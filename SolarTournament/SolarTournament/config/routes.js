@@ -2,24 +2,22 @@
 module.exports = function (app) {
 
     app.get('/', function (req, res) {
-        res.render('index', { title: 'Home' });
-    });
-
-    app.get('/training', function (req, res) {
-        res.render('training', { title: 'Training' });
+        res.render('index', {
+            title: 'SolarTournament // Home'
+        });
     });
 
     app.get('/tournament', function (req, res) {
         res.render('tournament', {
-            title: 'Multiplayer Tournament',
+            title: 'SolarTournament // Tournament',
             locals: {
-                socketUri: app.serverInfo.uri
+                socketUri: app.serverInfo.getSocketUri(req.headers.host)
             }
         });
     });
 
     app.get('/about', function (req, res) {
-        res.render('about', { title: 'About' });
+        res.render('SolarTournament // about', { title: 'About' });
     });
 
 

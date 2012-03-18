@@ -31,5 +31,10 @@ GameCam.prototype.updateAbsolutePosition = function () {
     this._cam.updateAbsolutePosition();
 };
 
+GameCam.prototype.getRotation = function () {
+    return this._cam.Rot;
+};
+
+
 
 

@@ -119,6 +119,20 @@ footer p
     display: none;
 }
 
+#debugKeyboardWatcher {
+    display: none;
+}
+
+#debugPlayer {
+    display: none;
+}
+
+#debugSocket {
+    width : 260px;
+    height : 100px;
+    overflow : auto; 
+}
+
 #musicButton {
     display: none !important;
 }

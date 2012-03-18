@@ -8,22 +8,26 @@ $(function () {
         var mainMenuCam = new MainMenuCam();
         var keyboardWatcher = new KeyboardWatcher();
 
-        if (!window.debugGame) {
+        var currentCam;
+        var player;
+        var skyboxName;
+
+        // !window.debugGame
+        if (true) {
 
             // old version
-            var currentCam = new GameCam();
-            var player = new Player(keyboardWatcher, currentCam);
-            var skyboxName = "skyboxSpace";
+            currentCam = new GameCam();
+            player = new Player(keyboardWatcher, currentCam);
+            skyboxName = "skyboxSpace";
 
         } else {
 
-            // work in progress
-            var currentCam = new ThirdPersonCam();
-            var player = new PlayerTwo(keyboardWatcher, currentCam);
-            var skyboxName = "skyboxDebug";
+            currentCam = new ThirdPersonCam();
+            player = new PlayerTwo(keyboardWatcher, currentCam);
+            skyboxName = "skyboxDebug";
         }
 
-        var gameLoop = new GameLoop(htmlMenu, mainMenuCam, currentCam, keyboardWatcher);
+        var gameLoop = new GameLoop(htmlMenu, mainMenuCam, currentCam, keyboardWatcher, window.socketUri);
         var gameLoader = new GameLoader(htmlMenu, player, skyboxName);
         gameLoader.onGameLoaded(gameLoop.getInitGameCall());
         gameLoader.loadGame();

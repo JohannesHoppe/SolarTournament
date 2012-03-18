@@ -8,18 +8,21 @@ var Randomizer = function() {
     this.detRandSeed = 0x0f0f0f0f;
 };
 
-Randomizer.prototype.seed = function (s) {
-    this.detRandSeed = s;
-};
+Randomizer.addToProto({
+    
+    seed: function(s) {
+        this.detRandSeed = s;
+    },
 
-Randomizer.prototype.getRandf = function () {
-    return (this.getRand() % 100000) / 100000;
-};
+    getRandf: function() {
+        return (this.getRand() % 100000) / 100000;
+    },
 
-Randomizer.prototype.getRand = function () {
-    // calculate new seed
-    this.detRandSeed = this.a * (this.detRandSeed % this.q) - this.r * (Math.floor(this.detRandSeed / this.q));
-    if (this.detRandSeed < 0) this.detRandSeed += this.m;
+    getRand: function() {
+        // calculate new seed
+        this.detRandSeed = this.a * (this.detRandSeed % this.q) - this.r * (Math.floor(this.detRandSeed / this.q));
+        if (this.detRandSeed < 0) this.detRandSeed += this.m;
 
-    return Math.floor(this.detRandSeed);
-};
+        return Math.floor(this.detRandSeed);
+    }
+});

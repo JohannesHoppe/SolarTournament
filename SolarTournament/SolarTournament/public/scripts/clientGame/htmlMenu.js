@@ -21,45 +21,55 @@ var HtmlMenu = function () {
     $('#backToMainMenuButton').click((this.showMainMenu).bind(this));
 };
 
+HtmlMenu.addToProto({
 
-HtmlMenu.prototype.showInfoPlate = function(text) {
+    showInfoPlate: function (text) {
 
-    this._gamehud.hide();
-    this._game_mainmenu.hide();
-    this._infoplate.show('fast');
-    this._infoplattext.html(text);
-};
+        this._gamehud.hide();
+        this._game_mainmenu.hide();
+        this._infoplate.show('fast');
+        this._infoplattext.html(text);
+    },
 
-HtmlMenu.prototype.showMainMenu = function() {
+    showMainMenu: function () {
 
-    this._gamehud.hide();
-    this._game_mainmenu.show('fast');
-    this._infoplate.hide();
-};
+        this._gamehud.hide();
+        this._game_mainmenu.show('fast');
+        this._infoplate.hide();
+    },
 
-HtmlMenu.prototype.showGame = function () {
+    showGame: function () {
 
-    this._gamehud.show();
-    this._game_mainmenu.hide();
-    this._infoplate.hide();
-};
+        this._gamehud.show();
+        this._game_mainmenu.hide();
+        this._infoplate.hide();
+    },
 
-HtmlMenu.prototype.showNoWebglMessage = function () {
-    $('#cl_nowebgl').show();
-};
+    showNoWebglMessage: function () {
+        $('#cl_nowebgl').show();
+    },
 
-HtmlMenu.prototype.showLoadingLabel = function () {
+    showLoadingLabel: function () {
 
-    this._loadinglabel.show();
-};
+        this._loadinglabel.show();
+    },
 
-HtmlMenu.prototype.hideLoadingLabel = function () {
+    hideLoadingLabel: function () {
 
-    this._loadinglabel.hide();
-};
+        this._loadinglabel.hide();
+    },
 
-HtmlMenu.prototype.updateHud = function (timeRemaining, gameScore) {
+    updateHud: function (timeRemaining, gameScore) {
 
-    this._gameTimeRemainingSpan.html(timeRemaining);
-    this._gameScoreSpan.html(gameScore);
-};
+        if (timeRemaining == -1) {
+
+            this._gameTimeRemainingSpan.hide();
+
+        } else {
+
+            this._gameTimeRemainingSpan.html("Time Remaining: " + timeRemaining);
+        }
+
+        this._gameScoreSpan.html("Your Score: " + gameScore);
+    }
+});

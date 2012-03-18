@@ -1,4 +1,6 @@
 SolarTournament/SolarTournament/obj/
+SolarTournament/SolarTournament/bin/SolarTournament.dll
+SolarTournament/SolarTournament/bin/SolarTournament.pdb
 SolarTournament/SolarTournament/public/scene1.html
 SolarTournament/SolarTournament/app.js.logs/
 SolarTournament/local_package.csx/
@@ -9,3 +11,5 @@ _ReSharper*
 *SolarTournament.csproj.user
 *SolarTournament.sln.docstates.suo
 *.sln.DotSettings.user
+
+~$2012-03-20 - Getting started with MS Azure.pptx

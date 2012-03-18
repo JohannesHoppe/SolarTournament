@@ -1,194 +1,168 @@
 ﻿/*
- * contains all objects the player can interact with
- */
+ * Contains all objects the player can interact with
+ *
+ * ---------------------------------------------------------------------
+ *   Compared to the client world the server world is too simple
+ *   Many things will have to be ported the the server side, too.
+ * 
+ *   Please keep in mind:
+ *   Cheeting with Firebug is NOT COOL! This is demo code, you know! ;-)
+ * ---------------------------------------------------------------------
+*/
 var World = function (engine, sceneTemplates, player) {
 
     this._engine = engine;
     this._sceneTemplates = sceneTemplates;
-    this._player = player;
+    
+    this._ownPlayer = player;
 
-    this._movingAsteroids = new Array();
-    this._movingPhotons = new Array();
-    this._movingSmokes = new Array();
-    this._playerModel = null;
-
+    this._asteroids = new Array();
+    this._photons = new Array();
+    this._smokes = new Array();
+    this._players = new Array();
+    
     // bindings
-    this._player.onShootPlaced((this._shootPlaced).bind(this));
+    this._ownPlayer.onShootPlaced((this._handleShootPlaced).bind(this));
 };
 
-World.prototype._loadModel = function (number) {
+World.addToProto({
 
-    var scene = this._engine.getScene();
-    var clone = this._sceneTemplates.getSpaceshipTemplates()[number].createClone(scene.getRootSceneNode());
-    clone.Visible = true;
-    clone.Pos.X = 0;
-    clone.Pos.Y = 0;
-    clone.Pos.Z = 30;
-   return clone;
-};
+    animate: function (timeDiff) {
 
-World.prototype.animate = function(timeDiff) {
+        this._ownPlayer.animate(timeDiff);
+        this._doMoveAndCollideObjects(timeDiff);
 
-    this._player.animate(timeDiff);
-    this._doMoveAndCollideObjects(timeDiff);
-};
+        // currently we don't care if player _really_ changed his position
+        $(this).trigger("playerPositionChanged", this._ownPlayer.getPositionAndRotation());
+    },
 
-World.prototype.spawnPlayer = function() {
+    // used in main menue only!
+    spawnNewAsteroids: function (level) {
+        new AsteroidSpawner(this._engine, this._sceneTemplates.getAsteroidTemplates, this._asteroids)
+            .createRandomAsteroidField(level);
+    },
 
-    this._player.resetValues();
-    this._playerModel = this._loadModel(0);
-    this._player.setModel(this._playerModel);
-};
+    clearScene: function () {
 
-World.prototype.spawnNewAsteroids = function (level, callback) {
+        // asteroids, photons and smokes are direct Copperlicht SceneNodes (with some extra properties)
+        Copper.clearSceneNodeArray(this._asteroids);
+        Copper.clearSceneNodeArray(this._photons);
+        Copper.clearSceneNodeArray(this._smokes);
 
-    new AsteroidSpawner(
-        this._engine,
-        this._sceneTemplates.getAsteroidTemplates(),
-        this._movingAsteroids
-    ).createRandomAsteroidField(level, callback);
-};
+        // players are objects that also implement removeFromScene()
+        Copper.clearSceneNodeArray(this._players);
+    },
 
-World.prototype.clearScene = function () {
+    // shoots that were placed by our own player
+    _handleShootPlaced: function (event, positionAndTarget) {
 
-    // delete asteroids
-    for (var j = 0; j < this._movingAsteroids.length; ++j) {
-        var a = this._movingAsteroids[j];
-        a.getParent().removeChild(a);
-        this._movingAsteroids.splice(j, 1);
-    }
+        var position = positionAndTarget.position;
+        var target = positionAndTarget.target;
+        this.spawnShoot(position, target, this._ownPlayer.id);
+        $(this).trigger("shootPlaced", positionAndTarget);
+    },
 
-    // delete photons
-    for (var i = 0; i < this._movingPhotons.length; ) {
-        var p = this._movingPhotons[i];
-        p.getParent().removeChild(p);
-        this._movingPhotons.splice(i, 1);
-    }
+    // an asteroid that was destroyed by our own or by an other player
+    _handleAsteriodDestroyed: function (shooterPlayerId) {
 
-    // delete smokes
-    for (var k = 0; k < this._movingSmokes.length; ) {
-        var s = this._movingSmokes[k];
-        s.getParent().removeChild(s);
-        this._movingSmokes.splice(k, 1);
-    }
+        playsound('explosion');
 
-    // delete player model
-    if (this._playerModel != null) {
-        
-        this._playerModel.getParent().removeChild(this._playerModel);
-        this._playerModel = null;
-    }
-};
-
-World.prototype._shootPlaced = function(event, eventData) {
-
-    var position = eventData.position;
-    var target = eventData.target;
-    var moveDir = target.substract(position);
-    moveDir.normalize();
-
-    var now = new Date().getTime();
-    var scene = this._engine.getScene();
-    var clone = this._sceneTemplates.getPhotonTemplate().createClone(scene.getRootSceneNode());
-    clone.Pos.X = position.X;
-    clone.Pos.Y = position.Y;
-    clone.Pos.Z = position.Z;
-    clone.Visible = true;
-    clone.gameMoveDir = moveDir;
-    clone.gameEndLiveTime = now + 1000;
-
-    this._movingPhotons.push(clone);
-};
-
-World.prototype._doMoveAndCollideObjects = function(timeDiff) {
-
-    var now = new Date().getTime();
-
-    // move smokes
-    for (var k = 0; k < this._movingSmokes.length;) {
-        var s = this._movingSmokes[k];
-
-        if (s.gameEndLiveTime < now) {
-            s.getParent().removeChild(s);
-            this._movingSmokes.splice(k, 1);
-        } else {
-            s.Pos.addToThis(s.gameMoveDir.multiplyWithScal(timeDiff * 0.1));
-            s.updateAbsolutePosition();
-
-            ++k;
+        if (shooterPlayerId == this._ownPlayer.id) {
+            $(this).trigger("asteroidDestroyedByOwnPlayer");
         }
-    }
+    },
 
-    // move photons and delete them
-    for (var i = 0; i < this._movingPhotons.length;) {
-        var p = this._movingPhotons[i];
-        var deletephoton = false;
+    // duplicate client side game logic that would require too much communication with server side
+    _doMoveAndCollideObjects: function (timeDiff) {
 
-        if (p.gameEndLiveTime < now) {
-            deletephoton = true;
-        } else {
-            
-            // move
-            p.Pos.addToThis(p.gameMoveDir.multiplyWithScal(timeDiff * 0.8));
-            p.updateAbsolutePosition();
+        var now = new Date().getTime();
 
-            // collide with all asteroids
-            for (var j = 0; j < this._movingAsteroids.length; ++j) {
-                
-                var ast = this._movingAsteroids[j];
+        var addSmokeCall = function (center) {
+            Copper.addSmoke(this._engine, this._sceneTemplates.getSmokeTemplate, center, now, this._smokes);
+        } .bind(this);
 
-                // collision
-                if (ast.Pos.getDistanceTo(p.Pos) < 60) {
+        Copper.moveSmokes(now, timeDiff, this._smokes);
+        Copper.movePhotons(now, timeDiff, this._photons, this._asteroids, this._handleAsteriodDestroyed.bind(this), addSmokeCall);
+    },
 
-                    // remove asteroid
-                    ast.getParent().removeChild(ast);
-                    this._movingAsteroids.splice(j, 1);
-                    deletephoton = true;
-                    playsound('explosion');
 
-                    $(this).trigger("asteroidDestroyed");
+    /* **** server driven updates to the world **** */
 
-                    this._addSmoke(40, 40, ast.Pos, timeDiff, now);
-                    break;
-                }
+    spawnOwnPlayer: function (player) {
+
+        var getTemplateCall = function () { return this._sceneTemplates.getSpaceshipTemplateByName(player.spaceship); } .bind(this);
+        var model = Copper.loadPlayerModel(this._engine, getTemplateCall, player.name);
+
+        this._ownPlayer.resetValues();
+        this._ownPlayer.setModel(model);
+        this._ownPlayer.initWithValuesFromServer(player);
+    },
+
+    spawnOtherPlayer: function (player) {
+
+        var getTemplateCall = function () { return this._sceneTemplates.getSpaceshipTemplateByName(player.spaceship); } .bind(this);
+        var model = Copper.loadPlayerModel(this._engine, getTemplateCall, player.name);
+
+        var otherPlayer = new PlayerBase();
+        otherPlayer.setModel(model);
+        otherPlayer.initWithValuesFromServer(player);
+
+        this._players.push(otherPlayer);
+    },
+
+    updatePlayers: function (players) {
+
+        for (var n = 0; n < players.length; n++) {
+
+            var player = players[n];
+
+            // we ignore our own position since we dictate it to the server anyway
+            if (player.id == this._ownPlayer.id) { continue; }
+
+            var otherPlayer = this._players.getById(player.id);
+
+            if (otherPlayer != null) {
+
+                otherPlayer.setPositionAndRotation(player.position, player.rotation);
+
+                // we have missed the spawn event
+            } else {
+                this.spawnOtherPlayer(player);
             }
-        }
+        };
+    },
 
-        if (deletephoton) {
-            // delete photon
-            p.getParent().removeChild(p);
-            this._movingPhotons.splice(i, 1);
-        } else {
-            // to next photon
-            ++i;
-        }
+    removePlayer: function (otherPlayerId) {
+        Copper.removeFromSceneNodeArray(this._players, otherPlayerId);
+    },
+
+    spawnShoot: function (position, target, playerId) {
+
+        var now = new Date().getTime();
+        var photon = Copper.addShoot(this._engine, now, this._sceneTemplates.getPhotonTemplate, position, target, this._photons);
+        photon.playerId = playerId;
+        playsound('shootsound');
+    },
+
+    /* **** public events **** */
+
+    // Bind an event handler to the "asteroidDestroyedByOwnPlayer" event
+    onAsteroidDestroyedByOwnPlayer: function (handler) {
+
+        $(this).bind("asteroidDestroyedByOwnPlayer", handler);
+    },
+
+    // Bind an event handler to the "playerPositionChanged" event
+    onPlayerPositionChanged: function (handler) {
+
+        $(this).bind("playerPositionChanged", handler);
+    },
+
+    // Bind an event handler to the "shootPlaced" event
+    // Note: this is a "bubbling" event, player has also onShootPlaced
+    onShootPlaced: function (handler) {
+
+        $(this).bind("shootPlaced", handler);
     }
-};
+});
 
-World.prototype._addSmoke = function(count, radius, center, timeDiff, now) {
-
-    var scene = this._engine.getScene();
-
-    for (var i = 0; i < count; ++i) {
-        
-        var clone = this._sceneTemplates.getSmokeTemplate().createClone(scene.getRootSceneNode());
-        clone.Pos.X = center.X + (Math.random() * radius * 2) - radius;
-        clone.Pos.Y = center.Y + (Math.random() * radius * 2) - radius;
-        clone.Pos.Z = center.Z + (Math.random() * radius * 2) - radius;
-        clone.Visible = true;
-
-        clone.gameEndLiveTime = now + (Math.random() * 2000);
-
-        var moveDir = clone.Pos.substract(center);
-        moveDir.normalize();
-        clone.gameMoveDir = moveDir;
-
-        this._movingSmokes.push(clone);
-    }
-};
-
-//  Bind an event handler to the "asteroidDestroyed" event
-World.prototype.onAsteroidDestroyed = function (handler) {
-
-    $(this).bind("asteroidDestroyed", handler);
-};

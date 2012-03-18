@@ -33,6 +33,9 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <None Include="bin\iisnode-full-iis7-v0.1.16-x64.msi" />
+    <None Include="bin\iisnode_original_version_from_sdk.msi" />
+    <None Include="bin\setup_web.cmd" />
     <None Include="public\copperlichtdata\scene1.ccbjs" />
     <None Include="public\fonts\quicksand\Quicksand_Bold-webfont.eot" />
     <None Include="public\fonts\quicksand\Quicksand_Bold-webfont.ttf" />
@@ -63,19 +66,24 @@
     <None Include="views\index.jade" />
     <None Include="views\layout.jade" />
     <None Include="views\tournament.jade" />
-    <None Include="views\training.jade" />
+    <Content Include="bin\node.exe" />
+    <Content Include="bin\vcredist_x64.exe" />
+    <Content Include="Web.cloud.config" />
+    <Content Include="Web.config" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="app.js" />
-    <Content Include="config\environment.js" />
+    <Content Include="config\config.js" />
     <Content Include="config\routes.js" />
     <Content Include="config\scriptRendering.js" />
-    <Content Include="game\socket.js" />
+    <Content Include="favicon.ico" />
+    <Content Include="game\serverPlayer.js" />
+    <Content Include="game\serverWorld.js" />
+    <Content Include="game\serverSocket.js" />
     <Content Include="public\audio\expl.ogg" />
     <Content Include="public\audio\game_low.ogg" />
     <Content Include="public\audio\menu_low.ogg" />
     <Content Include="public\audio\shoot.ogg" />
-    <Content Include="public\copperlichtdata\copperlicht.js" />
     <Content Include="public\copperlichtdata\default_skyboxb0.jpg" />
     <Content Include="public\copperlichtdata\default_skyboxb1.jpg" />
     <Content Include="public\copperlichtdata\default_skyboxb2.jpg" />
@@ -98,13 +106,15 @@
     <Content Include="public\scripts\clientGame\asteroidSpawner.js" />
     <Content Include="public\scripts\clientGame\cams\gameCam.js" />
     <Content Include="public\scripts\clientGame\cams\thirdPersonCam.js" />
+    <Content Include="public\scripts\clientGame\playerBase.js" />
     <Content Include="public\scripts\clientGame\gameLoop.js" />
     <Content Include="public\scripts\clientGame\gameLoader.js" />
     <Content Include="public\scripts\clientGame\htmlMenu.js" />
     <Content Include="public\scripts\clientGame\keyboardWatcher.js" />
     <Content Include="public\scripts\clientGame\player.js" />
     <Content Include="public\scripts\clientGame\playerTwo.js" />
-    <Content Include="public\scripts\clientGame\utils\languageEnhancements.js" />
+    <Content Include="public\scripts\clientGame\utils\copperlichtEnhancements.js" />
+    <Content Include="public\scripts\languageEnhancements.js" />
     <Content Include="public\scripts\clientGame\cams\mainMenuCam.js" />
     <Content Include="public\scripts\clientGame\utils\gameMath.js" />
     <Content Include="public\scripts\clientGame\utils\randomizer.js" />

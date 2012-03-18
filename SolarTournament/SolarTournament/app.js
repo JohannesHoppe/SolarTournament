@@ -3,10 +3,14 @@ var express = require('express');
 var app = module.exports = express.createServer();
 var io = require('socket.io').listen(app);
 
-require('./config/environment.js')(app, express, __dirname);
+require('./config/config.js')(express, app, io, __dirname);
 require('./config/routes.js')(app);
 require('./config/scriptRendering.js')(app);
-require('./game/socket.js')(io);
+
+
+var world = require('./game/serverWorld.js')();
+require('./game/serverSocket.js')(io, world);
+
 
 if (!module.parent) {
     app.listen(app.serverInfo.port);

@@ -6,80 +6,95 @@ var SceneTemplates = function (engine, skyboxName) {
     this.NUMBER_OF_ASTEROIDS = 3;
     this._engine = engine;
     this._skyboxName = skyboxName;
-    this._resetValues();
+    this.resetValues();
+
+    var self = this;
+
+    this.getAsteroidTemplates = function () {
+        return self._asteroidTemplates;
+    };
+
+    this.getPhotonTemplate = function () {
+        return self._photonTemplate;
+    };
+
+    this.getSmokeTemplate = function () {
+        return self._smokeTemplate;
+    };
+
+    this.getSpaceshipTemplateByName = function (name) {
+        return self._spaceshipTemplates.getByName(name);
+    };
+
+    this.getSpaceshipTemplates = function () {
+        return self._spaceshipTemplates;
+    };
 };
 
-SceneTemplates.prototype.getAsteroidTemplates = function() {
-    return this._asteroidTemplates;
-};
+SceneTemplates.addToProto({
 
-SceneTemplates.prototype.getPhotonTemplate = function () {
-    return this._photonTemplate;
-};
+    resetValues: function () {
 
-SceneTemplates.prototype.getSmokeTemplate = function () {
-    return this._smokeTemplate;
-};
+        this._asteroidTemplates = new Array();
+        this._photonTemplate = null;
+        this._smokeTemplate = null;
+        this._spaceshipTemplates = new Array();
+    },
 
-SceneTemplates.prototype.getSpaceshipTemplates = function () {
-    return this._spaceshipTemplates;
-};
+    loadTemplates: function (callback) {
 
-SceneTemplates.prototype._resetValues = function () {
+        this.resetValues();
 
-    this._asteroidTemplates = new Array();
-    this._photonTemplate = null;
-    this._smokeTemplate = null;
-    this._spaceshipTemplates = new Array();
-};
+        var scene = this._engine.getScene();
 
-SceneTemplates.prototype.loadTemplates = function (callback) {
-
-    this._resetValues();
-
-    var scene = this._engine.getScene();
-
-    if (!scene) {
-        throw "NO_SCENE in loadTemplates";
-    }
-
-    // collect all known asteroids
-    for (var i = 0; i < this.NUMBER_OF_ASTEROIDS; ++i) {
-
-        var asteroid = scene.getSceneNodeFromName('asteroid' + (i + 1));
-        if (asteroid) {
-            asteroid.Visible = false;
-            this._asteroidTemplates.push(asteroid);
+        if (!scene) {
+            throw "NO_SCENE in loadTemplates";
         }
-    }
 
-    // collect photon
-    var photon = scene.getSceneNodeFromName('photon');
-    if (photon) {
-        photon.Visible = false;
-        this._photonTemplate = photon;
-    }
+        // collect all known asteroids
+        for (var i = 0; i < this.NUMBER_OF_ASTEROIDS; ++i) {
 
-    // collect smoke
-    var smoke = scene.getSceneNodeFromName('smoke');
-    if (smoke) {
-        smoke.Visible = false;
-        this._smokeTemplate = smoke;
-    }
+            var asteroid = scene.getSceneNodeFromName('asteroid' + (i + 1));
+            if (asteroid) {
+                asteroid.Visible = false;
+                this._asteroidTemplates.push(asteroid);
+            }
+        }
 
-    // loads interceptor spaceship
-    var spaceship = scene.getSceneNodeFromName('interceptor');
-    if (spaceship) {
-        spaceship.Visible = false;
-        spaceship.Rot.Y = 90;
-        spaceship.Name = 'interceptor';
-        this._spaceshipTemplates.push(spaceship);
-    }
+        // collect photon
+        var photon = scene.getSceneNodeFromName('photonBlue');
+        if (photon) {
+            photon.Visible = false;
+            this._photonTemplate = photon;
+        }
 
-    var skybox = scene.getSceneNodeFromName(this._skyboxName);
-    if (skybox) {
-        skybox.Visible = true;
-    }
+        // collect smoke
+        var smoke = scene.getSceneNodeFromName('smoke');
+        if (smoke) {
+            smoke.Visible = false;
+            this._smokeTemplate = smoke;
+        }
 
-    callback();
-};
+        // spaceship
+        var spaceships = ["humanInterceptor", "alienInterceptor"];
+
+        for (var n = 0; n < spaceships.length; n++) {
+
+            var spaceship = scene.getSceneNodeFromName(spaceships[n]);
+            
+            if (spaceship) {
+                
+                spaceship.Visible = false;
+                spaceship.name = spaceships[n];
+                this._spaceshipTemplates.push(spaceship);
+            }
+        }
+
+        var skybox = scene.getSceneNodeFromName(this._skyboxName);
+        if (skybox) {
+            skybox.Visible = true;
+        }
+
+        callback();
+    }
+});
