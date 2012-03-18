@@ -1,0 +1,37 @@
+!!! 5
+html
+    head
+        title= title
+        link(rel='stylesheet', href='/stylesheets/style.css')
+        link(rel='stylesheet', href='/stylesheets/quicksand-fontface.css')
+        link(rel='stylesheet', href='/stylesheets/game.css')
+
+        != renderHeaderScriptTags(scripts)
+    
+    body
+        a#forkMe(href="javascript:alert('Very soon!')") 
+
+        div#galaxy
+            div#alien
+        
+                header
+                    nav
+                        ul
+                            li 
+                                a(href="/") Home
+                            li 
+                                a(href="/training") Training
+                            li 
+                                a(href="/tournament") Tournament
+                            li 
+                                a(href="/about") About
+
+                
+                section#wrapper.transify!= body
+                    footer 
+                        section.css-table
+                            section.one-column
+                            section.cell
+                                p (c) 2012 <a href="http://blog.johanneshoppe.de/">Johannes Hoppe</a> from <a href="http://www.haushoppe-its.de">HAUS HOPPE - ITS</a>
+        
+        != renderFooterScriptTags(scripts)

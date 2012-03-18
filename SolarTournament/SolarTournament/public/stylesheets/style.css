@@ -1,0 +1,284 @@
+/* Reset
+Based on http://meyerweb.com/eric/thoughts/2008/01/15/resetting-again/
+Removed elements not supported in HTML5
+-----------------------------------------------------------------------------*/
+html,
+body,
+div,
+span,
+object,
+iframe,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote,
+pre,
+a,
+abbr,
+address,
+cite,
+code,
+del,
+dfn,
+em,
+img,
+ins,
+kbd,
+q,
+samp,
+small,
+strike,
+strong,
+sub,
+sup,
+var,
+b,
+i,
+dl,
+dt,
+dd,
+ol,
+ul,
+li,
+fieldset,
+form,
+label,
+legend,
+table,
+caption,
+tbody,
+tfoot,
+thead,
+tr,
+th,
+td {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  font-size: 100%;
+  vertical-align: baseline;
+}
+/* 
+Trigger the new block level elements in to the correct content flow
+-----------------------------------------------------------------------------*/
+article,
+aside,
+dialog,
+figure,
+footer,
+header,
+hgroup,
+menu,
+nav,
+section {
+  display: block;
+}
+/* Set up document
+-----------------------------------------------------------------------------*/
+html {
+  height: 100%;
+}
+body {
+  background: #2c2c2c url("/images/bg_body.jpg") repeat;
+  font: 62.5%/1.5 Helvetica, Arial, "Lucida Grande", "Lucida Sans", Tahoma, Verdana, sans-serif;
+  text-align: left;
+  height: 100%;
+}
+#galaxy {
+  background: transparent url("/images/bg_galaxy.jpg") no-repeat center top;
+  height: 100%;
+}
+#alien {
+  background: transparent url("/images/alien2.png") no-repeat right 150px;
+  height: 100%;
+  width: 1300px;
+  margin-left: auto;
+  margin-right: auto;
+}
+#wrapper {
+  background: transparent url("/images/bg_opacity.png");
+  width: 920px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 20px;
+  -webkit-border-bottom-left-radius: 15px;
+  -moz-border-bottom-left-radius: 15px;
+  -o-border-bottom-left-radius: 15px;
+  border-bottom-left-radius: 15px;
+  -webkit-border-bottom-right-radius: 15px;
+  -moz-border-bottom-right-radius: 15px;
+  -o-border-bottom-right-radius: 15px;
+  border-bottom-right-radius: 15px;
+}
+/* Typography
+-----------------------------------------------------------------------------*/
+h1 {
+  color: #666;
+  font: 6.2em 'QuicksandLight';
+  line-height: 0.9em;
+  margin-bottom: 0.4em;
+}
+h2 {
+  font: 2em 'QuicksandBook';
+  line-height: 1em;
+  margin-bottom: 1em;
+}
+h3 {
+  font: 1.6em 'QuicksandBook';
+  line-height: 1.13em;
+  margin-bottom: 1.13em;
+}
+h4 {
+  font-size: 1.4em;
+  line-height: 1.29em;
+  margin-bottom: 1.29em;
+}
+h5 {
+  font-size: 1.3em;
+  line-height: 1.38em;
+  margin-bottom: 1.38em;
+}
+h6 {
+  font-size: 1.2em;
+  line-height: 1.5em;
+  margin-bottom: 1.5em;
+}
+p,
+q,
+cite,
+address,
+ul,
+ol,
+dl {
+  font-size: 1.2em;
+  line-height: 1.5em;
+  margin-bottom: 1.5em;
+}
+li,
+dd,
+dt {
+  font-size: 1em;
+}
+a {
+  text-decoration: underline;
+  color: #036;
+  outline: none;
+}
+a:hover {
+  text-decoration: none;
+}
+code,
+samp,
+dfn,
+kbd,
+var,
+acronym,
+ins,
+del,
+abbr {
+  speak: spell-out;
+}
+acronym {
+  speak: normal;
+}
+/* CSS Tables
+-----------------------------------------------------------------------------*/
+.css-table {
+  width: 100%;
+  display: table;
+}
+.css-table .two-column {
+  display: table-row;
+}
+.css-table .two-column .cell {
+  display: table-cell;
+  vertical-align: top;
+  width: 50%;
+}
+.css-table .two-column .cell * {
+  width: 90%;
+}
+.css-table .three-column {
+  display: table-row;
+}
+.css-table .three-column .cell {
+  display: table-cell;
+  width: 33.33333%;
+}
+.css-table .three-column .cell * {
+  width: 90%;
+}
+.css-table .four-column {
+  display: table-row;
+}
+.css-table .four-column .cell {
+  display: table-cell;
+  width: 25%;
+}
+/* Header
+-----------------------------------------------------------------------------*/
+header {
+  background: transparent url("/images/bg_header.png") repeat-x 0 top;
+  border-bottom: 1px solid #fff;
+  width: 960px;
+  margin-left: auto;
+  margin-right: auto;
+}
+header nav {
+  text-align: right;
+}
+header nav ul {
+  list-style: none;
+  padding: 10px;
+  margin-bottom: 0;
+}
+header nav ul li {
+  display: inline;
+  margin-left: 1%;
+}
+header nav ul li a {
+  background: #00589d;
+  -webkit-border-radius: 15px;
+  -moz-border-radius: 15px;
+  -o-border-radius: 15px;
+  border-radius: 15px;
+  display: inline-block;
+  padding: 5px 15px 6px;
+  color: #fff;
+  text-decoration: none;
+  position: relative;
+  cursor: pointer;
+}
+header nav ul li a:hover {
+  background-color: #003162;
+}
+/* Footer
+-----------------------------------------------------------------------------*/
+footer {
+  color: #666;
+  border-top: 1px solid #ccc;
+  padding-top: 1.5em;
+}
+footer ul {
+  list-style: none;
+}
+footer * {
+  margin-bottom: 0;
+}
+#forkMe {
+  position: absolute;
+  display: block;
+  top: 0;
+  right: 0;
+  width: 149px;
+  height: 149px;
+  background: transparent url("/images/fork_me_on_github_trans.png") no-repeat 0 0;
+}
+#forkMe:hover {
+  background-image: url("/images/fork_me_on_github.png");
+}

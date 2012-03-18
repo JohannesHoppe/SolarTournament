@@ -1,0 +1,149 @@
+@import "mixins/css3"
+
+/* Reset
+Based on http://meyerweb.com/eric/thoughts/2008/01/15/resetting-again/
+Removed elements not supported in HTML5
+-----------------------------------------------------------------------------*/
+html, body, div, span, object, iframe,
+h1, h2, h3, h4, h5, h6, p, blockquote, pre,
+a, abbr, address, cite, code,
+del, dfn, em, img, ins, kbd, q, samp,
+small, strike, strong, sub, sup, var,
+b, i,
+dl, dt, dd, ol, ul, li,
+fieldset, form, label, legend,
+table, caption, tbody, tfoot, thead, tr, th, td 
+  margin 0
+  padding 0
+  border 0
+  outline 0
+  font-size 100%
+  vertical-align baseline
+
+  
+/* 
+Trigger the new block level elements in to the correct content flow
+-----------------------------------------------------------------------------*/
+article, aside, dialog, figure, 
+footer, header, hgroup, menu, 
+nav, section  
+  display block 
+      
+
+/* Set up document
+-----------------------------------------------------------------------------*/
+html
+  height 100%
+
+body
+  background #2C2C2C url('/images/bg_body.jpg') repeat;
+  font 62.5%/1.5  Helvetica, Arial, "Lucida Grande", "Lucida Sans", Tahoma, Verdana, sans-serif
+  text-align left
+  height 100%
+
+#galaxy
+  background transparent url('/images/bg_galaxy.jpg') no-repeat center top
+  height 100%
+
+#alien
+  background transparent url('/images/alien2.png') no-repeat right 150px
+  height 100%
+  width 1300px;
+  margin-left auto 
+  margin-right auto
+  
+#wrapper
+  background transparent url('/images/bg_opacity.png')
+  width 920px
+  margin-left auto 
+  margin-right auto
+  padding 20px
+  border-bottom-radius(15px)
+
+
+/* Typography
+-----------------------------------------------------------------------------*/
+@import "partials/typography"
+
+
+/* CSS Tables
+-----------------------------------------------------------------------------*/
+.css-table
+  width 100%
+  display table
+  .two-column
+    display table-row
+    .cell
+      display table-cell
+      vertical-align top
+      width 50%
+      *
+        width 90%
+  .three-column
+    display table-row
+    .cell
+      display table-cell
+      width 33.33333%
+      *
+        width 90%
+  .four-column
+    display table-row
+    .cell
+      display table-cell
+      width 25%
+      
+/* Header
+-----------------------------------------------------------------------------*/
+header
+  background transparent url('/images/bg_header.png') repeat-x 0 top
+  border-bottom: 1px solid white
+  width 960px
+  margin-left auto 
+  margin-right auto
+
+  nav 
+    text-align right
+    ul 
+      list-style none
+      padding 10px
+      margin-bottom 0
+      li 
+        display inline
+        margin-left 1%
+        a 
+          background #00589D 
+          border-radius(15px)
+          display inline-block
+          padding 5px 15px 6px 
+          color #fff
+          text-decoration none
+          position relative
+          cursor pointer
+          &:hover
+            background-color #003162 
+
+            
+/* Footer
+-----------------------------------------------------------------------------*/
+footer
+  color #666
+  border-top 1px solid #ccc
+  padding-top 1.5em
+  ul 
+    list-style none
+  *
+    margin-bottom 0
+
+#forkMe {
+    position absolute;
+    display:block;
+    top 0;
+    right 0;
+    width 149px
+    height 149px
+    background transparent url('/images/fork_me_on_github_trans.png') no-repeat 0 0
+}
+
+#forkMe:hover {
+    background-image url('/images/fork_me_on_github.png')
+}

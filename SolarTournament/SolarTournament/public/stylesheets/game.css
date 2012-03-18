@@ -1,0 +1,124 @@
+﻿#centerDiv {
+    width:640px;
+    height: 500px;
+    margin:auto;
+    position:relative;
+}
+
+#centerDiv a {
+    color: white;
+    background: #00589D;
+    border-radius: 15px;
+    display: inline-block;
+    padding: 5px 15px 6px;
+    text-decoration: none;
+    position: relative;
+    cursor: pointer;
+    width: 140px;
+    opacity: 0.7;
+} 
+
+#centerDiv a:visited { color: white; } 
+#centerDiv a:active { color: white; } 
+#centerDiv a:hover { background-color: #003162; } 
+
+#gameCanvas {
+    
+    background-color:#111111;
+    border: 1px solid #222222;
+    border-radius: 5px;    
+}
+            
+#gamehud,
+#cl_loadinglabel {
+
+    display: none;
+    color: #ffffff;
+    padding: 5px;
+    position: absolute;
+    
+    left:20px;
+    top:420px;
+    height:37px;
+    width:300px;
+    
+    border-radius: 5px;
+    border:1px solid #777777;
+    opacity:0.5;
+}
+
+#gamehud p {
+     margin: 0;
+     padding: 0;
+}
+            
+          
+#cl_nowebgl {
+
+    display:none;
+    position:absolute;
+    left:180px;
+    top:100px;
+    height:90px;
+    width:300px;
+    
+    padding:5px;
+    color: #FFFFFF;    
+    background-color:#000000;
+    
+    font-size: 1.2em;
+    line-height: 1.5em;    
+    
+    border-radius: 15px;
+    border:1px solid #777777;
+    opacity:1;
+}
+            
+div.mainplate {
+    
+    display:none; 
+    color: black; 
+    padding:0px; 
+    position:absolute;
+     
+    left:220px;
+    top:100px; 
+    width:198px;
+    height:285px;  
+    
+    background: transparent url("/images/bg_opacity.png");
+    border-radius: 15px; 
+    border:none;
+}
+            
+div.mainplate p 
+{
+    padding-left:5px;
+    padding-top: 60px;
+    padding-bottom:5px;
+    text-align:center;
+}
+
+footer p 
+{
+    visibility: hidden;
+}
+
+#debug {
+
+    position:absolute;
+    top:10px;
+    right:10px;
+    width: 260px;
+    height: 200px;
+    
+    font-size:9px;
+    border: 1px dotted red;
+    background: transparent url("/images/bg_opacity.png");
+
+    display: none;
+}
+
+#musicButton {
+    display: none !important;
+}

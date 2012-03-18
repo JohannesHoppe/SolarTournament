@@ -1,0 +1,11 @@
+SolarTournament/SolarTournament/obj/
+SolarTournament/SolarTournament/public/scene1.html
+SolarTournament/SolarTournament/app.js.logs/
+SolarTournament/local_package.csx/
+SolarTournament/cloud_package.cspkg
+_ReSharper*
+*.ReSharper.user
+*SolarTournament.suo
+*SolarTournament.csproj.user
+*SolarTournament.sln.docstates.suo
+*.sln.DotSettings.user
