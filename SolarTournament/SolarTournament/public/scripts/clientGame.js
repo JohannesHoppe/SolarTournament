@@ -12,16 +12,16 @@ $(function () {
         var player;
         var skyboxName;
 
-        // !window.debugGame
         if (true) {
 
-            // old version
+            // stable version
             currentCam = new GameCam();
             player = new Player(keyboardWatcher, currentCam);
             skyboxName = "skyboxSpace";
 
         } else {
 
+            // experimental stuff
             currentCam = new ThirdPersonCam();
             player = new PlayerTwo(keyboardWatcher, currentCam);
             skyboxName = "skyboxDebug";

@@ -10,7 +10,7 @@ var Player = PlayerBase.extend({
         this.ROTATE_SPEED = 200.0;
         this.MAX_VERTICAL_ANGLE = 88.0;
         this.MAX_LOOK_DIFF = 300;
-        this.SHOOT_DELAY = 500;
+        this.SHOOT_DELAY = 250;
 
         this._keyboardWatcher = keyboardWatcher;
         this._gameCam = gameCam;

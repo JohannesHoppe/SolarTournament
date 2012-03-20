@@ -23,6 +23,7 @@ var World = function (engine, sceneTemplates, player) {
     
     // bindings
     this._ownPlayer.onShootPlaced((this._handleShootPlaced).bind(this));
+    
 };
 
 World.addToProto({
@@ -34,6 +35,10 @@ World.addToProto({
 
         // currently we don't care if player _really_ changed his position
         $(this).trigger("playerPositionChanged", this._ownPlayer.getPositionAndRotation());
+    },
+
+    getPlayerName: function () {
+        return this._ownPlayer.name; 
     },
 
     // used in main menue only!

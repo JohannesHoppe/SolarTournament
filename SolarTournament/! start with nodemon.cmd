@@ -1,7 +1,7 @@
 @echo off
 
 
-if 1==1 goto PRODUCTION
+if 1==2 goto PRODUCTION
 goto DEVELOPMENT
 
 :PRODUCTION

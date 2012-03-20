@@ -53,10 +53,6 @@ Socket.addToProto({
         });
 
         socket.on('updateWorld', function (broadcastData) {
-
-            // TODO:
-            // asteroids
-            // photons
             world.updatePlayers(broadcastData.players);
             debug('updateWorld/updatePlayers', broadcastData);
         });
@@ -86,6 +82,13 @@ Socket.addToProto({
 
         if (this._socket != null) {
             this._socket.disconnect();
+        }
+    },
+
+    saveHighscore: function (name, score) {
+        
+        if (this._socket != null) {
+            this._socket.emit('saveHighscore', { name: name, score: score });
         }
     },
 

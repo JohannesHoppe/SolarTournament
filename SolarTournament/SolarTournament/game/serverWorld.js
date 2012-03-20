@@ -19,7 +19,7 @@ module.exports = function () {
 
     var addNewPlayer = function (playerId) {
 
-        var newPlayer = serverPlayer.createNewPlayer(playerId);
+        var newPlayer = serverPlayer.createNewPlayer(playerId, "Player");
         players.push(newPlayer);
         return newPlayer;
     };

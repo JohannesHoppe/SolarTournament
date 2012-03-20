@@ -1,0 +1,11 @@
+- scripts.push('/scripts/jquery.tmpl.min.js');
+- scripts.push('/scripts/showHighscore.js');
+
+h1 Highscore
+
+script#highscoreTemplate(type="text/x-jquery-tmpl")
+    
+    h2 ${score} points
+    p  ${ getCounter() }. ${name}
+
+div#highscorePlaceholder

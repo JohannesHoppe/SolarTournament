@@ -64,6 +64,7 @@ module.exports = function (express, app, io, dirname) {
     // for later use
     app.serverInfo = {
 
+        runningInAzure : runningInAzure,
         getSocketUri: function (hostAndPort) { return util.format("http://%s", hostAndPort); },
         port: port,
         mode: process.env.NODE_ENV

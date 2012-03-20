@@ -90,7 +90,9 @@ GameLoop.addToProto({
 
             this._gameState = 'menu';
             this._action = this.showMainMenu;
-            this._socket.disconnect();            
+
+            this._socket.saveHighscore(this._world.getPlayerName(), this._gameScore);
+            this._socket.disconnect();
 
             this._htmlMenu.showInfoPlate('Game ended.<br>Your score: ' + this._gameScore);
 
@@ -119,7 +121,7 @@ GameLoop.addToProto({
         this._world.animate(timeDiff);
 
         if (this.GAME_HAS_END_TIME) {
-            
+
             var remainingTime = this._calculateRemainingTime();
             this._htmlMenu.updateHud(remainingTime, this._gameScore);
 

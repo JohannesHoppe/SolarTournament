@@ -33,8 +33,8 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="bin\iisnode-full-iis7-v0.1.16-x64.msi" />
-    <None Include="bin\iisnode_original_version_from_sdk.msi" />
+    <None Include="bin\iisnode.msi" />
+    <None Include="bin\setupAzureMongoEndpointsAgent.cmd" />
     <None Include="bin\setup_web.cmd" />
     <None Include="public\copperlichtdata\scene1.ccbjs" />
     <None Include="public\fonts\quicksand\Quicksand_Bold-webfont.eot" />
@@ -63,16 +63,44 @@
     <None Include="public\stylesheets\partials\typography.styl" />
     <None Include="public\stylesheets\style.styl" />
     <None Include="views\about.jade" />
+    <None Include="views\highscore.jade" />
     <None Include="views\index.jade" />
     <None Include="views\layout.jade" />
     <None Include="views\tournament.jade" />
+    <Content Include="app.js" />
+    <Content Include="bin\AzureMongoEndpointsAgent.exe" />
     <Content Include="bin\node.exe" />
     <Content Include="bin\vcredist_x64.exe" />
+    <Content Include="game\highscoreProvider.js" />
+    <Content Include="public\copperlichtdata\copperlicht.js" />
+    <Content Include="public\copperlichtdata\model_imperial_interceptor.jpg" />
+    <Content Include="public\copperlichtdata\particle_shoot.jpg" />
+    <Content Include="public\copperlichtdata\particle_smoke.jpg" />
+    <Content Include="public\copperlichtdata\photon_blue.png" />
+    <Content Include="public\copperlichtdata\photon_yellow.png" />
+    <Content Include="public\copperlichtdata\schwager.png" />
+    <Content Include="public\copperlichtdata\skybox_debug0.jpg" />
+    <Content Include="public\copperlichtdata\skybox_debug1.jpg" />
+    <Content Include="public\copperlichtdata\skybox_debug2.jpg" />
+    <Content Include="public\copperlichtdata\skybox_debug3.jpg" />
+    <Content Include="public\copperlichtdata\skybox_debug_down.jpg" />
+    <Content Include="public\copperlichtdata\skybox_debug_up.jpg" />
+    <Content Include="public\copperlichtdata\skybox_space1.jpg" />
+    <Content Include="public\copperlichtdata\skybox_space2.jpg" />
+    <Content Include="public\copperlichtdata\skybox_space3.jpg" />
+    <Content Include="public\copperlichtdata\stone_blue.jpg" />
+    <Content Include="public\copperlichtdata\stone_gray.jpg" />
+    <Content Include="public\copperlichtdata\stone_pink.jpg" />
+    <Content Include="public\images\alien2.png" />
+    <Content Include="public\images\fork_me_on_github.png" />
+    <Content Include="public\images\fork_me_on_github_trans.png" />
+    <Content Include="public\images\screenshot.png" />
+    <Content Include="public\images\screenshot_small.png" />
+    <Content Include="public\scripts\showHighscore.js" />
     <Content Include="Web.cloud.config" />
     <Content Include="Web.config" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="app.js" />
     <Content Include="config\config.js" />
     <Content Include="config\routes.js" />
     <Content Include="config\scriptRendering.js" />
@@ -84,23 +112,6 @@
     <Content Include="public\audio\game_low.ogg" />
     <Content Include="public\audio\menu_low.ogg" />
     <Content Include="public\audio\shoot.ogg" />
-    <Content Include="public\copperlichtdata\default_skyboxb0.jpg" />
-    <Content Include="public\copperlichtdata\default_skyboxb1.jpg" />
-    <Content Include="public\copperlichtdata\default_skyboxb2.jpg" />
-    <Content Include="public\copperlichtdata\default_skyboxb3.jpg" />
-    <Content Include="public\copperlichtdata\default_skyboxbdn.jpg" />
-    <Content Include="public\copperlichtdata\default_skyboxbup.jpg" />
-    <Content Include="public\copperlichtdata\imperial interceptor_imperial_interceptorshape1.jpg" />
-    <Content Include="public\copperlichtdata\particle_yellow.png" />
-    <Content Include="public\copperlichtdata\particle_yellow.tga.jpg" />
-    <Content Include="public\copperlichtdata\smoke3.jpg" />
-    <Content Include="public\copperlichtdata\stars1.jpg" />
-    <Content Include="public\copperlichtdata\stars2.jpg" />
-    <Content Include="public\copperlichtdata\stars3.jpg" />
-    <Content Include="public\copperlichtdata\stone-effect-final_seamless.jpg" />
-    <Content Include="public\copperlichtdata\stone-effect-final_seamless_blue.jpg" />
-    <Content Include="public\copperlichtdata\stone-effect-final_seamless_pink.jpg" />
-    <Content Include="public\copperlichtdata\stone2_seamless.png" />
     <Content Include="public\images\bg_header.png" />
     <Content Include="public\images\bg_opacity.png" />
     <Content Include="public\scripts\clientGame\asteroidSpawner.js" />

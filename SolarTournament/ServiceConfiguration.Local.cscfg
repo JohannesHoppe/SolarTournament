@@ -1,8 +1,21 @@
 <?xml version="1.0"?>
 <ServiceConfiguration xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" serviceName="SolarTournament" osFamily="1" osVersion="*" xmlns="http://schemas.microsoft.com/ServiceHosting/2008/10/ServiceConfiguration">
   <Role name="SolarTournament">
-    <ConfigurationSettings />
+    <ConfigurationSettings>
+      <Setting name="AzureMongoEndpointsAgent.RoleName" value="ReplicaSetRole" />
+      <Setting name="AzureMongoEndpointsAgent.EndpointName" value="MongodPort" />
+    </ConfigurationSettings>
     <Instances count="1" />
     <Certificates />
+  </Role>
+  <Role name="ReplicaSetRole">
+    <ConfigurationSettings>
+      <Setting name="MongoDBDataDir" value="UseDevelopmentStorage=true" />
+      <Setting name="ReplicaSetName" value="rs" />
+      <Setting name="MongoDBDataDirSize" value="" />
+      <Setting name="MongoDBLogVerbosity" value="-v" />
+      <Setting name="Microsoft.WindowsAzure.Plugins.Diagnostics.ConnectionString" value="UseDevelopmentStorage=true" />
+    </ConfigurationSettings>
+    <Instances count="1" />
   </Role>
 </ServiceConfiguration>

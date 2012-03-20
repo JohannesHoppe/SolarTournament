@@ -13,6 +13,7 @@
  * 
  *     playerPositionChanged : positionAndRotation
  *     shootPlaced           : positionAndTarget
+ *     saveHighscore         : nameAndScore
  *
  * Terminology:
  *
@@ -21,7 +22,7 @@
  *      broadcastAll = Sends message to every connected user
  *      volatile     = fire and forget functionally, messages are not buffered internally for when a client is unable to receive messages
  */
-module.exports = function (io, world) {
+module.exports = function (io, world, highscoreProvider) {
 
     var UPDATE_WORLD_BROADCAST_INTERVALL = 30;
     var broadcastCounter = 0;
@@ -57,6 +58,11 @@ module.exports = function (io, world) {
                 stop_RepeatedBroadcastAll_OfWorldData();
             }
         });
+
+        // hello MongoDB
+        socket.on("saveHighscore", function (nameAndScore) {
+            highscoreProvider.save(nameAndScore, function () { });
+        });
     };
 
     // TYPE: send (message to current player)
@@ -77,7 +83,7 @@ module.exports = function (io, world) {
 
         //console.log("shootPlaced: " + playerId);
         var positionAndTargetAndPlayerId = {
-            
+
             position: positionAndTarget.position,
             target: positionAndTarget.target,
             playerId: player.id
@@ -121,11 +127,6 @@ module.exports = function (io, world) {
             var worldData = world.getWorldData();
 
             var broadcastData = {
-
-                // TODO:
-                //asteroids: worldData.asteroids,
-                //photons: worldData.photons,
-
                 players: worldData.players,
                 serverTime: new Date().getTime(),
                 counter: ++broadcastCounter
@@ -143,14 +144,14 @@ module.exports = function (io, world) {
     var restartInFourHours = function () {
 
         var fourHours = 4 * 60 * 60 * 1000;
-        
+
         setTimeout(function () {
             console.log("+++ RESTART +++");
 
             // Haven't tested how IISnode will handle process.exit, but it will definitely restart on an uncaught exception
             //process.exit(code = 0);
             throw "+++ RESTART +++";
-            
+
         }, fourHours);
     };
 

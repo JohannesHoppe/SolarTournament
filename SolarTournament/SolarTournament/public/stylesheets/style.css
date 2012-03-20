@@ -282,3 +282,37 @@ footer * {
 #forkMe:hover {
   background-image: url("/images/fork_me_on_github.png");
 }
+img.screenshot {
+  width: 300px !important;
+  height: 177px !important;
+  margin-top: 15px;
+  margin-left: 65px;
+}
+#highscorePlaceholder {
+  width: 300px;
+  margin: 20px;
+}
+#highscorePlaceholder h2 {
+  margin-bottom: 5px;
+}
+#highscorePlaceholder p {
+  border-bottom: 1px solid #666;
+  padding-bottom: 10px;
+}
+div.copy {
+  margin: 20px;
+  width: 400px;
+}
+div.copy p {
+  font-size: 10px;
+  line-height: 12px;
+  text-align: justify;
+}
+div.copy ol {
+  margin-left: 30px;
+}
+div.copy ol li {
+  font-size: 10px;
+  line-height: 12px;
+  text-align: justify;
+}

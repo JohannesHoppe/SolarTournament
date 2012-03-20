@@ -1,15 +1,15 @@
-// Module dependencies.
 var express = require('express');
 var app = module.exports = express.createServer();
 var io = require('socket.io').listen(app);
 
 require('./config/config.js')(express, app, io, __dirname);
-require('./config/routes.js')(app);
+var highscoreProvider = require('./game/highscoreProvider.js')(app);
+
+require('./config/routes.js')(app, highscoreProvider);
 require('./config/scriptRendering.js')(app);
 
-
 var world = require('./game/serverWorld.js')();
-require('./game/serverSocket.js')(io, world);
+var socket = require('./game/serverSocket.js')(io, world, highscoreProvider);
 
 
 if (!module.parent) {
