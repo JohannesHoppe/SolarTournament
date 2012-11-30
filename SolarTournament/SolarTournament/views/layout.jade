@@ -5,9 +5,7 @@ html
         link(rel='stylesheet', href='/stylesheets/style.css')
         link(rel='stylesheet', href='/stylesheets/quicksand-fontface.css')
         link(rel='stylesheet', href='/stylesheets/game.css')
-
-        != renderHeaderScriptTags(scripts)
-    
+   
     body
         a#forkMe(href="https://github.com/JohannesHoppe/SolarTournament") 
 
@@ -21,7 +19,7 @@ html
                                 a(href="/") Home
                             li 
                                 a(href="/tournament") Tournament
-                            li 
+                            li(style='display:none') 
                                 a(href="/highscore") Highscore
                             li 
                                 a(href="/about") About
@@ -33,5 +31,3 @@ html
                             section.one-column
                             section.cell
                                 p (c) 2012 <a href="http://blog.johanneshoppe.de/">Johannes Hoppe</a> from <a href="http://www.haushoppe-its.de">HAUS HOPPE - ITS</a>
-        
-        != renderFooterScriptTags(scripts)

@@ -13,7 +13,7 @@
             name = "Player" + playerCounter;
         }
 
-        var spaceship = isEven(playerCounter) ? "humanInterceptor" : "alienInterceptor";
+        var spaceship = isEven(playerCounter) ? "alienInterceptor" : "humanInterceptor";
 
         return {
             id: playerId,

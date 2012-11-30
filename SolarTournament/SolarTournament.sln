@@ -1,7 +1,23 @@
 ﻿
-Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2010
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 2012
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SolarTournament", "SolarTournament\SolarTournament.csproj", "{7B8BDAB5-BE7F-4225-A7DA-270CDF932214}"
+EndProject
+Project("{CC5FD16D-436D-48AD-A40C-5A424C6E3E79}") = "NodeWorkerRole", "NodeWorkerRole\NodeWorkerRole.ccproj", "{7E740745-9AAA-47BA-8CC2-4199095B0FE7}"
+	ProjectSection(ProjectDependencies) = postProject
+		{7B8BDAB5-BE7F-4225-A7DA-270CDF932214} = {7B8BDAB5-BE7F-4225-A7DA-270CDF932214}
+	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "NodeHost", "NodeHost\NodeHost.csproj", "{AF6B611C-8E29-4215-88F1-9BC1EEC2A21C}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "DevScripts", "DevScripts", "{826B1B8A-50A1-4CC7-B75C-0BA74ECD806B}"
+	ProjectSection(SolutionItems) = preProject
+		1a_install_node.cmd = 1a_install_node.cmd
+		1b_install_modules.cmd = 1b_install_modules.cmd
+		2_start with plain node.cmd = 2_start with plain node.cmd
+		3a_start with nodemon and debug.cmd = 3a_start with nodemon and debug.cmd
+		3b_debug with node-inspector.cmd = 3b_debug with node-inspector.cmd
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -13,6 +29,14 @@ Global
 		{7B8BDAB5-BE7F-4225-A7DA-270CDF932214}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7B8BDAB5-BE7F-4225-A7DA-270CDF932214}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{7B8BDAB5-BE7F-4225-A7DA-270CDF932214}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7E740745-9AAA-47BA-8CC2-4199095B0FE7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7E740745-9AAA-47BA-8CC2-4199095B0FE7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7E740745-9AAA-47BA-8CC2-4199095B0FE7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7E740745-9AAA-47BA-8CC2-4199095B0FE7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{AF6B611C-8E29-4215-88F1-9BC1EEC2A21C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{AF6B611C-8E29-4215-88F1-9BC1EEC2A21C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{AF6B611C-8E29-4215-88F1-9BC1EEC2A21C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{AF6B611C-8E29-4215-88F1-9BC1EEC2A21C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

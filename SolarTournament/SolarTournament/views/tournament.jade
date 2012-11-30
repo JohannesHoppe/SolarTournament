@@ -1,33 +1,26 @@
-script(type='text/javascript') 
-    var socketUri = '#{socketUri}';
+script
+    var require = {
+    
+        baseUrl: "scripts"
+    
+    };
+script(src='scripts/jam/require.js')
+script 
 
-- scripts.push('/socket.io/socket.io.js');
-- scripts.push('/scripts/copperlicht.js');
-- scripts.push('/scripts/languageEnhancements.js');
+    var debugGame = false;
 
-- scripts.push('/scripts/clientGame/cams/gameCam.js');
-- scripts.push('/scripts/clientGame/cams/mainMenuCam.js');
-- scripts.push('/scripts/clientGame/cams/thirdPersonCam.js');
+    define('config', [], function() {
+        return {
+            socketUri  : '#{socketUri}',
+            skyboxName : "skyboxSpace" 
+        }
+    });
 
-- scripts.push('/scripts/clientGame/utils/copperlichtEnhancements.js');
-- scripts.push('/scripts/clientGame/utils/gameMath.js');
-- scripts.push('/scripts/clientGame/utils/randomizer.js');
-- scripts.push('/scripts/clientGame/utils/sound.js');
+    require(['domReady!',
+             'init'], function (document, init) {
 
-- scripts.push('/scripts/clientGame/asteroidSpawner.js');
-- scripts.push('/scripts/clientGame/gameLoop.js');
-- scripts.push('/scripts/clientGame/gameLoader.js');
-- scripts.push('/scripts/clientGame/htmlMenu.js');
-- scripts.push('/scripts/clientGame/keyboardWatcher.js');
-- scripts.push('/scripts/clientGame/playerBase.js');
-- scripts.push('/scripts/clientGame/player.js');
-- scripts.push('/scripts/clientGame/playerTwo.js');
-- scripts.push('/scripts/clientGame/sceneTemplates.js');
-- scripts.push('/scripts/clientGame/socket.js');
-- scripts.push('/scripts/clientGame/world.js');
-
-- scripts.push('/scripts/clientGame.js');
-
+        init.start();
+    });
 
 h1 Tournament
 section.css-table
@@ -65,18 +58,18 @@ section.css-table
 
         div#game_mainmenu.mainplate
             p Welcome to SolarTournament<br /><br /><a id="startGame" href="javascript:void(0)">Start New Game</a><br/><br/>
-              | <a id="musicButton" onclick="disableMusic(!musicDisabled)" href="javascript:void(0)">Enable/Disable Music</a>
+              | <a id="musicButton" href="javascript:void(0)">Enable/Disable Music</a>
 
     
     div#debug
         div#debugKeyboardWatcher
         div#debugPlayer
         div#debugSocket
-
-    audio#mainmenumusic(src="audio/menu_low.ogg", loop="true", autobuffer="autobuffer")
+                     
+    audio#mainmenumusic(src="http://content.solartournament.org/audio/DST-SpaceClouds.ogg", loop="true", autobuffer="autobuffer")
     audio#explosion(src="audio/expl.ogg", autobuffer="autobuffer")
     audio#shootsound(src="audio/shoot.ogg", autobuffer="autobuffer")
-    audio#gamemusic(src="audio/game_low.ogg", autobuffer="autobuffer")
+    audio#gamemusic(src="http://content.solartournament.org/audio/DST-AngryRobotIII.ogg", autobuffer="autobuffer")
 
 
     //- END: game

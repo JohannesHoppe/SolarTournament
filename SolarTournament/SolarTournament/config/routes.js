@@ -40,13 +40,6 @@ module.exports = function (app, highscoreProvider) {
             title: 'SolarTournament // About'
         });
     });
-
-    // scripts to load on every page - see scriptRendering.js
-    app.dynamicHelpers({
-        scripts: function () {
-            return ['scripts/jquery-1.7.1.min.js'];
-        }
-    });
 };
 
 

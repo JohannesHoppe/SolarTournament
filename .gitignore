@@ -1,15 +1,17 @@
-SolarTournament/SolarTournament/obj/
-SolarTournament/SolarTournament/bin/SolarTournament.dll
-SolarTournament/SolarTournament/bin/SolarTournament.pdb
+obj/
+bin/
+csx/
+node_modules/
+jam/
+_ReSharper*
+*.user
+*.suo
+node.exe
+packages/
 SolarTournament/SolarTournament/public/scene1.html
 SolarTournament/SolarTournament/app.js.logs/
-SolarTournament/local_package.csx/
-SolarTournament/cloud_package.cspkg
-_ReSharper*
-*.ReSharper.user
-*SolarTournament.suo
-*SolarTournament.csproj.user
-*SolarTournament.sln.docstates.suo
-*.sln.DotSettings.user
+SolarTournament/SolarTournament/npm-debug.log
 
-~$2012-03-20 - Getting started with MS Azure.pptx
+*.Local.cscfg
+*.Cloud.cscfg
+*.azurePubxml

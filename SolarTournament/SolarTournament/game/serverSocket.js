@@ -139,21 +139,17 @@ module.exports = function (io, world, highscoreProvider) {
         }, UPDATE_WORLD_BROADCAST_INTERVALL);
     };
 
-    // throw an exception after 4hours to make sure everything is cleaned up again
-    // at the moment this code is too unstable
-    var restartInFourHours = function () {
+    // throw an exception after one day to make sure everything is cleaned up again
+    var restartIn24h = function () {
 
-        var fourHours = 4 * 60 * 60 * 1000;
+        var oneDay = 24 * 60 * 60 * 1000;
 
         setTimeout(function () {
             console.log("+++ RESTART +++");
-
-            // Haven't tested how IISnode will handle process.exit, but it will definitely restart on an uncaught exception
-            //process.exit(code = 0);
             throw "+++ RESTART +++";
 
-        }, fourHours);
+        }, oneDay);
     };
 
-    restartInFourHours();
+    restartIn24h();
 }

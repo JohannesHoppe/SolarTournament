@@ -1,0 +1,17 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<ServiceDefinition name="SolarTournament" xmlns="http://schemas.microsoft.com/ServiceHosting/2008/10/ServiceDefinition" schemaVersion="2012-10.1.8">
+  <WorkerRole name="NodeHost" vmsize="Small">
+    <Startup>
+      <Task commandLine="startup.cmd &gt; startup.log 2&gt;&amp;1" executionContext="elevated" taskType="simple" />
+    </Startup>
+    <Imports>
+      <Import moduleName="Diagnostics" />
+      <Import moduleName="RemoteAccess" />
+      <Import moduleName="RemoteForwarder" />
+    </Imports>
+    <Endpoints>
+      <InputEndpoint name="http" protocol="tcp" port="80" />
+      <InputEndpoint name="httpFallback" protocol="tcp" port="1337" />
+    </Endpoints>
+  </WorkerRole>
+</ServiceDefinition>

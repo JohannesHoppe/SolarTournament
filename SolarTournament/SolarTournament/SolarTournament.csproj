@@ -1,5 +1,6 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
@@ -14,6 +15,14 @@
     <AssemblyName>SolarTournament</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
     <UseIISExpress>false</UseIISExpress>
+    <FileUpgradeFlags>
+    </FileUpgradeFlags>
+    <OldToolsVersion>4.0</OldToolsVersion>
+    <UpgradeBackupLocation />
+    <IISExpressSSLPort />
+    <IISExpressAnonymousAuthentication />
+    <IISExpressWindowsAuthentication />
+    <IISExpressUseClassicPipelineMode />
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -33,9 +42,7 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="bin\iisnode.msi" />
-    <None Include="bin\setupAzureMongoEndpointsAgent.cmd" />
-    <None Include="bin\setup_web.cmd" />
+    <Content Include="package.json" />
     <None Include="public\copperlichtdata\scene1.ccbjs" />
     <None Include="public\fonts\quicksand\Quicksand_Bold-webfont.eot" />
     <None Include="public\fonts\quicksand\Quicksand_Bold-webfont.ttf" />
@@ -59,6 +66,14 @@
     <None Include="public\fonts\quicksand\Quicksand_Light_Oblique-webfont.ttf" />
     <None Include="public\fonts\quicksand\Quicksand_Light_Oblique-webfont.woff" />
     <None Include="public\images\bg_header.psd" />
+    <Content Include="public\copperlichtdata\schwager1.png" />
+    <Content Include="public\images\screenshot_2012-09-23.png" />
+    <Content Include="public\scripts\CL3D.js" />
+    <Content Include="public\scripts\clientGame\grafics\shaderManager.js" />
+    <Content Include="public\scripts\clientGame\playerControll\driveControllSystem.js" />
+    <Content Include="public\scripts\clientGame\playerControll\stabilizationSystem.js" />
+    <Content Include="public\scripts\clientGame\utils\collisionHandler.js" />
+    <Content Include="public\scripts\clientGame\playerControll\shipNavigation.js" />
     <None Include="public\stylesheets\mixins\css3.styl" />
     <None Include="public\stylesheets\partials\typography.styl" />
     <None Include="public\stylesheets\style.styl" />
@@ -68,17 +83,14 @@
     <None Include="views\layout.jade" />
     <None Include="views\tournament.jade" />
     <Content Include="app.js" />
-    <Content Include="bin\AzureMongoEndpointsAgent.exe" />
-    <Content Include="bin\node.exe" />
-    <Content Include="bin\vcredist_x64.exe" />
     <Content Include="game\highscoreProvider.js" />
+    <Content Include="game\highscoreProviderFake.js" />
     <Content Include="public\copperlichtdata\copperlicht.js" />
     <Content Include="public\copperlichtdata\model_imperial_interceptor.jpg" />
     <Content Include="public\copperlichtdata\particle_shoot.jpg" />
     <Content Include="public\copperlichtdata\particle_smoke.jpg" />
     <Content Include="public\copperlichtdata\photon_blue.png" />
     <Content Include="public\copperlichtdata\photon_yellow.png" />
-    <Content Include="public\copperlichtdata\schwager.png" />
     <Content Include="public\copperlichtdata\skybox_debug0.jpg" />
     <Content Include="public\copperlichtdata\skybox_debug1.jpg" />
     <Content Include="public\copperlichtdata\skybox_debug2.jpg" />
@@ -96,42 +108,44 @@
     <Content Include="public\images\fork_me_on_github_trans.png" />
     <Content Include="public\images\screenshot.png" />
     <Content Include="public\images\screenshot_small.png" />
+    <Content Include="public\scripts\clientGame\infrastructure\asteroidSpawner.js" />
+    <Content Include="public\scripts\clientGame\infrastructure\sceneAttachment.js" />
+    <Content Include="public\scripts\clientGame\infrastructure\engine.js" />
+    <Content Include="public\scripts\clientGame\infrastructure\gameLoader.js" />
+    <Content Include="public\scripts\clientGame\infrastructure\htmlMenu.js" />
+    <Content Include="public\scripts\clientGame\infrastructure\keyboardWatcher.js" />
+    <Content Include="public\scripts\clientGame\infrastructure\sceneTemplates.js" />
+    <Content Include="public\scripts\clientGame\utils\Randomizer.js" />
+    <Content Include="public\scripts\clientGame\worldObjects\ownPlayer.js" />
+    <Content Include="public\scripts\clientGame\worldObjects\PlayerBase.js" />
+    <Content Include="public\scripts\domReady.js" />
+    <Content Include="public\scripts\init.js" />
+    <Content Include="public\scripts\jquery.tmpl.js" />
+    <Content Include="public\scripts\jquery.tmpl.min.js">
+      <DependentUpon>jquery.tmpl.js</DependentUpon>
+    </Content>
     <Content Include="public\scripts\showHighscore.js" />
-    <Content Include="Web.cloud.config" />
-    <Content Include="Web.config" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="config\config.js" />
     <Content Include="config\routes.js" />
-    <Content Include="config\scriptRendering.js" />
     <Content Include="favicon.ico" />
     <Content Include="game\serverPlayer.js" />
     <Content Include="game\serverWorld.js" />
     <Content Include="game\serverSocket.js" />
     <Content Include="public\audio\expl.ogg" />
-    <Content Include="public\audio\game_low.ogg" />
-    <Content Include="public\audio\menu_low.ogg" />
     <Content Include="public\audio\shoot.ogg" />
     <Content Include="public\images\bg_header.png" />
     <Content Include="public\images\bg_opacity.png" />
-    <Content Include="public\scripts\clientGame\asteroidSpawner.js" />
-    <Content Include="public\scripts\clientGame\cams\gameCam.js" />
     <Content Include="public\scripts\clientGame\cams\thirdPersonCam.js" />
-    <Content Include="public\scripts\clientGame\playerBase.js" />
     <Content Include="public\scripts\clientGame\gameLoop.js" />
-    <Content Include="public\scripts\clientGame\gameLoader.js" />
-    <Content Include="public\scripts\clientGame\htmlMenu.js" />
-    <Content Include="public\scripts\clientGame\keyboardWatcher.js" />
-    <Content Include="public\scripts\clientGame\player.js" />
-    <Content Include="public\scripts\clientGame\playerTwo.js" />
-    <Content Include="public\scripts\clientGame\utils\copperlichtEnhancements.js" />
+    <Content Include="public\scripts\clientGame\utils\copper.js" />
     <Content Include="public\scripts\languageEnhancements.js" />
     <Content Include="public\scripts\clientGame\cams\mainMenuCam.js" />
     <Content Include="public\scripts\clientGame\utils\gameMath.js" />
-    <Content Include="public\scripts\clientGame\utils\randomizer.js" />
-    <Content Include="public\scripts\clientGame\sceneTemplates.js" />
     <Content Include="public\scripts\clientGame\socket.js" />
     <Content Include="public\scripts\clientGame\world.js" />
+    <Content Include="public\scripts\socket.io.js" />
     <Content Include="public\stylesheets\game.css" />
     <Content Include="public\fonts\quicksand\Quicksand License.txt" />
     <Content Include="public\fonts\quicksand\Quicksand_Bold-webfont.svg" />
@@ -143,10 +157,7 @@
     <Content Include="public\fonts\quicksand\Quicksand_Light_Oblique-webfont.svg" />
     <Content Include="public\images\bg_body.jpg" />
     <Content Include="public\images\bg_galaxy.jpg" />
-    <Content Include="public\scripts\clientGame.js" />
     <Content Include="public\scripts\copperlicht.js" />
-    <Content Include="public\scripts\jquery-1.7.1.js" />
-    <Content Include="public\scripts\jquery-1.7.1.min.js" />
     <Content Include="public\scripts\clientGame\utils\sound.js" />
     <Content Include="public\stylesheets\quicksand-fontface.css" />
     <Content Include="public\stylesheets\style.css" />
@@ -154,8 +165,13 @@
   <ItemGroup>
     <Folder Include="Properties\" />
   </ItemGroup>
+  <PropertyGroup>
+    <VisualStudioVersion Condition="'$(VisualStudioVersion)' == ''">10.0</VisualStudioVersion>
+    <VSToolsPath Condition="'$(VSToolsPath)' == ''">$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v$(VisualStudioVersion)</VSToolsPath>
+  </PropertyGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
-  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v10.0\WebApplications\Microsoft.WebApplication.targets" />
+  <Import Project="$(VSToolsPath)\WebApplications\Microsoft.WebApplication.targets" Condition="'$(VSToolsPath)' != ''" />
+  <Import Project="$(MSBuildExtensionsPath32)\Microsoft\VisualStudio\v10.0\WebApplications\Microsoft.WebApplication.targets" Condition="false" />
   <ProjectExtensions>
     <VisualStudio>
       <FlavorProperties GUID="{349c5851-65df-11da-9384-00065b846f21}">

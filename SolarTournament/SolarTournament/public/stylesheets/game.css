@@ -28,7 +28,7 @@
     border: 1px solid #222222;
     border-radius: 5px;    
 }
-            
+     
 #gamehud,
 #cl_loadinglabel {
 
@@ -124,15 +124,11 @@ footer p
 }
 
 #debugPlayer {
-    display: none;
+    
 }
 
 #debugSocket {
     width : 260px;
     height : 200px;
     overflow : auto; 
-}
-
-#musicButton {
-    display: none !important;
 }
