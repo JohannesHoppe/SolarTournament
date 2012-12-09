@@ -13,9 +13,9 @@ var serverPlayer = require('./serverPlayer.js')();
 
 module.exports = function () {
 
-    var asteroids = new Array();
-    var photons = new Array();
-    var players = new Array();
+    var asteroids = [];
+    var photons = [];
+    var players = [];
 
     var addNewPlayer = function (playerId) {
 

@@ -14,9 +14,11 @@
  *     playerPositionChanged : positionAndRotation
  *     shootPlaced           : positionAndTarget
  */
-define(['socket.io',
+define(['CL3D',
+        'jquery',
+        'socket.io',
         'config',
-        'clientGame/world'], function (io, config, world) {
+        'clientGame/world'], function (CL3D, $, io, config, world) {
 
     var Socket = function() {
 
@@ -82,14 +84,14 @@ define(['socket.io',
 
         disconnect: function() {
 
-            if (this._socket != null) {
+            if (this._socket) {
                 this._socket.disconnect();
             }
         },
 
         saveHighscore: function(name, score) {
 
-            if (this._socket != null) {
+            if (this._socket) {
                 this._socket.emit('saveHighscore', { name: name, score: score });
             }
         },
@@ -124,20 +126,22 @@ define(['socket.io',
         _debugGame: function(event, data) {
             if (window.debugGame) {
 
+                if (!data) { 
+                    return;
+                }
+
                 var extraInfo = "";
 
-                if (data == null) {
-
+                if (typeof data == 'string') {
                     // it is a playerId
-                } else if (typeof data == 'string') {
                     extraInfo = data;
 
-                    // it is a player
                 } else if (typeof data.name != 'undefined') {
+                    // it is a player                    
                     extraInfo = data.name;
 
-                    // it is broadcastData
                 } else if (typeof data.counter != 'undefined') {
+                    // it is broadcastData                    
                     extraInfo = "counter" + data.counter;
                 }
 

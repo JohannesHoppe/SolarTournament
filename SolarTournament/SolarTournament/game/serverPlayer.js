@@ -2,14 +2,20 @@
 
     var playerCounter = 0;
 
+    var randomMinToMax = function(min, max) {
+
+        var range = max - min + 1;
+        return Math.floor(Math.random() * range + min);
+    };
+
     var createNewPlayer = function (playerId, name) {
-    
+
         playerCounter++;
 
         var posX = randomMinToMax(-700, 700);
         var posZ = randomMinToMax(-700, 700);
 
-        if (name == "Player" || name == "") {
+        if (!name || name == "Player") {
             name = "Player" + playerCounter;
         }
 
@@ -25,17 +31,10 @@
     };
 
     var isEven = function (someNumber) {
-        return (someNumber % 2 == 0) ? true : false;
+        return (someNumber % 2 === 0) ? true : false;
     };
 
     return {
         createNewPlayer: createNewPlayer
     };
 };
-
-
-function randomMinToMax(min, max) {
-    
-    var range = max - min + 1;
-    return Math.floor(Math.random() * range + min);
-}

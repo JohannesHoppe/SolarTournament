@@ -1,8 +1,9 @@
-﻿define(['clientGame/utils/gameMath',
+﻿define(['CL3D',
+        'clientGame/utils/gameMath',
         'clientGame/playerControll/stabilizationSystem',
-        'clientGame/playerControll/driveControllSystem'], function (gameMath, stabilizationSystem, driveControllSystem) {
-    var shipNavigation = function () {
-        this._moveSpeed = 1;
+        'clientGame/playerControll/driveControllSystem'], function (CL3D, gameMath, stabilizationSystem, driveControllSystem) {
+    var ShipNavigation = function () {
+        this._moveSpeed = 2;
         this._rotation = new CL3D.Vect3d(0, 0, 0);
         this._toTheBottom = new CL3D.Vect3d(-1, 0, 0);
         this._toTheTop = new CL3D.Vect3d(1, 0, 0);
@@ -20,7 +21,7 @@
         
     };
 
-    shipNavigation.addToProto({
+    ShipNavigation.addToProto({
         reset: function(){
             this._movementOrientation = new CL3D.Quaternion(0, 0, 0, 1);
             this._stabilizationSystem.visualOrientation = new CL3D.Quaternion(0, 0, 0, 1);
@@ -88,10 +89,8 @@
 
         _flyForward: function (position, forward, timeDiff) {
             position.addToThis(forward.getNormalized().multiplyWithScal(timeDiff).multiplyWithScal(this._moveSpeed));
-        },
-
-        
+        }
     });
     
-    return new shipNavigation();
+    return new ShipNavigation();
 });

@@ -1,7 +1,7 @@
 ﻿/*
  * Base "class" for game participants to inititalize (remote players) or to inherit from (own player)
  */
-define(function () {
+define(['CL3D'], function (CL3D) {
 
     var PlayerBase = Class.extend({
         init: function() {
@@ -37,7 +37,7 @@ define(function () {
             this._rotation.Y = rotation.Y;
             this._rotation.Z = rotation.Z;
 
-            if (this._model != null) {
+            if (this._model) {
 
                 this._model.Pos.X = this._position.X;
                 this._model.Pos.Y = this._position.Y;

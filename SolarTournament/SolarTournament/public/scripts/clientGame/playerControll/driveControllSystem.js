@@ -1,12 +1,12 @@
 ﻿define(['clientGame/utils/gameMath'], function (gameMath) {
-    var driveControllSystem = function () {
+    var DriveControllSystem = function () {
         this.drive = null;
         this._driveGlowEffectLeft = null;
         this._driveGlowEffectRight = null;
         this._driveGlowEffectTop = null;
     };
 
-    driveControllSystem.addToProto({
+    DriveControllSystem.addToProto({
         initializeShipDriveFire: function (model) {
             if (model) {
                 if (model.getChildren()[1]) {
@@ -70,8 +70,8 @@
                     }
                 }
             }
-        },
+        }
     });
     
-    return new driveControllSystem();
+    return new DriveControllSystem();
 });

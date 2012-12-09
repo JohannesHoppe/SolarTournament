@@ -1,12 +1,12 @@
-﻿define(['clientGame/utils/gameMath'], function (gameMath) {
-    var collisionHandler = function () {
+﻿define(['CL3D', 'clientGame/utils/gameMath'], function (CL3D, gameMath) {
+    
+    var CollisionHandler = function() {
         this._gameMath = gameMath;
     };
 
-    collisionHandler.addToProto({
+    CollisionHandler.addToProto({
+        testOnSphereCollision: function(objectOne, objectTwo) {
 
-        testOnSphereCollision: function (objectOne, objectTwo) {
-            
             if (!objectOne || !objectTwo) {
                 return false;
             }
@@ -16,29 +16,29 @@
             return distance < collisionDistance;
         },
 
-        testOnMeshCollision: function (objectOne, objectTwo) {
+        testOnMeshCollision: function(objectOne, objectTwo) {
 
             if (!this.testOnSphereCollision(objectOne, objectTwo)) {
                 return false;
             }
-            
+
             // not always available - if Copperlicht hasn't loaded all data?!
             if (typeof objectOne.Children[0] == "undefined" ||
                 typeof objectTwo.Children[0] == "undefined") {
                 return false;
             }
-            
+
             if (!objectOne.MeshSelector) {
                 objectOne.MeshSelector = new CL3D.MeshTriangleSelector(objectOne.Children[0].OwnedMesh, objectOne);
             }
-            
+
             if (!objectTwo.MeshSelector) {
                 objectTwo.MeshSelector = new CL3D.MeshTriangleSelector(objectTwo.Children[0].OwnedMesh, objectTwo);
             }
-            
+
             var triesOfObjectOne = [];
             var triesOfObjectTwo = [];
-            
+
             objectOne.MeshSelector.getAllTriangles(null, triesOfObjectOne);
             objectTwo.MeshSelector.getAllTriangles(null, triesOfObjectTwo);
 
@@ -46,10 +46,10 @@
             return isColliding;
         },
 
-        _calculateIfCollisionExist: function (triesOfObjectOne, triesOfObjectTwo) {
+        _calculateIfCollisionExist: function(triesOfObjectOne, triesOfObjectTwo) {
             var collide;
-            for (var indexTriesOfObjectOne = 0 ; indexTriesOfObjectOne < triesOfObjectOne.length || collide; indexTriesOfObjectOne++) {
-                for (var indexTriesOfObjectTwo = 0 ; indexTriesOfObjectTwo < triesOfObjectTwo.length || collide ; indexTriesOfObjectTwo++) {
+            for (var indexTriesOfObjectOne = 0; indexTriesOfObjectOne < triesOfObjectOne.length || collide; indexTriesOfObjectOne++) {
+                for (var indexTriesOfObjectTwo = 0; indexTriesOfObjectTwo < triesOfObjectTwo.length || collide; indexTriesOfObjectTwo++) {
 
                     var planeOne = triesOfObjectOne[indexTriesOfObjectOne].getPlane();
                     var planeTwo = triesOfObjectTwo[indexTriesOfObjectTwo].getPlane();
@@ -57,10 +57,10 @@
                     var outlinePoint = new CL3D.Vect3d();
                     var outLineVect = new CL3D.Vect3d();
                     var intersectPlaneOneWithPlaneTwo = planeOne.getIntersectionWithPlane(planeTwo, outlinePoint, outLineVect);
-                        
+
                     var intersectionOfTriesOneEdgeWithIntersectionLine = this._calculateIntersectionWithIntersectionLine(triesOfObjectOne[indexTriesOfObjectOne], outlinePoint, outLineVect);
                     var intersectionOfTriesTwoEdgeWithIntersectionLine = this._calculateIntersectionWithIntersectionLine(triesOfObjectTwo[indexTriesOfObjectTwo], outlinePoint, outLineVect);
-                    
+
                     collide = this._calculateIfTriangleIntersectOnTheIntersectionLine(intersectPlaneOneWithPlaneTwo, intersectionOfTriesOneEdgeWithIntersectionLine, intersectionOfTriesTwoEdgeWithIntersectionLine);
                     if (collide) {
                         return collide;
@@ -71,8 +71,8 @@
             return false;
         },
 
-        _calculateIntersectionWithIntersectionLine: function (trie, intersectionLineOrigin, intersectionLineDirection) {
-            var originTrieEdge = [];            
+        _calculateIntersectionWithIntersectionLine: function(trie, intersectionLineOrigin, intersectionLineDirection) {
+            var originTrieEdge = [];
             var directionTrieEdge = [];
             var intersectionArray = [];
 
@@ -83,15 +83,15 @@
             originTrieEdge.push(trie.pointC);
             directionTrieEdge.push(trie.pointA.substract(trie.pointC));
 
-            for (var index = 0 ; index < originTrieEdge.length ; index++) {
-                intersectionArray.push(gameMath.intesectBetweenTwoLines(originTrieEdge[index], directionTrieEdge[index], intersectionLineOrigin, intersectionLineDirection));    
+            for (var index = 0; index < originTrieEdge.length; index++) {
+                intersectionArray.push(gameMath.intesectBetweenTwoLines(originTrieEdge[index], directionTrieEdge[index], intersectionLineOrigin, intersectionLineDirection));
             }
 
             return intersectionArray;
         },
 
-        _calculateIfTriangleIntersectOnTheIntersectionLine: function (planeIntersect, triangleOneIntersection, triangleTwoIntersection) {
-            
+        _calculateIfTriangleIntersectOnTheIntersectionLine: function(planeIntersect, triangleOneIntersection, triangleTwoIntersection) {
+
             var objectOnePoints = [];
             var objectTwoPoints = [];
             objectOnePoints = this._filterTriangleIntersectionPoints(triangleOneIntersection);
@@ -103,11 +103,11 @@
             return false;
         },
 
-        _filterTriangleIntersectionPoints: function (intersectionPoints) {
+        _filterTriangleIntersectionPoints: function(intersectionPoints) {
             var vectorZero = new CL3D.Vect3d(0, 0, 0);
             var objectIntersectionPoints = [];
 
-            for (var index = 0; index < intersectionPoints.length ; index++) {
+            for (var index = 0; index < intersectionPoints.length; index++) {
                 if (!intersectionPoints[index].equals(vectorZero)) {
                     objectIntersectionPoints.push(intersectionPoints[index]);
                 }
@@ -116,5 +116,5 @@
         }
     });
 
-    return new collisionHandler();
-})
+    return new CollisionHandler();
+});

@@ -1,11 +1,10 @@
-﻿define(['clientGame/infrastructure/engine'], function (engine) {
-    var sceneAttachment = function () {
+﻿define(['CL3D', 'clientGame/infrastructure/engine'], function (CL3D, engine) {
+    var SceneAttachment = function() {
         this._engine = engine;
     };
 
-    sceneAttachment.addToProto({
-        
-        addLightToScene : function () {
+    SceneAttachment.addToProto({
+        addLightToScene: function() {
             var lightnode = new CL3D.LightSceneNode();
             var scene = this._engine.getScene();
             lightnode.Name = "mainLight";
@@ -27,7 +26,7 @@
             scene.AmbientLight.B = 0.4;
         },
 
-        addShipDriveLight: function () {
+        addShipDriveLight: function() {
             var lightnode = new CL3D.LightSceneNode();
 
             lightnode.Name = "driveLight";
@@ -39,10 +38,10 @@
             lightnode.Pos.X = 0;
             lightnode.Pos.Y = 0;
             lightnode.Pos.Z = -60;
- 
+
             return lightnode;
         }
     });
 
-    return new sceneAttachment();
-})
+    return new SceneAttachment();
+});

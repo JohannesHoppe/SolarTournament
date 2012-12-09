@@ -1,4 +1,4 @@
-﻿define(['clientGame/infrastructure/engine'], function(engine) {
+﻿define(['CL3D', 'clientGame/infrastructure/engine'], function (CL3D,engine) {
 
     var ThirdPersonCam = function() {
         this._cam = null;
@@ -16,7 +16,7 @@
         this._cam = scene.getSceneNodeFromName('thirdPersonCamera');
         this._crosshair = scene.getSceneNodeFromName('crosshair');
 
-        this._cam.setFarValue(200000)
+        this._cam.setFarValue(200000);
 
         //scene.getRootSceneNode().addChild(this._cam);
         scene.setActiveCamera(this._cam);

@@ -111,8 +111,9 @@ if (!Function.prototype.bind) { // check if native implementation available
         // The dummy class constructor
         function Class() {
             // All construction is actually done in the init method
-            if (!initializing && this.init)
+            if (!initializing && this.init) {
                 this.init.apply(this, arguments);
+            }
         }
 
         // Populate our constructed prototype object

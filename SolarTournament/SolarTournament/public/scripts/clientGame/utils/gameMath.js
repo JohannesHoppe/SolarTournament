@@ -1,37 +1,8 @@
 ﻿/* Helper for Mathemtic routines */
-define(function() {
+define(['CL3D'], function (CL3D) {
 
     var gameMath = function() {
 
-    };
-
-    // unused?!
-    gameMath.deccelerateValue = function (timeDiff, value, deceleratefact, maxspeed) {
-
-        var p = deceleratefact * timeDiff;
-
-        if (value < 0) {
-
-            value += p;
-            if (value > 0) value = 0;
-
-        } else if (value > 0) {
-
-            value -= p;
-            if (value < 0) {
-                value = 0;
-            }
-        }
-
-        if (value > maxspeed) {
-            value = maxspeed;
-        }
-
-        if (value < -maxspeed) {
-            value = -maxspeed;
-        }
-
-        return value;
     };
 
     gameMath.quaternionMultiplication = function (quaterionOne, quaterionTwo) {
@@ -123,13 +94,13 @@ define(function() {
         return projectedVector;
     };
 
-    gameMath.intesectBetweenTwoLines = function (linePointOne, lineDirectionOne, linePointTwo, lineDirectionTwo, linesIntesect) {
+    gameMath.intesectBetweenTwoLines = function(linePointOne, lineDirectionOne, linePointTwo, lineDirectionTwo, linesIntesect) {
         var r = null;
         var s = null;
         var intersectionPoint = new CL3D.Vect3d();
 
         s = (linePointOne.X - linePointTwo.X + ((linePointTwo.Y - linePointOne.Y) / lineDirectionOne.Y) * lineDirectionOne.X) / (lineDirectionTwo.X - ((lineDirectionTwo.Y * lineDirectionOne.X) / lineDirectionOne.Y));
-        r =  ((linePointTwo.Y - linePointOne.Y + lineDirectionTwo.Y * s) / lineDirectionOne.Y);
+        r = ((linePointTwo.Y - linePointOne.Y + lineDirectionTwo.Y * s) / lineDirectionOne.Y);
         if (linePointOne.X + lineDirectionOne.X * r == linePointTwo.X + lineDirectionTwo.X * s) {
             if (linePointOne.Y + lineDirectionOne.Y * r == linePointTwo.Y + lineDirectionTwo.Y * s) {
                 if (linePointOne.Z + lineDirectionOne.Z * r == linePointTwo.Z + lineDirectionTwo.Z * s) {
@@ -144,7 +115,7 @@ define(function() {
         }
         //linesIntesect = false;
         return intersectionPoint;
-    }
+    };
 
     // no initialization intended!
     // (the GameMath object should be similar to a "static class")

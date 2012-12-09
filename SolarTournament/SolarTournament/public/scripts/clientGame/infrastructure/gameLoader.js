@@ -1,11 +1,12 @@
 ﻿/*
  * Loads resources and initiliazes the asteroids, ends with a event call "gameLoaded"
  */
-define(['config',
+define(['jquery',
+        'config',
         'clientGame/infrastructure/htmlMenu',
         'clientGame/infrastructure/engine',
         'clientGame/infrastructure/sceneTemplates',
-        'clientGame/grafics/shaderManager'], function (config, htmlMenu, engine, sceneTemplates, shaderManager) {
+        'clientGame/grafics/shaderManager'], function ($, config, htmlMenu, engine, sceneTemplates, shaderManager) {
 
     var GameLoader = function() { };
 
