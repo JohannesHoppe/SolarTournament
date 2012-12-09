@@ -1,6 +1,8 @@
 Welcome to SolarTournament
 ==========================
 
+![Screenshot][Screenshot_SolarTournament.jpg]
+
 [SolarTournament](http://solartournament.org) demonstrates a bunch of technologies.
 
 It bases on [Node.js](http://nodejs.org/) and uses the [express](http://expressjs.com/) web development framework, the [Jade](https://github.com/visionmedia/jade/blob/master/Readme.md) template engine, the [Stylus](http://learnboost.github.com/stylus/) CSS engine and [Socket.IO](http://socket.io/) for WebSocket communictation.
