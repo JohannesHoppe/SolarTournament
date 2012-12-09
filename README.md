@@ -1,7 +1,7 @@
 Welcome to SolarTournament
 ==========================
 
-![Screenshot][https://raw.github.com/JohannesHoppe/SolarTournament/master/Screenshot_SolarTournament.jpg]
+![Screenshot](https://raw.github.com/JohannesHoppe/SolarTournament/master/Screenshot_SolarTournament.jpg)
 
 [SolarTournament](http://solartournament.org) demonstrates a bunch of technologies.
 
