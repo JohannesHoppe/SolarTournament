@@ -4,7 +4,7 @@
 define(['jquery',
         'clientGame/utils/sound'], function ($, sound) {
 
-    var HtmlMenu = function() {
+    var HtmlMenu = function () {
 
         this._gamehud = $('#gamehud');
         this._game_mainmenu = $('#game_mainmenu');
@@ -26,7 +26,7 @@ define(['jquery',
     };
 
     HtmlMenu.addToProto({
-        showInfoPlate: function(text) {
+        showInfoPlate: function (text) {
 
             this._gamehud.hide();
             this._game_mainmenu.hide();
@@ -34,7 +34,7 @@ define(['jquery',
             this._infoplattext.html(text);
         },
 
-        showMainMenu: function() {
+        showMainMenu: function () {
 
             this._gamehud.hide();
             this._game_mainmenu.show('fast');
@@ -46,28 +46,28 @@ define(['jquery',
             sound.toggleMusic();
         },
 
-        showGame: function() {
+        showGame: function () {
 
             this._gamehud.show();
             this._game_mainmenu.hide();
             this._infoplate.hide();
         },
 
-        showNoWebglMessage: function() {
+        showNoWebglMessage: function () {
             $('#cl_nowebgl').show();
         },
 
-        showLoadingLabel: function() {
+        showLoadingLabel: function () {
 
             this._loadinglabel.show();
         },
 
-        hideLoadingLabel: function() {
+        hideLoadingLabel: function () {
 
             this._loadinglabel.hide();
         },
 
-        updateHud: function(timeRemaining, gameScore) {
+        updateHud: function (timeRemaining, gameScore) {
 
             if (timeRemaining == -1) {
 

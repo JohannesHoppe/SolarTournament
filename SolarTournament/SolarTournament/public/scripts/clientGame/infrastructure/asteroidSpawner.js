@@ -6,13 +6,13 @@
         'clientGame/utils/Randomizer',
         'clientGame/grafics/shaderManager'], function (CL3D, engine, sceneTemplates, copper, gameMath, Randomizer, shaderManager) {
 
-            var asteroidSpawner = function () {
+            var AsteroidSpawner = function () {
                 this.asteroids = [];
                 this.gameMath = gameMath;
                 this.matIds = [];
             };
 
-            asteroidSpawner.addToProto({
+            AsteroidSpawner.addToProto({
 
                 _createNewAsteroid : function (asteroidTemplate, position, animatorVect) {
 
@@ -64,12 +64,12 @@
                         this.asteroids[asteroidCount].orientation = this.gameMath.getLocalRotationQuanterion(this.asteroids[asteroidCount].animatorVect, 0.0002, this.asteroids[asteroidCount].orientation, timeDiff);
 
                         this.asteroids[asteroidCount].orientation.normalize();
-                        var rotationMatrix = this.asteroids[asteroidCount].orientation.getMatrix()
+                        var rotationMatrix = this.asteroids[asteroidCount].orientation.getMatrix();
                         this.asteroids[asteroidCount].Rot = rotationMatrix.getRotationDegrees();
                         this.asteroids[asteroidCount].Children[0].Rot = rotationMatrix.getRotationDegrees();
                     }
                 }
          });
 
-        return new asteroidSpawner();
+        return new AsteroidSpawner();
 });

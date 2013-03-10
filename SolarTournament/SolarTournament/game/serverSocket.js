@@ -22,16 +22,16 @@
  *      broadcastAll = Sends message to every connected user
  *      volatile     = fire and forget functionally, messages are not buffered internally for when a client is unable to receive messages
  */
-module.exports = function (io, world, highscoreProvider) {
+module.exports = function(io, world, highscoreProvider) {
 
     var UPDATE_WORLD_BROADCAST_INTERVALL = 30;
     var broadcastCounter = 0;
     var intervalId = null;
 
-    io.sockets.on('connection', function (socket) { handleConnection(socket); });
+    io.sockets.on('connection', function(socket) { handleConnection(socket); });
 
 
-    var handleConnection = function (socket) {
+    var handleConnection = function(socket) {
 
         var player = world.addNewPlayer(socket.id);
 
@@ -42,15 +42,15 @@ module.exports = function (io, world, highscoreProvider) {
             start_RepeatedBroacastAll_OfWorldData();
         }
 
-        socket.on('playerPositionChanged', function (positionAndRotation) {
+        socket.on('playerPositionChanged', function(positionAndRotation) {
             world.updatePlayerPosition(player.id, positionAndRotation);
         });
 
-        socket.on('shootPlaced', function (positionAndTarget) {
+        socket.on('shootPlaced', function(positionAndTarget) {
             broadcastSpawnShoot(socket, positionAndTarget, player);
         });
 
-        socket.on('disconnect', function () {
+        socket.on('disconnect', function() {
 
             broadcastRemovePlayer(socket, player);
 
@@ -60,13 +60,14 @@ module.exports = function (io, world, highscoreProvider) {
         });
 
         // hello MongoDB
-        socket.on("saveHighscore", function (nameAndScore) {
-            highscoreProvider.save(nameAndScore, function () { });
+        socket.on("saveHighscore", function(nameAndScore) {
+            highscoreProvider.save(nameAndScore, function() {
+            });
         });
     };
 
     // TYPE: send (message to current player)
-    var sendSpawnOwnPlayer = function (socket, player) {
+    var sendSpawnOwnPlayer = function(socket, player) {
 
         // send to current player
         socket.emit('spawnOwnPlayer', player);
@@ -74,16 +75,15 @@ module.exports = function (io, world, highscoreProvider) {
     };
 
     // TYPE: broadcast (message to all other connected players)
-    var broadcastSpawnOtherPlayer = function (socket, player) {
+    var broadcastSpawnOtherPlayer = function(socket, player) {
         socket.broadcast.emit('spawnOtherPlayer', player);
     };
 
     // TYPE: volatile broadcast
-    var broadcastSpawnShoot = function (socket, positionAndTarget, player) {
+    var broadcastSpawnShoot = function(socket, positionAndTarget, player) {
 
         //console.log("shootPlaced: " + playerId);
         var positionAndTargetAndPlayerId = {
-
             position: positionAndTarget.position,
             target: positionAndTarget.target,
             playerId: player.id
@@ -94,7 +94,7 @@ module.exports = function (io, world, highscoreProvider) {
     };
 
     // TYPE: broadcast
-    var broadcastRemovePlayer = function (socket, player) {
+    var broadcastRemovePlayer = function(socket, player) {
 
         world.deletePlayer(player.id);
         socket.broadcast.emit('removePlayer', player.id);
@@ -102,9 +102,9 @@ module.exports = function (io, world, highscoreProvider) {
     };
 
     // to avoid wasting traffic and CPU cycles
-    var stop_RepeatedBroadcastAll_OfWorldData = function () {
+    var stop_RepeatedBroadcastAll_OfWorldData = function() {
 
-        if (intervalId == null) {
+        if (!intervalId) {
             return;
         }
 
@@ -115,14 +115,14 @@ module.exports = function (io, world, highscoreProvider) {
 
     // TYPE: volatile broadcastAll
     // could create high traffic and a lot of CPU cycles
-    var start_RepeatedBroacastAll_OfWorldData = function () {
+    var start_RepeatedBroacastAll_OfWorldData = function() {
 
-        if (intervalId != null) {
+        if (intervalId) {
             stop_RepeatedBroadcastAll_OfWorldData();
         }
 
         console.log("+++ START BROADCASTING +++");
-        intervalId = setInterval(function () {
+        intervalId = setInterval(function() {
 
             var worldData = world.getWorldData();
 
@@ -140,11 +140,11 @@ module.exports = function (io, world, highscoreProvider) {
     };
 
     // throw an exception after one day to make sure everything is cleaned up again
-    var restartIn24h = function () {
+    var restartIn24h = function() {
 
         var oneDay = 24 * 60 * 60 * 1000;
 
-        setTimeout(function () {
+        setTimeout(function() {
             console.log("+++ RESTART +++");
             throw "+++ RESTART +++";
 
@@ -152,4 +152,4 @@ module.exports = function (io, world, highscoreProvider) {
     };
 
     restartIn24h();
-}
+};

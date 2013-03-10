@@ -1,5 +1,5 @@
 ﻿/* Helper for Copperlicht */
-define(['clientGame/utils/collisionHandler'], function (collisionHandler) {
+define(['CL3D', 'clientGame/utils/collisionHandler'], function (CL3D, collisionHandler) {
 
     var copper = function () {
  
@@ -8,7 +8,7 @@ define(['clientGame/utils/collisionHandler'], function (collisionHandler) {
     copper.SMOKE_COUNT = 80;
     copper.SMOKE_RADIUS = 80;
     copper.SHOOT_LIVETIME = 5500;
-    copper.PHOTON_SPEED = 3;
+    copper.PHOTON_SPEED = 5;
 
     copper.createClone = function(engine, getTemplateCall, position) {
 
@@ -50,7 +50,7 @@ define(['clientGame/utils/collisionHandler'], function (collisionHandler) {
     copper.update3DPosition = function(pos3d) {
 
         var pos2d = this.engine.get2DPositionFrom3DPosition(pos3d);
-        if (pos2d != null) {
+        if (pos2d) {
             this.set2DPosition(pos2d.X, pos2d.Y, 256, 256);
         }
     };
@@ -149,7 +149,7 @@ define(['clientGame/utils/collisionHandler'], function (collisionHandler) {
                 player.life -= 1;
                 var force = player._position.substract(asteroids[i].Pos);
                 force.normalize();
-                force.multiplyThisWithScal(100);
+                force.multiplyThisWithScal(1000);
                 player._position.addToThis(force);
             }
         }

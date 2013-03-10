@@ -22,7 +22,7 @@
         getRand: function() {
             // calculate new seed
             this.detRandSeed = this.a * (this.detRandSeed % this.q) - this.r * (Math.floor(this.detRandSeed / this.q));
-            if (this.detRandSeed < 0) this.detRandSeed += this.m;
+            if (this.detRandSeed < 0) { this.detRandSeed += this.m; }
 
             return Math.floor(this.detRandSeed);
         }

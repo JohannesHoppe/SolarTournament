@@ -9,13 +9,13 @@ define(function() {
         musicDisabled = !musicDisabled;
 
         if (musicDisabled) {
-            if (playingMusic != null) {
+            if (playingMusic) {
                 playingMusic.pause();
             }
             playingMusic = null;
 
         } else {
-            if (playingMusic == null && currentlyPlayingMusicName != null) {
+            if (!playingMusic && currentlyPlayingMusicName) {
                 playmusic(currentlyPlayingMusicName);
             }
         }
@@ -23,25 +23,20 @@ define(function() {
 
     var playmusic = function(s) {
         currentlyPlayingMusicName = s;
-        if (musicDisabled)
-            return;
+        if (musicDisabled) { return; }
         var a = new Audio();
         a.src = document.getElementById(s).src;
         a.loop = true;
-        //a.load();
         a.play();
-        if (playingMusic != null)
-            playingMusic.pause();
+        if (playingMusic) { playingMusic.pause(); }
         playingMusic = a;
     };
 
     var playsound = function(s) {
         var thistime = new Date();
-        var now = thistime.getTime();
 
         var origaudio = document.getElementById(s);
-        if (origaudio == null)
-            return;
+        if (!origaudio) { return; }
 
         // the problem with this is that the audio will be reloaded by chrome, no matter what we do here.
         // seeking and restarting an audio file isn't possible as well.

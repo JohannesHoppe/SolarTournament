@@ -1,10 +1,9 @@
-﻿
-define(['CL3D',
+﻿define(['CL3D',
         'clientGame/infrastructure/engine'],
     function (CL3D, engine) {
-        var ShaderManager = function () {
+        var ShaderManager = function() {
             this._engine = engine;
-        }
+        };
 
         ShaderManager.prototype.drawWithPointLightShader = function (model) {
 
@@ -55,7 +54,7 @@ define(['CL3D',
                 model.getMaterial(0).Type = newMaterialType;
             }
             else {
-                alert('could not create shader');
+                window.alert('could not create shader');
             }
             return newMaterialType;
 
@@ -129,15 +128,15 @@ define(['CL3D',
                 model.getMaterial(0).Type = newMaterialType;
             }
             else {
-                alert('could not create shader');
+                window.alert('could not create shader');
             }
 
             return newMaterialType;
 
         };
 
-        ShaderManager.prototype.updateShader = function () {
-            this._engine.getRenderer().OnChangeMaterial = function (mattype) {
+        ShaderManager.prototype.updateShader = function() {
+            this._engine.getRenderer().OnChangeMaterial = function(mattype) {
                 var renderer = engine.getRenderer();
                 var scene = engine.getScene();
                 var gl = renderer.getWebGL();
@@ -151,7 +150,7 @@ define(['CL3D',
                 var shininessLocation = gl.getUniformLocation(program, "uMaterialShininess");
                 var driveLightRadiusLocation = gl.getUniformLocation(program, "uDriveLightRadius");
                 var camPositionLocation = gl.getUniformLocation(program, "uCamPosition");
-                
+
                 var driveLightPositionLocation = gl.getUniformLocation(program, "uDriveLightLocation");
                 var driveLightDiffuseColorLocation = gl.getUniformLocation(program, "uDriveLightColor");
 
@@ -161,39 +160,39 @@ define(['CL3D',
 
                 // set the content of the variable
                 gl.uniform3f(lightPositionLocation,
-                                light.LightData.Position.X,
-                                light.LightData.Position.Y,
-                                light.LightData.Position.Z);
+                    light.LightData.Position.X,
+                    light.LightData.Position.Y,
+                    light.LightData.Position.Z);
                 gl.uniform3f(lightDiffuseColorLocation,
-                                light.LightData.Color.R,
-                                light.LightData.Color.G,
-                                light.LightData.Color.B);
+                    light.LightData.Color.R,
+                    light.LightData.Color.G,
+                    light.LightData.Color.B);
                 gl.uniform3f(ambientColorLocation,
-                                scene.AmbientLight.R,
-                                scene.AmbientLight.G,
-                                scene.AmbientLight.B);
+                    scene.AmbientLight.R,
+                    scene.AmbientLight.G,
+                    scene.AmbientLight.B);
                 gl.uniform3f(lightSpecularColorLocation,
-                                1,
-                                1,
-                                1);
+                    1,
+                    1,
+                    1);
                 gl.uniform1f(shininessLocation, 64);
                 gl.uniform1f(driveLightRadiusLocation, driveLight.radius);
                 gl.uniform3f(camPositionLocation,
-                                cam.Pos.X,
-                                cam.Pos.Y,
-                                cam.Pos.Z);
+                    cam.Pos.X,
+                    cam.Pos.Y,
+                    cam.Pos.Z);
 
                 gl.uniform3f(driveLightPositionLocation,
-                               driveLight.LightData.Position.X,
-                               driveLight.LightData.Position.Y,
-                               driveLight.LightData.Position.Z);
+                    driveLight.LightData.Position.X,
+                    driveLight.LightData.Position.Y,
+                    driveLight.LightData.Position.Z);
                 gl.uniform3f(driveLightDiffuseColorLocation,
-                                driveLight.LightData.Color.R,
-                                driveLight.LightData.Color.G,
-                                driveLight.LightData.Color.B);  
-                
+                    driveLight.LightData.Color.R,
+                    driveLight.LightData.Color.G,
+                    driveLight.LightData.Color.B);
+
             };
-        }
+        };
 
         return new ShaderManager();
 

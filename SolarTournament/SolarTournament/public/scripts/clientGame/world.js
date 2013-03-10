@@ -1,13 +1,14 @@
 ﻿/*
  * Contains all objects the player can interact with
 */
-define(['clientGame/infrastructure/engine',
+define(['jquery',
+        'clientGame/infrastructure/engine',
         'clientGame/infrastructure/sceneTemplates',
         'clientGame/infrastructure/asteroidSpawner',
         'clientGame/worldObjects/ownPlayer',
         'clientGame/worldObjects/PlayerBase',
         'clientGame/utils/copper',
-        'clientGame/utils/sound'], function (engine, sceneTemplates, asteroidSpawner, ownPlayer, PlayerBase, copper, sound) {
+        'clientGame/utils/sound'], function ($, engine, sceneTemplates, asteroidSpawner, ownPlayer, PlayerBase, copper, sound) {
 
     var World = function() {
 
@@ -16,10 +17,10 @@ define(['clientGame/infrastructure/engine',
 
         this._ownPlayer = ownPlayer;
 
-        this._asteroids = new Array();
-        this._photons = new Array();
-        this._smokes = new Array();
-        this._players = new Array();
+        this._asteroids = [];
+        this._photons = [];
+        this._smokes = [];
+        this._players = [];
 
         // bindings
         this._ownPlayer.onShootPlaced((this._handleShootPlaced).bind(this));
@@ -100,7 +101,7 @@ define(['clientGame/infrastructure/engine',
             model.Name = "ownPlayer";
 
             this._ownPlayer.resetValues();
-            this._ownPlayer.setModel(model)
+            this._ownPlayer.setModel(model);
             this._ownPlayer.initWithValuesFromServer(player);
         },
 
@@ -129,7 +130,7 @@ define(['clientGame/infrastructure/engine',
 
                 var otherPlayer = this._players.getById(player.id);
 
-                if (otherPlayer != null) {
+                if (otherPlayer) {
 
                     otherPlayer.setPositionAndRotation(player.position, player.rotation);
 
@@ -138,7 +139,6 @@ define(['clientGame/infrastructure/engine',
                     this.spawnOtherPlayer(player);
                 }
             }
-            ;
         },
 
         removePlayer: function(otherPlayerId) {

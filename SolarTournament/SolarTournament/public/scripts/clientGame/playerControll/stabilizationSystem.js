@@ -1,12 +1,12 @@
-﻿define(['clientGame/utils/gameMath'], function (gameMath) {
-    var stabilizationSystem = function () {
+﻿define(['CL3D', 'clientGame/utils/gameMath'], function (CL3D, gameMath) {
+    var StabilizationSystem = function () {
         this._currentTiltDegreeToRight = 0;
         this._currentTiltDegreeToUp = 0;
         this.maxTiltDegree = 10;
         this.visualOrientation = new CL3D.Quaternion(0, 0, 0, 1);
     };
 
-    stabilizationSystem.addToProto({
+    StabilizationSystem.addToProto({
         holdStabilizOrientation: function (keyBoardWatcher, timeDiff, movementOrientation) {
             this._calculateTiltDegree(keyBoardWatcher);
             return this._fadeBackToHorizontalOrientation(keyBoardWatcher, timeDiff, movementOrientation);
@@ -47,12 +47,12 @@
                 this._currentTiltDegreeToRight = this._fadeBackTiltDegree(this._currentTiltDegreeToRight);
                 this._lastModelOrientationFixes(true, false, timeDiff);
             }
-            if (this._currentTiltDegreeToRight == 0 && this._currentTiltDegreeToUp == 0) {
+            if (this._currentTiltDegreeToRight === 0 && this._currentTiltDegreeToUp === 0) {
                 this._lastModelOrientationFixes(true, true, timeDiff);
             }
 
             var shipOrientationAfterRotation = gameMath.quaternionMultiplication(this.visualOrientation, movementOrientation);
-            var rotationMatrix = shipOrientationAfterRotation.getMatrix()
+            var rotationMatrix = shipOrientationAfterRotation.getMatrix();
             return rotationMatrix.getRotationDegrees();
         },
 
@@ -89,8 +89,8 @@
                 this.visualOrientation.Y += fadeBackQuaternion.Y;
                 this.visualOrientation.Z += fadeBackQuaternion.Z;
             }
-        },
+        }
     });
     
-    return new stabilizationSystem();
+    return new StabilizationSystem();
 });

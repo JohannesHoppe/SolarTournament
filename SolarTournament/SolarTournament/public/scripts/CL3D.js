@@ -1,4 +1,5 @@
-﻿define(['copperlicht'], function () {
+﻿// enchanced copperlicht
+define(['copperlicht'], function () {
 
     var CL3D = window.CL3D;
 
@@ -46,11 +47,12 @@
 
         // set world view projection matrix
         var program = this.currentGLProgram;
-        if (program.locWorldViewProj != null)
+        if (program.locWorldViewProj) {
             gl.uniformMatrix4fv(program.locWorldViewProj, false, this.getMatrixAsWebGLFloatArray(mat));
+        }
 
         // set normal matrix
-        if (program.locNormalMatrix != null) {
+        if (program.locNormalMatrix) {
             // set the normal matrix
 
             var matnormal = new CL3D.Matrix4(true);
@@ -63,7 +65,7 @@
         }
 
         // set model view
-        if (program.locModelViewMatrix != null) {
+        if (program.locModelViewMatrix) {
             // set the model matrix
 
             var matmodel = new CL3D.Matrix4(true);
@@ -73,8 +75,9 @@
         }
 
         // set light values
-        if (program.locLightPositions != null)
+        if (program.locLightPositions) {
             this.setDynamicLightsIntoConstants(program);
+        }
 
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);

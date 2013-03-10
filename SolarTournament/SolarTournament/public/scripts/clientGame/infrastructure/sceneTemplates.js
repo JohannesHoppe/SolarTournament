@@ -35,10 +35,10 @@ define(['config',
     SceneTemplates.addToProto({
         resetValues: function() {
 
-            this._asteroidTemplates = new Array();
+            this._asteroidTemplates = [];
             this._photonTemplate = null;
             this._smokeTemplate = null;
-            this._spaceshipTemplates = new Array();
+            this._spaceshipTemplates = [];
         },
 
         loadTemplates: function() {

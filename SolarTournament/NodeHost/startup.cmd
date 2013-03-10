@@ -8,7 +8,7 @@ CD "%~dp0"
 SET PATH=%PATH%;%systemdrive%\chocolatey\bin
 
 @echo Downloading Node.js with NPM
-CALL cinst nodejs.install
+CALL cinst nodejs.install -Version 0.8.15
 
 @echo Change folder for global node_modules
 @echo (%appdata%\npm of NT AUTHORITY\SYSTEM does not work!)

@@ -1,6 +1,11 @@
 // Set up routes
 module.exports = function (app, highscoreProvider) {
 
+    var sendError500 = function (response, error) {
+        response.writeHead(500, { "Content-Type": "text/plain" });
+        response.end("ERROR! " + error + "\n");
+    };
+
     app.get('/', function (request, response) {
         response.render('index', {
             title: 'SolarTournament // Home'
@@ -41,9 +46,3 @@ module.exports = function (app, highscoreProvider) {
         });
     });
 };
-
-
-var sendError500 = function (response, error) {
-    response.writeHead(500, { "Content-Type": "text/plain" });
-    response.end("ERROR! " + error + "\n");
-}

@@ -1,7 +1,8 @@
 ﻿/*
  * central class, called after resources were loeaded
  */
-define(['clientGame/infrastructure/htmlMenu',
+define(['jquery',
+        'clientGame/infrastructure/htmlMenu',
         'clientGame/infrastructure/keyboardWatcher',
         'clientGame/infrastructure/engine',
         'clientGame/infrastructure/sceneAttachment',
@@ -10,7 +11,8 @@ define(['clientGame/infrastructure/htmlMenu',
         'clientGame/world',
         'clientGame/socket',
         'clientGame/utils/sound'],
-    function (htmlMenu,
+    function ($,
+              htmlMenu,
               keyboardWatcher,
               engine,
               sceneAttachment,

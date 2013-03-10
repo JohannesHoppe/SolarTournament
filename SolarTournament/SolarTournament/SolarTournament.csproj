@@ -23,6 +23,7 @@
     <IISExpressAnonymousAuthentication />
     <IISExpressWindowsAuthentication />
     <IISExpressUseClassicPipelineMode />
+    <JSLintSkip>\public\scripts\copperlicht.js|\public\copperlichtdata\copperlicht.js|\public\scripts\jquery.tmpl.js|\public\scripts\jquery.tmpl.min.js|\public\scripts\showHighscore.js|\public\scripts\languageEnhancements.js</JSLintSkip>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -66,7 +67,31 @@
     <None Include="public\fonts\quicksand\Quicksand_Light_Oblique-webfont.ttf" />
     <None Include="public\fonts\quicksand\Quicksand_Light_Oblique-webfont.woff" />
     <None Include="public\images\bg_header.psd" />
-    <Content Include="public\copperlichtdata\schwager1.png" />
+    <Content Include="public\copperlichtdata\795206-plasma2_super1.jpg" />
+    <Content Include="public\copperlichtdata\antrieb.png" />
+    <Content Include="public\copperlichtdata\antriebfour.png" />
+    <Content Include="public\copperlichtdata\antriebinvisible.png" />
+    <Content Include="public\copperlichtdata\antriebthree.png" />
+    <Content Include="public\copperlichtdata\antriebtwo.png" />
+    <Content Include="public\copperlichtdata\crosshair.png" />
+    <Content Include="public\copperlichtdata\default_white.png" />
+    <Content Include="public\copperlichtdata\driveflame.png" />
+    <Content Include="public\copperlichtdata\driveflamefour.png" />
+    <Content Include="public\copperlichtdata\driveflamethree.png" />
+    <Content Include="public\copperlichtdata\driveflametwo.png" />
+    <Content Include="public\copperlichtdata\drivelight.png" />
+    <Content Include="public\copperlichtdata\drivelightone.png" />
+    <Content Include="public\copperlichtdata\drivelighttree.png" />
+    <Content Include="public\copperlichtdata\drivelighttwo.png" />
+    <Content Include="public\copperlichtdata\meteoronenormalmap.png" />
+    <Content Include="public\copperlichtdata\meteoronetexture.png" />
+    <Content Include="public\copperlichtdata\meteorthreenormal.png" />
+    <Content Include="public\copperlichtdata\meteorthreetexture.png" />
+    <Content Include="public\copperlichtdata\meteortwonormal.png" />
+    <Content Include="public\copperlichtdata\meteortwotexture.png" />
+    <Content Include="public\copperlichtdata\schwager.png" />
+    <Content Include="public\copperlichtdata\shootlight.png" />
+    <Content Include="public\copperlichtdata\shoottwo.jpg" />
     <Content Include="public\images\screenshot_2012-09-23.png" />
     <Content Include="public\scripts\CL3D.js" />
     <Content Include="public\scripts\clientGame\grafics\shaderManager.js" />
@@ -91,18 +116,9 @@
     <Content Include="public\copperlichtdata\particle_smoke.jpg" />
     <Content Include="public\copperlichtdata\photon_blue.png" />
     <Content Include="public\copperlichtdata\photon_yellow.png" />
-    <Content Include="public\copperlichtdata\skybox_debug0.jpg" />
-    <Content Include="public\copperlichtdata\skybox_debug1.jpg" />
-    <Content Include="public\copperlichtdata\skybox_debug2.jpg" />
-    <Content Include="public\copperlichtdata\skybox_debug3.jpg" />
-    <Content Include="public\copperlichtdata\skybox_debug_down.jpg" />
-    <Content Include="public\copperlichtdata\skybox_debug_up.jpg" />
     <Content Include="public\copperlichtdata\skybox_space1.jpg" />
     <Content Include="public\copperlichtdata\skybox_space2.jpg" />
     <Content Include="public\copperlichtdata\skybox_space3.jpg" />
-    <Content Include="public\copperlichtdata\stone_blue.jpg" />
-    <Content Include="public\copperlichtdata\stone_gray.jpg" />
-    <Content Include="public\copperlichtdata\stone_pink.jpg" />
     <Content Include="public\images\alien2.png" />
     <Content Include="public\images\fork_me_on_github.png" />
     <Content Include="public\images\fork_me_on_github_trans.png" />

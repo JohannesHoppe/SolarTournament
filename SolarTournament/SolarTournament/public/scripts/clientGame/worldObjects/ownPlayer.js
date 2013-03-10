@@ -1,14 +1,16 @@
 ﻿/*
 * Depending on the keyboard input the player will interact with the world
 */
-define(['clientGame/worldObjects/PlayerBase',
+define(['CL3D',
+        'jquery',
+        'clientGame/worldObjects/PlayerBase',
         'clientGame/infrastructure/keyboardWatcher',
         'clientGame/infrastructure/sceneAttachment',
         'clientGame/cams/thirdPersonCam',
         'clientGame/utils/gameMath',
         'clientGame/infrastructure/engine',
         'clientGame/grafics/shaderManager',
-        'clientGame/playerControll/shipNavigation'], function (PlayerBase, keyboardWatcher, sceneAttachment, thirdPersonCam, gameMath, engine, shaderManager, shipNavigation) {
+        'clientGame/playerControll/shipNavigation'], function (CL3D, $, PlayerBase, keyboardWatcher, sceneAttachment, thirdPersonCam, gameMath, engine, shaderManager, shipNavigation) {
 
     var OwnPlayer = PlayerBase.extend({
         init: function() {
@@ -49,14 +51,14 @@ define(['clientGame/worldObjects/PlayerBase',
             this._driveLight.radius = 700;
             this._driveLight.fullRadius = 700;
             this._driveLight.radiusChangeSpeed = 14;
-            this._model.addChild(this._driveLight)
+            this._model.addChild(this._driveLight);
             this._model.sphereCollider = {};
             this._model.sphereCollider.radius = 500;
          },
 
          _updateModelPosition: function() {
 
-            if (this._model != null) {
+            if (this._model) {
                 this._model.Pos.X = this._position.X;
                 this._model.Pos.Y = this._position.Y;
                 this._model.Pos.Z = this._position.Z;
@@ -86,7 +88,7 @@ define(['clientGame/worldObjects/PlayerBase',
             if (this._keyboardWatcher.shootKeyDown) {
                 var now = new Date().getTime();
 
-                if (this._lastShootTime == 0 || now - this._lastShootTime > this.SHOOT_DELAY) {
+                if (this._lastShootTime === 0 || now - this._lastShootTime > this.SHOOT_DELAY) {
 
                     this._lastShootTime = now;
                     var shootDirection = new CL3D.Vect3d(0, 0, 0);
@@ -99,7 +101,7 @@ define(['clientGame/worldObjects/PlayerBase',
 
         _navigateShip: function (timeDiff) {
             this._rotation = this._shipNavigation.getRotation(timeDiff, this._keyboardWatcher);
-            this._orientationForward = this._shipNavigation.calculateOrientationForward()
+            this._orientationForward = this._shipNavigation.calculateOrientationForward();
             this._orientationRight = this._shipNavigation.calculateOrientationRight();
             this._orientationUp = this._shipNavigation.calculateOrientationUp();
             this._position = this._shipNavigation.fly(timeDiff, this._position, this._keyboardWatcher, this._orientationForward, this._model, this._driveLight);

@@ -21,9 +21,10 @@ module.exports = function (express, app, io, dirname) {
         app.use(app.router);
     });
 
-    app.configure('development', function () {
+    app.configure('development', function() {
 
-        app.use(express.static(dirname + '/public'));
+        // instead of express.static for the sake of jslint
+        app.use(express['static'](dirname + '/public'));
         app.use(express.errorHandler({ dumpExceptions: true, showStack: true }));
         app.set('view options', { pretty: true });
 
@@ -41,7 +42,7 @@ module.exports = function (express, app, io, dirname) {
         io.enable('browser client gzip');          // gzip the file
     });
 
-    io.configure(function() {
+    io.configure(function () {
         io.set('transports', ['websocket', /* 'flashsocket', */ 'htmlfile', 'xhr-polling', 'jsonp-polling']);
         io.set("polling duration", 10);
         io.set('log level', 1);
