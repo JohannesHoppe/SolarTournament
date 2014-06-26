@@ -8,10 +8,10 @@ CD "%~dp0"
 SET PATH=%PATH%;%systemdrive%\chocolatey\bin
 
 @echo Downloading Node.js with NPM
-CALL cinst nodejs.install
+CALL cinst nodejs.install -Version 0.10.29
 
 @echo Installing Jam (package manager for JavaScript)
-CALL npm install -g jamjs
+CALL npm install -g jamjs@0.2.16
 
 @echo Installing Node Inspector globally (a debugger interface for nodeJS using the WebKit Web Inspector)
 CALL npm install -g node-inspector

@@ -12,6 +12,8 @@
     <AssemblyName>SolarTournament</AssemblyName>
     <StartDevelopmentStorage>True</StartDevelopmentStorage>
     <Name>NodeWorkerRole</Name>
+    <!-- Path too long error when building a windows azure service? / Create C:\Azure!-->
+    <ServiceOutputDirectory>C:\Azure\</ServiceOutputDirectory>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
