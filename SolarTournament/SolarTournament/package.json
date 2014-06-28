@@ -16,14 +16,6 @@
         "util": "0.4.9"
     },
     "license": "zlib",
-    "jam": {
-        "dependencies": {
-            "jquery": null,
-            "underscore": null
-        },
-        "packageDir": "public/scripts/jam",
-        "baseUrl": "public/scripts"
-    },
     "engines": {
         "node": "0.6.20",
         "iisnode": "0.1.19"

@@ -8,7 +8,4 @@ cd SolarTournament
 @echo Downloading Node.js modules
 CALL npm install
 
-@echo Downloading jam modules
-CALL jam install
-
 pause

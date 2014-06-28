@@ -15,13 +15,7 @@ CALL cinst nodejs.install -Version 0.8.15
 CALL npm config set prefix %SystemDrive%\npm
 SET PATH=%PATH%;%systemdrive%\npm
 
-REM @echo Downloading Jam globally
-REM CALL npm install -g jamjs@0.2.9
-
 cd SolarTournament
 
 @echo Downloading Node.js modules
 CALL npm install
-
-@echo Downloading jam modules
-CALL jam install

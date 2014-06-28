@@ -99,6 +99,14 @@
     <Content Include="public\scripts\clientGame\playerControll\stabilizationSystem.js" />
     <Content Include="public\scripts\clientGame\utils\collisionHandler.js" />
     <Content Include="public\scripts\clientGame\playerControll\shipNavigation.js" />
+    <Content Include="public\scripts\jam\jquery\dist\jquery.min.map" />
+    <Content Include="public\scripts\jam\jquery\package.json" />
+    <Content Include="public\scripts\jam\jquery\src\sizzle\package.json" />
+    <Content Include="public\scripts\jam\jquery\src\sizzle\speed\benchmark.js\package.json" />
+    <Content Include="public\scripts\jam\jquery\test\qunit\package.json" />
+    <Content Include="public\scripts\jam\underscore\LICENSE" />
+    <Content Include="public\scripts\jam\underscore\package.json" />
+    <Content Include="public\scripts\jam\underscore\README.md" />
     <None Include="public\stylesheets\mixins\css3.styl" />
     <None Include="public\stylesheets\partials\typography.styl" />
     <None Include="public\stylesheets\style.styl" />
@@ -136,6 +144,12 @@
     <Content Include="public\scripts\clientGame\worldObjects\PlayerBase.js" />
     <Content Include="public\scripts\domReady.js" />
     <Content Include="public\scripts\init.js" />
+    <Content Include="public\scripts\jam\jquery\dist\jquery.js" />
+    <Content Include="public\scripts\jam\jquery\dist\jquery.min.js" />
+    <Content Include="public\scripts\jam\jquery\dist\jquery.pre-min.js" />
+    <Content Include="public\scripts\jam\require.config.js" />
+    <Content Include="public\scripts\jam\require.js" />
+    <Content Include="public\scripts\jam\underscore\underscore.js" />
     <Content Include="public\scripts\jquery.tmpl.js" />
     <Content Include="public\scripts\jquery.tmpl.min.js">
       <DependentUpon>jquery.tmpl.js</DependentUpon>
