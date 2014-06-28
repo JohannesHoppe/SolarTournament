@@ -2,7 +2,6 @@ obj/
 bin/
 csx/
 node_modules/
-jam/
 _ReSharper*
 *.user
 *.suo
