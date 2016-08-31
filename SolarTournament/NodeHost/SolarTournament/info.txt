@@ -1,1 +1,0 @@
-﻿All files from the SolarTournament project will be dynamically added to this folder.

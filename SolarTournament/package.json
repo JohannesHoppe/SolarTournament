@@ -2,6 +2,9 @@
     "name": "SolarTournament",
     "version": "0.1.4",
     "author": "HAUS HOPPE - ITS",
+    "scripts": {
+        "start": "node app.js"
+    },
     "contributors": [{
         "name": "Ingmar Wietig"
     }, {
