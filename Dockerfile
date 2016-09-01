@@ -8,5 +8,8 @@ ADD . .
 ENV NODE_ENV production
 ENV port 80
 
-EXPOSE 80
 CMD ["npm", "run", "startForever"]  
+
+# Expose ports.
+EXPOSE 80
+EXPOSE 443
