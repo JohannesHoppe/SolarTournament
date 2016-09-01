@@ -1,4 +1,4 @@
-FROM nodesource/node:4.0
+FROM nodesource/node:6.3
 
 ADD package.json package.json  
 RUN npm install --production
