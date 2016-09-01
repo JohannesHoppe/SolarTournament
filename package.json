@@ -2,7 +2,7 @@
     "name": "solartournament",
     "version": "0.1.5",
     "scripts": {
-        "start": "node app.js",
+        "start": "node server.js",
         "startForever": "forever --minUptime 1000 --spinSleepTime 1000 server.js"
     },
     "author": { "name": "Johannes Hoppe" },
