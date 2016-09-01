@@ -5,5 +5,8 @@ RUN npm install --production
 
 ADD . .
 
-EXPOSE 1337
+ENV NODE_ENV production
+ENV port 80
+
+EXPOSE 80
 CMD ["npm", "run", "startForever"]  
