@@ -1,3 +1,5 @@
+var pjson = require('../package.json');
+
 // Set up routes
 module.exports = function (app, highscoreProvider) {
 
@@ -8,7 +10,12 @@ module.exports = function (app, highscoreProvider) {
 
     app.get('/', function (request, response) {
         response.render('index', {
-            title: 'SolarTournament // Home'
+            title: 'SolarTournament // Home',
+            locals: {
+                version: pjson.version,
+                time: process.uptime(),
+                mode: (app && app.serverInfo && app.serverInfo.mode) ? app.serverInfo.mode : '?'
+            }
         });
     });
 
