@@ -6,7 +6,7 @@ define(['jquery',
         'clientGame/infrastructure/sceneTemplates',
         'clientGame/infrastructure/asteroidSpawner',
         'clientGame/worldObjects/ownPlayer',
-        'clientGame/worldObjects/PlayerBase',
+        'clientGame/worldObjects/playerBase',
         'clientGame/utils/copper',
         'clientGame/utils/sound'], function ($, engine, sceneTemplates, asteroidSpawner, ownPlayer, PlayerBase, copper, sound) {
 

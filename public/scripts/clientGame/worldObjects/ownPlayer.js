@@ -3,7 +3,7 @@
 */
 define(['CL3D',
         'jquery',
-        'clientGame/worldObjects/PlayerBase',
+        'clientGame/worldObjects/playerBase',
         'clientGame/infrastructure/keyboardWatcher',
         'clientGame/infrastructure/sceneAttachment',
         'clientGame/cams/thirdPersonCam',

@@ -3,7 +3,7 @@
         'clientGame/infrastructure/sceneTemplates',
         'clientGame/utils/copper',
         'clientGame/utils/gameMath',
-        'clientGame/utils/Randomizer',
+        'clientGame/utils/randomizer',
         'clientGame/grafics/shaderManager'], function (CL3D, engine, sceneTemplates, copper, gameMath, Randomizer, shaderManager) {
 
             var AsteroidSpawner = function () {
