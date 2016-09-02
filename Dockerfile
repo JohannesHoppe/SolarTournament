@@ -5,8 +5,8 @@ RUN npm install --production
 
 ADD . .
 
-#production is broken ATM
-#ENV NODE_ENV production
+#production is broken
+ENV NODE_ENV development
 ENV port 80
 
 EXPOSE 80
