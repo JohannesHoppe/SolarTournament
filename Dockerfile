@@ -5,7 +5,7 @@ RUN npm install -g yarn
 ADD package.json .
 ADD yarn.lock .
  
-RUN yarn install
+RUN yarn install --ignore-engines
 
 ADD . .
 
