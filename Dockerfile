@@ -1,7 +1,11 @@
 FROM nodesource/node:6.3
 
-ADD package.json package.json  
-RUN npm install --production
+RUN npm install -g yarn
+
+ADD package.json .
+ADD yarn.lock .
+ 
+RUN yarn install
 
 ADD . .
 

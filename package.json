@@ -8,13 +8,13 @@
     "author": { "name": "Johannes Hoppe" },
     "contributors": [{ "name": "Ingmar Wietig" }],
     "dependencies": {
-        "express": "^2.5.8",
-        "gzippo": "^0.1.4",
-        "jade": "^0.20.1",
-        "socket.io": "^0.8.7",
-        "stylus": "0.54.5",
-        "util": "^0.4.9",
-        "forever": "^0.15.2"
+        "express": "2.5.8",
+        "gzippo": "0.1.4",
+        "jade": "0.20.1",
+        "socket.io": "0.8.7",
+        "stylus": "0.23.0",
+        "util": "0.4.9",
+        "forever": "0.15.3"
     },
     "license": "zlib"
 }
