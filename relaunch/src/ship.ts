@@ -61,12 +61,39 @@ interface Hole {
   at: number;
 }
 
+/** A ship as it travels over the network; short keys keep the 15 Hz updates small. */
+export type ShipState = {
+  id: string;
+  /** name and ship type */
+  n: string;
+  k: ShipType;
+  /** position, velocity, orientation (quaternion), rotation rate in ship space */
+  p: number[];
+  v: number[];
+  q: number[];
+  w: number[];
+  /** visible drive output */
+  th: number;
+  a: boolean;
+  /** hull, drive and thruster health */
+  h: number;
+  dr: number;
+  tr: number;
+  /** score, kills, deaths */
+  s: number;
+  ki: number;
+  de: number;
+  /** remaining spawn protection (s) */
+  pr: number;
+};
+
 let shipCounter = 0;
 const force = new THREE.Vector3();
 const torque = new THREE.Vector3();
 const inverse = new THREE.Quaternion();
 const local = new THREE.Vector3();
 const offset = new THREE.Vector3();
+const spinStep = new THREE.Quaternion();
 
 /** Both ship types share one hit radius, so the skin makes no difference in combat. */
 function sharedRadius(assets: Assets): number {
@@ -101,7 +128,17 @@ export class Ship {
   protectedUntil = 0;
   /** Time the ship left the arena, or null while inside. */
   outsideSince: number | null = null;
+  /** Peer that simulates this ship in an online tournament; null when this browser does. */
+  owner: string | null = null;
 
+  /** Last state received for a ship another peer simulates, and when it arrived. */
+  private readonly remote = {
+    position: new THREE.Vector3(),
+    velocity: new THREE.Vector3(),
+    orientation: new THREE.Quaternion(),
+    spin: new THREE.Vector3(),
+    at: 0,
+  };
   private lastShotAt = -Infinity;
   private readonly engine: EngineParts;
   private flameTime = 0;
@@ -171,6 +208,82 @@ export class Ship {
     this.outsideSince = null;
     this.root.visible = true;
     this.syncTransform();
+  }
+
+  /** The ship's state as it travels over the network. */
+  toState(now: number): ShipState {
+    const f = this.flight;
+    const round = (v: { toArray(): number[] }, digits = 0) => v.toArray().map((x) => +x.toFixed(digits));
+    return {
+      id: this.id,
+      n: this.name,
+      k: this.type,
+      p: round(f.position),
+      v: round(f.velocity, 1),
+      q: round(f.orientation, 4),
+      w: round(f.angularVelocity, 3),
+      th: +f.throttle.toFixed(2),
+      a: this.alive,
+      h: Math.round(this.hull),
+      dr: +this.drive.toFixed(2),
+      tr: +this.thrusters.toFixed(2),
+      s: this.score,
+      ki: this.kills,
+      de: this.deaths,
+      pr: +Math.max(0, this.protectedUntil - now).toFixed(1),
+    };
+  }
+
+  /** Takes over the state another peer sent for its ship. */
+  applyState(state: ShipState, now: number) {
+    const r = this.remote;
+    r.position.fromArray(state.p);
+    r.velocity.fromArray(state.v);
+    r.orientation.fromArray(state.q).normalize();
+    r.spin.fromArray(state.w);
+    r.at = now;
+    this.flight.velocity.copy(r.velocity);
+    this.flight.throttle = state.th;
+    this.hull = state.h;
+    this.drive = state.dr;
+    this.thrusters = state.tr;
+    this.score = state.s;
+    this.kills = state.ki;
+    this.deaths = state.de;
+    this.protectedUntil = now + state.pr;
+    this.name = state.n;
+    if (state.a && !this.alive) {
+      // the owner booted a new clone
+      this.alive = true;
+      this.holes.length = 0;
+      this.root.visible = true;
+      this.flight.position.copy(r.position);
+      this.flight.orientation.copy(r.orientation);
+    } else if (!state.a && this.alive) {
+      this.alive = false;
+      this.root.visible = false;
+    }
+  }
+
+  /**
+   * Moves a ship another peer simulates: Newtonian prediction from the last state (a ship
+   * without thrust flies straight on), blended in smoothly so corrections do not jump.
+   */
+  updateRemote(dt: number, now: number) {
+    if (!this.alive) return;
+    const r = this.remote;
+    const age = Math.min(now - r.at, 1);
+    local.copy(r.position).addScaledVector(r.velocity, age);
+    const blend = 1 - Math.exp(-12 * dt);
+    if (this.flight.position.distanceToSquared(local) > 4000 * 4000) this.flight.position.copy(local);
+    else this.flight.position.lerp(local, blend);
+    const spin = r.spin.length();
+    inverse.copy(r.orientation);
+    if (spin > 1e-6) inverse.multiply(spinStep.setFromAxisAngle(offset.copy(r.spin).divideScalar(spin), spin * age));
+    this.flight.orientation.slerp(inverse, blend);
+    this.model.visible = now >= this.protectedUntil || Math.floor(now * 8) % 2 === 0;
+    this.syncTransform();
+    this.animateEngine(dt);
   }
 
   /** Advances flight and laser; returns true when the ship fires this frame. */

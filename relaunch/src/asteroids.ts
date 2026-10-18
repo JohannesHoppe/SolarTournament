@@ -37,6 +37,14 @@ export interface Asteroid {
   inverse: THREE.Matrix4;
 }
 
+/** A rock as it travels over the network. */
+export type AsteroidState = {
+  id: string;
+  hp: number;
+  p: number[];
+  v: number[];
+};
+
 interface Template {
   object: THREE.Object3D;
   center: THREE.Vector3;
@@ -174,6 +182,45 @@ export class AsteroidField {
       }
     }
     return asteroid;
+  }
+
+  /** Current state of every rock, for a player who joins a running tournament. */
+  snapshot(): AsteroidState[] {
+    return [...this.asteroids.values()].map((a) => ({
+      id: a.id,
+      hp: a.hitPoints,
+      p: a.object.position.toArray().map(Math.round),
+      v: a.velocity.toArray().map(Math.round),
+    }));
+  }
+
+  /**
+   * Rebuilds the field from a snapshot: breaks the parents of every listed fragment (the
+   * fragments are deterministic), removes rocks that are gone and takes over positions and hits.
+   */
+  restore(states: AsteroidState[]) {
+    const listed = new Set(states.map((s) => s.id));
+    const ensure = (id: string) => {
+      if (this.asteroids.has(id)) return;
+      const dot = id.lastIndexOf('.');
+      if (dot < 0) return;
+      const parent = id.slice(0, dot);
+      ensure(parent);
+      this.destroy(parent);
+    };
+    for (const state of states) ensure(state.id);
+    for (const id of [...this.asteroids.keys()]) {
+      if (listed.has(id)) continue;
+      this.group.remove(this.asteroids.get(id)!.object);
+      this.asteroids.delete(id);
+    }
+    for (const state of states) {
+      const asteroid = this.asteroids.get(state.id);
+      if (!asteroid) continue;
+      asteroid.hitPoints = state.hp;
+      asteroid.object.position.fromArray(state.p);
+      asteroid.velocity.fromArray(state.v);
+    }
   }
 
   /** Nearest asteroid hit by a ray, with the distance along the ray. */

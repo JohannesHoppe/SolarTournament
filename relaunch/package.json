@@ -12,7 +12,8 @@
   "license": "zlib",
   "dependencies": {
     "nipplejs": "^1.0.4",
-    "three": "^0.186.1"
+    "three": "^0.186.1",
+    "trystero": "^0.26.0"
   },
   "devDependencies": {
     "@types/node": "^26.6.5",

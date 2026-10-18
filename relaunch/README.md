@@ -32,6 +32,19 @@ Gamepads with the standard layout (Xbox, PlayStation, most others in current bro
 
 On phones and tablets touch controls appear: the fixed stick on the left turns the ship (drag up = nose up), a second stick appears under the right thumb and fires the maneuvering thrusters. Hold **Drive** for the main drive and **Fire** for the laser; **Back** pushes backwards, **Flip** starts the flip assist. Pressing a key on a hardware keyboard hides the touch controls, touching the screen brings them back.
 
+## Online tournament
+
+**Online tournament** in the menu opens a room and puts its code into the address (`?t=code`); the pause menu copies the invitation link. Whoever opens the link joins the same tournament. There is no game server: the browsers find each other through public Nostr relays ([Trystero](https://github.com/dmotz/trystero)) and then talk directly over WebRTC.
+
+- **Four places per tournament.** The host fills free places with bots and removes one for every pilot who joins.
+- **Every pilot flies their own ship.** Each browser simulates its own ship and sends its state 15 times per second; the other browsers predict the motion in between (a ship without thrust flies straight on) and blend corrections in smoothly.
+- **The shooter decides about hits.** A beam that goes through a ship on the shooter's screen is reported to the browser flying that ship, which applies the damage and announces a destruction. Asteroid hits go to everyone; the fragments are deterministic, so all players see the same ones.
+- **The host** is the browser that has been in the room longest. It runs the bots and the round clock and brings newcomers' asteroid fields up to date. When it leaves, the next one takes over seamlessly.
+- **Rounds** last five minutes for everyone; the scoreboard shows over the running game, and the next round starts after 12 seconds. The pause menu does not stop the tournament.
+- Some networks (e.g. strict company firewalls or carrier-grade NAT) block direct connections between browsers; players behind them cannot connect without a relay (TURN) server.
+
+For development, `?t=code&local=1` connects tabs of the same browser without the internet.
+
 ## Flight school
 
 The menu offers a guided flight school without opponents. Ten steps teach the main drive, drifting, the flip, braking, the maneuvering thrusters, shooting a target drone, cooling in the shadow of an asteroid and the impact warning. Each step waits until the pilot has actually done it; a blinking diamond marks targets. Training clones are free: a pilot who dies in flight school respawns without a sponsor break.

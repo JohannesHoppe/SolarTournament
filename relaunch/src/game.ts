@@ -10,14 +10,18 @@ import { Bot, BOT_NAMES } from './bots';
 import { Effects } from './effects';
 import { Hud } from './hud';
 import { IDLE, Input, type Action, type Controls } from './input';
-import { Ship, type Zone } from './ship';
+import { Ship, type ShipState, type Zone } from './ship';
 import { MAIN_THRUST } from './flight';
+import { newRoomCode, Session, type RoundState } from './net/session';
+import { Online, type OnlineGame } from './online';
 import { Space, SUN_DIRECTION } from './space';
 import { FlightSchool } from './school';
 import { SponsorBreak } from './sponsors';
 import { Wrecks } from './wrecks';
 
 const ROUND_SECONDS = 5 * 60;
+/** Online tournaments show the scoreboard this long before the next round starts. */
+const RESULTS_SECONDS = 12;
 const FIELD_SEED = 11;
 const BOT_COUNT = 3;
 const LASER_RANGE = 200000;
@@ -87,13 +91,13 @@ function storageSet(key: string, value: string) {
   }
 }
 
-export class Game {
+export class Game implements OnlineGame {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly composer: EffectComposer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(70, 1, 10, 400000);
   private readonly space = new Space();
-  private readonly field: AsteroidField;
+  readonly field: AsteroidField;
   private readonly effects: Effects;
   private readonly wrecks = new Wrecks();
   private readonly sponsors = new SponsorBreak();
@@ -102,8 +106,12 @@ export class Game {
   private readonly timer = new THREE.Timer();
 
   private state: State = 'menu';
-  private time = 0;
+  time = 0;
   private roundEndsAt = 0;
+  /** Online tournament this browser takes part in, or null offline. */
+  private online: Online | null = null;
+  /** Number of the running online round; a new number resets the scores. */
+  private roundId = 0;
   private ships: Ship[] = [];
   private bots: Bot[] = [];
   private me: Ship | null = null;
@@ -166,17 +174,74 @@ export class Game {
         document.querySelectorAll('.ship-select button').forEach((b) => b.classList.toggle('selected', b === button));
       });
     }
-    $('start').addEventListener('click', () => this.startRound());
-    $('school').addEventListener('click', () => this.startRound(true));
+    $('start').addEventListener('click', () => this.startRound('solo'));
+    $('school').addEventListener('click', () => this.startRound('school'));
+    $('online').addEventListener('click', () => void this.goOnline());
     $('resume').addEventListener('click', () => this.resume());
     $('quit').addEventListener('click', () => this.endRound());
     $('again').addEventListener('click', () => this.showMenu());
+    $('invite').addEventListener('click', () => void this.copyInvite());
+
+    // an invitation link opens the menu with "Join" as the main action
+    const invited = this.invitedRoom();
+    if (invited) {
+      $('online').textContent = `Join tournament ${invited}`;
+      $('online').classList.add('primary');
+      $('start').classList.remove('primary');
+    }
+  }
+
+  /** Room code from an invitation link (?t=code). */
+  private invitedRoom(): string | null {
+    return new URLSearchParams(location.search).get('t');
+  }
+
+  /** Joins the invited tournament or opens a new one, then starts playing in it. */
+  private async goOnline() {
+    const button = $<HTMLButtonElement>('online');
+    const label = button.textContent;
+    button.disabled = true;
+    button.textContent = 'Connecting…';
+    try {
+      const params = new URLSearchParams(location.search);
+      const room = params.get('t') ?? newRoomCode();
+      params.set('t', room);
+      history.replaceState(null, '', `${location.pathname}?${params}`);
+      // ?local=1 connects tabs of this browser instead of going over the internet
+      const session = await Session.join(room, params.has('local'));
+      this.online = new Online(session, this);
+      this.startRound('online');
+    } catch (error) {
+      console.error(error);
+      this.hud.flashMessage(this.time, 'Could not connect', 3);
+    } finally {
+      button.disabled = false;
+      button.textContent = label;
+    }
+  }
+
+  private async copyInvite() {
+    const button = $('invite');
+    try {
+      await navigator.clipboard.writeText(location.href);
+      button.textContent = 'Link copied';
+    } catch {
+      button.textContent = location.href;
+    }
+  }
+
+  private leaveOnline() {
+    this.online?.leave();
+    this.online = null;
   }
 
   private onAction(action: Action) {
     switch (this.state) {
       case 'menu':
-        if (action === 'confirm') this.startRound();
+        if (action === 'confirm') {
+          if (this.invitedRoom()) void this.goOnline();
+          else this.startRound('solo');
+        }
         break;
       case 'playing':
         if (this.sponsors.visible) {
@@ -202,12 +267,15 @@ export class Game {
     $('menu').hidden = state !== 'menu';
     $('pause').hidden = state !== 'paused';
     $('results').hidden = state !== 'results';
+    $('invite').hidden = !this.online;
+    $('invite').textContent = 'Copy invite link';
     if (state !== 'playing') this.sponsors.hide();
     this.hud.show(state === 'playing');
     if (state !== 'playing') this.sound.setEngine(0, 0);
   }
 
   private showMenu() {
+    this.leaveOnline();
     this.clearShips();
     this.field.generate(FIELD_SEED);
     const best = Number(storageGet(BEST_SCORE_KEY) ?? 0);
@@ -225,25 +293,28 @@ export class Game {
     this.drone = null;
   }
 
-  /** Starts a tournament round against bots, or the flight school without opponents. */
-  private startRound(school = false) {
+  /**
+   * Starts a round: solo against bots, the flight school without opponents, or an online
+   * tournament (where the host adds bots for free places).
+   */
+  private startRound(mode: 'solo' | 'school' | 'online') {
     const callsign = $<HTMLInputElement>('callsign').value.trim() || 'Pilot';
     storageSet(CALLSIGN_KEY, callsign);
+    if (mode !== 'online') this.leaveOnline();
 
     this.clearShips();
     this.field.generate(FIELD_SEED);
     this.hud.reset();
+    $('hud-room').textContent = '';
 
-    this.me = this.addShip('me', callsign, this.selectedShip, true);
-    this.school = school ? new FlightSchool() : null;
-    const names = [...BOT_NAMES].sort(() => Math.random() - 0.5);
-    for (let i = 0; i < (school ? 0 : BOT_COUNT); i++) {
-      const ship = this.addShip('bot' + i, names[i], i % 2 === 0 ? 'alien' : 'human', false);
-      this.bots.push(new Bot(ship, 0.2 + i * 0.2));
-    }
-    for (const ship of this.ships) this.respawn(ship);
+    this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, this.selectedShip, true);
+    this.school = mode === 'school' ? new FlightSchool() : null;
+    if (mode === 'solo') this.setBotCount(BOT_COUNT);
+    this.respawn(this.me);
 
-    this.roundEndsAt = school ? Infinity : this.time + ROUND_SECONDS;
+    this.roundId = 0;
+    // online, the host's clock decides (see hostRound and syncRound)
+    this.roundEndsAt = mode === 'solo' ? this.time + ROUND_SECONDS : Infinity;
     this.cockpit = false;
     this.flipAssist = false;
     this.strain = 0;
@@ -258,6 +329,88 @@ export class Game {
     this.ships.push(ship);
     this.scene.add(ship.root);
     return ship;
+  }
+
+  // ---- OnlineGame: what the online layer uses ----
+
+  allShips() {
+    return this.ships;
+  }
+
+  ownedShips() {
+    return this.ships.filter((ship) => ship.owner === null);
+  }
+
+  addRemoteShip(state: ShipState, owner: string): Ship {
+    const ship = this.addShip(state.id, state.n, state.k, false);
+    ship.owner = owner;
+    ship.alive = false;
+    ship.root.visible = false;
+    ship.applyState(state, this.time);
+    return ship;
+  }
+
+  removeShip(ship: Ship) {
+    this.scene.remove(ship.root);
+    this.ships = this.ships.filter((s) => s !== ship);
+    this.bots = this.bots.filter((b) => b.ship !== ship);
+  }
+
+  /** Adds or removes own bots until this browser runs `count` of them. */
+  setBotCount(count: number) {
+    while (this.bots.length > count) this.removeShip(this.bots[this.bots.length - 1].ship);
+    const taken = new Set(this.ships.map((s) => s.name));
+    const names = BOT_NAMES.filter((n) => !taken.has(n));
+    for (let i = this.bots.length; i < count; i++) {
+      const id = this.online ? `b:${this.online.selfId}:${i}` : `bot${i}`;
+      const ship = this.addShip(id, names[i] ?? `Bot ${i + 1}`, i % 2 === 0 ? 'alien' : 'human', false);
+      this.bots.push(new Bot(ship, 0.2 + (i % 3) * 0.2));
+      this.respawn(ship);
+    }
+  }
+
+  showBeam(shooter: Ship, from: THREE.Vector3, to: THREE.Vector3) {
+    this.effects.beam(from, to, shooter.color);
+  }
+
+  remoteDestroyed(victim: Ship, killer: Ship | null) {
+    victim.alive = false;
+    victim.root.visible = false;
+    this.shipDestroyed(victim, killer);
+  }
+
+  remoteRock(id: string) {
+    const destroyed = this.field.hit(id);
+    if (!destroyed) return;
+    this.effects.explosion(destroyed.object.position, destroyed.meanRadius * 0.6, destroyed.velocity);
+    this.hearDebris(destroyed.object.position, destroyed.meanRadius);
+  }
+
+  syncRound(round: RoundState) {
+    if (round.id !== this.roundId) {
+      this.roundId = round.id;
+      this.startNextRound();
+    }
+    const endsAt = this.time + round.left;
+    if (Math.abs(endsAt - this.roundEndsAt) > 1 || !Number.isFinite(this.roundEndsAt)) this.roundEndsAt = endsAt;
+  }
+
+  hostRound(): RoundState {
+    // the first host of a room starts the clock; a new host continues the synced one
+    if (!Number.isFinite(this.roundEndsAt)) this.roundEndsAt = this.time + ROUND_SECONDS;
+    // the host starts the next round once the scoreboard has been shown
+    if (this.time >= this.roundEndsAt + RESULTS_SECONDS) {
+      this.roundId++;
+      this.startNextRound();
+      this.roundEndsAt = this.time + ROUND_SECONDS;
+    }
+    return { id: this.roundId, left: +(this.roundEndsAt - this.time).toFixed(1) };
+  }
+
+  /** Online: scores of the own ships start from zero, the scoreboard closes. */
+  private startNextRound() {
+    for (const ship of this.ownedShips()) ship.score = ship.kills = ship.deaths = 0;
+    $('results').hidden = true;
   }
 
   /** Spawns a ship on the edge of the field, facing the center, away from asteroids. */
@@ -294,9 +447,22 @@ export class Game {
     this.input.lockPointer();
   }
 
+  /** Ends a solo round with the scoreboard; leaving an online tournament goes to the menu. */
   private endRound() {
+    if (this.online) {
+      this.showMenu();
+      return;
+    }
+    this.renderScoreboard();
+    $('results-next').textContent = '';
+    $('again').innerHTML = 'Back to hangar <kbd>Enter</kbd>';
+    this.setScreen('results');
+    this.input.releasePointer();
+  }
+
+  private renderScoreboard() {
     const me = this.me;
-    const ranking = [...this.ships].sort((a, b) => b.score - a.score);
+    const ranking = this.ships.filter((s) => s !== this.drone).sort((a, b) => b.score - a.score);
     const table = $<HTMLTableElement>('scoreboard');
     table.innerHTML = '<tr><th>#</th><th>Pilot</th><th>Kills</th><th>Deaths</th><th>Score</th></tr>';
     ranking.forEach((ship, i) => {
@@ -305,8 +471,21 @@ export class Game {
       for (const value of [i + 1, ship.name, ship.kills, ship.deaths, ship.score]) row.insertCell().textContent = String(value);
     });
     if (me && me.score > Number(storageGet(BEST_SCORE_KEY) ?? 0)) storageSet(BEST_SCORE_KEY, String(me.score));
-    this.setScreen('results');
-    this.input.releasePointer();
+  }
+
+  /**
+   * Online rounds end for everyone at once: the scoreboard shows over the running game
+   * until the host starts the next round.
+   */
+  private showOnlineResults() {
+    const results = $('results');
+    if (results.hidden) {
+      this.renderScoreboard();
+      $('again').textContent = 'Leave tournament';
+      results.hidden = false;
+    }
+    const next = Math.max(0, this.roundEndsAt + RESULTS_SECONDS - this.time);
+    $('results-next').textContent = `Next round in ${Math.ceil(next)} s`;
   }
 
   private resize() {
@@ -323,10 +502,12 @@ export class Game {
     this.timer.update();
     this.input.poll();
     const dt = Math.min(this.timer.getDelta(), 0.05) * this.timeScale;
-    if (this.state !== 'paused') this.time += dt;
+    // an online tournament does not stop for one pilot's pause menu
+    const running = this.state === 'playing' || (this.state === 'paused' && !!this.online);
+    if (this.state !== 'paused' || running) this.time += dt;
 
-    if (this.state === 'playing') this.updateRound(dt);
-    if (this.state !== 'paused') {
+    if (running) this.updateRound(dt);
+    if (this.state !== 'paused' || running) {
       this.field.update(dt);
       this.effects.update(dt);
     }
@@ -340,8 +521,12 @@ export class Game {
     const me = this.me!;
     const now = this.time;
 
-    const myControls = this.flightComputer(this.input.read(dt));
-    for (const ship of this.ships) {
+    const myControls = this.flightComputer(this.state === 'playing' ? this.input.read(dt) : { ...IDLE });
+    for (const ship of [...this.ships]) {
+      if (ship.owner !== null) {
+        ship.updateRemote(dt, now);
+        continue;
+      }
       if (!ship.alive) {
         if (now < ship.respawnAt || ship === this.drone) continue;
         // training clones are free; tournament clones cost an ad
@@ -381,7 +566,14 @@ export class Game {
     } else if (this.flipAssist) {
       this.hud.flashMessage(now, 'Flip', 0.2);
     }
-    if (now >= this.roundEndsAt) this.endRound();
+
+    if (this.online) {
+      this.online.update(now);
+      $('hud-room').textContent = `Tournament ${this.online.session.room} · ${this.online.pilots} ${this.online.pilots === 1 ? 'pilot' : 'pilots'}`;
+      if (now >= this.roundEndsAt) this.showOnlineResults();
+    } else if (now >= this.roundEndsAt) {
+      this.endRound();
+    }
   }
 
   /** Runs the flight school: checks the current step, shows the instruction and waypoint. */
@@ -480,27 +672,27 @@ export class Game {
     const beamLength = wreckHit?.distance ?? asteroidHit?.distance ?? LASER_RANGE;
 
     const end = new THREE.Vector3().copy(origin).addScaledVector(direction, beamLength);
-    this.effects.beam(shooter.muzzle(this.shotCounter++, scratch), end, shooter.color);
+    const start = shooter.muzzle(this.shotCounter++, new THREE.Vector3());
+    this.effects.beam(start, end, shooter.color);
+    this.online?.sendFire(shooter, start, end);
     if (shooter.isLocal) this.sound.play('laser', { volume: 0.7 });
 
-    for (const ship of this.ships) {
+    for (const ship of [...this.ships]) {
       if (ship === shooter || !ship.alive) continue;
       const distance = raySphere(origin, direction, ship.flight.position, ship.radius);
       if (distance === null || distance > beamLength) continue;
-      const { status, zone } = ship.laserHit(origin, direction, this.time);
-      if (status === 'protected') continue;
-      this.effects.sparks(scratch.copy(origin).addScaledVector(direction, distance), shooter.color, 60);
-      if (shooter.isLocal) {
-        this.hud.hit();
-        this.sound.beep(zone === 'reactor' ? 1760 : 1320);
+      if (ship.owner !== null) {
+        // another peer simulates this ship and applies the damage
+        if (this.time < ship.protectedUntil) continue;
+        this.online?.sendHit(ship, origin, direction, shooter);
+        this.effects.sparks(scratch.copy(origin).addScaledVector(direction, distance), shooter.color, 60);
+        if (shooter.isLocal) {
+          this.hud.hit();
+          this.sound.beep(1320);
+        }
+        continue;
       }
-      if (ship.isLocal) {
-        this.hud.damaged();
-        this.hud.flashMessage(this.time, ZONE_MESSAGES[zone], 1.5);
-        this.sound.play('explosion', { volume: 1.2, rate: 1.5 });
-        this.sound.beep(220, 0.25, 0.12);
-      }
-      if (status === 'destroyed') this.shipDestroyed(ship, shooter);
+      this.applyLaserHit(ship, origin, direction, shooter, distance);
     }
 
     if (wreckHit) {
@@ -515,6 +707,7 @@ export class Game {
       this.effects.sparks(end, shooter.color, 40);
       this.effects.debris(end, normal, 120);
       const destroyed = this.field.hit(asteroid.id);
+      this.online?.sendRock(asteroid.id);
       if (destroyed) {
         shooter.score += ASTEROID_POINTS[destroyed.generation];
         this.effects.explosion(destroyed.object.position, destroyed.meanRadius * 0.6, destroyed.velocity);
@@ -527,6 +720,28 @@ export class Game {
     }
   }
 
+  /**
+   * A laser beam went through a ship this browser simulates: damage, feedback, destruction.
+   * Also called for beams from other peers.
+   */
+  applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number) {
+    const { status, zone } = ship.laserHit(origin, direction, this.time);
+    if (status === 'protected') return;
+    const along = distance ?? scratch.subVectors(ship.flight.position, origin).dot(direction);
+    this.effects.sparks(scratch.copy(origin).addScaledVector(direction, along), shooter?.color ?? SCRAPE_COLOR, 60);
+    if (shooter?.isLocal) {
+      this.hud.hit();
+      this.sound.beep(zone === 'reactor' ? 1760 : 1320);
+    }
+    if (ship.isLocal) {
+      this.hud.damaged();
+      this.hud.flashMessage(this.time, ZONE_MESSAGES[zone], 1.5);
+      this.sound.play('explosion', { volume: 1.2, rate: 1.5 });
+      this.sound.beep(220, 0.25, 0.12);
+    }
+    if (status === 'destroyed') this.shipDestroyed(ship, shooter);
+  }
+
   private shipDestroyed(victim: Ship, killer: Ship | null) {
     victim.respawnAt = this.time + RESPAWN_SECONDS;
     if (victim.isLocal) this.flipAssist = false;
@@ -534,7 +749,9 @@ export class Game {
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
     if (victim.isLocal) this.sound.play('explosion', { volume: 1.6, rate: 0.6 });
     else this.hearDebris(victim.flight.position, victim.radius);
-    if (killer) {
+    // online, the owner of the victim announces the destruction; each peer scores its own ships
+    if (victim.owner === null) this.online?.sendDestroyed(victim, killer);
+    if (killer && killer.owner === null) {
       killer.kills++;
       killer.score += KILL_POINTS;
       if (killer.isLocal) {

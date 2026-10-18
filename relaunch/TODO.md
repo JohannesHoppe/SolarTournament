@@ -12,8 +12,10 @@ Abgearbeitet von oben nach unten. Jeder erledigte Punkt ist auch in der README d
 
 ### 2. Multiplayer
 
-- [ ] Peer-to-Peer-Multiplayer ohne Server (Trystero), Turnier-Link zum Teilen, Bots füllen freie Plätze
-- [ ] Host entscheidet über Treffer, Interpolation entfernter Schiffe
+- [x] Peer-to-Peer-Multiplayer ohne Server (Trystero), Turnier-Link zum Teilen, Bots füllen freie Plätze
+- [x] Treffer entscheidet der Schütze, der Besitzer wendet den Schaden an; Vorhersage und weiches Nachführen entfernter Schiffe
+- [ ] TURN-Server für Spieler hinter strikten Firewalls (z. B. Cloudflare TURN, Kosten und Limits prüfen)
+- [ ] Trümmer über das Netz abgleichen (bisher erzeugt jeder Browser sie selbst; Laser-Treffer auf Trümmer bleiben lokal)
 
 ### 3. Das Turnier als Show
 

@@ -52,6 +52,9 @@ Nie `npx` verwenden, immer die Scripts aus `package.json`.
 | `space.ts` | Sterne, Nebel, Sonne mit Schattenwurf, Raumstaub |
 | `hud.ts` | DOM-HUD: Anzeigen, Marker, Warnungen, Tunnelblick |
 | `audio.ts` | Ton durch den Rumpf (Tiefpass), Bordcomputer-Pieptöne, Antriebsgeräusch |
+| `online.ts` | Online-Turnier: Besitz der Schiffe, was übers Netz geht, Bots des Hosts |
+| `net/session.ts` | Turnier-Protokoll: Nachrichtentypen, Host-Wahl (am längsten im Raum), Raumcodes |
+| `net/transport.ts` | Transport: Trystero (WebRTC über Nostr-Relays) und BroadcastChannel für lokale Tests (`?local=1`) |
 | `school.ts` | Flugschule: Schritte mit Anleitung, Erfolgsbedingung und Wegpunkt |
 | `sponsors.ts` | Sponsor-Break vor dem Respawn: `AdProvider`-Schnittstelle, Platzhalter-Werbung |
 | `input.ts` | Tastatur, Maus (Pointer Lock als virtueller Stick) und Gamepad, führt alle Eingaben zu `Controls` zusammen |
@@ -75,5 +78,6 @@ Im Dev-Modus hängt das Spiel als `window.game` am Fenster. Damit lässt sich de
 - Tasten simulieren: `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))`
 - Zeit einfrieren für Screenshots: `game.timeScale = 0`
 - Bots abschalten: andere Schiffe auf `alive = false` und `respawnAt = Infinity` setzen
+- Multiplayer: zwei Tabs mit `?t=<code>&local=1` öffnen und in beiden „Online tournament“ klicken (BroadcastChannel, ohne Internet); ohne `local=1` läuft derselbe Test über Trystero und echte Nostr-Relays
 
 Der Testbrowser rendert ohne GPU, die Framerate dort sagt nichts über echte Hardware. Spielgefühl und Ton lassen sich so nicht beurteilen, das testet Johannes selbst.

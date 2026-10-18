@@ -591,6 +591,30 @@ button.primary {
   font-size: 1.3rem;
 }
 
+/* online tournament */
+
+#hud-room {
+  position: absolute;
+  top: 18px;
+  left: 16px;
+  color: var(--muted);
+  font-size: 0.8rem;
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+}
+
+body.touch #hud-room {
+  left: 68px;
+}
+
+#results-next {
+  margin: 0;
+  color: var(--muted);
+}
+
+#results-next:empty {
+  display: none;
+}
+
 /* flight school */
 
 #school-panel {

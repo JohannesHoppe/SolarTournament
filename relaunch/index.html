@@ -15,6 +15,7 @@
       <span id="hud-time"></span>
       <span id="hud-score"></span>
     </div>
+    <div id="hud-room"></div>
     <div id="crosshair"></div>
     <div id="prograde" class="velocity-marker" hidden></div>
     <div id="retrograde" class="velocity-marker" hidden></div>
@@ -53,6 +54,7 @@
     </div>
     <label class="field">Callsign <input id="callsign" maxlength="16" autocomplete="off" spellcheck="false"></label>
     <button type="button" id="start" class="primary">Launch <kbd>Enter</kbd></button>
+    <button type="button" id="online">Online tournament</button>
     <button type="button" id="school">Flight school</button>
     <dl class="controls">
       <dt>Mouse / Arrows</dt><dd>Turn</dd>
@@ -79,12 +81,14 @@
   <div id="pause" class="plate" hidden>
     <h2>Paused</h2>
     <button type="button" id="resume" class="primary">Resume <kbd>Enter</kbd></button>
+    <button type="button" id="invite" hidden>Copy invite link</button>
     <button type="button" id="quit">Quit round <kbd>Q</kbd></button>
   </div>
 
   <div id="results" class="plate" hidden>
     <h2>Round over</h2>
     <table id="scoreboard"></table>
+    <p id="results-next"></p>
     <button type="button" id="again" class="primary">Back to hangar <kbd>Enter</kbd></button>
   </div>
 
