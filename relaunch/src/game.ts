@@ -13,6 +13,7 @@ import { IDLE, Input, type Action, type Controls } from './input';
 import { Ship, type Zone } from './ship';
 import { MAIN_THRUST } from './flight';
 import { Space, SUN_DIRECTION } from './space';
+import { SponsorBreak } from './sponsors';
 import { Wrecks } from './wrecks';
 
 const ROUND_SECONDS = 5 * 60;
@@ -20,6 +21,7 @@ const FIELD_SEED = 11;
 const BOT_COUNT = 3;
 const LASER_RANGE = 200000;
 const KILL_POINTS = 500;
+/** Bots respawn after this delay; the own pilot sees the sponsor break after it. */
 const RESPAWN_SECONDS = 3;
 /** Impacts slower than this (units/s) only scratch the paint. */
 const SAFE_IMPACT = 250;
@@ -93,6 +95,7 @@ export class Game {
   private readonly field: AsteroidField;
   private readonly effects: Effects;
   private readonly wrecks = new Wrecks();
+  private readonly sponsors = new SponsorBreak();
   private readonly hud = new Hud();
   private readonly input: Input;
   private readonly timer = new THREE.Timer();
@@ -170,6 +173,7 @@ export class Game {
         if (action === 'confirm') this.startRound();
         break;
       case 'playing':
+        if (this.sponsors.visible) break;
         if (action === 'pause' || action === 'pointer-released') this.pause();
         if (action === 'camera') this.cockpit = !this.cockpit;
         if (action === 'flip' && this.me?.alive) this.flipAssist = !this.flipAssist;
@@ -189,6 +193,7 @@ export class Game {
     $('menu').hidden = state !== 'menu';
     $('pause').hidden = state !== 'paused';
     $('results').hidden = state !== 'results';
+    if (state !== 'playing') this.sponsors.hide();
     this.hud.show(state === 'playing');
     if (state !== 'playing') this.sound.setEngine(0, 0);
   }
@@ -254,6 +259,18 @@ export class Game {
     ship.spawn(position, new THREE.Quaternion().setFromRotationMatrix(look), this.time);
   }
 
+  /** The next clone only boots after the pilot has watched an ad. */
+  private sponsorBreak() {
+    this.input.releasePointer();
+    this.hud.show(false);
+    this.sponsors.show(() => {
+      this.hud.show(true);
+      this.respawn(this.me!);
+      this.input.resetMouse();
+      this.input.lockPointer();
+    });
+  }
+
   private pause() {
     this.setScreen('paused');
     this.input.releasePointer();
@@ -313,7 +330,9 @@ export class Game {
     const myControls = this.flightComputer(this.input.read(dt));
     for (const ship of this.ships) {
       if (!ship.alive) {
-        if (now >= ship.respawnAt) this.respawn(ship);
+        if (now < ship.respawnAt) continue;
+        if (ship !== me) this.respawn(ship);
+        else if (!this.sponsors.visible) this.sponsorBreak();
         continue;
       }
       const bot = this.bots.find((b) => b.ship === ship);

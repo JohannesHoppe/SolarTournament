@@ -38,7 +38,9 @@ Humanity has settled the solar system. Fast fusion drives make hard burns betwee
 
 The pilots die, and come back. They have transferred their consciousness into cloned human bodies; when a ship is destroyed, the pilot wakes up in the next clone, in the next ship. That is why every round has respawns, and why the audience never runs out of champions.
 
-The year is **2584**: a nod to George Orwell's *1984*, where a whole society watches and is watched, and to 1984, the year the game's creator was born.
+It is a society without morals. A new clone is not free: the pilot pays with attention. Before the next body boots, the pilot has to watch an advertisement. Want another clone? Make the sponsor happy.
+
+The year is **2584**, a nod to George Orwell's *1984*, where a whole society watches and is watched.
 
 ## The physics of the SolarTournament universe
 
@@ -98,7 +100,7 @@ There is no sound in vacuum. Everything the pilot hears travels through the own 
 ### Combat rules
 
 - A kill scores 500 points; asteroids score 200, 120 and 80 points depending on their generation.
-- Destroyed ships respawn after 3 seconds at the edge of the field, with 2.5 seconds of spawn protection.
+- Destroyed ships respawn at the edge of the field, with 2.5 seconds of spawn protection. Bots respawn after 3 seconds. The own pilot first sits through a sponsor break: after 3 seconds an ad appears, and once it has run, a button boots the next clone. The round goes on meanwhile.
 - Human and alien interceptor are identical apart from their looks.
 
 ## License

@@ -534,3 +534,59 @@ button.primary {
   border-left: 18px solid var(--tint);
   transform: rotate(var(--angle));
 }
+
+/* sponsor break before the next clone boots */
+
+#sponsor {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 16px;
+  background: rgba(2, 3, 10, 0.8);
+  text-align: center;
+}
+
+.sponsor-pitch {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
+.sponsor-label,
+#sponsor-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+#ad-slot {
+  width: min(468px, 100%);
+  min-height: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 24px;
+  border: 2px dashed var(--line);
+  border-radius: 12px;
+  background: #060c1c;
+}
+
+.ad-label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+#ad-slot strong {
+  font-size: 1.3rem;
+}

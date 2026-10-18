@@ -52,6 +52,7 @@ Nie `npx` verwenden, immer die Scripts aus `package.json`.
 | `space.ts` | Sterne, Nebel, Sonne mit Schattenwurf, Raumstaub |
 | `hud.ts` | DOM-HUD: Anzeigen, Marker, Warnungen, Tunnelblick |
 | `audio.ts` | Ton durch den Rumpf (Tiefpass), Bordcomputer-Pieptöne, Antriebsgeräusch |
+| `sponsors.ts` | Sponsor-Break vor dem Respawn: `AdProvider`-Schnittstelle, Platzhalter-Werbung |
 | `input.ts` | Tastatur und Maus (Pointer Lock als virtueller Stick) |
 | `random.ts` | Deterministischer Zufallsgenerator |
 
