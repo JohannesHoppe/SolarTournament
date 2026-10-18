@@ -173,13 +173,16 @@ export class Game {
         if (action === 'confirm') this.startRound();
         break;
       case 'playing':
-        if (this.sponsors.visible) break;
+        if (this.sponsors.visible) {
+          if (action === 'confirm') this.sponsors.confirm();
+          break;
+        }
         if (action === 'pause' || action === 'pointer-released') this.pause();
         if (action === 'camera') this.cockpit = !this.cockpit;
         if (action === 'flip' && this.me?.alive) this.flipAssist = !this.flipAssist;
         break;
       case 'paused':
-        if (action === 'confirm') this.resume();
+        if (action === 'confirm' || action === 'pause') this.resume();
         if (action === 'quit') this.endRound();
         break;
       case 'results':
@@ -309,6 +312,7 @@ export class Game {
 
   private frame() {
     this.timer.update();
+    this.input.poll();
     const dt = Math.min(this.timer.getDelta(), 0.05) * this.timeScale;
     if (this.state !== 'paused') this.time += dt;
 

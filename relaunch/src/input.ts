@@ -24,12 +24,25 @@ type ActionHandler = (action: Action) => void;
 const MOUSE_SENSITIVITY = 0.0035;
 /** The virtual stick returns to center with this rate (1/s), so the ship stops turning. */
 const MOUSE_RECENTER_RATE = 2.2;
+/** Stick deflections below this are treated as zero, so worn sticks do not drift. */
+const STICK_DEADZONE = 0.15;
+
+/** Buttons of the standard gamepad layout (Xbox naming). */
+const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9 } as const;
+const PAD_ACTIONS: [number, Action][] = [
+  [PAD.a, 'confirm'],
+  [PAD.menu, 'pause'],
+  [PAD.b, 'quit'],
+  [PAD.view, 'camera'],
+  [PAD.y, 'flip'],
+];
 
 export class Input {
   private readonly keys = new Set<string>();
   private readonly mouseStick = { x: 0, y: 0 };
   private mouseFire = false;
   private handler: ActionHandler = () => {};
+  private readonly padPressed = new Set<number>();
 
   constructor(private readonly canvas: HTMLElement) {
     window.addEventListener('keydown', (e) => this.onKey(e, true));
@@ -93,16 +106,42 @@ export class Input {
     this.mouseStick.x *= decay;
     this.mouseStick.y *= decay;
 
+    // Gamepad: left stick turns (pull back = nose up, as in aircraft), right stick pushes
+    // sideways and up/down, right trigger is the main drive, left trigger or A fires.
+    const pad = this.gamepad();
+    const stick = (i: number) => deadzone(pad?.axes[i] ?? 0);
+    const button = (i: number) => pad?.buttons[i]?.value ?? 0;
+
     return {
-      yaw: clamp(axis(['ArrowRight'], ['ArrowLeft']) + this.mouseStick.x),
-      pitch: clamp(axis(['ArrowUp'], ['ArrowDown']) + this.mouseStick.y),
-      roll: axis(['KeyE'], ['KeyQ']),
-      thrust: k('KeyW', 'ShiftLeft', 'ShiftRight') ? 1 : 0,
-      strafeX: axis(['KeyD'], ['KeyA']),
-      strafeY: axis(['KeyR'], ['KeyF']),
-      strafeZ: -(k('KeyS') ? 1 : 0),
-      fire: k('Space') || this.mouseFire,
+      yaw: clamp(axis(['ArrowRight'], ['ArrowLeft']) + this.mouseStick.x + stick(0)),
+      pitch: clamp(axis(['ArrowUp'], ['ArrowDown']) + this.mouseStick.y + stick(1)),
+      roll: clamp(axis(['KeyE'], ['KeyQ']) + button(PAD.rb) - button(PAD.lb)),
+      thrust: Math.max(k('KeyW', 'ShiftLeft', 'ShiftRight') ? 1 : 0, button(PAD.rt)),
+      strafeX: clamp(axis(['KeyD'], ['KeyA']) + stick(2)),
+      strafeY: clamp(axis(['KeyR'], ['KeyF']) - stick(3)),
+      strafeZ: -Math.max(k('KeyS') ? 1 : 0, button(PAD.x)),
+      fire: k('Space') || this.mouseFire || button(PAD.lt) > 0.5 || button(PAD.a) > 0.5,
     };
+  }
+
+  /** Polls gamepad buttons once per frame and turns new presses into actions. */
+  poll() {
+    const pad = this.gamepad();
+    if (!pad) return;
+    for (const [index, action] of PAD_ACTIONS) {
+      const down = (pad.buttons[index]?.value ?? 0) > 0.5;
+      if (down && !this.padPressed.has(index)) this.handler(action);
+      if (down) this.padPressed.add(index);
+      else this.padPressed.delete(index);
+    }
+  }
+
+  /** The first connected gamepad with the standard layout, if any. */
+  private gamepad(): Gamepad | null {
+    for (const pad of navigator.getGamepads?.() ?? []) {
+      if (pad?.connected && pad.mapping === 'standard') return pad;
+    }
+    return null;
   }
 
   private onKey(e: KeyboardEvent, down: boolean) {
@@ -124,3 +163,9 @@ export class Input {
 }
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+
+/** Removes the dead zone and rescales the rest of the stick travel to 0..1. */
+function deadzone(v: number) {
+  const magnitude = Math.abs(v);
+  return magnitude < STICK_DEADZONE ? 0 : (Math.sign(v) * (magnitude - STICK_DEADZONE)) / (1 - STICK_DEADZONE);
+}

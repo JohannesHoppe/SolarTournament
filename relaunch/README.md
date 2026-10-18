@@ -14,18 +14,21 @@ npm run build      # static site in dist/
 
 ## Controls
 
-| Input | Action |
-|---|---|
-| Mouse (click the game first) / arrow keys | Turn (yaw, pitch) |
-| Q / E | Roll |
-| W / Shift | Main drive |
-| A / D | Thrusters: sideways |
-| S | Thrusters: backwards |
-| R / F | Thrusters: up / down |
-| X | Flip: the flight computer turns the drive into the flight direction |
-| Click / Space | Fire laser |
-| C | Chase / cockpit camera |
-| Esc | Pause |
+| Keyboard and mouse | Gamepad | Action |
+|---|---|---|
+| Mouse (click the game first) / arrow keys | Left stick (pull back = nose up) | Turn (yaw, pitch) |
+| Q / E | LB / RB | Roll |
+| W / Shift | RT (analog) | Main drive |
+| A / D | Right stick left / right | Thrusters: sideways |
+| S | X | Thrusters: backwards |
+| R / F | Right stick up / down | Thrusters: up / down |
+| X | Y | Flip: the flight computer turns the drive into the flight direction |
+| Click / Space | LT / A | Fire laser |
+| C | View | Chase / cockpit camera |
+| Esc | Menu | Pause |
+| Enter | A | Confirm (start, resume, boot the next clone) |
+
+Gamepads with the standard layout (Xbox, PlayStation, most others in current browsers) work without setup.
 
 ## The universe
 

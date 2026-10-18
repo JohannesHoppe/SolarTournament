@@ -66,6 +66,11 @@ export class SponsorBreak {
     this.onDone = null;
   }
 
+  /** Boots the clone from keyboard or gamepad, once the ad has run. */
+  confirm() {
+    if (!this.boot.hidden) this.finish();
+  }
+
   private finish() {
     const done = this.onDone;
     if (!done) return;
