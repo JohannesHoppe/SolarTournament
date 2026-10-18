@@ -1,0 +1,4 @@
+# Cloudflare Pages: a static site, built by `npm run build` into dist/.
+name = "solartournament"
+pages_build_output_dir = "dist"
+compatibility_date = "2026-10-01"

@@ -7,7 +7,11 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "cf:login": "wrangler login",
+    "cf:create": "wrangler pages project create solartournament --production-branch master",
+    "deploy": "npm run build && wrangler pages deploy --branch master",
+    "deploy:preview": "npm run build && wrangler pages deploy --branch preview"
   },
   "license": "zlib",
   "dependencies": {
@@ -19,6 +23,7 @@
     "@types/node": "^26.6.5",
     "@types/three": "^0.186.0",
     "typescript": "^7.0.2",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "wrangler": "^4.149.0"
   }
 }

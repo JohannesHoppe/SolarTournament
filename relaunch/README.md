@@ -12,6 +12,19 @@ npm run dev        # http://127.0.0.1:5173/
 npm run build      # static site in dist/
 ```
 
+## Deploy
+
+The game is a static site on [Cloudflare Pages](https://pages.cloudflare.com/) (`wrangler.toml`).
+
+```
+npm run cf:login        # once: log in to Cloudflare in the browser
+npm run cf:create       # once: create the Pages project "solartournament"
+npm run deploy          # build and publish (production)
+npm run deploy:preview  # build and publish to a preview address
+```
+
+Alternatively, connect the GitHub repository in the Cloudflare dashboard (Workers & Pages → Create → Pages → Connect to Git) with root directory `relaunch`, build command `npm run build` and output directory `dist`; every push then deploys automatically.
+
 ## Controls
 
 | Keyboard and mouse | Gamepad | Action |

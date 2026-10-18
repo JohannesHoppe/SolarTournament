@@ -33,7 +33,10 @@ npm install
 npm run dev         # Dev-Server auf http://127.0.0.1:5173/
 npm run typecheck
 npm run build       # statische Seite in dist/
+npm run deploy      # baut und veröffentlicht auf Cloudflare Pages (Projekt „solartournament“)
 ```
+
+Gehostet wird auf Cloudflare Pages (`wrangler.toml`). Veröffentlichen nur, wenn Johannes darum bittet.
 
 Nie `npx` verwenden, immer die Scripts aus `package.json`.
 
