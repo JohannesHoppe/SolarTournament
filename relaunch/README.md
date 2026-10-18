@@ -38,7 +38,7 @@ Humanity has settled the solar system. Fast fusion drives make hard burns betwee
 
 The pilots die, and come back. They have transferred their consciousness into cloned human bodies; when a ship is destroyed, the pilot wakes up in the next clone, in the next ship. That is why every round has respawns, and why the audience never runs out of champions.
 
-The exact year of the tournament is not set yet.
+The year is **2584**: a nod to George Orwell's *1984*, where a whole society watches and is watched, and to 1984, the year the game's creator was born.
 
 ## The physics of the SolarTournament universe
 
