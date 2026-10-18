@@ -53,7 +53,8 @@ Nie `npx` verwenden, immer die Scripts aus `package.json`.
 | `hud.ts` | DOM-HUD: Anzeigen, Marker, Warnungen, Tunnelblick |
 | `audio.ts` | Ton durch den Rumpf (Tiefpass), Bordcomputer-Pieptöne, Antriebsgeräusch |
 | `sponsors.ts` | Sponsor-Break vor dem Respawn: `AdProvider`-Schnittstelle, Platzhalter-Werbung |
-| `input.ts` | Tastatur und Maus (Pointer Lock als virtueller Stick) |
+| `input.ts` | Tastatur, Maus (Pointer Lock als virtueller Stick) und Gamepad, führt alle Eingaben zu `Controls` zusammen |
+| `touch.ts` | Touch-Steuerung mit nipplejs: fester Stick links, dynamischer Stick rechts, Halte-Tasten |
 | `random.ts` | Deterministischer Zufallsgenerator |
 
 `tools/extract-ccb/` lädt die alte CopperCube-Szene mit der Original-Engine und schreibt glTF-Modelle nach `public/assets/models/`. Aufruf: `npm run dev`, dann `http://127.0.0.1:5173/tools/extract-ccb/` öffnen.

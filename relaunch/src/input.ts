@@ -1,4 +1,6 @@
-/** Rotation, thrust and fire state, combined from keyboard and mouse. */
+import { TouchControls } from './touch';
+
+/** Rotation, thrust and fire state, combined from keyboard, mouse, gamepad and touch. */
 export interface Controls {
   /** -1 = left, 1 = right */
   yaw: number;
@@ -43,6 +45,7 @@ export class Input {
   private mouseFire = false;
   private handler: ActionHandler = () => {};
   private readonly padPressed = new Set<number>();
+  private readonly touch = new TouchControls(() => this.handler('flip'), () => this.handler('pause'));
 
   constructor(private readonly canvas: HTMLElement) {
     window.addEventListener('keydown', (e) => this.onKey(e, true));
@@ -53,7 +56,7 @@ export class Input {
     });
 
     canvas.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return;
+      if (e.button !== 0 || this.touch.active) return;
       if (document.pointerLockElement !== canvas) {
         canvas.requestPointerLock?.();
         return;
@@ -86,7 +89,12 @@ export class Input {
   }
 
   lockPointer() {
-    this.canvas.requestPointerLock?.();
+    // touch devices steer with the on-screen sticks; mobile browsers reject pointer lock
+    if (!this.touch.active) this.canvas.requestPointerLock?.();
+  }
+
+  get touchActive() {
+    return this.touch.active;
   }
 
   releasePointer() {
@@ -112,15 +120,17 @@ export class Input {
     const stick = (i: number) => deadzone(pad?.axes[i] ?? 0);
     const button = (i: number) => pad?.buttons[i]?.value ?? 0;
 
+    const touch = this.touch;
+
     return {
-      yaw: clamp(axis(['ArrowRight'], ['ArrowLeft']) + this.mouseStick.x + stick(0)),
-      pitch: clamp(axis(['ArrowUp'], ['ArrowDown']) + this.mouseStick.y + stick(1)),
+      yaw: clamp(axis(['ArrowRight'], ['ArrowLeft']) + this.mouseStick.x + stick(0) + touch.turn.x),
+      pitch: clamp(axis(['ArrowUp'], ['ArrowDown']) + this.mouseStick.y + stick(1) + touch.turn.y),
       roll: clamp(axis(['KeyE'], ['KeyQ']) + button(PAD.rb) - button(PAD.lb)),
-      thrust: Math.max(k('KeyW', 'ShiftLeft', 'ShiftRight') ? 1 : 0, button(PAD.rt)),
-      strafeX: clamp(axis(['KeyD'], ['KeyA']) + stick(2)),
-      strafeY: clamp(axis(['KeyR'], ['KeyF']) - stick(3)),
-      strafeZ: -Math.max(k('KeyS') ? 1 : 0, button(PAD.x)),
-      fire: k('Space') || this.mouseFire || button(PAD.lt) > 0.5 || button(PAD.a) > 0.5,
+      thrust: Math.max(k('KeyW', 'ShiftLeft', 'ShiftRight') || touch.drive ? 1 : 0, button(PAD.rt)),
+      strafeX: clamp(axis(['KeyD'], ['KeyA']) + stick(2) + touch.push.x),
+      strafeY: clamp(axis(['KeyR'], ['KeyF']) - stick(3) + touch.push.y),
+      strafeZ: -Math.max(k('KeyS') || touch.back ? 1 : 0, button(PAD.x)),
+      fire: k('Space') || this.mouseFire || touch.fire || button(PAD.lt) > 0.5 || button(PAD.a) > 0.5,
     };
   }
 

@@ -7,7 +7,7 @@ Abgearbeitet von oben nach unten. Jeder erledigte Punkt ist auch in der README d
 ### 1. Spielbar für neue Spieler
 
 - [x] Gamepad-Steuerung
-- [ ] Touch-Steuerung für Handy und Tablet mit nipplejs (wie in der Bitmap-Ansicht von ordpool: fester Stick links, dynamischer Stick rechts, Schutz gegen hängende Sticks)
+- [x] Touch-Steuerung für Handy und Tablet mit nipplejs (wie in der Bitmap-Ansicht von ordpool: fester Stick links, dynamischer Stick rechts, Schutz gegen hängende Sticks)
 - [ ] Flugschule: geführtes Tutorial für Schub, Driften, Flip-and-burn, Kollisionswarnung, Hitze im Schatten
 
 ### 2. Multiplayer

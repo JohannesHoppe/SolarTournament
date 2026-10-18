@@ -241,7 +241,7 @@ export class Game {
     this.setScreen('playing');
     this.input.resetMouse();
     this.input.lockPointer();
-    this.hud.flashMessage(this.time, 'Click to steer with the mouse', 4);
+    if (!this.input.touchActive) this.hud.flashMessage(this.time, 'Click to steer with the mouse', 4);
   }
 
   private addShip(id: string, name: string, type: ShipType, isLocal: boolean): Ship {

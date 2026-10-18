@@ -30,6 +30,8 @@ npm run build      # static site in dist/
 
 Gamepads with the standard layout (Xbox, PlayStation, most others in current browsers) work without setup.
 
+On phones and tablets touch controls appear: the fixed stick on the left turns the ship (drag up = nose up), a second stick appears under the right thumb and fires the maneuvering thrusters. Hold **Drive** for the main drive and **Fire** for the laser; **Back** pushes backwards, **Flip** starts the flip assist. Pressing a key on a hardware keyboard hides the touch controls, touching the screen brings them back.
+
 ## The universe
 
 SolarTournament has a universe of its own. It borrows two principles from science fiction series we love:
