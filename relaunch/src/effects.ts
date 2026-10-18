@@ -102,6 +102,8 @@ export class ParticleSystem {
 
 const FIRE = new THREE.Color(0.9, 0.42, 0.12);
 const SMOKE = new THREE.Color(0.12, 0.11, 0.11);
+const VAPOR = new THREE.Color(0.35, 0.38, 0.42);
+const ROCK = new THREE.Color(0.22, 0.19, 0.16);
 const scratch = new THREE.Vector3();
 const scratchVelocity = new THREE.Vector3();
 
@@ -144,6 +146,19 @@ export class Effects {
     for (let i = 0; i < 24; i++) {
       randomDirection(scratchVelocity).multiplyScalar(size * (2 + Math.random() * 6));
       this.fire.emit(point, scratchVelocity, 0.25 + Math.random() * 0.3, size, size * 0.2, color);
+    }
+  }
+
+  /** Thruster exhaust or venting atmosphere: a short, pale puff. */
+  puff(position: THREE.Vector3, velocity: THREE.Vector3, size: number) {
+    this.smoke.emit(position, velocity, 0.35 + Math.random() * 0.2, size, size * 3, VAPOR);
+  }
+
+  /** Rock splinters and dust where a laser hits an asteroid. */
+  debris(point: THREE.Vector3, normal: THREE.Vector3, size: number) {
+    for (let i = 0; i < 14; i++) {
+      randomDirection(scratchVelocity).add(normal).normalize().multiplyScalar(size * (1 + Math.random() * 3));
+      this.smoke.emit(point, scratchVelocity, 1.2 + Math.random(), size * 0.6, size * 2.5, ROCK);
     }
   }
 

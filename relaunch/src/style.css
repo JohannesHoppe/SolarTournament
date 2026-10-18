@@ -317,6 +317,7 @@ button.primary {
   display: flex;
   align-items: center;
   gap: 8px;
+  white-space: nowrap;
   font-size: 0.8rem;
   color: var(--muted);
   text-transform: uppercase;
@@ -324,7 +325,7 @@ button.primary {
 }
 
 .bar {
-  width: 140px;
+  width: 100px;
   height: 8px;
   background: rgba(255, 255, 255, 0.12);
   border-radius: 4px;
@@ -337,16 +338,117 @@ button.primary {
   background: var(--accent);
 }
 
-#hud-laser {
+#hud-heat {
   background: var(--accent-strong);
 }
 
-#hud-laser.empty {
-  opacity: 0.4;
+#hud-heat.overheated {
+  background: var(--danger);
+  animation: blink 0.4s steps(2) infinite;
 }
 
-#hud-shield.low {
+#hud-shadow {
+  color: var(--accent);
+  font-size: 1rem;
+  text-transform: none;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+#hud-warning {
+  position: absolute;
+  top: calc(50% + 48px);
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--danger);
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.9);
+  white-space: pre-line;
+}
+
+#g-vignette {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  background: radial-gradient(ellipse at center, transparent var(--tunnel, 70%), rgba(0, 0, 0, 0.96) calc(var(--tunnel, 70%) + 25%));
+}
+
+.bar > div.low {
   background: var(--danger);
+}
+
+.readout {
+  min-width: 70px;
+  color: var(--text);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.velocity-marker {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  border: 2px solid #9dffb0;
+  border-radius: 50%;
+  opacity: 0.85;
+}
+
+#prograde::before,
+#prograde::after {
+  content: '';
+  position: absolute;
+  background: #9dffb0;
+}
+
+/* prograde: circle with three fins, as in flight instruments */
+#prograde::before {
+  left: 50%;
+  top: -10px;
+  width: 2px;
+  height: 8px;
+  margin-left: -1px;
+}
+
+#prograde::after {
+  top: 50%;
+  left: -10px;
+  right: -10px;
+  height: 2px;
+  margin-top: -1px;
+  background: linear-gradient(to right, #9dffb0 8px, transparent 8px, transparent calc(100% - 8px), #9dffb0 calc(100% - 8px));
+}
+
+/* retrograde: circle with a cross */
+#retrograde {
+  border-color: #ffb36b;
+}
+
+#retrograde::before,
+#retrograde::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 30px;
+  height: 2px;
+  margin: -1px 0 0 -15px;
+  background: #ffb36b;
+  transform: rotate(45deg);
+}
+
+#retrograde::after {
+  transform: rotate(-45deg);
 }
 
 #damage-flash {
@@ -369,7 +471,17 @@ button.primary {
   }
 
   .bar {
-    width: 80px;
+    width: 50px;
+  }
+
+  .hud-bottom {
+    gap: 10px;
+  }
+
+  .gauge {
+    flex-direction: column;
+    gap: 4px;
+    font-size: 0.65rem;
   }
 }
 

@@ -76,22 +76,30 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
 }
 
 /**
- * Radius of the bounding sphere of an object's collider mesh (or its visible meshes when it
- * has none), measured in the object's own space including its scale.
+ * Bounding box of an object's collider mesh (or its visible meshes when it has none),
+ * in the object's own coordinates without its scale.
  */
-export function colliderRadius(root: THREE.Object3D): number {
+export function colliderBox(root: THREE.Object3D): THREE.Box3 {
   root.updateMatrixWorld(true);
   const inverseRoot = new THREE.Matrix4().copy(root.matrixWorld).invert();
-  const scale = new THREE.Vector3().setFromMatrixScale(root.matrixWorld);
   const box = new THREE.Box3();
   let hasCollider = false;
   root.traverse((o) => (hasCollider ||= !!o.userData.collider));
   root.traverse((o) => {
     if (!(o instanceof THREE.Mesh || o instanceof THREE.Line) || (hasCollider && !o.userData.collider)) return;
     o.geometry.computeBoundingBox();
-    const local = o.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverseRoot, o.matrixWorld));
-    box.union(local);
+    box.union(o.geometry.boundingBox!.clone().applyMatrix4(new THREE.Matrix4().multiplyMatrices(inverseRoot, o.matrixWorld)));
   });
-  const sphere = box.getBoundingSphere(new THREE.Sphere());
-  return sphere.radius * Math.max(scale.x, scale.y, scale.z);
+  return box;
+}
+
+/** Largest scale factor of an object's world transform. */
+export function worldScale(root: THREE.Object3D): number {
+  const scale = new THREE.Vector3().setFromMatrixScale(root.matrixWorld);
+  return Math.max(scale.x, scale.y, scale.z);
+}
+
+/** Radius of the bounding sphere of an object's collider, including its scale. */
+export function colliderRadius(root: THREE.Object3D): number {
+  return colliderBox(root).getBoundingSphere(new THREE.Sphere()).radius * worldScale(root);
 }

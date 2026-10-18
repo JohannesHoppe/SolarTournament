@@ -1,18 +1,26 @@
 import * as THREE from 'three';
-import { LASER_CAPACITY, LASER_SHOT_COST, MAX_SHIELD, type Ship } from './ship';
-import { FlightModel } from './flight';
+import { MAX_HEAT, MAX_HULL, type Ship } from './ship';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const projected = new THREE.Vector3();
 const KILLFEED_SECONDS = 5;
+/** Display scale: one world unit is 5 cm, a ship is about 35 m long. */
+const METERS_PER_UNIT = 0.05;
 
 export class Hud {
   private readonly root = $('hud');
   private readonly time = $('hud-time');
   private readonly score = $('hud-score');
-  private readonly shield = $('hud-shield');
-  private readonly laser = $('hud-laser');
+  private readonly hull = $('hud-hull');
+  private readonly drive = $('hud-drive');
+  private readonly thrusters = $('hud-thrusters');
+  private readonly heat = $('hud-heat');
+  private readonly shadow = $('hud-shadow');
+  private readonly warning = $('hud-warning');
+  private readonly vignette = $('g-vignette');
   private readonly speed = $('hud-speed');
+  private readonly prograde = $('prograde');
+  private readonly retrograde = $('retrograde');
   private readonly message = $('hud-message');
   private readonly hitmarker = $('hitmarker');
   private readonly damageFlash = $('damage-flash');
@@ -44,11 +52,13 @@ export class Hud {
     const seconds = Math.floor(secondsLeft % 60);
     this.time.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
     this.score.textContent = `${me.score} pts`;
-    this.shield.style.width = `${(me.shield / MAX_SHIELD) * 100}%`;
-    this.shield.classList.toggle('low', me.shield < 35);
-    this.laser.style.width = `${(me.laser / LASER_CAPACITY) * 100}%`;
-    this.laser.classList.toggle('empty', me.laser < LASER_SHOT_COST);
-    this.speed.style.width = `${(me.flight.speed / FlightModel.maxSpeed) * 100}%`;
+    setBar(this.hull, me.hull / MAX_HULL);
+    setBar(this.drive, me.drive);
+    setBar(this.thrusters, me.thrusters);
+    this.heat.style.width = `${Math.min(1, me.heat / MAX_HEAT) * 100}%`;
+    this.heat.classList.toggle('overheated', me.overheated);
+    this.shadow.hidden = !me.alive || !me.inShadow;
+    this.speed.textContent = `${Math.round(me.flight.velocity.length() * METERS_PER_UNIT)} m/s`;
 
     if (!me.alive) this.message.textContent = `Destroyed — respawn in ${Math.max(0, me.respawnAt - now).toFixed(1)}s`;
     else if (now > this.messageUntil) this.message.textContent = '';
@@ -56,6 +66,17 @@ export class Hud {
     for (const item of [...this.killfeed.children] as HTMLElement[]) {
       if (now - Number(item.dataset.at) > KILLFEED_SECONDS) item.remove();
     }
+  }
+
+  /** Persistent warning below the crosshair (impact, overheating); empty text hides it. */
+  setWarning(text: string) {
+    if (this.warning.textContent !== text) this.warning.textContent = text;
+  }
+
+  /** Tunnel vision under sustained acceleration, 0..1. */
+  setStrain(strain: number) {
+    this.vignette.style.opacity = String(strain);
+    this.vignette.style.setProperty('--tunnel', `${Math.round(70 - strain * 45)}%`);
   }
 
   flashMessage(now: number, text: string, seconds = 2) {
@@ -84,13 +105,28 @@ export class Hud {
     this.killfeed.prepend(item);
   }
 
-  /** Marks other ships with their name; ships off screen get an arrow at the screen edge. */
-  updateMarkers(camera: THREE.Camera, ships: Ship[], me: Ship) {
+  /**
+   * Prograde marker where the ship is drifting to, retrograde marker where to point the
+   * drive to brake.
+   */
+  updateVelocityMarkers(camera: THREE.Camera, me: Ship) {
+    const velocity = me.flight.velocity;
+    const show = me.alive && velocity.lengthSq() > 400;
+    for (const [element, sign] of [[this.prograde, 1], [this.retrograde, -1]] as const) {
+      projected.copy(velocity).normalize().multiplyScalar(sign * 100000).add(camera.position).project(camera);
+      const visible = show && projected.z < 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1;
+      element.hidden = !visible;
+      if (visible) element.style.transform = `translate(${((projected.x + 1) / 2) * window.innerWidth}px, ${((1 - projected.y) / 2) * window.innerHeight}px)`;
+    }
+  }
+
+  /** Marks other ships in line of sight with their name; ships off screen get an arrow at the screen edge. */
+  updateMarkers(camera: THREE.Camera, ships: Ship[], me: Ship, visible: (ship: Ship) => boolean) {
     const width = window.innerWidth;
     const height = window.innerHeight;
     const seen = new Set<string>();
     for (const ship of ships) {
-      if (ship === me || !ship.alive) continue;
+      if (ship === me || !ship.alive || !visible(ship)) continue;
       seen.add(ship.id);
       let marker = this.markers.get(ship.id);
       if (!marker) {
@@ -126,4 +162,9 @@ export class Hud {
       this.markers.delete(id);
     }
   }
+}
+
+function setBar(bar: HTMLElement, fraction: number) {
+  bar.style.width = `${Math.max(0, fraction) * 100}%`;
+  bar.classList.toggle('low', fraction < 0.35);
 }

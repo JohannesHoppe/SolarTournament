@@ -16,20 +16,26 @@
       <span id="hud-score"></span>
     </div>
     <div id="crosshair"></div>
+    <div id="prograde" class="velocity-marker" hidden></div>
+    <div id="retrograde" class="velocity-marker" hidden></div>
     <div id="hitmarker"></div>
     <div id="hud-message"></div>
+    <div id="hud-warning"></div>
     <ol id="killfeed"></ol>
     <div class="hud-bottom">
-      <div class="gauge"><label>Shield</label><div class="bar"><div id="hud-shield"></div></div></div>
-      <div class="gauge"><label>Laser</label><div class="bar"><div id="hud-laser"></div></div></div>
-      <div class="gauge"><label>Speed</label><div class="bar"><div id="hud-speed"></div></div></div>
+      <div class="gauge"><label>Hull</label><div class="bar"><div id="hud-hull"></div></div></div>
+      <div class="gauge"><label>Drive</label><div class="bar"><div id="hud-drive"></div></div></div>
+      <div class="gauge"><label>Thrusters</label><div class="bar"><div id="hud-thrusters"></div></div></div>
+      <div class="gauge"><label>Heat <span id="hud-shadow" title="In shadow: radiators cool faster" hidden>☾</span></label><div class="bar"><div id="hud-heat"></div></div></div>
+      <div class="gauge"><label>Velocity</label><span id="hud-speed" class="readout"></span></div>
     </div>
+    <div id="g-vignette"></div>
     <div id="damage-flash"></div>
   </div>
 
   <div id="menu" class="plate" hidden>
     <h1>Solar<span>Tournament</span></h1>
-    <p class="tagline">Five minutes. One asteroid field. Shoot everything.</p>
+    <p class="tagline">Five minutes. No shields. No sound in space. Newton is watching.</p>
     <div class="ship-select">
       <button type="button" data-ship="human" class="selected">Human Interceptor</button>
       <button type="button" data-ship="alien">Alien Interceptor</button>
@@ -37,10 +43,12 @@
     <label class="field">Callsign <input id="callsign" maxlength="16" autocomplete="off" spellcheck="false"></label>
     <button type="button" id="start" class="primary">Launch <kbd>Enter</kbd></button>
     <dl class="controls">
-      <dt>Mouse / WASD / Arrows</dt><dd>Steer</dd>
+      <dt>Mouse / Arrows</dt><dd>Turn</dd>
+      <dt>Q / E</dt><dd>Roll</dd>
+      <dt>W / Shift</dt><dd>Main drive</dd>
+      <dt>A D S · R F</dt><dd>Thrusters: sideways, back, up, down</dd>
+      <dt>X</dt><dd>Flip: turn the drive into the flight direction</dd>
       <dt>Click / Space</dt><dd>Fire laser</dd>
-      <dt>Shift</dt><dd>Boost</dd>
-      <dt>X</dt><dd>Brake</dd>
       <dt>C</dt><dd>Cockpit / chase camera</dd>
       <dt>Esc</dt><dd>Pause</dd>
     </dl>

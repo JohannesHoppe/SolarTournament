@@ -3,89 +3,116 @@ import type { AsteroidField } from './asteroids';
 import type { Controls } from './input';
 import type { Ship } from './ship';
 
-const SIGHT_RANGE = 16000;
-const FIRE_RANGE = 14000;
-const AVOID_LOOKAHEAD = 2.0;
-const STEER_GAIN = 2.5;
+const SIGHT_RANGE = 50000;
+const FIRE_RANGE = 30000;
+/** Bots close in with up to this speed and hold position near their target. */
+const CRUISE_SPEED = 2500;
+const HOLD_DISTANCE = 4000;
+/** Seconds ahead a bot checks its flight path for asteroids. */
+const AVOID_HORIZON = 5;
+/** A velocity error larger than this makes the bot turn and burn instead of fighting. */
+const BURN_THRESHOLD = 500;
+/** Bots stay this far inside the arena. */
+const HOME_RADIUS = 50000;
 
+const toTarget = new THREE.Vector3();
+const desired = new THREE.Vector3();
+const error = new THREE.Vector3();
+const aimPoint = new THREE.Vector3();
 const inverse = new THREE.Quaternion();
 const local = new THREE.Vector3();
-const toTarget = new THREE.Vector3();
-const ahead = new THREE.Vector3();
+const heading = new THREE.Vector3();
 
 export const BOT_NAMES = ['Ingmar', 'Nova', 'Kessler', 'Vega', 'Orion', 'Sputnik', 'Halley', 'Laika'];
 
 /**
- * Simple pursuit AI: hunts the nearest ship in sight, otherwise the nearest asteroid,
- * dodges asteroids in its flight path and fires when the target is close to its nose.
+ * Newtonian pursuit AI. Bots only see ships they have a line of sight to. It works out the velocity it wants (close in on the nearest ship,
+ * hold distance, avoid rocks, stay in the arena) and corrects large differences by turning
+ * the main drive into the error and burning. Small differences are trimmed with the
+ * maneuvering thrusters while the nose stays on the target.
  */
 export class Bot {
-  private aimError = new THREE.Vector2();
+  private readonly aimOffset = new THREE.Vector3();
   private nextRethink = 0;
   /** Seconds the target has been in the sights; bots need a moment before they pull the trigger. */
   private onTargetFor = 0;
   private lastThink = 0;
-  private wanderTarget = new THREE.Vector3();
+  private readonly wanderTarget = new THREE.Vector3();
 
   constructor(readonly ship: Ship, private readonly skill: number) {}
 
   think(now: number, ships: Ship[], field: AsteroidField): Controls {
     const me = this.ship.flight;
-    const controls: Controls = { yaw: 0, pitch: 0, boost: false, brake: false, fire: false };
+    const controls: Controls = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
+    const dt = now - this.lastThink;
+    this.lastThink = now;
 
     if (now >= this.nextRethink) {
       this.nextRethink = now + 0.4 + Math.random() * 0.6;
-      const spread = 0.14 * (1 - this.skill);
-      this.aimError.set((Math.random() - 0.5) * spread, (Math.random() - 0.5) * spread);
-      if (Math.random() < 0.3) this.wanderTarget.randomDirection().multiplyScalar(Math.random() * 15000);
+      // the aim wanders around the target; better pilots aim closer to the center
+      this.aimOffset.randomDirection().multiplyScalar(this.ship.radius * (1.6 - 1.4 * this.skill) * Math.random());
+      if (Math.random() < 0.2) this.wanderTarget.randomDirection().multiplyScalar(Math.random() * 30000);
     }
 
-    let target: THREE.Vector3 | null = null;
-    let targetRadius = 0;
-    let targetDistance = Infinity;
+    let target: Ship | null = null;
+    let targetDistance = SIGHT_RANGE;
     for (const ship of ships) {
       if (ship === this.ship || !ship.alive) continue;
       const distance = ship.flight.position.distanceTo(me.position);
-      if (distance < SIGHT_RANGE && distance < targetDistance) {
-        target = ship.flight.position;
-        targetRadius = ship.radius;
+      if (distance < targetDistance && field.lineOfSight(me.position, ship.flight.position)) {
+        target = ship;
         targetDistance = distance;
       }
     }
-    if (!target) {
-      for (const asteroid of field.asteroids.values()) {
-        const distance = asteroid.object.position.distanceTo(me.position);
-        if (distance < targetDistance) {
-          target = asteroid.object.position;
-          targetRadius = asteroid.radius;
-          targetDistance = distance;
-        }
+
+    if (target) {
+      toTarget.subVectors(target.flight.position, me.position);
+      const approach = THREE.MathUtils.clamp((targetDistance - HOLD_DISTANCE) * 0.3, -CRUISE_SPEED * 0.3, CRUISE_SPEED);
+      desired.copy(toTarget).normalize().multiplyScalar(approach).add(target.flight.velocity);
+    } else {
+      toTarget.subVectors(this.wanderTarget, me.position);
+      desired.copy(toTarget).normalize().multiplyScalar(Math.min(CRUISE_SPEED * 0.6, toTarget.length() * 0.2));
+    }
+    if (me.position.length() > HOME_RADIUS) desired.addScaledVector(me.position, -CRUISE_SPEED / me.position.length());
+
+    // rocks in the flight path: aim the velocity past them
+    const speed = me.velocity.length();
+    let danger = false;
+    if (speed > 50) {
+      heading.copy(me.velocity).divideScalar(speed);
+      const hit = field.raycast(me.position, heading, speed * AVOID_HORIZON + this.ship.radius * 4);
+      if (hit) {
+        danger = hit.distance < speed * AVOID_HORIZON * 0.6;
+        const away = local.subVectors(me.position, hit.asteroid.object.position);
+        away.addScaledVector(heading, -away.dot(heading));
+        if (away.lengthSq() < 1) away.set(0, 1, 0);
+        desired.addScaledVector(away.normalize(), CRUISE_SPEED).addScaledVector(heading, -speed * 0.5);
       }
     }
-    const goal = target ?? this.wanderTarget;
 
-    inverse.copy(me.orientation).invert();
-    local.copy(toTarget.subVectors(goal, me.position).normalize()).applyQuaternion(inverse);
-    // local: -Z is ahead, +X right, +Y up
-    controls.yaw = THREE.MathUtils.clamp((local.x + this.aimError.x) * STEER_GAIN, -1, 1);
-    controls.pitch = THREE.MathUtils.clamp((local.y + this.aimError.y) * STEER_GAIN, -1, 1);
-    if (local.z > 0) controls.yaw = local.x >= 0 ? 1 : -1; // target behind: turn hard
-
-    const onTarget = local.z < 0 && Math.hypot(local.x, local.y) < (targetRadius * 1.2) / Math.max(targetDistance, 1);
-    this.onTargetFor = onTarget ? this.onTargetFor + (now - this.lastThink) : 0;
-    this.lastThink = now;
-    const reaction = 0.45 - 0.3 * this.skill;
-    controls.fire = !!target && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && this.ship.laser > 60 * (1 - this.skill);
-    controls.boost = targetDistance > 8000;
-    controls.brake = targetDistance < 1500 && !!target;
-
-    const obstacle = field.overlap(ahead.copy(me.position).addScaledVector(me.velocity, AVOID_LOOKAHEAD * 0.5), this.ship.radius * 3);
-    if (obstacle && obstacle.object.position !== target) {
-      local.subVectors(obstacle.object.position, me.position).applyQuaternion(inverse);
-      controls.yaw = local.x > 0 ? -1 : 1;
-      controls.pitch = local.y > 0 ? -1 : 1;
-      controls.fire = false;
+    error.subVectors(desired, me.velocity);
+    const burning = danger || error.length() > BURN_THRESHOLD && !(target && targetDistance < FIRE_RANGE && !this.ship.overheated);
+    if (burning) {
+      Object.assign(controls, me.steer(error));
+      controls.thrust = me.angleTo(error) < 0.25 ? 1 : 0;
+    } else if (target) {
+      aimPoint.copy(target.flight.position).add(this.aimOffset);
+      Object.assign(controls, me.steer(aimPoint.sub(me.position), 3));
+      const angularSize = (target.radius * 0.8) / Math.max(targetDistance, 1);
+      const onTarget = me.angleTo(aimPoint) < angularSize + this.ship.radius / Math.max(targetDistance, 1);
+      this.onTargetFor = onTarget ? this.onTargetFor + dt : 0;
+      const reaction = 0.45 - 0.3 * this.skill;
+      controls.fire = this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < 40 + 50 * this.skill;
+    } else {
+      Object.assign(controls, me.steer(toTarget));
     }
+
+    // trim the remaining velocity error with the maneuvering thrusters
+    inverse.copy(me.orientation).invert();
+    local.copy(error).applyQuaternion(inverse).divideScalar(200);
+    controls.strafeX = THREE.MathUtils.clamp(local.x, -1, 1);
+    controls.strafeY = THREE.MathUtils.clamp(local.y, -1, 1);
+    controls.strafeZ = THREE.MathUtils.clamp(-local.z, -1, 1);
     return controls;
   }
 }

@@ -1,15 +1,23 @@
-/** Steering, throttle and fire state, combined from keyboard and mouse. */
+/** Rotation, thrust and fire state, combined from keyboard and mouse. */
 export interface Controls {
   /** -1 = left, 1 = right */
   yaw: number;
   /** -1 = nose down, 1 = nose up */
   pitch: number;
-  boost: boolean;
-  brake: boolean;
+  /** -1 = roll left, 1 = roll right */
+  roll: number;
+  /** Main drive 0..1 */
+  thrust: number;
+  /** Maneuvering thruster translation in ship space, each -1..1: right, up, forward. */
+  strafeX: number;
+  strafeY: number;
+  strafeZ: number;
   fire: boolean;
 }
 
-export type Action = 'confirm' | 'pause' | 'quit' | 'camera' | 'pointer-released';
+export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
+
+export type Action = 'confirm' | 'pause' | 'quit' | 'camera' | 'flip' | 'pointer-released';
 type ActionHandler = (action: Action) => void;
 
 /** How strongly mouse movement deflects the virtual stick, per pixel. */
@@ -80,18 +88,19 @@ export class Input {
   /** Reads the current controls; advances the mouse stick recentering by dt seconds. */
   read(dt: number): Controls {
     const k = (...codes: string[]) => codes.some((c) => this.keys.has(c));
+    const axis = (plus: string[], minus: string[]) => (k(...plus) ? 1 : 0) - (k(...minus) ? 1 : 0);
     const decay = Math.exp(-MOUSE_RECENTER_RATE * dt);
     this.mouseStick.x *= decay;
     this.mouseStick.y *= decay;
 
-    const keyYaw = (k('KeyD', 'ArrowRight') ? 1 : 0) - (k('KeyA', 'ArrowLeft') ? 1 : 0);
-    const keyPitch = (k('KeyW', 'ArrowUp') ? 1 : 0) - (k('KeyS', 'ArrowDown') ? 1 : 0);
-
     return {
-      yaw: clamp(keyYaw + this.mouseStick.x),
-      pitch: clamp(keyPitch + this.mouseStick.y),
-      boost: k('ShiftLeft', 'ShiftRight'),
-      brake: k('KeyX'),
+      yaw: clamp(axis(['ArrowRight'], ['ArrowLeft']) + this.mouseStick.x),
+      pitch: clamp(axis(['ArrowUp'], ['ArrowDown']) + this.mouseStick.y),
+      roll: axis(['KeyE'], ['KeyQ']),
+      thrust: k('KeyW', 'ShiftLeft', 'ShiftRight') ? 1 : 0,
+      strafeX: axis(['KeyD'], ['KeyA']),
+      strafeY: axis(['KeyR'], ['KeyF']),
+      strafeZ: -(k('KeyS') ? 1 : 0),
       fire: k('Space') || this.mouseFire,
     };
   }
@@ -109,6 +118,7 @@ export class Input {
     if (e.code === 'Escape' || e.code === 'KeyP') this.handler('pause');
     if (e.code === 'KeyQ') this.handler('quit');
     if (e.code === 'KeyC') this.handler('camera');
+    if (e.code === 'KeyX') this.handler('flip');
     if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
   }
 }
