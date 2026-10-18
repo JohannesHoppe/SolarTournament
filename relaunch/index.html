@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SolarTournament</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <div id="game"></div>
+
+  <div id="hud" hidden>
+    <div class="hud-top">
+      <span id="hud-time"></span>
+      <span id="hud-score"></span>
+    </div>
+    <div id="crosshair"></div>
+    <div id="hitmarker"></div>
+    <div id="hud-message"></div>
+    <ol id="killfeed"></ol>
+    <div class="hud-bottom">
+      <div class="gauge"><label>Shield</label><div class="bar"><div id="hud-shield"></div></div></div>
+      <div class="gauge"><label>Laser</label><div class="bar"><div id="hud-laser"></div></div></div>
+      <div class="gauge"><label>Speed</label><div class="bar"><div id="hud-speed"></div></div></div>
+    </div>
+    <div id="damage-flash"></div>
+  </div>
+
+  <div id="menu" class="plate" hidden>
+    <h1>Solar<span>Tournament</span></h1>
+    <p class="tagline">Five minutes. One asteroid field. Shoot everything.</p>
+    <div class="ship-select">
+      <button type="button" data-ship="human" class="selected">Human Interceptor</button>
+      <button type="button" data-ship="alien">Alien Interceptor</button>
+    </div>
+    <label class="field">Callsign <input id="callsign" maxlength="16" autocomplete="off" spellcheck="false"></label>
+    <button type="button" id="start" class="primary">Launch <kbd>Enter</kbd></button>
+    <dl class="controls">
+      <dt>Mouse / WASD / Arrows</dt><dd>Steer</dd>
+      <dt>Click / Space</dt><dd>Fire laser</dd>
+      <dt>Shift</dt><dd>Boost</dd>
+      <dt>X</dt><dd>Brake</dd>
+      <dt>C</dt><dd>Cockpit / chase camera</dd>
+      <dt>Esc</dt><dd>Pause</dd>
+    </dl>
+    <p class="best" id="best-score"></p>
+  </div>
+
+  <div id="pause" class="plate" hidden>
+    <h2>Paused</h2>
+    <button type="button" id="resume" class="primary">Resume <kbd>Enter</kbd></button>
+    <button type="button" id="quit">Quit round <kbd>Q</kbd></button>
+  </div>
+
+  <div id="results" class="plate" hidden>
+    <h2>Round over</h2>
+    <table id="scoreboard"></table>
+    <button type="button" id="again" class="primary">Back to hangar <kbd>Enter</kbd></button>
+  </div>
+
+  <div id="loading">Loading…</div>
+  <div id="no-webgl" hidden>Your browser does not support WebGL 2.</div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

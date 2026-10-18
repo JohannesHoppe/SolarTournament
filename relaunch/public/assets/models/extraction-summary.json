@@ -1,0 +1,50 @@
+{
+  "humanInterceptor": {
+    "file": "human-interceptor.glb",
+    "size": [
+      670,
+      247,
+      616
+    ]
+  },
+  "alienInterceptor": {
+    "file": "alien-interceptor.glb",
+    "size": [
+      448,
+      380,
+      888
+    ]
+  },
+  "asteroid1": {
+    "file": "asteroid-1.glb",
+    "size": [
+      1153,
+      1755,
+      2554
+    ]
+  },
+  "asteroid2": {
+    "file": "asteroid-2.glb",
+    "size": [
+      1001,
+      1341,
+      1587
+    ]
+  },
+  "asteroid3": {
+    "file": "asteroid-3.glb",
+    "size": [
+      1670,
+      2017,
+      3465
+    ]
+  },
+  "photonBlue": {
+    "file": "photon.glb",
+    "size": [
+      15,
+      16,
+      16
+    ]
+  }
+}
