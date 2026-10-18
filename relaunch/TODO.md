@@ -8,7 +8,7 @@ Abgearbeitet von oben nach unten. Jeder erledigte Punkt ist auch in der README d
 
 - [x] Gamepad-Steuerung
 - [x] Touch-Steuerung für Handy und Tablet mit nipplejs (wie in der Bitmap-Ansicht von ordpool: fester Stick links, dynamischer Stick rechts, Schutz gegen hängende Sticks)
-- [ ] Flugschule: geführtes Tutorial für Schub, Driften, Flip-and-burn, Kollisionswarnung, Hitze im Schatten
+- [x] Flugschule: geführtes Tutorial für Schub, Driften, Flip-and-burn, Kollisionswarnung, Hitze im Schatten
 
 ### 2. Multiplayer
 

@@ -52,6 +52,7 @@ Nie `npx` verwenden, immer die Scripts aus `package.json`.
 | `space.ts` | Sterne, Nebel, Sonne mit Schattenwurf, Raumstaub |
 | `hud.ts` | DOM-HUD: Anzeigen, Marker, Warnungen, Tunnelblick |
 | `audio.ts` | Ton durch den Rumpf (Tiefpass), Bordcomputer-Pieptöne, Antriebsgeräusch |
+| `school.ts` | Flugschule: Schritte mit Anleitung, Erfolgsbedingung und Wegpunkt |
 | `sponsors.ts` | Sponsor-Break vor dem Respawn: `AdProvider`-Schnittstelle, Platzhalter-Werbung |
 | `input.ts` | Tastatur, Maus (Pointer Lock als virtueller Stick) und Gamepad, führt alle Eingaben zu `Controls` zusammen |
 | `touch.ts` | Touch-Steuerung mit nipplejs: fester Stick links, dynamischer Stick rechts, Halte-Tasten |

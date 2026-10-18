@@ -32,6 +32,10 @@ Gamepads with the standard layout (Xbox, PlayStation, most others in current bro
 
 On phones and tablets touch controls appear: the fixed stick on the left turns the ship (drag up = nose up), a second stick appears under the right thumb and fires the maneuvering thrusters. Hold **Drive** for the main drive and **Fire** for the laser; **Back** pushes backwards, **Flip** starts the flip assist. Pressing a key on a hardware keyboard hides the touch controls, touching the screen brings them back.
 
+## Flight school
+
+The menu offers a guided flight school without opponents. Ten steps teach the main drive, drifting, the flip, braking, the maneuvering thrusters, shooting a target drone, cooling in the shadow of an asteroid and the impact warning. Each step waits until the pilot has actually done it; a blinking diamond marks targets. Training clones are free: a pilot who dies in flight school respawns without a sponsor break.
+
 ## The universe
 
 SolarTournament has a universe of its own. It borrows two principles from science fiction series we love:

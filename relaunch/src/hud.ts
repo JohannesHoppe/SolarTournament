@@ -25,6 +25,10 @@ export class Hud {
   private readonly hitmarker = $('hitmarker');
   private readonly damageFlash = $('damage-flash');
   private readonly killfeed = $('killfeed');
+  private readonly schoolPanel = $('school-panel');
+  private readonly schoolStep = $('school-step');
+  private readonly schoolText = $('school-text');
+  private readonly waypoint = $('waypoint');
   private readonly markers = new Map<string, HTMLElement>();
   private readonly markerLayer = document.createElement('div');
   private messageUntil = 0;
@@ -45,12 +49,15 @@ export class Hud {
     this.markerLayer.replaceChildren();
     this.markers.clear();
     this.message.textContent = '';
+    this.setSchool(null);
+    this.waypoint.hidden = true;
   }
 
+  /** secondsLeft is Infinity in rounds without a time limit. */
   update(now: number, secondsLeft: number, me: Ship) {
     const minutes = Math.floor(secondsLeft / 60);
     const seconds = Math.floor(secondsLeft % 60);
-    this.time.textContent = `${minutes}:${String(seconds).padStart(2, '0')}`;
+    this.time.textContent = Number.isFinite(secondsLeft) ? `${minutes}:${String(seconds).padStart(2, '0')}` : '';
     this.score.textContent = `${me.score} pts`;
     setBar(this.hull, me.hull / MAX_HULL);
     setBar(this.drive, me.drive);
@@ -66,6 +73,30 @@ export class Hud {
     for (const item of [...this.killfeed.children] as HTMLElement[]) {
       if (now - Number(item.dataset.at) > KILLFEED_SECONDS) item.remove();
     }
+  }
+
+  /** Flight school instruction; null hides the panel. */
+  setSchool(status: { step: string; text: string } | null) {
+    this.schoolPanel.hidden = !status;
+    if (!status) return;
+    if (this.schoolStep.textContent !== status.step) this.schoolStep.textContent = status.step;
+    if (this.schoolText.textContent !== status.text) this.schoolText.textContent = status.text;
+  }
+
+  /** Blinking diamond on a point in space, clamped to the screen edge when off screen. */
+  setWaypoint(camera: THREE.Camera, point: THREE.Vector3 | null) {
+    this.waypoint.hidden = !point;
+    if (!point) return;
+    projected.copy(point).project(camera);
+    let { x, y } = projected;
+    const behind = projected.z > 1;
+    if (behind) {
+      x = -x;
+      y = -y;
+    }
+    // points behind the camera always sit on the edge
+    const scale = 1 / Math.max(Math.abs(x) / 0.92, Math.abs(y) / 0.85, behind ? 1e-6 : 1);
+    this.waypoint.style.translate = `${((x * scale + 1) / 2) * window.innerWidth}px ${((1 - y * scale) / 2) * window.innerHeight}px`;
   }
 
   /** Persistent warning below the crosshair (impact, overheating); empty text hides it. */

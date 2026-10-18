@@ -13,6 +13,7 @@ import { IDLE, Input, type Action, type Controls } from './input';
 import { Ship, type Zone } from './ship';
 import { MAIN_THRUST } from './flight';
 import { Space, SUN_DIRECTION } from './space';
+import { FlightSchool } from './school';
 import { SponsorBreak } from './sponsors';
 import { Wrecks } from './wrecks';
 
@@ -111,6 +112,10 @@ export class Game {
   private selectedShip: ShipType = 'human';
   /** The flight computer turns the own ship to retrograde while this is set. */
   private flipAssist = false;
+  /** The running flight school, or null in a tournament round. */
+  private school: FlightSchool | null = null;
+  /** Target drone of the flight school. */
+  private drone: Ship | null = null;
   /** G-force strain of the own pilot, 0..1. */
   private strain = 0;
   private nextHeartbeat = 0;
@@ -162,6 +167,7 @@ export class Game {
       });
     }
     $('start').addEventListener('click', () => this.startRound());
+    $('school').addEventListener('click', () => this.startRound(true));
     $('resume').addEventListener('click', () => this.resume());
     $('quit').addEventListener('click', () => this.endRound());
     $('again').addEventListener('click', () => this.showMenu());
@@ -216,9 +222,11 @@ export class Game {
     this.ships = [];
     this.bots = [];
     this.me = null;
+    this.drone = null;
   }
 
-  private startRound() {
+  /** Starts a tournament round against bots, or the flight school without opponents. */
+  private startRound(school = false) {
     const callsign = $<HTMLInputElement>('callsign').value.trim() || 'Pilot';
     storageSet(CALLSIGN_KEY, callsign);
 
@@ -227,14 +235,15 @@ export class Game {
     this.hud.reset();
 
     this.me = this.addShip('me', callsign, this.selectedShip, true);
+    this.school = school ? new FlightSchool() : null;
     const names = [...BOT_NAMES].sort(() => Math.random() - 0.5);
-    for (let i = 0; i < BOT_COUNT; i++) {
+    for (let i = 0; i < (school ? 0 : BOT_COUNT); i++) {
       const ship = this.addShip('bot' + i, names[i], i % 2 === 0 ? 'alien' : 'human', false);
       this.bots.push(new Bot(ship, 0.2 + i * 0.2));
     }
     for (const ship of this.ships) this.respawn(ship);
 
-    this.roundEndsAt = this.time + ROUND_SECONDS;
+    this.roundEndsAt = school ? Infinity : this.time + ROUND_SECONDS;
     this.cockpit = false;
     this.flipAssist = false;
     this.strain = 0;
@@ -334,8 +343,9 @@ export class Game {
     const myControls = this.flightComputer(this.input.read(dt));
     for (const ship of this.ships) {
       if (!ship.alive) {
-        if (now < ship.respawnAt) continue;
-        if (ship !== me) this.respawn(ship);
+        if (now < ship.respawnAt || ship === this.drone) continue;
+        // training clones are free; tournament clones cost an ad
+        if (ship !== me || this.school) this.respawn(ship);
         else if (!this.sponsors.visible) this.sponsorBreak();
         continue;
       }
@@ -364,6 +374,7 @@ export class Game {
     this.hud.update(now, Math.max(0, this.roundEndsAt - now), me);
     this.hud.updateMarkers(this.camera, this.ships, me, (ship) => this.field.lineOfSight(this.camera.position, ship.flight.position));
     this.hud.updateVelocityMarkers(this.camera, me);
+    if (this.school) this.teach(dt, myControls);
 
     if (me.alive && me.outsideSince !== null) {
       this.hud.flashMessage(now, `Return to the field — ${Math.max(0, ARENA_GRACE - (now - me.outsideSince)).toFixed(1)}s`, 0.2);
@@ -371,6 +382,39 @@ export class Game {
       this.hud.flashMessage(now, 'Flip', 0.2);
     }
     if (now >= this.roundEndsAt) this.endRound();
+  }
+
+  /** Runs the flight school: checks the current step, shows the instruction and waypoint. */
+  private teach(dt: number, controls: Controls) {
+    const school = this.school!;
+    const me = this.me!;
+    const step = school.stepIndex;
+    const waypoint = school.update({
+      me,
+      controls,
+      field: this.field,
+      now: this.time,
+      dt,
+      drone: this.drone,
+      spawnDrone: () => this.spawnDrone(),
+    });
+    if (school.stepIndex !== step) this.sound.beep(880, 0.1, 0.15);
+    if (school.finished) {
+      this.showMenu();
+      return;
+    }
+    this.hud.setSchool(school.status);
+    this.hud.setWaypoint(this.camera, waypoint);
+  }
+
+  /** A defenseless target for the flight school, placed in front of the pilot. */
+  private spawnDrone() {
+    const me = this.me!;
+    this.drone ??= this.addShip('drone', 'Target drone', me.type === 'human' ? 'alien' : 'human', false);
+    const position = me.flight.forward(new THREE.Vector3()).multiplyScalar(6000).add(me.flight.position);
+    const look = new THREE.Matrix4().lookAt(position, me.flight.position, me.flight.up(new THREE.Vector3()));
+    this.drone.spawn(position, new THREE.Quaternion().setFromRotationMatrix(look), this.time);
+    this.drone.protectedUntil = this.time;
   }
 
   /**

@@ -591,6 +591,52 @@ button.primary {
   font-size: 1.3rem;
 }
 
+/* flight school */
+
+#school-panel {
+  position: absolute;
+  top: 56px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, calc(100% - 32px));
+  padding: 12px 16px;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  text-align: center;
+}
+
+#school-step {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+#school-text {
+  margin: 6px 0 0;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+
+body.touch #school-panel {
+  top: 92px;
+}
+
+#waypoint {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 30px;
+  height: 30px;
+  margin: -15px 0 0 -15px;
+  border: 2px solid var(--accent-strong);
+  transform-origin: center;
+  rotate: 45deg;
+  animation: blink 1s steps(2) infinite;
+}
+
 /* touch controls: only on touch devices (body.touch) */
 
 #touch {
