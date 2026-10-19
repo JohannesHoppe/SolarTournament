@@ -172,7 +172,7 @@ export const ANNOUNCER_ROCK = [
 ];
 export const ANNOUNCER_OPEN = ['radio twenty five eighty four. live from the arena', 'this is your announcer. the games continue'];
 
-/** Bot callsigns the host can say; the clones of human Hosts become "pilot". */
+/** Bot callsigns the announcer can say; the clones of human Hosts become "pilot". */
 export const ANNOUNCER_NAMES = ['ingmar', 'nova', 'kessler', 'vega', 'orion', 'sputnik', 'halley', 'laika', 'pilot'];
 
 /**

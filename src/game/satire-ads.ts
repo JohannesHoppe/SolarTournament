@@ -27,7 +27,7 @@ const ADS: SatireAd[] = [
   },
   {
     brand: 'Space Burger',
-    slogan: 'Flame-grilled in a fusion drive. 100 % meat-like!*',
+    slogan: 'Flame-grilled in a fusion drive. 100\u00a0% meat-like!*',
     fine: '*Printed fresh in the same printers as your clone. Do not ask which batch.',
     color: '#ff9d00',
     art: '<path d="M18 46 Q50 10 82 46 Z" fill="currentColor"/><rect x="16" y="50" width="68" height="8" rx="4" fill="#5a2a12"/><rect x="18" y="60" width="64" height="5" rx="2" fill="#7ad86b"/><path d="M18 68 H82 Q82 82 50 82 Q18 82 18 68 Z" fill="currentColor"/>',
@@ -41,14 +41,14 @@ const ADS: SatireAd[] = [
   },
   {
     brand: 'PrintMe Bodies',
-    slogan: 'Your next body is already warm. Premium Skin: 40 % less pain!*',
+    slogan: 'Your next body is already warm. Premium Skin: 40\u00a0% less pain!*',
     fine: '*Pain is not reduced. Your awareness of it is. Memories stream as usual.',
     color: '#4d91ff',
     art: '<circle cx="50" cy="28" r="12" fill="currentColor"/><path d="M30 86 Q30 46 50 44 Q70 46 70 86 Z" fill="currentColor"/><path d="M14 90 H86" stroke="currentColor" stroke-width="3" stroke-dasharray="4 4"/>',
   },
   {
     brand: 'Oxygen+',
-    slogan: 'Breathe more. Gold plan: 21 % oxygen. Basic plan: 17 %.',
+    slogan: 'Breathe more. Gold plan: 21\u00a0% oxygen. Basic plan: 17\u00a0%.',
     fine: 'Rockborn not eligible. Holding your breath without a plan is a violation of the terms of service.',
     color: '#7affd4',
     art: '<circle cx="38" cy="58" r="20" fill="none" stroke="currentColor" stroke-width="5"/><circle cx="66" cy="34" r="12" fill="none" stroke="currentColor" stroke-width="4"/><circle cx="72" cy="70" r="7" fill="currentColor"/>',

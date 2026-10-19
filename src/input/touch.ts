@@ -18,8 +18,11 @@ export class TouchControls {
   private loading: Promise<void> | null = null;
 
   constructor(onFlip: () => void, onPause: () => void) {
-    const coarse = window.matchMedia?.('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
-    this.setActive(coarse);
+    // touch controls from the start only where touch is the only way to point (phones,
+    // tablets); a laptop with a touch screen or a tablet with a trackpad starts with the
+    // mouse and switches on the first touch
+    const media = (query: string) => window.matchMedia?.(query).matches ?? false;
+    this.setActive(media('(pointer: coarse)') && !media('(any-pointer: fine)'));
     window.addEventListener('keydown', (e) => {
       // typing the callsign on a phone's on-screen keyboard is not a switch to a hardware keyboard
       if (!(e.target instanceof HTMLInputElement)) this.setActive(false);

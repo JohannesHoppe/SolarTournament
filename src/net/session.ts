@@ -147,24 +147,24 @@ export class Session {
    * so a newcomer never takes over a running tournament. Every peer comes to the same answer
    * on its own.
    */
-  get isHost() {
-    return !this.justJoined && this.hostId === this.selfId;
+  get isLead() {
+    return !this.justJoined && this.leadId === this.selfId;
   }
 
-  get hostId(): string {
+  get leadId(): string {
     const now = seconds();
-    let host = this.selfId;
-    let hostJoined = this.joinedAt;
+    let lead = this.selfId;
+    let leadJoined = this.joinedAt;
     for (const peer of this.peers) {
       // peers that have not reported yet count as newer; silent peers cannot lead
       const joined = this.peerJoinedAt.get(peer) ?? Infinity;
       if (now - (this.lastHeard.get(peer) ?? -Infinity) > LIVENESS_MS / 1000) continue;
-      if (joined < hostJoined || (joined === hostJoined && peer < host)) {
-        host = peer;
-        hostJoined = joined;
+      if (joined < leadJoined || (joined === leadJoined && peer < lead)) {
+        lead = peer;
+        leadJoined = joined;
       }
     }
-    return host;
+    return lead;
   }
 
   /** How many peers joined before this one: 0 for the first in the room. */

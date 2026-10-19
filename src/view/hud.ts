@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { MAX_HEAT, MAX_HULL, type Ship } from '../ship/ship';
+import { keyLabel } from '../input/input';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const projected = new THREE.Vector3();
+/** Kills stay in the feed this long (s). */
 const KILLFEED_SECONDS = 5;
 /** Display scale: one world unit is 5 cm, a ship is about 35 m long. */
 const METERS_PER_UNIT = 0.05;
@@ -33,6 +35,8 @@ export class Hud {
   private readonly center = $('center');
   private readonly centerDistance = $('center-distance');
   private readonly markers = new Map<string, HTMLElement>();
+  /** Ships marked this frame, reused from frame to frame. */
+  private readonly seen = new Set<string>();
   private readonly markerLayer = document.createElement('div');
   private messageUntil = 0;
   private hitmarkerTimer = 0;
@@ -61,21 +65,25 @@ export class Hud {
   update(now: number, secondsLeft: number, me: Ship) {
     const minutes = Math.floor(secondsLeft / 60);
     const seconds = Math.floor(secondsLeft % 60);
-    this.time.textContent = Number.isFinite(secondsLeft) ? `${minutes}:${String(seconds).padStart(2, '0')}` : '';
-    this.score.textContent = `${me.score} pts`;
+    setText(this.time, Number.isFinite(secondsLeft) ? `${minutes}:${String(seconds).padStart(2, '0')}` : '');
+    setText(this.score, `${me.score} pts`);
     setBar(this.hull, me.hull / MAX_HULL);
     setBar(this.drive, me.drive);
     setBar(this.thrusters, me.thrusters);
     this.heat.style.width = `${Math.min(1, me.heat / MAX_HEAT) * 100}%`;
     this.heat.classList.toggle('overheated', me.overheated);
-    this.shadow.hidden = !me.alive || !me.inShadow;
-    this.speed.textContent = `${Math.round(me.flight.velocity.length() * METERS_PER_UNIT)} m/s`;
+    setHidden(this.shadow, !me.alive || !me.inShadow);
+    setText(this.speed, `${Math.round(me.flight.velocity.length() * METERS_PER_UNIT)} m/s`);
 
-    if (!me.alive) this.message.textContent = 'Live link lost';
-    else if (now > this.messageUntil) this.message.textContent = '';
+    if (!me.alive) setText(this.message, 'Live link lost');
+    else if (now > this.messageUntil) setText(this.message, '');
 
-    for (const item of [...this.killfeed.children] as HTMLElement[]) {
-      if (now - Number(item.dataset.at) > KILLFEED_SECONDS) item.remove();
+    // the newest entries come first: expired ones are at the end
+    let item = this.killfeed.lastElementChild as HTMLElement | null;
+    while (item && now - Number(item.dataset.at) > KILLFEED_SECONDS) {
+      const previous = item.previousElementSibling as HTMLElement | null;
+      item.remove();
+      item = previous;
     }
   }
 
@@ -88,7 +96,7 @@ export class Hud {
     const keys = status.keys.join('|');
     if (this.schoolKeys.dataset.keys !== keys) {
       this.schoolKeys.dataset.keys = keys;
-      this.schoolKeys.replaceChildren(...status.keys.map((key) => Object.assign(document.createElement('kbd'), { textContent: key })));
+      this.schoolKeys.replaceChildren(...status.keys.map((key) => Object.assign(document.createElement('kbd'), { textContent: keyLabel(key) })));
     }
   }
 
@@ -107,9 +115,7 @@ export class Hud {
     this.center.hidden = !me.alive;
     if (!me.alive) return;
     pin(this.center, camera, origin);
-    const meters = me.flight.position.length() * METERS_PER_UNIT;
-    const label = meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`;
-    if (this.centerDistance.textContent !== label) this.centerDistance.textContent = label;
+    setText(this.centerDistance, meters(me.flight.position.length()));
   }
 
   /** Persistent warning below the crosshair (impact, overheating); empty text hides it. */
@@ -156,19 +162,16 @@ export class Hud {
   updateVelocityMarkers(camera: THREE.Camera, me: Ship) {
     const velocity = me.flight.velocity;
     const show = me.alive && velocity.lengthSq() > 400;
-    for (const [element, sign] of [[this.prograde, 1], [this.retrograde, -1]] as const) {
-      projected.copy(velocity).normalize().multiplyScalar(sign * 100000).add(camera.position).project(camera);
-      const visible = show && projected.z < 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1;
-      element.hidden = !visible;
-      if (visible) element.style.transform = `translate(${((projected.x + 1) / 2) * window.innerWidth}px, ${((1 - projected.y) / 2) * window.innerHeight}px)`;
-    }
+    placeVelocityMarker(this.prograde, camera, velocity, 1, show);
+    placeVelocityMarker(this.retrograde, camera, velocity, -1, show);
   }
 
   /** Marks other ships in line of sight with their name; ships off screen get an arrow at the screen edge. */
   updateMarkers(camera: THREE.Camera, ships: Ship[], me: Ship, visible: (ship: Ship) => boolean) {
     const width = window.innerWidth;
     const height = window.innerHeight;
-    const seen = new Set<string>();
+    const seen = this.seen;
+    seen.clear();
     for (const ship of ships) {
       if (ship === me || !ship.alive || !visible(ship)) continue;
       seen.add(ship.id);
@@ -194,11 +197,10 @@ export class Hud {
         x *= scale;
         y *= scale;
       }
-      const distance = Math.round(ship.flight.position.distanceTo(me.flight.position) / 100) / 10;
       marker.classList.toggle('offscreen', offscreen);
       marker.style.transform = `translate(${((x + 1) / 2) * width}px, ${((1 - y) / 2) * height}px)`;
       if (offscreen) marker.style.setProperty('--angle', `${Math.atan2(-y, x)}rad`);
-      marker.textContent = offscreen ? '' : `${ship.name} · ${distance}k`;
+      setText(marker, offscreen ? '' : `${ship.name} · ${meters(ship.flight.position.distanceTo(me.flight.position))}`);
     }
     for (const [id, marker] of this.markers) {
       if (seen.has(id)) continue;
@@ -227,4 +229,29 @@ function pin(element: HTMLElement, camera: THREE.Camera, point: THREE.Vector3) {
   // points behind the camera always sit on the edge
   const scale = 1 / Math.max(Math.abs(x) / 0.92, Math.abs(y) / 0.85, behind ? 1e-6 : 1);
   element.style.translate = `${((x * scale + 1) / 2) * window.innerWidth}px ${((1 - y * scale) / 2) * window.innerHeight}px`;
+}
+
+/** A distance in world units as the HUD shows it: meters, kilometers from 1000 m on. */
+function meters(units: number): string {
+  const m = units * METERS_PER_UNIT;
+  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+}
+
+/** Writes text only when it changed, so an unchanged HUD costs the browser no layout work. */
+function setText(element: HTMLElement, text: string) {
+  if (element.textContent !== text) element.textContent = text;
+}
+
+function setHidden(element: HTMLElement, hidden: boolean) {
+  if (element.hidden !== hidden) element.hidden = hidden;
+}
+
+const ahead = new THREE.Vector3();
+
+/** The prograde (sign 1) or retrograde (sign -1) marker, where the ship drifts to or from. */
+function placeVelocityMarker(element: HTMLElement, camera: THREE.Camera, velocity: THREE.Vector3, sign: number, show: boolean) {
+  ahead.copy(velocity).normalize().multiplyScalar(sign * 100000).add(camera.position).project(camera);
+  const visible = show && ahead.z < 1 && Math.abs(ahead.x) < 1 && Math.abs(ahead.y) < 1;
+  setHidden(element, !visible);
+  if (visible) element.style.transform = `translate(${((ahead.x + 1) / 2) * window.innerWidth}px, ${((1 - ahead.y) / 2) * window.innerHeight}px)`;
 }

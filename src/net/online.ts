@@ -26,7 +26,7 @@ export interface OnlineGame {
   remoteRock(id: string, at: number): void;
   /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
-  hostRound(): RoundState;
+  leadRound(): RoundState;
   /** The tournament has all its places taken by Hosts who were here first. */
   tournamentFull(): void;
 }
@@ -38,7 +38,7 @@ const to = new THREE.Vector3();
 
 /** Connects the game to a tournament session: who owns which ship, and what goes over the wire. */
 export class Online {
-  private wasHost: boolean | null = null;
+  private wasLead: boolean | null = null;
 
   constructor(
     readonly session: Session,
@@ -63,7 +63,7 @@ export class Online {
     session.onSync = (field) => game.field.restore(field);
     session.onPeerJoin = (peer) => {
       // the lead browser brings the newcomer's asteroid field up to date
-      if (session.isHost) session.sendSync(peer, game.field.snapshot());
+      if (session.isLead) session.sendSync(peer, game.field.snapshot());
       this.balanceBots();
     };
     session.onPeerLeave = (peer) => {
@@ -76,8 +76,8 @@ export class Online {
     return this.session.selfId;
   }
 
-  get isHost() {
-    return this.session.isHost;
+  get isLead() {
+    return this.session.isLead;
   }
 
   get pilots() {
@@ -86,9 +86,9 @@ export class Online {
 
   /** Sends the own ships; the lead browser adds the round clock. Rebalances bots when the lead changes. */
   update(now: number) {
-    const host = this.isHost;
-    if (this.wasHost !== host) {
-      this.wasHost = host;
+    const lead = this.isLead;
+    if (this.wasLead !== lead) {
+      this.wasLead = lead;
       this.balanceBots();
     }
     // a Host beyond the places of the tournament leaves again, once it knows who was here first
@@ -97,7 +97,7 @@ export class Online {
       return;
     }
     const states = this.game.ownedShips().map((ship) => ship.toState(now));
-    this.session.sendStates(now, states, host ? this.game.hostRound() : null);
+    this.session.sendStates(now, states, lead ? this.game.leadRound() : null);
   }
 
   sendFire(shooter: Ship, a: THREE.Vector3, b: THREE.Vector3) {
@@ -123,7 +123,7 @@ export class Online {
 
   /** The lead browser fills the tournament up with bots; everyone else runs none. */
   private balanceBots() {
-    this.game.setBotCount(this.isHost ? Math.max(0, TOURNAMENT_SIZE - this.pilots) : 0);
+    this.game.setBotCount(this.isLead ? Math.max(0, TOURNAMENT_SIZE - this.pilots) : 0);
   }
 
   private receiveStates(states: ShipState[], round: RoundState | null, peer: string) {
@@ -137,7 +137,7 @@ export class Online {
     }
     // bots the peer no longer runs (e.g. it stopped leading)
     for (const ship of [...this.game.allShips()]) if (ship.owner === peer && !seen.has(ship.id)) this.game.removeShip(ship);
-    if (round && peer === this.session.hostId) this.game.syncRound(round);
+    if (round && peer === this.session.leadId) this.game.syncRound(round);
   }
 
   private find(id: string): Ship | null {

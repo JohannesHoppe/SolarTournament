@@ -15,7 +15,7 @@ import type { Spoken } from '../music/band';
 import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_KILL, ANNOUNCER_NAMES, ANNOUNCER_ROCK, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, textSeed, titleFor, type Song } from '../music/songs';
-import { IDLE, Input, type Action, type Controls } from '../input/input';
+import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls } from '../input/input';
 import { Ship, type ShipState, type Zone } from '../ship/ship';
 import { MAIN_THRUST } from '../ship/flight';
 import { newRoomCode, roomCode, Session, type RoundState } from '../net/session';
@@ -29,7 +29,7 @@ const ROUND_SECONDS = 5 * 60;
 /** Online tournaments show the scoreboard this long before the next round starts. */
 const RESULTS_SECONDS = 12;
 const FIELD_SEED = 11;
-/** A client's round clock jumps to the host's when it is this far off (s), and drifts towards it otherwise. */
+/** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
 const ROUND_SNAP = 0.25;
 /** Online, the asteroids jump to the lead browser's field time when they are this far off (s), and otherwise glide towards it. */
 const FIELD_SNAP = 0.5;
@@ -66,6 +66,8 @@ const BRAKE_EASE = 0.3;
 const BRAKE_REST = 20;
 /** Once at rest, the brake only burns again above this speed (units/s, 2 m/s). */
 const BRAKE_RESUME = 40;
+/** Confirm presses are ignored this long after a screen changes (ms). */
+const CONFIRM_LOCK_MS = 600;
 /** One standard gravity in units/s² (1 unit = 5 cm). */
 const G = 9.81 / 0.05;
 /** Above this load the pilot starts to grey out; at the limit it takes G_ONSET seconds to tunnel vision. */
@@ -167,6 +169,8 @@ export class Game implements OnlineGame {
   private flipStick = { yaw: 0, pitch: 0 };
   /** How the own clone died last, for the sponsor break. */
   private deathCause = 'Your clone is dead';
+  /** When the current screen (menu, playing, paused, results) came up (performance.now, ms). */
+  private screenSince = 0;
   /** The running flight school, or null in a tournament round. */
   private school: FlightSchool | null = null;
   /** Target drone of the flight school. */
@@ -196,7 +200,7 @@ export class Game implements OnlineGame {
   private transmissionTimer = 0;
   /** Real time before which the announcer stays quiet (s). */
   private nextAnnouncement = 0;
-  /** The name the host's current line is about, for the subtitle. */
+  /** The name the announcer's current line is about, for the subtitle. */
   private announcedName: string | null = null;
 
   constructor(
@@ -229,6 +233,10 @@ export class Game implements OnlineGame {
     this.input = new Input(this.renderer.domElement);
     this.input.onAction((action) => this.onAction(action));
     this.bindMenu();
+    // the menu names the keys as the Host's keyboard prints them
+    void learnKeyboardLayout().then(() => {
+      for (const key of document.querySelectorAll<HTMLElement>('#menu .controls dt, #pause kbd')) key.textContent = keyLabel(key.textContent ?? '');
+    });
 
     window.addEventListener('resize', () => this.resize());
     this.resize();
@@ -387,7 +395,7 @@ export class Game implements OnlineGame {
       .join(' ');
     window.setTimeout(() => {
       const box = $('transmission');
-      box.className = spoken.language === 'mod' ? 'host' : 'regime';
+      box.className = spoken.language === 'mod' ? 'announcer' : 'regime';
       $('transmission-speaker').textContent = speaker;
       $('transmission-text').textContent = /[.?!]$/.test(text) ? text : text + '.';
       box.hidden = false;
@@ -440,6 +448,9 @@ export class Game implements OnlineGame {
       this.toggleRadio();
       return;
     }
+    // a confirm right after a screen change is a key or button still held from before (the
+    // fire button A, Enter for the last screen), not a choice on the new screen
+    if (action === 'confirm' && performance.now() - this.screenSince < CONFIRM_LOCK_MS) return;
     switch (this.state) {
       case 'menu':
         if (action === 'confirm') {
@@ -449,25 +460,26 @@ export class Game implements OnlineGame {
         }
         break;
       case 'playing':
+        if (action === 'pause') this.pause();
         if (this.sponsors.visible) {
           if (action === 'confirm') this.sponsors.confirm();
           break;
         }
-        if (action === 'pause') this.pause();
         if (action === 'camera') this.cockpit = !this.cockpit;
         if (action === 'flip' && this.me?.alive) this.toggleFlip();
         break;
       case 'paused':
-        if (action === 'confirm' || action === 'pause') this.resume();
+        if (action === 'confirm' || action === 'pause' || action === 'back') this.resume();
         if (action === 'quit') this.endRound();
         break;
       case 'results':
-        if (action === 'confirm') this.showMenu();
+        if (action === 'confirm' || action === 'back') this.showMenu();
         break;
     }
   }
 
   private setScreen(state: State) {
+    if (state !== this.state) this.screenSince = performance.now();
     this.state = state;
     $('menu').hidden = state !== 'menu';
     $('crest').hidden = state !== 'menu';
@@ -504,7 +516,7 @@ export class Game implements OnlineGame {
 
   /**
    * Starts a round: solo against bots, the flight school without opponents, or an online
-   * tournament (where the host adds bots for free places).
+   * tournament (where the lead browser adds bots for free places).
    */
   private startRound(mode: 'solo' | 'school' | 'online') {
     const callsign = $<HTMLInputElement>('callsign').value.trim() || 'Host';
@@ -524,7 +536,7 @@ export class Game implements OnlineGame {
 
     this.roundId = 0;
     this.soloSeed = 1 + Math.floor(Math.random() * 2147483000);
-    // online, the host's clock decides (see hostRound and syncRound)
+    // online, the lead browser's clock decides (see leadRound and syncRound)
     if (mode === 'solo') this.setRoundEnd(ROUND_SECONDS);
     else this.roundEndsAt = this.roundEndsAtWall = Infinity;
     this.cockpit = false;
@@ -620,7 +632,7 @@ export class Game implements OnlineGame {
     this.field.setClock(Math.abs(drift) > FIELD_SNAP ? round.field : this.field.clock + drift * 0.1);
   }
 
-  hostRound(): RoundState {
+  leadRound(): RoundState {
     // the first lead browser of a room starts the clock; a new one continues the synced clock
     if (!Number.isFinite(this.roundEndsAtWall)) this.setRoundEnd(ROUND_SECONDS);
     // the lead browser starts the next round once the scoreboard has been shown
@@ -695,7 +707,6 @@ export class Game implements OnlineGame {
     // a solo round stood still during the pause; its real-time end moves on accordingly
     if (!this.online && Number.isFinite(this.roundEndsAt)) this.setRoundEnd(this.roundEndsAt - this.time);
     this.setScreen('playing');
-    if (this.sponsors.visible) this.input.steerWithMouse(false);
   }
 
   /** Ends a solo round with the scoreboard; leaving an online tournament goes to the menu. */
@@ -726,7 +737,7 @@ export class Game implements OnlineGame {
 
   /**
    * Online rounds end for everyone at once: the scoreboard shows over the running game
-   * until the host starts the next round.
+   * until the lead browser starts the next round.
    */
   private showOnlineResults() {
     const results = $('results');
@@ -795,7 +806,7 @@ export class Game implements OnlineGame {
         if (now < ship.respawnAt || ship === this.drone || ship === this.sparring?.bot.ship) continue;
         // training clones are free; tournament clones cost an ad
         if (ship !== me || this.school) this.respawn(ship);
-        else if (!this.sponsors.visible) this.sponsorBreak();
+        else if (!this.sponsors.visible && this.state === 'playing') this.sponsorBreak();
         continue;
       }
       const bot = this.bots.find((b) => b.ship === ship);
@@ -840,7 +851,9 @@ export class Game implements OnlineGame {
 
     if (this.online) {
       this.online.update(now);
-      $('hud-room').textContent = `Tournament ${this.online.session.room} · ${this.online.pilots} ${this.online.pilots === 1 ? 'host' : 'hosts'}`;
+      // the room code is in the invite link; the HUD only says how many Hosts fly
+      const room = `Online · ${this.online.pilots} ${this.online.pilots === 1 ? 'Host' : 'Hosts'}`;
+      if ($('hud-room').textContent !== room) $('hud-room').textContent = room;
       if (now >= this.roundEndsAt) this.showOnlineResults();
     } else if (now >= this.roundEndsAt) {
       this.endRound();

@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 
+/** Particles per texture; the oldest is recycled when all are in use. */
 const PARTICLE_CAPACITY = 6000;
+/** Beams on screen at once; a flood of shots reuses the oldest instead of growing without end. */
+const MAX_BEAMS = 64;
 
 const particleVertex = /* glsl */ `
   attribute float size;
@@ -40,6 +43,9 @@ export class ParticleSystem {
   private readonly age = new Float32Array(PARTICLE_CAPACITY);
   private readonly life = new Float32Array(PARTICLE_CAPACITY);
   private next = 0;
+  /** Particles alive, and whether the GPU buffers still show particles that have died. */
+  private live = 0;
+  private dirty = false;
   private readonly material: THREE.ShaderMaterial;
 
   constructor(texture: THREE.Texture) {
@@ -68,9 +74,11 @@ export class ParticleSystem {
   emit(position: THREE.Vector3, velocity: THREE.Vector3, life: number, startSize: number, endSize: number, color: THREE.Color) {
     const i = this.next;
     this.next = (this.next + 1) % PARTICLE_CAPACITY;
-    this.position.set([position.x, position.y, position.z], i * 3);
-    this.velocity.set([velocity.x, velocity.y, velocity.z], i * 3);
-    this.color.set([color.r, color.g, color.b], i * 3);
+    position.toArray(this.position, i * 3);
+    velocity.toArray(this.velocity, i * 3);
+    color.toArray(this.color, i * 3);
+    // the ring may overwrite a particle that is still alive; only a free slot adds one
+    if (this.life[i] <= 0) this.live++;
     this.age[i] = 0;
     this.life[i] = life;
     this.startSize[i] = startSize;
@@ -78,6 +86,9 @@ export class ParticleSystem {
   }
 
   update(dt: number) {
+    // nothing alive and nothing that just died: the buffers on the GPU are still right
+    if (this.live === 0 && !this.dirty) return;
+    this.dirty = this.live > 0;
     for (let i = 0; i < PARTICLE_CAPACITY; i++) {
       if (this.life[i] <= 0) continue;
       this.age[i] += dt;
@@ -86,12 +97,15 @@ export class ParticleSystem {
         this.life[i] = 0;
         this.size[i] = 0;
         this.tint[i * 4 + 3] = 0;
+        this.live--;
         continue;
       }
       for (let k = 0; k < 3; k++) this.position[i * 3 + k] += this.velocity[i * 3 + k] * dt;
       this.size[i] = this.startSize[i] + (this.endSize[i] - this.startSize[i]) * t;
-      const fade = t < 0.1 ? t / 0.1 : 1 - (t - 0.1) / 0.9;
-      this.tint.set([this.color[i * 3], this.color[i * 3 + 1], this.color[i * 3 + 2], fade], i * 4);
+      this.tint[i * 4] = this.color[i * 3];
+      this.tint[i * 4 + 1] = this.color[i * 3 + 1];
+      this.tint[i * 4 + 2] = this.color[i * 3 + 2];
+      this.tint[i * 4 + 3] = t < 0.1 ? t / 0.1 : 1 - (t - 0.1) / 0.9;
     }
     const attributes = this.points.geometry.attributes;
     attributes.position.needsUpdate = true;
@@ -106,6 +120,7 @@ const VAPOR = new THREE.Color(0.35, 0.38, 0.42);
 const ROCK = new THREE.Color(0.22, 0.19, 0.16);
 const scratch = new THREE.Vector3();
 const scratchVelocity = new THREE.Vector3();
+const spread = new THREE.Vector3();
 
 function randomDirection(target: THREE.Vector3) {
   return target.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize();
@@ -137,7 +152,7 @@ export class Effects {
     }
     for (let i = 0; i < count * 0.6; i++) {
       randomDirection(scratchVelocity).multiplyScalar(radius * (0.2 + Math.random() * 0.6)).add(drift);
-      scratch.copy(center).addScaledVector(randomDirection(scratch.clone()), Math.random() * radius * 0.6);
+      scratch.copy(center).addScaledVector(randomDirection(spread), Math.random() * radius * 0.6);
       this.smoke.emit(scratch, scratchVelocity, 1.5 + Math.random() * 1.5, radius * 0.5, radius * 1.5, SMOKE);
     }
   }
@@ -168,7 +183,15 @@ export class Effects {
   }
 
   beam(from: THREE.Vector3, to: THREE.Vector3, color: THREE.Color) {
-    let beam = this.beams.find((b) => b.age >= Beam.LIFE);
+    let beam: Beam | null = null;
+    for (const b of this.beams) {
+      if (b.age >= Beam.LIFE) {
+        beam = b;
+        break;
+      }
+      // with all beams in use, the oldest makes way
+      if (this.beams.length >= MAX_BEAMS && (!beam || b.age > beam.age)) beam = b;
+    }
     if (!beam) {
       beam = new Beam();
       this.beams.push(beam);
@@ -189,6 +212,7 @@ const Z_AXIS = new THREE.Vector3(0, 0, 1);
 
 /** A laser beam: bright core plus a soft halo, fading out quickly. */
 class Beam {
+  /** Seconds a beam glows before it is gone. */
   static readonly LIFE = 0.3;
   readonly mesh = new THREE.Group();
   age = Beam.LIFE;

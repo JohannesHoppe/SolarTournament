@@ -19,7 +19,7 @@ export interface Controls {
 
 export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 
-export type Action = 'confirm' | 'pause' | 'quit' | 'camera' | 'flip' | 'radio';
+export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'flip' | 'radio';
 type ActionHandler = (action: Action) => void;
 
 /** The pointer at this share of the shorter screen side away from the center turns at full rate. */
@@ -36,7 +36,8 @@ const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu:
 const PAD_ACTIONS: [number, Action][] = [
   [PAD.a, 'confirm'],
   [PAD.menu, 'pause'],
-  [PAD.b, 'quit'],
+  // B brakes in flight; in the menus it goes back, it never quits
+  [PAD.b, 'back'],
   [PAD.view, 'camera'],
   [PAD.y, 'flip'],
 ];
@@ -153,12 +154,15 @@ export class Input {
   }
 
   private onKey(e: KeyboardEvent, down: boolean) {
+    // releasing a key always counts, wherever the focus is, so no key stays held
+    if (!down) this.keys.delete(e.code);
     if (e.target instanceof HTMLInputElement) {
-      if (down && e.code === 'Enter') this.handler('confirm');
+      if (down && e.code === 'Enter' && !e.repeat) this.handler('confirm');
       return;
     }
     if (down) this.keys.add(e.code);
-    else this.keys.delete(e.code);
+    // keys the game uses never also press the button that happens to have the focus
+    if (e.code === 'Enter' || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
 
     if (!down || e.repeat) return;
     if (e.code === 'Enter') this.handler('confirm');
@@ -167,11 +171,32 @@ export class Input {
     if (e.code === 'KeyC') this.handler('camera');
     if (e.code === 'KeyX') this.handler('flip');
     if (e.code === 'KeyM') this.handler('radio');
-    if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
   }
 }
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+
+/** Letters of the keyboard layout in use, by physical key; empty where the browser does not tell. */
+const layout = new Map<string, string>();
+
+/**
+ * Learns the keyboard layout (Chromium browsers only). The game binds physical keys, as on a
+ * US keyboard; on AZERTY the key in W's place reads Z, and the labels say so.
+ */
+export async function learnKeyboardLayout(): Promise<void> {
+  const keyboard = (navigator as Navigator & { keyboard?: { getLayoutMap(): Promise<Map<string, string>> } }).keyboard;
+  try {
+    const map = await keyboard?.getLayoutMap();
+    map?.forEach((key, code) => layout.set(code, key.toUpperCase()));
+  } catch {
+    // not allowed here (e.g. in a frame): the US labels stay
+  }
+}
+
+/** Every single letter in a label as the player's keyboard prints it ("A / D" → "Q / D" on AZERTY). */
+export function keyLabel(label: string): string {
+  return label.replace(/\b[A-Z]\b/g, (letter) => layout.get('Key' + letter) ?? letter);
+}
 
 /** Pointer offset (1 = full deflection) to stick deflection: dead zone in the center, clamped at the edge. */
 function mouseAxis(offset: number) {

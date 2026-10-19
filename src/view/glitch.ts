@@ -102,11 +102,18 @@ const GlitchShader = {
 
 /** Frames per second of the corruption, like the inscription's frame rate. */
 const GLITCH_FPS = 20;
+/**
+ * With reduced motion the picture changes at most this often per second, below the three
+ * flashes per second that can trigger seizures, and without jolts, color shifts or storms.
+ */
+const CALM_FPS = 2;
 /** Corruptions per frame are drawn from 0..MAX_CORRUPTIONS. */
 const MAX_CORRUPTIONS = 3;
 
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+
 /**
- * The video link between the pilot and the clone. Hits and impacts shake the clone, and the
+ * The video link between the Host and the clone. Hits and impacts shake the clone, and the
  * picture breaks up for a moment. Every glitch frame draws 0 to 3 corruptions; when the
  * maximum comes up several frames in a row, a storm also rearranges the picture.
  */
@@ -150,19 +157,20 @@ export class Glitch {
       return;
     }
     if (now < this.nextFrame) return;
-    this.nextFrame = now + 1 / GLITCH_FPS;
+    const calm = reducedMotion.matches;
+    this.nextFrame = now + 1 / (calm ? CALM_FPS : GLITCH_FPS);
 
     const uniforms = this.pass.uniforms;
     const corruptions = Math.floor(Math.random() * (MAX_CORRUPTIONS + 1) * Math.min(1, 0.5 + this.strength));
     this.stormCounter = corruptions === MAX_CORRUPTIONS ? this.stormCounter + 1 : 0;
     uniforms.seed.value = Math.random() * 1000;
     uniforms.corruptions.value = corruptions;
-    uniforms.amount.value = this.strength * (0.5 + 0.5 * Math.random());
-    const storm = this.stormCounter > 2 || (this.strength >= 1 && Math.random() < 0.3);
+    uniforms.amount.value = this.strength * (0.5 + 0.5 * Math.random()) * (calm ? 0.4 : 1);
+    const storm = !calm && (this.stormCounter > 2 || (this.strength >= 1 && Math.random() < 0.3));
     const height = 0.05 + Math.random() * 0.2;
     uniforms.slice.value.set(storm ? 1 : 0, Math.random() * (1 - height), height);
     const style = document.body.style;
-    const jolt = corruptions > 0 ? this.strength : 0;
+    const jolt = corruptions > 0 && !calm ? this.strength : 0;
     style.setProperty('--glitch-x', `${((Math.random() - 0.5) * 24 * jolt).toFixed(1)}px`);
     style.setProperty('--glitch-split', `${(1 + 4 * jolt * Math.random()).toFixed(1)}px`);
     style.setProperty('--glitch-hue', `${Math.round((Math.random() - 0.5) * 120 * jolt)}deg`);

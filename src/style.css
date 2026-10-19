@@ -216,6 +216,14 @@ button:focus-visible {
   outline: none;
 }
 
+/* keyboard focus is always visible, on every button and link, primary buttons included */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 3px;
+}
+
 button.primary {
   background: var(--accent);
   border-color: var(--accent);
@@ -690,11 +698,35 @@ button.primary .mode-note {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* on a phone held sideways the break is taller than the screen: it scrolls, and the
+     button to boot the clone stays reachable */
+  justify-content: safe center;
+  overflow-y: auto;
   gap: 14px;
   padding: 16px;
   background: rgba(2, 3, 10, 0.8);
   text-align: center;
+}
+
+@media (max-height: 480px) {
+  #sponsor {
+    gap: 8px;
+    padding: 8px 16px;
+  }
+
+  #sponsor .sponsor-pitch {
+    font-size: 0.95rem;
+  }
+
+  #ad-slot {
+    min-height: 0;
+    padding: 12px;
+  }
+
+  .satire-art {
+    width: 56px;
+    height: 56px;
+  }
 }
 
 /* The sponsor's own neon sign, in the complementary blue. */
@@ -819,8 +851,15 @@ button.primary .mode-note {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .satire-art {
+  .satire-art,
+  #hud-heat.overheated,
+  #waypoint {
     animation: none;
+  }
+
+  /* hits tint the view instead of flashing it */
+  #damage-flash.on {
+    opacity: 0.35;
   }
 }
 
@@ -836,7 +875,8 @@ button.primary .mode-note {
 }
 
 body.touch #hud-room {
-  left: 68px;
+  top: 96px;
+  left: max(12px, env(safe-area-inset-left));
 }
 
 #results-next {
@@ -1171,8 +1211,9 @@ body.glitching #now-playing {
   display: none;
 }
 
+/* on touch devices the gauges sit at the top: the track and the room go below them */
 body.touch #now-playing {
-  top: 60px;
+  top: 88px;
 }
 
 @media (max-width: 640px) {
@@ -1217,7 +1258,7 @@ body.touch #now-playing {
   text-shadow: var(--neon-orange);
 }
 
-#transmission.host #transmission-text {
+#transmission.announcer #transmission-text {
   color: var(--tube-blue);
   text-shadow: var(--neon-blue-soft);
 }
@@ -1258,6 +1299,8 @@ body.page {
 
 .tuner {
   display: grid;
+  /* the column may shrink below the input's natural width, so phones do not scroll sideways */
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   margin: 28px 0;
 }
@@ -1283,8 +1326,8 @@ body.page {
   background: rgba(5, 7, 13, 0.8);
   color: var(--tube-orange);
   font: inherit;
+  font-family: var(--font-display);
   font-size: 1.3rem;
-  font-weight: 700;
 }
 
 .tuner button,
@@ -1507,10 +1550,23 @@ body.page {
 #download-status,
 .sponsor-pitch,
 .tagline,
-#transmission-text {
+#transmission-text,
+#sponsor-report,
+.satire-slogan,
+.satire-fine {
   text-align: justify;
   hyphens: auto;
   -webkit-hyphens: auto;
+}
+
+/* centered blocks are justified too and only center their last line */
+#school-text,
+.sponsor-pitch,
+.tagline,
+#sponsor-report,
+.satire-slogan,
+.satire-fine {
+  text-align-last: center;
 }
 
 .tagline,
