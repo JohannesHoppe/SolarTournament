@@ -71,6 +71,8 @@ const BRAKE_EASE = 0.3;
 const BRAKE_REST = 20;
 /** Once at rest, the brake only burns again above this speed (units/s, 2 m/s). */
 const BRAKE_RESUME = 40;
+/** Below this speed the brake stops the ship with the thrusters alone and no longer turns it (units/s, 15 m/s: the thrusters take it out in under half a second). */
+const BRAKE_FINE = 300;
 /** Confirm presses are ignored this long after a screen changes (ms). */
 const CONFIRM_LOCK_MS = 600;
 /** Drive lights in the scene: enough for a full tournament plus the flight school's drone and sparring bot. */
@@ -1203,13 +1205,27 @@ export class Game implements OnlineGame {
         return resting;
       }
       this.braked = false;
-      retrograde.copy(flight.velocity).negate();
-      const aligned = flight.angleTo(retrograde) < BRAKE_BURN_ANGLE;
-      // the burn eases off at the end, so the ship comes to rest instead of reversing; a
-      // damaged drive pushes less, so it eases off later
-      const thrust = aligned ? Math.min(1, speed / (MAIN_THRUST * Math.max(me.drive, 0.05) * BRAKE_EASE)) : 0;
-      const burn = flight.flip(retrograde, 3, Object.assign(this.computed, controls));
-      burn.thrust = thrust;
+      // the drift in ship space (the nose is -Z): +Z is the speed the drive brakes once flipped
+      inverseOrientation.copy(flight.orientation).invert();
+      const drift = relative.copy(flight.velocity).applyQuaternion(inverseOrientation);
+      let burn: Controls;
+      if (speed > BRAKE_FINE) {
+        retrograde.copy(flight.velocity).negate();
+        burn = flight.flip(retrograde, 3, Object.assign(this.computed, controls));
+        // the burn eases off at the end, so the ship comes to rest instead of reversing; a
+        // damaged drive pushes less, so it eases off later
+        const aligned = flight.angleTo(retrograde) < BRAKE_BURN_ANGLE;
+        burn.thrust = aligned ? Math.min(1, Math.max(0, drift.z) / (MAIN_THRUST * Math.max(me.drive, 0.05) * BRAKE_EASE)) : 0;
+      } else {
+        // the last few m/s: the nose stays where it is and the thrusters stop the ship, so a
+        // slow drift that wanders in direction cannot make the ship flip back and forth
+        burn = this.keepUpright(Object.assign(this.computed, controls));
+        burn.thrust = 0;
+        burn.strafeZ = THREE.MathUtils.clamp(drift.z / (RCS_THRUST * BRAKE_EASE), -1, 1);
+      }
+      // the thrusters take out the drift across the nose, which the drive cannot reach
+      burn.strafeX = THREE.MathUtils.clamp(-drift.x / (RCS_THRUST * BRAKE_EASE), -1, 1);
+      burn.strafeY = THREE.MathUtils.clamp(-drift.y / (RCS_THRUST * BRAKE_EASE), -1, 1);
       return burn;
     }
     this.braked = false;
