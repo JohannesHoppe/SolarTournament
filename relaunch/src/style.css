@@ -20,8 +20,11 @@
   --accent-strong: #4d91ff;
   --complement: #0062ff;
   /* Neon: white tube, a halo in shades of the color (after Silvia O'Dwyer, CSS-Tricks 2021) */
-  --neon-orange: 0 0 2px #fff, 0 0 5px #fff, 0 0 9px #ffc266, 0 0 15px #ff9d00, 0 0 26px #ff9d00, 0 0 42px #ff7b00, 0 0 62px #ff5a00, 0 0 90px #ff5a00;
-  --neon-blue: 0 0 2px #fff, 0 0 5px #fff, 0 0 9px #9cc2ff, 0 0 15px #4d91ff, 0 0 26px #0062ff, 0 0 42px #0062ff, 0 0 62px #0048c0, 0 0 90px #0048c0;
+  --neon-orange: 0 0 1px #fff, 0 0 3px #ffd9a0, 0 0 8px #ff9d00, 0 0 14px #ff9d00, 0 0 24px #ff7b00, 0 0 40px #ff5a00, 0 0 64px #ff5a00;
+  --neon-blue: 0 0 1px #fff, 0 0 3px #cfe0ff, 0 0 8px #4d91ff, 0 0 14px #0062ff, 0 0 24px #0062ff, 0 0 40px #0048c0, 0 0 64px #0048c0;
+  /* the tube itself: tinted white, so the letters stay sharp inside their glow */
+  --tube-orange: #fff1dc;
+  --tube-blue: #eef4ff;
   --neon-blue-soft: 0 0 3px #fff, 0 0 10px #4d91ff, 0 0 22px #0062ff;
   --danger: #ff5a4f;
   --text: #e8f1ff;
@@ -95,14 +98,17 @@ kbd {
   letter-spacing: 0.02em;
 }
 
-/* Neon signs: the logo flickers on like a tube when the menu opens, one letter is loose. */
+/*
+ * Neon signs. In the logo "Solar" is plain white and "Tournament" is the tube: it flickers on
+ * when the menu opens, stutters now and then, and its "n" is loose.
+ */
 .neon {
-  color: #fff;
+  color: var(--tube-orange);
   text-shadow: var(--neon-orange);
 }
 
-h1.neon {
-  animation: neon-power-on 1.4s ease-out 1;
+h1 .neon {
+  animation: neon-power-on 1.4s ease-out 1, neon-stutter 11s 1.4s infinite;
 }
 
 .neon-loose {
@@ -111,14 +117,14 @@ h1.neon {
 
 .plate h2 {
   margin: 0;
-  color: #fff;
+  color: var(--tube-orange);
   text-shadow: var(--neon-orange);
 }
 
 @keyframes neon-flicker {
   0%, 18%, 22%, 25%, 53%, 57%, 100% {
     text-shadow: var(--neon-orange);
-    color: #fff;
+    color: var(--tube-orange);
   }
   20%, 24%, 55% {
     text-shadow: none;
@@ -133,14 +139,25 @@ h1.neon {
   }
   4%, 12%, 24%, 40%, 100% {
     text-shadow: var(--neon-orange);
-    color: #fff;
+    color: var(--tube-orange);
+  }
+}
+
+@keyframes neon-stutter {
+  0%, 60%, 61.5%, 62.5%, 100% {
+    text-shadow: var(--neon-orange);
+    color: var(--tube-orange);
+  }
+  61%, 62% {
+    text-shadow: none;
+    color: #6b5a44;
   }
 }
 
 @keyframes neon-flicker-blue {
   0%, 40%, 44%, 100% {
     text-shadow: var(--neon-blue);
-    color: #fff;
+    color: var(--tube-blue);
   }
   42% {
     text-shadow: none;
@@ -149,7 +166,7 @@ h1.neon {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  h1.neon,
+  h1 .neon,
   .neon-loose,
   .sponsor-pitch {
     animation: none;
@@ -631,7 +648,7 @@ button.primary {
   font-size: 1.15rem;
   font-weight: 700;
   line-height: 1.5;
-  color: #fff;
+  color: var(--tube-blue);
   text-shadow: var(--neon-blue);
   animation: neon-flicker-blue 5s infinite;
 }
