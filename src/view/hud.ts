@@ -33,6 +33,7 @@ export class Hud {
   private readonly schoolText = $('school-text');
   private readonly schoolKeys = $('school-keys');
   private readonly waypoint = $('waypoint');
+  private readonly crosshair = $('crosshair');
   private readonly waypointLabel = $('waypoint-label');
   private readonly center = $('center');
   private readonly centerDistance = $('center-distance');
@@ -102,6 +103,12 @@ export class Hud {
     }
   }
 
+  /** The crosshair and the hit marker sit where the nose points (see Game.aimCrosshair). */
+  setCrosshair(camera: THREE.Camera, point: THREE.Vector3) {
+    pin(this.crosshair, camera, point);
+    pin(this.hitmarker, camera, point);
+  }
+
   /** Blinking diamond on a point in space with what it is, clamped to the screen edge when off screen. */
   setWaypoint(camera: THREE.Camera, point: THREE.Vector3 | null, label = '') {
     setHidden(this.waypoint, !point);
@@ -110,10 +117,6 @@ export class Hud {
     pin(this.waypoint, camera, point);
   }
 
-  /**
-   * The zero point: the center of the field, where the asteroids are densest and the arena
-   * ends farthest away, with its distance. Always on screen, at the edge when behind.
-   */
   /** The flight mode next to the velocity: AUTOPILOT in blue, FREE DRIFT in orange. */
   setAutopilot(on: boolean) {
     if (this.mode.classList.contains('free') !== on) return;
@@ -121,6 +124,10 @@ export class Hud {
     this.mode.classList.toggle('free', !on);
   }
 
+  /**
+   * The zero point: the center of the field, where the asteroids are densest and the arena
+   * ends farthest away, with its distance. Always on screen, at the edge when behind.
+   */
   setCenter(camera: THREE.Camera, me: Ship) {
     this.center.hidden = !me.alive;
     if (!me.alive) return;

@@ -384,8 +384,9 @@ button.primary .mode-note {
 
 #crosshair {
   position: absolute;
-  top: 50%;
-  left: 50%;
+  top: 0;
+  left: 0;
+  translate: 50vw 50vh;
   width: 34px;
   height: 34px;
   transform: translate(-50%, -50%);
@@ -407,8 +408,9 @@ button.primary .mode-note {
 
 #hitmarker {
   position: absolute;
-  top: 50%;
-  left: 50%;
+  top: 0;
+  left: 0;
+  translate: 50vw 50vh;
   width: 48px;
   height: 48px;
   transform: translate(-50%, -50%) rotate(45deg);

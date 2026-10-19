@@ -91,6 +91,8 @@ const IMPACT_MARGIN = 2;
 const FLIP_SECONDS = 1.8;
 /** Assumed extra time of the roll that starts a head-over flip (s). */
 const FLIP_ROLL_SECONDS = 0.7;
+/** Without a rock or ship in the way, the crosshair shows the nose at this distance (units, 2 km). */
+const AIM_DEPTH = 40000;
 /** Random places on the edge of the field a respawn chooses from. */
 const SPAWN_CANDIDATES = 12;
 /** Ships farther away than this never set off the lock warning (units, 3 km). */
@@ -131,6 +133,7 @@ const gravity = new THREE.Vector3();
 const retrograde = new THREE.Vector3();
 const normal = new THREE.Vector3();
 const relative = new THREE.Vector3();
+const aimPoint = new THREE.Vector3();
 const inverseOrientation = new THREE.Quaternion();
 const sweep = new THREE.Vector3();
 const surface = new THREE.Vector3();
@@ -1020,7 +1023,8 @@ export class Game implements OnlineGame {
     this.hud.updateVelocityMarkers(this.camera, me);
     this.hud.setCenter(this.camera, me);
     this.hud.setAutopilot(this.autopilot);
-    if (this.school) this.teach(dt, myControls);
+    const waypoint = this.school ? this.teach(dt, myControls) : null;
+    if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
 
     const outside = me.alive && me.outsideSince !== null;
     if (!outside) this.toldToReturn = false;
@@ -1045,7 +1049,8 @@ export class Game implements OnlineGame {
   }
 
   /** Runs the flight school: the current drill, its instruction, keys and waypoint. */
-  private teach(dt: number, controls: Controls) {
+  /** Runs the flight school for this frame; returns the point its HUD marker sits on. */
+  private teach(dt: number, controls: Controls): THREE.Vector3 | null {
     const school = this.school!;
     const context = (this.schoolContext ??= this.createSchoolContext());
     context.controls = controls;
@@ -1062,10 +1067,11 @@ export class Game implements OnlineGame {
     if (school.finished) {
       storageSet(SCHOOL_DONE_KEY, '1');
       this.showMenu();
-      return;
+      return null;
     }
     this.hud.setSchool(school.status(context.device));
     this.hud.setWaypoint(this.camera, waypoint, school.mark);
+    return waypoint;
   }
 
   /** What the flight school sees of the game; created once, the per-frame values are filled in by teach(). */
@@ -1528,6 +1534,26 @@ export class Game implements OnlineGame {
       this.sound.beep(level === 2 ? 1560 : 1170, 0.04, 0.1);
       this.nextLockBeep = now + (level === 2 ? 0.1 : 0.35);
     }
+  }
+
+  /**
+   * The crosshair shows where the nose points, at the depth that matters: a flight school
+   * marker's distance, or what the laser would hit. The chase camera sits above and behind
+   * the ship and trails its turns, so the plain screen center would be off by degrees up close.
+   */
+  private aimCrosshair(waypoint: THREE.Vector3 | null) {
+    const me = this.me!;
+    const flight = me.flight;
+    const direction = flight.forward(forward);
+    let depth = waypoint ? waypoint.distanceTo(flight.position) : (this.field.raycast(flight.position, direction, AIM_DEPTH)?.distance ?? AIM_DEPTH);
+    if (!waypoint) {
+      for (const ship of this.ships) {
+        if (ship === me || !ship.alive) continue;
+        const distance = raySphere(flight.position, direction, ship.flight.position, ship.radius);
+        if (distance !== null && distance < depth) depth = distance;
+      }
+    }
+    this.hud.setCrosshair(this.camera, aimPoint.copy(flight.position).addScaledVector(direction, depth));
   }
 
   /** Space has no walls: ships that stay outside the arena for too long are lost. */
