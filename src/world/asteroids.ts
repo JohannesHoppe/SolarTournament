@@ -297,6 +297,12 @@ export class AsteroidField {
     return normal;
   }
 
+  /** Velocity of a rock's surface at a point (units/s): its drift plus its spin. */
+  surfaceVelocity(asteroid: Asteroid, point: THREE.Vector3, target = new THREE.Vector3()): THREE.Vector3 {
+    const arm = pull.subVectors(point, asteroid.object.position);
+    return target.copy(asteroid.spinAxis).multiplyScalar(SPIN_RATE).cross(arm).add(asteroid.velocity);
+  }
+
   /** Sum of the asteroids' gravitational pull at a point (units/s²). */
   gravity(position: THREE.Vector3, target = new THREE.Vector3()): THREE.Vector3 {
     target.set(0, 0, 0);

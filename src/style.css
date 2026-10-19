@@ -944,10 +944,6 @@ body.touch #hud-room {
   box-shadow: 0 0 10px rgb(255 157 0 / 0.35);
 }
 
-body.touch #school-keys {
-  display: none;
-}
-
 body.touch #school-panel {
   top: 92px;
 }

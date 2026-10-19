@@ -35,7 +35,7 @@ The project is a classic Pages project, not a Worker: the game is a static site 
 | Q / E | LB / RB | Roll |
 | W | RT (analog) | Main drive |
 | S (hold) | B (hold) | Brake: the flight computer flips the ship head over and burns until it is at rest |
-| Shift (hold) | | Fine aim: turns at 30 % for precise aiming |
+| Shift (hold) | L3, the left stick pressed in | Fine aim: turns at 30 % for precise aiming |
 | A / D | Right stick left / right | Thrusters: sideways |
 | | X | Thrusters: backwards |
 | R / F | Right stick up / down | Thrusters: up / down |
@@ -60,7 +60,7 @@ On phones and tablets touch controls appear: the fixed stick on the left turns t
 
 - **Four places per tournament.** The lead browser fills free places with bots and removes one for every Host who joins. A fifth Host is sent back to the hangar: "This tournament is full".
 - **Every Host has their own pilot.** Each browser simulates its own ship and sends its state 15 times per second; the other browsers predict the motion in between (a ship without thrust flies straight on) and blend corrections in smoothly.
-- **The shooter decides about hits.** A beam that goes through a ship on the shooter's screen is reported to the browser flying that ship, which applies the damage and announces a destruction. Asteroid hits go to everyone, with the field time of the hit; the fragments are deterministic, so all players see the same ones, and a destroyed ship's wreckage is seeded with its death count, so it breaks into the same pieces everywhere.
+- **The shooter decides about hits.** A beam that goes through a ship on the shooter's screen is reported to the browser flying that ship, which applies the damage and announces a destruction. Asteroid hits go to everyone, with the field time of the hit; the fragments are deterministic, so all players see the same ones, and a destroyed ship's wreckage is seeded with its death count, so it breaks into the same pieces everywhere. When two Hosts break the same rock at the same moment, the hit with the earlier field time gets the points; the other browser takes its own points back when it learns it was later.
 - **One field for everyone.** Where a rock stands and how it is turned follows from the seed and the field time. The lead browser shares its field time with the round clock 15 times per second; the others glide towards it and jump when they are more than half a second off. A newcomer gets the field time, every rock's remaining hits and when each fragment broke off. Every new round brings a fresh field.
 - **The lead browser** is the one that has been in the room longest and is still sending. It runs the bots and the round clock and brings newcomers' asteroid fields up to date. When it leaves, or falls silent for 2.5 seconds (a hidden tab runs no frames), the next one takes over; when it is back, it leads again.
 - **Nothing from other browsers is trusted.** Every message is checked before the game uses it (finite numbers in plausible ranges, callsigns up to 16 characters, at most four ships per browser, messages up to 64 KB). A message about a ship only counts from the browser that runs it, a shooter cannot report more hits than its laser fires, asteroid hits are limited to 20 per second and browser, and only a newcomer takes an asteroid field, once, from a browser that was there first.
@@ -71,7 +71,7 @@ For development, `?local=1#t=code` connects tabs of the same browser without the
 
 ## Flight school
 
-The menu leads with the flight school until a Host has completed it once; after that the solo round is the main action (Enter). The flight school trains one maneuver per drill, 21 drills in all, each with a short spoken line, the keys as big keycaps, and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver.
+The menu leads with the flight school until a Host has completed it once; after that the solo round is the main action (Enter). The flight school trains one maneuver per drill, 21 drills in all, each with a short spoken line, the keys as big keycaps (the spoken words name no keys; the keycaps show those of the Host's keyboard, gamepad or touch screen), and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver.
 
 1. Briefing: the world of the games, in four sentences.
 2. Turning: three markers into the crosshair (arrows or mouse).
@@ -216,7 +216,8 @@ One world unit is 5 cm. A ship is about 35 m long; the asteroids are ten to thir
 
 ### Collisions
 
-- A ship bounces off a rock and keeps 30 % of its impact speed; scraping along the surface bleeds off some sideways speed.
+- A ship bounces off a rock and keeps 30 % of its impact speed; scraping along the surface bleeds off some sideways speed. The impact counts against the rock's surface, which moves with its drift and its spin: the tip of a long, turning rock hits harder than its middle.
+- A ship that moves farther than its own radius in one frame is checked along its whole path, so even at extreme speed it cannot pass through a thin rock.
 - Impacts below 12.5 m/s only scratch the paint. Above that the hull loses 1 point per 0.6 m/s; at about 72 m/s a ship is destroyed.
 - **Impact warning.** The flight computer warns when the current course hits a rock sooner than the ship could flip and brake (plus 2 seconds of reaction time) and beeps faster the closer the impact gets. The flip time it assumes grows with the angle to turn (2.5 s for a half turn), adds 1 s for the roll that starts a head-over flip and stretches with damaged thrusters.
 

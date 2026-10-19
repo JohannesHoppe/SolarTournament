@@ -100,36 +100,42 @@ export class FlightModel {
    * Yaw and pitch commands that turn the nose towards a world direction, as the flight
    * computer and the bots use them.
    */
-  steer(direction: THREE.Vector3, gain = 2.5): { yaw: number; pitch: number } {
+  steer<T extends { yaw: number; pitch: number }>(direction: THREE.Vector3, gain = 2.5, target: T = { yaw: 0, pitch: 0 } as T): T {
     inverse.copy(this.orientation).invert();
     local.copy(direction).normalize().applyQuaternion(inverse);
     // local: -Z is ahead, +X right, +Y up
     let yaw = Math.atan2(local.x, -local.z);
     const pitch = Math.atan2(local.y, Math.hypot(local.x, local.z));
     if (local.z > 0 && Math.abs(local.x) < 1e-3) yaw = Math.PI; // straight behind: pick a side
-    return { yaw: THREE.MathUtils.clamp(yaw * gain, -1, 1), pitch: THREE.MathUtils.clamp(pitch * gain, -1, 1) };
+    target.yaw = THREE.MathUtils.clamp(yaw * gain, -1, 1);
+    target.pitch = THREE.MathUtils.clamp(pitch * gain, -1, 1);
+    return target;
   }
 
   /**
    * Commands for a head-over flip towards a world direction: the ship rolls until the
    * direction lies straight above its canopy, then pulls the nose up and over. The last
-   * stretch is ordinary steering, where the roll angle would be meaningless.
+   * stretch is ordinary steering, where the roll angle would be meaningless. Writes into
+   * `target` (yaw, pitch and roll), so the flight computer needs no new object per frame.
    */
-  flip(direction: THREE.Vector3, gain = 2.5): { yaw: number; pitch: number; roll: number } {
+  flip<T extends { yaw: number; pitch: number; roll: number }>(direction: THREE.Vector3, gain = 2.5, target: T = { yaw: 0, pitch: 0, roll: 0 } as T): T {
     inverse.copy(this.orientation).invert();
     local.copy(direction).normalize().applyQuaternion(inverse);
     const off = Math.acos(THREE.MathUtils.clamp(-local.z, -1, 1));
-    if (off < FLIP_STEER_ANGLE) return { ...this.steer(direction, gain), roll: 0 };
+    if (off < FLIP_STEER_ANGLE) {
+      this.steer(direction, gain, target);
+      target.roll = 0;
+      return target;
+    }
     // a goal behind and below is reached faster by pulling straight up and over than by
     // rolling half around first; the steering at the end takes out what is left
     const behind = Math.PI - off;
     const rollError = local.y < 0 && behind < FLIP_PULL_THROUGH ? 0 : Math.atan2(local.x, local.y);
     const aligned = Math.max(0, 1 - Math.abs(rollError) / FLIP_ROLL_TOLERANCE);
-    return {
-      yaw: 0,
-      pitch: THREE.MathUtils.clamp(off * gain, 0, 1) * aligned,
-      roll: THREE.MathUtils.clamp(rollError * gain, -1, 1),
-    };
+    target.yaw = 0;
+    target.pitch = THREE.MathUtils.clamp(off * gain, 0, 1) * aligned;
+    target.roll = THREE.MathUtils.clamp(rollError * gain, -1, 1);
+    return target;
   }
 }
 

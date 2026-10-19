@@ -52,7 +52,6 @@ interface EngineParts {
   flameMaterial: THREE.MeshBasicMaterial | null;
   flameZ: number;
   glows: THREE.Object3D[];
-  light: THREE.PointLight;
 }
 
 interface Hole {
@@ -105,6 +104,8 @@ function sharedRadius(assets: Assets): number {
 
 export class Ship {
   readonly flight = new FlightModel();
+  /** Where the ship was before this frame's move, for the swept collision test. */
+  readonly previous = new THREE.Vector3();
   readonly root = new THREE.Group();
   readonly model: THREE.Object3D;
   readonly radius: number;
@@ -133,6 +134,8 @@ export class Ship {
   outsideSince: number | null = null;
   /** Peer that simulates this ship in an online tournament; null when this browser does. */
   owner: string | null = null;
+  /** The drive's light on nearby rocks, lent by the game from a fixed pool (see Game.lendLight). */
+  engineLight: THREE.PointLight | null = null;
 
   /** Last state received for a ship another peer simulates, and when it arrived. */
   private readonly remote = {
@@ -186,16 +189,12 @@ export class Ship {
       side: THREE.DoubleSide,
     });
     for (const glow of glows) if (glow instanceof THREE.Mesh) glow.material = glowMaterial;
-    const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
-    light.position.set(0, 0, 400);
-    this.root.add(light);
     const flameMesh = flame as THREE.Mesh | null;
     return {
       flame: flameMesh,
       flameMaterial: flameMesh ? (flameMesh.material as THREE.MeshBasicMaterial) : null,
       flameZ: flameMesh ? flameMesh.position.z : 0,
       glows,
-      light,
     };
   }
 
@@ -292,6 +291,7 @@ export class Ship {
   /** Advances flight and laser; returns true when the ship fires this frame. */
   update(dt: number, now: number, controls: Controls, gravity: THREE.Vector3): boolean {
     if (!this.alive) return false;
+    this.previous.copy(this.flight.position);
     this.flight.driveFactor = this.drive;
     this.flight.thrusterFactor = 0.25 + 0.75 * this.thrusters;
     this.vent(now);
@@ -406,7 +406,7 @@ export class Ship {
   }
 
   private animateEngine(dt: number) {
-    const { flame, flameMaterial, flameZ, glows, light } = this.engine;
+    const { flame, flameMaterial, flameZ, glows } = this.engine;
     // A damaged drive sputters.
     const sputter = this.drive < 1 ? 0.6 + 0.4 * Math.random() : 1;
     const throttle = this.flight.throttle * sputter;
@@ -423,6 +423,6 @@ export class Ship {
       glow.scale.set(glowScale, glowScale, 1);
       glow.rotateZ(dt * 2);
     }
-    light.intensity = 1.5e5 * throttle;
+    if (this.engineLight) this.engineLight.intensity = 1.5e5 * throttle;
   }
 }

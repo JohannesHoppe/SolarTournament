@@ -178,35 +178,36 @@ export const ANNOUNCER_NAMES = ['ingmar', 'nova', 'kessler', 'vega', 'orion', 's
 /**
  * The flight school, said by the flight computer and shown on screen with the same words:
  * short, quick, a little seductive. People would rather listen than read, but nobody
- * listens to a lecture. Each drill trains one maneuver.
+ * listens to a lecture. Each drill trains one maneuver. The words name no keys: the keys of
+ * the Host's keyboard, gamepad or touch screen show as keycaps next to them.
  */
 export const SCHOOL = {
   briefing:
     'The year is 2584. The Orange President wants his games, and you are one of his chosen Hosts. Your printed clones fly for you, and every death they die streams straight into your mind. Training clones are free. Shall we?',
-  turn: 'Turn with the arrow keys or the mouse. Put the marker in your crosshair.',
-  fineAim: 'Hold Shift, and you turn slowly. Center the marker. Exactly.',
-  drive: 'W is your main drive. Push it to fifty meters per second.',
+  turn: 'Turn the ship. Put the marker in your crosshair.',
+  fineAim: 'Hold fine aim, and you turn slowly. Center the marker. Exactly.',
+  drive: 'This is your main drive. Push it to fifty meters per second.',
   drift: 'Now let go. Nothing out here slows you down.',
   lookBack: 'Turn around while you drift. Your course stays the same. The green ring shows where you are going.',
-  brake: 'Hold S. I flip you over and brake for you.',
-  flipBurn: 'By hand is faster. X flips the ship, W burns against your flight.',
+  brake: 'Hold the brake. I flip you over and brake for you.',
+  flipBurn: 'By hand is faster. Flip the ship, then burn against your flight.',
   flipBurnAgain: 'Faster this time. Flip, and burn.',
-  byHand: 'By hand, darling. X, then W.',
+  byHand: 'By hand, darling. Flip, then burn.',
   stopAt: 'Fly to the marker and stop right next to it.',
   stopAtFar: 'Farther now. Accelerate, flip, brake in time.',
-  slide: 'A and D push you sideways without turning. Slide in front of the marker and stop.',
+  slide: 'Your thrusters push you sideways without turning. Slide in front of the marker and stop.',
   slideBack: 'And the other way.',
   dodge: 'Debris incoming. Slide out of its way. Do not turn.',
   dodgeHit: 'Ouch. Again.',
   rings: 'Fly through the rings. Brake when you need to.',
-  shoot: 'Space fires. Keep hitting the drone until it breaks. Hit its middle, and you hit the reactor.',
-  shootMoving: 'This one moves. Your laser hits the instant you fire, so just keep it in your crosshair. Shift helps.',
+  shoot: 'Fire! Keep hitting the drone until it breaks. Hit its middle, and you hit the reactor.',
+  shootMoving: 'This one moves. Your laser hits the instant you fire, so just keep it in your crosshair. Fine aim helps.',
   overheat: 'Every shot heats your ship. Keep firing until it overheats.',
   shadow: 'Hot, isn’t it? Cool down in the shadow of an asteroid. I marked one.',
   impact: 'Trouble ahead. When impact flashes, brake, or slide past.',
   noTurn: 'Without turning, darling.',
   chase: 'A bot on the run. It does not shoot. Stay on its tail and wreck it. Brake if you overshoot.',
-  evade: 'Now it shoots back. Never fly straight at it. Keep sliding with A and D while you fire.',
+  evade: 'Now it shoots back. Never fly straight at it. Keep sliding sideways while you fire.',
   duel: 'Final exam. A real bot. Take it down.',
   done: 'Well done, pilot. You are cleared for the tournament. Go and die for the President.',
   again: 'Again.',

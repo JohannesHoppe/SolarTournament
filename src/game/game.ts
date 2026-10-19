@@ -68,6 +68,8 @@ const BRAKE_REST = 20;
 const BRAKE_RESUME = 40;
 /** Confirm presses are ignored this long after a screen changes (ms). */
 const CONFIRM_LOCK_MS = 600;
+/** Drive lights in the scene: enough for a full tournament plus the flight school's drone and sparring bot. */
+const ENGINE_LIGHTS = 6;
 /** The announcer opens a round this long after the launch (ms), once the flight computer is through. */
 const ANNOUNCER_OPEN_DELAY_MS = 7000;
 /** One standard gravity in units/s² (1 unit = 5 cm). */
@@ -109,6 +111,8 @@ const gravity = new THREE.Vector3();
 const retrograde = new THREE.Vector3();
 const normal = new THREE.Vector3();
 const relative = new THREE.Vector3();
+const sweep = new THREE.Vector3();
+const surface = new THREE.Vector3();
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
 const SCRAPE_COLOR = new THREE.Color(1, 0.7, 0.3);
 
@@ -164,9 +168,17 @@ export class Game implements OnlineGame {
   private shotCounter = 0;
   private selectedShip: ShipType = 'human';
   /** The flight computer turns the own ship to retrograde while this is set. */
+  /** The drive lights, always in the scene; ships borrow them (see lendLight). */
+  private readonly engineLights: THREE.PointLight[] = [];
   private flipAssist = false;
   /** The brake has brought the ship to rest (it beeps once). */
   private braked = false;
+  /** The flight computer's output, reused from frame to frame. */
+  private readonly computed: Controls = { ...IDLE };
+  /** Warnings below the crosshair, rebuilt every frame in the same array. */
+  private readonly warnings: string[] = [];
+  /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
+  private readonly inSight = (ship: Ship) => this.field.lineOfSight(this.camera.position, ship.flight.position);
   /** The stick when the flip began: moving it away from there hands the ship back to the pilot. */
   private flipStick = { yaw: 0, pitch: 0 };
   /** How the own clone died last, for the sponsor break. */
@@ -175,6 +187,8 @@ export class Game implements OnlineGame {
   private screenSince = 0;
   /** Online round whose scoreboard has been shown and announced. */
   private resultsShownFor = -1;
+  /** Rocks this browser's ships broke online: when, by whom, for how many points. */
+  private readonly brokenHere = new Map<string, { at: number; ship: Ship; points: number }>();
   /** The running flight school, or null in a tournament round. */
   private school: FlightSchool | null = null;
   private schoolContext: SchoolContext | null = null;
@@ -234,6 +248,11 @@ export class Game implements OnlineGame {
     this.field = new AsteroidField(assets.asteroids);
     this.effects = new Effects(assets.textures);
     this.scene.add(this.space.sky, this.space.dust, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
+    for (let i = 0; i < ENGINE_LIGHTS; i++) {
+      const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
+      this.engineLights.push(light);
+      this.scene.add(light);
+    }
 
     this.input = new Input(this.renderer.domElement);
     this.input.onAction((action) => this.onAction(action));
@@ -516,7 +535,11 @@ export class Game implements OnlineGame {
 
   private clearShips() {
     this.wrecks.clear();
-    for (const ship of this.ships) this.scene.remove(ship.root);
+    this.brokenHere.clear();
+    for (const ship of this.ships) {
+      this.returnLight(ship);
+      this.scene.remove(ship.root);
+    }
     this.ships = [];
     this.bots = [];
     this.me = null;
@@ -580,7 +603,29 @@ export class Game implements OnlineGame {
     const ship = new Ship(id, name, type, this.assets, isLocal);
     this.ships.push(ship);
     this.scene.add(ship.root);
+    this.lendLight(ship);
     return ship;
+  }
+
+  /**
+   * Gives a ship one of the drive lights. The scene always holds the same number of lights,
+   * free ones dark and unattached, because a change in the number of lights makes three.js
+   * recompile every lit material, which stutters when a ship joins or leaves.
+   */
+  private lendLight(ship: Ship) {
+    const light = this.engineLights.find((l) => l.parent === this.scene);
+    if (!light) return;
+    light.position.set(0, 0, 400);
+    ship.root.add(light);
+    ship.engineLight = light;
+  }
+
+  private returnLight(ship: Ship) {
+    const light = ship.engineLight;
+    if (!light) return;
+    light.intensity = 0;
+    this.scene.add(light);
+    ship.engineLight = null;
   }
 
   // ---- OnlineGame: what the online layer uses ----
@@ -603,6 +648,7 @@ export class Game implements OnlineGame {
   }
 
   removeShip(ship: Ship) {
+    this.returnLight(ship);
     this.scene.remove(ship.root);
     this.ships = this.ships.filter((s) => s !== ship);
     this.bots = this.bots.filter((b) => b.ship !== ship);
@@ -634,6 +680,16 @@ export class Game implements OnlineGame {
   }
 
   remoteRock(id: string, at: number) {
+    if (!this.field.asteroids.has(id)) {
+      // two Hosts broke the same rock at once: the earlier hit by field time gets the points,
+      // and each browser takes its own back when it learns it was later
+      const broken = this.brokenHere.get(id);
+      if (broken && at < broken.at) {
+        broken.ship.score -= broken.points;
+        this.brokenHere.delete(id);
+      }
+      return;
+    }
     const destroyed = this.field.hit(id, at);
     if (!destroyed) return;
     this.effects.explosion(destroyed.object.position, destroyed.meanRadius * 0.6, destroyed.velocity);
@@ -685,6 +741,7 @@ export class Game implements OnlineGame {
   private startNextRound() {
     for (const ship of this.ownedShips()) ship.score = ship.kills = ship.deaths = 0;
     this.field.generate(FIELD_SEED);
+    this.brokenHere.clear();
     this.wrecks.clear();
     $('results').hidden = true;
   }
@@ -839,9 +896,12 @@ export class Game implements OnlineGame {
         else if (!this.sponsors.visible && this.state === 'playing') this.sponsorBreak();
         continue;
       }
-      const bot = this.bots.find((b) => b.ship === ship);
-      let controls = ship === me ? myControls : bot ? bot.think(now, this.ships, this.field) : IDLE;
-      if (bot && bot === this.sparring?.bot && !this.sparring.armed) controls = { ...controls, fire: false };
+      let bot: Bot | null = null;
+      for (const b of this.bots) if (b.ship === ship) bot = b;
+      const thought = bot ? bot.think(now, this.ships, this.field) : null;
+      // the flight school's unarmed sparring bot only flies
+      if (thought && bot === this.sparring?.bot && !this.sparring.armed) thought.fire = false;
+      const controls = ship === me ? myControls : (thought ?? IDLE);
       this.field.gravity(ship.flight.position, gravity);
       ship.inShadow = this.field.raycast(ship.flight.position, SUN_DIRECTION, LASER_RANGE) !== null;
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
@@ -863,7 +923,7 @@ export class Game implements OnlineGame {
     this.updateCamera(dt);
     me.root.visible = me.alive && !this.cockpit;
     this.hud.update(now, Math.max(0, this.roundEndsAt - now), me);
-    this.hud.updateMarkers(this.camera, this.ships, me, (ship) => this.field.lineOfSight(this.camera.position, ship.flight.position));
+    this.hud.updateMarkers(this.camera, this.ships, me, this.inSight);
     this.hud.updateVelocityMarkers(this.camera, me);
     this.hud.setCenter(this.camera, me);
     if (this.school) this.teach(dt, myControls);
@@ -897,7 +957,7 @@ export class Game implements OnlineGame {
     context.controls = controls;
     context.braking = this.input.braking;
     context.impactAhead = this.impactAhead;
-    context.touch = this.input.touchActive;
+    context.device = this.input.touchActive ? 'touch' : this.input.gamepadActive ? 'gamepad' : 'keyboard';
     context.now = this.time;
     context.dt = dt;
     const step = school.stepIndex;
@@ -908,7 +968,7 @@ export class Game implements OnlineGame {
       this.showMenu();
       return;
     }
-    this.hud.setSchool(school.status);
+    this.hud.setSchool(school.status(context.device));
     this.hud.setWaypoint(this.camera, waypoint);
   }
 
@@ -922,7 +982,7 @@ export class Game implements OnlineGame {
       controls: IDLE,
       braking: false,
       impactAhead: false,
-      touch: false,
+      device: 'keyboard',
       field: this.field,
       now: 0,
       dt: 0,
@@ -986,7 +1046,9 @@ export class Game implements OnlineGame {
       if (speed < (this.braked ? BRAKE_RESUME : BRAKE_REST)) {
         if (!this.braked) this.sound.beep(660, 0.08);
         this.braked = true;
-        return { ...controls, thrust: 0 };
+        const resting = Object.assign(this.computed, controls);
+        resting.thrust = 0;
+        return resting;
       }
       this.braked = false;
       retrograde.copy(flight.velocity).negate();
@@ -994,7 +1056,9 @@ export class Game implements OnlineGame {
       // the burn eases off at the end, so the ship comes to rest instead of reversing; a
       // damaged drive pushes less, so it eases off later
       const thrust = aligned ? Math.min(1, speed / (MAIN_THRUST * Math.max(me.drive, 0.05) * BRAKE_EASE)) : 0;
-      return { ...controls, ...flight.flip(retrograde, 3), thrust };
+      const burn = flight.flip(retrograde, 3, Object.assign(this.computed, controls));
+      burn.thrust = thrust;
+      return burn;
     }
     this.braked = false;
     if (!this.flipAssist) return controls;
@@ -1010,7 +1074,7 @@ export class Game implements OnlineGame {
       this.sound.beep(660, 0.08);
       return controls;
     }
-    return { ...controls, ...flight.flip(retrograde, 3) };
+    return flight.flip(retrograde, 3, Object.assign(this.computed, controls));
   }
 
   /** X: starts the flip assist, or stops it; remembers where the stick was. */
@@ -1102,6 +1166,8 @@ export class Game implements OnlineGame {
       this.online?.sendRock(asteroid.id, this.field.clock);
       if (destroyed) {
         shooter.score += ASTEROID_POINTS[destroyed.generation];
+        // online, another Host may have broken the same rock a moment earlier (see remoteRock)
+        if (this.online) this.brokenHere.set(asteroid.id, { at: this.field.clock, ship: shooter, points: ASTEROID_POINTS[destroyed.generation] });
         this.effects.explosion(destroyed.object.position, destroyed.meanRadius * 0.6, destroyed.velocity);
         this.hearDebris(destroyed.object.position, destroyed.meanRadius);
         if (shooter.isLocal) {
@@ -1177,15 +1243,26 @@ export class Game implements OnlineGame {
 
   /** Ship vs asteroid: the ship bounces off; fast impacts wreck the hull. */
   private collide(ship: Ship, now: number) {
-    const asteroid = this.field.overlap(ship.flight.position, ship.radius);
-    if (!asteroid || !this.field.resolve(asteroid, ship.flight.position, ship.radius, normal)) return;
-    const velocity = ship.flight.velocity;
-    relative.subVectors(velocity, asteroid.velocity);
+    const flight = ship.flight;
+    // a ship that moved farther than its radius this frame may have passed through a thin
+    // rock: the path is checked, and the ship stops where it first touched
+    const moved = flight.position.distanceTo(ship.previous);
+    if (moved > ship.radius) {
+      sweep.subVectors(flight.position, ship.previous).divideScalar(moved);
+      const hit = this.field.raycast(ship.previous, sweep, moved);
+      if (hit) flight.position.copy(ship.previous).addScaledVector(sweep, Math.max(0, hit.distance - 1));
+    }
+    const asteroid = this.field.overlap(flight.position, ship.radius);
+    if (!asteroid || !this.field.resolve(asteroid, flight.position, ship.radius, normal)) return;
+    const velocity = flight.velocity;
+    // the rock's surface moves with its drift and its spin; the tip of a long rock sweeps fast
+    this.field.surfaceVelocity(asteroid, scratch.copy(flight.position).addScaledVector(normal, -ship.radius), surface);
+    relative.subVectors(velocity, surface);
     const approach = -relative.dot(normal);
     if (approach <= 0) return;
     velocity.addScaledVector(normal, approach * (1 + RESTITUTION));
     // friction: scraping along the rock bleeds off some sideways speed
-    relative.subVectors(velocity, asteroid.velocity);
+    relative.subVectors(velocity, surface);
     velocity.addScaledVector(relative.addScaledVector(normal, -relative.dot(normal)), -0.2);
     ship.syncTransform();
 
@@ -1241,7 +1318,8 @@ export class Game implements OnlineGame {
       this.nextHeartbeat = now + 1.1 - 0.5 * this.strain;
     }
 
-    const warnings: string[] = [];
+    const warnings = this.warnings;
+    warnings.length = 0;
     const speed = flight.velocity.length();
     if (me.alive && speed > 100) {
       const heading = scratch.copy(flight.velocity).divideScalar(speed);

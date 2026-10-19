@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { AsteroidField } from '../world/asteroids';
-import type { Controls } from '../input/input';
+import { IDLE, type Controls } from '../input/input';
 import type { Ship } from './ship';
 
 const SIGHT_RANGE = 50000;
@@ -38,12 +38,14 @@ export class Bot {
   private onTargetFor = 0;
   private lastThink = 0;
   private readonly wanderTarget = new THREE.Vector3();
+  private readonly controls: Controls = { ...IDLE };
 
   constructor(readonly ship: Ship, private readonly skill: number) {}
 
   think(now: number, ships: Ship[], field: AsteroidField): Controls {
     const me = this.ship.flight;
-    const controls: Controls = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
+    // one controls object per bot, cleared each thought, so thinking allocates nothing
+    const controls = Object.assign(this.controls, IDLE);
     // the first thought after a (re)spawn must not count the time the bot was gone as reaction time
     const dt = Math.min(now - this.lastThink, 0.1);
     this.lastThink = now;
@@ -94,18 +96,18 @@ export class Bot {
     error.subVectors(desired, me.velocity);
     const burning = danger || error.length() > BURN_THRESHOLD && !(target && targetDistance < FIRE_RANGE && !this.ship.overheated);
     if (burning) {
-      Object.assign(controls, me.steer(error));
+      me.steer(error, 2.5, controls);
       controls.thrust = me.angleTo(error) < 0.25 ? 1 : 0;
     } else if (target) {
       aimPoint.copy(target.flight.position).add(this.aimOffset);
-      Object.assign(controls, me.steer(aimPoint.sub(me.position), 3));
+      me.steer(aimPoint.sub(me.position), 3, controls);
       const angularSize = (target.radius * 0.8) / Math.max(targetDistance, 1);
       const onTarget = me.angleTo(aimPoint) < angularSize + this.ship.radius / Math.max(targetDistance, 1);
       this.onTargetFor = onTarget ? this.onTargetFor + dt : 0;
       const reaction = 0.45 - 0.3 * this.skill;
       controls.fire = this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < 40 + 50 * this.skill;
     } else {
-      Object.assign(controls, me.steer(toTarget));
+      me.steer(toTarget, 2.5, controls);
     }
 
     // trim the remaining velocity error with the maneuvering thrusters

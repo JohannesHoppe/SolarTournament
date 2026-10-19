@@ -32,7 +32,7 @@ const FINE_AIM = 0.3;
 const STICK_DEADZONE = 0.15;
 
 /** Buttons of the standard gamepad layout (Xbox naming). */
-const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9 } as const;
+const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, leftStick: 10 } as const;
 const PAD_ACTIONS: [number, Action][] = [
   [PAD.a, 'confirm'],
   [PAD.menu, 'pause'],
@@ -49,6 +49,8 @@ const PAD_ACTIONS: [number, Action][] = [
  */
 export class Input {
   private readonly keys = new Set<string>();
+  /** The controls read() hands out, the same object every frame. */
+  private readonly controls: Controls = { ...IDLE };
   private readonly mouseStick = { x: 0, y: 0 };
   private mouseFire = false;
   private steering = false;
@@ -114,8 +116,9 @@ export class Input {
 
   /** Reads the current controls. */
   read(): Controls {
-    const k = (...codes: string[]) => codes.some((c) => this.keys.has(c));
-    const axis = (plus: string[], minus: string[]) => (k(...plus) ? 1 : 0) - (k(...minus) ? 1 : 0);
+    const keys = this.keys;
+    const key = (code: string) => keys.has(code);
+    const axis = (plus: string, minus: string) => (keys.has(plus) ? 1 : 0) - (keys.has(minus) ? 1 : 0);
 
     // Gamepad: left stick turns (pull back = nose up, as in aircraft), right stick pushes
     // sideways and up/down, right trigger is the main drive, left trigger or A fires.
@@ -124,18 +127,20 @@ export class Input {
     const button = (i: number) => pad?.buttons[i]?.value ?? 0;
 
     const touch = this.touch;
-    const aim = k('ShiftLeft', 'ShiftRight') ? FINE_AIM : 1;
+    // fine aim: Shift, or pressing the left stick in
+    const aim = key('ShiftLeft') || key('ShiftRight') || button(PAD.leftStick) > 0.5 ? FINE_AIM : 1;
 
-    return {
-      yaw: clamp(axis(['ArrowRight'], ['ArrowLeft']) + this.mouseStick.x + stick(0) + touch.turn.x) * aim,
-      pitch: clamp(axis(['ArrowUp'], ['ArrowDown']) + this.mouseStick.y + stick(1) + touch.turn.y) * aim,
-      roll: clamp(axis(['KeyE'], ['KeyQ']) + button(PAD.rb) - button(PAD.lb)),
-      thrust: Math.max(k('KeyW') || touch.drive ? 1 : 0, button(PAD.rt)),
-      strafeX: clamp(axis(['KeyD'], ['KeyA']) + stick(2) + touch.push.x),
-      strafeY: clamp(axis(['KeyR'], ['KeyF']) - stick(3) + touch.push.y),
-      strafeZ: -button(PAD.x),
-      fire: k('Space') || this.mouseFire || touch.fire || button(PAD.lt) > 0.5 || button(PAD.a) > 0.5,
-    };
+    // the same object every frame: reading the controls allocates nothing
+    const out = this.controls;
+    out.yaw = clamp(axis('ArrowRight', 'ArrowLeft') + this.mouseStick.x + stick(0) + touch.turn.x) * aim;
+    out.pitch = clamp(axis('ArrowUp', 'ArrowDown') + this.mouseStick.y + stick(1) + touch.turn.y) * aim;
+    out.roll = clamp(axis('KeyE', 'KeyQ') + button(PAD.rb) - button(PAD.lb));
+    out.thrust = Math.max(key('KeyW') || touch.drive ? 1 : 0, button(PAD.rt));
+    out.strafeX = clamp(axis('KeyD', 'KeyA') + stick(2) + touch.push.x);
+    out.strafeY = clamp(axis('KeyR', 'KeyF') - stick(3) + touch.push.y);
+    out.strafeZ = -button(PAD.x);
+    out.fire = key('Space') || this.mouseFire || touch.fire || button(PAD.lt) > 0.5 || button(PAD.a) > 0.5;
+    return out;
   }
 
   /** Polls gamepad buttons once per frame and turns new presses into actions. */
@@ -152,7 +157,9 @@ export class Input {
 
   /** The first connected gamepad with the standard layout, if any. */
   private gamepad(): Gamepad | null {
-    for (const pad of navigator.getGamepads?.() ?? []) {
+    const pads = navigator.getGamepads?.() ?? [];
+    for (let i = 0; i < pads.length; i++) {
+      const pad = pads[i];
       if (pad?.connected && pad.mapping === 'standard') return pad;
     }
     return null;

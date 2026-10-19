@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AsteroidField } from '../world/asteroids';
+import type { Asteroid, AsteroidField } from '../world/asteroids';
 import type { Controls } from '../input/input';
 import type { Ship } from '../ship/ship';
 import { SUN_DIRECTION } from '../world/space';
@@ -13,8 +13,8 @@ export interface SchoolContext {
   braking: boolean;
   /** The impact warning is on. */
   impactAhead: boolean;
-  /** The pilot flies with the touch controls (no fine aim). */
-  touch: boolean;
+  /** What the Host flies with; touch has no fine aim. */
+  device: Device;
   field: AsteroidField;
   now: number;
   dt: number;
@@ -63,8 +63,8 @@ interface Drill {
   line: string;
   /** Said once the drill is mastered: praise and the physics behind it. */
   praise?: string;
-  /** Keys the panel shows. */
-  keys: string[];
+  /** What the pilot uses in this drill; the panel shows the keys of the Host's device. */
+  keys: Command[];
   reps?: number;
   /** Said instead of `line` from the second repetition on. */
   repLine?: string;
@@ -76,6 +76,43 @@ interface Drill {
   /** A point the HUD marks for the pilot. */
   waypoint?(ctx: SchoolContext, attempt: Attempt): THREE.Vector3 | null;
 }
+
+/** What the Host flies with. */
+export type Device = 'keyboard' | 'gamepad' | 'touch';
+
+/** What a drill asks the pilot to use. */
+type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'fire';
+
+/** The keys, buttons and sticks of each device, as the keycaps show them. */
+const CONTROLS: Record<Device, Record<Command, string[]>> = {
+  keyboard: {
+    turn: ['← ↑ ↓ →', 'Mouse'],
+    fine: ['Shift'],
+    drive: ['W'],
+    brake: ['S'],
+    flip: ['X'],
+    slide: ['A', 'D'],
+    fire: ['Space', 'Click'],
+  },
+  gamepad: {
+    turn: ['Left stick'],
+    fine: ['L3'],
+    drive: ['RT'],
+    brake: ['B'],
+    flip: ['Y'],
+    slide: ['Right stick'],
+    fire: ['LT'],
+  },
+  touch: {
+    turn: ['Left stick'],
+    fine: [],
+    drive: ['DRIVE'],
+    brake: ['BRAKE'],
+    flip: ['FLIP'],
+    slide: ['Right stick'],
+    fire: ['FIRE'],
+  },
+};
 
 /** 50 m/s and 5 m/s in world units (1 unit = 5 cm). */
 const FAST = 1000;
@@ -139,17 +176,17 @@ const speed = (ctx: SchoolContext) => ctx.me.flight.velocity.length();
 /** A point in the shadow of the asteroid nearest to the pilot. */
 function nearestShadow(ctx: SchoolContext): THREE.Vector3 | null {
   const asteroid = nearestAsteroid(ctx);
-  return asteroid && scratch.copy(asteroid.position).addScaledVector(SUN_DIRECTION, -(asteroid.radius + 1500));
+  return asteroid && scratch.copy(asteroid.object.position).addScaledVector(SUN_DIRECTION, -(asteroid.radius + 1500));
 }
 
-function nearestAsteroid(ctx: SchoolContext): { position: THREE.Vector3; radius: number } | null {
-  let best: { position: THREE.Vector3; radius: number } | null = null;
+function nearestAsteroid(ctx: SchoolContext): Asteroid | null {
+  let best: Asteroid | null = null;
   let bestDistance = Infinity;
   for (const asteroid of ctx.field.asteroids.values()) {
     const distance = asteroid.object.position.distanceTo(ctx.me.flight.position);
     if (distance < bestDistance) {
       bestDistance = distance;
-      best = { position: asteroid.object.position, radius: asteroid.radius };
+      best = asteroid;
     }
   }
   return best;
@@ -170,7 +207,7 @@ const DRILLS: Drill[] = [
   {
     line: SCHOOL.turn,
     praise: SCHOOL_PRAISE.turn,
-    keys: ['← ↑ ↓ →', 'Mouse'],
+    keys: ['turn'],
     reps: TURN_MARKERS.length,
     enter(ctx, a, markers) {
       stop(ctx);
@@ -183,19 +220,19 @@ const DRILLS: Drill[] = [
   {
     line: SCHOOL.fineAim,
     praise: SCHOOL_PRAISE.fineAim,
-    keys: ['Shift'],
+    keys: ['fine'],
     enter(ctx, a, markers) {
       stop(ctx);
       a.points = [markers.buoy(ahead(ctx, 0.12, -0.07, -1).sub(ctx.me.flight.position).setLength(8000).add(ctx.me.flight.position), 0.5)];
     },
     // touch sticks have no fine aim: there the marker only has to sit in the crosshair
-    done: (ctx, a) => holdFor(ctx, a, aimError(ctx, a.points[0]) < (ctx.touch ? 0.04 : 0.015), 0.8),
+    done: (ctx, a) => holdFor(ctx, a, aimError(ctx, a.points[0]) < (ctx.device === 'touch' ? 0.04 : 0.015), 0.8),
     waypoint: (_, a) => a.points[0],
   },
   {
     line: SCHOOL.drive,
     praise: SCHOOL_PRAISE.drive,
-    keys: ['W'],
+    keys: ['drive'],
     enter: (ctx) => stop(ctx),
     done: (ctx) => speed(ctx) >= FAST,
   },
@@ -212,7 +249,7 @@ const DRILLS: Drill[] = [
   {
     line: SCHOOL.lookBack,
     praise: SCHOOL_PRAISE.lookBack,
-    keys: ['← ↑ ↓ →', 'Mouse'],
+    keys: ['turn'],
     enter(ctx) {
       if (speed(ctx) < FAST * 0.8) drift(ctx, FAST);
     },
@@ -223,7 +260,7 @@ const DRILLS: Drill[] = [
   {
     line: SCHOOL.brake,
     praise: SCHOOL_PRAISE.brake,
-    keys: ['S'],
+    keys: ['brake'],
     enter(ctx) {
       if (speed(ctx) < FAST * 0.8) drift(ctx, FAST * 1.2, speed(ctx) > 10 ? ctx.me.flight.velocity : undefined);
     },
@@ -233,7 +270,7 @@ const DRILLS: Drill[] = [
     line: SCHOOL.flipBurn,
     praise: SCHOOL_PRAISE.flipBurn,
     repLine: SCHOOL.flipBurnAgain,
-    keys: ['X', 'W'],
+    keys: ['flip', 'drive'],
     reps: 2,
     enter: (ctx, a) => drift(ctx, a.rep === 0 ? 1500 : 2400),
     done: (ctx, a) => speed(ctx) < STOPPED && !a.usedBrake,
@@ -247,7 +284,7 @@ const DRILLS: Drill[] = [
     line: SCHOOL.stopAt,
     praise: SCHOOL_PRAISE.stopAt,
     repLine: SCHOOL.stopAtFar,
-    keys: ['W', 'X', 'S'],
+    keys: ['drive', 'flip', 'brake'],
     reps: 2,
     enter(ctx, a, markers) {
       stop(ctx);
@@ -261,7 +298,7 @@ const DRILLS: Drill[] = [
     line: SCHOOL.slide,
     praise: SCHOOL_PRAISE.slide,
     repLine: SCHOOL.slideBack,
-    keys: ['A', 'D'],
+    keys: ['slide'],
     reps: 2,
     enter(ctx, a, markers) {
       stop(ctx);
@@ -278,7 +315,7 @@ const DRILLS: Drill[] = [
   {
     line: SCHOOL.dodge,
     praise: SCHOOL_PRAISE.dodge,
-    keys: ['A', 'D'],
+    keys: ['slide'],
     reps: 2,
     enter(ctx, a, markers) {
       stop(ctx);
@@ -295,7 +332,7 @@ const DRILLS: Drill[] = [
   {
     line: SCHOOL.rings,
     praise: SCHOOL_PRAISE.rings,
-    keys: ['W', 'S', 'X'],
+    keys: ['drive', 'brake', 'flip'],
     enter(ctx, a, markers) {
       stop(ctx);
       const course: [number, number, number][] = [
@@ -330,7 +367,7 @@ const DRILLS: Drill[] = [
   {
     line: SCHOOL.shoot,
     praise: SCHOOL_PRAISE.shoot,
-    keys: ['Space', 'Click'],
+    keys: ['fire'],
     enter(ctx) {
       stop(ctx);
       ctx.spawnDrone(ahead(ctx, 0, 0, -6000), new THREE.Vector3());
@@ -341,7 +378,7 @@ const DRILLS: Drill[] = [
   {
     line: SCHOOL.shootMoving,
     praise: SCHOOL_PRAISE.shootMoving,
-    keys: ['Space', 'Shift'],
+    keys: ['fire', 'fine'],
     enter(ctx) {
       stop(ctx);
       const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ctx.me.flight.orientation);
@@ -354,7 +391,7 @@ const DRILLS: Drill[] = [
   {
     line: SCHOOL.overheat,
     praise: SCHOOL_PRAISE.overheat,
-    keys: ['Space'],
+    keys: ['fire'],
     // a laser still hot from the last drill would pass this one before the first shot
     enter(ctx) {
       stop(ctx);
@@ -366,26 +403,26 @@ const DRILLS: Drill[] = [
   {
     line: SCHOOL.shadow,
     praise: SCHOOL_PRAISE.shadow,
-    keys: ['W', 'S'],
+    keys: ['drive', 'brake'],
     done: (ctx, a) => holdFor(ctx, a, ctx.me.inShadow, 1),
     waypoint: (ctx) => nearestShadow(ctx),
   },
   {
     line: SCHOOL.impact,
     praise: SCHOOL_PRAISE.impact,
-    keys: ['S', 'A', 'D'],
+    keys: ['brake', 'slide'],
     enter(ctx, a) {
       const rock = nearestAsteroid(ctx);
       if (!rock) return;
       // between the rock and the field's center, heading for the rock at 100 m/s
-      const outward = rock.position.clone().normalize();
-      const start = rock.position.clone().addScaledVector(outward, -(rock.radius + 14000));
+      const outward = rock.object.position.clone().normalize();
+      const start = rock.object.position.clone().addScaledVector(outward, -(rock.radius + 14000));
       const flight = ctx.me.flight;
       flight.position.copy(start);
-      flight.orientation.setFromRotationMatrix(new THREE.Matrix4().lookAt(start, rock.position, new THREE.Vector3(0, 1, 0)));
+      flight.orientation.setFromRotationMatrix(new THREE.Matrix4().lookAt(start, rock.object.position, new THREE.Vector3(0, 1, 0)));
       drift(ctx, 2000, outward);
-      a.points = [rock.position];
-      a.reach = start.distanceTo(rock.position);
+      a.points = [rock.object.position];
+      a.reach = start.distanceTo(rock.object.position);
     },
     done(ctx, a) {
       a.warned ||= ctx.impactAhead;
@@ -400,9 +437,9 @@ const DRILLS: Drill[] = [
   },
   ...(
     [
-      [SCHOOL.chase, SCHOOL_PRAISE.chase, ['W', 'S', 'Space'], { armed: false, skill: 0.1 }],
-      [SCHOOL.evade, SCHOOL_PRAISE.evade, ['A', 'D', 'Space'], { armed: true, skill: 0.05 }],
-      [SCHOOL.duel, SCHOOL_PRAISE.duel, ['W', 'S', 'A', 'D', 'Space'], { armed: true, skill: 0.2 }],
+      [SCHOOL.chase, SCHOOL_PRAISE.chase, ['drive', 'brake', 'fire'], { armed: false, skill: 0.1 }],
+      [SCHOOL.evade, SCHOOL_PRAISE.evade, ['slide', 'fire'], { armed: true, skill: 0.05 }],
+      [SCHOOL.duel, SCHOOL_PRAISE.duel, ['drive', 'brake', 'slide', 'fire'], { armed: true, skill: 0.2 }],
     ] as const
   ).map(
     ([line, praise, keys, bot]): Drill => ({
@@ -570,12 +607,26 @@ export class FlightSchool {
     if (spoken.length) ctx.say(spoken);
   }
 
-  /** "Flight school 3/19", the current line, the keys to use. */
-  get status(): { step: string; text: string; keys: string[] } {
+  /**
+   * "Flight school 3/21", the current line, the keys of the Host's device. The same object
+   * every frame; it only changes with the drill, the line or the device.
+   */
+  status(device: Device): { step: string; text: string; keys: string[] } {
     const index = Math.min(this.index, DRILLS.length - 1);
-    const drill = DRILLS[index];
-    return { step: `Flight school ${index + 1}/${DRILLS.length}`, text: this.line, keys: drill.keys };
+    const shown = this.shown;
+    if (shown.index !== index || shown.status.text !== this.line || shown.device !== device) {
+      shown.index = index;
+      shown.device = device;
+      shown.status = {
+        step: `Flight school ${index + 1}/${DRILLS.length}`,
+        text: this.line,
+        keys: DRILLS[index].keys.flatMap((command) => CONTROLS[device][command]),
+      };
+    }
+    return shown.status;
   }
+
+  private readonly shown = { index: -1, device: 'keyboard' as Device, status: { step: '', text: '', keys: [] as string[] } };
 
   get stepIndex() {
     return this.index;
