@@ -65,7 +65,7 @@ export class TouchControls {
         zone: document.getElementById('touch-turn')!,
         mode: 'static',
         position: { left: '50%', top: '50%' },
-        color: '#7fd8ff',
+        color: '#ff9d00',
         size: 120,
       });
       turn.on('move', (e) => Object.assign(this.turn, quantize(e.data.vector)));
@@ -73,7 +73,7 @@ export class TouchControls {
       const push = nipplejs.create({
         zone: document.getElementById('touch-push')!,
         mode: 'dynamic',
-        color: '#ffd36b',
+        color: '#3fd0ff',
         size: 110,
       });
       push.on('move', (e) => Object.assign(this.push, quantize(e.data.vector)));

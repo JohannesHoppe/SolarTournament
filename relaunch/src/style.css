@@ -10,14 +10,24 @@
   font-weight: 700;
 }
 
+/*
+ * Sun orange (hue 37°) for everything to press and everything that hits; its complement,
+ * azure blue (hue 217°), for information. #0062ff is the exact complement and glows in the
+ * neon signs; #4d91ff is the same hue lightened, so it stays readable as text on the dark plates.
+ */
 :root {
-  --accent: #7fd8ff;
-  --accent-strong: #ffd36b;
+  --accent: #ff9d00;
+  --accent-strong: #4d91ff;
+  --complement: #0062ff;
+  /* Neon: white tube, a halo in shades of the color (after Silvia O'Dwyer, CSS-Tricks 2021) */
+  --neon-orange: 0 0 2px #fff, 0 0 5px #fff, 0 0 9px #ffc266, 0 0 15px #ff9d00, 0 0 26px #ff9d00, 0 0 42px #ff7b00, 0 0 62px #ff5a00, 0 0 90px #ff5a00;
+  --neon-blue: 0 0 2px #fff, 0 0 5px #fff, 0 0 9px #9cc2ff, 0 0 15px #4d91ff, 0 0 26px #0062ff, 0 0 42px #0062ff, 0 0 62px #0048c0, 0 0 90px #0048c0;
+  --neon-blue-soft: 0 0 3px #fff, 0 0 10px #4d91ff, 0 0 22px #0062ff;
   --danger: #ff5a4f;
   --text: #e8f1ff;
   --muted: #8ea3c0;
   --plate: rgba(6, 12, 28, 0.82);
-  --line: rgba(127, 216, 255, 0.35);
+  --line: rgba(255, 157, 0, 0.35);
 }
 
 * {
@@ -85,12 +95,65 @@ kbd {
   letter-spacing: 0.02em;
 }
 
-.plate h1 span {
-  color: var(--accent);
+/* Neon signs: the logo flickers on like a tube when the menu opens, one letter is loose. */
+.neon {
+  color: #fff;
+  text-shadow: var(--neon-orange);
+}
+
+h1.neon {
+  animation: neon-power-on 1.4s ease-out 1;
+}
+
+.neon-loose {
+  animation: neon-flicker 7s infinite;
 }
 
 .plate h2 {
   margin: 0;
+  color: #fff;
+  text-shadow: var(--neon-orange);
+}
+
+@keyframes neon-flicker {
+  0%, 18%, 22%, 25%, 53%, 57%, 100% {
+    text-shadow: var(--neon-orange);
+    color: #fff;
+  }
+  20%, 24%, 55% {
+    text-shadow: none;
+    color: #6b5a44;
+  }
+}
+
+@keyframes neon-power-on {
+  0%, 8%, 16%, 30% {
+    text-shadow: none;
+    color: #6b5a44;
+  }
+  4%, 12%, 24%, 40%, 100% {
+    text-shadow: var(--neon-orange);
+    color: #fff;
+  }
+}
+
+@keyframes neon-flicker-blue {
+  0%, 40%, 44%, 100% {
+    text-shadow: var(--neon-blue);
+    color: #fff;
+  }
+  42% {
+    text-shadow: none;
+    color: #4a5a78;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  h1.neon,
+  .neon-loose,
+  .sponsor-pitch {
+    animation: none;
+  }
 }
 
 .tagline {
@@ -119,6 +182,7 @@ button.primary {
   border-color: var(--accent);
   color: #04101f;
   font-weight: 700;
+  box-shadow: 0 0 12px rgba(255, 157, 0, 0.55), 0 0 32px rgba(255, 110, 0, 0.3);
 }
 
 .ship-select {
@@ -250,7 +314,7 @@ button.primary {
   width: 34px;
   height: 34px;
   transform: translate(-50%, -50%);
-  border: 2px solid rgba(127, 216, 255, 0.75);
+  border: 2px solid rgba(63, 208, 255, 0.75);
   border-radius: 50%;
 }
 
@@ -561,11 +625,15 @@ button.primary {
   text-align: center;
 }
 
+/* The sponsor's own neon sign, in the complementary blue. */
 .sponsor-pitch {
   margin: 0;
   font-size: 1.15rem;
   font-weight: 700;
   line-height: 1.5;
+  color: #fff;
+  text-shadow: var(--neon-blue);
+  animation: neon-flicker-blue 5s infinite;
 }
 
 .sponsor-label,
@@ -732,7 +800,7 @@ body.touch #game canvas {
 }
 
 .touch-button.held {
-  background: rgba(127, 216, 255, 0.35);
+  background: rgba(255, 157, 0, 0.35);
   border-color: var(--accent);
 }
 
@@ -834,6 +902,11 @@ body.glitching #radio {
 #radio.fresh {
   opacity: 1;
   border-color: var(--line);
+}
+
+#radio.fresh #radio-title {
+  color: #fff;
+  text-shadow: var(--neon-blue-soft);
 }
 
 #radio.off {

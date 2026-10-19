@@ -11,7 +11,15 @@ SolarTournament hat ein eigenes Universum. Wir orientieren uns an beliebten Seri
 - **A: Realistische Physik wie in The Expanse.** Grund: Es war einfach eine geile Serie. Was fliegt, kollidiert, brennt und kaputtgeht, verhält sich so, wie es da draußen wäre, solange es Spaß macht: Newtonsche Flugphysik, kein Schall im Vakuum, keine Schilde, Laser schlagen durch. Wo wir für den Spielspaß bewusst davon abweichen (z. B. die übertriebene Schwerkraft der Asteroiden), steht das ausdrücklich in der README.
 - **B: Bewusstseinsübertragung auf Klone wie in Altered Carbon.** Die Piloten haben ihr Bewusstsein auf geklonte menschliche Körper übertragen. Stirbt ein Klon, wacht der Pilot im nächsten auf. Daraus erklärt sich der Respawn.
 
-Namen, Begriffe und Figuren aus den Serien übernehmen wir nicht; die Welt füllen wir mit eigenen Ideen.
+Dazu kommt ein Look:
+
+- **C: Neon und Glitch, angelehnt an Cyberpunk.** Die Zukunft ist im Arsch, und so sieht sie aus: Neonschrift, flackernde Röhren, Sponsoren überall, ein Bild, das bei jedem Treffer zerbricht. Stilelemente aus bekannten Cyberpunk-Spielen dürfen anklingen, aber nicht übertrieben; wir haben unseren eigenen Stil, leicht retro (80er, Oldschool-Techno). Neon muss sein.
+
+Namen, Begriffe und Figuren aus den Serien und Spielen übernehmen wir nicht; die Welt füllen wir mit eigenen Ideen.
+
+### Farben
+
+Sonnen-Orange `#ff9d00` (Farbton 37°) für alles, was man drückt und was knallt; sein Komplement Azurblau (217°) für Informationen: `#0062ff` exakt als Neon-Leuchten, `#4d91ff` aufgehellt als lesbare Schrift. Neon entsteht aus weißer Schrift mit bis zu acht `text-shadow` in Abstufungen der Farbe (`--neon-orange`, `--neon-blue` in `style.css`); Flackern respektiert `prefers-reduced-motion`. Neon gezielt einsetzen: Logo, Überschriften der Tafeln, Sponsor-Schild, Radio-Titel.
 
 ## Pflicht: Jedes Spielprinzip wird dokumentiert
 

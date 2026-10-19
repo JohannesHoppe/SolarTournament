@@ -2,11 +2,11 @@
   <defs>
     <radialGradient id="sun" cx="0.4" cy="0.4" r="0.6">
       <stop offset="0" stop-color="#fff6d8"/>
-      <stop offset="0.5" stop-color="#ffb347"/>
+      <stop offset="0.5" stop-color="#ff9d00"/>
       <stop offset="1" stop-color="#e2541b"/>
     </radialGradient>
   </defs>
   <rect width="64" height="64" rx="12" fill="#05070d"/>
   <circle cx="32" cy="32" r="15" fill="url(#sun)"/>
-  <ellipse cx="32" cy="32" rx="27" ry="8" fill="none" stroke="#7fd4ff" stroke-width="3" transform="rotate(-20 32 32)"/>
+  <ellipse cx="32" cy="32" rx="27" ry="8" fill="none" stroke="#3fd0ff" stroke-width="3" transform="rotate(-20 32 32)"/>
 </svg>

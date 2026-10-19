@@ -87,6 +87,8 @@ The pilots die, and come back. They have transferred their consciousness into cl
 
 The original pilot stays safe and follows the fight over a live link to the clone in the cockpit. Everything the player sees and hears arrives over that link. When a hit or an impact shakes the clone, the link stutters: the picture breaks up like a corrupted video stream, the radio drops out, static crackles in the headset. When the clone dies, the link breaks down until the next clone is printed. Even the idle link to the clone hangar flickers now and then.
 
+The future is broken, and it glows. Neon signs flicker over everything, every surface is for sale, every picture comes over a link that can break. The tournament's own sign is sun orange; the sponsors advertise in its complement, a cold azure blue.
+
 It is a society without morals. A new clone is not free: the pilot pays with attention. Before the next body boots, the pilot has to watch an advertisement. Want another clone? Make the sponsor happy.
 
 The year is **2584**, a nod to George Orwell's *1984*, where a whole society watches and is watched.
