@@ -28,6 +28,7 @@ export class Hud {
   private readonly schoolPanel = $('school-panel');
   private readonly schoolStep = $('school-step');
   private readonly schoolText = $('school-text');
+  private readonly schoolKeys = $('school-keys');
   private readonly waypoint = $('waypoint');
   private readonly markers = new Map<string, HTMLElement>();
   private readonly markerLayer = document.createElement('div');
@@ -76,11 +77,16 @@ export class Hud {
   }
 
   /** Flight school instruction; null hides the panel. */
-  setSchool(status: { step: string; text: string } | null) {
+  setSchool(status: { step: string; text: string; keys: string[] } | null) {
     this.schoolPanel.hidden = !status;
     if (!status) return;
     if (this.schoolStep.textContent !== status.step) this.schoolStep.textContent = status.step;
     if (this.schoolText.textContent !== status.text) this.schoolText.textContent = status.text;
+    const keys = status.keys.join('|');
+    if (this.schoolKeys.dataset.keys !== keys) {
+      this.schoolKeys.dataset.keys = keys;
+      this.schoolKeys.replaceChildren(...status.keys.map((key) => Object.assign(document.createElement('kbd'), { textContent: key })));
+    }
   }
 
   /** Blinking diamond on a point in space, clamped to the screen edge when off screen. */

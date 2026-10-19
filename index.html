@@ -22,7 +22,7 @@
     <div id="hitmarker"></div>
     <div id="hud-message"></div>
     <div id="hud-warning"></div>
-    <div id="school-panel" hidden><span id="school-step"></span><p id="school-text"></p></div>
+    <div id="school-panel" hidden><span id="school-step"></span><p id="school-text"></p><p id="school-keys"></p></div>
     <div id="waypoint" hidden></div>
     <ol id="killfeed"></ol>
     <div class="hud-bottom">
@@ -38,7 +38,7 @@
       <button type="button" id="touch-fire" class="touch-button">Fire</button>
       <button type="button" id="touch-drive" class="touch-button">Drive</button>
       <button type="button" id="touch-flip" class="touch-button">Flip</button>
-      <button type="button" id="touch-back" class="touch-button">Back</button>
+      <button type="button" id="touch-brake" class="touch-button">Brake</button>
       <button type="button" id="touch-pause" class="touch-button" aria-label="Pause">II</button>
     </div>
     <div id="g-vignette"></div>
@@ -56,17 +56,19 @@
       <button type="button" data-ship="alien">Alien Interceptor</button>
     </div>
     <label class="field">Callsign <input id="callsign" maxlength="16" autocomplete="off" spellcheck="false"></label>
-    <button type="button" id="start" class="primary">Launch <kbd>Enter</kbd></button>
-    <button type="button" id="online">Online tournament</button>
-    <button type="button" id="school">Flight school</button>
+    <button type="button" id="school" class="mode"><span class="mode-name">Flight school</span><span class="mode-note">Learn to fly. Training clones are free.</span></button>
+    <button type="button" id="start" class="mode"><span class="mode-name">Solo round</span><span class="mode-note">Five minutes against bots.</span></button>
+    <button type="button" id="online" class="mode"><span class="mode-name">Online tournament</span><span class="mode-note">Real Hosts, one invite link.</span></button>
     <dl class="controls">
       <dt>Mouse / Arrows</dt><dd>Turn: the ship turns towards the pointer</dd>
-      <dt>Q / E</dt><dd>Roll</dd>
-      <dt>W / Shift</dt><dd>Main drive</dd>
-      <dt>A D S · R F</dt><dd>Thrusters: sideways, back, up, down</dd>
-      <dt>X</dt><dd>Flip: turn the drive into the flight direction</dd>
-      <dt>Click / Space</dt><dd>Fire laser</dd>
-      <dt>Gamepad</dt><dd>Sticks turn and push, RT drive, LT/A fire, Y flip</dd>
+      <dt>W</dt><dd>Main drive</dd>
+      <dt>S</dt><dd>Brake: flip and burn to a stop</dd>
+      <dt>A / D</dt><dd>Thrusters: slide sideways</dd>
+      <dt>Shift</dt><dd>Fine aim</dd>
+      <dt>Space / Click</dt><dd>Fire laser</dd>
+      <dt>X</dt><dd>Flip: fly backwards, drive forward</dd>
+      <dt>Q E · R F</dt><dd>Extras: roll, thrusters up and down</dd>
+      <dt>Gamepad</dt><dd>Sticks turn and push, RT drive, B brake, LT/A fire, Y flip</dd>
       <dt>C</dt><dd>Cockpit / chase camera</dd>
       <dt>M</dt><dd>Radio on / off</dd>
       <dt>Esc</dt><dd>Pause</dd>

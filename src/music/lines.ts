@@ -176,33 +176,67 @@ export const ANNOUNCER_OPEN = ['radio twenty five eighty four. live from the are
 export const ANNOUNCER_NAMES = ['ingmar', 'nova', 'kessler', 'vega', 'orion', 'sputnik', 'halley', 'laika', 'pilot'];
 
 /**
- * The flight computer reads out what the screen shows; people would rather listen than read.
- * The briefing opens the flight school with the story of the games.
+ * The flight school, said by the flight computer and shown on screen with the same words:
+ * short, quick, a little seductive. People would rather listen than read, but nobody
+ * listens to a lecture. Each drill trains one maneuver.
  */
-export const BRIEFING =
-  'the year is twenty five eighty four. the united solar states rule the planets, and the orange president rules the united solar states. ' +
-  'to keep his people quiet and entertained, his ministry of war stages the presidential games. ' +
-  'you are one of the chosen hosts, and it is an honor to die for the president. ' +
-  'your printed clones fly for you, faster than any radio link could, and everything they live through streams back into your mind. ' +
-  'when a clone dies, the next one is already waiting in the printer. ' +
-  'you will die again and again through your clones. that is your destiny now. ' +
-  'training clones like this one are free, but in the tournament every new clone costs you an advertisement. ' +
-  'make the great president happy. that is all that counts.';
+export const SCHOOL = {
+  briefing:
+    'The year is 2584. The Orange President wants his games, and you are one of his chosen Hosts. Your printed clones fly for you, and every death they die streams straight into your mind. Training clones are free. Shall we?',
+  turn: 'Turn with the arrow keys or the mouse. Put the marker in your crosshair.',
+  fineAim: 'Hold Shift, and you turn slowly. Center the marker. Exactly.',
+  drive: 'W is your main drive. Push it to fifty meters per second.',
+  drift: 'Now let go. Nothing out here slows you down.',
+  lookBack: 'Turn around while you drift. Your course stays the same. The green ring shows where you are going.',
+  brake: 'Hold S. I flip you over and brake for you.',
+  flipBurn: 'By hand is faster. X flips the ship, W burns against your flight.',
+  flipBurnAgain: 'Faster this time. Flip, and burn.',
+  byHand: 'By hand, darling. X, then W.',
+  stopAt: 'Fly to the marker and stop right next to it.',
+  stopAtFar: 'Farther now. Accelerate, flip, brake in time.',
+  slide: 'A and D push you sideways without turning. Slide in front of the marker and stop.',
+  slideBack: 'And the other way.',
+  dodge: 'Debris incoming. Slide out of its way. Do not turn.',
+  dodgeHit: 'Ouch. Again.',
+  rings: 'Fly through the rings. Brake when you need to.',
+  shoot: 'Space fires. Three hits wreck the drone.',
+  shootMoving: 'This one moves. Your laser hits the instant you fire, so just keep it in your crosshair. Shift helps.',
+  overheat: 'Every shot heats your ship. Keep firing until it overheats.',
+  shadow: 'Hot, isn’t it? Cool down in the shadow of an asteroid. I marked one.',
+  impact: 'Trouble ahead. When impact flashes, brake, or slide past.',
+  noTurn: 'Without turning, darling.',
+  chase: 'A bot on the run. It does not shoot. Stay on its tail and hit it three times. Brake if you overshoot.',
+  evade: 'Now it shoots back. Never fly straight at it. Keep sliding with A and D while you fire.',
+  duel: 'Final exam. A real bot. Take it down.',
+  done: 'Well done, pilot. You are cleared for the tournament. Go and die for the President.',
+  again: 'Again.',
+} as const;
 
-/** Spoken versions of the flight school steps, in order (the screen shows the full text). */
-export const SCHOOL_SPEECH = [
-  BRIEFING,
-  'welcome to flight school. training clones are free. enjoy it while it lasts.',
-  'main drive. hold the drive until you fly fifty meters per second.',
-  'let go of the drive. nothing slows you down out here. you keep drifting.',
-  'to stop, your drive has to point into the flight direction. flip the ship.',
-  'now burn until you are almost at rest. the orange cross marks the braking direction.',
-  'maneuvering thrusters push you sideways. sidestep for a moment.',
-  'a target drone. turn towards it and fire. three hits wreck any hull. a shot through the center hits the reactor.',
-  'every shot heats your ship. in the shadow of an asteroid the radiators cool much faster. fly into the marked shadow.',
-  'when impact appears below the crosshair, flip and burn or steer past.',
-  'flight school complete. your clone is cleared for the tournament.',
-];
+/**
+ * Said when a drill is mastered, before the next one: praise, and the physics behind the
+ * maneuver.
+ */
+export const SCHOOL_PRAISE = {
+  turn: 'Nice. Turning only spins you around. It never moves you anywhere.',
+  fineAim: 'Precise. I like that.',
+  drive: 'Feel that? Seven g. Your clone gets heavier with every burn. Burn too long, and the world shrinks to a tunnel.',
+  drift: 'No air, no friction. You drift forever, unless you do something about it.',
+  lookBack: 'See? Where you look and where you fly are two different things out here.',
+  brake: 'At rest. The only thing that stops you is a burn against your flight.',
+  flipBurn: 'Good. The flip alone changes nothing, you just fly backwards. The burn is what stops you.',
+  stopAt: 'Perfect. Burn, flip, burn. That is all of space flight.',
+  slide: 'The thrusters only manage one g. But they push you without turning you away from your target.',
+  dodge: 'Missed you. Out here, a small push early beats a big one late.',
+  rings: 'Beautiful flying. You are doing very well, darling.',
+  shoot: 'Light needs no lead. What is in your crosshair when you fire, you hit. Right through the hull.',
+  shootMoving: 'Scrap. And it never knew what hit it.',
+  overheat: 'In a vacuum, heat has nowhere to go. Only your radiators shed it, slowly, in the sun.',
+  shadow: 'Better? Out of the sun, the radiators cool you much faster.',
+  impact: 'Still alive. Rocks do not care how good you are. Above seventy meters per second, they win.',
+  chase: 'Got it. Stay behind them, and they have to turn before they can hit you.',
+  evade: 'You are doing so well. Soon you may go and die for the President.',
+  duel: 'Your first kill. The President is proud of you.',
+} as const;
 
 /** What the flight computer says when the screen shows a message. */
 export const COMPUTER = {
@@ -232,7 +266,7 @@ export function allLines(language: Language): string[] {
     case 'mod':
       return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_OPEN, ...ANNOUNCER_NAMES].map((line) => line.replace('{name}', ''));
     case 'sys':
-      return [...SCHOOL_SPEECH, ...Object.values(COMPUTER)];
+      return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER)];
   }
 }
 

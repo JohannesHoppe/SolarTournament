@@ -224,6 +224,28 @@ button.primary {
   box-shadow: 0 0 12px rgba(255, 157, 0, 0.55), 0 0 32px rgba(255, 110, 0, 0.3);
 }
 
+/* menu modes: the name, and a line on what it is */
+button.mode {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: center;
+}
+
+.mode-name {
+  font-weight: 700;
+}
+
+.mode-note {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+button.primary .mode-note {
+  color: inherit;
+  opacity: 0.75;
+}
+
 .ship-select {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -767,6 +789,37 @@ body.touch #hud-room {
   line-height: 1.4;
 }
 
+/* the keys of the drill as big keycaps */
+#school-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 10px 0 0;
+}
+
+#school-keys:empty {
+  display: none;
+}
+
+#school-keys kbd {
+  margin: 0;
+  min-width: 2.2em;
+  padding: 0.25em 0.6em;
+  font-family: var(--font-display);
+  font-size: 0.95rem;
+  text-align: center;
+  color: var(--accent);
+  border-width: 2px;
+  border-radius: 6px;
+  opacity: 1;
+  box-shadow: 0 0 10px rgb(255 157 0 / 0.35);
+}
+
+body.touch #school-keys {
+  display: none;
+}
+
 body.touch #school-panel {
   top: 92px;
 }
@@ -871,7 +924,7 @@ body.touch #game canvas {
   height: 64px;
 }
 
-#touch-back {
+#touch-brake {
   right: calc(max(20px, env(safe-area-inset-right)) + 118px);
   bottom: 112px;
   width: 52px;

@@ -26,6 +26,8 @@ type ActionHandler = (action: Action) => void;
 const MOUSE_FULL_DEFLECTION = 0.4;
 /** Around the center the pointer does not turn the ship (share of full deflection), so it can fly straight. */
 const MOUSE_DEADZONE = 0.06;
+/** Shift (fine aim) scales turning down to this share, for precise aiming. */
+const FINE_AIM = 0.3;
 /** Stick deflections below this are treated as zero, so worn sticks do not drift. */
 const STICK_DEADZONE = 0.15;
 
@@ -99,6 +101,11 @@ export class Input {
     this.mouseFire = false;
   }
 
+  /** The brake is held: S, B on the gamepad, or BRAKE on touch. The flight computer flips and burns. */
+  get braking(): boolean {
+    return this.keys.has('KeyS') || this.touch.brake || (this.gamepad()?.buttons[PAD.b]?.pressed ?? false);
+  }
+
   /** Reads the current controls. */
   read(): Controls {
     const k = (...codes: string[]) => codes.some((c) => this.keys.has(c));
@@ -111,15 +118,16 @@ export class Input {
     const button = (i: number) => pad?.buttons[i]?.value ?? 0;
 
     const touch = this.touch;
+    const aim = k('ShiftLeft', 'ShiftRight') ? FINE_AIM : 1;
 
     return {
-      yaw: clamp(axis(['ArrowRight'], ['ArrowLeft']) + this.mouseStick.x + stick(0) + touch.turn.x),
-      pitch: clamp(axis(['ArrowUp'], ['ArrowDown']) + this.mouseStick.y + stick(1) + touch.turn.y),
+      yaw: clamp(axis(['ArrowRight'], ['ArrowLeft']) + this.mouseStick.x + stick(0) + touch.turn.x) * aim,
+      pitch: clamp(axis(['ArrowUp'], ['ArrowDown']) + this.mouseStick.y + stick(1) + touch.turn.y) * aim,
       roll: clamp(axis(['KeyE'], ['KeyQ']) + button(PAD.rb) - button(PAD.lb)),
-      thrust: Math.max(k('KeyW', 'ShiftLeft', 'ShiftRight') || touch.drive ? 1 : 0, button(PAD.rt)),
+      thrust: Math.max(k('KeyW') || touch.drive ? 1 : 0, button(PAD.rt)),
       strafeX: clamp(axis(['KeyD'], ['KeyA']) + stick(2) + touch.push.x),
       strafeY: clamp(axis(['KeyR'], ['KeyF']) - stick(3) + touch.push.y),
-      strafeZ: -Math.max(k('KeyS') || touch.back ? 1 : 0, button(PAD.x)),
+      strafeZ: -button(PAD.x),
       fire: k('Space') || this.mouseFire || touch.fire || button(PAD.lt) > 0.5 || button(PAD.a) > 0.5,
     };
   }

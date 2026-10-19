@@ -33,22 +33,26 @@ The project is a classic Pages project, not a Worker: the game is a static site 
 |---|---|---|
 | Mouse pointer (the ship turns towards it; the farther from the center, the faster) / arrow keys | Left stick (pull back = nose up) | Turn (yaw, pitch) |
 | Q / E | LB / RB | Roll |
-| W / Shift | RT (analog) | Main drive |
+| W | RT (analog) | Main drive |
+| S (hold) | B (hold) | Brake: the flight computer flips the ship head over and burns until it is at rest |
+| Shift (hold) | | Fine aim: turns at 30 % for precise aiming |
 | A / D | Right stick left / right | Thrusters: sideways |
-| S | X | Thrusters: backwards |
+| | X | Thrusters: backwards |
 | R / F | Right stick up / down | Thrusters: up / down |
-| X | Y | Flip: the flight computer turns the drive into the flight direction |
+| X | Y | Flip: the flight computer turns the ship head over until the drive points into the flight direction; the ship keeps flying, now backwards |
 | Click / Space | LT / A | Fire laser |
 | C | View | Chase / cockpit camera |
 | M | | Radio on / off (also by clicking the song title in the top right corner) |
 | Esc | Menu | Pause |
 | Enter | A | Confirm (start, resume, boot the next clone) |
 
+**The essentials** are W, A, S, D, Shift, Space, X and the arrow keys or the mouse; both work at the same time, so keyboard pilots and mouse pilots share one layout. Roll, the up and down thrusters and the camera are extras.
+
 **Mouse flight.** The pointer stays visible and nothing captures the mouse. Its offset from the screen center is the stick: at 40 % of the shorter screen side it turns at full rate, within 6 % of that around the center the ship flies straight, and a pointer that leaves the window lets go of the stick.
 
 Gamepads with the standard layout (Xbox, PlayStation, most others in current browsers) work without setup.
 
-On phones and tablets touch controls appear: the fixed stick on the left turns the ship (drag up = nose up), a second stick appears under the right thumb and fires the maneuvering thrusters. Hold **Drive** for the main drive and **Fire** for the laser; **Back** pushes backwards, **Flip** starts the flip assist. Pressing a key on a hardware keyboard hides the touch controls, touching the screen brings them back.
+On phones and tablets touch controls appear: the fixed stick on the left turns the ship (drag up = nose up), a second stick appears under the right thumb and fires the maneuvering thrusters. Hold **Drive** for the main drive and **Fire** for the laser; **Brake** brakes to a stop, **Flip** starts the flip assist. Pressing a key on a hardware keyboard hides the touch controls, touching the screen brings them back.
 
 ## Online tournament
 
@@ -65,7 +69,29 @@ For development, `?t=code&local=1` connects tabs of the same browser without the
 
 ## Flight school
 
-The menu offers a guided flight school without opponents. It opens with a briefing on the world of the games, read out by the flight computer, which also reads every following step aloud. Ten steps teach the main drive, drifting, the flip, braking, the maneuvering thrusters, shooting a target drone, cooling in the shadow of an asteroid and the impact warning. Each step waits until the pilot has actually done it; a blinking diamond marks targets. Training clones are free: a Host whose clone dies in flight school gets the next one without a sponsor break.
+The menu leads with the flight school until a Host has completed it once; after that the solo round is the main action (Enter). The flight school trains one maneuver per drill, 21 drills in all, each with a short spoken line, the keys as big keycaps, and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver.
+
+1. Briefing: the world of the games, in four sentences.
+2. Turning: three markers into the crosshair (arrows or mouse).
+3. Fine aim: Shift turns slowly; center a far marker exactly.
+4. Main drive: W up to 50 m/s.
+5. Drifting: let go, nothing slows the ship down.
+6. Looking back while drifting: the nose turns, the course stays (the green prograde marker shows the course).
+7. Brake: hold S, the flight computer flips and burns until the ship is at rest.
+8. Flip and burn by hand, twice: X flips the ship, W burns; the S brake does not count here.
+9. Stopping at a marker, near and far: burn, flip, burn.
+10. Sliding with the thrusters (A/D), both ways, without turning.
+11. Dodging debris that drifts straight at the ship, twice, without turning.
+12. A course of four rings.
+13. Shooting a resting drone.
+14. Shooting a drifting drone (the laser hits instantly, no lead needed).
+15. Firing until the laser overheats.
+16. Cooling down in the shadow of an asteroid.
+17. The impact warning: drifting at a rock with 100 m/s, braking or sliding past.
+18. Chasing a bot that flies but does not shoot.
+19. Fighting a weak bot that shoots back, sliding sideways while firing.
+20. Final exam: a real bot.
+21. Cleared for the tournament.
 
 ## Radio 2584
 
@@ -115,9 +141,9 @@ Decisions so far:
 - **The announcer** cuts in over the radio after kills: static, a cynical line, static. "An excellent death for Ingmar." "The alien is dead. Now our nation can grow again." Human callsigns are spoken as "host" (the voice is rendered ahead of time) and shown by name.
 - **Now playing.** The title of the running track, with flavor and tempo, is always in view in the top right corner. The note button next to it switches the radio off and on (also key M). A click on the title opens the radio page.
 - **The radio page** (`radio.html`): enter any title, or roll a random one, and the track it grows plays again in the browser: the shape of the track as a bar of sections, a playhead, the transmissions on screen. "Download WAV" presses the whole track (5 minutes plus outro) offline into a 16-bit stereo WAV file of about 55 MB. Rendering time grows faster than the length of the music, so the track is pressed in 20-second chunks, each started 8 seconds early so reverbs, echoes and voice lines are already sounding at its seam, and the chunks are crossfaded; it takes one to two minutes.
-- **The flight computer** has a voice of its own, clear and calm, independent of the radio: whatever the screen tells the Host, it also says. Damage reports, impacts, a cracked asteroid, leaving the field, the lost clone and the sponsor's pitch, the end of a round, and every step of the flight school. Its lines are rendered whole, not word by word, so they sound natural.
+- **The flight computer** has a voice of its own, independent of the radio: a natural, breathy, quick woman's voice that flirts with the pilot while preparing it for death. Whatever the screen tells the Host, it also says: whatever the screen tells the Host, it also says. Damage reports, impacts, a cracked asteroid, leaving the field, the lost clone and the sponsor's pitch, the end of a round, and every step of the flight school. Its lines are rendered whole, not word by word, so they sound natural.
 - **Transmissions on screen.** Whatever the voice and the announcer say runs across the screen while it is spoken: the regime in orange neon, the announcer in blue.
-- **The voice is pre-rendered.** `npm run voice` speaks every word and every sentence of `src/music/lines.ts` with [espeak-ng](https://github.com/espeak-ng/espeak-ng) (its robosoft variant for the regime, a livelier voice for the announcer) into one MP3 sprite; the game plays whole sentences, so they keep their melody, places single words on the beat, and needs no speech engine. Browser speech synthesis cannot be used: its output can neither be routed through Web Audio nor timed to the beat, and it sounds different on every device.
+- **The voice is pre-rendered.** `npm run voice` speaks every word and every sentence of `src/music/lines.ts` with [espeak-ng](https://github.com/espeak-ng/espeak-ng) (its robosoft variant for the regime, a livelier voice for the announcer) and the flight computer's lines with the neural voice Kokoro into one MP3 sprite; the game plays whole sentences, so they keep their melody, places single words on the beat, and needs no speech engine. Browser speech synthesis cannot be used: its output can neither be routed through Web Audio nor timed to the beat, and it sounds different on every device.
 - **Everyone hears the same beat.** In an online tournament the room code and the round number choose the title, and the music runs on the lead browser's round clock. Every note is an integer hash of seed, bar and step, so a browser can jump to any point of the track; it compares its music with the clock several times per second and jumps when they drift apart. All Hosts of a tournament hear the same note at the same moment (up to the network delay).
 - **Hangar.** In the menu and the flight school the arena's groove comes through the hangar wall: lower energy, filtered, never peaking.
 - The radio sits in the cockpit and plays straight into the headset, not through the hull. When the clone dies, its radio fades into the distance; the next clone hears it clearly again.
@@ -141,6 +167,8 @@ The future is broken, and it glows. Neon signs flicker over everything, every su
 
 It is a society without morals. A new clone is not free: the Host pays with attention. Before the next body boots, the Host has to watch an advertisement. Want another clone? Make the sponsor happy.
 
+In every cockpit sits **Nicole**, the flight computer the Ministry of War installs in each printed ship. Her voice was designed to keep clones flying into their deaths gladly: breathy, quick, always a little indecent. She calls the pilot "darling", purrs over a clean flip and a precise shot, explains the physics like a secret, and never forgets to remind the clone what all the training is for: soon it may go and die for the President. She is the only one in the whole system who is ever nice to a clone, and she is a product. An old principle in new clothes: a sweet voice that talks fools like us, the Hosts, into dying for the President, again and again.
+
 The system is ruled by the **United Solar States**, the heir of an America that turned completely fascist and then took the planets with it. At its head sits **the Orange President**, and he has sat there for at least a thousand years. Clone transfer normally wears out after a few lifetimes; his never did. Every time he dies, a new clone boots, and every transfer copies his dementia along with him and makes it worse. Many believe that is the source of his madness: he has become completely unpredictable, the end product of a rotten society, and his eternal life does not seem to end. The President wants his games, and the army stages them: the **Ministry of War** of the United Solar States organizes the Presidential Games. Its seal hangs over every hangar: an eagle before the sun, nine stars above it, one for each of the eight planets and one for the asteroid belt, and the ribbon "Solar Tournament · MMDLXXXIV". The SolarTournament is his games: the Presidential Games, held to keep the people of the solar system entertained and quiet. His voice runs through the tournament radio with hollow boasts about the greatest tournament of all time and the highest statistics anyone has ever seen. His favorite enemies are the **Rockborn**, people born and raised in the asteroid belt, who mine the rocks the tournament is fought among. Many of them want to come back to Earth; the regime deports them to the belt again and again, and the Orange President is building a wall against them: the Solar Wall, the biggest wall in the history of walls, and Mars is going to pay for it. That the tournament's sign glows in orange is no accident. The game is satire: a warning, drawn from the politics of its own time, of where this road leads.
 
 The year is **2584**, a nod to George Orwell's *1984*, where a whole society watches and is watched.
@@ -162,10 +190,10 @@ One world unit is 5 cm. A ship is about 35 m long; the asteroids are ten to thir
 
 ### Flight
 
-- **Main drive.** It pushes only along the nose, with 45 m/s² (about 4.6 g). Nothing slows a ship down: without thrust it keeps drifting forever.
-- **Maneuvering thrusters.** They rotate the ship and also push it gently along every axis (7 m/s²), enough to sidestep, not enough to brake from full speed.
+- **Main drive.** It pushes only along the nose, with 70 m/s² (about 7 g). Nothing slows a ship down: without thrust it keeps drifting forever.
+- **Maneuvering thrusters.** They rotate the ship and also push it gently along every axis (10 m/s², about 1 g), enough to sidestep and dodge, not enough to brake from full speed.
 - **Flight computer.** Rotation is rate-controlled: the stick sets how fast the ship turns, and the thrusters stop the rotation when the stick is released (up to 1.6 rad/s for yaw and pitch, 1.8 rad/s for roll, reached with 6 rad/s²).
-- **Flip and burn.** Braking means turning the drive into the flight direction and burning. The flip assist (X) turns the ship to retrograde; the pilot burns. Grabbing the stick cancels the assist.
+- **Flip and burn.** Braking means turning the drive into the flight direction and burning. The flip alone changes nothing: the ship keeps its course, now flying backwards; the burn is what slows it down. The flip assist (X) turns the ship to retrograde head over, the way a pilot pulls up and over: it first rolls until the goal lies straight above the canopy, then pulls the nose up; the pilot burns. Grabbing the stick cancels the assist. The brake (S) does both: it flips head over, burns once the nose is within 0.2 rad of retrograde, eases the burn off over the last 0.3 seconds of full thrust and reports "At rest" below 1 m/s.
 - **Velocity markers.** The green marker shows where the ship is actually drifting, the orange cross where the drive has to point to brake.
 - **Space dust.** Fine dust stays fixed in space, so drift is visible even far from any rock.
 
@@ -203,7 +231,7 @@ The laser draws no ammunition but produces heat. Each shot adds 30 % of the heat
 
 ### The pilot
 
-- **G-forces.** Above 3 g the pilot starts to grey out. A full burn (4.6 g) narrows the view to a tunnel within 5 seconds, with the pilot's heartbeat getting louder; 3 seconds without hard acceleration clear it again.
+- **G-forces.** Above 3 g the pilot starts to grey out. A full burn (7 g) narrows the view to a tunnel within 5 seconds, with the pilot's heartbeat getting louder; 3 seconds without hard acceleration clear it again.
 - **Line of sight.** Sensors need a clear line: a ship hidden behind an asteroid disappears from the HUD, and bots cannot see it either.
 
 ### Sound
@@ -229,3 +257,5 @@ There is no sound in vacuum. Everything the Host hears travels through the clone
 **The SolarTournament logo, the seal of the Ministry of War** (`public/crest.svg`, drawn by `npm run crest`; logo, favicon, menu, loading screen, radio page): the eagle is based on ["Zurich Eagle Silhouette"](https://openclipart.org/detail/282180/zurich-eagle-silhouette) by GDJ on Openclipart, CC0 1.0 (public domain), cut into straight facets by the generator.
 
 **Font:** [Michroma](https://github.com/googlefonts/Michroma-font) for headings and signs, SIL Open Font License 1.1 (see `public/assets/fonts/OFL-michroma.txt`). Text is set in the system's sans-serif.
+
+**Voices** (`public/assets/voice/`, rendered by `npm run voice`): the radio voices by [espeak-ng](https://github.com/espeak-ng/espeak-ng) (GPL-3.0; its output is not covered by the GPL), the flight computer by [Kokoro-82M](https://huggingface.co/hexgrad/Kokoro-82M) (Apache-2.0, voice `af_nicole`) through [kokoro-js](https://www.npmjs.com/package/kokoro-js) (Apache-2.0). Both only run when the voices are rendered; neither ships with the game.

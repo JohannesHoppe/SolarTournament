@@ -68,7 +68,7 @@ The repository root is the Vite project: `index.html` (the game) and `radio.html
 | `random.ts` | Deterministic random generator |
 | **`game/`** | **The round** |
 | `game/game.ts` | Game states, round flow, lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
-| `game/school.ts` | Flight school: steps with instruction, success condition and waypoint |
+| `game/school.ts` | Flight school: 21 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
 | `game/sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, placeholder ad |
 | **`world/`** | **The arena** |
 | `world/space.ts` | Stars, nebula, sun with shadows, space dust |
@@ -90,7 +90,7 @@ The repository root is the Vite project: `index.html` (the game) and `radio.html
 | **`sound/`** | **What the pilot hears besides the radio** |
 | `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static |
 | `sound/sounds.ts` | Synthesized sound effects: laser, explosion |
-| `sound/speaker.ts` | The flight computer's voice: reads out what the screen shows, whole lines from the sprite |
+| `sound/speaker.ts` | Nicole, the flight computer's voice: reads out what the screen shows, whole lines from the sprite |
 | **`music/`** | **Radio 2584** |
 | `music/songs.ts` | Hard techno tracks from a seed (flavor, form, energy curve, Grids-style patterns, fills); every decision is an integer hash of seed, bar and step |
 | `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser), the voices, and how one sixteenth is played |
@@ -105,7 +105,7 @@ The repository root is the Vite project: `index.html` (the game) and `radio.html
 
 `tools/crest/render.ts` (`npm run crest`) draws the seal of the Ministry of War into `public/crest.svg`: computed rings, stars and sun, Michroma lettering as paths, and the eagle of `tools/crest/eagle.svg` (CC0) cut into angular facets.
 
-`tools/voice/render.ts` (`npm run voice`, needs ffmpeg) renders every word and every sentence of `src/music/lines.ts` with espeak-ng into `public/assets/voice/`. Run it after changing any line; the radio skips words that are not rendered.
+`tools/voice/render.ts` (`npm run voice`, needs ffmpeg) renders every word and every sentence of the radio lines in `src/music/lines.ts` with espeak-ng, and the flight computer's lines (Nicole) with Kokoro, into `public/assets/voice/`. The first run downloads the Kokoro model. Run it after changing any line; the radio skips words that are not rendered.
 
 ## License
 

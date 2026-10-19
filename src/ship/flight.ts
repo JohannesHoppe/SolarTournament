@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import type { Controls } from '../input/input';
 
-/** Acceleration of the main drive at full thrust (units/s²). */
-export const MAIN_THRUST = 900;
-/** Acceleration of the maneuvering thrusters along any axis (units/s²). */
-export const RCS_THRUST = 140;
+/** Acceleration of the main drive at full thrust (units/s²): 70 m/s², about 7 g. */
+export const MAIN_THRUST = 1400;
+/** Acceleration of the maneuvering thrusters along any axis (units/s²): 10 m/s², about 1 g. */
+export const RCS_THRUST = 200;
 /** Rotation rates the flight computer allows (rad/s) and how fast the thrusters reach them (rad/s²). */
 const MAX_TURN_RATE = 1.6;
 const MAX_ROLL_RATE = 1.8;
@@ -109,4 +109,30 @@ export class FlightModel {
     if (local.z > 0 && Math.abs(local.x) < 1e-3) yaw = Math.PI; // straight behind: pick a side
     return { yaw: THREE.MathUtils.clamp(yaw * gain, -1, 1), pitch: THREE.MathUtils.clamp(pitch * gain, -1, 1) };
   }
+
+  /**
+   * Commands for a head-over flip towards a world direction: the ship rolls until the
+   * direction lies straight above its canopy, then pulls the nose up and over. The last
+   * stretch is ordinary steering, where the roll angle would be meaningless.
+   */
+  flip(direction: THREE.Vector3, gain = 2.5): { yaw: number; pitch: number; roll: number } {
+    inverse.copy(this.orientation).invert();
+    local.copy(direction).normalize().applyQuaternion(inverse);
+    const off = Math.acos(THREE.MathUtils.clamp(-local.z, -1, 1));
+    if (off < FLIP_STEER_ANGLE) return { ...this.steer(direction, gain), roll: 0 };
+    const side = Math.hypot(local.x, local.y);
+    // straight behind there is no "above" to roll to: just pull up
+    const rollError = side < 0.05 ? 0 : Math.atan2(local.x, local.y);
+    const aligned = Math.max(0, 1 - Math.abs(rollError) / FLIP_ROLL_TOLERANCE);
+    return {
+      yaw: 0,
+      pitch: THREE.MathUtils.clamp(off * gain, 0, 1) * aligned,
+      roll: THREE.MathUtils.clamp(rollError * gain, -1, 1),
+    };
+  }
 }
+
+/** Below this angle between nose and goal (rad) the flip ends in ordinary steering. */
+const FLIP_STEER_ANGLE = 0.35;
+/** The nose only pulls up once the roll is this close to the goal (rad). */
+const FLIP_ROLL_TOLERANCE = 0.6;

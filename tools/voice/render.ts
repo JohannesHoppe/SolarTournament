@@ -1,8 +1,10 @@
 /**
- * Renders the voice of Radio 2584 with espeak-ng (WebAssembly build, GPL-3.0) into one MP3
- * sprite plus a manifest: every word and every sentence of every line in src/music/lines.ts,
- * once per language. The game speaks sentences whole and places single words on the beat; no speech engine ships
- * with the game. Run with `npm run voice` after changing lines.ts; needs ffmpeg on the PATH.
+ * Renders the voices into one MP3 sprite plus a manifest; no speech engine ships with the
+ * game. The radio voices come from espeak-ng (WebAssembly build, GPL-3.0): every word and
+ * every sentence of every line in src/music/lines.ts, once per language, because the game
+ * speaks sentences whole and places single words on the beat. The flight computer speaks
+ * whole lines with Kokoro (neural, Apache-2.0), a natural voice. Run with `npm run voice`
+ * after changing lines.ts; needs ffmpeg on the PATH, and downloads the Kokoro model once.
  */
 import { spawnSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -16,12 +18,13 @@ const SAMPLE_RATE = 22050;
 /** Silence between two words in the sprite, so decoder padding never cuts into a word (s). */
 const GAP = 0.25;
 /** The regime speaks as a slow robot (espeak's robosoft variant, a narrow pitch range); the announcer talks fast and lively. */
-const VOICES: Record<Language, { voice: string; rate: number; pitch: number; range: number }> = {
+const VOICES: Record<Exclude<Language, 'sys'>, { voice: string; rate: number; pitch: number; range: number }> = {
   en: { voice: 'en-us+robosoft', rate: 140, pitch: 32, range: 15 },
   de: { voice: 'de+robosoft', rate: 135, pitch: 30, range: 15 },
   mod: { voice: 'en-us+m3', rate: 170, pitch: 45, range: 60 },
-  sys: { voice: 'en-us+f3', rate: 172, pitch: 55, range: 35 },
 };
+/** The flight computer: Kokoro's breathy, intimate Nicole, a little faster than she talks by herself. */
+const COMPUTER_VOICE = { model: 'onnx-community/Kokoro-82M-v1.0-ONNX', voice: 'af_nicole', speed: 1.3 } as const;
 
 interface Worker {
   set_voice(voice: string): void;
@@ -40,17 +43,13 @@ const clips: Record<string, [number, number]> = {};
 let position = 0;
 const gap = new Int16Array(Math.round(GAP * SAMPLE_RATE));
 
-for (const language of ['en', 'de', 'mod', 'sys'] as Language[]) {
+for (const language of ['en', 'de', 'mod'] as const) {
   const settings = VOICES[language];
-  // the music voices need single words to place on the beat and whole sentences to speak them
-  // with their melody; the flight computer speaks whole lines
-  const texts: [key: string, text: string][] =
-    language === 'sys'
-      ? allLines(language).map((line) => [line, line])
-      : allLines(language).flatMap((line) => [
-          ...words(line).map(({ word }): [string, string] => [word, word]),
-          ...phrases(line).filter((piece) => piece !== '{name}').map((piece): [string, string] => [phraseKey(piece), piece]),
-        ]);
+  // single words to place on the beat, whole sentences to speak them with their melody
+  const texts: [key: string, text: string][] = allLines(language).flatMap((line) => [
+    ...words(line).map(({ word }): [string, string] => [word, word]),
+    ...phrases(line).filter((piece) => piece !== '{name}').map((piece): [string, string] => [phraseKey(piece), piece]),
+  ]);
   const rendered = new Set<string>();
   for (const [key, text] of texts) {
     if (rendered.has(key)) continue;
@@ -65,11 +64,39 @@ for (const language of ['en', 'de', 'mod', 'sys'] as Language[]) {
     worker.synthesize(text, (samples) => {
       if (samples?.length) parts.push(Int16Array.from(samples));
     });
-    const pcm = trim(concat(parts));
-    clips[clipKey(language, key)] = [position / SAMPLE_RATE, pcm.length / SAMPLE_RATE];
-    chunks.push(pcm, gap);
-    position += pcm.length + gap.length;
+    add(clipKey(language, key), trim(concat(parts)));
   }
+}
+
+const { KokoroTTS } = await import('kokoro-js');
+const kokoro = await KokoroTTS.from_pretrained(COMPUTER_VOICE.model, { dtype: 'fp32', device: 'cpu' });
+for (const line of new Set(allLines('sys'))) {
+  const audio = await kokoro.generate(line, { voice: COMPUTER_VOICE.voice, speed: COMPUTER_VOICE.speed });
+  add(clipKey('sys', line), trim(toPcm(resample(audio.audio, audio.sampling_rate, SAMPLE_RATE))));
+}
+
+function add(key: string, pcm: Int16Array) {
+  clips[key] = [position / SAMPLE_RATE, pcm.length / SAMPLE_RATE];
+  chunks.push(pcm, gap);
+  position += pcm.length + gap.length;
+}
+
+/** Linear resampling, good enough for speech that ends up as a 24 kbps MP3. */
+function resample(samples: Float32Array, from: number, to: number): Float32Array {
+  const result = new Float32Array(Math.floor((samples.length * to) / from));
+  for (let i = 0; i < result.length; i++) {
+    const x = (i * from) / to;
+    const j = Math.floor(x);
+    const next = samples[Math.min(j + 1, samples.length - 1)];
+    result[i] = samples[j] + (next - samples[j]) * (x - j);
+  }
+  return result;
+}
+
+/** Float samples to 16 bit, normalized to a peak of 90 %. */
+function toPcm(samples: Float32Array): Int16Array {
+  const peak = samples.reduce((max, s) => Math.max(max, Math.abs(s)), 1e-6);
+  return Int16Array.from(samples, (s) => Math.round((s / peak) * 0.9 * 32767));
 }
 
 mkdirSync(out, { recursive: true });

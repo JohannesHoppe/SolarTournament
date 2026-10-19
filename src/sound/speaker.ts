@@ -15,12 +15,12 @@ export class Speaker {
   private busyUntil = 0;
 
   constructor(private readonly context: AudioContext, destination: AudioNode) {
-    // a little cockpit speaker: no rumble, a touch of grit
+    // a little cockpit speaker: no rumble, the faintest grit
     const highpass = context.createBiquadFilter();
     highpass.type = 'highpass';
-    highpass.frequency.value = 220;
+    highpass.frequency.value = 160;
     const grit = context.createWaveShaper();
-    grit.curve = Float32Array.from({ length: 1024 }, (_, i) => Math.tanh(1.8 * ((i / 1023) * 2 - 1)) / Math.tanh(1.8));
+    grit.curve = Float32Array.from({ length: 1024 }, (_, i) => Math.tanh(1.2 * ((i / 1023) * 2 - 1)) / Math.tanh(1.2));
     const level = context.createGain();
     level.gain.value = 1.1;
     this.input = context.createGain();
@@ -41,7 +41,7 @@ export class Speaker {
   }
 
   /**
-   * Says lines of the flight computer (see COMPUTER and SCHOOL_SPEECH), one after the other;
+   * Says lines of the flight computer (see COMPUTER and SCHOOL), one after the other;
    * each line is rendered whole. Returns false when it stayed silent.
    */
   say(lines: string | string[], interrupt = false): boolean {
