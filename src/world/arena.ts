@@ -3,8 +3,8 @@ import { FIELD_RADIUS } from './asteroids';
 
 /** Ships beyond this distance from the center have a few seconds to come back. */
 export const ARENA_LIMIT = FIELD_RADIUS * 1.5;
-/** Spacing of the grid lines on the arena's edge: 200 m. */
-const GRID_SPACING = 4000;
+/** Spacing of the grid lines on the arena's edge: 600 m, wide enough not to distract. */
+const GRID_SPACING = 12000;
 /** Inside, the grid shows up within this distance of the pilot (units). */
 const GRID_REACH = 30000;
 

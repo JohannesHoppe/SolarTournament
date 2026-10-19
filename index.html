@@ -68,20 +68,6 @@
     <button type="button" id="start" class="mode"><span class="mode-name"><span class="mode-label">Solo round</span></span><span class="mode-note">Five minutes against bots.</span></button>
     <button type="button" id="online" class="mode"><span class="mode-name"><span class="mode-label">Online tournament</span></span><span class="mode-note">Real Hosts, one invite link.</span></button>
     <p id="menu-notice" role="status" hidden></p>
-    <dl class="controls">
-      <dt>Mouse / Arrows</dt><dd>Turn: the ship turns towards the pointer</dd>
-      <dt>W</dt><dd>Main drive</dd>
-      <dt>S</dt><dd>Brake: flip and burn to a stop</dd>
-      <dt>A / D</dt><dd>Thrusters: slide sideways</dd>
-      <dt>Shift</dt><dd>Fine aim</dd>
-      <dt>Space / Click</dt><dd>Fire laser</dd>
-      <dt>X</dt><dd>Flip: fly backwards, drive forward</dd>
-      <dt>Q E · R F</dt><dd>Extras: roll, thrusters up and down</dd>
-      <dt>Gamepad</dt><dd>Sticks turn and push, RT drive, B brake, LT/A fire, Y flip</dd>
-      <dt>C</dt><dd>Cockpit / chase camera</dd>
-      <dt>M</dt><dd>Radio on / off</dd>
-      <dt>Esc</dt><dd>Pause</dd>
-    </dl>
     <button type="button" id="fullscreen" hidden>Fullscreen</button>
     <p class="best" id="best-score"></p>
     <p class="source"><a href="https://github.com/JohannesHoppe/SolarTournament" target="_blank" rel="noopener noreferrer">Source code</a> · AGPL-3.0 · <a href="impressum.html" target="_blank">Impressum</a> · <a href="datenschutz.html" target="_blank">Datenschutz</a></p>
@@ -105,6 +91,25 @@
     <div id="ad-slot"></div>
     <p id="sponsor-status"></p>
     <button type="button" id="sponsor-boot" class="primary" hidden>Boot next clone</button>
+  </div>
+
+  <div id="quicksheet" class="plate" hidden aria-live="polite">
+    <h2>Controls</h2>
+    <dl class="controls">
+      <dt>Mouse / Arrows</dt><dd>Turn: the ship turns towards the pointer</dd>
+      <dt>W</dt><dd>Main drive</dd>
+      <dt>S</dt><dd>Brake: flip and burn to a stop</dd>
+      <dt>A / D</dt><dd>Thrusters: slide sideways</dd>
+      <dt>Shift</dt><dd>Fine aim</dd>
+      <dt>Space / Click</dt><dd>Fire laser</dd>
+      <dt>X</dt><dd>Flip: fly backwards, drive forward</dd>
+      <dt>Q E · R F</dt><dd>Extras: roll, thrusters up and down</dd>
+      <dt>Gamepad</dt><dd>Sticks turn and push, RT drive, B brake, LT/A fire, Y flip</dd>
+      <dt>C</dt><dd>Cockpit / chase camera</dd>
+      <dt>M</dt><dd>Radio on / off</dd>
+      <dt>Esc</dt><dd>Pause</dd>
+      <dt>F1</dt><dd>This sheet</dd>
+    </dl>
   </div>
 
   <div id="pause" class="plate" hidden>

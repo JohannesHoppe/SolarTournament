@@ -44,6 +44,7 @@ The project is a classic Pages project, not a Worker: the game is a static site 
 | C | View | Chase / cockpit camera |
 | M | | Radio on / off (also with the ♪ button in the top right corner; a click on the song title opens the radio page) |
 | Esc | Menu | Pause |
+| F1 | | Controls sheet over any screen, the running round included (F1 again closes it) |
 | Enter | A | Confirm (start, resume, boot the next clone) |
 
 **The essentials** are W, A, S, D, Shift, Space, X and the arrow keys or the mouse; both work at the same time, so keyboard pilots and mouse pilots share one layout. Roll, the up and down thrusters and the camera are extras.
@@ -237,7 +238,7 @@ There are no shields. Every hit stays until the ship respawns.
   - **Hull**: every other hit costs 12 of 100 hull points, so it takes nine hits to destroy a ship: long enough for a dogfight, and every hit still leaves its holes.
 - **Decompression.** Each beam leaves an entry and a larger exit hole. The escaping air jolts the ship into a spin and keeps pushing it for a few seconds (fading with a time constant of 2.5 s) until the compartment is empty. A healthy flight computer catches the tumble quickly; damaged thrusters take longer.
 - **Wreckage.** A destroyed ship breaks into five glowing pieces of hull plating that keep its momentum, fall towards the asteroids and grind to dust when they hit one. Flying into a piece costs hull points depending on the impact speed; lasers shatter them.
-- **The arena.** Space has no walls. A ship that stays more than 3.4 km from the center for 8 seconds is lost in deep space. The edge is a sphere with a thin grid (lines every 200 m): inside it is a faint blue that grows stronger near the pilot, outside the whole edge glows orange, so the way back is always in sight.
+- **The arena.** Space has no walls. A ship that stays more than 3.4 km from the center for 8 seconds is lost in deep space. The edge is a sphere with a thin grid (lines every 600 m): inside it is a faint blue that grows stronger near the pilot, outside the whole edge glows orange, so the way back is always in sight.
 
 ### Heat
 

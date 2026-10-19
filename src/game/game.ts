@@ -258,9 +258,9 @@ export class Game implements OnlineGame {
     this.input = new Input(this.renderer.domElement);
     this.input.onAction((action) => this.onAction(action));
     this.bindMenu();
-    // the menu names the keys as the Host's keyboard prints them
+    // the controls and the pause screen name the keys as the Host's keyboard prints them
     void learnKeyboardLayout().then(() => {
-      for (const key of document.querySelectorAll<HTMLElement>('#menu .controls dt, #pause kbd')) key.textContent = keyLabel(key.textContent ?? '');
+      for (const key of document.querySelectorAll<HTMLElement>('.controls dt, #pause kbd')) key.textContent = keyLabel(key.textContent ?? '');
     });
 
     window.addEventListener('resize', () => this.resize());
@@ -507,6 +507,11 @@ export class Game implements OnlineGame {
   private onAction(action: Action) {
     if (action === 'radio') {
       this.toggleRadio();
+      return;
+    }
+    // F1 lays the controls over any screen, the running game included
+    if (action === 'help') {
+      $('quicksheet').hidden = !$('quicksheet').hidden;
       return;
     }
     // a confirm right after a screen change is a key or button still held from before (the

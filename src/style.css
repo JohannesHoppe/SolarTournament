@@ -1613,3 +1613,20 @@ body.page {
   justify-content: center;
   gap: 16px;
 }
+
+/* F1 in a round: the controls over the running game, without catching the mouse */
+#quicksheet {
+  top: 16px;
+  left: 16px;
+  transform: none;
+  width: auto;
+  max-width: calc(100vw - 32px);
+  padding: 16px 20px;
+  pointer-events: none;
+  z-index: 20;
+}
+
+#quicksheet h2 {
+  font-size: 1rem;
+  margin-bottom: 8px;
+}

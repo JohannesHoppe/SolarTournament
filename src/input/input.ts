@@ -19,7 +19,7 @@ export interface Controls {
 
 export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 
-export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'flip' | 'radio';
+export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'flip' | 'radio' | 'help';
 type ActionHandler = (action: Action) => void;
 
 /** The pointer at this share of the shorter screen side away from the center turns at full rate. */
@@ -175,6 +175,8 @@ export class Input {
     if (down) this.keys.add(e.code);
     // keys the game uses never also press the button that happens to have the focus
     if (e.code === 'Enter' || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+    // F1 opens the controls, not the browser's help
+    if (e.code === 'F1') e.preventDefault();
 
     if (!down || e.repeat) return;
     if (e.code === 'Enter') this.handler('confirm');
@@ -183,6 +185,7 @@ export class Input {
     if (e.code === 'KeyC') this.handler('camera');
     if (e.code === 'KeyX') this.handler('flip');
     if (e.code === 'KeyM') this.handler('radio');
+    if (e.code === 'F1') this.handler('help');
   }
 }
 
