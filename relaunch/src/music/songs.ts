@@ -116,6 +116,31 @@ export interface BarInfo {
   sweep: number;
 }
 
+/**
+ * The kick of a track, its own in every track: how far and how fast the pitch falls, how long
+ * it rings, how it is distorted, and the rumble under it.
+ */
+export interface KickDesign {
+  /** Pitch at the hit and after the first stage, as multiples of the fundamental. */
+  start: number;
+  middle: number;
+  /** Duration of the two stages of the pitch drop (s). */
+  snap: number;
+  fall: number;
+  /** Length of the body as a share of a beat. */
+  length: number;
+  /** gabber: tanh then atan, hard: clipped flat, soft: warm tanh, fold: folded back, metallic. */
+  shape: 'gabber' | 'hard' | 'soft' | 'fold';
+  /** Level of the noise click, 0..1. */
+  click: number;
+  /** Lowpass after the distortion (Hz): dark and round or bright and cutting. */
+  tone: number;
+  /** Rumble: its upper limit (Hz), level, and how long it takes to swell back (share of a beat). */
+  rumbleCut: number;
+  rumbleLevel: number;
+  swell: number;
+}
+
 export interface Hit {
   note: number;
   velocity: number;
@@ -148,6 +173,7 @@ export interface Song {
   metal: { k: number; rotation: number };
   bassStyle: BassStyle;
   lead: LeadVoice;
+  kick: KickDesign;
   form: Section[];
   /** Bars of the lounge cycle; rounds play their form once. */
   cycle: number;
@@ -291,8 +317,8 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
     energy,
     bpm,
     swing: settings.swing[0] + unit(seed, Ch.Genes, 5) * (settings.swing[1] - settings.swing[0]),
-    // kick fundamental between F#1 (46 Hz) and A#1 (58 Hz)
-    root: 30 + (hash(seed, Ch.Genes, 6) % 5),
+    // kick fundamental between E1 (41 Hz) and B1 (62 Hz)
+    root: 28 + (hash(seed, Ch.Genes, 6) % 8),
     acidSet: choose(ACID_SETS, seed, Ch.Genes, 7),
     // a 12-step acid loop over the 16-step bar is a classic acid techno trick
     acidLength: unit(seed, Ch.Genes, 8) < 0.4 ? 12 : 16,
@@ -302,6 +328,7 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
     metal: { k: choose([3, 5, 7], seed, Ch.Genes, 13), rotation: hash(seed, Ch.Genes, 14) % 16 },
     bassStyle: choose(settings.bass, seed, Ch.Genes, 15),
     lead: choose(settings.lead, seed, Ch.Genes, 16),
+    kick: kickDesign(seed, chosen),
     form: [],
     cycle: 0,
     motif: leadMotif(seed),
@@ -315,6 +342,36 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
   song.surprises = lounge ? [] : planSurprises(song);
   song.voice = planVoice(song);
   return song;
+}
+
+/** Each flavor leans towards its own distortion; the rest of the kick is the track's own. */
+const KICK_SHAPES: Record<Flavor, KickDesign['shape'][]> = {
+  hard: ['gabber', 'gabber', 'hard', 'fold'],
+  industrial: ['fold', 'hard', 'gabber'],
+  acid: ['soft', 'gabber', 'hard'],
+  ebm: ['hard', 'soft'],
+  french: ['soft', 'soft', 'hard'],
+  motorik: ['soft', 'hard'],
+  schranz: ['gabber', 'hard'],
+  rave: ['gabber', 'fold'],
+};
+
+function kickDesign(seed: number, flavor: Flavor): KickDesign {
+  const r = (key: number, min: number, max: number) => min + unit(seed, Ch.Genes, 40 + key) * (max - min);
+  const soft = flavor === 'french' || flavor === 'motorik';
+  return {
+    start: r(1, 10, 26),
+    middle: r(2, 4, 9),
+    snap: r(3, 0.008, 0.025),
+    fall: r(4, 0.06, 0.18),
+    length: soft ? r(5, 0.4, 0.6) : r(5, 0.45, 0.8),
+    shape: choose(KICK_SHAPES[flavor], seed, Ch.Genes, 46),
+    click: r(7, 0.2, 1),
+    tone: r(8, 2500, 9500),
+    rumbleCut: r(9, 110, 230),
+    rumbleLevel: soft ? r(10, 0.2, 0.5) : r(10, 0.5, 1),
+    swell: r(11, 0.4, 0.85),
+  };
 }
 
 function weighted(seed: number): Flavor {

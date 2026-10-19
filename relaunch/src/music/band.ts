@@ -1,6 +1,6 @@
 import type * as ToneLib from 'tone';
 import { clipKey, words, type Language } from './lines';
-import { barSeconds, stepEvents, STEPS_PER_BAR, type BarInfo, type Song, type VoiceLine } from './songs';
+import { barSeconds, stepEvents, STEPS_PER_BAR, type BarInfo, type KickDesign, type Song, type VoiceLine } from './songs';
 
 type Tone = typeof ToneLib;
 
@@ -10,6 +10,19 @@ const midiToHz = (note: number) => 440 * Math.pow(2, (note - 69) / 12);
 const saturate = (k: number) => (x: number) => Math.tanh(k * x) / Math.tanh(k);
 /** The gabber kick's double saturation (Sonic Pi "gabberkick": tanh, then atan). */
 const gabber = (x: number) => Math.atan(5.1 * Math.tanh(10 * x)) / Math.atan(5.1);
+
+/** Sampled waveshaper curve of a function on -1..1. */
+function curve(shape: (x: number) => number, size = 4096): Float32Array {
+  return Float32Array.from({ length: size }, (_, i) => shape((i / (size - 1)) * 2 - 1));
+}
+
+/** The kick's distortion characters (see KickDesign.shape). */
+const KICK_CURVES: Record<KickDesign['shape'], Float32Array> = {
+  gabber: curve(gabber),
+  hard: curve((x) => Math.max(-1, Math.min(1, 4 * x))),
+  soft: curve(saturate(2.5)),
+  fold: curve((x) => Math.sin(Math.PI * 1.6 * x)),
+};
 
 /** Master filter cutoff for a brightness of 0..1: 200 Hz to 18 kHz. */
 const cutoff = (brightness: number) => 200 * Math.pow(90, Math.max(0, Math.min(1, brightness)));
@@ -58,6 +71,10 @@ export class Band {
   private readonly kickDrive: ToneLib.Gain;
   private readonly kickAmp: ToneLib.AmplitudeEnvelope;
   private readonly kickHighpass: ToneLib.Filter;
+  private readonly kickShaper: ToneLib.WaveShaper;
+  private readonly kickTone: ToneLib.Filter;
+  private readonly rumbleLow: ToneLib.Filter;
+  private readonly rumbleLevel: ToneLib.Gain;
   private readonly click: ToneLib.NoiseSynth;
   private readonly rumbleSend: ToneLib.Gain;
   private readonly rumbleDuck: ToneLib.Gain;
@@ -128,21 +145,22 @@ export class Band {
     const kickBus = new T.Gain(0.9).connect(this.master);
     this.kickHighpass = new T.Filter({ type: 'highpass', frequency: 10, Q: 0 }).connect(kickBus);
     this.kickAmp = new T.AmplitudeEnvelope({ attack: 0.001, decay: 0.01, sustain: 0.75, release: 0.03 }).connect(this.kickHighpass);
-    const kickTone = new T.Filter({ type: 'lowpass', frequency: 7900, Q: 0 }).connect(this.kickAmp);
-    const kickShaper = new T.WaveShaper(gabber, 4096).connect(kickTone);
-    kickShaper.oversample = '4x';
-    this.kickDrive = new T.Gain(1).connect(kickShaper);
+    this.kickTone = new T.Filter({ type: 'lowpass', frequency: 7900, Q: 0 }).connect(this.kickAmp);
+    this.kickShaper = new T.WaveShaper(gabber, 4096).connect(this.kickTone);
+    this.kickShaper.oversample = '4x';
+    this.kickDrive = new T.Gain(1).connect(this.kickShaper);
     this.kickOsc = new T.Oscillator({ type: 'sine', frequency: 55 }).connect(this.kickDrive);
     this.kickOsc.start();
     this.click = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.0005, decay: 0.012, sustain: 0 }, volume: -14 })
       .connect(new T.Filter({ type: 'bandpass', frequency: 3000, Q: 1 }).connect(this.kickHighpass));
 
     // rumble: kick -> long reverb -> distortion -> sub band -> mono -> ducked by the kick
-    this.rumbleDuck = new T.Gain(1).connect(new T.Gain(0.75).connect(this.master));
+    this.rumbleLevel = new T.Gain(0.75).connect(this.master);
+    this.rumbleDuck = new T.Gain(1).connect(this.rumbleLevel);
     const rumbleMono = new T.Mono().connect(this.rumbleDuck);
     const rumbleHigh = new T.Filter({ type: 'highpass', frequency: 30, Q: 0 }).connect(rumbleMono);
-    const rumbleLow = new T.Filter({ type: 'lowpass', frequency: 170, rolloff: -24, Q: 0 }).connect(rumbleHigh);
-    const rumbleGrit = new T.WaveShaper(saturate(6), 2048).connect(rumbleLow);
+    this.rumbleLow = new T.Filter({ type: 'lowpass', frequency: 170, rolloff: -24, Q: 0 }).connect(rumbleHigh);
+    const rumbleGrit = new T.WaveShaper(saturate(6), 2048).connect(this.rumbleLow);
     const rumbleVerb = this.reverb(T, 3.5);
     rumbleVerb.connect(new T.Gain(3).connect(rumbleGrit));
     this.rumbleSend = new T.Gain(0).connect(rumbleVerb);
@@ -309,6 +327,11 @@ export class Band {
 
   /** Sets the sound of a track's flavor. */
   prepare(song: Song) {
+    // every track has its own kick and rumble
+    this.kickShaper.curve = KICK_CURVES[song.kick.shape];
+    this.kickTone.frequency.value = song.kick.tone;
+    this.rumbleLow.frequency.value = song.kick.rumbleCut;
+    this.rumbleLevel.gain.value = 0.75 * song.kick.rumbleLevel;
     if (this.flavor === song.flavor) return;
     this.flavor = song.flavor;
     const crushed = song.flavor === 'industrial' || song.flavor === 'ebm';
@@ -337,7 +360,7 @@ export class Band {
       // rumble and harmony duck under the kick and swell back before the next one
       this.rumbleDuck.gain.cancelAndHoldAtTime(t);
       this.rumbleDuck.gain.linearRampToValueAtTime(0, t + 0.004);
-      this.rumbleDuck.gain.linearRampToValueAtTime(1, t + 0.6 * beat);
+      this.rumbleDuck.gain.linearRampToValueAtTime(1, t + song.kick.swell * beat);
       this.pump.gain.cancelAndHoldAtTime(t);
       this.pump.gain.linearRampToValueAtTime(0.4, t + 0.004);
       this.pump.gain.linearRampToValueAtTime(1, t + 0.45 * beat);
@@ -462,12 +485,12 @@ export class Band {
     const fundamental = midiToHz(song.root) * Math.pow(2, detune / 1200);
     const frequency = this.kickOsc.frequency;
     frequency.cancelAndHoldAtTime(t);
-    frequency.setValueAtTime(fundamental * 18, t);
-    frequency.exponentialRampToValueAtTime(fundamental * 7.5, t + 0.015);
-    frequency.exponentialRampToValueAtTime(fundamental, t + 0.115);
-    const length = Math.min(0.3, (60 / song.bpm) * 0.72);
-    this.kickAmp.triggerAttackRelease(length, t, velocity);
-    this.click.triggerAttackRelease(0.012, t, velocity * (0.5 + 0.5 * drive));
+    const design = song.kick;
+    frequency.setValueAtTime(fundamental * design.start, t);
+    frequency.exponentialRampToValueAtTime(fundamental * design.middle, t + design.snap);
+    frequency.exponentialRampToValueAtTime(fundamental, t + design.snap + design.fall);
+    this.kickAmp.triggerAttackRelease((60 / song.bpm) * design.length, t, velocity);
+    this.click.triggerAttackRelease(0.012, t, velocity * design.click * (0.5 + 0.5 * drive));
   }
 
   /** The 303: accents open the squelch filter wide, slides glide without a new attack. */

@@ -1,5 +1,5 @@
 import type { Spoken } from './music/band';
-import { trackSeconds } from './music/preview';
+import { renderTrack, trackSeconds } from './music/preview';
 import { Radio } from './music/radio';
 import { createSong, titleFor, type SectionKind, type Song } from './music/songs';
 
@@ -103,7 +103,6 @@ async function download() {
   button.disabled = true;
   status.textContent = `Pressing ${song.title}…`;
   try {
-    const { renderTrack } = await import('./music/preview');
     const title = song.title;
     const wav = await renderTrack(song, 0, trackSeconds(song), 44100, (done) => {
       status.textContent = `Pressing ${title}… ${Math.round(done * 100)} %`;
