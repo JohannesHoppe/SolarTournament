@@ -1,9 +1,10 @@
-import { Band } from './band';
+import { Band, type Spoken } from './band';
 import { barSeconds, createSong, STEPS_PER_BAR, type Energy, type Song } from './songs';
+import { loadVoice } from './voice';
 
-/** What the radio should play: a song (by seed) and how far into it the music is. */
+/** What the radio should play: a track (by its title) and how far into it the music is. */
 export interface MusicCue {
-  seed: number;
+  title: string;
   energy: Energy;
   /** Seconds since the song began; tournament songs run on the shared round clock. */
   elapsed: number;
@@ -29,7 +30,7 @@ export class Radio {
   private readonly muffler: BiquadFilterNode;
   private band: Band | null = null;
   private loading = false;
-  private song: Song | null = null;
+  song: Song | null = null;
   private songKey = '';
   /** Audio time at which the song's elapsed time was zero. */
   private start = 0;
@@ -37,11 +38,14 @@ export class Radio {
   private cue: MusicCue | null = null;
   private cueAt = 0;
   private enabledFlag = true;
+  private lateAnnouncement = false;
 
   constructor(
     private readonly context: AudioContext,
     destination: AudioNode,
     private readonly onSong: (song: Song) => void,
+    /** A voice line starts in `delayMs` milliseconds, for the subtitles. */
+    private readonly onSpeak: (spoken: Spoken, delayMs: number) => void,
   ) {
     this.muffler = context.createBiquadFilter();
     this.muffler.type = 'lowpass';
@@ -103,8 +107,21 @@ export class Radio {
     T.setContext(this.context);
     const band = new Band(T);
     band.output.connect(this.muffler);
+    band.onSpeak = (spoken) => this.onSpeak(spoken, (spoken.time - this.context.currentTime) * 1000);
     await band.ready();
+    try {
+      band.setVoice(await loadVoice());
+    } catch (error) {
+      // without the voice the music still plays
+      console.warn('Radio voice unavailable', error);
+    }
     this.band = band;
+  }
+
+  /** The radio host comments on the action, over the music. */
+  host(text: string, name: string | null) {
+    if (!this.band || !this.enabledFlag || this.context.state !== 'running') return;
+    this.band.host(text, name, this.context.currentTime + 0.05);
   }
 
   private tick() {
@@ -119,16 +136,23 @@ export class Radio {
     if (!this.enabledFlag) return;
 
     const elapsed = cue.elapsed + (performance.now() - this.cueAt) / 1000;
-    const key = `${cue.seed}:${cue.energy}:${cue.roundLength}`;
+    const key = `${cue.title}:${cue.energy}:${cue.roundLength}`;
     if (key !== this.songKey) {
       this.songKey = key;
-      this.song = createSong(cue.seed, cue.energy, cue.roundLength);
+      this.song = createSong(cue.title, cue.energy, cue.roundLength);
       this.band.prepare(this.song);
       this.start = Infinity;
       this.onSong(this.song);
+      // joining a track after its announcement: the station names it on the next bar
+      this.lateAnnouncement = elapsed > barSeconds(this.song) * (this.song.voice[0].bar - 1);
     }
     const song = this.song!;
     const sixteenth = barSeconds(song) / STEPS_PER_BAR;
+    if (this.lateAnnouncement) {
+      const nextBar = Math.ceil(elapsed / barSeconds(song) + 0.25);
+      this.band.speak(song.voice[0], now - elapsed + nextBar * barSeconds(song), barSeconds(song) / 8);
+      this.lateAnnouncement = false;
+    }
     const desiredStart = now - elapsed;
     if (Math.abs(desiredStart - this.start) > RESYNC) {
       this.start = desiredStart;

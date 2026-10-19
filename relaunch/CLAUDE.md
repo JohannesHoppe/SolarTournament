@@ -68,6 +68,10 @@ Never use `npx`, always the scripts from `package.json`.
 | `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser) and how one sixteenth is played |
 | `music/radio.ts` | Plays the song on the cue's clock (tournament: the host's round clock), jumps when it drifts |
 | `music/preview.ts` | Development tool: renders a stretch of a song offline as WAV |
+| `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the radio host's lines |
+| `music/voice.ts` | Loads the pre-rendered voice sprite |
+
+`tools/voice/render.ts` (`npm run voice`, needs ffmpeg) renders every word of `music/lines.ts` with espeak-ng into `public/assets/voice/`. Run it after changing any line; the radio skips words that are not rendered.
 | `game.ts` | Game states, round flow, lasers, collisions, arena, camera, pilot (g-forces, warnings) |
 | `flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`) |
 | `ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, drive animation |
@@ -91,7 +95,7 @@ Never use `npx`, always the scripts from `package.json`.
 
 ## License
 
-The code is licensed under AGPL-3.0-or-later (`LICENSE`), the repository is public. Name, logo and domains are not licensed. The only files in `public/assets/` are Johannes' own ship models with their drive sprites (not licensed) and the font (OFL). Asteroids, sky, particles, sound effects and music are generated in code. New dependencies must be compatible with the AGPL. Third-party assets only enter the repo with a clarified license, named in the README; when in doubt, generate in code. Never commit keys, tokens or credentials. The menu links the source code, as the AGPL requires for a network game.
+The code is licensed under AGPL-3.0-or-later (`LICENSE`), the repository is public. Name, logo and domains are not licensed. The only files in `public/assets/` are Johannes' own ship models with their drive sprites (not licensed) the font (Quicksand 2008, no license, declared free by its author) and the rendered voice (`public/assets/voice/`, made by `npm run voice` with espeak-ng; the output of a GPL program is not covered by the GPL). Asteroids, sky, particles, sound effects and music are generated in code. New dependencies must be compatible with the AGPL. Third-party assets only enter the repo with a clarified license, named in the README; when in doubt, generate in code. Never commit keys, tokens or credentials. The menu links the source code, as the AGPL requires for a network game.
 
 ## Code rules
 
@@ -109,7 +113,7 @@ In dev mode the game hangs on the window as `window.game`. It lets you read and 
 - Freeze time for screenshots: `game.timeScale = 0`
 - Disable bots: set the other ships to `alive = false` and `respawnAt = Infinity`
 - Multiplayer: open two tabs with `?t=<code>&local=1` and click "Online tournament" in both (BroadcastChannel, no internet); without `local=1` the same test runs over Trystero and real Nostr relays
-- Render music offline: `const { renderPreview } = await import('/src/music/preview.ts')`, then `renderPreview(seed, 'round', 'acid', fromSecond, seconds)`; returns a WAV file as base64 that can be saved and listened to
+- Render music offline: `const { renderPreview } = await import('/src/music/preview.ts')`, then `renderPreview('Orbit Terror', 'round', undefined, fromSecond, seconds)` (the title is the seed; a flavor can be forced); returns a WAV file as base64 that can be saved and listened to
 - Trigger a glitch: `game.glitch.trigger(1, 5)`; idle glitches in the menu make element screenshots fail, so stop them with `game.nextIdleGlitch = Infinity`
 
 The test browser renders without a GPU; its frame rate says nothing about real hardware. Game feel and sound cannot be judged this way; Johannes tests those himself.

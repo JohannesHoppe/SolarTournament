@@ -11,7 +11,8 @@
     "cf:login": "wrangler login",
     "cf:create": "wrangler pages project create solartournament --production-branch master",
     "deploy": "npm run build && wrangler pages deploy --branch master",
-    "deploy:preview": "npm run build && wrangler pages deploy --branch preview"
+    "deploy:preview": "npm run build && wrangler pages deploy --branch preview",
+    "voice": "node tools/voice/render.ts"
   },
   "license": "AGPL-3.0-or-later",
   "dependencies": {
@@ -21,6 +22,7 @@
     "trystero": "^0.26.0"
   },
   "devDependencies": {
+    "@echogarden/espeak-ng-emscripten": "^0.3.5",
     "@types/node": "^26.6.5",
     "@types/three": "^0.186.0",
     "typescript": "^7.0.2",

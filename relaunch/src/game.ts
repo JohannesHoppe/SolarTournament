@@ -11,7 +11,9 @@ import { Effects } from './effects';
 import { Glitch } from './glitch';
 import { Hud } from './hud';
 import { Radio, type MusicCue } from './music/radio';
-import { mixSeed, textSeed, type Song } from './music/songs';
+import type { Spoken } from './music/band';
+import { HOST_ALIEN, HOST_KILL, HOST_NAMES, HOST_ROCK } from './music/lines';
+import { hash, mixSeed, textSeed, titleFor, type Song } from './music/songs';
 import { IDLE, Input, type Action, type Controls } from './input';
 import { Ship, type ShipState, type Zone } from './ship';
 import { MAIN_THRUST } from './flight';
@@ -28,6 +30,8 @@ const RESULTS_SECONDS = 12;
 const FIELD_SEED = 11;
 /** A client's round clock jumps to the host's when it is this far off (s), and drifts towards it otherwise. */
 const ROUND_SNAP = 0.25;
+/** The radio host comments on a death at most this often (s). */
+const HOST_COOLDOWN = 7;
 /** Song of the menu; the flight school plays the next one. */
 const LOUNGE_SEED = 2584;
 /** The idle link to the clone hangar glitches now and then, every 5 to 14 s. */
@@ -153,6 +157,11 @@ export class Game implements OnlineGame {
   private readonly loungeEpoch = wallClock();
   private nextIdleGlitch = 0;
   private radioTitleTimer = 0;
+  private transmissionTimer = 0;
+  /** Real time before which the radio host stays quiet (s). */
+  private nextHostComment = 0;
+  /** The name the host's current line is about, for the subtitle. */
+  private hostName: string | null = null;
 
   constructor(
     container: HTMLElement,
@@ -172,7 +181,7 @@ export class Game implements OnlineGame {
     this.composer.addPass(new OutputPass());
     this.composer.addPass(this.glitch.pass);
     this.glitch.onStatic = (strength) => this.sound.crackle(strength);
-    this.radio = new Radio(sound.context, sound.headset, (song) => this.announceSong(song));
+    this.radio = new Radio(sound.context, sound.headset, (song) => this.announceSong(song), (spoken, delay) => this.subtitle(spoken, delay));
 
     this.scene.background = new THREE.Color(0x01020a);
     this.field = new AsteroidField(assets.asteroids);
@@ -283,6 +292,44 @@ export class Game implements OnlineGame {
     this.radioTitleTimer = window.setTimeout(() => radio.classList.remove('fresh'), 6000);
   }
 
+  /** Whatever the radio says also runs across the screen, in neon, while it is spoken. */
+  private subtitle(spoken: Spoken, delay: number) {
+    const speaker = spoken.language === 'mod' ? 'Radio host' : spoken.line.startsWith('radio') ? 'Radio 2584' : spoken.language === 'de' ? 'Der Präsident' : 'The Orange President';
+    const announcement = spoken.line.startsWith('radio') && this.radio.song;
+    const text = announcement ? `${spoken.language === 'de' ? 'Es läuft' : 'Now playing'}: ${this.radio.song!.title}` : spoken.line
+      .replace('{name}', this.hostName ?? 'pilot')
+      .split(/(?<=[.?!])\s+/)
+      .map((sentence) => sentence.charAt(0).toUpperCase() + sentence.slice(1))
+      .join(' ');
+    window.setTimeout(() => {
+      const box = $('transmission');
+      box.className = spoken.language === 'mod' ? 'host' : 'regime';
+      $('transmission-speaker').textContent = speaker;
+      $('transmission-text').textContent = /[.?!]$/.test(text) ? text : text + '.';
+      box.hidden = false;
+      clearTimeout(this.transmissionTimer);
+      this.transmissionTimer = window.setTimeout(() => (box.hidden = true), spoken.duration * 1000 + 1800);
+    }, Math.max(0, delay));
+  }
+
+  /**
+   * The radio host revels in every death: a line about the victim, the president's joy or
+   * the dead "alien". Not every death, and never two comments on top of each other.
+   */
+  private commentOnDeath(victim: Ship, killer: Ship | null) {
+    const now = wallClock();
+    if (now < this.nextHostComment) return;
+    const roll = hash(textSeed(victim.id), victim.deaths, 7);
+    if (roll % 10 >= 7) return;
+    this.nextHostComment = now + HOST_COOLDOWN;
+    const lines = victim.type === 'alien' && roll % 2 === 0 ? HOST_ALIEN : killer ? HOST_KILL : HOST_ROCK;
+    const line = lines[(roll >>> 4) % lines.length];
+    const spoken = victim.name.toLowerCase();
+    // bots have rendered names; a human callsign is spoken as "pilot" and shown in the subtitle
+    this.hostName = victim.name;
+    this.radio.host(line, HOST_NAMES.includes(spoken) ? spoken : null);
+  }
+
   /**
    * What the radio plays. A tournament round has its own song on the round clock: online,
    * the room and round number pick it, so every pilot hears the same song at the same beat.
@@ -292,10 +339,10 @@ export class Game implements OnlineGame {
     const inRound = this.state === 'playing' || this.state === 'results' || (this.state === 'paused' && !!this.online);
     if (inRound && !this.school && Number.isFinite(this.roundEndsAtWall)) {
       const seed = this.online ? mixSeed(textSeed(this.online.session.room), this.roundId) : this.soloSeed;
-      return { seed, energy: 'round', elapsed: ROUND_SECONDS - (this.roundEndsAtWall - wallClock()), roundLength: ROUND_SECONDS };
+      return { title: titleFor(seed), energy: 'round', elapsed: ROUND_SECONDS - (this.roundEndsAtWall - wallClock()), roundLength: ROUND_SECONDS };
     }
     const seed = this.school && this.state !== 'menu' ? LOUNGE_SEED + 1 : LOUNGE_SEED;
-    return { seed, energy: 'lounge', elapsed: wallClock() - this.loungeEpoch, roundLength: ROUND_SECONDS };
+    return { title: titleFor(seed), energy: 'lounge', elapsed: wallClock() - this.loungeEpoch, roundLength: ROUND_SECONDS };
   }
 
   /** A blow to the clone shakes the link to it: the picture breaks up, the radio drops out. */
@@ -875,6 +922,7 @@ export class Game implements OnlineGame {
       }
     }
     this.hud.kill(this.time, killer?.name ?? (victim.outsideSince !== null ? 'Deep space' : 'Asteroid'), victim.name);
+    if (victim !== this.drone) this.commentOnDeath(victim, killer);
   }
 
   /** In vacuum an explosion is only heard when its debris rattles against the own hull. */

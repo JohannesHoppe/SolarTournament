@@ -946,3 +946,48 @@ body.glitching #radio {
 body.touch #radio {
   top: 60px;
 }
+
+/* Transmissions: what the radio says, in neon, while it is spoken. */
+#transmission {
+  position: fixed;
+  left: 50%;
+  bottom: 96px;
+  z-index: 15;
+  max-width: min(720px, calc(100vw - 32px));
+  translate: -50% 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+#transmission[hidden] {
+  display: none;
+}
+
+#transmission-speaker {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.7rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+#transmission-text {
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+#transmission.regime #transmission-text {
+  color: var(--tube-orange);
+  text-shadow: var(--neon-orange);
+}
+
+#transmission.host #transmission-text {
+  color: var(--tube-blue);
+  text-shadow: var(--neon-blue-soft);
+}
+
+body.touch #transmission {
+  bottom: 150px;
+}
