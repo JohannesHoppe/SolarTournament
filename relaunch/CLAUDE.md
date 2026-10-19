@@ -60,8 +60,8 @@ Never use `npx`, always the scripts from `package.json`.
 | `textures.ts` | Canvas textures: glows, sparks, smoke |
 | `sounds.ts` | Synthesized sound effects: laser, explosion |
 | `glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |
-| `music/songs.ts` | Radio 2584: songs from a seed (style, key, patterns, arrangement); pure functions of seed, bar and step |
-| `music/band.ts` | The Tone.js instruments and how one sixteenth of a song is played |
+| `music/songs.ts` | Radio 2584: hard techno tracks from a seed (flavor, form, energy curve, Grids-style patterns, fills); every decision is an integer hash of seed, bar and step |
+| `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser) and how one sixteenth is played |
 | `music/radio.ts` | Plays the song on the cue's clock (tournament: the host's round clock), jumps when it drifts |
 | `music/preview.ts` | Development tool: renders a stretch of a song offline as WAV |
 | `game.ts` | Game states, round flow, lasers, collisions, arena, camera, pilot (g-forces, warnings) |

@@ -276,7 +276,7 @@ export class Game implements OnlineGame {
   /** Radio 2584 names a new song for a few seconds. */
   private announceSong(song: Song) {
     $('radio-title').textContent = `Radio 2584 · ${song.title}`;
-    $('radio-style').textContent = song.style;
+    $('radio-style').textContent = `${song.flavor} · ${song.bpm} bpm`;
     const radio = $('radio');
     radio.classList.add('fresh');
     clearTimeout(this.radioTitleTimer);

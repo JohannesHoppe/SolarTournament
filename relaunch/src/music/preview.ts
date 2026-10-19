@@ -1,13 +1,13 @@
 import { Band } from './band';
-import { barSeconds, createSong, STEPS_PER_BAR, type Energy, type Style } from './songs';
+import { barSeconds, createSong, STEPS_PER_BAR, type Energy, type Flavor } from './songs';
 
 /**
  * Development tool: renders a stretch of a song offline and returns it as a 16-bit stereo
  * WAV file, base64-encoded. Used to listen to and check songs without playing the game.
  */
-export async function renderPreview(seed: number, energy: Energy, style: Style | undefined, from: number, seconds: number): Promise<{ title: string; style: string; bpm: number; wav: string }> {
+export async function renderPreview(seed: number, energy: Energy, flavor: Flavor | undefined, from: number, seconds: number): Promise<{ title: string; flavor: string; bpm: number; wav: string }> {
   const T = await import('tone');
-  const song = createSong(seed, energy, 300, style);
+  const song = createSong(seed, energy, 300, flavor);
   const sampleRate = 32000;
   const buffer = await T.Offline(async (context) => {
     const band = new Band(T);
@@ -20,7 +20,7 @@ export async function renderPreview(seed: number, energy: Energy, style: Style |
     for (let step = first; step < last; step++) band.play(song, step, step * sixteenth - from + 0.05);
     context.transport.bpm.value = song.bpm;
   }, seconds + 1.5, 2, sampleRate);
-  return { title: song.title, style: song.style, bpm: song.bpm, wav: encodeWav(buffer.toArray() as Float32Array[], sampleRate) };
+  return { title: song.title, flavor: song.flavor, bpm: song.bpm, wav: encodeWav(buffer.toArray() as Float32Array[], sampleRate) };
 }
 
 function encodeWav(channels: Float32Array[], sampleRate: number): string {

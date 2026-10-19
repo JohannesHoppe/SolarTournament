@@ -1,252 +1,306 @@
 import type * as ToneLib from 'tone';
-import { barSeconds, chordAt, mixSeed, scaleNote, sectionAt, STEPS_PER_BAR, type Song, type Style } from './songs';
+import { barSeconds, stepEvents, STEPS_PER_BAR, type BarInfo, type Song } from './songs';
 
 type Tone = typeof ToneLib;
 
-/** Sound design per style: oscillators, filters and how dirty the bass and lead get. */
-const VOICES: Record<Style, {
-  bass: ToneLib.ToneOscillatorType;
-  bassQ: number;
-  bassDrive: number;
-  lead: ToneLib.ToneOscillatorType;
-  arp: ToneLib.ToneOscillatorType;
-  crush: number;
-  kickPitch: number;
-}> = {
-  robotik: { bass: 'square', bassQ: 3, bassDrive: 0.25, lead: 'square', arp: 'triangle', crush: 0, kickPitch: 48 },
-  acid: { bass: 'sawtooth', bassQ: 14, bassDrive: 0.6, lead: 'sawtooth', arp: 'square', crush: 0, kickPitch: 45 },
-  chip: { bass: 'triangle', bassQ: 1, bassDrive: 0.15, lead: 'square', arp: 'square', crush: 0.8, kickPitch: 52 },
-  detroit: { bass: 'sine', bassQ: 2, bassDrive: 0.35, lead: 'triangle', arp: 'sine', crush: 0, kickPitch: 44 },
-  rave: { bass: 'sawtooth', bassQ: 6, bassDrive: 0.85, lead: 'sawtooth', arp: 'sawtooth', crush: 0.3, kickPitch: 46 },
-};
-
 const midiToHz = (note: number) => 440 * Math.pow(2, (note - 69) / 12);
 
-/** Small, repeatable velocity variation, so the machines groove a little. */
-function humanize(song: Song, step: number): number {
-  const h = mixSeed(song.seed, step);
-  return 0.9 + (h % 1000) / 10000;
-}
+/** A waveshaper curve normalised to ±1, so distortion adds grit without losing level. */
+const saturate = (k: number) => (x: number) => Math.tanh(k * x) / Math.tanh(k);
+/** The gabber kick's double saturation (Sonic Pi "gabberkick": tanh, then atan). */
+const gabber = (x: number) => Math.atan(5.1 * Math.tanh(10 * x)) / Math.atan(5.1);
+
+/** Master filter cutoff for a brightness of 0..1: 200 Hz to 18 kHz. */
+const cutoff = (brightness: number) => 200 * Math.pow(90, Math.max(0, Math.min(1, brightness)));
 
 /**
- * The instruments of Radio 2584 and how one sixteenth step of a song is played on them.
+ * The instruments of Radio 2584 and how one sixteenth step of a track is played on them.
  * Works on whatever Tone context is active, live or offline.
+ *
+ * The kick is a sine with a two-stage pitch drop, saturated hard, plus a noise click. A copy
+ * of it feeds the rumble: a long reverb, distorted, low-passed to the sub range, ducked by
+ * every kick so it swells in between. Bass, acid and stabs pump with the kick as well. The
+ * master ends in a soft clipper: loud, dense, never harsh digital clipping.
  */
 export class Band {
   readonly output: ToneLib.Gain;
   private readonly master: ToneLib.Filter;
-  /** Ducks bass and harmony on every kick: the pumping of club techno. */
   private readonly pump: ToneLib.Gain;
-  private readonly kick: ToneLib.MembraneSynth;
-  private readonly clap: ToneLib.NoiseSynth;
+  private readonly fxSend: ToneLib.Gain;
+  private readonly echoSend: ToneLib.Gain;
+  private readonly reverbs: ToneLib.Reverb[] = [];
+
+  private readonly kickOsc: ToneLib.Oscillator;
+  private readonly kickDrive: ToneLib.Gain;
+  private readonly kickAmp: ToneLib.AmplitudeEnvelope;
+  private readonly click: ToneLib.NoiseSynth;
+  private readonly rumbleSend: ToneLib.Gain;
+  private readonly rumbleDuck: ToneLib.Gain;
+
   private readonly hat: ToneLib.NoiseSynth;
   private readonly openHat: ToneLib.NoiseSynth;
+  private readonly hatCrush: ToneLib.BitCrusher;
+  private readonly ride: ToneLib.NoiseSynth;
+  private readonly clap: ToneLib.NoiseSynth;
+  private readonly perc: ToneLib.MembraneSynth;
+  private readonly percCrush: ToneLib.BitCrusher;
+
   private readonly bass: ToneLib.MonoSynth;
-  private readonly squelch: ToneLib.Filter;
-  private readonly bassDirt: ToneLib.Distortion;
-  private readonly lead: ToneLib.MonoSynth;
-  private readonly leadDirt: ToneLib.Chebyshev;
-  private readonly arp: ToneLib.Synth;
-  private readonly crusher: ToneLib.BitCrusher;
-  private readonly pad: ToneLib.PolySynth;
+  private readonly bassDrive: ToneLib.Gain;
+  private readonly bassHighpass: ToneLib.Filter;
+  private readonly acid: ToneLib.MonoSynth;
+  private readonly acidFilter: ToneLib.Filter;
+  private readonly acidDrive: ToneLib.Gain;
   private readonly stab: ToneLib.PolySynth;
+  private readonly stabDrive: ToneLib.Gain;
+  private readonly lead: ToneLib.MonoSynth;
   private readonly riser: ToneLib.NoiseSynth;
   private readonly riserFilter: ToneLib.Filter;
-  private readonly reverb: ToneLib.Reverb;
-  private style: Style | null = null;
-  private lastBassNote = 0;
+  private readonly impact: ToneLib.NoiseSynth;
+
+  private flavor = '';
+  /** Highpass of the bass; a breakdown lifts it, so the bass goes on without its low end. */
+  private bassFloor = 60;
+  private lastAcid = 0;
 
   constructor(T: Tone) {
-    this.output = new T.Gain(1);
-    const limiter = new T.Limiter(-1).connect(this.output);
-    const glue = new T.Compressor({ threshold: -18, ratio: 3, attack: 0.01, release: 0.15 }).connect(limiter);
-    this.master = new T.Filter({ frequency: 18000, type: 'lowpass', rolloff: -24, Q: 1 }).connect(glue);
+    // master: filter -> glue compressor -> soft clipper -> -1 dB ceiling
+    this.output = new T.Gain(T.dbToGain(-1));
+    const clipper = new T.WaveShaper(saturate(2), 4096).connect(this.output);
+    clipper.oversample = '4x';
+    const glue = new T.Compressor({ threshold: -14, ratio: 4, attack: 0.02, release: 0.12, knee: 6 }).connect(new T.Gain(0.9).connect(clipper));
+    this.master = new T.Filter({ frequency: 18000, type: 'lowpass', rolloff: -24, Q: 0 }).connect(glue);
     this.pump = new T.Gain(1).connect(this.master);
 
-    this.reverb = new T.Reverb({ decay: 4.5, preDelay: 0.02, wet: 1 }).connect(this.master);
-    const reverbSend = new T.Gain(0.35).connect(this.reverb);
-    const echo = new T.PingPongDelay({ delayTime: '8n.', feedback: 0.38, wet: 0.3 }).connect(this.pump);
-    echo.connect(reverbSend);
+    // shared effects: a reverb for space, a dotted-eighth echo
+    const space = this.reverb(T, 2.2);
+    space.connect(this.master);
+    this.fxSend = new T.Gain(1).connect(space);
+    const echo = new T.PingPongDelay({ delayTime: '8n.', feedback: 0.38, wet: 1 }).connect(this.master);
+    this.echoSend = new T.Gain(1).connect(echo);
 
-    this.kick = new T.MembraneSynth({
-      pitchDecay: 0.045, octaves: 6, oscillator: { type: 'sine' },
-      envelope: { attack: 0.001, decay: 0.42, sustain: 0, release: 0.05 },
-      volume: -2,
-    }).connect(new T.Distortion({ distortion: 0.15, wet: 0.4 }).connect(this.master));
+    // kick: sine -> drive -> gabber shaper -> tame the fizz -> amplitude envelope
+    const kickBus = new T.Gain(0.9).connect(this.master);
+    this.kickAmp = new T.AmplitudeEnvelope({ attack: 0.001, decay: 0.01, sustain: 0.75, release: 0.03 }).connect(kickBus);
+    const kickTone = new T.Filter({ type: 'lowpass', frequency: 7900, Q: 0 }).connect(this.kickAmp);
+    const kickShaper = new T.WaveShaper(gabber, 4096).connect(kickTone);
+    kickShaper.oversample = '4x';
+    this.kickDrive = new T.Gain(1).connect(kickShaper);
+    this.kickOsc = new T.Oscillator({ type: 'sine', frequency: 55 }).connect(this.kickDrive);
+    this.kickOsc.start();
+    this.click = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.0005, decay: 0.012, sustain: 0 }, volume: -14 })
+      .connect(new T.Filter({ type: 'bandpass', frequency: 3000, Q: 1 }).connect(kickBus));
 
-    const clapTone = new T.Filter({ frequency: 1400, type: 'bandpass', Q: 1.2 }).connect(this.master);
-    clapTone.connect(reverbSend);
-    this.clap = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.002, decay: 0.16, sustain: 0 }, volume: -10 }).connect(clapTone);
+    // rumble: kick -> long reverb -> distortion -> sub band -> mono -> ducked by the kick
+    this.rumbleDuck = new T.Gain(1).connect(new T.Gain(0.75).connect(this.master));
+    const rumbleMono = new T.Mono().connect(this.rumbleDuck);
+    const rumbleHigh = new T.Filter({ type: 'highpass', frequency: 30, Q: 0 }).connect(rumbleMono);
+    const rumbleLow = new T.Filter({ type: 'lowpass', frequency: 170, rolloff: -24, Q: 0 }).connect(rumbleHigh);
+    const rumbleGrit = new T.WaveShaper(saturate(6), 2048).connect(rumbleLow);
+    const rumbleVerb = this.reverb(T, 3.5);
+    rumbleVerb.connect(new T.Gain(3).connect(rumbleGrit));
+    this.rumbleSend = new T.Gain(0).connect(rumbleVerb);
+    kickBus.connect(this.rumbleSend);
 
-    const hatTone = new T.Filter({ frequency: 7500, type: 'highpass' }).connect(this.master);
-    this.hat = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.035, sustain: 0 }, volume: -17 }).connect(hatTone);
-    this.openHat = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.002, decay: 0.22, sustain: 0 }, volume: -20 }).connect(hatTone);
+    // hats, ride, clap, percussion
+    const hatBus = new T.Gain(1).connect(this.master);
+    this.hatCrush = new T.BitCrusher({ bits: 6 }).connect(hatBus);
+    this.hatCrush.wet.value = 0;
+    const hatTone = new T.Filter({ type: 'highpass', frequency: 8200, Q: 0 }).connect(this.hatCrush);
+    this.hat = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.03, sustain: 0 }, volume: -15 }).connect(hatTone);
+    this.openHat = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.002, decay: 0.24, sustain: 0 }, volume: -17 })
+      .connect(new T.Filter({ type: 'highpass', frequency: 7600, Q: 0 }).connect(this.hatCrush));
+    // ride: noise through two resonant bands, a metallic shimmer that can retrigger any time
+    this.ride = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.35, sustain: 0 }, volume: -12 });
+    this.ride.fan(
+      new T.Filter({ type: 'bandpass', frequency: 5200, Q: 6 }).connect(hatBus),
+      new T.Filter({ type: 'bandpass', frequency: 7400, Q: 8 }).connect(hatBus),
+    );
 
-    // bass: synth -> resonant squelch filter -> distortion
-    this.bassDirt = new T.Distortion({ distortion: 0.4, oversample: '4x', wet: 0.5 }).connect(this.pump);
-    this.squelch = new T.Filter({ frequency: 900, type: 'lowpass', rolloff: -24, Q: 4 }).connect(this.bassDirt);
+    const clapDrive = new T.WaveShaper(saturate(3), 1024).connect(this.master);
+    clapDrive.connect(this.fxSend);
+    this.clap = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.11, sustain: 0 }, volume: -11 })
+      .connect(new T.Filter({ type: 'bandpass', frequency: 1250, Q: 1 }).connect(clapDrive));
+
+    this.percCrush = new T.BitCrusher({ bits: 5 }).connect(this.master);
+    this.percCrush.connect(this.echoSend);
+    this.percCrush.wet.value = 0;
+    this.perc = new T.MembraneSynth({ pitchDecay: 0.02, octaves: 2, envelope: { attack: 0.001, decay: 0.16, sustain: 0, release: 0.05 }, volume: -15 })
+      .connect(new T.Filter({ type: 'highpass', frequency: 120, Q: 0 }).connect(this.percCrush));
+
+    // bass: saw -> filter envelope -> highpass (the rumble owns the sub) -> drive
+    const bassShaper = new T.WaveShaper(saturate(3), 2048).connect(this.pump);
+    this.bassDrive = new T.Gain(1).connect(bassShaper);
+    this.bassHighpass = new T.Filter({ type: 'highpass', frequency: 60, Q: 0 }).connect(this.bassDrive);
     this.bass = new T.MonoSynth({
       oscillator: { type: 'sawtooth' },
-      filter: { Q: 1, type: 'lowpass', rolloff: -12 },
-      envelope: { attack: 0.003, decay: 0.25, sustain: 0.5, release: 0.08 },
-      filterEnvelope: { attack: 0.002, decay: 0.2, sustain: 0.3, release: 0.1, baseFrequency: 180, octaves: 4 },
-      volume: -6,
-    }).connect(this.squelch);
+      filter: { type: 'lowpass', rolloff: -24, Q: 2 },
+      envelope: { attack: 0.002, decay: 0.15, sustain: 0.5, release: 0.04 },
+      filterEnvelope: { attack: 0.002, decay: 0.12, sustain: 0.2, release: 0.05, baseFrequency: 140, octaves: 3.5 },
+      volume: -9,
+    }).connect(this.bassHighpass);
 
-    this.leadDirt = new T.Chebyshev({ order: 3, wet: 0.2 }).connect(echo);
-    this.leadDirt.connect(this.pump);
-    this.lead = new T.MonoSynth({
-      oscillator: { type: 'square' },
-      portamento: 0.03,
-      filter: { Q: 2, type: 'lowpass' },
-      envelope: { attack: 0.01, decay: 0.2, sustain: 0.6, release: 0.2 },
-      filterEnvelope: { attack: 0.01, decay: 0.3, sustain: 0.5, release: 0.3, baseFrequency: 600, octaves: 3 },
-      volume: -17,
-    }).connect(this.leadDirt);
+    // acid: saw/square -> resonant squelch filter -> drive, with echo
+    const acidShaper = new T.WaveShaper(saturate(4), 2048).connect(this.pump);
+    acidShaper.connect(this.echoSend);
+    this.acidDrive = new T.Gain(1).connect(acidShaper);
+    this.acidFilter = new T.Filter({ type: 'lowpass', frequency: 800, rolloff: -24, Q: 9 }).connect(new T.Filter({ type: 'highpass', frequency: 140, Q: 0 }).connect(this.acidDrive));
+    this.acid = new T.MonoSynth({
+      oscillator: { type: 'sawtooth' },
+      filter: { type: 'lowpass', Q: 0, rolloff: -12 },
+      envelope: { attack: 0.003, decay: 0.2, sustain: 0.6, release: 0.03 },
+      filterEnvelope: { attack: 0.001, decay: 0.1, sustain: 1, release: 0.1, baseFrequency: 20000, octaves: 0 },
+      volume: -13,
+    }).connect(this.acidFilter);
 
-    this.crusher = new T.BitCrusher({ bits: 5 }).connect(echo);
-    this.crusher.wet.value = 0;
-    this.crusher.connect(this.pump);
-    this.arp = new T.Synth({ oscillator: { type: 'square' }, envelope: { attack: 0.002, decay: 0.12, sustain: 0.1, release: 0.08 }, volume: -19 }).connect(this.crusher);
-
-    const padTone = new T.Filter({ frequency: 1600, type: 'lowpass' }).connect(this.pump);
-    padTone.connect(reverbSend);
-    this.pad = new T.PolySynth(T.Synth, {
-      oscillator: { type: 'fatsawtooth', count: 3, spread: 28 },
-      envelope: { attack: 1.2, decay: 0.6, sustain: 0.7, release: 2.5 },
-      volume: -24,
-    }).connect(padTone);
-
+    // stabs: fat saws -> drive -> echo and reverb
+    const stabShaper = new T.WaveShaper(saturate(3), 2048).connect(new T.Filter({ type: 'lowpass', frequency: 3800, Q: 0 }).connect(this.pump));
+    stabShaper.connect(this.echoSend);
+    stabShaper.connect(this.fxSend);
+    this.stabDrive = new T.Gain(1).connect(stabShaper);
     this.stab = new T.PolySynth(T.Synth, {
-      oscillator: { type: 'fatsquare', count: 2, spread: 12 },
-      envelope: { attack: 0.003, decay: 0.16, sustain: 0, release: 0.12 },
-      volume: -20,
-    }).connect(echo);
-    this.stab.connect(this.pump);
+      oscillator: { type: 'fatsawtooth', count: 3, spread: 30 },
+      envelope: { attack: 0.002, decay: 0.17, sustain: 0, release: 0.1 },
+      volume: -19,
+    }).connect(this.stabDrive);
 
-    this.riserFilter = new T.Filter({ frequency: 400, type: 'bandpass', Q: 3 }).connect(this.master);
-    this.riserFilter.connect(reverbSend);
-    this.riser = new T.NoiseSynth({ noise: { type: 'pink' }, envelope: { attack: 4, decay: 0.1, sustain: 1, release: 0.3 }, volume: -22 }).connect(this.riserFilter);
+    // hoover lead: pulse width modulation, gliding, chorus
+    const chorus = new T.Chorus({ frequency: 1.5, delayTime: 3.5, depth: 0.7, spread: 180, wet: 0.5 }).connect(this.pump);
+    chorus.connect(this.fxSend);
+    chorus.start();
+    this.lead = new T.MonoSynth({
+      oscillator: { type: 'pwm', modulationFrequency: 6 },
+      portamento: 0.12,
+      filter: { type: 'lowpass', Q: 1, rolloff: -12 },
+      envelope: { attack: 0.01, decay: 0.3, sustain: 0.8, release: 0.25 },
+      filterEnvelope: { attack: 0.02, decay: 0.4, sustain: 0.6, release: 0.3, baseFrequency: 900, octaves: 2.5 },
+      volume: -17,
+    }).connect(chorus);
+
+    // transitions: a noise riser into the drop, a crash on the first beat after it
+    this.riserFilter = new T.Filter({ type: 'highpass', frequency: 1000, Q: 1 }).connect(this.master);
+    this.riserFilter.connect(this.fxSend);
+    this.riser = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 3, decay: 0.1, sustain: 1, release: 0.05 }, volume: -20 }).connect(this.riserFilter);
+    const impactTone = new T.Filter({ type: 'lowpass', frequency: 6000, Q: 0 }).connect(this.master);
+    impactTone.connect(this.fxSend);
+    this.impact = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 1.3, sustain: 0 }, volume: -13 }).connect(impactTone);
   }
 
-  /** Resolves when the reverb's impulse response is ready. */
-  ready(): Promise<void> {
-    return this.reverb.ready;
+  private reverb(T: Tone, decay: number) {
+    const reverb = new T.Reverb({ decay, preDelay: 0.01, wet: 1 });
+    this.reverbs.push(reverb);
+    return reverb;
   }
 
-  /** Sets the sound design of a song's style. */
+  /** Resolves when the reverbs' impulse responses are rendered. */
+  async ready(): Promise<void> {
+    await Promise.all(this.reverbs.map((r) => r.ready));
+  }
+
+  /** Sets the sound of a track's flavor. */
   prepare(song: Song) {
-    if (this.style === song.style) return;
-    this.style = song.style;
-    const voice = VOICES[song.style];
-    this.bass.oscillator.type = voice.bass;
-    this.squelch.Q.value = voice.bassQ;
-    this.bassDirt.distortion = voice.bassDrive;
-    this.lead.oscillator.type = voice.lead;
-    this.arp.oscillator.type = voice.arp;
-    this.crusher.wet.value = voice.crush;
+    if (this.flavor === song.flavor) return;
+    this.flavor = song.flavor;
+    const industrial = song.flavor === 'industrial';
+    this.hatCrush.wet.value = industrial ? 0.6 : 0;
+    this.percCrush.wet.value = industrial || song.flavor === 'schranz' ? 0.8 : 0.2;
+    this.acid.oscillator.type = song.flavor === 'acid' ? 'sawtooth' : 'square';
+    // when the acid carries the track, the bass makes room above the rumble
+    this.bassFloor = song.flavor === 'acid' ? 150 : 60;
   }
 
-  /** Plays sixteenth step number `step` of the song at audio time `time`. */
+  /** Plays sixteenth number `step` of the track at audio time `time`. */
   play(song: Song, step: number, time: number) {
-    const bar = Math.floor(step / STEPS_PER_BAR);
+    const events = stepEvents(song, step);
+    const info = events.info;
     const pos = step % STEPS_PER_BAR;
-    const section = sectionAt(song, bar);
-    const sixteenth = barSeconds(song) / STEPS_PER_BAR;
+    const bar = barSeconds(song);
+    const sixteenth = bar / STEPS_PER_BAR;
+    const beat = sixteenth * 4;
     const t = time + (pos % 2 === 1 ? song.swing * sixteenth : 0);
-    const chord = chordAt(song, bar);
-    const feel = humanize(song, step);
-    const voice = VOICES[song.style];
-    const lastBarOfSection = section.bar === 7;
 
-    if (pos === 0) {
-      // master filter and dirt follow the arrangement, once per bar
-      const brightness = section.brightness + (section.kind === 'build' ? 0.65 / 8 : 0);
-      this.master.frequency.linearRampToValueAtTime(200 * Math.pow(90, Math.min(1, brightness)), t + barSeconds(song));
-      this.bassDirt.wet.setValueAtTime(0.35 + 0.65 * section.dirt, t);
-      this.leadDirt.wet.setValueAtTime(0.1 + 0.6 * section.dirt, t);
-      if (section.kind === 'build' && section.bar === 4) {
-        const length = barSeconds(song) * 4;
-        this.riserFilter.frequency.setValueAtTime(300, t);
-        this.riserFilter.frequency.exponentialRampToValueAtTime(6000, t + length);
-        this.riser.triggerAttackRelease(length * 0.98, t, 0.8);
-      }
-    }
+    if (pos === 0) this.startBar(info, t, bar);
 
-    // drums; the last beat before a drop stays empty for the impact
-    const silenceBeforeDrop = section.kind === 'build' && lastBarOfSection && pos >= 12;
-    if (section.kick && song.kick[pos] && !silenceBeforeDrop) {
-      this.kick.triggerAttackRelease(midiToHz(voice.kickPitch) * 0.5, '8n', t, song.kick[pos] * feel);
-      this.pump.gain.cancelScheduledValues(t);
-      this.pump.gain.setValueAtTime(0.35, t);
-      this.pump.gain.linearRampToValueAtTime(1, t + sixteenth * 2.5);
+    if (events.kick) {
+      this.kick(song, t, events.kick, info.drive);
+      // rumble and harmony duck under the kick and swell back before the next one
+      this.rumbleDuck.gain.cancelAndHoldAtTime(t);
+      this.rumbleDuck.gain.linearRampToValueAtTime(0, t + 0.004);
+      this.rumbleDuck.gain.linearRampToValueAtTime(1, t + 0.6 * beat);
+      this.pump.gain.cancelAndHoldAtTime(t);
+      this.pump.gain.linearRampToValueAtTime(0.4, t + 0.004);
+      this.pump.gain.linearRampToValueAtTime(1, t + 0.45 * beat);
     }
-    if (section.clap) {
-      if (section.kind === 'build' && section.bar >= 6) {
-        // snare roll into the drop, getting denser and louder
-        const every = section.bar === 6 ? 2 : 1;
-        if (pos % every === 0) this.clap.triggerAttackRelease(0.08, t, 0.3 + 0.7 * (pos / 16));
-      } else if (song.clap[pos]) {
-        this.clap.triggerAttackRelease(0.15, t, song.clap[pos] * feel);
-      }
+    if (events.clap) {
+      // a clap is several hands: three bursts a few milliseconds apart
+      for (const offset of [0, 0.011, 0.023]) this.clap.triggerAttackRelease(0.1, t + offset, events.clap);
     }
-    if (section.hat && song.hat[pos]) this.hat.triggerAttackRelease(0.03, t, song.hat[pos] * feel);
-    if (section.openHat && song.openHat[pos]) this.openHat.triggerAttackRelease(0.2, t, song.openHat[pos] * feel);
+    if (events.hat) this.hat.triggerAttackRelease(0.03, t, events.hat);
+    if (events.openHat) this.openHat.triggerAttackRelease(0.2, t + 0.004, events.openHat);
+    if (events.ride) this.ride.triggerAttackRelease(0.1, t, events.ride);
+    if (events.perc) this.perc.triggerAttackRelease(midiToHz(events.perc.note), 0.1, t, events.perc.velocity);
 
-    if (section.bass) this.playBass(song, section.bassVariation, chord, pos, t, sixteenth, feel);
+    if (events.bass) this.bass.triggerAttackRelease(midiToHz(events.bass.note), sixteenth * 0.8, t, events.bass.velocity);
 
-    if (section.arp) {
-      const index = song.arp[pos];
-      if (index !== null) {
-        const tones = [0, 2, 4, 7, 9, 11];
-        const note = scaleNote(song, chord + tones[index]) + 36;
-        this.arp.triggerAttackRelease(midiToHz(note), sixteenth * 0.9, t, 0.6 * feel);
-      }
-    }
+    if (events.acid) this.playAcid(song, events.acid.note, events.acid.accent, events.acid.slide, step, t, sixteenth, info);
 
-    if (section.lead) {
-      const motif = song.lead[(bar % 2) * STEPS_PER_BAR + pos];
-      if (motif) {
-        const note = scaleNote(song, chord + motif.degree) + 36 + 12 * motif.octave;
-        this.lead.triggerAttackRelease(midiToHz(note), sixteenth * motif.length * 0.95, t, motif.velocity);
-      }
-    }
+    if (events.stab) this.stab.triggerAttackRelease(events.stab.notes.map(midiToHz), sixteenth * 1.2, t, events.stab.velocity);
 
-    if (section.stab && song.stab[pos]) {
-      this.stab.triggerAttackRelease(this.chordNotes(song, chord, 24), sixteenth * 1.5, t, song.stab[pos] * 0.8);
-    }
-
-    if (section.pad && pos === 0 && bar % song.chordBars === 0) {
-      this.pad.triggerAttackRelease(this.chordNotes(song, chord, 24), barSeconds(song) * song.chordBars * 0.92, t, 0.6);
-    }
+    if (events.lead) this.lead.triggerAttackRelease(midiToHz(events.lead.note), sixteenth * events.lead.length * 0.95, t, events.lead.velocity);
   }
 
-  private chordNotes(song: Song, chord: number, transpose: number): number[] {
-    return [0, 2, 4, 6].map((d) => midiToHz(scaleNote(song, chord + d) + transpose));
+  private startBar(info: BarInfo, t: number, bar: number) {
+    this.master.frequency.cancelAndHoldAtTime(t);
+    this.master.frequency.exponentialRampToValueAtTime(cutoff(info.brightness), t + bar);
+    this.rumbleSend.gain.setValueAtTime(info.layers.rumble ? 1 : 0, t);
+    this.bassHighpass.frequency.setValueAtTime(info.section.kind === 'break' ? 380 : this.bassFloor, t);
+    const drive = info.drive;
+    this.kickDrive.gain.setValueAtTime(0.25 + 0.75 * drive, t);
+    this.bassDrive.gain.setValueAtTime(0.5 + 1.5 * drive, t);
+    this.acidDrive.gain.setValueAtTime(0.6 + 1.6 * drive, t);
+    this.stabDrive.gain.setValueAtTime(0.6 + 1.4 * drive, t);
+    if (info.riserBars) {
+      const length = bar * info.riserBars;
+      this.riserFilter.frequency.setValueAtTime(1000, t);
+      this.riserFilter.frequency.exponentialRampToValueAtTime(10000, t + length);
+      this.riser.triggerAttackRelease(length - bar / 4, t, 0.9);
+    }
+    if (info.impact) this.impact.triggerAttackRelease(1.2, t, 1);
   }
 
-  private playBass(song: Song, variation: number, chord: number, pos: number, t: number, sixteenth: number, feel: number) {
-    const line = song.bass[variation];
-    const step = line[pos];
-    if (!step) return;
-    const note = scaleNote(song, chord + step.degree) + 12 * step.octave + (song.style === 'acid' || song.style === 'chip' ? 12 : 0);
+  /** Two-stage pitch drop: a fast click of pitch, then the body falls to the fundamental. */
+  private kick(song: Song, t: number, velocity: number, drive: number) {
+    const fundamental = midiToHz(song.root);
+    const frequency = this.kickOsc.frequency;
+    frequency.cancelAndHoldAtTime(t);
+    frequency.setValueAtTime(fundamental * 18, t);
+    frequency.exponentialRampToValueAtTime(fundamental * 7.5, t + 0.015);
+    frequency.exponentialRampToValueAtTime(fundamental, t + 0.115);
+    const length = Math.min(0.3, (60 / song.bpm) * 0.72);
+    this.kickAmp.triggerAttackRelease(length, t, velocity);
+    this.click.triggerAttackRelease(0.012, t, velocity * (0.5 + 0.5 * drive));
+  }
+
+  /** The 303: accents open the squelch filter wide, slides glide without a new attack. */
+  private playAcid(song: Song, note: number, accent: boolean, slide: boolean, step: number, t: number, sixteenth: number, info: BarInfo) {
     const frequency = midiToHz(note);
-    // a slide glides from the held note instead of striking a new one
-    if (step.slide && pos > 0 && line[pos - 1]) {
-      this.bass.frequency.setValueAtTime(this.lastBassNote, t);
-      this.bass.frequency.exponentialRampToValueAtTime(frequency, t + sixteenth * 0.6);
+    if (slide && this.lastAcid > 0) {
+      this.acid.frequency.setValueAtTime(this.lastAcid, t);
+      this.acid.frequency.exponentialRampToValueAtTime(frequency, t + 0.06);
     } else {
+      // hold the note through the slides that follow it
       let length = 1;
-      while (pos + length < STEPS_PER_BAR && line[pos + length]?.slide) length++;
-      const gate = song.style === 'robotik' || song.style === 'chip' ? 0.5 : 0.8;
-      this.bass.triggerAttackRelease(frequency, sixteenth * (length - 1 + gate), t, (step.accent ? 1 : 0.7) * feel);
+      while (length < 4 && stepEvents(song, step + length).acid?.slide) length++;
+      this.acid.triggerAttackRelease(frequency, sixteenth * (length - 0.45), t, accent ? 1 : 0.75);
     }
-    this.lastBassNote = frequency;
-    // the acid squelch: every note opens the resonant filter, accents open it wide
-    const open = step.accent ? 5200 : 2200;
-    const rest = song.style === 'acid' ? 380 : 900;
-    this.squelch.frequency.cancelScheduledValues(t);
-    this.squelch.frequency.setValueAtTime(open, t);
-    this.squelch.frequency.exponentialRampToValueAtTime(rest, t + sixteenth * 1.6);
+    this.lastAcid = frequency;
+    // the cutoff wanders over 16 bars and opens with the energy
+    const wander = 0.5 - 0.5 * Math.cos((2 * Math.PI * (info.bar + (step % STEPS_PER_BAR) / STEPS_PER_BAR)) / 16);
+    const rest = 220 + 1400 * wander * info.energy;
+    const peak = rest * (accent ? 6 : 3);
+    const filter = this.acidFilter.frequency;
+    filter.cancelAndHoldAtTime(t);
+    filter.setValueAtTime(Math.min(12000, peak), t);
+    filter.exponentialRampToValueAtTime(rest, t + (accent ? 0.12 : 0.22));
   }
 }
