@@ -341,6 +341,8 @@ export class Ship {
     const along = offset.dot(direction);
     inverse.copy(this.flight.orientation).invert();
     local.copy(origin).addScaledVector(direction, along).sub(this.flight.position).applyQuaternion(inverse).divideScalar(this.radius);
+    // a beam that only grazed the hit sphere on a lagging screen still hits the hull, not empty space
+    if (local.lengthSq() > 1) local.normalize();
 
     const half = Math.sqrt(Math.max(0, 1 - local.lengthSq())) * this.radius;
     const localDirection = direction.clone().applyQuaternion(inverse);

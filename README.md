@@ -201,7 +201,7 @@ One world unit is 5 cm. A ship is about 35 m long; the asteroids are ten to thir
 - **Main drive.** It pushes only along the nose, with 70 m/s² (about 7 g). Nothing slows a ship down: without thrust it keeps drifting forever.
 - **Maneuvering thrusters.** They rotate the ship and also push it gently along every axis (10 m/s², about 1 g), enough to sidestep and dodge, not enough to brake from full speed.
 - **Flight computer.** Rotation is rate-controlled: the stick sets how fast the ship turns, and the thrusters stop the rotation when the stick is released (up to 1.6 rad/s for yaw and pitch, 1.8 rad/s for roll, reached with 6 rad/s²).
-- **Flip and burn.** Braking means turning the drive into the flight direction and burning. The flip alone changes nothing: the ship keeps its course, now flying backwards; the burn is what slows it down. The flip assist (X) turns the ship to retrograde head over, the way a pilot pulls up and over: it first rolls until the goal lies straight above the canopy, then pulls the nose up; the pilot burns. Grabbing the stick cancels the assist. The brake (S) does both: it flips head over, burns once the nose is within 0.2 rad of retrograde, eases the burn off over the last 0.3 seconds of full thrust and reports "At rest" below 1 m/s.
+- **Flip and burn.** Braking means turning the drive into the flight direction and burning. The flip alone changes nothing: the ship keeps its course, now flying backwards; the burn is what slows it down. The flip assist (X) turns the ship to retrograde head over, the way a pilot pulls up and over: it first rolls until the goal lies straight above the canopy, then pulls the nose up; a goal below and within 70° of straight behind is reached by pulling up and over without rolling first. The pilot burns. Moving the stick cancels the assist (a mouse pointer resting off-center does not count). The brake (S) does both: it flips head over, burns once the nose is within 0.2 rad of retrograde, eases the burn off below the speed the drive kills in 0.3 seconds (less with a damaged drive) and reports "At rest" below 1 m/s; at rest it holds until the ship drifts faster than 2 m/s again.
 - **Velocity markers.** The green marker (prograde, a circle with three fins) shows where the ship is actually drifting, the orange cross (retrograde) where the drive has to point to brake.
 - **The zero point.** A blue ring with a dot marks the center of the field, with its distance; it stays on the screen edge when the center is behind. The asteroids are densest there, and the edge of the arena is farthest away.
 - **Space dust.** Fine dust stays fixed in space, so drift is visible even far from any rock.
@@ -210,7 +210,7 @@ One world unit is 5 cm. A ship is about 35 m long; the asteroids are ten to thir
 
 - **Huge and few.** 40 rocks with mean radii of roughly 90 to 350 m (up to about 600 m along their longest axis) in a field of 2.25 km radius. Collisions use an ellipsoid fitted to each rock, not a sphere, so ships can fly close to elongated rocks.
 - **Sixteen shapes, four kinds.** The rocks are generated: squashed or stretched lumps with crags, ridges and craters (many small, few large; the floors show fresher, brighter material). They come as dark carbon-rich rock, stony rock, reddish iron-bearing rock and shiny metal, like the real asteroid belt.
-- **Gravity.** Every asteroid pulls with a surface gravity proportional to its radius (uniform density) that falls off with the square of the distance. The big ones pull with about 1.5 m/s² at the surface, roughly 3 % of the main drive. A ship that drifts near a rock slowly falls towards it. This is the one deliberate exaggeration: a real rock of this size pulls thousands of times weaker, too weak to feel in a fight.
+- **Gravity.** Every asteroid pulls with a surface gravity proportional to its radius (uniform density) that falls off with the square of the distance. The big ones pull with about 1.4 m/s² at the surface, roughly 2 % of the main drive. A ship that drifts near a rock slowly falls towards it. This is the one deliberate exaggeration: a real rock of this size pulls thousands of times weaker, too weak to feel in a fight.
 - **Tough.** A rock withstands 4 laser hits plus one per 40 m of mean radius (6 to 13 hits). Then it breaks into 2 to 3 fragments with 55 % of its size that drift apart. After two generations the pieces are gone for good.
 - **Deterministic.** Layout and fragments come from seeded randomness, so every player sees the same field.
 
@@ -218,7 +218,7 @@ One world unit is 5 cm. A ship is about 35 m long; the asteroids are ten to thir
 
 - A ship bounces off a rock and keeps 30 % of its impact speed; scraping along the surface bleeds off some sideways speed.
 - Impacts below 12.5 m/s only scratch the paint. Above that the hull loses 1 point per 0.6 m/s; at about 72 m/s a ship is destroyed.
-- **Impact warning.** The flight computer warns when the current course hits a rock sooner than the ship could flip and brake (plus 2 seconds of reaction time) and beeps faster the closer the impact gets.
+- **Impact warning.** The flight computer warns when the current course hits a rock sooner than the ship could flip and brake (plus 2 seconds of reaction time) and beeps faster the closer the impact gets. The flip time it assumes grows with the angle to turn (2.5 s for a half turn), adds 1 s for the roll that starts a head-over flip and stretches with damaged thrusters.
 
 ### Damage
 
@@ -228,7 +228,7 @@ There are no shields. Every hit stays until the ship respawns.
 - **Hit zones.** The point where the beam passes closest to the ship's center decides what breaks:
   - **Reactor** (within 15 % of the radius from the center): costs 40 hull points instead of 12. A good shot is worth more, but nothing kills with one hit.
   - **Main drive** (rear): loses a quarter of its thrust per hit and sputters; four hits kill it. A ship without drive drifts but can still turn and fire.
-  - **Maneuvering thrusters** (flanks): lose 20 % per hit; the ship turns and sidesteps more slowly.
+  - **Maneuvering thrusters** (flanks): lose 20 % of their health per hit. Their push follows 25 % + 75 % of the health and the turn rate 30 % + 70 % of that push, so a ship with dead thrusters still sidesteps at a quarter and turns at about half its rate.
   - **Hull**: every other hit costs 12 of 100 hull points, so it takes nine hits to destroy a ship: long enough for a dogfight, and every hit still leaves its holes.
 - **Decompression.** Each beam leaves an entry and a larger exit hole. The escaping air jolts the ship into a spin and keeps pushing it for a few seconds (fading with a time constant of 2.5 s) until the compartment is empty. A healthy flight computer catches the tumble quickly; damaged thrusters take longer.
 - **Wreckage.** A destroyed ship breaks into five glowing pieces of hull plating that keep its momentum, fall towards the asteroids and grind to dust when they hit one. Flying into a piece costs hull points depending on the impact speed; lasers shatter them.
@@ -236,7 +236,7 @@ There are no shields. Every hit stays until the ship respawns.
 
 ### Heat
 
-The laser draws no ammunition but produces heat. Each shot adds 20 % of the heat capacity, so a cool laser fires a burst of five; at 100 % the laser locks until the ship has cooled down to 30 %. Radiators shed 20 % per second in sunlight and 50 % per second in the shadow of an asteroid. The asteroids cast real shadows; a ship in shadow goes dark and the HUD shows ☾ next to the heat gauge.
+The laser draws no ammunition but produces heat. Each shot adds 20 % of the heat capacity; the radiators keep working between shots (0.18 s apart), so a cool laser fires a burst of six in sunlight and nine in shadow; at 100 % the laser locks until the ship has cooled down to 30 %. Radiators shed 20 % per second in sunlight and 50 % per second in the shadow of an asteroid. The asteroids cast real shadows; a ship in shadow goes dark and the HUD shows ☾ next to the heat gauge.
 
 ### The pilot
 

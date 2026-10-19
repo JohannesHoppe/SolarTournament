@@ -44,7 +44,8 @@ export class Bot {
   think(now: number, ships: Ship[], field: AsteroidField): Controls {
     const me = this.ship.flight;
     const controls: Controls = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
-    const dt = now - this.lastThink;
+    // the first thought after a (re)spawn must not count the time the bot was gone as reaction time
+    const dt = Math.min(now - this.lastThink, 0.1);
     this.lastThink = now;
 
     if (now >= this.nextRethink) {

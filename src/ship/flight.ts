@@ -120,9 +120,10 @@ export class FlightModel {
     local.copy(direction).normalize().applyQuaternion(inverse);
     const off = Math.acos(THREE.MathUtils.clamp(-local.z, -1, 1));
     if (off < FLIP_STEER_ANGLE) return { ...this.steer(direction, gain), roll: 0 };
-    const side = Math.hypot(local.x, local.y);
-    // straight behind there is no "above" to roll to: just pull up
-    const rollError = side < 0.05 ? 0 : Math.atan2(local.x, local.y);
+    // a goal behind and below is reached faster by pulling straight up and over than by
+    // rolling half around first; the steering at the end takes out what is left
+    const behind = Math.PI - off;
+    const rollError = local.y < 0 && behind < FLIP_PULL_THROUGH ? 0 : Math.atan2(local.x, local.y);
     const aligned = Math.max(0, 1 - Math.abs(rollError) / FLIP_ROLL_TOLERANCE);
     return {
       yaw: 0,
@@ -136,3 +137,5 @@ export class FlightModel {
 const FLIP_STEER_ANGLE = 0.35;
 /** The nose only pulls up once the roll is this close to the goal (rad). */
 const FLIP_ROLL_TOLERANCE = 0.6;
+/** A goal below and within this angle of straight behind (rad, 70°) is reached by pulling up without rolling. */
+const FLIP_PULL_THROUGH = 1.2;

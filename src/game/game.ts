@@ -64,6 +64,8 @@ const BRAKE_BURN_ANGLE = 0.2;
 const BRAKE_EASE = 0.3;
 /** Below this speed the brake counts the ship as at rest (units/s, 1 m/s). */
 const BRAKE_REST = 20;
+/** Once at rest, the brake only burns again above this speed (units/s, 2 m/s). */
+const BRAKE_RESUME = 40;
 /** One standard gravity in units/s² (1 unit = 5 cm). */
 const G = 9.81 / 0.05;
 /** Above this load the pilot starts to grey out; at the limit it takes G_ONSET seconds to tunnel vision. */
@@ -74,6 +76,8 @@ const G_RECOVERY = 3;
 const IMPACT_MARGIN = 2;
 /** Assumed duration of a flip for the impact warning (s). */
 const FLIP_SECONDS = 2.5;
+/** Assumed extra time of the roll that starts a head-over flip (s). */
+const FLIP_ROLL_SECONDS = 1;
 const ZONE_MESSAGES: Record<Zone, string> = {
   reactor: 'Reactor breach',
   drive: 'Main drive damaged',
@@ -159,6 +163,8 @@ export class Game implements OnlineGame {
   private flipAssist = false;
   /** The brake has brought the ship to rest (it beeps once). */
   private braked = false;
+  /** The stick when the flip began: moving it away from there hands the ship back to the pilot. */
+  private flipStick = { yaw: 0, pitch: 0 };
   /** How the own clone died last, for the sponsor break. */
   private deathCause = 'Your clone is dead';
   /** The running flight school, or null in a tournament round. */
@@ -449,7 +455,7 @@ export class Game implements OnlineGame {
         }
         if (action === 'pause') this.pause();
         if (action === 'camera') this.cockpit = !this.cockpit;
-        if (action === 'flip' && this.me?.alive) this.flipAssist = !this.flipAssist;
+        if (action === 'flip' && this.me?.alive) this.toggleFlip();
         break;
       case 'paused':
         if (action === 'confirm' || action === 'pause') this.resume();
@@ -911,7 +917,9 @@ export class Game implements OnlineGame {
     if (braking) {
       this.flipAssist = false;
       const speed = flight.velocity.length();
-      if (speed < BRAKE_REST) {
+      // at rest the brake holds still until gravity has pulled the ship clearly out of rest,
+      // so it does not flicker between resting and burning
+      if (speed < (this.braked ? BRAKE_RESUME : BRAKE_REST)) {
         if (!this.braked) this.sound.beep(660, 0.08);
         this.braked = true;
         return { ...controls, thrust: 0 };
@@ -919,13 +927,16 @@ export class Game implements OnlineGame {
       this.braked = false;
       retrograde.copy(flight.velocity).negate();
       const aligned = flight.angleTo(retrograde) < BRAKE_BURN_ANGLE;
-      // the burn eases off at the end, so the ship comes to rest instead of reversing
-      const thrust = aligned ? Math.min(1, speed / (MAIN_THRUST * BRAKE_EASE)) : 0;
+      // the burn eases off at the end, so the ship comes to rest instead of reversing; a
+      // damaged drive pushes less, so it eases off later
+      const thrust = aligned ? Math.min(1, speed / (MAIN_THRUST * Math.max(me.drive, 0.05) * BRAKE_EASE)) : 0;
       return { ...controls, ...flight.flip(retrograde, 3), thrust };
     }
     this.braked = false;
     if (!this.flipAssist) return controls;
-    if (!me.alive || Math.hypot(controls.yaw, controls.pitch) > 0.35 || flight.velocity.lengthSq() < 400) {
+    // the pilot takes over by moving the stick; a mouse pointer resting off-center does not count
+    const grabbed = Math.hypot(controls.yaw - this.flipStick.yaw, controls.pitch - this.flipStick.pitch) > 0.35;
+    if (!me.alive || grabbed || flight.velocity.lengthSq() < 400) {
       this.flipAssist = false;
       return controls;
     }
@@ -936,6 +947,14 @@ export class Game implements OnlineGame {
       return controls;
     }
     return { ...controls, ...flight.flip(retrograde, 3) };
+  }
+
+  /** X: starts the flip assist, or stops it; remembers where the stick was. */
+  private toggleFlip() {
+    this.flipAssist = !this.flipAssist;
+    const stick = this.input.read();
+    this.flipStick.yaw = stick.yaw;
+    this.flipStick.pitch = stick.pitch;
   }
 
   /** Drive trail, thruster puffs, and venting holes in damaged hulls. */
@@ -1165,7 +1184,10 @@ export class Game implements OnlineGame {
       if (hit) {
         const timeToImpact = Math.max(0, hit.distance - me.radius) / speed;
         const thrust = MAIN_THRUST * Math.max(me.drive, 0.01);
-        const flipTime = (flight.angleTo(retrograde.copy(heading).negate()) / Math.PI) * FLIP_SECONDS;
+        // the head-over flip rolls first, and damaged thrusters turn the ship more slowly
+        const turning = flight.angleTo(retrograde.copy(heading).negate());
+        const turnRate = 0.3 + 0.7 * (0.25 + 0.75 * me.thrusters);
+        const flipTime = ((turning / Math.PI) * FLIP_SECONDS + (turning > 0.35 ? FLIP_ROLL_SECONDS : 0)) / turnRate;
         const brakeTime = flipTime + speed / thrust / 2;
         if (timeToImpact < brakeTime + IMPACT_MARGIN) {
           warnings.push(`IMPACT IN ${timeToImpact.toFixed(1)} s`);
