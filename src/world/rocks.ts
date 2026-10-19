@@ -7,6 +7,8 @@ const ROCK_SEED = 2584;
 const ROCK_COUNT = 16;
 /** Edge subdivisions of the base icosahedron: 20 · 33² ≈ 22 000 triangles per rock. */
 const DETAIL = 32;
+/** Subdivisions for rocks seen only from kilometers away: 20 · 7² ≈ 1000 triangles each. */
+export const DISTANT_DETAIL = 6;
 /** Mean radius of a template in world units (40 to 55 m); the field scales it by 2.5 to 7. */
 const MIN_RADIUS = 800;
 const MAX_RADIUS = 1100;
@@ -85,7 +87,7 @@ function craterHeight(direction: THREE.Vector3, crater: Crater): number {
  * One rock: a squashed or stretched ellipsoid, roughened by fractal noise and pocked with
  * craters, colored by its composition.
  */
-function createRock(index: number): THREE.Mesh {
+function createRock(index: number, detail: number): THREE.Mesh {
   const r = new Randomizer(ROCK_SEED * 7919 + index * 104729);
   const noise = new Noise(r.nextInt());
   const composition = COMPOSITIONS[r.nextInt() % COMPOSITIONS.length];
@@ -111,7 +113,7 @@ function createRock(index: number): THREE.Mesh {
     });
   }
 
-  let geometry: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, DETAIL);
+  let geometry: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, detail);
   geometry.deleteAttribute('normal');
   geometry.deleteAttribute('uv');
   geometry = mergeVertices(geometry);
@@ -155,7 +157,10 @@ function createRock(index: number): THREE.Mesh {
   return mesh;
 }
 
-/** The rock shapes of the asteroid field, identical on every client. */
-export function createRocks(): THREE.Mesh[] {
-  return Array.from({ length: ROCK_COUNT }, (_, i) => createRock(i));
+/**
+ * The rock shapes of the asteroid field, identical on every client; with a lower detail,
+ * the same shapes for rocks so far away that their fine relief would never show.
+ */
+export function createRocks(detail = DETAIL): THREE.Mesh[] {
+  return Array.from({ length: ROCK_COUNT }, (_, i) => createRock(i, detail));
 }

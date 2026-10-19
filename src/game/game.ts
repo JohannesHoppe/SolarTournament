@@ -21,7 +21,8 @@ import { MAIN_THRUST, RCS_THRUST } from '../ship/flight';
 import { newRoomCode, roomCode, Session, type RoundState } from '../net/session';
 import { Online, TOURNAMENT_SIZE, type OnlineGame } from '../net/online';
 import { Space, SUN_DIRECTION } from '../world/space';
-import { Arena, ARENA_LIMIT } from '../world/arena';
+import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
+import { Belt } from '../world/belt';
 import { FlightSchool, type SchoolContext } from './school';
 import { SponsorBreak } from './sponsors';
 import { Wrecks } from '../world/wrecks';
@@ -52,8 +53,6 @@ const SAFE_IMPACT = 250;
 const IMPACT_DAMAGE = 1 / 12;
 /** Share of the impact speed a ship keeps when it bounces off a rock. */
 const RESTITUTION = 0.3;
-/** Seconds a ship may stay beyond ARENA_LIMIT before it is lost: enough to flip, burn off an outward drift of 100 m/s or more and fly back in. */
-const ARENA_GRACE = 20;
 /** Each death of the Host by an enemy raises the bots' ease (see Bot.ease) by this much in a solo round; a kill by the Host lowers it by KILL_EASE. */
 const DEATH_EASE = 0.35;
 const KILL_EASE = 0.1;
@@ -204,6 +203,7 @@ export class Game implements OnlineGame {
   private readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 10, 400000);
   private readonly space = new Space();
   private readonly arena = new Arena();
+  private readonly belt: Belt;
   readonly field: AsteroidField;
   private readonly effects: Effects;
   private readonly wrecks = new Wrecks();
@@ -319,8 +319,9 @@ export class Game implements OnlineGame {
 
     this.scene.background = new THREE.Color(0x01020a);
     this.field = new AsteroidField(assets.asteroids);
+    this.belt = new Belt(assets.belt);
     this.effects = new Effects(assets.textures);
-    this.scene.add(this.space.sky, this.space.dust, this.arena.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
+    this.scene.add(this.space.sky, this.space.dust, this.arena.mesh, this.belt.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
       this.engineLights.push(light);

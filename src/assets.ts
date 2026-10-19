@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createRocks } from './world/rocks';
+import { createRocks, DISTANT_DETAIL } from './world/rocks';
 import { synthesizeSounds } from './sound/sounds';
 import { radialTexture, smokeTexture, sparkTexture } from './view/textures';
 
@@ -9,6 +9,8 @@ export type ShipType = 'human' | 'alien';
 export interface Assets {
   ships: Record<ShipType, THREE.Object3D>;
   asteroids: THREE.Object3D[];
+  /** The same rock shapes in low detail, for the belt beyond the arena. */
+  belt: THREE.Mesh[];
   textures: {
     flameFrames: THREE.Texture[];
     smoke: THREE.Texture;
@@ -101,6 +103,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   return {
     ships: { human, alien },
     asteroids: createRocks(),
+    belt: createRocks(DISTANT_DETAIL),
     textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), glow },
     sounds: synthesizeSounds(audio),
   };

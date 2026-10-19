@@ -75,7 +75,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `game/satire-ads.ts` | The invented sponsors of 2584 (Victory Cola, Space Burger, PrintMe Bodies, …): consumer satire in the ad slot until real sponsors take it |
 | **`world/`** | **The arena** |
 | `world/space.ts` | Stars, nebula, sun with shadows, space dust |
-| `world/arena.ts` | The arena edge (`ARENA_LIMIT`) and its grid |
+| `world/arena.ts` | The arena edge (`ARENA_LIMIT`, `ARENA_GRACE`) and its grid |
+| `world/belt.ts` | The asteroid belt beyond the arena: instanced low-detail rocks as scenery |
 | `world/asteroids.ts` | Asteroid field: ellipsoid collision, raycast, line of sight, gravity, fragments |
 | `world/rocks.ts` | Generates the 16 asteroid shapes: noise, craters, four kinds of rock; integer hashing and polynomials only, so every browser builds identical shapes |
 | `world/wrecks.ts` | Wreckage of destroyed ships |
