@@ -67,6 +67,14 @@ The menu offers a guided flight school without opponents. Ten steps teach the ma
 
 The tournament broadcaster pumps hard techno into every cockpit, composed live by the game with [Tone.js](https://tonejs.github.io/). There are no fixed tracks: every round grows its own track from a seed, and it is never heard again.
 
+**Musical direction.** The maintainer is a big fan of Kraftwerk and Daft Punk, and of everything early techno had to offer: hard beats and that certain underground feeling. It was a great time that he was maybe a little too young for, so we live it out here. Radio 2584 therefore sounds like the underground: driving, raw and distorted, with machine-like sequences, and now and then the German *Autobahn* feeling of Kraftwerk, robot voices with a rolling R included. Tracks must never become predictable: every round takes its own path.
+
+Decisions so far:
+
+- Hard and fast beats beat polite ones; chiptune and lounge music do not fit.
+- Schranz and generic rave are not the maintainer's taste and only play rarely.
+- German words in the robot voice, but only now and then.
+
 - **Hard and fast.** 140 to 160 BPM; hard techno sits around a median of 146 BPM, peak-time sets at 150 to 155.
 - **Five flavors.** *Hard*: rolling bass under a heavy rumble (148–155 BPM). *Industrial*: bit-crushed hats and metallic percussion, a little swing (140–147). *Acid*: a squelching 303 line carries the track (145–150). *Schranz*: the fastest, loop-driven and tom-heavy (155–160). *Rave*: distorted chord stabs and a hoover lead (148–154).
 - **The kick** is a sine whose pitch drops in two stages (18× the fundamental to 7.5× in 15 ms, then to the fundamental in 100 ms), saturated hard, with a noise click on top. The fundamental lies between 46 and 58 Hz and sets the key of the track.
