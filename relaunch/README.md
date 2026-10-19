@@ -123,13 +123,13 @@ Decisions so far:
 SolarTournament has a universe of its own. It borrows two principles from science fiction series we love:
 
 1. **Realistic physics**, as in *The Expanse*: Newtonian flight, no sound in vacuum, no shields, hulls that break.
-2. **Consciousness transfer into clones**, as in *Altered Carbon*: death is not the end.
+2. **Consciousness transfer into clones**, as in *Altered Carbon*: death is not the end. But over a live link and with a memory that never breaks, as for the expendable of *Mickey 17*: every death is lived through.
 
 Humanity has settled the solar system. Fast fusion drives make hard burns between the planets possible, and daredevil pilots whip their ships around gravity wells at extreme speed for the thrill of it. The SolarTournament grew out of that daring and became the greatest entertainment of its time: pilots fight each other to the death in ships among the asteroids, while audiences across the system watch from a safe distance. Gladiator games for the space age.
 
 The pilots die, and come back. They have transferred their consciousness into cloned human bodies; when a ship is destroyed, the pilot wakes up in the next clone, in the next ship. That is why every round has respawns, and why the audience never runs out of champions. The clones come out of a 3D printer: disposable bodies, printed by the dozen, and everyone knows it.
 
-The original pilot follows the fight over a live link to the clone in the cockpit, and nothing about it is safe: every death is felt, again and again. Everything the player sees and hears arrives over that link. When a hit or an impact shakes the clone, the link stutters: the picture breaks up like a corrupted video stream, the radio drops out, static crackles in the headset. When the clone dies, the link breaks down until the next clone is printed. Even the idle link to the clone hangar flickers now and then.
+The pilot lives in the clone over a live link. There is only ever one consciousness, and its memory carries on from clone to clone: a pilot remembers every death, because a pilot lives through every death. Dying hurts, and nothing about it is safe. (This is where SolarTournament leaves the Altered Carbon model behind, in which a stored memory is loaded into a new body and the death itself is lost; ours is closer to the reprinted expendable of Mickey 17.) Everything the player sees and hears arrives over that link. When a hit or an impact shakes the clone, the link stutters: the picture breaks up like a corrupted video stream, the radio drops out, static crackles in the headset. When the clone dies, the link breaks down until the next clone is printed. Even the idle link to the clone hangar flickers now and then.
 
 The future is broken, and it glows. Neon signs flicker over everything, every surface is for sale, every picture comes over a link that can break. The tournament's own sign is sun orange; the sponsors advertise in its complement, a cold azure blue.
 

@@ -11,7 +11,7 @@ The code in the parent directory (`../`) is the original from 2012 (CopperLicht,
 SolarTournament has a universe of its own. We take inspiration from popular series, but only adopt two game principles:
 
 - **A: Realistic physics as in The Expanse.** Reason: it simply was an awesome series. Whatever flies, collides, burns and breaks behaves the way it would out there, as long as it is fun: Newtonian flight, no sound in vacuum, no shields, lasers punch through. Where we deliberately deviate for the fun of it (e.g. the exaggerated gravity of the asteroids), the README says so explicitly.
-- **B: Consciousness transfer into clones as in Altered Carbon.** The pilots have transferred their consciousness into cloned human bodies, printed by 3D printers. When a clone dies, the pilot wakes up in the next one. That explains the respawn.
+- **B: Consciousness transfer into clones as in Altered Carbon, with one deliberate deviation.** The pilots have transferred their consciousness into cloned human bodies, printed by 3D printers. When a clone dies, the pilot wakes up in the next one. That explains the respawn. Unlike Altered Carbon, where a stored memory is loaded into a new body (two bodies, two memories; the death itself is not remembered unless it is uploaded), our pilots live over a **live link**: there is only ever one consciousness, the memory persists from clone to clone, and the pilot experiences every death. Dying hurts. This follows the reprinted expendable of the film Mickey 17.
 
 On top of that, a look:
 
