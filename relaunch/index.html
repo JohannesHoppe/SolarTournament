@@ -47,7 +47,7 @@
 
   <div id="menu" class="plate" hidden>
     <h1>Solar<span class="neon">Tour<span class="neon-loose">n</span>ament</span></h1>
-    <p class="tagline">Five minutes. No shields. No sound in space. Newton is watching.</p>
+    <p class="tagline">Five minutes. No shields. No sound in space. The President is watching.</p>
     <div class="ship-select">
       <button type="button" data-ship="human" class="selected">Human Interceptor</button>
       <button type="button" data-ship="alien">Alien Interceptor</button>
@@ -74,7 +74,14 @@
 
   <div id="transmission" hidden><span id="transmission-speaker"></span><span id="transmission-text"></span></div>
 
-  <button type="button" id="radio" title="Radio on / off (M)"><span id="radio-title">Radio 2584</span><span id="radio-style"></span></button>
+  <div id="now-playing">
+    <button type="button" id="radio" title="Radio on / off (M)" aria-label="Radio on / off">♪</button>
+    <a id="now-playing-link" href="radio.html" target="_blank" rel="noopener" title="Listen again and download">
+      <span class="np-label">Now playing</span>
+      <span id="radio-title">Radio 2584</span>
+      <span id="radio-style"></span>
+    </a>
+  </div>
 
   <div id="sponsor" hidden>
     <p class="sponsor-label">Clone lost</p>

@@ -1,13 +1,9 @@
+/* Michroma (SIL Open Font License, see public/assets/fonts/OFL-michroma.txt): headings, logo, neon signs. */
 @font-face {
-  font-family: 'Quicksand';
-  src: url('/assets/fonts/quicksand-book.woff') format('woff');
+  font-family: 'Michroma';
+  src: url('/assets/fonts/Michroma-Regular.ttf') format('truetype');
   font-weight: 400;
-}
-
-@font-face {
-  font-family: 'Quicksand';
-  src: url('/assets/fonts/quicksand-bold.woff') format('woff');
-  font-weight: 700;
+  font-display: swap;
 }
 
 /*
@@ -31,6 +27,24 @@
   --muted: #8ea3c0;
   --plate: rgba(6, 12, 28, 0.82);
   --line: rgba(255, 157, 0, 0.35);
+  /* text in the system's sans-serif; headings and signs in Michroma, which has one weight only */
+  --font-body: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-display: 'Michroma', var(--font-body);
+}
+
+h1,
+h2,
+.hud-top,
+#hud-message,
+#hud-warning,
+.sponsor-pitch,
+#radio-title,
+#transmission-text,
+.station-logo,
+.track h2,
+.tuner input {
+  font-family: var(--font-display);
+  font-weight: 400;
 }
 
 * {
@@ -44,7 +58,7 @@ body {
   overflow: hidden;
   background: #02030a;
   color: var(--text);
-  font-family: 'Quicksand', system-ui, sans-serif;
+  font-family: var(--font-body);
   user-select: none;
 }
 
@@ -92,10 +106,12 @@ kbd {
   gap: 14px;
 }
 
+/* Michroma runs wide: the logo is sized to fit the plate */
 .plate h1 {
   margin: 0;
-  font-size: 2.3rem;
-  letter-spacing: 0.02em;
+  font-size: clamp(1.3rem, 6.5vw, 1.7rem);
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 /*
@@ -885,66 +901,100 @@ body.touch #killfeed {
 body.glitching #hud,
 body.glitching .plate,
 body.glitching #sponsor,
-body.glitching #radio {
+body.glitching #now-playing {
   translate: var(--glitch-x, 0) 0;
   filter: hue-rotate(var(--glitch-hue, 0deg));
   text-shadow: var(--glitch-split, 2px) 0 rgba(255, 0, 80, 0.75), calc(-1 * var(--glitch-split, 2px)) 0 rgba(0, 220, 255, 0.75);
 }
 
-/* Radio 2584: names the song for a few seconds, a click switches the radio on and off. */
-#radio {
+/*
+ * Now playing: the track that is on, always in view. Its title is its seed; a click on it
+ * opens Radio 2584's own page, where the track can be heard again and downloaded.
+ */
+#now-playing {
   position: fixed;
-  top: 14px;
+  top: 12px;
   right: 16px;
   z-index: 20;
   display: flex;
+  align-items: center;
   gap: 8px;
-  align-items: baseline;
-  padding: 4px 10px;
-  border: 1px solid transparent;
+  max-width: calc(100vw - 32px);
+  padding: 4px 6px 4px 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(5, 7, 13, 0.6);
+  font-size: 0.8rem;
+}
+
+#radio {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
   border-radius: 8px;
   background: transparent;
-  color: var(--muted);
+  color: var(--accent);
   font: inherit;
-  font-size: 0.8rem;
-  opacity: 0.55;
   cursor: pointer;
-  transition: opacity 0.6s, border-color 0.6s;
-}
-
-#radio::before {
-  content: '♪';
-}
-
-#radio:hover,
-#radio.fresh {
-  opacity: 1;
-  border-color: var(--line);
-}
-
-#radio.fresh #radio-title {
-  color: #fff;
-  text-shadow: var(--neon-blue-soft);
 }
 
 #radio.off {
-  opacity: 0.4;
+  color: var(--muted);
   text-decoration: line-through;
+}
+
+#now-playing-link {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.np-label {
+  color: var(--muted);
+  font-size: 0.65rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+#radio-title {
+  overflow: hidden;
+  font-weight: 700;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+#now-playing.fresh #radio-title,
+#now-playing-link:hover #radio-title {
+  color: var(--tube-orange);
+  text-shadow: var(--neon-orange);
 }
 
 #radio-style {
   color: var(--accent-strong);
-  font-size: 0.7rem;
-  text-transform: uppercase;
+  font-size: 0.65rem;
   letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
-#radio.off #radio-style {
+#now-playing.off #radio-style,
+#now-playing.off .np-label {
   display: none;
 }
 
-body.touch #radio {
+body.touch #now-playing {
   top: 60px;
+}
+
+@media (max-width: 640px) {
+  #radio-style {
+    display: none;
+  }
 }
 
 /* Transmissions: what the radio says, in neon, while it is spoken. */
@@ -990,4 +1040,172 @@ body.touch #radio {
 
 body.touch #transmission {
   bottom: 150px;
+}
+
+/* Radio 2584's own page (radio.html): a scrolling document instead of the game's full screen. */
+html:has(body.page),
+body.page {
+  height: auto;
+  min-height: 100%;
+  overflow: auto;
+  user-select: text;
+}
+
+body.page {
+  background: radial-gradient(ellipse at top, #1a0d02 0%, #02030a 60%);
+}
+
+.station {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 16px 32px;
+}
+
+.station-logo {
+  margin: 0;
+  font-size: clamp(2.2rem, 8vw, 3.6rem);
+  letter-spacing: 0.02em;
+}
+
+.station-tagline {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.tuner {
+  display: grid;
+  gap: 8px;
+  margin: 28px 0;
+}
+
+.tuner label {
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tuner-row {
+  display: flex;
+  gap: 8px;
+}
+
+.tuner input {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(5, 7, 13, 0.8);
+  color: var(--tube-orange);
+  font: inherit;
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.tuner button,
+.track-actions button {
+  padding: 10px 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.track-actions button.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #04101f;
+  font-weight: 700;
+  box-shadow: 0 0 12px rgba(255, 157, 0, 0.55), 0 0 32px rgba(255, 110, 0, 0.3);
+}
+
+.track h2 {
+  margin: 0 0 4px;
+  color: var(--tube-orange);
+  font-size: 1.8rem;
+  text-shadow: var(--neon-orange);
+}
+
+#track-facts {
+  margin: 0 0 16px;
+  color: var(--accent-strong);
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* the shape of a track: one block per section */
+.track-form {
+  display: flex;
+  gap: 2px;
+  height: 28px;
+  margin-bottom: 8px;
+}
+
+.track-form .section {
+  flex-basis: 0;
+  border-radius: 3px;
+  background: rgba(255, 157, 0, 0.45);
+}
+
+.track-form .intro,
+.track-form .outro {
+  background: rgba(255, 157, 0, 0.2);
+}
+
+.track-form .peak,
+.track-form .finale {
+  background: var(--accent);
+  box-shadow: 0 0 8px rgba(255, 157, 0, 0.6);
+}
+
+.track-form .break,
+.track-form .strip,
+.track-form .gap {
+  background: rgba(77, 145, 255, 0.55);
+}
+
+.track-time {
+  margin-bottom: 16px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.track-actions {
+  display: flex;
+  gap: 8px;
+}
+
+#download-status {
+  min-height: 1.4em;
+  color: var(--muted);
+}
+
+.station-footer {
+  margin-top: 48px;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.station-footer a {
+  color: inherit;
+}
+
+/* the playhead runs along the shape of the track */
+.track-form {
+  position: relative;
+}
+
+.track-form::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  left: var(--progress, 0%);
+  width: 2px;
+  background: #fff;
+  box-shadow: var(--neon-blue-soft);
 }

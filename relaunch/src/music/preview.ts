@@ -1,16 +1,56 @@
-import { Band } from './band';
-import { barSeconds, createSong, STEPS_PER_BAR, type Energy, type Flavor } from './songs';
+import { Band, type Voice } from './band';
+import { barSeconds, createSong, STEPS_PER_BAR, type Energy, type Flavor, type Song } from './songs';
 import { loadVoice } from './voice';
 
+/** Length of a tournament track in seconds: the round, then the outro. */
+export function trackSeconds(song: Song): number {
+  const outro = song.form[song.form.length - 1];
+  return (outro.start + outro.bars) * barSeconds(song);
+}
+
+/** Rendering time grows faster than the music, so long tracks are pressed in chunks. */
+const CHUNK = 20;
+/** Each chunk starts this early, so reverbs, echoes and voice lines are already sounding at its seam (s). */
+const PREROLL = 8;
+/** Chunks overlap by this much and crossfade, so no seam clicks (s). */
+const FADE = 0.05;
+/** Events are scheduled this far after the start of a render (s). */
+const LEAD = 0.05;
+/** The last chunk keeps ringing for this long (s). */
+const TAIL = 1.5;
+
 /**
- * Development tool: renders a stretch of a track offline, voice included, and returns it as
- * a 16-bit stereo WAV file, base64-encoded. Used to listen to tracks without playing the game.
+ * Renders a stretch of a track offline, voice included, as 16-bit stereo WAV. The radio page
+ * uses it for downloads; in development it lets you listen to tracks without playing.
  */
-export async function renderPreview(title: string, energy: Energy, flavor: Flavor | undefined, from: number, seconds: number) {
+export async function renderTrack(song: Song, from: number, seconds: number, sampleRate = 44100, onProgress: (done: number) => void = () => {}): Promise<ArrayBuffer> {
   const T = await import('tone');
-  const song = createSong(title, energy, 300, flavor);
   const voice = await loadVoice();
-  const sampleRate = 32000;
+  const total = Math.round((seconds + TAIL) * sampleRate);
+  const out = [new Float32Array(total), new Float32Array(total)];
+  const fade = Math.round(FADE * sampleRate);
+  for (let start = 0; start < seconds; start += CHUNK) {
+    const last = start + CHUNK >= seconds;
+    const length = Math.min(CHUNK, seconds - start);
+    const pre = Math.min(PREROLL, from + start);
+    const chunk = await renderChunk(T, song, voice, from + start - pre, pre + length, last ? TAIL : FADE, sampleRate);
+    const skip = Math.round((pre + LEAD) * sampleRate);
+    const at = Math.round(start * sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const source = chunk[c];
+      const target = out[c];
+      for (let i = 0; skip + i < source.length && at + i < total; i++) {
+        // the first samples blend with the overlap the previous chunk left behind
+        const weight = start > 0 && i < fade ? i / fade : 1;
+        target[at + i] = target[at + i] * (1 - weight) + source[skip + i] * weight;
+      }
+    }
+    onProgress(Math.min(1, (start + length) / seconds));
+  }
+  return encodeWav(out, sampleRate);
+}
+
+async function renderChunk(T: typeof import('tone'), song: Song, voice: Voice, from: number, seconds: number, extra: number, sampleRate: number): Promise<Float32Array[]> {
   const buffer = await T.Offline(async (context) => {
     const band = new Band(T);
     band.output.toDestination();
@@ -19,10 +59,20 @@ export async function renderPreview(title: string, energy: Energy, flavor: Flavo
     band.prepare(song);
     context.transport.bpm.value = song.bpm;
     const sixteenth = barSeconds(song) / STEPS_PER_BAR;
-    const first = Math.ceil(from / sixteenth);
-    const last = Math.floor((from + seconds) / sixteenth);
-    for (let step = first; step < last; step++) band.play(song, step, step * sixteenth - from + 0.05);
-  }, seconds + 1.5, 2, sampleRate);
+    const first = Math.ceil(from / sixteenth - 1e-9);
+    const last = Math.ceil((from + seconds) / sixteenth - 1e-9);
+    for (let step = first; step < last; step++) band.play(song, step, step * sixteenth - from + LEAD);
+  }, LEAD + seconds + extra, 2, sampleRate);
+  return buffer.toArray() as Float32Array[];
+}
+
+/** Development tool: a stretch of a track as base64 WAV plus what the generator decided. */
+export async function renderPreview(title: string, energy: Energy, flavor: Flavor | undefined, from: number, seconds: number) {
+  const song = createSong(title, energy, 300, flavor);
+  const wav = await renderTrack(song, from, seconds, 32000);
+  let binary = '';
+  const bytes = new Uint8Array(wav);
+  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
   return {
     title: song.title,
     flavor: song.flavor,
@@ -31,11 +81,11 @@ export async function renderPreview(title: string, energy: Energy, flavor: Flavo
     form: song.form.map((s) => `${s.kind}:${s.bars}${s.groove !== 'four' ? '/' + s.groove : ''}${s.fake ? '/fake' : ''}`).join(' '),
     surprises: song.surprises.map((s) => `${s.type}@${s.bar}`).join(' '),
     voice: song.voice.map((v) => `${v.bar}:${v.language}:${v.style}`).join(' '),
-    wav: encodeWav(buffer.toArray() as Float32Array[], sampleRate),
+    wav: btoa(binary),
   };
 }
 
-function encodeWav(channels: Float32Array[], sampleRate: number): string {
+function encodeWav(channels: Float32Array[], sampleRate: number): ArrayBuffer {
   const frames = channels[0].length;
   const bytes = new DataView(new ArrayBuffer(44 + frames * channels.length * 2));
   const text = (offset: number, value: string) => [...value].forEach((c, i) => bytes.setUint8(offset + i, c.charCodeAt(0)));
@@ -59,8 +109,5 @@ function encodeWav(channels: Float32Array[], sampleRate: number): string {
       offset += 2;
     }
   }
-  let binary = '';
-  const array = new Uint8Array(bytes.buffer);
-  for (let i = 0; i < array.length; i += 0x8000) binary += String.fromCharCode(...array.subarray(i, i + 0x8000));
-  return btoa(binary);
+  return bytes.buffer;
 }

@@ -59,6 +59,7 @@ Never use `npx`, always the scripts from `package.json`.
 | File | Content |
 |---|---|
 | `main.ts` | Startup: WebGL check, load assets, create `Game` |
+| `radio-page.ts` | The radio page (`radio.html`, a second Vite entry): tune in a title, play it, download it as WAV |
 | `assets.ts` | Loads the ship models and drive sprites, collects the assets generated in code |
 | `rocks.ts` | Generates the 16 asteroid shapes: noise, craters, four kinds of rock; integer hashing and polynomials only, so every browser builds identical shapes |
 | `textures.ts` | Canvas textures: glows, sparks, smoke |
@@ -67,7 +68,7 @@ Never use `npx`, always the scripts from `package.json`.
 | `music/songs.ts` | Radio 2584: hard techno tracks from a seed (flavor, form, energy curve, Grids-style patterns, fills); every decision is an integer hash of seed, bar and step |
 | `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser) and how one sixteenth is played |
 | `music/radio.ts` | Plays the song on the cue's clock (tournament: the host's round clock), jumps when it drifts |
-| `music/preview.ts` | Development tool: renders a stretch of a song offline as WAV |
+| `music/preview.ts` | Renders a track (or a stretch) offline as WAV: downloads on the radio page, previews in development |
 | `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the radio host's lines |
 | `music/voice.ts` | Loads the pre-rendered voice sprite |
 
@@ -95,7 +96,7 @@ Never use `npx`, always the scripts from `package.json`.
 
 ## License
 
-The code is licensed under AGPL-3.0-or-later (`LICENSE`), the repository is public. Name, logo and domains are not licensed. The only files in `public/assets/` are Johannes' own ship models with their drive sprites (not licensed) the font (Quicksand 2008, no license, declared free by its author) and the rendered voice (`public/assets/voice/`, made by `npm run voice` with espeak-ng; the output of a GPL program is not covered by the GPL). Asteroids, sky, particles, sound effects and music are generated in code. New dependencies must be compatible with the AGPL. Third-party assets only enter the repo with a clarified license, named in the README; when in doubt, generate in code. Never commit keys, tokens or credentials. The menu links the source code, as the AGPL requires for a network game.
+The code is licensed under AGPL-3.0-or-later (`LICENSE`), the repository is public. Name, logo and domains are not licensed. The only files in `public/assets/` are Johannes' own ship models with their drive sprites (not licensed), the font Michroma (OFL) and the rendered voice (`public/assets/voice/`, made by `npm run voice` with espeak-ng; the output of a GPL program is not covered by the GPL). Asteroids, sky, particles, sound effects and music are generated in code. New dependencies must be compatible with the AGPL. Third-party assets only enter the repo with a clarified license, named in the README; when in doubt, generate in code. Never commit keys, tokens or credentials. The menu links the source code, as the AGPL requires for a network game.
 
 ## Code rules
 

@@ -46,6 +46,8 @@ export class Radio {
     private readonly onSong: (song: Song) => void,
     /** A voice line starts in `delayMs` milliseconds, for the subtitles. */
     private readonly onSpeak: (spoken: Spoken, delayMs: number) => void,
+    /** The game remembers whether the pilot switched the radio off; the radio page always plays. */
+    private readonly remember = true,
   ) {
     this.muffler = context.createBiquadFilter();
     this.muffler.type = 'lowpass';
@@ -54,11 +56,18 @@ export class Radio {
     this.output.gain.value = 0;
     this.muffler.connect(this.output).connect(destination);
     try {
-      this.enabledFlag = localStorage.getItem(ENABLED_KEY) !== 'off';
+      if (remember) this.enabledFlag = localStorage.getItem(ENABLED_KEY) !== 'off';
     } catch {
       // storage unavailable: the radio starts switched on
     }
     setInterval(() => this.tick(), TICK_MS);
+  }
+
+  /** Stops the music; the next cue starts it again from the cue's position. */
+  stop() {
+    this.cue = null;
+    this.songKey = '';
+    this.output.gain.setTargetAtTime(0, this.context.currentTime, 0.05);
   }
 
   get enabled() {
@@ -69,7 +78,7 @@ export class Radio {
   toggle(): boolean {
     this.enabledFlag = !this.enabledFlag;
     try {
-      localStorage.setItem(ENABLED_KEY, this.enabledFlag ? 'on' : 'off');
+      if (this.remember) localStorage.setItem(ENABLED_KEY, this.enabledFlag ? 'on' : 'off');
     } catch {
       // not remembered
     }

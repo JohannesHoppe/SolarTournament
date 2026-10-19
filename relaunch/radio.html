@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Radio 2584 · SolarTournament</title>
+  <meta name="description" content="Every round of SolarTournament grows its own techno track. Its title is its seed: enter a title, listen again, download it.">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body class="page">
+  <main class="station">
+    <h1 class="station-logo">Radio <span class="neon">2584</span></h1>
+    <p class="station-tagline">The soundtrack of the Presidential Games. Every round grows its own track, and its title is its seed: the same title, the same track, note for note.</p>
+
+    <form id="tuner" class="tuner" autocomplete="off">
+      <label for="title">Track title</label>
+      <div class="tuner-row">
+        <input id="title" name="title" maxlength="60" spellcheck="false" required>
+        <button type="button" id="random">Random</button>
+      </div>
+    </form>
+
+    <section id="track" class="track" hidden>
+      <h2 id="track-title"></h2>
+      <p id="track-facts"></p>
+      <div id="track-form" class="track-form" aria-hidden="true"></div>
+      <div class="track-time"><span id="track-position">0:00</span> / <span id="track-length"></span></div>
+      <div class="track-actions">
+        <button type="button" id="play" class="primary">Play</button>
+        <button type="button" id="download">Download WAV</button>
+      </div>
+      <p id="download-status"></p>
+    </section>
+
+    <div id="transmission" hidden><span id="transmission-speaker"></span><span id="transmission-text"></span></div>
+
+    <footer class="station-footer">
+      <a href="./">Play SolarTournament</a> · <a href="https://github.com/JohannesHoppe/SolarTournament" target="_blank" rel="noopener">Source code</a> · AGPL-3.0
+    </footer>
+  </main>
+  <script type="module" src="/src/radio-page.ts"></script>
+</body>
+</html>

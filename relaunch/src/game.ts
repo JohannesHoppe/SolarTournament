@@ -279,17 +279,20 @@ export class Game implements OnlineGame {
 
   private showRadioState() {
     $('radio').classList.toggle('off', !this.radio.enabled);
+    $('now-playing').classList.toggle('off', !this.radio.enabled);
     if (!this.radio.enabled) $('radio-title').textContent = 'Radio off';
+    else if (this.radio.song) $('radio-title').textContent = this.radio.song.title;
   }
 
-  /** Radio 2584 names a new song for a few seconds. */
+  /** Now playing: the title (the track's seed) stays in view; a new one lights up for a few seconds. */
   private announceSong(song: Song) {
-    $('radio-title').textContent = `Radio 2584 · ${song.title}`;
+    $('radio-title').textContent = song.title;
     $('radio-style').textContent = `${song.flavor} · ${song.bpm} bpm`;
-    const radio = $('radio');
-    radio.classList.add('fresh');
+    $<HTMLAnchorElement>('now-playing-link').href = `radio.html?title=${encodeURIComponent(song.title)}`;
+    const box = $('now-playing');
+    box.classList.add('fresh');
     clearTimeout(this.radioTitleTimer);
-    this.radioTitleTimer = window.setTimeout(() => radio.classList.remove('fresh'), 6000);
+    this.radioTitleTimer = window.setTimeout(() => box.classList.remove('fresh'), 6000);
   }
 
   /** Whatever the radio says also runs across the screen, in neon, while it is spoken. */

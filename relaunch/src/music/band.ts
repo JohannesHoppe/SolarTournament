@@ -45,6 +45,7 @@ export class Band {
 
   private readonly T: Tone;
   private readonly glue: ToneLib.Compressor;
+  private readonly voiceBus: ToneLib.Gain;
   private readonly master: ToneLib.Filter;
   private readonly musicLevel: ToneLib.Gain;
   private readonly pump: ToneLib.Gain;
@@ -97,7 +98,6 @@ export class Band {
   private readonly hostIn: ToneLib.Gain;
   private readonly hostStatic: ToneLib.NoiseSynth;
   private voice: Voice | null = null;
-  private voiceBuffer: ToneLib.ToneAudioBuffer | null = null;
 
   private flavor = '';
   /** Highpass of the bass; a breakdown lifts it, so the bass goes on without its low end. */
@@ -110,7 +110,9 @@ export class Band {
     this.output = new T.Gain(T.dbToGain(-1));
     const clipper = new T.WaveShaper(saturate(2), 4096).connect(this.output);
     clipper.oversample = '4x';
-    this.glue = new T.Compressor({ threshold: -14, ratio: 4, attack: 0.02, release: 0.12, knee: 6 }).connect(new T.Gain(0.9).connect(clipper));
+    // voices join after the glue compressor, so the music cannot squash them
+    this.voiceBus = new T.Gain(1).connect(clipper);
+    this.glue = new T.Compressor({ threshold: -14, ratio: 4, attack: 0.02, release: 0.12, knee: 6 }).connect(new T.Gain(0.9).connect(this.voiceBus));
     this.musicLevel = new T.Gain(1).connect(this.glue);
     this.master = new T.Filter({ frequency: 18000, type: 'lowpass', rolloff: -24, Q: 0 }).connect(this.musicLevel);
     this.pump = new T.Gain(1).connect(this.master);
@@ -268,7 +270,7 @@ export class Band {
     this.impact = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 1.3, sustain: 0, release: 0.1 }, volume: -13 }).connect(impactTone);
 
     // the regime's voice: ring-modulated, crushed, gritty, past the master filter; echo throws on the last word
-    const voiceOut = new T.Gain(1.4).connect(this.glue);
+    const voiceOut = new T.Gain(6).connect(this.voiceBus);
     const voiceGrit = new T.Chebyshev({ order: 3, wet: 0.35 }).connect(voiceOut);
     voiceGrit.connect(new T.Gain(0.35).connect(this.fxSend));
     const voiceCrush = new T.BitCrusher({ bits: 7 }).connect(voiceGrit);
@@ -283,7 +285,7 @@ export class Band {
     voiceGrit.connect(this.voiceEcho);
 
     // the radio host: a narrow radio band, a little drive, static at the start and the end
-    const hostOut = new T.Gain(1.3).connect(this.glue);
+    const hostOut = new T.Gain(3.5).connect(this.voiceBus);
     const hostBand = new T.Filter({ type: 'bandpass', frequency: 1500, Q: 0.8 }).connect(new T.WaveShaper(saturate(2.5), 1024).connect(hostOut));
     this.hostIn = new T.Gain(1).connect(new T.Filter({ type: 'highpass', frequency: 350, Q: 0 }).connect(hostBand));
     this.hostStatic = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.25, sustain: 0, release: 0.05 }, volume: -18 })
@@ -303,7 +305,6 @@ export class Band {
 
   setVoice(voice: Voice) {
     this.voice = voice;
-    this.voiceBuffer = new this.T.ToneAudioBuffer(voice.buffer);
   }
 
   /** Sets the sound of a track's flavor. */
@@ -498,7 +499,7 @@ export class Band {
    */
   speak(line: VoiceLine, t: number, eighth: number): number {
     const voice = this.voice;
-    if (!voice || !this.voiceBuffer) return t;
+    if (!voice) return t;
     let position = t;
     const list = words(line.text);
     list.forEach(({ word, stop }, i) => {
@@ -513,7 +514,7 @@ export class Band {
       position = start + clip[1] + (line.style === 'chop' ? 0.02 : 0.05) + (stop ? eighth : 0);
     });
     // the music steps back while the voice talks
-    this.musicLevel.gain.setValueAtTime(0.75, t);
+    this.musicLevel.gain.setValueAtTime(0.5, t);
     this.musicLevel.gain.setValueAtTime(1, position);
     this.onSpeak({ line: line.text, language: line.language, time: t, duration: position - t });
     return position;
@@ -522,7 +523,7 @@ export class Band {
   /** The radio host cuts in over the radio: static, the words, static. */
   host(text: string, name: string | null, t: number) {
     const voice = this.voice;
-    if (!voice || !this.voiceBuffer) return;
+    if (!voice) return;
     this.hostStatic.triggerAttackRelease(0.15, t, 0.9);
     let position = t + 0.18;
     for (const { word, stop } of words(text.replace('{name}', name ?? 'pilot'))) {
@@ -533,15 +534,17 @@ export class Band {
     }
     this.hostStatic.triggerAttackRelease(0.1, position + 0.05, 0.7);
     this.musicLevel.gain.cancelAndHoldAtTime(t);
-    this.musicLevel.gain.linearRampToValueAtTime(0.55, t + 0.1);
-    this.musicLevel.gain.setValueAtTime(0.55, position);
+    this.musicLevel.gain.linearRampToValueAtTime(0.4, t + 0.1);
+    this.musicLevel.gain.setValueAtTime(0.4, position);
     this.musicLevel.gain.linearRampToValueAtTime(1, position + 0.4);
     this.onSpeak({ line: text, language: 'mod', time: t, duration: position - t });
   }
 
+  /** One word: a native buffer source, which the browser discards by itself once it has played. */
   private playClip([offset, duration]: [number, number], time: number, destination: ToneLib.InputNode) {
-    const source = new this.T.ToneBufferSource(this.voiceBuffer!).connect(destination);
-    source.onended = () => source.dispose();
+    const source = (this.T.getContext().rawContext as BaseAudioContext).createBufferSource();
+    source.buffer = this.voice!.buffer;
+    this.T.connect(source, destination);
     source.start(time, offset, duration);
   }
 }
