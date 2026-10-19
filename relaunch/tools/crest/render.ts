@@ -46,6 +46,46 @@ function arcText(text: string, radius: number, size: number, spacing: number, bo
     if (path) glyphs.push(`<path transform="translate(${x} ${y}) rotate(${f(rotation)})" d="${path}"/>`);
     angle += (bottom ? -1 : 1) * (widths[i] / radius) * (180 / Math.PI);
   });
+  // Michroma has one weight only; an outline in the same color makes it bold
+  return `<g fill="${ORANGE}" stroke="${ORANGE}" stroke-width="${BOLD}" stroke-linejoin="miter">${glyphs.join('')}</g>`;
+}
+
+/** Stroke that thickens the lettering of the rings. */
+const BOLD = 1.3;
+
+/**
+ * Lettering along a quadratic curve from p0 over control point c to p1, centered on it
+ * vertically, every letter turned with the curve: the motto bends with its ribbon.
+ */
+function curveText(content: string, p0: [number, number], c: [number, number], p1: [number, number], size: number, spacing: number) {
+  const at = (t: number): [number, number] => [
+    (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * c[0] + t * t * p1[0],
+    (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * c[1] + t * t * p1[1],
+  ];
+  // arc length table of the curve
+  const samples = 400;
+  const table: { t: number; length: number }[] = [{ t: 0, length: 0 }];
+  for (let i = 1; i <= samples; i++) {
+    const [ax, ay] = at((i - 1) / samples);
+    const [bx, by] = at(i / samples);
+    table.push({ t: i / samples, length: table[i - 1].length + Math.hypot(bx - ax, by - ay) });
+  }
+  const curveLength = table[samples].length;
+  const tAt = (length: number) => table.find((entry) => entry.length >= length)?.t ?? 1;
+  const widths = [...content].map((ch) => font.getAdvanceWidth(ch, size) + spacing);
+  const total = widths.reduce((a, b) => a + b, 0) - spacing;
+  const cap = -font.getPath('H', 0, 0, size).getBoundingBox().y1;
+  let position = (curveLength - total) / 2;
+  const glyphs = [...content].map((ch, i) => {
+    const t = tAt(position + (widths[i] - spacing) / 2);
+    const [x, y] = at(t);
+    const [nx, ny] = at(Math.min(1, t + 0.001));
+    const [px, py] = at(Math.max(0, t - 0.001));
+    const angle = (Math.atan2(ny - py, nx - px) * 180) / Math.PI;
+    position += widths[i];
+    const d = font.getPath(ch, -(widths[i] - spacing) / 2, cap / 2, size).toPathData(2);
+    return d ? `<path transform="translate(${f(x)} ${f(y)}) rotate(${f(angle)})" d="${d}"/>` : '';
+  });
   return `<g fill="${ORANGE}">${glyphs.join('')}</g>`;
 }
 
@@ -96,10 +136,10 @@ const SUN: [number, number] = [0, -58];
 const rays = Array.from({ length: 36 }, (_, i) => {
   const angle = i * 10;
   const long = i % 2 === 0;
-  const a = point(96, angle - 2, ...SUN);
+  const a = point(96, angle - 3, ...SUN);
   const b = point(long ? 260 : 190, angle, ...SUN);
-  const c = point(96, angle + 2, ...SUN);
-  return `<path d="${poly([a, b, c])}" fill="${ORANGE}" opacity="${long ? 0.3 : 0.16}"/>`;
+  const c = point(96, angle + 3, ...SUN);
+  return `<path d="${poly([a, b, c])}" fill="${ORANGE}" opacity="${long ? 0.62 : 0.34}"/>`;
 }).join('');
 const sun = `<circle cx="${SUN[0]}" cy="${SUN[1]}" r="92" fill="url(#sun)"/><circle cx="${SUN[0]}" cy="${SUN[1]}" r="92" stroke="${ORANGE}" stroke-width="2"/>`;
 /** Eight planets and the asteroid belt: nine stars in an even arc over the eagle. */
@@ -231,10 +271,10 @@ function eagle(): string {
 // ---- the ribbon, laid across the inner ring --------------------------------------------------
 
 const ribbon = [
-  `<path d="M -140 136 L -166 142 L -154 154 L -166 168 L -132 164 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.4"/>`,
-  `<path d="M 140 136 L 166 142 L 154 154 L 166 168 L 132 164 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.4"/>`,
-  `<path d="M -142 132 Q 0 116 142 132 L 142 162 Q 0 146 -142 162 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.6"/>`,
-  text('PRESIDENTIAL GAMES', 145, 13, 2.4),
+  `<path d="M -128 142 L -152 146 L -141 157 L -152 170 L -124 166 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.4"/>`,
+  `<path d="M 128 142 L 152 146 L 141 157 L 152 170 L 124 166 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.4"/>`,
+  `<path d="M -132 138 Q 0 102 132 138 L 132 166 Q 0 130 -132 166 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.6"/>`,
+  curveText('PRESIDENTIAL GAMES', [-132, 152], [0, 116], [132, 152], 12, 2),
 ].join('');
 const year = text('MMDLXXXIV', 184, 10, 5);
 
