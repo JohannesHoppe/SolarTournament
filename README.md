@@ -74,31 +74,32 @@ For development, `?local=1#t=code` connects tabs of the same browser without the
 
 ## Flight school
 
-The menu leads with the flight school until a Host has completed it once; after that the solo round is the main action (Enter). The flight school trains one maneuver per drill, 23 drills in all, each with a short spoken line, the keys as big keycaps (the spoken words name no keys; the keycaps show those of the Host's keyboard, gamepad or touch screen), and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver.
+The menu leads with the flight school until a Host has completed it once; after that the solo round is the main action (Enter). The flight school trains one maneuver per drill, 24 drills in all, each with a short spoken line, the keys as big keycaps (the spoken words name no keys; the keycaps show those of the Host's keyboard, gamepad or touch screen), and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver.
 
 1. Briefing: the world of the games, in four sentences.
 2. Turning: three markers into the crosshair (arrows or mouse).
 3. Fine aim: Shift turns slowly; center a far marker exactly.
-4. Main drive: W up to 50 m/s, with the autopilot on.
-5. Free drift: T switches the autopilot off; the drift lessons that follow need it.
-6. Drifting: let go, nothing slows the ship down.
-7. Looking back while drifting: the nose turns, the course stays (the green prograde marker shows the course).
-8. Brake: hold S, the flight computer flips and burns until the ship is at rest.
-9. Flip and burn by hand, twice: X flips the ship, W burns; the S brake does not count here. The drill counts once the drift along the course is gone; a little sideways drift may remain.
-10. Stopping at a marker, near and far: burn, flip, burn. It counts once the ship rests (below 10 m/s) inside the blue sphere around the marker, 200 m in radius.
-11. Sliding with the thrusters (A/D), both ways, without turning.
-12. Dodging debris that drifts straight at the ship, twice, without turning.
-13. Autopilot back on (T).
-14. A course of four rings.
-15. Shooting a resting drone.
-16. Shooting a drifting drone (the laser hits instantly, no lead needed).
-17. Firing until the laser overheats.
-18. Cooling down in the shadow of an asteroid.
-19. The impact warning: drifting at a rock with 100 m/s, braking or sliding past.
-20. Chasing a bot that flies but does not shoot.
-21. Fighting a weak bot that shoots back, sliding sideways while firing.
-22. Final exam: a real bot.
-23. Cleared for the tournament.
+4. Cockpit view: C switches into the cockpit and back (skipped on touch screens, which have no camera switch).
+5. Main drive: W up to 50 m/s, with the autopilot on.
+6. Free drift: T switches the autopilot off; the drift lessons that follow need it.
+7. Drifting: let go, nothing slows the ship down.
+8. Looking back while drifting: the nose turns, the course stays (the green prograde marker shows the course).
+9. Brake: hold S, the flight computer flips and burns until the ship is at rest.
+10. Flip and burn by hand, twice: X flips the ship, W burns; the S brake does not count here. The drill counts once the drift along the course is gone; a little sideways drift may remain.
+11. Stopping at a marker, near and far: burn, flip, burn. It counts once the ship rests (below 10 m/s) inside the blue sphere around the marker, 200 m in radius.
+12. Sliding with the thrusters (A/D), both ways, without turning.
+13. Dodging debris that drifts straight at the ship, twice, without turning.
+14. Autopilot back on (T).
+15. A course of four rings.
+16. Shooting a resting drone.
+17. Shooting a drifting drone (the laser hits instantly, no lead needed).
+18. Firing until the laser overheats.
+19. Cooling down in the shadow of an asteroid.
+20. The impact warning: drifting at a rock with 100 m/s, braking or sliding past.
+21. Chasing a bot that flies but does not shoot.
+22. Fighting a weak bot that shoots back, sliding sideways while firing.
+23. Final exam: a real bot.
+24. Cleared for the tournament.
 
 ## Radio 2584
 

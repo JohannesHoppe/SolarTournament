@@ -1051,6 +1051,7 @@ export class Game implements OnlineGame {
     context.controls = controls;
     context.braking = this.input.braking;
     context.autopilot = this.autopilot;
+    context.cockpit = this.cockpit;
     context.impactAhead = this.impactAhead;
     context.device = this.input.touchActive ? 'touch' : this.input.gamepadActive ? 'gamepad' : 'keyboard';
     context.now = this.time;
@@ -1078,6 +1079,7 @@ export class Game implements OnlineGame {
       braking: false,
       impactAhead: false,
       autopilot: true,
+      cockpit: false,
       device: 'keyboard',
       field: this.field,
       now: 0,

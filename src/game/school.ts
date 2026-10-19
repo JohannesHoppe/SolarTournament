@@ -15,6 +15,8 @@ export interface SchoolContext {
   impactAhead: boolean;
   /** The autopilot takes out the drift across the nose; off, the ship drifts freely. */
   autopilot: boolean;
+  /** The camera sits in the cockpit instead of behind the ship. */
+  cockpit: boolean;
   /** What the Host flies with; touch has no fine aim. */
   device: Device;
   field: AsteroidField;
@@ -85,7 +87,7 @@ interface Drill {
 export type Device = 'keyboard' | 'gamepad' | 'touch';
 
 /** What a drill asks the pilot to use. */
-type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'fire' | 'autopilot';
+type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'fire' | 'autopilot' | 'camera';
 
 /** The keys, buttons and sticks of each device, as the keycaps show them. */
 const CONTROLS: Record<Device, Record<Command, string[]>> = {
@@ -98,6 +100,7 @@ const CONTROLS: Record<Device, Record<Command, string[]>> = {
     slide: ['A', 'D'],
     fire: ['Space', 'Click'],
     autopilot: ['T'],
+    camera: ['C'],
   },
   gamepad: {
     turn: ['Left stick'],
@@ -108,6 +111,7 @@ const CONTROLS: Record<Device, Record<Command, string[]>> = {
     slide: ['Right stick'],
     fire: ['LT'],
     autopilot: ['R3'],
+    camera: ['View'],
   },
   touch: {
     turn: ['Left stick'],
@@ -118,6 +122,7 @@ const CONTROLS: Record<Device, Record<Command, string[]>> = {
     slide: ['Right stick'],
     fire: ['FIRE'],
     autopilot: ['AUTO'],
+    camera: [],
   },
 };
 
@@ -241,6 +246,16 @@ const DRILLS: Drill[] = [
     done: (ctx, a) => holdFor(ctx, a, aimError(ctx, a.points[0]) < (ctx.device === 'touch' ? 0.04 : 0.015), 0.8),
     waypoint: (_, a) => a.points[0],
     mark: () => 'Target',
+  },
+  {
+    line: SCHOOL.cockpit,
+    praise: SCHOOL_PRAISE.cockpit,
+    keys: ['camera'],
+    // in, then out again; touch screens have no camera switch and skip it
+    done(ctx, a) {
+      if (ctx.cockpit) a.next = 1;
+      return ctx.device === 'touch' || (a.next === 1 && !ctx.cockpit);
+    },
   },
   {
     line: SCHOOL.drive,
@@ -655,7 +670,7 @@ export class FlightSchool {
   }
 
   /**
-   * "Flight school 3/23", the current line, the keys of the Host's device. The same object
+   * "Flight school 3/24", the current line, the keys of the Host's device. The same object
    * every frame; it only changes with the drill, the line or the device.
    */
   status(device: Device): { step: string; text: string; keys: string[] } {

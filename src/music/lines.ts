@@ -186,6 +186,7 @@ export const SCHOOL = {
     'The year is 2584. The Orange President wants his games, and you are one of his chosen Hosts. Your printed clones fly for you, and every death they die streams straight into your mind. Training clones are free. Shall we?',
   turn: 'Turn the ship. Put the marker in your crosshair.',
   fineAim: 'Hold fine aim, and you turn slowly. Center the marker. Exactly.',
+  cockpit: 'Now look through your clone’s eyes. Switch to the cockpit, have a look around, and switch back.',
   drive: 'This is your main drive. Push it to fifty meters per second.',
   freeDrift: 'Your autopilot keeps you flying where you point. Switch it off, and you drift like a real spaceship.',
   drift: 'Now let go. Nothing out here slows you down.',
@@ -222,6 +223,7 @@ export const SCHOOL = {
 export const SCHOOL_PRAISE = {
   turn: 'Nice. Turning only spins you around. It never moves you anywhere.',
   fineAim: 'Precise. I like that.',
+  cockpit: 'Inside you aim like your clone. Outside you see your ship and its drift. Your choice.',
   drive: 'Feel that? Nine g. Your clone gets heavier with every burn. Burn too long, and the world shrinks to a tunnel.',
   freeDrift: 'Free drift. Every push stays with you now, until you push back.',
   drift: 'No air, no friction. You drift forever, unless you do something about it.',
