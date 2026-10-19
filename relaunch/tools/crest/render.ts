@@ -15,6 +15,8 @@ const font = opentype.parse(fontFile.buffer.slice(fontFile.byteOffset, fontFile.
 
 const ORANGE = '#ff9d00';
 const DARK = '#0b0703';
+/** The ribbon's folded ends, a deeper orange in the shade. */
+const EMBER = '#c4570f';
 const deg = (d: number) => (d * Math.PI) / 180;
 const f = (n: number) => +n.toFixed(2);
 const point = (r: number, angle: number, cx = 0, cy = 0): [number, number] => [f(cx + r * Math.cos(deg(angle))), f(cy + r * Math.sin(deg(angle)))];
@@ -57,7 +59,7 @@ const BOLD = 2.6;
  * Lettering along a quadratic curve from p0 over control point c to p1, centered on it
  * vertically, every letter turned with the curve: the motto bends with its ribbon.
  */
-function curveText(content: string, p0: [number, number], c: [number, number], p1: [number, number], size: number, spacing: number) {
+function curveText(content: string, p0: [number, number], c: [number, number], p1: [number, number], size: number, spacing: number, color = ORANGE, weight = 0) {
   const at = (t: number): [number, number] => [
     (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * c[0] + t * t * p1[0],
     (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * c[1] + t * t * p1[1],
@@ -86,7 +88,7 @@ function curveText(content: string, p0: [number, number], c: [number, number], p
     const d = font.getPath(ch, -(widths[i] - spacing) / 2, cap / 2, size).toPathData(2);
     return d ? `<path transform="translate(${f(x)} ${f(y)}) rotate(${f(angle)})" d="${d}"/>` : '';
   });
-  return `<g fill="${ORANGE}">${glyphs.join('')}</g>`;
+  return `<g fill="${color}" stroke="${color}" stroke-width="${weight}" stroke-linejoin="miter">${glyphs.join('')}</g>`;
 }
 
 /** Straight lettering, centered. */
@@ -271,10 +273,10 @@ function eagle(): string {
 // ---- the ribbon, laid across the inner ring --------------------------------------------------
 
 const ribbon = [
-  `<path d="M -128 126 L -152 130 L -141 141 L -152 154 L -124 150 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.4"/>`,
-  `<path d="M 128 126 L 152 130 L 141 141 L 152 154 L 124 150 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.4"/>`,
-  `<path d="M -132 122 Q 0 86 132 122 L 132 150 Q 0 114 -132 150 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.6"/>`,
-  curveText('PRESIDENTIAL GAMES', [-132, 136], [0, 100], [132, 136], 12, 2),
+  `<path d="M -128 126 L -152 130 L -141 141 L -152 154 L -124 150 Z" fill="${EMBER}" stroke="${DARK}" stroke-width="1.6"/>`,
+  `<path d="M 128 126 L 152 130 L 141 141 L 152 154 L 124 150 Z" fill="${EMBER}" stroke="${DARK}" stroke-width="1.6"/>`,
+  `<path d="M -134 120 Q 0 84 134 120 L 134 152 Q 0 116 -134 152 Z" fill="${ORANGE}" stroke="${DARK}" stroke-width="1.6"/>`,
+  curveText('PRESIDENTIAL GAMES', [-134, 136], [0, 100], [134, 136], 13.5, 2, DARK, 0.9),
 ].join('');
 const year = text('MMDLXXXIV', 172, 10, 5);
 
