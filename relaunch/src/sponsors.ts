@@ -50,7 +50,7 @@ export class SponsorBreak {
     const generation = ++this.generation;
     this.onDone = onDone;
     this.boot.hidden = true;
-    this.status.textContent = 'Your next clone is being grown during this message';
+    this.status.textContent = 'Your next clone is being printed during this message';
     this.root.hidden = false;
     void this.ads.render(this.slot).then(() => {
       if (generation !== this.generation || !this.visible) return;

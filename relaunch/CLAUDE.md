@@ -49,6 +49,11 @@ Nie `npx` verwenden, immer die Scripts aus `package.json`.
 | `rocks.ts` | Erzeugt die 16 Asteroidenformen: Rauschen, Krater, vier Gesteinsarten; nur ganzzahliges Hashing und Polynome, damit jeder Browser identische Formen baut |
 | `textures.ts` | Canvas-Texturen: Leuchtkreise, Funken, Rauch |
 | `sounds.ts` | Synthetisierte Soundeffekte: Laser, Explosion |
+| `glitch.ts` | Gestörte Verbindung zum Klon: Shader, der einen kaputten JPEG-Datenstrom nachahmt (Look der REVEALED-Inscriptions), plus Glitch des DOM-HUD |
+| `music/songs.ts` | Radio 2584: Songs aus einem Seed (Stil, Tonart, Patterns, Arrangement); reine Funktionen von Seed, Takt und Schritt |
+| `music/band.ts` | Die Tone.js-Instrumente und wie ein Sechzehntel eines Songs gespielt wird |
+| `music/radio.ts` | Spielt den Song zur Uhr des Cues (Turnier: Rundenuhr des Hosts), springt bei Abweichung |
+| `music/preview.ts` | Entwicklungswerkzeug: rendert einen Songabschnitt offline als WAV |
 | `game.ts` | Spielzustände, Rundenablauf, Laser, Kollisionen, Arena, Kamera, Pilot (G-Kräfte, Warnungen) |
 | `flight.ts` | Newtonsches Flugmodell mit Bordcomputer (Drehraten-Regelung, `steer()`) |
 | `ship.ts` | Schiff: Rumpf, Trefferzonen, Löcher mit Dekompression, Laser-Hitze, Antriebsanimation |
@@ -76,7 +81,7 @@ Der Code steht unter AGPL-3.0-or-later (`LICENSE`), das Repo ist öffentlich. Na
 
 ## Regeln für den Code
 
-- **Determinismus:** Alles, was den gemeinsamen Weltzustand betrifft (Asteroidenfeld, Bruchstücke, Trümmer), entsteht aus dem Seed-Zufall (`Randomizer`), nie aus `Math.random()`. Sonst sehen Peer-to-Peer-Mitspieler unterschiedliche Welten. `Math.random()` ist nur für Optik erlaubt (Partikel, Flackern) und für Bot-Entscheidungen.
+- **Determinismus:** Alles, was den gemeinsamen Weltzustand betrifft (Asteroidenfeld, Bruchstücke, Trümmer, die Noten von Radio 2584), entsteht aus dem Seed-Zufall (`Randomizer`), nie aus `Math.random()`. Sonst sehen Peer-to-Peer-Mitspieler unterschiedliche Welten. `Math.random()` ist nur für Optik erlaubt (Partikel, Flackern) und für Bot-Entscheidungen.
 - **Menschen- und Alien-Schiff sind identisch**, nur das Aussehen unterscheidet sich (gemeinsamer Trefferradius).
 - **Kein Schall von außen:** Der Spieler hört nur, was durch den eigenen Rumpf kommt, plus Pieptöne des Bordcomputers.
 - **Performance:** Keine pro Frame erzeugten Objekte in heißen Schleifen; Scratch-Vektoren auf Modulebene wiederverwenden.
@@ -90,5 +95,8 @@ Im Dev-Modus hängt das Spiel als `window.game` am Fenster. Damit lässt sich de
 - Zeit einfrieren für Screenshots: `game.timeScale = 0`
 - Bots abschalten: andere Schiffe auf `alive = false` und `respawnAt = Infinity` setzen
 - Multiplayer: zwei Tabs mit `?t=<code>&local=1` öffnen und in beiden „Online tournament“ klicken (BroadcastChannel, ohne Internet); ohne `local=1` läuft derselbe Test über Trystero und echte Nostr-Relays
+
+- Musik offline rendern: `const { renderPreview } = await import('/src/music/preview.ts')`, dann `renderPreview(seed, 'round', 'acid', vonSekunde, dauer)`; liefert eine WAV-Datei als Base64, die sich als Datei speichern und anhören lässt
+- Glitch auslösen: `game.glitch.trigger(1, 5)`
 
 Der Testbrowser rendert ohne GPU, die Framerate dort sagt nichts über echte Hardware. Spielgefühl und Ton lassen sich so nicht beurteilen, das testet Johannes selbst.

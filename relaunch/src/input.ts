@@ -19,7 +19,7 @@ export interface Controls {
 
 export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 
-export type Action = 'confirm' | 'pause' | 'quit' | 'camera' | 'flip' | 'pointer-released';
+export type Action = 'confirm' | 'pause' | 'quit' | 'camera' | 'flip' | 'radio' | 'pointer-released';
 type ActionHandler = (action: Action) => void;
 
 /** How strongly mouse movement deflects the virtual stick, per pixel. */
@@ -168,6 +168,7 @@ export class Input {
     if (e.code === 'KeyQ') this.handler('quit');
     if (e.code === 'KeyC') this.handler('camera');
     if (e.code === 'KeyX') this.handler('flip');
+    if (e.code === 'KeyM') this.handler('radio');
     if (e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
   }
 }

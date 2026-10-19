@@ -11,6 +11,7 @@ export class Sound {
   private readonly thrusterGain = this.context.createGain();
   private buffers: Record<string, AudioBuffer | null> = {};
   private loopsStarted = false;
+  private whiteNoise: AudioBuffer | null = null;
 
   constructor() {
     this.master.gain.value = 0.6;
@@ -63,6 +64,33 @@ export class Sound {
     oscillator.stop(start + duration + 0.02);
   }
 
+  /**
+   * Static of the broken link to the clone: a burst of filtered white noise in the pilot's
+   * own headset, so it does not pass through the hull.
+   */
+  crackle(strength: number) {
+    if (this.context.state !== 'running') return;
+    const now = this.context.currentTime;
+    const source = this.context.createBufferSource();
+    source.buffer = this.whiteNoise ??= this.createWhiteNoise();
+    source.playbackRate.value = 0.5 + Math.random();
+    const filter = this.context.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.value = 200 + Math.random() * 600 * (1 + strength);
+    filter.Q.value = 1.5;
+    const gain = this.context.createGain();
+    gain.gain.setValueAtTime(0.25 * Math.min(1, strength + 0.3), now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+    source.connect(filter).connect(gain).connect(this.master);
+    source.start(now, Math.random());
+    source.stop(now + 0.08);
+  }
+
+  /** Where the cockpit radio plays: straight into the headset, like the beeps. */
+  get headset(): AudioNode {
+    return this.master;
+  }
+
   /** Drive rumble and thruster hiss of the own ship, 0..1 each. */
   setEngine(drive: number, thrusters: number) {
     const now = this.context.currentTime;
@@ -94,6 +122,13 @@ export class Sound {
     hissFilter.Q.value = 0.8;
     hiss.connect(hissFilter).connect(this.thrusterGain).connect(this.hull);
     hiss.start();
+  }
+
+  private createWhiteNoise(): AudioBuffer {
+    const buffer = this.context.createBuffer(1, this.context.sampleRate * 2, this.context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    return buffer;
   }
 
   private noiseBuffer(): AudioBuffer {

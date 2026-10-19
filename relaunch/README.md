@@ -38,6 +38,7 @@ Alternatively, connect the GitHub repository in the Cloudflare dashboard (Worker
 | X | Y | Flip: the flight computer turns the drive into the flight direction |
 | Click / Space | LT / A | Fire laser |
 | C | View | Chase / cockpit camera |
+| M | | Radio on / off (also by clicking the song title in the top right corner) |
 | Esc | Menu | Pause |
 | Enter | A | Confirm (start, resume, boot the next clone) |
 
@@ -62,6 +63,17 @@ For development, `?t=code&local=1` connects tabs of the same browser without the
 
 The menu offers a guided flight school without opponents. Ten steps teach the main drive, drifting, the flip, braking, the maneuvering thrusters, shooting a target drone, cooling in the shadow of an asteroid and the impact warning. Each step waits until the pilot has actually done it; a blinking diamond marks targets. Training clones are free: a pilot who dies in flight school respawns without a sponsor break.
 
+## Radio 2584
+
+The tournament broadcaster plays the same soundtrack into every cockpit: old-school techno, electro and chiptune, composed live by the game with [Tone.js](https://tonejs.github.io/). Nothing is recorded; every song comes out of a seed.
+
+- **Five styles.** *Robotik*: drum machine electro with octave basses and pling arpeggios. *Acid*: squelching, resonant basslines. *Chip*: fast square-wave arpeggios like a home computer's sound chip. *Detroit*: deep, syncopated bass with chord stabs and echoes. *Rave*: hard, distorted offbeat bass and screaming leads. The basses and leads run through distortion, a wave shaper and a bit crusher, so they get dirty.
+- **A song** is a key, a scale, a chord progression, one-bar patterns for drums, bass, arpeggio and chord stabs, and a two-bar lead motif that follows the chords. Tempo, patterns and the song title come from the seed.
+- **Arrangement.** Songs are built from 8-bar sections: intro, groove, build (the filter opens, a noise riser climbs, a snare roll runs into a beat of silence), drop, main, breakdown. Bass and chords duck on every kick. The last minute of a round is the finale with everything at full dirt; after the round the song fades out in an outro.
+- **Everyone hears the same beat.** In an online tournament the room code and the round number choose the song, and the music runs on the host's round clock. A browser compares its music with that clock several times per second and jumps to the right step when they drift apart, so all pilots of a tournament hear the same note at the same moment (up to the network delay).
+- **Lounge.** The menu and the flight school play calm songs on a local clock.
+- The radio sits in the cockpit and plays straight into the headset, not through the hull. When the clone dies, its radio fades into the distance; the next clone hears it clearly again.
+
 ## The universe
 
 SolarTournament has a universe of its own. It borrows two principles from science fiction series we love:
@@ -71,7 +83,9 @@ SolarTournament has a universe of its own. It borrows two principles from scienc
 
 Humanity has settled the solar system. Fast fusion drives make hard burns between the planets possible, and daredevil pilots whip their ships around gravity wells at extreme speed for the thrill of it. The SolarTournament grew out of that daring and became the greatest entertainment of its time: pilots fight each other to the death in ships among the asteroids, while audiences across the system watch from a safe distance. Gladiator games for the space age.
 
-The pilots die, and come back. They have transferred their consciousness into cloned human bodies; when a ship is destroyed, the pilot wakes up in the next clone, in the next ship. That is why every round has respawns, and why the audience never runs out of champions.
+The pilots die, and come back. They have transferred their consciousness into cloned human bodies; when a ship is destroyed, the pilot wakes up in the next clone, in the next ship. That is why every round has respawns, and why the audience never runs out of champions. The clones come out of a 3D printer: disposable bodies, printed by the dozen, and everyone knows it.
+
+The original pilot stays safe and follows the fight over a live link to the clone in the cockpit. Everything the player sees and hears arrives over that link. When a hit or an impact shakes the clone, the link stutters: the picture breaks up like a corrupted video stream, the radio drops out, static crackles in the headset. When the clone dies, the link breaks down until the next clone is printed. Even the idle link to the clone hangar flickers now and then.
 
 It is a society without morals. A new clone is not free: the pilot pays with attention. Before the next body boots, the pilot has to watch an advertisement. Want another clone? Make the sponsor happy.
 
@@ -131,12 +145,12 @@ The laser draws no ammunition but produces heat. Each shot adds 30 % of the heat
 
 ### Sound
 
-There is no sound in vacuum. Everything the pilot hears travels through the own hull and sounds muffled: the rumble of the drive, the hiss of the thrusters, the own laser, hits on the own ship, and debris of nearby explosions rattling against the hull. Clean beeps come from the ship's computer: hits, kills, the end of a flip, impact warnings.
+There is no sound in vacuum. Everything the pilot hears travels through the own hull and sounds muffled: the rumble of the drive, the hiss of the thrusters, the own laser, hits on the own ship, and debris of nearby explosions rattling against the hull. Clean beeps come from the ship's computer: hits, kills, the end of a flip, impact warnings. The radio and the static of a disturbed link play in the headset and are not muffled.
 
 ### Combat rules
 
 - A kill scores 500 points; asteroids score 200, 120 and 80 points depending on their generation.
-- Destroyed ships respawn at the edge of the field, with 2.5 seconds of spawn protection. Bots respawn after 3 seconds. The own pilot first sits through a sponsor break: after 3 seconds an ad appears, and once it has run, a button boots the next clone. The round goes on meanwhile.
+- Destroyed ships respawn at the edge of the field, with 2.5 seconds of spawn protection. Bots respawn after 3 seconds. The own pilot first sits through a sponsor break while the next clone is printed: after 3 seconds an ad appears, and once it has run, a button boots the next clone. The round goes on meanwhile.
 - Human and alien interceptor are identical apart from their looks.
 
 ## License
@@ -147,6 +161,6 @@ There is no sound in vacuum. Everything the pilot hears travels through the own 
 
 **Ships:** The two interceptor models and their drive sprites (`public/assets/models/`, `public/assets/textures/`) are by Johannes Hoppe and not covered by the license. Please ask for permission before using them in other software.
 
-**Everything else is generated in code** and covered by the license: asteroids, sky, sun, particles, sound effects and the icon.
+**Everything else is generated in code** and covered by the license: asteroids, sky, sun, particles, sound effects, music and the icon.
 
 **Font:** Quicksand, SIL Open Font License (see `public/assets/fonts/LICENSE-quicksand.txt`).

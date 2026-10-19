@@ -21,7 +21,9 @@ Abgearbeitet von oben nach unten. Jeder erledigte Punkt ist auch in der README d
 
 - [ ] Zuschauer-Modus: Übertragung mit automatischer Regie-Kamera
 - [ ] Zeitlupen-Wiederholung bei Abschüssen (Kill-Cam)
-- [ ] Cockpit-Radio: Musik und Kommentator, dumpf durch den Rumpf. Generative Musik mit Tone.js (MIT-Lizenz), wie in Johannes’ Inscriptions-Experimenten (`haushoppe/deconstructed-inscriptions`)
+- [x] Radio 2584: generative Musik mit Tone.js, für alle Piloten synchron
+- [ ] Radio 2584: Kommentator, Jingles, Samples wie in Johannes’ Inscriptions-Experimenten (`haushoppe/deconstructed-inscriptions`)
+- [x] Glitch der Verbindung zum Klon bei Treffern, Einschlägen und Tod
 - [ ] Publikumsgunst (Hype) für spektakuläre Manöver
 - [ ] Sponsoren auf den Schiffen, Sponsor-Aufträge
 - [ ] Klon-Zähler mit HUD-Bildfehlern bei vielen Kopien

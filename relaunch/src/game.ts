@@ -8,7 +8,10 @@ import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from './aster
 import { Sound } from './audio';
 import { Bot, BOT_NAMES } from './bots';
 import { Effects } from './effects';
+import { Glitch } from './glitch';
 import { Hud } from './hud';
+import { Radio, type MusicCue } from './music/radio';
+import { mixSeed, textSeed, type Song } from './music/songs';
 import { IDLE, Input, type Action, type Controls } from './input';
 import { Ship, type ShipState, type Zone } from './ship';
 import { MAIN_THRUST } from './flight';
@@ -23,6 +26,13 @@ const ROUND_SECONDS = 5 * 60;
 /** Online tournaments show the scoreboard this long before the next round starts. */
 const RESULTS_SECONDS = 12;
 const FIELD_SEED = 11;
+/** A client's round clock jumps to the host's when it is this far off (s), and drifts towards it otherwise. */
+const ROUND_SNAP = 0.25;
+/** Song of the menu; the flight school plays the next one. */
+const LOUNGE_SEED = 2584;
+/** The idle link to the clone hangar glitches now and then, every 5 to 14 s. */
+const IDLE_GLITCH_MIN = 5;
+const IDLE_GLITCH_RANGE = 9;
 const BOT_COUNT = 3;
 const LASER_RANGE = 200000;
 const KILL_POINTS = 500;
@@ -75,6 +85,9 @@ const relative = new THREE.Vector3();
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
 const SCRAPE_COLOR = new THREE.Color(1, 0.7, 0.3);
 
+/** Real time in seconds; unlike game time it never slows down or pauses. */
+const wallClock = () => performance.now() / 1000;
+
 function storageGet(key: string): string | null {
   try {
     return localStorage.getItem(key);
@@ -108,6 +121,8 @@ export class Game implements OnlineGame {
   private state: State = 'menu';
   time = 0;
   private roundEndsAt = 0;
+  /** The same moment on the real-time clock (see setRoundEnd). */
+  private roundEndsAtWall = 0;
   /** Online tournament this browser takes part in, or null offline. */
   private online: Online | null = null;
   /** Number of the running online round; a new number resets the scores. */
@@ -130,6 +145,14 @@ export class Game implements OnlineGame {
   private nextWarningBeep = 0;
   /** Speed of game time; 0 freezes the simulation while rendering continues. */
   timeScale = 1;
+  private readonly glitch = new Glitch();
+  private readonly radio: Radio;
+  /** Song of the running solo round. */
+  private soloSeed = 1;
+  /** Clock of the lounge songs in menu and flight school (s). */
+  private readonly loungeEpoch = wallClock();
+  private nextIdleGlitch = 0;
+  private radioTitleTimer = 0;
 
   constructor(
     container: HTMLElement,
@@ -147,6 +170,9 @@ export class Game implements OnlineGame {
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.4, 0.88));
     this.composer.addPass(new OutputPass());
+    this.composer.addPass(this.glitch.pass);
+    this.glitch.onStatic = (strength) => this.sound.crackle(strength);
+    this.radio = new Radio(sound.context, sound.headset, (song) => this.announceSong(song));
 
     this.scene.background = new THREE.Color(0x01020a);
     this.field = new AsteroidField(assets.asteroids);
@@ -181,6 +207,8 @@ export class Game implements OnlineGame {
     $('quit').addEventListener('click', () => this.endRound());
     $('again').addEventListener('click', () => this.showMenu());
     $('invite').addEventListener('click', () => void this.copyInvite());
+    $('radio').addEventListener('click', () => this.toggleRadio());
+    this.showRadioState();
 
     // an invitation link opens the menu with "Join" as the main action
     const invited = this.invitedRoom();
@@ -235,7 +263,52 @@ export class Game implements OnlineGame {
     this.online = null;
   }
 
+  private toggleRadio() {
+    this.radio.toggle();
+    this.showRadioState();
+  }
+
+  private showRadioState() {
+    $('radio').classList.toggle('off', !this.radio.enabled);
+    if (!this.radio.enabled) $('radio-title').textContent = 'Radio off';
+  }
+
+  /** Radio 2584 names a new song for a few seconds. */
+  private announceSong(song: Song) {
+    $('radio-title').textContent = `Radio 2584 · ${song.title}`;
+    $('radio-style').textContent = song.style;
+    const radio = $('radio');
+    radio.classList.add('fresh');
+    clearTimeout(this.radioTitleTimer);
+    this.radioTitleTimer = window.setTimeout(() => radio.classList.remove('fresh'), 6000);
+  }
+
+  /**
+   * What the radio plays. A tournament round has its own song on the round clock: online,
+   * the room and round number pick it, so every pilot hears the same song at the same beat.
+   * Menu and flight school play calm songs on a local clock.
+   */
+  private musicCue(): MusicCue {
+    const inRound = this.state === 'playing' || this.state === 'results' || (this.state === 'paused' && !!this.online);
+    if (inRound && !this.school && Number.isFinite(this.roundEndsAtWall)) {
+      const seed = this.online ? mixSeed(textSeed(this.online.session.room), this.roundId) : this.soloSeed;
+      return { seed, energy: 'round', elapsed: ROUND_SECONDS - (this.roundEndsAtWall - wallClock()), roundLength: ROUND_SECONDS };
+    }
+    const seed = this.school && this.state !== 'menu' ? LOUNGE_SEED + 1 : LOUNGE_SEED;
+    return { seed, energy: 'lounge', elapsed: wallClock() - this.loungeEpoch, roundLength: ROUND_SECONDS };
+  }
+
+  /** A blow to the clone shakes the link to it: the picture breaks up, the radio drops out. */
+  private linkHit(strength: number, seconds: number) {
+    this.glitch.trigger(strength, seconds);
+    this.radio.dropout(0.05 + 0.2 * strength);
+  }
+
   private onAction(action: Action) {
+    if (action === 'radio') {
+      this.toggleRadio();
+      return;
+    }
     switch (this.state) {
       case 'menu':
         if (action === 'confirm') {
@@ -313,8 +386,10 @@ export class Game implements OnlineGame {
     this.respawn(this.me);
 
     this.roundId = 0;
+    this.soloSeed = 1 + Math.floor(Math.random() * 2147483000);
     // online, the host's clock decides (see hostRound and syncRound)
-    this.roundEndsAt = mode === 'solo' ? this.time + ROUND_SECONDS : Infinity;
+    if (mode === 'solo') this.setRoundEnd(ROUND_SECONDS);
+    else this.roundEndsAt = this.roundEndsAtWall = Infinity;
     this.cockpit = false;
     this.flipAssist = false;
     this.strain = 0;
@@ -391,20 +466,34 @@ export class Game implements OnlineGame {
       this.roundId = round.id;
       this.startNextRound();
     }
-    const endsAt = this.time + round.left;
-    if (Math.abs(endsAt - this.roundEndsAt) > 1 || !Number.isFinite(this.roundEndsAt)) this.roundEndsAt = endsAt;
+    // the radio plays on this clock, so it follows the host closely: jumps when far off,
+    // otherwise smooths out the jitter of the network
+    const endsAt = wallClock() + round.left;
+    if (Math.abs(endsAt - this.roundEndsAtWall) > ROUND_SNAP || !Number.isFinite(this.roundEndsAtWall)) this.setRoundEnd(round.left);
+    else this.setRoundEnd(this.roundEndsAtWall + (endsAt - this.roundEndsAtWall) * 0.05 - wallClock());
   }
 
   hostRound(): RoundState {
     // the first host of a room starts the clock; a new host continues the synced one
-    if (!Number.isFinite(this.roundEndsAt)) this.roundEndsAt = this.time + ROUND_SECONDS;
+    if (!Number.isFinite(this.roundEndsAtWall)) this.setRoundEnd(ROUND_SECONDS);
     // the host starts the next round once the scoreboard has been shown
-    if (this.time >= this.roundEndsAt + RESULTS_SECONDS) {
+    if (wallClock() >= this.roundEndsAtWall + RESULTS_SECONDS) {
       this.roundId++;
       this.startNextRound();
-      this.roundEndsAt = this.time + ROUND_SECONDS;
+      this.setRoundEnd(ROUND_SECONDS);
     }
-    return { id: this.roundId, left: +(this.roundEndsAt - this.time).toFixed(1) };
+    const left = this.roundEndsAtWall - wallClock();
+    this.roundEndsAt = this.time + left;
+    return { id: this.roundId, left: +left.toFixed(3) };
+  }
+
+  /**
+   * Sets the end of the round on both clocks. Online rounds run on real time, so a slow
+   * frame rate or a hidden tab does not hold them back; game time follows.
+   */
+  private setRoundEnd(left: number) {
+    this.roundEndsAt = this.time + left;
+    this.roundEndsAtWall = wallClock() + left;
   }
 
   /** Online: scores of the own ships start from zero, the scoreboard closes. */
@@ -422,6 +511,11 @@ export class Game implements OnlineGame {
     }
     const look = new THREE.Matrix4().lookAt(position, scratch.set(0, 0, 0), new THREE.Vector3(0, 1, 0));
     ship.spawn(position, new THREE.Quaternion().setFromRotationMatrix(look), this.time);
+    if (ship === this.me) {
+      // the link locks onto the freshly printed clone
+      this.glitch.trigger(0.5, 0.5);
+      this.radio.setMuffled(false);
+    }
   }
 
   /** The next clone only boots after the pilot has watched an ad. */
@@ -442,6 +536,8 @@ export class Game implements OnlineGame {
   }
 
   private resume() {
+    // a solo round stood still during the pause; its real-time end moves on accordingly
+    if (!this.online && Number.isFinite(this.roundEndsAt)) this.setRoundEnd(this.roundEndsAt - this.time);
     this.setScreen('playing');
     this.input.resetMouse();
     this.input.lockPointer();
@@ -493,6 +589,7 @@ export class Game implements OnlineGame {
     const height = window.innerHeight;
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
+    this.glitch.setSize(width * this.renderer.getPixelRatio(), height * this.renderer.getPixelRatio());
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.effects.setViewport(height * this.renderer.getPixelRatio(), this.camera.fov);
@@ -512,6 +609,17 @@ export class Game implements OnlineGame {
       this.effects.update(dt);
     }
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
+
+    this.radio.setCue(this.musicCue());
+    if (this.state === 'menu' || this.state === 'paused' || this.sponsors.visible) {
+      // the idle link flickers now and then
+      const now = performance.now() / 1000;
+      if (now >= this.nextIdleGlitch) {
+        if (this.nextIdleGlitch > 0) this.glitch.trigger(0.25 + Math.random() * 0.4, 0.1 + Math.random() * 0.4);
+        this.nextIdleGlitch = now + IDLE_GLITCH_MIN + Math.random() * IDLE_GLITCH_RANGE;
+      }
+    }
+    this.glitch.update();
 
     this.space.follow(this.camera);
     this.composer.render();
@@ -738,6 +846,7 @@ export class Game implements OnlineGame {
       this.hud.flashMessage(this.time, ZONE_MESSAGES[zone], 1.5);
       this.sound.play('explosion', { volume: 1.2, rate: 1.5 });
       this.sound.beep(220, 0.25, 0.12);
+      this.linkHit(zone === 'reactor' ? 1 : 0.7, 0.5);
     }
     if (status === 'destroyed') this.shipDestroyed(ship, shooter);
   }
@@ -747,8 +856,14 @@ export class Game implements OnlineGame {
     if (victim.isLocal) this.flipAssist = false;
     this.effects.explosion(victim.flight.position, victim.radius * 2, victim.flight.velocity.clone().multiplyScalar(0.3));
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
-    if (victim.isLocal) this.sound.play('explosion', { volume: 1.6, rate: 0.6 });
-    else this.hearDebris(victim.flight.position, victim.radius);
+    if (victim.isLocal) {
+      this.sound.play('explosion', { volume: 1.6, rate: 0.6 });
+      // the clone dies: its link breaks down, its radio fades out
+      this.glitch.trigger(1, 1.4);
+      this.radio.setMuffled(true);
+    } else {
+      this.hearDebris(victim.flight.position, victim.radius);
+    }
     // online, the owner of the victim announces the destruction; each peer scores its own ships
     if (victim.owner === null) this.online?.sendDestroyed(victim, killer);
     if (killer && killer.owner === null) {
@@ -793,6 +908,7 @@ export class Game implements OnlineGame {
     if (ship.isLocal && status !== 'protected') {
       this.hud.damaged();
       this.hud.flashMessage(now, `Impact at ${Math.round(approach * 0.05)} m/s`, 1.5);
+      this.linkHit(Math.min(1, 0.4 + (approach - SAFE_IMPACT) / 1000), 0.6);
     }
     if (status === 'destroyed') this.shipDestroyed(ship, null);
   }
@@ -810,6 +926,7 @@ export class Game implements OnlineGame {
       this.sound.play('explosion', { volume: Math.min(1.4, 0.3 + impact / 1000), rate: 2.1 });
       this.hud.damaged();
       this.hud.flashMessage(now, 'Debris impact', 1.2);
+      this.linkHit(0.5, 0.35);
     }
     if (status === 'destroyed') this.shipDestroyed(ship, null);
   }

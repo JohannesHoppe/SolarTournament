@@ -17,6 +17,7 @@
   "dependencies": {
     "nipplejs": "^1.0.4",
     "three": "^0.186.1",
+    "tone": "^15.1.22",
     "trystero": "^0.26.0"
   },
   "devDependencies": {
