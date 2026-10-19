@@ -252,6 +252,9 @@ There is no sound in vacuum. Everything the Host hears travels through the clone
 - A kill scores 500 points; asteroids score 200, 120 and 80 points depending on their generation.
 - Destroyed ships respawn at the edge of the field, with 2.5 seconds of spawn protection. Bots respawn after 3 seconds. The Host first sits through a sponsor break while the next clone is printed: after 3 seconds an ad appears, and once it has run, a button boots the next clone. The round goes on meanwhile.
 - Human and alien interceptor are identical apart from their looks.
+- A solo round lasts five minutes of real time, like the radio's track, so a slow frame rate does not stretch it. It pauses when the tab is hidden, and while paused.
+- The personal best counts solo and tournament rounds; points from the flight school's drones and sparring bots do not count.
+- The sponsor break can be paused. If an ad fails or runs too long, the button to boot the clone appears after 20 seconds at the latest.
 
 ## Privacy
 

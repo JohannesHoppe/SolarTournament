@@ -13,6 +13,8 @@ export interface SchoolContext {
   braking: boolean;
   /** The impact warning is on. */
   impactAhead: boolean;
+  /** The pilot flies with the touch controls (no fine aim). */
+  touch: boolean;
   field: AsteroidField;
   now: number;
   dt: number;
@@ -50,6 +52,10 @@ interface Attempt {
   side: number;
   /** The impact warning has come up in this attempt. */
   warned: boolean;
+  /** The pilot used the S brake in this attempt. */
+  usedBrake: boolean;
+  /** Distance the attempt started from its target (units). */
+  reach: number;
 }
 
 interface Drill {
@@ -182,7 +188,8 @@ const DRILLS: Drill[] = [
       stop(ctx);
       a.points = [markers.buoy(ahead(ctx, 0.12, -0.07, -1).sub(ctx.me.flight.position).setLength(8000).add(ctx.me.flight.position), 0.5)];
     },
-    done: (ctx, a) => holdFor(ctx, a, aimError(ctx, a.points[0]) < 0.015, 0.8),
+    // touch sticks have no fine aim: there the marker only has to sit in the crosshair
+    done: (ctx, a) => holdFor(ctx, a, aimError(ctx, a.points[0]) < (ctx.touch ? 0.04 : 0.015), 0.8),
     waypoint: (_, a) => a.points[0],
   },
   {
@@ -196,6 +203,10 @@ const DRILLS: Drill[] = [
     line: SCHOOL.drift,
     praise: SCHOOL_PRAISE.drift,
     keys: [],
+    // a fresh clone (after a crash) starts at rest: it gets the drift it would have had
+    enter(ctx) {
+      if (speed(ctx) < FAST / 2) drift(ctx, FAST);
+    },
     done: (ctx, a) => holdFor(ctx, a, ctx.controls.thrust === 0 && speed(ctx) > FAST / 2, 2.5),
   },
   {
@@ -206,6 +217,8 @@ const DRILLS: Drill[] = [
       if (speed(ctx) < FAST * 0.8) drift(ctx, FAST);
     },
     done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.angleTo(ctx.me.flight.velocity) > 2.4, 1),
+    // without drift there is no course to look away from
+    fail: (ctx) => (speed(ctx) < FAST * 0.3 ? SCHOOL.again : null),
   },
   {
     line: SCHOOL.brake,
@@ -223,8 +236,12 @@ const DRILLS: Drill[] = [
     keys: ['X', 'W'],
     reps: 2,
     enter: (ctx, a) => drift(ctx, a.rep === 0 ? 1500 : 2400),
-    done: (ctx) => speed(ctx) < STOPPED,
-    fail: (ctx) => (ctx.braking ? SCHOOL.byHand : null),
+    done: (ctx, a) => speed(ctx) < STOPPED && !a.usedBrake,
+    // stopping with the S brake does not count; the attempt starts over once the ship is at rest
+    fail(ctx, a) {
+      a.usedBrake ||= ctx.braking;
+      return a.usedBrake && speed(ctx) < STOPPED ? SCHOOL.byHand : null;
+    },
   },
   {
     line: SCHOOL.stopAt,
@@ -338,7 +355,12 @@ const DRILLS: Drill[] = [
     line: SCHOOL.overheat,
     praise: SCHOOL_PRAISE.overheat,
     keys: ['Space'],
-    enter: (ctx) => stop(ctx),
+    // a laser still hot from the last drill would pass this one before the first shot
+    enter(ctx) {
+      stop(ctx);
+      ctx.me.heat = 0;
+      ctx.me.overheated = false;
+    },
     done: (ctx) => ctx.me.overheated,
   },
   {
@@ -363,13 +385,18 @@ const DRILLS: Drill[] = [
       flight.orientation.setFromRotationMatrix(new THREE.Matrix4().lookAt(start, rock.position, new THREE.Vector3(0, 1, 0)));
       drift(ctx, 2000, outward);
       a.points = [rock.position];
+      a.reach = start.distanceTo(rock.position);
     },
     done(ctx, a) {
       a.warned ||= ctx.impactAhead;
       if (!a.points.length) return true;
       const away = toTarget.copy(a.points[0]).sub(ctx.me.flight.position).dot(ctx.me.flight.velocity) < 0;
-      return holdFor(ctx, a, a.warned && !ctx.impactAhead && (speed(ctx) < STOPPED || away), 1);
+      // braking before the warning even comes up is good flying too; sliding past only
+      // counts once the warning has been seen
+      return holdFor(ctx, a, !ctx.impactAhead && (speed(ctx) < STOPPED || (away && a.warned)), 1);
     },
+    // slid past without ever being warned: the lesson did not happen, once more
+    fail: (ctx, a) => (a.points.length && !a.warned && ctx.me.flight.position.distanceTo(a.points[0]) > a.reach + 3000 ? SCHOOL.again : null),
   },
   ...(
     [
@@ -459,6 +486,12 @@ class Markers {
     this.rings = [];
     this.moving = [];
   }
+
+  /** Frees the geometries and materials on the GPU when the flight school ends. */
+  dispose() {
+    this.clear();
+    for (const resource of [this.buoyGeometry, this.ringGeometry, this.debrisGeometry, this.bright, this.dim, this.rock]) resource.dispose();
+  }
 }
 
 /**
@@ -482,6 +515,10 @@ export class FlightSchool {
 
   get finished() {
     return this.index >= DRILLS.length;
+  }
+
+  dispose() {
+    this.markers.dispose();
   }
 
   /** Advances the training; returns the waypoint to mark, if any. */
@@ -522,7 +559,7 @@ export class FlightSchool {
     const drill = DRILLS[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: -Infinity, warned: false };
+    this.attempt = { rep, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: -Infinity, warned: false, usedBrake: false, reach: 0 };
     drill.enter?.(ctx, this.attempt, this.markers);
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on

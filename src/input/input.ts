@@ -97,6 +97,11 @@ export class Input {
     return this.touch.active;
   }
 
+  /** A gamepad is connected: mouse hints do not apply. */
+  get gamepadActive() {
+    return this.gamepad() !== null;
+  }
+
   resetMouse() {
     this.mouseStick.x = this.mouseStick.y = 0;
     this.mouseFire = false;

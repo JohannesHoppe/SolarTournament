@@ -12,6 +12,9 @@ export interface AdProvider {
   render(slot: HTMLElement): Promise<void>;
 }
 
+/** The boot button appears after this long at the latest (ms), whatever the ad does. */
+const AD_TIMEOUT_MS = 20000;
+
 const $ = (id: string) => document.getElementById(id)!;
 
 export class SponsorBreak {
@@ -45,12 +48,16 @@ export class SponsorBreak {
     this.boot.hidden = true;
     this.status.textContent = 'Your next clone is being printed during this message';
     this.root.hidden = false;
-    void this.ads.render(this.slot).then(() => {
-      if (generation !== this.generation || !this.visible) return;
-      this.status.textContent = 'The sponsor is happy';
-      this.boot.hidden = false;
-      this.boot.focus();
-    });
+    // an ad that fails or never finishes must not keep the Host from the next clone
+    const timeout = new Promise<void>((resolve) => setTimeout(resolve, AD_TIMEOUT_MS));
+    void Promise.race([this.ads.render(this.slot), timeout])
+      .catch((error) => console.warn('Ad failed', error))
+      .then(() => {
+        if (generation !== this.generation || !this.visible) return;
+        this.status.textContent = 'The sponsor is happy';
+        this.boot.hidden = false;
+        this.boot.focus();
+      });
   }
 
   hide() {

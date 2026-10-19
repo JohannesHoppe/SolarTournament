@@ -21,7 +21,7 @@ import { MAIN_THRUST } from '../ship/flight';
 import { newRoomCode, roomCode, Session, type RoundState } from '../net/session';
 import { Online, TOURNAMENT_SIZE, type OnlineGame } from '../net/online';
 import { Space, SUN_DIRECTION } from '../world/space';
-import { FlightSchool } from './school';
+import { FlightSchool, type SchoolContext } from './school';
 import { SponsorBreak } from './sponsors';
 import { Wrecks } from '../world/wrecks';
 
@@ -171,8 +171,11 @@ export class Game implements OnlineGame {
   private deathCause = 'Your clone is dead';
   /** When the current screen (menu, playing, paused, results) came up (performance.now, ms). */
   private screenSince = 0;
+  /** Online round whose scoreboard has been shown and announced. */
+  private resultsShownFor = -1;
   /** The running flight school, or null in a tournament round. */
   private school: FlightSchool | null = null;
+  private schoolContext: SchoolContext | null = null;
   /** Target drone of the flight school. */
   private drone: Ship | null = null;
   /** G-force strain of the own pilot, 0..1. */
@@ -239,6 +242,10 @@ export class Game implements OnlineGame {
     });
 
     window.addEventListener('resize', () => this.resize());
+    // a hidden tab runs no frames: a solo round pauses instead of running out unseen
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && this.state === 'playing' && !this.online) this.pause();
+    });
     this.resize();
     this.showMenu();
     this.timer.connect(document);
@@ -500,6 +507,8 @@ export class Game implements OnlineGame {
     const best = Number(storageGet(BEST_SCORE_KEY) ?? 0);
     $('best-score').textContent = best ? `Personal best: ${best} pts` : '';
     this.markLeadMode();
+    // a clone that died last leaves no muffled radio behind in the hangar
+    this.radio.setMuffled(false);
     this.setScreen('menu');
   }
 
@@ -511,7 +520,12 @@ export class Game implements OnlineGame {
     this.me = null;
     this.drone = null;
     this.sparring = null;
-    if (this.school) this.scene.remove(this.school.root);
+    if (this.school) {
+      this.scene.remove(this.school.root);
+      this.school.dispose();
+      this.school = null;
+      this.schoolContext = null;
+    }
   }
 
   /**
@@ -543,14 +557,15 @@ export class Game implements OnlineGame {
     this.flipAssist = false;
     this.strain = 0;
     this.setScreen('playing');
-    // the link to the clone comes first, then the hint for the mouse
-    if (!this.input.touchActive) {
+    // the link to the clone comes first, then the hint for the mouse (not for touch or gamepad)
+    const mouse = !this.input.touchActive && !this.input.gamepadActive;
+    if (mouse) {
       window.setTimeout(() => {
         if (this.state === 'playing') this.hud.flashMessage(this.time, 'The ship turns towards the mouse pointer', 4);
       }, 2200);
     }
     // the flight school starts with its briefing; a tournament clone just reports in
-    if (mode !== 'school') this.speaker.say(this.input.touchActive ? COMPUTER.launch : [COMPUTER.launch, COMPUTER.mouse], true);
+    if (mode !== 'school') this.speaker.say(mouse ? [COMPUTER.launch, COMPUTER.mouse] : COMPUTER.launch, true);
   }
 
   private addShip(id: string, name: string, type: ShipType, isLocal: boolean): Ship {
@@ -732,23 +747,25 @@ export class Game implements OnlineGame {
       row.classList.toggle('me', ship === me);
       for (const value of [i + 1, ship.name, ship.kills, ship.deaths, ship.score]) row.insertCell().textContent = String(value);
     });
-    if (me && me.score > Number(storageGet(BEST_SCORE_KEY) ?? 0)) storageSet(BEST_SCORE_KEY, String(me.score));
+    // training points from the flight school are no personal best
+    if (me && !this.school && me.score > Number(storageGet(BEST_SCORE_KEY) ?? 0)) storageSet(BEST_SCORE_KEY, String(me.score));
   }
 
   /**
    * Online rounds end for everyone at once: the scoreboard shows over the running game
-   * until the lead browser starts the next round.
+   * until the lead browser starts the next round. It is announced once per round, and the
+   * pause menu covers it while it is open.
    */
   private showOnlineResults() {
-    const results = $('results');
-    if (results.hidden) {
+    if (this.resultsShownFor !== this.roundId) {
+      this.resultsShownFor = this.roundId;
       this.renderScoreboard();
       $('again').textContent = 'Leave tournament';
-      results.hidden = false;
       this.speaker.say(COMPUTER.roundOver, true);
     }
-    const next = Math.max(0, this.roundEndsAt + RESULTS_SECONDS - this.time);
-    $('results-next').textContent = `Next round in ${Math.ceil(next)} s`;
+    $('results').hidden = this.state !== 'playing';
+    const next = `Next round in ${Math.ceil(Math.max(0, this.roundEndsAt + RESULTS_SECONDS - this.time))} s`;
+    if ($('results-next').textContent !== next) $('results-next').textContent = next;
   }
 
   private resize() {
@@ -796,8 +813,13 @@ export class Game implements OnlineGame {
     const me = this.me!;
     const now = this.time;
 
-    const myControls = this.flightComputer(this.state === 'playing' ? this.input.read() : { ...IDLE });
-    for (const ship of [...this.ships]) {
+    // solo rounds run on real time too, like the radio, so a slow frame rate does not stretch
+    // them and the finale of the music meets the end of the round
+    if (!this.online && Number.isFinite(this.roundEndsAtWall)) this.roundEndsAt = now + (this.roundEndsAtWall - wallClock());
+
+    const myControls = this.flightComputer(this.state === 'playing' ? this.input.read() : IDLE);
+    // removing a ship replaces the list, so the loop safely runs over the list it started with
+    for (const ship of this.ships) {
       if (ship.owner !== null) {
         ship.updateRemote(dt, now);
         continue;
@@ -863,27 +885,15 @@ export class Game implements OnlineGame {
   /** Runs the flight school: the current drill, its instruction, keys and waypoint. */
   private teach(dt: number, controls: Controls) {
     const school = this.school!;
-    const me = this.me!;
+    const context = (this.schoolContext ??= this.createSchoolContext());
+    context.controls = controls;
+    context.braking = this.input.braking;
+    context.impactAhead = this.impactAhead;
+    context.touch = this.input.touchActive;
+    context.now = this.time;
+    context.dt = dt;
     const step = school.stepIndex;
-    const waypoint = school.update({
-      me,
-      controls,
-      braking: this.input.braking,
-      impactAhead: this.impactAhead,
-      field: this.field,
-      now: this.time,
-      dt,
-      drone: this.drone,
-      spawnDrone: (position, velocity) => this.spawnDrone(position, velocity),
-      bot: this.sparring?.bot.ship ?? null,
-      spawnBot: (position, armed, skill) => this.spawnSparring(position, armed, skill),
-      removeBot: () => {
-        if (this.sparring) this.removeShip(this.sparring.bot.ship);
-        this.sparring = null;
-      },
-      speaking: this.speaker.speaking,
-      say: (lines) => this.speaker.say(lines, true),
-    });
+    const waypoint = school.update(context);
     if (school.stepIndex !== step) this.sound.beep(880, 0.1, 0.15);
     if (school.finished) {
       storageSet(SCHOOL_DONE_KEY, '1');
@@ -892,6 +902,39 @@ export class Game implements OnlineGame {
     }
     this.hud.setSchool(school.status);
     this.hud.setWaypoint(this.camera, waypoint);
+  }
+
+  /** What the flight school sees of the game; created once, the per-frame values are filled in by teach(). */
+  private createSchoolContext(): SchoolContext {
+    const game = this;
+    return {
+      get me() {
+        return game.me!;
+      },
+      controls: IDLE,
+      braking: false,
+      impactAhead: false,
+      touch: false,
+      field: this.field,
+      now: 0,
+      dt: 0,
+      get drone() {
+        return game.drone;
+      },
+      spawnDrone: (position, velocity) => this.spawnDrone(position, velocity),
+      get bot() {
+        return game.sparring?.bot.ship ?? null;
+      },
+      spawnBot: (position, armed, skill) => this.spawnSparring(position, armed, skill),
+      removeBot: () => {
+        if (this.sparring) this.removeShip(this.sparring.bot.ship);
+        this.sparring = null;
+      },
+      get speaking() {
+        return game.speaker.speaking;
+      },
+      say: (lines) => this.speaker.say(lines, true),
+    };
   }
 
   /** A defenseless target for the flight school, facing the pilot. */
@@ -923,7 +966,7 @@ export class Game implements OnlineGame {
    * is on, it only flips, until the nose points against the flight or the pilot takes over
    * the stick.
    */
-  private flightComputer(controls: Controls): Controls {
+  private flightComputer(controls: Readonly<Controls>): Controls {
     const me = this.me!;
     const flight = me.flight;
     const braking = this.state === 'playing' && this.input.braking && me.alive;
@@ -974,18 +1017,18 @@ export class Game implements OnlineGame {
   private exhaust(ship: Ship, controls: Controls, dt: number) {
     const flight = ship.flight;
     if (flight.throttle > 0.3) {
-      this.effects.engineTrail(ship.toWorld(scratch.set(0, 0, ship.radius * 0.9)), flight.velocity, flight.throttle);
+      this.effects.engineTrail(ship.toWorld(scratch.set(0, 0, ship.radius * 0.9), scratch), flight.velocity, flight.throttle);
     }
     const rcs = flight.rcs;
     if (rcs.lengthSq() > 0.01 && Math.random() < dt * 30) {
       // the exhaust leaves on the side opposite to the push
-      const nozzle = ship.toWorld(scratch.copy(rcs).normalize().multiplyScalar(-ship.radius * 0.7));
+      const nozzle = ship.toWorld(scratch.copy(rcs).normalize().multiplyScalar(-ship.radius * 0.7), scratch);
       relative.copy(rcs).normalize().applyQuaternion(flight.orientation).multiplyScalar(-600).add(flight.velocity);
       this.effects.puff(nozzle, relative, ship.radius * 0.12);
     }
     if ((Math.abs(controls.yaw) > 0.2 || Math.abs(controls.pitch) > 0.2) && Math.random() < dt * 20) {
       const side = scratch.set(Math.sign(controls.yaw) * ship.radius * 0.5, Math.sign(controls.pitch) * ship.radius * 0.3, -ship.radius * 0.6);
-      const nozzle = ship.toWorld(side);
+      const nozzle = ship.toWorld(side, side);
       relative.copy(side).normalize().applyQuaternion(flight.orientation).multiplyScalar(500).add(flight.velocity);
       this.effects.puff(nozzle, relative, ship.radius * 0.08);
     }
@@ -1110,7 +1153,8 @@ export class Game implements OnlineGame {
         this.sound.beep(1760, 0.12, 0.15, 0.09);
       }
     }
-    this.hud.kill(this.time, killer?.name ?? (victim.outsideSince !== null ? 'Deep space' : 'Asteroid'), victim.name);
+    // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
+    this.hud.kill(this.time, killer?.name ?? (victim.outsideSince !== null ? 'Deep space' : 'Crash'), victim.name);
     if (victim !== this.drone) this.commentOnDeath(victim, killer);
   }
 
