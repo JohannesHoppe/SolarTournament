@@ -12,7 +12,7 @@ import { Glitch } from './glitch';
 import { Hud } from './hud';
 import { Radio, type MusicCue } from './music/radio';
 import type { Spoken } from './music/band';
-import { COMPUTER, HOST_ALIEN, HOST_KILL, HOST_NAMES, HOST_ROCK, SCHOOL_SPEECH } from './music/lines';
+import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_KILL, ANNOUNCER_NAMES, ANNOUNCER_ROCK, SCHOOL_SPEECH } from './music/lines';
 import { Speaker } from './speaker';
 import { hash, mixSeed, textSeed, titleFor, type Song } from './music/songs';
 import { IDLE, Input, type Action, type Controls } from './input';
@@ -31,8 +31,8 @@ const RESULTS_SECONDS = 12;
 const FIELD_SEED = 11;
 /** A client's round clock jumps to the host's when it is this far off (s), and drifts towards it otherwise. */
 const ROUND_SNAP = 0.25;
-/** The radio host comments on a death at most this often (s). */
-const HOST_COOLDOWN = 7;
+/** The announcer comments on a death at most this often (s). */
+const ANNOUNCER_COOLDOWN = 7;
 /** Song of the menu; the flight school plays the next one. */
 const LOUNGE_SEED = 2584;
 /** The idle link to the clone hangar glitches now and then, every 5 to 14 s. */
@@ -165,10 +165,10 @@ export class Game implements OnlineGame {
   private nextIdleGlitch = 0;
   private radioTitleTimer = 0;
   private transmissionTimer = 0;
-  /** Real time before which the radio host stays quiet (s). */
-  private nextHostComment = 0;
+  /** Real time before which the announcer stays quiet (s). */
+  private nextAnnouncement = 0;
   /** The name the host's current line is about, for the subtitle. */
-  private hostName: string | null = null;
+  private announcedName: string | null = null;
 
   constructor(
     container: HTMLElement,
@@ -211,7 +211,7 @@ export class Game implements OnlineGame {
   private bindMenu() {
     const callsign = $<HTMLInputElement>('callsign');
     callsign.value = storageGet(CALLSIGN_KEY) ?? '';
-    callsign.placeholder = 'Pilot';
+    callsign.placeholder = 'Host';
     for (const button of document.querySelectorAll<HTMLButtonElement>('.ship-select button')) {
       button.addEventListener('click', () => {
         this.selectedShip = button.dataset.ship as ShipType;
@@ -307,10 +307,10 @@ export class Game implements OnlineGame {
 
   /** Whatever the radio says also runs across the screen, in neon, while it is spoken. */
   private subtitle(spoken: Spoken, delay: number) {
-    const speaker = spoken.language === 'mod' ? 'Radio host' : spoken.line.startsWith('radio') ? 'Radio 2584' : spoken.language === 'de' ? 'Der Präsident' : 'The Orange President';
+    const speaker = spoken.language === 'mod' ? 'Announcer' : spoken.line.startsWith('radio') ? 'Radio 2584' : spoken.language === 'de' ? 'Der Präsident' : 'The Orange President';
     const announcement = spoken.line.startsWith('radio') && this.radio.song;
     const text = announcement ? `${spoken.language === 'de' ? 'Es läuft' : 'Now playing'}: ${this.radio.song!.title}` : spoken.line
-      .replace('{name}', this.hostName ?? 'pilot')
+      .replace('{name}', this.announcedName ?? 'host')
       .split(/(?<=[.?!])\s+/)
       .map((sentence) => sentence.charAt(0).toUpperCase() + sentence.slice(1))
       .join(' ');
@@ -326,21 +326,21 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * The radio host revels in every death: a line about the victim, the president's joy or
+   * The announcer revels in every death: a line about the victim, the president's joy or
    * the dead "alien". Not every death, and never two comments on top of each other.
    */
   private commentOnDeath(victim: Ship, killer: Ship | null) {
     const now = wallClock();
-    if (now < this.nextHostComment) return;
+    if (now < this.nextAnnouncement) return;
     const roll = hash(textSeed(victim.id), victim.deaths, 7);
     if (roll % 10 >= 7) return;
-    this.nextHostComment = now + HOST_COOLDOWN;
-    const lines = victim.type === 'alien' && roll % 2 === 0 ? HOST_ALIEN : killer ? HOST_KILL : HOST_ROCK;
+    this.nextAnnouncement = now + ANNOUNCER_COOLDOWN;
+    const lines = victim.type === 'alien' && roll % 2 === 0 ? ANNOUNCER_ALIEN : killer ? ANNOUNCER_KILL : ANNOUNCER_ROCK;
     const line = lines[(roll >>> 4) % lines.length];
     const spoken = victim.name.toLowerCase();
-    // bots have rendered names; a human callsign is spoken as "pilot" and shown in the subtitle
-    this.hostName = victim.name;
-    this.radio.host(line, HOST_NAMES.includes(spoken) ? spoken : null);
+    // bots have rendered names; a human callsign is spoken as "host" and shown in the subtitle
+    this.announcedName = victim.name;
+    this.radio.announce(line, ANNOUNCER_NAMES.includes(spoken) ? spoken : null);
   }
 
   /**
@@ -432,7 +432,7 @@ export class Game implements OnlineGame {
    * tournament (where the host adds bots for free places).
    */
   private startRound(mode: 'solo' | 'school' | 'online') {
-    const callsign = $<HTMLInputElement>('callsign').value.trim() || 'Pilot';
+    const callsign = $<HTMLInputElement>('callsign').value.trim() || 'Host';
     storageSet(CALLSIGN_KEY, callsign);
     if (mode !== 'online') this.leaveOnline();
 
@@ -627,7 +627,7 @@ export class Game implements OnlineGame {
     const me = this.me;
     const ranking = this.ships.filter((s) => s !== this.drone).sort((a, b) => b.score - a.score);
     const table = $<HTMLTableElement>('scoreboard');
-    table.innerHTML = '<tr><th>#</th><th>Pilot</th><th>Kills</th><th>Deaths</th><th>Score</th></tr>';
+    table.innerHTML = '<tr><th>#</th><th>Host</th><th>Kills</th><th>Deaths</th><th>Score</th></tr>';
     ranking.forEach((ship, i) => {
       const row = table.insertRow();
       row.classList.toggle('me', ship === me);
@@ -748,7 +748,7 @@ export class Game implements OnlineGame {
 
     if (this.online) {
       this.online.update(now);
-      $('hud-room').textContent = `Tournament ${this.online.session.room} · ${this.online.pilots} ${this.online.pilots === 1 ? 'pilot' : 'pilots'}`;
+      $('hud-room').textContent = `Tournament ${this.online.session.room} · ${this.online.pilots} ${this.online.pilots === 1 ? 'host' : 'hosts'}`;
       if (now >= this.roundEndsAt) this.showOnlineResults();
     } else if (now >= this.roundEndsAt) {
       this.endRound();

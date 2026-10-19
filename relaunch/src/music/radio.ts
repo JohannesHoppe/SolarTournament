@@ -127,10 +127,10 @@ export class Radio {
     this.band = band;
   }
 
-  /** The radio host comments on the action, over the music. */
-  host(text: string, name: string | null) {
+  /** The announcer comments on the action, over the music. */
+  announce(text: string, name: string | null) {
     if (!this.band || !this.enabledFlag || this.context.state !== 'running') return;
-    this.band.host(text, name, this.context.currentTime + 0.05);
+    this.band.announce(text, name, this.context.currentTime + 0.05);
   }
 
   private tick() {

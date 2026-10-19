@@ -49,7 +49,7 @@ export interface Spoken {
  * of it feeds the rumble: a long reverb, distorted, low-passed to the sub range, ducked by
  * every kick so it swells in between. Bass and harmony pump with the kick as well. The
  * master ends in a soft clipper: loud, dense, never harsh digital clipping. The voice of the
- * regime and the radio host bypass the master filter, so they cut through every breakdown.
+ * regime and the announcer bypass the master filter, so they cut through every breakdown.
  */
 export class Band {
   readonly output: ToneLib.Gain;
@@ -112,8 +112,8 @@ export class Band {
 
   private readonly voiceIn: ToneLib.Gain;
   private readonly voiceEcho: ToneLib.Gain;
-  private readonly hostIn: ToneLib.Gain;
-  private readonly hostStatic: ToneLib.NoiseSynth;
+  private readonly announcerIn: ToneLib.Gain;
+  private readonly announcerStatic: ToneLib.NoiseSynth;
   private voice: Voice | null = null;
 
   private flavor = '';
@@ -302,12 +302,12 @@ export class Band {
     this.voiceEcho = new T.Gain(0).connect(this.echoSend);
     voiceGrit.connect(this.voiceEcho);
 
-    // the radio host: a narrow radio band, a little drive, static at the start and the end
-    const hostOut = new T.Gain(3.5).connect(this.voiceBus);
-    const hostBand = new T.Filter({ type: 'bandpass', frequency: 1500, Q: 0.8 }).connect(new T.WaveShaper(saturate(2.5), 1024).connect(hostOut));
-    this.hostIn = new T.Gain(1).connect(new T.Filter({ type: 'highpass', frequency: 350, Q: 0 }).connect(hostBand));
-    this.hostStatic = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.25, sustain: 0, release: 0.05 }, volume: -18 })
-      .connect(new T.Filter({ type: 'bandpass', frequency: 2500, Q: 1.5 }).connect(hostOut));
+    // the announcer: a narrow radio band, a little drive, static at the start and the end
+    const announcerOut = new T.Gain(3.5).connect(this.voiceBus);
+    const announcerBand = new T.Filter({ type: 'bandpass', frequency: 1500, Q: 0.8 }).connect(new T.WaveShaper(saturate(2.5), 1024).connect(announcerOut));
+    this.announcerIn = new T.Gain(1).connect(new T.Filter({ type: 'highpass', frequency: 350, Q: 0 }).connect(announcerBand));
+    this.announcerStatic = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.25, sustain: 0, release: 0.05 }, volume: -18 })
+      .connect(new T.Filter({ type: 'bandpass', frequency: 2500, Q: 1.5 }).connect(announcerOut));
   }
 
   private reverb(T: Tone, decay: number) {
@@ -543,19 +543,19 @@ export class Band {
     return position;
   }
 
-  /** The radio host cuts in over the radio: static, the words, static. */
-  host(text: string, name: string | null, t: number) {
+  /** The announcer cuts in over the radio: static, the words, static. */
+  announce(text: string, name: string | null, t: number) {
     const voice = this.voice;
     if (!voice) return;
-    this.hostStatic.triggerAttackRelease(0.15, t, 0.9);
+    this.announcerStatic.triggerAttackRelease(0.15, t, 0.9);
     let position = t + 0.18;
-    for (const { word, stop } of words(text.replace('{name}', name ?? 'pilot'))) {
+    for (const { word, stop } of words(text.replace('{name}', name ?? 'host'))) {
       const clip = voice.clips[clipKey('mod', word)];
       if (!clip) continue;
-      this.playClip(clip, position, this.hostIn);
+      this.playClip(clip, position, this.announcerIn);
       position += clip[1] + 0.03 + (stop ? 0.22 : 0);
     }
-    this.hostStatic.triggerAttackRelease(0.1, position + 0.05, 0.7);
+    this.announcerStatic.triggerAttackRelease(0.1, position + 0.05, 0.7);
     this.musicLevel.gain.cancelAndHoldAtTime(t);
     this.musicLevel.gain.linearRampToValueAtTime(0.4, t + 0.1);
     this.musicLevel.gain.setValueAtTime(0.4, position);

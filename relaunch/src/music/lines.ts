@@ -6,7 +6,7 @@
  * every word here must be in the rendered set; the radio places the words on the beat.
  */
 
-/** en, de: the propaganda voice. mod: the radio host. sys: the flight computer, clear and calm. */
+/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. */
 export type Language = 'en' | 'de' | 'mod' | 'sys';
 
 /** Title words of the English flavors; a title is one word of each list. */
@@ -148,10 +148,10 @@ export const PHRASES_DE = [
 ];
 
 /**
- * The radio host: cynical, delighted by every death. A line may contain {name}; it is
- * spoken as the name of a bot, or as "pilot" for a human callsign (the subtitle shows it).
+ * The announcer: cynical, delighted by every death. A line may contain {name}; it is
+ * spoken as the name of a bot, or as "host" for a human callsign (the subtitle shows it).
  */
-export const HOST_KILL = [
+export const ANNOUNCER_KILL = [
   'an excellent death for {name}',
   'what a beautiful death. {name} goes back to the printer',
   '{name} is dead. the sponsor is delighted',
@@ -161,19 +161,19 @@ export const HOST_KILL = [
   'that one was sponsored. {name} dies for victory cola',
   'beautiful. {name} breathes vacuum now',
 ];
-export const HOST_ALIEN = [
+export const ANNOUNCER_ALIEN = [
   'the alien is dead. now our nation can grow again',
   'one less alien. the president thanks you',
   'the monster is dead. cheer for the united solar states',
 ];
-export const HOST_ROCK = [
+export const ANNOUNCER_ROCK = [
   'and {name} meets an asteroid. the rockborn send their regards',
   'a rock wins again. {name} goes back to the printer',
 ];
-export const HOST_OPEN = ['radio twenty five eighty four. live from the arena', 'this is your host. the games continue'];
+export const ANNOUNCER_OPEN = ['radio twenty five eighty four. live from the arena', 'this is your announcer. the games continue'];
 
-/** Bot callsigns the host can say; human callsigns become "pilot". */
-export const HOST_NAMES = ['ingmar', 'nova', 'kessler', 'vega', 'orion', 'sputnik', 'halley', 'laika', 'pilot'];
+/** Bot callsigns the host can say; human callsigns become "host". */
+export const ANNOUNCER_NAMES = ['ingmar', 'nova', 'kessler', 'vega', 'orion', 'sputnik', 'halley', 'laika', 'host'];
 
 /**
  * The flight computer reads out what the screen shows; people would rather listen than read.
@@ -182,7 +182,7 @@ export const HOST_NAMES = ['ingmar', 'nova', 'kessler', 'vega', 'orion', 'sputni
 export const BRIEFING =
   'the year is twenty five eighty four. the united solar states rule the planets, and the orange president rules the united solar states. ' +
   'to keep his people quiet and entertained, his ministry of war stages the presidential games. ' +
-  'you are one of the chosen pilots, and it is an honor to die for the president. ' +
+  'you are one of the chosen hosts, and it is an honor to die for the president. ' +
   'you fly a printed clone over a live link, and when the clone dies, the next one is already waiting in the printer. ' +
   'you will die again and again through your clones. that is your destiny now. ' +
   'training clones like this one are free, but in the tournament every new clone costs you an advertisement. ' +
@@ -218,7 +218,7 @@ export const COMPUTER = {
   cloneLost: 'clone lost. want another clone? you pay with advertising. make the sponsor happy.',
   sponsorHappy: 'the sponsor is happy. booting your next clone.',
   roundOver: 'round over',
-  launch: 'clone online. good luck, pilot.',
+  launch: 'clone online. good luck, host.',
 } as const;
 
 /** All phrases and fixed announcements of a language, for the renderer. */
@@ -229,7 +229,7 @@ export function allLines(language: Language): string[] {
     case 'de':
       return [STATION_DE, NOW_PLAYING_DE, ...TITLE_FIRST_DE, ...TITLE_SECOND_DE, ...PHRASES_DE];
     case 'mod':
-      return [...HOST_KILL, ...HOST_ALIEN, ...HOST_ROCK, ...HOST_OPEN, ...HOST_NAMES].map((line) => line.replace('{name}', ''));
+      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_OPEN, ...ANNOUNCER_NAMES].map((line) => line.replace('{name}', ''));
     case 'sys':
       return [...SCHOOL_SPEECH, ...Object.values(COMPUTER)];
   }
