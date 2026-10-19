@@ -74,7 +74,7 @@ Never use `npx`, always the scripts from `package.json`.
 | `speaker.ts` | The flight computer's voice: reads out what the screen shows, whole lines from the sprite |
 
 `tools/voice/render.ts` (`npm run voice`, needs ffmpeg) renders every word of `music/lines.ts` with espeak-ng into `public/assets/voice/`. Run it after changing any line; the radio skips words that are not rendered.
-| `game.ts` | Game states, round flow, lasers, collisions, arena, camera, pilot (g-forces, warnings) |
+| `game.ts` | Game states, round flow, lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
 | `flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`) |
 | `ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, drive animation |
 | `asteroids.ts` | Asteroid field: ellipsoid collision, raycast, line of sight, gravity, fragments |
