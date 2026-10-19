@@ -572,6 +572,12 @@ const GATES: Record<Flavor, Record<Layer, number>> = {
 /** Bars of a song kept in its memo (see barInfo). */
 const BAR_CACHE = 512;
 
+/** Layers that crowd each other when all of them play: the melodic parts and the extra percussion (with a salt for each group). */
+const CROWDS: [Layer[], number][] = [
+  [['acid', 'lead', 'chords'], 2],
+  [['ride', 'perc', 'metal'], 3],
+];
+
 /** Layers a relentless track mutes for two bars at a time. */
 const MUTABLE: Layer[] = ['hat', 'clap', 'openHat', 'bass', 'perc', 'lead', 'acid', 'ride'];
 
@@ -619,6 +625,12 @@ export function barInfo(song: Song, absoluteBar: number): BarInfo {
   if (song.strategy === 'relentless' && (section.kind === 'groove' || section.kind === 'peak')) {
     if (unit(song.seed, Ch.Mute, bar >> 1) < 0.35) layers[choose(MUTABLE, song.seed, Ch.Mute, bar >> 1, 1)] = false;
     if (inSection % 16 === 15) layers.hat = layers.ride = layers.clap = false;
+  }
+  // room to breathe: of the melodic parts and of the extra percussion, at most two play at
+  // once; which one rests changes every eight bars
+  for (const [group, salt] of CROWDS) {
+    const playing = group.filter((layer) => layers[layer]);
+    if (playing.length > 2) layers[choose(playing, song.seed, Ch.Mute, bar >> 3, salt)] = false;
   }
 
   const progress = Math.min(1, inSection / section.bars);
@@ -826,7 +838,20 @@ export function stepEvents(song: Song, absoluteStep: number): StepEvents {
   }
 
   if (inFill) applyFill(song, events, fill, step, root);
+  // one key for every instrument: whatever the chord shape, the motif or the acid line asks
+  // for, the note lands on the track's minor scale, so the parts never rub against each other
+  for (const hit of [events.perc, events.bass, events.acid, events.lead]) if (hit) hit.note = inKey(hit.note, root);
+  if (events.chord) events.chord.notes = events.chord.notes.map((note) => inKey(note, root));
   return events;
+}
+
+/** Steps of the natural minor scale (aeolian) above the root, in semitones. */
+const MINOR_SCALE = [0, 2, 3, 5, 7, 8, 10];
+
+/** A note on the minor scale of `root`: a note outside it moves down a semitone onto the scale. */
+function inKey(note: number, root: number): number {
+  const degree = (((note - root) % 12) + 12) % 12;
+  return MINOR_SCALE.includes(degree) ? note : note - 1;
 }
 
 function bassAt(song: Song, info: BarInfo, step: number, root: number): Hit | null {
