@@ -183,7 +183,8 @@ export const BRIEFING =
   'year twenty five eighty four. the united solar states rule the planets, and the orange president rules them. ' +
   'to keep the people quiet, his ministry of war stages the presidential games. ' +
   'you are the original pilot. you stay safe, and you fly a printed clone over a live link. ' +
-  'when your clone dies, the next one is printed. training clones are free. tournament clones cost an advertisement.';
+  'when your clone dies, the next one is printed. training clones are free. tournament clones cost an advertisement. ' +
+  'make the great president happy. that is all that counts.';
 
 /** Spoken versions of the flight school steps, in order (the screen shows the full text). */
 export const SCHOOL_SPEECH = [
