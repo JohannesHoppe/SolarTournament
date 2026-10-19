@@ -199,13 +199,13 @@ export const SCHOOL = {
   dodge: 'Debris incoming. Slide out of its way. Do not turn.',
   dodgeHit: 'Ouch. Again.',
   rings: 'Fly through the rings. Brake when you need to.',
-  shoot: 'Space fires. Three hits wreck the drone.',
+  shoot: 'Space fires. Keep hitting the drone until it breaks. Hit its middle, and you hit the reactor.',
   shootMoving: 'This one moves. Your laser hits the instant you fire, so just keep it in your crosshair. Shift helps.',
   overheat: 'Every shot heats your ship. Keep firing until it overheats.',
   shadow: 'Hot, isn’t it? Cool down in the shadow of an asteroid. I marked one.',
   impact: 'Trouble ahead. When impact flashes, brake, or slide past.',
   noTurn: 'Without turning, darling.',
-  chase: 'A bot on the run. It does not shoot. Stay on its tail and hit it three times. Brake if you overshoot.',
+  chase: 'A bot on the run. It does not shoot. Stay on its tail and wreck it. Brake if you overshoot.',
   evade: 'Now it shoots back. Never fly straight at it. Keep sliding with A and D while you fire.',
   duel: 'Final exam. A real bot. Take it down.',
   done: 'Well done, pilot. You are cleared for the tournament. Go and die for the President.',
@@ -240,21 +240,41 @@ export const SCHOOL_PRAISE = {
 
 /** What the flight computer says when the screen shows a message. */
 export const COMPUTER = {
-  reactor: 'reactor breach',
-  drive: 'main drive damaged',
-  thrusters: 'thrusters damaged',
-  hull: 'hull breach',
-  impact: 'impact',
-  debris: 'debris impact',
-  asteroid: 'asteroid cracked',
-  arena: 'return to the field',
-  mouse: 'the ship turns towards your mouse pointer.',
-  noLink: 'could not connect',
-  cloneLost: 'live link lost. your clone is dead. want another clone? you pay with advertising. make the sponsor happy.',
-  sponsorHappy: 'the sponsor is happy. establishing live link to your next clone.',
-  roundOver: 'round over',
-  launch: 'establishing live link to your clone. link established. good luck, pilot.',
+  reactor: 'Reactor breach.',
+  drive: 'Main drive damaged.',
+  thrusters: 'Thrusters damaged.',
+  hull: 'Hull breach.',
+  impact: 'Impact!',
+  debris: 'Debris impact.',
+  asteroid: 'Asteroid cracked.',
+  arena: 'Come back to the field, darling.',
+  mouse: 'The ship turns towards your mouse pointer.',
+  noLink: 'Could not connect.',
+  roundOver: 'Round over. You were wonderful.',
+  launch: 'Live link established. Go get them, pilot.',
 } as const;
+
+/**
+ * Nicole in the sponsor break, one line picked at random each time: she comforts the Host,
+ * makes the Host feel special, and only wants one thing, the next clone back in the war.
+ */
+export const SPONSOR_BREAK = [
+  'Oh, you died again, darling. No problem. Just watch this little ad, and I will have you up and ready again. I am rooting for you.',
+  'Next time you will make it. I just know it. Watch the ad for me?',
+  'Die bravely, and the President will love you. Now be good, and watch the sponsor.',
+  'A girl like me only wants to see you. Back in the cockpit. Right after this ad.',
+  'That looked like it hurt. Shh. It is over. The sponsor is paying for your next body.',
+  'You are special, you know that? Not everyone dies so beautifully. One little ad, and you are mine again.',
+  'Do not look so sad, darling. Bodies are cheap. You are not.',
+  'I saved your seat. Watch the ad, and I will warm up your next clone.',
+] as const;
+
+/** Nicole when the next clone boots. */
+export const SPONSOR_HAPPY = [
+  'The sponsor is happy. Linking you to your next clone. Welcome back, darling.',
+  'There you are again. I missed you.',
+  'Fresh body, same old you. Go get them.',
+] as const;
 
 /** All phrases and fixed announcements of a language, for the renderer. */
 export function allLines(language: Language): string[] {
@@ -266,7 +286,7 @@ export function allLines(language: Language): string[] {
     case 'mod':
       return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_OPEN, ...ANNOUNCER_NAMES].map((line) => line.replace('{name}', ''));
     case 'sys':
-      return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER)];
+      return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...SPONSOR_BREAK, ...SPONSOR_HAPPY];
   }
 }
 

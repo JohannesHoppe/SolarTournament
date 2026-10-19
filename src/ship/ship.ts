@@ -5,11 +5,14 @@ import type { Controls } from '../input/input';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
-const LASER_HULL_DAMAGE = 34;
+/** Hull damage of a laser hit: nine hits wreck a ship, long enough for a dogfight. */
+const LASER_HULL_DAMAGE = 12;
+/** A hit through the reactor zone does more, but never kills at once. */
+const REACTOR_DAMAGE = 40;
 /** Damage a laser hit deals to the drive or the maneuvering thrusters (0..1). */
-const DRIVE_HIT = 0.5;
-const THRUSTER_HIT = 0.4;
-/** A beam passing closer than this (fraction of the radius) to the center hits the reactor. */
+const DRIVE_HIT = 0.25;
+const THRUSTER_HIT = 0.2;
+/** A beam passing closer than this (fraction of the radius) to the center hits the reactor zone. */
 const REACTOR_ZONE = 0.15;
 const MAX_HOLES = 8;
 /** Venting from a hole fades with this time constant (s): the compartment runs out of air. */
@@ -19,7 +22,7 @@ const VENT_THRUST = 120;
 /** Spin the escaping air causes per unit of lever arm (rad/s²); it acts off-center, so the ship tumbles. */
 const VENT_SPIN = 6;
 /** Rotation kick of the explosive decompression at the moment of the hit (rad/s). */
-const DECOMPRESSION_KICK = 2;
+const DECOMPRESSION_KICK = 1.2;
 /** The exit hole tears wider than the entry hole and vents more. */
 const ENTRY_HOLE = 0.4;
 const EXIT_HOLE = 1;
@@ -29,7 +32,7 @@ const SPAWN_PROTECTION = 2.5;
 
 /** The laser heats the ship; radiators shed the heat, much better in the shadow of an asteroid. */
 export const MAX_HEAT = 100;
-const HEAT_PER_SHOT = 30;
+const HEAT_PER_SHOT = 20;
 const COOLING_SUN = 20;
 const COOLING_SHADOW = 50;
 /** An overheated laser stays locked until the ship has cooled down to this. */
@@ -356,7 +359,7 @@ export class Ship {
 
     if (zone === 'drive') this.drive = Math.max(0, this.drive - DRIVE_HIT);
     if (zone === 'thrusters') this.thrusters = Math.max(0, this.thrusters - THRUSTER_HIT);
-    const status = this.structural(zone === 'reactor' ? Infinity : LASER_HULL_DAMAGE, now);
+    const status = this.structural(zone === 'reactor' ? REACTOR_DAMAGE : LASER_HULL_DAMAGE, now);
     return { status, zone };
   }
 

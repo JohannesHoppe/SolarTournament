@@ -837,6 +837,39 @@ body.touch #school-panel {
   animation: blink 1s steps(2) infinite;
 }
 
+/* the zero point: the field's center, a blue ring with a dot and its distance */
+#center {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border: 2px solid var(--accent-strong);
+  border-radius: 50%;
+  opacity: 0.8;
+  pointer-events: none;
+}
+
+#center::before {
+  content: '';
+  position: absolute;
+  inset: 7px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+}
+
+#center-distance {
+  position: absolute;
+  top: 24px;
+  left: 50%;
+  translate: -50% 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  color: var(--accent-strong);
+}
+
 /* touch controls: only on touch devices (body.touch) */
 
 #touch {

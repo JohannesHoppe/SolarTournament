@@ -12,7 +12,7 @@ import { Glitch } from '../view/glitch';
 import { Hud } from '../view/hud';
 import { Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_KILL, ANNOUNCER_NAMES, ANNOUNCER_ROCK } from '../music/lines';
+import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_KILL, ANNOUNCER_NAMES, ANNOUNCER_ROCK, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, textSeed, titleFor, type Song } from '../music/songs';
 import { IDLE, Input, type Action, type Controls } from '../input/input';
@@ -89,6 +89,8 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 /** The label of a menu mode button (its first line). */
 const modeName = (id: string) => $(id).querySelector<HTMLElement>('.mode-name')!;
 
+/** One of several lines, at random; only the local voice says it. */
+const pick = <T,>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
 const scratch = new THREE.Vector3();
 const forward = new THREE.Vector3();
 const muzzle = new THREE.Vector3();
@@ -623,9 +625,9 @@ export class Game implements OnlineGame {
   private sponsorBreak() {
     this.input.steerWithMouse(false);
     this.hud.show(false);
-    this.speaker.say(COMPUTER.cloneLost, true);
+    this.speaker.say(pick(SPONSOR_BREAK), true);
     this.sponsors.show(() => {
-      this.speaker.say(COMPUTER.sponsorHappy, true);
+      this.speaker.say(pick(SPONSOR_HAPPY), true);
       this.hud.show(true);
       this.respawn(this.me!);
       this.input.steerWithMouse(true);
@@ -769,6 +771,7 @@ export class Game implements OnlineGame {
     this.hud.update(now, Math.max(0, this.roundEndsAt - now), me);
     this.hud.updateMarkers(this.camera, this.ships, me, (ship) => this.field.lineOfSight(this.camera.position, ship.flight.position));
     this.hud.updateVelocityMarkers(this.camera, me);
+    this.hud.setCenter(this.camera, me);
     if (this.school) this.teach(dt, myControls);
 
     const outside = me.alive && me.outsideSince !== null;

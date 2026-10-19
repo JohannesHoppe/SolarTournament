@@ -30,6 +30,8 @@ export class Hud {
   private readonly schoolText = $('school-text');
   private readonly schoolKeys = $('school-keys');
   private readonly waypoint = $('waypoint');
+  private readonly center = $('center');
+  private readonly centerDistance = $('center-distance');
   private readonly markers = new Map<string, HTMLElement>();
   private readonly markerLayer = document.createElement('div');
   private messageUntil = 0;
@@ -52,6 +54,7 @@ export class Hud {
     this.message.textContent = '';
     this.setSchool(null);
     this.waypoint.hidden = true;
+    this.center.hidden = true;
   }
 
   /** secondsLeft is Infinity in rounds without a time limit. */
@@ -93,16 +96,20 @@ export class Hud {
   setWaypoint(camera: THREE.Camera, point: THREE.Vector3 | null) {
     this.waypoint.hidden = !point;
     if (!point) return;
-    projected.copy(point).project(camera);
-    let { x, y } = projected;
-    const behind = projected.z > 1;
-    if (behind) {
-      x = -x;
-      y = -y;
-    }
-    // points behind the camera always sit on the edge
-    const scale = 1 / Math.max(Math.abs(x) / 0.92, Math.abs(y) / 0.85, behind ? 1e-6 : 1);
-    this.waypoint.style.translate = `${((x * scale + 1) / 2) * window.innerWidth}px ${((1 - y * scale) / 2) * window.innerHeight}px`;
+    pin(this.waypoint, camera, point);
+  }
+
+  /**
+   * The zero point: the center of the field, where the asteroids are densest and the arena
+   * ends farthest away, with its distance. Always on screen, at the edge when behind.
+   */
+  setCenter(camera: THREE.Camera, me: Ship) {
+    this.center.hidden = !me.alive;
+    if (!me.alive) return;
+    pin(this.center, camera, origin);
+    const meters = me.flight.position.length() * METERS_PER_UNIT;
+    const label = meters < 1000 ? `${Math.round(meters)} m` : `${(meters / 1000).toFixed(1)} km`;
+    if (this.centerDistance.textContent !== label) this.centerDistance.textContent = label;
   }
 
   /** Persistent warning below the crosshair (impact, overheating); empty text hides it. */
@@ -204,4 +211,20 @@ export class Hud {
 function setBar(bar: HTMLElement, fraction: number) {
   bar.style.width = `${Math.max(0, fraction) * 100}%`;
   bar.classList.toggle('low', fraction < 0.35);
+}
+
+const origin = new THREE.Vector3();
+
+/** Places a marker on a point in space, clamped to the screen edge when off screen or behind. */
+function pin(element: HTMLElement, camera: THREE.Camera, point: THREE.Vector3) {
+  projected.copy(point).project(camera);
+  let { x, y } = projected;
+  const behind = projected.z > 1;
+  if (behind) {
+    x = -x;
+    y = -y;
+  }
+  // points behind the camera always sit on the edge
+  const scale = 1 / Math.max(Math.abs(x) / 0.92, Math.abs(y) / 0.85, behind ? 1e-6 : 1);
+  element.style.translate = `${((x * scale + 1) / 2) * window.innerWidth}px ${((1 - y * scale) / 2) * window.innerHeight}px`;
 }

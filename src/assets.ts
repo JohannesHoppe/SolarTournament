@@ -20,6 +20,35 @@ export interface Assets {
 
 const base = import.meta.env.BASE_URL + 'assets/';
 
+/** Share of the sprite's width over which the flame fades out towards each edge. */
+const FLAME_EDGE_FADE = 0.25;
+
+/**
+ * The flame sprites burn almost up to their borders, so the quad would cut them off with a
+ * visible edge: fade every side out smoothly.
+ */
+function softEdges(texture: THREE.Texture): THREE.Texture {
+  const image = texture.image as HTMLImageElement;
+  const canvas = document.createElement('canvas');
+  canvas.width = image.width;
+  canvas.height = image.height;
+  const context = canvas.getContext('2d')!;
+  context.drawImage(image, 0, 0);
+  const pixels = context.getImageData(0, 0, canvas.width, canvas.height);
+  const fade = (t: number) => THREE.MathUtils.smoothstep(Math.min(t, 1 - t), 0, FLAME_EDGE_FADE);
+  for (let y = 0; y < canvas.height; y++) {
+    const fy = fade((y + 0.5) / canvas.height);
+    for (let x = 0; x < canvas.width; x++) {
+      pixels.data[(y * canvas.width + x) * 4 + 3] *= fy * fade((x + 0.5) / canvas.width);
+    }
+  }
+  context.putImageData(pixels, 0, 0);
+  const soft = new THREE.CanvasTexture(canvas);
+  soft.colorSpace = texture.colorSpace;
+  texture.dispose();
+  return soft;
+}
+
 /** Applies the blending stored in the materials' userData and hides collider meshes. */
 function prepareModel(root: THREE.Object3D) {
   root.traverse((object) => {
@@ -55,9 +84,9 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   };
 
   const [human, alien] = await Promise.all(['human-interceptor.glb', 'alien-interceptor.glb'].map(model));
-  const flameFrames = await Promise.all(
-    ['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture),
-  );
+  const flameFrames = (
+    await Promise.all(['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture))
+  ).map(softEdges);
   flameFrames.forEach((t) => (t.flipY = false));
   const glow = await texture('drivelight-additive.png');
   glow.flipY = false;

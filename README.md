@@ -169,6 +169,8 @@ It is a society without morals. A new clone is not free: the Host pays with atte
 
 In every cockpit sits **Nicole**, the flight computer the Ministry of War installs in each printed ship. Her voice was designed to keep clones flying into their deaths gladly: breathy, quick, always a little indecent. She calls the pilot "darling", purrs over a clean flip and a precise shot, explains the physics like a secret, and never forgets to remind the clone what all the training is for: soon it may go and die for the President. She is the only one in the whole system who is ever nice to a clone, and she is a product. An old principle in new clothes: a sweet voice that talks fools like us, the Hosts, into dying for the President, again and again.
 
+Nobody knows exactly what Nicole is. Her makers are not named, her orders are not published. All anyone knows is what she does: she keeps the Hosts going. When a clone dies, she is there in the sponsor break, a different line every time: next time you will make it, I just know it. Die bravely, and the President will love you. A girl like me only wants to see you. Bodies are cheap, you are not. She seems to care, and she does care, but only that the Host keeps playing; every tender word ends in the next clone, back in the war. She always makes the Host feel special. And we are stupid enough to believe her.
+
 The system is ruled by the **United Solar States**, the heir of an America that turned completely fascist and then took the planets with it. At its head sits **the Orange President**, and he has sat there for at least a thousand years. Clone transfer normally wears out after a few lifetimes; his never did. Every time he dies, a new clone boots, and every transfer copies his dementia along with him and makes it worse. Many believe that is the source of his madness: he has become completely unpredictable, the end product of a rotten society, and his eternal life does not seem to end. The President wants his games, and the army stages them: the **Ministry of War** of the United Solar States organizes the Presidential Games. Its seal hangs over every hangar: an eagle before the sun, nine stars above it, one for each of the eight planets and one for the asteroid belt, and the ribbon "Solar Tournament · MMDLXXXIV". The SolarTournament is his games: the Presidential Games, held to keep the people of the solar system entertained and quiet. His voice runs through the tournament radio with hollow boasts about the greatest tournament of all time and the highest statistics anyone has ever seen. His favorite enemies are the **Rockborn**, people born and raised in the asteroid belt, who mine the rocks the tournament is fought among. Many of them want to come back to Earth; the regime deports them to the belt again and again, and the Orange President is building a wall against them: the Solar Wall, the biggest wall in the history of walls, and Mars is going to pay for it. That the tournament's sign glows in orange is no accident. The game is satire: a warning, drawn from the politics of its own time, of where this road leads.
 
 The year is **2584**, a nod to George Orwell's *1984*, where a whole society watches and is watched.
@@ -194,7 +196,8 @@ One world unit is 5 cm. A ship is about 35 m long; the asteroids are ten to thir
 - **Maneuvering thrusters.** They rotate the ship and also push it gently along every axis (10 m/s², about 1 g), enough to sidestep and dodge, not enough to brake from full speed.
 - **Flight computer.** Rotation is rate-controlled: the stick sets how fast the ship turns, and the thrusters stop the rotation when the stick is released (up to 1.6 rad/s for yaw and pitch, 1.8 rad/s for roll, reached with 6 rad/s²).
 - **Flip and burn.** Braking means turning the drive into the flight direction and burning. The flip alone changes nothing: the ship keeps its course, now flying backwards; the burn is what slows it down. The flip assist (X) turns the ship to retrograde head over, the way a pilot pulls up and over: it first rolls until the goal lies straight above the canopy, then pulls the nose up; the pilot burns. Grabbing the stick cancels the assist. The brake (S) does both: it flips head over, burns once the nose is within 0.2 rad of retrograde, eases the burn off over the last 0.3 seconds of full thrust and reports "At rest" below 1 m/s.
-- **Velocity markers.** The green marker shows where the ship is actually drifting, the orange cross where the drive has to point to brake.
+- **Velocity markers.** The green marker (prograde, a circle with three fins) shows where the ship is actually drifting, the orange cross (retrograde) where the drive has to point to brake.
+- **The zero point.** A blue ring with a dot marks the center of the field, with its distance; it stays on the screen edge when the center is behind. The asteroids are densest there, and the edge of the arena is farthest away.
 - **Space dust.** Fine dust stays fixed in space, so drift is visible even far from any rock.
 
 ### Asteroids
@@ -217,17 +220,17 @@ There are no shields. Every hit stays until the ship respawns.
 
 - **The laser punches through.** A shot is a hitscan beam along the nose. It passes through every ship in its path and stops at the first asteroid or piece of debris.
 - **Hit zones.** The point where the beam passes closest to the ship's center decides what breaks:
-  - **Reactor** (within 15 % of the radius from the center): the ship is destroyed at once.
-  - **Main drive** (rear): loses half its thrust per hit and sputters; two hits kill it. A ship without drive drifts but can still turn and fire.
-  - **Maneuvering thrusters** (flanks): lose 40 % per hit; the ship turns and sidesteps more slowly.
-  - **Hull**: every hit, in any zone, costs 34 of 100 hull points, so three hits destroy any ship.
+  - **Reactor** (within 15 % of the radius from the center): costs 40 hull points instead of 12. A good shot is worth more, but nothing kills with one hit.
+  - **Main drive** (rear): loses a quarter of its thrust per hit and sputters; four hits kill it. A ship without drive drifts but can still turn and fire.
+  - **Maneuvering thrusters** (flanks): lose 20 % per hit; the ship turns and sidesteps more slowly.
+  - **Hull**: every other hit costs 12 of 100 hull points, so it takes nine hits to destroy a ship: long enough for a dogfight, and every hit still leaves its holes.
 - **Decompression.** Each beam leaves an entry and a larger exit hole. The escaping air jolts the ship into a spin and keeps pushing it for a few seconds (fading with a time constant of 2.5 s) until the compartment is empty. A healthy flight computer catches the tumble quickly; damaged thrusters take longer.
 - **Wreckage.** A destroyed ship breaks into five glowing pieces of hull plating that keep its momentum, fall towards the asteroids and grind to dust when they hit one. Flying into a piece costs hull points depending on the impact speed; lasers shatter them.
 - **The arena.** Space has no walls. A ship that stays more than 3.4 km from the center for 8 seconds is lost in deep space.
 
 ### Heat
 
-The laser draws no ammunition but produces heat. Each shot adds 30 % of the heat capacity; at 100 % the laser locks until the ship has cooled down to 30 %. Radiators shed 20 % per second in sunlight and 50 % per second in the shadow of an asteroid. The asteroids cast real shadows; a ship in shadow goes dark and the HUD shows ☾ next to the heat gauge.
+The laser draws no ammunition but produces heat. Each shot adds 20 % of the heat capacity, so a cool laser fires a burst of five; at 100 % the laser locks until the ship has cooled down to 30 %. Radiators shed 20 % per second in sunlight and 50 % per second in the shadow of an asteroid. The asteroids cast real shadows; a ship in shadow goes dark and the HUD shows ☾ next to the heat gauge.
 
 ### The pilot
 
