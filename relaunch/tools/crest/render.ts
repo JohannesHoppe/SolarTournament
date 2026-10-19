@@ -276,7 +276,7 @@ const ribbon = [
   `<path d="M -128 126 L -152 130 L -141 141 L -152 154 L -124 150 Z" fill="${EMBER}" stroke="${DARK}" stroke-width="1.6"/>`,
   `<path d="M 128 126 L 152 130 L 141 141 L 152 154 L 124 150 Z" fill="${EMBER}" stroke="${DARK}" stroke-width="1.6"/>`,
   `<path d="M -134 120 Q 0 84 134 120 L 134 152 Q 0 116 -134 152 Z" fill="${ORANGE}" stroke="${DARK}" stroke-width="1.6"/>`,
-  curveText('PRESIDENTIAL GAMES', [-134, 136], [0, 100], [134, 136], 13.5, 2, DARK, 0.9),
+  curveText('SOLAR TOURNAMENT', [-134, 136], [0, 100], [134, 136], 13.5, 2, DARK, 0.9),
 ].join('');
 const year = text('MMDLXXXIV', 172, 10, 5);
 
