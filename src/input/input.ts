@@ -23,7 +23,7 @@ export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'radio' 
 type ActionHandler = (action: Action) => void;
 
 /** The pointer at this share of the shorter screen side away from the center turns at full rate. */
-const MOUSE_FULL_DEFLECTION = 0.4;
+const MOUSE_FULL_DEFLECTION = 0.25;
 /** Around the center the pointer does not turn the ship (share of full deflection), so it can fly straight. */
 const MOUSE_DEADZONE = 0.08;
 /** Shift (fine aim) scales turning down to this share, for precise aiming. */

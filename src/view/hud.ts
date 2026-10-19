@@ -104,6 +104,23 @@ export class Hud {
     }
   }
 
+  /** A short word or number floating up from a point in space: a hit, a kill, points. */
+  popup(camera: THREE.Camera, point: THREE.Vector3, text: string, kind: 'hit' | 'kill' | 'points') {
+    projected.copy(point).project(camera);
+    if (projected.z > 1 || Math.abs(projected.x) > 1 || Math.abs(projected.y) > 1) return;
+    const popup = document.createElement('div');
+    popup.className = `popup ${kind}`;
+    popup.textContent = text;
+    popup.style.translate = `${((projected.x + 1) / 2) * window.innerWidth}px ${((1 - projected.y) / 2) * window.innerHeight}px`;
+    popup.addEventListener('animationend', () => popup.remove());
+    this.root.append(popup);
+  }
+
+  /** The crosshair lights up while the laser would hit a ship. */
+  setOnTarget(on: boolean) {
+    if (this.crosshair.classList.contains('on-target') !== on) this.crosshair.classList.toggle('on-target', on);
+  }
+
   /** The crosshair and the hit marker sit where the nose points (see Game.aimCrosshair). */
   setCrosshair(camera: THREE.Camera, point: THREE.Vector3) {
     pin(this.crosshair, camera, point);

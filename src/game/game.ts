@@ -54,6 +54,17 @@ const IMPACT_DAMAGE = 1 / 12;
 const RESTITUTION = 0.3;
 /** Seconds a ship may stay beyond ARENA_LIMIT before it is lost: enough to flip, burn off an outward drift of 100 m/s or more and fly back in. */
 const ARENA_GRACE = 20;
+/** Each death of the Host by an enemy raises the bots' ease (see Bot.ease) by this much in a solo round; a kill by the Host lowers it by KILL_EASE. */
+const DEATH_EASE = 0.35;
+const KILL_EASE = 0.1;
+/** The aim assist takes ships within this angle of the nose (rad, about 4°) and this distance (units, 2 km). */
+const AIM_ASSIST_ANGLE = 0.07;
+const AIM_ASSIST_RANGE = 40000;
+/** How hard the aim assist pulls at most (0..1), and the steering gain it pulls with. */
+const AIM_ASSIST_STRENGTH = 0.85;
+const AIM_ASSIST_GAIN = 6;
+/** The ease fades away over this many seconds of game time. */
+const EASE_FADE = 90;
 /** Explosions closer than this pelt the own hull with audible debris. */
 const DEBRIS_HEARING = 6000;
 /** The autopilot's thrusters push at full strength until the drift would be gone in this time (s), then ease off. */
@@ -104,8 +115,16 @@ const CAMERA_FOV = 70;
 /** A full burn widens the view by this much (degrees) and shakes the chase camera by this share of the ship radius: the drive is felt. */
 const DRIVE_FOV_KICK = 7;
 const DRIVE_SHAKE = 0.012;
+/** How fast the chase camera follows the ship's position and turns (1/s): tight, so the ship feels direct. */
+const CAMERA_FOLLOW = 20;
+const CAMERA_TURN = 18;
+/** A landed hit jolts the camera by this share of the ship radius (a kill by twice that), fading at KICK_FADE (1/s). */
+const KICK_SHAKE = 0.06;
+const KICK_FADE = 9;
 /** Hosts who ask for less motion get no camera shake. */
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+/** What a landed hit says where it struck, by the zone it broke. */
+const HIT_WORDS: Record<Zone, string> = { reactor: 'REACTOR', drive: 'DRIVE', thrusters: 'THRUSTERS', hull: 'HIT' };
 const ZONE_MESSAGES: Record<Zone, string> = {
   reactor: 'Reactor breach',
   drive: 'Main drive damaged',
@@ -136,6 +155,8 @@ const retrograde = new THREE.Vector3();
 const normal = new THREE.Vector3();
 const relative = new THREE.Vector3();
 const aimPoint = new THREE.Vector3();
+const toAim = new THREE.Vector3();
+const assistSteer = { yaw: 0, pitch: 0 };
 const inverseOrientation = new THREE.Quaternion();
 const sweep = new THREE.Vector3();
 const surface = new THREE.Vector3();
@@ -218,6 +239,12 @@ export class Game implements OnlineGame {
   private flipAligned = false;
   /** The autopilot keeps the own ship flying where its nose points: the thrusters take out every sideways drift. On at the start of a round; T switches to free drift and back. */
   private autopilot = false;
+  /** How much the bots go easy on the Host in a solo round, 0..1 (see DEATH_EASE). */
+  private ease = 0;
+  /** The nose is on a ship: the laser would hit now (see assistAim). */
+  private onTarget = false;
+  /** Strength of the camera jolt after the own laser hit something, 0..2. */
+  private kick = 0;
   /** The brake has brought the ship to rest (it beeps once). */
   private braked = false;
   /** The flight computer's output, reused from frame to frame. */
@@ -680,6 +707,7 @@ export class Game implements OnlineGame {
     this.cockpit = false;
     this.flipping = false;
     this.autopilot = true;
+    this.ease = 0;
     // a resumed flight school starts with the autopilot as the drills before left it
     if (this.school) this.autopilot = this.school.startsWithAutopilot;
     this.strain = 0;
@@ -1005,6 +1033,7 @@ export class Game implements OnlineGame {
     // them and the finale of the music meets the end of the round
     if (!this.online && Number.isFinite(this.roundEndsAtWall)) this.roundEndsAt = now + (this.roundEndsAtWall - wallClock());
 
+    this.ease = Math.max(0, this.ease - dt / EASE_FADE);
     const myControls = this.flightComputer(this.state === 'playing' ? this.input.read() : IDLE);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
@@ -1021,7 +1050,8 @@ export class Game implements OnlineGame {
       }
       let bot: Bot | null = null;
       for (const b of this.bots) if (b.ship === ship) bot = b;
-      const thought = bot ? bot.think(now, this.ships, this.field) : null;
+      if (bot) bot.ease = this.online ? 0 : this.ease;
+      const thought = bot ? bot.think(now, this.ships, this.field, this.bots) : null;
       // the flight school's unarmed sparring bot only flies
       if (thought && bot === this.sparring?.bot && !this.sparring.armed) thought.fire = false;
       const controls = ship === me ? myControls : (thought ?? IDLE);
@@ -1052,6 +1082,7 @@ export class Game implements OnlineGame {
     this.hud.setAutopilot(this.autopilot);
     const waypoint = this.school ? this.teach(dt, myControls) : null;
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
+    this.hud.setOnTarget(me.alive && this.onTarget);
 
     const outside = me.alive && me.outsideSince !== null;
     if (!outside) this.toldToReturn = false;
@@ -1232,7 +1263,7 @@ export class Game implements OnlineGame {
     const flipping = this.state === 'playing' && this.input.flipping && me.alive;
     if (!flipping) {
       this.flipping = false;
-      return this.keepUpright(this.autopilot && me.alive ? this.trimDrift(controls) : Object.assign(this.computed, controls));
+      return this.assistAim(this.keepUpright(this.autopilot && me.alive ? this.trimDrift(controls) : Object.assign(this.computed, controls)));
     }
     if (!this.flipping) {
       // the goal is fixed when the flip starts: against the flight, or straight behind the nose
@@ -1248,6 +1279,42 @@ export class Game implements OnlineGame {
     const out = flight.flip(this.flipGoal, 3, Object.assign(this.computed, controls));
     // the drive only pushes once the nose points the right way, never sideways during the turn
     out.thrust = aligned ? controls.thrust : 0;
+    return out;
+  }
+
+  /**
+   * Aim assist: a ship in sight within AIM_ASSIST_ANGLE of the nose pulls the nose onto it,
+   * the firmer the closer it already is, and the less the pilot steers away. The bots aim
+   * with a computer too; the pilot still pulls the trigger. Sets `onTarget` when the laser
+   * would hit now.
+   */
+  private assistAim(out: Controls): Controls {
+    const me = this.me!;
+    const flight = me.flight;
+    this.onTarget = false;
+    if (!me.alive) return out;
+    const nose = flight.forward(forward);
+    let target: Ship | null = null;
+    let angle = AIM_ASSIST_ANGLE;
+    let distance = 0;
+    for (const ship of this.ships) {
+      if (ship === me || !ship.alive) continue;
+      const line = toAim.subVectors(ship.flight.position, flight.position);
+      const range = line.length();
+      if (range > AIM_ASSIST_RANGE) continue;
+      const off = nose.angleTo(line);
+      if (off < angle && this.field.lineOfSight(flight.position, ship.flight.position)) {
+        target = ship;
+        angle = off;
+        distance = range;
+      }
+    }
+    if (!target) return out;
+    this.onTarget = angle < target.radius / Math.max(distance, 1);
+    flight.steer(toAim.subVectors(target.flight.position, flight.position), AIM_ASSIST_GAIN, assistSteer);
+    const pull = AIM_ASSIST_STRENGTH * (1 - angle / AIM_ASSIST_ANGLE) * (1 - THREE.MathUtils.smoothstep(Math.hypot(out.yaw, out.pitch), 0.3, 0.8));
+    out.yaw += (assistSteer.yaw - out.yaw) * pull;
+    out.pitch += (assistSteer.pitch - out.pitch) * pull;
     return out;
   }
 
@@ -1364,6 +1431,7 @@ export class Game implements OnlineGame {
         if (shooter.isLocal) {
           this.hud.hit();
           this.sound.beep(1320);
+          this.landed(scratch, 'HIT');
         }
         continue;
       }
@@ -1391,11 +1459,19 @@ export class Game implements OnlineGame {
         this.hearDebris(destroyed.object.position, destroyed.meanRadius);
         if (shooter.isLocal) {
           this.hud.hit();
+          this.hud.popup(this.camera, destroyed.object.position, `+${ASTEROID_POINTS[destroyed.generation]}`, 'points');
+          this.kick = Math.min(2, this.kick + 0.6);
           this.hud.flashMessage(this.time, `Asteroid cracked +${ASTEROID_POINTS[destroyed.generation]}`, 1.5);
           this.speaker.say(COMPUTER.asteroid);
         }
       }
     }
+  }
+
+  /** Feedback for a hit the own laser landed: a word where it struck, and a jolt. */
+  private landed(point: THREE.Vector3, word: string) {
+    this.hud.popup(this.camera, point, word, 'hit');
+    this.kick = Math.min(2, this.kick + 0.5);
   }
 
   /**
@@ -1410,6 +1486,7 @@ export class Game implements OnlineGame {
     if (shooter?.isLocal) {
       this.hud.hit();
       this.sound.beep(zone === 'reactor' ? 1760 : 1320);
+      this.landed(scratch, HIT_WORDS[zone]);
     }
     if (ship.isLocal) {
       this.hud.damaged();
@@ -1424,8 +1501,16 @@ export class Game implements OnlineGame {
 
   private shipDestroyed(victim: Ship, killer: Ship | null) {
     victim.respawnAt = this.time + RESPAWN_SECONDS;
+    if (victim === this.me && killer && killer !== victim) this.ease = Math.min(1, this.ease + DEATH_EASE);
+    if (killer === this.me && victim !== this.me) this.ease = Math.max(0, this.ease - KILL_EASE);
     if (victim === this.me) this.deathCause = killer ? `Shot down by ${killer.name}` : victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
-    this.effects.explosion(victim.flight.position, victim.radius * 2, victim.flight.velocity.clone().multiplyScalar(0.3));
+    // a kill of the Host's own is bigger: more fire, a jolt, and the points where it happened
+    const ownKill = killer?.isLocal === true && killer === this.me;
+    this.effects.explosion(victim.flight.position, victim.radius * (ownKill ? 3 : 2), victim.flight.velocity.clone().multiplyScalar(0.3));
+    if (ownKill) {
+      this.hud.popup(this.camera, victim.flight.position, `+${KILL_POINTS}`, 'kill');
+      this.kick = 2;
+    }
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
     if (victim.isLocal) {
       this.sound.play('explosion', { volume: 1.6, rate: 0.6 });
@@ -1640,9 +1725,8 @@ export class Game implements OnlineGame {
       return;
     }
     cameraGoal.set(0, me.radius * 0.75, me.radius * 2.6).applyQuaternion(flight.orientation).add(flight.position);
-    const blend = 1 - Math.exp(-14 * dt);
-    this.camera.position.lerp(cameraGoal, blend);
-    this.camera.quaternion.slerp(flight.orientation, 1 - Math.exp(-10 * dt));
+    this.camera.position.lerp(cameraGoal, 1 - Math.exp(-CAMERA_FOLLOW * dt));
+    this.camera.quaternion.slerp(flight.orientation, 1 - Math.exp(-CAMERA_TURN * dt));
     // the drive kicks: the view widens and trembles while it burns
     const burn = me.alive ? flight.throttle : 0;
     const fov = this.camera.fov + (CAMERA_FOV + DRIVE_FOV_KICK * burn - this.camera.fov) * (1 - Math.exp(-6 * dt));
@@ -1651,6 +1735,9 @@ export class Game implements OnlineGame {
       this.camera.updateProjectionMatrix();
     }
     if (burn > 0.05 && !reducedMotion.matches) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * DRIVE_SHAKE * burn));
+    // a jolt for every hit the own laser lands, bigger for a kill; it fades in a fraction of a second
+    if (this.kick > 0.01 && !reducedMotion.matches) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * KICK_SHAKE * this.kick));
+    this.kick *= Math.exp(-KICK_FADE * dt);
   }
 
   private updateMenuCamera() {

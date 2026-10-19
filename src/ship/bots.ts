@@ -5,7 +5,15 @@ import type { Ship } from './ship';
 import { RCS_THRUST } from './flight';
 
 const SIGHT_RANGE = 50000;
-const FIRE_RANGE = 30000;
+/** Bots only fire within this distance (units, 1 km). */
+const FIRE_RANGE = 20000;
+/** At most this many bots hunt the same ship; the others look for another target. */
+const MAX_HUNTERS = 2;
+/** A bot keeps its target unless another is clearly better: the current one counts this much nearer. */
+const STICKY = 0.7;
+/** At full ease (see Bot.ease) bots aim this much worse and react this much later (s). */
+const EASE_AIM = 1.5;
+const EASE_REACTION = 0.4;
 /** Bots close in with up to this speed and hold position near their target. */
 const CRUISE_SPEED = 2500;
 const HOLD_DISTANCE = 4000;
@@ -13,7 +21,7 @@ const HOLD_DISTANCE = 4000;
 const AVOID_HORIZON = 5;
 /** A velocity error larger than this makes the bot turn and burn instead of fighting. */
 const BURN_THRESHOLD = 500;
-/** Angular aim error of an average bot (rad, about 1.1°): at 1 km it scatters by about one ship radius (20 m), at its firing range of 1.5 km by one and a half. */
+/** Angular aim error of an average bot (rad, about 1.1°): at 1 km, its firing range, it scatters by about one ship radius (20 m). */
 const AIM_ANGLE = 0.02;
 /** How long a bot's sense of the target's jinking lingers (s). */
 const JINK_MEMORY = 0.6;
@@ -37,7 +45,7 @@ const line = new THREE.Vector3();
 export const BOT_NAMES = ['Ingmar', 'Nova', 'Kessler', 'Vega', 'Orion', 'Sputnik', 'Halley', 'Laika'];
 
 /**
- * Newtonian pursuit AI. Bots only see ships they have a line of sight to. It works out the velocity it wants (close in on the nearest ship,
+ * Newtonian pursuit AI. Bots only see ships they have a line of sight to. It works out the velocity it wants (close in on its target,
  * hold distance, avoid rocks, stay in the arena) and corrects large differences by turning
  * the main drive into the error and burning. Small differences are trimmed with the
  * maneuvering thrusters while the nose stays on the target.
@@ -58,9 +66,17 @@ export class Bot {
   private readonly wanderTarget = new THREE.Vector3();
   private readonly controls: Controls = { ...IDLE };
 
+  /** The ship this bot hunts; other bots read it, so no more than MAX_HUNTERS chase the same one. */
+  target: Ship | null = null;
+  /**
+   * How much the bots go easy on the Host, 0..1: a solo round raises it when the Host dies
+   * again and again, and lets it fade (see Game). It widens their aim and slows their trigger.
+   */
+  ease = 0;
+
   constructor(readonly ship: Ship, private readonly skill: number) {}
 
-  think(now: number, ships: Ship[], field: AsteroidField): Controls {
+  think(now: number, ships: Ship[], field: AsteroidField, bots: readonly Bot[]): Controls {
     const me = this.ship.flight;
     // one controls object per bot, cleared each thought, so thinking allocates nothing
     const controls = Object.assign(this.controls, IDLE);
@@ -70,23 +86,32 @@ export class Bot {
 
     if (now >= this.nextRethink) {
       this.nextRethink = now + 0.4 + Math.random() * 0.6;
-      // the aim wanders around the target; better pilots aim closer to the center
-      // a direction and a share of the full error; how far that is depends on the distance (see aimError)
+      // the aim wanders around the target: a direction and a share of the full error (see aimError)
       this.aimOffset.randomDirection().multiplyScalar(Math.random());
       if (Math.random() < 0.2) this.wanderTarget.randomDirection().multiplyScalar(Math.random() * 30000);
     }
 
+    // the nearest ship in sight, but one that other bots already hunt counts as farther, and a
+    // ship hunted by MAX_HUNTERS is left to them: the bots fight each other too, not only the Host
     let target: Ship | null = null;
     let targetDistance = SIGHT_RANGE;
+    let best = Infinity;
     for (const ship of ships) {
       // a freshly printed clone is left alone until its spawn protection runs out
       if (ship === this.ship || !ship.alive || now < ship.protectedUntil) continue;
       const distance = ship.flight.position.distanceTo(me.position);
-      if (distance < targetDistance && field.lineOfSight(me.position, ship.flight.position)) {
+      if (distance >= SIGHT_RANGE) continue;
+      let hunters = 0;
+      for (const bot of bots) if (bot !== this && bot.ship.alive && bot.target === ship) hunters++;
+      if (hunters >= MAX_HUNTERS) continue;
+      const cost = distance * (1 + hunters) * (ship === this.target ? STICKY : 1);
+      if (cost < best && field.lineOfSight(me.position, ship.flight.position)) {
+        best = cost;
         target = ship;
         targetDistance = distance;
       }
     }
+    this.target = target;
 
     if (target) {
       toTarget.subVectors(target.flight.position, me.position);
@@ -125,7 +150,7 @@ export class Bot {
       const angularSize = (target.radius * 0.8) / Math.max(targetDistance, 1);
       const onTarget = me.angleTo(aimPoint) < angularSize + this.ship.radius / Math.max(targetDistance, 1);
       this.onTargetFor = onTarget ? this.onTargetFor + dt : 0;
-      const reaction = 0.45 - 0.3 * this.skill;
+      const reaction = 0.45 - 0.3 * this.skill + EASE_REACTION * this.ease;
       controls.fire = this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < 40 + 50 * this.skill;
     } else {
       me.steer(toTarget, 2.5, controls);
@@ -146,7 +171,7 @@ export class Bot {
    * target is hard to hit, as it would be for any eye.
    */
   private aimError(distance: number) {
-    return this.ship.radius * (1.6 - 1.4 * this.skill) + distance * AIM_ANGLE * (1.5 - this.skill);
+    return (this.ship.radius * (1.6 - 1.4 * this.skill) + distance * AIM_ANGLE * (1.5 - this.skill)) * (1 + EASE_AIM * this.ease);
   }
 
   /**

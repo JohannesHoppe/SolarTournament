@@ -1683,3 +1683,66 @@ button.quiet:focus-visible {
   text-align-last: center;
   hyphens: auto;
 }
+
+/* the laser would hit now: the crosshair glows orange and grows a little */
+#crosshair.on-target {
+  border-color: var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  scale: 1.25;
+}
+
+/* a hit, a kill or points float up from where they happened and fade */
+.popup {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font-family: 'Michroma', sans-serif;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  pointer-events: none;
+  color: var(--accent);
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9), 0 0 10px var(--accent);
+  animation: popup-rise 0.9s ease-out forwards;
+}
+
+.popup.kill {
+  font-size: 1.5rem;
+  color: var(--tube-orange);
+  text-shadow: var(--neon-orange);
+  animation-duration: 1.4s;
+}
+
+.popup.points {
+  color: var(--accent-strong);
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9), 0 0 10px var(--accent-strong);
+}
+
+@keyframes popup-rise {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -320%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popup {
+    animation-name: popup-fade;
+  }
+}
+
+@keyframes popup-fade {
+  from {
+    opacity: 1;
+    transform: translate(-50%, -100%);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -100%);
+  }
+}
