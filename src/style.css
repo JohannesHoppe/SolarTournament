@@ -1746,3 +1746,9 @@ button.quiet:focus-visible {
     transform: translate(-50%, -100%);
   }
 }
+
+/* the flight school is complete: its note keeps saying so, in the blue of information */
+#school.cleared .mode-note {
+  color: var(--accent-strong);
+  font-weight: 700;
+}

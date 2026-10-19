@@ -390,11 +390,17 @@ export class Game implements OnlineGame {
     return storageGet(SCHOOL_DONE_KEY) ? 'start' : 'school';
   }
 
-  /** The flight school button says where a Host left off, with a way to start over. */
+  /**
+   * The flight school button says where a Host left off, with a way to start over, and once
+   * the school is complete it says so for good: a Host who made it through keeps the badge.
+   */
   private showSchoolProgress() {
     const step = Number(storageGet(SCHOOL_STEP_KEY) ?? 0);
+    const cleared = storageGet(SCHOOL_DONE_KEY) !== null;
     const note = $('school').querySelector<HTMLElement>('.mode-note')!;
-    note.textContent = step > 0 ? `Continue at drill ${step + 1} of ${FlightSchool.drills}.` : 'Learn to fly. Training clones are free.';
+    if (step > 0) note.textContent = `Continue at drill ${step + 1} of ${FlightSchool.drills}.${cleared ? ' Completed before.' : ''}`;
+    else note.textContent = cleared ? '✓ Completed. Cleared for the tournament.' : 'Learn to fly. Training clones are free.';
+    $('school').classList.toggle('cleared', cleared);
     $('school-reset').hidden = step <= 0;
   }
 
