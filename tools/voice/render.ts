@@ -7,7 +7,8 @@
  * after changing lines.ts; needs ffmpeg on the PATH, and downloads the Kokoro model once.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { allLines, clipKey, phraseKey, phrases, words, type Language } from '../../src/music/lines.ts';
@@ -105,7 +106,10 @@ const encoded = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 's16le', '-ar', 
   input: Buffer.from(pcm.buffer),
 });
 if (encoded.status !== 0) throw new Error('ffmpeg failed: ' + encoded.stderr);
-writeFileSync(join(out, 'voice.json'), JSON.stringify({ sampleRate: SAMPLE_RATE, clips }, null, 1) + '\n');
+// the sprite's fingerprint: the game loads the MP3 under it, so a cached older sprite can
+// never meet a newer manifest
+const version = createHash('sha256').update(readFileSync(join(out, 'voice.mp3'))).digest('hex').slice(0, 12);
+writeFileSync(join(out, 'voice.json'), JSON.stringify({ sampleRate: SAMPLE_RATE, version, clips }, null, 1) + '\n');
 console.log(`${Object.keys(clips).length} clips, ${(pcm.length / SAMPLE_RATE).toFixed(1)} s`);
 
 function concat(parts: Int16Array[]): Int16Array {
