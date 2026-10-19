@@ -381,7 +381,7 @@ export class Game implements OnlineGame {
           if (action === 'confirm') this.sponsors.confirm();
           break;
         }
-        if (action === 'pause' || action === 'pointer-released') this.pause();
+        if (action === 'pause') this.pause();
         if (action === 'camera') this.cockpit = !this.cockpit;
         if (action === 'flip' && this.me?.alive) this.flipAssist = !this.flipAssist;
         break;
@@ -405,6 +405,7 @@ export class Game implements OnlineGame {
     $('invite').textContent = 'Copy invite link';
     if (state !== 'playing') this.sponsors.hide();
     this.hud.show(state === 'playing');
+    this.input.steerWithMouse(state === 'playing');
     if (state !== 'playing') this.sound.setEngine(0, 0);
   }
 
@@ -415,7 +416,6 @@ export class Game implements OnlineGame {
     const best = Number(storageGet(BEST_SCORE_KEY) ?? 0);
     $('best-score').textContent = best ? `Personal best: ${best} pts` : '';
     this.setScreen('menu');
-    this.input.releasePointer();
   }
 
   private clearShips() {
@@ -456,12 +456,10 @@ export class Game implements OnlineGame {
     this.flipAssist = false;
     this.strain = 0;
     this.setScreen('playing');
-    this.input.resetMouse();
-    this.input.lockPointer();
     // the link to the clone comes first, then the hint for the mouse
     if (!this.input.touchActive) {
       window.setTimeout(() => {
-        if (this.state === 'playing') this.hud.flashMessage(this.time, 'Click to steer with the mouse', 4);
+        if (this.state === 'playing') this.hud.flashMessage(this.time, 'The ship turns towards the mouse pointer', 4);
       }, 2200);
     }
     // the flight school starts with its briefing; a tournament clone just reports in
@@ -590,29 +588,26 @@ export class Game implements OnlineGame {
 
   /** The next clone only boots after the pilot has watched an ad. */
   private sponsorBreak() {
-    this.input.releasePointer();
+    this.input.steerWithMouse(false);
     this.hud.show(false);
     this.speaker.say(COMPUTER.cloneLost, true);
     this.sponsors.show(() => {
       this.speaker.say(COMPUTER.sponsorHappy, true);
       this.hud.show(true);
       this.respawn(this.me!);
-      this.input.resetMouse();
-      this.input.lockPointer();
+      this.input.steerWithMouse(true);
     });
   }
 
   private pause() {
     this.setScreen('paused');
-    this.input.releasePointer();
   }
 
   private resume() {
     // a solo round stood still during the pause; its real-time end moves on accordingly
     if (!this.online && Number.isFinite(this.roundEndsAt)) this.setRoundEnd(this.roundEndsAt - this.time);
     this.setScreen('playing');
-    this.input.resetMouse();
-    this.input.lockPointer();
+    if (this.sponsors.visible) this.input.steerWithMouse(false);
   }
 
   /** Ends a solo round with the scoreboard; leaving an online tournament goes to the menu. */
@@ -626,7 +621,6 @@ export class Game implements OnlineGame {
     $('again').innerHTML = 'Back to hangar <kbd>Enter</kbd>';
     this.speaker.say(COMPUTER.roundOver, true);
     this.setScreen('results');
-    this.input.releasePointer();
   }
 
   private renderScoreboard() {
@@ -703,7 +697,7 @@ export class Game implements OnlineGame {
     const me = this.me!;
     const now = this.time;
 
-    const myControls = this.flightComputer(this.state === 'playing' ? this.input.read(dt) : { ...IDLE });
+    const myControls = this.flightComputer(this.state === 'playing' ? this.input.read() : { ...IDLE });
     for (const ship of [...this.ships]) {
       if (ship.owner !== null) {
         ship.updateRemote(dt, now);

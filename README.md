@@ -31,7 +31,7 @@ The project is a classic Pages project, not a Worker: the game is a static site 
 
 | Keyboard and mouse | Gamepad | Action |
 |---|---|---|
-| Mouse (click the game first) / arrow keys | Left stick (pull back = nose up) | Turn (yaw, pitch) |
+| Mouse pointer (the ship turns towards it; the farther from the center, the faster) / arrow keys | Left stick (pull back = nose up) | Turn (yaw, pitch) |
 | Q / E | LB / RB | Roll |
 | W / Shift | RT (analog) | Main drive |
 | A / D | Right stick left / right | Thrusters: sideways |
@@ -43,6 +43,8 @@ The project is a classic Pages project, not a Worker: the game is a static site 
 | M | | Radio on / off (also by clicking the song title in the top right corner) |
 | Esc | Menu | Pause |
 | Enter | A | Confirm (start, resume, boot the next clone) |
+
+**Mouse flight.** The pointer stays visible and nothing captures the mouse. Its offset from the screen center is the stick: at 40 % of the shorter screen side it turns at full rate, within 6 % of that around the center the ship flies straight, and a pointer that leaves the window lets go of the stick.
 
 Gamepads with the standard layout (Xbox, PlayStation, most others in current browsers) work without setup.
 

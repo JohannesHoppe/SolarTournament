@@ -85,7 +85,7 @@ The repository root is the Vite project: `index.html` (the game) and `radio.html
 | `view/glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |
 | `view/textures.ts` | Canvas textures: glows, sparks, smoke |
 | **`input/`** | **Controls** |
-| `input/input.ts` | Keyboard, mouse (pointer lock as virtual stick) and gamepad, merges all input into `Controls` |
+| `input/input.ts` | Keyboard, mouse flight (the ship turns towards the visible pointer, its offset from the center is the stick) and gamepad, merges all input into `Controls` |
 | `input/touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |
 | **`sound/`** | **What the pilot hears besides the radio** |
 | `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static |

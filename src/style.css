@@ -71,6 +71,11 @@ body {
   display: block;
 }
 
+/* in flight the pointer is the point the ship turns towards */
+#game canvas.steering {
+  cursor: crosshair;
+}
+
 [hidden] {
   display: none !important;
 }

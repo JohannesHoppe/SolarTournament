@@ -19,13 +19,13 @@ export interface Controls {
 
 export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 
-export type Action = 'confirm' | 'pause' | 'quit' | 'camera' | 'flip' | 'radio' | 'pointer-released';
+export type Action = 'confirm' | 'pause' | 'quit' | 'camera' | 'flip' | 'radio';
 type ActionHandler = (action: Action) => void;
 
-/** How strongly mouse movement deflects the virtual stick, per pixel. */
-const MOUSE_SENSITIVITY = 0.0035;
-/** The virtual stick returns to center with this rate (1/s), so the ship stops turning. */
-const MOUSE_RECENTER_RATE = 2.2;
+/** The pointer at this share of the shorter screen side away from the center turns at full rate. */
+const MOUSE_FULL_DEFLECTION = 0.4;
+/** Around the center the pointer does not turn the ship (share of full deflection), so it can fly straight. */
+const MOUSE_DEADZONE = 0.06;
 /** Stick deflections below this are treated as zero, so worn sticks do not drift. */
 const STICK_DEADZONE = 0.15;
 
@@ -39,10 +39,16 @@ const PAD_ACTIONS: [number, Action][] = [
   [PAD.y, 'flip'],
 ];
 
+/**
+ * Mouse flight: the pointer stays visible and the ship turns towards it. Its offset from the
+ * screen center is the stick deflection; a click fires. Nothing captures the mouse, so it can
+ * always leave the game, and Escape only pauses.
+ */
 export class Input {
   private readonly keys = new Set<string>();
   private readonly mouseStick = { x: 0, y: 0 };
   private mouseFire = false;
+  private steering = false;
   private handler: ActionHandler = () => {};
   private readonly padPressed = new Set<number>();
   private readonly touch = new TouchControls(() => this.handler('flip'), () => this.handler('pause'));
@@ -52,53 +58,40 @@ export class Input {
     window.addEventListener('keyup', (e) => this.onKey(e, false));
     window.addEventListener('blur', () => {
       this.keys.clear();
-      this.mouseFire = false;
+      this.resetMouse();
     });
 
     canvas.addEventListener('mousedown', (e) => {
-      if (e.button !== 0 || this.touch.active) return;
-      if (document.pointerLockElement !== canvas) {
-        canvas.requestPointerLock?.();
-        return;
-      }
+      if (e.button !== 0 || !this.steering || this.touch.active) return;
       this.mouseFire = true;
     });
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.mouseFire = false;
     });
     document.addEventListener('mousemove', (e) => {
-      if (document.pointerLockElement !== canvas) return;
-      this.mouseStick.x += e.movementX * MOUSE_SENSITIVITY;
-      this.mouseStick.y -= e.movementY * MOUSE_SENSITIVITY;
-      const length = Math.hypot(this.mouseStick.x, this.mouseStick.y);
-      if (length > 1) {
-        this.mouseStick.x /= length;
-        this.mouseStick.y /= length;
-      }
+      // phones emulate mouse events for taps; they steer with the on-screen sticks
+      if (!this.steering || this.touch.active) return;
+      const full = Math.min(window.innerWidth, window.innerHeight) * MOUSE_FULL_DEFLECTION;
+      this.mouseStick.x = mouseAxis((e.clientX - window.innerWidth / 2) / full);
+      this.mouseStick.y = mouseAxis((window.innerHeight / 2 - e.clientY) / full);
     });
-    document.addEventListener('pointerlockchange', () => {
-      if (document.pointerLockElement === canvas) return;
-      this.resetMouse();
-      // Browsers swallow the Escape key that releases the pointer, so this doubles as "pause".
-      this.handler('pointer-released');
-    });
+    // a pointer outside the window does not keep the ship spinning
+    document.documentElement.addEventListener('mouseleave', () => this.resetMouse());
   }
 
   onAction(handler: ActionHandler) {
     this.handler = handler;
   }
 
-  lockPointer() {
-    // touch devices steer with the on-screen sticks; mobile browsers reject pointer lock
-    if (!this.touch.active) this.canvas.requestPointerLock?.();
+  /** The mouse steers while a clone is flying; in menus it is just a pointer. */
+  steerWithMouse(on: boolean) {
+    this.steering = on;
+    this.canvas.classList.toggle('steering', on);
+    this.resetMouse();
   }
 
   get touchActive() {
     return this.touch.active;
-  }
-
-  releasePointer() {
-    if (document.pointerLockElement) document.exitPointerLock();
   }
 
   resetMouse() {
@@ -106,13 +99,10 @@ export class Input {
     this.mouseFire = false;
   }
 
-  /** Reads the current controls; advances the mouse stick recentering by dt seconds. */
-  read(dt: number): Controls {
+  /** Reads the current controls. */
+  read(): Controls {
     const k = (...codes: string[]) => codes.some((c) => this.keys.has(c));
     const axis = (plus: string[], minus: string[]) => (k(...plus) ? 1 : 0) - (k(...minus) ? 1 : 0);
-    const decay = Math.exp(-MOUSE_RECENTER_RATE * dt);
-    this.mouseStick.x *= decay;
-    this.mouseStick.y *= decay;
 
     // Gamepad: left stick turns (pull back = nose up, as in aircraft), right stick pushes
     // sideways and up/down, right trigger is the main drive, left trigger or A fires.
@@ -174,6 +164,12 @@ export class Input {
 }
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+
+/** Pointer offset (1 = full deflection) to stick deflection: dead zone in the center, clamped at the edge. */
+function mouseAxis(offset: number) {
+  const magnitude = Math.abs(offset);
+  return magnitude < MOUSE_DEADZONE ? 0 : clamp((Math.sign(offset) * (magnitude - MOUSE_DEADZONE)) / (1 - MOUSE_DEADZONE));
+}
 
 /** Removes the dead zone and rescales the rest of the stick travel to 0..1. */
 function deadzone(v: number) {

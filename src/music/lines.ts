@@ -214,7 +214,7 @@ export const COMPUTER = {
   debris: 'debris impact',
   asteroid: 'asteroid cracked',
   arena: 'return to the field',
-  mouse: 'click to steer with the mouse',
+  mouse: 'the ship turns towards your mouse pointer.',
   noLink: 'could not connect',
   cloneLost: 'live link lost. your clone is dead. want another clone? you pay with advertising. make the sponsor happy.',
   sponsorHappy: 'the sponsor is happy. establishing live link to your next clone.',
