@@ -1280,3 +1280,18 @@ body.page {
 #transmission-text {
   text-align-last: center;
 }
+
+/* The SolarTournament logo: the seal of the Ministry of War, glowing like everything the regime owns. */
+.logo {
+  display: block;
+  margin: 0 auto 8px;
+  filter: drop-shadow(0 0 6px rgba(255, 157, 0, 0.55)) drop-shadow(0 0 18px rgba(255, 90, 0, 0.35));
+}
+
+#loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
