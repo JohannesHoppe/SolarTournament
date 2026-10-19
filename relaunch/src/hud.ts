@@ -67,7 +67,7 @@ export class Hud {
     this.shadow.hidden = !me.alive || !me.inShadow;
     this.speed.textContent = `${Math.round(me.flight.velocity.length() * METERS_PER_UNIT)} m/s`;
 
-    if (!me.alive) this.message.textContent = 'Clone lost';
+    if (!me.alive) this.message.textContent = 'Live link lost';
     else if (now > this.messageUntil) this.message.textContent = '';
 
     for (const item of [...this.killfeed.children] as HTMLElement[]) {

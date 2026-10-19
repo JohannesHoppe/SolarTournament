@@ -216,10 +216,10 @@ export const COMPUTER = {
   arena: 'return to the field',
   mouse: 'click to steer with the mouse',
   noLink: 'could not connect',
-  cloneLost: 'clone lost. want another clone? you pay with advertising. make the sponsor happy.',
-  sponsorHappy: 'the sponsor is happy. booting your next clone.',
+  cloneLost: 'live link lost. your clone is dead. want another clone? you pay with advertising. make the sponsor happy.',
+  sponsorHappy: 'the sponsor is happy. establishing live link to your next clone.',
   roundOver: 'round over',
-  launch: 'clone online. link to host established. good luck, pilot.',
+  launch: 'establishing live link to your clone. link established. good luck, pilot.',
 } as const;
 
 /** All phrases and fixed announcements of a language, for the renderer. */

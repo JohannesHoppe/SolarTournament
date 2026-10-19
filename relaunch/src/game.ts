@@ -458,7 +458,12 @@ export class Game implements OnlineGame {
     this.setScreen('playing');
     this.input.resetMouse();
     this.input.lockPointer();
-    if (!this.input.touchActive) this.hud.flashMessage(this.time, 'Click to steer with the mouse', 4);
+    // the link to the clone comes first, then the hint for the mouse
+    if (!this.input.touchActive) {
+      window.setTimeout(() => {
+        if (this.state === 'playing') this.hud.flashMessage(this.time, 'Click to steer with the mouse', 4);
+      }, 2200);
+    }
     // the flight school starts with its briefing; a tournament clone just reports in
     if (mode !== 'school') this.speaker.say(this.input.touchActive ? COMPUTER.launch : [COMPUTER.launch, COMPUTER.mouse], true);
   }
@@ -576,8 +581,9 @@ export class Game implements OnlineGame {
     const look = new THREE.Matrix4().lookAt(position, scratch.set(0, 0, 0), new THREE.Vector3(0, 1, 0));
     ship.spawn(position, new THREE.Quaternion().setFromRotationMatrix(look), this.time);
     if (ship === this.me) {
-      // the link locks onto the freshly printed clone
-      this.glitch.trigger(0.5, 0.5);
+      // the Host's mind locks onto the freshly printed clone: from here on we are the clone
+      this.hud.flashMessage(this.time, 'Establishing live link to your clone…', 2);
+      this.glitch.trigger(0.9, 1.1);
       this.radio.setMuffled(false);
     }
   }
