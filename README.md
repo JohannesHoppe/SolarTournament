@@ -260,8 +260,8 @@ There is no sound in vacuum. Everything the Host hears travels through the clone
 
 The game collects as little as possible: no accounts, no cookies, no tracking, no ad network, nothing loaded from third-party servers. The German legal pages [Impressum](impressum.html) and [Datenschutz](datenschutz.html) are linked from the menu and the radio page. What happens to data:
 
-- **Hosting:** Cloudflare Pages delivers the site and sees connection data (IP address, time, file, user agent).
-- **Browser storage:** four localStorage entries (callsign, personal best, flight school completed, radio on or off); they never leave the browser.
+- **Hosting:** Cloudflare Pages delivers the site and sees connection data (IP address, time, file, user agent); Cloudflare also asks browsers to report failed connections (Network Error Logging). Links to GitHub carry no referrer.
+- **Browser storage:** four localStorage entries (callsign, personal best, flight school completed, radio on or off); they stay in the browser, only the callsign is shown to the other players of an online tournament.
 - **Online tournament** (only when a Host starts or joins one): the browsers connect directly over WebRTC, so the other players see the Host's IP address, callsign, ship and score. To find each other, the browsers post short connection messages (with network addresses) on public Nostr relays run by independent third parties. Each browser asks Cloudflare's STUN server for its public address; Trystero's default STUN servers of Google are replaced by Cloudflare's alone.
 - **Sponsor break:** invented satire ads, no ad network. The privacy policy has to be extended before real ads are shown.
 
