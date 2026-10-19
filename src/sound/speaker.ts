@@ -2,10 +2,13 @@ import type { Voice } from '../music/band';
 import { clipKey } from '../music/lines';
 import { loadVoice } from '../music/voice';
 
+/** How a line meets one still being said: see Speaker.say. */
+export type Urgency = 'chatter' | 'urgent' | 'lesson';
+
 /**
  * The flight computer reads out what the screen shows, in its own clear voice, independent
- * of the radio. One line at a time: a new line either waits its turn (it is dropped when
- * something else is talking) or interrupts, like a new step of the flight school.
+ * of the radio. One line at a time; how a new line meets one still being said depends on
+ * its urgency (see say).
  */
 export class Speaker {
   private voice: Voice | null = null;
@@ -13,6 +16,8 @@ export class Speaker {
   private readonly input: GainNode;
   private sources: AudioBufferSourceNode[] = [];
   private busyUntil = 0;
+  /** How urgent the line being said is (see say). */
+  private saying: Urgency = 'chatter';
 
   constructor(private readonly context: AudioContext, destination: AudioNode) {
     // a little cockpit speaker: no rumble, the faintest grit
@@ -46,15 +51,20 @@ export class Speaker {
 
   /**
    * Says lines of the flight computer (see COMPUTER and SCHOOL), one after the other;
-   * each line is rendered whole. Returns false when it stayed silent.
+   * each line is rendered whole. How it meets a line still being said depends on its
+   * urgency: a lesson of the flight school is never cut off, a new lesson waits its turn
+   * behind whatever is being said, an urgent line cuts off anything but a lesson, and
+   * chatter only speaks into silence. Returns false when it stayed silent.
    */
-  say(lines: string | string[], interrupt = false): boolean {
+  say(lines: string | string[], urgency: Urgency = 'chatter'): boolean {
     this.prepare();
     const voice = this.voice;
     if (!voice || this.context.state !== 'running') return false;
-    if (this.speaking && !interrupt) return false;
-    this.stop();
     let position = this.context.currentTime + 0.05;
+    const queued = this.speaking && urgency === 'lesson';
+    if (queued) position = this.busyUntil;
+    else if (this.speaking && (urgency === 'chatter' || this.saying === 'lesson')) return false;
+    else this.stop();
     let said = false;
     for (const line of typeof lines === 'string' ? [lines] : lines) {
       const clip = voice.clips[clipKey('sys', line)];
@@ -64,10 +74,20 @@ export class Speaker {
       source.buffer = voice.buffer;
       source.connect(this.input);
       source.start(position, clip[0], clip[1]);
+      // a finished line leaves the list, so a long flight school does not pile them up
+      source.onended = () => {
+        const index = this.sources.indexOf(source);
+        if (index >= 0) this.sources.splice(index, 1);
+      };
       this.sources.push(source);
       position += clip[1] + 0.3;
     }
-    this.busyUntil = said ? position : 0;
+    if (said) {
+      this.busyUntil = position;
+      this.saying = urgency;
+    } else if (!queued) {
+      this.busyUntil = 0;
+    }
     return said;
   }
 

@@ -447,7 +447,7 @@ export class Game implements OnlineGame {
     } catch (error) {
       console.error(error);
       this.notice('Could not connect to the tournament. Try again in a moment.');
-      this.speaker.say(COMPUTER.noLink, true);
+      this.speaker.say(COMPUTER.noLink, 'urgent');
     } finally {
       this.connecting = false;
       button.disabled = false;
@@ -638,7 +638,6 @@ export class Game implements OnlineGame {
     if (state !== this.state) this.screenSince = performance.now();
     this.state = state;
     $('menu').hidden = state !== 'menu';
-    $('crest').hidden = state !== 'menu';
     $('pause').hidden = state !== 'paused';
     $('results').hidden = state !== 'results';
     $('invite').hidden = !this.online;
@@ -728,7 +727,7 @@ export class Game implements OnlineGame {
     // the flight school starts with its briefing; a tournament clone just reports in, and
     // once Nicole is through, the announcer opens the broadcast
     if (mode !== 'school') {
-      this.speaker.say(mouse ? [COMPUTER.launch, COMPUTER.mouse] : COMPUTER.launch, true);
+      this.speaker.say(mouse ? [COMPUTER.launch, COMPUTER.mouse] : COMPUTER.launch, 'urgent');
       window.setTimeout(() => {
         if (this.state === 'playing' && !this.school) this.radio.announce(pick(ANNOUNCER_OPEN), null);
       }, ANNOUNCER_OPEN_DELAY_MS);
@@ -922,11 +921,11 @@ export class Game implements OnlineGame {
     const me = this.me!;
     this.input.steerWithMouse(false);
     this.hud.show(false);
-    this.speaker.say(pick(SPONSOR_BREAK), true);
+    this.speaker.say(pick(SPONSOR_BREAK), 'urgent');
     const kills = `${me.kills} ${me.kills === 1 ? 'kill' : 'kills'}`;
     const clones = `${me.deaths} ${me.deaths === 1 ? 'clone' : 'clones'} lost`;
     this.sponsors.show(this.deathCause, `This round: ${kills} · ${me.score} pts · ${clones}`, () => {
-      this.speaker.say(pick(SPONSOR_HAPPY), true);
+      this.speaker.say(pick(SPONSOR_HAPPY), 'urgent');
       this.hud.show(true);
       this.respawn(this.me!);
       this.input.steerWithMouse(true);
@@ -952,7 +951,7 @@ export class Game implements OnlineGame {
     this.renderScoreboard();
     $('results-next').textContent = '';
     $('again').innerHTML = 'Back to hangar <kbd>Enter</kbd>';
-    this.speaker.say(COMPUTER.roundOver, true);
+    this.speaker.say(COMPUTER.roundOver, 'urgent');
     this.setScreen('results');
   }
 
@@ -980,7 +979,7 @@ export class Game implements OnlineGame {
       this.resultsShownFor = this.roundId;
       this.renderScoreboard();
       $('again').textContent = 'Leave tournament';
-      this.speaker.say(COMPUTER.roundOver, true);
+      this.speaker.say(COMPUTER.roundOver, 'urgent');
     }
     $('results').hidden = this.state !== 'playing';
     const next = `Next round in ${Math.ceil(Math.max(0, this.roundEndsAt + RESULTS_SECONDS - this.time))} s`;
@@ -1094,7 +1093,7 @@ export class Game implements OnlineGame {
     if (!outside) this.toldToReturn = false;
     if (outside) {
       this.hud.flashMessage(now, `Return to the field — ${Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1)}s`, 0.2);
-      if (!this.toldToReturn) this.toldToReturn = this.speaker.say(COMPUTER.arena, true);
+      if (!this.toldToReturn) this.toldToReturn = this.speaker.say(COMPUTER.arena, 'urgent');
     } else if (this.flipping) {
       this.hud.flashMessage(now, this.flipAligned ? 'Flipped · drive brakes' : 'Flip', 0.2);
     } else if (this.input.braking && me.alive) {
@@ -1173,7 +1172,7 @@ export class Game implements OnlineGame {
       get speaking() {
         return game.speaker.speaking;
       },
-      say: (lines) => this.speaker.say(lines, true),
+      say: (lines) => this.speaker.say(lines, 'lesson'),
       fireAt: (from, through) => this.drillShot(from, through),
     };
   }
@@ -1497,7 +1496,7 @@ export class Game implements OnlineGame {
     if (ship.isLocal) {
       this.hud.damaged();
       this.hud.flashMessage(this.time, ZONE_MESSAGES[zone], 1.5);
-      this.speaker.say(COMPUTER[zone], true);
+      this.speaker.say(COMPUTER[zone], 'urgent');
       this.sound.play('explosion', { volume: 1.2, rate: 1.5 });
       this.sound.beep(220, 0.25, 0.12);
       this.linkHit(zone === 'reactor' ? 1 : 0.7, 0.5);
@@ -1583,7 +1582,7 @@ export class Game implements OnlineGame {
     if (ship.isLocal && status !== 'protected') {
       this.hud.damaged();
       this.hud.flashMessage(now, `Impact at ${Math.round(approach * 0.05)} m/s`, 1.5);
-      this.speaker.say(COMPUTER.impact, true);
+      this.speaker.say(COMPUTER.impact, 'urgent');
       this.linkHit(Math.min(1, 0.4 + (approach - SAFE_IMPACT) / 1000), 0.6);
     }
     if (status === 'destroyed') this.shipDestroyed(ship, null);
