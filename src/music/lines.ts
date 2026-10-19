@@ -182,6 +182,7 @@ export const ANNOUNCER_NAMES = ['ingmar', 'nova', 'kessler', 'vega', 'orion', 's
  * the Host's keyboard, gamepad or touch screen show as keycaps next to them.
  */
 export const SCHOOL = {
+  hello: 'Hi, I am Nicole. Your personal flight computer.',
   briefing:
     'The year is 2584. The Orange President wants his games, and you are one of his chosen Hosts. Your printed clones fly for you, and every death they die streams straight into your mind. Training clones are free. Shall we?',
   turn: 'Turn the ship. Put the marker in your crosshair.',

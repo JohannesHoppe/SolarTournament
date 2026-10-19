@@ -633,6 +633,8 @@ export class FlightSchool {
   constructor(start = 0) {
     this.index = THREE.MathUtils.clamp(Math.floor(start), 0, DRILLS.length - 1);
     this.line = DRILLS[this.index].line;
+    // the very first words of the school: Nicole introduces herself before the briefing
+    if (this.index === 0) this.pending = [SCHOOL.hello];
   }
 
   /** Number of drills, for the menu's "continue at drill n of m". */
