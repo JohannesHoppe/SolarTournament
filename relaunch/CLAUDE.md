@@ -47,10 +47,9 @@ npm install
 npm run dev         # dev server on http://127.0.0.1:5173/
 npm run typecheck
 npm run build       # static site in dist/
-npm run deploy      # builds and publishes to Cloudflare Pages (project "solartournament")
 ```
 
-Hosting is Cloudflare Pages (`wrangler.toml`). Only publish when Johannes asks for it.
+Hosting is Cloudflare Pages (`wrangler.toml`), deployed by GitHub Actions on every push: `main` is the test stage (https://test.solartournament.games), `stage_prod` is production (https://solartournament.games). Work happens on `main`. Only merge into `stage_prod` when Johannes asks for it.
 
 Never use `npx`, always the scripts from `package.json`.
 

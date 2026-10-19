@@ -16,16 +16,14 @@ npm run build      # static site in dist/
 
 ## Deploy
 
-The game is a static site on [Cloudflare Pages](https://pages.cloudflare.com/) (`wrangler.toml`).
+The game is a static site on [Cloudflare Pages](https://pages.cloudflare.com/), project `solartournament` (`wrangler.toml`). Two stages, one branch each:
 
-```
-npm run cf:login        # once: log in to Cloudflare in the browser
-npm run cf:create       # once: create the Pages project "solartournament"
-npm run deploy          # build and publish (production)
-npm run deploy:preview  # build and publish to a preview address
-```
+| Branch | Stage | Address |
+|---|---|---|
+| `stage_prod` | production | https://solartournament.games |
+| `main` | test | https://test.solartournament.games |
 
-Alternatively, connect the GitHub repository in the Cloudflare dashboard (Workers & Pages → Create → Pages → Connect to Git) with root directory `relaunch`, build command `npm run build` and output directory `dist`; every push then deploys automatically.
+Every push to one of the two branches builds the game and publishes it (`.github/workflows/deploy.yml`, with the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`). Development happens on `main`; a release merges `main` into `stage_prod`. `test.solartournament.games` points to the branch alias `main.solartournament.pages.dev`, and `solar-tournament.games` redirects to `solartournament.games`.
 
 ## Controls
 
@@ -218,7 +216,7 @@ There is no sound in vacuum. Everything the Host hears travels through the clone
 
 **Code:** Copyright © 2012–2026 Johannes Hoppe, licensed under the [GNU Affero General Public License v3.0 or later](LICENSE). Anyone may play, study, change and share the game. Whoever publishes a changed version, including as a website, has to publish its source code under the same license.
 
-**Name and brand:** The name *SolarTournament*, the logo and the domains solartournament.com and solartournament.games are not covered by the license. A changed version has to use its own name.
+**Name and brand:** The name *SolarTournament*, the logo and the domains solartournament.games and solar-tournament.games are not covered by the license. A changed version has to use its own name.
 
 **Ships:** The two interceptor models and their drive sprites (`public/assets/models/`, `public/assets/textures/`) are by Johannes Hoppe and not covered by the license. Please ask for permission before using them in other software.
 

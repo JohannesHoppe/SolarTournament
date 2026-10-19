@@ -53,9 +53,8 @@ Worked through from top to bottom. Every finished item is also documented in the
 
 ## Domains
 
-- Register `solartournament.com` (main address).
-- Register `solartournament.games` ("Solar Tournament Games").
-- Both were available on 2026-10-18. `solartournament.org` belongs to someone else (paid until 2027-01-28).
+- `solartournament.games` (main address) and `solar-tournament.games` (redirects to it) are registered at GoDaddy, DNS at Cloudflare.
+- `solartournament.com` is not registered; it was available on 2026-10-18. `solartournament.org` belongs to someone else (paid until 2027-01-28).
 - `.game` is too expensive at around $300/year; `.games` costs only a few euros.
 
 ## Ads in the sponsor break

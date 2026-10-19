@@ -8,10 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "cf:login": "wrangler login",
-    "cf:create": "wrangler pages project create solartournament --production-branch master",
-    "deploy": "npm run build && wrangler pages deploy --branch master",
-    "deploy:preview": "npm run build && wrangler pages deploy --branch preview",
+    "cf:create": "wrangler pages project create solartournament --production-branch stage_prod",
+    "pages:deploy": "wrangler pages deploy --branch",
     "voice": "node tools/voice/render.ts",
     "crest": "node tools/crest/render.ts"
   },
