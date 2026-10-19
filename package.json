@@ -4,8 +4,8 @@
   "version": "2.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev": "npm run voice && vite",
+    "build": "npm run voice && tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "voice": "node tools/voice/render.ts",
@@ -22,6 +22,7 @@
     "@echogarden/espeak-ng-emscripten": "^0.3.5",
     "@types/node": "^26.6.5",
     "@types/three": "^0.186.0",
+    "ffmpeg-static": "^5.3.0",
     "kokoro-js": "^1.2.1",
     "opentype.js": "^2.0.0",
     "typescript": "^7.0.2",

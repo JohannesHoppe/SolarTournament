@@ -9,10 +9,10 @@ const BELT_SEED = 2584;
 const BELT_ROCKS = 480;
 /**
  * The belt starts beyond the reach of any ship: one that leaves the arena at top speed is lost
- * before it gets there, so the belt needs no collisions (units, 9.4 km).
+ * before it gets there, so the belt needs no collisions (units, 10.4 km).
  */
 const BELT_INNER = ARENA_LIMIT + ARENA_GRACE * MAX_SPEED + 20000;
-/** The belt ends before the camera's far plane (units, 17.5 km). */
+/** The belt ends well before the camera's far plane (units, 17.5 km). */
 const BELT_OUTER = 350000;
 /** Half the belt's thickness around the arena's horizon plane (units, about 3 km). */
 const BELT_THICKNESS = 60000;

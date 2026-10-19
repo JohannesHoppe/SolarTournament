@@ -125,11 +125,11 @@ const KICK_SHAKE = 0.06;
 const KICK_FADE = 9;
 /**
  * The overdrive (E): the drive's reactor dumps everything into one shove along the nose, this
- * much speed at once (units/s, 150 m/s), past the tournament's limit. It leaves the clone at
+ * much speed at once (units/s, 300 m/s), past the tournament's limit. It leaves the clone at
  * the edge of blacking out (OVERDRIVE_STRAIN), the laser overheated, and needs
  * OVERDRIVE_RECHARGE seconds before it fires again.
  */
-const OVERDRIVE_PUSH = 3000;
+const OVERDRIVE_PUSH = 6000;
 const OVERDRIVE_STRAIN = 0.9;
 const OVERDRIVE_RECHARGE = 60;
 /** Hosts who ask for less motion get no camera shake. */

@@ -3,12 +3,15 @@
  * game. The radio voices come from espeak-ng (WebAssembly build, GPL-3.0): every word and
  * every sentence of every line in src/music/lines.ts, once per language, because the game
  * speaks sentences whole and places single words on the beat. The flight computer speaks
- * whole lines with Kokoro (neural, Apache-2.0), a natural voice. Run with `npm run voice`
- * after changing lines.ts; needs ffmpeg on the PATH, and downloads the Kokoro model once.
+ * whole lines with Kokoro (neural, Apache-2.0), a natural voice. The sprite is not kept in the
+ * repository: `npm run build` and `npm run dev` render it into public/assets/voice/ (ffmpeg
+ * comes with the ffmpeg-static package, the Kokoro model is downloaded once per machine), and
+ * only when the lines, this tool or the speech engines have changed since the last time.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { allLines, clipKey, phraseKey, phrases, words, type Language } from '../../src/music/lines.ts';
@@ -33,6 +36,21 @@ interface Worker {
   set_pitch(pitch: number): void;
   set_range(range: number): void;
   synthesize(text: string, callback: (samples: Int16Array | null) => void): void;
+}
+
+// the sprite is rendered again only when what it is made of has changed: the lines, this tool
+// and the speech engines' versions; a fresh checkout (a build on the server) always renders it
+const manifestPath = join(out, 'voice.json');
+const packageVersion = (name: string) => (JSON.parse(readFileSync(join(root, 'node_modules', name, 'package.json'), 'utf8')) as { version: string }).version;
+const inputs = createHash('sha256')
+  .update(readFileSync(join(root, 'src/music/lines.ts')))
+  .update(readFileSync(fileURLToPath(import.meta.url)))
+  .update(['kokoro-js', '@echogarden/espeak-ng-emscripten'].map(packageVersion).join())
+  .digest('hex')
+  .slice(0, 12);
+if (existsSync(manifestPath) && (JSON.parse(readFileSync(manifestPath, 'utf8')) as { inputs?: string }).inputs === inputs) {
+  console.log('Voice sprite up to date');
+  process.exit(0);
 }
 
 const espeakPath = join(root, 'node_modules/@echogarden/espeak-ng-emscripten/espeak-ng.js');
@@ -102,14 +120,16 @@ function toPcm(samples: Float32Array): Int16Array {
 
 mkdirSync(out, { recursive: true });
 const pcm = concat(chunks);
-const encoded = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 's16le', '-ar', String(SAMPLE_RATE), '-ac', '1', '-i', 'pipe:0', '-b:a', '24k', join(out, 'voice.mp3')], {
+// ffmpeg from the ffmpeg-static package, so no machine needs one installed
+const ffmpeg = createRequire(import.meta.url)('ffmpeg-static') as string;
+const encoded = spawnSync(ffmpeg, ['-v', 'error', '-y', '-f', 's16le', '-ar', String(SAMPLE_RATE), '-ac', '1', '-i', 'pipe:0', '-b:a', '24k', join(out, 'voice.mp3')], {
   input: Buffer.from(pcm.buffer),
 });
 if (encoded.status !== 0) throw new Error('ffmpeg failed: ' + encoded.stderr);
 // the sprite's fingerprint: the game loads the MP3 under it, so a cached older sprite can
 // never meet a newer manifest
 const version = createHash('sha256').update(readFileSync(join(out, 'voice.mp3'))).digest('hex').slice(0, 12);
-writeFileSync(join(out, 'voice.json'), JSON.stringify({ sampleRate: SAMPLE_RATE, version, clips }, null, 1) + '\n');
+writeFileSync(manifestPath, JSON.stringify({ sampleRate: SAMPLE_RATE, version, inputs, clips }, null, 1) + '\n');
 console.log(`${Object.keys(clips).length} clips, ${(pcm.length / SAMPLE_RATE).toFixed(1)} s`);
 
 function concat(parts: Int16Array[]): Int16Array {
