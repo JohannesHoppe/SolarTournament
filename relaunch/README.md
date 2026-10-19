@@ -74,6 +74,7 @@ Decisions so far:
 - Hard and fast beats beat polite ones; chiptune and lounge music do not fit.
 - Schranz and generic rave are not the maintainer's taste and only play rarely.
 - German words in the robot voice, but only now and then.
+- Daft Punk styles and elements are always welcome: loops that a filter opens and closes, phaser, pumping compression, vocoder robot voices, phrases chopped into the beat word by word, and the raw, distorted early sound.
 
 - **Hard and fast.** 140 to 160 BPM; hard techno sits around a median of 146 BPM, peak-time sets at 150 to 155.
 - **Five flavors.** *Hard*: rolling bass under a heavy rumble (148–155 BPM). *Industrial*: bit-crushed hats and metallic percussion, a little swing (140–147). *Acid*: a squelching 303 line carries the track (145–150). *Schranz*: the fastest, loop-driven and tom-heavy (155–160). *Rave*: distorted chord stabs and a hoover lead (148–154).
