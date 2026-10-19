@@ -76,7 +76,8 @@ export class Hud {
     this.heat.style.width = `${Math.min(1, me.heat / MAX_HEAT) * 100}%`;
     this.heat.classList.toggle('overheated', me.overheated);
     setHidden(this.shadow, !me.alive || !me.inShadow);
-    setText(this.speed, `${Math.round(me.flight.velocity.length() * METERS_PER_UNIT)} m/s`);
+    // at the tournament's speed limit the readout says so: the drive is held back
+    setText(this.speed, `${Math.round(me.flight.velocity.length() * METERS_PER_UNIT)} m/s${me.flight.limited ? ' · MAX' : ''}`);
 
     if (!me.alive) setText(this.message, 'Live link lost');
     else if (now > this.messageUntil) setText(this.message, '');

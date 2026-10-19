@@ -5,6 +5,8 @@ import type { Controls } from '../input/input';
 export const MAIN_THRUST = 1800;
 /** Acceleration of the maneuvering thrusters along any axis (units/s²): 40 m/s², about 4 g, so a sidestep left and right throws off an aim. */
 export const RCS_THRUST = 800;
+/** Tournament rule: no ship flies faster than this (units/s, 250 m/s); the flight computer cuts any push beyond it. */
+export const MAX_SPEED = 5000;
 /**
  * Rotation rates the flight computer allows (rad/s) and how fast the thrusters reach them
  * (rad/s²): full rate in a sixth of a second, so the nose stops where the stick stops.
@@ -38,6 +40,8 @@ export class FlightModel {
   readonly rcs = new THREE.Vector3();
   /** Rotation thrust of the last update in ship space, per axis -1..1 (x = pitch, y = yaw, z = roll), for effects: speeding up a turn and stopping it alike. */
   readonly turnThrust = new THREE.Vector3();
+  /** The ship flies at the tournament's speed limit, so the flight computer holds the drive back. */
+  limited = false;
   /** Visible main drive output 0..1. */
   throttle = 0;
   /** Health of the main drive and the maneuvering thrusters, 0..1. */
@@ -83,12 +87,27 @@ export class FlightModel {
     acceleration
       .copy(this.rcs).multiplyScalar(RCS_THRUST * thrusters)
       .add(local.set(0, 0, -MAIN_THRUST * thrust));
+    // the tournament's speed limit: at MAX_SPEED the flight computer takes out every push that
+    // would make the ship faster; turning, braking and sidestepping go on
+    let drive = thrust;
+    const speed = this.velocity.length();
+    if (speed >= MAX_SPEED) {
+      inverse.copy(this.orientation).invert();
+      const course = local.copy(this.velocity).divideScalar(speed).applyQuaternion(inverse);
+      const faster = acceleration.dot(course);
+      if (faster > 0) acceleration.addScaledVector(course, -faster);
+      // the drive along the nose dies by the share of it that points along the course
+      drive = thrust * (1 - Math.max(0, -course.z));
+    }
+    this.limited = speed >= MAX_SPEED;
     this.properAcceleration = acceleration.length();
     if (push) acceleration.add(push);
     acceleration.applyQuaternion(this.orientation).add(gravity);
     this.velocity.addScaledVector(acceleration, dt);
+    // a step that crosses the limit ends on it, however long the frame was
+    if (speed < MAX_SPEED && this.velocity.lengthSq() > MAX_SPEED * MAX_SPEED) this.velocity.setLength(MAX_SPEED);
     this.position.addScaledVector(this.velocity, dt);
-    this.throttle += (thrust - this.throttle) * (1 - Math.exp(-THROTTLE_RESPONSE * dt));
+    this.throttle += (drive - this.throttle) * (1 - Math.exp(-THROTTLE_RESPONSE * dt));
   }
 
   forward(target = new THREE.Vector3()) {
