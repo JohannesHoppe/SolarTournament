@@ -638,6 +638,7 @@ export class Game implements OnlineGame {
     if (state !== this.state) this.screenSince = performance.now();
     this.state = state;
     $('menu').hidden = state !== 'menu';
+    $('crest').hidden = state !== 'menu';
     $('pause').hidden = state !== 'paused';
     $('results').hidden = state !== 'results';
     $('invite').hidden = !this.online;
