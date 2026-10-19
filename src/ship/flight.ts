@@ -33,6 +33,8 @@ export class FlightModel {
   readonly angularVelocity = new THREE.Vector3();
   /** Thruster translation command in ship space of the last update, for effects. */
   readonly rcs = new THREE.Vector3();
+  /** Rotation thrust of the last update in ship space, per axis -1..1 (x = pitch, y = yaw, z = roll), for effects: speeding up a turn and stopping it alike. */
+  readonly turnThrust = new THREE.Vector3();
   /** Visible main drive output 0..1. */
   throttle = 0;
   /** Health of the main drive and the maneuvering thrusters, 0..1. */
@@ -45,6 +47,7 @@ export class FlightModel {
     this.velocity.set(0, 0, 0);
     this.angularVelocity.set(0, 0, 0);
     this.rcs.set(0, 0, 0);
+    this.turnThrust.set(0, 0, 0);
     this.throttle = 0;
     this.driveFactor = this.thrusterFactor = 1;
   }
@@ -61,7 +64,9 @@ export class FlightModel {
     targetRate.set(controls.pitch * MAX_TURN_RATE, -controls.yaw * MAX_TURN_RATE, -controls.roll * MAX_ROLL_RATE).multiplyScalar(0.3 + 0.7 * thrusters);
     const maxStep = TURN_ACCELERATION * thrusters * dt;
     for (const k of ['x', 'y', 'z'] as const) {
-      this.angularVelocity[k] += THREE.MathUtils.clamp(targetRate[k] - this.angularVelocity[k], -maxStep, maxStep);
+      const step = THREE.MathUtils.clamp(targetRate[k] - this.angularVelocity[k], -maxStep, maxStep);
+      this.angularVelocity[k] += step;
+      this.turnThrust[k] = maxStep > 0 ? step / maxStep : 0;
     }
     if (spin) this.angularVelocity.addScaledVector(spin, dt);
     const rate = this.angularVelocity.length();

@@ -114,6 +114,11 @@ const relative = new THREE.Vector3();
 const sweep = new THREE.Vector3();
 const surface = new THREE.Vector3();
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
+/** Axes of the rotation thrusters in ship space, and the lever of each pair as a share of the ship radius: nose and tail for pitch and yaw, the wing tips for roll. */
+const TURN_AXES = ['x', 'y', 'z'] as const;
+const TURN_AXIS = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) };
+const TURN_LEVERS = { x: new THREE.Vector3(0, 0, 0.6), y: new THREE.Vector3(0, 0, 0.6), z: new THREE.Vector3(0.5, 0, 0) };
+const TURN_ENDS = [1, -1];
 const SCRAPE_COLOR = new THREE.Color(1, 0.7, 0.3);
 
 /** Real time in seconds; unlike game time it never slows down or pauses. */
@@ -952,7 +957,7 @@ export class Game implements OnlineGame {
       this.keepInArena(ship, now);
       this.collide(ship, now);
       this.hitWreckage(ship, now);
-      this.exhaust(ship, controls, dt);
+      this.exhaust(ship, dt);
     }
     this.wrecks.update(dt, now, this.field);
     this.pilot(dt, now);
@@ -1130,7 +1135,7 @@ export class Game implements OnlineGame {
   }
 
   /** Drive trail, thruster puffs, and venting holes in damaged hulls. */
-  private exhaust(ship: Ship, controls: Controls, dt: number) {
+  private exhaust(ship: Ship, dt: number) {
     const flight = ship.flight;
     if (flight.throttle > 0.3) {
       // the exhaust is laid along the nozzle's path since the last frame, without gaps
@@ -1149,11 +1154,21 @@ export class Game implements OnlineGame {
       relative.copy(rcs).normalize().applyQuaternion(flight.orientation).multiplyScalar(-600).add(flight.velocity);
       this.effects.puff(nozzle, relative, ship.radius * 0.12);
     }
-    if ((Math.abs(controls.yaw) > 0.2 || Math.abs(controls.pitch) > 0.2) && Math.random() < dt * 20) {
-      const side = scratch.set(Math.sign(controls.yaw) * ship.radius * 0.5, Math.sign(controls.pitch) * ship.radius * 0.3, -ship.radius * 0.6);
-      const nozzle = ship.toWorld(side, side);
-      relative.copy(side).normalize().applyQuaternion(flight.orientation).multiplyScalar(500).add(flight.velocity);
-      this.effects.puff(nozzle, relative, ship.radius * 0.08);
+    // rotation thrusters fire in pairs on opposite levers (nose and tail for pitch and yaw,
+    // the wing tips for roll), when a turn speeds up and when it is stopped
+    const turn = flight.turnThrust;
+    for (const k of TURN_AXES) {
+      const thrust = turn[k];
+      if (Math.abs(thrust) < 0.2 || Math.random() > dt * 40 * Math.abs(thrust)) continue;
+      const lever = TURN_LEVERS[k];
+      for (const end of TURN_ENDS) {
+        // a push F = axis × lever at the lever turns the ship about the axis; the gas leaves against F
+        scratch.copy(lever).multiplyScalar(end * ship.radius);
+        relative.copy(TURN_AXIS[k]).cross(scratch).normalize().multiplyScalar(-Math.sign(thrust));
+        const nozzle = ship.toWorld(scratch, scratch);
+        relative.applyQuaternion(flight.orientation).multiplyScalar(500).add(flight.velocity);
+        this.effects.puff(nozzle, relative, ship.radius * 0.08);
+      }
     }
     for (const hole of ship.holes) {
       const strength = ship.ventStrength(hole, this.time);
