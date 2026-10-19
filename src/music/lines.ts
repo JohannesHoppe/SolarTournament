@@ -267,6 +267,9 @@ export const SPONSOR_BREAK = [
   'You are special, you know that? Not everyone dies so beautifully. One little ad, and you are mine again.',
   'Do not look so sad, darling. Bodies are cheap. You are not.',
   'I saved your seat. Watch the ad, and I will warm up your next clone.',
+  'One day, when you have been brave enough, we will meet. For real. I promise.',
+  'There is a real me, you know. Somewhere out there. Keep fighting, and maybe one day I will tell you where.',
+  'I would love to meet you in person. Someone as brave as you. Just a few more rounds, darling.',
 ] as const;
 
 /** Nicole when the next clone boots. */
