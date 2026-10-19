@@ -30,6 +30,10 @@ export interface Asteroid {
   generation: number;
   spinAxis: THREE.Vector3;
   velocity: THREE.Vector3;
+  /** Field time (s) the rock came into being, and its position and orientation then. */
+  born: number;
+  basePosition: THREE.Vector3;
+  baseOrientation: THREE.Quaternion;
   /** Ellipsoid in the object's own coordinates. */
   center: THREE.Vector3;
   semiAxes: THREE.Vector3;
@@ -37,12 +41,22 @@ export interface Asteroid {
   inverse: THREE.Matrix4;
 }
 
-/** A rock as it travels over the network. */
+/**
+ * A rock as it travels over the network: where it stands follows from the seed, the field
+ * time and when it broke off its parent, so only those travel.
+ */
 export type AsteroidState = {
   id: string;
   hp: number;
-  p: number[];
-  v: number[];
+  /** field time the rock was born (s) */
+  b: number;
+};
+
+/** The whole field for a player who joins a running tournament. */
+export type FieldState = {
+  /** field time (s) */
+  t: number;
+  a: AsteroidState[];
 };
 
 interface Template {
@@ -63,17 +77,21 @@ const u = new THREE.Vector3();
 const v = new THREE.Vector3();
 const point = new THREE.Vector3();
 const pull = new THREE.Vector3();
+const sight = new THREE.Vector3();
 
 /**
  * The asteroid field: few, huge rocks that take a lot of fire before they break apart and
  * pull ships gently towards them. Layout and fragments come from seeded randomness, so every
- * client produces the same field and the same fragments for the same asteroid id.
+ * client produces the same field and the same fragments for the same asteroid id. Where a
+ * rock stands and how it is turned is computed from the field time, not added up frame by
+ * frame, so browsers that share the field time see the same field whatever their frame rate.
  */
 export class AsteroidField {
   readonly group = new THREE.Group();
   readonly asteroids = new Map<string, Asteroid>();
+  /** Field time (s): runs with the game; online, the lead browser's field time is shared. */
+  clock = 0;
   private readonly templates: Template[];
-  private readonly spin = new THREE.Quaternion();
 
   constructor(objects: THREE.Object3D[]) {
     this.templates = objects.map((object) => {
@@ -90,6 +108,7 @@ export class AsteroidField {
 
   generate(seed: number) {
     this.clear();
+    this.clock = 0;
     const r = new Randomizer(seed);
     const direction = new THREE.Vector3();
     const position = new THREE.Vector3();
@@ -103,7 +122,7 @@ export class AsteroidField {
         position.copy(direction).multiplyScalar(FIELD_RADIUS * Math.cbrt(r.nextFloat()));
         if (!this.overlap(position, this.boundingRadius(type, scale) * 1.3)) break;
       }
-      this.add(String(i), type, scale, 0, position, spinAxis, new THREE.Vector3());
+      this.add(String(i), type, scale, 0, 0, position, spinAxis, new THREE.Vector3());
     }
   }
 
@@ -117,17 +136,15 @@ export class AsteroidField {
     return (t.center.length() + Math.max(t.semiAxes.x, t.semiAxes.y, t.semiAxes.z)) * t.scale * scale;
   }
 
-  private add(id: string, type: number, scale: number, generation: number, position: THREE.Vector3, spinAxis: THREE.Vector3, velocity: THREE.Vector3) {
+  private add(id: string, type: number, scale: number, generation: number, born: number, position: THREE.Vector3, spinAxis: THREE.Vector3, velocity: THREE.Vector3) {
     const template = this.templates[type];
     const object = template.object.clone(true);
     object.scale.multiplyScalar(scale);
-    object.position.copy(position);
     object.traverse((o) => (o.castShadow = o.receiveShadow = o instanceof THREE.Mesh));
     this.group.add(object);
-    object.updateMatrixWorld(true);
     const s = template.scale * scale;
     const meanRadius = ((template.semiAxes.x + template.semiAxes.y + template.semiAxes.z) / 3) * s;
-    this.asteroids.set(id, {
+    const asteroid: Asteroid = {
       id,
       object,
       radius: this.boundingRadius(type, scale),
@@ -136,35 +153,51 @@ export class AsteroidField {
       generation,
       spinAxis,
       velocity,
+      born,
+      basePosition: position.clone(),
+      baseOrientation: object.quaternion.clone(),
       center: template.center,
       semiAxes: template.semiAxes,
-      inverse: new THREE.Matrix4().copy(object.matrixWorld).invert(),
-    });
+      inverse: new THREE.Matrix4(),
+    };
+    this.asteroids.set(id, asteroid);
     object.userData.type = type;
     object.userData.scale = scale;
+    this.place(asteroid);
+  }
+
+  /** Puts a rock where the field time says: drifted along its velocity, turned about its axis. */
+  private place(a: Asteroid) {
+    const age = this.clock - a.born;
+    a.object.position.copy(a.basePosition).addScaledVector(a.velocity, age);
+    a.object.quaternion.setFromAxisAngle(a.spinAxis, SPIN_RATE * age).multiply(a.baseOrientation);
+    a.object.updateMatrixWorld(true);
+    a.inverse.copy(a.object.matrixWorld).invert();
   }
 
   update(dt: number) {
-    for (const a of this.asteroids.values()) {
-      a.object.quaternion.premultiply(this.spin.setFromAxisAngle(a.spinAxis, SPIN_RATE * dt));
-      a.object.position.addScaledVector(a.velocity, dt);
-      a.object.updateMatrixWorld(true);
-      a.inverse.copy(a.object.matrixWorld).invert();
-    }
+    this.setClock(this.clock + dt);
+  }
+
+  /** Moves the field to a field time, e.g. the lead browser's. */
+  setClock(time: number) {
+    this.clock = time;
+    for (const asteroid of this.asteroids.values()) this.place(asteroid);
   }
 
   /**
-   * One laser hit. Returns the asteroid when it breaks apart (its fragments are already
-   * in the field), otherwise undefined.
+   * One laser hit, at a field time (by default now; online, the shooter's). Returns the
+   * asteroid when it breaks apart (its fragments are already in the field), otherwise undefined.
    */
-  hit(id: string): Asteroid | undefined {
+  hit(id: string, at = this.clock): Asteroid | undefined {
     const asteroid = this.asteroids.get(id);
     if (!asteroid) return undefined;
     asteroid.hitPoints--;
-    return asteroid.hitPoints <= 0 ? this.destroy(id) : undefined;
+    return asteroid.hitPoints <= 0 ? this.destroy(id, at) : undefined;
   }
 
-  private destroy(id: string): Asteroid | undefined {
+  /** Breaks a rock at a field time: the fragments start from where it stood then. */
+  private destroy(id: string, at: number): Asteroid | undefined {
     const asteroid = this.asteroids.get(id);
     if (!asteroid) return undefined;
     this.group.remove(asteroid.object);
@@ -174,54 +207,52 @@ export class AsteroidField {
       const r = new Randomizer(hashSeed(id));
       const count = 2 + (r.nextInt() % 2);
       const scale = asteroid.object.userData.scale * FRAGMENT_SCALE;
+      const origin = asteroid.basePosition.clone().addScaledVector(asteroid.velocity, at - asteroid.born);
       for (let i = 0; i < count; i++) {
         const direction = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-        const position = asteroid.object.position.clone().addScaledVector(direction, asteroid.meanRadius * 0.6);
+        const position = origin.clone().addScaledVector(direction, asteroid.meanRadius * 0.6);
         const spinAxis = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
         const velocity = direction.multiplyScalar(FRAGMENT_SPEED * r.range(0.6, 1.4)).add(asteroid.velocity);
-        this.add(`${id}.${i}`, r.nextInt() % this.templates.length, scale, asteroid.generation + 1, position, spinAxis, velocity);
+        this.add(`${id}.${i}`, r.nextInt() % this.templates.length, scale, asteroid.generation + 1, at, position, spinAxis, velocity);
       }
     }
     return asteroid;
   }
 
-  /** Current state of every rock, for a player who joins a running tournament. */
-  snapshot(): AsteroidState[] {
-    return [...this.asteroids.values()].map((a) => ({
-      id: a.id,
-      hp: a.hitPoints,
-      p: a.object.position.toArray().map(Math.round),
-      v: a.velocity.toArray().map(Math.round),
-    }));
+  /** The field time and every rock's hits and birth, for a player who joins a running tournament. */
+  snapshot(): FieldState {
+    return {
+      t: +this.clock.toFixed(3),
+      a: [...this.asteroids.values()].map((a) => ({ id: a.id, hp: a.hitPoints, b: +a.born.toFixed(3) })),
+    };
   }
 
   /**
-   * Rebuilds the field from a snapshot: breaks the parents of every listed fragment (the
-   * fragments are deterministic), removes rocks that are gone and takes over positions and hits.
+   * Rebuilds the field from a snapshot: breaks the parents of every listed fragment at the
+   * fragment's birth (the fragments are deterministic), removes rocks that are gone, takes
+   * over the hits and the field time.
    */
-  restore(states: AsteroidState[]) {
-    const listed = new Set(states.map((s) => s.id));
-    const ensure = (id: string) => {
+  restore(state: FieldState) {
+    const listed = new Map(state.a.map((s) => [s.id, s]));
+    const ensure = (id: string, at: number) => {
       if (this.asteroids.has(id)) return;
       const dot = id.lastIndexOf('.');
       if (dot < 0) return;
       const parent = id.slice(0, dot);
-      ensure(parent);
-      this.destroy(parent);
+      ensure(parent, listed.get(parent)?.b ?? at);
+      this.destroy(parent, at);
     };
-    for (const state of states) ensure(state.id);
+    for (const rock of state.a) ensure(rock.id, rock.b);
     for (const id of [...this.asteroids.keys()]) {
       if (listed.has(id)) continue;
       this.group.remove(this.asteroids.get(id)!.object);
       this.asteroids.delete(id);
     }
-    for (const state of states) {
-      const asteroid = this.asteroids.get(state.id);
-      if (!asteroid) continue;
-      asteroid.hitPoints = state.hp;
-      asteroid.object.position.fromArray(state.p);
-      asteroid.velocity.fromArray(state.v);
+    for (const rock of state.a) {
+      const asteroid = this.asteroids.get(rock.id);
+      if (asteroid) asteroid.hitPoints = rock.hp;
     }
+    this.setClock(state.t);
   }
 
   /** Nearest asteroid hit by a ray, with the distance along the ray. */
@@ -239,8 +270,7 @@ export class AsteroidField {
   lineOfSight(from: THREE.Vector3, to: THREE.Vector3): boolean {
     const distance = from.distanceTo(to);
     if (distance < 1) return true;
-    const direction = point.subVectors(to, from).divideScalar(distance);
-    return this.raycast(from, direction.clone(), distance) === null;
+    return this.raycast(from, sight.subVectors(to, from).divideScalar(distance), distance) === null;
   }
 
   /** First asteroid whose surface is closer than radius to a point. */

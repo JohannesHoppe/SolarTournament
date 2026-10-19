@@ -25,6 +25,8 @@ const APP_ID = 'solartournament-2584';
  * the game anyway, so no further company learns who plays (the privacy policy names it).
  */
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.cloudflare.com:3478' }];
+/** No message is bigger than this (bytes): the largest, a full asteroid field, is about 15 KB. */
+const MAX_MESSAGE_BYTES = 64 * 1024;
 
 abstract class BaseTransport implements Transport {
   abstract readonly selfId: string;
@@ -59,15 +61,20 @@ export class TrysteroTransport extends BaseTransport {
   private readonly action: import('trystero').MessageAction<Json>;
   private readonly connected = new Set<string>();
 
-  private constructor(trystero: typeof import('trystero'), roomId: string) {
+  private constructor(
+    private readonly trystero: typeof import('trystero'),
+    roomId: string,
+  ) {
     super();
     this.selfId = trystero.selfId;
-    this.room = trystero.joinRoom({ appId: APP_ID, rtcConfig: { iceServers: ICE_SERVERS } }, roomId);
+    // the relays were put to sleep when the last room was left
+    trystero.resumeRelayReconnection();
+    this.room = trystero.joinRoom({ appId: APP_ID, rtcConfig: { iceServers: ICE_SERVERS }, maxReceiveBytes: MAX_MESSAGE_BYTES }, roomId);
     // one action for all message types keeps the channel setup small
     this.action = this.room.makeAction<Json>('st');
     this.action.onMessage = (message, { peerId }) => {
-      const { t, d } = message as { t: string; d: Json };
-      this.dispatch(t, d, peerId);
+      const { t, d } = (message ?? {}) as { t?: unknown; d?: Json };
+      if (typeof t === 'string') this.dispatch(t, d ?? null, peerId);
     };
     this.room.onPeerJoin = (id) => {
       this.connected.add(id);
@@ -94,8 +101,14 @@ export class TrysteroTransport extends BaseTransport {
     return [...this.connected];
   }
 
+  /**
+   * Leaves the room and closes the connections to the signaling relays: outside a tournament
+   * the game talks to no relay at all.
+   */
   leave() {
     void this.room.leave();
+    this.trystero.pauseRelayReconnection();
+    for (const socket of Object.values(this.trystero.getRelaySockets() as Record<string, WebSocket>)) socket.close();
   }
 }
 

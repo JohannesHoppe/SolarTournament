@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import type { AsteroidField } from '../world/asteroids';
-import type { Session, RoundState, Vec } from './session';
+import { ownerOf, type Session, type RoundState, type Vec } from './session';
 import type { Ship, ShipState } from '../ship/ship';
 
-/** Players per tournament; the host fills free places with bots. */
+/** Places per tournament: Hosts and bots together; the lead browser fills free places with bots. */
 export const TOURNAMENT_SIZE = 4;
 
 /** What the online layer needs from the game. */
@@ -20,13 +20,15 @@ export interface OnlineGame {
   showBeam(shooter: Ship, from: THREE.Vector3, to: THREE.Vector3): void;
   /** A beam from another peer hit a ship this browser simulates. */
   applyLaserHit(target: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null): void;
-  /** Another peer reports a destroyed ship. */
-  remoteDestroyed(victim: Ship, killer: Ship | null): void;
-  /** Another peer hit an asteroid. */
-  remoteRock(id: string): void;
-  /** The host's round clock. */
+  /** Another peer reports a destroyed ship; `deaths` counts this death. */
+  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number): void;
+  /** Another peer hit an asteroid at a field time. */
+  remoteRock(id: string, at: number): void;
+  /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
   hostRound(): RoundState;
+  /** The tournament has all its places taken by Hosts who were here first. */
+  tournamentFull(): void;
 }
 
 const origin = new THREE.Vector3();
@@ -49,21 +51,23 @@ export class Online {
     };
     session.onHit = (target, o, d, shooter) => {
       const ship = this.find(target);
-      if (ship && ship.owner === null) game.applyLaserHit(ship, origin.fromArray(o), direction.fromArray(d), this.find(shooter));
+      const gun = this.find(shooter);
+      // only a living shooter hits, and only ships this browser runs take damage here
+      if (ship && ship.owner === null && gun?.alive) game.applyLaserHit(ship, origin.fromArray(o), direction.fromArray(d).normalize(), gun);
     };
-    session.onDestroyed = (victim, killer) => {
+    session.onDestroyed = (victim, killer, deaths) => {
       const ship = this.find(victim);
-      if (ship && ship.owner !== null) game.remoteDestroyed(ship, killer ? this.find(killer) : null);
+      if (ship && ship.owner !== null) game.remoteDestroyed(ship, killer ? this.find(killer) : null, deaths);
     };
-    session.onRock = (id) => game.remoteRock(id);
-    session.onSync = (asteroids) => game.field.restore(asteroids);
+    session.onRock = (id, at) => game.remoteRock(id, at);
+    session.onSync = (field) => game.field.restore(field);
     session.onPeerJoin = (peer) => {
-      // the host brings the newcomer's asteroid field up to date
-      if (session.isHost && !session.justJoined) session.sendSync(peer, game.field.snapshot());
+      // the lead browser brings the newcomer's asteroid field up to date
+      if (session.isHost) session.sendSync(peer, game.field.snapshot());
       this.balanceBots();
     };
     session.onPeerLeave = (peer) => {
-      for (const ship of game.allShips()) if (ship.owner === peer) game.removeShip(ship);
+      for (const ship of [...game.allShips()]) if (ship.owner === peer) game.removeShip(ship);
       this.balanceBots();
     };
   }
@@ -80,12 +84,17 @@ export class Online {
     return 1 + this.session.peers.length;
   }
 
-  /** Sends the own ships; the host adds the round clock. Rebalances bots when the host changes. */
+  /** Sends the own ships; the lead browser adds the round clock. Rebalances bots when the lead changes. */
   update(now: number) {
-    const host = this.isHost && !this.session.settling;
+    const host = this.isHost;
     if (this.wasHost !== host) {
       this.wasHost = host;
       this.balanceBots();
+    }
+    // a Host beyond the places of the tournament leaves again, once it knows who was here first
+    if (!this.session.justJoined && this.session.rank() >= TOURNAMENT_SIZE) {
+      this.game.tournamentFull();
+      return;
     }
     const states = this.game.ownedShips().map((ship) => ship.toState(now));
     this.session.sendStates(now, states, host ? this.game.hostRound() : null);
@@ -101,21 +110,20 @@ export class Online {
   }
 
   sendDestroyed(victim: Ship, killer: Ship | null) {
-    this.session.sendDestroyed(victim.id, killer?.id ?? null);
+    this.session.sendDestroyed(victim.id, killer?.id ?? null, victim.deaths);
   }
 
-  sendRock(id: string) {
-    this.session.sendRock(id);
+  sendRock(id: string, at: number) {
+    this.session.sendRock(id, at);
   }
 
   leave() {
     this.session.leave();
   }
 
-  /** The host fills the tournament up with bots; everyone else runs none. */
+  /** The lead browser fills the tournament up with bots; everyone else runs none. */
   private balanceBots() {
-    const host = this.isHost && !this.session.settling;
-    this.game.setBotCount(host ? Math.max(0, TOURNAMENT_SIZE - this.pilots) : 0);
+    this.game.setBotCount(this.isHost ? Math.max(0, TOURNAMENT_SIZE - this.pilots) : 0);
   }
 
   private receiveStates(states: ShipState[], round: RoundState | null, peer: string) {
@@ -123,11 +131,12 @@ export class Online {
     const seen = new Set<string>();
     for (const state of states) {
       seen.add(state.id);
+      // the session only passes on ships whose id names the sender as their owner
       const ship = this.find(state.id) ?? this.game.addRemoteShip(state, peer);
-      if (ship.owner === peer) ship.applyState(state, now);
+      if (ship.owner === peer && ownerOf(ship.id) === peer) ship.applyState(state, now);
     }
-    // bots the peer no longer runs (e.g. it stopped hosting)
-    for (const ship of this.game.allShips()) if (ship.owner === peer && !seen.has(ship.id)) this.game.removeShip(ship);
+    // bots the peer no longer runs (e.g. it stopped leading)
+    for (const ship of [...this.game.allShips()]) if (ship.owner === peer && !seen.has(ship.id)) this.game.removeShip(ship);
     if (round && peer === this.session.hostId) this.game.syncRound(round);
   }
 

@@ -103,7 +103,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `music/voice.ts` | Loads the pre-rendered voice sprite (once, shared) |
 | **`net/`** | **Online tournament** |
 | `net/online.ts` | Ship ownership, what goes over the network, the lead browser's bots |
-| `net/session.ts` | Tournament protocol: message types, election of the lead browser (longest in the room), room codes |
+| `net/session.ts` | Tournament protocol: message types, sender checks and rate limits, election of the lead browser (longest in the room and still sending), room codes |
+| `net/validate.ts` | Checks every message from other browsers before the game uses it |
 | `net/transport.ts` | Transport: Trystero (WebRTC over Nostr relays) and BroadcastChannel for local tests (`?local=1`) |
 
 `tools/crest/render.ts` (`npm run crest`) draws the seal of the Ministry of War into `public/crest.svg`: computed rings, stars and sun, Michroma lettering as paths, and the eagle of `tools/crest/eagle.svg` (CC0) cut into angular facets.
@@ -133,7 +134,7 @@ In dev mode the game hangs on the window as `window.game`. It lets you read and 
 - Simulate keys: `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))`
 - Freeze time for screenshots: `game.timeScale = 0`
 - Disable bots: set the other ships to `alive = false` and `respawnAt = Infinity`
-- Multiplayer: open two tabs with `?t=<code>&local=1` and click "Online tournament" in both (BroadcastChannel, no internet); without `local=1` the same test runs over Trystero and real Nostr relays
+- Multiplayer: open two tabs with `?local=1#t=<code>` (at least six letters or digits) and click "Join tournament" in both (BroadcastChannel, no internet); without `local=1` the same test runs over Trystero and real Nostr relays
 - Render music offline: `const { renderPreview } = await import('/src/music/preview.ts')`, then `renderPreview('Orbit Terror', 'round', undefined, fromSecond, seconds)` (the title is the seed; a flavor can be forced); returns a WAV file as base64 that can be saved and listened to
 - Trigger a glitch: `game.glitch.trigger(1, 5)`; idle glitches in the menu make element screenshots fail, so stop them with `game.nextIdleGlitch = Infinity`
 

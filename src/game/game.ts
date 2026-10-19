@@ -18,8 +18,8 @@ import { hash, mixSeed, textSeed, titleFor, type Song } from '../music/songs';
 import { IDLE, Input, type Action, type Controls } from '../input/input';
 import { Ship, type ShipState, type Zone } from '../ship/ship';
 import { MAIN_THRUST } from '../ship/flight';
-import { newRoomCode, Session, type RoundState } from '../net/session';
-import { Online, type OnlineGame } from '../net/online';
+import { newRoomCode, roomCode, Session, type RoundState } from '../net/session';
+import { Online, TOURNAMENT_SIZE, type OnlineGame } from '../net/online';
 import { Space, SUN_DIRECTION } from '../world/space';
 import { FlightSchool } from './school';
 import { SponsorBreak } from './sponsors';
@@ -31,6 +31,8 @@ const RESULTS_SECONDS = 12;
 const FIELD_SEED = 11;
 /** A client's round clock jumps to the host's when it is this far off (s), and drifts towards it otherwise. */
 const ROUND_SNAP = 0.25;
+/** Online, the asteroids jump to the lead browser's field time when they are this far off (s), and otherwise glide towards it. */
+const FIELD_SNAP = 0.5;
 /** The announcer comments on a death at most this often (s). */
 const ANNOUNCER_COOLDOWN = 7;
 /** Song of the menu; the flight school plays the next one. */
@@ -86,8 +88,8 @@ const SCHOOL_DONE_KEY = 'solartournament.school';
 type State = 'menu' | 'playing' | 'paused' | 'results';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-/** The label of a menu mode button (its first line). */
-const modeName = (id: string) => $(id).querySelector<HTMLElement>('.mode-name')!;
+/** The label of a menu mode button: the text of its first line, without the Enter key. */
+const modeName = (id: string) => $(id).querySelector<HTMLElement>('.mode-label')!;
 
 /** One of several lines, at random; only the local voice says it. */
 const pick = <T,>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
@@ -142,6 +144,9 @@ export class Game implements OnlineGame {
   private roundEndsAtWall = 0;
   /** Online tournament this browser takes part in, or null offline. */
   private online: Online | null = null;
+  /** A tournament connection is being set up; every new start or leave counts up the attempt. */
+  private connecting = false;
+  private joinAttempt = 0;
   /** Number of the running online round; a new number resets the scores. */
   private roundId = 0;
   private ships: Ship[] = [];
@@ -246,8 +251,7 @@ export class Game implements OnlineGame {
     $('radio').addEventListener('click', () => this.toggleRadio());
     this.showRadioState();
 
-    const invited = this.invitedRoom();
-    if (invited) modeName('online').textContent = `Join tournament ${invited}`;
+    if (this.invitedRoom()) modeName('online').textContent = 'Join tournament';
     this.markLeadMode();
   }
 
@@ -266,38 +270,60 @@ export class Game implements OnlineGame {
       $(id).classList.toggle('primary', id === lead);
       $(id).querySelector('kbd')?.remove();
     }
-    modeName(lead).append(Object.assign(document.createElement('kbd'), { textContent: 'Enter' }));
+    $(lead).querySelector('.mode-name')!.append(Object.assign(document.createElement('kbd'), { textContent: 'Enter' }));
   }
 
-  /** Room code from an invitation link (?t=code). */
+  /**
+   * Room code from an invitation link (#t=code). The code travels in the fragment, so it never
+   * reaches the web server's logs or another site's Referer header.
+   */
   private invitedRoom(): string | null {
-    return new URLSearchParams(location.search).get('t');
+    return roomCode(new URLSearchParams(location.hash.slice(1)).get('t'));
   }
 
   /** Joins the invited tournament or opens a new one, then starts playing in it. */
   private async goOnline() {
+    if (this.connecting) return;
+    this.connecting = true;
+    const attempt = ++this.joinAttempt;
     const button = $<HTMLButtonElement>('online');
-    const label = modeName('online').textContent;
     button.disabled = true;
     modeName('online').textContent = 'Connecting…';
+    this.notice('');
     try {
-      const params = new URLSearchParams(location.search);
-      const room = params.get('t') ?? newRoomCode();
-      params.set('t', room);
-      history.replaceState(null, '', `${location.pathname}?${params}`);
+      const room = this.invitedRoom() ?? newRoomCode();
+      history.replaceState(null, '', `${location.pathname}${location.search}#t=${room}`);
       // ?local=1 connects tabs of this browser instead of going over the internet
-      const session = await Session.join(room, params.has('local'));
+      const session = await Session.join(room, new URLSearchParams(location.search).has('local'));
+      // the Host started something else while the connection was being set up
+      if (attempt !== this.joinAttempt) {
+        session.leave();
+        return;
+      }
       this.online = new Online(session, this);
       this.startRound('online');
     } catch (error) {
       console.error(error);
-      this.hud.flashMessage(this.time, 'Could not connect', 3);
+      this.notice('Could not connect to the tournament. Try again in a moment.');
       this.speaker.say(COMPUTER.noLink, true);
     } finally {
+      this.connecting = false;
       button.disabled = false;
-      modeName('online').textContent = label;
+      modeName('online').textContent = this.invitedRoom() ? 'Join tournament' : 'Online tournament';
       this.markLeadMode();
     }
+  }
+
+  /** A line in the menu for what went wrong; empty hides it. */
+  private notice(text: string) {
+    $('menu-notice').textContent = text;
+    $('menu-notice').hidden = !text;
+  }
+
+  /** All places of the tournament are taken by Hosts who came first: back to the hangar. */
+  tournamentFull() {
+    this.showMenu();
+    this.notice(`This tournament is full: ${TOURNAMENT_SIZE} Hosts are already flying.`);
   }
 
   private async copyInvite() {
@@ -310,9 +336,15 @@ export class Game implements OnlineGame {
     }
   }
 
+  /** Leaves the tournament, and forgets its code, so the menu leads with the own choice again. */
   private leaveOnline() {
-    this.online?.leave();
+    // a connection still being set up is dropped when it arrives
+    this.joinAttempt++;
+    if (!this.online) return;
+    this.online.leave();
     this.online = null;
+    history.replaceState(null, '', `${location.pathname}${location.search}`);
+    modeName('online').textContent = 'Online tournament';
   }
 
   private toggleRadio() {
@@ -552,14 +584,16 @@ export class Game implements OnlineGame {
     this.effects.beam(from, to, shooter.color);
   }
 
-  remoteDestroyed(victim: Ship, killer: Ship | null) {
+  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number) {
     victim.alive = false;
     victim.root.visible = false;
+    // the owner counted this death already; its wreckage is seeded with that count
+    victim.deaths = deaths;
     this.shipDestroyed(victim, killer);
   }
 
-  remoteRock(id: string) {
-    const destroyed = this.field.hit(id);
+  remoteRock(id: string, at: number) {
+    const destroyed = this.field.hit(id, at);
     if (!destroyed) return;
     this.effects.explosion(destroyed.object.position, destroyed.meanRadius * 0.6, destroyed.velocity);
     this.hearDebris(destroyed.object.position, destroyed.meanRadius);
@@ -570,17 +604,20 @@ export class Game implements OnlineGame {
       this.roundId = round.id;
       this.startNextRound();
     }
-    // the radio plays on this clock, so it follows the host closely: jumps when far off,
-    // otherwise smooths out the jitter of the network
+    // the radio plays on this clock, so it follows the lead browser closely: jumps when far
+    // off, otherwise smooths out the jitter of the network
     const endsAt = wallClock() + round.left;
     if (Math.abs(endsAt - this.roundEndsAtWall) > ROUND_SNAP || !Number.isFinite(this.roundEndsAtWall)) this.setRoundEnd(round.left);
     else this.setRoundEnd(this.roundEndsAtWall + (endsAt - this.roundEndsAtWall) * 0.05 - wallClock());
+    // the asteroids follow the lead browser's field time the same way
+    const drift = round.field - this.field.clock;
+    this.field.setClock(Math.abs(drift) > FIELD_SNAP ? round.field : this.field.clock + drift * 0.1);
   }
 
   hostRound(): RoundState {
-    // the first host of a room starts the clock; a new host continues the synced one
+    // the first lead browser of a room starts the clock; a new one continues the synced clock
     if (!Number.isFinite(this.roundEndsAtWall)) this.setRoundEnd(ROUND_SECONDS);
-    // the host starts the next round once the scoreboard has been shown
+    // the lead browser starts the next round once the scoreboard has been shown
     if (wallClock() >= this.roundEndsAtWall + RESULTS_SECONDS) {
       this.roundId++;
       this.startNextRound();
@@ -588,7 +625,7 @@ export class Game implements OnlineGame {
     }
     const left = this.roundEndsAtWall - wallClock();
     this.roundEndsAt = this.time + left;
-    return { id: this.roundId, left: +left.toFixed(3) };
+    return { id: this.roundId, left: +left.toFixed(3), field: +this.field.clock.toFixed(3) };
   }
 
   /**
@@ -600,9 +637,14 @@ export class Game implements OnlineGame {
     this.roundEndsAtWall = wallClock() + left;
   }
 
-  /** Online: scores of the own ships start from zero, the scoreboard closes. */
+  /**
+   * Online: scores of the own ships start from zero, the scoreboard closes, the field and its
+   * wreckage come back fresh, as in a solo round.
+   */
   private startNextRound() {
     for (const ship of this.ownedShips()) ship.score = ship.kills = ship.deaths = 0;
+    this.field.generate(FIELD_SEED);
+    this.wrecks.clear();
     $('results').hidden = true;
   }
 
@@ -974,7 +1016,7 @@ export class Game implements OnlineGame {
       this.effects.sparks(end, shooter.color, 40);
       this.effects.debris(end, normal, 120);
       const destroyed = this.field.hit(asteroid.id);
-      this.online?.sendRock(asteroid.id);
+      this.online?.sendRock(asteroid.id, this.field.clock);
       if (destroyed) {
         shooter.score += ASTEROID_POINTS[destroyed.generation];
         this.effects.explosion(destroyed.object.position, destroyed.meanRadius * 0.6, destroyed.velocity);

@@ -224,6 +224,12 @@ button.primary {
   box-shadow: 0 0 12px rgba(255, 157, 0, 0.55), 0 0 32px rgba(255, 110, 0, 0.3);
 }
 
+#menu-notice {
+  margin: 0;
+  color: var(--accent);
+  text-align: center;
+}
+
 /* menu modes: the name, and a line on what it is */
 button.mode {
   display: flex;
