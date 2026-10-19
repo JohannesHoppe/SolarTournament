@@ -267,7 +267,7 @@ There is no sound in vacuum. Everything the Host hears travels through the clone
 - **Dodging.** The laser hits the instant it fires, so nobody outruns a beam; a dodge beats the aim. Bots sense how hard their target changes its motion across their line of sight (smoothed over 0.6 s) and their aim scatters by it: at half the thrusters' push one ship radius, at most two and a half. Steady flight, however fast, is easy to lead; jinking left and right with the thrusters, autopilot on or off, is what makes them miss. Their aim also wanders by an angle (about 1.1° for an average bot, less for better ones): one ship radius at 1 km, so a far target is hard to hit.
 - A solo round lasts five minutes of real time, like the radio's track, so a slow frame rate does not stretch it. It pauses when the tab is hidden, and while paused.
 - The personal best counts solo and tournament rounds; points from the flight school's drones and sparring bots do not count.
-- The sponsor break can be paused. If an ad fails or runs too long, the button to boot the clone appears after 20 seconds at the latest.
+- The sponsor break can be paused. If an ad fails or runs too long, the button to boot the clone appears after 20 seconds at the latest. When an ad blocker hides even the satire ads (it hides the ad slot by its name), the break notices that the ad has no size and scolds the Host instead: "You even blocked an ad for products that do not exist. Shame on you. How is an indie developer supposed to make a living?" The clone boots all the same; the check looks only at the page itself and sends nothing anywhere.
 
 ## Privacy
 

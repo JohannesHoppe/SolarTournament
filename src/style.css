@@ -1669,3 +1669,17 @@ button.quiet:hover,
 button.quiet:focus-visible {
   color: var(--accent);
 }
+
+/* shown when an ad blocker hid even the satire ads: the indie developer's reproach */
+#conscience {
+  max-width: 468px;
+  margin: 0;
+  color: var(--tube-orange);
+  text-shadow: var(--neon-orange);
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1.5;
+  text-align: justify;
+  text-align-last: center;
+  hyphens: auto;
+}

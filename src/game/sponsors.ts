@@ -14,6 +14,8 @@ export interface AdProvider {
 
 /** The boot button appears after this long at the latest (ms), whatever the ad does. */
 const AD_TIMEOUT_MS = 20000;
+/** An ad blocker hides the slot by its name a moment after it shows (ms); then the check looks. */
+const BLOCKER_CHECK_MS = 600;
 
 const $ = (id: string) => document.getElementById(id)!;
 
@@ -24,6 +26,8 @@ export class SponsorBreak {
   private readonly cause = $('sponsor-cause');
   private readonly report = $('sponsor-report');
   private readonly boot = $('sponsor-boot') as HTMLButtonElement;
+  /** Named so no blocker list knows it: it scolds the Host whose blocker hid even the satire. */
+  private readonly conscience = $('conscience');
   private onDone: (() => void) | null = null;
   /** Counts breaks, so a late-finishing ad cannot unlock a newer break. */
   private generation = 0;
@@ -48,6 +52,10 @@ export class SponsorBreak {
     this.boot.hidden = true;
     this.status.textContent = 'Your next clone is being printed during this message';
     this.root.hidden = false;
+    this.conscience.hidden = true;
+    setTimeout(() => {
+      if (generation === this.generation && this.visible) this.conscience.hidden = !this.adHidden();
+    }, BLOCKER_CHECK_MS);
     // an ad that fails or never finishes must not keep the Host from the next clone
     const timeout = new Promise<void>((resolve) => setTimeout(resolve, AD_TIMEOUT_MS));
     void Promise.race([this.ads.render(this.slot), timeout])
@@ -58,6 +66,15 @@ export class SponsorBreak {
         this.boot.hidden = false;
         this.boot.focus();
       });
+  }
+
+  /**
+   * Whether a blocker took the ad away: blockers hide the slot or the ad inside it by their
+   * names (`display: none`) or remove them, and either way nothing of the ad has a size.
+   */
+  private adHidden() {
+    const ad = this.slot.firstElementChild as HTMLElement | null;
+    return !this.slot.isConnected || this.slot.offsetHeight === 0 || !ad || ad.offsetHeight === 0;
   }
 
   hide() {
