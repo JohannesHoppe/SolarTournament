@@ -19,7 +19,7 @@ export interface Controls {
 
 export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 
-export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'flip' | 'radio' | 'help';
+export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'flip' | 'radio' | 'help' | 'autopilot';
 type ActionHandler = (action: Action) => void;
 
 /** The pointer at this share of the shorter screen side away from the center turns at full rate. */
@@ -32,7 +32,7 @@ const FINE_AIM = 0.3;
 const STICK_DEADZONE = 0.15;
 
 /** Buttons of the standard gamepad layout (Xbox naming). */
-const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, leftStick: 10 } as const;
+const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, leftStick: 10, rightStick: 11 } as const;
 const PAD_ACTIONS: [number, Action][] = [
   [PAD.a, 'confirm'],
   [PAD.menu, 'pause'],
@@ -40,6 +40,7 @@ const PAD_ACTIONS: [number, Action][] = [
   [PAD.b, 'back'],
   [PAD.view, 'camera'],
   [PAD.y, 'flip'],
+  [PAD.rightStick, 'autopilot'],
 ];
 
 /**
@@ -186,6 +187,7 @@ export class Input {
     if (e.code === 'KeyX') this.handler('flip');
     if (e.code === 'KeyM') this.handler('radio');
     if (e.code === 'F1') this.handler('help');
+    if (e.code === 'KeyT') this.handler('autopilot');
   }
 }
 

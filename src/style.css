@@ -1630,3 +1630,9 @@ body.page {
   font-size: 1rem;
   margin-bottom: 8px;
 }
+
+#hud-autopilot .readout {
+  color: var(--accent-strong);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}

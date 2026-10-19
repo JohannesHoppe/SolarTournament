@@ -17,7 +17,7 @@ import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, textSeed, titleFor, type Song } from '../music/songs';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls } from '../input/input';
 import { Ship, type ShipState, type Zone } from '../ship/ship';
-import { MAIN_THRUST } from '../ship/flight';
+import { MAIN_THRUST, RCS_THRUST } from '../ship/flight';
 import { newRoomCode, roomCode, Session, type RoundState } from '../net/session';
 import { Online, TOURNAMENT_SIZE, type OnlineGame } from '../net/online';
 import { Space, SUN_DIRECTION } from '../world/space';
@@ -56,6 +56,8 @@ const RESTITUTION = 0.3;
 const ARENA_GRACE = 8;
 /** Explosions closer than this pelt the own hull with audible debris. */
 const DEBRIS_HEARING = 6000;
+/** The autopilot's thrusters push at full strength until the drift would be gone in this time (s), then ease off. */
+const AUTOPILOT_EASE = 0.3;
 /** The flip assist lets go once the nose is this close to retrograde (rad). */
 const FLIP_DONE_ANGLE = 0.04;
 /** The brake burns once the nose is this close to retrograde (rad). */
@@ -111,6 +113,7 @@ const gravity = new THREE.Vector3();
 const retrograde = new THREE.Vector3();
 const normal = new THREE.Vector3();
 const relative = new THREE.Vector3();
+const inverseOrientation = new THREE.Quaternion();
 const sweep = new THREE.Vector3();
 const surface = new THREE.Vector3();
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
@@ -173,10 +176,12 @@ export class Game implements OnlineGame {
   private cockpit = false;
   private shotCounter = 0;
   private selectedShip: ShipType = 'human';
-  /** The flight computer turns the own ship to retrograde while this is set. */
   /** The drive lights, always in the scene; ships borrow them (see lendLight). */
   private readonly engineLights: THREE.PointLight[] = [];
+  /** The flight computer turns the own ship to retrograde while this is set. */
   private flipAssist = false;
+  /** The autopilot keeps the own ship flying where its nose points: the thrusters take out every sideways drift. */
+  private autopilot = false;
   /** The brake has brought the ship to rest (it beeps once). */
   private braked = false;
   /** The flight computer's output, reused from frame to frame. */
@@ -538,6 +543,7 @@ export class Game implements OnlineGame {
         }
         if (action === 'camera') this.cockpit = !this.cockpit;
         if (action === 'flip' && this.me?.alive) this.toggleFlip();
+        if (action === 'autopilot' && this.me?.alive) this.toggleAutopilot();
         break;
       case 'paused':
         if (action === 'confirm' || action === 'pause' || action === 'back') this.resume();
@@ -626,6 +632,7 @@ export class Game implements OnlineGame {
     else this.roundEndsAt = this.roundEndsAtWall = Infinity;
     this.cockpit = false;
     this.flipAssist = false;
+    this.autopilot = false;
     this.strain = 0;
     this.setScreen('playing');
     // the link to the clone comes first, then the hint for the mouse (not for touch or gamepad)
@@ -975,6 +982,7 @@ export class Game implements OnlineGame {
     this.hud.updateMarkers(this.camera, this.ships, me, this.inSight);
     this.hud.updateVelocityMarkers(this.camera, me);
     this.hud.setCenter(this.camera, me);
+    this.hud.setAutopilot(this.autopilot && me.alive);
     if (this.school) this.teach(dt, myControls);
 
     const outside = me.alive && me.outsideSince !== null;
@@ -1110,7 +1118,7 @@ export class Game implements OnlineGame {
       return burn;
     }
     this.braked = false;
-    if (!this.flipAssist) return controls;
+    if (!this.flipAssist) return this.autopilot && me.alive ? this.trimDrift(controls) : controls;
     // the pilot takes over by moving the stick; a mouse pointer resting off-center does not count
     const grabbed = Math.hypot(controls.yaw - this.flipStick.yaw, controls.pitch - this.flipStick.pitch) > 0.35;
     if (!me.alive || grabbed || flight.velocity.lengthSq() < 400) {
@@ -1132,6 +1140,26 @@ export class Game implements OnlineGame {
     const stick = this.input.read();
     this.flipStick.yaw = stick.yaw;
     this.flipStick.pitch = stick.pitch;
+  }
+
+  /** T: the autopilot on or off. */
+  private toggleAutopilot() {
+    this.autopilot = !this.autopilot;
+    this.sound.beep(this.autopilot ? 880 : 440, 0.08);
+  }
+
+  /**
+   * The autopilot: the thrusters push against every drift across the nose, so the ship flies
+   * where it points and the main drive (W) pushes it exactly that way. The pilot's own
+   * thruster input on an axis goes first.
+   */
+  private trimDrift(controls: Readonly<Controls>): Controls {
+    const out = Object.assign(this.computed, controls);
+    inverseOrientation.copy(this.me!.flight.orientation).invert();
+    const drift = relative.copy(this.me!.flight.velocity).applyQuaternion(inverseOrientation).divideScalar(RCS_THRUST * AUTOPILOT_EASE);
+    if (!controls.strafeX) out.strafeX = THREE.MathUtils.clamp(-drift.x, -1, 1);
+    if (!controls.strafeY) out.strafeY = THREE.MathUtils.clamp(-drift.y, -1, 1);
+    return out;
   }
 
   /** Drive trail, thruster puffs, and venting holes in damaged hulls. */
@@ -1272,6 +1300,7 @@ export class Game implements OnlineGame {
   private shipDestroyed(victim: Ship, killer: Ship | null) {
     victim.respawnAt = this.time + RESPAWN_SECONDS;
     if (victim.isLocal) this.flipAssist = false;
+    if (victim === this.me) this.autopilot = false;
     if (victim === this.me) this.deathCause = killer ? `Shot down by ${killer.name}` : victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
     this.effects.explosion(victim.flight.position, victim.radius * 2, victim.flight.velocity.clone().multiplyScalar(0.3));
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
