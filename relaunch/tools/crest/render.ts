@@ -51,7 +51,7 @@ function arcText(text: string, radius: number, size: number, spacing: number, bo
 }
 
 /** Stroke that thickens the lettering of the rings. */
-const BOLD = 1.3;
+const BOLD = 2.6;
 
 /**
  * Lettering along a quadratic curve from p0 over control point c to p1, centered on it
@@ -121,8 +121,8 @@ const LETTER_SIZE = 23;
 const BAND_MIDDLE = 243;
 const capHeight = -font.getPath('H', 0, 0, LETTER_SIZE).getBoundingBox().y1;
 const lettering = [
-  arcText('MINISTRY OF WAR', BAND_MIDDLE - capHeight / 2, LETTER_SIZE, 8, false),
-  arcText('UNITED SOLAR STATES', BAND_MIDDLE + capHeight / 2, LETTER_SIZE, 5, true),
+  arcText('MINISTRY OF WAR', BAND_MIDDLE - capHeight / 2, LETTER_SIZE, 9.5, false),
+  arcText('UNITED SOLAR STATES', BAND_MIDDLE + capHeight / 2, LETTER_SIZE, 6.5, true),
   star(...point(BAND_MIDDLE, 180), 11, 4.4, -90),
   star(...point(BAND_MIDDLE, 0), 11, 4.4, 90),
 ];
@@ -271,12 +271,12 @@ function eagle(): string {
 // ---- the ribbon, laid across the inner ring --------------------------------------------------
 
 const ribbon = [
-  `<path d="M -128 142 L -152 146 L -141 157 L -152 170 L -124 166 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.4"/>`,
-  `<path d="M 128 142 L 152 146 L 141 157 L 152 170 L 124 166 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.4"/>`,
-  `<path d="M -132 138 Q 0 102 132 138 L 132 166 Q 0 130 -132 166 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.6"/>`,
-  curveText('PRESIDENTIAL GAMES', [-132, 152], [0, 116], [132, 152], 12, 2),
+  `<path d="M -128 126 L -152 130 L -141 141 L -152 154 L -124 150 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.4"/>`,
+  `<path d="M 128 126 L 152 130 L 141 141 L 152 154 L 124 150 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.4"/>`,
+  `<path d="M -132 122 Q 0 86 132 122 L 132 150 Q 0 114 -132 150 Z" fill="${DARK}" stroke="${ORANGE}" stroke-width="2.6"/>`,
+  curveText('PRESIDENTIAL GAMES', [-132, 136], [0, 100], [132, 136], 12, 2),
 ].join('');
-const year = text('MMDLXXXIV', 184, 10, 5);
+const year = text('MMDLXXXIV', 172, 10, 5);
 
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-300 -300 600 600" fill="none" stroke-linejoin="round">
 <title>Seal of the Ministry of War of the United Solar States</title>
