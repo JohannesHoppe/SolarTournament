@@ -2,7 +2,7 @@
 
 SolarTournament is a space shooter in the browser: three.js, TypeScript, Vite, hosted as a static site. Short rounds (5 minutes), ships fight each other in an asteroid field. Multiplayer runs peer-to-peer without a game server.
 
-The code in the parent directory (`../`) is the original from 2012 (CopperLicht, Node.js, Socket.IO). It only serves as a source of assets and ideas and is never changed.
+The original from 2012 (CopperLicht, Node.js, Socket.IO) lives on the branch `old-main-2013` (and its farewell page on `old-gh-pages-2013`). It only serves as a source of assets and ideas and is never changed.
 
 **Language:** everything in this repository is English: code, comments, docs, commit messages. Johannes and Claude talk German with each other; that does not change the language of the repo.
 
@@ -93,8 +93,6 @@ Never use `npx`, always the scripts from `package.json`.
 | `input.ts` | Keyboard, mouse (pointer lock as virtual stick) and gamepad, merges all input into `Controls` |
 | `touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |
 | `random.ts` | Deterministic random generator |
-
-`tools/extract-ccb/` loads the old CopperCube scene with the original engine and writes the two ships as glTF models to `public/assets/models/`. Usage: `npm run dev`, then open `http://127.0.0.1:5173/tools/extract-ccb/`. It only runs when opened by hand.
 
 ## License
 

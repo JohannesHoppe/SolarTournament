@@ -1,20 +1,29 @@
 {
-    "name": "solartournament",
-    "version": "0.1.5-test",
-    "scripts": {
-        "start": "node server.js",
-        "startForever": "forever --minUptime 1000 --spinSleepTime 1000 server.js"
-    },
-    "author": { "name": "Johannes Hoppe" },
-    "contributors": [{ "name": "Ingmar Wietig" }],
-    "dependencies": {
-        "express": "2.5.8",
-        "gzippo": "0.1.4",
-        "jade": "0.20.1",
-        "socket.io": "0.8.7",
-        "stylus": "0.23.0",
-        "util": "0.4.9",
-        "forever": "0.15.3"
-    },
-    "license": "zlib"
+  "name": "solartournament",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "voice": "node tools/voice/render.ts",
+    "crest": "node tools/crest/render.ts"
+  },
+  "license": "AGPL-3.0-or-later",
+  "dependencies": {
+    "nipplejs": "^1.0.4",
+    "three": "^0.186.1",
+    "tone": "^15.1.22",
+    "trystero": "^0.26.0"
+  },
+  "devDependencies": {
+    "@echogarden/espeak-ng-emscripten": "^0.3.5",
+    "@types/node": "^26.6.5",
+    "@types/three": "^0.186.0",
+    "opentype.js": "^2.0.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.4"
+  }
 }

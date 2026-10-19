@@ -20,7 +20,7 @@ export interface Assets {
 
 const base = import.meta.env.BASE_URL + 'assets/';
 
-/** Applies the blending stored by the extraction tool and hides collider meshes. */
+/** Applies the blending stored in the materials' userData and hides collider meshes. */
 function prepareModel(root: THREE.Object3D) {
   root.traverse((object) => {
     if (object.userData.collider) object.visible = false;
