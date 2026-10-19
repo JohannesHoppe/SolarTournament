@@ -5,13 +5,15 @@
  * speaks sentences whole and places single words on the beat. The flight computer speaks
  * whole lines with Kokoro (neural, Apache-2.0), a natural voice. The sprite is not kept in the
  * repository: `npm run build` and `npm run dev` render it into public/assets/voice/ (ffmpeg
- * comes with the ffmpeg-static package, the Kokoro model is downloaded once per machine), and
- * only when the lines, this tool or the speech engines have changed since the last time.
+ * comes with the ffmpeg-static package), and only when the lines, this tool or the speech
+ * engines have changed since the last time. Sprite and Kokoro model are kept in a build cache
+ * (see cacheRoot), so a fresh checkout copies a sprite rendered before instead of rendering it.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { allLines, clipKey, phraseKey, phrases, words, type Language } from '../../src/music/lines.ts';
@@ -19,6 +21,8 @@ import { allLines, clipKey, phraseKey, phrases, words, type Language } from '../
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const out = join(root, 'public/assets/voice');
 const SAMPLE_RATE = 22050;
+/** Sprites the build cache keeps, the newest first. */
+const CACHED_SPRITES = 3;
 /** Silence between two words in the sprite, so decoder padding never cuts into a word (s). */
 const GAP = 0.25;
 /** The regime speaks as a slow robot (espeak's robosoft variant, a narrow pitch range); the announcer talks fast and lively. */
@@ -50,6 +54,18 @@ const inputs = createHash('sha256')
   .slice(0, 12);
 if (existsSync(manifestPath) && (JSON.parse(readFileSync(manifestPath, 'utf8')) as { inputs?: string }).inputs === inputs) {
   console.log('Voice sprite up to date');
+  process.exit(0);
+}
+
+// A cache that outlives a checkout: the sprite of these inputs and the Kokoro model. It sits in
+// npm's global cache directory because Cloudflare Pages keeps that one between builds (and
+// lets no other directory be kept); npm ignores the folder. VOICE_CACHE moves it elsewhere.
+const cacheRoot = process.env.VOICE_CACHE ?? join(homedir(), '.npm', '_solartournament');
+const cachedSprite = join(cacheRoot, 'voice', inputs);
+if (existsSync(join(cachedSprite, 'voice.json'))) {
+  mkdirSync(out, { recursive: true });
+  for (const file of ['voice.mp3', 'voice.json']) cpSync(join(cachedSprite, file), join(out, file));
+  console.log('Voice sprite from the build cache');
   process.exit(0);
 }
 
@@ -87,6 +103,9 @@ for (const language of ['en', 'de', 'mod'] as const) {
   }
 }
 
+// the model lands in the build cache too, instead of being downloaded for every build
+const { env } = await import('@huggingface/transformers');
+env.cacheDir = join(cacheRoot, 'models');
 const { KokoroTTS } = await import('kokoro-js');
 const kokoro = await KokoroTTS.from_pretrained(COMPUTER_VOICE.model, { dtype: 'fp32', device: 'cpu' });
 for (const line of new Set(allLines('sys'))) {
@@ -131,6 +150,13 @@ if (encoded.status !== 0) throw new Error('ffmpeg failed: ' + encoded.stderr);
 const version = createHash('sha256').update(readFileSync(join(out, 'voice.mp3'))).digest('hex').slice(0, 12);
 writeFileSync(manifestPath, JSON.stringify({ sampleRate: SAMPLE_RATE, version, inputs, clips }, null, 1) + '\n');
 console.log(`${Object.keys(clips).length} clips, ${(pcm.length / SAMPLE_RATE).toFixed(1)} s`);
+
+// into the build cache, which keeps the newest few sprites
+mkdirSync(cachedSprite, { recursive: true });
+for (const file of ['voice.mp3', 'voice.json']) cpSync(join(out, file), join(cachedSprite, file));
+const sprites = join(cacheRoot, 'voice');
+const old = readdirSync(sprites).sort((a, b) => statSync(join(sprites, b)).mtimeMs - statSync(join(sprites, a)).mtimeMs).slice(CACHED_SPRITES);
+for (const entry of old) rmSync(join(sprites, entry), { recursive: true, force: true });
 
 function concat(parts: Int16Array[]): Int16Array {
   const result = new Int16Array(parts.reduce((n, p) => n + p.length, 0));
