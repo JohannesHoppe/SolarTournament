@@ -99,6 +99,10 @@ Never use `npx`, always the scripts from `package.json`.
 
 The code is licensed under AGPL-3.0-or-later (`LICENSE`), the repository is public. Name, logo and domains are not licensed. The only files in `public/assets/` are Johannes' own ship models with their drive sprites (not licensed), the font Michroma (OFL) and the rendered voice (`public/assets/voice/`, made by `npm run voice` with espeak-ng; the output of a GPL program is not covered by the GPL). Asteroids, sky, particles, sound effects and music are generated in code. New dependencies must be compatible with the AGPL. Third-party assets only enter the repo with a clarified license, named in the README; when in doubt, generate in code. Never commit keys, tokens or credentials. The menu links the source code, as the AGPL requires for a network game.
 
+### Typography
+
+Typography matters. Running text is always justified, never ragged, with hyphenation on (`hyphens: auto`, the pages declare `lang`). Centered blocks are justified too and only center their last line (`text-align-last: center`). Headings and signs in Michroma, text in the system sans-serif.
+
 ## Code rules
 
 - **Determinism:** everything that concerns the shared world state (asteroid field, fragments, wreckage, the notes of Radio 2584) comes from seeded randomness (`Randomizer`), never from `Math.random()`. Otherwise peer-to-peer players see different worlds. `Math.random()` is only allowed for visuals (particles, flicker, glitches) and bot decisions.

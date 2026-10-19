@@ -1259,3 +1259,24 @@ body.page {
   background: rgba(6, 12, 28, 0.55);
   backdrop-filter: blur(1.5px);
 }
+
+/*
+ * Typography: running text is always justified, never ragged, with hyphenation so the
+ * spacing stays even. Centered blocks justify too and only center their last line.
+ */
+#school-text,
+.station-tagline,
+#download-status,
+.sponsor-pitch,
+.tagline,
+#transmission-text {
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+.tagline,
+.sponsor-pitch,
+#transmission-text {
+  text-align-last: center;
+}
