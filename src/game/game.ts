@@ -63,8 +63,6 @@ const UPRIGHT_GAIN = 1.2;
 /** The upright hold fades out between these steepness values of the nose (sine of the climb angle: about 45° and 65°). */
 const UPRIGHT_LET_GO = 0.7;
 const UPRIGHT_FREE = 0.9;
-/** The flip assist lets go once the nose is this close to retrograde (rad). */
-const FLIP_DONE_ANGLE = 0.04;
 /** The brake burns once the nose is this close to retrograde (rad). */
 const BRAKE_BURN_ANGLE = 0.2;
 /** The brake eases the burn over the last BRAKE_EASE seconds of full thrust (s). */
@@ -116,6 +114,8 @@ const BEST_SCORE_KEY = 'solartournament.best';
 const CALLSIGN_KEY = 'solartournament.callsign';
 /** Set once the flight school is complete; the menu then leads with the solo round. */
 const SCHOOL_DONE_KEY = 'solartournament.school';
+/** The drill a Host has reached in the flight school, so a reload continues there; cleared when the school is complete or started over. */
+const SCHOOL_STEP_KEY = 'solartournament.school-step';
 
 type State = 'menu' | 'playing' | 'paused' | 'results';
 
@@ -138,6 +138,8 @@ const inverseOrientation = new THREE.Quaternion();
 const sweep = new THREE.Vector3();
 const surface = new THREE.Vector3();
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
+/** The beams of the flight school's gunner: red, the color of danger. */
+const DRILL_GUNNER_COLOR = new THREE.Color(1, 0.2, 0.25);
 /** Axes of the rotation thrusters in ship space, and the lever of each pair as a share of the ship radius: nose and tail for pitch and yaw, the wing tips for roll. */
 const TURN_AXES = ['x', 'y', 'z'] as const;
 const TURN_AXIS = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) };
@@ -161,6 +163,14 @@ function storageSet(key: string, value: string) {
     localStorage.setItem(key, value);
   } catch {
     // storage unavailable (private mode): the value just isn't remembered
+  }
+}
+
+function storageRemove(key: string) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // storage unavailable: there is nothing to remove
   }
 }
 
@@ -199,8 +209,11 @@ export class Game implements OnlineGame {
   private selectedShip: ShipType = 'human';
   /** The drive lights, always in the scene; ships borrow them (see lendLight). */
   private readonly engineLights: THREE.PointLight[] = [];
-  /** The flight computer turns the own ship to retrograde while this is set. */
-  private flipAssist = false;
+  /** X is held: the flight computer turns the own ship towards `flipGoal`, fixed when the flip started. */
+  private flipping = false;
+  private readonly flipGoal = new THREE.Vector3();
+  /** The nose points at the flip's goal (it beeps once when it gets there). */
+  private flipAligned = false;
   /** The autopilot keeps the own ship flying where its nose points: the thrusters take out every sideways drift. On at the start of a round; T switches to free drift and back. */
   private autopilot = false;
   /** The brake has brought the ship to rest (it beeps once). */
@@ -211,8 +224,6 @@ export class Game implements OnlineGame {
   private readonly warnings: string[] = [];
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
   private readonly inSight = (ship: Ship) => this.field.lineOfSight(this.camera.position, ship.flight.position);
-  /** The stick when the flip began: moving it away from there hands the ship back to the pilot. */
-  private flipStick = { yaw: 0, pitch: 0 };
   /** How the own clone died last, for the sponsor break. */
   private deathCause = 'Your clone is dead';
   /** When the current screen (menu, playing, paused, results) came up (performance.now, ms). */
@@ -318,6 +329,10 @@ export class Game implements OnlineGame {
     }
     $('start').addEventListener('click', () => this.startRound('solo'));
     $('school').addEventListener('click', () => this.startRound('school'));
+    $('school-reset').addEventListener('click', () => {
+      storageRemove(SCHOOL_STEP_KEY);
+      this.showSchoolProgress();
+    });
     $('online').addEventListener('click', () => void this.goOnline());
     $('resume').addEventListener('click', () => this.resume());
     $('quit').addEventListener('click', () => this.endRound());
@@ -344,6 +359,14 @@ export class Game implements OnlineGame {
   private leadMode(): 'online' | 'school' | 'start' {
     if (this.invitedRoom()) return 'online';
     return storageGet(SCHOOL_DONE_KEY) ? 'start' : 'school';
+  }
+
+  /** The flight school button says where a Host left off, with a way to start over. */
+  private showSchoolProgress() {
+    const step = Number(storageGet(SCHOOL_STEP_KEY) ?? 0);
+    const note = $('school').querySelector<HTMLElement>('.mode-note')!;
+    note.textContent = step > 0 ? `Continue at drill ${step + 1} of ${FlightSchool.drills}.` : 'Learn to fly. Training clones are free.';
+    $('school-reset').hidden = step <= 0;
   }
 
   private markLeadMode() {
@@ -564,7 +587,6 @@ export class Game implements OnlineGame {
           break;
         }
         if (action === 'camera') this.cockpit = !this.cockpit;
-        if (action === 'flip' && this.me?.alive) this.toggleFlip();
         if (action === 'autopilot' && this.me?.alive) this.toggleAutopilot();
         break;
       case 'paused':
@@ -598,6 +620,7 @@ export class Game implements OnlineGame {
     this.field.generate(FIELD_SEED);
     const best = Number(storageGet(BEST_SCORE_KEY) ?? 0);
     $('best-score').textContent = best ? `Personal best: ${best} pts` : '';
+    this.showSchoolProgress();
     this.markLeadMode();
     // a clone that died last leaves no muffled radio behind in the hangar
     this.radio.setMuffled(false);
@@ -641,7 +664,7 @@ export class Game implements OnlineGame {
     $('hud-room').textContent = '';
 
     this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, this.selectedShip, true);
-    this.school = mode === 'school' ? new FlightSchool() : null;
+    this.school = mode === 'school' ? new FlightSchool(Number(storageGet(SCHOOL_STEP_KEY) ?? 0)) : null;
     if (this.school) this.scene.add(this.school.root);
     $('now-playing').hidden = mode === 'school';
     if (mode === 'solo') this.setBotCount(BOT_COUNT);
@@ -653,8 +676,10 @@ export class Game implements OnlineGame {
     if (mode === 'solo') this.setRoundEnd(ROUND_SECONDS);
     else this.roundEndsAt = this.roundEndsAtWall = Infinity;
     this.cockpit = false;
-    this.flipAssist = false;
+    this.flipping = false;
     this.autopilot = true;
+    // a resumed flight school starts with the autopilot as the drills before left it
+    if (this.school) this.autopilot = this.school.startsWithAutopilot;
     this.strain = 0;
     this.setScreen('playing');
     // the link to the clone comes first, then the hint for the mouse (not for touch or gamepad)
@@ -1031,8 +1056,8 @@ export class Game implements OnlineGame {
     if (outside) {
       this.hud.flashMessage(now, `Return to the field — ${Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1)}s`, 0.2);
       if (!this.toldToReturn) this.toldToReturn = this.speaker.say(COMPUTER.arena, true);
-    } else if (this.flipAssist) {
-      this.hud.flashMessage(now, 'Flip', 0.2);
+    } else if (this.flipping) {
+      this.hud.flashMessage(now, this.flipAligned ? 'Flipped · drive brakes' : 'Flip', 0.2);
     } else if (this.input.braking && me.alive) {
       this.hud.flashMessage(now, this.braked ? 'At rest' : 'Braking', 0.2);
     }
@@ -1063,9 +1088,13 @@ export class Game implements OnlineGame {
     context.dt = dt;
     const step = school.stepIndex;
     const waypoint = school.update(context);
-    if (school.stepIndex !== step) this.sound.beep(880, 0.1, 0.15);
+    if (school.stepIndex !== step) {
+      this.sound.beep(880, 0.1, 0.15);
+      storageSet(SCHOOL_STEP_KEY, String(school.stepIndex));
+    }
     if (school.finished) {
       storageSet(SCHOOL_DONE_KEY, '1');
+      storageRemove(SCHOOL_STEP_KEY);
       this.showMenu();
       return null;
     }
@@ -1106,7 +1135,25 @@ export class Game implements OnlineGame {
         return game.speaker.speaking;
       },
       say: (lines) => this.speaker.say(lines, true),
+      fireAt: (from, through) => this.drillShot(from, through),
     };
+  }
+
+  /**
+   * A flight school gunner's shot: a red beam from a point through another and on. It costs
+   * no hull; a beam that passes the own ship closer than its radius sparks on it and shakes
+   * the link, so the pilot sees a jink that came too late.
+   */
+  private drillShot(from: THREE.Vector3, through: THREE.Vector3) {
+    const me = this.me!;
+    const direction = forward.subVectors(through, from).normalize();
+    const end = aimPoint.copy(from).addScaledVector(direction, from.distanceTo(through) * 2);
+    this.effects.beam(from, end, DRILL_GUNNER_COLOR);
+    const distance = raySphere(from, direction, me.flight.position, me.radius);
+    if (distance === null) return;
+    this.effects.sparks(scratch.copy(from).addScaledVector(direction, distance), DRILL_GUNNER_COLOR, 40);
+    this.glitch.trigger(0.35, 0.3);
+    this.sound.beep(220, 0.1, 0.2);
   }
 
   /** A defenseless target for the flight school, facing the pilot. */
@@ -1134,16 +1181,17 @@ export class Game implements OnlineGame {
 
   /**
    * The own ship's flight computer. While the brake is held, it flips the ship head over
-   * and burns against the flight direction until the ship is at rest. While the flip assist
-   * is on, it only flips, until the nose points against the flight or the pilot takes over
-   * the stick.
+   * and burns against the flight direction until the ship is at rest. While the flip is held,
+   * it only turns the nose against the flight and keeps it there; the pilot's drive pushes
+   * once the nose points the right way. Otherwise it keeps the ship upright and, with the
+   * autopilot, takes out the drift.
    */
   private flightComputer(controls: Readonly<Controls>): Controls {
     const me = this.me!;
     const flight = me.flight;
     const braking = this.state === 'playing' && this.input.braking && me.alive;
     if (braking) {
-      this.flipAssist = false;
+      this.flipping = false;
       const speed = flight.velocity.length();
       // at rest the brake holds still until gravity has pulled the ship clearly out of rest,
       // so it does not flicker between resting and burning
@@ -1165,20 +1213,26 @@ export class Game implements OnlineGame {
       return burn;
     }
     this.braked = false;
-    if (!this.flipAssist) return this.keepUpright(this.autopilot && me.alive ? this.trimDrift(controls) : Object.assign(this.computed, controls));
-    // the pilot takes over by moving the stick; a mouse pointer resting off-center does not count
-    const grabbed = Math.hypot(controls.yaw - this.flipStick.yaw, controls.pitch - this.flipStick.pitch) > 0.35;
-    if (!me.alive || grabbed || flight.velocity.lengthSq() < 400) {
-      this.flipAssist = false;
-      return this.keepUpright(Object.assign(this.computed, controls));
+    const flipping = this.state === 'playing' && this.input.flipping && me.alive;
+    if (!flipping) {
+      this.flipping = false;
+      return this.keepUpright(this.autopilot && me.alive ? this.trimDrift(controls) : Object.assign(this.computed, controls));
     }
-    retrograde.copy(flight.velocity).negate();
-    if (flight.angleTo(retrograde) < FLIP_DONE_ANGLE && flight.angularVelocity.length() < 0.1) {
-      this.flipAssist = false;
-      this.sound.beep(660, 0.08);
-      return this.keepUpright(Object.assign(this.computed, controls));
+    if (!this.flipping) {
+      // the goal is fixed when the flip starts: against the flight, or straight behind the nose
+      // at rest; so a burn held past standstill speeds the ship up backwards instead of flipping again
+      this.flipping = true;
+      this.flipAligned = false;
+      if (flight.velocity.lengthSq() > BRAKE_REST * BRAKE_REST) this.flipGoal.copy(flight.velocity).negate().normalize();
+      else flight.forward(this.flipGoal).negate();
     }
-    return flight.flip(retrograde, 3, Object.assign(this.computed, controls));
+    const aligned = flight.angleTo(this.flipGoal) < BRAKE_BURN_ANGLE;
+    if (aligned && !this.flipAligned) this.sound.beep(660, 0.08);
+    this.flipAligned = aligned;
+    const out = flight.flip(this.flipGoal, 3, Object.assign(this.computed, controls));
+    // the drive only pushes once the nose points the right way, never sideways during the turn
+    out.thrust = aligned ? controls.thrust : 0;
+    return out;
   }
 
   /**
@@ -1193,14 +1247,6 @@ export class Game implements OnlineGame {
     const hold = 1 - THREE.MathUtils.smoothstep(Math.abs(up.z), UPRIGHT_LET_GO, UPRIGHT_FREE);
     out.roll = THREE.MathUtils.clamp(Math.atan2(up.x, up.y) * UPRIGHT_GAIN, -1, 1) * hold;
     return out;
-  }
-
-  /** X: starts the flip assist, or stops it; remembers where the stick was. */
-  private toggleFlip() {
-    this.flipAssist = !this.flipAssist;
-    const stick = this.input.read();
-    this.flipStick.yaw = stick.yaw;
-    this.flipStick.pitch = stick.pitch;
   }
 
   /** T: the autopilot on or off. */
@@ -1362,7 +1408,6 @@ export class Game implements OnlineGame {
 
   private shipDestroyed(victim: Ship, killer: Ship | null) {
     victim.respawnAt = this.time + RESPAWN_SECONDS;
-    if (victim.isLocal) this.flipAssist = false;
     if (victim === this.me) this.deathCause = killer ? `Shot down by ${killer.name}` : victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
     this.effects.explosion(victim.flight.position, victim.radius * 2, victim.flight.velocity.clone().multiplyScalar(0.3));
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
@@ -1547,6 +1592,7 @@ export class Game implements OnlineGame {
     const direction = flight.forward(forward);
     let depth = waypoint ? waypoint.distanceTo(flight.position) : (this.field.raycast(flight.position, direction, AIM_DEPTH)?.distance ?? AIM_DEPTH);
     if (!waypoint) {
+      depth = this.wrecks.raycast(flight.position, direction, depth)?.distance ?? depth;
       for (const ship of this.ships) {
         if (ship === me || !ship.alive) continue;
         const distance = raySphere(flight.position, direction, ship.flight.position, ship.radius);

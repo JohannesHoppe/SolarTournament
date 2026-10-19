@@ -19,7 +19,7 @@ export interface Controls {
 
 export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 
-export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'flip' | 'radio' | 'help' | 'autopilot';
+export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'radio' | 'help' | 'autopilot';
 type ActionHandler = (action: Action) => void;
 
 /** The pointer at this share of the shorter screen side away from the center turns at full rate. */
@@ -39,7 +39,6 @@ const PAD_ACTIONS: [number, Action][] = [
   // B brakes in flight; in the menus it goes back, it never quits
   [PAD.b, 'back'],
   [PAD.view, 'camera'],
-  [PAD.y, 'flip'],
   [PAD.rightStick, 'autopilot'],
 ];
 
@@ -57,7 +56,7 @@ export class Input {
   private steering = false;
   private handler: ActionHandler = () => {};
   private readonly padPressed = new Set<number>();
-  private readonly touch = new TouchControls(() => this.handler('flip'), () => this.handler('pause'), () => this.handler('autopilot'));
+  private readonly touch = new TouchControls(() => this.handler('pause'), () => this.handler('autopilot'));
 
   constructor(private readonly canvas: HTMLElement) {
     window.addEventListener('keydown', (e) => this.onKey(e, true));
@@ -108,6 +107,11 @@ export class Input {
   resetMouse() {
     this.mouseStick.x = this.mouseStick.y = 0;
     this.mouseFire = false;
+  }
+
+  /** The flip is held: X, Y on the gamepad, or FLIP on touch. The flight computer turns the ship against the flight. */
+  get flipping(): boolean {
+    return this.keys.has('KeyX') || this.touch.flip || (this.gamepad()?.buttons[PAD.y]?.pressed ?? false);
   }
 
   /** The brake is held: S, B on the gamepad, or BRAKE on touch. The flight computer flips and burns. */
@@ -185,7 +189,6 @@ export class Input {
     if (e.code === 'Escape' || e.code === 'KeyP') this.handler('pause');
     if (e.code === 'KeyQ') this.handler('quit');
     if (e.code === 'KeyC') this.handler('camera');
-    if (e.code === 'KeyX') this.handler('flip');
     if (e.code === 'KeyM') this.handler('radio');
     if (e.code === 'F1') this.handler('help');
     if (e.code === 'KeyT') this.handler('autopilot');

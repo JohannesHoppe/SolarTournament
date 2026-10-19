@@ -31,6 +31,8 @@ export interface SchoolContext {
   /** A bot at a point; an unarmed one only flees. Skill as in Bot (0..1). */
   spawnBot(position: THREE.Vector3, armed: boolean, skill: number): void;
   removeBot(): void;
+  /** A laser shot from a point through a target point, for show: it costs no hull, a hit only sparks and shakes the link. */
+  fireAt(from: THREE.Vector3, through: THREE.Vector3): void;
   /** The flight computer is still talking. */
   speaking: boolean;
   /** The flight computer says lines, one after the other; it cuts off whatever it was saying. */
@@ -60,6 +62,11 @@ interface Attempt {
   usedBrake: boolean;
   /** Distance the attempt started from its target (units). */
   reach: number;
+  /** The side the pilot last pushed to with the thrusters (-1 left, 1 right, 0 not yet), and how often it changed. */
+  jinkSide: number;
+  jinks: number;
+  /** When a drill's gunner fired last (attempt seconds). */
+  lastShot: number;
 }
 
 interface Drill {
@@ -81,6 +88,8 @@ interface Drill {
   waypoint?(ctx: SchoolContext, attempt: Attempt): THREE.Vector3 | null;
   /** What the waypoint is, written under it. */
   mark?(ctx: SchoolContext, attempt: Attempt): string;
+  /** The autopilot setting the drill leaves behind, so a flight school resumed later starts with it. */
+  autopilotAfter?: boolean;
 }
 
 /** What the Host flies with. */
@@ -139,8 +148,14 @@ const STOP_SPEED = 200;
 const DEBRIS_RADIUS = 300;
 /** Speed of the debris: 60 m/s. */
 const DEBRIS_SPEED = 1200;
-/** Turning more than this (rad) breaks a drill that forbids turning. */
-const NO_TURN = 0.35;
+/** Turning more than this (rad, about 45°) breaks a drill that forbids turning; a mouse pointer slightly off-center does not get there. */
+const NO_TURN = 0.8;
+/** The jinking drill's gunner fires every GUNNER_INTERVAL seconds at where the ship was GUNNER_LAG seconds ago (a smoothing time constant). */
+const GUNNER_INTERVAL = 0.7;
+const GUNNER_LAG = 0.35;
+/** Changes of side the jinking drill wants: left, right, left, right, left. */
+const JINKS = 4;
+
 
 const scratch = new THREE.Vector3();
 const toTarget = new THREE.Vector3();
@@ -269,6 +284,7 @@ const DRILLS: Drill[] = [
     praise: SCHOOL_PRAISE.freeDrift,
     keys: ['autopilot'],
     done: (ctx) => !ctx.autopilot,
+    autopilotAfter: false,
   },
   {
     line: SCHOOL.drift,
@@ -335,21 +351,27 @@ const DRILLS: Drill[] = [
   {
     line: SCHOOL.slide,
     praise: SCHOOL_PRAISE.slide,
-    repLine: SCHOOL.slideBack,
     keys: ['slide'],
-    reps: 2,
-    enter(ctx, a, markers) {
+    // a gunner on the pilot's tail fires where the ship was a moment ago: jinking left and
+    // right with the thrusters is what makes the shots go past; turning and drift do not matter
+    enter(ctx, a) {
       stop(ctx);
-      a.points = [markers.buoy(ahead(ctx, a.rep === 0 ? 1500 : -1500, 0, -4000))];
+      a.points = [ctx.me.flight.position.clone()];
     },
     done(ctx, a) {
-      const offset = local(ctx, a.points[0]).x;
-      const drifting = local(ctx, toTarget.copy(ctx.me.flight.velocity).add(ctx.me.flight.position)).x;
-      return holdFor(ctx, a, Math.abs(offset) < 150 && Math.abs(drifting) < 60, 0.5);
+      const push = ctx.controls.strafeX;
+      const side = push > 0.5 ? 1 : push < -0.5 ? -1 : 0;
+      if (side && side !== a.jinkSide) {
+        if (a.jinkSide) a.jinks++;
+        a.jinkSide = side;
+      }
+      a.points[0].lerp(ctx.me.flight.position, 1 - Math.exp(-ctx.dt / GUNNER_LAG));
+      if (a.seconds - a.lastShot > GUNNER_INTERVAL) {
+        a.lastShot = a.seconds;
+        ctx.fireAt(ahead(ctx, (Math.random() - 0.5) * 3000, 800, 12000), a.points[0]);
+      }
+      return a.jinks >= JINKS;
     },
-    fail: (ctx, a) => (turned(ctx, a) ? SCHOOL.noTurn : null),
-    waypoint: (_, a) => a.points[0],
-    mark: () => 'Line up here',
   },
   {
     line: SCHOOL.dodge,
@@ -373,6 +395,7 @@ const DRILLS: Drill[] = [
     praise: SCHOOL_PRAISE.autopilotOn,
     keys: ['autopilot'],
     done: (ctx) => ctx.autopilot,
+    autopilotAfter: true,
   },
   {
     line: SCHOOL.rings,
@@ -596,15 +619,33 @@ class Markers {
  */
 export class FlightSchool {
   private readonly markers = new Markers();
-  private index = 0;
+  private index: number;
   private attempt: Attempt | null = null;
   /** The attempt has to start over (failed, or the clone died). */
   private restart = false;
   /** Lines to say before the next attempt: the praise of the last drill, or why the attempt failed. */
   private pending: string[] = [];
-  private line: string = DRILLS[0].line;
+  private line: string;
   /** What the current waypoint is, for its label in the HUD. */
   mark = '';
+
+  /** Starts at a drill: 0 for the briefing, or where a Host left off. */
+  constructor(start = 0) {
+    this.index = THREE.MathUtils.clamp(Math.floor(start), 0, DRILLS.length - 1);
+    this.line = DRILLS[this.index].line;
+  }
+
+  /** Number of drills, for the menu's "continue at drill n of m". */
+  static get drills() {
+    return DRILLS.length;
+  }
+
+  /** Whether the autopilot is on at the starting drill: as the drills before it left it. */
+  get startsWithAutopilot() {
+    let on = true;
+    for (let i = 0; i < this.index; i++) on = DRILLS[i].autopilotAfter ?? on;
+    return on;
+  }
 
   /** Group of the drills' props; the game adds it to the scene. */
   get root(): THREE.Object3D {
@@ -658,7 +699,7 @@ export class FlightSchool {
     const drill = DRILLS[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: -Infinity, warned: false, usedBrake: false, reach: 0 };
+    this.attempt = { rep, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: -Infinity, warned: false, usedBrake: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0 };
     drill.enter?.(ctx, this.attempt, this.markers);
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
