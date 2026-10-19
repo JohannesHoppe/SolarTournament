@@ -23,7 +23,9 @@ The game is a static site on [Cloudflare Pages](https://pages.cloudflare.com/), 
 | `stage_prod` | production | https://solartournament.games |
 | `main` | test | https://test.solartournament.games |
 
-Every push to one of the two branches builds the game and publishes it (`.github/workflows/deploy.yml`, with the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`). Development happens on `main`; a release merges `main` into `stage_prod`. `test.solartournament.games` points to the branch alias `main.solartournament.pages.dev`, and `solar-tournament.games` redirects to `solartournament.games`.
+Every push to one of the two branches builds the game and publishes it (`.github/workflows/deploy.yml`, with the repository secrets `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`). Development happens on `main`; a release merges `main` into `stage_prod`. `test.solartournament.games` points to the branch alias `main.solartournament.pages.dev`; `www.solartournament.games` and `solar-tournament.games` (with `www.`) redirect permanently to `solartournament.games`, path and query included.
+
+The project is a classic Pages project with direct upload, created through the Pages API (`POST /accounts/{account}/pages/projects` with `production_branch: stage_prod`), not a Worker: the game is a static site and needs no server code. `wrangler pages project create` hands the project over to Workers, so it is not used.
 
 ## Controls
 
