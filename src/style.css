@@ -736,6 +736,88 @@ button.primary .mode-note {
   font-size: 1.3rem;
 }
 
+#sponsor-report {
+  margin: 0;
+  color: var(--text);
+  font-size: 0.95rem;
+}
+
+/* the invented sponsors of 2584: a neon sign each, the truth in the small print */
+.satire-ad {
+  --brand: var(--accent);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.satire-art {
+  width: 92px;
+  height: 92px;
+  color: var(--brand);
+  filter: drop-shadow(0 0 10px var(--brand));
+  animation: satire-bob 2.4s ease-in-out infinite;
+}
+
+@keyframes satire-bob {
+  50% {
+    transform: translateY(-4px) rotate(-3deg);
+  }
+}
+
+#ad-slot .satire-brand {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-size: 1.6rem;
+  color: #fff;
+  text-shadow: 0 0 6px var(--brand), 0 0 18px var(--brand);
+}
+
+.satire-slogan {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.05rem;
+  line-height: 1.4;
+}
+
+.satire-fine {
+  margin: 0;
+  max-width: 34ch;
+  color: var(--muted);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
+.satire-progress {
+  width: 100%;
+  height: 3px;
+  margin-top: 6px;
+  background: var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.satire-progress span {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  transform-origin: left;
+  animation: satire-run linear forwards;
+}
+
+@keyframes satire-run {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .satire-art {
+    animation: none;
+  }
+}
+
 /* online tournament */
 
 #hud-room {

@@ -59,7 +59,7 @@ Worked through from top to bottom. Every finished item is also documented in the
 
 ## Ads in the sponsor break
 
-- Connect a real ad network: a class implementing `AdProvider` from `src/game/sponsors.ts` replaces `PlaceholderAd`.
+- Connect a real ad network: a class implementing `AdProvider` from `src/game/sponsors.ts` replaces `SatireAds` (`src/game/satire-ads.ts`).
 - **Johannes' rules for any ad network, not negotiable:**
   - Ads stay inside the small sponsor slot (`#ad-slot`). No full-screen ads of any kind: no interstitials, no vignettes, no rewarded video that takes over the screen, no anchor or side-rail overlays, no Auto ads.
   - No misleading ads (fake download or play buttons, fake system warnings, bait). Serious advertising only.

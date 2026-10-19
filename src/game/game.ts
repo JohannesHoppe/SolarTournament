@@ -154,6 +154,8 @@ export class Game implements OnlineGame {
   private flipAssist = false;
   /** The brake has brought the ship to rest (it beeps once). */
   private braked = false;
+  /** How the own clone died last, for the sponsor break. */
+  private deathCause = 'Your clone is dead';
   /** The running flight school, or null in a tournament round. */
   private school: FlightSchool | null = null;
   /** Target drone of the flight school. */
@@ -621,12 +623,15 @@ export class Game implements OnlineGame {
     }
   }
 
-  /** The next clone only boots after the pilot has watched an ad. */
+  /** The next clone only boots after the Host has watched an ad. */
   private sponsorBreak() {
+    const me = this.me!;
     this.input.steerWithMouse(false);
     this.hud.show(false);
     this.speaker.say(pick(SPONSOR_BREAK), true);
-    this.sponsors.show(() => {
+    const kills = `${me.kills} ${me.kills === 1 ? 'kill' : 'kills'}`;
+    const clones = `${me.deaths} ${me.deaths === 1 ? 'clone' : 'clones'} lost`;
+    this.sponsors.show(this.deathCause, `This round: ${kills} · ${me.score} pts · ${clones}`, () => {
       this.speaker.say(pick(SPONSOR_HAPPY), true);
       this.hud.show(true);
       this.respawn(this.me!);
@@ -1010,6 +1015,7 @@ export class Game implements OnlineGame {
   private shipDestroyed(victim: Ship, killer: Ship | null) {
     victim.respawnAt = this.time + RESPAWN_SECONDS;
     if (victim.isLocal) this.flipAssist = false;
+    if (victim === this.me) this.deathCause = killer ? `Shot down by ${killer.name}` : victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
     this.effects.explosion(victim.flight.position, victim.radius * 2, victim.flight.velocity.clone().multiplyScalar(0.3));
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
     if (victim.isLocal) {

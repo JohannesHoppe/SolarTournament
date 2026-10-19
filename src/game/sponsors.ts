@@ -1,29 +1,15 @@
+import { SatireAds } from './satire-ads';
+
 /**
- * Sponsor breaks. In 2584 a pilot's next clone only boots after the pilot has watched an
- * advertisement. The ad comes from an AdProvider; the button to boot the clone appears once
- * the ad has run. The button is separate from the ad, because ad networks forbid rewarding
- * clicks on the ads themselves.
+ * Sponsor breaks. In 2584 a Host's next clone only boots after the Host has watched an
+ * advertisement. The ad comes from an AdProvider and stays inside its small slot; the button
+ * to boot the clone appears once the ad has run. The button is separate from the ad, because
+ * ad networks forbid rewarding clicks on the ads themselves. Around the ad the break reports
+ * how the clone died, so the screen has content of its own.
  */
 export interface AdProvider {
   /** Fills the slot with one ad; resolves once it has run long enough to count as watched. */
   render(slot: HTMLElement): Promise<void>;
-}
-
-/** Seconds the placeholder runs before the clone can boot. */
-const PLACEHOLDER_SECONDS = 5;
-
-/** Marks the ad slot until a real ad network is connected. */
-export class PlaceholderAd implements AdProvider {
-  render(slot: HTMLElement): Promise<void> {
-    slot.replaceChildren();
-    const label = document.createElement('span');
-    label.className = 'ad-label';
-    label.textContent = 'Advertisement';
-    const text = document.createElement('strong');
-    text.textContent = 'Real ads will appear here.';
-    slot.append(label, text);
-    return new Promise((resolve) => setTimeout(resolve, PLACEHOLDER_SECONDS * 1000));
-  }
 }
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -32,12 +18,14 @@ export class SponsorBreak {
   private readonly root = $('sponsor');
   private readonly slot = $('ad-slot');
   private readonly status = $('sponsor-status');
+  private readonly cause = $('sponsor-cause');
+  private readonly report = $('sponsor-report');
   private readonly boot = $('sponsor-boot') as HTMLButtonElement;
   private onDone: (() => void) | null = null;
   /** Counts breaks, so a late-finishing ad cannot unlock a newer break. */
   private generation = 0;
 
-  constructor(private readonly ads: AdProvider = new PlaceholderAd()) {
+  constructor(private readonly ads: AdProvider = new SatireAds()) {
     this.boot.addEventListener('click', () => this.finish());
   }
 
@@ -45,10 +33,15 @@ export class SponsorBreak {
     return !this.root.hidden;
   }
 
-  /** Shows an ad; onDone runs when the pilot boots the next clone after the ad has run. */
-  show(onDone: () => void) {
+  /**
+   * Shows an ad; onDone runs when the Host boots the next clone after the ad has run. `cause`
+   * names what killed the clone, `report` sums up the round so far.
+   */
+  show(cause: string, report: string, onDone: () => void) {
     const generation = ++this.generation;
     this.onDone = onDone;
+    this.cause.textContent = cause;
+    this.report.textContent = report;
     this.boot.hidden = true;
     this.status.textContent = 'Your next clone is being printed during this message';
     this.root.hidden = false;

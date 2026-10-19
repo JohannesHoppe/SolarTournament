@@ -57,7 +57,7 @@ Never use `npx`, always the scripts from `package.json`.
 
 The repository root is the Vite project: `index.html` (the game), `radio.html` (Radio 2584), `impressum.html` and `datenschutz.html` (German legal pages, linked from the menu and the radio page) are its pages, `public/` holds the static files, `tools/` the generators that write into `public/`.
 
-**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the four localStorage entries, the online tournament (WebRTC between players, public Nostr relays, Cloudflare's STUN server), the placeholder ad, e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, a TURN server, another STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
+**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the four localStorage entries, the online tournament (WebRTC between players, public Nostr relays, Cloudflare's STUN server), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, a TURN server, another STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
 
 `src/` is grouped by area:
 
@@ -71,7 +71,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | **`game/`** | **The round** |
 | `game/game.ts` | Game states, round flow, lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
 | `game/school.ts` | Flight school: 21 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
-| `game/sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, placeholder ad |
+| `game/sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, how the clone died, the round so far |
+| `game/satire-ads.ts` | The invented sponsors of 2584 (Victory Cola, Space Burger, PrintMe Bodies, …): consumer satire in the ad slot until real sponsors take it |
 | **`world/`** | **The arena** |
 | `world/space.ts` | Stars, nebula, sun with shadows, space dust |
 | `world/asteroids.ts` | Asteroid field: ellipsoid collision, raycast, line of sight, gravity, fragments |
