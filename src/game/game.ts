@@ -12,7 +12,7 @@ import { Glitch } from '../view/glitch';
 import { Hud } from '../view/hud';
 import { Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_KILL, ANNOUNCER_NAMES, ANNOUNCER_ROCK, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
+import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_KILL, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_ROCK, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, textSeed, titleFor, type Song } from '../music/songs';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls } from '../input/input';
@@ -68,6 +68,8 @@ const BRAKE_REST = 20;
 const BRAKE_RESUME = 40;
 /** Confirm presses are ignored this long after a screen changes (ms). */
 const CONFIRM_LOCK_MS = 600;
+/** The announcer opens a round this long after the launch (ms), once the flight computer is through. */
+const ANNOUNCER_OPEN_DELAY_MS = 7000;
 /** One standard gravity in units/s² (1 unit = 5 cm). */
 const G = 9.81 / 0.05;
 /** Above this load the pilot starts to grey out; at the limit it takes G_ONSET seconds to tunnel vision. */
@@ -564,8 +566,14 @@ export class Game implements OnlineGame {
         if (this.state === 'playing') this.hud.flashMessage(this.time, 'The ship turns towards the mouse pointer', 4);
       }, 2200);
     }
-    // the flight school starts with its briefing; a tournament clone just reports in
-    if (mode !== 'school') this.speaker.say(mouse ? [COMPUTER.launch, COMPUTER.mouse] : COMPUTER.launch, true);
+    // the flight school starts with its briefing; a tournament clone just reports in, and
+    // once Nicole is through, the announcer opens the broadcast
+    if (mode !== 'school') {
+      this.speaker.say(mouse ? [COMPUTER.launch, COMPUTER.mouse] : COMPUTER.launch, true);
+      window.setTimeout(() => {
+        if (this.state === 'playing' && !this.school) this.radio.announce(pick(ANNOUNCER_OPEN), null);
+      }, ANNOUNCER_OPEN_DELAY_MS);
+    }
   }
 
   private addShip(id: string, name: string, type: ShipType, isLocal: boolean): Ship {

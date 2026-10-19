@@ -16,10 +16,13 @@ let song: Song | null = null;
 let context: AudioContext | null = null;
 let radio: Radio | null = null;
 let playingSince: number | null = null;
+/** Play was pressed and the band is still loading. */
+let starting = false;
 let transmissionTimer = 0;
 
 const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
-const tidy = (title: string) => title.trim().replace(/\s+/g, ' ').replace(/\b\p{L}/gu, (c) => c.toUpperCase());
+/** Capitalizes each word; words start after a space, so ß or ö inside a word stay as they are. */
+const tidy = (title: string) => title.trim().replace(/\s+/g, ' ').replace(/(^| )(\p{L})/gu, (_, space: string, c: string) => space + c.toUpperCase());
 
 const SECTION_LABELS: Record<SectionKind, string> = { intro: 'Intro', groove: 'Groove', peak: 'Peak', break: 'Breakdown', strip: 'Strip', gap: 'Gap', finale: 'Finale', outro: 'Outro' };
 
@@ -55,7 +58,14 @@ function play() {
   if (!song) return;
   context ??= new AudioContext();
   void context.resume();
-  radio ??= new Radio(context, context.destination, () => {}, subtitle, false);
+  // the track's clock starts when the band has loaded and takes the song, not at the click,
+  // so the first bars are not lost to loading
+  radio ??= new Radio(context, context.destination, () => {
+    if (!starting) return;
+    starting = false;
+    playingSince = performance.now();
+  }, subtitle, false);
+  starting = true;
   playingSince = performance.now();
   $('play').textContent = 'Stop';
 }
@@ -63,6 +73,7 @@ function play() {
 function stop() {
   radio?.stop();
   playingSince = null;
+  starting = false;
   $('play').textContent = 'Play';
 }
 
@@ -82,34 +93,40 @@ function subtitle(spoken: Spoken, delay: number) {
   }, Math.max(0, delay));
 }
 
-/** Feeds the radio its position and moves the clock; the track stops after its outro. */
+/** Seconds into the track; zero while the band is still loading. */
+const elapsed = () => (starting || playingSince === null ? 0 : (performance.now() - playingSince) / 1000);
+
+/** Feeds the radio its position and moves the clock. */
 function frame() {
   if (song && radio && playingSince !== null) {
-    const elapsed = (performance.now() - playingSince) / 1000;
-    if (elapsed > trackSeconds(song)) stop();
-    else {
-      radio.setCue({ title: song.title, energy: 'round', elapsed, roundLength: ROUND_SECONDS });
-      $('track-position').textContent = time(elapsed);
-      $('track-form').style.setProperty('--progress', `${(100 * elapsed) / trackSeconds(song)}%`);
-    }
+    const seconds = elapsed();
+    radio.setCue({ title: song.title, energy: 'round', elapsed: seconds, roundLength: ROUND_SECONDS });
+    $('track-position').textContent = time(seconds);
+    $('track-form').style.setProperty('--progress', `${(100 * seconds) / trackSeconds(song)}%`);
   }
   requestAnimationFrame(frame);
 }
 
+/** The track stops after its outro; checked on a timer, which also runs in a hidden tab. */
+function checkEnd() {
+  if (song && playingSince !== null && elapsed() > trackSeconds(song)) stop();
+}
+
 async function download() {
   if (!song) return;
+  // the track as it was tuned when the pressing began, even if the Host tunes another meanwhile
+  const pressing = song;
   const button = $<HTMLButtonElement>('download');
   const status = $('download-status');
   button.disabled = true;
-  status.textContent = `Pressing ${song.title}…`;
+  status.textContent = `Pressing ${pressing.title}…`;
   try {
-    const title = song.title;
-    const wav = await renderTrack(song, 0, trackSeconds(song), 44100, (done) => {
-      status.textContent = `Pressing ${title}… ${Math.round(done * 100)} %`;
+    const wav = await renderTrack(pressing, 0, trackSeconds(pressing), 44100, (done) => {
+      status.textContent = `Pressing ${pressing.title}… ${Math.round(done * 100)} %`;
     });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
-    link.download = `SolarTournament - ${song.title}.wav`;
+    link.download = `SolarTournament - ${pressing.title}.wav`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 10000);
     status.textContent = `${(wav.byteLength / 1048576).toFixed(0)} MB. Make the sponsor happy.`;
@@ -132,3 +149,4 @@ $('download').addEventListener('click', () => void download());
 
 tune(new URLSearchParams(location.search).get('title') ?? titleFor(1 + Math.floor(Math.random() * 2147483000)));
 requestAnimationFrame(frame);
+setInterval(checkEnd, 500);

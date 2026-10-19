@@ -33,7 +33,11 @@ export class Speaker {
       .then((voice) => {
         this.voice = voice;
       })
-      .catch((error) => console.warn('Flight computer voice unavailable', error));
+      .catch((error) => {
+        // tried again with the next line
+        this.loading = null;
+        console.warn('Flight computer voice unavailable', error);
+      });
   }
 
   get speaking(): boolean {
@@ -51,9 +55,11 @@ export class Speaker {
     if (this.speaking && !interrupt) return false;
     this.stop();
     let position = this.context.currentTime + 0.05;
+    let said = false;
     for (const line of typeof lines === 'string' ? [lines] : lines) {
       const clip = voice.clips[clipKey('sys', line)];
       if (!clip) continue;
+      said = true;
       const source = this.context.createBufferSource();
       source.buffer = voice.buffer;
       source.connect(this.input);
@@ -61,8 +67,8 @@ export class Speaker {
       this.sources.push(source);
       position += clip[1] + 0.3;
     }
-    this.busyUntil = position;
-    return true;
+    this.busyUntil = said ? position : 0;
+    return said;
   }
 
   /** Cuts the current line off. */

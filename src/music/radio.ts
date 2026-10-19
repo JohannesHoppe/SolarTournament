@@ -39,6 +39,12 @@ export class Radio {
   private cueAt = 0;
   private enabledFlag = true;
   private lateAnnouncement = false;
+  /** Audio time of the last step handed to the band; the instruments never take an earlier one. */
+  private scheduledUntil = 0;
+  /** The output level the radio is set to, and the end of a running drop-out. */
+  private level = 0;
+  private dropoutUntil = 0;
+  private warned = false;
 
   constructor(
     private readonly context: AudioContext,
@@ -67,6 +73,7 @@ export class Radio {
   stop() {
     this.cue = null;
     this.songKey = '';
+    this.level = 0;
     this.output.gain.setTargetAtTime(0, this.context.currentTime, 0.05);
   }
 
@@ -108,6 +115,9 @@ export class Radio {
     gain.linearRampToValueAtTime(0.05 * VOLUME, now + 0.02);
     gain.setValueAtTime(0.05 * VOLUME, now + seconds);
     gain.linearRampToValueAtTime(this.enabledFlag ? VOLUME : 0, now + seconds + 0.05);
+    // the level the drop-out returns to is set; the tick leaves the gain alone until it is over
+    this.dropoutUntil = now + seconds + 0.05;
+    this.level = this.enabledFlag ? VOLUME : 0;
   }
 
   private async load() {
@@ -141,7 +151,12 @@ export class Radio {
       return;
     }
     const now = this.context.currentTime;
-    this.output.gain.setTargetAtTime(this.enabledFlag ? VOLUME : 0, now, 0.15);
+    // the level only changes when the radio is switched, and never during a drop-out
+    const level = this.enabledFlag ? VOLUME : 0;
+    if (level !== this.level && now >= this.dropoutUntil) {
+      this.level = level;
+      this.output.gain.setTargetAtTime(level, now, 0.15);
+    }
     if (!this.enabledFlag) return;
 
     const elapsed = cue.elapsed + (performance.now() - this.cueAt) / 1000;
@@ -152,8 +167,9 @@ export class Radio {
       this.band.prepare(this.song);
       this.start = Infinity;
       this.onSong(this.song);
-      // joining a track after its announcement: the station names it on the next bar
-      this.lateAnnouncement = elapsed > barSeconds(this.song) * (this.song.voice[0].bar - 1);
+      // joining a track after its announcement's downbeat: the station names it on the next
+      // bar (before that downbeat, the scheduler reaches it by itself)
+      this.lateAnnouncement = elapsed + LOOKAHEAD > barSeconds(this.song) * this.song.voice[0].bar;
     }
     const song = this.song!;
     const sixteenth = barSeconds(song) / STEPS_PER_BAR;
@@ -165,12 +181,28 @@ export class Radio {
     const desiredStart = now - elapsed;
     if (Math.abs(desiredStart - this.start) > RESYNC) {
       this.start = desiredStart;
-      this.nextStep = Math.max(0, Math.ceil((now - this.start) / sixteenth));
+      // the old grid has notes out up to scheduledUntil: the new one starts after them, as
+      // the instruments only take times later than their last one
+      this.nextStep = Math.max(0, Math.ceil((Math.max(now, this.scheduledUntil + 1e-3) - this.start) / sixteenth));
+      // landing inside a bar: its sound (filters, drive) is set up at once
+      if (this.nextStep % STEPS_PER_BAR !== 0) this.guard(() => this.band!.joinBar(song, this.nextStep, now));
     }
     while (this.start + this.nextStep * sixteenth < now + LOOKAHEAD) {
       const time = this.start + this.nextStep * sixteenth;
-      if (time >= now) this.band.play(song, this.nextStep, time);
-      this.nextStep++;
+      const step = this.nextStep++;
+      if (time < now || time <= this.scheduledUntil) continue;
+      this.scheduledUntil = time;
+      this.guard(() => this.band!.play(song, step, time));
+    }
+  }
+
+  /** One failing instrument costs one note, not the beat: the scheduler goes on. */
+  private guard(play: () => void) {
+    try {
+      play();
+    } catch (error) {
+      if (!this.warned) console.warn('Radio note dropped', error);
+      this.warned = true;
     }
   }
 }

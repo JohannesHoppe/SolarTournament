@@ -14,10 +14,13 @@ const CHUNK = 20;
 const PREROLL = 8;
 /** Chunks overlap by this much and crossfade, so no seam clicks (s). */
 const FADE = 0.05;
+/** A seam lies this far before a beat (s). */
+const SEAM_LEAD = 0.06;
 /** Events are scheduled this far after the start of a render (s). */
 const LEAD = 0.05;
-/** The last chunk keeps ringing for this long (s). */
-const TAIL = 1.5;
+/** The last chunk keeps ringing for this long (s), and its last FADE_OUT seconds fade to silence. */
+const TAIL = 4;
+const FADE_OUT = 1;
 
 /**
  * Renders a stretch of a track offline, voice included, as 16-bit stereo WAV. The radio page
@@ -29,9 +32,19 @@ export async function renderTrack(song: Song, from: number, seconds: number, sam
   const total = Math.round((seconds + TAIL) * sampleRate);
   const out = [new Float32Array(total), new Float32Array(total)];
   const fade = Math.round(FADE * sampleRate);
-  for (let start = 0; start < seconds; start += CHUNK) {
-    const last = start + CHUNK >= seconds;
-    const length = Math.min(CHUNK, seconds - start);
+  // the chunks' free-running oscillators are out of phase with each other: a seam sits just
+  // before a beat, where the last kick has died away and the next has not begun
+  const beat = barSeconds(song) / 4;
+  const seams: number[] = [];
+  for (let t = CHUNK; t < seconds; t += CHUNK) {
+    const seam = Math.ceil((from + t + SEAM_LEAD) / beat) * beat - SEAM_LEAD - from;
+    if (seam < seconds && seam > (seams[seams.length - 1] ?? 0)) seams.push(seam);
+  }
+  const bounds = [0, ...seams, seconds];
+  for (let k = 0; k + 1 < bounds.length; k++) {
+    const start = bounds[k];
+    const last = k + 2 === bounds.length;
+    const length = bounds[k + 1] - start;
     const pre = Math.min(PREROLL, from + start);
     const chunk = await renderChunk(T, song, voice, from + start - pre, pre + length, last ? TAIL : FADE, sampleRate);
     const skip = Math.round((pre + LEAD) * sampleRate);
@@ -47,6 +60,9 @@ export async function renderTrack(song: Song, from: number, seconds: number, sam
     }
     onProgress(Math.min(1, (start + length) / seconds));
   }
+  // the rumble of the last bars dies away instead of being cut off
+  const fadeOut = Math.round(FADE_OUT * sampleRate);
+  for (const channel of out) for (let i = 0; i < fadeOut; i++) channel[total - 1 - i] *= i / fadeOut;
   return encodeWav(out, sampleRate);
 }
 

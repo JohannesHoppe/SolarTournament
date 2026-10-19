@@ -26,6 +26,8 @@ const KICK_CURVES: Record<KickDesign['shape'], Float32Array> = {
 
 /** Master filter cutoff for a brightness of 0..1: 200 Hz to 18 kHz. */
 const cutoff = (brightness: number) => 200 * Math.pow(90, Math.max(0, Math.min(1, brightness)));
+/** The music ducks under a voice line and comes back over this long (s), without a click. */
+const DUCK_RAMP = 0.02;
 
 /** The rendered words of the voices (see tools/voice/render.ts). */
 export interface Voice {
@@ -119,7 +121,6 @@ export class Band {
   private flavor = '';
   /** Highpass of the bass; a breakdown lifts it, so the bass goes on without its low end. */
   private bassFloor = 60;
-  private lastAcid = 0;
 
   constructor(T: Tone) {
     this.T = T;
@@ -403,7 +404,31 @@ export class Band {
     }
   }
 
+  /**
+   * Joins a track in the middle of a bar (a start, a jump of the shared clock): the bar's
+   * sound is set up from now on, its downbeat events (voice, riser, surprise) are gone.
+   */
+  joinBar(song: Song, step: number, time: number) {
+    const bar = barSeconds(song);
+    const rest = bar * (1 - (step % STEPS_PER_BAR) / STEPS_PER_BAR);
+    this.setUpBar(stepEvents(song, step).info, time, rest);
+  }
+
   private startBar(song: Song, info: BarInfo, t: number, bar: number) {
+    this.setUpBar(info, t, bar);
+    if (info.riserBars) {
+      const length = bar * info.riserBars;
+      this.riserFilter.frequency.setValueAtTime(1000, t);
+      this.riserFilter.frequency.exponentialRampToValueAtTime(10000, t + length);
+      this.riser.triggerAttackRelease(length - bar / 4, t, 0.9);
+    }
+    if (info.impact) this.impact.triggerAttackRelease(1.2, t, 1);
+    if (info.surprise) this.surprise(song, info, t, bar);
+    if (info.voice) this.speak(info.voice, t, bar / 8);
+  }
+
+  /** The sound of a bar from t on, for the `bar` seconds it has left: filters, drive, sends. */
+  private setUpBar(info: BarInfo, t: number, bar: number) {
     this.master.frequency.cancelAndHoldAtTime(t);
     this.master.frequency.exponentialRampToValueAtTime(cutoff(info.brightness), t + bar);
     this.bassHighpass.frequency.setValueAtTime(info.section.kind === 'break' ? 380 : this.bassFloor, t);
@@ -421,16 +446,6 @@ export class Band {
     const next = info.sweep + 1 / 8 < 0.5 ? (info.sweep + 1 / 8) * 2 : 2 - (info.sweep + 1 / 8) * 2;
     this.frenchFilter.frequency.setValueAtTime(400 + 5200 * open * open, t);
     this.frenchFilter.frequency.linearRampToValueAtTime(400 + 5200 * next * next, t + bar);
-
-    if (info.riserBars) {
-      const length = bar * info.riserBars;
-      this.riserFilter.frequency.setValueAtTime(1000, t);
-      this.riserFilter.frequency.exponentialRampToValueAtTime(10000, t + length);
-      this.riser.triggerAttackRelease(length - bar / 4, t, 0.9);
-    }
-    if (info.impact) this.impact.triggerAttackRelease(1.2, t, 1);
-    if (info.surprise) this.surprise(song, info, t, bar);
-    if (info.voice) this.speak(info.voice, t, bar / 8);
   }
 
   private surprise(song: Song, info: BarInfo, t: number, bar: number) {
@@ -474,8 +489,9 @@ export class Band {
   /** The record slows down: every tonal part slides two octaves down, the level falls away. */
   private tapeStop(t: number, length: number) {
     for (const synth of [this.bass, this.acid, this.hoover, this.bell, this.arp]) {
+      // cents are already logarithmic: a straight line in cents is the slowing record
       synth.detune.setValueAtTime(0, t);
-      synth.detune.exponentialRampToValueAtTime(-2400, t + length);
+      synth.detune.linearRampToValueAtTime(-2400, t + length);
     }
     this.musicLevel.gain.setValueAtTime(1, t);
     this.musicLevel.gain.linearRampToValueAtTime(0, t + length);
@@ -502,8 +518,15 @@ export class Band {
   /** The 303: accents open the squelch filter wide, slides glide without a new attack. */
   private playAcid(song: Song, note: number, accent: boolean, slide: boolean, step: number, t: number, sixteenth: number, info: BarInfo) {
     const frequency = midiToHz(note);
-    if (slide && this.lastAcid > 0) {
-      this.acid.frequency.setValueAtTime(this.lastAcid, t);
+    // a slide starts from the track's previous acid note, not from whatever this browser
+    // played last, so a Host who joins late hears the same glide
+    let previous: number | null = null;
+    for (let back = 1; back <= STEPS_PER_BAR && previous === null; back++) {
+      const earlier = step - back >= 0 ? stepEvents(song, step - back).acid : null;
+      if (earlier) previous = midiToHz(earlier.note);
+    }
+    if (slide && previous !== null) {
+      this.acid.frequency.setValueAtTime(previous, t);
       this.acid.frequency.exponentialRampToValueAtTime(frequency, t + 0.06);
     } else {
       // hold the note through the slides that follow it
@@ -511,7 +534,6 @@ export class Band {
       while (length < 4 && stepEvents(song, step + length).acid?.slide) length++;
       this.acid.triggerAttackRelease(frequency, sixteenth * (length - 0.45), t, accent ? 1 : 0.75);
     }
-    this.lastAcid = frequency;
     // the cutoff wanders over 16 bars and opens with the energy
     const wander = 0.5 - 0.5 * Math.cos((2 * Math.PI * (info.bar + (step % STEPS_PER_BAR) / STEPS_PER_BAR)) / 16);
     const rest = 220 + 1400 * wander * info.energy;
@@ -541,8 +563,11 @@ export class Band {
       position = start + clip[1] + (line.style === 'chop' ? 0.02 : 0.05) + (stop ? eighth : 0);
     });
     // the music steps back while the voice talks
-    this.musicLevel.gain.setValueAtTime(0.4, t);
-    this.musicLevel.gain.setValueAtTime(1, position);
+    // short ramps instead of steps, so the duck does not click
+    this.musicLevel.gain.setValueAtTime(1, t);
+    this.musicLevel.gain.linearRampToValueAtTime(0.4, t + DUCK_RAMP);
+    this.musicLevel.gain.setValueAtTime(0.4, position);
+    this.musicLevel.gain.linearRampToValueAtTime(1, position + DUCK_RAMP);
     this.onSpeak({ line: line.text, language: line.language, time: t, duration: position - t });
     return position;
   }
@@ -581,9 +606,13 @@ export class Band {
     });
   }
 
-  /** One word: a native buffer source, which the browser discards by itself once it has played. */
+  /**
+   * One word: a native buffer source, which the browser discards by itself once it has played.
+   * It is made in the band's own context: an offline render swaps Tone's global context while
+   * it runs, and a source from another context cannot be connected.
+   */
   private playClip([offset, duration]: [number, number], time: number, destination: ToneLib.InputNode) {
-    const source = (this.T.getContext().rawContext as BaseAudioContext).createBufferSource();
+    const source = (this.voiceIn.context.rawContext as BaseAudioContext).createBufferSource();
     source.buffer = this.voice!.buffer;
     this.T.connect(source, destination);
     source.start(time, offset, duration);

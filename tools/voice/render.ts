@@ -47,7 +47,7 @@ for (const language of ['en', 'de', 'mod'] as const) {
   const settings = VOICES[language];
   // single words to place on the beat, whole sentences to speak them with their melody
   const texts: [key: string, text: string][] = allLines(language).flatMap((line) => [
-    ...words(line).map(({ word }): [string, string] => [word, word]),
+    ...words(line.replaceAll('{name}', '')).map(({ word }): [string, string] => [word, word]),
     ...phrases(line).filter((piece) => piece !== '{name}').map((piece): [string, string] => [phraseKey(piece), piece]),
   ]);
   const rendered = new Set<string>();

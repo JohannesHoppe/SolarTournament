@@ -23,7 +23,9 @@ function laser(context: BaseAudioContext): AudioBuffer {
     const ring = 0.25 * Math.sin(ringPhase) * Math.exp(-t * 30);
     const click = (Math.random() * 2 - 1) * Math.exp(-t * 120);
     const attack = Math.min(1, t / 0.003);
-    data[i] = 0.7 * attack * (thump + ring + 0.5 * click);
+    // a short release, so the buffer does not end on a click
+    const release = Math.min(1, (data.length - i) / (rate * 0.03));
+    data[i] = 0.7 * attack * release * (thump + ring + 0.5 * click);
   }
   return buffer;
 }

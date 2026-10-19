@@ -86,7 +86,7 @@ export interface VoiceLine {
   bar: number;
   language: Language;
   text: string;
-  /** chop: one word per beat, like a vocoder hook; speech: words back to back. */
+  /** chop: one word per eighth, like a vocoder hook; speech: sentence after sentence. */
   style: 'chop' | 'speech';
 }
 
@@ -441,6 +441,13 @@ function roundForm(song: Song, roundLength: number, groove: Groove): Section[] {
   const form: Section[] = [{ kind: 'intro', start: 0, bars: introBars, from: 0.3, to: 0.5, groove }];
   let start = introBars;
   const middle = middleBlocks(song);
+  if (song.strategy === 'hypnotic') {
+    // the accumulation fills the middle, and its strip lands right before the finale
+    const [build, strip] = middle;
+    form.push({ ...build, start, bars: middleEnd - strip.bars - start, groove: build.groove ?? groove });
+    form.push({ ...strip, start: middleEnd - strip.bars, groove: strip.groove ?? groove });
+    start = middleEnd;
+  }
   for (let i = 0; start < middleEnd; i++) {
     const b = middle[i % middle.length];
     const bars = Math.min(b.bars, middleEnd - start);
@@ -479,28 +486,33 @@ function energyAt(section: Section, bar: number): number {
 const SURPRISES: SurpriseType[] = ['filterDip', 'delayThrow', 'siren', 'bitDrop', 'keyLift'];
 
 /**
- * 4 to 7 surprises per round, at least 12 bars apart, each type once. They land after
- * stable stretches: a big surprise works best when the listener is sure what comes next.
+ * 3 to 5 surprises per round, at least 12 bars apart, each type at most once. They land
+ * after stable stretches: a big surprise works best when the listener is sure what comes
+ * next. The bit drop belongs to industrial and EBM and to half of the other tracks; the key
+ * lift only comes in the last stretch before the finale.
  */
 function planSurprises(song: Song): Surprise[] {
   const seed = song.seed;
-  const count = 4 + (hash(seed, Ch.Surprise, 0) % 4);
-  const types = [...SURPRISES].sort((a, b) => hash(seed, Ch.Surprise, 1, SURPRISES.indexOf(a)) - hash(seed, Ch.Surprise, 1, SURPRISES.indexOf(b)));
+  const count = 3 + (hash(seed, Ch.Surprise, 0) % 3);
+  const remaining = [...SURPRISES].sort((a, b) => hash(seed, Ch.Surprise, 1, SURPRISES.indexOf(a)) - hash(seed, Ch.Surprise, 1, SURPRISES.indexOf(b)));
+  const bitDrop = song.flavor === 'industrial' || song.flavor === 'ebm' || unit(seed, Ch.Surprise, 3) >= 0.5;
   const result: Surprise[] = [];
   const finale = song.form.find((s) => s.kind === 'finale')!;
+  const fits = (type: SurpriseType, bar: number) => (type !== 'keyLift' || bar >= finale.start - 48) && (type !== 'bitDrop' || bitDrop);
   let last = -12;
   for (let bar = 24; bar < finale.start && result.length < count; bar += 4) {
     const section = sectionAt(song, bar);
     if (section.kind !== 'groove' && section.kind !== 'peak') continue;
     if (bar - last < 12) continue;
     if (unit(seed, Ch.Surprise, 2, bar) > 0.3) continue;
-    const type = types[result.length % types.length];
-    if (type === 'keyLift' && bar < finale.start - 48) continue;
-    if (type === 'bitDrop' && song.flavor !== 'industrial' && song.flavor !== 'ebm' && unit(seed, Ch.Surprise, 3) < 0.5) continue;
+    // the next type in the round's order that fits here
+    const type = remaining.find((t) => fits(t, bar));
+    if (!type) continue;
+    remaining.splice(remaining.indexOf(type), 1);
     result.push({ type, bar, bars: type === 'filterDip' ? 4 : type === 'siren' ? 2 : type === 'keyLift' ? finale.start + finale.bars + 16 - bar : 1 });
     last = bar;
   }
-  // every breakdown opens with a bomb: a deep hit into a long reverb
+  // half of the breakdowns open with a bomb: a deep hit into a long reverb
   for (const section of song.form) if (section.kind === 'break' && unit(seed, Ch.Surprise, 4, section.start) < 0.5) result.push({ type: 'bomb', bar: section.start, bars: 1 });
   return result;
 }
@@ -556,6 +568,9 @@ const GATES: Record<Flavor, Record<Layer, number>> = {
   schranz: { kick: 0, rumble: 0.3, hat: 0.15, openHat: 0.25, bass: 0.45, clap: 0.4, ride: 0.5, perc: 0.35, metal: 0.6, acid: 0.9, lead: 0.85, chords: 2 },
   rave: { kick: 0, rumble: 0.3, hat: 0.2, openHat: 0.3, bass: 0.45, clap: 0.5, ride: 0.7, perc: 0.7, metal: 0.9, acid: 0.8, lead: 0.55, chords: 2 },
 };
+
+/** Bars of a song kept in its memo (see barInfo). */
+const BAR_CACHE = 512;
 
 /** Layers a relentless track mutes for two bars at a time. */
 const MUTABLE: Layer[] = ['hat', 'clap', 'openHat', 'bass', 'perc', 'lead', 'acid', 'ride'];
@@ -637,6 +652,8 @@ export function barInfo(song: Song, absoluteBar: number): BarInfo {
     voice: song.voice.find((v) => v.bar === bar) ?? null,
     sweep: (bar % 8) / 8,
   };
+  // the hangar track cycles for hours: the memo holds the recent bars, not all of them
+  if (song.cache.size >= BAR_CACHE) song.cache.clear();
   song.cache.set(absoluteBar, info);
   return info;
 }
