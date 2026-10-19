@@ -85,7 +85,7 @@ The menu leads with the flight school until a Host has completed it once; after 
 7. Looking back while drifting: the nose turns, the course stays (the green prograde marker shows the course).
 8. Brake: hold S, the flight computer flips and burns until the ship is at rest.
 9. Flip and burn by hand, twice: X flips the ship, W burns; the S brake does not count here. The drill counts once the drift along the course is gone; a little sideways drift may remain.
-10. Stopping at a marker, near and far: burn, flip, burn.
+10. Stopping at a marker, near and far: burn, flip, burn. It counts once the ship rests (below 10 m/s) inside the blue sphere around the marker, 200 m in radius.
 11. Sliding with the thrusters (A/D), both ways, without turning.
 12. Dodging debris that drifts straight at the ship, twice, without turning.
 13. Autopilot back on (T).

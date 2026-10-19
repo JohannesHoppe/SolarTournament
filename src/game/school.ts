@@ -126,6 +126,10 @@ const FAST = 1000;
 const STOPPED = 100;
 /** Ring radius of the course: 55 m, comfortable for a 35 m ship. */
 const RING_RADIUS = 1100;
+/** Radius of the zone the stop drill wants the ship to rest in: 200 m, shown as a sphere around the marker. */
+const STOP_RADIUS = 4000;
+/** At rest in the stop drill means slower than this: 10 m/s. */
+const STOP_SPEED = 200;
 /** Radius of the debris of the dodge drill: 15 m. */
 const DEBRIS_RADIUS = 300;
 /** Speed of the debris: 60 m/s. */
@@ -305,9 +309,10 @@ const DRILLS: Drill[] = [
     reps: 2,
     enter(ctx, a, markers) {
       stop(ctx);
-      a.points = [markers.buoy(clear(ctx, a.rep === 0 ? ahead(ctx, 0, 0, -8000) : ahead(ctx, 3000, 1500, -15000), 1500))];
+      a.points = [markers.buoy(clear(ctx, a.rep === 0 ? ahead(ctx, 0, 0, -10000) : ahead(ctx, 3000, 1500, -18000), STOP_RADIUS))];
+      markers.zone(a.points[0], STOP_RADIUS);
     },
-    done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.position.distanceTo(a.points[0]) < 1000 && speed(ctx) < STOPPED, 0.3),
+    done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.position.distanceTo(a.points[0]) < STOP_RADIUS && speed(ctx) < STOP_SPEED, 0.3),
     fail: (ctx, a) => (ctx.me.flight.position.distanceTo(a.points[0]) > 30000 ? SCHOOL.again : null),
     waypoint: (_, a) => a.points[0],
     mark: () => 'Stop here',
@@ -498,6 +503,7 @@ class Markers {
   private readonly buoyGeometry = new THREE.OctahedronGeometry(1, 0);
   private readonly ringGeometry = new THREE.TorusGeometry(RING_RADIUS, 40, 8, 48);
   private readonly debrisGeometry = new THREE.IcosahedronGeometry(1, 0);
+  private readonly zoneGeometry = new THREE.IcosahedronGeometry(1, 2);
   private readonly bright = new THREE.MeshBasicMaterial({ color: 0xff9d00, wireframe: true });
   private readonly dim = new THREE.MeshBasicMaterial({ color: 0x4d91ff, wireframe: true, transparent: true, opacity: 0.45 });
   private readonly rock = new THREE.MeshBasicMaterial({ color: 0xff4d2e, wireframe: true });
@@ -512,6 +518,14 @@ class Markers {
     mesh.userData.spin = true;
     this.root.add(mesh);
     return mesh.position;
+  }
+
+  /** A faint wire sphere around a point: the zone a drill wants the ship in. */
+  zone(position: THREE.Vector3, radius: number) {
+    const mesh = new THREE.Mesh(this.zoneGeometry, this.dim);
+    mesh.scale.setScalar(radius);
+    mesh.position.copy(position);
+    this.root.add(mesh);
   }
 
   ring(position: THREE.Vector3, normal: THREE.Vector3) {
@@ -557,7 +571,7 @@ class Markers {
   /** Frees the geometries and materials on the GPU when the flight school ends. */
   dispose() {
     this.clear();
-    for (const resource of [this.buoyGeometry, this.ringGeometry, this.debrisGeometry, this.bright, this.dim, this.rock]) resource.dispose();
+    for (const resource of [this.buoyGeometry, this.ringGeometry, this.debrisGeometry, this.zoneGeometry, this.bright, this.dim, this.rock]) resource.dispose();
   }
 }
 
