@@ -183,7 +183,7 @@ export const BRIEFING =
   'the year is twenty five eighty four. the united solar states rule the planets, and the orange president rules the united solar states. ' +
   'to keep his people quiet and entertained, his ministry of war stages the presidential games. ' +
   'you are one of the chosen pilots, and it is an honor to die for the president. ' +
-  'your body stays safe while you fly a printed clone over a live link, and when the clone dies, the next one is already waiting in the printer. ' +
+  'you fly a printed clone over a live link, and when the clone dies, the next one is already waiting in the printer. ' +
   'you will die again and again through your clones. that is your destiny now. ' +
   'training clones like this one are free, but in the tournament every new clone costs you an advertisement. ' +
   'make the great president happy. that is all that counts.';

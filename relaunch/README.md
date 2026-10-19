@@ -129,7 +129,7 @@ Humanity has settled the solar system. Fast fusion drives make hard burns betwee
 
 The pilots die, and come back. They have transferred their consciousness into cloned human bodies; when a ship is destroyed, the pilot wakes up in the next clone, in the next ship. That is why every round has respawns, and why the audience never runs out of champions. The clones come out of a 3D printer: disposable bodies, printed by the dozen, and everyone knows it.
 
-The original pilot stays safe and follows the fight over a live link to the clone in the cockpit. Everything the player sees and hears arrives over that link. When a hit or an impact shakes the clone, the link stutters: the picture breaks up like a corrupted video stream, the radio drops out, static crackles in the headset. When the clone dies, the link breaks down until the next clone is printed. Even the idle link to the clone hangar flickers now and then.
+The original pilot follows the fight over a live link to the clone in the cockpit, and nothing about it is safe: every death is felt, again and again. Everything the player sees and hears arrives over that link. When a hit or an impact shakes the clone, the link stutters: the picture breaks up like a corrupted video stream, the radio drops out, static crackles in the headset. When the clone dies, the link breaks down until the next clone is printed. Even the idle link to the clone hangar flickers now and then.
 
 The future is broken, and it glows. Neon signs flicker over everything, every surface is for sale, every picture comes over a link that can break. The tournament's own sign is sun orange; the sponsors advertise in its complement, a cold azure blue.
 
