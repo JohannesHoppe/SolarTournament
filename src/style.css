@@ -1125,6 +1125,15 @@ body.touch #game canvas {
   border-radius: 10px;
 }
 
+#touch-autopilot {
+  top: 12px;
+  left: calc(max(12px, env(safe-area-inset-left)) + 54px);
+  width: 54px;
+  height: 44px;
+  border-radius: 10px;
+  font-size: 0.65rem;
+}
+
 /* gauges move to the top, the thumbs own the bottom of the screen */
 body.touch .hud-bottom {
   top: 52px;
@@ -1631,8 +1640,12 @@ body.page {
   margin-bottom: 8px;
 }
 
-#hud-autopilot .readout {
+#hud-mode {
   color: var(--accent-strong);
   text-transform: uppercase;
   letter-spacing: 0.08em;
+}
+
+#hud-mode.free {
+  color: var(--accent);
 }

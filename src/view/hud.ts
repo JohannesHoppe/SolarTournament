@@ -21,7 +21,7 @@ export class Hud {
   private readonly warning = $('hud-warning');
   private readonly vignette = $('g-vignette');
   private readonly speed = $('hud-speed');
-  private readonly autopilot = $('hud-autopilot');
+  private readonly mode = $('hud-mode');
   private readonly prograde = $('prograde');
   private readonly retrograde = $('retrograde');
   private readonly message = $('hud-message');
@@ -114,9 +114,11 @@ export class Hud {
    * The zero point: the center of the field, where the asteroids are densest and the arena
    * ends farthest away, with its distance. Always on screen, at the edge when behind.
    */
-  /** The autopilot is on: a lit word next to the velocity. */
+  /** The flight mode next to the velocity: AUTOPILOT in blue, FREE DRIFT in orange. */
   setAutopilot(on: boolean) {
-    if (this.autopilot.hidden === on) this.autopilot.hidden = !on;
+    if (this.mode.classList.contains('free') !== on) return;
+    this.mode.textContent = on ? 'Autopilot' : 'Free drift';
+    this.mode.classList.toggle('free', !on);
   }
 
   setCenter(camera: THREE.Camera, me: Ship) {

@@ -25,7 +25,7 @@ type ActionHandler = (action: Action) => void;
 /** The pointer at this share of the shorter screen side away from the center turns at full rate. */
 const MOUSE_FULL_DEFLECTION = 0.4;
 /** Around the center the pointer does not turn the ship (share of full deflection), so it can fly straight. */
-const MOUSE_DEADZONE = 0.06;
+const MOUSE_DEADZONE = 0.08;
 /** Shift (fine aim) scales turning down to this share, for precise aiming. */
 const FINE_AIM = 0.3;
 /** Stick deflections below this are treated as zero, so worn sticks do not drift. */
@@ -57,7 +57,7 @@ export class Input {
   private steering = false;
   private handler: ActionHandler = () => {};
   private readonly padPressed = new Set<number>();
-  private readonly touch = new TouchControls(() => this.handler('flip'), () => this.handler('pause'));
+  private readonly touch = new TouchControls(() => this.handler('flip'), () => this.handler('pause'), () => this.handler('autopilot'));
 
   constructor(private readonly canvas: HTMLElement) {
     window.addEventListener('keydown', (e) => this.onKey(e, true));
@@ -135,7 +135,8 @@ export class Input {
     const out = this.controls;
     out.yaw = clamp(axis('ArrowRight', 'ArrowLeft') + this.mouseStick.x + stick(0) + touch.turn.x) * aim;
     out.pitch = clamp(axis('ArrowUp', 'ArrowDown') + this.mouseStick.y + stick(1) + touch.turn.y) * aim;
-    out.roll = clamp(axis('KeyE', 'KeyQ') + button(PAD.rb) - button(PAD.lb));
+    // the pilot does not roll: the flight computer keeps the ship upright (see Game.flightComputer)
+    out.roll = 0;
     out.thrust = Math.max(key('KeyW') || touch.drive ? 1 : 0, button(PAD.rt));
     out.strafeX = clamp(axis('KeyD', 'KeyA') + stick(2) + touch.push.x);
     out.strafeY = clamp(axis('KeyR', 'KeyF') - stick(3) + touch.push.y);

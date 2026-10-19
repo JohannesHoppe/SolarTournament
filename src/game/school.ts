@@ -13,6 +13,8 @@ export interface SchoolContext {
   braking: boolean;
   /** The impact warning is on. */
   impactAhead: boolean;
+  /** The autopilot takes out the drift across the nose; off, the ship drifts freely. */
+  autopilot: boolean;
   /** What the Host flies with; touch has no fine aim. */
   device: Device;
   field: AsteroidField;
@@ -83,7 +85,7 @@ interface Drill {
 export type Device = 'keyboard' | 'gamepad' | 'touch';
 
 /** What a drill asks the pilot to use. */
-type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'fire';
+type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'fire' | 'autopilot';
 
 /** The keys, buttons and sticks of each device, as the keycaps show them. */
 const CONTROLS: Record<Device, Record<Command, string[]>> = {
@@ -95,6 +97,7 @@ const CONTROLS: Record<Device, Record<Command, string[]>> = {
     flip: ['X'],
     slide: ['A', 'D'],
     fire: ['Space', 'Click'],
+    autopilot: ['T'],
   },
   gamepad: {
     turn: ['Left stick'],
@@ -104,6 +107,7 @@ const CONTROLS: Record<Device, Record<Command, string[]>> = {
     flip: ['Y'],
     slide: ['Right stick'],
     fire: ['LT'],
+    autopilot: ['R3'],
   },
   touch: {
     turn: ['Left stick'],
@@ -113,6 +117,7 @@ const CONTROLS: Record<Device, Record<Command, string[]>> = {
     flip: ['FLIP'],
     slide: ['Right stick'],
     fire: ['FIRE'],
+    autopilot: ['AUTO'],
   },
 };
 
@@ -241,6 +246,12 @@ const DRILLS: Drill[] = [
     done: (ctx) => speed(ctx) >= FAST,
   },
   {
+    line: SCHOOL.freeDrift,
+    praise: SCHOOL_PRAISE.freeDrift,
+    keys: ['autopilot'],
+    done: (ctx) => !ctx.autopilot,
+  },
+  {
     line: SCHOOL.drift,
     praise: SCHOOL_PRAISE.drift,
     keys: [],
@@ -336,6 +347,12 @@ const DRILLS: Drill[] = [
       if (ctx.me.flight.position.distanceTo(a.points[0]) < DEBRIS_RADIUS + ctx.me.radius) return SCHOOL.dodgeHit;
       return turned(ctx, a) ? SCHOOL.noTurn : null;
     },
+  },
+  {
+    line: SCHOOL.autopilotOn,
+    praise: SCHOOL_PRAISE.autopilotOn,
+    keys: ['autopilot'],
+    done: (ctx) => ctx.autopilot,
   },
   {
     line: SCHOOL.rings,
@@ -624,7 +641,7 @@ export class FlightSchool {
   }
 
   /**
-   * "Flight school 3/21", the current line, the keys of the Host's device. The same object
+   * "Flight school 3/23", the current line, the keys of the Host's device. The same object
    * every frame; it only changes with the drill, the line or the device.
    */
   status(device: Device): { step: string; text: string; keys: string[] } {

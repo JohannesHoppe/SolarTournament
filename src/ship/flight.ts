@@ -1,16 +1,19 @@
 import * as THREE from 'three';
 import type { Controls } from '../input/input';
 
-/** Acceleration of the main drive at full thrust (units/s²): 70 m/s², about 7 g. */
-export const MAIN_THRUST = 1400;
-/** Acceleration of the maneuvering thrusters along any axis (units/s²): 10 m/s², about 1 g. */
-export const RCS_THRUST = 200;
-/** Rotation rates the flight computer allows (rad/s) and how fast the thrusters reach them (rad/s²). */
-const MAX_TURN_RATE = 1.6;
-const MAX_ROLL_RATE = 1.8;
-const TURN_ACCELERATION = 6;
+/** Acceleration of the main drive at full thrust (units/s²): 90 m/s², about 9 g. Hard, so a burn is felt. */
+export const MAIN_THRUST = 1800;
+/** Acceleration of the maneuvering thrusters along any axis (units/s²): 40 m/s², about 4 g, so a sidestep left and right throws off an aim. */
+export const RCS_THRUST = 800;
+/**
+ * Rotation rates the flight computer allows (rad/s) and how fast the thrusters reach them
+ * (rad/s²): full rate in a sixth of a second, so the nose stops where the stick stops.
+ */
+const MAX_TURN_RATE = 2.2;
+const MAX_ROLL_RATE = 2.4;
+const TURN_ACCELERATION = 14;
 /** How fast the visible drive output follows the thrust command (1/s). */
-const THROTTLE_RESPONSE = 8;
+const THROTTLE_RESPONSE = 12;
 
 const rotation = new THREE.Quaternion();
 const axis = new THREE.Vector3();

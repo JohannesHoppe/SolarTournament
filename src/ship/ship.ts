@@ -27,8 +27,8 @@ const DECOMPRESSION_KICK = 1.2;
 const ENTRY_HOLE = 0.4;
 const EXIT_HOLE = 1;
 
-/** Freshly spawned ships cannot be damaged for this long (s). */
-const SPAWN_PROTECTION = 2.5;
+/** Freshly spawned ships cannot be damaged for this long (s), long enough to get the bearings; firing ends it early. */
+const SPAWN_PROTECTION = 5;
 
 /** The laser heats the ship; radiators shed the heat, much better in the shadow of an asteroid. */
 export const MAX_HEAT = 100;

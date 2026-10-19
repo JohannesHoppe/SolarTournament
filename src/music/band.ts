@@ -120,6 +120,8 @@ export class Band {
   private readonly voiceEcho: ToneLib.Gain;
   private readonly announcerIn: ToneLib.Gain;
   private readonly announcerStatic: ToneLib.NoiseSynth;
+  /** Until when the announcer's static is scheduled (s): its noise source only takes start times in order. */
+  private staticUntil = 0;
   private voice: Voice | null = null;
 
   private flavor = '';
@@ -581,18 +583,30 @@ export class Band {
   /** The announcer cuts in over the radio: static, the words, static. */
   announce(text: string, name: string | null, t: number) {
     if (!this.voice) return;
-    this.announcerStatic.triggerAttackRelease(0.15, t, 0.9);
+    this.crackle(0.15, t, 0.9);
     let position = t + 0.18;
     for (const { clip, stop } of this.clips('mod', text, false, name ?? 'pilot')) {
       this.playClip(clip, position, this.announcerIn);
       position += clip[1] + 0.03 + (stop ? 0.22 : 0);
     }
-    this.announcerStatic.triggerAttackRelease(0.1, position + 0.05, 0.7);
+    this.crackle(0.1, position + 0.05, 0.7);
     this.musicLevel.gain.cancelAndHoldAtTime(t);
     this.musicLevel.gain.linearRampToValueAtTime(0.35, t + 0.1);
     this.musicLevel.gain.setValueAtTime(0.35, position);
     this.musicLevel.gain.linearRampToValueAtTime(1, position + 0.4);
     this.onSpeak({ line: text, language: 'mod', time: t, duration: position - t });
+  }
+
+  /**
+   * A burst of radio static around an announcement. An announcement that starts while the
+   * last one's closing static is still scheduled skips its opening burst instead of
+   * scheduling noise back in time.
+   */
+  private crackle(duration: number, t: number, velocity: number) {
+    if (t <= this.staticUntil) return;
+    this.announcerStatic.triggerAttackRelease(duration, t, velocity);
+    // the release follows the duration; a little margin keeps the next start clear of it
+    this.staticUntil = t + duration + 0.1;
   }
 
   /**

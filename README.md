@@ -32,7 +32,6 @@ The project is a classic Pages project, not a Worker: the game is a static site 
 | Keyboard and mouse | Gamepad | Action |
 |---|---|---|
 | Mouse pointer (the ship turns towards it; the farther from the center, the faster) / arrow keys | Left stick (pull back = nose up) | Turn (yaw, pitch) |
-| Q / E | LB / RB | Roll |
 | W | RT (analog) | Main drive |
 | S (hold) | B (hold) | Brake: the flight computer flips the ship head over and burns until it is at rest |
 | Shift (hold) | L3, the left stick pressed in | Fine aim: turns at 30 % for precise aiming |
@@ -40,7 +39,7 @@ The project is a classic Pages project, not a Worker: the game is a static site 
 | | X | Thrusters: backwards |
 | R / F | Right stick up / down | Thrusters: up / down |
 | X | Y | Flip: the flight computer turns the ship head over until the drive points into the flight direction; the ship keeps flying, now backwards |
-| T | R3, the right stick pressed in | Autopilot on / off: the thrusters take out every drift across the nose, so the ship flies where it points and W pushes it exactly that way. Without the autopilot the ship keeps any drift, for slides and drifts on purpose |
+| T | R3, the right stick pressed in | Autopilot / free drift. The autopilot is on at the start of every round: the thrusters take out every drift across the nose, so the ship flies where it points and W pushes it exactly that way. In free drift the ship keeps any drift, for slides and drifts on purpose. On touch screens the AUTO button |
 | Click / Space | LT / A | Fire laser |
 | C | View | Chase / cockpit camera |
 | M | | Radio on / off (also with the ♪ button in the top right corner; a click on the song title opens the radio page) |
@@ -48,9 +47,9 @@ The project is a classic Pages project, not a Worker: the game is a static site 
 | F1 | | Controls sheet over any screen, the running round included (F1 again closes it) |
 | Enter | A | Confirm (start, resume, boot the next clone) |
 
-**The essentials** are W, A, S, D, Shift, Space, X and the arrow keys or the mouse; both work at the same time, so keyboard pilots and mouse pilots share one layout. Roll, the up and down thrusters and the camera are extras.
+**The essentials** are W, A, S, D, Shift, Space, X and the arrow keys or the mouse; both work at the same time, so keyboard pilots and mouse pilots share one layout. The up and down thrusters and the camera are extras. The pilot does not roll: the flight computer keeps the ship upright (see Flight).
 
-**Mouse flight.** The pointer stays visible and nothing captures the mouse. Its offset from the screen center is the stick: at 40 % of the shorter screen side it turns at full rate, within 6 % of that around the center the ship flies straight, and a pointer that leaves the window lets go of the stick.
+**Mouse flight.** The pointer stays visible and nothing captures the mouse. Its offset from the screen center is the stick: at 40 % of the shorter screen side it turns at full rate, within 8 % of that around the center the ship flies straight, and a pointer that leaves the window lets go of the stick.
 
 Gamepads with the standard layout (Xbox, PlayStation, most others in current browsers) work without setup.
 
@@ -75,29 +74,31 @@ For development, `?local=1#t=code` connects tabs of the same browser without the
 
 ## Flight school
 
-The menu leads with the flight school until a Host has completed it once; after that the solo round is the main action (Enter). The flight school trains one maneuver per drill, 21 drills in all, each with a short spoken line, the keys as big keycaps (the spoken words name no keys; the keycaps show those of the Host's keyboard, gamepad or touch screen), and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver.
+The menu leads with the flight school until a Host has completed it once; after that the solo round is the main action (Enter). The flight school trains one maneuver per drill, 23 drills in all, each with a short spoken line, the keys as big keycaps (the spoken words name no keys; the keycaps show those of the Host's keyboard, gamepad or touch screen), and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver.
 
 1. Briefing: the world of the games, in four sentences.
 2. Turning: three markers into the crosshair (arrows or mouse).
 3. Fine aim: Shift turns slowly; center a far marker exactly.
-4. Main drive: W up to 50 m/s.
-5. Drifting: let go, nothing slows the ship down.
-6. Looking back while drifting: the nose turns, the course stays (the green prograde marker shows the course).
-7. Brake: hold S, the flight computer flips and burns until the ship is at rest.
-8. Flip and burn by hand, twice: X flips the ship, W burns; the S brake does not count here. The drill counts once the drift along the course is gone; a little sideways drift may remain.
-9. Stopping at a marker, near and far: burn, flip, burn.
-10. Sliding with the thrusters (A/D), both ways, without turning.
-11. Dodging debris that drifts straight at the ship, twice, without turning.
-12. A course of four rings.
-13. Shooting a resting drone.
-14. Shooting a drifting drone (the laser hits instantly, no lead needed).
-15. Firing until the laser overheats.
-16. Cooling down in the shadow of an asteroid.
-17. The impact warning: drifting at a rock with 100 m/s, braking or sliding past.
-18. Chasing a bot that flies but does not shoot.
-19. Fighting a weak bot that shoots back, sliding sideways while firing.
-20. Final exam: a real bot.
-21. Cleared for the tournament.
+4. Main drive: W up to 50 m/s, with the autopilot on.
+5. Free drift: T switches the autopilot off; the drift lessons that follow need it.
+6. Drifting: let go, nothing slows the ship down.
+7. Looking back while drifting: the nose turns, the course stays (the green prograde marker shows the course).
+8. Brake: hold S, the flight computer flips and burns until the ship is at rest.
+9. Flip and burn by hand, twice: X flips the ship, W burns; the S brake does not count here. The drill counts once the drift along the course is gone; a little sideways drift may remain.
+10. Stopping at a marker, near and far: burn, flip, burn.
+11. Sliding with the thrusters (A/D), both ways, without turning.
+12. Dodging debris that drifts straight at the ship, twice, without turning.
+13. Autopilot back on (T).
+14. A course of four rings.
+15. Shooting a resting drone.
+16. Shooting a drifting drone (the laser hits instantly, no lead needed).
+17. Firing until the laser overheats.
+18. Cooling down in the shadow of an asteroid.
+19. The impact warning: drifting at a rock with 100 m/s, braking or sliding past.
+20. Chasing a bot that flies but does not shoot.
+21. Fighting a weak bot that shoots back, sliding sideways while firing.
+22. Final exam: a real bot.
+23. Cleared for the tournament.
 
 ## Radio 2584
 
@@ -203,10 +204,10 @@ One world unit is 5 cm. A ship is about 35 m long; the asteroids are ten to thir
 
 ### Flight
 
-- **Main drive.** It pushes only along the nose, with 70 m/s² (about 7 g). Nothing slows a ship down: without thrust it keeps drifting forever.
-- **Maneuvering thrusters.** They rotate the ship and also push it gently along every axis (10 m/s², about 1 g), enough to sidestep and dodge, not enough to brake from full speed. Rotation thrusters sit in pairs on opposite levers (nose and tail for pitch and yaw, the wing tips for roll) and fire only while a rotation speeds up or is stopped: a steady turn needs no thrust in vacuum.
-- **Flight computer.** Rotation is rate-controlled: the stick sets how fast the ship turns, and the thrusters stop the rotation when the stick is released (up to 1.6 rad/s for yaw and pitch, 1.8 rad/s for roll, reached with 6 rad/s²).
-- **Autopilot.** The thrusters push against the velocity across the nose (sideways and up/down) at their full 1 g until the drift would be gone in 0.3 seconds, then ease off; the pilot's own thruster input on an axis goes first. Velocity along the nose, forward or backward, stays. The brake and the flip assist take over while they run; the autopilot stays on and resumes after them. A clone's death or a new round switches it off; the HUD shows AUTOPILOT next to the velocity.
+- **Main drive.** It pushes only along the nose, with 90 m/s² (about 9 g). Nothing slows a ship down: without thrust it keeps drifting forever.
+- **Maneuvering thrusters.** They rotate the ship and also push it along every axis (40 m/s², about 4 g), enough for a quick sidestep, not enough to brake from full speed. Rotation thrusters sit in pairs on opposite levers (nose and tail for pitch and yaw, the wing tips for roll) and fire only while a rotation speeds up or is stopped: a steady turn needs no thrust in vacuum.
+- **Flight computer.** Rotation is rate-controlled: the stick sets how fast the ship turns, and the thrusters stop the rotation when the stick is released (up to 2.2 rad/s for yaw and pitch, 2.4 rad/s for roll, reached with 14 rad/s², so the nose stops where the stick stops). The pilot only yaws and pitches; the flight computer rolls. It keeps the ship upright to the arena, whose north pole is up, so there is always a horizon; in climbs and dives steeper than about 45° it lets go gradually and is free from about 65°, so a loop is not fought halfway through. The flip and the brake roll as they need.
+- **Autopilot.** The thrusters push against the velocity across the nose (sideways and up/down) at their full 4 g until the drift would be gone in 0.3 seconds, then ease off; the pilot's own thruster input on an axis goes first. Velocity along the nose, forward or backward, stays. The brake and the flip assist take over while they run; the autopilot stays on and resumes after them. Every round starts with the autopilot on; T switches to free drift and back, and the choice outlives a clone. The HUD shows AUTOPILOT (blue) or FREE DRIFT (orange) next to the velocity.
 - **Flip and burn.** Braking means turning the drive into the flight direction and burning. The flip alone changes nothing: the ship keeps its course, now flying backwards; the burn is what slows it down. The flip assist (X) turns the ship to retrograde head over, the way a pilot pulls up and over: it first rolls until the goal lies straight above the canopy, then pulls the nose up; a goal below and within 70° of straight behind is reached by pulling up and over without rolling first. The pilot burns. Moving the stick cancels the assist (a mouse pointer resting off-center does not count). The brake (S) does both: it flips head over, burns once the nose is within 0.2 rad of retrograde, eases the burn off below the speed the drive kills in 0.3 seconds (less with a damaged drive) and reports "At rest" below 1 m/s; at rest it holds until the ship drifts faster than 2 m/s again.
 - **Velocity markers.** The green marker (prograde, a circle with three fins) shows where the ship is actually drifting, the orange cross (retrograde) where the drive has to point to brake.
 - **The zero point.** A blue ring with a dot marks the center of the field, with its distance; it stays on the screen edge when the center is behind. The asteroids are densest there, and the edge of the arena is farthest away.
@@ -226,7 +227,8 @@ One world unit is 5 cm. A ship is about 35 m long; the asteroids are ten to thir
 - A ship bounces off a rock and keeps 30 % of its impact speed; scraping along the surface bleeds off some sideways speed. The impact counts against the rock's surface, which moves with its drift and its spin: the tip of a long, turning rock hits harder than its middle.
 - A ship that moves farther than its own radius in one frame is checked along its whole path, so even at extreme speed it cannot pass through a thin rock.
 - Impacts below 12.5 m/s only scratch the paint. Above that the hull loses 1 point per 0.6 m/s; at about 72 m/s a ship is destroyed.
-- **Impact warning.** The flight computer warns when the current course hits a rock sooner than the ship could flip and brake (plus 2 seconds of reaction time) and beeps faster the closer the impact gets. The flip time it assumes grows with the angle to turn (2.5 s for a half turn), adds 1 s for the roll that starts a head-over flip and stretches with damaged thrusters.
+- **Impact warning.** The flight computer warns when the current course hits a rock sooner than the ship could flip and brake (plus 2 seconds of reaction time) and beeps faster the closer the impact gets. The flip time it assumes grows with the angle to turn (1.8 s for a half turn), adds 0.7 s for the roll that starts a head-over flip and stretches with damaged thrusters.
+- **Lock warning.** The sensors see where every other ship points. A nose within four times the own ship's angular radius sets off TRACKED with the shooter's name and a slow beep; a nose on the own ship, where its laser would hit now, sets off LOCKED with a fast beep. Ships farther than 3 km and ships behind rocks do not count; the target drone and the unarmed sparring bot never shoot.
 
 ### Damage
 
@@ -248,7 +250,7 @@ The laser draws no ammunition but produces heat. Each shot adds 20 % of the heat
 
 ### The pilot
 
-- **G-forces.** Above 3 g the pilot starts to grey out. A full burn (7 g) narrows the view to a tunnel within 5 seconds, with the pilot's heartbeat getting louder; 3 seconds without hard acceleration clear it again.
+- **G-forces.** Above 3 g the pilot starts to grey out. A full burn (9 g) narrows the view to a tunnel within 5 seconds, with the pilot's heartbeat getting louder; 3 seconds without hard acceleration clear it again.
 - **Line of sight.** Sensors need a clear line: a ship hidden behind an asteroid disappears from the HUD, and bots cannot see it either.
 
 ### Sound
@@ -258,8 +260,9 @@ There is no sound in vacuum. Everything the Host hears travels through the clone
 ### Combat rules
 
 - A kill scores 500 points; asteroids score 200, 120 and 80 points depending on their generation.
-- Destroyed ships respawn at the edge of the field, with 2.5 seconds of spawn protection. Bots respawn after 3 seconds. The Host first sits through a sponsor break while the next clone is printed: after 3 seconds an ad appears, and once it has run, a button boots the next clone. The round goes on meanwhile.
+- Destroyed ships respawn at the edge of the field, at the best of twelve random places clear of rock: the one farthest from the nearest enemy, preferably out of every enemy's sight behind the asteroids. A fresh clone has 5 seconds of spawn protection (it blinks); bots leave it alone meanwhile, and firing ends it early. Bots respawn after 3 seconds. The Host first sits through a sponsor break while the next clone is printed: after 3 seconds an ad appears, and once it has run, a button boots the next clone. The round goes on meanwhile.
 - Human and alien interceptor are identical apart from their looks.
+- **Dodging.** The laser hits the instant it fires, so nobody outruns a beam; a dodge beats the aim. Bots sense how hard their target changes its motion across their line of sight (smoothed over 0.6 s) and their aim scatters by it: at half the thrusters' push one ship radius, at most two and a half. Steady flight, however fast, is easy to lead; jinking left and right with the thrusters, autopilot on or off, is what makes them miss. Their aim also wanders by an angle (about 1.1° for an average bot, less for better ones): one ship radius at 1 km, so a far target is hard to hit.
 - A solo round lasts five minutes of real time, like the radio's track, so a slow frame rate does not stretch it. It pauses when the tab is hidden, and while paused.
 - The personal best counts solo and tournament rounds; points from the flight school's drones and sparring bots do not count.
 - The sponsor break can be paused. If an ad fails or runs too long, the button to boot the clone appears after 20 seconds at the latest.

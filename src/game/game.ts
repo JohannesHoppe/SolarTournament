@@ -58,6 +58,11 @@ const ARENA_GRACE = 20;
 const DEBRIS_HEARING = 6000;
 /** The autopilot's thrusters push at full strength until the drift would be gone in this time (s), then ease off. */
 const AUTOPILOT_EASE = 0.3;
+/** The upright hold rolls at full rate from this roll error on (1/rad): firm, without overshooting. */
+const UPRIGHT_GAIN = 1.2;
+/** The upright hold fades out between these steepness values of the nose (sine of the climb angle: about 45° and 65°). */
+const UPRIGHT_LET_GO = 0.7;
+const UPRIGHT_FREE = 0.9;
 /** The flip assist lets go once the nose is this close to retrograde (rad). */
 const FLIP_DONE_ANGLE = 0.04;
 /** The brake burns once the nose is this close to retrograde (rad). */
@@ -82,10 +87,23 @@ const G_ONSET = 5;
 const G_RECOVERY = 3;
 /** The impact warning starts this many seconds before the last chance to flip and brake. */
 const IMPACT_MARGIN = 2;
-/** Assumed duration of a flip for the impact warning (s). */
-const FLIP_SECONDS = 2.5;
+/** Assumed duration of a flip for the impact warning (s): half a turn at 2.2 rad/s, plus spin-up and settling. */
+const FLIP_SECONDS = 1.8;
 /** Assumed extra time of the roll that starts a head-over flip (s). */
-const FLIP_ROLL_SECONDS = 1;
+const FLIP_ROLL_SECONDS = 0.7;
+/** Random places on the edge of the field a respawn chooses from. */
+const SPAWN_CANDIDATES = 12;
+/** Ships farther away than this never set off the lock warning (units, 3 km). */
+const LOCK_RANGE = 60000;
+/** A nose within this many times the own ship's angular radius counts as TRACKED. */
+const LOCK_TRACKING = 4;
+/** Vertical field of view of the camera (degrees). */
+const CAMERA_FOV = 70;
+/** A full burn widens the view by this much (degrees) and shakes the chase camera by this share of the ship radius: the drive is felt. */
+const DRIVE_FOV_KICK = 7;
+const DRIVE_SHAKE = 0.012;
+/** Hosts who ask for less motion get no camera shake. */
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const ZONE_MESSAGES: Record<Zone, string> = {
   reactor: 'Reactor breach',
   drive: 'Main drive damaged',
@@ -147,7 +165,7 @@ export class Game implements OnlineGame {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly composer: EffectComposer;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(70, 1, 10, 400000);
+  private readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 10, 400000);
   private readonly space = new Space();
   private readonly arena = new Arena();
   readonly field: AsteroidField;
@@ -180,7 +198,7 @@ export class Game implements OnlineGame {
   private readonly engineLights: THREE.PointLight[] = [];
   /** The flight computer turns the own ship to retrograde while this is set. */
   private flipAssist = false;
-  /** The autopilot keeps the own ship flying where its nose points: the thrusters take out every sideways drift. */
+  /** The autopilot keeps the own ship flying where its nose points: the thrusters take out every sideways drift. On at the start of a round; T switches to free drift and back. */
   private autopilot = false;
   /** The brake has brought the ship to rest (it beeps once). */
   private braked = false;
@@ -209,6 +227,7 @@ export class Game implements OnlineGame {
   private strain = 0;
   private nextHeartbeat = 0;
   private nextWarningBeep = 0;
+  private nextLockBeep = 0;
   /** Speed of game time; 0 freezes the simulation while rendering continues. */
   timeScale = 1;
   private readonly glitch = new Glitch();
@@ -632,7 +651,7 @@ export class Game implements OnlineGame {
     else this.roundEndsAt = this.roundEndsAtWall = Infinity;
     this.cockpit = false;
     this.flipAssist = false;
-    this.autopilot = false;
+    this.autopilot = true;
     this.strain = 0;
     this.setScreen('playing');
     // the link to the clone comes first, then the hint for the mouse (not for touch or gamepad)
@@ -801,11 +820,29 @@ export class Game implements OnlineGame {
 
   /** Spawns a ship on the edge of the field, facing the center, away from asteroids. */
   private respawn(ship: Ship) {
+    // of a dozen random places on the edge of the field, clear of rock, the one farthest from
+    // the nearest enemy, preferably hidden from every enemy behind the asteroids
     const position = new THREE.Vector3();
-    for (let attempt = 0; attempt < 20; attempt++) {
-      position.randomDirection().multiplyScalar(FIELD_RADIUS * (0.9 + Math.random() * 0.2));
-      if (!this.field.overlap(position, ship.radius * 10)) break;
+    const candidate = new THREE.Vector3();
+    let best = -Infinity;
+    for (let attempt = 0; attempt < SPAWN_CANDIDATES; attempt++) {
+      candidate.randomDirection().multiplyScalar(FIELD_RADIUS * (0.9 + Math.random() * 0.2));
+      if (this.field.overlap(candidate, ship.radius * 10)) continue;
+      let nearest = Infinity;
+      let seen = false;
+      for (const other of this.ships) {
+        if (other === ship || !other.alive) continue;
+        const distance = other.flight.position.distanceTo(candidate);
+        nearest = Math.min(nearest, distance);
+        seen ||= distance < LOCK_RANGE && this.field.lineOfSight(other.flight.position, candidate);
+      }
+      const score = Math.min(nearest, FIELD_RADIUS * 3) - (seen ? FIELD_RADIUS * 3 : 0);
+      if (score > best) {
+        best = score;
+        position.copy(candidate);
+      }
     }
+    if (best === -Infinity) position.copy(candidate);
     const look = new THREE.Matrix4().lookAt(position, scratch.set(0, 0, 0), new THREE.Vector3(0, 1, 0));
     ship.spawn(position, new THREE.Quaternion().setFromRotationMatrix(look), this.time);
     if (ship === this.me) {
@@ -982,7 +1019,7 @@ export class Game implements OnlineGame {
     this.hud.updateMarkers(this.camera, this.ships, me, this.inSight);
     this.hud.updateVelocityMarkers(this.camera, me);
     this.hud.setCenter(this.camera, me);
-    this.hud.setAutopilot(this.autopilot && me.alive);
+    this.hud.setAutopilot(this.autopilot);
     if (this.school) this.teach(dt, myControls);
 
     const outside = me.alive && me.outsideSince !== null;
@@ -1013,6 +1050,7 @@ export class Game implements OnlineGame {
     const context = (this.schoolContext ??= this.createSchoolContext());
     context.controls = controls;
     context.braking = this.input.braking;
+    context.autopilot = this.autopilot;
     context.impactAhead = this.impactAhead;
     context.device = this.input.touchActive ? 'touch' : this.input.gamepadActive ? 'gamepad' : 'keyboard';
     context.now = this.time;
@@ -1039,6 +1077,7 @@ export class Game implements OnlineGame {
       controls: IDLE,
       braking: false,
       impactAhead: false,
+      autopilot: true,
       device: 'keyboard',
       field: this.field,
       now: 0,
@@ -1118,20 +1157,34 @@ export class Game implements OnlineGame {
       return burn;
     }
     this.braked = false;
-    if (!this.flipAssist) return this.autopilot && me.alive ? this.trimDrift(controls) : controls;
+    if (!this.flipAssist) return this.keepUpright(this.autopilot && me.alive ? this.trimDrift(controls) : Object.assign(this.computed, controls));
     // the pilot takes over by moving the stick; a mouse pointer resting off-center does not count
     const grabbed = Math.hypot(controls.yaw - this.flipStick.yaw, controls.pitch - this.flipStick.pitch) > 0.35;
     if (!me.alive || grabbed || flight.velocity.lengthSq() < 400) {
       this.flipAssist = false;
-      return controls;
+      return this.keepUpright(Object.assign(this.computed, controls));
     }
     retrograde.copy(flight.velocity).negate();
     if (flight.angleTo(retrograde) < FLIP_DONE_ANGLE && flight.angularVelocity.length() < 0.1) {
       this.flipAssist = false;
       this.sound.beep(660, 0.08);
-      return controls;
+      return this.keepUpright(Object.assign(this.computed, controls));
     }
     return flight.flip(retrograde, 3, Object.assign(this.computed, controls));
+  }
+
+  /**
+   * The pilot does not roll; the flight computer keeps the ship upright to the arena (its
+   * north pole is up), so there is always a horizon. In steep climbs and dives it lets go,
+   * so a loop is not fought halfway through.
+   */
+  private keepUpright(out: Controls): Controls {
+    inverseOrientation.copy(this.me!.flight.orientation).invert();
+    const up = scratch.set(0, 1, 0).applyQuaternion(inverseOrientation);
+    // the ship's nose is -Z, so |up.z| is how steeply it points up or down
+    const hold = 1 - THREE.MathUtils.smoothstep(Math.abs(up.z), UPRIGHT_LET_GO, UPRIGHT_FREE);
+    out.roll = THREE.MathUtils.clamp(Math.atan2(up.x, up.y) * UPRIGHT_GAIN, -1, 1) * hold;
+    return out;
   }
 
   /** X: starts the flip assist, or stops it; remembers where the stick was. */
@@ -1214,6 +1267,8 @@ export class Game implements OnlineGame {
    * stops at the first asteroid, which takes one hit.
    */
   private fireLaser(shooter: Ship) {
+    // shooting ends the own spawn protection: nobody fires from behind it
+    shooter.protectedUntil = Math.min(shooter.protectedUntil, this.time);
     const origin = shooter.nose(muzzle);
     const direction = shooter.flight.forward(forward);
     let asteroidHit = this.field.raycast(origin, direction, LASER_RANGE);
@@ -1300,7 +1355,6 @@ export class Game implements OnlineGame {
   private shipDestroyed(victim: Ship, killer: Ship | null) {
     victim.respawnAt = this.time + RESPAWN_SECONDS;
     if (victim.isLocal) this.flipAssist = false;
-    if (victim === this.me) this.autopilot = false;
     if (victim === this.me) this.deathCause = killer ? `Shot down by ${killer.name}` : victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
     this.effects.explosion(victim.flight.position, victim.radius * 2, victim.flight.velocity.clone().multiplyScalar(0.3));
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
@@ -1437,8 +1491,41 @@ export class Game implements OnlineGame {
       }
     }
     this.impactAhead = warnings.length > 0;
+    this.lockWarning(warnings, now);
     if (me.alive && me.overheated) warnings.push('LASER OVERHEATED');
     this.hud.setWarning(warnings.join('\n'));
+  }
+
+  /**
+   * Another ship's nose on the own ship: LOCKED when its laser would hit now, TRACKED when
+   * the nose is close to it. The ship's sensors see where every other hull points; the
+   * faster beeping is the cue to jink.
+   */
+  private lockWarning(warnings: string[], now: number) {
+    const me = this.me!;
+    if (!me.alive) return;
+    let level = 0;
+    let shooter: Ship | null = null;
+    for (const ship of this.ships) {
+      // the target drone and the unarmed sparring bot never shoot
+      if (ship === me || !ship.alive || ship === this.drone || (ship === this.sparring?.bot.ship && !this.sparring.armed)) continue;
+      const line = relative.subVectors(me.flight.position, ship.flight.position);
+      const distance = line.length();
+      if (distance > LOCK_RANGE) continue;
+      const angle = ship.flight.angleTo(line);
+      const size = me.radius / Math.max(distance, 1);
+      const sighted = angle < size ? 2 : angle < size * LOCK_TRACKING ? 1 : 0;
+      if (sighted > level && this.field.lineOfSight(ship.flight.position, me.flight.position)) {
+        level = sighted;
+        shooter = ship;
+      }
+    }
+    if (!shooter) return;
+    warnings.push(`${level === 2 ? 'LOCKED' : 'TRACKED'} · ${shooter.name}`);
+    if (now >= this.nextLockBeep) {
+      this.sound.beep(level === 2 ? 1560 : 1170, 0.04, 0.1);
+      this.nextLockBeep = now + (level === 2 ? 0.1 : 0.35);
+    }
   }
 
   /** Space has no walls: ships that stay outside the arena for too long are lost. */
@@ -1466,9 +1553,21 @@ export class Game implements OnlineGame {
     const blend = 1 - Math.exp(-14 * dt);
     this.camera.position.lerp(cameraGoal, blend);
     this.camera.quaternion.slerp(flight.orientation, 1 - Math.exp(-10 * dt));
+    // the drive kicks: the view widens and trembles while it burns
+    const burn = me.alive ? flight.throttle : 0;
+    const fov = this.camera.fov + (CAMERA_FOV + DRIVE_FOV_KICK * burn - this.camera.fov) * (1 - Math.exp(-6 * dt));
+    if (Math.abs(fov - this.camera.fov) > 0.01) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+    if (burn > 0.05 && !reducedMotion.matches) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * DRIVE_SHAKE * burn));
   }
 
   private updateMenuCamera() {
+    if (this.camera.fov !== CAMERA_FOV) {
+      this.camera.fov = CAMERA_FOV;
+      this.camera.updateProjectionMatrix();
+    }
     const t = this.time * 0.08;
     this.camera.position.set(0, 0, 0);
     this.camera.lookAt(Math.cos(t), Math.sin(t * 0.7) * 0.2, Math.sin(t));

@@ -39,7 +39,7 @@
       <div class="gauge"><label>Thrusters</label><div class="bar"><div id="hud-thrusters"></div></div></div>
       <div class="gauge"><label>Heat <span id="hud-shadow" title="In shadow: radiators cool faster" hidden>☾</span></label><div class="bar"><div id="hud-heat"></div></div></div>
       <div class="gauge"><label>Velocity</label><span id="hud-speed" class="readout"></span></div>
-      <div class="gauge" id="hud-autopilot" hidden><span class="readout">Autopilot</span></div>
+      <div class="gauge" id="hud-autopilot"><span id="hud-mode" class="readout">Autopilot</span></div>
     </div>
     <div id="touch">
       <div id="touch-turn" class="touch-zone"></div>
@@ -49,6 +49,7 @@
       <button type="button" id="touch-flip" class="touch-button">Flip</button>
       <button type="button" id="touch-brake" class="touch-button">Brake</button>
       <button type="button" id="touch-pause" class="touch-button" aria-label="Pause">II</button>
+      <button type="button" id="touch-autopilot" class="touch-button" aria-label="Autopilot on / off">Auto</button>
     </div>
     <div id="g-vignette"></div>
     <div id="damage-flash"></div>
@@ -104,8 +105,8 @@
       <dt>Shift</dt><dd>Fine aim</dd>
       <dt>Space / Click</dt><dd>Fire laser</dd>
       <dt>X</dt><dd>Flip: fly backwards, drive forward</dd>
-      <dt>T</dt><dd>Autopilot: the ship flies where it points</dd>
-      <dt>Q E · R F</dt><dd>Extras: roll, thrusters up and down</dd>
+      <dt>T</dt><dd>Autopilot (flies where it points) / free drift</dd>
+      <dt>R / F</dt><dd>Extras: thrusters up and down</dd>
       <dt>Gamepad</dt><dd>Sticks turn and push, RT drive, B brake, LT/A fire, Y flip, R3 autopilot</dd>
       <dt>C</dt><dd>Cockpit / chase camera</dd>
       <dt>M</dt><dd>Radio on / off</dd>
