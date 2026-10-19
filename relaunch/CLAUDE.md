@@ -70,7 +70,8 @@ Never use `npx`, always the scripts from `package.json`.
 | `music/radio.ts` | Plays the song on the cue's clock (tournament: the host's round clock), jumps when it drifts |
 | `music/preview.ts` | Renders a track (or a stretch) offline as WAV: downloads on the radio page, previews in development |
 | `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the radio host's lines |
-| `music/voice.ts` | Loads the pre-rendered voice sprite |
+| `music/voice.ts` | Loads the pre-rendered voice sprite (once, shared) |
+| `speaker.ts` | The flight computer's voice: reads out what the screen shows, whole lines from the sprite |
 
 `tools/voice/render.ts` (`npm run voice`, needs ffmpeg) renders every word of `music/lines.ts` with espeak-ng into `public/assets/voice/`. Run it after changing any line; the radio skips words that are not rendered.
 | `game.ts` | Game states, round flow, lasers, collisions, arena, camera, pilot (g-forces, warnings) |

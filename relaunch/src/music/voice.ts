@@ -1,7 +1,17 @@
 import type { Voice } from './band';
 
-/** Loads the rendered words of the voices: one MP3 sprite and a manifest of word positions. */
-export async function loadVoice(): Promise<Voice> {
+let loading: Promise<Voice> | null = null;
+
+/**
+ * Loads the rendered words of the voices: one MP3 sprite and a manifest of word positions.
+ * Loaded once and shared by the radio and the flight computer.
+ */
+export function loadVoice(): Promise<Voice> {
+  loading ??= load();
+  return loading;
+}
+
+async function load(): Promise<Voice> {
   const base = import.meta.env.BASE_URL + 'assets/voice/';
   const [manifest, audio] = await Promise.all([
     fetch(base + 'voice.json').then((r) => r.json() as Promise<{ clips: Record<string, [number, number]> }>),

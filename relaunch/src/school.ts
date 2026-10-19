@@ -15,6 +15,8 @@ export interface SchoolContext {
   drone: Ship | null;
   /** Places the target drone in front of the pilot. */
   spawnDrone(): void;
+  /** The flight computer is still reading something out. */
+  speaking: boolean;
 }
 
 interface Step {
@@ -55,6 +57,12 @@ function holdFor(progress: { held: number }, condition: boolean, dt: number, sec
 }
 
 const STEPS: Step[] = [
+  {
+    // the briefing: the story of the games, read out by the flight computer (see SCHOOL_SPEECH)
+    text: 'Year 2584. The United Solar States rule the planets, and the Orange President rules them. To keep the people quiet, his Ministry of War stages the Presidential Games. You are the original pilot: you stay safe and fly a printed clone over a live link. When your clone dies, the next one is printed. Training clones are free. Tournament clones cost an advertisement.',
+    // over once it has been read out; a muted computer leaves time to read it
+    done: (ctx, seconds) => (seconds > 2 && !ctx.speaking) || seconds > 40,
+  },
   {
     text: 'Welcome to flight school. Training clones are free — enjoy it while it lasts.',
     done: (_, seconds) => seconds > 5,

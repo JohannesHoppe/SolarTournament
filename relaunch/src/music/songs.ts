@@ -516,6 +516,8 @@ function planVoice(song: Song): VoiceLine[] {
   const german = song.language === 'de';
   const titleLine = `${german ? STATION_DE : STATION_EN}. ${german ? NOW_PLAYING_DE : NOW_PLAYING_EN}. ${song.title.toLowerCase()}`;
   lines.push({ bar: song.energy === 'lounge' ? 2 : 4, language: song.language, text: titleLine, style: 'speech' });
+  // in the hangar the radio only names its track; the flight computer has the floor
+  if (song.energy === 'lounge') return lines;
 
   const englishOrder = order(seed, PHRASES_EN.length, 1);
   const germanOrder = order(seed, PHRASES_DE.length, 2);

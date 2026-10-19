@@ -20,6 +20,7 @@ const VOICES: Record<Language, { voice: string; rate: number; pitch: number; ran
   en: { voice: 'en-us+robosoft', rate: 150, pitch: 32, range: 0 },
   de: { voice: 'de+robosoft', rate: 145, pitch: 30, range: 0 },
   mod: { voice: 'en-us+m3', rate: 170, pitch: 45, range: 60 },
+  sys: { voice: 'en-us+f3', rate: 172, pitch: 55, range: 35 },
 };
 
 interface Worker {
@@ -39,22 +40,23 @@ const clips: Record<string, [number, number]> = {};
 let position = 0;
 const gap = new Int16Array(Math.round(GAP * SAMPLE_RATE));
 
-for (const language of ['en', 'de', 'mod'] as Language[]) {
+for (const language of ['en', 'de', 'mod', 'sys'] as Language[]) {
   const settings = VOICES[language];
-  const unique = new Set(allLines(language).flatMap((line) => words(line).map((w) => w.word)));
-  for (const word of unique) {
-    // a fresh worker per word: espeak keeps state between calls, this keeps every clip reproducible
+  // the music voices are cut into words to be placed on the beat; the flight computer speaks whole lines
+  const texts = language === 'sys' ? allLines(language) : allLines(language).flatMap((line) => words(line).map((w) => w.word));
+  for (const text of new Set(texts)) {
+    // a fresh worker per clip: espeak keeps state between calls, this keeps every clip reproducible
     const worker = new module.eSpeakNGWorker();
     worker.set_voice(settings.voice);
     worker.set_rate(settings.rate);
     worker.set_pitch(settings.pitch);
     worker.set_range(settings.range);
     const parts: Int16Array[] = [];
-    worker.synthesize(word, (samples) => {
+    worker.synthesize(text, (samples) => {
       if (samples?.length) parts.push(Int16Array.from(samples));
     });
     const pcm = trim(concat(parts));
-    clips[clipKey(language, word)] = [position / SAMPLE_RATE, pcm.length / SAMPLE_RATE];
+    clips[clipKey(language, text)] = [position / SAMPLE_RATE, pcm.length / SAMPLE_RATE];
     chunks.push(pcm, gap);
     position += pcm.length + gap.length;
   }
@@ -62,12 +64,12 @@ for (const language of ['en', 'de', 'mod'] as Language[]) {
 
 mkdirSync(out, { recursive: true });
 const pcm = concat(chunks);
-const encoded = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 's16le', '-ar', String(SAMPLE_RATE), '-ac', '1', '-i', 'pipe:0', '-b:a', '32k', join(out, 'voice.mp3')], {
+const encoded = spawnSync('ffmpeg', ['-v', 'error', '-y', '-f', 's16le', '-ar', String(SAMPLE_RATE), '-ac', '1', '-i', 'pipe:0', '-b:a', '24k', join(out, 'voice.mp3')], {
   input: Buffer.from(pcm.buffer),
 });
 if (encoded.status !== 0) throw new Error('ffmpeg failed: ' + encoded.stderr);
 writeFileSync(join(out, 'voice.json'), JSON.stringify({ sampleRate: SAMPLE_RATE, clips }, null, 1) + '\n');
-console.log(`${Object.keys(clips).length} words, ${(pcm.length / SAMPLE_RATE).toFixed(1)} s`);
+console.log(`${Object.keys(clips).length} clips, ${(pcm.length / SAMPLE_RATE).toFixed(1)} s`);
 
 function concat(parts: Int16Array[]): Int16Array {
   const result = new Int16Array(parts.reduce((n, p) => n + p.length, 0));

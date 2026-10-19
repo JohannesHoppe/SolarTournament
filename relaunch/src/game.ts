@@ -12,7 +12,8 @@ import { Glitch } from './glitch';
 import { Hud } from './hud';
 import { Radio, type MusicCue } from './music/radio';
 import type { Spoken } from './music/band';
-import { HOST_ALIEN, HOST_KILL, HOST_NAMES, HOST_ROCK } from './music/lines';
+import { COMPUTER, HOST_ALIEN, HOST_KILL, HOST_NAMES, HOST_ROCK, SCHOOL_SPEECH } from './music/lines';
+import { Speaker } from './speaker';
 import { hash, mixSeed, textSeed, titleFor, type Song } from './music/songs';
 import { IDLE, Input, type Action, type Controls } from './input';
 import { Ship, type ShipState, type Zone } from './ship';
@@ -151,6 +152,12 @@ export class Game implements OnlineGame {
   timeScale = 1;
   private readonly glitch = new Glitch();
   private readonly radio: Radio;
+  /** The flight computer's voice: reads out what the screen shows. */
+  private readonly speaker: Speaker;
+  /** Flight school step the computer has read out. */
+  private spokenStep = -1;
+  /** The pilot has been told to return to the field during this excursion. */
+  private toldToReturn = false;
   /** Song of the running solo round. */
   private soloSeed = 1;
   /** Clock of the lounge songs in menu and flight school (s). */
@@ -182,6 +189,8 @@ export class Game implements OnlineGame {
     this.composer.addPass(this.glitch.pass);
     this.glitch.onStatic = (strength) => this.sound.crackle(strength);
     this.radio = new Radio(sound.context, sound.headset, (song) => this.announceSong(song), (spoken, delay) => this.subtitle(spoken, delay));
+    this.speaker = new Speaker(sound.context, sound.headset);
+    this.speaker.prepare();
 
     this.scene.background = new THREE.Color(0x01020a);
     this.field = new AsteroidField(assets.asteroids);
@@ -251,6 +260,7 @@ export class Game implements OnlineGame {
     } catch (error) {
       console.error(error);
       this.hud.flashMessage(this.time, 'Could not connect', 3);
+      this.speaker.say(COMPUTER.noLink, true);
     } finally {
       button.disabled = false;
       button.textContent = label;
@@ -433,6 +443,7 @@ export class Game implements OnlineGame {
 
     this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, this.selectedShip, true);
     this.school = mode === 'school' ? new FlightSchool() : null;
+    this.spokenStep = -1;
     if (mode === 'solo') this.setBotCount(BOT_COUNT);
     this.respawn(this.me);
 
@@ -448,6 +459,8 @@ export class Game implements OnlineGame {
     this.input.resetMouse();
     this.input.lockPointer();
     if (!this.input.touchActive) this.hud.flashMessage(this.time, 'Click to steer with the mouse', 4);
+    // the flight school starts with its briefing; a tournament clone just reports in
+    if (mode !== 'school') this.speaker.say(this.input.touchActive ? COMPUTER.launch : [COMPUTER.launch, COMPUTER.mouse], true);
   }
 
   private addShip(id: string, name: string, type: ShipType, isLocal: boolean): Ship {
@@ -573,7 +586,9 @@ export class Game implements OnlineGame {
   private sponsorBreak() {
     this.input.releasePointer();
     this.hud.show(false);
+    this.speaker.say(COMPUTER.cloneLost, true);
     this.sponsors.show(() => {
+      this.speaker.say(COMPUTER.sponsorHappy, true);
       this.hud.show(true);
       this.respawn(this.me!);
       this.input.resetMouse();
@@ -603,6 +618,7 @@ export class Game implements OnlineGame {
     this.renderScoreboard();
     $('results-next').textContent = '';
     $('again').innerHTML = 'Back to hangar <kbd>Enter</kbd>';
+    this.speaker.say(COMPUTER.roundOver, true);
     this.setScreen('results');
     this.input.releasePointer();
   }
@@ -630,6 +646,7 @@ export class Game implements OnlineGame {
       this.renderScoreboard();
       $('again').textContent = 'Leave tournament';
       results.hidden = false;
+      this.speaker.say(COMPUTER.roundOver, true);
     }
     const next = Math.max(0, this.roundEndsAt + RESULTS_SECONDS - this.time);
     $('results-next').textContent = `Next round in ${Math.ceil(next)} s`;
@@ -720,8 +737,11 @@ export class Game implements OnlineGame {
     this.hud.updateVelocityMarkers(this.camera, me);
     if (this.school) this.teach(dt, myControls);
 
-    if (me.alive && me.outsideSince !== null) {
-      this.hud.flashMessage(now, `Return to the field — ${Math.max(0, ARENA_GRACE - (now - me.outsideSince)).toFixed(1)}s`, 0.2);
+    const outside = me.alive && me.outsideSince !== null;
+    if (!outside) this.toldToReturn = false;
+    if (outside) {
+      this.hud.flashMessage(now, `Return to the field — ${Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1)}s`, 0.2);
+      if (!this.toldToReturn) this.toldToReturn = this.speaker.say(COMPUTER.arena, true);
     } else if (this.flipAssist) {
       this.hud.flashMessage(now, 'Flip', 0.2);
     }
@@ -748,8 +768,13 @@ export class Game implements OnlineGame {
       dt,
       drone: this.drone,
       spawnDrone: () => this.spawnDrone(),
+      speaking: this.speaker.speaking,
     });
     if (school.stepIndex !== step) this.sound.beep(880, 0.1, 0.15);
+    // the flight computer reads every step out; a new step cuts the old one off
+    if (school.stepIndex !== this.spokenStep && !school.finished) {
+      if (this.speaker.say(SCHOOL_SPEECH[school.stepIndex], true)) this.spokenStep = school.stepIndex;
+    }
     if (school.finished) {
       this.showMenu();
       return;
@@ -874,6 +899,7 @@ export class Game implements OnlineGame {
         if (shooter.isLocal) {
           this.hud.hit();
           this.hud.flashMessage(this.time, `Asteroid cracked +${ASTEROID_POINTS[destroyed.generation]}`, 1.5);
+          this.speaker.say(COMPUTER.asteroid);
         }
       }
     }
@@ -895,6 +921,7 @@ export class Game implements OnlineGame {
     if (ship.isLocal) {
       this.hud.damaged();
       this.hud.flashMessage(this.time, ZONE_MESSAGES[zone], 1.5);
+      this.speaker.say(COMPUTER[zone], true);
       this.sound.play('explosion', { volume: 1.2, rate: 1.5 });
       this.sound.beep(220, 0.25, 0.12);
       this.linkHit(zone === 'reactor' ? 1 : 0.7, 0.5);
@@ -960,6 +987,7 @@ export class Game implements OnlineGame {
     if (ship.isLocal && status !== 'protected') {
       this.hud.damaged();
       this.hud.flashMessage(now, `Impact at ${Math.round(approach * 0.05)} m/s`, 1.5);
+      this.speaker.say(COMPUTER.impact, true);
       this.linkHit(Math.min(1, 0.4 + (approach - SAFE_IMPACT) / 1000), 0.6);
     }
     if (status === 'destroyed') this.shipDestroyed(ship, null);
@@ -978,6 +1006,7 @@ export class Game implements OnlineGame {
       this.sound.play('explosion', { volume: Math.min(1.4, 0.3 + impact / 1000), rate: 2.1 });
       this.hud.damaged();
       this.hud.flashMessage(now, 'Debris impact', 1.2);
+      this.speaker.say(COMPUTER.debris);
       this.linkHit(0.5, 0.35);
     }
     if (status === 'destroyed') this.shipDestroyed(ship, null);

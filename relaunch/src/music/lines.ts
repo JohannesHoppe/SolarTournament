@@ -6,8 +6,8 @@
  * every word here must be in the rendered set; the radio places the words on the beat.
  */
 
-/** en, de: the propaganda voice. mod: the radio host, a second, less robotic voice. */
-export type Language = 'en' | 'de' | 'mod';
+/** en, de: the propaganda voice. mod: the radio host. sys: the flight computer, clear and calm. */
+export type Language = 'en' | 'de' | 'mod' | 'sys';
 
 /** Title words of the English flavors; a title is one word of each list. */
 export const TITLE_FIRST = [
@@ -175,6 +175,49 @@ export const HOST_OPEN = ['radio twenty five eighty four. live from the arena', 
 /** Bot callsigns the host can say; human callsigns become "pilot". */
 export const HOST_NAMES = ['ingmar', 'nova', 'kessler', 'vega', 'orion', 'sputnik', 'halley', 'laika', 'pilot'];
 
+/**
+ * The flight computer reads out what the screen shows; people would rather listen than read.
+ * The briefing opens the flight school with the story of the games.
+ */
+export const BRIEFING =
+  'year twenty five eighty four. the united solar states rule the planets, and the orange president rules them. ' +
+  'to keep the people quiet, his ministry of war stages the presidential games. ' +
+  'you are the original pilot. you stay safe, and you fly a printed clone over a live link. ' +
+  'when your clone dies, the next one is printed. training clones are free. tournament clones cost an advertisement.';
+
+/** Spoken versions of the flight school steps, in order (the screen shows the full text). */
+export const SCHOOL_SPEECH = [
+  BRIEFING,
+  'welcome to flight school. training clones are free. enjoy it while it lasts.',
+  'main drive. hold the drive until you fly fifty meters per second.',
+  'let go of the drive. nothing slows you down out here. you keep drifting.',
+  'to stop, your drive has to point into the flight direction. flip the ship.',
+  'now burn until you are almost at rest. the orange cross marks the braking direction.',
+  'maneuvering thrusters push you sideways. sidestep for a moment.',
+  'a target drone. turn towards it and fire. three hits wreck any hull. a shot through the center hits the reactor.',
+  'every shot heats your ship. in the shadow of an asteroid the radiators cool much faster. fly into the marked shadow.',
+  'when impact appears below the crosshair, flip and burn or steer past.',
+  'flight school complete. your clone is cleared for the tournament.',
+];
+
+/** What the flight computer says when the screen shows a message. */
+export const COMPUTER = {
+  reactor: 'reactor breach',
+  drive: 'main drive damaged',
+  thrusters: 'thrusters damaged',
+  hull: 'hull breach',
+  impact: 'impact',
+  debris: 'debris impact',
+  asteroid: 'asteroid cracked',
+  arena: 'return to the field',
+  mouse: 'click to steer with the mouse',
+  noLink: 'could not connect',
+  cloneLost: 'clone lost. want another clone? you pay with advertising. make the sponsor happy.',
+  sponsorHappy: 'the sponsor is happy. booting your next clone.',
+  roundOver: 'round over',
+  launch: 'clone online. good luck, pilot.',
+} as const;
+
 /** All phrases and fixed announcements of a language, for the renderer. */
 export function allLines(language: Language): string[] {
   switch (language) {
@@ -184,6 +227,8 @@ export function allLines(language: Language): string[] {
       return [STATION_DE, NOW_PLAYING_DE, ...TITLE_FIRST_DE, ...TITLE_SECOND_DE, ...PHRASES_DE];
     case 'mod':
       return [...HOST_KILL, ...HOST_ALIEN, ...HOST_ROCK, ...HOST_OPEN, ...HOST_NAMES].map((line) => line.replace('{name}', ''));
+    case 'sys':
+      return [...SCHOOL_SPEECH, ...Object.values(COMPUTER)];
   }
 }
 

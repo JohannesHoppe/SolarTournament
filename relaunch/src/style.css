@@ -393,6 +393,11 @@ button.primary {
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
 }
 
+/* the flight school's panel takes the upper third; messages move below the crosshair */
+#hud:has(#school-panel:not([hidden])) #hud-message {
+  top: 62%;
+}
+
 #killfeed {
   position: absolute;
   top: 56px;
