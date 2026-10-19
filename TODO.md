@@ -60,6 +60,16 @@ Worked through from top to bottom. Every finished item is also documented in the
 ## Ads in the sponsor break
 
 - Connect a real ad network: a class implementing `AdProvider` from `src/game/sponsors.ts` replaces `PlaceholderAd`.
-- Only a format that explicitly allows "watch an ad for a reward" (rewarded ads). Ad networks forbid rewarding clicks on the ad itself; that is why the clone boots from a button of its own, not from a click on the ad. Check the chosen network's policies before connecting it.
+- **Johannes' rules for any ad network, not negotiable:**
+  - Ads stay inside the small sponsor slot (`#ad-slot`). No full-screen ads of any kind: no interstitials, no vignettes, no rewarded video that takes over the screen, no anchor or side-rail overlays, no Auto ads.
+  - No misleading ads (fake download or play buttons, fake system warnings, bait). Serious advertising only.
+  - A network that breaks these rules is removed.
+- Candidates checked on 2026-10-19:
+  - Google AdSense **H5 Games Ads** (Ad Placement API): out. Its interstitial and rewarded formats are full-screen.
+  - Google AdSense **display unit** (fixed size in `#ad-slot`, Auto ads off, vignette and anchor off): the only candidate open to a small site. Blocking controls exist (advertiser URLs, general and sensitive categories, Ad review center for single ads). Risk: Google forbids ads "on screens without publisher-content" or used "for … behavioral purposes"; a pure waiting screen may count as one. The sponsor break would need real content around the ad (Nicole's line, the round so far, who killed the clone). Needs the Google-certified CMP (Google offers its own) for personalized ads in the EEA, UK and Switzerland.
+  - EthicalAds (no tracking, one small ad): developer sites with 50k+ pageviews a month only. Carbon Ads: hand-picked tech sites. Neither fits a game today.
+  - AppLixir (rewarded video, 5,000 daily active users minimum) and AdinPlay/Venatus: built around video and full-screen formats; check against the rules above before considering them.
+  - Direct sponsors in the slot, sold by hand: fits the lore and the rules best, needs an audience first.
+- Ad networks forbid rewarding clicks on the ad itself; the clone boots from a button of its own, never from a click on the ad. Check the chosen network's policies before connecting it.
 - Privacy: consent banner (GDPR) as soon as personalized ads are served.
 - Privacy policy (`datenschutz.html`, section 6 "Werbung"): it announces the planned ad network. Before the first real ad is shown, analyze the chosen network exactly (what it collects, cookies and storage, third-country transfers, consent) and take over its own privacy wording for section 6: name, processed data, legal basis, consent.
