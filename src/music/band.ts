@@ -126,7 +126,7 @@ export class Band {
     this.T = T;
     // master: filter -> level -> glue compressor -> soft clipper -> -1 dB ceiling
     this.output = new T.Gain(T.dbToGain(-1));
-    const clipper = new T.WaveShaper(saturate(2), 4096).connect(this.output);
+    const clipper = new T.WaveShaper(saturate(1.6), 4096).connect(this.output);
     clipper.oversample = '4x';
     // voices join after the glue compressor, so the music cannot squash them
     this.voiceBus = new T.Gain(1).connect(clipper);

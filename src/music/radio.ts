@@ -77,6 +77,11 @@ export class Radio {
     this.output.gain.setTargetAtTime(0, this.context.currentTime, 0.05);
   }
 
+  /** A cue is set: the radio plays (or waits for its band to load). */
+  get playing() {
+    return this.cue !== null;
+  }
+
   get enabled() {
     return this.enabledFlag;
   }

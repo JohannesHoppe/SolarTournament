@@ -35,7 +35,7 @@ const ROUND_SNAP = 0.25;
 const FIELD_SNAP = 0.5;
 /** The announcer comments on a death at most this often (s). */
 const ANNOUNCER_COOLDOWN = 7;
-/** Song of the menu; the flight school plays the next one. */
+/** Song of the menu. The flight school plays no music, so Nicole is heard clearly. */
 const LOUNGE_SEED = 2584;
 /** The idle link to the clone hangar glitches now and then, every 5 to 14 s. */
 const IDLE_GLITCH_MIN = 5;
@@ -291,6 +291,13 @@ export class Game implements OnlineGame {
     $('again').addEventListener('click', () => this.showMenu());
     $('invite').addEventListener('click', () => void this.copyInvite());
     $('radio').addEventListener('click', () => this.toggleRadio());
+    for (const id of ['fullscreen', 'fullscreen-pause']) {
+      $(id).hidden = !document.fullscreenEnabled;
+      $(id).addEventListener('click', () => this.toggleFullscreen());
+    }
+    document.addEventListener('fullscreenchange', () => {
+      for (const id of ['fullscreen', 'fullscreen-pause']) $(id).textContent = document.fullscreenElement ? 'Leave fullscreen' : 'Fullscreen';
+    });
     this.showRadioState();
 
     if (this.invitedRoom()) modeName('online').textContent = 'Join tournament';
@@ -327,6 +334,8 @@ export class Game implements OnlineGame {
   private async goOnline() {
     if (this.connecting) return;
     this.connecting = true;
+    // still inside the click: later, after connecting, the browser would refuse
+    if (this.input.touchActive) this.enterFullscreen();
     const attempt = ++this.joinAttempt;
     const button = $<HTMLButtonElement>('online');
     button.disabled = true;
@@ -354,6 +363,28 @@ export class Game implements OnlineGame {
       modeName('online').textContent = this.invitedRoom() ? 'Join tournament' : 'Online tournament';
       this.markLeadMode();
     }
+  }
+
+  /**
+   * Fullscreen: the browser's bars cost a phone much of its screen. On touch devices a round
+   * goes fullscreen by itself, in landscape where the browser allows it to hold it; the menu
+   * and the pause menu have a button for everyone. Browsers without fullscreen for pages
+   * (the iPhone's) get it by adding the game to the home screen (manifest.webmanifest).
+   */
+  private enterFullscreen() {
+    const root = document.documentElement;
+    if (document.fullscreenElement || !root.requestFullscreen) return;
+    root
+      .requestFullscreen({ navigationUI: 'hide' })
+      .then(() => (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape'))
+      .catch(() => {
+        // not allowed here, or no orientation lock: the game plays on as it is
+      });
+  }
+
+  private toggleFullscreen() {
+    if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
+    else this.enterFullscreen();
   }
 
   /** A line in the menu for what went wrong; empty hides it. */
@@ -455,14 +486,15 @@ export class Game implements OnlineGame {
    * the room and round number pick it, so every pilot hears the same song at the same beat.
    * Menu and flight school play calm songs on a local clock.
    */
-  private musicCue(): MusicCue {
+  /** What the radio plays now; null in the flight school, where Nicole has the cockpit to herself. */
+  private musicCue(): MusicCue | null {
+    if (this.school) return null;
     const inRound = this.state === 'playing' || this.state === 'results' || (this.state === 'paused' && !!this.online);
-    if (inRound && !this.school && Number.isFinite(this.roundEndsAtWall)) {
+    if (inRound && Number.isFinite(this.roundEndsAtWall)) {
       const seed = this.online ? mixSeed(textSeed(this.online.session.room), this.roundId) : this.soloSeed;
       return { title: titleFor(seed), energy: 'round', elapsed: ROUND_SECONDS - (this.roundEndsAtWall - wallClock()), roundLength: ROUND_SECONDS };
     }
-    const seed = this.school && this.state !== 'menu' ? LOUNGE_SEED + 1 : LOUNGE_SEED;
-    return { title: titleFor(seed), energy: 'lounge', elapsed: wallClock() - this.loungeEpoch, roundLength: ROUND_SECONDS };
+    return { title: titleFor(LOUNGE_SEED), energy: 'lounge', elapsed: wallClock() - this.loungeEpoch, roundLength: ROUND_SECONDS };
   }
 
   /** A blow to the clone shakes the link to it: the picture breaks up, the radio drops out. */
@@ -530,6 +562,7 @@ export class Game implements OnlineGame {
     this.markLeadMode();
     // a clone that died last leaves no muffled radio behind in the hangar
     this.radio.setMuffled(false);
+    $('now-playing').hidden = false;
     this.setScreen('menu');
   }
 
@@ -558,6 +591,7 @@ export class Game implements OnlineGame {
    * tournament (where the lead browser adds bots for free places).
    */
   private startRound(mode: 'solo' | 'school' | 'online') {
+    if (this.input.touchActive) this.enterFullscreen();
     const callsign = $<HTMLInputElement>('callsign').value.trim() || 'Host';
     storageSet(CALLSIGN_KEY, callsign);
     if (mode !== 'online') this.leaveOnline();
@@ -570,6 +604,7 @@ export class Game implements OnlineGame {
     this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, this.selectedShip, true);
     this.school = mode === 'school' ? new FlightSchool() : null;
     if (this.school) this.scene.add(this.school.root);
+    $('now-playing').hidden = mode === 'school';
     if (mode === 'solo') this.setBotCount(BOT_COUNT);
     this.respawn(this.me);
 
@@ -859,7 +894,9 @@ export class Game implements OnlineGame {
     }
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
 
-    this.radio.setCue(this.musicCue());
+    const cue = this.musicCue();
+    if (cue) this.radio.setCue(cue);
+    else if (this.radio.playing) this.radio.stop();
     if (this.state === 'menu' || this.state === 'paused' || this.sponsors.visible) {
       // the idle link flickers now and then
       const now = performance.now() / 1000;

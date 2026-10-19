@@ -249,7 +249,7 @@ const INSTRUMENT: Record<Layer, number> = { kick: 1, rumble: 2, bass: 3, hat: 4,
 // ---- titles: the seed you can read --------------------------------------------------------
 
 /** How often each flavor comes up (relative weights). */
-const FLAVOR_WEIGHTS: [Flavor, number][] = [['hard', 6], ['industrial', 4], ['acid', 4], ['ebm', 4], ['french', 4], ['schranz', 1], ['rave', 1]];
+const FLAVOR_WEIGHTS: [Flavor, number][] = [['hard', 4], ['industrial', 4], ['acid', 4], ['ebm', 5], ['french', 5], ['schranz', 1], ['rave', 1]];
 /** One track in thirteen is a German motorik track. */
 const MOTORIK_CHANCE = 1 / 13;
 
@@ -272,14 +272,14 @@ function isGerman(title: string): boolean {
 // ---- genes: what a title decides once -----------------------------------------------------
 
 const FLAVOR_SETTINGS: Record<Flavor, { bpm: [number, number]; swing: [number, number]; bass: BassStyle[]; lead: LeadVoice[]; groove: Groove }> = {
-  hard: { bpm: [148, 155], swing: [0, 0.06], bass: ['rolling', 'rolling', 'offbeat'], lead: ['stab', 'hoover', 'bell'], groove: 'four' },
-  industrial: { bpm: [140, 147], swing: [0.04, 0.12], bass: ['offbeat', 'rolling', 'ebm'], lead: ['stab', 'bell'], groove: 'four' },
-  acid: { bpm: [145, 150], swing: [0, 0.08], bass: ['offbeat', 'rolling'], lead: ['stab', 'bell'], groove: 'four' },
+  hard: { bpm: [140, 148], swing: [0, 0.06], bass: ['rolling', 'rolling', 'offbeat'], lead: ['stab', 'hoover', 'bell'], groove: 'four' },
+  industrial: { bpm: [134, 141], swing: [0.04, 0.12], bass: ['offbeat', 'rolling', 'ebm'], lead: ['stab', 'bell'], groove: 'four' },
+  acid: { bpm: [138, 144], swing: [0, 0.08], bass: ['offbeat', 'rolling'], lead: ['stab', 'bell'], groove: 'four' },
   ebm: { bpm: [132, 140], swing: [0, 0.03], bass: ['ebm', 'ebm', 'moroder'], lead: ['arp', 'stab', 'hoover'], groove: 'four' },
   french: { bpm: [126, 132], swing: [0.04, 0.1], bass: ['offbeat', 'moroder'], lead: ['bell', 'arp'], groove: 'four' },
   motorik: { bpm: [126, 134], swing: [0, 0.02], bass: ['moroder', 'ebm'], lead: ['arp', 'arp', 'bell'], groove: 'electro' },
-  schranz: { bpm: [155, 160], swing: [0, 0.04], bass: ['rolling', 'offbeat'], lead: ['stab'], groove: 'four' },
-  rave: { bpm: [148, 154], swing: [0, 0.04], bass: ['offbeat', 'rolling'], lead: ['hoover', 'stab'], groove: 'four' },
+  schranz: { bpm: [148, 152], swing: [0, 0.04], bass: ['rolling', 'offbeat'], lead: ['stab'], groove: 'four' },
+  rave: { bpm: [142, 148], swing: [0, 0.04], bass: ['offbeat', 'rolling'], lead: ['hoover', 'stab'], groove: 'four' },
 };
 
 /**
@@ -346,14 +346,14 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
 
 /** Each flavor leans towards its own distortion; the rest of the kick is the track's own. */
 const KICK_SHAPES: Record<Flavor, KickDesign['shape'][]> = {
-  hard: ['gabber', 'gabber', 'hard', 'fold'],
+  hard: ['hard', 'soft', 'gabber', 'fold'],
   industrial: ['fold', 'hard', 'gabber'],
   acid: ['soft', 'gabber', 'hard'],
   ebm: ['hard', 'soft'],
   french: ['soft', 'soft', 'hard'],
   motorik: ['soft', 'hard'],
   schranz: ['gabber', 'hard'],
-  rave: ['gabber', 'fold'],
+  rave: ['hard', 'fold'],
 };
 
 function kickDesign(seed: number, flavor: Flavor): KickDesign {
@@ -643,7 +643,8 @@ export function barInfo(song: Song, absoluteBar: number): BarInfo {
     layers,
     fill: fillAt(song, section, inSection),
     brightness,
-    drive: section.kind === 'finale' ? 1 : 0.3 + 0.7 * energy,
+    // even the finale keeps some headroom: hours of full distortion wear the ears out
+    drive: section.kind === 'finale' ? 0.85 : 0.25 + 0.6 * energy,
     riserBars: section.kind === 'break' && inSection === section.bars - Math.min(4, section.bars) ? Math.min(4, section.bars) : 0,
     impact: inSection === 0 && (previous?.kind === 'break' || previous?.kind === 'gap' || section.kind === 'finale'),
     bassStyle: section.second && song.bassStyle !== 'ebm' && song.bassStyle !== 'moroder' ? 'ebm' : song.bassStyle,

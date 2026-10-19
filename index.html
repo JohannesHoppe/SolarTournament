@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SolarTournament</title>
   <link rel="icon" href="crest.svg" type="image/svg+xml">
+  <!-- added to the home screen, the game starts without the browser's bars -->
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#02030a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <link rel="apple-touch-icon" href="icon-180.png">
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
@@ -75,6 +82,7 @@
       <dt>M</dt><dd>Radio on / off</dd>
       <dt>Esc</dt><dd>Pause</dd>
     </dl>
+    <button type="button" id="fullscreen" hidden>Fullscreen</button>
     <p class="best" id="best-score"></p>
     <p class="source"><a href="https://github.com/JohannesHoppe/SolarTournament" target="_blank" rel="noopener noreferrer">Source code</a> · AGPL-3.0 · <a href="impressum.html" target="_blank">Impressum</a> · <a href="datenschutz.html" target="_blank">Datenschutz</a></p>
   </div>
@@ -103,6 +111,7 @@
     <h2>Paused</h2>
     <button type="button" id="resume" class="primary">Resume <kbd>Enter</kbd></button>
     <button type="button" id="invite" hidden>Copy invite link</button>
+    <button type="button" id="fullscreen-pause" hidden>Fullscreen</button>
     <button type="button" id="quit">Quit round <kbd>Q</kbd></button>
   </div>
 

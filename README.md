@@ -54,6 +54,8 @@ Gamepads with the standard layout (Xbox, PlayStation, most others in current bro
 
 On phones and tablets touch controls appear: the fixed stick on the left turns the ship (drag up = nose up), a second stick appears under the right thumb and fires the maneuvering thrusters. Hold **Drive** for the main drive and **Fire** for the laser; **Brake** brakes to a stop, **Flip** starts the flip assist. Pressing a key on a hardware keyboard hides the touch controls, touching the screen brings them back.
 
+**Fullscreen.** On phones and tablets a round goes fullscreen by itself and, where the browser allows it, holds landscape; the menu and the pause menu have a Fullscreen button for every device. Browsers that do not let a page go fullscreen (the iPhone's) get it by adding the game to the home screen: the web app manifest (`public/manifest.webmanifest`, icons rendered from the seal) starts it without the browser's bars.
+
 ## Online tournament
 
 **Online tournament** in the menu opens a room and puts its code into the address (`#t=code`, 20 random characters); the pause menu copies the invitation link. Whoever opens the link joins the same tournament. The code sits in the fragment of the address, so it never reaches the web server. There is no game server: the browsers find each other through public Nostr relays ([Trystero](https://github.com/dmotz/trystero)) and then talk directly over WebRTC. Leaving the tournament closes the connections to the relays.
@@ -108,14 +110,14 @@ Decisions so far:
 - German words in the robot voice, but only now and then.
 - Daft Punk styles and elements are always welcome: loops that a filter opens and closes, phaser, pumping compression, vocoder robot voices, phrases chopped into the beat word by word, and the raw, distorted early sound.
 
-- **Hard and fast.** Mostly 140 to 160 BPM; hard techno sits around a median of 146 BPM, peak-time sets at 150 to 155.
+- **Hard, but not exhausting.** Mostly 126 to 148 BPM, the fastest at 152: a round lasts five minutes, but people play many rounds, and peak-time speed and full distortion wear the ears out over an evening.
 - **Flavors** (how often they come up):
-  - *Hard* (6 in 24): rolling bass under a heavy rumble, 148–155 BPM.
-  - *Industrial* (4): bit-crushed hats, cowbells and claves in Euclidean patterns, a little swing, 140–147.
-  - *Acid* (4): a squelching 303 line carries the track, 145–150.
-  - *EBM* (4): electronic body music, a sequenced 16th bass (root, root, octave, root, accents before the beat) or an octave bass whose 16th echo turns it into a pulse (Giorgio Moroder), arpeggios, 132–140.
-  - *French* (4): a chord loop that a filter opens over four bars and closes over the next four, phaser, pumping, 126–132.
-  - *Schranz* and *Rave* (1 each): the fastest and tom-heavy, or stabs and a hoover.
+  - *Hard* (4 in 24): rolling bass under a heavy rumble, 140–148 BPM.
+  - *Industrial* (4): bit-crushed hats, cowbells and claves in Euclidean patterns, a little swing, 134–141.
+  - *Acid* (4): a squelching 303 line carries the track, 138–144.
+  - *EBM* (5): electronic body music, a sequenced 16th bass (root, root, octave, root, accents before the beat) or an octave bass whose 16th echo turns it into a pulse (Giorgio Moroder), arpeggios, 132–140.
+  - *French* (5): a chord loop that a filter opens over four bars and closes over the next four, phaser, pumping, 126–132.
+  - *Schranz* and *Rave* (1 each): the fastest (148–152) and tom-heavy, or stabs and a hoover (142–148).
   - *Motorik*, one track in thirteen: Kraftwerk's machine pop. An electro beat, octave bass, square-wave plings, a pad, 126–134 BPM, a German title and a German robot voice.
 - **Strategies.** The title also picks how the track develops, so no two rounds follow the same recipe:
   - *Classic*: grooves and peaks, kick-less breakdowns, re-entries.
@@ -136,7 +138,7 @@ Decisions so far:
 - **The rumble.** A copy of the kick runs through a long reverb, distortion and a band from 30 Hz up to 110 to 230 Hz (set per track), in mono. Every kick ducks it, and it swells back before the next one: the low end breathes on the offbeat. Bass, acid and stabs pump with the kick as well. The bass leaves the sub to the rumble and mostly stays off the kick; only the EBM and Moroder bass lines run straight through it.
 - **Patterns.** Every step of a bar has a weight for every instrument (after Mutable Instruments' Grids); a step plays when its weight beats the instrument's density, and density follows the energy of the track. More energy adds notes in a fixed order instead of reshuffling them, so build-ups sound intended. Hats run in 16ths with accents, open hats on the offbeat, claps on two and four with ghost notes, percussion in Euclidean rhythms on a loop of 5 to 16 steps that drifts against the bar. Every 16 bars each part may mutate a little; the kick never does.
 - **The acid line** loops over 12 or 16 steps, its note sets and step weights after Vitling's [Endless Acid Banger](https://github.com/vitling/acid-banger) (CC BY 4.0). Accents throw the resonant filter wide open, slides glide into the next note, often an octave up.
-- **Arrangement.** A round runs intro, grooves, peaks and breakdowns on an 8-bar grid, with short strips of 2 or 4 bars between some sections; energy moves through breakdowns and re-entries. In a breakdown the kick drops out while hats and a thin bass without its low end keep the rhythm going, the filter opens, a noise riser climbs over the last four bars and the last beat falls silent; the next section crashes in. Every 8 or 16 bars a fill marks the phrase: kicks added or removed, a hat roll, a clap burst, a tom run. The last minute of the round is the finale with every layer and full distortion; after the round an outro takes the track down.
+- **Arrangement.** A round runs intro, grooves, peaks and breakdowns on an 8-bar grid, with short strips of 2 or 4 bars between some sections; energy moves through breakdowns and re-entries. In a breakdown the kick drops out while hats and a thin bass without its low end keep the rhythm going, the filter opens, a noise riser climbs over the last four bars and the last beat falls silent; the next section crashes in. Every 8 or 16 bars a fill marks the phrase: kicks added or removed, a hat roll, a clap burst, a tom run. The last minute of the round is the finale with every layer and the most distortion (85 % drive: some headroom stays); after the round an outro takes the track down.
 - **Loud, not harsh.** The mix ends in a glue compressor and a soft clipper instead of a hard limiter.
 - **More instruments.** Besides kick, rumble, hats, ride, clap and bass: Euclidean toms, an 808-style cowbell (two square tones at 587 and 845 Hz through a band at 2.64 kHz), claves, an FM bell, a hoover, a square-wave arpeggio, distorted chord stabs, the french chord loop and the motorik pad.
 - **The voice of the regime.** A robot voice announces the station and the track ("Radio twenty five eighty four. Now playing. Orbit Terror.") and drops the propaganda of the Orange President and his sponsors over the music, most often 7 to 10 times a round (2 to 11 in all): at section changes and now and then in between, in the finale more often. It speaks sentence after sentence, or chops a line onto the beat one word per eighth. Every word must stay understandable: the clear voice carries it, a touch of ring modulation, bit crushing and grit only colors it, a compressor makes it loud, the music steps back while it talks, and its last word is thrown into the echo. German now and then; in motorik tracks mostly German.
@@ -147,7 +149,7 @@ Decisions so far:
 - **Transmissions on screen.** Whatever the voice and the announcer say runs across the screen while it is spoken: the regime in orange neon, the announcer in blue.
 - **The voice is pre-rendered.** `npm run voice` speaks every word and every sentence of `src/music/lines.ts` with [espeak-ng](https://github.com/espeak-ng/espeak-ng) (its robosoft variant for the regime, a livelier voice for the announcer) and the flight computer's lines with the neural voice Kokoro into one MP3 sprite; the game plays whole sentences, so they keep their melody, places single words on the beat, and needs no speech engine. Browser speech synthesis cannot be used: its output can neither be routed through Web Audio nor timed to the beat, and it sounds different on every device.
 - **Everyone hears the same beat.** In an online tournament the room code and the round number choose the title, and the music runs on the lead browser's round clock. Every note is an integer hash of seed, bar and step, so a browser can jump to any point of the track; it compares its music with the clock several times per second and jumps when they drift apart. All Hosts of a tournament hear the same note at the same moment (up to the network delay).
-- **Hangar.** In the menu and the flight school the arena's groove comes through the hangar wall: lower energy, filtered, never peaking.
+- **Hangar.** In the menu the arena's groove comes through the hangar wall: lower energy, filtered, never peaking. The flight school plays no music at all, so every word of Nicole is heard.
 - The radio sits in the cockpit and plays straight into the headset, not through the hull. When the clone dies, its radio fades into the distance; the next clone hears it clearly again.
 
 ## The universe

@@ -1,0 +1,16 @@
+{
+  "name": "SolarTournament",
+  "short_name": "SolarTournament",
+  "description": "Five minutes. Die for the President. Again and again.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#02030a",
+  "theme_color": "#02030a",
+  "icons": [
+    { "src": "crest.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-180.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ]
+}
