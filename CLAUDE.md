@@ -49,7 +49,7 @@ npm run typecheck
 npm run build       # static site in dist/
 ```
 
-Hosting is a classic Cloudflare Pages project (`wrangler.toml`), never Workers, built by Cloudflare from every push (Git integration): `main` is the test stage (https://test.solartournament.games), `stage_prod` is production (https://solartournament.games). Work happens on `main`. As long as the game has no real players yet, every push goes to both branches at once (`git push origin main main:stage_prod`); once it has players, `stage_prod` only moves when Johannes asks for it.
+Hosting is a classic Cloudflare Pages project (`wrangler.toml`), never Workers, built by Cloudflare from every push (Git integration): `main` is the test stage (https://test.solartournament.games), `stage_prod` is production (https://solartournament.games). Every page sends visitors of the raw Pages addresses (`solartournament.pages.dev`, `main.solartournament.pages.dev`) on to these domains with a small inline script, keeping path and room code. Work happens on `main`. As long as the game has no real players yet, every push goes to both branches at once (`git push origin main main:stage_prod`); once it has players, `stage_prod` only moves when Johannes asks for it.
 
 Never use `npx`, always the scripts from `package.json`.
 

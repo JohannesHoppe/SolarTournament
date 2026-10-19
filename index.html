@@ -2,6 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <!-- the Cloudflare Pages addresses of production and test lead to our own domains, with path and room code -->
+  <script>{ const home = { 'solartournament.pages.dev': 'solartournament.games', 'main.solartournament.pages.dev': 'test.solartournament.games' }[location.hostname]; if (home) location.replace('https://' + home + location.pathname + location.search + location.hash); }</script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SolarTournament</title>
   <link rel="icon" href="crest.svg" type="image/svg+xml">
