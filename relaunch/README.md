@@ -94,9 +94,10 @@ One world unit is 5 cm. A ship is about 35 m long; the asteroids are ten to thir
 
 ### Asteroids
 
-- **Huge and few.** 40 rocks with mean radii of roughly 100 to 375 m (up to 500 m along their longest axis) in a field of 2.25 km radius. Collisions use an ellipsoid fitted to each rock, not a sphere, so ships can fly close to elongated rocks.
+- **Huge and few.** 40 rocks with mean radii of roughly 90 to 350 m (up to about 600 m along their longest axis) in a field of 2.25 km radius. Collisions use an ellipsoid fitted to each rock, not a sphere, so ships can fly close to elongated rocks.
+- **Sixteen shapes, four kinds.** The rocks are generated: squashed or stretched lumps with crags, ridges and craters (many small, few large; the floors show fresher, brighter material). They come as dark carbon-rich rock, stony rock, reddish iron-bearing rock and shiny metal, like the real asteroid belt.
 - **Gravity.** Every asteroid pulls with a surface gravity proportional to its radius (uniform density) that falls off with the square of the distance. The big ones pull with about 1.5 m/s² at the surface, roughly 3 % of the main drive. A ship that drifts near a rock slowly falls towards it. This is the one deliberate exaggeration: a real rock of this size pulls thousands of times weaker, too weak to feel in a fight.
-- **Tough.** A rock withstands 4 laser hits plus one per 40 m of mean radius (8 to 13 hits). Then it breaks into 2 to 3 fragments with 55 % of its size that drift apart. After two generations the pieces are gone for good.
+- **Tough.** A rock withstands 4 laser hits plus one per 40 m of mean radius (6 to 13 hits). Then it breaks into 2 to 3 fragments with 55 % of its size that drift apart. After two generations the pieces are gone for good.
 - **Deterministic.** Layout and fragments come from seeded randomness, so every player sees the same field.
 
 ### Collisions
@@ -144,6 +145,8 @@ There is no sound in vacuum. Everything the pilot hears travels through the own 
 
 **Name and brand:** The name *SolarTournament*, the logo and the domains solartournament.com and solartournament.games are not covered by the license. A changed version has to use its own name.
 
-**Graphics and sounds:** The models, textures and sounds in `public/assets/` (except the font) are not covered by the license. Please ask for permission before using them in other software.
+**Ships:** The two interceptor models and their drive sprites (`public/assets/models/`, `public/assets/textures/`) are by Johannes Hoppe and not covered by the license. Please ask for permission before using them in other software.
+
+**Everything else is generated in code** and covered by the license: asteroids, sky, sun, particles, sound effects and the icon.
 
 **Font:** Quicksand, SIL Open Font License (see `public/assets/fonts/LICENSE-quicksand.txt`).

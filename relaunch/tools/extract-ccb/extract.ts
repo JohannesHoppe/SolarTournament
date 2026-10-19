@@ -2,7 +2,7 @@
  * Converts the CopperCube scene (scene1.ccbjs) into glTF assets for the three.js game.
  *
  * Run with `npm run dev` and open /tools/extract-ccb/ — the page loads the scene with the
- * original CopperLicht engine, rebuilds every template as a three.js object and writes
+ * original CopperLicht engine, rebuilds the ship templates as three.js objects and writes
  * GLB files into public/assets/models via the dev server's /__save endpoint.
  *
  * CopperLicht is left-handed (+Z forward), three.js right-handed (-Z forward):
@@ -18,20 +18,13 @@ const MATERIAL_ADD_COLOR = 12;
 const MATERIAL_ALPHA_CHANNEL = 13;
 const MIRROR_Z = new THREE.Matrix4().makeScale(1, 1, -1);
 
-const NORMAL_MAPS: Record<string, string> = {
-  'meteoronetexture.png': 'meteoronenormalmap.png',
-  'meteortwotexture.png': 'meteortwonormal.png',
-  'meteorthreetexture.png': 'meteorthreenormal.png',
-};
-
-/** Templates with their file name in public/assets/models. */
+/**
+ * Templates with their file name in public/assets/models. Only the ships come from the scene;
+ * their models and drive sprites are Johannes Hoppe's own work. Everything else is generated in code.
+ */
 const TEMPLATES: Record<string, string> = {
   humanInterceptor: 'human-interceptor.glb',
   alienInterceptor: 'alien-interceptor.glb',
-  asteroid1: 'asteroid-1.glb',
-  asteroid2: 'asteroid-2.glb',
-  asteroid3: 'asteroid-3.glb',
-  photonBlue: 'photon.glb',
 };
 
 const logEl = document.getElementById('log')!;
@@ -111,10 +104,8 @@ async function buildMaterial(mat: any, isCollider: boolean): Promise<THREE.Mater
     material.userData.blending = mat.Type === MATERIAL_ADD_COLOR ? 'additive' : 'alpha';
     return material;
   }
-  const normalName = texName ? NORMAL_MAPS[texName] : undefined;
   const material = new THREE.MeshStandardMaterial({
     map,
-    normalMap: normalName ? await loadTexture(normalName, THREE.NoColorSpace) : null,
     roughness: 0.75,
     metalness: 0.1,
   });

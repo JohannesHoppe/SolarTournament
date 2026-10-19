@@ -45,6 +45,10 @@ Nie `npx` verwenden, immer die Scripts aus `package.json`.
 | Datei | Inhalt |
 |---|---|
 | `main.ts` | Start: WebGL-Check, Assets laden, `Game` erzeugen |
+| `assets.ts` | Lädt die Schiffsmodelle und Antriebs-Sprites, sammelt die im Code erzeugten Assets ein |
+| `rocks.ts` | Erzeugt die 16 Asteroidenformen: Rauschen, Krater, vier Gesteinsarten; nur ganzzahliges Hashing und Polynome, damit jeder Browser identische Formen baut |
+| `textures.ts` | Canvas-Texturen: Leuchtkreise, Funken, Rauch |
+| `sounds.ts` | Synthetisierte Soundeffekte: Laser, Explosion |
 | `game.ts` | Spielzustände, Rundenablauf, Laser, Kollisionen, Arena, Kamera, Pilot (G-Kräfte, Warnungen) |
 | `flight.ts` | Newtonsches Flugmodell mit Bordcomputer (Drehraten-Regelung, `steer()`) |
 | `ship.ts` | Schiff: Rumpf, Trefferzonen, Löcher mit Dekompression, Laser-Hitze, Antriebsanimation |
@@ -64,11 +68,11 @@ Nie `npx` verwenden, immer die Scripts aus `package.json`.
 | `touch.ts` | Touch-Steuerung mit nipplejs: fester Stick links, dynamischer Stick rechts, Halte-Tasten |
 | `random.ts` | Deterministischer Zufallsgenerator |
 
-`tools/extract-ccb/` lädt die alte CopperCube-Szene mit der Original-Engine und schreibt glTF-Modelle nach `public/assets/models/`. Aufruf: `npm run dev`, dann `http://127.0.0.1:5173/tools/extract-ccb/` öffnen.
+`tools/extract-ccb/` lädt die alte CopperCube-Szene mit der Original-Engine und schreibt die beiden Schiffe als glTF-Modelle nach `public/assets/models/`. Aufruf: `npm run dev`, dann `http://127.0.0.1:5173/tools/extract-ccb/` öffnen.
 
 ## Lizenz
 
-Der Code steht unter AGPL-3.0-or-later (`LICENSE`), das Repo ist öffentlich. Name, Logo und Domains sind nicht lizenziert, ebenso die Modelle, Texturen und Sounds in `public/assets/` (außer der Schrift). Neue Abhängigkeiten müssen mit der AGPL vereinbar sein. Fremde Assets kommen nur mit geklärter Lizenz ins Repo, und die Lizenz wird in der README genannt. Nie Schlüssel, Tokens oder Zugangsdaten committen. Das Menü verlinkt den Quellcode, so wie es die AGPL für ein Netzwerkspiel verlangt.
+Der Code steht unter AGPL-3.0-or-later (`LICENSE`), das Repo ist öffentlich. Name, Logo und Domains sind nicht lizenziert. Die einzigen Dateien in `public/assets/` sind Johannes' eigene Schiffsmodelle mit ihren Antriebs-Sprites (nicht lizenziert) und die Schrift (OFL). Asteroiden, Himmel, Partikel und Soundeffekte entstehen im Code. Neue Abhängigkeiten müssen mit der AGPL vereinbar sein. Fremde Assets kommen nur mit geklärter Lizenz ins Repo, und die Lizenz wird in der README genannt; im Zweifel lieber im Code erzeugen. Nie Schlüssel, Tokens oder Zugangsdaten committen. Das Menü verlinkt den Quellcode, so wie es die AGPL für ein Netzwerkspiel verlangt.
 
 ## Regeln für den Code
 

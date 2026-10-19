@@ -1,5 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { createRocks } from './rocks';
+import { synthesizeSounds } from './sounds';
+import { smokeTexture, sparkTexture } from './textures';
 
 export type ShipType = 'human' | 'alien';
 
@@ -37,15 +40,10 @@ function prepareModel(root: THREE.Object3D) {
   return root;
 }
 
-async function loadSound(context: AudioContext, name: string): Promise<AudioBuffer | null> {
-  try {
-    const response = await fetch(base + 'audio/' + name);
-    return await context.decodeAudioData(await response.arrayBuffer());
-  } catch {
-    return null;
-  }
-}
-
+/**
+ * The ships and their drive sprites are model files; rocks, particles and sounds are
+ * generated in code.
+ */
 export async function loadAssets(audio: AudioContext): Promise<Assets> {
   const gltf = new GLTFLoader();
   const textures = new THREE.TextureLoader();
@@ -56,22 +54,19 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     return t;
   };
 
-  const [human, alien, a1, a2, a3] = await Promise.all(
-    ['human-interceptor.glb', 'alien-interceptor.glb', 'asteroid-1.glb', 'asteroid-2.glb', 'asteroid-3.glb'].map(model),
-  );
+  const [human, alien] = await Promise.all(['human-interceptor.glb', 'alien-interceptor.glb'].map(model));
   const flameFrames = await Promise.all(
     ['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture),
   );
   flameFrames.forEach((t) => (t.flipY = false));
-  const [smoke, spark, glow] = await Promise.all(['particle_smoke.jpg', 'particle_shoot.jpg', 'drivelight-additive.png'].map(texture));
+  const glow = await texture('drivelight-additive.png');
   glow.flipY = false;
-  const [laser, explosion] = await Promise.all([loadSound(audio, 'shoot.mp3'), loadSound(audio, 'expl.mp3')]);
 
   return {
     ships: { human, alien },
-    asteroids: [a1, a2, a3],
-    textures: { flameFrames, smoke, spark, glow },
-    sounds: { laser, explosion },
+    asteroids: createRocks(),
+    textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), glow },
+    sounds: synthesizeSounds(audio),
   };
 }
 

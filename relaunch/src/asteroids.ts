@@ -78,10 +78,11 @@ export class AsteroidField {
   constructor(objects: THREE.Object3D[]) {
     this.templates = objects.map((object) => {
       const box = colliderBox(object);
+      // rounded to whole units, so tiny floating point differences between browsers vanish
       return {
         object,
-        center: box.getCenter(new THREE.Vector3()),
-        semiAxes: box.getSize(new THREE.Vector3()).multiplyScalar(0.5 * SHAPE_FILL),
+        center: box.getCenter(new THREE.Vector3()).round(),
+        semiAxes: box.getSize(new THREE.Vector3()).multiplyScalar(0.5 * SHAPE_FILL).round(),
         scale: Math.max(object.scale.x, object.scale.y, object.scale.z),
       };
     });

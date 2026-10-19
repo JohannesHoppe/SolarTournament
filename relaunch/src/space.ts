@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { radialTexture } from './textures';
 
 const STAR_COUNT = 6000;
 const SKY_RADIUS = 300000;
@@ -29,20 +30,6 @@ const dustFragment = /* glsl */ `
 const SHADOW_REACH = 140000;
 /** Direction towards the sun; it sits in front of the ships at spawn. */
 export const SUN_DIRECTION = new THREE.Vector3(0.25, 0.15, -1).normalize();
-
-function radialTexture(stops: [number, string][]): THREE.CanvasTexture {
-  const size = 256;
-  const canvas = document.createElement('canvas');
-  canvas.width = canvas.height = size;
-  const ctx = canvas.getContext('2d')!;
-  const gradient = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-  for (const [offset, color] of stops) gradient.addColorStop(offset, color);
-  ctx.fillStyle = gradient;
-  ctx.fillRect(0, 0, size, size);
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
 
 /** Star field, sun, nebula glow and lighting. Follows the camera so it is always at infinity. */
 export class Space {
