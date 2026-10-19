@@ -1577,6 +1577,35 @@ body.page {
 }
 
 /*
+ * Title screen: on a wide screen the seal stands on the left, whole and unhidden, and the
+ * menu sits on the right without a seal of its own. Where both do not fit side by side, the
+ * seal behind the menu stays away and the menu keeps its small one.
+ */
+@media (min-width: 900px) and (min-aspect-ratio: 5/4) {
+  #crest {
+    background-position: 27% center;
+    background-size: min(82vh, 44vw);
+    opacity: 0.55;
+  }
+
+  #menu {
+    left: auto;
+    right: max(5vw, 32px);
+    transform: translateY(-50%);
+  }
+
+  #menu .logo {
+    display: none;
+  }
+}
+
+@media (max-width: 899px), (max-aspect-ratio: 5/4) {
+  #crest {
+    display: none;
+  }
+}
+
+/*
  * Typography: running text is always justified, never ragged, with hyphenation so the
  * spacing stays even. Centered blocks justify too and only center their last line.
  */
