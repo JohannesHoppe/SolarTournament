@@ -1,6 +1,6 @@
-import type { Voice } from './music/band';
-import { clipKey } from './music/lines';
-import { loadVoice } from './music/voice';
+import type { Voice } from '../music/band';
+import { clipKey } from '../music/lines';
+import { loadVoice } from '../music/voice';
 
 /**
  * The flight computer reads out what the screen shows, in its own clear voice, independent

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { radialTexture } from './textures';
+import { radialTexture } from '../view/textures';
 
 const STAR_COUNT = 6000;
 const SKY_RADIUS = 300000;

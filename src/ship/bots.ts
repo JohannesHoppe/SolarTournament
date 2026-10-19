@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import type { AsteroidField } from './asteroids';
-import type { Controls } from './input';
+import type { AsteroidField } from '../world/asteroids';
+import type { Controls } from '../input/input';
 import type { Ship } from './ship';
 
 const SIGHT_RANGE = 50000;

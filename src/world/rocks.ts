@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
-import { Randomizer } from './random';
+import { Randomizer } from '../random';
 
 /** Fixed seed: every client builds the same rock shapes, so collision ellipsoids match. */
 const ROCK_SEED = 2584;

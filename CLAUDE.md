@@ -53,46 +53,59 @@ Hosting is a classic Cloudflare Pages project (`wrangler.toml`), never Workers, 
 
 Never use `npx`, always the scripts from `package.json`.
 
-## Structure (`src/`)
+## Structure
+
+The repository root is the Vite project: `index.html` (the game) and `radio.html` (Radio 2584) are its two pages, `public/` holds the static files, `tools/` the generators that write into `public/`.
+
+`src/` is grouped by area:
 
 | File | Content |
 |---|---|
-| `main.ts` | Startup: WebGL check, load assets, create `Game` |
-| `radio-page.ts` | The radio page (`radio.html`, a second Vite entry): tune in a title, play it, download it as WAV |
+| `main.ts` | Startup of the game: WebGL check, load assets, create `Game` |
+| `radio-page.ts` | Startup of the radio page: tune in a title, play it, download it as WAV |
+| `style.css` | Styles of both pages |
 | `assets.ts` | Loads the ship models and drive sprites, collects the assets generated in code |
-| `rocks.ts` | Generates the 16 asteroid shapes: noise, craters, four kinds of rock; integer hashing and polynomials only, so every browser builds identical shapes |
-| `textures.ts` | Canvas textures: glows, sparks, smoke |
-| `sounds.ts` | Synthesized sound effects: laser, explosion |
-| `glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |
-| `music/songs.ts` | Radio 2584: hard techno tracks from a seed (flavor, form, energy curve, Grids-style patterns, fills); every decision is an integer hash of seed, bar and step |
-| `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser) and how one sixteenth is played |
-| `music/radio.ts` | Plays the song on the cue's clock (tournament: the host's round clock), jumps when it drifts |
+| `random.ts` | Deterministic random generator |
+| **`game/`** | **The round** |
+| `game/game.ts` | Game states, round flow, lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
+| `game/school.ts` | Flight school: steps with instruction, success condition and waypoint |
+| `game/sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, placeholder ad |
+| **`world/`** | **The arena** |
+| `world/space.ts` | Stars, nebula, sun with shadows, space dust |
+| `world/asteroids.ts` | Asteroid field: ellipsoid collision, raycast, line of sight, gravity, fragments |
+| `world/rocks.ts` | Generates the 16 asteroid shapes: noise, craters, four kinds of rock; integer hashing and polynomials only, so every browser builds identical shapes |
+| `world/wrecks.ts` | Wreckage of destroyed ships |
+| **`ship/`** | **Ships and who flies them** |
+| `ship/ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, drive animation |
+| `ship/flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`) |
+| `ship/bots.ts` | Bot AI: desired velocity, turn and burn, aiming with spread |
+| **`view/`** | **What the screen shows** |
+| `view/hud.ts` | DOM HUD: gauges, markers, warnings, tunnel vision |
+| `view/effects.ts` | Particles (one draw call per texture), laser beams |
+| `view/glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |
+| `view/textures.ts` | Canvas textures: glows, sparks, smoke |
+| **`input/`** | **Controls** |
+| `input/input.ts` | Keyboard, mouse (pointer lock as virtual stick) and gamepad, merges all input into `Controls` |
+| `input/touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |
+| **`sound/`** | **What the pilot hears besides the radio** |
+| `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static |
+| `sound/sounds.ts` | Synthesized sound effects: laser, explosion |
+| `sound/speaker.ts` | The flight computer's voice: reads out what the screen shows, whole lines from the sprite |
+| **`music/`** | **Radio 2584** |
+| `music/songs.ts` | Hard techno tracks from a seed (flavor, form, energy curve, Grids-style patterns, fills); every decision is an integer hash of seed, bar and step |
+| `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser), the voices, and how one sixteenth is played |
+| `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts |
 | `music/preview.ts` | Renders a track (or a stretch) offline as WAV: downloads on the radio page, previews in development |
-| `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the radio host's lines |
+| `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the announcer's lines, the flight computer's lines |
 | `music/voice.ts` | Loads the pre-rendered voice sprite (once, shared) |
-| `speaker.ts` | The flight computer's voice: reads out what the screen shows, whole lines from the sprite |
+| **`net/`** | **Online tournament** |
+| `net/online.ts` | Ship ownership, what goes over the network, the lead browser's bots |
+| `net/session.ts` | Tournament protocol: message types, election of the lead browser (longest in the room), room codes |
+| `net/transport.ts` | Transport: Trystero (WebRTC over Nostr relays) and BroadcastChannel for local tests (`?local=1`) |
 
 `tools/crest/render.ts` (`npm run crest`) draws the seal of the Ministry of War into `public/crest.svg`: computed rings, stars and sun, Michroma lettering as paths, and the eagle of `tools/crest/eagle.svg` (CC0) cut into angular facets.
 
-`tools/voice/render.ts` (`npm run voice`, needs ffmpeg) renders every word of `music/lines.ts` with espeak-ng into `public/assets/voice/`. Run it after changing any line; the radio skips words that are not rendered.
-| `game.ts` | Game states, round flow, lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
-| `flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`) |
-| `ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, drive animation |
-| `asteroids.ts` | Asteroid field: ellipsoid collision, raycast, line of sight, gravity, fragments |
-| `wrecks.ts` | Wreckage of destroyed ships |
-| `bots.ts` | Bot AI: desired velocity, turn and burn, aiming with spread |
-| `effects.ts` | Particles (one draw call per texture), laser beams |
-| `space.ts` | Stars, nebula, sun with shadows, space dust |
-| `hud.ts` | DOM HUD: gauges, markers, warnings, tunnel vision |
-| `audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static |
-| `online.ts` | Online tournament: ship ownership, what goes over the network, the host's bots |
-| `net/session.ts` | Tournament protocol: message types, host election (longest in the room), room codes |
-| `net/transport.ts` | Transport: Trystero (WebRTC over Nostr relays) and BroadcastChannel for local tests (`?local=1`) |
-| `school.ts` | Flight school: steps with instruction, success condition and waypoint |
-| `sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, placeholder ad |
-| `input.ts` | Keyboard, mouse (pointer lock as virtual stick) and gamepad, merges all input into `Controls` |
-| `touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |
-| `random.ts` | Deterministic random generator |
+`tools/voice/render.ts` (`npm run voice`, needs ffmpeg) renders every word and every sentence of `src/music/lines.ts` with espeak-ng into `public/assets/voice/`. Run it after changing any line; the radio skips words that are not rendered.
 
 ## License
 

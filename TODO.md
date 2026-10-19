@@ -59,6 +59,6 @@ Worked through from top to bottom. Every finished item is also documented in the
 
 ## Ads in the sponsor break
 
-- Connect a real ad network: a class implementing `AdProvider` from `src/sponsors.ts` replaces `PlaceholderAd`.
+- Connect a real ad network: a class implementing `AdProvider` from `src/game/sponsors.ts` replaces `PlaceholderAd`.
 - Only a format that explicitly allows "watch an ad for a reward" (rewarded ads). Ad networks forbid rewarding clicks on the ad itself; that is why the clone boots from a button of its own, not from a click on the ad. Check the chosen network's policies before connecting it.
 - Privacy: consent banner (GDPR) as soon as personalized ads are served.

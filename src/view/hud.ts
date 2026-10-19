@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MAX_HEAT, MAX_HULL, type Ship } from './ship';
+import { MAX_HEAT, MAX_HULL, type Ship } from '../ship/ship';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const projected = new THREE.Vector3();

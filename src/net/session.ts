@@ -1,5 +1,5 @@
-import type { AsteroidState } from '../asteroids';
-import type { ShipState } from '../ship';
+import type { AsteroidState } from '../world/asteroids';
+import type { ShipState } from '../ship/ship';
 import { LocalTransport, TrysteroTransport, type Transport } from './transport';
 
 /** Ship states go out this often (Hz); the receivers predict the motion in between. */

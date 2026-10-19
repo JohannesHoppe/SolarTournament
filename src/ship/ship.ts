@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import { colliderRadius, type Assets, type ShipType } from './assets';
+import { colliderRadius, type Assets, type ShipType } from '../assets';
 import { FlightModel } from './flight';
-import type { Controls } from './input';
+import type { Controls } from '../input/input';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;

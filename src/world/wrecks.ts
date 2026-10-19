@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { raySphere, type AsteroidField } from './asteroids';
-import { Randomizer } from './random';
+import { Randomizer } from '../random';
 
 const PIECES_PER_SHIP = 5;
 const MAX_WRECKS = 60;

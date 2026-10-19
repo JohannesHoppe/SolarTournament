@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createRocks } from './rocks';
-import { synthesizeSounds } from './sounds';
-import { smokeTexture, sparkTexture } from './textures';
+import { createRocks } from './world/rocks';
+import { synthesizeSounds } from './sound/sounds';
+import { smokeTexture, sparkTexture } from './view/textures';
 
 export type ShipType = 'human' | 'alien';
 

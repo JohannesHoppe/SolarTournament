@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import type { AsteroidField } from './asteroids';
-import type { Session, RoundState, Vec } from './net/session';
-import type { Ship, ShipState } from './ship';
+import type { AsteroidField } from '../world/asteroids';
+import type { Session, RoundState, Vec } from './session';
+import type { Ship, ShipState } from '../ship/ship';
 
 /** Players per tournament; the host fills free places with bots. */
 export const TOURNAMENT_SIZE = 4;

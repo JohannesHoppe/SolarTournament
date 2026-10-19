@@ -1,8 +1,8 @@
 import * as THREE from 'three';
-import type { AsteroidField } from './asteroids';
-import type { Controls } from './input';
-import type { Ship } from './ship';
-import { SUN_DIRECTION } from './space';
+import type { AsteroidField } from '../world/asteroids';
+import type { Controls } from '../input/input';
+import type { Ship } from '../ship/ship';
+import { SUN_DIRECTION } from '../world/space';
 
 /** What a flight school step can see and do. */
 export interface SchoolContext {

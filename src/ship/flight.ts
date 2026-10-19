@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { Controls } from './input';
+import type { Controls } from '../input/input';
 
 /** Acceleration of the main drive at full thrust (units/s²). */
 export const MAIN_THRUST = 900;

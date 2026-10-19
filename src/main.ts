@@ -1,6 +1,6 @@
 import { loadAssets } from './assets';
-import { Sound } from './audio';
-import { Game } from './game';
+import { Sound } from './sound/audio';
+import { Game } from './game/game';
 
 async function start() {
   const loading = document.getElementById('loading')!;

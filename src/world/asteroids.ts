@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { colliderBox } from './assets';
-import { Randomizer } from './random';
+import { colliderBox } from '../assets';
+import { Randomizer } from '../random';
 
 export const FIELD_RADIUS = 45000;
 const ASTEROID_COUNT = 40;
