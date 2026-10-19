@@ -249,6 +249,15 @@ There is no sound in vacuum. Everything the Host hears travels through the clone
 - Destroyed ships respawn at the edge of the field, with 2.5 seconds of spawn protection. Bots respawn after 3 seconds. The Host first sits through a sponsor break while the next clone is printed: after 3 seconds an ad appears, and once it has run, a button boots the next clone. The round goes on meanwhile.
 - Human and alien interceptor are identical apart from their looks.
 
+## Privacy
+
+The game collects as little as possible: no accounts, no cookies, no tracking, no ad network, nothing loaded from third-party servers. The German legal pages [Impressum](impressum.html) and [Datenschutz](datenschutz.html) are linked from the menu and the radio page. What happens to data:
+
+- **Hosting:** Cloudflare Pages delivers the site and sees connection data (IP address, time, file, user agent).
+- **Browser storage:** four localStorage entries (callsign, personal best, flight school completed, radio on or off); they never leave the browser.
+- **Online tournament** (only when a Host starts or joins one): the browsers connect directly over WebRTC, so the other players see the Host's IP address, callsign, ship and score. To find each other, the browsers post short connection messages (with network addresses) on public Nostr relays run by independent third parties. Each browser asks Cloudflare's STUN server for its public address; Trystero's default STUN servers of Google are replaced by Cloudflare's alone.
+- **Sponsor break:** a placeholder, no ad network. The privacy policy has to be extended before real ads are shown.
+
 ## License
 
 **Code:** Copyright © 2012–2026 Johannes Hoppe, licensed under the [GNU Affero General Public License v3.0 or later](LICENSE). Anyone may play, study, change and share the game. Whoever publishes a changed version, including as a website, has to publish its source code under the same license.

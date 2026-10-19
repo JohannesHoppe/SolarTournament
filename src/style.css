@@ -1330,6 +1330,65 @@ body.page {
   z-index: 1;
 }
 
+/* Impressum and privacy policy: a readable column of justified text */
+.legal {
+  max-width: 42rem;
+  line-height: 1.6;
+}
+
+.legal-home .logo {
+  display: block;
+  margin: 0 0 20px;
+}
+
+.legal-eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.legal h1 {
+  font-size: clamp(1.8rem, 6vw, 2.6rem);
+  hyphens: manual;
+}
+
+.legal h2 {
+  margin: 2em 0 0.4em;
+  font-size: 1.1rem;
+  color: var(--accent);
+}
+
+.legal p,
+.legal li {
+  text-align: justify;
+  hyphens: auto;
+  -webkit-hyphens: auto;
+}
+
+.legal li + li {
+  margin-top: 0.5em;
+}
+
+.legal address {
+  font-style: normal;
+}
+
+.legal a {
+  color: var(--accent-strong);
+}
+
+.legal-lead {
+  font-size: 1.05rem;
+}
+
+.legal-date {
+  margin-top: 2.5em;
+  color: var(--muted);
+}
+
 @keyframes crest-hum {
   0%, 71%, 73%, 100% {
     opacity: 0.3;

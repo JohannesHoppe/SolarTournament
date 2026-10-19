@@ -7,7 +7,7 @@ export default defineConfig({
   build: {
     target: 'es2022',
     rollupOptions: {
-      input: { main: resolve(import.meta.dirname, 'index.html'), radio: resolve(import.meta.dirname, 'radio.html') },
+      input: Object.fromEntries(['index', 'radio', 'impressum', 'datenschutz'].map((page) => [page, resolve(import.meta.dirname, `${page}.html`)])),
     },
   },
 });

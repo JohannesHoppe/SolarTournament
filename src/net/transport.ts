@@ -20,6 +20,11 @@ export interface Transport {
 
 /** Identifies the game on the signaling relays; peers with other app ids never meet. */
 const APP_ID = 'solartournament-2584';
+/**
+ * The STUN server a browser asks for its own public address: only Cloudflare's, which hosts
+ * the game anyway, so no further company learns who plays (the privacy policy names it).
+ */
+const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.cloudflare.com:3478' }];
 
 abstract class BaseTransport implements Transport {
   abstract readonly selfId: string;
@@ -57,7 +62,7 @@ export class TrysteroTransport extends BaseTransport {
   private constructor(trystero: typeof import('trystero'), roomId: string) {
     super();
     this.selfId = trystero.selfId;
-    this.room = trystero.joinRoom({ appId: APP_ID }, roomId);
+    this.room = trystero.joinRoom({ appId: APP_ID, rtcConfig: { iceServers: ICE_SERVERS } }, roomId);
     // one action for all message types keeps the channel setup small
     this.action = this.room.makeAction<Json>('st');
     this.action.onMessage = (message, { peerId }) => {

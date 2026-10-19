@@ -62,3 +62,4 @@ Worked through from top to bottom. Every finished item is also documented in the
 - Connect a real ad network: a class implementing `AdProvider` from `src/game/sponsors.ts` replaces `PlaceholderAd`.
 - Only a format that explicitly allows "watch an ad for a reward" (rewarded ads). Ad networks forbid rewarding clicks on the ad itself; that is why the clone boots from a button of its own, not from a click on the ad. Check the chosen network's policies before connecting it.
 - Privacy: consent banner (GDPR) as soon as personalized ads are served.
+- Privacy policy (`datenschutz.html`, section 6 "Werbung"): before the first real ad is shown, name the ad network, what it processes, the legal basis and the consent; it states today that no ad network is connected.
