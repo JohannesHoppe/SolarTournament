@@ -12,7 +12,8 @@
     "cf:create": "wrangler pages project create solartournament --production-branch master",
     "deploy": "npm run build && wrangler pages deploy --branch master",
     "deploy:preview": "npm run build && wrangler pages deploy --branch preview",
-    "voice": "node tools/voice/render.ts"
+    "voice": "node tools/voice/render.ts",
+    "crest": "node tools/crest/render.ts"
   },
   "license": "AGPL-3.0-or-later",
   "dependencies": {

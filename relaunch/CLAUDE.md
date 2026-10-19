@@ -73,6 +73,8 @@ Never use `npx`, always the scripts from `package.json`.
 | `music/voice.ts` | Loads the pre-rendered voice sprite (once, shared) |
 | `speaker.ts` | The flight computer's voice: reads out what the screen shows, whole lines from the sprite |
 
+`tools/crest/render.ts` (`npm run crest`) draws the seal of the Ministry of War into `public/crest.svg`: computed rings, stars and sun, Michroma lettering as paths, and the eagle of `tools/crest/eagle.svg` (CC0) cut into angular facets.
+
 `tools/voice/render.ts` (`npm run voice`, needs ffmpeg) renders every word of `music/lines.ts` with espeak-ng into `public/assets/voice/`. Run it after changing any line; the radio skips words that are not rendered.
 | `game.ts` | Game states, round flow, lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
 | `flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`) |

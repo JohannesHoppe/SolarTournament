@@ -220,4 +220,6 @@ There is no sound in vacuum. Everything the Host hears travels through the clone
 
 **Everything else is generated in code** and covered by the license: asteroids, sky, sun, particles, sound effects, music and the icon.
 
+**Seal of the Ministry of War** (`public/crest.svg`, drawn by `npm run crest`): the eagle is based on ["Zurich Eagle Silhouette"](https://openclipart.org/detail/282180/zurich-eagle-silhouette) by GDJ on Openclipart, CC0 1.0 (public domain), cut into straight facets by the generator.
+
 **Font:** [Michroma](https://github.com/googlefonts/Michroma-font) for headings and signs, SIL Open Font License 1.1 (see `public/assets/fonts/OFL-michroma.txt`). Text is set in the system's sans-serif.
