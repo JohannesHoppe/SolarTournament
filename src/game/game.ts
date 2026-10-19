@@ -52,8 +52,8 @@ const SAFE_IMPACT = 250;
 const IMPACT_DAMAGE = 1 / 12;
 /** Share of the impact speed a ship keeps when it bounces off a rock. */
 const RESTITUTION = 0.3;
-/** Seconds a ship may stay beyond ARENA_LIMIT before it is lost. */
-const ARENA_GRACE = 8;
+/** Seconds a ship may stay beyond ARENA_LIMIT before it is lost: enough to flip, burn off an outward drift of 100 m/s or more and fly back in. */
+const ARENA_GRACE = 20;
 /** Explosions closer than this pelt the own hull with audible debris. */
 const DEBRIS_HEARING = 6000;
 /** The autopilot's thrusters push at full strength until the drift would be gone in this time (s), then ease off. */
