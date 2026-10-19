@@ -105,6 +105,8 @@ The future is broken, and it glows. Neon signs flicker over everything, every su
 
 It is a society without morals. A new clone is not free: the pilot pays with attention. Before the next body boots, the pilot has to watch an advertisement. Want another clone? Make the sponsor happy.
 
+The system is ruled by the **United Solar States**, the heir of an America that turned completely fascist and then took the planets with it. At its head sits **the Orange President**, and the SolarTournament is his games: the Presidential Games, held to keep the people of the solar system entertained and quiet. His voice runs through the tournament radio with hollow boasts about the greatest tournament of all time and the highest statistics anyone has ever seen. That the tournament's sign glows in orange is no accident. The game is satire: a warning, drawn from the politics of its own time, of where this road leads.
+
 The year is **2584**, a nod to George Orwell's *1984*, where a whole society watches and is watched.
 
 ## The physics of the SolarTournament universe
