@@ -241,5 +241,16 @@ export function words(line: string): { word: string; stop: boolean }[] {
   return line.split(/\s+/).filter(Boolean).map((token) => ({ word: token.replace(/[^\p{L}\p{N}]/gu, ''), stop: /[.?!]$/.test(token) }));
 }
 
-/** Key of a rendered word in the voice manifest. */
+/**
+ * The pieces a line is spoken in: whole sentences, so the voice keeps the melody of the
+ * sentence; a {name} stands on its own between the parts around it.
+ */
+export function phrases(line: string): string[] {
+  return line.split(/(?<=[.?!])\s+|\s*(\{name\})\s*/).filter((piece): piece is string => !!piece?.trim());
+}
+
+/** The words of a piece, the way its clip is keyed. */
+export const phraseKey = (piece: string) => words(piece).map((w) => w.word).join(' ');
+
+/** Key of a rendered word or piece in the voice manifest. */
 export const clipKey = (language: Language, word: string) => `${language}:${word}`;

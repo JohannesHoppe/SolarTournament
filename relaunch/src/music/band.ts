@@ -1,5 +1,5 @@
 import type * as ToneLib from 'tone';
-import { clipKey, words, type Language } from './lines';
+import { clipKey, phraseKey, phrases, words, type Language } from './lines';
 import { barSeconds, stepEvents, STEPS_PER_BAR, type BarInfo, type KickDesign, type Song, type VoiceLine } from './songs';
 
 type Tone = typeof ToneLib;
@@ -287,25 +287,31 @@ export class Band {
     impactTone.connect(this.fxSend);
     this.impact = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 1.3, sustain: 0, release: 0.1 }, volume: -13 }).connect(impactTone);
 
-    // the regime's voice: ring-modulated, crushed, gritty, past the master filter; echo throws on the last word
-    const voiceOut = new T.Gain(6).connect(this.voiceBus);
-    const voiceGrit = new T.Chebyshev({ order: 3, wet: 0.35 }).connect(voiceOut);
-    voiceGrit.connect(new T.Gain(0.35).connect(this.fxSend));
-    const voiceCrush = new T.BitCrusher({ bits: 7 }).connect(voiceGrit);
-    voiceCrush.wet.value = 0.35;
-    const voiceHigh = new T.Filter({ type: 'highpass', frequency: 160, Q: 0 }).connect(voiceCrush);
-    const ring = new T.Gain(0).connect(voiceHigh);
+    // the regime's voice: the clear voice carries the words, a little ring modulation, crush and
+    // grit only color it. A compressor makes it loud instead of the master clipper, which would
+    // smear the consonants. Past the master filter; echo throws on the last word.
+    const voiceOut = new T.Gain(1.6).connect(this.voiceBus);
+    const voiceLevel = new T.Compressor({ threshold: -26, ratio: 4, attack: 0.003, release: 0.08, knee: 6 }).connect(voiceOut);
+    const voiceGrit = new T.Chebyshev({ order: 3, wet: 0.1 }).connect(voiceLevel);
+    voiceGrit.connect(new T.Gain(0.25).connect(this.fxSend));
+    const voiceCrush = new T.BitCrusher({ bits: 8 }).connect(voiceGrit);
+    voiceCrush.wet.value = 0.1;
+    // presence around 2.5 kHz, where the consonants live
+    const voicePresence = new T.Filter({ type: 'peaking', frequency: 2500, Q: 0.9, gain: 4 }).connect(voiceCrush);
+    const voiceHigh = new T.Filter({ type: 'highpass', frequency: 160, Q: 0 }).connect(voicePresence);
+    const ring = new T.Gain(0).connect(new T.Gain(0.15).connect(voiceHigh));
     new T.Oscillator({ type: 'square', frequency: 62 }).connect(ring.gain).start();
-    this.voiceIn = new T.Gain(1);
+    this.voiceIn = new T.Gain(0.8);
     this.voiceIn.connect(ring);
-    this.voiceIn.connect(new T.Gain(0.55).connect(voiceHigh));
+    this.voiceIn.connect(voiceHigh);
     this.voiceEcho = new T.Gain(0).connect(this.echoSend);
     voiceGrit.connect(this.voiceEcho);
 
-    // the announcer: a narrow radio band, a little drive, static at the start and the end
-    const announcerOut = new T.Gain(3.5).connect(this.voiceBus);
-    const announcerBand = new T.Filter({ type: 'bandpass', frequency: 1500, Q: 0.8 }).connect(new T.WaveShaper(saturate(2.5), 1024).connect(announcerOut));
-    this.announcerIn = new T.Gain(1).connect(new T.Filter({ type: 'highpass', frequency: 350, Q: 0 }).connect(announcerBand));
+    // the announcer: a radio band, a touch of drive, static at the start and the end
+    const announcerOut = new T.Gain(1.6).connect(this.voiceBus);
+    const announcerLevel = new T.Compressor({ threshold: -24, ratio: 4, attack: 0.003, release: 0.08, knee: 6 }).connect(announcerOut);
+    const announcerBand = new T.Filter({ type: 'lowpass', frequency: 4500, Q: 0.5 }).connect(new T.WaveShaper(saturate(1.3), 1024).connect(announcerLevel));
+    this.announcerIn = new T.Gain(0.8).connect(new T.Filter({ type: 'highpass', frequency: 300, Q: 0 }).connect(announcerBand));
     this.announcerStatic = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.25, sustain: 0, release: 0.05 }, volume: -18 })
       .connect(new T.Filter({ type: 'bandpass', frequency: 2500, Q: 1.5 }).connect(announcerOut));
   }
@@ -517,17 +523,15 @@ export class Band {
   }
 
   /**
-   * The regime speaks. "speech": word after word. "chop": every word on its own eighth, like
-   * a vocoder hook. The last word is thrown into the echo. Returns the end time.
+   * The regime speaks. "speech": sentence after sentence, each one rendered whole, so it keeps
+   * its melody. "chop": every word on its own eighth, like a vocoder hook. The last clip is
+   * thrown into the echo. Returns the end time.
    */
   speak(line: VoiceLine, t: number, eighth: number): number {
-    const voice = this.voice;
-    if (!voice) return t;
+    if (!this.voice) return t;
     let position = t;
-    const list = words(line.text);
-    list.forEach(({ word, stop }, i) => {
-      const clip = voice.clips[clipKey(line.language, word)];
-      if (!clip) return;
+    const list = this.clips(line.language, line.text, line.style === 'chop');
+    list.forEach(({ clip, stop }, i) => {
       const start = line.style === 'chop' ? t + Math.ceil((position - t) / eighth - 1e-6) * eighth : position;
       this.playClip(clip, start, this.voiceIn);
       if (i === list.length - 1) {
@@ -537,7 +541,7 @@ export class Band {
       position = start + clip[1] + (line.style === 'chop' ? 0.02 : 0.05) + (stop ? eighth : 0);
     });
     // the music steps back while the voice talks
-    this.musicLevel.gain.setValueAtTime(0.5, t);
+    this.musicLevel.gain.setValueAtTime(0.4, t);
     this.musicLevel.gain.setValueAtTime(1, position);
     this.onSpeak({ line: line.text, language: line.language, time: t, duration: position - t });
     return position;
@@ -545,22 +549,36 @@ export class Band {
 
   /** The announcer cuts in over the radio: static, the words, static. */
   announce(text: string, name: string | null, t: number) {
-    const voice = this.voice;
-    if (!voice) return;
+    if (!this.voice) return;
     this.announcerStatic.triggerAttackRelease(0.15, t, 0.9);
     let position = t + 0.18;
-    for (const { word, stop } of words(text.replace('{name}', name ?? 'pilot'))) {
-      const clip = voice.clips[clipKey('mod', word)];
-      if (!clip) continue;
+    for (const { clip, stop } of this.clips('mod', text, false, name ?? 'pilot')) {
       this.playClip(clip, position, this.announcerIn);
       position += clip[1] + 0.03 + (stop ? 0.22 : 0);
     }
     this.announcerStatic.triggerAttackRelease(0.1, position + 0.05, 0.7);
     this.musicLevel.gain.cancelAndHoldAtTime(t);
-    this.musicLevel.gain.linearRampToValueAtTime(0.4, t + 0.1);
-    this.musicLevel.gain.setValueAtTime(0.4, position);
+    this.musicLevel.gain.linearRampToValueAtTime(0.35, t + 0.1);
+    this.musicLevel.gain.setValueAtTime(0.35, position);
     this.musicLevel.gain.linearRampToValueAtTime(1, position + 0.4);
     this.onSpeak({ line: text, language: 'mod', time: t, duration: position - t });
+  }
+
+  /**
+   * The clips a text is spoken with: word by word when chopped, otherwise whole pieces, with
+   * the words of a piece as fallback when it is not rendered (a track title). A {name} piece
+   * becomes the name.
+   */
+  private clips(language: Language, text: string, chop: boolean, name = 'pilot') {
+    const clips = this.voice!.clips;
+    const wordClips = (piece: string) =>
+      words(piece).flatMap(({ word, stop }) => (clips[clipKey(language, word)] ? [{ clip: clips[clipKey(language, word)], stop }] : []));
+    if (chop) return wordClips(text);
+    return phrases(text).flatMap((piece) => {
+      if (piece === '{name}') return wordClips(name);
+      const clip = clips[clipKey(language, phraseKey(piece))];
+      return clip ? [{ clip, stop: /[.?!]$/.test(piece) }] : wordClips(piece);
+    });
   }
 
   /** One word: a native buffer source, which the browser discards by itself once it has played. */
