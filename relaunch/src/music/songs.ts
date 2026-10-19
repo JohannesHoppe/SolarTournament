@@ -524,7 +524,7 @@ function planVoice(song: Song): VoiceLine[] {
   let english = 0;
   let deutsch = 0;
   let last = 4;
-  const end = song.energy === 'lounge' ? song.cycle : song.form[song.form.length - 1].start;
+  const end = song.form[song.form.length - 1].start;
   for (let bar = 12; bar < end; bar += 4) {
     const section = sectionAt(song, bar);
     const starts = bar === section.start;
