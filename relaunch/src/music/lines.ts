@@ -182,7 +182,7 @@ export const HOST_NAMES = ['ingmar', 'nova', 'kessler', 'vega', 'orion', 'sputni
 export const BRIEFING =
   'year twenty five eighty four. the united solar states rule the planets, and the orange president rules them. ' +
   'to keep the people quiet, his ministry of war stages the presidential games. ' +
-  'you are the original pilot. you stay safe, and you fly a printed clone over a live link. ' +
+  'you are one of the chosen pilots. it is an honor to die for the president. you stay safe, and you fly a printed clone over a live link. ' +
   'when your clone dies, the next one is printed. training clones are free. tournament clones cost an advertisement. ' +
   'make the great president happy. that is all that counts.';
 
