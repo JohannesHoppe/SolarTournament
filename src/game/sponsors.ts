@@ -44,10 +44,10 @@ export class SponsorBreak {
    * Shows an ad; onDone runs when the Host boots the next clone after the ad has run. `cause`
    * names what killed the clone, `report` sums up the round so far.
    */
-  show(cause: string, report: string, onDone: () => void) {
+  show(cause: string | (string | Node)[], report: string, onDone: () => void) {
     const generation = ++this.generation;
     this.onDone = onDone;
-    this.cause.textContent = cause;
+    this.cause.replaceChildren(...(typeof cause === 'string' ? [cause] : cause));
     this.report.textContent = report;
     this.boot.hidden = true;
     this.status.textContent = 'Your next clone is being printed during this message';

@@ -219,6 +219,7 @@ One world unit is 5 cm. A ship is about 35 m long; the asteroids are ten to thir
 - **Velocity markers.** The green marker (prograde, a circle with three fins) shows where the ship is actually drifting, the orange cross (retrograde) where the drive has to point to brake.
 - **The zero point.** A blue ring with a dot marks the center of the field, with its distance; it stays on the screen edge when the center is behind. The asteroids are densest there, and the edge of the arena is farthest away.
 - **Labels.** Every mark in the HUD says what it is: "Course" and "Brake" under the velocity markers, the distance above the zero point, and under a flight school marker what to do with it ("Target", "Stop here", "Ring 2/5", "Drone").
+- **Who flies.** Every name the HUD shows (markers, kill feed, lock warning, sponsor break, scoreboard) stands behind a mark: a robot head for a bot, a person for a real Host. The game reads it from the ship's id, which no Host chooses, and draws it as a shape (a CSS mask), not as a character: a callsign may carry anything, emoji included, and still cannot pose as the other kind.
 - **Space dust.** Fine dust stays fixed in space, so drift is visible even far from any rock.
 
 ### Asteroids

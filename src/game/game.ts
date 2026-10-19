@@ -26,6 +26,7 @@ import { Belt } from '../world/belt';
 import { FlightSchool, type SchoolContext } from './school';
 import { SponsorBreak } from './sponsors';
 import { Wrecks } from '../world/wrecks';
+import { markedName } from '../view/marks';
 
 const ROUND_SECONDS = 5 * 60;
 /** Online tournaments show the scoreboard this long before the next round starts. */
@@ -265,7 +266,7 @@ export class Game implements OnlineGame {
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
   private readonly inSight = (ship: Ship) => this.field.lineOfSight(this.camera.position, ship.flight.position);
   /** How the own clone died last, for the sponsor break. */
-  private deathCause = 'Your clone is dead';
+  private deathCause: string | (string | Node)[] = 'Your clone is dead';
   /** When the current screen (menu, playing, paused, results) came up (performance.now, ms). */
   private screenSince = 0;
   /** Online round whose scoreboard has been shown and announced. */
@@ -978,7 +979,9 @@ export class Game implements OnlineGame {
     ranking.forEach((ship, i) => {
       const row = table.insertRow();
       row.classList.toggle('me', ship === me);
-      for (const value of [i + 1, ship.name, ship.kills, ship.deaths, ship.score]) row.insertCell().textContent = String(value);
+      row.insertCell().textContent = String(i + 1);
+      row.insertCell().append(...markedName(ship.kind, ship.name));
+      for (const value of [ship.kills, ship.deaths, ship.score]) row.insertCell().textContent = String(value);
     });
     // training points from the flight school are no personal best
     if (me && !this.school && me.score > Number(storageGet(BEST_SCORE_KEY) ?? 0)) storageSet(BEST_SCORE_KEY, String(me.score));
@@ -1545,7 +1548,7 @@ export class Game implements OnlineGame {
     victim.respawnAt = this.time + RESPAWN_SECONDS;
     if (victim === this.me && killer && killer !== victim) this.ease = Math.min(1, this.ease + DEATH_EASE);
     if (killer === this.me && victim !== this.me) this.ease = Math.max(0, this.ease - KILL_EASE);
-    if (victim === this.me) this.deathCause = killer ? `Shot down by ${killer.name}` : victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
+    if (victim === this.me) this.deathCause = killer ? ['Shot down by ', ...markedName(killer.kind, killer.name)] : victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
     // a kill of the Host's own is bigger: more fire, a jolt, and the points where it happened
     const ownKill = killer?.isLocal === true && killer === this.me;
     this.effects.explosion(victim.flight.position, victim.radius * (ownKill ? 3 : 2), victim.flight.velocity.clone().multiplyScalar(0.3));
@@ -1573,7 +1576,7 @@ export class Game implements OnlineGame {
       }
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
-    this.hud.kill(this.time, killer?.name ?? (victim.outsideSince !== null ? 'Deep space' : 'Crash'), victim.name);
+    this.hud.kill(this.time, killer ?? { kind: null, name: victim.outsideSince !== null ? 'Deep space' : 'Crash' }, victim);
     if (victim !== this.drone) this.commentOnDeath(victim, killer);
   }
 
@@ -1687,7 +1690,7 @@ export class Game implements OnlineGame {
       }
     }
     this.impactAhead = warnings.length > 0;
-    this.lockWarning(warnings, now);
+    this.lockWarning(now);
     if (me.alive && me.overheated) warnings.push('LASER OVERHEATED');
     this.hud.setWarning(warnings.join('\n'));
   }
@@ -1697,9 +1700,12 @@ export class Game implements OnlineGame {
    * the nose is close to it, ON YOUR TAIL when it sits behind, where it reaches the drive. The
    * ship's sensors see where every other hull points; the faster beeping is the cue to act.
    */
-  private lockWarning(warnings: string[], now: number) {
+  private lockWarning(now: number) {
     const me = this.me!;
-    if (!me.alive) return;
+    if (!me.alive) {
+      this.hud.setLock('', null);
+      return;
+    }
     let level = 0;
     let shooter: Ship | null = null;
     for (const ship of this.ships) {
@@ -1716,10 +1722,13 @@ export class Game implements OnlineGame {
         shooter = ship;
       }
     }
-    if (!shooter) return;
+    if (!shooter) {
+      this.hud.setLock('', null);
+      return;
+    }
     // from behind the shooter reaches the drive, the one place that hurts: turn to face it
     const tail = me.tailToward(relative.subVectors(me.flight.position, shooter.flight.position));
-    warnings.push(`${tail ? 'ON YOUR TAIL' : level === 2 ? 'LOCKED' : 'TRACKED'} · ${shooter.name}`);
+    this.hud.setLock(tail ? 'ON YOUR TAIL' : level === 2 ? 'LOCKED' : 'TRACKED', shooter);
     if (now >= this.nextLockBeep) {
       this.sound.beep(tail ? 1760 : level === 2 ? 1560 : 1170, 0.04, tail ? 0.14 : 0.1);
       this.nextLockBeep = now + (tail ? 0.08 : level === 2 ? 0.1 : 0.35);

@@ -37,6 +37,7 @@ h2,
 .hud-top,
 #hud-message,
 #hud-warning,
+#hud-lock,
 .sponsor-pitch,
 #radio-title,
 #transmission-text,
@@ -516,12 +517,17 @@ button.primary .mode-note {
   }
 }
 
-#hud-warning {
+/* warnings below the crosshair: impact, overheating, and who has the own ship in the sights */
+#hud-alerts {
   position: absolute;
   top: calc(50% + 48px);
   left: 0;
   right: 0;
   text-align: center;
+}
+
+#hud-warning,
+#hud-lock {
   font-size: 1.1rem;
   font-weight: 700;
   color: var(--danger);
@@ -677,6 +683,8 @@ button.primary .mode-note {
 
 .marker.offscreen {
   padding: 0;
+  /* off screen only the arrow shows: the mark and the name shrink away */
+  font-size: 0;
 }
 
 .marker.offscreen::before {
@@ -1813,4 +1821,27 @@ button.quiet:focus-visible {
 
 #hud-overdrive.ready {
   color: var(--accent);
+}
+
+/*
+ * Marks before names, drawn by the game and never part of a name: a robot head for a bot, a
+ * person for a real Host. Masks over the text color, so they take the tint of what they mark.
+ */
+.mark {
+  display: inline-block;
+  width: 0.95em;
+  height: 0.95em;
+  margin-right: 0.3em;
+  vertical-align: -0.12em;
+  background: currentColor;
+  -webkit-mask: var(--shape) center / contain no-repeat;
+  mask: var(--shape) center / contain no-repeat;
+}
+
+.mark.bot {
+  --shape: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='1.6' r='1.5'/><rect x='7.3' y='2' width='1.4' height='2.5'/><path fill-rule='evenodd' d='M3 4.5h10a2 2 0 0 1 2 2V13a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V6.5a2 2 0 0 1 2-2zM5.2 7.4a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zm5.6 0a1.5 1.5 0 1 0 0 3 1.5 1.5 0 0 0 0-3zM5 12.2h6v1.1H5z'/></svg>");
+}
+
+.mark.host {
+  --shape: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='4.4' r='3.6'/><path d='M1 16c0-4.2 3.1-7.2 7-7.2s7 3 7 7.2z'/></svg>");
 }

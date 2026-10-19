@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MAX_HEAT, MAX_HULL, type Ship } from '../ship/ship';
 import { keyLabel } from '../input/input';
+import { markedName, type Kind } from './marks';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const projected = new THREE.Vector3();
@@ -19,6 +20,7 @@ export class Hud {
   private readonly heat = $('hud-heat');
   private readonly shadow = $('hud-shadow');
   private readonly warning = $('hud-warning');
+  private readonly lock = $('hud-lock');
   private readonly vignette = $('g-vignette');
   private readonly speed = $('hud-speed');
   private readonly mode = $('hud-mode');
@@ -57,6 +59,7 @@ export class Hud {
 
   reset() {
     this.killfeed.replaceChildren();
+    this.setLock('', null);
     this.markerLayer.replaceChildren();
     this.markers.clear();
     this.message.textContent = '';
@@ -191,13 +194,23 @@ export class Hud {
     this.flashTimer = window.setTimeout(() => this.damageFlash.classList.remove('on'), 60);
   }
 
-  kill(now: number, killer: string, victim: string) {
+  /** A line in the kill feed: who (a ship, or what killed it), and whom, each behind its mark. */
+  kill(now: number, killer: { kind: Kind; name: string }, victim: { kind: Kind; name: string }) {
     const item = document.createElement('li');
     item.dataset.at = String(now);
     const k = document.createElement('b');
-    k.textContent = killer;
-    item.append(k, ' ✦ ', victim);
+    k.append(...markedName(killer.kind, killer.name));
+    item.append(k, ' ✦ ', ...markedName(victim.kind, victim.name));
     this.killfeed.prepend(item);
+  }
+
+  /** The lock warning below the other warnings: what the shooter does, and who it is, behind its mark. */
+  setLock(text: string, shooter: { kind: Kind; name: string } | null) {
+    const key = shooter ? `${text}|${shooter.kind}|${shooter.name}` : '';
+    if (this.lock.dataset.key === key) return;
+    this.lock.dataset.key = key;
+    this.lock.replaceChildren(...(shooter ? [`${text} · `, ...markedName(shooter.kind, shooter.name)] : []));
+    this.lock.hidden = !shooter;
   }
 
   /**
@@ -225,6 +238,9 @@ export class Hud {
         marker = document.createElement('div');
         marker.className = 'marker';
         marker.style.setProperty('--tint', '#' + ship.color.getHexString());
+        // the mark and the name stay; only the distance behind them changes from frame to frame
+        const distance = document.createElement('span');
+        marker.append(...markedName(ship.kind, ship.name), distance);
         this.markerLayer.append(marker);
         this.markers.set(ship.id, marker);
       }
@@ -245,7 +261,7 @@ export class Hud {
       marker.classList.toggle('offscreen', offscreen);
       marker.style.transform = `translate(${((x + 1) / 2) * width}px, ${((1 - y) / 2) * height}px)`;
       if (offscreen) marker.style.setProperty('--angle', `${Math.atan2(-y, x)}rad`);
-      setText(marker, offscreen ? '' : `${ship.name} · ${meters(ship.flight.position.distanceTo(me.flight.position))}`);
+      setText(marker.lastElementChild as HTMLElement, ` · ${meters(ship.flight.position.distanceTo(me.flight.position))}`);
     }
     for (const [id, marker] of this.markers) {
       if (seen.has(id)) continue;

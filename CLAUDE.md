@@ -89,6 +89,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/effects.ts` | Particles (one draw call per texture), laser beams |
 | `view/glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |
 | `view/textures.ts` | Canvas textures: glows, sparks, smoke |
+| `view/marks.ts` | The marks before names: bot or Host, drawn as shapes, never as characters |
 | **`input/`** | **Controls** |
 | `input/input.ts` | Keyboard, mouse flight (the ship turns towards the visible pointer, its offset from the center is the stick) and gamepad, merges all input into `Controls` |
 | `input/touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |

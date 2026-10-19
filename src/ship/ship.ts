@@ -119,6 +119,15 @@ export class Ship {
   /** Where the drive's exhaust was laid last frame, and whether the drive was burning then. */
   readonly trailFrom = new THREE.Vector3();
   trailing = false;
+  /**
+   * Who flies the ship, read from its id, which no Host can choose: a bot, a real Host, or
+   * nobody (the flight school's target drone). The HUD marks names with it (see view/marks).
+   */
+  get kind(): 'bot' | 'host' | null {
+    if (this.id === 'drone') return null;
+    return /^(?:bot\d+|b:|sparring$)/.test(this.id) ? 'bot' : 'host';
+  }
+
   readonly root = new THREE.Group();
   readonly model: THREE.Object3D;
   readonly radius: number;
