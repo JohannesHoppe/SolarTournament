@@ -28,6 +28,10 @@ const KICK_CURVES: Record<KickDesign['shape'], Float32Array> = {
 const cutoff = (brightness: number) => 200 * Math.pow(90, Math.max(0, Math.min(1, brightness)));
 /** The music ducks under a voice line and comes back over this long (s), without a click. */
 const DUCK_RAMP = 0.02;
+/** Level of the shared echo and reverb sends, and how much of the echo comes back each time. */
+const ECHO_LEVEL = 0.3;
+const ECHO_FEEDBACK = 0.25;
+const REVERB_LEVEL = 0.5;
 
 /** The rendered words of the voices (see tools/voice/render.ts). */
 export interface Voice {
@@ -135,12 +139,14 @@ export class Band {
     this.master = new T.Filter({ frequency: 18000, type: 'lowpass', rolloff: -24, Q: 0 }).connect(this.musicLevel);
     this.pump = new T.Gain(1).connect(this.master);
 
-    // shared effects: a reverb for space, a dotted-eighth echo
+    // shared effects: a reverb for space, a dotted-eighth echo. Both sit well behind the dry
+    // parts: an echo as loud as its source smears every note across the beat. The echo
+    // repeats twice audibly, and only above the bass.
     const space = this.reverb(T, 2.4);
     space.connect(this.master);
-    this.fxSend = new T.Gain(1).connect(space);
-    this.echo = new T.FeedbackDelay({ delayTime: '8n.', feedback: 0.38, wet: 1 }).connect(this.master);
-    this.echoSend = new T.Gain(1).connect(this.echo);
+    this.fxSend = new T.Gain(REVERB_LEVEL).connect(space);
+    this.echo = new T.FeedbackDelay({ delayTime: '8n.', feedback: ECHO_FEEDBACK, wet: 1 }).connect(new T.Filter({ type: 'highpass', frequency: 300, Q: 0 }).connect(this.master));
+    this.echoSend = new T.Gain(ECHO_LEVEL).connect(this.echo);
 
     // kick: sine -> drive -> gabber shaper -> tame the fizz -> amplitude envelope
     const kickBus = new T.Gain(0.9).connect(this.master);
@@ -453,12 +459,12 @@ export class Band {
     switch (s.type) {
       case 'delayThrow':
         // the echo swells into feedback over the bar and is cut on the next downbeat
-        this.echo.feedback.setValueAtTime(0.38, t);
-        this.echo.feedback.linearRampToValueAtTime(0.85, t + bar);
-        this.echoSend.gain.setValueAtTime(1, t);
-        this.echoSend.gain.linearRampToValueAtTime(2, t + bar);
-        this.echo.feedback.setValueAtTime(0.38, t + bar + 0.1);
-        this.echoSend.gain.setValueAtTime(1, t + bar + 0.1);
+        this.echo.feedback.setValueAtTime(ECHO_FEEDBACK, t);
+        this.echo.feedback.linearRampToValueAtTime(0.8, t + bar);
+        this.echoSend.gain.setValueAtTime(ECHO_LEVEL, t);
+        this.echoSend.gain.linearRampToValueAtTime(ECHO_LEVEL * 3, t + bar);
+        this.echo.feedback.setValueAtTime(ECHO_FEEDBACK, t + bar + 0.1);
+        this.echoSend.gain.setValueAtTime(ECHO_LEVEL, t + bar + 0.1);
         break;
       case 'siren': {
         // an air-raid siren rising and falling over two bars

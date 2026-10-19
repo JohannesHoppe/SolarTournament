@@ -272,9 +272,9 @@ function isGerman(title: string): boolean {
 // ---- genes: what a title decides once -----------------------------------------------------
 
 const FLAVOR_SETTINGS: Record<Flavor, { bpm: [number, number]; swing: [number, number]; bass: BassStyle[]; lead: LeadVoice[]; groove: Groove }> = {
-  hard: { bpm: [140, 148], swing: [0, 0.06], bass: ['rolling', 'rolling', 'offbeat'], lead: ['stab', 'hoover', 'bell'], groove: 'four' },
+  hard: { bpm: [140, 148], swing: [0, 0.06], bass: ['offbeat', 'offbeat', 'rolling'], lead: ['stab', 'hoover', 'bell'], groove: 'four' },
   industrial: { bpm: [134, 141], swing: [0.04, 0.12], bass: ['offbeat', 'rolling', 'ebm'], lead: ['stab', 'bell'], groove: 'four' },
-  acid: { bpm: [138, 144], swing: [0, 0.08], bass: ['offbeat', 'rolling'], lead: ['stab', 'bell'], groove: 'four' },
+  acid: { bpm: [138, 144], swing: [0, 0.08], bass: ['offbeat', 'offbeat', 'rolling'], lead: ['stab', 'bell'], groove: 'four' },
   ebm: { bpm: [132, 140], swing: [0, 0.03], bass: ['ebm', 'ebm', 'moroder'], lead: ['arp', 'stab', 'hoover'], groove: 'four' },
   french: { bpm: [126, 132], swing: [0.04, 0.1], bass: ['offbeat', 'moroder'], lead: ['bell', 'arp'], groove: 'four' },
   motorik: { bpm: [126, 134], swing: [0, 0.02], bass: ['moroder', 'ebm'], lead: ['arp', 'arp', 'bell'], groove: 'electro' },
@@ -324,7 +324,7 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
     acidLength: unit(seed, Ch.Genes, 8) < 0.4 ? 12 : 16,
     stabShape: choose(STAB_SHAPES, seed, Ch.Genes, 9),
     progression: choose(PROGRESSIONS, seed, Ch.Genes, 10),
-    perc: { k: choose([3, 5, 7], seed, Ch.Genes, 11), n: choose([5, 6, 7, 12, 16], seed, Ch.Genes, 12) },
+    perc: { k: choose([2, 3, 3], seed, Ch.Genes, 11), n: choose([7, 9, 12, 16], seed, Ch.Genes, 12) },
     metal: { k: choose([3, 5, 7], seed, Ch.Genes, 13), rotation: hash(seed, Ch.Genes, 14) % 16 },
     bassStyle: choose(settings.bass, seed, Ch.Genes, 15),
     lead: choose(settings.lead, seed, Ch.Genes, 16),
@@ -689,8 +689,8 @@ function fillAt(song: Song, section: Section, inSection: number): Fill | null {
   // a peak that runs into a breakdown may die with a tape stop
   if (lastOfSection && next?.kind === 'break' && unit(seed, Ch.Fill, key, 3) < 0.35) return { type: 'tapeStop', from: 8, variant };
   if (lastOfSection && section.kind !== 'outro') return { type: choose<FillType>(['kickEdit', 'hatRoll', 'clapBurst', 'tomRun', 'stutter'], seed, Ch.Fill, key, 1), from: 12, variant };
-  if (inSection % 16 === 15 && unit(seed, Ch.Fill, key) < 0.7) return { type: choose<FillType>(['hatRoll', 'tomRun', 'kickEdit', 'stutter'], seed, Ch.Fill, key, 1), from: 12, variant };
-  if (inSection % 8 === 7 && unit(seed, Ch.Fill, key) < 0.5) return { type: 'kickEdit', from: 12, variant };
+  if (inSection % 16 === 15 && unit(seed, Ch.Fill, key) < 0.4) return { type: choose<FillType>(['hatRoll', 'tomRun', 'kickEdit', 'stutter'], seed, Ch.Fill, key, 1), from: 12, variant };
+  if (inSection % 8 === 7 && unit(seed, Ch.Fill, key) < 0.2) return { type: 'kickEdit', from: 12, variant };
   return null;
 }
 
@@ -733,17 +733,24 @@ function base(layer: Layer, step: number, bassStyle: BassStyle, groove: Groove):
   }
 }
 
-const JITTER: Partial<Record<Layer, number>> = { hat: 0.3, openHat: 0.2, ride: 0.3, clap: 0.35, bass: 0.35, lead: 0.6, chords: 0.4 };
+const JITTER: Partial<Record<Layer, number>> = { hat: 0.3, openHat: 0.2, ride: 0.3, clap: 0.15, bass: 0.3, lead: 0.6, chords: 0.4 };
 
+/**
+ * How much of a part's pattern plays (a step plays when its weight beats 1 - density). The
+ * ranges are kept narrow on purpose: energy brings the strong steps in and adds a few weak
+ * ones, but never fills every gap, so even the finale keeps its groove: claps on 2 and 4,
+ * open hats on the offbeat, hats in eighths with a sixteenth here and there, the bass on
+ * its steps. More energy comes from layers, filter and drive, not from more notes.
+ */
 function density(layer: Layer, energy: number): number {
   switch (layer) {
-    case 'hat': return 0.35 + 0.65 * energy;
-    case 'openHat': return 0.4 + 0.5 * energy;
-    case 'ride': return 0.5 + 0.4 * energy;
-    case 'clap': return 0.25 + 0.5 * energy;
-    case 'bass': return 0.45 + 0.5 * energy;
-    case 'lead': return 0.2 + 0.4 * energy;
-    case 'chords': return 0.35 + 0.5 * energy;
+    case 'hat': return 0.3 + 0.15 * energy;
+    case 'openHat': return 0.3 + 0.3 * energy;
+    case 'ride': return 0.3 + 0.2 * energy;
+    case 'clap': return 0.6 + 0.1 * energy;
+    case 'bass': return 0.3 + 0.3 * energy;
+    case 'lead': return 0.2 + 0.3 * energy;
+    case 'chords': return 0.35 + 0.35 * energy;
     default: return 1;
   }
 }
@@ -810,7 +817,8 @@ export function stepEvents(song: Song, absoluteStep: number): StepEvents {
   if (layers.perc) {
     // Euclidean hits on a loop that drifts against the bar (polymeter); odd loops in poly sections
     const n = info.section.poly ? choose([5, 7, 9], song.seed, Ch.Genes, 30) : song.perc.n;
-    const k = Math.min(song.perc.k, n - 2);
+    // at most two hits in five steps: the toms color the groove, they do not fill it
+    const k = Math.min(song.perc.k, Math.floor(n * 0.4));
     const i = absoluteStep % n;
     if ((i * k) % n < k) {
       const degree = choose([0, 0, 7, 12, 3, 10], song.seed, Ch.Note, INSTRUMENT.perc, version(song, 'perc', bar), i);
@@ -888,7 +896,8 @@ function leadAt(song: Song, info: BarInfo, step: number, root: number, events: S
       // motorik plings: 16ths over the chord tones, up and down
       const tones = [0, 7, 12, 15, 19, 24];
       const shape = choose([[0, 1, 2, 3, 4, 5], [0, 2, 1, 3, 2, 4], [5, 4, 3, 2, 1, 0], [0, 3, 1, 4, 2, 5]], song.seed, Ch.Lead, 50, version(song, 'lead', info.bar));
-      if (step % 2 === 1 && info.energy < 0.7) return;
+      // eighths: sixteenth plings on top of a sixteenth bass and hats would rush the track
+      if (step % 2 === 1) return;
       events.lead = { note: root + 36 + tones[shape[step % shape.length]], velocity: step % 4 === 0 ? 0.9 : 0.6, length: 1, accent: false, slide: false };
       return;
     }
