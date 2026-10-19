@@ -2,64 +2,64 @@
 
 ## Roadmap
 
-Abgearbeitet von oben nach unten. Jeder erledigte Punkt ist auch in der README dokumentiert.
+Worked through from top to bottom. Every finished item is also documented in the README.
 
-### 1. Spielbar für neue Spieler
+### 1. Playable for new players
 
-- [x] Gamepad-Steuerung
-- [x] Touch-Steuerung für Handy und Tablet mit nipplejs (wie in der Bitmap-Ansicht von ordpool: fester Stick links, dynamischer Stick rechts, Schutz gegen hängende Sticks)
-- [x] Flugschule: geführtes Tutorial für Schub, Driften, Flip-and-burn, Kollisionswarnung, Hitze im Schatten
+- [x] Gamepad controls
+- [x] Touch controls for phones and tablets with nipplejs (as in ordpool's bitmap view: fixed stick left, dynamic stick right, protection against stuck sticks)
+- [x] Flight school: guided tutorial for thrust, drifting, flip-and-burn, impact warning, heat in the shadow
 
 ### 2. Multiplayer
 
-- [x] Peer-to-Peer-Multiplayer ohne Server (Trystero), Turnier-Link zum Teilen, Bots füllen freie Plätze
-- [x] Treffer entscheidet der Schütze, der Besitzer wendet den Schaden an; Vorhersage und weiches Nachführen entfernter Schiffe
-- [ ] TURN-Server für Spieler hinter strikten Firewalls (z. B. Cloudflare TURN, Kosten und Limits prüfen)
-- [ ] Trümmer über das Netz abgleichen (bisher erzeugt jeder Browser sie selbst; Laser-Treffer auf Trümmer bleiben lokal)
+- [x] Peer-to-peer multiplayer without a server (Trystero), tournament link to share, bots fill free places
+- [x] The shooter decides about hits, the owner applies the damage; prediction and smooth correction of remote ships
+- [ ] TURN server for players behind strict firewalls (e.g. Cloudflare TURN; check costs and limits)
+- [ ] Sync wreckage over the network (every browser creates it on its own; laser hits on wreckage stay local)
 
-### 3. Das Turnier als Show
+### 3. The tournament as a show
 
-- [ ] Zuschauer-Modus: Übertragung mit automatischer Regie-Kamera
-- [ ] Zeitlupen-Wiederholung bei Abschüssen (Kill-Cam)
-- [x] Radio 2584: generative Musik mit Tone.js, für alle Piloten synchron
-- [ ] Radio 2584: Kommentator, Jingles, Samples wie in Johannes’ Inscriptions-Experimenten (`haushoppe/deconstructed-inscriptions`)
-- [x] Glitch der Verbindung zum Klon bei Treffern, Einschlägen und Tod
-- [ ] Publikumsgunst (Hype) für spektakuläre Manöver
-- [ ] Sponsoren auf den Schiffen, Sponsor-Aufträge
-- [ ] Klon-Zähler mit HUD-Bildfehlern bei vielen Kopien
+- [ ] Spectator mode: broadcast with an automatic director camera
+- [ ] Slow-motion replay of kills (kill cam)
+- [x] Radio 2584: generative music with Tone.js, in sync for all pilots
+- [ ] Radio 2584: commentator, jingles, samples as in Johannes' inscription experiments (`haushoppe/deconstructed-inscriptions`)
+- [x] Glitch of the link to the clone on hits, impacts and death
+- [ ] Audience favor (hype) for spectacular maneuvers
+- [ ] Sponsors on the ships, sponsor missions
+- [ ] Clone counter with HUD artifacts after many copies
 
-### 4. Arenen mit eigener Physik
+### 4. Arenas with their own physics
 
-- [ ] Saturnringe: tausende Eisbrocken
-- [ ] Kessler-Feld: Trümmer einer zerstörten Station
-- [ ] Gasriese: starke Schwerkraft, Swing-by als Waffe
-- [ ] Sonnennah: brutale Hitze, Sonnenstürme stören die Ortung
+- [ ] Saturn's rings: thousands of chunks of ice
+- [ ] Kessler field: debris of a destroyed station
+- [ ] Gas giant: strong gravity, swing-by as a weapon
+- [ ] Close to the sun: brutal heat, solar storms disturb the sensors
 
-### 5. Spielmodi
+### 5. Game modes
 
-- [ ] Slingshot-Rennen mit Checkpoints um Gravitationsfelder
-- [ ] Last Clone Standing: drei Klone, danach nur mit längerer Werbung
-- [ ] Teams: Menschen gegen Aliens
+- [ ] Slingshot race with checkpoints around gravity wells
+- [ ] Last Clone Standing: three clones, after that only with longer ads
+- [ ] Teams: humans against aliens
 
-### 6. Taktik
+### 6. Tactics
 
-- [ ] Torpedos: wenige Schuss, zielsuchend, mit dem Laser abschießbar
-- [ ] Täuschkörper und Schleichfahrt: kaltes Schiff ohne Antrieb ist schwerer zu orten
+- [ ] Torpedoes: few shots, homing, can be shot down with the laser
+- [ ] Decoys and silent running: a cold ship without drive is harder to detect
 
-### 7. Verbreitung
+### 7. Spreading the game
 
-- [ ] Abschuss-Clip als kurzes Video zum Teilen
-- [ ] Bestenliste ohne eigenen Server
+- [ ] Kill clip as a short video to share
+- [ ] Leaderboard without a server of our own
 
 ## Domains
 
-- `solartournament.com` registrieren (Hauptadresse).
-- `solartournament.games` registrieren („Solar Tournament Games“).
-- Beide waren am 2026-10-18 frei. `solartournament.org` ist fremd vergeben (bezahlt bis 2027-01-28).
-- `.game` ist mit rund 300 $/Jahr zu teuer, `.games` kostet nur ein paar Euro.
+- Register `solartournament.com` (main address).
+- Register `solartournament.games` ("Solar Tournament Games").
+- Both were available on 2026-10-18. `solartournament.org` belongs to someone else (paid until 2027-01-28).
+- `.game` is too expensive at around $300/year; `.games` costs only a few euros.
 
-## Werbung im Sponsor-Break
+## Ads in the sponsor break
 
-- Echtes Werbenetzwerk anbinden: eine Klasse, die `AdProvider` aus `src/sponsors.ts` implementiert, ersetzt `PlaceholderAd`.
-- Nur ein Format, das „Werbung ansehen gegen Belohnung“ ausdrücklich erlaubt (Rewarded Ads). Werbenetzwerke verbieten, Klicks auf die Werbung selbst zu belohnen; deshalb bootet der Klon über einen eigenen Knopf, nicht über einen Klick auf die Anzeige. Die Richtlinien des gewählten Netzwerks vor der Anbindung prüfen.
-- Datenschutz: Consent-Banner (DSGVO), sobald personalisierte Werbung ausgeliefert wird.
+- Connect a real ad network: a class implementing `AdProvider` from `src/sponsors.ts` replaces `PlaceholderAd`.
+- Only a format that explicitly allows "watch an ad for a reward" (rewarded ads). Ad networks forbid rewarding clicks on the ad itself; that is why the clone boots from a button of its own, not from a click on the ad. Check the chosen network's policies before connecting it.
+- Privacy: consent banner (GDPR) as soon as personalized ads are served.

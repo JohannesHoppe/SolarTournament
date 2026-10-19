@@ -1,110 +1,111 @@
-# SolarTournament – Einführung für Entwickler
+# SolarTournament – developer introduction
 
-SolarTournament ist ein Weltraum-Shooter im Browser: three.js, TypeScript, Vite, statisch gehostet. Kurze Runden (5 Minuten), Schiffe kämpfen in einem Asteroidenfeld gegeneinander. Multiplayer läuft künftig Peer-to-Peer ohne eigenen Server.
+SolarTournament is a space shooter in the browser: three.js, TypeScript, Vite, hosted as a static site. Short rounds (5 minutes), ships fight each other in an asteroid field. Multiplayer runs peer-to-peer without a game server.
 
-Der Code im übergeordneten Verzeichnis (`../`) ist das Original von 2012 (CopperLicht, Node.js, Socket.IO). Es dient nur noch als Quelle für Assets und Ideen und wird nicht verändert.
+The code in the parent directory (`../`) is the original from 2012 (CopperLicht, Node.js, Socket.IO). It only serves as a source of assets and ideas and is never changed.
 
-## Leitlinie: ein eigenes Universum nach zwei Prinzipien
+**Language:** everything in this repository is English: code, comments, docs, commit messages. Johannes and Claude talk German with each other; that does not change the language of the repo.
 
-SolarTournament hat ein eigenes Universum. Wir orientieren uns an beliebten Serienhits, übernehmen aber nur zwei Spielprinzipien:
+## Guideline: a universe of its own
 
-- **A: Realistische Physik wie in The Expanse.** Grund: Es war einfach eine geile Serie. Was fliegt, kollidiert, brennt und kaputtgeht, verhält sich so, wie es da draußen wäre, solange es Spaß macht: Newtonsche Flugphysik, kein Schall im Vakuum, keine Schilde, Laser schlagen durch. Wo wir für den Spielspaß bewusst davon abweichen (z. B. die übertriebene Schwerkraft der Asteroiden), steht das ausdrücklich in der README.
-- **B: Bewusstseinsübertragung auf Klone wie in Altered Carbon.** Die Piloten haben ihr Bewusstsein auf geklonte menschliche Körper übertragen. Stirbt ein Klon, wacht der Pilot im nächsten auf. Daraus erklärt sich der Respawn.
+SolarTournament has a universe of its own. We take inspiration from popular series, but only adopt two game principles:
 
-Dazu kommt ein Look:
+- **A: Realistic physics as in The Expanse.** Reason: it simply was an awesome series. Whatever flies, collides, burns and breaks behaves the way it would out there, as long as it is fun: Newtonian flight, no sound in vacuum, no shields, lasers punch through. Where we deliberately deviate for the fun of it (e.g. the exaggerated gravity of the asteroids), the README says so explicitly.
+- **B: Consciousness transfer into clones as in Altered Carbon.** The pilots have transferred their consciousness into cloned human bodies, printed by 3D printers. When a clone dies, the pilot wakes up in the next one. That explains the respawn.
 
-- **C: Neon und Glitch, angelehnt an Cyberpunk.** Die Zukunft ist im Arsch, und so sieht sie aus: Neonschrift, flackernde Röhren, Sponsoren überall, ein Bild, das bei jedem Treffer zerbricht. Stilelemente aus bekannten Cyberpunk-Spielen dürfen anklingen, aber nicht übertrieben; wir haben unseren eigenen Stil, leicht retro (80er, Oldschool-Techno). Neon muss sein.
+On top of that, a look:
 
-Namen, Begriffe und Figuren aus den Serien und Spielen übernehmen wir nicht; die Welt füllen wir mit eigenen Ideen.
+- **C: Neon and glitch, inspired by cyberpunk.** The future is screwed, and this is what it looks like: neon lettering, flickering tubes, sponsors everywhere, a picture that breaks up with every hit. Stylistic elements of well-known cyberpunk games may resonate, but without overdoing it; we have a style of our own, slightly retro (80s, old-school techno). Neon is a must.
 
-### Farben
+We do not adopt names, terms or characters from the series and games; we fill the world with our own ideas.
 
-Sonnen-Orange `#ff9d00` (Farbton 37°) für alles, was man drückt und was knallt; sein Komplement Azurblau (217°) für Informationen: `#0062ff` exakt als Neon-Leuchten, `#4d91ff` aufgehellt als lesbare Schrift. Neon entsteht aus weißer Schrift mit bis zu acht `text-shadow` in Abstufungen der Farbe (`--neon-orange`, `--neon-blue` in `style.css`); Flackern respektiert `prefers-reduced-motion`. Neon gezielt einsetzen: Logo, Überschriften der Tafeln, Sponsor-Schild, Radio-Titel.
+### Colors
 
-## Pflicht: Jedes Spielprinzip wird dokumentiert
+Sun orange `#ff9d00` (hue 37°) for everything you press and everything that hits; its complement azure blue (217°) for information: `#0062ff` exactly as neon glow, `#4d91ff` lightened as readable text. Neon is a tinted white tube with layered `text-shadow`s in shades of the color (`--neon-orange`, `--neon-blue` in `style.css`); flickering respects `prefers-reduced-motion`. Use neon deliberately: the "Tournament" of the logo, plate headings, the sponsor sign, the radio title.
 
-Alles, was wir uns für das Spiel ausdenken, muss dokumentiert sein, damit wir das SolarTournament-Universum später durchgängig verstehen können: Physik, Schadensmodell, Regeln, Punkte, Story, Welt.
+## Mandatory: every game principle is documented
 
-- **README.md** erklärt das Universum und die Spielphysik für Spieler und Entwickler, mit den tatsächlichen Zahlenwerten.
-- Jede Änderung an einer Spielregel oder Konstante aktualisiert die README im selben Commit. README und Code dürfen nie auseinanderlaufen.
-- Neue Story-Elemente (Zeit, Welt, Figuren, Hintergründe) kommen in den Abschnitt „The universe“ der README.
-- Konstanten im Code tragen einen Kommentar mit Einheit und Begründung.
+Everything we come up with for the game must be documented, so that we can understand the SolarTournament universe thoroughly later: physics, damage model, rules, points, story, world.
 
-## Einheiten
+- **README.md** explains the universe and the game physics for players and developers, with the actual numbers.
+- Every change to a game rule or constant updates the README in the same commit. README and code must never drift apart.
+- New story elements (time, world, characters, background) go into the README section "The universe".
+- Constants in the code carry a comment with unit and reasoning.
 
-1 Welteinheit = 5 cm. Ein Schiff ist etwa 35 m lang. Geschwindigkeiten im Code in Einheiten/s, im HUD in m/s (Faktor 0,05). 1 g = 196,2 Einheiten/s².
+## Units
 
-## Befehle
+1 world unit = 5 cm. A ship is about 35 m long. Speeds in code in units/s, in the HUD in m/s (factor 0.05). 1 g = 196.2 units/s².
+
+## Commands
 
 ```
 npm install
-npm run dev         # Dev-Server auf http://127.0.0.1:5173/
+npm run dev         # dev server on http://127.0.0.1:5173/
 npm run typecheck
-npm run build       # statische Seite in dist/
-npm run deploy      # baut und veröffentlicht auf Cloudflare Pages (Projekt „solartournament“)
+npm run build       # static site in dist/
+npm run deploy      # builds and publishes to Cloudflare Pages (project "solartournament")
 ```
 
-Gehostet wird auf Cloudflare Pages (`wrangler.toml`). Veröffentlichen nur, wenn Johannes darum bittet.
+Hosting is Cloudflare Pages (`wrangler.toml`). Only publish when Johannes asks for it.
 
-Nie `npx` verwenden, immer die Scripts aus `package.json`.
+Never use `npx`, always the scripts from `package.json`.
 
-## Aufbau (`src/`)
+## Structure (`src/`)
 
-| Datei | Inhalt |
+| File | Content |
 |---|---|
-| `main.ts` | Start: WebGL-Check, Assets laden, `Game` erzeugen |
-| `assets.ts` | Lädt die Schiffsmodelle und Antriebs-Sprites, sammelt die im Code erzeugten Assets ein |
-| `rocks.ts` | Erzeugt die 16 Asteroidenformen: Rauschen, Krater, vier Gesteinsarten; nur ganzzahliges Hashing und Polynome, damit jeder Browser identische Formen baut |
-| `textures.ts` | Canvas-Texturen: Leuchtkreise, Funken, Rauch |
-| `sounds.ts` | Synthetisierte Soundeffekte: Laser, Explosion |
-| `glitch.ts` | Gestörte Verbindung zum Klon: Shader, der einen kaputten JPEG-Datenstrom nachahmt (Look der REVEALED-Inscriptions), plus Glitch des DOM-HUD |
-| `music/songs.ts` | Radio 2584: Songs aus einem Seed (Stil, Tonart, Patterns, Arrangement); reine Funktionen von Seed, Takt und Schritt |
-| `music/band.ts` | Die Tone.js-Instrumente und wie ein Sechzehntel eines Songs gespielt wird |
-| `music/radio.ts` | Spielt den Song zur Uhr des Cues (Turnier: Rundenuhr des Hosts), springt bei Abweichung |
-| `music/preview.ts` | Entwicklungswerkzeug: rendert einen Songabschnitt offline als WAV |
-| `game.ts` | Spielzustände, Rundenablauf, Laser, Kollisionen, Arena, Kamera, Pilot (G-Kräfte, Warnungen) |
-| `flight.ts` | Newtonsches Flugmodell mit Bordcomputer (Drehraten-Regelung, `steer()`) |
-| `ship.ts` | Schiff: Rumpf, Trefferzonen, Löcher mit Dekompression, Laser-Hitze, Antriebsanimation |
-| `asteroids.ts` | Asteroidenfeld: Ellipsoid-Kollision, Raycast, Sichtlinie, Schwerkraft, Bruchstücke |
-| `wrecks.ts` | Trümmer zerstörter Schiffe |
-| `bots.ts` | Bot-KI: Soll-Geschwindigkeit, Drehen und Brennen, Zielen mit Streuung |
-| `effects.ts` | Partikel (ein Draw-Call pro Textur), Laserstrahlen |
-| `space.ts` | Sterne, Nebel, Sonne mit Schattenwurf, Raumstaub |
-| `hud.ts` | DOM-HUD: Anzeigen, Marker, Warnungen, Tunnelblick |
-| `audio.ts` | Ton durch den Rumpf (Tiefpass), Bordcomputer-Pieptöne, Antriebsgeräusch |
-| `online.ts` | Online-Turnier: Besitz der Schiffe, was übers Netz geht, Bots des Hosts |
-| `net/session.ts` | Turnier-Protokoll: Nachrichtentypen, Host-Wahl (am längsten im Raum), Raumcodes |
-| `net/transport.ts` | Transport: Trystero (WebRTC über Nostr-Relays) und BroadcastChannel für lokale Tests (`?local=1`) |
-| `school.ts` | Flugschule: Schritte mit Anleitung, Erfolgsbedingung und Wegpunkt |
-| `sponsors.ts` | Sponsor-Break vor dem Respawn: `AdProvider`-Schnittstelle, Platzhalter-Werbung |
-| `input.ts` | Tastatur, Maus (Pointer Lock als virtueller Stick) und Gamepad, führt alle Eingaben zu `Controls` zusammen |
-| `touch.ts` | Touch-Steuerung mit nipplejs: fester Stick links, dynamischer Stick rechts, Halte-Tasten |
-| `random.ts` | Deterministischer Zufallsgenerator |
+| `main.ts` | Startup: WebGL check, load assets, create `Game` |
+| `assets.ts` | Loads the ship models and drive sprites, collects the assets generated in code |
+| `rocks.ts` | Generates the 16 asteroid shapes: noise, craters, four kinds of rock; integer hashing and polynomials only, so every browser builds identical shapes |
+| `textures.ts` | Canvas textures: glows, sparks, smoke |
+| `sounds.ts` | Synthesized sound effects: laser, explosion |
+| `glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |
+| `music/songs.ts` | Radio 2584: songs from a seed (style, key, patterns, arrangement); pure functions of seed, bar and step |
+| `music/band.ts` | The Tone.js instruments and how one sixteenth of a song is played |
+| `music/radio.ts` | Plays the song on the cue's clock (tournament: the host's round clock), jumps when it drifts |
+| `music/preview.ts` | Development tool: renders a stretch of a song offline as WAV |
+| `game.ts` | Game states, round flow, lasers, collisions, arena, camera, pilot (g-forces, warnings) |
+| `flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`) |
+| `ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, drive animation |
+| `asteroids.ts` | Asteroid field: ellipsoid collision, raycast, line of sight, gravity, fragments |
+| `wrecks.ts` | Wreckage of destroyed ships |
+| `bots.ts` | Bot AI: desired velocity, turn and burn, aiming with spread |
+| `effects.ts` | Particles (one draw call per texture), laser beams |
+| `space.ts` | Stars, nebula, sun with shadows, space dust |
+| `hud.ts` | DOM HUD: gauges, markers, warnings, tunnel vision |
+| `audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static |
+| `online.ts` | Online tournament: ship ownership, what goes over the network, the host's bots |
+| `net/session.ts` | Tournament protocol: message types, host election (longest in the room), room codes |
+| `net/transport.ts` | Transport: Trystero (WebRTC over Nostr relays) and BroadcastChannel for local tests (`?local=1`) |
+| `school.ts` | Flight school: steps with instruction, success condition and waypoint |
+| `sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, placeholder ad |
+| `input.ts` | Keyboard, mouse (pointer lock as virtual stick) and gamepad, merges all input into `Controls` |
+| `touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |
+| `random.ts` | Deterministic random generator |
 
-`tools/extract-ccb/` lädt die alte CopperCube-Szene mit der Original-Engine und schreibt die beiden Schiffe als glTF-Modelle nach `public/assets/models/`. Aufruf: `npm run dev`, dann `http://127.0.0.1:5173/tools/extract-ccb/` öffnen.
+`tools/extract-ccb/` loads the old CopperCube scene with the original engine and writes the two ships as glTF models to `public/assets/models/`. Usage: `npm run dev`, then open `http://127.0.0.1:5173/tools/extract-ccb/`. It only runs when opened by hand.
 
-## Lizenz
+## License
 
-Der Code steht unter AGPL-3.0-or-later (`LICENSE`), das Repo ist öffentlich. Name, Logo und Domains sind nicht lizenziert. Die einzigen Dateien in `public/assets/` sind Johannes' eigene Schiffsmodelle mit ihren Antriebs-Sprites (nicht lizenziert) und die Schrift (OFL). Asteroiden, Himmel, Partikel und Soundeffekte entstehen im Code. Neue Abhängigkeiten müssen mit der AGPL vereinbar sein. Fremde Assets kommen nur mit geklärter Lizenz ins Repo, und die Lizenz wird in der README genannt; im Zweifel lieber im Code erzeugen. Nie Schlüssel, Tokens oder Zugangsdaten committen. Das Menü verlinkt den Quellcode, so wie es die AGPL für ein Netzwerkspiel verlangt.
+The code is licensed under AGPL-3.0-or-later (`LICENSE`), the repository is public. Name, logo and domains are not licensed. The only files in `public/assets/` are Johannes' own ship models with their drive sprites (not licensed) and the font (OFL). Asteroids, sky, particles, sound effects and music are generated in code. New dependencies must be compatible with the AGPL. Third-party assets only enter the repo with a clarified license, named in the README; when in doubt, generate in code. Never commit keys, tokens or credentials. The menu links the source code, as the AGPL requires for a network game.
 
-## Regeln für den Code
+## Code rules
 
-- **Determinismus:** Alles, was den gemeinsamen Weltzustand betrifft (Asteroidenfeld, Bruchstücke, Trümmer, die Noten von Radio 2584), entsteht aus dem Seed-Zufall (`Randomizer`), nie aus `Math.random()`. Sonst sehen Peer-to-Peer-Mitspieler unterschiedliche Welten. `Math.random()` ist nur für Optik erlaubt (Partikel, Flackern) und für Bot-Entscheidungen.
-- **Menschen- und Alien-Schiff sind identisch**, nur das Aussehen unterscheidet sich (gemeinsamer Trefferradius).
-- **Kein Schall von außen:** Der Spieler hört nur, was durch den eigenen Rumpf kommt, plus Pieptöne des Bordcomputers.
-- **Performance:** Keine pro Frame erzeugten Objekte in heißen Schleifen; Scratch-Vektoren auf Modulebene wiederverwenden.
+- **Determinism:** everything that concerns the shared world state (asteroid field, fragments, wreckage, the notes of Radio 2584) comes from seeded randomness (`Randomizer`), never from `Math.random()`. Otherwise peer-to-peer players see different worlds. `Math.random()` is only allowed for visuals (particles, flicker, glitches) and bot decisions.
+- **Human and alien ship are identical**, only their looks differ (shared hit radius).
+- **No sound from outside:** the player hears only what travels through the own hull, plus the flight computer's beeps, the radio and the link static in the headset.
+- **Performance:** no objects created per frame in hot loops; reuse module-level scratch vectors.
 
-## Testen im Browser
+## Testing in the browser
 
-Im Dev-Modus hängt das Spiel als `window.game` am Fenster. Damit lässt sich der Zustand auslesen und gezielt setzen (Playwright, `browser_evaluate`):
+In dev mode the game hangs on the window as `window.game`. It lets you read and set state (Playwright, `browser_evaluate`):
 
-- Runde starten: `document.getElementById('start').click()`
-- Tasten simulieren: `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))`
-- Zeit einfrieren für Screenshots: `game.timeScale = 0`
-- Bots abschalten: andere Schiffe auf `alive = false` und `respawnAt = Infinity` setzen
-- Multiplayer: zwei Tabs mit `?t=<code>&local=1` öffnen und in beiden „Online tournament“ klicken (BroadcastChannel, ohne Internet); ohne `local=1` läuft derselbe Test über Trystero und echte Nostr-Relays
+- Start a round: `document.getElementById('start').click()`
+- Simulate keys: `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))`
+- Freeze time for screenshots: `game.timeScale = 0`
+- Disable bots: set the other ships to `alive = false` and `respawnAt = Infinity`
+- Multiplayer: open two tabs with `?t=<code>&local=1` and click "Online tournament" in both (BroadcastChannel, no internet); without `local=1` the same test runs over Trystero and real Nostr relays
+- Render music offline: `const { renderPreview } = await import('/src/music/preview.ts')`, then `renderPreview(seed, 'round', 'acid', fromSecond, seconds)`; returns a WAV file as base64 that can be saved and listened to
+- Trigger a glitch: `game.glitch.trigger(1, 5)`; idle glitches in the menu make element screenshots fail, so stop them with `game.nextIdleGlitch = Infinity`
 
-- Musik offline rendern: `const { renderPreview } = await import('/src/music/preview.ts')`, dann `renderPreview(seed, 'round', 'acid', vonSekunde, dauer)`; liefert eine WAV-Datei als Base64, die sich als Datei speichern und anhören lässt
-- Glitch auslösen: `game.glitch.trigger(1, 5)`
-
-Der Testbrowser rendert ohne GPU, die Framerate dort sagt nichts über echte Hardware. Spielgefühl und Ton lassen sich so nicht beurteilen, das testet Johannes selbst.
+The test browser renders without a GPU; its frame rate says nothing about real hardware. Game feel and sound cannot be judged this way; Johannes tests those himself.

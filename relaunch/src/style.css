@@ -108,11 +108,12 @@ kbd {
 }
 
 h1 .neon {
-  animation: neon-power-on 1.4s ease-out 1, neon-stutter 11s 1.4s infinite;
+  /* step-end: a tube snaps on and off, it never fades */
+  animation: neon-power-on 1.4s step-end 1, neon-stutter 11s step-end 1.4s infinite;
 }
 
 .neon-loose {
-  animation: neon-flicker 7s infinite;
+  animation: neon-flicker 7s step-end infinite;
 }
 
 .plate h2 {
@@ -650,7 +651,7 @@ button.primary {
   line-height: 1.5;
   color: var(--tube-blue);
   text-shadow: var(--neon-blue);
-  animation: neon-flicker-blue 5s infinite;
+  animation: neon-flicker-blue 5s step-end infinite;
 }
 
 .sponsor-label,
