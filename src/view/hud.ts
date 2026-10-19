@@ -22,6 +22,7 @@ export class Hud {
   private readonly vignette = $('g-vignette');
   private readonly speed = $('hud-speed');
   private readonly mode = $('hud-mode');
+  private readonly overdrive = $('hud-overdrive');
   private readonly prograde = $('prograde');
   private readonly retrograde = $('retrograde');
   private readonly message = $('hud-message');
@@ -105,7 +106,7 @@ export class Hud {
   }
 
   /** A short word or number floating up from a point in space: a hit, a kill, points. */
-  popup(camera: THREE.Camera, point: THREE.Vector3, text: string, kind: 'hit' | 'kill' | 'points') {
+  popup(camera: THREE.Camera, point: THREE.Vector3, text: string, kind: 'hit' | 'armor' | 'kill' | 'points') {
     projected.copy(point).project(camera);
     if (projected.z > 1 || Math.abs(projected.x) > 1 || Math.abs(projected.y) > 1) return;
     const popup = document.createElement('div');
@@ -116,9 +117,12 @@ export class Hud {
     this.root.append(popup);
   }
 
-  /** The crosshair lights up while the laser would hit a ship. */
-  setOnTarget(on: boolean) {
-    if (this.crosshair.classList.contains('on-target') !== on) this.crosshair.classList.toggle('on-target', on);
+  /** The crosshair glows orange while the laser would hit a drive, and dims over armor, where a shot does little. */
+  setOnTarget(hit: 'drive' | 'armor' | null) {
+    const drive = hit === 'drive';
+    const armor = hit === 'armor';
+    if (this.crosshair.classList.contains('on-target') !== drive) this.crosshair.classList.toggle('on-target', drive);
+    if (this.crosshair.classList.contains('on-armor') !== armor) this.crosshair.classList.toggle('on-armor', armor);
   }
 
   /** The crosshair and the hit marker sit where the nose points (see Game.aimCrosshair). */
@@ -133,6 +137,12 @@ export class Hud {
     if (!point) return;
     setText(this.waypointLabel, label);
     pin(this.waypoint, camera, point);
+  }
+
+  /** The overdrive next to the flight mode: ready, or the seconds until it is. */
+  setOverdrive(seconds: number) {
+    setText(this.overdrive, seconds > 0 ? `Overdrive ${Math.ceil(seconds)} s` : 'Overdrive ready');
+    if (this.overdrive.classList.contains('ready') !== (seconds <= 0)) this.overdrive.classList.toggle('ready', seconds <= 0);
   }
 
   /** The flight mode next to the velocity: AUTOPILOT in blue, FREE DRIFT in orange. */

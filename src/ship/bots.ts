@@ -14,6 +14,12 @@ const STICKY = 0.7;
 /** At full ease (see Bot.ease) bots aim this much worse and react this much later (s). */
 const EASE_AIM = 1.5;
 const EASE_REACTION = 0.4;
+/** A ship within this distance (units, 1.5 km) on a bot's tail with its nose within THREAT_ANGLE (rad) of the bot makes it defend. */
+const THREAT_RANGE = 30000;
+const THREAT_ANGLE = 0.3;
+/** A bot fires at armor only while its laser is cooler than this (one shot heats it by 20), and only in some of its thinking spells (SNIPE_CHANCE): sparingly. */
+const ARMOR_FIRE_HEAT = 10;
+const SNIPE_CHANCE = 0.3;
 /** Bots close in with up to this speed and hold position near their target. */
 const CRUISE_SPEED = 2500;
 const HOLD_DISTANCE = 4000;
@@ -48,7 +54,9 @@ export const BOT_NAMES = ['Ingmar', 'Nova', 'Kessler', 'Vega', 'Orion', 'Sputnik
  * Newtonian pursuit AI. Bots only see ships they have a line of sight to. It works out the velocity it wants (close in on its target,
  * hold distance, avoid rocks, stay in the arena) and corrects large differences by turning
  * the main drive into the error and burning. Small differences are trimmed with the
- * maneuvering thrusters while the nose stays on the target.
+ * maneuvering thrusters while the nose stays on the target. The armor makes it a dogfight:
+ * a bot works its way behind its target, where the drive is open, fires at the drive and only
+ * snipes at armor, and turns its own armored nose to a ship on its tail.
  */
 export class Bot {
   private readonly aimOffset = new THREE.Vector3();
@@ -73,6 +81,13 @@ export class Bot {
    * again and again, and lets it fade (see Game). It widens their aim and slows their trigger.
    */
   ease = 0;
+  /** An unarmed bot (a flight school sparring partner) never shoots and runs from a chaser instead of turning on it. */
+  armed = true;
+  /** In this thinking spell the bot takes single shots at armor too (see SNIPE_CHANCE). */
+  private snipe = false;
+  /** The side the bot jinks to while it defends, and when it switches. */
+  private dodge = 1;
+  private nextDodge = 0;
 
   constructor(readonly ship: Ship, private readonly skill: number) {}
 
@@ -88,6 +103,7 @@ export class Bot {
       this.nextRethink = now + 0.4 + Math.random() * 0.6;
       // the aim wanders around the target: a direction and a share of the full error (see aimError)
       this.aimOffset.randomDirection().multiplyScalar(Math.random());
+      this.snipe = Math.random() < SNIPE_CHANCE;
       if (Math.random() < 0.2) this.wanderTarget.randomDirection().multiplyScalar(Math.random() * 30000);
     }
 
@@ -111,13 +127,44 @@ export class Bot {
         targetDistance = distance;
       }
     }
+    // a ship on the own tail with its nose on the bot comes first: the bot turns its armor to
+    // it and jinks, because from behind the drive is open
+    let defending = false;
+    let chaser: Ship | null = null;
+    for (const ship of ships) {
+      if (ship === this.ship || !ship.alive) continue;
+      const line = toTarget.subVectors(me.position, ship.flight.position);
+      const distance = line.length();
+      if (distance < THREAT_RANGE && this.ship.tailToward(line) && ship.flight.angleTo(line) < THREAT_ANGLE && field.lineOfSight(me.position, ship.flight.position)) {
+        chaser = ship;
+        if (this.armed) {
+          target = ship;
+          targetDistance = distance;
+          defending = true;
+        }
+        break;
+      }
+    }
+    // an unarmed bot does not fight back: it runs, and its drive stays open to the chaser
+    if (chaser && !this.armed) target = null;
     this.target = target;
 
-    if (target) {
+    if (chaser && !this.armed) {
+      toTarget.subVectors(me.position, chaser.flight.position);
+      desired.copy(toTarget).normalize().multiplyScalar(CRUISE_SPEED * 0.6);
+    } else if (target) {
       toTarget.subVectors(target.flight.position, me.position);
       this.senseJink(target, dt, now);
-      const approach = THREE.MathUtils.clamp((targetDistance - HOLD_DISTANCE) * 0.3, -CRUISE_SPEED * 0.3, CRUISE_SPEED);
-      desired.copy(toTarget).normalize().multiplyScalar(approach).add(target.flight.velocity);
+      if (defending) {
+        // hold the distance and face the attacker; the jink below makes it miss
+        const approach = THREE.MathUtils.clamp((targetDistance - HOLD_DISTANCE) * 0.3, -CRUISE_SPEED * 0.3, CRUISE_SPEED);
+        desired.copy(toTarget).normalize().multiplyScalar(approach).add(target.flight.velocity);
+      } else {
+        // the place to be is behind the target, where its drive is open
+        const goal = local.copy(target.flight.position).addScaledVector(target.flight.forward(heading), -HOLD_DISTANCE).sub(me.position);
+        const approach = Math.min(goal.length() * 0.3, CRUISE_SPEED);
+        desired.copy(goal).normalize().multiplyScalar(approach).add(target.flight.velocity);
+      }
     } else {
       toTarget.subVectors(this.wanderTarget, me.position);
       desired.copy(toTarget).normalize().multiplyScalar(Math.min(CRUISE_SPEED * 0.6, toTarget.length() * 0.2));
@@ -140,7 +187,9 @@ export class Bot {
     }
 
     error.subVectors(desired, me.velocity);
-    const burning = danger || error.length() > BURN_THRESHOLD && !(target && targetDistance < FIRE_RANGE && !this.ship.overheated);
+    // near the target the nose stays on it and the thrusters carry the bot around it; a bot
+    // under attack never turns its tail to burn
+    const burning = danger || (!defending && error.length() > BURN_THRESHOLD && !(target && targetDistance < FIRE_RANGE && !this.ship.overheated));
     if (burning) {
       me.steer(error, 2.5, controls);
       controls.thrust = me.angleTo(error) < 0.25 ? 1 : 0;
@@ -151,7 +200,11 @@ export class Bot {
       const onTarget = me.angleTo(aimPoint) < angularSize + this.ship.radius / Math.max(targetDistance, 1);
       this.onTargetFor = onTarget ? this.onTargetFor + dt : 0;
       const reaction = 0.45 - 0.3 * this.skill + EASE_REACTION * this.ease;
-      controls.fire = this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < 40 + 50 * this.skill;
+      // a shot into the drive is worth the heat; at the armor a bot only snipes now and then,
+      // single shots from a nearly cool laser, so it keeps the heat for the drive
+      const open = target.tailToward(toTarget);
+      const heatLimit = open ? 40 + 50 * this.skill : ARMOR_FIRE_HEAT;
+      controls.fire = (open || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
     } else {
       me.steer(toTarget, 2.5, controls);
     }
@@ -162,6 +215,14 @@ export class Bot {
     controls.strafeX = THREE.MathUtils.clamp(local.x, -1, 1);
     controls.strafeY = THREE.MathUtils.clamp(local.y, -1, 1);
     controls.strafeZ = THREE.MathUtils.clamp(-local.z, -1, 1);
+    // under attack the bot jinks left and right, so the attacker's aim cannot settle
+    if (defending) {
+      if (now >= this.nextDodge) {
+        this.dodge = -this.dodge;
+        this.nextDodge = now + 0.4 + Math.random() * 0.4;
+      }
+      controls.strafeX = this.dodge;
+    }
     return controls;
   }
 

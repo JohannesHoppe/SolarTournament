@@ -19,7 +19,7 @@ export interface Controls {
 
 export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 
-export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'radio' | 'help' | 'autopilot';
+export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'radio' | 'help' | 'autopilot' | 'overdrive';
 type ActionHandler = (action: Action) => void;
 
 /** The pointer at this share of the shorter screen side away from the center turns at full rate. */
@@ -40,6 +40,7 @@ const PAD_ACTIONS: [number, Action][] = [
   [PAD.b, 'back'],
   [PAD.view, 'camera'],
   [PAD.rightStick, 'autopilot'],
+  [PAD.rb, 'overdrive'],
 ];
 
 /**
@@ -56,7 +57,7 @@ export class Input {
   private steering = false;
   private handler: ActionHandler = () => {};
   private readonly padPressed = new Set<number>();
-  private readonly touch = new TouchControls(() => this.handler('pause'), () => this.handler('autopilot'));
+  private readonly touch = new TouchControls(() => this.handler('pause'), () => this.handler('autopilot'), () => this.handler('overdrive'));
 
   constructor(private readonly canvas: HTMLElement) {
     window.addEventListener('keydown', (e) => this.onKey(e, true));
@@ -192,6 +193,7 @@ export class Input {
     if (e.code === 'KeyM') this.handler('radio');
     if (e.code === 'F1') this.handler('help');
     if (e.code === 'KeyT') this.handler('autopilot');
+    if (e.code === 'KeyE') this.handler('overdrive');
   }
 }
 

@@ -24,7 +24,7 @@ export interface SchoolContext {
   dt: number;
   /** The target drone, once a drill has spawned it. */
   drone: Ship | null;
-  /** Places the target drone at a point, drifting with a velocity, facing the pilot. */
+  /** Places the target drone at a point, drifting with a velocity, its drive towards the pilot. */
   spawnDrone(position: THREE.Vector3, velocity: THREE.Vector3): void;
   /** The sparring bot of the final exam. */
   bot: Ship | null;

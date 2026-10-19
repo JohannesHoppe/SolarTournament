@@ -120,15 +120,24 @@ const CAMERA_TURN = 18;
 /** A landed hit jolts the camera by this share of the ship radius (a kill by twice that), fading at KICK_FADE (1/s). */
 const KICK_SHAKE = 0.06;
 const KICK_FADE = 9;
+/**
+ * The overdrive (E): the drive's reactor dumps everything into one shove along the nose, this
+ * much speed at once (units/s, 150 m/s), past the tournament's limit. It leaves the clone at
+ * the edge of blacking out (OVERDRIVE_STRAIN), the laser overheated, and needs
+ * OVERDRIVE_RECHARGE seconds before it fires again.
+ */
+const OVERDRIVE_PUSH = 3000;
+const OVERDRIVE_STRAIN = 0.9;
+const OVERDRIVE_RECHARGE = 60;
 /** Hosts who ask for less motion get no camera shake. */
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 /** What a landed hit says where it struck, by the zone it broke. */
-const HIT_WORDS: Record<Zone, string> = { reactor: 'REACTOR', drive: 'DRIVE', thrusters: 'THRUSTERS', hull: 'HIT' };
+const HIT_WORDS: Record<Zone, string> = { reactor: 'REACTOR', drive: 'DRIVE', thrusters: 'ARMOR', armor: 'ARMOR' };
 const ZONE_MESSAGES: Record<Zone, string> = {
   reactor: 'Reactor breach',
   drive: 'Main drive damaged',
   thrusters: 'Thrusters damaged',
-  hull: 'Hull breach',
+  armor: 'Armor hit',
 };
 const BEST_SCORE_KEY = 'solartournament.best';
 const CALLSIGN_KEY = 'solartournament.callsign';
@@ -242,9 +251,11 @@ export class Game implements OnlineGame {
   /** How much the bots go easy on the Host in a solo round, 0..1 (see DEATH_EASE). */
   private ease = 0;
   /** The nose is on a ship: the laser would hit now (see assistAim). */
-  private onTarget = false;
+  private onTarget: 'drive' | 'armor' | null = null;
   /** Strength of the camera jolt after the own laser hit something, 0..2. */
   private kick = 0;
+  /** When the overdrive can fire again (game time, s). */
+  private overdriveReadyAt = 0;
   /** The brake has brought the ship to rest (it beeps once). */
   private braked = false;
   /** The flight computer's output, reused from frame to frame. */
@@ -624,6 +635,7 @@ export class Game implements OnlineGame {
         }
         if (action === 'camera') this.cockpit = !this.cockpit;
         if (action === 'autopilot' && this.me?.alive) this.toggleAutopilot();
+        if (action === 'overdrive') this.overdrive();
         break;
       case 'paused':
         if (action === 'confirm' || action === 'pause' || action === 'back') this.resume();
@@ -714,6 +726,7 @@ export class Game implements OnlineGame {
     this.cockpit = false;
     this.flipping = false;
     this.autopilot = true;
+    this.overdriveReadyAt = 0;
     this.ease = 0;
     // a resumed flight school starts with the autopilot as the drills before left it
     if (this.school) this.autopilot = this.school.startsWithAutopilot;
@@ -1087,9 +1100,10 @@ export class Game implements OnlineGame {
     this.hud.updateVelocityMarkers(this.camera, me);
     this.hud.setCenter(this.camera, me);
     this.hud.setAutopilot(this.autopilot);
+    this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
     const waypoint = this.school ? this.teach(dt, myControls) : null;
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
-    this.hud.setOnTarget(me.alive && this.onTarget);
+    this.hud.setOnTarget(me.alive ? this.onTarget : null);
 
     const outside = me.alive && me.outsideSince !== null;
     if (!outside) this.toldToReturn = false;
@@ -1196,11 +1210,11 @@ export class Game implements OnlineGame {
     this.sound.beep(220, 0.1, 0.2);
   }
 
-  /** A defenseless target for the flight school, facing the pilot. */
+  /** A defenseless target for the flight school, its drive towards the pilot: the one place a laser hurts. */
   private spawnDrone(position: THREE.Vector3, velocity: THREE.Vector3) {
     const me = this.me!;
     this.drone ??= this.addShip('drone', 'Target drone', me.type === 'human' ? 'alien' : 'human', false);
-    const look = new THREE.Matrix4().lookAt(position, me.flight.position, me.flight.up(new THREE.Vector3()));
+    const look = new THREE.Matrix4().lookAt(me.flight.position, position, me.flight.up(new THREE.Vector3()));
     this.drone.spawn(position, new THREE.Quaternion().setFromRotationMatrix(look), this.time);
     this.drone.flight.velocity.copy(velocity);
     this.drone.protectedUntil = this.time;
@@ -1212,6 +1226,7 @@ export class Game implements OnlineGame {
     if (this.sparring) this.removeShip(this.sparring.bot.ship);
     const ship = this.addShip('sparring', 'Sparring bot', me.type === 'human' ? 'alien' : 'human', false);
     const bot = new Bot(ship, skill);
+    bot.armed = armed;
     this.bots.push(bot);
     this.sparring = { bot, armed };
     const look = new THREE.Matrix4().lookAt(position, me.flight.position, me.flight.up(new THREE.Vector3()));
@@ -1292,13 +1307,13 @@ export class Game implements OnlineGame {
   /**
    * Aim assist: a ship in sight within AIM_ASSIST_ANGLE of the nose pulls the nose onto it,
    * the firmer the closer it already is, and the less the pilot steers away. The bots aim
-   * with a computer too; the pilot still pulls the trigger. Sets `onTarget` when the laser
+   * with a computer too; the pilot still pulls the trigger. Sets `onTarget` to what the laser
    * would hit now.
    */
   private assistAim(out: Controls): Controls {
     const me = this.me!;
     const flight = me.flight;
-    this.onTarget = false;
+    this.onTarget = null;
     if (!me.alive) return out;
     const nose = flight.forward(forward);
     let target: Ship | null = null;
@@ -1317,7 +1332,8 @@ export class Game implements OnlineGame {
       }
     }
     if (!target) return out;
-    this.onTarget = angle < target.radius / Math.max(distance, 1);
+    const line = toAim.subVectors(target.flight.position, flight.position);
+    if (angle < target.radius / Math.max(distance, 1)) this.onTarget = target.tailToward(line) ? 'drive' : 'armor';
     flight.steer(toAim.subVectors(target.flight.position, flight.position), AIM_ASSIST_GAIN, assistSteer);
     const pull = AIM_ASSIST_STRENGTH * (1 - angle / AIM_ASSIST_ANGLE) * (1 - THREE.MathUtils.smoothstep(Math.hypot(out.yaw, out.pitch), 0.3, 0.8));
     out.yaw += (assistSteer.yaw - out.yaw) * pull;
@@ -1340,6 +1356,21 @@ export class Game implements OnlineGame {
   }
 
   /** T: the autopilot on or off. */
+  /** E: the overdrive, a last resort; see OVERDRIVE_PUSH. */
+  private overdrive() {
+    const me = this.me!;
+    if (!me.alive || this.time < this.overdriveReadyAt) return;
+    this.overdriveReadyAt = this.time + OVERDRIVE_RECHARGE;
+    me.flight.velocity.addScaledVector(me.flight.forward(forward), OVERDRIVE_PUSH);
+    me.overheat();
+    // about sixty g at once: the clone is pressed to the edge of blacking out
+    this.strain = Math.max(this.strain, OVERDRIVE_STRAIN);
+    this.kick = 2;
+    this.effects.engineTrail(me.toWorld(scratch.set(0, 0, me.radius * 0.9)), me.toWorld(relative.set(0, 0, me.radius * 4)), me.flight.velocity, 1);
+    this.sound.play('explosion', { volume: 1.4, rate: 0.7 });
+    this.hud.flashMessage(this.time, 'Overdrive', 1.2);
+  }
+
   private toggleAutopilot() {
     this.autopilot = !this.autopilot;
     this.sound.beep(this.autopilot ? 880 : 440, 0.08);
@@ -1438,7 +1469,7 @@ export class Game implements OnlineGame {
         if (shooter.isLocal) {
           this.hud.hit();
           this.sound.beep(1320);
-          this.landed(scratch, 'HIT');
+          this.landed(scratch, ship.tailToward(direction) ? 'DRIVE' : 'ARMOR', ship.tailToward(direction));
         }
         continue;
       }
@@ -1475,10 +1506,10 @@ export class Game implements OnlineGame {
     }
   }
 
-  /** Feedback for a hit the own laser landed: a word where it struck, and a jolt. */
-  private landed(point: THREE.Vector3, word: string) {
-    this.hud.popup(this.camera, point, word, 'hit');
-    this.kick = Math.min(2, this.kick + 0.5);
+  /** Feedback for a hit the own laser landed: a word where it struck, and a jolt for one that hurt. */
+  private landed(point: THREE.Vector3, word: string, hurt = true) {
+    this.hud.popup(this.camera, point, word, hurt ? 'hit' : 'armor');
+    if (hurt) this.kick = Math.min(2, this.kick + 0.5);
   }
 
   /**
@@ -1492,16 +1523,20 @@ export class Game implements OnlineGame {
     this.effects.sparks(scratch.copy(origin).addScaledVector(direction, along), shooter?.color ?? SCRAPE_COLOR, 60);
     if (shooter?.isLocal) {
       this.hud.hit();
-      this.sound.beep(zone === 'reactor' ? 1760 : 1320);
-      this.landed(scratch, HIT_WORDS[zone]);
+      // the drive rings out, the armor only clinks
+      const hurt = zone === 'drive' || zone === 'reactor';
+      this.sound.beep(zone === 'reactor' ? 1760 : hurt ? 1320 : 660, hurt ? 0.08 : 0.04);
+      this.landed(scratch, HIT_WORDS[zone], hurt);
     }
     if (ship.isLocal) {
+      // a hit into the drive hurts and is told at once; the armor's scorch marks are chatter
+      const serious = zone === 'drive' || zone === 'reactor';
       this.hud.damaged();
       this.hud.flashMessage(this.time, ZONE_MESSAGES[zone], 1.5);
-      this.speaker.say(COMPUTER[zone], 'urgent');
-      this.sound.play('explosion', { volume: 1.2, rate: 1.5 });
+      this.speaker.say(COMPUTER[zone], serious ? 'urgent' : 'chatter');
+      this.sound.play('explosion', { volume: serious ? 1.2 : 0.6, rate: 1.5 });
       this.sound.beep(220, 0.25, 0.12);
-      this.linkHit(zone === 'reactor' ? 1 : 0.7, 0.5);
+      this.linkHit(zone === 'reactor' ? 1 : serious ? 0.7 : 0.3, serious ? 0.5 : 0.2);
     }
     if (status === 'destroyed') this.shipDestroyed(ship, shooter);
   }
@@ -1659,8 +1694,8 @@ export class Game implements OnlineGame {
 
   /**
    * Another ship's nose on the own ship: LOCKED when its laser would hit now, TRACKED when
-   * the nose is close to it. The ship's sensors see where every other hull points; the
-   * faster beeping is the cue to jink.
+   * the nose is close to it, ON YOUR TAIL when it sits behind, where it reaches the drive. The
+   * ship's sensors see where every other hull points; the faster beeping is the cue to act.
    */
   private lockWarning(warnings: string[], now: number) {
     const me = this.me!;
@@ -1682,10 +1717,12 @@ export class Game implements OnlineGame {
       }
     }
     if (!shooter) return;
-    warnings.push(`${level === 2 ? 'LOCKED' : 'TRACKED'} · ${shooter.name}`);
+    // from behind the shooter reaches the drive, the one place that hurts: turn to face it
+    const tail = me.tailToward(relative.subVectors(me.flight.position, shooter.flight.position));
+    warnings.push(`${tail ? 'ON YOUR TAIL' : level === 2 ? 'LOCKED' : 'TRACKED'} · ${shooter.name}`);
     if (now >= this.nextLockBeep) {
-      this.sound.beep(level === 2 ? 1560 : 1170, 0.04, 0.1);
-      this.nextLockBeep = now + (level === 2 ? 0.1 : 0.35);
+      this.sound.beep(tail ? 1760 : level === 2 ? 1560 : 1170, 0.04, tail ? 0.14 : 0.1);
+      this.nextLockBeep = now + (tail ? 0.08 : level === 2 ? 0.1 : 0.35);
     }
   }
 

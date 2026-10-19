@@ -5,15 +5,22 @@ import type { Controls } from '../input/input';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
-/** Hull damage of a laser hit: nine hits wreck a ship, long enough for a dogfight. */
-const LASER_HULL_DAMAGE = 12;
-/** A hit through the reactor zone does more, but never kills at once. */
-const REACTOR_DAMAGE = 40;
-/** Damage a laser hit deals to the drive or the maneuvering thrusters (0..1). */
-const DRIVE_HIT = 0.25;
-const THRUSTER_HIT = 0.2;
-/** A beam passing closer than this (fraction of the radius) to the center hits the reactor zone. */
-const REACTOR_ZONE = 0.15;
+/**
+ * The ships are heavily armored: a beam from the front or the side only scorches the armor
+ * (this many hull points; fifty such hits wreck a ship). The drive is the weak spot.
+ */
+const ARMOR_DAMAGE = 2;
+/**
+ * A beam from behind, within REAR_CONE of the ship's axis, goes into the drive: each hit costs
+ * this share of the thrust, and the hit that leaves nothing of it sends the drive's reactor
+ * critical, so five hits from behind destroy a ship.
+ */
+const DRIVE_HIT = 0.2;
+/** Half the opening angle of the cone behind a ship from which a beam reaches the drive (rad, 50°). */
+const REAR_CONE = 0.87;
+const REAR_CONE_COS = Math.cos(REAR_CONE);
+/** Damage a beam into the flanks deals to the maneuvering thrusters (0..1), on top of the armor. */
+const THRUSTER_HIT = 0.1;
 const MAX_HOLES = 8;
 /** Venting from a hole fades with this time constant (s): the compartment runs out of air. */
 const VENT_TIME = 2.5;
@@ -46,7 +53,7 @@ const GLOW_MAX_SCALE = 3;
 /** Brightness of the drive glow at idle, as a share of full thrust. */
 const GLOW_IDLE = 0.25;
 
-export type Zone = 'reactor' | 'drive' | 'thrusters' | 'hull';
+export type Zone = 'reactor' | 'drive' | 'thrusters' | 'armor';
 export type DamageStatus = 'protected' | 'hit' | 'destroyed';
 
 interface EngineParts {
@@ -344,7 +351,17 @@ export class Ship {
    * decides which part it destroys; entry and exit leave holes.
    */
   laserHit(origin: THREE.Vector3, direction: THREE.Vector3, now: number): { status: DamageStatus; zone: Zone } {
-    if (!this.alive || now < this.protectedUntil) return { status: 'protected', zone: 'hull' };
+    if (!this.alive || now < this.protectedUntil) return { status: 'protected', zone: 'armor' };
+    if (!this.tailToward(direction)) {
+      // the armor takes it: a scorch mark and a few points, no hole; a beam into the flanks
+      // also shakes the maneuvering thrusters
+      inverse.copy(this.flight.orientation).invert();
+      offset.subVectors(this.flight.position, origin);
+      local.copy(origin).addScaledVector(direction, offset.dot(direction)).sub(this.flight.position).applyQuaternion(inverse).divideScalar(this.radius);
+      const flank = Math.abs(local.x) > 0.4 || Math.abs(local.y) > 0.35;
+      if (flank) this.thrusters = Math.max(0, this.thrusters - THRUSTER_HIT);
+      return { status: this.structural(ARMOR_DAMAGE, now), zone: flank ? 'thrusters' : 'armor' };
+    }
     offset.subVectors(this.flight.position, origin);
     const along = offset.dot(direction);
     inverse.copy(this.flight.orientation).invert();
@@ -362,15 +379,24 @@ export class Ship {
       this.flight.angularVelocity.addScaledVector(torque, DECOMPRESSION_KICK);
     }
 
-    let zone: Zone = 'hull';
-    if (local.length() < REACTOR_ZONE) zone = 'reactor';
-    else if (local.z > 0.35) zone = 'drive';
-    else if (Math.abs(local.x) > 0.4 || Math.abs(local.y) > 0.35) zone = 'thrusters';
+    // into the drive: it loses thrust, and once nothing is left its reactor goes critical
+    this.drive = Math.max(0, this.drive - DRIVE_HIT);
+    if (this.drive > 1e-6) return { status: this.structural(ARMOR_DAMAGE, now), zone: 'drive' };
+    return { status: this.structural(Infinity, now), zone: 'reactor' };
+  }
 
-    if (zone === 'drive') this.drive = Math.max(0, this.drive - DRIVE_HIT);
-    if (zone === 'thrusters') this.thrusters = Math.max(0, this.thrusters - THRUSTER_HIT);
-    const status = this.structural(zone === 'reactor' ? REACTOR_DAMAGE : LASER_HULL_DAMAGE, now);
-    return { status, zone };
+  /**
+   * Whether a beam travelling in `direction` comes from behind this ship, within REAR_CONE of
+   * its axis: then it goes into the drive instead of the armor.
+   */
+  tailToward(direction: THREE.Vector3): boolean {
+    return direction.dot(this.flight.forward(offset)) / direction.length() > REAR_CONE_COS;
+  }
+
+  /** The overdrive dumps the reactor's heat into the ship: the laser locks until it has cooled down. */
+  overheat() {
+    this.heat = MAX_HEAT;
+    this.overheated = true;
   }
 
   /** Hull damage, e.g. from a collision. */

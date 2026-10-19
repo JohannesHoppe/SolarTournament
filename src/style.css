@@ -1136,6 +1136,16 @@ body.touch #game canvas {
   font-size: 0.65rem;
 }
 
+#touch-overdrive {
+  top: 12px;
+  left: calc(max(12px, env(safe-area-inset-left)) + 118px);
+  width: 64px;
+  height: 44px;
+  border-radius: 10px;
+  font-size: 0.6rem;
+  line-height: 1.1;
+}
+
 /* gauges move to the top, the thumbs own the bottom of the screen */
 body.touch .hud-bottom {
   top: 52px;
@@ -1713,7 +1723,7 @@ button.quiet:focus-visible {
   hyphens: auto;
 }
 
-/* the laser would hit now: the crosshair glows orange and grows a little */
+/* the laser would hit a drive now: the crosshair glows orange and grows a little */
 #crosshair.on-target {
   border-color: var(--accent);
   box-shadow: 0 0 10px var(--accent);
@@ -1780,4 +1790,27 @@ button.quiet:focus-visible {
 #school.cleared .mode-note {
   color: var(--accent-strong);
   font-weight: 700;
+}
+
+/* a hit the armor shrugged off: small and grey, so the ones that hurt stand out */
+.popup.armor {
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+}
+
+/* the laser would only scorch armor: the crosshair dims */
+#crosshair.on-armor {
+  opacity: 0.45;
+}
+
+/* the overdrive: dim while it recharges, orange once it is ready */
+#hud-overdrive {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+#hud-overdrive.ready {
+  color: var(--accent);
 }

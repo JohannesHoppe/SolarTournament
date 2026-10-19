@@ -4,7 +4,7 @@ type Collection = ReturnType<(typeof import('nipplejs'))['create']>;
  * Touch controls for phones and tablets, shown on touch devices and hidden as soon as a key
  * is pressed. Left stick (fixed): turn the ship, drag up = nose up. Right stick (appears
  * under the thumb): maneuvering thrusters. Buttons: main drive, fire, brake and flip (hold),
- * autopilot, pause.
+ * autopilot, overdrive, pause.
  * nipplejs is only loaded once the touch UI is used.
  */
 export class TouchControls {
@@ -19,7 +19,7 @@ export class TouchControls {
   private sticks: Collection[] = [];
   private loading: Promise<void> | null = null;
 
-  constructor(onPause: () => void, onAutopilot: () => void) {
+  constructor(onPause: () => void, onAutopilot: () => void, onOverdrive: () => void) {
     // touch controls from the start only where touch is the only way to point (phones,
     // tablets); a laptop with a touch screen or a tablet with a trackpad starts with the
     // mouse and switches on the first touch
@@ -40,6 +40,7 @@ export class TouchControls {
     this.hold('touch-flip', (down) => (this.flip = down));
     this.tap('touch-pause', onPause);
     this.tap('touch-autopilot', onAutopilot);
+    this.tap('touch-overdrive', onOverdrive);
 
     // A stick can get stuck when the system swallows the touchend (app switch, incoming call):
     // rebuild the sticks in that case.
