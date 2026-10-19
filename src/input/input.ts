@@ -19,7 +19,7 @@ export interface Controls {
 
 export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 
-export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'radio' | 'help' | 'autopilot' | 'overdrive';
+export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'radio' | 'help' | 'autopilot' | 'overdrive' | 'watch';
 type ActionHandler = (action: Action) => void;
 
 /** The pointer at this share of the shorter screen side away from the center turns at full rate. */
@@ -182,6 +182,8 @@ export class Input {
     if (down) this.keys.add(e.code);
     // keys the game uses never also press the button that happens to have the focus
     if (e.code === 'Enter' || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();
+    // Tab switches the watched pilot while spectating, not the focus
+    if (e.code === 'Tab' && this.steering) e.preventDefault();
     // F1 opens the controls, not the browser's help
     if (e.code === 'F1') e.preventDefault();
 
@@ -194,6 +196,7 @@ export class Input {
     if (e.code === 'F1') this.handler('help');
     if (e.code === 'KeyT') this.handler('autopilot');
     if (e.code === 'KeyE') this.handler('overdrive');
+    if (e.code === 'Tab') this.handler('watch');
   }
 }
 

@@ -1,10 +1,7 @@
 import * as THREE from 'three';
 import type { AsteroidField } from '../world/asteroids';
-import { ownerOf, type Session, type RoundState, type Vec } from './session';
+import { ownerOf, TOURNAMENT_SIZE, type Session, type RoundState, type Vec } from './session';
 import type { Ship, ShipState } from '../ship/ship';
-
-/** Places per tournament: Hosts and bots together; the lead browser fills free places with bots. */
-export const TOURNAMENT_SIZE = 4;
 
 /** What the online layer needs from the game. */
 export interface OnlineGame {
@@ -27,8 +24,11 @@ export interface OnlineGame {
   /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
   leadRound(): RoundState;
-  /** The tournament has all its places taken by Hosts who were here first. */
-  tournamentFull(): void;
+  /**
+   * All places are taken by Hosts who were here first: the own clone watches instead of flying
+   * (true), or a place has come free and it flies (false).
+   */
+  spectate(watching: boolean): void;
 }
 
 const origin = new THREE.Vector3();
@@ -39,10 +39,16 @@ const to = new THREE.Vector3();
 /** Connects the game to a tournament session: who owns which ship, and what goes over the wire. */
 export class Online {
   private wasLead: boolean | null = null;
+  /** The own Host only watches: the tournament was full when it came. */
+  private watching = false;
+  /** Peers whose clone flies (their states carry a Host's ship); watchers do not take a place. */
+  private readonly flying = new Set<string>();
 
   constructor(
     readonly session: Session,
     private readonly game: OnlineGame,
+    /** The room's rule: bots fill the places no Host takes. */
+    private readonly bots: boolean,
   ) {
     session.onStates = (states, round, peer) => this.receiveStates(states, round, peer);
     session.onFire = (shooter, a, b) => {
@@ -67,6 +73,7 @@ export class Online {
       this.balanceBots();
     };
     session.onPeerLeave = (peer) => {
+      this.flying.delete(peer);
       for (const ship of [...game.allShips()]) if (ship.owner === peer) game.removeShip(ship);
       this.balanceBots();
     };
@@ -80,8 +87,13 @@ export class Online {
     return this.session.isLead;
   }
 
+  /** Hosts whose clones fly, the own one included unless it watches. */
   get pilots() {
-    return 1 + this.session.peers.length;
+    return (this.watching ? 0 : 1) + this.flying.size;
+  }
+
+  get spectating() {
+    return this.watching;
   }
 
   /** Sends the own ships; the lead browser adds the round clock. Rebalances bots when the lead changes. */
@@ -91,10 +103,13 @@ export class Online {
       this.wasLead = lead;
       this.balanceBots();
     }
-    // a Host beyond the places of the tournament leaves again, once it knows who was here first
-    if (!this.session.justJoined && this.session.rank() >= TOURNAMENT_SIZE) {
-      this.game.tournamentFull();
-      return;
+    // a Host beyond the places of the tournament watches, once it knows who was here first, and
+    // flies as soon as a place comes free
+    const watching = !this.session.justJoined && this.session.rank() >= TOURNAMENT_SIZE;
+    if (watching !== this.watching) {
+      this.watching = watching;
+      this.game.spectate(watching);
+      this.balanceBots();
     }
     const states = this.game.ownedShips().map((ship) => ship.toState(now));
     this.session.sendStates(now, states, lead ? this.game.leadRound() : null);
@@ -121,9 +136,9 @@ export class Online {
     this.session.leave();
   }
 
-  /** The lead browser fills the tournament up with bots; everyone else runs none. */
+  /** In a room with bots the lead browser fills the free places with them; a Host always takes a bot's place. */
   private balanceBots() {
-    this.game.setBotCount(this.isLead ? Math.max(0, TOURNAMENT_SIZE - this.pilots) : 0);
+    this.game.setBotCount(this.isLead && this.bots ? Math.max(0, TOURNAMENT_SIZE - this.pilots) : 0);
   }
 
   private receiveStates(states: ShipState[], round: RoundState | null, peer: string) {
@@ -134,6 +149,12 @@ export class Online {
       // the session only passes on ships whose id names the sender as their owner
       const ship = this.find(state.id) ?? this.game.addRemoteShip(state, peer);
       if (ship.owner === peer && ownerOf(ship.id) === peer) ship.applyState(state, now);
+    }
+    const flies = states.some((state) => state.id.startsWith('p:'));
+    if (flies !== this.flying.has(peer)) {
+      if (flies) this.flying.add(peer);
+      else this.flying.delete(peer);
+      this.balanceBots();
     }
     // bots the peer no longer runs (e.g. it stopped leading)
     for (const ship of [...this.game.allShips()]) if (ship.owner === peer && !seen.has(ship.id)) this.game.removeShip(ship);

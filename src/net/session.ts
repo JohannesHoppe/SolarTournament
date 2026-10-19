@@ -15,8 +15,10 @@ const SETTLE_MS = 6000;
  * runs no frames and sends nothing, so the next one takes over until it is back.
  */
 const LIVENESS_MS = 2500;
-/** Ships one peer may run: its own and the bots of a lead browser. */
-const MAX_SHIPS_PER_PEER = 4;
+/** Places per tournament: Hosts and bots together; with bots, the lead browser fills free places. */
+export const TOURNAMENT_SIZE = 8;
+/** Ships one peer may run: its own and the bots of a lead browser, at most a full tournament. */
+const MAX_SHIPS_PER_PEER = TOURNAMENT_SIZE;
 /** A shooter cannot hit more often than its laser fires (s); a little below the cooldown for jitter. */
 const MIN_HIT_INTERVAL = 0.15;
 /** Asteroid hits per peer and second, generous for several ships firing at once. */
@@ -266,19 +268,3 @@ export class Session {
   }
 }
 
-/** Characters of room codes: no 0/o, 1/l/i, so a code read aloud survives. */
-const ROOM_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
-/** 20 characters of 31: about 99 bits, far beyond guessing from the public relays. */
-const ROOM_CODE_LENGTH = 20;
-
-/** A room code for invitation links, from the browser's cryptographic random source. */
-export function newRoomCode(): string {
-  const bytes = crypto.getRandomValues(new Uint8Array(ROOM_CODE_LENGTH));
-  return Array.from(bytes, (b) => ROOM_ALPHABET[b % ROOM_ALPHABET.length]).join('');
-}
-
-/** A room code as it arrives in a link, or null when it is not one. */
-export function roomCode(x: string | null): string | null {
-  const code = x?.trim().toLowerCase().replace(/[^a-z0-9]/g, '') ?? '';
-  return code.length >= 6 && code.length <= 40 ? code : null;
-}

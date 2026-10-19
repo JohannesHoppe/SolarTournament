@@ -18,8 +18,10 @@ import { hash, mixSeed, textSeed, titleFor, type Song } from '../music/songs';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls } from '../input/input';
 import { Ship, type ShipState, type Zone } from '../ship/ship';
 import { MAIN_THRUST, RCS_THRUST } from '../ship/flight';
-import { newRoomCode, roomCode, Session, type RoundState } from '../net/session';
-import { Online, TOURNAMENT_SIZE, type OnlineGame } from '../net/online';
+import { Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
+import { Online, type OnlineGame } from '../net/online';
+import { Lobby, type Listing } from '../net/lobby';
+import { newRoom, roomFragment, roomFromFragment, type Room } from '../net/room';
 import { Space, SUN_DIRECTION } from '../world/space';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { Belt } from '../world/belt';
@@ -232,6 +234,19 @@ export class Game implements OnlineGame {
   /** A tournament connection is being set up; every new start or leave counts up the attempt. */
   private connecting = false;
   private joinAttempt = 0;
+  /** The tournament this browser is in: its code, name and rules (see net/room). */
+  private room: Room | null = null;
+  /** The list of tournaments is open; the lobby listens meanwhile. */
+  private browsing = false;
+  /** The lobby: open while browsing, or while leading a public tournament (see updateLobby). */
+  private lobby: Lobby | null = null;
+  private lobbyOpening = false;
+  /** The choices of the form that starts a tournament. */
+  private roomPublic = true;
+  private roomBots = true;
+  /** The tournament was full: the own Host watches a pilot (watchIndex, Tab switches) instead of flying. */
+  private spectating = false;
+  private watchIndex = 0;
   /** Number of the running online round; a new number resets the scores. */
   private roundId = 0;
   private ships: Ship[] = [];
@@ -375,11 +390,26 @@ export class Game implements OnlineGame {
       storageRemove(SCHOOL_STEP_KEY);
       this.showSchoolProgress();
     });
-    $('online').addEventListener('click', () => void this.goOnline());
+    $('online').addEventListener('click', () => this.openOnline());
+    $('room-create').addEventListener('click', () => this.createTournament());
+    $('tournaments-back').addEventListener('click', () => this.showTournaments(false));
+    // two pairs of switches: who can find the tournament, and whether bots fill it
+    const choose = (on: string, off: string, set: (value: boolean) => void, value: boolean) =>
+      $(on).addEventListener('click', () => {
+        set(value);
+        $(on).classList.add('selected');
+        $(off).classList.remove('selected');
+        this.describeRoom();
+      });
+    choose('room-public', 'room-private', (v) => (this.roomPublic = v), true);
+    choose('room-private', 'room-public', (v) => (this.roomPublic = v), false);
+    choose('room-bots', 'room-nobots', (v) => (this.roomBots = v), true);
+    choose('room-nobots', 'room-bots', (v) => (this.roomBots = v), false);
+    this.describeRoom();
     $('resume').addEventListener('click', () => this.resume());
     $('quit').addEventListener('click', () => this.endRound());
     $('again').addEventListener('click', () => this.showMenu());
-    $('invite').addEventListener('click', () => void this.copyInvite());
+    $('invite').addEventListener('click', () => void this.invite());
     $('radio').addEventListener('click', () => this.toggleRadio());
     for (const id of ['fullscreen', 'fullscreen-pause']) {
       $(id).hidden = !document.fullscreenEnabled;
@@ -427,15 +457,110 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * Room code from an invitation link (#t=code). The code travels in the fragment, so it never
+   * The room of an invitation link (#t=code&n=name…). It travels in the fragment, so it never
    * reaches the web server's logs or another site's Referer header.
    */
-  private invitedRoom(): string | null {
-    return roomCode(new URLSearchParams(location.hash.slice(1)).get('t'));
+  private invitedRoom(): Room | null {
+    return roomFromFragment(location.hash);
   }
 
-  /** Joins the invited tournament or opens a new one, then starts playing in it. */
-  private async goOnline() {
+  /** The menu's online button: straight into the invited tournament, else the list of tournaments. */
+  private openOnline() {
+    const invited = this.invitedRoom();
+    if (invited) void this.goOnline(invited, false);
+    else this.showTournaments(true);
+  }
+
+  /**
+   * The plate of tournaments: the public ones the lobby hears of, and a form to start one.
+   * While it is open this browser listens in the lobby.
+   */
+  private showTournaments(open: boolean) {
+    this.browsing = open;
+    $('menu').hidden = open || this.state !== 'menu';
+    $('tournaments').hidden = !open;
+    if (open) {
+      this.renderTournaments(this.lobby?.list() ?? []);
+      $('room-name').focus();
+    }
+    this.updateLobby();
+  }
+
+  private renderTournaments(listings: Listing[]) {
+    const list = $('tournament-list');
+    if (!listings.length) {
+      const empty = Object.assign(document.createElement('li'), { className: 'empty', textContent: this.lobby ? 'No public tournament right now. Start one.' : 'Looking for tournaments…' });
+      list.replaceChildren(empty);
+      return;
+    }
+    list.replaceChildren(
+      ...listings.map((listing) => {
+        const item = document.createElement('li');
+        const info = Object.assign(document.createElement('span'), { className: 'room-info' });
+        const full = listing.hosts >= TOURNAMENT_SIZE;
+        const minutes = Math.max(0, Math.floor(listing.left / 60));
+        const seconds = String(Math.max(0, Math.floor(listing.left % 60))).padStart(2, '0');
+        info.append(
+          Object.assign(document.createElement('span'), { className: 'room-name', textContent: listing.name }),
+          Object.assign(document.createElement('span'), {
+            className: 'room-meta',
+            textContent: `${listing.hosts} of ${TOURNAMENT_SIZE} Hosts${listing.bots ? ' · bots' : ''} · ${minutes}:${seconds} left`,
+          }),
+        );
+        const join = Object.assign(document.createElement('button'), { type: 'button', textContent: full ? 'Watch' : 'Join' });
+        join.addEventListener('click', () => void this.goOnline({ code: listing.code, name: listing.name, public: true, bots: listing.bots }, false));
+        item.append(info, join);
+        return item;
+      }),
+    );
+  }
+
+  /** A line under the switches: what the chosen kind of tournament means. */
+  private describeRoom() {
+    const who = this.roomPublic ? 'Listed here for every Host; anyone can join or watch.' : 'Not listed: only who has your invite link finds it.';
+    const bots = this.roomBots ? `Bots fill the ${TOURNAMENT_SIZE} places; every Host who joins takes a bot's place.` : 'No bots: only Hosts fly.';
+    $('room-note').textContent = `${who} ${bots} The link works for good: whoever follows it later starts the tournament again.`;
+  }
+
+  /** Starts a tournament from the form: a name, public or private, with or without bots. */
+  private createTournament() {
+    const name = $<HTMLInputElement>('room-name').value;
+    void this.goOnline(newRoom(name || $<HTMLInputElement>('room-name').placeholder, this.roomPublic, this.roomBots), true);
+  }
+
+  /**
+   * The lobby is open while the list of tournaments is shown, or while this browser leads a
+   * public tournament and announces it; otherwise it is closed and talks to no relay.
+   */
+  private updateLobby() {
+    const announcing = !!this.online && !!this.room?.public && this.online.isLead;
+    const wanted = this.browsing || announcing;
+    if (!wanted) {
+      this.lobby?.close();
+      this.lobby = null;
+      return;
+    }
+    if (!this.lobby) {
+      if (this.lobbyOpening) return;
+      this.lobbyOpening = true;
+      void Lobby.open(new URLSearchParams(location.search).has('local'))
+        .then((lobby) => {
+          this.lobby = lobby;
+          lobby.onChange = (listings) => {
+            if (this.browsing) this.renderTournaments(listings);
+          };
+          if (this.browsing) this.renderTournaments(lobby.list());
+        })
+        .catch((error) => console.warn('Lobby unavailable', error))
+        .finally(() => (this.lobbyOpening = false));
+      return;
+    }
+    const left = Number.isFinite(this.roundEndsAt) ? this.roundEndsAt - this.time : ROUND_SECONDS;
+    this.lobby.announce(announcing ? { code: this.room!.code, name: this.room!.name, hosts: this.online!.pilots, bots: this.room!.bots, left } : null);
+  }
+
+  /** Joins a tournament room, then starts playing in it; `created` invites friends at once. */
+  private async goOnline(room: Room, created: boolean) {
     if (this.connecting) return;
     this.connecting = true;
     // still inside the click: later, after connecting, the browser would refuse
@@ -446,17 +571,19 @@ export class Game implements OnlineGame {
     modeName('online').textContent = 'Connecting…';
     this.notice('');
     try {
-      const room = this.invitedRoom() ?? newRoomCode();
-      history.replaceState(null, '', `${location.pathname}${location.search}#t=${room}`);
+      history.replaceState(null, '', `${location.pathname}${location.search}${roomFragment(room)}`);
       // ?local=1 connects tabs of this browser instead of going over the internet
-      const session = await Session.join(room, new URLSearchParams(location.search).has('local'));
+      const session = await Session.join(room.code, new URLSearchParams(location.search).has('local'));
       // the Host started something else while the connection was being set up
       if (attempt !== this.joinAttempt) {
         session.leave();
         return;
       }
-      this.online = new Online(session, this);
+      this.room = room;
+      this.online = new Online(session, this, room.bots);
+      this.showTournaments(false);
       this.startRound('online');
+      if (created) void this.invite();
     } catch (error) {
       console.error(error);
       this.notice('Could not connect to the tournament. Try again in a moment.');
@@ -497,19 +624,49 @@ export class Game implements OnlineGame {
     $('menu-notice').hidden = !text;
   }
 
-  /** All places of the tournament are taken by Hosts who came first: back to the hangar. */
-  tournamentFull() {
-    this.showMenu();
-    this.notice(`This tournament is full: ${TOURNAMENT_SIZE} Hosts are already flying.`);
+  /**
+   * All places are taken by Hosts who came first: the own clone watches a pilot of the
+   * tournament (Tab switches) until a place comes free, then it is printed and flies.
+   */
+  spectate(watching: boolean) {
+    const me = this.me!;
+    this.spectating = watching;
+    if (watching) {
+      me.alive = false;
+      me.root.visible = false;
+      me.respawnAt = Infinity;
+      this.sponsors.hide();
+      this.watchIndex = 0;
+    } else {
+      this.respawn(me);
+    }
   }
 
-  private async copyInvite() {
+  /** The pilot a watching Host follows: the living ships of the tournament, in turn. */
+  private watched(): Ship | null {
+    const pilots = this.ships.filter((ship) => ship !== this.me && ship.alive);
+    return pilots.length ? pilots[this.watchIndex % pilots.length] : null;
+  }
+
+  /**
+   * Invites friends: the phone's share sheet where there is one, else the link to the
+   * clipboard. The link names the tournament, so a friend sees where they are going.
+   */
+  private async invite() {
     const button = $('invite');
+    const url = location.href;
+    const text = `Fly with me in the SolarTournament "${this.room?.name ?? 'Tournament'}"`;
     try {
-      await navigator.clipboard.writeText(location.href);
-      button.textContent = 'Link copied';
+      if (navigator.share && this.input.touchActive) {
+        await navigator.share({ title: 'SolarTournament', text, url });
+        return;
+      }
+      await navigator.clipboard.writeText(url);
+      button.textContent = 'Invite link copied';
+      this.hud.flashMessage(this.time, 'Invite link copied. Send it to your friends.', 3);
     } catch {
-      button.textContent = location.href;
+      // no clipboard here, or the share sheet was closed: the link is shown to copy by hand
+      button.textContent = url;
     }
   }
 
@@ -520,6 +677,9 @@ export class Game implements OnlineGame {
     if (!this.online) return;
     this.online.leave();
     this.online = null;
+    this.room = null;
+    this.spectating = false;
+    this.updateLobby();
     history.replaceState(null, '', `${location.pathname}${location.search}`);
     modeName('online').textContent = 'Online tournament';
   }
@@ -622,9 +782,15 @@ export class Game implements OnlineGame {
     if (action === 'confirm' && performance.now() - this.screenSince < CONFIRM_LOCK_MS) return;
     switch (this.state) {
       case 'menu':
+        // on the list of tournaments Enter starts one and Escape goes back
+        if (this.browsing) {
+          if (action === 'confirm') this.createTournament();
+          if (action === 'back' || action === 'pause') this.showTournaments(false);
+          break;
+        }
         if (action === 'confirm') {
           const lead = this.leadMode();
-          if (lead === 'online') void this.goOnline();
+          if (lead === 'online') this.openOnline();
           else this.startRound(lead === 'school' ? 'school' : 'solo');
         }
         break;
@@ -637,6 +803,7 @@ export class Game implements OnlineGame {
         if (action === 'camera') this.cockpit = !this.cockpit;
         if (action === 'autopilot' && this.me?.alive) this.toggleAutopilot();
         if (action === 'overdrive') this.overdrive();
+        if (action === 'watch' && this.spectating) this.watchIndex++;
         break;
       case 'paused':
         if (action === 'confirm' || action === 'pause' || action === 'back') this.resume();
@@ -785,8 +952,9 @@ export class Game implements OnlineGame {
     return this.ships;
   }
 
+  /** The ships this browser runs and reports; a watching Host's clone is not printed and not reported. */
   ownedShips() {
-    return this.ships.filter((ship) => ship.owner === null);
+    return this.ships.filter((ship) => ship.owner === null && !(this.spectating && ship === this.me));
   }
 
   addRemoteShip(state: ShipState, owner: string): Ship {
@@ -973,7 +1141,7 @@ export class Game implements OnlineGame {
 
   private renderScoreboard() {
     const me = this.me;
-    const ranking = this.ships.filter((s) => s !== this.drone).sort((a, b) => b.score - a.score);
+    const ranking = this.ships.filter((s) => s !== this.drone && !(this.spectating && s === this.me)).sort((a, b) => b.score - a.score);
     const table = $<HTMLTableElement>('scoreboard');
     table.innerHTML = '<tr><th>#</th><th>Host</th><th>Kills</th><th>Deaths</th><th>Score</th></tr>';
     ranking.forEach((ship, i) => {
@@ -1098,10 +1266,12 @@ export class Game implements OnlineGame {
 
     this.updateCamera(dt);
     me.root.visible = me.alive && !this.cockpit;
+    // a watching Host sees the tournament through the pilot it follows
+    const subject = (this.spectating ? this.watched() : null) ?? me;
     this.hud.update(now, Math.max(0, this.roundEndsAt - now), me);
-    this.hud.updateMarkers(this.camera, this.ships, me, this.inSight);
-    this.hud.updateVelocityMarkers(this.camera, me);
-    this.hud.setCenter(this.camera, me);
+    this.hud.updateMarkers(this.camera, this.ships, subject, this.inSight);
+    this.hud.updateVelocityMarkers(this.camera, subject);
+    this.hud.setCenter(this.camera, subject);
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
     const waypoint = this.school ? this.teach(dt, myControls) : null;
@@ -1110,7 +1280,9 @@ export class Game implements OnlineGame {
 
     const outside = me.alive && me.outsideSince !== null;
     if (!outside) this.toldToReturn = false;
-    if (outside) {
+    if (this.spectating) {
+      this.hud.flashMessage(now, `Tournament full · watching ${subject === me ? 'the field' : subject.name} · Tab: next pilot · you fly as soon as a place is free`, 0.2);
+    } else if (outside) {
       this.hud.flashMessage(now, `Return to the field — ${Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1)}s`, 0.2);
       if (!this.toldToReturn) this.toldToReturn = this.speaker.say(COMPUTER.arena, 'urgent');
     } else if (this.flipping) {
@@ -1121,8 +1293,9 @@ export class Game implements OnlineGame {
 
     if (this.online) {
       this.online.update(now);
-      // the room code is in the invite link; the HUD only says how many Hosts fly
-      const room = `Online · ${this.online.pilots} ${this.online.pilots === 1 ? 'Host' : 'Hosts'}`;
+      this.updateLobby();
+      // the room code is in the invite link; the HUD names the tournament and how many Hosts fly
+      const room = `${this.room?.name ?? 'Online'} · ${this.online.pilots} ${this.online.pilots === 1 ? 'Host' : 'Hosts'}`;
       if ($('hud-room').textContent !== room) $('hud-room').textContent = room;
       if (now >= this.roundEndsAt) this.showOnlineResults();
     } else if (now >= this.roundEndsAt) {
@@ -1130,7 +1303,6 @@ export class Game implements OnlineGame {
     }
   }
 
-  /** Runs the flight school: the current drill, its instruction, keys and waypoint. */
   /** Runs the flight school for this frame; returns the point its HUD marker sits on. */
   private teach(dt: number, controls: Controls): THREE.Vector3 | null {
     const school = this.school!;
@@ -1770,7 +1942,8 @@ export class Game implements OnlineGame {
   }
 
   private updateCamera(dt: number) {
-    const me = this.me!;
+    // the chase camera follows the own ship, or the pilot a watching Host follows
+    const me = (this.spectating ? this.watched() : null) ?? this.me!;
     const flight = me.flight;
     if (this.cockpit) {
       this.camera.position.copy(flight.position).addScaledVector(flight.forward(scratch), me.radius * 0.3);

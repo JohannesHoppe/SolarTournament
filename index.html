@@ -73,7 +73,7 @@
     <button type="button" id="school" class="mode"><span class="mode-name"><span class="mode-label">Flight school</span></span><span class="mode-note">Learn to fly. Training clones are free.</span></button>
     <button type="button" id="school-reset" class="quiet" hidden>Start the flight school over</button>
     <button type="button" id="start" class="mode"><span class="mode-name"><span class="mode-label">Solo round</span></span><span class="mode-note">Five minutes against bots.</span></button>
-    <button type="button" id="online" class="mode"><span class="mode-name"><span class="mode-label">Online tournament</span></span><span class="mode-note">Real Hosts, one invite link.</span></button>
+    <button type="button" id="online" class="mode"><span class="mode-name"><span class="mode-label">Online tournament</span></span><span class="mode-note">Real Hosts: join a public one or start your own.</span></button>
     <p id="menu-notice" role="status" hidden></p>
     <button type="button" id="fullscreen" hidden>Fullscreen</button>
     <p class="best" id="best-score"></p>
@@ -122,10 +122,29 @@
     </dl>
   </div>
 
+  <div id="tournaments" class="plate" hidden>
+    <h2>Online tournament</h2>
+    <p class="plate-label">Public tournaments right now</p>
+    <ul id="tournament-list" aria-live="polite"></ul>
+    <p class="plate-label">Start a tournament</p>
+    <label class="field">Name <input id="room-name" maxlength="32" autocomplete="off" spellcheck="false" placeholder="Kessler's Revenge"></label>
+    <div class="ship-select" role="group" aria-label="Who can find it">
+      <button type="button" id="room-public" class="selected">Public</button>
+      <button type="button" id="room-private">Private</button>
+    </div>
+    <div class="ship-select" role="group" aria-label="Bots">
+      <button type="button" id="room-bots" class="selected">With bots</button>
+      <button type="button" id="room-nobots">Without bots</button>
+    </div>
+    <p id="room-note" class="plate-note"></p>
+    <button type="button" id="room-create" class="primary">Start tournament <kbd>Enter</kbd></button>
+    <button type="button" id="tournaments-back">Back <kbd>Esc</kbd></button>
+  </div>
+
   <div id="pause" class="plate" hidden>
     <h2>Paused</h2>
     <button type="button" id="resume" class="primary">Resume <kbd>Enter</kbd></button>
-    <button type="button" id="invite" hidden>Copy invite link</button>
+    <button type="button" id="invite" hidden>Invite friends</button>
     <button type="button" id="fullscreen-pause" hidden>Fullscreen</button>
     <button type="button" id="quit">Quit round <kbd>Q</kbd></button>
   </div>

@@ -27,6 +27,11 @@ const APP_ID = 'solartournament-2584';
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.cloudflare.com:3478' }];
 /** No message is bigger than this (bytes): the largest, a full asteroid field, is about 15 KB. */
 const MAX_MESSAGE_BYTES = 64 * 1024;
+/**
+ * Trystero rooms open in this browser: a tournament and the lobby can be open at once, and the
+ * relays only go to sleep when the last of them is left.
+ */
+let openRooms = 0;
 
 abstract class BaseTransport implements Transport {
   abstract readonly selfId: string;
@@ -68,7 +73,7 @@ export class TrysteroTransport extends BaseTransport {
     super();
     this.selfId = trystero.selfId;
     // the relays were put to sleep when the last room was left
-    trystero.resumeRelayReconnection();
+    if (openRooms++ === 0) trystero.resumeRelayReconnection();
     this.room = trystero.joinRoom({ appId: APP_ID, rtcConfig: { iceServers: ICE_SERVERS }, maxReceiveBytes: MAX_MESSAGE_BYTES }, roomId);
     // one action for all message types keeps the channel setup small
     this.action = this.room.makeAction<Json>('st');
@@ -102,11 +107,12 @@ export class TrysteroTransport extends BaseTransport {
   }
 
   /**
-   * Leaves the room and closes the connections to the signaling relays: outside a tournament
-   * the game talks to no relay at all.
+   * Leaves the room; with the last open room it also closes the connections to the signaling
+   * relays: outside a tournament and the lobby the game talks to no relay at all.
    */
   leave() {
     void this.room.leave();
+    if (--openRooms > 0) return;
     this.trystero.pauseRelayReconnection();
     for (const socket of Object.values(this.trystero.getRelaySockets() as Record<string, WebSocket>)) socket.close();
   }

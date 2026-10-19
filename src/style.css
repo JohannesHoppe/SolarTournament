@@ -1588,8 +1588,9 @@ body.page {
   }
 }
 
-/* the menu plate lets the seal shine through */
-#menu {
+/* the menu plates let the seal shine through */
+#menu,
+#tournaments {
   background: rgba(6, 12, 28, 0.55);
   backdrop-filter: blur(1.5px);
 }
@@ -1606,7 +1607,8 @@ body.page {
     opacity: 0.55;
   }
 
-  #menu {
+  #menu,
+  #tournaments {
     left: auto;
     right: max(5vw, 32px);
     transform: translateY(-50%);
@@ -1630,6 +1632,7 @@ body.page {
 #school-text,
 .station-tagline,
 #download-status,
+#room-note,
 .sponsor-pitch,
 .tagline,
 #transmission-text,
@@ -1844,4 +1847,59 @@ button.quiet:focus-visible {
 
 .mark.host {
   --shape: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='4.4' r='3.6'/><path d='M1 16c0-4.2 3.1-7.2 7-7.2s7 3 7 7.2z'/></svg>");
+}
+
+/* the list of public tournaments: a name, who flies, and the way in */
+#tournament-list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-height: 34vh;
+  overflow-y: auto;
+}
+
+#tournament-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-align: left;
+}
+
+#tournament-list .room-info {
+  flex: 1;
+  min-width: 0;
+}
+
+#tournament-list .room-name {
+  display: block;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#tournament-list .room-meta,
+#tournament-list .empty,
+.plate-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+#tournament-list .empty {
+  border: none;
+  justify-content: center;
+}
+
+.plate-label {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
