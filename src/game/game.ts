@@ -1006,7 +1006,7 @@ export class Game implements OnlineGame {
       return;
     }
     this.hud.setSchool(school.status(context.device));
-    this.hud.setWaypoint(this.camera, waypoint);
+    this.hud.setWaypoint(this.camera, waypoint, school.mark);
   }
 
   /** What the flight school sees of the game; created once, the per-frame values are filled in by teach(). */
@@ -1126,7 +1126,14 @@ export class Game implements OnlineGame {
   private exhaust(ship: Ship, controls: Controls, dt: number) {
     const flight = ship.flight;
     if (flight.throttle > 0.3) {
-      this.effects.engineTrail(ship.toWorld(scratch.set(0, 0, ship.radius * 0.9), scratch), flight.velocity, flight.throttle);
+      // the exhaust is laid along the nozzle's path since the last frame, without gaps
+      const nozzle = ship.toWorld(scratch.set(0, 0, ship.radius * 0.9), scratch);
+      if (!ship.trailing) ship.trailFrom.copy(nozzle);
+      this.effects.engineTrail(ship.trailFrom, nozzle, flight.velocity, flight.throttle);
+      ship.trailFrom.copy(nozzle);
+      ship.trailing = true;
+    } else {
+      ship.trailing = false;
     }
     const rcs = flight.rcs;
     if (rcs.lengthSq() > 0.01 && Math.random() < dt * 30) {

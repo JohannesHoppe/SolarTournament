@@ -118,6 +118,10 @@ const FIRE = new THREE.Color(0.9, 0.42, 0.12);
 const SMOKE = new THREE.Color(0.12, 0.11, 0.11);
 const VAPOR = new THREE.Color(0.35, 0.38, 0.42);
 const ROCK = new THREE.Color(0.22, 0.19, 0.16);
+/** The drive's exhaust: a faint, cool blue, added on top of whatever is behind it. */
+const EXHAUST = new THREE.Color(0.2, 0.28, 0.5);
+/** At most this many exhaust puffs per frame and ship, even at extreme speed. */
+const TRAIL_MAX_PUFFS = 12;
 const scratch = new THREE.Vector3();
 const scratchVelocity = new THREE.Vector3();
 const spread = new THREE.Vector3();
@@ -177,9 +181,19 @@ export class Effects {
     }
   }
 
-  engineTrail(position: THREE.Vector3, velocity: THREE.Vector3, intensity: number) {
+  /**
+   * The drive's exhaust from one frame to the next: puffs laid evenly along the nozzle's path
+   * from `from` to `to`, close enough to overlap, so a fast ship leaves a continuous, faint
+   * blue plume instead of a string of beads.
+   */
+  engineTrail(from: THREE.Vector3, to: THREE.Vector3, velocity: THREE.Vector3, intensity: number) {
+    const size = 70 * intensity;
+    const steps = Math.min(TRAIL_MAX_PUFFS, Math.max(1, Math.ceil(from.distanceTo(to) / (size * 0.35))));
     scratchVelocity.copy(velocity).multiplyScalar(0.1);
-    this.smoke.emit(position, scratchVelocity, 0.5, 60 * intensity, 180 * intensity, SMOKE);
+    for (let i = 1; i <= steps; i++) {
+      scratch.lerpVectors(from, to, i / steps);
+      this.smoke.emit(scratch, scratchVelocity, 0.45, size, size * 2.5, EXHAUST);
+    }
   }
 
   beam(from: THREE.Vector3, to: THREE.Vector3, color: THREE.Color) {

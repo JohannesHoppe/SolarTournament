@@ -42,7 +42,9 @@ const LASER_COOLDOWN = 0.18;
 
 /** The engine flame slides this far (model units) into the hull at zero thrust. */
 const FLAME_RETRACT = 16;
-const GLOW_MAX_SCALE = 3.5;
+const GLOW_MAX_SCALE = 3;
+/** Brightness of the drive glow at idle, as a share of full thrust. */
+const GLOW_IDLE = 0.25;
 
 export type Zone = 'reactor' | 'drive' | 'thrusters' | 'hull';
 export type DamageStatus = 'protected' | 'hit' | 'destroyed';
@@ -52,6 +54,7 @@ interface EngineParts {
   flameMaterial: THREE.MeshBasicMaterial | null;
   flameZ: number;
   glows: THREE.Object3D[];
+  glowMaterial: THREE.MeshBasicMaterial;
 }
 
 interface Hole {
@@ -106,6 +109,9 @@ export class Ship {
   readonly flight = new FlightModel();
   /** Where the ship was before this frame's move, for the swept collision test. */
   readonly previous = new THREE.Vector3();
+  /** Where the drive's exhaust was laid last frame, and whether the drive was burning then. */
+  readonly trailFrom = new THREE.Vector3();
+  trailing = false;
   readonly root = new THREE.Group();
   readonly model: THREE.Object3D;
   readonly radius: number;
@@ -195,10 +201,12 @@ export class Ship {
       flameMaterial: flameMesh ? (flameMesh.material as THREE.MeshBasicMaterial) : null,
       flameZ: flameMesh ? flameMesh.position.z : 0,
       glows,
+      glowMaterial,
     };
   }
 
   spawn(position: THREE.Vector3, orientation: THREE.Quaternion, now: number) {
+    this.trailing = false;
     this.protectedUntil = now + SPAWN_PROTECTION;
     this.flight.reset(position, orientation);
     this.hull = MAX_HULL;
@@ -406,7 +414,7 @@ export class Ship {
   }
 
   private animateEngine(dt: number) {
-    const { flame, flameMaterial, flameZ, glows } = this.engine;
+    const { flame, flameMaterial, flameZ, glows, glowMaterial } = this.engine;
     // A damaged drive sputters.
     const sputter = this.drive < 1 ? 0.6 + 0.4 * Math.random() : 1;
     const throttle = this.flight.throttle * sputter;
@@ -417,11 +425,12 @@ export class Ship {
       flameMaterial.map = this.frames[Math.floor(this.flameTime * 10) % this.frames.length];
       flameMaterial.opacity = throttle;
     }
-    const glowScale = GLOW_MAX_SCALE * (0.15 + 0.85 * throttle);
+    // the glow grows and brightens with the drive; idle it is a faint pilot light
+    const glowScale = GLOW_MAX_SCALE * (0.3 + 0.7 * throttle);
+    glowMaterial.color.setScalar(GLOW_IDLE + (1 - GLOW_IDLE) * throttle);
     for (const glow of glows) {
       glow.visible = this.drive > 0;
       glow.scale.set(glowScale, glowScale, 1);
-      glow.rotateZ(dt * 2);
     }
     if (this.engineLight) this.engineLight.intensity = 1.5e5 * throttle;
   }

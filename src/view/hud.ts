@@ -32,6 +32,7 @@ export class Hud {
   private readonly schoolText = $('school-text');
   private readonly schoolKeys = $('school-keys');
   private readonly waypoint = $('waypoint');
+  private readonly waypointLabel = $('waypoint-label');
   private readonly center = $('center');
   private readonly centerDistance = $('center-distance');
   private readonly markers = new Map<string, HTMLElement>();
@@ -100,10 +101,11 @@ export class Hud {
     }
   }
 
-  /** Blinking diamond on a point in space, clamped to the screen edge when off screen. */
-  setWaypoint(camera: THREE.Camera, point: THREE.Vector3 | null) {
-    this.waypoint.hidden = !point;
+  /** Blinking diamond on a point in space with what it is, clamped to the screen edge when off screen. */
+  setWaypoint(camera: THREE.Camera, point: THREE.Vector3 | null, label = '') {
+    setHidden(this.waypoint, !point);
     if (!point) return;
+    setText(this.waypointLabel, label);
     pin(this.waypoint, camera, point);
   }
 
@@ -115,7 +117,7 @@ export class Hud {
     this.center.hidden = !me.alive;
     if (!me.alive) return;
     pin(this.center, camera, origin);
-    setText(this.centerDistance, meters(me.flight.position.length()));
+    setText(this.centerDistance, `Center · ${meters(me.flight.position.length())}`);
   }
 
   /** Persistent warning below the crosshair (impact, overheating); empty text hides it. */

@@ -75,6 +75,8 @@ interface Drill {
   leave?(ctx: SchoolContext): void;
   /** A point the HUD marks for the pilot. */
   waypoint?(ctx: SchoolContext, attempt: Attempt): THREE.Vector3 | null;
+  /** What the waypoint is, written under it. */
+  mark?(ctx: SchoolContext, attempt: Attempt): string;
 }
 
 /** What the Host flies with. */
@@ -216,6 +218,7 @@ const DRILLS: Drill[] = [
     },
     done: (ctx, a) => holdFor(ctx, a, aimError(ctx, a.points[0]) < 0.05, 0.4),
     waypoint: (_, a) => a.points[0],
+    mark: () => 'Target',
   },
   {
     line: SCHOOL.fineAim,
@@ -228,6 +231,7 @@ const DRILLS: Drill[] = [
     // touch sticks have no fine aim: there the marker only has to sit in the crosshair
     done: (ctx, a) => holdFor(ctx, a, aimError(ctx, a.points[0]) < (ctx.device === 'touch' ? 0.04 : 0.015), 0.8),
     waypoint: (_, a) => a.points[0],
+    mark: () => 'Target',
   },
   {
     line: SCHOOL.drive,
@@ -273,7 +277,9 @@ const DRILLS: Drill[] = [
     keys: ['flip', 'drive'],
     reps: 2,
     enter: (ctx, a) => drift(ctx, a.rep === 0 ? 1500 : 2400),
-    done: (ctx, a) => speed(ctx) < STOPPED && !a.usedBrake,
+    // counts once the burn has taken out the drift along the course; a burn by hand never
+    // hits the flight direction exactly, so some sideways drift is allowed to remain
+    done: (ctx, a) => ctx.me.flight.velocity.dot(a.forward) < STOPPED && !a.usedBrake,
     // stopping with the S brake does not count; the attempt starts over once the ship is at rest
     fail(ctx, a) {
       a.usedBrake ||= ctx.braking;
@@ -293,6 +299,7 @@ const DRILLS: Drill[] = [
     done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.position.distanceTo(a.points[0]) < 1000 && speed(ctx) < STOPPED, 0.3),
     fail: (ctx, a) => (ctx.me.flight.position.distanceTo(a.points[0]) > 30000 ? SCHOOL.again : null),
     waypoint: (_, a) => a.points[0],
+    mark: () => 'Stop here',
   },
   {
     line: SCHOOL.slide,
@@ -311,6 +318,7 @@ const DRILLS: Drill[] = [
     },
     fail: (ctx, a) => (turned(ctx, a) ? SCHOOL.noTurn : null),
     waypoint: (_, a) => a.points[0],
+    mark: () => 'Line up here',
   },
   {
     line: SCHOOL.dodge,
@@ -363,6 +371,7 @@ const DRILLS: Drill[] = [
     },
     fail: (ctx, a) => (ctx.me.flight.position.distanceTo(a.points[a.points.length - 1]) > 50000 ? SCHOOL.again : null),
     waypoint: (_, a) => a.points[a.next] ?? null,
+    mark: (_, a) => `Ring ${a.next + 1}/${a.points.length}`,
   },
   {
     line: SCHOOL.shoot,
@@ -374,6 +383,7 @@ const DRILLS: Drill[] = [
     },
     done: (ctx) => !!ctx.drone && !ctx.drone.alive,
     waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
+    mark: () => 'Drone',
   },
   {
     line: SCHOOL.shootMoving,
@@ -387,6 +397,7 @@ const DRILLS: Drill[] = [
     done: (ctx) => !!ctx.drone && !ctx.drone.alive,
     fail: (ctx) => (ctx.drone && ctx.drone.flight.position.distanceTo(ctx.me.flight.position) > 20000 ? SCHOOL.again : null),
     waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
+    mark: () => 'Drone',
   },
   {
     line: SCHOOL.overheat,
@@ -406,6 +417,7 @@ const DRILLS: Drill[] = [
     keys: ['drive', 'brake'],
     done: (ctx, a) => holdFor(ctx, a, ctx.me.inShadow, 1),
     waypoint: (ctx) => nearestShadow(ctx),
+    mark: () => 'Shadow',
   },
   {
     line: SCHOOL.impact,
@@ -453,6 +465,7 @@ const DRILLS: Drill[] = [
       done: (ctx) => !!ctx.bot && !ctx.bot.alive,
       leave: (ctx) => ctx.removeBot(),
       waypoint: (ctx) => (ctx.bot?.alive ? ctx.bot.flight.position : null),
+      mark: () => 'Bot',
     }),
   ),
   {
@@ -544,6 +557,8 @@ export class FlightSchool {
   /** Lines to say before the next attempt: the praise of the last drill, or why the attempt failed. */
   private pending: string[] = [];
   private line: string = DRILLS[0].line;
+  /** What the current waypoint is, for its label in the HUD. */
+  mark = '';
 
   /** Group of the drills' props; the game adds it to the scene. */
   get root(): THREE.Object3D {
@@ -589,6 +604,7 @@ export class FlightSchool {
       }
       return null;
     }
+    this.mark = drill.mark?.(ctx, attempt) ?? '';
     return drill.waypoint?.(ctx, attempt) ?? null;
   }
 

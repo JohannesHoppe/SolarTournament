@@ -853,7 +853,7 @@ button.primary .mode-note {
 @media (prefers-reduced-motion: reduce) {
   .satire-art,
   #hud-heat.overheated,
-  #waypoint {
+  #waypoint::before {
     animation: none;
   }
 
@@ -955,10 +955,43 @@ body.touch #school-panel {
   width: 30px;
   height: 30px;
   margin: -15px 0 0 -15px;
+}
+
+/* the blinking diamond; its label stays upright and steady */
+#waypoint::before {
+  content: '';
+  position: absolute;
+  inset: 0;
   border: 2px solid var(--accent-strong);
-  transform-origin: center;
   rotate: 45deg;
   animation: blink 1s steps(2) infinite;
+}
+
+/* every mark in the HUD says what it is, in a small line below it (the center above it,
+   so it stays readable when the course marker sits on the center) */
+.hud-label {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  translate: -50% 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  text-transform: uppercase;
+  text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+  pointer-events: none;
+}
+
+#waypoint .hud-label {
+  color: var(--accent-strong);
+}
+
+#prograde .hud-label {
+  color: #9dffb0;
+}
+
+#retrograde .hud-label {
+  color: #ffb36b;
 }
 
 /* the zero point: the field's center, a blue ring with a dot and its distance */
@@ -984,13 +1017,8 @@ body.touch #school-panel {
 }
 
 #center-distance {
-  position: absolute;
-  top: 24px;
-  left: 50%;
-  translate: -50% 0;
-  font-size: 0.7rem;
-  letter-spacing: 0.08em;
-  white-space: nowrap;
+  top: auto;
+  bottom: calc(100% + 6px);
   color: var(--accent-strong);
 }
 

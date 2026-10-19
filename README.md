@@ -82,7 +82,7 @@ The menu leads with the flight school until a Host has completed it once; after 
 5. Drifting: let go, nothing slows the ship down.
 6. Looking back while drifting: the nose turns, the course stays (the green prograde marker shows the course).
 7. Brake: hold S, the flight computer flips and burns until the ship is at rest.
-8. Flip and burn by hand, twice: X flips the ship, W burns; the S brake does not count here.
+8. Flip and burn by hand, twice: X flips the ship, W burns; the S brake does not count here. The drill counts once the drift along the course is gone; a little sideways drift may remain.
 9. Stopping at a marker, near and far: burn, flip, burn.
 10. Sliding with the thrusters (A/D), both ways, without turning.
 11. Dodging debris that drifts straight at the ship, twice, without turning.
@@ -207,6 +207,7 @@ One world unit is 5 cm. A ship is about 35 m long; the asteroids are ten to thir
 - **Flip and burn.** Braking means turning the drive into the flight direction and burning. The flip alone changes nothing: the ship keeps its course, now flying backwards; the burn is what slows it down. The flip assist (X) turns the ship to retrograde head over, the way a pilot pulls up and over: it first rolls until the goal lies straight above the canopy, then pulls the nose up; a goal below and within 70° of straight behind is reached by pulling up and over without rolling first. The pilot burns. Moving the stick cancels the assist (a mouse pointer resting off-center does not count). The brake (S) does both: it flips head over, burns once the nose is within 0.2 rad of retrograde, eases the burn off below the speed the drive kills in 0.3 seconds (less with a damaged drive) and reports "At rest" below 1 m/s; at rest it holds until the ship drifts faster than 2 m/s again.
 - **Velocity markers.** The green marker (prograde, a circle with three fins) shows where the ship is actually drifting, the orange cross (retrograde) where the drive has to point to brake.
 - **The zero point.** A blue ring with a dot marks the center of the field, with its distance; it stays on the screen edge when the center is behind. The asteroids are densest there, and the edge of the arena is farthest away.
+- **Labels.** Every mark in the HUD says what it is: "Course" and "Brake" under the velocity markers, the distance above the zero point, and under a flight school marker what to do with it ("Target", "Stop here", "Ring 2/5", "Drone").
 - **Space dust.** Fine dust stays fixed in space, so drift is visible even far from any rock.
 
 ### Asteroids

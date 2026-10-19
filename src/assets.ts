@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createRocks } from './world/rocks';
 import { synthesizeSounds } from './sound/sounds';
-import { smokeTexture, sparkTexture } from './view/textures';
+import { radialTexture, smokeTexture, sparkTexture } from './view/textures';
 
 export type ShipType = 'human' | 'alien';
 
@@ -88,8 +88,15 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     await Promise.all(['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture))
   ).map(softEdges);
   flameFrames.forEach((t) => (t.flipY = false));
-  const glow = await texture('drivelight-additive.png');
-  glow.flipY = false;
+  // the drive glow: a round, soft, cool-blue light on black for additive blending, without
+  // rays, so it neither turns into a star nor blows out under the bloom
+  const glow = radialTexture([
+    [0, '#6f93d6'],
+    [0.12, '#3f63a8'],
+    [0.4, '#1b2b52'],
+    [0.75, '#060a14'],
+    [1, '#000000'],
+  ]);
 
   return {
     ships: { human, alien },

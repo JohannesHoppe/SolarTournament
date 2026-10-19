@@ -44,10 +44,12 @@ export function smokeTexture(): THREE.CanvasTexture {
     const distance = Math.random() * size * 0.12;
     const x = size / 2 + Math.cos(angle) * distance;
     const y = size / 2 + Math.sin(angle) * distance;
-    // blobs stay inside the canvas, so the puff never shows a square edge
+    // blobs stay inside the canvas, so the puff never shows a square edge; together they stay
+    // below full white, so the center never clips into a flat disc with a hard rim
     const radius = size * (0.16 + Math.random() * 0.14);
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.22)');
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 0.07)');
+    gradient.addColorStop(0.5, 'rgba(255, 255, 255, 0.03)');
     gradient.addColorStop(1, 'rgba(255, 255, 255, 0)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, size, size);
