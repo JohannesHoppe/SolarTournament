@@ -72,4 +72,4 @@ Worked through from top to bottom. Every finished item is also documented in the
   - Direct sponsors in the slot, sold by hand: fits the lore and the rules best, needs an audience first.
 - Ad networks forbid rewarding clicks on the ad itself; the clone boots from a button of its own, never from a click on the ad. Check the chosen network's policies before connecting it.
 - Privacy: consent banner (GDPR) as soon as personalized ads are served.
-- Privacy policy (`datenschutz.html`, section 6 "Werbung"): it announces the planned ad network. Before the first real ad is shown, analyze the chosen network exactly (what it collects, cookies and storage, third-country transfers, consent) and take over its own privacy wording for section 6: name, processed data, legal basis, consent.
+- Privacy policy (`datenschutz.html`, section 6 "Werbung"): it states that only satire ads run and no ad network is connected. Before the first real ad is shown, analyze the chosen network exactly (what it collects, cookies and storage, third-country transfers, consent) and take over its own privacy wording for section 6: name, processed data, legal basis, consent.
