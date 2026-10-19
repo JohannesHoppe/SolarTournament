@@ -66,6 +66,10 @@ Nie `npx` verwenden, immer die Scripts aus `package.json`.
 
 `tools/extract-ccb/` lädt die alte CopperCube-Szene mit der Original-Engine und schreibt glTF-Modelle nach `public/assets/models/`. Aufruf: `npm run dev`, dann `http://127.0.0.1:5173/tools/extract-ccb/` öffnen.
 
+## Lizenz
+
+Der Code steht unter AGPL-3.0-or-later (`LICENSE`), das Repo ist öffentlich. Name, Logo und Domains sind nicht lizenziert, ebenso die Modelle, Texturen und Sounds in `public/assets/` (außer der Schrift). Neue Abhängigkeiten müssen mit der AGPL vereinbar sein. Fremde Assets kommen nur mit geklärter Lizenz ins Repo, und die Lizenz wird in der README genannt. Nie Schlüssel, Tokens oder Zugangsdaten committen. Das Menü verlinkt den Quellcode, so wie es die AGPL für ein Netzwerkspiel verlangt.
+
 ## Regeln für den Code
 
 - **Determinismus:** Alles, was den gemeinsamen Weltzustand betrifft (Asteroidenfeld, Bruchstücke, Trümmer), entsteht aus dem Seed-Zufall (`Randomizer`), nie aus `Math.random()`. Sonst sehen Peer-to-Peer-Mitspieler unterschiedliche Welten. `Math.random()` ist nur für Optik erlaubt (Partikel, Flackern) und für Bot-Entscheidungen.

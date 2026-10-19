@@ -140,4 +140,10 @@ There is no sound in vacuum. Everything the pilot hears travels through the own 
 
 ## License
 
-zlib License, Copyright © 2012 Johannes Hoppe. Quicksand font: SIL Open Font License (see `public/assets/fonts/LICENSE-quicksand.txt`).
+**Code:** Copyright © 2012–2026 Johannes Hoppe, licensed under the [GNU Affero General Public License v3.0 or later](LICENSE). Anyone may play, study, change and share the game. Whoever publishes a changed version, including as a website, has to publish its source code under the same license.
+
+**Name and brand:** The name *SolarTournament*, the logo and the domains solartournament.com and solartournament.games are not covered by the license. A changed version has to use its own name.
+
+**Graphics and sounds:** The models, textures and sounds in `public/assets/` (except the font) are not covered by the license. Please ask for permission before using them in other software.
+
+**Font:** Quicksand, SIL Open Font License (see `public/assets/fonts/LICENSE-quicksand.txt`).

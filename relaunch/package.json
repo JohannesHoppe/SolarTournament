@@ -13,7 +13,7 @@
     "deploy": "npm run build && wrangler pages deploy --branch master",
     "deploy:preview": "npm run build && wrangler pages deploy --branch preview"
   },
-  "license": "zlib",
+  "license": "AGPL-3.0-or-later",
   "dependencies": {
     "nipplejs": "^1.0.4",
     "three": "^0.186.1",

@@ -175,6 +175,17 @@ button.primary {
   font-size: 0.9rem;
 }
 
+/* The AGPL asks a network game to offer its source to the players. */
+.source {
+  margin: 0;
+  font-size: 0.75rem;
+  opacity: 0.6;
+}
+
+.source a {
+  color: inherit;
+}
+
 #scoreboard {
   width: 100%;
   border-collapse: collapse;
