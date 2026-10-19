@@ -388,6 +388,7 @@ export class Game implements OnlineGame {
   private setScreen(state: State) {
     this.state = state;
     $('menu').hidden = state !== 'menu';
+    $('crest').hidden = state !== 'menu';
     $('pause').hidden = state !== 'paused';
     $('results').hidden = state !== 'results';
     $('invite').hidden = !this.online;

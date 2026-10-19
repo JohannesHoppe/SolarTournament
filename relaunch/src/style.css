@@ -1209,3 +1209,48 @@ body.page {
   background: #fff;
   box-shadow: var(--neon-blue-soft);
 }
+
+/*
+ * The seal of the Ministry of War, which stages the Presidential Games: huge and faint behind
+ * the menu, glowing like a sign that never quite switched off.
+ */
+.crest {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: url('/crest.svg') center / min(92vh, 92vw) no-repeat;
+  opacity: 0.3;
+  filter: drop-shadow(0 0 6px #ff9d00) drop-shadow(0 0 22px #ff5a00);
+  pointer-events: none;
+  animation: crest-hum 9s step-end infinite;
+}
+
+.crest[hidden] {
+  display: none;
+}
+
+.page .station {
+  position: relative;
+  z-index: 1;
+}
+
+@keyframes crest-hum {
+  0%, 71%, 73%, 100% {
+    opacity: 0.3;
+  }
+  72% {
+    opacity: 0.1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .crest {
+    animation: none;
+  }
+}
+
+/* the menu plate lets the seal shine through */
+#menu {
+  background: rgba(6, 12, 28, 0.55);
+  backdrop-filter: blur(1.5px);
+}

@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="-300 -300 600 600" fill="none" stroke="#ff9d00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" font-family="Michroma, sans-serif">
+  <title>Seal of the Ministry of War of the United Solar States</title>
+  <defs>
+    <path id="arc-top" d="M -232 0 A 232 232 0 0 1 232 0"/>
+    <path id="arc-bottom" d="M -246 0 A 246 246 0 0 0 246 0"/>
+    <g id="star"><path d="M 0 -9 L 2.6 -2.8 9 -2.8 3.8 1.2 5.8 7.6 0 3.6 -5.8 7.6 -3.8 1.2 -9 -2.8 -2.6 -2.8 Z" fill="#ff9d00" stroke="none"/></g>
+    <g id="feather"><path d="M 0 0 L 70 -14 L 78 -4 Z"/></g>
+    <g id="interceptor"><path d="M 0 -64 L 16 10 L 40 34 L 12 26 L 0 40 L -12 26 L -40 34 L -16 10 Z"/><path d="M 0 -40 L 0 22"/></g>
+  </defs>
+
+  <!-- the rings and their words -->
+  <circle r="290" stroke-width="5"/>
+  <circle r="276"/>
+  <circle r="204"/>
+  <text font-size="27" letter-spacing="7" fill="#ff9d00" stroke="none" text-anchor="middle"><textPath href="#arc-top" startOffset="50%">MINISTRY OF WAR</textPath></text>
+  <text font-size="21" letter-spacing="5" fill="#ff9d00" stroke="none" text-anchor="middle" dominant-baseline="hanging"><textPath href="#arc-bottom" startOffset="50%">UNITED SOLAR STATES</textPath></text>
+
+  <!-- six planets as stars between the words -->
+  <use href="#star" x="-258" y="0"/>
+  <use href="#star" x="258" y="0"/>
+  <use href="#star" x="-223" y="-129"/>
+  <use href="#star" x="223" y="-129"/>
+  <use href="#star" x="-223" y="129"/>
+  <use href="#star" x="223" y="129"/>
+
+  <!-- the sun behind the eagle -->
+  <g stroke-width="2.5">
+    <circle cy="-30" r="62" fill="#ff9d00" fill-opacity="0.18"/>
+    <path d="M 0 -122 L 8 -98 M 0 -122 L -8 -98 M 0 62 L 0 50 M -92 -30 L -78 -30 M 92 -30 L 78 -30 M -65 -95 L -55 -85 M 65 -95 L 55 -85 M -65 35 L -55 25 M 65 35 L 55 25"/>
+  </g>
+
+  <!-- crossed interceptors -->
+  <g stroke-width="2.5">
+    <use href="#interceptor" transform="translate(-58 92) rotate(-38)"/>
+    <use href="#interceptor" transform="translate(58 92) rotate(38)"/>
+  </g>
+
+  <!-- the eagle: spread wings of stacked feathers, a shield for a body, the head turned -->
+  <g stroke-width="3">
+    <g transform="translate(-26 -36)">
+      <use href="#feather" transform="scale(-1 1) rotate(-38)"/>
+      <use href="#feather" transform="scale(-1 1) translate(4 14) rotate(-22) scale(1.15)"/>
+      <use href="#feather" transform="scale(-1 1) translate(8 30) rotate(-6) scale(1.25)"/>
+      <use href="#feather" transform="scale(-1 1) translate(10 46) rotate(10) scale(1.2)"/>
+      <use href="#feather" transform="scale(-1 1) translate(10 60) rotate(26) scale(1.05)"/>
+    </g>
+    <g transform="translate(26 -36)">
+      <use href="#feather" transform="rotate(-38)"/>
+      <use href="#feather" transform="translate(4 14) rotate(-22) scale(1.15)"/>
+      <use href="#feather" transform="translate(8 30) rotate(-6) scale(1.25)"/>
+      <use href="#feather" transform="translate(10 46) rotate(10) scale(1.2)"/>
+      <use href="#feather" transform="translate(10 60) rotate(26) scale(1.05)"/>
+    </g>
+    <path d="M -28 -40 L 28 -40 L 28 10 Q 28 44 0 58 Q -28 44 -28 10 Z" fill="#05070d"/>
+    <path d="M -28 -16 L 28 -16 M -28 8 L 28 8" stroke-width="2"/>
+    <path d="M -12 58 L -18 84 M 0 60 L 0 88 M 12 58 L 18 84"/>
+    <path d="M -10 -40 Q -16 -66 4 -76 Q 22 -82 30 -68 L 46 -64 L 30 -56 Q 22 -48 10 -46 L 10 -40" fill="#05070d"/>
+    <circle cx="16" cy="-66" r="3" fill="#ff9d00" stroke="none"/>
+    <!-- a crest of orange hair, combed over -->
+    <path d="M -8 -74 Q 8 -94 34 -84 Q 18 -82 10 -76" fill="#ff9d00" fill-opacity="0.6" stroke-width="2"/>
+  </g>
+
+  <!-- the ribbon -->
+  <g stroke-width="2.5">
+    <path d="M -178 146 L 178 146 L 164 168 L 178 190 L -178 190 L -164 168 Z" fill="#05070d"/>
+    <text y="175" font-size="12" letter-spacing="2.5" fill="#ff9d00" stroke="none" text-anchor="middle">PRESIDENTIAL GAMES · MMDLXXXIV</text>
+  </g>
+</svg>
