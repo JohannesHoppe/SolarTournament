@@ -109,6 +109,15 @@ The system is ruled by the **United Solar States**, the heir of an America that 
 
 The year is **2584**, a nod to George Orwell's *1984*, where a whole society watches and is watched.
 
+### Factions
+
+- **Earth**: the United Solar States under the Orange President. They own the tournament, the clone printers and the broadcast.
+- **Mars**: the old colony, proud, militarized and tired of paying for Earth's walls.
+- **The Rockborn**: people of the asteroid belt, miners of the rocks the tournament is fought among. Earth needs their work and deports them when they come home.
+- **The "Aliens"**: that is what the regime's broadcast calls them, but they are human. Generations in deep space, radiation and selection have changed their descendants beyond recognition; nothing about them looks human any more. They can no longer live on Earth or Mars, not even in a ship with a normal atmosphere: they need air with an extremely high share of oxygen and survive only inside the life support of their own ships. Calling them aliens makes it easier to cheer when they die.
+
+The "alien" interceptor and the human interceptor are the same ship under a different skin: the rules of the Presidential Games allow one hull for everyone, built by the sponsors, so that the audience sees a fair fight and the sponsors sell one ship to every faction.
+
 ## The physics of the SolarTournament universe
 
 ### Scale
