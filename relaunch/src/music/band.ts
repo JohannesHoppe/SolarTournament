@@ -549,7 +549,7 @@ export class Band {
     if (!voice) return;
     this.announcerStatic.triggerAttackRelease(0.15, t, 0.9);
     let position = t + 0.18;
-    for (const { word, stop } of words(text.replace('{name}', name ?? 'host'))) {
+    for (const { word, stop } of words(text.replace('{name}', name ?? 'pilot'))) {
       const clip = voice.clips[clipKey('mod', word)];
       if (!clip) continue;
       this.playClip(clip, position, this.announcerIn);

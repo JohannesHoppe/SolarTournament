@@ -310,7 +310,7 @@ export class Game implements OnlineGame {
     const speaker = spoken.language === 'mod' ? 'Announcer' : spoken.line.startsWith('radio') ? 'Radio 2584' : spoken.language === 'de' ? 'Der Präsident' : 'The Orange President';
     const announcement = spoken.line.startsWith('radio') && this.radio.song;
     const text = announcement ? `${spoken.language === 'de' ? 'Es läuft' : 'Now playing'}: ${this.radio.song!.title}` : spoken.line
-      .replace('{name}', this.announcedName ?? 'host')
+      .replace('{name}', this.announcedName ?? 'pilot')
       .split(/(?<=[.?!])\s+/)
       .map((sentence) => sentence.charAt(0).toUpperCase() + sentence.slice(1))
       .join(' ');
@@ -338,7 +338,7 @@ export class Game implements OnlineGame {
     const lines = victim.type === 'alien' && roll % 2 === 0 ? ANNOUNCER_ALIEN : killer ? ANNOUNCER_KILL : ANNOUNCER_ROCK;
     const line = lines[(roll >>> 4) % lines.length];
     const spoken = victim.name.toLowerCase();
-    // bots have rendered names; a human callsign is spoken as "host" and shown in the subtitle
+    // bots have rendered names; the clone of a human Host is spoken as "pilot" and shown in the subtitle
     this.announcedName = victim.name;
     this.radio.announce(line, ANNOUNCER_NAMES.includes(spoken) ? spoken : null);
   }

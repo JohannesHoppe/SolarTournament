@@ -51,7 +51,7 @@ On phones and tablets touch controls appear: the fixed stick on the left turns t
 **Online tournament** in the menu opens a room and puts its code into the address (`?t=code`); the pause menu copies the invitation link. Whoever opens the link joins the same tournament. There is no game server: the browsers find each other through public Nostr relays ([Trystero](https://github.com/dmotz/trystero)) and then talk directly over WebRTC.
 
 - **Four places per tournament.** The lead browser fills free places with bots and removes one for every host who joins.
-- **Every host flies their own ship.** Each browser simulates its own ship and sends its state 15 times per second; the other browsers predict the motion in between (a ship without thrust flies straight on) and blend corrections in smoothly.
+- **Every Host has their own pilot.** Each browser simulates its own ship and sends its state 15 times per second; the other browsers predict the motion in between (a ship without thrust flies straight on) and blend corrections in smoothly.
 - **The shooter decides about hits.** A beam that goes through a ship on the shooter's screen is reported to the browser flying that ship, which applies the damage and announces a destruction. Asteroid hits go to everyone; the fragments are deterministic, so all players see the same ones.
 - **The lead browser** is the one that has been in the room longest. It runs the bots and the round clock and brings newcomers' asteroid fields up to date. When it leaves, the next one takes over seamlessly.
 - **Rounds** last five minutes for everyone; the scoreboard shows over the running game, and the next round starts after 12 seconds. The pause menu does not stop the tournament.
@@ -61,7 +61,7 @@ For development, `?t=code&local=1` connects tabs of the same browser without the
 
 ## Flight school
 
-The menu offers a guided flight school without opponents. It opens with a briefing on the world of the games, read out by the flight computer, which also reads every following step aloud. Ten steps teach the main drive, drifting, the flip, braking, the maneuvering thrusters, shooting a target drone, cooling in the shadow of an asteroid and the impact warning. Each step waits until the Host has actually done it; a blinking diamond marks targets. Training clones are free: a Host whose clone dies in flight school gets the next one without a sponsor break.
+The menu offers a guided flight school without opponents. It opens with a briefing on the world of the games, read out by the flight computer, which also reads every following step aloud. Ten steps teach the main drive, drifting, the flip, braking, the maneuvering thrusters, shooting a target drone, cooling in the shadow of an asteroid and the impact warning. Each step waits until the pilot has actually done it; a blinking diamond marks targets. Training clones are free: a Host whose clone dies in flight school gets the next one without a sponsor break.
 
 ## Radio 2584
 
@@ -125,7 +125,7 @@ SolarTournament has a universe of its own. It borrows two principles from scienc
 1. **Realistic physics**, as in *The Expanse*: Newtonian flight, no sound in vacuum, no shields, hulls that break.
 2. **Consciousness transfer into clones**, as in *Altered Carbon*: death is not the end. But over a live link and with a memory that never breaks, as for the expendable of *Mickey 17*: every death is lived through.
 
-Humanity has settled the solar system. Fast fusion drives make hard burns between the planets possible, and daredevil pilots whip their ships around gravity wells at extreme speed for the thrill of it. The SolarTournament grew out of that daring and became the greatest entertainment of its time: Hosts fight each other to the death in ships among the asteroids, while audiences across the system watch from a safe distance. Gladiator games for the space age.
+Humanity has settled the solar system. Fast fusion drives make hard burns between the planets possible, and daredevil pilots whip their ships around gravity wells at extreme speed for the thrill of it. The SolarTournament grew out of that daring and became the greatest entertainment of its time: pilots, printed clones of their Hosts, fight each other to the death in ships among the asteroids, while audiences across the system watch from a safe distance. Gladiator games for the space age.
 
 The clones die, and the Hosts come back. Their minds are linked to cloned human bodies; when a ship is destroyed, the Host wakes up in the next clone, in the next ship. That is why every round has respawns, and why the audience never runs out of champions. The clones come out of a 3D printer: disposable bodies, printed by the dozen, and everyone knows it.
 
@@ -159,7 +159,7 @@ One world unit is 5 cm. A ship is about 35 m long; the asteroids are ten to thir
 - **Main drive.** It pushes only along the nose, with 45 m/s² (about 4.6 g). Nothing slows a ship down: without thrust it keeps drifting forever.
 - **Maneuvering thrusters.** They rotate the ship and also push it gently along every axis (7 m/s²), enough to sidestep, not enough to brake from full speed.
 - **Flight computer.** Rotation is rate-controlled: the stick sets how fast the ship turns, and the thrusters stop the rotation when the stick is released (up to 1.6 rad/s for yaw and pitch, 1.8 rad/s for roll, reached with 6 rad/s²).
-- **Flip and burn.** Braking means turning the drive into the flight direction and burning. The flip assist (X) turns the ship to retrograde; the Host burns. Grabbing the stick cancels the assist.
+- **Flip and burn.** Braking means turning the drive into the flight direction and burning. The flip assist (X) turns the ship to retrograde; the pilot burns. Grabbing the stick cancels the assist.
 - **Velocity markers.** The green marker shows where the ship is actually drifting, the orange cross where the drive has to point to brake.
 - **Space dust.** Fine dust stays fixed in space, so drift is visible even far from any rock.
 
@@ -195,9 +195,9 @@ There are no shields. Every hit stays until the ship respawns.
 
 The laser draws no ammunition but produces heat. Each shot adds 30 % of the heat capacity; at 100 % the laser locks until the ship has cooled down to 30 %. Radiators shed 20 % per second in sunlight and 50 % per second in the shadow of an asteroid. The asteroids cast real shadows; a ship in shadow goes dark and the HUD shows ☾ next to the heat gauge.
 
-### The clone in the cockpit
+### The pilot
 
-- **G-forces.** Above 3 g the clone starts to grey out. A full burn (4.6 g) narrows the view to a tunnel within 5 seconds, with the clone's heartbeat getting louder; 3 seconds without hard acceleration clear it again.
+- **G-forces.** Above 3 g the pilot starts to grey out. A full burn (4.6 g) narrows the view to a tunnel within 5 seconds, with the pilot's heartbeat getting louder; 3 seconds without hard acceleration clear it again.
 - **Line of sight.** Sensors need a clear line: a ship hidden behind an asteroid disappears from the HUD, and bots cannot see it either.
 
 ### Sound

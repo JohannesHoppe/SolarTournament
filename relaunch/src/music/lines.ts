@@ -149,7 +149,7 @@ export const PHRASES_DE = [
 
 /**
  * The announcer: cynical, delighted by every death. A line may contain {name}; it is
- * spoken as the name of a bot, or as "host" for a human callsign (the subtitle shows it).
+ * spoken as the name of a bot, or as "pilot" for the clone of a human Host (the subtitle shows it).
  */
 export const ANNOUNCER_KILL = [
   'an excellent death for {name}',
@@ -172,8 +172,8 @@ export const ANNOUNCER_ROCK = [
 ];
 export const ANNOUNCER_OPEN = ['radio twenty five eighty four. live from the arena', 'this is your announcer. the games continue'];
 
-/** Bot callsigns the host can say; human callsigns become "host". */
-export const ANNOUNCER_NAMES = ['ingmar', 'nova', 'kessler', 'vega', 'orion', 'sputnik', 'halley', 'laika', 'host'];
+/** Bot callsigns the host can say; the clones of human Hosts become "pilot". */
+export const ANNOUNCER_NAMES = ['ingmar', 'nova', 'kessler', 'vega', 'orion', 'sputnik', 'halley', 'laika', 'pilot'];
 
 /**
  * The flight computer reads out what the screen shows; people would rather listen than read.
@@ -183,7 +183,8 @@ export const BRIEFING =
   'the year is twenty five eighty four. the united solar states rule the planets, and the orange president rules the united solar states. ' +
   'to keep his people quiet and entertained, his ministry of war stages the presidential games. ' +
   'you are one of the chosen hosts, and it is an honor to die for the president. ' +
-  'you fly a printed clone over a live link, and when the clone dies, the next one is already waiting in the printer. ' +
+  'your printed clones fly for you, faster than any radio link could, and everything they live through streams back into your mind. ' +
+  'when a clone dies, the next one is already waiting in the printer. ' +
   'you will die again and again through your clones. that is your destiny now. ' +
   'training clones like this one are free, but in the tournament every new clone costs you an advertisement. ' +
   'make the great president happy. that is all that counts.';
@@ -218,7 +219,7 @@ export const COMPUTER = {
   cloneLost: 'clone lost. want another clone? you pay with advertising. make the sponsor happy.',
   sponsorHappy: 'the sponsor is happy. booting your next clone.',
   roundOver: 'round over',
-  launch: 'clone online. good luck, host.',
+  launch: 'clone online. link to host established. good luck, pilot.',
 } as const;
 
 /** All phrases and fixed announcements of a language, for the renderer. */
