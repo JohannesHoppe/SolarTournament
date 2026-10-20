@@ -95,6 +95,8 @@ export class Bot {
   blind = false;
   /** Set by the game in a race: the next gate, which the bot flies through. */
   waypoint: THREE.Vector3 | null = null;
+  /** Set by the game: the nearest probe, which an idle bot goes for. */
+  lure: THREE.Vector3 | null = null;
   /** A racer looks back at a ship on its tail until then, and may again from then on (s). */
   private lookBackUntil = 0;
   private nextLookBack = 0;
@@ -208,7 +210,8 @@ export class Bot {
         desired.copy(goal).normalize().multiplyScalar(approach).add(target.flight.velocity);
       }
     } else {
-      toTarget.subVectors(this.wanderTarget, me.position);
+      // nothing to fight: a probe in sight is worth the trip, else the bot roams
+      toTarget.subVectors(this.lure ?? this.wanderTarget, me.position);
       desired.copy(toTarget).normalize().multiplyScalar(Math.min(CRUISE_SPEED * 0.6, toTarget.length() * 0.2));
     }
     if (me.position.length() > HOME_RADIUS) desired.addScaledVector(me.position, -CRUISE_SPEED / me.position.length());

@@ -49,6 +49,7 @@ Worked through from top to bottom. Every finished item is also documented in the
 ### 6. Tactics
 
 - [x] Torpedoes: few shots, homing, can be shot down with the laser
+- [x] Items: sponsor probes with a twin laser, plating, torpedoes, overdrive or repair; a dead clone's fly out again
 - [ ] Decoys and silent running: a cold ship without drive is harder to detect
 
 ### 7. Spreading the game

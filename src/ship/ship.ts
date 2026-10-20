@@ -3,6 +3,7 @@ import { colliderRadius, type Assets, type ShipType } from '../assets';
 import { FlightModel } from './flight';
 import type { Controls } from '../input/input';
 import { TORPEDOES } from '../game/torpedoes';
+import { packItems, unpackItems } from '../game/items';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
@@ -110,6 +111,8 @@ export type ShipState = {
   /** gates passed in a race, and the second of the round it finished (-1 while racing) */
   g?: number;
   fi?: number;
+  /** items held (see packItems) */
+  it?: number;
   /** remaining spawn protection (s) */
   pr: number;
 };
@@ -158,6 +161,9 @@ export class Ship {
   torpedoes = TORPEDOES;
   /** Torpedoes this ship fired with this clone and before, for their ids. */
   torpedoesFired = 0;
+  /** Items the clone holds (see game/items): a twin laser, and plating charges left. */
+  twin = false;
+  plating = 0;
   /** Health of the main drive and of the maneuvering thrusters, 0..1. */
   drive = 1;
   thrusters = 1;
@@ -261,6 +267,8 @@ export class Ship {
     this.hull = MAX_HULL;
     this.drive = this.thrusters = 1;
     this.torpedoes = TORPEDOES;
+    this.twin = false;
+    this.plating = 0;
     this.holes.length = 0;
     this.heat = 0;
     this.overheated = false;
@@ -288,6 +296,8 @@ export class Ship {
     this.score = from.score;
     this.kills = from.kills;
     this.deaths = from.deaths;
+    this.twin = from.twin;
+    this.plating = from.plating;
     this.gates = from.gates;
     this.finish = from.finish;
     this.alive = r.alive;
@@ -302,7 +312,8 @@ export class Ship {
   toState(now: number, full = false): ShipState {
     const f = this.flight;
     const round = (v: { toArray(): number[] }, digits = 0) => v.toArray().map((x) => +x.toFixed(digits));
-    const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}|${this.gates}|${this.finish}`;
+    const items = packItems(this.twin, this.plating);
+    const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}|${this.gates}|${this.finish}|${items}`;
     const withSlow = full || slow !== this.slowSent || now - this.slowSentAt >= SLOW_STATE_SECONDS;
     if (withSlow) {
       this.slowSent = slow;
@@ -310,7 +321,7 @@ export class Ship {
     }
     return {
       id: this.id,
-      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish } : {}),
+      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items } : {}),
       p: round(f.position),
       v: round(f.velocity, 1),
       q: round(f.orientation, 4),
@@ -346,6 +357,7 @@ export class Ship {
       this.deaths = state.de!;
       this.gates = state.g!;
       this.finish = state.fi!;
+      ({ twin: this.twin, plating: this.plating } = unpackItems(state.it!));
     }
     if (state.a && !this.alive) {
       // the owner booted a new clone
@@ -406,8 +418,10 @@ export class Ship {
 
     this.heat = Math.max(0, this.heat - (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * dt);
     if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;
-    if (controls.fire && !this.overheated && now - this.lastShotAt >= LASER_COOLDOWN) {
-      this.heat += HEAT_PER_SHOT;
+    // a twin laser (an item) fires twice as fast at half the heat per shot
+    const twin = this.twin ? 2 : 1;
+    if (controls.fire && !this.overheated && now - this.lastShotAt >= LASER_COOLDOWN / twin) {
+      this.heat += HEAT_PER_SHOT / twin;
       if (this.heat >= MAX_HEAT) this.overheated = true;
       this.lastShotAt = now;
       return true;
@@ -476,6 +490,13 @@ export class Ship {
    */
   tailToward(direction: THREE.Vector3): boolean {
     return direction.dot(this.flight.forward(offset)) / direction.length() > REAR_CONE_COS;
+  }
+
+  /** The repair item: hull, drive and thrusters as new, the holes patched. */
+  repair() {
+    this.hull = MAX_HULL;
+    this.drive = this.thrusters = 1;
+    this.holes.length = 0;
   }
 
   /**

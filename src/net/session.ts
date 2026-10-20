@@ -2,7 +2,7 @@ import type { FieldState } from '../world/asteroids';
 import type { ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
 import { LocalTransport, TrysteroTransport, type Transport } from './transport';
-import { fieldState, id, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
+import { fieldState, id, ids, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
 /** Ship states go out this often (Hz); the receivers predict the motion in between. */
 const STATE_RATE = 15;
@@ -30,8 +30,8 @@ const RESTART_SLACK = 1;
 export const TOURNAMENT_SIZE = 8;
 /** Ships one peer may run: its own and the bots of a lead browser, at most a full tournament. */
 const MAX_SHIPS_PER_PEER = TOURNAMENT_SIZE;
-/** One shooter cannot hit the same ship more often than its laser fires (s); well below the cooldown, for network jitter. */
-const MIN_HIT_INTERVAL = 0.1;
+/** One shooter cannot hit the same ship more often than its laser fires (s); below the cooldown of a twin laser (0.09 s), for network jitter. */
+const MIN_HIT_INTERVAL = 0.07;
 /** Hits per peer and second: every ship it runs firing as fast as the laser allows, each beam through a few ships. */
 const MAX_HITS_PER_SECOND = MAX_SHIPS_PER_PEER * 12;
 /** Asteroid hits per peer and second, generous for several ships firing at once. */
@@ -40,7 +40,7 @@ const MAX_ROCK_HITS_PER_SECOND = 20;
 const MAX_DESTRUCTIONS_PER_SECOND = 4;
 /** Pieces of wreckage one peer's ships shoot or ram per second, generous for several ships firing at once. */
 const MAX_WRECK_HITS_PER_SECOND = 20;
-/** Torpedo launches, hits and torpedoes gone, per peer and second: a few torpedoes per clone, eight ships at most. */
+/** Torpedo launches, hits, torpedoes gone and probes taken, per peer and second: a few of each per clone, eight ships at most. */
 const MAX_TORPEDO_EVENTS_PER_SECOND = 12;
 
 /**
@@ -108,7 +108,10 @@ export class Session {
   onTorpedoGone: (id: string, position: Vec) => void = () => {};
   /** Another browser's torpedo hit a ship this browser runs. */
   onTorpedoHit: (target: string, shooter: string) => void = () => {};
-  onSync: (field: FieldState, wrecks: WreckState[]) => void = () => {};
+  /** A ship of another browser took a probe. */
+  onProbe: (probe: string, ship: string) => void = () => {};
+  /** The lead's field, the wreckage in flight, and the probes taken this round. */
+  onSync: (field: FieldState, wrecks: WreckState[], probesTaken: string[]) => void = () => {};
   onPeerJoin: (id: string) => void = () => {};
   onPeerLeave: (id: string) => void = () => {};
   /** This browser started over (see restart): it takes the round and field of the lead browser again. */
@@ -198,6 +201,11 @@ export class Session {
       const position = vec(d?.p, 3, MAX_COORDINATE);
       if (torpedo && position && this.torpedoBudget.spend(from)) this.guard(() => this.onTorpedoGone(torpedo, position));
     });
+    transport.on('ic', (d, from) => {
+      const probe = id(d?.c);
+      const ship = id(d?.s);
+      if (probe && ship && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onProbe(probe, ship));
+    });
     transport.on('tk', (d, from) => {
       const target = id(d?.t);
       const shooter = id(d?.s);
@@ -214,13 +222,14 @@ export class Session {
       // peer that was here before it
       const field = fieldState(d?.f);
       const wrecks = wreckStates(d?.w);
+      const taken = ids(d?.p);
       const age = num(d?.g, 0, MAX_FIELD_TIME);
-      if (!field || !wrecks || age === null) return;
+      if (!field || !wrecks || !taken || age === null) return;
       this.hear(from, age);
       if (this.synced || seconds() - this.startedAt >= SETTLE_MS / 1000) return;
       if ((this.peerJoinedAt.get(from) ?? Infinity) >= this.startedAt) return;
       this.synced = true;
-      this.guard(() => this.onSync(field, wrecks));
+      this.guard(() => this.onSync(field, wrecks, taken));
     });
     transport.onPeerJoin((peer) => {
       if (!this.left) this.guard(() => this.onPeerJoin(peer));
@@ -347,6 +356,10 @@ export class Session {
     this.transport.send('tl', { i: torpedo, s: shooter, t: target, p: position, v: velocity });
   }
 
+  sendProbe(probe: string, ship: string) {
+    this.transport.send('ic', { c: probe, s: ship });
+  }
+
   sendTorpedoGone(torpedo: string, position: Vec) {
     this.transport.send('tg', { i: torpedo, p: position });
   }
@@ -361,8 +374,8 @@ export class Session {
     this.transport.send('r', { i: rock, t: +at.toFixed(3), n: round });
   }
 
-  sendSync(to: string, field: FieldState, wrecks: WreckState[]) {
-    this.transport.send('y', { f: field, w: wrecks, g: this.age() }, to);
+  sendSync(to: string, field: FieldState, wrecks: WreckState[], probesTaken: string[]) {
+    this.transport.send('y', { f: field, w: wrecks, p: probesTaken, g: this.age() }, to);
   }
 
   leave() {

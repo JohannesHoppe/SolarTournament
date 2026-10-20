@@ -72,6 +72,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | **`game/`** | **The round** |
 | `game/game.ts` | Game states, round flow, lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
 | `game/race.ts` | The race: modes of rounds and rooms, the course of gates (laid out from the arena's field), points for gates and places |
+| `game/items.ts` | Items: sponsor probes that show up on the round clock (the same on every browser), what they carry, dropped again when a clone dies |
 | `game/torpedoes.ts` | Torpedoes: launch, homing, fuse, shot down by the laser; only the shooter's browser decides where one goes off |
 | `game/school.ts` | Flight school: 24 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
 | `game/sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, how the clone died, the round so far |

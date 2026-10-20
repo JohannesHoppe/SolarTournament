@@ -36,6 +36,7 @@ import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Torpedo } from './torpedoes';
+import { Probes, ITEM_NAMES, type Probe, type ItemKind } from './items';
 import type { FieldState } from '../world/asteroids';
 import { Course, GATE_POINTS, GATE_RADIUS, GATES, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
 import { markedName } from '../view/marks';
@@ -66,6 +67,10 @@ const RACE_KILL_POINTS = 200;
 /** Points for shooting down a torpedo, and how often a bot with a lock fires one (per second). */
 const TORPEDO_DOWN_POINTS = 50;
 const BOT_TORPEDO_RATE = 0.08;
+/** An idle bot goes for a probe within this distance (units, 1.5 km). */
+const PROBE_LURE = 30000;
+/** Plating (an item) turns this many hits into the drive, or one torpedo. */
+const PLATING_CHARGES = 2;
 /** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km). */
 const TORPEDO_WARNING = 40000;
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
@@ -255,6 +260,8 @@ const TURN_AXIS = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0)
 const TURN_LEVERS = { x: new THREE.Vector3(0, 0, 0.6), y: new THREE.Vector3(0, 0, 0.6), z: new THREE.Vector3(0.5, 0, 0) };
 const TURN_ENDS = [1, -1];
 const SCRAPE_COLOR = new THREE.Color(1, 0.7, 0.3);
+/** The sparks of a hit the plating takes: the plating probe's blue. */
+const PLATING_COLOR = new THREE.Color(0.3, 0.57, 1);
 
 /** 1st, 2nd, 3rd, 4th … */
 const ordinal = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`;
@@ -302,6 +309,8 @@ export class Game implements OnlineGame {
   private readonly replayEffects: Effects;
   private readonly killcam: KillCam;
   private readonly torpedoes: Torpedoes;
+  /** The item probes of the round (see game/items). */
+  private readonly probes = new Probes();
   /** The last picture was the kill cam's. */
   private replaying = false;
   private readonly wrecks = new Wrecks();
@@ -414,6 +423,7 @@ export class Game implements OnlineGame {
     { position: new THREE.Vector3(), label: '', color: '#ff9d00' },
   ];
   private readonly torpedoMarks: RadarMark[] = Array.from({ length: 16 }, () => ({ position: new THREE.Vector3(), label: 'Torpedo', color: '#ff3b30' }));
+  private readonly probeMarks: RadarMark[] = Array.from({ length: 12 }, () => ({ position: new THREE.Vector3(), label: '', color: '#3dff9a' }));
   /** The marks the radar shows this frame (see radarMarks). */
   private readonly shownMarks: RadarMark[] = [];
   /** How the own clone died last, for the sponsor break. */
@@ -501,7 +511,7 @@ export class Game implements OnlineGame {
     this.scene.add(this.replayEffects.group);
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
-    this.scene.add(this.torpedoes.group);
+    this.scene.add(this.torpedoes.group, this.probes.group);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
@@ -1169,6 +1179,7 @@ export class Game implements OnlineGame {
   private clearShips() {
     this.killcam.stop();
     this.torpedoes.clear();
+    this.probes.reset();
     this.wrecks.clear();
     this.brokenHere.clear();
     this.lastRockHit.clear();
@@ -1535,6 +1546,7 @@ export class Game implements OnlineGame {
     this.brokenHere.clear();
     this.lastRockHit.clear();
     this.wrecks.clear();
+    this.probes.reset();
     $('results').hidden = true;
   }
 
@@ -1762,6 +1774,7 @@ export class Game implements OnlineGame {
         bot.ease = this.online ? 0 : this.ease;
         // a racing bot flies the course until it has finished, then it only fights
         bot.waypoint = this.course && ship.finish < 0 ? this.course.points[ship.gates % GATES] : null;
+        bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE)?.position ?? null;
       }
       const thought = bot ? bot.think(now, this.ships, this.field, this.bots) : null;
       // the flight school's unarmed sparring bot only flies
@@ -1783,6 +1796,7 @@ export class Game implements OnlineGame {
     this.killcam.record(now, this.ships);
     this.replayEffects.update(dt);
     this.torpedoes.update(dt, now, this.field, this.ships, (torpedo, hit) => this.detonate(torpedo, hit));
+    this.items(dt, now);
     this.closeCall(now);
     this.pilot(dt, now);
 
@@ -1806,7 +1820,7 @@ export class Game implements OnlineGame {
     this.hud.setCenter(this.camera, subject);
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
-    this.hud.setTorpedoes(me.torpedoes);
+    this.hud.setArsenal(me.torpedoes, me.twin, me.plating);
     const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course) : null;
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
     this.hud.showCrosshair(me.alive);
@@ -1855,6 +1869,14 @@ export class Game implements OnlineGame {
     for (let i = 0; i < this.torpedoes.list.length && i < this.torpedoMarks.length; i++) {
       const mark = this.torpedoMarks[i];
       mark.position.copy(this.torpedoes.list[i].position);
+      list.push(mark);
+    }
+    // probes, in green, with what is inside
+    for (let i = 0; i < this.probes.list.length && i < this.probeMarks.length; i++) {
+      const mark = this.probeMarks[i];
+      const probe = this.probes.list[i];
+      mark.position.copy(probe.position);
+      mark.label = ITEM_NAMES[probe.kind];
       list.push(mark);
     }
     return list;
@@ -2244,6 +2266,67 @@ export class Game implements OnlineGame {
     }
   }
 
+  /**
+   * The round's probes: the arena's show up on the round clock (the same on every browser),
+   * all of them drift, and a ship this browser runs that flies through one takes it.
+   */
+  private items(dt: number, now: number) {
+    if (this.school) return;
+    const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
+    if (this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.raceTime(), this.field);
+    this.probes.update(dt, now, this.field);
+    for (const ship of this.ships) {
+      if (ship.owner !== null || !ship.alive || ship === this.drone || (this.spectating && ship === this.me)) continue;
+      const probe = this.probes.touching(ship.flight.position, ship.radius);
+      if (probe) this.takeProbe(ship, probe);
+    }
+  }
+
+  private takeProbe(ship: Ship, probe: Probe) {
+    this.probes.take(probe);
+    this.online?.sendProbe(probe.id, ship);
+    this.useItem(ship, probe.kind);
+  }
+
+  /** What an item does to the ship that took it. */
+  private useItem(ship: Ship, kind: ItemKind) {
+    switch (kind) {
+      case 'twin':
+        ship.twin = true;
+        break;
+      case 'plating':
+        ship.plating = PLATING_CHARGES;
+        break;
+      case 'torpedoes':
+        ship.torpedoes += 2;
+        break;
+      case 'overdrive':
+        if (ship === this.me) this.overdriveReadyAt = 0;
+        break;
+      case 'repair':
+        ship.repair();
+        break;
+    }
+    if (ship.isLocal) {
+      this.hud.flashMessage(this.time, ITEM_NAMES[kind], 2);
+      this.sound.beep(988, 0.07, 0.15);
+      this.sound.beep(1319, 0.07, 0.15, 0.07);
+      this.sound.beep(1976, 0.12, 0.15, 0.14);
+    }
+  }
+
+  remoteProbe(id: string) {
+    this.probes.takeId(id);
+  }
+
+  probesTaken() {
+    return this.probes.takenIds();
+  }
+
+  restoreProbes(taken: string[]) {
+    for (const id of taken) this.probes.takeId(id);
+  }
+
   /** A beam went through a torpedo: it goes off where it is, on every browser. */
   private shootDown(torpedo: Torpedo, shooter: Ship) {
     this.blowUp(torpedo);
@@ -2261,6 +2344,13 @@ export class Game implements OnlineGame {
 
   applyTorpedoHit(ship: Ship, shooter: Ship | null) {
     const now = this.time;
+    // plating (an item) takes a whole torpedo and is gone
+    if (ship.plating > 0 && now >= ship.protectedUntil) {
+      ship.plating = 0;
+      this.effects.sparks(ship.flight.position, PLATING_COLOR, 160);
+      if (ship.isLocal) this.hud.flashMessage(now, 'Plating took the torpedo', 1.5);
+      return;
+    }
     const status = ship.structural(TORPEDO_DAMAGE, now);
     if (status === 'protected') return;
     // the blast shakes the thrusters too
@@ -2509,6 +2599,14 @@ export class Game implements OnlineGame {
    * Also called for beams from other peers.
    */
   applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number) {
+    // plating (an item) takes a hit into the drive
+    if (ship.plating > 0 && ship.tailToward(direction) && ship.alive && this.time >= ship.protectedUntil) {
+      ship.plating--;
+      const along = distance ?? scratch.subVectors(ship.flight.position, origin).dot(direction);
+      this.effects.sparks(scratch.copy(origin).addScaledVector(direction, along), PLATING_COLOR, 80);
+      if (ship.isLocal) this.hud.flashMessage(this.time, ship.plating ? 'Plating holds' : 'Plating gone', 1.2);
+      return;
+    }
     const { status, zone } = ship.laserHit(origin, direction, this.time);
     if (status === 'protected') return;
     const along = distance ?? scratch.subVectors(ship.flight.position, origin).dot(direction);
@@ -2559,6 +2657,13 @@ export class Game implements OnlineGame {
       this.kick = 2;
     }
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
+    // what the clone held flies out again, as probes for whoever gets there first
+    const held: ItemKind[] = [];
+    if (victim.twin) held.push('twin');
+    if (victim.plating > 0) held.push('plating');
+    if (held.length && !this.school) this.probes.drop(victim.id, victim.deaths, held, victim.flight.position, victim.flight.velocity, this.time);
+    victim.twin = false;
+    victim.plating = 0;
     if (victim.isLocal) {
       this.sound.play('explosion', { volume: 1.6, rate: 0.6 });
       // the clone dies: its link breaks down, its radio fades out

@@ -170,10 +170,11 @@ export class Hud {
     if (this.overdrive.classList.contains('ready') !== (seconds <= 0)) this.overdrive.classList.toggle('ready', seconds <= 0);
   }
 
-  /** The torpedoes left, next to the overdrive. */
-  setTorpedoes(count: number) {
-    setText(this.torpedo, count > 0 ? `Torpedo ${count}` : 'No torpedo');
-    if (this.torpedo.classList.contains('ready') !== count > 0) this.torpedo.classList.toggle('ready', count > 0);
+  /** The torpedoes left and the items held, next to the overdrive. */
+  setArsenal(torpedoes: number, twin: boolean, plating: number) {
+    const items = `${twin ? ' · Twin' : ''}${plating ? ` · Plating ${plating}` : ''}`;
+    setText(this.torpedo, `${torpedoes > 0 ? `Torpedo ${torpedoes}` : 'No torpedo'}${items}`);
+    if (this.torpedo.classList.contains('ready') !== torpedoes > 0) this.torpedo.classList.toggle('ready', torpedoes > 0);
   }
 
   /** The flight mode next to the velocity: AUTOPILOT in blue, FREE DRIFT in orange. */

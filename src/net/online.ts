@@ -31,6 +31,10 @@ export interface OnlineGame {
   wreckSnapshot(): WreckState[];
   /** Takes the pieces of wreckage in flight from the lead browser. */
   restoreWrecks(wrecks: WreckState[]): void;
+  /** The probes taken this round, for a browser that joins. */
+  probesTaken(): string[];
+  /** Takes the probes taken this round from the lead browser: they do not show up here. */
+  restoreProbes(taken: string[]): void;
   /** Takes the lead browser's field, in the arena it names. */
   restoreField(field: FieldState): void;
   /** Another browser's ship launched a torpedo. */
@@ -39,6 +43,8 @@ export interface OnlineGame {
   remoteTorpedoGone(id: string, position: THREE.Vector3): void;
   /** Another browser's torpedo hit a ship this browser runs. */
   applyTorpedoHit(target: Ship, shooter: Ship | null): void;
+  /** A ship of another browser took a probe. */
+  remoteProbe(id: string, ship: Ship | null): void;
   /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
   leadRound(): RoundState;
@@ -97,14 +103,16 @@ export class Online {
       if (ship?.alive) game.remoteTorpedo(id, ship, target ? this.find(target) : null, from.fromArray(p), to.fromArray(v));
     };
     session.onTorpedoGone = (id, p) => game.remoteTorpedoGone(id, from.fromArray(p));
+    session.onProbe = (id, ship) => game.remoteProbe(id, this.find(ship));
     session.onTorpedoHit = (target, shooter) => {
       const ship = this.find(target);
       // only ships this browser runs take damage here
       if (ship && ship.owner === null) game.applyTorpedoHit(ship, this.find(shooter));
     };
-    session.onSync = (field, wrecks) => {
+    session.onSync = (field, wrecks, probesTaken) => {
       game.restoreField(field);
       game.restoreWrecks(wrecks);
+      game.restoreProbes(probesTaken);
     };
     session.onPeerJoin = (peer) => {
       // the lead browser brings the newcomer's asteroid field and wreckage up to date;
@@ -203,6 +211,10 @@ export class Online {
     this.session.sendTorpedo(id, shooter.id, target?.id ?? null, round(position), round(velocity));
   }
 
+  sendProbe(id: string, ship: Ship) {
+    this.session.sendProbe(id, ship.id);
+  }
+
   sendTorpedoGone(id: string, position: THREE.Vector3) {
     this.session.sendTorpedoGone(id, round(position));
   }
@@ -214,7 +226,7 @@ export class Online {
 
   /** The lead browser hands a newcomer, or a browser that started over, the field and the wreckage. */
   private sync(peer: string) {
-    if (this.session.isLead) this.session.sendSync(peer, this.game.field.snapshot(), this.game.wreckSnapshot());
+    if (this.session.isLead) this.session.sendSync(peer, this.game.field.snapshot(), this.game.wreckSnapshot(), this.game.probesTaken());
   }
 
   leave() {

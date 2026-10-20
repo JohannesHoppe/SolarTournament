@@ -29,6 +29,8 @@ export const ROUND_LIMIT = 3600;
 const MAX_ID = 64;
 /** A field never holds more rocks than this (40 rocks, up to 9 fragments each). */
 const MAX_ROCKS = 400;
+/** Lists of ids (the probes taken in a round: one every 25 s and the dead clones' ones) stay below this. */
+const MAX_IDS = 200;
 /** The arena never holds more pieces of wreckage than this (MAX_WRECKS in world/wrecks, with room). */
 const MAX_WRECK_PIECES = 100;
 
@@ -62,7 +64,7 @@ export function cleanName(x: unknown, max = MAX_NAME): string {
 /** A ship's state; name, type, score, kills, deaths and race progress come all together or not at all (see ShipState). */
 export function shipState(x: unknown): ShipState | null {
   if (!isRecord(x)) return null;
-  const slowKeys = ['n', 'k', 's', 'ki', 'de', 'g', 'fi'] as const;
+  const slowKeys = ['n', 'k', 's', 'ki', 'de', 'g', 'fi', 'it'] as const;
   const present = slowKeys.filter((key) => key in x).length;
   if (present !== 0 && present !== slowKeys.length) return null;
   const slow =
@@ -76,6 +78,7 @@ export function shipState(x: unknown): ShipState | null {
           de: num(x.de, 0, MAX_COUNT),
           g: num(x.g, 0, MAX_COUNT),
           fi: num(x.fi, -1, ROUND_LIMIT),
+          it: num(x.it, 0, 7),
         };
   const state = {
     id: id(x.id),
@@ -108,6 +111,13 @@ function breakState(x: unknown): { id: string; b: number } | null {
   if (!isRecord(x)) return null;
   const rock = { id: id(x.id), b: num(x.b, 0, MAX_FIELD_TIME) };
   return rock.id !== null && rock.b !== null ? (rock as { id: string; b: number }) : null;
+}
+
+/** A short list of ids (the probes taken in a round), or null. */
+export function ids(x: unknown): string[] | null {
+  if (!Array.isArray(x) || x.length > MAX_IDS) return null;
+  const list = x.map(id);
+  return list.some((entry) => entry === null) ? null : (list as string[]);
 }
 
 /** The pieces of wreckage in flight, or null. */
