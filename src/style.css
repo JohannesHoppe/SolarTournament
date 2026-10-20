@@ -265,7 +265,8 @@ button.primary .mode-note {
 
 .ship-select {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
   gap: 8px;
 }
 

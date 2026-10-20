@@ -81,9 +81,9 @@ interface Hole {
 
 /**
  * A ship as it travels over the network; short keys keep the 15 Hz updates small. Name, type,
- * score, kills and deaths change rarely: they come along when they changed, at least once a
- * second, and in every state right after a newcomer arrived (see Ship.toState); a state
- * carries all five or none.
+ * score, kills, deaths and race progress change rarely: they come along when they changed, at
+ * least once a second, and in every state right after a newcomer arrived (see Ship.toState);
+ * a state carries all of them or none.
  */
 export type ShipState = {
   id: string;
@@ -106,6 +106,9 @@ export type ShipState = {
   s?: number;
   ki?: number;
   de?: number;
+  /** gates passed in a race, and the second of the round it finished (-1 while racing) */
+  g?: number;
+  fi?: number;
   /** remaining spawn protection (s) */
   pr: number;
 };
@@ -170,6 +173,9 @@ export class Ship {
   score = 0;
   kills = 0;
   deaths = 0;
+  /** Gates passed in a race, and the second of the round it crossed the finish (-1 while it races). */
+  gates = 0;
+  finish = -1;
   respawnAt = 0;
   protectedUntil = 0;
   /** Time the ship left the arena, or null while inside. */
@@ -276,6 +282,8 @@ export class Ship {
     this.score = from.score;
     this.kills = from.kills;
     this.deaths = from.deaths;
+    this.gates = from.gates;
+    this.finish = from.finish;
     this.alive = r.alive;
     this.root.visible = r.alive;
     this.syncTransform();
@@ -288,7 +296,7 @@ export class Ship {
   toState(now: number, full = false): ShipState {
     const f = this.flight;
     const round = (v: { toArray(): number[] }, digits = 0) => v.toArray().map((x) => +x.toFixed(digits));
-    const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}`;
+    const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}|${this.gates}|${this.finish}`;
     const withSlow = full || slow !== this.slowSent || now - this.slowSentAt >= SLOW_STATE_SECONDS;
     if (withSlow) {
       this.slowSent = slow;
@@ -296,7 +304,7 @@ export class Ship {
     }
     return {
       id: this.id,
-      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths } : {}),
+      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish } : {}),
       p: round(f.position),
       v: round(f.velocity, 1),
       q: round(f.orientation, 4),
@@ -330,6 +338,8 @@ export class Ship {
       this.score = state.s!;
       this.kills = state.ki!;
       this.deaths = state.de!;
+      this.gates = state.g!;
+      this.finish = state.fi!;
     }
     if (state.a && !this.alive) {
       // the owner booted a new clone

@@ -40,6 +40,7 @@ Worked through from top to bottom. Every finished item is also documented in the
 
 ### 5. Game modes
 
+- [x] Race: three laps through eight gates, lasers on; rooms play deathmatch, race, or both in turn
 - [ ] Slingshot race with checkpoints around gravity wells
 - [ ] Last Clone Standing: three clones, after that only with longer ads
 - [ ] Teams: humans against aliens

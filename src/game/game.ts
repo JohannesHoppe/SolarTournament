@@ -34,6 +34,7 @@ import { ARENAS, arenaByKey, arenaOfRound, type ArenaId, type ArenaProfile } fro
 import { Landmarks } from '../world/landmarks';
 import { Lensing } from '../view/lensing';
 import type { FieldState } from '../world/asteroids';
+import { Course, GATE_POINTS, GATES, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
 import { markedName } from '../view/marks';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
@@ -45,6 +46,10 @@ const RESULTS_SECONDS = 12;
  */
 const STORM_PERIOD = 50;
 const STORM_SECONDS = 8;
+/** The modes as the list of tournaments names them. */
+const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', mixed: 'Deathmatch and race' };
+/** A kill in a race is worth less than in a deathmatch: the gates and the finish decide. */
+const RACE_KILL_POINTS = 200;
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
 const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: 'Burned up in the clouds', hole: 'Crossed the event horizon' };
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
@@ -231,6 +236,9 @@ const TURN_LEVERS = { x: new THREE.Vector3(0, 0, 0.6), y: new THREE.Vector3(0, 0
 const TURN_ENDS = [1, -1];
 const SCRAPE_COLOR = new THREE.Color(1, 0.7, 0.3);
 
+/** 1st, 2nd, 3rd, 4th … */
+const ordinal = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`;
+
 /** The sensors see nothing (a solar storm). */
 const blind = () => false;
 
@@ -307,6 +315,12 @@ export class Game implements OnlineGame {
   /** The choices of the form that starts a tournament. */
   private roomPublic = true;
   private roomBots = true;
+  private roomMode: RoomMode = 'deathmatch';
+  /** What a solo round is. */
+  private soloMode: RoundMode = 'deathmatch';
+  /** What the running round is, and its course when it is a race. */
+  private roundMode: RoundMode = 'deathmatch';
+  private course: Course | null = null;
   /** The tournament was full: the own Host watches a pilot (watchIndex, Tab switches) instead of flying. */
   private spectating = false;
   private watchIndex = 0;
@@ -498,6 +512,18 @@ export class Game implements OnlineGame {
     choose('room-private', 'room-public', (v) => (this.roomPublic = v), false);
     choose('room-bots', 'room-nobots', (v) => (this.roomBots = v), true);
     choose('room-nobots', 'room-bots', (v) => (this.roomBots = v), false);
+    // groups of choices that keep their value in data-value: the rounds of a room, the solo mode
+    for (const group of document.querySelectorAll<HTMLElement>('[data-choice]')) {
+      const buttons = group.querySelectorAll<HTMLButtonElement>('button[data-value]');
+      for (const button of buttons) {
+        button.addEventListener('click', () => {
+          buttons.forEach((b) => b.classList.toggle('selected', b === button));
+          if (group.dataset.choice === 'room-mode') this.roomMode = button.dataset.value as RoomMode;
+          else this.soloMode = button.dataset.value as RoundMode;
+          this.describeRoom();
+        });
+      }
+    }
     this.describeRoom();
     $('resume').addEventListener('click', () => this.resume());
     $('quit').addEventListener('click', () => this.endRound());
@@ -616,13 +642,13 @@ export class Game implements OnlineGame {
         item.append(info, join);
         row = { item, name, meta, join, listing };
         const entry = row;
-        join.addEventListener('click', () => void this.goOnline({ code: entry.listing.code, name: entry.listing.name, public: true, bots: entry.listing.bots }, false));
+        join.addEventListener('click', () => void this.goOnline({ code: entry.listing.code, name: entry.listing.name, public: true, bots: entry.listing.bots, mode: entry.listing.mode }, false));
         this.tournamentRows.set(listing.code, row);
       }
       row.listing = listing;
       const minutes = Math.max(0, Math.floor(listing.left / 60));
       const seconds = String(Math.max(0, Math.floor(listing.left % 60))).padStart(2, '0');
-      const meta = `${listing.hosts} of ${TOURNAMENT_SIZE} Hosts${listing.bots ? ' · bots' : ''} · ${minutes}:${seconds} left`;
+      const meta = `${MODE_NAMES[listing.mode]} · ${listing.hosts} of ${TOURNAMENT_SIZE} Hosts${listing.bots ? ' · bots' : ''} · ${minutes}:${seconds} left`;
       const join = listing.hosts >= TOURNAMENT_SIZE ? 'Watch' : 'Join';
       if (row.name.textContent !== listing.name) row.name.textContent = listing.name;
       if (row.meta.textContent !== meta) row.meta.textContent = meta;
@@ -643,13 +669,14 @@ export class Game implements OnlineGame {
   private describeRoom() {
     const who = this.roomPublic ? 'Listed here for every Host; anyone can join or watch.' : 'Not listed: only who has your invite link finds it.';
     const bots = this.roomBots ? `Bots fill the ${TOURNAMENT_SIZE} places; every Host who joins takes a bot's place.` : 'No bots: only Hosts fly.';
-    $('room-note').textContent = `${who} ${bots} The link works for good: whoever follows it later starts the tournament again.`;
+    const rounds = { deathmatch: 'Every round a deathmatch.', race: `Every round a race: ${LAPS} laps through ${GATES} gates, lasers on.`, mixed: 'Deathmatch and race take turns.' }[this.roomMode];
+    $('room-note').textContent = `${who} ${bots} ${rounds} The link works for good: whoever follows it later starts the tournament again.`;
   }
 
-  /** Starts a tournament from the form: a name, public or private, with or without bots. */
+  /** Starts a tournament from the form: a name, public or private, with or without bots, and what its rounds are. */
   private createTournament() {
     const name = $<HTMLInputElement>('room-name').value;
-    void this.goOnline(newRoom(name || $<HTMLInputElement>('room-name').placeholder, this.roomPublic, this.roomBots), true);
+    void this.goOnline(newRoom(name || $<HTMLInputElement>('room-name').placeholder, this.roomPublic, this.roomBots, this.roomMode), true);
   }
 
   /**
@@ -693,7 +720,7 @@ export class Game implements OnlineGame {
       return;
     }
     const left = Number.isFinite(this.roundEndsAt) ? this.roundEndsAt - this.time : ROUND_SECONDS;
-    this.lobby.announce(announcing ? { code: this.room!.code, name: this.room!.name, hosts: this.online!.pilots, bots: this.room!.bots, left } : null);
+    this.lobby.announce(announcing ? { code: this.room!.code, name: this.room!.name, hosts: this.online!.pilots, bots: this.room!.bots, mode: this.room!.mode, left } : null);
   }
 
   /** Joins a tournament room, then starts playing in it; `created` invites friends at once. */
@@ -976,8 +1003,15 @@ export class Game implements OnlineGame {
    */
   private enterArena(arena: ArenaProfile, state?: FieldState) {
     this.venue = arena;
+    this.field.generate(arena.layout);
+    // a race's course is laid out in the field as generated, the same on every browser
+    if (this.course) {
+      this.scene.remove(this.course.root);
+      this.course.dispose();
+    }
+    this.course = this.roundMode === 'race' ? new Course(this.field, arena.layout.seed) : null;
+    if (this.course) this.scene.add(this.course.root);
     if (state) this.field.restore(state, arena.layout);
-    else this.field.generate(arena.layout);
     this.space.setSun(arena.sun);
     this.landmarks.show(arena);
     this.belt.group.visible = arena.id === 'belt';
@@ -996,9 +1030,20 @@ export class Game implements OnlineGame {
     return arenaOfRound(this.online!.session.room, Math.max(0, this.roundId));
   }
 
-  /** Shows where the round is played: the arena's name in neon, with what makes it special. */
+  /** Shows where the round is played and what it is: the arena's name, a race's laps, what makes the arena special. */
   private announceArena() {
-    this.hud.flashMessage(this.time, `${this.venue.name} · ${this.venue.tagline}`, 5);
+    const race = this.roundMode === 'race' ? ` · Race: ${LAPS} laps through ${GATES} gates` : '';
+    this.hud.flashMessage(this.time, `${this.venue.name}${race} · ${this.venue.tagline}`, 5);
+  }
+
+  /** What an online round is, by the room's rule and the round number. */
+  private onlineRoundMode(): RoundMode {
+    return modeOfRound(this.room?.mode ?? 'deathmatch', Math.max(0, this.roundId));
+  }
+
+  /** Points for a kill: less in a race, where the gates and the finish decide. */
+  private killPoints() {
+    return this.roundMode === 'race' ? RACE_KILL_POINTS : KILL_POINTS;
   }
 
   private showMenu() {
@@ -1052,6 +1097,9 @@ export class Game implements OnlineGame {
     this.clearShips();
     // the flight school trains in the belt; a solo round is in an arena of chance; online the
     // room and round decide, so a first round starts in the room's first arena (see arriveInRound)
+    // online the round is unknown until the lead browser tells it (see syncRound)
+    this.roundId = mode === 'online' ? -1 : 0;
+    this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? this.soloMode : 'deathmatch';
     if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0));
     else this.enterArena(mode === 'school' ? ARENAS[0] : pick(ARENAS));
     this.hud.reset();
@@ -1065,7 +1113,6 @@ export class Game implements OnlineGame {
     this.respawn(this.me);
 
     // online the round is unknown until the lead browser tells it (see syncRound)
-    this.roundId = mode === 'online' ? -1 : 0;
     this.rejoinedFrom = null;
     this.resultsShownFor = null;
     this.pendingRocks.length = 0;
@@ -1322,6 +1369,7 @@ export class Game implements OnlineGame {
    */
   private startNextRound() {
     this.clearRound();
+    this.roundMode = this.onlineRoundMode();
     this.enterArena(this.roundArena());
     this.reprintOwn();
     this.announceArena();
@@ -1337,7 +1385,15 @@ export class Game implements OnlineGame {
    */
   private arriveInRound() {
     const arena = this.roundArena();
-    if (this.field.layout?.key === arena.layout.key) return;
+    const mode = this.onlineRoundMode();
+    if (this.field.layout?.key === arena.layout.key) {
+      // the field is right (a snapshot built it); only the round's mode, and with it the course, may change
+      if (mode === this.roundMode) return;
+      this.roundMode = mode;
+      this.enterArena(arena, this.field.snapshot());
+      return;
+    }
+    this.roundMode = mode;
     this.enterArena(arena);
     this.reprintOwn();
     this.announceArena();
@@ -1361,7 +1417,11 @@ export class Game implements OnlineGame {
   /** Online: scores of the own ships start from zero, the scoreboard closes, the wreckage goes. */
   private clearRound() {
     // the own clone too while it watches: it starts the round it flies with nothing
-    for (const ship of this.ships) if (ship.owner === null) ship.score = ship.kills = ship.deaths = 0;
+    for (const ship of this.ships) {
+      if (ship.owner !== null) continue;
+      ship.score = ship.kills = ship.deaths = ship.gates = 0;
+      ship.finish = -1;
+    }
     this.brokenHere.clear();
     this.lastRockHit.clear();
     this.wrecks.clear();
@@ -1370,12 +1430,20 @@ export class Game implements OnlineGame {
 
   /** Spawns a ship on the edge of the field, facing the center, away from asteroids. */
   private respawn(ship: Ship) {
-    // of a dozen random places on the edge of the field, clear of rock, the one farthest from
-    // the nearest enemy, preferably hidden from every enemy behind the asteroids
     const position = new THREE.Vector3();
     const candidate = new THREE.Vector3();
     let best = -Infinity;
-    for (let attempt = 0; attempt < SPAWN_CANDIDATES; attempt++) {
+    const course = this.course;
+    if (course) {
+      // a racer starts on the grid before the first gate, and a new clone where the last one
+      // passed its last gate, facing the next
+      course.startOf(ship.gates, Math.max(0, this.ships.indexOf(ship)) % 8, position);
+      candidate.copy(course.points[ship.gates % GATES]);
+      best = 0;
+    }
+    // of a dozen random places on the edge of the field, clear of rock, the one farthest from
+    // the nearest enemy, preferably hidden from every enemy behind the asteroids
+    for (let attempt = 0; attempt < SPAWN_CANDIDATES && !course; attempt++) {
       candidate.randomDirection().multiplyScalar(FIELD_RADIUS * (0.9 + Math.random() * 0.2));
       if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40)) continue;
       let nearest = Infinity;
@@ -1393,7 +1461,7 @@ export class Game implements OnlineGame {
       }
     }
     if (best === -Infinity) position.copy(candidate);
-    const look = new THREE.Matrix4().lookAt(position, scratch.set(0, 0, 0), new THREE.Vector3(0, 1, 0));
+    const look = new THREE.Matrix4().lookAt(position, course ? candidate : scratch.set(0, 0, 0), new THREE.Vector3(0, 1, 0));
     ship.spawn(position, new THREE.Quaternion().setFromRotationMatrix(look), this.time);
     if (ship === this.me) {
       // the Host's mind locks onto the freshly printed clone: from here on we are the clone
@@ -1447,14 +1515,16 @@ export class Game implements OnlineGame {
 
   private renderScoreboard() {
     const me = this.me;
-    const ranking = this.ships.filter((s) => s !== this.drone && !(this.spectating && s === this.me)).sort((a, b) => b.score - a.score);
+    const race = this.roundMode === 'race';
     const table = $<HTMLTableElement>('scoreboard');
-    table.innerHTML = '<tr><th>#</th><th>Host</th><th>Kills</th><th>Deaths</th><th>Score</th></tr>';
-    ranking.forEach((ship, i) => {
+    table.innerHTML = `<tr><th>#</th><th>Host</th>${race ? '<th>Race</th>' : ''}<th>Kills</th><th>Deaths</th><th>Score</th></tr>`;
+    // a race ranks by the finish, a deathmatch by the score (see standings)
+    this.standings().forEach((ship, i) => {
       const row = table.insertRow();
       row.classList.toggle('me', ship === me);
       row.insertCell().textContent = String(i + 1);
       row.insertCell().append(...markedName(ship.kind, ship.name));
+      if (race) row.insertCell().textContent = ship.finish >= 0 ? `${ship.finish.toFixed(1)} s` : `Lap ${Math.min(LAPS, Math.floor(ship.gates / GATES) + 1)}`;
       for (const value of [ship.kills, ship.deaths, ship.score]) row.insertCell().textContent = String(value);
     });
     // training points from the flight school are no personal best
@@ -1567,7 +1637,11 @@ export class Game implements OnlineGame {
       }
       let bot: Bot | null = null;
       for (const b of this.bots) if (b.ship === ship) bot = b;
-      if (bot) bot.ease = this.online ? 0 : this.ease;
+      if (bot) {
+        bot.ease = this.online ? 0 : this.ease;
+        // a racing bot flies the course until it has finished, then it only fights
+        bot.waypoint = this.course && ship.finish < 0 ? this.course.points[ship.gates % GATES] : null;
+      }
       const thought = bot ? bot.think(now, this.ships, this.field, this.bots) : null;
       // the flight school's unarmed sparring bot only flies
       if (thought && bot === this.sparring?.bot && !this.sparring.armed) thought.fire = false;
@@ -1576,6 +1650,7 @@ export class Game implements OnlineGame {
       ship.inShadow = this.field.raycast(ship.flight.position, SUN_DIRECTION, LASER_RANGE) !== null;
       ship.sunCooling = this.venue.cooling;
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
+      if (this.course) this.passGates(ship, this.course);
       this.keepInArena(ship, now);
       this.collide(ship, now);
       this.hitWreckage(ship, now);
@@ -1604,7 +1679,7 @@ export class Game implements OnlineGame {
     this.hud.setCenter(this.camera, subject);
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
-    const waypoint = this.school ? this.teach(dt, myControls) : null;
+    const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course) : null;
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
     this.hud.showCrosshair(me.alive);
     this.hud.setOnTarget(me.alive ? this.onTarget : null);
@@ -1632,6 +1707,65 @@ export class Game implements OnlineGame {
     } else if (now >= this.roundEndsAt) {
       this.endRound();
     }
+  }
+
+  /**
+   * A ship this browser runs flew through its next gate: a gate's points, a lap, and after
+   * the last lap the finish, with the points of its place among those finished before it.
+   */
+  private passGates(ship: Ship, course: Course) {
+    if (!ship.alive || ship.finish >= 0 || !course.crossed(ship.gates % GATES, ship.previous, ship.flight.position)) return;
+    ship.gates++;
+    ship.score += GATE_POINTS;
+    const lap = Math.floor(ship.gates / GATES);
+    if (ship.gates >= GATES * LAPS) {
+      ship.finish = +this.raceTime().toFixed(2);
+      const place = this.standings().indexOf(ship);
+      ship.score += PLACE_POINTS[place] ?? 0;
+      if (ship === this.me) {
+        this.hud.flashMessage(this.time, `Finished · ${ordinal(place + 1)} · +${PLACE_POINTS[place] ?? 0}`, 4);
+        this.sound.beep(1320, 0.1, 0.18);
+        this.sound.beep(1760, 0.2, 0.18, 0.12);
+      }
+      return;
+    }
+    if (ship !== this.me) return;
+    this.sound.beep(1180, 0.06, 0.12);
+    if (ship.gates % GATES === 0) this.hud.flashMessage(this.time, lap === LAPS - 1 ? 'Last lap' : `Lap ${lap + 1} of ${LAPS}`, 2);
+  }
+
+  /** Seconds since the round started. */
+  private raceTime() {
+    return Math.max(0, ROUND_SECONDS - (this.roundEndsAt - this.time));
+  }
+
+  /**
+   * The race as it stands: who finished, by the time it took, then who is racing, by the
+   * gates passed. In a deathmatch every ship has passed none, so the score decides.
+   */
+  private standings(): Ship[] {
+    const finished = (ship: Ship) => (ship.finish >= 0 ? ship.finish : Infinity);
+    return this.ships
+      .filter((ship) => ship !== this.drone && !(this.spectating && ship === this.me))
+      .sort((a, b) => finished(a) - finished(b) || b.gates - a.gates || b.score - a.score);
+  }
+
+  /** The own racer's next gate in the HUD, with lap, gate and place; returns the gate for the crosshair. */
+  private showRace(course: Course): THREE.Vector3 | null {
+    const me = this.me!;
+    const place = ordinal(this.standings().indexOf(me) + 1);
+    if (me.finish >= 0) {
+      course.highlight(-1);
+      this.hud.setWaypoint(this.camera, null);
+      this.hud.setSchool({ step: `Finished · ${place}`, text: `${me.finish.toFixed(1)} s. Now hunt the others.`, keys: [] });
+      return null;
+    }
+    const next = me.gates % GATES;
+    const lap = Math.min(LAPS, Math.floor(me.gates / GATES) + 1);
+    course.highlight(next);
+    this.hud.setWaypoint(this.camera, course.points[next], next === 0 && me.gates > 0 ? (lap === LAPS ? 'Last lap' : 'Lap') : `Gate ${next + 1}/${GATES}`);
+    this.hud.setSchool({ step: `Race · lap ${lap}/${LAPS} · ${place}`, text: `Gate ${next + 1} of ${GATES}`, keys: [] });
+    return course.points[next];
   }
 
   /**
@@ -2163,7 +2297,7 @@ export class Game implements OnlineGame {
     const ownKill = killer?.isLocal === true && killer === this.me;
     this.effects.explosion(victim.flight.position, victim.radius * (ownKill ? 3 : 2), victim.flight.velocity.clone().multiplyScalar(0.3));
     if (ownKill) {
-      this.hud.popup(this.camera, victim.flight.position, `+${KILL_POINTS}`, 'kill');
+      this.hud.popup(this.camera, victim.flight.position, `+${this.killPoints()}`, 'kill');
       this.kick = 2;
     }
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
@@ -2179,7 +2313,7 @@ export class Game implements OnlineGame {
     if (victim.owner === null) this.online?.sendDestroyed(victim, killer);
     if (killer && killer.owner === null) {
       killer.kills++;
-      killer.score += KILL_POINTS;
+      killer.score += this.killPoints();
       if (killer.isLocal) {
         this.sound.beep(1320, 0.07, 0.15);
         this.sound.beep(1760, 0.12, 0.15, 0.09);

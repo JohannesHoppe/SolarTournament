@@ -1,6 +1,7 @@
 import { LocalTransport, TrysteroTransport, type Transport } from './transport';
 import { num, ROUND_LIMIT } from './validate';
-import { roomCode, roomName } from './room';
+import { roomCode, roomMode, roomName } from './room';
+import type { RoomMode } from '../game/race';
 import { TOURNAMENT_SIZE } from './session';
 
 /**
@@ -35,6 +36,8 @@ export interface Listing {
   /** Hosts whose clones fly. */
   hosts: number;
   bots: boolean;
+  /** Deathmatches, races, or both in turn. */
+  mode: RoomMode;
   /** Seconds left in the running round. */
   left: number;
 }
@@ -84,7 +87,7 @@ export class Lobby {
     const now = performance.now();
     return [...this.listings.values()]
       .sort((a, b) => b.hosts - a.hosts || a.name.localeCompare(b.name))
-      .map(({ code, name, hosts, bots, left, heard }) => ({ code, name, hosts, bots, left: left - (now - heard) / 1000 }));
+      .map(({ code, name, hosts, bots, mode, left, heard }) => ({ code, name, hosts, bots, mode, left: left - (now - heard) / 1000 }));
   }
 
   close() {
@@ -94,7 +97,7 @@ export class Lobby {
   }
 
   private wire(listing: Listing) {
-    return { c: listing.code, n: listing.name, h: Math.min(listing.hosts, TOURNAMENT_SIZE), b: listing.bots, l: Math.round(listing.left) };
+    return { c: listing.code, n: listing.name, h: Math.min(listing.hosts, TOURNAMENT_SIZE), b: listing.bots, m: listing.mode, l: Math.round(listing.left) };
   }
 
   /**
@@ -112,7 +115,8 @@ export class Lobby {
     const now = performance.now();
     const known = this.listings.get(code);
     if (known && known.from !== from && now - known.heard < TAKEOVER_MS) return;
-    let changed = !known || known.name !== name || known.hosts !== hosts || known.bots !== x.b;
+    const mode = roomMode(x.m);
+    let changed = !known || known.name !== name || known.hosts !== hosts || known.bots !== x.b || known.mode !== mode;
     for (const [other, listing] of this.listings) {
       if (other === code || listing.from !== from) continue;
       this.listings.delete(other);
@@ -123,7 +127,7 @@ export class Lobby {
       for (const [other, listing] of this.listings) if (!oldest || listing.heard < this.listings.get(oldest)!.heard) oldest = other;
       if (oldest) this.listings.delete(oldest);
     }
-    this.listings.set(code, { code, name, hosts, bots: x.b, left, heard: now, from });
+    this.listings.set(code, { code, name, hosts, bots: x.b, mode, left, heard: now, from });
     if (changed) this.onChange(this.list());
   }
 

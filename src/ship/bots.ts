@@ -23,6 +23,8 @@ const THREAT_ANGLE = 0.3;
 /** A bot fires at armor only while its laser is cooler than this (one shot heats it by 20), and only in some of its thinking spells (SNIPE_CHANCE): sparingly. */
 const ARMOR_FIRE_HEAT = 10;
 const SNIPE_CHANCE = 0.3;
+/** Racing bots fly to the next gate at this speed (units/s, 180 m/s), below the limit, so they still turn in time. */
+const RACE_SPEED = 3600;
 /** Bots close in with up to this speed and hold position near their target. */
 const CRUISE_SPEED = 2500;
 const HOLD_DISTANCE = 4000;
@@ -86,6 +88,8 @@ export class Bot {
   target: Ship | null = null;
   /** Set by the game during a solar storm: the sensors are blind (see STORM_SIGHT). */
   blind = false;
+  /** Set by the game in a race: the next gate, which the bot flies through unless a fight is close. */
+  waypoint: THREE.Vector3 | null = null;
   /**
    * How much the bots go easy on the Host, 0..1: a solo round raises it when the Host dies
    * again and again, and lets it fade (see Game). It widens their aim and slows their trigger.
@@ -160,9 +164,16 @@ export class Bot {
     if (chaser && !this.armed) target = null;
     this.target = target;
 
+    // a racer keeps racing; it only turns to fight a ship on its tail, and shoots at whatever crosses its sights
+    const racing = !!this.waypoint && !defending;
     if (chaser && !this.armed) {
       toTarget.subVectors(me.position, chaser.flight.position);
       desired.copy(toTarget).normalize().multiplyScalar(CRUISE_SPEED * 0.6);
+    } else if (racing) {
+      // racing: through the next gate, at speed; a ship close ahead still gets shot at
+      toTarget.subVectors(this.waypoint!, me.position);
+      desired.copy(toTarget).normalize().multiplyScalar(RACE_SPEED);
+      if (target) this.senseJink(target, dt, now);
     } else if (target) {
       toTarget.subVectors(target.flight.position, me.position);
       this.senseJink(target, dt, now);
@@ -212,7 +223,8 @@ export class Bot {
     error.subVectors(desired, me.velocity);
     // near the target the nose stays on it and the thrusters carry the bot around it; a bot
     // under attack never turns its tail to burn
-    const burning = danger || (!defending && error.length() > BURN_THRESHOLD && !(target && targetDistance < FIRE_RANGE && !this.ship.overheated));
+    // a racer burns for the gate; a fighter only when no target is in range
+    const burning = danger || (!defending && error.length() > BURN_THRESHOLD && (racing || !(target && targetDistance < FIRE_RANGE && !this.ship.overheated)));
     if (burning) {
       me.steer(error, 2.5, controls);
       controls.thrust = me.angleTo(error) < 0.25 ? 1 : 0;

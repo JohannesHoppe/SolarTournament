@@ -59,10 +59,10 @@ export function cleanName(x: unknown, max = MAX_NAME): string {
   return typeof x === 'string' ? x.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, max) : '';
 }
 
-/** A ship's state; name, type, score, kills and deaths come all together or not at all (see ShipState). */
+/** A ship's state; name, type, score, kills, deaths and race progress come all together or not at all (see ShipState). */
 export function shipState(x: unknown): ShipState | null {
   if (!isRecord(x)) return null;
-  const slowKeys = ['n', 'k', 's', 'ki', 'de'] as const;
+  const slowKeys = ['n', 'k', 's', 'ki', 'de', 'g', 'fi'] as const;
   const present = slowKeys.filter((key) => key in x).length;
   if (present !== 0 && present !== slowKeys.length) return null;
   const slow =
@@ -74,6 +74,8 @@ export function shipState(x: unknown): ShipState | null {
           s: num(x.s, -MAX_COUNT, MAX_COUNT),
           ki: num(x.ki, 0, MAX_COUNT),
           de: num(x.de, 0, MAX_COUNT),
+          g: num(x.g, 0, MAX_COUNT),
+          fi: num(x.fi, -1, ROUND_LIMIT),
         };
   const state = {
     id: id(x.id),
