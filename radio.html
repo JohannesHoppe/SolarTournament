@@ -23,11 +23,12 @@
     <section id="track" class="track" hidden>
       <h2 id="track-title"></h2>
       <p id="track-facts"></p>
-      <div id="track-form" class="track-form" aria-hidden="true"></div>
+      <div class="track-form"><div id="track-form" class="track-sections" aria-hidden="true"></div><input type="range" id="track-seek" class="track-seek" min="0" step="1" value="0" aria-label="Position in the track"></div>
       <div class="track-time"><span id="track-position">0:00</span> / <span id="track-length"></span></div>
       <div class="track-actions">
         <button type="button" id="play" class="primary">Play</button>
         <button type="button" id="download">Download WAV</button>
+        <label class="track-volume">Volume <input type="range" id="radio-volume" class="volume" min="0" max="100" step="5"></label>
       </div>
       <p id="download-status"></p>
     </section>

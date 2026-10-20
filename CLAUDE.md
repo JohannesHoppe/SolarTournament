@@ -58,14 +58,14 @@ Never use `npx`, always the scripts from `package.json`.
 
 The repository root is the Vite project: `index.html` (the game), `radio.html` (Radio 2584), `impressum.html` and `datenschutz.html` (German legal pages, linked from the menu and the radio page) are its pages, `public/` holds the static files, `tools/` the generators that write into `public/`.
 
-**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the five localStorage entries, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server, public tournament names), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, a TURN server, another STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
+**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the six localStorage entries, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server, public tournament names), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, a TURN server, another STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
 
 `src/` is grouped by area:
 
 | File | Content |
 |---|---|
 | `main.ts` | Startup of the game: WebGL check, load assets, create `Game` |
-| `radio-page.ts` | Startup of the radio page: tune in a title, play it, download it as WAV |
+| `radio-page.ts` | Startup of the radio page: tune in a title, play it, jump in it, download it as WAV |
 | `style.css` | Styles of both pages |
 | `assets.ts` | Loads the ship models and drive sprites, collects the assets generated in code |
 | `random.ts` | Deterministic random generator |

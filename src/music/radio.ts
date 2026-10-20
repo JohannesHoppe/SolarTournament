@@ -17,7 +17,36 @@ const TICK_MS = 40;
 /** The music jumps to the shared clock when it is this far off (s). */
 const RESYNC = 0.12;
 const ENABLED_KEY = 'solartournament.radio';
+/** The Host's volume, 0..1, shared by the game and the radio page. */
+const VOLUME_KEY = 'solartournament.radio-volume';
+/** Output level at full volume: the radio sits under the cockpit's own sounds. */
 const VOLUME = 0.55;
+
+function storedVolume() {
+  try {
+    const volume = Number(localStorage.getItem(VOLUME_KEY) ?? 1);
+    return Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1;
+  } catch {
+    // storage unavailable: full volume
+    return 1;
+  }
+}
+
+/** The Host's volume, 0..1: every radio on the page plays at it. */
+let hostVolume = storedVolume();
+
+/** A volume slider (0 to 100): it shows the Host's volume, turns it and remembers it. */
+export function bindVolume(slider: HTMLInputElement) {
+  slider.value = String(Math.round(hostVolume * 100));
+  slider.addEventListener('input', () => {
+    hostVolume = Number(slider.value) / 100;
+    try {
+      localStorage.setItem(VOLUME_KEY, String(hostVolume));
+    } catch {
+      // not remembered
+    }
+  });
+}
 /** A failed load of Tone.js or the voice is tried again after this long (s). */
 const RETRY_SECONDS = 5;
 /** An announcement needs this much quiet before the track's next line (s): the announcer's lines are a few seconds long. */
@@ -110,6 +139,11 @@ export class Radio {
     return this.enabledFlag;
   }
 
+  /** The output level the radio should have now: the Host's volume while it is on. */
+  private targetLevel() {
+    return this.enabledFlag ? VOLUME * hostVolume : 0;
+  }
+
   /** Called every frame with what should be playing. */
   setCue(cue: MusicCue) {
     this.cue = cue;
@@ -129,12 +163,13 @@ export class Radio {
     const gain = this.output.gain;
     gain.cancelScheduledValues(now);
     gain.setValueAtTime(gain.value, now);
-    gain.linearRampToValueAtTime(0.05 * VOLUME, now + 0.02);
-    gain.setValueAtTime(0.05 * VOLUME, now + seconds);
-    gain.linearRampToValueAtTime(this.enabledFlag ? VOLUME : 0, now + seconds + 0.05);
+    const level = this.targetLevel();
+    gain.linearRampToValueAtTime(0.05 * level, now + 0.02);
+    gain.setValueAtTime(0.05 * level, now + seconds);
+    gain.linearRampToValueAtTime(level, now + seconds + 0.05);
     // the level the drop-out returns to is set; the tick leaves the gain alone until it is over
     this.dropoutUntil = now + seconds + 0.05;
-    this.level = this.enabledFlag ? VOLUME : 0;
+    this.level = level;
   }
 
   /**
@@ -223,11 +258,11 @@ export class Radio {
       void this.loadBandVoice().finally(() => (this.loading = false));
     }
     const now = this.context.currentTime;
-    // the level only changes when the radio is switched, and never during a drop-out
-    const level = this.enabledFlag ? VOLUME : 0;
+    // the level only changes when the radio is switched or turned up or down, and never during a drop-out
+    const level = this.targetLevel();
     if (level !== this.level && now >= this.dropoutUntil) {
       this.level = level;
-      this.output.gain.setTargetAtTime(level, now, 0.15);
+      this.output.gain.setTargetAtTime(level, now, 0.05);
     }
     if (!this.enabledFlag) return;
 

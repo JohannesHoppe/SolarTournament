@@ -188,7 +188,8 @@ export class Input {
     if (!down) this.keys.delete(e.code);
     // the Enter that commits an input method's composition only ends the composition
     if (e.isComposing || e.keyCode === 229) return;
-    if (e.target instanceof HTMLInputElement) {
+    // a slider (the radio's volume) takes no typing: the game's keys still fly the ship
+    if (e.target instanceof HTMLInputElement && e.target.type !== 'range') {
       // in a text field only Enter, Escape and F1 belong to the game; the rest is typing
       if (e.code === 'F1') e.preventDefault();
       if (!down || e.repeat) return;

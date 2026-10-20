@@ -10,7 +10,7 @@ import { Bot, BOT_NAMES } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { Hud, METERS_PER_UNIT } from '../view/hud';
-import { Radio, type MusicCue } from '../music/radio';
+import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
 import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_KILL, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_ROCK, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
 import { Speaker } from '../sound/speaker';
@@ -442,6 +442,9 @@ export class Game implements OnlineGame {
     $('again').addEventListener('click', () => this.showMenu());
     $('invite').addEventListener('click', () => void this.invite());
     $('radio').addEventListener('click', () => this.toggleRadio());
+    bindVolume($<HTMLInputElement>('radio-volume'));
+    // the slider hands the focus back once let go, so Enter and Space go to the game again
+    $('radio-volume').addEventListener('change', () => $('radio-volume').blur());
     for (const id of ['fullscreen', 'fullscreen-pause']) {
       $(id).hidden = !document.fullscreenEnabled;
       $(id).addEventListener('click', () => this.toggleFullscreen());

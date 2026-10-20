@@ -1224,6 +1224,18 @@ body.glitching #now-playing {
   text-decoration: line-through;
 }
 
+/* the radio's volume: a slim orange slider, on the game's radio and on the radio page */
+.volume {
+  width: 72px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+#now-playing.off .volume {
+  opacity: 0.4;
+}
+
 #now-playing-link {
   display: flex;
   align-items: baseline;
@@ -1415,9 +1427,14 @@ body.page {
 /* the shape of a track: one block per section */
 .track-form {
   display: flex;
-  gap: 2px;
   height: 28px;
   margin-bottom: 8px;
+}
+
+.track-sections {
+  display: flex;
+  flex: 1;
+  gap: 2px;
 }
 
 .track-form .section {
@@ -1483,6 +1500,33 @@ body.page {
   width: 2px;
   background: #fff;
   box-shadow: var(--neon-blue-soft);
+  pointer-events: none;
+}
+
+/* a slider over the shape of the track: click, drag or use the arrow keys to jump in the track */
+.track-seek {
+  position: absolute;
+  inset: -4px 0;
+  width: 100%;
+  height: calc(100% + 8px);
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.track-form:has(.track-seek:focus-visible) {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 6px;
+  border-radius: 4px;
+}
+
+.track-volume {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.8rem;
 }
 
 /*

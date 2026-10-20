@@ -1,6 +1,6 @@
 import type { Spoken } from './music/band';
 import { renderTrack, trackSeconds } from './music/preview';
-import { Radio } from './music/radio';
+import { bindVolume, Radio } from './music/radio';
 import { createSong, ROUND_SECONDS, titleFor, type SectionKind, type Song } from './music/songs';
 import { showTransmission } from './music/transmission';
 
@@ -18,6 +18,11 @@ let radio: Radio | null = null;
 let playingSince: number | null = null;
 /** Play was pressed and the band is still loading. */
 let starting = false;
+/** Where the track plays from (s): the start, or where the Host moved the playhead. */
+let from = 0;
+const seek = $<HTMLInputElement>('track-seek');
+/** The Host holds the playhead: the clock does not move it meanwhile. */
+let dragging = false;
 
 const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 /** Capitalizes each word; words start after a space, so ß or ö inside a word stay as they are. */
@@ -37,8 +42,8 @@ function tune(title: string) {
   $('track-facts').textContent = `${song.flavor} · ${song.strategy} · ${song.bpm} bpm`;
   const length = trackSeconds(song);
   $('track-length').textContent = time(length);
-  $('track-position').textContent = '0:00';
-  $('track-form').style.setProperty('--progress', '0%');
+  seek.max = String(Math.floor(length));
+  showPosition(0);
   $('download-status').textContent = '';
   // the shape of the track: one block per section, as wide as it is long
   const form = $('track-form');
@@ -62,34 +67,49 @@ function play() {
   radio ??= new Radio(context, context.destination, () => {
     if (!starting) return;
     starting = false;
-    playingSince = performance.now();
+    playingSince = performance.now() - from * 1000;
   }, subtitle, false);
   starting = true;
-  playingSince = performance.now();
+  playingSince = performance.now() - from * 1000;
   $('play').textContent = 'Stop';
 }
 
+/** Stops the track; the next Play starts it from the beginning. */
 function stop() {
   radio?.stop();
   playingSince = null;
   starting = false;
+  from = 0;
+  showPosition(0);
   $('play').textContent = 'Play';
+}
+
+/** Moves the playhead: a playing track jumps there (the radio follows its clock), a stopped one plays from there. */
+function jump(seconds: number) {
+  from = seconds;
+  if (playingSince !== null && !starting) playingSince = performance.now() - seconds * 1000;
+  showPosition(seconds);
+}
+
+function showPosition(seconds: number) {
+  $('track-position').textContent = time(seconds);
+  seek.parentElement!.style.setProperty('--progress', song ? `${(100 * seconds) / trackSeconds(song)}%` : '0%');
+  if (!dragging) seek.value = String(Math.floor(seconds));
 }
 
 function subtitle(spoken: Spoken, delay: number) {
   showTransmission(spoken, delay, song?.title ?? null);
 }
 
-/** Seconds into the track; zero while the band is still loading. */
-const elapsed = () => (starting || playingSince === null ? 0 : (performance.now() - playingSince) / 1000);
+/** Seconds into the track; where it starts while the band is still loading. */
+const elapsed = () => (starting || playingSince === null ? from : (performance.now() - playingSince) / 1000);
 
 /** Feeds the radio its position and moves the clock. */
 function frame() {
   if (song && radio && playingSince !== null) {
     const seconds = elapsed();
     radio.setCue({ title: song.title, energy: 'round', elapsed: seconds, roundLength: ROUND_SECONDS });
-    $('track-position').textContent = time(seconds);
-    $('track-form').style.setProperty('--progress', `${(100 * seconds) / trackSeconds(song)}%`);
+    showPosition(seconds);
   }
   requestAnimationFrame(frame);
 }
@@ -133,6 +153,10 @@ input.addEventListener('change', () => tune(input.value));
 $('random').addEventListener('click', () => tune(titleFor(1 + Math.floor(Math.random() * 2147483000))));
 $('play').addEventListener('click', () => (playingSince === null ? play() : stop()));
 $('download').addEventListener('click', () => void download());
+seek.addEventListener('input', () => jump(Number(seek.value)));
+seek.addEventListener('pointerdown', () => (dragging = true));
+window.addEventListener('pointerup', () => (dragging = false));
+bindVolume($<HTMLInputElement>('radio-volume'));
 
 tune(new URLSearchParams(location.search).get('title') ?? titleFor(1 + Math.floor(Math.random() * 2147483000)));
 requestAnimationFrame(frame);
