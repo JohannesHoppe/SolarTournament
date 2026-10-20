@@ -46,10 +46,11 @@ Everything we come up with for the game must be documented, so that we can under
 npm install
 npm run dev         # dev server on http://127.0.0.1:5173/
 npm run typecheck
-npm run build       # static site in dist/
+npm run dupes       # duplicated code (jscpd) and duplicated style rules (tools/dupes/css.ts)
+npm run build       # static site in dist/ (renders the voice, checks types and duplicates first)
 ```
 
-Hosting is a classic Cloudflare Pages project (`wrangler.toml`), never Workers, built by Cloudflare from every push (Git integration): `main` is the test stage (https://test.solartournament.games), `stage_prod` is production (https://solartournament.games). Every page sends visitors of the raw Pages addresses (`solartournament.pages.dev`, `main.solartournament.pages.dev`) on to these domains with a small inline script, keeping path and room code. Work happens on `main`. As long as the game has no real players yet, every push goes to both branches at once (`git push origin main main:stage_prod`); once it has players, `stage_prod` only moves when Johannes asks for it.
+Hosting is a classic Cloudflare Pages project (`wrangler.toml`), never Workers, built by Cloudflare from every push (Git integration): `main` is the test stage (https://test.solartournament.games), `stage_prod` is production (https://solartournament.games). Every page sends visitors of the raw Pages addresses (`solartournament.pages.dev`, `main.solartournament.pages.dev`) on to these domains with a small inline script, keeping path and room code; the plugin `pageShell` in `vite.config.ts` writes it into every page (also into the static `public/404.html` in `dist/`), together with what else the pages share (icon, stylesheet, the seal behind the station pages, the head of the legal pages). Work happens on `main`. As long as the game has no real players yet, every push goes to both branches at once (`git push origin main main:stage_prod`); once it has players, `stage_prod` only moves when Johannes asks for it.
 
 Never use `npx`, always the scripts from `package.json`.
 
@@ -131,6 +132,7 @@ Typography matters. Running text is always justified, never ragged, with hyphena
 - **Human and alien ship are identical**, only their looks differ (shared hit radius).
 - **No sound from outside:** the player hears only what travels through the own hull, plus the flight computer's beeps, the radio and the link static in the headset.
 - **Performance:** no objects created per frame in hot loops; reuse module-level scratch vectors.
+- **Write nothing twice.** Code, markup and styles exist once: a repeated stretch becomes a function, a constant, a selector list or part of the page shell (`vite.config.ts`). `npm run dupes` checks it: jscpd (`.jscpd.json`: `src`, `tools`, the four pages, `public/404.html` and `vite.config.ts`, from 5 lines and 50 tokens, threshold 0, files of any length) and `tools/dupes/css.ts`, which finds style rules with the same set of at least three declarations under different selectors. Run it regularly and at the latest before every commit; `npm run build` fails on a duplicate, so Cloudflare does not deploy one. A repetition that is technically unavoidable is marked with `jscpd:ignore-start` / `jscpd:ignore-end` (in a style sheet the comment `css-dupes: <reason>` before the rule) and one sentence why.
 
 ## Testing in the browser
 

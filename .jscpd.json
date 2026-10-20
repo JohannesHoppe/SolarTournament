@@ -1,0 +1,11 @@
+{
+  "path": ["src", "tools", "index.html", "radio.html", "impressum.html", "datenschutz.html", "public/404.html", "vite.config.ts"],
+  "minLines": 5,
+  "minTokens": 50,
+  "maxLines": 100000,
+  "maxSize": "10mb",
+  "threshold": 0,
+  "reporters": ["console"],
+  "gitignore": true,
+  "ignorePattern": ["import\\s[^;]*?\\sfrom\\s'[^']+';"]
+}

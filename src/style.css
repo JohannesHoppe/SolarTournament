@@ -225,7 +225,9 @@ input:focus-visible {
   outline-offset: 3px;
 }
 
-button.primary {
+/* the radio page's track buttons are transparent; its primary one stays orange */
+button.primary,
+.track-actions button.primary {
   background: var(--accent);
   border-color: var(--accent);
   color: #04101f;
@@ -1395,14 +1397,6 @@ body.page {
   cursor: pointer;
 }
 
-.track-actions button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #04101f;
-  font-weight: 700;
-  box-shadow: 0 0 12px rgba(255, 157, 0, 0.55), 0 0 32px rgba(255, 110, 0, 0.3);
-}
-
 .track h2 {
   margin: 0 0 4px;
   color: var(--tube-orange);
@@ -1548,13 +1542,6 @@ body.page {
   color: var(--accent);
 }
 
-.legal p,
-.legal li {
-  text-align: justify;
-  hyphens: auto;
-  -webkit-hyphens: auto;
-}
-
 .legal li + li {
   margin-top: 0.5em;
 }
@@ -1641,7 +1628,9 @@ body.page {
 #transmission-text,
 #sponsor-report,
 .satire-slogan,
-.satire-fine {
+.satire-fine,
+.legal p,
+.legal li {
   text-align: justify;
   hyphens: auto;
   -webkit-hyphens: auto;
@@ -1653,12 +1642,7 @@ body.page {
 .tagline,
 #sponsor-report,
 .satire-slogan,
-.satire-fine {
-  text-align-last: center;
-}
-
-.tagline,
-.sponsor-pitch,
+.satire-fine,
 #transmission-text {
   text-align-last: center;
 }

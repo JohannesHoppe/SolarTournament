@@ -2,11 +2,8 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <!-- the Cloudflare Pages addresses of production and test lead to our own domains, with path and room code -->
-  <script>{ const home = { 'solartournament.pages.dev': 'solartournament.games', 'main.solartournament.pages.dev': 'test.solartournament.games' }[location.hostname]; if (home) location.replace('https://' + home + location.pathname + location.search + location.hash); }</script>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SolarTournament</title>
-  <link rel="icon" href="crest.svg" type="image/svg+xml">
   <!-- added to the home screen, the game starts without the browser's bars -->
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#02030a">
@@ -14,7 +11,6 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <link rel="apple-touch-icon" href="icon-180.png">
-  <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
   <div id="game"></div>
