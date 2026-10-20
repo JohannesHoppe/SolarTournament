@@ -14,7 +14,7 @@ Worked through from top to bottom. Every finished item is also documented in the
 
 - [x] Peer-to-peer multiplayer without a server (Trystero), tournament link to share, bots fill free places
 - [x] The shooter decides about hits, the owner applies the damage; prediction and smooth correction of remote ships
-- [ ] TURN server for players behind strict firewalls (e.g. Cloudflare TURN; check costs and limits)
+- [x] TURN relay for players behind strict firewalls: Cloudflare TURN through the Pages Function `/turn` (first 1,000 GB a month free); needs the TURN key in the Pages project's environment
 - [x] Sync wreckage over the network: pieces fly from where the owner saw the ship break up, shot or rammed pieces burst everywhere, newcomers get the pieces in flight
 
 ### 3. The tournament as a show

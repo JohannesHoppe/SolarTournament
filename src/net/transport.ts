@@ -25,6 +25,25 @@ const APP_ID = 'solartournament-2584';
  * the game anyway, so no further company learns who plays (the privacy policy names it).
  */
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.cloudflare.com:3478' }];
+/** Cloudflare's TURN relay comes with credentials from the game's own Pages Function (functions/turn.ts); a slow answer is not waited for (ms). */
+const TURN_PATH = '/turn';
+const TURN_PATIENCE_MS = 3000;
+
+/**
+ * The relays a browser may use: STUN, and Cloudflare's TURN relay for networks that block
+ * direct connections (strict firewalls, carrier-grade NAT). Without an answer from /turn (the
+ * dev server, a project without a TURN key) the game connects with STUN alone.
+ */
+async function iceServers(): Promise<RTCIceServer[]> {
+  try {
+    const answer = await fetch(TURN_PATH, { signal: AbortSignal.timeout(TURN_PATIENCE_MS), cache: 'no-store' });
+    if (!answer.ok) return ICE_SERVERS;
+    const { iceServers: relays } = (await answer.json()) as { iceServers?: RTCIceServer[] };
+    return Array.isArray(relays) && relays.length ? [...ICE_SERVERS, ...relays] : ICE_SERVERS;
+  } catch {
+    return ICE_SERVERS;
+  }
+}
 /** No message is bigger than this (bytes): the largest, a full asteroid field, is about 15 KB. */
 const MAX_MESSAGE_BYTES = 64 * 1024;
 /**
@@ -98,12 +117,13 @@ export class TrysteroTransport extends BaseTransport {
   private constructor(
     private readonly trystero: typeof import('trystero'),
     roomId: string,
+    relays: RTCIceServer[],
   ) {
     super();
     this.selfId = trystero.selfId;
     // the relays were put to sleep when the last room was left
     if (openRooms++ === 0) trystero.resumeRelayReconnection();
-    this.room = trystero.joinRoom({ appId: APP_ID, rtcConfig: { iceServers: ICE_SERVERS }, maxReceiveBytes: MAX_MESSAGE_BYTES }, roomId);
+    this.room = trystero.joinRoom({ appId: APP_ID, rtcConfig: { iceServers: relays }, maxReceiveBytes: MAX_MESSAGE_BYTES }, roomId);
     // one action for all message types keeps the channel setup small
     this.action = this.room.makeAction<Json>('st');
     this.action.onMessage = (message, { peerId }) => {
@@ -120,10 +140,11 @@ export class TrysteroTransport extends BaseTransport {
     };
   }
 
-  /** Loads Trystero only when a player goes online. */
+  /** Loads Trystero only when a player goes online, and asks for the TURN relay meanwhile. */
   static async join(roomId: string): Promise<TrysteroTransport> {
     guardRelays();
-    return new TrysteroTransport(await import('trystero'), roomId);
+    const [trystero, relays] = await Promise.all([import('trystero'), iceServers()]);
+    return new TrysteroTransport(trystero, roomId, relays);
   }
 
   send(type: string, data: Json, to?: string) {
