@@ -32,6 +32,14 @@ const DUCK_RAMP = 0.02;
 const ECHO_LEVEL = 0.3;
 const ECHO_FEEDBACK = 0.25;
 const REVERB_LEVEL = 0.5;
+/**
+ * The announcer: how hard his clips are driven into his compressor, his level on air, and the
+ * level the music steps back to while he talks. The track is compressed and clipped loud, so
+ * he needs all of it to stand above it instead of getting lost in it.
+ */
+const ANNOUNCER_DRIVE = 3;
+const ANNOUNCER_LEVEL = 2.6;
+const ANNOUNCER_DUCK = 0.2;
 
 /** The rendered words of the voices (see tools/voice/render.ts). */
 export interface Voice {
@@ -318,11 +326,13 @@ export class Band {
     this.voiceEcho = new T.Gain(0).connect(this.echoSend);
     voiceGrit.connect(this.voiceEcho);
 
-    // the announcer: a radio band, a touch of drive, static at the start and the end
-    const announcerOut = new T.Gain(1.6).connect(this.voiceBus);
-    const announcerLevel = new T.Compressor({ threshold: -24, ratio: 4, attack: 0.003, release: 0.08, knee: 6 }).connect(announcerOut);
+    // the announcer: a radio band, a touch of drive, static at the start and the end. His
+    // clips are rendered quieter than the music: he is driven hard into his compressor and
+    // stands well above the track, which steps far back while he talks (see announce)
+    const announcerOut = new T.Gain(ANNOUNCER_LEVEL).connect(this.voiceBus);
+    const announcerLevel = new T.Compressor({ threshold: -30, ratio: 6, attack: 0.003, release: 0.08, knee: 6 }).connect(announcerOut);
     const announcerBand = new T.Filter({ type: 'lowpass', frequency: 4500, Q: 0.5 }).connect(new T.WaveShaper(saturate(1.3), 1024).connect(announcerLevel));
-    this.announcerIn = new T.Gain(0.8).connect(new T.Filter({ type: 'highpass', frequency: 300, Q: 0 }).connect(announcerBand));
+    this.announcerIn = new T.Gain(ANNOUNCER_DRIVE).connect(new T.Filter({ type: 'highpass', frequency: 300, Q: 0 }).connect(announcerBand));
     this.announcerStatic = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.005, decay: 0.25, sustain: 0, release: 0.05 }, volume: -18 })
       .connect(new T.Filter({ type: 'bandpass', frequency: 2500, Q: 1.5 }).connect(announcerOut));
   }
@@ -598,8 +608,8 @@ export class Band {
     }
     this.crackle(0.1, position + 0.05, 0.7);
     this.musicLevel.gain.cancelAndHoldAtTime(t);
-    this.musicLevel.gain.linearRampToValueAtTime(0.35, t + 0.1);
-    this.musicLevel.gain.setValueAtTime(0.35, position);
+    this.musicLevel.gain.linearRampToValueAtTime(ANNOUNCER_DUCK, t + 0.1);
+    this.musicLevel.gain.setValueAtTime(ANNOUNCER_DUCK, position);
     this.musicLevel.gain.linearRampToValueAtTime(1, position + 0.4);
     this.onSpeak({ line: text, language: 'mod', time: t, duration: position - t });
     this.voiceUntil = Math.max(this.voiceUntil, position);
