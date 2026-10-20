@@ -1147,7 +1147,8 @@ body.touch #game canvas {
   font-size: 0.65rem;
 }
 
-#touch-overdrive {
+#touch-overdrive,
+#touch-torpedo {
   top: 12px;
   left: calc(max(12px, env(safe-area-inset-left)) + 118px);
   width: 64px;
@@ -1155,6 +1156,10 @@ body.touch #game canvas {
   border-radius: 10px;
   font-size: 0.6rem;
   line-height: 1.1;
+}
+
+#touch-torpedo {
+  left: calc(max(12px, env(safe-area-inset-left)) + 192px);
 }
 
 /* gauges move to the top, the thumbs own the bottom of the screen */
@@ -1866,13 +1871,15 @@ button.quiet:focus-visible {
 }
 
 /* the overdrive: dim while it recharges, orange once it is ready */
-#hud-overdrive {
+#hud-overdrive,
+#hud-torpedo {
   color: var(--muted);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
 
-#hud-overdrive.ready {
+#hud-overdrive.ready,
+#hud-torpedo.ready {
   color: var(--accent);
 }
 

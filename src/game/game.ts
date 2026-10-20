@@ -35,6 +35,7 @@ import { Landmarks } from '../world/landmarks';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
+import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Torpedo } from './torpedoes';
 import type { FieldState } from '../world/asteroids';
 import { Course, GATE_POINTS, GATE_RADIUS, GATES, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
 import { markedName } from '../view/marks';
@@ -60,6 +61,11 @@ const DIRECTOR_PAUSE = 10;
 const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', mixed: 'Deathmatch and race' };
 /** A kill in a race is worth less than in a deathmatch: the gates and the finish decide. */
 const RACE_KILL_POINTS = 200;
+/** Points for shooting down a torpedo, and how often a bot with a lock fires one (per second). */
+const TORPEDO_DOWN_POINTS = 50;
+const BOT_TORPEDO_RATE = 0.08;
+/** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km). */
+const TORPEDO_WARNING = 40000;
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
 const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: 'Burned up in the clouds', hole: 'Crossed the event horizon' };
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
@@ -293,6 +299,7 @@ export class Game implements OnlineGame {
   private readonly effects: Effects;
   private readonly replayEffects: Effects;
   private readonly killcam: KillCam;
+  private readonly torpedoes: Torpedoes;
   /** The last picture was the kill cam's. */
   private replaying = false;
   private readonly wrecks = new Wrecks();
@@ -406,6 +413,9 @@ export class Game implements OnlineGame {
     { position: new THREE.Vector3(), label: 'Center', color: '#4d91ff' },
     { position: new THREE.Vector3(), label: '', color: '#ff9d00' },
   ];
+  private readonly torpedoMarks: RadarMark[] = Array.from({ length: 16 }, () => ({ position: new THREE.Vector3(), label: 'Torpedo', color: '#ff3b30' }));
+  /** The marks the radar shows this frame (see radarMarks). */
+  private readonly shownMarks: RadarMark[] = [];
   /** How the own clone died last, for the sponsor break. */
   private deathCause: string | (string | Node)[] = 'Your clone is dead';
   /** When the current screen (menu, playing, paused, results) came up (performance.now, ms). */
@@ -490,6 +500,8 @@ export class Game implements OnlineGame {
     this.replayEffects.group.visible = false;
     this.scene.add(this.replayEffects.group);
     this.killcam = new KillCam(this.replayEffects);
+    this.torpedoes = new Torpedoes(this.effects);
+    this.scene.add(this.torpedoes.group);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
@@ -1059,6 +1071,7 @@ export class Game implements OnlineGame {
         if (action === 'camera' && !this.spectating) this.cockpit = !this.cockpit;
         if (action === 'autopilot' && this.me?.alive) this.toggleAutopilot();
         if (action === 'overdrive') this.overdrive();
+        if (action === 'torpedo' && !this.spectating && this.me) this.fireTorpedo(this.me);
         if (action === 'watch' && this.spectating) {
           this.watchIndex++;
           this.handPickedUntil = this.time + DIRECTOR_PAUSE;
@@ -1111,6 +1124,7 @@ export class Game implements OnlineGame {
     this.landmarks.show(arena);
     this.belt.group.visible = arena.id === 'belt';
     this.wrecks.clear();
+    this.torpedoes.clear();
     this.storming = false;
   }
 
@@ -1157,6 +1171,7 @@ export class Game implements OnlineGame {
 
   private clearShips() {
     this.killcam.stop();
+    this.torpedoes.clear();
     this.wrecks.clear();
     this.brokenHere.clear();
     this.lastRockHit.clear();
@@ -1753,6 +1768,8 @@ export class Game implements OnlineGame {
       const thought = bot ? bot.think(now, this.ships, this.field, this.bots) : null;
       // the flight school's unarmed sparring bot only flies
       if (thought && bot === this.sparring?.bot && !this.sparring.armed) thought.fire = false;
+      // a bot with its target locked sends a torpedo now and then (never the flight school's)
+      if (bot && bot !== this.sparring?.bot && bot.target && ship.torpedoes > 0 && Math.random() < dt * BOT_TORPEDO_RATE && this.torpedoTarget(ship) === bot.target) this.fireTorpedo(ship);
       const controls = ship === me ? myControls : (thought ?? IDLE);
       this.field.gravity(ship.flight.position, gravity);
       ship.inShadow = this.field.raycast(ship.flight.position, SUN_DIRECTION, LASER_RANGE) !== null;
@@ -1767,6 +1784,7 @@ export class Game implements OnlineGame {
     this.wrecks.update(dt, now, this.field);
     this.killcam.record(now, this.ships);
     this.replayEffects.update(dt);
+    this.torpedoes.update(dt, now, this.field, this.ships, (torpedo, hit) => this.detonate(torpedo, hit));
     this.closeCall(now);
     this.pilot(dt, now);
 
@@ -1790,6 +1808,7 @@ export class Game implements OnlineGame {
     this.hud.setCenter(this.camera, subject);
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
+    this.hud.setTorpedoes(me.torpedoes);
     const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course) : null;
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
     this.hud.showCrosshair(me.alive);
@@ -1823,13 +1842,24 @@ export class Game implements OnlineGame {
 
   /** The radar's marks: the field's center, and in a race the next gate of the ship it shows. */
   private radarMarks(subject: Ship): RadarMark[] {
+    const list = this.shownMarks;
+    list.length = 0;
+    list.push(this.marks[0]);
     const course = this.course;
-    if (!course || subject.finish >= 0) return this.marks.slice(0, 1);
-    const gate = this.marks[1];
-    const next = subject.gates % GATES;
-    gate.position.copy(course.points[next]);
-    gate.label = `Gate ${next + 1}`;
-    return this.marks;
+    if (course && subject.finish < 0) {
+      const gate = this.marks[1];
+      const next = subject.gates % GATES;
+      gate.position.copy(course.points[next]);
+      gate.label = `Gate ${next + 1}`;
+      list.push(gate);
+    }
+    // torpedoes in flight, in red
+    for (let i = 0; i < this.torpedoes.list.length && i < this.torpedoMarks.length; i++) {
+      const mark = this.torpedoMarks[i];
+      mark.position.copy(this.torpedoes.list[i].position);
+      list.push(mark);
+    }
+    return list;
   }
 
   /**
@@ -2168,6 +2198,95 @@ export class Game implements OnlineGame {
     this.hud.flashMessage(this.time, 'Overdrive', 1.2);
   }
 
+  /** G, D-pad up: a torpedo, at the ship closest to the nose when one is locked (see game/torpedoes). */
+  private fireTorpedo(ship: Ship) {
+    if (!ship.alive || ship.torpedoes <= 0) return;
+    ship.torpedoes--;
+    // firing ends the own spawn protection, as the laser does
+    ship.protectedUntil = Math.min(ship.protectedUntil, this.time);
+    const target = this.torpedoTarget(ship);
+    const id = `${ship.id}.${ship.torpedoesFired++}`;
+    const position = ship.nose(new THREE.Vector3());
+    const velocity = Torpedoes.launchVelocity(ship);
+    this.torpedoes.launch(id, ship, target, position, velocity, this.time, true);
+    this.online?.sendTorpedo(id, ship, target, position, velocity);
+    if (ship.isLocal) {
+      this.sound.play('laser', { volume: 0.9, rate: 0.45 });
+      this.hud.flashMessage(this.time, target ? `Torpedo away · ${target.name}` : 'Torpedo away · no lock', 1.5);
+    }
+  }
+
+  /** The ship a torpedo of `ship` would lock on: the one in sight closest to its nose (see LOCK_ANGLE). */
+  private torpedoTarget(ship: Ship): Ship | null {
+    let best: Ship | null = null;
+    let angle = LOCK_ANGLE;
+    for (const other of this.ships) {
+      if (other === ship || !other.alive || other === this.drone) continue;
+      const line = toAim.subVectors(other.flight.position, ship.flight.position);
+      if (line.length() > LOCK_DISTANCE) continue;
+      const off = ship.flight.angleTo(line);
+      if (off < angle && this.field.lineOfSight(ship.flight.position, other.flight.position)) {
+        best = other;
+        angle = off;
+      }
+    }
+    return best;
+  }
+
+  /** An own torpedo went off: on a ship (whose browser takes the damage), on a rock, or burnt out. */
+  private detonate(torpedo: Torpedo, hit: Ship | null) {
+    this.blowUp(torpedo);
+    this.online?.sendTorpedoGone(torpedo.id, torpedo.position);
+    if (!hit) return;
+    if (hit.owner === null) this.applyTorpedoHit(hit, torpedo.shooter);
+    else this.online?.sendTorpedoHit(hit, torpedo.shooter);
+    if (torpedo.shooter.isLocal) {
+      this.hud.hit();
+      this.landed(hit.flight.position, 'TORPEDO');
+    }
+  }
+
+  /** A beam went through a torpedo: it goes off where it is, on every browser. */
+  private shootDown(torpedo: Torpedo, shooter: Ship) {
+    this.blowUp(torpedo);
+    this.online?.sendTorpedoGone(torpedo.id, torpedo.position);
+    if (shooter.owner !== null) return;
+    shooter.score += TORPEDO_DOWN_POINTS;
+    if (shooter.isLocal) this.hud.popup(this.camera, torpedo.position, `TORPEDO DOWN +${TORPEDO_DOWN_POINTS}`, 'points');
+  }
+
+  private blowUp(torpedo: Torpedo) {
+    this.effects.explosion(torpedo.position, TORPEDO_RADIUS * 4, torpedo.velocity);
+    this.hearDebris(torpedo.position, TORPEDO_RADIUS * 4);
+    this.torpedoes.remove(torpedo);
+  }
+
+  applyTorpedoHit(ship: Ship, shooter: Ship | null) {
+    const now = this.time;
+    const status = ship.structural(TORPEDO_DAMAGE, now);
+    if (status === 'protected') return;
+    // the blast shakes the thrusters too
+    ship.thrusters = Math.max(0, ship.thrusters - 0.3);
+    if (ship.isLocal) {
+      this.hud.damaged();
+      this.hud.flashMessage(now, 'Torpedo hit', 1.5);
+      this.sound.play('explosion', { volume: 1.5, rate: 0.9 });
+      this.linkHit(0.9, 0.6);
+    }
+    if (status === 'destroyed') this.shipDestroyed(ship, shooter);
+  }
+
+  remoteTorpedo(id: string, shooter: Ship, target: Ship | null, position: THREE.Vector3, velocity: THREE.Vector3) {
+    this.torpedoes.launch(id, shooter, target, position, velocity, this.time, false);
+  }
+
+  remoteTorpedoGone(id: string, position: THREE.Vector3) {
+    const torpedo = this.torpedoes.find(id);
+    if (!torpedo) return;
+    torpedo.position.copy(position);
+    this.blowUp(torpedo);
+  }
+
   /** A thruster key tapped twice, or LB: the dodge; see DODGE_SPEED. */
   private dodge(direction: { x: number; y: number }) {
     const me = this.me!;
@@ -2310,9 +2429,16 @@ export class Game implements OnlineGame {
     const origin = shooter.nose(muzzle);
     const direction = shooter.flight.forward(forward);
     let asteroidHit = this.field.raycast(origin, direction, LASER_RANGE);
-    const wreckHit = this.wrecks.raycast(origin, direction, asteroidHit?.distance ?? LASER_RANGE);
+    let wreckHit = this.wrecks.raycast(origin, direction, asteroidHit?.distance ?? LASER_RANGE);
     if (wreckHit) asteroidHit = null;
-    const beamLength = wreckHit?.distance ?? asteroidHit?.distance ?? LASER_RANGE;
+    let beamLength = wreckHit?.distance ?? asteroidHit?.distance ?? LASER_RANGE;
+    // a torpedo in the way takes the beam and goes off
+    const torpedoHit = this.torpedoes.raycast(origin, direction, beamLength, shooter, this.time);
+    if (torpedoHit) {
+      asteroidHit = wreckHit = null;
+      beamLength = torpedoHit.distance;
+      this.shootDown(torpedoHit.torpedo, shooter);
+    }
 
     const end = new THREE.Vector3().copy(origin).addScaledVector(direction, beamLength);
     const start = shooter.muzzle(new THREE.Vector3());
@@ -2579,6 +2705,16 @@ export class Game implements OnlineGame {
     this.impactAhead = warnings.length > 0;
     this.lockWarning(now);
     if (me.alive && me.overheated) warnings.push('LASER OVERHEATED');
+    // a torpedo homing on the own ship: shoot it down or dodge
+    for (const torpedo of this.torpedoes.list) {
+      if (!me.alive || torpedo.target !== me || torpedo.position.distanceTo(flight.position) > TORPEDO_WARNING) continue;
+      warnings.push('TORPEDO INBOUND');
+      if (now >= this.nextWarningBeep) {
+        this.sound.beep(1480, 0.05, 0.16);
+        this.nextWarningBeep = now + 0.12;
+      }
+      break;
+    }
     if (me.alive && me.driveOffline(now)) warnings.push('DRIVE OVERHEATED');
     this.hud.setWarning(warnings.join('\n'));
   }

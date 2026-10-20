@@ -40,6 +40,8 @@ const MAX_ROCK_HITS_PER_SECOND = 20;
 const MAX_DESTRUCTIONS_PER_SECOND = 4;
 /** Pieces of wreckage one peer's ships shoot or ram per second, generous for several ships firing at once. */
 const MAX_WRECK_HITS_PER_SECOND = 20;
+/** Torpedo launches, hits and torpedoes gone, per peer and second: a few torpedoes per clone, eight ships at most. */
+const MAX_TORPEDO_EVENTS_PER_SECOND = 12;
 
 /**
  * Round clock of the lead browser: which round is running, how many seconds are left, and the
@@ -100,6 +102,12 @@ export class Session {
   onRock: (id: string, at: number, round: number) => void = () => {};
   /** A piece of wreckage was shot or rammed on another browser. */
   onWreck: (id: string) => void = () => {};
+  /** A ship of another browser launched a torpedo, at a target or none. */
+  onTorpedo: (id: string, shooter: string, target: string | null, position: Vec, velocity: Vec) => void = () => {};
+  /** A torpedo went off or was shot down, where. */
+  onTorpedoGone: (id: string, position: Vec) => void = () => {};
+  /** Another browser's torpedo hit a ship this browser runs. */
+  onTorpedoHit: (target: string, shooter: string) => void = () => {};
   onSync: (field: FieldState, wrecks: WreckState[]) => void = () => {};
   onPeerJoin: (id: string) => void = () => {};
   onPeerLeave: (id: string) => void = () => {};
@@ -137,6 +145,7 @@ export class Session {
   private readonly rockBudget = new Budget(MAX_ROCK_HITS_PER_SECOND);
   private readonly destroyBudget = new Budget(MAX_DESTRUCTIONS_PER_SECOND);
   private readonly wreckBudget = new Budget(MAX_WRECK_HITS_PER_SECOND);
+  private readonly torpedoBudget = new Budget(MAX_TORPEDO_EVENTS_PER_SECOND);
   private synced = false;
   private left = false;
 
@@ -175,6 +184,25 @@ export class Session {
       const wreck = id(d?.i);
       if (wreck && this.wreckBudget.spend(from)) this.guard(() => this.onWreck(wreck));
     });
+    transport.on('tl', (d, from) => {
+      const torpedo = id(d?.i);
+      const shooter = id(d?.s);
+      const target = d?.t === null ? null : id(d?.t);
+      const position = vec(d?.p, 3, MAX_COORDINATE);
+      const velocity = vec(d?.v, 3, MAX_SPEED);
+      if (!torpedo || !shooter || target === undefined || !position || !velocity || ownerOf(shooter) !== from || !this.torpedoBudget.spend(from)) return;
+      this.guard(() => this.onTorpedo(torpedo, shooter, target, position, velocity));
+    });
+    transport.on('tg', (d, from) => {
+      const torpedo = id(d?.i);
+      const position = vec(d?.p, 3, MAX_COORDINATE);
+      if (torpedo && position && this.torpedoBudget.spend(from)) this.guard(() => this.onTorpedoGone(torpedo, position));
+    });
+    transport.on('tk', (d, from) => {
+      const target = id(d?.t);
+      const shooter = id(d?.s);
+      if (target && shooter && ownerOf(shooter) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onTorpedoHit(target, shooter));
+    });
     transport.on('r', (d, from) => {
       const rock = id(d?.i);
       const at = num(d?.t, 0, MAX_FIELD_TIME);
@@ -200,7 +228,7 @@ export class Session {
     transport.onPeerLeave((peer) => {
       // join time and last word stay: a link that comes back belongs to the same peer
       this.backAt.delete(peer);
-      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget]) budget.forget(peer);
+      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget]) budget.forget(peer);
       for (const key of this.lastHit.keys()) if (ownerOf(key.slice(0, key.indexOf('>'))) === peer) this.lastHit.delete(key);
       if (!this.left) this.guard(() => this.onPeerLeave(peer));
     });
@@ -313,6 +341,19 @@ export class Session {
 
   sendWreck(wreck: string) {
     this.transport.send('w', { i: wreck });
+  }
+
+  sendTorpedo(torpedo: string, shooter: string, target: string | null, position: Vec, velocity: Vec) {
+    this.transport.send('tl', { i: torpedo, s: shooter, t: target, p: position, v: velocity });
+  }
+
+  sendTorpedoGone(torpedo: string, position: Vec) {
+    this.transport.send('tg', { i: torpedo, p: position });
+  }
+
+  /** Tells the browser that runs `target` that the own torpedo of `shooter` hit it. */
+  sendTorpedoHit(owner: string, target: string, shooter: string) {
+    this.transport.send('tk', { t: target, s: shooter }, owner);
   }
 
   /** `at` is the field time of the hit and `round` the round it fell in, so a rock breaks into the same fragments everywhere. */

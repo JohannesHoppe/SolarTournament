@@ -1,0 +1,131 @@
+import * as THREE from 'three';
+import { raySphere, type AsteroidField } from '../world/asteroids';
+import type { Ship } from '../ship/ship';
+import type { Effects } from '../view/effects';
+
+/** Torpedoes a fresh clone carries. */
+export const TORPEDOES = 2;
+/** A torpedo leaves the tube this much faster than its ship (units/s, 40 m/s). */
+const LAUNCH_SPEED = 800;
+/** Its drive pushes with 6 g (units/s²), and it closes in on its target with up to CLOSING (units/s, 200 m/s). */
+const THRUST = 1177;
+const CLOSING = 4000;
+/** It burns out after this long (s) and is gone. */
+const LIFETIME = 12;
+/** Its own radius, for the laser that shoots it down (units, 6 m), and how close it has to come to a ship to go off (units, beyond the hull). */
+export const TORPEDO_RADIUS = 120;
+const FUSE = 150;
+/** Hull points a torpedo takes from the ship it hits, whatever side it hits: armor does not stop it. */
+export const TORPEDO_DAMAGE = 60;
+/** A torpedo locks on a ship within this angle of the nose (rad, about 17°) and this distance (units, 3 km), in sight. */
+export const LOCK_ANGLE = 0.3;
+export const LOCK_DISTANCE = 60000;
+
+export interface Torpedo {
+  /** "<shooter id>.<shot>": the same torpedo on every browser. */
+  id: string;
+  shooter: Ship;
+  target: Ship | null;
+  position: THREE.Vector3;
+  velocity: THREE.Vector3;
+  bornAt: number;
+  /** This browser decides where it goes off (its shooter is a ship this browser runs). */
+  own: boolean;
+  mesh: THREE.Mesh;
+}
+
+const intercept = new THREE.Vector3();
+const wanted = new THREE.Vector3();
+const nozzle = new THREE.Vector3();
+const exhaust = new THREE.Vector3();
+
+/**
+ * Torpedoes: few, slow to start and homing. A torpedo flies on every browser alike from its
+ * launch, but only the browser of its shooter decides when it goes off: on a ship (then that
+ * ship's browser takes the damage), on a rock, or burnt out. A laser beam shoots one down,
+ * wherever it is fired.
+ */
+export class Torpedoes {
+  readonly group = new THREE.Group();
+  readonly list: Torpedo[] = [];
+  private readonly geometry = new THREE.CylinderGeometry(25, 40, 260, 6).rotateX(Math.PI / 2);
+  private readonly material = new THREE.MeshStandardMaterial({ color: 0x9a9fa8, emissive: 0xff3300, emissiveIntensity: 0.6, roughness: 0.5, metalness: 0.3, flatShading: true });
+
+  constructor(private readonly effects: Effects) {}
+
+  launch(id: string, shooter: Ship, target: Ship | null, position: THREE.Vector3, velocity: THREE.Vector3, now: number, own: boolean): Torpedo {
+    const mesh = new THREE.Mesh(this.geometry, this.material);
+    mesh.position.copy(position);
+    this.group.add(mesh);
+    const torpedo = { id, shooter, target, position: mesh.position, velocity: velocity.clone(), bornAt: now, own, mesh };
+    this.list.push(torpedo);
+    return torpedo;
+  }
+
+  /** The launch velocity of a torpedo from a ship: the ship's own and a push out of the tube. */
+  static launchVelocity(ship: Ship, target = new THREE.Vector3()): THREE.Vector3 {
+    return ship.flight.forward(target).multiplyScalar(LAUNCH_SPEED).add(ship.flight.velocity);
+  }
+
+  /**
+   * Flies every torpedo: it turns its push towards where its target will be and closes in.
+   * For the own ones, `detonate` is called where they go off (with the ship they hit, or null).
+   */
+  update(dt: number, now: number, field: AsteroidField, ships: readonly Ship[], detonate: (torpedo: Torpedo, hit: Ship | null) => void) {
+    for (let i = this.list.length - 1; i >= 0; i--) {
+      const torpedo = this.list[i];
+      const target = torpedo.target?.alive ? torpedo.target : null;
+      if (target) {
+        // lead the target: where it will be when the torpedo closes the distance
+        const distance = intercept.subVectors(target.flight.position, torpedo.position).length();
+        intercept.addScaledVector(target.flight.velocity, distance / CLOSING).normalize();
+        wanted.copy(target.flight.velocity).addScaledVector(intercept, CLOSING);
+      } else {
+        wanted.copy(torpedo.velocity).setLength(torpedo.velocity.length() + THRUST * dt);
+      }
+      torpedo.velocity.add(wanted.sub(torpedo.velocity).clampLength(0, THRUST * dt));
+      torpedo.position.addScaledVector(torpedo.velocity, dt);
+      torpedo.mesh.lookAt(exhaust.copy(torpedo.position).add(torpedo.velocity));
+      // a short bright trail behind it
+      if (Math.random() < dt * 30) this.effects.puff(nozzle.copy(torpedo.velocity).setLength(-160).add(torpedo.position), exhaust.copy(torpedo.velocity).multiplyScalar(0.6), 60);
+      // another browser decides where its torpedo goes off; one whose word never came is gone after its time
+      if (!torpedo.own) {
+        if (now - torpedo.bornAt > LIFETIME + 2) this.remove(torpedo);
+        continue;
+      }
+      let hit: Ship | null = null;
+      for (const ship of ships) {
+        if (ship === torpedo.shooter || !ship.alive) continue;
+        if (ship.flight.position.distanceTo(torpedo.position) < ship.radius + FUSE) hit = ship;
+      }
+      if (hit || field.overlap(torpedo.position, TORPEDO_RADIUS) || field.insideWell(torpedo.position, TORPEDO_RADIUS) || now - torpedo.bornAt > LIFETIME) detonate(torpedo, hit);
+    }
+  }
+
+  /** The first torpedo a beam passes through, with the distance along it. */
+  raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number, shooter: Ship, now: number): { torpedo: Torpedo; distance: number } | null {
+    let best: { torpedo: Torpedo; distance: number } | null = null;
+    for (const torpedo of this.list) {
+      // a ship does not shoot down its own torpedo leaving the tube
+      if (torpedo.shooter === shooter && now - torpedo.bornAt < 0.5) continue;
+      const distance = raySphere(origin, direction, torpedo.position, TORPEDO_RADIUS);
+      if (distance !== null && distance <= maxDistance && (!best || distance < best.distance)) best = { torpedo, distance };
+    }
+    return best;
+  }
+
+  find(id: string): Torpedo | null {
+    return this.list.find((torpedo) => torpedo.id === id) ?? null;
+  }
+
+  remove(torpedo: Torpedo) {
+    const index = this.list.indexOf(torpedo);
+    if (index < 0) return;
+    this.list.splice(index, 1);
+    this.group.remove(torpedo.mesh);
+  }
+
+  clear() {
+    while (this.list.length) this.remove(this.list[0]);
+  }
+}

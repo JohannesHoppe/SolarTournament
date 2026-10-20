@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { colliderRadius, type Assets, type ShipType } from '../assets';
 import { FlightModel } from './flight';
 import type { Controls } from '../input/input';
+import { TORPEDOES } from '../game/torpedoes';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
@@ -153,6 +154,10 @@ export class Ship {
   private readonly ventSpin = new THREE.Vector3();
 
   hull = MAX_HULL;
+  /** Torpedoes left (see game/torpedoes); every clone comes with a full load. */
+  torpedoes = TORPEDOES;
+  /** Torpedoes this ship fired with this clone and before, for their ids. */
+  torpedoesFired = 0;
   /** Health of the main drive and of the maneuvering thrusters, 0..1. */
   drive = 1;
   thrusters = 1;
@@ -255,6 +260,7 @@ export class Ship {
     this.flight.reset(position, orientation);
     this.hull = MAX_HULL;
     this.drive = this.thrusters = 1;
+    this.torpedoes = TORPEDOES;
     this.holes.length = 0;
     this.heat = 0;
     this.overheated = false;

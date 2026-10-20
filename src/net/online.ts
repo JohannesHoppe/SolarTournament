@@ -33,6 +33,12 @@ export interface OnlineGame {
   restoreWrecks(wrecks: WreckState[]): void;
   /** Takes the lead browser's field, in the arena it names. */
   restoreField(field: FieldState): void;
+  /** Another browser's ship launched a torpedo. */
+  remoteTorpedo(id: string, shooter: Ship, target: Ship | null, position: THREE.Vector3, velocity: THREE.Vector3): void;
+  /** A torpedo went off or was shot down on another browser. */
+  remoteTorpedoGone(id: string, position: THREE.Vector3): void;
+  /** Another browser's torpedo hit a ship this browser runs. */
+  applyTorpedoHit(target: Ship, shooter: Ship | null): void;
   /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
   leadRound(): RoundState;
@@ -86,6 +92,16 @@ export class Online {
     };
     session.onRock = (id, at, round) => game.remoteRock(id, at, round);
     session.onWreck = (id) => game.remoteWreck(id);
+    session.onTorpedo = (id, shooter, target, p, v) => {
+      const ship = this.find(shooter);
+      if (ship?.alive) game.remoteTorpedo(id, ship, target ? this.find(target) : null, from.fromArray(p), to.fromArray(v));
+    };
+    session.onTorpedoGone = (id, p) => game.remoteTorpedoGone(id, from.fromArray(p));
+    session.onTorpedoHit = (target, shooter) => {
+      const ship = this.find(target);
+      // only ships this browser runs take damage here
+      if (ship && ship.owner === null) game.applyTorpedoHit(ship, this.find(shooter));
+    };
     session.onSync = (field, wrecks) => {
       game.restoreField(field);
       game.restoreWrecks(wrecks);
@@ -181,6 +197,19 @@ export class Online {
 
   sendWreck(id: string) {
     this.session.sendWreck(id);
+  }
+
+  sendTorpedo(id: string, shooter: Ship, target: Ship | null, position: THREE.Vector3, velocity: THREE.Vector3) {
+    this.session.sendTorpedo(id, shooter.id, target?.id ?? null, round(position), round(velocity));
+  }
+
+  sendTorpedoGone(id: string, position: THREE.Vector3) {
+    this.session.sendTorpedoGone(id, round(position));
+  }
+
+  /** Tells the browser that runs a remote ship that an own torpedo hit it. */
+  sendTorpedoHit(target: Ship, shooter: Ship) {
+    if (target.owner) this.session.sendTorpedoHit(target.owner, target.id, shooter.id);
   }
 
   /** The lead browser hands a newcomer, or a browser that started over, the field and the wreckage. */

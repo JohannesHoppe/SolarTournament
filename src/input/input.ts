@@ -19,7 +19,7 @@ export interface Controls {
 
 export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 
-export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'radio' | 'help' | 'autopilot' | 'overdrive' | 'watch';
+export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'radio' | 'help' | 'autopilot' | 'overdrive' | 'torpedo' | 'watch';
 type ActionHandler = (action: Action) => void;
 
 /** The pointer at this share of the shorter screen side away from the center turns at full rate. */
@@ -41,7 +41,7 @@ const THRUSTER_KEYS: Record<string, { axis: 'x' | 'y'; sign: number } | undefine
 };
 
 /** Buttons of the standard gamepad layout (Xbox naming). */
-const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, leftStick: 10, rightStick: 11 } as const;
+const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, leftStick: 10, rightStick: 11, up: 12 } as const;
 const PAD_ACTIONS: [number, Action][] = [
   [PAD.a, 'confirm'],
   [PAD.menu, 'pause'],
@@ -50,6 +50,7 @@ const PAD_ACTIONS: [number, Action][] = [
   [PAD.view, 'camera'],
   [PAD.rightStick, 'autopilot'],
   [PAD.rb, 'overdrive'],
+  [PAD.up, 'torpedo'],
 ];
 
 /**
@@ -73,7 +74,12 @@ export class Input {
   private lastTap = { axis: '', sign: 0, at: -Infinity };
   /** A dodge asked for and not yet taken: sideways and up, each -1, 0 or 1. */
   private dodge: { x: number; y: number } | null = null;
-  private readonly touch = new TouchControls(() => this.handler('pause'), () => this.handler('autopilot'), () => this.handler('overdrive'));
+  private readonly touch = new TouchControls(
+    () => this.handler('pause'),
+    () => this.handler('autopilot'),
+    () => this.handler('overdrive'),
+    () => this.handler('torpedo'),
+  );
 
   constructor(private readonly canvas: HTMLElement) {
     window.addEventListener('keydown', (e) => this.onKey(e, true));
@@ -272,6 +278,7 @@ export class Input {
     if (e.code === 'F1') this.handler('help');
     if (e.code === 'KeyT') this.handler('autopilot');
     if (e.code === 'KeyE') this.handler('overdrive');
+    if (e.code === 'KeyG') this.handler('torpedo');
     if (e.code === 'Tab') this.handler('watch');
   }
 }
