@@ -74,7 +74,9 @@ export class Torpedoes {
   update(dt: number, now: number, field: AsteroidField, ships: readonly Ship[], detonate: (torpedo: Torpedo, hit: Ship | null) => void) {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const torpedo = this.list[i];
-      const target = torpedo.target?.alive ? torpedo.target : null;
+      // its seeker needs a clear line: a ship that slips behind a rock loses it for good
+      if (torpedo.target && (!torpedo.target.alive || !field.lineOfSight(torpedo.position, torpedo.target.flight.position))) torpedo.target = null;
+      const target = torpedo.target;
       if (target) {
         // lead the target: where it will be when the torpedo closes the distance
         const distance = intercept.subVectors(target.flight.position, torpedo.position).length();
