@@ -19,7 +19,7 @@ Worked through from top to bottom. Every finished item is also documented in the
 
 ### 3. The tournament as a show
 
-- [ ] Spectator mode: broadcast with an automatic director camera
+- [x] Spectator mode: broadcast with an automatic director camera
 - [x] Slow-motion replay of kills (kill cam)
 - [x] Radio 2584: generative music with Tone.js, in sync for all pilots
 - [ ] Radio 2584: commentator, jingles, samples as in Johannes' inscription experiments (`haushoppe/deconstructed-inscriptions`)

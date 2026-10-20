@@ -48,6 +48,14 @@ const RESULTS_SECONDS = 12;
  */
 const STORM_PERIOD = 50;
 const STORM_SECONDS = 8;
+/**
+ * The director of a watching Host's broadcast (see Game.direct) holds a pilot at least
+ * DIRECTOR_HOLD seconds, cuts only to one clearly more in the thick of it (the followed one
+ * counts DIRECTOR_STICK times), and takes over again DIRECTOR_PAUSE seconds after Tab.
+ */
+const DIRECTOR_HOLD = 6;
+const DIRECTOR_STICK = 1.3;
+const DIRECTOR_PAUSE = 10;
 /** The modes as the list of tournaments names them. */
 const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', mixed: 'Deathmatch and race' };
 /** A kill in a race is worth less than in a deathmatch: the gates and the finish decide. */
@@ -219,6 +227,8 @@ const scratch = new THREE.Vector3();
 const forward = new THREE.Vector3();
 const muzzle = new THREE.Vector3();
 const cameraGoal = new THREE.Vector3();
+const look = new THREE.Matrix4();
+const aim = new THREE.Quaternion();
 const gravity = new THREE.Vector3();
 const retrograde = new THREE.Vector3();
 const normal = new THREE.Vector3();
@@ -330,6 +340,12 @@ export class Game implements OnlineGame {
   /** The tournament was full: the own Host watches a pilot (watchIndex, Tab switches) instead of flying. */
   private spectating = false;
   private watchIndex = 0;
+  /** The pilot the watching Host follows, when the director cut to it, and until when a pilot picked by hand holds. */
+  private watchedShip: Ship | null = null;
+  private cutAt = -Infinity;
+  private handPickedUntil = -Infinity;
+  /** The director's shot of the pilot: the chase camera, or a wide shot from the side. */
+  private wideShot = false;
   /** Number of the running online round; a new number resets the scores. */
   private roundId = 0;
   /** The round this browser was in when it started over in the tournament (see rejoin), until it knows the round again. */
@@ -453,6 +469,8 @@ export class Game implements OnlineGame {
     container.append(this.renderer.domElement);
 
     this.composer = new EffectComposer(this.renderer);
+    // the scene's depth stays readable, so the black hole's lens bends only what lies behind it
+    for (const target of [this.composer.renderTarget1, this.composer.renderTarget2]) target.depthTexture = new THREE.DepthTexture(1, 1);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.composer.addPass(this.lensing.pass);
     this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.4, 0.88));
@@ -837,10 +855,61 @@ export class Game implements OnlineGame {
     }
   }
 
-  /** The pilot a watching Host follows: the living ships of the tournament, in turn. */
+  /** The pilot a watching Host follows (see direct). */
   private watched(): Ship | null {
+    return this.watchedShip?.alive ? this.watchedShip : null;
+  }
+
+  /**
+   * The director of the broadcast a watching Host sees: it follows the pilot in the thick of
+   * it (another ship close, one on its tail, its nose on an enemy, its hull battered) and cuts
+   * to another only after a while, or at once when the followed one dies. Tab picks the next
+   * pilot by hand; the director takes over again after a while without a key.
+   */
+  private direct(now: number) {
+    if (!this.spectating) return;
     const pilots = this.ships.filter((ship) => ship !== this.me && ship.alive);
-    return pilots.length ? pilots[this.watchIndex % pilots.length] : null;
+    if (!pilots.length) {
+      this.watchedShip = null;
+      return;
+    }
+    if (now < this.handPickedUntil) {
+      this.watchedShip = pilots[this.watchIndex % pilots.length];
+      return;
+    }
+    const current = this.watched();
+    if (current && now - this.cutAt < DIRECTOR_HOLD) return;
+    let best = current;
+    let bestScore = current ? this.drama(current) * DIRECTOR_STICK : -Infinity;
+    for (const ship of pilots) {
+      const score = this.drama(ship);
+      if (score > bestScore) {
+        best = ship;
+        bestScore = score;
+      }
+    }
+    if (best !== current) {
+      this.watchedShip = best;
+      this.cutAt = now;
+      // every other cut is a wide shot
+      this.wideShot = !this.wideShot;
+    }
+  }
+
+  /** How much a pilot is in the thick of it, for the director. */
+  private drama(ship: Ship): number {
+    let nearest = Infinity;
+    let threat = 0;
+    for (const other of this.ships) {
+      if (other === ship || !other.alive || (this.spectating && other === this.me)) continue;
+      const line = relative.subVectors(other.flight.position, ship.flight.position);
+      const distance = line.length();
+      nearest = Math.min(nearest, distance);
+      // its nose on another ship, or another's nose on it from behind
+      if (distance < LOCK_RANGE && ship.flight.angleTo(line) < 0.2) threat += 1;
+      if (distance < LOCK_RANGE && other.flight.angleTo(line.negate()) < 0.2) threat += ship.tailToward(line) ? 2 : 1;
+    }
+    return 20000 / (nearest + 2000) + threat + (1 - ship.hull / 100) + (this.course ? ship.gates / GATES : 0);
   }
 
   /**
@@ -990,7 +1059,10 @@ export class Game implements OnlineGame {
         if (action === 'camera' && !this.spectating) this.cockpit = !this.cockpit;
         if (action === 'autopilot' && this.me?.alive) this.toggleAutopilot();
         if (action === 'overdrive') this.overdrive();
-        if (action === 'watch' && this.spectating) this.watchIndex++;
+        if (action === 'watch' && this.spectating) {
+          this.watchIndex++;
+          this.handPickedUntil = this.time + DIRECTOR_PAUSE;
+        }
         break;
       case 'paused':
         if (action === 'confirm' || action === 'pause' || action === 'back') this.resume();
@@ -1635,7 +1707,8 @@ export class Game implements OnlineGame {
     this.arena.update(this.camera);
     this.landmarks.update(this.field.clock);
     const well = this.field.well;
-    this.lensing.update(this.camera, this.venue.id === 'hole' && well ? well.position : null, well?.radius ?? 0);
+    // the scene is drawn into the composer's read buffer, which the lens reads right after
+    this.lensing.update(this.camera, this.venue.id === 'hole' && well ? well.position : null, well?.radius ?? 0, this.composer.readBuffer.depthTexture);
     this.composer.render();
     if (replaying) this.killcam.restore();
   }
@@ -1650,6 +1723,7 @@ export class Game implements OnlineGame {
 
     this.ease = Math.max(0, this.ease - dt / EASE_FADE);
     this.weather(dt, now);
+    this.direct(now);
     const myControls = this.flightComputer(this.state === 'playing' ? this.input.read() : IDLE);
     this.ignite(myControls);
     const dodge = this.input.takeDodge();
@@ -1724,7 +1798,8 @@ export class Game implements OnlineGame {
     const outside = me.alive && me.outsideSince !== null;
     if (!outside) this.toldToReturn = false;
     if (this.spectating) {
-      this.hud.flashMessage(now, `Tournament full · watching ${subject === me ? 'the field' : subject.name} · Tab: next pilot · you fly as soon as a place is free`, 0.2);
+      const by = now < this.handPickedUntil ? 'your pick' : 'live, the director cuts';
+      this.hud.flashMessage(now, `Tournament full · watching ${subject === me ? 'the field' : `${subject.name} (${by})`} · Tab: next pilot · you fly as soon as a place is free`, 0.2);
     } else if (outside) {
       this.hud.flashMessage(now, `Return to the field — ${Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1)}s`, 0.2);
       if (!this.toldToReturn) this.toldToReturn = this.speaker.say(COMPUTER.arena, 'urgent');
@@ -2591,6 +2666,12 @@ export class Game implements OnlineGame {
     if (this.cockpit) {
       this.camera.position.copy(flight.position).addScaledVector(flight.forward(scratch), me.radius * 0.3);
       this.camera.quaternion.copy(flight.orientation);
+    } else if (this.spectating && this.wideShot && me !== this.me) {
+      // the director's wide shot: off to the side and behind, the pilot in the frame
+      flight.toWorld(cameraGoal.set(me.radius * 6, me.radius * 2.5, me.radius * 5), cameraGoal);
+      this.camera.position.lerp(cameraGoal, 1 - Math.exp(-CAMERA_FOLLOW * 0.4 * dt));
+      look.lookAt(this.camera.position, flight.position, flight.up(scratch));
+      this.camera.quaternion.slerp(aim.setFromRotationMatrix(look), 1 - Math.exp(-CAMERA_TURN * 0.5 * dt));
     } else {
       // a burn presses the ship ahead of the camera, which hangs back a little
       const lag = me.alive ? flight.throttle * DRIVE_LAG : 0;

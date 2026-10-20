@@ -10,6 +10,9 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 const shader = {
   uniforms: {
     tDiffuse: { value: null as THREE.Texture | null },
+    /** The scene's depth, and the hole's depth in it: only what lies behind the hole is bent. */
+    tDepth: { value: null as THREE.Texture | null },
+    holeDepth: { value: 1 },
     center: { value: new THREE.Vector2(0.5, 0.5) },
     aspect: { value: 1 },
     /** The Einstein ring and the shadow, as shares of the screen height. */
@@ -25,12 +28,19 @@ const shader = {
   `,
   fragmentShader: /* glsl */ `
     uniform sampler2D tDiffuse;
+    uniform sampler2D tDepth;
+    uniform float holeDepth;
     uniform vec2 center;
     uniform float aspect;
     uniform float ring;
     uniform float shadow;
     varying vec2 vUv;
     void main() {
+      // a ship or rock in front of the hole is seen as it is
+      if (texture2D(tDepth, vUv).x < holeDepth) {
+        gl_FragColor = texture2D(tDiffuse, vUv);
+        return;
+      }
       vec2 d = (vUv - center) * vec2(aspect, 1.0);
       float theta = length(d);
       if (theta < shadow) {
@@ -62,7 +72,7 @@ export class Lensing {
    * Aims the lens at a hole of the given horizon radius (units), seen by the camera; null
    * switches it off. The ring grows as the hole comes closer.
    */
-  update(camera: THREE.PerspectiveCamera, hole: THREE.Vector3 | null, horizon: number) {
+  update(camera: THREE.PerspectiveCamera, hole: THREE.Vector3 | null, horizon: number, depth: THREE.Texture | null) {
     if (!hole) {
       this.pass.enabled = false;
       return;
@@ -78,6 +88,8 @@ export class Lensing {
     projected.copy(hole).project(camera);
     const uniforms = this.pass.uniforms;
     uniforms.center.value.set(projected.x * 0.5 + 0.5, projected.y * 0.5 + 0.5);
+    uniforms.tDepth.value = depth;
+    uniforms.holeDepth.value = projected.z * 0.5 + 0.5;
     uniforms.aspect.value = camera.aspect;
     // the hole's angular radius as a share of the screen height
     const angular = Math.atan(horizon / distance) / THREE.MathUtils.degToRad(camera.fov);
