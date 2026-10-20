@@ -33,6 +33,34 @@ const MAX_MESSAGE_BYTES = 64 * 1024;
  */
 let openRooms = 0;
 
+/**
+ * Keeps the relays asleep while no Trystero room is open. Trystero's pause only holds sockets
+ * that close afterwards; a reconnect already scheduled when the last room is left would open
+ * a new socket anyway. So while no room is open, a socket to another host comes back already
+ * closed, which sends Trystero back to waiting until the next room resumes the relays.
+ */
+function guardRelays() {
+  if ((window.WebSocket as { guarded?: boolean }).guarded) return;
+  const Native = window.WebSocket;
+  class Guarded extends Native {
+    static readonly guarded = true;
+    constructor(url: string | URL, protocols?: string | string[]) {
+      if (openRooms === 0 && new URL(url, location.href).host !== location.host) return closedSocket(String(url));
+      super(url, protocols);
+    }
+  }
+  window.WebSocket = Guarded;
+}
+
+/** A WebSocket that never connects: closed from the start, it reports its close as soon as someone listens. */
+function closedSocket(url: string): WebSocket {
+  const socket = { url, readyState: 3, send() {}, close() {}, addEventListener() {}, removeEventListener() {} } as unknown as WebSocket;
+  Object.defineProperty(socket, 'onclose', {
+    set: (handler: ((event: CloseEvent) => void) | null) => setTimeout(() => handler?.(new CloseEvent('close'))),
+  });
+  return socket;
+}
+
 abstract class BaseTransport implements Transport {
   abstract readonly selfId: string;
   protected readonly handlers = new Map<string, Handler[]>();
@@ -65,6 +93,7 @@ export class TrysteroTransport extends BaseTransport {
   private readonly room: import('trystero').Room;
   private readonly action: import('trystero').MessageAction<Json>;
   private readonly connected = new Set<string>();
+  private left = false;
 
   private constructor(
     private readonly trystero: typeof import('trystero'),
@@ -93,6 +122,7 @@ export class TrysteroTransport extends BaseTransport {
 
   /** Loads Trystero only when a player goes online. */
   static async join(roomId: string): Promise<TrysteroTransport> {
+    guardRelays();
     return new TrysteroTransport(await import('trystero'), roomId);
   }
 
@@ -111,6 +141,8 @@ export class TrysteroTransport extends BaseTransport {
    * relays: outside a tournament and the lobby the game talks to no relay at all.
    */
   leave() {
+    if (this.left) return;
+    this.left = true;
     void this.room.leave();
     if (--openRooms > 0) return;
     this.trystero.pauseRelayReconnection();

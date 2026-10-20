@@ -19,8 +19,8 @@ export interface OnlineGame {
   applyLaserHit(target: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null): void;
   /** Another peer reports a destroyed ship; `deaths` counts this death. */
   remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number): void;
-  /** Another peer hit an asteroid at a field time. */
-  remoteRock(id: string, at: number): void;
+  /** Another peer hit an asteroid at a field time, in an online round. */
+  remoteRock(id: string, at: number, round: number): void;
   /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
   leadRound(): RoundState;
@@ -39,6 +39,8 @@ const to = new THREE.Vector3();
 /** Connects the game to a tournament session: who owns which ship, and what goes over the wire. */
 export class Online {
   private wasLead: boolean | null = null;
+  /** The number of pilots the bots were last balanced for. */
+  private balancedFor = -1;
   /** The own Host only watches: the tournament was full when it came. */
   private watching = false;
   /** Peers whose clone flies (their states carry a Host's ship); watchers do not take a place. */
@@ -62,10 +64,11 @@ export class Online {
       if (ship && ship.owner === null && gun?.alive) game.applyLaserHit(ship, origin.fromArray(o), direction.fromArray(d).normalize(), gun);
     };
     session.onDestroyed = (victim, killer, deaths) => {
+      // a ship dies once per clone: a dead one cannot die again, and the count only goes up
       const ship = this.find(victim);
-      if (ship && ship.owner !== null) game.remoteDestroyed(ship, killer ? this.find(killer) : null, deaths);
+      if (ship && ship.owner !== null && ship.alive && deaths > ship.deaths) game.remoteDestroyed(ship, killer ? this.find(killer) : null, deaths);
     };
-    session.onRock = (id, at) => game.remoteRock(id, at);
+    session.onRock = (id, at, round) => game.remoteRock(id, at, round);
     session.onSync = (field) => game.field.restore(field);
     session.onPeerJoin = (peer) => {
       // the lead browser brings the newcomer's asteroid field up to date
@@ -87,9 +90,11 @@ export class Online {
     return this.session.isLead;
   }
 
-  /** Hosts whose clones fly, the own one included unless it watches. */
+  /** Hosts whose clones fly, the own one included unless it watches; a silent peer's clone does not count. */
   get pilots() {
-    return (this.watching ? 0 : 1) + this.flying.size;
+    let pilots = this.watching ? 0 : 1;
+    for (const peer of this.flying) if (!this.session.isSilent(peer)) pilots++;
+    return Math.min(pilots, TOURNAMENT_SIZE);
   }
 
   get spectating() {
@@ -98,21 +103,35 @@ export class Online {
 
   /** Sends the own ships; the lead browser adds the round clock. Rebalances bots when the lead changes. */
   update(now: number) {
+    this.session.tick();
     const lead = this.isLead;
-    if (this.wasLead !== lead) {
-      this.wasLead = lead;
-      this.balanceBots();
-    }
-    // a Host beyond the places of the tournament watches, once it knows who was here first, and
-    // flies as soon as a place comes free
-    const watching = !this.session.justJoined && this.session.rank() >= TOURNAMENT_SIZE;
+    // a Host beyond the places of the tournament watches, and flies as soon as a place comes free
+    const watching = this.session.rank() >= TOURNAMENT_SIZE;
     if (watching !== this.watching) {
       this.watching = watching;
       this.game.spectate(watching);
+    }
+    // the ships of a peer that went quiet (a hidden tab) leave every screen until it sends again
+    for (const ship of this.game.allShips()) {
+      if (ship.owner !== null && ship.alive && this.session.isSilent(ship.owner)) {
+        ship.alive = false;
+        ship.root.visible = false;
+      }
+    }
+    const pilots = this.pilots;
+    if (this.wasLead !== lead || this.balancedFor !== pilots) {
+      this.wasLead = lead;
+      this.balancedFor = pilots;
       this.balanceBots();
     }
-    const states = this.game.ownedShips().map((ship) => ship.toState(now));
-    this.session.sendStates(now, states, lead ? this.game.leadRound() : null);
+    // the lead browser keeps its round clock every frame; the states go out at their own rate
+    const round = lead ? this.game.leadRound() : null;
+    if (!this.session.statesDue(now)) return;
+    this.session.sendStates(
+      now,
+      this.game.ownedShips().map((ship) => ship.toState(now)),
+      round,
+    );
   }
 
   sendFire(shooter: Ship, a: THREE.Vector3, b: THREE.Vector3) {
@@ -128,8 +147,8 @@ export class Online {
     this.session.sendDestroyed(victim.id, killer?.id ?? null, victim.deaths);
   }
 
-  sendRock(id: string, at: number) {
-    this.session.sendRock(id, at);
+  sendRock(id: string, at: number, round: number) {
+    this.session.sendRock(id, at, round);
   }
 
   leave() {

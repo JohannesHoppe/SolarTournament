@@ -7,13 +7,16 @@ export const MAIN_THRUST = 3600;
 export const RCS_THRUST = 800;
 /** Tournament rule: no ship flies faster than this (units/s, 500 m/s); the flight computer cuts any push beyond it. */
 export const MAX_SPEED = 10000;
+/** The overdrive's shove along the nose (units/s, 300 m/s): past the tournament's limit, see Game.overdrive. */
+export const OVERDRIVE_PUSH = 6000;
 /**
  * Rotation rates the flight computer allows (rad/s) and how fast the thrusters reach them
- * (rad/s²): full rate in a sixth of a second, so the nose stops where the stick stops.
+ * (rad/s²): full rate in an eighth of a second, so the nose snaps where the stick points and
+ * stops where the stick stops; a half turn takes about a second.
  */
-const MAX_TURN_RATE = 2.2;
-const MAX_ROLL_RATE = 2.4;
-const TURN_ACCELERATION = 14;
+export const MAX_TURN_RATE = 3;
+const MAX_ROLL_RATE = 3.2;
+const TURN_ACCELERATION = 24;
 /** How fast the visible drive output follows the thrust command (1/s). */
 const THROTTLE_RESPONSE = 12;
 
@@ -104,8 +107,10 @@ export class FlightModel {
     if (push) acceleration.add(push);
     acceleration.applyQuaternion(this.orientation).add(gravity);
     this.velocity.addScaledVector(acceleration, dt);
-    // a step that crosses the limit ends on it, however long the frame was
-    if (speed < MAX_SPEED && this.velocity.lengthSq() > MAX_SPEED * MAX_SPEED) this.velocity.setLength(MAX_SPEED);
+    // a step that crosses the limit ends on it, however long the frame was; at or past the
+    // limit (after an overdrive) a push across the course turns the flight but never adds speed
+    const limit = Math.max(speed, MAX_SPEED);
+    if (this.velocity.lengthSq() > limit * limit) this.velocity.setLength(limit);
     this.position.addScaledVector(this.velocity, dt);
     this.throttle += (drive - this.throttle) * (1 - Math.exp(-THROTTLE_RESPONSE * dt));
   }

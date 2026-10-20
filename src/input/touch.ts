@@ -87,6 +87,11 @@ export class TouchControls {
       push.on('end', () => Object.assign(this.push, { x: 0, y: 0 }));
       this.sticks = [turn, push];
     });
+    // a chunk that failed to load (a dropped connection) is asked for again next time
+    this.loading = this.loading.catch((error) => {
+      this.loading = null;
+      console.warn('Touch sticks unavailable', error);
+    });
     return this.loading;
   }
 
@@ -106,7 +111,8 @@ export class TouchControls {
   private release() {
     Object.assign(this.turn, { x: 0, y: 0 });
     Object.assign(this.push, { x: 0, y: 0 });
-    this.drive = this.fire = this.brake = false;
+    this.drive = this.fire = this.brake = this.flip = false;
+    for (const button of document.querySelectorAll('.touch-button.held')) button.classList.remove('held');
   }
 
   private hold(id: string, set: (down: boolean) => void) {

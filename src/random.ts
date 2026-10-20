@@ -1,4 +1,15 @@
 /**
+ * A seed from a text, e.g. a rock id, a tournament room code or a track title: FNV-1a, folded
+ * into 1..2147483000, so it is never 0 (a Randomizer seeded with 0 stays at 0) and stays
+ * below the Randomizer's modulus.
+ */
+export function textSeed(text: string): number {
+  let h = 2166136261;
+  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
+  return ((h >>> 0) % 2147483000) + 1;
+}
+
+/**
  * Deterministic pseudo random generator (Park–Miller style with a non-Mersenne prime).
  * Every client that uses the same seed gets the same sequence, so the asteroid field
  * and asteroid fragments are identical for all players without sending them over the wire.

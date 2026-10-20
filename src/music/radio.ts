@@ -18,6 +18,12 @@ const TICK_MS = 40;
 const RESYNC = 0.12;
 const ENABLED_KEY = 'solartournament.radio';
 const VOLUME = 0.55;
+/** A failed load of Tone.js or the voice is tried again after this long (s). */
+const RETRY_SECONDS = 5;
+/** An announcement needs this much quiet before the track's next line (s): the announcer's lines are a few seconds long. */
+const ANNOUNCE_ROOM = 5;
+/** An announcement that found no room for this long (s) is no longer news and is dropped. */
+const ANNOUNCE_PATIENCE = 8;
 
 /**
  * Radio 2584: the tournament's soundtrack in the cockpit. Tone.js loads only once the radio
@@ -45,6 +51,11 @@ export class Radio {
   private level = 0;
   private dropoutUntil = 0;
   private warned = false;
+  /** The band has its voice; until then, and after a failed load, when to try again (performance.now, ms). */
+  private voiced = false;
+  private retryAt = 0;
+  /** An announcement waiting for room on air (see announce). */
+  private pendingAnnouncement: { text: string; name: string | null; until: number } | null = null;
 
   constructor(
     private readonly context: AudioContext,
@@ -73,6 +84,7 @@ export class Radio {
   stop() {
     this.cue = null;
     this.songKey = '';
+    this.pendingAnnouncement = null;
     this.level = 0;
     this.output.gain.setTargetAtTime(0, this.context.currentTime, 0.05);
   }
@@ -110,9 +122,9 @@ export class Radio {
     this.muffler.frequency.setTargetAtTime(muffled ? 450 : 20000, now, muffled ? 0.25 : 0.6);
   }
 
-  /** A short drop-out of the link: the radio cuts out for a moment. */
+  /** A short drop-out of the link: the radio cuts out for a moment; a stopped radio stays silent. */
   dropout(seconds: number) {
-    if (!this.band) return;
+    if (!this.band || !this.cue) return;
     const now = this.context.currentTime;
     const gain = this.output.gain;
     gain.cancelScheduledValues(now);
@@ -125,35 +137,90 @@ export class Radio {
     this.level = this.enabledFlag ? VOLUME : 0;
   }
 
+  /**
+   * Loads Tone.js and the band. A failed load (a dropped connection) is tried again after
+   * RETRY_SECONDS; so is a failed voice, while the music already plays without it.
+   */
   private async load() {
     this.loading = true;
-    const T = await import('tone');
-    T.setContext(this.context);
-    const band = new Band(T);
-    band.output.connect(this.muffler);
-    band.onSpeak = (spoken) => this.onSpeak(spoken, (spoken.time - this.context.currentTime) * 1000);
-    await band.ready();
     try {
-      band.setVoice(await loadVoice());
+      const T = await import('tone');
+      T.setContext(this.context);
+      const band = new Band(T);
+      band.output.connect(this.muffler);
+      band.onSpeak = (spoken) => this.onSpeak(spoken, (spoken.time - this.context.currentTime) * 1000);
+      await band.ready();
+      this.band = band;
+      await this.loadBandVoice();
+    } catch (error) {
+      console.warn('Radio unavailable', error);
+      this.retryAt = performance.now() + RETRY_SECONDS * 1000;
+    } finally {
+      this.loading = false;
+    }
+  }
+
+  private async loadBandVoice() {
+    try {
+      this.band!.setVoice(await loadVoice());
+      this.voiced = true;
     } catch (error) {
       // without the voice the music still plays
       console.warn('Radio voice unavailable', error);
+      this.retryAt = performance.now() + RETRY_SECONDS * 1000;
     }
-    this.band = band;
   }
 
-  /** The announcer comments on the action, over the music. */
+  /**
+   * The announcer comments on the action, over the music; a stopped radio says nothing. Two
+   * voices never talk at once: the line waits until the voice on air is through and no line of
+   * the track is due within ANNOUNCE_ROOM seconds, and is dropped after ANNOUNCE_PATIENCE.
+   */
   announce(text: string, name: string | null) {
-    if (!this.band || !this.enabledFlag || this.context.state !== 'running') return;
-    this.band.announce(text, name, this.context.currentTime + 0.05);
+    if (!this.band || !this.cue || !this.enabledFlag || this.context.state !== 'running') return;
+    this.pendingAnnouncement = { text, name, until: this.context.currentTime + ANNOUNCE_PATIENCE };
+  }
+
+  /** Puts a waiting announcement on air once there is room for it (see announce). */
+  private releaseAnnouncement(now: number, elapsed: number) {
+    const pending = this.pendingAnnouncement;
+    if (!pending || !this.band || !this.song) return;
+    if (now > pending.until) {
+      this.pendingAnnouncement = null;
+      return;
+    }
+    if (now < this.band.voiceUntil + 0.3 || this.nextTrackLine(elapsed) < ANNOUNCE_ROOM) return;
+    this.pendingAnnouncement = null;
+    this.band.announce(pending.text, pending.name, now + 0.05);
+  }
+
+  /** Seconds until the next voice line the track plans (Infinity without one). */
+  private nextTrackLine(elapsed: number): number {
+    const song = this.song!;
+    const bar = barSeconds(song);
+    const now = elapsed / bar;
+    let next = Infinity;
+    for (const line of song.voice) {
+      let at = line.bar;
+      if (song.cycle) {
+        at += Math.floor(now / song.cycle) * song.cycle;
+        if (at < now) at += song.cycle;
+      }
+      if (at >= now) next = Math.min(next, (at - now) * bar);
+    }
+    return next;
   }
 
   private tick() {
     const cue = this.cue;
     if (!cue || this.context.state !== 'running') return;
     if (!this.band) {
-      if (this.enabledFlag && !this.loading) void this.load();
+      if (this.enabledFlag && !this.loading && performance.now() >= this.retryAt) void this.load();
       return;
+    }
+    if (!this.voiced && !this.loading && performance.now() >= this.retryAt) {
+      this.loading = true;
+      void this.loadBandVoice().finally(() => (this.loading = false));
     }
     const now = this.context.currentTime;
     // the level only changes when the radio is switched, and never during a drop-out
@@ -173,8 +240,14 @@ export class Radio {
       this.start = Infinity;
       this.onSong(this.song);
       // joining a track after its announcement's downbeat: the station names it on the next
-      // bar (before that downbeat, the scheduler reaches it by itself)
-      this.lateAnnouncement = elapsed + LOOKAHEAD > barSeconds(this.song) * this.song.voice[0].bar;
+      // bar. The scheduler only skips downbeats before the first step it plays (now, or after
+      // the old track's last note); a lounge track names itself again in every cycle, so
+      // when that comes within two bars, the scheduler is left to it.
+      const bars = (elapsed + Math.max(0, this.scheduledUntil - now) + 1e-3) / barSeconds(this.song);
+      const position = this.song.cycle ? bars % this.song.cycle : bars;
+      const announced = this.song.voice[0].bar;
+      const nextByItself = this.song.cycle ? this.song.cycle - position + announced : Infinity;
+      this.lateAnnouncement = position > announced && nextByItself > 2;
     }
     const song = this.song!;
     const sixteenth = barSeconds(song) / STEPS_PER_BAR;
@@ -199,6 +272,7 @@ export class Radio {
       this.scheduledUntil = time;
       this.guard(() => this.band!.play(song, step, time));
     }
+    this.releaseAnnouncement(now, elapsed);
   }
 
   /** One failing instrument costs one note, not the beat: the scheduler goes on. */

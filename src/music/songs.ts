@@ -1,3 +1,4 @@
+import { textSeed } from '../random';
 import { NOW_PLAYING_DE, NOW_PLAYING_EN, PHRASES_DE, PHRASES_EN, STATION_DE, STATION_EN, TITLE_FIRST, TITLE_FIRST_DE, TITLE_SECOND, TITLE_SECOND_DE, type Language } from './lines';
 
 /**
@@ -36,7 +37,7 @@ export type Flavor = 'hard' | 'industrial' | 'acid' | 'ebm' | 'french' | 'motori
 export type Strategy = 'classic' | 'relentless' | 'hypnotic' | 'movements' | 'switcher' | 'fakeDrop' | 'polymeter';
 const STRATEGIES: Strategy[] = ['classic', 'relentless', 'hypnotic', 'movements', 'switcher', 'fakeDrop', 'polymeter'];
 
-/** Tracks for tournament rounds run the full arc; the menu and the flight school idle in a groove. */
+/** Tracks for tournament rounds run the full arc; the menu idles in a groove. */
 export type Energy = 'lounge' | 'round';
 
 export type SectionKind = 'intro' | 'groove' | 'peak' | 'break' | 'strip' | 'gap' | 'finale' | 'outro';
@@ -216,12 +217,10 @@ export function hash(seed: number, ...keys: number[]): number {
 const unit = (seed: number, ...keys: number[]) => hash(seed, ...keys) / 4294967296;
 const choose = <T>(list: readonly T[], seed: number, ...keys: number[]): T => list[hash(seed, ...keys) % list.length];
 
-/** A seed from a text, e.g. a tournament room code or a track title. */
-export function textSeed(text: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
-  return ((h >>> 0) % 2147483000) + 1;
-}
+export { textSeed };
+
+/** Length of a tournament round (s); a round's track is grown for it, in the game, on the radio page and in its WAV file alike. */
+export const ROUND_SECONDS = 5 * 60;
 
 /** Mixes two integers into a seed. */
 export function mixSeed(a: number, b: number): number {
@@ -461,7 +460,7 @@ function roundForm(song: Song, roundLength: number, groove: Groove): Section[] {
   return form;
 }
 
-/** The menu and the flight school: the arena's groove heard through the hangar wall. */
+/** The menu: the arena's groove heard through the hangar wall. */
 function loungeForm(groove: Groove): Section[] {
   return [
     { kind: 'groove', start: 0, bars: 32, from: 0.4, to: 0.55, groove },
@@ -486,7 +485,7 @@ function energyAt(section: Section, bar: number): number {
 const SURPRISES: SurpriseType[] = ['filterDip', 'delayThrow', 'siren', 'bitDrop', 'keyLift'];
 
 /**
- * 3 to 5 surprises per round, at least 12 bars apart, each type at most once. They land
+ * 3 to 5 surprises per round, 12 bars apart (8 where a track has no room for more), each type at most once. They land
  * after stable stretches: a big surprise works best when the listener is sure what comes
  * next. The bit drop belongs to industrial and EBM and to half of the other tracks; the key
  * lift only comes in the last stretch before the finale.
@@ -499,19 +498,25 @@ function planSurprises(song: Song): Surprise[] {
   const result: Surprise[] = [];
   const finale = song.form.find((s) => s.kind === 'finale')!;
   const fits = (type: SurpriseType, bar: number) => (type !== 'keyLift' || bar >= finale.start - 48) && (type !== 'bitDrop' || bitDrop);
-  let last = -12;
-  for (let bar = 24; bar < finale.start && result.length < count; bar += 4) {
-    const section = sectionAt(song, bar);
-    if (section.kind !== 'groove' && section.kind !== 'peak') continue;
-    if (bar - last < 12) continue;
-    if (unit(seed, Ch.Surprise, 2, bar) > 0.3) continue;
-    // the next type in the round's order that fits here
-    const type = remaining.find((t) => fits(t, bar));
-    if (!type) continue;
-    remaining.splice(remaining.indexOf(type), 1);
-    result.push({ type, bar, bars: type === 'filterDip' ? 4 : type === 'siren' ? 2 : type === 'keyLift' ? finale.start + finale.bars + 16 - bar : 1 });
-    last = bar;
-  }
+  // first at bars the seed picks, 12 bars apart; a track that got too few that way takes
+  // them at any free groove or peak bar, closer together if it has to
+  const place = (chance: number, spacing: number) => {
+    for (let bar = 24; bar < finale.start && result.length < count; bar += 4) {
+      const section = sectionAt(song, bar);
+      if (section.kind !== 'groove' && section.kind !== 'peak') continue;
+      if (result.some((s) => Math.abs(s.bar - bar) < spacing)) continue;
+      if (unit(seed, Ch.Surprise, 2, bar) > chance) continue;
+      // the next type in the round's order that fits here
+      const type = remaining.find((t) => fits(t, bar));
+      if (!type) continue;
+      remaining.splice(remaining.indexOf(type), 1);
+      result.push({ type, bar, bars: type === 'filterDip' ? 4 : type === 'siren' ? 2 : type === 'keyLift' ? finale.start + finale.bars + 16 - bar : 1 });
+    }
+  };
+  place(0.3, 12);
+  place(1, 12);
+  place(1, 8);
+  result.sort((a, b) => a.bar - b.bar);
   // half of the breakdowns open with a bomb: a deep hit into a long reverb
   for (const section of song.form) if (section.kind === 'break' && unit(seed, Ch.Surprise, 4, section.start) < 0.5) result.push({ type: 'bomb', bar: section.start, bars: 1 });
   return result;

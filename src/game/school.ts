@@ -35,8 +35,8 @@ export interface SchoolContext {
   fireAt(from: THREE.Vector3, through: THREE.Vector3): void;
   /** The flight computer is still talking. */
   speaking: boolean;
-  /** The flight computer says lines, one after the other; it cuts off whatever it was saying. */
-  say(lines: string[]): void;
+  /** The flight computer says lines, one after the other, after whatever it is saying; false when it could not speak yet (voice still loading, audio not yet allowed). */
+  say(lines: string[]): boolean;
 }
 
 /** The running state of one attempt at a drill. */
@@ -58,8 +58,9 @@ interface Attempt {
   side: number;
   /** The impact warning has come up in this attempt. */
   warned: boolean;
-  /** The pilot used the S brake in this attempt. */
+  /** The pilot used the S brake in this attempt; a brake still held from the drill before only counts once let go. */
   usedBrake: boolean;
+  brakeLetGo: boolean;
   /** Distance the attempt started from its target (units). */
   reach: number;
   /** The side the pilot last pushed to with the thrusters (-1 left, 1 right, 0 not yet), and how often it changed. */
@@ -90,6 +91,8 @@ interface Drill {
   mark?(ctx: SchoolContext, attempt: Attempt): string;
   /** The autopilot setting the drill leaves behind, so a flight school resumed later starts with it. */
   autopilotAfter?: boolean;
+  /** The drill does not apply to the Host's device: it is passed over without a word. */
+  skip?(ctx: SchoolContext): boolean;
 }
 
 /** What the Host flies with. */
@@ -155,6 +158,8 @@ const GUNNER_INTERVAL = 0.7;
 const GUNNER_LAG = 0.35;
 /** Changes of side the jinking drill wants: left, right, left, right, left. */
 const JINKS = 4;
+/** A drill waits this long for the voice to say its lines (s), then goes on without. */
+const UNSAID_PATIENCE = 10;
 
 
 const scratch = new THREE.Vector3();
@@ -266,10 +271,12 @@ const DRILLS: Drill[] = [
     line: SCHOOL.cockpit,
     praise: SCHOOL_PRAISE.cockpit,
     keys: ['camera'],
-    // in, then out again; touch screens have no camera switch and skip it
+    // touch screens have no camera switch: there the drill is not given at all
+    skip: (ctx) => ctx.device === 'touch',
+    // in, then out again
     done(ctx, a) {
       if (ctx.cockpit) a.next = 1;
-      return ctx.device === 'touch' || (a.next === 1 && !ctx.cockpit);
+      return a.next === 1 && !ctx.cockpit;
     },
   },
   {
@@ -328,7 +335,8 @@ const DRILLS: Drill[] = [
     done: (ctx, a) => ctx.me.flight.velocity.dot(a.forward) < STOPPED && !a.usedBrake,
     // stopping with the S brake does not count; the attempt starts over once the ship is at rest
     fail(ctx, a) {
-      a.usedBrake ||= ctx.braking;
+      a.brakeLetGo ||= !ctx.braking;
+      a.usedBrake ||= ctx.braking && a.brakeLetGo;
       return a.usedBrake && speed(ctx) < STOPPED ? SCHOOL.byHand : null;
     },
   },
@@ -484,12 +492,22 @@ const DRILLS: Drill[] = [
     praise: SCHOOL_PRAISE.impact,
     keys: ['brake', 'slide'],
     enter(ctx, a) {
-      const rock = nearestAsteroid(ctx);
-      if (!rock) return;
-      // between the rock and the field's center, heading for the rock at 100 m/s
-      const outward = rock.object.position.clone().normalize();
-      const start = rock.object.position.clone().addScaledVector(outward, -(rock.radius + 14000));
+      // between a rock and the field's center, heading for the rock at 100 m/s: the nearest
+      // rock whose start lies in open space and whose way there no other rock blocks
       const flight = ctx.me.flight;
+      const rocks = [...ctx.field.asteroids.values()].sort((p, q) => p.object.position.distanceTo(flight.position) - q.object.position.distanceTo(flight.position));
+      let rock: Asteroid | null = null;
+      const start = new THREE.Vector3();
+      const outward = new THREE.Vector3();
+      for (const candidate of rocks) {
+        outward.copy(candidate.object.position).normalize();
+        start.copy(candidate.object.position).addScaledVector(outward, -(candidate.radius + 14000));
+        if (ctx.field.overlap(start, ctx.me.radius * 4)) continue;
+        if (ctx.field.raycast(start, outward, Infinity)?.asteroid !== candidate) continue;
+        rock = candidate;
+        break;
+      }
+      if (!rock) return;
       flight.position.copy(start);
       flight.orientation.setFromRotationMatrix(new THREE.Matrix4().lookAt(start, rock.object.position, new THREE.Vector3(0, 1, 0)));
       drift(ctx, 2000, outward);
@@ -625,6 +643,8 @@ export class FlightSchool {
   private restart = false;
   /** Lines to say before the next attempt: the praise of the last drill, or why the attempt failed. */
   private pending: string[] = [];
+  /** Lines of the beginning attempt the voice could not say yet, and since when (see speak). */
+  private unsaid: { lines: string[]; since: number } | null = null;
   private line: string;
   /** What the current waypoint is, for its label in the HUD. */
   mark = '';
@@ -664,6 +684,7 @@ export class FlightSchool {
 
   /** Advances the training; returns the waypoint to mark, if any. */
   update(ctx: SchoolContext): THREE.Vector3 | null {
+    if (!this.attempt) while (!this.finished && DRILLS[this.index].skip?.(ctx)) this.index++;
     if (this.finished) return null;
     const drill = DRILLS[this.index];
     if (!ctx.me.alive) {
@@ -671,6 +692,7 @@ export class FlightSchool {
       return null;
     }
     if (!this.attempt || this.restart) this.begin(ctx, this.attempt?.rep ?? 0);
+    if (!this.speak(ctx)) return null;
     const attempt = this.attempt!;
     attempt.seconds += ctx.dt;
     this.markers.update(ctx.dt);
@@ -701,7 +723,7 @@ export class FlightSchool {
     const drill = DRILLS[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: -Infinity, warned: false, usedBrake: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0 };
+    this.attempt = { rep, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: -Infinity, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0 };
     drill.enter?.(ctx, this.attempt, this.markers);
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
@@ -709,7 +731,19 @@ export class FlightSchool {
     const spoken = [...this.pending, ...(fresh && (rep === 0 || drill.repLine) ? [instruction] : [])];
     this.line = instruction;
     this.pending = [];
-    if (spoken.length) ctx.say(spoken);
+    if (spoken.length) this.unsaid = { lines: spoken, since: ctx.now };
+  }
+
+  /**
+   * Says the lines of the beginning attempt. Until the voice can speak (still loading, or the
+   * browser has not allowed audio yet) the drill waits, so no instruction is lost; after
+   * UNSAID_PATIENCE seconds it goes on without.
+   */
+  private speak(ctx: SchoolContext): boolean {
+    const unsaid = this.unsaid;
+    if (!unsaid) return true;
+    if (ctx.say(unsaid.lines) || ctx.now - unsaid.since > UNSAID_PATIENCE) this.unsaid = null;
+    return !this.unsaid;
   }
 
   /**

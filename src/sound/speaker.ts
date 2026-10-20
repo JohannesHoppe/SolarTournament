@@ -14,7 +14,8 @@ export class Speaker {
   private voice: Voice | null = null;
   private loading: Promise<void> | null = null;
   private readonly input: GainNode;
-  private sources: AudioBufferSourceNode[] = [];
+  /** The lines playing or waiting to play, by their source. */
+  private readonly sources = new Map<AudioBufferSourceNode, string>();
   private busyUntil = 0;
   /** How urgent the line being said is (see say). */
   private saying: Urgency = 'chatter';
@@ -54,7 +55,9 @@ export class Speaker {
    * each line is rendered whole. How it meets a line still being said depends on its
    * urgency: a lesson of the flight school is never cut off, a new lesson waits its turn
    * behind whatever is being said, an urgent line cuts off anything but a lesson, and
-   * chatter only speaks into silence. Returns false when it stayed silent.
+   * chatter only speaks into silence. A lesson that is already waiting is not queued twice, so
+   * a drill failed again and again does not pile up its line. Returns false when it stayed
+   * silent.
    */
   say(lines: string | string[], urgency: Urgency = 'chatter'): boolean {
     this.prepare();
@@ -65,21 +68,20 @@ export class Speaker {
     if (queued) position = this.busyUntil;
     else if (this.speaking && (urgency === 'chatter' || this.saying === 'lesson')) return false;
     else this.stop();
+    const waiting = new Set(this.sources.values());
     let said = false;
     for (const line of typeof lines === 'string' ? [lines] : lines) {
       const clip = voice.clips[clipKey('sys', line)];
       if (!clip) continue;
       said = true;
+      if (queued && waiting.has(line)) continue;
       const source = this.context.createBufferSource();
       source.buffer = voice.buffer;
       source.connect(this.input);
       source.start(position, clip[0], clip[1]);
       // a finished line leaves the list, so a long flight school does not pile them up
-      source.onended = () => {
-        const index = this.sources.indexOf(source);
-        if (index >= 0) this.sources.splice(index, 1);
-      };
-      this.sources.push(source);
+      source.onended = () => this.sources.delete(source);
+      this.sources.set(source, line);
       position += clip[1] + 0.3;
     }
     if (said) {
@@ -93,8 +95,8 @@ export class Speaker {
 
   /** Cuts the current line off. */
   stop() {
-    for (const source of this.sources) source.stop();
-    this.sources = [];
+    for (const source of this.sources.keys()) source.stop();
+    this.sources.clear();
     this.busyUntil = 0;
   }
 }

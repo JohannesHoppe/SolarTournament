@@ -8,7 +8,9 @@ const projected = new THREE.Vector3();
 /** Kills stay in the feed this long (s). */
 const KILLFEED_SECONDS = 5;
 /** Display scale: one world unit is 5 cm, a ship is about 35 m long. */
-const METERS_PER_UNIT = 0.05;
+export const METERS_PER_UNIT = 0.05;
+/** The size of the window, as Game.resize last set it: reading it from the window after the HUD wrote to the page would force a layout. */
+const viewport = { width: window.innerWidth, height: window.innerHeight };
 
 export class Hud {
   private readonly root = $('hud');
@@ -55,10 +57,29 @@ export class Hud {
 
   show(visible: boolean) {
     this.root.hidden = !visible;
+    // a hidden HUD cancels the popups' animation without ending it: they would replay later
+    if (!visible) this.clearPopups();
+  }
+
+  /** The window's new size (see viewport). */
+  setViewport(width: number, height: number) {
+    viewport.width = width;
+    viewport.height = height;
+  }
+
+  /** The crosshair shows while the own clone flies. */
+  showCrosshair(visible: boolean) {
+    setHidden(this.crosshair, !visible);
+    setHidden(this.hitmarker, !visible);
+  }
+
+  private clearPopups() {
+    for (const popup of this.root.querySelectorAll('.popup')) popup.remove();
   }
 
   reset() {
     this.killfeed.replaceChildren();
+    this.clearPopups();
     this.setLock('', null);
     this.markerLayer.replaceChildren();
     this.markers.clear();
@@ -95,16 +116,16 @@ export class Hud {
     }
   }
 
-  /** Flight school instruction; null hides the panel. */
-  setSchool(status: { step: string; text: string; keys: string[] } | null) {
+  /** Flight school instruction; null hides the panel. Keys of the keyboard are named as the Host's layout prints them, gamepad buttons as they are. */
+  setSchool(status: { step: string; text: string; keys: string[] } | null, keyboard = true) {
     this.schoolPanel.hidden = !status;
     if (!status) return;
     if (this.schoolStep.textContent !== status.step) this.schoolStep.textContent = status.step;
     if (this.schoolText.textContent !== status.text) this.schoolText.textContent = status.text;
-    const keys = status.keys.join('|');
+    const keys = `${keyboard}|${status.keys.join('|')}`;
     if (this.schoolKeys.dataset.keys !== keys) {
       this.schoolKeys.dataset.keys = keys;
-      this.schoolKeys.replaceChildren(...status.keys.map((key) => Object.assign(document.createElement('kbd'), { textContent: keyLabel(key) })));
+      this.schoolKeys.replaceChildren(...status.keys.map((key) => Object.assign(document.createElement('kbd'), { textContent: keyboard ? keyLabel(key) : key })));
     }
   }
 
@@ -115,7 +136,7 @@ export class Hud {
     const popup = document.createElement('div');
     popup.className = `popup ${kind}`;
     popup.textContent = text;
-    popup.style.translate = `${((projected.x + 1) / 2) * window.innerWidth}px ${((1 - projected.y) / 2) * window.innerHeight}px`;
+    popup.style.translate = `${((projected.x + 1) / 2) * viewport.width}px ${((1 - projected.y) / 2) * viewport.height}px`;
     popup.addEventListener('animationend', () => popup.remove());
     this.root.append(popup);
   }
@@ -226,8 +247,7 @@ export class Hud {
 
   /** Marks other ships in line of sight with their name; ships off screen get an arrow at the screen edge. */
   updateMarkers(camera: THREE.Camera, ships: Ship[], me: Ship, visible: (ship: Ship) => boolean) {
-    const width = window.innerWidth;
-    const height = window.innerHeight;
+    const { width, height } = viewport;
     const seen = this.seen;
     seen.clear();
     for (const ship of ships) {
@@ -289,7 +309,7 @@ function pin(element: HTMLElement, camera: THREE.Camera, point: THREE.Vector3) {
   }
   // points behind the camera always sit on the edge
   const scale = 1 / Math.max(Math.abs(x) / 0.92, Math.abs(y) / 0.85, behind ? 1e-6 : 1);
-  element.style.translate = `${((x * scale + 1) / 2) * window.innerWidth}px ${((1 - y * scale) / 2) * window.innerHeight}px`;
+  element.style.translate = `${((x * scale + 1) / 2) * viewport.width}px ${((1 - y * scale) / 2) * viewport.height}px`;
 }
 
 /** A distance in world units as the HUD shows it: meters, kilometers from 1000 m on. */
@@ -314,5 +334,5 @@ function placeVelocityMarker(element: HTMLElement, camera: THREE.Camera, velocit
   ahead.copy(velocity).normalize().multiplyScalar(sign * 100000).add(camera.position).project(camera);
   const visible = show && ahead.z < 1 && Math.abs(ahead.x) < 1 && Math.abs(ahead.y) < 1;
   setHidden(element, !visible);
-  if (visible) element.style.transform = `translate(${((ahead.x + 1) / 2) * window.innerWidth}px, ${((1 - ahead.y) / 2) * window.innerHeight}px)`;
+  if (visible) element.style.transform = `translate(${((ahead.x + 1) / 2) * viewport.width}px, ${((1 - ahead.y) / 2) * viewport.height}px)`;
 }

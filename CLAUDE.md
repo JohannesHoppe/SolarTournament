@@ -103,6 +103,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts |
 | `music/preview.ts` | Renders a track (or a stretch) offline as WAV: downloads on the radio page, previews in development |
 | `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the announcer's lines, the flight computer's lines |
+| `music/transmission.ts` | The on-screen transmission: whatever the radio says, in neon, while it is spoken (game and radio page) |
 | `music/voice.ts` | Loads the pre-rendered voice sprite (once, shared) |
 | **`net/`** | **Online tournament** |
 | `net/online.ts` | Ship ownership, what goes over the network, the lead browser's bots |
@@ -114,7 +115,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 
 `tools/crest/render.ts` (`npm run crest`) draws the seal of the Ministry of War into `public/crest.svg`: computed rings, stars and sun, Michroma lettering as paths, and the eagle of `tools/crest/eagle.svg` (CC0) cut into angular facets.
 
-`tools/voice/render.ts` (`npm run voice`) renders every word and every sentence of the radio lines in `src/music/lines.ts` with espeak-ng, and the flight computer's lines (Nicole) with Kokoro, into `public/assets/voice/`. The sprite is generated, not versioned (`.gitignore`): `npm run build` and `npm run dev` render it first, so Cloudflare's build renders it from a fresh checkout, and locally it is only rendered again when the lines, the tool or the speech engines changed. ffmpeg comes from the ffmpeg-static package. Sprite (keyed by a hash of its inputs) and Kokoro model are kept in `~/.npm/_solartournament/`: Cloudflare Pages keeps npm's global cache directory between builds and no other, so a build whose lines did not change copies the sprite instead of rendering it (`VOICE_CACHE` moves the cache). Never commit the sprite: generated binaries bloat the repository's history for good.
+`tools/voice/render.ts` (`npm run voice`) renders every word and every sentence of the radio lines in `src/music/lines.ts` with espeak-ng, and the flight computer's lines (Nicole) with Kokoro, into `public/assets/voice/`. The sprite is generated, not versioned (`.gitignore`): `npm run build` and `npm run dev` make it first, and only render it when the lines, the tool (with the pinned Kokoro revision) or the engines' versions (kokoro-js, phonemizer, transformers, onnxruntime, espeak-ng, ffmpeg-static) changed. ffmpeg comes from the ffmpeg-static package. Sprite (keyed by a hash of its inputs) and Kokoro model (one folder per revision, used only once a download has completed) are kept in `_solartournament/` inside npm's cache directory (`~/.npm` by default): Cloudflare Pages keeps that directory between builds and no other, so a fresh checkout whose inputs did not change copies the sprite instead of rendering it (`VOICE_CACHE` moves the cache; where it cannot be written, the voice is rendered all the same). Never commit the sprite: generated binaries bloat the repository's history for good.
 
 ## License
 

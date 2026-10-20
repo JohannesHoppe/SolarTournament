@@ -4,6 +4,7 @@ import { IDLE, type Controls } from '../input/input';
 import type { Ship } from './ship';
 import { RCS_THRUST } from './flight';
 
+/** Bots notice ships within this distance (units, 2.5 km), when no rock is in the way. */
 const SIGHT_RANGE = 50000;
 /** Bots only fire within this distance (units, 1 km). */
 const FIRE_RANGE = 20000;
@@ -48,7 +49,7 @@ const heading = new THREE.Vector3();
 const jinkStep = new THREE.Vector3();
 const line = new THREE.Vector3();
 
-export const BOT_NAMES = ['Ingmar', 'Nova', 'Kessler', 'Vega', 'Orion', 'Sputnik', 'Halley', 'Laika'];
+export { BOT_NAMES } from '../music/lines';
 
 /**
  * Newtonian pursuit AI. Bots only see ships they have a line of sight to. It works out the velocity it wants (close in on its target,

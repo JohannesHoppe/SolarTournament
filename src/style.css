@@ -1170,8 +1170,9 @@ body.touch .bar {
   width: 56px;
 }
 
+/* below the radio box, which touch screens move down to 88 px */
 body.touch #killfeed {
-  top: 100px;
+  top: 136px;
 }
 
 /* The HUD and menus come over the same video link as the picture and glitch with it. */
@@ -1320,8 +1321,8 @@ body.touch #transmission {
   bottom: 150px;
 }
 
-/* Radio 2584's own page (radio.html): a scrolling document instead of the game's full screen. */
-html:has(body.page),
+/* The radio page and the legal pages: a scrolling document instead of the game's full screen. */
+html.page,
 body.page {
   height: auto;
   min-height: 100%;
@@ -1499,7 +1500,9 @@ body.page {
   inset: 0;
   z-index: 0;
   background: url('/crest.svg') center / min(92vh, 92vw) no-repeat;
-  opacity: 0.3;
+  /* the hum's keyframes set the opacity, so its level is a variable they read */
+  --crest-glow: 0.3;
+  opacity: var(--crest-glow);
   filter: drop-shadow(0 0 6px #ff9d00) drop-shadow(0 0 22px #ff5a00);
   pointer-events: none;
   animation: crest-hum 9s step-end infinite;
@@ -1575,10 +1578,10 @@ body.page {
 
 @keyframes crest-hum {
   0%, 71%, 73%, 100% {
-    opacity: 0.3;
+    opacity: var(--crest-glow);
   }
   72% {
-    opacity: 0.1;
+    opacity: calc(var(--crest-glow) / 3);
   }
 }
 
@@ -1604,7 +1607,7 @@ body.page {
   #crest {
     background-position: 27% center;
     background-size: min(82vh, 44vw);
-    opacity: 0.55;
+    --crest-glow: 0.55;
   }
 
   #menu,

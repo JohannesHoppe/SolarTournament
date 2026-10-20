@@ -1,7 +1,8 @@
 import type { Spoken } from './music/band';
 import { renderTrack, trackSeconds } from './music/preview';
 import { Radio } from './music/radio';
-import { createSong, titleFor, type SectionKind, type Song } from './music/songs';
+import { createSong, ROUND_SECONDS, titleFor, type SectionKind, type Song } from './music/songs';
+import { showTransmission } from './music/transmission';
 
 /**
  * Radio 2584's own page: enter a title, and the track it grows plays again or downloads as a
@@ -9,7 +10,6 @@ import { createSong, titleFor, type SectionKind, type Song } from './music/songs
  */
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-const ROUND_SECONDS = 5 * 60;
 
 const input = $<HTMLInputElement>('title');
 let song: Song | null = null;
@@ -18,7 +18,6 @@ let radio: Radio | null = null;
 let playingSince: number | null = null;
 /** Play was pressed and the band is still loading. */
 let starting = false;
-let transmissionTimer = 0;
 
 const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 /** Capitalizes each word; words start after a space, so ß or ö inside a word stay as they are. */
@@ -78,19 +77,7 @@ function stop() {
 }
 
 function subtitle(spoken: Spoken, delay: number) {
-  const speaker = spoken.line.startsWith('radio') ? 'Radio 2584' : spoken.language === 'de' ? 'Der Präsident' : 'The Orange President';
-  const text = spoken.line.startsWith('radio') && song
-    ? `${spoken.language === 'de' ? 'Es läuft' : 'Now playing'}: ${song.title}`
-    : spoken.line.split(/(?<=[.?!])\s+/).map((s) => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
-  window.setTimeout(() => {
-    const box = $('transmission');
-    box.className = 'regime';
-    $('transmission-speaker').textContent = speaker;
-    $('transmission-text').textContent = /[.?!]$/.test(text) ? text : text + '.';
-    box.hidden = false;
-    clearTimeout(transmissionTimer);
-    transmissionTimer = window.setTimeout(() => (box.hidden = true), spoken.duration * 1000 + 1800);
-  }, Math.max(0, delay));
+  showTransmission(spoken, delay, song?.title ?? null);
 }
 
 /** Seconds into the track; zero while the band is still loading. */

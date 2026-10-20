@@ -21,6 +21,7 @@ const REAR_CONE = 0.87;
 const REAR_CONE_COS = Math.cos(REAR_CONE);
 /** Damage a beam into the flanks deals to the maneuvering thrusters (0..1), on top of the armor. */
 const THRUSTER_HIT = 0.1;
+/** Holes a hull keeps at most (four hits from behind); the oldest has vented long since and goes first. */
 const MAX_HOLES = 8;
 /** Venting from a hole fades with this time constant (s): the compartment runs out of air. */
 const VENT_TIME = 2.5;
@@ -52,6 +53,8 @@ const FLAME_RETRACT = 16;
 const GLOW_MAX_SCALE = 3;
 /** Brightness of the drive glow at idle, as a share of full thrust. */
 const GLOW_IDLE = 0.25;
+/** The drive light sits this far behind the ship's center (units, 20 m), where the exhaust glows. */
+const ENGINE_LIGHT_OFFSET = 400;
 
 export type Zone = 'reactor' | 'drive' | 'thrusters' | 'armor';
 export type DamageStatus = 'protected' | 'hit' | 'destroyed';
@@ -144,6 +147,10 @@ export class Ship {
   thrusters = 1;
   heat = 0;
   overheated = false;
+  /** Game time until which the main drive cools down after an overdrive. */
+  private driveOfflineUntil = 0;
+  /** Shots fired, so the muzzles alternate per ship. */
+  private shots = 0;
   /** Set by the game: an asteroid blocks the sun. */
   inShadow = false;
   alive = true;
@@ -230,6 +237,7 @@ export class Ship {
     this.holes.length = 0;
     this.heat = 0;
     this.overheated = false;
+    this.driveOfflineUntil = 0;
     this.alive = true;
     this.outsideSince = null;
     this.root.visible = true;
@@ -296,14 +304,21 @@ export class Ship {
    * without thrust flies straight on), blended in smoothly so corrections do not jump.
    */
   updateRemote(dt: number, now: number) {
-    if (!this.alive) return;
+    if (!this.alive) {
+      if (this.engineLight) this.engineLight.intensity = 0;
+      return;
+    }
     const r = this.remote;
     const age = Math.min(now - r.at, 1);
     local.copy(r.position).addScaledVector(r.velocity, age);
     const blend = 1 - Math.exp(-12 * dt);
+    const spin = r.spin.length();
+    // the shown ship moves and turns on as predicted first, and the blend only takes out the
+    // correction; so it is drawn where the prediction says, not a stretch of travel behind
+    this.flight.position.addScaledVector(r.velocity, dt);
+    if (spin > 1e-6) this.flight.orientation.multiply(spinStep.setFromAxisAngle(offset.copy(r.spin).divideScalar(spin), spin * dt));
     if (this.flight.position.distanceToSquared(local) > 4000 * 4000) this.flight.position.copy(local);
     else this.flight.position.lerp(local, blend);
-    const spin = r.spin.length();
     inverse.copy(r.orientation);
     if (spin > 1e-6) inverse.multiply(spinStep.setFromAxisAngle(offset.copy(r.spin).divideScalar(spin), spin * age));
     this.flight.orientation.slerp(inverse, blend);
@@ -314,9 +329,12 @@ export class Ship {
 
   /** Advances flight and laser; returns true when the ship fires this frame. */
   update(dt: number, now: number, controls: Controls, gravity: THREE.Vector3): boolean {
-    if (!this.alive) return false;
+    if (!this.alive) {
+      if (this.engineLight) this.engineLight.intensity = 0;
+      return false;
+    }
     this.previous.copy(this.flight.position);
-    this.flight.driveFactor = this.drive;
+    this.flight.driveFactor = this.driveOffline(now) ? 0 : this.drive;
     this.flight.thrusterFactor = 0.25 + 0.75 * this.thrusters;
     this.vent(now);
     this.flight.update(dt, controls, gravity, this.ventForce, this.ventSpin);
@@ -362,12 +380,11 @@ export class Ship {
   laserHit(origin: THREE.Vector3, direction: THREE.Vector3, now: number): { status: DamageStatus; zone: Zone } {
     if (!this.alive || now < this.protectedUntil) return { status: 'protected', zone: 'armor' };
     if (!this.tailToward(direction)) {
-      // the armor takes it: a scorch mark and a few points, no hole; a beam into the flanks
-      // also shakes the maneuvering thrusters
+      // the armor takes it: a scorch mark and a few points, no hole; a beam into the flanks,
+      // more than 45° off the ship's axis, also shakes the maneuvering thrusters
       inverse.copy(this.flight.orientation).invert();
-      offset.subVectors(this.flight.position, origin);
-      local.copy(origin).addScaledVector(direction, offset.dot(direction)).sub(this.flight.position).applyQuaternion(inverse).divideScalar(this.radius);
-      const flank = Math.abs(local.x) > 0.4 || Math.abs(local.y) > 0.35;
+      local.copy(direction).applyQuaternion(inverse);
+      const flank = Math.hypot(local.x, local.y) > Math.abs(local.z);
       if (flank) this.thrusters = Math.max(0, this.thrusters - THRUSTER_HIT);
       return { status: this.structural(ARMOR_DAMAGE, now), zone: flank ? 'thrusters' : 'armor' };
     }
@@ -402,10 +419,18 @@ export class Ship {
     return direction.dot(this.flight.forward(offset)) / direction.length() > REAR_CONE_COS;
   }
 
-  /** The overdrive dumps the reactor's heat into the ship: the laser locks until it has cooled down. */
-  overheat() {
-    this.heat = MAX_HEAT;
-    this.overheated = true;
+  /**
+   * The overdrive leaves the main drive glowing: it gives no thrust until `until` (game time).
+   * The maneuvering thrusters and the laser run on their own, so the ship still turns,
+   * sidesteps and fires.
+   */
+  overheatDrive(until: number) {
+    this.driveOfflineUntil = until;
+  }
+
+  /** The main drive is cooling down after an overdrive (see overheatDrive). */
+  driveOffline(now: number) {
+    return now < this.driveOfflineUntil;
   }
 
   /** Hull damage, e.g. from a collision. */
@@ -432,9 +457,9 @@ export class Ship {
     return target.copy(point).applyQuaternion(this.flight.orientation).add(this.flight.position);
   }
 
-  /** Muzzle position in world space: alternating between the left and right side of the nose. */
-  muzzle(shotIndex: number, target = new THREE.Vector3()) {
-    const side = shotIndex % 2 === 0 ? -1 : 1;
+  /** Muzzle position of the next shot in world space: alternating between the left and right side of the nose. */
+  muzzle(target = new THREE.Vector3()) {
+    const side = this.shots++ % 2 === 0 ? -1 : 1;
     return this.toWorld(local.set(side * this.radius * 0.35, -this.radius * 0.1, -this.radius * 0.6), target);
   }
 
@@ -446,6 +471,8 @@ export class Ship {
   syncTransform() {
     this.root.position.copy(this.flight.position);
     this.root.quaternion.copy(this.flight.orientation);
+    // the drive light hangs behind the nozzle, though it is not a child of the ship (see Game.lendLight)
+    if (this.engineLight) this.toWorld(local.set(0, 0, ENGINE_LIGHT_OFFSET), this.engineLight.position);
   }
 
   private animateEngine(dt: number) {

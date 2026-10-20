@@ -4,6 +4,8 @@
  * lives in the link's fragment (after the #), so it never reaches a server, and whoever follows
  * the link knows the room's rules even when nobody else is in it: a room can be played forever.
  */
+import { cleanName } from './validate';
+
 export interface Room {
   code: string;
   name: string;
@@ -38,7 +40,7 @@ export function newRoom(name: string, isPublic: boolean, bots: boolean): Room {
 
 /** A room name as the game shows it: without control characters, at most ROOM_NAME_MAX characters. */
 export function roomName(x: unknown): string {
-  return typeof x === 'string' ? x.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, ROOM_NAME_MAX) : '';
+  return cleanName(x, ROOM_NAME_MAX);
 }
 
 /** A room code as it arrives in a link or the lobby, or null when it is not one. */

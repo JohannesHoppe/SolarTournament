@@ -1,21 +1,28 @@
 import * as THREE from 'three';
 import { colliderBox } from '../assets';
-import { Randomizer } from '../random';
+import { Randomizer, textSeed } from '../random';
 
+/** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
+/** Rocks of a fresh field: few and huge, so there is room to fly between them and cover behind them. */
 const ASTEROID_COUNT = 40;
+/** Scale of a field rock over its template: rocks of about 100 to 350 m mean radius, ten ships long and more. */
 const MIN_SCALE = 2.5;
 const MAX_SCALE = 7;
 /** Rocks are not full ellipsoids; the collision shape is slightly smaller than the bounding box. */
 const SHAPE_FILL = 0.9;
+/** How fast every rock turns about its own axis (rad/s, a turn in about 2.6 minutes): slow, but the tip of a long rock sweeps. */
 const SPIN_RATE = 0.04;
 /** Fragments are this much smaller than their parent. */
 const FRAGMENT_SCALE = 0.55;
+/** A rock breaks twice at most: rock, fragments, and their fragments, which are gone when they break. */
 const MAX_GENERATION = 2;
+/** Speed fragments fly apart with (units/s, 7.5 m/s, 60 % to 140 % of it), on top of the parent's drift. */
 const FRAGMENT_SPEED = 150;
 /** Surface gravity per unit of mean radius (1/s²): uniform density, so bigger rocks pull harder. */
 const GRAVITY_PER_RADIUS = 0.004;
 
+/** Points for breaking a rock, by generation: the big one is worth most, its fragments less. */
 export const ASTEROID_POINTS = [200, 120, 80];
 
 export interface Asteroid {
@@ -57,6 +64,8 @@ export type FieldState = {
   /** field time (s) */
   t: number;
   a: AsteroidState[];
+  /** every rock broken so far and the field time it broke, so its fragments start where they did */
+  x: { id: string; b: number }[];
 };
 
 interface Template {
@@ -65,12 +74,6 @@ interface Template {
   semiAxes: THREE.Vector3;
   /** Template scale, the object's own size factor before field scaling. */
   scale: number;
-}
-
-function hashSeed(text: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
-  return (hash >>> 0) % 2147483000 + 1;
 }
 
 const u = new THREE.Vector3();
@@ -91,6 +94,8 @@ export class AsteroidField {
   readonly asteroids = new Map<string, Asteroid>();
   /** Field time (s): runs with the game; online, the lead browser's field time is shared. */
   clock = 0;
+  /** Rocks broken so far, with the field time each broke (for snapshot). */
+  private readonly broken = new Map<string, number>();
   private readonly templates: Template[];
 
   constructor(objects: THREE.Object3D[]) {
@@ -129,6 +134,7 @@ export class AsteroidField {
   clear() {
     for (const asteroid of this.asteroids.values()) this.group.remove(asteroid.object);
     this.asteroids.clear();
+    this.broken.clear();
   }
 
   private boundingRadius(type: number, scale: number) {
@@ -202,9 +208,10 @@ export class AsteroidField {
     if (!asteroid) return undefined;
     this.group.remove(asteroid.object);
     this.asteroids.delete(id);
+    this.broken.set(id, at);
 
     if (asteroid.generation < MAX_GENERATION) {
-      const r = new Randomizer(hashSeed(id));
+      const r = new Randomizer(textSeed(id));
       const count = 2 + (r.nextInt() % 2);
       const scale = asteroid.object.userData.scale * FRAGMENT_SCALE;
       const origin = asteroid.basePosition.clone().addScaledVector(asteroid.velocity, at - asteroid.born);
@@ -224,29 +231,37 @@ export class AsteroidField {
     return {
       t: +this.clock.toFixed(3),
       a: [...this.asteroids.values()].map((a) => ({ id: a.id, hp: a.hitPoints, b: +a.born.toFixed(3) })),
+      x: [...this.broken].map(([id, at]) => ({ id, b: +at.toFixed(3) })),
     };
   }
 
   /**
-   * Rebuilds the field from a snapshot: breaks the parents of every listed fragment at the
-   * fragment's birth (the fragments are deterministic), removes rocks that are gone, takes
-   * over the hits and the field time.
+   * Rebuilds the field from a snapshot: breaks every broken rock at the field time it broke,
+   * parents first (the fragments are deterministic), removes rocks that are gone, takes over
+   * the hits and the field time. A fragment's birth is its parent's break time as well.
    */
   restore(state: FieldState) {
     const listed = new Map(state.a.map((s) => [s.id, s]));
-    const ensure = (id: string, at: number) => {
+    const breaks = new Map(state.x.map((s) => [s.id, s.b]));
+    for (const rock of state.a) {
+      const dot = rock.id.lastIndexOf('.');
+      if (dot > 0 && !breaks.has(rock.id.slice(0, dot))) breaks.set(rock.id.slice(0, dot), rock.b);
+    }
+    const ensure = (id: string) => {
       if (this.asteroids.has(id)) return;
       const dot = id.lastIndexOf('.');
       if (dot < 0) return;
       const parent = id.slice(0, dot);
-      ensure(parent, listed.get(parent)?.b ?? at);
-      this.destroy(parent, at);
+      ensure(parent);
+      const at = breaks.get(parent);
+      if (at !== undefined) this.destroy(parent, at);
     };
-    for (const rock of state.a) ensure(rock.id, rock.b);
+    for (const rock of state.a) ensure(rock.id);
     for (const id of [...this.asteroids.keys()]) {
       if (listed.has(id)) continue;
       this.group.remove(this.asteroids.get(id)!.object);
       this.asteroids.delete(id);
+      this.broken.set(id, breaks.get(id) ?? state.t);
     }
     for (const rock of state.a) {
       const asteroid = this.asteroids.get(rock.id);

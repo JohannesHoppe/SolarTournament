@@ -26,7 +26,7 @@ export const TITLE_FIRST_DE = [
   'rakete', 'reaktor', 'klon', 'rotor', 'radar', 'rekord', 'roboter', 'raum', 'nacht', 'sonnen', 'strom', 'turnier',
 ];
 export const TITLE_SECOND_DE = [
-  'fabrik', 'strasse', 'rennen', 'rausch', 'zentrale', 'maschine', 'propaganda', 'reflex', 'signal', 'motor', 'ring', 'reise',
+  'fabrik', 'straße', 'rennen', 'rausch', 'zentrale', 'maschine', 'propaganda', 'reflex', 'signal', 'motor', 'ring', 'reise',
 ];
 
 export const STATION_EN = 'radio twenty five eighty four';
@@ -173,7 +173,11 @@ export const ANNOUNCER_ROCK = [
 export const ANNOUNCER_OPEN = ['radio twenty five eighty four. live from the arena', 'this is your announcer. the games continue'];
 
 /** Bot callsigns the announcer can say; the clones of human Hosts become "pilot". */
-export const ANNOUNCER_NAMES = ['ingmar', 'nova', 'kessler', 'vega', 'orion', 'sputnik', 'halley', 'laika', 'pilot'];
+/** The bots' callsigns; the announcer has a rendered clip of each. */
+export const BOT_NAMES = ['Ingmar', 'Nova', 'Kessler', 'Vega', 'Orion', 'Sputnik', 'Halley', 'Laika'];
+
+/** The names the announcer can say: the bots', and "pilot" for every Host. */
+export const ANNOUNCER_NAMES = [...BOT_NAMES.map((name) => name.toLowerCase()), 'pilot'];
 
 /**
  * The flight school, said by the flight computer and shown on screen with the same words:

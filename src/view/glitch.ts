@@ -143,7 +143,9 @@ export class Glitch {
     }
     this.strength = strength;
     this.until = Math.max(this.until, now + duration);
-    this.nextFrame = 0;
+    // a new glitch shows at once, but with reduced motion the picture still changes no more
+    // than CALM_FPS times a second, however many hits come in
+    if (!reducedMotion.matches) this.nextFrame = 0;
   }
 
   update() {

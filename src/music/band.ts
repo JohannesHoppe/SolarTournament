@@ -123,6 +123,8 @@ export class Band {
   /** Until when the announcer's static is scheduled (s): its noise source only takes start times in order. */
   private staticUntil = 0;
   private voice: Voice | null = null;
+  /** Until when a voice line (the regime's or the announcer's) is scheduled (audio time, s). */
+  voiceUntil = 0;
 
   private flavor = '';
   /** Highpass of the bass; a breakdown lifts it, so the bass goes on without its low end. */
@@ -342,6 +344,10 @@ export class Band {
 
   /** Sets the sound of a track's flavor. */
   prepare(song: Song) {
+    // the echoes sit on the track's own grid: a dotted eighth, and a sixteenth for the bass
+    const beat = 60 / song.bpm;
+    this.echo.delayTime.value = beat * 0.75;
+    this.bassEcho.delayTime.value = beat / 4;
     // every track has its own kick and rumble
     this.kickShaper.curve = KICK_CURVES[song.kick.shape];
     this.kickTone.frequency.value = song.kick.tone;
@@ -577,6 +583,7 @@ export class Band {
     this.musicLevel.gain.setValueAtTime(0.4, position);
     this.musicLevel.gain.linearRampToValueAtTime(1, position + DUCK_RAMP);
     this.onSpeak({ line: line.text, language: line.language, time: t, duration: position - t });
+    this.voiceUntil = Math.max(this.voiceUntil, position);
     return position;
   }
 
@@ -595,6 +602,7 @@ export class Band {
     this.musicLevel.gain.setValueAtTime(0.35, position);
     this.musicLevel.gain.linearRampToValueAtTime(1, position + 0.4);
     this.onSpeak({ line: text, language: 'mod', time: t, duration: position - t });
+    this.voiceUntil = Math.max(this.voiceUntil, position);
   }
 
   /**

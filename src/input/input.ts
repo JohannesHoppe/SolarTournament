@@ -57,6 +57,8 @@ export class Input {
   private steering = false;
   private handler: ActionHandler = () => {};
   private readonly padPressed = new Set<number>();
+  /** A held since a screen changed (see holdFire). */
+  private fireHeld = false;
   private readonly touch = new TouchControls(() => this.handler('pause'), () => this.handler('autopilot'), () => this.handler('overdrive'));
 
   constructor(private readonly canvas: HTMLElement) {
@@ -146,13 +148,22 @@ export class Input {
     out.strafeX = clamp(axis('KeyD', 'KeyA') + stick(2) + touch.push.x);
     out.strafeY = clamp(axis('KeyR', 'KeyF') - stick(3) + touch.push.y);
     out.strafeZ = -button(PAD.x);
-    out.fire = key('Space') || this.mouseFire || touch.fire || button(PAD.lt) > 0.5 || button(PAD.a) > 0.5;
+    out.fire = key('Space') || this.mouseFire || touch.fire || button(PAD.lt) > 0.5 || (button(PAD.a) > 0.5 && !this.fireHeld);
     return out;
+  }
+
+  /**
+   * A screen changed: the A button that confirmed it does not also fire the laser, until it
+   * is let go. A is both confirm and a fire button.
+   */
+  holdFire() {
+    this.fireHeld = true;
   }
 
   /** Polls gamepad buttons once per frame and turns new presses into actions. */
   poll() {
     const pad = this.gamepad();
+    if (!pad || !((pad.buttons[PAD.a]?.value ?? 0) > 0.5)) this.fireHeld = false;
     if (!pad) return;
     for (const [index, action] of PAD_ACTIONS) {
       const down = (pad.buttons[index]?.value ?? 0) > 0.5;
@@ -175,10 +186,19 @@ export class Input {
   private onKey(e: KeyboardEvent, down: boolean) {
     // releasing a key always counts, wherever the focus is, so no key stays held
     if (!down) this.keys.delete(e.code);
+    // the Enter that commits an input method's composition only ends the composition
+    if (e.isComposing || e.keyCode === 229) return;
     if (e.target instanceof HTMLInputElement) {
-      if (down && e.code === 'Enter' && !e.repeat) this.handler('confirm');
+      // in a text field only Enter, Escape and F1 belong to the game; the rest is typing
+      if (e.code === 'F1') e.preventDefault();
+      if (!down || e.repeat) return;
+      if (e.code === 'Enter') this.handler('confirm');
+      if (e.code === 'Escape') this.handler('back');
+      if (e.code === 'F1') this.handler('help');
       return;
     }
+    // a button the Host reached with Tab is pressed by Enter and Space as usual
+    if (!this.steering && e.target instanceof HTMLButtonElement && e.target.matches(':focus-visible') && (e.code === 'Enter' || e.code === 'Space')) return;
     if (down) this.keys.add(e.code);
     // keys the game uses never also press the button that happens to have the focus
     if (e.code === 'Enter' || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();

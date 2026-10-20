@@ -1,11 +1,14 @@
 import * as THREE from 'three';
 import { raySphere, type AsteroidField } from './asteroids';
-import { Randomizer } from '../random';
+import { Randomizer, textSeed } from '../random';
 
+/** Pieces a destroyed ship breaks into. */
 const PIECES_PER_SHIP = 5;
+/** Pieces in the arena at most (twelve ships' worth); the oldest go first. */
 const MAX_WRECKS = 60;
 /** Glowing edges of fresh wreckage cool down with this time constant (s). */
 const GLOW_TIME = 4;
+/** Speed the pieces fly apart with (units/s, 20 m/s), on top of the ship's own. */
 const SPREAD_SPEED = 400;
 
 export interface Wreck {
@@ -15,12 +18,6 @@ export interface Wreck {
   spinRate: number;
   radius: number;
   bornAt: number;
-}
-
-function hashSeed(text: string): number {
-  let hash = 2166136261;
-  for (let i = 0; i < text.length; i++) hash = Math.imul(hash ^ text.charCodeAt(i), 16777619);
-  return (hash >>> 0) % 2147483000 + 1;
 }
 
 /** A jagged chunk of hull plating: an icosahedron with displaced corners. */
@@ -56,7 +53,7 @@ export class Wrecks {
   readonly list: Wreck[] = [];
 
   spawn(id: string, deaths: number, position: THREE.Vector3, velocity: THREE.Vector3, shipRadius: number, now: number) {
-    const r = new Randomizer(hashSeed(`${id}#${deaths}`));
+    const r = new Randomizer(textSeed(`${id}#${deaths}`));
     for (let i = 0; i < PIECES_PER_SHIP; i++) {
       const radius = shipRadius * r.range(0.1, 0.3);
       const mesh = new THREE.Mesh(chunkGeometry(r), new THREE.MeshStandardMaterial({
