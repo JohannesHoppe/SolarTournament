@@ -24,6 +24,9 @@
   "include": [
     "src",
     "tools",
-    "vite.config.ts"
+    "e2e",
+    "vite.config.ts",
+    "vitest.config.ts",
+    "playwright.config.ts"
   ]
 }

@@ -11,7 +11,9 @@ What flies, collides, burns and breaks behaves the way it would out there, as lo
 ```
 npm install
 npm run dev        # http://127.0.0.1:5173/
-npm run build      # static site in dist/
+npm test           # unit tests (Vitest)
+npm run e2e        # browser tests (Playwright; first once: npm run e2e:install)
+npm run build      # static site in dist/ (runs the unit tests first)
 ```
 
 ## Deploy

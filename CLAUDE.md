@@ -47,8 +47,12 @@ npm install
 npm run dev         # dev server on http://127.0.0.1:5173/
 npm run typecheck
 npm run dupes       # duplicated code (jscpd) and duplicated style rules (tools/dupes/css.ts)
-npm run build       # static site in dist/ (renders the voice, checks types and duplicates first)
+npm test            # unit tests of the deterministic core (Vitest, in Node, under a second)
+npm run e2e         # browser tests (Playwright: solo start, two tabs online); first once: npm run e2e:install
+npm run build       # static site in dist/ (renders the voice, checks types, duplicates and unit tests first)
 ```
+
+**Tests.** The unit tests (`src/**/*.test.ts`, helpers in `src/test/`) cover what every browser must compute alike and what guards the game: songs (same title, same notes, a jump lands on the same step, every note on the scale), the arena of a round, the field (same layout, snapshot and restore, orbits, box and well collision), the race course and its gates, probes, wreckage, the checks of messages from other browsers, room links. Every change to these rules adds or updates a test; `npm run build` fails on a red one. The browser tests (`e2e/`, against the dev server) start a solo round and the flight school without errors and let two tabs of one tournament see the same arena, round, rocks and ships and a torpedo of one hit the other. Run them before pushing changes to the network or the round flow. How the game feels and sounds is tested by playing.
 
 Hosting is a classic Cloudflare Pages project (`wrangler.toml`), never Workers, built by Cloudflare from every push (Git integration): `main` is the test stage (https://test.solartournament.games), `stage_prod` is production (https://solartournament.games). Every page sends visitors of the raw Pages addresses (`solartournament.pages.dev`, `main.solartournament.pages.dev`) on to these domains with a small inline script, keeping path and room code; the plugin `pageShell` in `vite.config.ts` writes it into every page (also into the static `public/404.html` in `dist/`), together with what else the pages share (icon, stylesheet, the seal behind the station pages, the head of the legal pages). Work happens on `main`. As long as the game has no real players yet, every push goes to both branches at once (`git push origin main main:stage_prod`); once it has players, `stage_prod` only moves when Johannes asks for it.
 

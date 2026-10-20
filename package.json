@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "dev": "npm run voice && vite",
-    "build": "npm run voice && tsc --noEmit && npm run dupes && vite build",
+    "build": "npm run voice && tsc --noEmit && npm run dupes && npm test && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install chromium",
     "dupes": "jscpd && node tools/dupes/css.ts",
     "voice": "node tools/voice/render.ts",
     "crest": "node tools/crest/render.ts"
@@ -21,6 +24,7 @@
   },
   "devDependencies": {
     "@echogarden/espeak-ng-emscripten": "^0.3.5",
+    "@playwright/test": "^1.64.1",
     "@types/node": "^26.6.5",
     "@types/three": "^0.186.0",
     "ffmpeg-static": "^5.3.0",
@@ -29,6 +33,7 @@
     "opentype.js": "^2.0.0",
     "postcss": "^8.5.31",
     "typescript": "^7.0.2",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "vitest": "^5.0.5"
   }
 }

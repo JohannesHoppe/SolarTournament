@@ -2,3 +2,5 @@ node_modules
 dist
 .wrangler
 public/assets/voice/
+test-results
+playwright-report

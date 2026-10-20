@@ -1,5 +1,5 @@
 {
-  "path": ["src", "tools", "index.html", "radio.html", "impressum.html", "datenschutz.html", "public/404.html", "vite.config.ts"],
+  "path": ["src", "tools", "e2e", "index.html", "radio.html", "impressum.html", "datenschutz.html", "public/404.html", "vite.config.ts"],
   "minLines": 5,
   "minTokens": 50,
   "maxLines": 100000,
