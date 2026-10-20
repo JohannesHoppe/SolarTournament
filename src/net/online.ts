@@ -45,6 +45,8 @@ export interface OnlineGame {
   applyTorpedoHit(target: Ship, shooter: Ship | null): void;
   /** A ship of another browser took a probe. */
   remoteProbe(id: string, ship: Ship | null): void;
+  /** A ship of another browser set off its nova core: this browser's ships near it are gone. */
+  novaBlast(holder: Ship, position: THREE.Vector3): void;
   /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
   leadRound(): RoundState;
@@ -104,6 +106,10 @@ export class Online {
     };
     session.onTorpedoGone = (id, p) => game.remoteTorpedoGone(id, from.fromArray(p));
     session.onProbe = (id, ship) => game.remoteProbe(id, this.find(ship));
+    session.onNova = (ship, p) => {
+      const holder = this.find(ship);
+      if (holder) game.novaBlast(holder, from.fromArray(p));
+    };
     session.onTorpedoHit = (target, shooter) => {
       const ship = this.find(target);
       // only ships this browser runs take damage here
@@ -209,6 +215,10 @@ export class Online {
 
   sendTorpedo(id: string, shooter: Ship, target: Ship | null, position: THREE.Vector3, velocity: THREE.Vector3) {
     this.session.sendTorpedo(id, shooter.id, target?.id ?? null, round(position), round(velocity));
+  }
+
+  sendNova(ship: Ship, position: THREE.Vector3) {
+    this.session.sendNova(ship.id, round(position));
   }
 
   sendProbe(id: string, ship: Ship) {

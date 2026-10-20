@@ -27,7 +27,7 @@ describe('messages from other browsers', () => {
     expect(shipState({ ...ship, h: Number.NaN })).toBeNull();
     expect(shipState({ ...ship, p: [1, 2, Infinity] })).toBeNull();
     expect(shipState({ ...ship, q: [0, 0, 0, 0] })).toBeNull();
-    expect(shipState({ ...ship, ...slow, it: 9 })).toBeNull();
+    expect(shipState({ ...ship, ...slow, it: 16 })).toBeNull();
   });
 
   it('drop a field snapshot without its arena', () => {

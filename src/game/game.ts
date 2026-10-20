@@ -9,7 +9,7 @@ import { Sound } from '../sound/audio';
 import { Bot, BOT_NAMES } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
-import { Hud, METERS_PER_UNIT } from '../view/hud';
+import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
 import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_KILL, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_ROCK, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
@@ -36,7 +36,7 @@ import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Torpedo } from './torpedoes';
-import { Probes, ITEM_NAMES, type Probe, type ItemKind } from './items';
+import { Probes, ITEM_NAMES, ITEM_HINTS, type Probe, type ItemKind } from './items';
 import type { FieldState } from '../world/asteroids';
 import { Course, GATE_POINTS, GATE_RADIUS, GATES, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
 import { markedName } from '../view/marks';
@@ -67,6 +67,15 @@ const RACE_KILL_POINTS = 200;
 /** Points for shooting down a torpedo, and how often a bot with a lock fires one (per second). */
 const TORPEDO_DOWN_POINTS = 50;
 const BOT_TORPEDO_RATE = 0.08;
+/**
+ * A nova core destroys every other ship within NOVA_RADIUS (units, 800 m) of its holder; its
+ * shell runs out there in NOVA_EXPANSION seconds. A bot that holds one only sets it off with
+ * at least NOVA_CROWD enemies inside, and bots flee a nova holder within NOVA_FLEE radii.
+ */
+const NOVA_RADIUS = 16000;
+const NOVA_EXPANSION = 0.8;
+const NOVA_CROWD = 2;
+const NOVA_FLEE = 1.5;
 /** An idle bot goes for a probe within this distance (units, 1.5 km). */
 const PROBE_LURE = 30000;
 /** Plating (an item) turns this many hits into the drive, or one torpedo. */
@@ -309,6 +318,9 @@ export class Game implements OnlineGame {
   private readonly replayEffects: Effects;
   private readonly killcam: KillCam;
   private readonly torpedoes: Torpedoes;
+  /** The shells of novas going off (see novaBlast). */
+  private readonly shockwaves: { mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; born: number }[] = [];
+  private readonly shockwaveGeometry = new THREE.SphereGeometry(1, 48, 24);
   /** The item probes of the round (see game/items). */
   private readonly probes = new Probes();
   /** The last picture was the kill cam's. */
@@ -424,6 +436,8 @@ export class Game implements OnlineGame {
   ];
   private readonly torpedoMarks: RadarMark[] = Array.from({ length: 16 }, () => ({ position: new THREE.Vector3(), label: 'Torpedo', color: '#ff3b30' }));
   private readonly probeMarks: RadarMark[] = Array.from({ length: 12 }, () => ({ position: new THREE.Vector3(), label: '', color: '#3dff9a' }));
+  /** The ship holding a nova core, in white, so everyone sees where not to be. */
+  private readonly novaMark: RadarMark = { position: new THREE.Vector3(), label: 'NOVA', color: '#ffffff' };
   /** The marks the radar shows this frame (see radarMarks). */
   private readonly shownMarks: RadarMark[] = [];
   /** How the own clone died last, for the sponsor break. */
@@ -447,6 +461,9 @@ export class Game implements OnlineGame {
   private strain = 0;
   private nextHeartbeat = 0;
   private nextWarningBeep = 0;
+  /** The nova holder the own pilot was last warned about, and when the siren sounds next. */
+  private novaWarned: Ship | null = null;
+  private nextNovaSiren = 0;
   private nextLockBeep = 0;
   /** Speed of game time; 0 freezes the simulation while rendering continues. */
   timeScale = 1;
@@ -1775,10 +1792,13 @@ export class Game implements OnlineGame {
         // a racing bot flies the course until it has finished, then it only fights
         bot.waypoint = this.course && ship.finish < 0 ? this.course.points[ship.gates % GATES] : null;
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE)?.position ?? null;
+        bot.flee = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? null;
       }
       const thought = bot ? bot.think(now, this.ships, this.field, this.bots) : null;
       // the flight school's unarmed sparring bot only flies
       if (thought && bot === this.sparring?.bot && !this.sparring.armed) thought.fire = false;
+      // a bot with a nova core saves it for a crowd
+      if (thought?.fire && ship.nova && this.crowdAround(ship, NOVA_RADIUS * 0.8) < NOVA_CROWD) thought.fire = false;
       // a bot with its target locked sends a torpedo now and then (never the flight school's)
       if (bot && bot !== this.sparring?.bot && bot.target && ship.torpedoes > 0 && Math.random() < dt * BOT_TORPEDO_RATE && this.torpedoTarget(ship) === bot.target) this.fireTorpedo(ship);
       const controls = ship === me ? myControls : (thought ?? IDLE);
@@ -1820,7 +1840,7 @@ export class Game implements OnlineGame {
     this.hud.setCenter(this.camera, subject);
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
-    this.hud.setArsenal(me.torpedoes, me.twin, me.plating);
+    this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
     const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course) : null;
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
     this.hud.showCrosshair(me.alive);
@@ -1878,6 +1898,11 @@ export class Game implements OnlineGame {
       mark.position.copy(probe.position);
       mark.label = ITEM_NAMES[probe.kind];
       list.push(mark);
+    }
+    const holder = this.ships.find((ship) => ship.nova && ship.alive && ship !== subject);
+    if (holder) {
+      this.novaMark.position.copy(holder.flight.position);
+      list.push(this.novaMark);
     }
     return list;
   }
@@ -2271,6 +2296,11 @@ export class Game implements OnlineGame {
    * all of them drift, and a ship this browser runs that flies through one takes it.
    */
   private items(dt: number, now: number) {
+    this.updateShockwaves();
+    for (const ship of this.ships) ship.pulse(now);
+    // the world looks different while the own clone holds a nova core
+    const holding = !!this.me?.nova && this.me.alive;
+    if (document.body.classList.contains('nova-held') !== holding) document.body.classList.toggle('nova-held', holding);
     if (this.school) return;
     const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
     if (this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.raceTime(), this.field);
@@ -2306,9 +2336,13 @@ export class Game implements OnlineGame {
       case 'repair':
         ship.repair();
         break;
+      case 'nova':
+        ship.nova = true;
+        break;
     }
     if (ship.isLocal) {
-      this.hud.flashMessage(this.time, ITEM_NAMES[kind], 2);
+      this.hud.flashMessage(this.time, `${ITEM_NAMES[kind]} · ${ITEM_HINTS[kind]}`, kind === 'nova' ? 4 : 2.5);
+      if (kind === 'nova') this.speaker.say(COMPUTER.nova, 'urgent');
       this.sound.beep(988, 0.07, 0.15);
       this.sound.beep(1319, 0.07, 0.15, 0.07);
       this.sound.beep(1976, 0.12, 0.15, 0.14);
@@ -2325,6 +2359,105 @@ export class Game implements OnlineGame {
 
   restoreProbes(taken: string[]) {
     for (const id of taken) this.probes.takeId(id);
+  }
+
+  /**
+   * A nova core goes off: a shockwave runs out to NOVA_RADIUS, and every ship this browser
+   * runs inside it is gone, whatever protects it (each browser destroys its own and says so,
+   * as with every death), together with torpedoes and wreckage there. The holder stays.
+   */
+  novaBlast(holder: Ship, position: THREE.Vector3) {
+    const now = this.time;
+    this.effects.explosion(position, holder.radius * 12, holder.flight.velocity);
+    this.shockwaves.push(this.shockwave(position));
+    for (const ship of [...this.ships]) {
+      if (ship === holder || ship.owner !== null || !ship.alive || ship.flight.position.distanceTo(position) > NOVA_RADIUS) continue;
+      ship.protectedUntil = Math.min(ship.protectedUntil, now);
+      if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, holder);
+    }
+    for (const torpedo of [...this.torpedoes.list]) if (torpedo.position.distanceTo(position) < NOVA_RADIUS) this.blowUp(torpedo);
+    for (const wreck of [...this.wrecks.list]) if (wreck.mesh.position.distanceTo(position) < NOVA_RADIUS) this.shatterWreck(wreck);
+    // whoever sees it is blinded for a moment, and hears its debris from far
+    const seen = this.camera.position.distanceTo(position);
+    if (seen < NOVA_RADIUS * 3) {
+      this.linkHit(Math.max(0.4, 1 - seen / (NOVA_RADIUS * 3)), 1);
+      this.kick = 2;
+      this.sound.play('explosion', { volume: 2, rate: 0.4 });
+      document.body.classList.remove('nova-flash');
+      void document.body.offsetWidth;
+      document.body.classList.add('nova-flash');
+    }
+    this.hud.flashMessage(now, holder === this.me ? 'NOVA' : `NOVA · ${holder.name}`, 2.5);
+  }
+
+  /**
+   * Panic in the own cockpit while another ship with a nova core is close: a two-tone siren,
+   * the warning, the tint of an alarm on the screen, and Nicole urging the pilot away, once
+   * each time a holder comes close.
+   */
+  private novaAlarm(me: Ship, warnings: string[], now: number) {
+    const holder = me.alive ? this.novaNear(me, NOVA_RADIUS * NOVA_FLEE) : null;
+    if (document.body.classList.contains('nova-alarm') !== !!holder) document.body.classList.toggle('nova-alarm', !!holder);
+    if (!holder) {
+      this.novaWarned = null;
+      return;
+    }
+    warnings.push(`NOVA CORE ACTIVATED · ${meters(holder.flight.position.distanceTo(me.flight.position))} · GET OUT`);
+    if (now >= this.nextNovaSiren) {
+      const high = Math.floor(now * 4) % 2 === 0;
+      this.sound.beep(high ? 1320 : 880, 0.2, 0.18);
+      this.nextNovaSiren = now + 0.25;
+    }
+    if (this.novaWarned !== holder) {
+      this.novaWarned = holder;
+      this.speaker.say(COMPUTER.novaNear, 'urgent');
+    }
+  }
+
+  /** How many other living ships are within `range` of a ship. */
+  private crowdAround(ship: Ship, range: number): number {
+    let count = 0;
+    for (const other of this.ships) if (other !== ship && other.alive && other !== this.drone && other.flight.position.distanceTo(ship.flight.position) < range) count++;
+    return count;
+  }
+
+  /** The nearest other ship within `range` that holds a nova core, if any. */
+  private novaNear(ship: Ship, range: number): Ship | null {
+    let best: Ship | null = null;
+    let distance = range;
+    for (const other of this.ships) {
+      if (other === ship || !other.alive || !other.nova) continue;
+      const d = other.flight.position.distanceTo(ship.flight.position);
+      if (d < distance) {
+        best = other;
+        distance = d;
+      }
+    }
+    return best;
+  }
+
+  /** The shell of a nova: a glowing sphere that runs out to NOVA_RADIUS and fades. */
+  private shockwave(position: THREE.Vector3) {
+    const mesh = new THREE.Mesh(this.shockwaveGeometry, new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.85, 0.6).multiplyScalar(2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
+    mesh.position.copy(position);
+    mesh.scale.setScalar(1);
+    this.scene.add(mesh);
+    return { mesh, born: this.time };
+  }
+
+  private updateShockwaves() {
+    for (let i = this.shockwaves.length - 1; i >= 0; i--) {
+      const { mesh, born } = this.shockwaves[i];
+      const t = (this.time - born) / NOVA_EXPANSION;
+      if (t >= 1) {
+        this.scene.remove(mesh);
+        mesh.material.dispose();
+        this.shockwaves.splice(i, 1);
+        continue;
+      }
+      mesh.scale.setScalar(NOVA_RADIUS * Math.sqrt(t));
+      mesh.material.opacity = 0.6 * (1 - t);
+    }
   }
 
   /** A beam went through a torpedo: it goes off where it is, on every browser. */
@@ -2514,6 +2647,14 @@ export class Game implements OnlineGame {
   private fireLaser(shooter: Ship) {
     // shooting ends the own spawn protection: nobody fires from behind it
     shooter.protectedUntil = Math.min(shooter.protectedUntil, this.time);
+    // with a nova core, the next shot is the nova
+    if (shooter.nova) {
+      shooter.nova = false;
+      const position = shooter.flight.position.clone();
+      this.online?.sendNova(shooter, position);
+      this.novaBlast(shooter, position);
+      return;
+    }
     const origin = shooter.nose(muzzle);
     const direction = shooter.flight.forward(forward);
     let asteroidHit = this.field.raycast(origin, direction, LASER_RANGE);
@@ -2661,9 +2802,11 @@ export class Game implements OnlineGame {
     const held: ItemKind[] = [];
     if (victim.twin) held.push('twin');
     if (victim.plating > 0) held.push('plating');
+    if (victim.nova) held.push('nova');
     if (held.length && !this.school) this.probes.drop(victim.id, victim.deaths, held, victim.flight.position, victim.flight.velocity, this.time);
     victim.twin = false;
     victim.plating = 0;
+    victim.nova = false;
     if (victim.isLocal) {
       this.sound.play('explosion', { volume: 1.6, rate: 0.6 });
       // the clone dies: its link breaks down, its radio fades out
@@ -2808,6 +2951,7 @@ export class Game implements OnlineGame {
     this.impactAhead = warnings.length > 0;
     this.lockWarning(now);
     if (me.alive && me.overheated) warnings.push('LASER OVERHEATED');
+    this.novaAlarm(me, warnings, now);
     // a torpedo homing on the own ship: shoot it down or dodge
     for (const torpedo of this.torpedoes.list) {
       if (!me.alive || torpedo.target !== me || torpedo.position.distanceTo(flight.position) > TORPEDO_WARNING) continue;

@@ -46,6 +46,6 @@ describe('probes', () => {
   });
 
   it('pack the items a clone holds into its state and back', () => {
-    for (const twin of [false, true]) for (const plating of [0, 1, 2]) expect(unpackItems(packItems(twin, plating))).toEqual({ twin, plating });
+    for (const twin of [false, true]) for (const plating of [0, 1, 2]) for (const nova of [false, true]) expect(unpackItems(packItems(twin, plating, nova))).toEqual({ twin, plating, nova });
   });
 });

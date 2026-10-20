@@ -40,6 +40,8 @@ const EXIT_HOLE = 1;
 /** Name, type, score, kills and deaths travel at least this often (s), even unchanged. */
 const SLOW_STATE_SECONDS = 1;
 
+/** A ship with a nova core pulses this often (Hz). */
+const NOVA_PULSE = 2;
 /** Freshly spawned ships cannot be damaged for this long (s), long enough to get the bearings; firing ends it early. */
 const SPAWN_PROTECTION = 5;
 
@@ -164,6 +166,9 @@ export class Ship {
   /** Items the clone holds (see game/items): a twin laser, and plating charges left. */
   twin = false;
   plating = 0;
+  /** The clone holds a nova core: it pulses for everyone to see (see pulse). */
+  nova = false;
+  private readonly aura: THREE.Sprite;
   /** Health of the main drive and of the maneuvering thrusters, 0..1. */
   drive = 1;
   thrusters = 1;
@@ -231,6 +236,18 @@ export class Ship {
     this.root.add(this.model);
     this.engine = this.findEngine(assets.textures.glow);
     this.root.name = 'ship:' + id;
+    this.aura = new THREE.Sprite(new THREE.SpriteMaterial({ map: assets.textures.glow, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false }));
+    this.aura.visible = false;
+    this.root.add(this.aura);
+  }
+
+  /** The glow of a nova core: it pulses and runs through every color, so everyone sees who holds it. */
+  pulse(now: number) {
+    this.aura.visible = this.nova && this.alive;
+    if (!this.aura.visible) return;
+    const beat = 0.5 + 0.5 * Math.sin(now * NOVA_PULSE * Math.PI * 2);
+    this.aura.scale.setScalar(this.radius * (5 + 3 * beat));
+    this.aura.material.color.setHSL((now * 0.4) % 1, 1, 0.5).multiplyScalar(1.5 + 2 * beat);
   }
 
   private findEngine(glowTexture: THREE.Texture): EngineParts {
@@ -269,6 +286,7 @@ export class Ship {
     this.torpedoes = TORPEDOES;
     this.twin = false;
     this.plating = 0;
+    this.nova = false;
     this.holes.length = 0;
     this.heat = 0;
     this.overheated = false;
@@ -298,6 +316,7 @@ export class Ship {
     this.deaths = from.deaths;
     this.twin = from.twin;
     this.plating = from.plating;
+    this.nova = from.nova;
     this.gates = from.gates;
     this.finish = from.finish;
     this.alive = r.alive;
@@ -312,7 +331,7 @@ export class Ship {
   toState(now: number, full = false): ShipState {
     const f = this.flight;
     const round = (v: { toArray(): number[] }, digits = 0) => v.toArray().map((x) => +x.toFixed(digits));
-    const items = packItems(this.twin, this.plating);
+    const items = packItems(this.twin, this.plating, this.nova);
     const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}|${this.gates}|${this.finish}|${items}`;
     const withSlow = full || slow !== this.slowSent || now - this.slowSentAt >= SLOW_STATE_SECONDS;
     if (withSlow) {
@@ -357,7 +376,7 @@ export class Ship {
       this.deaths = state.de!;
       this.gates = state.g!;
       this.finish = state.fi!;
-      ({ twin: this.twin, plating: this.plating } = unpackItems(state.it!));
+      ({ twin: this.twin, plating: this.plating, nova: this.nova } = unpackItems(state.it!));
     }
     if (state.a && !this.alive) {
       // the owner booted a new clone

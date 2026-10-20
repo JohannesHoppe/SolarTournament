@@ -170,9 +170,9 @@ export class Hud {
     if (this.overdrive.classList.contains('ready') !== (seconds <= 0)) this.overdrive.classList.toggle('ready', seconds <= 0);
   }
 
-  /** The torpedoes left and the items held, next to the overdrive. */
-  setArsenal(torpedoes: number, twin: boolean, plating: number) {
-    const items = `${twin ? ' · Twin' : ''}${plating ? ` · Plating ${plating}` : ''}`;
+  /** The torpedoes left and the items held, each with what it does, next to the overdrive. */
+  setArsenal(torpedoes: number, twin: boolean, plating: number, nova: boolean) {
+    const items = `${twin ? ' · Twin: fires twice as fast' : ''}${plating ? ` · Plating ${plating}: stops hits` : ''}${nova ? ' · Nova: next shot blows up everything around' : ''}`;
     setText(this.torpedo, `${torpedoes > 0 ? `Torpedo ${torpedoes}` : 'No torpedo'}${items}`);
     if (this.torpedo.classList.contains('ready') !== torpedoes > 0) this.torpedo.classList.toggle('ready', torpedoes > 0);
   }
@@ -321,7 +321,7 @@ function pin(element: HTMLElement, camera: THREE.Camera, point: THREE.Vector3) {
 }
 
 /** A distance in world units as the HUD shows it: meters, kilometers from 1000 m on. */
-function meters(units: number): string {
+export function meters(units: number): string {
   const m = units * METERS_PER_UNIT;
   return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
 }

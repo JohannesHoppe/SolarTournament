@@ -110,6 +110,8 @@ export class Session {
   onTorpedoHit: (target: string, shooter: string) => void = () => {};
   /** A ship of another browser took a probe. */
   onProbe: (probe: string, ship: string) => void = () => {};
+  /** A ship of another browser set off its nova core, here. */
+  onNova: (ship: string, position: Vec) => void = () => {};
   /** The lead's field, the wreckage in flight, and the probes taken this round. */
   onSync: (field: FieldState, wrecks: WreckState[], probesTaken: string[]) => void = () => {};
   onPeerJoin: (id: string) => void = () => {};
@@ -205,6 +207,11 @@ export class Session {
       const probe = id(d?.c);
       const ship = id(d?.s);
       if (probe && ship && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onProbe(probe, ship));
+    });
+    transport.on('nv', (d, from) => {
+      const ship = id(d?.s);
+      const position = vec(d?.p, 3, MAX_COORDINATE);
+      if (ship && position && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onNova(ship, position));
     });
     transport.on('tk', (d, from) => {
       const target = id(d?.t);
@@ -354,6 +361,10 @@ export class Session {
 
   sendTorpedo(torpedo: string, shooter: string, target: string | null, position: Vec, velocity: Vec) {
     this.transport.send('tl', { i: torpedo, s: shooter, t: target, p: position, v: velocity });
+  }
+
+  sendNova(ship: string, position: Vec) {
+    this.transport.send('nv', { s: ship, p: position });
   }
 
   sendProbe(probe: string, ship: string) {

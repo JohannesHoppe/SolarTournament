@@ -630,6 +630,56 @@ button.primary .mode-note {
   transition: none;
 }
 
+/*
+ * The nova core: its holder sees the world through the overcharged core (shifted, oversaturated,
+ * a breathing white rim); everyone close to a holder gets the red rim of an alarm; whoever sees
+ * it go off is blinded white for a moment.
+ */
+body.nova-held #game {
+  filter: hue-rotate(-40deg) saturate(1.8) contrast(1.1);
+}
+
+body.nova-held #hud::before,
+body.nova-alarm #hud::before,
+body.nova-flash #hud::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+body.nova-held #hud::before {
+  box-shadow: inset 0 0 180px rgba(255, 240, 255, 0.55);
+  animation: nova-breath 1s ease-in-out infinite alternate;
+}
+
+body.nova-alarm #hud::before {
+  box-shadow: inset 0 0 220px rgba(255, 30, 40, 0.85);
+  animation: nova-breath 0.25s steps(2) infinite alternate;
+}
+
+body.nova-flash #hud::after {
+  background: #fff;
+  animation: nova-flash 1.6s ease-out forwards;
+}
+
+@keyframes nova-breath {
+  from { opacity: 0.35; }
+  to { opacity: 1; }
+}
+
+@keyframes nova-flash {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body.nova-held #hud::before,
+  body.nova-alarm #hud::before {
+    animation: none;
+  }
+}
+
 @media (max-width: 600px) {
   .hud-top {
     font-size: 1rem;

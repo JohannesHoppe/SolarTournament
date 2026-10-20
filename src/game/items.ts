@@ -12,15 +12,21 @@ import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
  * - torpedoes: two more.
  * - overdrive: ready at once.
  * - repair: hull, drive and thrusters as new.
+ * - nova: an overcharged reactor core, the rarest of all. The ship that holds it pulses for
+ *   everyone to see, and its next shot is no laser: the core goes off, and every other ship
+ *   around it is gone (see Game.novaBlast). It stays with the clone until then, and flies
+ *   out when it dies.
  */
-export type ItemKind = 'twin' | 'plating' | 'torpedoes' | 'overdrive' | 'repair';
-const KINDS: readonly ItemKind[] = ['twin', 'plating', 'torpedoes', 'overdrive', 'repair'];
+export type ItemKind = 'twin' | 'plating' | 'torpedoes' | 'overdrive' | 'repair' | 'nova';
+const KINDS: readonly ItemKind[] = ['twin', 'plating', 'torpedoes', 'overdrive', 'repair', 'nova'];
 /** How often each kind comes in a probe (relative), the coveted ones rarer. */
-const WEIGHTS: Record<ItemKind, number> = { twin: 2, plating: 3, torpedoes: 3, overdrive: 2, repair: 3 };
+const WEIGHTS: Record<ItemKind, number> = { twin: 2, plating: 3, torpedoes: 3, overdrive: 2, repair: 3, nova: 1 };
 
-export const ITEM_NAMES: Record<ItemKind, string> = { twin: 'Twin laser', plating: 'Plating', torpedoes: '+2 torpedoes', overdrive: 'Overdrive charged', repair: 'Repair' };
+export const ITEM_NAMES: Record<ItemKind, string> = { twin: 'Twin laser', plating: 'Plating', torpedoes: '+2 torpedoes', overdrive: 'Overdrive charged', repair: 'Repair', nova: 'Nova core' };
+/** What each item does, in as few words as the HUD can show next to its name. */
+export const ITEM_HINTS: Record<ItemKind, string> = { twin: 'fires twice as fast', plating: 'stops two hits', torpedoes: 'extra torpedoes', overdrive: 'ready now', repair: 'ship as new', nova: 'next shot blows up everything around' };
 /** The neon of each kind, so a pilot sees from afar what a probe carries. */
-const COLORS: Record<ItemKind, number> = { twin: 0xff3fa4, plating: 0x4d91ff, torpedoes: 0xff9d00, overdrive: 0xffe04d, repair: 0x3dff9a };
+const COLORS: Record<ItemKind, number> = { twin: 0xff3fa4, plating: 0x4d91ff, torpedoes: 0xff9d00, overdrive: 0xffe04d, repair: 0x3dff9a, nova: 0xffffff };
 
 /** A probe shows up every PROBE_EVERY seconds of a round, from PROBE_FIRST on, at most PROBE_MAX at once. */
 const PROBE_FIRST = 20;
@@ -201,6 +207,6 @@ function kindOf(h: number): ItemKind {
   return 'repair';
 }
 
-/** The items a clone holds, as one number for its state: twin laser (1) plus plating charges (2 each). */
-export const packItems = (twin: boolean, plating: number) => (twin ? 1 : 0) + plating * 2;
-export const unpackItems = (packed: number) => ({ twin: (packed & 1) === 1, plating: packed >> 1 });
+/** The items a clone holds, as one number for its state: twin laser (1), plating charges (2 each, up to 2), nova core (8). */
+export const packItems = (twin: boolean, plating: number, nova: boolean) => (twin ? 1 : 0) + plating * 2 + (nova ? 8 : 0);
+export const unpackItems = (packed: number) => ({ twin: (packed & 1) === 1, plating: (packed >> 1) & 3, nova: (packed & 8) === 8 });

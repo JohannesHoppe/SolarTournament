@@ -273,6 +273,8 @@ export const COMPUTER = {
   noLink: 'Could not connect.',
   roundOver: 'Round over. You were wonderful.',
   launch: 'Live link established. Go get them, pilot.',
+  nova: 'Darling, you have the nova core. Your next shot sets it off: a monstrous blast. Fly right into the crowd, and take as many as you can with you.',
+  novaNear: 'Warning! Nova core activated close by! Get out of there, now!',
 } as const;
 
 /**

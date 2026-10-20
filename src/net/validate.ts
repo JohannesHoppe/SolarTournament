@@ -78,7 +78,7 @@ export function shipState(x: unknown): ShipState | null {
           de: num(x.de, 0, MAX_COUNT),
           g: num(x.g, 0, MAX_COUNT),
           fi: num(x.fi, -1, ROUND_LIMIT),
-          it: num(x.it, 0, 7),
+          it: num(x.it, 0, 15),
         };
   const state = {
     id: id(x.id),
