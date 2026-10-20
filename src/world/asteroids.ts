@@ -27,8 +27,8 @@ const SOLID = 1000;
 /** The kinds of shapes a field is built from: rocks, ice, the debris of a station, the hull sections of a wreck. */
 export type TemplateKind = 'rock' | 'ice' | 'debris' | 'hull';
 
-/** The shapes of one kind, in full detail and (optionally) in less detail for afar. */
-export type TemplateSet = { near: THREE.Object3D[]; far: THREE.Object3D[] };
+/** The shapes of one kind, in full detail and (optionally) in less detail for afar; `box` shapes collide as their collider box itself. */
+export type TemplateSet = { near: THREE.Object3D[]; far: THREE.Object3D[]; box?: boolean };
 
 /**
  * A massive body at the center of an arena or near it (a planet, a black hole): it pulls with
@@ -96,6 +96,8 @@ export interface Asteroid {
   kind: TemplateKind;
   /** Never breaks and gives no points (see SOLID). */
   solid: boolean;
+  /** Collides as a box (the hull of a wreck): `semiAxes` are its half extents; otherwise as an ellipsoid. */
+  box: boolean;
   spinAxis: THREE.Vector3;
   spinRate: number;
   velocity: THREE.Vector3;
@@ -143,6 +145,8 @@ interface Template {
   scale: number;
   /** The same shape in less detail, or null. */
   far: THREE.Object3D | null;
+  /** Collides as its box (see Asteroid.box). */
+  box: boolean;
 }
 
 const u = new THREE.Vector3();
@@ -178,13 +182,15 @@ export class AsteroidField {
     const templates = (set: TemplateSet) =>
       set.near.map((object, i): Template => {
         const box = colliderBox(object);
-        // rounded to whole units, so tiny floating point differences between browsers vanish
+        // rounded to whole units, so tiny floating point differences between browsers vanish;
+        // a box piece is its whole box, a rock fills only part of it
         return {
           object,
           center: box.getCenter(new THREE.Vector3()).round(),
-          semiAxes: box.getSize(new THREE.Vector3()).multiplyScalar(0.5 * SHAPE_FILL).round(),
+          semiAxes: box.getSize(new THREE.Vector3()).multiplyScalar(0.5 * (set.box ? 1 : SHAPE_FILL)).round(),
           scale: Math.max(object.scale.x, object.scale.y, object.scale.z),
           far: set.far[i] ?? null,
+          box: !!set.box,
         };
       });
     this.templates = { rock: templates(sets.rock), ice: templates(sets.ice), debris: templates(sets.debris), hull: templates(sets.hull) };
@@ -251,7 +257,8 @@ export class AsteroidField {
 
   private boundingRadius(kind: TemplateKind, type: number, scale: number) {
     const t = this.templates[kind][type];
-    return (t.center.length() + Math.max(t.semiAxes.x, t.semiAxes.y, t.semiAxes.z)) * t.scale * scale;
+    // a box reaches out to its corners
+    return (t.center.length() + (t.box ? t.semiAxes.length() : Math.max(t.semiAxes.x, t.semiAxes.y, t.semiAxes.z))) * t.scale * scale;
   }
 
   private add(
@@ -304,6 +311,7 @@ export class AsteroidField {
       baseOrientation: object.quaternion.clone(),
       center: template.center,
       semiAxes: template.semiAxes,
+      box: template.box,
       inverse: new THREE.Matrix4(),
     };
     this.asteroids.set(id, asteroid);
@@ -422,7 +430,7 @@ export class AsteroidField {
     let best: { asteroid: Asteroid | null; distance: number } | null = null;
     for (const asteroid of this.asteroids.values()) {
       if (raySphere(origin, direction, asteroid.object.position, asteroid.radius) === null) continue;
-      const distance = rayEllipsoid(asteroid, origin, direction);
+      const distance = asteroid.box ? rayBox(asteroid, origin, direction) : rayEllipsoid(asteroid, origin, direction);
       if (distance !== null && distance <= maxDistance && (!best || distance < best.distance)) best = { asteroid, distance };
     }
     const well = this.well;
@@ -451,7 +459,7 @@ export class AsteroidField {
     for (const asteroid of this.asteroids.values()) {
       const reach = asteroid.radius + radius;
       if (asteroid.object.position.distanceToSquared(center) > reach * reach) continue;
-      if (ellipsoidContact(asteroid, center, radius)) return asteroid;
+      if (asteroid.box ? boxContact(asteroid, center, radius, pull) : ellipsoidContact(asteroid, center, radius)) return asteroid;
     }
     return null;
   }
@@ -461,6 +469,14 @@ export class AsteroidField {
    * touched (and moves center onto the surface), otherwise null.
    */
   resolve(asteroid: Asteroid, center: THREE.Vector3, radius: number, normal = new THREE.Vector3()): THREE.Vector3 | null {
+    if (asteroid.box) {
+      const surface = boxContact(asteroid, center, radius, normal);
+      if (!surface) return null;
+      normal.transformDirection(asteroid.object.matrixWorld);
+      point.copy(surface).add(asteroid.center).applyMatrix4(asteroid.object.matrixWorld);
+      center.copy(point).addScaledVector(normal, radius + 1);
+      return normal;
+    }
     const contact = ellipsoidContact(asteroid, center, radius);
     if (!contact) return null;
     // gradient of the inflated ellipsoid, transformed back into the world
@@ -518,6 +534,55 @@ function ellipsoidContact(asteroid: Asteroid, center: THREE.Vector3, radius: num
   const local = u.copy(center).applyMatrix4(asteroid.inverse).sub(asteroid.center);
   const length = Math.hypot(local.x / axes.x, local.y / axes.y, local.z / axes.z);
   return length < 1 ? { local, axes, length } : null;
+}
+
+const closest = new THREE.Vector3();
+
+/**
+ * A sphere against a box piece, in the piece's own coordinates: the point of the box closest
+ * to the sphere's center (on its surface; for a center inside, on the face nearest to it) and
+ * the outward normal there, when the sphere touches the box; otherwise null.
+ */
+function boxContact(asteroid: Asteroid, center: THREE.Vector3, radius: number, normal: THREE.Vector3) {
+  const scale = asteroid.object.matrixWorld.getMaxScaleOnAxis();
+  const half = asteroid.semiAxes;
+  const local = u.copy(center).applyMatrix4(asteroid.inverse).sub(asteroid.center);
+  closest.set(THREE.MathUtils.clamp(local.x, -half.x, half.x), THREE.MathUtils.clamp(local.y, -half.y, half.y), THREE.MathUtils.clamp(local.z, -half.z, half.z));
+  const distance = normal.subVectors(local, closest).length();
+  if (distance >= radius / scale) return null;
+  if (distance > 0) {
+    normal.divideScalar(distance);
+    return closest;
+  }
+  // the center is inside: out through the nearest face
+  const depths = [half.x - Math.abs(local.x), half.y - Math.abs(local.y), half.z - Math.abs(local.z)];
+  const axis = depths.indexOf(Math.min(...depths));
+  normal.set(0, 0, 0).setComponent(axis, Math.sign(local.getComponent(axis)) || 1);
+  closest.copy(local).setComponent(axis, normal.getComponent(axis) * half.getComponent(axis));
+  return closest;
+}
+
+/** Distance along a normalized ray to a box piece's surface (slabs), or null. */
+function rayBox(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
+  const o = localOrigin.copy(origin).applyMatrix4(asteroid.inverse).sub(asteroid.center);
+  const d = localEnd.copy(origin).add(direction).applyMatrix4(asteroid.inverse).sub(asteroid.center).sub(o);
+  let near = -Infinity;
+  let far = Infinity;
+  for (let axis = 0; axis < 3; axis++) {
+    const start = o.getComponent(axis);
+    const step = d.getComponent(axis);
+    const half = asteroid.semiAxes.getComponent(axis);
+    if (Math.abs(step) < 1e-12) {
+      if (Math.abs(start) > half) return null;
+      continue;
+    }
+    const a = (-half - start) / step;
+    const b = (half - start) / step;
+    near = Math.max(near, Math.min(a, b));
+    far = Math.min(far, Math.max(a, b));
+  }
+  if (near > far || far < 0) return null;
+  return Math.max(near, 0);
 }
 
 const localOrigin = new THREE.Vector3();

@@ -6,8 +6,8 @@ import type { TemplateSet } from './asteroids';
 /**
  * The shapes the arenas are built from besides rock: chunks of ice, the debris of a station
  * and the hull sections of a wrecked world ship. Each carries an invisible collider box whose
- * size is computed, not measured, so the collision ellipsoid (90 % of the box, see
- * AsteroidField) is the same on every browser.
+ * size is computed, not measured, so the collision shape is the same on every browser: an
+ * ellipsoid of 90 % of the box for ice and debris (see AsteroidField), the box itself for the hull.
  */
 
 /** The collision ellipsoid is this share of the collider box (SHAPE_FILL in asteroids.ts). */
@@ -19,16 +19,10 @@ const DEBRIS_COUNT = 8;
 const DEBRIS_SIZE = 900;
 /** Hull templates are as long as this (units, 100 m) before an arena scales them up. */
 const HULL_LENGTH = 2000;
-/**
- * How square the hull's cross section is (the exponent of a superellipsoid; 2 is an
- * ellipsoid). At 2.6, scaled to 96 %, the hull lies inside its collision ellipsoid along its
- * axes and reaches past it only towards its corners, by up to 9 %.
- */
-const HULL_SQUARENESS = 2.6;
 
-/** An invisible box whose 90 % is the collision ellipsoid with these semi-axes. */
-function collider(semiAxes: THREE.Vector3): THREE.Mesh {
-  const box = new THREE.Mesh(new THREE.BoxGeometry((semiAxes.x * 2) / FILL, (semiAxes.y * 2) / FILL, (semiAxes.z * 2) / FILL));
+/** An invisible box whose `fill` (90 % for rock-like pieces, all of it for a box piece) is the collision shape with these semi-axes. */
+function collider(semiAxes: THREE.Vector3, fill = FILL): THREE.Mesh {
+  const box = new THREE.Mesh(new THREE.BoxGeometry((semiAxes.x * 2) / fill, (semiAxes.y * 2) / fill, (semiAxes.z * 2) / fill));
   box.userData.collider = true;
   box.visible = false;
   return box;
@@ -41,31 +35,25 @@ export function iceSet(rocks: TemplateSet): TemplateSet {
   return { near: rocks.near.map(freeze), far: rocks.far.map(freeze) };
 }
 
-/** Lit windows and neon strips on dark plating, as an emissive map (a wreck's emergency power still runs). */
-function windowTexture(seed: number, tint: string): THREE.CanvasTexture {
+/** A deck of windows: lit ones in runs, with dark stretches where the power is out (a wreck's emergency power still runs). */
+function windowTexture(seed: number): THREE.CanvasTexture {
   const r = new Randomizer(seed);
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 256;
+  canvas.width = 256;
+  canvas.height = 4;
   const ctx = canvas.getContext('2d')!;
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
-  for (let row = 0; row < 32; row++) {
-    if (r.nextFloat() < 0.45) continue;
-    const y = row * 8 + 3;
-    for (let x = 0; x < canvas.width; x += 6) {
-      // runs of lit windows with dark stretches where the power is out
-      if (r.nextFloat() < 0.55) continue;
-      ctx.fillStyle = r.nextFloat() < 0.85 ? '#ffd9a0' : '#9fc4ff';
-      ctx.globalAlpha = r.range(0.3, 1);
-      ctx.fillRect(x, y, 3, 2);
-    }
+  let lit = true;
+  for (let x = 0; x < canvas.width; x += 4) {
+    if (r.nextFloat() < 0.12) lit = !lit;
+    if (!lit || r.nextFloat() < 0.2) continue;
+    ctx.fillStyle = r.nextFloat() < 0.85 ? '#ffd9a0' : '#9fc4ff';
+    ctx.fillRect(x, 0, 3, canvas.height);
   }
-  ctx.globalAlpha = 1;
-  ctx.fillStyle = tint;
-  for (let i = 0; i < 3; i++) ctx.fillRect(0, Math.floor(r.range(0.1, 0.9) * canvas.height), canvas.width, 2);
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   return texture;
 }
 
@@ -151,60 +139,121 @@ export function debrisSet(): TemplateSet {
 }
 
 /**
- * The hull sections of a wrecked world ship, each an ellipsoid of plating with panel lines,
- * lit windows and a strip of neon, so its collision shape is the hull itself:
- * 0 a hull section, 1 a section torn off at one end, 2 an engine block, 3 a bridge tower,
- * 4 a long spar.
+ * Texture coordinates for boxy parts: each face takes the plating at the same density
+ * (one tile per `tile` units), projected along its dominant axis, so long and short parts look alike.
+ */
+function boxUv(geometry: THREE.BufferGeometry, tile: number): THREE.BufferGeometry {
+  const position = geometry.attributes.position;
+  const normal = geometry.attributes.normal;
+  const uv = new Float32Array(position.count * 2);
+  for (let i = 0; i < position.count; i++) {
+    const nx = Math.abs(normal.getX(i));
+    const ny = Math.abs(normal.getY(i));
+    const nz = Math.abs(normal.getZ(i));
+    const [u, v] = nx >= ny && nx >= nz ? [position.getZ(i), position.getY(i)] : ny >= nz ? [position.getX(i), position.getZ(i)] : [position.getX(i), position.getY(i)];
+    uv[i * 2] = u / tile;
+    uv[i * 2 + 1] = v / tile;
+  }
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return geometry;
+}
+
+/** A box of size (x, y, z) centered at (cx, cy, cz), as a part of a hull. */
+const block = (x: number, y: number, z: number, cx = 0, cy = 0, cz = 0) => new THREE.BoxGeometry(x, y, z).translate(cx, cy, cz).toNonIndexed();
+
+/**
+ * The hull sections of a wrecked world ship, industrial and angular: boxes of plating on
+ * frames, a spine, containers along the flanks, decks of lit windows, all within the section's
+ * collider box, which is its collision shape. 0 a hull section, 1 a section torn off at one end
+ * (still glowing where it broke), 2 an engine block with three nozzles, 3 a bridge tower,
+ * 4 a long truss.
  */
 export function hullSet(): TemplateSet {
   const plating = platingTexture(DEBRIS_SEED + 1);
-  plating.repeat.set(8, 3);
-  const windows = windowTexture(DEBRIS_SEED + 2, '#ff9d00');
-  const material = new THREE.MeshStandardMaterial({ map: plating, emissiveMap: windows, emissive: 0xffffff, emissiveIntensity: 1.2, roughness: 0.6, metalness: 0.6 });
-  // where it broke, the hull still glows
-  const tornWindows = windowTexture(DEBRIS_SEED + 2, '#ff9d00');
-  const ctx = (tornWindows.image as HTMLCanvasElement).getContext('2d')!;
-  const glow = ctx.createLinearGradient(tornWindows.image.width * 0.82, 0, tornWindows.image.width, 0);
-  glow.addColorStop(0, 'rgba(255, 90, 0, 0)');
-  glow.addColorStop(1, 'rgba(255, 120, 20, 1)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, tornWindows.image.width, tornWindows.image.height);
-  const torn = material.clone();
-  torn.emissiveMap = tornWindows;
-  const engine = new THREE.MeshStandardMaterial({ color: 0x24262c, emissive: 0x2a6cff, emissiveIntensity: 0.5, roughness: 0.4, metalness: 0.8 });
+  // little metalness: without a reflected environment, metal turns black on its shadowed side
+  const metal = new THREE.MeshStandardMaterial({ map: plating, color: 0xb8bec8, roughness: 0.7, metalness: 0.2 });
+  const dark = new THREE.MeshStandardMaterial({ color: 0x4a4e57, roughness: 0.6, metalness: 0.25 });
+  const windows = new THREE.MeshBasicMaterial({ map: windowTexture(DEBRIS_SEED + 2), color: new THREE.Color(1, 1, 1).multiplyScalar(1.6), toneMapped: false });
+  const ember = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.35, 0.05).multiplyScalar(2), toneMapped: false });
+  const drive = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 0.5, 1).multiplyScalar(1.4), toneMapped: false });
+  const r = new Randomizer(DEBRIS_SEED + 3);
   const L = HULL_LENGTH;
-  const shapes: [THREE.Vector3, boolean][] = [
-    [new THREE.Vector3(L * 0.5, L * 0.16, L * 0.14), false],
-    [new THREE.Vector3(L * 0.5, L * 0.16, L * 0.14), true],
-    [new THREE.Vector3(L * 0.22, L * 0.2, L * 0.2), false],
-    [new THREE.Vector3(L * 0.12, L * 0.3, L * 0.1), false],
-    [new THREE.Vector3(L * 0.5, L * 0.04, L * 0.04), false],
-  ];
-  const near = shapes.map(([axes, broken], i) => {
-    const geometry = new THREE.SphereGeometry(1, 96, 48);
-    geometry.rotateZ(Math.PI / 2);
-    // the texture's rows run along the hull (decks of windows), not around it
-    const uv = geometry.attributes.uv;
-    for (let k = 0; k < uv.count; k++) uv.setXY(k, uv.getY(k), uv.getX(k));
-    const position = geometry.attributes.position;
-    const p = new THREE.Vector3();
-    for (let k = 0; k < position.count; k++) {
-      p.fromBufferAttribute(position, k);
-      // a squarish hull (a superellipsoid), kept close to the collision ellipsoid
-      const squarish = Math.pow(Math.abs(p.x) ** HULL_SQUARENESS + Math.abs(p.y) ** HULL_SQUARENESS + Math.abs(p.z) ** HULL_SQUARENESS, 1 / HULL_SQUARENESS);
-      p.divideScalar(squarish).multiplyScalar(0.96);
-      // a torn section ends in a jagged break, inside the ellipsoid
-      if (broken && p.x > 0.55) {
-        const jag = 0.55 + 0.25 * Math.abs(Math.sin(p.y * 23 + p.z * 17));
-        p.x = Math.min(p.x, jag);
+
+  /** A section's body: a core on frames, a spine on top, containers and window decks on both flanks. */
+  const section = (half: THREE.Vector3, end: number, parts: THREE.BufferGeometry[], lights: THREE.BufferGeometry[]) => {
+    const start = -half.x;
+    const length = end - start;
+    const middle = (start + end) / 2;
+    parts.push(block(length, half.y * 1.6, half.z * 1.6, middle));
+    for (let x = start + 40; x < end; x += length / 7) parts.push(block(60, half.y * 2, half.z * 2, x));
+    parts.push(block(length * 0.9, half.y * 0.2, half.z * 0.5, middle, half.y * 0.9));
+    for (const side of [1, -1]) {
+      for (let x = start + 120; x < end - 160; x += r.range(160, 260)) {
+        parts.push(block(r.range(90, 150), half.y * r.range(0.35, 0.6), half.z * 0.16, x, r.range(-0.3, 0.3) * half.y, side * half.z * 0.88));
       }
-      position.setXYZ(k, p.x * axes.x, p.y * axes.y, p.z * axes.z);
+      for (const deck of [-0.45, -0.15, 0.15, 0.45]) lights.push(block(length * r.range(0.5, 0.9), 10, 6, middle + r.range(-0.1, 0.1) * length, deck * half.y, side * half.z * 0.81));
     }
-    geometry.computeVertexNormals();
+  };
+
+  const shapes: [THREE.Vector3, (half: THREE.Vector3, parts: THREE.BufferGeometry[], lights: THREE.BufferGeometry[], glow: THREE.BufferGeometry[]) => void][] = [
+    [new THREE.Vector3(L * 0.5, L * 0.16, L * 0.14), (half, parts, lights) => section(half, half.x, parts, lights)],
+    [
+      new THREE.Vector3(L * 0.5, L * 0.16, L * 0.14),
+      (half, parts, lights, glow) => {
+        // the hull ends at 40 % of the length, torn plates reach on to the end of the box
+        section(half, half.x * 0.4, parts, lights);
+        for (let k = 0; k < 9; k++) {
+          const length = r.range(0.2, 0.6) * half.x;
+          parts.push(block(length, r.range(10, 30), half.z * r.range(0.4, 1.4), half.x * 0.4 + length / 2, r.range(-0.75, 0.75) * half.y, r.range(-0.3, 0.3) * half.z));
+        }
+        glow.push(block(20, half.y * 1.5, half.z * 1.5, half.x * 0.4 + 12));
+      },
+    ],
+    [
+      new THREE.Vector3(L * 0.22, L * 0.2, L * 0.2),
+      (half, parts, _, glow) => {
+        parts.push(block(half.x * 1.2, half.y * 2, half.z * 2, -half.x * 0.4));
+        // three nozzles out of the back, their throats still glowing
+        for (const [y, z] of [[0.45, 0], [-0.3, 0.45], [-0.3, -0.45]]) {
+          const nozzle = new THREE.CylinderGeometry(half.y * 0.32, half.y * 0.48, half.x * 0.8, 8, 1, true).rotateZ(Math.PI / 2).translate(half.x * 0.6, y * half.y, z * half.z).toNonIndexed();
+          parts.push(nozzle);
+          glow.push(new THREE.CircleGeometry(half.y * 0.3, 8).rotateY(Math.PI / 2).translate(half.x * 0.25, y * half.y, z * half.z).toNonIndexed());
+        }
+      },
+    ],
+    [
+      new THREE.Vector3(L * 0.12, L * 0.3, L * 0.1),
+      (half, parts, lights) => {
+        // stepped levels, a bridge on top, and a mast
+        for (let level = 0; level < 4; level++) {
+          const shrink = 1 - level * 0.18;
+          parts.push(block(half.x * 2 * shrink, half.y * 0.4, half.z * 2 * shrink, 0, -half.y + half.y * 0.2 + level * half.y * 0.4));
+          lights.push(block(half.x * 2 * shrink + 2, 8, half.z * 1.2 * shrink, 0, -half.y + half.y * 0.32 + level * half.y * 0.4));
+        }
+        parts.push(block(16, half.y * 0.4, 16, 0, half.y * 0.8));
+      },
+    ],
+    [
+      new THREE.Vector3(L * 0.5, L * 0.04, L * 0.04),
+      (half, parts) => {
+        // a truss: four rails and their struts
+        for (const [y, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) parts.push(block(half.x * 2, 14, 14, 0, y * (half.y - 7), z * (half.z - 7)));
+        for (let x = -half.x; x <= half.x; x += half.x / 10) parts.push(block(10, half.y * 2, 10, x), block(10, 10, half.z * 2, x));
+      },
+    ],
+  ];
+  const near = shapes.map(([half, build]) => {
+    const parts: THREE.BufferGeometry[] = [];
+    const lights: THREE.BufferGeometry[] = [];
+    const glow: THREE.BufferGeometry[] = [];
+    build(half, parts, lights, glow);
     const group = new THREE.Group();
-    group.add(new THREE.Mesh(geometry, i === 2 ? engine : broken ? torn : material));
-    group.add(collider(axes.clone().round()));
+    const body = mergeGeometries(parts.map((p) => p.deleteAttribute('uv')));
+    group.add(new THREE.Mesh(boxUv(body, 160), half.y < L * 0.05 ? dark : metal));
+    if (lights.length) group.add(new THREE.Mesh(boxUv(mergeGeometries(lights.map((p) => p.deleteAttribute('uv'))), 400), windows));
+    if (glow.length) group.add(new THREE.Mesh(mergeGeometries(glow.map((p) => p.deleteAttribute('uv'))), half.x < L * 0.3 ? drive : ember));
+    group.add(collider(half.clone().round(), 1));
     return group;
   });
-  return { near, far: [] };
+  return { near, far: [], box: true };
 }
