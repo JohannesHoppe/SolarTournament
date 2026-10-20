@@ -361,6 +361,12 @@ export class Band {
     this.acid.oscillator.type = song.flavor === 'acid' ? 'sawtooth' : 'square';
     // when the acid carries the track, the bass makes room above the rumble
     this.bassFloor = song.flavor === 'acid' ? 150 : 60;
+    // the pop's bass pops: a square with a quick, bright filter snap, the slap of a thumb
+    const funk = song.flavor === 'pop';
+    this.bass.oscillator.type = funk ? 'square' : 'sawtooth';
+    this.bass.filterEnvelope.baseFrequency = funk ? 220 : 140;
+    this.bass.filterEnvelope.octaves = funk ? 4.5 : 3.5;
+    this.bass.filterEnvelope.decay = funk ? 0.07 : 0.12;
   }
 
   /** Plays sixteenth number `step` of the track at audio time `time`. */
@@ -399,7 +405,7 @@ export class Band {
       else this.clave.triggerAttackRelease(2500, 0.03, t, events.metal.velocity);
     }
 
-    if (events.bass) this.bass.triggerAttackRelease(midiToHz(events.bass.note), sixteenth * (info.bassStyle === 'ebm' ? 0.6 : 0.8), t, events.bass.velocity);
+    if (events.bass) this.bass.triggerAttackRelease(midiToHz(events.bass.note), sixteenth * events.bass.length * (info.bassStyle === 'ebm' ? 0.6 : 0.8), t, events.bass.velocity);
     if (events.acid) this.playAcid(song, events.acid.note, events.acid.accent, events.acid.slide, step, t, sixteenth, info);
 
     if (events.chord) {

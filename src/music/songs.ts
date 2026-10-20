@@ -20,9 +20,12 @@ import { NOW_PLAYING_DE, NOW_PLAYING_EN, PHRASES_DE, PHRASES_EN, STATION_DE, STA
  * - ebm: electronic body music, a sequenced 16th bass and a backbeat.
  * - french: a chord loop that a filter opens and closes, phaser and pump.
  * - motorik: Kraftwerk's machine pop, electro beat, octave bass, pling arpeggios, German voice.
+ * - pop: the cheerful odd one out, indie dance-pop after The Ting Tings: a major key, a bouncy
+ *   beat full of hand claps and cowbell, a slap bass, bright chords that chank off the beat,
+ *   no distortion.
  * - schranz, rave: rare guests, loop-driven and tom-heavy or with stabs and a hoover.
  */
-export type Flavor = 'hard' | 'industrial' | 'acid' | 'ebm' | 'french' | 'motorik' | 'schranz' | 'rave';
+export type Flavor = 'hard' | 'industrial' | 'acid' | 'ebm' | 'french' | 'motorik' | 'pop' | 'schranz' | 'rave';
 
 /**
  * How a track develops:
@@ -41,8 +44,8 @@ const STRATEGIES: Strategy[] = ['classic', 'relentless', 'hypnotic', 'movements'
 export type Energy = 'lounge' | 'round';
 
 export type SectionKind = 'intro' | 'groove' | 'peak' | 'break' | 'strip' | 'gap' | 'finale' | 'outro';
-export type Groove = 'four' | 'half' | 'broken' | 'electro';
-export type BassStyle = 'rolling' | 'offbeat' | 'ebm' | 'moroder';
+export type Groove = 'four' | 'half' | 'broken' | 'electro' | 'funk';
+export type BassStyle = 'rolling' | 'offbeat' | 'ebm' | 'moroder' | 'funk' | 'eighths';
 export type LeadVoice = 'stab' | 'bell' | 'hoover' | 'arp';
 
 export interface Section {
@@ -163,6 +166,8 @@ export interface Song {
   swing: number;
   /** MIDI note of the kick's fundamental; the whole track is in this key. */
   root: number;
+  /** The scale every note lands on: natural minor, or major for the pop. */
+  scale: readonly number[];
   acidSet: number[];
   acidLength: number;
   stabShape: number[];
@@ -248,7 +253,7 @@ const INSTRUMENT: Record<Layer, number> = { kick: 1, rumble: 2, bass: 3, hat: 4,
 // ---- titles: the seed you can read --------------------------------------------------------
 
 /** How often each flavor comes up (relative weights). */
-const FLAVOR_WEIGHTS: [Flavor, number][] = [['hard', 4], ['industrial', 4], ['acid', 4], ['ebm', 5], ['french', 5], ['schranz', 1], ['rave', 1]];
+const FLAVOR_WEIGHTS: [Flavor, number][] = [['hard', 4], ['industrial', 4], ['acid', 4], ['ebm', 5], ['french', 5], ['pop', 4], ['schranz', 1], ['rave', 1]];
 /** One track in thirteen is a German motorik track. */
 const MOTORIK_CHANCE = 1 / 13;
 
@@ -277,6 +282,7 @@ const FLAVOR_SETTINGS: Record<Flavor, { bpm: [number, number]; swing: [number, n
   ebm: { bpm: [132, 140], swing: [0, 0.03], bass: ['ebm', 'ebm', 'moroder'], lead: ['arp', 'stab', 'hoover'], groove: 'four' },
   french: { bpm: [126, 132], swing: [0.04, 0.1], bass: ['offbeat', 'moroder'], lead: ['bell', 'arp'], groove: 'four' },
   motorik: { bpm: [126, 134], swing: [0, 0.02], bass: ['moroder', 'ebm'], lead: ['arp', 'arp', 'bell'], groove: 'electro' },
+  pop: { bpm: [118, 128], swing: [0.04, 0.1], bass: ['eighths', 'eighths', 'funk'], lead: ['bell', 'arp'], groove: 'funk' },
   schranz: { bpm: [148, 152], swing: [0, 0.04], bass: ['rolling', 'offbeat'], lead: ['stab'], groove: 'four' },
   rave: { bpm: [142, 148], swing: [0, 0.04], bass: ['offbeat', 'rolling'], lead: ['hoover', 'stab'], groove: 'four' },
 };
@@ -297,6 +303,10 @@ const STAB_SHAPES = [[0, 3, 7], [0, 7, 10], [0, 3, 10, 14], [0, 5, 7]];
 const PROGRESSIONS = [[0, 0, 3, 5], [0, -2, 0, 3], [0, 5, 3, -2], [0, 0, 7, 5], [0, 3, -2, 0], [0, 0, 0, -2]];
 /** Lead motif degrees in semitones; minor, with the flat second for menace. */
 const LEAD_NOTES = [0, 0, 3, 7, 10, 12, 1, -2];
+/** The pop: bright seventh and ninth chords, the I–vi–IV–V family, a major pentatonic motif. */
+const FUNK_CHORDS = [[0, 4, 7, 11], [0, 4, 7, 14], [0, 7, 11, 16], [0, 4, 11, 14]];
+const FUNK_PROGRESSIONS = [[0, 9, 5, 7], [0, 5, 9, 7], [0, 2, 5, 7], [0, 9, 2, 7]];
+const FUNK_NOTES = [0, 2, 4, 7, 9, 12, 14, 7];
 
 /** A track from its title. The title decides everything; online, titleFor picks the title. */
 export function createSong(title: string, energy: Energy, roundLength: number, flavor?: Flavor): Song {
@@ -305,6 +315,7 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
   const chosen = flavor ?? (german ? 'motorik' : weighted(seed));
   const settings = FLAVOR_SETTINGS[chosen];
   const lounge = energy === 'lounge';
+  const funk = chosen === 'pop';
   const bpm = settings.bpm[0] + (hash(seed, Ch.Genes, 2) % (settings.bpm[1] - settings.bpm[0] + 1)) - (lounge ? 6 : 0);
   const strategy: Strategy = lounge ? 'hypnotic' : chosen === 'motorik' ? choose(['relentless', 'hypnotic', 'movements'], seed, Ch.Genes, 3) : choose(STRATEGIES, seed, Ch.Genes, 3);
   const song: Song = {
@@ -318,11 +329,12 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
     swing: settings.swing[0] + unit(seed, Ch.Genes, 5) * (settings.swing[1] - settings.swing[0]),
     // kick fundamental between E1 (41 Hz) and B1 (62 Hz)
     root: 28 + (hash(seed, Ch.Genes, 6) % 8),
+    scale: funk ? MAJOR_SCALE : MINOR_SCALE,
     acidSet: choose(ACID_SETS, seed, Ch.Genes, 7),
     // a 12-step acid loop over the 16-step bar is a classic acid techno trick
     acidLength: unit(seed, Ch.Genes, 8) < 0.4 ? 12 : 16,
-    stabShape: choose(STAB_SHAPES, seed, Ch.Genes, 9),
-    progression: choose(PROGRESSIONS, seed, Ch.Genes, 10),
+    stabShape: choose(funk ? FUNK_CHORDS : STAB_SHAPES, seed, Ch.Genes, 9),
+    progression: choose(funk ? FUNK_PROGRESSIONS : PROGRESSIONS, seed, Ch.Genes, 10),
     perc: { k: choose([2, 3, 3], seed, Ch.Genes, 11), n: choose([7, 9, 12, 16], seed, Ch.Genes, 12) },
     metal: { k: choose([3, 5, 7], seed, Ch.Genes, 13), rotation: hash(seed, Ch.Genes, 14) % 16 },
     bassStyle: choose(settings.bass, seed, Ch.Genes, 15),
@@ -330,7 +342,7 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
     kick: kickDesign(seed, chosen),
     form: [],
     cycle: 0,
-    motif: leadMotif(seed),
+    motif: leadMotif(seed, funk ? FUNK_NOTES : LEAD_NOTES),
     surprises: [],
     voice: [],
     cache: new Map(),
@@ -351,13 +363,14 @@ const KICK_SHAPES: Record<Flavor, KickDesign['shape'][]> = {
   ebm: ['hard', 'soft'],
   french: ['soft', 'soft', 'hard'],
   motorik: ['soft', 'hard'],
+  pop: ['soft'],
   schranz: ['gabber', 'hard'],
   rave: ['hard', 'fold'],
 };
 
 function kickDesign(seed: number, flavor: Flavor): KickDesign {
   const r = (key: number, min: number, max: number) => min + unit(seed, Ch.Genes, 40 + key) * (max - min);
-  const soft = flavor === 'french' || flavor === 'motorik';
+  const soft = flavor === 'french' || flavor === 'motorik' || flavor === 'pop';
   return {
     start: r(1, 10, 26),
     middle: r(2, 4, 9),
@@ -387,12 +400,12 @@ export function barSeconds(song: Song): number {
   return (60 / song.bpm) * 4;
 }
 
-function leadMotif(seed: number) {
+function leadMotif(seed: number, degrees: readonly number[]) {
   const notes: { step: number; degree: number; length: number }[] = [];
   let step = 0;
   for (let i = 0; step < 32; i++) {
     const length = choose([4, 4, 6, 8, 2, 2], seed, Ch.Lead, i, 1);
-    if (unit(seed, Ch.Lead, i, 2) < 0.75) notes.push({ step, degree: choose(LEAD_NOTES, seed, Ch.Lead, i, 3), length: Math.min(length, 32 - step) });
+    if (unit(seed, Ch.Lead, i, 2) < 0.75) notes.push({ step, degree: choose(degrees, seed, Ch.Lead, i, 3), length: Math.min(length, 32 - step) });
     step += length;
   }
   return notes;
@@ -570,6 +583,7 @@ const GATES: Record<Flavor, Record<Layer, number>> = {
   ebm: { kick: 0, rumble: 0.5, hat: 0.25, openHat: 0.5, bass: 0.25, clap: 0.4, ride: 0.8, perc: 0.7, metal: 0.55, acid: 2, lead: 0.6, chords: 2 },
   french: { kick: 0, rumble: 0.6, hat: 0.2, openHat: 0.3, bass: 0.4, clap: 0.45, ride: 0.7, perc: 0.8, metal: 0.9, acid: 2, lead: 0.85, chords: 0.3 },
   motorik: { kick: 0, rumble: 2, hat: 0.2, openHat: 2, bass: 0.3, clap: 0.35, ride: 2, perc: 0.7, metal: 0.5, acid: 2, lead: 0.45, chords: 0.8 },
+  pop: { kick: 0, rumble: 2, hat: 0.2, openHat: 0.35, bass: 0.3, clap: 0.3, ride: 2, perc: 0.65, metal: 0.35, acid: 2, lead: 0.55, chords: 0.3 },
   schranz: { kick: 0, rumble: 0.3, hat: 0.15, openHat: 0.25, bass: 0.45, clap: 0.4, ride: 0.5, perc: 0.35, metal: 0.6, acid: 0.9, lead: 0.85, chords: 2 },
   rave: { kick: 0, rumble: 0.3, hat: 0.2, openHat: 0.3, bass: 0.45, clap: 0.5, ride: 0.7, perc: 0.7, metal: 0.9, acid: 0.8, lead: 0.55, chords: 2 },
 };
@@ -604,7 +618,7 @@ export function barInfo(song: Song, absoluteBar: number): BarInfo {
     case 'intro':
       layers.rumble = layers.rumble && inSection >= 8;
       layers.bass = layers.clap = layers.acid = layers.lead = layers.ride = layers.metal = false;
-      layers.chords = layers.chords && song.flavor === 'french';
+      layers.chords = layers.chords && (song.flavor === 'french' || song.flavor === 'pop');
       break;
     case 'break':
       // the kick drops out but the rhythm goes on: hats and a thin bass (its low end cut) carry the tension
@@ -660,8 +674,8 @@ export function barInfo(song: Song, absoluteBar: number): BarInfo {
     layers,
     fill: fillAt(song, section, inSection),
     brightness,
-    // even the finale keeps some headroom: hours of full distortion wear the ears out
-    drive: section.kind === 'finale' ? 0.85 : 0.25 + 0.6 * energy,
+    // even the finale keeps some headroom: hours of full distortion wear the ears out; the pop stays clean
+    drive: song.flavor === 'pop' ? 0.1 + 0.15 * energy : section.kind === 'finale' ? 0.85 : 0.25 + 0.6 * energy,
     riserBars: section.kind === 'break' && inSection === section.bars - Math.min(4, section.bars) ? Math.min(4, section.bars) : 0,
     impact: inSection === 0 && (previous?.kind === 'break' || previous?.kind === 'gap' || section.kind === 'finale'),
     bassStyle: section.second && song.bassStyle !== 'ebm' && song.bassStyle !== 'moroder' ? 'ebm' : song.bassStyle,
@@ -776,6 +790,8 @@ function kickAt(groove: Groove, step: number): number {
     case 'half': return step === 0 ? 1 : 0;
     case 'broken': return step === 0 ? 1 : step === 10 ? 0.9 : 0;
     case 'electro': return step === 0 || step === 8 ? 1 : step === 10 ? 0.75 : 0;
+    // the one, the "and" of two, the three: the kick of a funk band
+    case 'funk': return step === 0 ? 1 : step === 8 ? 0.9 : step === 6 ? 0.7 : 0;
   }
 }
 
@@ -813,7 +829,12 @@ export function stepEvents(song: Song, absoluteStep: number): StepEvents {
   const move = song.progression[(bar >> 1) % song.progression.length];
 
   if (layers.kick) events.kick = kickAt(info.section.groove, step);
-  if (layers.clap) events.clap = info.section.groove === 'electro' ? (step === 4 || step === 12 ? 1 : 0) : level(song, 'clap', info, step);
+  if (layers.clap) {
+    if (info.section.groove === 'electro') events.clap = step === 4 || step === 12 ? 1 : 0;
+    // the pop claps like a crowd of hands: on two and four, and a double clap before the one
+    else if (song.flavor === 'pop') events.clap = step === 4 || step === 12 ? 1 : step === 14 || step === 15 ? 0.7 : step === 7 && bar % 2 === 1 ? 0.6 : 0;
+    else events.clap = level(song, 'clap', info, step);
+  }
   if (layers.hat) events.hat = level(song, 'hat', info, step) * (info.section.groove === 'half' && step % 2 === 1 ? 0.5 : 0.8);
   if (layers.openHat) events.openHat = level(song, 'openHat', info, step) * 0.7;
   // the ride plays eighths only
@@ -833,7 +854,9 @@ export function stepEvents(song: Song, absoluteStep: number): StepEvents {
 
   if (layers.metal) {
     const i = (step + song.metal.rotation) % 16;
-    if ((i * song.metal.k) % 16 < song.metal.k) events.metal = { kind: unit(song.seed, Ch.Note, INSTRUMENT.metal, i) < 0.5 ? 'cowbell' : 'clave', velocity: 0.6 + 0.3 * unit(song.seed, Ch.Velocity, absoluteStep, 1) };
+    // the pop rings the cowbell only
+    const cowbell = song.flavor === 'pop' || unit(song.seed, Ch.Note, INSTRUMENT.metal, i) < 0.5;
+    if ((i * song.metal.k) % 16 < song.metal.k) events.metal = { kind: cowbell ? 'cowbell' : 'clave', velocity: 0.6 + 0.3 * unit(song.seed, Ch.Velocity, absoluteStep, 1) };
   }
 
   if (layers.bass) events.bass = bassAt(song, info, step, root + move);
@@ -841,9 +864,12 @@ export function stepEvents(song: Song, absoluteStep: number): StepEvents {
   if (layers.lead) leadAt(song, info, step, root + move, events);
 
   if (layers.chords) {
-    if (song.flavor === 'french') {
-      const velocity = level(song, 'chords', info, step);
-      if (velocity > 0) events.chord = { notes: song.stabShape.map((n) => root + 36 + move + n), velocity, length: 1.5 };
+    if (song.flavor === 'french' || song.flavor === 'pop') {
+      // the french loop rings a little; the pop's chords are short, bright and sparse, the
+      // syncopated chank of a clean guitar
+      const funk = song.flavor === 'pop';
+      const velocity = funk ? (choose(FUNK_CHANKS, song.seed, Ch.Note, INSTRUMENT.chords, version(song, 'chords', bar)).includes(step) ? 0.8 : 0) : level(song, 'chords', info, step);
+      if (velocity > 0) events.chord = { notes: song.stabShape.map((n) => root + (funk ? 48 : 36) + move + n), velocity, length: funk ? 0.6 : 1.5 };
     } else if (step === 0 && bar % 2 === 0) {
       // motorik: a sustained pad under the machines
       events.chord = { notes: [0, 7, 12, 15].map((n) => root + 36 + move + n), velocity: 0.5, length: 31 };
@@ -852,20 +878,39 @@ export function stepEvents(song: Song, absoluteStep: number): StepEvents {
 
   if (inFill) applyFill(song, events, fill, step, root);
   // one key for every instrument: whatever the chord shape, the motif or the acid line asks
-  // for, the note lands on the track's minor scale, so the parts never rub against each other
-  for (const hit of [events.perc, events.bass, events.acid, events.lead]) if (hit) hit.note = inKey(hit.note, root);
-  if (events.chord) events.chord.notes = events.chord.notes.map((note) => inKey(note, root));
+  // for, the note lands on the track's scale, so the parts never rub against each other
+  for (const hit of [events.perc, events.bass, events.acid, events.lead]) if (hit) hit.note = inKey(hit.note, root, song.scale);
+  if (events.chord) events.chord.notes = events.chord.notes.map((note) => inKey(note, root, song.scale));
   return events;
 }
 
-/** Steps of the natural minor scale (aeolian) above the root, in semitones. */
+/** Steps of the natural minor scale (aeolian) and of the major scale above the root, in semitones. */
 const MINOR_SCALE = [0, 2, 3, 5, 7, 8, 10];
+const MAJOR_SCALE = [0, 2, 4, 5, 7, 9, 11];
 
-/** A note on the minor scale of `root`: a note outside it moves down a semitone onto the scale. */
-function inKey(note: number, root: number): number {
+/** A note on the scale of `root`: a note outside it moves down a semitone onto the scale. */
+function inKey(note: number, root: number, scale: readonly number[]): number {
   const degree = (((note - root) % 12) + 12) % 12;
-  return MINOR_SCALE.includes(degree) ? note : note - 1;
+  return scale.includes(degree) ? note : note - 1;
 }
+
+/** The steps the pop's chords chank on: off the beat, a sixteenth early now and then. */
+const FUNK_CHANKS: readonly (readonly number[])[] = [
+  [2, 7, 10, 14],
+  [3, 6, 11, 14],
+  [2, 6, 10, 13],
+  [2, 10, 11, 15],
+];
+
+/**
+ * The pop's slap bass: the root on the one, octave pops and ghost notes, the fifth and the
+ * seventh in passing. Per pattern: [step, semitones above the root, velocity].
+ */
+const FUNK_BASS: readonly (readonly [number, number, number])[][] = [
+  [[0, 0, 1], [3, 12, 0.5], [6, 0, 0.9], [7, 12, 0.6], [10, 7, 0.8], [11, 0, 0.4], [14, 10, 0.8]],
+  [[0, 0, 1], [2, 0, 0.4], [4, 12, 0.8], [7, 0, 0.9], [9, 12, 0.6], [12, 7, 0.8], [14, 12, 0.7], [15, 10, 0.5]],
+  [[0, 0, 1], [3, 0, 0.5], [5, 12, 0.8], [8, 0, 0.9], [10, 12, 0.7], [13, 7, 0.6], [15, 12, 0.5]],
+];
 
 function bassAt(song: Song, info: BarInfo, step: number, root: number): Hit | null {
   const v = version(song, 'bass', info.bar);
@@ -880,6 +925,17 @@ function bassAt(song: Song, info: BarInfo, step: number, root: number): Hit | nu
       // eighths in alternating octaves; a 16th echo in the band turns them into a pulse
       if (step % 2 === 1) return null;
       return { note: root + 12 + (step % 4 === 2 ? 12 : 0), velocity: 0.85, length: 1, accent: false, slide: false };
+    }
+    case 'eighths': {
+      // indie dance-pop: plain driving eighths on the root, up an octave on the last one
+      if (step % 2 === 1) return null;
+      return { note: root + 12 + (step === 14 ? 12 : 0), velocity: step % 4 === 0 ? 0.9 : 0.7, length: 2, accent: false, slide: false };
+    }
+    case 'funk': {
+      const hit = choose(FUNK_BASS, song.seed, Ch.Note, INSTRUMENT.bass, v).find(([at]) => at === step);
+      if (!hit) return null;
+      // strong notes ring for two sixteenths, ghost notes are short
+      return { note: root + 12 + hit[1], velocity: hit[2], length: hit[2] > 0.6 ? 2 : 1, accent: hit[2] >= 0.9, slide: false };
     }
     default: {
       const velocity = level(song, 'bass', info, step);
