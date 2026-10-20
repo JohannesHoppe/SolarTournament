@@ -265,6 +265,8 @@ export class Game implements OnlineGame {
   private watchIndex = 0;
   /** Number of the running online round; a new number resets the scores. */
   private roundId = 0;
+  /** The round this browser was in when it started over in the tournament (see rejoin), until it knows the round again. */
+  private rejoinedFrom: number | null = null;
   private ships: Ship[] = [];
   private bots: Bot[] = [];
   private me: Ship | null = null;
@@ -965,6 +967,7 @@ export class Game implements OnlineGame {
 
     // online the round is unknown until the lead browser tells it (see syncRound)
     this.roundId = mode === 'online' ? -1 : 0;
+    this.rejoinedFrom = null;
     this.resultsShownFor = null;
     this.pendingRocks.length = 0;
     this.soloSeed = 1 + Math.floor(Math.random() * 2147483000);
@@ -1054,16 +1057,27 @@ export class Game implements OnlineGame {
     this.bots = this.bots.filter((b) => b.ship !== ship);
   }
 
-  /** Adds or removes own bots until this browser runs `count` of them. */
-  setBotCount(count: number) {
+  /**
+   * Adds or removes own bots until this browser runs `count` of them. The first new ones adopt
+   * the `heirs` (bots another browser ran, see Ship.adopt), which leave the scene in their favor.
+   */
+  setBotCount(count: number, heirs: readonly Ship[] = []) {
     while (this.bots.length > count) this.removeShip(this.bots[this.bots.length - 1].ship);
+    for (const heir of heirs) this.removeShip(heir);
     const taken = new Set(this.ships.map((s) => s.name));
-    const names = BOT_NAMES.filter((n) => !taken.has(n));
-    for (let i = this.bots.length, free = 0; i < count; i++, free++) {
+    const names = BOT_NAMES.filter((n) => !taken.has(n) && !heirs.some((heir) => heir.name === n));
+    for (let i = this.bots.length, next = 0, free = 0; i < count; i++) {
       const id = this.online ? `b:${this.online.selfId}:${i}` : `bot${i}`;
-      const ship = this.addShip(id, names[free] ?? `Bot ${i + 1}`, i % 2 === 0 ? 'alien' : 'human', false);
+      const heir = heirs[next++];
+      const ship = heir
+        ? this.addShip(id, heir.name, heir.type, false)
+        : this.addShip(id, names[free++] ?? `Bot ${i + 1}`, i % 2 === 0 ? 'alien' : 'human', false);
       this.bots.push(new Bot(ship, 0.2 + (i % 3) * 0.2));
-      this.respawn(ship);
+      if (!heir) this.respawn(ship);
+      else {
+        ship.adopt(heir, this.time);
+        if (!ship.alive) ship.respawnAt = this.time + RESPAWN_SECONDS;
+      }
     }
   }
 
@@ -1110,11 +1124,21 @@ export class Game implements OnlineGame {
     this.hearDebris(destroyed.object.position, destroyed.meanRadius);
   }
 
+  rejoin() {
+    if (this.roundId >= 0) this.rejoinedFrom = this.roundId;
+    this.roundId = -1;
+    this.pendingRocks.length = 0;
+  }
+
   syncRound(round: RoundState) {
     // the first round state a newcomer hears only tells it which round runs: its field is the
-    // lead's snapshot already (see Online's onSync), not a fresh one
-    if (this.roundId < 0) this.roundId = round.id;
-    else if (round.id > this.roundId) {
+    // lead's snapshot already (see Online's onSync), not a fresh one. A browser that started
+    // over in another round than its own leaves its own behind.
+    if (this.roundId < 0) {
+      if (this.rejoinedFrom !== null && this.rejoinedFrom !== round.id) this.clearRound();
+      this.roundId = round.id;
+      this.rejoinedFrom = null;
+    } else if (round.id > this.roundId) {
       this.roundId = round.id;
       this.startNextRound();
     }
@@ -1129,8 +1153,10 @@ export class Game implements OnlineGame {
   }
 
   leadRound(): RoundState {
-    // the first lead browser of a room starts the clock; a new one continues the synced clock
-    if (this.roundId < 0) this.roundId = 0;
+    // the first lead browser of a room starts the clock; a new one continues the synced clock,
+    // and one that started over without hearing another lead continues its own round
+    if (this.roundId < 0) this.roundId = this.rejoinedFrom ?? 0;
+    this.rejoinedFrom = null;
     if (!Number.isFinite(this.roundEndsAtWall)) this.setRoundEnd(ROUND_SECONDS);
     // the lead browser starts the next round once the scoreboard has been shown
     if (wallClock() >= this.roundEndsAtWall + RESULTS_SECONDS) {
@@ -1157,16 +1183,21 @@ export class Game implements OnlineGame {
    * wreckage come back fresh, as in a solo round.
    */
   private startNextRound() {
+    this.clearRound();
+    this.field.generate(FIELD_SEED);
+    // hits that arrived before this browser started the round
+    const pending = this.pendingRocks.splice(0);
+    for (const rock of pending) if (rock.round >= this.roundId) this.remoteRock(rock.id, rock.at, rock.round);
+  }
+
+  /** Online: scores of the own ships start from zero, the scoreboard closes, the wreckage goes. */
+  private clearRound() {
     // the own clone too while it watches: it starts the round it flies with nothing
     for (const ship of this.ships) if (ship.owner === null) ship.score = ship.kills = ship.deaths = 0;
-    this.field.generate(FIELD_SEED);
     this.brokenHere.clear();
     this.lastRockHit.clear();
     this.wrecks.clear();
     $('results').hidden = true;
-    // hits that arrived before this browser started the round
-    const pending = this.pendingRocks.splice(0);
-    for (const rock of pending) if (rock.round >= this.roundId) this.remoteRock(rock.id, rock.at, rock.round);
   }
 
   /** Spawns a ship on the edge of the field, facing the center, away from asteroids. */
@@ -1802,7 +1833,7 @@ export class Game implements OnlineGame {
       this.effects.debris(end, normal, 120);
       const destroyed = this.field.hit(asteroid.id);
       if (this.online && !destroyed) this.lastRockHit.set(asteroid.id, { at: this.field.clock, ship: shooter });
-      this.online?.sendRock(asteroid.id, this.field.clock, Math.max(0, this.roundId));
+      this.online?.sendRock(asteroid.id, this.field.clock, this.roundId >= 0 ? this.roundId : (this.rejoinedFrom ?? 0));
       if (destroyed) {
         shooter.score += ASTEROID_POINTS[destroyed.generation];
         // online, another Host may have broken the same rock a moment earlier (see remoteRock)

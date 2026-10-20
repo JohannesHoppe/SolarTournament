@@ -101,6 +101,8 @@ export class AsteroidField {
   /** Rocks broken so far, with the field time each broke (for snapshot). */
   private readonly broken = new Map<string, number>();
   private readonly templates: Template[];
+  /** The seed of the field as generated, from which restore rebuilds it. */
+  private seed = 0;
 
   /** `far` holds the same shapes in less detail, drawn for rocks beyond FAR_LEVEL; collisions always use the full shapes. */
   constructor(objects: THREE.Object3D[], far: THREE.Object3D[] = []) {
@@ -118,6 +120,7 @@ export class AsteroidField {
   }
 
   generate(seed: number) {
+    this.seed = seed;
     this.clear();
     this.clock = 0;
     const r = new Randomizer(seed);
@@ -252,11 +255,13 @@ export class AsteroidField {
   }
 
   /**
-   * Rebuilds the field from a snapshot: breaks every broken rock at the field time it broke,
-   * parents first (the fragments are deterministic), removes rocks that are gone, takes over
-   * the hits and the field time. A fragment's birth is its parent's break time as well.
+   * Rebuilds the field from a snapshot, starting over from the generated field (this browser
+   * may have broken rocks the snapshot still holds): breaks every broken rock at the field time
+   * it broke, parents first (the fragments are deterministic), removes rocks that are gone,
+   * takes over the hits and the field time. A fragment's birth is its parent's break time as well.
    */
   restore(state: FieldState) {
+    this.generate(this.seed);
     const listed = new Map(state.a.map((s) => [s.id, s]));
     const breaks = new Map(state.x.map((s) => [s.id, s.b]));
     for (const rock of state.a) {

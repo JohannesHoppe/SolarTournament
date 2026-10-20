@@ -12,11 +12,19 @@ const STATE_RATE = 15;
 const SETTLE_MS = 6000;
 /**
  * A peer that has sent nothing for this long cannot lead (ms): a lead browser in a hidden tab
- * runs no frames and sends nothing, so the next one takes over until it is back. A peer that
- * comes back from such a silence follows the others for as long again before it may lead, so
- * it first takes over the round clock and field time that ran on without it.
+ * runs no frames and sends nothing, so the next one takes over. A peer that speaks again after
+ * such a silence counts as live only after as long again, so that it can report first whether
+ * it started over (see Session.restart).
  */
 const LIVENESS_MS = 2500;
+/**
+ * A browser that ran no frames or heard none of its peers for this long starts over (ms). It
+ * judges itself cut off sooner than the others judge it silent, so the one whose link failed
+ * is the one that starts over, not the ones that went on without it.
+ */
+const CUT_OFF_MS = 2000;
+/** A reported join time this much later than the known one means the peer started over (s); well above network jitter. */
+const RESTART_SLACK = 1;
 /** Places per tournament: Hosts and bots together; with bots, the lead browser fills free places. */
 export const TOURNAMENT_SIZE = 8;
 /** Ships one peer may run: its own and the bots of a lead browser, at most a full tournament. */
@@ -73,7 +81,8 @@ class Budget {
  * the owner of the ship it hit; the owner applies the damage and announces a destruction.
  * Asteroid hits go to everyone, fragments are deterministic. The lead browser (the peer
  * longest in the room that is still sending) runs the bots and the round clock and brings
- * newcomers up to date.
+ * newcomers up to date. A browser that lost the others for a while starts over as the newest
+ * in the room: the others went on without it, so it takes their round and field.
  *
  * Nothing that arrives is trusted: every message is checked (see validate.ts), messages about
  * a ship only count from the peer that runs it, and every kind of message has a rate limit.
@@ -87,22 +96,34 @@ export class Session {
   onSync: (field: FieldState) => void = () => {};
   onPeerJoin: (id: string) => void = () => {};
   onPeerLeave: (id: string) => void = () => {};
+  /** This browser started over (see restart): it takes the round and field of the lead browser again. */
+  onRestart: () => void = () => {};
+  /** Another peer started over and waits for the field. */
+  onPeerRestart: (id: string) => void = () => {};
 
   private nextStateAt = 0;
-  /** When this peer joined, on this browser's clock (s). */
+  /** When this peer entered the room, on this browser's clock (s). */
   private readonly joinedAt = seconds();
+  /** When this peer joined or last started over, on this browser's clock (s): its place in the election. */
+  private startedAt = this.joinedAt;
+  private restartedAt = -Infinity;
   /**
-   * When each peer joined, on this browser's clock: its reported time in the room, subtracted
-   * from the moment its first message arrived. Every peer works it out from the same reports,
-   * so all of them elect the same lead; it is kept when a link drops and comes back.
+   * When each peer joined or last started over, on this browser's clock: its reported time in
+   * the room, subtracted from the moment its message arrived. Every peer works it out from the
+   * same reports, so all of them elect the same lead. A report can only move it later (the
+   * peer started over), never earlier, so no peer can push itself ahead of the others.
    */
   private readonly peerJoinedAt = new Map<string, number>();
+  /** When each peer last spoke; kept when its link drops, so its return is noticed. */
   private readonly lastHeard = new Map<string, number>();
+  /** When any peer last spoke. */
+  private lastHeardAny = -Infinity;
   /** When a peer spoke again after a silence of more than LIVENESS_MS. */
   private readonly backAt = new Map<string, number>();
-  /** When this browser last ran a frame, and when it came back from a silence of its own. */
+  /** When this browser last ran a frame. */
   private lastFrameAt = 0;
-  private selfBackAt = -Infinity;
+  /** The lead this browser followed at the last frame. */
+  private followed: string | null = null;
   /** When each shooter last hit each ship ("shooter>target"). */
   private readonly lastHit = new Map<string, number>();
   private readonly hitBudget = new Budget(MAX_HITS_PER_SECOND);
@@ -147,12 +168,14 @@ export class Session {
       if (rock && at !== null && round !== null && this.rockBudget.spend(from)) this.guard(() => this.onRock(rock, at, round));
     });
     transport.on('y', (d, from) => {
-      // only a newcomer takes a field, once, and only from a peer that was here before it
+      // only a browser that just joined or started over takes a field, once, and only from a
+      // peer that was here before it
       const field = fieldState(d?.f);
       const age = num(d?.g, 0, MAX_FIELD_TIME);
-      if (!field || age === null || this.synced || !this.justJoined) return;
+      if (!field || age === null) return;
       this.hear(from, age);
-      if ((this.peerJoinedAt.get(from) ?? Infinity) >= this.joinedAt) return;
+      if (this.synced || seconds() - this.startedAt >= SETTLE_MS / 1000) return;
+      if ((this.peerJoinedAt.get(from) ?? Infinity) >= this.startedAt) return;
       this.synced = true;
       this.guard(() => this.onSync(field));
     });
@@ -160,8 +183,7 @@ export class Session {
       if (!this.left) this.guard(() => this.onPeerJoin(peer));
     });
     transport.onPeerLeave((peer) => {
-      // the join time stays: a link that comes back belongs to the same peer
-      this.lastHeard.delete(peer);
+      // join time and last word stay: a link that comes back belongs to the same peer
       this.backAt.delete(peer);
       for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget]) budget.forget(peer);
       for (const key of this.lastHit.keys()) if (ownerOf(key.slice(0, key.indexOf('>'))) === peer) this.lastHit.delete(key);
@@ -184,35 +206,30 @@ export class Session {
   }
 
   /**
-   * The peer that has been in the room longest and is still sending leads (ties: lower id),
-   * so a newcomer never takes over a running tournament. Every peer comes to the same answer
-   * on its own.
+   * The peer that has been in the room longest (without starting over) and is still sending
+   * leads (ties: lower id), so a newcomer never takes over a running tournament. Every peer
+   * comes to the same answer on its own.
    */
   get isLead() {
     return !this.justJoined && this.leadId === this.selfId;
   }
 
   get leadId(): string {
-    const now = seconds();
-    // a browser back from a silence follows the others until it has caught up
-    let lead: string | null = now - this.selfBackAt < LIVENESS_MS / 1000 ? null : this.selfId;
-    let leadJoined = lead ? this.joinedAt : Infinity;
+    let lead = this.selfId;
+    let leadJoined = this.startedAt;
     for (const peer of this.peers) {
       if (!this.isLive(peer)) continue;
       // peers that have not reported yet count as newer
       const joined = this.peerJoinedAt.get(peer) ?? Infinity;
-      if (lead === null || joined < leadJoined || (joined === leadJoined && peer < lead)) {
+      if (joined < leadJoined || (joined === leadJoined && peer < lead)) {
         lead = peer;
         leadJoined = joined;
       }
     }
-    return lead ?? this.selfId;
+    return lead;
   }
 
-  /**
-   * A peer is live while it sends: heard within LIVENESS_MS, and not just back from a silence
-   * (see LIVENESS_MS). The ships of a peer that is not live are not shown.
-   */
+  /** A peer is live while it sends: heard within LIVENESS_MS, and not just back from a silence (see LIVENESS_MS). */
   isLive(peer: string) {
     const now = seconds();
     return now - (this.lastHeard.get(peer) ?? -Infinity) <= LIVENESS_MS / 1000 && now - (this.backAt.get(peer) ?? -Infinity) >= LIVENESS_MS / 1000;
@@ -230,7 +247,7 @@ export class Session {
   rank() {
     if (this.justJoined) return this.peers.length;
     let earlier = 0;
-    for (const peer of this.peers) if ((this.peerJoinedAt.get(peer) ?? Infinity) < this.joinedAt) earlier++;
+    for (const peer of this.peers) if ((this.peerJoinedAt.get(peer) ?? Infinity) < this.startedAt) earlier++;
     return earlier;
   }
 
@@ -239,11 +256,20 @@ export class Session {
     return seconds() - this.joinedAt < SETTLE_MS / 1000;
   }
 
-  /** Called every frame: notes when no frames ran for a while (a hidden tab), so the others went on without this browser. */
+  /** Called every frame, before anything is sent: notices when this browser has to start over (see restart). */
   tick() {
     const now = seconds();
-    if (this.lastFrameAt && now - this.lastFrameAt > LIVENESS_MS / 1000) this.selfBackAt = now;
+    // no frames ran for a while (a hidden tab, a sleeping device): the others went on without it
+    if (this.lastFrameAt && now - this.lastFrameAt > CUT_OFF_MS / 1000 && this.peers.length > 0) this.restart();
     this.lastFrameAt = now;
+    // the lead changed to a peer this browser could not hear for a while: two groups that lost
+    // each other meet again, and the one whose lead is not the oldest takes the other's world
+    const lead = this.leadId;
+    if (lead === this.followed) return;
+    const back = this.backAt.get(lead);
+    const merge = this.followed !== null && lead !== this.selfId && back !== undefined && now - back < (2 * LIVENESS_MS) / 1000;
+    if (merge && now - this.restartedAt > (2 * LIVENESS_MS) / 1000) this.restart();
+    this.followed = this.leadId;
   }
 
   /** Whether the own states are due now; the caller builds them only then. */
@@ -285,18 +311,42 @@ export class Session {
     this.transport.leave();
   }
 
-  /** Seconds this peer has been in the room, reported to the others for the lead election. */
+  /** Seconds since this peer joined or last started over, reported to the others for the lead election. */
   private age() {
-    return +(seconds() - this.joinedAt).toFixed(3);
+    return +(seconds() - this.startedAt).toFixed(3);
   }
 
-  /** A peer spoke: notes when, and when it joined (only the first report counts). */
+  /**
+   * Starts over as the newest peer in the room: this browser lost the others for a while, and
+   * they went on without it. It gives up the lead (and with it the bots, which the next lead
+   * adopts), takes its place behind all others, and takes round and field from the lead again.
+   */
+  private restart() {
+    const now = seconds();
+    this.startedAt = this.restartedAt = now;
+    this.synced = false;
+    this.guard(() => this.onRestart());
+  }
+
+  /** A peer spoke: notes when, and when it joined or started over. */
   private hear(peer: string, age: number) {
     const now = seconds();
     const last = this.lastHeard.get(peer);
+    const cutOff = now - this.lastHeardAny > CUT_OFF_MS / 1000;
+    this.lastHeardAny = now;
     if (last !== undefined && now - last > LIVENESS_MS / 1000) this.backAt.set(peer, now);
     this.lastHeard.set(peer, now);
-    if (!this.peerJoinedAt.has(peer)) this.peerJoinedAt.set(peer, now - age);
+    const joined = now - age;
+    const known = this.peerJoinedAt.get(peer);
+    if (known === undefined) this.peerJoinedAt.set(peer, joined);
+    else if (joined > known + RESTART_SLACK) {
+      // the peer started over: it was the one that was gone
+      this.peerJoinedAt.set(peer, joined);
+      this.guard(() => this.onPeerRestart(peer));
+    } else if (last !== undefined && cutOff) {
+      // a peer this browser knew speaks again after it heard nobody for a while: its own link was down
+      this.restart();
+    }
   }
 
   private receiveStates(d: unknown, from: string) {
@@ -309,6 +359,9 @@ export class Session {
     this.hear(from, age);
     const round = d.r === null ? null : this.roundState(d.r);
     if (round === undefined) return;
+    // two browsers lead at once (their join times lie too close to tell apart over the network,
+    // or both lost each other): the one with the higher id steps back
+    if (round && this.isLead && this.isLive(from) && from < this.selfId) this.restart();
     this.guard(() => this.onStates(states as ShipState[], round, from));
   }
 

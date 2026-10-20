@@ -184,6 +184,8 @@ export class Ship {
     orientation: new THREE.Quaternion(),
     spin: new THREE.Vector3(),
     at: 0,
+    /** whether the owner reported a living clone; `alive` also goes false while the owner is silent */
+    alive: false,
   };
   private lastShotAt = -Infinity;
   private readonly engine: EngineParts;
@@ -256,6 +258,28 @@ export class Ship {
   }
 
   /**
+   * Takes over a ship another peer ran, as its last state left it (moved on by its velocity):
+   * score, kills, deaths, damage and whether its clone lives. A new lead browser adopts the
+   * bots of the one before it this way.
+   */
+  adopt(from: Ship, now: number) {
+    const r = from.remote;
+    this.flight.reset(local.copy(r.position).addScaledVector(r.velocity, Math.max(0, now - r.at)), r.orientation);
+    this.flight.velocity.copy(r.velocity);
+    this.flight.angularVelocity.copy(r.spin);
+    this.hull = from.hull;
+    this.drive = from.drive;
+    this.thrusters = from.thrusters;
+    this.protectedUntil = from.protectedUntil;
+    this.score = from.score;
+    this.kills = from.kills;
+    this.deaths = from.deaths;
+    this.alive = r.alive;
+    this.root.visible = r.alive;
+    this.syncTransform();
+  }
+
+  /**
    * The ship's state as it travels over the network; `full` adds name, type, score, kills
    * and deaths, which otherwise come along only when they changed or a second has passed.
    */
@@ -292,6 +316,7 @@ export class Ship {
     r.orientation.fromArray(state.q).normalize();
     r.spin.fromArray(state.w);
     r.at = now;
+    r.alive = state.a;
     this.flight.velocity.copy(r.velocity);
     this.flight.throttle = state.th;
     this.hull = state.h;

@@ -13,7 +13,10 @@ export interface OnlineGame {
   ownedShips(): Ship[];
   addRemoteShip(state: ShipState, owner: string): Ship;
   removeShip(ship: Ship): void;
-  setBotCount(count: number): void;
+  /** Runs `count` own bots; the first adopt the `heirs`, bots another peer ran, with everything they had. */
+  setBotCount(count: number, heirs?: readonly Ship[]): void;
+  /** This browser started over in the tournament: the next round clock and field come from the lead browser. */
+  rejoin(): void;
   showBeam(shooter: Ship, from: THREE.Vector3, to: THREE.Vector3): void;
   /** A beam from another peer hit a ship this browser simulates. */
   applyLaserHit(target: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null): void;
@@ -79,8 +82,16 @@ export class Online {
       this.sendFull = true;
       this.balanceBots();
     };
+    session.onPeerRestart = (peer) => {
+      // a browser that started over takes the field again, like a newcomer
+      if (session.isLead) session.sendSync(peer, game.field.snapshot());
+      this.sendFull = true;
+    };
+    session.onRestart = () => game.rejoin();
     session.onPeerLeave = (peer) => {
       this.flying.delete(peer);
+      // a lead browser that leaves hands its bots to the next one before its ships go
+      this.followLead();
       for (const ship of [...game.allShips()]) if (ship.owner === peer) game.removeShip(ship);
       this.balanceBots();
     };
@@ -108,7 +119,6 @@ export class Online {
   /** Sends the own ships; the lead browser adds the round clock. Rebalances bots when the lead changes. */
   update(now: number) {
     this.session.tick();
-    const lead = this.isLead;
     // a Host beyond the places of the tournament watches, and flies as soon as a place comes free
     const watching = this.session.rank() >= TOURNAMENT_SIZE;
     if (watching !== this.watching) {
@@ -122,14 +132,12 @@ export class Online {
         ship.root.visible = false;
       }
     }
-    const pilots = this.pilots;
-    if (this.wasLead !== lead || this.balancedFor !== pilots) {
-      this.wasLead = lead;
-      this.balancedFor = pilots;
-      this.balanceBots();
-    }
+    this.followLead();
+    // the bots of a browser that no longer leads are gone; the new lead has adopted them
+    const lead = this.session.leadId;
+    for (const ship of this.game.allShips()) if (ship.owner !== null && ship.owner !== lead && ship.id.startsWith('b:')) this.game.removeShip(ship);
     // the lead browser keeps its round clock every frame; the states go out at their own rate
-    const round = lead ? this.game.leadRound() : null;
+    const round = this.isLead ? this.game.leadRound() : null;
     if (!this.session.statesDue(now)) return;
     this.session.sendStates(
       now,
@@ -160,15 +168,36 @@ export class Online {
     this.session.leave();
   }
 
-  /** In a room with bots the lead browser fills the free places with them; a Host always takes a bot's place. */
+  /** Rebalances the bots when the lead or the number of pilots changed. */
+  private followLead() {
+    const lead = this.isLead;
+    const pilots = this.pilots;
+    if (this.wasLead === lead && this.balancedFor === pilots) return;
+    this.wasLead = lead;
+    this.balancedFor = pilots;
+    this.balanceBots();
+  }
+
+  /**
+   * In a room with bots the lead browser fills the free places with them; a Host always takes
+   * a bot's place. A browser that has just become the lead adopts the bots of the one before
+   * it, so they fly on with their scores, damage and positions.
+   */
   private balanceBots() {
-    this.game.setBotCount(this.isLead && this.bots ? Math.max(0, TOURNAMENT_SIZE - this.pilots) : 0);
+    const lead = this.isLead;
+    const heirs = lead ? this.game.allShips().filter((ship) => ship.owner !== null && ship.id.startsWith('b:')) : [];
+    this.game.setBotCount(lead && this.bots ? Math.max(0, TOURNAMENT_SIZE - this.pilots) : 0, heirs);
   }
 
   private receiveStates(states: ShipState[], round: RoundState | null, peer: string) {
     const now = this.game.time;
+    // a peer that started over hands its bots to the next lead before they are gone
+    this.followLead();
+    const lead = this.session.leadId;
     const seen = new Set<string>();
     for (const state of states) {
+      // only the lead browser runs bots: those of a peer that just stopped leading are gone
+      if (state.id.startsWith('b:') && peer !== lead) continue;
       seen.add(state.id);
       // the session only passes on ships whose id names the sender as their owner; a ship
       // first shows once a state brings its name and type
@@ -185,7 +214,7 @@ export class Online {
     }
     // bots the peer no longer runs (e.g. it stopped leading)
     for (const ship of [...this.game.allShips()]) if (ship.owner === peer && !seen.has(ship.id)) this.game.removeShip(ship);
-    if (round && peer === this.session.leadId) this.game.syncRound(round);
+    if (round && peer === lead) this.game.syncRound(round);
   }
 
   private find(id: string): Ship | null {

@@ -106,8 +106,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `music/transmission.ts` | The on-screen transmission: whatever the radio says, in neon, while it is spoken (game and radio page) |
 | `music/voice.ts` | Loads the pre-rendered voice sprite (once, shared) |
 | **`net/`** | **Online tournament** |
-| `net/online.ts` | Ship ownership, what goes over the network, the lead browser's bots |
-| `net/session.ts` | Tournament protocol: message types, sender checks and rate limits, election of the lead browser (longest in the room and still sending), room codes |
+| `net/online.ts` | Ship ownership, what goes over the network, the lead browser's bots (a new lead adopts them) |
+| `net/session.ts` | Tournament protocol: message types, sender checks and rate limits, election of the lead browser (longest in the room and still sending), starting over after a lost link, room codes |
 | `net/room.ts` | A tournament room as its link describes it: code, name, public or private, bots or not |
 | `net/lobby.ts` | The lobby: public tournaments announce themselves, the list of tournaments listens |
 | `net/validate.ts` | Checks every message from other browsers before the game uses it |
@@ -140,7 +140,7 @@ In dev mode the game hangs on the window as `window.game`. It lets you read and 
 - Simulate keys: `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))`
 - Freeze time for screenshots: `game.timeScale = 0`
 - Disable bots: set the other ships to `alive = false` and `respawnAt = Infinity`
-- Multiplayer: open two tabs with `?local=1#t=<code>` (at least six letters or digits) and click "Join tournament" in both (BroadcastChannel, no internet); without `local=1` the same test runs over Trystero and real Nostr relays
+- Multiplayer: open two tabs with `?local=1#t=<code>` (at least six letters or digits) and click "Join tournament" in both (BroadcastChannel, no internet); without `local=1` the same test runs over Trystero and real Nostr relays. Several tabs render too slowly without a GPU (frame gaps make browsers start over, see `CUT_OFF_MS`): switch rendering off with `game.composer.render = () => {}`. Cut a tab's link with `const t = game.online.session.transport; t._post = t.post; t.post = () => {}; t._recv = t.channel.onmessage; t.channel.onmessage = null` (restore both to reconnect); freeze it with a busy loop of a few seconds
 - Render music offline: `const { renderPreview } = await import('/src/music/preview.ts')`, then `renderPreview('Orbit Terror', 'round', undefined, fromSecond, seconds)` (the title is the seed; a flavor can be forced); returns a WAV file as base64 that can be saved and listened to
 - Trigger a glitch: `game.glitch.trigger(1, 5)`; idle glitches in the menu make element screenshots fail, so stop them with `game.nextIdleGlitch = Infinity`
 
