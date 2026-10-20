@@ -86,6 +86,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `world/rocks.ts` | Generates the 16 asteroid shapes: noise, craters, four kinds of rock; integer hashing and polynomials only, so every browser builds identical shapes |
 | `world/wrecks.ts` | Wreckage of destroyed ships |
 | **`ship/`** | **Ships and who flies them** |
+| `ship/models.ts` | The interceptors' hulls, low poly in code; collider, drive flame and glows come from the model files |
 | `ship/ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, drive animation |
 | `ship/flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`) |
 | `ship/bots.ts` | Bot AI: desired velocity, turn and burn, aiming with spread |
@@ -126,7 +127,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 
 ## License
 
-The code is licensed under AGPL-3.0-or-later (`LICENSE`), the repository is public. Name, logo and domains are not licensed. The only files in `public/assets/` are Johannes' own ship models with their drive sprites (not licensed), the font Michroma (OFL) and, generated at build time and not versioned, the rendered voice (`public/assets/voice/`, made by `npm run voice` with espeak-ng and Kokoro; the output of a GPL program is not covered by the GPL). Asteroids, sky, particles, sound effects and music are generated in code. New dependencies must be compatible with the AGPL. Third-party assets only enter the repo with a clarified license, named in the README; when in doubt, generate in code. Never commit keys, tokens or credentials. The menu links the source code, as the AGPL requires for a network game.
+The code is licensed under AGPL-3.0-or-later (`LICENSE`), the repository is public. Name, logo and domains are not licensed. The only files in `public/assets/` are Johannes' own ship models with their drive sprites (not licensed; the game takes their colliders, drive flames and glows, the hulls are built in code in `ship/models.ts`), the font Michroma (OFL) and, generated at build time and not versioned, the rendered voice (`public/assets/voice/`, made by `npm run voice` with espeak-ng and Kokoro; the output of a GPL program is not covered by the GPL). Asteroids, sky, particles, sound effects and music are generated in code. New dependencies must be compatible with the AGPL. Third-party assets only enter the repo with a clarified license, named in the README; when in doubt, generate in code. Never commit keys, tokens or credentials. The menu links the source code, as the AGPL requires for a network game.
 
 ### Typography
 

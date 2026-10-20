@@ -100,7 +100,8 @@ export class Radar {
       this.stalk(p, 'rgba(150, 160, 180, 0.25)');
       ctx.fillStyle = rock.solid ? 'rgba(140, 170, 220, 0.55)' : 'rgba(170, 160, 150, 0.5)';
       ctx.beginPath();
-      ctx.arc(p.x, p.y, Math.max(1.5, Math.min(radius * 0.4, rock.meanRadius * p.scale)), 0, Math.PI * 2);
+      // near rocks would fill the sphere: a rock shows at most a sixth of its radius across
+      ctx.arc(p.x, p.y, Math.max(1.5, Math.min(radius / 6, rock.meanRadius * p.scale)), 0, Math.PI * 2);
       ctx.fill();
     }
     for (const mark of marks) {

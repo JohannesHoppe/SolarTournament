@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createRocks, DISTANT_DETAIL, FAR_DETAIL } from './world/rocks';
 import { debrisSet, hullSet, iceSet } from './world/shapes';
+import { alienInterceptor, humanInterceptor } from './ship/models';
 import type { TemplateKind, TemplateSet } from './world/asteroids';
 import { synthesizeSounds } from './sound/sounds';
 import { radialTexture, smokeTexture, sparkTexture } from './view/textures';
@@ -109,7 +110,8 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
 
   const rock = { near: asteroids, far: asteroidsFar };
   return {
-    ships: { human, alien },
+    // the hulls are built in code; the model files give collider, drive flame and glows
+    ships: { human: humanInterceptor(human), alien: alienInterceptor(alien) },
     belt,
     fieldSets: { rock, ice: iceSet(rock), debris: debrisSet(), hull: hullSet() },
     textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), glow },
