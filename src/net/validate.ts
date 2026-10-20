@@ -56,12 +56,25 @@ export function cleanName(x: unknown, max = MAX_NAME): string {
   return typeof x === 'string' ? x.replace(/[\p{Cc}\p{Cf}]/gu, '').trim().slice(0, max) : '';
 }
 
+/** A ship's state; name, type, score, kills and deaths come all together or not at all (see ShipState). */
 export function shipState(x: unknown): ShipState | null {
   if (!isRecord(x)) return null;
+  const slowKeys = ['n', 'k', 's', 'ki', 'de'] as const;
+  const present = slowKeys.filter((key) => key in x).length;
+  if (present !== 0 && present !== slowKeys.length) return null;
+  const slow =
+    present === 0
+      ? {}
+      : {
+          n: cleanName(x.n) || null,
+          k: x.k === 'human' || x.k === 'alien' ? x.k : null,
+          s: num(x.s, -MAX_COUNT, MAX_COUNT),
+          ki: num(x.ki, 0, MAX_COUNT),
+          de: num(x.de, 0, MAX_COUNT),
+        };
   const state = {
     id: id(x.id),
-    n: cleanName(x.n) || null,
-    k: x.k === 'human' || x.k === 'alien' ? x.k : null,
+    ...slow,
     p: vec(x.p, 3, MAX_COORDINATE),
     v: vec(x.v, 3, MAX_SPEED),
     q: vec(x.q, 4, UNIT_LENGTH),
@@ -71,9 +84,6 @@ export function shipState(x: unknown): ShipState | null {
     h: num(x.h, 0, 100),
     dr: num(x.dr, 0, 1),
     tr: num(x.tr, 0, 1),
-    s: num(x.s, -MAX_COUNT, MAX_COUNT),
-    ki: num(x.ki, 0, MAX_COUNT),
-    de: num(x.de, 0, MAX_COUNT),
     pr: num(x.pr, 0, 10),
   };
   if (Object.values(state).some((value) => value === null)) return null;

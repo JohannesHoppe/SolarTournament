@@ -164,17 +164,15 @@ const UNSAID_PATIENCE = 10;
 
 const scratch = new THREE.Vector3();
 const toTarget = new THREE.Vector3();
-const inverse = new THREE.Quaternion();
 
 /** A point given in the pilot's frame (-Z ahead, +X right, +Y up), in world space. */
 function ahead(ctx: SchoolContext, x: number, y: number, z: number) {
-  return new THREE.Vector3(x, y, z).applyQuaternion(ctx.me.flight.orientation).add(ctx.me.flight.position);
+  return ctx.me.flight.toWorld(new THREE.Vector3(x, y, z));
 }
 
 /** A world point in the pilot's frame. */
 function local(ctx: SchoolContext, point: THREE.Vector3, target = scratch) {
-  inverse.copy(ctx.me.flight.orientation).invert();
-  return target.copy(point).sub(ctx.me.flight.position).applyQuaternion(inverse);
+  return ctx.me.flight.toLocal(point, target);
 }
 
 /** Angle between the pilot's nose and a point (rad). */

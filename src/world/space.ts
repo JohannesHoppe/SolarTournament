@@ -44,7 +44,7 @@ export class Space {
     const color = new THREE.Color();
     const v = new THREE.Vector3();
     for (let i = 0; i < STAR_COUNT; i++) {
-      v.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize().multiplyScalar(SKY_RADIUS);
+      v.randomDirection().multiplyScalar(SKY_RADIUS);
       positions.set([v.x, v.y, v.z], i * 3);
       const brightness = Math.pow(Math.random(), 3) * 0.9 + 0.1;
       color.setHSL(0.55 + Math.random() * 0.15 - (Math.random() < 0.2 ? 0.5 : 0), 0.4, brightness);

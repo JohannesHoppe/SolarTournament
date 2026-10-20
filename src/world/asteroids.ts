@@ -19,6 +19,8 @@ const FRAGMENT_SCALE = 0.55;
 const MAX_GENERATION = 2;
 /** Speed fragments fly apart with (units/s, 7.5 m/s, 60 % to 140 % of it), on top of the parent's drift. */
 const FRAGMENT_SPEED = 150;
+/** Rocks farther than this many of their mean radii from the camera are drawn in less detail (about 5° of the view). */
+const FAR_LEVEL = 12;
 /** Surface gravity per unit of mean radius (1/s²): uniform density, so bigger rocks pull harder. */
 const GRAVITY_PER_RADIUS = 0.004;
 
@@ -74,6 +76,8 @@ interface Template {
   semiAxes: THREE.Vector3;
   /** Template scale, the object's own size factor before field scaling. */
   scale: number;
+  /** The same shape in less detail, or null. */
+  far: THREE.Object3D | null;
 }
 
 const u = new THREE.Vector3();
@@ -98,8 +102,9 @@ export class AsteroidField {
   private readonly broken = new Map<string, number>();
   private readonly templates: Template[];
 
-  constructor(objects: THREE.Object3D[]) {
-    this.templates = objects.map((object) => {
+  /** `far` holds the same shapes in less detail, drawn for rocks beyond FAR_LEVEL; collisions always use the full shapes. */
+  constructor(objects: THREE.Object3D[], far: THREE.Object3D[] = []) {
+    this.templates = objects.map((object, i) => {
       const box = colliderBox(object);
       // rounded to whole units, so tiny floating point differences between browsers vanish
       return {
@@ -107,6 +112,7 @@ export class AsteroidField {
         center: box.getCenter(new THREE.Vector3()).round(),
         semiAxes: box.getSize(new THREE.Vector3()).multiplyScalar(0.5 * SHAPE_FILL).round(),
         scale: Math.max(object.scale.x, object.scale.y, object.scale.z),
+        far: far[i] ?? null,
       };
     });
   }
@@ -144,12 +150,22 @@ export class AsteroidField {
 
   private add(id: string, type: number, scale: number, generation: number, born: number, position: THREE.Vector3, spinAxis: THREE.Vector3, velocity: THREE.Vector3) {
     const template = this.templates[type];
-    const object = template.object.clone(true);
+    const s = template.scale * scale;
+    const meanRadius = ((template.semiAxes.x + template.semiAxes.y + template.semiAxes.z) / 3) * s;
+    let object: THREE.Object3D = template.object.clone(true);
+    if (template.far) {
+      // the full relief up close, fewer triangles from afar, in the shadow pass as well
+      const lod = new THREE.LOD();
+      lod.addLevel(object, 0);
+      lod.addLevel(template.far.clone(true), meanRadius * FAR_LEVEL);
+      lod.scale.copy(template.object.scale);
+      object.scale.set(1, 1, 1);
+      lod.children[1].scale.set(1, 1, 1);
+      object = lod;
+    }
     object.scale.multiplyScalar(scale);
     object.traverse((o) => (o.castShadow = o.receiveShadow = o instanceof THREE.Mesh));
     this.group.add(object);
-    const s = template.scale * scale;
-    const meanRadius = ((template.semiAxes.x + template.semiAxes.y + template.semiAxes.z) / 3) * s;
     const asteroid: Asteroid = {
       id,
       object,

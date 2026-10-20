@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { raySphere, type AsteroidField } from './asteroids';
 import { Randomizer, textSeed } from '../random';
+import { BELT_INNER } from './belt';
 
 /** Pieces a destroyed ship breaks into. */
 const PIECES_PER_SHIP = 5;
@@ -54,15 +55,18 @@ export class Wrecks {
 
   spawn(id: string, deaths: number, position: THREE.Vector3, velocity: THREE.Vector3, shipRadius: number, now: number) {
     const r = new Randomizer(textSeed(`${id}#${deaths}`));
+    // the pieces of one ship cool down together: they share one material
+    const material = new THREE.MeshStandardMaterial({
+      color: 0x3a3d42,
+      metalness: 0.7,
+      roughness: 0.45,
+      emissive: HOT,
+      flatShading: true,
+    });
+    material.userData.pieces = PIECES_PER_SHIP;
     for (let i = 0; i < PIECES_PER_SHIP; i++) {
       const radius = shipRadius * r.range(0.1, 0.3);
-      const mesh = new THREE.Mesh(chunkGeometry(r), new THREE.MeshStandardMaterial({
-        color: 0x3a3d42,
-        metalness: 0.7,
-        roughness: 0.45,
-        emissive: HOT,
-        flatShading: true,
-      }));
+      const mesh = new THREE.Mesh(chunkGeometry(r), material);
       mesh.scale.setScalar(radius);
       const direction = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
       mesh.position.copy(position).addScaledVector(direction, shipRadius * 0.4);
@@ -81,14 +85,16 @@ export class Wrecks {
   }
 
   update(dt: number, now: number, field: AsteroidField) {
-    for (const wreck of [...this.list]) {
+    // backwards, so removing a piece does not skip the next
+    for (let i = this.list.length - 1; i >= 0; i--) {
+      const wreck = this.list[i];
       const { mesh } = wreck;
       wreck.velocity.addScaledVector(field.gravity(mesh.position, gravity), dt);
       mesh.position.addScaledVector(wreck.velocity, dt);
       mesh.quaternion.premultiply(spin.setFromAxisAngle(wreck.spinAxis, wreck.spinRate * dt));
       mesh.material.emissiveIntensity = 2 * Math.exp(-(now - wreck.bornAt) / GLOW_TIME);
-      // debris that hits a rock grinds to dust
-      if (field.overlap(mesh.position, wreck.radius)) this.remove(wreck);
+      // debris that hits a rock grinds to dust; debris that drifts off into the belt is gone for good
+      if (field.overlap(mesh.position, wreck.radius) || mesh.position.lengthSq() > BELT_INNER * BELT_INNER) this.remove(wreck);
     }
   }
 
@@ -117,7 +123,8 @@ export class Wrecks {
     this.list.splice(index, 1);
     this.group.remove(wreck.mesh);
     wreck.mesh.geometry.dispose();
-    wreck.mesh.material.dispose();
+    const material = wreck.mesh.material;
+    if (--material.userData.pieces <= 0) material.dispose();
   }
 
   clear() {

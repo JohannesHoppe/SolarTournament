@@ -43,7 +43,6 @@ const toTarget = new THREE.Vector3();
 const desired = new THREE.Vector3();
 const error = new THREE.Vector3();
 const aimPoint = new THREE.Vector3();
-const inverse = new THREE.Quaternion();
 const local = new THREE.Vector3();
 const heading = new THREE.Vector3();
 const jinkStep = new THREE.Vector3();
@@ -211,8 +210,7 @@ export class Bot {
     }
 
     // trim the remaining velocity error with the maneuvering thrusters
-    inverse.copy(me.orientation).invert();
-    local.copy(error).applyQuaternion(inverse).divideScalar(RCS_THRUST * 0.3);
+    me.toLocalDirection(error, local).divideScalar(RCS_THRUST * 0.3);
     controls.strafeX = THREE.MathUtils.clamp(local.x, -1, 1);
     controls.strafeY = THREE.MathUtils.clamp(local.y, -1, 1);
     controls.strafeZ = THREE.MathUtils.clamp(-local.z, -1, 1);

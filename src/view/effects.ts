@@ -30,6 +30,9 @@ const particleFragment = /* glsl */ `
 /**
  * All particles of one texture live in a single buffer and render with one draw call.
  * Each particle has position, velocity, size, color and a lifetime after which it is recycled.
+ * The living particles are packed at the front of the buffers (a dying one takes the last
+ * one's place; the blending is additive, so their order does not matter), and only they are
+ * drawn and uploaded. When all slots are in use, a new particle replaces the slots in turn.
  */
 export class ParticleSystem {
   readonly points: THREE.Points;
@@ -42,10 +45,10 @@ export class ParticleSystem {
   private readonly color = new Float32Array(PARTICLE_CAPACITY * 3);
   private readonly age = new Float32Array(PARTICLE_CAPACITY);
   private readonly life = new Float32Array(PARTICLE_CAPACITY);
+  /** The slot a new particle takes when all are in use. */
   private next = 0;
-  /** Particles alive, and whether the GPU buffers still show particles that have died. */
+  /** Particles alive: the first `live` slots. */
   private live = 0;
-  private dirty = false;
   private readonly material: THREE.ShaderMaterial;
 
   constructor(texture: THREE.Texture) {
@@ -62,6 +65,7 @@ export class ParticleSystem {
       depthWrite: false,
       transparent: true,
     });
+    geometry.setDrawRange(0, 0);
     this.points = new THREE.Points(geometry, this.material);
     this.points.frustumCulled = false;
   }
@@ -72,32 +76,34 @@ export class ParticleSystem {
   }
 
   emit(position: THREE.Vector3, velocity: THREE.Vector3, life: number, startSize: number, endSize: number, color: THREE.Color) {
-    const i = this.next;
-    this.next = (this.next + 1) % PARTICLE_CAPACITY;
+    let i: number;
+    if (this.live < PARTICLE_CAPACITY) {
+      i = this.live++;
+    } else {
+      i = this.next;
+      this.next = (this.next + 1) % PARTICLE_CAPACITY;
+    }
     position.toArray(this.position, i * 3);
     velocity.toArray(this.velocity, i * 3);
     color.toArray(this.color, i * 3);
-    // the ring may overwrite a particle that is still alive; only a free slot adds one
-    if (this.life[i] <= 0) this.live++;
     this.age[i] = 0;
     this.life[i] = life;
     this.startSize[i] = startSize;
     this.endSize[i] = endSize;
+    this.size[i] = startSize;
+    this.tint[i * 4 + 3] = 0;
   }
 
   update(dt: number) {
-    // nothing alive and nothing that just died: the buffers on the GPU are still right
-    if (this.live === 0 && !this.dirty) return;
-    this.dirty = this.live > 0;
-    for (let i = 0; i < PARTICLE_CAPACITY; i++) {
-      if (this.life[i] <= 0) continue;
+    const geometry = this.points.geometry;
+    // nothing alive: nothing is drawn, the buffers on the GPU need nothing
+    if (this.live === 0 && geometry.drawRange.count === 0) return;
+    // backwards, so the particle that takes a dying one's place has been moved already
+    for (let i = this.live - 1; i >= 0; i--) {
       this.age[i] += dt;
       const t = this.age[i] / this.life[i];
       if (t >= 1) {
-        this.life[i] = 0;
-        this.size[i] = 0;
-        this.tint[i * 4 + 3] = 0;
-        this.live--;
+        this.move(--this.live, i);
         continue;
       }
       for (let k = 0; k < 3; k++) this.position[i * 3 + k] += this.velocity[i * 3 + k] * dt;
@@ -107,10 +113,29 @@ export class ParticleSystem {
       this.tint[i * 4 + 2] = this.color[i * 3 + 2];
       this.tint[i * 4 + 3] = t < 0.1 ? t / 0.1 : 1 - (t - 0.1) / 0.9;
     }
-    const attributes = this.points.geometry.attributes;
-    attributes.position.needsUpdate = true;
-    attributes.size.needsUpdate = true;
-    attributes.tint.needsUpdate = true;
+    if (this.next >= this.live) this.next = 0;
+    geometry.setDrawRange(0, this.live);
+    for (const [name, size] of [['position', 3], ['size', 1], ['tint', 4]] as const) {
+      const attribute = geometry.attributes[name] as THREE.BufferAttribute;
+      attribute.clearUpdateRanges();
+      if (this.live === 0) continue;
+      attribute.addUpdateRange(0, this.live * size);
+      attribute.needsUpdate = true;
+    }
+  }
+
+  /** Moves the particle in slot `from` to slot `to`. */
+  private move(from: number, to: number) {
+    if (from === to) return;
+    this.position.copyWithin(to * 3, from * 3, from * 3 + 3);
+    this.velocity.copyWithin(to * 3, from * 3, from * 3 + 3);
+    this.color.copyWithin(to * 3, from * 3, from * 3 + 3);
+    this.tint.copyWithin(to * 4, from * 4, from * 4 + 4);
+    this.size[to] = this.size[from];
+    this.startSize[to] = this.startSize[from];
+    this.endSize[to] = this.endSize[from];
+    this.age[to] = this.age[from];
+    this.life[to] = this.life[from];
   }
 }
 
@@ -126,8 +151,9 @@ const scratch = new THREE.Vector3();
 const scratchVelocity = new THREE.Vector3();
 const spread = new THREE.Vector3();
 
+/** A direction evenly spread over the sphere. */
 function randomDirection(target: THREE.Vector3) {
-  return target.set(Math.random() * 2 - 1, Math.random() * 2 - 1, Math.random() * 2 - 1).normalize();
+  return target.randomDirection();
 }
 
 export class Effects {

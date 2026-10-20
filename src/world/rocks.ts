@@ -7,6 +7,8 @@ const ROCK_SEED = 2584;
 const ROCK_COUNT = 16;
 /** Edge subdivisions of the base icosahedron: 20 · 33² ≈ 22 000 triangles per rock. */
 const DETAIL = 32;
+/** Subdivisions for field rocks seen from afar, where the fine relief no longer shows: 20 · 13² ≈ 3400 triangles each. */
+export const FAR_DETAIL = 12;
 /** Subdivisions for rocks seen only from kilometers away: 20 · 7² ≈ 1000 triangles each. */
 export const DISTANT_DETAIL = 6;
 /** Mean radius of a template in world units (40 to 55 m); the field scales it by 2.5 to 7. */
@@ -83,6 +85,21 @@ function craterHeight(direction: THREE.Vector3, crater: Crater): number {
   return crater.depth * 0.25 * rim * rim;
 }
 
+const spheres = new Map<number, THREE.BufferGeometry>();
+
+/** The unit sphere every rock of a detail starts from, with shared vertices; built once per detail, as it takes most of a rock's time. */
+function sphere(detail: number): THREE.BufferGeometry {
+  let geometry = spheres.get(detail);
+  if (!geometry) {
+    geometry = new THREE.IcosahedronGeometry(1, detail);
+    geometry.deleteAttribute('normal');
+    geometry.deleteAttribute('uv');
+    geometry = mergeVertices(geometry);
+    spheres.set(detail, geometry);
+  }
+  return geometry;
+}
+
 /**
  * One rock: a squashed or stretched ellipsoid, roughened by fractal noise and pocked with
  * craters, colored by its composition.
@@ -113,10 +130,7 @@ function createRock(index: number, detail: number): THREE.Mesh {
     });
   }
 
-  let geometry: THREE.BufferGeometry = new THREE.IcosahedronGeometry(1, detail);
-  geometry.deleteAttribute('normal');
-  geometry.deleteAttribute('uv');
-  geometry = mergeVertices(geometry);
+  const geometry = sphere(detail).clone();
 
   const position = geometry.attributes.position;
   const colors = new Float32Array(position.count * 3);

@@ -41,6 +41,8 @@ export class Online {
   private wasLead: boolean | null = null;
   /** The number of pilots the bots were last balanced for. */
   private balancedFor = -1;
+  /** A newcomer arrived: the next states carry everything (see Ship.toState). */
+  private sendFull = false;
   /** The own Host only watches: the tournament was full when it came. */
   private watching = false;
   /** Peers whose clone flies (their states carry a Host's ship); watchers do not take a place. */
@@ -71,8 +73,10 @@ export class Online {
     session.onRock = (id, at, round) => game.remoteRock(id, at, round);
     session.onSync = (field) => game.field.restore(field);
     session.onPeerJoin = (peer) => {
-      // the lead browser brings the newcomer's asteroid field up to date
+      // the lead browser brings the newcomer's asteroid field up to date; everyone tells it
+      // the names and scores of their ships with the next states
       if (session.isLead) session.sendSync(peer, game.field.snapshot());
+      this.sendFull = true;
       this.balanceBots();
     };
     session.onPeerLeave = (peer) => {
@@ -129,9 +133,10 @@ export class Online {
     if (!this.session.statesDue(now)) return;
     this.session.sendStates(
       now,
-      this.game.ownedShips().map((ship) => ship.toState(now)),
+      this.game.ownedShips().map((ship) => ship.toState(now, this.sendFull)),
       round,
     );
+    this.sendFull = false;
   }
 
   sendFire(shooter: Ship, a: THREE.Vector3, b: THREE.Vector3) {
@@ -165,8 +170,11 @@ export class Online {
     const seen = new Set<string>();
     for (const state of states) {
       seen.add(state.id);
-      // the session only passes on ships whose id names the sender as their owner
-      const ship = this.find(state.id) ?? this.game.addRemoteShip(state, peer);
+      // the session only passes on ships whose id names the sender as their owner; a ship
+      // first shows once a state brings its name and type
+      const known = this.find(state.id);
+      if (!known && state.n === undefined) continue;
+      const ship = known ?? this.game.addRemoteShip(state, peer);
       if (ship.owner === peer && ownerOf(ship.id) === peer) ship.applyState(state, now);
     }
     const flies = states.some((state) => state.id.startsWith('p:'));

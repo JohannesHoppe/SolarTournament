@@ -95,8 +95,7 @@ export class FlightModel {
     let drive = thrust;
     const speed = this.velocity.length();
     if (speed >= MAX_SPEED) {
-      inverse.copy(this.orientation).invert();
-      const course = local.copy(this.velocity).divideScalar(speed).applyQuaternion(inverse);
+      const course = this.toLocalDirection(this.velocity, local).divideScalar(speed);
       const faster = acceleration.dot(course);
       if (faster > 0) acceleration.addScaledVector(course, -faster);
       // the drive along the nose dies by the share of it that points along the course
@@ -113,6 +112,21 @@ export class FlightModel {
     if (this.velocity.lengthSq() > limit * limit) this.velocity.setLength(limit);
     this.position.addScaledVector(this.velocity, dt);
     this.throttle += (drive - this.throttle) * (1 - Math.exp(-THROTTLE_RESPONSE * dt));
+  }
+
+  /** A world direction in ship space (-Z ahead, +X right, +Y up). */
+  toLocalDirection(direction: THREE.Vector3, target = new THREE.Vector3()) {
+    return target.copy(direction).applyQuaternion(inverse.copy(this.orientation).invert());
+  }
+
+  /** A world point in ship space, relative to the ship's center. */
+  toLocal(point: THREE.Vector3, target = new THREE.Vector3()) {
+    return this.toLocalDirection(target.subVectors(point, this.position), target);
+  }
+
+  /** A point in ship space in the world. */
+  toWorld(point: THREE.Vector3, target = new THREE.Vector3()) {
+    return target.copy(point).applyQuaternion(this.orientation).add(this.position);
   }
 
   forward(target = new THREE.Vector3()) {
@@ -133,8 +147,7 @@ export class FlightModel {
    * computer and the bots use them.
    */
   steer<T extends { yaw: number; pitch: number }>(direction: THREE.Vector3, gain = 2.5, target: T = { yaw: 0, pitch: 0 } as T): T {
-    inverse.copy(this.orientation).invert();
-    local.copy(direction).normalize().applyQuaternion(inverse);
+    this.toLocalDirection(direction, local).normalize();
     // local: -Z is ahead, +X right, +Y up
     let yaw = Math.atan2(local.x, -local.z);
     const pitch = Math.atan2(local.y, Math.hypot(local.x, local.z));
@@ -151,8 +164,7 @@ export class FlightModel {
    * `target` (yaw, pitch and roll), so the flight computer needs no new object per frame.
    */
   flip<T extends { yaw: number; pitch: number; roll: number }>(direction: THREE.Vector3, gain = 2.5, target: T = { yaw: 0, pitch: 0, roll: 0 } as T): T {
-    inverse.copy(this.orientation).invert();
-    local.copy(direction).normalize().applyQuaternion(inverse);
+    this.toLocalDirection(direction, local).normalize();
     const off = Math.acos(THREE.MathUtils.clamp(-local.z, -1, 1));
     if (off < FLIP_STEER_ANGLE) {
       this.steer(direction, gain, target);

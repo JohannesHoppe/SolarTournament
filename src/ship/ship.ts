@@ -35,6 +35,9 @@ const DECOMPRESSION_KICK = 1.2;
 const ENTRY_HOLE = 0.4;
 const EXIT_HOLE = 1;
 
+/** Name, type, score, kills and deaths travel at least this often (s), even unchanged. */
+const SLOW_STATE_SECONDS = 1;
+
 /** Freshly spawned ships cannot be damaged for this long (s), long enough to get the bearings; firing ends it early. */
 const SPAWN_PROTECTION = 5;
 
@@ -76,12 +79,17 @@ interface Hole {
   at: number;
 }
 
-/** A ship as it travels over the network; short keys keep the 15 Hz updates small. */
+/**
+ * A ship as it travels over the network; short keys keep the 15 Hz updates small. Name, type,
+ * score, kills and deaths change rarely: they come along when they changed, at least once a
+ * second, and in every state right after a newcomer arrived (see Ship.toState); a state
+ * carries all five or none.
+ */
 export type ShipState = {
   id: string;
   /** name and ship type */
-  n: string;
-  k: ShipType;
+  n?: string;
+  k?: ShipType;
   /** position, velocity, orientation (quaternion), rotation rate in ship space */
   p: number[];
   v: number[];
@@ -95,9 +103,9 @@ export type ShipState = {
   dr: number;
   tr: number;
   /** score, kills, deaths */
-  s: number;
-  ki: number;
-  de: number;
+  s?: number;
+  ki?: number;
+  de?: number;
   /** remaining spawn protection (s) */
   pr: number;
 };
@@ -151,6 +159,9 @@ export class Ship {
   private driveOfflineUntil = 0;
   /** Shots fired, so the muzzles alternate per ship. */
   private shots = 0;
+  /** The rarely changing part of the state as last sent, and when (see toState). */
+  private slowSent = '';
+  private slowSentAt = -Infinity;
   /** Set by the game: an asteroid blocks the sun. */
   inShadow = false;
   alive = true;
@@ -244,14 +255,22 @@ export class Ship {
     this.syncTransform();
   }
 
-  /** The ship's state as it travels over the network. */
-  toState(now: number): ShipState {
+  /**
+   * The ship's state as it travels over the network; `full` adds name, type, score, kills
+   * and deaths, which otherwise come along only when they changed or a second has passed.
+   */
+  toState(now: number, full = false): ShipState {
     const f = this.flight;
     const round = (v: { toArray(): number[] }, digits = 0) => v.toArray().map((x) => +x.toFixed(digits));
+    const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}`;
+    const withSlow = full || slow !== this.slowSent || now - this.slowSentAt >= SLOW_STATE_SECONDS;
+    if (withSlow) {
+      this.slowSent = slow;
+      this.slowSentAt = now;
+    }
     return {
       id: this.id,
-      n: this.name,
-      k: this.type,
+      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths } : {}),
       p: round(f.position),
       v: round(f.velocity, 1),
       q: round(f.orientation, 4),
@@ -261,10 +280,7 @@ export class Ship {
       h: Math.round(this.hull),
       dr: +this.drive.toFixed(2),
       tr: +this.thrusters.toFixed(2),
-      s: this.score,
-      ki: this.kills,
-      de: this.deaths,
-      pr: +Math.max(0, this.protectedUntil - now).toFixed(1),
+      pr:+Math.max(0, this.protectedUntil - now).toFixed(1),
     };
   }
 
@@ -281,11 +297,13 @@ export class Ship {
     this.hull = state.h;
     this.drive = state.dr;
     this.thrusters = state.tr;
-    this.score = state.s;
-    this.kills = state.ki;
-    this.deaths = state.de;
     this.protectedUntil = now + state.pr;
-    this.name = state.n;
+    if (state.n !== undefined) {
+      this.name = state.n;
+      this.score = state.s!;
+      this.kills = state.ki!;
+      this.deaths = state.de!;
+    }
     if (state.a && !this.alive) {
       // the owner booted a new clone
       this.alive = true;
@@ -382,21 +400,19 @@ export class Ship {
     if (!this.tailToward(direction)) {
       // the armor takes it: a scorch mark and a few points, no hole; a beam into the flanks,
       // more than 45° off the ship's axis, also shakes the maneuvering thrusters
-      inverse.copy(this.flight.orientation).invert();
-      local.copy(direction).applyQuaternion(inverse);
+      this.flight.toLocalDirection(direction, local);
       const flank = Math.hypot(local.x, local.y) > Math.abs(local.z);
       if (flank) this.thrusters = Math.max(0, this.thrusters - THRUSTER_HIT);
       return { status: this.structural(ARMOR_DAMAGE, now), zone: flank ? 'thrusters' : 'armor' };
     }
     offset.subVectors(this.flight.position, origin);
     const along = offset.dot(direction);
-    inverse.copy(this.flight.orientation).invert();
-    local.copy(origin).addScaledVector(direction, along).sub(this.flight.position).applyQuaternion(inverse).divideScalar(this.radius);
+    this.flight.toLocal(local.copy(origin).addScaledVector(direction, along), local).divideScalar(this.radius);
     // a beam that only grazed the hit sphere on a lagging screen still hits the hull, not empty space
     if (local.lengthSq() > 1) local.normalize();
 
     const half = Math.sqrt(Math.max(0, 1 - local.lengthSq())) * this.radius;
-    const localDirection = direction.clone().applyQuaternion(inverse);
+    const localDirection = this.flight.toLocalDirection(direction);
     const center = local.clone().multiplyScalar(this.radius);
     const entry = this.addHole(center.clone().addScaledVector(localDirection, -half * 0.8), localDirection.clone().negate(), ENTRY_HOLE, now);
     const exit = this.addHole(center.clone().addScaledVector(localDirection, half * 0.8), localDirection.clone(), EXIT_HOLE, now);
@@ -454,7 +470,7 @@ export class Ship {
 
   /** Converts a point in ship space to world space. */
   toWorld(point: THREE.Vector3, target = new THREE.Vector3()) {
-    return target.copy(point).applyQuaternion(this.flight.orientation).add(this.flight.position);
+    return this.flight.toWorld(point, target);
   }
 
   /** Muzzle position of the next shot in world space: alternating between the left and right side of the nose. */

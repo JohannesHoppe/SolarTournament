@@ -181,7 +181,6 @@ const relative = new THREE.Vector3();
 const aimPoint = new THREE.Vector3();
 const toAim = new THREE.Vector3();
 const assistSteer = { yaw: 0, pitch: 0 };
-const inverseOrientation = new THREE.Quaternion();
 const sweep = new THREE.Vector3();
 const surface = new THREE.Vector3();
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
@@ -324,6 +323,9 @@ export class Game implements OnlineGame {
   private nextLockBeep = 0;
   /** Speed of game time; 0 freezes the simulation while rendering continues. */
   timeScale = 1;
+  /** The picture has to be drawn again even in a still pause (see frame). */
+  private redraw = true;
+  private glitched = false;
   private readonly glitch = new Glitch();
   private readonly radio: Radio;
   /** The flight computer's voice: reads out what the screen shows. */
@@ -350,7 +352,9 @@ export class Game implements OnlineGame {
     private readonly assets: Assets,
     private readonly sound: Sound,
   ) {
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    // no multisampled canvas: the composer draws the scene into its own targets and only puts
+    // the finished picture on the canvas, so the canvas's samples would smooth nothing
+    this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.shadowMap.enabled = true;
@@ -368,7 +372,7 @@ export class Game implements OnlineGame {
     this.speaker.prepare();
 
     this.scene.background = new THREE.Color(0x01020a);
-    this.field = new AsteroidField(assets.asteroids);
+    this.field = new AsteroidField(assets.asteroids, assets.asteroidsFar);
     this.belt = new Belt(assets.belt);
     this.effects = new Effects(assets.textures);
     this.scene.add(this.space.sky, this.space.dust, this.arena.mesh, this.belt.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
@@ -883,6 +887,7 @@ export class Game implements OnlineGame {
 
   private setScreen(state: State) {
     if (state !== this.state) this.screenSince = performance.now();
+    this.redraw = true;
     this.state = state;
     $('menu').hidden = state !== 'menu';
     $('crest').hidden = state !== 'menu';
@@ -1032,8 +1037,9 @@ export class Game implements OnlineGame {
     return this.ships.filter((ship) => ship.owner === null && !(this.spectating && ship === this.me));
   }
 
+  /** A ship another browser runs, from a state with its name and type (see ShipState). */
   addRemoteShip(state: ShipState, owner: string): Ship {
-    const ship = this.addShip(state.id, state.n, state.k, false);
+    const ship = this.addShip(state.id, state.n!, state.k!, false);
     ship.owner = owner;
     ship.alive = false;
     ship.root.visible = false;
@@ -1279,6 +1285,7 @@ export class Game implements OnlineGame {
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
     this.hud.setViewport(width, height);
+    this.redraw = true;
     this.glitch.setSize(width * this.renderer.getPixelRatio(), height * this.renderer.getPixelRatio());
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
@@ -1313,6 +1320,15 @@ export class Game implements OnlineGame {
     }
     this.glitch.update();
 
+    // a paused solo round stands still: its picture is drawn again only while it glitches or
+    // after the window changed, not 60 times a second under the pause plate
+    const glitching = this.glitch.pass.enabled;
+    // the frame after a glitch shows the clean picture again
+    if (this.glitched && !glitching) this.redraw = true;
+    this.glitched = glitching;
+    const still = this.state === 'paused' && !this.online && !glitching;
+    if (still && !this.redraw) return;
+    this.redraw = false;
     this.space.follow(this.camera);
     this.arena.update(this.camera);
     this.composer.render();
@@ -1542,8 +1558,7 @@ export class Game implements OnlineGame {
       }
       this.braked = false;
       // the drift in ship space (the nose is -Z): +Z is the speed the drive brakes once flipped
-      inverseOrientation.copy(flight.orientation).invert();
-      const drift = relative.copy(flight.velocity).applyQuaternion(inverseOrientation);
+      const drift = flight.toLocalDirection(flight.velocity, relative);
       retrograde.copy(flight.velocity).negate();
       const aligned = flight.angleTo(retrograde) < BRAKE_BURN_ANGLE;
       let burn: Controls;
@@ -1647,8 +1662,7 @@ export class Game implements OnlineGame {
    * so a loop is not fought halfway through.
    */
   private keepUpright(out: Controls): Controls {
-    inverseOrientation.copy(this.me!.flight.orientation).invert();
-    const up = scratch.set(0, 1, 0).applyQuaternion(inverseOrientation);
+    const up = this.me!.flight.toLocalDirection(scratch.set(0, 1, 0), scratch);
     // the ship's nose is -Z, so |up.z| is how steeply it points up or down
     const hold = 1 - THREE.MathUtils.smoothstep(Math.abs(up.z), UPRIGHT_LET_GO, UPRIGHT_FREE);
     out.roll = THREE.MathUtils.clamp(Math.atan2(up.x, up.y) * UPRIGHT_GAIN, -1, 1) * hold;
@@ -1683,8 +1697,7 @@ export class Game implements OnlineGame {
    */
   private trimDrift(controls: Readonly<Controls>): Controls {
     const out = Object.assign(this.computed, controls);
-    inverseOrientation.copy(this.me!.flight.orientation).invert();
-    const drift = relative.copy(this.me!.flight.velocity).applyQuaternion(inverseOrientation).divideScalar(RCS_THRUST * AUTOPILOT_EASE);
+    const drift = this.me!.flight.toLocalDirection(this.me!.flight.velocity, relative).divideScalar(RCS_THRUST * AUTOPILOT_EASE);
     if (!controls.strafeX) out.strafeX = THREE.MathUtils.clamp(-drift.x, -1, 1);
     if (!controls.strafeY) out.strafeY = THREE.MathUtils.clamp(-drift.y, -1, 1);
     return out;
@@ -2079,7 +2092,7 @@ export class Game implements OnlineGame {
       this.camera.position.copy(flight.position).addScaledVector(flight.forward(scratch), me.radius * 0.3);
       this.camera.quaternion.copy(flight.orientation);
     } else {
-      cameraGoal.set(0, me.radius * 0.75, me.radius * 2.6).applyQuaternion(flight.orientation).add(flight.position);
+      flight.toWorld(cameraGoal.set(0, me.radius * 0.75, me.radius * 2.6), cameraGoal);
       this.camera.position.lerp(cameraGoal, 1 - Math.exp(-CAMERA_FOLLOW * dt));
       this.camera.quaternion.slerp(flight.orientation, 1 - Math.exp(-CAMERA_TURN * dt));
     }

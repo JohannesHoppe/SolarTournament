@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createRocks, DISTANT_DETAIL } from './world/rocks';
+import { createRocks, DISTANT_DETAIL, FAR_DETAIL } from './world/rocks';
 import { synthesizeSounds } from './sound/sounds';
 import { radialTexture, smokeTexture, sparkTexture } from './view/textures';
 
@@ -9,6 +9,8 @@ export type ShipType = 'human' | 'alien';
 export interface Assets {
   ships: Record<ShipType, THREE.Object3D>;
   asteroids: THREE.Object3D[];
+  /** The same rock shapes in less detail, for field rocks seen from afar. */
+  asteroidsFar: THREE.Object3D[];
   /** The same rock shapes in low detail, for the belt beyond the arena. */
   belt: THREE.Mesh[];
   textures: {
@@ -85,10 +87,14 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     return t;
   };
 
-  const [human, alien] = await Promise.all(['human-interceptor.glb', 'alien-interceptor.glb'].map(model));
-  const flameFrames = (
-    await Promise.all(['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture))
-  ).map(softEdges);
+  // every file is requested at once, and the rocks are generated while they are on their way
+  const ships = Promise.all(['human-interceptor.glb', 'alien-interceptor.glb'].map(model));
+  const flames = Promise.all(['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture));
+  const asteroids = createRocks();
+  const asteroidsFar = createRocks(FAR_DETAIL);
+  const belt = createRocks(DISTANT_DETAIL);
+  const [human, alien] = await ships;
+  const flameFrames = (await flames).map(softEdges);
   flameFrames.forEach((t) => (t.flipY = false));
   // the drive glow: a round, soft, cool-blue light on black for additive blending, without
   // rays, so it neither turns into a star nor blows out under the bloom
@@ -102,8 +108,9 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
 
   return {
     ships: { human, alien },
-    asteroids: createRocks(),
-    belt: createRocks(DISTANT_DETAIL),
+    asteroids,
+    asteroidsFar,
+    belt,
     textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), glow },
     sounds: synthesizeSounds(audio),
   };
