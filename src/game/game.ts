@@ -34,7 +34,7 @@ import { ARENAS, arenaByKey, arenaOfRound, type ArenaId, type ArenaProfile } fro
 import { Landmarks } from '../world/landmarks';
 import { Lensing } from '../view/lensing';
 import type { FieldState } from '../world/asteroids';
-import { Course, GATE_POINTS, GATES, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
+import { Course, GATE_POINTS, GATE_RADIUS, GATES, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
 import { markedName } from '../view/marks';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
@@ -1763,8 +1763,11 @@ export class Game implements OnlineGame {
     const next = me.gates % GATES;
     const lap = Math.min(LAPS, Math.floor(me.gates / GATES) + 1);
     course.highlight(next);
-    this.hud.setWaypoint(this.camera, course.points[next], next === 0 && me.gates > 0 ? (lap === LAPS ? 'Last lap' : 'Lap') : `Gate ${next + 1}/${GATES}`);
-    this.hud.setSchool({ step: `Race · lap ${lap}/${LAPS} · ${place}`, text: `Gate ${next + 1} of ${GATES}`, keys: [] });
+    // past the gate's plane but not through it: the gate only counts from its front
+    const missed = scratch.subVectors(me.flight.position, course.points[next]).dot(course.normals[next]) > GATE_RADIUS;
+    const label = missed ? 'Missed · turn back' : next === 0 && me.gates > 0 ? (lap === LAPS ? 'Last lap' : 'Lap') : `Gate ${next + 1}/${GATES}`;
+    this.hud.setWaypoint(this.camera, course.points[next], label);
+    this.hud.setSchool({ step: `Race · lap ${lap}/${LAPS} · ${place}`, text: missed ? `Missed gate ${next + 1}: turn back and fly through it` : `Gate ${next + 1} of ${GATES}`, keys: [] });
     return course.points[next];
   }
 

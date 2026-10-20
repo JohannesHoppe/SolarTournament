@@ -25,6 +25,11 @@ const ARMOR_FIRE_HEAT = 10;
 const SNIPE_CHANCE = 0.3;
 /** Racing bots fly to the next gate at this speed (units/s, 180 m/s), below the limit, so they still turn in time. */
 const RACE_SPEED = 3600;
+/** A racer only turns its nose to a ship this close to it (rad, about 30°): one ahead on the course. */
+const RACE_AIM_CONE = 0.5;
+/** A racer with a ship on its tail flips to shoot back for this long (s), at most once in LOOK_BACK_PAUSE (s). */
+const LOOK_BACK_SECONDS = 2.5;
+const LOOK_BACK_PAUSE = 8;
 /** Bots close in with up to this speed and hold position near their target. */
 const CRUISE_SPEED = 2500;
 const HOLD_DISTANCE = 4000;
@@ -88,8 +93,11 @@ export class Bot {
   target: Ship | null = null;
   /** Set by the game during a solar storm: the sensors are blind (see STORM_SIGHT). */
   blind = false;
-  /** Set by the game in a race: the next gate, which the bot flies through unless a fight is close. */
+  /** Set by the game in a race: the next gate, which the bot flies through. */
   waypoint: THREE.Vector3 | null = null;
+  /** A racer looks back at a ship on its tail until then, and may again from then on (s). */
+  private lookBackUntil = 0;
+  private nextLookBack = 0;
   /**
    * How much the bots go easy on the Host, 0..1: a solo round raises it when the Host dies
    * again and again, and lets it fade (see Game). It widens their aim and slows their trigger.
@@ -152,7 +160,8 @@ export class Bot {
       const distance = line.length();
       if (distance < THREAT_RANGE && this.ship.tailToward(line) && ship.flight.angleTo(line) < THREAT_ANGLE && field.lineOfSight(me.position, ship.flight.position)) {
         chaser = ship;
-        if (this.armed) {
+        // a racer does not turn around for it: it races on
+        if (this.armed && !this.waypoint) {
           target = ship;
           targetDistance = distance;
           defending = true;
@@ -162,15 +171,26 @@ export class Bot {
     }
     // an unarmed bot does not fight back: it runs, and its drive stays open to the chaser
     if (chaser && !this.armed) target = null;
+    // a racer never gives up the race: it flies the course and shoots whoever is ahead of it.
+    // A ship on its tail it answers with a flip: its drift carries it on along the course while
+    // its nose turns back for a few shots, then it turns forward again
+    const racing = !!this.waypoint;
+    if (racing && chaser && this.armed && now >= this.nextLookBack && !this.ship.overheated && chaser.flight.position.distanceTo(me.position) < FIRE_RANGE) {
+      this.lookBackUntil = now + LOOK_BACK_SECONDS;
+      this.nextLookBack = now + LOOK_BACK_PAUSE;
+    }
+    const lookingBack = racing && !!chaser && now < this.lookBackUntil;
+    if (lookingBack) {
+      target = chaser;
+      targetDistance = chaser!.flight.position.distanceTo(me.position);
+    }
     this.target = target;
 
-    // a racer keeps racing; it only turns to fight a ship on its tail, and shoots at whatever crosses its sights
-    const racing = !!this.waypoint && !defending;
     if (chaser && !this.armed) {
       toTarget.subVectors(me.position, chaser.flight.position);
       desired.copy(toTarget).normalize().multiplyScalar(CRUISE_SPEED * 0.6);
     } else if (racing) {
-      // racing: through the next gate, at speed; a ship close ahead still gets shot at
+      // through the next gate, at speed
       toTarget.subVectors(this.waypoint!, me.position);
       desired.copy(toTarget).normalize().multiplyScalar(RACE_SPEED);
       if (target) this.senseJink(target, dt, now);
@@ -224,11 +244,11 @@ export class Bot {
     // near the target the nose stays on it and the thrusters carry the bot around it; a bot
     // under attack never turns its tail to burn
     // a racer burns for the gate; a fighter only when no target is in range
-    const burning = danger || (!defending && error.length() > BURN_THRESHOLD && (racing || !(target && targetDistance < FIRE_RANGE && !this.ship.overheated)));
+    const burning = danger || (!defending && !lookingBack && error.length() > BURN_THRESHOLD && (racing || !(target && targetDistance < FIRE_RANGE && !this.ship.overheated)));
     if (burning) {
       me.steer(error, 2.5, controls);
       controls.thrust = me.angleTo(error) < 0.25 ? 1 : 0;
-    } else if (target) {
+    } else if (target && (!racing || lookingBack || me.angleTo(line.subVectors(target.flight.position, me.position)) < RACE_AIM_CONE)) {
       aimPoint.copy(target.flight.position).addScaledVector(this.aimOffset, this.aimError(targetDistance)).add(this.jinkOffset);
       me.steer(aimPoint.sub(me.position), 3, controls);
       const angularSize = (target.radius * 0.8) / Math.max(targetDistance, 1);
@@ -237,7 +257,7 @@ export class Bot {
       const reaction = 0.45 - 0.3 * this.skill + EASE_REACTION * this.ease;
       // a shot into the drive is worth the heat; at the armor a bot only snipes now and then,
       // single shots from a nearly cool laser, so it keeps the heat for the drive
-      const open = target.tailToward(toTarget);
+      const open = target.tailToward(line.subVectors(target.flight.position, me.position));
       const heatLimit = open ? 40 + 50 * this.skill : ARMOR_FIRE_HEAT;
       controls.fire = (open || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
     } else {
