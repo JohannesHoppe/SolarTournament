@@ -1,14 +1,14 @@
 import * as THREE from 'three';
 import type { Controls } from '../input/input';
 
-/** Acceleration of the main drive at full thrust (units/s²): 180 m/s², about 18 g. Brutal, so a burn is felt and the top speed is reached in under three seconds. */
-export const MAIN_THRUST = 3600;
+/** Acceleration of the main drive at full thrust (units/s²): 90 m/s², about 9 g. Hard, so a burn is felt. */
+export const MAIN_THRUST = 1800;
 /** Acceleration of the maneuvering thrusters along any axis (units/s²): 40 m/s², about 4 g, so a sidestep left and right throws off an aim. */
 export const RCS_THRUST = 800;
-/** Tournament rule: no ship flies faster than this (units/s, 500 m/s); the flight computer cuts any push beyond it. */
-export const MAX_SPEED = 10000;
-/** The overdrive's shove along the nose (units/s, 300 m/s): past the tournament's limit, see Game.overdrive. */
-export const OVERDRIVE_PUSH = 6000;
+/** Tournament rule: no ship flies faster than this (units/s, 250 m/s); the flight computer cuts any push beyond it. */
+export const MAX_SPEED = 5000;
+/** The overdrive's shove along the nose (units/s, 150 m/s): past the tournament's limit, see Game.overdrive. */
+export const OVERDRIVE_PUSH = 3000;
 /**
  * Rotation rates the flight computer allows (rad/s) and how fast the thrusters reach them
  * (rad/s²): full rate in an eighth of a second, so the nose snaps where the stick points and

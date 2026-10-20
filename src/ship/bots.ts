@@ -22,7 +22,7 @@ const THREAT_ANGLE = 0.3;
 const ARMOR_FIRE_HEAT = 10;
 const SNIPE_CHANCE = 0.3;
 /** Bots close in with up to this speed and hold position near their target. */
-const CRUISE_SPEED = 5000;
+const CRUISE_SPEED = 2500;
 const HOLD_DISTANCE = 4000;
 /** Seconds ahead a bot checks its flight path for asteroids. */
 const AVOID_HORIZON = 5;

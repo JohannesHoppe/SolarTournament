@@ -137,7 +137,7 @@ const KICK_SHAKE = 0.06;
 const KICK_FADE = 9;
 /**
  * The overdrive (E): the drive's reactor dumps everything into one shove along the nose
- * (OVERDRIVE_PUSH, 300 m/s), past the tournament's limit. It leaves the clone at the edge of
+ * (OVERDRIVE_PUSH, 150 m/s), past the tournament's limit. It leaves the clone at the edge of
  * blacking out (OVERDRIVE_STRAIN) and the main drive glowing: no thrust for
  * OVERDRIVE_DRIVE_COOLDOWN seconds, while the thrusters still turn the ship and the laser
  * still fires. It needs OVERDRIVE_RECHARGE seconds before it fires again.
@@ -1707,7 +1707,7 @@ export class Game implements OnlineGame {
     this.overdriveReadyAt = this.time + OVERDRIVE_RECHARGE;
     me.flight.velocity.addScaledVector(me.flight.forward(forward), OVERDRIVE_PUSH);
     me.overheatDrive(this.time + OVERDRIVE_DRIVE_COOLDOWN);
-    // more than a hundred g at once: the clone is pressed to the edge of blacking out
+    // about sixty g at once: the clone is pressed to the edge of blacking out
     this.strain = Math.max(this.strain, OVERDRIVE_STRAIN);
     this.kick = 2;
     this.effects.engineTrail(me.toWorld(scratch.set(0, 0, me.radius * 0.9)), me.toWorld(relative.set(0, 0, me.radius * 4)), me.flight.velocity, 1);

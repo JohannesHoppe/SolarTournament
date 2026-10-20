@@ -10,7 +10,7 @@ const BELT_ROCKS = 480;
 /**
  * The belt starts beyond the reach of any ship: one that leaves the arena at top speed is lost
  * before it gets there, and one faster than that (after an overdrive) is lost the moment it
- * reaches it (see Game.keepInArena), so the belt needs no collisions (units, 10.4 km).
+ * reaches it (see Game.keepInArena), so the belt needs no collisions (units, 9.4 km).
  */
 export const BELT_INNER = ARENA_LIMIT + ARENA_GRACE * MAX_SPEED + 20000;
 /** The belt ends well before the camera's far plane (units, 17.5 km). */
