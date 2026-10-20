@@ -93,6 +93,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | **`view/`** | **What the screen shows** |
 | `view/hud.ts` | DOM HUD: gauges, markers, warnings, tunnel vision |
 | `view/effects.ts` | Particles (one draw call per texture), laser beams |
+| `view/killcam.ts` | The kill cam: keeps the last seconds of every ship and beam, replays the kill of the own clone in slow motion from behind the shooter |
 | `view/radar.ts` | The radar sphere: everything within 2.5 km around the own ship, ahead and behind, on a canvas |
 | `view/lensing.ts` | The black hole's gravitational lens over the rendered picture |
 | `view/glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |

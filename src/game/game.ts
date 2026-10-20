@@ -34,6 +34,7 @@ import { ARENAS, arenaByKey, arenaOfRound, type ArenaId, type ArenaProfile } fro
 import { Landmarks } from '../world/landmarks';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
+import { KillCam } from '../view/killcam';
 import type { FieldState } from '../world/asteroids';
 import { Course, GATE_POINTS, GATE_RADIUS, GATES, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
 import { markedName } from '../view/marks';
@@ -280,6 +281,10 @@ export class Game implements OnlineGame {
   private readonly belt: Belt;
   readonly field: AsteroidField;
   private readonly effects: Effects;
+  private readonly replayEffects: Effects;
+  private readonly killcam: KillCam;
+  /** The last picture was the kill cam's. */
+  private replaying = false;
   private readonly wrecks = new Wrecks();
   /** The arena the round is played in (see enterArena), and its scenery. */
   private venue: ArenaProfile = ARENAS[0];
@@ -462,6 +467,11 @@ export class Game implements OnlineGame {
     this.field = new AsteroidField(assets.fieldSets);
     this.belt = new Belt(assets.belt);
     this.effects = new Effects(assets.textures);
+    // the kill cam fires the beams of its replay in effects of their own
+    this.replayEffects = new Effects(assets.textures);
+    this.replayEffects.group.visible = false;
+    this.scene.add(this.replayEffects.group);
+    this.killcam = new KillCam(this.replayEffects);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
@@ -968,6 +978,10 @@ export class Game implements OnlineGame {
         break;
       case 'playing':
         if (action === 'pause') this.pause();
+        if (this.killcam.active) {
+          if (action === 'confirm') this.killcam.stop();
+          break;
+        }
         if (this.sponsors.visible) {
           if (action === 'confirm') this.sponsors.confirm();
           break;
@@ -1070,6 +1084,7 @@ export class Game implements OnlineGame {
   }
 
   private clearShips() {
+    this.killcam.stop();
     this.wrecks.clear();
     this.brokenHere.clear();
     this.lastRockHit.clear();
@@ -1251,6 +1266,7 @@ export class Game implements OnlineGame {
 
   showBeam(shooter: Ship, from: THREE.Vector3, to: THREE.Vector3) {
     this.effects.beam(from, to, shooter.color);
+    this.killcam.recordBeam(this.time, from, to, shooter.color);
   }
 
   remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number, position: THREE.Vector3 | null, velocity: THREE.Vector3 | null) {
@@ -1607,12 +1623,21 @@ export class Game implements OnlineGame {
     const still = this.state === 'paused' && !this.online && !glitching;
     if (still && !this.redraw) return;
     this.redraw = false;
+    // the kill cam borrows the ships' pictures and the camera for this one picture
+    const replaying = this.state === 'playing' && this.killcam.pose(this.camera);
+    if (replaying !== this.replaying) {
+      this.replaying = replaying;
+      this.effects.group.visible = !replaying;
+      this.replayEffects.group.visible = replaying;
+      this.hud.show(!replaying && this.state === 'playing' && !this.sponsors.visible);
+    }
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
     this.arena.update(this.camera);
     this.landmarks.update(this.field.clock);
     const well = this.field.well;
     this.lensing.update(this.camera, this.venue.id === 'hole' && well ? well.position : null, well?.radius ?? 0);
     this.composer.render();
+    if (replaying) this.killcam.restore();
   }
 
   private updateRound(dt: number) {
@@ -1641,7 +1666,7 @@ export class Game implements OnlineGame {
         if (now < ship.respawnAt || ship === this.drone || ship === this.sparring?.bot.ship) continue;
         // training clones are free; tournament clones cost an ad
         if (ship !== me || this.school) this.respawn(ship);
-        else if (!this.sponsors.visible && this.state === 'playing') this.sponsorBreak();
+        else if (!this.sponsors.visible && this.state === 'playing' && !this.killcam.active) this.sponsorBreak();
         continue;
       }
       let bot: Bot | null = null;
@@ -1666,6 +1691,8 @@ export class Game implements OnlineGame {
       this.exhaust(ship, dt);
     }
     this.wrecks.update(dt, now, this.field);
+    this.killcam.record(now, this.ships);
+    this.replayEffects.update(dt);
     this.closeCall(now);
     this.pilot(dt, now);
 
@@ -2215,6 +2242,7 @@ export class Game implements OnlineGame {
     const end = new THREE.Vector3().copy(origin).addScaledVector(direction, beamLength);
     const start = shooter.muzzle(new THREE.Vector3());
     this.effects.beam(start, end, shooter.color);
+    this.killcam.recordBeam(this.time, start, end, shooter.color);
     this.online?.sendFire(shooter, start, end);
     if (shooter.isLocal) this.sound.play('laser', { volume: 0.7 });
 
@@ -2310,7 +2338,14 @@ export class Game implements OnlineGame {
   private shipDestroyed(victim: Ship, killer: Ship | null, cause: DeathCause = null) {
     victim.respawnAt = this.time + RESPAWN_SECONDS;
     if (victim.engineLight) victim.engineLight.intensity = 0;
-    if (victim === this.me && killer && killer !== victim) this.ease = Math.min(1, this.ease + DEATH_EASE);
+    if (victim === this.me && killer && killer !== victim) {
+      this.ease = Math.min(1, this.ease + DEATH_EASE);
+      // the moments before the kill, again, in slow motion, from behind the shooter
+      if (!this.school && this.state === 'playing') {
+        this.killcam.start(killer, victim, this.time);
+        this.hud.flashMessage(this.time, `Kill cam · ${killer.name} · Enter skips`, 3);
+      }
+    }
     if (killer === this.me && victim !== this.me) this.ease = Math.max(0, this.ease - KILL_EASE);
     if (victim === this.me) {
       if (killer) this.deathCause = ['Shot down by ', ...markedName(killer.kind, killer.name)];
