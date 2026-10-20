@@ -12,7 +12,7 @@ import { Glitch } from '../view/glitch';
 import { Hud, METERS_PER_UNIT } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_KILL, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_ROCK, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
+import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_KILL, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_ROCK, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
@@ -30,12 +30,23 @@ import { Belt, BELT_INNER } from '../world/belt';
 import { FlightSchool, type SchoolContext } from './school';
 import { SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
+import { ARENAS, arenaByKey, arenaOfRound, type ArenaId, type ArenaProfile } from '../world/arenas';
+import { Landmarks } from '../world/landmarks';
+import { Lensing } from '../view/lensing';
+import type { FieldState } from '../world/asteroids';
 import { markedName } from '../view/marks';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
 const RESULTS_SECONDS = 12;
-/** Seed of the asteroid field: the same for every round and every browser, so all fly in one field. */
-const FIELD_SEED = 11;
+/**
+ * Solar storms in the corona arena: every STORM_PERIOD seconds of field time a storm of
+ * STORM_SECONDS blinds the sensors (no markers, no lock warnings, bots see only within
+ * STORM_SIGHT). The field time is shared, so a storm hits every browser at once.
+ */
+const STORM_PERIOD = 50;
+const STORM_SECONDS = 8;
+/** How a ship that touches an arena's massive body dies, for the sponsor break. */
+const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: 'Burned up in the clouds', hole: 'Crossed the event horizon' };
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
 const ROUND_SNAP = 0.25;
 /** Online, the asteroids jump to the lead browser's field time when they are this far off (s), and otherwise glide towards it. */
@@ -104,6 +115,8 @@ const CONFIRM_LOCK_MS = 600;
 const ENGINE_LIGHTS = TOURNAMENT_SIZE + 1;
 /** The announcer opens a round this long after the launch (ms), once the flight computer is through. */
 const ANNOUNCER_OPEN_DELAY_MS = 7000;
+/** The arena's name shows this long after the launch (ms), once the link and the hint for the mouse are through. */
+const ARENA_TITLE_DELAY_MS = 4500;
 /** One standard gravity in units/s² (1 unit = 5 cm). */
 const G = 9.81 / METERS_PER_UNIT;
 /** Above this load the pilot starts to grey out; at the limit it takes G_ONSET seconds to tunnel vision. */
@@ -186,6 +199,8 @@ const SCHOOL_DONE_KEY = 'solartournament.school';
 const SCHOOL_STEP_KEY = 'solartournament.school-step';
 
 type State = 'menu' | 'playing' | 'paused' | 'results';
+/** What killed a ship without a killer, where this browser saw it happen: a rock, wreckage, deep space, the arena's massive body. */
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | null;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 /** The label of a menu mode button: the text of its first line, without the Enter key. */
@@ -215,6 +230,9 @@ const TURN_AXIS = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0)
 const TURN_LEVERS = { x: new THREE.Vector3(0, 0, 0.6), y: new THREE.Vector3(0, 0, 0.6), z: new THREE.Vector3(0.5, 0, 0) };
 const TURN_ENDS = [1, -1];
 const SCRAPE_COLOR = new THREE.Color(1, 0.7, 0.3);
+
+/** The sensors see nothing (a solar storm). */
+const blind = () => false;
 
 /** Real time in seconds; unlike game time it never slows down or pauses. */
 const wallClock = () => performance.now() / 1000;
@@ -254,6 +272,12 @@ export class Game implements OnlineGame {
   readonly field: AsteroidField;
   private readonly effects: Effects;
   private readonly wrecks = new Wrecks();
+  /** The arena the round is played in (see enterArena), and its scenery. */
+  private venue: ArenaProfile = ARENAS[0];
+  private readonly landmarks = new Landmarks();
+  private readonly lensing = new Lensing();
+  /** A solar storm blinds the sensors (see STORM_PERIOD). */
+  private storming = false;
   private readonly sponsors = new SponsorBreak();
   private readonly hud = new Hud();
   private readonly input: Input;
@@ -402,6 +426,7 @@ export class Game implements OnlineGame {
 
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
+    this.composer.addPass(this.lensing.pass);
     this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.4, 0.88));
     this.composer.addPass(new OutputPass());
     this.composer.addPass(this.glitch.pass);
@@ -411,10 +436,10 @@ export class Game implements OnlineGame {
     this.speaker.prepare();
 
     this.scene.background = new THREE.Color(0x01020a);
-    this.field = new AsteroidField(assets.asteroids, assets.asteroidsFar);
+    this.field = new AsteroidField(assets.fieldSets);
     this.belt = new Belt(assets.belt);
     this.effects = new Effects(assets.textures);
-    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
+    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
       this.engineLights.push(light);
@@ -840,7 +865,7 @@ export class Game implements OnlineGame {
    * The announcer revels in every death: a line about the victim, the president's joy or
    * the dead "alien". Not every death, and never two comments on top of each other.
    */
-  private commentOnDeath(victim: Ship, killer: Ship | null, cause: 'rock' | 'wreck' | 'space' | null) {
+  private commentOnDeath(victim: Ship, killer: Ship | null, cause: DeathCause) {
     // the flight school is on no broadcast; a death the announcer has no line for goes uncommented
     if (this.school || (!killer && cause !== 'rock')) return;
     const now = wallClock();
@@ -945,10 +970,41 @@ export class Game implements OnlineGame {
     if (state !== 'playing') this.sound.setEngine(0, 0);
   }
 
+  /**
+   * Builds an arena: its field, its sun and scenery. A field restored from a snapshot is
+   * built by the snapshot (see restoreField) and only takes the rest here.
+   */
+  private enterArena(arena: ArenaProfile, state?: FieldState) {
+    this.venue = arena;
+    if (state) this.field.restore(state, arena.layout);
+    else this.field.generate(arena.layout);
+    this.space.setSun(arena.sun);
+    this.landmarks.show(arena);
+    this.belt.group.visible = arena.id === 'belt';
+    this.wrecks.clear();
+    this.storming = false;
+  }
+
+  /** The lead browser's field: built in the arena it names, which a joining browser may not know to be in yet. */
+  restoreField(state: FieldState) {
+    const arena = arenaByKey(state.k);
+    if (arena) this.enterArena(arena, state);
+  }
+
+  /** The arena of the running online round, from the room and the round number. */
+  private roundArena(): ArenaProfile {
+    return arenaOfRound(this.online!.session.room, Math.max(0, this.roundId));
+  }
+
+  /** Shows where the round is played: the arena's name in neon, with what makes it special. */
+  private announceArena() {
+    this.hud.flashMessage(this.time, `${this.venue.name} · ${this.venue.tagline}`, 5);
+  }
+
   private showMenu() {
     this.leaveOnline();
     this.clearShips();
-    this.field.generate(FIELD_SEED);
+    this.enterArena(ARENAS[0]);
     const best = Number(storageGet(BEST_SCORE_KEY) ?? 0);
     $('best-score').textContent = best ? `Personal best: ${best} pts` : '';
     this.showSchoolProgress();
@@ -994,7 +1050,10 @@ export class Game implements OnlineGame {
     if (mode !== 'online') this.leaveOnline();
 
     this.clearShips();
-    this.field.generate(FIELD_SEED);
+    // the flight school trains in the belt; a solo round is in an arena of chance; online the
+    // room and round decide, so a first round starts in the room's first arena (see arriveInRound)
+    if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0));
+    else this.enterArena(mode === 'school' ? ARENAS[0] : pick(ARENAS));
     this.hud.reset();
     $('hud-room').textContent = '';
 
@@ -1041,9 +1100,17 @@ export class Game implements OnlineGame {
     if (mode !== 'school') {
       this.speaker.say(mouse ? [COMPUTER.launch, COMPUTER.mouse] : COMPUTER.launch, 'urgent');
       window.setTimeout(() => {
-        if (this.state === 'playing' && !this.school) this.radio.announce(pick(ANNOUNCER_OPEN), null);
+        if (this.state === 'playing' && !this.school) this.announceArena();
+      }, ARENA_TITLE_DELAY_MS);
+      window.setTimeout(() => {
+        if (this.state === 'playing' && !this.school) this.openBroadcast();
       }, ANNOUNCER_OPEN_DELAY_MS);
     }
+  }
+
+  /** The announcer opens the broadcast from the arena of the round. */
+  private openBroadcast() {
+    this.radio.announce(pick([ANNOUNCER_ARENA[this.venue.id], ...ANNOUNCER_OPEN]), null);
   }
 
   private addShip(id: string, name: string, type: ShipType, isLocal: boolean): Ship {
@@ -1205,6 +1272,7 @@ export class Game implements OnlineGame {
       if (this.rejoinedFrom !== null && this.rejoinedFrom !== round.id) this.clearRound();
       this.roundId = round.id;
       this.rejoinedFrom = null;
+      this.arriveInRound();
     } else if (round.id > this.roundId) {
       this.roundId = round.id;
       this.startNextRound();
@@ -1222,7 +1290,10 @@ export class Game implements OnlineGame {
   leadRound(): RoundState {
     // the first lead browser of a room starts the clock; a new one continues the synced clock,
     // and one that started over without hearing another lead continues its own round
-    if (this.roundId < 0) this.roundId = this.rejoinedFrom ?? 0;
+    if (this.roundId < 0) {
+      this.roundId = this.rejoinedFrom ?? 0;
+      this.arriveInRound();
+    }
     this.rejoinedFrom = null;
     if (!Number.isFinite(this.roundEndsAtWall)) this.setRoundEnd(ROUND_SECONDS);
     // the lead browser starts the next round once the scoreboard has been shown
@@ -1251,10 +1322,40 @@ export class Game implements OnlineGame {
    */
   private startNextRound() {
     this.clearRound();
-    this.field.generate(FIELD_SEED);
+    this.enterArena(this.roundArena());
+    this.reprintOwn();
+    this.announceArena();
+    this.openBroadcast();
     // hits that arrived before this browser started the round
     const pending = this.pendingRocks.splice(0);
     for (const rock of pending) if (rock.round >= this.roundId) this.remoteRock(rock.id, rock.at, rock.round);
+  }
+
+  /**
+   * Online, the round's arena is known: a browser whose field is another one moves there,
+   * and its ships with it, freshly printed, since where they flew may be rock in the new one.
+   */
+  private arriveInRound() {
+    const arena = this.roundArena();
+    if (this.field.layout?.key === arena.layout.key) return;
+    this.enterArena(arena);
+    this.reprintOwn();
+    this.announceArena();
+  }
+
+  /** Every ship this browser runs starts the arena with a fresh clone on its edge; a sponsor break in progress ends. */
+  private reprintOwn() {
+    for (const ship of this.ships) {
+      if (ship.owner !== null || ship === this.drone || (this.spectating && ship === this.me)) continue;
+      if (ship === this.me && this.sponsors.visible) {
+        this.sponsors.hide();
+        if (this.state === 'playing') {
+          this.hud.show(true);
+          this.input.steerWithMouse(true);
+        }
+      }
+      this.respawn(ship);
+    }
   }
 
   /** Online: scores of the own ships start from zero, the scoreboard closes, the wreckage goes. */
@@ -1276,7 +1377,7 @@ export class Game implements OnlineGame {
     let best = -Infinity;
     for (let attempt = 0; attempt < SPAWN_CANDIDATES; attempt++) {
       candidate.randomDirection().multiplyScalar(FIELD_RADIUS * (0.9 + Math.random() * 0.2));
-      if (this.field.overlap(candidate, ship.radius * 10)) continue;
+      if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40)) continue;
       let nearest = Infinity;
       let seen = false;
       for (const other of this.ships) {
@@ -1429,6 +1530,9 @@ export class Game implements OnlineGame {
     this.redraw = false;
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
     this.arena.update(this.camera);
+    this.landmarks.update(this.field.clock);
+    const well = this.field.well;
+    this.lensing.update(this.camera, this.venue.id === 'hole' && well ? well.position : null, well?.radius ?? 0);
     this.composer.render();
   }
 
@@ -1441,6 +1545,7 @@ export class Game implements OnlineGame {
     if (!this.online && Number.isFinite(this.roundEndsAtWall)) this.roundEndsAt = now + (this.roundEndsAtWall - wallClock());
 
     this.ease = Math.max(0, this.ease - dt / EASE_FADE);
+    this.weather(dt, now);
     const myControls = this.flightComputer(this.state === 'playing' ? this.input.read() : IDLE);
     this.ignite(myControls);
     const dodge = this.input.takeDodge();
@@ -1469,6 +1574,7 @@ export class Game implements OnlineGame {
       const controls = ship === me ? myControls : (thought ?? IDLE);
       this.field.gravity(ship.flight.position, gravity);
       ship.inShadow = this.field.raycast(ship.flight.position, SUN_DIRECTION, LASER_RANGE) !== null;
+      ship.sunCooling = this.venue.cooling;
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
       this.keepInArena(ship, now);
       this.collide(ship, now);
@@ -1492,7 +1598,8 @@ export class Game implements OnlineGame {
     const subject = (this.spectating ? this.watched() : null) ?? me;
     // its gauges too: the own clone is not printed while the Host watches
     this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
-    this.hud.updateMarkers(this.camera, this.ships, subject, this.inSight);
+    // a solar storm blinds the sensors: no ship shows a marker
+    this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight);
     this.hud.updateVelocityMarkers(this.camera, subject);
     this.hud.setCenter(this.camera, subject);
     this.hud.setAutopilot(this.autopilot);
@@ -1525,6 +1632,21 @@ export class Game implements OnlineGame {
     } else if (now >= this.roundEndsAt) {
       this.endRound();
     }
+  }
+
+  /**
+   * Solar storms (see STORM_PERIOD): the sensors go blind, the link to the clone crackles.
+   * The storm follows the shared field time, so it hits every Host at once.
+   */
+  private weather(dt: number, now: number) {
+    const storm = this.venue.storms && this.field.clock % STORM_PERIOD > STORM_PERIOD - STORM_SECONDS;
+    if (storm && !this.storming) {
+      this.hud.flashMessage(now, 'SOLAR STORM · SENSORS BLIND', STORM_SECONDS);
+      this.linkHit(0.6, 1.2);
+    }
+    this.storming = storm;
+    for (const bot of this.bots) bot.blind = storm;
+    if (storm && Math.random() < dt * 2) this.glitch.trigger(0.25 + Math.random() * 0.35, 0.1 + Math.random() * 0.3);
   }
 
   /** Runs the flight school for this frame; returns the point its HUD marker sits on. */
@@ -1963,11 +2085,14 @@ export class Game implements OnlineGame {
       this.shatterWreck(wreckHit.wreck);
     }
 
-    if (asteroidHit) {
-      const asteroid = asteroidHit.asteroid;
+    // a beam into the well's body (a planet's clouds, a black hole) is simply gone
+    const asteroid = asteroidHit?.asteroid;
+    if (asteroid) {
       normal.subVectors(end, asteroid.object.position).normalize();
       this.effects.sparks(end, shooter.color, 40);
       this.effects.debris(end, normal, 120);
+      // the hull of a wreck only scorches
+      if (asteroid.solid) return;
       const destroyed = this.field.hit(asteroid.id);
       if (this.online && !destroyed) this.lastRockHit.set(asteroid.id, { at: this.field.clock, ship: shooter });
       this.online?.sendRock(asteroid.id, this.field.clock, this.roundId >= 0 ? this.roundId : (this.rejoinedFrom ?? 0));
@@ -2024,12 +2149,16 @@ export class Game implements OnlineGame {
   }
 
   /** `cause` says what killed a ship without a killer, where this browser saw it happen. */
-  private shipDestroyed(victim: Ship, killer: Ship | null, cause: 'rock' | 'wreck' | 'space' | null = null) {
+  private shipDestroyed(victim: Ship, killer: Ship | null, cause: DeathCause = null) {
     victim.respawnAt = this.time + RESPAWN_SECONDS;
     if (victim.engineLight) victim.engineLight.intensity = 0;
     if (victim === this.me && killer && killer !== victim) this.ease = Math.min(1, this.ease + DEATH_EASE);
     if (killer === this.me && victim !== this.me) this.ease = Math.max(0, this.ease - KILL_EASE);
-    if (victim === this.me) this.deathCause = killer ? ['Shot down by ', ...markedName(killer.kind, killer.name)] : victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
+    if (victim === this.me) {
+      if (killer) this.deathCause = ['Shot down by ', ...markedName(killer.kind, killer.name)];
+      else if (cause === 'well') this.deathCause = WELL_DEATHS[this.venue.id] ?? 'Crashed';
+      else this.deathCause = victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
+    }
     // a kill of the Host's own is bigger: more fire, a jolt, and the points where it happened
     const ownKill = killer?.isLocal === true && killer === this.me;
     this.effects.explosion(victim.flight.position, victim.radius * (ownKill ? 3 : 2), victim.flight.velocity.clone().multiplyScalar(0.3));
@@ -2057,7 +2186,8 @@ export class Game implements OnlineGame {
       }
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
-    this.hud.kill(this.time, killer ?? { kind: null, name: victim.outsideSince !== null ? 'Deep space' : 'Crash' }, victim);
+    const killedBy = cause === 'well' ? this.venue.name : victim.outsideSince !== null ? 'Deep space' : 'Crash';
+    this.hud.kill(this.time, killer ?? { kind: null, name: killedBy }, victim);
     if (victim !== this.drone) this.commentOnDeath(victim, killer, cause);
   }
 
@@ -2073,6 +2203,12 @@ export class Game implements OnlineGame {
   /** Ship vs asteroid: the ship bounces off; fast impacts wreck the hull. */
   private collide(ship: Ship, now: number) {
     const flight = ship.flight;
+    // the clouds of a gas giant burn a ship up, a black hole swallows it; no protection holds
+    if (this.field.insideWell(flight.position, ship.radius)) {
+      ship.protectedUntil = Math.min(ship.protectedUntil, now);
+      if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, null, 'well');
+      return;
+    }
     // a ship that moved farther than its radius this frame may have passed through a thin
     // rock: the path is checked, and the ship stops where it first touched
     const moved = flight.position.distanceTo(ship.previous);
@@ -2186,7 +2322,8 @@ export class Game implements OnlineGame {
    */
   private lockWarning(now: number) {
     const me = this.me!;
-    if (!me.alive) {
+    // a solar storm blinds the sensors that would see a nose on the own ship
+    if (!me.alive || this.storming) {
       this.hud.setLock('', null);
       return;
     }

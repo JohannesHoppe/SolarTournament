@@ -2,12 +2,14 @@ import * as THREE from 'three';
 import type { AsteroidField } from '../world/asteroids';
 import { IDLE, type Controls } from '../input/input';
 import type { Ship } from './ship';
-import { RCS_THRUST } from './flight';
+import { MAIN_THRUST, RCS_THRUST } from './flight';
 
 /** Bots notice ships within this distance (units, 3.5 km: across the whole field), when no rock is in the way, so the fight finds a Host quickly. */
 const SIGHT_RANGE = 70000;
 /** Bots only fire within this distance (units, 1 km). */
 const FIRE_RANGE = 20000;
+/** In a solar storm a bot's sensors are blind: it only sees what its own eyes see (units, 750 m). */
+const STORM_SIGHT = 15000;
 /** At most this many bots hunt the same ship; the others look for another target. */
 const MAX_HUNTERS = 2;
 /** A bot keeps its target unless another is clearly better: the current one counts this much nearer. */
@@ -38,6 +40,12 @@ const JINK_SCATTER = 0.5;
 const JINK_SCATTER_MAX = 2.5;
 /** Bots stay this far inside the arena. */
 const HOME_RADIUS = 50000;
+/**
+ * Near a massive body a bot burns away from it: within WELL_MARGIN (units, 750 m) of its
+ * surface, or where its pull reaches WELL_PULL of the main drive (a black hole's grip).
+ */
+const WELL_MARGIN = 15000;
+const WELL_PULL = 0.3;
 
 const toTarget = new THREE.Vector3();
 const desired = new THREE.Vector3();
@@ -76,6 +84,8 @@ export class Bot {
 
   /** The ship this bot hunts; other bots read it, so no more than MAX_HUNTERS chase the same one. */
   target: Ship | null = null;
+  /** Set by the game during a solar storm: the sensors are blind (see STORM_SIGHT). */
+  blind = false;
   /**
    * How much the bots go easy on the Host, 0..1: a solo round raises it when the Host dies
    * again and again, and lets it fade (see Game). It widens their aim and slows their trigger.
@@ -110,13 +120,14 @@ export class Bot {
     // the nearest ship in sight, but one that other bots already hunt counts as farther, and a
     // ship hunted by MAX_HUNTERS is left to them: the bots fight each other too, not only the Host
     let target: Ship | null = null;
-    let targetDistance = SIGHT_RANGE;
+    const sight = this.blind ? STORM_SIGHT : SIGHT_RANGE;
+    let targetDistance = sight;
     let best = Infinity;
     for (const ship of ships) {
       // a freshly printed clone is left alone until its spawn protection runs out
       if (ship === this.ship || !ship.alive || now < ship.protectedUntil) continue;
       const distance = ship.flight.position.distanceTo(me.position);
-      if (distance >= SIGHT_RANGE) continue;
+      if (distance >= sight) continue;
       let hunters = 0;
       for (const bot of bots) if (bot !== this && bot.ship.alive && bot.target === ship) hunters++;
       if (hunters >= MAX_HUNTERS) continue;
@@ -170,16 +181,28 @@ export class Bot {
       desired.copy(toTarget).normalize().multiplyScalar(Math.min(CRUISE_SPEED * 0.6, toTarget.length() * 0.2));
     }
     if (me.position.length() > HOME_RADIUS) desired.addScaledVector(me.position, -CRUISE_SPEED / me.position.length());
+    // a massive body pulls: near it, away from it comes first
+    const well = field.well;
+    let falling = false;
+    if (well) {
+      const away = local.subVectors(me.position, well.position);
+      const distance = away.length();
+      const escape = Math.max(well.radius + WELL_MARGIN, Math.sqrt((well.surfaceGravity * well.radius * well.radius) / (WELL_PULL * MAIN_THRUST)));
+      if (distance < escape) {
+        falling = true;
+        desired.addScaledVector(away.divideScalar(Math.max(distance, 1)), CRUISE_SPEED * 2);
+      }
+    }
 
     // rocks in the flight path: aim the velocity past them
     const speed = me.velocity.length();
-    let danger = false;
+    let danger = falling;
     if (speed > 50) {
       heading.copy(me.velocity).divideScalar(speed);
       const hit = field.raycast(me.position, heading, speed * AVOID_HORIZON + this.ship.radius * 4);
       if (hit) {
-        danger = hit.distance < speed * AVOID_HORIZON * 0.6;
-        const away = local.subVectors(me.position, hit.asteroid.object.position);
+        danger ||= hit.distance < speed * AVOID_HORIZON * 0.6;
+        const away = local.subVectors(me.position, hit.asteroid?.object.position ?? well!.position);
         away.addScaledVector(heading, -away.dot(heading));
         if (away.lengthSq() < 1) away.set(0, 1, 0);
         desired.addScaledVector(away.normalize(), CRUISE_SPEED).addScaledVector(heading, -speed * 0.5);

@@ -4,15 +4,10 @@ import { Randomizer, textSeed } from '../random';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
-/** Rocks of a fresh field: few and huge, so there is room to fly between them and cover behind them. */
-const ASTEROID_COUNT = 40;
-/** Scale of a field rock over its template: rocks of about 100 to 350 m mean radius, ten ships long and more. */
-const MIN_SCALE = 2.5;
-const MAX_SCALE = 7;
 /** Rocks are not full ellipsoids; the collision shape is slightly smaller than the bounding box. */
 const SHAPE_FILL = 0.9;
-/** How fast every rock turns about its own axis (rad/s, a turn in about 2.6 minutes): slow, but the tip of a long rock sweeps. */
-const SPIN_RATE = 0.04;
+/** How fast a rock of the belt turns about its own axis (rad/s, a turn in about 2.6 minutes): slow, but the tip of a long rock sweeps. */
+export const SPIN_RATE = 0.04;
 /** Fragments are this much smaller than their parent. */
 const FRAGMENT_SCALE = 0.55;
 /** A rock breaks twice at most: rock, fragments, and their fragments, which are gone when they break. */
@@ -26,7 +21,68 @@ const GRAVITY_PER_RADIUS = 0.004;
 
 /** Points for breaking a rock, by generation: the big one is worth most, its fragments less. */
 export const ASTEROID_POINTS = [200, 120, 80];
+/** Hit points of a solid piece (the hulk of a wreck): beyond any number of shots in a round, and never counted down. */
+const SOLID = 1000;
 
+/** The kinds of shapes a field is built from: rocks, ice, the debris of a station, the hull sections of a wreck. */
+export type TemplateKind = 'rock' | 'ice' | 'debris' | 'hull';
+
+/** The shapes of one kind, in full detail and (optionally) in less detail for afar. */
+export type TemplateSet = { near: THREE.Object3D[]; far: THREE.Object3D[] };
+
+/**
+ * A massive body at the center of an arena or near it (a planet, a black hole): it pulls with
+ * `surfaceGravity` (units/s²) at its `radius` (units), falling off with the square of the
+ * distance, blocks beams and sight, and a ship that touches it is lost.
+ */
+export interface Well {
+  position: THREE.Vector3;
+  radius: number;
+  surfaceGravity: number;
+}
+
+/** A piece placed by hand: a template of a kind at a position and turn, with the template's own size times `scale`. */
+export interface Placement {
+  kind: TemplateKind;
+  type: number;
+  scale: number;
+  position: THREE.Vector3;
+  orientation: THREE.Quaternion;
+  /** Solid pieces never break and give no points. */
+  solid: boolean;
+}
+
+/**
+ * How a field is built. Everything follows from it and the seed, so every browser builds the
+ * same field for the same layout; `key` names it in snapshots.
+ */
+export interface FieldLayout {
+  key: string;
+  seed: number;
+  kind: TemplateKind;
+  count: number;
+  /** Scale over the template (the templates have mean radii of 40 to 55 m). */
+  minScale: number;
+  maxScale: number;
+  /** Rocks lie within this distance of the center (units), but not closer than `inner`. */
+  radius: number;
+  inner: number;
+  /** Half the thickness of a flat disk in the horizon plane (units); a ball when absent. */
+  flat?: number;
+  /**
+   * The rocks circle the center: about the vertical axis or each about an axis of its own
+   * (crossing orbits), at `speed` (units/s) or, with a well, at the speed its gravity holds
+   * them in (Kepler).
+   */
+  orbit?: { axis: 'vertical' | 'random'; speed?: number };
+  /** How fast each rock turns about itself (rad/s). */
+  spin: number;
+  /** Hits a rock withstands: 4 plus one per this many units of mean radius. */
+  toughness: number;
+  /** Pieces placed by hand (the hulk of a wreck). */
+  placements?: Placement[];
+  well?: Well;
+}
 export interface Asteroid {
   id: string;
   object: THREE.Object3D;
@@ -37,8 +93,15 @@ export interface Asteroid {
   /** Laser hits the rock withstands before it breaks apart. */
   hitPoints: number;
   generation: number;
+  kind: TemplateKind;
+  /** Never breaks and gives no points (see SOLID). */
+  solid: boolean;
   spinAxis: THREE.Vector3;
+  spinRate: number;
   velocity: THREE.Vector3;
+  /** The rock circles the field's center about this axis at this rate (rad/s); zero for a rock that only drifts. */
+  orbitAxis: THREE.Vector3;
+  orbitRate: number;
   /** Field time (s) the rock came into being, and its position and orientation then. */
   born: number;
   basePosition: THREE.Vector3;
@@ -63,6 +126,8 @@ export type AsteroidState = {
 
 /** The whole field for a player who joins a running tournament. */
 export type FieldState = {
+  /** the layout's key (see FieldLayout) */
+  k: string;
   /** field time (s) */
   t: number;
   a: AsteroidState[];
@@ -87,11 +152,13 @@ const pull = new THREE.Vector3();
 const sight = new THREE.Vector3();
 
 /**
- * The asteroid field: few, huge rocks that take a lot of fire before they break apart and
- * pull ships gently towards them. Layout and fragments come from seeded randomness, so every
- * client produces the same field and the same fragments for the same asteroid id. Where a
- * rock stands and how it is turned is computed from the field time, not added up frame by
- * frame, so browsers that share the field time see the same field whatever their frame rate.
+ * The field of an arena: few, huge rocks (or chunks of ice, or the debris of a station, or the
+ * hull of a wreck) that take a lot of fire before they break apart and pull ships gently
+ * towards them, and maybe a massive body (see Well). Layout and fragments come from seeded
+ * randomness, so every client produces the same field and the same fragments for the same
+ * rock id. Where a rock stands and how it is turned is computed from the field time, not
+ * added up frame by frame, so browsers that share the field time see the same field whatever
+ * their frame rate.
  */
 export class AsteroidField {
   readonly group = new THREE.Group();
@@ -100,44 +167,80 @@ export class AsteroidField {
   clock = 0;
   /** Rocks broken so far, with the field time each broke (for snapshot). */
   private readonly broken = new Map<string, number>();
-  private readonly templates: Template[];
-  /** The seed of the field as generated, from which restore rebuilds it. */
-  private seed = 0;
+  private readonly templates: Record<TemplateKind, Template[]>;
+  /** The layout of the field as generated, from which restore rebuilds it. */
+  layout: FieldLayout | null = null;
+  /** The massive body of the arena, if it has one. */
+  well: Well | null = null;
 
-  /** `far` holds the same shapes in less detail, drawn for rocks beyond FAR_LEVEL; collisions always use the full shapes. */
-  constructor(objects: THREE.Object3D[], far: THREE.Object3D[] = []) {
-    this.templates = objects.map((object, i) => {
-      const box = colliderBox(object);
-      // rounded to whole units, so tiny floating point differences between browsers vanish
-      return {
-        object,
-        center: box.getCenter(new THREE.Vector3()).round(),
-        semiAxes: box.getSize(new THREE.Vector3()).multiplyScalar(0.5 * SHAPE_FILL).round(),
-        scale: Math.max(object.scale.x, object.scale.y, object.scale.z),
-        far: far[i] ?? null,
-      };
-    });
+  /** Each set's `far` holds the same shapes in less detail, drawn for rocks beyond FAR_LEVEL; collisions always use the full shapes. */
+  constructor(sets: Record<TemplateKind, TemplateSet>) {
+    const templates = (set: TemplateSet) =>
+      set.near.map((object, i): Template => {
+        const box = colliderBox(object);
+        // rounded to whole units, so tiny floating point differences between browsers vanish
+        return {
+          object,
+          center: box.getCenter(new THREE.Vector3()).round(),
+          semiAxes: box.getSize(new THREE.Vector3()).multiplyScalar(0.5 * SHAPE_FILL).round(),
+          scale: Math.max(object.scale.x, object.scale.y, object.scale.z),
+          far: set.far[i] ?? null,
+        };
+      });
+    this.templates = { rock: templates(sets.rock), ice: templates(sets.ice), debris: templates(sets.debris), hull: templates(sets.hull) };
   }
 
-  generate(seed: number) {
-    this.seed = seed;
+  generate(layout: FieldLayout) {
+    this.layout = layout;
+    this.well = layout.well ?? null;
     this.clear();
     this.clock = 0;
-    const r = new Randomizer(seed);
+    const r = new Randomizer(layout.seed);
+    const templates = this.templates[layout.kind];
     const direction = new THREE.Vector3();
     const position = new THREE.Vector3();
-    for (let i = 0; i < ASTEROID_COUNT; i++) {
-      const type = r.nextInt() % this.templates.length;
-      const scale = r.range(MIN_SCALE, MAX_SCALE);
+    for (let i = 0; i < layout.count; i++) {
+      const type = r.nextInt() % templates.length;
+      const scale = r.range(layout.minScale, layout.maxScale);
       const spinAxis = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
       // a few attempts to keep the rocks apart; the sequence is seeded, so it stays deterministic
       for (let attempt = 0; attempt < 8; attempt++) {
-        direction.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-        position.copy(direction).multiplyScalar(FIELD_RADIUS * Math.cbrt(r.nextFloat()));
-        if (!this.overlap(position, this.boundingRadius(type, scale) * 1.3)) break;
+        if (layout.flat === undefined) {
+          direction.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
+          const inner = layout.inner / layout.radius;
+          position.copy(direction).multiplyScalar(layout.radius * Math.cbrt(inner ** 3 + (1 - inner ** 3) * r.nextFloat()));
+        } else {
+          // evenly over the disk's area
+          const angle = r.range(0, Math.PI * 2);
+          const distance = Math.sqrt(r.range(layout.inner ** 2, layout.radius ** 2));
+          position.set(Math.cos(angle) * distance, r.range(-layout.flat, layout.flat), Math.sin(angle) * distance);
+        }
+        const clear = this.boundingRadius(layout.kind, type, scale) * 1.3;
+        if (!this.overlap(position, clear) && !this.insideWell(position, clear)) break;
       }
-      this.add(String(i), type, scale, 0, 0, position, spinAxis, new THREE.Vector3());
+      const orbitAxis = new THREE.Vector3(0, 1, 0);
+      if (layout.orbit?.axis === 'random') {
+        // an axis across the line to the center, so the rock circles at its distance
+        orbitAxis.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).cross(position).normalize();
+      }
+      const orbitRate = layout.orbit ? this.orbitRate(position, layout.orbit.speed) : 0;
+      this.add(String(i), layout.kind, type, scale, 0, 0, position, spinAxis, new THREE.Vector3(), orbitAxis, orbitRate);
     }
+    for (const [i, piece] of (layout.placements ?? []).entries()) {
+      const id = `h${i}`;
+      this.add(id, piece.kind, piece.type, piece.scale, 0, 0, piece.position, new THREE.Vector3(0, 1, 0), new THREE.Vector3(), new THREE.Vector3(0, 1, 0), 0, piece.solid);
+      const asteroid = this.asteroids.get(id)!;
+      asteroid.baseOrientation.copy(piece.orientation).multiply(asteroid.object.quaternion);
+      this.place(asteroid);
+    }
+  }
+
+  /** How fast a rock at a place circles the center: at `speed` (units/s), or as the well's gravity holds it. */
+  private orbitRate(position: THREE.Vector3, speed?: number) {
+    const distance = Math.max(position.length(), 1);
+    if (speed !== undefined) return speed / distance;
+    const well = this.well;
+    return well ? Math.sqrt((well.surfaceGravity * well.radius * well.radius) / distance ** 3) : 0;
   }
 
   clear() {
@@ -146,13 +249,26 @@ export class AsteroidField {
     this.broken.clear();
   }
 
-  private boundingRadius(type: number, scale: number) {
-    const t = this.templates[type];
+  private boundingRadius(kind: TemplateKind, type: number, scale: number) {
+    const t = this.templates[kind][type];
     return (t.center.length() + Math.max(t.semiAxes.x, t.semiAxes.y, t.semiAxes.z)) * t.scale * scale;
   }
 
-  private add(id: string, type: number, scale: number, generation: number, born: number, position: THREE.Vector3, spinAxis: THREE.Vector3, velocity: THREE.Vector3) {
-    const template = this.templates[type];
+  private add(
+    id: string,
+    kind: TemplateKind,
+    type: number,
+    scale: number,
+    generation: number,
+    born: number,
+    position: THREE.Vector3,
+    spinAxis: THREE.Vector3,
+    velocity: THREE.Vector3,
+    orbitAxis: THREE.Vector3,
+    orbitRate: number,
+    solid = false,
+  ) {
+    const template = this.templates[kind][type];
     const s = template.scale * scale;
     const meanRadius = ((template.semiAxes.x + template.semiAxes.y + template.semiAxes.z) / 3) * s;
     let object: THREE.Object3D = template.object.clone(true);
@@ -172,12 +288,17 @@ export class AsteroidField {
     const asteroid: Asteroid = {
       id,
       object,
-      radius: this.boundingRadius(type, scale),
+      radius: this.boundingRadius(kind, type, scale),
       meanRadius,
-      hitPoints: Math.round(4 + meanRadius / 800),
+      hitPoints: solid ? SOLID : Math.round(4 + meanRadius / (this.layout?.toughness ?? 800)),
       generation,
+      kind,
+      solid,
       spinAxis,
+      spinRate: solid ? 0 : (this.layout?.spin ?? 0),
       velocity,
+      orbitAxis,
+      orbitRate,
       born,
       basePosition: position.clone(),
       baseOrientation: object.quaternion.clone(),
@@ -191,11 +312,11 @@ export class AsteroidField {
     this.place(asteroid);
   }
 
-  /** Puts a rock where the field time says: drifted along its velocity, turned about its axis. */
+  /** Puts a rock where the field time says: drifted along its velocity, carried along its orbit, turned about its axis. */
   private place(a: Asteroid) {
     const age = this.clock - a.born;
-    a.object.position.copy(a.basePosition).addScaledVector(a.velocity, age);
-    a.object.quaternion.setFromAxisAngle(a.spinAxis, SPIN_RATE * age).multiply(a.baseOrientation);
+    positionAt(a, this.clock, a.object.position);
+    a.object.quaternion.setFromAxisAngle(a.spinAxis, a.spinRate * age).multiply(a.baseOrientation);
     a.object.updateMatrixWorld(true);
     a.inverse.copy(a.object.matrixWorld).invert();
   }
@@ -216,7 +337,7 @@ export class AsteroidField {
    */
   hit(id: string, at = this.clock): Asteroid | undefined {
     const asteroid = this.asteroids.get(id);
-    if (!asteroid) return undefined;
+    if (!asteroid || asteroid.solid) return undefined;
     asteroid.hitPoints--;
     return asteroid.hitPoints <= 0 ? this.destroy(id, at) : undefined;
   }
@@ -233,13 +354,17 @@ export class AsteroidField {
       const r = new Randomizer(textSeed(id));
       const count = 2 + (r.nextInt() % 2);
       const scale = asteroid.object.userData.scale * FRAGMENT_SCALE;
-      const origin = asteroid.basePosition.clone().addScaledVector(asteroid.velocity, at - asteroid.born);
+      // the fragments fly apart from where the rock stood, and keep circling with its orbit
+      const origin = positionAt(asteroid, at, new THREE.Vector3());
+      const drift = asteroid.velocity.clone();
+      if (asteroid.orbitRate) drift.applyAxisAngle(asteroid.orbitAxis, asteroid.orbitRate * (at - asteroid.born));
+      const templates = this.templates[asteroid.kind];
       for (let i = 0; i < count; i++) {
         const direction = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
         const position = origin.clone().addScaledVector(direction, asteroid.meanRadius * 0.6);
         const spinAxis = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-        const velocity = direction.multiplyScalar(FRAGMENT_SPEED * r.range(0.6, 1.4)).add(asteroid.velocity);
-        this.add(`${id}.${i}`, r.nextInt() % this.templates.length, scale, asteroid.generation + 1, at, position, spinAxis, velocity);
+        const velocity = direction.multiplyScalar(FRAGMENT_SPEED * r.range(0.6, 1.4)).add(drift);
+        this.add(`${id}.${i}`, asteroid.kind, r.nextInt() % templates.length, scale, asteroid.generation + 1, at, position, spinAxis, velocity, asteroid.orbitAxis, asteroid.orbitRate);
       }
     }
     return asteroid;
@@ -248,6 +373,7 @@ export class AsteroidField {
   /** The field time and every rock's hits and birth, for a player who joins a running tournament. */
   snapshot(): FieldState {
     return {
+      k: this.layout?.key ?? '',
       t: +this.clock.toFixed(3),
       a: [...this.asteroids.values()].map((a) => ({ id: a.id, hp: a.hitPoints, b: +a.born.toFixed(3) })),
       x: [...this.broken].map(([id, at]) => ({ id, b: +at.toFixed(3) })),
@@ -260,8 +386,8 @@ export class AsteroidField {
    * it broke, parents first (the fragments are deterministic), removes rocks that are gone,
    * takes over the hits and the field time. A fragment's birth is its parent's break time as well.
    */
-  restore(state: FieldState) {
-    this.generate(this.seed);
+  restore(state: FieldState, layout: FieldLayout) {
+    this.generate(layout);
     const listed = new Map(state.a.map((s) => [s.id, s]));
     const breaks = new Map(state.x.map((s) => [s.id, s.b]));
     for (const rock of state.a) {
@@ -291,22 +417,33 @@ export class AsteroidField {
     this.setClock(state.t);
   }
 
-  /** Nearest asteroid hit by a ray, with the distance along the ray. */
-  raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number): { asteroid: Asteroid; distance: number } | null {
-    let best: { asteroid: Asteroid; distance: number } | null = null;
+  /** Nearest rock hit by a ray, with the distance along the ray; the well's body counts too, as a hit without a rock (null). */
+  raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number): { asteroid: Asteroid | null; distance: number } | null {
+    let best: { asteroid: Asteroid | null; distance: number } | null = null;
     for (const asteroid of this.asteroids.values()) {
       if (raySphere(origin, direction, asteroid.object.position, asteroid.radius) === null) continue;
       const distance = rayEllipsoid(asteroid, origin, direction);
       if (distance !== null && distance <= maxDistance && (!best || distance < best.distance)) best = { asteroid, distance };
     }
+    const well = this.well;
+    if (well) {
+      const distance = raySphere(origin, direction, well.position, well.radius);
+      if (distance !== null && distance <= maxDistance && (!best || distance < best.distance)) best = { asteroid: null, distance };
+    }
     return best;
   }
 
-  /** True when no asteroid lies between two points. */
+  /** True when no rock (and not the well's body) lies between two points. */
   lineOfSight(from: THREE.Vector3, to: THREE.Vector3): boolean {
     const distance = from.distanceTo(to);
     if (distance < 1) return true;
     return this.raycast(from, sight.subVectors(to, from).divideScalar(distance), distance) === null;
+  }
+
+  /** Whether a sphere touches the well's body: a ship there is lost. */
+  insideWell(center: THREE.Vector3, radius: number): boolean {
+    const well = this.well;
+    return !!well && center.distanceTo(well.position) < well.radius + radius;
   }
 
   /** First asteroid whose surface is closer than radius to a point. */
@@ -333,10 +470,14 @@ export class AsteroidField {
     return normal;
   }
 
-  /** Velocity of a rock's surface at a point (units/s): its drift plus its spin. */
+  /** Velocity of a rock's surface at a point (units/s): its drift and orbit plus its spin. */
   surfaceVelocity(asteroid: Asteroid, point: THREE.Vector3, target = new THREE.Vector3()): THREE.Vector3 {
     const arm = pull.subVectors(point, asteroid.object.position);
-    return target.copy(asteroid.spinAxis).multiplyScalar(SPIN_RATE).cross(arm).add(asteroid.velocity);
+    target.copy(asteroid.spinAxis).multiplyScalar(asteroid.spinRate).cross(arm);
+    if (!asteroid.orbitRate) return target.add(asteroid.velocity);
+    // the orbit carries the rock (and turns its drift) about the field's center
+    target.add(v.copy(asteroid.velocity).applyAxisAngle(asteroid.orbitAxis, asteroid.orbitRate * (this.clock - asteroid.born)));
+    return target.add(u.copy(asteroid.orbitAxis).multiplyScalar(asteroid.orbitRate).cross(asteroid.object.position));
   }
 
   /** Sum of the asteroids' gravitational pull at a point (units/s²). */
@@ -349,8 +490,21 @@ export class AsteroidField {
       const strength = (surfaceGravity * asteroid.meanRadius * asteroid.meanRadius) / (distance * distance);
       target.addScaledVector(pull.normalize(), strength);
     }
+    const well = this.well;
+    if (well) {
+      pull.subVectors(well.position, position);
+      const distance = Math.max(pull.length(), well.radius);
+      target.addScaledVector(pull.normalize(), (well.surfaceGravity * well.radius * well.radius) / (distance * distance));
+    }
     return target;
   }
+}
+
+/** Where a rock is at a field time: drifted from where it was born, carried along its orbit about the center. */
+function positionAt(a: Asteroid, time: number, target: THREE.Vector3): THREE.Vector3 {
+  const age = time - a.born;
+  target.copy(a.basePosition).addScaledVector(a.velocity, age);
+  return a.orbitRate ? target.applyAxisAngle(a.orbitAxis, a.orbitRate * age) : target;
 }
 
 /**

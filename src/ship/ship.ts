@@ -164,6 +164,8 @@ export class Ship {
   private slowSentAt = -Infinity;
   /** Set by the game: an asteroid blocks the sun. */
   inShadow = false;
+  /** Set by the game: how well the radiators shed heat in sunlight in this arena (the sun's glare: less). */
+  sunCooling = 1;
   alive = true;
   score = 0;
   kills = 0;
@@ -386,7 +388,7 @@ export class Ship {
     this.syncTransform();
     this.animateEngine(dt);
 
-    this.heat = Math.max(0, this.heat - (this.inShadow ? COOLING_SHADOW : COOLING_SUN) * dt);
+    this.heat = Math.max(0, this.heat - (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * dt);
     if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;
     if (controls.fire && !this.overheated && now - this.lastShotAt >= LASER_COOLDOWN) {
       this.heat += HEAT_PER_SHOT;

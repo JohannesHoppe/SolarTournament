@@ -103,8 +103,9 @@ export class Wrecks {
       mesh.position.addScaledVector(wreck.velocity, dt);
       mesh.quaternion.premultiply(spin.setFromAxisAngle(wreck.spinAxis, wreck.spinRate * dt));
       mesh.material.emissiveIntensity = 2 * Math.exp(-(now - wreck.bornAt) / GLOW_TIME);
-      // debris that hits a rock grinds to dust; debris that drifts off into the belt is gone for good
-      if (field.overlap(mesh.position, wreck.radius) || mesh.position.lengthSq() > BELT_INNER * BELT_INNER) this.remove(wreck);
+      // debris that hits a rock grinds to dust, debris that falls into the arena's massive body
+      // is gone, and so is debris that drifts off into the belt
+      if (field.overlap(mesh.position, wreck.radius) || field.insideWell(mesh.position, wreck.radius) || mesh.position.lengthSq() > BELT_INNER * BELT_INNER) this.remove(wreck);
     }
   }
 

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createRocks, DISTANT_DETAIL, FAR_DETAIL } from './world/rocks';
+import { debrisSet, hullSet, iceSet } from './world/shapes';
+import type { TemplateKind, TemplateSet } from './world/asteroids';
 import { synthesizeSounds } from './sound/sounds';
 import { radialTexture, smokeTexture, sparkTexture } from './view/textures';
 
@@ -8,11 +10,10 @@ export type ShipType = 'human' | 'alien';
 
 export interface Assets {
   ships: Record<ShipType, THREE.Object3D>;
-  asteroids: THREE.Object3D[];
-  /** The same rock shapes in less detail, for field rocks seen from afar. */
-  asteroidsFar: THREE.Object3D[];
-  /** The same rock shapes in low detail, for the belt beyond the arena. */
+  /** The rock shapes in low detail, for the belt beyond the arena. */
   belt: THREE.Mesh[];
+  /** Every kind of shape the arenas' fields are built from (see world/shapes); the rocks also in less detail for afar. */
+  fieldSets: Record<TemplateKind, TemplateSet>;
   textures: {
     flameFrames: THREE.Texture[];
     smoke: THREE.Texture;
@@ -106,11 +107,11 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     [1, '#000000'],
   ]);
 
+  const rock = { near: asteroids, far: asteroidsFar };
   return {
     ships: { human, alien },
-    asteroids,
-    asteroidsFar,
     belt,
+    fieldSets: { rock, ice: iceSet(rock), debris: debrisSet(), hull: hullSet() },
     textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), glow },
     sounds: synthesizeSounds(audio),
   };

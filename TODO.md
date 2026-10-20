@@ -30,10 +30,13 @@ Worked through from top to bottom. Every finished item is also documented in the
 
 ### 4. Arenas with their own physics
 
-- [ ] Saturn's rings: thousands of chunks of ice
-- [ ] Kessler field: debris of a destroyed station
-- [ ] Gas giant: strong gravity, swing-by as a weapon
-- [ ] Close to the sun: brutal heat, solar storms disturb the sensors
+- [x] Every round in another arena; tournaments walk through all of them in an order of their own
+- [x] Rings of Kronos: chunks of ice in a thin sheet
+- [x] Kessler field: debris of a destroyed station on crossing orbits
+- [x] Gas giant: strong gravity, swing-by as a weapon
+- [x] Corona: close to the sun, radiators barely cool, solar storms blind the sensors
+- [x] Event horizon: a black hole that pulls everything in, with a gravitational lens
+- [x] The derelict: a broken world ship as the only cover
 
 ### 5. Game modes
 

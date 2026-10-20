@@ -121,9 +121,10 @@ export function wreckStates(x: unknown): WreckState[] | null {
 
 export function fieldState(x: unknown): FieldState | null {
   if (!isRecord(x) || !Array.isArray(x.a) || x.a.length > MAX_ROCKS || !Array.isArray(x.x) || x.x.length > MAX_ROCKS) return null;
+  const k = id(x.k);
   const t = num(x.t, 0, MAX_FIELD_TIME);
   const rocks = x.a.map(asteroidState);
   const broken = x.x.map(breakState);
-  if (t === null || rocks.some((rock) => rock === null) || broken.some((rock) => rock === null)) return null;
-  return { t, a: rocks as AsteroidState[], x: broken as { id: string; b: number }[] };
+  if (k === null || t === null || rocks.some((rock) => rock === null) || broken.some((rock) => rock === null)) return null;
+  return { k, t, a: rocks as AsteroidState[], x: broken as { id: string; b: number }[] };
 }

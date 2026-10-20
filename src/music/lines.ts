@@ -171,6 +171,16 @@ export const ANNOUNCER_ROCK = [
   'a rock wins again. {name} goes back to the printer',
 ];
 export const ANNOUNCER_OPEN = ['radio twenty five eighty four. live from the arena', 'this is your announcer. the games continue'];
+/** The announcer names the arena of the round (see world/arenas). */
+export const ANNOUNCER_ARENA = {
+  belt: 'live from the belt. forty rocks. no mercy',
+  rings: 'live from the rings of kronos. mind the ice',
+  kessler: 'live from the kessler field. the station died. so will you',
+  giant: 'live from the gas giant. do not fall in',
+  corona: 'live from the corona. it is hot today',
+  hole: 'live from the event horizon. nobody comes back',
+  derelict: 'live from the derelict. a world ship, broken in two',
+} as const;
 
 /** Bot callsigns the announcer can say; the clones of human Hosts become "pilot". */
 /** The bots' callsigns; the announcer has a rendered clip of each. */
@@ -299,7 +309,7 @@ export function allLines(language: Language): string[] {
       return [STATION_DE, NOW_PLAYING_DE, ...TITLE_FIRST_DE, ...TITLE_SECOND_DE, ...PHRASES_DE];
     case 'mod':
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
-      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_OPEN, ...ANNOUNCER_NAMES];
+      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
       return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...SPONSOR_BREAK, ...SPONSOR_HAPPY];
   }

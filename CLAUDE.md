@@ -78,7 +78,10 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `world/space.ts` | Stars, nebula, sun with shadows, space dust |
 | `world/arena.ts` | The arena edge (`ARENA_LIMIT`, `ARENA_GRACE`) and its grid |
 | `world/belt.ts` | The asteroid belt beyond the arena: instanced low-detail rocks as scenery |
-| `world/asteroids.ts` | Asteroid field: ellipsoid collision, raycast, line of sight, gravity, fragments |
+| `world/arenas.ts` | The seven arenas (belt, rings, Kessler field, gas giant, corona, event horizon, derelict): field layout, well, sun, cooling, storms; which arena a tournament round is in |
+| `world/asteroids.ts` | The field of an arena: rocks, ice, debris or hull from a layout, orbits, solid pieces, a massive body (well); ellipsoid collision, raycast, line of sight, gravity, fragments |
+| `world/shapes.ts` | The field shapes besides rock: ice, station debris, the world ship's hull sections (with computed collider boxes) |
+| `world/landmarks.ts` | The arenas' scenery: ringed planet, the world below the Kessler field, gas giant, the sun up close, black hole and its disk, the derelict's neon |
 | `world/rocks.ts` | Generates the 16 asteroid shapes: noise, craters, four kinds of rock; integer hashing and polynomials only, so every browser builds identical shapes |
 | `world/wrecks.ts` | Wreckage of destroyed ships |
 | **`ship/`** | **Ships and who flies them** |
@@ -88,6 +91,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | **`view/`** | **What the screen shows** |
 | `view/hud.ts` | DOM HUD: gauges, markers, warnings, tunnel vision |
 | `view/effects.ts` | Particles (one draw call per texture), laser beams |
+| `view/lensing.ts` | The black hole's gravitational lens over the rendered picture |
 | `view/glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |
 | `view/textures.ts` | Canvas textures: glows, sparks, smoke |
 | `view/marks.ts` | The marks before names: bot or Host, drawn as shapes, never as characters |
@@ -128,7 +132,7 @@ Typography matters. Running text is always justified, never ragged, with hyphena
 
 ## Code rules
 
-- **Determinism:** everything that concerns the shared world state (asteroid field, fragments, wreckage, the notes of Radio 2584) comes from seeded randomness (`Randomizer`), never from `Math.random()`. Otherwise peer-to-peer players see different worlds. `Math.random()` is only allowed for visuals (particles, flicker, glitches) and bot decisions.
+- **Determinism:** everything that concerns the shared world state (the arena of a round, its field, fragments, wreckage, the notes of Radio 2584) comes from seeded randomness (`Randomizer`), never from `Math.random()`. Otherwise peer-to-peer players see different worlds. `Math.random()` is only allowed for visuals (particles, flicker, glitches) and bot decisions.
 - **Human and alien ship are identical**, only their looks differ (shared hit radius).
 - **No sound from outside:** the player hears only what travels through the own hull, plus the flight computer's beeps, the radio and the link static in the headset.
 - **Performance:** no objects created per frame in hot loops; reuse module-level scratch vectors.

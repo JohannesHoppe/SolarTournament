@@ -69,6 +69,8 @@ export class Space {
   readonly dust: THREE.Points;
   /** The dust's streaks at speed (see streakVertex). */
   readonly streaks: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  private readonly sun: THREE.Sprite;
+  private readonly sunLight: THREE.DirectionalLight;
 
   constructor() {
     const positions = new Float32Array(STAR_COUNT * 3);
@@ -114,6 +116,7 @@ export class Space {
     sun.position.copy(SUN_DIRECTION).multiplyScalar(SKY_RADIUS * 0.8);
     sun.scale.setScalar(30000);
     this.sky.add(sun);
+    this.sun = sun;
     this.sky.renderOrder = -1;
 
     const dustPositions = new Float32Array(DUST_COUNT * 3);
@@ -169,7 +172,16 @@ export class Space {
     });
     sunLight.shadow.camera.updateProjectionMatrix();
     this.lights.add(sunLight, sunLight.target);
+    this.sunLight = sunLight;
     this.lights.add(new THREE.HemisphereLight(0x7788bb, 0x2a201c, 1.6));
+  }
+
+  /** The sun of an arena: its size in the sky, and how bright and in which color it lights the field. */
+  setSun(sun: { size: number; intensity: number; color: number }) {
+    this.sun.scale.setScalar(sun.size);
+    this.sun.material.color.set(sun.color);
+    this.sunLight.intensity = sun.intensity;
+    this.sunLight.color.set(sun.color);
   }
 
   /** Keeps the sky at infinity; the dust streaks along `velocity`, the motion of whoever the camera rides with. */

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AsteroidField } from '../world/asteroids';
+import type { AsteroidField, FieldState } from '../world/asteroids';
 import { ownerOf, TOURNAMENT_SIZE, type Session, type RoundState, type Vec } from './session';
 import type { Ship, ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
@@ -31,6 +31,8 @@ export interface OnlineGame {
   wreckSnapshot(): WreckState[];
   /** Takes the pieces of wreckage in flight from the lead browser. */
   restoreWrecks(wrecks: WreckState[]): void;
+  /** Takes the lead browser's field, in the arena it names. */
+  restoreField(field: FieldState): void;
   /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
   leadRound(): RoundState;
@@ -85,7 +87,7 @@ export class Online {
     session.onRock = (id, at, round) => game.remoteRock(id, at, round);
     session.onWreck = (id) => game.remoteWreck(id);
     session.onSync = (field, wrecks) => {
-      game.field.restore(field);
+      game.restoreField(field);
       game.restoreWrecks(wrecks);
     };
     session.onPeerJoin = (peer) => {
