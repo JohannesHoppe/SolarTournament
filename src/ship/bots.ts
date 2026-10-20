@@ -4,8 +4,8 @@ import { IDLE, type Controls } from '../input/input';
 import type { Ship } from './ship';
 import { RCS_THRUST } from './flight';
 
-/** Bots notice ships within this distance (units, 2.5 km), when no rock is in the way. */
-const SIGHT_RANGE = 50000;
+/** Bots notice ships within this distance (units, 3.5 km: across the whole field), when no rock is in the way, so the fight finds a Host quickly. */
+const SIGHT_RANGE = 70000;
 /** Bots only fire within this distance (units, 1 km). */
 const FIRE_RANGE = 20000;
 /** At most this many bots hunt the same ship; the others look for another target. */

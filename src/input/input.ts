@@ -30,6 +30,15 @@ const MOUSE_DEADZONE = 0.08;
 const FINE_AIM = 0.3;
 /** Stick deflections below this are treated as zero, so worn sticks do not drift. */
 const STICK_DEADZONE = 0.15;
+/** Two taps of a thruster key (or two flicks of the thruster stick) the same way within this time (ms) dodge. */
+const DODGE_TAP_MS = 300;
+/** The thruster keys: which axis each pushes, and which way. */
+const THRUSTER_KEYS: Record<string, { axis: 'x' | 'y'; sign: number } | undefined> = {
+  KeyD: { axis: 'x', sign: 1 },
+  KeyA: { axis: 'x', sign: -1 },
+  KeyR: { axis: 'y', sign: 1 },
+  KeyF: { axis: 'y', sign: -1 },
+};
 
 /** Buttons of the standard gamepad layout (Xbox naming). */
 const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, leftStick: 10, rightStick: 11 } as const;
@@ -59,6 +68,11 @@ export class Input {
   private readonly padPressed = new Set<number>();
   /** A held since a screen changed (see holdFire). */
   private fireHeld = false;
+  /** The thruster axes as last read, and the last time each was pushed fully one way (see dodge detection in read). */
+  private readonly lastPush = { x: 0, y: 0 };
+  private lastTap = { axis: '', sign: 0, at: -Infinity };
+  /** A dodge asked for and not yet taken: sideways and up, each -1, 0 or 1. */
+  private dodge: { x: number; y: number } | null = null;
   private readonly touch = new TouchControls(() => this.handler('pause'), () => this.handler('autopilot'), () => this.handler('overdrive'));
 
   constructor(private readonly canvas: HTMLElement) {
@@ -149,7 +163,37 @@ export class Input {
     out.strafeY = clamp(axis('KeyR', 'KeyF') - stick(3) + touch.push.y);
     out.strafeZ = -button(PAD.x);
     out.fire = key('Space') || this.mouseFire || touch.fire || button(PAD.lt) > 0.5 || (button(PAD.a) > 0.5 && !this.fireHeld);
+    // keys are told apart by their events (see onKey), the sticks by their travel from frame to frame
+    this.detectDodge('x', stick(2) + touch.push.x);
+    this.detectDodge('y', -stick(3) + touch.push.y);
     return out;
+  }
+
+  /** The dodge asked for since the last call, if any: sideways (x) and up (y), each -1, 0 or 1. */
+  takeDodge(): { x: number; y: number } | null {
+    const dodge = this.dodge;
+    this.dodge = null;
+    return dodge;
+  }
+
+  /** A thruster stick pushed fully one way twice in quick succession asks for a dodge that way. */
+  private detectDodge(axis: 'x' | 'y', value: number) {
+    const before = this.lastPush[axis];
+    this.lastPush[axis] = value;
+    if (Math.abs(value) < 0.9 || Math.abs(before) >= 0.5) return;
+    this.tapped(axis, Math.sign(value));
+  }
+
+  /** A thruster key or stick went fully one way: the second time within DODGE_TAP_MS asks for a dodge. */
+  private tapped(axis: 'x' | 'y', sign: number) {
+    const now = performance.now();
+    const tap = this.lastTap;
+    if (tap.axis === axis && tap.sign === sign && now - tap.at < DODGE_TAP_MS) {
+      this.dodge = { x: axis === 'x' ? sign : 0, y: axis === 'y' ? sign : 0 };
+      this.lastTap = { axis: '', sign: 0, at: -Infinity };
+      return;
+    }
+    this.lastTap = { axis, sign, at: now };
   }
 
   /**
@@ -165,6 +209,15 @@ export class Input {
     const pad = this.gamepad();
     if (!pad || !((pad.buttons[PAD.a]?.value ?? 0) > 0.5)) this.fireHeld = false;
     if (!pad) return;
+    // LB dodges the way the thruster stick points, sideways to the right when it rests
+    const lb = (pad.buttons[PAD.lb]?.value ?? 0) > 0.5;
+    if (lb && !this.padPressed.has(PAD.lb)) {
+      const x = Math.sign(deadzone(pad.axes[2] ?? 0));
+      const y = -Math.sign(deadzone(pad.axes[3] ?? 0));
+      this.dodge = x || y ? { x, y } : { x: 1, y: 0 };
+    }
+    if (lb) this.padPressed.add(PAD.lb);
+    else this.padPressed.delete(PAD.lb);
     for (const [index, action] of PAD_ACTIONS) {
       const down = (pad.buttons[index]?.value ?? 0) > 0.5;
       if (down && !this.padPressed.has(index)) this.handler(action);
@@ -209,6 +262,8 @@ export class Input {
     if (e.code === 'F1') e.preventDefault();
 
     if (!down || e.repeat) return;
+    const thruster = THRUSTER_KEYS[e.code];
+    if (thruster) this.tapped(thruster.axis, thruster.sign);
     if (e.code === 'Enter') this.handler('confirm');
     if (e.code === 'Escape' || e.code === 'KeyP') this.handler('pause');
     if (e.code === 'KeyQ') this.handler('quit');

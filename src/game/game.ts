@@ -18,7 +18,7 @@ import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../
 import { showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls } from '../input/input';
 import { Ship, type ShipState, type Zone } from '../ship/ship';
-import { MAIN_THRUST, MAX_TURN_RATE, OVERDRIVE_PUSH, RCS_THRUST } from '../ship/flight';
+import { MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, RCS_THRUST } from '../ship/flight';
 import { Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { Online, type OnlineGame } from '../net/online';
 import { Lobby, type Listing } from '../net/lobby';
@@ -145,6 +145,29 @@ const KICK_FADE = 9;
 const OVERDRIVE_STRAIN = 0.9;
 const OVERDRIVE_DRIVE_COOLDOWN = 4;
 const OVERDRIVE_RECHARGE = 60;
+/**
+ * The dodge (a thruster key tapped twice, LB): the maneuvering thrusters fire all at once at
+ * overload, a kick of DODGE_SPEED (units/s, 25 m/s) sideways or up or down. The autopilot lets
+ * the drift be for DODGE_DRIFT seconds, so the ship really leaves the line of fire (about
+ * 25 m, more than half a ship length), and the thrusters need DODGE_RECHARGE seconds before
+ * the next one. It presses the clone into the side of the seat (DODGE_STRAIN).
+ */
+const DODGE_SPEED = 500;
+const DODGE_DRIFT = 0.7;
+const DODGE_RECHARGE = 1.5;
+const DODGE_STRAIN = 0.15;
+/**
+ * A close call: passing a rock faster than CLOSE_CALL_SPEED (units/s, 60 m/s) within
+ * CLOSE_CALL_REACH ship radii of its surface, without touching it, earns CLOSE_CALL_POINTS.
+ * The same rock pays again only once the ship has left it behind (CLOSE_CALL_CLEAR radii).
+ */
+const CLOSE_CALL_SPEED = 1200;
+const CLOSE_CALL_REACH = 2.2;
+const CLOSE_CALL_CLEAR = 5;
+const CLOSE_CALL_POINTS = 25;
+/** The camera hangs back by this share of the ship radius at a full burn, and the view widens by SPEED_FOV degrees at the speed limit. */
+const DRIVE_LAG = 0.6;
+const SPEED_FOV = 6;
 /** Hosts who ask for less motion get no camera shake. */
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 /** What a landed hit says where it struck, by the zone it broke. */
@@ -289,6 +312,20 @@ export class Game implements OnlineGame {
   private aimAngle = 0;
   /** Strength of the camera jolt after the own laser hit something, 0..2. */
   private kick = 0;
+  /** The velocity of the ship the camera rides with, for the dust's streaks; null without one. */
+  private riding: THREE.Vector3 | null = null;
+  /** The own drive burned in the last frame (see ignite). */
+  private burning = false;
+  /** When the next dodge is ready (game time, s). */
+  private dodgeReadyAt = 0;
+  /** When the own ship last got a close call (game time, s), and from which rock. */
+  private lastCloseCall = -Infinity;
+  /** Rocks that paid a close call and stay unpaid until the ship has left them behind. */
+  private readonly closeCalls = new Set<string>();
+  /** The rock the own ship is passing close by, and whether it touched it. */
+  private closePass: { id: string; touched: boolean } | null = null;
+  /** When the own ship last touched a rock (game time, s). */
+  private lastScrape = -Infinity;
   /** When the overdrive can fire again (game time, s). */
   private overdriveReadyAt = 0;
   /** The brake has brought the ship to rest (it beeps once). */
@@ -377,7 +414,7 @@ export class Game implements OnlineGame {
     this.field = new AsteroidField(assets.asteroids, assets.asteroidsFar);
     this.belt = new Belt(assets.belt);
     this.effects = new Effects(assets.textures);
-    this.scene.add(this.space.sky, this.space.dust, this.arena.mesh, this.belt.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
+    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
       this.engineLights.push(light);
@@ -982,6 +1019,11 @@ export class Game implements OnlineGame {
     this.kick = 0;
     this.autopilot = true;
     this.overdriveReadyAt = 0;
+    this.dodgeReadyAt = 0;
+    // taps from the menu ask for nothing
+    this.input.takeDodge();
+    this.closeCalls.clear();
+    this.closePass = null;
     this.ease = 0;
     // a resumed flight school starts with the autopilot as the drills before left it
     if (this.school) this.autopilot = this.school.startsWithAutopilot;
@@ -1385,7 +1427,7 @@ export class Game implements OnlineGame {
     const still = this.state === 'paused' && !this.online && !glitching;
     if (still && !this.redraw) return;
     this.redraw = false;
-    this.space.follow(this.camera);
+    this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
     this.arena.update(this.camera);
     this.composer.render();
   }
@@ -1400,6 +1442,9 @@ export class Game implements OnlineGame {
 
     this.ease = Math.max(0, this.ease - dt / EASE_FADE);
     const myControls = this.flightComputer(this.state === 'playing' ? this.input.read() : IDLE);
+    this.ignite(myControls);
+    const dodge = this.input.takeDodge();
+    if (dodge && this.state === 'playing' && !this.spectating) this.dodge(dodge);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -1431,6 +1476,7 @@ export class Game implements OnlineGame {
       this.exhaust(ship, dt);
     }
     this.wrecks.update(dt, now, this.field);
+    this.closeCall(now);
     this.pilot(dt, now);
 
     if (me.alive) {
@@ -1740,6 +1786,70 @@ export class Game implements OnlineGame {
     this.hud.flashMessage(this.time, 'Overdrive', 1.2);
   }
 
+  /** A thruster key tapped twice, or LB: the dodge; see DODGE_SPEED. */
+  private dodge(direction: { x: number; y: number }) {
+    const me = this.me!;
+    if (!me.alive || this.time < this.dodgeReadyAt) return;
+    this.dodgeReadyAt = this.time + DODGE_RECHARGE;
+    // a damaged thruster kicks weaker
+    const push = relative.set(direction.x, direction.y, 0).normalize().multiplyScalar(DODGE_SPEED * (0.25 + 0.75 * me.thrusters));
+    me.flight.velocity.add(push.applyQuaternion(me.flight.orientation));
+    this.strain = Math.min(1, this.strain + DODGE_STRAIN);
+    this.kick = Math.min(2, this.kick + 0.8);
+    // the gas leaves on the side opposite to the kick
+    const nozzle = me.toWorld(scratch.set(-direction.x, -direction.y, 0).multiplyScalar(me.radius * 0.7), scratch);
+    for (let i = 0; i < 6; i++) this.effects.puff(nozzle, aimPoint.copy(push).multiplyScalar(-1.5).add(me.flight.velocity), me.radius * 0.25);
+    this.sound.play('explosion', { volume: 0.5, rate: 2.6 });
+  }
+
+  /** The drive lights: the first moment of a burn is felt, with a jolt and a thump through the hull. */
+  private ignite(controls: Readonly<Controls>) {
+    const me = this.me!;
+    const burning = me.alive && controls.thrust > 0.5 && !me.driveOffline(this.time) && !me.flight.limited;
+    if (burning && !this.burning) {
+      this.kick = Math.min(2, this.kick + 0.35);
+      this.sound.play('explosion', { volume: 0.45, rate: 0.45 });
+    }
+    this.burning = burning;
+  }
+
+  /** Passing a rock close and fast pays (see CLOSE_CALL_SPEED); a touch does not. */
+  private closeCall(now: number) {
+    const me = this.me!;
+    if (!me.alive || this.school) {
+      this.closePass = null;
+      return;
+    }
+    const flight = me.flight;
+    for (const id of this.closeCalls) {
+      const rock = this.field.asteroids.get(id);
+      if (!rock || rock.object.position.distanceTo(flight.position) > rock.radius + me.radius * CLOSE_CALL_CLEAR) this.closeCalls.delete(id);
+    }
+    const near = this.field.overlap(flight.position, me.radius * CLOSE_CALL_REACH);
+    const pass = this.closePass;
+    if (pass && near?.id !== pass.id) {
+      // the pass is over: it pays if it was fast and never touched the rock
+      this.closePass = null;
+      if (!pass.touched) this.payCloseCall(now);
+    }
+    const touched = now - this.lastScrape < 0.1;
+    if (near && this.closePass) this.closePass.touched ||= touched;
+    if (!near || this.closePass || this.closeCalls.has(near.id) || flight.velocity.lengthSq() < CLOSE_CALL_SPEED * CLOSE_CALL_SPEED) return;
+    this.closeCalls.add(near.id);
+    this.closePass = { id: near.id, touched };
+  }
+
+  private payCloseCall(now: number) {
+    const me = this.me!;
+    const flight = me.flight;
+    if (now - this.lastCloseCall < 0.5) return;
+    this.lastCloseCall = now;
+    me.score += CLOSE_CALL_POINTS;
+    this.hud.popup(this.camera, scratch.copy(flight.position).addScaledVector(flight.forward(forward), me.radius * 4), `CLOSE CALL +${CLOSE_CALL_POINTS}`, 'points');
+    this.sound.beep(1180, 0.05, 0.12);
+    this.sound.beep(1570, 0.08, 0.12, 0.06);
+  }
+
   /** T: the autopilot on or off. */
   private toggleAutopilot() {
     this.autopilot = !this.autopilot;
@@ -1753,6 +1863,8 @@ export class Game implements OnlineGame {
    */
   private trimDrift(controls: Readonly<Controls>): Controls {
     const out = Object.assign(this.computed, controls);
+    // right after a dodge the drift is the point
+    if (this.time < this.dodgeReadyAt - DODGE_RECHARGE + DODGE_DRIFT) return out;
     const drift = this.me!.flight.toLocalDirection(this.me!.flight.velocity, relative).divideScalar(RCS_THRUST * AUTOPILOT_EASE);
     if (!controls.strafeX) out.strafeX = THREE.MathUtils.clamp(-drift.x, -1, 1);
     if (!controls.strafeY) out.strafeY = THREE.MathUtils.clamp(-drift.y, -1, 1);
@@ -1977,6 +2089,7 @@ export class Game implements OnlineGame {
     relative.subVectors(velocity, surface);
     const approach = -relative.dot(normal);
     if (approach <= 0) return;
+    if (ship === this.me) this.lastScrape = now;
     velocity.addScaledVector(normal, approach * (1 + RESTITUTION));
     // friction: scraping along the rock bleeds off some sideways speed
     relative.subVectors(velocity, surface);
@@ -2149,13 +2262,17 @@ export class Game implements OnlineGame {
       this.camera.position.copy(flight.position).addScaledVector(flight.forward(scratch), me.radius * 0.3);
       this.camera.quaternion.copy(flight.orientation);
     } else {
-      flight.toWorld(cameraGoal.set(0, me.radius * 0.75, me.radius * 2.6), cameraGoal);
+      // a burn presses the ship ahead of the camera, which hangs back a little
+      const lag = me.alive ? flight.throttle * DRIVE_LAG : 0;
+      flight.toWorld(cameraGoal.set(0, me.radius * 0.75, me.radius * (2.6 + lag)), cameraGoal);
       this.camera.position.lerp(cameraGoal, 1 - Math.exp(-CAMERA_FOLLOW * dt));
       this.camera.quaternion.slerp(flight.orientation, 1 - Math.exp(-CAMERA_TURN * dt));
     }
-    // the drive kicks: the view widens while it burns, and the chase camera trembles
+    this.riding = me.alive ? flight.velocity : null;
+    // the drive kicks: the view widens while it burns and with speed, and the chase camera trembles
     const burn = me.alive ? flight.throttle : 0;
-    const fov = this.camera.fov + (CAMERA_FOV + DRIVE_FOV_KICK * burn - this.camera.fov) * (1 - Math.exp(-6 * dt));
+    const fast = me.alive ? Math.min(1, flight.velocity.length() / MAX_SPEED) : 0;
+    const fov = this.camera.fov + (CAMERA_FOV + DRIVE_FOV_KICK * burn + SPEED_FOV * fast - this.camera.fov) * (1 - Math.exp(-6 * dt));
     if (Math.abs(fov - this.camera.fov) > 0.01) {
       this.camera.fov = fov;
       this.camera.updateProjectionMatrix();
@@ -2171,6 +2288,7 @@ export class Game implements OnlineGame {
   }
 
   private updateMenuCamera() {
+    this.riding = null;
     if (this.camera.fov !== CAMERA_FOV) {
       this.camera.fov = CAMERA_FOV;
       this.camera.updateProjectionMatrix();

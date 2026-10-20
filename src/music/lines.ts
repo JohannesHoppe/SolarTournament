@@ -228,7 +228,7 @@ export const SCHOOL_PRAISE = {
   turn: 'Nice. Turning only spins you around. It never moves you anywhere.',
   fineAim: 'Precise. I like that.',
   cockpit: 'Inside you aim like your clone. Outside you see your ship and its drift. Your choice.',
-  drive: 'Feel that? Nine g. Your clone gets heavier with every burn. Burn too long, and the world shrinks to a tunnel.',
+  drive: 'Feel that? Thirteen g. Your clone gets heavier with every burn. Burn too long, and the world shrinks to a tunnel.',
   freeDrift: 'Free drift. Every push stays with you now, until you push back.',
   drift: 'No air, no friction. You drift forever, unless you do something about it.',
   lookBack: 'See? Where you look and where you fly are two different things out here.',

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import type { Controls } from '../input/input';
 
-/** Acceleration of the main drive at full thrust (units/s²): 90 m/s², about 9 g. Hard, so a burn is felt. */
-export const MAIN_THRUST = 1800;
+/** Acceleration of the main drive at full thrust (units/s²): 127.5 m/s², 13 g. Hard and quick: the speed limit is two seconds away, and so is a stop. */
+export const MAIN_THRUST = 2550;
 /** Acceleration of the maneuvering thrusters along any axis (units/s²): 40 m/s², about 4 g, so a sidestep left and right throws off an aim. */
 export const RCS_THRUST = 800;
 /** Tournament rule: no ship flies faster than this (units/s, 250 m/s); the flight computer cuts any push beyond it. */
@@ -17,8 +17,9 @@ export const OVERDRIVE_PUSH = 3000;
 export const MAX_TURN_RATE = 3;
 const MAX_ROLL_RATE = 3.2;
 const TURN_ACCELERATION = 24;
-/** How fast the visible drive output follows the thrust command (1/s). */
-const THROTTLE_RESPONSE = 12;
+/** How fast the visible drive output follows the thrust command (1/s): the flame is there at once and dies a little slower. */
+const THROTTLE_RISE = 40;
+const THROTTLE_FALL = 12;
 
 const rotation = new THREE.Quaternion();
 const axis = new THREE.Vector3();
@@ -111,7 +112,7 @@ export class FlightModel {
     const limit = Math.max(speed, MAX_SPEED);
     if (this.velocity.lengthSq() > limit * limit) this.velocity.setLength(limit);
     this.position.addScaledVector(this.velocity, dt);
-    this.throttle += (drive - this.throttle) * (1 - Math.exp(-THROTTLE_RESPONSE * dt));
+    this.throttle += (drive - this.throttle) * (1 - Math.exp(-(drive > this.throttle ? THROTTLE_RISE : THROTTLE_FALL) * dt));
   }
 
   /** A world direction in ship space (-Z ahead, +X right, +Y up). */

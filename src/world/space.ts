@@ -26,6 +26,36 @@ const dustFragment = /* glsl */ `
     gl_FragColor = vec4(vec3(0.55, 0.6, 0.7) * vFade, 1.0);
   }
 `;
+
+/**
+ * The same dust drawn as streaks: every mote is a line from where it is to where it was
+ * STREAK_SECONDS ago, seen from the moving ship, so speed shows as the dust rushing past.
+ */
+const streakVertex = /* glsl */ `
+  uniform float size;
+  uniform vec3 velocity;
+  uniform float strength;
+  attribute float tail;
+  varying float vFade;
+  void main() {
+    vec3 offset = mod(position - cameraPosition + size * 0.5, size) - size * 0.5;
+    vFade = (1.0 - smoothstep(size * 0.2, size * 0.45, length(offset))) * strength * (1.0 - tail * 0.85);
+    vec3 world = cameraPosition + offset + velocity * tail;
+    gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
+  }
+`;
+
+const streakFragment = /* glsl */ `
+  varying float vFade;
+  void main() {
+    gl_FragColor = vec4(vec3(0.6, 0.72, 0.9) * vFade, 1.0);
+  }
+`;
+/** A streak is as long as the way the ship travels in this time (s): 250 m/s draws 12.5 m lines. */
+const STREAK_SECONDS = 0.05;
+/** Streaks show from this speed on (units/s, 20 m/s) and are at full strength from STREAK_FULL (units/s, 200 m/s). */
+const STREAK_START = 400;
+const STREAK_FULL = 4000;
 /** Size of the area the sun's shadow map covers, centered on the field. */
 const SHADOW_REACH = 140000;
 /** Direction towards the sun; it sits in front of the ships at spawn. */
@@ -37,6 +67,8 @@ export class Space {
   readonly lights = new THREE.Group();
   /** Fine dust that stays in place, so drift and speed are visible even far from any rock. */
   readonly dust: THREE.Points;
+  /** The dust's streaks at speed (see streakVertex). */
+  readonly streaks: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
 
   constructor() {
     const positions = new Float32Array(STAR_COUNT * 3);
@@ -98,6 +130,28 @@ export class Space {
     }));
     this.dust.frustumCulled = false;
 
+    // every mote twice: its head where it is, its tail where it was
+    const streakPositions = new Float32Array(DUST_COUNT * 6);
+    const tails = new Float32Array(DUST_COUNT * 2);
+    for (let i = 0; i < DUST_COUNT; i++) {
+      streakPositions.set(dustPositions.subarray(i * 3, i * 3 + 3), i * 6);
+      streakPositions.set(dustPositions.subarray(i * 3, i * 3 + 3), i * 6 + 3);
+      tails[i * 2 + 1] = 1;
+    }
+    const streakGeometry = new THREE.BufferGeometry();
+    streakGeometry.setAttribute('position', new THREE.BufferAttribute(streakPositions, 3));
+    streakGeometry.setAttribute('tail', new THREE.BufferAttribute(tails, 1));
+    this.streaks = new THREE.LineSegments(streakGeometry, new THREE.ShaderMaterial({
+      uniforms: { size: { value: DUST_SIZE }, velocity: { value: new THREE.Vector3() }, strength: { value: 0 } },
+      vertexShader: streakVertex,
+      fragmentShader: streakFragment,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      transparent: true,
+    }));
+    this.streaks.frustumCulled = false;
+    this.streaks.visible = false;
+
     // The asteroids cast shadows over the whole field; a ship in their shadow goes dark.
     const sunLight = new THREE.DirectionalLight(0xfff0dd, 3.2);
     sunLight.position.copy(SUN_DIRECTION).multiplyScalar(SHADOW_REACH);
@@ -118,7 +172,16 @@ export class Space {
     this.lights.add(new THREE.HemisphereLight(0x7788bb, 0x2a201c, 1.6));
   }
 
-  follow(camera: THREE.Camera) {
+  /** Keeps the sky at infinity; the dust streaks along `velocity`, the motion of whoever the camera rides with. */
+  follow(camera: THREE.Camera, velocity: THREE.Vector3 | null) {
     this.sky.position.copy(camera.position);
+    const speed = velocity?.length() ?? 0;
+    const strength = THREE.MathUtils.smoothstep(speed, STREAK_START, STREAK_FULL);
+    this.streaks.visible = strength > 0;
+    if (!velocity || !this.streaks.visible) return;
+    const uniforms = this.streaks.material.uniforms;
+    uniforms.strength.value = strength;
+    // the tail lies where the mote was, seen from the ship: ahead along the ship's own motion
+    uniforms.velocity.value.copy(velocity).multiplyScalar(STREAK_SECONDS);
   }
 }
