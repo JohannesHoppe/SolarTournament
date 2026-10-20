@@ -1,7 +1,8 @@
 import type { FieldState } from '../world/asteroids';
 import type { ShipState } from '../ship/ship';
+import type { WreckState } from '../world/wrecks';
 import { LocalTransport, TrysteroTransport, type Transport } from './transport';
-import { fieldState, id, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec } from './validate';
+import { fieldState, id, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
 /** Ship states go out this often (Hz); the receivers predict the motion in between. */
 const STATE_RATE = 15;
@@ -37,6 +38,8 @@ const MAX_HITS_PER_SECOND = MAX_SHIPS_PER_PEER * 12;
 const MAX_ROCK_HITS_PER_SECOND = 20;
 /** Destructions per peer and second: the ships one browser runs die a few times a minute, never this often. */
 const MAX_DESTRUCTIONS_PER_SECOND = 4;
+/** Pieces of wreckage one peer's ships shoot or ram per second, generous for several ships firing at once. */
+const MAX_WRECK_HITS_PER_SECOND = 20;
 
 /**
  * Round clock of the lead browser: which round is running, how many seconds are left, and the
@@ -79,7 +82,8 @@ class Budget {
  * The tournament protocol between peers. Every peer simulates its own ship (and the lead
  * browser its bots) and sends their states. The shooter decides whether a beam hit and tells
  * the owner of the ship it hit; the owner applies the damage and announces a destruction.
- * Asteroid hits go to everyone, fragments are deterministic. The lead browser (the peer
+ * Asteroid hits and wreckage shot or rammed go to everyone, fragments and the pieces of a
+ * wreck are deterministic. The lead browser (the peer
  * longest in the room that is still sending) runs the bots and the round clock and brings
  * newcomers up to date. A browser that lost the others for a while starts over as the newest
  * in the room: the others went on without it, so it takes their round and field.
@@ -91,9 +95,12 @@ export class Session {
   onStates: (states: ShipState[], round: RoundState | null, from: string) => void = () => {};
   onFire: (shooter: string, from: Vec, to: Vec) => void = () => {};
   onHit: (target: string, origin: Vec, direction: Vec, shooter: string) => void = () => {};
-  onDestroyed: (victim: string, killer: string | null, deaths: number) => void = () => {};
+  /** `position` and `velocity` are where the victim broke up, on its owner's screen. */
+  onDestroyed: (victim: string, killer: string | null, deaths: number, position: Vec | null, velocity: Vec | null) => void = () => {};
   onRock: (id: string, at: number, round: number) => void = () => {};
-  onSync: (field: FieldState) => void = () => {};
+  /** A piece of wreckage was shot or rammed on another browser. */
+  onWreck: (id: string) => void = () => {};
+  onSync: (field: FieldState, wrecks: WreckState[]) => void = () => {};
   onPeerJoin: (id: string) => void = () => {};
   onPeerLeave: (id: string) => void = () => {};
   /** This browser started over (see restart): it takes the round and field of the lead browser again. */
@@ -129,6 +136,7 @@ export class Session {
   private readonly hitBudget = new Budget(MAX_HITS_PER_SECOND);
   private readonly rockBudget = new Budget(MAX_ROCK_HITS_PER_SECOND);
   private readonly destroyBudget = new Budget(MAX_DESTRUCTIONS_PER_SECOND);
+  private readonly wreckBudget = new Budget(MAX_WRECK_HITS_PER_SECOND);
   private synced = false;
   private left = false;
 
@@ -158,8 +166,14 @@ export class Session {
       const victim = id(d?.v);
       const killer = d?.k === null ? null : id(d?.k);
       const deaths = num(d?.de, 0, MAX_COUNT);
+      const position = vec(d?.p, 3, MAX_COORDINATE);
+      const velocity = vec(d?.u, 3, MAX_SPEED);
       if (!victim || killer === undefined || deaths === null || ownerOf(victim) !== from || !this.destroyBudget.spend(from)) return;
-      this.guard(() => this.onDestroyed(victim, killer, deaths));
+      this.guard(() => this.onDestroyed(victim, killer, deaths, position, velocity));
+    });
+    transport.on('w', (d, from) => {
+      const wreck = id(d?.i);
+      if (wreck && this.wreckBudget.spend(from)) this.guard(() => this.onWreck(wreck));
     });
     transport.on('r', (d, from) => {
       const rock = id(d?.i);
@@ -171,13 +185,14 @@ export class Session {
       // only a browser that just joined or started over takes a field, once, and only from a
       // peer that was here before it
       const field = fieldState(d?.f);
+      const wrecks = wreckStates(d?.w);
       const age = num(d?.g, 0, MAX_FIELD_TIME);
-      if (!field || age === null) return;
+      if (!field || !wrecks || age === null) return;
       this.hear(from, age);
       if (this.synced || seconds() - this.startedAt >= SETTLE_MS / 1000) return;
       if ((this.peerJoinedAt.get(from) ?? Infinity) >= this.startedAt) return;
       this.synced = true;
-      this.guard(() => this.onSync(field));
+      this.guard(() => this.onSync(field, wrecks));
     });
     transport.onPeerJoin((peer) => {
       if (!this.left) this.guard(() => this.onPeerJoin(peer));
@@ -185,7 +200,7 @@ export class Session {
     transport.onPeerLeave((peer) => {
       // join time and last word stay: a link that comes back belongs to the same peer
       this.backAt.delete(peer);
-      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget]) budget.forget(peer);
+      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget]) budget.forget(peer);
       for (const key of this.lastHit.keys()) if (ownerOf(key.slice(0, key.indexOf('>'))) === peer) this.lastHit.delete(key);
       if (!this.left) this.guard(() => this.onPeerLeave(peer));
     });
@@ -291,9 +306,13 @@ export class Session {
     this.transport.send('h', { t: target, o: origin, d: direction, i: shooter }, owner);
   }
 
-  /** `deaths` is the victim's death count with this death, so every peer seeds the same wreckage. */
-  sendDestroyed(victim: string, killer: string | null, deaths: number) {
-    this.transport.send('x', { v: victim, k: killer, de: deaths });
+  /** `deaths` is the victim's death count with this death, so every peer seeds the same wreckage, where the victim broke up. */
+  sendDestroyed(victim: string, killer: string | null, deaths: number, position: Vec, velocity: Vec) {
+    this.transport.send('x', { v: victim, k: killer, de: deaths, p: position, u: velocity });
+  }
+
+  sendWreck(wreck: string) {
+    this.transport.send('w', { i: wreck });
   }
 
   /** `at` is the field time of the hit and `round` the round it fell in, so a rock breaks into the same fragments everywhere. */
@@ -301,8 +320,8 @@ export class Session {
     this.transport.send('r', { i: rock, t: +at.toFixed(3), n: round });
   }
 
-  sendSync(to: string, field: FieldState) {
-    this.transport.send('y', { f: field, g: this.age() }, to);
+  sendSync(to: string, field: FieldState, wrecks: WreckState[]) {
+    this.transport.send('y', { f: field, w: wrecks, g: this.age() }, to);
   }
 
   leave() {

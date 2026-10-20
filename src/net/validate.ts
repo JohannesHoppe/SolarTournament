@@ -1,5 +1,6 @@
 import type { ShipState } from '../ship/ship';
 import type { AsteroidState, FieldState } from '../world/asteroids';
+import type { WreckState } from '../world/wrecks';
 
 /**
  * Checks everything that arrives from other browsers before the game touches it. Peers are
@@ -11,7 +12,7 @@ import type { AsteroidState, FieldState } from '../world/asteroids';
 /** No coordinate in the game comes near this (units): the arena ends at 68,000. */
 export const MAX_COORDINATE = 1e6;
 /** No speed in the game comes near this (units/s). */
-const MAX_SPEED = 1e5;
+export const MAX_SPEED = 1e5;
 /** Spin rates (rad/s). */
 const MAX_SPIN = 50;
 /** A unit vector, with room for rounding. */
@@ -28,6 +29,8 @@ export const ROUND_LIMIT = 3600;
 const MAX_ID = 64;
 /** A field never holds more rocks than this (40 rocks, up to 9 fragments each). */
 const MAX_ROCKS = 400;
+/** The arena never holds more pieces of wreckage than this (MAX_WRECKS in world/wrecks, with room). */
+const MAX_WRECK_PIECES = 100;
 
 export const isRecord = (x: unknown): x is Record<string, unknown> => typeof x === 'object' && x !== null && !Array.isArray(x);
 
@@ -103,6 +106,17 @@ function breakState(x: unknown): { id: string; b: number } | null {
   if (!isRecord(x)) return null;
   const rock = { id: id(x.id), b: num(x.b, 0, MAX_FIELD_TIME) };
   return rock.id !== null && rock.b !== null ? (rock as { id: string; b: number }) : null;
+}
+
+/** The pieces of wreckage in flight, or null. */
+export function wreckStates(x: unknown): WreckState[] | null {
+  if (!Array.isArray(x) || x.length > MAX_WRECK_PIECES) return null;
+  const pieces = x.map((piece) => {
+    if (!isRecord(piece)) return null;
+    const state = { id: id(piece.id), p: vec(piece.p, 3, MAX_COORDINATE), v: vec(piece.v, 3, MAX_SPEED), g: num(piece.g, 0, MAX_FIELD_TIME) };
+    return Object.values(state).some((value) => value === null) ? null : (state as WreckState);
+  });
+  return pieces.some((piece) => piece === null) ? null : (pieces as WreckState[]);
 }
 
 export function fieldState(x: unknown): FieldState | null {

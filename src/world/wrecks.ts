@@ -13,6 +13,8 @@ const GLOW_TIME = 4;
 const SPREAD_SPEED = 400;
 
 export interface Wreck {
+  /** "<ship id>.<death count>.<piece>": the same piece on every browser. */
+  id: string;
   mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
   velocity: THREE.Vector3;
   spinAxis: THREE.Vector3;
@@ -20,6 +22,9 @@ export interface Wreck {
   radius: number;
   bornAt: number;
 }
+
+/** A piece of wreckage as it travels to a browser that joins: where it is, how it drifts, how long it has glowed (s). */
+export type WreckState = { id: string; p: number[]; v: number[]; g: number };
 
 /** A jagged chunk of hull plating: an icosahedron with displaced corners. */
 function chunkGeometry(r: Randomizer): THREE.BufferGeometry {
@@ -41,13 +46,17 @@ function chunkGeometry(r: Randomizer): THREE.BufferGeometry {
 }
 
 const gravity = new THREE.Vector3();
+const position = new THREE.Vector3();
+const velocity = new THREE.Vector3();
 const spin = new THREE.Quaternion();
 const HOT = new THREE.Color(1, 0.35, 0.08);
 
 /**
  * Debris of destroyed ships. It keeps drifting with the wreck's momentum, falls towards the
  * asteroids, rips open hulls that run into it and blocks laser beams. The pieces are seeded
- * by the destroyed ship and its death count, so every client sees the same debris.
+ * by the destroyed ship and its death count, so every client sees the same debris; online,
+ * the owner of the destroyed ship tells where it broke up, a piece shot or rammed goes on
+ * every screen (see Game.remoteWreck), and a browser that joins takes the pieces in flight.
  */
 export class Wrecks {
   readonly group = new THREE.Group();
@@ -73,6 +82,7 @@ export class Wrecks {
       mesh.castShadow = mesh.receiveShadow = true;
       this.group.add(mesh);
       this.list.push({
+        id: `${id}.${deaths}.${i}`,
         mesh,
         velocity: direction.multiplyScalar(SPREAD_SPEED * r.range(0.3, 1)).add(velocity),
         spinAxis: new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize(),
@@ -115,6 +125,43 @@ export class Wrecks {
       if (wreck.mesh.position.distanceToSquared(center) < reach * reach) return wreck;
     }
     return null;
+  }
+
+  find(id: string): Wreck | null {
+    return this.list.find((wreck) => wreck.id === id) ?? null;
+  }
+
+  /** The pieces in flight, for a browser that joins a running tournament. */
+  snapshot(now: number): WreckState[] {
+    return this.list.map((wreck) => ({
+      id: wreck.id,
+      p: wreck.mesh.position.toArray().map(Math.round),
+      v: wreck.velocity.toArray().map(Math.round),
+      g: +(now - wreck.bornAt).toFixed(2),
+    }));
+  }
+
+  /** Takes the pieces of a snapshot: each ship's pieces come from their seed again, then move to where the snapshot has them. */
+  restore(states: readonly WreckState[], shipRadius: number, now: number) {
+    this.clear();
+    const wanted = new Map(states.map((state) => [state.id, state]));
+    const ships = new Set<string>();
+    for (const state of states) {
+      const match = /^(.+)\.(\d+)\.\d+$/.exec(state.id);
+      if (!match || ships.has(`${match[1]}.${match[2]}`)) continue;
+      ships.add(`${match[1]}.${match[2]}`);
+      this.spawn(match[1], Number(match[2]), position.fromArray(state.p), velocity.fromArray(state.v), shipRadius, now);
+    }
+    for (const wreck of [...this.list]) {
+      const state = wanted.get(wreck.id);
+      if (!state) {
+        this.remove(wreck);
+        continue;
+      }
+      wreck.mesh.position.fromArray(state.p);
+      wreck.velocity.fromArray(state.v);
+      wreck.bornAt = now - state.g;
+    }
   }
 
   remove(wreck: Wreck) {

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { AsteroidField } from '../world/asteroids';
 import { ownerOf, TOURNAMENT_SIZE, type Session, type RoundState, type Vec } from './session';
 import type { Ship, ShipState } from '../ship/ship';
+import type { WreckState } from '../world/wrecks';
 
 /** What the online layer needs from the game. */
 export interface OnlineGame {
@@ -20,10 +21,16 @@ export interface OnlineGame {
   showBeam(shooter: Ship, from: THREE.Vector3, to: THREE.Vector3): void;
   /** A beam from another peer hit a ship this browser simulates. */
   applyLaserHit(target: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null): void;
-  /** Another peer reports a destroyed ship; `deaths` counts this death. */
-  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number): void;
+  /** Another peer reports a destroyed ship; `deaths` counts this death; position and velocity are where it broke up. */
+  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number, position: THREE.Vector3 | null, velocity: THREE.Vector3 | null): void;
   /** Another peer hit an asteroid at a field time, in an online round. */
   remoteRock(id: string, at: number, round: number): void;
+  /** Another peer shot or rammed a piece of wreckage. */
+  remoteWreck(id: string): void;
+  /** The pieces of wreckage in flight, for a browser that joins. */
+  wreckSnapshot(): WreckState[];
+  /** Takes the pieces of wreckage in flight from the lead browser. */
+  restoreWrecks(wrecks: WreckState[]): void;
   /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
   leadRound(): RoundState;
@@ -68,23 +75,29 @@ export class Online {
       // only a living shooter hits, and only ships this browser runs take damage here
       if (ship && ship.owner === null && gun?.alive) game.applyLaserHit(ship, origin.fromArray(o), direction.fromArray(d).normalize(), gun);
     };
-    session.onDestroyed = (victim, killer, deaths) => {
+    session.onDestroyed = (victim, killer, deaths, p, u) => {
       // a ship dies once per clone: a dead one cannot die again, and the count only goes up
       const ship = this.find(victim);
-      if (ship && ship.owner !== null && ship.alive && deaths > ship.deaths) game.remoteDestroyed(ship, killer ? this.find(killer) : null, deaths);
+      if (ship && ship.owner !== null && ship.alive && deaths > ship.deaths) {
+        game.remoteDestroyed(ship, killer ? this.find(killer) : null, deaths, p && from.fromArray(p), u && to.fromArray(u));
+      }
     };
     session.onRock = (id, at, round) => game.remoteRock(id, at, round);
-    session.onSync = (field) => game.field.restore(field);
+    session.onWreck = (id) => game.remoteWreck(id);
+    session.onSync = (field, wrecks) => {
+      game.field.restore(field);
+      game.restoreWrecks(wrecks);
+    };
     session.onPeerJoin = (peer) => {
-      // the lead browser brings the newcomer's asteroid field up to date; everyone tells it
-      // the names and scores of their ships with the next states
-      if (session.isLead) session.sendSync(peer, game.field.snapshot());
+      // the lead browser brings the newcomer's asteroid field and wreckage up to date;
+      // everyone tells it the names and scores of their ships with the next states
+      this.sync(peer);
       this.sendFull = true;
       this.balanceBots();
     };
     session.onPeerRestart = (peer) => {
       // a browser that started over takes the field again, like a newcomer
-      if (session.isLead) session.sendSync(peer, game.field.snapshot());
+      this.sync(peer);
       this.sendFull = true;
     };
     session.onRestart = () => game.rejoin();
@@ -157,11 +170,20 @@ export class Online {
   }
 
   sendDestroyed(victim: Ship, killer: Ship | null) {
-    this.session.sendDestroyed(victim.id, killer?.id ?? null, victim.deaths);
+    this.session.sendDestroyed(victim.id, killer?.id ?? null, victim.deaths, round(victim.flight.position), round(victim.flight.velocity));
   }
 
   sendRock(id: string, at: number, round: number) {
     this.session.sendRock(id, at, round);
+  }
+
+  sendWreck(id: string) {
+    this.session.sendWreck(id);
+  }
+
+  /** The lead browser hands a newcomer, or a browser that started over, the field and the wreckage. */
+  private sync(peer: string) {
+    if (this.session.isLead) this.session.sendSync(peer, this.game.field.snapshot(), this.game.wreckSnapshot());
   }
 
   leave() {

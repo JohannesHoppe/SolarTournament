@@ -29,7 +29,7 @@ import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { Belt, BELT_INNER } from '../world/belt';
 import { FlightSchool, type SchoolContext } from './school';
 import { SponsorBreak } from './sponsors';
-import { Wrecks } from '../world/wrecks';
+import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
 import { markedName } from '../view/marks';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
@@ -1085,12 +1085,34 @@ export class Game implements OnlineGame {
     this.effects.beam(from, to, shooter.color);
   }
 
-  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number) {
+  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number, position: THREE.Vector3 | null, velocity: THREE.Vector3 | null) {
     victim.alive = false;
     victim.root.visible = false;
-    // the owner counted this death already; its wreckage is seeded with that count
+    // the owner counted this death already; its wreckage is seeded with that count and flies
+    // from where the owner saw the ship break up, not from where it was predicted here
     victim.deaths = deaths;
+    if (position) victim.flight.position.copy(position);
+    if (velocity) victim.flight.velocity.copy(velocity);
     this.shipDestroyed(victim, killer);
+  }
+
+  remoteWreck(id: string) {
+    const wreck = this.wrecks.find(id);
+    if (wreck) this.shatterWreck(wreck);
+  }
+
+  wreckSnapshot() {
+    return this.wrecks.snapshot(this.time);
+  }
+
+  restoreWrecks(wrecks: WreckState[]) {
+    this.wrecks.restore(wrecks, this.me!.radius, this.time);
+  }
+
+  /** A piece of wreckage bursts: shot or rammed, here or on another browser. */
+  private shatterWreck(wreck: Wreck) {
+    this.effects.explosion(wreck.mesh.position, wreck.radius, wreck.velocity);
+    this.wrecks.remove(wreck);
   }
 
   remoteRock(id: string, at: number, round: number) {
@@ -1822,8 +1844,8 @@ export class Game implements OnlineGame {
 
     if (wreckHit) {
       this.effects.sparks(end, shooter.color, 40);
-      this.effects.explosion(wreckHit.wreck.mesh.position, wreckHit.wreck.radius, wreckHit.wreck.velocity);
-      this.wrecks.remove(wreckHit.wreck);
+      this.online?.sendWreck(wreckHit.wreck.id);
+      this.shatterWreck(wreckHit.wreck);
     }
 
     if (asteroidHit) {
@@ -1979,6 +2001,7 @@ export class Game implements OnlineGame {
     if (!wreck) return;
     const impact = relative.subVectors(ship.flight.velocity, wreck.velocity).length();
     this.effects.sparks(wreck.mesh.position, SCRAPE_COLOR, 60);
+    this.online?.sendWreck(wreck.id);
     this.wrecks.remove(wreck);
     const status = ship.structural(Math.max(0, impact - SAFE_IMPACT) * IMPACT_DAMAGE * 0.6, now);
     if (ship.isLocal && status !== 'protected') {
