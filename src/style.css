@@ -1178,6 +1178,24 @@ body.touch #killfeed {
   top: 136px;
 }
 
+/* the radar sphere: bottom right, above the gauges; on touch screens the buttons own that corner */
+#radar {
+  position: absolute;
+  right: 16px;
+  bottom: 56px;
+  width: 190px;
+  height: 190px;
+  pointer-events: none;
+}
+
+body.touch #radar {
+  top: 64px;
+  bottom: auto;
+  left: max(12px, env(safe-area-inset-left));
+  width: 130px;
+  height: 130px;
+}
+
 /* The HUD and menus come over the same video link as the picture and glitch with it. */
 body.glitching #hud,
 body.glitching .plate,

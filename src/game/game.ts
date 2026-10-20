@@ -33,6 +33,7 @@ import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
 import { ARENAS, arenaByKey, arenaOfRound, type ArenaId, type ArenaProfile } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
 import { Lensing } from '../view/lensing';
+import { Radar, type RadarMark } from '../view/radar';
 import type { FieldState } from '../world/asteroids';
 import { Course, GATE_POINTS, GATE_RADIUS, GATES, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
 import { markedName } from '../view/marks';
@@ -376,6 +377,14 @@ export class Game implements OnlineGame {
   private readonly warnings: string[] = [];
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
   private readonly inSight = (ship: Ship) => this.field.lineOfSight(this.camera.position, ship.flight.position);
+  /** Whether the own ship's sensors see a ship past the asteroids, for the radar. */
+  private readonly sensed = (ship: Ship) => this.field.lineOfSight((this.watched() ?? this.me!).flight.position, ship.flight.position);
+  private readonly radar = new Radar($<HTMLCanvasElement>('radar'));
+  /** The radar's marks besides ships and rocks, reused from frame to frame. */
+  private readonly marks: RadarMark[] = [
+    { position: new THREE.Vector3(), label: 'Center', color: '#4d91ff' },
+    { position: new THREE.Vector3(), label: '', color: '#ff9d00' },
+  ];
   /** How the own clone died last, for the sponsor break. */
   private deathCause: string | (string | Node)[] = 'Your clone is dead';
   /** When the current screen (menu, playing, paused, results) came up (performance.now, ms). */
@@ -1675,6 +1684,7 @@ export class Game implements OnlineGame {
     this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
     // a solar storm blinds the sensors: no ship shows a marker
     this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight);
+    this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
     this.hud.updateVelocityMarkers(this.camera, subject);
     this.hud.setCenter(this.camera, subject);
     this.hud.setAutopilot(this.autopilot);
@@ -1707,6 +1717,17 @@ export class Game implements OnlineGame {
     } else if (now >= this.roundEndsAt) {
       this.endRound();
     }
+  }
+
+  /** The radar's marks: the field's center, and in a race the next gate of the ship it shows. */
+  private radarMarks(subject: Ship): RadarMark[] {
+    const course = this.course;
+    if (!course || subject.finish >= 0) return this.marks.slice(0, 1);
+    const gate = this.marks[1];
+    const next = subject.gates % GATES;
+    gate.position.copy(course.points[next]);
+    gate.label = `Gate ${next + 1}`;
+    return this.marks;
   }
 
   /**
