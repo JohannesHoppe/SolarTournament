@@ -59,6 +59,8 @@ const DIRECTOR_STICK = 1.3;
 const DIRECTOR_PAUSE = 10;
 /** The modes as the list of tournaments names them. */
 const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', mixed: 'Deathmatch and race' };
+/** A solo round is one of these, by chance. */
+const SOLO_MODES: readonly RoundMode[] = ['deathmatch', 'race'];
 /** A kill in a race is worth less than in a deathmatch: the gates and the finish decide. */
 const RACE_KILL_POINTS = 200;
 /** Points for shooting down a torpedo, and how often a bot with a lock fires one (per second). */
@@ -339,8 +341,6 @@ export class Game implements OnlineGame {
   private roomPublic = true;
   private roomBots = true;
   private roomMode: RoomMode = 'deathmatch';
-  /** What a solo round is. */
-  private soloMode: RoundMode = 'deathmatch';
   /** What the running round is, and its course when it is a race. */
   private roundMode: RoundMode = 'deathmatch';
   private course: Course | null = null;
@@ -561,17 +561,14 @@ export class Game implements OnlineGame {
     choose('room-private', 'room-public', (v) => (this.roomPublic = v), false);
     choose('room-bots', 'room-nobots', (v) => (this.roomBots = v), true);
     choose('room-nobots', 'room-bots', (v) => (this.roomBots = v), false);
-    // groups of choices that keep their value in data-value: the rounds of a room, the solo mode
-    for (const group of document.querySelectorAll<HTMLElement>('[data-choice]')) {
-      const buttons = group.querySelectorAll<HTMLButtonElement>('button[data-value]');
-      for (const button of buttons) {
-        button.addEventListener('click', () => {
-          buttons.forEach((b) => b.classList.toggle('selected', b === button));
-          if (group.dataset.choice === 'room-mode') this.roomMode = button.dataset.value as RoomMode;
-          else this.soloMode = button.dataset.value as RoundMode;
-          this.describeRoom();
-        });
-      }
+    // the rounds of a room: three choices that keep their value in data-value
+    const modes = document.querySelectorAll<HTMLButtonElement>('[data-choice="room-mode"] button[data-value]');
+    for (const button of modes) {
+      button.addEventListener('click', () => {
+        modes.forEach((b) => b.classList.toggle('selected', b === button));
+        this.roomMode = button.dataset.value as RoomMode;
+        this.describeRoom();
+      });
     }
     this.describeRoom();
     $('resume').addEventListener('click', () => this.resume());
@@ -1210,7 +1207,8 @@ export class Game implements OnlineGame {
     // room and round decide, so a first round starts in the room's first arena (see arriveInRound)
     // online the round is unknown until the lead browser tells it (see syncRound)
     this.roundId = mode === 'online' ? -1 : 0;
-    this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? this.soloMode : 'deathmatch';
+    // a solo round needs no choices: arena and mode come by chance
+    this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? pick(SOLO_MODES) : 'deathmatch';
     if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0));
     else this.enterArena(mode === 'school' ? ARENAS[0] : pick(ARENAS));
     this.hud.reset();
