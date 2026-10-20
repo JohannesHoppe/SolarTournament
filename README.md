@@ -123,19 +123,17 @@ The tournament broadcaster pumps hard techno into every cockpit, composed live b
 Decisions so far:
 
 - Hard and fast beats beat polite ones; chiptune and lounge music do not fit.
-- Now and then something cheerful in between: indie dance-pop in a major key after The Ting Tings (hand claps, cowbell, choppy chords), so the radio is not always hardcore.
 - Schranz and generic rave are not the maintainer's taste and only play rarely.
 - German words in the robot voice, but only now and then.
 - Daft Punk styles and elements are always welcome: loops that a filter opens and closes, phaser, pumping compression, vocoder robot voices, phrases chopped into the beat word by word, and the raw, distorted early sound.
 
-- **Hard, but not exhausting.** Mostly 126 to 148 BPM (the pop slower, from 118), the fastest at 152: a round lasts five minutes, but people play many rounds, and peak-time speed and full distortion wear the ears out over an evening.
+- **Hard, but not exhausting.** Mostly 126 to 148 BPM, the fastest at 152: a round lasts five minutes, but people play many rounds, and peak-time speed and full distortion wear the ears out over an evening.
 - **Flavors** (how often they come up):
-  - *Hard* (4 in 28): rolling bass under a heavy rumble, 140–148 BPM.
+  - *Hard* (4 in 24): rolling bass under a heavy rumble, 140–148 BPM.
   - *Industrial* (4): bit-crushed hats, cowbells and claves in Euclidean patterns, a little swing, 134–141.
   - *Acid* (4): a squelching 303 line carries the track, 138–144.
   - *EBM* (5): electronic body music, a sequenced 16th bass (root, root, octave, root, accents before the beat) or an octave bass whose 16th echo turns it into a pulse (Giorgio Moroder), arpeggios, 132–140.
   - *French* (5): a chord loop that a filter opens over four bars and closes over the next four, phaser, pumping, 126–132.
-  - *Pop* (4): the cheerful odd one out, indie dance-pop after The Ting Tings, so not every round is hardcore. A major key (every part lands on the major scale), a bouncy beat (a little swing, 4–10 %) with the kick on the one, the "and" of two and the three, hand claps on two and four with a double clap before the one, cowbell only, a plain driving bass in eighths (up an octave on the last one) or now and then a slap bass (a square with a quick, bright filter snap: the root on the one, octave pops, ghost notes), short bright seventh and ninth chords that chank off the beat like a choppy guitar, in the I–vi–IV–V family, a bell or plings on the major pentatonic, no rumble, hardly any distortion, 118–128 BPM.
   - *Schranz* and *Rave* (1 each): the fastest (148–152) and tom-heavy, or stabs and a hoover (142–148).
   - *Motorik*, one track in thirteen: Kraftwerk's machine pop. An electro beat, octave bass, square-wave plings, a pad, 126–134 BPM, a German title and a German robot voice.
 - **Strategies.** The title also picks how the track develops, so no two rounds follow the same recipe:

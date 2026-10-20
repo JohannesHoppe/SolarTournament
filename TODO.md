@@ -23,6 +23,7 @@ Worked through from top to bottom. Every finished item is also documented in the
 - [x] Slow-motion replay of kills (kill cam)
 - [x] Radio 2584: generative music with Tone.js, in sync for all pilots
 - [ ] Radio 2584: commentator, jingles, samples as in Johannes' inscription experiments (`haushoppe/deconstructed-inscriptions`)
+- [ ] Radio 2584: now and then something cheerful in between (indie dance-pop after The Ting Tings). A first try (major key, claps, cowbell, choppy chords) did not sound right and is out again; revisit later
 - [x] Glitch of the link to the clone on hits, impacts and death
 - [ ] Audience favor (hype) for spectacular maneuvers
 - [ ] Sponsors on the ships, sponsor missions

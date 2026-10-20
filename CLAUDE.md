@@ -21,7 +21,7 @@ We do not adopt names, terms or characters from the series and games; we fill th
 
 ### Music
 
-Radio 2584 follows the maintainer's taste, written down in the README section "Radio 2584" ("Musical direction"): early techno, Kraftwerk, Daft Punk, hard beats, underground feeling, now and then German words with a rolling R, and now and then something cheerful in between (indie dance-pop after The Ting Tings). New musical decisions go there.
+Radio 2584 follows the maintainer's taste, written down in the README section "Radio 2584" ("Musical direction"): early techno, Kraftwerk, Daft Punk, hard beats, underground feeling, now and then German words with a rolling R. New musical decisions go there.
 
 ### Colors
 
@@ -108,7 +108,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `sound/sounds.ts` | Synthesized sound effects: laser, explosion |
 | `sound/speaker.ts` | Nicole, the flight computer's voice: reads out what the screen shows, whole lines from the sprite |
 | **`music/`** | **Radio 2584** |
-| `music/songs.ts` | Hard techno tracks from a seed, now and then indie dance-pop (flavor, form, energy curve, Grids-style patterns, fills); every decision is an integer hash of seed, bar and step |
+| `music/songs.ts` | Hard techno tracks from a seed (flavor, form, energy curve, Grids-style patterns, fills); every decision is an integer hash of seed, bar and step |
 | `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser), the voices, and how one sixteenth is played |
 | `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts |
 | `music/preview.ts` | Renders a track (or a stretch) offline as WAV: downloads on the radio page, previews in development |
