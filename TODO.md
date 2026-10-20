@@ -76,3 +76,32 @@ Worked through from top to bottom. Every finished item is also documented in the
 - Ad networks forbid rewarding clicks on the ad itself; the clone boots from a button of its own, never from a click on the ad. Check the chosen network's policies before connecting it.
 - Privacy: consent banner (GDPR) as soon as personalized ads are served.
 - Privacy policy (`datenschutz.html`, section 6 "Werbung"): it states that only satire ads run and no ad network is connected. Before the first real ad is shown, analyze the chosen network exactly (what it collects, cookies and storage, third-country transfers, consent) and take over its own privacy wording for section 6: name, processed data, legal basis, consent.
+
+## Later: a youth edition for Poki
+
+Long term, not on the roadmap yet. First learn with SolarTournament what works (flight feel, rounds, bots, multiplayer); then, maybe, monetize it as a separate, colorful edition on [Poki](https://poki.com), the curated web games portal. This game stays as it is.
+
+**Poki in short** (checked on 2026-10-20, from sdk.poki.com and its deals and quality guideline pages):
+
+- Curated: every game is chosen by hand; Poki for Developers is a closed beta, games are submitted through a form. A free playtesting tool can be used before any deal, with no obligation to publish.
+- Technical: first download under 8 MB, 16:9 canvas, Poki SDK mandatory. Only Poki's own ads; any other ad network, tracker or external service needs Poki's written consent. Soft release before the full launch.
+- Money: ad revenue share. Players Poki brings: 50/50. Players the game brings itself (direct, bookmarks, search, own community): 100 % to the developer.
+- Deals: web exclusive by default (Poki's pages say 5 years in one place, 7 in another; check the actual contract). Steam, app stores and consoles stay free; Discord and YouTube Playables count as web and would break exclusivity. Alternative: non-exclusive, a one-time flat license fee, no revenue share.
+- Content: safe and inclusive for all ages. Mildly inappropriate content (light dating mechanics, suggestive jokes, violent scenes) must be removed or reframed. No look-alikes of known IPs.
+- Chat or user-generated content only with Poki's approval and Poki's moderation tools.
+- Multiplayer tools, free: Netlib (`@poki/netlib`, peer-to-peer over WebRTC datachannels, Poki hosts signaling and STUN/TURN; beta, contact Poki before going live) and AUDS (a data store for levels, leaderboards, turn-based play).
+
+**What already fits:** a static site of about 3.3 MB, touch, gamepad, fullscreen on phones, bots that fill free places, tournament links, no free chat, the respawn break as the natural ad moment.
+
+**What a youth edition would have to change:**
+
+- Setting: no Orange President, no United Solar States, no deportations, no "die for the President", none of the announcer's racist satire lines. A neutral, cheerful sci-fi tournament instead.
+- Nicole: a friendly flight computer, not flirting, not "a little indecent".
+- Death: respawn without remembered pain and rotting souls. Cartoon explosions, no blood (there is none now either).
+- Satire sponsors and the ad blocker scolding: out; Poki's ads only.
+- Trystero and the public Nostr relays: replaced by Netlib (which also brings the TURN server from roadmap item 2).
+- Onboarding: fun within seconds. The flight school shrinks to a few drills or becomes optional; the autopilot stays the default.
+- Look: bright, colorful, "quietschebunt" (Johannes' word).
+- Licensing: the game is AGPL and runs on solartournament.games. A web exclusive deal would need a separate license from Johannes as rights holder for the youth edition's own code and assets, and the edition must not appear on another web portal. Otherwise only the non-exclusive deal with a flat fee remains.
+
+**Open conflict with the ad rules above:** Poki's SDK shows its own full-screen breaks (commercial breaks between rounds or after a death, rewarded breaks the player opts into). Johannes' rules for this game forbid every full-screen ad. For a youth edition on Poki, decide first whether those rules apply there too; if they do, Poki is out.
