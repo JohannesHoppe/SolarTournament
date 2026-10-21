@@ -10,6 +10,7 @@ import { Bot, BOT_NAMES } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { Datamosh } from '../view/datamosh';
+import { GuideLine } from '../view/guide';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
@@ -492,6 +493,8 @@ export class Game implements OnlineGame {
   private glitched = false;
   private readonly glitch = new Glitch();
   private readonly datamosh = new Datamosh(this.camera);
+  /** The racing line to the next gate. */
+  private readonly guide = new GuideLine();
   private readonly radio: Radio;
   /** The flight computer's voice: reads out what the screen shows. */
   private readonly speaker: Speaker;
@@ -550,7 +553,7 @@ export class Game implements OnlineGame {
     this.scene.add(this.replayEffects.group);
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
-    this.scene.add(this.torpedoes.group, this.probes.group);
+    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.points);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
@@ -1160,7 +1163,10 @@ export class Game implements OnlineGame {
       // the look of a nova core belongs to the round; the next frame of play brings it back
       document.body.classList.remove('nova-held', 'nova-alarm');
     }
-    if (state === 'menu' || state === 'results') this.datamosh.stop();
+    if (state === 'menu' || state === 'results') {
+      this.datamosh.stop();
+      this.guide.hide();
+    }
   }
 
   /**
@@ -1648,9 +1654,12 @@ export class Game implements OnlineGame {
     let best = -Infinity;
     const course = this.course;
     if (course) {
-      // a racer starts on the grid before the first gate, and a new clone where the last one
-      // passed its last gate, facing the next
-      course.startOf(ship.gates, Math.max(0, this.ships.indexOf(ship)) % 8, position);
+      // a racer starts on the grid before the first gate, and a new clone takes up the race
+      // where the last one died, facing the next gate; where the last one passed its last gate
+      // when that spot lies in rock, in a well or out of the arena
+      const spot = ship.flight.position;
+      if (ship.gates > 0 && ship.outsideSince === null && !this.field.overlap(spot, ship.radius * 4) && !this.field.insideWell(spot, ship.radius * 40)) position.copy(spot);
+      else course.startOf(ship.gates, Math.max(0, this.ships.indexOf(ship)) % 8, position);
       candidate.copy(course.points[ship.gates % GATES]);
       best = 0;
     }
@@ -1924,6 +1933,7 @@ export class Game implements OnlineGame {
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
     // a watching Host sees the race of the pilot on screen
     const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : null;
+    if (!this.course || this.school) this.guide.hide();
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
     this.hud.showCrosshair(me.alive);
     this.hud.setOnTarget(me.alive ? this.onTarget : null);
@@ -2036,6 +2046,7 @@ export class Game implements OnlineGame {
     const place = ordinal(this.standings().indexOf(me) + 1);
     if (me.finish >= 0) {
       course.highlight(-1);
+      this.guide.hide();
       this.hud.setWaypoint(this.camera, null);
       this.hud.setSchool({ step: `Finished · ${place}`, text: `${me.finish.toFixed(1)} s. Now hunt the others.`, keys: [] });
       return null;
@@ -2047,6 +2058,14 @@ export class Game implements OnlineGame {
     const missed = scratch.subVectors(me.flight.position, course.points[next]).dot(course.normals[next]) > GATE_RADIUS && me.flight.velocity.dot(course.normals[next]) > 0;
     const label = missed ? 'Missed · turn back' : next === 0 ? (me.gates === 0 ? 'Start' : lap === LAPS ? 'Finish' : 'Lap') : `Gate ${next + 1}/${GATES}`;
     this.hud.setWaypoint(this.camera, course.points[next], label);
+    if (me.alive) {
+      // the line leaves along the flight, or along the nose of a ship that hardly moves
+      const speed = me.flight.velocity.length();
+      const heading = speed > 20 ? scratch.copy(me.flight.velocity).divideScalar(speed) : me.flight.forward(scratch);
+      this.guide.show(me.flight.position, heading, course.points[next], wallClock());
+    } else {
+      this.guide.hide();
+    }
     this.hud.setSchool({ step: `Race · lap ${lap}/${LAPS} · ${place}`, text: missed ? `Missed gate ${next + 1}: turn back and fly through it` : `Gate ${next + 1} of ${GATES}`, keys: [] });
     return course.points[next];
   }
