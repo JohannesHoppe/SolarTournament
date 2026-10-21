@@ -1069,7 +1069,9 @@ export class Game implements OnlineGame {
     if (this.school) return null;
     const inRound = this.state === 'playing' || this.state === 'results' || (this.state === 'paused' && !!this.online);
     if (inRound && Number.isFinite(this.roundEndsAtWall)) {
-      const seed = this.online ? mixSeed(textSeed(this.online.session.room), this.roundId) : this.soloSeed;
+      // a browser that started over plays on the round it was in until it hears the round again
+      const round = this.roundId < 0 ? (this.rejoinedFrom ?? 0) : this.roundId;
+      const seed = this.online ? mixSeed(textSeed(this.online.session.room), round) : this.soloSeed;
       return { title: titleFor(seed), energy: 'round', elapsed: ROUND_SECONDS - (this.roundEndsAtWall - wallClock()), roundLength: ROUND_SECONDS };
     }
     return { title: titleFor(LOUNGE_SEED), energy: 'lounge', elapsed: wallClock() - this.loungeEpoch, roundLength: ROUND_SECONDS };
@@ -1744,7 +1746,8 @@ export class Game implements OnlineGame {
    * pause menu covers it while it is open.
    */
   private showOnlineResults() {
-    if (this.resultsShownFor !== this.roundId) {
+    // a browser that started over does not announce the round it was in once more
+    if (this.roundId >= 0 && this.resultsShownFor !== this.roundId) {
       this.resultsShownFor = this.roundId;
       this.renderScoreboard();
       $('again').textContent = 'Leave tournament';
