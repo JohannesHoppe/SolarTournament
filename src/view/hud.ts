@@ -32,6 +32,8 @@ export class Hud {
   private readonly retrograde = $('retrograde');
   private readonly message = $('hud-message');
   private readonly countdownText = $('hud-countdown');
+  private readonly splitText = $('hud-split');
+  private splitUntil = 0;
   private readonly hitmarker = $('hitmarker');
   private readonly damageFlash = $('damage-flash');
   private readonly killfeed = $('killfeed');
@@ -87,6 +89,7 @@ export class Hud {
     this.markers.clear();
     this.message.textContent = '';
     this.countdownText.textContent = '';
+    this.splitText.textContent = '';
     this.setSchool(null);
     this.waypoint.hidden = true;
     this.center.hidden = true;
@@ -109,6 +112,7 @@ export class Hud {
 
     if (!me.alive) setText(this.message, 'Live link lost');
     else if (now > this.messageUntil) setText(this.message, '');
+    if (now > this.splitUntil) setText(this.splitText, '');
 
     // the newest entries come first: expired ones are at the end
     let item = this.killfeed.lastElementChild as HTMLElement | null;
@@ -206,6 +210,14 @@ export class Hud {
   setStrain(strain: number) {
     this.vignette.style.opacity = String(strain);
     this.vignette.style.setProperty('--tunnel', `${Math.round(70 - strain * 45)}%`);
+  }
+
+  /** A split or lap time against the best lap, for a few seconds: ahead in green, behind in red, without a best in white. */
+  split(now: number, text: string, ahead: boolean | null, seconds = 3) {
+    setText(this.splitText, text);
+    this.splitText.classList.toggle('ahead', ahead === true);
+    this.splitText.classList.toggle('behind', ahead === false);
+    this.splitUntil = now + seconds;
   }
 
   /** A number of a race's countdown, or GO, in big neon: it pops in and fades out by itself. */

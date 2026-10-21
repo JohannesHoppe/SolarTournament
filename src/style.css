@@ -471,6 +471,26 @@ button.primary .mode-note {
   text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
 }
 
+/* a race's split at each gate against the best lap: green ahead, red behind */
+#hud-split {
+  position: absolute;
+  top: 36%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+}
+
+#hud-split.ahead {
+  color: #3dff9a;
+}
+
+#hud-split.behind {
+  color: #ff3b30;
+}
+
 /* a race's 3, 2, 1, GO: big neon over the grid, each number popping in */
 #hud-countdown {
   position: absolute;
