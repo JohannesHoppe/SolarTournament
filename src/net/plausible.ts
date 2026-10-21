@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { MAX_SPEED } from '../ship/flight';
 import { TORPEDOES } from '../game/torpedoes';
 
@@ -7,8 +8,8 @@ import { TORPEDOES } from '../game/torpedoes';
  * honest browser look like a cheater; only the impossible does: a ship that jumps across the
  * arena, a nova core nobody ever had, more torpedoes than a clone can carry, kills nobody died for.
  */
-export type Cheat = 'teleport' | 'nova' | 'torpedoes' | 'kills';
-export const CHEATS: readonly Cheat[] = ['teleport', 'nova', 'torpedoes', 'kills'];
+export type Cheat = 'teleport' | 'nova' | 'torpedoes' | 'kills' | 'hit';
+export const CHEATS: readonly Cheat[] = ['teleport', 'nova', 'torpedoes', 'kills', 'hit'];
 
 /** No ship flies faster than this (units/s, 750 m/s): three times the tournament limit, the overdrive and a gravity well included. */
 const PLAUSIBLE_SPEED = MAX_SPEED * 3;
@@ -146,6 +147,25 @@ export class Plausibility {
     track.launched++;
     return track.launched > track.torpedoes + TORPEDO_SLACK ? 'torpedoes' : null;
   }
+}
+
+/** A report about the own ship may be off this far from where this browser has it (units, 1 km): the shooter saw it up to half a second late. */
+const AIM_SLACK = 20000;
+/** How far behind the shooter's last known place a beam may start (units): AIM_SLACK and half a second at full speed. */
+const ORIGIN_SLACK = AIM_SLACK + PLAUSIBLE_SPEED * 0.5;
+const toTarget = new THREE.Vector3();
+
+/** A laser hit on the own ship: the beam starts near its shooter and passes near the ship, ahead of the muzzle. */
+export function plausibleBeam(origin: THREE.Vector3, direction: THREE.Vector3, shooter: THREE.Vector3, target: THREE.Vector3): boolean {
+  if (origin.distanceTo(shooter) > ORIGIN_SLACK) return false;
+  toTarget.subVectors(target, origin);
+  const along = toTarget.dot(direction);
+  return along > -AIM_SLACK && toTarget.addScaledVector(direction, -along).length() < AIM_SLACK;
+}
+
+/** A torpedo hit on the own ship: the torpedo went off near it. */
+export function plausibleBlast(at: THREE.Vector3, target: THREE.Vector3): boolean {
+  return at.distanceTo(target) < AIM_SLACK;
 }
 
 /** Accusations: a peer counts as a cheater once at least ACCUSERS browsers, the own one included, say so. */

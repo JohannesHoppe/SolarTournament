@@ -3,8 +3,9 @@ import type { AsteroidField, FieldState } from '../world/asteroids';
 import { ownerOf, TOURNAMENT_SIZE, type Session, type RoundState, type Vec } from './session';
 import type { Ship, ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
-import { unpackItems, type ItemKind } from '../game/items';
-import { Accusations, Plausibility, type Cheat } from './plausible';
+import { unpackItems, type ItemKind, type ProbeState } from '../game/items';
+import { Accusations, Plausibility, plausibleBeam, plausibleBlast, type Cheat } from './plausible';
+import type { Torpedo } from '../game/torpedoes';
 
 /** What the online layer needs from the game. */
 export interface OnlineGame {
@@ -35,8 +36,10 @@ export interface OnlineGame {
   restoreWrecks(wrecks: WreckState[]): void;
   /** The probes taken this round, for a browser that joins. */
   probesTaken(): string[];
+  /** The probes in flight, for a browser that joins. */
+  probeSnapshot(): ProbeState[];
   /** Takes the probes taken this round from the lead browser: they do not show up here. */
-  restoreProbes(taken: string[]): void;
+  restoreProbes(taken: string[], probes: ProbeState[]): void;
   /** Takes the lead browser's field, in the arena it names. */
   restoreField(field: FieldState): void;
   /** Another browser's ship launched a torpedo. */
@@ -45,6 +48,8 @@ export interface OnlineGame {
   remoteTorpedoGone(id: string, position: THREE.Vector3): void;
   /** Another browser's torpedo hit a ship this browser runs. */
   applyTorpedoHit(target: Ship, shooter: Ship | null): void;
+  /** A torpedo in flight or gone a moment ago (see Torpedoes.recent). */
+  recentTorpedo(id: string): Torpedo | null;
   /** A ship of another browser took a probe. */
   remoteProbe(id: string, ship: Ship | null): ItemKind | null;
   /** A ship of another browser set off its nova core: this browser's ships near it are gone. */
@@ -101,8 +106,12 @@ export class Online {
     session.onHit = (target, o, d, shooter) => {
       const ship = this.find(target);
       const gun = this.find(shooter);
-      // only a living shooter hits, and only ships this browser runs take damage here
-      if (ship && ship.owner === null && gun?.alive) game.applyLaserHit(ship, origin.fromArray(o), direction.fromArray(d).normalize(), gun);
+      // only a living shooter hits, with a beam from near it past the ship, and only ships this
+      // browser runs take damage here
+      if (!ship || ship.owner !== null || !gun?.alive) return;
+      origin.fromArray(o);
+      direction.fromArray(d).normalize();
+      if (!this.caught(gun, plausibleBeam(origin, direction, gun.flight.position, ship.flight.position) ? null : 'hit')) game.applyLaserHit(ship, origin, direction, gun);
     };
     session.onDestroyed = (victim, killer, deaths, p, u, nova) => {
       this.credit(victim, killer, nova);
@@ -134,15 +143,20 @@ export class Online {
       const accused = ownerOf(ship);
       if (accused) this.accuse(accused, accuser);
     };
-    session.onTorpedoHit = (target, shooter) => {
+    session.onTorpedoHit = (target, shooter, id) => {
       const ship = this.find(target);
-      // only ships this browser runs take damage here
-      if (ship && ship.owner === null) game.applyTorpedoHit(ship, this.find(shooter));
+      // only ships this browser runs take damage here, and only from a torpedo of that shooter
+      // that flew here too and went off near the ship
+      if (!ship || ship.owner !== null) return;
+      const gun = this.find(shooter);
+      const torpedo = game.recentTorpedo(id);
+      if (!gun || this.caught(gun, torpedo?.shooter === gun && plausibleBlast(torpedo.position, ship.flight.position) ? null : 'hit')) return;
+      game.applyTorpedoHit(ship, gun);
     };
-    session.onSync = (field, wrecks, probesTaken) => {
+    session.onSync = (field, wrecks, probesTaken, probes) => {
       game.restoreField(field);
       game.restoreWrecks(wrecks);
-      game.restoreProbes(probesTaken);
+      game.restoreProbes(probesTaken, probes);
     };
     session.onPeerJoin = (peer) => {
       // the lead browser brings the newcomer's asteroid field and wreckage up to date;
@@ -213,9 +227,11 @@ export class Online {
       }
     }
     this.followLead();
-    // the bots of a browser that no longer leads are gone; the new lead has adopted them
+    // the bots of a browser that no longer leads are gone; the new lead has adopted them (while
+    // this browser does not know the lead yet, the bots it sees stay)
     const lead = this.session.leadId;
-    for (const ship of this.game.allShips()) if (ship.owner !== null && ship.owner !== lead && ship.id.startsWith('b:')) this.game.removeShip(ship);
+    const known = lead !== this.selfId || this.isLead;
+    for (const ship of this.game.allShips()) if (known && ship.owner !== null && ship.owner !== lead && ship.id.startsWith('b:')) this.game.removeShip(ship);
     // the lead browser keeps its round clock every frame; the states go out at their own rate
     const round = this.isLead ? this.game.leadRound() : null;
     if (!this.session.statesDue(now)) return;
@@ -266,13 +282,13 @@ export class Online {
   }
 
   /** Tells the browser that runs a remote ship that an own torpedo hit it. */
-  sendTorpedoHit(target: Ship, shooter: Ship) {
-    if (target.owner) this.session.sendTorpedoHit(target.owner, target.id, shooter.id);
+  sendTorpedoHit(target: Ship, shooter: Ship, torpedo: string) {
+    if (target.owner) this.session.sendTorpedoHit(target.owner, target.id, shooter.id, torpedo);
   }
 
   /** The lead browser hands a newcomer, or a browser that started over, the field and the wreckage. */
   private sync(peer: string) {
-    if (this.session.isLead) this.session.sendSync(peer, this.game.field.snapshot(), this.game.wreckSnapshot(), this.game.probesTaken());
+    if (this.session.isLead) this.session.sendSync(peer, this.game.field.snapshot(), this.game.wreckSnapshot(), this.game.probesTaken(), this.game.probeSnapshot());
   }
 
   leave() {

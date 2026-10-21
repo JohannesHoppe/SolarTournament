@@ -19,7 +19,10 @@ import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
  *   out when it dies.
  */
 export type ItemKind = 'twin' | 'plating' | 'torpedoes' | 'overdrive' | 'repair' | 'nova';
-const KINDS: readonly ItemKind[] = ['twin', 'plating', 'torpedoes', 'overdrive', 'repair', 'nova'];
+export const KINDS: readonly ItemKind[] = ['twin', 'plating', 'torpedoes', 'overdrive', 'repair', 'nova'];
+
+/** A probe in flight as it travels to a browser that joins: id, kind, position, velocity, seconds left. */
+export type ProbeState = { i: string; k: ItemKind; p: number[]; v: number[]; u: number };
 /** How often each kind comes in a probe (relative), the coveted ones rarer. */
 const WEIGHTS: Record<ItemKind, number> = { twin: 2, plating: 3, torpedoes: 3, overdrive: 2, repair: 3, nova: 1 };
 
@@ -29,10 +32,16 @@ export const ITEM_HINTS: Record<ItemKind, string> = { twin: 'fires twice as fast
 /** The neon of each kind, so a pilot sees from afar what a probe carries. */
 const COLORS: Record<ItemKind, number> = { twin: 0xff3fa4, plating: 0x4d91ff, torpedoes: 0xff9d00, overdrive: 0xffe04d, repair: 0x3dff9a, nova: 0xffffff };
 
-/** A probe shows up every PROBE_EVERY seconds of a round, from PROBE_FIRST on, at most PROBE_MAX at once. */
+/**
+ * A probe shows up every PROBE_EVERY seconds of a round, from PROBE_FIRST on, and drifts for
+ * PROBE_LIFETIME seconds unless taken: at most four at once, the same on every browser whatever
+ * was taken when.
+ */
 const PROBE_FIRST = 20;
 const PROBE_EVERY = 25;
-const PROBE_MAX = 4;
+const PROBE_LIFETIME = PROBE_EVERY * 4;
+/** A dead clone drops at most this many probes: twin laser, plating, nova core. */
+const MAX_DROPS = 3;
 /** A probe's reach (units, 15 m): a ship that comes this close plus its own radius takes it. */
 export const PROBE_RADIUS = 300;
 /** A probe a dead clone dropped drifts this long (s) before it is gone. */
@@ -46,7 +55,7 @@ export interface Probe {
   kind: ItemKind;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
-  /** Gone after this (game time, s); Infinity for the arena's. */
+  /** Gone after this (game time, s). */
   until: number;
   mesh: THREE.Group;
   /** The beacon that blinks in the color of what the probe carries. */
@@ -101,18 +110,47 @@ export class Probes {
    * round): each at a place in the field and with a kind its number decides; places taken by
    * rock are skipped over to the next one.
    */
-  schedule(seed: number, round: number, elapsed: number, field: AsteroidField) {
+  schedule(seed: number, round: number, elapsed: number, now: number, field: AsteroidField) {
     while (PROBE_FIRST + this.shown * PROBE_EVERY <= elapsed) {
       const n = this.shown++;
       const id = `r${round}.${n}`;
-      if (this.taken.has(id) || this.list.filter((probe) => probe.until === Infinity).length >= PROBE_MAX) continue;
+      const left = PROBE_FIRST + n * PROBE_EVERY + PROBE_LIFETIME - elapsed;
+      if (this.taken.has(id) || left <= 0) continue;
       const position = new THREE.Vector3();
       for (let attempt = 0; attempt < 8; attempt++) {
         const h = (k: number) => hash(seed, round, n, attempt, k) / 4294967296;
         position.set(h(1) * 2 - 1, (h(2) * 2 - 1) * 0.5, h(3) * 2 - 1).multiplyScalar(FIELD_RADIUS * 0.8);
         if (!field.overlap(position, PROBE_RADIUS * 4) && !field.insideWell(position, PROBE_RADIUS * 20)) break;
       }
-      this.add(id, kindOf(hash(seed, round, n, 99)), position, new THREE.Vector3(), Infinity);
+      this.add(id, kindOf(hash(seed, round, n, 99)), position, new THREE.Vector3(), now + left);
+    }
+  }
+
+  /**
+   * Whether a probe id taken on another browser could be one: a probe this browser has or knows
+   * taken, one of this round already due (`round` -1 while the round is not known yet), or one
+   * a known ship's dead clone dropped. An invented id never enters the list of probes taken.
+   */
+  plausible(id: string, round: number, deathsOf: (ship: string) => number | null): boolean {
+    if (this.find(id) || this.taken.has(id)) return true;
+    const arena = /^r(\d+)\.(\d+)$/.exec(id);
+    if (arena) return round < 0 || (Number(arena[1]) === round && Number(arena[2]) <= this.shown);
+    const drop = /^(.+)\.(\d+)\.(\d+)$/.exec(id);
+    const deaths = drop ? deathsOf(drop[1]) : null;
+    return deaths !== null && Number(drop![2]) <= deaths + 1 && Number(drop![3]) < MAX_DROPS;
+  }
+
+  /** The probes in flight, for a browser that joins: it takes them as they are, wherever they drift. */
+  snapshot(now: number): ProbeState[] {
+    return this.list.map((probe) => ({ i: probe.id, k: probe.kind, p: probe.position.toArray().map(Math.round), v: probe.velocity.toArray().map(Math.round), u: +(probe.until - now).toFixed(1) }));
+  }
+
+  /** Takes the probes in flight from the lead browser. */
+  restore(states: readonly ProbeState[], now: number) {
+    for (const state of states) {
+      const existing = this.find(state.i);
+      if (existing) this.remove(existing);
+      this.add(state.i, state.k, new THREE.Vector3().fromArray(state.p), new THREE.Vector3().fromArray(state.v), now + state.u);
     }
   }
 
@@ -144,7 +182,7 @@ export class Probes {
       probe.position.addScaledVector(probe.velocity, dt);
       probe.mesh.rotation.copy(spin.set(0.3, now * 0.4, 0.15));
       probe.beacon.visible = now % 1 < 0.6;
-      if (now > probe.until || field.insideWell(probe.position, PROBE_RADIUS)) this.remove(probe);
+      if (now >= probe.until || field.insideWell(probe.position, PROBE_RADIUS)) this.remove(probe);
     }
   }
 

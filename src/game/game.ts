@@ -36,7 +36,7 @@ import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Torpedo } from './torpedoes';
-import { Probes, ITEM_NAMES, ITEM_HINTS, type Probe, type ItemKind } from './items';
+import { Probes, ITEM_NAMES, ITEM_HINTS, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
 import { Course, GATE_POINTS, GATE_RADIUS, GATES, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
 import { markedName } from '../view/marks';
@@ -66,6 +66,8 @@ const SOLO_MODES: readonly RoundMode[] = ['deathmatch', 'race'];
 const RACE_KILL_POINTS = 200;
 /** Points for shooting down a torpedo, and how often a bot with a lock fires one (per second). */
 const TORPEDO_DOWN_POINTS = 50;
+/** A torpedo another browser says went off is this close (units, 1.5 km) to where it flies here, or the report is ignored: torpedoes fly alike everywhere, up to the lag. */
+const TORPEDO_GONE_SLACK = 30000;
 const BOT_TORPEDO_RATE = 0.08;
 /**
  * A nova core destroys every other ship within NOVA_RADIUS (units, 800 m) of its holder; its
@@ -88,6 +90,10 @@ const TORPEDO_WARNING = 40000;
 const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: 'Burned up in the clouds', hole: 'Crossed the event horizon' };
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
 const ROUND_SNAP = 0.25;
+/** A rock hit from another browser counts only within this much field time (s) of the own clock; the clocks agree to a fraction of a second. */
+const ROCK_TIME_SLACK = 5;
+/** A lead browser's next round is taken this long (s) before the own clock ends the running one at the earliest: clocks drift a little, not by minutes. */
+const ROUND_END_SLACK = 30;
 /** Online, the asteroids jump to the lead browser's field time when they are this far off (s), and otherwise glide towards it. */
 const FIELD_SNAP = 0.5;
 /** The announcer comments on a death at most this often (s). */
@@ -1436,6 +1442,9 @@ export class Game implements OnlineGame {
       if (round > this.roundId && this.pendingRocks.length < 200) this.pendingRocks.push({ id, at, round });
       return;
     }
+    // the field clocks of all browsers follow the lead's closely: a hit far off in field time
+    // is no hit of now (an early time would take the points of whoever broke the rock)
+    if (this.roundId >= 0 && Math.abs(at - this.field.clock) > ROCK_TIME_SLACK) return;
     if (!this.field.asteroids.has(id)) {
       // two Hosts broke the same rock at once: the earlier hit by field time gets the points,
       // and each browser takes its own back when it learns it was later
@@ -1476,9 +1485,12 @@ export class Game implements OnlineGame {
       this.rejoinedFrom = null;
       this.arriveInRound();
     } else if (round.id > this.roundId) {
+      // a new round only once the running one is over; a lead that counts rounds up before
+      // has nothing to say about this one
+      if (wallClock() < this.roundEndsAtWall - ROUND_END_SLACK) return;
       this.roundId = round.id;
       this.startNextRound();
-    }
+    } else if (round.id < this.roundId) return;
     // the radio plays on this clock, so it follows the lead browser closely: jumps when far
     // off, otherwise smooths out the jitter of the network
     const endsAt = wallClock() + round.left;
@@ -2301,7 +2313,7 @@ export class Game implements OnlineGame {
     this.online?.sendTorpedoGone(torpedo.id, torpedo.position);
     if (!hit) return;
     if (hit.owner === null) this.applyTorpedoHit(hit, torpedo.shooter);
-    else this.online?.sendTorpedoHit(hit, torpedo.shooter);
+    else this.online?.sendTorpedoHit(hit, torpedo.shooter, torpedo.id);
     if (torpedo.shooter.isLocal) {
       this.hud.hit();
       this.landed(hit.flight.position, 'TORPEDO');
@@ -2320,7 +2332,7 @@ export class Game implements OnlineGame {
     if (document.body.classList.contains('nova-held') !== holding) document.body.classList.toggle('nova-held', holding);
     if (this.school) return;
     const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
-    if (this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.raceTime(), this.field);
+    if (this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.raceTime(), now, this.field);
     this.probes.update(dt, now, this.field);
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive || ship === this.drone || (this.spectating && ship === this.me)) continue;
@@ -2368,8 +2380,10 @@ export class Game implements OnlineGame {
     }
   }
 
+  /** Another browser's ship took a probe; an id no probe could have is ignored. */
   remoteProbe(id: string) {
-    return this.probes.takeId(id);
+    const deathsOf = (ship: string) => this.ships.find((s) => s.id === ship)?.deaths ?? null;
+    return this.probes.plausible(id, this.roundId, deathsOf) ? this.probes.takeId(id) : null;
   }
 
   /** Several browsers found a Host cheating: everyone is told. */
@@ -2383,14 +2397,20 @@ export class Game implements OnlineGame {
     return this.probes.takenIds();
   }
 
-  restoreProbes(taken: string[]) {
+  restoreProbes(taken: string[], probes: ProbeState[]) {
     for (const id of taken) this.probes.takeId(id);
+    this.probes.restore(probes, this.time);
+  }
+
+  probeSnapshot() {
+    return this.probes.snapshot(this.time);
   }
 
   /**
    * A nova core goes off: a shockwave runs out to NOVA_RADIUS, and every ship this browser
    * runs inside it is gone, whatever protects it (each browser destroys its own and says so,
-   * as with every death), together with torpedoes and wreckage there. The holder stays.
+   * as with every death), together with torpedoes and wreckage there. The holder's clone burns
+   * up too and is printed again at once.
    */
   novaBlast(holder: Ship, position: THREE.Vector3) {
     const now = this.time;
@@ -2548,9 +2568,14 @@ export class Game implements OnlineGame {
     this.torpedoes.launch(id, shooter, target, position, velocity, this.time, false);
   }
 
+  recentTorpedo(id: string) {
+    return this.torpedoes.recent(id);
+  }
+
   remoteTorpedoGone(id: string, position: THREE.Vector3) {
     const torpedo = this.torpedoes.find(id);
-    if (!torpedo) return;
+    // it flies here too: a report from far off its course is no shot that downed it
+    if (!torpedo || torpedo.position.distanceTo(position) > TORPEDO_GONE_SLACK) return;
     torpedo.position.copy(position);
     this.blowUp(torpedo);
   }

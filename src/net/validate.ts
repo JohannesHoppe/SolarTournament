@@ -1,6 +1,7 @@
 import type { ShipState } from '../ship/ship';
 import type { AsteroidState, FieldState } from '../world/asteroids';
 import type { WreckState } from '../world/wrecks';
+import { KINDS, type ProbeState } from '../game/items';
 
 /**
  * Checks everything that arrives from other browsers before the game touches it. Peers are
@@ -32,6 +33,9 @@ const MAX_ID = 64;
  * 90 pieces, and each breaks into up to 3, twice (90 · (1 + 3 + 9) = 1170).
  */
 const MAX_ROCKS = 1200;
+/** Probes in flight at once, and the seconds a probe drifts at most (see game/items). */
+const MAX_PROBES = 64;
+const MAX_PROBE_SECONDS = 200;
 /** Lists of ids (the probes taken in a round: one every 25 s and the dead clones' ones) stay below this. */
 const MAX_IDS = 200;
 /** The arena never holds more pieces of wreckage than this (MAX_WRECKS in world/wrecks, with room). */
@@ -126,6 +130,17 @@ export function ids(x: unknown): string[] | null {
   if (!Array.isArray(x) || x.length > MAX_IDS) return null;
   const list = x.map(id);
   return list.some((entry) => entry === null) ? null : (list as string[]);
+}
+
+/** The probes in flight, or null: at most four of the arena and the drops of a few dead clones. */
+export function probeStates(x: unknown): ProbeState[] | null {
+  if (!Array.isArray(x) || x.length > MAX_PROBES) return null;
+  const probes = x.map((probe) => {
+    if (!isRecord(probe)) return null;
+    const state = { i: id(probe.i), k: KINDS.find((kind) => kind === probe.k) ?? null, p: vec(probe.p, 3, MAX_COORDINATE), v: vec(probe.v, 3, MAX_SPEED), u: num(probe.u, 0, MAX_PROBE_SECONDS) };
+    return Object.values(state).some((value) => value === null) ? null : (state as ProbeState);
+  });
+  return probes.some((probe) => probe === null) ? null : (probes as ProbeState[]);
 }
 
 /** The pieces of wreckage in flight, or null. */

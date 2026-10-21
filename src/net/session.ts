@@ -3,7 +3,8 @@ import type { ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
 import { CHEATS, type Cheat } from './plausible';
 import { LocalTransport, TrysteroTransport, type Transport } from './transport';
-import { fieldState, id, ids, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
+import type { ProbeState } from '../game/items';
+import { fieldState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
 /** Ship states go out this often (Hz); the receivers predict the motion in between. */
 const STATE_RATE = 15;
@@ -27,6 +28,11 @@ const LIVENESS_MS = 2500;
 const CUT_OFF_MS = 2000;
 /** A reported join time this much later than the known one means the peer started over (s); well above network jitter. */
 const RESTART_SLACK = 1;
+/**
+ * Seconds left in a round reported by a lead browser, at the least: the results after a round
+ * last 12 s, a clock far below would hold everyone on the scoreboard.
+ */
+const MIN_ROUND_LEFT = -60;
 /** Places per tournament: Hosts and bots together; with bots, the lead browser fills free places. */
 export const TOURNAMENT_SIZE = 8;
 /** Ships one peer may run: its own and the bots of a lead browser, at most a full tournament. */
@@ -110,7 +116,7 @@ export class Session {
   /** A torpedo went off or was shot down, where. */
   onTorpedoGone: (id: string, position: Vec) => void = () => {};
   /** Another browser's torpedo hit a ship this browser runs. */
-  onTorpedoHit: (target: string, shooter: string) => void = () => {};
+  onTorpedoHit: (target: string, shooter: string, torpedo: string) => void = () => {};
   /** A ship of another browser took a probe. */
   onProbe: (probe: string, ship: string) => void = () => {};
   /** A ship of another browser set off its nova core, here. */
@@ -118,7 +124,7 @@ export class Session {
   /** Another browser says a ship cheats (see plausible.ts). */
   onCheat: (ship: string, cheat: Cheat, from: string) => void = () => {};
   /** The lead's field, the wreckage in flight, and the probes taken this round. */
-  onSync: (field: FieldState, wrecks: WreckState[], probesTaken: string[]) => void = () => {};
+  onSync: (field: FieldState, wrecks: WreckState[], probesTaken: string[], probes: ProbeState[]) => void = () => {};
   onPeerJoin: (id: string) => void = () => {};
   onPeerLeave: (id: string) => void = () => {};
   /** This browser started over (see restart): it takes the round and field of the lead browser again. */
@@ -227,7 +233,8 @@ export class Session {
     transport.on('tk', (d, from) => {
       const target = id(d?.t);
       const shooter = id(d?.s);
-      if (target && shooter && ownerOf(shooter) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onTorpedoHit(target, shooter));
+      const torpedo = id(d?.i);
+      if (target && shooter && torpedo && ownerOf(shooter) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onTorpedoHit(target, shooter, torpedo));
     });
     transport.on('r', (d, from) => {
       const rock = id(d?.i);
@@ -241,13 +248,14 @@ export class Session {
       const field = fieldState(d?.f);
       const wrecks = wreckStates(d?.w);
       const taken = ids(d?.p);
+      const probes = probeStates(d?.q);
       const age = num(d?.g, 0, MAX_FIELD_TIME);
-      if (!field || !wrecks || !taken || age === null) return;
+      if (!field || !wrecks || !taken || !probes || age === null) return;
       this.hear(from, age);
       if (this.synced || seconds() - this.startedAt >= SETTLE_MS / 1000) return;
       if ((this.peerJoinedAt.get(from) ?? Infinity) >= this.startedAt) return;
       this.synced = true;
-      this.guard(() => this.onSync(field, wrecks, taken));
+      this.guard(() => this.onSync(field, wrecks, taken, probes));
     });
     transport.onPeerJoin((peer) => {
       if (!this.left) this.guard(() => this.onPeerJoin(peer));
@@ -281,7 +289,9 @@ export class Session {
    * comes to the same answer on its own.
    */
   get isLead() {
-    return !this.justJoined && this.leadId === this.selfId;
+    // a browser that has just started over waits to hear the others first (see isLive)
+    const startedOver = seconds() - this.restartedAt < (2 * LIVENESS_MS) / 1000 && this.peers.length > 0;
+    return !this.justJoined && !startedOver && this.leadId === this.selfId;
   }
 
   get leadId(): string {
@@ -299,10 +309,16 @@ export class Session {
     return lead;
   }
 
-  /** A peer is live while it sends: heard within LIVENESS_MS, and not just back from a silence (see LIVENESS_MS). */
+  /**
+   * A peer is live while it sends: heard within LIVENESS_MS, and not just back from a silence
+   * (see LIVENESS_MS). A browser that has just started over itself was the one that was gone:
+   * the others count as live as soon as it hears them, so it does not lead in the meantime.
+   */
   isLive(peer: string) {
     const now = seconds();
-    return now - (this.lastHeard.get(peer) ?? -Infinity) <= LIVENESS_MS / 1000 && now - (this.backAt.get(peer) ?? -Infinity) >= LIVENESS_MS / 1000;
+    const heard = now - (this.lastHeard.get(peer) ?? -Infinity) <= LIVENESS_MS / 1000;
+    const startedOver = now - this.restartedAt < (2 * LIVENESS_MS) / 1000;
+    return heard && (startedOver || now - (this.backAt.get(peer) ?? -Infinity) >= LIVENESS_MS / 1000);
   }
 
   /** Whether a peer has gone quiet: nothing heard from it for LIVENESS_MS. */
@@ -394,9 +410,9 @@ export class Session {
     this.transport.send('tg', { i: torpedo, p: position });
   }
 
-  /** Tells the browser that runs `target` that the own torpedo of `shooter` hit it. */
-  sendTorpedoHit(owner: string, target: string, shooter: string) {
-    this.transport.send('tk', { t: target, s: shooter }, owner);
+  /** Tells the browser that runs `target` that the own torpedo `torpedo` of `shooter` hit it. */
+  sendTorpedoHit(owner: string, target: string, shooter: string, torpedo: string) {
+    this.transport.send('tk', { t: target, s: shooter, i: torpedo }, owner);
   }
 
   /** `at` is the field time of the hit and `round` the round it fell in, so a rock breaks into the same fragments everywhere. */
@@ -404,8 +420,8 @@ export class Session {
     this.transport.send('r', { i: rock, t: +at.toFixed(3), n: round });
   }
 
-  sendSync(to: string, field: FieldState, wrecks: WreckState[], probesTaken: string[]) {
-    this.transport.send('y', { f: field, w: wrecks, p: probesTaken, g: this.age() }, to);
+  sendSync(to: string, field: FieldState, wrecks: WreckState[], probesTaken: string[], probes: ProbeState[]) {
+    this.transport.send('y', { f: field, w: wrecks, p: probesTaken, q: probes, g: this.age() }, to);
   }
 
   leave() {
@@ -431,6 +447,19 @@ export class Session {
     this.guard(() => this.onRestart());
   }
 
+  /**
+   * The join time of a peer heard for the first time. A peer that shows up after this browser
+   * has settled was not in the room before it: a claim to have been here longer than the
+   * current lead is a lie (it would take the lead and the places of everyone), so it lines up
+   * behind the lead instead.
+   */
+  private plausibleJoin(peer: string, joined: number): number {
+    if (this.justJoined) return joined;
+    const lead = this.leadId;
+    const leadJoined = lead === this.selfId ? this.startedAt : (this.peerJoinedAt.get(lead) ?? this.startedAt);
+    return joined < leadJoined && peer !== lead ? leadJoined + RESTART_SLACK / 2 : joined;
+  }
+
   /** A peer spoke: notes when, and when it joined or started over. */
   private hear(peer: string, age: number) {
     const now = seconds();
@@ -441,7 +470,7 @@ export class Session {
     this.lastHeard.set(peer, now);
     const joined = now - age;
     const known = this.peerJoinedAt.get(peer);
-    if (known === undefined) this.peerJoinedAt.set(peer, joined);
+    if (known === undefined) this.peerJoinedAt.set(peer, this.plausibleJoin(peer, joined));
     else if (joined > known + RESTART_SLACK) {
       // the peer started over: it was the one that was gone
       this.peerJoinedAt.set(peer, joined);
@@ -462,15 +491,17 @@ export class Session {
     this.hear(from, age);
     const round = d.r === null ? null : this.roundState(d.r);
     if (round === undefined) return;
-    // two browsers lead at once (their join times lie too close to tell apart over the network,
-    // or both lost each other): the one with the higher id steps back
-    if (round && this.isLead && this.isLive(from) && from < this.selfId) this.restart();
+    // two browsers lead at once because their join times lie too close to tell apart over the
+    // network: the one with the higher id steps back (a peer that came clearly later cannot
+    // make the lead step back by sending a round clock)
+    const tie = Math.abs((this.peerJoinedAt.get(from) ?? Infinity) - this.startedAt) <= RESTART_SLACK;
+    if (round && tie && this.isLead && this.isLive(from) && from < this.selfId) this.restart();
     this.guard(() => this.onStates(states as ShipState[], round, from));
   }
 
   private roundState(x: unknown): RoundState | undefined {
     if (!isRecord(x)) return undefined;
-    const round = { id: num(x.id, 0, MAX_COUNT), left: num(x.left, -ROUND_LIMIT, ROUND_LIMIT), field: num(x.field, 0, MAX_FIELD_TIME) };
+    const round = { id: int(x.id, 0, MAX_COUNT), left: num(x.left, MIN_ROUND_LEFT, ROUND_LIMIT), field: num(x.field, 0, MAX_FIELD_TIME) };
     return round.id !== null && round.left !== null && round.field !== null ? (round as RoundState) : undefined;
   }
 

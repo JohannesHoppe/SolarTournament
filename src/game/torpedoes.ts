@@ -20,6 +20,8 @@ export const TORPEDO_DAMAGE = 60;
 /** A torpedo locks on a ship within this angle of the nose (rad, about 17°) and this distance (units, 3 km), in sight. */
 export const LOCK_ANGLE = 0.3;
 export const LOCK_DISTANCE = 60000;
+/** Torpedoes remembered after they went off, for hits told late: more than all clones of a tournament carry. */
+const GONE_MEMORY = 32;
 
 export interface Torpedo {
   /** "<shooter id>.<shot>": the same torpedo on every browser. */
@@ -48,6 +50,8 @@ const exhaust = new THREE.Vector3();
 export class Torpedoes {
   readonly group = new THREE.Group();
   readonly list: Torpedo[] = [];
+  /** The last torpedoes gone (see recent). */
+  private readonly gone: Torpedo[] = [];
   private readonly geometry = new THREE.CylinderGeometry(25, 40, 260, 6).rotateX(Math.PI / 2);
   private readonly material = new THREE.MeshStandardMaterial({ color: 0x9a9fa8, emissive: 0xff3300, emissiveIntensity: 0.6, roughness: 0.5, metalness: 0.3, flatShading: true });
 
@@ -120,14 +124,22 @@ export class Torpedoes {
     return this.list.find((torpedo) => torpedo.id === id) ?? null;
   }
 
+  /** A torpedo in flight or gone a moment ago, where it went off: its hit is told after it is gone. */
+  recent(id: string): Torpedo | null {
+    return this.find(id) ?? this.gone.find((torpedo) => torpedo.id === id) ?? null;
+  }
+
   remove(torpedo: Torpedo) {
     const index = this.list.indexOf(torpedo);
     if (index < 0) return;
     this.list.splice(index, 1);
     this.group.remove(torpedo.mesh);
+    this.gone.push(torpedo);
+    if (this.gone.length > GONE_MEMORY) this.gone.shift();
   }
 
   clear() {
     while (this.list.length) this.remove(this.list[0]);
+    this.gone.length = 0;
   }
 }
