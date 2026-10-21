@@ -131,7 +131,10 @@ export class Bot {
   private dodge = 1;
   private nextDodge = 0;
 
-  constructor(readonly ship: Ship, private readonly skill: number) {}
+  constructor(
+    readonly ship: Ship,
+    readonly skill: number,
+  ) {}
 
   think(now: number, ships: Ship[], field: AsteroidField, bots: readonly Bot[]): Controls {
     const me = this.ship.flight;

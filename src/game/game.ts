@@ -50,6 +50,19 @@ const STANDINGS_REFRESH = 0.25;
 /** Once every Host has finished a race, the round ends this many seconds later (s): time to see the own place. */
 const RACE_OVER_SECONDS = 5;
 /**
+ * A race starts with a countdown of START_SECONDS on the round clock: the grid's clamps hold
+ * every ship until GO, and the race time runs from GO. A drive lit within START_WINDOW seconds
+ * before GO, or within START_LATE seconds after it, makes a perfect start: a shove of
+ * BOOST_PUSH along the nose. A drive lit earlier and still burning at GO stalls for
+ * FALSE_START_STALL seconds. A bot gets a perfect start with a chance of its skill times
+ * BOT_PERFECT_START.
+ */
+const START_SECONDS = 3;
+const START_WINDOW = 0.3;
+const START_LATE = 0.2;
+const FALSE_START_STALL = 1.5;
+const BOT_PERFECT_START = 0.8;
+/**
  * Solar storms in the corona arena: every STORM_PERIOD seconds of field time a storm of
  * STORM_SECONDS blinds the sensors (no markers, no lock warnings, bots see only within
  * STORM_SIGHT). The field time is shared, so a storm hits every browser at once.
@@ -455,6 +468,12 @@ export class Game implements OnlineGame {
   private kick = 0;
   /** Strength of the widened view after a coil boost, 0..1. */
   private boostKick = 0;
+  /** The number of a race's countdown last shown (0 once the race runs; see startCountdown). */
+  private countdown = 0;
+  /** The own drive is lit, and since when (round time, s); the perfect start is still to be judged. */
+  private driveLit = false;
+  private driveLitAt = -Infinity;
+  private startOpen = false;
   /** The velocity of the ship the camera rides with, for the dust's streaks; null without one. */
   private riding: THREE.Vector3 | null = null;
   /** The own drive burned in the last frame (see ignite). */
@@ -1230,8 +1249,9 @@ export class Game implements OnlineGame {
         // a watching Host has no cockpit of its own
         if (action === 'camera' && !this.spectating) this.cockpit = !this.cockpit;
         if (action === 'autopilot' && this.me?.alive) this.toggleAutopilot();
-        if (action === 'overdrive') this.overdrive();
-        if (action === 'torpedo' && !this.spectating && this.me) this.fireTorpedo(this.me);
+        // the grid's clamps hold the overdrive and the torpedoes too
+        if (action === 'overdrive' && this.countdown === 0) this.overdrive();
+        if (action === 'torpedo' && !this.spectating && this.me && this.countdown === 0) this.fireTorpedo(this.me);
         if (action === 'watch' && this.spectating) this.watchNext();
         break;
       case 'paused':
@@ -1980,6 +2000,7 @@ export class Game implements OnlineGame {
     this.ignite(myControls);
     const dodge = this.input.takeDodge();
     if (dodge && this.state === 'playing' && !this.spectating) this.dodge(dodge);
+    const clamped = this.startCountdown(myControls);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -2010,12 +2031,15 @@ export class Game implements OnlineGame {
       // a bot with a nova core saves it for a crowd
       if (thought?.fire && ship.nova && this.crowdAround(ship, NOVA_RADIUS * 0.8) < NOVA_CROWD) thought.fire = false;
       // a bot with its target locked sends a torpedo now and then (never the flight school's)
-      if (bot && bot !== this.sparring?.bot && bot.target && ship.torpedoes > 0 && Math.random() < dt * BOT_TORPEDO_RATE && this.torpedoTarget(ship) === bot.target) this.fireTorpedo(ship);
+      if (bot && !clamped && bot !== this.sparring?.bot && bot.target && ship.torpedoes > 0 && Math.random() < dt * BOT_TORPEDO_RATE && this.torpedoTarget(ship) === bot.target) this.fireTorpedo(ship);
       // the target drone keeps its drive turned to the pilot, wherever the pilot flies: the
       // drills train hitting the drive, not getting around the armor
       if (ship === this.drone && me.alive) ship.flight.orientation.setFromRotationMatrix(facing.lookAt(me.flight.position, ship.flight.position, me.flight.up(upward)));
-      const controls = ship === me ? myControls : (thought ?? IDLE);
+      // on the grid before GO the clamps hold the ship: no push, no pull, no shot
+      if (clamped) ship.flight.velocity.set(0, 0, 0);
+      const controls = clamped ? IDLE : ship === me ? myControls : (thought ?? IDLE);
       this.field.gravity(ship.flight.position, gravity);
+      if (clamped) gravity.set(0, 0, 0);
       ship.inShadow = this.field.raycast(ship.flight.position, SUN_DIRECTION, LASER_RANGE) !== null;
       ship.sunCooling = this.venue.cooling;
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
@@ -2143,7 +2167,7 @@ export class Game implements OnlineGame {
     ship.gates++;
     ship.score += GATE_POINTS;
     if (ship.gates >= FINISH_GATES) {
-      ship.finish = +this.raceTime().toFixed(2);
+      ship.finish = +(this.raceTime() - START_SECONDS).toFixed(2);
       const place = this.standings().indexOf(ship);
       ship.score += PLACE_POINTS[place] ?? 0;
       if (ship === this.me) {
@@ -2157,6 +2181,72 @@ export class Game implements OnlineGame {
     this.sound.beep(1180, 0.06, 0.12);
     // through the pink gate: a new lap begins
     if (ship.gates > 1 && ship.gates % GATES === 1) this.hud.flashMessage(this.time, lapOf(ship.gates) === LAPS ? 'Last lap' : `Lap ${lapOf(ship.gates)} of ${LAPS}`, 2);
+  }
+
+  /**
+   * A race's start: 3, 2, 1, GO on the round clock, the same on every browser. Until GO the
+   * grid's clamps hold every ship (returns true while they do). The own drive lit just before
+   * GO, or just after it, makes a perfect start; lit too early and still burning at GO, it
+   * stalls (see START_SECONDS).
+   */
+  private startCountdown(controls: Controls): boolean {
+    if (!this.course || this.school) {
+      this.countdown = 0;
+      return false;
+    }
+    const t = this.raceTime();
+    const count = Math.max(0, Math.ceil(START_SECONDS - t));
+    const lit = controls.thrust > 0;
+    if (lit && !this.driveLit) this.driveLitAt = t;
+    this.driveLit = lit;
+    if (count !== this.countdown) {
+      if (count > 0) {
+        this.hud.countdown(String(count));
+        this.sound.beep(660, 0.12, 0.2);
+      } else if (this.countdown > 0) {
+        this.go();
+      }
+      this.countdown = count;
+    }
+    if (this.startOpen && count === 0) {
+      if (t > START_SECONDS + START_LATE) this.startOpen = false;
+      else if (lit && this.driveLitAt >= START_SECONDS) {
+        this.startOpen = false;
+        this.perfectStart(this.me!);
+      }
+    }
+    return count > 0;
+  }
+
+  /** GO: the clamps let go; whose drive is lit is judged at once, the rest within START_LATE. */
+  private go() {
+    const me = this.me!;
+    this.hud.countdown('GO');
+    this.sound.beep(1320, 0.35, 0.22);
+    this.startOpen = !this.spectating && me.alive;
+    if (this.startOpen && this.driveLit) {
+      this.startOpen = false;
+      if (this.driveLitAt >= START_SECONDS - START_WINDOW) this.perfectStart(me);
+      else {
+        me.overheatDrive(this.time + FALSE_START_STALL);
+        this.hud.flashMessage(this.time, 'Too early · drive stalled', 2);
+        this.speaker.say(COMPUTER.falseStart, 'urgent');
+        this.sound.beep(220, 0.3, 0.15);
+      }
+    }
+    for (const bot of this.bots) {
+      if (bot.ship.owner === null && bot.ship.alive && bot !== this.sparring?.bot && Math.random() < bot.skill * BOT_PERFECT_START) this.perfectStart(bot.ship);
+    }
+  }
+
+  /** A perfect start: the drive lights the moment the clamps let go, a shove along the nose. */
+  private perfectStart(ship: Ship) {
+    ship.flight.velocity.addScaledVector(ship.flight.forward(forward), BOOST_PUSH);
+    if (ship !== this.me) return;
+    this.boostKick = 1;
+    this.sound.play('boost', { volume: 1.1, rate: 0.8 });
+    this.hud.flashMessage(this.time, 'Perfect start', 1.5);
+    this.speaker.say(COMPUTER.perfectStart, 'urgent');
   }
 
   /**

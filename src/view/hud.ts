@@ -31,6 +31,7 @@ export class Hud {
   private readonly prograde = $('prograde');
   private readonly retrograde = $('retrograde');
   private readonly message = $('hud-message');
+  private readonly countdownText = $('hud-countdown');
   private readonly hitmarker = $('hitmarker');
   private readonly damageFlash = $('damage-flash');
   private readonly killfeed = $('killfeed');
@@ -85,6 +86,7 @@ export class Hud {
     this.markerLayer.replaceChildren();
     this.markers.clear();
     this.message.textContent = '';
+    this.countdownText.textContent = '';
     this.setSchool(null);
     this.waypoint.hidden = true;
     this.center.hidden = true;
@@ -204,6 +206,16 @@ export class Hud {
   setStrain(strain: number) {
     this.vignette.style.opacity = String(strain);
     this.vignette.style.setProperty('--tunnel', `${Math.round(70 - strain * 45)}%`);
+  }
+
+  /** A number of a race's countdown, or GO, in big neon: it pops in and fades out by itself. */
+  countdown(text: string) {
+    const element = this.countdownText;
+    element.textContent = text;
+    element.classList.remove('pop');
+    // a reflow between removing and adding the class restarts the animation
+    void element.offsetWidth;
+    element.classList.add('pop');
   }
 
   flashMessage(now: number, text: string, seconds = 2) {
