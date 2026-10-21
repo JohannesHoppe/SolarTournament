@@ -54,7 +54,7 @@ interface Attempt {
   normals: THREE.Vector3[];
   /** Index of the next ring of the course. */
   next: number;
-  /** Signed distance of the pilot to the plane of the next ring, the frame before. */
+  /** Signed distance of the pilot to the plane of the next ring, the frame before (NaN: no frame yet for this ring). */
   side: number;
   /** The impact warning has come up in this attempt. */
   warned: boolean;
@@ -425,11 +425,11 @@ const DRILLS: Drill[] = [
       const normal = a.normals[a.next];
       const offset = toTarget.copy(ctx.me.flight.position).sub(a.points[a.next]);
       const side = offset.dot(normal);
-      // passed: the pilot crossed the ring's plane, inside the ring
-      if (a.side < 0 && side >= 0 && offset.addScaledVector(normal, -side).length() < RING_RADIUS) {
+      // passed: the pilot crossed the ring's plane, inside the ring, either way
+      if (Number.isFinite(a.side) && a.side < 0 !== side < 0 && offset.addScaledVector(normal, -side).length() < RING_RADIUS) {
         a.next++;
         markers.highlight(a.next);
-        a.side = -Infinity;
+        a.side = NaN;
         return a.next >= a.points.length;
       }
       a.side = side;
@@ -721,7 +721,7 @@ export class FlightSchool {
     const drill = DRILLS[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: -Infinity, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0 };
+    this.attempt = { rep, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0 };
     drill.enter?.(ctx, this.attempt, this.markers);
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on

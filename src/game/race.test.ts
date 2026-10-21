@@ -28,14 +28,15 @@ describe('the race course', () => {
     }
   });
 
-  it('counts a gate only through its front and inside its ring', () => {
+  it('counts a gate either way, but only inside its ring', () => {
     const c = course();
     const gate = c.points[0];
     const normal = c.normals[0];
     const before = gate.clone().addScaledVector(normal, -500);
     const after = gate.clone().addScaledVector(normal, 500);
     expect(c.crossed(0, before, after)).toBe(true);
-    expect(c.crossed(0, after, before)).toBe(false);
+    expect(c.crossed(0, after, before)).toBe(true);
+    expect(c.crossed(0, before, before.clone().addScaledVector(normal, 400))).toBe(false);
     const side = new THREE.Vector3(0, 1, 0).cross(normal).normalize().multiplyScalar(GATE_RADIUS * 1.5);
     expect(c.crossed(0, before.clone().add(side), after.clone().add(side))).toBe(false);
   });

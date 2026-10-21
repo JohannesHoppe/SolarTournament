@@ -75,13 +75,13 @@ export class Course {
     }
   }
 
-  /** Whether a ship moving from `from` to `to` this frame flew through a gate, the right way. */
+  /** Whether a ship moving from `from` to `to` this frame flew through a gate, either way: a ring is a ring. */
   crossed(gate: number, from: THREE.Vector3, to: THREE.Vector3): boolean {
     const point = this.points[gate];
     const normal = this.normals[gate];
     const before = toGate.subVectors(from, point).dot(normal);
     const after = crossing.subVectors(to, point).dot(normal);
-    if (before >= 0 || after < 0) return false;
+    if (before < 0 === after < 0) return false;
     // where the path pierces the gate's plane, inside the ring
     crossing.subVectors(to, from).multiplyScalar(before / (before - after)).add(from);
     return crossing.distanceTo(point) < GATE_RADIUS;

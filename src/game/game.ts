@@ -2043,8 +2043,8 @@ export class Game implements OnlineGame {
     const next = me.gates % GATES;
     const lap = lapOf(me.gates);
     course.highlight(next);
-    // past the gate's plane but not through it: the gate only counts from its front
-    const missed = scratch.subVectors(me.flight.position, course.points[next]).dot(course.normals[next]) > GATE_RADIUS;
+    // past the gate's plane without going through it, and still moving away from it
+    const missed = scratch.subVectors(me.flight.position, course.points[next]).dot(course.normals[next]) > GATE_RADIUS && me.flight.velocity.dot(course.normals[next]) > 0;
     const label = missed ? 'Missed · turn back' : next === 0 ? (me.gates === 0 ? 'Start' : lap === LAPS ? 'Finish' : 'Lap') : `Gate ${next + 1}/${GATES}`;
     this.hud.setWaypoint(this.camera, course.points[next], label);
     this.hud.setSchool({ step: `Race · lap ${lap}/${LAPS} · ${place}`, text: missed ? `Missed gate ${next + 1}: turn back and fly through it` : `Gate ${next + 1} of ${GATES}`, keys: [] });
