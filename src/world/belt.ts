@@ -15,7 +15,7 @@ const BELT_ROCKS = 480;
 export const BELT_INNER = ARENA_LIMIT + ARENA_GRACE * MAX_SPEED + 20000;
 /** The belt ends well before the camera's far plane (units, 17.5 km). */
 const BELT_OUTER = 350000;
-/** Half the belt's thickness around the arena's horizon plane (units, about 3 km). */
+/** The spread of the belt around the arena's horizon plane (units, 3 km): heights are the sum of three draws, so most rocks lie within 1.5 km of the plane, none beyond 4.5 km. */
 const BELT_THICKNESS = 60000;
 /** Rocks of the belt are scaled like the field's, up to a little bigger (template radius 40 to 55 m). */
 const MIN_SCALE = 2;

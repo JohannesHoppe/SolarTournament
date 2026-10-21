@@ -6,7 +6,7 @@ import { LocalTransport, TrysteroTransport, type Transport } from './transport';
 import type { ProbeState } from '../game/items';
 import { fieldState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
-/** Ship states go out this often (Hz); the receivers predict the motion in between. */
+/** Ship states go out this often (Hz); the receivers predict the motion in between, and take at most three times as many. */
 const STATE_RATE = 15;
 /**
  * A newcomer waits this long for the peers already in the room before deciding who leads (ms).
@@ -39,7 +39,7 @@ export const TOURNAMENT_SIZE = 8;
 const MAX_SHIPS_PER_PEER = TOURNAMENT_SIZE;
 /** One shooter cannot hit the same ship more often than its laser fires (s); below the cooldown of a twin laser (0.09 s), for network jitter. */
 const MIN_HIT_INTERVAL = 0.07;
-/** Hits per peer and second: every ship it runs firing as fast as the laser allows, each beam through a few ships. */
+/** Hits per peer and second, and as many beams: every ship it runs firing as fast as the laser allows, each beam through a few ships. */
 const MAX_HITS_PER_SECOND = MAX_SHIPS_PER_PEER * 12;
 /** Asteroid hits per peer and second, generous for several ships firing at once. */
 const MAX_ROCK_HITS_PER_SECOND = 20;
@@ -163,6 +163,8 @@ export class Session {
   private readonly wreckBudget = new Budget(MAX_WRECK_HITS_PER_SECOND);
   private readonly torpedoBudget = new Budget(MAX_TORPEDO_EVENTS_PER_SECOND);
   private readonly cheatBudget = new Budget(MAX_CHEAT_REPORTS_PER_SECOND);
+  private readonly stateBudget = new Budget(STATE_RATE * 3);
+  private readonly beamBudget = new Budget(MAX_HITS_PER_SECOND);
   private synced = false;
   private left = false;
 
@@ -172,7 +174,7 @@ export class Session {
       const shooter = id(d?.i);
       const a = vec(d?.a, 3, MAX_COORDINATE);
       const b = vec(d?.b, 3, MAX_COORDINATE);
-      if (shooter && a && b && ownerOf(shooter) === from) this.guard(() => this.onFire(shooter, a, b));
+      if (shooter && a && b && ownerOf(shooter) === from && this.beamBudget.spend(from)) this.guard(() => this.onFire(shooter, a, b));
     });
     transport.on('h', (d, from) => {
       const target = id(d?.t);
@@ -263,7 +265,7 @@ export class Session {
     transport.onPeerLeave((peer) => {
       // join time and last word stay: a link that comes back belongs to the same peer
       this.backAt.delete(peer);
-      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget]) budget.forget(peer);
+      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.stateBudget, this.beamBudget]) budget.forget(peer);
       for (const key of this.lastHit.keys()) if (ownerOf(key.slice(0, key.indexOf('>'))) === peer) this.lastHit.delete(key);
       if (!this.left) this.guard(() => this.onPeerLeave(peer));
     });
@@ -482,7 +484,7 @@ export class Session {
   }
 
   private receiveStates(d: unknown, from: string) {
-    if (this.left || !isRecord(d)) return;
+    if (this.left || !isRecord(d) || !this.stateBudget.spend(from)) return;
     const age = num(d.g, 0, MAX_FIELD_TIME);
     if (age === null || !Array.isArray(d.s) || d.s.length > MAX_SHIPS_PER_PEER) return;
     const states = d.s.map(shipState);

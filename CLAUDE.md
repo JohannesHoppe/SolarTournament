@@ -124,7 +124,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `music/voice.ts` | Loads the pre-rendered voice sprite (once, shared) |
 | **`net/`** | **Online tournament** |
 | `net/online.ts` | Ship ownership, what goes over the network, the lead browser's bots (a new lead adopts them) |
-| `net/session.ts` | Tournament protocol: message types, sender checks and rate limits, election of the lead browser (longest in the room and still sending), starting over after a lost link, room codes |
+| `net/session.ts` | Tournament protocol: message types, sender checks and rate limits, election of the lead browser (longest in the room and still sending), starting over after a lost link |
 | `net/room.ts` | A tournament room as its link describes it: code, name, public or private, bots or not, deathmatch, race or both |
 | `net/lobby.ts` | The lobby: public tournaments announce themselves, the list of tournaments listens |
 | `net/validate.ts` | Checks every message from other browsers before the game uses it |
@@ -149,7 +149,7 @@ Typography matters. Running text is always justified, never ragged, with hyphena
 - **Human and alien ship are identical**, only their looks differ (shared hit radius).
 - **No sound from outside:** the player hears only what travels through the own hull, plus the flight computer's beeps, the radio and the link static in the headset.
 - **Performance:** no objects created per frame in hot loops; reuse module-level scratch vectors.
-- **Write nothing twice.** Code, markup and styles exist once: a repeated stretch becomes a function, a constant, a selector list or part of the page shell (`vite.config.ts`). `npm run dupes` checks it: jscpd (`.jscpd.json`: `src`, `tools`, the four pages, `public/404.html` and `vite.config.ts`, from 5 lines and 50 tokens, threshold 0, files of any length) and `tools/dupes/css.ts`, which finds style rules with the same set of at least three declarations under different selectors. Run it regularly and at the latest before every commit; `npm run build` fails on a duplicate, so Cloudflare does not deploy one. A repetition that is technically unavoidable is marked with `jscpd:ignore-start` / `jscpd:ignore-end` (in a style sheet the comment `css-dupes: <reason>` before the rule) and one sentence why.
+- **Write nothing twice.** Code, markup and styles exist once: a repeated stretch becomes a function, a constant, a selector list or part of the page shell (`vite.config.ts`). `npm run dupes` checks it: jscpd (`.jscpd.json`: `src`, `tools`, `e2e`, `functions`, the four pages, `public/404.html` and `vite.config.ts`, from 5 lines and 50 tokens, threshold 0, files of any length) and `tools/dupes/css.ts`, which finds style rules with the same set of at least three declarations under different selectors. Run it regularly and at the latest before every commit; `npm run build` fails on a duplicate, so Cloudflare does not deploy one. A repetition that is technically unavoidable is marked with `jscpd:ignore-start` / `jscpd:ignore-end` (in a style sheet the comment `css-dupes: <reason>` before the rule) and one sentence why.
 
 ## Testing in the browser
 

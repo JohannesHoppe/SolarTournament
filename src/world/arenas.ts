@@ -142,7 +142,7 @@ export const ARENAS: readonly ArenaProfile[] = [
   {
     id: 'hole',
     name: 'Event Horizon',
-    tagline: 'A black hole in the middle pulls everything in. Past 300 m no drive gets out.',
+    tagline: 'A black hole in the middle pulls everything in. Past 280 m no drive gets out.',
     layout: {
       key: 'hole',
       seed: 61,

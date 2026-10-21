@@ -14,8 +14,8 @@ type Section = [number, number][];
 /** One end of a loft: its depth along the ship (z, the nose towards -z), its scale and its center. */
 type End = { z: number; w: number; h: number; x?: number; y?: number };
 
-/** A hexagon with a flat top and bottom, the cross section of most hull parts (width and height 2). */
-const HEXAGON: Section = [[-1, -0.6], [-0.6, -1], [0.6, -1], [1, -0.6], [1, 0.6], [0.6, 1], [-0.6, 1], [-1, 0.6]];
+/** An octagon with flat sides, top and bottom, the cross section of most hull parts (width and height 2). */
+const OCTAGON: Section = [[-1, -0.6], [-0.6, -1], [0.6, -1], [1, -0.6], [1, 0.6], [0.6, 1], [-0.6, 1], [-1, 0.6]];
 const RECTANGLE: Section = [[-1, -1], [1, -1], [1, 1], [-1, 1]];
 /** A blade: thin and pointed at both edges. */
 const BLADE: Section = [[-1, 0], [0, -1], [1, 0], [0, 1]];
@@ -98,18 +98,18 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
   const root = keepEngine(original);
   const parts: THREE.BufferGeometry[] = [
     // fuselage: wide at the drives, narrowing to the nose
-    paint(loft(HEXAGON, { z: 240, w: 70, h: 55, y: 5 }, { z: -170, w: 45, h: 40, y: 0 }), OLIVE),
-    paint(loft(HEXAGON, { z: -170, w: 45, h: 40 }, { z: -290, w: 12, h: 10, y: -8 }), OLIVE),
+    paint(loft(OCTAGON, { z: 240, w: 70, h: 55, y: 5 }, { z: -170, w: 45, h: 40, y: 0 }), OLIVE),
+    paint(loft(OCTAGON, { z: -170, w: 45, h: 40 }, { z: -290, w: 12, h: 10, y: -8 }), OLIVE),
     // canopy, dark glass
-    paint(loft(HEXAGON, { z: -40, w: 30, h: 14, y: 42 }, { z: -170, w: 18, h: 6, y: 34 }), GLASS),
+    paint(loft(OCTAGON, { z: -40, w: 30, h: 14, y: 42 }, { z: -170, w: 18, h: 6, y: 34 }), GLASS),
     // spine and belly
     paint(loft(RECTANGLE, { z: 230, w: 12, h: 10, y: 62 }, { z: -40, w: 8, h: 4, y: 50 }), OLIVE_DARK),
     paint(loft(RECTANGLE, { z: 160, w: 34, h: 12, y: -50 }, { z: -150, w: 22, h: 8, y: -40 }), STEEL),
     // gun under the nose
-    paint(loft(HEXAGON, { z: -120, w: 9, h: 9, y: -52 }, { z: -300, w: 6, h: 6, y: -52 }), GUNMETAL),
+    paint(loft(OCTAGON, { z: -120, w: 9, h: 9, y: -52 }, { z: -300, w: 6, h: 6, y: -52 }), GUNMETAL),
     // drive nacelles, with their nozzles where the flames burn
-    ...pair(paint(loft(HEXAGON, { z: 250, w: 30, h: 26, x: 87, y: 2 }, { z: 60, w: 22, h: 20, x: 75, y: 4 }), STEEL)),
-    ...pair(paint(loft(HEXAGON, { z: 275, w: 26, h: 22, x: 87, y: 2 }, { z: 250, w: 30, h: 26, x: 87, y: 2 }), GUNMETAL)),
+    ...pair(paint(loft(OCTAGON, { z: 250, w: 30, h: 26, x: 87, y: 2 }, { z: 60, w: 22, h: 20, x: 75, y: 4 }), STEEL)),
+    ...pair(paint(loft(OCTAGON, { z: 275, w: 26, h: 22, x: 87, y: 2 }, { z: 250, w: 30, h: 26, x: 87, y: 2 }), GUNMETAL)),
     // struts out to the fins, swept back
     ...pair(paint(loft(BLADE, { z: 150, w: 60, h: 12, x: 120, y: 10 }, { z: 0, w: 40, h: 10, x: 190, y: 14 }), OLIVE_DARK)),
     ...pair(paint(loft(RECTANGLE, { z: 120, w: 110, h: 8, x: 170, y: 12 }, { z: 20, w: 90, h: 6, x: 170, y: 12 }), OLIVE)),
@@ -138,15 +138,15 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
   const root = keepEngine(original);
   const parts: THREE.BufferGeometry[] = [
     // the dart: a long, narrow body ending in a needle
-    paint(loft(HEXAGON, { z: 400, w: 34, h: 40, y: -10 }, { z: 60, w: 62, h: 52, y: 0 }), VOID),
-    paint(loft(HEXAGON, { z: 60, w: 62, h: 52 }, { z: -330, w: 6, h: 8, y: -10 }), VOID_SHEEN),
+    paint(loft(OCTAGON, { z: 400, w: 34, h: 40, y: -10 }, { z: 60, w: 62, h: 52, y: 0 }), VOID),
+    paint(loft(OCTAGON, { z: 60, w: 62, h: 52 }, { z: -330, w: 6, h: 8, y: -10 }), VOID_SHEEN),
     // the dorsal blade, tall and swept back, and the keel below
     paint(loft(BLADE, { z: 330, w: 10, h: 80, y: 120 }, { z: -60, w: 12, h: 12, y: 40 }), VOID_SHEEN),
     paint(loft(BLADE, { z: 300, w: 8, h: 50, y: -90 }, { z: 40, w: 10, h: 10, y: -40 }), VOID),
     // side blades, swept, carrying the drives
     ...pair(paint(loft(BLADE, { z: 380, w: 14, h: 26, x: 104, y: -44 }, { z: 40, w: 8, h: 10, x: 150, y: -60 }), VOID_SHEEN)),
     ...pair(paint(loft(BLADE, { z: 200, w: 70, h: 10, x: 60, y: -30 }, { z: 0, w: 40, h: 6, x: 60, y: -20 }), VOID)),
-    ...pair(paint(loft(HEXAGON, { z: 410, w: 18, h: 18, x: 104, y: -44 }, { z: 280, w: 16, h: 16, x: 104, y: -44 }), VOID)),
+    ...pair(paint(loft(OCTAGON, { z: 410, w: 18, h: 18, x: 104, y: -44 }, { z: 280, w: 16, h: 16, x: 104, y: -44 }), VOID)),
   ];
   const veins: THREE.BufferGeometry[] = [
     // along the body and up the blade: the life support's glow

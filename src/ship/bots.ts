@@ -37,7 +37,7 @@ const HOLD_DISTANCE = 4000;
 const AVOID_HORIZON = 5;
 /** A velocity error larger than this makes the bot turn and burn instead of fighting. */
 const BURN_THRESHOLD = 500;
-/** Angular aim error of an average bot (rad, about 1.1°): at 1 km, its firing range, it scatters by about one ship radius (20 m). */
+/** Angular aim error at a skill of one half (rad, about 1.1°; see aimError): at 1 km, its firing range, it scatters by about 20 m, a little more than a ship's radius (17 m). */
 const AIM_ANGLE = 0.02;
 /** How long a bot's sense of the target's jinking lingers (s). */
 const JINK_MEMORY = 0.6;
