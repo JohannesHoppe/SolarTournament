@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { newRoom, roomFragment, roomFromFragment } from './room';
+import { ROUND_MODES } from '../game/race';
 
 describe('a tournament room in its link', () => {
   it('comes back from its fragment with name, rules and mode', () => {
-    for (const mode of ['deathmatch', 'race', 'mixed'] as const) {
+    for (const mode of [...ROUND_MODES, 'mixed'] as const) {
       const room = newRoom("Kessler's Revenge", true, false, mode);
       expect(roomFromFragment(roomFragment(room))).toEqual(room);
     }

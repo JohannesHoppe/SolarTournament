@@ -276,7 +276,7 @@ button.primary .mode-note {
   color: var(--accent-strong);
 }
 
-/* the solo round's arenas and rivals: as many in a row as fit */
+/* the modes of a round, the solo round's arenas and rivals: as many in a row as fit */
 .choice-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));

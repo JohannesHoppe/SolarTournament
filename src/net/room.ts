@@ -5,7 +5,7 @@
  * the link knows the room's rules even when nobody else is in it: a room can be played forever.
  */
 import { cleanName } from './validate';
-import type { RoomMode } from '../game/race';
+import { ROUND_MODES, type RoomMode } from '../game/race';
 
 export interface Room {
   code: string;
@@ -14,11 +14,11 @@ export interface Room {
   public: boolean;
   /** Bots fill the places no Host takes. */
   bots: boolean;
-  /** What the rounds are: deathmatches, races, or both in turn. */
+  /** What the rounds are: one mode, or every mode in turn. */
   mode: RoomMode;
 }
 
-const MODES: readonly RoomMode[] = ['deathmatch', 'race', 'mixed'];
+const MODES: readonly RoomMode[] = [...ROUND_MODES, 'mixed'];
 
 /** A room mode as it arrives in a link or the lobby; a deathmatch when it is none. */
 export const roomMode = (x: unknown): RoomMode => (MODES.includes(x as RoomMode) ? (x as RoomMode) : 'deathmatch');

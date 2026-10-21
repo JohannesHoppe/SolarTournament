@@ -36,7 +36,7 @@ export interface Listing {
   /** Hosts whose clones fly. */
   hosts: number;
   bots: boolean;
-  /** Deathmatches, races, or both in turn. */
+  /** What its rounds are: one mode, or every mode in turn. */
   mode: RoomMode;
   /** Seconds left in the running round. */
   left: number;

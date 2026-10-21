@@ -6,7 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { Bot, BOT_NAMES, RACE_SPEED, rankOf, skillOf } from '../ship/bots';
+import { Bot, BOT_NAMES, HOME_RADIUS, RACE_SPEED, rankOf, skillOf } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { Datamosh } from '../view/datamosh';
@@ -17,7 +17,7 @@ import { aimHook, anchorPoint, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_ROCK, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
+import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_FLARE, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_ROCK, ANNOUNCER_SURVIVOR, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
@@ -43,15 +43,19 @@ import { KillCam } from '../view/killcam';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Torpedo } from './torpedoes';
 import { contents, Probes, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
-import { BOOST_PUSH, BOOST_RADIUS, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
+import { BOOST_PUSH, BOOST_RADIUS, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
+import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut } from './survival';
 import { markedName } from '../view/marks';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
 const RESULTS_SECONDS = 12;
 /** The standings held open with Tab are written anew this often (s, real time). */
 const STANDINGS_REFRESH = 0.25;
-/** Once every Host has finished a race, the round ends this many seconds later (s): time to see the own place. */
-const RACE_OVER_SECONDS = 5;
+/**
+ * Once a round is decided before its time (every Host has finished the race, one ship is left
+ * standing), it ends this many seconds later (s): time to see the own place.
+ */
+const DECIDED_SECONDS = 5;
 /**
  * A race starts with a countdown of START_SECONDS on the round clock: the grid's clamps hold
  * every ship until GO, and the race time runs from GO. A drive lit within START_WINDOW seconds
@@ -81,7 +85,7 @@ const DIRECTOR_HOLD = 6;
 const DIRECTOR_STICK = 1.3;
 const DIRECTOR_PAUSE = 10;
 /** The modes as the list of tournaments names them. */
-const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', mixed: 'Deathmatch and race' };
+const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', survival: 'Last Clone Standing', mixed: 'Every mode in turn' };
 /** A kill in a race is worth less than in a deathmatch: the gates and the finish decide. */
 const RACE_KILL_POINTS = 200;
 /** Points for shooting down a torpedo, and how often a bot with a lock fires one (per second). */
@@ -340,6 +344,7 @@ const SOLO_DEFAULT: SoloChoice = { mode: 'race', pace: 'pro', arena: null, rival
 const SOLO_NOTES: Record<RoundMode, string> = {
   race: 'Three laps through eight gates. Killing your opponents is explicitly allowed.',
   deathmatch: 'For the hard pilots: five minutes, every clone for itself.',
+  survival: `${CLONES} clones each. A solar flare closes in on the arena. The last clone standing wins.`,
 };
 
 /** The solo choice kept in this browser, checked: whatever does not fit falls back to the default. */
@@ -347,7 +352,7 @@ function loadSolo(): SoloChoice {
   try {
     const kept = JSON.parse(storageGet(SOLO_KEY) ?? '{}') as Partial<SoloChoice>;
     return {
-      mode: kept.mode === 'deathmatch' ? 'deathmatch' : 'race',
+      mode: kept.mode && ROUND_MODES.includes(kept.mode) ? kept.mode : SOLO_DEFAULT.mode,
       pace: kept.pace && kept.pace in PACES ? kept.pace : SOLO_DEFAULT.pace,
       arena: ARENAS.some((a) => a.id === kept.arena) ? kept.arena! : null,
       rivals: Array.isArray(kept.rivals) ? BOT_NAMES.filter((n) => kept.rivals!.includes(n)).slice(0, TOURNAMENT_SIZE - 1) : [...SOLO_DEFAULT.rivals],
@@ -363,7 +368,7 @@ type State = 'menu' | 'playing' | 'paused' | 'results';
  * What killed a ship without a killer, where this browser saw it happen: a rock, wreckage, deep
  * space, the arena's massive body; or, with a killer, its nova core.
  */
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'nova' | 'plume' | null;
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'flare' | 'nova' | 'plume' | null;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 /** The label of a menu mode button: the text of its first line, without the Enter key. */
@@ -555,6 +560,11 @@ export class Game implements OnlineGame {
   private nextPlaceCall = 0;
   /** The radio is opened up for the own last lap. */
   private pushed = false;
+  /** What Last Clone Standing has said: the flare coming, the last one standing. */
+  private flareCalled = false;
+  private survivorCalled = false;
+  /** When each ship lost its last clone (game time, s): who held out longer places higher. */
+  private readonly outAt = new Map<Ship, number>();
   /** The velocity of the ship the camera rides with, for the dust's streaks; null without one. */
   private riding: THREE.Vector3 | null = null;
   /** The own drive burned in the last frame (see ignite). */
@@ -582,7 +592,7 @@ export class Game implements OnlineGame {
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
   private readonly inSight = (ship: Ship) => this.field.lineOfSight(this.camera.position, ship.flight.position);
   /** Whether the own ship's sensors see a ship past the asteroids, for the radar. */
-  private readonly sensed = (ship: Ship) => this.field.lineOfSight(((this.spectating ? this.watched() : null) ?? this.me!).flight.position, ship.flight.position);
+  private readonly sensed = (ship: Ship) => this.field.lineOfSight(((this.watching() ? this.watched() : null) ?? this.me!).flight.position, ship.flight.position);
   private readonly radar = new Radar($<HTMLCanvasElement>('radar'));
   /** The radar's marks besides ships and rocks, reused from frame to frame. */
   private readonly marks: RadarMark[] = [
@@ -1020,7 +1030,12 @@ export class Game implements OnlineGame {
   private describeRoom() {
     const who = this.roomPublic ? 'Listed here for every Host; anyone can join or watch.' : 'Not listed: only who has your invite link finds it.';
     const bots = this.roomBots ? `Bots fill the ${TOURNAMENT_SIZE} places; every Host who joins takes a bot's place.` : 'No bots: only Hosts fly.';
-    const rounds = { deathmatch: 'Every round a deathmatch.', race: `Every round a race: ${LAPS} laps through ${GATES} gates, lasers on.`, mixed: 'Deathmatch and race take turns.' }[this.roomMode];
+    const rounds = {
+      deathmatch: 'Every round a deathmatch.',
+      race: `Every round a race: ${LAPS} laps through ${GATES} gates, lasers on.`,
+      survival: `Every round Last Clone Standing: ${CLONES} clones each, a solar flare closing in.`,
+      mixed: 'Every mode in turn, starting with a deathmatch.',
+    }[this.roomMode];
     $('room-note').textContent = `${who} ${bots} ${rounds} The link works for good: whoever follows it later starts the tournament again.`;
   }
 
@@ -1191,7 +1206,7 @@ export class Game implements OnlineGame {
    * pilot by hand; the director takes over again after a while without a key.
    */
   private direct(now: number) {
-    if (!this.spectating) return;
+    if (!this.watching()) return;
     const pilots = this.ships.filter((ship) => ship !== this.me && ship.alive);
     if (!pilots.length) {
       this.watchedShip = null;
@@ -1439,12 +1454,12 @@ export class Game implements OnlineGame {
           break;
         }
         // a watching Host has no cockpit of its own
-        if (action === 'camera' && !this.spectating) this.cockpit = !this.cockpit;
+        if (action === 'camera' && !this.watching()) this.cockpit = !this.cockpit;
         if (action === 'autopilot' && this.me?.alive) this.toggleAutopilot();
         // the grid's clamps hold the overdrive and the torpedoes too
         if (action === 'overdrive' && this.countdown === 0) this.overdrive();
         if (action === 'torpedo' && !this.spectating && this.me && this.countdown === 0) this.fireTorpedo(this.me);
-        if (action === 'watch' && this.spectating) this.watchNext();
+        if (action === 'watch' && this.watching()) this.watchNext();
         break;
       case 'paused':
         if (action === 'confirm' || action === 'pause' || action === 'back') this.resume();
@@ -1505,6 +1520,9 @@ export class Game implements OnlineGame {
     this.laps = this.course ? new LapTimer(parseLaps(storageGet(LAPS_KEY))[arena.id] ?? null) : null;
     this.leader = null;
     this.lastLapCalled = this.winCalled = false;
+    this.flareCalled = this.survivorCalled = false;
+    this.outAt.clear();
+    this.arena.setEdge(ARENA_LIMIT, false);
     this.place = -1;
     if (state) this.field.restore(state, arena.layout);
     this.space.setSun(arena.sun);
@@ -1542,6 +1560,31 @@ export class Game implements OnlineGame {
   /** Points for a kill: less in a race, where the gates and the finish decide. */
   private killPoints() {
     return this.roundMode === 'race' ? RACE_KILL_POINTS : KILL_POINTS;
+  }
+
+  /** The running round is Last Clone Standing (see survival.ts). */
+  private get survival() {
+    return this.roundMode === 'survival';
+  }
+
+  /** A ship that lost its last clone in Last Clone Standing: no clone of it is printed again this round. */
+  private out(ship: Ship) {
+    return this.survival && isOut(ship);
+  }
+
+  /** The own Host watches the others instead of flying: the tournament is full, or its last clone is dead. */
+  private watching() {
+    return this.spectating || (!!this.me && this.out(this.me));
+  }
+
+  /** The ships still in Last Clone Standing, with a clone left. */
+  private contenders() {
+    return this.standings().filter((ship) => !isOut(ship));
+  }
+
+  /** How far from the center a ship is safe now (units): the solar flare's shell in Last Clone Standing, else the arena's edge. */
+  private safeRadius() {
+    return this.survival ? flareRadius(this.field.clock) : ARENA_LIMIT;
   }
 
   private showMenu() {
@@ -1885,7 +1928,7 @@ export class Game implements OnlineGame {
       this.startNextRound();
       this.setRoundEnd(ROUND_SECONDS);
     }
-    if (this.raceOver() && this.roundEndsAtWall - wallClock() > RACE_OVER_SECONDS) this.setRoundEnd(RACE_OVER_SECONDS);
+    if (this.decided() && this.roundEndsAtWall - wallClock() > DECIDED_SECONDS) this.setRoundEnd(DECIDED_SECONDS);
     const left = this.roundEndsAtWall - wallClock();
     this.roundEndsAt = this.time + left;
     return { id: this.roundId, left: +left.toFixed(3), field: +this.field.clock.toFixed(3) };
@@ -1994,10 +2037,12 @@ export class Game implements OnlineGame {
       candidate.copy(course.points[ship.gates % GATES]);
       best = 0;
     }
-    // of a dozen random places on the edge of the field, clear of rock, the one farthest from
-    // the nearest enemy, preferably hidden from every enemy behind the asteroids
+    // of a dozen random places on the edge of the field (well inside a solar flare's shell),
+    // clear of rock, the one farthest from the nearest enemy, preferably hidden from every enemy
+    // behind the asteroids
+    const edge = Math.min(FIELD_RADIUS, this.safeRadius() * FLARE_KEEP);
     for (let attempt = 0; attempt < SPAWN_CANDIDATES && !course; attempt++) {
-      candidate.randomDirection().multiplyScalar(FIELD_RADIUS * (0.9 + Math.random() * 0.2));
+      candidate.randomDirection().multiplyScalar(edge * (0.9 + Math.random() * 0.2));
       if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40)) continue;
       let nearest = Infinity;
       let seen = false;
@@ -2019,6 +2064,7 @@ export class Game implements OnlineGame {
     if (ship === this.me) {
       // the Host's mind locks onto the freshly printed clone: from here on we are the clone
       this.hud.flashMessage(this.time, 'Establishing live link to your clone…', 2);
+      if (this.survival && clonesLeft(ship) === 1) this.speaker.say(COMPUTER.lastClone, 'urgent');
       this.glitch.trigger(0.9, 1.1);
       this.radio.setMuffled(false);
     }
@@ -2033,7 +2079,8 @@ export class Game implements OnlineGame {
     // the kill again and again behind the ad, until the next clone boots
     this.killcam.again();
     const kills = `${me.kills} ${me.kills === 1 ? 'kill' : 'kills'}`;
-    const clones = `${me.deaths} ${me.deaths === 1 ? 'clone' : 'clones'} lost`;
+    const left = clonesLeft(me);
+    const clones = `${me.deaths} ${me.deaths === 1 ? 'clone' : 'clones'} lost${this.survival ? ` · ${left} ${left === 1 ? 'clone' : 'clones'} left` : ''}`;
     this.sponsors.show(this.deathCause, `This round: ${kills} · ${me.score} pts · ${clones}`, () => {
       this.speaker.say(pick(SPONSOR_HAPPY), 'urgent');
       this.killcam.stop();
@@ -2079,14 +2126,16 @@ export class Game implements OnlineGame {
   /** The standings as a table: the scoreboard at the round's end, and the one Tab holds open. */
   private fillStandings(table: HTMLTableElement) {
     const race = this.roundMode === 'race';
-    table.innerHTML = `<tr><th>#</th><th>Host</th>${race ? '<th>Race</th>' : ''}<th>Kills</th><th>Deaths</th><th>Score</th></tr>`;
-    // a race ranks by the finish, a deathmatch by the score (see standings)
+    const survival = this.survival;
+    table.innerHTML = `<tr><th>#</th><th>Host</th>${race ? '<th>Race</th>' : ''}${survival ? '<th>Clones</th>' : ''}<th>Kills</th><th>Deaths</th><th>Score</th></tr>`;
+    // a race ranks by the finish, Last Clone Standing by the clones left, a deathmatch by the score (see standings)
     this.standings().forEach((ship, i) => {
       const row = table.insertRow();
       row.classList.toggle('me', ship === this.me);
       row.insertCell().textContent = String(i + 1);
       row.insertCell().append(...markedName(ship.kind, ship.name));
       if (race) row.insertCell().textContent = ship.finish >= 0 ? `${ship.finish.toFixed(1)} s` : `Lap ${lapOf(ship.gates)}/${LAPS}`;
+      if (survival) row.insertCell().textContent = isOut(ship) ? 'Out' : `${clonesLeft(ship)} left`;
       for (const value of [ship.kills, ship.deaths, ship.score]) row.insertCell().textContent = String(value);
     });
   }
@@ -2209,6 +2258,9 @@ export class Game implements OnlineGame {
     const dodge = this.input.takeDodge();
     if (dodge && this.state === 'playing' && !this.spectating) this.dodge(dodge);
     const clamped = this.startCountdown(myControls);
+    // Last Clone Standing: the solar flare's shell, the same on every browser by the field time
+    const safe = this.safeRadius();
+    this.arena.setEdge(safe, this.survival && this.field.clock >= FLARE_START);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -2218,7 +2270,7 @@ export class Game implements OnlineGame {
         continue;
       }
       if (!ship.alive) {
-        if (now < ship.respawnAt || ship === this.drone || ship === this.sparring?.bot.ship) continue;
+        if (now < ship.respawnAt || ship === this.drone || ship === this.sparring?.bot.ship || this.out(ship)) continue;
         // training clones are free; tournament clones cost an ad
         if (ship !== me || this.school) this.respawn(ship);
         else if (!this.sponsors.visible && this.state === 'playing' && !this.killcam.active) this.sponsorBreak();
@@ -2232,6 +2284,7 @@ export class Game implements OnlineGame {
         bot.waypoint = this.course && ship.finish < 0 ? this.course.points[ship.gates % GATES] : null;
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE)?.position ?? null;
         bot.flee = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? null;
+        bot.home = Math.min(HOME_RADIUS, safe * FLARE_KEEP);
       }
       const thought = bot ? bot.think(now, this.ships, this.field, this.bots) : null;
       // the flight school's unarmed sparring bot only flies
@@ -2253,6 +2306,7 @@ export class Game implements OnlineGame {
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
       if (this.course) this.passGates(ship, this.course);
       this.keepInArena(ship, now);
+      if (this.survival && ship.flight.position.length() > safe) this.burn(ship, 1, FLARE_HEAT, FLARE_BURN, 'Inside the solar flare · get back in', null, 'flare', dt, now);
       this.collide(ship, now);
       this.hitWreckage(ship, now);
       this.scorch(ship, dt, now);
@@ -2278,7 +2332,7 @@ export class Game implements OnlineGame {
     this.updateCamera(dt);
     me.root.visible = me.alive && !this.cockpit;
     // a watching Host sees the tournament through the pilot it follows
-    const subject = (this.spectating ? this.watched() : null) ?? me;
+    const subject = (this.watching() ? this.watched() : null) ?? me;
     // its gauges too: the own clone is not printed while the Host watches
     this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
     // a solar storm blinds the sensors: no ship shows a marker
@@ -2297,6 +2351,7 @@ export class Game implements OnlineGame {
     this.flyGhost(me);
     const racing = !!this.course && !this.school && this.countdown === 0;
     if (racing) this.callRace(subject);
+    if (this.survival) this.callSurvival(me, safe);
     this.pushRadio(racing && !this.spectating && me.finish < 0 && lapOf(me.gates) === LAPS);
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
     this.hud.showCrosshair(me.alive);
@@ -2307,6 +2362,8 @@ export class Game implements OnlineGame {
     if (this.spectating) {
       const by = now < this.handPickedUntil ? 'your pick' : 'live, the director cuts';
       this.hud.flashMessage(now, `Tournament full · watching ${subject === me ? 'the field' : `${subject.name} (${by})`} · Tab: next pilot · you fly as soon as a place is free`, 0.2);
+    } else if (this.watching()) {
+      this.hud.flashMessage(now, `Out · watching ${subject === me ? 'the field' : subject.name} · Tab: next pilot`, 0.2);
     } else if (outside) {
       this.hud.flashMessage(now, `Return to the field — ${Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1)}s`, 0.2);
       if (!this.toldToReturn) this.toldToReturn = this.speaker.say(COMPUTER.arena, 'urgent');
@@ -2325,15 +2382,46 @@ export class Game implements OnlineGame {
       if ($('hud-room').textContent !== room) $('hud-room').textContent = room;
       if (now >= this.roundEndsAt) this.showOnlineResults();
     } else {
-      if (this.raceOver() && this.roundEndsAt - now > RACE_OVER_SECONDS) this.setRoundEnd(RACE_OVER_SECONDS);
+      if (this.decided() && this.roundEndsAt - now > DECIDED_SECONDS) this.setRoundEnd(DECIDED_SECONDS);
       if (now >= this.roundEndsAt) this.endRound();
     }
   }
 
-  /** A race is over once every Host's clone has finished: bots do not hold it up. */
-  private raceOver() {
+  /**
+   * The round is decided before its time: a race once every Host's clone has finished (bots do
+   * not hold it up), Last Clone Standing once no more than one ship has a clone left.
+   */
+  private decided() {
+    if (this.survival) return this.standings().length > 1 && this.contenders().length <= 1;
     const hosts = this.ships.filter((ship) => ship.kind === 'host');
     return !!this.course && hosts.length > 0 && hosts.every((ship) => ship.finish >= 0);
+  }
+
+  /**
+   * Last Clone Standing as it runs: the clones left, who still stands and the flare in the HUD;
+   * the announcer and Nicole call the flare and the last one standing.
+   */
+  private callSurvival(me: Ship, safe: number) {
+    const clock = this.field.clock;
+    if (!this.flareCalled && clock >= FLARE_START) {
+      this.flareCalled = true;
+      // a Host who joins long after it started is not told again
+      if (clock < FLARE_START + 5) {
+        this.radio.announce(ANNOUNCER_FLARE, null);
+        this.speaker.say(COMPUTER.flare, 'urgent');
+      }
+    }
+    const standing = this.contenders();
+    if (!this.survivorCalled && this.decided()) {
+      this.survivorCalled = true;
+      const last = standing[0];
+      if (last) this.announce(pick(ANNOUNCER_SURVIVOR), last, true);
+      if (last === me) this.speaker.say(COMPUTER.survivor, 'urgent');
+    }
+    const left = clonesLeft(me);
+    const step = isOut(me) ? `Out · ${ordinal(this.standings().indexOf(me) + 1)}` : `Last Clone Standing · ${left} ${left === 1 ? 'clone' : 'clones'} left`;
+    const flare = clock < FLARE_START ? `solar flare in ${Math.ceil(FLARE_START - clock)} s` : `the flare ${safe > FLARE_MIN ? 'closes in' : 'holds'}: ${Math.round(safe * METERS_PER_UNIT)} m from the center`;
+    this.hud.setSchool({ step, text: `${standing.length} of ${this.standings().length} standing · ${flare}`, keys: [] });
   }
 
   /** The radar's marks: the field's center, and in a race the next gate of the ship it shows. */
@@ -2516,14 +2604,17 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * The race as it stands: who finished, by the time it took, then who is racing, by the
-   * gates passed. In a deathmatch every ship has passed none, so the score decides.
+   * The round as it stands: in a race who finished, by the time it took, then who is racing,
+   * by the gates passed; in Last Clone Standing who has the most clones left, and among those
+   * out, who held out longest. Otherwise, and among equals, the score decides.
    */
   private standings(): Ship[] {
     const finished = (ship: Ship) => (ship.finish >= 0 ? ship.finish : Infinity);
+    const lost = (ship: Ship) => (this.survival ? Math.min(ship.deaths, CLONES) : 0);
+    const held = (ship: Ship) => this.outAt.get(ship) ?? Infinity;
     return this.ships
       .filter((ship) => ship !== this.drone && !(this.spectating && ship === this.me))
-      .sort((a, b) => finished(a) - finished(b) || b.gates - a.gates || b.score - a.score);
+      .sort((a, b) => finished(a) - finished(b) || b.gates - a.gates || lost(a) - lost(b) || held(b) - held(a) || b.score - a.score);
   }
 
   /** The own racer's next gate in the HUD, with lap, gate and place; returns the gate for the crosshair. */
@@ -3435,15 +3526,23 @@ export class Game implements OnlineGame {
         burner = other;
       }
     }
-    if (!burner) return;
-    ship.heat = Math.min(MAX_HEAT, ship.heat + PLUME_HEAT * hottest * dt);
+    if (burner) this.burn(ship, hottest, PLUME_HEAT, PLUME_BURN, `In the drive plume of ${burner.name} · get out`, burner, 'plume', dt, now);
+  }
+
+  /**
+   * Hot plasma on the hull (a drive plume, a solar flare): `heat` and `hull` per second at full
+   * `strength`, a word for the own pilot, and the killer and cause should the ship break up.
+   */
+  private burn(ship: Ship, strength: number, heat: number, hull: number, message: string, killer: Ship | null, cause: DeathCause, dt: number, now: number) {
+    if (!ship.alive) return;
+    ship.heat = Math.min(MAX_HEAT, ship.heat + heat * strength * dt);
     if (ship.heat >= MAX_HEAT) ship.overheated = true;
-    const status = ship.structural(PLUME_BURN * hottest * dt, now);
+    const status = ship.structural(hull * strength * dt, now);
     if (ship.isLocal) {
-      this.hud.flashMessage(now, `In the drive plume of ${burner.name} · get out`, 0.2);
-      if (Math.random() < dt * 6) this.linkHit(0.2 + 0.4 * hottest, 0.15);
+      this.hud.flashMessage(now, message, 0.2);
+      if (Math.random() < dt * 6) this.linkHit(0.2 + 0.4 * strength, 0.15);
     }
-    if (status === 'destroyed') this.shipDestroyed(ship, burner, 'plume');
+    if (status === 'destroyed') this.shipDestroyed(ship, killer, cause);
   }
 
   /** Drive trail, thruster puffs, and venting holes in damaged hulls. */
@@ -3641,6 +3740,7 @@ export class Game implements OnlineGame {
     if (victim === this.me) {
       if (killer) this.deathCause = [cause === 'nova' ? 'Vaporized by the nova of ' : cause === 'plume' ? 'Grilled in the drive plume of ' : 'Shot down by ', ...markedName(killer.kind, killer.name)];
       else if (cause === 'well') this.deathCause = WELL_DEATHS[this.venue.id] ?? 'Crashed';
+      else if (cause === 'flare') this.deathCause = 'Burned up in the solar flare';
       else this.deathCause = victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
     }
     // a kill of the Host's own is bigger: more fire, a jolt, and the points where it happened
@@ -3687,9 +3787,14 @@ export class Game implements OnlineGame {
       }
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
-    const killedBy = cause === 'well' ? this.venue.name : victim.outsideSince !== null ? 'Deep space' : 'Crash';
+    const killedBy = cause === 'well' ? this.venue.name : cause === 'flare' ? 'Solar flare' : victim.outsideSince !== null ? 'Deep space' : 'Crash';
     this.hud.kill(this.time, killer ?? { kind: null, name: killedBy }, victim);
-    if (victim !== this.drone) this.commentOnDeath(victim, killer, cause);
+    // the last clone of a ship in Last Clone Standing: out, and everyone hears it
+    if (this.out(victim)) {
+      this.outAt.set(victim, this.time);
+      this.announce(pick(ANNOUNCER_OUT), victim, true);
+      if (victim === this.me) this.speaker.say(COMPUTER.out, 'urgent');
+    } else if (victim !== this.drone) this.commentOnDeath(victim, killer, cause);
   }
 
   /** In vacuum an explosion is only heard when its debris rattles against the own hull. */
@@ -3905,12 +4010,12 @@ export class Game implements OnlineGame {
 
   private updateCamera(dt: number) {
     // the chase camera follows the own ship, or the pilot a watching Host follows
-    const me = (this.spectating ? this.watched() : null) ?? this.me!;
+    const me = (this.watching() ? this.watched() : null) ?? this.me!;
     const flight = me.flight;
     if (this.cockpit) {
       this.camera.position.copy(flight.position).addScaledVector(flight.forward(scratch), me.radius * 0.3);
       this.camera.quaternion.copy(flight.orientation);
-    } else if (this.spectating && this.wideShot && me !== this.me) {
+    } else if (this.watching() && this.wideShot && me !== this.me) {
       // the director's wide shot: off to the side and behind, the pilot in the frame
       flight.toWorld(cameraGoal.set(me.radius * 6, me.radius * 2.5, me.radius * 5), cameraGoal);
       this.camera.position.lerp(cameraGoal, 1 - Math.exp(-CAMERA_FOLLOW * 0.4 * dt));

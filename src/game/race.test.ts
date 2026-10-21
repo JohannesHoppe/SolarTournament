@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BOOST_RADIUS, Course, GATE_RADIUS, GATES, modeOfRound } from './race';
+import { BOOST_RADIUS, Course, GATE_RADIUS, GATES, modeOfRound, ROUND_MODES } from './race';
 import { ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
 
@@ -53,9 +53,12 @@ describe('the race course', () => {
 });
 
 describe('the mode of a round', () => {
-  it('follows the room: one mode, or both in turn starting with a deathmatch', () => {
+  it('follows the room: one mode, or every mode in turn starting with a deathmatch', () => {
     expect(modeOfRound('race', 3)).toBe('race');
     expect(modeOfRound('deathmatch', 3)).toBe('deathmatch');
-    expect([0, 1, 2, 3].map((round) => modeOfRound('mixed', round))).toEqual(['deathmatch', 'race', 'deathmatch', 'race']);
+    const turns = ROUND_MODES.map((_, round) => modeOfRound('mixed', round));
+    expect(turns[0]).toBe('deathmatch');
+    expect(new Set(turns)).toEqual(new Set(ROUND_MODES));
+    expect(modeOfRound('mixed', ROUND_MODES.length)).toBe('deathmatch');
   });
 });

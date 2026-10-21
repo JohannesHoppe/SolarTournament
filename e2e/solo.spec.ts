@@ -18,6 +18,22 @@ test('a solo round starts and runs without errors', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+for (const mode of ['deathmatch', 'survival']) {
+  test(`a solo round of ${mode} starts and runs without errors`, async ({ page }) => {
+    const errors = await openGame(page);
+    await page.click('#start');
+    await page.click(`[data-choice="solo-mode"] button[data-value="${mode}"]`);
+    await page.click('#solo-launch');
+    await play(page, 3);
+    const state = await page.evaluate(() => {
+      const game = (window as unknown as GameWindow).game;
+      return { state: game.state, mode: game.roundMode, alive: game.me.alive };
+    });
+    expect(state).toEqual({ state: 'playing', mode, alive: true });
+    expect(errors).toEqual([]);
+  });
+}
+
 for (const course of ['basic', 'racer', 'gladiator']) {
   test(`the flight school's ${course} course starts in the belt`, async ({ page }) => {
     const errors = await openGame(page);

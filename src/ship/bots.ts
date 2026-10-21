@@ -46,8 +46,8 @@ const JINK_MEMORY = 0.6;
 const JINK_SCATTER = 0.5;
 /** The scatter never exceeds this many ship radii, so a jinking target is hard to hit, not impossible. */
 const JINK_SCATTER_MAX = 2.5;
-/** Bots stay this far inside the arena. */
-const HOME_RADIUS = 50000;
+/** Bots stay this far inside the arena, unless the game draws them closer in (see Bot.home). */
+export const HOME_RADIUS = 50000;
 /**
  * Near a massive body a bot burns away from it: within WELL_MARGIN (units, 750 m) of its
  * surface, or where its pull reaches WELL_PULL of the main drive (a black hole's grip).
@@ -115,6 +115,8 @@ export class Bot {
   lure: THREE.Vector3 | null = null;
   /** Set by the game: a ship with a nova core close by, which the bot gets away from first. */
   flee: THREE.Vector3 | null = null;
+  /** Set by the game: the bot turns back towards the center beyond this distance (units), inside a solar flare's shell. */
+  home = HOME_RADIUS;
   /** A racer looks back at a ship on its tail until then, and may again from then on (s). */
   private lookBackUntil = 0;
   private nextLookBack = 0;
@@ -238,7 +240,7 @@ export class Bot {
     }
     // a nova core close by: away from it, at full speed, with the main drive (see burning)
     if (this.flee) desired.copy(local.subVectors(me.position, this.flee).normalize()).multiplyScalar(CRUISE_SPEED * 2);
-    if (me.position.length() > HOME_RADIUS) desired.addScaledVector(me.position, -CRUISE_SPEED / me.position.length());
+    if (me.position.length() > this.home) desired.addScaledVector(me.position, -CRUISE_SPEED / me.position.length());
     // a massive body pulls: near it, away from it comes first
     const well = field.well;
     let falling = false;
