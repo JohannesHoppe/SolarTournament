@@ -13,6 +13,7 @@ import { Datamosh } from '../view/datamosh';
 import { GuideLine } from '../view/guide';
 import { Ghost } from '../view/ghost';
 import { LapTimer, parseLaps } from './laps';
+import { aimHook, anchorPoint, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, pullOn, type Anchor, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
@@ -115,6 +116,13 @@ const PLUME_REACH = 3000;
 const PLUME_SPREAD = 0.12;
 const PLUME_HEAT = 60;
 const PLUME_BURN = 8;
+/**
+ * Let go by its hook, the own ship flies off along its swing, across its nose. For
+ * FLING_SECONDS the flight computer turns the nose onto the new course and the autopilot
+ * leaves the drift alone, unless the pilot steers more than FLING_STEER (stick deflection).
+ */
+const FLING_SECONDS = 1.2;
+const FLING_STEER = 0.1;
 /** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km). */
 const TORPEDO_WARNING = 40000;
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
@@ -397,6 +405,11 @@ const BOOST_COLOR = new THREE.Color(1, 0.9, 0.75);
 /** A lap time as 1:02.34. */
 const lapClock = (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, '0')}`;
 
+/** A hook's anchor, the owner's nose and the cable's far end this frame. */
+const hookPoint = new THREE.Vector3();
+const hookNose = new THREE.Vector3();
+const hookEnd = new THREE.Vector3();
+
 /** Where the ghost of the best lap is this frame. */
 const ghostPosition = new THREE.Vector3();
 const ghostTurn = new THREE.Quaternion();
@@ -621,6 +634,13 @@ export class Game implements OnlineGame {
   private readonly datamosh = new Datamosh(this.camera);
   /** The racing line to the next gate. */
   private readonly guide = new GuideLine();
+  /** The hooks out, by the ship that fired them, and their cables (see game/hook); when the own hook is ready again, and whether it was held last frame. */
+  private readonly tethers = new Map<Ship, Tether>();
+  private readonly cables = new Cables();
+  private hookReadyAt = 0;
+  private hookHeld = false;
+  /** The own ship was let go by its hook: until then the flight computer turns it onto its new course (see FLING_SECONDS). */
+  private flungUntil = 0;
   /** The own laps in a race, against the best lap of the arena, and its ghost. */
   private laps: LapTimer | null = null;
   private readonly ghost = new Ghost();
@@ -682,7 +702,7 @@ export class Game implements OnlineGame {
     this.scene.add(this.replayEffects.group);
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
-    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.points, this.ghost.root);
+    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.points, this.ghost.root, this.cables.group);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
@@ -1470,6 +1490,8 @@ export class Game implements OnlineGame {
    * keeps the wreckage and torpedoes in flight, for the same arena rebuilt with another course.
    */
   private enterArena(arena: ArenaProfile, state?: FieldState, keepWreckage = false) {
+    // the rocks a hook held are gone with the field
+    this.clearHooks();
     this.venue = arena;
     this.field.generate(arena.layout);
     // a race's course is laid out in the field as generated, the same on every browser
@@ -1551,6 +1573,7 @@ export class Game implements OnlineGame {
       this.returnLight(ship);
       this.scene.remove(ship.root);
     }
+    this.clearHooks();
     this.ships = [];
     this.bots = [];
     this.me = null;
@@ -1616,6 +1639,7 @@ export class Game implements OnlineGame {
     this.kick = 0;
     this.autopilot = true;
     this.overdriveReadyAt = 0;
+    this.hookReadyAt = 0;
     this.dodgeReadyAt = 0;
     // taps from the menu ask for nothing
     this.input.takeDodge();
@@ -2234,6 +2258,8 @@ export class Game implements OnlineGame {
       this.scorch(ship, dt, now);
       this.exhaust(ship, dt);
     }
+    this.hookOwn(now);
+    this.updateHooks(dt);
     this.wrecks.update(dt, now, this.field);
     this.killcam.record(now, this.ships);
     this.replayEffects.update(dt);
@@ -2262,6 +2288,8 @@ export class Game implements OnlineGame {
     this.hud.setCenter(this.camera, subject);
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
+    const hook = this.tethers.get(me);
+    this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now));
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
     // a watching Host sees the race of the pilot on screen
     const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : null;
@@ -2588,6 +2616,8 @@ export class Game implements OnlineGame {
     const context = (this.schoolContext ??= this.createSchoolContext());
     context.controls = controls;
     context.braking = this.input.braking;
+    const hook = this.tethers.get(this.me!);
+    context.hooked = !!hook?.anchor && hook.flying <= 0;
     context.autopilot = this.autopilot;
     context.cockpit = this.cockpit;
     context.impactAhead = this.impactAhead;
@@ -2622,6 +2652,7 @@ export class Game implements OnlineGame {
       },
       controls: IDLE,
       braking: false,
+      hooked: false,
       impactAhead: false,
       autopilot: true,
       cockpit: false,
@@ -2748,7 +2779,12 @@ export class Game implements OnlineGame {
     const flipping = this.state === 'playing' && this.input.flipping && me.alive;
     if (!flipping) {
       this.flipping = false;
-      return this.assistAim(this.keepUpright(this.autopilot && me.alive ? this.trimDrift(controls) : Object.assign(this.computed, controls)));
+      // flung off the hook: the flight computer turns the nose onto the new course, unless the
+      // pilot steers, and the autopilot does not brake the swing meanwhile
+      const flung = this.time < this.flungUntil && me.alive;
+      const out = this.autopilot && me.alive && !flung ? this.trimDrift(controls) : Object.assign(this.computed, controls);
+      if (flung && Math.abs(controls.yaw) + Math.abs(controls.pitch) < FLING_STEER && flight.velocity.lengthSq() > 1) flight.steer(flight.velocity, 3, out);
+      return this.assistAim(this.keepUpright(out));
     }
     if (!this.flipping) {
       // the goal is fixed when the flip starts: against the flight, or straight behind the nose
@@ -2845,6 +2881,124 @@ export class Game implements OnlineGame {
     this.effects.engineTrail(me.toWorld(scratch.set(0, 0, me.radius * 0.9)), me.toWorld(relative.set(0, 0, me.radius * 4)), me.flight.velocity, 1);
     this.sound.play('explosion', { volume: 1.4, rate: 0.7 });
     this.hud.flashMessage(this.time, 'Overdrive', 1.2);
+  }
+
+  /**
+   * V, the right mouse button: pressed, the own hook fires along the nose; held, it reels in;
+   * let go, it releases (see game/hook). Not on the grid before GO.
+   */
+  private hookOwn(now: number) {
+    const me = this.me!;
+    const held = this.state === 'playing' && me.alive && !this.spectating && this.countdown === 0 && this.input.hooking;
+    const pressed = held && !this.hookHeld;
+    this.hookHeld = held;
+    if (this.tethers.has(me)) {
+      if (!held) this.unhook(me);
+    } else if (pressed && now >= this.hookReadyAt) {
+      this.fireHook(me);
+    }
+  }
+
+  /** The harpoon leaves the nose: it bites what lies ahead within reach, or flies out and is reeled back. */
+  private fireHook(ship: Ship) {
+    const aim = aimHook(ship, this.field, this.ships.filter((other) => other !== this.drone));
+    const end = aim ? aim.at : ship.nose(new THREE.Vector3()).addScaledVector(ship.flight.forward(forward), HOOK_RANGE);
+    this.tethers.set(ship, { owner: ship, anchor: aim?.anchor ?? null, flying: flightTime(aim?.distance ?? HOOK_RANGE), end, length: 0, line: this.cables.take() });
+    if (ship === this.me) this.sound.play('laser', { volume: 0.7, rate: 0.3 });
+  }
+
+  /** A hook lets go: the cable is reeled back. The own hook is ready again after HOOK_RECHARGE; a hook this browser fired and that held is told to the others. */
+  private unhook(ship: Ship) {
+    const tether = this.tethers.get(ship);
+    if (!tether) return;
+    this.tethers.delete(ship);
+    this.cables.give(tether.line);
+    const held = !!tether.anchor && tether.flying <= 0;
+    if (ship.owner === null && held) this.online?.sendHook(ship, null);
+    if (ship !== this.me) return;
+    this.hookReadyAt = this.time + HOOK_RECHARGE;
+    if (held && ship.alive) this.flungUntil = this.time + FLING_SECONDS;
+  }
+
+  private clearHooks() {
+    for (const ship of [...this.tethers.keys()]) this.unhook(ship);
+  }
+
+  /**
+   * Every hook out: a harpoon on its way bites when it arrives, a cable pulls the ships this
+   * browser runs (the owner, and a hooked ship), and every cable is drawn from its owner's
+   * nose. A hook whose owner, rock or ship is gone lets go, and so does a cable that snaps.
+   */
+  private updateHooks(dt: number) {
+    for (const tether of this.tethers.values()) {
+      const owner = tether.owner;
+      if (!owner.alive) {
+        this.unhook(owner);
+        continue;
+      }
+      if (tether.flying > 0) {
+        tether.flying -= dt;
+        if (tether.flying <= 0) {
+          // a miss is reeled back; so is a harpoon whose rock broke or whose ship died on the way
+          const at = tether.anchor ? anchorPoint(tether.anchor, hookPoint) : null;
+          if (!at || !tether.anchor) {
+            this.unhook(owner);
+            continue;
+          }
+          tether.length = owner.flight.position.distanceTo(at);
+          this.hooked(owner, tether.anchor, tether.length);
+        }
+      }
+      const nose = owner.nose(hookNose);
+      Cables.draw(tether.line, nose, cableEnd(tether, nose, hookEnd));
+      if (tether.flying > 0 || !tether.anchor) continue;
+      const at = anchorPoint(tether.anchor, hookPoint);
+      if (!at) {
+        this.unhook(owner);
+        continue;
+      }
+      // a ship hooked to a ship: the winch pulls both alike, each on the browser that runs it
+      const target = tether.anchor.ship;
+      const share = target ? 0.5 : 1;
+      const floor = floorOf(owner);
+      let length: number | null = tether.length;
+      if (owner.owner === null) length = pullOn(owner.flight, at, length, true, share, floor, MAX_SPEED, dt);
+      if (length !== null && target && target.owner === null) length = pullOn(target.flight, owner.flight.position, length, true, share, floor, MAX_SPEED, dt);
+      if (length === null) {
+        if (owner === this.me) this.hud.flashMessage(this.time, 'Cable snapped', 1.5);
+        this.unhook(owner);
+        continue;
+      }
+      tether.length = length;
+    }
+  }
+
+  /** A hook of this browser bit: the others are told, and the own pilot feels and hears it. */
+  private hooked(owner: Ship, anchor: Anchor, length: number) {
+    if (owner.owner !== null) return;
+    this.online?.sendHook(owner, anchor.rock ? { rock: anchor.rock.id, local: anchor.local } : { target: anchor.ship }, length);
+    if (owner !== this.me) return;
+    this.sound.play('explosion', { volume: 0.5, rate: 2.4 });
+    this.sound.beep(523, 0.08, 0.12);
+    this.hud.flashMessage(this.time, anchor.ship ? `Hooked ${anchor.ship.name}` : 'Hooked', 1.2);
+    if (anchor.ship) this.kick = Math.max(this.kick, 0.8);
+  }
+
+  /** A ship of another browser hooked a rock or a ship: its cable shows here, and pulls a ship this browser runs. */
+  remoteHook(owner: Ship, rock: string | null, local: THREE.Vector3 | null, target: Ship | null, length: number) {
+    this.unhook(owner);
+    const asteroid = rock ? this.field.asteroids.get(rock) : undefined;
+    const anchor: Anchor | null = asteroid && local ? { rock: asteroid, local: local.clone(), ship: null } : target ? { rock: null, local: null, ship: target } : null;
+    if (!anchor) return;
+    this.tethers.set(owner, { owner, anchor, flying: 0, end: new THREE.Vector3(), length, line: this.cables.take() });
+    if (target === this.me) {
+      this.hud.flashMessage(this.time, `Hooked by ${owner.name}`, 2);
+      this.linkHit(0.3, 0.2);
+    }
+  }
+
+  remoteUnhook(owner: Ship) {
+    this.unhook(owner);
   }
 
   /** G, D-pad up: a torpedo, at the ship closest to the nose when one is locked (see game/torpedoes). */
@@ -3248,8 +3402,8 @@ export class Game implements OnlineGame {
    */
   private trimDrift(controls: Readonly<Controls>): Controls {
     const out = Object.assign(this.computed, controls);
-    // right after a dodge the drift is the point
-    if (this.time < this.dodgeReadyAt - DODGE_RECHARGE + DODGE_DRIFT) return out;
+    // right after a dodge the drift is the point, and so is a swing on the hook
+    if (this.time < this.dodgeReadyAt - DODGE_RECHARGE + DODGE_DRIFT || this.tethers.has(this.me!)) return out;
     const drift = this.me!.flight.toLocalDirection(this.me!.flight.velocity, relative).divideScalar(RCS_THRUST * AUTOPILOT_EASE);
     if (!controls.strafeX) out.strafeX = THREE.MathUtils.clamp(-drift.x, -1, 1);
     if (!controls.strafeY) out.strafeY = THREE.MathUtils.clamp(-drift.y, -1, 1);

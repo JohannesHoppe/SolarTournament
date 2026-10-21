@@ -41,7 +41,7 @@ const THRUSTER_KEYS: Record<string, { axis: 'x' | 'y'; sign: number } | undefine
 };
 
 /** Buttons of the standard gamepad layout (Xbox naming). */
-const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, leftStick: 10, rightStick: 11, up: 12 } as const;
+const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, leftStick: 10, rightStick: 11, up: 12, down: 13 } as const;
 const PAD_ACTIONS: [number, Action][] = [
   [PAD.a, 'confirm'],
   [PAD.menu, 'pause'],
@@ -64,6 +64,7 @@ export class Input {
   private readonly controls: Controls = { ...IDLE };
   private readonly mouseStick = { x: 0, y: 0 };
   private mouseFire = false;
+  private mouseHook = false;
   private steering = false;
   private handler: ActionHandler = () => {};
   private readonly padPressed = new Set<number>();
@@ -90,11 +91,14 @@ export class Input {
     });
 
     canvas.addEventListener('mousedown', (e) => {
-      if (e.button !== 0 || !this.steering || this.touch.active) return;
-      this.mouseFire = true;
+      if (!this.steering || this.touch.active) return;
+      // the left button fires, the right one holds the hook
+      if (e.button === 0) this.mouseFire = true;
+      if (e.button === 2) this.mouseHook = true;
     });
     window.addEventListener('mouseup', (e) => {
       if (e.button === 0) this.mouseFire = false;
+      if (e.button === 2) this.mouseHook = false;
     });
     document.addEventListener('mousemove', (e) => {
       // phones emulate mouse events for taps; they steer with the on-screen sticks
@@ -133,7 +137,7 @@ export class Input {
 
   resetMouse() {
     this.mouseStick.x = this.mouseStick.y = 0;
-    this.mouseFire = false;
+    this.mouseFire = this.mouseHook = false;
   }
 
   /** The flip is held: X, Y on the gamepad, or FLIP on touch. The flight computer turns the ship against the flight. */
@@ -144,6 +148,11 @@ export class Input {
   /** The brake is held: S, B on the gamepad, or BRAKE on touch. The flight computer flips and burns. */
   get braking(): boolean {
     return this.keys.has('KeyS') || this.touch.brake || (this.gamepad()?.buttons[PAD.b]?.pressed ?? false);
+  }
+
+  /** The hook is held: V, the right mouse button, the D-pad down, or HOOK on touch. Pressed it fires, held it reels in, let go it releases. */
+  get hooking(): boolean {
+    return this.keys.has('KeyV') || this.mouseHook || this.touch.hook || (this.gamepad()?.buttons[PAD.down]?.pressed ?? false);
   }
 
   /** The standings are held open: Tab. */

@@ -11,6 +11,8 @@ export interface SchoolContext {
   controls: Controls;
   /** The pilot holds the brake (the flight computer flips and burns). */
   braking: boolean;
+  /** The own hook holds on to something. */
+  hooked: boolean;
   /** The impact warning is on. */
   impactAhead: boolean;
   /** The autopilot takes out the drift across the nose; off, the ship drifts freely. */
@@ -113,7 +115,7 @@ interface Drill {
 export type Device = 'keyboard' | 'gamepad' | 'touch';
 
 /** What a drill asks the pilot to use. */
-type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'fire' | 'autopilot' | 'camera';
+type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'fire' | 'autopilot' | 'camera' | 'hook';
 
 /** The keys, buttons and sticks of each device, as the keycaps show them. */
 const CONTROLS: Record<Device, Record<Command, string[]>> = {
@@ -127,6 +129,7 @@ const CONTROLS: Record<Device, Record<Command, string[]>> = {
     fire: ['Space', 'Click'],
     autopilot: ['T'],
     camera: ['C'],
+    hook: ['V', 'Right click'],
   },
   gamepad: {
     turn: ['Left stick'],
@@ -138,6 +141,7 @@ const CONTROLS: Record<Device, Record<Command, string[]>> = {
     fire: ['LT'],
     autopilot: ['R3'],
     camera: ['View'],
+    hook: ['D-pad down'],
   },
   touch: {
     turn: ['Left stick'],
@@ -149,6 +153,7 @@ const CONTROLS: Record<Device, Record<Command, string[]>> = {
     fire: ['FIRE'],
     autopilot: ['AUTO'],
     camera: [],
+    hook: ['HOOK'],
   },
 };
 
@@ -193,6 +198,8 @@ const CORE_SHARE = 1 / 3;
 const START_GO = 3;
 const START_EARLY = 0.3;
 const START_LATE = 0.2;
+/** The hook drill wants the pilot to fly off faster than this when it lets go (units/s, 75 m/s): one and a half times the drift it started with. */
+const HOOK_FLING = 1500;
 
 
 const scratch = new THREE.Vector3();
@@ -257,6 +264,28 @@ function nearestAsteroid(ctx: SchoolContext): Asteroid | null {
     }
   }
   return best;
+}
+
+/**
+ * Puts the pilot `standoff` units off the surface of a rock, between it and the field's
+ * center, facing it: the nearest rock whose spot lies in open space and whose way there no
+ * other rock blocks. Returns the rock and the way from the center out to it; null for none.
+ */
+function faceRock(ctx: SchoolContext, standoff: number): { rock: Asteroid; outward: THREE.Vector3 } | null {
+  const flight = ctx.me.flight;
+  const rocks = [...ctx.field.asteroids.values()].sort((p, q) => p.object.position.distanceTo(flight.position) - q.object.position.distanceTo(flight.position));
+  const start = new THREE.Vector3();
+  const outward = new THREE.Vector3();
+  for (const rock of rocks) {
+    outward.copy(rock.object.position).normalize();
+    start.copy(rock.object.position).addScaledVector(outward, -(rock.radius + standoff));
+    if (ctx.field.overlap(start, ctx.me.radius * 4)) continue;
+    if (ctx.field.raycast(start, outward, Infinity)?.asteroid !== rock) continue;
+    flight.position.copy(start);
+    flight.orientation.setFromRotationMatrix(new THREE.Matrix4().lookAt(start, rock.object.position, new THREE.Vector3(0, 1, 0)));
+    return { rock, outward };
+  }
+  return null;
 }
 
 const TURN_MARKERS: [number, number, number][] = [
@@ -419,6 +448,31 @@ const DRILL = {
     },
     fail: (_, a) => (a.early ? SCHOOL.tooEarly : a.seconds > START_GO + START_LATE ? SCHOOL.tooLate : null),
   },
+  // the hook: bite a rock while drifting past it, swing around it, and fly off when let go
+  hook: {
+    line: SCHOOL.hook,
+    praise: SCHOOL_PRAISE.hook,
+    keys: ['hook', 'turn'],
+    enter(ctx, a) {
+      stop(ctx);
+      const facing = faceRock(ctx, 5000);
+      if (!facing) return;
+      // drifting past the rock sideways, so the cable swings the ship around it
+      drift(ctx, 1000, new THREE.Vector3(1, 0, 0).applyQuaternion(ctx.me.flight.orientation));
+      a.points = [facing.rock.object.position];
+    },
+    done(ctx, a) {
+      if (!a.points.length) return true;
+      if (ctx.hooked) a.warned = true;
+      return a.warned && !ctx.hooked && speed(ctx) > HOOK_FLING;
+    },
+    fail(ctx, a) {
+      if (a.warned && !ctx.hooked && speed(ctx) <= HOOK_FLING) return SCHOOL.hookSlow;
+      return a.points.length && ctx.me.flight.position.distanceTo(a.points[0]) > 40000 ? SCHOOL.again : null;
+    },
+    waypoint: (_, a) => a.points[0] ?? null,
+    mark: () => 'Hook it',
+  },
   shoot: {
     line: SCHOOL.shoot,
     praise: SCHOOL_PRAISE.shoot,
@@ -470,27 +524,12 @@ const DRILL = {
     praise: SCHOOL_PRAISE.impact,
     keys: ['brake', 'slide'],
     enter(ctx, a) {
-      // between a rock and the field's center, heading for the rock at 100 m/s: the nearest
-      // rock whose start lies in open space and whose way there no other rock blocks
-      const flight = ctx.me.flight;
-      const rocks = [...ctx.field.asteroids.values()].sort((p, q) => p.object.position.distanceTo(flight.position) - q.object.position.distanceTo(flight.position));
-      let rock: Asteroid | null = null;
-      const start = new THREE.Vector3();
-      const outward = new THREE.Vector3();
-      for (const candidate of rocks) {
-        outward.copy(candidate.object.position).normalize();
-        start.copy(candidate.object.position).addScaledVector(outward, -(candidate.radius + 14000));
-        if (ctx.field.overlap(start, ctx.me.radius * 4)) continue;
-        if (ctx.field.raycast(start, outward, Infinity)?.asteroid !== candidate) continue;
-        rock = candidate;
-        break;
-      }
-      if (!rock) return;
-      flight.position.copy(start);
-      flight.orientation.setFromRotationMatrix(new THREE.Matrix4().lookAt(start, rock.object.position, new THREE.Vector3(0, 1, 0)));
-      drift(ctx, 2000, outward);
-      a.points = [rock.object.position];
-      a.reach = start.distanceTo(rock.object.position);
+      // between a rock and the field's center, heading for the rock at 100 m/s
+      const facing = faceRock(ctx, 14000);
+      if (!facing) return;
+      drift(ctx, 2000, facing.outward);
+      a.points = [facing.rock.object.position];
+      a.reach = ctx.me.flight.position.distanceTo(facing.rock.object.position);
     },
     done(ctx, a) {
       a.warned ||= ctx.impactAhead;
@@ -644,12 +683,12 @@ export const COURSE_NAMES: Record<SchoolCourse, string> = { basic: 'Basic traini
 /**
  * The drills of each course, in the order a Host needs them. Basic training: turning, aiming,
  * the drive and the brake, stopping at a point and the rocks, all with the autopilot on. The
- * racer: the rings, their coils and the start. The gladiator: the laser and its heat, free
+ * racer: the rings, their coils, the start and the hook. The gladiator: the laser and its heat, free
  * drift like a real spaceship, dodging, and the dogfight last.
  */
 const COURSES: Record<SchoolCourse, Drill[]> = {
   basic: [DRILL.briefing, DRILL.turn, DRILL.fineAim, DRILL.cockpit, DRILL.drive, DRILL.brake, DRILL.stopAt, DRILL.impact, saying(SCHOOL.basicDone)],
-  racer: [saying(SCHOOL.racer), DRILL.rings, DRILL.coil, DRILL.start, saying(SCHOOL.racerDone)],
+  racer: [saying(SCHOOL.racer), DRILL.rings, DRILL.coil, DRILL.start, DRILL.hook, saying(SCHOOL.racerDone)],
   gladiator: [
     saying(SCHOOL.gladiator),
     DRILL.shoot,

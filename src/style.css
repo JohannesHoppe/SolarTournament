@@ -1293,6 +1293,16 @@ body.touch #game canvas {
   font-size: 0.65rem;
 }
 
+/* the hook sits above the fire button, in the cable's blue */
+#touch-hook {
+  right: calc(max(20px, env(safe-area-inset-right)) + 22px);
+  bottom: 214px;
+  width: 52px;
+  height: 52px;
+  font-size: 0.65rem;
+  border-color: var(--accent-strong);
+}
+
 #touch-pause {
   top: 12px;
   left: max(12px, env(safe-area-inset-left));
@@ -2034,8 +2044,9 @@ button.quiet:focus-visible {
   opacity: 0.45;
 }
 
-/* the overdrive: dim while it recharges, orange once it is ready */
+/* the overdrive, the hook and the torpedoes: dim while they recharge, orange once they are ready */
 #hud-overdrive,
+#hud-hook,
 #hud-torpedo {
   color: var(--muted);
   text-transform: uppercase;
@@ -2043,8 +2054,14 @@ button.quiet:focus-visible {
 }
 
 #hud-overdrive.ready,
+#hud-hook.ready,
 #hud-torpedo.ready {
   color: var(--accent);
+}
+
+/* a hook that holds: in the cable's blue */
+#hud-hook.held {
+  color: var(--accent-strong);
 }
 
 /*

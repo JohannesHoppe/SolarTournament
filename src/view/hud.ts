@@ -27,6 +27,7 @@ export class Hud {
   private readonly speed = $('hud-speed');
   private readonly mode = $('hud-mode');
   private readonly overdrive = $('hud-overdrive');
+  private readonly hook = $('hud-hook');
   private readonly torpedo = $('hud-torpedo');
   private readonly prograde = $('prograde');
   private readonly retrograde = $('retrograde');
@@ -174,6 +175,13 @@ export class Hud {
   setOverdrive(seconds: number) {
     setText(this.overdrive, seconds > 0 ? `Overdrive ${Math.ceil(seconds)} s` : 'Overdrive ready');
     if (this.overdrive.classList.contains('ready') !== (seconds <= 0)) this.overdrive.classList.toggle('ready', seconds <= 0);
+  }
+
+  /** The hook: holding with so much cable out (m), recharging for `seconds`, or ready. */
+  setHook(cable: number | null, seconds: number) {
+    setText(this.hook, cable !== null ? `Hooked · ${Math.round(cable)} m` : seconds > 0 ? `Hook ${seconds.toFixed(1)} s` : 'Hook ready');
+    const state = cable !== null ? 'held' : seconds > 0 ? '' : 'ready';
+    if (this.hook.className !== `readout ${state}`.trim()) this.hook.className = `readout ${state}`.trim();
   }
 
   /** The torpedoes left and the items held, each with what it does, next to the overdrive. */

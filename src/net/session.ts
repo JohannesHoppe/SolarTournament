@@ -121,6 +121,8 @@ export class Session {
   onProbe: (probe: string, ship: string, bucket: number) => void = () => {};
   /** A ship of another browser set off its nova core, here. */
   onNova: (ship: string, position: Vec) => void = () => {};
+  /** A ship of another browser hooked a rock (a point in the rock's frame) or a ship, with this much cable out; or let go (null). */
+  onHook: (ship: string, hold: { rock: string | null; local: Vec | null; target: string | null; length: number } | null) => void = () => {};
   /** Another browser says a ship cheats (see plausible.ts). */
   onCheat: (ship: string, cheat: Cheat, from: string) => void = () => {};
   /** The lead's field, the wreckage in flight, and the probes taken this round. */
@@ -223,6 +225,21 @@ export class Session {
       // a browser that names no third took it in the middle
       const bucket = d?.b === undefined ? 1 : int(d.b, 0, 2);
       if (probe && ship && bucket !== null && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onProbe(probe, ship, bucket));
+    });
+    transport.on('hk', (d, from) => {
+      const ship = id(d?.s);
+      if (!ship || ownerOf(ship) !== from || !this.torpedoBudget.spend(from)) return;
+      if (d?.x) {
+        this.guard(() => this.onHook(ship, null));
+        return;
+      }
+      // a rock with a point on it, or a ship; and the cable out
+      const rock = d?.r === undefined ? null : id(d.r);
+      const local = d?.l === undefined ? null : vec(d.l, 3, MAX_COORDINATE);
+      const target = d?.t === undefined ? null : id(d.t);
+      const length = num(d?.n, 0, MAX_COORDINATE);
+      if (length === null || (rock ? !local || target : !target)) return;
+      this.guard(() => this.onHook(ship, { rock, local, target, length }));
     });
     transport.on('nv', (d, from) => {
       const ship = id(d?.s);
@@ -399,6 +416,13 @@ export class Session {
 
   sendTorpedo(torpedo: string, shooter: string, target: string | null, position: Vec, velocity: Vec) {
     this.transport.send('tl', { i: torpedo, s: shooter, t: target, p: position, v: velocity });
+  }
+
+  /** A ship of this browser hooked a rock or a ship, or let go (null). */
+  sendHook(ship: string, hold: { rock: string; local: Vec } | { target: string } | null, length = 0) {
+    if (!hold) this.transport.send('hk', { s: ship, x: 1 });
+    else if ('rock' in hold) this.transport.send('hk', { s: ship, r: hold.rock, l: hold.local, n: length });
+    else this.transport.send('hk', { s: ship, t: hold.target, n: length });
   }
 
   sendNova(ship: string, position: Vec) {

@@ -54,6 +54,10 @@ export interface OnlineGame {
   remoteProbe(id: string, ship: Ship | null, bucket: number): ItemKind | null;
   /** A ship of another browser set off its nova core: this browser's ships near it are gone. */
   novaBlast(holder: Ship, position: THREE.Vector3): void;
+  /** A ship of another browser hooked a rock (by id, a point in its frame) or a ship, with this much cable out. */
+  remoteHook(owner: Ship, rock: string | null, local: THREE.Vector3 | null, target: Ship | null, length: number): void;
+  /** A ship of another browser let go of its hook. */
+  remoteUnhook(owner: Ship): void;
   /** Several browsers found a Host cheating. */
   announceCheater(name: string): void;
   /** Number of the running online round. */
@@ -134,6 +138,12 @@ export class Online {
       if (kind) this.plausible.probe(ship, kind, game.time);
     };
     // a nova only from a living ship that holds a core, where it is; anything else never goes off
+    session.onHook = (ship, hold) => {
+      const owner = this.find(ship);
+      if (!owner) return;
+      if (!hold) game.remoteUnhook(owner);
+      else game.remoteHook(owner, hold.rock, hold.local ? from.fromArray(hold.local) : null, hold.target ? this.find(hold.target) : null, hold.length);
+    };
     session.onNova = (ship, p) => {
       const holder = this.find(ship);
       if (!holder?.alive || this.caught(holder, this.plausible.nova(holder.id, p, game.time))) return;
@@ -271,6 +281,13 @@ export class Online {
 
   sendNova(ship: Ship, position: THREE.Vector3) {
     this.session.sendNova(ship.id, round(position));
+  }
+
+  /** A ship of this browser hooked a rock (a point in its frame) or a ship, or let go (null). */
+  sendHook(ship: Ship, hold: { rock: string; local: THREE.Vector3 } | { target: Ship } | null, length = 0) {
+    if (!hold) this.session.sendHook(ship.id, null);
+    else if ('rock' in hold) this.session.sendHook(ship.id, { rock: hold.rock, local: round(hold.local) }, Math.round(length));
+    else this.session.sendHook(ship.id, { target: hold.target.id }, Math.round(length));
   }
 
   sendProbe(id: string, ship: Ship, bucket: number) {
