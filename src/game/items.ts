@@ -21,14 +21,36 @@ import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
 export type ItemKind = 'twin' | 'plating' | 'torpedoes' | 'overdrive' | 'repair' | 'nova';
 export const KINDS: readonly ItemKind[] = ['twin', 'plating', 'torpedoes', 'overdrive', 'repair', 'nova'];
 
-/** A probe in flight as it travels to a browser that joins: id, kind, position, velocity, seconds left. */
-export type ProbeState = { i: string; k: ItemKind; p: number[]; v: number[]; u: number };
+/** A probe in flight as it travels to a browser that joins: id, kind, position, velocity, seconds left, and the luck of a sealed one (see Probe.luck). */
+export type ProbeState = { i: string; k: ItemKind; p: number[]; v: number[]; u: number; x?: number };
 /** How often each kind comes in a probe (relative), the coveted ones rarer. */
 const WEIGHTS: Record<ItemKind, number> = { twin: 2, plating: 3, torpedoes: 3, overdrive: 2, repair: 3, nova: 1 };
+/** Sealed probes the radar names this way. */
+export const SEALED_NAME = 'Sealed probe';
+/**
+ * In a race the arena's probes are sealed: what one holds is decided when it is taken, by the
+ * taker's place, so whoever lies behind catches up. The leaders' third mostly finds plating
+ * and repairs, the middle the usual mix (WEIGHTS), the last third torpedoes, overdrives and
+ * the nova cores, which the leaders never find.
+ */
+const PLACE_WEIGHTS: readonly Record<ItemKind, number>[] = [
+  { twin: 1, plating: 4, torpedoes: 2, overdrive: 1, repair: 4, nova: 0 },
+  WEIGHTS,
+  { twin: 3, plating: 1, torpedoes: 4, overdrive: 4, repair: 2, nova: 2 },
+];
+
+/** The third of the field a place lies in: 0 the leaders, 1 the middle, 2 the last; a ship alone is the middle. */
+export function placeBucket(place: number, count: number): number {
+  if (count <= 1) return 1;
+  const share = place / (count - 1);
+  return share < 1 / 3 ? 0 : share > 2 / 3 ? 2 : 1;
+}
 
 export const ITEM_NAMES: Record<ItemKind, string> = { twin: 'Twin laser', plating: 'Plating', torpedoes: '+2 torpedoes', overdrive: 'Overdrive charged', repair: 'Repair', nova: 'Nova core' };
 /** What each item does, in as few words as the HUD can show next to its name. */
 export const ITEM_HINTS: Record<ItemKind, string> = { twin: 'fires twice as fast', plating: 'stops two hits', torpedoes: 'extra torpedoes', overdrive: 'ready now', repair: 'ship as new', nova: 'next shot blows up everything around' };
+/** A sealed probe's neon runs through the colors this often (1/s). */
+const SEALED_CYCLE = 0.4;
 /** The neon of each kind, so a pilot sees from afar what a probe carries. */
 const COLORS: Record<ItemKind, number> = { twin: 0xff3fa4, plating: 0x4d91ff, torpedoes: 0xff9d00, overdrive: 0xffe04d, repair: 0x3dff9a, nova: 0xffffff };
 
@@ -55,6 +77,8 @@ export interface Probe {
   /** "r<round>.<n>" for the arena's probes, "<ship id>.<deaths>.<n>" for a dead clone's: the same probe on every browser. */
   id: string;
   kind: ItemKind;
+  /** A sealed probe's luck: what it holds is decided by it and the taker's place (see PLACE_WEIGHTS); null for a probe that shows what it carries. */
+  luck: number | null;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
   /** Gone after this (game time, s). */
@@ -95,6 +119,7 @@ export class Probes {
   private readonly hull = new THREE.MeshStandardMaterial({ color: 0x8c9198, roughness: 0.5, metalness: 0.3, flatShading: true });
   private readonly panels = new THREE.MeshStandardMaterial({ color: 0x1b2a55, emissive: 0x0a1430, roughness: 0.3, metalness: 0.4 });
   private readonly beacons = new Map<ItemKind, THREE.MeshBasicMaterial>();
+  private readonly sealed = new THREE.MeshBasicMaterial({ toneMapped: false });
 
   constructor() {
     for (const kind of KINDS) this.beacons.set(kind, new THREE.MeshBasicMaterial({ color: new THREE.Color(COLORS[kind]).multiplyScalar(2.5), toneMapped: false }));
@@ -132,7 +157,9 @@ export class Probes {
         }
         if (!field.overlap(position, PROBE_RADIUS * 4) && !field.insideWell(position, PROBE_RADIUS * 20)) break;
       }
-      this.add(id, kindOf(hash(seed, round, n, 99)), position, new THREE.Vector3(), now + left);
+      // in a race the probe is sealed: its luck and the taker's place decide what it holds
+      const luck = hash(seed, round, n, 99);
+      this.add(id, kindOf(luck), position, new THREE.Vector3(), now + left, track.length ? luck : null);
     }
   }
 
@@ -152,7 +179,7 @@ export class Probes {
 
   /** The probes in flight, for a browser that joins: it takes them as they are, wherever they drift. */
   snapshot(now: number): ProbeState[] {
-    return this.list.map((probe) => ({ i: probe.id, k: probe.kind, p: probe.position.toArray().map(Math.round), v: probe.velocity.toArray().map(Math.round), u: +(probe.until - now).toFixed(1) }));
+    return this.list.map((probe) => ({ i: probe.id, k: probe.kind, p: probe.position.toArray().map(Math.round), v: probe.velocity.toArray().map(Math.round), u: +(probe.until - now).toFixed(1), ...(probe.luck === null ? {} : { x: probe.luck }) }));
   }
 
   /** Takes the probes in flight from the lead browser. */
@@ -160,7 +187,7 @@ export class Probes {
     for (const state of states) {
       const existing = this.find(state.i);
       if (existing) this.remove(existing);
-      this.add(state.i, state.k, new THREE.Vector3().fromArray(state.p), new THREE.Vector3().fromArray(state.v), now + state.u);
+      this.add(state.i, state.k, new THREE.Vector3().fromArray(state.p), new THREE.Vector3().fromArray(state.v), now + state.u, state.x ?? null);
     }
   }
 
@@ -169,24 +196,26 @@ export class Probes {
     kinds.forEach((kind, k) => {
       const h = (i: number) => hash(textSeed(shipId), deaths, k, i) / 4294967296;
       const push = new THREE.Vector3(h(1) * 2 - 1, h(2) * 2 - 1, h(3) * 2 - 1).normalize().multiplyScalar(DROP_SPREAD * (0.5 + h(4) * 0.5));
-      this.add(`${shipId}.${deaths}.${k}`, kind, position.clone(), push.add(velocity), now + DROP_LIFETIME);
+      this.add(`${shipId}.${deaths}.${k}`, kind, position.clone(), push.add(velocity), now + DROP_LIFETIME, null);
     });
   }
 
-  private add(id: string, kind: ItemKind, position: THREE.Vector3, velocity: THREE.Vector3, until: number) {
+  private add(id: string, kind: ItemKind, position: THREE.Vector3, velocity: THREE.Vector3, until: number, luck: number | null) {
     if (this.taken.has(id) || this.find(id)) return;
     const { body, wing, dish, mast, beacon: light, ring } = this.parts;
     const mesh = new THREE.Group();
-    const neon = this.beacons.get(kind)!;
+    // a sealed probe runs through every color: nobody knows what it holds
+    const neon = luck === null ? this.beacons.get(kind)! : this.sealed;
     const beacon = new THREE.Mesh(light, neon);
     mesh.add(new THREE.Mesh(body, this.hull), new THREE.Mesh(wing, this.panels), new THREE.Mesh(dish, this.hull), new THREE.Mesh(mast, this.hull), beacon, new THREE.Mesh(ring, neon));
     mesh.position.copy(position);
     this.group.add(mesh);
-    this.list.push({ id, kind, position: mesh.position, velocity, until, mesh, beacon });
+    this.list.push({ id, kind, luck, position: mesh.position, velocity, until, mesh, beacon });
   }
 
   /** Probes drift, turn slowly and blink; a dropped one is gone after its time, or in the arena's massive body. */
   update(dt: number, now: number, field: AsteroidField) {
+    this.sealed.color.setHSL((now * SEALED_CYCLE) % 1, 1, 0.6).multiplyScalar(2.5);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const probe = this.list[i];
       probe.position.addScaledVector(probe.velocity, dt);
@@ -231,12 +260,12 @@ export class Probes {
     return [...this.taken];
   }
 
-  /** A probe id taken on another browser, before or after this one has it: what it carried, if this one has it. */
-  takeId(id: string): ItemKind | null {
+  /** A probe id taken on another browser, before or after this one has it: the probe, if this one has it. */
+  takeId(id: string): Probe | null {
     this.taken.add(id);
     const probe = this.find(id);
     if (probe) this.remove(probe);
-    return probe?.kind ?? null;
+    return probe;
   }
 
   private remove(probe: Probe) {
@@ -246,13 +275,16 @@ export class Probes {
   }
 }
 
+/** What a probe gives a taker in the `bucket` third of the field (see placeBucket): its kind, or for a sealed one what its luck and the place make of it. */
+export const contents = (probe: Probe, bucket: number): ItemKind => (probe.luck === null ? probe.kind : kindOf(probe.luck, PLACE_WEIGHTS[bucket] ?? WEIGHTS));
+
 /** The kind of a probe from a hash, by the weights. */
-function kindOf(h: number): ItemKind {
-  const total = KINDS.reduce((sum, kind) => sum + WEIGHTS[kind], 0);
+function kindOf(h: number, weights = WEIGHTS): ItemKind {
+  const total = KINDS.reduce((sum, kind) => sum + weights[kind], 0);
   let pick = h % total;
   for (const kind of KINDS) {
-    if (pick < WEIGHTS[kind]) return kind;
-    pick -= WEIGHTS[kind];
+    if (pick < weights[kind]) return kind;
+    pick -= weights[kind];
   }
   return 'repair';
 }

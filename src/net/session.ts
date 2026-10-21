@@ -117,8 +117,8 @@ export class Session {
   onTorpedoGone: (id: string, position: Vec) => void = () => {};
   /** Another browser's torpedo hit a ship this browser runs. */
   onTorpedoHit: (target: string, shooter: string, torpedo: string) => void = () => {};
-  /** A ship of another browser took a probe. */
-  onProbe: (probe: string, ship: string) => void = () => {};
+  /** A ship of another browser took a probe, in the third of a race its browser names (see placeBucket). */
+  onProbe: (probe: string, ship: string, bucket: number) => void = () => {};
   /** A ship of another browser set off its nova core, here. */
   onNova: (ship: string, position: Vec) => void = () => {};
   /** Another browser says a ship cheats (see plausible.ts). */
@@ -220,7 +220,9 @@ export class Session {
     transport.on('ic', (d, from) => {
       const probe = id(d?.c);
       const ship = id(d?.s);
-      if (probe && ship && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onProbe(probe, ship));
+      // a browser that names no third took it in the middle
+      const bucket = d?.b === undefined ? 1 : int(d.b, 0, 2);
+      if (probe && ship && bucket !== null && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onProbe(probe, ship, bucket));
     });
     transport.on('nv', (d, from) => {
       const ship = id(d?.s);
@@ -408,8 +410,8 @@ export class Session {
     this.transport.send('ch', { s: ship, r: cheat });
   }
 
-  sendProbe(probe: string, ship: string) {
-    this.transport.send('ic', { c: probe, s: ship });
+  sendProbe(probe: string, ship: string, bucket: number) {
+    this.transport.send('ic', { c: probe, s: ship, b: bucket });
   }
 
   sendTorpedoGone(torpedo: string, position: Vec) {

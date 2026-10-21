@@ -50,8 +50,8 @@ export interface OnlineGame {
   applyTorpedoHit(target: Ship, shooter: Ship | null): void;
   /** A torpedo in flight or gone a moment ago (see Torpedoes.recent). */
   recentTorpedo(id: string): Torpedo | null;
-  /** A ship of another browser took a probe. */
-  remoteProbe(id: string, ship: Ship | null): ItemKind | null;
+  /** A ship of another browser took a probe, in the third of a race its browser names. */
+  remoteProbe(id: string, ship: Ship | null, bucket: number): ItemKind | null;
   /** A ship of another browser set off its nova core: this browser's ships near it are gone. */
   novaBlast(holder: Ship, position: THREE.Vector3): void;
   /** Several browsers found a Host cheating. */
@@ -129,8 +129,8 @@ export class Online {
       game.remoteTorpedo(id, ship, target ? this.find(target) : null, from.fromArray(p), to.fromArray(v));
     };
     session.onTorpedoGone = (id, p) => game.remoteTorpedoGone(id, from.fromArray(p));
-    session.onProbe = (id, ship) => {
-      const kind = game.remoteProbe(id, this.find(ship));
+    session.onProbe = (id, ship, bucket) => {
+      const kind = game.remoteProbe(id, this.find(ship), bucket);
       if (kind) this.plausible.probe(ship, kind, game.time);
     };
     // a nova only from a living ship that holds a core, where it is; anything else never goes off
@@ -273,8 +273,8 @@ export class Online {
     this.session.sendNova(ship.id, round(position));
   }
 
-  sendProbe(id: string, ship: Ship) {
-    this.session.sendProbe(id, ship.id);
+  sendProbe(id: string, ship: Ship, bucket: number) {
+    this.session.sendProbe(id, ship.id, bucket);
   }
 
   sendTorpedoGone(id: string, position: THREE.Vector3) {

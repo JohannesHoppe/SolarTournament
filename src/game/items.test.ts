@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { packItems, Probes, unpackItems } from './items';
+import { contents, packItems, placeBucket, Probes, unpackItems } from './items';
 import { ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
 
@@ -92,6 +92,33 @@ describe('probes', () => {
     };
     expect(drop()).toEqual(drop());
     expect(drop()).toHaveLength(2);
+  });
+
+  it('are sealed in a race, and give the last more than the leaders', () => {
+    const field = testField();
+    field.generate(ARENAS[0].layout);
+    const track = [new THREE.Vector3(30000, 0, 0), new THREE.Vector3(0, 0, 30000), new THREE.Vector3(-30000, 0, 0), new THREE.Vector3(0, 0, -30000)];
+    const probes = new Probes();
+    probes.schedule(1234, 3, 120, 120, field, track);
+    expect(probes.list.every((probe) => probe.luck !== null)).toBe(true);
+    // a sealed probe passes to a newcomer sealed
+    const newcomer = new Probes();
+    newcomer.restore(probes.snapshot(120), 120);
+    expect(newcomer.list.map((probe) => probe.luck)).toEqual(probes.list.map((probe) => probe.luck));
+    // over many probes: the leaders never find a nova core, the last third does
+    const sealed = (luck: number) => ({ ...probes.list[0], luck });
+    const kinds = (bucket: number) => new Set(Array.from({ length: 200 }, (_, luck) => contents(sealed(luck * 7919), bucket)));
+    expect(kinds(0).has('nova')).toBe(false);
+    expect(kinds(2).has('nova')).toBe(true);
+    // an open probe gives what it shows, whatever the place
+    const open = { ...probes.list[0], luck: null, kind: 'twin' as const };
+    expect([0, 1, 2].map((bucket) => contents(open, bucket))).toEqual(['twin', 'twin', 'twin']);
+  });
+
+  it('split a race into thirds by place', () => {
+    expect([0, 1, 2, 3, 4, 5, 6, 7].map((place) => placeBucket(place, 8))).toEqual([0, 0, 0, 1, 1, 2, 2, 2]);
+    expect(placeBucket(0, 1)).toBe(1);
+    expect([placeBucket(0, 2), placeBucket(1, 2)]).toEqual([0, 2]);
   });
 
   it('pack the items a clone holds into its state and back', () => {

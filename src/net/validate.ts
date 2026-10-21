@@ -138,7 +138,11 @@ export function probeStates(x: unknown): ProbeState[] | null {
   const probes = x.map((probe) => {
     if (!isRecord(probe)) return null;
     const state = { i: id(probe.i), k: KINDS.find((kind) => kind === probe.k) ?? null, p: vec(probe.p, 3, MAX_COORDINATE), v: vec(probe.v, 3, MAX_SPEED), u: num(probe.u, 0, MAX_PROBE_SECONDS) };
-    return Object.values(state).some((value) => value === null) ? null : (state as ProbeState);
+    if (Object.values(state).some((value) => value === null)) return null;
+    // a sealed probe's luck is a 32-bit hash
+    if (probe.x === undefined) return state as ProbeState;
+    const luck = int(probe.x, 0, 0xffffffff);
+    return luck === null ? null : ({ ...state, x: luck } as ProbeState);
   });
   return probes.some((probe) => probe === null) ? null : (probes as ProbeState[]);
 }

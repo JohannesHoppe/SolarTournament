@@ -38,7 +38,7 @@ import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Torpedo } from './torpedoes';
-import { Probes, ITEM_NAMES, ITEM_HINTS, type Probe, type ItemKind, type ProbeState } from './items';
+import { contents, Probes, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
 import { BOOST_PUSH, BOOST_RADIUS, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
 import { markedName } from '../view/marks';
@@ -2143,7 +2143,7 @@ export class Game implements OnlineGame {
       const mark = this.probeMarks[i];
       const probe = this.probes.list[i];
       mark.position.copy(probe.position);
-      mark.label = ITEM_NAMES[probe.kind];
+      mark.label = probe.luck === null ? ITEM_NAMES[probe.kind] : SEALED_NAME;
       list.push(mark);
     }
     const holder = this.ships.find((ship) => ship.nova && ship.alive && ship !== subject);
@@ -2662,9 +2662,17 @@ export class Game implements OnlineGame {
   }
 
   private takeProbe(ship: Ship, probe: Probe) {
+    const bucket = this.bucketOf(ship);
     this.probes.take(probe);
-    this.online?.sendProbe(probe.id, ship);
-    this.useItem(ship, probe.kind);
+    this.online?.sendProbe(probe.id, ship, bucket);
+    this.useItem(ship, contents(probe, bucket));
+  }
+
+  /** The third of the race a ship lies in (see placeBucket); outside a race the middle. */
+  private bucketOf(ship: Ship): number {
+    if (!this.course) return 1;
+    const standings = this.standings();
+    return placeBucket(standings.indexOf(ship), standings.length);
   }
 
   /** What an item does to the ship that took it. */
@@ -2700,10 +2708,18 @@ export class Game implements OnlineGame {
     }
   }
 
-  /** Another browser's ship took a probe; an id no probe could have is ignored. */
-  remoteProbe(id: string) {
-    const deathsOf = (ship: string) => this.ships.find((s) => s.id === ship)?.deaths ?? null;
-    return this.probes.plausible(id, this.roundId, deathsOf) ? this.probes.takeId(id) : null;
+  /**
+   * Another browser's ship took a probe; an id no probe could have is ignored. A sealed probe
+   * holds what the taker's place made of it: the third the taker's browser names, unless it
+   * lies two thirds from where this browser sees the taker (standings differ by a little lag,
+   * not from first to last), then the third seen here.
+   */
+  remoteProbe(id: string, ship: Ship | null, bucket: number): ItemKind | null {
+    const deathsOf = (s: string) => this.ships.find((other) => other.id === s)?.deaths ?? null;
+    const probe = this.probes.plausible(id, this.roundId, deathsOf) ? this.probes.takeId(id) : null;
+    if (!probe) return null;
+    const seen = ship ? this.bucketOf(ship) : 1;
+    return contents(probe, Math.abs(bucket - seen) <= 1 ? bucket : seen);
   }
 
   /** Several browsers found a Host cheating: everyone is told. */
