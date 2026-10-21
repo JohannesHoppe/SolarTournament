@@ -336,6 +336,8 @@ The game collects as little as possible: no accounts, no cookies, no tracking, n
 
 **Code:** Copyright © 2012–2026 Johannes Hoppe, licensed under the [GNU Affero General Public License v3.0 or later](LICENSE). Anyone may play, study, change and share the game. Whoever publishes a changed version, including as a website, has to publish its source code under the same license.
 
+**Contributions:** Johannes Hoppe keeps the right to license the code under other terms as well, commercial ones included. Whoever contributes signs the Contributor License Agreement in [CONTRIBUTING.md](CONTRIBUTING.md) once, with a file `contributors/<GitHub username>.txt`; the contributor keeps the copyright, and the contribution is AGPL for everyone else. A check on every pull request (`.github/workflows/cla.yml`) labels it `cla: missing` or `cla: signed` and says so in a comment.
+
 **Name and brand:** The name *SolarTournament*, the logo and the domains solartournament.games and solar-tournament.games are not covered by the license. A changed version has to use its own name.
 
 **Ships:** The two interceptor models and their drive sprites (`public/assets/models/`, `public/assets/textures/`) are by Johannes Hoppe and not covered by the license. Please ask for permission before using them in other software.
