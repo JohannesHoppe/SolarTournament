@@ -22,13 +22,13 @@ export class Sound {
     this.hull.connect(this.master);
     this.driveGain.gain.value = 0;
     this.thrusterGain.gain.value = 0;
-    // Browsers only start audio after a user gesture.
+    // Browsers only start audio after a user gesture; for a finger that is its lifting
+    // (pointerup, touchend), for a mouse or a key already the press.
     const unlock = () => {
       void this.context.resume();
       this.startLoops();
     };
-    window.addEventListener('pointerdown', unlock);
-    window.addEventListener('keydown', unlock);
+    for (const gesture of ['pointerdown', 'pointerup', 'touchend', 'keydown']) window.addEventListener(gesture, unlock);
   }
 
   setBuffers(buffers: Record<string, AudioBuffer | null>) {

@@ -448,7 +448,9 @@ export class Band {
     }
     if (info.impact) this.impact.triggerAttackRelease(1.2, t, 1);
     if (info.surprise) this.surprise(song, info, t, bar);
-    if (info.voice) this.speak(info.voice, t, bar / 8);
+    // one voice at a time: a line planned while another still talks (the station's name, late
+    // on joining a track) is left out
+    if (info.voice && t >= this.voiceUntil) this.speak(info.voice, t, bar / 8);
   }
 
   /** The sound of a bar from t on, for the `bar` seconds it has left: filters, drive, sends. */

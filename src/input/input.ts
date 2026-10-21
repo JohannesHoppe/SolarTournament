@@ -105,6 +105,10 @@ export class Input {
     });
     // a pointer outside the window does not keep the ship spinning
     document.documentElement.addEventListener('mouseleave', () => this.resetMouse());
+    // in flight a right click opens no menu, which would swallow the release of held keys
+    canvas.addEventListener('contextmenu', (e) => {
+      if (this.steering) e.preventDefault();
+    });
   }
 
   onAction(handler: ActionHandler) {
@@ -257,8 +261,12 @@ export class Input {
       if (e.code === 'F1') this.handler('help');
       return;
     }
-    // a button the Host reached with Tab is pressed by Enter and Space as usual
-    if (!this.steering && e.target instanceof HTMLButtonElement && e.target.matches(':focus-visible') && (e.code === 'Enter' || e.code === 'Space')) return;
+    // a button or link the Host reached with Tab is pressed by Enter (a button by Space too) as
+    // usual, and a slider reached so is moved by the arrows
+    const reached = !this.steering && e.target instanceof HTMLElement && e.target.matches(':focus-visible');
+    if (reached && e.target instanceof HTMLButtonElement && (e.code === 'Enter' || e.code === 'Space')) return;
+    if (reached && e.target instanceof HTMLAnchorElement && e.code === 'Enter') return;
+    if (reached && e.target instanceof HTMLInputElement && e.code.startsWith('Arrow')) return;
     if (down) this.keys.add(e.code);
     // keys the game uses never also press the button that happens to have the focus
     if (e.code === 'Enter' || e.code === 'Space' || e.code.startsWith('Arrow')) e.preventDefault();

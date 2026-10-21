@@ -4,6 +4,8 @@ import type { Effects } from './effects';
 
 /** Frames the kill cam keeps: four seconds at 60 frames a second, more on slower devices. */
 const FRAMES = 240;
+/** Frames come at most this often (s, 60 a second, with room for jitter): a 144 Hz screen keeps the same four seconds. */
+const MIN_FRAME_GAP = 1 / 64;
 /** Ships a frame holds at most: a full tournament and a watching Host's clone. */
 const MAX_SHIPS = 9;
 /** Beams the kill cam keeps. */
@@ -46,8 +48,10 @@ export class KillCam {
     return this.replay !== null;
   }
 
-  /** Keeps this frame's ships, at game time `time`. */
+  /** Keeps this frame's ships, at game time `time`; at most 60 frames a second, so fast screens keep the same span. */
   record(time: number, ships: readonly Ship[]) {
+    const last = this.frames[(this.next + FRAMES - 1) % FRAMES];
+    if (time - last.time < MIN_FRAME_GAP) return;
     const frame = this.frames[this.next];
     this.next = (this.next + 1) % FRAMES;
     frame.time = time;
@@ -77,7 +81,9 @@ export class KillCam {
   /** The own clone was shot down at game time `time`: replays the moments before. */
   start(killer: Ship, victim: Ship, time: number) {
     const oldest = Math.min(...this.frames.map((frame) => frame.time));
-    this.replay = { killer, victim, start: Math.max(oldest, time - WINDOW), end: time, startedAt: performance.now() / 1000, lastBeam: -Infinity };
+    // beams from before the window are not fired again at its start
+    const start = Math.max(oldest, time - WINDOW);
+    this.replay = { killer, victim, start, end: time, startedAt: performance.now() / 1000, lastBeam: start };
   }
 
   stop() {

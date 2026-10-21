@@ -288,7 +288,8 @@ export class Radio {
     const sixteenth = barSeconds(song) / STEPS_PER_BAR;
     if (this.lateAnnouncement) {
       const nextBar = Math.ceil(elapsed / barSeconds(song) + 0.25);
-      this.band.speak(song.voice[0], now - elapsed + nextBar * barSeconds(song), barSeconds(song) / 8);
+      const at = now - elapsed + nextBar * barSeconds(song);
+      if (at >= this.band.voiceUntil) this.band.speak(song.voice[0], at, barSeconds(song) / 8);
       this.lateAnnouncement = false;
     }
     const desiredStart = now - elapsed;
