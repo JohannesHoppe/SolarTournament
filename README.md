@@ -51,7 +51,7 @@ The project is a classic Pages project, not a Worker: the game is a static site,
 | Esc / P | Menu | Pause |
 | Q | | On the pause screen: quit the round |
 | F1 | | Controls sheet over any screen, the running round included (F1 again closes it) |
-| Tab | | While watching a full tournament: the next pilot |
+| Tab (hold) | | Standings over the running round: place, kills, deaths, score, in a race the lap or the finish time. While watching a full tournament it also switches to the next pilot |
 | Enter | A | Confirm (start, resume, boot the next clone) |
 
 **The essentials** are W, A, S, D, Shift, Space, X and the arrow keys or the mouse; both work at the same time, so keyboard pilots and mouse pilots share one layout. The up and down thrusters and the camera are extras. The pilot does not roll: the flight computer keeps the ship upright (see Flight).

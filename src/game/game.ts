@@ -45,6 +45,8 @@ import { markedName } from '../view/marks';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
 const RESULTS_SECONDS = 12;
+/** The standings held open with Tab are written anew this often (s, real time). */
+const STANDINGS_REFRESH = 0.25;
 /** Once every Host has finished a race, the round ends this many seconds later (s): time to see the own place. */
 const RACE_OVER_SECONDS = 5;
 /**
@@ -464,6 +466,8 @@ export class Game implements OnlineGame {
   private deathCause: string | (string | Node)[] = 'Your clone is dead';
   /** When the current screen (menu, playing, paused, results) came up (performance.now, ms). */
   private screenSince = 0;
+  /** When the standings held open with Tab are written next (real time, s). */
+  private standingsAt = 0;
   /** Online round whose scoreboard has been shown and announced. */
   private resultsShownFor: number | null = null;
   /** Rock hits from other browsers for a round this browser has not started yet. */
@@ -1740,20 +1744,33 @@ export class Game implements OnlineGame {
 
   private renderScoreboard() {
     const me = this.me;
+    this.fillStandings($<HTMLTableElement>('scoreboard'));
+    // training points from the flight school are no personal best
+    if (me && !this.school && me.score > Number(storageGet(BEST_SCORE_KEY) ?? 0)) storageSet(BEST_SCORE_KEY, String(me.score));
+  }
+
+  /** The standings as a table: the scoreboard at the round's end, and the one Tab holds open. */
+  private fillStandings(table: HTMLTableElement) {
     const race = this.roundMode === 'race';
-    const table = $<HTMLTableElement>('scoreboard');
     table.innerHTML = `<tr><th>#</th><th>Host</th>${race ? '<th>Race</th>' : ''}<th>Kills</th><th>Deaths</th><th>Score</th></tr>`;
     // a race ranks by the finish, a deathmatch by the score (see standings)
     this.standings().forEach((ship, i) => {
       const row = table.insertRow();
-      row.classList.toggle('me', ship === me);
+      row.classList.toggle('me', ship === this.me);
       row.insertCell().textContent = String(i + 1);
       row.insertCell().append(...markedName(ship.kind, ship.name));
-      if (race) row.insertCell().textContent = ship.finish >= 0 ? `${ship.finish.toFixed(1)} s` : `Lap ${lapOf(ship.gates)}`;
+      if (race) row.insertCell().textContent = ship.finish >= 0 ? `${ship.finish.toFixed(1)} s` : `Lap ${lapOf(ship.gates)}/${LAPS}`;
       for (const value of [ship.kills, ship.deaths, ship.score]) row.insertCell().textContent = String(value);
     });
-    // training points from the flight school are no personal best
-    if (me && !this.school && me.score > Number(storageGet(BEST_SCORE_KEY) ?? 0)) storageSet(BEST_SCORE_KEY, String(me.score));
+  }
+
+  /** Tab held in a round: the standings over the running game, refreshed a few times a second. */
+  private showStandings(now: number) {
+    const open = this.state === 'playing' && this.input.standings && $('results').hidden;
+    if ($('standings').hidden === open) $('standings').hidden = !open;
+    if (!open || now < this.standingsAt) return;
+    this.standingsAt = now + STANDINGS_REFRESH;
+    this.fillStandings($<HTMLTableElement>('standings-table'));
   }
 
   /**
@@ -1818,6 +1835,7 @@ export class Game implements OnlineGame {
     }
     this.glitch.update();
     this.datamosh.update();
+    this.showStandings(wallClock());
 
     // a paused solo round stands still: its picture is drawn again only while it glitches or
     // after the window changed, not 60 times a second under the pause plate

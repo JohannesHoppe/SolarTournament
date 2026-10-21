@@ -146,6 +146,11 @@ export class Input {
     return this.keys.has('KeyS') || this.touch.brake || (this.gamepad()?.buttons[PAD.b]?.pressed ?? false);
   }
 
+  /** The standings are held open: Tab. */
+  get standings(): boolean {
+    return this.keys.has('Tab');
+  }
+
   /** Reads the current controls. */
   read(): Controls {
     const keys = this.keys;

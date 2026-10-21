@@ -329,26 +329,34 @@ button.primary .mode-note {
   color: inherit;
 }
 
-#scoreboard {
+.standings {
   width: 100%;
   border-collapse: collapse;
 }
 
-#scoreboard th,
-#scoreboard td {
+.standings th,
+.standings td {
   padding: 6px 8px;
   border-bottom: 1px solid var(--line);
   text-align: right;
 }
 
-#scoreboard th:first-child,
-#scoreboard td:first-child,
-#scoreboard td:nth-child(2) {
+.standings th:first-child,
+.standings td:first-child,
+.standings th:nth-child(2),
+.standings td:nth-child(2) {
   text-align: left;
 }
 
-#scoreboard tr.me td {
+.standings tr.me td {
   color: var(--accent-strong);
+}
+
+/* held open with Tab over the running round: it never takes a click */
+#standings {
+  width: min(560px, calc(100vw - 32px));
+  pointer-events: none;
+  z-index: 20;
 }
 
 #loading,
