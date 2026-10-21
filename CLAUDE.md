@@ -6,6 +6,8 @@ The original from 2012 (CopperLicht, Node.js, Socket.IO) lives on the branch `ol
 
 **Language:** everything in this repository is English: code, comments, docs, commit messages. Johannes and Claude talk German with each other; that does not change the language of the repo.
 
+**No foreign projects as references:** files and commit messages never name another project that served as a model or inspiration (for a license, a workflow, a pattern). Only what the repo actually uses is named: dependencies, assets and their licenses.
+
 ## Guideline: a universe of its own
 
 SolarTournament has a universe of its own. We take inspiration from popular series, but only adopt two game principles:
