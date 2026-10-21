@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
 
-/** Fixed seed: every client builds the same rock shapes, so collision ellipsoids match. */
+/** Fixed seed: every client builds the same rock shapes, so their measured surfaces match (see world/surface). */
 const ROCK_SEED = 2584;
 const ROCK_COUNT = 16;
 /** Edge subdivisions of the base icosahedron: 20 · 33² ≈ 22 000 triangles per rock. */
-const DETAIL = 32;
+export const DETAIL = 32;
 /** Subdivisions for field rocks seen from afar, where the fine relief no longer shows: 20 · 13² ≈ 3400 triangles each. */
 export const FAR_DETAIL = 12;
 /** Subdivisions for rocks seen only from kilometers away: 20 · 7² ≈ 1000 triangles each. */

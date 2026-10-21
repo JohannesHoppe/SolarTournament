@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { colliderBox } from '../assets';
 import { Randomizer, textSeed } from '../random';
+import { Surface } from './surface';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
-/** Rocks are not full ellipsoids; the collision shape is slightly smaller than the bounding box. */
+/** A piece with a computed collider box (the station's debris) collides as an ellipsoid slightly smaller than the box; rocks and ice are measured instead (see Surface). */
 const SHAPE_FILL = 0.9;
 /** How fast a rock of the belt turns about its own axis (rad/s, a turn in about 2.6 minutes): slow, but the tip of a long rock sweeps. */
 export const SPIN_RATE = 0.04;
@@ -96,7 +97,7 @@ export interface Asteroid {
   kind: TemplateKind;
   /** Never breaks and gives no points (see SOLID). */
   solid: boolean;
-  /** Collides as a box (the hull of a wreck): `semiAxes` are its half extents; otherwise as an ellipsoid. */
+  /** Collides as a box (the hull of a wreck): `semiAxes` are its half extents; otherwise as its measured surface, or without one as an ellipsoid. */
   box: boolean;
   spinAxis: THREE.Vector3;
   spinRate: number;
@@ -111,6 +112,8 @@ export interface Asteroid {
   /** Ellipsoid in the object's own coordinates. */
   center: THREE.Vector3;
   semiAxes: THREE.Vector3;
+  /** A rock's measured surface around `center`, which its collisions and rays use; null for a piece that collides as its ellipsoid or box. */
+  surface: Surface | null;
   /** World matrix inverse, refreshed every update. */
   inverse: THREE.Matrix4;
 }
@@ -147,6 +150,8 @@ interface Template {
   far: THREE.Object3D | null;
   /** Collides as its box (see Asteroid.box). */
   box: boolean;
+  /** The measured surface of a shape without a collider box (see Asteroid.surface). */
+  surface: Surface | null;
 }
 
 const u = new THREE.Vector3();
@@ -184,13 +189,18 @@ export class AsteroidField {
         const box = colliderBox(object);
         // rounded to whole units, so tiny floating point differences between browsers vanish;
         // a box piece is its whole box, a rock fills only part of it
+        const center = box.getCenter(new THREE.Vector3()).round();
+        let collider = false;
+        object.traverse((o) => (collider ||= !!o.userData.collider));
         return {
           object,
-          center: box.getCenter(new THREE.Vector3()).round(),
+          center,
           semiAxes: box.getSize(new THREE.Vector3()).multiplyScalar(0.5 * (set.box ? 1 : SHAPE_FILL)).round(),
           scale: Math.max(object.scale.x, object.scale.y, object.scale.z),
           far: set.far[i] ?? null,
           box: !!set.box,
+          // a shape without a computed collider is measured: a rock collides where it is seen
+          surface: set.box || collider ? null : new Surface(object, center),
         };
       });
     this.templates = { rock: templates(sets.rock), ice: templates(sets.ice), debris: templates(sets.debris), hull: templates(sets.hull) };
@@ -257,8 +267,8 @@ export class AsteroidField {
 
   private boundingRadius(kind: TemplateKind, type: number, scale: number) {
     const t = this.templates[kind][type];
-    // a box reaches out to its corners
-    return (t.center.length() + (t.box ? t.semiAxes.length() : Math.max(t.semiAxes.x, t.semiAxes.y, t.semiAxes.z))) * t.scale * scale;
+    // a box reaches out to its corners, a rock as far as its surface does
+    return (t.center.length() + (t.surface ? t.surface.reach : t.box ? t.semiAxes.length() : Math.max(t.semiAxes.x, t.semiAxes.y, t.semiAxes.z))) * t.scale * scale;
   }
 
   private add(
@@ -311,6 +321,7 @@ export class AsteroidField {
       baseOrientation: object.quaternion.clone(),
       center: template.center,
       semiAxes: template.semiAxes,
+      surface: template.surface,
       box: template.box,
       inverse: new THREE.Matrix4(),
     };
@@ -430,7 +441,7 @@ export class AsteroidField {
     let best: { asteroid: Asteroid | null; distance: number } | null = null;
     for (const asteroid of this.asteroids.values()) {
       if (raySphere(origin, direction, asteroid.object.position, asteroid.radius) === null) continue;
-      const distance = asteroid.box ? rayBox(asteroid, origin, direction) : rayEllipsoid(asteroid, origin, direction);
+      const distance = asteroid.box ? rayBox(asteroid, origin, direction) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);
       if (distance !== null && distance <= maxDistance && (!best || distance < best.distance)) best = { asteroid, distance };
     }
     const well = this.well;
@@ -459,7 +470,7 @@ export class AsteroidField {
     for (const asteroid of this.asteroids.values()) {
       const reach = asteroid.radius + radius;
       if (asteroid.object.position.distanceToSquared(center) > reach * reach) continue;
-      if (asteroid.box ? boxContact(asteroid, center, radius, pull) : ellipsoidContact(asteroid, center, radius)) return asteroid;
+      if (asteroid.box ? boxContact(asteroid, center, radius, pull) : asteroid.surface ? surfaceContact(asteroid, asteroid.surface, center, radius) : ellipsoidContact(asteroid, center, radius)) return asteroid;
     }
     return null;
   }
@@ -475,6 +486,15 @@ export class AsteroidField {
       normal.transformDirection(asteroid.object.matrixWorld);
       point.copy(surface).add(asteroid.center).applyMatrix4(asteroid.object.matrixWorld);
       center.copy(point).addScaledVector(normal, radius + 1);
+      return normal;
+    }
+    if (asteroid.surface) {
+      const contact = surfaceContact(asteroid, asteroid.surface, center, radius);
+      if (!contact) return null;
+      // out along the way from the center, onto the measured surface lifted by the sphere's radius
+      surfaceNormal(asteroid.surface, contact.local, normal).transformDirection(asteroid.object.matrixWorld);
+      point.copy(contact.local).multiplyScalar((contact.reach + 1 / contact.scale) / contact.length).add(asteroid.center).applyMatrix4(asteroid.object.matrixWorld);
+      center.copy(point);
       return normal;
     }
     const contact = ellipsoidContact(asteroid, center, radius);
@@ -535,6 +555,49 @@ function ellipsoidContact(asteroid: Asteroid, center: THREE.Vector3, radius: num
   const length = Math.hypot(local.x / axes.x, local.y / axes.y, local.z / axes.z);
   return length < 1 ? { local, axes, length } : null;
 }
+
+/**
+ * A sphere against a rock's measured surface: the sphere's center in the rock's own
+ * coordinates (relative to its center), its distance from the center, and how far the surface
+ * lifted by the sphere's radius reaches that way, when the sphere touches the rock; else null.
+ */
+function surfaceContact(asteroid: Asteroid, surface: Surface, center: THREE.Vector3, radius: number) {
+  const scale = asteroid.object.matrixWorld.getMaxScaleOnAxis();
+  const local = u.copy(center).applyMatrix4(asteroid.inverse).sub(asteroid.center);
+  const length = local.length();
+  const reach = surface.radius(local) + radius / scale;
+  return length < reach ? { local, length, reach, scale } : null;
+}
+
+const side = new THREE.Vector3();
+const across = new THREE.Vector3();
+const there = new THREE.Vector3();
+const here = new THREE.Vector3();
+const nearby = new THREE.Vector3();
+const base = new THREE.Vector3();
+
+/**
+ * The outward normal of a measured surface in the direction of `local`, from the surface
+ * points a little to either side: a slope of the rock bounces a ship along its slope.
+ */
+function surfaceNormal(surface: Surface, local: THREE.Vector3, normal: THREE.Vector3): THREE.Vector3 {
+  const direction = here.copy(local).normalize();
+  // two directions across the way out
+  side.set(Math.abs(direction.x) < 0.9 ? 1 : 0, Math.abs(direction.x) < 0.9 ? 0 : 1, 0).cross(direction).normalize();
+  across.crossVectors(direction, side);
+  const point0 = base.copy(direction).multiplyScalar(surface.radius(direction));
+  nearby.copy(direction).addScaledVector(side, NORMAL_STEP).normalize();
+  const point1 = there.copy(nearby).multiplyScalar(surface.radius(nearby)).sub(point0);
+  nearby.copy(direction).addScaledVector(across, NORMAL_STEP).normalize();
+  const point2 = nearby.multiplyScalar(surface.radius(nearby)).sub(point0);
+  normal.crossVectors(point1, point2).normalize();
+  // the cross product's sign depends on the order of the two: outward is away from the center
+  if (normal.dot(direction) < 0) normal.negate();
+  return normal;
+}
+
+/** The step to either side for a surface normal (share of the way out, about 3°). */
+const NORMAL_STEP = 0.05;
 
 const closest = new THREE.Vector3();
 
@@ -604,6 +667,51 @@ function rayEllipsoid(asteroid: Asteroid, origin: THREE.Vector3, direction: THRE
   const near = (-b - root) / (2 * a);
   if (near >= 0) return near;
   return (-b + root) / (2 * a) >= 0 ? 0 : null;
+}
+
+/** A ray marches through a rock's measured surface in this many steps across its reach, then narrows the hit down in RAY_REFINE halvings. */
+const RAY_STEPS = 24;
+const RAY_REFINE = 8;
+const marching = new THREE.Vector3();
+
+/**
+ * Distance along a normalized ray to a rock's measured surface, or null: through the sphere
+ * the surface reaches to, step by step, until a point lies inside the surface, then narrowed
+ * down between that step and the one before.
+ */
+function raySurface(asteroid: Asteroid, surface: Surface, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
+  localOrigin.copy(origin).applyMatrix4(asteroid.inverse).sub(asteroid.center);
+  // one world unit along the ray, in the rock's own coordinates
+  const step = localEnd.copy(origin).add(direction).applyMatrix4(asteroid.inverse).sub(asteroid.center).sub(localOrigin);
+  const a = step.dot(step);
+  const b = 2 * localOrigin.dot(step);
+  const c = localOrigin.dot(localOrigin) - surface.reach * surface.reach;
+  const discriminant = b * b - 4 * a * c;
+  if (discriminant < 0) return null;
+  const root = Math.sqrt(discriminant);
+  const far = (-b + root) / (2 * a);
+  if (far < 0) return null;
+  const near = Math.max(0, (-b - root) / (2 * a));
+  if (insideAlong(surface, near)) return near;
+  const stride = (far - near) / RAY_STEPS;
+  for (let i = 1; i <= RAY_STEPS; i++) {
+    let hit = near + i * stride;
+    if (!insideAlong(surface, hit)) continue;
+    let miss = hit - stride;
+    for (let k = 0; k < RAY_REFINE; k++) {
+      const middle = (hit + miss) / 2;
+      if (insideAlong(surface, middle)) hit = middle;
+      else miss = middle;
+    }
+    return hit;
+  }
+  return null;
+}
+
+/** Whether the point `t` world units along the ray of raySurface (localOrigin, one unit = localEnd) lies inside the surface. */
+function insideAlong(surface: Surface, t: number) {
+  marching.copy(localOrigin).addScaledVector(localEnd, t);
+  return marching.length() < surface.radius(marching);
 }
 
 const offset = new THREE.Vector3();

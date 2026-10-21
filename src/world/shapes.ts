@@ -5,9 +5,10 @@ import type { TemplateSet } from './asteroids';
 
 /**
  * The shapes the arenas are built from besides rock: chunks of ice, the debris of a station
- * and the hull sections of a wrecked world ship. Each carries an invisible collider box whose
- * size is computed, not measured, so the collision shape is the same on every browser: an
- * ellipsoid of 90 % of the box for ice and debris (see AsteroidField), the box itself for the hull.
+ * and the hull sections of a wrecked world ship. Ice collides with its measured surface, as the
+ * rocks do (see world/surface); debris and hull carry an invisible collider box whose size is
+ * computed, so the collision shape is the same on every browser: an ellipsoid of 90 % of the box
+ * for debris (see AsteroidField), the box itself for the hull.
  */
 
 /** The collision ellipsoid is this share of the collider box (SHAPE_FILL in asteroids.ts). */

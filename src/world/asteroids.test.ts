@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ARENAS } from './arenas';
 import type { FieldLayout } from './asteroids';
 import { testField } from '../test/field';
+import { DETAIL } from './rocks';
 
 const positions = (field: ReturnType<typeof testField>) => [...field.asteroids.values()].map((a) => `${a.id}:${a.object.position.toArray().map((v) => v.toFixed(3)).join(',')}`);
 
@@ -47,6 +48,56 @@ describe('the field of an arena', () => {
     // an orbit keeps its distance from the center
     expect(rock.object.position.length()).toBeCloseTo(start, 0);
     expect(rock.object.position.distanceTo(rock.basePosition)).toBeGreaterThan(1000);
+  });
+});
+
+describe('collision with a rock', () => {
+  /** Four rock shapes alone in a field, each at the center, unturned, in the detail the game builds; a sample of the points of their surface. */
+  const rocks = [0, 3, 9, 13].map((type) => {
+    const field = testField(DETAIL);
+    field.generate({ key: `rock${type}`, seed: 1, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: 1, inner: 0, spin: 0, toughness: 800, placements: [{ kind: 'rock', type, scale: 1, position: new THREE.Vector3(), orientation: new THREE.Quaternion(), solid: false }] });
+    const rock = [...field.asteroids.values()][0];
+    const mesh = rock.object as THREE.Mesh;
+    const corners = mesh.geometry.getAttribute('position');
+    const points = Array.from({ length: Math.floor(corners.count / 23) }, (_, k) => new THREE.Vector3().fromBufferAttribute(corners, k * 23).applyMatrix4(mesh.matrixWorld));
+    return { field, rock, mesh, points };
+  });
+
+  it('touches where it is seen: just inside its surface is rock, a little outside is not', () => {
+    for (const { field, rock, points } of rocks) {
+      const center = rock.object.position;
+      const share = (scale: number) => points.filter((p) => field.overlap(p.clone().sub(center).multiplyScalar(scale).add(center), 1)).length / points.length;
+      expect(share(0.97), rock.id).toBeGreaterThan(0.97);
+      expect(share(1.1), rock.id).toBeLessThan(0.05);
+    }
+  });
+
+  it('stops a ray on its surface: never deep inside, rarely early', () => {
+    const caster = new THREE.Raycaster();
+    for (const { field, mesh, points } of rocks) {
+      // a ray through the full mesh is slow: every fifth point of the sample
+      const errors = points.filter((_, k) => k % 5 === 0).map((p) => {
+        const direction = p.clone().normalize().negate();
+        const origin = p.clone().addScaledVector(direction, -20000);
+        caster.set(origin, direction);
+        const seen = caster.intersectObject(mesh)[0].distance;
+        return (field.raycast(origin, direction, 40000)!.distance - seen) / p.length();
+      });
+      expect(Math.max(...errors)).toBeLessThan(0.03);
+      expect(errors.filter((e) => e > -0.05).length / errors.length).toBeGreaterThan(0.9);
+    }
+  });
+
+  it('pushes a ship out onto its surface, and bounces it off along the slope', () => {
+    for (const { field, rock, points } of rocks) {
+      const center = rock.object.position;
+      const inside = points[0].clone().sub(center).multiplyScalar(0.9).add(center);
+      const normal = field.resolve(rock, inside, 300)!;
+      expect(normal).not.toBeNull();
+      // outward, and the ship now just touches the surface from outside
+      expect(normal.dot(inside.clone().sub(center).normalize())).toBeGreaterThan(0.2);
+      expect(field.overlap(inside.clone().addScaledVector(normal, 50), 300)).toBeNull();
+    }
   });
 });
 
