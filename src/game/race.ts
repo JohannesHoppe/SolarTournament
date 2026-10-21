@@ -15,6 +15,23 @@ export const GATE_RADIUS = 1600;
 /** The course loops around the field's center at about this distance (units, 1.6 km), 300 m more or less. */
 const COURSE_RADIUS = 32000;
 const COURSE_SPREAD = 6000;
+/**
+ * Every other gate lies this much closer to the center (about 900 m out), where the rocks
+ * are densest: the course weaves in and out of the thick of the field, past rock at speed,
+ * and the straight line from gate to gate is the short way through the rocks, not the safe one.
+ */
+const COURSE_INNER = 0.55;
+/**
+ * The gates are coils: a ship that flies through the inner third of a ring (BOOST_RADIUS,
+ * about 27 m from its center) is pulled through by the ring's magnetic field and leaves it
+ * BOOST_PUSH faster (units/s, 40 m/s), along the way it went through, though never faster
+ * than the tournament's limit plus that push (see Game.boost). Off-center the field would drag
+ * the hull into the coil, so the ring only fires for a ship in its core.
+ */
+export const BOOST_RADIUS = GATE_RADIUS / 3;
+export const BOOST_PUSH = 800;
+/** A ring that fired glows white this long (s). */
+const BOOST_FLASH = 0.35;
 /** Up and down along the loop (units, up to 400 m), so the course is not flat. */
 const COURSE_RISE = 8000;
 /** A gate keeps this many of its radii clear of rock, and four times as much of an arena's massive body. */
@@ -50,13 +67,16 @@ export class Course {
   private readonly after = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.57, 1).multiplyScalar(1.6), toneMapped: false });
   private readonly faint = new THREE.MeshBasicMaterial({ color: 0x2a4e8c, transparent: true, opacity: 0.35, toneMapped: false });
   private readonly finish = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.25, 0.65).multiplyScalar(2), toneMapped: false });
+  private readonly fired = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.9, 0.75).multiplyScalar(3), toneMapped: false });
+  /** Until when each ring glows from its coil firing (game time, s). */
+  private readonly flashUntil: number[] = new Array<number>(GATES).fill(-Infinity);
 
   constructor(field: AsteroidField, seed: number) {
     const r = new Randomizer(seed * 7 + 3);
     const start = r.range(0, Math.PI * 2);
     for (let i = 0; i < GATES; i++) {
       const angle = start + (i / GATES) * Math.PI * 2 + r.range(-0.15, 0.15);
-      const distance = COURSE_RADIUS + r.range(-COURSE_SPREAD, COURSE_SPREAD);
+      const distance = (COURSE_RADIUS + r.range(-COURSE_SPREAD, COURSE_SPREAD)) * (i % 2 ? COURSE_INNER : 1);
       const point = new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle * 2 + start) * COURSE_RISE, Math.sin(angle) * distance);
       // up or down, away from rock and from the arena's massive body, in turns
       for (let attempt = 1; attempt < 24 && (field.overlap(point, GATE_RADIUS * GATE_CLEARANCE) || field.insideWell(point, GATE_RADIUS * GATE_CLEARANCE * 4)); attempt++) {
@@ -75,22 +95,31 @@ export class Course {
     }
   }
 
-  /** Whether a ship moving from `from` to `to` this frame flew through a gate, either way: a ring is a ring. */
-  crossed(gate: number, from: THREE.Vector3, to: THREE.Vector3): boolean {
+  /**
+   * How far from a gate's center a ship moving from `from` to `to` this frame flew through it,
+   * either way (a ring is a ring); null when it did not fly through.
+   */
+  crossing(gate: number, from: THREE.Vector3, to: THREE.Vector3): number | null {
     const point = this.points[gate];
     const normal = this.normals[gate];
     const before = toGate.subVectors(from, point).dot(normal);
     const after = crossing.subVectors(to, point).dot(normal);
-    if (before < 0 === after < 0) return false;
+    if (before < 0 === after < 0) return null;
     // where the path pierces the gate's plane, inside the ring
     crossing.subVectors(to, from).multiplyScalar(before / (before - after)).add(from);
-    return crossing.distanceTo(point) < GATE_RADIUS;
+    const off = crossing.distanceTo(point);
+    return off < GATE_RADIUS ? off : null;
   }
 
-  /** Shows the own pilot's next gates: the next one bright, the one after in blue. */
-  highlight(next: number) {
+  /** A gate's coil fired (see BOOST_RADIUS): it glows white for a moment. */
+  flash(gate: number, now: number) {
+    this.flashUntil[gate] = now + BOOST_FLASH;
+  }
+
+  /** Shows the own pilot's next gates: the next one bright, the one after in blue, a ring that just fired white. */
+  highlight(next: number, now: number) {
     this.rings.forEach((ring, i) => {
-      ring.material = i === next ? this.next : i === (next + 1) % GATES ? this.after : i === 0 ? this.finish : this.faint;
+      ring.material = now < this.flashUntil[i] ? this.fired : i === next ? this.next : i === (next + 1) % GATES ? this.after : i === 0 ? this.finish : this.faint;
     });
   }
 
@@ -110,6 +139,6 @@ export class Course {
   dispose() {
     this.root.clear();
     this.geometry.dispose();
-    for (const material of [this.next, this.after, this.faint, this.finish]) material.dispose();
+    for (const material of [this.next, this.after, this.faint, this.finish, this.fired]) material.dispose();
   }
 }

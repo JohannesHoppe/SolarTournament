@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { Course, GATE_RADIUS, GATES, modeOfRound } from './race';
+import { BOOST_RADIUS, Course, GATE_RADIUS, GATES, modeOfRound } from './race';
 import { ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
 
@@ -34,11 +34,21 @@ describe('the race course', () => {
     const normal = c.normals[0];
     const before = gate.clone().addScaledVector(normal, -500);
     const after = gate.clone().addScaledVector(normal, 500);
-    expect(c.crossed(0, before, after)).toBe(true);
-    expect(c.crossed(0, after, before)).toBe(true);
-    expect(c.crossed(0, before, before.clone().addScaledVector(normal, 400))).toBe(false);
-    const side = new THREE.Vector3(0, 1, 0).cross(normal).normalize().multiplyScalar(GATE_RADIUS * 1.5);
-    expect(c.crossed(0, before.clone().add(side), after.clone().add(side))).toBe(false);
+    expect(c.crossing(0, before, after)).toBeCloseTo(0);
+    expect(c.crossing(0, after, before)).toBeCloseTo(0);
+    expect(c.crossing(0, before, before.clone().addScaledVector(normal, 400))).toBeNull();
+    const side = new THREE.Vector3(0, 1, 0).cross(normal).normalize();
+    expect(c.crossing(0, before.clone().addScaledVector(side, GATE_RADIUS * 1.5), after.clone().addScaledVector(side, GATE_RADIUS * 1.5))).toBeNull();
+    // how far off the center it went through decides whether the coil fires
+    expect(c.crossing(0, before.clone().addScaledVector(side, BOOST_RADIUS / 2), after.clone().addScaledVector(side, BOOST_RADIUS / 2))).toBeCloseTo(BOOST_RADIUS / 2);
+    expect(c.crossing(0, before.clone().addScaledVector(side, BOOST_RADIUS * 2), after.clone().addScaledVector(side, BOOST_RADIUS * 2))!).toBeGreaterThan(BOOST_RADIUS);
+  });
+
+  it('weaves in and out of the thick of the field', () => {
+    const distances = course().points.map((p) => Math.hypot(p.x, p.z));
+    const inner = distances.filter((_, i) => i % 2 === 1);
+    const outer = distances.filter((_, i) => i % 2 === 0);
+    expect(Math.max(...inner)).toBeLessThan(Math.min(...outer));
   });
 });
 

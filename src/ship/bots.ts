@@ -3,6 +3,7 @@ import type { AsteroidField } from '../world/asteroids';
 import { IDLE, type Controls } from '../input/input';
 import type { Ship } from './ship';
 import { MAIN_THRUST, RCS_THRUST } from './flight';
+import { BOOST_PUSH } from '../game/race';
 
 /** Bots notice ships within this distance (units, 3.5 km: across the whole field), when no rock is in the way, so the fight finds a Host quickly. */
 const SIGHT_RANGE = 70000;
@@ -23,8 +24,8 @@ const THREAT_ANGLE = 0.3;
 /** A bot fires at armor only while its laser is cooler than this (one shot heats it by 20), and only in some of its thinking spells (SNIPE_CHANCE): sparingly. */
 const ARMOR_FIRE_HEAT = 10;
 const SNIPE_CHANCE = 0.3;
-/** Racing bots fly to the next gate at this speed (units/s, 180 m/s), below the limit, so they still turn in time. */
-const RACE_SPEED = 3600;
+/** Racing bots fly to the next gate at this speed (units/s, 180 m/s), below the limit, so they still turn in time; a solo round may set another class (see Bot.raceSpeed). */
+export const RACE_SPEED = 3600;
 /** A racer only turns its nose to a ship this close to it (rad, about 30°): one ahead on the course. */
 const RACE_AIM_CONE = 0.5;
 /** A racer with a ship on its tail flips to shoot back for this long (s), at most once in LOOK_BACK_PAUSE (s). */
@@ -107,8 +108,9 @@ export class Bot {
   target: Ship | null = null;
   /** Set by the game during a solar storm: the sensors are blind (see STORM_SIGHT). */
   blind = false;
-  /** Set by the game in a race: the next gate, which the bot flies through. */
+  /** Set by the game in a race: the next gate, which the bot flies through, and how fast it races (units/s). */
   waypoint: THREE.Vector3 | null = null;
+  raceSpeed = RACE_SPEED;
   /** Set by the game: the nearest probe, which an idle bot goes for. */
   lure: THREE.Vector3 | null = null;
   /** Set by the game: a ship with a nova core close by, which the bot gets away from first. */
@@ -209,9 +211,9 @@ export class Bot {
       toTarget.subVectors(me.position, chaser.flight.position);
       desired.copy(toTarget).normalize().multiplyScalar(CRUISE_SPEED * 0.6);
     } else if (racing) {
-      // through the next gate, at speed
+      // through the next gate, at speed; what a gate's coil gave it, it keeps
       toTarget.subVectors(this.waypoint!, me.position);
-      desired.copy(toTarget).normalize().multiplyScalar(RACE_SPEED);
+      desired.copy(toTarget).normalize().multiplyScalar(Math.max(this.raceSpeed, Math.min(me.velocity.length(), this.raceSpeed + BOOST_PUSH)));
       if (target) this.senseJink(target, dt, now);
     } else if (target) {
       toTarget.subVectors(target.flight.position, me.position);

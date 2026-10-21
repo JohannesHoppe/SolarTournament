@@ -40,7 +40,7 @@ import { KillCam } from '../view/killcam';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Torpedo } from './torpedoes';
 import { Probes, ITEM_NAMES, ITEM_HINTS, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
-import { Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
+import { BOOST_PUSH, BOOST_RADIUS, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
 import { markedName } from '../view/marks';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
@@ -231,9 +231,13 @@ const CLOSE_CALL_SPEED = 1200;
 const CLOSE_CALL_REACH = 2.2;
 const CLOSE_CALL_CLEAR = 5;
 const CLOSE_CALL_POINTS = 25;
-/** The camera hangs back by this share of the ship radius at a full burn, and the view widens by SPEED_FOV degrees at the speed limit. */
+/** The camera hangs back by this share of the ship radius at a full burn, and the view widens by SPEED_FOV degrees at the speed limit: speed is felt. */
 const DRIVE_LAG = 0.6;
-const SPEED_FOV = 6;
+const SPEED_FOV = 10;
+/** A gate's coil boost (see race.ts) widens the view by BOOST_FOV degrees for a moment, fading at BOOST_FADE (1/s), and presses the clone into the seat (BOOST_STRAIN). */
+const BOOST_FOV = 9;
+const BOOST_FADE = 2.5;
+const BOOST_STRAIN = 0.3;
 /** Hosts who ask for less motion get no camera shake. */
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 /** What a landed hit says where it struck, by the zone it broke. */
@@ -316,6 +320,8 @@ const TURN_ENDS = [1, -1];
 const SCRAPE_COLOR = new THREE.Color(1, 0.7, 0.3);
 /** The sparks of a hit the plating takes: the plating probe's blue. */
 const PLATING_COLOR = new THREE.Color(0.3, 0.57, 1);
+/** The sparks of a gate's coil firing: hot white. */
+const BOOST_COLOR = new THREE.Color(1, 0.9, 0.75);
 
 /** 1st, 2nd, 3rd, 4th … */
 const ordinal = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`;
@@ -447,6 +453,8 @@ export class Game implements OnlineGame {
   private aimAngle = 0;
   /** Strength of the camera jolt after the own laser hit something, 0..2. */
   private kick = 0;
+  /** Strength of the widened view after a coil boost, 0..1. */
+  private boostKick = 0;
   /** The velocity of the ship the camera rides with, for the dust's streaks; null without one. */
   private riding: THREE.Vector3 | null = null;
   /** The own drive burned in the last frame (see ignite). */
@@ -2127,7 +2135,11 @@ export class Game implements OnlineGame {
    * the last lap the finish, with the points of its place among those finished before it.
    */
   private passGates(ship: Ship, course: Course) {
-    if (!ship.alive || ship.finish >= 0 || !course.crossed(ship.gates % GATES, ship.previous, ship.flight.position)) return;
+    if (!ship.alive || ship.finish >= 0) return;
+    const gate = ship.gates % GATES;
+    const off = course.crossing(gate, ship.previous, ship.flight.position);
+    if (off === null) return;
+    if (off < BOOST_RADIUS) this.boost(ship, course, gate);
     ship.gates++;
     ship.score += GATE_POINTS;
     if (ship.gates >= FINISH_GATES) {
@@ -2145,6 +2157,30 @@ export class Game implements OnlineGame {
     this.sound.beep(1180, 0.06, 0.12);
     // through the pink gate: a new lap begins
     if (ship.gates > 1 && ship.gates % GATES === 1) this.hud.flashMessage(this.time, lapOf(ship.gates) === LAPS ? 'Last lap' : `Lap ${lapOf(ship.gates)} of ${LAPS}`, 2);
+  }
+
+  /**
+   * Through a gate's core: its coil pulls the ship through and lets it go BOOST_PUSH faster,
+   * the way it flew (see BOOST_RADIUS). The ring flashes for everyone on this browser; the own
+   * pilot feels the shove, hears the coil sing and sees the view widen.
+   */
+  private boost(ship: Ship, course: Course, gate: number) {
+    const through = scratch.copy(course.normals[gate]);
+    if (through.dot(ship.flight.velocity) < 0) through.negate();
+    // the coil's field runs at the tournament's limit plus its push: it pushes no ship beyond that
+    const before = ship.flight.velocity.length();
+    ship.flight.velocity.addScaledVector(through, BOOST_PUSH);
+    const cap = Math.max(before, MAX_SPEED + BOOST_PUSH);
+    if (ship.flight.velocity.length() > cap) ship.flight.velocity.setLength(cap);
+    course.flash(gate, this.time);
+    if (ship !== this.me) return;
+    this.boostKick = 1;
+    this.strain = Math.max(this.strain, BOOST_STRAIN);
+    this.effects.sparks(ship.flight.position, BOOST_COLOR, 120);
+    this.sound.play('boost', { volume: 1.3 });
+    this.sound.beep(1568, 0.05, 0.1);
+    this.sound.beep(2093, 0.09, 0.1, 0.06);
+    this.hud.flashMessage(this.time, 'Coil boost', 1);
   }
 
   /** Seconds since the round started. */
@@ -2167,7 +2203,7 @@ export class Game implements OnlineGame {
   private showRace(course: Course, me: Ship): THREE.Vector3 | null {
     const place = ordinal(this.standings().indexOf(me) + 1);
     if (me.finish >= 0) {
-      course.highlight(-1);
+      course.highlight(-1, this.time);
       this.guide.hide();
       this.hud.setWaypoint(this.camera, null);
       this.hud.setSchool({ step: `Finished · ${place}`, text: `${me.finish.toFixed(1)} s. Now hunt the others.`, keys: [] });
@@ -2175,7 +2211,7 @@ export class Game implements OnlineGame {
     }
     const next = me.gates % GATES;
     const lap = lapOf(me.gates);
-    course.highlight(next);
+    course.highlight(next, this.time);
     // past the gate's plane without going through it, and still moving away from it
     const missed = scratch.subVectors(me.flight.position, course.points[next]).dot(course.normals[next]) > GATE_RADIUS && me.flight.velocity.dot(course.normals[next]) > 0;
     const label = missed ? 'Missed · turn back' : next === 0 ? (me.gates === 0 ? 'Start' : lap === LAPS ? 'Finish' : 'Lap') : `Gate ${next + 1}/${GATES}`;
@@ -3340,7 +3376,8 @@ export class Game implements OnlineGame {
     // the drive kicks: the view widens while it burns and with speed, and the chase camera trembles
     const burn = me.alive ? flight.throttle : 0;
     const fast = me.alive ? Math.min(1, flight.velocity.length() / MAX_SPEED) : 0;
-    const fov = this.camera.fov + (CAMERA_FOV + DRIVE_FOV_KICK * burn + SPEED_FOV * fast - this.camera.fov) * (1 - Math.exp(-6 * dt));
+    const fov = this.camera.fov + (CAMERA_FOV + DRIVE_FOV_KICK * burn + SPEED_FOV * fast + BOOST_FOV * this.boostKick - this.camera.fov) * (1 - Math.exp(-6 * dt));
+    this.boostKick *= Math.exp(-BOOST_FADE * dt);
     if (Math.abs(fov - this.camera.fov) > 0.01) this.setFov(fov);
     if (!this.cockpit && !reducedMotion.matches) {
       if (burn > 0.05) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * DRIVE_SHAKE * burn));
