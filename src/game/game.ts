@@ -257,7 +257,7 @@ const SOLO_KEY = 'solartournament.solo';
 type SoloChoice = { mode: RoundMode; arena: ArenaId | null; rivals: string[] };
 const SOLO_DEFAULT: SoloChoice = { mode: 'race', arena: null, rivals: ['Ingmar', 'Nova', 'Kessler'] };
 const SOLO_NOTES: Record<RoundMode, string> = {
-  race: 'Three laps through eight gates. Lasers stay on.',
+  race: 'Three laps through eight gates. Killing your opponents is explicitly allowed.',
   deathmatch: 'For the hard pilots: five minutes, every clone for itself.',
 };
 
