@@ -1124,12 +1124,13 @@ export class Game implements OnlineGame {
         break;
       case 'playing':
         if (action === 'pause') this.pause();
-        if (this.killcam.active) {
-          if (action === 'confirm') this.killcam.stop();
-          break;
-        }
+        // in the sponsor break the kill cam runs behind the ad: Enter boots the clone
         if (this.sponsors.visible) {
           if (action === 'confirm') this.sponsors.confirm();
+          break;
+        }
+        if (this.killcam.active) {
+          if (action === 'confirm') this.killcam.stop();
           break;
         }
         // a watching Host has no cockpit of its own
@@ -1706,10 +1707,13 @@ export class Game implements OnlineGame {
     this.input.steerWithMouse(false);
     this.hud.show(false);
     this.speaker.say(pick(SPONSOR_BREAK), 'urgent');
+    // the kill again and again behind the ad, until the next clone boots
+    this.killcam.again();
     const kills = `${me.kills} ${me.kills === 1 ? 'kill' : 'kills'}`;
     const clones = `${me.deaths} ${me.deaths === 1 ? 'clone' : 'clones'} lost`;
     this.sponsors.show(this.deathCause, `This round: ${kills} · ${me.score} pts · ${clones}`, () => {
       this.speaker.say(pick(SPONSOR_HAPPY), 'urgent');
+      this.killcam.stop();
       this.hud.show(true);
       this.respawn(this.me!);
       this.input.steerWithMouse(true);

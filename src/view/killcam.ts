@@ -24,6 +24,7 @@ const offset = new THREE.Vector3();
 
 type Frame = { time: number; ships: (Ship | null)[]; data: Float32Array };
 type Beam = { time: number; from: THREE.Vector3; to: THREE.Vector3; color: THREE.Color };
+type Replay = { killer: Ship; victim: Ship; start: number; end: number; startedAt: number; lastBeam: number; loop: boolean };
 
 /**
  * The kill cam: the game keeps the last few seconds of every ship's flight and every beam;
@@ -36,8 +37,10 @@ export class KillCam {
   private next = 0;
   private readonly beams: Beam[] = Array.from({ length: MAX_BEAMS }, () => ({ time: -Infinity, from: new THREE.Vector3(), to: new THREE.Vector3(), color: new THREE.Color() }));
   private nextBeam = 0;
-  /** The running replay: whom it follows, the span of the past it shows, and when it started (real time). */
-  private replay: { killer: Ship; victim: Ship; start: number; end: number; startedAt: number; lastBeam: number } | null = null;
+  /** The running replay: whom it follows, the span of the past it shows, when it started (real time), and whether it starts over at its end. */
+  private replay: Replay | null = null;
+  /** The last replay that ran to its end, kept for the sponsor break (see again). */
+  private kept: Replay | null = null;
   /** Where the ships really are, kept while the replay borrows their pictures (`savedCount` of them). */
   private readonly saved = Array.from({ length: MAX_SHIPS }, () => ({ ship: null as Ship | null, position: new THREE.Vector3(), quaternion: new THREE.Quaternion(), visible: false }));
   private savedCount = 0;
@@ -48,8 +51,13 @@ export class KillCam {
     return this.replay !== null;
   }
 
-  /** Keeps this frame's ships, at game time `time`; at most 60 frames a second, so fast screens keep the same span. */
+  /**
+   * Keeps this frame's ships, at game time `time`; at most 60 frames a second, so fast screens
+   * keep the same span. Nothing is kept while a replay runs or waits for the sponsor break, so
+   * the moments before the kill stay.
+   */
   record(time: number, ships: readonly Ship[]) {
+    if (this.replay || this.kept) return;
     const last = this.frames[(this.next + FRAMES - 1) % FRAMES];
     if (time - last.time < MIN_FRAME_GAP) return;
     const frame = this.frames[this.next];
@@ -70,6 +78,7 @@ export class KillCam {
 
   /** Keeps a beam, at game time `time`. */
   recordBeam(time: number, start: THREE.Vector3, end: THREE.Vector3, color: THREE.Color) {
+    if (this.replay || this.kept) return;
     const beam = this.beams[this.nextBeam];
     this.nextBeam = (this.nextBeam + 1) % MAX_BEAMS;
     beam.time = time;
@@ -83,11 +92,19 @@ export class KillCam {
     const oldest = Math.min(...this.frames.map((frame) => frame.time));
     // beams from before the window are not fired again at its start
     const start = Math.max(oldest, time - WINDOW);
-    this.replay = { killer, victim, start, end: time, startedAt: performance.now() / 1000, lastBeam: start };
+    this.replay = { killer, victim, start, end: time, startedAt: performance.now() / 1000, lastBeam: start, loop: false };
+    this.kept = null;
+  }
+
+  /** The sponsor break: the last replay runs again behind the ad, over and over, until stop. */
+  again() {
+    if (!this.kept) return;
+    this.replay = { ...this.kept, startedAt: performance.now() / 1000, lastBeam: this.kept.start, loop: true };
   }
 
   stop() {
     this.replay = null;
+    this.kept = null;
   }
 
   /**
@@ -98,10 +115,15 @@ export class KillCam {
   pose(camera: THREE.Camera): boolean {
     const replay = this.replay;
     if (!replay) return false;
-    const time = replay.start + (performance.now() / 1000 - replay.startedAt) * SPEED;
+    let time = replay.start + (performance.now() / 1000 - replay.startedAt) * SPEED;
     if (time > replay.end) {
-      this.replay = null;
-      return false;
+      if (!replay.loop) {
+        this.kept = replay;
+        this.replay = null;
+        return false;
+      }
+      replay.startedAt = performance.now() / 1000;
+      replay.lastBeam = time = replay.start;
     }
     const frame = this.frameAt(time);
     if (!frame) return false;

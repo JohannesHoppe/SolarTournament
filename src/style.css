@@ -775,7 +775,8 @@ body.nova-flash #hud::after {
   overflow-y: auto;
   gap: 14px;
   padding: 16px;
-  background: rgba(2, 3, 10, 0.8);
+  /* the kill cam runs on behind the ad */
+  background: rgba(2, 3, 10, 0.6);
   text-align: center;
 }
 
