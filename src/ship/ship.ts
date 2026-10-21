@@ -148,6 +148,11 @@ export class Ship {
     return /^(?:bot\d+|b:|sparring$)/.test(this.id) ? 'bot' : 'host';
   }
 
+  /** Another ship on the same side: lasers pass through it, torpedoes and novas spare it, bots never hunt it. */
+  allyOf(other: Ship) {
+    return other !== this && this.team >= 0 && other.team === this.team;
+  }
+
   readonly root = new THREE.Group();
   readonly model: THREE.Object3D;
   readonly radius: number;
@@ -196,6 +201,8 @@ export class Ship {
   protectedUntil = 0;
   /** Time the ship left the arena, or null while inside. */
   outsideSince: number | null = null;
+  /** The ship's side, set by the game in a round of teams (see game/flags); -1 when every clone fights for itself. */
+  team = -1;
   /** Peer that simulates this ship in an online tournament; null when this browser does. */
   owner: string | null = null;
   /** The drive's light on nearby rocks, lent by the game from a fixed pool (see Game.lendLight). */

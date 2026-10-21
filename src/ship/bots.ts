@@ -113,6 +113,8 @@ export class Bot {
   raceSpeed = RACE_SPEED;
   /** Set by the game: the nearest probe, which an idle bot goes for. */
   lure: THREE.Vector3 | null = null;
+  /** Set by the game: a ship the bot hunts wherever it is, seen or not. */
+  prey: Ship | null = null;
   /** Set by the game: a ship with a nova core close by, which the bot gets away from first. */
   flee: THREE.Vector3 | null = null;
   /** Set by the game: the bot turns back towards the center beyond this distance (units), inside a solar flare's shell. */
@@ -161,8 +163,8 @@ export class Bot {
     let targetDistance = sight;
     let best = Infinity;
     for (const ship of ships) {
-      // a freshly printed clone is left alone until its spawn protection runs out
-      if (ship === this.ship || !ship.alive || now < ship.protectedUntil) continue;
+      // a freshly printed clone is left alone until its spawn protection runs out, and the own side always
+      if (ship === this.ship || !ship.alive || now < ship.protectedUntil || ship.allyOf(this.ship)) continue;
       const distance = ship.flight.position.distanceTo(me.position);
       if (distance >= sight) continue;
       let hunters = 0;
@@ -175,13 +177,18 @@ export class Bot {
         targetDistance = distance;
       }
     }
+    // a ship the game names as prey (the thief of the own side's core) is hunted wherever it is
+    if (this.prey?.alive) {
+      target = this.prey;
+      targetDistance = this.prey.flight.position.distanceTo(me.position);
+    }
     // a ship on the own tail with its nose on the bot comes first: the bot turns its armor to
     // it and jinks, because from behind the drive is open
     let defending = false;
     let chaser: Ship | null = null;
     for (const ship of ships) {
-      // as with targets: a fresh clone cannot hurt, and a storm blinds the sensors beyond sight
-      if (ship === this.ship || !ship.alive || now < ship.protectedUntil) continue;
+      // as with targets: a fresh clone cannot hurt, nor can the own side, and a storm blinds the sensors beyond sight
+      if (ship === this.ship || !ship.alive || now < ship.protectedUntil || ship.allyOf(this.ship)) continue;
       const line = toTarget.subVectors(me.position, ship.flight.position);
       const distance = line.length();
       if (distance < Math.min(THREAT_RANGE, sight) && this.ship.tailToward(line) && ship.flight.angleTo(line) < THREAT_ANGLE && field.lineOfSight(me.position, ship.flight.position)) {

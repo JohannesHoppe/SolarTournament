@@ -2,6 +2,7 @@ import type { ShipState } from '../ship/ship';
 import type { AsteroidState, FieldState } from '../world/asteroids';
 import type { WreckState } from '../world/wrecks';
 import { KINDS, type ProbeState } from '../game/items';
+import type { FlagsState } from '../game/flags';
 
 /**
  * Checks everything that arrives from other browsers before the game touches it. Peers are
@@ -166,4 +167,26 @@ export function fieldState(x: unknown): FieldState | null {
   const broken = x.x.map(breakState);
   if (k === null || t === null || rocks.some((rock) => rock === null) || broken.some((rock) => rock === null)) return null;
   return { k, t, a: rocks as AsteroidState[], x: broken as { id: string; b: number }[] };
+}
+
+/** Ships on one side of Capture the Flag: at most every place of a tournament, and those of a lead browser's bots with room. */
+const MAX_SIDE = 32;
+/** Captures, far beyond any round (see CAPTURES_TO_WIN). */
+const MAX_CAPTURES = 99;
+/** The lead's recent flag events (see EVENT_KEEP in game/flags), with room. */
+const MAX_FLAG_EVENTS = 16;
+
+/** The sides and cores of Capture the Flag as the lead browser sends them, or null. */
+export function flagsState(x: unknown): FlagsState | null {
+  if (!isRecord(x) || !Array.isArray(x.t) || x.t.length !== 2 || !Array.isArray(x.f) || x.f.length !== 2 || !Array.isArray(x.e) || x.e.length > MAX_FLAG_EVENTS) return null;
+  const sides = x.t.map((side) => (Array.isArray(side) && side.length <= MAX_SIDE ? ids(side) : null));
+  const captures = vec(x.c, 2, MAX_CAPTURES);
+  const cores = x.f.map((core) => (core === null ? null : typeof core === 'string' ? (id(core) ?? undefined) : (vec(core, 6, MAX_COORDINATE) ?? undefined)));
+  const events = x.e.map((e) => {
+    if (!Array.isArray(e) || e.length !== 4) return null;
+    const event = [int(e[0], 1, MAX_COUNT), int(e[1], 0, 3), e[2] === null ? null : id(e[2]), int(e[3], 0, 1)] as const;
+    return event[0] === null || event[1] === null || event[3] === null || (e[2] !== null && event[2] === null) ? null : (event as [number, number, string | null, number]);
+  });
+  if (sides.some((side) => side === null) || !captures || captures.some((c) => !Number.isInteger(c) || c < 0) || cores.some((core) => core === undefined) || events.some((e) => e === null)) return null;
+  return { t: sides as string[][], c: captures, f: cores as (string | number[] | null)[], e: events as [number, number, string | null, number][] };
 }

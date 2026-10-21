@@ -178,6 +178,8 @@ export const ANNOUNCER_WIN = ['{name} wins the race. glory to the president', 'a
 export const ANNOUNCER_OUT = ['{name} is out. no clones left', 'and {name} is gone. for good. well, for this round'];
 export const ANNOUNCER_SURVIVOR = ['{name} is the last clone standing', '{name} survives. the president is impressed'];
 export const ANNOUNCER_FLARE = 'here comes the flare. the arena is closing';
+/** Capture the Flag: a pilot brings the other side's core home. */
+export const ANNOUNCER_CAPTURE = ['{name} brings the core home', 'and {name} scores. the sponsor core is theirs'];
 export const ANNOUNCER_OPEN = ['radio twenty five eighty four. live from the arena', 'this is your announcer. the games continue'];
 /** The announcer names the arena of the round (see world/arenas). */
 export const ANNOUNCER_ARENA = {
@@ -309,6 +311,10 @@ export const COMPUTER = {
   lastClone: 'This is your last clone, darling. Make it count.',
   out: 'That was your last clone, darling. You are out. Sit back, and watch the others burn.',
   survivor: 'You are the last clone standing. I knew it, darling.',
+  coreGrabbed: 'You have their core. Bring it home, darling.',
+  coreTaken: 'They took our core. Get it back.',
+  captured: 'We scored, darling!',
+  theyCaptured: 'They scored. Do not let that happen again.',
 } as const;
 
 /**
@@ -345,7 +351,7 @@ export function allLines(language: Language): string[] {
       return [STATION_DE, NOW_PLAYING_DE, ...TITLE_FIRST_DE, ...TITLE_SECOND_DE, ...PHRASES_DE];
     case 'mod':
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
-      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
+      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_CAPTURE, ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
       return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...SPONSOR_BREAK, ...SPONSOR_HAPPY];
   }

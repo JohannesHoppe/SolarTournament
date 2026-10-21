@@ -4,7 +4,8 @@ import type { WreckState } from '../world/wrecks';
 import { CHEATS, type Cheat } from './plausible';
 import { LocalTransport, TrysteroTransport, type Transport } from './transport';
 import type { ProbeState } from '../game/items';
-import { fieldState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
+import type { FlagsState } from '../game/flags';
+import { fieldState, flagsState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
 /** Ship states go out this often (Hz); the receivers predict the motion in between, and take at most three times as many. */
 const STATE_RATE = 15;
@@ -54,9 +55,10 @@ const MAX_TORPEDO_EVENTS_PER_SECOND = 12;
 
 /**
  * Round clock of the lead browser: which round is running, how many seconds are left, and the
- * field time, so every browser turns and moves the asteroids alike.
+ * field time, so every browser turns and moves the asteroids alike; in Capture the Flag also
+ * the sides and the cores (see game/flags).
  */
-export type RoundState = { id: number; left: number; field: number };
+export type RoundState = { id: number; left: number; field: number; f?: FlagsState };
 
 export type Vec = number[];
 
@@ -534,7 +536,10 @@ export class Session {
   private roundState(x: unknown): RoundState | undefined {
     if (!isRecord(x)) return undefined;
     const round = { id: int(x.id, 0, MAX_COUNT), left: num(x.left, MIN_ROUND_LEFT, ROUND_LIMIT), field: num(x.field, 0, MAX_FIELD_TIME) };
-    return round.id !== null && round.left !== null && round.field !== null ? (round as RoundState) : undefined;
+    if (round.id === null || round.left === null || round.field === null) return undefined;
+    if (x.f === undefined) return round as RoundState;
+    const flags = flagsState(x.f);
+    return flags ? { ...(round as RoundState), f: flags } : undefined;
   }
 
   /** Runs a handler unless this peer has left the room. */

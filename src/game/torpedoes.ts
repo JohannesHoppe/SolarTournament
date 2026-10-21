@@ -101,7 +101,7 @@ export class Torpedoes {
       }
       let hit: Ship | null = null;
       for (const ship of ships) {
-        if (ship === torpedo.shooter || !ship.alive) continue;
+        if (ship === torpedo.shooter || !ship.alive || ship.allyOf(torpedo.shooter)) continue;
         if (ship.flight.position.distanceTo(torpedo.position) < ship.radius + FUSE) hit = ship;
       }
       if (hit || field.overlap(torpedo.position, TORPEDO_RADIUS) || field.insideWell(torpedo.position, TORPEDO_RADIUS) || now - torpedo.bornAt > LIFETIME) detonate(torpedo, hit);

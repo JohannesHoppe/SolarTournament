@@ -17,7 +17,7 @@ import { aimHook, anchorPoint, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_FLARE, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_ROCK, ANNOUNCER_SURVIVOR, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
+import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_FLARE, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_ROCK, ANNOUNCER_SURVIVOR, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
@@ -44,6 +44,7 @@ import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, t
 import { contents, Probes, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
 import { BOOST_PUSH, BOOST_RADIUS, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
+import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut } from './survival';
 import { markedName } from '../view/marks';
 
@@ -85,7 +86,19 @@ const DIRECTOR_HOLD = 6;
 const DIRECTOR_STICK = 1.3;
 const DIRECTOR_PAUSE = 10;
 /** The modes as the list of tournaments names them. */
-const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', survival: 'Last Clone Standing', mixed: 'Every mode in turn' };
+const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', survival: 'Last Clone Standing', flag: 'Capture the Flag', mixed: 'Every mode in turn' };
+/**
+ * Bots of Capture the Flag: one in FLAG_GUARDS of each side guards its base and hunts a thief
+ * of its core, the others raid. They fly for a core at FLAG_RAID_SPEED (units/s, 120 m/s),
+ * slow enough to turn for home, and home at FLAG_HOME_SPEED (220 m/s), close to the limit.
+ */
+const FLAG_GUARDS = 3;
+const FLAG_RAID_SPEED = 2400;
+const FLAG_HOME_SPEED = 4400;
+/** A raider swings out this far beyond the other side's base, and as far to one side, before it dives through the core (units, 200 m). */
+const FLAG_SWING = 4000;
+/** What each event of Capture the Flag is worth to the ship that did it. */
+const FLAG_POINTS: Record<FlagEvent['kind'], number> = { grab: GRAB_POINTS, return: RETURN_POINTS, capture: CAPTURE_POINTS, drop: 0 };
 /** A kill in a race is worth less than in a deathmatch: the gates and the finish decide. */
 const RACE_KILL_POINTS = 200;
 /** Points for shooting down a torpedo, and how often a bot with a lock fires one (per second). */
@@ -345,6 +358,7 @@ const SOLO_NOTES: Record<RoundMode, string> = {
   race: 'Three laps through eight gates. Killing your opponents is explicitly allowed.',
   deathmatch: 'For the hard pilots: five minutes, every clone for itself.',
   survival: `${CLONES} clones each. A solar flare closes in on the arena. The last clone standing wins.`,
+  flag: 'Orange against Blue, bots on both sides. Steal their sponsor core, bring it home, keep yours.',
 };
 
 /** The solo choice kept in this browser, checked: whatever does not fit falls back to the default. */
@@ -507,9 +521,12 @@ export class Game implements OnlineGame {
   private roomPublic = true;
   private roomBots = true;
   private roomMode: RoomMode = 'race';
-  /** What the running round is, and its course when it is a race. */
+  /** What the running round is, its course when it is a race, its bases and cores in Capture the Flag. */
   private roundMode: RoundMode = 'deathmatch';
   private course: Course | null = null;
+  private flags: Flags | null = null;
+  /** Where each raiding bot swings out before it dives through a core (see raidPoint). */
+  private readonly raidPoints = new Map<Bot, THREE.Vector3>();
   /** The tournament was full: the own Host watches a pilot (Tab switches, see watchNext) instead of flying. */
   private spectating = false;
   /** The pilot the watching Host follows, when the director cut to it, and until when a pilot picked by hand holds. */
@@ -601,6 +618,11 @@ export class Game implements OnlineGame {
   ];
   private readonly torpedoMarks: RadarMark[] = Array.from({ length: 16 }, () => ({ position: new THREE.Vector3(), label: 'Torpedo', color: '#ff3b30' }));
   private readonly probeMarks: RadarMark[] = Array.from({ length: 12 }, () => ({ position: new THREE.Vector3(), label: '', color: '#3dff9a' }));
+  /** Capture the Flag: each side's base and core, in its color. */
+  private readonly flagMarks: RadarMark[] = TEAM_NAMES.flatMap((name, team) => [
+    { position: new THREE.Vector3(), label: `${name} base`, color: TEAM_TINTS[team] },
+    { position: new THREE.Vector3(), label: `${name} core`, color: TEAM_TINTS[team] },
+  ]);
   /** The ship holding a nova core, in white, so everyone sees where not to be. */
   private readonly novaMark: RadarMark = { position: new THREE.Vector3(), label: 'NOVA', color: '#ffffff' };
   /** The marks the radar shows this frame (see radarMarks). */
@@ -750,6 +772,17 @@ export class Game implements OnlineGame {
         this.selectedShip = button.dataset.ship as ShipType;
         shipButtons.forEach((b) => b.classList.toggle('selected', b === button));
       });
+    }
+    // the modes to choose from, for a solo round and for a room, each a button with its name
+    for (const [choice, modes] of [['solo-mode', ROUND_MODES], ['room-mode', [...ROUND_MODES, 'mixed']]] as const) {
+      document.querySelector(`[data-choice="${choice}"]`)!.append(
+        ...modes.map((mode) => {
+          const button = Object.assign(document.createElement('button'), { type: 'button', textContent: MODE_NAMES[mode] });
+          button.dataset.value = mode;
+          button.classList.toggle('selected', mode === this.roomMode);
+          return button;
+        }),
+      );
     }
     $('start').addEventListener('click', () => this.showSolo(true));
     this.buildSolo();
@@ -1034,6 +1067,7 @@ export class Game implements OnlineGame {
       deathmatch: 'Every round a deathmatch.',
       race: `Every round a race: ${LAPS} laps through ${GATES} gates, lasers on.`,
       survival: `Every round Last Clone Standing: ${CLONES} clones each, a solar flare closing in.`,
+      flag: 'Every round Capture the Flag: Orange against Blue, Hosts spread over both sides.',
       mixed: 'Every mode in turn, starting with a deathmatch.',
     }[this.roomMode];
     $('room-note').textContent = `${who} ${bots} ${rounds} The link works for good: whoever follows it later starts the tournament again.`;
@@ -1516,6 +1550,14 @@ export class Game implements OnlineGame {
     }
     this.course = this.roundMode === 'race' ? new Course(this.field, arena.layout.seed) : null;
     if (this.course) this.scene.add(this.course.root);
+    // so are the bases of Capture the Flag; the sides are the lead browser's to give
+    if (this.flags) {
+      this.scene.remove(this.flags.root);
+      this.flags.dispose();
+    }
+    this.flags = this.roundMode === 'flag' ? new Flags(this.field, arena.layout.seed) : null;
+    if (this.flags) this.scene.add(this.flags.root);
+    for (const ship of this.ships) ship.team = -1;
     // the course of an arena is always the same: its best lap and ghost race along
     this.laps = this.course ? new LapTimer(parseLaps(storageGet(LAPS_KEY))[arena.id] ?? null) : null;
     this.leader = null;
@@ -1619,6 +1661,7 @@ export class Game implements OnlineGame {
     this.clearHooks();
     this.ships = [];
     this.bots = [];
+    this.raidPoints.clear();
     this.me = null;
     this.drone = null;
     this.watchedShip = null;
@@ -1663,10 +1706,7 @@ export class Game implements OnlineGame {
     this.school = mode === 'school' ? new FlightSchool(this.schoolCourse, schoolSteps()[this.schoolCourse] ?? 0) : null;
     if (this.school) this.scene.add(this.school.root);
     $('now-playing').hidden = mode === 'school';
-    if (mode === 'solo') {
-      this.setBotCount(this.solo.rivals.length, [], this.solo.rivals);
-      for (const bot of this.bots) bot.raceSpeed = PACES[this.solo.pace].speed;
-    }
+    if (mode === 'solo') this.setBotCount(this.solo.rivals.length, [], this.solo.rivals);
     this.respawn(this.me);
 
     // online the round is unknown until the lead browser tells it (see syncRound)
@@ -1911,6 +1951,8 @@ export class Game implements OnlineGame {
     // the asteroids follow the lead browser's field time the same way
     const drift = round.field - this.field.clock;
     this.field.setClock(Math.abs(drift) > FIELD_SNAP ? round.field : this.field.clock + drift * 0.1);
+    // and the sides and cores of Capture the Flag are the lead's
+    if (round.f && this.flags) this.flags.follow(round.f, this.time);
   }
 
   leadRound(): RoundState {
@@ -1931,7 +1973,9 @@ export class Game implements OnlineGame {
     if (this.decided() && this.roundEndsAtWall - wallClock() > DECIDED_SECONDS) this.setRoundEnd(DECIDED_SECONDS);
     const left = this.roundEndsAtWall - wallClock();
     this.roundEndsAt = this.time + left;
-    return { id: this.roundId, left: +left.toFixed(3), field: +this.field.clock.toFixed(3) };
+    const round: RoundState = { id: this.roundId, left: +left.toFixed(3), field: +this.field.clock.toFixed(3) };
+    if (this.flags) round.f = this.flags.toState();
+    return round;
   }
 
   /**
@@ -2037,17 +2081,19 @@ export class Game implements OnlineGame {
       candidate.copy(course.points[ship.gates % GATES]);
       best = 0;
     }
-    // of a dozen random places on the edge of the field (well inside a solar flare's shell),
-    // clear of rock, the one farthest from the nearest enemy, preferably hidden from every enemy
-    // behind the asteroids
+    // of a dozen random places on the edge of the field (well inside a solar flare's shell; in
+    // Capture the Flag around the own side's base), clear of rock, the one farthest from the
+    // nearest enemy, preferably hidden from every enemy behind the asteroids
     const edge = Math.min(FIELD_RADIUS, this.safeRadius() * FLARE_KEEP);
+    const base = this.flags && ship.team >= 0 ? this.flags.bases[ship.team] : null;
     for (let attempt = 0; attempt < SPAWN_CANDIDATES && !course; attempt++) {
-      candidate.randomDirection().multiplyScalar(edge * (0.9 + Math.random() * 0.2));
+      if (base) candidate.randomDirection().multiplyScalar(BASE_RADIUS * (2 + Math.random() * 2)).add(base);
+      else candidate.randomDirection().multiplyScalar(edge * (0.9 + Math.random() * 0.2));
       if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40)) continue;
       let nearest = Infinity;
       let seen = false;
       for (const other of this.ships) {
-        if (other === ship || !other.alive) continue;
+        if (other === ship || !other.alive || other.allyOf(ship)) continue;
         const distance = other.flight.position.distanceTo(candidate);
         nearest = Math.min(nearest, distance);
         seen ||= distance < LOCK_RANGE && this.field.lineOfSight(other.flight.position, candidate);
@@ -2127,7 +2173,10 @@ export class Game implements OnlineGame {
   private fillStandings(table: HTMLTableElement) {
     const race = this.roundMode === 'race';
     const survival = this.survival;
-    table.innerHTML = `<tr><th>#</th><th>Host</th>${race ? '<th>Race</th>' : ''}${survival ? '<th>Clones</th>' : ''}<th>Kills</th><th>Deaths</th><th>Score</th></tr>`;
+    const flags = this.flags;
+    table.innerHTML = `<tr><th>#</th><th>Host</th>${race ? '<th>Race</th>' : ''}${survival ? '<th>Clones</th>' : ''}${flags ? '<th>Side</th>' : ''}<th>Kills</th><th>Deaths</th><th>Score</th></tr>`;
+    // Capture the Flag names the sides' captures above the pilots
+    if (flags) table.createCaption().textContent = `${TEAM_NAMES[0]} ${flags.captures[0]} : ${flags.captures[1]} ${TEAM_NAMES[1]}${flags.leading >= 0 ? ` · ${TEAM_NAMES[flags.leading]} leads` : ''}`;
     // a race ranks by the finish, Last Clone Standing by the clones left, a deathmatch by the score (see standings)
     this.standings().forEach((ship, i) => {
       const row = table.insertRow();
@@ -2136,6 +2185,11 @@ export class Game implements OnlineGame {
       row.insertCell().append(...markedName(ship.kind, ship.name));
       if (race) row.insertCell().textContent = ship.finish >= 0 ? `${ship.finish.toFixed(1)} s` : `Lap ${lapOf(ship.gates)}/${LAPS}`;
       if (survival) row.insertCell().textContent = isOut(ship) ? 'Out' : `${clonesLeft(ship)} left`;
+      if (flags) {
+        const side = row.insertCell();
+        side.textContent = TEAM_NAMES[ship.team] ?? '–';
+        side.style.color = TEAM_TINTS[ship.team] ?? '';
+      }
       for (const value of [ship.kills, ship.deaths, ship.score]) row.insertCell().textContent = String(value);
     });
   }
@@ -2285,6 +2339,10 @@ export class Game implements OnlineGame {
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE)?.position ?? null;
         bot.flee = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? null;
         bot.home = Math.min(HOME_RADIUS, safe * FLARE_KEEP);
+        bot.prey = null;
+        // a race online at the tournament's pace, a solo race at its class's
+        bot.raceSpeed = this.flags ? FLAG_RAID_SPEED : this.online ? RACE_SPEED : PACES[this.solo.pace].speed;
+        if (this.flags) this.flagRole(bot, this.flags);
       }
       const thought = bot ? bot.think(now, this.ships, this.field, this.bots) : null;
       // the flight school's unarmed sparring bot only flies
@@ -2312,6 +2370,7 @@ export class Game implements OnlineGame {
       this.scorch(ship, dt, now);
       this.exhaust(ship, dt);
     }
+    if (this.flags) this.playFlags(this.flags, dt, now);
     this.hookOwn(now);
     this.updateHooks(dt);
     this.wrecks.update(dt, now, this.field);
@@ -2346,7 +2405,7 @@ export class Game implements OnlineGame {
     this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now));
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
     // a watching Host sees the race of the pilot on screen
-    const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : null;
+    const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : this.flags ? this.showFlags(this.flags, subject) : null;
     if (!this.course || this.school) this.guide.hide();
     this.flyGhost(me);
     const racing = !!this.course && !this.school && this.countdown === 0;
@@ -2389,10 +2448,12 @@ export class Game implements OnlineGame {
 
   /**
    * The round is decided before its time: a race once every Host's clone has finished (bots do
-   * not hold it up), Last Clone Standing once no more than one ship has a clone left.
+   * not hold it up), Last Clone Standing once no more than one ship has a clone left, Capture
+   * the Flag once a side has captured enough.
    */
   private decided() {
     if (this.survival) return this.standings().length > 1 && this.contenders().length <= 1;
+    if (this.flags) return this.flags.won;
     const hosts = this.ships.filter((ship) => ship.kind === 'host');
     return !!this.course && hosts.length > 0 && hosts.every((ship) => ship.finish >= 0);
   }
@@ -2424,6 +2485,115 @@ export class Game implements OnlineGame {
     this.hud.setSchool({ step, text: `${standing.length} of ${this.standings().length} standing · ${flare}`, keys: [] });
   }
 
+  /**
+   * Capture the Flag as it runs: the lead browser (or a solo round) applies the rules, every
+   * browser moves the cores, takes the sides and hears the events; a ship that gets its first
+   * side is printed at its base.
+   */
+  private playFlags(flags: Flags, dt: number, now: number) {
+    const ships = this.standings();
+    if (!this.online || this.online.isLead) flags.lead(ships, now);
+    flags.update(dt, ships, now);
+    for (const ship of this.ships) {
+      const team = flags.teamOf(ship.id);
+      if (team === ship.team) continue;
+      const fresh = ship.team < 0;
+      ship.team = team;
+      if (fresh && team >= 0 && ship.owner === null && ship.alive) this.respawn(ship);
+    }
+    for (const event of flags.takeEvents()) this.flagEvent(event);
+  }
+
+  /** Something happened to a core: points for the own ship that did it (each browser scores its own), and word of it. */
+  private flagEvent(event: FlagEvent) {
+    const ship = event.ship ? (this.ships.find((s) => s.id === event.ship) ?? null) : null;
+    if (ship && ship.owner === null) ship.score += FLAG_POINTS[event.kind];
+    const me = this.me!;
+    const ours = event.team === me.team;
+    const core = ours ? 'Your core' : `${TEAM_NAMES[event.team]} core`;
+    const who = ship === me ? 'You' : (ship?.name ?? 'Someone');
+    const now = this.time;
+    if (ship === me && FLAG_POINTS[event.kind]) this.hud.popup(this.camera, me.flight.position, `+${FLAG_POINTS[event.kind]}`, 'points');
+    if (event.kind === 'grab') {
+      this.hud.flashMessage(now, ship === me ? 'You have their core · bring it home' : `${who} took ${core.toLowerCase()}`, 3);
+      if (ship === me) this.speaker.say(COMPUTER.coreGrabbed, 'urgent');
+      else if (ours) this.speaker.say(COMPUTER.coreTaken, 'urgent');
+    } else if (event.kind === 'drop') {
+      this.hud.flashMessage(now, `${core} adrift`, 2);
+    } else if (event.kind === 'return') {
+      this.hud.flashMessage(now, `${core} back home${ship ? ` · ${who}` : ''}`, 2);
+    } else {
+      const side = 1 - event.team;
+      this.hud.flashMessage(now, `${TEAM_NAMES[side]} captures · ${TEAM_NAMES[0]} ${this.flags!.captures[0]} : ${this.flags!.captures[1]} ${TEAM_NAMES[1]}`, 4);
+      if (ship) this.announce(pick(ANNOUNCER_CAPTURE), ship, true);
+      this.speaker.say(side === me.team ? COMPUTER.captured : COMPUTER.theyCaptured, 'urgent');
+      this.sound.beep(1320, 0.1, 0.18);
+      this.sound.beep(1760, 0.2, 0.18, 0.12);
+    }
+  }
+
+  /**
+   * What a bot of Capture the Flag does: with the other side's core in tow it flies home; its
+   * own core adrift it fetches; every other bot goes for the other side's core, the rest guard
+   * the base or escort a carrier of their own. A thief of the own core is hunted by all.
+   */
+  private flagRole(bot: Bot, flags: Flags) {
+    const ship = bot.ship;
+    const side = ship.team;
+    if (side < 0) return;
+    const own = flags.cores[side];
+    const theirs = flags.cores[1 - side];
+    if (theirs.carrier === ship.id) {
+      bot.waypoint = flags.bases[side];
+      bot.raceSpeed = FLAG_HOME_SPEED;
+      return;
+    }
+    const guard = this.bots.filter((b) => b.ship.team === side).indexOf(bot) % FLAG_GUARDS === 0;
+    if (own.carrier && guard) bot.prey = this.ships.find((s) => s.id === own.carrier) ?? null;
+    if (!own.home && !own.carrier) bot.waypoint = own.position;
+    else if (!guard && !theirs.carrier) bot.waypoint = theirs.home ? this.raidPoint(bot, theirs.position) : theirs.position;
+    else bot.lure = theirs.carrier ? theirs.position : flags.bases[side];
+  }
+
+  /**
+   * A raider does not fly straight at a core at home: it would have to turn around under the
+   * guards' fire. It swings out beyond the base first, off to one side, and dives through the
+   * core from there, already on its way home.
+   */
+  private raidPoint(bot: Bot, core: THREE.Vector3): THREE.Vector3 {
+    const out = bot.ship.flight.position.length() > core.length() + FLAG_SWING / 2;
+    if (out) return core;
+    const point = this.raidPoints.get(bot) ?? this.raidPoints.set(bot, new THREE.Vector3()).get(bot)!;
+    scratch.set(0, 1, 0).cross(core).setLength(FLAG_SWING);
+    return point.copy(core).setLength(core.length() + FLAG_SWING).add(scratch);
+  }
+
+  /** Capture the Flag in the HUD: the score, the own side, both cores, and where to fly; returns that point for the crosshair. */
+  private showFlags(flags: Flags, me: Ship): THREE.Vector3 | null {
+    const score = `${TEAM_NAMES[0]} ${flags.captures[0]} : ${flags.captures[1]} ${TEAM_NAMES[1]}`;
+    const side = me.team;
+    if (side < 0) {
+      this.hud.setWaypoint(this.camera, null);
+      this.hud.setSchool({ step: `Capture the Flag · ${score}`, text: 'Waiting for a side…', keys: [] });
+      return null;
+    }
+    const own = flags.cores[side];
+    const theirs = flags.cores[1 - side];
+    const where = (core: (typeof flags.cores)[number]) => (core.home ? 'at home' : !core.carrier ? 'adrift' : core.carrier === me.id ? 'in your tow' : `with ${this.ships.find((s) => s.id === core.carrier)?.name ?? 'someone'}`);
+    let goal = theirs.position;
+    let label = 'Their core';
+    if (theirs.carrier === me.id) {
+      goal = flags.bases[side];
+      label = own.home ? 'Home' : 'Home · get your core back first';
+    } else if (!own.home) {
+      goal = own.position;
+      label = own.carrier ? 'Thief' : 'Your core';
+    }
+    this.hud.setWaypoint(this.camera, goal, label);
+    this.hud.setSchool({ step: `Capture the Flag · ${score}`, text: `You fly for ${TEAM_NAMES[side]} · your core ${where(own)} · theirs ${where(theirs)}`, keys: [] });
+    return goal;
+  }
+
   /** The radar's marks: the field's center, and in a race the next gate of the ship it shows. */
   private radarMarks(subject: Ship): RadarMark[] {
     const list = this.shownMarks;
@@ -2437,6 +2607,15 @@ export class Game implements OnlineGame {
       gate.label = `Gate ${next + 1}`;
       list.push(gate);
     }
+    // the bases, and the cores away from home
+    this.flags?.cores.forEach((core, team) => {
+      const [base, mark] = [this.flagMarks[team * 2], this.flagMarks[team * 2 + 1]];
+      base.position.copy(this.flags!.bases[team]);
+      list.push(base);
+      if (core.home) return;
+      mark.position.copy(core.position);
+      list.push(mark);
+    });
     // torpedoes in flight, in red
     for (let i = 0; i < this.torpedoes.list.length && i < this.torpedoMarks.length; i++) {
       const mark = this.torpedoMarks[i];
@@ -3115,7 +3294,7 @@ export class Game implements OnlineGame {
     let best: Ship | null = null;
     let angle = LOCK_ANGLE;
     for (const other of this.ships) {
-      if (other === ship || !other.alive || other === this.drone) continue;
+      if (other === ship || !other.alive || other === this.drone || other.allyOf(ship)) continue;
       const line = toAim.subVectors(other.flight.position, ship.flight.position);
       if (line.length() > LOCK_DISTANCE) continue;
       const off = ship.flight.angleTo(line);
@@ -3253,7 +3432,7 @@ export class Game implements OnlineGame {
     this.effects.explosion(position, holder.radius * 12, holder.flight.velocity);
     this.shockwaves.push(this.shockwave(position));
     for (const ship of [...this.ships]) {
-      if (ship === holder || ship.owner !== null || !ship.alive || ship.flight.position.distanceTo(position) > NOVA_RADIUS) continue;
+      if (ship === holder || ship.owner !== null || !ship.alive || ship.allyOf(holder) || ship.flight.position.distanceTo(position) > NOVA_RADIUS) continue;
       ship.protectedUntil = Math.min(ship.protectedUntil, now);
       if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, holder, 'nova');
     }
@@ -3380,6 +3559,7 @@ export class Game implements OnlineGame {
 
   applyTorpedoHit(ship: Ship, shooter: Ship | null) {
     const now = this.time;
+    if (shooter && ship.allyOf(shooter)) return;
     // plating (an item) takes a whole torpedo and is gone
     if (ship.plating > 0 && now >= ship.protectedUntil) {
       ship.plating = 0;
@@ -3629,7 +3809,8 @@ export class Game implements OnlineGame {
     if (shooter.isLocal) this.sound.play('laser', { volume: 0.7 });
 
     for (const ship of [...this.ships]) {
-      if (ship === shooter || !ship.alive) continue;
+      // a beam passes through the own side's ships
+      if (ship === shooter || !ship.alive || ship.allyOf(shooter)) continue;
       const distance = raySphere(origin, direction, ship.flight.position, ship.radius);
       if (distance === null || distance > beamLength) continue;
       if (ship.owner !== null) {
@@ -3692,6 +3873,7 @@ export class Game implements OnlineGame {
    * Also called for beams from other peers.
    */
   applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number) {
+    if (shooter && ship.allyOf(shooter)) return;
     // plating (an item) takes a hit into the drive
     if (ship.plating > 0 && ship.tailToward(direction) && ship.alive && this.time >= ship.protectedUntil) {
       ship.plating--;

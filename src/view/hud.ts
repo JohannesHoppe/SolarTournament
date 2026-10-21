@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { MAX_HEAT, MAX_HULL, type Ship } from '../ship/ship';
 import { keyLabel } from '../input/input';
 import { markedName, type Kind } from './marks';
+import { TEAM_TINTS } from '../game/flags';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const projected = new THREE.Vector3();
@@ -297,12 +298,18 @@ export class Hud {
       if (!marker) {
         marker = document.createElement('div');
         marker.className = 'marker';
-        marker.style.setProperty('--tint', '#' + ship.color.getHexString());
+        marker.dataset.team = 'unset';
         // the mark and the name stay; only the distance behind them changes from frame to frame
         const distance = document.createElement('span');
         marker.append(...markedName(ship.kind, ship.name), distance);
         this.markerLayer.append(marker);
         this.markers.set(ship.id, marker);
+      }
+      // in a round of sides a marker takes its side's color, else the ship's own
+      const team = ship.team >= 0 ? String(ship.team) : '';
+      if (marker.dataset.team !== team) {
+        marker.dataset.team = team;
+        marker.style.setProperty('--tint', TEAM_TINTS[ship.team] ?? '#' + ship.color.getHexString());
       }
       projected.copy(ship.flight.position).project(camera);
       const behind = projected.z > 1;

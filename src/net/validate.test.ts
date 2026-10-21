@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanName, fieldState, ids, shipState, wreckStates } from './validate';
+import { cleanName, fieldState, flagsState, ids, shipState, wreckStates } from './validate';
 
 const ship = {
   id: 'p:abc',
@@ -44,6 +44,15 @@ describe('messages from other browsers', () => {
     expect(ids(Array.from({ length: 201 }, (_, i) => `r0.${i}`))).toBeNull();
     expect(ids(['r0.1', 'p:abc.2.0'])).toEqual(['r0.1', 'p:abc.2.0']);
     expect(wreckStates(Array.from({ length: 101 }, () => ({ id: 'a.1.0', p: [0, 0, 0], v: [0, 0, 0], g: 0 })))).toBeNull();
+  });
+
+  it('take the sides and cores of Capture the Flag, and drop them broken', () => {
+    const flags = { t: [['p:abc', 'b:abc:0'], ['b:abc:1']], c: [1, 0], f: [null, [1, 2, 3, 0, 0, 0]], e: [[4, 2, 'p:abc', 1], [5, 1, null, 0]] };
+    expect(flagsState(flags)).toEqual(flags);
+    expect(flagsState({ ...flags, f: ['b:abc:1', 'p:x y'] })).toBeNull();
+    expect(flagsState({ ...flags, c: [0.5, 0] })).toBeNull();
+    expect(flagsState({ ...flags, e: [[4, 7, 'p:abc', 1]] })).toBeNull();
+    expect(flagsState({ ...flags, t: [['p:abc']] })).toBeNull();
   });
 
   it('clean callsigns of control and invisible format characters', () => {
