@@ -16,8 +16,6 @@ Signed: <your GitHub username>
 
 A check on every pull request looks for this file, for the author of the pull request and for the author of every commit in it. It comments once when a signature is missing and once when all are there, and labels the pull request `cla: missing` or `cla: signed`. A pull request is only merged with `cla: signed`. Commits have to be linked to your GitHub account (the commit e-mail address is one of your account's addresses), or the check cannot tell who wrote them. You sign only once; your file covers all your later pull requests.
 
-This way of signing follows [The Mempool Open Source Project](https://github.com/mempool/mempool/blob/master/CONTRIBUTING.md), whose agreement this one is based on.
-
 # Contributor License Agreement
 
 Last updated: October 21, 2026
