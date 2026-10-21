@@ -43,6 +43,8 @@ export interface SchoolContext {
 interface Attempt {
   /** Repetition of the drill, from 0. */
   rep: number;
+  /** The instruction has been said and the drill's props are out: from now on the attempt counts. */
+  live: boolean;
   seconds: number;
   /** Seconds a condition has held without interruption (see holdFor). */
   held: number;
@@ -680,7 +682,12 @@ export class FlightSchool {
     this.markers.dispose();
   }
 
-  /** Advances the training; returns the waypoint to mark, if any. */
+  /**
+   * Advances the training; returns the waypoint to mark, if any. Every attempt runs in clear
+   * phases, one after the other: what is left to say of the last one (the praise, or why it
+   * failed) to its end; then the instruction, to its end; only then the drill's props show up
+   * and the drill counts.
+   */
   update(ctx: SchoolContext): THREE.Vector3 | null {
     if (!this.attempt) while (!this.finished && DRILLS[this.index].skip?.(ctx)) this.index++;
     if (this.finished) return null;
@@ -689,9 +696,24 @@ export class FlightSchool {
       this.restart = true;
       return null;
     }
-    if (!this.attempt || this.restart) this.begin(ctx, this.attempt?.rep ?? 0);
+    if (this.pending.length && !this.unsaid) {
+      this.unsaid = { lines: this.pending, since: ctx.now };
+      this.pending = [];
+    }
     if (!this.speak(ctx)) return null;
-    const attempt = this.attempt!;
+    if (!this.attempt || this.restart) {
+      if (ctx.speaking) return null;
+      this.begin(ctx, this.attempt?.rep ?? 0);
+      return null;
+    }
+    const attempt = this.attempt;
+    if (!attempt.live) {
+      if (ctx.speaking) return null;
+      attempt.live = true;
+      // drills that forbid turning measure from the nose as the attempt really starts
+      ctx.me.flight.forward(attempt.forward);
+      drill.enter?.(ctx, attempt, this.markers);
+    }
     attempt.seconds += ctx.dt;
     this.markers.update(ctx.dt);
 
@@ -717,19 +739,17 @@ export class FlightSchool {
     return drill.waypoint?.(ctx, attempt) ?? null;
   }
 
+  /** Sets up an attempt and says its instruction; the drill's props come once it is said (see update). */
   private begin(ctx: SchoolContext, rep: number) {
     const drill = DRILLS[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0 };
-    drill.enter?.(ctx, this.attempt, this.markers);
+    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0 };
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
     const instruction = rep > 0 && drill.repLine ? drill.repLine : drill.line;
-    const spoken = [...this.pending, ...(fresh && (rep === 0 || drill.repLine) ? [instruction] : [])];
     this.line = instruction;
-    this.pending = [];
-    if (spoken.length) this.unsaid = { lines: spoken, since: ctx.now };
+    if (fresh && (rep === 0 || drill.repLine)) this.unsaid = { lines: [instruction], since: ctx.now };
   }
 
   /**

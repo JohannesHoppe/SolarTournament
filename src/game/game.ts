@@ -290,6 +290,8 @@ const modeName = (id: string) => $(id).querySelector<HTMLElement>('.mode-label')
 const pick = <T,>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];
 const scratch = new THREE.Vector3();
 const forward = new THREE.Vector3();
+const upward = new THREE.Vector3();
+const facing = new THREE.Matrix4();
 const muzzle = new THREE.Vector3();
 const cameraGoal = new THREE.Vector3();
 const look = new THREE.Matrix4();
@@ -2001,6 +2003,9 @@ export class Game implements OnlineGame {
       if (thought?.fire && ship.nova && this.crowdAround(ship, NOVA_RADIUS * 0.8) < NOVA_CROWD) thought.fire = false;
       // a bot with its target locked sends a torpedo now and then (never the flight school's)
       if (bot && bot !== this.sparring?.bot && bot.target && ship.torpedoes > 0 && Math.random() < dt * BOT_TORPEDO_RATE && this.torpedoTarget(ship) === bot.target) this.fireTorpedo(ship);
+      // the target drone keeps its drive turned to the pilot, wherever the pilot flies: the
+      // drills train hitting the drive, not getting around the armor
+      if (ship === this.drone && me.alive) ship.flight.orientation.setFromRotationMatrix(facing.lookAt(me.flight.position, ship.flight.position, me.flight.up(upward)));
       const controls = ship === me ? myControls : (thought ?? IDLE);
       this.field.gravity(ship.flight.position, gravity);
       ship.inShadow = this.field.raycast(ship.flight.position, SUN_DIRECTION, LASER_RANGE) !== null;
