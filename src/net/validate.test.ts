@@ -56,10 +56,10 @@ describe('messages from other browsers', () => {
   });
 
   it("take the President's battleship, and drop it broken", () => {
-    const fleet = { w: 2, a: 31.5, h: [3, 0, 30, 0, 0, 0, 0, 0, 0], p: [1, 2, 3], v: [600, 0, 0], q: [0, 0, 0, 1], t: 'p:abc', u: 1 };
+    const fleet = { d: 0, h: [3, 0, 30, 0, 0, 0, 0, 0, 0], p: [1, 2, 3], v: [600, 0, 0], q: [0, 0, 0, 1], t: 'p:abc', u: 1 };
     expect(fleetState(fleet)).toEqual(fleet);
     expect(fleetState({ ...fleet, t: null })?.t).toBeNull();
-    expect(fleetState({ ...fleet, w: 0 })).toBeNull();
+    expect(fleetState({ ...fleet, d: 2 })).toBeNull();
     expect(fleetState({ ...fleet, h: [1.5] })).toBeNull();
     expect(fleetState({ ...fleet, q: [0, 0, 0, 0] })).toBeNull();
   });

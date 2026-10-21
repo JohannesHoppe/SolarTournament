@@ -116,8 +116,8 @@ export class Session {
   onRock: (id: string, at: number, round: number) => void = () => {};
   /** A piece of wreckage was shot or rammed on another browser. */
   onWreck: (id: string) => void = () => {};
-  /** A ship of another browser hit a part of the President's battleship (see game/fleet). */
-  onFleetHit: (zone: number, wave: number, shooter: string) => void = () => {};
+  /** A ship of another browser hit a part of the President's battleship in a round (see game/fleet). */
+  onFleetHit: (zone: number, round: number, shooter: string) => void = () => {};
   /** A ship of another browser launched a torpedo, at a target or none. */
   onTorpedo: (id: string, shooter: string, target: string | null, position: Vec, velocity: Vec) => void = () => {};
   /** A torpedo went off or was shot down, where. */
@@ -215,8 +215,8 @@ export class Session {
     transport.on('bh', (d, from) => {
       const shooter = id(d?.i);
       const zone = int(d?.z, 0, MAX_FLEET_ZONE);
-      const wave = int(d?.w, 1, MAX_COUNT);
-      if (shooter && zone !== null && wave !== null && ownerOf(shooter) === from && this.hitBudget.spend(from)) this.guard(() => this.onFleetHit(zone, wave, shooter));
+      const round = int(d?.n, 0, MAX_COUNT);
+      if (shooter && zone !== null && round !== null && ownerOf(shooter) === from && this.hitBudget.spend(from)) this.guard(() => this.onFleetHit(zone, round, shooter));
     });
     transport.on('tl', (d, from) => {
       const torpedo = id(d?.i);
@@ -427,8 +427,8 @@ export class Session {
     this.transport.send('w', { i: wreck });
   }
 
-  sendFleetHit(zone: number, wave: number, shooter: string) {
-    this.transport.send('bh', { z: zone, w: wave, i: shooter });
+  sendFleetHit(zone: number, round: number, shooter: string) {
+    this.transport.send('bh', { z: zone, n: round, i: shooter });
   }
 
   sendTorpedo(torpedo: string, shooter: string, target: string | null, position: Vec, velocity: Vec) {

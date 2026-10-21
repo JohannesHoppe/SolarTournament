@@ -200,8 +200,7 @@ export function fleetState(x: unknown): FleetState | null {
   if (!isRecord(x) || !Array.isArray(x.h) || x.h.length > MAX_FLEET_ZONES) return null;
   const hits = x.h.map((h) => int(h, 0, MAX_COUNT));
   const state = {
-    w: int(x.w, 1, MAX_COUNT),
-    a: num(x.a, 0, MAX_FIELD_TIME),
+    d: int(x.d, 0, 1),
     p: vec(x.p, 3, MAX_COORDINATE),
     v: vec(x.v, 3, MAX_SPEED),
     q: vec(x.q, 4, UNIT_LENGTH),

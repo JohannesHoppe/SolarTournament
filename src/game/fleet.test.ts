@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BATTERY_PERIOD, FIRST_ARRIVAL, Fleet, PLUME_REACH, RESPITE, type Target } from './fleet';
+import { ARRIVAL, BATTERY_PERIOD, Fleet, PLUME_REACH, SINK_SECONDS, type Target } from './fleet';
 
 /** A battleship in the arena, its bow along -z at the center, unturned. */
 function battleship() {
@@ -14,7 +14,7 @@ function battleship() {
 }
 
 const zonesOf = (fleet: Fleet, kind: string) => fleet.zones.flatMap((zone, i) => (zone.kind === kind ? [i] : []));
-const breakAll = (fleet: Fleet, zones: number[]) => zones.flatMap((zone) => Array.from({ length: fleet.hitsOf(zone) }, () => fleet.hit(zone, fleet.wave)).flat());
+const breakAll = (fleet: Fleet, zones: number[]) => zones.flatMap((zone) => Array.from({ length: fleet.hitsOf(zone) }, () => fleet.hit(zone)).flat());
 const down = new THREE.Vector3(0, -1, 0);
 
 describe("the President's fleet", () => {
@@ -35,7 +35,7 @@ describe("the President's fleet", () => {
     expect(fleet.raycast(new THREE.Vector3(30000, 20000, 0), down, 40000, 1)).toBeNull();
   });
 
-  it('turns to its plume at half its batteries, and goes down with its reactor', () => {
+  it('turns to its plume at half its batteries, and goes down with its reactor, once a round', () => {
     const fleet = battleship();
     const batteries = zonesOf(fleet, 'battery');
     const events = breakAll(fleet, batteries.slice(0, batteries.length / 2));
@@ -44,13 +44,14 @@ describe("the President's fleet", () => {
     breakAll(fleet, batteries);
     // hits on the sealed reactor count nothing until the dome is open
     const reactor = zonesOf(fleet, 'reactor')[0];
-    const hits = fleet.hitsOf(reactor);
     const sunk = breakAll(fleet, [reactor]).filter((e) => e.kind === 'sunk');
     expect(sunk).toHaveLength(1);
-    expect(fleet.wave).toBe(2);
-    expect(fleet.hits.every((h) => h === 0)).toBe(true);
-    expect(fleet.hitsOf(reactor)).toBeGreaterThan(hits);
-    expect(fleet.arrivesAt).toBeCloseTo(RESPITE);
+    // it burns with its reactor critical, then it is over: no next one, and no more hits count
+    expect(fleet.present(1)).toBe(false);
+    expect(fleet.sunk(SINK_SECONDS / 2)).toBe(false);
+    expect(fleet.sunk(SINK_SECONDS + 0.1)).toBe(true);
+    expect(fleet.present(1000)).toBe(false);
+    expect(fleet.hit(batteries[0])).toEqual([]);
   });
 
   it('fires each battery once a period, at the same moments everywhere', () => {
@@ -85,7 +86,7 @@ describe("the President's fleet", () => {
   it('is followed by the other browsers as the lead flies it', () => {
     const lead = battleship();
     const other = new Fleet(7);
-    expect(other.present(FIRST_ARRIVAL - 1)).toBe(false);
+    expect(other.present(ARRIVAL - 1)).toBe(false);
     const battery = zonesOf(lead, 'battery')[0];
     breakAll(lead, [battery]);
     let events = other.follow(JSON.parse(JSON.stringify(lead.toState())));
@@ -96,6 +97,6 @@ describe("the President's fleet", () => {
     breakAll(lead, zonesOf(lead, 'reactor'));
     events = other.follow(JSON.parse(JSON.stringify(lead.toState())));
     expect(events.map((e) => e.kind)).toContain('sunk');
-    expect(other.wave).toBe(2);
+    expect(other.down).toBe(true);
   });
 });

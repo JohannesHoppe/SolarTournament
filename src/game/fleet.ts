@@ -5,13 +5,15 @@ import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
 
 /**
- * The President's Fleet: every Host on one side against the President's battleships, one at a
- * time. The President wants blood and sends battleships into the ring, because he can.
+ * The President's Fleet: every Host on one side against a battleship of the President, one in
+ * every round. The President wants blood and sends battleships into the ring, because he can.
+ * The Hosts win the round when it goes down; when the time runs out first, it got away, and
+ * the President wins.
  *
  * A battleship is 600 m long and circles the field along its outer rocks like a shark. It has
- * BATTERIES laser batteries, two drives and a reactor under an armored dome; its hull itself
- * takes no harm. Every laser hit on a part counts; a part takes ZONE_HITS hits (more with every
- * battleship of the round, see waveScale). Its phases follow from what is left of it:
+ * six laser batteries, two drives and a reactor under an armored dome; its hull itself takes
+ * no harm. Every laser hit on a part counts; a part takes ZONE_HITS hits. Its phases follow
+ * from what is left of it:
  *
  * - while more than half its batteries stand, it circles and its batteries fire;
  * - with half of them gone, it turns its stern on the nearest pilot and lights its drives: its
@@ -19,22 +21,21 @@ import { boxContact, rayBox } from '../world/boxes';
  * - with every battery gone, the dome over the reactor opens; the reactor's end is the ship's.
  *
  * Without drives it drifts and burns nothing. A battleship that goes down takes every ship
- * within SINK_BLAST along, and the next one comes RESPITE seconds later.
+ * within SINK_BLAST along.
  *
  * Online the lead browser flies the battleship and sends where it is with the round clock (see
  * Fleet.toState); every laser hit on a part goes to every browser, so all count the same hits.
  * Each browser fires the batteries at the ships it runs, and burns them in the plume.
  */
 export type ZoneKind = 'battery' | 'drive' | 'reactor';
-/** Hits a part takes on the first battleship (see waveScale). */
+/** Hits a part takes. */
 export const ZONE_HITS: Record<ZoneKind, number> = { battery: 30, drive: 45, reactor: 90 };
-/** Points for a hit on a part, for the hit that breaks one, and for every ship of the side when a battleship goes down. */
+/** Points for a hit on a part, for the hit that breaks one, and for every ship of the side when the battleship goes down. */
 export const FLEET_HIT_POINTS = 10;
 export const ZONE_POINTS: Record<ZoneKind, number> = { battery: 150, drive: 200, reactor: 1000 };
 export const SINK_POINTS = 500;
-/** The first battleship comes this long after the round starts (s of field time), each next one RESPITE seconds after the last went down. */
-export const FIRST_ARRIVAL = 12;
-export const RESPITE = 20;
+/** The battleship comes this long after the round starts (s of field time). */
+export const ARRIVAL = 12;
 /**
  * A battleship circles the center this far out (units, 2.5 km), along the outer rocks and
  * almost 1 km inside the arena's edge, so a pilot can attack it from every side, at
@@ -74,8 +75,8 @@ const REACH = 8500;
 type Zone = { kind: ZoneKind; at: THREE.Vector3; radius: number; mesh: THREE.Object3D };
 type Box = { center: THREE.Vector3; half: THREE.Vector3 };
 
-/** What the lead browser sends: the battleship's number, when it arrives (field time), the hits on each part, where it is, its motion and turn, whom its stern hunts and whether its drives burn. */
-export type FleetState = { w: number; a: number; h: number[]; p: number[]; v: number[]; q: number[]; t: string | null; u: number };
+/** What the lead browser sends: whether the battleship went down, the hits on each part, where it is, its motion and turn, whom its stern hunts and whether its drives burn. */
+export type FleetState = { d: number; h: number[]; p: number[]; v: number[]; q: number[]; t: string | null; u: number };
 
 /** What the fleet needs to know of a ship. */
 export interface Target {
@@ -99,14 +100,11 @@ const UP = new THREE.Vector3(0, 1, 0);
 /** The chance a battery's beam hits a target this fast (units/s) this far away (units). */
 export const batteryChance = (speed: number, distance: number) => BATTERY_AIM * (1 - 0.5 * Math.min(1, speed / BATTERY_DODGE_SPEED)) * (1 - 0.5 * Math.min(1, distance / BATTERY_RANGE));
 
-/** Every battleship is a little tougher than the last: a quarter more hits per part each. */
-export const waveScale = (wave: number) => 1 + 0.25 * Math.max(0, wave - 1);
-
 export class Fleet {
   readonly root = new THREE.Group();
-  /** The number of the battleship of now (1 for the first), when it arrives (field time), and how many went down. */
-  wave = 1;
-  arrivesAt = FIRST_ARRIVAL;
+  /** When the battleship comes (field time), and whether it went down. */
+  arrivesAt = ARRIVAL;
+  down = false;
   readonly hits: number[];
   readonly zones: Zone[] = [];
   readonly velocity = new THREE.Vector3();
@@ -126,9 +124,8 @@ export class Fleet {
   private readonly reactorGlow: THREE.MeshBasicMaterial;
   private readonly driveGlow: THREE.MeshBasicMaterial;
   private lastClock = 0;
-  /** When the last battleship went down (field time), and whether the next one waits on the edge already. */
+  /** When the battleship went down (field time). */
   private sunkAt = -Infinity;
-  private entered = false;
 
   constructor(private readonly seed: number) {
     const hull = this.material(new THREE.MeshStandardMaterial({ color: 0x5a606c, metalness: 0.4, roughness: 0.55 }));
@@ -201,14 +198,19 @@ export class Fleet {
     return this.root.quaternion;
   }
 
-  /** The battleship is in the arena now (not between two). */
+  /** The battleship is in the fight: it has come, and has not gone down. */
   present(clock: number) {
-    return clock >= this.arrivesAt;
+    return clock >= this.arrivesAt && !this.down;
   }
 
-  /** Hits a part takes on this battleship. */
+  /** It went down and has gone up: the Hosts have won the round. */
+  sunk(clock: number) {
+    return this.down && !this.dying(clock);
+  }
+
+  /** Hits a part takes. */
   hitsOf(zone: number) {
-    return Math.round(ZONE_HITS[this.zones[zone].kind] * waveScale(this.wave));
+    return ZONE_HITS[this.zones[zone].kind];
   }
 
   broken(zone: number) {
@@ -263,11 +265,11 @@ export class Fleet {
 
   /**
    * One laser hit on a part, from here or another browser; returns the events it set off: the
-   * part broken, a new phase, the ship gone down. A hit for another battleship, or on a part
-   * already broken or still sealed, counts nothing.
+   * part broken, a new phase, the ship gone down. A hit on a part already broken or still
+   * sealed, or on a battleship that went down, counts nothing.
    */
-  hit(zone: number, wave: number): FleetEvent[] {
-    if (wave !== this.wave || !this.open(zone)) return [];
+  hit(zone: number): FleetEvent[] {
+    if (this.down || !this.open(zone)) return [];
     const phase = this.phase;
     this.hits[zone]++;
     return this.after(zone, phase);
@@ -379,8 +381,7 @@ export class Fleet {
   toState(): FleetState {
     const round = (v: number) => +v.toFixed(3);
     return {
-      w: this.wave,
-      a: round(this.arrivesAt),
+      d: this.down ? 1 : 0,
       h: [...this.hits],
       p: this.position.toArray().map(Math.round),
       v: this.velocity.toArray().map(Math.round),
@@ -390,13 +391,12 @@ export class Fleet {
     };
   }
 
-  /** Takes the lead's state: a later battleship (this one went down there first), the hits it counts, where it is. */
+  /** Takes the lead's state: the battleship went down there first, the hits it counts, where it is. */
   follow(state: FleetState): FleetEvent[] {
+    if (this.down) return [];
+    if (state.d) return this.sink();
     const events: FleetEvent[] = [];
-    if (state.w > this.wave) events.push(...this.sink(state.w));
-    if (state.w !== this.wave) return events;
-    this.arrivesAt = state.a;
-    // hits only add up within a battleship: the lead's count fills in hits not heard here
+    // hits only add up: the lead's count fills in hits not heard here
     const phase = this.phase;
     state.h.forEach((hits, zone) => {
       if (hits <= this.hits[zone] || zone >= this.hits.length) return;
@@ -434,13 +434,11 @@ export class Fleet {
 
   /**
    * The battleship as it looks this frame: broken parts burnt out, the dome open, the reactor
-   * pulsing, the plume burning; a battleship that went down stays until it goes up, and the
-   * next one waits on the arena's edge.
+   * pulsing, the plume burning; once it went down it stays until it goes up.
    */
   update(clock: number, now: number) {
     const dying = this.dying(clock);
     this.root.visible = this.present(clock) || dying;
-    if (!this.root.visible && !this.entered) this.enter();
     // a broken drive is burnt out; a broken battery or reactor is gone
     this.zones.forEach((zone, i) => {
       if (zone.kind === 'drive') (zone.mesh as THREE.Mesh).material = this.broken(i) ? this.burnt : this.driveGlow;
@@ -457,28 +455,18 @@ export class Fleet {
     for (const geometry of this.geometries) geometry.dispose();
   }
 
-  /**
-   * The battleship went down (here, or on the lead browser first): its reactor goes critical,
-   * and SINK_SECONDS later it goes up; the next one, `wave`, comes RESPITE seconds after it
-   * went down, whole, from the arena's edge.
-   */
-  sink(wave = this.wave + 1): FleetEvent[] {
-    const events: FleetEvent[] = [{ kind: 'sunk', zone: -1, position: this.position.clone() }];
-    this.wave = wave;
+  /** The battleship went down (here, or on the lead browser first): its reactor goes critical, and SINK_SECONDS later it goes up. */
+  sink(): FleetEvent[] {
+    this.down = true;
     this.sunkAt = this.lastClock;
-    this.arrivesAt = this.lastClock + RESPITE;
-    this.hits.fill(0);
-    this.heardFresh = false;
-    this.entered = false;
     this.target = null;
     this.burning = false;
-    return events;
+    return [{ kind: 'sunk', zone: -1, position: this.position.clone() }];
   }
 
-  /** Where the battleship of this wave comes in: on the arena's edge, from a side that follows from the round and the wave, heading along its orbit. */
+  /** Where the battleship comes in: on the arena's edge, from a side that follows from the arena, heading along its orbit. */
   private enter() {
-    this.entered = true;
-    const r = new Randomizer(this.seed * 13 + this.wave * 101);
+    const r = new Randomizer(this.seed * 13 + 101);
     const angle = r.range(0, Math.PI * 2);
     this.position.set(Math.cos(angle) * ENTRY, r.range(-4000, 4000), Math.sin(angle) * ENTRY);
     this.velocity.crossVectors(UP, this.position).setLength(FLEET_SPEED);

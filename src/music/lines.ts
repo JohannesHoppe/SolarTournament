@@ -180,12 +180,13 @@ export const ANNOUNCER_SURVIVOR = ['{name} is the last clone standing', '{name} 
 export const ANNOUNCER_FLARE = 'here comes the flare. the arena is closing';
 /** Capture the Flag: a pilot brings the other side's core home. */
 export const ANNOUNCER_CAPTURE = ['{name} brings the core home', 'and {name} scores. the sponsor core is theirs'];
-/** The President's Fleet: a battleship comes, turns its drive on the pilots, opens its reactor, goes down. */
+/** The President's Fleet: the battleship comes, turns its drive on the pilots, opens its reactor, goes down. */
 export const ANNOUNCER_FLEET = {
   arrives: ['the president wants blood. here comes his battleship', 'a battleship enters the ring. because the president can'],
   plume: 'it turns its drive on you. do not stand behind it',
   open: 'the reactor is open. finish it',
-  sunk: ['the battleship is down. the president is not amused', 'down it goes. the president will send another'],
+  sunk: ['the battleship is down. the president is not amused', 'down it goes. the hosts take the round'],
+  escaped: 'the battleship got away. the president wins. as always',
 } as const;
 export const ANNOUNCER_OPEN = ['radio twenty five eighty four. live from the arena', 'this is your announcer. the games continue'];
 /** The announcer names the arena of the round (see world/arenas). */

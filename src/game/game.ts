@@ -55,7 +55,8 @@ const RESULTS_SECONDS = 12;
 const STANDINGS_REFRESH = 0.25;
 /**
  * Once a round is decided before its time (every Host has finished the race, one ship is left
- * standing), it ends this many seconds later (s): time to see the own place.
+ * standing, a side has captured enough, the battleship went up), it ends this many seconds
+ * later (s): time to see the own place.
  */
 const DECIDED_SECONDS = 5;
 /**
@@ -366,7 +367,7 @@ const SOLO_NOTES: Record<RoundMode, string> = {
   deathmatch: 'For the hard pilots: five minutes, every clone for itself.',
   survival: `${CLONES} clones each. A solar flare closes in on the arena. The last clone standing wins.`,
   flag: 'Orange against Blue, bots on both sides. Steal their sponsor core, bring it home, keep yours.',
-  fleet: 'The President wants blood and sends battleships into the ring. Because he can. Everyone against them.',
+  fleet: 'The President wants blood and sends a battleship into the ring. Because he can. Everyone against it: sink it before the time runs out.',
 };
 
 /** The solo choice kept in this browser, checked: whatever does not fit falls back to the default. */
@@ -543,9 +544,9 @@ export class Game implements OnlineGame {
   private roundMode: RoundMode = 'deathmatch';
   private course: Course | null = null;
   private flags: Flags | null = null;
-  /** The President's battleship in his Fleet, which wave of it has been announced, and the phase it was in. */
+  /** The President's battleship in his Fleet, whether its coming has been announced, and the phase it was in. */
   private fleet: Fleet | null = null;
-  private fleetCalled = 0;
+  private fleetCalled = false;
   private fleetPhase = 1;
   /** A point of its own each bot steers by: where a raider swings out before it dives through a core (see raidPoint), the part of a battleship it attacks. */
   private readonly botPoints = new Map<Bot, THREE.Vector3>();
@@ -1092,7 +1093,7 @@ export class Game implements OnlineGame {
       race: `Every round a race: ${LAPS} laps through ${GATES} gates, lasers on.`,
       survival: `Every round Last Clone Standing: ${CLONES} clones each, a solar flare closing in.`,
       flag: 'Every round Capture the Flag: Orange against Blue, Hosts spread over both sides.',
-      fleet: "Every round the President's Fleet: every Host and bot together against his battleships.",
+      fleet: "Every round the President's Fleet: every Host and bot together against one of his battleships.",
       mixed: 'Every mode in turn, starting with a deathmatch.',
     }[this.roomMode];
     $('room-note').textContent = `${who} ${bots} ${rounds} The link works for good: whoever follows it later starts the tournament again.`;
@@ -1582,14 +1583,14 @@ export class Game implements OnlineGame {
     }
     this.flags = this.roundMode === 'flag' ? new Flags(this.field, arena.layout.seed) : null;
     if (this.flags) this.scene.add(this.flags.root);
-    // and the President's battleships, which come in from a side that follows from the arena
+    // and the President's battleship, which comes in from a side that follows from the arena
     if (this.fleet) {
       this.scene.remove(this.fleet.root);
       this.fleet.dispose();
     }
     this.fleet = this.roundMode === 'fleet' ? new Fleet(arena.layout.seed) : null;
     if (this.fleet) this.scene.add(this.fleet.root);
-    this.fleetCalled = 0;
+    this.fleetCalled = false;
     this.fleetPhase = 1;
     // against the President every ship is on one side
     for (const ship of this.ships) ship.team = this.fleet ? 0 : -1;
@@ -2203,6 +2204,8 @@ export class Game implements OnlineGame {
   private renderScoreboard() {
     const me = this.me;
     this.fillStandings($<HTMLTableElement>('scoreboard'));
+    // the time ran out with the President's battleship still in the fight: it got away
+    if (this.fleet?.present(this.field.clock)) this.radio.announce(ANNOUNCER_FLEET.escaped, null);
     // training points from the flight school are no personal best
     if (me && !this.school && me.score > Number(storageGet(BEST_SCORE_KEY) ?? 0)) storageSet(BEST_SCORE_KEY, String(me.score));
   }
@@ -2215,8 +2218,8 @@ export class Game implements OnlineGame {
     table.innerHTML = `<tr><th>#</th><th>Host</th>${race ? '<th>Race</th>' : ''}${survival ? '<th>Clones</th>' : ''}${flags ? '<th>Side</th>' : ''}<th>Kills</th><th>Deaths</th><th>Score</th></tr>`;
     // Capture the Flag names the sides' captures above the pilots
     if (flags) table.createCaption().textContent = `${TEAM_NAMES[0]} ${flags.captures[0]} : ${flags.captures[1]} ${TEAM_NAMES[1]}${flags.leading >= 0 ? ` · ${TEAM_NAMES[flags.leading]} leads` : ''}`;
-    // the President's Fleet: how many battleships went down together
-    if (this.fleet) table.createCaption().textContent = `Battleships down: ${this.fleet.wave - 1}`;
+    // the President's Fleet: who won, the Hosts or the President
+    if (this.fleet) table.createCaption().textContent = this.fleet.down ? 'Battleship down · the Hosts win' : this.fleet.present(this.field.clock) ? 'The battleship got away · the President wins' : 'The battleship is coming';
     // a race ranks by the finish, Last Clone Standing by the clones left, a deathmatch by the score (see standings)
     this.standings().forEach((ship, i) => {
       const row = table.insertRow();
@@ -2493,11 +2496,12 @@ export class Game implements OnlineGame {
   /**
    * The round is decided before its time: a race once every Host's clone has finished (bots do
    * not hold it up), Last Clone Standing once no more than one ship has a clone left, Capture
-   * the Flag once a side has captured enough.
+   * the Flag once a side has captured enough, the President's Fleet once his battleship went up.
    */
   private decided() {
     if (this.survival) return this.standings().length > 1 && this.contenders().length <= 1;
     if (this.flags) return this.flags.won;
+    if (this.fleet) return this.fleet.sunk(this.field.clock);
     const hosts = this.ships.filter((ship) => ship.kind === 'host');
     return !!this.course && hosts.length > 0 && hosts.every((ship) => ship.finish >= 0);
   }
@@ -2659,12 +2663,11 @@ export class Game implements OnlineGame {
       const plume = fleet.plumeAt(ship.flight.position, ship.radius);
       if (plume > 0) this.burn(ship, plume, FLEET_PLUME_HEAT, FLEET_PLUME_BURN, "In the battleship's drive plume · get out", null, 'exhaust', dt, now);
     }
-    if (fleet.present(clock) && this.fleetCalled !== fleet.wave) {
-      this.fleetCalled = fleet.wave;
-      this.fleetPhase = 1;
+    if (fleet.present(clock) && !this.fleetCalled) {
+      this.fleetCalled = true;
       this.radio.announce(pick(ANNOUNCER_FLEET.arrives), null);
       this.speaker.say(COMPUTER.battleship, 'urgent');
-      this.hud.flashMessage(now, `Battleship ${fleet.wave} · take out its batteries`, 4);
+      this.hud.flashMessage(now, 'Battleship · take out its batteries', 4);
     }
     // the battleship's phases, called once each, wherever the hits that changed it came from
     if (fleet.present(clock) && fleet.phase > this.fleetPhase) {
@@ -2706,20 +2709,20 @@ export class Game implements OnlineGame {
 
   /** An own ship's laser hit a part of the battleship: every browser counts it; the shooter scores the hit and the part it breaks. */
   private hitFleet(fleet: Fleet, zone: number, shooter: Ship, point: THREE.Vector3) {
-    const wave = fleet.wave;
     this.effects.sparks(point, shooter.color, 60);
-    this.online?.sendFleetHit(zone, wave, shooter);
+    this.online?.sendFleetHit(zone, this.roundId, shooter);
     shooter.score += FLEET_HIT_POINTS;
     if (shooter.isLocal) {
       this.hud.hit();
       this.sound.beep(1320, 0.06);
       this.landed(point, ZONE_NAMES[fleet.zones[zone].kind].toUpperCase());
     }
-    this.fleetEvents(fleet.hit(zone, wave), shooter);
+    this.fleetEvents(fleet.hit(zone), shooter);
   }
 
-  remoteFleetHit(zone: number, wave: number, shooter: Ship) {
-    if (this.fleet) this.fleetEvents(this.fleet.hit(zone, wave), shooter);
+  remoteFleetHit(zone: number, round: number, shooter: Ship) {
+    // a hit of another round was on another battleship
+    if (this.fleet && round === this.roundId) this.fleetEvents(this.fleet.hit(zone), shooter);
   }
 
   /** What the battleship's hits set off: a part breaking (points for an own shooter), a new phase, the ship going down. */
@@ -2759,7 +2762,7 @@ export class Game implements OnlineGame {
       ship.protectedUntil = Math.min(ship.protectedUntil, now);
       if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, null, 'blast');
     }
-    if (this.me?.alive) this.hud.flashMessage(now, `Battleship down · +${SINK_POINTS}`, 3);
+    this.hud.flashMessage(now, `Battleship down · the round is yours · +${SINK_POINTS}`, DECIDED_SECONDS);
     const seen = this.camera.position.distanceTo(position);
     if (seen < SINK_BLAST * 3) {
       this.linkHit(Math.max(0.4, 1 - seen / (SINK_BLAST * 3)), 1);
@@ -2778,16 +2781,16 @@ export class Game implements OnlineGame {
   /** The President's Fleet in the HUD: the battleship, what is left of it, and where to fly; returns that point for the crosshair. */
   private showFleet(fleet: Fleet, me: Ship): THREE.Vector3 | null {
     const clock = this.field.clock;
-    const sunk = fleet.wave - 1;
-    const step = `The President's Fleet · ${sunk} ${sunk === 1 ? 'battleship' : 'battleships'} down`;
+    const step = "The President's Fleet";
     if (!fleet.present(clock)) {
       this.hud.setWaypoint(this.camera, null);
-      this.hud.setSchool({ step, text: `Battleship ${fleet.wave} comes in ${Math.max(0, Math.ceil(fleet.arrivesAt - clock))} s`, keys: [] });
+      const text = fleet.down ? (fleet.sunk(clock) ? 'Battleship down · the Hosts win' : 'Reactor critical · get clear') : `The battleship comes in ${Math.max(0, Math.ceil(fleet.arrivesAt - clock))} s`;
+      this.hud.setSchool({ step, text, keys: [] });
       return null;
     }
     const total = (kind: string) => fleet.zones.filter((zone) => zone.kind === kind).length;
     const reactor = fleet.phase === 3 ? 'reactor open' : 'reactor sealed';
-    this.hud.setSchool({ step, text: `Battleship ${fleet.wave} · batteries ${fleet.batteries}/${total('battery')} · drives ${fleet.drives}/${total('drive')} · ${reactor}`, keys: [] });
+    this.hud.setSchool({ step, text: `Sink it before the time runs out · batteries ${fleet.batteries}/${total('battery')} · drives ${fleet.drives}/${total('drive')} · ${reactor}`, keys: [] });
     const zone = fleet.nearestZone(me.flight.position);
     const goal = zone < 0 ? fleet.position : fleet.zoneAt(zone, fleetGoal);
     this.hud.setWaypoint(this.camera, goal, zone < 0 ? 'Battleship' : ZONE_NAMES[fleet.zones[zone].kind]);
