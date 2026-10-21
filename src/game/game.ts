@@ -2375,6 +2375,15 @@ export class Game implements OnlineGame {
       ship.protectedUntil = Math.min(ship.protectedUntil, now);
       if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, holder);
     }
+    // the holder's clone burns up in its own core, leaving nothing behind; no one is blamed for
+    // it, and the sponsors are so thrilled by the show that the next clone comes without an ad
+    if (holder.owner === null && holder.alive) {
+      this.respawn(holder);
+      if (holder === this.me) {
+        this.speaker.say(COMPUTER.novaReprint, 'urgent');
+        this.hud.flashMessage(now, 'Sponsors thrilled · no ad · next clone ready', 3);
+      }
+    }
     for (const torpedo of [...this.torpedoes.list]) if (torpedo.position.distanceTo(position) < NOVA_RADIUS) this.blowUp(torpedo);
     for (const wreck of [...this.wrecks.list]) if (wreck.mesh.position.distanceTo(position) < NOVA_RADIUS) this.shatterWreck(wreck);
     // whoever sees it is blinded for a moment, and hears its debris from far
@@ -2387,7 +2396,7 @@ export class Game implements OnlineGame {
       void document.body.offsetWidth;
       document.body.classList.add('nova-flash');
     }
-    this.hud.flashMessage(now, holder === this.me ? 'NOVA' : `NOVA · ${holder.name}`, 2.5);
+    if (holder !== this.me) this.hud.flashMessage(now, `NOVA · ${holder.name}`, 2.5);
   }
 
   /**

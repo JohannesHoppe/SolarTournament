@@ -275,6 +275,7 @@ export const COMPUTER = {
   launch: 'Live link established. Go get them, pilot.',
   nova: 'Darling, you have the nova core. Your next shot sets it off: a monstrous blast. Fly right into the crowd, and take as many as you can with you.',
   novaNear: 'Warning! Nova core activated close by! Get out of there, now!',
+  novaReprint: 'What a blast, darling! The sponsors loved it. No ad this time. Here is your next clone.',
 } as const;
 
 /**

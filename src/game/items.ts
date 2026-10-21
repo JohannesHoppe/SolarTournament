@@ -14,7 +14,8 @@ import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
  * - repair: hull, drive and thrusters as new.
  * - nova: an overcharged reactor core, the rarest of all. The ship that holds it pulses for
  *   everyone to see, and its next shot is no laser: the core goes off, and every other ship
- *   around it is gone (see Game.novaBlast). It stays with the clone until then, and flies
+ *   around it is gone, and so is its own clone, printed again at once without counting as a
+ *   death (see Game.novaBlast). It stays with the clone until then, and flies
  *   out when it dies.
  */
 export type ItemKind = 'twin' | 'plating' | 'torpedoes' | 'overdrive' | 'repair' | 'nova';
