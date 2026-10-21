@@ -40,19 +40,32 @@ jobs:
             const authors = new Set([pr.user.login]);
             const unlinked = [];
             const commits = await github.paginate(github.rest.pulls.listCommits, { owner, repo, pull_number: number, per_page: 100 });
+            // the API lists at most 250 commits: a longer pull request cannot be checked whole
+            if (pr.commits > commits.length) unlinked.push(`${pr.commits - commits.length} commits beyond the first ${commits.length}`);
             for (const commit of commits) {
               if (commit.author?.login) authors.add(commit.author.login);
               else unlinked.push(commit.sha.slice(0, 7));
+              // co-authors sign too; only a GitHub noreply address tells their login
+              for (const [, email] of commit.commit.message.matchAll(/^Co-authored-by:.*<([^>]+)>\s*$/gim)) {
+                const noreply = /^(?:\d+\+)?([^@]+)@users\.noreply\.github\.com$/i.exec(email);
+                if (noreply) authors.add(noreply[1]);
+                else unlinked.push(`co-author of ${commit.sha.slice(0, 7)}`);
+              }
             }
             const needed = [...authors].filter((login) => login.toLowerCase() !== MAINTAINER && !login.endsWith('[bot]'));
 
-            // a signature: the file names the agreement and is signed with the login
+            // a signature: the file names the agreement and is signed with the login; one that
+            // only the pull request brings counts when its author committed it, nobody else
             const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            async function signature(login, where) {
+            async function signature(login, where, own) {
+              const path = `contributors/${login}.txt`;
               try {
-                const { data } = await github.rest.repos.getContent({ ...where, path: `contributors/${login}.txt` });
+                const { data } = await github.rest.repos.getContent({ ...where, path });
                 const text = Buffer.from(data.content, 'base64').toString('utf8');
-                return /Contributor License Agreement/i.test(text) && new RegExp(`Signed:\\s*@?${escape(login)}\\s*$`, 'im').test(text);
+                if (!/Contributor License Agreement/i.test(text) || !new RegExp(`Signed:\\s*@?${escape(login)}\\s*$`, 'im').test(text)) return false;
+                if (!own) return true;
+                const { data: history } = await github.rest.repos.listCommits({ owner: where.owner, repo: where.repo, sha: where.ref, path, per_page: 1 });
+                return history[0]?.author?.login?.toLowerCase() === login.toLowerCase();
               } catch {
                 return false;
               }
@@ -61,7 +74,7 @@ jobs:
             const head = pr.head.repo ? { owner: pr.head.repo.owner.login, repo: pr.head.repo.name, ref: pr.head.sha } : null;
             const missing = [];
             for (const login of needed) {
-              if (!(await signature(login, base)) && !(head && (await signature(login, head)))) missing.push(login);
+              if (!(await signature(login, base, false)) && !(head && (await signature(login, head, true)))) missing.push(login);
             }
             const state = missing.length || unlinked.length ? 'missing' : 'signed';
 
@@ -98,7 +111,7 @@ jobs:
                     MARKER(state),
                     `**CLA missing.** Thank you for your pull request! Before it can be merged, every author has to sign the [Contributor License Agreement](${agreement}) once. You keep the copyright in your contribution; the agreement lets Johannes Hoppe license the code under other terms as well, next to the AGPL.`,
                     ...missing.map((login) => `@${login}: please add the file \`contributors/${login}.txt\` to this pull request, with this content:\n\n${sentence(login)}`),
-                    ...(unlinked.length ? [`These commits are not linked to a GitHub account, so their authors are unknown: ${unlinked.join(', ')}. Please set your commit e-mail address to one of your account's addresses and push the commits again.`] : []),
+                    ...(unlinked.length ? [`Not every author can be told: ${unlinked.join(', ')}. Commits have to be linked to a GitHub account (the commit e-mail address is one of the account's addresses), co-authors named with their GitHub noreply address, and a pull request of more than 250 commits has to be split.`] : []),
                     'This check runs again with every push to the pull request.',
                   ].join('\n\n');
               await github.rest.issues.createComment({ owner, repo, issue_number: number, body });

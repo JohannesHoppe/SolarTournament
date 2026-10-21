@@ -14,7 +14,7 @@ I hereby accept the terms of the Contributor License Agreement in the CONTRIBUTI
 Signed: <your GitHub username>
 ```
 
-A check on every pull request looks for this file, for the author of the pull request and for the author of every commit in it. It comments once when a signature is missing and once when all are there, and labels the pull request `cla: missing` or `cla: signed`. A pull request is only merged with `cla: signed`. Commits have to be linked to your GitHub account (the commit e-mail address is one of your account's addresses), or the check cannot tell who wrote them. You sign only once; your file covers all your later pull requests.
+A check on every pull request looks for this file, for the author of the pull request, the author of every commit in it and every co-author (`Co-authored-by`). A file the pull request brings counts only when you committed it yourself: nobody can sign for you. The check labels the pull request `cla: missing` or `cla: signed` and comments on its first run and whenever that changes. A pull request is only merged with `cla: signed`. Commits have to be linked to your GitHub account (the commit e-mail address is one of your account's addresses), co-authors are named with their GitHub noreply address, and a pull request has at most 250 commits, or the check cannot tell who wrote them. You sign only once; your file covers all your later pull requests.
 
 # Contributor License Agreement
 

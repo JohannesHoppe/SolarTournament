@@ -1758,6 +1758,9 @@ export class Game implements OnlineGame {
   private resize() {
     const width = window.innerWidth;
     const height = window.innerHeight;
+    // a zoom or another screen changes the pixel ratio as well
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.composer.setPixelRatio(this.renderer.getPixelRatio());
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
     this.hud.setViewport(width, height);
@@ -3186,10 +3189,7 @@ export class Game implements OnlineGame {
     const burn = me.alive ? flight.throttle : 0;
     const fast = me.alive ? Math.min(1, flight.velocity.length() / MAX_SPEED) : 0;
     const fov = this.camera.fov + (CAMERA_FOV + DRIVE_FOV_KICK * burn + SPEED_FOV * fast - this.camera.fov) * (1 - Math.exp(-6 * dt));
-    if (Math.abs(fov - this.camera.fov) > 0.01) {
-      this.camera.fov = fov;
-      this.camera.updateProjectionMatrix();
-    }
+    if (Math.abs(fov - this.camera.fov) > 0.01) this.setFov(fov);
     if (!this.cockpit && !reducedMotion.matches) {
       if (burn > 0.05) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * DRIVE_SHAKE * burn));
       // a jolt for every hit the own laser lands, bigger for a kill; it fades in a fraction of a second
@@ -3200,12 +3200,16 @@ export class Game implements OnlineGame {
     this.camera.updateMatrixWorld();
   }
 
+  /** A new field of view: the particles keep their size in the world with it. */
+  private setFov(fov: number) {
+    this.camera.fov = fov;
+    this.camera.updateProjectionMatrix();
+    this.effects.setViewport(window.innerHeight * this.renderer.getPixelRatio(), fov);
+  }
+
   private updateMenuCamera() {
     this.riding = null;
-    if (this.camera.fov !== CAMERA_FOV) {
-      this.camera.fov = CAMERA_FOV;
-      this.camera.updateProjectionMatrix();
-    }
+    if (this.camera.fov !== CAMERA_FOV) this.setFov(CAMERA_FOV);
     const t = this.time * 0.08;
     this.camera.position.set(0, 0, 0);
     this.camera.lookAt(Math.cos(t), Math.sin(t * 0.7) * 0.2, Math.sin(t));

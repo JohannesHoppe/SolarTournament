@@ -159,10 +159,11 @@ export class Bot {
     let defending = false;
     let chaser: Ship | null = null;
     for (const ship of ships) {
-      if (ship === this.ship || !ship.alive) continue;
+      // as with targets: a fresh clone cannot hurt, and a storm blinds the sensors beyond sight
+      if (ship === this.ship || !ship.alive || now < ship.protectedUntil) continue;
       const line = toTarget.subVectors(me.position, ship.flight.position);
       const distance = line.length();
-      if (distance < THREAT_RANGE && this.ship.tailToward(line) && ship.flight.angleTo(line) < THREAT_ANGLE && field.lineOfSight(me.position, ship.flight.position)) {
+      if (distance < Math.min(THREAT_RANGE, sight) && this.ship.tailToward(line) && ship.flight.angleTo(line) < THREAT_ANGLE && field.lineOfSight(me.position, ship.flight.position)) {
         chaser = ship;
         // a racer does not turn around for it: it races on
         if (this.armed && !this.waypoint) {

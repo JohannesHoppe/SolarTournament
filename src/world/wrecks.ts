@@ -152,13 +152,11 @@ export class Wrecks {
       if (!match || ships.has(`${match[1]}.${match[2]}`)) continue;
       ships.add(`${match[1]}.${match[2]}`);
       this.spawn(match[1], Number(match[2]), position.fromArray(state.p), velocity.fromArray(state.v), shipRadius, now);
+      // the pieces gone in the snapshot go at once, so the cap on pieces never takes wanted ones
+      for (const wreck of [...this.list]) if (!wanted.has(wreck.id)) this.remove(wreck);
     }
-    for (const wreck of [...this.list]) {
-      const state = wanted.get(wreck.id);
-      if (!state) {
-        this.remove(wreck);
-        continue;
-      }
+    for (const wreck of this.list) {
+      const state = wanted.get(wreck.id)!;
       wreck.mesh.position.fromArray(state.p);
       wreck.velocity.fromArray(state.v);
       wreck.bornAt = now - state.g;

@@ -32,10 +32,14 @@ export class Radar {
   private readonly ctx: CanvasRenderingContext2D;
   private nextDraw = 0;
   private size = 0;
+  /** The canvas's width on the page (CSS pixels); 0 while it is hidden. */
+  private css = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d')!;
+    // its size is told when it changes, not asked every draw (which would lay out the page mid-frame)
+    new ResizeObserver(([entry]) => (this.css = entry.contentRect.width)).observe(canvas);
   }
 
   update(
@@ -50,7 +54,7 @@ export class Radar {
     if (now < this.nextDraw) return;
     this.nextDraw = now + 1 / RATE;
     const ctx = this.ctx;
-    const css = this.canvas.clientWidth;
+    const css = this.css;
     if (!css) return;
     const pixels = Math.round(css * Math.min(window.devicePixelRatio, 2));
     if (pixels !== this.size) {

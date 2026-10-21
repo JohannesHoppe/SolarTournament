@@ -2,6 +2,9 @@ import type { Voice } from '../music/band';
 import { clipKey } from '../music/lines';
 import { loadVoice } from '../music/voice';
 
+/** A voice that failed to load is tried again after this long (ms), as the radio's. */
+const VOICE_RETRY_MS = 5000;
+
 /** How a line meets one still being said: see Speaker.say. */
 export type Urgency = 'chatter' | 'urgent' | 'lesson';
 
@@ -13,6 +16,8 @@ export type Urgency = 'chatter' | 'urgent' | 'lesson';
 export class Speaker {
   private voice: Voice | null = null;
   private loading: Promise<void> | null = null;
+  /** After a failed load, the next try waits until then (performance.now(), ms). */
+  private retryAt = 0;
   private readonly input: GainNode;
   /** The lines playing or waiting to play, by their source. */
   private readonly sources = new Map<AudioBufferSourceNode, string>();
@@ -35,13 +40,15 @@ export class Speaker {
 
   /** Loads the voice in the background; lines said before it is ready are skipped. */
   prepare() {
-    this.loading ??= loadVoice()
+    if (this.loading || performance.now() < this.retryAt) return;
+    this.loading = loadVoice()
       .then((voice) => {
         this.voice = voice;
       })
       .catch((error) => {
-        // tried again with the next line
+        // tried again with a line said after a pause, not with every line of every frame
         this.loading = null;
+        this.retryAt = performance.now() + VOICE_RETRY_MS;
         console.warn('Flight computer voice unavailable', error);
       });
   }
