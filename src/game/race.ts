@@ -5,6 +5,11 @@ import type { AsteroidField } from '../world/asteroids';
 /** Gates of a lap, and laps of a race. */
 export const GATES = 8;
 export const LAPS = 3;
+/** The grid lies before the pink gate, and its first crossing starts the race: the race ends at the pink gate, LAPS laps later. */
+export const FINISH_GATES = GATES * LAPS + 1;
+
+/** The lap a ship flies after passing `gates` gates (1 to LAPS). */
+export const lapOf = (gates: number) => Math.min(LAPS, Math.floor(Math.max(0, gates - 1) / GATES) + 1);
 /** Radius of a gate (units, 80 m): wide enough for a pack of 35 m ships. */
 export const GATE_RADIUS = 1600;
 /** The course loops around the field's center at about this distance (units, 1.6 km), 300 m more or less. */

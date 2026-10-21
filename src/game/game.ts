@@ -38,7 +38,7 @@ import { KillCam } from '../view/killcam';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Torpedo } from './torpedoes';
 import { Probes, ITEM_NAMES, ITEM_HINTS, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
-import { Course, GATE_POINTS, GATE_RADIUS, GATES, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
+import { Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, type RoomMode, type RoundMode } from './race';
 import { markedName } from '../view/marks';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
@@ -164,10 +164,10 @@ const BRAKE_SETTLE = 300;
 const CONFIRM_LOCK_MS = 600;
 /** Drive lights in the scene: one for every place of a tournament, and one more for a watching Host's clone. */
 const ENGINE_LIGHTS = TOURNAMENT_SIZE + 1;
-/** The announcer opens a round this long after the launch (ms), once the flight computer is through. */
-const ANNOUNCER_OPEN_DELAY_MS = 7000;
-/** The arena's name shows this long after the launch (ms), once the link and the hint for the mouse are through. */
-const ARENA_TITLE_DELAY_MS = 4500;
+/** The announcer opens a round this long after the launch (s), once the flight computer is through. */
+const ANNOUNCER_OPEN_DELAY = 7;
+/** The arena's name shows this long after the launch (s), once the link and the hint for the mouse are through. */
+const ARENA_TITLE_DELAY = 4.5;
 /** One standard gravity in units/s² (1 unit = 5 cm). */
 const G = 9.81 / METERS_PER_UNIT;
 /** Above this load the pilot starts to grey out; at the limit it takes G_ONSET seconds to tunnel vision. */
@@ -382,9 +382,8 @@ export class Game implements OnlineGame {
   /** What the running round is, and its course when it is a race. */
   private roundMode: RoundMode = 'deathmatch';
   private course: Course | null = null;
-  /** The tournament was full: the own Host watches a pilot (watchIndex, Tab switches) instead of flying. */
+  /** The tournament was full: the own Host watches a pilot (Tab switches, see watchNext) instead of flying. */
   private spectating = false;
-  private watchIndex = 0;
   /** The pilot the watching Host follows, when the director cut to it, and until when a pilot picked by hand holds. */
   private watchedShip: Ship | null = null;
   private cutAt = -Infinity;
@@ -444,7 +443,7 @@ export class Game implements OnlineGame {
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
   private readonly inSight = (ship: Ship) => this.field.lineOfSight(this.camera.position, ship.flight.position);
   /** Whether the own ship's sensors see a ship past the asteroids, for the radar. */
-  private readonly sensed = (ship: Ship) => this.field.lineOfSight((this.watched() ?? this.me!).flight.position, ship.flight.position);
+  private readonly sensed = (ship: Ship) => this.field.lineOfSight(((this.spectating ? this.watched() : null) ?? this.me!).flight.position, ship.flight.position);
   private readonly radar = new Radar($<HTMLCanvasElement>('radar'));
   /** The radar's marks besides ships and rocks, reused from frame to frame. */
   private readonly marks: RadarMark[] = [
@@ -481,6 +480,8 @@ export class Game implements OnlineGame {
   /** The nova holder the own pilot was last warned about, and when the siren sounds next. */
   private novaWarned: Ship | null = null;
   private novaFlashTimer = 0;
+  /** Things to say and show a little after a round started (see cue). */
+  private readonly cues: { at: number; run: () => void }[] = [];
   private nextNovaSiren = 0;
   private nextLockBeep = 0;
   /** Speed of game time; 0 freezes the simulation while rendering continues. */
@@ -895,7 +896,6 @@ export class Game implements OnlineGame {
       me.root.visible = false;
       me.respawnAt = Infinity;
       this.cockpit = false;
-      this.watchIndex = 0;
       // a sponsor break in progress ends without booting a clone; HUD and mouse come back
       if (this.sponsors.visible) {
         this.sponsors.hide();
@@ -911,7 +911,18 @@ export class Game implements OnlineGame {
 
   /** The pilot a watching Host follows (see direct). */
   private watched(): Ship | null {
-    return this.watchedShip?.alive ? this.watchedShip : null;
+    // a ship that left the tournament is no longer among the ships, though its clone was alive
+    return this.watchedShip?.alive && this.ships.includes(this.watchedShip) ? this.watchedShip : null;
+  }
+
+  /** Tab while watching: the pilot after the one on screen, held for a while. */
+  private watchNext() {
+    const pilots = this.ships.filter((ship) => ship !== this.me && ship.alive);
+    if (!pilots.length) return;
+    const current = this.watched();
+    this.watchedShip = pilots[(current ? pilots.indexOf(current) + 1 : 0) % pilots.length];
+    this.cutAt = this.time;
+    this.handPickedUntil = this.time + DIRECTOR_PAUSE;
   }
 
   /**
@@ -927,10 +938,8 @@ export class Game implements OnlineGame {
       this.watchedShip = null;
       return;
     }
-    if (now < this.handPickedUntil) {
-      this.watchedShip = pilots[this.watchIndex % pilots.length];
-      return;
-    }
+    // a pilot picked by hand holds a while, as long as its clone lives
+    if (now < this.handPickedUntil && this.watched()) return;
     const current = this.watched();
     if (current && now - this.cutAt < DIRECTOR_HOLD) return;
     let best = current;
@@ -1114,10 +1123,7 @@ export class Game implements OnlineGame {
         if (action === 'autopilot' && this.me?.alive) this.toggleAutopilot();
         if (action === 'overdrive') this.overdrive();
         if (action === 'torpedo' && !this.spectating && this.me) this.fireTorpedo(this.me);
-        if (action === 'watch' && this.spectating) {
-          this.watchIndex++;
-          this.handPickedUntil = this.time + DIRECTOR_PAUSE;
-        }
+        if (action === 'watch' && this.spectating) this.watchNext();
         break;
       case 'paused':
         if (action === 'confirm' || action === 'pause' || action === 'back') this.resume();
@@ -1153,9 +1159,10 @@ export class Game implements OnlineGame {
 
   /**
    * Builds an arena: its field, its sun and scenery. A field restored from a snapshot is
-   * built by the snapshot (see restoreField) and only takes the rest here.
+   * built by the snapshot (see restoreField) and only takes the rest here; `keepWreckage`
+   * keeps the wreckage and torpedoes in flight, for the same arena rebuilt with another course.
    */
-  private enterArena(arena: ArenaProfile, state?: FieldState) {
+  private enterArena(arena: ArenaProfile, state?: FieldState, keepWreckage = false) {
     this.venue = arena;
     this.field.generate(arena.layout);
     // a race's course is laid out in the field as generated, the same on every browser
@@ -1169,8 +1176,10 @@ export class Game implements OnlineGame {
     this.space.setSun(arena.sun);
     this.landmarks.show(arena);
     this.belt.group.visible = arena.id === 'belt';
-    this.wrecks.clear();
-    this.torpedoes.clear();
+    if (!keepWreckage) {
+      this.wrecks.clear();
+      this.torpedoes.clear();
+    }
     this.storming = false;
   }
 
@@ -1204,6 +1213,8 @@ export class Game implements OnlineGame {
   private showMenu() {
     this.leaveOnline();
     this.clearShips();
+    // the hangar is no race: no gates behind the menu
+    this.roundMode = 'deathmatch';
     this.enterArena(ARENAS[0]);
     const best = Number(storageGet(BEST_SCORE_KEY) ?? 0);
     $('best-score').textContent = best ? `Personal best: ${best} pts` : '';
@@ -1218,6 +1229,7 @@ export class Game implements OnlineGame {
   private clearShips() {
     this.killcam.stop();
     this.clearShockwaves();
+    this.cues.length = 0;
     this.torpedoes.clear();
     this.probes.reset();
     this.wrecks.clear();
@@ -1231,6 +1243,7 @@ export class Game implements OnlineGame {
     this.bots = [];
     this.me = null;
     this.drone = null;
+    this.watchedShip = null;
     this.sparring = null;
     if (this.school) {
       this.speaker.stop();
@@ -1297,21 +1310,30 @@ export class Game implements OnlineGame {
     this.setScreen('playing');
     // the link to the clone comes first, then the hint for the mouse (not for touch or gamepad)
     const mouse = !this.input.touchActive && !this.input.gamepadActive;
-    if (mouse) {
-      window.setTimeout(() => {
-        if (this.state === 'playing') this.hud.flashMessage(this.time, 'The ship turns towards the mouse pointer', 4);
-      }, 2200);
-    }
+    // cues of this round on its own clock: a pause holds them, a new round drops them
+    this.cues.length = 0;
+    if (mouse) this.cue(2.2, () => this.hud.flashMessage(this.time, 'The ship turns towards the mouse pointer', 4));
     // the flight school starts with its briefing; a tournament clone just reports in, and
     // once Nicole is through, the announcer opens the broadcast
     if (mode !== 'school') {
       this.speaker.say(mouse ? [COMPUTER.launch, COMPUTER.mouse] : COMPUTER.launch, 'urgent');
-      window.setTimeout(() => {
-        if (this.state === 'playing' && !this.school) this.announceArena();
-      }, ARENA_TITLE_DELAY_MS);
-      window.setTimeout(() => {
-        if (this.state === 'playing' && !this.school) this.openBroadcast();
-      }, ANNOUNCER_OPEN_DELAY_MS);
+      this.cue(ARENA_TITLE_DELAY, () => this.announceArena());
+      this.cue(ANNOUNCER_OPEN_DELAY, () => this.openBroadcast());
+    }
+  }
+
+  /** Runs `run` this many seconds of round time from now. */
+  private cue(seconds: number, run: () => void) {
+    this.cues.push({ at: this.time + seconds, run });
+  }
+
+  /** The cues that are due (see cue). */
+  private runCues() {
+    for (let i = this.cues.length - 1; i >= 0; i--) {
+      if (this.time < this.cues[i].at) continue;
+      const { run } = this.cues[i];
+      this.cues.splice(i, 1);
+      run();
     }
   }
 
@@ -1370,6 +1392,9 @@ export class Game implements OnlineGame {
   }
 
   removeShip(ship: Ship) {
+    // gone from every screen: no camera follows it, no torpedo homes on it
+    ship.alive = false;
+    if (this.watchedShip === ship) this.watchedShip = null;
     this.returnLight(ship);
     this.scene.remove(ship.root);
     this.ships = this.ships.filter((s) => s !== ship);
@@ -1481,9 +1506,11 @@ export class Game implements OnlineGame {
     // over in another round than its own leaves its own behind.
     if (this.roundId < 0) {
       if (this.rejoinedFrom !== null && this.rejoinedFrom !== round.id) this.clearRound();
+      // a newcomer's clone was printed before it knew the round's arena
+      const newcomer = this.rejoinedFrom === null;
       this.roundId = round.id;
       this.rejoinedFrom = null;
-      this.arriveInRound();
+      this.arriveInRound(newcomer);
     } else if (round.id > this.roundId) {
       // a new round only once the running one is over; a lead that counts rounds up before
       // has nothing to say about this one
@@ -1506,7 +1533,7 @@ export class Game implements OnlineGame {
     // and one that started over without hearing another lead continues its own round
     if (this.roundId < 0) {
       this.roundId = this.rejoinedFrom ?? 0;
-      this.arriveInRound();
+      this.arriveInRound(false);
     }
     this.rejoinedFrom = null;
     if (!Number.isFinite(this.roundEndsAtWall)) this.setRoundEnd(ROUND_SECONDS);
@@ -1536,6 +1563,7 @@ export class Game implements OnlineGame {
    */
   private startNextRound() {
     this.clearRound();
+    this.freshRound();
     this.roundMode = this.onlineRoundMode();
     this.enterArena(this.roundArena());
     this.reprintOwn();
@@ -1549,21 +1577,32 @@ export class Game implements OnlineGame {
   /**
    * Online, the round's arena is known: a browser whose field is another one moves there,
    * and its ships with it, freshly printed, since where they flew may be rock in the new one.
+   * A newcomer's ships were printed before it knew the arena (`reprint`): they are printed
+   * again in it, on the grid in a race.
    */
-  private arriveInRound() {
+  private arriveInRound(reprint: boolean) {
     const arena = this.roundArena();
     const mode = this.onlineRoundMode();
-    if (this.field.layout?.key === arena.layout.key) {
-      // the field is right (a snapshot built it); only the round's mode, and with it the course, may change
-      if (mode === this.roundMode) return;
+    const sameField = this.field.layout?.key === arena.layout.key;
+    if (reprint) this.freshRound();
+    if (!sameField) {
       this.roundMode = mode;
-      this.enterArena(arena, this.field.snapshot());
-      return;
+      this.enterArena(arena);
+      this.announceArena();
+    } else if (mode !== this.roundMode) {
+      // the field is right (a snapshot built it, with the wreckage restored alongside); only the
+      // round's mode, and with it the course, changes
+      this.roundMode = mode;
+      this.enterArena(arena, this.field.snapshot(), true);
     }
-    this.roundMode = mode;
-    this.enterArena(arena);
-    this.reprintOwn();
-    this.announceArena();
+    if (!sameField || reprint) this.reprintOwn();
+  }
+
+  /** What every round starts with on screen and in the cockpit: no replay, no old marks, the autopilot on. */
+  private freshRound() {
+    this.killcam.stop();
+    this.hud.reset();
+    this.autopilot = true;
   }
 
   /** Every ship this browser runs starts the arena with a fresh clone on its edge; a sponsor break in progress ends. */
@@ -1692,7 +1731,7 @@ export class Game implements OnlineGame {
       row.classList.toggle('me', ship === me);
       row.insertCell().textContent = String(i + 1);
       row.insertCell().append(...markedName(ship.kind, ship.name));
-      if (race) row.insertCell().textContent = ship.finish >= 0 ? `${ship.finish.toFixed(1)} s` : `Lap ${Math.min(LAPS, Math.floor(ship.gates / GATES) + 1)}`;
+      if (race) row.insertCell().textContent = ship.finish >= 0 ? `${ship.finish.toFixed(1)} s` : `Lap ${lapOf(ship.gates)}`;
       for (const value of [ship.kills, ship.deaths, ship.score]) row.insertCell().textContent = String(value);
     });
     // training points from the flight school are no personal best
@@ -1787,6 +1826,7 @@ export class Game implements OnlineGame {
   private updateRound(dt: number) {
     const me = this.me!;
     const now = this.time;
+    this.runCues();
 
     // solo rounds run on real time too, like the radio, so a slow frame rate does not stretch
     // them and the finale of the music meets the end of the round
@@ -1870,7 +1910,8 @@ export class Game implements OnlineGame {
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
-    const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course) : null;
+    // a watching Host sees the race of the pilot on screen
+    const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : null;
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
     this.hud.showCrosshair(me.alive);
     this.hud.setOnTarget(me.alive ? this.onTarget : null);
@@ -1944,8 +1985,7 @@ export class Game implements OnlineGame {
     if (!ship.alive || ship.finish >= 0 || !course.crossed(ship.gates % GATES, ship.previous, ship.flight.position)) return;
     ship.gates++;
     ship.score += GATE_POINTS;
-    const lap = Math.floor(ship.gates / GATES);
-    if (ship.gates >= GATES * LAPS) {
+    if (ship.gates >= FINISH_GATES) {
       ship.finish = +this.raceTime().toFixed(2);
       const place = this.standings().indexOf(ship);
       ship.score += PLACE_POINTS[place] ?? 0;
@@ -1958,7 +1998,8 @@ export class Game implements OnlineGame {
     }
     if (ship !== this.me) return;
     this.sound.beep(1180, 0.06, 0.12);
-    if (ship.gates % GATES === 0) this.hud.flashMessage(this.time, lap === LAPS - 1 ? 'Last lap' : `Lap ${lap + 1} of ${LAPS}`, 2);
+    // through the pink gate: a new lap begins
+    if (ship.gates > 1 && ship.gates % GATES === 1) this.hud.flashMessage(this.time, lapOf(ship.gates) === LAPS ? 'Last lap' : `Lap ${lapOf(ship.gates)} of ${LAPS}`, 2);
   }
 
   /** Seconds since the round started. */
@@ -1978,8 +2019,7 @@ export class Game implements OnlineGame {
   }
 
   /** The own racer's next gate in the HUD, with lap, gate and place; returns the gate for the crosshair. */
-  private showRace(course: Course): THREE.Vector3 | null {
-    const me = this.me!;
+  private showRace(course: Course, me: Ship): THREE.Vector3 | null {
     const place = ordinal(this.standings().indexOf(me) + 1);
     if (me.finish >= 0) {
       course.highlight(-1);
@@ -1988,11 +2028,11 @@ export class Game implements OnlineGame {
       return null;
     }
     const next = me.gates % GATES;
-    const lap = Math.min(LAPS, Math.floor(me.gates / GATES) + 1);
+    const lap = lapOf(me.gates);
     course.highlight(next);
     // past the gate's plane but not through it: the gate only counts from its front
     const missed = scratch.subVectors(me.flight.position, course.points[next]).dot(course.normals[next]) > GATE_RADIUS;
-    const label = missed ? 'Missed · turn back' : next === 0 && me.gates > 0 ? (lap === LAPS ? 'Last lap' : 'Lap') : `Gate ${next + 1}/${GATES}`;
+    const label = missed ? 'Missed · turn back' : next === 0 ? (me.gates === 0 ? 'Start' : lap === LAPS ? 'Finish' : 'Lap') : `Gate ${next + 1}/${GATES}`;
     this.hud.setWaypoint(this.camera, course.points[next], label);
     this.hud.setSchool({ step: `Race · lap ${lap}/${LAPS} · ${place}`, text: missed ? `Missed gate ${next + 1}: turn back and fly through it` : `Gate ${next + 1} of ${GATES}`, keys: [] });
     return course.points[next];
