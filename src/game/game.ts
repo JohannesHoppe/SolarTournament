@@ -21,7 +21,7 @@ import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls } from '../input/input';
-import { Ship, type ShipState, type Zone } from '../ship/ship';
+import { MAX_HEAT, Ship, type ShipState, type Zone } from '../ship/ship';
 import { MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, RCS_THRUST } from '../ship/flight';
 import { Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { Online, type OnlineGame } from '../net/online';
@@ -103,6 +103,18 @@ const NOVA_FLASH_MS = 1600;
 const PROBE_LURE = 30000;
 /** Plating (an item) turns this many hits into the drive, or one torpedo. */
 const PLATING_CHARGES = 2;
+/**
+ * A drive plume: a burning main drive (throttle above PLUME_THROTTLE) throws hot plasma out
+ * behind it, PLUME_REACH far (units, 150 m), spreading by PLUME_SPREAD per unit of its length
+ * (about 7°). A ship inside takes PLUME_HEAT heat and PLUME_BURN hull per second at the nozzle
+ * of a full burn, less with the throttle and fading to nothing at the plume's end. Nothing
+ * like a slipstream in vacuum: to overtake, a ship has to get out of the line of the one ahead.
+ */
+const PLUME_THROTTLE = 0.3;
+const PLUME_REACH = 3000;
+const PLUME_SPREAD = 0.12;
+const PLUME_HEAT = 60;
+const PLUME_BURN = 8;
 /** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km). */
 const TORPEDO_WARNING = 40000;
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
@@ -301,7 +313,7 @@ type State = 'menu' | 'playing' | 'paused' | 'results';
  * What killed a ship without a killer, where this browser saw it happen: a rock, wreckage, deep
  * space, the arena's massive body; or, with a killer, its nova core.
  */
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'nova' | null;
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'nova' | 'plume' | null;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 /** The label of a menu mode button: the text of its first line, without the Enter key. */
@@ -2065,6 +2077,7 @@ export class Game implements OnlineGame {
       this.keepInArena(ship, now);
       this.collide(ship, now);
       this.hitWreckage(ship, now);
+      this.scorch(ship, dt, now);
       this.exhaust(ship, dt);
     }
     this.wrecks.update(dt, now, this.field);
@@ -3061,6 +3074,42 @@ export class Game implements OnlineGame {
     return out;
   }
 
+  /**
+   * A ship this browser runs inside another's drive plume (see PLUME_REACH) gets grilled: its
+   * radiators take the heat, its hull burns, and a clone that burns up counts as a kill of the
+   * ship that burned. The flight school has no plumes: its drills chase drives on purpose.
+   */
+  private scorch(ship: Ship, dt: number, now: number) {
+    if (this.school || !ship.alive) return;
+    let hottest = 0;
+    let burner: Ship | null = null;
+    for (const other of this.ships) {
+      const throttle = other.flight.throttle;
+      if (other === ship || !other.alive || throttle < PLUME_THROTTLE) continue;
+      // behind the other's drive, along its axis, and inside the cone the plume spreads to
+      const back = other.flight.forward(forward).negate();
+      const away = relative.subVectors(ship.flight.position, other.flight.position);
+      const along = away.dot(back);
+      if (along <= 0 || along > PLUME_REACH) continue;
+      const across = away.addScaledVector(back, -along).length();
+      if (across > ship.radius * 0.6 + along * PLUME_SPREAD) continue;
+      const strength = throttle * (1 - along / PLUME_REACH);
+      if (strength > hottest) {
+        hottest = strength;
+        burner = other;
+      }
+    }
+    if (!burner) return;
+    ship.heat = Math.min(MAX_HEAT, ship.heat + PLUME_HEAT * hottest * dt);
+    if (ship.heat >= MAX_HEAT) ship.overheated = true;
+    const status = ship.structural(PLUME_BURN * hottest * dt, now);
+    if (ship.isLocal) {
+      this.hud.flashMessage(now, `In the drive plume of ${burner.name} · get out`, 0.2);
+      if (Math.random() < dt * 6) this.linkHit(0.2 + 0.4 * hottest, 0.15);
+    }
+    if (status === 'destroyed') this.shipDestroyed(ship, burner, 'plume');
+  }
+
   /** Drive trail, thruster puffs, and venting holes in damaged hulls. */
   private exhaust(ship: Ship, dt: number) {
     const flight = ship.flight;
@@ -3254,7 +3303,7 @@ export class Game implements OnlineGame {
     }
     if (killer === this.me && victim !== this.me) this.ease = Math.max(0, this.ease - KILL_EASE);
     if (victim === this.me) {
-      if (killer) this.deathCause = [cause === 'nova' ? 'Vaporized by the nova of ' : 'Shot down by ', ...markedName(killer.kind, killer.name)];
+      if (killer) this.deathCause = [cause === 'nova' ? 'Vaporized by the nova of ' : cause === 'plume' ? 'Grilled in the drive plume of ' : 'Shot down by ', ...markedName(killer.kind, killer.name)];
       else if (cause === 'well') this.deathCause = WELL_DEATHS[this.venue.id] ?? 'Crashed';
       else this.deathCause = victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
     }
