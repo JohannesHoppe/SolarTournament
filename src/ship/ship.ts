@@ -212,6 +212,11 @@ export class Ship {
     alive: false,
   };
   private lastShotAt = -Infinity;
+  /**
+   * Fire held from before is ignored until it is let go: a fresh clone does not shoot (and end
+   * its spawn protection) because fire is still down, and a nova core goes off on the next press.
+   */
+  private triggerHeld = false;
   private readonly engine: EngineParts;
   private flameTime = 0;
   private readonly frames: THREE.Texture[];
@@ -281,6 +286,9 @@ export class Ship {
     this.trailing = false;
     this.protectedUntil = now + SPAWN_PROTECTION;
     this.flight.reset(position, orientation);
+    // the move to the spawn point is no flight: collisions and gates do not sweep along it
+    this.previous.copy(position);
+    this.holdTrigger();
     this.hull = MAX_HULL;
     this.drive = this.thrusters = 1;
     this.torpedoes = TORPEDOES;
@@ -295,6 +303,11 @@ export class Ship {
     this.outsideSince = null;
     this.root.visible = true;
     this.syncTransform();
+  }
+
+  /** Ignores fire until it is let go (see triggerHeld). */
+  holdTrigger() {
+    this.triggerHeld = true;
   }
 
   /**
@@ -439,7 +452,8 @@ export class Ship {
     if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;
     // a twin laser (an item) fires twice as fast at half the heat per shot
     const twin = this.twin ? 2 : 1;
-    if (controls.fire && !this.overheated && now - this.lastShotAt >= LASER_COOLDOWN / twin) {
+    if (!controls.fire) this.triggerHeld = false;
+    if (controls.fire && !this.triggerHeld && !this.overheated && now - this.lastShotAt >= LASER_COOLDOWN / twin) {
       this.heat += HEAT_PER_SHOT / twin;
       if (this.heat >= MAX_HEAT) this.overheated = true;
       this.lastShotAt = now;

@@ -183,11 +183,12 @@ export class Probes {
     return [...this.taken];
   }
 
-  /** A probe id taken on another browser, before or after this one has it. */
-  takeId(id: string) {
+  /** A probe id taken on another browser, before or after this one has it: what it carried, if this one has it. */
+  takeId(id: string): ItemKind | null {
     this.taken.add(id);
     const probe = this.find(id);
     if (probe) this.remove(probe);
+    return probe?.kind ?? null;
   }
 
   private remove(probe: Probe) {

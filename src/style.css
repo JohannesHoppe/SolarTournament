@@ -920,9 +920,14 @@ body.nova-flash #hud::after {
     animation: none;
   }
 
-  /* hits tint the view instead of flashing it */
+  /* hits tint the view instead of flashing it; a nova only lights it */
   #damage-flash.on {
     opacity: 0.35;
+  }
+
+  body.nova-flash #hud::after {
+    animation: none;
+    opacity: 0.3;
   }
 }
 

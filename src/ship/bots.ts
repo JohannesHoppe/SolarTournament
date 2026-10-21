@@ -216,9 +216,9 @@ export class Bot {
       toTarget.subVectors(this.lure ?? this.wanderTarget, me.position);
       desired.copy(toTarget).normalize().multiplyScalar(Math.min(CRUISE_SPEED * 0.6, toTarget.length() * 0.2));
     }
-    if (me.position.length() > HOME_RADIUS) desired.addScaledVector(me.position, -CRUISE_SPEED / me.position.length());
-    // a nova core close by: away from it, at full speed
+    // a nova core close by: away from it, at full speed, with the main drive (see burning)
     if (this.flee) desired.copy(local.subVectors(me.position, this.flee).normalize()).multiplyScalar(CRUISE_SPEED * 2);
+    if (me.position.length() > HOME_RADIUS) desired.addScaledVector(me.position, -CRUISE_SPEED / me.position.length());
     // a massive body pulls: near it, away from it comes first
     const well = field.well;
     let falling = false;
@@ -251,7 +251,7 @@ export class Bot {
     // near the target the nose stays on it and the thrusters carry the bot around it; a bot
     // under attack never turns its tail to burn
     // a racer burns for the gate; a fighter only when no target is in range
-    const burning = danger || (!defending && !lookingBack && error.length() > BURN_THRESHOLD && (racing || !(target && targetDistance < FIRE_RANGE && !this.ship.overheated)));
+    const burning = danger || !!this.flee || (!defending && !lookingBack && error.length() > BURN_THRESHOLD && (racing || !(target && targetDistance < FIRE_RANGE && !this.ship.overheated)));
     if (burning) {
       me.steer(error, 2.5, controls);
       controls.thrust = me.angleTo(error) < 0.25 ? 1 : 0;

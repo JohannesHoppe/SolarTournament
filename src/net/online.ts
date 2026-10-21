@@ -3,6 +3,8 @@ import type { AsteroidField, FieldState } from '../world/asteroids';
 import { ownerOf, TOURNAMENT_SIZE, type Session, type RoundState, type Vec } from './session';
 import type { Ship, ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
+import { unpackItems, type ItemKind } from '../game/items';
+import { Accusations, Plausibility, type Cheat } from './plausible';
 
 /** What the online layer needs from the game. */
 export interface OnlineGame {
@@ -44,9 +46,13 @@ export interface OnlineGame {
   /** Another browser's torpedo hit a ship this browser runs. */
   applyTorpedoHit(target: Ship, shooter: Ship | null): void;
   /** A ship of another browser took a probe. */
-  remoteProbe(id: string, ship: Ship | null): void;
+  remoteProbe(id: string, ship: Ship | null): ItemKind | null;
   /** A ship of another browser set off its nova core: this browser's ships near it are gone. */
   novaBlast(holder: Ship, position: THREE.Vector3): void;
+  /** Several browsers found a Host cheating. */
+  announceCheater(name: string): void;
+  /** Number of the running online round. */
+  readonly roundId: number;
   /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
   leadRound(): RoundState;
@@ -73,6 +79,13 @@ export class Online {
   private watching = false;
   /** Peers whose clone flies (their states carry a Host's ship); watchers do not take a place. */
   private readonly flying = new Set<string>();
+  /** What other browsers report is checked for the impossible; a peer several browsers catch is named. */
+  private readonly plausible = new Plausibility();
+  private readonly accusations = new Accusations();
+  /** Peers this browser has reported, once each. */
+  private readonly reported = new Set<string>();
+  /** The round the checks were last reset for. */
+  private checkedRound = Number.NaN;
 
   constructor(
     readonly session: Session,
@@ -92,6 +105,7 @@ export class Online {
       if (ship && ship.owner === null && gun?.alive) game.applyLaserHit(ship, origin.fromArray(o), direction.fromArray(d).normalize(), gun);
     };
     session.onDestroyed = (victim, killer, deaths, p, u, nova) => {
+      this.credit(victim, killer, nova);
       // a ship dies once per clone: a dead one cannot die again, and the count only goes up
       const ship = this.find(victim);
       if (ship && ship.owner !== null && ship.alive && deaths > ship.deaths) {
@@ -102,13 +116,23 @@ export class Online {
     session.onWreck = (id) => game.remoteWreck(id);
     session.onTorpedo = (id, shooter, target, p, v) => {
       const ship = this.find(shooter);
-      if (ship?.alive) game.remoteTorpedo(id, ship, target ? this.find(target) : null, from.fromArray(p), to.fromArray(v));
+      if (!ship?.alive || this.caught(ship, this.plausible.torpedo(ship.id, game.time))) return;
+      game.remoteTorpedo(id, ship, target ? this.find(target) : null, from.fromArray(p), to.fromArray(v));
     };
     session.onTorpedoGone = (id, p) => game.remoteTorpedoGone(id, from.fromArray(p));
-    session.onProbe = (id, ship) => game.remoteProbe(id, this.find(ship));
+    session.onProbe = (id, ship) => {
+      const kind = game.remoteProbe(id, this.find(ship));
+      if (kind) this.plausible.probe(ship, kind, game.time);
+    };
+    // a nova only from a living ship that holds a core, where it is; anything else never goes off
     session.onNova = (ship, p) => {
       const holder = this.find(ship);
-      if (holder) game.novaBlast(holder, from.fromArray(p));
+      if (!holder?.alive || this.caught(holder, this.plausible.nova(holder.id, p, game.time))) return;
+      game.novaBlast(holder, from.fromArray(p));
+    };
+    session.onCheat = (ship, _cheat, accuser) => {
+      const accused = ownerOf(ship);
+      if (accused) this.accuse(accused, accuser);
     };
     session.onTorpedoHit = (target, shooter) => {
       const ship = this.find(target);
@@ -131,10 +155,16 @@ export class Online {
       // a browser that started over takes the field again, like a newcomer
       this.sync(peer);
       this.sendFull = true;
+      this.forgetShipsOf(peer);
     };
-    session.onRestart = () => game.rejoin();
+    session.onRestart = () => {
+      game.rejoin();
+      this.plausible.newRound(game.time);
+    };
     session.onPeerLeave = (peer) => {
       this.flying.delete(peer);
+      this.forgetShipsOf(peer);
+      this.accusations.forget(peer);
       // a lead browser that leaves hands its bots to the next one before its ships go
       this.followLead();
       for (const ship of [...game.allShips()]) if (ship.owner === peer) game.removeShip(ship);
@@ -164,6 +194,11 @@ export class Online {
   /** Sends the own ships; the lead browser adds the round clock. Rebalances bots when the lead changes. */
   update(now: number) {
     this.session.tick();
+    // a new round prints every ship again and starts the kills over
+    if (this.game.roundId !== this.checkedRound) {
+      this.checkedRound = this.game.roundId;
+      this.plausible.newRound(this.game.time);
+    }
     // a Host beyond the places of the tournament watches, and flies as soon as a place comes free
     const watching = this.session.rank() >= TOURNAMENT_SIZE;
     if (watching !== this.watching) {
@@ -202,6 +237,7 @@ export class Online {
   }
 
   sendDestroyed(victim: Ship, killer: Ship | null, nova: boolean) {
+    this.credit(victim.id, killer?.id ?? null, nova);
     this.session.sendDestroyed(victim.id, killer?.id ?? null, victim.deaths, round(victim.flight.position), round(victim.flight.velocity), nova);
   }
 
@@ -279,7 +315,10 @@ export class Online {
       const known = this.find(state.id);
       if (!known && state.n === undefined) continue;
       const ship = known ?? this.game.addRemoteShip(state, peer);
-      if (ship.owner === peer && ownerOf(ship.id) === peer) ship.applyState(state, now);
+      if (ship.owner !== peer || ownerOf(ship.id) !== peer) continue;
+      const report = { p: state.p, alive: state.a, deaths: state.de, kills: state.ki, nova: state.it === undefined ? undefined : unpackItems(state.it).nova };
+      this.caught(ship, this.plausible.state(ship.id, report, now));
+      ship.applyState(state, now);
     }
     const flies = states.some((state) => state.id.startsWith('p:'));
     if (flies !== this.flying.has(peer)) {
@@ -290,6 +329,39 @@ export class Online {
     // bots the peer no longer runs (e.g. it stopped leading)
     for (const ship of [...this.game.allShips()]) if (ship.owner === peer && !seen.has(ship.id)) this.game.removeShip(ship);
     if (round && peer === lead) this.game.syncRound(round);
+  }
+
+  /** A death everyone saw: its killer's kills grow, by two for a nova, and a nova's victim loses one. */
+  private credit(victim: string, killer: string | null, nova: boolean) {
+    const now = this.game.time;
+    if (killer) this.plausible.credit(killer, nova ? 2 : 1, now);
+    if (nova) this.plausible.credit(victim, -1, now);
+  }
+
+  /** A ship of another browser did the impossible (or not, `cheat` null): this browser reports its peer, once. */
+  private caught(ship: Ship, cheat: Cheat | null): boolean {
+    if (!cheat) return false;
+    const accused = ownerOf(ship.id);
+    if (!accused || accused === this.selfId) return true;
+    console.warn(`SolarTournament: ${ship.name} (${ship.id}) failed the ${cheat} check`);
+    if (!this.reported.has(accused)) {
+      this.reported.add(accused);
+      this.session.sendCheat(ship.id, cheat);
+      this.accuse(accused, this.selfId);
+    }
+    return true;
+  }
+
+  /** One browser more says a peer cheats; once enough do, everyone here is told who. */
+  private accuse(accused: string, accuser: string) {
+    if (!this.accusations.add(accused, accuser)) return;
+    const ships = this.game.allShips().filter((ship) => ship.owner === accused || (accused === this.selfId && ship.owner === null));
+    const host = ships.find((ship) => ship.id.startsWith('p:')) ?? ships[0];
+    this.game.announceCheater(host?.name ?? accused);
+  }
+
+  private forgetShipsOf(peer: string) {
+    for (const ship of this.game.allShips()) if (ownerOf(ship.id) === peer) this.plausible.forget(ship.id);
   }
 
   private find(id: string): Ship | null {

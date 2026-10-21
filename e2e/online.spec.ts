@@ -34,6 +34,8 @@ test('two tabs of one tournament see the same world', async ({ context }) => {
   // each sees both Hosts' ships and the lead's bots
   expect(seenB.ships).toEqual(seenA.ships);
   expect(errorsA.concat(errorsB)).toEqual([]);
+  // honest tabs never take each other for cheats
+  for (const page of [a, b]) expect(await page.evaluate(() => (window as unknown as GameWindow).game.online.reported.size)).toBe(0);
 });
 
 test('a torpedo flies on both tabs and hits the ship of the other', async ({ context }) => {
@@ -66,4 +68,40 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
   expect(await b.evaluate(() => (window as unknown as GameWindow).game.torpedoes.list.length)).toBe(1);
   await play(b, 8);
   expect(await b.evaluate(() => (window as unknown as GameWindow).game.me.hull)).toBe(40);
+});
+
+test('a nova from a ship without a core never goes off, and two tabs name its Host a cheater', async ({ context }) => {
+  const room = `e2e-${Date.now().toString(36)}n&bots=0`;
+  const pages = [];
+  for (const wait of [7, 9, 9]) {
+    const page = await context.newPage();
+    await join(page, room);
+    await play(page, wait);
+    pages.push(page);
+  }
+  const [a, b, cheat] = pages;
+  for (const page of [a, b]) {
+    await page.evaluate(() => {
+      const game = (window as unknown as GameWindow).game;
+      game.cheaters = [];
+      game.announceCheater = (name: string) => game.cheaters.push(name);
+    });
+  }
+  const victim = await a.evaluate(() => (window as unknown as GameWindow).game.me.flight.position.toArray().map(Math.round));
+  // the cheating tab says its clone set off a core it never had, right at the other's ship
+  const name = await cheat.evaluate((at) => {
+    const game = (window as unknown as GameWindow).game;
+    game.online.session.sendNova(game.me.id, at);
+    return game.me.name;
+  }, victim);
+  await play(a, 2);
+  await play(b, 2);
+  for (const page of [a, b]) {
+    const seen = await page.evaluate(() => {
+      const game = (window as unknown as GameWindow).game;
+      return { alive: game.me.alive, cheaters: game.cheaters };
+    });
+    expect(seen.alive).toBe(true);
+    expect(seen.cheaters).toEqual([name]);
+  }
 });

@@ -64,7 +64,7 @@ Never use `npx`, always the scripts from `package.json`.
 
 The repository root is the Vite project: `index.html` (the game), `radio.html` (Radio 2584), `impressum.html` and `datenschutz.html` (German legal pages, linked from the menu and the radio page) are its pages, `public/` holds the static files, `tools/` the generators that write into `public/`.
 
-**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the six localStorage entries, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server and TURN relay, public tournament names), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, another TURN or STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
+**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the six localStorage entries, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server and TURN relay, public tournament names, the cheat reports between the browsers), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, another TURN or STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
 
 `src/` is grouped by area:
 
@@ -128,6 +128,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `net/room.ts` | A tournament room as its link describes it: code, name, public or private, bots or not, deathmatch, race or both |
 | `net/lobby.ts` | The lobby: public tournaments announce themselves, the list of tournaments listens |
 | `net/validate.ts` | Checks every message from other browsers before the game uses it |
+| `net/plausible.ts` | Rough plausibility of what other browsers report (jumps, novas without a core, torpedoes, kills) and the accusations: a peer at least two browsers catch is named a cheater |
 | `net/transport.ts` | Transport: Trystero (WebRTC over Nostr relays, STUN and the TURN relay from `/turn`) and BroadcastChannel for local tests (`?local=1`) |
 
 `tools/crest/render.ts` (`npm run crest`) draws the seal of the Ministry of War into `public/crest.svg`: computed rings, stars and sun, Michroma lettering as paths, and the eagle of `tools/crest/eagle.svg` (CC0) cut into angular facets.

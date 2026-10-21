@@ -76,6 +76,8 @@ const NOVA_RADIUS = 16000;
 const NOVA_EXPANSION = 0.8;
 const NOVA_CROWD = 2;
 const NOVA_FLEE = 1.5;
+/** The white flash of a nova seen close lasts this long (ms), as the animation nova-flash in style.css. */
+const NOVA_FLASH_MS = 1600;
 /** An idle bot goes for a probe within this distance (units, 1.5 km). */
 const PROBE_LURE = 30000;
 /** Plating (an item) turns this many hits into the drive, or one torpedo. */
@@ -384,7 +386,7 @@ export class Game implements OnlineGame {
   /** The director's shot of the pilot: the chase camera, or a wide shot from the side. */
   private wideShot = false;
   /** Number of the running online round; a new number resets the scores. */
-  private roundId = 0;
+  roundId = 0;
   /** The round this browser was in when it started over in the tournament (see rejoin), until it knows the round again. */
   private rejoinedFrom: number | null = null;
   private ships: Ship[] = [];
@@ -472,6 +474,7 @@ export class Game implements OnlineGame {
   private nextWarningBeep = 0;
   /** The nova holder the own pilot was last warned about, and when the siren sounds next. */
   private novaWarned: Ship | null = null;
+  private novaFlashTimer = 0;
   private nextNovaSiren = 0;
   private nextLockBeep = 0;
   /** Speed of game time; 0 freezes the simulation while rendering continues. */
@@ -1135,7 +1138,11 @@ export class Game implements OnlineGame {
     if (state !== 'playing') this.sponsors.hide();
     this.hud.show(state === 'playing');
     this.input.steerWithMouse(state === 'playing');
-    if (state !== 'playing') this.sound.setEngine(0, 0);
+    if (state !== 'playing') {
+      this.sound.setEngine(0, 0);
+      // the look of a nova core belongs to the round; the next frame of play brings it back
+      document.body.classList.remove('nova-held', 'nova-alarm');
+    }
   }
 
   /**
@@ -1204,6 +1211,7 @@ export class Game implements OnlineGame {
 
   private clearShips() {
     this.killcam.stop();
+    this.clearShockwaves();
     this.torpedoes.clear();
     this.probes.reset();
     this.wrecks.clear();
@@ -2347,6 +2355,8 @@ export class Game implements OnlineGame {
         break;
       case 'nova':
         ship.nova = true;
+        // the core goes off on the next press of fire, not on fire held since before
+        ship.holdTrigger();
         break;
     }
     if (ship.isLocal) {
@@ -2359,7 +2369,14 @@ export class Game implements OnlineGame {
   }
 
   remoteProbe(id: string) {
-    this.probes.takeId(id);
+    return this.probes.takeId(id);
+  }
+
+  /** Several browsers found a Host cheating: everyone is told. */
+  announceCheater(name: string) {
+    this.hud.flashMessage(this.time, `CHEATER · ${name}`, 6);
+    this.sound.beep(220, 0.3, 0.15);
+    this.sound.beep(165, 0.4, 0.15, 0.3);
   }
 
   probesTaken() {
@@ -2401,9 +2418,12 @@ export class Game implements OnlineGame {
       this.linkHit(Math.max(0.4, 1 - seen / (NOVA_RADIUS * 3)), 1);
       this.kick = 2;
       this.sound.play('explosion', { volume: 2, rate: 0.4 });
+      // the class goes once the flash has faded, or showing the HUD again would replay it
       document.body.classList.remove('nova-flash');
       void document.body.offsetWidth;
       document.body.classList.add('nova-flash');
+      clearTimeout(this.novaFlashTimer);
+      this.novaFlashTimer = window.setTimeout(() => document.body.classList.remove('nova-flash'), NOVA_FLASH_MS);
     }
     if (holder !== this.me) this.hud.flashMessage(now, `NOVA · ${holder.name}`, 2.5);
   }
@@ -2468,14 +2488,23 @@ export class Game implements OnlineGame {
       const { mesh, born } = this.shockwaves[i];
       const t = (this.time - born) / NOVA_EXPANSION;
       if (t >= 1) {
-        this.scene.remove(mesh);
-        mesh.material.dispose();
-        this.shockwaves.splice(i, 1);
+        this.removeShockwave(i);
         continue;
       }
       mesh.scale.setScalar(NOVA_RADIUS * Math.sqrt(t));
       mesh.material.opacity = 0.6 * (1 - t);
     }
+  }
+
+  private removeShockwave(index: number) {
+    const { mesh } = this.shockwaves[index];
+    this.scene.remove(mesh);
+    mesh.material.dispose();
+    this.shockwaves.splice(index, 1);
+  }
+
+  private clearShockwaves() {
+    while (this.shockwaves.length) this.removeShockwave(0);
   }
 
   /** A beam went through a torpedo: it goes off where it is, on every browser. */

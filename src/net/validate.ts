@@ -27,8 +27,11 @@ export const MAX_FIELD_TIME = 1e7;
 export const ROUND_LIMIT = 3600;
 /** Ship and rock ids are short ("p:abc…", "b:abc…:2", "12.0.1"). */
 const MAX_ID = 64;
-/** A field never holds more rocks than this (40 rocks, up to 9 fragments each). */
-const MAX_ROCKS = 400;
+/**
+ * A field's snapshot never lists more rocks than this, alive or broken: the largest fields have
+ * 90 pieces, and each breaks into up to 3, twice (90 · (1 + 3 + 9) = 1170).
+ */
+const MAX_ROCKS = 1200;
 /** Lists of ids (the probes taken in a round: one every 25 s and the dead clones' ones) stay below this. */
 const MAX_IDS = 200;
 /** The arena never holds more pieces of wreckage than this (MAX_WRECKS in world/wrecks, with room). */
@@ -39,6 +42,11 @@ export const isRecord = (x: unknown): x is Record<string, unknown> => typeof x =
 /** A finite number within bounds, or null. */
 export function num(x: unknown, min: number, max: number): number | null {
   return typeof x === 'number' && Number.isFinite(x) && x >= min && x <= max ? x : null;
+}
+
+/** A whole number within bounds, or null: counts index lists, a fraction would point between them. */
+export function int(x: unknown, min: number, max: number): number | null {
+  return Number.isInteger(x) ? num(x, min, max) : null;
 }
 
 /** A vector of `length` finite numbers within ±limit, or null. */
@@ -73,12 +81,12 @@ export function shipState(x: unknown): ShipState | null {
       : {
           n: cleanName(x.n) || null,
           k: x.k === 'human' || x.k === 'alien' ? x.k : null,
-          s: num(x.s, -MAX_COUNT, MAX_COUNT),
-          ki: num(x.ki, -MAX_COUNT, MAX_COUNT),
-          de: num(x.de, 0, MAX_COUNT),
-          g: num(x.g, 0, MAX_COUNT),
+          s: int(x.s, -MAX_COUNT, MAX_COUNT),
+          ki: int(x.ki, -MAX_COUNT, MAX_COUNT),
+          de: int(x.de, 0, MAX_COUNT),
+          g: int(x.g, 0, MAX_COUNT),
           fi: num(x.fi, -1, ROUND_LIMIT),
-          it: num(x.it, 0, 15),
+          it: int(x.it, 0, 15),
         };
   const state = {
     id: id(x.id),

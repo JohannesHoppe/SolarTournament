@@ -1,6 +1,7 @@
 import type { FieldState } from '../world/asteroids';
 import type { ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
+import { CHEATS, type Cheat } from './plausible';
 import { LocalTransport, TrysteroTransport, type Transport } from './transport';
 import { fieldState, id, ids, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
@@ -36,8 +37,10 @@ const MIN_HIT_INTERVAL = 0.07;
 const MAX_HITS_PER_SECOND = MAX_SHIPS_PER_PEER * 12;
 /** Asteroid hits per peer and second, generous for several ships firing at once. */
 const MAX_ROCK_HITS_PER_SECOND = 20;
-/** Destructions per peer and second: the ships one browser runs die a few times a minute, never this often. */
-const MAX_DESTRUCTIONS_PER_SECOND = 4;
+/** Destructions per peer and second: a nova core can take every ship one browser runs at once, but each dies only once a clone. */
+const MAX_DESTRUCTIONS_PER_SECOND = MAX_SHIPS_PER_PEER;
+/** Cheat reports per peer and second: a browser reports each cheater once. */
+const MAX_CHEAT_REPORTS_PER_SECOND = 2;
 /** Pieces of wreckage one peer's ships shoot or ram per second, generous for several ships firing at once. */
 const MAX_WRECK_HITS_PER_SECOND = 20;
 /** Torpedo launches, hits, torpedoes gone and probes taken, per peer and second: a few of each per clone, eight ships at most. */
@@ -112,6 +115,8 @@ export class Session {
   onProbe: (probe: string, ship: string) => void = () => {};
   /** A ship of another browser set off its nova core, here. */
   onNova: (ship: string, position: Vec) => void = () => {};
+  /** Another browser says a ship cheats (see plausible.ts). */
+  onCheat: (ship: string, cheat: Cheat, from: string) => void = () => {};
   /** The lead's field, the wreckage in flight, and the probes taken this round. */
   onSync: (field: FieldState, wrecks: WreckState[], probesTaken: string[]) => void = () => {};
   onPeerJoin: (id: string) => void = () => {};
@@ -151,6 +156,7 @@ export class Session {
   private readonly destroyBudget = new Budget(MAX_DESTRUCTIONS_PER_SECOND);
   private readonly wreckBudget = new Budget(MAX_WRECK_HITS_PER_SECOND);
   private readonly torpedoBudget = new Budget(MAX_TORPEDO_EVENTS_PER_SECOND);
+  private readonly cheatBudget = new Budget(MAX_CHEAT_REPORTS_PER_SECOND);
   private synced = false;
   private left = false;
 
@@ -213,6 +219,11 @@ export class Session {
       const position = vec(d?.p, 3, MAX_COORDINATE);
       if (ship && position && ownerOf(ship) === from && this.torpedoBudget.spend(from)) this.guard(() => this.onNova(ship, position));
     });
+    transport.on('ch', (d, from) => {
+      const ship = id(d?.s);
+      const cheat = CHEATS.find((c) => c === d?.r);
+      if (ship && cheat && this.cheatBudget.spend(from)) this.guard(() => this.onCheat(ship, cheat, from));
+    });
     transport.on('tk', (d, from) => {
       const target = id(d?.t);
       const shooter = id(d?.s);
@@ -244,7 +255,7 @@ export class Session {
     transport.onPeerLeave((peer) => {
       // join time and last word stay: a link that comes back belongs to the same peer
       this.backAt.delete(peer);
-      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget]) budget.forget(peer);
+      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget]) budget.forget(peer);
       for (const key of this.lastHit.keys()) if (ownerOf(key.slice(0, key.indexOf('>'))) === peer) this.lastHit.delete(key);
       if (!this.left) this.guard(() => this.onPeerLeave(peer));
     });
@@ -368,6 +379,11 @@ export class Session {
 
   sendNova(ship: string, position: Vec) {
     this.transport.send('nv', { s: ship, p: position });
+  }
+
+  /** Tells everyone that a ship of another browser did something no honest browser reports. */
+  sendCheat(ship: string, cheat: Cheat) {
+    this.transport.send('ch', { s: ship, r: cheat });
   }
 
   sendProbe(probe: string, ship: string) {
