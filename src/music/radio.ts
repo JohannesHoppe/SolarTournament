@@ -21,6 +21,10 @@ const ENABLED_KEY = 'solartournament.radio';
 const VOLUME_KEY = 'solartournament.radio-volume';
 /** Output level at full volume: the radio sits under the cockpit's own sounds. */
 const VOLUME = 0.55;
+/** How much the last lap lifts the lows and highs (dB), and how long it takes (s); see Radio.push. */
+const PUSH_LOWS = 5;
+const PUSH_HIGHS = 4;
+const PUSH_SECONDS = 2;
 
 function storedVolume() {
   try {
@@ -63,6 +67,9 @@ const ANNOUNCE_PATIENCE = 8;
 export class Radio {
   private readonly output: GainNode;
   private readonly muffler: BiquadFilterNode;
+  /** Shelves that open the sound up when the race comes to its end (see push). */
+  private readonly lows: BiquadFilterNode;
+  private readonly highs: BiquadFilterNode;
   private band: Band | null = null;
   private loading = false;
   song: Song | null = null;
@@ -100,7 +107,13 @@ export class Radio {
     this.muffler.frequency.value = 20000;
     this.output = context.createGain();
     this.output.gain.value = 0;
-    this.muffler.connect(this.output).connect(destination);
+    this.lows = context.createBiquadFilter();
+    this.lows.type = 'lowshelf';
+    this.lows.frequency.value = 120;
+    this.highs = context.createBiquadFilter();
+    this.highs.type = 'highshelf';
+    this.highs.frequency.value = 6000;
+    this.muffler.connect(this.lows).connect(this.highs).connect(this.output).connect(destination);
     try {
       if (remember) this.enabledFlag = localStorage.getItem(ENABLED_KEY) !== 'off';
     } catch {
@@ -154,6 +167,17 @@ export class Radio {
   setMuffled(muffled: boolean) {
     const now = this.context.currentTime;
     this.muffler.frequency.setTargetAtTime(muffled ? 450 : 20000, now, muffled ? 0.25 : 0.6);
+  }
+
+  /**
+   * The last lap: the cockpit's radio opens up, the kick heavier and the hats brighter by
+   * PUSH_LOWS and PUSH_HIGHS (dB), over PUSH_SECONDS. Only the own cockpit hears it; the notes
+   * and the beat stay those of every pilot.
+   */
+  push(on: boolean) {
+    const now = this.context.currentTime;
+    this.lows.gain.setTargetAtTime(on ? PUSH_LOWS : 0, now, PUSH_SECONDS / 3);
+    this.highs.gain.setTargetAtTime(on ? PUSH_HIGHS : 0, now, PUSH_SECONDS / 3);
   }
 
   /** A short drop-out of the link: the radio cuts out for a moment; a stopped radio stays silent. */

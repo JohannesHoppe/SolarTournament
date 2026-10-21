@@ -16,7 +16,7 @@ import { LapTimer, parseLaps } from './laps';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_KILL, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_ROCK, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
+import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_ROCK, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
@@ -129,6 +129,8 @@ const ROUND_END_SLACK = 30;
 const FIELD_SNAP = 0.5;
 /** The announcer comments on a death at most this often (s). */
 const ANNOUNCER_COOLDOWN = 7;
+/** Nicole names the own passes and the lead at most this often (s of game time). */
+const PLACE_CALL_COOLDOWN = 4;
 /** Song of the menu. The flight school plays no music, so Nicole is heard clearly. */
 const LOUNGE_SEED = 2584;
 /** The idle link to the clone hangar glitches now and then, every 5 to 14 s. */
@@ -497,6 +499,14 @@ export class Game implements OnlineGame {
   private driveLit = false;
   private driveLitAt = -Infinity;
   private startOpen = false;
+  /** What the race calls have said (see callRace): the leader, the last lap and the winner, the own place, when Nicole may name a pass again. */
+  private leader: Ship | null = null;
+  private lastLapCalled = false;
+  private winCalled = false;
+  private place = -1;
+  private nextPlaceCall = 0;
+  /** The radio is opened up for the own last lap. */
+  private pushed = false;
   /** The velocity of the ship the camera rides with, for the dust's streaks; null without one. */
   private riding: THREE.Vector3 | null = null;
   /** The own drive burned in the last frame (see ignite). */
@@ -1190,17 +1200,62 @@ export class Game implements OnlineGame {
   private commentOnDeath(victim: Ship, killer: Ship | null, cause: DeathCause) {
     // the flight school is on no broadcast; a death the announcer has no line for goes uncommented
     if (this.school || (!killer && cause !== 'rock')) return;
-    const now = wallClock();
-    if (now < this.nextAnnouncement) return;
+    if (wallClock() < this.nextAnnouncement) return;
     const roll = hash(textSeed(victim.id), victim.deaths, 7);
     if (roll % 10 >= 7) return;
-    this.nextAnnouncement = now + ANNOUNCER_COOLDOWN;
     const lines = victim.type === 'alien' && roll % 2 === 0 ? ANNOUNCER_ALIEN : killer ? ANNOUNCER_KILL : ANNOUNCER_ROCK;
-    const line = lines[(roll >>> 4) % lines.length];
-    const spoken = victim.name.toLowerCase();
-    // bots have rendered names; the clone of a human Host is spoken as "pilot" and shown in the subtitle
-    this.announcedName = victim.name;
+    this.announce(lines[(roll >>> 4) % lines.length], victim);
+  }
+
+  /**
+   * The announcer says a line about a pilot, unless it spoke a moment ago; `always` lines (the
+   * last lap, the winner) are said anyway. Bots have rendered names; the clone of a human Host
+   * is spoken as "pilot" and shown in the subtitle.
+   */
+  private announce(line: string, about: Ship, always = false) {
+    const now = wallClock();
+    if (!always && now < this.nextAnnouncement) return;
+    this.nextAnnouncement = now + ANNOUNCER_COOLDOWN;
+    const spoken = about.name.toLowerCase();
+    this.announcedName = about.name;
     this.radio.announce(line, ANNOUNCER_NAMES.includes(spoken) ? spoken : null);
+  }
+
+  /**
+   * What a race is worth saying while it runs: the announcer calls a new leader and the
+   * leader's last lap, Nicole tells the own pilot its passes and the lead, and the own last
+   * lap opens up the radio.
+   */
+  private callRace(me: Ship) {
+    const standings = this.standings();
+    const leader = standings[0] ?? null;
+    if (leader && leader !== this.leader && leader.gates > 0 && leader.finish < 0) {
+      if (this.leader) this.announce(pick(ANNOUNCER_LEAD), leader);
+      this.leader = leader;
+    }
+    if (leader && !this.lastLapCalled && leader.finish < 0 && lapOf(leader.gates) === LAPS) {
+      this.lastLapCalled = true;
+      this.announce(pick(ANNOUNCER_LAST_LAP), leader, true);
+    }
+    if (leader && !this.winCalled && leader.finish >= 0) {
+      this.winCalled = true;
+      this.announce(pick(ANNOUNCER_WIN), leader, true);
+    }
+    const racing = me.alive && me.finish < 0 && me.gates > 0 && !this.spectating;
+    const place = standings.indexOf(me);
+    const now = this.time;
+    if (racing && this.place >= 0 && place !== this.place && now >= this.nextPlaceCall) {
+      const line = place === 0 ? COMPUTER.lead : this.place === 0 ? COMPUTER.lostLead : place < this.place ? COMPUTER.passed : COMPUTER.passedBy;
+      if (this.speaker.say(line, 'chatter')) this.nextPlaceCall = now + PLACE_CALL_COOLDOWN;
+    }
+    this.place = racing ? place : -1;
+  }
+
+  /** The own last lap of a race opens up the radio (see Radio.push); anything else leaves it as it is. */
+  private pushRadio(on: boolean) {
+    if (on === this.pushed) return;
+    this.pushed = on;
+    this.radio.push(on);
   }
 
   /**
@@ -1314,6 +1369,7 @@ export class Game implements OnlineGame {
       this.datamosh.stop();
       this.guide.hide();
       this.ghost.show(null);
+      this.pushRadio(false);
     }
   }
 
@@ -1334,6 +1390,9 @@ export class Game implements OnlineGame {
     if (this.course) this.scene.add(this.course.root);
     // the course of an arena is always the same: its best lap and ghost race along
     this.laps = this.course ? new LapTimer(parseLaps(storageGet(LAPS_KEY))[arena.id] ?? null) : null;
+    this.leader = null;
+    this.lastLapCalled = this.winCalled = false;
+    this.place = -1;
     if (state) this.field.restore(state, arena.layout);
     this.space.setSun(arena.sun);
     this.landmarks.show(arena);
@@ -2113,6 +2172,9 @@ export class Game implements OnlineGame {
     const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : null;
     if (!this.course || this.school) this.guide.hide();
     this.flyGhost(me);
+    const racing = !!this.course && !this.school && this.countdown === 0;
+    if (racing) this.callRace(subject);
+    this.pushRadio(racing && !this.spectating && me.finish < 0 && lapOf(me.gates) === LAPS);
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
     this.hud.showCrosshair(me.alive);
     this.hud.setOnTarget(me.alive ? this.onTarget : null);
@@ -2213,7 +2275,11 @@ export class Game implements OnlineGame {
     if (ship !== this.me) return;
     this.sound.beep(1180, 0.06, 0.12);
     // through the pink gate: a new lap begins
-    if (ship.gates > 1 && ship.gates % GATES === 1) this.hud.flashMessage(this.time, lapOf(ship.gates) === LAPS ? 'Last lap' : `Lap ${lapOf(ship.gates)} of ${LAPS}`, 2);
+    if (ship.gates > 1 && ship.gates % GATES === 1) {
+      const last = lapOf(ship.gates) === LAPS;
+      this.hud.flashMessage(this.time, last ? 'Last lap' : `Lap ${lapOf(ship.gates)} of ${LAPS}`, 2);
+      if (last) this.speaker.say(COMPUTER.finalLap, 'urgent');
+    }
   }
 
   /**

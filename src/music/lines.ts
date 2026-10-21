@@ -170,6 +170,10 @@ export const ANNOUNCER_ROCK = [
   'and {name} meets an asteroid. the rockborn send their regards',
   'a rock wins again. {name} goes back to the printer',
 ];
+/** The announcer on a race: a new leader, the leader's last lap, the winner. */
+export const ANNOUNCER_LEAD = ['and {name} takes the lead', '{name} in front now. the crowd goes wild'];
+export const ANNOUNCER_LAST_LAP = ['last lap. {name} leads the pack', 'the final lap. can anyone stop {name}'];
+export const ANNOUNCER_WIN = ['{name} wins the race. glory to the president', 'and {name} takes the race. the sponsor is delighted'];
 export const ANNOUNCER_OPEN = ['radio twenty five eighty four. live from the arena', 'this is your announcer. the games continue'];
 /** The announcer names the arena of the round (see world/arenas). */
 export const ANNOUNCER_ARENA = {
@@ -278,6 +282,11 @@ export const COMPUTER = {
   novaReprint: 'What a blast, darling! The sponsors loved it. No ad this time. Here is your next clone.',
   perfectStart: 'Perfect start!',
   falseStart: 'Too early, darling. Your drive stalled.',
+  finalLap: 'Final lap, darling. Give it everything.',
+  lead: 'You are in the lead.',
+  lostLead: 'You lost the lead.',
+  passed: 'Nice pass.',
+  passedBy: 'Someone got past you.',
 } as const;
 
 /**
@@ -314,7 +323,7 @@ export function allLines(language: Language): string[] {
       return [STATION_DE, NOW_PLAYING_DE, ...TITLE_FIRST_DE, ...TITLE_SECOND_DE, ...PHRASES_DE];
     case 'mod':
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
-      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
+      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
       return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...SPONSOR_BREAK, ...SPONSOR_HAPPY];
   }
