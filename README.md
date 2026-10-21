@@ -91,32 +91,46 @@ For development, `?local=1#t=code` connects tabs of the same browser without the
 
 ## Flight school
 
-The menu leads with the flight school until a Host has completed it once; after that the solo round is the main action (Enter opens its choices, Enter again launches it). The flight school remembers the drill a Host has reached: after a reload it continues there (the menu says "Continue at drill n of 24"), with the autopilot as the drills before left it, and "Start the flight school over" begins again from the briefing. Once complete, the flight school button says so for good ("✓ Completed. Cleared for the tournament."), also when the Host trains again. The flight school trains one maneuver per drill, 24 drills in all, in the order a Host needs them: first what a race takes (with the autopilot on: drive, brake, rings), then the laser and the rocks, then free drift like a real spaceship, and the dogfight last. Each drill comes with a short spoken line, the keys as big keycaps (the spoken words name no keys; the keycaps show those of the Host's keyboard, gamepad or touch screen), and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver. Every attempt runs in clear phases, one after the other: what is left to say of the last one (the praise, or why it failed) to its end, then the instruction to its end, and only then the drill's markers, drones or bots show up and the drill counts. Her lessons are never cut off: a new one waits until she has finished the last, and her other lines (hits, asteroids, warnings) stay silent while she teaches; the HUD shows them anyway.
+The flight school has three courses, each played on its own from the school's plate: **Basic training** (flying), **Racer** (the race) and **Gladiator** (the fight). The menu leads with the flight school until a Host has completed the basic training; after that the solo round is the main action (Enter opens its choices, Enter again launches it). On the school's plate Enter starts the first course not completed yet. Each course remembers the drill a Host has reached: after a reload it continues there ("Continue at drill n of m"), with the autopilot as the drills before left it, and "Start … over" below the course begins it again. A completed course says so for good ("✓ Completed."), also when the Host trains again, and the menu's button counts the completed courses; after a course the school's plate comes up again, with the next course a key away. Each course trains one maneuver per drill, in the order a Host needs them. Each drill comes with a short spoken line, the keys as big keycaps (the spoken words name no keys; the keycaps show those of the Host's keyboard, gamepad or touch screen), and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver. Every attempt runs in clear phases, one after the other: what is left to say of the last one (the praise, or why it failed) to its end, then the instruction to its end, and only then the drill's markers, drones or bots show up and the drill counts. Her lessons are never cut off: a new one waits until she has finished the last, and her other lines (hits, asteroids, warnings) stay silent while she teaches; the HUD shows them anyway.
+
+**Basic training** (9 drills, the autopilot on throughout):
 
 1. Briefing: Nicole introduces herself ("Hi, I am Nicole. Your personal flight computer."), then the world of the games in four sentences.
 2. Turning: three markers into the crosshair (arrows or mouse).
 3. Fine aim: Shift turns slowly; center a far marker exactly.
 4. Cockpit view: C switches into the cockpit and back (not given on touch screens, which have no camera switch: Nicole goes straight on to the next drill).
-5. Main drive: W up to 50 m/s, with the autopilot on.
+5. Main drive: W up to 50 m/s.
 6. Brake: hold S, the flight computer flips and burns until the ship is at rest.
-7. A course of four rings (each counts from either side).
-8. Shooting a resting drone: armor shrugs the laser off, five hits into the drive blow it up. A target drone keeps its drive turned to the pilot, wherever the pilot flies.
-9. Shooting a drifting drone, again into the drive (the laser hits instantly, no lead needed).
-10. Firing until the laser overheats.
-11. Cooling down in the shadow of an asteroid.
-12. The impact warning: drifting at a rock with 100 m/s, braking or sliding past.
-13. Free drift: T switches the autopilot off; the drift lessons that follow need it.
-14. Drifting: let go, nothing slows the ship down.
-15. Looking back while drifting: the nose turns, the course stays (the green prograde marker shows the course).
-16. Flip and burn by hand, twice: hold X and W together; the drive fires once the nose points back; the S brake does not count here. The drill counts once the drift along the course is gone; a little sideways drift may remain.
-17. Stopping at a marker, near and far: burn, flip, burn. It counts once the ship rests (below 10 m/s) inside the blue sphere around the marker, 200 m in radius.
-18. Jinking: a gunner on the tail fires red shots at where the ship was a moment ago; pushing left and right with the thrusters (A/D) makes them go past. It counts after four changes of side; turning and drift do not matter, a hit only sparks.
-19. Dodging debris that drifts straight at the ship, twice, without turning (more than 45°).
-20. Autopilot back on (T).
-21. Chasing a bot that flies but does not shoot: it runs, staying on its tail opens its drive.
-22. Fighting a weak bot that shoots back: keep the armored nose on it, slide, and work onto its tail.
-23. Final exam: a real bot that knows the trick too. Win the dogfight.
-24. Cleared for the tournament.
+7. Stopping at a marker, near and far: burn, flip, burn. It counts once the ship rests (below 10 m/s) inside the blue sphere around the marker, 200 m in radius.
+8. The impact warning: drifting at a rock with 100 m/s, braking or sliding past.
+9. Basic training complete: racer or gladiator next.
+
+**Racer** (5 drills):
+
+1. What the racer learns: rings, coils and a clean start.
+2. A course of four rings (each counts from either side).
+3. The coils: three rings in a long line, each through its inner third (as a race's gates, see Modes), so each throws the ship on by 40 m/s; a ring passed off-center starts the attempt over ("Off center").
+4. The start: 3, 2, 1, GO in big neon while the clamps hold the ship; the drive has to light within 0.3 s before GO or 0.2 s after it, as in a race. Lit earlier, the drive stalls ("Too early"); not lit in time, the attempt starts over ("Too late").
+5. A racer now.
+
+**Gladiator** (16 drills):
+
+1. What the gladiator learns: the laser, the heat, and the dogfight.
+2. Shooting a resting drone: armor shrugs the laser off, five hits into the drive blow it up. A target drone keeps its drive turned to the pilot, wherever the pilot flies.
+3. Shooting a drifting drone, again into the drive (the laser hits instantly, no lead needed).
+4. Firing until the laser overheats.
+5. Cooling down in the shadow of an asteroid.
+6. Free drift: T switches the autopilot off; the drift lessons that follow need it.
+7. Drifting: let go, nothing slows the ship down.
+8. Looking back while drifting: the nose turns, the course stays (the green prograde marker shows the course).
+9. Flip and burn by hand, twice: hold X and W together; the drive fires once the nose points back; the S brake does not count here. The drill counts once the drift along the course is gone; a little sideways drift may remain.
+10. Jinking: a gunner on the tail fires red shots at where the ship was a moment ago; pushing left and right with the thrusters (A/D) makes them go past. It counts after four changes of side; turning and drift do not matter, a hit only sparks.
+11. Dodging debris that drifts straight at the ship, twice, without turning (more than 45°).
+12. Autopilot back on (T).
+13. Chasing a bot that flies but does not shoot: it runs, staying on its tail opens its drive.
+14. Fighting a weak bot that shoots back: keep the armored nose on it, slide, and work onto its tail.
+15. Final exam: a real bot that knows the trick too. Win the dogfight.
+16. Cleared for the tournament.
 
 ## Radio 2584
 
@@ -332,7 +346,7 @@ A round is a **race** or a **deathmatch**. The race is the game's heart; the dea
 The game collects as little as possible: no accounts, no cookies, no tracking, no ad network, nothing loaded from third-party servers. The German legal pages [Impressum](impressum.html) and [Datenschutz](datenschutz.html) are linked from the menu and the radio page. What happens to data:
 
 - **Hosting:** Cloudflare Pages delivers the site and sees connection data (IP address, time, file, user agent); Cloudflare also asks browsers to report failed connections (Network Error Logging). Links to GitHub carry no referrer.
-- **Browser storage:** eight localStorage entries (callsign, personal best, the flight school drill reached, flight school completed, radio on or off, radio volume, the last solo round's choices, the best lap of each arena's race course with its ghost); they stay in the browser, only the callsign is shown to the other players of an online tournament.
+- **Browser storage:** eight localStorage entries (callsign, personal best, the drill reached in each course of the flight school, the courses completed, radio on or off, radio volume, the last solo round's choices, the best lap of each arena's race course with its ghost); they stay in the browser, only the callsign is shown to the other players of an online tournament.
 - **Online tournament** (only when a Host starts or joins one): the browsers connect directly over WebRTC, so the other players see the Host's IP address, callsign, ship and score. To find each other, the browsers post short connection messages (with network addresses) on public Nostr relays run by independent third parties. Each browser asks Cloudflare's STUN server for its public address; Trystero's default STUN servers of Google are replaced by Cloudflare's alone. Joining fetches short-lived credentials from `/turn`, and where no direct connection is possible the game data runs through Cloudflare's TURN relay (end-to-end encrypted by WebRTC). Every browser checks roughly whether what the others report is possible and tells them when it is not; once two browsers say so, everyone in the tournament sees the cheater's callsign. Nothing of it is stored. Opening the list of tournaments connects to the lobby the same way, and the names, Host counts and round times of public tournaments are visible to everyone there.
 - **Sponsor break:** invented satire ads, no ad network. The privacy policy has to be extended before real ads are shown.
 

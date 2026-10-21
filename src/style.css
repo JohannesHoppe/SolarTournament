@@ -298,6 +298,13 @@ button.primary .mode-note {
   width: min(560px, calc(100vw - 32px));
 }
 
+/* the flight school's courses, one above the other, each with its way to start over below it */
+#school-courses {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .field {
   display: flex;
   align-items: center;
@@ -1913,7 +1920,7 @@ body.page {
   color: var(--accent);
 }
 
-/* a small, plain action under a menu button, e.g. starting the flight school over */
+/* a small, plain action under a menu button, e.g. starting a course of the flight school over */
 button.quiet {
   margin-top: -4px;
   padding: 2px 6px;
@@ -2008,8 +2015,9 @@ button.quiet:focus-visible {
   }
 }
 
-/* the flight school is complete: its note keeps saying so, in the blue of information */
-#school.cleared .mode-note {
+/* a course of the flight school is complete: its note keeps saying so, in the blue of information */
+#school.cleared .mode-note,
+#school-courses .cleared .mode-note {
   color: var(--accent-strong);
   font-weight: 700;
 }

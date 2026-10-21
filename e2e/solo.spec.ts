@@ -18,10 +18,14 @@ test('a solo round starts and runs without errors', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('the flight school starts in the belt', async ({ page }) => {
-  const errors = await openGame(page);
-  await page.click('#school');
-  await play(page, 2);
-  expect(await page.evaluate(() => (window as unknown as GameWindow).game.venue.id)).toBe('belt');
-  expect(errors).toEqual([]);
-});
+for (const course of ['basic', 'racer', 'gladiator']) {
+  test(`the flight school's ${course} course starts in the belt`, async ({ page }) => {
+    const errors = await openGame(page);
+    await page.click('#school');
+    await page.click(`#school-${course}`);
+    await play(page, 2);
+    expect(await page.evaluate(() => (window as unknown as GameWindow).game.venue.id)).toBe('belt');
+    await expect(page.locator('#school-step')).toContainText(/\d+\/\d+/);
+    expect(errors).toEqual([]);
+  });
+}

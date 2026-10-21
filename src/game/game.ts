@@ -31,7 +31,7 @@ import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { Belt, BELT_INNER } from '../world/belt';
-import { FlightSchool, type SchoolContext } from './school';
+import { COURSE_NAMES, FlightSchool, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
 import { ARENAS, arenaByKey, arenaOfRound, type ArenaId, type ArenaProfile } from '../world/arenas';
@@ -279,10 +279,38 @@ const ZONE_MESSAGES: Record<Zone, string> = {
 };
 const BEST_SCORE_KEY = 'solartournament.best';
 const CALLSIGN_KEY = 'solartournament.callsign';
-/** Set once the flight school is complete; the menu then leads with the solo round. */
+/** The flight school's courses a Host has completed (a list); once the basic training is among them, the menu leads with the solo round. */
 const SCHOOL_DONE_KEY = 'solartournament.school';
-/** The drill a Host has reached in the flight school, so a reload continues there; cleared when the school is complete or started over. */
+/** The drill a Host has reached in each course, so a reload continues there; a course's entry goes when it is complete or started over. */
 const SCHOOL_STEP_KEY = 'solartournament.school-step';
+/** What each course of the flight school teaches, on its button. */
+const SCHOOL_NOTES: Record<SchoolCourse, string> = {
+  basic: 'Turn, aim, burn and brake. Start here.',
+  racer: 'Rings, coils and the perfect start.',
+  gladiator: 'The laser, free drift and the dogfight.',
+};
+
+/** The courses a Host has completed, as this browser keeps them; whatever does not fit is dropped. */
+function schoolDone(): Set<SchoolCourse> {
+  try {
+    const kept: unknown = JSON.parse(storageGet(SCHOOL_DONE_KEY) ?? '[]');
+    return new Set(Array.isArray(kept) ? SCHOOL_COURSES.filter((course) => kept.includes(course)) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+/** The drill a Host has reached in each course. */
+function schoolSteps(): Partial<Record<SchoolCourse, number>> {
+  try {
+    const kept: unknown = JSON.parse(storageGet(SCHOOL_STEP_KEY) ?? '{}');
+    const steps: Partial<Record<SchoolCourse, number>> = {};
+    if (kept && typeof kept === 'object') for (const course of SCHOOL_COURSES) if (Number.isInteger((kept as Record<string, unknown>)[course])) steps[course] = (kept as Record<string, number>)[course];
+    return steps;
+  } catch {
+    return {};
+  }
+}
 /** The solo round a Host chose last: mode, arena (none: by chance) and rivals. */
 const SOLO_KEY = 'solartournament.solo';
 /** The best lap of each arena's course, with its ghost (see game/laps). */
@@ -398,14 +426,6 @@ function storageSet(key: string, value: string) {
   }
 }
 
-function storageRemove(key: string) {
-  try {
-    localStorage.removeItem(key);
-  } catch {
-    // storage unavailable: there is nothing to remove
-  }
-}
-
 export class Game implements OnlineGame {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly composer: EffectComposer;
@@ -454,6 +474,9 @@ export class Game implements OnlineGame {
   private browsing = false;
   /** The choices of a solo round are open. */
   private choosingSolo = false;
+  /** The flight school's plate is open, and the course it starts. */
+  private choosingSchool = false;
+  private schoolCourse: SchoolCourse = 'basic';
   private solo = loadSolo();
   /** The lobby: open while browsing, or while leading a public tournament (see updateLobby). */
   private lobby: Lobby | null = null;
@@ -700,11 +723,9 @@ export class Game implements OnlineGame {
     }
     $('start').addEventListener('click', () => this.showSolo(true));
     this.buildSolo();
-    $('school').addEventListener('click', () => this.startRound('school'));
-    $('school-reset').addEventListener('click', () => {
-      storageRemove(SCHOOL_STEP_KEY);
-      this.showSchoolProgress();
-    });
+    $('school').addEventListener('click', () => this.showSchool(true));
+    $('school-back').addEventListener('click', () => this.showSchool(false));
+    this.buildSchool();
     $('online').addEventListener('click', () => this.openOnline());
     $('room-create').addEventListener('click', () => this.createTournament());
     $('tournaments-back').addEventListener('click', () => this.showTournaments(false));
@@ -753,25 +774,71 @@ export class Game implements OnlineGame {
 
   /**
    * The main action of the menu, started by Enter: joining when invited, the flight school
-   * until it is complete, then the solo round.
+   * until its basic training is complete, then the solo round.
    */
   private leadMode(): 'online' | 'school' | 'start' {
     if (this.invitedRoom()) return 'online';
-    return storageGet(SCHOOL_DONE_KEY) ? 'start' : 'school';
+    return schoolDone().has('basic') ? 'start' : 'school';
+  }
+
+  /** The flight school's plate: one button per course, each with a way to start it over. */
+  private buildSchool() {
+    for (const course of SCHOOL_COURSES) {
+      const button = Object.assign(document.createElement('button'), { type: 'button', className: 'mode', id: `school-${course}` });
+      button.innerHTML = `<span class="mode-name"><span class="mode-label">${COURSE_NAMES[course]}</span></span><span class="mode-note"></span>`;
+      button.addEventListener('click', () => this.startSchool(course));
+      const reset = Object.assign(document.createElement('button'), { type: 'button', className: 'quiet', textContent: `Start ${COURSE_NAMES[course].toLowerCase()} over` });
+      reset.addEventListener('click', () => {
+        const steps = schoolSteps();
+        delete steps[course];
+        storageSet(SCHOOL_STEP_KEY, JSON.stringify(steps));
+        this.showSchoolProgress();
+      });
+      $('school-courses').append(button, reset);
+    }
+  }
+
+  private showSchool(open: boolean) {
+    this.choosingSchool = open;
+    $('menu').hidden = open || this.state !== 'menu';
+    $('school-plate').hidden = !open;
+    if (open) $(`school-${this.nextCourse()}`).focus();
+  }
+
+  /** The course Enter starts on the school's plate: the first one not completed, or the basic training again. */
+  private nextCourse(): SchoolCourse {
+    const done = schoolDone();
+    return SCHOOL_COURSES.find((course) => !done.has(course)) ?? 'basic';
+  }
+
+  private startSchool(course: SchoolCourse) {
+    this.schoolCourse = course;
+    this.startRound('school');
   }
 
   /**
-   * The flight school button says where a Host left off, with a way to start over, and once
-   * the school is complete it says so for good: a Host who made it through keeps the badge.
+   * The flight school says where a Host left off in each course, with a way to start it over,
+   * and a course once completed says so for good: a Host who made it through keeps the badge.
+   * The menu's button sums it up.
    */
   private showSchoolProgress() {
-    const step = Number(storageGet(SCHOOL_STEP_KEY) ?? 0);
-    const cleared = storageGet(SCHOOL_DONE_KEY) !== null;
+    const steps = schoolSteps();
+    const done = schoolDone();
+    for (const course of SCHOOL_COURSES) {
+      const button = $(`school-${course}`);
+      const step = steps[course] ?? 0;
+      const cleared = done.has(course);
+      const note = button.querySelector<HTMLElement>('.mode-note')!;
+      if (step > 0) note.textContent = `Continue at drill ${step + 1} of ${FlightSchool.drillsOf(course)}.${cleared ? ' Completed before.' : ''}`;
+      else note.textContent = cleared ? '✓ Completed.' : SCHOOL_NOTES[course];
+      button.classList.toggle('cleared', cleared);
+      (button.nextElementSibling as HTMLElement).hidden = step <= 0;
+      button.classList.toggle('primary', course === this.nextCourse() && !cleared);
+    }
+    const cleared = SCHOOL_COURSES.filter((course) => done.has(course)).length;
     const note = $('school').querySelector<HTMLElement>('.mode-note')!;
-    if (step > 0) note.textContent = `Continue at drill ${step + 1} of ${FlightSchool.drills}.${cleared ? ' Completed before.' : ''}`;
-    else note.textContent = cleared ? '✓ Completed. Cleared for the tournament.' : 'Learn to fly. Training clones are free.';
-    $('school').classList.toggle('cleared', cleared);
-    $('school-reset').hidden = step <= 0;
+    note.textContent = cleared === SCHOOL_COURSES.length ? '✓ All three courses completed.' : cleared ? `✓ ${cleared} of ${SCHOOL_COURSES.length} courses completed.` : 'Learn to fly. Training clones are free.';
+    $('school').classList.toggle('cleared', cleared > 0);
   }
 
   private markLeadMode() {
@@ -1327,10 +1394,16 @@ export class Game implements OnlineGame {
           if (action === 'back' || action === 'pause') this.showSolo(false);
           break;
         }
+        // on the flight school's plate Enter starts the next course
+        if (this.choosingSchool) {
+          if (action === 'confirm') this.startSchool(this.nextCourse());
+          if (action === 'back' || action === 'pause') this.showSchool(false);
+          break;
+        }
         if (action === 'confirm') {
           const lead = this.leadMode();
           if (lead === 'online') this.openOnline();
-          else if (lead === 'school') this.startRound('school');
+          else if (lead === 'school') this.showSchool(true);
           else this.showSolo(true);
         }
         break;
@@ -1505,6 +1578,7 @@ export class Game implements OnlineGame {
     storageSet(CALLSIGN_KEY, callsign);
     if (mode !== 'online') this.leaveOnline();
     if (this.choosingSolo) this.showSolo(false);
+    if (this.choosingSchool) this.showSchool(false);
 
     this.clearShips();
     // the flight school trains in the belt; a solo round is in an arena of chance; online the
@@ -1520,7 +1594,7 @@ export class Game implements OnlineGame {
 
     this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, this.selectedShip, true);
     this.ghost.wear(this.assets.ships[this.selectedShip]);
-    this.school = mode === 'school' ? new FlightSchool(Number(storageGet(SCHOOL_STEP_KEY) ?? 0)) : null;
+    this.school = mode === 'school' ? new FlightSchool(this.schoolCourse, schoolSteps()[this.schoolCourse] ?? 0) : null;
     if (this.school) this.scene.add(this.school.root);
     $('now-playing').hidden = mode === 'school';
     if (mode === 'solo') {
@@ -2321,8 +2395,7 @@ export class Game implements OnlineGame {
     this.driveLit = lit;
     if (count !== this.countdown) {
       if (count > 0) {
-        this.hud.countdown(String(count));
-        this.sound.beep(660, 0.12, 0.2);
+        this.count(String(count));
       } else if (this.countdown > 0) {
         this.go();
       }
@@ -2341,22 +2414,33 @@ export class Game implements OnlineGame {
   /** GO: the clamps let go; whose drive is lit is judged at once, the rest within START_LATE. */
   private go() {
     const me = this.me!;
-    this.hud.countdown('GO');
-    this.sound.beep(1320, 0.35, 0.22);
+    this.count('GO');
     this.startOpen = !this.spectating && me.alive;
     if (this.startOpen && this.driveLit) {
       this.startOpen = false;
       if (this.driveLitAt >= START_SECONDS - START_WINDOW) this.perfectStart(me);
       else {
-        me.overheatDrive(this.time + FALSE_START_STALL);
-        this.hud.flashMessage(this.time, 'Too early · drive stalled', 2);
+        this.stall(me);
         this.speaker.say(COMPUTER.falseStart, 'urgent');
-        this.sound.beep(220, 0.3, 0.15);
       }
     }
     for (const bot of this.bots) {
       if (bot.ship.owner === null && bot.ship.alive && bot !== this.sparring?.bot && Math.random() < bot.skill * BOT_PERFECT_START) this.perfectStart(bot.ship);
     }
+  }
+
+  /** A number of a countdown, or GO, in big neon, with its beep. */
+  private count(text: string) {
+    this.hud.countdown(text);
+    if (text === 'GO') this.sound.beep(1320, 0.35, 0.22);
+    else this.sound.beep(660, 0.12, 0.2);
+  }
+
+  /** A false start: the drive was lit before GO and stalls (see FALSE_START_STALL). */
+  private stall(ship: Ship) {
+    ship.overheatDrive(this.time + FALSE_START_STALL);
+    this.hud.flashMessage(this.time, 'Too early · drive stalled', 2);
+    this.sound.beep(220, 0.3, 0.15);
   }
 
   /** A perfect start: the drive lights the moment the clamps let go, a shove along the nose. */
@@ -2375,14 +2459,19 @@ export class Game implements OnlineGame {
    * pilot feels the shove, hears the coil sing and sees the view widen.
    */
   private boost(ship: Ship, course: Course, gate: number) {
-    const through = scratch.copy(course.normals[gate]);
+    course.flash(gate, this.time);
+    this.coilPush(ship, course.normals[gate]);
+  }
+
+  /** A coil throws a ship on along an axis, the way it flies along it (see BOOST_PUSH); the flight school's coils too. */
+  private coilPush(ship: Ship, axis: THREE.Vector3) {
+    const through = scratch.copy(axis);
     if (through.dot(ship.flight.velocity) < 0) through.negate();
     // the coil's field runs at the tournament's limit plus its push: it pushes no ship beyond that
     const before = ship.flight.velocity.length();
     ship.flight.velocity.addScaledVector(through, BOOST_PUSH);
     const cap = Math.max(before, MAX_SPEED + BOOST_PUSH);
     if (ship.flight.velocity.length() > cap) ship.flight.velocity.setLength(cap);
-    course.flash(gate, this.time);
     if (ship !== this.me) return;
     this.boostKick = 1;
     this.strain = Math.max(this.strain, BOOST_STRAIN);
@@ -2509,12 +2598,14 @@ export class Game implements OnlineGame {
     const waypoint = school.update(context);
     if (school.stepIndex !== step) {
       this.sound.beep(880, 0.1, 0.15);
-      storageSet(SCHOOL_STEP_KEY, String(school.stepIndex));
+      storageSet(SCHOOL_STEP_KEY, JSON.stringify({ ...schoolSteps(), [school.course]: school.stepIndex }));
     }
     if (school.finished) {
-      storageSet(SCHOOL_DONE_KEY, '1');
-      storageRemove(SCHOOL_STEP_KEY);
+      storageSet(SCHOOL_DONE_KEY, JSON.stringify([...schoolDone().add(school.course)]));
+      storageSet(SCHOOL_STEP_KEY, JSON.stringify({ ...schoolSteps(), [school.course]: undefined }));
+      // back on the school's plate: the next course is a key away
       this.showMenu();
+      this.showSchool(true);
       return null;
     }
     this.hud.setSchool(school.status(context.device), context.device === 'keyboard');
@@ -2555,6 +2646,10 @@ export class Game implements OnlineGame {
       },
       say: (lines) => this.speaker.say(lines, 'lesson'),
       fireAt: (from, through) => this.drillShot(from, through),
+      boost: (through) => this.coilPush(this.me!, through),
+      countdown: (text) => this.count(text),
+      perfectStart: () => this.perfectStart(this.me!),
+      stall: () => this.stall(this.me!),
     };
   }
 

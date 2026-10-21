@@ -33,6 +33,13 @@ export interface SchoolContext {
   removeBot(): void;
   /** A laser shot from a point through a target point, for show: it costs no hull, a hit only sparks and shakes the link. */
   fireAt(from: THREE.Vector3, through: THREE.Vector3): void;
+  /** A coil throws the pilot on along a direction (either way, as it flies), as a race's gate does. */
+  boost(through: THREE.Vector3): void;
+  /** A number of a countdown, or GO, in big neon. */
+  countdown(text: string): void;
+  /** The drive lit on GO: a perfect start's shove; lit too early: the drive stalls. */
+  perfectStart(): void;
+  stall(): void;
   /** The flight computer is still talking. */
   speaking: boolean;
   /** The flight computer says lines, one after the other, after whatever it is saying; false when it could not speak yet (voice still loading, audio not yet allowed). */
@@ -70,6 +77,11 @@ interface Attempt {
   jinks: number;
   /** When a drill's gunner fired last (attempt seconds). */
   lastShot: number;
+  /** The start drill: the drive is lit and since when (attempt seconds), the number of the countdown shown, and a drive lit too early. */
+  lit: boolean;
+  litAt: number;
+  count: number;
+  early: boolean;
 }
 
 interface Drill {
@@ -162,6 +174,25 @@ const GUNNER_LAG = 0.35;
 const JINKS = 4;
 /** A drill waits this long for the voice to say its lines (s), then goes on without. */
 const UNSAID_PATIENCE = 10;
+/** The rings of the ring drill, in the pilot's frame (units): a gentle slalom. */
+const RING_COURSE: readonly [number, number, number][] = [
+  [0, 0, -7000],
+  [2500, 800, -14000],
+  [500, 3000, -21000],
+  [-2000, 1000, -28000],
+];
+/** The rings of the coil drill: three in a long, almost straight line, so the speed builds up. */
+const COIL_COURSE: readonly [number, number, number][] = [
+  [0, 0, -8000],
+  [600, 300, -18000],
+  [-400, 600, -28000],
+];
+/** A coil fires for a pilot through this share of its ring's radius, as a race's gates do (see race.ts). */
+const CORE_SHARE = 1 / 3;
+/** The start drill counts down to GO at this second of the attempt; the drive has to light at most START_EARLY before it and START_LATE after it, as in a race. */
+const START_GO = 3;
+const START_EARLY = 0.3;
+const START_LATE = 0.2;
 
 
 const scratch = new THREE.Vector3();
@@ -234,13 +265,43 @@ const TURN_MARKERS: [number, number, number][] = [
   [0.8, -0.35, 0.3],
 ];
 
-const DRILLS: Drill[] = [
-  {
-    line: SCHOOL.briefing,
-    keys: [],
-    done: (ctx, a) => (a.seconds > 2 && !ctx.speaking) || a.seconds > 30,
-  },
-  {
+/** A drill that only says its line: a course's opening or closing words. */
+const saying = (line: string): Drill => ({
+  line,
+  keys: [],
+  done: (ctx, a) => (a.seconds > 2 && !ctx.speaking) || a.seconds > 30,
+});
+
+/**
+ * Whether the pilot flew through the attempt's next ring this frame, either way: how far from
+ * its center, or null. The ring then counts as passed.
+ */
+function passRing(ctx: SchoolContext, a: Attempt): number | null {
+  const normal = a.normals[a.next];
+  const offset = toTarget.copy(ctx.me.flight.position).sub(a.points[a.next]);
+  const side = offset.dot(normal);
+  const crossed = Number.isFinite(a.side) && a.side < 0 !== side < 0;
+  a.side = side;
+  if (!crossed) return null;
+  const off = offset.addScaledVector(normal, -side).length();
+  if (off >= RING_RADIUS) return null;
+  a.next++;
+  a.side = NaN;
+  return off;
+}
+
+/** Lays out a course of rings ahead of the pilot, each facing the way from the one before. */
+function layRings(ctx: SchoolContext, a: Attempt, markers: Markers, course: readonly [number, number, number][]) {
+  stop(ctx);
+  a.points = course.map(([x, y, z]) => clear(ctx, ahead(ctx, x, y, z), RING_RADIUS * 1.5));
+  a.normals = a.points.map((point, i) => point.clone().sub(i === 0 ? ctx.me.flight.position : a.points[i - 1]).normalize());
+  a.points.forEach((point, i) => markers.ring(point, a.normals[i]));
+  markers.highlight(0);
+}
+
+const DRILL = {
+  briefing: saying(SCHOOL.briefing),
+  turn: {
     line: SCHOOL.turn,
     praise: SCHOOL_PRAISE.turn,
     keys: ['turn'],
@@ -254,7 +315,7 @@ const DRILLS: Drill[] = [
     waypoint: (_, a) => a.points[0],
     mark: () => 'Target',
   },
-  {
+  fineAim: {
     line: SCHOOL.fineAim,
     praise: SCHOOL_PRAISE.fineAim,
     keys: ['fine'],
@@ -267,7 +328,7 @@ const DRILLS: Drill[] = [
     waypoint: (_, a) => a.points[0],
     mark: () => 'Target',
   },
-  {
+  cockpit: {
     line: SCHOOL.cockpit,
     praise: SCHOOL_PRAISE.cockpit,
     keys: ['camera'],
@@ -279,14 +340,14 @@ const DRILLS: Drill[] = [
       return a.next === 1 && !ctx.cockpit;
     },
   },
-  {
+  drive: {
     line: SCHOOL.drive,
     praise: SCHOOL_PRAISE.drive,
     keys: ['drive'],
     enter: (ctx) => stop(ctx),
     done: (ctx) => speed(ctx) >= FAST,
   },
-  {
+  brake: {
     line: SCHOOL.brake,
     praise: SCHOOL_PRAISE.brake,
     keys: ['brake'],
@@ -295,44 +356,70 @@ const DRILLS: Drill[] = [
     },
     done: (ctx) => speed(ctx) < STOPPED,
   },
-  // the race needs no more: through the rings, around the rocks
-  {
+  rings: {
     line: SCHOOL.rings,
     praise: SCHOOL_PRAISE.rings,
     keys: ['drive', 'brake', 'flip'],
-    enter(ctx, a, markers) {
-      stop(ctx);
-      const course: [number, number, number][] = [
-        [0, 0, -7000],
-        [2500, 800, -14000],
-        [500, 3000, -21000],
-        [-2000, 1000, -28000],
-      ];
-      a.points = course.map(([x, y, z]) => clear(ctx, ahead(ctx, x, y, z), RING_RADIUS * 1.5));
-      // each ring faces the way from the one before
-      a.normals = a.points.map((point, i) => point.clone().sub(i === 0 ? ctx.me.flight.position : a.points[i - 1]).normalize());
-      a.points.forEach((point, i) => markers.ring(point, a.normals[i]));
-      markers.highlight(0);
-    },
+    enter: (ctx, a, markers) => layRings(ctx, a, markers, RING_COURSE),
     done(ctx, a, markers) {
-      const normal = a.normals[a.next];
-      const offset = toTarget.copy(ctx.me.flight.position).sub(a.points[a.next]);
-      const side = offset.dot(normal);
-      // passed: the pilot crossed the ring's plane, inside the ring, either way
-      if (Number.isFinite(a.side) && a.side < 0 !== side < 0 && offset.addScaledVector(normal, -side).length() < RING_RADIUS) {
-        a.next++;
-        markers.highlight(a.next);
-        a.side = NaN;
-        return a.next >= a.points.length;
-      }
-      a.side = side;
-      return false;
+      if (passRing(ctx, a) === null) return false;
+      markers.highlight(a.next);
+      return a.next >= a.points.length;
     },
     fail: (ctx, a) => (ctx.me.flight.position.distanceTo(a.points[a.points.length - 1]) > 50000 ? SCHOOL.again : null),
     waypoint: (_, a) => a.points[a.next] ?? null,
     mark: (_, a) => `Ring ${a.next + 1}/${a.points.length}`,
   },
-  {
+  // the rings of a race are coils: only their core throws a ship on
+  coil: {
+    line: SCHOOL.coil,
+    praise: SCHOOL_PRAISE.coil,
+    keys: ['drive', 'turn', 'fine'],
+    enter: (ctx, a, markers) => layRings(ctx, a, markers, COIL_COURSE),
+    done(ctx, a, markers) {
+      const off = passRing(ctx, a);
+      if (off === null) return false;
+      markers.highlight(a.next);
+      if (off < RING_RADIUS * CORE_SHARE) ctx.boost(a.normals[a.next - 1]);
+      else a.warned = true;
+      return a.next >= a.points.length && !a.warned;
+    },
+    fail: (ctx, a) => (a.warned ? SCHOOL.coilMiss : ctx.me.flight.position.distanceTo(a.points[a.points.length - 1]) > 50000 ? SCHOOL.again : null),
+    waypoint: (_, a) => a.points[a.next] ?? null,
+    mark: (_, a) => `Core ${a.next + 1}/${a.points.length}`,
+  },
+  // the race's start: the clamps hold the ship until GO, and the drive must light on it
+  start: {
+    line: SCHOOL.start,
+    praise: SCHOOL_PRAISE.start,
+    keys: ['drive'],
+    enter: (ctx) => stop(ctx),
+    done(ctx, a) {
+      const t = a.seconds;
+      const lit = ctx.controls.thrust > 0;
+      if (lit && !a.lit) a.litAt = t;
+      a.lit = lit;
+      const count = Math.max(0, Math.ceil(START_GO - t));
+      if (count !== a.count) {
+        ctx.countdown(count > 0 ? String(count) : 'GO');
+        a.count = count;
+      }
+      if (count > 0) {
+        stop(ctx);
+        return false;
+      }
+      if (!lit) return false;
+      if (a.litAt >= START_GO - START_EARLY) {
+        ctx.perfectStart();
+        return true;
+      }
+      if (!a.early) ctx.stall();
+      a.early = true;
+      return false;
+    },
+    fail: (_, a) => (a.early ? SCHOOL.tooEarly : a.seconds > START_GO + START_LATE ? SCHOOL.tooLate : null),
+  },
+  shoot: {
     line: SCHOOL.shoot,
     praise: SCHOOL_PRAISE.shoot,
     keys: ['fire'],
@@ -344,7 +431,7 @@ const DRILLS: Drill[] = [
     waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
     mark: () => 'Drone',
   },
-  {
+  shootMoving: {
     line: SCHOOL.shootMoving,
     praise: SCHOOL_PRAISE.shootMoving,
     keys: ['fire', 'fine'],
@@ -358,7 +445,7 @@ const DRILLS: Drill[] = [
     waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
     mark: () => 'Drone',
   },
-  {
+  overheat: {
     line: SCHOOL.overheat,
     praise: SCHOOL_PRAISE.overheat,
     keys: ['fire'],
@@ -370,7 +457,7 @@ const DRILLS: Drill[] = [
     },
     done: (ctx) => ctx.me.overheated,
   },
-  {
+  shadow: {
     line: SCHOOL.shadow,
     praise: SCHOOL_PRAISE.shadow,
     keys: ['drive', 'brake'],
@@ -378,7 +465,7 @@ const DRILLS: Drill[] = [
     waypoint: (ctx) => nearestShadow(ctx),
     mark: () => 'Shadow',
   },
-  {
+  impact: {
     line: SCHOOL.impact,
     praise: SCHOOL_PRAISE.impact,
     keys: ['brake', 'slide'],
@@ -417,14 +504,14 @@ const DRILLS: Drill[] = [
     fail: (ctx, a) => (a.points.length && !a.warned && ctx.me.flight.position.distanceTo(a.points[0]) > a.reach + 3000 ? SCHOOL.again : null),
   },
   // free drift: flying like a real spaceship, for the dogfight
-  {
+  freeDrift: {
     line: SCHOOL.freeDrift,
     praise: SCHOOL_PRAISE.freeDrift,
     keys: ['autopilot'],
     done: (ctx) => !ctx.autopilot,
     autopilotAfter: false,
   },
-  {
+  drift: {
     line: SCHOOL.drift,
     praise: SCHOOL_PRAISE.drift,
     keys: [],
@@ -434,7 +521,7 @@ const DRILLS: Drill[] = [
     },
     done: (ctx, a) => holdFor(ctx, a, ctx.controls.thrust === 0 && speed(ctx) > FAST / 2, 2.5),
   },
-  {
+  lookBack: {
     line: SCHOOL.lookBack,
     praise: SCHOOL_PRAISE.lookBack,
     keys: ['turn'],
@@ -445,7 +532,7 @@ const DRILLS: Drill[] = [
     // without drift there is no course to look away from
     fail: (ctx) => (speed(ctx) < FAST * 0.3 ? SCHOOL.again : null),
   },
-  {
+  flipBurn: {
     line: SCHOOL.flipBurn,
     praise: SCHOOL_PRAISE.flipBurn,
     repLine: SCHOOL.flipBurnAgain,
@@ -462,7 +549,7 @@ const DRILLS: Drill[] = [
       return a.usedBrake && speed(ctx) < STOPPED ? SCHOOL.byHand : null;
     },
   },
-  {
+  stopAt: {
     line: SCHOOL.stopAt,
     praise: SCHOOL_PRAISE.stopAt,
     repLine: SCHOOL.stopAtFar,
@@ -478,7 +565,7 @@ const DRILLS: Drill[] = [
     waypoint: (_, a) => a.points[0],
     mark: () => 'Stop here',
   },
-  {
+  slide: {
     line: SCHOOL.slide,
     praise: SCHOOL_PRAISE.slide,
     keys: ['slide'],
@@ -503,7 +590,7 @@ const DRILLS: Drill[] = [
       return a.jinks >= JINKS;
     },
   },
-  {
+  dodge: {
     line: SCHOOL.dodge,
     praise: SCHOOL_PRAISE.dodge,
     keys: ['slide'],
@@ -520,40 +607,68 @@ const DRILLS: Drill[] = [
       return turned(ctx, a) ? SCHOOL.noTurn : null;
     },
   },
-  {
+  autopilotOn: {
     line: SCHOOL.autopilotOn,
     praise: SCHOOL_PRAISE.autopilotOn,
     keys: ['autopilot'],
     done: (ctx) => ctx.autopilot,
     autopilotAfter: true,
   },
-  ...(
-    [
-      [SCHOOL.chase, SCHOOL_PRAISE.chase, ['drive', 'brake', 'fire'], { armed: false, skill: 0.1 }],
-      [SCHOOL.evade, SCHOOL_PRAISE.evade, ['slide', 'fire'], { armed: true, skill: 0.05 }],
-      [SCHOOL.duel, SCHOOL_PRAISE.duel, ['drive', 'brake', 'slide', 'fire'], { armed: true, skill: 0.2 }],
-    ] as const
-  ).map(
-    ([line, praise, keys, bot]): Drill => ({
-      line,
-      praise,
-      keys: [...keys],
-      enter(ctx) {
-        stop(ctx);
-        ctx.spawnBot(clear(ctx, ahead(ctx, 0, 0, -8000), 2000), bot.armed, bot.skill);
-      },
-      done: (ctx) => !!ctx.bot && !ctx.bot.alive,
-      leave: (ctx) => ctx.removeBot(),
-      waypoint: (ctx) => (ctx.bot?.alive ? ctx.bot.flight.position : null),
-      mark: () => 'Bot',
-    }),
-  ),
-  {
-    line: SCHOOL.done,
-    keys: [],
-    done: (ctx, a) => a.seconds > 3 && !ctx.speaking,
-  },
-];
+  chase: sparring(SCHOOL.chase, SCHOOL_PRAISE.chase, ['drive', 'brake', 'fire'], false, 0.1),
+  evade: sparring(SCHOOL.evade, SCHOOL_PRAISE.evade, ['slide', 'fire'], true, 0.05),
+  duel: sparring(SCHOOL.duel, SCHOOL_PRAISE.duel, ['drive', 'brake', 'slide', 'fire'], true, 0.2),
+} satisfies Record<string, Drill>;
+
+/** A drill against a sparring bot, armed or not, of a skill (see Bot). */
+function sparring(line: string, praise: string, keys: Command[], armed: boolean, skill: number): Drill {
+  return {
+    line,
+    praise,
+    keys,
+    enter(ctx) {
+      stop(ctx);
+      ctx.spawnBot(clear(ctx, ahead(ctx, 0, 0, -8000), 2000), armed, skill);
+    },
+    done: (ctx) => !!ctx.bot && !ctx.bot.alive,
+    leave: (ctx) => ctx.removeBot(),
+    waypoint: (ctx) => (ctx.bot?.alive ? ctx.bot.flight.position : null),
+    mark: () => 'Bot',
+  };
+}
+
+/** The courses of the flight school, each played on its own. */
+export type SchoolCourse = 'basic' | 'racer' | 'gladiator';
+export const SCHOOL_COURSES: readonly SchoolCourse[] = ['basic', 'racer', 'gladiator'];
+export const COURSE_NAMES: Record<SchoolCourse, string> = { basic: 'Basic training', racer: 'Racer', gladiator: 'Gladiator' };
+
+/**
+ * The drills of each course, in the order a Host needs them. Basic training: turning, aiming,
+ * the drive and the brake, stopping at a point and the rocks, all with the autopilot on. The
+ * racer: the rings, their coils and the start. The gladiator: the laser and its heat, free
+ * drift like a real spaceship, dodging, and the dogfight last.
+ */
+const COURSES: Record<SchoolCourse, Drill[]> = {
+  basic: [DRILL.briefing, DRILL.turn, DRILL.fineAim, DRILL.cockpit, DRILL.drive, DRILL.brake, DRILL.stopAt, DRILL.impact, saying(SCHOOL.basicDone)],
+  racer: [saying(SCHOOL.racer), DRILL.rings, DRILL.coil, DRILL.start, saying(SCHOOL.racerDone)],
+  gladiator: [
+    saying(SCHOOL.gladiator),
+    DRILL.shoot,
+    DRILL.shootMoving,
+    DRILL.overheat,
+    DRILL.shadow,
+    DRILL.freeDrift,
+    DRILL.drift,
+    DRILL.lookBack,
+    DRILL.flipBurn,
+    DRILL.slide,
+    DRILL.dodge,
+    DRILL.autopilotOn,
+    DRILL.chase,
+    DRILL.evade,
+    DRILL.duel,
+    saying(SCHOOL.done),
+  ],
+};
 
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
 class Markers {
@@ -634,11 +749,13 @@ class Markers {
 }
 
 /**
- * The guided training: one drill after another, each one maneuver, some repeated. A failed
- * attempt or a dead training clone starts the attempt over; training clones are free.
+ * The guided training of one course: one drill after another, each one maneuver, some
+ * repeated. A failed attempt or a dead training clone starts the attempt over; training
+ * clones are free.
  */
 export class FlightSchool {
   private readonly markers = new Markers();
+  private readonly drills: Drill[];
   private index: number;
   private attempt: Attempt | null = null;
   /** The attempt has to start over (failed, or the clone died). */
@@ -651,23 +768,27 @@ export class FlightSchool {
   /** What the current waypoint is, for its label in the HUD. */
   mark = '';
 
-  /** Starts at a drill: 0 for the briefing, or where a Host left off. */
-  constructor(start = 0) {
-    this.index = THREE.MathUtils.clamp(Math.floor(start), 0, DRILLS.length - 1);
-    this.line = DRILLS[this.index].line;
+  /** Starts a course at a drill: 0 for its opening, or where a Host left off. */
+  constructor(
+    readonly course: SchoolCourse,
+    start = 0,
+  ) {
+    this.drills = COURSES[course];
+    this.index = THREE.MathUtils.clamp(Math.floor(start), 0, this.drills.length - 1);
+    this.line = this.drills[this.index].line;
     // the very first words of the school: Nicole introduces herself before the briefing
-    if (this.index === 0) this.pending = [SCHOOL.hello];
+    if (course === 'basic' && this.index === 0) this.pending = [SCHOOL.hello];
   }
 
-  /** Number of drills, for the menu's "continue at drill n of m". */
-  static get drills() {
-    return DRILLS.length;
+  /** Number of drills of a course, for the menu's "continue at drill n of m". */
+  static drillsOf(course: SchoolCourse) {
+    return COURSES[course].length;
   }
 
   /** Whether the autopilot is on at the starting drill: as the drills before it left it. */
   get startsWithAutopilot() {
     let on = true;
-    for (let i = 0; i < this.index; i++) on = DRILLS[i].autopilotAfter ?? on;
+    for (let i = 0; i < this.index; i++) on = this.drills[i].autopilotAfter ?? on;
     return on;
   }
 
@@ -677,7 +798,7 @@ export class FlightSchool {
   }
 
   get finished() {
-    return this.index >= DRILLS.length;
+    return this.index >= this.drills.length;
   }
 
   dispose() {
@@ -691,9 +812,9 @@ export class FlightSchool {
    * and the drill counts.
    */
   update(ctx: SchoolContext): THREE.Vector3 | null {
-    if (!this.attempt) while (!this.finished && DRILLS[this.index].skip?.(ctx)) this.index++;
+    if (!this.attempt) while (!this.finished && this.drills[this.index].skip?.(ctx)) this.index++;
     if (this.finished) return null;
-    const drill = DRILLS[this.index];
+    const drill = this.drills[this.index];
     if (!ctx.me.alive) {
       this.restart = true;
       return null;
@@ -743,10 +864,10 @@ export class FlightSchool {
 
   /** Sets up an attempt and says its instruction; the drill's props come once it is said (see update). */
   private begin(ctx: SchoolContext, rep: number) {
-    const drill = DRILLS[this.index];
+    const drill = this.drills[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0 };
+    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false };
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
     const instruction = rep > 0 && drill.repLine ? drill.repLine : drill.line;
@@ -767,19 +888,19 @@ export class FlightSchool {
   }
 
   /**
-   * "Flight school 3/24", the current line, the keys of the Host's device. The same object
+   * "Racer 3/5", the current line, the keys of the Host's device. The same object
    * every frame; it only changes with the drill, the line or the device.
    */
   status(device: Device): { step: string; text: string; keys: string[] } {
-    const index = Math.min(this.index, DRILLS.length - 1);
+    const index = Math.min(this.index, this.drills.length - 1);
     const shown = this.shown;
     if (shown.index !== index || shown.status.text !== this.line || shown.device !== device) {
       shown.index = index;
       shown.device = device;
       shown.status = {
-        step: `Flight school ${index + 1}/${DRILLS.length}`,
+        step: `${COURSE_NAMES[this.course]} ${index + 1}/${this.drills.length}`,
         text: this.line,
-        keys: DRILLS[index].keys.flatMap((command) => CONTROLS[device][command]),
+        keys: this.drills[index].keys.flatMap((command) => CONTROLS[device][command]),
       };
     }
     return shown.status;
