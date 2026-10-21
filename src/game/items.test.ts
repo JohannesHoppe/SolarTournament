@@ -12,6 +12,18 @@ const scheduled = (elapsed: number) => {
   return probes.list.map((probe) => `${probe.id}:${probe.kind}:${probe.position.toArray().join()}`);
 };
 
+/** A square course of four gates, 1.5 km out. */
+const track = [new THREE.Vector3(30000, 0, 0), new THREE.Vector3(0, 0, 30000), new THREE.Vector3(-30000, 0, 0), new THREE.Vector3(0, 0, -30000)];
+
+/** The probes of two minutes of a race on `track`. */
+const raced = () => {
+  const field = testField();
+  field.generate(ARENAS[0].layout);
+  const probes = new Probes();
+  probes.schedule(1234, 3, 120, 120, field, track);
+  return probes;
+};
+
 describe('probes', () => {
   it('show up alike on every browser for the same room, round and clock', () => {
     expect(scheduled(80)).toEqual(scheduled(80));
@@ -21,11 +33,7 @@ describe('probes', () => {
   });
 
   it('lie on the track in a race', () => {
-    const field = testField();
-    field.generate(ARENAS[0].layout);
-    const track = [new THREE.Vector3(30000, 0, 0), new THREE.Vector3(0, 0, 30000), new THREE.Vector3(-30000, 0, 0), new THREE.Vector3(0, 0, -30000)];
-    const probes = new Probes();
-    probes.schedule(1234, 3, 120, 120, field, track);
+    const probes = raced();
     expect(probes.list.length).toBeGreaterThan(0);
     const along = new THREE.Line3();
     const closest = new THREE.Vector3();
@@ -95,11 +103,7 @@ describe('probes', () => {
   });
 
   it('are sealed in a race, and give the last more than the leaders', () => {
-    const field = testField();
-    field.generate(ARENAS[0].layout);
-    const track = [new THREE.Vector3(30000, 0, 0), new THREE.Vector3(0, 0, 30000), new THREE.Vector3(-30000, 0, 0), new THREE.Vector3(0, 0, -30000)];
-    const probes = new Probes();
-    probes.schedule(1234, 3, 120, 120, field, track);
+    const probes = raced();
     expect(probes.list.every((probe) => probe.luck !== null)).toBe(true);
     // a sealed probe passes to a newcomer sealed
     const newcomer = new Probes();
