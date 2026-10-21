@@ -45,15 +45,20 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 /** No relay, and why: the game shows the reason in the HUD, so a Host who cannot connect knows. */
 const off = (reason: string, status = 200) => json({ iceServers: [], off: reason }, status);
 
-/** The last reading of the month's outbound traffic (GB), per instance of the function. */
-let usage = { gb: Infinity, at: -Infinity };
+/** The month's outbound traffic (GB), or Infinity and why it could not be read. */
+type Usage = { gb: number; unread: string };
 
-/** The relay's outbound traffic of the current month (GB, UTC), or Infinity when it cannot be read. */
-async function monthlyGb(env: Env): Promise<number> {
-  if (Date.now() - usage.at < USAGE_MEMORY_MS) return usage.gb;
+/** The last reading, per instance of the function. */
+let usage = { gb: Infinity, unread: 'not read yet', at: -Infinity };
+
+/** The relay's outbound traffic of the current month (GB, UTC). */
+async function monthlyGb(env: Env): Promise<Usage> {
+  if (Date.now() - usage.at < USAGE_MEMORY_MS) return usage;
   let gb = Infinity;
+  let unread = 'no analytics token';
   if (env.CLOUDFLARE_ACCOUNT_ID && env.TURN_ANALYTICS_TOKEN) {
     const today = new Date().toISOString().slice(0, 10);
+    unread = 'analytics unreachable';
     try {
       const answer = await fetch('https://api.cloudflare.com/client/v4/graphql', {
         method: 'POST',
@@ -63,18 +68,20 @@ async function monthlyGb(env: Env): Promise<number> {
           variables: { account: env.CLOUDFLARE_ACCOUNT_ID, from: `${today.slice(0, 8)}01`, to: today },
         }),
       });
+      unread = `analytics answered ${answer.status}`;
       if (answer.ok) {
-        const body = (await answer.json()) as { errors?: unknown[] | null; data?: { viewer?: { accounts?: { callsTurnUsageAdaptiveGroups?: { sum?: { egressBytes?: number } }[] }[] } } };
+        const body = (await answer.json()) as { errors?: { message?: string }[] | null; data?: { viewer?: { accounts?: { callsTurnUsageAdaptiveGroups?: { sum?: { egressBytes?: number } }[] }[] } } };
         const account = body.data?.viewer?.accounts?.[0];
         // an account without traffic this month has no group at all
         if (!body.errors?.length && account) gb = (account.callsTurnUsageAdaptiveGroups?.[0]?.sum?.egressBytes ?? 0) / 1e9;
+        else unread = `analytics: ${body.errors?.[0]?.message ?? 'no account'}`.slice(0, 80);
       }
     } catch {
       // unreadable counts as spent
     }
   }
-  usage = { gb, at: Date.now() };
-  return gb;
+  usage = { gb, unread, at: Date.now() };
+  return usage;
 }
 
 export async function onRequestGet({ env, request }: { env: Env; request: Request }): Promise<Response> {
@@ -82,8 +89,8 @@ export async function onRequestGet({ env, request }: { env: Env; request: Reques
   const site = request.headers.get('sec-fetch-site');
   if (!HOSTS.has(new URL(request.url).hostname) || (site !== null && site !== 'same-origin')) return off('foreign site', 403);
   if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return off('not set up');
-  const gb = await monthlyGb(env);
-  if (gb === Infinity) return off('budget unreadable');
+  const { gb, unread } = await monthlyGb(env);
+  if (gb === Infinity) return off(`budget unreadable (${unread})`);
   if (gb >= MONTHLY_BUDGET_GB) return off('monthly budget spent');
   const answer = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
     method: 'POST',
