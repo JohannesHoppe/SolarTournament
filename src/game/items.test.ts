@@ -20,6 +20,21 @@ describe('probes', () => {
     expect(scheduled(70)).toHaveLength(3);
   });
 
+  it('lie on the track in a race', () => {
+    const field = testField();
+    field.generate(ARENAS[0].layout);
+    const track = [new THREE.Vector3(30000, 0, 0), new THREE.Vector3(0, 0, 30000), new THREE.Vector3(-30000, 0, 0), new THREE.Vector3(0, 0, -30000)];
+    const probes = new Probes();
+    probes.schedule(1234, 3, 120, 120, field, track);
+    expect(probes.list.length).toBeGreaterThan(0);
+    const along = new THREE.Line3();
+    const closest = new THREE.Vector3();
+    for (const probe of probes.list) {
+      const near = track.some((gate, i) => along.set(gate, track[(i + 1) % track.length]).closestPointToPoint(probe.position, true, closest).distanceTo(probe.position) < 800 * Math.sqrt(3) + 1);
+      expect(near).toBe(true);
+    }
+  });
+
   it('do not come back once taken', () => {
     const field = testField();
     field.generate(ARENAS[0].layout);

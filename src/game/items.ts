@@ -44,6 +44,8 @@ const PROBE_LIFETIME = PROBE_EVERY * 4;
 const MAX_DROPS = 3;
 /** A probe's reach (units, 15 m): a ship that comes this close plus its own radius takes it. */
 export const PROBE_RADIUS = 300;
+/** In a race, a probe lies this far (units, up to 40 m on each axis) off the line between two gates: well inside a gate's 80 m. */
+const TRACK_SPREAD = 800;
 /** A probe a dead clone dropped drifts this long (s) before it is gone. */
 const DROP_LIFETIME = 45;
 /** Dropped probes fly apart with up to this speed (units/s, 20 m/s) on top of the wreck's. */
@@ -108,9 +110,10 @@ export class Probes {
   /**
    * The arena's probes due by `elapsed` seconds into round `round` of `seed`'s room (or solo
    * round): each at a place in the field and with a kind its number decides; places taken by
-   * rock are skipped over to the next one.
+   * rock are skipped over to the next one. In a race they lie on the track: between two
+   * gates of `track`, close to the straight line from one to the next.
    */
-  schedule(seed: number, round: number, elapsed: number, now: number, field: AsteroidField) {
+  schedule(seed: number, round: number, elapsed: number, now: number, field: AsteroidField, track: readonly THREE.Vector3[] = []) {
     while (PROBE_FIRST + this.shown * PROBE_EVERY <= elapsed) {
       const n = this.shown++;
       const id = `r${round}.${n}`;
@@ -119,7 +122,14 @@ export class Probes {
       const position = new THREE.Vector3();
       for (let attempt = 0; attempt < 8; attempt++) {
         const h = (k: number) => hash(seed, round, n, attempt, k) / 4294967296;
-        position.set(h(1) * 2 - 1, (h(2) * 2 - 1) * 0.5, h(3) * 2 - 1).multiplyScalar(FIELD_RADIUS * 0.8);
+        if (track.length) {
+          const gate = Math.floor(h(1) * track.length);
+          position
+            .lerpVectors(track[gate], track[(gate + 1) % track.length], 0.25 + h(2) * 0.5)
+            .add(new THREE.Vector3(h(3) * 2 - 1, h(4) * 2 - 1, h(5) * 2 - 1).multiplyScalar(TRACK_SPREAD));
+        } else {
+          position.set(h(1) * 2 - 1, (h(2) * 2 - 1) * 0.5, h(3) * 2 - 1).multiplyScalar(FIELD_RADIUS * 0.8);
+        }
         if (!field.overlap(position, PROBE_RADIUS * 4) && !field.insideWell(position, PROBE_RADIUS * 20)) break;
       }
       this.add(id, kindOf(hash(seed, round, n, 99)), position, new THREE.Vector3(), now + left);

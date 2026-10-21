@@ -2404,7 +2404,7 @@ export class Game implements OnlineGame {
     if (document.body.classList.contains('nova-held') !== holding) document.body.classList.toggle('nova-held', holding);
     if (this.school) return;
     const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
-    if (this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.raceTime(), now, this.field);
+    if (this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.raceTime(), now, this.field, this.course?.points);
     this.probes.update(dt, now, this.field);
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive || ship === this.drone || (this.spectating && ship === this.me)) continue;
