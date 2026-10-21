@@ -2,3 +2,9 @@
 name = "solartournament"
 pages_build_output_dir = "dist"
 compatibility_date = "2026-10-01"
+
+# Plain variables of functions/turn.ts (with a wrangler.toml, Pages takes plain variables only
+# from here; the secrets TURN_KEY_API_TOKEN, TURN_KEY_ID and TURN_ANALYTICS_TOKEN stay in the
+# dashboard). The account whose TURN traffic the monthly budget reads; an account ID is no secret.
+[vars]
+CLOUDFLARE_ACCOUNT_ID = "2ccacec509bc697696aa0b57f969dc16"
