@@ -91,28 +91,28 @@ For development, `?local=1#t=code` connects tabs of the same browser without the
 
 ## Flight school
 
-The menu leads with the flight school until a Host has completed it once; after that the solo round is the main action (Enter opens its choices, Enter again launches it). The flight school remembers the drill a Host has reached: after a reload it continues there (the menu says "Continue at drill n of 24"), with the autopilot as the drills before left it, and "Start the flight school over" begins again from the briefing. Once complete, the flight school button says so for good ("✓ Completed. Cleared for the tournament."), also when the Host trains again. The flight school trains one maneuver per drill, 24 drills in all, each with a short spoken line, the keys as big keycaps (the spoken words name no keys; the keycaps show those of the Host's keyboard, gamepad or touch screen), and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver. Every attempt runs in clear phases, one after the other: what is left to say of the last one (the praise, or why it failed) to its end, then the instruction to its end, and only then the drill's markers, drones or bots show up and the drill counts. Her lessons are never cut off: a new one waits until she has finished the last, and her other lines (hits, asteroids, warnings) stay silent while she teaches; the HUD shows them anyway.
+The menu leads with the flight school until a Host has completed it once; after that the solo round is the main action (Enter opens its choices, Enter again launches it). The flight school remembers the drill a Host has reached: after a reload it continues there (the menu says "Continue at drill n of 24"), with the autopilot as the drills before left it, and "Start the flight school over" begins again from the briefing. Once complete, the flight school button says so for good ("✓ Completed. Cleared for the tournament."), also when the Host trains again. The flight school trains one maneuver per drill, 24 drills in all, in the order a Host needs them: first what a race takes (with the autopilot on: drive, brake, rings), then the laser and the rocks, then free drift like a real spaceship, and the dogfight last. Each drill comes with a short spoken line, the keys as big keycaps (the spoken words name no keys; the keycaps show those of the Host's keyboard, gamepad or touch screen), and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver. Every attempt runs in clear phases, one after the other: what is left to say of the last one (the praise, or why it failed) to its end, then the instruction to its end, and only then the drill's markers, drones or bots show up and the drill counts. Her lessons are never cut off: a new one waits until she has finished the last, and her other lines (hits, asteroids, warnings) stay silent while she teaches; the HUD shows them anyway.
 
 1. Briefing: Nicole introduces herself ("Hi, I am Nicole. Your personal flight computer."), then the world of the games in four sentences.
 2. Turning: three markers into the crosshair (arrows or mouse).
 3. Fine aim: Shift turns slowly; center a far marker exactly.
 4. Cockpit view: C switches into the cockpit and back (not given on touch screens, which have no camera switch: Nicole goes straight on to the next drill).
 5. Main drive: W up to 50 m/s, with the autopilot on.
-6. Free drift: T switches the autopilot off; the drift lessons that follow need it.
-7. Drifting: let go, nothing slows the ship down.
-8. Looking back while drifting: the nose turns, the course stays (the green prograde marker shows the course).
-9. Brake: hold S, the flight computer flips and burns until the ship is at rest.
-10. Flip and burn by hand, twice: hold X and W together; the drive fires once the nose points back; the S brake does not count here. The drill counts once the drift along the course is gone; a little sideways drift may remain.
-11. Stopping at a marker, near and far: burn, flip, burn. It counts once the ship rests (below 10 m/s) inside the blue sphere around the marker, 200 m in radius.
-12. Jinking: a gunner on the tail fires red shots at where the ship was a moment ago; pushing left and right with the thrusters (A/D) makes them go past. It counts after four changes of side; turning and drift do not matter, a hit only sparks.
-13. Dodging debris that drifts straight at the ship, twice, without turning (more than 45°).
-14. Autopilot back on (T).
-15. A course of four rings (each counts from either side).
-16. Shooting a resting drone: armor shrugs the laser off, five hits into the drive blow it up. A target drone keeps its drive turned to the pilot, wherever the pilot flies.
-17. Shooting a drifting drone, again into the drive (the laser hits instantly, no lead needed).
-18. Firing until the laser overheats.
-19. Cooling down in the shadow of an asteroid.
-20. The impact warning: drifting at a rock with 100 m/s, braking or sliding past.
+6. Brake: hold S, the flight computer flips and burns until the ship is at rest.
+7. A course of four rings (each counts from either side).
+8. Shooting a resting drone: armor shrugs the laser off, five hits into the drive blow it up. A target drone keeps its drive turned to the pilot, wherever the pilot flies.
+9. Shooting a drifting drone, again into the drive (the laser hits instantly, no lead needed).
+10. Firing until the laser overheats.
+11. Cooling down in the shadow of an asteroid.
+12. The impact warning: drifting at a rock with 100 m/s, braking or sliding past.
+13. Free drift: T switches the autopilot off; the drift lessons that follow need it.
+14. Drifting: let go, nothing slows the ship down.
+15. Looking back while drifting: the nose turns, the course stays (the green prograde marker shows the course).
+16. Flip and burn by hand, twice: hold X and W together; the drive fires once the nose points back; the S brake does not count here. The drill counts once the drift along the course is gone; a little sideways drift may remain.
+17. Stopping at a marker, near and far: burn, flip, burn. It counts once the ship rests (below 10 m/s) inside the blue sphere around the marker, 200 m in radius.
+18. Jinking: a gunner on the tail fires red shots at where the ship was a moment ago; pushing left and right with the thrusters (A/D) makes them go past. It counts after four changes of side; turning and drift do not matter, a hit only sparks.
+19. Dodging debris that drifts straight at the ship, twice, without turning (more than 45°).
+20. Autopilot back on (T).
 21. Chasing a bot that flies but does not shoot: it runs, staying on its tail opens its drive.
 22. Fighting a weak bot that shoots back: keep the armored nose on it, slide, and work onto its tail.
 23. Final exam: a real bot that knows the trick too. Win the dogfight.

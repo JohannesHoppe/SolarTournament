@@ -287,34 +287,6 @@ const DRILLS: Drill[] = [
     done: (ctx) => speed(ctx) >= FAST,
   },
   {
-    line: SCHOOL.freeDrift,
-    praise: SCHOOL_PRAISE.freeDrift,
-    keys: ['autopilot'],
-    done: (ctx) => !ctx.autopilot,
-    autopilotAfter: false,
-  },
-  {
-    line: SCHOOL.drift,
-    praise: SCHOOL_PRAISE.drift,
-    keys: [],
-    // a fresh clone (after a crash) starts at rest: it gets the drift it would have had
-    enter(ctx) {
-      if (speed(ctx) < FAST / 2) drift(ctx, FAST);
-    },
-    done: (ctx, a) => holdFor(ctx, a, ctx.controls.thrust === 0 && speed(ctx) > FAST / 2, 2.5),
-  },
-  {
-    line: SCHOOL.lookBack,
-    praise: SCHOOL_PRAISE.lookBack,
-    keys: ['turn'],
-    enter(ctx) {
-      if (speed(ctx) < FAST * 0.8) drift(ctx, FAST);
-    },
-    done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.angleTo(ctx.me.flight.velocity) > 2.4, 1),
-    // without drift there is no course to look away from
-    fail: (ctx) => (speed(ctx) < FAST * 0.3 ? SCHOOL.again : null),
-  },
-  {
     line: SCHOOL.brake,
     praise: SCHOOL_PRAISE.brake,
     keys: ['brake'],
@@ -323,88 +295,7 @@ const DRILLS: Drill[] = [
     },
     done: (ctx) => speed(ctx) < STOPPED,
   },
-  {
-    line: SCHOOL.flipBurn,
-    praise: SCHOOL_PRAISE.flipBurn,
-    repLine: SCHOOL.flipBurnAgain,
-    keys: ['flip', 'drive'],
-    reps: 2,
-    enter: (ctx, a) => drift(ctx, a.rep === 0 ? 1500 : 2400),
-    // counts once the burn has taken out the drift along the course; a burn by hand never
-    // hits the flight direction exactly, so some sideways drift is allowed to remain
-    done: (ctx, a) => ctx.me.flight.velocity.dot(a.forward) < STOPPED && !a.usedBrake,
-    // stopping with the S brake does not count; the attempt starts over once the ship is at rest
-    fail(ctx, a) {
-      a.brakeLetGo ||= !ctx.braking;
-      a.usedBrake ||= ctx.braking && a.brakeLetGo;
-      return a.usedBrake && speed(ctx) < STOPPED ? SCHOOL.byHand : null;
-    },
-  },
-  {
-    line: SCHOOL.stopAt,
-    praise: SCHOOL_PRAISE.stopAt,
-    repLine: SCHOOL.stopAtFar,
-    keys: ['drive', 'flip', 'brake'],
-    reps: 2,
-    enter(ctx, a, markers) {
-      stop(ctx);
-      a.points = [markers.buoy(clear(ctx, a.rep === 0 ? ahead(ctx, 0, 0, -10000) : ahead(ctx, 3000, 1500, -18000), STOP_RADIUS))];
-      markers.zone(a.points[0], STOP_RADIUS);
-    },
-    done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.position.distanceTo(a.points[0]) < STOP_RADIUS && speed(ctx) < STOP_SPEED, 0.3),
-    fail: (ctx, a) => (ctx.me.flight.position.distanceTo(a.points[0]) > 30000 ? SCHOOL.again : null),
-    waypoint: (_, a) => a.points[0],
-    mark: () => 'Stop here',
-  },
-  {
-    line: SCHOOL.slide,
-    praise: SCHOOL_PRAISE.slide,
-    keys: ['slide'],
-    // a gunner on the pilot's tail fires where the ship was a moment ago: jinking left and
-    // right with the thrusters is what makes the shots go past; turning and drift do not matter
-    enter(ctx, a) {
-      stop(ctx);
-      a.points = [ctx.me.flight.position.clone()];
-    },
-    done(ctx, a) {
-      const push = ctx.controls.strafeX;
-      const side = push > 0.5 ? 1 : push < -0.5 ? -1 : 0;
-      if (side && side !== a.jinkSide) {
-        if (a.jinkSide) a.jinks++;
-        a.jinkSide = side;
-      }
-      a.points[0].lerp(ctx.me.flight.position, 1 - Math.exp(-ctx.dt / GUNNER_LAG));
-      if (a.seconds - a.lastShot > GUNNER_INTERVAL) {
-        a.lastShot = a.seconds;
-        ctx.fireAt(ahead(ctx, (Math.random() - 0.5) * 3000, 800, 12000), a.points[0]);
-      }
-      return a.jinks >= JINKS;
-    },
-  },
-  {
-    line: SCHOOL.dodge,
-    praise: SCHOOL_PRAISE.dodge,
-    keys: ['slide'],
-    reps: 2,
-    enter(ctx, a, markers) {
-      stop(ctx);
-      const start = ahead(ctx, 0, 0, -9000);
-      const velocity = ctx.me.flight.position.clone().sub(start).setLength(DEBRIS_SPEED);
-      a.points = [markers.debris(start, velocity, DEBRIS_RADIUS)];
-    },
-    done: (ctx, a) => local(ctx, a.points[0]).z > 1500,
-    fail(ctx, a) {
-      if (ctx.me.flight.position.distanceTo(a.points[0]) < DEBRIS_RADIUS + ctx.me.radius) return SCHOOL.dodgeHit;
-      return turned(ctx, a) ? SCHOOL.noTurn : null;
-    },
-  },
-  {
-    line: SCHOOL.autopilotOn,
-    praise: SCHOOL_PRAISE.autopilotOn,
-    keys: ['autopilot'],
-    done: (ctx) => ctx.autopilot,
-    autopilotAfter: true,
-  },
+  // the race needs no more: through the rings, around the rocks
   {
     line: SCHOOL.rings,
     praise: SCHOOL_PRAISE.rings,
@@ -524,6 +415,117 @@ const DRILLS: Drill[] = [
     },
     // slid past without ever being warned: the lesson did not happen, once more
     fail: (ctx, a) => (a.points.length && !a.warned && ctx.me.flight.position.distanceTo(a.points[0]) > a.reach + 3000 ? SCHOOL.again : null),
+  },
+  // free drift: flying like a real spaceship, for the dogfight
+  {
+    line: SCHOOL.freeDrift,
+    praise: SCHOOL_PRAISE.freeDrift,
+    keys: ['autopilot'],
+    done: (ctx) => !ctx.autopilot,
+    autopilotAfter: false,
+  },
+  {
+    line: SCHOOL.drift,
+    praise: SCHOOL_PRAISE.drift,
+    keys: [],
+    // a fresh clone (after a crash) starts at rest: it gets the drift it would have had
+    enter(ctx) {
+      if (speed(ctx) < FAST / 2) drift(ctx, FAST);
+    },
+    done: (ctx, a) => holdFor(ctx, a, ctx.controls.thrust === 0 && speed(ctx) > FAST / 2, 2.5),
+  },
+  {
+    line: SCHOOL.lookBack,
+    praise: SCHOOL_PRAISE.lookBack,
+    keys: ['turn'],
+    enter(ctx) {
+      if (speed(ctx) < FAST * 0.8) drift(ctx, FAST);
+    },
+    done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.angleTo(ctx.me.flight.velocity) > 2.4, 1),
+    // without drift there is no course to look away from
+    fail: (ctx) => (speed(ctx) < FAST * 0.3 ? SCHOOL.again : null),
+  },
+  {
+    line: SCHOOL.flipBurn,
+    praise: SCHOOL_PRAISE.flipBurn,
+    repLine: SCHOOL.flipBurnAgain,
+    keys: ['flip', 'drive'],
+    reps: 2,
+    enter: (ctx, a) => drift(ctx, a.rep === 0 ? 1500 : 2400),
+    // counts once the burn has taken out the drift along the course; a burn by hand never
+    // hits the flight direction exactly, so some sideways drift is allowed to remain
+    done: (ctx, a) => ctx.me.flight.velocity.dot(a.forward) < STOPPED && !a.usedBrake,
+    // stopping with the S brake does not count; the attempt starts over once the ship is at rest
+    fail(ctx, a) {
+      a.brakeLetGo ||= !ctx.braking;
+      a.usedBrake ||= ctx.braking && a.brakeLetGo;
+      return a.usedBrake && speed(ctx) < STOPPED ? SCHOOL.byHand : null;
+    },
+  },
+  {
+    line: SCHOOL.stopAt,
+    praise: SCHOOL_PRAISE.stopAt,
+    repLine: SCHOOL.stopAtFar,
+    keys: ['drive', 'flip', 'brake'],
+    reps: 2,
+    enter(ctx, a, markers) {
+      stop(ctx);
+      a.points = [markers.buoy(clear(ctx, a.rep === 0 ? ahead(ctx, 0, 0, -10000) : ahead(ctx, 3000, 1500, -18000), STOP_RADIUS))];
+      markers.zone(a.points[0], STOP_RADIUS);
+    },
+    done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.position.distanceTo(a.points[0]) < STOP_RADIUS && speed(ctx) < STOP_SPEED, 0.3),
+    fail: (ctx, a) => (ctx.me.flight.position.distanceTo(a.points[0]) > 30000 ? SCHOOL.again : null),
+    waypoint: (_, a) => a.points[0],
+    mark: () => 'Stop here',
+  },
+  {
+    line: SCHOOL.slide,
+    praise: SCHOOL_PRAISE.slide,
+    keys: ['slide'],
+    // a gunner on the pilot's tail fires where the ship was a moment ago: jinking left and
+    // right with the thrusters is what makes the shots go past; turning and drift do not matter
+    enter(ctx, a) {
+      stop(ctx);
+      a.points = [ctx.me.flight.position.clone()];
+    },
+    done(ctx, a) {
+      const push = ctx.controls.strafeX;
+      const side = push > 0.5 ? 1 : push < -0.5 ? -1 : 0;
+      if (side && side !== a.jinkSide) {
+        if (a.jinkSide) a.jinks++;
+        a.jinkSide = side;
+      }
+      a.points[0].lerp(ctx.me.flight.position, 1 - Math.exp(-ctx.dt / GUNNER_LAG));
+      if (a.seconds - a.lastShot > GUNNER_INTERVAL) {
+        a.lastShot = a.seconds;
+        ctx.fireAt(ahead(ctx, (Math.random() - 0.5) * 3000, 800, 12000), a.points[0]);
+      }
+      return a.jinks >= JINKS;
+    },
+  },
+  {
+    line: SCHOOL.dodge,
+    praise: SCHOOL_PRAISE.dodge,
+    keys: ['slide'],
+    reps: 2,
+    enter(ctx, a, markers) {
+      stop(ctx);
+      const start = ahead(ctx, 0, 0, -9000);
+      const velocity = ctx.me.flight.position.clone().sub(start).setLength(DEBRIS_SPEED);
+      a.points = [markers.debris(start, velocity, DEBRIS_RADIUS)];
+    },
+    done: (ctx, a) => local(ctx, a.points[0]).z > 1500,
+    fail(ctx, a) {
+      if (ctx.me.flight.position.distanceTo(a.points[0]) < DEBRIS_RADIUS + ctx.me.radius) return SCHOOL.dodgeHit;
+      return turned(ctx, a) ? SCHOOL.noTurn : null;
+    },
+  },
+  {
+    line: SCHOOL.autopilotOn,
+    praise: SCHOOL_PRAISE.autopilotOn,
+    keys: ['autopilot'],
+    done: (ctx) => ctx.autopilot,
+    autopilotAfter: true,
   },
   ...(
     [
