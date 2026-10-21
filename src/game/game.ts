@@ -9,6 +9,7 @@ import { Sound } from '../sound/audio';
 import { Bot, BOT_NAMES } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
+import { Datamosh } from '../view/datamosh';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
@@ -490,6 +491,7 @@ export class Game implements OnlineGame {
   private redraw = true;
   private glitched = false;
   private readonly glitch = new Glitch();
+  private readonly datamosh = new Datamosh(this.camera);
   private readonly radio: Radio;
   /** The flight computer's voice: reads out what the screen shows. */
   private readonly speaker: Speaker;
@@ -531,6 +533,7 @@ export class Game implements OnlineGame {
     this.composer.addPass(this.lensing.pass);
     this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.4, 0.88));
     this.composer.addPass(new OutputPass());
+    this.composer.addPass(this.datamosh);
     this.composer.addPass(this.glitch.pass);
     this.glitch.onStatic = (strength) => this.sound.crackle(strength);
     this.radio = new Radio(sound.context, sound.headset, (song) => this.announceSong(song), (spoken, delay) => this.subtitle(spoken, delay));
@@ -1157,6 +1160,7 @@ export class Game implements OnlineGame {
       // the look of a nova core belongs to the round; the next frame of play brings it back
       document.body.classList.remove('nova-held', 'nova-alarm');
     }
+    if (state === 'menu' || state === 'results') this.datamosh.stop();
   }
 
   /**
@@ -1801,6 +1805,7 @@ export class Game implements OnlineGame {
       }
     }
     this.glitch.update();
+    this.datamosh.update();
 
     // a paused solo round stands still: its picture is drawn again only while it glitches or
     // after the window changed, not 60 times a second under the pause plate
@@ -1811,8 +1816,9 @@ export class Game implements OnlineGame {
     const still = this.state === 'paused' && !this.online && !glitching;
     if (still && !this.redraw) return;
     this.redraw = false;
-    // the kill cam borrows the ships' pictures and the camera for this one picture
-    const replaying = this.state === 'playing' && this.killcam.pose(this.camera);
+    // the kill cam borrows the ships' pictures and the camera for this one picture, from the
+    // second picture after the death on: the first one is the cockpit's last, which rots
+    const replaying = this.state === 'playing' && !this.datamosh.freezing && this.killcam.pose(this.camera);
     if (replaying !== this.replaying) {
       this.replaying = replaying;
       this.effects.group.visible = !replaying;
@@ -2929,8 +2935,9 @@ export class Game implements OnlineGame {
     victim.nova = false;
     if (victim.isLocal) {
       this.sound.play('explosion', { volume: 1.6, rate: 0.6 });
-      // the clone dies: its link breaks down, its radio fades out
-      this.glitch.trigger(1, 1.4);
+      // the clone dies: its link breaks down in a burst, its last picture rots, its radio fades out
+      this.glitch.trigger(0.7, 0.5);
+      this.datamosh.trigger();
       this.radio.setMuffled(true);
     } else {
       this.hearDebris(victim.flight.position, victim.radius);

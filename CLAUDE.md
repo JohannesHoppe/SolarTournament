@@ -105,6 +105,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/radar.ts` | The radar sphere: everything within 2.5 km around the own ship, ahead and behind, on a canvas |
 | `view/lensing.ts` | The black hole's gravitational lens over the rendered picture |
 | `view/glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |
+| `view/datamosh.ts` | The clone's death: its last picture loses the key frames and rots with the camera's motion and the frames' changes (a pass with its own feedback buffers) |
 | `view/textures.ts` | Canvas textures: glows, sparks, smoke |
 | `view/marks.ts` | The marks before names: bot or Host, drawn as shapes, never as characters |
 | **`input/`** | **Controls** |
