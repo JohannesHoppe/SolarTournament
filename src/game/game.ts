@@ -1939,8 +1939,9 @@ export class Game implements OnlineGame {
     if (this.online) {
       this.online.update(now);
       this.updateLobby();
-      // the room code is in the invite link; the HUD names the tournament and how many Hosts fly
-      const room = `${this.room?.name ?? 'Online'} · ${this.online.pilots} ${this.online.pilots === 1 ? 'Host' : 'Hosts'}`;
+      // the room code is in the invite link; the HUD names the tournament, how many Hosts fly and why the relay is missing, if it is
+      const relayOff = this.online.session.relayOff;
+      const room = `${this.room?.name ?? 'Online'} · ${this.online.pilots} ${this.online.pilots === 1 ? 'Host' : 'Hosts'}${relayOff ? ` · Relay off: ${relayOff}` : ''}`;
       if ($('hud-room').textContent !== room) $('hud-room').textContent = room;
       if (now >= this.roundEndsAt) this.showOnlineResults();
     } else if (now >= this.roundEndsAt) {

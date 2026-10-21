@@ -10,6 +10,12 @@
  * and the secret TURN_ANALYTICS_TOKEN with the permission Account Analytics Read) and hands
  * out nothing beyond MONTHLY_BUDGET_GB. Whatever cannot be read counts as spent: the relay
  * rather stops than costs money.
+ *
+ * To whoever found this endpoint and thinks of a free relay: there is nothing to get here.
+ * Every IP gets five answers per ten seconds, every credential dies after an hour, and the
+ * month's budget is small and locks the relay for everyone once it is spent. You would only
+ * take it from players behind strict firewalls, until the first of the next month.
+ * Don't be silly. Just play a nice match with us, mate!
  */
 
 interface Env {
@@ -19,11 +25,11 @@ interface Env {
   TURN_ANALYTICS_TOKEN?: string;
 }
 
-/** How long the credentials hold (s): longer than an evening of rounds. */
-const TTL = 6 * 60 * 60;
+/** How long the credentials hold (s): short, so a credential taken away is worthless soon; the game fetches fresh ones before (src/net/transport.ts). */
+const TTL = 60 * 60;
 
-/** Outbound relay traffic a month (GB) after which no credentials go out: below the 1,000 GB Cloudflare gives free, leaving room for credentials already handed out. */
-const MONTHLY_BUDGET_GB = 800;
+/** Outbound relay traffic a month (GB) after which no credentials go out: half of the 1,000 GB Cloudflare gives free, the rest is room for credentials already handed out. */
+const MONTHLY_BUDGET_GB = 500;
 
 /** How long one reading of the month's traffic is trusted (ms): the analytics lag minutes behind anyway. */
 const USAGE_MEMORY_MS = 5 * 60 * 1000;
@@ -35,6 +41,9 @@ const USAGE_MEMORY_MS = 5 * 60 * 1000;
 const HOSTS = new Set(['solartournament.games', 'test.solartournament.games']);
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+
+/** No relay, and why: the game shows the reason in the HUD, so a Host who cannot connect knows. */
+const off = (reason: string, status = 200) => json({ iceServers: [], off: reason }, status);
 
 /** The last reading of the month's outbound traffic (GB), per instance of the function. */
 let usage = { gb: Infinity, at: -Infinity };
@@ -71,15 +80,17 @@ async function monthlyGb(env: Env): Promise<number> {
 export async function onRequestGet({ env, request }: { env: Env; request: Request }): Promise<Response> {
   // a page of another site that asks gets nothing (browsers say where a request comes from)
   const site = request.headers.get('sec-fetch-site');
-  if (!HOSTS.has(new URL(request.url).hostname) || (site !== null && site !== 'same-origin')) return json({ iceServers: [] }, 403);
-  if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return json({ iceServers: [] });
-  if ((await monthlyGb(env)) >= MONTHLY_BUDGET_GB) return json({ iceServers: [] });
+  if (!HOSTS.has(new URL(request.url).hostname) || (site !== null && site !== 'same-origin')) return off('foreign site', 403);
+  if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return off('not set up');
+  const gb = await monthlyGb(env);
+  if (gb === Infinity) return off('budget unreadable');
+  if (gb >= MONTHLY_BUDGET_GB) return off('monthly budget spent');
   const answer = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
     method: 'POST',
     headers: { authorization: `Bearer ${env.TURN_KEY_API_TOKEN}`, 'content-type': 'application/json' },
     body: JSON.stringify({ ttl: TTL }),
   });
-  if (!answer.ok) return json({ iceServers: [] });
+  if (!answer.ok) return off(`Cloudflare answered ${answer.status}`);
   const { iceServers } = (await answer.json()) as { iceServers: { urls: string[]; username?: string; credential?: string }[] };
   // browsers block port 53, and a TURN address on it only times out
   return json({ iceServers: iceServers.map((server) => ({ ...server, urls: server.urls.filter((url) => !/:53\b/.test(url)) })).filter((server) => server.urls.length) });

@@ -285,6 +285,10 @@ export class Session {
     return this.transport.peers();
   }
 
+  get relayOff() {
+    return this.transport.relayOff;
+  }
+
   /**
    * The peer that has been in the room longest (without starting over) and is still sending
    * leads (ties: lower id), so a newcomer never takes over a running tournament. Every peer

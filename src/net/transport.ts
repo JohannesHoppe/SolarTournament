@@ -16,6 +16,8 @@ export interface Transport {
   onPeerLeave(handler: (id: string) => void): void;
   peers(): string[];
   leave(): void;
+  /** Why the TURN relay is not available (the HUD names it), or null when it is or not needed. */
+  readonly relayOff: string | null;
 }
 
 /** Identifies the game on the signaling relays; peers with other app ids never meet. */
@@ -28,20 +30,28 @@ const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.cloudflare.com:3478' }];
 /** Cloudflare's TURN relay comes with credentials from the game's own Pages Function (functions/turn.ts); a slow answer is not waited for (ms). */
 const TURN_PATH = '/turn';
 const TURN_PATIENCE_MS = 3000;
+/** The credentials hold an hour (functions/turn.ts); fresh ones are fetched well before (ms). */
+const TURN_REFRESH_MS = 50 * 60 * 1000;
 
 /**
  * The relays a browser may use: STUN, and Cloudflare's TURN relay for networks that block
  * direct connections (strict firewalls, carrier-grade NAT). Without an answer from /turn (the
  * dev server, a project without a TURN key) the game connects with STUN alone.
  */
-async function iceServers(): Promise<RTCIceServer[]> {
+async function iceServers(): Promise<{ servers: RTCIceServer[]; off: string | null }> {
+  let answer: Response;
   try {
-    const answer = await fetch(TURN_PATH, { signal: AbortSignal.timeout(TURN_PATIENCE_MS), cache: 'no-store' });
-    if (!answer.ok) return ICE_SERVERS;
-    const { iceServers: relays } = (await answer.json()) as { iceServers?: RTCIceServer[] };
-    return Array.isArray(relays) && relays.length ? [...ICE_SERVERS, ...relays] : ICE_SERVERS;
+    answer = await fetch(TURN_PATH, { signal: AbortSignal.timeout(TURN_PATIENCE_MS), cache: 'no-store' });
   } catch {
-    return ICE_SERVERS;
+    return { servers: ICE_SERVERS, off: 'no answer' };
+  }
+  try {
+    const { iceServers: relays, off } = (await answer.json()) as { iceServers?: RTCIceServer[]; off?: unknown };
+    if (Array.isArray(relays) && relays.length) return { servers: [...ICE_SERVERS, ...relays], off: null };
+    return { servers: ICE_SERVERS, off: typeof off === 'string' ? off.slice(0, 40) : 'no relay' };
+  } catch {
+    // not the game's function (the dev server answers with a page)
+    return { servers: ICE_SERVERS, off: null };
   }
 }
 /** No message is bigger than this (bytes): the largest, a full asteroid field, is about 15 KB. */
@@ -82,6 +92,7 @@ function closedSocket(url: string): WebSocket {
 
 abstract class BaseTransport implements Transport {
   abstract readonly selfId: string;
+  relayOff: string | null = null;
   protected readonly handlers = new Map<string, Handler[]>();
   protected joinHandlers: ((id: string) => void)[] = [];
   protected leaveHandlers: ((id: string) => void)[] = [];
@@ -112,18 +123,24 @@ export class TrysteroTransport extends BaseTransport {
   private readonly room: import('trystero').Room;
   private readonly action: import('trystero').MessageAction<Json>;
   private readonly connected = new Set<string>();
+  /** Trystero reads it for every new connection, so fresh credentials reach the next one too. */
+  private readonly rtcConfig: RTCConfiguration;
+  private readonly refresh: number;
   private left = false;
 
   private constructor(
     private readonly trystero: typeof import('trystero'),
     roomId: string,
-    relays: RTCIceServer[],
+    relays: { servers: RTCIceServer[]; off: string | null },
   ) {
     super();
     this.selfId = trystero.selfId;
     // the relays were put to sleep when the last room was left
     if (openRooms++ === 0) trystero.resumeRelayReconnection();
-    this.room = trystero.joinRoom({ appId: APP_ID, rtcConfig: { iceServers: relays }, maxReceiveBytes: MAX_MESSAGE_BYTES }, roomId);
+    this.rtcConfig = { iceServers: relays.servers };
+    this.relayOff = relays.off;
+    this.room = trystero.joinRoom({ appId: APP_ID, rtcConfig: this.rtcConfig, maxReceiveBytes: MAX_MESSAGE_BYTES }, roomId);
+    this.refresh = window.setInterval(() => void this.renewRelays(), TURN_REFRESH_MS);
     // one action for all message types keeps the channel setup small
     this.action = this.room.makeAction<Json>('st');
     this.action.onMessage = (message, { peerId }) => {
@@ -157,6 +174,21 @@ export class TrysteroTransport extends BaseTransport {
     return [...this.connected];
   }
 
+  /** Hands fresh TURN credentials to the connections that are open and to those still to come. */
+  private async renewRelays() {
+    const { servers, off } = await iceServers();
+    if (this.left) return;
+    this.rtcConfig.iceServers = servers;
+    this.relayOff = off;
+    for (const connection of Object.values(this.room.getPeers())) {
+      try {
+        connection.setConfiguration({ ...connection.getConfiguration(), iceServers: servers });
+      } catch {
+        // a connection that closed meanwhile takes no configuration
+      }
+    }
+  }
+
   /**
    * Leaves the room; with the last open room it also closes the connections to the signaling
    * relays: outside a tournament and the lobby the game talks to no relay at all.
@@ -164,6 +196,7 @@ export class TrysteroTransport extends BaseTransport {
   leave() {
     if (this.left) return;
     this.left = true;
+    clearInterval(this.refresh);
     void this.room.leave();
     if (--openRooms > 0) return;
     this.trystero.pauseRelayReconnection();
