@@ -45,6 +45,8 @@ import { markedName } from '../view/marks';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
 const RESULTS_SECONDS = 12;
+/** Once every Host has finished a race, the round ends this many seconds later (s): time to see the own place. */
+const RACE_OVER_SECONDS = 5;
 /**
  * Solar storms in the corona arena: every STORM_PERIOD seconds of field time a storm of
  * STORM_SECONDS blinds the sensors (no markers, no lock warnings, bots see only within
@@ -1555,6 +1557,7 @@ export class Game implements OnlineGame {
       this.startNextRound();
       this.setRoundEnd(ROUND_SECONDS);
     }
+    if (this.raceOver() && this.roundEndsAtWall - wallClock() > RACE_OVER_SECONDS) this.setRoundEnd(RACE_OVER_SECONDS);
     const left = this.roundEndsAtWall - wallClock();
     this.roundEndsAt = this.time + left;
     return { id: this.roundId, left: +left.toFixed(3), field: +this.field.clock.toFixed(3) };
@@ -1960,9 +1963,16 @@ export class Game implements OnlineGame {
       const room = `${this.room?.name ?? 'Online'} · ${this.online.pilots} ${this.online.pilots === 1 ? 'Host' : 'Hosts'}${relayOff ? ` · Relay off: ${relayOff}` : ''}`;
       if ($('hud-room').textContent !== room) $('hud-room').textContent = room;
       if (now >= this.roundEndsAt) this.showOnlineResults();
-    } else if (now >= this.roundEndsAt) {
-      this.endRound();
+    } else {
+      if (this.raceOver() && this.roundEndsAt - now > RACE_OVER_SECONDS) this.setRoundEnd(RACE_OVER_SECONDS);
+      if (now >= this.roundEndsAt) this.endRound();
     }
+  }
+
+  /** A race is over once every Host's clone has finished: bots do not hold it up. */
+  private raceOver() {
+    const hosts = this.ships.filter((ship) => ship.kind === 'host');
+    return !!this.course && hosts.length > 0 && hosts.every((ship) => ship.finish >= 0);
   }
 
   /** The radar's marks: the field's center, and in a race the next gate of the ship it shows. */
