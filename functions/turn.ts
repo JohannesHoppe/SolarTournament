@@ -14,9 +14,18 @@ interface Env {
 /** How long the credentials hold (s): longer than an evening of rounds. */
 const TTL = 6 * 60 * 60;
 
-const json = (body: unknown) => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+/**
+ * Only the game's own domains hand out credentials: their zone's rate limit guards them,
+ * the raw Pages addresses have none (and the game sends their visitors on anyway).
+ */
+const HOSTS = new Set(['solartournament.games', 'test.solartournament.games']);
 
-export async function onRequestGet({ env }: { env: Env }): Promise<Response> {
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
+
+export async function onRequestGet({ env, request }: { env: Env; request: Request }): Promise<Response> {
+  // a page of another site that asks gets nothing (browsers say where a request comes from)
+  const site = request.headers.get('sec-fetch-site');
+  if (!HOSTS.has(new URL(request.url).hostname) || (site !== null && site !== 'same-origin')) return json({ iceServers: [] }, 403);
   if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return json({ iceServers: [] });
   const answer = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
     method: 'POST',
