@@ -6,7 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { Bot, BOT_NAMES, rankOf, skillOf } from '../ship/bots';
+import { Bot, BOT_NAMES, RACE_SPEED, rankOf, skillOf } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { Datamosh } from '../view/datamosh';
@@ -288,9 +288,19 @@ const SOLO_KEY = 'solartournament.solo';
 /** The best lap of each arena's course, with its ghost (see game/laps). */
 const LAPS_KEY = 'solartournament.laps';
 
-/** What a solo round plays: a race unless the Host asks for a deathmatch, its arena (null: by chance), and the bots it flies against. */
-type SoloChoice = { mode: RoundMode; arena: ArenaId | null; rivals: string[] };
-const SOLO_DEFAULT: SoloChoice = { mode: 'race', arena: null, rivals: ['Ingmar', 'Nova', 'Kessler'] };
+/**
+ * The class of a solo race: how fast its bots race from gate to gate (units/s): 120 m/s,
+ * 180 m/s as online, or 240 m/s, just below the limit, where they hardly make the turns.
+ */
+type Pace = 'cruise' | 'pro' | 'max';
+const PACES: Record<Pace, { speed: number; note: string }> = {
+  cruise: { speed: 2400, note: '· bots race at 120 m/s' },
+  pro: { speed: RACE_SPEED, note: '· bots race at 180 m/s, as online' },
+  max: { speed: 4800, note: '· bots race at 240 m/s, at the limit' },
+};
+/** What a solo round plays: a race unless the Host asks for a deathmatch, its class, its arena (null: by chance), and the bots it flies against: a full grid unless the Host picks fewer. */
+type SoloChoice = { mode: RoundMode; pace: Pace; arena: ArenaId | null; rivals: string[] };
+const SOLO_DEFAULT: SoloChoice = { mode: 'race', pace: 'pro', arena: null, rivals: ['Laika', 'Sputnik', 'Ingmar', 'Nova', 'Kessler', 'Orion', 'Vega'] };
 const SOLO_NOTES: Record<RoundMode, string> = {
   race: 'Three laps through eight gates. Killing your opponents is explicitly allowed.',
   deathmatch: 'For the hard pilots: five minutes, every clone for itself.',
@@ -302,11 +312,13 @@ function loadSolo(): SoloChoice {
     const kept = JSON.parse(storageGet(SOLO_KEY) ?? '{}') as Partial<SoloChoice>;
     return {
       mode: kept.mode === 'deathmatch' ? 'deathmatch' : 'race',
+      pace: kept.pace && kept.pace in PACES ? kept.pace : SOLO_DEFAULT.pace,
       arena: ARENAS.some((a) => a.id === kept.arena) ? kept.arena! : null,
-      rivals: Array.isArray(kept.rivals) ? BOT_NAMES.filter((n) => kept.rivals!.includes(n)).slice(0, TOURNAMENT_SIZE - 1) : SOLO_DEFAULT.rivals,
+      rivals: Array.isArray(kept.rivals) ? BOT_NAMES.filter((n) => kept.rivals!.includes(n)).slice(0, TOURNAMENT_SIZE - 1) : [...SOLO_DEFAULT.rivals],
     };
   } catch {
-    return { ...SOLO_DEFAULT };
+    // the choice changes the rivals in place: the default keeps its own
+    return { ...SOLO_DEFAULT, rivals: [...SOLO_DEFAULT.rivals] };
   }
 }
 
@@ -793,6 +805,7 @@ export class Game implements OnlineGame {
       return element;
     };
     for (const mode of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-mode"] button[data-value]')) choose(mode, () => (this.solo.mode = mode.dataset.value as RoundMode));
+    for (const pace of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-pace"] button[data-value]')) choose(pace, () => (this.solo.pace = pace.dataset.value as Pace));
     $('solo-arenas').append(
       button('By chance', () => (this.solo.arena = null)),
       ...ARENAS.map((arena) => button(arena.name, () => (this.solo.arena = arena.id))),
@@ -813,9 +826,14 @@ export class Game implements OnlineGame {
 
   /** Marks the solo round's choices. */
   private renderSolo() {
-    const { mode, arena, rivals } = this.solo;
-    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-mode"] button[data-value]')) button.classList.toggle('selected', button.dataset.value === mode);
+    const { mode, pace, arena, rivals } = this.solo;
+    for (const [choice, value] of [['solo-mode', mode], ['solo-pace', pace]]) {
+      for (const button of document.querySelectorAll<HTMLButtonElement>(`[data-choice="${choice}"] button[data-value]`)) button.classList.toggle('selected', button.dataset.value === value);
+    }
     $('solo-mode-note').textContent = SOLO_NOTES[mode];
+    // the class is the bots' racing speed: a deathmatch has none
+    $('solo-class').hidden = mode !== 'race';
+    $('solo-class-note').textContent = PACES[pace].note;
     [...$('solo-arenas').children].forEach((b, i) => b.classList.toggle('selected', i === 0 ? arena === null : ARENAS[i - 1].id === arena));
     [...$('solo-bots').children].forEach((b, i) => {
       const chosen = rivals.includes(BOT_NAMES[i]);
@@ -1505,7 +1523,10 @@ export class Game implements OnlineGame {
     this.school = mode === 'school' ? new FlightSchool(Number(storageGet(SCHOOL_STEP_KEY) ?? 0)) : null;
     if (this.school) this.scene.add(this.school.root);
     $('now-playing').hidden = mode === 'school';
-    if (mode === 'solo') this.setBotCount(this.solo.rivals.length, [], this.solo.rivals);
+    if (mode === 'solo') {
+      this.setBotCount(this.solo.rivals.length, [], this.solo.rivals);
+      for (const bot of this.bots) bot.raceSpeed = PACES[this.solo.pace].speed;
+    }
     this.respawn(this.me);
 
     // online the round is unknown until the lead browser tells it (see syncRound)

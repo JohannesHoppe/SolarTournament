@@ -3,7 +3,7 @@ import { openGame, play, type GameWindow } from './game';
 
 test('a solo round starts and runs without errors', async ({ page }) => {
   const errors = await openGame(page);
-  // the solo plate opens with the default choice: a race against three rivals
+  // the solo plate opens with the default choice: a race against a full grid of seven rivals
   await page.click('#start');
   await page.click('#solo-launch');
   await play(page, 5);
@@ -12,7 +12,7 @@ test('a solo round starts and runs without errors', async ({ page }) => {
     return { state: game.state, ships: game.ships.length, arena: game.venue.id, alive: game.me.alive };
   });
   expect(state.state).toBe('playing');
-  expect(state.ships).toBe(4);
+  expect(state.ships).toBe(8);
   expect(state.alive).toBe(true);
   await expect(page.locator('#hud')).toBeVisible();
   expect(errors).toEqual([]);
