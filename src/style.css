@@ -270,9 +270,32 @@ button.primary .mode-note {
   gap: 8px;
 }
 
-.ship-select button.selected {
+.ship-select button.selected,
+.choice-grid button.selected {
   border-color: var(--accent-strong);
   color: var(--accent-strong);
+}
+
+/* the solo round's arenas and rivals: as many in a row as fit */
+.choice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
+  gap: 8px;
+}
+
+.choice-grid button {
+  padding: 8px 10px;
+  line-height: 1.25;
+}
+
+.choice-grid small {
+  display: block;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+#solo {
+  width: min(560px, calc(100vw - 32px));
 }
 
 .field {

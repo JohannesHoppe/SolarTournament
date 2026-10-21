@@ -66,6 +66,20 @@ const line = new THREE.Vector3();
 export { BOT_NAMES } from '../music/lines';
 
 /**
+ * Every bot flies with a skill of its own, 0..1 (reaction, aim, how hot it runs its laser): the
+ * menu names it, so a Host knows whom it picks. The first three, who fill a tournament first,
+ * average 0.4.
+ */
+export const BOT_SKILLS: Record<string, number> = { Ingmar: 0.3, Nova: 0.4, Kessler: 0.5, Vega: 0.7, Orion: 0.6, Sputnik: 0.2, Halley: 0.85, Laika: 0.1 };
+/** A bot of a name without a skill of its own. */
+const DEFAULT_SKILL = 0.4;
+
+export const skillOf = (name: string) => BOT_SKILLS[name] ?? DEFAULT_SKILL;
+
+/** What the menu calls a skill. */
+export const rankOf = (skill: number) => (skill < 0.25 ? 'Rookie' : skill < 0.45 ? 'Pilot' : skill < 0.65 ? 'Veteran' : 'Ace');
+
+/**
  * Newtonian pursuit AI. Bots only see ships they have a line of sight to. It works out the velocity it wants (close in on its target,
  * hold distance, avoid rocks, stay in the arena) and corrects large differences by turning
  * the main drive into the error and burning. Small differences are trimmed with the

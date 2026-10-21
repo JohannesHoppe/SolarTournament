@@ -3,7 +3,9 @@ import { openGame, play, type GameWindow } from './game';
 
 test('a solo round starts and runs without errors', async ({ page }) => {
   const errors = await openGame(page);
+  // the solo plate opens with the default choice: a race against three rivals
   await page.click('#start');
+  await page.click('#solo-launch');
   await play(page, 5);
   const state = await page.evaluate(() => {
     const game = (window as unknown as GameWindow).game;

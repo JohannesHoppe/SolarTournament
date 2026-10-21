@@ -6,7 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { Bot, BOT_NAMES } from '../ship/bots';
+import { Bot, BOT_NAMES, rankOf, skillOf } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { Datamosh } from '../view/datamosh';
@@ -66,8 +66,6 @@ const DIRECTOR_STICK = 1.3;
 const DIRECTOR_PAUSE = 10;
 /** The modes as the list of tournaments names them. */
 const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', mixed: 'Deathmatch and race' };
-/** A solo round is one of these, by chance. */
-const SOLO_MODES: readonly RoundMode[] = ['deathmatch', 'race'];
 /** A kill in a race is worth less than in a deathmatch: the gates and the finish decide. */
 const RACE_KILL_POINTS = 200;
 /** Points for shooting down a torpedo, and how often a bot with a lock fires one (per second). */
@@ -109,8 +107,6 @@ const LOUNGE_SEED = 2584;
 /** The idle link to the clone hangar glitches now and then, every 5 to 14 s. */
 const IDLE_GLITCH_MIN = 5;
 const IDLE_GLITCH_RANGE = 9;
-/** Bots of a solo round: enough for a dogfight, few enough to follow. */
-const BOT_COUNT = 3;
 /** Reach of the laser (units, 10 km), far beyond the arena; also the length of the rays that find the shadow of the rocks. */
 const LASER_RANGE = 200000;
 /** Points for destroying a ship: a kill is worth more than any rock. */
@@ -254,6 +250,30 @@ const CALLSIGN_KEY = 'solartournament.callsign';
 const SCHOOL_DONE_KEY = 'solartournament.school';
 /** The drill a Host has reached in the flight school, so a reload continues there; cleared when the school is complete or started over. */
 const SCHOOL_STEP_KEY = 'solartournament.school-step';
+/** The solo round a Host chose last: mode, arena (none: by chance) and rivals. */
+const SOLO_KEY = 'solartournament.solo';
+
+/** What a solo round plays: a race unless the Host asks for a deathmatch, its arena (null: by chance), and the bots it flies against. */
+type SoloChoice = { mode: RoundMode; arena: ArenaId | null; rivals: string[] };
+const SOLO_DEFAULT: SoloChoice = { mode: 'race', arena: null, rivals: ['Ingmar', 'Nova', 'Kessler'] };
+const SOLO_NOTES: Record<RoundMode, string> = {
+  race: 'Three laps through eight gates. Lasers stay on.',
+  deathmatch: 'For the hard pilots: five minutes, every clone for itself.',
+};
+
+/** The solo choice kept in this browser, checked: whatever does not fit falls back to the default. */
+function loadSolo(): SoloChoice {
+  try {
+    const kept = JSON.parse(storageGet(SOLO_KEY) ?? '{}') as Partial<SoloChoice>;
+    return {
+      mode: kept.mode === 'deathmatch' ? 'deathmatch' : 'race',
+      arena: ARENAS.some((a) => a.id === kept.arena) ? kept.arena! : null,
+      rivals: Array.isArray(kept.rivals) ? BOT_NAMES.filter((n) => kept.rivals!.includes(n)).slice(0, TOURNAMENT_SIZE - 1) : SOLO_DEFAULT.rivals,
+    };
+  } catch {
+    return { ...SOLO_DEFAULT };
+  }
+}
 
 type State = 'menu' | 'playing' | 'paused' | 'results';
 /**
@@ -374,6 +394,9 @@ export class Game implements OnlineGame {
   private room: Room | null = null;
   /** The list of tournaments is open; the lobby listens meanwhile. */
   private browsing = false;
+  /** The choices of a solo round are open. */
+  private choosingSolo = false;
+  private solo = loadSolo();
   /** The lobby: open while browsing, or while leading a public tournament (see updateLobby). */
   private lobby: Lobby | null = null;
   private lobbyOpening = false;
@@ -384,7 +407,7 @@ export class Game implements OnlineGame {
   /** The choices of the form that starts a tournament. */
   private roomPublic = true;
   private roomBots = true;
-  private roomMode: RoomMode = 'deathmatch';
+  private roomMode: RoomMode = 'race';
   /** What the running round is, and its course when it is a race. */
   private roundMode: RoundMode = 'deathmatch';
   private course: Course | null = null;
@@ -598,7 +621,8 @@ export class Game implements OnlineGame {
         shipButtons.forEach((b) => b.classList.toggle('selected', b === button));
       });
     }
-    $('start').addEventListener('click', () => this.startRound('solo'));
+    $('start').addEventListener('click', () => this.showSolo(true));
+    this.buildSolo();
     $('school').addEventListener('click', () => this.startRound('school'));
     $('school-reset').addEventListener('click', () => {
       storageRemove(SCHOOL_STEP_KEY);
@@ -688,6 +712,59 @@ export class Game implements OnlineGame {
    */
   private invitedRoom(): Room | null {
     return roomFromFragment(location.hash);
+  }
+
+  /** The plate of a solo round's choices: mode, arena and rivals, kept in this browser. */
+  private buildSolo() {
+    const choose = (element: HTMLButtonElement, apply: () => void) =>
+      element.addEventListener('click', () => {
+        apply();
+        storageSet(SOLO_KEY, JSON.stringify(this.solo));
+        this.renderSolo();
+      });
+    const button = (html: string, apply: () => void) => {
+      const element = Object.assign(document.createElement('button'), { type: 'button', innerHTML: html });
+      choose(element, apply);
+      return element;
+    };
+    for (const mode of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-mode"] button[data-value]')) choose(mode, () => (this.solo.mode = mode.dataset.value as RoundMode));
+    $('solo-arenas').append(
+      button('By chance', () => (this.solo.arena = null)),
+      ...ARENAS.map((arena) => button(arena.name, () => (this.solo.arena = arena.id))),
+    );
+    $('solo-bots').append(
+      ...BOT_NAMES.map((name) =>
+        button(`${name}<small>${rankOf(skillOf(name))}</small>`, () => {
+          const rivals = this.solo.rivals;
+          if (rivals.includes(name)) rivals.splice(rivals.indexOf(name), 1);
+          else if (rivals.length < TOURNAMENT_SIZE - 1) rivals.push(name);
+        }),
+      ),
+    );
+    $('solo-launch').addEventListener('click', () => this.startRound('solo'));
+    $('solo-back').addEventListener('click', () => this.showSolo(false));
+    this.renderSolo();
+  }
+
+  /** Marks the solo round's choices. */
+  private renderSolo() {
+    const { mode, arena, rivals } = this.solo;
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-mode"] button[data-value]')) button.classList.toggle('selected', button.dataset.value === mode);
+    $('solo-mode-note').textContent = SOLO_NOTES[mode];
+    [...$('solo-arenas').children].forEach((b, i) => b.classList.toggle('selected', i === 0 ? arena === null : ARENAS[i - 1].id === arena));
+    [...$('solo-bots').children].forEach((b, i) => {
+      const chosen = rivals.includes(BOT_NAMES[i]);
+      b.classList.toggle('selected', chosen);
+      b.setAttribute('aria-pressed', String(chosen));
+    });
+    $('solo-bot-count').textContent = rivals.length ? `· ${rivals.length}` : '· none: alone against the clock';
+  }
+
+  private showSolo(open: boolean) {
+    this.choosingSolo = open;
+    $('menu').hidden = open || this.state !== 'menu';
+    $('solo').hidden = !open;
+    if (open) $('solo-launch').focus();
   }
 
   /** The menu's online button: straight into the invited tournament, else the list of tournaments. */
@@ -1116,10 +1193,17 @@ export class Game implements OnlineGame {
           if (action === 'back' || action === 'pause') this.showTournaments(false);
           break;
         }
+        // on the solo round's choices Enter launches it and Escape goes back
+        if (this.choosingSolo) {
+          if (action === 'confirm') this.startRound('solo');
+          if (action === 'back' || action === 'pause') this.showSolo(false);
+          break;
+        }
         if (action === 'confirm') {
           const lead = this.leadMode();
           if (lead === 'online') this.openOnline();
-          else this.startRound(lead === 'school' ? 'school' : 'solo');
+          else if (lead === 'school') this.startRound('school');
+          else this.showSolo(true);
         }
         break;
       case 'playing':
@@ -1284,16 +1368,17 @@ export class Game implements OnlineGame {
     $<HTMLInputElement>('callsign').value = callsign;
     storageSet(CALLSIGN_KEY, callsign);
     if (mode !== 'online') this.leaveOnline();
+    if (this.choosingSolo) this.showSolo(false);
 
     this.clearShips();
     // the flight school trains in the belt; a solo round is in an arena of chance; online the
     // room and round decide, so a first round starts in the room's first arena (see arriveInRound)
     // online the round is unknown until the lead browser tells it (see syncRound)
     this.roundId = mode === 'online' ? -1 : 0;
-    // a solo round needs no choices: arena and mode come by chance
-    this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? pick(SOLO_MODES) : 'deathmatch';
+    // a solo round plays what the Host chose, its arena by chance unless one was chosen
+    this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? this.solo.mode : 'deathmatch';
     if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0));
-    else this.enterArena(mode === 'school' ? ARENAS[0] : pick(ARENAS));
+    else this.enterArena(mode === 'school' ? ARENAS[0] : (ARENAS.find((a) => a.id === this.solo.arena) ?? pick(ARENAS)));
     this.hud.reset();
     $('hud-room').textContent = '';
 
@@ -1301,7 +1386,7 @@ export class Game implements OnlineGame {
     this.school = mode === 'school' ? new FlightSchool(Number(storageGet(SCHOOL_STEP_KEY) ?? 0)) : null;
     if (this.school) this.scene.add(this.school.root);
     $('now-playing').hidden = mode === 'school';
-    if (mode === 'solo') this.setBotCount(BOT_COUNT);
+    if (mode === 'solo') this.setBotCount(this.solo.rivals.length, [], this.solo.rivals);
     this.respawn(this.me);
 
     // online the round is unknown until the lead browser tells it (see syncRound)
@@ -1424,18 +1509,18 @@ export class Game implements OnlineGame {
    * Adds or removes own bots until this browser runs `count` of them. The first new ones adopt
    * the `heirs` (bots another browser ran, see Ship.adopt), which leave the scene in their favor.
    */
-  setBotCount(count: number, heirs: readonly Ship[] = []) {
+  setBotCount(count: number, heirs: readonly Ship[] = [], wanted: readonly string[] = BOT_NAMES) {
     while (this.bots.length > count) this.removeShip(this.bots[this.bots.length - 1].ship);
     for (const heir of heirs) this.removeShip(heir);
     const taken = new Set(this.ships.map((s) => s.name));
-    const names = BOT_NAMES.filter((n) => !taken.has(n) && !heirs.some((heir) => heir.name === n));
+    const names = wanted.filter((n) => !taken.has(n) && !heirs.some((heir) => heir.name === n));
     for (let i = this.bots.length, next = 0, free = 0; i < count; i++) {
       const id = this.online ? `b:${this.online.selfId}:${i}` : `bot${i}`;
       const heir = heirs[next++];
       const ship = heir
         ? this.addShip(id, heir.name, heir.type, false)
         : this.addShip(id, names[free++] ?? `Bot ${i + 1}`, i % 2 === 0 ? 'alien' : 'human', false);
-      this.bots.push(new Bot(ship, 0.2 + (i % 3) * 0.2));
+      this.bots.push(new Bot(ship, skillOf(ship.name)));
       if (!heir) this.respawn(ship);
       else {
         ship.adopt(heir, this.time);

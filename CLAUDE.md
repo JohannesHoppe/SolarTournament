@@ -64,7 +64,7 @@ Never use `npx`, always the scripts from `package.json`.
 
 The repository root is the Vite project: `index.html` (the game), `radio.html` (Radio 2584), `impressum.html` and `datenschutz.html` (German legal pages, linked from the menu and the radio page) are its pages, `public/` holds the static files, `tools/` the generators that write into `public/`.
 
-**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the six localStorage entries, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server and TURN relay, public tournament names, the cheat reports between the browsers), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, another TURN or STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
+**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the seven localStorage entries, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server and TURN relay, public tournament names, the cheat reports between the browsers), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, another TURN or STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
 
 `src/` is grouped by area:
 
@@ -97,7 +97,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `ship/models.ts` | The interceptors' hulls, low poly in code; collider, drive flame and glows come from the model files |
 | `ship/ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, drive animation |
 | `ship/flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`) |
-| `ship/bots.ts` | Bot AI: desired velocity, turn and burn, aiming with spread |
+| `ship/bots.ts` | Bot AI: desired velocity, turn and burn, aiming with spread; every bot's skill and rank |
 | **`view/`** | **What the screen shows** |
 | `view/hud.ts` | DOM HUD: gauges, markers, warnings, tunnel vision |
 | `view/effects.ts` | Particles (one draw call per texture), laser beams |
@@ -157,7 +157,7 @@ Typography matters. Running text is always justified, never ragged, with hyphena
 
 In dev mode the game hangs on the window as `window.game`. It lets you read and set state (Playwright, `browser_evaluate`):
 
-- Start a round: `document.getElementById('start').click()`
+- Start a solo round: `document.getElementById('start').click()` opens its choices, `document.getElementById('solo-launch').click()` launches it
 - Simulate keys: `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))`
 - Freeze time for screenshots: `game.timeScale = 0`
 - Disable bots: set the other ships to `alive = false` and `respawnAt = Infinity`
