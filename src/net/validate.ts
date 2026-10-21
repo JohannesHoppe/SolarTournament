@@ -74,7 +74,7 @@ export function shipState(x: unknown): ShipState | null {
           n: cleanName(x.n) || null,
           k: x.k === 'human' || x.k === 'alien' ? x.k : null,
           s: num(x.s, -MAX_COUNT, MAX_COUNT),
-          ki: num(x.ki, 0, MAX_COUNT),
+          ki: num(x.ki, -MAX_COUNT, MAX_COUNT),
           de: num(x.de, 0, MAX_COUNT),
           g: num(x.g, 0, MAX_COUNT),
           fi: num(x.fi, -1, ROUND_LIMIT),

@@ -101,6 +101,12 @@ const BOT_COUNT = 3;
 const LASER_RANGE = 200000;
 /** Points for destroying a ship: a kill is worth more than any rock. */
 const KILL_POINTS = 500;
+/**
+ * A ship destroyed by a nova core counts as this many kills (and their points) for the holder,
+ * because it is funny; the victim loses one kill and its points for it, so everyone has a
+ * reason to get out of the blast radius fast.
+ */
+const NOVA_KILL_CREDIT = 2;
 /** Bots respawn after this delay; the own pilot sees the sponsor break after it. */
 const RESPAWN_SECONDS = 3;
 /** Impacts slower than this (units/s) only scratch the paint. */
@@ -236,8 +242,11 @@ const SCHOOL_DONE_KEY = 'solartournament.school';
 const SCHOOL_STEP_KEY = 'solartournament.school-step';
 
 type State = 'menu' | 'playing' | 'paused' | 'results';
-/** What killed a ship without a killer, where this browser saw it happen: a rock, wreckage, deep space, the arena's massive body. */
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | null;
+/**
+ * What killed a ship without a killer, where this browser saw it happen: a rock, wreckage, deep
+ * space, the arena's massive body; or, with a killer, its nova core.
+ */
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'nova' | null;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 /** The label of a menu mode button: the text of its first line, without the Enter key. */
@@ -1382,7 +1391,7 @@ export class Game implements OnlineGame {
     this.killcam.recordBeam(this.time, from, to, shooter.color);
   }
 
-  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number, position: THREE.Vector3 | null, velocity: THREE.Vector3 | null) {
+  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number, position: THREE.Vector3 | null, velocity: THREE.Vector3 | null, nova: boolean) {
     victim.alive = false;
     victim.root.visible = false;
     // the owner counted this death already; its wreckage is seeded with that count and flies
@@ -1390,7 +1399,7 @@ export class Game implements OnlineGame {
     victim.deaths = deaths;
     if (position) victim.flight.position.copy(position);
     if (velocity) victim.flight.velocity.copy(velocity);
-    this.shipDestroyed(victim, killer);
+    this.shipDestroyed(victim, killer, nova && killer ? 'nova' : null);
   }
 
   remoteWreck(id: string) {
@@ -2373,7 +2382,7 @@ export class Game implements OnlineGame {
     for (const ship of [...this.ships]) {
       if (ship === holder || ship.owner !== null || !ship.alive || ship.flight.position.distanceTo(position) > NOVA_RADIUS) continue;
       ship.protectedUntil = Math.min(ship.protectedUntil, now);
-      if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, holder);
+      if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, holder, 'nova');
     }
     // the holder's clone burns up in its own core, leaving nothing behind; no one is blamed for
     // it, and the sponsors are so thrilled by the show that the next clone comes without an ad
@@ -2795,15 +2804,16 @@ export class Game implements OnlineGame {
     }
     if (killer === this.me && victim !== this.me) this.ease = Math.max(0, this.ease - KILL_EASE);
     if (victim === this.me) {
-      if (killer) this.deathCause = ['Shot down by ', ...markedName(killer.kind, killer.name)];
+      if (killer) this.deathCause = [cause === 'nova' ? 'Vaporized by the nova of ' : 'Shot down by ', ...markedName(killer.kind, killer.name)];
       else if (cause === 'well') this.deathCause = WELL_DEATHS[this.venue.id] ?? 'Crashed';
       else this.deathCause = victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
     }
     // a kill of the Host's own is bigger: more fire, a jolt, and the points where it happened
     const ownKill = killer?.isLocal === true && killer === this.me;
+    const credit = cause === 'nova' ? NOVA_KILL_CREDIT : 1;
     this.effects.explosion(victim.flight.position, victim.radius * (ownKill ? 3 : 2), victim.flight.velocity.clone().multiplyScalar(0.3));
     if (ownKill) {
-      this.hud.popup(this.camera, victim.flight.position, `+${this.killPoints()}`, 'kill');
+      this.hud.popup(this.camera, victim.flight.position, credit > 1 ? `Double kill +${this.killPoints() * credit}` : `+${this.killPoints()}`, 'kill');
       this.kick = 2;
     }
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
@@ -2825,10 +2835,16 @@ export class Game implements OnlineGame {
       this.hearDebris(victim.flight.position, victim.radius);
     }
     // online, the owner of the victim announces the destruction; each peer scores its own ships
-    if (victim.owner === null) this.online?.sendDestroyed(victim, killer);
+    if (victim.owner === null) this.online?.sendDestroyed(victim, killer, cause === 'nova');
+    // a nova's second kill comes out of the victim's pocket: whoever lets novas catch it again
+    // and again goes below zero (each browser scores the victims it runs)
+    if (cause === 'nova' && victim.owner === null) {
+      victim.kills--;
+      victim.score -= this.killPoints();
+    }
     if (killer && killer.owner === null) {
-      killer.kills++;
-      killer.score += this.killPoints();
+      killer.kills += credit;
+      killer.score += this.killPoints() * credit;
       if (killer.isLocal) {
         this.sound.beep(1320, 0.07, 0.15);
         this.sound.beep(1760, 0.12, 0.15, 0.09);

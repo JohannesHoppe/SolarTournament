@@ -98,7 +98,7 @@ export class Session {
   onFire: (shooter: string, from: Vec, to: Vec) => void = () => {};
   onHit: (target: string, origin: Vec, direction: Vec, shooter: string) => void = () => {};
   /** `position` and `velocity` are where the victim broke up, on its owner's screen. */
-  onDestroyed: (victim: string, killer: string | null, deaths: number, position: Vec | null, velocity: Vec | null) => void = () => {};
+  onDestroyed: (victim: string, killer: string | null, deaths: number, position: Vec | null, velocity: Vec | null, nova: boolean) => void = () => {};
   onRock: (id: string, at: number, round: number) => void = () => {};
   /** A piece of wreckage was shot or rammed on another browser. */
   onWreck: (id: string) => void = () => {};
@@ -183,7 +183,7 @@ export class Session {
       const position = vec(d?.p, 3, MAX_COORDINATE);
       const velocity = vec(d?.u, 3, MAX_SPEED);
       if (!victim || killer === undefined || deaths === null || ownerOf(victim) !== from || !this.destroyBudget.spend(from)) return;
-      this.guard(() => this.onDestroyed(victim, killer, deaths, position, velocity));
+      this.guard(() => this.onDestroyed(victim, killer, deaths, position, velocity, d?.n === 1));
     });
     transport.on('w', (d, from) => {
       const wreck = id(d?.i);
@@ -350,9 +350,12 @@ export class Session {
     this.transport.send('h', { t: target, o: origin, d: direction, i: shooter }, owner);
   }
 
-  /** `deaths` is the victim's death count with this death, so every peer seeds the same wreckage, where the victim broke up. */
-  sendDestroyed(victim: string, killer: string | null, deaths: number, position: Vec, velocity: Vec) {
-    this.transport.send('x', { v: victim, k: killer, de: deaths, p: position, u: velocity });
+  /**
+   * `deaths` is the victim's death count with this death, so every peer seeds the same wreckage,
+   * where the victim broke up; `n: 1` when the killer's nova core did it (it counts double).
+   */
+  sendDestroyed(victim: string, killer: string | null, deaths: number, position: Vec, velocity: Vec, nova: boolean) {
+    this.transport.send('x', { v: victim, k: killer, de: deaths, p: position, u: velocity, ...(nova ? { n: 1 } : {}) });
   }
 
   sendWreck(wreck: string) {

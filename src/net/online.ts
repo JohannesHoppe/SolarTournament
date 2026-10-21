@@ -21,8 +21,8 @@ export interface OnlineGame {
   showBeam(shooter: Ship, from: THREE.Vector3, to: THREE.Vector3): void;
   /** A beam from another peer hit a ship this browser simulates. */
   applyLaserHit(target: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null): void;
-  /** Another peer reports a destroyed ship; `deaths` counts this death; position and velocity are where it broke up. */
-  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number, position: THREE.Vector3 | null, velocity: THREE.Vector3 | null): void;
+  /** Another peer reports a destroyed ship; `deaths` counts this death; position and velocity are where it broke up; `nova` when the killer's nova core did it. */
+  remoteDestroyed(victim: Ship, killer: Ship | null, deaths: number, position: THREE.Vector3 | null, velocity: THREE.Vector3 | null, nova: boolean): void;
   /** Another peer hit an asteroid at a field time, in an online round. */
   remoteRock(id: string, at: number, round: number): void;
   /** Another peer shot or rammed a piece of wreckage. */
@@ -91,11 +91,11 @@ export class Online {
       // only a living shooter hits, and only ships this browser runs take damage here
       if (ship && ship.owner === null && gun?.alive) game.applyLaserHit(ship, origin.fromArray(o), direction.fromArray(d).normalize(), gun);
     };
-    session.onDestroyed = (victim, killer, deaths, p, u) => {
+    session.onDestroyed = (victim, killer, deaths, p, u, nova) => {
       // a ship dies once per clone: a dead one cannot die again, and the count only goes up
       const ship = this.find(victim);
       if (ship && ship.owner !== null && ship.alive && deaths > ship.deaths) {
-        game.remoteDestroyed(ship, killer ? this.find(killer) : null, deaths, p && from.fromArray(p), u && to.fromArray(u));
+        game.remoteDestroyed(ship, killer ? this.find(killer) : null, deaths, p && from.fromArray(p), u && to.fromArray(u), nova);
       }
     };
     session.onRock = (id, at, round) => game.remoteRock(id, at, round);
@@ -201,8 +201,8 @@ export class Online {
     if (target.owner) this.session.sendHit(target.owner, target.id, round(o), d.toArray().map((x) => +x.toFixed(5)), shooter.id);
   }
 
-  sendDestroyed(victim: Ship, killer: Ship | null) {
-    this.session.sendDestroyed(victim.id, killer?.id ?? null, victim.deaths, round(victim.flight.position), round(victim.flight.velocity));
+  sendDestroyed(victim: Ship, killer: Ship | null, nova: boolean) {
+    this.session.sendDestroyed(victim.id, killer?.id ?? null, victim.deaths, round(victim.flight.position), round(victim.flight.velocity), nova);
   }
 
   sendRock(id: string, at: number, round: number) {

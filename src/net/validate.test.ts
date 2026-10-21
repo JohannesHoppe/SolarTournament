@@ -22,6 +22,10 @@ describe('messages from other browsers', () => {
     expect(shipState({ ...ship, ...slow })?.n).toBe('Nova');
   });
 
+  it('take kills and score below zero, which novas can bring about', () => {
+    expect(shipState({ ...ship, ...slow, ki: -3, s: -1500 })?.ki).toBe(-3);
+  });
+
   it('drop a ship state with only part of its slow part, a number that is not finite, or a broken quaternion', () => {
     expect(shipState({ ...ship, n: 'Nova' })).toBeNull();
     expect(shipState({ ...ship, h: Number.NaN })).toBeNull();
