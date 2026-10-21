@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { colliderBox } from '../assets';
 import { Randomizer, textSeed } from '../random';
 import { Surface } from './surface';
+import { boxContact, rayBox } from './boxes';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
@@ -441,7 +442,7 @@ export class AsteroidField {
     let best: { asteroid: Asteroid | null; distance: number } | null = null;
     for (const asteroid of this.asteroids.values()) {
       if (raySphere(origin, direction, asteroid.object.position, asteroid.radius) === null) continue;
-      const distance = asteroid.box ? rayBox(asteroid, origin, direction) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);
+      const distance = asteroid.box ? rayPiece(asteroid, origin, direction) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);
       if (distance !== null && distance <= maxDistance && (!best || distance < best.distance)) best = { asteroid, distance };
     }
     const well = this.well;
@@ -470,7 +471,7 @@ export class AsteroidField {
     for (const asteroid of this.asteroids.values()) {
       const reach = asteroid.radius + radius;
       if (asteroid.object.position.distanceToSquared(center) > reach * reach) continue;
-      if (asteroid.box ? boxContact(asteroid, center, radius, pull) : asteroid.surface ? surfaceContact(asteroid, asteroid.surface, center, radius) : ellipsoidContact(asteroid, center, radius)) return asteroid;
+      if (asteroid.box ? pieceContact(asteroid, center, radius, pull) : asteroid.surface ? surfaceContact(asteroid, asteroid.surface, center, radius) : ellipsoidContact(asteroid, center, radius)) return asteroid;
     }
     return null;
   }
@@ -481,7 +482,7 @@ export class AsteroidField {
    */
   resolve(asteroid: Asteroid, center: THREE.Vector3, radius: number, normal = new THREE.Vector3()): THREE.Vector3 | null {
     if (asteroid.box) {
-      const surface = boxContact(asteroid, center, radius, normal);
+      const surface = pieceContact(asteroid, center, radius, normal);
       if (!surface) return null;
       normal.transformDirection(asteroid.object.matrixWorld);
       point.copy(surface).add(asteroid.center).applyMatrix4(asteroid.object.matrixWorld);
@@ -606,46 +607,17 @@ const closest = new THREE.Vector3();
  * to the sphere's center (on its surface; for a center inside, on the face nearest to it) and
  * the outward normal there, when the sphere touches the box; otherwise null.
  */
-function boxContact(asteroid: Asteroid, center: THREE.Vector3, radius: number, normal: THREE.Vector3) {
+function pieceContact(asteroid: Asteroid, center: THREE.Vector3, radius: number, normal: THREE.Vector3) {
   const scale = asteroid.object.matrixWorld.getMaxScaleOnAxis();
-  const half = asteroid.semiAxes;
   const local = u.copy(center).applyMatrix4(asteroid.inverse).sub(asteroid.center);
-  closest.set(THREE.MathUtils.clamp(local.x, -half.x, half.x), THREE.MathUtils.clamp(local.y, -half.y, half.y), THREE.MathUtils.clamp(local.z, -half.z, half.z));
-  const distance = normal.subVectors(local, closest).length();
-  if (distance >= radius / scale) return null;
-  if (distance > 0) {
-    normal.divideScalar(distance);
-    return closest;
-  }
-  // the center is inside: out through the nearest face
-  const depths = [half.x - Math.abs(local.x), half.y - Math.abs(local.y), half.z - Math.abs(local.z)];
-  const axis = depths.indexOf(Math.min(...depths));
-  normal.set(0, 0, 0).setComponent(axis, Math.sign(local.getComponent(axis)) || 1);
-  closest.copy(local).setComponent(axis, normal.getComponent(axis) * half.getComponent(axis));
-  return closest;
+  return boxContact(local, asteroid.semiAxes, radius / scale, normal, closest);
 }
 
 /** Distance along a normalized ray to a box piece's surface (slabs), or null. */
-function rayBox(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
+function rayPiece(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
   const o = localOrigin.copy(origin).applyMatrix4(asteroid.inverse).sub(asteroid.center);
   const d = localEnd.copy(origin).add(direction).applyMatrix4(asteroid.inverse).sub(asteroid.center).sub(o);
-  let near = -Infinity;
-  let far = Infinity;
-  for (let axis = 0; axis < 3; axis++) {
-    const start = o.getComponent(axis);
-    const step = d.getComponent(axis);
-    const half = asteroid.semiAxes.getComponent(axis);
-    if (Math.abs(step) < 1e-12) {
-      if (Math.abs(start) > half) return null;
-      continue;
-    }
-    const a = (-half - start) / step;
-    const b = (half - start) / step;
-    near = Math.max(near, Math.min(a, b));
-    far = Math.min(far, Math.max(a, b));
-  }
-  if (near > far || far < 0) return null;
-  return Math.max(near, 0);
+  return rayBox(o, d, asteroid.semiAxes);
 }
 
 const localOrigin = new THREE.Vector3();

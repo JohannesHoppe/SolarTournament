@@ -17,7 +17,7 @@ import { aimHook, anchorPoint, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_FLARE, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_ROCK, ANNOUNCER_SURVIVOR, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
+import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_ROCK, ANNOUNCER_SURVIVOR, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
@@ -44,6 +44,7 @@ import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, t
 import { contents, Probes, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
 import { BOOST_PUSH, BOOST_RADIUS, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
+import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, ZONE_POINTS, type FleetEvent } from './fleet';
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut } from './survival';
 import { markedName } from '../view/marks';
@@ -86,7 +87,11 @@ const DIRECTOR_HOLD = 6;
 const DIRECTOR_STICK = 1.3;
 const DIRECTOR_PAUSE = 10;
 /** The modes as the list of tournaments names them. */
-const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', survival: 'Last Clone Standing', flag: 'Capture the Flag', mixed: 'Every mode in turn' };
+const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', survival: 'Last Clone Standing', flag: 'Capture the Flag', fleet: "The President's Fleet", mixed: 'Every mode in turn' };
+/** The beams of the President's batteries: red, the regime's neon. */
+const BATTERY_COLOR = new THREE.Color(1, 0.1, 0.15);
+/** What the HUD calls a battleship's parts. */
+const ZONE_NAMES = { battery: 'Battery', drive: 'Drive', reactor: 'Reactor' } as const;
 /**
  * Bots of Capture the Flag: one in FLAG_GUARDS of each side guards its base and hunts a thief
  * of its core, the others raid. They fly for a core at FLAG_RAID_SPEED (units/s, 120 m/s),
@@ -97,6 +102,8 @@ const FLAG_RAID_SPEED = 2400;
 const FLAG_HOME_SPEED = 4400;
 /** A raider swings out this far beyond the other side's base, and as far to one side, before it dives through the core (units, 200 m). */
 const FLAG_SWING = 4000;
+/** Against the President's battleships bots range out this far (units), to its orbit beyond the rocks. */
+const FLEET_HOME = ARENA_LIMIT * 0.95;
 /** What each event of Capture the Flag is worth to the ship that did it. */
 const FLAG_POINTS: Record<FlagEvent['kind'], number> = { grab: GRAB_POINTS, return: RETURN_POINTS, capture: CAPTURE_POINTS, drop: 0 };
 /** A kill in a race is worth less than in a deathmatch: the gates and the finish decide. */
@@ -359,6 +366,7 @@ const SOLO_NOTES: Record<RoundMode, string> = {
   deathmatch: 'For the hard pilots: five minutes, every clone for itself.',
   survival: `${CLONES} clones each. A solar flare closes in on the arena. The last clone standing wins.`,
   flag: 'Orange against Blue, bots on both sides. Steal their sponsor core, bring it home, keep yours.',
+  fleet: 'The President wants blood and sends battleships into the ring. Because he can. Everyone against them.',
 };
 
 /** The solo choice kept in this browser, checked: whatever does not fit falls back to the default. */
@@ -382,7 +390,13 @@ type State = 'menu' | 'playing' | 'paused' | 'results';
  * What killed a ship without a killer, where this browser saw it happen: a rock, wreckage, deep
  * space, the arena's massive body; or, with a killer, its nova core.
  */
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'flare' | 'nova' | 'plume' | null;
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'plume' | null;
+/** How the President's battleship killed a ship, for the sponsor break. */
+const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
+  battery: "Shot down by the President's battleship",
+  exhaust: "Burned up in the battleship's drive plume",
+  blast: 'Taken along by the battleship',
+};
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 /** The label of a menu mode button: the text of its first line, without the Enter key. */
@@ -428,6 +442,10 @@ const lapClock = (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 
 const hookPoint = new THREE.Vector3();
 const hookNose = new THREE.Vector3();
 const hookEnd = new THREE.Vector3();
+
+/** The part of the battleship the HUD marks, and how far a battery's beam misses. */
+const fleetGoal = new THREE.Vector3();
+const missBy = new THREE.Vector3();
 
 /** Where the ghost of the best lap is this frame. */
 const ghostPosition = new THREE.Vector3();
@@ -525,8 +543,12 @@ export class Game implements OnlineGame {
   private roundMode: RoundMode = 'deathmatch';
   private course: Course | null = null;
   private flags: Flags | null = null;
-  /** Where each raiding bot swings out before it dives through a core (see raidPoint). */
-  private readonly raidPoints = new Map<Bot, THREE.Vector3>();
+  /** The President's battleship in his Fleet, which wave of it has been announced, and the phase it was in. */
+  private fleet: Fleet | null = null;
+  private fleetCalled = 0;
+  private fleetPhase = 1;
+  /** A point of its own each bot steers by: where a raider swings out before it dives through a core (see raidPoint), the part of a battleship it attacks. */
+  private readonly botPoints = new Map<Bot, THREE.Vector3>();
   /** The tournament was full: the own Host watches a pilot (Tab switches, see watchNext) instead of flying. */
   private spectating = false;
   /** The pilot the watching Host follows, when the director cut to it, and until when a pilot picked by hand holds. */
@@ -623,6 +645,8 @@ export class Game implements OnlineGame {
     { position: new THREE.Vector3(), label: `${name} base`, color: TEAM_TINTS[team] },
     { position: new THREE.Vector3(), label: `${name} core`, color: TEAM_TINTS[team] },
   ]);
+  /** The President's battleship, in the regime's red. */
+  private readonly fleetMark: RadarMark = { position: new THREE.Vector3(), label: 'Battleship', color: '#ff2a3a' };
   /** The ship holding a nova core, in white, so everyone sees where not to be. */
   private readonly novaMark: RadarMark = { position: new THREE.Vector3(), label: 'NOVA', color: '#ffffff' };
   /** The marks the radar shows this frame (see radarMarks). */
@@ -1068,6 +1092,7 @@ export class Game implements OnlineGame {
       race: `Every round a race: ${LAPS} laps through ${GATES} gates, lasers on.`,
       survival: `Every round Last Clone Standing: ${CLONES} clones each, a solar flare closing in.`,
       flag: 'Every round Capture the Flag: Orange against Blue, Hosts spread over both sides.',
+      fleet: "Every round the President's Fleet: every Host and bot together against his battleships.",
       mixed: 'Every mode in turn, starting with a deathmatch.',
     }[this.roomMode];
     $('room-note').textContent = `${who} ${bots} ${rounds} The link works for good: whoever follows it later starts the tournament again.`;
@@ -1557,7 +1582,17 @@ export class Game implements OnlineGame {
     }
     this.flags = this.roundMode === 'flag' ? new Flags(this.field, arena.layout.seed) : null;
     if (this.flags) this.scene.add(this.flags.root);
-    for (const ship of this.ships) ship.team = -1;
+    // and the President's battleships, which come in from a side that follows from the arena
+    if (this.fleet) {
+      this.scene.remove(this.fleet.root);
+      this.fleet.dispose();
+    }
+    this.fleet = this.roundMode === 'fleet' ? new Fleet(arena.layout.seed) : null;
+    if (this.fleet) this.scene.add(this.fleet.root);
+    this.fleetCalled = 0;
+    this.fleetPhase = 1;
+    // against the President every ship is on one side
+    for (const ship of this.ships) ship.team = this.fleet ? 0 : -1;
     // the course of an arena is always the same: its best lap and ghost race along
     this.laps = this.course ? new LapTimer(parseLaps(storageGet(LAPS_KEY))[arena.id] ?? null) : null;
     this.leader = null;
@@ -1661,7 +1696,7 @@ export class Game implements OnlineGame {
     this.clearHooks();
     this.ships = [];
     this.bots = [];
-    this.raidPoints.clear();
+    this.botPoints.clear();
     this.me = null;
     this.drone = null;
     this.watchedShip = null;
@@ -1953,6 +1988,8 @@ export class Game implements OnlineGame {
     this.field.setClock(Math.abs(drift) > FIELD_SNAP ? round.field : this.field.clock + drift * 0.1);
     // and the sides and cores of Capture the Flag are the lead's
     if (round.f && this.flags) this.flags.follow(round.f, this.time);
+    // and so is the President's battleship
+    if (round.b && this.fleet) this.fleetEvents(this.fleet.follow(round.b), null);
   }
 
   leadRound(): RoundState {
@@ -1975,6 +2012,7 @@ export class Game implements OnlineGame {
     this.roundEndsAt = this.time + left;
     const round: RoundState = { id: this.roundId, left: +left.toFixed(3), field: +this.field.clock.toFixed(3) };
     if (this.flags) round.f = this.flags.toState();
+    if (this.fleet) round.b = this.fleet.toState();
     return round;
   }
 
@@ -2177,6 +2215,8 @@ export class Game implements OnlineGame {
     table.innerHTML = `<tr><th>#</th><th>Host</th>${race ? '<th>Race</th>' : ''}${survival ? '<th>Clones</th>' : ''}${flags ? '<th>Side</th>' : ''}<th>Kills</th><th>Deaths</th><th>Score</th></tr>`;
     // Capture the Flag names the sides' captures above the pilots
     if (flags) table.createCaption().textContent = `${TEAM_NAMES[0]} ${flags.captures[0]} : ${flags.captures[1]} ${TEAM_NAMES[1]}${flags.leading >= 0 ? ` · ${TEAM_NAMES[flags.leading]} leads` : ''}`;
+    // the President's Fleet: how many battleships went down together
+    if (this.fleet) table.createCaption().textContent = `Battleships down: ${this.fleet.wave - 1}`;
     // a race ranks by the finish, Last Clone Standing by the clones left, a deathmatch by the score (see standings)
     this.standings().forEach((ship, i) => {
       const row = table.insertRow();
@@ -2337,9 +2377,12 @@ export class Game implements OnlineGame {
         // a racing bot flies the course until it has finished, then it only fights
         bot.waypoint = this.course && ship.finish < 0 ? this.course.points[ship.gates % GATES] : null;
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE)?.position ?? null;
-        bot.flee = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? null;
-        bot.home = Math.min(HOME_RADIUS, safe * FLARE_KEEP);
+        // a nova core close by, or a battleship whose reactor went critical: away from it
+        bot.flee = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? (this.fleet?.dying(this.field.clock) && ship.flight.position.distanceTo(this.fleet.position) < SINK_BLAST * 1.5 ? this.fleet.position : null);
+        // a bot goes out to the President's battleship on its orbit beyond the rocks
+        bot.home = this.fleet ? FLEET_HOME : Math.min(HOME_RADIUS, safe * FLARE_KEEP);
         bot.prey = null;
+        bot.siege = this.fleet ? this.siegePoint(bot, this.fleet) : null;
         // a race online at the tournament's pace, a solo race at its class's
         bot.raceSpeed = this.flags ? FLAG_RAID_SPEED : this.online ? RACE_SPEED : PACES[this.solo.pace].speed;
         if (this.flags) this.flagRole(bot, this.flags);
@@ -2371,6 +2414,7 @@ export class Game implements OnlineGame {
       this.exhaust(ship, dt);
     }
     if (this.flags) this.playFlags(this.flags, dt, now);
+    if (this.fleet) this.playFleet(this.fleet, dt, now);
     this.hookOwn(now);
     this.updateHooks(dt);
     this.wrecks.update(dt, now, this.field);
@@ -2405,7 +2449,7 @@ export class Game implements OnlineGame {
     this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now));
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
     // a watching Host sees the race of the pilot on screen
-    const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : this.flags ? this.showFlags(this.flags, subject) : null;
+    const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : this.flags ? this.showFlags(this.flags, subject) : this.fleet ? this.showFleet(this.fleet, subject) : null;
     if (!this.course || this.school) this.guide.hide();
     this.flyGhost(me);
     const racing = !!this.course && !this.school && this.countdown === 0;
@@ -2563,9 +2607,13 @@ export class Game implements OnlineGame {
   private raidPoint(bot: Bot, core: THREE.Vector3): THREE.Vector3 {
     const out = bot.ship.flight.position.length() > core.length() + FLAG_SWING / 2;
     if (out) return core;
-    const point = this.raidPoints.get(bot) ?? this.raidPoints.set(bot, new THREE.Vector3()).get(bot)!;
     scratch.set(0, 1, 0).cross(core).setLength(FLAG_SWING);
-    return point.copy(core).setLength(core.length() + FLAG_SWING).add(scratch);
+    return this.botPoint(bot).copy(core).setLength(core.length() + FLAG_SWING).add(scratch);
+  }
+
+  /** The point of its own a bot steers by (see botPoints). */
+  private botPoint(bot: Bot) {
+    return this.botPoints.get(bot) ?? this.botPoints.set(bot, new THREE.Vector3()).get(bot)!;
   }
 
   /** Capture the Flag in the HUD: the score, the own side, both cores, and where to fly; returns that point for the crosshair. */
@@ -2594,6 +2642,158 @@ export class Game implements OnlineGame {
     return goal;
   }
 
+  /**
+   * The President's Fleet as it runs: the lead browser (or a solo round) flies the battleship,
+   * the others glide after it; every browser fires its batteries, burns the ships it runs in
+   * its plume, and calls what it does.
+   */
+  private playFleet(fleet: Fleet, dt: number, now: number) {
+    const clock = this.field.clock;
+    for (const ship of this.ships) ship.team = 0;
+    if (!this.online || this.online.isLead) fleet.lead(dt, clock, this.ships);
+    else fleet.glide(dt);
+    fleet.update(clock, now);
+    for (const { zone, shot } of fleet.firing(clock)) this.fireBattery(fleet, zone, shot);
+    for (const ship of this.ships) {
+      if (ship.owner !== null || !ship.alive) continue;
+      const plume = fleet.plumeAt(ship.flight.position, ship.radius);
+      if (plume > 0) this.burn(ship, plume, FLEET_PLUME_HEAT, FLEET_PLUME_BURN, "In the battleship's drive plume · get out", null, 'exhaust', dt, now);
+    }
+    if (fleet.present(clock) && this.fleetCalled !== fleet.wave) {
+      this.fleetCalled = fleet.wave;
+      this.fleetPhase = 1;
+      this.radio.announce(pick(ANNOUNCER_FLEET.arrives), null);
+      this.speaker.say(COMPUTER.battleship, 'urgent');
+      this.hud.flashMessage(now, `Battleship ${fleet.wave} · take out its batteries`, 4);
+    }
+    // the battleship's phases, called once each, wherever the hits that changed it came from
+    if (fleet.present(clock) && fleet.phase > this.fleetPhase) {
+      this.fleetPhase = fleet.phase;
+      this.radio.announce(fleet.phase === 2 ? ANNOUNCER_FLEET.plume : ANNOUNCER_FLEET.open, null);
+      this.speaker.say(fleet.phase === 2 ? COMPUTER.fleetPlume : COMPUTER.reactorOpen, 'urgent');
+    }
+  }
+
+  /**
+   * A battery fires at the nearest ship it sees in range. Whether it hits follows from the
+   * shot's number, the target and its speed and distance (see batteryChance), the same on
+   * every browser; the browser that runs the target takes the damage.
+   */
+  private fireBattery(fleet: Fleet, zone: number, shot: number) {
+    const origin = fleet.zoneAt(zone, muzzle);
+    let target: Ship | null = null;
+    let distance = BATTERY_RANGE;
+    for (const ship of this.ships) {
+      if (!ship.alive || this.time < ship.protectedUntil) continue;
+      const d = ship.flight.position.distanceTo(origin);
+      if (d < distance && this.field.lineOfSight(origin, ship.flight.position)) {
+        target = ship;
+        distance = d;
+      }
+    }
+    if (!target) return;
+    const roll = hash(textSeed(target.id), shot, zone) / 0x100000000;
+    const hit = roll < batteryChance(target.flight.velocity.length(), distance);
+    const end = scratch.copy(target.flight.position);
+    // a miss goes past the target, by a few of its radii
+    if (!hit) end.add(missBy.set(hash(shot, zone, 1) / 0x100000000 - 0.5, hash(shot, zone, 2) / 0x100000000 - 0.5, hash(shot, zone, 3) / 0x100000000 - 0.5).setLength(target.radius * 4));
+    this.effects.beam(origin, end, BATTERY_COLOR);
+    this.killcam.recordBeam(this.time, origin, end, BATTERY_COLOR);
+    if (!hit || target.owner !== null) return;
+    this.applyLaserHit(target, origin, forward.subVectors(end, origin).normalize(), null, distance, 'battery');
+    if (target.alive && target.structural(BATTERY_DAMAGE, this.time) === 'destroyed') this.shipDestroyed(target, null, 'battery');
+  }
+
+  /** An own ship's laser hit a part of the battleship: every browser counts it; the shooter scores the hit and the part it breaks. */
+  private hitFleet(fleet: Fleet, zone: number, shooter: Ship, point: THREE.Vector3) {
+    const wave = fleet.wave;
+    this.effects.sparks(point, shooter.color, 60);
+    this.online?.sendFleetHit(zone, wave, shooter);
+    shooter.score += FLEET_HIT_POINTS;
+    if (shooter.isLocal) {
+      this.hud.hit();
+      this.sound.beep(1320, 0.06);
+      this.landed(point, ZONE_NAMES[fleet.zones[zone].kind].toUpperCase());
+    }
+    this.fleetEvents(fleet.hit(zone, wave), shooter);
+  }
+
+  remoteFleetHit(zone: number, wave: number, shooter: Ship) {
+    if (this.fleet) this.fleetEvents(this.fleet.hit(zone, wave), shooter);
+  }
+
+  /** What the battleship's hits set off: a part breaking (points for an own shooter), a new phase, the ship going down. */
+  private fleetEvents(events: FleetEvent[], shooter: Ship | null) {
+    const fleet = this.fleet!;
+    for (const event of events) {
+      if (event.kind === 'broken') {
+        const kind = fleet.zones[event.zone].kind;
+        this.effects.explosion(event.position, 1500, fleet.velocity);
+        this.hearDebris(event.position, 1500);
+        if (shooter?.owner === null) shooter.score += ZONE_POINTS[kind];
+        if (shooter?.isLocal) this.hud.popup(this.camera, event.position, `+${ZONE_POINTS[kind]}`, 'points');
+        this.hud.flashMessage(this.time, `${ZONE_NAMES[kind]} destroyed`, 2);
+      } else if (event.kind === 'sunk') {
+        // the reactor goes critical; SINK_SECONDS later the battleship goes up
+        const position = event.position.clone();
+        this.speaker.say(COMPUTER.reactorCritical, 'urgent');
+        this.hud.flashMessage(this.time, `Reactor critical · get clear · ${meters(SINK_BLAST)}`, SINK_SECONDS);
+        this.cue(SINK_SECONDS, () => this.sinkBlast(position));
+      }
+    }
+  }
+
+  /**
+   * The battleship goes up: every ship this browser runs within SINK_BLAST goes with it, and
+   * every ship it runs scores the sinking.
+   */
+  private sinkBlast(position: THREE.Vector3) {
+    const now = this.time;
+    this.effects.explosion(position, 12000, scratch.set(0, 0, 0));
+    this.shockwaves.push(this.shockwave(position));
+    this.radio.announce(pick(ANNOUNCER_FLEET.sunk), null);
+    for (const ship of [...this.ships]) {
+      if (ship.owner !== null || ship === this.drone) continue;
+      ship.score += SINK_POINTS;
+      if (!ship.alive || ship.flight.position.distanceTo(position) > SINK_BLAST) continue;
+      ship.protectedUntil = Math.min(ship.protectedUntil, now);
+      if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, null, 'blast');
+    }
+    if (this.me?.alive) this.hud.flashMessage(now, `Battleship down · +${SINK_POINTS}`, 3);
+    const seen = this.camera.position.distanceTo(position);
+    if (seen < SINK_BLAST * 3) {
+      this.linkHit(Math.max(0.4, 1 - seen / (SINK_BLAST * 3)), 1);
+      this.kick = 2;
+      this.sound.play('explosion', { volume: 2, rate: 0.35 });
+    }
+  }
+
+  /** The part of the battleship a bot attacks: the nearest it can hurt; none while the battleship is away. */
+  private siegePoint(bot: Bot, fleet: Fleet): THREE.Vector3 | null {
+    if (!fleet.present(this.field.clock)) return null;
+    const zone = fleet.nearestZone(bot.ship.flight.position);
+    return zone < 0 ? null : fleet.zoneAt(zone, this.botPoint(bot));
+  }
+
+  /** The President's Fleet in the HUD: the battleship, what is left of it, and where to fly; returns that point for the crosshair. */
+  private showFleet(fleet: Fleet, me: Ship): THREE.Vector3 | null {
+    const clock = this.field.clock;
+    const sunk = fleet.wave - 1;
+    const step = `The President's Fleet · ${sunk} ${sunk === 1 ? 'battleship' : 'battleships'} down`;
+    if (!fleet.present(clock)) {
+      this.hud.setWaypoint(this.camera, null);
+      this.hud.setSchool({ step, text: `Battleship ${fleet.wave} comes in ${Math.max(0, Math.ceil(fleet.arrivesAt - clock))} s`, keys: [] });
+      return null;
+    }
+    const total = (kind: string) => fleet.zones.filter((zone) => zone.kind === kind).length;
+    const reactor = fleet.phase === 3 ? 'reactor open' : 'reactor sealed';
+    this.hud.setSchool({ step, text: `Battleship ${fleet.wave} · batteries ${fleet.batteries}/${total('battery')} · drives ${fleet.drives}/${total('drive')} · ${reactor}`, keys: [] });
+    const zone = fleet.nearestZone(me.flight.position);
+    const goal = zone < 0 ? fleet.position : fleet.zoneAt(zone, fleetGoal);
+    this.hud.setWaypoint(this.camera, goal, zone < 0 ? 'Battleship' : ZONE_NAMES[fleet.zones[zone].kind]);
+    return goal;
+  }
+
   /** The radar's marks: the field's center, and in a race the next gate of the ship it shows. */
   private radarMarks(subject: Ship): RadarMark[] {
     const list = this.shownMarks;
@@ -2616,6 +2816,10 @@ export class Game implements OnlineGame {
       mark.position.copy(core.position);
       list.push(mark);
     });
+    if (this.fleet?.present(this.field.clock)) {
+      this.fleetMark.position.copy(this.fleet.position);
+      list.push(this.fleetMark);
+    }
     // torpedoes in flight, in red
     for (let i = 0; i < this.torpedoes.list.length && i < this.torpedoMarks.length; i++) {
       const mark = this.torpedoMarks[i];
@@ -3800,6 +4004,12 @@ export class Game implements OnlineGame {
       beamLength = torpedoHit.distance;
       this.shootDown(torpedoHit.torpedo, shooter);
     }
+    // the President's battleship stops it: on its armor, or on a part it breaks
+    const fleetHit = torpedoHit ? null : (this.fleet?.raycast(origin, direction, beamLength, this.field.clock) ?? null);
+    if (fleetHit) {
+      asteroidHit = wreckHit = null;
+      beamLength = fleetHit.distance;
+    }
 
     const end = new THREE.Vector3().copy(origin).addScaledVector(direction, beamLength);
     const start = shooter.muzzle(new THREE.Vector3());
@@ -3832,6 +4042,10 @@ export class Game implements OnlineGame {
       this.effects.sparks(end, shooter.color, 40);
       this.online?.sendWreck(wreckHit.wreck.id);
       this.shatterWreck(wreckHit.wreck);
+    }
+    if (fleetHit) {
+      if (fleetHit.zone >= 0) this.hitFleet(this.fleet!, fleetHit.zone, shooter, end);
+      else this.effects.sparks(end, shooter.color, 30);
     }
 
     // a beam into the well's body (a planet's clouds, a black hole) is simply gone
@@ -3872,7 +4086,7 @@ export class Game implements OnlineGame {
    * A laser beam went through a ship this browser simulates: damage, feedback, destruction.
    * Also called for beams from other peers.
    */
-  applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number) {
+  applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number, cause: DeathCause = null) {
     if (shooter && ship.allyOf(shooter)) return;
     // plating (an item) takes a hit into the drive
     if (ship.plating > 0 && ship.tailToward(direction) && ship.alive && this.time >= ship.protectedUntil) {
@@ -3903,7 +4117,7 @@ export class Game implements OnlineGame {
       this.sound.beep(220, 0.25, 0.12);
       this.linkHit(zone === 'reactor' ? 1 : serious ? 0.7 : 0.3, serious ? 0.5 : 0.2);
     }
-    if (status === 'destroyed') this.shipDestroyed(ship, shooter);
+    if (status === 'destroyed') this.shipDestroyed(ship, shooter, cause);
   }
 
   /** `cause` says what killed a ship without a killer, where this browser saw it happen. */
@@ -3923,6 +4137,7 @@ export class Game implements OnlineGame {
       if (killer) this.deathCause = [cause === 'nova' ? 'Vaporized by the nova of ' : cause === 'plume' ? 'Grilled in the drive plume of ' : 'Shot down by ', ...markedName(killer.kind, killer.name)];
       else if (cause === 'well') this.deathCause = WELL_DEATHS[this.venue.id] ?? 'Crashed';
       else if (cause === 'flare') this.deathCause = 'Burned up in the solar flare';
+      else if (cause && FLEET_DEATHS[cause]) this.deathCause = FLEET_DEATHS[cause];
       else this.deathCause = victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
     }
     // a kill of the Host's own is bigger: more fire, a jolt, and the points where it happened
@@ -3969,7 +4184,7 @@ export class Game implements OnlineGame {
       }
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
-    const killedBy = cause === 'well' ? this.venue.name : cause === 'flare' ? 'Solar flare' : victim.outsideSince !== null ? 'Deep space' : 'Crash';
+    const killedBy = cause === 'well' ? this.venue.name : cause === 'flare' ? 'Solar flare' : cause && FLEET_DEATHS[cause] ? 'Battleship' : victim.outsideSince !== null ? 'Deep space' : 'Crash';
     this.hud.kill(this.time, killer ?? { kind: null, name: killedBy }, victim);
     // the last clone of a ship in Last Clone Standing: out, and everyone hears it
     if (this.out(victim)) {
@@ -4006,17 +4221,23 @@ export class Game implements OnlineGame {
       if (hit) flight.position.copy(ship.previous).addScaledVector(sweep, Math.max(0, hit.distance - 1));
     }
     const asteroid = this.field.overlap(flight.position, ship.radius);
-    if (!asteroid || !this.field.resolve(asteroid, flight.position, ship.radius, normal)) return;
-    const velocity = flight.velocity;
-    // the rock's surface moves with its drift and its spin; the tip of a long rock sweeps fast
-    this.field.surfaceVelocity(asteroid, scratch.copy(flight.position).addScaledVector(normal, -ship.radius), surface);
-    relative.subVectors(velocity, surface);
+    if (asteroid && this.field.resolve(asteroid, flight.position, ship.radius, normal)) {
+      // the rock's surface moves with its drift and its spin; the tip of a long rock sweeps fast
+      this.field.surfaceVelocity(asteroid, scratch.copy(flight.position).addScaledVector(normal, -ship.radius), surface);
+      this.bounce(ship, surface, now);
+    } else if (this.fleet?.resolve(flight.position, ship.radius, this.field.clock, normal)) this.bounce(ship, this.fleet.velocity, now);
+  }
+
+  /** A ship touched a surface (a rock, a battleship's hull) moving at `moving`, with the outward `normal` of this frame: it bounces off, scrapes, and an impact hurts. */
+  private bounce(ship: Ship, moving: THREE.Vector3, now: number) {
+    const velocity = ship.flight.velocity;
+    relative.subVectors(velocity, moving);
     const approach = -relative.dot(normal);
     if (approach <= 0) return;
     if (ship === this.me) this.lastScrape = now;
     velocity.addScaledVector(normal, approach * (1 + RESTITUTION));
-    // friction: scraping along the rock bleeds off some sideways speed
-    relative.subVectors(velocity, surface);
+    // friction: scraping along the surface bleeds off some sideways speed
+    relative.subVectors(velocity, moving);
     velocity.addScaledVector(relative.addScaledVector(normal, -relative.dot(normal)), -0.2);
     ship.syncTransform();
 

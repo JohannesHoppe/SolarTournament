@@ -5,7 +5,8 @@ import { CHEATS, type Cheat } from './plausible';
 import { LocalTransport, TrysteroTransport, type Transport } from './transport';
 import type { ProbeState } from '../game/items';
 import type { FlagsState } from '../game/flags';
-import { fieldState, flagsState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
+import type { FleetState } from '../game/fleet';
+import { fieldState, flagsState, fleetState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
 /** Ship states go out this often (Hz); the receivers predict the motion in between, and take at most three times as many. */
 const STATE_RATE = 15;
@@ -52,13 +53,15 @@ const MAX_CHEAT_REPORTS_PER_SECOND = 2;
 const MAX_WRECK_HITS_PER_SECOND = 20;
 /** Torpedo launches, hits, torpedoes gone and probes taken, per peer and second: a few of each per clone, eight ships at most. */
 const MAX_TORPEDO_EVENTS_PER_SECOND = 12;
+/** The parts of a battleship are numbered from zero, far fewer than this (see game/fleet). */
+const MAX_FLEET_ZONE = 31;
 
 /**
  * Round clock of the lead browser: which round is running, how many seconds are left, and the
  * field time, so every browser turns and moves the asteroids alike; in Capture the Flag also
- * the sides and the cores (see game/flags).
+ * the sides and the cores (see game/flags), in the President's Fleet the battleship (see game/fleet).
  */
-export type RoundState = { id: number; left: number; field: number; f?: FlagsState };
+export type RoundState = { id: number; left: number; field: number; f?: FlagsState; b?: FleetState };
 
 export type Vec = number[];
 
@@ -113,6 +116,8 @@ export class Session {
   onRock: (id: string, at: number, round: number) => void = () => {};
   /** A piece of wreckage was shot or rammed on another browser. */
   onWreck: (id: string) => void = () => {};
+  /** A ship of another browser hit a part of the President's battleship (see game/fleet). */
+  onFleetHit: (zone: number, wave: number, shooter: string) => void = () => {};
   /** A ship of another browser launched a torpedo, at a target or none. */
   onTorpedo: (id: string, shooter: string, target: string | null, position: Vec, velocity: Vec) => void = () => {};
   /** A torpedo went off or was shot down, where. */
@@ -206,6 +211,12 @@ export class Session {
     transport.on('w', (d, from) => {
       const wreck = id(d?.i);
       if (wreck && this.wreckBudget.spend(from)) this.guard(() => this.onWreck(wreck));
+    });
+    transport.on('bh', (d, from) => {
+      const shooter = id(d?.i);
+      const zone = int(d?.z, 0, MAX_FLEET_ZONE);
+      const wave = int(d?.w, 1, MAX_COUNT);
+      if (shooter && zone !== null && wave !== null && ownerOf(shooter) === from && this.hitBudget.spend(from)) this.guard(() => this.onFleetHit(zone, wave, shooter));
     });
     transport.on('tl', (d, from) => {
       const torpedo = id(d?.i);
@@ -416,6 +427,10 @@ export class Session {
     this.transport.send('w', { i: wreck });
   }
 
+  sendFleetHit(zone: number, wave: number, shooter: string) {
+    this.transport.send('bh', { z: zone, w: wave, i: shooter });
+  }
+
   sendTorpedo(torpedo: string, shooter: string, target: string | null, position: Vec, velocity: Vec) {
     this.transport.send('tl', { i: torpedo, s: shooter, t: target, p: position, v: velocity });
   }
@@ -537,9 +552,18 @@ export class Session {
     if (!isRecord(x)) return undefined;
     const round = { id: int(x.id, 0, MAX_COUNT), left: num(x.left, MIN_ROUND_LEFT, ROUND_LIMIT), field: num(x.field, 0, MAX_FIELD_TIME) };
     if (round.id === null || round.left === null || round.field === null) return undefined;
-    if (x.f === undefined) return round as RoundState;
-    const flags = flagsState(x.f);
-    return flags ? { ...(round as RoundState), f: flags } : undefined;
+    const state = round as RoundState;
+    if (x.f !== undefined) {
+      const flags = flagsState(x.f);
+      if (!flags) return undefined;
+      state.f = flags;
+    }
+    if (x.b !== undefined) {
+      const fleet = fleetState(x.b);
+      if (!fleet) return undefined;
+      state.b = fleet;
+    }
+    return state;
   }
 
   /** Runs a handler unless this peer has left the room. */

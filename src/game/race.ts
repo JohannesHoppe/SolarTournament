@@ -42,13 +42,14 @@ export const PLACE_POINTS = [1000, 800, 650, 500, 400, 300, 200, 100];
 
 /**
  * The modes a round can be played in (Last Clone Standing is 'survival', see survival.ts;
- * Capture the Flag is 'flag', see flags.ts), and what a tournament room plays: one of them,
- * or all of them in turn.
+ * Capture the Flag is 'flag', see flags.ts; the President's Fleet, every Host against his
+ * battleships, is 'fleet', see fleet.ts), and what a tournament room plays: one of them, or
+ * all of them in turn.
  */
-export type RoundMode = 'deathmatch' | 'race' | 'survival' | 'flag';
+export type RoundMode = 'deathmatch' | 'race' | 'survival' | 'flag' | 'fleet';
 export type RoomMode = RoundMode | 'mixed';
 /** Every mode, in the order a mixed room plays them. */
-export const ROUND_MODES: readonly RoundMode[] = ['deathmatch', 'race', 'survival', 'flag'];
+export const ROUND_MODES: readonly RoundMode[] = ['deathmatch', 'race', 'survival', 'flag', 'fleet'];
 
 /** The mode of a round: a mixed room starts with a deathmatch and then plays every mode in turn. */
 export const modeOfRound = (mode: RoomMode, round: number): RoundMode => (mode === 'mixed' ? ROUND_MODES[round % ROUND_MODES.length] : mode);

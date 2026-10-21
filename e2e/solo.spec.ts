@@ -18,7 +18,7 @@ test('a solo round starts and runs without errors', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-for (const mode of ['deathmatch', 'survival', 'flag']) {
+for (const mode of ['deathmatch', 'survival', 'flag', 'fleet']) {
   test(`a solo round of ${mode} starts and runs without errors`, async ({ page }) => {
     const errors = await openGame(page);
     await page.click('#start');

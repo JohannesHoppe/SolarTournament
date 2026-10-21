@@ -93,6 +93,25 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
   for (const page of [a, b]) expect(await page.evaluate(() => (window as unknown as GameWindow).game.flags.cores.map((core: { carrier: string | null }) => core.carrier))).toContain(thief);
 });
 
+test("two tabs of the President's Fleet see one battleship and count the same hits", async ({ context }) => {
+  const { a, b } = await pair(context, `e2e-${Date.now().toString(36)}b&m=fleet&bots=0`);
+  // the battleship comes in on the field time; both tabs wait for it
+  for (const page of [a, b]) await page.evaluate(() => (window as unknown as GameWindow).game.field.setClock(13));
+  await play(b, 2);
+  const where = (page: Page) => page.evaluate(() => (window as unknown as GameWindow).game.fleet.position.toArray());
+  const [atA, atB] = [await where(a), await where(b)];
+  expect(Math.hypot(atA[0] - atB[0], atA[1] - atB[1], atA[2] - atB[2])).toBeLessThan(2000);
+  // the second tab's clone lands ten hits on a battery: the first tab counts them too
+  await b.evaluate(() => {
+    const game = (window as unknown as GameWindow).game;
+    const zone = game.fleet.zones.findIndex((z: { kind: string }) => z.kind === 'battery');
+    const point = game.fleet.zoneAt(zone);
+    for (let i = 0; i < 10; i++) game.hitFleet(game.fleet, zone, game.me, point);
+  });
+  await play(a, 2);
+  expect(await a.evaluate(() => (window as unknown as GameWindow).game.fleet.hits[0])).toBe(10);
+});
+
 test('a nova from a ship without a core never goes off, and two tabs name its Host a cheater', async ({ context }) => {
   const room = `e2e-${Date.now().toString(36)}n&bots=0`;
   const pages = [];

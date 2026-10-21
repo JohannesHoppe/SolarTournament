@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { cleanName, fieldState, flagsState, ids, shipState, wreckStates } from './validate';
+import { cleanName, fieldState, flagsState, fleetState, ids, shipState, wreckStates } from './validate';
 
 const ship = {
   id: 'p:abc',
@@ -53,6 +53,15 @@ describe('messages from other browsers', () => {
     expect(flagsState({ ...flags, c: [0.5, 0] })).toBeNull();
     expect(flagsState({ ...flags, e: [[4, 7, 'p:abc', 1]] })).toBeNull();
     expect(flagsState({ ...flags, t: [['p:abc']] })).toBeNull();
+  });
+
+  it("take the President's battleship, and drop it broken", () => {
+    const fleet = { w: 2, a: 31.5, h: [3, 0, 30, 0, 0, 0, 0, 0, 0], p: [1, 2, 3], v: [600, 0, 0], q: [0, 0, 0, 1], t: 'p:abc', u: 1 };
+    expect(fleetState(fleet)).toEqual(fleet);
+    expect(fleetState({ ...fleet, t: null })?.t).toBeNull();
+    expect(fleetState({ ...fleet, w: 0 })).toBeNull();
+    expect(fleetState({ ...fleet, h: [1.5] })).toBeNull();
+    expect(fleetState({ ...fleet, q: [0, 0, 0, 0] })).toBeNull();
   });
 
   it('clean callsigns of control and invisible format characters', () => {

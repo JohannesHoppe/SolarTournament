@@ -30,6 +30,8 @@ export interface OnlineGame {
   remoteRock(id: string, at: number, round: number): void;
   /** Another peer shot or rammed a piece of wreckage. */
   remoteWreck(id: string): void;
+  /** A ship of another peer hit a part of the President's battleship. */
+  remoteFleetHit(zone: number, wave: number, shooter: Ship): void;
   /** The pieces of wreckage in flight, for a browser that joins. */
   wreckSnapshot(): WreckState[];
   /** Takes the pieces of wreckage in flight from the lead browser. */
@@ -127,6 +129,11 @@ export class Online {
     };
     session.onRock = (id, at, round) => game.remoteRock(id, at, round);
     session.onWreck = (id) => game.remoteWreck(id);
+    session.onFleetHit = (zone, wave, shooter) => {
+      // only a living shooter hits
+      const ship = this.find(shooter);
+      if (ship?.alive) game.remoteFleetHit(zone, wave, ship);
+    };
     session.onTorpedo = (id, shooter, target, p, v) => {
       const ship = this.find(shooter);
       if (!ship?.alive || this.caught(ship, this.plausible.torpedo(ship.id, game.time))) return;
@@ -273,6 +280,10 @@ export class Online {
 
   sendWreck(id: string) {
     this.session.sendWreck(id);
+  }
+
+  sendFleetHit(zone: number, wave: number, shooter: Ship) {
+    this.session.sendFleetHit(zone, wave, shooter.id);
   }
 
   sendTorpedo(id: string, shooter: Ship, target: Ship | null, position: THREE.Vector3, velocity: THREE.Vector3) {

@@ -3,6 +3,7 @@ import type { AsteroidState, FieldState } from '../world/asteroids';
 import type { WreckState } from '../world/wrecks';
 import { KINDS, type ProbeState } from '../game/items';
 import type { FlagsState } from '../game/flags';
+import type { FleetState } from '../game/fleet';
 
 /**
  * Checks everything that arrives from other browsers before the game touches it. Peers are
@@ -189,4 +190,24 @@ export function flagsState(x: unknown): FlagsState | null {
   });
   if (sides.some((side) => side === null) || !captures || captures.some((c) => !Number.isInteger(c) || c < 0) || cores.some((core) => core === undefined) || events.some((e) => e === null)) return null;
   return { t: sides as string[][], c: captures, f: cores as (string | number[] | null)[], e: events as [number, number, string | null, number][] };
+}
+
+/** A battleship's parts, with room (see game/fleet). */
+const MAX_FLEET_ZONES = 32;
+
+/** The President's battleship as the lead browser sends it, or null. */
+export function fleetState(x: unknown): FleetState | null {
+  if (!isRecord(x) || !Array.isArray(x.h) || x.h.length > MAX_FLEET_ZONES) return null;
+  const hits = x.h.map((h) => int(h, 0, MAX_COUNT));
+  const state = {
+    w: int(x.w, 1, MAX_COUNT),
+    a: num(x.a, 0, MAX_FIELD_TIME),
+    p: vec(x.p, 3, MAX_COORDINATE),
+    v: vec(x.v, 3, MAX_SPEED),
+    q: vec(x.q, 4, UNIT_LENGTH),
+    u: int(x.u, 0, 1),
+  };
+  const target = x.t === null ? null : id(x.t);
+  if (Object.values(state).some((value) => value === null) || hits.some((h) => h === null) || (x.t !== null && target === null) || Math.hypot(...state.q!) < 0.5) return null;
+  return { ...(state as Omit<FleetState, 'h' | 't'>), h: hits as number[], t: target };
 }

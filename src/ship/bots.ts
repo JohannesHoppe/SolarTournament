@@ -46,6 +46,9 @@ const JINK_MEMORY = 0.6;
 const JINK_SCATTER = 0.5;
 /** The scatter never exceeds this many ship radii, so a jinking target is hard to hit, not impossible. */
 const JINK_SCATTER_MAX = 2.5;
+/** A bot attacking a battleship's part holds this far from it (units, 600 m), and fires with its nose within SIEGE_AIM of it (rad). */
+const SIEGE_DISTANCE = 12000;
+const SIEGE_AIM = 0.02;
 /** Bots stay this far inside the arena, unless the game draws them closer in (see Bot.home). */
 export const HOME_RADIUS = 50000;
 /**
@@ -115,6 +118,8 @@ export class Bot {
   lure: THREE.Vector3 | null = null;
   /** Set by the game: a ship the bot hunts wherever it is, seen or not. */
   prey: Ship | null = null;
+  /** Set by the game: a part of a battleship, which a bot with no ship to fight attacks. */
+  siege: THREE.Vector3 | null = null;
   /** Set by the game: a ship with a nova core close by, which the bot gets away from first. */
   flee: THREE.Vector3 | null = null;
   /** Set by the game: the bot turns back towards the center beyond this distance (units), inside a solar flare's shell. */
@@ -240,6 +245,11 @@ export class Bot {
         const approach = Math.min(goal.length() * 0.3, CRUISE_SPEED);
         desired.copy(goal).normalize().multiplyScalar(approach).add(target.flight.velocity);
       }
+    } else if (this.siege) {
+      // no ship to fight, but a battleship's part: close in to SIEGE_DISTANCE and hold there
+      toTarget.subVectors(this.siege, me.position);
+      const approach = THREE.MathUtils.clamp((toTarget.length() - SIEGE_DISTANCE) * 0.3, -CRUISE_SPEED * 0.5, CRUISE_SPEED);
+      desired.copy(toTarget).normalize().multiplyScalar(approach);
     } else {
       // nothing to fight: a probe in sight is worth the trip, else the bot roams
       toTarget.subVectors(this.lure ?? this.wanderTarget, me.position);
@@ -280,7 +290,8 @@ export class Bot {
     // near the target the nose stays on it and the thrusters carry the bot around it; a bot
     // under attack never turns its tail to burn
     // a racer burns for the gate; a fighter only when no target is in range
-    const burning = danger || !!this.flee || (!defending && !lookingBack && error.length() > BURN_THRESHOLD && (racing || !(target && targetDistance < FIRE_RANGE && !this.ship.overheated)));
+    const sieging = !target && !!this.siege && toTarget.length() < FIRE_RANGE;
+    const burning = danger || !!this.flee || (!defending && !lookingBack && error.length() > BURN_THRESHOLD && (racing || !(((target && targetDistance < FIRE_RANGE) || sieging) && !this.ship.overheated)));
     if (burning) {
       me.steer(error, 2.5, controls);
       controls.thrust = me.angleTo(error) < 0.25 ? 1 : 0;
@@ -296,6 +307,10 @@ export class Bot {
       const open = target.tailToward(line.subVectors(target.flight.position, me.position));
       const heatLimit = open ? 40 + 50 * this.skill : ARMOR_FIRE_HEAT;
       controls.fire = (open || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
+    } else if (sieging) {
+      // a part of a battleship holds still: the nose on it, and fire while the laser allows
+      me.steer(toTarget, 3, controls);
+      controls.fire = me.angleTo(toTarget) < SIEGE_AIM && !this.ship.overheated && this.ship.heat < 40 + 50 * this.skill;
     } else {
       me.steer(toTarget, 2.5, controls);
     }
