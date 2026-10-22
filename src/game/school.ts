@@ -7,6 +7,8 @@ import { SCHOOL, SCHOOL_PRAISE } from '../music/lines';
 import { RacingLine } from './racingline';
 import { ARENA_LIMIT } from '../world/arena';
 import { GATE_RADIUS } from './race';
+import type { ItemKind } from './items';
+import { MAX_HULL } from '../ship/ship';
 
 /** What a flight school drill can see and do. */
 export interface SchoolContext {
@@ -40,6 +42,16 @@ export interface SchoolContext {
   fireAt(from: THREE.Vector3, through: THREE.Vector3): void;
   /** A coil throws the pilot on along a direction (either way, as it flies), as a race's gate does. */
   boost(through: THREE.Vector3): void;
+  /** Hands the pilot's clone two torpedoes, or a nova core. */
+  arm(item: 'torpedo' | 'nova'): void;
+  /** A torpedo from a ship (the drone), homing on the pilot. */
+  torpedoAt(from: Ship): void;
+  /** Torpedoes in flight, where the first of them is, and how many the pilot has shot down so far. */
+  readonly torpedoes: number;
+  readonly incoming: THREE.Vector3 | null;
+  readonly torpedoesDown: number;
+  /** A probe carrying an item at a point; returns where it drifts. */
+  spawnProbe(position: THREE.Vector3, kind: ItemKind): THREE.Vector3;
   /** A number of a countdown, or GO, in big neon. */
   countdown(text: string): void;
   /** The drive lit on GO: a perfect start's shove; lit too early: the drive stalls. */
@@ -169,6 +181,10 @@ const START_LATE = 0.2;
 export const HOOK_FLING = 1300;
 /** The hook drill starts this far off the rock's farthest reach (units, 500 m): cable enough to gain speed on any rock. */
 export const HOOK_STANDOFF = 10000;
+/** The overdrive drill wants the ship past this speed from rest (units/s, 140 m/s): the overdrive's shove, nearly all of it. */
+const OVERDRIVE_FAST = 2800;
+/** The ship hooked in the hook drill of the arsenal counts as reeled in this close (units, 300 m). */
+const HOOKED_CLOSE = 6000;
 
 
 const scratch = new THREE.Vector3();
@@ -460,18 +476,7 @@ const DRILL = {
     waypoint: (_, a) => a.points[0] ?? null,
     mark: () => 'Hook it',
   },
-  shoot: {
-    line: SCHOOL.shoot,
-    praise: SCHOOL_PRAISE.shoot,
-    keys: ['fire'],
-    enter(ctx) {
-      stop(ctx);
-      ctx.spawnDrone(ahead(ctx, 0, 0, -6000), new THREE.Vector3());
-    },
-    done: (ctx) => !!ctx.drone && !ctx.drone.alive,
-    waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
-    mark: () => 'Drone',
-  },
+  shoot: atDrone(SCHOOL.shoot, SCHOOL_PRAISE.shoot, 6000),
   shootMoving: {
     line: SCHOOL.shootMoving,
     praise: SCHOOL_PRAISE.shootMoving,
@@ -643,7 +648,98 @@ const DRILL = {
   chase: sparring(SCHOOL.chase, SCHOOL_PRAISE.chase, ['drive', 'brake', 'fire'], false, 0.1),
   evade: sparring(SCHOOL.evade, SCHOOL_PRAISE.evade, ['slide', 'fire'], true, 0.05),
   duel: sparring(SCHOOL.duel, SCHOOL_PRAISE.duel, ['drive', 'brake', 'slide', 'fire'], true, 0.2),
+  // the arsenal: what a clone carries besides its laser, and what it finds out there
+  torpedo: {
+    line: SCHOOL.torpedo,
+    praise: SCHOOL_PRAISE.torpedo,
+    keys: ['turn', 'torpedo'],
+    enter(ctx) {
+      stop(ctx);
+      ctx.arm('torpedo');
+      ctx.spawnDrone(clear(ctx, ahead(ctx, 3000, 1500, -24000), 2000), new THREE.Vector3());
+    },
+    done: (ctx) => !!ctx.drone && (!ctx.drone.alive || ctx.drone.hull < MAX_HULL),
+    // both launched without a lock, or both gone past
+    fail: (ctx) => (ctx.me.torpedoes === 0 && ctx.torpedoes === 0 ? SCHOOL.again : null),
+    waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
+    mark: () => 'Lock on',
+  },
+  torpedoDown: {
+    line: SCHOOL.torpedoDown,
+    praise: SCHOOL_PRAISE.torpedoDown,
+    keys: ['turn', 'fine', 'fire'],
+    enter(ctx, a) {
+      stop(ctx);
+      ctx.spawnDrone(clear(ctx, ahead(ctx, 0, 0, -30000), 2000), new THREE.Vector3());
+      a.count = ctx.torpedoesDown;
+      a.reach = ctx.me.hull;
+      a.lit = false;
+    },
+    done(ctx, a) {
+      // the drone launches once the drill counts
+      if (!a.lit && ctx.drone) {
+        ctx.torpedoAt(ctx.drone);
+        a.lit = true;
+      }
+      return ctx.torpedoesDown > a.count;
+    },
+    fail: (ctx, a) => (ctx.me.hull < a.reach || (a.lit && ctx.torpedoes === 0 && ctx.torpedoesDown === a.count) ? SCHOOL.torpedoHit : null),
+    waypoint: (ctx) => ctx.incoming,
+    mark: () => 'Torpedo',
+  },
+  overdrive: {
+    line: SCHOOL.overdrive,
+    praise: SCHOOL_PRAISE.overdrive,
+    keys: ['overdrive'],
+    enter: (ctx) => stop(ctx),
+    done: (ctx) => speed(ctx) > OVERDRIVE_FAST,
+  },
+  probe: {
+    line: SCHOOL.probe,
+    praise: SCHOOL_PRAISE.probe,
+    keys: ['turn', 'drive', 'brake'],
+    enter(ctx, a) {
+      stop(ctx);
+      a.count = ctx.me.torpedoes;
+      a.points = [ctx.spawnProbe(clear(ctx, ahead(ctx, 0, 0, -8000), 1000), 'torpedoes')];
+    },
+    done: (ctx, a) => ctx.me.torpedoes > a.count,
+    fail: (ctx, a) => (ctx.me.flight.position.distanceTo(a.points[0]) > 30000 ? SCHOOL.again : null),
+    waypoint: (_, a) => a.points[0] ?? null,
+    mark: () => 'Probe',
+  },
+  hookShip: {
+    line: SCHOOL.hookShip,
+    praise: SCHOOL_PRAISE.hookShip,
+    keys: ['turn', 'hook'],
+    enter(ctx) {
+      stop(ctx);
+      ctx.spawnBot(clear(ctx, ahead(ctx, 0, 0, -12000), 2000), false, 0.2);
+    },
+    done: (ctx) => ctx.hooked && !!ctx.bot && ctx.bot.flight.position.distanceTo(ctx.me.flight.position) < HOOKED_CLOSE,
+    leave: (ctx) => ctx.removeBot(),
+    waypoint: (ctx) => (ctx.bot?.alive ? ctx.bot.flight.position : null),
+    mark: () => 'Hook it',
+  },
+  nova: atDrone(SCHOOL.nova, SCHOOL_PRAISE.nova, 10000, true),
 } satisfies Record<string, Drill>;
+
+/** A drill against the target drone at rest `distance` ahead, done once it is gone; for the nova drill the clone holds a core first. */
+function atDrone(line: string, praise: string, distance: number, nova = false): Drill {
+  return {
+    line,
+    praise,
+    keys: ['fire'],
+    enter(ctx) {
+      stop(ctx);
+      if (nova) ctx.arm('nova');
+      ctx.spawnDrone(clear(ctx, ahead(ctx, 0, 0, -distance), 2000), new THREE.Vector3());
+    },
+    done: (ctx) => !!ctx.drone && !ctx.drone.alive,
+    waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
+    mark: () => 'Drone',
+  };
+}
 
 /** A drill against a sparring bot, armed or not, of a skill (see Bot). */
 function sparring(line: string, praise: string, keys: Command[], armed: boolean, skill: number): Drill {
@@ -663,15 +759,16 @@ function sparring(line: string, praise: string, keys: Command[], armed: boolean,
 }
 
 /** The courses of the flight school, each played on its own. */
-export type SchoolCourse = 'basic' | 'racer' | 'gladiator';
-export const SCHOOL_COURSES: readonly SchoolCourse[] = ['basic', 'racer', 'gladiator'];
-export const COURSE_NAMES: Record<SchoolCourse, string> = { basic: 'Basic training', racer: 'Racer', gladiator: 'Gladiator' };
+export type SchoolCourse = 'basic' | 'racer' | 'gladiator' | 'arsenal';
+export const SCHOOL_COURSES: readonly SchoolCourse[] = ['basic', 'racer', 'gladiator', 'arsenal'];
+export const COURSE_NAMES: Record<SchoolCourse, string> = { basic: 'Basic training', racer: 'Racer', gladiator: 'Gladiator', arsenal: 'Arsenal' };
 
 /**
  * The drills of each course, in the order a Host needs them. Basic training: turning, aiming,
  * the drive and the brake, stopping at a point and the rocks, all with the autopilot on. The
  * racer: the rings, their coils, the start and the hook. The gladiator: the laser and its heat, free
- * drift like a real spaceship, dodging, and the dogfight last.
+ * drift like a real spaceship, dodging, and the dogfight last. The arsenal: torpedoes (launching
+ * one, shooting one down), the overdrive, a probe, the hook on a ship, the nova core.
  */
 const COURSES: Record<SchoolCourse, Drill[]> = {
   basic: [DRILL.briefing, DRILL.turn, DRILL.fineAim, DRILL.cockpit, DRILL.drive, DRILL.brake, DRILL.stopAt, DRILL.impact, saying(SCHOOL.basicDone)],
@@ -694,6 +791,7 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
     DRILL.duel,
     saying(SCHOOL.done),
   ],
+  arsenal: [saying(SCHOOL.arsenal), DRILL.torpedo, DRILL.torpedoDown, DRILL.overdrive, DRILL.probe, DRILL.hookShip, DRILL.nova, saying(SCHOOL.arsenalDone)],
 };
 
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */

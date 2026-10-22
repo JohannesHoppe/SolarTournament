@@ -92,7 +92,7 @@ For development, `?local=1#t=code` connects tabs of the same browser without the
 
 ## Flight school
 
-The flight school has three courses, each played on its own from the school's plate: **Basic training** (flying), **Racer** (the race) and **Gladiator** (the fight). The menu leads with the flight school until a Host has completed the basic training; after that the solo round is the main action (Enter opens its choices, Enter again launches it). On the school's plate Enter starts the first course not completed yet. Each course remembers the drill a Host has reached: after a reload it continues there ("Continue at drill n of m"), with the autopilot as the drills before left it, and "Start … over" below the course begins it again. A completed course says so for good ("✓ Completed."), also when the Host trains again, and the menu's button counts the completed courses; after a course the school's plate comes up again, with the next course a key away. Each course trains one maneuver per drill, in the order a Host needs them. Each drill comes with a short spoken line, the keys as big keycaps (the spoken words name no keys; the keycaps show those of the Host's keyboard, gamepad or touch screen), and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver. Every attempt runs in clear phases, one after the other: what is left to say of the last one (the praise, or why it failed) to its end, then the instruction to its end, and only then the drill's markers, drones or bots show up and the drill counts. Her lessons are never cut off: a new one waits until she has finished the last, and her other lines (hits, asteroids, warnings) stay silent while she teaches; the HUD shows them anyway.
+The flight school has four courses, each played on its own from the school's plate: **Basic training** (flying), **Racer** (the race), **Gladiator** (the fight) and **Arsenal** (torpedoes, overdrive, probes, the hook on a ship, the nova core). The menu leads with the flight school until a Host has completed the basic training; after that the solo round is the main action (Enter opens its choices, Enter again launches it). On the school's plate Enter starts the first course not completed yet. Each course remembers the drill a Host has reached: after a reload it continues there ("Continue at drill n of m"), with the autopilot as the drills before left it, and "Start … over" below the course begins it again. A completed course says so for good ("✓ Completed."), also when the Host trains again, and the menu's button counts the completed courses; after a course the school's plate comes up again, with the next course a key away. Each course trains one maneuver per drill, in the order a Host needs them. Each drill comes with a short spoken line, the keys as big keycaps (the spoken words name no keys; the keycaps show those of the Host's keyboard, gamepad or touch screen), and markers in space (orange diamonds, a course of rings, red debris). A drill waits until the pilot has really done it, some are repeated two or three times, and a failed attempt or a dead clone starts the attempt over. Training clones are free: no sponsor break. After every drill the flight computer praises the pilot and explains the physics behind the maneuver. Every attempt runs in clear phases, one after the other: what is left to say of the last one (the praise, or why it failed) to its end, then the instruction to its end, and only then the drill's markers, drones or bots show up and the drill counts. Her lessons are never cut off: a new one waits until she has finished the last, and her other lines (hits, asteroids, warnings) stay silent while she teaches; the HUD shows them anyway.
 
 **Basic training** (9 drills, the autopilot on throughout):
 
@@ -135,6 +135,17 @@ Both ring courses (2.6 km long) lie ahead of the pilot, or, where they would rea
 14. Fighting a weak bot that shoots back: keep the armored nose on it, slide, and work onto its tail.
 15. Final exam: a real bot that knows the trick too. Win the dogfight.
 16. Cleared for the tournament.
+
+**Arsenal** (8 drills):
+
+1. What the arsenal holds: torpedoes, the overdrive, the probes and the nova core.
+2. Torpedo: two in the tubes, a target drone 1.2 km ahead; keep it near the crosshair until the lock holds, launch, and hit it. Both launched without a hit starts the attempt over.
+3. Shooting one down: the drone, 1.5 km off, launches a torpedo at the pilot; the HUD marks it ("Torpedo"); the laser has to hit it before it arrives. Hit by it ("It got you"), or it gone past, starts the attempt over.
+4. The overdrive: from rest, one press and the ship is past 140 m/s.
+5. A probe 400 m ahead carries two torpedoes: fly through it.
+6. The hook on a ship: an unarmed bot 600 m ahead runs; hook it and reel it in within 300 m.
+7. The nova core: the clone holds one, a drone 500 m ahead; fire, and both go up (the next clone is on the sponsors).
+8. The arsenal is ready.
 
 ## Radio 2584
 

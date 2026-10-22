@@ -72,7 +72,8 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
 });
 
 test('two tabs of Capture the Flag agree on the sides and on who has a core in tow', async ({ context }) => {
-  const { a, b } = await pair(context, `e2e-${Date.now().toString(36)}f&m=flag`);
+  // two Hosts alone: bots would only slow two tabs without a GPU down
+  const { a, b } = await pair(context, `e2e-${Date.now().toString(36)}f&m=flag&bots=0`);
   const sides = (page: Page) =>
     page.evaluate(() => {
       const game = (window as unknown as GameWindow).game;

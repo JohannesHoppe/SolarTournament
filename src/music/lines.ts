@@ -252,10 +252,19 @@ export const SCHOOL = {
   start: 'A race starts on my count. Light your drive exactly on go. Too early, and it stalls.',
   tooEarly: 'Too early. Wait for go.',
   tooLate: 'Too late. Again.',
-  hook: 'Your hook. Aim at the rock and hold it: the harpoon bites, the winch reels you in, and you swing around the rock. Let go, and you fly off.',
+  hook: 'Your hook. Aim at the rock and hold it: the harpoon bites, the winch yanks you in, and you swing around the rock. Let go, and you fly off with all that speed.',
   hookSlow: 'Swing faster before you let go. Again.',
   racerDone: 'You are a racer now. Fly the clean line, mind the plumes, and win one for the President.',
   gladiator: 'Gladiator training. The laser, the heat, and the dogfight. Let us hurt somebody.',
+  arsenal: 'Arsenal training. Torpedoes, the overdrive, the probes, and the nova core. Toys, darling. Deadly toys.',
+  torpedo: 'Torpedoes. Keep the drone close to your crosshair until the lock holds, then launch.',
+  torpedoDown: 'Now one is coming for you. Find the red mark, and shoot it down before it reaches you.',
+  torpedoHit: 'It got you. Aim for the red mark, and keep firing. Again.',
+  overdrive: 'Your overdrive. One shove, past the speed limit. Use it.',
+  probe: 'Sponsor probes drift in every arena. Fly through this one, and take what it carries.',
+  hookShip: 'Your hook bites ships too. Catch that runner, and reel it in.',
+  nova: 'This is a nova core. Everything around you dies when you set it off, and so does your clone. Fly close to the drone, and fire.',
+  arsenalDone: 'Your arsenal is ready. Use all of it, and make the President proud.',
   again: 'Again.',
 } as const;
 
@@ -289,6 +298,12 @@ export const SCHOOL_PRAISE = {
   chase: 'Got it. Stay behind them, and they have to turn before they can hit you.',
   evade: 'You are doing so well. Soon you may go and die for the President.',
   duel: 'Your first kill. The President is proud of you.',
+  torpedo: 'Boom. Armor does not stop a torpedo. Two of those, and a ship is gone.',
+  torpedoDown: 'Saved yourself. A torpedo is small, but your laser is faster.',
+  overdrive: 'Sixty g in a blink. Your drive needs a few seconds to cool after that. Use it to escape, or to strike.',
+  probe: 'Two more torpedoes. Every probe shows its color. Blue plates you, green repairs you, white is the nova core.',
+  hookShip: 'Got it. You both pull on the same cable, and the slower one gets dragged.',
+  nova: 'Glorious. The sponsors love it so much, your next clone is on them.',
 } as const;
 
 /** What the flight computer says when the screen shows a message. */

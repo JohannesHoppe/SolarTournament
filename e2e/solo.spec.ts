@@ -34,7 +34,7 @@ for (const mode of ['deathmatch', 'survival', 'flag', 'fleet']) {
   });
 }
 
-for (const course of ['basic', 'racer', 'gladiator']) {
+for (const course of ['basic', 'racer', 'gladiator', 'arsenal']) {
   test(`the flight school's ${course} course starts in the belt`, async ({ page }) => {
     const errors = await openGame(page);
     await page.click('#school');

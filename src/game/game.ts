@@ -40,7 +40,7 @@ import { Landmarks } from '../world/landmarks';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
-import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Homing, type Torpedo } from './torpedoes';
+import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
 import { RacingLine } from './racingline';
@@ -115,6 +115,8 @@ const FLAG_POINTS: Record<FlagEvent['kind'], number> = { grab: GRAB_POINTS, retu
 const RACE_KILL_POINTS = 200;
 /** Points for shooting down a torpedo, and how often a bot with a lock fires one (per second). */
 const TORPEDO_DOWN_POINTS = 50;
+/** A flight school drill's torpedo leaves its drone at this speed towards the pilot (units/s, 40 m/s, as from a tube). */
+const DRILL_TORPEDO_LAUNCH = 800;
 /** A torpedo another browser says went off is this close (units, 1.5 km) to where it flies here, or the report is ignored: torpedoes fly alike everywhere, up to the lag. */
 const TORPEDO_GONE_SLACK = 30000;
 const BOT_TORPEDO_RATE = 0.08;
@@ -330,6 +332,7 @@ const SCHOOL_NOTES: Record<SchoolCourse, string> = {
   basic: 'Turn, aim, burn and brake. Start here.',
   racer: 'Rings, coils and the perfect start.',
   gladiator: 'The laser, free drift and the dogfight.',
+  arsenal: 'Torpedoes, overdrive, probes, the hook on a ship and the nova core.',
 };
 
 /** The courses a Host has completed, as this browser keeps them; whatever does not fit is dropped. */
@@ -696,6 +699,8 @@ export class Game implements OnlineGame {
   /** The running flight school, or null in a tournament round. */
   private school: FlightSchool | null = null;
   private schoolContext: SchoolContext | null = null;
+  /** Torpedoes the own pilot has shot down, for the flight school's drill. */
+  private torpedoesDown = 0;
   /** The flight school's line to its marker (see lineTo). */
   private schoolLine: { line: RacingLine; to: THREE.Vector3 } | null = null;
   /** Target drone of the flight school. */
@@ -3228,6 +3233,25 @@ export class Game implements OnlineGame {
       say: (lines) => this.speaker.say(lines, 'lesson'),
       fireAt: (from, through) => this.drillShot(from, through),
       boost: (through) => this.coilPush(this.me!, through),
+      arm: (item) => {
+        if (item === 'nova') game.me!.nova = true;
+        else game.me!.torpedoes = Math.max(game.me!.torpedoes, TORPEDOES);
+      },
+      torpedoAt: (from) => this.drillTorpedo(from),
+      get torpedoes() {
+        return game.torpedoes.list.length;
+      },
+      get incoming() {
+        return game.torpedoes.list[0]?.position ?? null;
+      },
+      get torpedoesDown() {
+        return game.torpedoesDown;
+      },
+      spawnProbe: (position, kind) => {
+        // a probe of its own each time: one taken is never shown again
+        this.probes.drop('school', Math.floor(this.time * 1000), [kind], position, new THREE.Vector3(), this.time);
+        return this.probes.list[this.probes.list.length - 1].position;
+      },
       countdown: (text) => this.count(text),
       perfectStart: () => this.perfectStart(this.me!),
       stall: () => this.stall(this.me!),
@@ -3602,7 +3626,8 @@ export class Game implements OnlineGame {
         angle = off;
       }
     };
-    for (const other of this.ships) if (other !== ship && other.alive && other !== this.drone && !other.allyOf(ship)) consider(other);
+    // the flight school's target drone too: its torpedo drill is about the lock
+    for (const other of this.ships) if (other !== ship && other.alive && !other.allyOf(ship)) consider(other);
     for (const beacon of this.fleet?.beacons ?? []) if (beacon.alive) consider(beacon);
     return best;
   }
@@ -3632,9 +3657,9 @@ export class Game implements OnlineGame {
     // the world looks different while the own clone holds a nova core
     const holding = !!this.me?.nova && this.me.alive;
     if (document.body.classList.contains('nova-held') !== holding) document.body.classList.toggle('nova-held', holding);
-    if (this.school) return;
+    // the flight school shows only the probes its drills put out
     const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
-    if (this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.raceTime(), now, this.field, this.course?.points);
+    if (!this.school && this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.raceTime(), now, this.field, this.course?.points);
     this.probes.update(dt, now, this.field);
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive || ship === this.drone || (this.spectating && ship === this.me)) continue;
@@ -3851,7 +3876,17 @@ export class Game implements OnlineGame {
     this.online?.sendTorpedoGone(torpedo.id, torpedo.position);
     if (shooter.owner !== null) return;
     shooter.score += TORPEDO_DOWN_POINTS;
-    if (shooter.isLocal) this.hud.popup(this.camera, torpedo.position, `TORPEDO DOWN +${TORPEDO_DOWN_POINTS}`, 'points');
+    if (!shooter.isLocal) return;
+    this.torpedoesDown++;
+    this.hud.popup(this.camera, torpedo.position, `TORPEDO DOWN +${TORPEDO_DOWN_POINTS}`, 'points');
+  }
+
+  /** A flight school drill's torpedo: from a ship (the drone), homing on the own pilot, launched straight at it. */
+  private drillTorpedo(from: Ship) {
+    const me = this.me!;
+    const position = from.flight.position.clone();
+    const velocity = toAim.subVectors(me.flight.position, position).setLength(DRILL_TORPEDO_LAUNCH).clone();
+    this.torpedoes.launch(`${from.id}.${from.torpedoesFired++}`, from, me, position, velocity, this.time, true);
   }
 
   private blowUp(torpedo: Torpedo) {
