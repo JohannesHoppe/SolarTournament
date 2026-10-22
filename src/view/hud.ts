@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MAX_HEAT, MAX_HULL, type Ship } from '../ship/ship';
-import { keyLabel } from '../input/input';
+import { CONTROLS, keyLabel, type Command, type Device } from '../input/input';
 import { markedName, type Kind } from './marks';
 import { TEAM_TINTS } from '../game/flags';
 
@@ -55,10 +55,28 @@ export class Hud {
   private messageUntil = 0;
   private hitmarkerTimer = 0;
   private flashTimer = 0;
+  /** The keys shown before the readouts at the bottom, and the device they are shown for. */
+  private readonly keys = [...document.querySelectorAll<HTMLElement>('.hud-key')];
+  private keysFor: Device | null = null;
 
   constructor() {
     this.markerLayer.className = 'markers';
     this.root.prepend(this.markerLayer);
+  }
+
+  /**
+   * The key of each readout at the bottom (autopilot, overdrive, hook, torpedo) for the device
+   * the Host flies with, so it need not be remembered in a panic; on a touch screen the buttons
+   * name themselves.
+   */
+  setKeys(device: Device) {
+    if (device === this.keysFor) return;
+    this.keysFor = device;
+    for (const key of this.keys) {
+      const label = device === 'touch' ? '' : (CONTROLS[device][key.dataset.command as Command]?.[0] ?? '');
+      key.textContent = device === 'keyboard' ? keyLabel(label) : label;
+      key.hidden = !label;
+    }
   }
 
   show(visible: boolean) {

@@ -2473,6 +2473,7 @@ export class Game implements OnlineGame {
     const hook = this.tethers.get(me);
     this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now));
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
+    this.hud.setKeys(this.input.device);
     // a watching Host sees the race of the pilot on screen
     const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : this.flags ? this.showFlags(this.flags, subject) : this.fleet ? this.showFleet(this.fleet, subject) : null;
     if (!this.course && !this.school) this.guide.hide();
@@ -3130,7 +3131,7 @@ export class Game implements OnlineGame {
     context.autopilot = this.autopilot;
     context.cockpit = this.cockpit;
     context.impactAhead = this.impactAhead;
-    context.device = this.input.touchActive ? 'touch' : this.input.gamepadActive ? 'gamepad' : 'keyboard';
+    context.device = this.input.device;
     context.now = this.time;
     context.dt = dt;
     const step = school.stepIndex;

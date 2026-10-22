@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Asteroid, AsteroidField } from '../world/asteroids';
-import type { Controls } from '../input/input';
+import { CONTROLS, type Command, type Controls, type Device } from '../input/input';
 import type { Ship } from '../ship/ship';
 import { SUN_DIRECTION } from '../world/space';
 import { SCHOOL, SCHOOL_PRAISE } from '../music/lines';
@@ -116,51 +116,6 @@ interface Drill {
   skip?(ctx: SchoolContext): boolean;
 }
 
-/** What the Host flies with. */
-export type Device = 'keyboard' | 'gamepad' | 'touch';
-
-/** What a drill asks the pilot to use. */
-type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'fire' | 'autopilot' | 'camera' | 'hook';
-
-/** The keys, buttons and sticks of each device, as the keycaps show them. */
-const CONTROLS: Record<Device, Record<Command, string[]>> = {
-  keyboard: {
-    turn: ['← ↑ ↓ →', 'Mouse'],
-    fine: ['Shift'],
-    drive: ['W'],
-    brake: ['S'],
-    flip: ['X'],
-    slide: ['A', 'D'],
-    fire: ['Space', 'Click'],
-    autopilot: ['T'],
-    camera: ['C'],
-    hook: ['V', 'Right click'],
-  },
-  gamepad: {
-    turn: ['Left stick'],
-    fine: ['L3'],
-    drive: ['RT'],
-    brake: ['B'],
-    flip: ['Y'],
-    slide: ['Right stick'],
-    fire: ['LT'],
-    autopilot: ['R3'],
-    camera: ['View'],
-    hook: ['D-pad down'],
-  },
-  touch: {
-    turn: ['Left stick'],
-    fine: [],
-    drive: ['DRIVE'],
-    brake: ['BRAKE'],
-    flip: ['FLIP'],
-    slide: ['Right stick'],
-    fire: ['FIRE'],
-    autopilot: ['AUTO'],
-    camera: [],
-    hook: ['HOOK'],
-  },
-};
 
 /** 50 m/s and 5 m/s in world units (1 unit = 5 cm). */
 const FAST = 1000;

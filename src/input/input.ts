@@ -22,6 +22,58 @@ export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, 
 export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'radio' | 'help' | 'autopilot' | 'overdrive' | 'torpedo' | 'watch';
 type ActionHandler = (action: Action) => void;
 
+/** What the Host flies with. */
+export type Device = 'keyboard' | 'gamepad' | 'touch';
+
+/** What the Host can be asked to use, by the flight school's drills and by the HUD's labels. */
+export type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'fire' | 'autopilot' | 'camera' | 'hook' | 'overdrive' | 'torpedo';
+
+/** The keys, buttons and sticks of each device for each command, as keycaps show them (the first is the main one). */
+export const CONTROLS: Record<Device, Record<Command, string[]>> = {
+  keyboard: {
+    turn: ['← ↑ ↓ →', 'Mouse'],
+    fine: ['Shift'],
+    drive: ['W'],
+    brake: ['S'],
+    flip: ['X'],
+    slide: ['A', 'D'],
+    fire: ['Space', 'Click'],
+    autopilot: ['T'],
+    camera: ['C'],
+    hook: ['V', 'Right click'],
+    overdrive: ['E'],
+    torpedo: ['G'],
+  },
+  gamepad: {
+    turn: ['Left stick'],
+    fine: ['L3'],
+    drive: ['RT'],
+    brake: ['B'],
+    flip: ['Y'],
+    slide: ['Right stick'],
+    fire: ['LT'],
+    autopilot: ['R3'],
+    camera: ['View'],
+    hook: ['D-pad down'],
+    overdrive: ['RB'],
+    torpedo: ['D-pad up'],
+  },
+  touch: {
+    turn: ['Left stick'],
+    fine: [],
+    drive: ['DRIVE'],
+    brake: ['BRAKE'],
+    flip: ['FLIP'],
+    slide: ['Right stick'],
+    fire: ['FIRE'],
+    autopilot: ['AUTO'],
+    camera: [],
+    hook: ['HOOK'],
+    overdrive: ['OVERDRIVE'],
+    torpedo: ['TORPEDO'],
+  },
+};
+
 /** The pointer at this share of the shorter screen side away from the center turns at full rate. */
 const MOUSE_FULL_DEFLECTION = 0.25;
 /** Around the center the pointer does not turn the ship (share of full deflection), so it can fly straight. */
@@ -133,6 +185,11 @@ export class Input {
   /** A gamepad is connected: mouse hints do not apply. */
   get gamepadActive() {
     return this.gamepad() !== null;
+  }
+
+  /** What the Host flies with now, for the keys shown: touch, a gamepad, or keyboard and mouse. */
+  get device(): Device {
+    return this.touchActive ? 'touch' : this.gamepadActive ? 'gamepad' : 'keyboard';
   }
 
   resetMouse() {

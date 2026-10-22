@@ -1930,6 +1930,17 @@ body.page {
   color: var(--accent);
 }
 
+/* the key of a readout at the bottom, a small keycap before it */
+.hud-key {
+  margin: 0 6px 0 0;
+  padding: 0.05em 0.4em;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  color: var(--accent);
+  border-radius: 4px;
+  opacity: 0.9;
+}
+
 /* a small, plain action under a menu button, e.g. starting a course of the flight school over */
 button.quiet {
   margin-top: -4px;
