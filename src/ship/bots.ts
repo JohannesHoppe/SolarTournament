@@ -77,13 +77,13 @@ export { BOT_NAMES } from '../music/lines';
 
 /**
  * What a bot can, each 0..1: `aim`, how close its aim comes; `reflexes`, how fast it reacts,
- * how quick its hand is (see Bot.byHand) and how well it starts a race; `nerve`, how hot it runs
+ * how quick its hand is (see Bot.byHand) and how well it starts a race; `daring`, how hot it runs
  * its laser and how often it takes the hook.
  */
 export interface Skills {
   aim: number;
   reflexes: number;
-  nerve: number;
+  daring: number;
 }
 
 /**
@@ -92,18 +92,18 @@ export interface Skills {
  * tournament first, average 0.4; Kessler is the middling one (0.5), whom the balance runs watch.
  */
 export const BOT_SKILLS: Record<string, Skills> = {
-  Laika: { aim: 0.1, reflexes: 0.2, nerve: 0 },
-  Sputnik: { aim: 0.3, reflexes: 0.1, nerve: 0.2 },
-  Juno: { aim: 0.2, reflexes: 0.4, nerve: 0.3 },
-  Ceres: { aim: 0.5, reflexes: 0.3, nerve: 0.4 },
-  Kessler: { aim: 0.4, reflexes: 0.5, nerve: 0.6 },
-  Orion: { aim: 0.7, reflexes: 0.5, nerve: 0.6 },
-  Vega: { aim: 0.6, reflexes: 0.9, nerve: 0.6 },
-  Halley: { aim: 0.9, reflexes: 0.8, nerve: 0.85 },
+  Laika: { aim: 0.1, reflexes: 0.2, daring: 0 },
+  Sputnik: { aim: 0.3, reflexes: 0.1, daring: 0.2 },
+  Juno: { aim: 0.2, reflexes: 0.4, daring: 0.3 },
+  Ceres: { aim: 0.5, reflexes: 0.3, daring: 0.4 },
+  Kessler: { aim: 0.4, reflexes: 0.5, daring: 0.6 },
+  Orion: { aim: 0.7, reflexes: 0.5, daring: 0.6 },
+  Vega: { aim: 0.6, reflexes: 0.9, daring: 0.6 },
+  Halley: { aim: 0.9, reflexes: 0.8, daring: 0.85 },
 };
 
 /** Skills that are all the same, for a bot of a name without its own (0.4) or one the flight school sets. */
-export const evenSkills = (skill: number): Skills => ({ aim: skill, reflexes: skill, nerve: skill });
+export const evenSkills = (skill: number): Skills => ({ aim: skill, reflexes: skill, daring: skill });
 
 export const skillsOf = (name: string) => BOT_SKILLS[name] ?? evenSkills(0.4);
 
@@ -349,12 +349,12 @@ export class Bot {
       // single shots from a nearly cool laser, so it keeps the heat for the drive
       const open = target.tailToward(line.subVectors(target.flight.position, me.position));
       // a racer flies first: single shots only, even at an open drive, unless it looks back
-      const heatLimit = open && (!racing || lookingBack) ? 40 + 50 * this.skills.nerve : ARMOR_FIRE_HEAT;
+      const heatLimit = open && (!racing || lookingBack) ? 40 + 50 * this.skills.daring : ARMOR_FIRE_HEAT;
       controls.fire = (open || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
     } else if (sieging) {
       // a part of a battleship holds still: the nose on it, and fire while the laser allows
       me.steer(toTarget, 3, controls);
-      controls.fire = me.angleTo(toTarget) < SIEGE_AIM && !this.ship.overheated && this.ship.heat < 40 + 50 * this.skills.nerve;
+      controls.fire = me.angleTo(toTarget) < SIEGE_AIM && !this.ship.overheated && this.ship.heat < 40 + 50 * this.skills.daring;
     } else {
       me.steer(toTarget, 2.5, controls);
     }

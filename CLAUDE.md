@@ -106,7 +106,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `ship/models.ts` | The interceptors' hulls, low poly in code; collider, drive flame and glows come from the model files |
 | `ship/ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, drive animation |
 | `ship/flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`) |
-| `ship/bots.ts` | Bot AI: desired velocity, turn and burn, dogfights in arcs, aiming with spread, a hand that eases every command in; every bot's skills (aim, reflexes, nerve) |
+| `ship/bots.ts` | Bot AI: desired velocity, turn and burn, dogfights in arcs, aiming with spread, a hand that eases every command in; every bot's skills (aim, reflexes, daring) |
 | **`view/`** | **What the screen shows** |
 | `view/hud.ts` | DOM HUD: gauges, markers, warnings, tunnel vision |
 | `view/effects.ts` | Particles (one draw call per texture), laser beams |

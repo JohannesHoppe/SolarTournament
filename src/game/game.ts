@@ -120,7 +120,7 @@ const TORPEDO_GONE_SLACK = 30000;
 const BOT_TORPEDO_RATE = 0.08;
 /**
  * A bot hooks the ship it hunts when it lies dead ahead between BOT_HOOK_MIN (units, 150 m) and
- * nine tenths of the hook's reach, with a chance of BOT_HOOK_RATE times its nerve a second
+ * nine tenths of the hook's reach, with a chance of BOT_HOOK_RATE times its daring a second
  * (Halley about once in five seconds of such a chance, Sputnik once in twenty, Laika never), reels it in for
  * BOT_HOOK_HOLD seconds and lets go; its hook is ready again BOT_HOOK_PAUSE seconds after that.
  * Far rarer than a Host can, and never in a race.
@@ -455,7 +455,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 const SKILL_NAMES: [keyof Skills, string][] = [
   ['aim', 'Aim'],
   ['reflexes', 'Reflexes'],
-  ['nerve', 'Nerve'],
+  ['daring', 'Daring'],
 ];
 const skillScales = (skills: Skills) =>
   `<span class="skills">${SKILL_NAMES.map(([key, label]) => {
@@ -3460,7 +3460,7 @@ export class Game implements OnlineGame {
       if (now >= bot.hookUntil || !target?.alive) this.unhook(ship);
       return;
     }
-    if (!target || bot === this.sparring?.bot || bot.waypoint || now < bot.hookReadyAt || Math.random() >= dt * BOT_HOOK_RATE * bot.skills.nerve * (1 - bot.ease)) return;
+    if (!target || bot === this.sparring?.bot || bot.waypoint || now < bot.hookReadyAt || Math.random() >= dt * BOT_HOOK_RATE * bot.skills.daring * (1 - bot.ease)) return;
     const distance = target.flight.position.distanceTo(ship.flight.position);
     if (distance < BOT_HOOK_MIN || distance > HOOK_RANGE * 0.9 || aimHook(ship, this.field, this.ships)?.anchor.ship !== target) return;
     this.fireHook(ship);
