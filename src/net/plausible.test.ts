@@ -76,24 +76,32 @@ describe('plausibility of what other browsers report', () => {
 });
 
 describe('accusations', () => {
-  it('name a cheater once two browsers say so, never on its own word', () => {
+  it('name a cheater once two Hosts who fly say so, never on its own word', () => {
     const accusations = new Accusations();
-    expect(accusations.add('c', 'c', 3)).toBe(false);
-    expect(accusations.add('c', 'a', 3)).toBe(false);
-    expect(accusations.add('c', 'a', 3)).toBe(false);
-    expect(accusations.add('c', 'b', 3)).toBe(true);
-    expect(accusations.add('c', 'd', 3)).toBe(false);
+    expect(accusations.add('c', 'c', true, 3)).toBe(false);
+    expect(accusations.add('c', 'a', true, 3)).toBe(false);
+    expect(accusations.add('c', 'a', true, 3)).toBe(false);
+    expect(accusations.add('c', 'b', true, 3)).toBe(true);
+    expect(accusations.add('c', 'd', true, 3)).toBe(false);
     accusations.forget('b');
-    expect(accusations.add('c', 'e', 3)).toBe(false);
+    expect(accusations.add('c', 'e', true, 3)).toBe(false);
   });
 
-  it('take a majority of the others in a fuller tournament, so two tabs cannot vote a Host out', () => {
+  it('take a majority of the others in a fuller round, so two tabs cannot vote a Host out', () => {
     expect(accusersNeeded(3)).toBe(2);
     expect(accusersNeeded(5)).toBe(3);
     expect(accusersNeeded(8)).toBe(4);
     const accusations = new Accusations();
-    expect(accusations.add('v', 'x1', 6)).toBe(false);
-    expect(accusations.add('v', 'x2', 6)).toBe(false);
-    expect(accusations.add('v', 'h', 6)).toBe(true);
+    expect(accusations.add('v', 'x1', true, 6)).toBe(false);
+    expect(accusations.add('v', 'x2', true, 6)).toBe(false);
+    expect(accusations.add('v', 'h', true, 6)).toBe(true);
+  });
+
+  it('give watching Hosts no vote: a cheater coming in to watch with many tabs cannot take the majority', () => {
+    const accusations = new Accusations();
+    // three pilots fly; the accused is one of them, four tabs of a cheater only watch
+    for (const tab of ['w1', 'w2', 'w3', 'w4']) expect(accusations.add('h', tab, false, 3)).toBe(false);
+    expect(accusations.add('h', 'p1', true, 3)).toBe(false);
+    expect(accusations.add('h', 'p2', true, 3)).toBe(true);
   });
 });

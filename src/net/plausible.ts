@@ -172,29 +172,29 @@ export function plausibleBlast(at: THREE.Vector3, target: THREE.Vector3): boolea
   return at.distanceTo(target) < AIM_SLACK;
 }
 
-/** Accusations: a peer counts as a cheater once at least ACCUSERS browsers, the own one included, say so. */
+/** Accusations: a peer counts as a cheater once at least ACCUSERS Hosts who fly, the own one included, say so. */
 export const ACCUSERS = 2;
 
 /**
- * How many accusers it takes in a tournament of `browsers` (the own one included): a majority
- * of the others besides the accused, at least ACCUSERS, so two tabs of one Host cannot vote an
- * honest one out of a fuller room.
+ * How many accusers it takes among `pilots` Hosts who fly (the own one included, if it flies):
+ * a majority of them besides the accused, at least ACCUSERS, so two tabs of one Host cannot
+ * vote an honest one out of a fuller round. Watching Hosts neither vote nor count.
  */
-export function accusersNeeded(browsers: number): number {
-  return Math.max(ACCUSERS, Math.floor((browsers - 1) / 2) + 1);
+export function accusersNeeded(pilots: number): number {
+  return Math.max(ACCUSERS, Math.floor((pilots - 1) / 2) + 1);
 }
 
 export class Accusations {
   private readonly accusers = new Map<string, Set<string>>();
   private readonly announced = new Set<string>();
 
-  /** `accuser` says `accused` cheats, in a tournament of `browsers`; true once enough say so, the first time. */
-  add(accused: string, accuser: string, browsers: number): boolean {
-    if (accused === accuser) return false;
+  /** `accuser` says `accused` cheats, among `pilots` Hosts who fly; it counts only if it `flies` itself. True once enough say so, the first time. */
+  add(accused: string, accuser: string, flies: boolean, pilots: number): boolean {
+    if (accused === accuser || !flies) return false;
     const set = this.accusers.get(accused) ?? new Set<string>();
     set.add(accuser);
     this.accusers.set(accused, set);
-    if (set.size < accusersNeeded(browsers) || this.announced.has(accused)) return false;
+    if (set.size < accusersNeeded(pilots) || this.announced.has(accused)) return false;
     this.announced.add(accused);
     return true;
   }

@@ -393,7 +393,8 @@ export class Online {
     const accused = ownerOf(ship.id);
     if (!accused || accused === this.selfId) return true;
     console.warn(`SolarTournament: ${ship.name} (${ship.id}) failed the ${cheat} check`);
-    if (!this.reported.has(accused)) {
+    // a watching Host rejects what it can, but has no vote (see accuse)
+    if (!this.reported.has(accused) && !this.watching) {
       this.reported.add(accused);
       this.session.sendCheat(ship.id, cheat);
       this.accuse(accused, this.selfId);
@@ -401,14 +402,21 @@ export class Online {
     return true;
   }
 
+  /** Whether a browser's Host flies in the tournament now, and so has a vote on cheaters. */
+  private votes(peer: string): boolean {
+    return peer === this.selfId ? !this.watching : this.flying.has(peer);
+  }
+
   /**
    * One browser more says a peer cheats; once enough do, everyone here is told who, and the
    * peer is cast out: this browser sends it nothing more and takes nothing from it, its ships
-   * leave this tournament as if it had gone. Every honest browser comes to the same vote, so the
-   * cheater is left alone; a browser cast out itself is told so and leaves.
+   * leave this tournament as if it had gone. Only the Hosts who fly vote, and the majority is
+   * counted among them: a cheater who comes in to watch, with as many tabs as it likes, has no
+   * say. Every honest browser comes to the same vote, so the cheater is left alone; a browser
+   * cast out itself is told so and leaves.
    */
   private accuse(accused: string, accuser: string) {
-    if (!this.accusations.add(accused, accuser, this.session.peers.length + 1)) return;
+    if (!this.accusations.add(accused, accuser, this.votes(accuser), this.pilots)) return;
     const ships = this.game.allShips().filter((ship) => ship.owner === accused || (accused === this.selfId && ship.owner === null));
     const host = ships.find((ship) => ship.id.startsWith('p:')) ?? ships[0];
     this.game.announceCheater(host?.name ?? accused);

@@ -146,7 +146,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `net/room.ts` | A tournament room as its link describes it: code, name, public or private, bots or not, deathmatch, race or both |
 | `net/lobby.ts` | The lobby: public tournaments announce themselves, the list of tournaments listens |
 | `net/validate.ts` | Checks every message from other browsers before the game uses it |
-| `net/plausible.ts` | Rough plausibility of what other browsers report (jumps, novas without a core, torpedoes, kills) and the accusations: a peer a majority of the others (at least two browsers) catch is named a cheater and cast out |
+| `net/plausible.ts` | Rough plausibility of what other browsers report (jumps, novas without a core, torpedoes, kills) and the accusations: a peer a majority of the other Hosts who fly (at least two; watching Hosts have no vote) catch is named a cheater and cast out |
 | `net/transport.ts` | Transport: Trystero (WebRTC over Nostr relays, STUN and the TURN relay from `/turn`) and BroadcastChannel for local tests (`?local=1`) |
 
 `tools/crest/render.ts` (`npm run crest`) draws the seal of the Ministry of War into `public/crest.svg`: computed rings, stars and sun, Michroma lettering as paths, and the eagle of `tools/crest/eagle.svg` (CC0) cut into angular facets.
