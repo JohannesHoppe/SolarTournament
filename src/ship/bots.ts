@@ -124,6 +124,9 @@ export class Bot {
   flee: THREE.Vector3 | null = null;
   /** Set by the game: the bot turns back towards the center beyond this distance (units), inside a solar flare's shell. */
   home = HOME_RADIUS;
+  /** Set by the game: the bot's hook holds until then, and is ready again from then on (s). */
+  hookUntil = 0;
+  hookReadyAt = 0;
   /** A racer looks back at a ship on its tail until then, and may again from then on (s). */
   private lookBackUntil = 0;
   private nextLookBack = 0;

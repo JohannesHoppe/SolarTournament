@@ -115,6 +115,17 @@ const TORPEDO_DOWN_POINTS = 50;
 const TORPEDO_GONE_SLACK = 30000;
 const BOT_TORPEDO_RATE = 0.08;
 /**
+ * A bot hooks the ship it hunts when it lies dead ahead between BOT_HOOK_MIN (units, 150 m) and
+ * nine tenths of the hook's reach, with a chance of BOT_HOOK_RATE times its skill a second
+ * (Halley, the best, about once in five seconds of such a chance, Laika once in forty), reels it in for
+ * BOT_HOOK_HOLD seconds and lets go; its hook is ready again BOT_HOOK_PAUSE seconds after that.
+ * Far rarer than a Host can, and never in a race.
+ */
+const BOT_HOOK_MIN = 3000;
+const BOT_HOOK_RATE = 0.25;
+const BOT_HOOK_HOLD = 1.5;
+const BOT_HOOK_PAUSE = 10;
+/**
  * A nova core destroys every other ship within NOVA_RADIUS (units, 800 m) of its holder; its
  * shell runs out there in NOVA_EXPANSION seconds. A bot that holds one only sets it off with
  * at least NOVA_CROWD enemies inside, and bots flee a nova holder within NOVA_FLEE radii.
@@ -2406,6 +2417,7 @@ export class Game implements OnlineGame {
         const lock = this.torpedoTarget(ship);
         if (lock && (!bot.target || lock === bot.target)) this.fireTorpedo(ship);
       }
+      if (bot && !clamped) this.botHook(bot, dt, now);
       // the target drone keeps its drive turned to the pilot, wherever the pilot flies: the
       // drills train hitting the drive, not getting around the armor
       if (ship === this.drone && me.alive) ship.flight.orientation.setFromRotationMatrix(facing.lookAt(me.flight.position, ship.flight.position, me.flight.up(upward)));
@@ -3397,6 +3409,25 @@ export class Game implements OnlineGame {
     } else if (pressed && now >= this.hookReadyAt) {
       this.fireHook(me);
     }
+  }
+
+  /**
+   * A bot's hook: now and then it hooks the ship it hunts, dead ahead within reach, reels it in
+   * for a moment and lets go (see BOT_HOOK_RATE); never the flight school's bots, never racing.
+   */
+  private botHook(bot: Bot, dt: number, now: number) {
+    const ship = bot.ship;
+    const target = bot.target;
+    if (this.tethers.has(ship)) {
+      if (now >= bot.hookUntil || !target?.alive) this.unhook(ship);
+      return;
+    }
+    if (!target || bot === this.sparring?.bot || bot.waypoint || now < bot.hookReadyAt || Math.random() >= dt * BOT_HOOK_RATE * bot.skill * (1 - bot.ease)) return;
+    const distance = target.flight.position.distanceTo(ship.flight.position);
+    if (distance < BOT_HOOK_MIN || distance > HOOK_RANGE * 0.9 || aimHook(ship, this.field, this.ships)?.anchor.ship !== target) return;
+    this.fireHook(ship);
+    bot.hookUntil = now + flightTime(distance) + BOT_HOOK_HOLD;
+    bot.hookReadyAt = bot.hookUntil + BOT_HOOK_PAUSE;
   }
 
   /** The harpoon leaves the nose: it bites what lies ahead within reach, or flies out and is reeled back. */
