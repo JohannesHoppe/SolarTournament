@@ -4,6 +4,8 @@
  *   No server of our own.
  * - Local: BroadcastChannel between tabs of the same browser, for development and tests.
  */
+import { msg } from '../i18n/i18n';
+
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 type Handler = (data: any, from: string) => void;
 
@@ -12,6 +14,8 @@ export interface Transport {
   /** Sends to one peer, or to everyone when `to` is omitted. */
   send(type: string, data: Json, to?: string): void;
   on(type: string, handler: Handler): void;
+  /** Casts a peer out: nothing it sends is taken any more, and nothing is sent to it. */
+  block(peer: string): void;
   onPeerJoin(handler: (id: string) => void): void;
   onPeerLeave(handler: (id: string) => void): void;
   peers(): string[];
@@ -43,12 +47,12 @@ async function iceServers(): Promise<{ servers: RTCIceServer[]; off: string | nu
   try {
     answer = await fetch(TURN_PATH, { signal: AbortSignal.timeout(TURN_PATIENCE_MS), cache: 'no-store' });
   } catch {
-    return { servers: ICE_SERVERS, off: 'no answer' };
+    return { servers: ICE_SERVERS, off: msg('no answer') };
   }
   try {
     const { iceServers: relays, off } = (await answer.json()) as { iceServers?: RTCIceServer[]; off?: unknown };
     if (Array.isArray(relays) && relays.length) return { servers: [...ICE_SERVERS, ...relays], off: null };
-    return { servers: ICE_SERVERS, off: typeof off === 'string' ? off.slice(0, 40) : 'no relay' };
+    return { servers: ICE_SERVERS, off: typeof off === 'string' ? off.slice(0, 40) : msg('no relay') };
   } catch {
     // not the game's function (the dev server answers with a page)
     return { servers: ICE_SERVERS, off: null };
@@ -113,7 +117,22 @@ abstract class BaseTransport implements Transport {
     this.leaveHandlers.push(handler);
   }
 
+  /** Peers cast out of the tournament (see block). */
+  protected readonly blocked = new Set<string>();
+
+  /** Casts a peer out: nothing it sends is taken any more, and nothing is sent to it; to this browser it has left. */
+  block(peer: string) {
+    if (this.blocked.has(peer)) return;
+    this.blocked.add(peer);
+    this.forget(peer);
+    for (const handler of this.leaveHandlers) handler(peer);
+  }
+
+  /** A peer is gone for good: no longer one of peers(), and its leaving is not told again. */
+  protected abstract forget(peer: string): void;
+
   protected dispatch(type: string, data: unknown, from: string) {
+    if (this.blocked.has(from)) return;
     for (const handler of this.handlers.get(type) ?? []) handler(data, from);
   }
 }
@@ -148,13 +167,19 @@ export class TrysteroTransport extends BaseTransport {
       if (typeof t === 'string') this.dispatch(t, d ?? null, peerId);
     };
     this.room.onPeerJoin = (id) => {
+      // a peer cast out stays out, however often it connects
+      if (this.blocked.has(id)) return;
       this.connected.add(id);
       for (const handler of this.joinHandlers) handler(id);
     };
     this.room.onPeerLeave = (id) => {
-      this.connected.delete(id);
+      if (!this.connected.delete(id)) return;
       for (const handler of this.leaveHandlers) handler(id);
     };
+  }
+
+  protected forget(peer: string) {
+    this.connected.delete(peer);
   }
 
   /** Loads Trystero only when a player goes online, and asks for the TURN relay meanwhile. */
@@ -165,7 +190,10 @@ export class TrysteroTransport extends BaseTransport {
   }
 
   send(type: string, data: Json, to?: string) {
-    void this.action.send({ t: type, d: data }, to ? { target: to } : undefined).catch(() => {
+    // to everyone but a peer cast out (see block)
+    const target = to ? (this.blocked.has(to) ? [] : [to]) : this.blocked.size ? this.peers() : null;
+    if (target?.length === 0) return;
+    void this.action.send({ t: type, d: data }, target ? { target } : undefined).catch(() => {
       // the peer left while the message was on its way
     });
   }
@@ -234,6 +262,10 @@ export class LocalTransport extends BaseTransport {
     return [...this.lastSeen.keys()];
   }
 
+  protected forget(peer: string) {
+    this.lastSeen.delete(peer);
+  }
+
   leave() {
     clearInterval(this.heartbeat);
     this.post({ t: '_bye' });
@@ -241,16 +273,18 @@ export class LocalTransport extends BaseTransport {
   }
 
   private post(message: { t: string; d?: Json; to?: string }) {
+    if (message.to && this.blocked.has(message.to)) return;
     try {
-      this.channel.postMessage({ ...message, from: this.selfId });
+      // the channel reaches every tab: a peer cast out reads past what is not meant for it
+      this.channel.postMessage({ ...message, from: this.selfId, skip: [...this.blocked] });
     } catch {
       // channel already closed
     }
   }
 
-  private receive(message: { t: string; d: Json; to?: string; from: string }) {
-    const { t, d, to, from } = message;
-    if (to && to !== this.selfId) return;
+  private receive(message: { t: string; d: Json; to?: string; from: string; skip?: string[] }) {
+    const { t, d, to, from, skip } = message;
+    if ((to && to !== this.selfId) || skip?.includes(this.selfId) || this.blocked.has(from)) return;
     if (t === '_bye') return this.drop(from);
     if (!this.lastSeen.has(from)) {
       this.lastSeen.set(from, performance.now() / 1000);

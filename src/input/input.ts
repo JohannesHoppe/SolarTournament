@@ -1,4 +1,5 @@
 import { TouchControls } from './touch';
+import { msg } from '../i18n/i18n';
 
 /** Rotation, thrust and fire state, combined from keyboard, mouse, gamepad and touch. */
 export interface Controls {
@@ -28,49 +29,53 @@ export type Device = 'keyboard' | 'gamepad' | 'touch';
 /** What the Host can be asked to use, by the flight school's drills and by the HUD's labels. */
 export type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'fire' | 'autopilot' | 'camera' | 'hook' | 'overdrive' | 'torpedo';
 
-/** The keys, buttons and sticks of each device for each command, as keycaps show them (the first is the main one). */
+/**
+ * The keys, buttons and sticks of each device for each command, as keycaps show them (the first
+ * is the main one). Descriptive labels are marked for translation and translated where they are
+ * shown; key letters, key names and gamepad button codes are printed on the hardware and stay.
+ */
 export const CONTROLS: Record<Device, Record<Command, string[]>> = {
   keyboard: {
-    turn: ['← ↑ ↓ →', 'Mouse'],
+    turn: ['← ↑ ↓ →', msg('Mouse')],
     fine: ['Shift'],
     drive: ['W'],
     brake: ['S'],
     flip: ['X'],
     slide: ['A', 'D'],
-    fire: ['Space', 'Click'],
+    fire: ['Space', msg('Click')],
     autopilot: ['T'],
     camera: ['C'],
-    hook: ['V', 'Right click'],
+    hook: ['V', msg('Right click')],
     overdrive: ['E'],
     torpedo: ['G'],
   },
   gamepad: {
-    turn: ['Left stick'],
+    turn: [msg('Left stick')],
     fine: ['L3'],
     drive: ['RT'],
     brake: ['B'],
     flip: ['Y'],
-    slide: ['Right stick'],
+    slide: [msg('Right stick')],
     fire: ['LT'],
     autopilot: ['R3'],
     camera: ['View'],
-    hook: ['D-pad down'],
+    hook: [msg('D-pad down')],
     overdrive: ['RB'],
-    torpedo: ['D-pad up'],
+    torpedo: [msg('D-pad up')],
   },
   touch: {
-    turn: ['Left stick'],
+    turn: [msg('Left stick')],
     fine: [],
-    drive: ['DRIVE'],
-    brake: ['BRAKE'],
-    flip: ['FLIP'],
-    slide: ['Right stick'],
-    fire: ['FIRE'],
-    autopilot: ['AUTO'],
+    drive: [msg('DRIVE')],
+    brake: [msg('BRAKE')],
+    flip: [msg('FLIP')],
+    slide: [msg('Right stick')],
+    fire: [msg('FIRE')],
+    autopilot: [msg('AUTO')],
     camera: [],
-    hook: ['HOOK'],
-    overdrive: ['OVERDRIVE'],
-    torpedo: ['TORPEDO'],
+    hook: [msg('HOOK')],
+    overdrive: [msg('OVERDRIVE')],
+    torpedo: [msg('TORPEDO')],
   },
 };
 

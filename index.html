@@ -22,8 +22,8 @@
     </div>
     <div id="hud-room"></div>
     <div id="crosshair"></div>
-    <div id="prograde" class="velocity-marker" hidden><span class="hud-label">Course</span></div>
-    <div id="retrograde" class="velocity-marker" hidden><span class="hud-label">Brake</span></div>
+    <div id="prograde" class="velocity-marker" hidden><span class="hud-label" data-i18n>Course</span></div>
+    <div id="retrograde" class="velocity-marker" hidden><span class="hud-label" data-i18n>Brake</span></div>
     <div id="hitmarker"></div>
     <div id="hud-message"></div>
     <div id="hud-countdown" aria-live="assertive"></div>
@@ -35,183 +35,183 @@
     <ol id="killfeed"></ol>
     <canvas id="radar" aria-hidden="true"></canvas>
     <div class="hud-bottom">
-      <div class="gauge"><label>Hull</label><div class="bar"><div id="hud-hull"></div></div></div>
-      <div class="gauge"><label>Drive</label><div class="bar"><div id="hud-drive"></div></div></div>
-      <div class="gauge"><label>Thrusters</label><div class="bar"><div id="hud-thrusters"></div></div></div>
-      <div class="gauge"><label>Heat <span id="hud-shadow" title="In shadow: radiators cool faster" hidden>☾</span></label><div class="bar"><div id="hud-heat"></div></div></div>
-      <div class="gauge"><label>Velocity</label><span id="hud-speed" class="readout"></span></div>
-      <div class="gauge" id="hud-autopilot"><kbd class="hud-key" data-command="autopilot"></kbd><span id="hud-mode" class="readout">Autopilot</span></div>
-      <div class="gauge"><kbd class="hud-key" data-command="overdrive"></kbd><span id="hud-overdrive" class="readout">Overdrive</span></div>
-      <div class="gauge"><kbd class="hud-key" data-command="hook"></kbd><span id="hud-hook" class="readout">Hook</span></div>
+      <div class="gauge"><label data-i18n>Hull</label><div class="bar"><div id="hud-hull"></div></div></div>
+      <div class="gauge"><label data-i18n>Drive</label><div class="bar"><div id="hud-drive"></div></div></div>
+      <div class="gauge"><label data-i18n>Thrusters</label><div class="bar"><div id="hud-thrusters"></div></div></div>
+      <div class="gauge"><label><span data-i18n>Heat</span> <span id="hud-shadow" title="In shadow: radiators cool faster" data-i18n-attr="title" hidden>☾</span></label><div class="bar"><div id="hud-heat"></div></div></div>
+      <div class="gauge"><label data-i18n>Velocity</label><span id="hud-speed" class="readout"></span></div>
+      <div class="gauge" id="hud-autopilot"><kbd class="hud-key" data-command="autopilot"></kbd><span id="hud-mode" class="readout" data-i18n>Autopilot</span></div>
+      <div class="gauge"><kbd class="hud-key" data-command="overdrive"></kbd><span id="hud-overdrive" class="readout" data-i18n>Overdrive</span></div>
+      <div class="gauge"><kbd class="hud-key" data-command="hook"></kbd><span id="hud-hook" class="readout" data-i18n>Hook</span></div>
       <div class="gauge"><kbd class="hud-key" data-command="torpedo"></kbd><span id="hud-torpedo" class="readout"></span></div>
     </div>
     <div id="touch">
       <div id="touch-turn" class="touch-zone"></div>
       <div id="touch-push" class="touch-zone"></div>
-      <button type="button" id="touch-fire" class="touch-button">Fire</button>
-      <button type="button" id="touch-drive" class="touch-button">Drive</button>
-      <button type="button" id="touch-flip" class="touch-button">Flip</button>
-      <button type="button" id="touch-brake" class="touch-button">Brake</button>
-      <button type="button" id="touch-hook" class="touch-button">Hook</button>
-      <button type="button" id="touch-pause" class="touch-button" aria-label="Pause">II</button>
-      <button type="button" id="touch-autopilot" class="touch-button" aria-label="Autopilot on / off">Auto</button>
-      <button type="button" id="touch-overdrive" class="touch-button" aria-label="Overdrive">Over<br>drive</button>
-      <button type="button" id="touch-torpedo" class="touch-button" aria-label="Torpedo">Torp<br>edo</button>
+      <button type="button" id="touch-fire" class="touch-button" data-i18n>Fire</button>
+      <button type="button" id="touch-drive" class="touch-button" data-i18n>Drive</button>
+      <button type="button" id="touch-flip" class="touch-button" data-i18n>Flip</button>
+      <button type="button" id="touch-brake" class="touch-button" data-i18n>Brake</button>
+      <button type="button" id="touch-hook" class="touch-button" data-i18n>Hook</button>
+      <button type="button" id="touch-pause" class="touch-button" aria-label="Pause" data-i18n-attr="aria-label">II</button>
+      <button type="button" id="touch-autopilot" class="touch-button" aria-label="Autopilot on / off" data-i18n-attr="aria-label" data-i18n>Auto</button>
+      <button type="button" id="touch-overdrive" class="touch-button" aria-label="Overdrive" data-i18n-attr="aria-label" data-i18n>Over<br>drive</button>
+      <button type="button" id="touch-torpedo" class="touch-button" aria-label="Torpedo" data-i18n-attr="aria-label" data-i18n>Torp<br>edo</button>
     </div>
     <div id="g-vignette"></div>
     <div id="damage-flash"></div>
   </div>
 
-  <div id="crest" class="crest" aria-hidden="true" hidden></div>
+  <canvas id="crest" aria-hidden="true" hidden></canvas>
 
   <div id="menu" class="plate" hidden>
     <div id="showcase">
-      <canvas id="showcase-view" aria-hidden="true"></canvas>
       <div class="showcase-bar">
-        <button type="button" id="ship-prev" aria-label="Previous ship">◀</button>
+        <button type="button" id="ship-prev" aria-label="Previous ship" data-i18n-attr="aria-label">◀</button>
         <span id="ship-name" aria-live="polite"></span>
-        <button type="button" id="ship-next" aria-label="Next ship">▶</button>
+        <button type="button" id="ship-next" aria-label="Next ship" data-i18n-attr="aria-label">▶</button>
       </div>
       <p id="ship-note"></p>
     </div>
-    <img class="logo" src="crest.svg" alt="SolarTournament: seal of the Ministry of War of the United Solar States" width="104" height="104">
+    <img class="logo" src="crest.svg" alt="SolarTournament: seal of the Ministry of War of the United Solar States" data-i18n-attr="alt" width="104" height="104">
     <h1>Solar<span class="neon">Tour<span class="neon-loose">n</span>ament</span></h1>
-    <p class="tagline">Five minutes. Die for the President. Again and again.</p>
-    <label class="field">Callsign <input id="callsign" maxlength="16" autocomplete="off" spellcheck="false"></label>
-    <button type="button" id="school" class="mode"><span class="mode-name"><span class="mode-label">Flight school</span></span><span class="mode-note">Learn to fly. Training clones are free.</span></button>
-    <button type="button" id="start" class="mode"><span class="mode-name"><span class="mode-label">Solo round</span></span><span class="mode-note">Race the gates or fight it out: your arena, your rivals.</span></button>
-    <button type="button" id="online" class="mode"><span class="mode-name"><span class="mode-label">Online tournament</span></span><span class="mode-note">Real Hosts: join a public one or start your own.</span></button>
-    <button type="button" id="hangar" class="mode"><span class="mode-name"><span class="mode-label">Hangar</span></span><span class="mode-note" id="hangar-note"></span></button>
+    <p class="tagline" data-i18n>Five minutes. Die for the President. Again and again.</p>
+    <label class="field"><span data-i18n>Callsign</span> <input id="callsign" maxlength="16" autocomplete="off" spellcheck="false"></label>
+    <button type="button" id="school" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Flight school</span></span><span class="mode-note" data-i18n>Learn to fly. Training clones are free.</span></button>
+    <button type="button" id="start" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Solo round</span></span><span class="mode-note" data-i18n>Race the gates or fight it out: your arena, your rivals.</span></button>
+    <button type="button" id="online" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Online tournament</span></span><span class="mode-note" data-i18n>Real Hosts: join a public one or start your own.</span></button>
+    <button type="button" id="hangar" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Hangar</span></span><span class="mode-note" id="hangar-note"></span></button>
     <p id="menu-notice" role="status" hidden></p>
-    <button type="button" id="fullscreen" hidden>Fullscreen</button>
+    <button type="button" id="fullscreen" hidden data-i18n>Fullscreen</button>
     <p class="best" id="best-score"></p>
-    <p class="source"><a href="https://github.com/JohannesHoppe/SolarTournament" target="_blank" rel="noopener noreferrer">Source code</a> · AGPL-3.0 · <a href="impressum.html" target="_blank">Impressum</a> · <a href="datenschutz.html" target="_blank">Datenschutz</a></p>
+    <div id="languages" class="ship-select" role="group" aria-label="Language" data-i18n-attr="aria-label"></div>
+    <p class="source"><a href="https://github.com/JohannesHoppe/SolarTournament" target="_blank" rel="noopener noreferrer" data-i18n>Source code</a> · AGPL-3.0 · <a href="impressum.html" target="_blank">Impressum</a> · <a href="datenschutz.html" target="_blank">Datenschutz</a></p>
   </div>
 
   <div id="transmission" hidden><span id="transmission-speaker"></span><span id="transmission-text"></span></div>
 
   <div id="now-playing">
-    <button type="button" id="radio" title="Radio on / off (M)" aria-label="Radio on / off">♪</button>
-    <input type="range" id="radio-volume" class="volume" min="0" max="100" step="5" title="Radio volume" aria-label="Radio volume">
-    <a id="now-playing-link" href="radio.html" target="_blank" rel="noopener" title="Listen again and download">
-      <span class="np-label">Now playing</span>
+    <button type="button" id="radio" title="Radio on / off (M)" aria-label="Radio on / off" data-i18n-attr="title aria-label">♪</button>
+    <input type="range" id="radio-volume" class="volume" min="0" max="100" step="5" title="Radio volume" aria-label="Radio volume" data-i18n-attr="title aria-label">
+    <a id="now-playing-link" href="radio.html" target="_blank" rel="noopener" title="Listen again and download" data-i18n-attr="title">
+      <span class="np-label" data-i18n>Now playing</span>
       <span id="radio-title">Radio 2584</span>
       <span id="radio-style"></span>
     </a>
   </div>
 
   <div id="sponsor" hidden>
-    <p class="sponsor-label">Live link lost · <span id="sponsor-cause"></span></p>
+    <p class="sponsor-label"><span data-i18n>Live link lost</span> · <span id="sponsor-cause"></span></p>
     <p id="sponsor-report"></p>
-    <p class="sponsor-pitch">Want another clone? You pay with advertising.<br>Make the sponsor happy.</p>
+    <p class="sponsor-pitch" data-i18n>Want another clone? You pay with advertising.<br>Make the sponsor happy.</p>
     <div id="ad-slot"></div>
-    <p id="conscience" hidden>You even blocked an ad for products that do not exist. Shame on you. How is an indie developer supposed to make a living?</p>
+    <p id="conscience" hidden data-i18n>You even blocked an ad for products that do not exist. Shame on you. How is an indie developer supposed to make a living?</p>
     <p id="sponsor-status"></p>
-    <button type="button" id="sponsor-boot" class="primary" hidden>Boot next clone</button>
+    <button type="button" id="sponsor-boot" class="primary" hidden data-i18n>Boot next clone</button>
   </div>
 
   <div id="quicksheet" class="plate" hidden aria-live="polite">
-    <h2>Controls</h2>
+    <h2 data-i18n>Controls</h2>
     <dl class="controls">
-      <dt>Mouse / Arrows</dt><dd>Turn: the ship turns towards the pointer</dd>
-      <dt>W</dt><dd>Main drive</dd>
-      <dt>S</dt><dd>Brake: flip and burn to a stop</dd>
-      <dt>A / D</dt><dd>Thrusters: slide sideways</dd>
-      <dt>Shift</dt><dd>Fine aim</dd>
-      <dt>Space / Click</dt><dd>Fire laser</dd>
-      <dt>X (hold)</dt><dd>Flip: nose against the flight; with W it brakes</dd>
-      <dt>T</dt><dd>Autopilot (flies where it points) / free drift</dd>
-      <dt>E</dt><dd>Overdrive: one shove forward, last resort, once a minute</dd>
-      <dt>R / F</dt><dd>Extras: thrusters up and down</dd>
-      <dt>A D R F twice</dt><dd>Dodge: a hard kick that way</dd>
-      <dt>G</dt><dd>Torpedo: homes on the ship ahead, two per clone</dd>
-      <dt>V / Right click (hold)</dt><dd>Hook: bite a rock or a ship, reel in, let go to fly off</dd>
-      <dt>Gamepad</dt><dd>Sticks turn and push, RT drive, B brake, LT/A fire, Y flip, R3 autopilot, RB overdrive, LB dodge, D-pad up torpedo, D-pad down hook</dd>
-      <dt>C</dt><dd>Cockpit / chase camera</dd>
-      <dt>M</dt><dd>Radio on / off</dd>
-      <dt>Esc / P</dt><dd>Pause; Q there quits the round</dd>
-      <dt>Tab (hold)</dt><dd>Standings: kills, deaths, score, in a race the lap</dd>
-      <dt>F1</dt><dd>This sheet</dd>
+      <dt data-i18n>Mouse / Arrows</dt><dd data-i18n>Turn: the ship turns towards the pointer</dd>
+      <dt>W</dt><dd data-i18n>Main drive</dd>
+      <dt>S</dt><dd data-i18n>Brake: flip and burn to a stop</dd>
+      <dt>A / D</dt><dd data-i18n>Thrusters: slide sideways</dd>
+      <dt>Shift</dt><dd data-i18n>Fine aim</dd>
+      <dt data-i18n>Space / Click</dt><dd data-i18n>Fire laser</dd>
+      <dt data-i18n>X (hold)</dt><dd data-i18n>Flip: nose against the flight; with W it brakes</dd>
+      <dt>T</dt><dd data-i18n>Autopilot (flies where it points) / free drift</dd>
+      <dt>E</dt><dd data-i18n>Overdrive: one shove forward, last resort, once a minute</dd>
+      <dt>R / F</dt><dd data-i18n>Extras: thrusters up and down</dd>
+      <dt data-i18n>A D R F twice</dt><dd data-i18n>Dodge: a hard kick that way</dd>
+      <dt>G</dt><dd data-i18n>Torpedo: homes on the ship ahead, two per clone</dd>
+      <dt data-i18n>V / Right click (hold)</dt><dd data-i18n>Hook: bite a rock or a ship, reel in, let go to fly off</dd>
+      <dt data-i18n>Gamepad</dt><dd data-i18n>Sticks turn and push, RT drive, B brake, LT/A fire, Y flip, R3 autopilot, RB overdrive, LB dodge, D-pad up torpedo, D-pad down hook</dd>
+      <dt>C</dt><dd data-i18n>Cockpit / chase camera</dd>
+      <dt>M</dt><dd data-i18n>Radio on / off</dd>
+      <dt data-i18n>Esc / P</dt><dd data-i18n>Pause; Q there quits the round</dd>
+      <dt data-i18n>Tab (hold)</dt><dd data-i18n>Standings: kills, deaths, score, in a race the lap</dd>
+      <dt>F1</dt><dd data-i18n>This sheet</dd>
     </dl>
   </div>
 
   <div id="school-plate" class="plate" hidden>
-    <h2>Flight school</h2>
-    <p class="plate-note">Three courses, each on its own. Training clones are free.</p>
+    <h2 data-i18n>Flight school</h2>
+    <p class="plate-note" data-i18n>Four courses, each on its own. Training clones are free.</p>
     <div id="school-courses"></div>
-    <button type="button" id="school-back">Back <kbd>Esc</kbd></button>
+    <button type="button" id="school-back" data-i18n>Back <kbd>Esc</kbd></button>
   </div>
 
   <div id="hangar-plate" class="plate" hidden>
-    <h2>Hangar</h2>
+    <h2 data-i18n>Hangar</h2>
     <p id="hangar-coins" class="plate-note"></p>
     <div id="hangar-upgrades"></div>
-    <button type="button" id="hangar-back">Back <kbd>Esc</kbd></button>
+    <button type="button" id="hangar-back" data-i18n>Back <kbd>Esc</kbd></button>
   </div>
 
   <div id="solo" class="plate" hidden>
-    <h2>Solo round</h2>
-    <div class="choice-grid" role="group" aria-label="Round" data-choice="solo-mode"></div>
+    <h2 data-i18n>Solo round</h2>
+    <div class="choice-grid" role="group" aria-label="Round" data-i18n-attr="aria-label" data-choice="solo-mode"></div>
     <p id="solo-mode-note" class="plate-note"></p>
     <div id="solo-class">
-      <p class="plate-label">Class <span id="solo-class-note"></span></p>
-      <div class="ship-select" role="group" aria-label="Class" data-choice="solo-pace">
-        <button type="button" data-value="cruise">Cruise</button>
-        <button type="button" data-value="pro" class="selected">Pro</button>
-        <button type="button" data-value="max">Max</button>
+      <p class="plate-label"><span data-i18n>Class</span> <span id="solo-class-note"></span></p>
+      <div class="ship-select" role="group" aria-label="Class" data-i18n-attr="aria-label" data-choice="solo-pace">
+        <button type="button" data-value="cruise" data-i18n>Cruise</button>
+        <button type="button" data-value="pro" class="selected" data-i18n>Pro</button>
+        <button type="button" data-value="max" data-i18n>Max</button>
       </div>
     </div>
-    <p class="plate-label">Arena</p>
-    <div id="solo-arenas" class="choice-grid" role="group" aria-label="Arena"></div>
-    <p class="plate-label">Rivals <span id="solo-bot-count"></span></p>
-    <div id="solo-bots" class="choice-grid" role="group" aria-label="Rivals"></div>
-    <button type="button" id="solo-launch" class="primary">Launch <kbd>Enter</kbd></button>
-    <button type="button" id="solo-back">Back <kbd>Esc</kbd></button>
+    <p class="plate-label" data-i18n>Arena</p>
+    <div id="solo-arenas" class="choice-grid" role="group" aria-label="Arena" data-i18n-attr="aria-label"></div>
+    <p class="plate-label"><span data-i18n>Rivals</span> <span id="solo-bot-count"></span></p>
+    <div id="solo-bots" class="choice-grid" role="group" aria-label="Rivals" data-i18n-attr="aria-label"></div>
+    <button type="button" id="solo-launch" class="primary" data-i18n>Launch <kbd>Enter</kbd></button>
+    <button type="button" id="solo-back" data-i18n>Back <kbd>Esc</kbd></button>
   </div>
 
   <div id="standings" class="plate" hidden>
-    <h2>Standings</h2>
+    <h2 data-i18n>Standings</h2>
     <table id="standings-table" class="standings"></table>
   </div>
 
   <div id="tournaments" class="plate" hidden>
-    <h2>Online tournament</h2>
-    <p class="plate-label">Public tournaments right now</p>
+    <h2 data-i18n>Online tournament</h2>
+    <p class="plate-label" data-i18n>Public tournaments right now</p>
     <ul id="tournament-list" aria-live="polite"></ul>
-    <p class="plate-label">Start a tournament</p>
-    <label class="field">Name <input id="room-name" maxlength="32" autocomplete="off" spellcheck="false" placeholder="Kessler's Revenge"></label>
-    <div class="ship-select" role="group" aria-label="Who can find it">
-      <button type="button" id="room-public" class="selected">Public</button>
-      <button type="button" id="room-private">Private</button>
+    <p class="plate-label" data-i18n>Start a tournament</p>
+    <label class="field"><span data-i18n>Name</span> <input id="room-name" maxlength="32" autocomplete="off" spellcheck="false" placeholder="Kessler's Revenge" data-i18n-attr="placeholder"></label>
+    <div class="ship-select" role="group" aria-label="Who can find it" data-i18n-attr="aria-label">
+      <button type="button" id="room-public" class="selected" data-i18n>Public</button>
+      <button type="button" id="room-private" data-i18n>Private</button>
     </div>
-    <div class="ship-select" role="group" aria-label="Bots">
-      <button type="button" id="room-bots" class="selected">With bots</button>
-      <button type="button" id="room-nobots">Without bots</button>
+    <div class="ship-select" role="group" aria-label="Bots" data-i18n-attr="aria-label">
+      <button type="button" id="room-bots" class="selected" data-i18n>With bots</button>
+      <button type="button" id="room-nobots" data-i18n>Without bots</button>
     </div>
-    <div class="choice-grid" role="group" aria-label="Rounds" data-choice="room-mode"></div>
+    <div class="choice-grid" role="group" aria-label="Rounds" data-i18n-attr="aria-label" data-choice="room-mode"></div>
     <p id="room-note" class="plate-note"></p>
-    <button type="button" id="room-create" class="primary">Start tournament <kbd>Enter</kbd></button>
-    <button type="button" id="tournaments-back">Back <kbd>Esc</kbd></button>
+    <button type="button" id="room-create" class="primary" data-i18n>Start tournament <kbd>Enter</kbd></button>
+    <button type="button" id="tournaments-back" data-i18n>Back <kbd>Esc</kbd></button>
   </div>
 
   <div id="pause" class="plate" hidden>
-    <h2>Paused</h2>
-    <button type="button" id="resume" class="primary">Resume <kbd>Enter</kbd></button>
-    <button type="button" id="invite" hidden>Invite friends</button>
-    <button type="button" id="fullscreen-pause" hidden>Fullscreen</button>
-    <button type="button" id="quit">Quit round <kbd>Q</kbd></button>
+    <h2 data-i18n>Paused</h2>
+    <button type="button" id="resume" class="primary" data-i18n>Resume <kbd>Enter</kbd></button>
+    <button type="button" id="invite" hidden data-i18n>Invite friends</button>
+    <button type="button" id="fullscreen-pause" hidden data-i18n>Fullscreen</button>
+    <button type="button" id="quit" data-i18n>Quit round <kbd>Q</kbd></button>
   </div>
 
   <div id="results" class="plate" hidden>
-    <h2>Round over</h2>
+    <h2 data-i18n>Round over</h2>
     <table id="scoreboard" class="standings"></table>
     <p id="results-coins" class="plate-note"></p>
     <p id="results-next"></p>
-    <button type="button" id="again" class="primary">Back to hangar <kbd>Enter</kbd></button>
+    <button type="button" id="again" class="primary" data-i18n>Back to hangar <kbd>Enter</kbd></button>
   </div>
 
-  <div id="loading"><img class="logo" src="crest.svg" alt="" width="180" height="180"><span>Establishing link…</span></div>
-  <div id="no-webgl" hidden>Your browser does not support WebGL 2.</div>
+  <div id="loading"><img class="logo" src="crest.svg" alt="" width="180" height="180"><span data-i18n>Establishing link…</span></div>
+  <div id="no-webgl" hidden data-i18n>Your browser does not support WebGL 2.</div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

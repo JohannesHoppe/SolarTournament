@@ -8,27 +8,27 @@
 </head>
 <body class="page">
   <main class="station">
-    <img class="logo" src="crest.svg" alt="SolarTournament: seal of the Ministry of War" width="120" height="120">
+    <img class="logo" src="crest.svg" alt="SolarTournament: seal of the Ministry of War" data-i18n-attr="alt" width="120" height="120">
     <h1 class="station-logo">Radio <span class="neon">2584</span></h1>
-    <p class="station-tagline">The soundtrack of the Presidential Games. Every round grows its own track, and its title is its seed: the same title, the same track, note for note.</p>
+    <p class="station-tagline" data-i18n>The soundtrack of the Presidential Games. Every round grows its own track, and its title is its seed: the same title, the same track, note for note.</p>
 
     <form id="tuner" class="tuner" autocomplete="off">
-      <label for="title">Track title</label>
+      <label for="title" data-i18n>Track title</label>
       <div class="tuner-row">
         <input id="title" name="title" maxlength="60" spellcheck="false" required>
-        <button type="button" id="random">Random</button>
+        <button type="button" id="random" data-i18n>Random</button>
       </div>
     </form>
 
     <section id="track" class="track" hidden>
       <h2 id="track-title"></h2>
       <p id="track-facts"></p>
-      <div class="track-form"><div id="track-form" class="track-sections" aria-hidden="true"></div><input type="range" id="track-seek" class="track-seek" min="0" step="1" value="0" aria-label="Position in the track"></div>
+      <div class="track-form"><div id="track-form" class="track-sections" aria-hidden="true"></div><input type="range" id="track-seek" class="track-seek" min="0" step="1" value="0" aria-label="Position in the track" data-i18n-attr="aria-label"></div>
       <div class="track-time"><span id="track-position">0:00</span> / <span id="track-length"></span></div>
       <div class="track-actions">
-        <button type="button" id="play" class="primary">Play</button>
-        <button type="button" id="download">Download WAV</button>
-        <label class="track-volume">Volume <input type="range" id="radio-volume" class="volume" min="0" max="100" step="5"></label>
+        <button type="button" id="play" class="primary" data-i18n>Play</button>
+        <button type="button" id="download" data-i18n>Download WAV</button>
+        <label class="track-volume"><span data-i18n>Volume</span> <input type="range" id="radio-volume" class="volume" min="0" max="100" step="5"></label>
       </div>
       <p id="download-status"></p>
     </section>
@@ -36,7 +36,7 @@
     <div id="transmission" hidden><span id="transmission-speaker"></span><span id="transmission-text"></span></div>
 
     <footer class="station-footer">
-      <a href="./">Play SolarTournament</a> · <a href="https://github.com/JohannesHoppe/SolarTournament" target="_blank" rel="noopener noreferrer">Source code</a> · AGPL-3.0 · <a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a>
+      <a href="./" data-i18n>Play SolarTournament</a> · <a href="https://github.com/JohannesHoppe/SolarTournament" target="_blank" rel="noopener noreferrer" data-i18n>Source code</a> · AGPL-3.0 · <a href="impressum.html">Impressum</a> · <a href="datenschutz.html">Datenschutz</a>
     </footer>
   </main>
   <script type="module" src="/src/radio-page.ts"></script>

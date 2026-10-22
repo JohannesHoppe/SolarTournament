@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { FIELD_RADIUS, SPIN_RATE, type FieldLayout, type Placement } from './asteroids';
 import { hash } from '../music/songs';
 import { textSeed } from '../random';
+import { msg } from '../i18n/i18n';
 
 /** One standard gravity (units/s², 1 unit = 5 cm). */
 const G = 196.2;
@@ -11,7 +12,7 @@ export type ArenaId = 'belt' | 'rings' | 'kessler' | 'giant' | 'corona' | 'hole'
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
   id: ArenaId;
-  /** Shown in neon when a round starts there. */
+  /** Shown in neon when a round starts there (marked for translation, translated where shown). */
   name: string;
   tagline: string;
   layout: FieldLayout;
@@ -72,8 +73,8 @@ function derelict(): Placement[] {
 export const ARENAS: readonly ArenaProfile[] = [
   {
     id: 'belt',
-    name: 'The Belt',
-    tagline: 'Forty rocks, ten ships long each. Cover is everywhere.',
+    name: msg('The Belt'),
+    tagline: msg('Forty rocks, ten ships long each. Cover is everywhere.'),
     layout: { key: 'belt', seed: 11, kind: 'rock', count: 40, minScale: 2.5, maxScale: 7, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800 },
     cooling: 1,
     storms: false,
@@ -82,8 +83,8 @@ export const ARENAS: readonly ArenaProfile[] = [
   },
   {
     id: 'rings',
-    name: 'Rings of Kronos',
-    tagline: 'Inside a ring of ice, as thin as a sheet. Up and down are open.',
+    name: msg('Rings of Kronos'),
+    tagline: msg('Inside a ring of ice, as thin as a sheet. Up and down are open.'),
     layout: { key: 'rings', seed: 23, kind: 'ice', count: 90, minScale: 0.8, maxScale: 3.2, radius: FIELD_RADIUS * 1.3, inner: 0, flat: 5000, spin: 0.08, toughness: 500 },
     cooling: 1.2,
     storms: false,
@@ -91,8 +92,8 @@ export const ARENAS: readonly ArenaProfile[] = [
   },
   {
     id: 'kessler',
-    name: 'Kessler Field',
-    tagline: 'A station blew up. Its pieces still cross each other at 25 m/s.',
+    name: msg('Kessler Field'),
+    tagline: msg('A station blew up. Its pieces still cross each other at 25 m/s.'),
     layout: {
       key: 'kessler',
       seed: 31,
@@ -117,8 +118,8 @@ export const ARENAS: readonly ArenaProfile[] = [
   },
   {
     id: 'giant',
-    name: 'Gas Giant',
-    tagline: 'A world of storms below, pulling with three g at its clouds. Swing by it, or fall in.',
+    name: msg('Gas Giant'),
+    tagline: msg('A world of storms below, pulling with three g at its clouds. Swing by it, or fall in.'),
     layout: {
       key: 'giant',
       seed: 47,
@@ -138,8 +139,8 @@ export const ARENAS: readonly ArenaProfile[] = [
   },
   {
     id: 'corona',
-    name: 'Corona',
-    tagline: 'Close to the sun. Lasers barely cool in its glare, and its storms blind the sensors.',
+    name: msg('Corona'),
+    tagline: msg('Close to the sun. Lasers barely cool in its glare, and its storms blind the sensors.'),
     layout: { key: 'corona', seed: 59, kind: 'rock', count: 30, minScale: 2.5, maxScale: 6, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800 },
     cooling: 0.35,
     storms: true,
@@ -147,8 +148,8 @@ export const ARENAS: readonly ArenaProfile[] = [
   },
   {
     id: 'hole',
-    name: 'Event Horizon',
-    tagline: 'A black hole in the middle pulls everything in. Past 280 m no drive gets out.',
+    name: msg('Event Horizon'),
+    tagline: msg('A black hole in the middle pulls everything in. Past 280 m no drive gets out.'),
     layout: {
       key: 'hole',
       seed: 61,
@@ -171,8 +172,8 @@ export const ARENAS: readonly ArenaProfile[] = [
   },
   {
     id: 'derelict',
-    name: 'The Derelict',
-    tagline: 'A world ship, broken in two. Nothing else out here: only its hull to hide behind.',
+    name: msg('The Derelict'),
+    tagline: msg('A world ship, broken in two. Nothing else out here: only its hull to hide behind.'),
     layout: { key: 'derelict', seed: 71, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: derelict() },
     cooling: 1,
     storms: false,

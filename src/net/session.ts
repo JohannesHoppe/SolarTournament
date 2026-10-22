@@ -452,6 +452,11 @@ export class Session {
     this.transport.send('ch', { s: ship, r: cheat });
   }
 
+  /** The tournament has named a peer a cheater: it is cast out (see Transport.block). */
+  castOut(peer: string) {
+    this.transport.block(peer);
+  }
+
   sendProbe(probe: string, ship: string, bucket: number) {
     this.transport.send('ic', { c: probe, s: ship, b: bucket });
   }

@@ -1,8 +1,11 @@
 import { loadAssets } from './assets';
 import { Sound } from './sound/audio';
 import { Game } from './game/game';
+import { initLocale, t, translatePage } from './i18n/i18n';
 
 async function start() {
+  initLocale();
+  translatePage();
   const loading = document.getElementById('loading')!;
   if (!document.createElement('canvas').getContext('webgl2')) {
     loading.hidden = true;
@@ -23,6 +26,6 @@ async function start() {
 start().catch((error) => {
   const loading = document.getElementById('loading')!;
   loading.hidden = false;
-  loading.textContent = 'Failed to load: ' + error;
+  loading.textContent = t('Failed to load: {error}', { error: String(error) });
   console.error(error);
 });

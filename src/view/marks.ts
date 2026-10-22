@@ -1,3 +1,5 @@
+import { t } from '../i18n/i18n';
+
 /**
  * Marks before names: a small robot for a bot, a person for a real Host. The game draws them
  * as shapes (CSS masks, see `.mark` in style.css), never as characters of a name, so no
@@ -12,6 +14,6 @@ export function markedName(kind: Kind, name: string): Node[] {
   const mark = document.createElement('i');
   mark.className = `mark ${kind}`;
   mark.setAttribute('role', 'img');
-  mark.setAttribute('aria-label', kind === 'bot' ? 'Bot' : 'Host');
+  mark.setAttribute('aria-label', kind === 'bot' ? t('Bot') : t('Host'));
   return [mark, text];
 }

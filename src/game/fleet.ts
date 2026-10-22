@@ -4,6 +4,7 @@ import { FIELD_RADIUS, raySphere, type Obstacle } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
 import type { Homing } from './torpedoes';
+import { msg, t } from '../i18n/i18n';
 
 /**
  * The President's Fleet: every Host on one side against a battleship of the President, one in
@@ -33,7 +34,7 @@ import type { Homing } from './torpedoes';
  * Each browser fires the batteries at the ships it runs, and burns them in the plume.
  */
 export type ZoneKind = 'battery' | 'drive' | 'reactor';
-export const ZONE_NAMES: Record<ZoneKind, string> = { battery: 'Battery', drive: 'Drive', reactor: 'Reactor' };
+export const ZONE_NAMES: Record<ZoneKind, string> = { battery: msg('Battery'), drive: msg('Drive'), reactor: msg('Reactor') };
 /** Hits a part takes. */
 export const ZONE_HITS: Record<ZoneKind, number> = { battery: 30, drive: 45, reactor: 90 };
 /** A torpedo counts this many hits on every part it goes off within TORPEDO_REACH of (units, 20 m beyond the part): a third of a battery. */
@@ -122,7 +123,7 @@ class Beacon implements Homing {
   ) {
     const part = fleet.zones[zone];
     this.id = `battleship.${zone}`;
-    this.name = ZONE_NAMES[part.kind];
+    this.name = t(ZONE_NAMES[part.kind]);
     this.radius = part.radius;
     this.flight = { position: new THREE.Vector3(), velocity: fleet.velocity };
   }

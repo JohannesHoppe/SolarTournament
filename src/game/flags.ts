@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
+import { msg } from '../i18n/i18n';
 
 /**
  * Capture the Flag: two sides, Orange and Blue, each with a base on opposite sides of the
@@ -16,7 +17,7 @@ import { ARENA_LIMIT } from '../world/arena';
  * captures a core. Every other browser follows the lead's state (see Flags.follow), which
  * travels with the round clock.
  */
-export const TEAM_NAMES = ['Orange', 'Blue'] as const;
+export const TEAM_NAMES = [msg('Orange'), msg('Blue')] as const;
 /** The sides' colors in the HUD: the tournament's orange, and the blue of information made readable. */
 export const TEAM_TINTS = ['#ff9d00', '#4d91ff'] as const;
 export const CAPTURES_TO_WIN = 3;

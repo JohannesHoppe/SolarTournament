@@ -41,6 +41,7 @@ import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
 import { Showcase } from '../view/showcase';
+import { storageGet, storageSet } from '../storage';
 import { buy, LEVELS, nextPrice, parseHangar, payOut, perksOf, sovereignEarned, UPGRADES } from './hangar';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
@@ -52,6 +53,7 @@ import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, 
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut } from './survival';
 import { markedName } from '../view/marks';
+import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
 const RESULTS_SECONDS = 12;
@@ -92,7 +94,14 @@ const DIRECTOR_HOLD = 6;
 const DIRECTOR_STICK = 1.3;
 const DIRECTOR_PAUSE = 10;
 /** The modes as the list of tournaments names them. */
-const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', survival: 'Last Clone Standing', flag: 'Capture the Flag', fleet: "The President's Fleet", mixed: 'Every mode in turn' };
+const MODE_NAMES: Record<RoomMode, string> = {
+  deathmatch: msg('Deathmatch'),
+  race: msg('Race'),
+  survival: msg('Last Clone Standing'),
+  flag: msg('Capture the Flag'),
+  fleet: msg("The President's Fleet"),
+  mixed: msg('Every mode in turn'),
+};
 /** The beams of the President's batteries: red, the regime's neon. */
 const BATTERY_COLOR = new THREE.Color(1, 0.1, 0.15);
 /**
@@ -170,7 +179,7 @@ const FLING_STEER = 0.1;
 /** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km). */
 const TORPEDO_WARNING = 40000;
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
-const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: 'Burned up in the clouds', hole: 'Crossed the event horizon' };
+const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: msg('Burned up in the clouds'), hole: msg('Crossed the event horizon') };
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
 const ROUND_SNAP = 0.25;
 /** A rock hit from another browser counts only within this much field time (s) of the own clock; the clocks agree to a fraction of a second. */
@@ -316,18 +325,20 @@ const BOOST_STRAIN = 0.3;
 /** Hosts who ask for less motion get no camera shake. */
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 /** What a landed hit says where it struck, by the zone it broke. */
-const HIT_WORDS: Record<Zone, string> = { reactor: 'REACTOR', drive: 'DRIVE', thrusters: 'ARMOR', armor: 'ARMOR' };
+const HIT_WORDS: Record<Zone, string> = { reactor: msg('REACTOR'), drive: msg('DRIVE'), thrusters: msg('ARMOR'), armor: msg('ARMOR') };
 const ZONE_MESSAGES: Record<Zone, string> = {
-  reactor: 'Reactor breach',
-  drive: 'Main drive damaged',
-  thrusters: 'Thrusters damaged',
-  armor: 'Armor hit',
+  reactor: msg('Reactor breach'),
+  drive: msg('Main drive damaged'),
+  thrusters: msg('Thrusters damaged'),
+  armor: msg('Armor hit'),
 };
 const BEST_SCORE_KEY = 'solartournament.best';
+/** A Host the others cast out as a cheater sees the call this long before it is back in the menu (ms). */
+const CAST_OUT_MS = 3000;
 /** What the Host owns: Solar Coins, the upgrades of its ships, the ship it flies (see game/hangar). */
 const HANGAR_KEY = 'solartournament.hangar';
 /** The ships as the menu names them. */
-const SHIP_NAMES: Record<ShipType, string> = { human: 'Human Interceptor', alien: 'Alien Interceptor', sovereign: 'The Sovereign' };
+const SHIP_NAMES: Record<ShipType, string> = { human: msg('Human Interceptor'), alien: msg('Alien Interceptor'), sovereign: msg('The Sovereign') };
 const CALLSIGN_KEY = 'solartournament.callsign';
 /** The flight school's courses a Host has completed (a list); once the basic training is among them, the menu leads with the solo round. */
 const SCHOOL_DONE_KEY = 'solartournament.school';
@@ -335,10 +346,10 @@ const SCHOOL_DONE_KEY = 'solartournament.school';
 const SCHOOL_STEP_KEY = 'solartournament.school-step';
 /** What each course of the flight school teaches, on its button. */
 const SCHOOL_NOTES: Record<SchoolCourse, string> = {
-  basic: 'Turn, aim, burn and brake. Start here.',
-  racer: 'Rings, coils and the perfect start.',
-  gladiator: 'The laser, free drift and the dogfight.',
-  arsenal: 'Torpedoes, overdrive, probes, the hook on a ship and the nova core.',
+  basic: msg('Turn, aim, burn and brake. Start here.'),
+  racer: msg('Rings, coils and the perfect start.'),
+  gladiator: msg('The laser, free drift and the dogfight.'),
+  arsenal: msg('Torpedoes, overdrive, probes, the hook on a ship and the nova core.'),
 };
 
 /** The courses a Host has completed, as this browser keeps them; whatever does not fit is dropped. */
@@ -373,19 +384,19 @@ const LAPS_KEY = 'solartournament.laps';
  */
 type Pace = 'cruise' | 'pro' | 'max';
 const PACES: Record<Pace, { speed: number; note: string }> = {
-  cruise: { speed: 2400, note: '· bots race at 120 m/s' },
-  pro: { speed: RACE_SPEED, note: '· bots race at 180 m/s, as online' },
-  max: { speed: 4800, note: '· bots race at 240 m/s, at the limit' },
+  cruise: { speed: 2400, note: msg('· bots race at 120 m/s') },
+  pro: { speed: RACE_SPEED, note: msg('· bots race at 180 m/s, as online') },
+  max: { speed: 4800, note: msg('· bots race at 240 m/s, at the limit') },
 };
 /** What a solo round plays: a race unless the Host asks for a deathmatch, its class, its arena (null: by chance), and the bots it flies against: a full grid unless the Host picks fewer. */
 type SoloChoice = { mode: RoundMode; pace: Pace; arena: ArenaId | null; rivals: string[] };
 const SOLO_DEFAULT: SoloChoice = { mode: 'race', pace: 'pro', arena: null, rivals: ['Laika', 'Sputnik', 'Juno', 'Ceres', 'Kessler', 'Orion', 'Vega'] };
 const SOLO_NOTES: Record<RoundMode, string> = {
-  race: 'Three laps through eight gates. Killing your opponents is explicitly allowed.',
-  deathmatch: 'For the hard pilots: five minutes, every clone for itself.',
-  survival: `${CLONES} clones each. A solar flare closes in on the arena. The last clone standing wins.`,
-  flag: 'Orange against Blue, bots on both sides. Steal their sponsor core, bring it home, keep yours.',
-  fleet: 'The President wants blood and sends a battleship into the ring. Because he can. Everyone against it: sink it before the time runs out.',
+  race: msg('Three laps through eight gates. Killing your opponents is explicitly allowed.'),
+  deathmatch: msg('For the hard pilots: five minutes, every clone for itself.'),
+  survival: msg('{clones} clones each. A solar flare closes in on the arena. The last clone standing wins.'),
+  flag: msg('Orange against Blue, bots on both sides. Steal their sponsor core, bring it home, keep yours.'),
+  fleet: msg('The President wants blood and sends a battleship into the ring. Because he can. Everyone against it: sink it before the time runs out.'),
 };
 
 /** The solo choice kept in this browser, checked: whatever does not fit falls back to the default. */
@@ -412,9 +423,9 @@ type State = 'menu' | 'playing' | 'paused' | 'results';
 type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'plume' | null;
 /** How the President's battleship killed a ship, for the sponsor break. */
 const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
-  battery: "Shot down by the President's battleship",
-  exhaust: "Burned up in the battleship's drive plume",
-  blast: 'Taken along by the battleship',
+  battery: msg("Shot down by the President's battleship"),
+  exhaust: msg("Burned up in the battleship's drive plume"),
+  blast: msg('Taken along by the battleship'),
 };
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -462,14 +473,15 @@ const PREVIEW_SHIFT = 0.3;
 const UP = new THREE.Vector3(0, 1, 0);
 /** A bot's skills as small scales of five pips each, for the solo plate: what it can, at a glance. */
 const SKILL_NAMES: [keyof Skills, string][] = [
-  ['aim', 'Aim'],
-  ['reflexes', 'Reflexes'],
-  ['daring', 'Daring'],
+  ['aim', msg('Aim')],
+  ['reflexes', msg('Reflexes')],
+  ['daring', msg('Daring')],
 ];
 const skillScales = (skills: Skills) =>
-  `<span class="skills">${SKILL_NAMES.map(([key, label]) => {
+  `<span class="skills">${SKILL_NAMES.map(([key, name]) => {
     const pips = Math.round(skills[key] * 5);
-    return `<span class="skill" aria-label="${label} ${pips} of 5"><span>${label}</span><span class="pips">${'<i class="on"></i>'.repeat(pips)}${'<i></i>'.repeat(5 - pips)}</span></span>`;
+    const label = t(name);
+    return `<span class="skill" aria-label="${t('{skill} {pips} of 5', { skill: label, pips })}"><span>${label}</span><span class="pips">${'<i class="on"></i>'.repeat(pips)}${'<i></i>'.repeat(5 - pips)}</span></span>`;
   }).join('')}</span>`;
 
 const lapClock = (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, '0')}`;
@@ -489,29 +501,17 @@ const ghostPosition = new THREE.Vector3();
 const ghostTurn = new THREE.Quaternion();
 
 /** 1st, 2nd, 3rd, 4th … */
-const ordinal = (n: number) => `${n}${n % 10 === 1 && n % 100 !== 11 ? 'st' : n % 10 === 2 && n % 100 !== 12 ? 'nd' : n % 10 === 3 && n % 100 !== 13 ? 'rd' : 'th'}`;
+const ordinal = (n: number) =>
+  n % 10 === 1 && n % 100 !== 11 ? t('{n}st', { n }) : n % 10 === 2 && n % 100 !== 12 ? t('{n}nd', { n }) : n % 10 === 3 && n % 100 !== 13 ? t('{n}rd', { n }) : t('{n}th', { n });
+
+/** How many clones a ship has left in Last Clone Standing, in words. */
+const clonesLeftText = (n: number) => (n === 1 ? t('{n} clone left', { n }) : t('{n} clones left', { n }));
 
 /** The sensors see nothing (a solar storm). */
 const blind = () => false;
 
 /** Real time in seconds; unlike game time it never slows down or pauses. */
 const wallClock = () => performance.now() / 1000;
-
-function storageGet(key: string): string | null {
-  try {
-    return localStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function storageSet(key: string, value: string) {
-  try {
-    localStorage.setItem(key, value);
-  } catch {
-    // storage unavailable (private mode): the value just isn't remembered
-  }
-}
 
 export class Game implements OnlineGame {
   private readonly renderer: THREE.WebGLRenderer;
@@ -677,24 +677,24 @@ export class Game implements OnlineGame {
   private readonly radar = new Radar($<HTMLCanvasElement>('radar'));
   /** The radar's marks besides ships and rocks, reused from frame to frame. */
   private readonly marks: RadarMark[] = [
-    { position: new THREE.Vector3(), label: 'Center', color: '#4d91ff' },
+    { position: new THREE.Vector3(), label: t('Center'), color: '#4d91ff' },
     { position: new THREE.Vector3(), label: '', color: '#ff9d00' },
   ];
-  private readonly torpedoMarks: RadarMark[] = Array.from({ length: 16 }, () => ({ position: new THREE.Vector3(), label: 'Torpedo', color: '#ff3b30' }));
+  private readonly torpedoMarks: RadarMark[] = Array.from({ length: 16 }, () => ({ position: new THREE.Vector3(), label: t('Torpedo'), color: '#ff3b30' }));
   private readonly probeMarks: RadarMark[] = Array.from({ length: 12 }, () => ({ position: new THREE.Vector3(), label: '', color: '#3dff9a' }));
   /** Capture the Flag: each side's base and core, in its color. */
   private readonly flagMarks: RadarMark[] = TEAM_NAMES.flatMap((name, team) => [
-    { position: new THREE.Vector3(), label: `${name} base`, color: TEAM_TINTS[team] },
-    { position: new THREE.Vector3(), label: `${name} core`, color: TEAM_TINTS[team] },
+    { position: new THREE.Vector3(), label: t('{side} base', { side: t(name) }), color: TEAM_TINTS[team] },
+    { position: new THREE.Vector3(), label: t('{side} core', { side: t(name) }), color: TEAM_TINTS[team] },
   ]);
   /** The President's battleship, in the regime's red. */
-  private readonly fleetMark: RadarMark = { position: new THREE.Vector3(), label: 'Battleship', color: '#ff2a3a' };
+  private readonly fleetMark: RadarMark = { position: new THREE.Vector3(), label: t('Battleship'), color: '#ff2a3a' };
   /** The ship holding a nova core, in white, so everyone sees where not to be. */
-  private readonly novaMark: RadarMark = { position: new THREE.Vector3(), label: 'NOVA', color: '#ffffff' };
+  private readonly novaMark: RadarMark = { position: new THREE.Vector3(), label: t('NOVA'), color: '#ffffff' };
   /** The marks the radar shows this frame (see radarMarks). */
   private readonly shownMarks: RadarMark[] = [];
   /** How the own clone died last, for the sponsor break. */
-  private deathCause: string | (string | Node)[] = 'Your clone is dead';
+  private deathCause: string | (string | Node)[] = t('Your clone is dead');
   /** When the current screen (menu, playing, paused, results) came up (performance.now, ms). */
   private screenSince = 0;
   /** When the standings held open with Tab are written next (real time, s). */
@@ -834,9 +834,18 @@ export class Game implements OnlineGame {
   private bindMenu() {
     const callsign = $<HTMLInputElement>('callsign');
     callsign.value = storageGet(CALLSIGN_KEY) ?? '';
-    callsign.placeholder = 'Host';
+    callsign.placeholder = t('Host');
+    // the languages, each named in itself
+    $('languages').append(
+      ...LOCALES.map((locale) => {
+        const button = Object.assign(document.createElement('button'), { type: 'button', textContent: LOCALE_NAMES[locale], lang: locale });
+        button.classList.toggle('selected', locale === currentLocale());
+        button.addEventListener('click', () => chooseLocale(locale));
+        return button;
+      }),
+    );
     // the ship on show above the logo, and the hangar
-    this.showcase = new Showcase($<HTMLCanvasElement>('showcase-view'), this.assets);
+    this.showcase = new Showcase($<HTMLCanvasElement>('crest'), this.assets);
     $('ship-prev').addEventListener('click', () => this.turnShowcase(-1));
     $('ship-next').addEventListener('click', () => this.turnShowcase(1));
     $('hangar').addEventListener('click', () => this.showHangar(true));
@@ -846,7 +855,7 @@ export class Game implements OnlineGame {
     for (const [choice, modes] of [['solo-mode', ROUND_MODES], ['room-mode', [...ROUND_MODES, 'mixed']]] as const) {
       document.querySelector(`[data-choice="${choice}"]`)!.append(
         ...modes.map((mode) => {
-          const button = Object.assign(document.createElement('button'), { type: 'button', textContent: MODE_NAMES[mode] });
+          const button = Object.assign(document.createElement('button'), { type: 'button', textContent: t(MODE_NAMES[mode]) });
           button.dataset.value = mode;
           button.classList.toggle('selected', mode === this.roomMode);
           return button;
@@ -896,11 +905,11 @@ export class Game implements OnlineGame {
       $(id).addEventListener('click', () => this.toggleFullscreen());
     }
     document.addEventListener('fullscreenchange', () => {
-      for (const id of ['fullscreen', 'fullscreen-pause']) $(id).textContent = document.fullscreenElement ? 'Leave fullscreen' : 'Fullscreen';
+      for (const id of ['fullscreen', 'fullscreen-pause']) $(id).textContent = document.fullscreenElement ? t('Leave fullscreen') : t('Fullscreen');
     });
     this.showRadioState();
 
-    if (this.invitedRoom()) modeName('online').textContent = 'Join tournament';
+    if (this.invitedRoom()) modeName('online').textContent = t('Join tournament');
     this.markLeadMode();
   }
 
@@ -917,9 +926,9 @@ export class Game implements OnlineGame {
   private buildSchool() {
     for (const course of SCHOOL_COURSES) {
       const button = Object.assign(document.createElement('button'), { type: 'button', className: 'mode', id: `school-${course}` });
-      button.innerHTML = `<span class="mode-name"><span class="mode-label">${COURSE_NAMES[course]}</span></span><span class="mode-note"></span>`;
+      button.innerHTML = `<span class="mode-name"><span class="mode-label">${t(COURSE_NAMES[course])}</span></span><span class="mode-note"></span>`;
       button.addEventListener('click', () => this.startSchool(course));
-      const reset = Object.assign(document.createElement('button'), { type: 'button', className: 'quiet', textContent: `Start ${COURSE_NAMES[course].toLowerCase()} over` });
+      const reset = Object.assign(document.createElement('button'), { type: 'button', className: 'quiet', textContent: t('Start {course} over', { course: t(COURSE_NAMES[course]) }) });
       reset.addEventListener('click', () => {
         const steps = schoolSteps();
         delete steps[course];
@@ -961,15 +970,17 @@ export class Game implements OnlineGame {
       const step = steps[course] ?? 0;
       const cleared = done.has(course);
       const note = button.querySelector<HTMLElement>('.mode-note')!;
-      if (step > 0) note.textContent = `Continue at drill ${step + 1} of ${FlightSchool.drillsOf(course)}.${cleared ? ' Completed before.' : ''}`;
-      else note.textContent = cleared ? '✓ Completed.' : SCHOOL_NOTES[course];
+      const drill = { n: step + 1, total: FlightSchool.drillsOf(course) };
+      if (step > 0) note.textContent = cleared ? t('Continue at drill {n} of {total}. Completed before.', drill) : t('Continue at drill {n} of {total}.', drill);
+      else note.textContent = cleared ? t('✓ Completed.') : t(SCHOOL_NOTES[course]);
       button.classList.toggle('cleared', cleared);
       (button.nextElementSibling as HTMLElement).hidden = step <= 0;
       button.classList.toggle('primary', course === this.nextCourse() && !cleared);
     }
     const cleared = SCHOOL_COURSES.filter((course) => done.has(course)).length;
     const note = $('school').querySelector<HTMLElement>('.mode-note')!;
-    note.textContent = cleared === SCHOOL_COURSES.length ? '✓ All three courses completed.' : cleared ? `✓ ${cleared} of ${SCHOOL_COURSES.length} courses completed.` : 'Learn to fly. Training clones are free.';
+    note.textContent =
+      cleared === SCHOOL_COURSES.length ? t('✓ All courses completed.') : cleared ? t('✓ {n} of {total} courses completed.', { n: cleared, total: SCHOOL_COURSES.length }) : t('Learn to fly. Training clones are free.');
     $('school').classList.toggle('cleared', cleared > 0);
   }
 
@@ -1006,8 +1017,8 @@ export class Game implements OnlineGame {
     for (const mode of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-mode"] button[data-value]')) choose(mode, () => (this.solo.mode = mode.dataset.value as RoundMode));
     for (const pace of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-pace"] button[data-value]')) choose(pace, () => (this.solo.pace = pace.dataset.value as Pace));
     $('solo-arenas').append(
-      button('By chance', () => (this.solo.arena = null)),
-      ...ARENAS.map((arena) => button(`${arena.name}<small>${arena.tagline}</small>`, () => (this.solo.arena = arena.id))),
+      button(t('By chance'), () => (this.solo.arena = null)),
+      ...ARENAS.map((arena) => button(`${t(arena.name)}<small>${t(arena.tagline)}</small>`, () => (this.solo.arena = arena.id))),
     );
     $('solo-bots').append(
       ...BOT_NAMES.map((name) =>
@@ -1029,17 +1040,17 @@ export class Game implements OnlineGame {
     for (const [choice, value] of [['solo-mode', mode], ['solo-pace', pace]]) {
       for (const button of document.querySelectorAll<HTMLButtonElement>(`[data-choice="${choice}"] button[data-value]`)) button.classList.toggle('selected', button.dataset.value === value);
     }
-    $('solo-mode-note').textContent = SOLO_NOTES[mode];
+    $('solo-mode-note').textContent = t(SOLO_NOTES[mode], { clones: CLONES });
     // the class is the bots' racing speed: a deathmatch has none
     $('solo-class').hidden = mode !== 'race';
-    $('solo-class-note').textContent = PACES[pace].note;
+    $('solo-class-note').textContent = t(PACES[pace].note);
     [...$('solo-arenas').children].forEach((b, i) => b.classList.toggle('selected', i === 0 ? arena === null : ARENAS[i - 1].id === arena));
     [...$('solo-bots').children].forEach((b, i) => {
       const chosen = rivals.includes(BOT_NAMES[i]);
       b.classList.toggle('selected', chosen);
       b.setAttribute('aria-pressed', String(chosen));
     });
-    $('solo-bot-count').textContent = rivals.length ? `· ${rivals.length}` : '· none: alone against the clock';
+    $('solo-bot-count').textContent = rivals.length ? `· ${rivals.length}` : t('· none: alone against the clock');
   }
 
   private showSolo(open: boolean) {
@@ -1084,7 +1095,7 @@ export class Game implements OnlineGame {
     const list = $('tournament-list');
     if (!listings.length) {
       this.tournamentRows.clear();
-      const text = this.lobby?.settled ? 'No public tournament right now. Start one.' : 'Looking for tournaments…';
+      const text = this.lobby?.settled ? t('No public tournament right now. Start one.') : t('Looking for tournaments…');
       const empty = list.querySelector('li.empty');
       if (empty && list.children.length === 1) {
         if (empty.textContent !== text) empty.textContent = text;
@@ -1113,8 +1124,9 @@ export class Game implements OnlineGame {
       row.listing = listing;
       const minutes = Math.max(0, Math.floor(listing.left / 60));
       const seconds = String(Math.max(0, Math.floor(listing.left % 60))).padStart(2, '0');
-      const meta = `${MODE_NAMES[listing.mode]} · ${listing.hosts} of ${TOURNAMENT_SIZE} Hosts${listing.bots ? ' · bots' : ''} · ${minutes}:${seconds} left`;
-      const join = listing.hosts >= TOURNAMENT_SIZE ? 'Watch' : 'Join';
+      const facts = { mode: t(MODE_NAMES[listing.mode]), hosts: listing.hosts, places: TOURNAMENT_SIZE, left: `${minutes}:${seconds}` };
+      const meta = listing.bots ? t('{mode} · {hosts} of {places} Hosts · bots · {left} left', facts) : t('{mode} · {hosts} of {places} Hosts · {left} left', facts);
+      const join = listing.hosts >= TOURNAMENT_SIZE ? t('Watch') : t('Join');
       if (row.name.textContent !== listing.name) row.name.textContent = listing.name;
       if (row.meta.textContent !== meta) row.meta.textContent = meta;
       if (row.join.textContent !== join) row.join.textContent = join;
@@ -1132,17 +1144,17 @@ export class Game implements OnlineGame {
 
   /** A line under the switches: what the chosen kind of tournament means. */
   private describeRoom() {
-    const who = this.roomPublic ? 'Listed here for every Host; anyone can join or watch.' : 'Not listed: only who has your invite link finds it.';
-    const bots = this.roomBots ? `Bots fill the ${TOURNAMENT_SIZE} places; every Host who joins takes a bot's place.` : 'No bots: only Hosts fly.';
+    const who = this.roomPublic ? t('Listed here for every Host; anyone can join or watch.') : t('Not listed: only who has your invite link finds it.');
+    const bots = this.roomBots ? t("Bots fill the {places} places; every Host who joins takes a bot's place.", { places: TOURNAMENT_SIZE }) : t('No bots: only Hosts fly.');
     const rounds = {
-      deathmatch: 'Every round a deathmatch.',
-      race: `Every round a race: ${LAPS} laps through ${GATES} gates, lasers on.`,
-      survival: `Every round Last Clone Standing: ${CLONES} clones each, a solar flare closing in.`,
-      flag: 'Every round Capture the Flag: Orange against Blue, Hosts spread over both sides.',
-      fleet: "Every round the President's Fleet: every Host and bot together against one of his battleships.",
-      mixed: 'Every mode in turn, starting with a deathmatch.',
-    }[this.roomMode];
-    $('room-note').textContent = `${who} ${bots} ${rounds} The link works for good: whoever follows it later starts the tournament again.`;
+      deathmatch: () => t('Every round a deathmatch.'),
+      race: () => t('Every round a race: {laps} laps through {gates} gates, lasers on.', { laps: LAPS, gates: GATES }),
+      survival: () => t('Every round Last Clone Standing: {clones} clones each, a solar flare closing in.', { clones: CLONES }),
+      flag: () => t('Every round Capture the Flag: Orange against Blue, Hosts spread over both sides.'),
+      fleet: () => t("Every round the President's Fleet: every Host and bot together against one of his battleships."),
+      mixed: () => t('Every mode in turn, starting with a deathmatch.'),
+    }[this.roomMode]();
+    $('room-note').textContent = `${who} ${bots} ${rounds} ${t('The link works for good: whoever follows it later starts the tournament again.')}`;
   }
 
   /** Starts a tournament from the form: a name, public or private, with or without bots, and what its rounds are. */
@@ -1204,7 +1216,7 @@ export class Game implements OnlineGame {
     const attempt = ++this.joinAttempt;
     const button = $<HTMLButtonElement>('online');
     button.disabled = true;
-    modeName('online').textContent = 'Connecting…';
+    modeName('online').textContent = t('Connecting…');
     this.notice('');
     let session: Session | null = null;
     try {
@@ -1226,12 +1238,12 @@ export class Game implements OnlineGame {
       // a session that never got going is left at once, so no relay stays connected
       if (this.online) this.showMenu();
       else session?.leave();
-      this.notice('Could not connect to the tournament. Try again in a moment.');
+      this.notice(t('Could not connect to the tournament. Try again in a moment.'));
       this.speaker.say(COMPUTER.noLink, 'urgent');
     } finally {
       this.connecting = false;
       button.disabled = false;
-      modeName('online').textContent = this.invitedRoom() ? 'Join tournament' : 'Online tournament';
+      modeName('online').textContent = this.invitedRoom() ? t('Join tournament') : t('Online tournament');
       this.markLeadMode();
     }
   }
@@ -1256,6 +1268,14 @@ export class Game implements OnlineGame {
   private toggleFullscreen() {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
     else this.enterFullscreen();
+  }
+
+  castOut() {
+    // after the call, so the Host still sees its name on the cheater's line
+    window.setTimeout(() => {
+      this.showMenu();
+      this.notice(t('The other Hosts named you a cheater and cast you out of the tournament.'));
+    }, CAST_OUT_MS);
   }
 
   /** A line in the menu for what went wrong; empty hides it. */
@@ -1362,15 +1382,15 @@ export class Game implements OnlineGame {
   private async invite() {
     const button = $('invite');
     const url = location.href;
-    const text = `Fly with me in the SolarTournament "${this.room?.name ?? 'Tournament'}"`;
+    const text = t('Fly with me in the SolarTournament "{name}"', { name: this.room?.name ?? t('Tournament') });
     try {
       if (navigator.share && this.input.touchActive) {
         await navigator.share({ title: 'SolarTournament', text, url });
         return;
       }
       await navigator.clipboard.writeText(url);
-      button.textContent = 'Invite link copied';
-      this.hud.flashMessage(this.time, 'Invite link copied. Send it to your friends.', 3);
+      button.textContent = t('Invite link copied');
+      this.hud.flashMessage(this.time, t('Invite link copied. Send it to your friends.'), 3);
     } catch {
       // no clipboard here, or the share sheet was closed: the link is shown to copy by hand
       button.textContent = url;
@@ -1388,7 +1408,7 @@ export class Game implements OnlineGame {
     this.spectating = false;
     this.updateLobby();
     history.replaceState(null, '', `${location.pathname}${location.search}`);
-    modeName('online').textContent = 'Online tournament';
+    modeName('online').textContent = t('Online tournament');
   }
 
   private toggleRadio() {
@@ -1399,7 +1419,7 @@ export class Game implements OnlineGame {
   private showRadioState() {
     $('radio').classList.toggle('off', !this.radio.enabled);
     $('now-playing').classList.toggle('off', !this.radio.enabled);
-    if (!this.radio.enabled) $('radio-title').textContent = 'Radio off';
+    if (!this.radio.enabled) $('radio-title').textContent = t('Radio off');
     else if (this.radio.song) $('radio-title').textContent = this.radio.song.title;
   }
 
@@ -1416,7 +1436,7 @@ export class Game implements OnlineGame {
 
   /** Whatever the radio says also runs across the screen, in neon, while it is spoken. */
   private subtitle(spoken: Spoken, delay: number) {
-    showTransmission(spoken, delay, this.radio.song?.title ?? null, this.announcedName ?? 'pilot');
+    showTransmission(spoken, delay, this.radio.song?.title ?? null, this.announcedName);
   }
 
   /**
@@ -1592,7 +1612,7 @@ export class Game implements OnlineGame {
     $('pause').hidden = state !== 'paused';
     $('results').hidden = state !== 'results';
     $('invite').hidden = !this.online;
-    $('invite').textContent = 'Invite friends';
+    $('invite').textContent = t('Invite friends');
     // the A button that changed the screen does not also fire
     this.input.holdFire();
     if (state !== 'playing') this.sponsors.hide();
@@ -1680,8 +1700,8 @@ export class Game implements OnlineGame {
 
   /** Shows where the round is played and what it is: the arena's name, a race's laps, what makes the arena special. */
   private announceArena() {
-    const race = this.roundMode === 'race' ? ` · Race: ${LAPS} laps through ${GATES} gates` : '';
-    this.hud.flashMessage(this.time, `${this.venue.name}${race} · ${this.venue.tagline}`, 5);
+    const venue = { arena: t(this.venue.name), tagline: t(this.venue.tagline), laps: LAPS, gates: GATES };
+    this.hud.flashMessage(this.time, this.roundMode === 'race' ? t('{arena} · Race: {laps} laps through {gates} gates · {tagline}', venue) : `${venue.arena} · ${venue.tagline}`, 5);
   }
 
   /** What an online round is, by the room's rule and the round number. */
@@ -1726,7 +1746,7 @@ export class Game implements OnlineGame {
     this.roundMode = 'deathmatch';
     this.enterArena(ARENAS[0]);
     const best = Number(storageGet(BEST_SCORE_KEY) ?? 0);
-    $('best-score').textContent = best ? `Personal best: ${best} pts` : '';
+    $('best-score').textContent = best ? t('Personal best: {points} pts', { points: best }) : '';
     this.showSchoolProgress();
     this.markLeadMode();
     // a clone that died last leaves no muffled radio behind in the hangar
@@ -1829,7 +1849,7 @@ export class Game implements OnlineGame {
     const mouse = !this.input.touchActive && !this.input.gamepadActive;
     // cues of this round on its own clock: a pause holds them, a new round drops them
     this.cues.length = 0;
-    if (mouse) this.cue(2.2, () => this.hud.flashMessage(this.time, 'The ship turns towards the mouse pointer', 4));
+    if (mouse) this.cue(2.2, () => this.hud.flashMessage(this.time, t('The ship turns towards the mouse pointer'), 4));
     // the flight school starts with its briefing; a tournament clone just reports in, and
     // once Nicole is through, the announcer opens the broadcast
     if (mode !== 'school') {
@@ -2204,7 +2224,7 @@ export class Game implements OnlineGame {
     ship.spawn(position, new THREE.Quaternion().setFromRotationMatrix(look), this.time);
     if (ship === this.me) {
       // the Host's mind locks onto the freshly printed clone: from here on we are the clone
-      this.hud.flashMessage(this.time, 'Establishing live link to your clone…', 2);
+      this.hud.flashMessage(this.time, t('Establishing live link to your clone…'), 2);
       if (this.survival && clonesLeft(ship) === 1) this.speaker.say(COMPUTER.lastClone, 'urgent');
       this.glitch.trigger(0.9, 1.1);
       this.radio.setMuffled(false);
@@ -2219,10 +2239,11 @@ export class Game implements OnlineGame {
     this.speaker.say(pick(SPONSOR_BREAK), 'urgent');
     // the kill again and again behind the ad, until the next clone boots
     this.killcam.again();
-    const kills = `${me.kills} ${me.kills === 1 ? 'kill' : 'kills'}`;
-    const left = clonesLeft(me);
-    const clones = `${me.deaths} ${me.deaths === 1 ? 'clone' : 'clones'} lost${this.survival ? ` · ${left} ${left === 1 ? 'clone' : 'clones'} left` : ''}`;
-    this.sponsors.show(this.deathCause, `This round: ${kills} · ${me.score} pts · ${clones}`, () => {
+    const n = me.kills;
+    const kills = n === 1 ? t('{n} kill', { n }) : t('{n} kills', { n });
+    const lost = me.deaths === 1 ? t('{n} clone lost', { n: me.deaths }) : t('{n} clones lost', { n: me.deaths });
+    const clones = this.survival ? `${lost} · ${clonesLeftText(clonesLeft(me))}` : lost;
+    this.sponsors.show(this.deathCause, t('This round: {kills} · {points} pts · {clones}', { kills, points: me.score, clones }), () => {
       this.speaker.say(pick(SPONSOR_HAPPY), 'urgent');
       this.killcam.stop();
       this.hud.show(true);
@@ -2252,7 +2273,7 @@ export class Game implements OnlineGame {
     if (this.school) this.speaker.stop();
     this.renderScoreboard();
     $('results-next').textContent = '';
-    $('again').innerHTML = 'Back to hangar <kbd>Enter</kbd>';
+    $('again').innerHTML = `${t('Back to hangar')} <kbd>Enter</kbd>`;
     this.speaker.say(COMPUTER.roundOver, 'urgent');
     this.setScreen('results');
   }
@@ -2266,7 +2287,7 @@ export class Game implements OnlineGame {
     if (me && !this.school && me.score > Number(storageGet(BEST_SCORE_KEY) ?? 0)) storageSet(BEST_SCORE_KEY, String(me.score));
     const coins = me && !this.school && !this.spectating ? payOut(this.hangar, me.score) : 0;
     if (coins > 0) this.saveHangar();
-    $('results-coins').textContent = coins > 0 ? `+${coins.toLocaleString('en')} Solar Coins · ${this.hangar.coins.toLocaleString('en')} in the hangar` : '';
+    $('results-coins').textContent = coins > 0 ? t('+{coins} Solar Coins · {total} in the hangar', { coins: coins.toLocaleString('en'), total: this.hangar.coins.toLocaleString('en') }) : '';
   }
 
   private saveHangar() {
@@ -2279,9 +2300,9 @@ export class Game implements OnlineGame {
     const ship = this.shipShown;
     const locked = ship === 'sovereign' && !sovereignEarned(this.hangar);
     this.showcase?.show(ship, perksOf(this.hangar, ship, false), locked);
-    $('ship-name').textContent = SHIP_NAMES[ship];
-    $('ship-note').textContent = locked ? 'Make both interceptors complete in the hangar, and it is yours.' : ship === this.selectedShip ? 'Your ship' : '';
-    $('hangar-note').textContent = `${this.hangar.coins.toLocaleString('en')} Solar Coins · upgrade your ships`;
+    $('ship-name').textContent = t(SHIP_NAMES[ship]);
+    $('ship-note').textContent = locked ? t('Make both interceptors complete in the hangar, and it is yours.') : ship === this.selectedShip ? t('Your ship') : '';
+    $('hangar-note').textContent = t('{coins} Solar Coins · upgrade your ships', { coins: this.hangar.coins.toLocaleString('en') });
     if (this.inHangar) this.renderHangar();
   }
 
@@ -2299,10 +2320,10 @@ export class Game implements OnlineGame {
   /** The hangar's plate: the coins, and every upgrade of the ship on show with its steps and the price of the next. */
   private renderHangar() {
     const ship = this.shipShown;
-    $('hangar-coins').textContent = `${this.hangar.coins.toLocaleString('en')} Solar Coins. Every point of a round pays one.`;
+    $('hangar-coins').textContent = t('{coins} Solar Coins. Every point of a round pays one.', { coins: this.hangar.coins.toLocaleString('en') });
     const list = $('hangar-upgrades');
     if (ship === 'sovereign') {
-      list.textContent = sovereignEarned(this.hangar) ? 'The Sovereign flies with every upgrade, and wears every look.' : 'The Sovereign is the President’s gift for both interceptors made complete.';
+      list.textContent = sovereignEarned(this.hangar) ? t('The Sovereign flies with every upgrade, and wears every look.') : t('The Sovereign is the President’s gift for both interceptors made complete.');
       return;
     }
     list.replaceChildren(
@@ -2311,7 +2332,7 @@ export class Game implements OnlineGame {
         const price = nextPrice(this.hangar, ship, upgrade.id);
         const row = Object.assign(document.createElement('button'), { type: 'button', className: 'upgrade' });
         row.disabled = price === null || price > this.hangar.coins;
-        row.innerHTML = `<span class="upgrade-name">${upgrade.name}<small>${upgrade.note}${upgrade.looks ? ' · looks only' : ''}</small></span><span class="pips">${'<i class="on"></i>'.repeat(level)}${'<i></i>'.repeat(LEVELS - level)}</span><span class="upgrade-price">${price === null ? 'Complete' : `${price.toLocaleString('en')} ☉`}</span>`;
+        row.innerHTML = `<span class="upgrade-name">${t(upgrade.name)}<small>${upgrade.looks ? t('{note} · looks only', { note: t(upgrade.note) }) : t(upgrade.note)}</small></span><span class="pips">${'<i class="on"></i>'.repeat(level)}${'<i></i>'.repeat(LEVELS - level)}</span><span class="upgrade-price">${price === null ? t('Complete') : `${price.toLocaleString('en')} ☉`}</span>`;
         row.addEventListener('click', () => {
           if (buy(this.hangar, ship, upgrade.id)) this.saveHangar();
         });
@@ -2324,7 +2345,7 @@ export class Game implements OnlineGame {
     this.inHangar = open;
     $('menu').hidden = open || this.state !== 'menu';
     $('hangar-plate').hidden = !open;
-    // the ship on show goes along onto the hangar's plate, and back above the logo
+    // the ship's name and its arrows go along onto the hangar's plate, and back onto the menu's
     if (open) $('hangar-plate').insertBefore($('showcase'), $('hangar-coins'));
     else $('menu').prepend($('showcase'));
     this.renderShowcase();
@@ -2336,26 +2357,33 @@ export class Game implements OnlineGame {
     const race = this.roundMode === 'race';
     const survival = this.survival;
     const flags = this.flags;
-    table.innerHTML = `<tr><th>#</th><th>Host</th>${race ? '<th>Race</th>' : ''}${survival ? '<th>Clones</th>' : ''}${flags ? '<th>Side</th>' : ''}<th>Kills</th><th>Deaths</th><th>Score</th></tr>`;
+    const heads = ['#', t('Host'), race && t('Race'), survival && t('Clones'), flags && t('Side'), t('Kills'), t('Deaths'), t('Score')];
+    table.innerHTML = `<tr>${heads.map((head) => (head ? `<th>${head}</th>` : '')).join('')}</tr>`;
     // Capture the Flag names the sides' captures above the pilots
-    if (flags) table.createCaption().textContent = `${TEAM_NAMES[0]} ${flags.captures[0]} : ${flags.captures[1]} ${TEAM_NAMES[1]}${flags.leading >= 0 ? ` · ${TEAM_NAMES[flags.leading]} leads` : ''}`;
+    if (flags) table.createCaption().textContent = flags.leading >= 0 ? t('{score} · {side} leads', { score: this.flagScore(), side: t(TEAM_NAMES[flags.leading]) }) : this.flagScore();
     // the President's Fleet: who won, the Hosts or the President
-    if (this.fleet) table.createCaption().textContent = this.fleet.down ? 'Battleship down · the Hosts win' : this.fleet.present(this.field.clock) ? 'The battleship got away · the President wins' : 'The battleship is coming';
+    if (this.fleet) table.createCaption().textContent = this.fleet.down ? t('Battleship down · the Hosts win') : this.fleet.present(this.field.clock) ? t('The battleship got away · the President wins') : t('The battleship is coming');
     // a race ranks by the finish, Last Clone Standing by the clones left, a deathmatch by the score (see standings)
     this.standings().forEach((ship, i) => {
       const row = table.insertRow();
       row.classList.toggle('me', ship === this.me);
       row.insertCell().textContent = String(i + 1);
       row.insertCell().append(...markedName(ship.kind, ship.name));
-      if (race) row.insertCell().textContent = ship.finish >= 0 ? `${ship.finish.toFixed(1)} s` : `Lap ${lapOf(ship.gates)}/${LAPS}`;
-      if (survival) row.insertCell().textContent = isOut(ship) ? 'Out' : `${clonesLeft(ship)} left`;
+      if (race) row.insertCell().textContent = ship.finish >= 0 ? t('{time} s', { time: ship.finish.toFixed(1) }) : t('Lap {lap}/{laps}', { lap: lapOf(ship.gates), laps: LAPS });
+      if (survival) row.insertCell().textContent = isOut(ship) ? t('Out') : t('{n} left', { n: clonesLeft(ship) });
       if (flags) {
         const side = row.insertCell();
-        side.textContent = TEAM_NAMES[ship.team] ?? '–';
+        side.textContent = TEAM_NAMES[ship.team] ? t(TEAM_NAMES[ship.team]) : '–';
         side.style.color = TEAM_TINTS[ship.team] ?? '';
       }
       for (const value of [ship.kills, ship.deaths, ship.score]) row.insertCell().textContent = String(value);
     });
+  }
+
+  /** The captures of Capture the Flag, both sides named: Orange 2 : 1 Blue. */
+  private flagScore() {
+    const [orange, blue] = this.flags!.captures;
+    return `${t(TEAM_NAMES[0])} ${orange} : ${blue} ${t(TEAM_NAMES[1])}`;
   }
 
   /** Tab held in a round: the standings over the running game, refreshed a few times a second. */
@@ -2377,11 +2405,11 @@ export class Game implements OnlineGame {
     if (this.roundId >= 0 && this.resultsShownFor !== this.roundId) {
       this.resultsShownFor = this.roundId;
       this.renderScoreboard();
-      $('again').textContent = 'Leave tournament';
+      $('again').textContent = t('Leave tournament');
       this.speaker.say(COMPUTER.roundOver, 'urgent');
     }
     $('results').hidden = this.state !== 'playing';
-    const next = `Next round in ${Math.ceil(Math.max(0, this.roundEndsAt + RESULTS_SECONDS - this.time))} s`;
+    const next = t('Next round in {seconds} s', { seconds: Math.ceil(Math.max(0, this.roundEndsAt + RESULTS_SECONDS - this.time)) });
     if ($('results-next').textContent !== next) $('results-next').textContent = next;
   }
 
@@ -2546,7 +2574,7 @@ export class Game implements OnlineGame {
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
       if (this.course) this.passGates(ship, this.course);
       this.keepInArena(ship, now);
-      if (this.survival && ship.flight.position.length() > safe) this.burn(ship, 1, FLARE_HEAT, FLARE_BURN, 'Inside the solar flare · get back in', null, 'flare', dt, now);
+      if (this.survival && ship.flight.position.length() > safe) this.burn(ship, 1, FLARE_HEAT, FLARE_BURN, msg('Inside the solar flare · get back in'), null, 'flare', dt, now);
       this.collide(ship, now);
       this.hitWreckage(ship, now);
       this.scorch(ship, dt, now);
@@ -2603,17 +2631,18 @@ export class Game implements OnlineGame {
     const outside = me.alive && me.outsideSince !== null;
     if (!outside) this.toldToReturn = false;
     if (this.spectating) {
-      const by = now < this.handPickedUntil ? 'your pick' : 'live, the director cuts';
-      this.hud.flashMessage(now, `Tournament full · watching ${subject === me ? 'the field' : `${subject.name} (${by})`} · Tab: next pilot · you fly as soon as a place is free`, 0.2);
+      const watched =
+        subject === me ? t('the field') : now < this.handPickedUntil ? t('{name} (your pick)', { name: subject.name }) : t('{name} (live, the director cuts)', { name: subject.name });
+      this.hud.flashMessage(now, t('Tournament full · watching {watched} · Tab: next pilot · you fly as soon as a place is free', { watched }), 0.2);
     } else if (this.watching()) {
-      this.hud.flashMessage(now, `Out · watching ${subject === me ? 'the field' : subject.name} · Tab: next pilot`, 0.2);
+      this.hud.flashMessage(now, t('Out · watching {watched} · Tab: next pilot', { watched: subject === me ? t('the field') : subject.name }), 0.2);
     } else if (outside) {
-      this.hud.flashMessage(now, this.school ? 'Return to the field' : `Return to the field — ${Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1)}s`, 0.2);
+      this.hud.flashMessage(now, this.school ? t('Return to the field') : t('Return to the field — {seconds}s', { seconds: Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1) }), 0.2);
       if (!this.toldToReturn) this.toldToReturn = this.speaker.say(COMPUTER.arena, 'urgent');
     } else if (this.flipping) {
-      this.hud.flashMessage(now, this.flipAligned ? 'Flipped · drive brakes' : 'Flip', 0.2);
+      this.hud.flashMessage(now, this.flipAligned ? t('Flipped · drive brakes') : t('Flip'), 0.2);
     } else if (this.input.braking && me.alive) {
-      this.hud.flashMessage(now, this.braked ? 'At rest' : 'Braking', 0.2);
+      this.hud.flashMessage(now, this.braked ? t('At rest') : t('Braking'), 0.2);
     }
 
     if (this.online) {
@@ -2621,7 +2650,9 @@ export class Game implements OnlineGame {
       this.updateLobby();
       // the room code is in the invite link; the HUD names the tournament, how many Hosts fly and why the relay is missing, if it is
       const relayOff = this.online.session.relayOff;
-      const room = `${this.room?.name ?? 'Online'} · ${this.online.pilots} ${this.online.pilots === 1 ? 'Host' : 'Hosts'}${relayOff ? ` · Relay off: ${relayOff}` : ''}`;
+      const pilots = { name: this.room?.name ?? t('Online'), n: this.online.pilots };
+      const hosts = pilots.n === 1 ? t('{name} · {n} Host', pilots) : t('{name} · {n} Hosts', pilots);
+      const room = relayOff ? t('{hosts} · Relay off: {reason}', { hosts, reason: t(relayOff) }) : hosts;
       if ($('hud-room').textContent !== room) $('hud-room').textContent = room;
       if (now >= this.roundEndsAt) this.showOnlineResults();
     } else {
@@ -2664,10 +2695,15 @@ export class Game implements OnlineGame {
       if (last) this.announce(pick(ANNOUNCER_SURVIVOR), last, true);
       if (last === me) this.speaker.say(COMPUTER.survivor, 'urgent');
     }
-    const left = clonesLeft(me);
-    const step = isOut(me) ? `Out · ${ordinal(this.standings().indexOf(me) + 1)}` : `Last Clone Standing · ${left} ${left === 1 ? 'clone' : 'clones'} left`;
-    const flare = clock < FLARE_START ? `solar flare in ${Math.ceil(FLARE_START - clock)} s` : `the flare ${safe > FLARE_MIN ? 'closes in' : 'holds'}: ${Math.round(safe * METERS_PER_UNIT)} m from the center`;
-    this.hud.setSchool({ step, text: `${standing.length} of ${this.standings().length} standing · ${flare}`, keys: [] });
+    const step = isOut(me) ? t('Out · {place}', { place: ordinal(this.standings().indexOf(me) + 1) }) : t('Last Clone Standing · {left}', { left: clonesLeftText(clonesLeft(me)) });
+    const reach = { meters: Math.round(safe * METERS_PER_UNIT) };
+    const flare =
+      clock < FLARE_START
+        ? t('solar flare in {seconds} s', { seconds: Math.ceil(FLARE_START - clock) })
+        : safe > FLARE_MIN
+          ? t('the flare closes in: {meters} m from the center', reach)
+          : t('the flare holds: {meters} m from the center', reach);
+    this.hud.setSchool({ step, text: t('{n} of {total} standing · {flare}', { n: standing.length, total: this.standings().length, flare }), keys: [] });
   }
 
   /**
@@ -2695,21 +2731,23 @@ export class Game implements OnlineGame {
     if (ship && ship.owner === null) ship.score += FLAG_POINTS[event.kind];
     const me = this.me!;
     const ours = event.team === me.team;
-    const core = ours ? 'Your core' : `${TEAM_NAMES[event.team]} core`;
-    const who = ship === me ? 'You' : (ship?.name ?? 'Someone');
+    const named = { side: t(TEAM_NAMES[event.team]) };
+    const who = ship === me ? t('You') : (ship?.name ?? t('Someone'));
     const now = this.time;
     if (ship === me && FLAG_POINTS[event.kind]) this.hud.popup(this.camera, me.flight.position, `+${FLAG_POINTS[event.kind]}`, 'points');
     if (event.kind === 'grab') {
-      this.hud.flashMessage(now, ship === me ? 'You have their core · bring it home' : `${who} took ${core.toLowerCase()}`, 3);
+      const took = ours ? t('{who} took your core', { who }) : t('{who} took the {side} core', { who, ...named });
+      this.hud.flashMessage(now, ship === me ? t('You have their core · bring it home') : took, 3);
       if (ship === me) this.speaker.say(COMPUTER.coreGrabbed, 'urgent');
       else if (ours) this.speaker.say(COMPUTER.coreTaken, 'urgent');
     } else if (event.kind === 'drop') {
-      this.hud.flashMessage(now, `${core} adrift`, 2);
+      this.hud.flashMessage(now, ours ? t('Your core adrift') : t('{side} core adrift', named), 2);
     } else if (event.kind === 'return') {
-      this.hud.flashMessage(now, `${core} back home${ship ? ` · ${who}` : ''}`, 2);
+      const home = ours ? t('Your core back home') : t('{side} core back home', named);
+      this.hud.flashMessage(now, ship ? `${home} · ${who}` : home, 2);
     } else {
       const side = 1 - event.team;
-      this.hud.flashMessage(now, `${TEAM_NAMES[side]} captures · ${TEAM_NAMES[0]} ${this.flags!.captures[0]} : ${this.flags!.captures[1]} ${TEAM_NAMES[1]}`, 4);
+      this.hud.flashMessage(now, t('{side} captures · {score}', { side: t(TEAM_NAMES[side]), score: this.flagScore() }), 4);
       if (ship) this.announce(pick(ANNOUNCER_CAPTURE), ship, true);
       this.speaker.say(side === me.team ? COMPUTER.captured : COMPUTER.theyCaptured, 'urgent');
       this.sound.beep(1320, 0.1, 0.18);
@@ -2759,27 +2797,28 @@ export class Game implements OnlineGame {
 
   /** Capture the Flag in the HUD: the score, the own side, both cores, and where to fly; returns that point for the crosshair. */
   private showFlags(flags: Flags, me: Ship): THREE.Vector3 | null {
-    const score = `${TEAM_NAMES[0]} ${flags.captures[0]} : ${flags.captures[1]} ${TEAM_NAMES[1]}`;
+    const step = t('Capture the Flag · {score}', { score: this.flagScore() });
     const side = me.team;
     if (side < 0) {
       this.hud.setWaypoint(this.camera, null);
-      this.hud.setSchool({ step: `Capture the Flag · ${score}`, text: 'Waiting for a side…', keys: [] });
+      this.hud.setSchool({ step, text: t('Waiting for a side…'), keys: [] });
       return null;
     }
     const own = flags.cores[side];
     const theirs = flags.cores[1 - side];
-    const where = (core: (typeof flags.cores)[number]) => (core.home ? 'at home' : !core.carrier ? 'adrift' : core.carrier === me.id ? 'in your tow' : `with ${this.ships.find((s) => s.id === core.carrier)?.name ?? 'someone'}`);
+    const where = (core: (typeof flags.cores)[number]) =>
+      core.home ? t('at home') : !core.carrier ? t('adrift') : core.carrier === me.id ? t('in your tow') : t('with {name}', { name: this.ships.find((s) => s.id === core.carrier)?.name ?? t('someone') });
     let goal = theirs.position;
-    let label = 'Their core';
+    let label = t('Their core');
     if (theirs.carrier === me.id) {
       goal = flags.bases[side];
-      label = own.home ? 'Home' : 'Home · get your core back first';
+      label = own.home ? t('Home') : t('Home · get your core back first');
     } else if (!own.home) {
       goal = own.position;
-      label = own.carrier ? 'Thief' : 'Your core';
+      label = own.carrier ? t('Thief') : t('Your core');
     }
     this.hud.setWaypoint(this.camera, goal, label);
-    this.hud.setSchool({ step: `Capture the Flag · ${score}`, text: `You fly for ${TEAM_NAMES[side]} · your core ${where(own)} · theirs ${where(theirs)}`, keys: [] });
+    this.hud.setSchool({ step, text: t('You fly for {side} · your core {own} · theirs {theirs}', { side: t(TEAM_NAMES[side]), own: where(own), theirs: where(theirs) }), keys: [] });
     return goal;
   }
 
@@ -2798,13 +2837,13 @@ export class Game implements OnlineGame {
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive) continue;
       const plume = fleet.plumeAt(ship.flight.position, ship.radius);
-      if (plume > 0) this.burn(ship, plume, FLEET_PLUME_HEAT, FLEET_PLUME_BURN, "In the battleship's drive plume · get out", null, 'exhaust', dt, now);
+      if (plume > 0) this.burn(ship, plume, FLEET_PLUME_HEAT, FLEET_PLUME_BURN, msg("In the battleship's drive plume · get out"), null, 'exhaust', dt, now);
     }
     if (fleet.present(clock) && !this.fleetCalled) {
       this.fleetCalled = true;
       this.radio.announce(pick(ANNOUNCER_FLEET.arrives), null);
       this.speaker.say(COMPUTER.battleship, 'urgent');
-      this.hud.flashMessage(now, 'Battleship · take out its batteries', 4);
+      this.hud.flashMessage(now, t('Battleship · take out its batteries'), 4);
     }
     // the battleship's phases, called once each, wherever the hits that changed it came from
     if (fleet.present(clock) && fleet.phase > this.fleetPhase) {
@@ -2855,7 +2894,7 @@ export class Game implements OnlineGame {
     if (shooter.isLocal) {
       this.hud.hit();
       this.sound.beep(1320, 0.06);
-      this.landed(point, ZONE_NAMES[fleet.zones[zone].kind].toUpperCase());
+      this.landed(point, t(ZONE_NAMES[fleet.zones[zone].kind]).toUpperCase());
     }
     this.fleetEvents(fleet.hit(zone, count), shooter);
   }
@@ -2886,12 +2925,12 @@ export class Game implements OnlineGame {
         this.hearDebris(event.position, 1500);
         if (shooter?.owner === null) shooter.score += ZONE_POINTS[kind];
         if (shooter?.isLocal) this.hud.popup(this.camera, event.position, `+${ZONE_POINTS[kind]}`, 'points');
-        this.hud.flashMessage(this.time, `${ZONE_NAMES[kind]} destroyed`, 2);
+        this.hud.flashMessage(this.time, t('{part} destroyed', { part: t(ZONE_NAMES[kind]) }), 2);
       } else if (event.kind === 'sunk') {
         // the reactor goes critical; SINK_SECONDS later the battleship goes up
         const position = event.position.clone();
         this.speaker.say(COMPUTER.reactorCritical, 'urgent');
-        this.hud.flashMessage(this.time, `Reactor critical · get clear · ${meters(SINK_BLAST)}`, SINK_SECONDS);
+        this.hud.flashMessage(this.time, t('Reactor critical · get clear · {distance}', { distance: meters(SINK_BLAST) }), SINK_SECONDS);
         this.cue(SINK_SECONDS, () => this.sinkBlast(position));
       }
     }
@@ -2913,7 +2952,7 @@ export class Game implements OnlineGame {
       ship.protectedUntil = Math.min(ship.protectedUntil, now);
       if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, null, 'blast');
     }
-    this.hud.flashMessage(now, `Battleship down · the round is yours · +${SINK_POINTS}`, DECIDED_SECONDS);
+    this.hud.flashMessage(now, t('Battleship down · the round is yours · +{points}', { points: SINK_POINTS }), DECIDED_SECONDS);
     const seen = this.camera.position.distanceTo(position);
     if (seen < SINK_BLAST * 3) {
       this.linkHit(Math.max(0.4, 1 - seen / (SINK_BLAST * 3)), 1);
@@ -2932,19 +2971,27 @@ export class Game implements OnlineGame {
   /** The President's Fleet in the HUD: the battleship, what is left of it, and where to fly; returns that point for the crosshair. */
   private showFleet(fleet: Fleet, me: Ship): THREE.Vector3 | null {
     const clock = this.field.clock;
-    const step = "The President's Fleet";
+    const step = t(MODE_NAMES.fleet);
     if (!fleet.present(clock)) {
       this.hud.setWaypoint(this.camera, null);
-      const text = fleet.down ? (fleet.sunk(clock) ? 'Battleship down · the Hosts win' : 'Reactor critical · get clear') : `The battleship comes in ${Math.max(0, Math.ceil(fleet.arrivesAt - clock))} s`;
+      const text = fleet.down
+        ? fleet.sunk(clock)
+          ? t('Battleship down · the Hosts win')
+          : t('Reactor critical · get clear')
+        : t('The battleship comes in {seconds} s', { seconds: Math.max(0, Math.ceil(fleet.arrivesAt - clock)) });
       this.hud.setSchool({ step, text, keys: [] });
       return null;
     }
     const total = (kind: string) => fleet.zones.filter((zone) => zone.kind === kind).length;
-    const reactor = fleet.phase === 3 ? 'reactor open' : 'reactor sealed';
-    this.hud.setSchool({ step, text: `Sink it before the time runs out · batteries ${fleet.batteries}/${total('battery')} · drives ${fleet.drives}/${total('drive')} · ${reactor}`, keys: [] });
+    const parts = { batteries: fleet.batteries, allBatteries: total('battery'), drives: fleet.drives, allDrives: total('drive') };
+    const text =
+      fleet.phase === 3
+        ? t('Sink it before the time runs out · batteries {batteries}/{allBatteries} · drives {drives}/{allDrives} · reactor open', parts)
+        : t('Sink it before the time runs out · batteries {batteries}/{allBatteries} · drives {drives}/{allDrives} · reactor sealed', parts);
+    this.hud.setSchool({ step, text, keys: [] });
     const zone = fleet.nearestZone(me.flight.position);
     const goal = zone < 0 ? fleet.position : fleet.zoneAt(zone, fleetGoal);
-    this.hud.setWaypoint(this.camera, goal, zone < 0 ? 'Battleship' : ZONE_NAMES[fleet.zones[zone].kind]);
+    this.hud.setWaypoint(this.camera, goal, zone < 0 ? t('Battleship') : t(ZONE_NAMES[fleet.zones[zone].kind]));
     return goal;
   }
 
@@ -2958,7 +3005,7 @@ export class Game implements OnlineGame {
       const gate = this.marks[1];
       const next = subject.gates % GATES;
       gate.position.copy(course.points[next]);
-      gate.label = `Gate ${next + 1}`;
+      gate.label = t('Gate {n}', { n: next + 1 });
       list.push(gate);
     }
     // the bases, and the cores away from home
@@ -2985,7 +3032,7 @@ export class Game implements OnlineGame {
       const mark = this.probeMarks[i];
       const probe = this.probes.list[i];
       mark.position.copy(probe.position);
-      mark.label = probe.luck === null ? ITEM_NAMES[probe.kind] : SEALED_NAME;
+      mark.label = t(probe.luck === null ? ITEM_NAMES[probe.kind] : SEALED_NAME);
       list.push(mark);
     }
     const holder = this.ships.find((ship) => ship.nova && ship.alive && ship !== subject);
@@ -3014,7 +3061,7 @@ export class Game implements OnlineGame {
       const place = this.standings().indexOf(ship);
       ship.score += PLACE_POINTS[place] ?? 0;
       if (ship === this.me) {
-        this.hud.flashMessage(this.time, `Finished · ${ordinal(place + 1)} · +${PLACE_POINTS[place] ?? 0}`, 4);
+        this.hud.flashMessage(this.time, t('Finished · {place} · +{points}', { place: ordinal(place + 1), points: PLACE_POINTS[place] ?? 0 }), 4);
         this.sound.beep(1320, 0.1, 0.18);
         this.sound.beep(1760, 0.2, 0.18, 0.12);
       }
@@ -3025,7 +3072,7 @@ export class Game implements OnlineGame {
     // through the pink gate: a new lap begins
     if (ship.gates > 1 && ship.gates % GATES === 1) {
       const last = lapOf(ship.gates) === LAPS;
-      this.hud.flashMessage(this.time, last ? 'Last lap' : `Lap ${lapOf(ship.gates)} of ${LAPS}`, 2);
+      this.hud.flashMessage(this.time, last ? t('Last lap') : t('Lap {lap} of {laps}', { lap: lapOf(ship.gates), laps: LAPS }), 2);
       if (last) this.speaker.say(COMPUTER.finalLap, 'urgent');
     }
   }
@@ -3067,7 +3114,7 @@ export class Game implements OnlineGame {
   /** GO: the clamps let go; whose drive is lit is judged at once, the rest within START_LATE. */
   private go() {
     const me = this.me!;
-    this.count('GO');
+    this.count(t('GO'));
     this.startOpen = !this.spectating && me.alive;
     if (this.startOpen && this.driveLit) {
       this.startOpen = false;
@@ -3085,14 +3132,14 @@ export class Game implements OnlineGame {
   /** A number of a countdown, or GO, in big neon, with its beep. */
   private count(text: string) {
     this.hud.countdown(text);
-    if (text === 'GO') this.sound.beep(1320, 0.35, 0.22);
+    if (text === t('GO')) this.sound.beep(1320, 0.35, 0.22);
     else this.sound.beep(660, 0.12, 0.2);
   }
 
   /** A false start: the drive was lit before GO and stalls (see FALSE_START_STALL). */
   private stall(ship: Ship) {
     ship.overheatDrive(this.time + FALSE_START_STALL);
-    this.hud.flashMessage(this.time, 'Too early · drive stalled', 2);
+    this.hud.flashMessage(this.time, t('Too early · drive stalled'), 2);
     this.sound.beep(220, 0.3, 0.15);
   }
 
@@ -3102,7 +3149,7 @@ export class Game implements OnlineGame {
     if (ship !== this.me) return;
     this.boostKick = 1;
     this.sound.play('boost', { volume: 1.1, rate: 0.8 });
-    this.hud.flashMessage(this.time, 'Perfect start', 1.5);
+    this.hud.flashMessage(this.time, t('Perfect start'), 1.5);
     this.speaker.say(COMPUTER.perfectStart, 'urgent');
   }
 
@@ -3127,7 +3174,7 @@ export class Game implements OnlineGame {
     this.sound.play('boost', { volume: 1.3 });
     this.sound.beep(1568, 0.05, 0.1);
     this.sound.beep(2093, 0.09, 0.1, 0.06);
-    this.hud.flashMessage(this.time, 'Coil boost', 1);
+    this.hud.flashMessage(this.time, t('Coil boost'), 1);
   }
 
   /** Seconds since the round started. */
@@ -3163,7 +3210,7 @@ export class Game implements OnlineGame {
       course.highlight(-1, this.time);
       this.guide.hide();
       this.hud.setWaypoint(this.camera, null);
-      this.hud.setSchool({ step: `Finished · ${place}`, text: `${me.finish.toFixed(1)} s. Now hunt the others.`, keys: [] });
+      this.hud.setSchool({ step: t('Finished · {place}', { place }), text: t('{time} s. Now hunt the others.', { time: me.finish.toFixed(1) }), keys: [] });
       return null;
     }
     const next = me.gates % GATES;
@@ -3171,15 +3218,17 @@ export class Game implements OnlineGame {
     course.highlight(next, this.time);
     // past the gate's plane without going through it, and still moving away from it
     const missed = scratch.subVectors(me.flight.position, course.points[next]).dot(course.normals[next]) > GATE_RADIUS && me.flight.velocity.dot(course.normals[next]) > 0;
-    const label = missed ? 'Missed · turn back' : next === 0 ? (me.gates === 0 ? 'Start' : lap === LAPS ? 'Finish' : 'Lap') : `Gate ${next + 1}/${GATES}`;
+    const gate = { n: next + 1, gates: GATES };
+    const label = missed ? t('Missed · turn back') : next === 0 ? (me.gates === 0 ? t('Start') : lap === LAPS ? t('Finish') : t('Lap')) : t('Gate {n}/{gates}', gate);
     this.hud.setWaypoint(this.camera, course.points[next], label);
     if (me.alive) this.showGuide(me, course.line, next, missed);
     else this.guide.hide();
     // the running lap's clock, and the best lap of this arena to beat
     const lapTime = this.laps?.lapTime(this.raceClock());
-    const best = this.laps?.best ? ` · best ${lapClock(this.laps.best.time)}` : '';
+    const best = this.laps?.best ? ` · ${t('best {time}', { time: lapClock(this.laps.best.time) })}` : '';
     const timing = lapTime != null ? ` · ${lapClock(lapTime)}${best}` : '';
-    this.hud.setSchool({ step: `Race · lap ${lap}/${LAPS} · ${place}`, text: missed ? `Missed gate ${next + 1}: turn back and fly through it` : `Gate ${next + 1} of ${GATES}${timing}`, keys: [] });
+    const text = missed ? t('Missed gate {n}: turn back and fly through it', gate) : `${t('Gate {n} of {gates}', gate)}${timing}`;
+    this.hud.setSchool({ step: t('Race · lap {lap}/{laps} · {place}', { lap, laps: LAPS, place }), text, keys: [] });
     return course.points[next];
   }
 
@@ -3197,10 +3246,11 @@ export class Game implements OnlineGame {
     if (!event || event.kind === 'start') return;
     const delta = event.delta === null ? '' : ` · ${event.delta < 0 ? '−' : '+'}${Math.abs(event.delta).toFixed(2)}`;
     if (event.kind === 'split') {
-      this.hud.split(this.time, `Gate ${event.gate + 1} · ${lapClock(event.split)}${delta}`, event.delta === null ? null : event.delta < 0);
+      this.hud.split(this.time, `${t('Gate {n}', { n: event.gate + 1 })} · ${lapClock(event.split)}${delta}`, event.delta === null ? null : event.delta < 0);
       return;
     }
-    this.hud.split(this.time, `Lap ${lapClock(event.time)}${event.best ? ' · new best' : delta}`, event.best || (event.delta === null ? null : false), 4);
+    const lap = t('Lap {time}', { time: lapClock(event.time) });
+    this.hud.split(this.time, event.best ? t('{lap} · new best', { lap }) : `${lap}${delta}`, event.best || (event.delta === null ? null : false), 4);
     if (!event.best) return;
     const laps = parseLaps(storageGet(LAPS_KEY));
     laps[this.venue.id] = this.laps!.best!;
@@ -3226,7 +3276,7 @@ export class Game implements OnlineGame {
   private weather(dt: number, now: number) {
     const storm = this.venue.storms && this.field.clock % STORM_PERIOD > STORM_PERIOD - STORM_SECONDS;
     if (storm && !this.storming) {
-      this.hud.flashMessage(now, 'SOLAR STORM · SENSORS BLIND', STORM_SECONDS);
+      this.hud.flashMessage(now, t('SOLAR STORM · SENSORS BLIND'), STORM_SECONDS);
       this.linkHit(0.6, 1.2);
     }
     this.storming = storm;
@@ -3361,7 +3411,7 @@ export class Game implements OnlineGame {
   /** A defenseless target for the flight school, its drive towards the pilot: the one place a laser hurts. */
   private spawnDrone(position: THREE.Vector3, velocity: THREE.Vector3) {
     const me = this.me!;
-    this.drone ??= this.addShip('drone', 'Target drone', me.type === 'human' ? 'alien' : 'human', false);
+    this.drone ??= this.addShip('drone', t('Target drone'), me.type === 'human' ? 'alien' : 'human', false);
     const look = new THREE.Matrix4().lookAt(me.flight.position, position, me.flight.up(new THREE.Vector3()));
     this.drone.spawn(position, new THREE.Quaternion().setFromRotationMatrix(look), this.time);
     this.drone.flight.velocity.copy(velocity);
@@ -3372,7 +3422,7 @@ export class Game implements OnlineGame {
   private spawnSparring(position: THREE.Vector3, armed: boolean, skill: number) {
     const me = this.me!;
     if (this.sparring) this.removeShip(this.sparring.bot.ship);
-    const ship = this.addShip('sparring', 'Sparring bot', me.type === 'human' ? 'alien' : 'human', false);
+    const ship = this.addShip('sparring', t('Sparring bot'), me.type === 'human' ? 'alien' : 'human', false);
     const bot = new Bot(ship, evenSkills(skill));
     bot.armed = armed;
     this.bots.push(bot);
@@ -3537,7 +3587,7 @@ export class Game implements OnlineGame {
     this.kick = 2;
     this.effects.engineTrail(me.toWorld(scratch.set(0, 0, me.radius * 0.9)), me.toWorld(relative.set(0, 0, me.radius * 4)), me.flight.velocity, 1);
     this.sound.play('explosion', { volume: 1.4, rate: 0.7 });
-    this.hud.flashMessage(this.time, 'Overdrive', 1.2);
+    this.hud.flashMessage(this.time, t('Overdrive'), 1.2);
   }
 
   /**
@@ -3642,7 +3692,7 @@ export class Game implements OnlineGame {
       if (owner.owner === null) length = pullOn(owner.flight, at, length, true, share, floor, MAX_SPEED + BOOST_PUSH, dt);
       if (length !== null && target && target.owner === null) length = pullOn(target.flight, owner.flight.position, length, true, share, floor, MAX_SPEED + BOOST_PUSH, dt);
       if (length === null) {
-        if (owner === this.me) this.hud.flashMessage(this.time, 'Cable snapped', 1.5);
+        if (owner === this.me) this.hud.flashMessage(this.time, t('Cable snapped'), 1.5);
         this.unhook(owner);
         continue;
       }
@@ -3657,7 +3707,7 @@ export class Game implements OnlineGame {
     if (owner !== this.me) return;
     this.sound.play('explosion', { volume: 0.5, rate: 2.4 });
     this.sound.beep(523, 0.08, 0.12);
-    this.hud.flashMessage(this.time, anchor.ship ? `Hooked ${anchor.ship.name}` : 'Hooked', 1.2);
+    this.hud.flashMessage(this.time, anchor.ship ? t('Hooked {name}', { name: anchor.ship.name }) : t('Hooked'), 1.2);
     if (anchor.ship) this.kick = Math.max(this.kick, 0.8);
   }
 
@@ -3669,7 +3719,7 @@ export class Game implements OnlineGame {
     if (!anchor) return;
     this.tethers.set(owner, { owner, anchor, flying: 0, end: new THREE.Vector3(), length, line: this.cables.take() });
     if (target === this.me) {
-      this.hud.flashMessage(this.time, `Hooked by ${owner.name}`, 2);
+      this.hud.flashMessage(this.time, t('Hooked by {name}', { name: owner.name }), 2);
       this.linkHit(0.3, 0.2);
     }
   }
@@ -3692,7 +3742,7 @@ export class Game implements OnlineGame {
     this.online?.sendTorpedo(id, ship, target, position, velocity);
     if (ship.isLocal) {
       this.sound.play('laser', { volume: 0.9, rate: 0.45 });
-      this.hud.flashMessage(this.time, target ? `Torpedo away · ${target.name}` : 'Torpedo away · no lock', 1.5);
+      this.hud.flashMessage(this.time, target ? t('Torpedo away · {name}', { name: target.name }) : t('Torpedo away · no lock'), 1.5);
     }
   }
 
@@ -3726,7 +3776,7 @@ export class Game implements OnlineGame {
     else this.online?.sendTorpedoHit(hit, torpedo.shooter, torpedo.id);
     if (torpedo.shooter.isLocal) {
       this.hud.hit();
-      this.landed(hit.flight.position, 'TORPEDO');
+      this.landed(hit.flight.position, t('TORPEDO'));
     }
   }
 
@@ -3790,7 +3840,7 @@ export class Game implements OnlineGame {
         break;
     }
     if (ship.isLocal) {
-      this.hud.flashMessage(this.time, `${ITEM_NAMES[kind]} · ${ITEM_HINTS[kind]}`, kind === 'nova' ? 4 : 2.5);
+      this.hud.flashMessage(this.time, `${t(ITEM_NAMES[kind])} · ${t(ITEM_HINTS[kind])}`, kind === 'nova' ? 4 : 2.5);
       if (kind === 'nova') this.speaker.say(COMPUTER.nova, 'urgent');
       this.sound.beep(988, 0.07, 0.15);
       this.sound.beep(1319, 0.07, 0.15, 0.07);
@@ -3814,7 +3864,7 @@ export class Game implements OnlineGame {
 
   /** Several browsers found a Host cheating: everyone is told. */
   announceCheater(name: string) {
-    this.hud.flashMessage(this.time, `CHEATER · ${name}`, 6);
+    this.hud.flashMessage(this.time, t('CHEATER · {name}', { name }), 6);
     this.sound.beep(220, 0.3, 0.15);
     this.sound.beep(165, 0.4, 0.15, 0.3);
   }
@@ -3853,7 +3903,7 @@ export class Game implements OnlineGame {
       this.respawn(holder);
       if (holder === this.me) {
         this.speaker.say(COMPUTER.novaReprint, 'urgent');
-        this.hud.flashMessage(now, 'Sponsors thrilled · no ad · next clone ready', 3);
+        this.hud.flashMessage(now, t('Sponsors thrilled · no ad · next clone ready'), 3);
       }
     }
     for (const torpedo of [...this.torpedoes.list]) if (torpedo.position.distanceTo(position) < NOVA_RADIUS) this.blowUp(torpedo);
@@ -3871,7 +3921,7 @@ export class Game implements OnlineGame {
       clearTimeout(this.novaFlashTimer);
       this.novaFlashTimer = window.setTimeout(() => document.body.classList.remove('nova-flash'), NOVA_FLASH_MS);
     }
-    if (holder !== this.me) this.hud.flashMessage(now, `NOVA · ${holder.name}`, 2.5);
+    if (holder !== this.me) this.hud.flashMessage(now, t('NOVA · {name}', { name: holder.name }), 2.5);
   }
 
   /**
@@ -3886,7 +3936,7 @@ export class Game implements OnlineGame {
       this.novaWarned = null;
       return;
     }
-    warnings.push(`NOVA CORE ACTIVATED · ${meters(holder.flight.position.distanceTo(me.flight.position))} · GET OUT`);
+    warnings.push(t('NOVA CORE ACTIVATED · {distance} · GET OUT', { distance: meters(holder.flight.position.distanceTo(me.flight.position)) }));
     if (now >= this.nextNovaSiren) {
       const high = Math.floor(now * 4) % 2 === 0;
       this.sound.beep(high ? 1320 : 880, 0.2, 0.18);
@@ -3961,7 +4011,7 @@ export class Game implements OnlineGame {
     shooter.score += TORPEDO_DOWN_POINTS;
     if (!shooter.isLocal) return;
     this.torpedoesDown++;
-    this.hud.popup(this.camera, torpedo.position, `TORPEDO DOWN +${TORPEDO_DOWN_POINTS}`, 'points');
+    this.hud.popup(this.camera, torpedo.position, t('TORPEDO DOWN +{points}', { points: TORPEDO_DOWN_POINTS }), 'points');
   }
 
   /** A flight school drill's torpedo: from a ship (the drone), homing on the own pilot, launched straight at it. */
@@ -3985,7 +4035,7 @@ export class Game implements OnlineGame {
     if (ship.plating > 0 && now >= ship.protectedUntil) {
       ship.plating = 0;
       this.effects.sparks(ship.flight.position, PLATING_COLOR, 160);
-      if (ship.isLocal) this.hud.flashMessage(now, 'Plating took the torpedo', 1.5);
+      if (ship.isLocal) this.hud.flashMessage(now, t('Plating took the torpedo'), 1.5);
       return;
     }
     const status = ship.structural(TORPEDO_DAMAGE, now);
@@ -3994,7 +4044,7 @@ export class Game implements OnlineGame {
     ship.thrusters = Math.max(0, ship.thrusters - 0.3);
     if (ship.isLocal) {
       this.hud.damaged();
-      this.hud.flashMessage(now, 'Torpedo hit', 1.5);
+      this.hud.flashMessage(now, t('Torpedo hit'), 1.5);
       this.sound.play('explosion', { volume: 1.5, rate: 0.9 });
       this.linkHit(0.9, 0.6);
     }
@@ -4076,7 +4126,7 @@ export class Game implements OnlineGame {
     if (now - this.lastCloseCall < 0.5) return;
     this.lastCloseCall = now;
     me.score += CLOSE_CALL_POINTS;
-    this.hud.popup(this.camera, scratch.copy(flight.position).addScaledVector(flight.forward(forward), me.radius * 4), `CLOSE CALL +${CLOSE_CALL_POINTS}`, 'points');
+    this.hud.popup(this.camera, scratch.copy(flight.position).addScaledVector(flight.forward(forward), me.radius * 4), t('CLOSE CALL +{points}', { points: CLOSE_CALL_POINTS }), 'points');
     this.sound.beep(1180, 0.05, 0.12);
     this.sound.beep(1570, 0.08, 0.12, 0.06);
   }
@@ -4127,12 +4177,13 @@ export class Game implements OnlineGame {
         burner = other;
       }
     }
-    if (burner) this.burn(ship, hottest, PLUME_HEAT, PLUME_BURN, `In the drive plume of ${burner.name} · get out`, burner, 'plume', dt, now);
+    if (burner) this.burn(ship, hottest, PLUME_HEAT, PLUME_BURN, msg('In the drive plume of {name} · get out'), burner, 'plume', dt, now);
   }
 
   /**
    * Hot plasma on the hull (a drive plume, a solar flare): `heat` and `hull` per second at full
-   * `strength`, a word for the own pilot, and the killer and cause should the ship break up.
+   * `strength`, a word for the own pilot (a text marked with msg(), the killer as {name}), and
+   * the killer and cause should the ship break up.
    */
   private burn(ship: Ship, strength: number, heat: number, hull: number, message: string, killer: Ship | null, cause: DeathCause, dt: number, now: number) {
     if (!ship.alive) return;
@@ -4140,7 +4191,7 @@ export class Game implements OnlineGame {
     if (ship.heat >= MAX_HEAT) ship.overheated = true;
     const status = ship.structural(hull * strength * dt, now);
     if (ship.isLocal) {
-      this.hud.flashMessage(now, message, 0.2);
+      this.hud.flashMessage(now, killer ? t(message, { name: killer.name }) : t(message), 0.2);
       if (Math.random() < dt * 6) this.linkHit(0.2 + 0.4 * strength, 0.15);
     }
     if (status === 'destroyed') this.shipDestroyed(ship, killer, cause);
@@ -4248,7 +4299,7 @@ export class Game implements OnlineGame {
         if (shooter.isLocal) {
           this.hud.hit();
           this.sound.beep(1320);
-          this.landed(scratch, ship.tailToward(direction) ? 'DRIVE' : 'ARMOR', ship.tailToward(direction));
+          this.landed(scratch, t(ship.tailToward(direction) ? HIT_WORDS.drive : HIT_WORDS.armor), ship.tailToward(direction));
         }
         continue;
       }
@@ -4286,7 +4337,7 @@ export class Game implements OnlineGame {
           this.hud.hit();
           this.hud.popup(this.camera, destroyed.object.position, `+${ASTEROID_POINTS[destroyed.generation]}`, 'points');
           this.kick = Math.min(2, this.kick + 0.6);
-          this.hud.flashMessage(this.time, `Asteroid cracked +${ASTEROID_POINTS[destroyed.generation]}`, 1.5);
+          this.hud.flashMessage(this.time, t('Asteroid cracked +{points}', { points: ASTEROID_POINTS[destroyed.generation] }), 1.5);
           this.speaker.say(COMPUTER.asteroid);
         }
       }
@@ -4310,7 +4361,7 @@ export class Game implements OnlineGame {
       ship.plating--;
       const along = distance ?? scratch.subVectors(ship.flight.position, origin).dot(direction);
       this.effects.sparks(scratch.copy(origin).addScaledVector(direction, along), PLATING_COLOR, 80);
-      if (ship.isLocal) this.hud.flashMessage(this.time, ship.plating ? 'Plating holds' : 'Plating gone', 1.2);
+      if (ship.isLocal) this.hud.flashMessage(this.time, ship.plating ? t('Plating holds') : t('Plating gone'), 1.2);
       return;
     }
     const { status, zone } = ship.laserHit(origin, direction, this.time);
@@ -4322,13 +4373,13 @@ export class Game implements OnlineGame {
       // the drive rings out, the armor only clinks
       const hurt = zone === 'drive' || zone === 'reactor';
       this.sound.beep(zone === 'reactor' ? 1760 : hurt ? 1320 : 660, hurt ? 0.08 : 0.04);
-      this.landed(scratch, HIT_WORDS[zone], hurt);
+      this.landed(scratch, t(HIT_WORDS[zone]), hurt);
     }
     if (ship.isLocal) {
       // a hit into the drive hurts and is told at once; the armor's scorch marks are chatter
       const serious = zone === 'drive' || zone === 'reactor';
       this.hud.damaged();
-      this.hud.flashMessage(this.time, ZONE_MESSAGES[zone], 1.5);
+      this.hud.flashMessage(this.time, t(ZONE_MESSAGES[zone]), 1.5);
       this.speaker.say(COMPUTER[zone], serious ? 'urgent' : 'chatter');
       this.sound.play('explosion', { volume: serious ? 1.2 : 0.6, rate: 1.5 });
       this.sound.beep(220, 0.25, 0.12);
@@ -4346,23 +4397,27 @@ export class Game implements OnlineGame {
       // the moments before the kill, again, in slow motion, from behind the shooter
       if (!this.school && this.state === 'playing') {
         this.killcam.start(killer, victim, this.time);
-        this.hud.flashMessage(this.time, `Kill cam · ${killer.name} · Enter skips`, 3);
+        this.hud.flashMessage(this.time, t('Kill cam · {name} · Enter skips', { name: killer.name }), 3);
       }
     }
     if (killer === this.me && victim !== this.me) this.ease = Math.max(0, this.ease - KILL_EASE);
     if (victim === this.me) {
-      if (killer) this.deathCause = [cause === 'nova' ? 'Vaporized by the nova of ' : cause === 'plume' ? 'Grilled in the drive plume of ' : 'Shot down by ', ...markedName(killer.kind, killer.name)];
-      else if (cause === 'well') this.deathCause = WELL_DEATHS[this.venue.id] ?? 'Crashed';
-      else if (cause === 'flare') this.deathCause = 'Burned up in the solar flare';
-      else if (cause && FLEET_DEATHS[cause]) this.deathCause = FLEET_DEATHS[cause];
-      else this.deathCause = victim.outsideSince !== null ? 'Lost in deep space' : 'Crashed';
+      if (killer) {
+        // the killer's name with its mark goes where the translation puts {name}
+        const line = cause === 'nova' ? t('Vaporized by the nova of {name}') : cause === 'plume' ? t('Grilled in the drive plume of {name}') : t('Shot down by {name}');
+        const [before, after = ''] = line.split('{name}');
+        this.deathCause = [before, ...markedName(killer.kind, killer.name), after];
+      } else if (cause === 'well') this.deathCause = t(WELL_DEATHS[this.venue.id] ?? msg('Crashed'));
+      else if (cause === 'flare') this.deathCause = t('Burned up in the solar flare');
+      else if (cause && FLEET_DEATHS[cause]) this.deathCause = t(FLEET_DEATHS[cause]);
+      else this.deathCause = victim.outsideSince !== null ? t('Lost in deep space') : t('Crashed');
     }
     // a kill of the Host's own is bigger: more fire, a jolt, and the points where it happened
     const ownKill = killer?.isLocal === true && killer === this.me;
     const credit = cause === 'nova' ? NOVA_KILL_CREDIT : 1;
     this.effects.explosion(victim.flight.position, victim.radius * (ownKill ? 3 : 2), victim.flight.velocity.clone().multiplyScalar(0.3));
     if (ownKill) {
-      this.hud.popup(this.camera, victim.flight.position, credit > 1 ? `Double kill +${this.killPoints() * credit}` : `+${this.killPoints()}`, 'kill');
+      this.hud.popup(this.camera, victim.flight.position, credit > 1 ? t('Double kill +{points}', { points: this.killPoints() * credit }) : `+${this.killPoints()}`, 'kill');
       this.kick = 2;
     }
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
@@ -4401,7 +4456,8 @@ export class Game implements OnlineGame {
       }
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
-    const killedBy = cause === 'well' ? this.venue.name : cause === 'flare' ? 'Solar flare' : cause && FLEET_DEATHS[cause] ? 'Battleship' : victim.outsideSince !== null ? 'Deep space' : 'Crash';
+    const killedBy =
+      cause === 'well' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause && FLEET_DEATHS[cause] ? t('Battleship') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
     this.hud.kill(this.time, killer ?? { kind: null, name: killedBy }, victim);
     // the last clone of a ship in Last Clone Standing: out, and everyone hears it
     if (this.out(victim)) {
@@ -4459,7 +4515,7 @@ export class Game implements OnlineGame {
     const status = ship.structural(impactDamage(approach), now);
     if (ship.isLocal && status !== 'protected') {
       this.hud.damaged();
-      this.hud.flashMessage(now, `Impact at ${Math.round(approach * METERS_PER_UNIT)} m/s`, 1.5);
+      this.hud.flashMessage(now, t('Impact at {speed} m/s', { speed: Math.round(approach * METERS_PER_UNIT) }), 1.5);
       this.speaker.say(COMPUTER.impact, 'urgent');
       this.linkHit(Math.min(1, 0.4 + (approach - SAFE_IMPACT) / 1000), 0.6);
     }
@@ -4479,7 +4535,7 @@ export class Game implements OnlineGame {
     if (ship.isLocal && status !== 'protected') {
       this.sound.play('explosion', { volume: Math.min(1.4, 0.3 + impact / 1000), rate: 2.1 });
       this.hud.damaged();
-      this.hud.flashMessage(now, 'Debris impact', 1.2);
+      this.hud.flashMessage(now, t('Debris impact'), 1.2);
       this.speaker.say(COMPUTER.debris);
       this.linkHit(0.5, 0.35);
     }
@@ -4520,7 +4576,7 @@ export class Game implements OnlineGame {
         const flipTime = ((turning / Math.PI) * FLIP_SECONDS + (turning > 0.35 ? FLIP_ROLL_SECONDS : 0)) / turnRate;
         const brakeTime = flipTime + speed / thrust / 2;
         if (timeToImpact < brakeTime + IMPACT_MARGIN) {
-          warnings.push(`IMPACT IN ${timeToImpact.toFixed(1)} s`);
+          warnings.push(t('IMPACT IN {seconds} s', { seconds: timeToImpact.toFixed(1) }));
           if (now >= this.nextWarningBeep) {
             this.sound.beep(980, 0.05, 0.12);
             this.nextWarningBeep = now + THREE.MathUtils.clamp(timeToImpact / 6, 0.1, 0.5);
@@ -4530,19 +4586,19 @@ export class Game implements OnlineGame {
     }
     this.impactAhead = warnings.length > 0;
     this.lockWarning(now);
-    if (me.alive && me.overheated) warnings.push('LASER OVERHEATED');
+    if (me.alive && me.overheated) warnings.push(t('LASER OVERHEATED'));
     this.novaAlarm(me, warnings, now);
     // a torpedo homing on the own ship: shoot it down or dodge
     for (const torpedo of this.torpedoes.list) {
       if (!me.alive || torpedo.target !== me || torpedo.position.distanceTo(flight.position) > TORPEDO_WARNING) continue;
-      warnings.push('TORPEDO INBOUND');
+      warnings.push(t('TORPEDO INBOUND'));
       if (now >= this.nextWarningBeep) {
         this.sound.beep(1480, 0.05, 0.16);
         this.nextWarningBeep = now + 0.12;
       }
       break;
     }
-    if (me.alive && me.driveOffline(now)) warnings.push('DRIVE OVERHEATED');
+    if (me.alive && me.driveOffline(now)) warnings.push(t('DRIVE OVERHEATED'));
     this.hud.setWarning(warnings.join('\n'));
   }
 
@@ -4580,7 +4636,7 @@ export class Game implements OnlineGame {
     }
     // from behind the shooter reaches the drive, the one place that hurts: turn to face it
     const tail = me.tailToward(relative.subVectors(me.flight.position, shooter.flight.position));
-    this.hud.setLock(tail ? 'ON YOUR TAIL' : level === 2 ? 'LOCKED' : 'TRACKED', shooter);
+    this.hud.setLock(tail ? t('ON YOUR TAIL') : level === 2 ? t('LOCKED') : t('TRACKED'), shooter);
     if (now >= this.nextLockBeep) {
       this.sound.beep(tail ? 1760 : level === 2 ? 1560 : 1170, 0.04, tail ? 0.14 : 0.1);
       this.nextLockBeep = now + (tail ? 0.08 : level === 2 ? 0.1 : 0.35);

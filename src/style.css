@@ -295,15 +295,9 @@ button.primary .mode-note {
   font-size: 0.72rem;
 }
 
-/* the ship on show above the logo (and on the hangar's plate): it circles, the arrows change it */
+/* the ship on show, its name and the arrows that change it, on the menu's plate (and the hangar's) */
 #showcase {
-  margin: -8px 0 4px;
-}
-
-#showcase-view {
-  display: block;
-  width: 100%;
-  height: 150px;
+  margin: 0 0 8px;
 }
 
 .showcase-bar {
@@ -1848,6 +1842,20 @@ body.page {
   display: none;
 }
 
+/* the game's title screen: the seal as a pad with the ship on it, a view of its own behind the plates (see view/showcase) */
+#crest {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+#crest[hidden] {
+  display: none;
+}
+
 .page .station {
   position: relative;
   z-index: 1;
@@ -1928,31 +1936,21 @@ body.page {
 }
 
 /*
- * Title screen: on a wide screen the seal stands on the left, whole and unhidden, and the
- * menu sits on the right without a seal of its own. Where both do not fit side by side, the
- * seal behind the menu stays away and the menu keeps its small one.
+ * Title screen: on a wide screen the pad with the ship stands on the left, whole and unhidden
+ * (see view/showcase), and the menu and the hangar sit on the right without a seal of their
+ * own. Where both do not fit side by side, the pad stands above the menu, which keeps its small
+ * seal.
  */
 @media (min-width: 900px) and (min-aspect-ratio: 5/4) {
-  #crest {
-    background-position: 27% center;
-    background-size: min(82vh, 44vw);
-    --crest-glow: 0.55;
-  }
-
   #menu,
-  #tournaments {
+  #tournaments,
+  #hangar-plate {
     left: auto;
     right: max(5vw, 32px);
     transform: translateY(-50%);
   }
 
   #menu .logo {
-    display: none;
-  }
-}
-
-@media (max-width: 899px), (max-aspect-ratio: 5/4) {
-  #crest {
     display: none;
   }
 }

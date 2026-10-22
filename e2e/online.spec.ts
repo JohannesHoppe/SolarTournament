@@ -131,7 +131,7 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
   for (const page of [a, b]) expect(await page.evaluate(() => (window as unknown as GameWindow).game.fleet.hits[1])).toBe(10);
 });
 
-test('a nova from a ship without a core never goes off, and two tabs name its Host a cheater', async ({ context }) => {
+test('a nova from a ship without a core never goes off, and two tabs name its Host a cheater and cast it out', async ({ context }) => {
   const room = `e2e-${Date.now().toString(36)}n&bots=0`;
   const pages = [];
   for (const wait of [7, 9, 9]) {
@@ -150,10 +150,10 @@ test('a nova from a ship without a core never goes off, and two tabs name its Ho
   }
   const victim = await a.evaluate(() => (window as unknown as GameWindow).game.me.flight.position.toArray().map(Math.round));
   // the cheating tab says its clone set off a core it never had, right at the other's ship
-  const name = await cheat.evaluate((at) => {
+  const { name, id: cheaterId } = await cheat.evaluate((at) => {
     const game = (window as unknown as GameWindow).game;
     game.online.session.sendNova(game.me.id, at);
-    return game.me.name;
+    return { name: game.me.name, id: game.me.id };
   }, victim);
   await play(a, 2);
   await play(b, 2);
@@ -165,4 +165,9 @@ test('a nova from a ship without a core never goes off, and two tabs name its Ho
     expect(seen.alive).toBe(true);
     expect(seen.cheaters).toEqual([name]);
   }
+  // cast out: its ship is gone from the others, and the cheating tab is back in the menu
+  for (const page of [a, b]) {
+    expect(await page.evaluate((id) => (window as unknown as GameWindow).game.ships.some((ship: { id: string }) => ship.id === id), cheaterId)).toBe(false);
+  }
+  await cheat.waitForFunction(() => (window as unknown as GameWindow).game.state === 'menu', null, { timeout: 15_000 });
 });

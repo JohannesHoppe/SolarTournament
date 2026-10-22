@@ -80,7 +80,51 @@ function keepEngine(original: THREE.Object3D): THREE.Group {
   return root;
 }
 
-function hull(parts: THREE.BufferGeometry[], material: THREE.Material, glow?: { parts: THREE.BufferGeometry[]; material: THREE.Material }) {
+/** The sheen of every hull: what its polished plates mirror (see shine), and how strongly. */
+const SHEEN = 1.1;
+let mirrored: THREE.CubeTexture | null = null;
+
+/**
+ * What a hull's plates mirror, painted in code: deep space, the sun blazing on one side, and
+ * the tournament's neon in streaks, orange and azure. The glint of polished metal turning in
+ * the light, built once for every hull.
+ */
+function shine(): THREE.CubeTexture {
+  if (mirrored) return mirrored;
+  const face = (paint: (g: CanvasRenderingContext2D) => void) => {
+    const canvas = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
+    const g = canvas.getContext('2d')!;
+    const sky = g.createLinearGradient(0, 0, 0, 128);
+    sky.addColorStop(0, '#2a3242');
+    sky.addColorStop(0.55, '#0a0d14');
+    sky.addColorStop(1, '#020203');
+    g.fillStyle = sky;
+    g.fillRect(0, 0, 128, 128);
+    paint(g);
+    return canvas;
+  };
+  const streak = (color: string, y: number) => (g: CanvasRenderingContext2D) => {
+    g.fillStyle = color;
+    g.fillRect(0, y, 128, 6);
+  };
+  const sun = (g: CanvasRenderingContext2D) => {
+    const glow = g.createRadialGradient(64, 40, 0, 64, 40, 46);
+    glow.addColorStop(0, '#fffaf0');
+    glow.addColorStop(0.2, '#ffd9a0');
+    glow.addColorStop(1, 'rgba(255, 150, 40, 0)');
+    g.fillStyle = glow;
+    g.fillRect(0, 0, 128, 128);
+  };
+  // +x, -x, +y, -y, +z, -z
+  mirrored = new THREE.CubeTexture([face(sun), face(streak('#ff9d00', 70)), face(() => {}), face(() => {}), face(streak('#4d91ff', 76)), face(streak('#ff9d00', 60))]);
+  mirrored.colorSpace = THREE.SRGBColorSpace;
+  mirrored.needsUpdate = true;
+  return mirrored;
+}
+
+function hull(parts: THREE.BufferGeometry[], material: THREE.MeshStandardMaterial, glow?: { parts: THREE.BufferGeometry[]; material: THREE.Material }) {
+  material.envMap = shine();
+  material.envMapIntensity = SHEEN;
   const group: THREE.Mesh[] = [new THREE.Mesh(mergeGeometries(parts), material)];
   if (glow) group.push(new THREE.Mesh(mergeGeometries(glow.parts), glow.material));
   return group;
@@ -118,7 +162,7 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
     // tournament stripes on the fins
     ...pair(paint(loft(RECTANGLE, { z: 150, w: 17, h: 8, x: 285, y: 70 }, { z: 60, w: 15, h: 8, x: 289, y: 64 }), STRIPE)),
   ];
-  for (const mesh of hull(parts, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.7, metalness: 0.2, side: THREE.DoubleSide }))) {
+  for (const mesh of hull(parts, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.42, metalness: 0.45, side: THREE.DoubleSide }))) {
     mesh.name = 'humanHull';
     root.add(mesh);
   }
@@ -202,7 +246,7 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...pair(loft(RECTANGLE, { z: 360, w: 2, h: 2, x: 104, y: -18 }, { z: 60, w: 2, h: 2, x: 148, y: -50 })),
     ...pair(loft(RECTANGLE, { z: 150, w: 2, h: 2, x: 64, y: 20 }, { z: -220, w: 2, h: 2, x: 20, y: 4 })),
   ];
-  const meshes = hull(parts, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.35, metalness: 0.3, side: THREE.DoubleSide }), {
+  const meshes = hull(parts, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.28, metalness: 0.5, side: THREE.DoubleSide }), {
     parts: veins,
     material: new THREE.MeshBasicMaterial({ color: VEIN, toneMapped: false }),
   });

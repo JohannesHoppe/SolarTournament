@@ -30,6 +30,8 @@ export interface OnlineGame {
   remoteRock(id: string, at: number, round: number): void;
   /** Another peer shot or rammed a piece of wreckage. */
   remoteWreck(id: string): void;
+  /** The other browsers named this one a cheater and cast it out: it leaves the tournament. */
+  castOut(): void;
   /** A ship of another peer hit a part of the President's battleship in a round, this many times (a torpedo counts several). */
   remoteFleetHit(zone: number, round: number, shooter: Ship, count: number): void;
   /** A part of the President's battleship as a torpedo homes on it, by its id. */
@@ -398,12 +400,19 @@ export class Online {
     return true;
   }
 
-  /** One browser more says a peer cheats; once enough do, everyone here is told who. */
+  /**
+   * One browser more says a peer cheats; once enough do, everyone here is told who, and the
+   * peer is cast out: this browser sends it nothing more and takes nothing from it, its ships
+   * leave this tournament as if it had gone. Every honest browser comes to the same vote, so the
+   * cheater is left alone; a browser cast out itself is told so and leaves.
+   */
   private accuse(accused: string, accuser: string) {
     if (!this.accusations.add(accused, accuser)) return;
     const ships = this.game.allShips().filter((ship) => ship.owner === accused || (accused === this.selfId && ship.owner === null));
     const host = ships.find((ship) => ship.id.startsWith('p:')) ?? ships[0];
     this.game.announceCheater(host?.name ?? accused);
+    if (accused === this.selfId) this.game.castOut();
+    else this.session.castOut(accused);
   }
 
   private forgetShipsOf(peer: string) {

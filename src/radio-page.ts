@@ -3,11 +3,15 @@ import { renderTrack, trackSeconds } from './music/preview';
 import { bindVolume, Radio } from './music/radio';
 import { createSong, ROUND_SECONDS, titleFor, type SectionKind, type Song } from './music/songs';
 import { showTransmission } from './music/transmission';
+import { initLocale, msg, t, translatePage } from './i18n/i18n';
 
 /**
  * Radio 2584's own page: enter a title, and the track it grows plays again or downloads as a
  * WAV file. The title is the seed, so a track heard in a round can always be found again.
  */
+
+initLocale();
+translatePage();
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -28,7 +32,16 @@ const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.flo
 /** Capitalizes each word; words start after a space, so ß or ö inside a word stay as they are. */
 const tidy = (title: string) => title.trim().replace(/\s+/g, ' ').replace(/(^| )(\p{L})/gu, (_, space: string, c: string) => space + c.toUpperCase());
 
-const SECTION_LABELS: Record<SectionKind, string> = { intro: 'Intro', groove: 'Groove', peak: 'Peak', break: 'Breakdown', strip: 'Strip', gap: 'Gap', finale: 'Finale', outro: 'Outro' };
+const SECTION_LABELS: Record<SectionKind, string> = {
+  intro: msg('Intro'),
+  groove: msg('Groove'),
+  peak: msg('Peak'),
+  break: msg('Breakdown'),
+  strip: msg('Strip'),
+  gap: msg('Gap'),
+  finale: msg('Finale'),
+  outro: msg('Outro'),
+};
 
 function tune(title: string) {
   const clean = tidy(title);
@@ -52,7 +65,7 @@ function tune(title: string) {
       const block = document.createElement('span');
       block.className = `section ${section.kind}`;
       block.style.flexGrow = String(section.bars);
-      block.title = `${SECTION_LABELS[section.kind]}, ${section.bars} bars`;
+      block.title = t('{section}, {bars} bars', { section: t(SECTION_LABELS[section.kind]), bars: section.bars });
       return block;
     }),
   );
@@ -71,7 +84,7 @@ function play() {
   }, subtitle, false);
   starting = true;
   playingSince = performance.now() - from * 1000;
-  $('play').textContent = 'Stop';
+  $('play').textContent = t('Stop');
 }
 
 /** Stops the track; the next Play starts it from the beginning. */
@@ -81,7 +94,7 @@ function stop() {
   starting = false;
   from = 0;
   showPosition(0);
-  $('play').textContent = 'Play';
+  $('play').textContent = t('Play');
 }
 
 /** Moves the playhead: a playing track jumps there (the radio follows its clock), a stopped one plays from there. */
@@ -126,20 +139,20 @@ async function download() {
   const button = $<HTMLButtonElement>('download');
   const status = $('download-status');
   button.disabled = true;
-  status.textContent = `Pressing ${pressing.title}…`;
+  status.textContent = t('Pressing {title}…', { title: pressing.title });
   try {
     const wav = await renderTrack(pressing, 0, trackSeconds(pressing), 44100, (done) => {
-      status.textContent = `Pressing ${pressing.title}… ${Math.round(done * 100)} %`;
+      status.textContent = t('Pressing {title}… {percent} %', { title: pressing.title, percent: Math.round(done * 100) });
     });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
     link.download = `SolarTournament - ${pressing.title}.wav`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 10000);
-    status.textContent = `${(wav.byteLength / 1048576).toFixed(0)} MB. Make the sponsor happy.`;
+    status.textContent = t('{size} MB. Make the sponsor happy.', { size: (wav.byteLength / 1048576).toFixed(0) });
   } catch (error) {
     console.error(error);
-    status.textContent = 'Pressing failed. Try again in Chrome or Edge.';
+    status.textContent = t('Pressing failed. Try again in Chrome or Edge.');
   } finally {
     button.disabled = false;
   }

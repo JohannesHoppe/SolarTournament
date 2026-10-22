@@ -6,6 +6,8 @@ The original from 2012 (CopperLicht, Node.js, Socket.IO) lives on the branch `ol
 
 **Language:** everything in this repository is English: code, comments, docs, commit messages. Johannes and Claude talk German with each other; that does not change the language of the repo.
 
+**The game in four languages:** English, German, Spanish, French (see `src/i18n/i18n.ts`). Every text the player sees is written in English where it is used and wrapped in `t('…')` (placeholders in braces, `t('Gate {n} of {total}', { n, total })`; whole phrases, never fragments put together); a text kept in a table and shown elsewhere is marked with `msg('…')` and shown through `t(value)`; a fixed text of a page carries `data-i18n` (attributes `data-i18n-attr`). The flight computer's and the announcer's lines in `src/music/lines.ts` are translated where they are spoken. Each new or changed text gets its translation in `src/i18n/de.ts`, `es.ts` and `fr.ts` in the same commit (keyed by the exact English text; `npm run i18n -- de` lists what is missing); the unit tests fail on a missing, stale or broken entry. Translations follow the catalogs' glossaries and voices (the Host addressed as du/tú/tu; the President's bombast, the announcer's cynicism, Nicole's flirt); larger batches go to translators briefed on the universe.
+
 **No foreign projects as references:** files and commit messages never name another project that served as a model or inspiration (for a license, a workflow, a pattern). Only what the repo actually uses is named: dependencies, assets and their licenses.
 
 ## Guideline: a universe of its own
@@ -65,7 +67,7 @@ Never use `npx`, always the scripts from `package.json`.
 
 The repository root is the Vite project: `index.html` (the game), `radio.html` (Radio 2584), `impressum.html` and `datenschutz.html` (German legal pages, linked from the menu and the radio page) are its pages, `public/` holds the static files, `tools/` the generators that write into `public/`.
 
-**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the nine localStorage entries, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server and TURN relay, public tournament names, the cheat reports between the browsers), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, another TURN or STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
+**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the ten localStorage entries, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server and TURN relay, public tournament names, the cheat reports between the browsers), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, another TURN or STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
 
 `src/` is grouped by area:
 
@@ -76,6 +78,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `style.css` | Styles of both pages |
 | `assets.ts` | Loads the ship models and drive sprites, collects the assets generated in code |
 | `random.ts` | Deterministic random generator |
+| `storage.ts` | The browser's localStorage, where it is available |
+| `i18n/` | The languages: `i18n.ts` (t(), msg(), the language chosen, the page's fixed texts) and the catalogs `de.ts`, `es.ts`, `fr.ts`; `tools/i18n/` collects every text to translate |
 | **`game/`** | **The round** |
 | `game/game.ts` | Game states, round flow, lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
 | `game/race.ts` | The race: modes of rounds and rooms, the course of gates (laid out from the arena's field), points for gates and places |
@@ -116,7 +120,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/lensing.ts` | The black hole's gravitational lens over the rendered picture |
 | `view/glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |
 | `view/guide.ts` | The racing line: dots on the ideal line every 20 m, fixed in space, joined from the own ship's flight, with pulses |
-| `view/showcase.ts` | The ship on show above the menu's logo (and on the hangar's plate): a small view of its own, the chosen ship circling in its upgrades' looks, a ship not earned as a silhouette |
+| `view/showcase.ts` | The title screen's pad: the seal as a coin seen from above at a slant, the chosen ship hovering and circling above it in its upgrades' looks, a ship not earned as a silhouette; a view of its own behind the plates |
 | `view/ghost.ts` | The ghost of the own best lap: the own hull as a faint blue hologram |
 | `view/datamosh.ts` | The clone's death: its last picture loses the key frames and rots with the camera's motion and the frames' changes (a pass with its own feedback buffers) |
 | `view/textures.ts` | Canvas textures: glows, sparks, smoke |
@@ -135,7 +139,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `music/preview.ts` | Renders a track (or a stretch) offline as WAV: downloads on the radio page, previews in development |
 | `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the announcer's lines, the flight computer's lines |
 | `music/transmission.ts` | The on-screen transmission: whatever the radio says, in neon, while it is spoken (game and radio page) |
-| `music/voice.ts` | Loads the pre-rendered voice sprite (once, shared) |
+| `music/voice.ts` | Loads the pre-rendered voices for the Host's language: the radio's sprite and the language's, joined (once per language, shared) |
 | **`net/`** | **Online tournament** |
 | `net/online.ts` | Ship ownership, what goes over the network, the lead browser's bots (a new lead adopts them) |
 | `net/session.ts` | Tournament protocol: message types, sender checks and rate limits, election of the lead browser (longest in the room and still sending), starting over after a lost link |
@@ -147,7 +151,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 
 `tools/crest/render.ts` (`npm run crest`) draws the seal of the Ministry of War into `public/crest.svg`: computed rings, stars and sun, Michroma lettering as paths, and the eagle of `tools/crest/eagle.svg` (CC0) cut into angular facets.
 
-`tools/voice/render.ts` (`npm run voice`) renders every word and every sentence of the radio lines in `src/music/lines.ts` with espeak-ng, and the flight computer's lines (Nicole) with Kokoro, into `public/assets/voice/`. The sprite is generated, not versioned (`.gitignore`): `npm run build` and `npm run dev` make it first, and only render it when the lines, the tool (with the pinned Kokoro revision) or the engines' versions (kokoro-js, phonemizer, transformers, onnxruntime, espeak-ng, ffmpeg-static) changed. ffmpeg comes from the ffmpeg-static package. Sprite (keyed by a hash of its inputs) and Kokoro model (one folder per revision, used only once a download has completed) are kept in `_solartournament/` inside npm's cache directory (`~/.npm` by default): Cloudflare Pages keeps that directory between builds and no other, so a fresh checkout whose inputs did not change copies the sprite instead of rendering it (`VOICE_CACHE` moves the cache; where it cannot be written, the voice is rendered all the same). Never commit the sprite: generated binaries bloat the repository's history for good.
+`tools/voice/render.ts` (`npm run voice`) renders into `public/assets/voice/` a sprite for the radio (every word and every sentence of the regime's lines in `src/music/lines.ts` with espeak-ng, English and German) and one for each language of the game (the announcer with espeak-ng in that language, and the flight computer's lines, Nicole, with Kokoro: English by herself, the other languages in the phonemes espeak-ng spells them in), translated through the catalogs. The sprites are generated, not versioned (`.gitignore`): `npm run build` and `npm run dev` make them first, and only render them when the lines or their translations, the tool (with the pinned Kokoro revision) or the engines' versions (kokoro-js, phonemizer, transformers, onnxruntime, espeak-ng, ffmpeg-static) changed. ffmpeg comes from the ffmpeg-static package. Sprites (keyed by a hash of their inputs) and Kokoro model (one folder per revision, used only once a download has completed) are kept in `_solartournament/` inside npm's cache directory (`~/.npm` by default): Cloudflare Pages keeps that directory between builds and no other, so a fresh checkout whose inputs did not change copies the sprite instead of rendering it (`VOICE_CACHE` moves the cache; where it cannot be written, the voice is rendered all the same). Never commit the sprite: generated binaries bloat the repository's history for good.
 
 ## License
 

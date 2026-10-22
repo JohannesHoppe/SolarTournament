@@ -1,5 +1,6 @@
 import type * as ToneLib from 'tone';
 import { clipKey, phraseKey, phrases, words, type Language } from './lines';
+import * as i18n from '../i18n/i18n';
 import { barSeconds, stepEvents, STEPS_PER_BAR, type BarInfo, type KickDesign, type Song, type VoiceLine } from './songs';
 
 type Tone = typeof ToneLib;
@@ -604,7 +605,8 @@ export class Band {
     if (!this.voice) return;
     this.crackle(0.15, t, 0.9);
     let position = t + 0.18;
-    for (const { clip, stop } of this.clips('mod', text, false, name ?? 'pilot')) {
+    // a Host's clone is called "pilot", in the Host's language
+    for (const { clip, stop } of this.clips('mod', text, false, name ?? i18n.t('pilot'))) {
       this.playClip(clip, position, this.announcerIn);
       position += clip[1] + 0.03 + (stop ? 0.22 : 0);
     }

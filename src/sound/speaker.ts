@@ -1,6 +1,7 @@
 import type { Voice } from '../music/band';
 import { clipKey } from '../music/lines';
 import { loadVoice } from '../music/voice';
+import { currentLocale, t, type Locale } from '../i18n/i18n';
 
 /** A voice that failed to load is tried again after this long (ms), as the radio's. */
 const VOICE_RETRY_MS = 5000;
@@ -16,6 +17,8 @@ export type Urgency = 'chatter' | 'urgent' | 'lesson';
 export class Speaker {
   private voice: Voice | null = null;
   private loading: Promise<void> | null = null;
+  /** The language the voice was loaded for. */
+  private loadingFor: Locale | null = null;
   /** After a failed load, the next try waits until then (performance.now(), ms). */
   private retryAt = 0;
   private readonly input: GainNode;
@@ -38,12 +41,18 @@ export class Speaker {
     this.input.connect(highpass).connect(grit).connect(level).connect(destination);
   }
 
-  /** Loads the voice in the background; lines said before it is ready are skipped. */
+  /** Loads the voice of the Host's language in the background (again when the language changed); lines said before it is ready are skipped. */
   prepare() {
+    if (this.loadingFor !== currentLocale()) {
+      this.loading = null;
+      this.voice = null;
+    }
     if (this.loading || performance.now() < this.retryAt) return;
-    this.loading = loadVoice()
+    const locale = (this.loadingFor = currentLocale());
+    this.loading = loadVoice(locale)
       .then((voice) => {
-        this.voice = voice;
+        // a voice that arrives after the language changed again is not the one wanted
+        if (this.loadingFor === locale) this.voice = voice;
       })
       .catch((error) => {
         // tried again with a line said after a pause, not with every line of every frame
@@ -78,7 +87,8 @@ export class Speaker {
     const waiting = new Set(this.sources.values());
     let said = false;
     for (const line of typeof lines === 'string' ? [lines] : lines) {
-      const clip = voice.clips[clipKey('sys', line)];
+      // the line in the Host's language: the sprite holds it rendered in each
+      const clip = voice.clips[clipKey('sys', t(line))];
       if (!clip) continue;
       said = true;
       if (queued && waiting.has(line)) continue;

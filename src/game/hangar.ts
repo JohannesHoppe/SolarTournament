@@ -1,4 +1,5 @@
 import type { ShipType } from '../assets';
+import { msg } from '../i18n/i18n';
 
 /**
  * The hangar: Solar Coins, the currency of the United Solar States, and what a Host buys with
@@ -46,13 +47,13 @@ export const COINS_PER_POINT = 1;
  * violet, then white-hot.
  */
 export const UPGRADES: readonly Upgrade[] = [
-  { id: 'radiators', name: 'Radiators', note: 'Your laser cools faster', prices: [1000, 2500, 5000], looks: false },
-  { id: 'thrusters', name: 'Thrusters', note: 'Sharper turns and sidesteps', prices: [1000, 2500, 5000], looks: false },
-  { id: 'drive', name: 'Main drive', note: 'More push, same speed limit', prices: [1000, 2500, 5000], looks: false },
-  { id: 'tubes', name: 'Torpedo tubes', note: 'More torpedoes per clone', prices: [1500, 3000, 6000], looks: false },
-  { id: 'plating', name: 'Plating', note: 'Every hit hurts less', prices: [1500, 3000, 6000], looks: false },
-  { id: 'neon', name: 'Neon trim', note: 'The hull glows in sun orange', prices: [500, 1500, 3000], looks: true },
-  { id: 'flame', name: 'Drive flame', note: 'Azure, violet, white-hot', prices: [500, 1500, 3000], looks: true },
+  { id: 'radiators', name: msg('Radiators'), note: msg('Your laser cools faster'), prices: [1000, 2500, 5000], looks: false },
+  { id: 'thrusters', name: msg('Thrusters'), note: msg('Sharper turns and sidesteps'), prices: [1000, 2500, 5000], looks: false },
+  { id: 'drive', name: msg('Main drive'), note: msg('More push, same speed limit'), prices: [1000, 2500, 5000], looks: false },
+  { id: 'tubes', name: msg('Torpedo tubes'), note: msg('More torpedoes per clone'), prices: [1500, 3000, 6000], looks: false },
+  { id: 'plating', name: msg('Plating'), note: msg('Every hit hurts less'), prices: [1500, 3000, 6000], looks: false },
+  { id: 'neon', name: msg('Neon trim'), note: msg('The hull glows in sun orange'), prices: [500, 1500, 3000], looks: true },
+  { id: 'flame', name: msg('Drive flame'), note: msg('Azure, violet, white-hot'), prices: [500, 1500, 3000], looks: true },
 ];
 
 /** What a Host owns: its coins, the steps of every upgrade of each interceptor, and the ship it flies. */

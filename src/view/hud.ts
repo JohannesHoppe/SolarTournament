@@ -3,6 +3,7 @@ import { MAX_HEAT, MAX_HULL, type Ship } from '../ship/ship';
 import { CONTROLS, keyLabel, type Command, type Device } from '../input/input';
 import { markedName, type Kind } from './marks';
 import { TEAM_TINTS } from '../game/flags';
+import { t } from '../i18n/i18n';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const projected = new THREE.Vector3();
@@ -73,7 +74,7 @@ export class Hud {
     if (device === this.keysFor) return;
     this.keysFor = device;
     for (const key of this.keys) {
-      const label = device === 'touch' ? '' : (CONTROLS[device][key.dataset.command as Command]?.[0] ?? '');
+      const label = device === 'touch' ? '' : t(CONTROLS[device][key.dataset.command as Command]?.[0] ?? '');
       key.textContent = device === 'keyboard' ? keyLabel(label) : label;
       key.hidden = !label;
     }
@@ -120,7 +121,7 @@ export class Hud {
     const minutes = Math.floor(secondsLeft / 60);
     const seconds = Math.floor(secondsLeft % 60);
     setText(this.time, Number.isFinite(secondsLeft) ? `${minutes}:${String(seconds).padStart(2, '0')}` : '');
-    setText(this.score, `${me.score} pts`);
+    setText(this.score, t('{n} pts', { n: me.score }));
     setBar(this.hull, me.hull / MAX_HULL);
     setBar(this.drive, me.drive);
     setBar(this.thrusters, me.thrusters);
@@ -128,9 +129,10 @@ export class Hud {
     this.heat.classList.toggle('overheated', me.overheated);
     setHidden(this.shadow, !me.alive || !me.inShadow);
     // at the tournament's speed limit the readout says so: the drive is held back
-    setText(this.speed, `${Math.round(me.flight.velocity.length() * METERS_PER_UNIT)} m/s${me.flight.limited ? ' · MAX' : ''}`);
+    const speed = Math.round(me.flight.velocity.length() * METERS_PER_UNIT);
+    setText(this.speed, me.flight.limited ? t('{speed} m/s · MAX', { speed }) : t('{speed} m/s', { speed }));
 
-    if (!me.alive) setText(this.message, 'Live link lost');
+    if (!me.alive) setText(this.message, t('Live link lost'));
     else if (now > this.messageUntil) setText(this.message, '');
     if (now > this.splitUntil) setText(this.splitText, '');
 
@@ -192,28 +194,29 @@ export class Hud {
 
   /** The overdrive next to the flight mode: ready, or the seconds until it is. */
   setOverdrive(seconds: number) {
-    setText(this.overdrive, seconds > 0 ? `Overdrive ${Math.ceil(seconds)} s` : 'Overdrive ready');
+    setText(this.overdrive, seconds > 0 ? t('Overdrive {s} s', { s: Math.ceil(seconds) }) : t('Overdrive ready'));
     if (this.overdrive.classList.contains('ready') !== (seconds <= 0)) this.overdrive.classList.toggle('ready', seconds <= 0);
   }
 
   /** The hook: holding with so much cable out (m), recharging for `seconds`, or ready. */
   setHook(cable: number | null, seconds: number) {
-    setText(this.hook, cable !== null ? `Hooked · ${Math.round(cable)} m` : seconds > 0 ? `Hook ${seconds.toFixed(1)} s` : 'Hook ready');
+    setText(this.hook, cable !== null ? t('Hooked · {m} m', { m: Math.round(cable) }) : seconds > 0 ? t('Hook {s} s', { s: seconds.toFixed(1) }) : t('Hook ready'));
     const state = cable !== null ? 'held' : seconds > 0 ? '' : 'ready';
     if (this.hook.className !== `readout ${state}`.trim()) this.hook.className = `readout ${state}`.trim();
   }
 
   /** The torpedoes left and the items held, each with what it does, next to the overdrive. */
   setArsenal(torpedoes: number, twin: boolean, plating: number, nova: boolean) {
-    const items = `${twin ? ' · Twin: fires twice as fast' : ''}${plating ? ` · Plating ${plating}: stops hits` : ''}${nova ? ' · Nova: next shot blows up everything around' : ''}`;
-    setText(this.torpedo, `${torpedoes > 0 ? `Torpedo ${torpedoes}` : 'No torpedo'}${items}`);
+    // each item is a phrase of its own, joined by the separator
+    const items = `${twin ? ` · ${t('Twin: fires twice as fast')}` : ''}${plating ? ` · ${t('Plating {n}: stops hits', { n: plating })}` : ''}${nova ? ` · ${t('Nova: next shot blows up everything around')}` : ''}`;
+    setText(this.torpedo, `${torpedoes > 0 ? t('Torpedo {n}', { n: torpedoes }) : t('No torpedo')}${items}`);
     if (this.torpedo.classList.contains('ready') !== torpedoes > 0) this.torpedo.classList.toggle('ready', torpedoes > 0);
   }
 
   /** The flight mode next to the velocity: AUTOPILOT in blue, FREE DRIFT in orange. */
   setAutopilot(on: boolean) {
     if (this.mode.classList.contains('free') !== on) return;
-    this.mode.textContent = on ? 'Autopilot' : 'Free drift';
+    this.mode.textContent = on ? t('Autopilot') : t('Free drift');
     this.mode.classList.toggle('free', !on);
   }
 
@@ -225,7 +228,7 @@ export class Hud {
     this.center.hidden = !me.alive;
     if (!me.alive) return;
     pin(this.center, camera, origin);
-    setText(this.centerDistance, `Center · ${meters(me.flight.position.length())}`);
+    setText(this.centerDistance, t('Center · {distance}', { distance: meters(me.flight.position.length()) }));
   }
 
   /** Persistent warning below the crosshair (impact, overheating); empty text hides it. */

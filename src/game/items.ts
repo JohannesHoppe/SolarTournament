@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { hash } from '../music/songs';
 import { textSeed } from '../random';
 import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
+import { msg } from '../i18n/i18n';
 
 /**
  * Items: sponsor probes that drift in the arena, each carrying one thing, like the item boxes
@@ -26,7 +27,7 @@ export type ProbeState = { i: string; k: ItemKind; p: number[]; v: number[]; u: 
 /** How often each kind comes in a probe (relative), the coveted ones rarer. */
 const WEIGHTS: Record<ItemKind, number> = { twin: 2, plating: 3, torpedoes: 3, overdrive: 2, repair: 3, nova: 1 };
 /** Sealed probes the radar names this way. */
-export const SEALED_NAME = 'Sealed probe';
+export const SEALED_NAME = msg('Sealed probe');
 /**
  * In a race the arena's probes are sealed: what one holds is decided when it is taken, by the
  * taker's place, so whoever lies behind catches up. The leaders' third mostly finds plating
@@ -46,9 +47,23 @@ export function placeBucket(place: number, count: number): number {
   return share < 1 / 3 ? 0 : share > 2 / 3 ? 2 : 1;
 }
 
-export const ITEM_NAMES: Record<ItemKind, string> = { twin: 'Twin laser', plating: 'Plating', torpedoes: '+2 torpedoes', overdrive: 'Overdrive charged', repair: 'Repair', nova: 'Nova core' };
+export const ITEM_NAMES: Record<ItemKind, string> = {
+  twin: msg('Twin laser'),
+  plating: msg('Plating'),
+  torpedoes: msg('+2 torpedoes'),
+  overdrive: msg('Overdrive charged'),
+  repair: msg('Repair'),
+  nova: msg('Nova core'),
+};
 /** What each item does, in as few words as the HUD can show next to its name. */
-export const ITEM_HINTS: Record<ItemKind, string> = { twin: 'fires twice as fast', plating: 'stops two hits', torpedoes: 'extra torpedoes', overdrive: 'ready now', repair: 'ship as new', nova: 'next shot blows up everything around' };
+export const ITEM_HINTS: Record<ItemKind, string> = {
+  twin: msg('fires twice as fast'),
+  plating: msg('stops two hits'),
+  torpedoes: msg('extra torpedoes'),
+  overdrive: msg('ready now'),
+  repair: msg('ship as new'),
+  nova: msg('next shot blows up everything around'),
+};
 /** A sealed probe's neon runs through the colors this often (1/s). */
 const SEALED_CYCLE = 0.4;
 /** The neon of each kind, so a pilot sees from afar what a probe carries. */

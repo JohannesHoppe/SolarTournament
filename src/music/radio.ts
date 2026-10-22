@@ -1,6 +1,7 @@
 import { Band, type Spoken } from './band';
 import { barSeconds, createSong, STEPS_PER_BAR, type Energy, type Song } from './songs';
 import { loadVoice } from './voice';
+import { t } from '../i18n/i18n';
 
 /** What the radio should play: a track (by its title) and how far into it the music is. */
 export interface MusicCue {
@@ -219,6 +220,11 @@ export class Radio {
     }
   }
 
+  /** The Host changed its language: the announcer's voice comes anew, in it. */
+  relocalize() {
+    this.voiced = false;
+  }
+
   private async loadBandVoice() {
     try {
       this.band!.setVoice(await loadVoice());
@@ -237,7 +243,8 @@ export class Radio {
    */
   announce(text: string, name: string | null) {
     if (!this.band || !this.cue || !this.enabledFlag || this.context.state !== 'running') return;
-    this.pendingAnnouncement = { text, name, until: this.context.currentTime + ANNOUNCE_PATIENCE };
+    // in the Host's language: the sprite holds the announcer's lines rendered in each
+    this.pendingAnnouncement = { text: t(text), name, until: this.context.currentTime + ANNOUNCE_PATIENCE };
   }
 
   /** Puts a waiting announcement on air once there is room for it (see announce). */

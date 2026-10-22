@@ -1,4 +1,5 @@
 import type { Spoken } from './band';
+import { currentLocale, t } from '../i18n/i18n';
 
 /**
  * Whatever the radio says also runs across the screen, in neon, while it is spoken: the
@@ -14,14 +15,15 @@ let timer = 0;
  * voice names the track `title` instead of its words; `name` fills the {name} of an
  * announcer's line.
  */
-export function showTransmission(spoken: Spoken, delay: number, title: string | null, name = 'pilot') {
+export function showTransmission(spoken: Spoken, delay: number, title: string | null, name: string | null = null) {
   const station = spoken.language !== 'mod' && spoken.line.startsWith('radio');
-  const speaker = spoken.language === 'mod' ? 'Announcer' : station ? 'Radio 2584' : spoken.language === 'de' ? 'Der Präsident' : 'The Orange President';
+  // the announcer speaks the Host's language; the regime's voice speaks its own English or German
+  const speaker = spoken.language === 'mod' ? t('Announcer') : station ? 'Radio 2584' : spoken.language === 'de' ? 'Der Präsident' : 'The Orange President';
   const words =
     station && title
       ? `${spoken.language === 'de' ? 'Es läuft' : 'Now playing'}: ${title}`
       : spoken.line
-          .replace('{name}', name)
+          .replace('{name}', name ?? t('pilot'))
           .split(/(?<=[.?!])\s+/)
           .map((sentence) => sentence.charAt(0).toUpperCase() + sentence.slice(1))
           .join(' ');
@@ -31,8 +33,8 @@ export function showTransmission(spoken: Spoken, delay: number, title: string | 
     box.className = spoken.language === 'mod' ? 'announcer' : 'regime';
     document.getElementById('transmission-speaker')!.textContent = speaker;
     text.textContent = /[.?!]$/.test(words) ? words : words + '.';
-    // German lines are hyphenated and read out as German
-    text.lang = spoken.language === 'de' ? 'de' : 'en';
+    // a line is hyphenated and read out in its language: the announcer's is the Host's
+    text.lang = spoken.language === 'mod' ? currentLocale() : spoken.language === 'de' ? 'de' : 'en';
     box.hidden = false;
     clearTimeout(timer);
     timer = window.setTimeout(() => (box.hidden = true), spoken.duration * 1000 + HOLD_MS);

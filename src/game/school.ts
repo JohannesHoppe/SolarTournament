@@ -9,6 +9,7 @@ import { ARENA_LIMIT } from '../world/arena';
 import { GATE_RADIUS } from './race';
 import type { ItemKind } from './items';
 import { MAX_HULL } from '../ship/ship';
+import { currentLocale, msg, t } from '../i18n/i18n';
 
 /** What a flight school drill can see and do. */
 export interface SchoolContext {
@@ -345,7 +346,7 @@ const DRILL = {
     },
     done: (ctx, a) => holdFor(ctx, a, aimError(ctx, a.points[0]) < 0.05, 0.4),
     waypoint: (_, a) => a.points[0],
-    mark: () => 'Target',
+    mark: () => t('Target'),
   },
   fineAim: {
     line: SCHOOL.fineAim,
@@ -358,7 +359,7 @@ const DRILL = {
     // touch sticks have no fine aim: there the marker only has to sit in the crosshair
     done: (ctx, a) => holdFor(ctx, a, aimError(ctx, a.points[0]) < (ctx.device === 'touch' ? 0.04 : 0.015), 0.8),
     waypoint: (_, a) => a.points[0],
-    mark: () => 'Target',
+    mark: () => t('Target'),
   },
   cockpit: {
     line: SCHOOL.cockpit,
@@ -400,7 +401,7 @@ const DRILL = {
     },
     fail: (ctx, a) => (lost(ctx, a) ? SCHOOL.again : null),
     waypoint: (_, a) => a.points[a.next] ?? null,
-    mark: (_, a) => `Ring ${a.next + 1}/${a.points.length}`,
+    mark: (_, a) => t('Ring {n}/{total}', { n: a.next + 1, total: a.points.length }),
   },
   // the rings of a race are coils: only their core throws a ship on
   coil: {
@@ -418,7 +419,7 @@ const DRILL = {
     },
     fail: (ctx, a) => (a.warned ? SCHOOL.coilMiss : lost(ctx, a) ? SCHOOL.again : null),
     waypoint: (_, a) => a.points[a.next] ?? null,
-    mark: (_, a) => `Core ${a.next + 1}/${a.points.length}`,
+    mark: (_, a) => t('Core {n}/{total}', { n: a.next + 1, total: a.points.length }),
   },
   // the race's start: the clamps hold the ship until GO, and the drive must light on it
   start: {
@@ -427,13 +428,12 @@ const DRILL = {
     keys: ['drive'],
     enter: (ctx) => stop(ctx),
     done(ctx, a) {
-      const t = a.seconds;
       const lit = ctx.controls.thrust > 0;
-      if (lit && !a.lit) a.litAt = t;
+      if (lit && !a.lit) a.litAt = a.seconds;
       a.lit = lit;
-      const count = Math.max(0, Math.ceil(START_GO - t));
+      const count = Math.max(0, Math.ceil(START_GO - a.seconds));
       if (count !== a.count) {
-        ctx.countdown(count > 0 ? String(count) : 'GO');
+        ctx.countdown(count > 0 ? String(count) : t('GO'));
         a.count = count;
       }
       if (count > 0) {
@@ -474,7 +474,7 @@ const DRILL = {
       return a.points.length && ctx.me.flight.position.distanceTo(a.points[0]) > 40000 ? SCHOOL.again : null;
     },
     waypoint: (_, a) => a.points[0] ?? null,
-    mark: () => 'Hook it',
+    mark: () => t('Hook it'),
   },
   shoot: atDrone(SCHOOL.shoot, SCHOOL_PRAISE.shoot, 6000),
   shootMoving: {
@@ -489,7 +489,7 @@ const DRILL = {
     done: (ctx) => !!ctx.drone && !ctx.drone.alive,
     fail: (ctx) => (ctx.drone && ctx.drone.flight.position.distanceTo(ctx.me.flight.position) > 20000 ? SCHOOL.again : null),
     waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
-    mark: () => 'Drone',
+    mark: () => t('Drone'),
   },
   overheat: {
     line: SCHOOL.overheat,
@@ -509,7 +509,7 @@ const DRILL = {
     keys: ['drive', 'brake'],
     done: (ctx, a) => holdFor(ctx, a, ctx.me.inShadow, 1),
     waypoint: (ctx) => nearestShadow(ctx),
-    mark: () => 'Shadow',
+    mark: () => t('Shadow'),
   },
   impact: {
     line: SCHOOL.impact,
@@ -594,7 +594,7 @@ const DRILL = {
     done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.position.distanceTo(a.points[0]) < STOP_RADIUS && speed(ctx) < STOP_SPEED, 0.3),
     fail: (ctx, a) => (ctx.me.flight.position.distanceTo(a.points[0]) > 30000 ? SCHOOL.again : null),
     waypoint: (_, a) => a.points[0],
-    mark: () => 'Stop here',
+    mark: () => t('Stop here'),
   },
   slide: {
     line: SCHOOL.slide,
@@ -662,7 +662,7 @@ const DRILL = {
     // both launched without a lock, or both gone past
     fail: (ctx) => (ctx.me.torpedoes === 0 && ctx.torpedoes === 0 ? SCHOOL.again : null),
     waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
-    mark: () => 'Lock on',
+    mark: () => t('Lock on'),
   },
   torpedoDown: {
     line: SCHOOL.torpedoDown,
@@ -685,7 +685,7 @@ const DRILL = {
     },
     fail: (ctx, a) => (ctx.me.hull < a.reach || (a.lit && ctx.torpedoes === 0 && ctx.torpedoesDown === a.count) ? SCHOOL.torpedoHit : null),
     waypoint: (ctx) => ctx.incoming,
-    mark: () => 'Torpedo',
+    mark: () => t('Torpedo'),
   },
   overdrive: {
     line: SCHOOL.overdrive,
@@ -706,7 +706,7 @@ const DRILL = {
     done: (ctx, a) => ctx.me.torpedoes > a.count,
     fail: (ctx, a) => (ctx.me.flight.position.distanceTo(a.points[0]) > 30000 ? SCHOOL.again : null),
     waypoint: (_, a) => a.points[0] ?? null,
-    mark: () => 'Probe',
+    mark: () => t('Probe'),
   },
   hookShip: {
     line: SCHOOL.hookShip,
@@ -719,7 +719,7 @@ const DRILL = {
     done: (ctx) => ctx.hooked && !!ctx.bot && ctx.bot.flight.position.distanceTo(ctx.me.flight.position) < HOOKED_CLOSE,
     leave: (ctx) => ctx.removeBot(),
     waypoint: (ctx) => (ctx.bot?.alive ? ctx.bot.flight.position : null),
-    mark: () => 'Hook it',
+    mark: () => t('Hook it'),
   },
   nova: atDrone(SCHOOL.nova, SCHOOL_PRAISE.nova, 10000, true),
 } satisfies Record<string, Drill>;
@@ -737,7 +737,7 @@ function atDrone(line: string, praise: string, distance: number, nova = false): 
     },
     done: (ctx) => !!ctx.drone && !ctx.drone.alive,
     waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
-    mark: () => 'Drone',
+    mark: () => t('Drone'),
   };
 }
 
@@ -754,14 +754,14 @@ function sparring(line: string, praise: string, keys: Command[], armed: boolean,
     done: (ctx) => !!ctx.bot && !ctx.bot.alive,
     leave: (ctx) => ctx.removeBot(),
     waypoint: (ctx) => (ctx.bot?.alive ? ctx.bot.flight.position : null),
-    mark: () => 'Bot',
+    mark: () => t('Bot'),
   };
 }
 
 /** The courses of the flight school, each played on its own. */
 export type SchoolCourse = 'basic' | 'racer' | 'gladiator' | 'arsenal';
 export const SCHOOL_COURSES: readonly SchoolCourse[] = ['basic', 'racer', 'gladiator', 'arsenal'];
-export const COURSE_NAMES: Record<SchoolCourse, string> = { basic: 'Basic training', racer: 'Racer', gladiator: 'Gladiator', arsenal: 'Arsenal' };
+export const COURSE_NAMES: Record<SchoolCourse, string> = { basic: msg('Basic training'), racer: msg('Racer'), gladiator: msg('Gladiator'), arsenal: msg('Arsenal') };
 
 /**
  * The drills of each course, in the order a Host needs them. Basic training: turning, aiming,
@@ -1018,25 +1018,28 @@ export class FlightSchool {
   }
 
   /**
-   * "Racer 3/5", the current line, the keys of the Host's device. The same object
-   * every frame; it only changes with the drill, the line or the device.
+   * "Racer 3/5", the current line, the keys of the Host's device, in the Host's language. The
+   * same object every frame; it only changes with the drill, the line, the device or the language.
    */
   status(device: Device): { step: string; text: string; keys: string[] } {
     const index = Math.min(this.index, this.drills.length - 1);
     const shown = this.shown;
-    if (shown.index !== index || shown.status.text !== this.line || shown.device !== device) {
+    const locale = currentLocale();
+    if (shown.index !== index || shown.line !== this.line || shown.device !== device || shown.locale !== locale) {
       shown.index = index;
+      shown.line = this.line;
       shown.device = device;
+      shown.locale = locale;
       shown.status = {
-        step: `${COURSE_NAMES[this.course]} ${index + 1}/${this.drills.length}`,
-        text: this.line,
-        keys: this.drills[index].keys.flatMap((command) => CONTROLS[device][command]),
+        step: t('{course} {n}/{total}', { course: t(COURSE_NAMES[this.course]), n: index + 1, total: this.drills.length }),
+        text: t(this.line),
+        keys: this.drills[index].keys.flatMap((command) => CONTROLS[device][command].map((label) => t(label))),
       };
     }
     return shown.status;
   }
 
-  private readonly shown = { index: -1, device: 'keyboard' as Device, status: { step: '', text: '', keys: [] as string[] } };
+  private readonly shown = { index: -1, line: '', device: 'keyboard' as Device, locale: currentLocale(), status: { step: '', text: '', keys: [] as string[] } };
 
   get stepIndex() {
     return this.index;

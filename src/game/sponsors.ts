@@ -1,4 +1,5 @@
 import { SatireAds } from './satire-ads';
+import { t } from '../i18n/i18n';
 
 /**
  * Sponsor breaks. In 2584 a Host's next clone only boots after the Host has watched an
@@ -50,7 +51,7 @@ export class SponsorBreak {
     this.cause.replaceChildren(...(typeof cause === 'string' ? [cause] : cause));
     this.report.textContent = report;
     this.boot.hidden = true;
-    this.status.textContent = 'Your next clone is being printed during this message';
+    this.status.textContent = t('Your next clone is being printed during this message');
     this.root.hidden = false;
     this.conscience.hidden = true;
     setTimeout(() => {
@@ -62,7 +63,7 @@ export class SponsorBreak {
       .catch((error) => console.warn('Ad failed', error))
       .then(() => {
         if (generation !== this.generation || !this.visible) return;
-        this.status.textContent = 'The sponsor is happy';
+        this.status.textContent = t('The sponsor is happy');
         this.boot.hidden = false;
         this.boot.focus();
       });

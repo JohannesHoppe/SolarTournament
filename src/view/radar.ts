@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AsteroidField } from '../world/asteroids';
 import type { Ship } from '../ship/ship';
+import { t } from '../i18n/i18n';
 
 /** What the radar covers around the ship (units, 2.5 km). */
 const RANGE = 50000;
@@ -72,7 +73,7 @@ export class Radar {
         ctx.fillStyle = `rgba(160, 190, 255, ${Math.random() * 0.5})`;
         ctx.fillRect(center + (Math.random() - 0.5) * radius * 2, center + (Math.random() - 0.5) * radius * 2, 1.5, 1.5);
       }
-      this.text('NO SIGNAL', center, center + 4, 'rgba(255, 157, 0, 0.9)', 'center');
+      this.text(t('NO SIGNAL'),center, center + 4, 'rgba(255, 157, 0, 0.9)', 'center');
       return;
     }
     inverse.copy(me.flight.orientation).invert();
@@ -159,7 +160,7 @@ export class Radar {
     ctx.moveTo(center - radius, center);
     ctx.lineTo(center + radius, center);
     ctx.stroke();
-    this.text('AHEAD', center, center - radius * Math.sin(TILT) - 4, 'rgba(77, 145, 255, 0.7)', 'center');
+    this.text(t('AHEAD'),center, center - radius * Math.sin(TILT) - 4, 'rgba(77, 145, 255, 0.7)', 'center');
   }
 
   /** A line from the ship's horizontal plane up or down to a mark. */
