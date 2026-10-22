@@ -210,8 +210,10 @@ export const CORE_SHARE = 1 / 3;
 const START_GO = 3;
 const START_EARLY = 0.3;
 const START_LATE = 0.2;
-/** The hook drill wants the pilot to fly off faster than this when it lets go (units/s, 75 m/s): one and a half times the drift it started with. */
-const HOOK_FLING = 1500;
+/** The hook drill wants the pilot to fly off faster than this when it lets go (units/s, 65 m/s): 1.3 times the drift it started with, a few seconds of reeling. */
+export const HOOK_FLING = 1300;
+/** The hook drill starts this far off the rock's farthest reach (units, 500 m): cable enough to gain speed on any rock. */
+export const HOOK_STANDOFF = 10000;
 
 
 const scratch = new THREE.Vector3();
@@ -485,7 +487,7 @@ const DRILL = {
     keys: ['hook', 'turn'],
     enter(ctx, a) {
       stop(ctx);
-      const facing = faceRock(ctx, 5000);
+      const facing = faceRock(ctx, HOOK_STANDOFF);
       if (!facing) return;
       // drifting past the rock sideways, so the cable swings the ship around it
       drift(ctx, 1000, new THREE.Vector3(1, 0, 0).applyQuaternion(ctx.me.flight.orientation));

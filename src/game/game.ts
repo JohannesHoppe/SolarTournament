@@ -13,7 +13,7 @@ import { Datamosh } from '../view/datamosh';
 import { GuideLine } from '../view/guide';
 import { Ghost } from '../view/ghost';
 import { LapTimer, parseLaps } from './laps';
-import { aimHook, anchorPoint, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, pullOn, type Anchor, type Tether } from './hook';
+import { aimHook, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, pivotOf, pullOn, type Anchor, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import type { Spoken } from '../music/band';
@@ -3482,7 +3482,7 @@ export class Game implements OnlineGame {
         tether.flying -= dt;
         if (tether.flying <= 0) {
           // a miss is reeled back; so is a harpoon whose rock broke or whose ship died on the way
-          const at = tether.anchor ? anchorPoint(tether.anchor, hookPoint) : null;
+          const at = tether.anchor ? pivotOf(tether.anchor, hookPoint) : null;
           if (!at || !tether.anchor) {
             this.unhook(owner);
             continue;
@@ -3494,7 +3494,7 @@ export class Game implements OnlineGame {
       const nose = owner.nose(hookNose);
       Cables.draw(tether.line, nose, cableEnd(tether, nose, hookEnd));
       if (tether.flying > 0 || !tether.anchor) continue;
-      const at = anchorPoint(tether.anchor, hookPoint);
+      const at = pivotOf(tether.anchor, hookPoint);
       if (!at) {
         this.unhook(owner);
         continue;
@@ -3502,10 +3502,11 @@ export class Game implements OnlineGame {
       // a ship hooked to a ship: the winch pulls both alike, each on the browser that runs it
       const target = tether.anchor.ship;
       const share = target ? 0.5 : 1;
-      const floor = floorOf(owner);
+      const floor = floorOf(owner, tether.anchor);
       let length: number | null = tether.length;
-      if (owner.owner === null) length = pullOn(owner.flight, at, length, true, share, floor, MAX_SPEED, dt);
-      if (length !== null && target && target.owner === null) length = pullOn(target.flight, owner.flight.position, length, true, share, floor, MAX_SPEED, dt);
+      // the winch yanks as hard as a coil throws: up to the limit plus a coil's push
+      if (owner.owner === null) length = pullOn(owner.flight, at, length, true, share, floor, MAX_SPEED + BOOST_PUSH, dt);
+      if (length !== null && target && target.owner === null) length = pullOn(target.flight, owner.flight.position, length, true, share, floor, MAX_SPEED + BOOST_PUSH, dt);
       if (length === null) {
         if (owner === this.me) this.hud.flashMessage(this.time, 'Cable snapped', 1.5);
         this.unhook(owner);
