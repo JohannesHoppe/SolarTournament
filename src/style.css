@@ -294,6 +294,49 @@ button.primary .mode-note {
   font-size: 0.72rem;
 }
 
+/* the arenas: two in a row, each with its name and what it is like (the chosen one shows behind the plate) */
+#solo-arenas {
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+}
+
+#solo-arenas small {
+  text-align: justify;
+  hyphens: auto;
+}
+
+/* a bot's skills under its name: a label and five pips each, filled as far as it can */
+.skills {
+  display: grid;
+  gap: 2px;
+  margin-top: 4px;
+  font-size: 0.66rem;
+  color: var(--muted);
+}
+
+.skill {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
+.pips {
+  display: flex;
+  gap: 2px;
+}
+
+.pips i {
+  width: 6px;
+  height: 6px;
+  border: 1px solid currentColor;
+  border-radius: 1px;
+}
+
+.pips i.on {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 #solo {
   width: min(560px, calc(100vw - 32px));
 }

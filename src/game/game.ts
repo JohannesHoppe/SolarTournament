@@ -6,7 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { Bot, BOT_NAMES, HOME_RADIUS, RACE_SPEED, rankOf, skillOf } from '../ship/bots';
+import { Bot, BOT_NAMES, evenSkills, HOME_RADIUS, RACE_SPEED, skillsOf, type Skills } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { Datamosh } from '../view/datamosh';
@@ -35,7 +35,7 @@ import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, FlightSchool, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
-import { ARENAS, arenaByKey, arenaOfRound, type ArenaId, type ArenaProfile } from '../world/arenas';
+import { ARENAS, arenaById, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
@@ -66,7 +66,7 @@ const DECIDED_SECONDS = 5;
  * every ship until GO, and the race time runs from GO. A drive lit within START_WINDOW seconds
  * before GO, or within START_LATE seconds after it, makes a perfect start: a shove of
  * BOOST_PUSH along the nose. A drive lit earlier and still burning at GO stalls for
- * FALSE_START_STALL seconds. A bot gets a perfect start with a chance of its skill times
+ * FALSE_START_STALL seconds. A bot gets a perfect start with a chance of its reflexes times
  * BOT_PERFECT_START.
  */
 const START_SECONDS = 3;
@@ -120,8 +120,8 @@ const TORPEDO_GONE_SLACK = 30000;
 const BOT_TORPEDO_RATE = 0.08;
 /**
  * A bot hooks the ship it hunts when it lies dead ahead between BOT_HOOK_MIN (units, 150 m) and
- * nine tenths of the hook's reach, with a chance of BOT_HOOK_RATE times its skill a second
- * (Halley, the best, about once in five seconds of such a chance, Laika once in forty), reels it in for
+ * nine tenths of the hook's reach, with a chance of BOT_HOOK_RATE times its nerve a second
+ * (Halley about once in five seconds of such a chance, Sputnik once in twenty, Laika never), reels it in for
  * BOT_HOOK_HOLD seconds and lets go; its hook is ready again BOT_HOOK_PAUSE seconds after that.
  * Far rarer than a Host can, and never in a race.
  */
@@ -370,7 +370,7 @@ const PACES: Record<Pace, { speed: number; note: string }> = {
 };
 /** What a solo round plays: a race unless the Host asks for a deathmatch, its class, its arena (null: by chance), and the bots it flies against: a full grid unless the Host picks fewer. */
 type SoloChoice = { mode: RoundMode; pace: Pace; arena: ArenaId | null; rivals: string[] };
-const SOLO_DEFAULT: SoloChoice = { mode: 'race', pace: 'pro', arena: null, rivals: ['Laika', 'Sputnik', 'Juno', 'Nova', 'Kessler', 'Orion', 'Vega'] };
+const SOLO_DEFAULT: SoloChoice = { mode: 'race', pace: 'pro', arena: null, rivals: ['Laika', 'Sputnik', 'Juno', 'Ceres', 'Kessler', 'Orion', 'Vega'] };
 const SOLO_NOTES: Record<RoundMode, string> = {
   race: 'Three laps through eight gates. Killing your opponents is explicitly allowed.',
   deathmatch: 'For the hard pilots: five minutes, every clone for itself.',
@@ -446,6 +446,23 @@ const PLATING_COLOR = new THREE.Color(0.3, 0.57, 1);
 const BOOST_COLOR = new THREE.Color(1, 0.9, 0.75);
 
 /** A lap time as 1:02.34. */
+/** The solo plate's camera drifts around the chosen arena's landmark this fast (rad/s, a turn in about three and a half minutes). */
+const PREVIEW_DRIFT = 0.03;
+/** It shows the landmark this share of the screen's width left of the middle, beside the plate. */
+const PREVIEW_SHIFT = 0.3;
+const UP = new THREE.Vector3(0, 1, 0);
+/** A bot's skills as small scales of five pips each, for the solo plate: what it can, at a glance. */
+const SKILL_NAMES: [keyof Skills, string][] = [
+  ['aim', 'Aim'],
+  ['reflexes', 'Reflexes'],
+  ['nerve', 'Nerve'],
+];
+const skillScales = (skills: Skills) =>
+  `<span class="skills">${SKILL_NAMES.map(([key, label]) => {
+    const pips = Math.round(skills[key] * 5);
+    return `<span class="skill" aria-label="${label} ${pips} of 5"><span>${label}</span><span class="pips">${'<i class="on"></i>'.repeat(pips)}${'<i></i>'.repeat(5 - pips)}</span></span>`;
+  }).join('')}</span>`;
+
 const lapClock = (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, '0')}`;
 
 /** A hook's anchor, the owner's nose and the cable's far end this frame. */
@@ -975,11 +992,11 @@ export class Game implements OnlineGame {
     for (const pace of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-pace"] button[data-value]')) choose(pace, () => (this.solo.pace = pace.dataset.value as Pace));
     $('solo-arenas').append(
       button('By chance', () => (this.solo.arena = null)),
-      ...ARENAS.map((arena) => button(arena.name, () => (this.solo.arena = arena.id))),
+      ...ARENAS.map((arena) => button(`${arena.name}<small>${arena.tagline}</small>`, () => (this.solo.arena = arena.id))),
     );
     $('solo-bots').append(
       ...BOT_NAMES.map((name) =>
-        button(`${name}<small>${rankOf(skillOf(name))}</small>`, () => {
+        button(`${name}${skillScales(skillsOf(name))}`, () => {
           const rivals = this.solo.rivals;
           if (rivals.includes(name)) rivals.splice(rivals.indexOf(name), 1);
           else if (rivals.length < TOURNAMENT_SIZE - 1) rivals.push(name);
@@ -1014,6 +1031,8 @@ export class Game implements OnlineGame {
     this.choosingSolo = open;
     $('menu').hidden = open || this.state !== 'menu';
     $('solo').hidden = !open;
+    // the seal steps back for the arena the plate shows
+    $('crest').hidden = open || this.state !== 'menu';
     if (open) $('solo-launch').focus();
   }
 
@@ -1547,6 +1566,8 @@ export class Game implements OnlineGame {
     if (state !== this.state) this.screenSince = performance.now();
     this.redraw = true;
     this.state = state;
+    // the solo plate's view beside it (see updateMenuCamera) ends with the menu
+    if (state !== 'menu' && this.camera.view?.enabled) this.camera.clearViewOffset();
     $('menu').hidden = state !== 'menu';
     $('crest').hidden = state !== 'menu';
     $('pause').hidden = state !== 'paused';
@@ -1891,7 +1912,7 @@ export class Game implements OnlineGame {
       const ship = heir
         ? this.addShip(id, heir.name, heir.type, false)
         : this.addShip(id, names[free++] ?? `Bot ${i + 1}`, i % 2 === 0 ? 'alien' : 'human', false);
-      this.bots.push(new Bot(ship, skillOf(ship.name)));
+      this.bots.push(new Bot(ship, skillsOf(ship.name)));
       if (!heir) this.respawn(ship);
       else {
         ship.adopt(heir, this.time);
@@ -2342,6 +2363,12 @@ export class Game implements OnlineGame {
       this.replayEffects.group.visible = replaying;
       this.hud.show(!replaying && this.state === 'playing' && !this.sponsors.visible);
     }
+    this.paint();
+    if (replaying) this.killcam.restore();
+  }
+
+  /** Draws the scene as the camera sees it: the sky around it, the arena's edge, its landmarks, a black hole's lens. */
+  private paint() {
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
     this.arena.update(this.camera);
     this.landmarks.update(this.field.clock);
@@ -2349,7 +2376,6 @@ export class Game implements OnlineGame {
     // the scene is drawn into the composer's read buffer, which the lens reads right after
     this.lensing.update(this.camera, this.venue.id === 'hole' && well ? well.position : null, well?.radius ?? 0, this.composer.readBuffer.depthTexture);
     this.composer.render();
-    if (replaying) this.killcam.restore();
   }
 
   private updateRound(dt: number) {
@@ -2964,7 +2990,7 @@ export class Game implements OnlineGame {
       }
     }
     for (const bot of this.bots) {
-      if (bot.ship.owner === null && bot.ship.alive && bot !== this.sparring?.bot && Math.random() < bot.skill * BOT_PERFECT_START) this.perfectStart(bot.ship);
+      if (bot.ship.owner === null && bot.ship.alive && bot !== this.sparring?.bot && Math.random() < bot.skills.reflexes * BOT_PERFECT_START) this.perfectStart(bot.ship);
     }
   }
 
@@ -3240,7 +3266,7 @@ export class Game implements OnlineGame {
     const me = this.me!;
     if (this.sparring) this.removeShip(this.sparring.bot.ship);
     const ship = this.addShip('sparring', 'Sparring bot', me.type === 'human' ? 'alien' : 'human', false);
-    const bot = new Bot(ship, skill);
+    const bot = new Bot(ship, evenSkills(skill));
     bot.armed = armed;
     this.bots.push(bot);
     this.sparring = { bot, armed };
@@ -3434,7 +3460,7 @@ export class Game implements OnlineGame {
       if (now >= bot.hookUntil || !target?.alive) this.unhook(ship);
       return;
     }
-    if (!target || bot === this.sparring?.bot || bot.waypoint || now < bot.hookReadyAt || Math.random() >= dt * BOT_HOOK_RATE * bot.skill * (1 - bot.ease)) return;
+    if (!target || bot === this.sparring?.bot || bot.waypoint || now < bot.hookReadyAt || Math.random() >= dt * BOT_HOOK_RATE * bot.skills.nerve * (1 - bot.ease)) return;
     const distance = target.flight.position.distanceTo(ship.flight.position);
     if (distance < BOT_HOOK_MIN || distance > HOOK_RANGE * 0.9 || aimHook(ship, this.field, this.ships)?.anchor.ship !== target) return;
     this.fireHook(ship);
@@ -4526,6 +4552,21 @@ export class Game implements OnlineGame {
   private updateMenuCamera() {
     this.riding = null;
     if (this.camera.fov !== CAMERA_FOV) this.setFov(CAMERA_FOV);
+    // the solo plate shows the arena chosen on it: the menu goes there, and the camera drifts
+    // slowly around its landmark (see ArenaProfile.preview), the rocks turning as in a round
+    const chosen = this.choosingSolo && this.state === 'menu' && this.solo.arena ? arenaById(this.solo.arena) : undefined;
+    if (chosen) {
+      if (chosen !== this.venue) this.enterArena(chosen);
+      const at = scratch.fromArray(chosen.preview?.at ?? [0, 0, 0]);
+      this.camera.position.fromArray(chosen.preview?.from ?? PREVIEW_FROM).sub(at).applyAxisAngle(UP, this.time * PREVIEW_DRIFT).add(at);
+      this.camera.lookAt(at);
+      // the landmark beside the plate, not behind it: the picture is cut from a wider one
+      const { width, height } = this.renderer.domElement;
+      const shift = width * PREVIEW_SHIFT;
+      this.camera.setViewOffset(width + 2 * shift, height, 2 * shift, 0, width, height);
+      return;
+    }
+    if (this.camera.view?.enabled) this.camera.clearViewOffset();
     const t = this.time * 0.08;
     this.camera.position.set(0, 0, 0);
     this.camera.lookAt(Math.cos(t), Math.sin(t * 0.7) * 0.2, Math.sin(t));

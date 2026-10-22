@@ -36,14 +36,14 @@ const CRUISE_SPEED = 2500;
 const HOLD_DISTANCE = 4000;
 /** A fighter circles its target sideways at this speed (units/s, 60 m/s) on its way behind it: dogfights are wide drifting arcs, not jousts. */
 const ORBIT_SPEED = 1200;
-/** A bot's hand eases its commands in over this time (s): HAND_TIME_SLOW at skill 0, HAND_TIME_FAST at skill 1 (see Bot.byHand). */
+/** A bot's hand eases its commands in over this time (s): HAND_TIME_SLOW at reflexes 0, HAND_TIME_FAST at reflexes 1 (see Bot.byHand). */
 const HAND_TIME_SLOW = 0.35;
 const HAND_TIME_FAST = 0.12;
 /** Seconds ahead a bot checks its flight path for asteroids. */
 const AVOID_HORIZON = 5;
 /** A velocity error larger than this makes the bot turn and burn instead of fighting. */
 const BURN_THRESHOLD = 500;
-/** Angular aim error at a skill of one half (rad, about 1.1°; see aimError): at 1 km, its firing range, it scatters by about 20 m, a little more than a ship's radius (17 m). */
+/** Angular aim error at an aim of one half (rad, about 1.1°; see aimError): at 1 km, its firing range, it scatters by about 20 m, a little more than a ship's radius (17 m). */
 const AIM_ANGLE = 0.02;
 /** How long a bot's sense of the target's jinking lingers (s). */
 const JINK_MEMORY = 0.6;
@@ -76,18 +76,36 @@ const swing = new THREE.Vector3();
 export { BOT_NAMES } from '../music/lines';
 
 /**
- * Every bot flies with a skill of its own, 0..1 (reaction, aim, how hot it runs its laser): the
- * menu names it, so a Host knows whom it picks. The first three, who fill a tournament first,
- * average 0.4.
+ * What a bot can, each 0..1: `aim`, how close its aim comes; `reflexes`, how fast it reacts,
+ * how quick its hand is (see Bot.byHand) and how well it starts a race; `nerve`, how hot it runs
+ * its laser and how often it takes the hook.
  */
-export const BOT_SKILLS: Record<string, number> = { Juno: 0.3, Nova: 0.4, Kessler: 0.5, Vega: 0.7, Orion: 0.6, Sputnik: 0.2, Halley: 0.85, Laika: 0.1 };
-/** A bot of a name without a skill of its own. */
-const DEFAULT_SKILL = 0.4;
+export interface Skills {
+  aim: number;
+  reflexes: number;
+  nerve: number;
+}
 
-export const skillOf = (name: string) => BOT_SKILLS[name] ?? DEFAULT_SKILL;
+/**
+ * Every bot has skills of its own, which the menu shows as scales, so a Host knows whom it
+ * picks; on average they run from Laika (0.1) to Halley (0.85). The first three, who fill a
+ * tournament first, average 0.4; Kessler is the middling one (0.5), whom the balance runs watch.
+ */
+export const BOT_SKILLS: Record<string, Skills> = {
+  Laika: { aim: 0.1, reflexes: 0.2, nerve: 0 },
+  Sputnik: { aim: 0.3, reflexes: 0.1, nerve: 0.2 },
+  Juno: { aim: 0.2, reflexes: 0.4, nerve: 0.3 },
+  Ceres: { aim: 0.5, reflexes: 0.3, nerve: 0.4 },
+  Kessler: { aim: 0.4, reflexes: 0.5, nerve: 0.6 },
+  Orion: { aim: 0.7, reflexes: 0.5, nerve: 0.6 },
+  Vega: { aim: 0.6, reflexes: 0.9, nerve: 0.6 },
+  Halley: { aim: 0.9, reflexes: 0.8, nerve: 0.85 },
+};
 
-/** What the menu calls a skill. */
-export const rankOf = (skill: number) => (skill < 0.25 ? 'Rookie' : skill < 0.45 ? 'Pilot' : skill < 0.65 ? 'Veteran' : 'Ace');
+/** Skills that are all the same, for a bot of a name without its own (0.4) or one the flight school sets. */
+export const evenSkills = (skill: number): Skills => ({ aim: skill, reflexes: skill, nerve: skill });
+
+export const skillsOf = (name: string) => BOT_SKILLS[name] ?? evenSkills(0.4);
 
 /**
  * Newtonian pursuit AI. Bots only see ships they have a line of sight to. It works out the velocity it wants (close in on its target,
@@ -156,7 +174,7 @@ export class Bot {
 
   constructor(
     readonly ship: Ship,
-    readonly skill: number,
+    readonly skills: Skills,
   ) {}
 
   think(now: number, ships: Ship[], field: AsteroidField, bots: readonly Bot[]): Controls {
@@ -326,17 +344,17 @@ export class Bot {
       const angularSize = (target.radius * 0.8) / Math.max(targetDistance, 1);
       const onTarget = me.angleTo(aimPoint) < angularSize + this.ship.radius / Math.max(targetDistance, 1);
       this.onTargetFor = onTarget ? this.onTargetFor + dt : 0;
-      const reaction = 0.45 - 0.3 * this.skill + EASE_REACTION * this.ease;
+      const reaction = 0.45 - 0.3 * this.skills.reflexes + EASE_REACTION * this.ease;
       // a shot into the drive is worth the heat; at the armor a bot only snipes now and then,
       // single shots from a nearly cool laser, so it keeps the heat for the drive
       const open = target.tailToward(line.subVectors(target.flight.position, me.position));
       // a racer flies first: single shots only, even at an open drive, unless it looks back
-      const heatLimit = open && (!racing || lookingBack) ? 40 + 50 * this.skill : ARMOR_FIRE_HEAT;
+      const heatLimit = open && (!racing || lookingBack) ? 40 + 50 * this.skills.nerve : ARMOR_FIRE_HEAT;
       controls.fire = (open || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
     } else if (sieging) {
       // a part of a battleship holds still: the nose on it, and fire while the laser allows
       me.steer(toTarget, 3, controls);
-      controls.fire = me.angleTo(toTarget) < SIEGE_AIM && !this.ship.overheated && this.ship.heat < 40 + 50 * this.skill;
+      controls.fire = me.angleTo(toTarget) < SIEGE_AIM && !this.ship.overheated && this.ship.heat < 40 + 50 * this.skills.nerve;
     } else {
       me.steer(toTarget, 2.5, controls);
     }
@@ -364,7 +382,7 @@ export class Bot {
    */
   private byHand(wanted: Controls, dt: number): Controls {
     const hand = this.hand;
-    const k = 1 - Math.exp(-dt / (HAND_TIME_SLOW - (HAND_TIME_SLOW - HAND_TIME_FAST) * this.skill));
+    const k = 1 - Math.exp(-dt / (HAND_TIME_SLOW - (HAND_TIME_SLOW - HAND_TIME_FAST) * this.skills.reflexes));
     hand.yaw += (wanted.yaw - hand.yaw) * k;
     hand.pitch += (wanted.pitch - hand.pitch) * k;
     hand.roll += (wanted.roll - hand.roll) * k;
@@ -382,7 +400,8 @@ export class Bot {
    * target is hard to hit, as it would be for any eye.
    */
   private aimError(distance: number) {
-    return (this.ship.radius * (1.6 - 1.4 * this.skill) + distance * AIM_ANGLE * (1.5 - this.skill)) * (1 + EASE_AIM * this.ease);
+    const aim = this.skills.aim;
+    return (this.ship.radius * (1.6 - 1.4 * aim) + distance * AIM_ANGLE * (1.5 - aim)) * (1 + EASE_AIM * this.ease);
   }
 
   /**

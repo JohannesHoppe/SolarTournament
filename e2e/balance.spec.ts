@@ -6,8 +6,8 @@ import { ROUND_SECONDS } from '../src/music/songs';
  * Balance (npm run balance, not part of npm run e2e: each round takes about a minute): every
  * mode of a solo round plays out in time-lapse, ROUNDS times, with the default rivals and the
  * Host's ship taken out. What a bot of middling skill (Kessler, 0.5) cannot manage, a Host will
- * not manage either: on average it scores at least the median, and it does not die all the
- * time; a deathmatch is a fight, Capture the Flag sees captures, and the bots together sink the
+ * not manage either: on average it scores at least the median (in a race: it finishes), and it
+ * does not die all the time; a deathmatch is a fight, Capture the Flag sees captures, and the bots together sink the
  * President's battleship. One round alone says little: a single dogfight can turn any round.
  */
 const MIDDLING = 'Kessler';
@@ -15,7 +15,7 @@ const ROUNDS = 2;
 /** Game seconds per real second: a five-minute round in under a minute. */
 const TIME_LAPSE = 6;
 
-type Pilot = { name: string; kills: number; deaths: number; score: number };
+type Pilot = { name: string; kills: number; deaths: number; score: number; finish: number };
 type Round = { standings: Pilot[]; captures: number; sunk: boolean };
 
 /** Plays a whole solo round of `mode` with the Host out, and returns how it went. */
@@ -42,7 +42,7 @@ async function playRound(page: Page, mode: string): Promise<Round> {
       const standings = game
         .standings()
         .filter((ship: object) => ship !== game.me)
-        .map((ship: Pilot) => ({ name: ship.name, kills: ship.kills, deaths: ship.deaths, score: ship.score }));
+        .map((ship: Pilot) => ({ name: ship.name, kills: ship.kills, deaths: ship.deaths, score: ship.score, finish: ship.finish }));
       return { standings, captures: game.flags ? game.flags.captures[0] + game.flags.captures[1] : 0, sunk: !!game.fleet?.down };
     },
     [TIME_LAPSE, ROUND_SECONDS],
@@ -77,9 +77,11 @@ test('a deathmatch is a fight, and a middling bot holds its own in it', async ({
   expect(r.deaths, r.detail).toBeLessThanOrEqual(4);
 });
 
-test('a middling bot holds its own in a race, without dying all the time', async ({ page }) => {
+// every racing bot flies the ideal line alike: the place among them is chance and fights, so a
+// race asks of the middling bot what it asks of a Host, to finish without dying all the time
+test('a middling bot finishes a race, without dying all the time', async ({ page }) => {
   const r = await playRounds(page, 'race');
-  expect(r.score, r.detail).toBeGreaterThanOrEqual(r.median);
+  for (const round of r.rounds) expect(round.standings.find((p) => p.name === MIDDLING)!.finish, r.detail).toBeGreaterThan(0);
   expect(r.deaths, r.detail).toBeLessThanOrEqual(3);
 });
 

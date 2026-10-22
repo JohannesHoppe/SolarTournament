@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { AsteroidField } from '../world/asteroids';
-import { Bot } from '../ship/bots';
+import { Bot, evenSkills } from '../ship/bots';
 import { FlightModel, MAX_SPEED } from '../ship/flight';
 import { bounceOff, impactDamage } from '../ship/impact';
 import { MAX_HULL, type Ship } from '../ship/ship';
@@ -41,7 +41,7 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
   const flight = new FlightModel();
   flight.reset(start, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(start, facing.clone().add(start), new THREE.Vector3(0, 1, 0))));
   const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, allyOf: () => false } as unknown as Ship;
-  const bot = new Bot(ship, skill);
+  const bot = new Bot(ship, evenSkills(skill));
   bot.raceSpeed = speed;
   const gravity = new THREE.Vector3();
   const goal = new THREE.Vector3();

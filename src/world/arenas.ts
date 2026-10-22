@@ -21,7 +21,12 @@ export interface ArenaProfile {
   storms: boolean;
   /** The sun: how large it shows, how bright it shines, and its color. */
   sun: { size: number; intensity: number; color: number };
+  /** Where the camera of its preview picture stands and what it looks at (units); without, PREVIEW_FROM onto the center. */
+  preview?: { from: [number, number, number]; at?: [number, number, number] };
 }
+
+/** The camera of an arena's preview picture: far out and above, onto the center, so the landmark shows (see ArenaProfile.preview). */
+export const PREVIEW_FROM: [number, number, number] = [70000, 30000, 70000];
 
 /** The stern of the world ship drifted off: tilted by this angle (rad), sunk by STERN_DROP and shifted sideways by STERN_SHIFT (units). */
 const STERN_TILT = 0.22;
@@ -73,6 +78,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     cooling: 1,
     storms: false,
     sun: { size: 30000, intensity: 3.2, color: 0xfff0dd },
+    preview: { from: [32000, 12000, 32000] },
   },
   {
     id: 'rings',
@@ -161,6 +167,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     cooling: 1,
     storms: false,
     sun: { size: 20000, intensity: 2.6, color: 0xffe6cc },
+    preview: { from: [20000, 8000, 20000] },
   },
   {
     id: 'derelict',
@@ -170,6 +177,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     cooling: 1,
     storms: false,
     sun: { size: 30000, intensity: 3.2, color: 0xfff0dd },
+    preview: { from: [20000, 20000, 50000], at: [-3000, 0, 0] },
   },
 ];
 
