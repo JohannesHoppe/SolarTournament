@@ -1,0 +1,74 @@
+# Nicole in German, Spanish and French (see tools/voice/README.md): clones the lines the store
+# in the release "voice-nicole" still lacks, one job per language, and puts the store back
+# there. Runs when the lines, their translations or the clone tools change, and by hand
+# (Actions → Voice → Run workflow). A job stops after about five hours and keeps what it has
+# cloned; running the workflow again goes on from there.
+name: Voice
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - src/music/lines.ts
+      - src/i18n/de.ts
+      - src/i18n/es.ts
+      - src/i18n/fr.ts
+      - tools/voice/nicole.ts
+      - tools/voice/clone/**
+      - .github/workflows/voice.yml
+
+permissions:
+  contents: write
+
+# one run at a time: two would both write the same store
+concurrency:
+  group: voice
+  cancel-in-progress: false
+
+jobs:
+  clone:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [de, es, fr]
+    env:
+      GH_TOKEN: ${{ github.token }}
+      WORK: ${{ runner.temp }}/voice
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # the store of this language and Nicole's voice (conditionals and reference), if there
+      - name: Download the store
+        run: |
+          mkdir -p "$WORK"
+          gh release download voice-nicole --dir "$WORK" --pattern "nicole-${{ matrix.language }}.*" --pattern nicole-conds.pt --pattern reference.wav || true
+      - name: Prepare
+        id: prepare
+        run: |
+          node tools/voice/clone/prepare.ts "$WORK"
+          echo "todo=$(node -p "require('$WORK/todo.json')['${{ matrix.language }}']")" >> "$GITHUB_OUTPUT"
+      - if: steps.prepare.outputs.todo != '0'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      # torch from its CPU index: the runner has no GPU, and the CUDA build is gigabytes larger
+      - if: steps.prepare.outputs.todo != '0'
+        run: pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple -r "$WORK/requirements.txt"
+      - if: steps.prepare.outputs.todo != '0'
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/huggingface
+          key: huggingface-${{ hashFiles('tools/voice/nicole.ts') }}
+      - if: steps.prepare.outputs.todo != '0'
+        name: Clone
+        run: python tools/voice/clone/clone.py "$WORK" ${{ matrix.language }} 290
+      - if: steps.prepare.outputs.todo != '0'
+        name: Upload the store
+        run: gh release upload voice-nicole "$WORK/nicole-${{ matrix.language }}.flac" "$WORK/nicole-${{ matrix.language }}.json" "$WORK/nicole-conds.pt" "$WORK/reference.wav" --clobber

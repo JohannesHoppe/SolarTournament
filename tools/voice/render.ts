@@ -5,15 +5,16 @@
  * because the game speaks sentences whole and places single words on the beat. Each language of
  * the game (see src/i18n) has a sprite of its own with the announcer (espeak-ng in that language)
  * and the flight computer: Nicole, Kokoro (neural, Apache-2.0), a natural voice. Kokoro speaks
- * English by itself; for the other languages espeak-ng spells the line in the phonemes of its
- * language and Nicole speaks them, with her accent. The game loads the radio sprite and the
- * sprite of the Host's language.
+ * English by itself; in the other languages she speaks as her clone, made with Chatterbox and
+ * kept in a release of the repository (see README.md in this folder), and a line not cloned yet
+ * in the phonemes espeak-ng spells it in. The game loads the radio sprite and the sprite of the
+ * Host's language.
  *
  * The sprites are not kept in the repository: `npm run build` and `npm run dev` render them into
  * public/assets/voice/ (ffmpeg comes with the ffmpeg-static package), and only when the lines,
- * their translations, this tool or the speech engines have changed since the last time.
- * Sprites and Kokoro model are kept in a build cache (see cacheRoot), so a fresh checkout copies
- * sprites rendered before instead of rendering them.
+ * their translations, Nicole's clones, this tool or the speech engines have changed since the
+ * last time. Sprites, Kokoro model and clones are kept in a build cache (see cacheRoot), so a
+ * fresh checkout copies sprites rendered before instead of rendering them.
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -23,9 +24,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { allLines, clipKey, phraseKey, phrases, words, type Language } from '../../src/music/lines.ts';
-import { DE } from '../../src/i18n/de.ts';
-import { ES } from '../../src/i18n/es.ts';
-import { FR } from '../../src/i18n/fr.ts';
+import { CATALOGS, CLONED, cloneKey, COMPUTER_VOICE, nicoleLines, releaseUrl, type Cloned } from './nicole.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const out = join(root, 'public/assets/voice');
@@ -37,8 +36,6 @@ const GAP = 0.25;
 /** The sprites: the radio's, and one for each language of the game. */
 const SPRITES = ['radio', 'en', 'de', 'es', 'fr'] as const;
 type Locale = Exclude<(typeof SPRITES)[number], 'radio'>;
-/** Each language's translations of the lines (English is the source). */
-const CATALOGS: Record<Exclude<Locale, 'en'>, Readonly<Record<string, string>>> = { de: DE, es: ES, fr: FR };
 type Espeak = { voice: string; rate: number; pitch: number; range: number };
 /** The regime speaks as a slow robot (espeak's robosoft variant, a narrow pitch range). */
 const REGIME: Record<'en' | 'de', Espeak> = {
@@ -48,11 +45,6 @@ const REGIME: Record<'en' | 'de', Espeak> = {
 /** The announcer talks fast and lively, in every language with the same voice variant. */
 const ANNOUNCER = { rate: 170, pitch: 45, range: 60 };
 const ANNOUNCER_LANGUAGE: Record<Locale, string> = { en: 'en-us', de: 'de', es: 'es', fr: 'fr' };
-/**
- * The flight computer: Kokoro's breathy, intimate Nicole, a little faster than she talks by
- * herself. The model is pinned to one revision, so the same inputs always render the same voice.
- */
-const COMPUTER_VOICE = { model: 'onnx-community/Kokoro-82M-v1.0-ONNX', revision: '1939ad2a8e416c0acfeecc08a694d14ef25f2231', voice: 'af_nicole', speed: 1.3 } as const;
 /** Every package whose version changes what the sprites sound like: the speech engines, Kokoro's phonemizer and runtime, the encoder. */
 const ENGINES = ['kokoro-js', 'phonemizer', '@huggingface/transformers', 'onnxruntime-node', '@echogarden/espeak-ng-emscripten', 'ffmpeg-static'];
 
@@ -69,26 +61,11 @@ interface Worker {
 const manifest = (sprite: string) => join(out, `voice-${sprite}.json`);
 const files = SPRITES.flatMap((sprite) => [`voice-${sprite}.mp3`, `voice-${sprite}.json`]);
 
-// the sprites are rendered again only when what they are made of has changed: the lines and
-// their translations, this tool (with the model revision) and the engines' versions; a fresh
-// checkout without cached sprites (see cacheRoot) renders them
-const packageVersion = (name: string) => (JSON.parse(readFileSync(join(root, 'node_modules', name, 'package.json'), 'utf8')) as { version: string }).version;
-const hash = createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).update(ENGINES.map(packageVersion).join());
-hash.update(readFileSync(join(root, 'src/music/lines.ts')));
-// of the catalogs only what is spoken: a text of the screen never renders the voice again
-for (const locale of ['de', 'es', 'fr'] as const) for (const line of [...allLines('mod'), ...allLines('sys')]) hash.update(`${line}\u0000${CATALOGS[locale][line] ?? ''}\u0000`);
-const inputs = hash.digest('hex').slice(0, 12);
-const upToDate = SPRITES.every((sprite) => existsSync(manifest(sprite)) && (JSON.parse(readFileSync(manifest(sprite), 'utf8')) as { inputs?: string }).inputs === inputs);
-if (upToDate) {
-  console.log('Voice sprites up to date');
-  process.exit(0);
-}
-
-// A cache that outlives a checkout: the sprites of these inputs and the Kokoro model. It sits in
-// npm's cache directory (as npm run reports it, ~/.npm by default) because Cloudflare Pages
-// keeps that one between builds (and lets no other directory be kept); npm ignores the folder.
-// VOICE_CACHE moves it elsewhere. The cache is a help, never a need: where it cannot be
-// written, the voices are rendered all the same.
+// A cache that outlives a checkout: the sprites of these inputs, the Kokoro model and Nicole's
+// cloned lines. It sits in npm's cache directory (as npm run reports it, ~/.npm by default)
+// because Cloudflare Pages keeps that one between builds (and lets no other directory be kept);
+// npm ignores the folder. VOICE_CACHE moves it elsewhere. The cache is a help, never a need:
+// where it cannot be written, the voices are rendered all the same.
 const cacheRoot = process.env.VOICE_CACHE ?? join(process.env.npm_config_cache ?? join(homedir(), '.npm'), '_solartournament');
 const tryCache = (action: () => void) => {
   try {
@@ -97,6 +74,46 @@ const tryCache = (action: () => void) => {
     console.warn('Voice build cache not written:', (error as Error).message);
   }
 };
+
+// Nicole cloned into the other languages (see README.md): the index of each language's store
+// from the release, or the copy the cache kept of the last one; a line without a clone there
+// (new, or the store out of reach) she speaks as Kokoro does
+type CloneIndex = { sampleRate: number; audio: string; clips: Record<string, [number, number]> };
+const clonesCache = join(cacheRoot, 'clones');
+async function cloneIndex(locale: Cloned): Promise<CloneIndex | null> {
+  const copy = join(clonesCache, `nicole-${locale}.json`);
+  try {
+    const answer = await fetch(releaseUrl(`nicole-${locale}.json`), { signal: AbortSignal.timeout(20000) });
+    if (!answer.ok) throw new Error(`HTTP ${answer.status}`);
+    const text = await answer.text();
+    tryCache(() => {
+      mkdirSync(clonesCache, { recursive: true });
+      writeFileSync(copy, text);
+    });
+    return JSON.parse(text) as CloneIndex;
+  } catch (error) {
+    console.warn(`Nicole's ${locale} clones not reachable (${(error as Error).message})${existsSync(copy) ? ', the cached ones are used' : ''}`);
+    return existsSync(copy) ? (JSON.parse(readFileSync(copy, 'utf8')) as CloneIndex) : null;
+  }
+}
+const clones = Object.fromEntries(await Promise.all(CLONED.map(async (locale) => [locale, await cloneIndex(locale)] as const))) as Record<Cloned, CloneIndex | null>;
+
+// the sprites are rendered again only when what they are made of has changed: the lines and
+// their translations, Nicole's clones, this tool (with the model revision) and the engines'
+// versions; a fresh checkout without cached sprites renders them
+const packageVersion = (name: string) => (JSON.parse(readFileSync(join(root, 'node_modules', name, 'package.json'), 'utf8')) as { version: string }).version;
+const hash = createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).update(readFileSync(join(root, 'tools/voice/nicole.ts'))).update(ENGINES.map(packageVersion).join());
+hash.update(readFileSync(join(root, 'src/music/lines.ts')));
+// of the catalogs only what is spoken: a text of the screen never renders the voice again
+for (const locale of CLONED) for (const line of [...allLines('mod'), ...allLines('sys')]) hash.update(`${line}\u0000${CATALOGS[locale][line] ?? ''}\u0000`);
+for (const locale of CLONED) hash.update(clones[locale]?.audio ?? '-');
+const inputs = hash.digest('hex').slice(0, 12);
+const upToDate = SPRITES.every((sprite) => existsSync(manifest(sprite)) && (JSON.parse(readFileSync(manifest(sprite), 'utf8')) as { inputs?: string }).inputs === inputs);
+if (upToDate) {
+  console.log('Voice sprites up to date');
+  process.exit(0);
+}
+
 const cached = join(cacheRoot, 'voice', inputs);
 if (files.every((file) => existsSync(join(cached, file)))) {
   mkdirSync(out, { recursive: true });
@@ -105,7 +122,10 @@ if (files.every((file) => existsSync(join(cached, file)))) {
   process.exit(0);
 }
 
-const espeakPath = join(root, 'node_modules/@echogarden/espeak-ng-emscripten/espeak-ng.js');
+// ffmpeg from the ffmpeg-static package, so no machine needs one installed
+const ffmpeg = createRequire(import.meta.url)('ffmpeg-static') as string;
+
+const espeakPath = join(root,'node_modules/@echogarden/espeak-ng-emscripten/espeak-ng.js');
 const { default: init } = (await import(pathToFileURL(espeakPath).href)) as { default: () => Promise<{ eSpeakNGWorker: new () => Worker }> };
 const module = await init();
 
@@ -151,8 +171,6 @@ class Sprite {
   /** Encodes the sprite as MP3 and writes it with its manifest. */
   write(name: string) {
     const pcm = concat(this.chunks);
-    // ffmpeg from the ffmpeg-static package, so no machine needs one installed
-    const ffmpeg = createRequire(import.meta.url)('ffmpeg-static') as string;
     const file = join(out, `voice-${name}.mp3`);
     const encoded = spawnSync(ffmpeg, ['-v', 'error', '-y', '-f', 's16le', '-ar', String(SAMPLE_RATE), '-ac', '1', '-i', 'pipe:0', '-b:a', '24k', file], { input: Buffer.from(pcm.buffer) });
     if (encoded.status !== 0) throw new Error('ffmpeg failed: ' + encoded.stderr);
@@ -192,8 +210,43 @@ const kokoro = await KokoroTTS.from_pretrained(COMPUTER_VOICE.model, { dtype: 'f
 if (modelsCached) tryCache(() => writeFileSync(complete, COMPUTER_VOICE.revision + '\n'));
 const tokenizer = (kokoro as unknown as { tokenizer: (text: string, options: object) => { input_ids: unknown } }).tokenizer;
 
-/** Nicole says a line: English by herself, any other language in the phonemes espeak spells it in. */
+/** A language's store of cloned lines as samples, fetched once (and kept in the cache under its fingerprint); null when it cannot be had or is not the one its index names. */
+async function cloneAudio(locale: Cloned, index: CloneIndex): Promise<Float32Array | null> {
+  const file = join(clonesCache, `nicole-${locale}-${index.audio.slice(0, 16)}.flac`);
+  try {
+    if (!existsSync(file)) {
+      const answer = await fetch(releaseUrl(`nicole-${locale}.flac`), { signal: AbortSignal.timeout(120000) });
+      if (!answer.ok) throw new Error(`HTTP ${answer.status}`);
+      const bytes = Buffer.from(await answer.arrayBuffer());
+      // the release is updated while a build reads it: an audio newer or older than its index is not used
+      if (createHash('sha256').update(bytes).digest('hex') !== index.audio) throw new Error('audio and index do not match');
+      mkdirSync(clonesCache, { recursive: true });
+      writeFileSync(file, bytes);
+    }
+    const decoded = spawnSync(ffmpeg, ['-v', 'error', '-i', file, '-f', 'f32le', '-ac', '1', 'pipe:1'], { maxBuffer: 1 << 30 });
+    if (decoded.status !== 0) throw new Error('ffmpeg failed: ' + decoded.stderr);
+    const bytes = decoded.stdout;
+    return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
+  } catch (error) {
+    console.warn(`Nicole's ${locale} clones not used (${(error as Error).message})`);
+    return null;
+  }
+}
+const cloneSamples = new Map<Cloned, Float32Array | null>();
+let unclonedLines = 0;
+
+/** Nicole says a line: English by herself; any other language as her clone (see README.md), or, where it has no clone of the line yet, in the phonemes espeak spells it in. */
 async function nicole(locale: Locale, line: string): Promise<Int16Array> {
+  if (locale !== 'en') {
+    const index = clones[locale];
+    const clip = index?.clips[cloneKey(locale, line)];
+    if (index && clip) {
+      if (!cloneSamples.has(locale)) cloneSamples.set(locale, await cloneAudio(locale, index));
+      const samples = cloneSamples.get(locale);
+      if (samples) return trim(toPcm(resample(samples.subarray(clip[0], clip[0] + clip[1]), index.sampleRate, SAMPLE_RATE)));
+    }
+    unclonedLines++;
+  }
   let audio: { audio: Float32Array; sampling_rate: number };
   if (locale === 'en') audio = await kokoro.generate(line, { voice: COMPUTER_VOICE.voice, speed: COMPUTER_VOICE.speed });
   else {
@@ -212,9 +265,10 @@ for (const locale of ['en', 'de', 'es', 'fr'] as const) {
   const translate = (line: string) => (locale === 'en' ? line : (CATALOGS[locale][line] ?? line));
   const sprite = new Sprite();
   sprite.speak('mod', allLines('mod').map(translate), { voice: `${ANNOUNCER_LANGUAGE[locale]}+m3`, ...ANNOUNCER });
-  for (const line of new Set(allLines('sys').map(translate))) sprite.add(clipKey('sys', line), await nicole(locale, line));
+  for (const line of locale === 'en' ? new Set(allLines('sys')) : nicoleLines(locale)) sprite.add(clipKey('sys', line), await nicole(locale, line));
   sprite.write(locale);
 }
+if (unclonedLines) console.warn(`Nicole speaks ${unclonedLines} lines without her clone (not cloned yet: see the workflow Voice)`);
 
 // into the build cache, which keeps the newest few renders
 tryCache(() => {
