@@ -74,7 +74,7 @@ export { BOT_NAMES } from '../music/lines';
  * menu names it, so a Host knows whom it picks. The first three, who fill a tournament first,
  * average 0.4.
  */
-export const BOT_SKILLS: Record<string, number> = { Ingmar: 0.3, Nova: 0.4, Kessler: 0.5, Vega: 0.7, Orion: 0.6, Sputnik: 0.2, Halley: 0.85, Laika: 0.1 };
+export const BOT_SKILLS: Record<string, number> = { Juno: 0.3, Nova: 0.4, Kessler: 0.5, Vega: 0.7, Orion: 0.6, Sputnik: 0.2, Halley: 0.85, Laika: 0.1 };
 /** A bot of a name without a skill of its own. */
 const DEFAULT_SKILL = 0.4;
 

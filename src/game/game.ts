@@ -372,7 +372,7 @@ const PACES: Record<Pace, { speed: number; note: string }> = {
 };
 /** What a solo round plays: a race unless the Host asks for a deathmatch, its class, its arena (null: by chance), and the bots it flies against: a full grid unless the Host picks fewer. */
 type SoloChoice = { mode: RoundMode; pace: Pace; arena: ArenaId | null; rivals: string[] };
-const SOLO_DEFAULT: SoloChoice = { mode: 'race', pace: 'pro', arena: null, rivals: ['Laika', 'Sputnik', 'Ingmar', 'Nova', 'Kessler', 'Orion', 'Vega'] };
+const SOLO_DEFAULT: SoloChoice = { mode: 'race', pace: 'pro', arena: null, rivals: ['Laika', 'Sputnik', 'Juno', 'Nova', 'Kessler', 'Orion', 'Vega'] };
 const SOLO_NOTES: Record<RoundMode, string> = {
   race: 'Three laps through eight gates. Killing your opponents is explicitly allowed.',
   deathmatch: 'For the hard pilots: five minutes, every clone for itself.',

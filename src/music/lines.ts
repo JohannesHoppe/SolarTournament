@@ -202,7 +202,7 @@ export const ANNOUNCER_ARENA = {
 
 /** Bot callsigns the announcer can say; the clones of human Hosts become "pilot". */
 /** The bots' callsigns; the announcer has a rendered clip of each. */
-export const BOT_NAMES = ['Ingmar', 'Nova', 'Kessler', 'Vega', 'Orion', 'Sputnik', 'Halley', 'Laika'];
+export const BOT_NAMES = ['Juno', 'Nova', 'Kessler', 'Vega', 'Orion', 'Sputnik', 'Halley', 'Laika'];
 
 /** The names the announcer can say: the bots', and "pilot" for every Host. */
 export const ANNOUNCER_NAMES = [...BOT_NAMES.map((name) => name.toLowerCase()), 'pilot'];
