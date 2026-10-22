@@ -45,9 +45,11 @@ test('two tabs of one tournament see the same world', async ({ context }) => {
 
 test('a torpedo flies on both tabs and hits the ship of the other', async ({ context }) => {
   const { a, b } = await pair(context, `e2e-${Date.now().toString(36)}t&bots=0`);
+  // above the field, where no rock of whatever arena the room draws comes between the two
   const target = await b.evaluate(() => {
     const game = (window as unknown as GameWindow).game;
     game.me.protectedUntil = 0;
+    game.me.flight.position.set(0, 62000, 0);
     game.me.flight.velocity.set(0, 0, 0);
     game.autopilot = false;
     return { id: game.me.id, position: game.me.flight.position.toArray() };
@@ -57,7 +59,7 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
     const me = game.me;
     const at = me.flight.position.clone().set(position[0], position[1], position[2]);
     me.protectedUntil = 0;
-    me.flight.position.copy(at).add(at.clone().set(0, 0, 20000));
+    me.flight.position.copy(at).add(at.clone().set(20000, 0, 0));
     me.flight.velocity.set(0, 0, 0);
     const look = game.camera.matrix.clone().lookAt(me.flight.position, at, at.clone().set(0, 1, 0));
     me.flight.orientation.setFromRotationMatrix(look);

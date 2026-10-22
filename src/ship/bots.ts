@@ -34,6 +34,11 @@ const LOOK_BACK_PAUSE = 8;
 /** Bots close in with up to this speed and hold position near their target. */
 const CRUISE_SPEED = 2500;
 const HOLD_DISTANCE = 4000;
+/** A fighter circles its target sideways at this speed (units/s, 60 m/s) on its way behind it: dogfights are wide drifting arcs, not jousts. */
+const ORBIT_SPEED = 1200;
+/** A bot's hand eases its commands in over this time (s): HAND_TIME_SLOW at skill 0, HAND_TIME_FAST at skill 1 (see Bot.byHand). */
+const HAND_TIME_SLOW = 0.35;
+const HAND_TIME_FAST = 0.12;
 /** Seconds ahead a bot checks its flight path for asteroids. */
 const AVOID_HORIZON = 5;
 /** A velocity error larger than this makes the bot turn and burn instead of fighting. */
@@ -66,6 +71,7 @@ const local = new THREE.Vector3();
 const heading = new THREE.Vector3();
 const jinkStep = new THREE.Vector3();
 const line = new THREE.Vector3();
+const swing = new THREE.Vector3();
 
 export { BOT_NAMES } from '../music/lines';
 
@@ -105,7 +111,12 @@ export class Bot {
   private onTargetFor = 0;
   private lastThink = 0;
   private readonly wanderTarget = new THREE.Vector3();
+  /** What the bot wants this thought, and what its hand gives the ship: the same, eased in (see HAND_TIME). */
   private readonly controls: Controls = { ...IDLE };
+  private readonly hand: Controls = { ...IDLE };
+  /** The axis the bot circles its target about, and the target it was chosen for (see ORBIT_SPEED). */
+  private readonly orbitAxis = new THREE.Vector3(0, 1, 0);
+  private orbiting: Ship | null = null;
 
   /** The ship this bot hunts; other bots read it, so no more than MAX_HUNTERS chase the same one. */
   target: Ship | null = null;
@@ -243,10 +254,21 @@ export class Bot {
         const approach = THREE.MathUtils.clamp((targetDistance - HOLD_DISTANCE) * 0.3, -CRUISE_SPEED * 0.3, CRUISE_SPEED);
         desired.copy(toTarget).normalize().multiplyScalar(approach).add(target.flight.velocity);
       } else {
-        // the place to be is behind the target, where its drive is open
+        // the place to be is behind the target, where its drive is open; the way there is a
+        // wide arc around it, drifting sideways with the nose on it, never straight at it
         const goal = local.copy(target.flight.position).addScaledVector(target.flight.forward(heading), -HOLD_DISTANCE).sub(me.position);
         const approach = Math.min(goal.length() * 0.3, CRUISE_SPEED);
         desired.copy(goal).normalize().multiplyScalar(approach).add(target.flight.velocity);
+        if (target !== this.orbiting) {
+          this.orbiting = target;
+          this.orbitAxis.randomDirection();
+        }
+        // behind it, where the drive is open, the arc is done: the bot settles there and fires
+        if (!target.tailToward(toTarget)) {
+          swing.crossVectors(this.orbitAxis, toTarget);
+          if (swing.lengthSq() < 1) swing.crossVectors(heading.set(0, 1, 0), toTarget);
+          desired.addScaledVector(swing.normalize(), ORBIT_SPEED);
+        }
       }
     } else if (this.siege) {
       // no ship to fight, but a battleship's part: close in to SIEGE_DISTANCE and hold there
@@ -308,7 +330,8 @@ export class Bot {
       // a shot into the drive is worth the heat; at the armor a bot only snipes now and then,
       // single shots from a nearly cool laser, so it keeps the heat for the drive
       const open = target.tailToward(line.subVectors(target.flight.position, me.position));
-      const heatLimit = open ? 40 + 50 * this.skill : ARMOR_FIRE_HEAT;
+      // a racer flies first: single shots only, even at an open drive, unless it looks back
+      const heatLimit = open && (!racing || lookingBack) ? 40 + 50 * this.skill : ARMOR_FIRE_HEAT;
       controls.fire = (open || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
     } else if (sieging) {
       // a part of a battleship holds still: the nose on it, and fire while the laser allows
@@ -331,7 +354,26 @@ export class Bot {
       }
       controls.strafeX = this.dodge;
     }
-    return controls;
+    return this.byHand(controls, dt);
+  }
+
+  /**
+   * A pilot's hand: what the bot wants reaches the stick, the drive and the thrusters eased in
+   * over HAND_TIME (shorter for better pilots), as a hand on a mouse or a stick moves: it
+   * gathers speed, sweeps and settles, and overshoots a little. Only the trigger is instant.
+   */
+  private byHand(wanted: Controls, dt: number): Controls {
+    const hand = this.hand;
+    const k = 1 - Math.exp(-dt / (HAND_TIME_SLOW - (HAND_TIME_SLOW - HAND_TIME_FAST) * this.skill));
+    hand.yaw += (wanted.yaw - hand.yaw) * k;
+    hand.pitch += (wanted.pitch - hand.pitch) * k;
+    hand.roll += (wanted.roll - hand.roll) * k;
+    hand.thrust += (wanted.thrust - hand.thrust) * k;
+    hand.strafeX += (wanted.strafeX - hand.strafeX) * k;
+    hand.strafeY += (wanted.strafeY - hand.strafeY) * k;
+    hand.strafeZ += (wanted.strafeZ - hand.strafeZ) * k;
+    hand.fire = wanted.fire;
+    return hand;
   }
 
   /**

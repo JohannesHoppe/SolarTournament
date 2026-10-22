@@ -6,6 +6,8 @@ import { defineConfig } from '@playwright/test';
  */
 export default defineConfig({
   testDir: 'e2e',
+  // the balance runs play whole rounds and run on their own (npm run balance)
+  testIgnore: process.env.BALANCE ? [] : ['**/balance.spec.ts'],
   timeout: 90_000,
   workers: 1,
   use: {
