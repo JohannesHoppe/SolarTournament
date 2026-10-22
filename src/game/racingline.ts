@@ -67,11 +67,6 @@ export class RacingLine {
     for (let i = 0; i < gates.length; i++) this.gates.push(this.arcs[(i + offset) * SAMPLES]);
   }
 
-  /** Where gate `i` lies along the line (units). */
-  gateAt(i: number) {
-    return this.gates[i];
-  }
-
   get gateCount() {
     return this.gates.length;
   }
@@ -100,6 +95,8 @@ export class RacingLine {
    * bows around the rock in one smooth arc.
    */
   clear(s: number, field: AsteroidField, out: THREE.Vector3): THREE.Vector3 {
+    // around a closed loop, `s` may run past its length (the next lap)
+    if (this.closed) s = ((s % this.length) + this.length) % this.length;
     this.point(s, out);
     this.point(s + 1, tangent).sub(out).normalize();
     plain.copy(out);
@@ -108,7 +105,12 @@ export class RacingLine {
     for (let pass = 0; pass < BOW_PASSES; pass++) {
       for (const rock of field.asteroids.values()) this.bow(out, rock.object.position, rock.radius + CLEARANCE);
     }
-    const inside = [...field.asteroids.values()].find((rock) => rock.object.position.distanceTo(out) < rock.radius + CLEARANCE);
+    let inside = null;
+    for (const rock of field.asteroids.values()) {
+      if (rock.object.position.distanceTo(out) >= rock.radius + CLEARANCE) continue;
+      inside = rock;
+      break;
+    }
     if (inside) {
       cluster.center.copy(inside.object.position);
       cluster.radius = inside.radius + CLEARANCE;
@@ -161,7 +163,7 @@ export class RacingLine {
   }
 
   /** Whether `position` lies past the plane of gate `next`, square to the line there. */
-  beyond(position: THREE.Vector3, next: number): boolean {
+  private beyond(position: THREE.Vector3, next: number): boolean {
     const s = this.gates[next];
     this.point(s, sample);
     this.point(s + 1, tangent).sub(sample);
@@ -172,7 +174,7 @@ export class RacingLine {
    * The distance along the line of its point nearest `position`, looked for on the stretch from
    * `from` to `to` (units along the line; `to` may run past the length of a closed line).
    */
-  closest(position: THREE.Vector3, from: number, to: number): number {
+  private closest(position: THREE.Vector3, from: number, to: number): number {
     const steps = Math.max(1, Math.ceil(((to - from) / this.length) * (this.arcs.length - 1)));
     let best = from;
     let distance = Infinity;

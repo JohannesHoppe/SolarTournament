@@ -484,11 +484,14 @@ const skillScales = (skills: Skills) =>
     return `<span class="skill" aria-label="${t('{skill} {pips} of 5', { skill: label, pips })}"><span>${label}</span><span class="pips">${'<i class="on"></i>'.repeat(pips)}${'<i></i>'.repeat(5 - pips)}</span></span>`;
   }).join('')}</span>`;
 
+/** A sum of Solar Coins as the Host's language writes it (1,000 / 1.000 / 1 000). */
+const coinText = (coins: number) => coins.toLocaleString(currentLocale());
 const lapClock = (seconds: number) => `${Math.floor(seconds / 60)}:${(seconds % 60).toFixed(2).padStart(5, '0')}`;
 
 /** A hook's anchor, the owner's nose and the cable's far end this frame. */
 const hookPoint = new THREE.Vector3();
 const hookNose = new THREE.Vector3();
+const hookVelocity = new THREE.Vector3();
 const hookEnd = new THREE.Vector3();
 
 /** The part of the battleship the HUD marks, how far a battery's beam misses, and the point of the plume a bot flies away from. */
@@ -712,8 +715,10 @@ export class Game implements OnlineGame {
   private schoolContext: SchoolContext | null = null;
   /** Torpedoes the own pilot has shot down, for the flight school's drill. */
   private torpedoesDown = 0;
+  /** Torpedoes of the own pilot that hit a ship, for the flight school's drill. */
+  private torpedoesHit = 0;
   /** The flight school's line to its marker (see lineTo). */
-  private schoolLine: { line: RacingLine; to: THREE.Vector3 } | null = null;
+  private schoolLine: { line: RacingLine; next: number; to: THREE.Vector3 } | null = null;
   /** Target drone of the flight school. */
   private drone: Ship | null = null;
   /** G-force strain of the own pilot, 0..1. */
@@ -1271,8 +1276,11 @@ export class Game implements OnlineGame {
   }
 
   castOut() {
-    // after the call, so the Host still sees its name on the cheater's line
+    // after the call, so the Host still sees its name on the cheater's line; a Host who has
+    // left that tournament meanwhile is not taken out of what it does now
+    const tournament = this.online;
     window.setTimeout(() => {
+      if (!tournament || this.online !== tournament) return;
       this.showMenu();
       this.notice(t('The other Hosts named you a cheater and cast you out of the tournament.'));
     }, CAST_OUT_MS);
@@ -2287,7 +2295,7 @@ export class Game implements OnlineGame {
     if (me && !this.school && me.score > Number(storageGet(BEST_SCORE_KEY) ?? 0)) storageSet(BEST_SCORE_KEY, String(me.score));
     const coins = me && !this.school && !this.spectating ? payOut(this.hangar, me.score) : 0;
     if (coins > 0) this.saveHangar();
-    $('results-coins').textContent = coins > 0 ? t('+{coins} Solar Coins · {total} in the hangar', { coins: coins.toLocaleString('en'), total: this.hangar.coins.toLocaleString('en') }) : '';
+    $('results-coins').textContent = coins > 0 ? t('+{coins} Solar Coins · {total} in the hangar', { coins: coinText(coins), total: coinText(this.hangar.coins) }) : '';
   }
 
   private saveHangar() {
@@ -2302,7 +2310,7 @@ export class Game implements OnlineGame {
     this.showcase?.show(ship, perksOf(this.hangar, ship, false), locked);
     $('ship-name').textContent = t(SHIP_NAMES[ship]);
     $('ship-note').textContent = locked ? t('Make both interceptors complete in the hangar, and it is yours.') : ship === this.selectedShip ? t('Your ship') : '';
-    $('hangar-note').textContent = t('{coins} Solar Coins · upgrade your ships', { coins: this.hangar.coins.toLocaleString('en') });
+    $('hangar-note').textContent = t('{coins} Solar Coins · upgrade your ships', { coins: coinText(this.hangar.coins) });
     if (this.inHangar) this.renderHangar();
   }
 
@@ -2312,15 +2320,14 @@ export class Game implements OnlineGame {
     this.shipShown = ships[(ships.indexOf(this.shipShown) + step + ships.length) % ships.length];
     if (this.shipShown !== 'sovereign' || sovereignEarned(this.hangar)) {
       this.selectedShip = this.hangar.ship = this.shipShown;
-      storageSet(HANGAR_KEY, JSON.stringify(this.hangar));
-    }
-    this.renderShowcase();
+      this.saveHangar();
+    } else this.renderShowcase();
   }
 
   /** The hangar's plate: the coins, and every upgrade of the ship on show with its steps and the price of the next. */
   private renderHangar() {
     const ship = this.shipShown;
-    $('hangar-coins').textContent = t('{coins} Solar Coins. Every point of a round pays one.', { coins: this.hangar.coins.toLocaleString('en') });
+    $('hangar-coins').textContent = t('{coins} Solar Coins. Every point of a round pays one.', { coins: coinText(this.hangar.coins) });
     const list = $('hangar-upgrades');
     if (ship === 'sovereign') {
       list.textContent = sovereignEarned(this.hangar) ? t('The Sovereign flies with every upgrade, and wears every look.') : t('The Sovereign is the President’s gift for both interceptors made complete.');
@@ -2332,7 +2339,7 @@ export class Game implements OnlineGame {
         const price = nextPrice(this.hangar, ship, upgrade.id);
         const row = Object.assign(document.createElement('button'), { type: 'button', className: 'upgrade' });
         row.disabled = price === null || price > this.hangar.coins;
-        row.innerHTML = `<span class="upgrade-name">${t(upgrade.name)}<small>${upgrade.looks ? t('{note} · looks only', { note: t(upgrade.note) }) : t(upgrade.note)}</small></span><span class="pips">${'<i class="on"></i>'.repeat(level)}${'<i></i>'.repeat(LEVELS - level)}</span><span class="upgrade-price">${price === null ? t('Complete') : `${price.toLocaleString('en')} ☉`}</span>`;
+        row.innerHTML = `<span class="upgrade-name">${t(upgrade.name)}<small>${upgrade.looks ? t('{note} · looks only', { note: t(upgrade.note) }) : t(upgrade.note)}</small></span><span class="pips">${'<i class="on"></i>'.repeat(level)}${'<i></i>'.repeat(LEVELS - level)}</span><span class="upgrade-price">${price === null ? t('Complete') : `${coinText(price)} ☉`}</span>`;
         row.addEventListener('click', () => {
           if (buy(this.hangar, ship, upgrade.id)) this.saveHangar();
         });
@@ -2771,8 +2778,17 @@ export class Game implements OnlineGame {
       bot.raceSpeed = FLAG_HOME_SPEED;
       return;
     }
-    const guard = this.bots.filter((b) => b.ship.team === side).indexOf(bot) % FLAG_GUARDS === 0;
-    if (own.carrier && guard) bot.prey = this.ships.find((s) => s.id === own.carrier) ?? null;
+    // every FLAG_GUARDS-th bot of a side guards (counted by hand: this runs every frame)
+    let rank = 0;
+    for (const other of this.bots) {
+      if (other === bot) break;
+      if (other.ship.team === side) rank++;
+    }
+    const guard = rank % FLAG_GUARDS === 0;
+    if (own.carrier && guard) {
+      bot.prey = null;
+      for (const s of this.ships) if (s.id === own.carrier) bot.prey = s;
+    }
     if (!own.home && !own.carrier) bot.waypoint = own.position;
     else if (!guard && !theirs.carrier) bot.waypoint = theirs.home ? this.raidPoint(bot, theirs.position) : theirs.position;
     else bot.lure = theirs.carrier ? theirs.position : flags.bases[side];
@@ -3317,18 +3333,18 @@ export class Game implements OnlineGame {
     // a ring course has its racing line, as a race does; any other marker a line to it
     const me = this.me!;
     if (!waypoint) this.schoolLine = null;
-    const track = school.track ?? (waypoint && me.flight.position.distanceTo(waypoint) > SCHOOL_LINE_MIN ? { line: this.lineTo(me, waypoint), next: 0 } : null);
+    const track = school.track ?? (waypoint && me.flight.position.distanceTo(waypoint) > SCHOOL_LINE_MIN ? this.lineTo(me, waypoint) : null);
     if (track && me.alive) this.showGuide(me, track.line, track.next, false);
     else this.guide.hide();
     return waypoint;
   }
 
   /** The flight school's line to a marker: from where the pilot was when the marker came up (or last moved by SCHOOL_LINE_MIN), ending at it. */
-  private lineTo(me: Ship, waypoint: THREE.Vector3): RacingLine {
+  private lineTo(me: Ship, waypoint: THREE.Vector3): { line: RacingLine; next: number } {
     if (!this.schoolLine || this.schoolLine.to.distanceTo(waypoint) > SCHOOL_LINE_MIN) {
-      this.schoolLine = { line: new RacingLine([waypoint], false, me.flight.position, 0), to: waypoint.clone() };
+      this.schoolLine = { line: new RacingLine([waypoint], false, me.flight.position, 0), next: 0, to: waypoint.clone() };
     }
-    return this.schoolLine.line;
+    return this.schoolLine;
   }
 
   /** What the flight school sees of the game; created once, the per-frame values are filled in by teach(). */
@@ -3380,10 +3396,17 @@ export class Game implements OnlineGame {
       get torpedoesDown() {
         return game.torpedoesDown;
       },
+      get torpedoesHit() {
+        return game.torpedoesHit;
+      },
       spawnProbe: (position, kind) => {
-        // a probe of its own each time: one taken is never shown again
+        // a probe of its own each time: one taken is never shown again; it waits where it is
+        // until the pilot comes for it
         this.probes.drop('school', Math.floor(this.time * 1000), [kind], position, new THREE.Vector3(), this.time);
-        return this.probes.list[this.probes.list.length - 1].position;
+        const probe = this.probes.list[this.probes.list.length - 1];
+        probe.velocity.set(0, 0, 0);
+        probe.until = Infinity;
+        return probe.position;
       },
       countdown: (text) => this.count(text),
       perfectStart: () => this.perfectStart(this.me!),
@@ -3613,8 +3636,11 @@ export class Game implements OnlineGame {
   private botHook(bot: Bot, dt: number, now: number) {
     const ship = bot.ship;
     const target = bot.target;
-    if (this.tethers.has(ship)) {
-      if (now >= bot.hookUntil || !target?.alive) this.unhook(ship);
+    const tether = this.tethers.get(ship);
+    if (tether) {
+      // the ship it hooked, whichever it hunts now
+      const hooked = tether.anchor?.ship;
+      if (now >= bot.hookUntil || (hooked && !hooked.alive)) this.unhook(ship);
       return;
     }
     if (!target || bot === this.sparring?.bot || bot.waypoint || now < bot.hookReadyAt || Math.random() >= dt * BOT_HOOK_RATE * bot.skills.daring * (1 - bot.ease)) return;
@@ -3689,8 +3715,10 @@ export class Game implements OnlineGame {
       const floor = floorOf(owner, tether.anchor);
       let length: number | null = tether.length;
       // the winch yanks as hard as a coil throws: up to the limit plus a coil's push
-      if (owner.owner === null) length = pullOn(owner.flight, at, length, true, share, floor, MAX_SPEED + BOOST_PUSH, dt);
-      if (length !== null && target && target.owner === null) length = pullOn(target.flight, owner.flight.position, length, true, share, floor, MAX_SPEED + BOOST_PUSH, dt);
+      const rock = tether.anchor.rock;
+      const anchorVelocity = target ? target.flight.velocity : rock ? this.field.surfaceVelocity(rock, at, hookVelocity) : hookVelocity.set(0, 0, 0);
+      if (owner.owner === null) length = pullOn(owner.flight, at, anchorVelocity, length, true, share, floor, MAX_SPEED + BOOST_PUSH, dt);
+      if (length !== null && target && target.owner === null) length = pullOn(target.flight, owner.flight.position, owner.flight.velocity, length, true, share, floor, MAX_SPEED + BOOST_PUSH, dt);
       if (length === null) {
         if (owner === this.me) this.hud.flashMessage(this.time, t('Cable snapped'), 1.5);
         this.unhook(owner);
@@ -4040,6 +4068,7 @@ export class Game implements OnlineGame {
     }
     const status = ship.structural(TORPEDO_DAMAGE, now);
     if (status === 'protected') return;
+    if (shooter?.isLocal) this.torpedoesHit++;
     // the blast shakes the thrusters too
     ship.thrusters = Math.max(0, ship.thrusters - 0.3);
     if (ship.isLocal) {

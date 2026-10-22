@@ -220,11 +220,6 @@ export class Radio {
     }
   }
 
-  /** The Host changed its language: the announcer's voice comes anew, in it. */
-  relocalize() {
-    this.voiced = false;
-  }
-
   private async loadBandVoice() {
     try {
       this.band!.setVoice(await loadVoice());

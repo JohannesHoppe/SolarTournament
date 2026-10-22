@@ -403,6 +403,11 @@ export const DE: Catalog = {
   'Announcer': 'Kommentator',
   'no answer': 'keine Antwort',
   'no relay': 'kein Relay',
+  'foreign site': 'fremde Seite',
+  'not set up': 'nicht eingerichtet',
+  'monthly budget spent': 'Monatsbudget verbraucht',
+  'budget unreadable': 'Budget nicht lesbar',
+  'Cloudflare answered': 'Cloudflare hat abgelehnt',
 
   // the radio page
   'Intro': 'Intro',

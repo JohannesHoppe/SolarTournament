@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { MAX_SPEED } from '../ship/flight';
 import { TORPEDOES } from '../game/torpedoes';
+import { ONLINE_LEVEL, tubeTorpedoes } from '../game/hangar';
+
+/** The most torpedoes a clone carries online: the standard load and its tubes up to the online cap. */
+const LOAD = TORPEDOES + tubeTorpedoes(ONLINE_LEVEL);
 
 /**
  * Rough plausibility checks on what other browsers report about their own ships. Every bound is
@@ -61,7 +65,7 @@ export class Plausibility {
   private track(id: string, now: number): Track {
     let track = this.tracks.get(id);
     if (!track) {
-      track = { x: 0, y: 0, z: 0, at: -Infinity, alive: false, deaths: -1, jumps: [], graceUntil: now + REPRINT_GRACE, nova: false, launched: 0, torpedoes: TORPEDOES, kills: null, credits: 0 };
+      track = { x: 0, y: 0, z: 0, at: -Infinity, alive: false, deaths: -1, jumps: [], graceUntil: now + REPRINT_GRACE, nova: false, launched: 0, torpedoes: LOAD, kills: null, credits: 0 };
       this.tracks.set(id, track);
     }
     return track;
@@ -84,7 +88,7 @@ export class Plausibility {
 
   private freshClone(track: Track) {
     track.launched = 0;
-    track.torpedoes = TORPEDOES;
+    track.torpedoes = LOAD;
     track.nova = false;
   }
 
@@ -171,17 +175,26 @@ export function plausibleBlast(at: THREE.Vector3, target: THREE.Vector3): boolea
 /** Accusations: a peer counts as a cheater once at least ACCUSERS browsers, the own one included, say so. */
 export const ACCUSERS = 2;
 
+/**
+ * How many accusers it takes in a tournament of `browsers` (the own one included): a majority
+ * of the others besides the accused, at least ACCUSERS, so two tabs of one Host cannot vote an
+ * honest one out of a fuller room.
+ */
+export function accusersNeeded(browsers: number): number {
+  return Math.max(ACCUSERS, Math.floor((browsers - 1) / 2) + 1);
+}
+
 export class Accusations {
   private readonly accusers = new Map<string, Set<string>>();
   private readonly announced = new Set<string>();
 
-  /** `accuser` says `accused` cheats; true once enough say so, the first time. */
-  add(accused: string, accuser: string): boolean {
+  /** `accuser` says `accused` cheats, in a tournament of `browsers`; true once enough say so, the first time. */
+  add(accused: string, accuser: string, browsers: number): boolean {
     if (accused === accuser) return false;
     const set = this.accusers.get(accused) ?? new Set<string>();
     set.add(accuser);
     this.accusers.set(accused, set);
-    if (set.size < ACCUSERS || this.announced.has(accused)) return false;
+    if (set.size < accusersNeeded(browsers) || this.announced.has(accused)) return false;
     this.announced.add(accused);
     return true;
   }

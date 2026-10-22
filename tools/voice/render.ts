@@ -74,7 +74,9 @@ const files = SPRITES.flatMap((sprite) => [`voice-${sprite}.mp3`, `voice-${sprit
 // checkout without cached sprites (see cacheRoot) renders them
 const packageVersion = (name: string) => (JSON.parse(readFileSync(join(root, 'node_modules', name, 'package.json'), 'utf8')) as { version: string }).version;
 const hash = createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).update(ENGINES.map(packageVersion).join());
-for (const source of ['src/music/lines.ts', 'src/i18n/de.ts', 'src/i18n/es.ts', 'src/i18n/fr.ts']) hash.update(readFileSync(join(root, source)));
+hash.update(readFileSync(join(root, 'src/music/lines.ts')));
+// of the catalogs only what is spoken: a text of the screen never renders the voice again
+for (const locale of ['de', 'es', 'fr'] as const) for (const line of [...allLines('mod'), ...allLines('sys')]) hash.update(`${line}\u0000${CATALOGS[locale][line] ?? ''}\u0000`);
 const inputs = hash.digest('hex').slice(0, 12);
 const upToDate = SPRITES.every((sprite) => existsSync(manifest(sprite)) && (JSON.parse(readFileSync(manifest(sprite), 'utf8')) as { inputs?: string }).inputs === inputs);
 if (upToDate) {

@@ -39,6 +39,8 @@ const ORBIT_SPEED = 1200;
 /** A bot's hand eases its commands in over this time (s): HAND_TIME_SLOW at reflexes 0, HAND_TIME_FAST at reflexes 1 (see Bot.byHand). */
 const HAND_TIME_SLOW = 0.35;
 const HAND_TIME_FAST = 0.12;
+/** A pause between two thoughts longer than this (s) means the bot was gone (dead, not yet printed): the next thought starts afresh. A frame, even in a time-lapse, is shorter. */
+const RESPAWN_GAP = 1;
 /** Seconds ahead a bot checks its flight path for asteroids. */
 const AVOID_HORIZON = 5;
 /** A velocity error larger than this makes the bot turn and burn instead of fighting. */
@@ -140,7 +142,12 @@ export class Bot {
   target: Ship | null = null;
   /** Set by the game during a solar storm: the sensors are blind (see STORM_SIGHT). */
   blind = false;
-  /** Set by the game in a race: the next gate, which the bot flies through, and how fast it races (units/s). */
+  /**
+   * Set by the game in a race (the point on the line it flies for) and in Capture the Flag (a
+   * core to fetch or take, or the own base with a core in tow): the bot races there and how fast
+   * (units/s), as a racer does, shooting only what lies ahead and turning only on a chaser, and
+   * never takes the hook on the way.
+   */
   waypoint: THREE.Vector3 | null = null;
   raceSpeed = RACE_SPEED;
   /** Set by the game: the nearest probe, which an idle bot goes for. */
@@ -181,9 +188,15 @@ export class Bot {
     const me = this.ship.flight;
     // one controls object per bot, cleared each thought, so thinking allocates nothing
     const controls = Object.assign(this.controls, IDLE);
-    // the first thought after a (re)spawn must not count the time the bot was gone as reaction time
-    const dt = Math.min(now - this.lastThink, 0.1);
+    // the first thought after a (re)spawn must not count the time the bot was gone as reaction
+    // time, and a new clone's hand starts at rest; any shorter step counts in full (a time-lapse
+    // takes long ones)
+    let dt = now - this.lastThink;
     this.lastThink = now;
+    if (dt > RESPAWN_GAP) {
+      dt = 0;
+      Object.assign(this.hand, IDLE);
+    }
 
     if (now >= this.nextRethink) {
       this.nextRethink = now + 0.4 + Math.random() * 0.6;
@@ -420,7 +433,7 @@ export class Bot {
     }
     jinkStep.subVectors(velocity, this.lastTargetVelocity);
     this.lastTargetVelocity.copy(velocity);
-    line.copy(toTarget).normalize();
+    line.subVectors(target.flight.position, this.ship.flight.position).normalize();
     jinkStep.addScaledVector(line, -jinkStep.dot(line));
     this.jink += (jinkStep.length() / dt - this.jink) * (1 - Math.exp(-dt / JINK_MEMORY));
     if (now < this.nextJinkRoll) return;

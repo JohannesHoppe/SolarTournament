@@ -377,6 +377,11 @@ export const ES: Catalog = {
   Announcer: 'Locutor',
   'no answer': 'sin respuesta',
   'no relay': 'sin relé',
+  'foreign site': 'sitio ajeno',
+  'not set up': 'sin configurar',
+  'monthly budget spent': 'presupuesto mensual agotado',
+  'budget unreadable': 'presupuesto ilegible',
+  'Cloudflare answered': 'Cloudflare lo rechazó',
 
   // radio page
   Intro: 'Intro',

@@ -16,6 +16,7 @@ export interface Transport {
   on(type: string, handler: Handler): void;
   /** Casts a peer out: nothing it sends is taken any more, and nothing is sent to it. */
   block(peer: string): void;
+  isBlocked(peer: string): boolean;
   onPeerJoin(handler: (id: string) => void): void;
   onPeerLeave(handler: (id: string) => void): void;
   peers(): string[];
@@ -37,6 +38,15 @@ const TURN_PATIENCE_MS = 3000;
 /** The credentials hold an hour (functions/turn.ts); fresh ones are fetched well before (ms). */
 const TURN_REFRESH_MS = 50 * 60 * 1000;
 
+/** Why functions/turn.ts hands out no relay, in the words the HUD translates; its details (a status code, an error) go to the console. */
+const RELAY_REASONS = [msg('foreign site'), msg('not set up'), msg('monthly budget spent'), msg('budget unreadable'), msg('Cloudflare answered')];
+
+function relayReason(off: string): string {
+  const reason = RELAY_REASONS.find((known) => off.startsWith(known));
+  if (reason !== off) console.warn(`SolarTournament: TURN relay off: ${off.slice(0, 80)}`);
+  return reason ?? msg('no relay');
+}
+
 /**
  * The relays a browser may use: STUN, and Cloudflare's TURN relay for networks that block
  * direct connections (strict firewalls, carrier-grade NAT). Without an answer from /turn (the
@@ -52,7 +62,7 @@ async function iceServers(): Promise<{ servers: RTCIceServer[]; off: string | nu
   try {
     const { iceServers: relays, off } = (await answer.json()) as { iceServers?: RTCIceServer[]; off?: unknown };
     if (Array.isArray(relays) && relays.length) return { servers: [...ICE_SERVERS, ...relays], off: null };
-    return { servers: ICE_SERVERS, off: typeof off === 'string' ? off.slice(0, 40) : msg('no relay') };
+    return { servers: ICE_SERVERS, off: typeof off === 'string' ? relayReason(off) : msg('no relay') };
   } catch {
     // not the game's function (the dev server answers with a page)
     return { servers: ICE_SERVERS, off: null };
@@ -119,13 +129,20 @@ abstract class BaseTransport implements Transport {
 
   /** Peers cast out of the tournament (see block). */
   protected readonly blocked = new Set<string>();
+  /** The same peers as a list, kept for the messages that carry it. */
+  protected blockedList: string[] = [];
 
   /** Casts a peer out: nothing it sends is taken any more, and nothing is sent to it; to this browser it has left. */
   block(peer: string) {
     if (this.blocked.has(peer)) return;
     this.blocked.add(peer);
+    this.blockedList = [...this.blocked];
     this.forget(peer);
     for (const handler of this.leaveHandlers) handler(peer);
+  }
+
+  isBlocked(peer: string) {
+    return this.blocked.has(peer);
   }
 
   /** A peer is gone for good: no longer one of peers(), and its leaving is not told again. */
@@ -142,6 +159,7 @@ export class TrysteroTransport extends BaseTransport {
   private readonly room: import('trystero').Room;
   private readonly action: import('trystero').MessageAction<Json>;
   private readonly connected = new Set<string>();
+  private targets: string[] | null = null;
   /** Trystero reads it for every new connection, so fresh credentials reach the next one too. */
   private readonly rtcConfig: RTCConfiguration;
   private readonly refresh: number;
@@ -170,16 +188,24 @@ export class TrysteroTransport extends BaseTransport {
       // a peer cast out stays out, however often it connects
       if (this.blocked.has(id)) return;
       this.connected.add(id);
+      this.retarget();
       for (const handler of this.joinHandlers) handler(id);
     };
     this.room.onPeerLeave = (id) => {
       if (!this.connected.delete(id)) return;
+      this.retarget();
       for (const handler of this.leaveHandlers) handler(id);
     };
   }
 
   protected forget(peer: string) {
     this.connected.delete(peer);
+    this.retarget();
+  }
+
+  /** Who a message to everyone goes to: all, or, once a peer is cast out, the peers still here. */
+  private retarget() {
+    this.targets = this.blocked.size ? [...this.connected] : null;
   }
 
   /** Loads Trystero only when a player goes online, and asks for the TURN relay meanwhile. */
@@ -191,7 +217,7 @@ export class TrysteroTransport extends BaseTransport {
 
   send(type: string, data: Json, to?: string) {
     // to everyone but a peer cast out (see block)
-    const target = to ? (this.blocked.has(to) ? [] : [to]) : this.blocked.size ? this.peers() : null;
+    const target = to ? (this.blocked.has(to) ? [] : [to]) : this.targets;
     if (target?.length === 0) return;
     void this.action.send({ t: type, d: data }, target ? { target } : undefined).catch(() => {
       // the peer left while the message was on its way
@@ -276,7 +302,7 @@ export class LocalTransport extends BaseTransport {
     if (message.to && this.blocked.has(message.to)) return;
     try {
       // the channel reaches every tab: a peer cast out reads past what is not meant for it
-      this.channel.postMessage({ ...message, from: this.selfId, skip: [...this.blocked] });
+      this.channel.postMessage({ ...message, from: this.selfId, skip: this.blockedList.length ? this.blockedList : undefined });
     } catch {
       // channel already closed
     }

@@ -1,32 +1,30 @@
 import type { Voice } from './band';
-import { currentLocale, type Locale } from '../i18n/i18n';
+import { currentLocale } from '../i18n/i18n';
 
-const loading = new Map<Locale, Promise<Voice>>();
+let loading: Promise<Voice> | null = null;
 
+type Sprite = { buffer: AudioBuffer; manifest: Manifest };
 type Manifest = { sampleRate: number; version: string; clips: Record<string, [number, number]> };
 
 /**
- * Loads the rendered voices for the Host's language: the radio's sprite (the regime's words,
- * the same in every language) and the sprite of the language (the announcer and the flight
- * computer), joined into one, each an MP3 sprite with a manifest of its clips. Loaded once per
- * language and shared by the radio and the flight computer; a failed load is tried again the
- * next time a voice is wanted.
+ * Loads the rendered voices for the Host's language (fixed for the page: choosing another one
+ * reloads it): the radio's sprite (the regime's words, the same in every language) and the
+ * sprite of the language (the announcer and the flight computer), joined into one, each an MP3
+ * sprite with a manifest of its clips. Loaded once and shared by the radio and the flight
+ * computer; without the language's sprite the regime still speaks, and a failed load of the
+ * radio's is tried again the next time a voice is wanted.
  */
-export function loadVoice(locale: Locale = currentLocale()): Promise<Voice> {
-  let voice = loading.get(locale);
-  if (!voice) {
-    voice = Promise.all([load('radio'), load(locale)])
-      .then(join)
-      .catch((error) => {
-        loading.delete(locale);
-        throw error;
-      });
-    loading.set(locale, voice);
-  }
-  return voice;
+export function loadVoice(): Promise<Voice> {
+  loading ??= Promise.all([load('radio'), load(currentLocale()).catch((error) => (console.warn('Voice of the language unavailable', error), null))])
+    .then(([radio, language]) => join(radio, language))
+    .catch((error) => {
+      loading = null;
+      throw error;
+    });
+  return loading;
 }
 
-async function load(sprite: string): Promise<{ buffer: AudioBuffer; manifest: Manifest }> {
+async function load(sprite: string): Promise<Sprite> {
   const base = import.meta.env.BASE_URL + 'assets/voice/';
   const fetchOk = async (file: string, init?: RequestInit) => {
     const response = await fetch(base + file, init);
@@ -44,7 +42,8 @@ async function load(sprite: string): Promise<{ buffer: AudioBuffer; manifest: Ma
 }
 
 /** Two sprites as one: the second one's samples after the first's, its clips moved along. */
-function join([first, second]: { buffer: AudioBuffer; manifest: Manifest }[]): Voice {
+function join(first: Sprite, second: Sprite | null): Voice {
+  if (!second) return { buffer: first.buffer, clips: first.manifest.clips };
   const buffer = new AudioBuffer({ length: first.buffer.length + second.buffer.length, sampleRate: first.buffer.sampleRate, numberOfChannels: 1 });
   buffer.copyToChannel(first.buffer.getChannelData(0), 0, 0);
   buffer.copyToChannel(second.buffer.getChannelData(0), 0, first.buffer.length);

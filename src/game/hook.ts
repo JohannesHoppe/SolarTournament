@@ -51,6 +51,9 @@ const toAnchor = new THREE.Vector3();
 const spin = new THREE.Quaternion();
 const nose = new THREE.Vector3();
 const toward = new THREE.Vector3();
+const heading = new THREE.Vector3();
+const chosen = new THREE.Vector3();
+const relative = new THREE.Vector3();
 
 /** Where an anchor is now (world), or null when what it held is gone. */
 export function anchorPoint(anchor: Anchor, out: THREE.Vector3): THREE.Vector3 | null {
@@ -61,7 +64,7 @@ export function anchorPoint(anchor: Anchor, out: THREE.Vector3): THREE.Vector3 |
 }
 
 /** An anchor on a rock at a world point: kept in the rock's frame. */
-export function rockAnchor(rock: Asteroid, at: THREE.Vector3): Anchor {
+function rockAnchor(rock: Asteroid, at: THREE.Vector3): Anchor {
   const local = at.clone().sub(rock.object.position).applyQuaternion(spin.copy(rock.object.quaternion).invert());
   return { rock, local, ship: null };
 }
@@ -72,8 +75,10 @@ export function rockAnchor(rock: Asteroid, at: THREE.Vector3): Anchor {
  */
 export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[]): { anchor: Anchor; distance: number; at: THREE.Vector3 } | null {
   const origin = owner.nose(nose);
-  const direction = owner.flight.forward(new THREE.Vector3());
-  let rock = field.raycast(origin, direction, HOOK_RANGE);
+  const forward = owner.flight.forward(heading);
+  // the direction the harpoon flies: the nose's, or towards a rock beside it
+  chosen.copy(forward);
+  let rock = field.raycast(origin, forward, HOOK_RANGE);
   // nothing straight ahead: the rock whose surface comes closest to the nose's line within HOOK_CONE
   if (!rock?.asteroid) {
     let nearest = HOOK_CONE;
@@ -81,24 +86,23 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
       const line = toward.subVectors(asteroid.object.position, origin);
       const distance = line.length();
       if (distance - asteroid.radius > HOOK_RANGE) continue;
-      const off = line.angleTo(direction) - Math.asin(Math.min(1, asteroid.radius / distance));
+      const off = line.angleTo(forward) - Math.asin(Math.min(1, asteroid.radius / distance));
       if (off >= nearest) continue;
       const hit = field.raycast(origin, line.divideScalar(distance), HOOK_RANGE);
       if (hit?.asteroid !== asteroid) continue;
       nearest = off;
       rock = hit;
-      direction.copy(line);
+      chosen.copy(line);
     }
   }
   let best: { anchor: Anchor; distance: number; at: THREE.Vector3 } | null = null;
   if (rock?.asteroid) {
-    const at = origin.clone().addScaledVector(direction, rock.distance);
+    const at = origin.clone().addScaledVector(chosen, rock.distance);
     best = { anchor: rockAnchor(rock.asteroid, at), distance: rock.distance, at };
   }
-  direction.copy(owner.flight.forward(toward));
   for (const ship of ships) {
     if (ship === owner || !ship.alive) continue;
-    const distance = raySphere(origin, direction, ship.flight.position, ship.radius);
+    const distance = raySphere(origin, forward, ship.flight.position, ship.radius);
     if (distance === null || distance > HOOK_RANGE || (best && distance >= best.distance)) continue;
     best = { anchor: { rock: null, local: null, ship }, distance, at: ship.flight.position.clone() };
   }
@@ -109,29 +113,32 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
 export const flightTime = (distance: number) => distance / HOOK_SPEED;
 
 /**
- * The cable's pull on (the flight of) one ship this browser runs, hanging from `anchor` with `length` of cable
- * out: the winch, while `reeling`, pulls it in; a taut cable takes the ship's speed away from
- * the anchor and keeps it at the cable's length. Hooked to another ship, `share` is half: the
- * other ship takes the other half on its own browser. Returns the length the cable has now,
- * or null when it snapped.
+ * The cable's pull on (the flight of) one ship this browser runs, hanging from `anchor` (moving
+ * with `anchorVelocity`) with `length` of cable out: the winch, while `reeling`, pulls it in; a
+ * taut cable takes the ship's speed away from the anchor and keeps it at the cable's length.
+ * Every speed counts against the anchor's, so two ships flying side by side are pulled as two
+ * at rest. Hooked to another ship, `share` is half: the other ship takes the other half on its
+ * own browser. Returns the length the cable has now, or null when it snapped.
  */
-export function pullOn(flight: FlightModel, anchorAt: THREE.Vector3, length: number, reeling: boolean, share: number, floor: number, speedLimit: number, dt: number): number | null {
+export function pullOn(flight: FlightModel, anchorAt: THREE.Vector3, anchorVelocity: THREE.Vector3, length: number, reeling: boolean, share: number, floor: number, speedLimit: number, dt: number): number | null {
   toAnchor.subVectors(anchorAt, flight.position);
   const distance = toAnchor.length();
   if (distance < 1) return length;
   if (distance > floor + HOOK_RANGE * HOOK_SNAP) return null;
   toAnchor.divideScalar(distance);
+  relative.subVectors(flight.velocity, anchorVelocity);
   // the winch takes in the slack, and while held pulls, never past the limit; and the flight
-  // computer burns against the closing speed it could no longer stop before the floor
+  // computer burns against the closing speed it could no longer stop before the floor (two
+  // ships each their share of it)
   let cable = Math.min(length, distance);
-  const closing = flight.velocity.dot(toAnchor);
+  const closing = relative.dot(toAnchor);
   const stoppable = Math.sqrt(2 * HOOK_BRAKE * Math.max(0, distance - floor));
-  if (reeling && closing > stoppable) flight.velocity.addScaledVector(toAnchor, -Math.min(closing - stoppable, HOOK_BRAKE * dt));
-  else if (reeling && distance > floor && flight.velocity.length() < speedLimit) flight.velocity.addScaledVector(toAnchor, Math.min(HOOK_PULL * dt, stoppable - closing));
+  if (reeling && closing > stoppable) flight.velocity.addScaledVector(toAnchor, -Math.min(closing - stoppable, HOOK_BRAKE * dt) * share);
+  else if (reeling && distance > floor && relative.length() < speedLimit) flight.velocity.addScaledVector(toAnchor, Math.min(HOOK_PULL * dt, stoppable - closing));
   cable = Math.max(floor, cable);
   // a taut cable: no moving away from the anchor, and no farther than the cable
   if (distance > cable) {
-    const away = -flight.velocity.dot(toAnchor);
+    const away = -relative.dot(toAnchor);
     if (away > 0) flight.velocity.addScaledVector(toAnchor, away * share);
     flight.position.addScaledVector(toAnchor, (distance - cable) * share);
   }

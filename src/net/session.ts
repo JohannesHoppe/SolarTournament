@@ -457,6 +457,10 @@ export class Session {
     this.transport.block(peer);
   }
 
+  isCastOut(peer: string) {
+    return this.transport.isBlocked(peer);
+  }
+
   sendProbe(probe: string, ship: string, bucket: number) {
     this.transport.send('ic', { c: probe, s: ship, b: bucket });
   }

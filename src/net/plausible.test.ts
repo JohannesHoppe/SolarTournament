@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Accusations, Plausibility } from './plausible';
+import { Accusations, accusersNeeded, Plausibility } from './plausible';
 
 const alive = (x: number, more = {}) => ({ p: [x, 0, 0], alive: true, deaths: 0, ...more });
 
@@ -51,14 +51,14 @@ describe('plausibility of what other browsers report', () => {
     expect(check.nova('s', [0, 0, 0], 22.1)).toBe('nova');
   });
 
-  it('count torpedoes per clone, with probes and some slack', () => {
+  it('count torpedoes per clone, with the tubes allowed online, probes and some slack', () => {
     const check = flying(new Plausibility());
-    for (let i = 0; i < 4; i++) expect(check.torpedo('s', 21)).toBeNull();
+    for (let i = 0; i < 5; i++) expect(check.torpedo('s', 21)).toBeNull();
     expect(check.torpedo('s', 21)).toBe('torpedoes');
     check.state('s', { p: [0, 0, 0], alive: false, deaths: 1 }, 22);
     check.state('s', alive(0, { deaths: 1 }), 25);
     check.probe('s', 'torpedoes', 26);
-    for (let i = 0; i < 6; i++) expect(check.torpedo('s', 27)).toBeNull();
+    for (let i = 0; i < 7; i++) expect(check.torpedo('s', 27)).toBeNull();
     expect(check.torpedo('s', 27)).toBe('torpedoes');
   });
 
@@ -78,12 +78,22 @@ describe('plausibility of what other browsers report', () => {
 describe('accusations', () => {
   it('name a cheater once two browsers say so, never on its own word', () => {
     const accusations = new Accusations();
-    expect(accusations.add('c', 'c')).toBe(false);
-    expect(accusations.add('c', 'a')).toBe(false);
-    expect(accusations.add('c', 'a')).toBe(false);
-    expect(accusations.add('c', 'b')).toBe(true);
-    expect(accusations.add('c', 'd')).toBe(false);
+    expect(accusations.add('c', 'c', 3)).toBe(false);
+    expect(accusations.add('c', 'a', 3)).toBe(false);
+    expect(accusations.add('c', 'a', 3)).toBe(false);
+    expect(accusations.add('c', 'b', 3)).toBe(true);
+    expect(accusations.add('c', 'd', 3)).toBe(false);
     accusations.forget('b');
-    expect(accusations.add('c', 'e')).toBe(false);
+    expect(accusations.add('c', 'e', 3)).toBe(false);
+  });
+
+  it('take a majority of the others in a fuller tournament, so two tabs cannot vote a Host out', () => {
+    expect(accusersNeeded(3)).toBe(2);
+    expect(accusersNeeded(5)).toBe(3);
+    expect(accusersNeeded(8)).toBe(4);
+    const accusations = new Accusations();
+    expect(accusations.add('v', 'x1', 6)).toBe(false);
+    expect(accusations.add('v', 'x2', 6)).toBe(false);
+    expect(accusations.add('v', 'h', 6)).toBe(true);
   });
 });

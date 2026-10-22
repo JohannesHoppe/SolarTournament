@@ -80,9 +80,17 @@ export class GuideLine {
   show(from: THREE.Vector3, heading: THREE.Vector3, speed: number, line: RacingLine, field: AsteroidField, next: number, missed: boolean, time: number) {
     const join = Math.max(JOIN_MIN, speed * JOIN_SECONDS);
     const at = line.progress(from, next, missed ? join : 0);
-    const first = Math.ceil((at + LEAD) / SPACING) * SPACING;
-    for (let i = 0; i < DOTS; i++) {
-      const s = first + i * SPACING;
+    // the dots lie on a grid every SPACING from the start of each lap, so they stay where they
+    // are when the ship crosses into the next lap
+    const ahead = at + LEAD;
+    const lapStart = line.closed ? Math.floor(ahead / line.length) * line.length : 0;
+    let lapEnd = line.closed ? lapStart + line.length : Infinity;
+    let s = lapStart + Math.ceil((ahead - lapStart) / SPACING) * SPACING;
+    for (let i = 0; i < DOTS; i++, s += SPACING) {
+      if (s >= lapEnd) {
+        s = lapEnd + Math.ceil((s - lapEnd) / SPACING) * SPACING;
+        lapEnd += line.length;
+      }
       const along = s - at;
       const blend = THREE.MathUtils.smoothstep(along / join, 0, 1);
       point.copy(from).addScaledVector(heading, along).lerp(line.clear(s, field, onLine), blend);

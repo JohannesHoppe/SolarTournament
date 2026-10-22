@@ -365,7 +365,8 @@ export class Online {
       const ship = known ?? this.game.addRemoteShip(state, peer);
       if (ship.owner !== peer || ownerOf(ship.id) !== peer) continue;
       const report = { p: state.p, alive: state.a, deaths: state.de, kills: state.ki, nova: state.it === undefined ? undefined : unpackItems(state.it).nova };
-      this.caught(ship, this.plausible.state(ship.id, report, now));
+      // a peer cast out by this very state is gone: nothing more of it is taken
+      if (this.caught(ship, this.plausible.state(ship.id, report, now)) && this.session.isCastOut(peer)) return;
       ship.applyState(state, now);
     }
     const flies = states.some((state) => state.id.startsWith('p:'));
@@ -407,7 +408,7 @@ export class Online {
    * cheater is left alone; a browser cast out itself is told so and leaves.
    */
   private accuse(accused: string, accuser: string) {
-    if (!this.accusations.add(accused, accuser)) return;
+    if (!this.accusations.add(accused, accuser, this.session.peers.length + 1)) return;
     const ships = this.game.allShips().filter((ship) => ship.owner === accused || (accused === this.selfId && ship.owner === null));
     const host = ships.find((ship) => ship.id.startsWith('p:')) ?? ships[0];
     this.game.announceCheater(host?.name ?? accused);

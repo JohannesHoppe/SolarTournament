@@ -8,8 +8,7 @@ import { RacingLine } from './racingline';
 import { ARENA_LIMIT } from '../world/arena';
 import { GATE_RADIUS } from './race';
 import type { ItemKind } from './items';
-import { MAX_HULL } from '../ship/ship';
-import { currentLocale, msg, t } from '../i18n/i18n';
+import { msg, t } from '../i18n/i18n';
 
 /** What a flight school drill can see and do. */
 export interface SchoolContext {
@@ -51,6 +50,8 @@ export interface SchoolContext {
   readonly torpedoes: number;
   readonly incoming: THREE.Vector3 | null;
   readonly torpedoesDown: number;
+  /** How many of the pilot's torpedoes have hit a ship so far. */
+  readonly torpedoesHit: number;
   /** A probe carrying an item at a point; returns where it drifts. */
   spawnProbe(position: THREE.Vector3, kind: ItemKind): THREE.Vector3;
   /** A number of a countdown, or GO, in big neon. */
@@ -653,12 +654,14 @@ const DRILL = {
     line: SCHOOL.torpedo,
     praise: SCHOOL_PRAISE.torpedo,
     keys: ['turn', 'torpedo'],
-    enter(ctx) {
+    enter(ctx, a) {
       stop(ctx);
       ctx.arm('torpedo');
       ctx.spawnDrone(clear(ctx, ahead(ctx, 3000, 1500, -24000), 2000), new THREE.Vector3());
+      a.count = ctx.torpedoesHit;
     },
-    done: (ctx) => !!ctx.drone && (!ctx.drone.alive || ctx.drone.hull < MAX_HULL),
+    // a torpedo's hit, not the laser's
+    done: (ctx, a) => ctx.torpedoesHit > a.count,
     // both launched without a lock, or both gone past
     fail: (ctx) => (ctx.me.torpedoes === 0 && ctx.torpedoes === 0 ? SCHOOL.again : null),
     waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
@@ -1019,17 +1022,15 @@ export class FlightSchool {
 
   /**
    * "Racer 3/5", the current line, the keys of the Host's device, in the Host's language. The
-   * same object every frame; it only changes with the drill, the line, the device or the language.
+   * same object every frame; it only changes with the drill, the line or the device.
    */
   status(device: Device): { step: string; text: string; keys: string[] } {
     const index = Math.min(this.index, this.drills.length - 1);
     const shown = this.shown;
-    const locale = currentLocale();
-    if (shown.index !== index || shown.line !== this.line || shown.device !== device || shown.locale !== locale) {
+    if (shown.index !== index || shown.line !== this.line || shown.device !== device) {
       shown.index = index;
       shown.line = this.line;
       shown.device = device;
-      shown.locale = locale;
       shown.status = {
         step: t('{course} {n}/{total}', { course: t(COURSE_NAMES[this.course]), n: index + 1, total: this.drills.length }),
         text: t(this.line),
@@ -1039,7 +1040,7 @@ export class FlightSchool {
     return shown.status;
   }
 
-  private readonly shown = { index: -1, line: '', device: 'keyboard' as Device, locale: currentLocale(), status: { step: '', text: '', keys: [] as string[] } };
+  private readonly shown = { index: -1, line: '', device: 'keyboard' as Device, status: { step: '', text: '', keys: [] as string[] } };
 
   get stepIndex() {
     return this.index;

@@ -371,6 +371,11 @@ export const FR: Catalog = {
   'Announcer': 'Commentateur',
   'no answer': 'pas de réponse',
   'no relay': 'pas de relais',
+  'foreign site': 'site étranger',
+  'not set up': 'non configuré',
+  'monthly budget spent': 'budget mensuel épuisé',
+  'budget unreadable': 'budget illisible',
+  'Cloudflare answered': 'refusé par Cloudflare',
 
   // Radio 2584
   'Intro': 'Intro',

@@ -130,6 +130,9 @@ export function payOut(hangar: Hangar, points: number): number {
   return coins;
 }
 
+/** Torpedoes a clone carries beyond the standard load for the steps of its tubes: one for every two. */
+export const tubeTorpedoes = (level: number) => Math.ceil(level / 2);
+
 /** How a ship flies with the steps it has (the Sovereign: every step), online at most ONLINE_LEVEL of each but the looks. */
 export function perksOf(hangar: Hangar, ship: ShipType, online: boolean): Perks {
   const step = (id: UpgradeId) => {
@@ -141,7 +144,7 @@ export function perksOf(hangar: Hangar, ship: ShipType, online: boolean): Perks 
     cooling: 1 + 0.15 * step('radiators'),
     thrusters: 1 + 0.08 * step('thrusters'),
     drive: 1 + 0.05 * step('drive'),
-    torpedoes: Math.ceil(step('tubes') / 2),
+    torpedoes: tubeTorpedoes(step('tubes')),
     damage: 1 - 0.07 * step('plating'),
     neon: look('neon'),
     flame: look('flame'),
