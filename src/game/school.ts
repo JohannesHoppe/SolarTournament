@@ -4,6 +4,9 @@ import type { Controls } from '../input/input';
 import type { Ship } from '../ship/ship';
 import { SUN_DIRECTION } from '../world/space';
 import { SCHOOL, SCHOOL_PRAISE } from '../music/lines';
+import { RacingLine } from './racingline';
+import { ARENA_LIMIT } from '../world/arena';
+import { GATE_RADIUS } from './race';
 
 /** What a flight school drill can see and do. */
 export interface SchoolContext {
@@ -65,6 +68,8 @@ interface Attempt {
   normals: THREE.Vector3[];
   /** Index of the next ring of the course. */
   next: number;
+  /** The ideal line through the rings of the course, from where the pilot started (see layRings). */
+  track: RacingLine | null;
   /** Signed distance of the pilot to the plane of the next ring, the frame before (NaN: no frame yet for this ring). */
   side: number;
   /** The impact warning has come up in this attempt. */
@@ -160,8 +165,8 @@ const CONTROLS: Record<Device, Record<Command, string[]>> = {
 /** 50 m/s and 5 m/s in world units (1 unit = 5 cm). */
 const FAST = 1000;
 const STOPPED = 100;
-/** Ring radius of the course: 55 m, comfortable for a 35 m ship. */
-const RING_RADIUS = 1100;
+/** Ring radius of the course: a race's gate (80 m), so the rings fly as a race does. */
+export const RING_RADIUS = GATE_RADIUS;
 /** Radius of the zone the stop drill wants the ship to rest in: 200 m, shown as a sphere around the marker. */
 const STOP_RADIUS = 4000;
 /** At rest in the stop drill means slower than this: 10 m/s. */
@@ -179,21 +184,28 @@ const GUNNER_LAG = 0.35;
 const JINKS = 4;
 /** A drill waits this long for the voice to say its lines (s), then goes on without. */
 const UNSAID_PATIENCE = 10;
-/** The rings of the ring drill, in the pilot's frame (units): a gentle slalom. */
-const RING_COURSE: readonly [number, number, number][] = [
-  [0, 0, -7000],
-  [2500, 800, -14000],
-  [500, 3000, -21000],
-  [-2000, 1000, -28000],
-];
-/** The rings of the coil drill: three in a long, almost straight line, so the speed builds up. */
-const COIL_COURSE: readonly [number, number, number][] = [
+/**
+ * The rings of the ring drill, in the pilot's frame (units): a gentle slalom, the rings about
+ * 830 m apart, close to a race's gates (about 1.1 km), so there is room to turn at race speed.
+ */
+export const RING_COURSE: readonly [number, number, number][] = [
   [0, 0, -8000],
-  [600, 300, -18000],
-  [-400, 600, -28000],
+  [3500, 1500, -24000],
+  [1000, 4000, -40000],
+  [-2500, 2000, -52000],
 ];
+/** The rings of the coil drill: three in a long, almost straight line 1.1 km apart, so the speed a coil gives leaves time to line up for the next. */
+export const COIL_COURSE: readonly [number, number, number][] = [
+  [0, 0, -8000],
+  [1000, 500, -30000],
+  [-800, 1000, -52000],
+];
+/** A ring course lies within this share of the arena's edge (see ringCourse); both courses (2.6 km) fit ahead of a pilot in the middle. */
+export const COURSE_ROOM = 0.85;
+/** A pilot this far from the next ring (units, 2.5 km) has lost the course and starts again. */
+const COURSE_LOST = 50000;
 /** A coil fires for a pilot through this share of its ring's radius, as a race's gates do (see race.ts). */
-const CORE_SHARE = 1 / 3;
+export const CORE_SHARE = 1 / 3;
 /** The start drill counts down to GO at this second of the attempt; the drive has to light at most START_EARLY before it and START_LATE after it, as in a race. */
 const START_GO = 3;
 const START_EARLY = 0.3;
@@ -244,6 +256,8 @@ function drift(ctx: SchoolContext, speed: number, direction?: THREE.Vector3) {
   flight.angularVelocity.set(0, 0, 0);
 }
 
+/** The pilot has lost a ring course: too far from its next ring (see COURSE_LOST). */
+const lost = (ctx: SchoolContext, attempt: Attempt) => ctx.me.flight.position.distanceTo(attempt.points[Math.min(attempt.next, attempt.points.length - 1)]) > COURSE_LOST;
 const turned = (ctx: SchoolContext, attempt: Attempt) => ctx.me.flight.angleTo(attempt.forward) > NO_TURN;
 const speed = (ctx: SchoolContext) => ctx.me.flight.velocity.length();
 
@@ -319,12 +333,28 @@ function passRing(ctx: SchoolContext, a: Attempt): number | null {
   return off;
 }
 
-/** Lays out a course of rings ahead of the pilot, each facing the way from the one before. */
+/**
+ * Where the rings of a course (in the pilot's frame) lie for a pilot at `position` turned by
+ * `orientation`: ahead of it, or, where they would reach out beyond COURSE_ROOM of the arena's
+ * edge, towards the arena's center instead, and the pilot turns to the first ring.
+ */
+export function ringCourse(position: THREE.Vector3, orientation: THREE.Quaternion, course: readonly (readonly [number, number, number])[]): THREE.Vector3[] {
+  const frame = orientation.clone();
+  const place = ([x, y, z]: readonly [number, number, number]) => new THREE.Vector3(x, y, z).applyQuaternion(frame).add(position);
+  if (position.lengthSq() > 1 && course.some((point) => place(point).length() > ARENA_LIMIT * COURSE_ROOM)) {
+    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(orientation);
+    frame.setFromRotationMatrix(new THREE.Matrix4().lookAt(position, new THREE.Vector3(), up));
+  }
+  return course.map(place);
+}
+
+/** Lays out a course of rings for the pilot (see ringCourse), each facing the way from the one before. */
 function layRings(ctx: SchoolContext, a: Attempt, markers: Markers, course: readonly [number, number, number][]) {
   stop(ctx);
-  a.points = course.map(([x, y, z]) => clear(ctx, ahead(ctx, x, y, z), RING_RADIUS * 1.5));
+  a.points = ringCourse(ctx.me.flight.position, ctx.me.flight.orientation, course).map((point) => clear(ctx, point, RING_RADIUS * 1.5));
   a.normals = a.points.map((point, i) => point.clone().sub(i === 0 ? ctx.me.flight.position : a.points[i - 1]).normalize());
   a.points.forEach((point, i) => markers.ring(point, a.normals[i]));
+  a.track = new RacingLine(a.points, false, ctx.me.flight.position);
   markers.highlight(0);
 }
 
@@ -395,7 +425,7 @@ const DRILL = {
       markers.highlight(a.next);
       return a.next >= a.points.length;
     },
-    fail: (ctx, a) => (ctx.me.flight.position.distanceTo(a.points[a.points.length - 1]) > 50000 ? SCHOOL.again : null),
+    fail: (ctx, a) => (lost(ctx, a) ? SCHOOL.again : null),
     waypoint: (_, a) => a.points[a.next] ?? null,
     mark: (_, a) => `Ring ${a.next + 1}/${a.points.length}`,
   },
@@ -413,7 +443,7 @@ const DRILL = {
       else a.warned = true;
       return a.next >= a.points.length && !a.warned;
     },
-    fail: (ctx, a) => (a.warned ? SCHOOL.coilMiss : ctx.me.flight.position.distanceTo(a.points[a.points.length - 1]) > 50000 ? SCHOOL.again : null),
+    fail: (ctx, a) => (a.warned ? SCHOOL.coilMiss : lost(ctx, a) ? SCHOOL.again : null),
     waypoint: (_, a) => a.points[a.next] ?? null,
     mark: (_, a) => `Core ${a.next + 1}/${a.points.length}`,
   },
@@ -840,6 +870,12 @@ export class FlightSchool {
     return this.index >= this.drills.length;
   }
 
+  /** The ideal line of a ring course while its drill counts, with the next ring; null without one. */
+  get track(): { line: RacingLine; next: number } | null {
+    const a = this.attempt;
+    return a?.live && a.track && a.next < a.points.length ? { line: a.track, next: a.next } : null;
+  }
+
   dispose() {
     this.markers.dispose();
   }
@@ -906,7 +942,7 @@ export class FlightSchool {
     const drill = this.drills[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false };
+    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false };
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
     const instruction = rep > 0 && drill.repLine ? drill.repLine : drill.line;

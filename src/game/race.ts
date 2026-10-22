@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import type { AsteroidField } from '../world/asteroids';
+import { RacingLine } from './racingline';
 
 /** Gates of a lap, and laps of a race. */
 export const GATES = 8;
@@ -34,8 +35,14 @@ export const BOOST_PUSH = 800;
 const BOOST_FLASH = 0.35;
 /** Up and down along the loop (units, up to 400 m), so the course is not flat. */
 const COURSE_RISE = 8000;
-/** A gate keeps this many of its radii clear of rock, and four times as much of an arena's massive body. */
-const GATE_CLEARANCE = 1.5;
+/**
+ * A gate keeps this many of its radii clear of rock, and four times as much of an arena's
+ * massive body (see crowded); to find such a place it tries up to GATE_TRIES spots on a spiral
+ * around where it would be, a golden angle apart (out to about 640 m).
+ */
+const GATE_CLEARANCE = 2.5;
+const GATE_TRIES = 64;
+const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 /** Points for every gate passed, and for the places at the finish; a kill in a race is worth less (see Game). */
 export const GATE_POINTS = 20;
 export const PLACE_POINTS = [1000, 800, 650, 500, 400, 300, 200, 100];
@@ -56,6 +63,42 @@ export const modeOfRound = (mode: RoomMode, round: number): RoundMode => (mode =
 
 const crossing = new THREE.Vector3();
 const toGate = new THREE.Vector3();
+const through = new THREE.Vector3();
+
+/**
+ * Whether a gate at `point` lies too close to rock or to the arena's massive body: within
+ * GATE_CLEARANCE of its radii of the farthest reach of a rock (however the rock turns, the tip
+ * of a long one sweeps around it), or four times that of the massive body.
+ */
+export function crowded(field: AsteroidField, point: THREE.Vector3): boolean {
+  const room = GATE_RADIUS * GATE_CLEARANCE;
+  for (const rock of field.asteroids.values()) if (rock.object.position.distanceTo(point) < rock.radius + room) return true;
+  return field.insideWell(point, room * 4);
+}
+
+/** A coil throws a velocity on along its axis, the way it flies along it, by BOOST_PUSH; never beyond `limit` plus that push (a faster ship keeps its speed). */
+export function coilPush(velocity: THREE.Vector3, axis: THREE.Vector3, limit: number) {
+  through.copy(axis);
+  if (through.dot(velocity) < 0) through.negate();
+  const before = velocity.length();
+  velocity.addScaledVector(through, BOOST_PUSH);
+  const cap = Math.max(before, limit + BOOST_PUSH);
+  if (velocity.length() > cap) velocity.setLength(cap);
+}
+
+/**
+ * How far from the center of a ring (at `point`, facing `normal`, of `radius`) a ship moving
+ * from `from` to `to` flew through it, either way (a ring is a ring); null when it did not.
+ */
+export function ringCrossing(point: THREE.Vector3, normal: THREE.Vector3, radius: number, from: THREE.Vector3, to: THREE.Vector3): number | null {
+  const before = toGate.subVectors(from, point).dot(normal);
+  const after = crossing.subVectors(to, point).dot(normal);
+  if (before < 0 === after < 0) return null;
+  // where the path pierces the ring's plane, inside the ring
+  crossing.subVectors(to, from).multiplyScalar(before / (before - after)).add(from);
+  const off = crossing.distanceTo(point);
+  return off < radius ? off : null;
+}
 
 /**
  * A race course: GATES rings in a loop around the field's center, rising and falling, each
@@ -67,6 +110,8 @@ export class Course {
   readonly root = new THREE.Group();
   readonly points: THREE.Vector3[] = [];
   readonly normals: THREE.Vector3[] = [];
+  /** The ideal line through the centers of the gates, around the loop (bowing around rock as it lies, see RacingLine.clear). */
+  readonly line: RacingLine;
   private readonly rings: THREE.Mesh[] = [];
   private readonly geometry = new THREE.TorusGeometry(GATE_RADIUS, 70, 12, 72);
   /** The next gate glows in the tournament's orange, the one after it in blue, the rest faintly; the start and finish is pink. */
@@ -85,9 +130,15 @@ export class Course {
       const angle = start + (i / GATES) * Math.PI * 2 + r.range(-0.15, 0.15);
       const distance = (COURSE_RADIUS + r.range(-COURSE_SPREAD, COURSE_SPREAD)) * (i % 2 ? COURSE_INNER : 1);
       const point = new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle * 2 + start) * COURSE_RISE, Math.sin(angle) * distance);
-      // up or down, away from rock and from the arena's massive body, in turns
-      for (let attempt = 1; attempt < 24 && (field.overlap(point, GATE_RADIUS * GATE_CLEARANCE) || field.insideWell(point, GATE_RADIUS * GATE_CLEARANCE * 4)); attempt++) {
-        point.y += (attempt % 2 ? 1 : -1) * attempt * GATE_RADIUS;
+      // away from rock and from the arena's massive body: on a widening spiral up, down, in and
+      // out around where the gate would be
+      const outward = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+      const spot = point.clone();
+      for (let attempt = 1; attempt < GATE_TRIES && crowded(field, point); attempt++) {
+        const turn = attempt * GOLDEN_ANGLE;
+        const reach = GATE_RADIUS * Math.sqrt(attempt);
+        point.copy(spot).addScaledVector(outward, Math.cos(turn) * reach);
+        point.y += Math.sin(turn) * reach;
       }
       this.points.push(point);
     }
@@ -100,6 +151,7 @@ export class Course {
       this.rings.push(ring);
       this.root.add(ring);
     }
+    this.line = new RacingLine(this.points, true);
   }
 
   /**
@@ -107,15 +159,7 @@ export class Course {
    * either way (a ring is a ring); null when it did not fly through.
    */
   crossing(gate: number, from: THREE.Vector3, to: THREE.Vector3): number | null {
-    const point = this.points[gate];
-    const normal = this.normals[gate];
-    const before = toGate.subVectors(from, point).dot(normal);
-    const after = crossing.subVectors(to, point).dot(normal);
-    if (before < 0 === after < 0) return null;
-    // where the path pierces the gate's plane, inside the ring
-    crossing.subVectors(to, from).multiplyScalar(before / (before - after)).add(from);
-    const off = crossing.distanceTo(point);
-    return off < GATE_RADIUS ? off : null;
+    return ringCrossing(this.points[gate], this.normals[gate], GATE_RADIUS, from, to);
   }
 
   /** A gate's coil fired (see BOOST_RADIUS): it glows white for a moment. */

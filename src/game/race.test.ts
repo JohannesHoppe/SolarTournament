@@ -24,7 +24,7 @@ describe('the race course', () => {
       field.generate(arena.layout);
       const gates = new Course(field, arena.layout.seed);
       const blocked = gates.points.filter((point) => field.overlap(point, GATE_RADIUS));
-      expect(blocked.length, arena.id).toBeLessThanOrEqual(1);
+      expect(blocked.length, arena.id).toBe(0);
     }
   });
 

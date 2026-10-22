@@ -43,7 +43,9 @@ import { KillCam } from '../view/killcam';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
-import { BOOST_PUSH, BOOST_RADIUS, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
+import type { RacingLine } from './racingline';
+import { bounceOff, impactDamage, SAFE_IMPACT } from '../ship/impact';
+import { BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut } from './survival';
@@ -192,12 +194,6 @@ const KILL_POINTS = 500;
 const NOVA_KILL_CREDIT = 2;
 /** Bots respawn after this delay; the own pilot sees the sponsor break after it. */
 const RESPAWN_SECONDS = 3;
-/** Impacts slower than this (units/s) only scratch the paint. */
-const SAFE_IMPACT = 250;
-/** Hull damage per unit/s of impact speed above SAFE_IMPACT. */
-const IMPACT_DAMAGE = 1 / 12;
-/** Share of the impact speed a ship keeps when it bounces off a rock. */
-const RESTITUTION = 0.3;
 /** Each death of the Host by an enemy raises the bots' ease (see Bot.ease) by this much in a solo round; a kill by the Host lowers it by KILL_EASE. */
 const DEATH_EASE = 0.35;
 const KILL_EASE = 0.1;
@@ -2392,7 +2388,8 @@ export class Game implements OnlineGame {
       if (bot) {
         bot.ease = this.online ? 0 : this.ease;
         // a racing bot flies the course until it has finished, then it only fights
-        bot.waypoint = this.course && ship.finish < 0 ? this.course.points[ship.gates % GATES] : null;
+        // along the ideal line, bowed around the rock as it lies now
+        bot.waypoint = this.course && ship.finish < 0 ? this.course.line.target(ship.flight.position, ship.gates % GATES, ship.flight.velocity.length(), this.field, this.botPoint(bot)) : null;
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE)?.position ?? null;
         // a nova core close by, a battleship whose reactor went critical, or the plume of one
         // hunting with its stern: away from it, out of the plume to the side
@@ -2474,7 +2471,7 @@ export class Game implements OnlineGame {
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
     // a watching Host sees the race of the pilot on screen
     const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : this.flags ? this.showFlags(this.flags, subject) : this.fleet ? this.showFleet(this.fleet, subject) : null;
-    if (!this.course || this.school) this.guide.hide();
+    if (!this.course && !this.school) this.guide.hide();
     this.flyGhost(me);
     const racing = !!this.course && !this.school && this.countdown === 0;
     if (racing) this.callRace(subject);
@@ -2492,7 +2489,7 @@ export class Game implements OnlineGame {
     } else if (this.watching()) {
       this.hud.flashMessage(now, `Out · watching ${subject === me ? 'the field' : subject.name} · Tab: next pilot`, 0.2);
     } else if (outside) {
-      this.hud.flashMessage(now, `Return to the field — ${Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1)}s`, 0.2);
+      this.hud.flashMessage(now, this.school ? 'Return to the field' : `Return to the field — ${Math.max(0, ARENA_GRACE - (now - me.outsideSince!)).toFixed(1)}s`, 0.2);
       if (!this.toldToReturn) this.toldToReturn = this.speaker.say(COMPUTER.arena, 'urgent');
     } else if (this.flipping) {
       this.hud.flashMessage(now, this.flipAligned ? 'Flipped · drive brakes' : 'Flip', 0.2);
@@ -3002,13 +2999,8 @@ export class Game implements OnlineGame {
 
   /** A coil throws a ship on along an axis, the way it flies along it (see BOOST_PUSH); the flight school's coils too. */
   private coilPush(ship: Ship, axis: THREE.Vector3) {
-    const through = scratch.copy(axis);
-    if (through.dot(ship.flight.velocity) < 0) through.negate();
     // the coil's field runs at the tournament's limit plus its push: it pushes no ship beyond that
-    const before = ship.flight.velocity.length();
-    ship.flight.velocity.addScaledVector(through, BOOST_PUSH);
-    const cap = Math.max(before, MAX_SPEED + BOOST_PUSH);
-    if (ship.flight.velocity.length() > cap) ship.flight.velocity.setLength(cap);
+    coilPush(ship.flight.velocity, axis, MAX_SPEED);
     if (ship !== this.me) return;
     this.boostKick = 1;
     this.strain = Math.max(this.strain, BOOST_STRAIN);
@@ -3038,6 +3030,13 @@ export class Game implements OnlineGame {
       .sort((a, b) => finished(a) - finished(b) || b.gates - a.gates || lost(a) - lost(b) || held(b) - held(a) || b.score - a.score);
   }
 
+  /** The racing line from a ship on to gate `next` of an ideal line: it leaves along the flight, or along the nose of a ship that hardly moves. */
+  private showGuide(me: Ship, line: RacingLine, next: number, missed: boolean) {
+    const speed = me.flight.velocity.length();
+    const heading = speed > 20 ? scratch.copy(me.flight.velocity).divideScalar(speed) : me.flight.forward(scratch);
+    this.guide.show(me.flight.position, heading, speed, line, this.field, next, missed, wallClock());
+  }
+
   /** The own racer's next gate in the HUD, with lap, gate and place; returns the gate for the crosshair. */
   private showRace(course: Course, me: Ship): THREE.Vector3 | null {
     const place = ordinal(this.standings().indexOf(me) + 1);
@@ -3055,14 +3054,8 @@ export class Game implements OnlineGame {
     const missed = scratch.subVectors(me.flight.position, course.points[next]).dot(course.normals[next]) > GATE_RADIUS && me.flight.velocity.dot(course.normals[next]) > 0;
     const label = missed ? 'Missed · turn back' : next === 0 ? (me.gates === 0 ? 'Start' : lap === LAPS ? 'Finish' : 'Lap') : `Gate ${next + 1}/${GATES}`;
     this.hud.setWaypoint(this.camera, course.points[next], label);
-    if (me.alive) {
-      // the line leaves along the flight, or along the nose of a ship that hardly moves
-      const speed = me.flight.velocity.length();
-      const heading = speed > 20 ? scratch.copy(me.flight.velocity).divideScalar(speed) : me.flight.forward(scratch);
-      this.guide.show(me.flight.position, heading, course.points[next], wallClock());
-    } else {
-      this.guide.hide();
-    }
+    if (me.alive) this.showGuide(me, course.line, next, missed);
+    else this.guide.hide();
     // the running lap's clock, and the best lap of this arena to beat
     const lapTime = this.laps?.lapTime(this.raceClock());
     const best = this.laps?.best ? ` · best ${lapClock(this.laps.best.time)}` : '';
@@ -3152,6 +3145,10 @@ export class Game implements OnlineGame {
     }
     this.hud.setSchool(school.status(context.device), context.device === 'keyboard');
     this.hud.setWaypoint(this.camera, waypoint, school.mark);
+    // a ring course has its racing line, as a race does
+    const track = school.track;
+    if (track && this.me!.alive) this.showGuide(this.me!, track.line, track.next, false);
+    else this.guide.hide();
     return waypoint;
   }
 
@@ -4290,22 +4287,16 @@ export class Game implements OnlineGame {
 
   /** A ship touched a surface (a rock, a battleship's hull) moving at `moving`, with the outward `normal` of this frame: it bounces off, scrapes, and an impact hurts. */
   private bounce(ship: Ship, moving: THREE.Vector3, now: number) {
-    const velocity = ship.flight.velocity;
-    relative.subVectors(velocity, moving);
-    const approach = -relative.dot(normal);
+    const approach = bounceOff(ship.flight.velocity, moving, normal);
     if (approach <= 0) return;
     if (ship === this.me) this.lastScrape = now;
-    velocity.addScaledVector(normal, approach * (1 + RESTITUTION));
-    // friction: scraping along the surface bleeds off some sideways speed
-    relative.subVectors(velocity, moving);
-    velocity.addScaledVector(relative.addScaledVector(normal, -relative.dot(normal)), -0.2);
     ship.syncTransform();
 
     if (approach < SAFE_IMPACT * 0.4) return;
     this.effects.sparks(scratch.copy(ship.flight.position).addScaledVector(normal, -ship.radius), SCRAPE_COLOR, 40 + approach * 0.05);
     if (ship.isLocal) this.sound.play('explosion', { volume: Math.min(1.4, approach / 800), rate: 1.9 });
     if (approach < SAFE_IMPACT) return;
-    const status = ship.structural((approach - SAFE_IMPACT) * IMPACT_DAMAGE, now);
+    const status = ship.structural(impactDamage(approach), now);
     if (ship.isLocal && status !== 'protected') {
       this.hud.damaged();
       this.hud.flashMessage(now, `Impact at ${Math.round(approach * METERS_PER_UNIT)} m/s`, 1.5);
@@ -4324,7 +4315,7 @@ export class Game implements OnlineGame {
     this.effects.sparks(wreck.mesh.position, SCRAPE_COLOR, 60);
     this.online?.sendWreck(wreck.id);
     this.wrecks.remove(wreck);
-    const status = ship.structural(Math.max(0, impact - SAFE_IMPACT) * IMPACT_DAMAGE * 0.6, now);
+    const status = ship.structural(impactDamage(impact) * 0.6, now);
     if (ship.isLocal && status !== 'protected') {
       this.sound.play('explosion', { volume: Math.min(1.4, 0.3 + impact / 1000), rate: 2.1 });
       this.hud.damaged();
@@ -4465,8 +4456,9 @@ export class Game implements OnlineGame {
       return;
     }
     ship.outsideSince ??= now;
-    // the belt beyond is scenery: a ship that reaches it before its time is up is lost there
-    if (now - ship.outsideSince < ARENA_GRACE && ship.flight.position.length() < BELT_INNER) return;
+    // the belt beyond is scenery: a ship that reaches it before its time is up is lost there;
+    // the flight school gives its pilot all the time it takes to find back
+    if ((this.school || now - ship.outsideSince < ARENA_GRACE) && ship.flight.position.length() < BELT_INNER) return;
     ship.structural(Infinity, now);
     if (!ship.alive) this.shipDestroyed(ship, null, 'space');
   }

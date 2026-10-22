@@ -5,7 +5,8 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
  * The black hole bends light: a pass over the rendered picture that moves every pixel around
  * the hole as a gravitational lens would. A source at angle β from the hole shows at θ with
  * β = θ − θE²/θ: the stars and the disk behind it wrap around into a ring (the Einstein ring,
- * θE), a mirrored image shows inside it, and the middle stays black: the hole's shadow.
+ * θE), a mirrored image shows inside it, and the middle stays black: the hole's shadow. What
+ * lies in front of the hole (by the depth) is neither bent nor lent to the bent picture.
  */
 const shader = {
   uniforms: {
@@ -48,8 +49,18 @@ const shader = {
         return;
       }
       float beta = theta - ring * ring / theta;
-      vec2 source = center + (d / theta) * beta / vec2(aspect, 1.0);
-      vec4 color = texture2D(tDiffuse, clamp(source, 0.0, 1.0));
+      vec2 along = (d / theta) / vec2(aspect, 1.0);
+      // the lens bends only light from behind the hole: where a ship or rock in front of it
+      // covers the source, the light is looked for a little farther out on the same ray, and
+      // where none is found the pixel shows unbent; so nothing near is ever seen twice
+      vec4 color = texture2D(tDiffuse, vUv);
+      for (int i = 0; i < 6; i++) {
+        vec2 source = clamp(center + along * beta * (1.0 + 0.2 * float(i)), 0.0, 1.0);
+        if (texture2D(tDepth, source).x >= holeDepth) {
+          color = texture2D(tDiffuse, source);
+          break;
+        }
+      }
       // the light that grazes the shadow piles up into a thin bright ring
       float photon = exp(-pow((theta - shadow * 1.05) / (shadow * 0.08 + 0.0005), 2.0));
       gl_FragColor = color + vec4(vec3(1.0, 0.75, 0.45) * photon * 0.8, 0.0);
