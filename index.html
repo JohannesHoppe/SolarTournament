@@ -65,17 +65,23 @@
   <div id="crest" class="crest" aria-hidden="true" hidden></div>
 
   <div id="menu" class="plate" hidden>
+    <div id="showcase">
+      <canvas id="showcase-view" aria-hidden="true"></canvas>
+      <div class="showcase-bar">
+        <button type="button" id="ship-prev" aria-label="Previous ship">◀</button>
+        <span id="ship-name" aria-live="polite"></span>
+        <button type="button" id="ship-next" aria-label="Next ship">▶</button>
+      </div>
+      <p id="ship-note"></p>
+    </div>
     <img class="logo" src="crest.svg" alt="SolarTournament: seal of the Ministry of War of the United Solar States" width="104" height="104">
     <h1>Solar<span class="neon">Tour<span class="neon-loose">n</span>ament</span></h1>
     <p class="tagline">Five minutes. Die for the President. Again and again.</p>
-    <div class="ship-select">
-      <button type="button" data-ship="human" class="selected">Human Interceptor</button>
-      <button type="button" data-ship="alien">Alien Interceptor</button>
-    </div>
     <label class="field">Callsign <input id="callsign" maxlength="16" autocomplete="off" spellcheck="false"></label>
     <button type="button" id="school" class="mode"><span class="mode-name"><span class="mode-label">Flight school</span></span><span class="mode-note">Learn to fly. Training clones are free.</span></button>
     <button type="button" id="start" class="mode"><span class="mode-name"><span class="mode-label">Solo round</span></span><span class="mode-note">Race the gates or fight it out: your arena, your rivals.</span></button>
     <button type="button" id="online" class="mode"><span class="mode-name"><span class="mode-label">Online tournament</span></span><span class="mode-note">Real Hosts: join a public one or start your own.</span></button>
+    <button type="button" id="hangar" class="mode"><span class="mode-name"><span class="mode-label">Hangar</span></span><span class="mode-note" id="hangar-note"></span></button>
     <p id="menu-notice" role="status" hidden></p>
     <button type="button" id="fullscreen" hidden>Fullscreen</button>
     <p class="best" id="best-score"></p>
@@ -136,6 +142,13 @@
     <button type="button" id="school-back">Back <kbd>Esc</kbd></button>
   </div>
 
+  <div id="hangar-plate" class="plate" hidden>
+    <h2>Hangar</h2>
+    <p id="hangar-coins" class="plate-note"></p>
+    <div id="hangar-upgrades"></div>
+    <button type="button" id="hangar-back">Back <kbd>Esc</kbd></button>
+  </div>
+
   <div id="solo" class="plate" hidden>
     <h2>Solo round</h2>
     <div class="choice-grid" role="group" aria-label="Round" data-choice="solo-mode"></div>
@@ -192,6 +205,7 @@
   <div id="results" class="plate" hidden>
     <h2>Round over</h2>
     <table id="scoreboard" class="standings"></table>
+    <p id="results-coins" class="plate-note"></p>
     <p id="results-next"></p>
     <button type="button" id="again" class="primary">Back to hangar <kbd>Enter</kbd></button>
   </div>

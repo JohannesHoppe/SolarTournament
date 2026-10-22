@@ -125,6 +125,53 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
   return root;
 }
 
+const IVORY = 0xd9d3c3;
+const GOLD = 0xc9a227;
+const GOLD_DARK = 0x7a5f14;
+const AMBER_GLASS = 0x3a2608;
+const SUN = new THREE.Color(1, 0.62, 0.1).multiplyScalar(2.2);
+
+/**
+ * The Sovereign, the President's gift to a Host who has made both interceptors complete: a long
+ * ivory arrowhead with a gold canopy, delta wings swept back to gold tips, forward canards, and
+ * sun-orange neon along every leading edge. It keeps the human interceptor's drives, so its
+ * flames burn where the model file has them.
+ */
+export function sovereign(original: THREE.Object3D): THREE.Object3D {
+  const root = keepEngine(original);
+  const parts: THREE.BufferGeometry[] = [
+    // the arrowhead: wide at the drives, a long, flat needle to the nose
+    paint(loft(OCTAGON, { z: 250, w: 62, h: 40, y: 4 }, { z: -120, w: 40, h: 26 }), IVORY),
+    paint(loft(OCTAGON, { z: -120, w: 40, h: 26 }, { z: -380, w: 4, h: 4, y: -4 }), IVORY),
+    // the canopy, amber glass in a gold frame
+    paint(loft(OCTAGON, { z: 20, w: 24, h: 12, y: 30 }, { z: -150, w: 12, h: 5, y: 22 }), AMBER_GLASS),
+    paint(loft(RECTANGLE, { z: 240, w: 8, h: 8, y: 46 }, { z: 20, w: 6, h: 3, y: 38 }), GOLD),
+    // delta wings swept back to gold tips
+    ...pair(paint(loft(BLADE, { z: 230, w: 120, h: 9, x: 150, y: 0 }, { z: -40, w: 30, h: 6, x: 70, y: 2 }), IVORY)),
+    ...pair(paint(loft(RECTANGLE, { z: 250, w: 14, h: 30, x: 272, y: 8 }, { z: 140, w: 8, h: 14, x: 268, y: 10 }), GOLD)),
+    // forward canards near the nose
+    ...pair(paint(loft(BLADE, { z: -170, w: 46, h: 5, x: 64, y: 4 }, { z: -250, w: 14, h: 3, x: 40, y: 4 }), GOLD_DARK)),
+    // the drive nacelles, gold, with their nozzles where the flames burn
+    ...pair(paint(loft(OCTAGON, { z: 250, w: 28, h: 24, x: 87, y: 2 }, { z: 40, w: 18, h: 16, x: 70, y: 4 }), GOLD)),
+    ...pair(paint(loft(OCTAGON, { z: 275, w: 26, h: 22, x: 87, y: 2 }, { z: 250, w: 28, h: 24, x: 87, y: 2 }), GOLD_DARK)),
+  ];
+  const neon: THREE.BufferGeometry[] = [
+    // the leading edges and the spine, in the sun's orange
+    ...pair(loft(RECTANGLE, { z: 240, w: 2, h: 2, x: 268, y: 3 }, { z: -40, w: 2, h: 2, x: 72, y: 4 })),
+    ...pair(loft(RECTANGLE, { z: -120, w: 2, h: 2, x: 40, y: 0 }, { z: -370, w: 2, h: 2, x: 4, y: -3 })),
+    loft(RECTANGLE, { z: 240, w: 2, h: 2, y: 55 }, { z: 30, w: 2, h: 2, y: 42 }),
+  ];
+  const meshes = hull(parts, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.3, metalness: 0.6, side: THREE.DoubleSide }), {
+    parts: neon,
+    material: new THREE.MeshBasicMaterial({ color: SUN, toneMapped: false }),
+  });
+  for (const mesh of meshes) {
+    mesh.name = 'sovereignHull';
+    root.add(mesh);
+  }
+  return root;
+}
+
 const VOID = 0x15121c;
 const VOID_SHEEN = 0x2b2438;
 const VEIN = new THREE.Color(0.1, 1, 0.75).multiplyScalar(1.5);

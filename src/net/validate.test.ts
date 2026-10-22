@@ -14,7 +14,7 @@ const ship = {
   tr: 1,
   pr: 0,
 };
-const slow = { n: 'Nova', k: 'alien', s: 500, ki: 1, de: 2, g: 3, fi: -1, it: 3 };
+const slow = { n: 'Nova', k: 'alien', s: 500, ki: 1, de: 2, g: 3, fi: -1, it: 3, lo: 6 };
 
 describe('messages from other browsers', () => {
   it('take a valid ship state, with or without its slow part', () => {

@@ -4,6 +4,8 @@ import { FlightModel } from './flight';
 import type { Controls } from '../input/input';
 import { TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
+import { STOCK, type Perks } from '../game/hangar';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
@@ -62,6 +64,11 @@ const GLOW_MAX_SCALE = 3;
 const GLOW_IDLE = 0.25;
 /** The drive light sits this far behind the ship's center (units, 20 m), where the exhaust glows. */
 const ENGINE_LIGHT_OFFSET = 400;
+/** The drive flame's tint by the steps of its upgrade: stock, azure, violet, white-hot. */
+const FLAME_TINTS = [new THREE.Color(1, 1, 1), new THREE.Color(0.45, 0.75, 1.6), new THREE.Color(1.1, 0.45, 1.6), new THREE.Color(2, 2, 2.2)];
+/** The neon trim: sun orange along every edge of the hull that bends by more than TRIM_ANGLE (degrees). */
+const TRIM_COLOR = new THREE.Color(1, 0.62, 0.1);
+const TRIM_ANGLE = 25;
 
 export type Zone = 'reactor' | 'drive' | 'thrusters' | 'armor';
 export type DamageStatus = 'protected' | 'hit' | 'destroyed';
@@ -115,6 +122,8 @@ export type ShipState = {
   fi?: number;
   /** items held (see packItems) */
   it?: number;
+  /** the looks of its upgrades: 4 × the neon trim's step + the drive flame's (see Perks) */
+  lo?: number;
   /** remaining spawn protection (s) */
   pr: number;
 };
@@ -177,6 +186,10 @@ export class Ship {
   /** Health of the main drive and of the maneuvering thrusters, 0..1. */
   drive = 1;
   thrusters = 1;
+  /** What the ship's upgrades make of it (see game/hangar and outfit); stock for bots and other browsers' ships. */
+  perks: Perks = STOCK;
+  /** The neon trim along the hull's edges, made the first time the ship wears one. */
+  private trim: THREE.LineSegments | null = null;
   heat = 0;
   overheated = false;
   /** Game time until which the main drive cools down after an overdrive. */
@@ -253,6 +266,34 @@ export class Ship {
     this.root.add(this.aura);
   }
 
+  /**
+   * Fits the ship with its upgrades: how it flies and fights (read where they act), its neon
+   * trim (the hull's edges in sun orange, brighter with every step) and its drive flame's color.
+   */
+  outfit(perks: Perks) {
+    this.perks = perks;
+    if (this.engine.flameMaterial) this.engine.flameMaterial.color.copy(FLAME_TINTS[perks.flame]);
+    if (perks.neon > 0 && !this.trim) {
+      const edges: THREE.BufferGeometry[] = [];
+      this.model.traverse((o) => {
+        if (o instanceof THREE.Mesh && o.name.endsWith('Hull') && !(o.material instanceof THREE.MeshBasicMaterial)) edges.push(new THREE.EdgesGeometry(o.geometry, TRIM_ANGLE));
+      });
+      this.trim = new THREE.LineSegments(mergeGeometries(edges), new THREE.LineBasicMaterial({ transparent: true, toneMapped: false }));
+      this.model.add(this.trim);
+    }
+    if (!this.trim) return;
+    this.trim.visible = perks.neon > 0;
+    const material = this.trim.material as THREE.LineBasicMaterial;
+    material.color.copy(TRIM_COLOR).multiplyScalar(0.6 + 0.7 * perks.neon);
+    material.opacity = 0.35 + 0.2 * perks.neon;
+  }
+
+  /** The drive burning at a throttle without flying anywhere, for a ship on show (see view/showcase). */
+  idle(dt: number, throttle: number) {
+    this.flight.throttle = throttle;
+    this.animateEngine(dt);
+  }
+
   /** The glow of a nova core: it pulses and runs through every color, so everyone sees who holds it. */
   pulse(now: number) {
     this.aura.visible = this.nova && this.alive;
@@ -298,7 +339,7 @@ export class Ship {
     this.holdTrigger();
     this.hull = MAX_HULL;
     this.drive = this.thrusters = 1;
-    this.torpedoes = TORPEDOES;
+    this.torpedoes = TORPEDOES + this.perks.torpedoes;
     this.twin = false;
     this.plating = 0;
     this.nova = false;
@@ -360,7 +401,7 @@ export class Ship {
     }
     return {
       id: this.id,
-      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items } : {}),
+      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items, lo: this.perks.neon * 4 + this.perks.flame } : {}),
       p: round(f.position),
       v: round(f.velocity, 1),
       q: round(f.orientation, 4),
@@ -397,6 +438,10 @@ export class Ship {
       this.gates = state.g!;
       this.finish = state.fi!;
       ({ twin: this.twin, plating: this.plating, nova: this.nova } = unpackItems(state.it!));
+      // another browser's ship shows the looks of its upgrades; how it flies is that browser's
+      const neon = state.lo! >> 2;
+      const flame = state.lo! & 3;
+      if (neon !== this.perks.neon || flame !== this.perks.flame) this.outfit({ ...STOCK, neon, flame });
     }
     if (state.a && !this.alive) {
       // the owner booted a new clone
@@ -446,8 +491,8 @@ export class Ship {
       return false;
     }
     this.previous.copy(this.flight.position);
-    this.flight.driveFactor = this.driveOffline(now) ? 0 : this.drive;
-    this.flight.thrusterFactor = 0.25 + 0.75 * this.thrusters;
+    this.flight.driveFactor = this.driveOffline(now) ? 0 : this.drive * this.perks.drive;
+    this.flight.thrusterFactor = (0.25 + 0.75 * this.thrusters) * this.perks.thrusters;
     this.vent(now);
     this.flight.update(dt, controls, gravity, this.ventForce, this.ventSpin);
     // blink while spawn protection is active
@@ -455,7 +500,7 @@ export class Ship {
     this.syncTransform();
     this.animateEngine(dt);
 
-    this.heat = Math.max(0, this.heat - (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * dt);
+    this.heat = Math.max(0, this.heat - (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * this.perks.cooling * dt);
     if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;
     // a twin laser (an item) fires twice as fast at half the heat per shot
     const twin = this.twin ? 2 : 1;
@@ -553,10 +598,10 @@ export class Ship {
     return now < this.driveOfflineUntil;
   }
 
-  /** Hull damage, e.g. from a collision. */
+  /** Hull damage, e.g. from a collision; the plating of an upgraded ship takes some of it (see Perks). */
   structural(amount: number, now: number): DamageStatus {
     if (!this.alive || now < this.protectedUntil) return 'protected';
-    this.hull -= amount;
+    this.hull -= amount * this.perks.damage;
     if (this.hull > 0) return 'hit';
     this.hull = 0;
     this.alive = false;

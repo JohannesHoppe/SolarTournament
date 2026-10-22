@@ -243,6 +243,22 @@ The year is **2584**, a nod to George Orwell's *1984*, where a whole society wat
 
 The "alien" interceptor and the human interceptor are the same ship under a different skin: the rules of the Presidential Games allow one hull for everyone, built by the sponsors, so that the audience sees a fair fight and the sponsors sell one ship to every faction. Earth, Mars and the Rockborn all fly the human skin. Only the outcasts get the alien skin, and with it their life support. The strange-looking shell puts them on display and denies them their humanity: the audience is meant to see monsters, not people, and to know whom to cheer against.
 
+### The hangar and the Solar Coins
+
+The **Solar Coin** (☉) is the currency of the United Solar States, and the Games pay in it: every point a Host scores in a round, solo or online, is paid out in one coin at the round's end (the scoreboard says how many); the flight school pays nothing, training is free. In the hangar (a button in the menu) a Host spends them on its two interceptors, each with seven upgrades of three steps:
+
+| Upgrade | Per step | Prices (☉) |
+|---|---|---|
+| Radiators | the laser sheds heat 15 % faster | 1,000 · 2,500 · 5,000 |
+| Thrusters | maneuvering thrusters push and turn 8 % harder | 1,000 · 2,500 · 5,000 |
+| Main drive | 5 % more push (the speed limit stays) | 1,000 · 2,500 · 5,000 |
+| Torpedo tubes | one more torpedo per clone at the first and at the third step | 1,500 · 3,000 · 6,000 |
+| Plating | 7 % less of every damage | 1,500 · 3,000 · 6,000 |
+| Neon trim (looks only) | the hull's edges glow in sun orange, brighter with every step | 500 · 1,500 · 3,000 |
+| Drive flame (looks only) | azure, violet, white-hot | 500 · 1,500 · 3,000 |
+
+Online every upgrade counts for one step at most, so a Host who has played a lot meets newcomers almost on equal terms; the looks count in full, and the other Hosts see them. Bots fly stock ships. A Host who has made both interceptors complete (every upgrade at its third step) receives **the Sovereign**: the President's gift, a long ivory arrowhead with a gold canopy, delta wings with gold tips and sun-orange neon along every leading edge. It flies like a complete interceptor and wears every look; it is a trophy, not a better ship. Until then the menu shows it as a black silhouette against a rim of light. Above the menu's logo the ship the Host flies circles slowly with its drive burning, in its looks; the arrows beside its name change it (the Sovereign only once earned), and the hangar's plate takes it along.
+
 ## The physics of the SolarTournament universe
 
 ### Scale
@@ -365,7 +381,7 @@ A round is a **race**, a **deathmatch**, **Last Clone Standing**, **Capture the 
 The game collects as little as possible: no accounts, no cookies, no tracking, no ad network, nothing loaded from third-party servers. The German legal pages [Impressum](impressum.html) and [Datenschutz](datenschutz.html) are linked from the menu and the radio page. What happens to data:
 
 - **Hosting:** Cloudflare Pages delivers the site and sees connection data (IP address, time, file, user agent); Cloudflare also asks browsers to report failed connections (Network Error Logging). Links to GitHub carry no referrer.
-- **Browser storage:** eight localStorage entries (callsign, personal best, the drill reached in each course of the flight school, the courses completed, radio on or off, radio volume, the last solo round's choices, the best lap of each arena's race course with its ghost); they stay in the browser, only the callsign is shown to the other players of an online tournament.
+- **Browser storage:** nine localStorage entries (callsign, personal best, the drill reached in each course of the flight school, the courses completed, radio on or off, radio volume, the last solo round's choices, the best lap of each arena's race course with its ghost, the hangar: Solar Coins, the upgrades of the ships and the ship flown); they stay in the browser, only the callsign and the looks of the own ship (type, neon trim, drive flame) are shown to the other players of an online tournament.
 - **Online tournament** (only when a Host starts or joins one): the browsers connect directly over WebRTC, so the other players see the Host's IP address, callsign, ship and score. To find each other, the browsers post short connection messages (with network addresses) on public Nostr relays run by independent third parties. Each browser asks Cloudflare's STUN server for its public address; Trystero's default STUN servers of Google are replaced by Cloudflare's alone. Joining fetches short-lived credentials from `/turn`, and where no direct connection is possible the game data runs through Cloudflare's TURN relay (end-to-end encrypted by WebRTC). Every browser checks roughly whether what the others report is possible and tells them when it is not; once two browsers say so, everyone in the tournament sees the cheater's callsign. Nothing of it is stored. Opening the list of tournaments connects to the lobby the same way, and the names, Host counts and round times of public tournaments are visible to everyone there.
 - **Sponsor break:** invented satire ads, no ad network. The privacy policy has to be extended before real ads are shown.
 

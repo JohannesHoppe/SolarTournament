@@ -78,7 +78,7 @@ export function cleanName(x: unknown, max = MAX_NAME): string {
 /** A ship's state; name, type, score, kills, deaths and race progress come all together or not at all (see ShipState). */
 export function shipState(x: unknown): ShipState | null {
   if (!isRecord(x)) return null;
-  const slowKeys = ['n', 'k', 's', 'ki', 'de', 'g', 'fi', 'it'] as const;
+  const slowKeys = ['n', 'k', 's', 'ki', 'de', 'g', 'fi', 'it', 'lo'] as const;
   const present = slowKeys.filter((key) => key in x).length;
   if (present !== 0 && present !== slowKeys.length) return null;
   const slow =
@@ -86,13 +86,14 @@ export function shipState(x: unknown): ShipState | null {
       ? {}
       : {
           n: cleanName(x.n) || null,
-          k: x.k === 'human' || x.k === 'alien' ? x.k : null,
+          k: x.k === 'human' || x.k === 'alien' || x.k === 'sovereign' ? x.k : null,
           s: int(x.s, -MAX_COUNT, MAX_COUNT),
           ki: int(x.ki, -MAX_COUNT, MAX_COUNT),
           de: int(x.de, 0, MAX_COUNT),
           g: int(x.g, 0, MAX_COUNT),
           fi: num(x.fi, -1, ROUND_LIMIT),
           it: int(x.it, 0, 15),
+          lo: int(x.lo, 0, 15),
         };
   const state = {
     id: id(x.id),

@@ -40,6 +40,8 @@ import { Landmarks } from '../world/landmarks';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
+import { Showcase } from '../view/showcase';
+import { buy, LEVELS, nextPrice, parseHangar, payOut, perksOf, sovereignEarned, UPGRADES } from './hangar';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
@@ -322,6 +324,10 @@ const ZONE_MESSAGES: Record<Zone, string> = {
   armor: 'Armor hit',
 };
 const BEST_SCORE_KEY = 'solartournament.best';
+/** What the Host owns: Solar Coins, the upgrades of its ships, the ship it flies (see game/hangar). */
+const HANGAR_KEY = 'solartournament.hangar';
+/** The ships as the menu names them. */
+const SHIP_NAMES: Record<ShipType, string> = { human: 'Human Interceptor', alien: 'Alien Interceptor', sovereign: 'The Sovereign' };
 const CALLSIGN_KEY = 'solartournament.callsign';
 /** The flight school's courses a Host has completed (a list); once the basic training is among them, the menu leads with the solo round. */
 const SCHOOL_DONE_KEY = 'solartournament.school';
@@ -596,7 +602,12 @@ export class Game implements OnlineGame {
   private bots: Bot[] = [];
   private me: Ship | null = null;
   private cockpit = false;
-  private selectedShip: ShipType = 'human';
+  /** What the Host owns (see game/hangar), the ship it flies, the ship on show above the logo, and whether the hangar's plate is open. */
+  private readonly hangar = parseHangar(storageGet(HANGAR_KEY));
+  private selectedShip: ShipType = this.hangar.ship;
+  private shipShown: ShipType = this.hangar.ship;
+  private showcase: Showcase | null = null;
+  private inHangar = false;
   /** The drive lights, always in the scene; ships borrow them (see lendLight). */
   private readonly engineLights: THREE.PointLight[] = [];
   /** X is held: the flight computer turns the own ship towards `flipGoal`, fixed when the flip started. */
@@ -824,14 +835,13 @@ export class Game implements OnlineGame {
     const callsign = $<HTMLInputElement>('callsign');
     callsign.value = storageGet(CALLSIGN_KEY) ?? '';
     callsign.placeholder = 'Host';
-    // only the ship buttons carry data-ship; the tournament switches share their look
-    const shipButtons = document.querySelectorAll<HTMLButtonElement>('.ship-select button[data-ship]');
-    for (const button of shipButtons) {
-      button.addEventListener('click', () => {
-        this.selectedShip = button.dataset.ship as ShipType;
-        shipButtons.forEach((b) => b.classList.toggle('selected', b === button));
-      });
-    }
+    // the ship on show above the logo, and the hangar
+    this.showcase = new Showcase($<HTMLCanvasElement>('showcase-view'), this.assets);
+    $('ship-prev').addEventListener('click', () => this.turnShowcase(-1));
+    $('ship-next').addEventListener('click', () => this.turnShowcase(1));
+    $('hangar').addEventListener('click', () => this.showHangar(true));
+    $('hangar-back').addEventListener('click', () => this.showHangar(false));
+    this.renderShowcase();
     // the modes to choose from, for a solo round and for a room, each a button with its name
     for (const [choice, modes] of [['solo-mode', ROUND_MODES], ['room-mode', [...ROUND_MODES, 'mixed']]] as const) {
       document.querySelector(`[data-choice="${choice}"]`)!.append(
@@ -1525,6 +1535,10 @@ export class Game implements OnlineGame {
           if (action === 'back' || action === 'pause') this.showSolo(false);
           break;
         }
+        if (this.inHangar) {
+          if (action === 'back' || action === 'pause') this.showHangar(false);
+          break;
+        }
         // on the flight school's plate Enter starts the next course
         if (this.choosingSchool) {
           if (action === 'confirm') this.startSchool(this.nextCourse());
@@ -1778,6 +1792,8 @@ export class Game implements OnlineGame {
     $('hud-room').textContent = '';
 
     this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, this.selectedShip, true);
+    // the own ship flies with its upgrades, online only up to their cap
+    this.me.outfit(perksOf(this.hangar, this.selectedShip, !!this.online));
     this.ghost.wear(this.assets.ships[this.selectedShip]);
     this.school = mode === 'school' ? new FlightSchool(this.schoolCourse, schoolSteps()[this.schoolCourse] ?? 0) : null;
     if (this.school) this.scene.add(this.school.root);
@@ -2246,8 +2262,73 @@ export class Game implements OnlineGame {
     this.fillStandings($<HTMLTableElement>('scoreboard'));
     // the time ran out with the President's battleship still in the fight: it got away
     if (this.fleet?.present(this.field.clock)) this.radio.announce(ANNOUNCER_FLEET.escaped, null);
-    // training points from the flight school are no personal best
+    // training points from the flight school are no personal best, and pay no coins
     if (me && !this.school && me.score > Number(storageGet(BEST_SCORE_KEY) ?? 0)) storageSet(BEST_SCORE_KEY, String(me.score));
+    const coins = me && !this.school && !this.spectating ? payOut(this.hangar, me.score) : 0;
+    if (coins > 0) this.saveHangar();
+    $('results-coins').textContent = coins > 0 ? `+${coins.toLocaleString('en')} Solar Coins · ${this.hangar.coins.toLocaleString('en')} in the hangar` : '';
+  }
+
+  private saveHangar() {
+    storageSet(HANGAR_KEY, JSON.stringify(this.hangar));
+    this.renderShowcase();
+  }
+
+  /** The ship on show above the logo, its name and what it is; the hangar's note on its button. */
+  private renderShowcase() {
+    const ship = this.shipShown;
+    const locked = ship === 'sovereign' && !sovereignEarned(this.hangar);
+    this.showcase?.show(ship, perksOf(this.hangar, ship, false), locked);
+    $('ship-name').textContent = SHIP_NAMES[ship];
+    $('ship-note').textContent = locked ? 'Make both interceptors complete in the hangar, and it is yours.' : ship === this.selectedShip ? 'Your ship' : '';
+    $('hangar-note').textContent = `${this.hangar.coins.toLocaleString('en')} Solar Coins · upgrade your ships`;
+    if (this.inHangar) this.renderHangar();
+  }
+
+  /** The next or the previous ship on show; one that is earned is the one the Host flies. */
+  private turnShowcase(step: number) {
+    const ships: ShipType[] = ['human', 'alien', 'sovereign'];
+    this.shipShown = ships[(ships.indexOf(this.shipShown) + step + ships.length) % ships.length];
+    if (this.shipShown !== 'sovereign' || sovereignEarned(this.hangar)) {
+      this.selectedShip = this.hangar.ship = this.shipShown;
+      storageSet(HANGAR_KEY, JSON.stringify(this.hangar));
+    }
+    this.renderShowcase();
+  }
+
+  /** The hangar's plate: the coins, and every upgrade of the ship on show with its steps and the price of the next. */
+  private renderHangar() {
+    const ship = this.shipShown;
+    $('hangar-coins').textContent = `${this.hangar.coins.toLocaleString('en')} Solar Coins. Every point of a round pays one.`;
+    const list = $('hangar-upgrades');
+    if (ship === 'sovereign') {
+      list.textContent = sovereignEarned(this.hangar) ? 'The Sovereign flies with every upgrade, and wears every look.' : 'The Sovereign is the President’s gift for both interceptors made complete.';
+      return;
+    }
+    list.replaceChildren(
+      ...UPGRADES.map((upgrade) => {
+        const level = this.hangar.levels[ship][upgrade.id];
+        const price = nextPrice(this.hangar, ship, upgrade.id);
+        const row = Object.assign(document.createElement('button'), { type: 'button', className: 'upgrade' });
+        row.disabled = price === null || price > this.hangar.coins;
+        row.innerHTML = `<span class="upgrade-name">${upgrade.name}<small>${upgrade.note}${upgrade.looks ? ' · looks only' : ''}</small></span><span class="pips">${'<i class="on"></i>'.repeat(level)}${'<i></i>'.repeat(LEVELS - level)}</span><span class="upgrade-price">${price === null ? 'Complete' : `${price.toLocaleString('en')} ☉`}</span>`;
+        row.addEventListener('click', () => {
+          if (buy(this.hangar, ship, upgrade.id)) this.saveHangar();
+        });
+        return row;
+      }),
+    );
+  }
+
+  private showHangar(open: boolean) {
+    this.inHangar = open;
+    $('menu').hidden = open || this.state !== 'menu';
+    $('hangar-plate').hidden = !open;
+    // the ship on show goes along onto the hangar's plate, and back above the logo
+    if (open) $('hangar-plate').insertBefore($('showcase'), $('hangar-coins'));
+    else $('menu').prepend($('showcase'));
+    this.renderShowcase();
+    if (open) $('hangar-back').focus();
   }
 
   /** The standings as a table: the scoreboard at the round's end, and the one Tab holds open. */
@@ -2334,6 +2415,8 @@ export class Game implements OnlineGame {
       this.effects.update(dt);
     }
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
+    // the ship on show, while the menu or the hangar shows it
+    if (this.state === 'menu' && !this.choosingSolo && !this.choosingSchool && !this.browsing) this.showcase?.render(wallClock());
 
     const cue = this.musicCue();
     if (cue) this.radio.setCue(cue);
