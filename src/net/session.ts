@@ -5,7 +5,7 @@ import { CHEATS, type Cheat } from './plausible';
 import { LocalTransport, TrysteroTransport, type Transport } from './transport';
 import type { ProbeState } from '../game/items';
 import type { FlagsState } from '../game/flags';
-import type { FleetState } from '../game/fleet';
+import { TORPEDO_HITS, type FleetState } from '../game/fleet';
 import { fieldState, flagsState, fleetState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
 /** Ship states go out this often (Hz); the receivers predict the motion in between, and take at most three times as many. */
@@ -53,7 +53,7 @@ const MAX_CHEAT_REPORTS_PER_SECOND = 2;
 const MAX_WRECK_HITS_PER_SECOND = 20;
 /** Torpedo launches, hits, torpedoes gone and probes taken, per peer and second: a few of each per clone, eight ships at most. */
 const MAX_TORPEDO_EVENTS_PER_SECOND = 12;
-/** The parts of a battleship are numbered from zero, far fewer than this (see game/fleet). */
+/** The parts of a battleship are numbered from zero, far fewer than this (see game/fleet); one message counts a laser's hit or a torpedo's. */
 const MAX_FLEET_ZONE = 31;
 
 /**
@@ -117,7 +117,7 @@ export class Session {
   /** A piece of wreckage was shot or rammed on another browser. */
   onWreck: (id: string) => void = () => {};
   /** A ship of another browser hit a part of the President's battleship in a round (see game/fleet). */
-  onFleetHit: (zone: number, round: number, shooter: string) => void = () => {};
+  onFleetHit: (zone: number, round: number, shooter: string, count: number) => void = () => {};
   /** A ship of another browser launched a torpedo, at a target or none. */
   onTorpedo: (id: string, shooter: string, target: string | null, position: Vec, velocity: Vec) => void = () => {};
   /** A torpedo went off or was shot down, where. */
@@ -216,7 +216,8 @@ export class Session {
       const shooter = id(d?.i);
       const zone = int(d?.z, 0, MAX_FLEET_ZONE);
       const round = int(d?.n, 0, MAX_COUNT);
-      if (shooter && zone !== null && round !== null && ownerOf(shooter) === from && this.hitBudget.spend(from)) this.guard(() => this.onFleetHit(zone, round, shooter));
+      const count = int(d?.c, 1, TORPEDO_HITS);
+      if (shooter && zone !== null && round !== null && count !== null && ownerOf(shooter) === from && this.hitBudget.spend(from)) this.guard(() => this.onFleetHit(zone, round, shooter, count));
     });
     transport.on('tl', (d, from) => {
       const torpedo = id(d?.i);
@@ -427,8 +428,8 @@ export class Session {
     this.transport.send('w', { i: wreck });
   }
 
-  sendFleetHit(zone: number, round: number, shooter: string) {
-    this.transport.send('bh', { z: zone, n: round, i: shooter });
+  sendFleetHit(zone: number, round: number, shooter: string, count: number) {
+    this.transport.send('bh', { z: zone, n: round, i: shooter, c: count });
   }
 
   sendTorpedo(torpedo: string, shooter: string, target: string | null, position: Vec, velocity: Vec) {

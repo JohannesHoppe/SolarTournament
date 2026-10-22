@@ -5,7 +5,7 @@ import type { Ship, ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
 import { unpackItems, type ItemKind, type ProbeState } from '../game/items';
 import { Accusations, Plausibility, plausibleBeam, plausibleBlast, type Cheat } from './plausible';
-import type { Torpedo } from '../game/torpedoes';
+import type { Homing, Torpedo } from '../game/torpedoes';
 
 /** What the online layer needs from the game. */
 export interface OnlineGame {
@@ -30,8 +30,10 @@ export interface OnlineGame {
   remoteRock(id: string, at: number, round: number): void;
   /** Another peer shot or rammed a piece of wreckage. */
   remoteWreck(id: string): void;
-  /** A ship of another peer hit a part of the President's battleship in a round. */
-  remoteFleetHit(zone: number, round: number, shooter: Ship): void;
+  /** A ship of another peer hit a part of the President's battleship in a round, this many times (a torpedo counts several). */
+  remoteFleetHit(zone: number, round: number, shooter: Ship, count: number): void;
+  /** A part of the President's battleship as a torpedo homes on it, by its id. */
+  beacon(id: string): Homing | null;
   /** The pieces of wreckage in flight, for a browser that joins. */
   wreckSnapshot(): WreckState[];
   /** Takes the pieces of wreckage in flight from the lead browser. */
@@ -45,7 +47,7 @@ export interface OnlineGame {
   /** Takes the lead browser's field, in the arena it names. */
   restoreField(field: FieldState): void;
   /** Another browser's ship launched a torpedo. */
-  remoteTorpedo(id: string, shooter: Ship, target: Ship | null, position: THREE.Vector3, velocity: THREE.Vector3): void;
+  remoteTorpedo(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3): void;
   /** A torpedo went off or was shot down on another browser. */
   remoteTorpedoGone(id: string, position: THREE.Vector3): void;
   /** Another browser's torpedo hit a ship this browser runs. */
@@ -129,15 +131,15 @@ export class Online {
     };
     session.onRock = (id, at, round) => game.remoteRock(id, at, round);
     session.onWreck = (id) => game.remoteWreck(id);
-    session.onFleetHit = (zone, round, shooter) => {
+    session.onFleetHit = (zone, round, shooter, count) => {
       // only a living shooter hits
       const ship = this.find(shooter);
-      if (ship?.alive) game.remoteFleetHit(zone, round, ship);
+      if (ship?.alive) game.remoteFleetHit(zone, round, ship, count);
     };
     session.onTorpedo = (id, shooter, target, p, v) => {
       const ship = this.find(shooter);
       if (!ship?.alive || this.caught(ship, this.plausible.torpedo(ship.id, game.time))) return;
-      game.remoteTorpedo(id, ship, target ? this.find(target) : null, from.fromArray(p), to.fromArray(v));
+      game.remoteTorpedo(id, ship, target ? (this.find(target) ?? game.beacon(target)) : null, from.fromArray(p), to.fromArray(v));
     };
     session.onTorpedoGone = (id, p) => game.remoteTorpedoGone(id, from.fromArray(p));
     session.onProbe = (id, ship, bucket) => {
@@ -282,11 +284,11 @@ export class Online {
     this.session.sendWreck(id);
   }
 
-  sendFleetHit(zone: number, round: number, shooter: Ship) {
-    this.session.sendFleetHit(zone, round, shooter.id);
+  sendFleetHit(zone: number, round: number, shooter: Ship, count: number) {
+    this.session.sendFleetHit(zone, round, shooter.id, count);
   }
 
-  sendTorpedo(id: string, shooter: Ship, target: Ship | null, position: THREE.Vector3, velocity: THREE.Vector3) {
+  sendTorpedo(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3) {
     this.session.sendTorpedo(id, shooter.id, target?.id ?? null, round(position), round(velocity));
   }
 

@@ -40,11 +40,11 @@ import { Landmarks } from '../world/landmarks';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
-import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Torpedo } from './torpedoes';
+import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
 import { BOOST_PUSH, BOOST_RADIUS, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
-import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, ZONE_POINTS, type FleetEvent } from './fleet';
+import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut } from './survival';
 import { markedName } from '../view/marks';
@@ -91,8 +91,6 @@ const DIRECTOR_PAUSE = 10;
 const MODE_NAMES: Record<RoomMode, string> = { deathmatch: 'Deathmatch', race: 'Race', survival: 'Last Clone Standing', flag: 'Capture the Flag', fleet: "The President's Fleet", mixed: 'Every mode in turn' };
 /** The beams of the President's batteries: red, the regime's neon. */
 const BATTERY_COLOR = new THREE.Color(1, 0.1, 0.15);
-/** What the HUD calls a battleship's parts. */
-const ZONE_NAMES = { battery: 'Battery', drive: 'Drive', reactor: 'Reactor' } as const;
 /**
  * Bots of Capture the Flag: one in FLAG_GUARDS of each side guards its base and hunts a thief
  * of its core, the others raid. They fly for a core at FLAG_RAID_SPEED (units/s, 120 m/s),
@@ -105,6 +103,8 @@ const FLAG_HOME_SPEED = 4400;
 const FLAG_SWING = 4000;
 /** Against the President's battleships bots range out this far (units), to its orbit beyond the rocks. */
 const FLEET_HOME = ARENA_LIMIT * 0.95;
+/** Bots keep this far clear of the plume of a battleship hunting with its stern (units, 100 m). */
+const PLUME_MARGIN = 2000;
 /** What each event of Capture the Flag is worth to the ship that did it. */
 const FLAG_POINTS: Record<FlagEvent['kind'], number> = { grab: GRAB_POINTS, return: RETURN_POINTS, capture: CAPTURE_POINTS, drop: 0 };
 /** A kill in a race is worth less than in a deathmatch: the gates and the finish decide. */
@@ -444,9 +444,10 @@ const hookPoint = new THREE.Vector3();
 const hookNose = new THREE.Vector3();
 const hookEnd = new THREE.Vector3();
 
-/** The part of the battleship the HUD marks, and how far a battery's beam misses. */
+/** The part of the battleship the HUD marks, how far a battery's beam misses, and the point of the plume a bot flies away from. */
 const fleetGoal = new THREE.Vector3();
 const missBy = new THREE.Vector3();
+const plumeAxis = new THREE.Vector3();
 
 /** Where the ghost of the best lap is this frame. */
 const ghostPosition = new THREE.Vector3();
@@ -1590,6 +1591,8 @@ export class Game implements OnlineGame {
     }
     this.fleet = this.roundMode === 'fleet' ? new Fleet(arena.layout.seed) : null;
     if (this.fleet) this.scene.add(this.fleet.root);
+    // its hull hides what is behind it and stops torpedoes
+    this.field.obstacle = this.fleet;
     this.fleetCalled = false;
     this.fleetPhase = 1;
     // against the President every ship is on one side
@@ -2380,8 +2383,9 @@ export class Game implements OnlineGame {
         // a racing bot flies the course until it has finished, then it only fights
         bot.waypoint = this.course && ship.finish < 0 ? this.course.points[ship.gates % GATES] : null;
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE)?.position ?? null;
-        // a nova core close by, or a battleship whose reactor went critical: away from it
-        bot.flee = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? (this.fleet?.dying(this.field.clock) && ship.flight.position.distanceTo(this.fleet.position) < SINK_BLAST * 1.5 ? this.fleet.position : null);
+        // a nova core close by, a battleship whose reactor went critical, or the plume of one
+        // hunting with its stern: away from it, out of the plume to the side
+        bot.flee = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : null);
         // a bot goes out to the President's battleship on its orbit beyond the rocks
         bot.home = this.fleet ? FLEET_HOME : Math.min(HOME_RADIUS, safe * FLARE_KEEP);
         bot.prey = null;
@@ -2395,8 +2399,13 @@ export class Game implements OnlineGame {
       if (thought && bot === this.sparring?.bot && !this.sparring.armed) thought.fire = false;
       // a bot with a nova core saves it for a crowd
       if (thought?.fire && ship.nova && this.crowdAround(ship, NOVA_RADIUS * 0.8) < NOVA_CROWD) thought.fire = false;
-      // a bot with its target locked sends a torpedo now and then (never the flight school's)
-      if (bot && !clamped && bot !== this.sparring?.bot && bot.target && ship.torpedoes > 0 && Math.random() < dt * BOT_TORPEDO_RATE && this.torpedoTarget(ship) === bot.target) this.fireTorpedo(ship);
+      // a bot with its target locked, or a part of the battleship it attacks, sends a torpedo
+      // now and then (never the flight school's)
+      if (bot && !clamped && bot !== this.sparring?.bot && (bot.target || bot.siege) && ship.torpedoes > 0 && Math.random() < dt * BOT_TORPEDO_RATE) {
+        // against the battleship every ship is on one side: whatever it locks on is a part
+        const lock = this.torpedoTarget(ship);
+        if (lock && (!bot.target || lock === bot.target)) this.fireTorpedo(ship);
+      }
       // the target drone keeps its drive turned to the pilot, wherever the pilot flies: the
       // drills train hitting the drive, not getting around the armor
       if (ship === this.drone && me.alive) ship.flight.orientation.setFromRotationMatrix(facing.lookAt(me.flight.position, ship.flight.position, me.flight.up(upward)));
@@ -2707,22 +2716,36 @@ export class Game implements OnlineGame {
     if (target.alive && target.structural(BATTERY_DAMAGE, this.time) === 'destroyed') this.shipDestroyed(target, null, 'battery');
   }
 
-  /** An own ship's laser hit a part of the battleship: every browser counts it; the shooter scores the hit and the part it breaks. */
-  private hitFleet(fleet: Fleet, zone: number, shooter: Ship, point: THREE.Vector3) {
+  /**
+   * An own ship's laser (one hit) or torpedo (TORPEDO_HITS) hit a part of the battleship: every
+   * browser counts it; the shooter scores each hit and the part it breaks.
+   */
+  private hitFleet(fleet: Fleet, zone: number, shooter: Ship, point: THREE.Vector3, count = 1) {
     this.effects.sparks(point, shooter.color, 60);
-    this.online?.sendFleetHit(zone, this.roundId, shooter);
-    shooter.score += FLEET_HIT_POINTS;
+    this.online?.sendFleetHit(zone, this.roundId, shooter, count);
+    shooter.score += FLEET_HIT_POINTS * count;
     if (shooter.isLocal) {
       this.hud.hit();
       this.sound.beep(1320, 0.06);
       this.landed(point, ZONE_NAMES[fleet.zones[zone].kind].toUpperCase());
     }
-    this.fleetEvents(fleet.hit(zone), shooter);
+    this.fleetEvents(fleet.hit(zone, count), shooter);
   }
 
-  remoteFleetHit(zone: number, round: number, shooter: Ship) {
+  remoteFleetHit(zone: number, round: number, shooter: Ship, count: number) {
     // a hit of another round was on another battleship
-    if (this.fleet && round === this.roundId) this.fleetEvents(this.fleet.hit(zone), shooter);
+    if (this.fleet && round === this.roundId) this.fleetEvents(this.fleet.hit(zone, count), shooter);
+  }
+
+  /** A part of the battleship as a torpedo of another browser homes on it. */
+  beacon(id: string): Homing | null {
+    return this.fleet?.beacons.find((beacon) => beacon.id === id) ?? null;
+  }
+
+  /** What a bot of the President's Fleet flies away from: the battleship going up close by, or the plume of one hunting with its stern. */
+  private fleetDanger(ship: Ship, fleet: Fleet): THREE.Vector3 | null {
+    if (fleet.dying(this.field.clock)) return ship.flight.position.distanceTo(fleet.position) < SINK_BLAST * 1.5 ? fleet.position : null;
+    return fleet.plumeNear(ship.flight.position, ship.radius + PLUME_MARGIN, plumeAxis);
   }
 
   /** What the battleship's hits set off: a part breaking (points for an own shooter), a new phase, the ship going down. */
@@ -3496,27 +3519,30 @@ export class Game implements OnlineGame {
     }
   }
 
-  /** The ship a torpedo of `ship` would lock on: the one in sight closest to its nose (see LOCK_ANGLE). */
-  private torpedoTarget(ship: Ship): Ship | null {
-    let best: Ship | null = null;
+  /** What a torpedo of `ship` would lock on: the ship or part of the battleship in sight closest to its nose (see LOCK_ANGLE). */
+  private torpedoTarget(ship: Ship): Homing | null {
+    let best: Homing | null = null;
     let angle = LOCK_ANGLE;
-    for (const other of this.ships) {
-      if (other === ship || !other.alive || other === this.drone || other.allyOf(ship)) continue;
+    const consider = (other: Homing) => {
       const line = toAim.subVectors(other.flight.position, ship.flight.position);
-      if (line.length() > LOCK_DISTANCE) continue;
+      if (line.length() > LOCK_DISTANCE) return;
       const off = ship.flight.angleTo(line);
       if (off < angle && this.field.lineOfSight(ship.flight.position, other.flight.position)) {
         best = other;
         angle = off;
       }
-    }
+    };
+    for (const other of this.ships) if (other !== ship && other.alive && other !== this.drone && !other.allyOf(ship)) consider(other);
+    for (const beacon of this.fleet?.beacons ?? []) if (beacon.alive) consider(beacon);
     return best;
   }
 
-  /** An own torpedo went off: on a ship (whose browser takes the damage), on a rock, or burnt out. */
+  /** An own torpedo went off: on a ship (whose browser takes the damage), on the battleship, on a rock, or burnt out. */
   private detonate(torpedo: Torpedo, hit: Ship | null) {
     this.blowUp(torpedo);
     this.online?.sendTorpedoGone(torpedo.id, torpedo.position);
+    // every part of the battleship close to where it went off takes it
+    if (this.fleet) for (const zone of this.fleet.blast(torpedo.position)) this.hitFleet(this.fleet, zone, torpedo.shooter, torpedo.position, TORPEDO_HITS);
     if (!hit) return;
     if (hit.owner === null) this.applyTorpedoHit(hit, torpedo.shooter);
     else this.online?.sendTorpedoHit(hit, torpedo.shooter, torpedo.id);
@@ -3787,7 +3813,7 @@ export class Game implements OnlineGame {
     if (status === 'destroyed') this.shipDestroyed(ship, shooter);
   }
 
-  remoteTorpedo(id: string, shooter: Ship, target: Ship | null, position: THREE.Vector3, velocity: THREE.Vector3) {
+  remoteTorpedo(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3) {
     this.torpedoes.launch(id, shooter, target, position, velocity, this.time, false);
   }
 

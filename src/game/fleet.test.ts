@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ARRIVAL, BATTERY_PERIOD, Fleet, PLUME_REACH, SINK_SECONDS, type Target } from './fleet';
+import { ARRIVAL, BATTERY_PERIOD, Fleet, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
 
 /** A battleship in the arena, its bow along -z at the center, unturned. */
 function battleship() {
@@ -10,6 +10,7 @@ function battleship() {
   fleet.quaternion.identity();
   fleet.velocity.set(0, 0, 0);
   fleet.root.updateMatrixWorld();
+  fleet.update(1, 0);
   return fleet;
 }
 
@@ -62,6 +63,40 @@ describe("the President's fleet", () => {
     expect(shots).toBeLessThanOrEqual(zonesOf(fleet, 'battery').length * 11);
   });
 
+  it('hides what is behind its hull and sets off a torpedo that touches it', () => {
+    const fleet = battleship();
+    const across = new THREE.Vector3(1, 0, 0);
+    expect(fleet.blocks(new THREE.Vector3(-20000, 0, 0), across, 40000)).toBe(true);
+    // a ray that stops short of it, or passes above it, sees past
+    expect(fleet.blocks(new THREE.Vector3(-20000, 0, 0), across, 10000)).toBe(false);
+    expect(fleet.blocks(new THREE.Vector3(-20000, 5000, 0), across, 40000)).toBe(false);
+    expect(fleet.touches(new THREE.Vector3(0, 900, 0), 120)).toBe(true);
+    expect(fleet.touches(new THREE.Vector3(0, 2000, 0), 120)).toBe(false);
+    // gone up, it is gone from the field
+    breakAll(fleet, zonesOf(fleet, 'battery'));
+    breakAll(fleet, zonesOf(fleet, 'reactor'));
+    fleet.update(SINK_SECONDS + 100, 0);
+    expect(fleet.blocks(new THREE.Vector3(-20000, 0, 0), across, 40000)).toBe(false);
+  });
+
+  it('counts a torpedo as TORPEDO_HITS hits on every open part it goes off near, and lets one lock on them', () => {
+    const fleet = battleship();
+    const battery = zonesOf(fleet, 'battery')[0];
+    const reactor = zonesOf(fleet, 'reactor')[0];
+    expect(fleet.beacons[battery].alive).toBe(true);
+    expect(fleet.beacons[battery].flight.position.distanceTo(fleet.zoneAt(battery))).toBeLessThan(1);
+    // the sealed reactor is no target
+    expect(fleet.beacons[reactor].alive).toBe(false);
+    const at = fleet.zoneAt(battery).add(new THREE.Vector3(0, 400, 0));
+    for (const zone of fleet.blast(at)) fleet.hit(zone, TORPEDO_HITS);
+    expect(fleet.blast(at)).toEqual([battery]);
+    expect(fleet.hits[battery]).toBe(TORPEDO_HITS);
+    // more hits than a part has left break it and count no further
+    fleet.hit(battery, fleet.hitsOf(battery));
+    expect(fleet.hits[battery]).toBe(fleet.hitsOf(battery));
+    expect(fleet.beacons[battery].alive).toBe(false);
+  });
+
   it('pushes a ship out of its hull', () => {
     const fleet = battleship();
     const center = new THREE.Vector3(0, 700, 0);
@@ -81,6 +116,10 @@ describe("the President's fleet", () => {
     expect(fleet.plumeAt(pilot.flight.position, 300)).toBeGreaterThan(0);
     // beyond the plume's reach it burns nothing
     expect(fleet.plumeAt(pilot.flight.position.clone().setLength(PLUME_REACH * 2), 300)).toBe(0);
+    // a bot in it flies away from its axis, out to the side
+    const axis = fleet.plumeNear(pilot.flight.position, 2300, new THREE.Vector3())!;
+    expect(axis.distanceTo(pilot.flight.position)).toBeLessThan(2300 + 1400 + PLUME_REACH * 0.12);
+    expect(fleet.plumeNear(new THREE.Vector3(15000, 0, 20000), 2300, new THREE.Vector3())).toBeNull();
   });
 
   it('is followed by the other browsers as the lead flies it', () => {

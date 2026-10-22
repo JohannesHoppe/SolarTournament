@@ -17,17 +17,26 @@ export const TORPEDO_RADIUS = 120;
 const FUSE = 150;
 /** Hull points a torpedo takes from the ship it hits, whatever side it hits: armor does not stop it. */
 export const TORPEDO_DAMAGE = 60;
-/** A torpedo locks on a ship within this angle of the nose (rad, about 17°) and this distance (units, 3 km), in sight. */
+/** A torpedo locks on a ship (or a part of the President's battleship) within this angle of the nose (rad, about 17°) and this distance (units, 3 km), in sight. */
 export const LOCK_ANGLE = 0.3;
 export const LOCK_DISTANCE = 60000;
 /** Torpedoes remembered after they went off, for hits told late: more than all clones of a tournament carry. */
 const GONE_MEMORY = 32;
 
+/** What a torpedo homes on: a ship, or a part of the President's battleship (see Fleet.beacons). */
+export interface Homing {
+  readonly id: string;
+  readonly name: string;
+  readonly alive: boolean;
+  readonly radius: number;
+  readonly flight: { readonly position: THREE.Vector3; readonly velocity: THREE.Vector3 };
+}
+
 export interface Torpedo {
   /** "<shooter id>.<shot>": the same torpedo on every browser. */
   id: string;
   shooter: Ship;
-  target: Ship | null;
+  target: Homing | null;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
   bornAt: number;
@@ -44,7 +53,8 @@ const exhaust = new THREE.Vector3();
 /**
  * Torpedoes: few, slow to start and homing. A torpedo flies on every browser alike from its
  * launch, but only the browser of its shooter decides when it goes off: on a ship (then that
- * ship's browser takes the damage), on a rock, or burnt out. A laser beam shoots one down,
+ * ship's browser takes the damage), on the President's battleship (then every browser counts
+ * the hits on its parts), on a rock, or burnt out. A laser beam shoots one down,
  * wherever it is fired.
  */
 export class Torpedoes {
@@ -57,7 +67,7 @@ export class Torpedoes {
 
   constructor(private readonly effects: Effects) {}
 
-  launch(id: string, shooter: Ship, target: Ship | null, position: THREE.Vector3, velocity: THREE.Vector3, now: number, own: boolean): Torpedo {
+  launch(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3, now: number, own: boolean): Torpedo {
     const mesh = new THREE.Mesh(this.geometry, this.material);
     mesh.position.copy(position);
     this.group.add(mesh);
@@ -104,7 +114,10 @@ export class Torpedoes {
         if (ship === torpedo.shooter || !ship.alive || ship.allyOf(torpedo.shooter)) continue;
         if (ship.flight.position.distanceTo(torpedo.position) < ship.radius + FUSE) hit = ship;
       }
-      if (hit || field.overlap(torpedo.position, TORPEDO_RADIUS) || field.insideWell(torpedo.position, TORPEDO_RADIUS) || now - torpedo.bornAt > LIFETIME) detonate(torpedo, hit);
+      // a part of the battleship it homes on sets it off as a ship does, its hull as a rock does
+      const reached = !!target && target.flight.position.distanceTo(torpedo.position) < target.radius + FUSE;
+      const struck = reached || !!field.obstacle?.touches(torpedo.position, TORPEDO_RADIUS) || field.overlap(torpedo.position, TORPEDO_RADIUS) || field.insideWell(torpedo.position, TORPEDO_RADIUS);
+      if (hit || struck || now - torpedo.bornAt > LIFETIME) detonate(torpedo, hit);
     }
   }
 

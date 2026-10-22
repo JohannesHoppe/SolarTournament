@@ -43,6 +43,14 @@ export interface Well {
   surfaceGravity: number;
 }
 
+/** Something besides rocks that stands in the field, blocks the line of sight and sets off a torpedo (the President's battleship). */
+export interface Obstacle {
+  /** Whether it lies on the ray from `origin` along the normalized `direction` within `distance`. */
+  blocks(origin: THREE.Vector3, direction: THREE.Vector3, distance: number): boolean;
+  /** Whether a sphere touches it. */
+  touches(center: THREE.Vector3, radius: number): boolean;
+}
+
 /** A piece placed by hand: a template of a kind at a position and turn, with the template's own size times `scale`. */
 export interface Placement {
   kind: TemplateKind;
@@ -182,6 +190,8 @@ export class AsteroidField {
   layout: FieldLayout | null = null;
   /** The massive body of the arena, if it has one. */
   well: Well | null = null;
+  /** Something else in the field that blocks the line of sight and torpedoes, if a round has one. */
+  obstacle: Obstacle | null = null;
 
   /** Each set's `far` holds the same shapes in less detail, drawn for rocks beyond FAR_LEVEL; collisions always use the full shapes. */
   constructor(sets: Record<TemplateKind, TemplateSet>) {
@@ -453,11 +463,12 @@ export class AsteroidField {
     return best;
   }
 
-  /** True when no rock (and not the well's body) lies between two points. */
+  /** True when no rock (and not the well's body, nor an obstacle) lies between two points. */
   lineOfSight(from: THREE.Vector3, to: THREE.Vector3): boolean {
     const distance = from.distanceTo(to);
     if (distance < 1) return true;
-    return this.raycast(from, sight.subVectors(to, from).divideScalar(distance), distance) === null;
+    sight.subVectors(to, from).divideScalar(distance);
+    return !this.obstacle?.blocks(from, sight, distance) && this.raycast(from, sight, distance) === null;
   }
 
   /** Whether a sphere touches the well's body: a ship there is lost. */

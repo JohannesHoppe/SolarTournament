@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
-import { FIELD_RADIUS, raySphere } from '../world/asteroids';
+import { FIELD_RADIUS, raySphere, type Obstacle } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
+import type { Homing } from './torpedoes';
 
 /**
  * The President's Fleet: every Host on one side against a battleship of the President, one in
@@ -23,13 +24,21 @@ import { boxContact, rayBox } from '../world/boxes';
  * Without drives it drifts and burns nothing. A battleship that goes down takes every ship
  * within SINK_BLAST along.
  *
+ * Its hull blocks the line of sight like a rock: a battery does not fire through it, and a pilot
+ * on the far side is hidden from the others. A torpedo locks on a part as on a ship and goes off
+ * on it, or on the hull; it counts TORPEDO_HITS hits on every part it goes off near.
+ *
  * Online the lead browser flies the battleship and sends where it is with the round clock (see
  * Fleet.toState); every laser hit on a part goes to every browser, so all count the same hits.
  * Each browser fires the batteries at the ships it runs, and burns them in the plume.
  */
 export type ZoneKind = 'battery' | 'drive' | 'reactor';
+export const ZONE_NAMES: Record<ZoneKind, string> = { battery: 'Battery', drive: 'Drive', reactor: 'Reactor' };
 /** Hits a part takes. */
 export const ZONE_HITS: Record<ZoneKind, number> = { battery: 30, drive: 45, reactor: 90 };
+/** A torpedo counts this many hits on every part it goes off within TORPEDO_REACH of (units, 20 m beyond the part): a third of a battery. */
+export const TORPEDO_HITS = 10;
+const TORPEDO_REACH = 400;
 /** Points for a hit on a part, for the hit that breaks one, and for every ship of the side when the battleship goes down. */
 export const FLEET_HIT_POINTS = 10;
 export const ZONE_POINTS: Record<ZoneKind, number> = { battery: 150, drive: 200, reactor: 1000 };
@@ -100,13 +109,38 @@ const UP = new THREE.Vector3(0, 1, 0);
 /** The chance a battery's beam hits a target this fast (units/s) this far away (units). */
 export const batteryChance = (speed: number, distance: number) => BATTERY_AIM * (1 - 0.5 * Math.min(1, speed / BATTERY_DODGE_SPEED)) * (1 - 0.5 * Math.min(1, distance / BATTERY_RANGE));
 
-export class Fleet {
+/** A part of the battleship as a torpedo homes on it: where it is, and whether it can still be hit. */
+class Beacon implements Homing {
+  readonly id: string;
+  readonly name: string;
+  readonly radius: number;
+  readonly flight: { position: THREE.Vector3; velocity: THREE.Vector3 };
+
+  constructor(
+    private readonly fleet: Fleet,
+    private readonly zone: number,
+  ) {
+    const part = fleet.zones[zone];
+    this.id = `battleship.${zone}`;
+    this.name = ZONE_NAMES[part.kind];
+    this.radius = part.radius;
+    this.flight = { position: new THREE.Vector3(), velocity: fleet.velocity };
+  }
+
+  get alive() {
+    return this.fleet.targetable(this.zone);
+  }
+}
+
+export class Fleet implements Obstacle {
   readonly root = new THREE.Group();
   /** When the battleship comes (field time), and whether it went down. */
   arrivesAt = ARRIVAL;
   down = false;
   readonly hits: number[];
   readonly zones: Zone[] = [];
+  /** Each part, as a torpedo locks on it. */
+  readonly beacons: Beacon[];
   readonly velocity = new THREE.Vector3();
   /** The ship its stern hunts in its second phase, and whether its drives burn. */
   target: string | null = null;
@@ -124,6 +158,8 @@ export class Fleet {
   private readonly reactorGlow: THREE.MeshBasicMaterial;
   private readonly driveGlow: THREE.MeshBasicMaterial;
   private lastClock = 0;
+  /** The field time of the frame it was last shown in (see update). */
+  private clock = 0;
   /** When the battleship went down (field time). */
   private sunkAt = -Infinity;
 
@@ -187,6 +223,7 @@ export class Fleet {
     this.flame.visible = false;
     this.root.add(this.flame);
     this.hits = this.zones.map(() => 0);
+    this.beacons = this.zones.map((_, i) => new Beacon(this, i));
     this.enter();
   }
 
@@ -238,6 +275,11 @@ export class Fleet {
     return !this.broken(zone) && (this.zones[zone].kind !== 'reactor' || this.phase === 3);
   }
 
+  /** A torpedo can lock on a part: the battleship is in the fight, and the part can be hit. */
+  targetable(zone: number) {
+    return this.present(this.clock) && this.open(zone);
+  }
+
   /** A part in world space. */
   zoneAt(zone: number, target = new THREE.Vector3()) {
     return target.copy(this.zones[zone].at).applyMatrix4(this.root.matrixWorld);
@@ -264,15 +306,20 @@ export class Fleet {
   }
 
   /**
-   * One laser hit on a part, from here or another browser; returns the events it set off: the
-   * part broken, a new phase, the ship gone down. A hit on a part already broken or still
-   * sealed, or on a battleship that went down, counts nothing.
+   * Hits on a part (one for a laser, TORPEDO_HITS for a torpedo), from here or another browser;
+   * returns the events they set off: the part broken, a new phase, the ship gone down. A hit on
+   * a part already broken or still sealed, or on a battleship that went down, counts nothing.
    */
-  hit(zone: number): FleetEvent[] {
+  hit(zone: number, count = 1): FleetEvent[] {
     if (this.down || !this.open(zone)) return [];
     const phase = this.phase;
-    this.hits[zone]++;
+    this.hits[zone] = Math.min(this.hits[zone] + count, this.hitsOf(zone));
     return this.after(zone, phase);
+  }
+
+  /** The parts a torpedo going off at `point` hits (see TORPEDO_HITS). */
+  blast(point: THREE.Vector3): number[] {
+    return this.zones.flatMap((zone, i) => (this.targetable(i) && this.zoneAt(i, local).distanceTo(point) < zone.radius + TORPEDO_REACH ? [i] : []));
   }
 
   /**
@@ -281,14 +328,8 @@ export class Fleet {
    */
   raycast(origin: THREE.Vector3, direction: THREE.Vector3, max: number, clock: number): { distance: number; zone: number } | null {
     if (!this.present(clock) || raySphere(origin, direction, this.position, REACH) === null) return null;
-    this.toLocal(origin, local);
-    step.copy(direction).applyQuaternion(turn.copy(this.quaternion).invert());
-    let best: { distance: number; zone: number } | null = null;
-    for (const box of this.colliders) {
-      if (box === this.domeBox() && this.phase === 3) continue;
-      const d = rayBox(closest.subVectors(local, box.center), step, box.half);
-      if (d !== null && d <= max && (!best || d < best.distance)) best = { distance: d, zone: -1 };
-    }
+    const armor = this.rayHull(origin, direction, max);
+    let best = armor === null ? null : { distance: armor, zone: -1 };
     this.zones.forEach((zone, i) => {
       if (!this.open(i)) return;
       const d = raySphere(local, step, zone.at, zone.radius);
@@ -297,11 +338,22 @@ export class Fleet {
     return best;
   }
 
+  /** Its hull lies on a ray, while it is in the field (see Obstacle). */
+  blocks(origin: THREE.Vector3, direction: THREE.Vector3, distance: number): boolean {
+    return this.standing && raySphere(origin, direction, this.position, REACH) !== null && this.rayHull(origin, direction, distance) !== null;
+  }
+
+  /** A sphere touches its hull, while it is in the field (see Obstacle). */
+  touches(center: THREE.Vector3, radius: number): boolean {
+    if (!this.standing || center.distanceTo(this.position) > REACH + radius) return false;
+    return this.colliders.some((box) => this.solid(box) && boxContact(this.toLocal(center, local).sub(box.center), box.half, radius, step, closest) !== null);
+  }
+
   /** Pushes a sphere out of the hull; returns the outward normal when they touched (and moves `center` onto the hull), otherwise null. */
   resolve(center: THREE.Vector3, radius: number, clock: number, normal = new THREE.Vector3()): THREE.Vector3 | null {
     if (!this.present(clock) || center.distanceTo(this.position) > REACH + radius) return null;
     for (const box of this.colliders) {
-      if (box === this.domeBox() && this.phase === 3) continue;
+      if (!this.solid(box)) continue;
       this.toLocal(center, local).sub(box.center);
       if (!boxContact(local, box.half, radius, normal, closest)) continue;
       normal.applyQuaternion(this.quaternion);
@@ -315,13 +367,19 @@ export class Fleet {
   /** How strongly a point lies in the drive plume, 0..1 (1 at the nozzles), while the drives burn. */
   plumeAt(point: THREE.Vector3, radius: number): number {
     if (!this.burning) return 0;
-    const back = toTarget.set(0, 0, 1).applyQuaternion(this.quaternion);
-    const nozzle = want.set(0, 0, 7700).applyMatrix4(this.root.matrixWorld);
-    const away = local.subVectors(point, nozzle);
-    const along = away.dot(back);
-    if (along <= 0 || along > PLUME_REACH) return 0;
-    const across = away.addScaledVector(back, -along).length();
-    return across > radius + 1400 + along * PLUME_SPREAD ? 0 : 1 - along / PLUME_REACH;
+    const along = this.plume(point, radius);
+    return along < 0 ? 0 : 1 - along / PLUME_REACH;
+  }
+
+  /**
+   * While its stern hunts a pilot, burning or turning to: the point on the plume's axis abreast
+   * of `point` (into `target`) when `point` lies within `margin` of the plume, otherwise null.
+   * Bots fly away from it, out to the side.
+   */
+  plumeNear(point: THREE.Vector3, margin: number, target: THREE.Vector3): THREE.Vector3 | null {
+    if (this.target === null) return null;
+    const along = this.plume(point, margin);
+    return along < 0 ? null : target.copy(want).addScaledVector(toTarget, along);
   }
 
   /** The batteries that fire this frame, each with the number of its shot: the same moments and numbers on every browser, by the field time. */
@@ -437,8 +495,10 @@ export class Fleet {
    * pulsing, the plume burning; once it went down it stays until it goes up.
    */
   update(clock: number, now: number) {
+    this.clock = clock;
     const dying = this.dying(clock);
     this.root.visible = this.present(clock) || dying;
+    this.beacons.forEach((beacon, i) => this.zoneAt(i, beacon.flight.position));
     // a broken drive is burnt out; a broken battery or reactor is gone
     this.zones.forEach((zone, i) => {
       if (zone.kind === 'drive') (zone.mesh as THREE.Mesh).material = this.broken(i) ? this.burnt : this.driveGlow;
@@ -490,9 +550,38 @@ export class Fleet {
     return target.copy(point).sub(this.position).applyQuaternion(turn.copy(this.quaternion).invert());
   }
 
-  /** The dome's collider, which goes with the dome. */
-  private domeBox() {
-    return this.colliders[this.colliders.length - 1];
+  /** It is in the field as of the last frame shown: in the fight, or burning before it goes up. */
+  private get standing() {
+    return this.present(this.clock) || this.dying(this.clock);
+  }
+
+  /** A collider is there: every box of the hull, the dome's only while it is closed. */
+  private solid(box: Box) {
+    return box !== this.colliders[this.colliders.length - 1] || this.phase < 3;
+  }
+
+  /** Where a ray (up to `max`) meets the hull, or null; leaves the ray in the battleship's frame in `local` and `step`. */
+  private rayHull(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
+    this.toLocal(origin, local);
+    step.copy(direction).applyQuaternion(turn.copy(this.quaternion).invert());
+    let best: number | null = null;
+    for (const box of this.colliders) {
+      if (!this.solid(box)) continue;
+      const d = rayBox(closest.subVectors(local, box.center), step, box.half);
+      if (d !== null && d <= max && (best === null || d < best)) best = d;
+    }
+    return best;
+  }
+
+  /** How far behind the nozzles a sphere lies in the plume's cone, or -1 outside it; leaves the stern's direction in `toTarget` and the nozzles in `want`. */
+  private plume(point: THREE.Vector3, radius: number): number {
+    const back = toTarget.set(0, 0, 1).applyQuaternion(this.quaternion);
+    const nozzle = want.set(0, 0, 7700).applyMatrix4(this.root.matrixWorld);
+    const away = local.subVectors(point, nozzle);
+    const along = away.dot(back);
+    if (along <= 0 || along > PLUME_REACH) return -1;
+    const across = away.addScaledVector(back, -along).length();
+    return across > radius + 1400 + along * PLUME_SPREAD ? -1 : along;
   }
 
   private material<T extends THREE.Material>(material: T): T {

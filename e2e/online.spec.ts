@@ -93,7 +93,7 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
   for (const page of [a, b]) expect(await page.evaluate(() => (window as unknown as GameWindow).game.flags.cores.map((core: { carrier: string | null }) => core.carrier))).toContain(thief);
 });
 
-test("two tabs of the President's Fleet see one battleship and count the same hits", async ({ context }) => {
+test("two tabs of the President's Fleet see one battleship and count the same hits, a torpedo's too", async ({ context }) => {
   const { a, b } = await pair(context, `e2e-${Date.now().toString(36)}b&m=fleet&bots=0`);
   // the battleship comes in on the field time; both tabs wait for it
   for (const page of [a, b]) await page.evaluate(() => (window as unknown as GameWindow).game.field.setClock(13));
@@ -110,6 +110,22 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
   });
   await play(a, 2);
   expect(await a.evaluate(() => (window as unknown as GameWindow).game.fleet.hits[0])).toBe(10);
+  // above the next battery, its nose on it, the clone sends a torpedo: it locks on, goes off
+  // there, and both tabs count its hits
+  const lock = await b.evaluate(() => {
+    const game = (window as unknown as GameWindow).game;
+    const battery = game.fleet.zoneAt(1);
+    const above = battery.clone().set(0, 1, 0).applyQuaternion(game.fleet.quaternion).multiplyScalar(3000).add(battery);
+    game.me.flight.position.copy(above);
+    game.me.flight.velocity.set(0, 0, 0);
+    const bow = battery.clone().set(0, 0, -1).applyQuaternion(game.fleet.quaternion);
+    game.me.flight.orientation.setFromRotationMatrix(game.fleet.root.matrixWorld.clone().lookAt(above, battery, bow));
+    game.fireTorpedo(game.me);
+    return game.torpedoes.list[0]?.target?.id;
+  });
+  expect(lock).toBe('battleship.1');
+  await play(b, 3);
+  for (const page of [a, b]) expect(await page.evaluate(() => (window as unknown as GameWindow).game.fleet.hits[1])).toBe(10);
 });
 
 test('a nova from a ship without a core never goes off, and two tabs name its Host a cheater', async ({ context }) => {
