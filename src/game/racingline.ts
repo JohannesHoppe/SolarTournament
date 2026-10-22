@@ -38,17 +38,19 @@ export class RacingLine {
   private readonly arcs: number[] = [];
   private readonly gates: number[] = [];
 
+  /** An open line runs `runOut` (units) beyond its last gate: on through a ring, or not at all for a place to stop at. */
   constructor(
     gates: readonly THREE.Vector3[],
     readonly closed: boolean,
     lead?: THREE.Vector3,
+    runOut = RUN_OUT,
   ) {
     const points = gates.map((gate) => gate.clone());
     const offset = !closed && lead ? 1 : 0;
     if (!closed) {
       if (lead) points.unshift(lead.clone());
       const last = points[points.length - 1];
-      points.push(last.clone().sub(points[points.length - 2]).setLength(RUN_OUT).add(last));
+      if (runOut > 0) points.push(last.clone().sub(points[points.length - 2]).setLength(runOut).add(last));
     }
     this.curve = new THREE.CatmullRomCurve3(points, closed, 'centripetal');
     const segments = closed ? points.length : points.length - 1;

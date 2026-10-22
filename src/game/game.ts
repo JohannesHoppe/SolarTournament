@@ -43,7 +43,7 @@ import { KillCam } from '../view/killcam';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
-import type { RacingLine } from './racingline';
+import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
@@ -105,6 +105,8 @@ const FLAG_HOME_SPEED = 4400;
 const FLAG_SWING = 4000;
 /** Against the President's battleships bots range out this far (units), to its orbit beyond the rocks. */
 const FLEET_HOME = ARENA_LIMIT * 0.95;
+/** The flight school's line to a marker shows from this far off it (units, 100 m), and is laid anew from the pilot when the marker moves this far. */
+const SCHOOL_LINE_MIN = 2000;
 /** Bots keep this far clear of the plume of a battleship hunting with its stern (units, 100 m). */
 const PLUME_MARGIN = 2000;
 /** What each event of Capture the Flag is worth to the ship that did it. */
@@ -677,6 +679,8 @@ export class Game implements OnlineGame {
   /** The running flight school, or null in a tournament round. */
   private school: FlightSchool | null = null;
   private schoolContext: SchoolContext | null = null;
+  /** The flight school's line to its marker (see lineTo). */
+  private schoolLine: { line: RacingLine; to: THREE.Vector3 } | null = null;
   /** Target drone of the flight school. */
   private drone: Ship | null = null;
   /** G-force strain of the own pilot, 0..1. */
@@ -3145,11 +3149,21 @@ export class Game implements OnlineGame {
     }
     this.hud.setSchool(school.status(context.device), context.device === 'keyboard');
     this.hud.setWaypoint(this.camera, waypoint, school.mark);
-    // a ring course has its racing line, as a race does
-    const track = school.track;
-    if (track && this.me!.alive) this.showGuide(this.me!, track.line, track.next, false);
+    // a ring course has its racing line, as a race does; any other marker a line to it
+    const me = this.me!;
+    if (!waypoint) this.schoolLine = null;
+    const track = school.track ?? (waypoint && me.flight.position.distanceTo(waypoint) > SCHOOL_LINE_MIN ? { line: this.lineTo(me, waypoint), next: 0 } : null);
+    if (track && me.alive) this.showGuide(me, track.line, track.next, false);
     else this.guide.hide();
     return waypoint;
+  }
+
+  /** The flight school's line to a marker: from where the pilot was when the marker came up (or last moved by SCHOOL_LINE_MIN), ending at it. */
+  private lineTo(me: Ship, waypoint: THREE.Vector3): RacingLine {
+    if (!this.schoolLine || this.schoolLine.to.distanceTo(waypoint) > SCHOOL_LINE_MIN) {
+      this.schoolLine = { line: new RacingLine([waypoint], false, me.flight.position, 0), to: waypoint.clone() };
+    }
+    return this.schoolLine.line;
   }
 
   /** What the flight school sees of the game; created once, the per-frame values are filled in by teach(). */
