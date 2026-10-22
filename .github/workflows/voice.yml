@@ -36,8 +36,8 @@ jobs:
         language: [de, es, fr]
     env:
       GH_TOKEN: ${{ github.token }}
-      WORK: ${{ runner.temp }}/voice
     steps:
+      - run: echo "WORK=$RUNNER_TEMP/voice" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
