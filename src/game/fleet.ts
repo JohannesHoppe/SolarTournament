@@ -98,8 +98,8 @@ export interface Target {
   readonly flight: { readonly position: THREE.Vector3 };
 }
 
-/** A part was hit (or broken, or the ship went down) where. */
-export type FleetEvent = { kind: 'broken' | 'sunk' | 'phase'; zone: number; position: THREE.Vector3 };
+/** A part broke, or the ship went down, and where. */
+export type FleetEvent = { kind: 'broken' | 'sunk'; zone: number; position: THREE.Vector3 };
 
 const local = new THREE.Vector3();
 const step = new THREE.Vector3();
@@ -318,14 +318,15 @@ export class Fleet implements Obstacle {
 
   /**
    * Hits on a part (one for a laser, TORPEDO_HITS for a torpedo), from here or another browser;
-   * returns the events they set off: the part broken, a new phase, the ship gone down. A hit on
-   * a part already broken or still sealed, or on a battleship that went down, counts nothing.
+   * returns the events they set off: the part broken, the ship gone down. A hit on a part
+   * already broken or still sealed, or on a battleship that went down, counts nothing.
    */
   hit(zone: number, count = 1): FleetEvent[] {
     if (this.down || !this.open(zone)) return [];
-    const phase = this.phase;
     this.hits[zone] = Math.min(this.hits[zone] + count, this.hitsOf(zone));
-    return this.after(zone, phase);
+    if (!this.broken(zone)) return [];
+    const broken: FleetEvent = { kind: 'broken', zone, position: this.zoneAt(zone) };
+    return this.zones[zone].kind === 'reactor' ? [broken, ...this.sink()] : [broken];
   }
 
   /** The parts a torpedo going off at `point` hits (see TORPEDO_HITS). */
@@ -472,14 +473,12 @@ export class Fleet implements Obstacle {
     this.afloat = true;
     const events: FleetEvent[] = [];
     // hits only add up: the lead's count fills in hits not heard here
-    const phase = this.phase;
     state.h.forEach((hits, zone) => {
       if (hits <= this.hits[zone] || zone >= this.hits.length) return;
       const was = this.broken(zone);
       this.hits[zone] = Math.min(hits, this.hitsOf(zone));
       if (!was && this.broken(zone)) events.push({ kind: 'broken', zone, position: this.zoneAt(zone) });
     });
-    if (this.phase !== phase) events.push({ kind: 'phase', zone: -1, position: this.position.clone() });
     this.heard.fromArray(state.p);
     this.heardTurn.fromArray(state.q).normalize();
     this.velocity.fromArray(state.v);
@@ -551,16 +550,6 @@ export class Fleet implements Obstacle {
     this.target = null;
     this.burning = false;
     this.root.updateMatrixWorld();
-  }
-
-  /** What a hit that took a part from standing to `broken` (or not) set off. */
-  private after(zone: number, phase: number): FleetEvent[] {
-    const events: FleetEvent[] = [];
-    if (!this.broken(zone)) return events;
-    events.push({ kind: 'broken', zone, position: this.zoneAt(zone) });
-    if (this.zones[zone].kind === 'reactor') return [...events, ...this.sink()];
-    if (this.phase !== phase) events.push({ kind: 'phase', zone, position: this.position.clone() });
-    return events;
   }
 
   private toLocal(point: THREE.Vector3, target: THREE.Vector3) {

@@ -45,13 +45,13 @@ import { storageGet, storageSet } from '../storage';
 import { buy, LEVELS, nextPrice, parseHangar, payOut, perksOf, sovereignEarned, UPGRADES } from './hangar';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
-import type { FieldState } from '../world/asteroids';
+import type { Asteroid, FieldState } from '../world/asteroids';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
-import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut } from './survival';
+import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut, standing } from './survival';
 import { markedName } from '../view/marks';
 import { Coach, type Tip } from './coach';
 import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
@@ -513,6 +513,9 @@ const plumeAxis = new THREE.Vector3();
 const ghostPosition = new THREE.Vector3();
 const ghostTurn = new THREE.Quaternion();
 
+/** The turn of a ship at `eye` that looks at `target`, `up` as up; a fresh quaternion for a new clone. */
+const lookingAt = (eye: THREE.Vector3, target: THREE.Vector3, up: THREE.Vector3) => new THREE.Quaternion().setFromRotationMatrix(facing.lookAt(eye, target, up));
+
 /** 1st, 2nd, 3rd, 4th … */
 const ordinal = (n: number) =>
   n % 10 === 1 && n % 100 !== 11 ? t('{n}st', { n }) : n % 10 === 2 && n % 100 !== 12 ? t('{n}nd', { n }) : n % 10 === 3 && n % 100 !== 13 ? t('{n}rd', { n }) : t('{n}th', { n });
@@ -688,7 +691,7 @@ export class Game implements OnlineGame {
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
   private readonly inSight = (ship: Ship) => this.field.lineOfSight(this.camera.position, ship.flight.position);
   /** Whether the own ship's sensors see a ship past the asteroids, for the radar. */
-  private readonly sensed = (ship: Ship) => this.field.lineOfSight(((this.watching() ? this.watched() : null) ?? this.me!).flight.position, ship.flight.position);
+  private readonly sensed = (ship: Ship) => this.field.lineOfSight(this.subject().flight.position, ship.flight.position);
   private readonly radar = new Radar($<HTMLCanvasElement>('radar'));
   /** The radar's marks besides ships and rocks, reused from frame to frame. */
   private readonly marks: RadarMark[] = [
@@ -1208,7 +1211,6 @@ export class Game implements OnlineGame {
       this.lobbyOpening = true;
       void Lobby.open(new URLSearchParams(location.search).has('local'))
         .then((lobby) => {
-          this.lobbyOpening = false;
           // the Host may have closed the list while the lobby was opening
           if (!this.lobbyWanted()) {
             lobby.close();
@@ -1320,16 +1322,19 @@ export class Game implements OnlineGame {
       me.root.visible = false;
       me.respawnAt = Infinity;
       this.cockpit = false;
-      // a sponsor break in progress ends without booting a clone; HUD and mouse come back
-      if (this.sponsors.visible) {
-        this.sponsors.hide();
-        if (this.state === 'playing') {
-          this.hud.show(true);
-          this.input.steerWithMouse(true);
-        }
-      }
+      this.endSponsorBreak();
     } else {
       this.respawn(me);
+    }
+  }
+
+  /** A sponsor break in progress ends without booting a clone; HUD and mouse come back. */
+  private endSponsorBreak() {
+    if (!this.sponsors.visible) return;
+    this.sponsors.hide();
+    if (this.state === 'playing') {
+      this.hud.show(true);
+      this.input.steerWithMouse(true);
     }
   }
 
@@ -1337,6 +1342,11 @@ export class Game implements OnlineGame {
   private watched(): Ship | null {
     // a ship that left the tournament is no longer among the ships, though its clone was alive
     return this.watchedShip?.alive && this.ships.includes(this.watchedShip) ? this.watchedShip : null;
+  }
+
+  /** The ship the screen shows: the pilot a watching Host follows, else the own one. */
+  private subject(): Ship {
+    return (this.watching() ? this.watched() : null) ?? this.me!;
   }
 
   /** Tab while watching: the pilot after the one on screen, held for a while. */
@@ -1832,7 +1842,6 @@ export class Game implements OnlineGame {
     this.clearShips();
     // the flight school trains in the belt; a solo round is in an arena of chance; online the
     // room and round decide, so a first round starts in the room's first arena (see arriveInRound)
-    // online the round is unknown until the lead browser tells it (see syncRound)
     this.roundId = mode === 'online' ? -1 : 0;
     // a solo round plays what the Host chose, its arena by chance unless one was chosen
     this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? this.solo.mode : 'deathmatch';
@@ -1877,8 +1886,7 @@ export class Game implements OnlineGame {
     this.setScreen('playing');
     // the link to the clone comes first, then the hint for the mouse (not for touch or gamepad)
     const mouse = !this.input.touchActive && !this.input.gamepadActive;
-    // cues of this round on its own clock: a pause holds them, a new round drops them
-    this.cues.length = 0;
+    // cues of this round run on its own clock: a pause holds them, clearShips drops them
     if (mouse) this.cue(2.2, () => this.hud.flashMessage(this.time, t('The ship turns towards the mouse pointer'), 4));
     // the flight school starts with its briefing; a tournament clone just reports in, and
     // once Nicole is through, the announcer opens the broadcast
@@ -2061,12 +2069,21 @@ export class Game implements OnlineGame {
     // own ship broke it, though the other hit arrived later
     const own = this.lastRockHit.get(id);
     if (own && own.at > at) {
-      const points = ASTEROID_POINTS[destroyed.generation];
-      own.ship.score += points;
-      this.brokenHere.set(id, { at: own.at, ship: own.ship, points, position: destroyed.object.position.clone(), radius: destroyed.radius });
+      own.ship.score += ASTEROID_POINTS[destroyed.generation];
+      this.keepBroken(destroyed, own.at, own.ship);
     }
-    this.effects.explosion(destroyed.object.position, destroyed.meanRadius * 0.6, destroyed.velocity);
-    this.hearDebris(destroyed.object.position, destroyed.meanRadius);
+    this.burstRock(destroyed);
+  }
+
+  /** A rock a ship of this browser broke online, kept for remoteRock and rockAt. */
+  private keepBroken(rock: Asteroid, at: number, ship: Ship) {
+    this.brokenHere.set(rock.id, { at, ship, points: ASTEROID_POINTS[rock.generation], position: rock.object.position.clone(), radius: rock.radius });
+  }
+
+  /** A rock breaks apart, and the own pilot hears its debris. */
+  private burstRock(rock: Asteroid) {
+    this.effects.explosion(rock.object.position, rock.meanRadius * 0.6, rock.velocity);
+    this.hearDebris(rock.object.position, rock.meanRadius);
   }
 
   rejoin() {
@@ -2207,13 +2224,7 @@ export class Game implements OnlineGame {
   private reprintOwn() {
     for (const ship of this.ships) {
       if (ship.owner !== null || ship === this.drone || (this.spectating && ship === this.me)) continue;
-      if (ship === this.me && this.sponsors.visible) {
-        this.sponsors.hide();
-        if (this.state === 'playing') {
-          this.hud.show(true);
-          this.input.steerWithMouse(true);
-        }
-      }
+      if (ship === this.me) this.endSponsorBreak();
       this.respawn(ship);
     }
   }
@@ -2281,8 +2292,7 @@ export class Game implements OnlineGame {
       position.copy(candidate);
     }
     if (best === -Infinity) position.randomDirection().multiplyScalar(Math.min(ARENA_LIMIT * 0.95, (this.field.layout?.radius ?? FIELD_RADIUS) * SPAWN_BEYOND));
-    const look = new THREE.Matrix4().lookAt(position, course ? candidate : scratch.set(0, 0, 0), new THREE.Vector3(0, 1, 0));
-    ship.spawn(position, new THREE.Quaternion().setFromRotationMatrix(look), this.time);
+    ship.spawn(position, lookingAt(position, course ? candidate : scratch.set(0, 0, 0), UP), this.time);
     if (ship === this.me) {
       // the Host's mind locks onto the freshly printed clone: from here on we are the clone
       this.hud.flashMessage(this.time, t('Establishing live link to your clone…'), 2);
@@ -2670,7 +2680,7 @@ export class Game implements OnlineGame {
     this.updateCamera(dt);
     me.root.visible = me.alive && !this.cockpit;
     // a watching Host sees the tournament through the pilot it follows
-    const subject = (this.watching() ? this.watched() : null) ?? me;
+    const subject = this.subject();
     // its gauges too: the own clone is not printed while the Host watches
     this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
     // a solar storm blinds the sensors: no ship shows a marker
@@ -2737,9 +2747,7 @@ export class Game implements OnlineGame {
   private decided() {
     if (this.survival) {
       const ships = this.standings();
-      let standing = 0;
-      for (const ship of ships) if (!isOut(ship)) standing++;
-      return ships.length > 1 && standing <= 1;
+      return ships.length > 1 && standing(ships) <= 1;
     }
     if (this.flags) return this.flags.won;
     if (this.fleet) return this.fleet.sunk(this.field.clock);
@@ -2769,8 +2777,6 @@ export class Game implements OnlineGame {
       }
     }
     const ships = this.standings();
-    let standing = 0;
-    for (const ship of ships) if (!isOut(ship)) standing++;
     if (!this.survivorCalled && this.decided()) {
       this.survivorCalled = true;
       const last = ships.find((ship) => !isOut(ship));
@@ -2785,7 +2791,7 @@ export class Game implements OnlineGame {
         : safe > FLARE_MIN
           ? t('the flare closes in: {meters} m from the center', reach)
           : t('the flare holds: {meters} m from the center', reach);
-    this.hud.setSchool({ step, text: t('{n} of {total} standing · {flare}', { n: standing, total: ships.length, flare }), keys: [] });
+    this.hud.setSchool({ step, text: t('{n} of {total} standing · {flare}', { n: standing(ships), total: ships.length, flare }), keys: [] });
   }
 
   /**
@@ -2832,9 +2838,14 @@ export class Game implements OnlineGame {
       this.hud.flashMessage(now, t('{side} captures · {score}', { side: t(TEAM_NAMES[side]), score: this.flagScore() }), 4);
       if (ship) this.announce(pick(ANNOUNCER_CAPTURE), ship, true);
       this.speaker.say(side === me.team ? COMPUTER.captured : COMPUTER.theyCaptured, 'urgent');
-      this.sound.beep(1320, 0.1, 0.18);
-      this.sound.beep(1760, 0.2, 0.18, 0.12);
+      this.fanfare();
     }
+  }
+
+  /** Two rising beeps for a capture and a finish. */
+  private fanfare() {
+    this.sound.beep(1320, 0.1, 0.18);
+    this.sound.beep(1760, 0.2, 0.18, 0.12);
   }
 
   /**
@@ -3035,7 +3046,7 @@ export class Game implements OnlineGame {
   private sinkBlast(position: THREE.Vector3) {
     const now = this.time;
     this.effects.explosion(position, 12000, scratch.set(0, 0, 0));
-    this.shockwaves.push(this.shockwave(position));
+    this.shockwave(position);
     this.radio.announce(pick(ANNOUNCER_FLEET.sunk), null);
     for (const ship of [...this.ships]) {
       if (ship.owner !== null || ship === this.drone) continue;
@@ -3045,12 +3056,17 @@ export class Game implements OnlineGame {
       if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, null, 'blast');
     }
     this.hud.flashMessage(now, t('Battleship down · the round is yours · +{points}', { points: SINK_POINTS }), DECIDED_SECONDS);
+    this.witnessBlast(position, SINK_BLAST * 3, 0.35);
+  }
+
+  /** A blast the camera sees within `reach` blinds the link for a moment and is heard from far, deeper the bigger it is (`rate`); returns whether it was seen. */
+  private witnessBlast(position: THREE.Vector3, reach: number, rate: number): boolean {
     const seen = this.camera.position.distanceTo(position);
-    if (seen < SINK_BLAST * 3) {
-      this.linkHit(Math.max(0.4, 1 - seen / (SINK_BLAST * 3)), 1);
-      this.kick = 2;
-      this.sound.play('explosion', { volume: 2, rate: 0.35 });
-    }
+    if (seen >= reach) return false;
+    this.linkHit(Math.max(0.4, 1 - seen / reach), 1);
+    this.kick = 2;
+    this.sound.play('explosion', { volume: 2, rate });
+    return true;
   }
 
   /** The part of the battleship a bot attacks: the nearest it can hurt; none while the battleship is away. */
@@ -3156,8 +3172,7 @@ export class Game implements OnlineGame {
       ship.score += PLACE_POINTS[place] ?? 0;
       if (ship === this.me) {
         this.hud.flashMessage(this.time, t('Finished · {place} · +{points}', { place: ordinal(place + 1), points: PLACE_POINTS[place] ?? 0 }), 4);
-        this.sound.beep(1320, 0.1, 0.18);
-        this.sound.beep(1760, 0.2, 0.18, 0.12);
+        this.fanfare();
       }
       return;
     }
@@ -3536,8 +3551,7 @@ export class Game implements OnlineGame {
   private spawnDrone(position: THREE.Vector3, velocity: THREE.Vector3) {
     const me = this.me!;
     this.drone ??= this.addShip('drone', t('Target drone'), me.type === 'human' ? 'alien' : 'human', false);
-    const look = new THREE.Matrix4().lookAt(me.flight.position, position, me.flight.up(new THREE.Vector3()));
-    this.drone.spawn(position, new THREE.Quaternion().setFromRotationMatrix(look), this.time);
+    this.drone.spawn(position, lookingAt(me.flight.position, position, me.flight.up(upward)), this.time);
     this.drone.flight.velocity.copy(velocity);
     this.drone.protectedUntil = this.time;
   }
@@ -3551,8 +3565,7 @@ export class Game implements OnlineGame {
     bot.armed = armed;
     this.bots.push(bot);
     this.sparring = { bot, armed };
-    const look = new THREE.Matrix4().lookAt(position, me.flight.position, me.flight.up(new THREE.Vector3()));
-    ship.spawn(position, new THREE.Quaternion().setFromRotationMatrix(look), this.time);
+    ship.spawn(position, lookingAt(position, me.flight.position, me.flight.up(upward)), this.time);
     ship.protectedUntil = this.time;
   }
 
@@ -4037,7 +4050,7 @@ export class Game implements OnlineGame {
   novaBlast(holder: Ship, position: THREE.Vector3) {
     const now = this.time;
     this.effects.explosion(position, holder.radius * 12, holder.flight.velocity);
-    this.shockwaves.push(this.shockwave(position));
+    this.shockwave(position);
     for (const ship of [...this.ships]) {
       if (ship === holder || ship.owner !== null || !ship.alive || ship.allyOf(holder) || ship.flight.position.distanceTo(position) > NOVA_RADIUS) continue;
       ship.protectedUntil = Math.min(ship.protectedUntil, now);
@@ -4055,11 +4068,7 @@ export class Game implements OnlineGame {
     for (const torpedo of [...this.torpedoes.list]) if (torpedo.position.distanceTo(position) < NOVA_RADIUS) this.blowUp(torpedo);
     for (const wreck of [...this.wrecks.list]) if (wreck.mesh.position.distanceTo(position) < NOVA_RADIUS) this.shatterWreck(wreck);
     // whoever sees it is blinded for a moment, and hears its debris from far
-    const seen = this.camera.position.distanceTo(position);
-    if (seen < NOVA_RADIUS * 3) {
-      this.linkHit(Math.max(0.4, 1 - seen / (NOVA_RADIUS * 3)), 1);
-      this.kick = 2;
-      this.sound.play('explosion', { volume: 2, rate: 0.4 });
+    if (this.witnessBlast(position, NOVA_RADIUS * 3, 0.4)) {
       // the class goes once the flash has faded, or showing the HUD again would replay it
       document.body.classList.remove('nova-flash');
       void document.body.offsetWidth;
@@ -4120,9 +4129,8 @@ export class Game implements OnlineGame {
   private shockwave(position: THREE.Vector3) {
     const mesh = new THREE.Mesh(this.shockwaveGeometry, new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.85, 0.6).multiplyScalar(2), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
     mesh.position.copy(position);
-    mesh.scale.setScalar(1);
     this.scene.add(mesh);
-    return { mesh, born: this.time };
+    this.shockwaves.push({ mesh, born: this.time });
   }
 
   private updateShockwaves() {
@@ -4477,16 +4485,16 @@ export class Game implements OnlineGame {
       if (this.online && !destroyed) this.lastRockHit.set(asteroid.id, { at: this.field.clock, ship: shooter });
       this.online?.sendRock(asteroid.id, this.field.clock, this.roundId >= 0 ? this.roundId : (this.rejoinedFrom ?? 0), shooter);
       if (destroyed) {
-        shooter.score += ASTEROID_POINTS[destroyed.generation];
+        const points = ASTEROID_POINTS[destroyed.generation];
+        shooter.score += points;
         // online, another Host may have broken the same rock a moment earlier (see remoteRock)
-        if (this.online) this.brokenHere.set(asteroid.id, { at: this.field.clock, ship: shooter, points: ASTEROID_POINTS[destroyed.generation], position: destroyed.object.position.clone(), radius: destroyed.radius });
-        this.effects.explosion(destroyed.object.position, destroyed.meanRadius * 0.6, destroyed.velocity);
-        this.hearDebris(destroyed.object.position, destroyed.meanRadius);
+        if (this.online) this.keepBroken(destroyed, this.field.clock, shooter);
+        this.burstRock(destroyed);
         if (shooter.isLocal) {
           this.hud.hit();
-          this.hud.popup(this.camera, destroyed.object.position, `+${ASTEROID_POINTS[destroyed.generation]}`, 'points');
+          this.hud.popup(this.camera, destroyed.object.position, `+${points}`, 'points');
           this.kick = Math.min(2, this.kick + 0.6);
-          this.hud.flashMessage(this.time, t('Asteroid cracked +{points}', { points: ASTEROID_POINTS[destroyed.generation] }), 1.5);
+          this.hud.flashMessage(this.time, t('Asteroid cracked +{points}', { points }), 1.5);
           this.speaker.say(COMPUTER.asteroid);
         }
       }
@@ -4506,29 +4514,29 @@ export class Game implements OnlineGame {
   applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number, cause: DeathCause = null) {
     if (shooter && ship.allyOf(shooter)) return;
     // plating (an item) takes a hit into the drive
+    // where the beam meets the ship
+    const along = distance ?? scratch.subVectors(ship.flight.position, origin).dot(direction);
     if (ship.plating > 0 && ship.tailToward(direction) && ship.alive && this.time >= ship.protectedUntil) {
       ship.plating--;
-      const along = distance ?? scratch.subVectors(ship.flight.position, origin).dot(direction);
       this.effects.sparks(scratch.copy(origin).addScaledVector(direction, along), PLATING_COLOR, 80);
       if (ship.isLocal) this.hud.flashMessage(this.time, ship.plating ? t('Plating holds') : t('Plating gone'), 1.2);
       return;
     }
     const { status, zone } = ship.laserHit(origin, direction, this.time);
     if (status === 'protected') return;
+    // a hit into the drive hurts; the armor only scorches
+    const serious = zone === 'drive' || zone === 'reactor';
     // a bot hit in the drive turns to the shooter, from however far it fired
-    if (shooter && (zone === 'drive' || zone === 'reactor')) this.bots.find((bot) => bot.ship === ship)?.struck(shooter, this.time);
-    const along = distance ?? scratch.subVectors(ship.flight.position, origin).dot(direction);
+    if (shooter && serious) this.bots.find((bot) => bot.ship === ship)?.struck(shooter, this.time);
     this.effects.sparks(scratch.copy(origin).addScaledVector(direction, along), shooter?.color ?? SCRAPE_COLOR, 60);
     if (shooter?.isLocal) {
       this.hud.hit();
       // the drive rings out, the armor only clinks
-      const hurt = zone === 'drive' || zone === 'reactor';
-      this.sound.beep(zone === 'reactor' ? 1760 : hurt ? 1320 : 660, hurt ? 0.08 : 0.04);
-      this.landed(scratch, t(HIT_WORDS[zone]), hurt);
+      this.sound.beep(zone === 'reactor' ? 1760 : serious ? 1320 : 660, serious ? 0.08 : 0.04);
+      this.landed(scratch, t(HIT_WORDS[zone]), serious);
     }
     if (ship.isLocal) {
-      // a hit into the drive hurts and is told at once; the armor's scorch marks are chatter
-      const serious = zone === 'drive' || zone === 'reactor';
+      // a hit into the drive is told at once; the armor's scorch marks are chatter
       this.hud.damaged();
       this.hud.flashMessage(this.time, t(ZONE_MESSAGES[zone]), 1.5);
       this.speaker.say(COMPUTER[zone], serious ? 'urgent' : 'chatter');
@@ -4845,7 +4853,7 @@ export class Game implements OnlineGame {
 
   private updateCamera(dt: number) {
     // the chase camera follows the own ship, or the pilot a watching Host follows
-    const me = (this.watching() ? this.watched() : null) ?? this.me!;
+    const me = this.subject();
     const flight = me.flight;
     if (this.cockpit) {
       this.camera.position.copy(flight.position).addScaledVector(flight.forward(scratch), me.radius * 0.3);

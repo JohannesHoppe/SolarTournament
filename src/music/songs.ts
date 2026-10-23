@@ -256,10 +256,8 @@ const capitalize = (word: string) => word.charAt(0).toUpperCase() + word.slice(1
 
 /** The title of a track, picked by any seed (e.g. room code and round number). */
 export function titleFor(seed: number): string {
-  if (unit(seed, Ch.Title, 0) < MOTORIK_CHANCE) {
-    return `${capitalize(choose(TITLE_FIRST_DE, seed, Ch.Title, 1))} ${capitalize(choose(TITLE_SECOND_DE, seed, Ch.Title, 2))}`;
-  }
-  return `${capitalize(choose(TITLE_FIRST, seed, Ch.Title, 1))} ${capitalize(choose(TITLE_SECOND, seed, Ch.Title, 2))}`;
+  const [first, second] = unit(seed, Ch.Title, 0) < MOTORIK_CHANCE ? [TITLE_FIRST_DE, TITLE_SECOND_DE] : [TITLE_FIRST, TITLE_SECOND];
+  return `${capitalize(choose(first, seed, Ch.Title, 1))} ${capitalize(choose(second, seed, Ch.Title, 2))}`;
 }
 
 /** German titles are made of German words only; the word lists share no word. */
@@ -587,7 +585,7 @@ const CROWDS: [Layer[], number][] = [
 const MUTABLE: Layer[] = ['hat', 'clap', 'openHat', 'bass', 'perc', 'lead', 'acid', 'ride'];
 
 /** Everything about a bar that does not depend on the step. Memoized per song. */
-export function barInfo(song: Song, absoluteBar: number): BarInfo {
+function barInfo(song: Song, absoluteBar: number): BarInfo {
   const cached = song.cache.get(absoluteBar);
   if (cached) return cached;
   // the lounge cycles; a round past its outro stays in the outro
@@ -689,7 +687,7 @@ function fillAt(song: Song, section: Section, inSection: number): Fill | null {
   if (lastOfSection && section.kind === 'break') {
     const index = song.form.filter((s) => s.kind === 'break' && s.start < section.start).length;
     const type = BREAK_ENDINGS[(hash(seed, Ch.Fill, 0) + index) % BREAK_ENDINGS.length];
-    return { type, from: type === 'kickRoll' ? 0 : type === 'rugPull' ? 0 : 12, variant };
+    return { type, from: type === 'kickRoll' || type === 'rugPull' ? 0 : 12, variant };
   }
   // a peak that runs into a breakdown may die with a tape stop
   if (lastOfSection && next?.kind === 'break' && unit(seed, Ch.Fill, key, 3) < 0.35) return { type: 'tapeStop', from: 8, variant };
@@ -850,7 +848,7 @@ export function stepEvents(song: Song, absoluteStep: number): StepEvents {
     }
   }
 
-  if (inFill) applyFill(song, events, fill, step, root);
+  if (inFill) applyFill(events, fill, step, root);
   // one key for every instrument: whatever the chord shape, the motif or the acid line asks
   // for, the note lands on the track's minor scale, so the parts never rub against each other
   for (const hit of [events.perc, events.bass, events.acid, events.lead]) if (hit) hit.note = inKey(hit.note, root);
@@ -933,7 +931,7 @@ function acidAt(song: Song, info: BarInfo, absoluteStep: number, root: number): 
   return { note, velocity: 1, length: 1, accent: unit(song.seed, Ch.Acid, v, i, 4) < 0.3, slide };
 }
 
-function applyFill(song: Song, events: StepEvents, fill: Fill, step: number, root: number) {
+function applyFill(events: StepEvents, fill: Fill, step: number, root: number) {
   switch (fill.type) {
     case 'kickEdit':
       // add or remove kicks at the end of the phrase to mark the change
@@ -969,5 +967,4 @@ function applyFill(song: Song, events: StepEvents, fill: Fill, step: number, roo
       events.perc = events.metal = null;
       break;
   }
-  void song;
 }

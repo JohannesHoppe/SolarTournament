@@ -125,22 +125,23 @@ export class Sound {
   }
 
   private createWhiteNoise(): AudioBuffer {
-    const buffer = this.context.createBuffer(1, this.context.sampleRate * 2, this.context.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    return buffer;
+    return this.noise(() => Math.random() * 2 - 1);
   }
 
+  /** Brown noise: integrated white noise, deep and rumbling. */
   private noiseBuffer(): AudioBuffer {
-    const length = this.context.sampleRate * 2;
-    const buffer = this.context.createBuffer(1, length, this.context.sampleRate);
-    const data = buffer.getChannelData(0);
-    // brown noise: integrated white noise, deep and rumbling
     let last = 0;
-    for (let i = 0; i < length; i++) {
+    return this.noise(() => {
       last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
-      data[i] = last * 3.5;
-    }
+      return last * 3.5;
+    });
+  }
+
+  /** Two seconds of noise, each sample from `next`. */
+  private noise(next: () => number): AudioBuffer {
+    const buffer = this.context.createBuffer(1, this.context.sampleRate * 2, this.context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = next();
     return buffer;
   }
 }

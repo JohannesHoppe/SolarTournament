@@ -32,3 +32,10 @@ export const clonesLeft = (ship: { deaths: number }) => Math.max(0, CLONES - shi
 
 /** Whether a ship has lost its last clone. */
 export const isOut = (ship: { deaths: number }) => ship.deaths >= CLONES;
+
+/** How many of the ships still have a clone left (counted by hand: it runs every frame). */
+export function standing(ships: readonly { deaths: number }[]): number {
+  let count = 0;
+  for (const ship of ships) if (!isOut(ship)) count++;
+  return count;
+}

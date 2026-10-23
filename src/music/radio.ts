@@ -2,6 +2,7 @@ import { Band, type Spoken } from './band';
 import { barSeconds, createSong, STEPS_PER_BAR, type Energy, type Song } from './songs';
 import { loadVoice } from './voice';
 import { t } from '../i18n/i18n';
+import { storageGet, storageSet } from '../storage';
 
 /** What the radio should play: a track (by its title) and how far into it the music is. */
 export interface MusicCue {
@@ -27,14 +28,10 @@ const PUSH_LOWS = 5;
 const PUSH_HIGHS = 4;
 const PUSH_SECONDS = 2;
 
+/** The volume kept in this browser; full volume without one. */
 function storedVolume() {
-  try {
-    const volume = Number(localStorage.getItem(VOLUME_KEY) ?? 1);
-    return Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1;
-  } catch {
-    // storage unavailable: full volume
-    return 1;
-  }
+  const volume = Number(storageGet(VOLUME_KEY) ?? 1);
+  return Number.isFinite(volume) ? Math.min(1, Math.max(0, volume)) : 1;
 }
 
 /** The Host's volume, 0..1: every radio on the page plays at it. */
@@ -45,11 +42,7 @@ export function bindVolume(slider: HTMLInputElement) {
   slider.value = String(Math.round(hostVolume * 100));
   slider.addEventListener('input', () => {
     hostVolume = Number(slider.value) / 100;
-    try {
-      localStorage.setItem(VOLUME_KEY, String(hostVolume));
-    } catch {
-      // not remembered
-    }
+    storageSet(VOLUME_KEY, String(hostVolume));
   });
 }
 /** A failed load of Tone.js or the voice is tried again after this long (s). */
@@ -115,11 +108,8 @@ export class Radio {
     this.highs.type = 'highshelf';
     this.highs.frequency.value = 6000;
     this.muffler.connect(this.lows).connect(this.highs).connect(this.output).connect(destination);
-    try {
-      if (remember) this.enabledFlag = localStorage.getItem(ENABLED_KEY) !== 'off';
-    } catch {
-      // storage unavailable: the radio starts switched on
-    }
+    // without a kept choice the radio starts switched on
+    if (remember) this.enabledFlag = storageGet(ENABLED_KEY) !== 'off';
     setInterval(() => this.tick(), TICK_MS);
   }
 
@@ -141,16 +131,11 @@ export class Radio {
     return this.enabledFlag;
   }
 
-  /** Switches the radio on or off; returns the new state. */
-  toggle(): boolean {
+  /** Switches the radio on or off. */
+  toggle() {
     this.enabledFlag = !this.enabledFlag;
-    try {
-      if (this.remember) localStorage.setItem(ENABLED_KEY, this.enabledFlag ? 'on' : 'off');
-    } catch {
-      // not remembered
-    }
+    if (this.remember) storageSet(ENABLED_KEY, this.enabledFlag ? 'on' : 'off');
     if (this.enabledFlag) this.songKey = '';
-    return this.enabledFlag;
   }
 
   /** The output level the radio should have now: the Host's volume while it is on. */

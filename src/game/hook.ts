@@ -56,7 +56,7 @@ const chosen = new THREE.Vector3();
 const relative = new THREE.Vector3();
 
 /** Where an anchor is now (world), or null when what it held is gone. */
-export function anchorPoint(anchor: Anchor, out: THREE.Vector3): THREE.Vector3 | null {
+function anchorPoint(anchor: Anchor, out: THREE.Vector3): THREE.Vector3 | null {
   if (anchor.ship) return anchor.ship.alive ? out.copy(anchor.ship.flight.position) : null;
   const object = anchor.rock.object;
   if (!object.parent) return null;
