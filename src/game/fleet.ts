@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
-import { FIELD_RADIUS, raySphere, type Obstacle } from '../world/asteroids';
+import { FIELD_RADIUS, raySphere, type AsteroidField, type Obstacle } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
 import { armorSurface, boxUv, lacquer, shine, surfaced } from '../view/surfaces';
@@ -38,6 +38,12 @@ import { msg, t } from '../i18n/i18n';
  */
 export type ZoneKind = 'battery' | 'drive' | 'reactor';
 export const ZONE_NAMES: Record<ZoneKind, string> = { battery: msg('Battery'), drive: msg('Drive'), reactor: msg('Reactor') };
+/**
+ * How far a ship attacking a part turns its way there towards the side the part faces (see
+ * siegeFrom): straight in from that side, at 27° from it coming from abeam, and from the other
+ * side round to that side.
+ */
+const SIEGE_FACE = 2;
 /** Hits a part takes. */
 export const ZONE_HITS: Record<ZoneKind, number> = { battery: 30, drive: 45, reactor: 90 };
 /** A torpedo counts this many hits on every part it goes off within TORPEDO_REACH of (units, 20 m beyond the part): a third of a battery. */
@@ -138,7 +144,8 @@ const SEAL_Z = -1000;
 const PROCESSION = 0.6;
 const BATTERIES = BATTERY_MOUNTS.length;
 
-type Zone = { kind: ZoneKind; at: THREE.Vector3; radius: number; mesh: THREE.Object3D };
+/** A part: its kind, where it sits and how big it is (in the battleship's frame), the way it faces (from that side it shows itself) and its mesh. */
+type Zone = { kind: ZoneKind; at: THREE.Vector3; radius: number; face: THREE.Vector3; mesh: THREE.Object3D };
 type Box = { center: THREE.Vector3; half: THREE.Vector3 };
 
 /** What the lead browser sends: whether the battleship went down, the hits on each part, where it is, its motion and turn, whom its stern hunts and whether its drives burn. */
@@ -161,6 +168,9 @@ const toTarget = new THREE.Vector3();
 const want = new THREE.Vector3();
 const dodge = new THREE.Vector3();
 const look = new THREE.Matrix4();
+const sighted = new THREE.Vector3();
+const sightLine = new THREE.Vector3();
+const facing = new THREE.Vector3();
 const turn = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -322,6 +332,10 @@ class Beacon implements Homing {
 
   get alive() {
     return this.fleet.targetable(this.zone);
+  }
+
+  inSight(from: THREE.Vector3, field: AsteroidField) {
+    return this.fleet.inSight(this.zone, from, field);
   }
 }
 
@@ -639,19 +653,22 @@ export class Fleet implements Obstacle {
       if (at[1] < 0) turret.rotation.z = Math.PI;
       turret.add(new THREE.Mesh(housing, armor), new THREE.Mesh(collar, gold), new THREE.Mesh(barrels, gunmetal));
       this.root.add(turret);
-      this.zones.push({ kind: 'battery', at: new THREE.Vector3(...at), radius: 300, mesh: turret });
+      // on deck it shows itself above the deck and over its edge, under the keel below it
+      const face = at[1] < 0 ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(Math.sign(at[0]) * 0.5, 1, 0).normalize();
+      this.zones.push({ kind: 'battery', at: new THREE.Vector3(...at), radius: 300, face, mesh: turret });
     }
     const nozzle = this.geometry(new THREE.CylinderGeometry(420, 520, 600, 16).rotateX(Math.PI / 2));
     for (const side of [-1, 1]) {
       const drive = new THREE.Mesh(nozzle, this.driveGlow);
       drive.position.set(side * 700, 0, 7400);
       this.root.add(drive);
-      this.zones.push({ kind: 'drive', at: drive.position.clone(), radius: 480, mesh: drive });
+      // astern and out to its side, clear of the plume
+      this.zones.push({ kind: 'drive', at: drive.position.clone(), radius: 480, face: new THREE.Vector3(side * 0.6, 0, 1).normalize(), mesh: drive });
     }
     const reactor = new THREE.Mesh(this.geometry(new THREE.IcosahedronGeometry(420, 1)), this.reactorGlow);
     reactor.position.set(0, DECK_TOP, -1200);
     this.root.add(reactor);
-    this.zones.push({ kind: 'reactor', at: reactor.position.clone(), radius: 450, mesh: reactor });
+    this.zones.push({ kind: 'reactor', at: reactor.position.clone(), radius: 450, face: new THREE.Vector3(0, 1, 0), mesh: reactor });
     solid([0, DECK_TOP + 250, -1200], [1300, 500, 1300]);
     // the plume behind the drives, while they burn
     this.flame = new THREE.Mesh(this.geometry(new THREE.ConeGeometry(PLUME_REACH * PLUME_SPREAD, PLUME_REACH, 24, 1, true).rotateX(-Math.PI / 2).translate(0, 0, 7700 + PLUME_REACH / 2)), flame);
@@ -757,6 +774,33 @@ export class Fleet implements Obstacle {
     if (!this.broken(zone)) return [];
     const broken: FleetEvent = { kind: 'broken', zone, position: this.zoneAt(zone) };
     return this.zones[zone].kind === 'reactor' ? [broken, ...this.sink()] : [broken];
+  }
+
+  /**
+   * A part is in sight of a point: the line from there to the part meets that part before any
+   * armor, and no rock or massive body lies between. A battery's turret shows over the deck's
+   * edge though its center sits on its mount, the reactor only from above the deck.
+   */
+  inSight(zone: number, from: THREE.Vector3, field: AsteroidField): boolean {
+    const at = this.zoneAt(zone, sighted);
+    const distance = at.distanceTo(from);
+    if (distance < 1) return true;
+    sightLine.subVectors(at, from).divideScalar(distance);
+    const hit = this.raycast(from, sightLine, distance, this.clock);
+    return hit !== null && hit.zone === zone && field.raycast(from, sightLine, hit.distance) === null;
+  }
+
+  /**
+   * Where a ship attacking a part holds, `distance` from it (into `target`): on the side the
+   * part faces, where it shows itself. The way from the part to the ship (`from`) is turned
+   * towards that side (SIEGE_FACE), so ships coming from everywhere spread over it, and none
+   * holds beneath the hull firing into its armor.
+   */
+  siegeFrom(zone: number, from: THREE.Vector3, distance: number, target: THREE.Vector3): THREE.Vector3 {
+    const at = this.zoneAt(zone, sighted);
+    const face = facing.copy(this.zones[zone].face).applyQuaternion(this.quaternion);
+    target.subVectors(from, at).normalize().addScaledVector(face, SIEGE_FACE).normalize();
+    return target.multiplyScalar(distance).add(at);
   }
 
   /** The parts a torpedo going off at `point` hits (see TORPEDO_HITS). */

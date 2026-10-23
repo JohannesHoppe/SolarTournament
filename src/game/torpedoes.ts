@@ -63,7 +63,12 @@ export interface Homing {
   readonly alive: boolean;
   readonly radius: number;
   readonly flight: { readonly position: THREE.Vector3; readonly velocity: THREE.Vector3 };
+  /** Whether it is in sight of a point, where that is more than a clear line to its center (a part of the battleship, see Fleet.inSight). */
+  inSight?(from: THREE.Vector3, field: AsteroidField): boolean;
 }
+
+/** Whether a seeker at `from` sees what it homes on. */
+export const seesTarget = (target: Homing, from: THREE.Vector3, field: AsteroidField) => (target.inSight ? target.inSight(from, field) : field.lineOfSight(from, target.flight.position));
 
 export interface Torpedo {
   /** "<shooter id>.<shot>": the same torpedo on every browser. */
@@ -229,7 +234,7 @@ export class Torpedoes {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const torpedo = this.list[i];
       // its seeker needs a clear line: a ship that slips behind a rock loses it for good
-      if (torpedo.target && (!torpedo.target.alive || !field.lineOfSight(torpedo.position, torpedo.target.flight.position))) torpedo.target = null;
+      if (torpedo.target && (!torpedo.target.alive || !seesTarget(torpedo.target, torpedo.position, field))) torpedo.target = null;
       const target = torpedo.target;
       previous.copy(torpedo.position);
       // the motor pushes while it burns (on a rope too, against whatever pulls it, see game/hook); burnt out it only drifts

@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ARRIVAL, BATTERY_PERIOD, Fleet, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
+import { SIEGE_DISTANCE } from '../ship/bots';
+import { testField } from '../test/field';
 
 /** A battleship in the arena, its bow along -z at the center, unturned. */
 function battleship() {
@@ -94,6 +96,38 @@ describe("the President's fleet", () => {
     fleet.hit(battery, fleet.hitsOf(battery));
     expect(fleet.hits[battery]).toBe(fleet.hitsOf(battery));
     expect(fleet.beacons[battery].alive).toBe(false);
+  });
+
+  it('shows each part on the side it faces, where a ship attacking it holds, from wherever it comes', () => {
+    const fleet = battleship();
+    const field = testField();
+    const reactor = zonesOf(fleet, 'reactor')[0];
+    const keel = new THREE.Vector3(0, -30000, 0);
+    // under the keel the reactor on deck is hidden by the hull, and so is a battery on deck
+    breakAll(fleet, zonesOf(fleet, 'battery').filter((zone) => fleet.zones[zone].at.y < 0));
+    const deck = zonesOf(fleet, 'battery').find((zone) => fleet.zones[zone].at.y > 0)!;
+    expect(fleet.inSight(deck, keel, field)).toBe(false);
+    const hold = new THREE.Vector3();
+    for (const from of [keel, new THREE.Vector3(30000, 0, 0), new THREE.Vector3(0, 30000, 0), new THREE.Vector3(0, 0, 30000), new THREE.Vector3(0, 0, -30000)]) {
+      fleet.siegeFrom(deck, from, SIEGE_DISTANCE, hold);
+      expect(hold.distanceTo(fleet.zoneAt(deck))).toBeCloseTo(SIEGE_DISTANCE, 0);
+      expect(fleet.inSight(deck, hold, field)).toBe(true);
+    }
+    breakAll(fleet, zonesOf(fleet, 'battery'));
+    expect(fleet.inSight(reactor, keel, field)).toBe(false);
+    for (const zone of [reactor, ...zonesOf(fleet, 'drive')]) {
+      for (const from of [keel, new THREE.Vector3(-30000, 0, 0), new THREE.Vector3(0, 0, -30000)]) {
+        fleet.siegeFrom(zone, from, SIEGE_DISTANCE, hold);
+        expect(fleet.inSight(zone, hold, field)).toBe(true);
+      }
+    }
+    // the keel's batteries show themselves below it
+    const fresh = battleship();
+    for (const zone of zonesOf(fresh, 'battery').filter((zone) => fresh.zones[zone].at.y < 0)) {
+      fresh.siegeFrom(zone, new THREE.Vector3(0, 30000, 0), SIEGE_DISTANCE, hold);
+      expect(hold.y).toBeLessThan(fresh.zones[zone].at.y);
+      expect(fresh.inSight(zone, hold, field)).toBe(true);
+    }
   });
 
   it('pushes a ship out of its hull', () => {

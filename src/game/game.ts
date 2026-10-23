@@ -8,7 +8,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { Bot, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, raceSpeedOf, skillsOf, startTiming, type Ring, type Skills } from '../ship/bots';
+import { Bot, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, raceSpeedOf, SIEGE_DISTANCE, skillsOf, startTiming, type Ring, type Skills } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { Datamosh } from '../view/datamosh';
@@ -50,7 +50,7 @@ import { KillCam } from '../view/killcam';
 import { Showcase } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { buy, emptyHangar, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, sovereignEarned, UPGRADES, WALLET } from './hangar';
-import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LAUNCH, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
+import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { Asteroid, FieldState } from '../world/asteroids';
 import { RacingLine } from './racingline';
@@ -708,8 +708,10 @@ export class Game implements OnlineGame {
   private roundStartedAt = 0;
   /** Online: when this browser arrived in the running round (game time; see DECIDE_GRACE). */
   private roundArrivedAt = -Infinity;
-  /** The same moment on the real-time clock (see setRoundEnd). */
+  /** The same moment on the round's real-time clock (see setRoundEnd, roundClock). */
   private roundEndsAtWall = 0;
+  /** How far a solo round's clock runs ahead of real time (s): the game time a time-lapse added, or a freeze held back (see roundClock). */
+  private lapse = 0;
   /** Online tournament this browser takes part in, or null offline. */
   private online: Online | null = null;
   /** A tournament connection is being set up; every new start or leave counts up the attempt. */
@@ -1860,7 +1862,7 @@ export class Game implements OnlineGame {
       // a browser that started over plays on the round it was in until it hears the round again
       const round = this.roundId < 0 ? (this.rejoinedFrom ?? 0) : this.roundId;
       const seed = this.online ? mixSeed(textSeed(this.online.session.room), round) : this.soloSeed;
-      return { title: titleFor(seed), energy: 'round', elapsed: ROUND_SECONDS - (this.roundEndsAtWall - wallClock()), roundLength: ROUND_SECONDS };
+      return { title: titleFor(seed), energy: 'round', elapsed: ROUND_SECONDS - (this.roundEndsAtWall - this.roundClock()), roundLength: ROUND_SECONDS };
     }
     return { title: titleFor(LOUNGE_SEED), energy: 'lounge', elapsed: wallClock() - this.loungeEpoch, roundLength: ROUND_SECONDS };
   }
@@ -2473,15 +2475,15 @@ export class Game implements OnlineGame {
     } else if (round.id > this.roundId) {
       // a new round only once the running one is over; a lead that counts rounds up before
       // has nothing to say about this one
-      if (wallClock() < this.roundEndsAtWall - ROUND_END_SLACK) return;
+      if (this.roundClock() < this.roundEndsAtWall - ROUND_END_SLACK) return;
       this.roundId = round.id;
       this.startNextRound();
     } else if (round.id < this.roundId) return;
     // the radio plays on this clock, so it follows the lead browser closely: jumps when far
     // off, otherwise smooths out the jitter of the network
-    const endsAt = wallClock() + round.left;
+    const endsAt = this.roundClock() + round.left;
     if (Math.abs(endsAt - this.roundEndsAtWall) > ROUND_SNAP || !Number.isFinite(this.roundEndsAtWall)) this.setRoundEnd(round.left);
-    else this.setRoundEnd(this.roundEndsAtWall + (endsAt - this.roundEndsAtWall) * 0.05 - wallClock());
+    else this.setRoundEnd(this.roundEndsAtWall + (endsAt - this.roundEndsAtWall) * 0.05 - this.roundClock());
     // the asteroids follow the lead browser's field time the same way
     const drift = round.field - this.field.clock;
     this.field.setClock(Math.abs(drift) > FIELD_SNAP ? round.field : this.field.clock + drift * 0.1);
@@ -2501,13 +2503,13 @@ export class Game implements OnlineGame {
     this.rejoinedFrom = null;
     if (!Number.isFinite(this.roundEndsAtWall)) this.setRoundEnd(ROUND_SECONDS);
     // the lead browser starts the next round once the scoreboard has been shown
-    if (wallClock() >= this.roundEndsAtWall + RESULTS_SECONDS) {
+    if (this.roundClock() >= this.roundEndsAtWall + RESULTS_SECONDS) {
       this.roundId++;
       this.startNextRound();
       this.setRoundEnd(ROUND_SECONDS);
     }
-    if (this.decided() && this.roundEndsAtWall - wallClock() > DECIDED_SECONDS) this.setRoundEnd(DECIDED_SECONDS);
-    const left = this.roundEndsAtWall - wallClock();
+    if (this.decided() && this.roundEndsAtWall - this.roundClock() > DECIDED_SECONDS) this.setRoundEnd(DECIDED_SECONDS);
+    const left = this.roundEndsAtWall - this.roundClock();
     this.roundEndsAt = this.time + left;
     this.followStart();
     const round: RoundState = { id: this.roundId, left: +left.toFixed(3), field: +this.field.clock.toFixed(3), ...(this.room ? { m: this.room.mode } : {}) };
@@ -2522,8 +2524,18 @@ export class Game implements OnlineGame {
    */
   private setRoundEnd(left: number) {
     this.roundEndsAt = this.time + left;
-    this.roundEndsAtWall = wallClock() + left;
+    this.roundEndsAtWall = this.roundClock() + left;
     this.followStart();
+  }
+
+  /**
+   * The clock a round runs on: real time, so a slow frame rate does not stretch it. A solo
+   * round whose game time runs at another speed (the time-lapse of the balance runs, a freeze
+   * for a screenshot: see timeScale) runs with the game's time instead, its opening and its
+   * probes included, so a time-lapse plays the round as it is played.
+   */
+  private roundClock() {
+    return wallClock() + this.lapse;
   }
 
   /**
@@ -2977,7 +2989,9 @@ export class Game implements OnlineGame {
   private draw(): boolean {
     this.input.poll();
     this.holdUpright();
-    const dt = Math.min(this.timer.getDelta(), 0.05) * this.timeScale;
+    const real = this.timer.getDelta();
+    const dt = Math.min(real, 0.05) * this.timeScale;
+    if (this.timeScale !== 1 && !this.online) this.lapse += dt - real;
     // a long frame (a slow device, a time-lapse) runs as several steps of at most MAX_STEP, so
     // shots, collisions and bots play the same game at any frame rate
     const steps = Math.max(1, Math.ceil(dt / MAX_STEP - 1e-9));
@@ -3081,7 +3095,7 @@ export class Game implements OnlineGame {
     // solo rounds run on real time too, like the radio, so a slow frame rate does not stretch
     // them and the finale of the music meets the end of the round
     if (!this.online && Number.isFinite(this.roundEndsAtWall)) {
-      this.roundEndsAt = now + (this.roundEndsAtWall - wallClock());
+      this.roundEndsAt = now + (this.roundEndsAtWall - this.roundClock());
       this.followStart();
     }
 
@@ -3600,6 +3614,7 @@ export class Game implements OnlineGame {
     if (this.roundOver) return;
     this.online?.sendFleetHit(zone, this.roundId, shooter, count);
     shooter.score += FLEET_HIT_POINTS * count;
+    devlog?.add({ kind: 'fleet', t: this.time, event: 'hit', ship: shooter.name, part: fleet.zones[zone].kind, zone, weapon: count > 1 ? 'torpedo' : 'laser', count });
     if (shooter.isLocal) {
       this.hud.hit();
       this.sound.beep(1320, 0.06);
@@ -3630,6 +3645,7 @@ export class Game implements OnlineGame {
     for (const event of events) {
       if (event.kind === 'broken') {
         const kind = fleet.zones[event.zone].kind;
+        devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'broken', ship: shooter?.name ?? null, part: kind, zone: event.zone, weapon: null, count: 0 });
         this.effects.explosion(event.position, 1500, fleet.velocity);
         this.hearDebris(event.position, 1500);
         if (shooter?.owner === null) shooter.score += ZONE_POINTS[kind];
@@ -3638,6 +3654,7 @@ export class Game implements OnlineGame {
       } else if (event.kind === 'sunk') {
         // the reactor goes critical; SINK_SECONDS later the battleship goes up
         const position = event.position.clone();
+        devlog?.add({ kind: 'fleet', t: Math.round(this.time), event: 'sunk', ship: shooter?.name ?? null, part: 'reactor', zone: -1, weapon: null, count: 0 });
         this.speaker.say(COMPUTER.reactorCritical, 'urgent');
         this.hud.flashMessage(this.time, t('Reactor critical · get clear · {distance}', { distance: meters(SINK_BLAST) }), SINK_SECONDS);
         this.cue(SINK_SECONDS, () => this.sinkBlast(position));
@@ -3680,7 +3697,11 @@ export class Game implements OnlineGame {
   private siegePoint(bot: Bot, fleet: Fleet): THREE.Vector3 | null {
     if (!fleet.present(this.field.clock)) return null;
     const zone = fleet.nearestZone(bot.ship.flight.position);
-    return zone < 0 ? null : fleet.zoneAt(zone, this.botPoint(bot));
+    if (zone < 0) return null;
+    // where it shows itself, and whether it does from where the bot is, as a pilot sees it
+    fleet.siegeFrom(zone, bot.ship.flight.position, SIEGE_DISTANCE, bot.siegeHold);
+    bot.siegeClear = fleet.inSight(zone, bot.ship.flight.position, this.field);
+    return fleet.zoneAt(zone, this.botPoint(bot));
   }
 
   /** The President's Fleet in the HUD: the battleship, what is left of it, and where to fly; returns that point for the crosshair. */
@@ -4701,7 +4722,7 @@ export class Game implements OnlineGame {
       const line = toAim.subVectors(other.flight.position, ship.flight.position);
       if (line.length() > LOCK_DISTANCE) return;
       const off = ship.flight.angleTo(line);
-      if (off < angle && this.field.lineOfSight(ship.flight.position, other.flight.position)) {
+      if (off < angle && seesTarget(other, ship.flight.position, this.field)) {
         best = other;
         angle = off;
       }
@@ -4720,7 +4741,12 @@ export class Game implements OnlineGame {
     this.online?.sendTorpedoGone(torpedo.id, torpedo.position, null, holder);
     const credit = creditOf(torpedo, this.time);
     // every part of the battleship close to where it went off takes it
-    if (this.fleet) for (const zone of this.fleet.blast(torpedo.position)) this.hitFleet(this.fleet, zone, credit, torpedo.position, TORPEDO_HITS);
+    const parts = this.fleet ? this.fleet.blast(torpedo.position) : [];
+    for (const zone of parts) this.hitFleet(this.fleet!, zone, credit, torpedo.position, TORPEDO_HITS);
+    if (devlog) {
+      const outcome = hit ? 'on a ship' : parts.length ? 'on a part' : this.time - torpedo.bornAt >= TORPEDO_LIFETIME ? 'burnt out' : this.fleet?.touches(torpedo.position, TORPEDO_RADIUS) ? 'on the hull' : 'on rock';
+      devlog.add({ kind: 'act', t: this.time, ship: torpedo.shooter.name, act: 'torpedo gone', detail: `${outcome}${torpedo.target ? '' : ', lock lost'}${torpedo.shooter.alive ? '' : ', shooter dead'}` });
+    }
     if (!hit) return;
     if (hit.owner === null) this.applyTorpedoHit(hit, credit);
     else this.online?.sendTorpedoHit(hit, credit, torpedo.id);

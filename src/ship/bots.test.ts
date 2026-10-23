@@ -86,6 +86,31 @@ describe('bots fly by the Hosts\' rules', () => {
     expect(fired).toBe(false);
   });
 
+  it('fires at a part of the battleship only in sight of it, and flies round to the side where it shows', () => {
+    const f = field(false);
+    const me = ship('Kessler', at(0, -12000), at(0, 1));
+    const bot = new Bot(me, evenSkills(0.5));
+    bot.siege = at(0);
+    bot.siegeHold.set(0, 12000, 0);
+    const gravity = new THREE.Vector3();
+    const fly = (seconds: number, clear: boolean) => {
+      let fired = false;
+      for (let t = 0; t < seconds; t += STEP) {
+        bot.siegeClear = clear;
+        const c = bot.think(t, [me], f);
+        fired ||= c.fire;
+        me.flight.update(STEP, c, gravity);
+      }
+      return fired;
+    };
+    // behind the hull, its nose on the part: no shot, and on its way round
+    expect(fly(3, false)).toBe(false);
+    expect(me.flight.position.distanceTo(bot.siegeHold)).toBeLessThan(24000);
+    // in sight, within range, its nose on it: it fires
+    me.flight.reset(at(0, 12000), new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(at(0, 12000), at(0), at(0, 0, 1))));
+    expect(fly(3, true)).toBe(true);
+  });
+
   it('reads who hunts whom from the noses it sees, not from the other bots\' minds', () => {
     const f = field(false);
     const me = ship('Kessler', at(0), at(1));

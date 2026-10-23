@@ -89,7 +89,20 @@ export interface SuspicionEvent {
   reported: boolean;
 }
 
-export type LogEvent = DecisionEvent | ContactEvent | DeathEvent | ShoveEvent | ActEvent | SuspicionEvent;
+/** The President's battleship (see game/fleet): a hit on a part by a laser or a torpedo, a part broken, the reactor gone critical. */
+export interface FleetEvent {
+  kind: 'fleet';
+  t: number;
+  event: 'hit' | 'broken' | 'sunk';
+  /** The shooter (null for the battleship going down by itself), the part's kind and index. */
+  ship: string | null;
+  part: string;
+  zone: number;
+  weapon: 'laser' | 'torpedo' | null;
+  count: number;
+}
+
+export type LogEvent = DecisionEvent | ContactEvent | DeathEvent | ShoveEvent | ActEvent | SuspicionEvent | FleetEvent;
 
 /** Events kept (about a round's worth of eight bots changing their minds every second or so). */
 const LOG_CAPACITY = 20000;
@@ -163,7 +176,20 @@ export class DevLog {
     const afterDecision: Record<string, number> = {};
     const contacts: Record<string, number> = {};
     let shoves = 0;
+    // the battleship: hits by part and weapon, the times its parts broke, when it went critical
+    const fleetHits: Record<string, number> = {};
+    const broken: string[] = [];
+    let sunk: number | null = null;
+    // what bots did with their torpedoes and where those went off
+    const torpedoes: Record<string, number> = {};
     for (const e of this.events()) {
+      if (e.kind === 'fleet') {
+        if (e.event === 'hit') fleetHits[`${e.part} ${e.weapon}`] = (fleetHits[`${e.part} ${e.weapon}`] ?? 0) + e.count;
+        else if (e.event === 'broken') broken.push(`${e.part} ${e.zone} at ${e.t}`);
+        else sunk = e.t;
+        continue;
+      }
+      if (e.kind === 'act' && e.act.startsWith('torpedo')) count(torpedoes, e.act === 'torpedo' ? 'launched' : e.detail);
       if (e.kind === 'death') {
         count(deaths, e.cause);
         count((byShip[e.ship] ??= {}), e.cause);
@@ -172,7 +198,8 @@ export class DevLog {
       } else if (e.kind === 'contact') count(contacts, e.outcome);
       else if (e.kind === 'shove') shoves++;
     }
-    return { mode: this.mode, arena: this.arena, deaths, byShip, whileDoing, afterDecision, contacts, shoves, knockouts: deaths.knockout ?? 0 };
+    const fleet = this.mode === 'fleet' ? { hits: fleetHits, broken, sunk } : undefined;
+    return { mode: this.mode, arena: this.arena, deaths, byShip, whileDoing, afterDecision, contacts, shoves, knockouts: deaths.knockout ?? 0, torpedoes, fleet };
   }
 
   /** The whole log as JSON, to save or attach. */

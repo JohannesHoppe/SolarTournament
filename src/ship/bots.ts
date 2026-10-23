@@ -87,7 +87,7 @@ const JINK_SCATTER = 0.5;
 /** The scatter never exceeds this many ship radii, so a jinking target is hard to hit, not impossible. */
 const JINK_SCATTER_MAX = 2.5;
 /** A bot attacking a battleship's part holds this far from it (units, 600 m), and fires with its nose within SIEGE_AIM of it (rad). */
-const SIEGE_DISTANCE = 12000;
+export const SIEGE_DISTANCE = 12000;
 const SIEGE_AIM = 0.02;
 /** Bots stay this far inside the arena, unless the game draws them closer in (see Bot.home). */
 export const HOME_RADIUS = 50000;
@@ -224,8 +224,14 @@ export class Bot {
   lure: THREE.Vector3 | null = null;
   /** Set by the game: a ship the bot hunts wherever it is, seen or not. */
   prey: Ship | null = null;
-  /** Set by the game: a part of a battleship, which a bot with no ship to fight attacks. */
+  /**
+   * Set by the game: a part of a battleship, which a bot with no ship to fight attacks; where it
+   * holds for that, on the side the part shows itself (see Fleet.siegeFrom); and whether the
+   * part is in its sight, not behind the hull or a rock.
+   */
   siege: THREE.Vector3 | null = null;
+  readonly siegeHold = new THREE.Vector3();
+  siegeClear = false;
   /** Set by the game: a ship with a nova core close by, which the bot gets away from first. */
   flee: THREE.Vector3 | null = null;
   /** What the bot flees, for the development log: a nova, the battleship, a comet. */
@@ -400,10 +406,11 @@ export class Bot {
         }
       }
     } else if (this.siege) {
-      // no ship to fight, but a battleship's part: close in to SIEGE_DISTANCE and hold there
+      // no ship to fight, but a battleship's part: fly to where it shows itself, SIEGE_DISTANCE
+      // off it, and hold there with the nose on it
+      toTarget.subVectors(this.siegeHold, me.position);
+      desired.copy(toTarget).normalize().multiplyScalar(Math.min(toTarget.length() * 0.3, CRUISE_SPEED));
       toTarget.subVectors(this.siege, me.position);
-      const approach = THREE.MathUtils.clamp((toTarget.length() - SIEGE_DISTANCE) * 0.3, -CRUISE_SPEED * 0.5, CRUISE_SPEED);
-      desired.copy(toTarget).normalize().multiplyScalar(approach);
     } else {
       // nothing to fight: a probe in sight is worth the trip, else the bot roams
       toTarget.subVectors(this.lure ?? this.wanderTarget, me.position);
@@ -448,7 +455,8 @@ export class Bot {
     // near the target the nose stays on it and the thrusters carry the bot around it; a bot
     // under attack never turns its tail to burn
     // a racer burns for the gate; a fighter only when no target is in range
-    const sieging = !target && !!this.siege && toTarget.length() < FIRE_RANGE;
+    // a part of a battleship is fought within range and in sight; behind the hull the bot burns round to it
+    const sieging = !target && !!this.siege && this.siegeClear && toTarget.length() < FIRE_RANGE;
     const burning = danger || !!this.flee || (!defending && !lookingBack && error.length() > BURN_THRESHOLD && (racing || !(((target && targetDistance < FIRE_RANGE) || sieging) && !this.ship.overheated)));
     if (burning) {
       me.steer(error, 2.5, controls);
