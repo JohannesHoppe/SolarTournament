@@ -16,6 +16,8 @@ const G = 196.2;
 const GIANT_RADIUS = 800000;
 const GIANT_DEPTH = 45000;
 const GIANT_GRAVITY = 0.93 * G;
+/** The black hole's event horizon (units, 175 m), in the middle of its arena. */
+export const HOLE_RADIUS = 3500;
 
 export type ArenaId = 'belt' | 'rings' | 'kessler' | 'giant' | 'corona' | 'hole' | 'derelict';
 
@@ -34,7 +36,31 @@ export interface ArenaProfile {
   sun: { size: number; intensity: number; color: number };
   /** Where the camera of its preview picture stands and what it looks at (units); without, PREVIEW_FROM onto the center. */
   preview?: { from: [number, number, number]; at?: [number, number, number] };
+  /** The big things that never move, besides the field's center and the sun, which the HUD marks (see Reference). */
+  references: Reference[];
 }
+
+/** How the HUD draws a fixed reference: each kind has a glyph of its own in style.css (.reference[data-glyph]). */
+export type Glyph = 'center' | 'hole' | 'sun' | 'planet' | 'giant' | 'hull' | 'base' | 'battleship';
+
+/**
+ * A fixed reference the HUD marks, on screen where it lies and at the screen's edge when it does
+ * not (see Hud.setReferences): its glyph, its label (marked for translation), where it lies
+ * (units), and, where `distance` is set, how far it is, measured to its surface `radius` away
+ * from that point (units).
+ */
+export interface Reference {
+  glyph: Glyph;
+  label: string;
+  position: THREE.Vector3;
+  distance: boolean;
+  radius?: number;
+}
+
+/** The ringed planet beside the Rings of Kronos (units, 13 km off), whose ring runs through the arena in the horizon plane. */
+export const KRONOS_CENTER = new THREE.Vector3(-0.85, 0, 0.5).normalize().multiplyScalar(260000);
+/** The world the Kessler field's station circled, far below (units). */
+export const KESSLER_WORLD = new THREE.Vector3(-120000, -330000, -60000);
 
 /** The camera of an arena's preview picture: far out and above, onto the center, so the landmark shows (see ArenaProfile.preview). */
 export const PREVIEW_FROM: [number, number, number] = [70000, 30000, 70000];
@@ -90,6 +116,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     storms: false,
     sun: { size: 30000, intensity: 3.2, color: 0xfff0dd },
     preview: { from: [32000, 12000, 32000] },
+    references: [],
   },
   {
     id: 'rings',
@@ -99,6 +126,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     cooling: 1.2,
     storms: false,
     sun: { size: 26000, intensity: 3, color: 0xf2f4ff },
+    references: [{ glyph: 'planet', label: msg('Kronos'), position: KRONOS_CENTER, distance: false }],
   },
   {
     id: 'kessler',
@@ -125,6 +153,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     cooling: 1,
     storms: false,
     sun: { size: 30000, intensity: 3.2, color: 0xfff0dd },
+    references: [{ glyph: 'planet', label: msg('Planet'), position: KESSLER_WORLD, distance: false }],
   },
   {
     id: 'giant',
@@ -146,6 +175,8 @@ export const ARENAS: readonly ArenaProfile[] = [
     cooling: 1,
     storms: false,
     sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
+    // straight down to the clouds, and how far they are
+    references: [{ glyph: 'giant', label: msg('Clouds'), position: new THREE.Vector3(0, -(GIANT_RADIUS + GIANT_DEPTH), 0), distance: true, radius: GIANT_RADIUS }],
   },
   {
     id: 'corona',
@@ -155,6 +186,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     cooling: 0.35,
     storms: true,
     sun: { size: 150000, intensity: 6, color: 0xffd7a0 },
+    references: [],
   },
   {
     id: 'hole',
@@ -173,12 +205,14 @@ export const ARENAS: readonly ArenaProfile[] = [
       orbit: { axis: 'vertical', speed: 500 },
       spin: 0.06,
       toughness: 800,
-      well: { position: new THREE.Vector3(0, 0, 0), radius: 3500, surfaceGravity: (1 * G * 20000 * 20000) / (3500 * 3500) },
+      well: { position: new THREE.Vector3(0, 0, 0), radius: HOLE_RADIUS, surfaceGravity: (1 * G * 20000 * 20000) / (HOLE_RADIUS * HOLE_RADIUS) },
     },
     cooling: 1,
     storms: false,
     sun: { size: 20000, intensity: 2.6, color: 0xffe6cc },
     preview: { from: [20000, 8000, 20000] },
+    // the hole is the field's center: it takes the center's mark, measured to its horizon
+    references: [{ glyph: 'hole', label: msg('Black hole'), position: new THREE.Vector3(), distance: true, radius: HOLE_RADIUS }],
   },
   {
     id: 'derelict',
@@ -189,6 +223,11 @@ export const ARENAS: readonly ArenaProfile[] = [
     storms: false,
     sun: { size: 30000, intensity: 3.2, color: 0xfff0dd },
     preview: { from: [20000, 20000, 50000], at: [-3000, 0, 0] },
+    // the middle of each half of the world ship
+    references: [
+      { glyph: 'hull', label: msg('Bow'), position: new THREE.Vector3(-30000, 0, 0), distance: true },
+      { glyph: 'hull', label: msg('Stern'), position: new THREE.Vector3(...sternAt(25000), STERN_SHIFT), distance: true },
+    ],
   },
 ];
 

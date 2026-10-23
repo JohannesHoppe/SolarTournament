@@ -16,8 +16,8 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | `hook.ts` | The hook: harpoon, cable, winch, swing; the cables' lines (also a core's tow cable) |
 | `racingline.ts` | The ideal line through gates or rings, bowing around rock; how tight a line bends |
 | `laps.ts` | Lap clock, splits, the best lap and its ghost |
-| `hangar.ts` | Solar Coins, upgrades and their prices |
-| `school.ts` | The flight school: five courses, their drills and markers |
+| `hangar.ts` | Solar Coins, the wallet's cap, upgrades and their prices; the hangar as the browser keeps it, and what in it only an edit puts there |
+| `school.ts` | The flight school: five courses, their drills and markers; the completed courses as the browser keeps them |
 | `coach.ts` | Nicole's briefings and tips in real rounds |
 | `moments.ts` | The own pilot's big moments (streaks, revenge, a knockout, …): banner, crowd and announcer |
 | `sponsors.ts`, `satire-ads.ts` | The sponsor break before a respawn, and its invented sponsors |
