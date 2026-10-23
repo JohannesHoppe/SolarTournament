@@ -213,6 +213,9 @@ export class Ship {
   finish = -1;
   respawnAt = 0;
   protectedUntil = 0;
+  /** The ship that shoved this one last (a ram, a kick into its side), and when (game time): its crash soon after is that ship's knockout. */
+  shovedBy: Ship | null = null;
+  shovedAt = -Infinity;
   /** Time the ship left the arena, or null while inside. */
   outsideSince: number | null = null;
   /** The ship's side, set by the game in a round of teams (see game/flags); -1 when every clone fights for itself. */
@@ -346,6 +349,7 @@ export class Ship {
     this.heat = 0;
     this.overheated = false;
     this.driveOfflineUntil = 0;
+    this.shovedBy = null;
     this.alive = true;
     this.outsideSince = null;
     this.root.visible = true;

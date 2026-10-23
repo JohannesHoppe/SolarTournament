@@ -89,6 +89,18 @@ const WELL_PULL = 0.3;
 const KEEP_CLEAR = 5;
 const KEEP_CLEAR_AHEAD = 1;
 const KEEP_CLEAR_PUSH = 800;
+/**
+ * Bots shove on purpose. A rival beside the bot, its center within SHOVE_REACH ship radii (about
+ * 50 m) and drifting against it slower than SHOVE_DRIFT (units/s, 15 m/s), with rock or a hull
+ * within SHOVE_TARGET (units, 120 m) beyond it, gets the dodge's kick into its flank, for a
+ * knockout. A daring bot takes the chance more often; any bot at most once every SHOVE_PAUSE
+ * seconds, and its thrusters leave the drift alone for SHOVE_DRIFT_SECONDS so the kick lands.
+ */
+const SHOVE_REACH = 3;
+const SHOVE_DRIFT = 300;
+const SHOVE_TARGET = 2400;
+const SHOVE_PAUSE = 8;
+const SHOVE_DRIFT_SECONDS = 0.6;
 
 const toTarget = new THREE.Vector3();
 const desired = new THREE.Vector3();
@@ -203,6 +215,11 @@ export class Bot {
   /** The side the bot jinks to while it defends, and when it switches. */
   private dodge = 1;
   private nextDodge = 0;
+  /** The kick the bot gives its thrusters this thought, sideways and up in its own frame, to shove a rival (see SHOVE_REACH); the game fires it. */
+  shove: { x: number; y: number } | null = null;
+  private readonly shoveKick = { x: 0, y: 0 };
+  private nextShove = 0;
+  private shoveDriftUntil = 0;
   /** The ship that last hit the drive, and until when the bot defends against it (see STRUCK_MEMORY). */
   private struckBy: Ship | null = null;
   private struckUntil = 0;
@@ -426,7 +443,32 @@ export class Bot {
       }
       controls.strafeX = this.dodge;
     }
+    this.shove = this.armed && now >= this.nextShove ? this.shoveAt(ships, field, now) : null;
+    if (now < this.shoveDriftUntil) controls.strafeX = controls.strafeY = 0;
     return this.byHand(controls, dt);
+  }
+
+  /** A rival to shove into the rock beside it (see SHOVE_REACH): the kick, or null. */
+  private shoveAt(ships: readonly Ship[], field: AsteroidField, now: number): { x: number; y: number } | null {
+    const me = this.ship.flight;
+    for (const ship of ships) {
+      if (!this.rival(ship, now)) continue;
+      const away = local.subVectors(ship.flight.position, me.position);
+      const distance = away.length();
+      if (distance > this.ship.radius * SHOVE_REACH || line.subVectors(ship.flight.velocity, me.velocity).lengthSq() > SHOVE_DRIFT * SHOVE_DRIFT) continue;
+      away.divideScalar(distance);
+      if (!field.raycast(ship.flight.position, away, SHOVE_TARGET, true)) continue;
+      // the thrusters kick sideways and up and down: a rival ahead or behind is out of reach
+      me.toLocalDirection(away, away);
+      if (Math.hypot(away.x, away.y) < 0.7) continue;
+      this.nextShove = now + SHOVE_PAUSE;
+      if (Math.random() > this.skills.daring) return null;
+      this.shoveDriftUntil = now + SHOVE_DRIFT_SECONDS;
+      this.shoveKick.x = away.x;
+      this.shoveKick.y = away.y;
+      return this.shoveKick;
+    }
+    return null;
   }
 
   /** Off the way of any ship the bot would meet soon (see KEEP_CLEAR): the wanted velocity bends away from where they would come closest. */

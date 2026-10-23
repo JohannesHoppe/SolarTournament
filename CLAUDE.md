@@ -86,7 +86,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `storage.ts` | The browser's localStorage, where it is available |
 | `i18n/` | The languages: `i18n.ts` (t(), msg(), the language chosen, the page's fixed texts) and the catalogs `de.ts`, `es.ts`, `fr.ts`; `tools/i18n/` collects every text to translate |
 | **`game/`** | **The round** |
-| `game/game.ts` | Game states, round flow (with each round's opening: intro flight, countdown, start lights, BURN!/FIGHT!), lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
+| `game/game.ts` | Game states, round flow (with each round's opening: intro flight, countdown, start lights, BURN!/FIGHT!), lasers, collisions (ships ramming and shoving each other, knockouts), arena, camera, the clone's body (g-forces, warnings) |
 | `game/race.ts` | The race: modes of rounds and rooms, the course of gates (laid out from the arena's field), points for gates and places |
 | `game/survival.ts` | Last Clone Standing: the clones of a round, the solar flare closing in on the field time |
 | `game/flags.ts` | Capture the Flag: the two sides, their bases and sponsor cores; the lead browser's rules (sides, taking, sending home, capturing) and the state the others follow |
@@ -97,8 +97,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `game/laps.ts` | The own laps in a race: lap clock, splits against the arena's best lap, the best lap and its ghost as the browser keeps them |
 | `game/items.ts` | Items: sponsor probes that show up on the round clock (the same on every browser), what they carry and what each does in a few words, dropped again when a clone dies; the nova core goes off in `Game.novaBlast` |
 | `game/torpedoes.ts` | Torpedoes: launch, homing, fuse, shot down by the laser; only the shooter's browser decides where one goes off |
-| `game/school.ts` | Flight school: five courses played on their own (basic training, racer, gladiator, arsenal, tactician), 47 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
-| `game/moments.ts` | The own pilot's big moments for the broadcast (streaks, revenge, supernova, a torpedo kill, …): which one, its banner, the crowd's reaction, the announcer's lines, its rank; only show, no score |
+| `game/school.ts` | Flight school: five courses played on their own (basic training, racer, gladiator, arsenal, tactician), 48 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
+| `game/moments.ts` | The own pilot's big moments for the broadcast (streaks, revenge, supernova, a knockout, a torpedo kill, …): which one, its banner, the crowd's reaction, the announcer's lines, its rank; only show, no score |
 | `game/coach.ts` | Nicole as a coach in real rounds: the briefing of a mode in a Host's first round of it, the tips of the fight the moment they matter, each only a few times; what the browser has heard |
 | `game/sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, how the clone died, the round so far |
 | `game/satire-ads.ts` | The invented sponsors of 2584 (Victory Cola, Space Burger, PrintMe Bodies, …): consumer satire in the ad slot until real sponsors take it |
@@ -120,7 +120,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `ship/ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, drive animation |
 | `ship/flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`) |
 | `ship/impact.ts` | A ship striking a surface: how it bounces off and scrapes along, and what the impact costs its hull; two ships ramming: their bounce and what a ram costs by where it strikes |
-| `ship/bots.ts` | Bot AI: desired velocity, turn and burn, dogfights in arcs, aiming with spread, a hand that eases every command in; every bot's skills (aim, reflexes, daring) |
+| `ship/bots.ts` | Bot AI: desired velocity, turn and burn, dogfights in arcs, aiming with spread, keeping clear of other ships and shoving a rival into rock, a hand that eases every command in; every bot's skills (aim, reflexes, daring) |
 | **`view/`** | **What the screen shows** |
 | `view/hud.ts` | DOM HUD, the flight computer's projection: gauges, markers, warnings, tunnel vision, the boot of a fresh clone's link |
 | `view/attitude.ts` | The HUD's attitude on a canvas: horizon line, pitch ladder and heading tape, as in a fighter's head-up display |

@@ -5,7 +5,7 @@ import { ANNOUNCER_MOMENT } from '../music/lines';
  * The big moments of the own pilot, made for the broadcast: a neon banner, the crowd, and for
  * the biggest the announcer. Only the show: no moment changes a score.
  */
-export type Moment = 'double' | 'triple' | 'multi' | 'supernova' | 'revenge' | 'torpedo' | 'interception' | 'pass' | 'lead' | 'capture' | 'sunk';
+export type Moment = 'double' | 'triple' | 'multi' | 'supernova' | 'revenge' | 'torpedo' | 'interception' | 'pass' | 'lead' | 'capture' | 'sunk' | 'knockout';
 
 /**
  * Each moment: its banner, how loud the crowd gets (0..1; 1 erupts), the announcer's lines (for
@@ -18,6 +18,7 @@ export const MOMENTS: Record<Moment, { banner: string; crowd: number; lines?: re
   sunk: { banner: msg('BATTLESHIP DOWN'), crowd: 1, rank: 8 },
   capture: { banner: msg('CORE CAPTURED'), crowd: 1, rank: 7 },
   revenge: { banner: msg('REVENGE'), crowd: 0.9, lines: ANNOUNCER_MOMENT.revenge, rank: 6 },
+  knockout: { banner: msg('KNOCKOUT'), crowd: 0.95, lines: ANNOUNCER_MOMENT.knockout, rank: 6 },
   double: { banner: msg('DOUBLE KILL'), crowd: 0.85, rank: 5 },
   lead: { banner: msg('IN THE LEAD'), crowd: 0.8, rank: 5 },
   torpedo: { banner: msg('TORPEDO KILL'), crowd: 0.7, rank: 4 },
