@@ -3,6 +3,11 @@
 # there. Runs when the lines, their translations or the clone tools change, and by hand
 # (Actions → Voice → Run workflow). A job stops after about five hours and keeps what it has
 # cloned; running the workflow again goes on from there.
+#
+# Two kinds of jobs, so that no code of others ever holds a token that writes: the clone jobs
+# run Chatterbox, Whisper and their packages and may only read; they hand their store on as an
+# artifact. The upload job may write the release and runs nothing but the shell, jq and gh: it
+# checks every store it is handed and puts it into the release.
 name: Voice
 
 on:
@@ -18,8 +23,7 @@ on:
       - tools/voice/clone/**
       - .github/workflows/voice.yml
 
-permissions:
-  contents: write
+permissions: {}
 
 # one run at a time: two would both write the same store
 concurrency:
@@ -30,26 +34,31 @@ jobs:
   clone:
     runs-on: ubuntu-latest
     timeout-minutes: 340
+    permissions:
+      contents: read
     strategy:
       fail-fast: false
       matrix:
         language: [de, es, fr]
     steps:
       - run: echo "WORK=$RUNNER_TEMP/voice" >> "$GITHUB_ENV"
-      # actions pinned to their commits; the token stays out of the checkout and out of every
-      # install script, only the steps that read and write the release get it
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # actions pinned to their commits; the token (read only) stays out of the checkout and out
+      # of every install, only the step that reads the release gets it
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # no install scripts: nothing this job runs needs one (onnxruntime-node and sharp ship their
+      # Linux binaries in their packages; onnxruntime-node's script would only fetch CUDA
+      # libraries, unchecked, and ffmpeg is not used)
+      - run: npm ci --ignore-scripts
       # the store of this language and Nicole's voice (voice print and reference), as far as the
       # release has them; a download that fails stops the job, so a store that is there is never
-      # taken for an empty one and overwritten. Nicole's voice is shared by all three jobs: only a
-      # job that made it puts it into the release (see "Upload the store").
+      # taken for an empty one and overwritten. Nicole's voice is shared by all three jobs: only
+      # the German job makes it (see "Prepare").
       - name: Download the store
         id: store
         env:
@@ -78,36 +87,86 @@ jobs:
           if [ "${{ steps.store.outputs.voice }}" = new ]; then echo "todo=voice" >> "$GITHUB_OUTPUT"; exit 0; fi
           echo "todo=$(node -p "require('$WORK/todo.json')['${{ matrix.language }}']")" >> "$GITHUB_OUTPUT"
       - if: steps.prepare.outputs.todo != '0'
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
         with:
           python-version: '3.11'
-      # torch from its CPU index: the runner has no GPU, and the CUDA build is gigabytes larger
+      # every package by its hash, nothing beyond the lock (see tools/voice/README.md, "The Python
+      # lock"): first the build tools, then the rest, the two packages that come as source built
+      # with those tools instead of tools pip would fetch by itself
       - if: steps.prepare.outputs.todo != '0'
-        run: pip install --index-url https://download.pytorch.org/whl/cpu --extra-index-url https://pypi.org/simple -r "$WORK/requirements.txt"
+        name: Install the locked Python packages
+        run: |
+          pip install --require-hashes --no-deps -r tools/voice/clone/build-requirements.txt
+          pip install --require-hashes --no-deps --no-build-isolation -r tools/voice/clone/requirements.txt
       - if: steps.prepare.outputs.todo != '0'
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
           path: ~/.cache/huggingface
           key: huggingface-${{ hashFiles('tools/voice/nicole.ts') }}
       - if: steps.prepare.outputs.todo != '0'
         name: Clone
         run: python tools/voice/clone/clone.py "$WORK" ${{ matrix.language }} 290
-      # also after a clone that broke off: the store written every ten lines is kept. The audio
-      # goes up under its fingerprint before its index, which names it, so an index never points
-      # at another audio; older audio of the language goes once the new index is up.
-      - if: always() && steps.prepare.outputs.todo != '0'
-        name: Upload the store
+      # also after a clone that broke off: the store written every ten lines goes on to the
+      # upload job (a clone that broke off before its first ten lines wrote none, and the German
+      # job may hand on only the voice print)
+      - if: always() && steps.prepare.outcome == 'success' && steps.prepare.outputs.todo != '0'
+        name: Hand the store on
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: store-${{ matrix.language }}
+          path: |
+            ${{ env.WORK }}/nicole-${{ matrix.language }}.json
+            ${{ env.WORK }}/nicole-${{ matrix.language }}.flac
+            ${{ env.WORK }}/nicole-conds.pt
+            ${{ env.WORK }}/reference.wav
+          if-no-files-found: ignore
+          retention-days: 1
+          compression-level: 0
+
+  upload:
+    needs: clone
+    # also after a clone job that failed or ran out of time: what it handed on is kept
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: store-*
+          path: ${{ runner.temp }}/store
+      # The stores come from jobs that ran code of others, so each is checked before it goes up:
+      # the fingerprint its index names has to be a sha256 and the one of its audio. The audio goes
+      # up under its fingerprint before its index, which names it, so an index never points at
+      # another audio; older audio of the language goes once the new index is up.
+      - name: Upload the store
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          STORE: ${{ runner.temp }}/store
         run: |
-          language=${{ matrix.language }}
-          if [ "${{ steps.store.outputs.voice }}" = new ] && [ "$language" = de ] && [ -f "$WORK/nicole-conds.pt" ]; then gh release upload voice-nicole "$WORK/nicole-conds.pt" "$WORK/reference.wav" --clobber; fi
-          # a clone that broke off before its first ten lines wrote no store
-          [ -f "$WORK/nicole-$language.json" ] || exit 0
-          audio="nicole-$language-$(node -p "require('$WORK/nicole-$language.json').audio.slice(0, 16)").flac"
-          cp "$WORK/nicole-$language.flac" "$WORK/$audio"
-          gh release upload voice-nicole "$WORK/$audio" --clobber
-          gh release upload voice-nicole "$WORK/nicole-$language.json" --clobber
-          for old in $(gh release view voice-nicole --json assets --jq '.assets[].name' | grep -E "^nicole-$language(-[0-9a-f]{16})?\.flac$" | grep -vx "$audio"); do
-            gh release delete-asset voice-nicole "$old" --yes
+          failed=0
+          # Nicole's voice: the German job makes it when the release has none
+          assets=$(gh release view voice-nicole --json assets --jq '.assets[].name')
+          if ! grep -qx nicole-conds.pt <<< "$assets" && [ -f "$STORE/store-de/nicole-conds.pt" ] && [ -f "$STORE/store-de/reference.wav" ]; then
+            gh release upload voice-nicole "$STORE/store-de/nicole-conds.pt" "$STORE/store-de/reference.wav" --clobber
+          fi
+          for language in de es fr; do
+            dir="$STORE/store-$language"
+            [ -f "$dir/nicole-$language.json" ] || continue
+            fingerprint=$(jq -r '.audio' "$dir/nicole-$language.json" 2> /dev/null) || fingerprint=
+            if ! [[ "$fingerprint" =~ ^[0-9a-f]{64}$ ]] || [ "$(sha256sum "$dir/nicole-$language.flac" | cut -d' ' -f1)" != "$fingerprint" ]; then
+              echo "::error::The store of $language is not the audio its index names; it does not go up"
+              failed=1
+              continue
+            fi
+            audio="nicole-$language-${fingerprint:0:16}.flac"
+            cp "$dir/nicole-$language.flac" "$dir/$audio"
+            gh release upload voice-nicole "$dir/$audio" --clobber
+            gh release upload voice-nicole "$dir/nicole-$language.json" --clobber
+            for old in $(gh release view voice-nicole --json assets --jq '.assets[].name' | grep -E "^nicole-$language(-[0-9a-f]{16})?\.flac$" | grep -vx "$audio"); do
+              gh release delete-asset voice-nicole "$old" --yes
+            done
           done
+          exit "$failed"

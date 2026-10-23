@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { boxUv, shine, surfaced, wornSurface, type Wear } from '../view/surfaces';
+import { boxUv, lacquer, shine, surfaced, wornSurface, type Wear } from '../view/surfaces';
 
 /**
  * The two interceptors, built in code as low-poly hulls (a few hundred triangles each), shaded
@@ -138,16 +138,18 @@ function capGlint(shader: THREE.WebGLProgramParametersWithUniforms) {
 function hull(original: THREE.Object3D, name: string, wear: Wear, seed: number, parts: THREE.BufferGeometry[], trim: THREE.Object3D, glow?: { parts: THREE.BufferGeometry[]; color: THREE.Color }): THREE.Object3D {
   const root = keepEngine(original);
   const surface = wornSurface(seed, wear);
-  const material = new THREE.MeshPhysicalMaterial({
-    vertexColors: true,
-    ...surfaced(surface, RELIEF),
-    side: THREE.DoubleSide,
-    envMap: shine(),
-    envMapIntensity: SHEEN,
-    clearcoat: LACQUER,
-    clearcoatMap: surface.orm,
-    clearcoatRoughness: LACQUER_ROUGHNESS,
-  });
+  const material = lacquer(
+    new THREE.MeshPhysicalMaterial({
+      vertexColors: true,
+      ...surfaced(surface, RELIEF),
+      side: THREE.DoubleSide,
+      envMap: shine(),
+      envMapIntensity: SHEEN,
+      clearcoat: LACQUER,
+      clearcoatMap: surface.orm,
+      clearcoatRoughness: LACQUER_ROUGHNESS,
+    }),
+  );
   material.onBeforeCompile = capGlint;
   // the texture coordinates follow the facets (see boxUv), the normals the creases
   const meshes: THREE.Mesh[] = [new THREE.Mesh(toCreasedNormals(boxUv(mergeGeometries(parts), TILE), CREASE), material)];

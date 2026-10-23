@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buy, complete, emptyHangar, HANGAR_SHIPS, LEVELS, nextPrice, ONLINE_LEVEL, parseHangar, payOut, perksOf, sovereignEarned, STOCK, UPGRADES } from './hangar';
+import { buy, complete, emptyHangar, HANGAR_SHIPS, hangarFrom, keepable, LEVELS, nextPrice, ONLINE_LEVEL, payOut, perksOf, sovereignEarned, STOCK, UPGRADES, WALLET } from './hangar';
 
 /** A hangar with every upgrade of both interceptors bought. */
 function maxed() {
@@ -23,7 +23,7 @@ describe('the hangar', () => {
 
   it('stops at the last step', () => {
     const hangar = maxed();
-    hangar.coins = 1e9;
+    hangar.coins = WALLET;
     expect(nextPrice(hangar, 'alien', 'neon')).toBeNull();
     expect(buy(hangar, 'alien', 'neon')).toBe(false);
   });
@@ -50,14 +50,95 @@ describe('the hangar', () => {
     expect(perksOf(emptyHangar(), 'sovereign', false)).toEqual(solo);
   });
 
-  it('keeps only what fits from the browser, and the Sovereign only when earned', () => {
-    expect(parseHangar('nonsense')).toEqual(emptyHangar());
-    const kept = parseHangar(JSON.stringify({ coins: 50.7, levels: { human: { neon: 9, drive: -2, tubes: 1.5 } }, ship: 'sovereign' }));
-    expect(kept.coins).toBe(50);
-    expect(kept.levels.human.neon).toBe(LEVELS);
-    expect(kept.levels.human.drive).toBe(0);
-    expect(kept.levels.human.tubes).toBe(0);
-    expect(kept.ship).toBe('human');
-    expect(parseHangar(JSON.stringify({ ...maxed(), ship: 'sovereign' })).ship).toBe('sovereign');
+  it('holds in its wallet what the hangar sells, and no more', () => {
+    expect(WALLET).toBe(113_000);
+    const hangar = emptyHangar();
+    hangar.coins = WALLET - 500;
+    expect(payOut(hangar, 2000)).toBe(500);
+    expect(hangar.coins).toBe(WALLET);
+    expect(payOut(hangar, 2000)).toBe(0);
+    expect(hangar.coins).toBe(WALLET);
+  });
+
+  it('never keeps what it reads as an edit, whatever is bought, paid or earned', () => {
+    const hangar = emptyHangar();
+    const honest = () => {
+      const read = hangarFrom(JSON.stringify(keepable(hangar)));
+      expect(read.cheated).toBe(false);
+      expect(read.unreadable).toEqual([]);
+      expect(read.hangar).toEqual(hangar);
+    };
+    honest();
+    // a full wallet, everything bought step by step with payouts at the wallet's edge, the Sovereign flown
+    for (let round = 0; round < 40; round++) {
+      payOut(hangar, 50_000);
+      honest();
+      for (const ship of HANGAR_SHIPS) for (const upgrade of UPGRADES) if (buy(hangar, ship, upgrade.id)) honest();
+    }
+    expect(sovereignEarned(hangar)).toBe(true);
+    hangar.ship = 'sovereign';
+    honest();
+    payOut(hangar, 1e9);
+    honest();
+    // what no Host can own is put right before it is kept
+    Object.assign(hangar, { coins: WALLET * 2, ship: 'sovereign' });
+    hangar.levels.human.drive = LEVELS + 2;
+    hangar.levels.alien.neon = -1;
+    keepable(hangar);
+    expect(hangar.coins).toBe(WALLET);
+    expect(hangar.levels.human.drive).toBe(LEVELS);
+    expect(hangar.ship).toBe('human');
+    honest();
+  });
+});
+
+describe('the hangar as the browser keeps it', () => {
+  const kept = (entry: object) => hangarFrom(JSON.stringify(entry));
+
+  it('reads back what the game keeps, and nothing kept as stock', () => {
+    const hangar = maxed();
+    hangar.coins = 4321;
+    hangar.ship = 'sovereign';
+    expect(hangarFrom(JSON.stringify(hangar))).toEqual({ hangar, cheated: false, unreadable: [] });
+    expect(hangarFrom(null)).toEqual({ hangar: emptyHangar(), cheated: false, unreadable: [] });
+    // what is missing is stock, what this game does not know is passed over
+    expect(kept({ coins: 1200, ship: 'human' }).hangar).toEqual({ ...emptyHangar(), coins: 1200 });
+    expect(kept({ coins: 5, levels: { human: { warp: 9 }, frigate: { neon: 7 } }, ship: 'frigate', paint: 'gold' })).toEqual({ hangar: { ...emptyHangar(), coins: 5 }, cheated: false, unreadable: [] });
+    // coins within the wallet are the Host's business, whatever they are
+    for (const coins of [WALLET, -300, 50.7]) expect(kept({ coins })).toEqual({ hangar: { ...emptyHangar(), coins }, cheated: false, unreadable: [] });
+  });
+
+  it('calls coins beyond the wallet an edit', () => {
+    expect(kept({ coins: WALLET + 1 }).cheated).toBe(true);
+    expect(kept({ coins: 999_999_999, ship: 'human' }).cheated).toBe(true);
+  });
+
+  it('calls a step below none or beyond the last an edit', () => {
+    for (const level of [LEVELS + 1, -1, 99]) expect(kept({ levels: { alien: { drive: level } } }).cheated).toBe(true);
+  });
+
+  it('calls the Sovereign without both interceptors complete an edit', () => {
+    const hangar = maxed();
+    hangar.levels.alien.flame = LEVELS - 1;
+    expect(kept({ ...hangar, ship: 'sovereign' }).cheated).toBe(true);
+    expect(kept({ ...emptyHangar(), ship: 'sovereign' }).cheated).toBe(true);
+  });
+
+  it('takes what it cannot read as stock, and never as an edit', () => {
+    for (const text of ['nonsense', '{"coins": 12', '[]', '42', 'null', '"hangar"']) expect(hangarFrom(text)).toEqual({ hangar: emptyHangar(), cheated: false, unreadable: ['entry'] });
+    expect(kept({ coins: '100', levels: { human: 3, alien: { drive: 1.5, tubes: '2', neon: null, flame: 2 } } })).toEqual({
+      hangar: { ...emptyHangar(), levels: { human: emptyHangar().levels.human, alien: { ...emptyHangar().levels.alien, flame: 2 } } },
+      cheated: false,
+      unreadable: ['coins', 'levels.human', 'levels.alien.drive', 'levels.alien.tubes', 'levels.alien.neon'],
+    });
+    expect(kept({ levels: [] }).unreadable).toEqual(['levels']);
+    // a Sovereign beside a step that cannot be read is no edit either: it flies the human interceptor
+    const hangar = maxed();
+    expect(kept({ ...hangar, levels: { ...hangar.levels, alien: { ...hangar.levels.alien, drive: 'x' } }, ship: 'sovereign' })).toMatchObject({ cheated: false, hangar: { ship: 'human' } });
+  });
+
+  it('is no edit any more once it is put back', () => {
+    expect(kept({ ...emptyHangar(), coins: WALLET * 10 }).cheated).toBe(true);
+    expect(kept({ ...emptyHangar(), coins: 300 })).toMatchObject({ cheated: false, hangar: { coins: 300 } });
   });
 });
