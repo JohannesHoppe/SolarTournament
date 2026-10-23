@@ -7,12 +7,12 @@ declare global {
   }
 }
 
-/** Opens the game and waits until it runs; collects the page's errors. */
-export async function openGame(page: Page, path = '/'): Promise<string[]> {
+/** Opens the game and waits until it runs, at most `timeout` ms; collects the page's errors. */
+export async function openGame(page: Page, path = '/', timeout = 60_000): Promise<string[]> {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(String(error)));
-  await page.goto(path);
-  await page.waitForFunction(() => window.game?.composer, null, { timeout: 60_000 });
+  await page.goto(path, { timeout });
+  await page.waitForFunction(() => window.game?.composer, null, { timeout });
   // several tabs render too slowly without a GPU (the title screen's pad, with its shadows and
   // lacquer, holds up every other tab); the tests watch the state, not the picture
   await page.evaluate(() => {

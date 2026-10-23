@@ -127,7 +127,8 @@ class Budget {
  * a ship only count from the peer that runs it, and every kind of message has a rate limit.
  */
 export class Session {
-  onStates: (states: ShipState[], round: RoundState | null, from: string) => void = () => {};
+  /** Ship states of a peer, with the time it sent them on its own clock (seconds its page has run), or null when it named none. */
+  onStates: (states: ShipState[], round: RoundState | null, from: string, sent: number | null) => void = () => {};
   onFire: (shooter: string, from: Vec, to: Vec) => void = () => {};
   onHit: (target: string, origin: Vec, direction: Vec, shooter: string) => void = () => {};
   /** `position` and `velocity` are where the victim broke up, on its owner's screen. */
@@ -474,10 +475,10 @@ export class Session {
     return now >= this.nextStateAt;
   }
 
-  /** Sends the states of the own ships (see statesDue). */
+  /** Sends the states of the own ships (see statesDue), with the time they go out on this page's clock (see SenderClock). */
   sendStates(now: number, states: ShipState[], round: RoundState | null) {
     this.nextStateAt = now + 1 / STATE_RATE;
-    this.transport.send('s', { s: states, r: round, g: this.age(), l: this.leadId });
+    this.transport.send('s', { s: states, r: round, g: this.age(), l: this.leadId, c: +seconds().toFixed(3) });
   }
 
   sendFire(shooter: string, from: Vec, to: Vec) {
@@ -696,7 +697,9 @@ export class Session {
     // lined up behind the lead, cannot make the lead step back by sending a round clock)
     const tie = !this.linedUp.has(from) && Math.abs((this.peerJoinedAt.get(from) ?? Infinity) - this.startedAt) <= RESTART_SLACK;
     if (round && tie && this.isLead && this.isLive(from) && from < this.selfId) this.restart();
-    this.guard(() => this.onStates(states as ShipState[], round, from));
+    const sent = d.c === undefined ? null : num(d.c, 0, MAX_FIELD_TIME);
+    if (sent === null && d.c !== undefined) return;
+    this.guard(() => this.onStates(states as ShipState[], round, from, sent));
   }
 
   private roundState(x: unknown): RoundState | undefined {

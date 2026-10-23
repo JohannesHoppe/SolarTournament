@@ -54,17 +54,23 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
     game.autopilot = false;
     return { id: game.me.id, position: game.me.flight.position.toArray() };
   });
-  await a.evaluate(({ position }) => {
-    const game = window.game;
-    const me = game.me;
-    const at = me.flight.position.clone().set(position[0], position[1], position[2]);
-    me.protectedUntil = 0;
-    me.flight.position.copy(at).add(at.clone().set(20000, 0, 0));
-    me.flight.velocity.set(0, 0, 0);
-    const look = game.camera.matrix.clone().lookAt(me.flight.position, at, at.clone().set(0, 1, 0));
-    me.flight.orientation.setFromRotationMatrix(look);
-    game.fireTorpedo(me);
-  }, target);
+  // put 1 km beside it, its nose on it; it fires once the other tab has its states from
+  // there (a torpedo launched from where the others do not see the ship is not launched)
+  const aim = () =>
+    a.evaluate(({ position }) => {
+      const game = window.game;
+      const me = game.me;
+      const at = me.flight.position.clone().set(position[0], position[1], position[2]);
+      me.protectedUntil = 0;
+      me.flight.position.copy(at).add(at.clone().set(20000, 0, 0));
+      me.flight.velocity.set(0, 0, 0);
+      const look = game.camera.matrix.clone().lookAt(me.flight.position, at, at.clone().set(0, 1, 0));
+      me.flight.orientation.setFromRotationMatrix(look);
+    }, target);
+  await aim();
+  await play(a, 0.5);
+  await aim();
+  await a.evaluate(() => window.game.fireTorpedo(window.game.me));
   await play(b, 1);
   expect(await b.evaluate(() => window.game.torpedoes.list.length)).toBe(1);
   await play(b, 8);
@@ -107,27 +113,36 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
   const [atA, atB] = [await where(a), await where(b)];
   expect(Math.hypot(atA[0] - atB[0], atA[1] - atB[1], atA[2] - atB[2])).toBeLessThan(2000);
   // the clone 150 m above a part of the battleship, its nose on it, fires its laser or a
-  // torpedo; returns what the torpedo locked on
-  const fireAt = (page: Page, zone: number, torpedo: boolean) =>
-    page.evaluate(
-      ([zone, torpedo]) => {
-        const game = window.game;
-        const part = game.fleet.zoneAt(zone);
-        const above = part.clone().set(0, 1, 0).applyQuaternion(game.fleet.quaternion).multiplyScalar(3000).add(part);
-        game.me.flight.position.copy(above);
-        game.me.flight.velocity.set(0, 0, 0);
-        const bow = part.clone().set(0, 0, -1).applyQuaternion(game.fleet.quaternion);
-        game.me.flight.orientation.setFromRotationMatrix(game.fleet.root.matrixWorld.clone().lookAt(above, part, bow));
-        if (torpedo) game.fireTorpedo(game.me);
-        else game.fireLaser(game.me);
-        return game.torpedoes.list[0]?.target?.id;
-      },
-      [zone, torpedo] as const,
-    );
+  // torpedo; returns what the torpedo locked on. Coming from afar (`arrive`) it is put there
+  // first and fires once the other tab has its states from there: a shot from where the others
+  // do not see the ship yet is no shot of its (see Online.onFire)
+  const fireAt = async (page: Page, zone: number, torpedo: boolean, arrive = false) => {
+    const aim = (fire: boolean | null) =>
+      page.evaluate(
+        ([zone, fire]) => {
+          const game = window.game;
+          const part = game.fleet.zoneAt(zone);
+          const above = part.clone().set(0, 1, 0).applyQuaternion(game.fleet.quaternion).multiplyScalar(3000).add(part);
+          game.me.flight.position.copy(above);
+          game.me.flight.velocity.set(0, 0, 0);
+          const bow = part.clone().set(0, 0, -1).applyQuaternion(game.fleet.quaternion);
+          game.me.flight.orientation.setFromRotationMatrix(game.fleet.root.matrixWorld.clone().lookAt(above, part, bow));
+          if (fire === true) game.fireTorpedo(game.me);
+          else if (fire === false) game.fireLaser(game.me);
+          return game.torpedoes.list[0]?.target?.id;
+        },
+        [zone, fire] as const,
+      );
+    if (arrive) {
+      await aim(null);
+      await play(page, 0.5);
+    }
+    return aim(torpedo);
+  };
   // ten shots into the first battery, as fast as the laser fires: the first tab sees the beams
   // end there and counts the hits too
   for (let i = 0; i < 10; i++) {
-    await fireAt(b, 0, false);
+    await fireAt(b, 0, false, i === 0);
     await b.waitForTimeout(150);
   }
   await play(a, 2);
@@ -139,7 +154,9 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
   expect(errors).toEqual([]);
 });
 
-test('a nova from a ship without a core never goes off, and two tabs name its Host a cheater and cast it out', async ({ context }) => {
+test('a nova from a ship without a core never goes off; once is forgiven, and when it comes again and again two tabs name its Host a cheater and cast it out', async ({ context }) => {
+  // three tabs take their time on a busy machine
+  test.setTimeout(240_000);
   const room = `e2e-${Date.now().toString(36)}n&bots=0`;
   const pages = [];
   const errors: string[] = [];
@@ -159,11 +176,27 @@ test('a nova from a ship without a core never goes off, and two tabs name its Ho
   }
   const victim = await a.evaluate(() => window.game.me.flight.position.toArray().map(Math.round));
   // the cheating tab says its clone set off a core it never had, right at the other's ship
-  const { name, id: cheaterId } = await cheat.evaluate((at) => {
-    const game = window.game;
-    game.online.session.sendNova(game.me.id, at);
-    return { name: game.me.name, id: game.me.id };
-  }, victim);
+  const nova = () =>
+    cheat.evaluate((at) => {
+      const game = window.game;
+      game.online.session.sendNova(game.me.id, at);
+      return { name: game.me.name, id: game.me.id };
+    }, victim);
+  const { name, id: cheaterId } = await nova();
+  await play(a, 1.5);
+  // once is rejected, never reported: one odd event names nobody
+  for (const page of [a, b]) {
+    const seen = await page.evaluate(() => ({
+      caught: window.game.online.suspicions.some((s: { cheat: string }) => s.cheat === 'nova'),
+      cheaters: window.game.cheaters,
+      reported: window.game.online.reported.size,
+    }));
+    expect(seen).toEqual({ caught: true, cheaters: [], reported: 0 });
+  }
+  // again and again, a second apart: both name it
+  await nova();
+  await play(a, 1.5);
+  await nova();
   await play(a, 2);
   await play(b, 2);
   for (const page of [a, b]) {

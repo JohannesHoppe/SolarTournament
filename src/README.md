@@ -24,7 +24,7 @@ The files at this level:
 - `assets.ts`: loads the ship models and drive sprites, collects what is generated in code.
 - `random.ts`: the seeded random generator every browser shares, so all see the same world.
 - `storage.ts`: the browser's localStorage, safe where it is unavailable.
-- `devlog.ts`: the development log, a ring buffer of the round's deaths, ship contacts, shoves and bot decisions, read in the console as `game.log`; only in development, null and free in production.
+- `devlog.ts`: the development log, a ring buffer of the round's deaths, ship contacts, shoves, bot decisions and the cheat checks other browsers' ships failed, read in the console as `game.log`; only in development, null and free in production.
 - `style.css`: the styles of all pages.
 
 Unit tests sit next to the code they test (`*.test.ts`) and run with `npm test`.

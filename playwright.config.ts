@@ -9,8 +9,8 @@ const port = Number(process.env.DEV_PORT ?? 5173);
  */
 export default defineConfig({
   testDir: 'e2e',
-  // the balance runs play whole rounds and run on their own (npm run balance)
-  testIgnore: process.env.BALANCE ? [] : ['**/balance.spec.ts'],
+  // the balance runs and the soak of the cheat checks play whole rounds and run on their own (npm run balance, npm run soak)
+  testIgnore: [...(process.env.BALANCE ? [] : ['**/balance.spec.ts']), ...(process.env.SOAK ? [] : ['**/soak.spec.ts'])],
   timeout: 90_000,
   workers: 1,
   use: {

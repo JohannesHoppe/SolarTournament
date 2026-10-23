@@ -8,7 +8,7 @@ The online tournament, without a game server: browsers find each other through p
 | `session.ts` | The protocol: message types, rate limits, who leads, starting over after a lost link |
 | `online.ts` | Who owns which ship, what goes over the network, the lead's bots |
 | `validate.ts` | Checks the shape of every message from other browsers |
-| `plausible.ts` | Checks whether what a browser reports could have happened; a majority of the flying Hosts casts out a cheater |
+| `plausible.ts` | Checks whether what a browser reports could have happened (jumps, the nose's turn and the beams along it, novas, torpedoes, kills, the evidence of hits), on the time its states were sent; a ship that fails a check again and again gets its Host reported, and a majority of the flying Hosts casts out a cheater |
 | `room.ts` | A room as its link describes it: code, name, mode, bots |
 | `lobby.ts` | Public tournaments announce themselves; the list listens |
 

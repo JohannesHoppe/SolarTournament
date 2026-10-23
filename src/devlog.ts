@@ -75,7 +75,21 @@ export interface ActEvent {
   detail: string;
 }
 
-export type LogEvent = DecisionEvent | ContactEvent | DeathEvent | ShoveEvent | ActEvent;
+/** A ship of another browser failed a plausibility check (see net/plausible): which, how often of late, and whether this browser reported its Host for it. */
+export interface SuspicionEvent {
+  kind: 'suspicion';
+  t: number;
+  ship: string;
+  cheat: string;
+  /** Strikes of that kind within the window, this one included (see Strikes). */
+  strikes: number;
+  /** What the check measured last, as a share of its bound (above 1: failed), and the round this browser plays. */
+  share: number;
+  round: number;
+  reported: boolean;
+}
+
+export type LogEvent = DecisionEvent | ContactEvent | DeathEvent | ShoveEvent | ActEvent | SuspicionEvent;
 
 /** Events kept (about a round's worth of eight bots changing their minds every second or so). */
 const LOG_CAPACITY = 20000;
