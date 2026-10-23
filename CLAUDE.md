@@ -89,7 +89,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `game/game.ts` | Game states, round flow (with each round's opening: intro flight, countdown, start lights, BURN!/FIGHT!), lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
 | `game/race.ts` | The race: modes of rounds and rooms, the course of gates (laid out from the arena's field), points for gates and places |
 | `game/survival.ts` | Last Clone Standing: the clones of a round, the solar flare closing in on the field time |
-| `game/flags.ts` | Capture the Flag: the two sides, their bases and sponsor cores; the lead browser's rules (sides, taking, sending home, capturing) and the state the others follow |
+| `game/flags.ts` | Capture the Flag: the two sides, their bases and sponsor cores; the lead browser's rules (sides, taking, sending home, capturing) and the state the others follow; how a core is shown: on its tow cable behind and below the carrier, faded to its outline where it would hide the ship or the crosshair, unseen from the own cockpit |
 | `game/fleet.ts` | The President's Fleet: his battleship (hull, batteries, drives, reactor, built in code), its phases, how the lead browser flies it (out of a comet's way too), its plume, its hull as cover, how it takes hits (lasers and torpedoes) and goes down, and the state the others follow |
 | `game/alarms.ts` | The alarms: tiers (caution, warning, critical) ranked so only the worst sounds, `Game.alarms.raise` for any danger (with direction and countdown), their tones, a gravity well's escape load and its thresholds |
 | `game/hook.ts` | The hook: harpoon, cable and winch; what it bites, how the cable pulls and swings, its lines on screen |
@@ -111,6 +111,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `world/arenas.ts` | The seven arenas (belt, rings, Kessler field, gas giant, corona, event horizon, derelict): field layout, well, sun, cooling, storms; which arena a tournament round is in |
 | `world/asteroids.ts` | The field of an arena: rocks, ice, debris or hull from a layout, orbits, solid pieces (shoved by a comet), a massive body (well); collision with a rock's measured surface, a debris ellipsoid or a hull box, raycast, line of sight, gravity, fragments |
 | `world/gates.ts` | A ring of the tournament as a structure: armored coil housings with glowing windings, conduits, struts with blinking lights, a station module; shared by the race's gates, the flight school's rings and Capture the Flag's bases |
+| `world/powercore.ts` | A sponsor's power core (the flag of Capture the Flag) as a structure: an armored octagonal canister with windings glowing in its side's color, the sponsor's sign, a cage where the tow cable grips; low poly, faded to its outline on demand |
 | `world/boxes.ts` | Boxes in their own frame: a sphere against a box, a ray into a box (the hull of a wreck, a battleship) |
 | `world/surface.ts` | A rock's surface as its collisions see it: measured from its mesh, how far it reaches in every direction |
 | `world/shapes.ts` | The field shapes besides rock: ice, station debris, the world ship's hull sections (with computed collider boxes) |
