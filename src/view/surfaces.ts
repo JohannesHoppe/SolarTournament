@@ -77,7 +77,7 @@ function glowTexture(element: HTMLCanvasElement) {
   return texture;
 }
 
-/** A surface with a layer that glows of its own (embers, glitter). */
+/** A surface with a layer that glows of its own (embers). */
 export type GlowingSurface = Surface & { glow: THREE.Texture };
 
 /** A color of the second map: how intact a lacquer over it is (red), roughness (green), metalness (blue). */
@@ -337,58 +337,40 @@ export function ravagedSurface(seed: number): GlowingSurface {
   return ravaged;
 }
 
-let gleaming: GlowingSurface | null = null;
+let armored: Surface | null = null;
 
 /**
- * The President's battleship, fresh from the dock: flawless plating in fine pale seams, gold
- * pinstripes, and flakes of glitter in the lacquer, mirror smooth and fully metallic, that
- * sparkle even on the side away from the sun (see emissive).
+ * The President's battleship, fresh from the dock: heavy armor plates laid in staggered courses
+ * (5 m high, 10 m long, each course shifted by half a plate), deep seams between them, each plate
+ * a shade lighter or darker than its neighbors, polished smooth.
  */
-export function gleamingSurface(seed: number): GlowingSurface {
-  if (gleaming) return gleaming;
-  if (!drawable) return blankGlowing();
+export function armorSurface(seed: number): Surface {
+  if (armored) return armored;
+  if (!drawable) return blankSurface();
   const r = new Randomizer(seed);
-  const { color, orm, bump } = blank({ roughness: 0.16, metalness: 0.95 });
+  const { color, orm, bump } = blank({ roughness: 0.22, metalness: 0.9 });
   const g = color[1];
-  g.strokeStyle = 'rgba(120, 125, 140, 0.35)';
-  bump[1].strokeStyle = '#5a5a5a';
-  g.lineWidth = bump[1].lineWidth = 1;
-  for (let y = 0; y <= SIZE; y += 64) {
-    for (const c of [g, bump[1]]) {
-      c.beginPath();
-      c.moveTo(0, y);
-      c.lineTo(SIZE, y);
-      c.stroke();
+  const course = 64;
+  const plate = 128;
+  for (let y = 0; y < SIZE; y += course) {
+    const shift = (y / course) % 2 ? plate / 2 : 0;
+    for (let x = -shift; x < SIZE; x += plate) {
+      const shade = Math.round(r.range(-14, 14));
+      g.fillStyle = shade < 0 ? `rgba(0, 0, 0, ${-shade / 100})` : `rgba(255, 255, 255, ${shade / 100})`;
+      g.fillRect(x, y, plate, course);
+      orm[1].fillStyle = ormColor(r.range(0.16, 0.3), 0.9);
+      orm[1].fillRect(x, y, plate, course);
+      // the plate's seams: dark in color, grooves in the bump
+      g.fillStyle = 'rgba(0, 0, 0, 0.55)';
+      g.fillRect(x, y, plate, 2);
+      g.fillRect(x, y, 2, course);
+      bump[1].fillStyle = '#303030';
+      bump[1].fillRect(x, y, plate, 2);
+      bump[1].fillRect(x, y, 2, course);
     }
   }
-  for (let x = 0; x <= SIZE; x += 128) {
-    for (const c of [g, bump[1]]) {
-      c.beginPath();
-      c.moveTo(x, 0);
-      c.lineTo(x, SIZE);
-      c.stroke();
-    }
-  }
-  // gold pinstripes
-  g.fillStyle = 'rgba(255, 200, 80, 0.9)';
-  for (const y of [30, 34, 158]) g.fillRect(0, y, SIZE, 1.5);
-  // glitter: tiny flakes, mirror-smooth and bright, the brightest of them sparkling of their own
-  const glitter = glowLayer();
-  for (let i = 0; i < 420; i++) {
-    const x = Math.floor(r.range(0, SIZE));
-    const y = Math.floor(r.range(0, SIZE));
-    const flake = r.nextFloat() < 0.5 ? '#fff6e0' : '#e6f0ff';
-    g.fillStyle = flake;
-    g.fillRect(x, y, 1, 1);
-    orm[1].fillStyle = ormColor(0.02, 1);
-    orm[1].fillRect(x, y, 1, 1);
-    if (i % 3 === 0) {
-      glitter[1].fillStyle = flake;
-      glitter[1].fillRect(x, y, 1, 1);
-    }
-  }
-  gleaming = { ...textures(color[0], orm[0], bump[0]), glow: glowTexture(glitter[0]) };
-  return gleaming;
+  armored = textures(color[0], orm[0], bump[0]);
+  return armored;
 }
 
 let industrial: Surface | null = null;
@@ -521,6 +503,31 @@ export function boxUv(geometry: THREE.BufferGeometry, tile: number): THREE.Buffe
   }
   geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
   return geometry;
+}
+
+/** The materials under a clear lacquer, with the strength of their lacquer and its film (see setLacquer). */
+const lacquered = new Map<THREE.MeshPhysicalMaterial, { clearcoat: number; iridescence: number }>();
+let lacquerOn = true;
+
+/** Registers a material's clear lacquer, so the picture's quality can take it off (see setLacquer). */
+export function lacquer<M extends THREE.MeshPhysicalMaterial>(material: M): M {
+  lacquered.set(material, { clearcoat: material.clearcoat, iridescence: material.iridescence });
+  material.addEventListener('dispose', () => lacquered.delete(material));
+  if (!lacquerOn) material.clearcoat = material.iridescence = 0;
+  return material;
+}
+
+/**
+ * Lacquer on or off on every registered material. Without it a hull is shaded as plain painted
+ * metal: three.js drops the second specular layer (and the film's colors) from the shader when
+ * their strength is 0, which costs a compile of the hulls' shaders once.
+ */
+export function setLacquer(on: boolean) {
+  lacquerOn = on;
+  for (const [material, kept] of lacquered) {
+    material.clearcoat = on ? kept.clearcoat : 0;
+    material.iridescence = on ? kept.iridescence : 0;
+  }
 }
 
 let mirrored: THREE.CubeTexture | null = null;

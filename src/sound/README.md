@@ -4,6 +4,6 @@ What the pilot hears besides the radio. There is no sound in vacuum: everything 
 
 - `audio.ts`: the hull's low-pass, the drive's rumble, beeps, the link's static.
 - `sounds.ts`: synthesized effects (laser, explosion).
-- `speaker.ts`: Nicole, the flight computer: plays her lines from the pre-rendered voice sprite, with lessons that are never cut off and chatter that gives way.
+- `speaker.ts`: Nicole, the flight computer: plays her lines from the pre-rendered voice sprite, with lessons that are never cut off and chatter that gives way, and tells whether one of a set of lines is being said.
 
 The voice itself is rendered ahead of time by `tools/voice/`.

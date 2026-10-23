@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MAX_SPEED } from '../ship/flight';
-import { TORPEDOES } from '../game/torpedoes';
+import { TORPEDO_LIFETIME, TORPEDOES } from '../game/torpedoes';
+import { HOOK_RANGE } from '../game/hook';
 import { ONLINE_LEVEL, tubeTorpedoes } from '../game/hangar';
 
 /** The most torpedoes a clone carries online: the standard load and its tubes up to the online cap. */
@@ -15,8 +16,8 @@ const LOAD = TORPEDOES + tubeTorpedoes(ONLINE_LEVEL);
  * than a clone can carry, kills nobody died for. Each check judges one event; a peer is only
  * reported for what its ship does again and again (see Strikes).
  */
-export type Cheat = 'teleport' | 'nova' | 'torpedoes' | 'kills' | 'hit' | 'aim' | 'spin';
-export const CHEATS: readonly Cheat[] = ['teleport', 'nova', 'torpedoes', 'kills', 'hit', 'aim', 'spin'];
+export type Cheat = 'teleport' | 'nova' | 'torpedoes' | 'kills' | 'hit' | 'hook' | 'aim' | 'spin';
+export const CHEATS: readonly Cheat[] = ['teleport', 'nova', 'torpedoes', 'kills', 'hit', 'hook', 'aim', 'spin'];
 
 /**
  * No ship flies faster than this (units/s, 1 km/s): four times the tournament limit. An honest
@@ -34,7 +35,7 @@ const TORPEDO_SLACK = 2;
 const KILL_SLACK = 2;
 /** Kills beyond that count only once they stay so long (s): a nova's victims are told of by their own browsers, a moment after the killer's state. */
 const KILL_WAIT = 3;
-/** A clone printed sooner than this after its death was seen (s) is not a new one: bots wait 3 s, a Host sits through the sponsor break. */
+/** A clone printed sooner than this after its death was seen (s) is not a new one: a Host's and a bot's next clone both take 9 s at the soonest (the respawn delay and the sponsor break's ad). */
 const REPRINT_DELAY = 2;
 /** A ship's state may say it holds a nova core within this long after it took a probe whose contents this browser did not know (s). */
 const TAKE_WINDOW = 5;
@@ -472,9 +473,14 @@ export function plausibleBlast(at: THREE.Vector3, target: THREE.Vector3): boolea
   return at.distanceTo(target) < AIM_SLACK;
 }
 
+/** A torpedo claimed by a ship's hook: it lay within the hook's reach of the ship, as this browser sees them, up to AIM_SLACK of lag. */
+export function plausibleHook(ship: THREE.Vector3, torpedo: THREE.Vector3): boolean {
+  return ship.distanceTo(torpedo) < HOOK_RANGE + AIM_SLACK;
+}
+
 /** What a ship's beams and torpedoes did counts as evidence this long (s), its torpedo launches as long as a torpedo flies and a little more. */
 const EVIDENCE_SECONDS = 5;
-const LAUNCH_EVIDENCE = 15;
+const LAUNCH_EVIDENCE = TORPEDO_LIFETIME + 3;
 /** Beams and blasts kept per ship: far more than fit into EVIDENCE_SECONDS of a twin laser's bursts. */
 const EVIDENCE_KEPT = 32;
 const closest = new THREE.Vector3();

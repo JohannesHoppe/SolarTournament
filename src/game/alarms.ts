@@ -101,10 +101,13 @@ const WARNING_REPEAT = 1;
 /** Seconds between the two notes of the CRITICAL siren. */
 const SIREN_STEP = 0.28;
 
+/** Seconds between the beeps of a danger with a countdown: a sixth of the seconds left, within `shortest` and `longest`. */
+export const countdownBeat = (seconds: number, shortest: number, longest: number) => THREE.MathUtils.clamp(seconds / 6, shortest, longest);
+
 /**
  * Sounds the worst alarm in the headset, and only that one: a danger with a beep of its own
- * beeps it (faster as an impact comes closer), any other the tone of its level. A new worst
- * alarm sounds at once.
+ * beeps it (faster as an impact or a torpedo comes closer), any other the tone of its level. A
+ * new worst alarm sounds at once.
  */
 export class AlarmTones {
   private next = 0;
@@ -126,11 +129,11 @@ export class AlarmTones {
     switch (top.tone ?? top.level) {
       case 'impact':
         sound.beep(980, 0.05, 0.12);
-        this.next = now + THREE.MathUtils.clamp((top.seconds ?? 3) / 6, 0.1, 0.5);
+        this.next = now + countdownBeat(top.seconds ?? 3, 0.1, 0.5);
         break;
       case 'torpedo':
         sound.beep(1480, 0.05, 0.16);
-        this.next = now + 0.12;
+        this.next = now + countdownBeat(top.seconds ?? Infinity, 0.07, 0.6);
         break;
       case 'tail':
         sound.beep(1760, 0.04, 0.14);

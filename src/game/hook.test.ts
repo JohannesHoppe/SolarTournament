@@ -1,13 +1,16 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { FlightModel, MAX_SPEED } from '../ship/flight';
+import { FlightModel, MAIN_THRUST, MAX_SPEED, OVERDRIVE_PUSH } from '../ship/flight';
 import { HOOK_PULL, HOOK_RANGE, pullOn } from './hook';
 import { HOOK_FLING, HOOK_STANDOFF } from './school';
 import { SAFE_IMPACT } from '../ship/impact';
+import { IMMOVABLE, MASS, type Body } from '../world/bodies';
 
 const DT = 1 / 120;
-/** An anchor at the origin, at rest (never changed by the tests). */
-const AT_REST = new THREE.Vector3();
+/** An anchor at the origin, at rest: a rock, far too heavy to move (never changed by the tests). */
+const ROCK: Body = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: IMMOVABLE };
+/** A ship's flight as a body. */
+const body = (flight: FlightModel): Body => ({ position: flight.position, velocity: flight.velocity, mass: MASS.ship });
 
 /** A ship 200 m from the anchor at the origin, passing it sideways at `speed`. */
 function passing(speed: number) {
@@ -21,7 +24,7 @@ function passing(speed: number) {
 function fly(flight: FlightModel, seconds: number, reeling: boolean, floor = 0) {
   let length: number | null = flight.position.length();
   for (let t = 0; t < seconds && length !== null; t += DT) {
-    length = pullOn(flight, AT_REST, AT_REST, length, reeling, 1, floor, MAX_SPEED, DT);
+    length = pullOn(body(flight), ROCK, length, reeling, floor, MAX_SPEED, DT);
     flight.position.addScaledVector(flight.velocity, DT);
   }
   return length;
@@ -62,7 +65,7 @@ describe('the hook', () => {
   it('snaps far beyond its range', () => {
     const flight = new FlightModel();
     flight.position.set(HOOK_RANGE * 2, 0, 0);
-    expect(pullOn(flight, AT_REST, AT_REST, HOOK_RANGE, true, 1, 0, MAX_SPEED, DT)).toBeNull();
+    expect(pullOn(body(flight), ROCK, HOOK_RANGE, true, 0, MAX_SPEED, DT)).toBeNull();
   });
 
   it('never reels a ship at rest into its rock: from the full range it comes to rest at the floor', () => {
@@ -71,7 +74,7 @@ describe('the hook', () => {
     let closest = Infinity;
     let length: number | null = HOOK_RANGE;
     for (let t = 0; t < 20 && length !== null; t += DT) {
-      length = pullOn(flight, AT_REST, AT_REST, length, true, 1, 3000, MAX_SPEED, DT);
+      length = pullOn(body(flight), ROCK, length, true, 3000, MAX_SPEED, DT);
       flight.position.addScaledVector(flight.velocity, DT);
       closest = Math.min(closest, flight.position.length());
     }
@@ -101,8 +104,7 @@ describe('the hook', () => {
       let length: number | null = 6000;
       let closest = Infinity;
       for (let t = 0; t < 4 && length !== null; t += DT) {
-        length = pullOn(a, b.position, b.velocity, length, true, 0.5, 1360, MAX_SPEED, DT);
-        if (length !== null) length = pullOn(b, a.position, a.velocity, length, true, 0.5, 1360, MAX_SPEED, DT);
+        length = pullOn(body(a), body(b), length, true, 1360, MAX_SPEED, DT, 'moved');
         a.position.addScaledVector(a.velocity, DT);
         b.position.addScaledVector(b.velocity, DT);
         closest = Math.min(closest, a.position.distanceTo(b.position));
@@ -114,10 +116,52 @@ describe('the hook', () => {
     // the same pull on both, whatever they fly at together
     expect(cruising.a.x).toBeCloseTo(still.a.x, 0);
     expect(cruising.b.x).toBeCloseTo(still.b.x, 0);
-    // and alike on both (within 1 m/s: one is pulled after the other)
-    expect(Math.abs(cruising.a.x + cruising.b.x)).toBeLessThan(20);
+    // and alike on both
+    expect(Math.abs(cruising.a.x + cruising.b.x)).toBeLessThan(1);
     // two hulls (17 m each) never touch
     expect(cruising.closest).toBeGreaterThan(680);
+  });
+
+  describe('a tug of war between two ships on the rope', () => {
+    /** Two ships 70 m apart on a held cable (at the winch's floor), burning away from each other with `a` and `b` of the main drive (units/s²) for `seconds`, `kick` added to a's speed at the start (an overdrive); their velocities along the rope after. */
+    function tug(a: number, b: number, seconds: number, kick = 0) {
+      const one = new FlightModel();
+      const two = new FlightModel();
+      one.position.set(-700, 0, 0);
+      two.position.set(700, 0, 0);
+      one.velocity.x = -kick;
+      let length: number | null = 1400;
+      for (let t = 0; t < seconds && length !== null; t += DT) {
+        one.velocity.x -= a * DT;
+        two.velocity.x += b * DT;
+        length = pullOn(body(one), body(two), length, true, 1400, MAX_SPEED, DT, 'moved');
+        one.position.addScaledVector(one.velocity, DT);
+        two.position.addScaledVector(two.velocity, DT);
+      }
+      return { one: one.velocity.x, two: two.velocity.x, apart: one.position.distanceTo(two.position), middle: (one.position.x + two.position.x) / 2 };
+    }
+
+    it('ends in a stalemate between two equal drives: neither moves, the rope holds', () => {
+      const pull = tug(MAIN_THRUST, MAIN_THRUST, 3);
+      // (each frame's burn pulls them apart by a frame's thrust, which the rope takes back)
+      expect(Math.abs(pull.one)).toBeLessThanOrEqual(MAIN_THRUST * DT + 1);
+      expect(pull.one + pull.two).toBeCloseTo(0);
+      expect(Math.abs(pull.middle)).toBeLessThan(1);
+      expect(pull.apart).toBeLessThan(1401);
+    });
+
+    it('goes to the stronger drive: both drift its way at half the difference', () => {
+      // a drive at four fifths (damaged, or not upgraded) against a full one
+      const pull = tug(MAIN_THRUST, MAIN_THRUST * 0.8, 2);
+      expect(pull.one).toBeCloseTo(-MAIN_THRUST * 0.1 * 2, -1);
+      expect(pull.two).toBeCloseTo(pull.one, 0);
+    });
+
+    it("lets the overdrive yank the other ship along: the shove's momentum is split by mass", () => {
+      const pull = tug(0, 0, 0.5, OVERDRIVE_PUSH);
+      expect(pull.one).toBeCloseTo(-OVERDRIVE_PUSH / 2, -1);
+      expect(pull.two).toBeCloseTo(-OVERDRIVE_PUSH / 2, -1);
+    });
   });
 
   // plausibility: the flight school's hook drill (see school.ts) must work at every rock of the belt
@@ -130,7 +174,7 @@ describe('the hook', () => {
       flight.velocity.set(0, 0, 1000);
       let length: number | null = flight.position.length();
       for (let t = 0; t < 3 && length !== null; t += DT) {
-        length = pullOn(flight, AT_REST, AT_REST, length, true, 1, floor, MAX_SPEED, DT);
+        length = pullOn(body(flight), ROCK, length, true, floor, MAX_SPEED, DT);
         flight.position.addScaledVector(flight.velocity, DT);
         // never closer than the floor (within two meters), so never into the rock
         expect(flight.position.length()).toBeGreaterThan(floor - 40);

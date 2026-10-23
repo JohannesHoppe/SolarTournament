@@ -73,3 +73,8 @@ export function roomFragment(room: Room): string {
   if (room.mode !== 'deathmatch') params.set('m', room.mode);
   return '#' + params.toString();
 }
+
+/** The link a friend follows into a room: the game page it runs on (`base`, without a fragment) and the room's fragment. */
+export function roomLink(room: Room, base: string): string {
+  return base + roomFragment(room);
+}

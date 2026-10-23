@@ -30,7 +30,7 @@ const random = (r: Randomizer, length = 1) => new THREE.Vector3(r.range(-1, 1), 
 
 /**
  * An honest ship flown for `seconds` with the game's flight model by a wild pilot: the stick
- * slammed every few tenths of a second, flips, path steering at speed, the trigger held now and
+ * slammed every few tenths of a second, flips, the autopilot (braking now and then), the trigger held now and
  * then (beams from the muzzles along the nose, short and long), blown about as `rough` says.
  * Returns what another browser receives, in the order it arrives.
  */
@@ -97,8 +97,11 @@ export function honestFlight(seed: number, seconds: number, rough: Roughness): M
     flight.thrusterFactor = rough.wrecked ? 0.25 : 1.08;
     let command: Controls = controls;
     if (mode === 'flip') command = Object.assign(steered, IDLE, flight.flip(goal, 2.5, { yaw: 0, pitch: 0, roll: 0 }), { thrust: 0 });
-    else if (mode === 'path' && path.fly(flight, controls, gravity, dt, steered)) command = steered;
-    else path.release();
+    else if (mode === 'path') {
+      // the autopilot: the course where the Host points, braking now and then
+      path.fly(flight, controls, gravity, dt, steered, controls.thrust === 0 && controls.roll !== 0);
+      command = steered;
+    } else path.follow(flight);
     flight.update(dt, command, gravity, push, t < ventUntil ? spin : undefined);
     const arrive = (sentAt: number) => {
       if (r.nextFloat() < dt / rough.stalls) stallUntil = sentAt + r.range(1, 3);

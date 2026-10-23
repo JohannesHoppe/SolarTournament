@@ -54,4 +54,9 @@ export class Belt {
       this.group.add(mesh);
     }
   }
+
+  /** Draws `share` of the belt's rocks (see view/quality): a thinner belt, the same rocks where it is drawn. */
+  setShare(share: number) {
+    for (const mesh of this.group.children as THREE.InstancedMesh[]) mesh.count = Math.round(mesh.instanceMatrix.count * share);
+  }
 }

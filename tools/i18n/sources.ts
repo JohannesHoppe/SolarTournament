@@ -22,7 +22,7 @@ export function sources(root: string): Map<string, string[]> {
       add(unescape(match[2]), relative(root, file));
     }
   }
-  for (const page of ['index.html', 'radio.html']) {
+  for (const page of ['index.html', 'radio.html', 'handbook.html']) {
     const html = readFileSync(join(root, page), 'utf8');
     for (const match of html.matchAll(/<(\w+)\b[^>]*\sdata-i18n(?:="")?(?=[\s>])[^>]*>([\s\S]*?)<\/\1>/g)) add(match[2].replace(/\s+/g, ' '), page);
     for (const match of html.matchAll(/<\w+\b([^>]*)\sdata-i18n-attr="([^"]+)"([^>]*)>/g)) {

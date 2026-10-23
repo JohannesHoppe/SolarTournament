@@ -72,6 +72,22 @@ describe('the alarms', () => {
     tones.play(alarms.top, 0.06, sound);
     expect(heard.length).toBe(2);
   });
+
+  it("beat a torpedo's tone faster as its seconds to the hit run out: a sixth of them, from 0.6 s down to 0.07 s", () => {
+    const beats = (seconds: number | null) => {
+      const alarms = new Alarms();
+      const tones = new AlarmTones();
+      const heard: number[] = [];
+      alarms.raise({ id: 'torpedo', level: 'warning', text: '', seconds, tone: 'torpedo' });
+      alarms.finish();
+      for (let now = 0; now < 1.2; now += 0.01) tones.play(alarms.top, now, { beep: () => void heard.push(now) });
+      return heard[1] - heard[0];
+    };
+    expect(beats(null)).toBeCloseTo(0.6, 1);
+    expect(beats(10)).toBeCloseTo(0.6, 1);
+    expect(beats(1.8)).toBeCloseTo(0.3, 1);
+    expect(beats(0.2)).toBeCloseTo(0.07, 1);
+  });
 });
 
 describe('the escape load of a gravity well', () => {

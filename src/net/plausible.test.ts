@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { TORPEDO_LIFETIME } from '../game/torpedoes';
 import { Accusations, accusersNeeded, beamShare, Evidence, Plausibility, SenderClock, Strikes, type Margins, type Seen } from './plausible';
 import { honestFlight, type Roughness } from '../test/honest';
 
@@ -318,7 +319,7 @@ describe('honest flights', () => {
     return { cheats, margins };
   }
 
-  it('never look like cheats: slammed sticks, flips, path steering, beams, blows, stutters and stalls', () => {
+  it('never look like cheats: slammed sticks, flips, the autopilot, beams, blows, stutters and stalls', () => {
     for (const rough of [
       { blows: 1000, stutter: 1000, stalls: 1000, wrecked: false },
       { blows: 2, stutter: 3, stalls: 10, wrecked: false },
@@ -372,8 +373,8 @@ describe('evidence of what a ship did', () => {
     evidence.blast('s', v(0), 10);
     evidence.launch('s', 10);
     expect(evidence.blasted('s', v(500), 20000, 11)).toBe(true);
-    expect(evidence.launched('s', 24)).toBe(true);
-    expect(evidence.launched('s', 26)).toBe(false);
+    expect(evidence.launched('s', 10 + TORPEDO_LIFETIME + 2)).toBe(true);
+    expect(evidence.launched('s', 10 + TORPEDO_LIFETIME + 4)).toBe(false);
     evidence.forget('s');
     expect(evidence.blasted('s', v(500), 20000, 11)).toBe(false);
   });
