@@ -14,6 +14,8 @@
     "balance": "BALANCE=1 playwright test balance --reporter=line",
     "i18n": "node tools/i18n/list.ts",
     "dupes": "jscpd && node tools/dupes/css.ts",
+    "check": "node tools/check/check.ts",
+    "check:full": "node tools/check/check.ts --full",
     "voice": "node tools/voice/render.ts",
     "crest": "node tools/crest/render.ts"
   },

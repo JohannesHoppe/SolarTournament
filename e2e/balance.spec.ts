@@ -1,3 +1,4 @@
+import { writeFileSync } from 'node:fs';
 import { expect, test, type Page } from '@playwright/test';
 import { openGame, startSolo } from './game';
 import { ROUND_SECONDS } from '../src/music/songs';
@@ -16,7 +17,8 @@ const ROUNDS = 2;
 const TIME_LAPSE = 6;
 
 type Pilot = { name: string; kills: number; deaths: number; score: number; finish: number };
-type Round = { standings: Pilot[]; captures: number; sunk: boolean };
+/** A round's standings, and the development log of it (see src/devlog.ts): its summary and the whole of it as JSON. */
+type Round = { standings: Pilot[]; captures: number; sunk: boolean; summary: { arena: string; deaths: Record<string, number> } & Record<string, unknown>; log: string };
 
 /** Plays a whole solo round of `mode` with the Host out, and returns how it went. */
 async function playRound(page: Page, mode: string): Promise<Round> {
@@ -41,7 +43,7 @@ async function playRound(page: Page, mode: string): Promise<Round> {
         .standings()
         .filter((ship: object) => ship !== game.me)
         .map((ship: Pilot) => ({ name: ship.name, kills: ship.kills, deaths: ship.deaths, score: ship.score, finish: ship.finish }));
-      return { standings, captures: game.flags ? game.flags.captures[0] + game.flags.captures[1] : 0, sunk: !!game.fleet?.down };
+      return { standings, captures: game.flags ? game.flags.captures[0] + game.flags.captures[1] : 0, sunk: !!game.fleet?.down, summary: game.log.summary(), log: game.log.json() };
     },
     [TIME_LAPSE, ROUND_SECONDS],
   );
@@ -51,13 +53,19 @@ async function playRound(page: Page, mode: string): Promise<Round> {
 async function playRounds(page: Page, mode: string) {
   const rounds: Round[] = [];
   for (let i = 0; i < ROUNDS; i++) rounds.push(await playRound(page, mode));
-  test.info().annotations.push({ type: mode, description: JSON.stringify(rounds) });
+  // the whole log of every round goes with the result; its deaths by cause into the detail of a failure
+  for (const [i, round] of rounds.entries()) {
+    const path = test.info().outputPath(`${mode}-${i + 1}-${round.summary.arena}.json`);
+    writeFileSync(path, round.log);
+    await test.info().attach(`log of round ${i + 1}`, { path, contentType: 'application/json' });
+  }
+  test.info().annotations.push({ type: mode, description: JSON.stringify(rounds.map((round) => ({ standings: round.standings, summary: round.summary }))) });
   const mean = (value: (round: Round) => number) => rounds.reduce((sum, round) => sum + value(round), 0) / rounds.length;
   const pilot = (round: Round) => round.standings.find((p) => p.name === MIDDLING)!;
   const median = (round: Round) => round.standings.map((p) => p.score).sort((a, b) => a - b)[Math.floor(round.standings.length / 2)];
   return {
     rounds,
-    detail: JSON.stringify(rounds.map((round) => round.standings)),
+    detail: JSON.stringify(rounds.map((round) => ({ arena: round.summary.arena, deaths: round.summary.deaths, standings: round.standings }))),
     score: mean((round) => pilot(round).score),
     median: mean(median),
     deaths: mean((round) => pilot(round).deaths),
@@ -66,7 +74,8 @@ async function playRounds(page: Page, mode: string) {
   };
 }
 
-test.describe.configure({ timeout: ROUNDS * 150_000 });
+// a busy machine plays the time-lapse slower: BALANCE_SLOW=4 gives each test four times as long
+test.describe.configure({ timeout: ROUNDS * 150_000 * Number(process.env.BALANCE_SLOW ?? 1) });
 
 test('a deathmatch is a fight, and a middling bot holds its own in it', async ({ page }) => {
   const r = await playRounds(page, 'deathmatch');

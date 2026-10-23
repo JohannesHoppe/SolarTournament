@@ -6,7 +6,7 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 |---|---|
 | `game.ts` | The game: round flow and each round's opening show, scoring, respawns, warnings, the menus' wiring |
 | `alarms.ts` | The tiered alarms (caution, warning, critical), their tones, and the escape load of a gravity well |
-| `race.ts` | Round and room modes; the race course of gates (a gentle loop, flown at the speed limit), its points, and where a flight crosses a ring's plane |
+| `race.ts` | Round and room modes; the race course of gates (a gentle loop, flown at the speed limit), its points, where a flight crosses a ring's plane, and how a racer comes at its next gate clear of the housings |
 | `survival.ts` | Last Clone Standing: clones per round, the solar flare's plasma coming from the sun and the safe pocket it leaves |
 | `flags.ts` | Capture the Flag: sides, bases, sponsor cores, taking one (touch or hook shot), captures (the core itself through the ring); a core in tow as a trailer on the hook's rope (mass, jerks, bumps), adrift with its thrusters braking; the way a carrier flies home through the ring; how a core is shown (faded where it would hide the ship or the crosshair) |
 | `fleet.ts` | The President's Fleet: the battleship, its parts, phases and sinking |
@@ -19,7 +19,7 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | `hangar.ts` | Solar Coins, upgrades and their prices |
 | `school.ts` | The flight school: five courses, their drills and markers |
 | `coach.ts` | Nicole's briefings and tips in real rounds |
-| `moments.ts` | The own pilot's big moments: banner, crowd and announcer |
+| `moments.ts` | The own pilot's big moments (streaks, revenge, a knockout, …): banner, crowd and announcer |
 | `sponsors.ts`, `satire-ads.ts` | The sponsor break before a respawn, and its invented sponsors |
 
-Every rule here is also written down in the repository's README with its numbers; a change to one changes the other in the same commit. The `*.test.ts` files test the deterministic parts (`npm test`); `courses.test.ts` flies every race course and ring drill with a bot of middling skill.
+Every rule here is also written down in the repository's README with its numbers; a change to one changes the other in the same commit. The `*.test.ts` files test the deterministic parts (`npm test`); `courses.test.ts` flies every race course and every course of the flight school with a bot of middling skill.
