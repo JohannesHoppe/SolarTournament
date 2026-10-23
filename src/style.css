@@ -3447,6 +3447,15 @@ button.quiet:focus-visible {
   color: var(--tube-orange);
 }
 
+/* the plain truth under the Ministry's words, set as the small print of an ad, in the azure of information */
+.handbook-small-print {
+  margin: -0.4em 0 1.2em;
+  padding-left: 12px;
+  border-left: 2px solid var(--hud-dim);
+  color: var(--hud);
+  font-size: 0.85rem;
+}
+
 .handbook-keys {
   display: grid;
   grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr);
