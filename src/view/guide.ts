@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import type { RacingLine } from '../game/racingline';
+import { bendRadius, type RacingLine } from '../game/racingline';
+import { cornerSpeed } from '../ship/flight';
 import type { AsteroidField } from '../world/asteroids';
 
 /**
@@ -31,13 +32,23 @@ const WIDTH_MAX = 10;
 const OFF_NEAR = 1000;
 const OFF_FAR = 5000;
 const OFF_BOOST = 0.8;
+/**
+ * Brake zones: where the line bends tighter than the ship, at its speed now, can turn with path
+ * steering (see cornerSpeed), the ribbon glows orange; measured over BEND_SPAN samples to either
+ * side (60 m), and fading in from BRAKE_FROM to BRAKE_FULL of the speed that bend allows.
+ */
+const BEND_SPAN = 3;
+const BRAKE_FROM = 0.95;
+const BRAKE_FULL = 1.05;
 
 /** The attributes laid out anew every frame. */
-const CHANGING = ['position', 'next', 'along', 'fade'] as const;
+const CHANGING = ['position', 'next', 'along', 'fade', 'hot'] as const;
 
 const onLine = new THREE.Vector3();
 const point = new THREE.Vector3();
 const previous = new THREE.Vector3();
+const before = new THREE.Vector3();
+const after = new THREE.Vector3();
 
 /**
  * The racing line in the HUD: a dashed ribbon on the ideal line through the centers of the gates
@@ -53,6 +64,8 @@ export class GuideLine {
   /** Where on the line a sample lies (units), for the dashes and the pulses; how far it has faded in (negative: beyond the end of an open line). */
   private readonly along = new Float32Array(SAMPLES * 2);
   private readonly fade = new Float32Array(SAMPLES * 2);
+  /** How far a sample lies in a brake zone, 0..1 (see BRAKE_FROM). */
+  private readonly hot = new Float32Array(SAMPLES * 2);
   private readonly uniforms = { time: { value: 0 }, boost: { value: 0 }, viewport: { value: new THREE.Vector2(1, 1) } };
 
   constructor() {
@@ -62,6 +75,7 @@ export class GuideLine {
     geometry.setAttribute('next', dynamic(this.next, 3));
     geometry.setAttribute('along', dynamic(this.along, 1));
     geometry.setAttribute('fade', dynamic(this.fade, 1));
+    geometry.setAttribute('hot', dynamic(this.hot, 1));
     const side = new Float32Array(SAMPLES * 2).map((_, i) => (i % 2 ? 1 : -1));
     geometry.setAttribute('side', new THREE.BufferAttribute(side, 1));
     const index: number[] = [];
@@ -77,13 +91,16 @@ export class GuideLine {
         attribute float side;
         attribute float along;
         attribute float fade;
+        attribute float hot;
         varying float vAlong;
         varying float vSide;
         varying float vFade;
+        varying float vHot;
         void main() {
           vAlong = along;
           vSide = side;
           vFade = fade;
+          vHot = hot;
           vec4 here = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
           vec4 there = projectionMatrix * modelViewMatrix * vec4(next, 1.0);
           // the ribbon's direction on screen, and its width across it in pixels
@@ -100,6 +117,7 @@ export class GuideLine {
         varying float vAlong;
         varying float vSide;
         varying float vFade;
+        varying float vHot;
         void main() {
           // beyond the end of an open line nothing is drawn
           if (vFade < 0.0) discard;
@@ -109,9 +127,11 @@ export class GuideLine {
           float lit = dash ? 1.0 : pulse * 0.8;
           if (lit < 0.02) discard;
           float core = smoothstep(1.0, 0.45, abs(vSide));
-          // the flight computer's projection draws it: its azure (#4d91ff), white where a pulse
-          // runs, in a dark rim that keeps it readable on a bright disk or a sunlit rock
-          vec3 color = mix(vec3(0.3, 0.57, 1.0), vec3(0.9, 0.95, 1.0), pulse) * (1.0 + 1.3 * pulse + boost);
+          // the flight computer's projection draws it: its azure (#4d91ff), the orange of acting
+          // now (#ff9d00) in a brake zone, white where a pulse runs, in a dark rim that keeps it
+          // readable on a bright disk or a sunlit rock
+          vec3 tint = mix(vec3(0.3, 0.57, 1.0), vec3(1.0, 0.616, 0.0), vHot);
+          vec3 color = mix(tint, vec3(0.9, 0.95, 1.0), pulse) * (1.0 + 1.3 * pulse + boost);
           gl_FragColor = vec4(color * core * lit, mix(0.55, 1.0, core) * lit * vFade);
         }
       `,
@@ -132,9 +152,11 @@ export class GuideLine {
   /**
    * Lays the line for a ship at `from`, flying along `heading` (unit length) at `speed`
    * (units/s), on its way to gate `next` of the ideal `line`; `time` in seconds runs the pulses.
-   * A ship that `missed` the gate is led back to it, onto the line well before the gate.
+   * A ship that `missed` the gate is led back to it, onto the line well before the gate. Where
+   * the line bends tighter than a ship of that speed turns with `grip` (units/s², see gripOf),
+   * it glows orange.
    */
-  show(from: THREE.Vector3, heading: THREE.Vector3, speed: number, line: RacingLine, field: AsteroidField, next: number, missed: boolean, time: number) {
+  show(from: THREE.Vector3, heading: THREE.Vector3, speed: number, grip: number, line: RacingLine, field: AsteroidField, next: number, missed: boolean, time: number) {
     const join = Math.max(JOIN_MIN, speed * JOIN_SECONDS);
     const at = line.progress(from, next, missed ? join : 0);
     // the samples lie on a grid every SAMPLE from the start of each lap, so the dashes stay where
@@ -170,6 +192,17 @@ export class GuideLine {
         previous.toArray(this.next, (2 * i + 1) * 3);
       }
       previous.copy(point);
+    }
+    // the brake zones: how tight the ribbon bends at each sample, against the speed now
+    const positions = this.positions;
+    for (let i = 0; i < SAMPLES; i++) {
+      const a = Math.max(0, i - BEND_SPAN);
+      const b = Math.min(SAMPLES - 1, i + BEND_SPAN);
+      before.fromArray(positions, 2 * a * 3);
+      point.fromArray(positions, 2 * i * 3);
+      after.fromArray(positions, 2 * b * 3);
+      const radius = a < i && i < b ? bendRadius(before, point, after) : Infinity;
+      this.hot[2 * i] = this.hot[2 * i + 1] = THREE.MathUtils.smoothstep(speed / cornerSpeed(radius, grip), BRAKE_FROM, BRAKE_FULL);
     }
     // off the line, the line shows brighter and wider
     const off = from.distanceTo(line.clear(at, field, onLine));

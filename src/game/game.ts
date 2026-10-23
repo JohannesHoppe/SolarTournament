@@ -24,7 +24,7 @@ import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../
 import { showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls } from '../input/input';
 import { MAX_HEAT, Ship, type ShipState, type Zone } from '../ship/ship';
-import { MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, RCS_THRUST } from '../ship/flight';
+import { gripOf, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, PathSteering, RCS_THRUST } from '../ship/flight';
 import { Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { Online, type OnlineGame } from '../net/online';
 import { Lobby, type Listing } from '../net/lobby';
@@ -49,7 +49,7 @@ import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SE
 import type { Asteroid, FieldState } from '../world/asteroids';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, SAFE_IMPACT } from '../ship/impact';
-import { BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
+import { BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { touchRing } from '../world/gates';
 import { COMET_SPEED, COMET_WARNING, cometEnd, cometsOf, cometStart, CometView, courseAt, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
@@ -177,6 +177,8 @@ const FLAG_SWING = 4000;
 const FLEET_HOME = ARENA_LIMIT * 0.95;
 /** The flight school's line to a marker shows from this far off it (units, 100 m). */
 const SCHOOL_LINE_MIN = 2000;
+/** The HUD marks where the own flight crosses the next ring's plane when it gets there within this time (s). */
+const CROSSING_HORIZON = 12;
 /** The flight school's line is laid anew from the pilot whenever its marker moved this far (units, 10 m), so it keeps pointing at a ship or torpedo on the move. */
 const SCHOOL_LINE_MOVE = 200;
 /** Bots keep this far clear of the plume of a battleship hunting with its stern (units, 100 m). */
@@ -602,6 +604,7 @@ const plumeAxis = new THREE.Vector3();
 
 /** Where the ghost of the best lap is this frame. */
 const ghostPosition = new THREE.Vector3();
+const crossingPoint = new THREE.Vector3();
 const ghostTurn = new THREE.Quaternion();
 
 /** The turn of a ship at `eye` that looks at `target`, `up` as up; a fresh quaternion for a new clone. */
@@ -728,8 +731,14 @@ export class Game implements OnlineGame {
   private readonly flipGoal = new THREE.Vector3();
   /** The nose points at the flip's goal (it beeps once when it gets there). */
   private flipAligned = false;
-  /** The autopilot keeps the own ship flying where its nose points: the thrusters take out every sideways drift. On at the start of a round; T switches to free drift and back. */
+  /**
+   * The autopilot flies the own ship by its path (see PathSteering): the stick turns the flight,
+   * and drive and thrusters bend it; slower than 20 m/s, or looking elsewhere, the stick turns the
+   * nose and the thrusters take out every drift across it. On at the start of a round; T switches
+   * to free drift and back.
+   */
   private autopilot = false;
+  private readonly steering = new PathSteering();
   /** How much the bots go easy on the Host in a solo round, 0..1 (see DEATH_EASE). */
   private ease = 0;
   /** The nose is on a ship: the laser would hit now (see assistAim). */
@@ -2767,7 +2776,7 @@ export class Game implements OnlineGame {
     this.ease = Math.max(0, this.ease - dt / EASE_FADE);
     this.weather(dt, now);
     this.direct(now);
-    const myControls = this.flightComputer(this.state === 'playing' ? this.input.read() : IDLE);
+    const myControls = this.flightComputer(this.state === 'playing' ? this.input.read() : IDLE, dt);
     this.ignite(myControls);
     const dodge = this.input.takeDodge();
     if (dodge && this.state === 'playing' && !this.spectating) this.dodge(dodge);
@@ -3606,10 +3615,16 @@ export class Game implements OnlineGame {
   private rankedCount = -1;
 
   /** The racing line from a ship on to gate `next` of an ideal line: it leaves along the flight, or along the nose of a ship that hardly moves. */
+  /** The next ring of a course in the HUD: its brackets, the ring after it, and where the own flight crosses its plane (see Hud.setGates). */
+  private markRings(me: Ship, next: THREE.Vector3 | null, normal: THREE.Vector3 | null, after: THREE.Vector3 | null, radius: number) {
+    const off = next && normal && me.alive ? pathCrossing(me.flight.position, me.flight.velocity, next, normal, CROSSING_HORIZON, crossingPoint) : null;
+    this.hud.setGates(this.camera, next, after, radius, off === null ? null : crossingPoint, off !== null && off < radius);
+  }
+
   private showGuide(me: Ship, line: RacingLine, next: number, missed: boolean) {
     const speed = me.flight.velocity.length();
     const heading = speed > 20 ? scratch.copy(me.flight.velocity).divideScalar(speed) : me.flight.forward(scratch);
-    this.guide.show(me.flight.position, heading, speed, line, this.field, next, missed, wallClock());
+    this.guide.show(me.flight.position, heading, speed, gripOf(me.flight), line, this.field, next, missed, wallClock());
   }
 
   /** The own racer's next gate in the HUD, with lap, gate and place; returns the gate for the crosshair. */
@@ -3630,7 +3645,7 @@ export class Game implements OnlineGame {
     const gate = { n: next + 1, gates: GATES };
     const label = missed ? t('Missed · turn back') : next === 0 ? (me.gates === 0 ? t('Start') : lap === LAPS ? t('Finish') : t('Lap')) : t('Gate {n}/{gates}', gate);
     this.hud.setWaypoint(this.camera, course.points[next], label);
-    this.hud.setGates(this.camera, course.points[next], course.points[(next + 1) % GATES], GATE_RADIUS);
+    this.markRings(me, course.points[next], course.normals[next], course.points[(next + 1) % GATES], GATE_RADIUS);
     if (me.alive) this.showGuide(me, course.line, next, missed);
     else this.guide.hide();
     // the running lap's clock, and the best lap of this arena to beat
@@ -3724,9 +3739,9 @@ export class Game implements OnlineGame {
     }
     this.hud.setSchool(school.status(context.device), context.device === 'keyboard');
     this.hud.setWaypoint(this.camera, waypoint, school.mark);
-    this.hud.setGates(this.camera, school.nextRing, school.ringAfter, RING_RADIUS);
-    // a ring course has its racing line, as a race does; any other marker a line to it
     const me = this.me!;
+    this.markRings(me, school.nextRing, school.nextNormal, school.ringAfter, RING_RADIUS);
+    // a ring course has its racing line, as a race does; any other marker a line to it
     if (!waypoint) this.schoolLine = null;
     const track = school.track ?? (waypoint && me.flight.position.distanceTo(waypoint) > SCHOOL_LINE_MIN ? this.lineTo(me, waypoint) : null);
     if (track && me.alive) this.showGuide(me, track.line, track.next, false);
@@ -3868,11 +3883,12 @@ export class Game implements OnlineGame {
    * once the nose points the right way. Otherwise it keeps the ship upright and, with the
    * autopilot, takes out the drift.
    */
-  private flightComputer(controls: Readonly<Controls>): Controls {
+  private flightComputer(controls: Readonly<Controls>, dt: number): Controls {
     const me = this.me!;
     const flight = me.flight;
     const braking = this.state === 'playing' && this.input.braking && me.alive;
     if (braking) {
+      this.steering.release();
       this.flipping = false;
       this.aimTarget();
       const speed = flight.velocity.length();
@@ -3918,10 +3934,12 @@ export class Game implements OnlineGame {
       // flung off the hook: the flight computer turns the nose onto the new course, unless the
       // pilot steers, and the autopilot does not brake the swing meanwhile
       const flung = this.time < this.flungUntil && me.alive;
-      const out = this.autopilot && me.alive && !flung ? this.trimDrift(controls) : Object.assign(this.computed, controls);
+      if (!this.autopilot || !me.alive || flung) this.steering.release();
+      const out = this.autopilot && me.alive && !flung ? this.trimDrift(controls, dt) : Object.assign(this.computed, controls);
       if (flung && Math.abs(controls.yaw) + Math.abs(controls.pitch) < FLING_STEER && flight.velocity.lengthSq() > 1) flight.steer(flight.velocity, 3, out);
       return this.assistAim(this.keepUpright(out));
     }
+    this.steering.release();
     if (!this.flipping) {
       // the goal is fixed when the flip starts: against the flight, or straight behind the nose
       // at rest; so a burn held past standstill speeds the ship up backwards instead of flipping again
@@ -4586,15 +4604,21 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * The autopilot: the thrusters push against every drift across the nose, so the ship flies
-   * where it points and the main drive (W) pushes it exactly that way. The pilot's own
-   * thruster input on an axis goes first.
+   * The autopilot: path steering flies the ship by its path (see PathSteering). Where it does
+   * not (slower than 20 m/s, or the nose elsewhere), the thrusters push against every drift
+   * across the nose, so the ship flies where it points and the main drive (W) pushes it exactly
+   * that way. The pilot's own thruster input on an axis goes first.
    */
-  private trimDrift(controls: Readonly<Controls>): Controls {
+  private trimDrift(controls: Readonly<Controls>, dt: number): Controls {
     const out = Object.assign(this.computed, controls);
+    const me = this.me!;
     // right after a dodge the drift is the point, and so is a swing on the hook
-    if (this.time < this.dodgeReadyAt - DODGE_RECHARGE + DODGE_DRIFT || this.tethers.has(this.me!)) return out;
-    const drift = this.me!.flight.toLocalDirection(this.me!.flight.velocity, relative).divideScalar(RCS_THRUST * AUTOPILOT_EASE);
+    if (this.time < this.dodgeReadyAt - DODGE_RECHARGE + DODGE_DRIFT || this.tethers.has(me)) {
+      this.steering.release();
+      return out;
+    }
+    if (this.steering.fly(me.flight, controls, this.field.gravity(me.flight.position, gravity), dt, out)) return out;
+    const drift = me.flight.toLocalDirection(me.flight.velocity, relative).divideScalar(RCS_THRUST * AUTOPILOT_EASE);
     if (!controls.strafeX) out.strafeX = THREE.MathUtils.clamp(-drift.x, -1, 1);
     if (!controls.strafeY) out.strafeY = THREE.MathUtils.clamp(-drift.y, -1, 1);
     return out;

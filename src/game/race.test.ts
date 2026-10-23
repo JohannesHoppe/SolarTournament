@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { BOOST_RADIUS, Course, GATE_RADIUS, GATES, modeOfRound, ROUND_MODES } from './race';
 import { ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
+import { MAX_SPEED, turnRadius } from '../ship/flight';
+import { bendRadius } from './racingline';
 
 const course = (arena = ARENAS[0]) => {
   const field = testField();
@@ -44,11 +46,16 @@ describe('the race course', () => {
     expect(c.crossing(0, before.clone().addScaledVector(side, BOOST_RADIUS * 2), after.clone().addScaledVector(side, BOOST_RADIUS * 2))!).toBeGreaterThan(BOOST_RADIUS);
   });
 
-  it('weaves in and out of the thick of the field', () => {
-    const distances = course().points.map((p) => Math.hypot(p.x, p.z));
-    const inner = distances.filter((_, i) => i % 2 === 1);
-    const outer = distances.filter((_, i) => i % 2 === 0);
-    expect(Math.max(...inner)).toBeLessThan(Math.min(...outer));
+  it('bends gently enough everywhere to be flown at the speed limit with path steering', () => {
+    // a quarter more room than the tightest turn at the limit, for a pilot who is not perfect
+    const tightest = turnRadius(MAX_SPEED) * 1.25;
+    const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+    for (const arena of ARENAS) {
+      const { line } = course(arena);
+      let least = Infinity;
+      for (let s = 0; s < line.length; s += 400) least = Math.min(least, bendRadius(line.point(s - 1000, a), line.point(s, b), line.point(s + 1000, c)));
+      expect(least, arena.id).toBeGreaterThan(tightest);
+    }
   });
 });
 

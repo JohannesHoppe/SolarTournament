@@ -184,6 +184,151 @@ export class FlightModel {
   }
 }
 
+/**
+ * Path steering leads the nose at most this far into a turn (rad, 60°), so the way ahead stays
+ * in view; the main drive then bends the path with sin 60° of its thrust.
+ */
+const PATH_LEAD_MAX = Math.PI / 3;
+/**
+ * How hard path steering bends the path at most (units/s² across it, 150 m/s², about 15 g):
+ * the main drive led 60° into the turn plus the thrusters. At the speed limit that is a turn of
+ * 415 m radius; the thrusters alone (4 g) would need 1.56 km.
+ */
+export const PATH_GRIP = MAIN_THRUST * Math.sin(PATH_LEAD_MAX) + RCS_THRUST;
+/** How hard path steering bends a ship's path as its drive and thrusters are now (units/s²; see PATH_GRIP). */
+export const gripOf = (flight: FlightModel) => MAIN_THRUST * flight.driveFactor * Math.sin(PATH_LEAD_MAX) + RCS_THRUST * flight.thrusterFactor;
+/** The tightest turn path steering flies at a speed (units, radius), with a grip (units/s²). */
+export const turnRadius = (speed: number, grip = PATH_GRIP) => (speed * speed) / grip;
+/** The fastest a ship takes a bend of a radius (units/s), with a grip (units/s²). */
+export const cornerSpeed = (radius: number, grip = PATH_GRIP) => Math.sqrt(grip * radius);
+/**
+ * Path steering takes over from a speed of PATH_ENGAGE (units/s, 20 m/s) with the nose within
+ * PATH_ALIGN (rad, about 30°) of the flight, and gives the ship back below PATH_RELEASE (10 m/s)
+ * or with the nose more than PATH_LOST (rad, about 115°) off it: slower, or looking elsewhere
+ * (after a flip, say), the stick turns the nose.
+ */
+const PATH_ENGAGE = 400;
+const PATH_RELEASE = 200;
+const PATH_ALIGN = 0.5;
+const PATH_LOST = 2;
+/** The course the stick sets runs at most this far ahead of the flight (rad, about 3°), so letting go stops the turn at once. */
+const PATH_LAG = 0.05;
+/** The thrusters pull the flight onto the course with this gain (1/s), never harder than they push. */
+const PATH_GAIN = 3;
+/** The nose leads into a turn once the drive's share of it grows to this share of its thrust (0..1), not at once. */
+const PATH_LEAD_ONSET = 0.25;
+/** From PATH_FREE_FROM to PATH_FREE of the speed limit the drive's push along the path grows free: the limit takes it out. */
+const PATH_FREE_FROM = 0.95;
+const PATH_FREE = 0.99;
+/** Without its push along the path wanted, the drive fires from a nose within PATH_SQUARE_FROM (cosine, about 25°) of where it should point, fully within PATH_SQUARE (about 10°). */
+const PATH_SQUARE_FROM = 0.9;
+const PATH_SQUARE = 0.985;
+/** Steering gain of the nose onto its goal (see FlightModel.steer). */
+const PATH_STEER = 2.5;
+
+const path = new THREE.Vector3();
+const nose = new THREE.Vector3();
+const turn = new THREE.Vector3();
+const across = new THREE.Vector3();
+const demand = new THREE.Vector3();
+const drive = new THREE.Vector3();
+const goal = new THREE.Vector3();
+
+/**
+ * Path steering, the autopilot's way of flying: the stick sets how fast the path turns, not the
+ * nose. The flight computer keeps a course (where the stick says the ship should fly) and bends
+ * the flight onto it as hard as drive and thrusters allow: up to 4 g the thrusters alone, the
+ * nose on the course; beyond that it leads the nose into the turn (at most PATH_LEAD_MAX) and
+ * fires the main drive, so its push across the flight bends the path. The pilot's drive still
+ * pushes along the path; at the speed limit the limit takes the drive's push along the path,
+ * and below it, without the pilot's drive, the thrusters brake what they can of it. Letting go
+ * flies straight on, and the nose settles onto the path. The pilot's own thruster input on an
+ * axis goes first and leaves the course where it is: a sidestep, after which the thrusters bring
+ * the flight back parallel to the course.
+ */
+export class PathSteering {
+  /** Where the flight should go (unit length). */
+  readonly course = new THREE.Vector3(0, 0, -1);
+  /** Whether path steering flies the ship (see PATH_ENGAGE); otherwise the stick turns the nose. */
+  engaged = false;
+
+  /** Hands the ship back; the next take-over starts from the nose. */
+  release() {
+    this.engaged = false;
+  }
+
+  /**
+   * Writes the commands for one step into `out` (from the pilot's `controls`): true while path
+   * steering flies, false when the stick turns the nose (too slow, or the nose elsewhere).
+   */
+  fly(flight: FlightModel, controls: Readonly<Controls>, gravity: THREE.Vector3, dt: number, out: Controls): boolean {
+    const speed = flight.velocity.length();
+    flight.forward(nose);
+    path.copy(flight.velocity).divideScalar(Math.max(speed, 1e-6));
+    const off = speed > 0 ? nose.angleTo(path) : Math.PI;
+    if (this.engaged ? speed < PATH_RELEASE || off > PATH_LOST : speed < PATH_ENGAGE || off > PATH_ALIGN) {
+      this.engaged = false;
+      return false;
+    }
+    if (!this.engaged) {
+      // from the nose: the flight comes round to where the ship points, as without path steering
+      this.engaged = true;
+      this.course.copy(nose);
+    }
+    const thrust = MAIN_THRUST * flight.driveFactor;
+    const thrusters = RCS_THRUST * flight.thrusterFactor;
+    const rate = Math.min(MAX_TURN_RATE, gripOf(flight) / speed);
+    // the stick turns the course about the ship's up and right axes, as it would turn the nose
+    turn.set(controls.pitch * rate, -controls.yaw * rate, 0).applyQuaternion(flight.orientation);
+    const before = this.course.angleTo(path);
+    this.course.addScaledVector(across.crossVectors(turn, this.course), dt).normalize();
+    const limit = Math.max(before, PATH_LAG);
+    if (this.course.angleTo(path) > limit) {
+      across.copy(this.course).addScaledVector(path, -this.course.dot(path)).normalize();
+      this.course.copy(path).multiplyScalar(Math.cos(limit)).addScaledVector(across, Math.sin(limit));
+    }
+    // what bends the path: the stick's turn, the thrusters pulling the flight onto the course,
+    // and against gravity across the flight
+    demand.crossVectors(turn, flight.velocity);
+    across.copy(this.course).addScaledVector(path, -this.course.dot(path)).multiplyScalar(speed * PATH_GAIN).clampLength(0, thrusters);
+    demand.add(across).sub(gravity);
+    demand.addScaledVector(path, -demand.dot(path));
+    const bend = demand.length();
+    // the thrusters bend what they can, the drive the rest. Its nose leads into the turn as
+    // little as the bend allows where its push along the path is wanted (the pilot's drive) or
+    // free (at the limit, which takes it out), at most PATH_LEAD_MAX; otherwise square to the
+    // path, so a turn adds no speed the pilot did not ask for
+    const sideways = THREE.MathUtils.clamp(bend - thrusters, 0, thrust);
+    const pilot = THREE.MathUtils.clamp(controls.thrust, 0, 1);
+    const open = Math.max(pilot, THREE.MathUtils.smoothstep(speed / MAX_SPEED, PATH_FREE_FROM, PATH_FREE));
+    goal.copy(this.course);
+    drive.set(0, 0, 0);
+    if (sideways > 0) {
+      const lead = Math.min(THREE.MathUtils.lerp(Math.PI / 2, Math.asin(sideways / thrust), open), THREE.MathUtils.lerp(Math.PI / 2, PATH_LEAD_MAX, open));
+      goal.copy(path).multiplyScalar(Math.cos(lead)).addScaledVector(demand, Math.sin(lead) / bend);
+      drive.copy(goal).multiplyScalar(Math.min(thrust, sideways / Math.sin(lead)));
+      // a slight bend leads the nose only a little: it grows in with the drive's share
+      goal.lerp(this.course, 1 - THREE.MathUtils.smoothstep(sideways / thrust, 0, PATH_LEAD_ONSET)).normalize();
+    }
+    Object.assign(out, controls);
+    flight.steer(goal, PATH_STEER, out);
+    // the drive fires as far as its push along the nose is wanted, and with the pilot's; where
+    // its push along the path is not wanted, only once the nose is nearly square to it
+    const square = THREE.MathUtils.lerp(THREE.MathUtils.smoothstep(nose.dot(across.copy(drive).normalize()), PATH_SQUARE_FROM, PATH_SQUARE), 1, open);
+    out.thrust = Math.max(pilot, thrust > 0 ? THREE.MathUtils.clamp(drive.dot(nose) / thrust, 0, 1) * square : 0);
+    // the thrusters: what the drive leaves of the bend, and what they can of its push along the
+    // path where that is not wanted
+    drive.copy(nose).multiplyScalar(out.thrust * thrust);
+    const push = drive.dot(path);
+    demand.sub(drive).addScaledVector(path, push * open);
+    flight.toLocalDirection(demand, across).divideScalar(Math.max(thrusters, 1e-6));
+    if (!controls.strafeX) out.strafeX = THREE.MathUtils.clamp(across.x, -1, 1);
+    if (!controls.strafeY) out.strafeY = THREE.MathUtils.clamp(across.y, -1, 1);
+    if (!controls.strafeZ) out.strafeZ = THREE.MathUtils.clamp(-across.z, -1, 1);
+    return true;
+  }
+}
+
 /** Below this angle between nose and goal (rad) the flip ends in ordinary steering. */
 const FLIP_STEER_ANGLE = 0.35;
 /** The nose only pulls up once the roll is this close to the goal (rad). */

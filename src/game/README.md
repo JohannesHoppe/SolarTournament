@@ -6,7 +6,7 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 |---|---|
 | `game.ts` | The game: round flow and each round's opening show, scoring, respawns, warnings, the menus' wiring |
 | `alarms.ts` | The tiered alarms (caution, warning, critical), their tones, and the escape load of a gravity well |
-| `race.ts` | Round and room modes; the race course of gates and its points |
+| `race.ts` | Round and room modes; the race course of gates (a gentle loop, flown at the speed limit), its points, and where a flight crosses a ring's plane |
 | `survival.ts` | Last Clone Standing: clones per round, the solar flare closing in |
 | `flags.ts` | Capture the Flag: sides, bases, sponsor cores, captures |
 | `fleet.ts` | The President's Fleet: the battleship, its parts, phases and sinking |
@@ -14,7 +14,7 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | `comet.ts` | Comets crossing the arena: schedule and route (bent and swallowed by a well), the shower's pieces, the head breaking rock and shoving hull, the comet as the scene shows it |
 | `items.ts` | Sponsor probes and what they carry |
 | `hook.ts` | The hook: harpoon, cable, winch, swing |
-| `racingline.ts` | The ideal line through gates or rings, bowing around rock |
+| `racingline.ts` | The ideal line through gates or rings, bowing around rock; how tight a line bends |
 | `laps.ts` | Lap clock, splits, the best lap and its ghost |
 | `hangar.ts` | Solar Coins, upgrades and their prices |
 | `school.ts` | The flight school: five courses, their drills and markers |

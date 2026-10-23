@@ -263,10 +263,29 @@ export class Hud {
    * The flight computer brackets the next ring of a course on screen, sized to its opening of
    * `radius` (units), with a reticle on its core, and the ring after it faintly (see
    * .gate-mark); a ring behind, off screen, too far to see or filling the view goes unmarked.
+   * `crossing` is where the flight passes the next ring's plane, `inside` whether that lies
+   * inside the ring (see markCrossing).
    */
-  setGates(camera: THREE.Camera, next: THREE.Vector3 | null, after: THREE.Vector3 | null, radius: number) {
+  setGates(camera: THREE.Camera, next: THREE.Vector3 | null, after: THREE.Vector3 | null, radius: number, crossing: THREE.Vector3 | null = null, inside = false) {
     this.markGate(this.gateNext, camera, next, radius);
     this.markGate(this.gateAfter, camera, after, radius);
+    this.markCrossing(camera, next && crossing, inside);
+  }
+
+  private readonly crossing = $('gate-cross');
+
+  /**
+   * The crossing mark: where the flight, held as it is, passes the next ring's plane (see
+   * pathCrossing). In the flight computer's azure while that lies inside the ring, in orange
+   * while it lies outside: the pilot steers the mark into the ring. Hidden off screen.
+   */
+  private markCrossing(camera: THREE.Camera, point: THREE.Vector3 | null, inside: boolean) {
+    if (point) projected.copy(point).project(camera);
+    const shown = !!point && projected.z < 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1;
+    setHidden(this.crossing, !shown);
+    if (!shown) return;
+    setClass(this.crossing, 'outside', !inside);
+    this.crossing.style.translate = `${Math.round(((projected.x + 1) / 2) * viewport.width)}px ${Math.round(((1 - projected.y) / 2) * viewport.height)}px`;
   }
 
   private readonly gateNext = { element: $('gate-mark'), x: NaN, y: NaN, size: NaN };
