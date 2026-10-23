@@ -2,11 +2,12 @@ import { MAIN_THRUST, MAX_SPEED, METERS_PER_UNIT, OVERDRIVE_PUSH, PATH_GRIP } fr
 import { MAX_HULL } from '../ship/ship';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS } from '../game/race';
-import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_TOP_SPEED, TORPEDOES } from '../game/torpedoes';
+import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES } from '../game/torpedoes';
 import { HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
 import { PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
 import { CLONES, FLARE_BURN, FLARE_HEAT } from '../game/survival';
-import { ADRIFT_SECONDS, CAPTURE_POINTS, CAPTURES_TO_WIN, GRAB_POINTS, GRAB_REACH, RETURN_POINTS } from '../game/flags';
+import { ADRIFT_SECONDS, CAPTURE_POINTS, CAPTURES_TO_WIN, CORE_BRAKE, GRAB_POINTS, GRAB_REACH, RETURN_POINTS } from '../game/flags';
+import { MASS } from '../world/bodies';
 import { ARRIVAL, BATTERY_PERIOD, BATTERY_RANGE, SINK_BLAST, SINK_POINTS, TORPEDO_HITS, ZONE_HITS } from '../game/fleet';
 import { COMET_WARNING } from '../game/comet';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
@@ -47,10 +48,14 @@ export const FROM_CODE: Record<string, number> = {
   torpedoTurn: g(TORPEDO_LATERAL),
   grip: g(PATH_GRIP),
   torpedoBreak: TORPEDO_BREAK,
-  torpedoLife: TORPEDO_LIFETIME,
+  torpedoMass: MASS.torpedo / 1000,
+  torpedoThrust: g(TORPEDO_THRUST),
+  torpedoBurn: TORPEDO_LIFETIME,
+  fling: FLING_CREDIT,
   hookRange: km(HOOK_RANGE),
   hookPull: g(HOOK_PULL),
   hookReady: HOOK_RECHARGE,
+  shipMass: MASS.ship / 1000,
   probeEvery: PROBE_EVERY,
   probeFirst: PROBE_FIRST,
   probeReach: meters(PROBE_RADIUS),
@@ -65,6 +70,8 @@ export const FROM_CODE: Record<string, number> = {
   capturePoints: CAPTURE_POINTS,
   returnPoints: RETURN_POINTS,
   adrift: ADRIFT_SECONDS,
+  coreMass: MASS.core / 1000,
+  coreBrake: g(CORE_BRAKE),
   arrival: ARRIVAL,
   battery: ZONE_HITS.battery,
   driveHits: ZONE_HITS.drive,
@@ -125,6 +132,7 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   stormLength: { value: 8, readme: 'blinds the sensors for # seconds' },
   noReturn: { value: 280, readme: 'Within about # m no drive gets out' },
   impactKill: { value: 72, readme: 'at about # m/s a ship is destroyed' },
+  towCable: { value: 75, readme: 'on a cable of about # m' },
 };
 
 /** Every number of the handbook by its placeholder. */

@@ -9,6 +9,7 @@ The arena a round is fought in. Everything that every browser must build alike (
 | `asteroids.ts` | The field: rocks, ice, debris or hull (shoved by a comet), orbits, gravity, collisions, raycasts, line of sight; how close up rocks keep their full relief (the picture's quality) |
 | `rocks.ts` | Generates the 16 asteroid shapes with integer math, identical on every browser |
 | `surface.ts` | A rock's measured surface, as collisions see it |
+| `bodies.ts` | Bodies and their masses (ship, core, probe, torpedo, wreckage, the field's pieces by volume and density, the battleship; rings immovable); the rope that only pulls (between two browsers as a stiff spring, each end pulled where it is run) and the bump, both split by mass |
 | `shapes.ts` | Ice, station debris and the world ship's hull sections |
 | `gates.ts` | The rings of the tournament as structures (coil housings, windings, struts, lights, a station module with a sponsor's plate), all solid but the lights, shared by race gates, school rings and Capture the Flag bases |
 | `powercore.ts` | The sponsor core of Capture the Flag as a structure: an armored reactor canister with glowing windings, sign plates and a cage for the tow cable; fades to its outline |
@@ -20,4 +21,4 @@ The arena a round is fought in. Everything that every browser must build alike (
 | `flare.ts` | The solar flare's plasma on screen: a sphere of roiling fire with filaments |
 | `space.ts` | Stars, nebula, the sun's light and shadows (heated by a solar flare; their map's size or none at all, as the picture's quality says), dust |
 
-`asteroids.test.ts`, `arenas.test.ts` and `wrecks.test.ts` check layouts, snapshots and collisions, `reference.test.ts` the reference plane in every arena, height, climb, the sky pointer, the closure rate and each arena's fixed references (`npm test`).
+`asteroids.test.ts`, `arenas.test.ts` and `wrecks.test.ts` check layouts, snapshots and collisions, `bodies.test.ts` the rope and the bump, `reference.test.ts` the reference plane in every arena, height, climb, the sky pointer, the closure rate and each arena's fixed references (`npm test`).
