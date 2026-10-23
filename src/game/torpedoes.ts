@@ -67,18 +67,16 @@ export class Torpedoes {
 
   constructor(private readonly effects: Effects) {}
 
-  launch(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3, now: number, own: boolean): Torpedo {
+  launch(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3, now: number, own: boolean) {
     const mesh = new THREE.Mesh(this.geometry, this.material);
     mesh.position.copy(position);
     this.group.add(mesh);
-    const torpedo = { id, shooter, target, position: mesh.position, velocity: velocity.clone(), bornAt: now, own, mesh };
-    this.list.push(torpedo);
-    return torpedo;
+    this.list.push({ id, shooter, target, position: mesh.position, velocity: velocity.clone(), bornAt: now, own, mesh });
   }
 
   /** The launch velocity of a torpedo from a ship: the ship's own and a push out of the tube. */
-  static launchVelocity(ship: Ship, target = new THREE.Vector3()): THREE.Vector3 {
-    return ship.flight.forward(target).multiplyScalar(LAUNCH_SPEED).add(ship.flight.velocity);
+  static launchVelocity(ship: Ship): THREE.Vector3 {
+    return ship.flight.forward(new THREE.Vector3()).multiplyScalar(LAUNCH_SPEED).add(ship.flight.velocity);
   }
 
   /**

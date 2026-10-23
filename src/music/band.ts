@@ -25,6 +25,8 @@ const KICK_CURVES: Record<KickDesign['shape'], Float32Array> = {
   fold: curve((x) => Math.sin(Math.PI * 1.6 * x)),
 };
 
+/** How far the french filter is open at a point of its eight-bar sweep (0..1): up over the first half, down over the second. */
+const opening = (sweep: number) => (sweep < 0.5 ? sweep * 2 : 2 - sweep * 2);
 /** Master filter cutoff for a brightness of 0..1: 200 Hz to 18 kHz. */
 const cutoff = (brightness: number) => 200 * Math.pow(90, Math.max(0, Math.min(1, brightness)));
 /** The music ducks under a voice line and comes back over this long (s), without a click. */
@@ -366,12 +368,16 @@ export class Band {
     this.rumbleLevel.gain.value = 0.75 * song.kick.rumbleLevel;
     if (this.flavor === song.flavor) return;
     this.flavor = song.flavor;
-    const crushed = song.flavor === 'industrial' || song.flavor === 'ebm';
-    this.crush.wet.value = crushed ? 0.55 : 0;
-    this.percCrush.wet.value = crushed || song.flavor === 'schranz' ? 0.8 : 0.2;
+    this.crush.wet.value = this.hatCrush();
+    this.percCrush.wet.value = this.hatCrush() > 0 || song.flavor === 'schranz' ? 0.8 : 0.2;
     this.acid.oscillator.type = song.flavor === 'acid' ? 'sawtooth' : 'square';
     // when the acid carries the track, the bass makes room above the rumble
     this.bassFloor = song.flavor === 'acid' ? 150 : 60;
+  }
+
+  /** How much of the hats goes through the bit crusher: much in the industrial flavors, none in the rest. */
+  private hatCrush() {
+    return this.flavor === 'industrial' || this.flavor === 'ebm' ? 0.55 : 0;
   }
 
   /** Plays sixteenth number `step` of the track at audio time `time`. */
@@ -469,8 +475,8 @@ export class Band {
     this.acidDrive.gain.setValueAtTime(0.6 + 1.6 * drive, t);
     this.stabDrive.gain.setValueAtTime(0.6 + 1.4 * drive, t);
     // the french filter opens over four bars and closes over the next four
-    const open = info.sweep < 0.5 ? info.sweep * 2 : 2 - info.sweep * 2;
-    const next = info.sweep + 1 / 8 < 0.5 ? (info.sweep + 1 / 8) * 2 : 2 - (info.sweep + 1 / 8) * 2;
+    const open = opening(info.sweep);
+    const next = opening(info.sweep + 1 / 8);
     this.frenchFilter.frequency.setValueAtTime(400 + 5200 * open * open, t);
     this.frenchFilter.frequency.linearRampToValueAtTime(400 + 5200 * next * next, t + bar);
   }
@@ -506,7 +512,7 @@ export class Band {
         this.crush.bits.setValueAtTime(12, t);
         this.crush.bits.linearRampToValueAtTime(3, t + bar * 0.75);
         this.crush.bits.setValueAtTime(6, t + bar);
-        this.crush.wet.setValueAtTime(this.flavor === 'industrial' || this.flavor === 'ebm' ? 0.55 : 0, t + bar);
+        this.crush.wet.setValueAtTime(this.hatCrush(), t + bar);
         break;
       default:
         break;
@@ -515,7 +521,8 @@ export class Band {
 
   /** The record slows down: every tonal part slides two octaves down, the level falls away. */
   private tapeStop(t: number, length: number) {
-    for (const synth of [this.bass, this.acid, this.hoover, this.bell, this.arp]) {
+    const tonal = [this.bass, this.acid, this.hoover, this.bell, this.arp];
+    for (const synth of tonal) {
       // cents are already logarithmic: a straight line in cents is the slowing record
       synth.detune.setValueAtTime(0, t);
       synth.detune.linearRampToValueAtTime(-2400, t + length);
@@ -525,7 +532,7 @@ export class Band {
     this.master.frequency.cancelAndHoldAtTime(t);
     this.master.frequency.exponentialRampToValueAtTime(200, t + length);
     // the next bar starts in tune and at full level again
-    for (const synth of [this.bass, this.acid, this.hoover, this.bell, this.arp]) synth.detune.setValueAtTime(0, t + length);
+    for (const synth of tonal) synth.detune.setValueAtTime(0, t + length);
     this.musicLevel.gain.setValueAtTime(1, t + length);
   }
 
@@ -574,10 +581,10 @@ export class Band {
   /**
    * The regime speaks. "speech": sentence after sentence, each one rendered whole, so it keeps
    * its melody. "chop": every word on its own eighth, like a vocoder hook. The last clip is
-   * thrown into the echo. Returns the end time.
+   * thrown into the echo.
    */
-  speak(line: VoiceLine, t: number, eighth: number): number {
-    if (!this.voice) return t;
+  speak(line: VoiceLine, t: number, eighth: number) {
+    if (!this.voice) return;
     let position = t;
     const list = this.clips(line.language, line.text, line.style === 'chop');
     list.forEach(({ clip, stop }, i) => {
@@ -597,7 +604,6 @@ export class Band {
     this.musicLevel.gain.linearRampToValueAtTime(1, position + DUCK_RAMP);
     this.onSpeak({ line: line.text, language: line.language, time: t, duration: position - t });
     this.voiceUntil = Math.max(this.voiceUntil, position);
-    return position;
   }
 
   /** The announcer cuts in over the radio: static, the words, static. */
