@@ -26,7 +26,7 @@ from chatterbox.mtl_tts import ChatterboxMultilingualTTS, Conditionals
 work, language = Path(sys.argv[1]), sys.argv[2]
 deadline = time.time() + float(sys.argv[3]) * 60 if len(sys.argv) > 3 else float('inf')
 plan = json.loads((work / 'lines.json').read_text())
-clone, lines = plan['clone'], plan['locales'][language]
+clone, check, lines = plan['clone'], plan['check'], plan['locales'][language]
 
 # Tries per sentence: the first take that Whisper hears as the text wins, else the best of them.
 TRIES = 4
@@ -45,8 +45,13 @@ conds_path = work / 'nicole-conds.pt'
 # the store: every line cloned before, by its key
 store: dict[str, np.ndarray] = {}
 rate = 24000
-if store_index.exists() and store_audio.exists():
+if store_index.exists() != store_audio.exists():
+    sys.exit(f'{language}: the store is half there ({store_index.name} or {store_audio.name} missing); fetch both again')
+if store_index.exists():
     index = json.loads(store_index.read_text())
+    # an index cuts only the audio it was written for: one out of step would cut every clip wrong, for good
+    if hashlib.sha256(store_audio.read_bytes()).hexdigest() != index['audio']:
+        sys.exit(f'{language}: {store_audio.name} is not the audio its index was written for; fetch both again')
     audio, rate = sf.read(store_audio, dtype='float32')
     store = {key: audio[start:start + length] for key, (start, length) in index['clips'].items()}
 wanted = {line['key'] for line in lines}
@@ -83,7 +88,7 @@ if conds_path.exists():
 else:
     model.prepare_conditionals(str(work / 'reference.wav'), exaggeration=clone['exaggeration'])
     model.conds.save(conds_path)
-hear = pipeline('automatic-speech-recognition', model='openai/whisper-small', device='cpu')
+hear = pipeline('automatic-speech-recognition', model=check['whisper'], revision=check['revision'], device='cpu')
 
 
 def letters(text: str) -> str:

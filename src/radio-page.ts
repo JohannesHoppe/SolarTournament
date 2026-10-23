@@ -1,7 +1,7 @@
 import type { Spoken } from './music/band';
 import { renderTrack, trackSeconds } from './music/preview';
 import { bindVolume, Radio } from './music/radio';
-import { createSong, ROUND_SECONDS, titleFor, type SectionKind, type Song } from './music/songs';
+import { createSong, ROUND_SECONDS, titleFor, type SectionKind, type Song, type Strategy } from './music/songs';
 import { showTransmission } from './music/transmission';
 import { initLocale, msg, t, translatePage } from './i18n/i18n';
 
@@ -28,6 +28,16 @@ const seek = $<HTMLInputElement>('track-seek');
 /** The Host holds the playhead: the clock does not move it meanwhile. */
 let dragging = false;
 
+/** How a track develops, as the listener reads it. */
+const STRATEGY_NAMES: Record<Strategy, string> = {
+  classic: msg('classic'),
+  relentless: msg('relentless'),
+  hypnotic: msg('hypnotic'),
+  movements: msg('in movements'),
+  switcher: msg('switching'),
+  fakeDrop: msg('fake drop'),
+  polymeter: msg('polymeter'),
+};
 const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 /** Capitalizes each word; words start after a space, so ß or ö inside a word stay as they are. */
 const tidy = (title: string) => title.trim().replace(/\s+/g, ' ').replace(/(^| )(\p{L})/gu, (_, space: string, c: string) => space + c.toUpperCase());
@@ -52,7 +62,7 @@ function tune(title: string) {
   history.replaceState(null, '', `?title=${encodeURIComponent(clean)}`);
   $('track').hidden = false;
   $('track-title').textContent = song.title;
-  $('track-facts').textContent = `${song.flavor} · ${song.strategy} · ${song.bpm} bpm`;
+  $('track-facts').textContent = `${song.flavor} · ${t(STRATEGY_NAMES[song.strategy])} · ${song.bpm} bpm`;
   const length = trackSeconds(song);
   $('track-length').textContent = time(length);
   seek.max = String(Math.floor(length));

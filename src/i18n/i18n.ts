@@ -76,7 +76,8 @@ export function fill(text: string, params?: Record<string, string | number>): st
  */
 export function translatePage(root: ParentNode = document) {
   for (const element of root.querySelectorAll<HTMLElement>('[data-i18n]')) {
-    element.dataset.i18n ||= element.innerHTML.trim();
+    // a text that runs over several lines of the page is keyed as one line, as tools/i18n collects it
+    element.dataset.i18n ||= element.innerHTML.replace(/\s+/g, ' ').trim();
     element.innerHTML = t(element.dataset.i18n);
   }
   for (const element of root.querySelectorAll<HTMLElement>('[data-i18n-attr]')) {

@@ -210,6 +210,9 @@ const kokoro = await KokoroTTS.from_pretrained(COMPUTER_VOICE.model, { dtype: 'f
 if (modelsCached) tryCache(() => writeFileSync(complete, COMPUTER_VOICE.revision + '\n'));
 const tokenizer = (kokoro as unknown as { tokenizer: (text: string, options: object) => { input_ids: unknown } }).tokenizer;
 
+/** A store of clones its index names could not be had: the sprites speak those lines without it, and the next build tries again. */
+let cloneMissed = false;
+
 /** A language's store of cloned lines as samples, fetched once (and kept in the cache under its fingerprint); null when it cannot be had or is not the one its index names. */
 async function cloneAudio(locale: Cloned, index: CloneIndex): Promise<Float32Array | null> {
   const file = join(clonesCache, `nicole-${locale}-${index.audio.slice(0, 16)}.flac`);
@@ -229,6 +232,7 @@ async function cloneAudio(locale: Cloned, index: CloneIndex): Promise<Float32Arr
     return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
   } catch (error) {
     console.warn(`Nicole's ${locale} clones not used (${(error as Error).message})`);
+    cloneMissed = true;
     return null;
   }
 }
@@ -269,6 +273,17 @@ for (const locale of ['en', 'de', 'es', 'fr'] as const) {
   sprite.write(locale);
 }
 if (unclonedLines) console.warn(`Nicole speaks ${unclonedLines} lines without her clone (not cloned yet: see the workflow Voice)`);
+
+// sprites made without a store that was there are not what their inputs promise: no stamp
+// (the next build renders them again) and nothing for the cache
+if (cloneMissed) {
+  for (const sprite of SPRITES) {
+    const kept = JSON.parse(readFileSync(manifest(sprite), 'utf8')) as { inputs?: string };
+    delete kept.inputs;
+    writeFileSync(manifest(sprite), JSON.stringify(kept, null, 1) + '\n');
+  }
+  process.exit(0);
+}
 
 // into the build cache, which keeps the newest few renders
 tryCache(() => {

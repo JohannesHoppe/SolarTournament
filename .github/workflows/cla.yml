@@ -22,7 +22,7 @@ jobs:
   cla:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/github-script@v7
+      - uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |
             const MAINTAINER = 'johanneshoppe';
@@ -43,7 +43,11 @@ jobs:
             // the API lists at most 250 commits: a longer pull request cannot be checked whole
             if (pr.commits > commits.length) unlinked.push(`${pr.commits - commits.length} commits beyond the first ${commits.length}`);
             for (const commit of commits) {
-              if (commit.author?.login) authors.add(commit.author.login);
+              // the maintainer needs no signature, so a commit in the maintainer's name counts
+              // only when GitHub verified it: anyone can write any e-mail address into a commit
+              const maintainer = commit.author?.login?.toLowerCase() === MAINTAINER;
+              if (maintainer && !commit.commit.verification?.verified) unlinked.push(`${commit.sha.slice(0, 7)} (in the maintainer's name, not verified)`);
+              else if (commit.author?.login) authors.add(commit.author.login);
               else unlinked.push(commit.sha.slice(0, 7));
               // co-authors sign too; only a GitHub noreply address tells their login
               for (const [, email] of commit.commit.message.matchAll(/^Co-authored-by:.*<([^>]+)>\s*$/gim)) {
@@ -55,7 +59,8 @@ jobs:
             const needed = [...authors].filter((login) => login.toLowerCase() !== MAINTAINER && !login.endsWith('[bot]'));
 
             // a signature: the file names the agreement and is signed with the login; one that
-            // only the pull request brings counts when its author committed it, nobody else
+            // only the pull request brings counts when its author committed it, nobody else, in
+            // a commit GitHub verified (made on github.com, or signed)
             const escape = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             async function signature(login, where, own) {
               const path = `contributors/${login}.txt`;
@@ -65,7 +70,7 @@ jobs:
                 if (!/Contributor License Agreement/i.test(text) || !new RegExp(`Signed:\\s*@?${escape(login)}\\s*$`, 'im').test(text)) return false;
                 if (!own) return true;
                 const { data: history } = await github.rest.repos.listCommits({ owner: where.owner, repo: where.repo, sha: where.ref, path, per_page: 1 });
-                return history[0]?.author?.login?.toLowerCase() === login.toLowerCase();
+                return history[0]?.author?.login?.toLowerCase() === login.toLowerCase() && history[0].commit.verification?.verified === true;
               } catch {
                 return false;
               }

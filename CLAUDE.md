@@ -112,6 +112,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `ship/models.ts` | The interceptors' hulls, low poly in code; collider, drive flame and glows come from the model files |
 | `ship/ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, drive animation |
 | `ship/flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`) |
+| `ship/impact.ts` | A ship striking a surface: how it bounces off and scrapes along, and what the impact costs its hull |
 | `ship/bots.ts` | Bot AI: desired velocity, turn and burn, dogfights in arcs, aiming with spread, a hand that eases every command in; every bot's skills (aim, reflexes, daring) |
 | **`view/`** | **What the screen shows** |
 | `view/hud.ts` | DOM HUD: gauges, markers, warnings, tunnel vision |
@@ -134,7 +135,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `sound/sounds.ts` | Synthesized sound effects: laser, explosion |
 | `sound/speaker.ts` | Nicole, the flight computer's voice: reads out what the screen shows, whole lines from the sprite |
 | **`music/`** | **Radio 2584** |
-| `music/songs.ts` | Hard techno tracks from a seed (flavor, form, energy curve, Grids-style patterns, fills); every decision is an integer hash of seed, bar and step |
+| `music/songs.ts` | Hard techno tracks from a seed (flavor, form, energy curve, weighted step patterns, fills); every decision is an integer hash of seed, bar and step |
 | `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser), the voices, and how one sixteenth is played |
 | `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts |
 | `music/preview.ts` | Renders a track (or a stretch) offline as WAV: downloads on the radio page, previews in development |

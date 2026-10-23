@@ -44,7 +44,7 @@ test('two tabs of one tournament see the same world', async ({ context }) => {
 });
 
 test('a torpedo flies on both tabs and hits the ship of the other', async ({ context }) => {
-  const { a, b } = await pair(context, `e2e-${Date.now().toString(36)}t&bots=0`);
+  const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}t&bots=0`);
   // above the field, where no rock of whatever arena the room draws comes between the two
   const target = await b.evaluate(() => {
     const game = (window as unknown as GameWindow).game;
@@ -69,11 +69,12 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
   expect(await b.evaluate(() => (window as unknown as GameWindow).game.torpedoes.list.length)).toBe(1);
   await play(b, 8);
   expect(await b.evaluate(() => (window as unknown as GameWindow).game.me.hull)).toBe(40);
+  expect(errors).toEqual([]);
 });
 
 test('two tabs of Capture the Flag agree on the sides and on who has a core in tow', async ({ context }) => {
   // two Hosts alone: bots would only slow two tabs without a GPU down
-  const { a, b } = await pair(context, `e2e-${Date.now().toString(36)}f&m=flag&bots=0`);
+  const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}f&m=flag&bots=0`);
   const sides = (page: Page) =>
     page.evaluate(() => {
       const game = (window as unknown as GameWindow).game;
@@ -94,10 +95,11 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
   });
   await play(b, 2);
   for (const page of [a, b]) expect(await page.evaluate(() => (window as unknown as GameWindow).game.flags.cores.map((core: { carrier: string | null }) => core.carrier))).toContain(thief);
+  expect(errors).toEqual([]);
 });
 
 test("two tabs of the President's Fleet see one battleship and count the same hits, a torpedo's too", async ({ context }) => {
-  const { a, b } = await pair(context, `e2e-${Date.now().toString(36)}b&m=fleet&bots=0`);
+  const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}b&m=fleet&bots=0`);
   // the battleship comes in on the field time; both tabs wait for it
   for (const page of [a, b]) await page.evaluate(() => (window as unknown as GameWindow).game.field.setClock(13));
   await play(b, 2);
@@ -129,14 +131,16 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
   expect(lock).toBe('battleship.1');
   await play(b, 3);
   for (const page of [a, b]) expect(await page.evaluate(() => (window as unknown as GameWindow).game.fleet.hits[1])).toBe(10);
+  expect(errors).toEqual([]);
 });
 
 test('a nova from a ship without a core never goes off, and two tabs name its Host a cheater and cast it out', async ({ context }) => {
   const room = `e2e-${Date.now().toString(36)}n&bots=0`;
   const pages = [];
+  const errors: string[] = [];
   for (const wait of [7, 9, 9]) {
     const page = await context.newPage();
-    await join(page, room);
+    errors.push(...(await join(page, room)));
     await play(page, wait);
     pages.push(page);
   }
@@ -170,4 +174,5 @@ test('a nova from a ship without a core never goes off, and two tabs name its Ho
     expect(await page.evaluate((id) => (window as unknown as GameWindow).game.ships.some((ship: { id: string }) => ship.id === id), cheaterId)).toBe(false);
   }
   await cheat.waitForFunction(() => (window as unknown as GameWindow).game.state === 'menu', null, { timeout: 15_000 });
+  expect(errors).toEqual([]);
 });

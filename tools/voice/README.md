@@ -53,7 +53,9 @@ Nicole was born in English: Kokoro's `af_nicole`. For the other languages she is
 
 The cloning does not depend on anyone's computer. The GitHub Actions workflow `.github/workflows/voice.yml` runs whenever the lines, their translations or these tools change on `main`, and can be started by hand (Actions → Voice → Run workflow). For each language it downloads the store, clones what is missing, and puts the store back into the release. New lines take minutes. Cloning every line of a language from scratch takes a few hours; a job stops after about five hours and keeps what it has, and running the workflow again goes on from there. The three languages run side by side.
 
-Cloudflare's build usually runs before the workflow has finished: the new lines then play with the fallback voice until the next deploy builds the voices again.
+The store is guarded on its way: a download that fails stops the job instead of starting from an empty store; `clone.py` refuses an audio that is not the one its index was written for; the audio goes up before its index; and the store written every ten lines goes up even when a clone breaks off. Without a voice print in the release, only German clones (and makes the print), the other languages follow on the next run, so all three speak with the same voice. The workflow's actions are pinned to their commits, and the token that writes the release is given only to the steps that read and write it.
+
+Cloudflare's build usually runs before the workflow has finished: the new lines then play with the fallback voice until the next deploy builds the voices again. A build that cannot fetch a store the release has (a timeout, an upload under way) speaks those lines with the fallback too, but keeps no stamp and nothing in its cache, so the next build tries again.
 
 ## What makes Nicole Nicole, and where it is written down
 
@@ -65,6 +67,7 @@ Everything is pinned, so that the same inputs always give the same voice:
 | The reference sentences and their speed | `REFERENCE` in `nicole.ts` |
 | Chatterbox code (Git commit), model (Hugging Face revision), the V3 weights | `CLONE` in `nicole.ts` |
 | The chosen settings: emotion (`exaggeration` 0.8), closeness to the text (`cfg` 0.3), freedom of sampling (`temperature` 0.8) | `CLONE` in `nicole.ts` |
+| What checks the takes: Whisper's model and revision, the Python package of the store (`soundfile`) | `CHECK` in `nicole.ts` (not part of a line's key: they choose a take, they shape no voice) |
 | Nicole's voice print, the reference, the cloned lines | the release `voice-nicole` |
 
 The settings are the maintainer's choice by ear ("variant D"): unmistakably a machine, feeling and unfeeling at once, monotonous and aloof, with an English accent that stays. Changing any value of `CLONE` changes every key, and every line is cloned again on the next run.
@@ -78,12 +81,15 @@ The settings are the maintainer's choice by ear ("variant D"): unmistakably a ma
 **Clone on your own machine** (Python 3.11):
 
 ```
-node tools/voice/clone/prepare.ts <work folder>
 gh release download voice-nicole --dir <work folder> --pattern 'nicole-*' --pattern reference.wav
+node tools/voice/clone/prepare.ts <work folder>
 python -m venv .venv && .venv/bin/pip install -r <work folder>/requirements.txt
 .venv/bin/python tools/voice/clone/clone.py <work folder> de
-gh release upload voice-nicole <work folder>/nicole-de.flac <work folder>/nicole-de.json --clobber
+gh release upload voice-nicole <work folder>/nicole-de.flac --clobber
+gh release upload voice-nicole <work folder>/nicole-de.json --clobber
 ```
+
+If the release had no voice print, `clone.py` made one: upload `nicole-conds.pt` and `reference.wav` too, before any other language is cloned.
 
 The first run downloads Chatterbox (about 3 GB) and Whisper into the Hugging Face cache.
 

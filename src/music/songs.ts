@@ -699,7 +699,7 @@ function fillAt(song: Song, section: Section, inSection: number): Fill | null {
   return null;
 }
 
-// ---- patterns: importance and density (after Mutable Instruments Grids) --------------------
+// ---- patterns: importance and density ------------------------------------------------------
 
 /** How often a part mutates at the start of a 16-bar epoch. The kick never does. */
 const MUTATION: Record<Layer, number> = { kick: 0, rumble: 0, bass: 0.3, hat: 0.4, openHat: 0.15, ride: 0.2, clap: 0.2, perc: 0.3, metal: 0.25, acid: 0.5, lead: 0.35, chords: 0.3 };

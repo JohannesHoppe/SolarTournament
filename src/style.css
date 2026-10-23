@@ -100,6 +100,8 @@ kbd {
   transform: translate(-50%, -50%);
   width: min(440px, calc(100vw - 32px));
   max-height: calc(100vh - 32px);
+  /* on a phone the visible height, with the browser's bars, so both ends of a plate can be reached */
+  max-height: calc(100dvh - 32px);
   overflow: auto;
   padding: 28px 28px 22px;
   background: var(--plate);
@@ -1790,6 +1792,13 @@ body.touch #transmission {
     min-width: 0;
   }
 
+  /* the items held would push the row off both edges: the readout keeps its start, the pickup message said the rest */
+  body.touch #hud-torpedo {
+    max-width: 130px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
   body.touch #radar {
     width: 104px;
     height: 104px;
@@ -1864,7 +1873,7 @@ body.touch #transmission {
  * it, the round's panel narrow between the radar and the buttons, messages below the warnings,
  * the transmissions at the bottom between the thumbs.
  */
-@media (max-height: 500px) {
+@media (max-height: 500px) and (orientation: landscape) {
   body.touch .hud-top {
     top: 10px;
     gap: 20px;
@@ -1915,7 +1924,7 @@ body.touch #transmission {
  * two rows below that, then the radar and the round's panel beside it; the transmissions above
  * the thumbs' buttons.
  */
-@media (max-width: 600px) {
+@media (max-width: 600px) and (orientation: portrait) {
   body.touch .hud-top {
     top: 50px;
   }

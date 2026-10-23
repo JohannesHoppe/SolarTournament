@@ -55,7 +55,9 @@ const pageShell: Plugin = {
 
 export default defineConfig({
   base: './',
-  server: { host: '127.0.0.1' },
+  // the browser tests expect the dev server on 5173: taken, it stops rather than moving on to
+  // another port where the tests would meet some other checkout's server
+  server: { host: '127.0.0.1', port: 5173, strictPort: true },
   plugins: [pageShell],
   build: {
     target: 'es2022',

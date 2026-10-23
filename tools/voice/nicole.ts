@@ -39,6 +39,13 @@ export const CLONE = {
   temperature: 0.8,
 } as const;
 
+/**
+ * What checks the clone's work (see clone/clone.py): Whisper small (OpenAI, Apache-2.0) at a
+ * pinned revision, and the Python package that reads and writes the store. They pick a take but
+ * shape no voice, so they are not part of a line's key.
+ */
+export const CHECK = { whisper: 'openai/whisper-small', revision: '973afd24965f72e36ca33b3055d56a652f456b4d', soundfile: '0.14.0' } as const;
+
 /** What the English Nicole says to give the clone her voice: about 18 seconds, Kokoro at her own pace. */
 export const REFERENCE = {
   text: 'Beautiful flying. You are doing very well, darling. Feel that pull? Come back to the field, darling. Round over. You were wonderful. Your first kill. The President is proud of you.',

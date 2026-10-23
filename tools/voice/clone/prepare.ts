@@ -10,17 +10,17 @@
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { CLONE, CLONED, cloneKey, COMPUTER_VOICE, nicoleLines, REFERENCE } from '../nicole.ts';
+import { CHECK, CLONE, CLONED, cloneKey, COMPUTER_VOICE, nicoleLines, REFERENCE } from '../nicole.ts';
 
 const work = process.argv[2];
 if (!work) throw new Error('usage: prepare.ts <work folder>');
 mkdirSync(work, { recursive: true });
 
 const locales = Object.fromEntries(CLONED.map((locale) => [locale, nicoleLines(locale).map((text) => ({ key: cloneKey(locale, text), text }))]));
-writeFileSync(join(work, 'lines.json'), JSON.stringify({ clone: CLONE, locales }, null, 1) + '\n');
+writeFileSync(join(work, 'lines.json'), JSON.stringify({ clone: CLONE, check: CHECK, locales }, null, 1) + '\n');
 // what clone.py runs on (Python 3.11): Chatterbox at its pinned commit pins torch, transformers
 // (Whisper's too) and the rest itself
-writeFileSync(join(work, 'requirements.txt'), `chatterbox-tts @ ${CLONE.code}\nsoundfile\n`);
+writeFileSync(join(work, 'requirements.txt'), `chatterbox-tts @ ${CLONE.code}\nsoundfile==${CHECK.soundfile}\n`);
 // how many lines of each language the store in the work folder (if downloaded) still lacks
 const todo = Object.fromEntries(
   CLONED.map((locale) => {
