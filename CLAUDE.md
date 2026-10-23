@@ -84,7 +84,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `storage.ts` | The browser's localStorage, where it is available |
 | `i18n/` | The languages: `i18n.ts` (t(), msg(), the language chosen, the page's fixed texts) and the catalogs `de.ts`, `es.ts`, `fr.ts`; `tools/i18n/` collects every text to translate |
 | **`game/`** | **The round** |
-| `game/game.ts` | Game states, round flow, lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
+| `game/game.ts` | Game states, round flow (with each round's opening: intro flight, countdown, start lights, BURN!/FIGHT!), lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
 | `game/race.ts` | The race: modes of rounds and rooms, the course of gates (laid out from the arena's field), points for gates and places |
 | `game/survival.ts` | Last Clone Standing: the clones of a round, the solar flare closing in on the field time |
 | `game/flags.ts` | Capture the Flag: the two sides, their bases and sponsor cores; the lead browser's rules (sides, taking, sending home, capturing) and the state the others follow |
@@ -140,8 +140,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | **`music/`** | **Radio 2584** |
 | `music/songs.ts` | Hard techno tracks from a seed (flavor, form, energy curve, weighted step patterns, fills); every decision is an integer hash of seed, bar and step |
 | `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser), the voices, and how one sixteenth is played |
-| `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts |
-| `music/preview.ts` | Renders a track (or a stretch) offline as WAV: downloads on the radio page, previews in development |
+| `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts || `music/preview.ts` | Renders a track (or a stretch) offline as WAV: downloads on the radio page, previews in development |
 | `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the announcer's lines, the flight computer's lines |
 | `music/transmission.ts` | The on-screen transmission: whatever the radio says, in neon, while it is spoken (game and radio page) |
 | `music/voice.ts` | Loads the pre-rendered voices for the Host's language: the radio's sprite and the language's, joined (once, shared) |

@@ -18,7 +18,7 @@ import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_ROCK, ANNOUNCER_SURVIVOR, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
+import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
@@ -68,16 +68,34 @@ const STANDINGS_REFRESH = 0.25;
  */
 const DECIDED_SECONDS = 5;
 /**
- * A race starts with a countdown of START_SECONDS on the round clock: the grid's clamps hold
- * every ship until GO, and the race time runs from GO. A drive lit within START_WINDOW seconds
- * before GO, or within START_LATE seconds after it, makes a perfect start: a shove of
- * BOOST_PUSH along the nose. A drive lit earlier and still burning at GO stalls for
- * FALSE_START_STALL seconds. A bot gets a perfect start with a chance of its reflexes times
- * BOT_PERFECT_START.
+ * Every round but the flight school's opens as a show, on the round clock, the same on every
+ * browser: INTRO_SECONDS of the camera flying in over the arena while the field is presented,
+ * then a countdown of START_SECONDS with START_LIGHTS lights coming on one by one; at START_AT
+ * the clamps let go (BURN! in a race, FIGHT! in every other mode). Until then the clamps hold
+ * every ship (no drive, no thrusters, no laser, no torpedo, no overdrive, no hook), and a race's
+ * time runs from that moment. A drive lit within START_WINDOW seconds before BURN!, or within
+ * START_LATE seconds after it, makes a perfect start: a shove of BOOST_PUSH along the nose. A
+ * drive lit earlier and still burning at BURN! stalls for FALSE_START_STALL seconds. A bot gets a
+ * perfect start with a chance of its reflexes times BOT_PERFECT_START.
  */
+const INTRO_SECONDS = 5;
 const START_SECONDS = 3;
-/** How loud the stadium is at each number of the countdown (0 silent, 1 on its feet); at GO it erupts. */
+const START_AT = INTRO_SECONDS + START_SECONDS;
+const START_LIGHTS = 5;
+/** How loud the stadium is over the intro and at each number of the countdown (0 silent, 1 on its feet); at the start word it erupts. */
+const CROWD_INTRO = 0.3;
 const CROWD_COUNT: Record<number, number> = { 3: 0.45, 2: 0.65, 1: 0.85 };
+/** The countdown's state before its numbers: the intro is running (see startCountdown). */
+const INTRO_COUNT = START_SECONDS + 1;
+/**
+ * The intro's camera (see introCamera) holds on the arena's landmark for this share of the
+ * intro, drifting by INTRO_SWING (rad) around it over the whole intro, and then sweeps onto the
+ * own ship.
+ */
+const INTRO_HOLD = 0.3;
+const INTRO_SWING = 0.5;
+/** The start word shakes the camera like a kill (see KICK_SHAKE). */
+const START_KICK = 1.5;
 const START_WINDOW = 0.3;
 const START_LATE = 0.2;
 const FALSE_START_STALL = 1.5;
@@ -262,9 +280,12 @@ const BRAKE_SETTLE = 300;
 const CONFIRM_LOCK_MS = 600;
 /** Drive lights in the scene: one for every place of a tournament, and one more for a watching Host's clone. */
 const ENGINE_LIGHTS = TOURNAMENT_SIZE + 1;
-/** The announcer opens a round this long after the launch (s), once the flight computer is through. */
+/**
+ * A Host who comes in after a round's opening (online) hears the announcer open the broadcast
+ * this long after the launch (s), once the flight computer is through, and sees the arena's name
+ * ARENA_TITLE_DELAY after it; the opening's intro does both for everyone else.
+ */
 const ANNOUNCER_OPEN_DELAY = 7;
-/** The arena's name shows this long after the launch (s), once the link and the hint for the mouse are through. */
 const ARENA_TITLE_DELAY = 4.5;
 /** One standard gravity in units/s² (1 unit = 5 cm). */
 const G = 9.81 / METERS_PER_UNIT;
@@ -455,6 +476,9 @@ const upward = new THREE.Vector3();
 const facing = new THREE.Matrix4();
 const muzzle = new THREE.Vector3();
 const cameraGoal = new THREE.Vector3();
+const introTarget = new THREE.Vector3();
+const introFrom = new THREE.Vector3();
+const introUp = new THREE.Vector3();
 const look = new THREE.Matrix4();
 const aim = new THREE.Quaternion();
 const gravity = new THREE.Vector3();
@@ -650,6 +674,15 @@ export class Game implements OnlineGame {
   private boostKick = 0;
   /** The number of a race's countdown last shown (0 once the race runs; see startCountdown). */
   private countdown = 0;
+  /** The clamps of a round's opening hold every ship (see startCountdown). */
+  private clamped = false;
+  /** The start lights on (see startCountdown). */
+  private lightsOn = 0;
+  /** The round's intro is running, and whether the Host skipped it (the camera comes home then). */
+  private introOpen = false;
+  private introSkipped = false;
+  /** The announcer has opened the broadcast of this round (the intro does; else a cue does, see startRound). */
+  private broadcastOpened = false;
   /** The own drive is lit, and since when (round time, s); the perfect start is still to be judged. */
   private driveLit = false;
   private driveLitAt = -Infinity;
@@ -1626,9 +1659,11 @@ export class Game implements OnlineGame {
         // a watching Host has no cockpit of its own
         if (action === 'camera' && !this.watching()) this.cockpit = !this.cockpit;
         if (action === 'autopilot' && this.me?.alive) this.toggleAutopilot();
-        // the grid's clamps hold the overdrive and the torpedoes too
-        if (action === 'overdrive' && this.countdown === 0) this.overdrive();
-        if (action === 'torpedo' && !this.spectating && this.me && this.countdown === 0) this.fireTorpedo(this.me);
+        // Enter skips a round's intro
+        if (action === 'confirm' && this.introOpen) this.skipIntro();
+        // the clamps of the opening hold the overdrive and the torpedoes too
+        if (action === 'overdrive' && !this.clamped) this.overdrive();
+        if (action === 'torpedo' && !this.spectating && this.me && !this.clamped) this.fireTorpedo(this.me);
         if (action === 'watch' && this.watching()) this.watchNext();
         break;
       case 'paused':
@@ -1740,8 +1775,9 @@ export class Game implements OnlineGame {
     return arenaOfRound(this.online!.session.room, Math.max(0, this.roundId));
   }
 
-  /** Shows where the round is played and what it is: the arena's name, a race's laps, what makes the arena special. */
+  /** Shows where the round is played and what it is: the arena's name, a race's laps, what makes the arena special; the opening's intro card says it while it runs. */
   private announceArena() {
+    if (this.introOpen || (!this.school && Number.isFinite(this.roundEndsAt) && this.raceTime() < START_AT)) return;
     const venue = { arena: t(this.venue.name), tagline: t(this.venue.tagline), laps: LAPS, gates: GATES };
     this.hud.flashMessage(this.time, this.roundMode === 'race' ? t('{arena} · Race: {laps} laps through {gates} gates · {tagline}', venue) : `${venue.arena} · ${venue.tagline}`, 5);
   }
@@ -1854,6 +1890,7 @@ export class Game implements OnlineGame {
     if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0));
     else this.enterArena(mode === 'school' ? ARENAS[0] : (ARENAS.find((a) => a.id === this.solo.arena) ?? pick(ARENAS)));
     this.hud.reset();
+    this.resetOpening();
     $('hud-room').textContent = '';
 
     this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, this.selectedShip, true);
@@ -1900,8 +1937,9 @@ export class Game implements OnlineGame {
       this.speaker.say(mouse ? [COMPUTER.launch, COMPUTER.mouse] : COMPUTER.launch, 'urgent');
       // online the round's mode is known once the lead tells it (see arriveInRound)
       if (mode === 'solo') this.briefRound();
+      this.broadcastOpened = false;
       this.cue(ARENA_TITLE_DELAY, () => this.announceArena());
-      this.cue(ANNOUNCER_OPEN_DELAY, () => this.openBroadcast());
+      this.cue(ANNOUNCER_OPEN_DELAY, () => !this.broadcastOpened && this.openBroadcast());
     }
   }
 
@@ -2186,8 +2224,7 @@ export class Game implements OnlineGame {
     this.roundMode = this.onlineRoundMode();
     this.enterArena(this.roundArena());
     this.reprintOwn();
-    this.announceArena();
-    this.openBroadcast();
+    // the round's opening presents arena and field, and the announcer opens the broadcast
     this.briefRound();
     // hits that arrived before this browser started the round
     const pending = this.pendingRocks.splice(0);
@@ -2223,7 +2260,15 @@ export class Game implements OnlineGame {
   private freshRound() {
     this.killcam.stop();
     this.hud.reset();
+    this.resetOpening();
     this.autopilot = true;
+  }
+
+  /** The opening starts from nothing (see startCountdown): a round left during the last one's intro leaves none behind, and a browser that arrives during an opening sees the rest of it. */
+  private resetOpening() {
+    this.countdown = 0;
+    this.lightsOn = 0;
+    this.introOpen = false;
   }
 
   /** Every ship this browser runs starts the arena with a fresh clone on its edge; a sponsor break in progress ends. */
@@ -2619,7 +2664,7 @@ export class Game implements OnlineGame {
     this.ignite(myControls);
     const dodge = this.input.takeDodge();
     if (dodge && this.state === 'playing' && !this.spectating) this.dodge(dodge);
-    const clamped = this.startCountdown(myControls);
+    const clamped = (this.clamped = this.startCountdown(myControls));
     // Last Clone Standing: the solar flare's shell, the same on every browser by the field time
     const safe = this.safeRadius();
     this.arena.setEdge(safe, this.survival && this.field.clock >= FLARE_START);
@@ -2673,7 +2718,7 @@ export class Game implements OnlineGame {
       // the target drone keeps its drive turned to the pilot, wherever the pilot flies: the
       // drills train hitting the drive, not getting around the armor
       if (ship === this.drone && me.alive) ship.flight.orientation.setFromRotationMatrix(facing.lookAt(me.flight.position, ship.flight.position, me.flight.up(upward)));
-      // on the grid before GO the clamps hold the ship: no push, no pull, no shot
+      // in the clamps of a round's opening the ship is held: no push, no pull, no shot
       if (clamped) ship.flight.velocity.set(0, 0, 0);
       const controls = clamped ? IDLE : ship === me ? myControls : (thought ?? IDLE);
       this.field.gravity(ship.flight.position, gravity);
@@ -2729,7 +2774,7 @@ export class Game implements OnlineGame {
     const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : this.flags ? this.showFlags(this.flags, subject) : this.fleet ? this.showFleet(this.fleet, subject) : null;
     if (!this.course && !this.school) this.guide.hide();
     this.flyGhost(me);
-    const racing = !!this.course && !this.school && this.countdown === 0;
+    const racing = !!this.course && !this.school && !this.clamped;
     if (racing) this.callRace(subject);
     if (this.survival) this.callSurvival(me, safe);
     this.pushRadio(racing && !this.spectating && me.finish < 0 && lapOf(me.gates) === LAPS);
@@ -3218,32 +3263,41 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * A race's start: 3, 2, 1, GO on the round clock, the same on every browser. Until GO the
-   * grid's clamps hold every ship (returns true while they do). The own drive lit just before
-   * GO, or just after it, makes a perfect start; lit too early and still burning at GO, it
-   * stalls (see START_SECONDS).
+   * A round's opening on the round clock, the same on every browser (see INTRO_SECONDS): the
+   * intro, then 3, 2, 1 with the start lights, then BURN! or FIGHT!. Until then the clamps hold
+   * every ship (returns true while they do); online they hold until the lead's clock is known.
+   * The own drive lit just before BURN!, or just after it, makes a perfect start; lit too early
+   * and still burning, it stalls. A browser that comes in after the start sees none of it.
    */
   private startCountdown(controls: Controls): boolean {
-    if (!this.course || this.school) {
+    if (this.school) {
       this.countdown = 0;
+      this.endIntro();
       return false;
     }
+    if (!Number.isFinite(this.roundEndsAt)) return true;
     const t = this.raceTime();
-    const count = Math.max(0, Math.ceil(START_SECONDS - t));
+    const count = t < INTRO_SECONDS ? INTRO_COUNT : Math.max(0, Math.ceil(START_AT - t));
     const lit = controls.thrust > 0;
     if (lit && !this.driveLit) this.driveLitAt = t;
     this.driveLit = lit;
     if (count !== this.countdown) {
-      if (count > 0) {
-        this.count(String(count));
-      } else if (this.countdown > 0) {
-        this.go();
-      }
+      if (count === INTRO_COUNT) this.startIntro();
+      else this.endIntro();
+      if (count > 0 && count < INTRO_COUNT) this.count(String(count), count === START_SECONDS);
+      // the start itself only for who saw the countdown run out, not for a late arrival
+      else if (count === 0 && this.countdown > 0 && t < START_AT + 1) this.go();
       this.countdown = count;
     }
+    // the lights come on one by one over the countdown and all go out at the start
+    const lights = count > 0 && count < INTRO_COUNT ? Math.min(START_LIGHTS, Math.floor(((t - INTRO_SECONDS) / START_SECONDS) * START_LIGHTS) + 1) : 0;
+    if (lights !== this.lightsOn) {
+      this.hud.setStartLights(lights, START_LIGHTS);
+      this.lightsOn = lights;
+    }
     if (this.startOpen && count === 0) {
-      if (t > START_SECONDS + START_LATE) this.startOpen = false;
-      else if (lit && this.driveLitAt >= START_SECONDS) {
+      if (t > START_AT + START_LATE) this.startOpen = false;
+      else if (lit && this.driveLitAt >= START_AT) {
         this.startOpen = false;
         this.perfectStart(this.me!);
       }
@@ -3251,37 +3305,89 @@ export class Game implements OnlineGame {
     return count > 0;
   }
 
-  /** GO: the clamps let go; whose drive is lit is judged at once, the rest within START_LATE. */
+  /**
+   * The intro of a round: the camera flies in over the arena (see introCamera), the field is
+   * presented on a card, the stadium murmurs and the announcer opens the broadcast. Enter (A,
+   * a tap on the card) skips it: in a solo round the countdown comes at once, online only the
+   * camera comes home, as the round clock is everyone's.
+   */
+  private startIntro() {
+    this.introSkipped = false;
+    this.introOpen = true;
+    this.crowd.swell(CROWD_INTRO, 1.5);
+    this.broadcastOpened = true;
+    this.openBroadcast();
+    const pilots = this.standings().filter((ship) => ship !== this.drone);
+    this.hud.showIntro({
+      title: t(MODE_NAMES[this.roundMode]),
+      arena: t(this.venue.name),
+      tagline: t(this.venue.tagline),
+      pilots: pilots.map((ship) => ({ name: ship.name, kind: ship.kind, skills: ship.kind === 'bot' ? skillScales(skillsOf(ship.name)) : '', own: ship === this.me })),
+      skip: t('Skip'),
+      onSkip: () => this.skipIntro(),
+    });
+  }
+
+  /** The intro is over (its time ran out, or it was skipped): the card goes, the HUD comes back. */
+  private endIntro() {
+    if (!this.introOpen) return;
+    this.introOpen = false;
+    this.hud.hideIntro();
+  }
+
+  /** Enter during the intro: see startIntro. */
+  private skipIntro() {
+    if (!this.introOpen) return;
+    this.introSkipped = true;
+    this.endIntro();
+    if (this.online) return;
+    // a solo round moves its start back, so the countdown runs at once
+    const left = INTRO_SECONDS - this.raceTime();
+    if (left > 0) this.setRoundEnd(this.roundEndsAt - this.time - left);
+  }
+
+  /** BURN! or FIGHT!: the clamps let go; whose drive is lit is judged at once, the rest within START_LATE. */
   private go() {
     const me = this.me!;
-    this.count(t('GO'));
-    this.startOpen = !this.spectating && me.alive;
+    this.count(this.course ? t('BURN!') : t('FIGHT!'), false, true);
+    this.startOpen = !!this.course && !this.spectating && me.alive;
     if (this.startOpen && this.driveLit) {
       this.startOpen = false;
-      if (this.driveLitAt >= START_SECONDS - START_WINDOW) this.perfectStart(me);
+      if (this.driveLitAt >= START_AT - START_WINDOW) this.perfectStart(me);
       else {
         this.stall(me);
         this.speaker.say(COMPUTER.falseStart, 'urgent');
       }
     }
+    if (!this.course) return;
     for (const bot of this.bots) {
       if (bot.ship.owner === null && bot.ship.alive && bot !== this.sparring?.bot && Math.random() < bot.skills.reflexes * BOT_PERFECT_START) this.perfectStart(bot.ship);
     }
   }
 
-  /** A number of a countdown, or GO, in big neon, with its beep; the stadium rises with every number and erupts at GO. */
-  private count(text: string) {
-    this.hud.countdown(text);
-    if (text === t('GO')) {
+  /**
+   * A number of a countdown, or the start word, in big neon, with its beep. The stadium rises
+   * with every number and erupts at the start, which also flashes and shakes the camera; the
+   * first number brings the announcer's call for the round.
+   */
+  private count(text: string, first = false, start = false) {
+    this.hud.countdown(text, start);
+    if (start) {
       this.sound.beep(1320, 0.35, 0.22);
-      if (!this.school) this.crowd.erupt();
-    } else {
-      this.sound.beep(660, 0.12, 0.2);
-      if (!this.school) this.crowd.swell(CROWD_COUNT[Number(text)] ?? 0.5, 0.8, 1);
+      if (this.school) return;
+      this.crowd.erupt();
+      this.kick = Math.max(this.kick, START_KICK);
+      this.boostKick = 1;
+      this.glitch.trigger(0.25, 0.25);
+      return;
     }
+    this.sound.beep(660, 0.12, 0.2);
+    if (this.school) return;
+    this.crowd.swell(CROWD_COUNT[Number(text)] ?? 0.5, 0.8, 1);
+    if (first) this.radio.announce(pick(ANNOUNCER_START[this.roundMode]), null);
   }
 
-  /** A false start: the drive was lit before GO and stalls (see FALSE_START_STALL). */
+  /** A false start: the drive was lit before BURN! and stalls (see FALSE_START_STALL). */
   private stall(ship: Ship) {
     ship.overheatDrive(this.time + FALSE_START_STALL);
     this.hud.flashMessage(this.time, t('Too early · drive stalled'), 2);
@@ -3296,6 +3402,10 @@ export class Game implements OnlineGame {
     this.sound.play('boost', { volume: 1.1, rate: 0.8 });
     this.hud.flashMessage(this.time, t('Perfect start'), 1.5);
     this.speaker.say(COMPUTER.perfectStart, 'urgent');
+    // the stadium saw it: a cheer, and the announcer says so
+    if (this.school) return;
+    this.crowd.swell(1, 0.2, 3);
+    this.radio.announce(pick(ANNOUNCER_PERFECT), null);
   }
 
   /**
@@ -3394,9 +3504,9 @@ export class Game implements OnlineGame {
     return course.points[next];
   }
 
-  /** Seconds since GO: the race time every finish and lap is measured in. */
+  /** Seconds since BURN!: the race time every finish and lap is measured in. */
   private raceClock() {
-    return this.raceTime() - START_SECONDS;
+    return this.raceTime() - START_AT;
   }
 
   /**
@@ -3560,7 +3670,7 @@ export class Game implements OnlineGame {
         probe.until = Infinity;
         return probe.position;
       },
-      countdown: (text) => this.count(text),
+      countdown: (text, start) => this.count(text, false, start),
       perfectStart: () => this.perfectStart(this.me!),
       stall: () => this.stall(this.me!),
     };
@@ -3765,11 +3875,11 @@ export class Game implements OnlineGame {
 
   /**
    * V, the right mouse button: pressed, the own hook fires along the nose; held, it reels in;
-   * let go, it releases (see game/hook). Not on the grid before GO.
+   * let go, it releases (see game/hook). Not in the clamps of a round's opening.
    */
   private hookOwn(now: number) {
     const me = this.me!;
-    const held = this.state === 'playing' && me.alive && !this.spectating && this.countdown === 0 && this.input.hooking;
+    const held = this.state === 'playing' && me.alive && !this.spectating && !this.clamped && this.input.hooking;
     const pressed = held && !this.hookHeld;
     this.hookHeld = held;
     if (this.tethers.has(me)) {
@@ -4891,7 +5001,9 @@ export class Game implements OnlineGame {
     // the chase camera follows the own ship, or the pilot a watching Host follows
     const me = this.subject();
     const flight = me.flight;
-    if (this.cockpit) {
+    if (this.introOpen && !this.introSkipped && me === this.me && me.alive) {
+      this.introCamera(me);
+    } else if (this.cockpit) {
       this.camera.position.copy(flight.position).addScaledVector(flight.forward(scratch), me.radius * 0.3);
       this.camera.quaternion.copy(flight.orientation);
     } else if (this.watching() && this.wideShot && me !== this.me) {
@@ -4922,6 +5034,25 @@ export class Game implements OnlineGame {
     this.kick *= Math.exp(-KICK_FADE * dt);
     // the HUD projects with this frame's camera, not the one of the last rendered frame
     this.camera.updateMatrixWorld();
+  }
+
+  /**
+   * The intro's flight (see startIntro): it opens on the arena's landmark as the menu shows it,
+   * drifting around it, and sweeps down onto the own ship, ending exactly where the chase camera
+   * sits, so the round takes over without a cut.
+   */
+  private introCamera(me: Ship) {
+    const progress = THREE.MathUtils.clamp(this.raceTime() / INTRO_SECONDS, 0, 1);
+    const at = introTarget.fromArray(this.venue.preview?.at ?? [0, 0, 0]);
+    const from = introFrom.fromArray(this.venue.preview?.from ?? PREVIEW_FROM).sub(at).applyAxisAngle(UP, (progress - 0.5) * INTRO_SWING).add(at);
+    const flight = me.flight;
+    flight.toWorld(cameraGoal.set(0, me.radius * 0.75, me.radius * 2.6), cameraGoal);
+    // the first part on the landmark, then the sweep, slow at both ends
+    const sweep = THREE.MathUtils.smootherstep(progress, INTRO_HOLD, 1);
+    this.camera.position.copy(from).lerp(cameraGoal, sweep);
+    const target = at.lerp(scratch.copy(cameraGoal).addScaledVector(flight.forward(forward), me.radius * 10), sweep);
+    look.lookAt(this.camera.position, target, flight.up(introUp).multiplyScalar(sweep).addScaledVector(UP, 1 - sweep));
+    this.camera.quaternion.setFromRotationMatrix(look);
   }
 
   /** A new field of view: the particles keep their size in the world with it. */

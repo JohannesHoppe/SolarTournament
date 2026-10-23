@@ -189,6 +189,16 @@ export const ANNOUNCER_FLEET = {
   escaped: 'the battleship got away. the president wins. as always',
 } as const;
 export const ANNOUNCER_OPEN = ['radio twenty five eighty four. live from the arena', 'this is your announcer. the games continue'];
+/** The announcer calls the round as its countdown begins, by mode (see the round's opening in game.ts). */
+export const ANNOUNCER_START = {
+  race: ['three laps. no brakes. the president wants a show', 'engines hot. clones ready. let them burn'],
+  deathmatch: ['eight clones. one winner. the president is watching', 'ladies and gentlemen. let them bleed'],
+  survival: ['three clones each. the flare is hungry', 'only one walks out of this. well, flies'],
+  flag: ['orange against blue. bring the core home', 'two sides. two cores. no mercy'],
+  fleet: ['the president sends his battleship. you will need luck', 'one battleship. all of you. the odds are fair. for him'],
+} as const;
+/** The own pilot's perfect start: the crowd loves it. */
+export const ANNOUNCER_PERFECT = ['what a start. the crowd goes wild', 'a perfect launch. the sponsors are taking notes'];
 /** The announcer names the arena of the round (see world/arenas). */
 export const ANNOUNCER_ARENA = {
   belt: 'live from the belt. forty rocks. no mercy',
@@ -249,8 +259,8 @@ export const SCHOOL = {
   racer: 'Racer training. Rings, coils and a clean start. Out here, speed is everything.',
   coil: 'The rings of a race are coils. Fly through the very center, and the coil throws you on. Hit the center of all three.',
   coilMiss: 'Off center, darling. The coil only fires in the core. Again.',
-  start: 'A race starts on my count. Light your drive exactly on go. Too early, and it stalls.',
-  tooEarly: 'Too early. Wait for go.',
+  start: 'A race starts on my count. Light your drive the moment I say burn. Too early, and it stalls.',
+  tooEarly: 'Too early. Wait for burn.',
   tooLate: 'Too late. Again.',
   hook: 'Your hook. Aim at the rock and hold it: the harpoon bites, the winch yanks you in, and you swing around the rock. Let go, and you fly off with all that speed.',
   hookSlow: 'Swing faster before you let go. Again.',
@@ -410,7 +420,7 @@ export function allLines(language: Language): string[] {
       return [STATION_DE, NOW_PLAYING_DE, ...TITLE_FIRST_DE, ...TITLE_SECOND_DE, ...PHRASES_DE];
     case 'mod':
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
-      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
+      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
       return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY];
   }
