@@ -1,0 +1,184 @@
+import * as THREE from 'three';
+import { describe, expect, it } from 'vitest';
+import { COMET_REACH, COMET_SPEED, COMET_WINDOWS, cometEnd, cometsOf, cometStart, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, type Comet } from './comet';
+import { Fleet } from './fleet';
+import { ARENAS } from '../world/arenas';
+import { ARENA_LIMIT } from '../world/arena';
+import { testField } from '../test/field';
+
+const layoutOf = (id: string) => ARENAS.find((arena) => arena.id === id)!.layout;
+
+describe('the comets of a round', () => {
+  it('are the same for the same room and round on every browser, and differ from round to round', () => {
+    expect(cometsOf(1234, 3)).toEqual(cometsOf(1234, 3));
+    const rounds = Array.from({ length: 12 }, (_, round) => JSON.stringify(cometsOf(1234, round).map((comet) => [comet.at, comet.nearest])));
+    expect(new Set(rounds).size).toBeGreaterThan(6);
+  });
+
+  it('come in their windows, cross the field near its center along the horizon, and leave before the round ends', () => {
+    let seen = 0;
+    for (let seed = 1; seed < 200; seed++) {
+      for (const comet of cometsOf(seed, 0)) {
+        seen++;
+        // a route off the center reaches the edge's sphere a little later
+        expect(COMET_WINDOWS.some((w) => comet.edge >= w.from - 0.2 && comet.edge <= w.to + 1)).toBe(true);
+        expect(comet.direction.length()).toBeCloseTo(1);
+        expect(Math.abs(comet.direction.y)).toBeLessThan(Math.sin(0.61));
+        expect(comet.nearest.length()).toBeLessThanOrEqual(16000 + 1e-6);
+        expect(comet.nearest.dot(comet.direction)).toBeCloseTo(0, 3);
+        // without a well the route is straight
+        expect(headAt(comet, comet.at + 10, new THREE.Vector3()).distanceTo(comet.nearest.clone().addScaledVector(comet.direction, 10 * COMET_SPEED))).toBeLessThan(1);
+        expect(comet.swallowed).toBe(Infinity);
+        expect(cometStart(comet)).toBeGreaterThan(60);
+        expect(cometEnd(comet)).toBeLessThan(5 * 60 + 8);
+      }
+    }
+    // about one comet a round, sometimes none, sometimes two
+    expect(seen / 199).toBeGreaterThan(0.9);
+    expect(seen / 199).toBeLessThan(1.4);
+  });
+
+  it('are bent by the black hole and swallowed at its horizon, their shower after them', () => {
+    const well = layoutOf('hole').well!;
+    let seen = 0;
+    for (let seed = 1; seed < 80; seed++) {
+      for (const comet of cometsOf(seed, 2, well)) {
+        seen++;
+        expect(comet.swallowed).toBeLessThan(comet.at + COMET_REACH / COMET_SPEED);
+        expect(comet.swallowed).toBeGreaterThan(comet.edge);
+        const head = headAt(comet, comet.swallowed, new THREE.Vector3());
+        expect(head.distanceTo(well.position)).toBeLessThan(well.radius);
+        // the route bends: by the time it is swallowed it has fallen off the straight line
+        const straight = comet.nearest.clone().addScaledVector(comet.direction, (comet.swallowed - comet.at) * COMET_SPEED);
+        expect(straight.distanceTo(head)).toBeGreaterThan(HEAD_RADIUS);
+        // the head stays where it went; the shower's pieces follow it in, every one gone at the end
+        expect(headAt(comet, comet.swallowed + 5, new THREE.Vector3()).distanceTo(head)).toBeLessThan(1);
+        const shower = new Shower(comet);
+        const end = cometEnd(comet);
+        for (let i = 0; i < SHOWER_PIECES; i++) expect(shower.gone(i, end)).toBe(true);
+        expect(end).toBeLessThan(5 * 60 + 8);
+      }
+    }
+    expect(seen).toBeGreaterThan(50);
+  });
+
+  it("dive through the field into the gas giant's clouds, coming from above them", () => {
+    const well = layoutOf('giant').well!;
+    for (let seed = 1; seed < 80; seed++) {
+      for (const comet of cometsOf(seed, 2, well)) {
+        // it crosses the field's middle first, through its nearest point, then falls in
+        const there = new THREE.Vector3();
+        const when = routeNearest(comet, comet.nearest, comet.start, comet.swallowed, there);
+        expect(there.distanceTo(comet.nearest)).toBeLessThan(200);
+        expect(comet.swallowed).toBeGreaterThan(when + 3);
+        expect(comet.swallowed).toBeLessThan(comet.at + COMET_REACH / COMET_SPEED);
+        expect(cometEnd(comet)).toBeLessThan(5 * 60 + 8);
+        for (let time = comet.from; time < comet.swallowed; time += 1) expect(headAt(comet, time, new THREE.Vector3()).distanceTo(well.position)).toBeGreaterThan(well.radius);
+        expect(headAt(comet, cometStart(comet), new THREE.Vector3()).length()).toBeGreaterThan(ARENA_LIMIT * 0.9);
+      }
+    }
+  });
+});
+
+describe("a comet's shower", () => {
+  it('is laid out the same everywhere, trailing the head within its length', () => {
+    const comet = cometsOf(77, 2)[0] ?? cometsOf(78, 2)[0];
+    const a = new Shower(comet);
+    const b = new Shower(comet);
+    expect([...a.behind]).toEqual([...b.behind]);
+    expect([...a.offsets]).toEqual([...b.offsets]);
+    const head = headAt(comet, comet.at, new THREE.Vector3());
+    const piece = new THREE.Vector3();
+    for (let i = 0; i < SHOWER_PIECES; i++) {
+      a.pieceAt(i, comet.at, piece);
+      const behind = head.clone().sub(piece).dot(comet.direction);
+      expect(behind).toBeGreaterThan(0);
+      expect(behind).toBeLessThanOrEqual(SHOWER_LENGTH);
+    }
+  });
+});
+
+/** Flies a field from `from` to `to` at a frame step, the comet running down what is in its way. */
+function fly(field: ReturnType<typeof testField>, comet: Comet, dt: number, from: number, to: number) {
+  for (let time = from; time < to; time += dt) {
+    field.setClock(time);
+    runDown(comet, field, time, () => {});
+  }
+  field.setClock(to);
+}
+
+describe("a comet's head", () => {
+  it('breaks the same rocks at the same field times on every browser, however their frames fall', () => {
+    const belt = layoutOf('belt');
+    const [a, b] = [testField(), testField()];
+    a.generate(belt);
+    b.generate(belt);
+    // a comet straight through the first rock of the field
+    const target = [...a.asteroids.values()][0];
+    const at = 40;
+    const comet = makeComet(at, new THREE.Vector3(1, 0.1, 0.3).normalize(), a.positionOf(target, at, new THREE.Vector3()), 5);
+    fly(a, comet, 1 / 60, 30, 50);
+    fly(b, comet, 1 / 23, 30, 50);
+    expect(a.snapshot().x.length).toBeGreaterThan(0);
+    expect(b.snapshot().x).toEqual(a.snapshot().x);
+  });
+
+  it("shoves the wreck's hull aside the same way on every browser, and a newcomer's snapshot carries it", () => {
+    const derelict = layoutOf('derelict');
+    const [a, b, c] = [testField(), testField(), testField()];
+    for (const field of [a, b]) field.generate(derelict);
+    const hull = [...a.asteroids.values()].find((rock) => rock.solid)!;
+    const at = 40;
+    const before = a.positionOf(hull, 60, new THREE.Vector3());
+    // a comet grazing the piece, off its center, so it turns as well
+    const through = a.positionOf(hull, at, new THREE.Vector3()).add(new THREE.Vector3(0, hull.radius * 0.5, 0));
+    const comet = makeComet(at, new THREE.Vector3(0, 0, 1), through, 9);
+    fly(a, comet, 1 / 60, 30, 60);
+    fly(b, comet, 1 / 23, 30, 60);
+    const moved = a.asteroids.get(hull.id)!;
+    expect(moved.shovedBy).toBe(9);
+    expect(moved.object.position.distanceTo(before)).toBeGreaterThan(1000);
+    expect(moved.spinRate).toBeGreaterThan(0);
+    expect(b.asteroids.get(hull.id)!.object.position.distanceTo(moved.object.position)).toBeLessThan(1e-6);
+    expect(b.asteroids.get(hull.id)!.object.quaternion.angleTo(moved.object.quaternion)).toBeLessThan(1e-9);
+    // shoved once by a comet, however long it overlaps
+    expect(moved.born).toBeLessThan(at);
+    // a newcomer at field time 60 takes the motion from the snapshot
+    c.restore(JSON.parse(JSON.stringify(a.snapshot())), derelict);
+    c.setClock(80);
+    a.setClock(80);
+    expect(c.asteroids.get(hull.id)!.object.position.distanceTo(a.asteroids.get(hull.id)!.object.position)).toBeLessThan(1e-6);
+  });
+});
+
+describe("the President's battleship and a comet", () => {
+  /**
+   * Flies a battleship through a round's first 140 s past `comet`, the lead browser seeing it
+   * coming or not; returns whether its head or a piece of its shower struck it, and where the
+   * battleship was at field time `at`.
+   */
+  const sail = (comet: Comet | null, seen: boolean, at: number) => {
+    const fleet = new Fleet(7);
+    const shower = comet && new Shower(comet);
+    const piece = new THREE.Vector3();
+    const where = new THREE.Vector3();
+    let struck = false;
+    for (let time = 0; time < 140; time += 0.1) {
+      fleet.lead(0.1, time, [], comet && seen ? [comet] : []);
+      fleet.update(time, time);
+      if (Math.abs(time - at) < 0.05) where.copy(fleet.position);
+      if (!comet || !shower || time < cometStart(comet) || !fleet.present(time)) continue;
+      if (fleet.touches(headAt(comet, time, piece), HEAD_RADIUS)) struck = true;
+      for (let i = 0; i < SHOWER_PIECES; i += 5) if (fleet.touches(shower.pieceAt(i, time, piece), PIECE_RADIUS)) struck = true;
+    }
+    return { struck, where };
+  };
+
+  it('burns out of the way of a comet whose route runs right through it, in time for its head and shower', () => {
+    // a comet whose head passes right where the battleship on its orbit is at that moment
+    const at = 100;
+    const comet = makeComet(at, new THREE.Vector3(0.6, 0.1, 0.8).normalize(), sail(null, false, at).where, 3);
+    expect(sail(comet, false, at).struck).toBe(true);
+    expect(sail(comet, true, at).struck).toBe(false);
+  });
+});

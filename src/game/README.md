@@ -10,6 +10,7 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | `flags.ts` | Capture the Flag: sides, bases, sponsor cores, captures |
 | `fleet.ts` | The President's Fleet: the battleship, its parts, phases and sinking |
 | `torpedoes.ts` | Torpedoes: launch, homing, fuse, shot down by lasers |
+| `comet.ts` | Comets crossing the arena: schedule and route (bent and swallowed by a well), the shower's pieces, the head breaking rock and shoving hull, the comet as the scene shows it |
 | `items.ts` | Sponsor probes and what they carry |
 | `hook.ts` | The hook: harpoon, cable, winch, swing |
 | `racingline.ts` | The ideal line through gates or rings, bowing around rock |
