@@ -140,7 +140,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | **`music/`** | **Radio 2584** |
 | `music/songs.ts` | Hard techno tracks from a seed (flavor, form, energy curve, weighted step patterns, fills); every decision is an integer hash of seed, bar and step |
 | `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser), the voices, and how one sixteenth is played |
-| `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts || `music/preview.ts` | Renders a track (or a stretch) offline as WAV: downloads on the radio page, previews in development |
+| `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts |
+| `music/preview.ts` | Renders a track (or a stretch) offline as WAV: downloads on the radio page, previews in development |
 | `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the announcer's lines, the flight computer's lines |
 | `music/transmission.ts` | The on-screen transmission: whatever the radio says, in neon, while it is spoken (game and radio page) |
 | `music/voice.ts` | Loads the pre-rendered voices for the Host's language: the radio's sprite and the language's, joined (once, shared) |
