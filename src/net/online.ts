@@ -10,6 +10,7 @@ import type { Homing, Torpedo } from '../game/torpedoes';
 
 /** What the online layer needs from the game. */
 export interface OnlineGame {
+  /** The game's time, on which the ships' motion is predicted (the checks run on real time, see wall). */
   readonly time: number;
   readonly field: AsteroidField;
   /** All ships, local and remote. */
@@ -100,6 +101,15 @@ const NOVA_EVIDENCE = 5;
 /** A ship this browser runs may be hooked this far beyond the hook's reach (units, 500 m), for lag. */
 const HOOK_LAG = 10000;
 
+/**
+ * The clock of every check and every piece of evidence (s): real time, as the others' messages
+ * arrive in it. The game's time runs slower on a device below 20 frames a second, and windows
+ * measured in it (a respawn's delay, a beam's age) would come out wrong there.
+ */
+const wall = () => performance.now() / 1000;
+/** A ship's start over clears what the checks know of its clone at most once in this long (s); the field goes to it every time. */
+const REPRINT_GAP = 10;
+
 const origin = new THREE.Vector3();
 const direction = new THREE.Vector3();
 const from = new THREE.Vector3();
@@ -127,6 +137,8 @@ export class Online {
   private readonly novas = new Map<string, number>();
   /** The round the checks were last reset for. */
   private checkedRound = Number.NaN;
+  /** When the checks last took up each peer's start over (see REPRINT_GAP). */
+  private readonly reprintedAt = new Map<string, number>();
 
   constructor(
     readonly session: Session,
@@ -138,7 +150,7 @@ export class Online {
     session.onFire = (shooter, a, b) => {
       from.fromArray(a);
       to.fromArray(b);
-      this.evidence.beam(shooter, from, to, game.time);
+      this.evidence.beam(shooter, from, to, wall());
       const ship = this.find(shooter);
       if (ship) game.showBeam(ship, from, to);
     };
@@ -161,7 +173,7 @@ export class Online {
       // the kill counts for the killer only with evidence that it could have made it
       const credited = killer !== null && where !== null && this.witnessed(killer, where, nova) ? killer : null;
       this.credit(victim, credited, nova && credited !== null);
-      this.plausible.died(victim, game.time);
+      this.plausible.died(victim, wall());
       // a ship dies once per clone: a dead one cannot die again, and the count only goes up
       if (ship && ship.owner !== null && ship.alive && deaths > ship.deaths) {
         game.remoteDestroyed(ship, credited ? this.find(credited) : null, deaths, p && from.fromArray(p), u && to.fromArray(u), nova && credited !== null);
@@ -171,7 +183,7 @@ export class Online {
       // a rock of the running round breaks only for a beam of the shooter that ended on it (a
       // browser that has only just come, without the beams before, takes it on trust)
       const rock = round === game.roundId ? game.rockAt(id) : null;
-      if (rock && !this.session.justJoined && !this.evidence.beamEnded(shooter, rock.position, rock.radius + EVIDENCE_REACH, game.time)) return;
+      if (rock && !this.session.justJoined && !this.evidence.beamEnded(shooter, rock.position, rock.radius + EVIDENCE_REACH, wall())) return;
       game.remoteRock(id, at, round);
     };
     session.onWreck = (id) => game.remoteWreck(id);
@@ -181,31 +193,35 @@ export class Online {
       if (!ship?.alive) return;
       const part = round === game.roundId ? game.fleetZoneAt(zone) : null;
       if (part && !this.session.justJoined) {
-        const seen = count > 1 ? this.evidence.blasted(shooter, part, EVIDENCE_REACH, game.time) : this.evidence.beamEnded(shooter, part, EVIDENCE_REACH, game.time);
+        const seen = count > 1 ? this.evidence.blasted(shooter, part, EVIDENCE_REACH, wall()) : this.evidence.beamEnded(shooter, part, EVIDENCE_REACH, wall());
         if (!seen) return;
       }
       game.remoteFleetHit(zone, round, ship, count);
     };
     session.onTorpedo = (id, shooter, target, p, v) => {
       const ship = this.find(shooter);
-      if (!ship?.alive || this.caught(ship, this.plausible.torpedo(ship.id, game.time))) return;
-      this.evidence.launch(shooter, game.time);
+      if (!ship?.alive || this.caught(ship, this.plausible.torpedo(ship.id, wall()))) return;
+      this.evidence.launch(shooter, wall());
       game.remoteTorpedo(id, ship, target ? (this.find(target) ?? game.beacon(target)) : null, from.fromArray(p), to.fromArray(v));
     };
     session.onTorpedoGone = (id, p, shooter) => {
       from.fromArray(p);
       // the browser that launched it says where it went off; another one only shot it down with
       // a beam that ended there
-      if (shooter === null) this.evidence.blast(id.slice(0, id.lastIndexOf('.')), from, game.time);
-      else if (!this.evidence.beamEnded(shooter, from, EVIDENCE_REACH, game.time)) return;
+      if (shooter === null) this.evidence.blast(id.slice(0, id.lastIndexOf('.')), from, wall());
+      else if (!this.evidence.beamEnded(shooter, from, EVIDENCE_REACH, wall())) return;
       game.remoteTorpedoGone(id, from);
     };
     session.onProbe = (id, ship, bucket) => {
       const taker = this.find(ship);
-      // taken only by a ship near the probe, as this browser sees them
-      if (taker && !game.probeWithin(id, taker)) return;
+      // taken only by a ship near the probe, as this browser sees them; one refused here (lag may
+      // have put the taker too far) may still have held a nova core it sets off later
+      if (taker && !game.probeWithin(id, taker)) {
+        this.plausible.probe(ship, null, wall());
+        return;
+      }
       const kind = game.remoteProbe(id, taker, bucket);
-      if (kind !== undefined) this.plausible.probe(ship, kind, game.time);
+      if (kind !== undefined) this.plausible.probe(ship, kind, wall());
     };
     session.onHook = (ship, hold) => {
       const owner = this.find(ship);
@@ -228,8 +244,8 @@ export class Online {
     // a nova only from a living ship that holds a core, where it is; anything else never goes off
     session.onNova = (ship, p) => {
       const holder = this.find(ship);
-      if (!holder?.alive || this.caught(holder, this.plausible.nova(holder.id, p, game.time))) return;
-      this.novas.set(ship, game.time);
+      if (!holder?.alive || this.caught(holder, this.plausible.nova(holder.id, p, wall()))) return;
+      this.novas.set(ship, wall());
       game.novaBlast(holder, from.fromArray(p));
     };
     session.onCheat = (ship, accuser) => {
@@ -259,15 +275,20 @@ export class Online {
       this.balanceBots();
     };
     session.onPeerRestart = (peer) => {
-      // a browser that started over takes the field again, like a newcomer, and prints its clone
-      // again; what its ships did before still counts
+      // a browser that started over takes the field again, like a newcomer, and may print its
+      // clone again (the checks take that up at most once in REPRINT_GAP); what its ships did
+      // before still counts
       this.sync(peer);
       this.sendFull = true;
-      for (const ship of game.allShips()) if (ownerOf(ship.id) === peer) this.plausible.reprint(ship.id, game.time);
+      const now = wall();
+      if (now - (this.reprintedAt.get(peer) ?? -Infinity) < REPRINT_GAP) return;
+      this.reprintedAt.set(peer, now);
+      for (const ship of game.allShips()) if (ownerOf(ship.id) === peer) this.plausible.reprint(ship.id, now);
     };
     session.onRestart = () => {
       game.rejoin();
-      this.plausible.newRound(game.time);
+      // this browser heard nothing for a while: every ship may be anywhere now, what they hold stands
+      this.plausible.lostSight(wall());
     };
     session.onPeerLeave = (peer) => {
       this.flying.delete(peer);
@@ -298,10 +319,13 @@ export class Online {
   /** Sends the own ships; the lead browser adds the round clock. Rebalances bots when the lead changes. */
   update(now: number) {
     this.session.tick();
-    // a new round prints every ship again and starts the kills over
+    // a new round prints every ship again and starts the kills over; what was said of cheats in
+    // the last round goes with it (see Accusations.newRound)
     if (this.game.roundId !== this.checkedRound) {
       this.checkedRound = this.game.roundId;
-      this.plausible.newRound(this.game.time);
+      this.plausible.newRound(wall());
+      this.accusations.newRound();
+      this.reported.clear();
     }
     // a Host beyond the places of the tournament watches, and flies as soon as a place comes free
     const watching = this.session.rank() >= TOURNAMENT_SIZE;
@@ -419,7 +443,7 @@ export class Online {
   }
 
   private receiveStates(states: ShipState[], round: RoundState | null, peer: string) {
-    const now = this.game.time;
+    const now = wall();
     // a peer that started over hands its bots to the next lead before they are gone
     this.followLead();
     const lead = this.session.leadId;
@@ -437,7 +461,7 @@ export class Online {
       const report = { p: state.p, alive: state.a, kills: state.ki, nova: state.it === undefined ? undefined : unpackItems(state.it).nova };
       // a peer cast out by this very state is gone: nothing more of it is taken
       if (this.caught(ship, this.plausible.state(ship.id, report, now)) && this.session.isCastOut(peer)) return;
-      ship.applyState(state, now);
+      ship.applyState(state, this.game.time);
     }
     const flies = states.some((state) => state.id.startsWith('p:'));
     if (flies !== this.flying.has(peer)) {
@@ -458,7 +482,7 @@ export class Online {
   private witnessed(killer: string, where: THREE.Vector3, nova: boolean): boolean {
     const ship = this.find(killer);
     if (ship?.owner === null) return true;
-    const now = this.game.time;
+    const now = wall();
     const near = ship !== null && ship.flight.position.distanceTo(where) < KILL_NEAR;
     if (nova) return near || now - (this.novas.get(killer) ?? -Infinity) < NOVA_EVIDENCE;
     return near || this.evidence.beamPassed(killer, where, now) || this.evidence.launched(killer, now);
@@ -466,7 +490,7 @@ export class Online {
 
   /** A death everyone saw: its killer's kills grow, by two for a nova, and a nova's victim loses one. */
   private credit(victim: string, killer: string | null, nova: boolean) {
-    const now = this.game.time;
+    const now = wall();
     if (killer) this.plausible.credit(killer, nova ? 2 : 1, now);
     if (nova) this.plausible.credit(victim, -1, now);
   }

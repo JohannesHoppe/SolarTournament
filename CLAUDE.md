@@ -147,11 +147,11 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `music/voice.ts` | Loads the pre-rendered voices for the Host's language: the radio's sprite and the language's, joined (once, shared) |
 | **`net/`** | **Online tournament** |
 | `net/online.ts` | Ship ownership, what goes over the network, the lead browser's bots (a new lead adopts them) |
-| `net/session.ts` | Tournament protocol: message types, sender checks and rate limits, election of the lead browser (longest in the room and still sending; late claims lined up behind the lead, a newcomer checks its choice against whom the others follow), the places of the tournament by join time, starting over after a lost link |
+| `net/session.ts` | Tournament protocol: message types, sender checks and rate limits, election of the lead browser (longest in the room and still sending; late claims lined up behind the lead, every browser checks its choice once a second against whom the others follow), the places of the tournament by join time, starting over after a lost link |
 | `net/room.ts` | A tournament room as its link describes it: code, name, public or private, bots or not, deathmatch, race or both |
 | `net/lobby.ts` | The lobby: public tournaments announce themselves, the list of tournaments listens |
 | `net/validate.ts` | Checks every message from other browsers before the game uses it |
-| `net/plausible.ts` | Rough plausibility of what other browsers report (jumps, novas without a core, torpedoes, kills; a new clone only after a death everyone saw), the evidence of every ship's beams and torpedoes that a report of a rock, a torpedo shot down, a battleship hit or a kill needs, and the accusations: a peer a majority of the other Hosts with a place (at least two; watching Hosts have no vote) catch is named a cheater and cast out |
+| `net/plausible.ts` | Rough plausibility of what other browsers report (jumps, novas without a core, torpedoes, kills; a new clone only after a death everyone saw), the evidence of every ship's beams and torpedoes that a report of a rock, a torpedo shot down, a battleship hit or a kill needs, and the accusations: a peer a majority of the other Hosts with a place (at least two; watching Hosts have no vote) catch within a round is named a cheater and cast out |
 | `net/transport.ts` | Transport: Trystero (WebRTC over Nostr relays, STUN and the TURN relay from `/turn`) and BroadcastChannel for local tests (`?local=1`) |
 
 `tools/crest/render.ts` (`npm run crest`) draws the seal of the Ministry of War into `public/crest.svg`: computed rings, stars and sun, Michroma lettering as paths, and the eagle of `tools/crest/eagle.svg` (CC0) cut into angular facets.
