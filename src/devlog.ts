@@ -66,7 +66,7 @@ export interface ShoveEvent {
   closing: number;
 }
 
-/** A bot's act that is no lasting decision: a shove, a hook, a torpedo. */
+/** A bot's act that is no lasting decision: a shove, a hook, a torpedo, its start in a race. */
 export interface ActEvent {
   kind: 'act';
   t: number;

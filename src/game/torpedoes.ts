@@ -10,14 +10,14 @@ export const TORPEDOES = 2;
 /** A torpedo leaves the tube this much faster than its ship (units/s, 40 m/s). */
 const LAUNCH_SPEED = 800;
 /** Its drive pushes with 6 g (units/s²), and it closes in on its target with up to CLOSING (units/s, 200 m/s). */
-const THRUST = 1177;
+export const THRUST = 1177;
 const CLOSING = 4000;
 /**
  * Its motor burns this long (s); then a torpedo in free flight is gone. One on a hook's rope
  * hangs on as a mass without a motor, and one let go from it flies on as a bomb for
  * FLING_CREDIT seconds more.
  */
-const LIFETIME = 12;
+export const LIFETIME = 12;
 /**
  * A torpedo on a hook's rope (see game/hook) is a deliberate dirty trick: a bomb on a string.
  * Its fuse goes off on every ship, the one holding it included, and while it is held, or for

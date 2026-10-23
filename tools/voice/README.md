@@ -53,7 +53,30 @@ Nicole was born in English: Kokoro's `af_nicole`. For the other languages she is
 
 The cloning does not depend on anyone's computer. The GitHub Actions workflow `.github/workflows/voice.yml` runs whenever the lines, their translations or these tools change on `main`, and can be started by hand (Actions → Voice → Run workflow). For each language it downloads the store, clones what is missing, and puts the store back into the release. New lines take minutes. Cloning every line of a language from scratch takes a few hours; a job stops after about five hours and keeps what it has, and running the workflow again goes on from there. The three languages run side by side.
 
-The store is guarded on its way: a download that fails stops the job instead of starting from an empty store; `clone.py` refuses an audio that is not the one its index was written for; the audio goes up under its fingerprint before its index, and older audio of the language goes only once the new index is up; and the store written every ten lines goes up even when a clone breaks off. Without a voice print in the release, only German runs and makes the print (even with nothing to clone), the other languages follow on the next run, so all three speak with the same voice. The workflow's actions are pinned to their commits, and the token that writes the release is given only to the steps that read and write it.
+The store is guarded on its way: a download that fails stops the job instead of starting from an empty store; `clone.py` refuses an audio that is not the one its index was written for; the audio goes up under its fingerprint before its index, and older audio of the language goes only once the new index is up; and the store written every ten lines goes up even when a clone breaks off. Without a voice print in the release, only German runs and makes the print (even with nothing to clone), the other languages follow on the next run, so all three speak with the same voice.
+
+The workflow keeps code of others away from any token that writes. The clone jobs run Chatterbox, Whisper and their packages with a token that may only read; they hand their store on as an artifact. A separate upload job holds the token that writes the release and runs nothing but the shell, `jq` and `gh`: it puts a store up only if the fingerprint its index names is the sha256 of its audio. The workflow's actions are pinned to their commits, npm installs without install scripts, and every Python package is locked by its hash (below).
+
+## The Python lock
+
+What `clone.py` runs on is locked file by file, so a run installs exactly what was checked and nothing a package index or a Git branch offers that day:
+
+- `clone/requirements.in` names what is wanted: Chatterbox's dependencies at its pinned commit (without its demo app, gradio), Perth (Resemble AI's watermarker) as the archive of one commit, and `soundfile`. Whisper runs through `transformers`.
+- `clone/requirements.txt` is the lock: every package at one version with the hashes of its files, torch and torchaudio as PyTorch's CPU builds for Python 3.11 on Linux x86-64 (by URL and hash; the runner has no GPU, and the CUDA builds are gigabytes larger), and Chatterbox as the archive of the commit in `CLONE.code`. The workflow installs it with `pip install --require-hashes --no-deps`, so nothing outside the file comes in. Chatterbox's own metadata names Perth by a Git branch; installing without dependencies keeps that branch out.
+- `clone/build-requirements.in` and `.txt`: the build tools of the two packages that come as source (setuptools for Chatterbox, uv_build for Perth), installed first, so that pip builds them without fetching tools of its own (`--no-build-isolation`).
+- `prepare.ts` refuses a lock that names another Chatterbox commit or another `soundfile` than `nicole.ts`.
+
+**Locking again** (another Chatterbox commit, a package with a security fix). pip-tools makes the lock; it is only needed for this and never runs in the workflow. With Python 3.11, in a throwaway virtual environment outside the repository:
+
+```
+python3.11 -m venv /tmp/lock && /tmp/lock/bin/pip install pip-tools==7.6.2
+cd tools/voice/clone
+/tmp/lock/bin/pip-compile --generate-hashes --allow-unsafe --strip-extras --no-emit-index-url --output-file requirements.txt requirements.in
+/tmp/lock/bin/pip-compile --generate-hashes --allow-unsafe --strip-extras --no-emit-index-url --output-file build-requirements.txt build-requirements.in
+node lock.ts
+```
+
+`requirements.in` follows Chatterbox's `pyproject.toml` at the new commit (and Perth's commit, if it moves); `lock.ts` swaps torch and torchaudio for their CPU builds and adds Chatterbox at the commit in `CLONE.code`. pip-compile resolves for the machine it runs on; the packages here pull in nothing that only Linux needs, so a lock made on a Mac holds on the runner (worth checking again after larger changes). Look at what changed before committing: a new package or a new maintainer is a new dependency (see CLAUDE.md, "Supply chain").
 
 Cloudflare's build usually runs before the workflow has finished: the new lines then play with the fallback voice until the next deploy builds the voices again. A build that cannot fetch a store the release has (a timeout, an upload under way) speaks those lines with the fallback too, but keeps no stamp and nothing in its cache, so the next build tries again.
 
@@ -84,7 +107,8 @@ The settings are the maintainer's choice by ear ("variant D"): unmistakably a ma
 gh release download voice-nicole --dir <work folder> --pattern nicole-de.json --pattern nicole-conds.pt --pattern reference.wav
 gh release download voice-nicole --pattern nicole-de-<fingerprint>.flac --output <work folder>/nicole-de.flac
 node tools/voice/clone/prepare.ts <work folder>
-python -m venv .venv && .venv/bin/pip install -r <work folder>/requirements.txt
+python3.11 -m venv .venv && .venv/bin/pip install --require-hashes --no-deps -r tools/voice/clone/build-requirements.txt
+PATH=.venv/bin:$PATH .venv/bin/pip install --require-hashes --no-deps --no-build-isolation -r tools/voice/clone/requirements.txt
 .venv/bin/python tools/voice/clone/clone.py <work folder> de
 cp <work folder>/nicole-de.flac <work folder>/nicole-de-<new fingerprint>.flac
 gh release upload voice-nicole <work folder>/nicole-de-<new fingerprint>.flac --clobber
@@ -103,9 +127,12 @@ The first run downloads Chatterbox (about 3 GB) and Whisper into the Hugging Fac
 |---|---|
 | `render.ts` | Renders all sprites (`npm run voice`, run by build and dev): radio, announcer, Nicole |
 | `nicole.ts` | What Nicole is made of: Kokoro voice, reference, clone settings, the release, the keys of her lines |
-| `clone/prepare.ts` | Writes the list of lines to clone, the Python requirements and the reference |
+| `clone/prepare.ts` | Writes the list of lines to clone and the reference, checks the Python lock against `nicole.ts` |
 | `clone/clone.py` | Clones the missing lines of one language with Chatterbox, checks them with Whisper |
-| `.github/workflows/voice.yml` | Runs prepare and clone for every language and updates the release |
+| `clone/requirements.in`, `clone/requirements.txt` | The Python packages `clone.py` runs on, and their lock with hashes |
+| `clone/build-requirements.in`, `clone/build-requirements.txt` | The build tools of the two packages that come as source, and their lock |
+| `clone/lock.ts` | Finishes the lock after pip-compile: torch's CPU builds, Chatterbox at its commit |
+| `.github/workflows/voice.yml` | Runs prepare and clone for every language (reading only) and updates the release (a job of its own) |
 
 ## Licenses
 

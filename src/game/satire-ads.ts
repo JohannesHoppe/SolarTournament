@@ -91,8 +91,8 @@ const unbroken = (text: string) => text.replace(/ %/g, ' %');
 /** The sponsors' names and colors, as their signs show them on the rings of the tournament (see GateKit), in the Host's language. */
 export const sponsorSigns = () => ADS.map((ad) => ({ brand: t(ad.brand), color: ad.color }));
 
-/** Seconds a satire ad runs before the clone can boot. */
-const AD_SECONDS = 6;
+/** Seconds a satire ad runs before the clone can boot; a bot's next clone waits as long (see Game). */
+export const AD_SECONDS = 6;
 
 /** Shows the invented sponsors one after the other, in a fresh order every session. */
 export class SatireAds implements AdProvider {

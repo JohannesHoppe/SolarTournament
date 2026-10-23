@@ -1,0 +1,23 @@
+# What clone.py runs on (Python 3.11, Linux x86-64), the input of requirements.txt (see
+# ../README.md, "The Python lock"). Chatterbox itself is not resolved here: its metadata names
+# Perth by a Git branch, so it is installed without its dependencies, and these are its
+# dependencies at the pinned commit, minus the demo app (gradio), with Perth at a commit.
+
+# Chatterbox's dependencies (pyproject.toml at the commit in CLONE.code, tools/voice/nicole.ts)
+numpy>=1.24.0,<2.0.0
+librosa==0.11.0
+s3tokenizer
+torch==2.6.0
+torchaudio==2.6.0
+transformers==5.2.0
+diffusers==0.29.0
+resemble-perth @ https://github.com/resemble-ai/Perth/archive/ff1c8ac55a976971245cdd53c18d6131ca00d993.tar.gz
+conformer==0.3.2
+safetensors==0.5.3
+spacy-pkuseg
+pykakasi==2.3.0
+pyloudnorm
+omegaconf
+
+# clone.py itself (CHECK.soundfile in tools/voice/nicole.ts); Whisper runs through transformers
+soundfile==0.14.0

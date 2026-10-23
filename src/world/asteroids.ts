@@ -194,6 +194,11 @@ export class AsteroidField {
   readonly asteroids = new Map<string, Asteroid>();
   /** Field time (s): runs with the game; online, the lead browser's field time is shared. */
   clock = 0;
+  /**
+   * The share of FAR_LEVEL at which rocks switch to less detail (see view/quality): a cheaper
+   * picture draws the full relief only closer up. Only the picture: collisions use the full shapes.
+   */
+  private detail = 1;
   /** Rocks broken so far, with the field time each broke (for snapshot). */
   private readonly broken = new Map<string, number>();
   private readonly templates: Record<TemplateKind, Template[]>;
@@ -315,7 +320,8 @@ export class AsteroidField {
       // the full relief up close, fewer triangles from afar, in the shadow pass as well
       const lod = new THREE.LOD();
       lod.addLevel(object, 0);
-      lod.addLevel(template.far.clone(true), meanRadius * FAR_LEVEL);
+      lod.addLevel(template.far.clone(true), meanRadius * FAR_LEVEL * this.detail);
+      lod.userData.far = meanRadius * FAR_LEVEL;
       lod.scale.copy(template.object.scale);
       object.scale.set(1, 1, 1);
       lod.children[1].scale.set(1, 1, 1);
@@ -361,6 +367,12 @@ export class AsteroidField {
     a.object.quaternion.setFromAxisAngle(a.spinAxis, a.spinRate * age).multiply(a.baseOrientation);
     a.object.updateMatrixWorld(true);
     a.inverse.copy(a.object.matrixWorld).invert();
+  }
+
+  /** Draws the full relief only within `share` of FAR_LEVEL (see detail); 0 draws every rock in less detail. */
+  setDetail(share: number) {
+    this.detail = share;
+    for (const object of this.group.children) if (object instanceof THREE.LOD) object.levels[1].distance = object.userData.far * share;
   }
 
   update(dt: number) {

@@ -78,8 +78,8 @@ const COLORS: Record<ItemKind, number> = { twin: 0xff3fa4, plating: 0x4d91ff, to
  * PROBE_LIFETIME seconds unless taken: at most four at once, the same on every browser whatever
  * was taken when.
  */
-const PROBE_FIRST = 20;
-const PROBE_EVERY = 25;
+export const PROBE_FIRST = 20;
+export const PROBE_EVERY = 25;
 const PROBE_LIFETIME = PROBE_EVERY * 4;
 /** A dead clone drops at most this many probes: twin laser, plating, nova core. */
 const MAX_DROPS = 3;
@@ -251,13 +251,13 @@ export class Probes {
     return null;
   }
 
-  /** The nearest probe within `range` of a point, if any. */
-  nearest(position: THREE.Vector3, range: number): Probe | null {
+  /** The nearest probe within `range` of a point, if any; with a `field`, only one in sight of the point (no rock between). */
+  nearest(position: THREE.Vector3, range: number, field?: Pick<AsteroidField, 'lineOfSight'>): Probe | null {
     let best: Probe | null = null;
     let distance = range;
     for (const probe of this.list) {
       const d = probe.position.distanceTo(position);
-      if (d < distance) {
+      if (d < distance && (!field || field.lineOfSight(position, probe.position))) {
         best = probe;
         distance = d;
       }
