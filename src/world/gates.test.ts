@@ -38,6 +38,21 @@ describe("a ring's housings", () => {
     expect(touch(1750, 0, -1000).touched).toBe(false);
   });
 
+  it('include the station module on top and its sponsor plate: a ship flying into it head on bounces back', () => {
+    // the module sits on top (+Y for a ring facing +Z), 35 m wide, its plate facing along the axis
+    const hit = touch(0, 2070, -420);
+    expect(hit.touched).toBe(true);
+    expect(hit.normal.z).toBeLessThan(-0.9);
+  });
+
+  it('include the struts out to the position lights', () => {
+    const angle = Math.PI / 4 + Math.PI / 10;
+    const out = 1620 + 200 + 250;
+    const hit = touch(Math.cos(angle) * out, Math.sin(angle) * out, -300);
+    expect(hit.touched).toBe(true);
+    expect(touch(Math.cos(angle) * out, Math.sin(angle) * out, -600).touched).toBe(false);
+  });
+
   it('push a ship whose center is inside a housing out through the nearest face', () => {
     const hit = touch(1700, 0, 150);
     expect(hit.touched).toBe(true);

@@ -1,11 +1,15 @@
 import * as THREE from 'three';
 import { MAX_HEAT, MAX_HULL, type Ship } from '../ship/ship';
+import { METERS_PER_UNIT } from '../ship/flight';
 import { CONTROLS, keyLabel, type Command, type Device } from '../input/input';
-import { markedName, type Kind } from './marks';
-import { TEAM_TINTS } from '../game/flags';
+import { markedName, swatch, type Kind } from './marks';
+import { shownTint } from '../ship/tints';
+import { ink } from './ink';
 import { msg, t } from '../i18n/i18n';
 import { Attitude } from './attitude';
 import { WELL_GAUGE, WELL_LOST, wellLevel, type Alarm, type AlarmLevel } from '../game/alarms';
+import type { Reference } from '../world/arenas';
+import { climbOf, closure, heightOf } from '../world/reference';
 
 /** The master caution above the alarm list names the worst level. */
 const MASTER: Record<AlarmLevel, string> = { caution: msg('CAUTION'), warning: msg('WARNING'), critical: msg('CRITICAL') };
@@ -31,10 +35,31 @@ const BANNER_SECONDS = 2.4;
 /** A ship's name needs about this much room beside its mark (px); a name closer to one already written is left out. */
 const LABEL_WIDTH = 140;
 const LABEL_HEIGHT = 18;
+/** A name in the picture starts this far right of its ship (px, `.marker`'s margin and padding in style.css). */
+const NAME_LEFT = 20;
+/** A ship off screen gets its arrow where the view's edge cuts the line to it, this share of the half width and height out from the middle. */
+const EDGE_X = 0.95;
+const EDGE_Y = 0.8;
+/** The size of a ship's name beside its arrow at the screen's edge (font and line, px) and its widest box, longer names cut short; smaller on a phone. */
+type TagSize = { size: number; line: number; max: number };
+const TAG: TagSize = { size: 12, line: 16, max: 150 };
+const TAG_PHONE: TagSize = { size: 10, line: 13, max: 84 };
+/** A name keeps this far from its arrow's point and this far from the screen's edge (px); its plate pads it by TAG_PADDING on each side. */
+const TAG_GAP = 16;
+const TAG_MARGIN = 4;
+const TAG_PADDING = 3;
+/** Where its first place is taken, a name tries this many steps along the edge each way before it is left out. */
+const TAG_TRIES = 3;
+/** The mark before a name takes this much room (em, see `.mark` in style.css). */
+const MARK_EM = 1.25;
+/** An arrow at the edge reaches this far from its point (px); no name covers it. */
+const ARROW_REACH = 12;
+/** The HUD's pieces the names at the edge keep clear of (the pieces the layout test keeps apart), measured anew this often (ms). */
+const OBSTACLES = '.hud-top, #hud-room, #school-panel, #hud-split, #hud-alerts > *, #transmission, #radar, .hud-bottom, #killfeed, #now-playing, .touch-button, #hud-altitude';
+const OBSTACLE_MS = 500;
 /** How long a fresh clone's projection takes to draw itself (s); style.css staggers its pieces within it. */
 const BOOT_SECONDS = 1.2;
-/** Display scale: one world unit is 5 cm, a ship is about 35 m long. */
-export const METERS_PER_UNIT = 0.05;
+export { METERS_PER_UNIT };
 /** The size of the window, as Game.resize last set it: reading it from the window after the HUD wrote to the page would force a layout. */
 const viewport = { width: window.innerWidth, height: window.innerHeight };
 
@@ -56,11 +81,13 @@ export class Hud {
   private escapeShown = -1;
   private readonly lock = $('hud-lock');
   private readonly vignette = $('g-vignette');
+  private readonly flareHeat = $('flare-heat');
   private readonly speed = $('hud-speed');
   private readonly mode = $('hud-mode');
   private readonly overdrive = $('hud-overdrive');
   private readonly hook = $('hud-hook');
   private readonly torpedo = $('hud-torpedo');
+  private readonly courseMarker = $('course-marker');
   private readonly prograde = $('prograde');
   private readonly retrograde = $('retrograde');
   private readonly message = $('hud-message');
@@ -80,13 +107,42 @@ export class Hud {
   private readonly waypoint = $('waypoint');
   private readonly crosshair = $('crosshair');
   private readonly waypointLabel = $('waypoint-label');
-  private readonly center = $('center');
-  private readonly centerDistance = $('center-distance');
-  private readonly markers = new Map<string, HTMLElement>();
+  private readonly referenceLayer = $('references');
+  /** The marks of the fixed references, one per reference shown, reused from frame to frame (see setReferences). */
+  private readonly referenceMarks: { element: HTMLElement; label: HTMLElement; glyph: string }[] = [];
+  /** Where the ships' marks sit this frame (x, y pairs, px), whether named or not: the references give way to them. */
+  private readonly marked: number[] = [];
+  /** Where the crosshair sat when last placed (px). */
+  private readonly aim = { x: NaN, y: NaN };
+  /**
+   * The panels the fixed references keep out of, and their boxes as last measured (see
+   * setReferences): measured when one changes its size (shows, hides, takes a longer text), as a
+   * ResizeObserver tells right after the page is laid out, so measuring costs no layout of its own.
+   */
+  private readonly panels = [...document.querySelectorAll<HTMLElement>(PANELS)];
+  private readonly blocked: DOMRect[] = [];
+  /** The screen or the controls changed: the panels are measured again before the next placing. */
+  private blockedStale = true;
+  private blockedTouch = false;
+  private readonly altitude = $('hud-altitude');
+  private readonly height = $('hud-height');
+  private readonly climb = $('hud-climb');
+  private readonly markers = new Map<string, Marker>();
   /** Ships marked this frame, reused from frame to frame. */
   private readonly seen = new Set<string>();
   /** Where the names written this frame sit (x, y pairs, px), reused from frame to frame. */
   private readonly labeled: number[] = [];
+  private readonly labeledMarkers: Marker[] = [];
+  /** The arrows at the screen's edge this frame, and the records they are kept in, reused from frame to frame. */
+  private readonly edges: Edge[] = [];
+  private readonly edgePool: Edge[] = [];
+  /** What the names at the edge keep clear of this frame, and the HUD's pieces among it (boxes, flat: left, top, right, bottom). */
+  private readonly nameBlocked: number[] = [];
+  /** The boxes of the names written at the edge this frame (flat, as nameBlocked). */
+  private readonly tagBoxes: number[] = [];
+  private readonly obstacles: number[] = [];
+  private obstaclesAt = 0;
+  private measure: CanvasRenderingContext2D | null = null;
   private readonly markerLayer = document.createElement('div');
   private readonly attitude = new Attitude($<HTMLCanvasElement>('hud-attitude'));
   private messageUntil = 0;
@@ -99,6 +155,8 @@ export class Hud {
   private keysFor: Device | null = null;
 
   constructor() {
+    const observer = new ResizeObserver(() => this.measurePanels());
+    for (const panel of this.panels) observer.observe(panel);
     this.markerLayer.className = 'markers';
     this.root.prepend(this.markerLayer);
     for (let i = 0; i < ALARM_ROWS; i++) {
@@ -139,6 +197,7 @@ export class Hud {
   setViewport(width: number, height: number) {
     viewport.width = width;
     viewport.height = height;
+    this.blockedStale = true;
     this.attitude.setViewport(width, height, Math.min(window.devicePixelRatio, 2));
   }
 
@@ -172,7 +231,8 @@ export class Hud {
     this.splitText.textContent = '';
     this.setSchool(null);
     this.waypoint.hidden = true;
-    this.center.hidden = true;
+    for (const mark of this.referenceMarks) mark.element.hidden = true;
+    this.altitude.hidden = true;
   }
 
   /**
@@ -246,7 +306,15 @@ export class Hud {
     this.root.append(popup);
   }
 
-  /** The crosshair glows orange while the laser would hit a drive, and dims over armor, where a shot does little. */
+  /** What the crosshair shows the laser would hit now (see setOnTarget). */
+  get onTarget(): boolean {
+    return this.crosshair.classList.contains('on-target') || this.crosshair.classList.contains('on-armor');
+  }
+
+  /**
+   * The crosshair turns orange while the laser would hit a hull: bright and glowing over a drive,
+   * a plain orange ring over armor, where a shot only heats the laser.
+   */
   setOnTarget(hit: 'drive' | 'armor' | null) {
     setClass(this.crosshair, 'on-target', hit === 'drive');
     setClass(this.crosshair, 'on-armor', hit === 'armor');
@@ -254,8 +322,10 @@ export class Hud {
 
   /** The crosshair and the hit marker sit where the nose points (see Game.aimCrosshair). */
   setCrosshair(camera: THREE.Camera, point: THREE.Vector3) {
-    pin(this.crosshair, camera, point);
     pin(this.hitmarker, camera, point);
+    const at = pin(this.crosshair, camera, point);
+    this.aim.x = at.x;
+    this.aim.y = at.y;
   }
 
   /** Blinking diamond on a point in space with what it is, clamped to the screen edge when off screen. */
@@ -263,10 +333,29 @@ export class Hud {
    * The flight computer brackets the next ring of a course on screen, sized to its opening of
    * `radius` (units), with a reticle on its core, and the ring after it faintly (see
    * .gate-mark); a ring behind, off screen, too far to see or filling the view goes unmarked.
+   * `crossing` is where the flight passes the next ring's plane, `inside` whether that lies
+   * inside the ring (see markCrossing).
    */
-  setGates(camera: THREE.Camera, next: THREE.Vector3 | null, after: THREE.Vector3 | null, radius: number) {
+  setGates(camera: THREE.Camera, next: THREE.Vector3 | null, after: THREE.Vector3 | null, radius: number, crossing: THREE.Vector3 | null = null, inside = false) {
     this.markGate(this.gateNext, camera, next, radius);
     this.markGate(this.gateAfter, camera, after, radius);
+    this.markCrossing(camera, next && crossing, inside);
+  }
+
+  private readonly crossing = $('gate-cross');
+
+  /**
+   * The crossing mark: where the flight, held as it is, passes the next ring's plane (see
+   * pathCrossing). In the flight computer's azure while that lies inside the ring, in orange
+   * while it lies outside: the pilot steers the mark into the ring. Hidden off screen.
+   */
+  private markCrossing(camera: THREE.Camera, point: THREE.Vector3 | null, inside: boolean) {
+    if (point) projected.copy(point).project(camera);
+    const shown = !!point && projected.z < 1 && Math.abs(projected.x) < 1 && Math.abs(projected.y) < 1;
+    setHidden(this.crossing, !shown);
+    if (!shown) return;
+    setClass(this.crossing, 'outside', !inside);
+    this.crossing.style.translate = `${Math.round(((projected.x + 1) / 2) * viewport.width)}px ${Math.round(((1 - projected.y) / 2) * viewport.height)}px`;
   }
 
   private readonly gateNext = { element: $('gate-mark'), x: NaN, y: NaN, size: NaN };
@@ -301,8 +390,13 @@ export class Hud {
     setHidden(this.waypoint, !point);
     if (!point) return;
     setText(this.waypointLabel, label);
-    pin(this.waypoint, camera, point);
+    const at = pin(this.waypoint, camera, point);
+    this.waypointAt.x = at.x;
+    this.waypointAt.y = at.y;
   }
+
+  /** Where the waypoint sat when last placed (px). */
+  private readonly waypointAt = { x: NaN, y: NaN };
 
   /** The overdrive next to the flight mode: ready, or the seconds until it is. */
   setOverdrive(seconds: number) {
@@ -333,14 +427,96 @@ export class Hud {
   }
 
   /**
-   * The zero point: the center of the field, where the asteroids are densest and the arena
-   * ends farthest away, with its distance. Always on screen, at the edge when behind.
+   * The fixed references (see world/reference): the field's center, the sun, the arena's big
+   * things and the mode's bases, each a small dim glyph with its label (and distance), where it
+   * lies on screen or at the edge as the ships' arrows are. They give way first: one that would
+   * sit on a ship's mark or its name at the screen's edge, the waypoint, the crosshair or a reference before it is left out, and
+   * one whose label would run into a ship's name keeps only its glyph. Called after updateMarkers.
    */
-  setCenter(camera: THREE.Camera, me: Ship) {
-    this.center.hidden = !me.alive;
+  setReferences(camera: THREE.Camera, me: Ship, references: readonly Reference[]) {
+    const marks = this.referenceMarks;
+    const placed = this.labeled;
+    // the panels move with the screen's size and the touch controls (rarely: then measured here)
+    const blocked = this.blocked;
+    const touch = document.body.classList.contains('touch');
+    if (this.blockedStale || touch !== this.blockedTouch) {
+      this.blockedTouch = touch;
+      this.measurePanels();
+    }
+    const start = placed.length;
+    let shown = 0;
+    for (const reference of me.alive ? references : NONE) {
+      let mark = marks[shown];
+      if (!mark) {
+        const element = document.createElement('div');
+        element.className = 'reference';
+        const label = document.createElement('span');
+        label.className = 'hud-label';
+        element.append(label);
+        this.referenceLayer.append(element);
+        mark = { element, label, glyph: '' };
+        marks.push(mark);
+      }
+      const spot = toScreen(camera, reference.position, REFERENCE_EDGE_X, REFERENCE_EDGE_Y);
+      // a reference on another mark, or on the crosshair, is left out
+      let taken = near(spot.x, spot.y, this.aim.x, this.aim.y, REFERENCE_ROOM) || (!this.waypoint.hidden && near(spot.x, spot.y, this.waypointAt.x, this.waypointAt.y, REFERENCE_ROOM));
+      for (let i = 0; !taken && i < this.marked.length; i += 2) taken = near(spot.x, spot.y, this.marked[i], this.marked[i + 1], REFERENCE_ROOM);
+      for (let i = start; !taken && i < placed.length; i += 2) taken = near(spot.x, spot.y, placed[i], placed[i + 1], REFERENCE_ROOM);
+      const name = t(reference.label);
+      const distance = reference.distance ? me.flight.position.distanceTo(reference.position) - (reference.radius ?? 0) : 0;
+      const text = reference.distance ? t('{name} · {distance}', { name, distance: meters(Math.max(0, distance)) }) : name;
+      // where glyph and label reach (see .reference in style.css): the label above the glyph, or
+      // at the edge beside it, towards the middle
+      const east = spot.x > viewport.width / 2;
+      const width = text.length * REFERENCE_CHAR;
+      const half = Math.max(GLYPH, width / 2);
+      const left = spot.offscreen ? (east ? spot.x - GLYPH - width - 6 : spot.x - GLYPH) : spot.x - half;
+      const right = spot.offscreen ? (east ? spot.x + GLYPH : spot.x + GLYPH + width + 6) : spot.x + half;
+      const top = spot.offscreen ? spot.y - GLYPH : spot.y - GLYPH - 18;
+      for (let i = 0; !taken && i < blocked.length; i++) {
+        const box = blocked[i];
+        taken = left < box.right + PANEL_ROOM && right > box.left - PANEL_ROOM && top < box.bottom + PANEL_ROOM && spot.y + GLYPH > box.top - PANEL_ROOM;
+      }
+      // a ship's name at the screen's edge stands first
+      taken ||= hits(this.tagBoxes, left, top, right, spot.y + GLYPH);
+      if (taken) continue;
+      shown++;
+      setHidden(mark.element, false);
+      if (mark.glyph !== reference.glyph) {
+        mark.glyph = reference.glyph;
+        mark.element.dataset.glyph = reference.glyph;
+      }
+      // its label only where it runs into no name written before it
+      let crowded = false;
+      for (let i = 0; !crowded && i < placed.length; i += 2) crowded = Math.abs(placed[i] - spot.x) < LABEL_WIDTH && Math.abs(placed[i + 1] - spot.y) < LABEL_HEIGHT;
+      placed.push(spot.x, spot.y);
+      setClass(mark.element, 'crowded', crowded);
+      setClass(mark.element, 'offscreen', spot.offscreen);
+      setClass(mark.element, 'east', east);
+      mark.element.style.translate = `${Math.round(spot.x)}px ${Math.round(spot.y)}px`;
+      setText(mark.label, text);
+    }
+    for (; shown < marks.length; shown++) setHidden(marks[shown].element, true);
+  }
+
+  /** Measures the boxes of the panels shown (see panels). */
+  private measurePanels() {
+    this.blockedStale = false;
+    this.blocked.length = 0;
+    for (const panel of this.panels) {
+      const box = panel.getBoundingClientRect();
+      if (box.width >= 1 && box.height >= 1) this.blocked.push(box);
+    }
+  }
+
+  /** The height above the reference plane and the climb (see world/reference), right of the crosshair; hidden while no clone flies. */
+  setAltitude(me: Ship) {
+    setHidden(this.altitude, !me.alive);
     if (!me.alive) return;
-    pin(this.center, camera, origin);
-    setText(this.centerDistance, t('Center · {distance}', { distance: meters(me.flight.position.length()) }));
+    const height = heightOf(me.flight.position);
+    setText(this.height, `${height < 0 ? '−' : '+'}${meters(Math.abs(height))}`);
+    const climb = Math.round(climbOf(me.flight.velocity) * METERS_PER_UNIT);
+    setText(this.climb, `${climb > 0 ? '▲' : climb < 0 ? '▼' : '◆'} ${t('{speed} m/s', { speed: Math.abs(climb) })}`);
   }
 
   /**
@@ -391,10 +567,16 @@ export class Hud {
     for (const each of LEVELS) setClass(this.escape, each, each === level);
   }
 
-  /** Tunnel vision under sustained acceleration, 0..1. */
+  /** Tunnel vision under sustained acceleration, 0..1: only hinted, the edges darken a little and close in a little, so the picture stays readable. */
   setStrain(strain: number) {
     this.vignette.style.opacity = String(strain);
-    this.vignette.style.setProperty('--tunnel', `${Math.round(70 - strain * 45)}%`);
+    this.vignette.style.setProperty('--tunnel', `${Math.round(75 - strain * 20)}%`);
+  }
+
+  /** A solar flare's heat on the screen, 0..1: its edges glow orange, then the whole picture. */
+  setFlareHeat(heat: number) {
+    const shown = heat < 0.01 ? '0' : heat.toFixed(2);
+    if (this.flareHeat.style.opacity !== shown) this.flareHeat.style.opacity = shown;
   }
 
   /** A split or lap time against the best lap, for a few seconds: ahead in green, behind in red, without a best in white. */
@@ -439,7 +621,7 @@ export class Hud {
         row.classList.toggle('own', pilot.own);
         const name = document.createElement('span');
         name.className = 'intro-name';
-        name.append(...markedName(pilot.kind, pilot.name));
+        name.append(swatch(pilot.tint, pilot.sovereign), ...markedName(pilot.kind, pilot.name));
         row.append(name);
         // the skills come from the game's own table, never from another browser
         if (pilot.skills) row.insertAdjacentHTML('beforeend', pilot.skills);
@@ -513,6 +695,18 @@ export class Hud {
    * Prograde marker where the ship is drifting to, retrograde marker where to point the
    * drive to brake.
    */
+  /**
+   * The autopilot's course, where the Host wants to fly (see PathSteering): a thin diamond,
+   * held at the screen's edge when off screen or behind, fading out as the nose comes onto it,
+   * where the crosshair says it all. Null hides it (free drift, brake, flip).
+   */
+  setCourse(camera: THREE.Camera, course: THREE.Vector3 | null, nose: THREE.Vector3) {
+    setHidden(this.courseMarker, !course);
+    if (!course) return;
+    pin(this.courseMarker, camera, courseAhead.copy(course).multiplyScalar(100000).add(camera.position));
+    this.courseMarker.style.opacity = THREE.MathUtils.smoothstep(course.angleTo(nose), COURSE_FADE_FROM, COURSE_FADE).toFixed(2);
+  }
+
   updateVelocityMarkers(camera: THREE.Camera, me: Ship) {
     const velocity = me.flight.velocity;
     const show = me.alive && velocity.lengthSq() > 400;
@@ -520,65 +714,219 @@ export class Hud {
     placeVelocityMarker(this.retrograde, camera, velocity, -1, show);
   }
 
-  /** Marks other ships in line of sight with their name; ships off screen get an arrow at the screen edge. */
-  updateMarkers(camera: THREE.Camera, ships: Ship[], me: Ship, visible: (ship: Ship) => boolean) {
+  /**
+   * Marks other ships in line of sight with their name; ships off screen get an arrow at the
+   * screen edge with their name beside it (see placeNames). The `target`'s mark adds its closure
+   * rate and is set in the numbers' face.
+   */
+  updateMarkers(camera: THREE.Camera, ships: Ship[], me: Ship, visible: (ship: Ship) => boolean, target: Ship | null = null) {
     const { width, height } = viewport;
     const seen = this.seen;
     seen.clear();
     const labeled = this.labeled;
     labeled.length = 0;
+    this.labeledMarkers.length = 0;
+    this.tagBoxes.length = 0;
+    const edges = this.edges;
+    edges.length = 0;
+    const marked = this.marked;
+    marked.length = 0;
     for (const ship of ships) {
       if (ship === me || !ship.alive || !visible(ship)) continue;
       seen.add(ship.id);
-      let marker = this.markers.get(ship.id);
-      if (!marker) {
-        marker = document.createElement('div');
-        marker.className = 'marker';
-        marker.dataset.team = 'unset';
-        // the mark and the name stay; only the distance behind them changes from frame to frame
-        const distance = document.createElement('span');
-        marker.append(...markedName(ship.kind, ship.name), distance);
-        this.markerLayer.append(marker);
-        this.markers.set(ship.id, marker);
+      const marker = this.markers.get(ship.id) ?? this.addMarker(ship);
+      const element = marker.element;
+      // in a round of sides a marker takes its side's color, else the ship's own; the Sovereign's glows gold either way
+      const tint = shownTint(ship);
+      if (marker.tint !== tint) {
+        marker.tint = tint;
+        element.style.setProperty('--tint', tint);
+        setClass(element, 'sovereign', ship.sovereign);
       }
-      // in a round of sides a marker takes its side's color, else the ship's own
-      const team = ship.team >= 0 ? String(ship.team) : '';
-      if (marker.dataset.team !== team) {
-        marker.dataset.team = team;
-        marker.style.setProperty('--tint', TEAM_TINTS[ship.team] ?? '#' + ship.color.getHexString());
-      }
-      projected.copy(ship.flight.position).project(camera);
-      const behind = projected.z > 1;
-      let x = projected.x;
-      let y = projected.y;
-      if (behind) {
-        x = -x;
-        y = -y;
-      }
-      const offscreen = behind || Math.abs(x) > 0.95 || Math.abs(y) > 0.8;
+      const { x: left, y: top, offscreen, angle } = toScreen(camera, ship.flight.position, EDGE_X, EDGE_Y);
+      marked.push(left, top);
+      // the edge an arrow sits at: where the point, as a share of the frame, reaches farthest
+      const across = ((left / width) * 2 - 1) / EDGE_X;
+      const up = (1 - (top / height) * 2) / EDGE_Y;
+      const side = Math.abs(across) >= Math.abs(up) ? (across > 0 ? Side.Right : Side.Left) : up > 0 ? Side.Top : Side.Bottom;
+      const distance = ship.flight.position.distanceTo(me.flight.position);
       if (offscreen) {
-        const scale = 1 / Math.max(Math.abs(x) / 0.95, Math.abs(y) / 0.8, 1e-6);
-        x *= scale;
-        y *= scale;
+        const edge = (this.edgePool[edges.length] ??= { marker, left, top, side, distance });
+        edge.marker = marker;
+        edge.left = left;
+        edge.top = top;
+        edge.side = side;
+        edge.distance = distance;
+        edges.push(edge);
+      } else {
+        // a name that would land on one already written keeps only its mark
+        let crowded = false;
+        for (let i = 0; i < labeled.length; i += 2) crowded ||= Math.abs(labeled[i] - left) < LABEL_WIDTH && Math.abs(labeled[i + 1] - top) < LABEL_HEIGHT;
+        if (!crowded) {
+          labeled.push(left, top);
+          this.labeledMarkers.push(marker);
+        }
+        setClass(element, 'crowded', crowded);
       }
-      const left = ((x + 1) / 2) * width;
-      const top = ((1 - y) / 2) * height;
-      // a name that would land on one already written keeps only its mark
-      let crowded = false;
-      for (let i = 0; !offscreen && i < labeled.length; i += 2) crowded ||= Math.abs(labeled[i] - left) < LABEL_WIDTH && Math.abs(labeled[i + 1] - top) < LABEL_HEIGHT;
-      if (!offscreen && !crowded) labeled.push(left, top);
-      marker.classList.toggle('offscreen', offscreen);
-      marker.classList.toggle('crowded', crowded);
-      marker.style.transform = `translate(${left}px, ${top}px)`;
-      if (offscreen) marker.style.setProperty('--angle', `${Math.atan2(-y, x)}rad`);
-      setText(marker.lastElementChild as HTMLElement, ` · ${meters(ship.flight.position.distanceTo(me.flight.position))}`);
+      setClass(element, 'offscreen', offscreen);
+      element.style.transform = `translate(${left}px, ${top}px)`;
+      if (offscreen) element.style.setProperty('--angle', `${angle}rad`);
+      // the target's range and closure rate, as a fighter's HUD shows them (see closure)
+      const range = meters(distance);
+      const cue = ship === target;
+      setClass(element, 'target', cue);
+      setText(
+        marker.distance,
+        cue ? ` · ${t('{range} · Vc {vc}', { range, vc: signed(Math.round(closure(me.flight.position, me.flight.velocity, ship.flight.position, ship.flight.velocity) * METERS_PER_UNIT)) })}` : ` · ${range}`,
+      );
     }
     for (const [id, marker] of this.markers) {
       if (seen.has(id)) continue;
-      marker.remove();
+      marker.element.remove();
       this.markers.delete(id);
     }
+    if (edges.length || labeled.length) this.placeNames();
   }
+
+  private addMarker(ship: Ship): Marker {
+    const element = document.createElement('div');
+    element.className = 'marker';
+    // the mark and the name stay; only the distance behind them changes from frame to frame
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.append(...markedName(ship.kind, ship.name));
+    const distance = document.createElement('span');
+    distance.className = 'distance';
+    element.append(tag, distance);
+    this.markerLayer.append(element);
+    const marker: Marker = { element, tag, distance, tint: '', name: ship.name, mark: !!ship.kind, width: 0, measuredFor: null };
+    this.markers.set(ship.id, marker);
+    return marker;
+  }
+
+  /**
+   * Keeps the names clear of the arrows at the screen's edge and of the HUD's pieces: a name in
+   * the picture that would run under one keeps only its mark. Then writes the names beside the
+   * arrows, the nearest ship's first: inward of its arrow, or a line or a step along the edge
+   * where that is taken, never over another name, an arrow or a piece of the HUD; where nothing
+   * is free, the arrow goes without its name. On a phone the names at the edge are smaller and a
+   * long one is cut short.
+   */
+  private placeNames() {
+    const { width, height } = viewport;
+    const size = document.body.classList.contains('touch') || width <= 600 || height <= 500 ? TAG_PHONE : TAG;
+    const blocked = this.nameBlocked;
+    blocked.length = 0;
+    this.measureObstacles();
+    for (const value of this.obstacles) blocked.push(value);
+    const edges = this.edges;
+    for (const { left, top } of edges) blocked.push(left - ARROW_REACH, top - ARROW_REACH, left + ARROW_REACH, top + ARROW_REACH);
+    // a name in the picture that would run under an arrow or a piece of the HUD keeps only its mark
+    const labeled = this.labeled;
+    for (let i = 0; i < labeled.length; i += 2) {
+      const left = labeled[i] + NAME_LEFT;
+      const top = labeled[i + 1] - LABEL_HEIGHT / 2;
+      const crowded = hits(blocked, left, top, left + LABEL_WIDTH, top + LABEL_HEIGHT);
+      setClass(this.labeledMarkers[i / 2].element, 'crowded', crowded);
+      if (!crowded) blocked.push(left, top, left + LABEL_WIDTH, top + LABEL_HEIGHT);
+    }
+    edges.sort(nearestFirst);
+    for (const { marker, left, top, side } of edges) {
+      if (marker.measuredFor !== size) this.measureTag(marker, size);
+      const w = marker.width;
+      const h = size.line;
+      const upright = side === Side.Left || side === Side.Right;
+      const along = upright ? h + 2 : w / 2 + 8;
+      let found = false;
+      let x = 0;
+      let y = 0;
+      for (let k = 0; k <= 2 * TAG_TRIES && !found; k++) {
+        const step = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * along;
+        if (upright) {
+          x = side === Side.Right ? left - TAG_GAP - w : left + TAG_GAP;
+          y = top - h / 2 + step;
+        } else {
+          x = left - w / 2 + step;
+          y = side === Side.Top ? top + TAG_GAP : top - TAG_GAP - h;
+        }
+        x = Math.min(Math.max(x, TAG_MARGIN), width - TAG_MARGIN - w);
+        y = Math.min(Math.max(y, TAG_MARGIN), height - TAG_MARGIN - h);
+        found = !hits(blocked, x, y, x + w, y + h);
+      }
+      setClass(marker.element, 'crowded', !found);
+      if (!found) continue;
+      blocked.push(x, y, x + w, y + h);
+      // the fixed references give way to it (see setReferences)
+      this.tagBoxes.push(x, y, x + w, y + h);
+      marker.tag.style.setProperty('--at', `${Math.round(x - left)}px ${Math.round(y - top)}px`);
+    }
+  }
+
+  /** How wide a ship's name runs at the screen's edge in a size, up to its widest; the label takes exactly that box. */
+  private measureTag(marker: Marker, size: TagSize) {
+    const context = (this.measure ??= document.createElement('canvas').getContext('2d')!);
+    context.font = `${size.size}px ${getComputedStyle(this.markerLayer).fontFamily}`;
+    const text = context.measureText(marker.name).width + (marker.mark ? MARK_EM * size.size : 0);
+    marker.width = Math.min(size.max, Math.ceil(text) + 2 * TAG_PADDING + 2);
+    marker.measuredFor = size;
+    const style = marker.element.style;
+    style.setProperty('--tag-size', `${size.size}px`);
+    style.setProperty('--tag-line', `${size.line}px`);
+    style.setProperty('--tag-width', `${marker.width}px`);
+  }
+
+  /** The boxes of the HUD's pieces the names at the edge keep clear of, measured anew every OBSTACLE_MS. */
+  private measureObstacles() {
+    const now = performance.now();
+    if (now < this.obstaclesAt) return;
+    this.obstaclesAt = now + OBSTACLE_MS;
+    const obstacles = this.obstacles;
+    obstacles.length = 0;
+    for (const element of document.querySelectorAll(OBSTACLES)) {
+      const box = ink(element);
+      if (box) obstacles.push(box.left, box.top, box.right, box.bottom);
+    }
+  }
+}
+
+/** The edge of the screen an arrow sits at. */
+const enum Side {
+  Right,
+  Left,
+  Top,
+  Bottom,
+}
+
+/** A ship's marker: its element, its name (beside the arrow at the screen's edge) and its distance. */
+interface Marker {
+  element: HTMLElement;
+  tag: HTMLElement;
+  distance: HTMLElement;
+  /** What it is marked in, as last written (see shownTint). */
+  tint: string;
+  name: string;
+  /** Its name carries a mark (see marks.ts). */
+  mark: boolean;
+  /** The name's width at the edge (px), in the size it was measured for. */
+  width: number;
+  measuredFor: TagSize | null;
+}
+
+/** An arrow at the screen's edge this frame, waiting for its name (see Hud.placeNames). */
+interface Edge {
+  marker: Marker;
+  left: number;
+  top: number;
+  side: Side;
+  distance: number;
+}
+
+const nearestFirst = (a: Edge, b: Edge) => a.distance - b.distance;
+
+/** Whether a box overlaps one of the boxes (left, top, right, bottom; px, flat). */
+function hits(boxes: readonly number[], left: number, top: number, right: number, bottom: number): boolean {
+  for (let i = 0; i < boxes.length; i += 4) if (left < boxes[i + 2] && boxes[i] < right && top < boxes[i + 3] && boxes[i + 1] < bottom) return true;
+  return false;
 }
 
 function setBar(bar: HTMLElement, fraction: number) {
@@ -586,21 +934,67 @@ function setBar(bar: HTMLElement, fraction: number) {
   bar.classList.toggle('low', fraction < 0.35);
 }
 
-const origin = new THREE.Vector3();
+const courseAhead = new THREE.Vector3();
+/** The course marker fades in from this angle between course and nose (rad, about 1°) and shows fully from COURSE_FADE (about 3°). */
+const COURSE_FADE_FROM = 0.015;
+const COURSE_FADE = 0.05;
+/** Where a point in space shows on screen (see toScreen), reused from call to call. */
+const spot = { x: 0, y: 0, offscreen: false, angle: 0 };
 
-/** Places a marker on a point in space, clamped to the screen edge when off screen or behind. */
-function pin(element: HTMLElement, camera: THREE.Camera, point: THREE.Vector3) {
+/**
+ * Where a point in space sits on screen (px), for a mark at its place or, off screen or behind,
+ * on the frame within `edgeX` and `edgeY` of the middle (shares of half the screen), with the
+ * angle an arrow there points out at (rad). Returns the same object every call.
+ */
+function toScreen(camera: THREE.Camera, point: THREE.Vector3, edgeX = 0.95, edgeY = 0.8) {
   projected.copy(point).project(camera);
-  let { x, y } = projected;
   const behind = projected.z > 1;
-  if (behind) {
-    x = -x;
-    y = -y;
+  let x = behind ? -projected.x : projected.x;
+  let y = behind ? -projected.y : projected.y;
+  const offscreen = behind || Math.abs(x) > edgeX || Math.abs(y) > edgeY;
+  if (offscreen) {
+    // points behind the camera always sit on the edge
+    const scale = 1 / Math.max(Math.abs(x) / edgeX, Math.abs(y) / edgeY, 1e-6);
+    x *= scale;
+    y *= scale;
   }
-  // points behind the camera always sit on the edge
-  const scale = 1 / Math.max(Math.abs(x) / 0.92, Math.abs(y) / 0.85, behind ? 1e-6 : 1);
-  element.style.translate = `${((x * scale + 1) / 2) * viewport.width}px ${((1 - y * scale) / 2) * viewport.height}px`;
+  spot.x = ((x + 1) / 2) * viewport.width;
+  spot.y = ((1 - y) / 2) * viewport.height;
+  spot.offscreen = offscreen;
+  spot.angle = Math.atan2(-y, x);
+  return spot;
 }
+
+/** Places a marker on a point in space, clamped to the screen edge when off screen or behind; returns where (see toScreen). */
+function pin(element: HTMLElement, camera: THREE.Camera, point: THREE.Vector3) {
+  const at = toScreen(camera, point, 0.92, 0.85);
+  element.style.translate = `${at.x}px ${at.y}px`;
+  return at;
+}
+
+/** No reference, while no clone flies. */
+const NONE: readonly Reference[] = [];
+
+/** The frame the fixed references sit on off screen (see toScreen): inside the heading tape and the round's panel. */
+const REFERENCE_EDGE_X = 0.92;
+const REFERENCE_EDGE_Y = 0.62;
+
+/** The HUD's panels and texts a fixed reference keeps out of. */
+const PANELS = '#radar, #now-playing, .hud-top, #hud-room, #school-panel, #hud-split, #hud-alerts > *, #transmission, .hud-bottom, #killfeed, #hud-altitude, #touch .touch-button';
+
+/** A fixed reference's glyph reaches this far from its point (px), each letter of its label about REFERENCE_CHAR (px), and it keeps PANEL_ROOM from a panel (px). */
+const GLYPH = 8;
+const REFERENCE_CHAR = 8;
+const PANEL_ROOM = 4;
+
+/** A fixed reference keeps this far from any other mark (px), or it is left out. */
+const REFERENCE_ROOM = 30;
+
+/** Whether two points on screen lie within `room` of each other (px). */
+const near = (x: number, y: number, x2: number, y2: number, room: number) => Math.abs(x - x2) < room && Math.abs(y - y2) < room;
+
+/** A number with its sign, a plus too (a typographic minus for the negative). */
+const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
 
 /** A distance in world units as the HUD shows it: meters, kilometers from 1000 m on. */
 export function meters(units: number): string {
@@ -639,7 +1033,7 @@ export interface IntroCard {
   title: string;
   arena: string;
   tagline: string;
-  pilots: { name: string; kind: Kind; skills: string; own: boolean }[];
+  pilots: { name: string; kind: Kind; tint: string; sovereign: boolean; skills: string; own: boolean }[];
   skip: string;
   onSkip: () => void;
 }

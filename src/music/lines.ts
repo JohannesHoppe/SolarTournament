@@ -182,7 +182,7 @@ export const ANNOUNCER_WIN = ['{name} wins the race. glory to the president', 'a
 /** Last Clone Standing: a pilot loses its last clone, one is left, and the flare comes. */
 export const ANNOUNCER_OUT = ['{name} is out. no clones left', 'and {name} is gone. for good. well, for this round'];
 export const ANNOUNCER_SURVIVOR = ['{name} is the last clone standing', '{name} survives. the president is impressed'];
-export const ANNOUNCER_FLARE = 'here comes the flare. the arena is closing';
+export const ANNOUNCER_FLARE = 'here comes the flare. run from the sun, little clones';
 /** A comet crosses the arena, its shower after it (see game/comet.ts). */
 export const ANNOUNCER_COMET = ['a comet is coming. its tail is full of rock. hide, little clones', 'the heavens join the games. a comet, folks, courtesy of the president'];
 /** A comet's head runs a pilot down. */
@@ -194,6 +194,7 @@ export const ANNOUNCER_MOMENT = {
   multi: ['{name} is a massacre on legs. the sponsors weep with joy', 'and {name} keeps killing. this is what the president pays for'],
   supernova: ['{name} turns the arena into a supernova. the ratings explode', 'a nova from {name}. half the field is gone. glorious'],
   revenge: ['{name} takes revenge. sweet, cheap, and on live television', 'payback from {name}. the crowd loves a grudge'],
+  knockout: ['{name} shoves a clone into the scenery. no laser needed', 'a little nudge from {name}. the printers are already warming up'],
 };
 
 export const ANNOUNCER_CAPTURE = ['{name} brings the core home', 'and {name} scores. the sponsor core is theirs'];
@@ -248,10 +249,11 @@ export const SCHOOL = {
   fineAim: 'Hold fine aim, and you turn slowly. Center the marker. Exactly.',
   cockpit: 'Now look through your clone’s eyes. Switch to the cockpit, have a look around, and switch back.',
   drive: 'This is your main drive. Push it to fifty meters per second.',
-  freeDrift: 'Your autopilot keeps you flying where you point. Switch it off, and you drift like a real spaceship.',
+  freeDrift: 'With the autopilot, you point where you want to fly, and I take you there. Switch it off, and you drift like a real spaceship.',
   drift: 'Now let go. Nothing out here slows you down.',
-  lookBack: 'Turn around while you drift. Your course stays the same. The green ring shows where you are going.',
+  lookBack: 'In free drift, you turn your nose and nothing else. The ship slides on the way it was going. Turn around, and watch the course marker: that is where you fly.',
   brake: 'Hold the brake. I flip you over and brake for you.',
+  curve: 'With the autopilot, you point where you want to fly, and I take you there with drive and thrusters. The diamond shows where you want to go. Steer it through the markers, then stop steering, and fly straight on.',
   flipBurn: 'By hand is faster. Hold flip, and hold your drive at the same time. It fires as soon as your nose points back.',
   flipBurnAgain: 'Faster this time. Hold both, flip and drive.',
   byHand: 'By hand, darling. Hold flip and drive.',
@@ -260,22 +262,27 @@ export const SCHOOL = {
   slide: 'Someone is on your tail and shooting. Jink left and right with your thrusters, and the shots go past you.',
   dodge: 'Debris incoming. Slide out of its way. Do not turn.',
   dodgeHit: 'Ouch. Again.',
-  autopilotOn: 'Switch the autopilot back on. The thrusters catch every drift, and you fly where you point.',
-  rings: 'Fly through the rings. Brake when you need to.',
+  autopilotOn: 'Switch the autopilot back on. You point where you want to fly, and I bring your flight round with drive and thrusters.',
+  rings: 'Fly through the rings. The X shows where you cross the next one if you change nothing. Steer it into the ring, until it glows blue.',
+  missed: 'Missed, darling. Keep the X blue inside the ring. Again.',
   shoot: 'Fire! Your laser only scorches armor. This drone shows you its drive. Hit the drive until it blows.',
   shootMoving: 'This one moves. Your laser hits the instant you fire, so just keep it in your crosshair. Fine aim helps.',
   overheat: 'Every shot heats your ship. Keep firing until it overheats.',
   shadow: 'Hot, isn’t it? Cool down in the shadow of an asteroid. I marked one.',
-  impact: 'Trouble ahead. When impact flashes, brake, or slide past.',
+  impact: 'Trouble ahead. When impact flashes, brake, or steer around the rock.',
   noTurn: 'Without turning, darling.',
   chase: 'A bot on the run. It does not shoot. Stay on its tail and hit its drive. Brake if you overshoot.',
   evade: 'Now it shoots back. Never let it get behind you. Keep your armored nose on it, slide, and work your way onto its tail.',
   duel: 'Final exam. A real bot, and it knows the trick too. Win the dogfight.',
   done: 'Well done, pilot. Remember: firing at armor only heats your laser. Win the dogfight, get on their tail, and hit the drive. You are cleared for the tournament. Go and die for the President.',
   basicDone: 'Basic training complete. You can fly, darling. Now choose your trade: racer or gladiator.',
-  racer: 'Racer training. Rings, coils and a clean start. Out here, speed is everything.',
-  coil: 'The rings of a race are coils. Fly through the very center, and the coil throws you on. Hit the center of all three.',
+  racer: 'Racer training. Rings, coils, the racing line and a clean start. Out here, speed is everything.',
+  coil: 'The rings of a race are coils. Fly through the very center, and the coil throws you on. Put the X on the center of all three.',
   coilMiss: 'Off center, darling. The coil only fires in the core. Again.',
+  brakeZone: 'Orange on the line means: too fast for that bend. Brake before the orange, then steer through.',
+  tooFast: 'Too fast for that bend, darling. Brake before the orange. Again.',
+  fullSpeed: 'Now the line at full speed. Hold your drive all the way, and point along the line. I bend you through every turn.',
+  tooSlow: 'Too slow, darling. Hold your drive all the way, and let me take the bends. Again.',
   start: 'A race starts on my count. Light your drive the moment I say burn. Too early, and it stalls.',
   tooEarly: 'Too early. Wait for burn.',
   tooLate: 'Too late. Again.',
@@ -294,9 +301,12 @@ export const SCHOOL = {
   arsenalDone: 'Your arsenal is ready. Use all of it, and make the President proud.',
   tactician: 'Tactician training. How to win a dogfight, and how not to lose one. Most clones die flying a straight line.',
   kick: 'Debris, and it is fast. Too fast to slide. Tap a thruster twice, and every thruster kicks at once. Do not turn.',
+  shove: 'A drone drifts beside you, past a rock. When the rock comes up, kick your thrusters into the drone, and put it into the stone. Dirty, darling. Dirty is the point.',
   onTail: 'Someone is right behind you, on your drive. Turn your armored nose to it, and fight back.',
   bursts: 'Kill this one without overheating. Short bursts, only when the crosshair glows.',
   tooHot: 'Too hot, darling. A locked laser is a dead clone. Short bursts. Again.',
+  slideShot: 'Free drift wins dogfights. Switch to it as you pass the bot. Your flight slides on, and your nose is all yours: turn it onto the bot, and hit it three times. Then autopilot back on.',
+  slideShotStraight: 'Sideways, darling. Fire while your nose is off your flight. Again.',
   cover: 'This one is good, and it is hunting you. Get the rock between you and it, and stay there.',
   torpedoCover: 'A torpedo is coming. Do not shoot it this time. Get behind the rock.',
   torpedoCoverHit: 'It got you. Put the rock between you and it. Again.',
@@ -313,21 +323,24 @@ export const SCHOOL = {
  * maneuver.
  */
 export const SCHOOL_PRAISE = {
-  turn: 'Nice. Turning only spins you around. It never moves you anywhere.',
+  turn: 'Nice. At rest, turning only spins you around. It never moves you anywhere.',
   fineAim: 'Precise. I like that.',
   cockpit: 'Inside you aim like your clone. Outside you see your ship and its drift. Your choice.',
   drive: 'Feel that? Thirteen g. Your clone gets heavier with every burn. Burn too long, and the world shrinks to a tunnel.',
   freeDrift: 'Free drift. Every push stays with you now, until you push back.',
   drift: 'No air, no friction. You drift forever, unless you do something about it.',
-  lookBack: 'See? Where you look and where you fly are two different things out here.',
+  lookBack: 'See? In free drift, where you look and where you fly are two different things. With the autopilot, you point where you want to fly.',
   brake: 'At rest. The only thing that stops you is a burn against your flight.',
+  curve: 'Smooth, darling. You show me where, and I fly you there. Stop steering, and you fly straight on.',
   flipBurn: 'Good. The flip alone changes nothing, you just fly backwards. The burn is what stops you. Let go of flip, and the ship is yours again.',
   stopAt: 'Perfect. Burn, flip, burn. That is all of space flight.',
   slide: 'That is how you dodge. A laser hits the instant it fires, so never fly a straight line while someone has you in the crosshair.',
   dodge: 'Missed you. Out here, a small push early beats a big one late.',
-  autopilotOn: 'This is how you fly into a fight. Switch it off when you want to drift on purpose.',
-  rings: 'Beautiful flying. You are doing very well, darling.',
+  autopilotOn: 'This is how you fly into a fight. Switch it off when you want your nose free, and drift on purpose.',
+  rings: 'Beautiful. The X is where you cross if you change nothing. Blue means through. You are doing very well, darling.',
   coil: 'Feel that pull? Center, center, center. The clean line is the fast one.',
+  brakeZone: 'The faster you fly, the wider you turn. Twice the speed, four times the curve. Brake before the bend, and burn out of it.',
+  fullSpeed: 'That is racing, darling. Full drive, and I lead your nose into every turn. Where the line stays blue, never let go of the drive.',
   start: 'Perfect. A clean start wins races.',
   hook: 'Like a slingshot. The cable only pulls, darling. The speed of the swing stays yours.',
   shoot: 'Light needs no lead. What is in your crosshair when you fire, you hit. But only the drive breaks: five hits from behind, and the reactor goes.',
@@ -345,7 +358,9 @@ export const SCHOOL_PRAISE = {
   hookShip: 'Got it. You both pull on the same cable, and the slower one gets dragged.',
   nova: 'Glorious. The sponsors love it so much, your next clone is on them.',
   kick: 'Every thruster at once, forty meters per second sideways in a blink. Whoever aims at you has to find you again.',
+  shove: 'Knocked out. Both hulls take the same blow, but only one of you meets the rock. Whatever crashes within three seconds of your shove is your kill.',
   onTail: 'A nose on your drive is the deadliest thing out here. Show them armor, and they only scratch paint.',
+  slideShot: 'Your nose on them, your flight somewhere else. They cannot dodge what they do not see coming, darling.',
   bursts: 'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.',
   cover: 'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.',
   torpedoCover: 'Lost you. A seeker that loses its line never finds it again.',
@@ -363,7 +378,7 @@ export const COMPUTER = {
   debris: 'Debris impact.',
   asteroid: 'Asteroid cracked.',
   arena: 'Come back to the field, darling.',
-  mouse: 'The ship turns towards your mouse pointer.',
+  mouse: 'Your mouse pointer steers. Push it the way you want to fly, and center it to fly straight on.',
   noLink: 'Could not connect.',
   roundOver: 'Round over. You were wonderful.',
   launch: 'Live link established. Go get them, pilot.',
@@ -377,7 +392,7 @@ export const COMPUTER = {
   lostLead: 'You lost the lead.',
   passed: 'Nice pass.',
   passedBy: 'Someone got past you.',
-  flare: 'Solar flare, darling. The arena is closing in. Stay inside the shell.',
+  flare: 'Solar flare, darling. It comes from the sun. Fly to the far side, and keep a rock between you and the light.',
   lastClone: 'This is your last clone, darling. Make it count.',
   out: 'That was your last clone, darling. You are out. Sit back, and watch the others burn.',
   survivor: 'You are the last clone standing. I knew it, darling.',
@@ -404,14 +419,15 @@ export const COMPUTER = {
  * time a Host plays it, and the tips of the fight, the moment they matter.
  */
 export const TIPS = {
-  race: 'A race, darling. Three laps through the rings. Fly through their very centers, and the coils throw you on. Follow the orange dots, and shoot whoever is ahead of you.',
+  race: 'A race, darling. Three laps through the rings. Follow the line, and steer the X into their very centers: the coils throw you on. Brake where the line glows orange, and shoot whoever is ahead of you.',
   deathmatch: 'A deathmatch. Every kill counts. Hit their drives from behind, turn your armored nose to anyone behind you, and never fly a straight line.',
-  survival: 'Last clone standing. Three clones, no more. After a minute a solar flare closes in from the edge. Stay inside its shell, and stay alive.',
+  survival: 'Last clone standing. Three clones, no more. After a minute a solar flare sweeps in from the sun and burns the arena down to a pocket on the far side. Stay ahead of it, hide behind rock, and stay alive.',
   flag: 'Capture the flag. Touch their core, and tow it into our ring. We only score while our own core is at home, so guard it, or bring it back.',
   fleet: 'The President’s fleet. We all fight his battleship together. Take out its batteries first, then its drives. When the reactor opens, hit it, and get clear before it blows. Keep moving: its batteries miss fast ships.',
   tail: 'Someone is on your drive, darling. Turn your nose to them, now.',
   hot: 'Your laser is cooking. Short bursts, and only when the crosshair glows.',
   torpedo: 'Torpedo! Shoot it down, or put a rock between you and it.',
+  crossing: 'It is crossing you, darling. Free drift: slide on, and turn your nose onto it.',
 } as const;
 
 /**

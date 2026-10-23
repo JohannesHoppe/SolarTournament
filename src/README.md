@@ -15,15 +15,20 @@ The code is grouped by area, each folder with a README of its own:
 | [`music/`](music/) | Radio 2584: the generated techno and everything the voices say |
 | [`net/`](net/) | The online tournament: peer-to-peer messages, the lead browser, cheat checks |
 | [`i18n/`](i18n/) | The four languages and their catalogs |
+| [`handbook/`](handbook/) | The numbers of the Pilot's Handbook, kept in step with the game and the README |
 | [`test/`](test/) | Helpers shared by the unit tests |
 
 The files at this level:
 
-- `main.ts`: starts the game page (WebGL check, assets, the `Game`).
+- `main.ts`: starts the game page (WebGL check, assets, the `Game`), and the benchmark or the frame meter when the address asks for them.
+- `bench.ts`: the benchmark (`?bench`, `?bench=<seconds>`): plays a fixed scene and measures what each feature, each rung of the quality ladder, each arena and each mode costs per frame, with a table on screen, in the console and as JSON; the frame meter (`?fps`) with the frame rate and the rung the governor is on. See the README's section "Performance".
 - `radio-page.ts`: starts the radio page (tune in a title, play it, download it as WAV).
+- `handbook-page.ts`: starts the Pilot's Handbook (`handbook.html`): translates it into the Host's language and fills in the game's numbers.
 - `assets.ts`: loads the ship models and drive sprites, collects what is generated in code.
 - `random.ts`: the seeded random generator every browser shares, so all see the same world.
 - `storage.ts`: the browser's localStorage, safe where it is unavailable.
+- `recorder.ts`: the input recorder, a ring buffer of the own ship's last minute step by step (the Host's controls, the mouse pointer, the commands flown, the ship and the autopilot's course), read in the console as `game.recorder` and saved with `game.recorder.download()`; replayed in tests by `src/test/cockpit.ts`; only in development, null and free in production.
+- `devlog.ts`: the development log, a ring buffer of the round's deaths, ship contacts, shoves and bot decisions, read in the console as `game.log`; only in development, null and free in production.
 - `style.css`: the styles of all pages.
 
 Unit tests sit next to the code they test (`*.test.ts`) and run with `npm test`.

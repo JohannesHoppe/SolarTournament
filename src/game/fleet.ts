@@ -4,7 +4,7 @@ import { Randomizer } from '../random';
 import { FIELD_RADIUS, raySphere, type Obstacle } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
-import { armorSurface, boxUv, shine, surfaced } from '../view/surfaces';
+import { armorSurface, boxUv, lacquer, shine, surfaced } from '../view/surfaces';
 import type { Homing } from './torpedoes';
 import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS, routeNearest, SHOWER_LENGTH, SHOWER_WIDE, type Comet } from './comet';
 import { msg, t } from '../i18n/i18n';
@@ -367,8 +367,8 @@ export class Fleet implements Obstacle {
     // regime's deep red, warm light in its hangars and in rows of windows, the regime's orange
     // neon running along the deck's edges in a procession
     const polished = { ...surfaced(armorSurface(seed), ARMOR_RELIEF), envMap: shine(), clearcoat: 1, clearcoatRoughness: 0.15 };
-    const armor = this.material(new THREE.MeshPhysicalMaterial({ ...polished, color: 0x2c3039, envMapIntensity: 1.2 }));
-    const gold = this.material(new THREE.MeshPhysicalMaterial({ ...polished, color: 0xe2aa3e, envMapIntensity: 2.4 }));
+    const armor = this.material(lacquer(new THREE.MeshPhysicalMaterial({ ...polished, color: 0x2c3039, envMapIntensity: 1.2 })));
+    const gold = this.material(lacquer(new THREE.MeshPhysicalMaterial({ ...polished, color: 0xe2aa3e, envMapIntensity: 2.4 })));
     const runway = this.material(new THREE.MeshStandardMaterial({ color: 0x4a0b10, metalness: 0.3, roughness: 0.6 }));
     const recess = this.material(new THREE.MeshStandardMaterial({ color: 0x07080a, roughness: 0.9 }));
     const gunmetal = this.material(new THREE.MeshStandardMaterial({ color: 0x3c414c, metalness: 0.6, roughness: 0.45, flatShading: true }));

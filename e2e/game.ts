@@ -11,11 +11,15 @@ declare global {
 export async function openGame(page: Page, path = '/'): Promise<string[]> {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(String(error)));
+  // the low tier, pinned: the governor would only step down further without a GPU
+  await page.addInitScript(() => localStorage.setItem('solartournament.quality', JSON.stringify({ choice: 'low' })));
   await page.goto(path);
   await page.waitForFunction(() => window.game?.composer, null, { timeout: 60_000 });
-  // several tabs render too slowly without a GPU; the tests watch the state, not the picture
+  // several tabs render too slowly without a GPU (the scene and the title screen's pad hold up
+  // every other tab); the tests watch the state, not the picture
   await page.evaluate(() => {
     window.game.composer.render = () => {};
+    if (window.game.showcase) window.game.showcase.render = () => {};
     window.game.nextIdleGlitch = Infinity;
   });
   return errors;

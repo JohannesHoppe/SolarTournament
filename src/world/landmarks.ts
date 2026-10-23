@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { SUN_DIRECTION } from './space';
-import { ARENAS, sternAt, type ArenaId, type ArenaProfile } from './arenas';
+import { ARENAS, HOLE_RADIUS, KESSLER_WORLD, KRONOS_CENTER, sternAt, type ArenaId, type ArenaProfile } from './arenas';
 import { canvas, toTexture } from '../view/textures';
 
 /**
@@ -10,8 +10,7 @@ import { canvas, toTexture } from '../view/textures';
  * disk, the neon sign on the derelict. Scenery only; what pulls and blocks is the field's well.
  */
 
-/** Distance of the ringed planet from the arena (units, 13 km) and its radius; its ring runs through the arena. */
-const KRONOS_DISTANCE = 260000;
+/** The ringed planet's radius (units); it lies at KRONOS_CENTER, its ring runs through the arena. */
 const KRONOS_RADIUS = 90000;
 /** The ring around it, from and to (units). */
 const RING_INNER = 150000;
@@ -38,8 +37,8 @@ const CORONA_DISTANCE = 240000;
 const DISK_INNER = 6000;
 const DISK_OUTER = 28000;
 
-/** Smooth value noise in 3D for the shaders of planets and suns (visuals only, so float hashing is fine). */
-const noise3 = /* glsl */ `
+/** Smooth value noise in 3D for the shaders of planets, suns and the solar flare (visuals only, so float hashing is fine). */
+export const noise3 = /* glsl */ `
   float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
   float noise(vec3 p) {
     vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -48,7 +47,7 @@ const noise3 = /* glsl */ `
   }
 `;
 
-const bandsVertex = /* glsl */ `
+export const bandsVertex = /* glsl */ `
   varying vec3 vLocal;
   varying vec3 vNormal;
   varying vec3 vView;
@@ -65,7 +64,7 @@ const bandsVertex = /* glsl */ `
  * Noise in octaves (fractal Brownian motion) over noise3: the first three octaves always, the
  * finer ones weighed by `fine`, so detail that would only shimmer far off fades out there.
  */
-const fbm = /* glsl */ `
+export const fbm = /* glsl */ `
   float fbm(vec3 p, float fine) {
     float sum = 0.0;
     float amplitude = 0.5;
@@ -380,7 +379,7 @@ export class Landmarks {
 
   private rings(): THREE.Group {
     const group = new THREE.Group();
-    const center = new THREE.Vector3(-0.85, 0, 0.5).normalize().multiplyScalar(KRONOS_DISTANCE);
+    const center = KRONOS_CENTER;
     // pale bands, its axis tilted a little towards the arena, so the ring and the bands lie askew
     const planet = this.gas(new THREE.SphereGeometry(KRONOS_RADIUS, 128, 64), [0xe8dcc0, 0xcdb58a, 0x9c7c56, 0x9fc4ff], new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationX(KRONOS_TILT)), false);
     planet.position.copy(center);
@@ -451,7 +450,7 @@ export class Landmarks {
     const group = new THREE.Group();
     // the world the station circled, far below: oceans, clouds, the lights of its cities
     const planet = this.world(180000);
-    planet.position.set(-120000, -330000, -60000);
+    planet.position.copy(KESSLER_WORLD);
     group.add(planet);
     return group;
   }
@@ -484,7 +483,7 @@ export class Landmarks {
 
   private hole(): THREE.Group {
     const group = new THREE.Group();
-    const horizon = new THREE.Mesh(new THREE.SphereGeometry(3500, 48, 24), new THREE.MeshBasicMaterial({ color: 0x000000 }));
+    const horizon = new THREE.Mesh(new THREE.SphereGeometry(HOLE_RADIUS, 48, 24), new THREE.MeshBasicMaterial({ color: 0x000000 }));
     const material = new THREE.ShaderMaterial({
       uniforms: { time: { value: 0 }, inner: { value: DISK_INNER }, outer: { value: DISK_OUTER } },
       vertexShader: diskVertex,

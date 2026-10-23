@@ -17,15 +17,18 @@ export const lapOf = (gates: number) => Math.min(LAPS, Math.floor(Math.max(0, ga
  * racer coming in at speed a little off its center to pass the coil's solid housings.
  */
 export const GATE_RADIUS = 2400;
-/** The course loops around the field's center at about this distance (units, 1.6 km), 300 m more or less. */
-const COURSE_RADIUS = 32000;
-const COURSE_SPREAD = 6000;
 /**
- * Every other gate lies this much closer to the center (about 900 m out), where the rocks
- * are densest: the course weaves in and out of the thick of the field, past rock at speed,
- * and the straight line from gate to gate is the short way through the rocks, not the safe one.
+ * The course loops around the field's center at about this distance (units, 2 km), 150 m more
+ * or less, through the outer rocks: a lap of about 12.5 km, gates 1 to 1.9 km apart, so the
+ * bends stay gentle enough for path steering at the speed limit (see PATH_GRIP: a 415 m turn;
+ * the racing line's tightest bend has 600 m and more).
  */
-const COURSE_INNER = 0.55;
+const COURSE_RADIUS = 40000;
+const COURSE_SPREAD = 3000;
+/** Every other gate lies this much closer to the center (about 1.9 km out): the loop weaves a little, past rock at speed. */
+const COURSE_INNER = 0.95;
+/** Each gate lies up to this angle (rad, about 5°) off its even place around the loop. */
+const COURSE_JITTER = 0.08;
 /**
  * The gates are coils: a ship that flies through the inner third of a ring (BOOST_RADIUS,
  * 40 m from its center) is pulled through by the ring's magnetic field and leaves it
@@ -42,8 +45,8 @@ const COURSE_RISE = 8000;
 /**
  * A gate keeps GATE_ROOM (units, 200 m) clear of rock, and four times as much of an arena's
  * massive body (see crowded); to find such a place it tries up to GATE_TRIES spots on a spiral
- * around where it would be, a golden angle apart, SPIRAL_STEP (units, 80 m) times the square
- * root of the try out (out to about 640 m).
+ * around where it would be (up and down, along the loop), a golden angle apart, SPIRAL_STEP
+ * (units, 80 m) times the square root of the try out (out to about 640 m).
  */
 const GATE_ROOM = 4000;
 const GATE_TRIES = 64;
@@ -107,6 +110,52 @@ export function ringCrossing(point: THREE.Vector3, normal: THREE.Vector3, radius
 }
 
 /**
+ * A racing bot within APPROACH_NEAR (units, 150 m) of its next gate's plane but beside its
+ * opening first flies for a point APPROACH_FAR (200 m) before the gate on its axis (see
+ * approachGate), so it never runs into the coil's housings from the side.
+ */
+const APPROACH_NEAR = 3000;
+const APPROACH_FAR = 4000;
+/** A racer passes a gate this many ship radii inside its rim (about 34 m), or flies for its center first (see approachGate). */
+const APPROACH_CLEAR = 2;
+const lateral = new THREE.Vector3();
+
+/**
+ * Where a racer near its next gate (at `gate`, facing `axis`, of `radius`) flies for: one that
+ * would not pass its opening with room to spare would fly into the coil's housings. Beside the
+ * opening it flies for a point on the gate's axis APPROACH_FAR before it first; in front of it,
+ * but on a way that crosses the gate's plane nearer the rim than APPROACH_CLEAR ship radii (or
+ * there already), it flies for the gate's center; otherwise for its `waypoint`. Writes into
+ * `waypoint` and returns it.
+ */
+export function approachGate(gate: THREE.Vector3, axis: THREE.Vector3, radius: number, position: THREE.Vector3, velocity: THREE.Vector3, shipRadius: number, waypoint: THREE.Vector3): THREE.Vector3 {
+  const offset = lateral.subVectors(position, gate);
+  // the side it comes from: the gate counts either way
+  const along = offset.dot(axis);
+  if (Math.abs(along) > APPROACH_NEAR) return waypoint;
+  offset.addScaledVector(axis, -along);
+  const beside = offset.length();
+  if (beside >= radius) return waypoint.copy(gate).addScaledVector(axis, (along < 0 ? -1 : 1) * APPROACH_FAR);
+  // where its way crosses the gate's plane, flying on as it does
+  const toward = velocity.dot(axis) * (along < 0 ? 1 : -1);
+  const safe = radius - shipRadius * APPROACH_CLEAR;
+  if (toward > 0) offset.addScaledVector(velocity, Math.abs(along) / toward).addScaledVector(axis, -offset.dot(axis));
+  if (beside < safe && offset.length() < safe) return waypoint;
+  return waypoint.copy(gate);
+}
+
+/**
+ * Where a ship at `position`, flying on with `velocity` as it is, crosses the plane of a ring
+ * (at `point`, facing `normal`, either way), written into `out`; returns how far from the
+ * ring's center, or null when the flight does not reach the plane within `horizon` seconds.
+ */
+export function pathCrossing(position: THREE.Vector3, velocity: THREE.Vector3, point: THREE.Vector3, normal: THREE.Vector3, horizon: number, out: THREE.Vector3): number | null {
+  const seconds = toGate.subVectors(point, position).dot(normal) / velocity.dot(normal);
+  if (!(seconds > 0 && seconds < horizon)) return null;
+  return out.copy(position).addScaledVector(velocity, seconds).distanceTo(point);
+}
+
+/**
  * A race course: GATES rings in a loop around the field's center, rising and falling, each
  * facing the way from the gate before. It is built from the arena's freshly generated field
  * and the arena's seed, so every browser builds the same course; gates keep clear of rock as
@@ -134,17 +183,17 @@ export class Course {
     const r = new Randomizer(seed * 7 + 3);
     const start = r.range(0, Math.PI * 2);
     for (let i = 0; i < GATES; i++) {
-      const angle = start + (i / GATES) * Math.PI * 2 + r.range(-0.15, 0.15);
+      const angle = start + (i / GATES) * Math.PI * 2 + r.range(-COURSE_JITTER, COURSE_JITTER);
       const distance = (COURSE_RADIUS + r.range(-COURSE_SPREAD, COURSE_SPREAD)) * (i % 2 ? COURSE_INNER : 1);
       const point = new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle * 2 + start) * COURSE_RISE, Math.sin(angle) * distance);
-      // away from rock and from the arena's massive body: on a widening spiral up, down, in and
-      // out around where the gate would be
-      const outward = new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle));
+      // away from rock and from the arena's massive body: on a widening spiral up, down, back
+      // and forth along the loop around where the gate would be, which bends the loop least
+      const along = new THREE.Vector3(-Math.sin(angle), 0, Math.cos(angle));
       const spot = point.clone();
       for (let attempt = 1; attempt < GATE_TRIES && crowded(field, point); attempt++) {
         const turn = attempt * GOLDEN_ANGLE;
         const reach = SPIRAL_STEP * Math.sqrt(attempt);
-        point.copy(spot).addScaledVector(outward, Math.cos(turn) * reach);
+        point.copy(spot).addScaledVector(along, Math.cos(turn) * reach);
         point.y += Math.sin(turn) * reach;
       }
       this.points.push(point);

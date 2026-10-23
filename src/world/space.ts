@@ -61,6 +61,13 @@ const SHADOW_REACH = 140000;
 /** Direction towards the sun; it sits in front of the ships at spawn. */
 export const SUN_DIRECTION = new THREE.Vector3(0.25, 0.15, -1).normalize();
 
+/** How much larger the sun looks at a solar flare's height. */
+const FLARE_SWELL = 2.5;
+/** How much brighter it lights the field then. */
+const FLARE_GLARE = 2.2;
+/** The color a flaring sun burns in. */
+const WHITE_HOT = new THREE.Color(1, 0.97, 0.92);
+
 /** Star field, sun, nebula glow and lighting. Follows the camera so it is always at infinity. */
 export class Space {
   readonly sky = new THREE.Group();
@@ -71,6 +78,8 @@ export class Space {
   readonly streaks: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private readonly sun: THREE.Sprite;
   private readonly sunLight: THREE.DirectionalLight;
+  /** The arena's sun as setSun set it, which a solar flare heats up (see flare). */
+  private readonly sunBase = { size: 30000, intensity: 3.2, color: new THREE.Color(0xfff0dd) };
 
   constructor() {
     const positions = new Float32Array(STAR_COUNT * 3);
@@ -176,12 +185,42 @@ export class Space {
     this.lights.add(new THREE.HemisphereLight(0x7788bb, 0x2a201c, 1.6));
   }
 
+  /**
+   * The picture's quality (see view/quality): the sun's shadow map `shadows` px on an edge, 0
+   * for no shadows (the rocks then leave the ships lit), and the share of the dust drawn.
+   */
+  setLook(shadows: number, dust: number) {
+    const light = this.sunLight;
+    light.castShadow = shadows > 0;
+    if (shadows > 0 && light.shadow.mapSize.x !== shadows) {
+      light.shadow.mapSize.set(shadows, shadows);
+      // the map is made anew at its new size with the next frame
+      light.shadow.map?.dispose();
+      light.shadow.map = null;
+    }
+    this.dust.geometry.setDrawRange(0, Math.round(DUST_COUNT * dust));
+    this.streaks.geometry.setDrawRange(0, Math.round(DUST_COUNT * dust) * 2);
+  }
+
   /** The sun of an arena: its size in the sky, and how bright and in which color it lights the field. */
   setSun(sun: { size: number; intensity: number; color: number }) {
-    this.sun.scale.setScalar(sun.size);
-    this.sun.material.color.set(sun.color);
-    this.sunLight.intensity = sun.intensity;
-    this.sunLight.color.set(sun.color);
+    this.sunBase.size = sun.size;
+    this.sunBase.intensity = sun.intensity;
+    this.sunBase.color.set(sun.color);
+    this.flare(0);
+  }
+
+  /**
+   * The sun in a solar flare, `heat` from 0 (calm) to 1 (the flare at its height): it swells to
+   * FLARE_SWELL times its size and burns FLARE_GLARE times as bright, white-hot, so every rock
+   * throws a long hard shadow across the field.
+   */
+  flare(heat: number) {
+    const base = this.sunBase;
+    this.sun.scale.setScalar(base.size * (1 + (FLARE_SWELL - 1) * heat));
+    this.sun.material.color.copy(base.color).lerp(WHITE_HOT, heat);
+    this.sunLight.intensity = base.intensity * (1 + (FLARE_GLARE - 1) * heat);
+    this.sunLight.color.copy(base.color).lerp(WHITE_HOT, heat * 0.6);
   }
 
   /** Keeps the sky at infinity; the dust streaks along `velocity`, the motion of whoever the camera rides with. */

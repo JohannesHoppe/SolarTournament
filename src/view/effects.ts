@@ -4,6 +4,15 @@ import * as THREE from 'three';
 const PARTICLE_CAPACITY = 6000;
 /** Beams on screen at once; a flood of shots reuses the oldest instead of growing without end. */
 const MAX_BEAMS = 64;
+/**
+ * The share of the particles emitted (0..1, see view/quality): a cheaper picture lets the
+ * others go by chance, so explosions and trails thin out evenly. Particles are only looks.
+ */
+let particleShare = 1;
+
+export function setParticleShare(share: number) {
+  particleShare = share;
+}
 
 const particleVertex = /* glsl */ `
   attribute float size;
@@ -76,6 +85,7 @@ class ParticleSystem {
   }
 
   emit(position: THREE.Vector3, velocity: THREE.Vector3, life: number, startSize: number, endSize: number, color: THREE.Color) {
+    if (particleShare < 1 && Math.random() >= particleShare) return;
     let i: number;
     if (this.live < PARTICLE_CAPACITY) {
       i = this.live++;
@@ -192,6 +202,11 @@ export class Effects {
   /** Thruster exhaust or venting atmosphere: a short, pale puff. */
   puff(position: THREE.Vector3, velocity: THREE.Vector3, size: number) {
     this.smoke.emit(position, velocity, 0.35 + Math.random() * 0.2, size, size * 3, VAPOR);
+  }
+
+  /** An ember blown off a solar flare's front, drifting with `velocity` as it cools. */
+  ember(position: THREE.Vector3, velocity: THREE.Vector3, size: number) {
+    this.fire.emit(position, velocity, 1.5 + Math.random() * 1.5, size, size * 0.2, FIRE);
   }
 
   /** Rock splinters and dust where a laser hits an asteroid. */

@@ -3,19 +3,11 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Assets, ShipType } from '../assets';
 import type { Perks } from '../game/hangar';
 import { Ship } from '../ship/ship';
-import { shine } from './surfaces';
+import { lacquer, shine } from './surfaces';
 import { canvas, radialTexture, toTexture } from './textures';
 
-/**
- * The ship on show circles above the pad once in CIRCLE_SECONDS, CIRCLE_RADIUS (units) out,
- * banked by BANK (rad) into its turn, and rises and sinks by BOB (units) every BOB_SECONDS, its
- * nose following the rise a little: slow, smooth, never still.
- */
-const CIRCLE_SECONDS = 26;
-const CIRCLE_RADIUS = 170;
-const BANK = 0.22;
-const BOB = 40;
-const BOB_SECONDS = 7;
+/** The ship on show hovers level above the pad's middle and turns on the spot, once in TURN_SECONDS: an exhibit on a turntable. */
+const TURN_SECONDS = 30;
 /** The top of the pad's rim lies this high (units); the ship hovers HOVER above the pad's middle. */
 const PAD_TOP = 35;
 const HOVER = 280;
@@ -157,8 +149,19 @@ export class Showcase {
     this.shown = ship;
   }
 
+  /** The pad's look (see Look.showcase in view/quality): pixel ratio, the floodlight's shadow, every how many frames it is drawn. */
+  setLook(look: { pixelRatio: number; shadows: boolean; every: number }) {
+    this.renderer.setPixelRatio(Math.min(look.pixelRatio, window.devicePixelRatio));
+    this.flood.castShadow = look.shadows;
+    this.every = look.every;
+  }
+
+  private every = 1;
+  private frames = 0;
+
   /** Draws a frame at `time` (s): the ship turned a little further on its pad. */
   render(time: number) {
+    if (++this.frames % this.every) return;
     const width = this.canvas.clientWidth;
     const height = this.canvas.clientHeight;
     if (width === 0 || height === 0) return;
@@ -176,23 +179,14 @@ export class Showcase {
     this.last = time;
     const root = this.locked ? this.silhouette : this.shown?.root;
     if (root) {
-      // along its circle, nose ahead, banked into the turn; the nose lifts while it rises
-      const angle = (time / CIRCLE_SECONDS) * Math.PI * 2;
-      const bob = (time / BOB_SECONDS) * Math.PI * 2;
-      const x = Math.cos(angle) * CIRCLE_RADIUS;
-      const z = Math.sin(angle) * CIRCLE_RADIUS;
-      const y = HOVER + Math.sin(bob) * BOB;
-      root.position.set(x, y, z);
-      root.rotation.set(0, Math.PI - angle, 0);
-      root.rotateZ(BANK);
-      root.rotateX(Math.cos(bob) * 0.06);
-      // its lift lights the seal below it, brighter the lower it hovers; a silhouette lifts unlit
-      const near = this.locked ? 0 : 1 - (y - HOVER + BOB) / (4 * BOB);
-      this.pool.position.set(x, this.pool.position.y, z);
-      (this.pool.material as THREE.MeshBasicMaterial).opacity = 0.35 + 0.35 * near;
+      root.position.set(0, HOVER, 0);
+      root.rotation.set(0, (time / TURN_SECONDS) * Math.PI * 2, 0);
+      // its lift lights the seal below it; a silhouette lifts unlit
+      this.pool.position.set(0, this.pool.position.y, 0);
+      (this.pool.material as THREE.MeshBasicMaterial).opacity = 0.5;
       this.pool.visible = !this.locked;
-      this.lift.position.set(x, y - 120, z);
-      this.lift.intensity = this.locked ? 0 : 2 + 2 * near;
+      this.lift.position.set(0, HOVER - 120, 0);
+      this.lift.intensity = this.locked ? 0 : 3;
     }
     this.runLamps(time);
     this.shown?.idle(dt, 0.35);
@@ -246,7 +240,7 @@ export class Showcase {
     group.add(bolts(finishes.edge));
     // the seal, sunk into the rim: a disk mapped flat (u along x, v against z), so it lies
     // upright and unmirrored as seen from the front
-    const seal = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 1, metalness: 1, clearcoat: 0.7, clearcoatRoughness: 0.12, envMap: reflection, emissive: 0xff9d00, emissiveIntensity: 0 });
+    const seal = lacquer(new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 1, metalness: 1, clearcoat: 0.7, clearcoatRoughness: 0.12, envMap: reflection, emissive: 0xff9d00, emissiveIntensity: 0 }));
     const face = new THREE.Mesh(new THREE.CircleGeometry(SEAL_RADIUS, ROUND), seal);
     face.rotation.x = -Math.PI / 2;
     face.position.y = -SEAL_DEPTH;

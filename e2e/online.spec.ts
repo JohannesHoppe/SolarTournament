@@ -27,6 +27,7 @@ const world = (page: Page) =>
       round: game.roundId,
       ships: game.ships.map((ship: { id: string }) => ship.id).sort(),
       rocks: [...game.field.asteroids.keys()].sort(),
+      tints: game.ships.map((ship: { id: string; tint: string; kind: string }) => `${ship.kind} ${ship.id} ${ship.tint}`).sort(),
     };
   });
 
@@ -38,6 +39,10 @@ test('two tabs of one tournament see the same world', async ({ context }) => {
   expect(seenB.rocks).toEqual(seenA.rocks);
   // each sees both Hosts' ships and the lead's bots
   expect(seenB.ships).toEqual(seenA.ships);
+  // both tabs chose the same tint (one browser, one storage): both see the later one in another
+  expect(seenB.tints).toEqual(seenA.tints);
+  const hosts = seenA.tints.filter((entry: string) => entry.startsWith('host '));
+  expect(new Set(hosts.map((entry: string) => entry.split(' ')[2])).size).toBe(2);
   expect(errors).toEqual([]);
   // honest tabs never take each other for cheats
   for (const page of [a, b]) expect(await page.evaluate(() => window.game.online.reported.size)).toBe(0);
@@ -72,7 +77,58 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
   expect(errors).toEqual([]);
 });
 
-test('two tabs of Capture the Flag agree on the sides and on who has a core in tow', async ({ context }) => {
+test('two tabs agree on a tug of war between their ships on one rope', async ({ context }) => {
+  const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}w&bots=0`);
+  // above the field, 300 m apart along x: each tab puts its own clone there, at rest, its
+  // nose along x (a quarter turn about y: towards +x, or towards -x)
+  const place = (page: Page, x: number, towards: number) =>
+    page.evaluate(
+      ([x, towards]) => {
+        const game = window.game;
+        game.autopilot = false;
+        game.me.protectedUntil = 0;
+        game.me.flight.position.set(x, 62000, 0);
+        game.me.flight.velocity.set(0, 0, 0);
+        game.me.flight.orientation.set(0, -towards * Math.SQRT1_2, 0, Math.SQRT1_2);
+      },
+      [x, towards],
+    );
+  // without a GPU the tabs render too slowly to keep the game's time (a frame counts 50 ms at
+  // most): each would play the tug at its own pace, so they draw nothing
+  for (const page of [a, b]) await page.evaluate(() => (window.game.composer.render = () => {}));
+  await place(b, 6000, 1);
+  await place(a, 0, 1);
+  await play(a, 1);
+  // the first tab's clone hooks the other, holding the hook; the winch reels it in to 70 m
+  await a.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' })));
+  await play(a, 3);
+  expect(await a.evaluate(() => window.game.me.flight.position.distanceTo(window.game.ships.find((s: { id: string }) => s.id !== window.game.me.id).flight.position))).toBeLessThan(2000);
+  // both turn away from each other and burn with full drives for 3 s of their own game time,
+  // at once (one after the other, the second would burn on alone while the first is told)
+  await Promise.all(
+    [a, b].map((page, i) =>
+      page.evaluate(async (away) => {
+        const game = window.game;
+        game.me.flight.orientation.set(0, away * Math.SQRT1_2, 0, Math.SQRT1_2);
+        window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+        const start = game.time;
+        while (game.time - start < 3) await new Promise((resolve) => requestAnimationFrame(resolve));
+        window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
+      }, i === 0 ? 1 : -1),
+    ),
+  );
+  // a stalemate: the pair has hardly moved, the rope held, and both tabs see the same
+  const seen = (page: Page): Promise<Record<string, number[]>> => page.evaluate(() => Object.fromEntries(window.game.ships.map((s: { id: string; flight: { position: { toArray(): number[] } } }) => [s.id, s.flight.position.toArray()])));
+  const [onA, onB] = [await seen(a), await seen(b)];
+  const ids = Object.keys(onA);
+  const middle = (seen: Record<string, number[]>) => (seen[ids[0]][0] + seen[ids[1]][0]) / 2;
+  expect(Math.abs(middle(onA) - 3000)).toBeLessThan(4000);
+  expect(Math.abs(onA[ids[0]][0] - onA[ids[1]][0])).toBeLessThan(2000);
+  for (const id of ids) expect(Math.hypot(...onA[id].map((v, i) => v - onB[id][i]))).toBeLessThan(2000);
+  expect(errors).toEqual([]);
+});
+
+test('two tabs of Capture the Flag agree on the sides and on who has a core in tow, taken by a hook shot', async ({ context }) => {
   // two Hosts alone: bots would only slow two tabs without a GPU down
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}f&m=flag&bots=0`);
   const sides = (page: Page) =>
@@ -85,15 +141,22 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
   // the two Hosts fly for different sides
   const hosts = Object.entries(sidesA).filter(([id]) => id.startsWith('p:'));
   expect(new Set(hosts.map(([, team]) => team)).size).toBe(2);
-  // the second tab's clone takes the first side's core; the lead sees it and tells both
+  // the second tab's clone, 300 m in front of the other side's ring, its nose on the core,
+  // fires its harpoon at it (the hook held); the lead hears of the bite, takes the core for it
+  // and tells both
   const thief = await b.evaluate(() => {
     const game = window.game;
-    game.me.flight.position.copy(game.flags.bases[1 - game.me.team]);
+    const base = game.flags.bases[1 - game.me.team];
+    const facing = game.flags.facings[1 - game.me.team];
+    game.me.flight.position.copy(base).addScaledVector(facing, -6000);
     game.me.flight.velocity.set(0, 0, 0);
+    game.me.flight.orientation.setFromUnitVectors(facing.clone().set(0, 0, -1), facing);
     game.autopilot = false;
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' }));
     return game.me.id;
   });
   await play(b, 2);
+  await b.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyV' })));
   for (const page of [a, b]) expect(await page.evaluate(() => window.game.flags.cores.map((core: { carrier: string | null }) => core.carrier))).toContain(thief);
   expect(errors).toEqual([]);
 });

@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import type { AsteroidField } from '../world/asteroids';
 import { IDLE, type Controls } from '../input/input';
-import type { Ship } from './ship';
+import { noseOn, type Ship } from './ship';
 import { MAIN_THRUST, RCS_THRUST } from './flight';
 import { BOOST_PUSH } from '../game/race';
+import { devlog } from '../devlog';
+import { ringRim } from '../world/gates';
 
 /** Bots notice ships within this distance (units, 3.5 km: across the whole field), when no rock is in the way, so the fight finds a Host quickly. */
 const SIGHT_RANGE = 70000;
@@ -18,12 +20,11 @@ const STICKY = 0.7;
 /** At full ease (see Bot.ease) bots aim this much worse and react this much later (s). */
 const EASE_AIM = 1.5;
 const EASE_REACTION = 0.4;
-/**
- * A ship within this distance (units, 2 km: as far as a Host's aim assist reaches) on a bot's
- * tail with its nose within THREAT_ANGLE (rad) of the bot makes it defend.
- */
-const THREAT_RANGE = 40000;
-const THREAT_ANGLE = 0.3;
+/** At full g-force strain (see Ship.strain) bots aim this much worse and react this much later (s): the clone greys out, as a Host's screen darkens. */
+const STRAIN_AIM = 0.5;
+const STRAIN_REACTION = 0.15;
+/** A bot sees another ship hunting a third (see huntersOf) when its nose lies within HUNT_ANGLE (rad, about 17°) of it, within FIRE_RANGE. */
+const HUNT_ANGLE = 0.3;
 /** A ship that hit a bot's drive makes it defend for this long (s), from however far it fired. */
 const STRUCK_MEMORY = 3;
 /** A bot fires at armor only while its laser is cooler than this (one shot heats it by 20), and only in some of its thinking spells (SNIPE_CHANCE): sparingly. */
@@ -39,12 +40,30 @@ const RACE_SPEED_SLOW = 2800;
 const RACE_SPEED_FAST = 4400;
 export const RACE_SPEED = (RACE_SPEED_SLOW + RACE_SPEED_FAST) / 2;
 /** A bot's racing speed: the better it flies on average (aim, reflexes, daring), the faster. */
-export const raceSpeedOf = (skills: Skills) => RACE_SPEED_SLOW + (RACE_SPEED_FAST - RACE_SPEED_SLOW) * ((skills.aim + skills.reflexes + skills.daring) / 3);
+export const raceSpeedOf = (skills: Skills) => RACE_SPEED_SLOW + (RACE_SPEED_FAST - RACE_SPEED_SLOW) * meanSkill(skills);
+/** A bot's skill in one number: the mean of aim, reflexes and daring. */
+/** A ring of the round as a bot sees it: where it is, which way it faces (unit length), the radius of its opening. */
+export interface Ring {
+  center: THREE.Vector3;
+  facing: THREE.Vector3;
+  radius: number;
+}
+
+export const meanSkill = (skills: Skills) => (skills.aim + skills.reflexes + skills.daring) / 3;
 /** A racer only turns its nose to a ship this close to it (rad, about 30°): one ahead on the course. */
 const RACE_AIM_CONE = 0.5;
 /** A racer with a ship on its tail flips to shoot back for this long (s), at most once in LOOK_BACK_PAUSE (s). */
 const LOOK_BACK_SECONDS = 2.5;
 const LOOK_BACK_PAUSE = 8;
+/**
+ * At a race's start a bot lights its drive as a Host does, by its own timing: aiming at BURN!,
+ * it misses by up to START_SPREAD_SLOW seconds either way at reflexes 0 and START_SPREAD_FAST at
+ * reflexes 1. The game judges the moment by the Host's rules (a perfect start, a stall, or late).
+ */
+const START_SPREAD_SLOW = 0.9;
+const START_SPREAD_FAST = 0.3;
+/** When a bot lights its drive at a race's start (s after BURN!, negative before), for a `random` number 0..1. */
+export const startTiming = (reflexes: number, random: number) => (random * 2 - 1) * (START_SPREAD_SLOW - (START_SPREAD_SLOW - START_SPREAD_FAST) * reflexes);
 /** Bots close in with up to this speed and hold position near their target. */
 const CRUISE_SPEED = 2500;
 const HOLD_DISTANCE = 4000;
@@ -78,6 +97,38 @@ export const HOME_RADIUS = 50000;
  */
 const WELL_MARGIN = 15000;
 const WELL_PULL = 0.3;
+/**
+ * Bots do not ram by accident. They look KEEP_CLEAR_AHEAD seconds ahead: another ship whose way
+ * comes closer to theirs than KEEP_CLEAR ship radii (about 85 m) within that time (a racer a
+ * coil throws onto the one ahead, two fighters circling each other) pushes the bot's wanted
+ * velocity off the point where they would meet, up to KEEP_CLEAR_PUSH (units/s, 40 m/s) for a
+ * dead-center meeting; a ship already that close and closing pushes it straight away. Gentle
+ * enough that a racer stays near its line, clear of the rock beside it.
+ */
+const KEEP_CLEAR = 5;
+const KEEP_CLEAR_AHEAD = 1;
+const KEEP_CLEAR_PUSH = 800;
+/**
+ * Bots do not fly into a ring's housings (a race's gate, a base of Capture the Flag). Where
+ * their way would cross a ring's plane within RING_HORIZON seconds on its housings or struts,
+ * or within RING_MARGIN ship radii of them, the wanted velocity is pushed sideways, up to
+ * CRUISE_SPEED the nearer the crossing: into the opening when the way meets the inner half of
+ * the housings, else out past them.
+ */
+const RING_HORIZON = 2;
+const RING_MARGIN = 1.5;
+/**
+ * Bots shove on purpose. A rival beside the bot, its center within SHOVE_REACH ship radii (about
+ * 50 m) and drifting against it slower than SHOVE_DRIFT (units/s, 15 m/s), with rock or a hull
+ * within SHOVE_TARGET (units, 120 m) beyond it, gets the dodge's kick into its flank, for a
+ * knockout. A daring bot takes the chance more often; any bot at most once every SHOVE_PAUSE
+ * seconds, and its thrusters leave the drift alone for SHOVE_DRIFT_SECONDS so the kick lands.
+ */
+const SHOVE_REACH = 3;
+const SHOVE_DRIFT = 300;
+const SHOVE_TARGET = 2400;
+const SHOVE_PAUSE = 8;
+const SHOVE_DRIFT_SECONDS = 0.6;
 
 const toTarget = new THREE.Vector3();
 const desired = new THREE.Vector3();
@@ -88,6 +139,7 @@ const heading = new THREE.Vector3();
 const jinkStep = new THREE.Vector3();
 const line = new THREE.Vector3();
 const swing = new THREE.Vector3();
+const hunt = new THREE.Vector3();
 
 export { BOT_NAMES } from '../music/lines';
 
@@ -164,6 +216,10 @@ export class Bot {
    */
   waypoint: THREE.Vector3 | null = null;
   raceSpeed: number;
+  /** Set by the game: the rings of the round, whose housings the bot steers clear of (see RING_HORIZON). */
+  rings: readonly Ring[] = [];
+  /** Set by the game in a race: the ring the racer flies through next, which it comes at on its own way (see Game.approach), not steering clear of it. */
+  through: Ring | null = null;
   /** Set by the game: the nearest probe, which an idle bot goes for. */
   lure: THREE.Vector3 | null = null;
   /** Set by the game: a ship the bot hunts wherever it is, seen or not. */
@@ -172,8 +228,11 @@ export class Bot {
   siege: THREE.Vector3 | null = null;
   /** Set by the game: a ship with a nova core close by, which the bot gets away from first. */
   flee: THREE.Vector3 | null = null;
-  /** Set by the game: the bot turns back towards the center beyond this distance (units), inside a solar flare's shell. */
+  /** What the bot flees, for the development log: a nova, the battleship, a comet. */
+  fleeFrom = '';
+  /** Set by the game: the bot turns back beyond this distance (units) from `homeAt`, the field's center or a solar flare's safe pocket. */
   home = HOME_RADIUS;
+  homeAt: THREE.Vector3 | null = null;
   /** Set by the game: the bot's hook holds until then, and is ready again from then on (s). */
   hookUntil = 0;
   hookReadyAt = 0;
@@ -192,6 +251,11 @@ export class Bot {
   /** The side the bot jinks to while it defends, and when it switches. */
   private dodge = 1;
   private nextDodge = 0;
+  /** The kick the bot gives its thrusters this thought, sideways and up in its own frame, to shove a rival (see SHOVE_REACH); the game fires it. */
+  shove: { x: number; y: number } | null = null;
+  private readonly shoveKick = { x: 0, y: 0 };
+  private nextShove = 0;
+  private shoveDriftUntil = 0;
   /** The ship that last hit the drive, and until when the bot defends against it (see STRUCK_MEMORY). */
   private struckBy: Ship | null = null;
   private struckUntil = 0;
@@ -209,7 +273,7 @@ export class Bot {
     this.raceSpeed = raceSpeedOf(skills);
   }
 
-  think(now: number, ships: Ship[], field: AsteroidField, bots: readonly Bot[]): Controls {
+  think(now: number, ships: Ship[], field: AsteroidField): Controls {
     const me = this.ship.flight;
     // one controls object per bot, cleared each thought, so thinking allocates nothing
     const controls = Object.assign(this.controls, IDLE);
@@ -231,8 +295,9 @@ export class Bot {
       if (Math.random() < 0.2) this.wanderTarget.randomDirection().multiplyScalar(Math.random() * 30000);
     }
 
-    // the nearest ship in sight, but one that other bots already hunt counts as farther, and a
-    // ship hunted by MAX_HUNTERS is left to them: the bots fight each other too, not only the Host
+    // the nearest ship in sight, but one that others already hunt (as the bot sees them: their
+    // noses on it) counts as farther, and a ship hunted by MAX_HUNTERS is left to them: the bots
+    // fight each other too, not only the Host
     let target: Ship | null = null;
     const sight = this.blind ? STORM_SIGHT : SIGHT_RANGE;
     let targetDistance = sight;
@@ -241,8 +306,7 @@ export class Bot {
       if (!this.rival(ship, now)) continue;
       const distance = ship.flight.position.distanceTo(me.position);
       if (distance >= sight) continue;
-      let hunters = 0;
-      for (const bot of bots) if (bot !== this && bot.ship.alive && bot.target === ship) hunters++;
+      const hunters = this.huntersOf(ship, ships, field);
       if (hunters >= MAX_HUNTERS) continue;
       const cost = distance * (1 + hunters) * (ship === this.target ? STICKY : 1);
       if (cost < best && field.lineOfSight(me.position, ship.flight.position)) {
@@ -251,25 +315,30 @@ export class Bot {
         targetDistance = distance;
       }
     }
-    // a ship the game names as prey (the thief of the own side's core) is hunted wherever it is
+    // a ship the game names as prey (the thief of the own side's core, which a Host's HUD marks
+    // wherever it is) is chased wherever it is, but only fired at in sight
+    let inSight = true;
     if (this.prey?.alive) {
       target = this.prey;
       targetDistance = this.prey.flight.position.distanceTo(me.position);
+      inSight = targetDistance < sight && field.lineOfSight(me.position, this.prey.flight.position);
     }
     // a ship on the own tail with its nose on the bot comes first: the bot turns its armor to
     // it and jinks, because from behind the drive is open
     let defending = false;
     let chaser: Ship | null = null;
-    // a ship that just hit the drive is the first to turn to, wherever it fired from; out of
-    // sight, any other ship on the tail still counts
+    // a ship that just hit the drive is the first to turn to, wherever it fired from (its beam
+    // shows where); out of sight, any other ship on the tail still counts. That one the bot
+    // knows as a Host does, from the lock warning: a nose tracking it from behind, within the
+    // sensors' reach and in sight, and nothing while a solar storm blinds the sensors
     const struck = this.struckBy && now < this.struckUntil && this.struckBy.alive ? this.struckBy : null;
-    for (let i = struck ? -1 : 0; i < ships.length; i++) {
+    for (let i = struck ? -1 : 0; i < (this.blind ? 0 : ships.length); i++) {
       const ship = i < 0 ? struck! : ships[i];
-      // as with targets: a fresh clone cannot hurt, nor can the own side, and a storm blinds the sensors beyond sight
+      // as with targets: a fresh clone cannot hurt, nor can the own side
       if (!this.rival(ship, now)) continue;
       const line = toTarget.subVectors(me.position, ship.flight.position);
       const distance = line.length();
-      const threat = i < 0 || (distance < Math.min(THREAT_RANGE, sight) && this.ship.tailToward(line) && ship.flight.angleTo(line) < THREAT_ANGLE);
+      const threat = i < 0 || (this.ship.tailToward(line) && noseOn(ship.flight, me.position, this.ship.radius) > 0);
       if (threat && field.lineOfSight(me.position, ship.flight.position)) {
         chaser = ship;
         // a racer does not turn around for it: it races on
@@ -342,7 +411,10 @@ export class Bot {
     }
     // a nova core close by: away from it, at full speed, with the main drive (see burning)
     if (this.flee) desired.copy(local.subVectors(me.position, this.flee).normalize()).multiplyScalar(CRUISE_SPEED * 2);
-    if (me.position.length() > this.home) desired.addScaledVector(me.position, -CRUISE_SPEED / me.position.length());
+    const fromHome = this.homeAt ? local.subVectors(me.position, this.homeAt) : local.copy(me.position);
+    const homeDistance = fromHome.length();
+    if (homeDistance > this.home) desired.addScaledVector(fromHome, -CRUISE_SPEED / homeDistance);
+    const givingWay = this.keepClear(ships, field);
     // a massive body pulls: near it, away from it comes first
     const well = field.well;
     let falling = false;
@@ -369,6 +441,7 @@ export class Bot {
         if (away.lengthSq() < 1) away.set(0, 1, 0);
         desired.addScaledVector(away.normalize(), CRUISE_SPEED).addScaledVector(heading, -speed * 0.5);
       }
+      for (const ring of this.rings) if (ring !== this.through) this.clearRing(ring, speed);
     }
 
     error.subVectors(desired, me.velocity);
@@ -386,13 +459,15 @@ export class Bot {
       const angularSize = (target.radius * 0.8) / Math.max(targetDistance, 1);
       const onTarget = me.angleTo(aimPoint) < angularSize + this.ship.radius / Math.max(targetDistance, 1);
       this.onTargetFor = onTarget ? this.onTargetFor + dt : 0;
-      const reaction = 0.45 - 0.3 * this.skills.reflexes + EASE_REACTION * this.ease;
+      const reaction = 0.45 - 0.3 * this.skills.reflexes + EASE_REACTION * this.ease + STRAIN_REACTION * this.ship.strain;
       // a shot into the drive is worth the heat; at the armor a bot only snipes now and then,
       // single shots from a nearly cool laser, so it keeps the heat for the drive
       const open = target.tailToward(line.subVectors(target.flight.position, me.position));
-      // a racer flies first: single shots only, even at an open drive, unless it looks back
-      const heatLimit = open && (!racing || lookingBack) ? this.hotHeat : ARMOR_FIRE_HEAT;
-      controls.fire = (open || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
+      // a racer flies first: single shots only, even at an open drive, and only now and then
+      // (in its sniping spells), unless it looks back; the pack is a race, not a shooting gallery
+      const flying = racing && !lookingBack;
+      const heatLimit = open && !flying ? this.hotHeat : ARMOR_FIRE_HEAT;
+      controls.fire = inSight && ((open && !flying) || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
     } else if (sieging) {
       // a part of a battleship holds still: the nose on it, and fire while the laser allows
       me.steer(toTarget, 3, controls);
@@ -414,7 +489,87 @@ export class Bot {
       }
       controls.strafeX = this.dodge;
     }
+    this.shove = this.armed && now >= this.nextShove ? this.shoveAt(ships, field, now) : null;
+    if (now < this.shoveDriftUntil) controls.strafeX = controls.strafeY = 0;
+    if (devlog) {
+      // what the bot does, the first that holds: running from danger, then its task
+      const doing = this.flee ? 'flee' : falling ? 'escape well' : chaser && !this.armed ? 'run' : lookingBack ? 'look back' : racing ? 'race' : defending ? 'defend' : target ? 'attack' : this.siege ? 'siege' : this.lure ? 'probe' : 'roam';
+      const about = this.flee ? this.fleeFrom : chaser && (!this.armed || lookingBack || defending) ? chaser.name : target ? target.name : '';
+      const extra = `${danger && !falling ? ' +avoid rock' : ''}${homeDistance > this.home ? ' +home' : ''}${givingWay ? ` +give way to ${givingWay.name}` : ''}`;
+      devlog.decide(now, this.ship.name, meanSkill(this.skills), doing + extra, about);
+    }
     return this.byHand(controls, dt);
+  }
+
+  /** A rival to shove into the rock beside it (see SHOVE_REACH): the kick, or null. */
+  private shoveAt(ships: readonly Ship[], field: AsteroidField, now: number): { x: number; y: number } | null {
+    const me = this.ship.flight;
+    for (const ship of ships) {
+      if (!this.rival(ship, now)) continue;
+      const away = local.subVectors(ship.flight.position, me.position);
+      const distance = away.length();
+      if (distance > this.ship.radius * SHOVE_REACH || line.subVectors(ship.flight.velocity, me.velocity).lengthSq() > SHOVE_DRIFT * SHOVE_DRIFT) continue;
+      away.divideScalar(distance);
+      if (!field.raycast(ship.flight.position, away, SHOVE_TARGET, true)) continue;
+      // the thrusters kick sideways and up and down: a rival ahead or behind is out of reach
+      me.toLocalDirection(away, away);
+      if (Math.hypot(away.x, away.y) < 0.7) continue;
+      this.nextShove = now + SHOVE_PAUSE;
+      if (Math.random() > this.skills.daring) return null;
+      this.shoveDriftUntil = now + SHOVE_DRIFT_SECONDS;
+      devlog?.add({ kind: 'act', t: now, ship: this.ship.name, act: 'shove', detail: ship.name });
+      this.shoveKick.x = away.x;
+      this.shoveKick.y = away.y;
+      return this.shoveKick;
+    }
+    return null;
+  }
+
+  /** Off the way of any ship the bot would meet soon (see KEEP_CLEAR): the wanted velocity bends away from where they would come closest. Returns the ship it gives way to most, or null. */
+  private keepClear(ships: readonly Ship[], field: AsteroidField): Ship | null {
+    let most: Ship | null = null;
+    let least = Infinity;
+    const me = this.ship.flight;
+    const clear = this.ship.radius * KEEP_CLEAR;
+    for (const ship of ships) {
+      if (ship === this.ship || !ship.alive) continue;
+      // where the other ship is, and how fast the two close, as the bot sees it
+      local.subVectors(me.position, ship.flight.position);
+      line.subVectors(me.velocity, ship.flight.velocity);
+      const speed2 = line.lengthSq();
+      // the moment they come closest, within the look ahead (now, when they already part)
+      const when = speed2 > 1 ? THREE.MathUtils.clamp(-local.dot(line) / speed2, 0, KEEP_CLEAR_AHEAD) : 0;
+      local.addScaledVector(line, when);
+      const miss = local.length();
+      // a ship behind rock the bot does not see coming
+      if (miss >= clear || !field.lineOfSight(me.position, ship.flight.position)) continue;
+      if (miss < 1e-6) local.set(0, 1, 0);
+      else local.divideScalar(miss);
+      desired.addScaledVector(local, KEEP_CLEAR_PUSH * (1 - miss / clear));
+      if (miss < least) {
+        least = miss;
+        most = ship;
+      }
+    }
+    return most;
+  }
+
+  /** Pushes the wanted velocity off a ring's housings that the way (along `heading` at `speed`) would meet (see RING_HORIZON). */
+  private clearRing(ring: Ring, speed: number) {
+    const me = this.ship.flight;
+    const toward = heading.dot(ring.facing);
+    if (Math.abs(toward) < 0.05) return;
+    // when and where the way crosses the ring's plane
+    const time = local.subVectors(ring.center, me.position).dot(ring.facing) / (toward * speed);
+    if (time < 0 || time > RING_HORIZON) return;
+    const cross = local.copy(me.position).addScaledVector(heading, speed * time).sub(ring.center);
+    const out = cross.length();
+    const { inner, outer } = ringRim(ring.radius);
+    const margin = this.ship.radius * RING_MARGIN;
+    if (out < inner - margin || out > outer + margin) return;
+    // nearer the opening: through it; else out past the struts
+    const inward = out < inner + (outer - inner) / 4;
+    desired.addScaledVector(cross.divideScalar(Math.max(out, 1)), (inward ? -1 : 1) * CRUISE_SPEED * (1 - time / RING_HORIZON));
   }
 
   /** A ship the bot may fight: alive, not its own, not of its side, and past its spawn protection (a freshly printed clone is left alone). */
@@ -453,7 +608,22 @@ export class Bot {
    */
   private aimError(distance: number) {
     const aim = this.skills.aim;
-    return (this.ship.radius * (1.6 - 1.4 * aim) + distance * AIM_ANGLE * (1.5 - aim)) * (1 + EASE_AIM * this.ease);
+    return (this.ship.radius * (1.6 - 1.4 * aim) + distance * AIM_ANGLE * (1.5 - aim)) * (1 + EASE_AIM * this.ease + STRAIN_AIM * this.ship.strain);
+  }
+
+  /**
+   * How many others hunt a ship, as the bot sees them: ships in sight within FIRE_RANGE of it
+   * with their noses on it (see HUNT_ANGLE). Another bot's mind it cannot read.
+   */
+  private huntersOf(prey: Ship, ships: readonly Ship[], field: AsteroidField) {
+    let hunters = 0;
+    for (const ship of ships) {
+      if (ship === this.ship || ship === prey || !ship.alive || ship.allyOf(prey)) continue;
+      const line = hunt.subVectors(prey.flight.position, ship.flight.position);
+      if (line.length() > FIRE_RANGE || ship.flight.angleTo(line) > HUNT_ANGLE || !field.lineOfSight(this.ship.flight.position, ship.flight.position)) continue;
+      hunters++;
+    }
+    return hunters;
   }
 
   /**

@@ -11,8 +11,8 @@ import { msg } from '../i18n/i18n';
  *
  * Online, an upgrade counts for at most ONLINE_LEVEL of its steps, so a Host who has played a
  * lot meets newcomers almost on equal terms; the looks always count in full. What a Host owns
- * lives in its browser (see the privacy policy): it can be cheated, and that costs nobody but
- * the cheater, since the online cap holds for everyone.
+ * lives in its browser (see the privacy policy): a value no Host can own there is not used, and
+ * the game names whoever put it there (see hangarFrom); online the cap holds for everyone anyway.
  */
 
 /** The two interceptors, which have upgrades; every ship a Host can fly is a ShipType (the Sovereign too, once earned). */
@@ -43,8 +43,8 @@ export const COINS_PER_POINT = 1;
  * The upgrades. What they do per step: radiators shed heat 15 % faster, the thrusters push and
  * turn 8 % harder, the main drive pushes 5 % harder (the speed limit stays), the torpedo tubes
  * hold one more torpedo at the first and at the third step, the plating takes 7 % of every
- * damage away. Neon trims the hull, brighter with every step; the drive flame burns azure,
- * violet, then white-hot.
+ * damage away. The neon trim lights a strip along both flanks, adds one across the stern, then
+ * a running light (see Ship.outfit); the drive flame burns azure, violet, then white-hot.
  */
 export const UPGRADES: readonly Upgrade[] = [
   { id: 'radiators', name: msg('Radiators'), note: msg('Your laser cools faster'), prices: [1000, 2500, 5000], looks: false },
@@ -52,7 +52,7 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: 'drive', name: msg('Main drive'), note: msg('More push, same speed limit'), prices: [1000, 2500, 5000], looks: false },
   { id: 'tubes', name: msg('Torpedo tubes'), note: msg('More torpedoes per clone'), prices: [1500, 3000, 6000], looks: false },
   { id: 'plating', name: msg('Plating'), note: msg('Every hit hurts less'), prices: [1500, 3000, 6000], looks: false },
-  { id: 'neon', name: msg('Neon trim'), note: msg('The hull glows in sun orange'), prices: [500, 1500, 3000], looks: true },
+  { id: 'neon', name: msg('Neon trim'), note: msg('Light strips along both flanks'), prices: [500, 1500, 3000], looks: true },
   { id: 'flame', name: msg('Drive flame'), note: msg('Azure, violet, white-hot'), prices: [500, 1500, 3000], looks: true },
 ];
 
@@ -82,23 +82,79 @@ const noLevels = (): Record<UpgradeId, number> => Object.fromEntries(UPGRADES.ma
 
 export const emptyHangar = (): Hangar => ({ coins: 0, levels: { human: noLevels(), alien: noLevels() }, ship: 'human' });
 
-/** A hangar as the browser kept it: whatever does not fit is dropped, nothing beyond the steps there are. */
-export function parseHangar(text: string | null): Hangar {
-  const hangar = emptyHangar();
-  if (!text) return hangar;
+/**
+ * The wallet: a Host holds at most what the hangar sells, every step of every upgrade of both
+ * interceptors (113,000 coins). More would buy nothing, so a round's payout stops there, and the
+ * hangar says the wallet is full.
+ */
+export const WALLET = HANGAR_SHIPS.length * UPGRADES.reduce((sum, upgrade) => sum + upgrade.prices.reduce((a, b) => a + b, 0), 0);
+
+const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+
+/** A hangar as the browser kept it, whether a hand put in what no Host can own, and what of it could not be read. */
+export interface KeptHangar {
+  hangar: Hangar;
+  /** Coins beyond the wallet, a step below none or beyond the last, the Sovereign flown without both interceptors complete: only an edit puts these there. */
+  cheated: boolean;
+  /** What could not be read and counts as stock (the entry, its coins, its levels or one of them): a half-written entry or a format of another version, never a reason to call anyone a cheater. */
+  unreadable: string[];
+}
+
+/**
+ * Reads a hangar the browser kept (none: stock). What is missing or unreadable is stock; an
+ * upgrade, a ship or a field this game does not know is passed over. Coins below the wallet are
+ * the Host's business, whatever they are.
+ */
+export function hangarFrom(text: string | null): KeptHangar {
+  const kept: KeptHangar = { hangar: emptyHangar(), cheated: false, unreadable: [] };
+  if (text === null) return kept;
+  const { hangar, unreadable } = kept;
+  let entry: unknown;
   try {
-    const kept = JSON.parse(text) as Partial<Hangar>;
-    if (Number.isFinite(kept.coins) && kept.coins! >= 0) hangar.coins = Math.floor(kept.coins!);
-    for (const ship of HANGAR_SHIPS) {
+    entry = JSON.parse(text);
+  } catch {
+    entry = undefined;
+  }
+  if (!isRecord(entry)) {
+    unreadable.push('entry');
+    return kept;
+  }
+  const { coins, levels, ship } = entry;
+  if (typeof coins === 'number') {
+    if (coins > WALLET) kept.cheated = true;
+    else hangar.coins = coins;
+  } else if (coins !== undefined) unreadable.push('coins');
+  if (isRecord(levels)) {
+    for (const interceptor of HANGAR_SHIPS) {
+      const steps = levels[interceptor];
+      if (steps === undefined) continue;
+      if (!isRecord(steps)) {
+        unreadable.push(`levels.${interceptor}`);
+        continue;
+      }
       for (const upgrade of UPGRADES) {
-        const level = kept.levels?.[ship]?.[upgrade.id];
-        if (Number.isInteger(level)) hangar.levels[ship][upgrade.id] = Math.max(0, Math.min(LEVELS, level!));
+        const level = steps[upgrade.id];
+        if (level === undefined) continue;
+        if (typeof level === 'number' && (level < 0 || level > LEVELS)) kept.cheated = true;
+        else if (Number.isInteger(level)) hangar.levels[interceptor][upgrade.id] = level as number;
+        else unreadable.push(`levels.${interceptor}.${upgrade.id}`);
       }
     }
-    if (kept.ship === 'human' || kept.ship === 'alien' || (kept.ship === 'sovereign' && sovereignEarned(hangar))) hangar.ship = kept.ship;
-  } catch {
-    // a broken entry starts the hangar over
+  } else if (levels !== undefined) unreadable.push('levels');
+  if (ship === 'human' || ship === 'alien') hangar.ship = ship;
+  // the Sovereign is judged only on steps read in full: an unreadable step is no reason to call anyone a cheater
+  else if (ship === 'sovereign' && !kept.cheated) {
+    if (sovereignEarned(hangar)) hangar.ship = ship;
+    else if (unreadable.length === 0) kept.cheated = true;
   }
+  return kept;
+}
+
+/** A hangar as no Host could own it put right before it is kept: coins within the wallet, every step within its upgrade, the Sovereign only when earned. */
+export function keepable(hangar: Hangar): Hangar {
+  hangar.coins = Math.min(hangar.coins, WALLET);
+  for (const ship of HANGAR_SHIPS) for (const upgrade of UPGRADES) hangar.levels[ship][upgrade.id] = Math.max(0, Math.min(LEVELS, Math.floor(hangar.levels[ship][upgrade.id])));
+  if (hangar.ship === 'sovereign' && !sovereignEarned(hangar)) hangar.ship = 'human';
   return hangar;
 }
 
@@ -123,9 +179,9 @@ export const complete = (hangar: Hangar, ship: HangarShip) => UPGRADES.every((up
 /** The Sovereign is earned: both interceptors complete. */
 export const sovereignEarned = (hangar: Hangar) => HANGAR_SHIPS.every((ship) => complete(hangar, ship));
 
-/** Pays out a round: its points in coins (never negative). Returns the coins paid. */
+/** Pays out a round: its points in coins (never negative), as far as the wallet holds them. Returns the coins paid. */
 export function payOut(hangar: Hangar, points: number): number {
-  const coins = Math.max(0, Math.floor(points * COINS_PER_POINT));
+  const coins = Math.max(0, Math.min(Math.floor(points * COINS_PER_POINT), WALLET - hangar.coins));
   hangar.coins += coins;
   return coins;
 }

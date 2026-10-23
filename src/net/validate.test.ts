@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cleanName, fieldState, flagsState, fleetState, ids, shipState, wreckStates } from './validate';
+import { TINTS } from '../ship/tints';
 
 const ship = {
   id: 'p:abc',
@@ -14,7 +15,7 @@ const ship = {
   tr: 1,
   pr: 0,
 };
-const slow = { n: 'Nova', k: 'alien', s: 500, ki: 1, de: 2, g: 3, fi: -1, it: 3, lo: 6 };
+const slow = { n: 'Nova', k: 'alien', s: 500, ki: 1, de: 2, g: 3, fi: -1, it: 3, lo: 6, co: 2 };
 
 describe('messages from other browsers', () => {
   it('take a valid ship state, with or without its slow part', () => {
@@ -34,6 +35,11 @@ describe('messages from other browsers', () => {
     expect(shipState({ ...ship, ...slow, it: 16 })).toBeNull();
   });
 
+  it("take a Host's tint only as an entry of the palette, never as a color of its own", () => {
+    expect(shipState({ ...ship, ...slow, co: TINTS.length - 1 })?.co).toBe(TINTS.length - 1);
+    for (const co of [-1, TINTS.length, 1.5, '#000000', null]) expect(shipState({ ...ship, ...slow, co })).toBeNull();
+  });
+
   it('drop a field snapshot without its arena', () => {
     const field = { k: 'belt', t: 3, a: [{ id: '0', hp: 5, b: 0 }], x: [] };
     expect(fieldState(field)).not.toBeNull();
@@ -47,9 +53,10 @@ describe('messages from other browsers', () => {
   });
 
   it('take the sides and cores of Capture the Flag, and drop them broken', () => {
-    const flags = { t: [['p:abc', 'b:abc:0'], ['b:abc:1']], c: [1, 0], f: [null, [1, 2, 3, 0, 0, 0]], e: [[4, 2, 'p:abc', 1], [5, 1, null, 0]] };
+    const flags = { t: [['p:abc', 'b:abc:0'], ['b:abc:1']], c: [1, 0], f: ['b:abc:1', [1, 2, 3, 0, 0, 0]], w: [[4, 5, 6, -100, 0, 0], null], e: [[4, 2, 'p:abc', 1], [5, 1, null, 0]] };
     expect(flagsState(flags)).toEqual(flags);
     expect(flagsState({ ...flags, f: ['b:abc:1', 'p:x y'] })).toBeNull();
+    expect(flagsState({ ...flags, w: [[4, 5, 6], null] })).toBeNull();
     expect(flagsState({ ...flags, c: [0.5, 0] })).toBeNull();
     expect(flagsState({ ...flags, e: [[4, 7, 'p:abc', 1]] })).toBeNull();
     expect(flagsState({ ...flags, t: [['p:abc']] })).toBeNull();
