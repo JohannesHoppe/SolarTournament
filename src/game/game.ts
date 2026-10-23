@@ -947,6 +947,8 @@ export class Game implements OnlineGame {
   /** What the flight computer flew the own ship by in the last step, for the recorder. */
   private flightMode: FlightMode = 'dead';
   private recording: InputFrame | null = null;
+  /** The own clone was alive in the last step of the flight computer (see flightComputer): a new one starts its course from its nose. */
+  private flewAlive = false;
   /** The rings of the round (see Bot.rings). */
   private rings: Ring[] = [];
   /** The race's gate a ship touched last (see touchesRing), -1 for none: where a gate crash happened, for the log. */
@@ -2836,6 +2838,9 @@ export class Game implements OnlineGame {
     const dodge = this.input.takeDodge();
     if (dodge && this.state === 'playing' && !this.spectating) this.dodge(dodge);
     const clamped = (this.clamped = this.startCountdown(myControls));
+    // held by the clamps the ship goes nowhere: the course is where it points, so the flight
+    // sets off that way when they let go
+    if (clamped) this.steering.follow(me.flight);
     // Last Clone Standing: the solar flare, the same on every browser by the field time
     this.showFlare(dt);
     this.playComet();
@@ -4010,6 +4015,9 @@ export class Game implements OnlineGame {
   private flightComputer(controls: Readonly<Controls>, dt: number): Controls {
     const me = this.me!;
     const flight = me.flight;
+    // a fresh clone sets off where it points
+    if (me.alive && !this.flewAlive) this.steering.follow(flight);
+    this.flewAlive = me.alive;
     const braking = this.state === 'playing' && this.input.braking && me.alive;
     if (braking) {
       this.flightMode = 'brake';
