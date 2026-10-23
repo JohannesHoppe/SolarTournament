@@ -74,6 +74,8 @@ body {
   color: var(--text);
   font-family: var(--font-body);
   user-select: none;
+  /* no paragraph ends in a lonely word */
+  text-wrap: pretty;
 }
 
 #game,
@@ -700,9 +702,14 @@ button.primary .mode-note {
   transition: none;
 }
 
-/* a long message breaks into a few compact lines in the middle, so the eye does not travel the whole screen */
+/*
+ * A long message breaks into a few compact lines in the middle, so the eye does not travel the
+ * whole screen. It sits above the crosshair; where the panel of a race or the flight school takes
+ * the top (and on touch screens), it follows the alarms below the crosshair in their column, so
+ * the two never cover each other. Fixed inside the column means: placed on the whole HUD.
+ */
 #hud-message {
-  position: absolute;
+  position: fixed;
   top: 30%;
   left: 50%;
   transform: translateX(-50%);
@@ -1096,9 +1103,11 @@ body.cinema #touch {
   }
 }
 
-/* the flight school's panel takes the upper third; messages move below the crosshair */
-#hud:has(#school-panel:not([hidden])) #hud-message {
-  top: 62%;
+#hud:has(#school-panel:not([hidden])) #hud-message,
+body.touch #hud-message {
+  position: static;
+  transform: none;
+  margin: 10px auto 0;
 }
 
 #killfeed {
@@ -1209,6 +1218,106 @@ body.cinema #touch {
   white-space: pre-line;
 }
 
+/*
+ * The alarm tiers (see game/alarms.ts): CAUTION in the HUD's bright azure, WARNING in the orange
+ * of everything that acts, CRITICAL in red. The master caution is a lit annunciator plate; a
+ * CRITICAL one blinks, and the screen's edge glows red.
+ */
+#hud-alerts {
+  --caution: var(--hud-bright);
+  --caution-glow: var(--hud-text-glow);
+  --critical-glow: 0 0 2px rgba(2, 3, 10, 0.95), 0 0 10px rgba(255, 40, 30, 0.95);
+}
+
+#hud-master {
+  display: inline-block;
+  margin-bottom: 6px;
+  padding: 2px 10px;
+  border: 1px solid currentColor;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  letter-spacing: 0.2em;
+}
+
+#hud-master.caution,
+#hud-warning .alarm.caution,
+#hud-escape.caution {
+  color: var(--caution);
+  text-shadow: var(--caution-glow);
+}
+
+#hud-master.warning {
+  color: var(--tube-orange);
+  text-shadow: var(--hud-act-glow);
+  background: rgba(255, 157, 0, 0.18);
+}
+
+#hud-master.critical {
+  color: #fff;
+  text-shadow: var(--critical-glow);
+  background: rgba(255, 40, 30, 0.45);
+  animation: blink 0.5s steps(2) infinite;
+}
+
+#hud-warning .alarm.critical,
+#hud-escape.critical {
+  color: var(--danger);
+  text-shadow: var(--critical-glow);
+}
+
+/* where a danger comes from: an arrow turned as the screen sees it, up is ahead and above */
+.alarm-arrow {
+  display: inline-block;
+  margin-right: 0.4em;
+  font-style: normal;
+}
+
+.alarm-arrow::before {
+  content: "\2191";
+}
+
+/* the escape gauge in a gravity well: how much of the drive the well's hold takes */
+#hud-escape {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+  color: var(--hud-bright);
+  text-shadow: var(--hud-text-glow);
+  font-family: var(--font-numbers);
+  font-size: 0.9rem;
+}
+
+#hud-escape[hidden] {
+  display: none;
+}
+
+#hud-escape > i {
+  position: relative;
+  width: 140px;
+  height: 6px;
+  border: 1px solid currentColor;
+}
+
+#hud-escape b {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: currentColor;
+}
+
+#hud-escape > span:first-child {
+  min-width: 6em;
+  text-align: right;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+#hud-escape-value {
+  min-width: 6em;
+  text-align: left;
+}
+
 #g-vignette {
   position: absolute;
   inset: 0;
@@ -1303,15 +1412,15 @@ body.cinema #touch {
 
 /*
  * The nova core: its holder sees the world through the overcharged core (shifted, oversaturated,
- * a breathing white rim); everyone close to a holder gets the red rim of an alarm; whoever sees
- * it go off is blinded white for a moment.
+ * a breathing white rim); whoever sees it go off is blinded white for a moment. Every CRITICAL
+ * alarm (a holder close by among them) pulses the red rim of an alarm.
  */
 body.nova-held #game {
   filter: hue-rotate(-40deg) saturate(1.8) contrast(1.1);
 }
 
 body.nova-held #hud::before,
-body.nova-alarm #hud::before,
+body.alarm-critical #hud::before,
 body.nova-flash #hud::after {
   content: "";
   position: absolute;
@@ -1324,7 +1433,7 @@ body.nova-held #hud::before {
   animation: nova-breath 1s ease-in-out infinite alternate;
 }
 
-body.nova-alarm #hud::before {
+body.alarm-critical #hud::before {
   box-shadow: inset 0 0 220px rgba(255, 30, 40, 0.85);
   animation: nova-breath 0.25s steps(2) infinite alternate;
 }
@@ -1346,7 +1455,8 @@ body.nova-flash #hud::after {
 
 @media (prefers-reduced-motion: reduce) {
   body.nova-held #hud::before,
-  body.nova-alarm #hud::before {
+  body.alarm-critical #hud::before,
+  #hud-master.critical {
     animation: none;
   }
 }
@@ -2364,6 +2474,16 @@ body.touch #transmission {
     font-size: 0.85rem;
   }
 
+  body.touch #hud-master,
+  body.touch #hud-escape {
+    margin: 2px 0;
+    font-size: 0.7rem;
+  }
+
+  body.touch #hud-escape > i {
+    width: 90px;
+  }
+
   body.touch #hud-message,
   body.touch #transmission-text {
     font-size: 0.8rem;
@@ -2433,10 +2553,9 @@ body.touch #transmission {
     width: min(440px, calc(100% - 270px));
   }
 
-  body.touch #hud-message,
-  body.touch #hud:has(#school-panel:not([hidden])) #hud-message {
-    top: calc(50% + 78px);
-    width: calc(100% - 260px);
+  /* between the left stick and the drive and fire buttons */
+  body.touch #hud-message {
+    width: min(440px, calc(100% - 360px));
   }
 
   body.touch #transmission {
@@ -2805,7 +2924,8 @@ body.page {
   -webkit-hyphens: auto;
 }
 
-/* centered blocks are justified too and only center their last line */
+/* centered blocks are justified too and only center their last line; their lines run about
+   equally long, and a text marked `sentences` breaks between its sentences where they fit */
 #school-text,
 .sponsor-pitch,
 .tagline,
@@ -2814,6 +2934,11 @@ body.page {
 .satire-fine,
 #transmission-text {
   text-align-last: center;
+  text-wrap: balance;
+}
+
+.sentence {
+  display: inline-block;
 }
 
 /* The SolarTournament logo: the seal of the Ministry of War, glowing like everything the regime owns. */

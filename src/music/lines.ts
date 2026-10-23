@@ -183,6 +183,10 @@ export const ANNOUNCER_WIN = ['{name} wins the race. glory to the president', 'a
 export const ANNOUNCER_OUT = ['{name} is out. no clones left', 'and {name} is gone. for good. well, for this round'];
 export const ANNOUNCER_SURVIVOR = ['{name} is the last clone standing', '{name} survives. the president is impressed'];
 export const ANNOUNCER_FLARE = 'here comes the flare. the arena is closing';
+/** A comet crosses the arena, its shower after it (see game/comet.ts). */
+export const ANNOUNCER_COMET = ['a comet is coming. its tail is full of rock. hide, little clones', 'the heavens join the games. a comet, folks, courtesy of the president'];
+/** A comet's head runs a pilot down. */
+export const ANNOUNCER_COMET_KILL = ['and {name} meets the comet head on. the printer is warming up', 'a comet takes {name}. even the sky votes for the president'];
 /** Capture the Flag: a pilot brings the other side's core home. */
 /** The announcer on the own pilot's biggest moments (see game/moments.ts). */
 export const ANNOUNCER_MOMENT = {
@@ -206,7 +210,7 @@ export const ANNOUNCER_OPEN = ['radio twenty five eighty four. live from the are
 export const ANNOUNCER_START = {
   race: ['three laps. no brakes. the president wants a show', 'engines hot. clones ready. let them burn'],
   deathmatch: ['eight clones. one winner. the president is watching', 'ladies and gentlemen. let them bleed'],
-  survival: ['three clones each. the flare is hungry', 'only one walks out of this. well, flies'],
+  survival: ['three clones each. the flare is hungry', 'everybody dies tonight. the winner just does it last'],
   flag: ['orange against blue. bring the core home', 'two sides. two cores. no mercy'],
   fleet: ['the president sends his battleship. you will need luck', 'one battleship. all of you. the odds are fair. for him'],
 } as const;
@@ -297,6 +301,8 @@ export const SCHOOL = {
   torpedoCover: 'A torpedo is coming. Do not shoot it this time. Get behind the rock.',
   torpedoCoverHit: 'It got you. Put the rock between you and it. Again.',
   hideInstead: 'Shot down. Nice, but this time hide. Again.',
+  comet: 'A comet, darling, from your right. Its head misses you, its tail will not: a storm of rock. Get behind the rock, or turn your armored nose into it. Never show it your drive.',
+  cometDrive: 'Your drive took the shower. Hide, or face it. Again.',
   exam: 'Final exam, tactician. This bot flies as well as the field. Use everything.',
   tacticianDone: 'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.',
   again: 'Again.',
@@ -343,6 +349,7 @@ export const SCHOOL_PRAISE = {
   bursts: 'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.',
   cover: 'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.',
   torpedoCover: 'Lost you. A seeker that loses its line never finds it again.',
+  comet: 'Still in one piece. The head clears everything in its way, but the tail is what kills.',
   exam: 'A real fight, and you won it. I am so proud of you, darling.',
 } as const;
 
@@ -382,6 +389,14 @@ export const COMPUTER = {
   fleetPlume: 'It is turning its drive on us. Get out from behind it!',
   reactorOpen: 'The reactor is open. Now, darling!',
   reactorCritical: 'Reactor critical! Get clear, darling!',
+  hullCritical: 'Hull failing. One more hit, and you are dead, darling.',
+  holeNear: 'Careful, darling. The black hole is near.',
+  holePull: 'The black hole is pulling us! Burn away from it!',
+  giantNear: 'Careful, darling. The giant is pulling at us.',
+  giantPull: 'The giant is dragging us down! Burn away from it!',
+  wellTight: 'Now it gets really tight! Full burn, now!',
+  wellLost: 'I am sorry, darling.',
+  comet: 'Comet inbound, darling! Its tail is a storm of rock. Hide behind an asteroid, or turn your armored nose into it.',
 } as const;
 
 /**
@@ -433,7 +448,7 @@ export function allLines(language: Language): string[] {
       return [STATION_DE, NOW_PLAYING_DE, ...TITLE_FIRST_DE, ...TITLE_SECOND_DE, ...PHRASES_DE];
     case 'mod':
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
-      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
+      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
       return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY];
   }

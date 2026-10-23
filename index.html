@@ -27,7 +27,6 @@
     <div id="prograde" class="velocity-marker" hidden><span class="hud-label" data-i18n>Course</span></div>
     <div id="retrograde" class="velocity-marker" hidden><span class="hud-label" data-i18n>Brake</span></div>
     <div id="hitmarker"></div>
-    <div id="hud-message"></div>
     <div id="hud-countdown" aria-live="assertive"></div>
     <div id="hud-banner" aria-live="polite"></div>
     <div id="start-lights" hidden></div>
@@ -40,7 +39,13 @@
       <button type="button" class="intro-skip"></button>
     </section>
     <div id="hud-split"></div>
-    <div id="hud-alerts"><div id="hud-warning"></div><div id="hud-lock" hidden></div></div>
+    <div id="hud-alerts">
+      <div id="hud-master" hidden></div>
+      <div id="hud-warning"></div>
+      <div id="hud-lock" hidden></div>
+      <div id="hud-escape" hidden><span data-i18n>Pull</span><i><b></b></i><span id="hud-escape-value"></span></div>
+      <div id="hud-message"></div>
+    </div>
     <div id="school-panel" hidden><span id="school-step"></span><p id="school-text"></p><p id="school-keys"></p></div>
     <div id="gate-mark" class="gate-mark" hidden><i></i><i></i><i></i><i></i><b></b></div>
     <div id="gate-mark-after" class="gate-mark after" hidden><i></i><i></i><i></i><i></i></div>
@@ -89,7 +94,7 @@
     </div>
     <img class="logo" src="crest.svg" alt="SolarTournament: seal of the Ministry of War of the United Solar States" data-i18n-attr="alt" width="104" height="104">
     <h1>Solar<span class="neon">Tour<span class="neon-loose">n</span>ament</span></h1>
-    <p class="tagline" data-i18n>Five minutes. Die for the President. Again and again.</p>
+    <p class="tagline sentences" data-i18n>Five minutes. Die for the President. Again and again.</p>
     <label class="field"><span data-i18n>Callsign</span> <input id="callsign" maxlength="16" autocomplete="off" spellcheck="false"></label>
     <button type="button" id="school" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Flight school</span></span><span class="mode-note" data-i18n>Learn to fly. Training clones are free.</span></button>
     <button type="button" id="start" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Solo round</span></span><span class="mode-note" data-i18n>Race the gates or fight it out: your arena, your rivals.</span></button>

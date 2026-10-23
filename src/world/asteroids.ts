@@ -126,6 +126,8 @@ export interface Asteroid {
   surface: Surface | null;
   /** World matrix inverse, refreshed every update. */
   inverse: THREE.Matrix4;
+  /** The seed of the comet that last shoved this solid piece (see shove), or null. */
+  shovedBy: number | null;
 }
 
 /**
@@ -148,7 +150,12 @@ export type FieldState = {
   a: AsteroidState[];
   /** every rock broken so far and the field time it broke, so its fragments start where they did */
   x: { id: string; b: number }[];
+  /** the solid pieces a comet shoved (see AsteroidField.shove), with their motion since */
+  m?: ShovedState[];
 };
+
+/** A solid piece's motion since a comet shoved it: the field time of the blow, its position, drift, orientation and spin then (axis and rate), and the comet's seed. */
+export type ShovedState = { id: string; b: number; p: number[]; v: number[]; q: number[]; s: number[]; c: number };
 
 interface Template {
   object: THREE.Object3D;
@@ -339,6 +346,7 @@ export class AsteroidField {
       surface: template.surface,
       box: template.box,
       inverse: new THREE.Matrix4(),
+      shovedBy: null,
     };
     this.asteroids.set(id, asteroid);
     object.userData.type = type;
@@ -374,6 +382,40 @@ export class AsteroidField {
     if (!asteroid || asteroid.solid) return undefined;
     asteroid.hitPoints--;
     return asteroid.hitPoints <= 0 ? this.destroy(id, at) : undefined;
+  }
+
+  /** Where a rock is at a field time (see positionAt), for whatever must know it then, not now. */
+  positionOf(asteroid: Asteroid, time: number, target: THREE.Vector3): THREE.Vector3 {
+    return positionAt(asteroid, time, target);
+  }
+
+  /**
+   * Breaks a rock at once at a field time, whatever its hits (a comet's head runs it down);
+   * solid pieces stand. Returns the rock when it broke.
+   */
+  shatter(id: string, at: number): Asteroid | undefined {
+    return this.asteroids.get(id)?.solid ? undefined : this.destroy(id, at);
+  }
+
+  /**
+   * A comet (seeded `by`) shoves a solid piece at a field time: from where it stands then, it
+   * drifts on with `kick` (units/s) added to its drift, keeps circling with its orbit, and turns
+   * about `axis` at `rate` (rad/s) from its orientation then. Returns the piece when it moved.
+   */
+  shove(id: string, at: number, kick: THREE.Vector3, axis: THREE.Vector3, rate: number, by: number): Asteroid | undefined {
+    const a = this.asteroids.get(id);
+    if (!a?.solid) return undefined;
+    const age = at - a.born;
+    positionAt(a, at, a.basePosition);
+    a.baseOrientation.premultiply(new THREE.Quaternion().setFromAxisAngle(a.spinAxis, a.spinRate * age));
+    if (a.orbitRate) a.velocity.applyAxisAngle(a.orbitAxis, a.orbitRate * age);
+    a.velocity.add(kick);
+    a.spinAxis = axis.clone();
+    a.spinRate = rate;
+    a.born = at;
+    a.shovedBy = by;
+    this.place(a);
+    return a;
   }
 
   /** Breaks a rock at a field time: the fragments start from where it stood then. */
@@ -416,6 +458,9 @@ export class AsteroidField {
       t: +this.clock.toFixed(3),
       a: [...this.asteroids.values()].map((a) => ({ id: a.id, hp: a.hitPoints, b: +a.born.toFixed(3) })),
       x: [...this.broken].map(([id, at]) => ({ id, b: +at.toFixed(3) })),
+      m: [...this.asteroids.values()].flatMap((a) =>
+        a.shovedBy === null ? [] : [{ id: a.id, b: a.born, p: a.basePosition.toArray(), v: a.velocity.toArray(), q: a.baseOrientation.toArray(), s: [...a.spinAxis.toArray(), a.spinRate], c: a.shovedBy }],
+      ),
     };
   }
 
@@ -423,7 +468,8 @@ export class AsteroidField {
    * Rebuilds the field from a snapshot, starting over from the generated field (this browser
    * may have broken rocks the snapshot still holds): breaks every broken rock at the field time
    * it broke, parents first (the fragments are deterministic), removes rocks that are gone,
-   * takes over the hits and the field time. A fragment's birth is its parent's break time as well.
+   * takes over the hits, the motion of the solid pieces a comet shoved, and the field time. A
+   * fragment's birth is its parent's break time as well.
    */
   restore(state: FieldState, layout: FieldLayout) {
     this.generate(layout);
@@ -452,6 +498,17 @@ export class AsteroidField {
     for (const rock of state.a) {
       const asteroid = this.asteroids.get(rock.id);
       if (asteroid) asteroid.hitPoints = rock.hp;
+    }
+    for (const moved of state.m ?? []) {
+      const a = this.asteroids.get(moved.id);
+      if (!a?.solid) continue;
+      a.born = moved.b;
+      a.basePosition.fromArray(moved.p);
+      a.velocity.fromArray(moved.v);
+      a.baseOrientation.fromArray(moved.q).normalize();
+      a.spinAxis = new THREE.Vector3().fromArray(moved.s).normalize();
+      a.spinRate = moved.s[3];
+      a.shovedBy = moved.c;
     }
     this.setClock(state.t);
   }

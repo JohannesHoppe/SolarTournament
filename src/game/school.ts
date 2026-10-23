@@ -57,6 +57,10 @@ export interface SchoolContext {
   readonly tracked: boolean;
   /** How many dodges the pilot has fired so far. */
   readonly dodges: number;
+  /** Sends a comet (see comet.ts) along `direction` through `through`, its head there a few seconds from now; null clears it. */
+  launchComet(through: THREE.Vector3 | null, direction?: THREE.Vector3): void;
+  /** The comet the drill sent has passed, its shower gone by (true without one). */
+  readonly cometGone: boolean;
   /** A probe carrying an item at a point; returns where it drifts. */
   spawnProbe(position: THREE.Vector3, kind: ItemKind): THREE.Vector3;
   /** A number of a countdown, or (`start`) the start word, in big neon. */
@@ -204,6 +208,10 @@ const COVER_STANDOFF = 3000;
 const COVER_GUNNER = 24000;
 /** Seconds out of the gunner's sight the cover drill wants. */
 const COVER_HOLD = 3;
+/** The comet drill's route passes this far above the pilot (units, 150 m): its head goes over, its shower engulfs it. */
+const COMET_ABOVE = 3000;
+/** The comet drill fails once the drive is down to this share: two pieces into it. */
+const COMET_DRIVE = 0.7;
 /** Skill of the tactician's sparring bots (see Bot): the one on the tail, the one for bursts, the hunter of the cover drill, and the exam's, as good as the middling bot of the field. */
 const TAIL_SKILL = 0.15;
 const BURST_SKILL = 0.25;
@@ -762,6 +770,25 @@ const DRILL = {
     waypoint: (_, a) => a.points[1] ?? null,
     mark: () => t('Cover'),
   },
+  // a comet passes above the pilot from its right: its shower is the danger; the lee of the
+  // rock, or the armored nose turned into it, the answer
+  comet: {
+    line: SCHOOL.comet,
+    praise: SCHOOL_PRAISE.comet,
+    keys: ['turn', 'drive', 'slide'],
+    enter(ctx, a) {
+      takeCover(ctx, a);
+      if (!a.points.length) return;
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ctx.me.flight.orientation);
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(ctx.me.flight.orientation);
+      ctx.launchComet(ctx.me.flight.position.clone().addScaledVector(up, COMET_ABOVE), right.negate());
+    },
+    done: (ctx, a) => !a.points.length || ctx.cometGone,
+    fail: (ctx) => (ctx.me.alive && ctx.me.drive < COMET_DRIVE ? SCHOOL.cometDrive : null),
+    leave: (ctx) => ctx.launchComet(null),
+    waypoint: (_, a) => a.points[1] ?? null,
+    mark: () => t('Cover'),
+  },
   exam: sparring(SCHOOL.exam, SCHOOL_PRAISE.exam, ['drive', 'brake', 'slide', 'dodge', 'fire'], true, EXAM_SKILL),
 } satisfies Record<string, Drill>;
 
@@ -897,7 +924,7 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
     saying(SCHOOL.done),
   ],
   arsenal: [saying(SCHOOL.arsenal), DRILL.torpedo, DRILL.torpedoDown, DRILL.overdrive, DRILL.probe, DRILL.hookShip, DRILL.nova, saying(SCHOOL.arsenalDone)],
-  tactician: [saying(SCHOOL.tactician), DRILL.kick, DRILL.onTail, DRILL.bursts, DRILL.cover, DRILL.torpedoCover, DRILL.exam, saying(SCHOOL.tacticianDone)],
+  tactician: [saying(SCHOOL.tactician), DRILL.kick, DRILL.onTail, DRILL.bursts, DRILL.cover, DRILL.torpedoCover, DRILL.comet, DRILL.exam, saying(SCHOOL.tacticianDone)],
 };
 
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */

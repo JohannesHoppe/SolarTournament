@@ -1,5 +1,5 @@
 import type { ShipState } from '../ship/ship';
-import type { AsteroidState, FieldState } from '../world/asteroids';
+import type { AsteroidState, FieldState, ShovedState } from '../world/asteroids';
 import type { WreckState } from '../world/wrecks';
 import { KINDS, type ProbeState } from '../game/items';
 import type { FlagsState } from '../game/flags';
@@ -159,9 +159,19 @@ export function wreckStates(x: unknown): WreckState[] | null {
   );
 }
 
+/** A solid piece a comet shoved: its motion since, with a quaternion that can be normalized. */
+function shovedState(x: unknown): ShovedState | null {
+  if (!isRecord(x)) return null;
+  const state = complete<ShovedState>({ id: id(x.id), b: num(x.b, 0, MAX_FIELD_TIME), p: vec(x.p, 3, MAX_COORDINATE), v: vec(x.v, 3, MAX_SPEED), q: vec(x.q, 4, UNIT_LENGTH), s: vec(x.s, 4, MAX_SPIN), c: int(x.c, 0, 0xffffffff) });
+  return state && Math.hypot(...state.q) >= 0.5 ? state : null;
+}
+
 export function fieldState(x: unknown): FieldState | null {
   if (!isRecord(x)) return null;
-  return complete<FieldState>({ k: id(x.k), t: num(x.t, 0, MAX_FIELD_TIME), a: listOf(x.a, MAX_ROCKS, asteroidState), x: listOf(x.x, MAX_ROCKS, breakState) });
+  const state = complete<FieldState>({ k: id(x.k), t: num(x.t, 0, MAX_FIELD_TIME), a: listOf(x.a, MAX_ROCKS, asteroidState), x: listOf(x.x, MAX_ROCKS, breakState) });
+  if (!state || x.m === undefined) return state;
+  const moved = listOf(x.m, MAX_ROCKS, shovedState);
+  return moved ? { ...state, m: moved } : null;
 }
 
 /** Ships on one side of Capture the Flag: at most every place of a tournament, and those of a lead browser's bots with room. */

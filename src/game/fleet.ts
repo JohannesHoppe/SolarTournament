@@ -6,6 +6,7 @@ import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
 import { armorSurface, boxUv, shine, surfaced } from '../view/surfaces';
 import type { Homing } from './torpedoes';
+import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS, routeNearest, SHOWER_LENGTH, SHOWER_WIDE, type Comet } from './comet';
 import { msg, t } from '../i18n/i18n';
 
 /**
@@ -90,6 +91,20 @@ const REACH = 8500;
 const DECK_TOP = 1300;
 const KEEL = -1100;
 /**
+ * The battleship's sensors see a comet's route (see comet.ts) FLEET_LOOKOUT seconds before its
+ * head passes nearest it; while that route runs within FLEET_CLEAR of its center (units, 760 m:
+ * the shower's width, a piece, its own reach and 75 m to spare) it leaves its orbit and burns
+ * straight away from the route at EVADE_SPEED (units/s, 50 m/s), turning onto that course
+ * EVADE_BURN times as hard as onto its orbit, until the shower has passed. Clear of the route
+ * by 760 m from right on it takes it about 17 s. With its drives shot out it cannot get away.
+ */
+const FLEET_LOOKOUT = 40;
+const FLEET_CLEAR = SHOWER_WIDE + PIECE_RADIUS + REACH + 1500;
+const EVADE_SPEED = 1000;
+const EVADE_BURN = 2;
+/** How fast the battleship takes up its orbit's course (per s). */
+const STEER = 0.3;
+/**
  * A cross section of the hull at `z` (units, in its frame; the bow points along -z): the flight
  * deck on top at DECK_TOP, `half` wide to each side; the armored belt drops straight from the
  * deck's edges to `belt`; below it the hull slopes in to the keel, `keelHalf` wide at `keel`.
@@ -115,6 +130,8 @@ const BATTERY_MOUNTS: readonly (readonly [number, number, number])[] = [
   [0, KEEL - 350, -3000],
   [0, KEEL - 350, 2500],
 ];
+/** How far a hangar opening's armored casemate stands out of the hull (units, 11 m). */
+const HANGAR_DEPTH = 220;
 /** Where the Ministry's seal sits on both flanks (units along the hull). */
 const SEAL_Z = -1000;
 /** The lights along the deck's edges run forward this fast (lane lengths a second). */
@@ -142,6 +159,7 @@ const step = new THREE.Vector3();
 const closest = new THREE.Vector3();
 const toTarget = new THREE.Vector3();
 const want = new THREE.Vector3();
+const dodge = new THREE.Vector3();
 const look = new THREE.Matrix4();
 const turn = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -359,7 +377,7 @@ export class Fleet implements Obstacle {
     const light = (r: number, g: number, b: number, strength: number) => this.material(new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b).multiplyScalar(strength), toneMapped: false }));
     // warm light in the windows and hangars, white on the deck, the drives' plasma white-hot
     const lit = light(1, 0.8, 0.55, 1.2);
-    const hangar = light(1, 0.55, 0.22, 0.4);
+    const hangar = light(1, 0.6, 0.28, 0.7);
     const marking = light(1, 0.95, 0.85, 1.3);
     const thruster = light(0.75, 0.85, 1, 1.6);
     this.reactorGlow = light(1, 0.75, 0.4, 2.5);
@@ -479,16 +497,36 @@ export class Fleet implements Obstacle {
         lights.push(lamp);
       }
     }
-    // the hangar's mouth in the bow, warm light deep inside, gilded around
-    shaped(new THREE.PlaneGeometry(960, 340).rotateY(Math.PI).translate(0, DECK_TOP - 200, bow - 3), gold);
-    shaped(new THREE.PlaneGeometry(860, 260).rotateY(Math.PI).translate(0, DECK_TOP - 200, bow - 6), hangar);
-    // hangar bays along both flanks aft, warm light inside, gilded around
-    for (const side of [-1, 1]) {
-      for (let z = 900; z <= 4500; z += 1200) {
-        shaped(onBelt(side, z, 330, 1000, 600, 3), gold);
-        shaped(onBelt(side, z, 330, 900, 500, 6), hangar);
-        shaped(onBelt(side, z, 540, 900, 40, 9), lit);
+    /**
+     * A hangar opening `width` by `height` at `center` on the hull, facing `out`: an armored
+     * casemate standing HANGAR_DEPTH out of the hull, gilded around its mouth; inside, its
+     * ceiling and walls in warm light, a row of lamps under the ceiling, the back and the floor
+     * dark, so it reads as a deep, lit bay from any angle. It collides as one box.
+     */
+    const opening = (center: THREE.Vector3, out: THREE.Vector3, width: number, height: number) => {
+      const frame = new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(UP, out), UP, out).setPosition(center);
+      const add = (geometry: THREE.BufferGeometry, material: THREE.Material) => shaped(geometry.applyMatrix4(frame), material);
+      const deep = HANGAR_DEPTH;
+      const rim = 60;
+      add(new THREE.PlaneGeometry(width, height).translate(0, 0, 2), recess);
+      add(new THREE.PlaneGeometry(width, deep).rotateX(-Math.PI / 2).translate(0, -height / 2, deep / 2), recess);
+      add(new THREE.PlaneGeometry(width, deep).rotateX(Math.PI / 2).translate(0, height / 2, deep / 2), hangar);
+      for (const s of [-1, 1]) add(new THREE.PlaneGeometry(deep, height).rotateY(-s * (Math.PI / 2)).translate((s * width) / 2, 0, deep / 2), hangar);
+      for (let x = -width / 2 + 60; x < width / 2 - 30; x += 90) add(new THREE.BoxGeometry(40, 20, 20).translate(x, height / 2 - 20, 12), lit);
+      for (const s of [-1, 1]) {
+        add(new THREE.BoxGeometry(width + 2 * rim, rim, deep).translate(0, s * (height / 2 + rim / 2), deep / 2), armor);
+        add(new THREE.BoxGeometry(rim, height, deep).translate(s * (width / 2 + rim / 2), 0, deep / 2), armor);
+        add(new THREE.BoxGeometry(width + 2 * rim + 30, 30, 30).translate(0, s * (height / 2 + rim), deep), gold);
+        add(new THREE.BoxGeometry(30, height + 2 * rim, 30).translate(s * (width / 2 + rim), 0, deep), gold);
       }
+      const middle = center.clone().addScaledVector(out, deep / 2);
+      const across = width + 2 * rim;
+      solid(middle.toArray(), Math.abs(out.x) > Math.abs(out.z) ? [deep, height + 2 * rim, across] : [across, height + 2 * rim, deep]);
+    };
+    // the hangar's mouth in the bow, and hangar bays along both flanks aft
+    opening(new THREE.Vector3(0, DECK_TOP - 200, bow), new THREE.Vector3(0, 0, -1), 860, 260);
+    for (const side of [-1, 1]) {
+      for (let z = 900; z <= 4500; z += 1200) opening(flank(side, z, 330, 0), new THREE.Vector3(side, 0, -side * flare(z)).normalize(), 900, 480);
     }
 
     // the superstructure, stepped up towards the stern in tiers of armor, each sloping up from
@@ -803,18 +841,21 @@ export class Fleet implements Obstacle {
 
   /**
    * The lead browser flies the battleship: in on its orbit around the field, its stern turned on
-   * the nearest pilot in its second phase, adrift without drives.
+   * the nearest pilot in its second phase, out of the way of the round's `comets`, adrift
+   * without drives.
    */
-  lead(dt: number, clock: number, ships: readonly Target[]) {
+  lead(dt: number, clock: number, ships: readonly Target[], comets: readonly Comet[] = []) {
     if (!this.present(clock)) return;
     const position = this.position;
-    if (this.drives > 0) {
+    const away = this.drives > 0 ? this.evasion(clock, comets, dodge) : null;
+    if (away) this.velocity.lerp(want.copy(away).multiplyScalar(EVADE_SPEED), Math.min(1, dt * STEER * EVADE_BURN));
+    else if (this.drives > 0) {
       // the orbit: along its circle around the center, back towards it when off
       const radial = local.copy(position).setY(0);
       const r = radial.length() || 1;
       want.crossVectors(UP, radial).divideScalar(r).multiplyScalar(FLEET_SPEED).addScaledVector(radial, ((ORBIT - r) / r) * 0.05);
       want.y = -position.y * 0.05;
-      this.velocity.lerp(want, Math.min(1, dt * 0.3));
+      this.velocity.lerp(want, Math.min(1, dt * STEER));
     } else this.velocity.multiplyScalar(Math.max(0, 1 - dt * 0.2));
     position.addScaledVector(this.velocity, dt);
     // its bow along its course, or in its second phase its stern on the nearest pilot
@@ -837,6 +878,21 @@ export class Fleet implements Obstacle {
     }
     this.burning = !!prey && this.quaternion.angleTo(turn) < PLUME_AIM;
     this.root.updateMatrixWorld();
+  }
+
+  /** The way out of a comet's route the battleship sees coming within FLEET_CLEAR (unit length, into `target`), or null when none does. */
+  private evasion(clock: number, comets: readonly Comet[], target: THREE.Vector3): THREE.Vector3 | null {
+    for (const comet of comets) {
+      if (clock < cometStart(comet) - FLEET_LOOKOUT || clock > cometEnd(comet)) continue;
+      const when = routeNearest(comet, this.position, cometStart(comet), comet.at + COMET_REACH / COMET_SPEED, target);
+      if (clock < when - FLEET_LOOKOUT || clock > when + SHOWER_LENGTH / COMET_SPEED) continue;
+      target.subVectors(this.position, target);
+      if (target.length() > FLEET_CLEAR) continue;
+      // right on the route: up or down, square to it
+      if (target.lengthSq() < 1) target.crossVectors(courseAt(comet, when, target), UP).cross(courseAt(comet, when, local));
+      return target.normalize();
+    }
+    return null;
   }
 
   /** The lead's state, for the other browsers. */
