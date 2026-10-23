@@ -6,7 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { Bot, BOT_NAMES, evenSkills, HOME_RADIUS, raceSpeedOf, skillsOf, type Skills } from '../ship/bots';
+import { Bot, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, raceSpeedOf, skillsOf, type Ring, type Skills } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { Datamosh } from '../view/datamosh';
@@ -48,7 +48,7 @@ import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, TORPEDOES, T
 import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { Asteroid, FieldState } from '../world/asteroids';
 import { RacingLine } from './racingline';
-import { bounceOff, impactDamage, SAFE_IMPACT } from '../ship/impact';
+import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
 import { BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
@@ -79,6 +79,7 @@ import {
   wellLevel,
 } from './alarms';
 import { MOMENTS, Moments, type Moment } from './moments';
+import { devlog } from '../devlog';
 import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
@@ -120,6 +121,8 @@ const CROWD_INTRO = 0.3;
  */
 const APPROACH_NEAR = 3000;
 const APPROACH_FAR = 4000;
+/** A racer passes a gate this many ship radii inside its rim (about 34 m), or flies for its center first (see approach). */
+const APPROACH_CLEAR = 2;
 const CROWD_COUNT: Record<number, number> = { 3: 0.45, 2: 0.65, 1: 0.85 };
 /** A smaller moment's cheer lasts this long (s), then the stadium settles back to its murmur (0..1). */
 const CHEER_SECONDS = 1.5;
@@ -280,6 +283,18 @@ const RESPAWN_SECONDS = 3;
 /** Each death of the Host by an enemy raises the bots' ease (see Bot.ease) by this much in a solo round; a kill by the Host lowers it by KILL_EASE. */
 const DEATH_EASE = 0.35;
 const KILL_EASE = 0.1;
+/**
+ * A ship struck by another at this closing speed or more (units/s, 5 m/s) is shoved: a crash of
+ * its within KNOCKOUT_SECONDS (s) is a knockout, the shover's kill. Three seconds carry a ship
+ * shoved at 40 m/s some 120 m: into the rock beside the line, the housing of a gate, the hull.
+ */
+const SHOVE_SPEED = 100;
+const KNOCKOUT_SECONDS = 3;
+/** The crashes a shove can end in: what a ship flies into, not what shoots it. */
+const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'space', 'well', 'flare', 'comet']);
+/** A shove sets the hull spinning by this much per unit of closing speed (rad/s per units/s; 3.2 rad/s at 40 m/s), up to SHOVE_SPIN_MAX; the flight computer catches it within a fraction of a second. */
+const SHOVE_SPIN = 0.004;
+const SHOVE_SPIN_MAX = 6;
 /**
  * The longest step the round runs in (s): a longer frame is split into steps this short, so a
  * laser's cadence, a collision's sweep and a bot's thinking come out the same at 20 frames a
@@ -510,9 +525,10 @@ function loadSolo(): SoloChoice {
 type State = 'menu' | 'playing' | 'paused' | 'results';
 /**
  * What killed a ship without a killer, where this browser saw it happen: a rock, wreckage, deep
- * space, the arena's massive body; or, with a killer, its nova core.
+ * space, the arena's massive body; or, with a killer, its nova core, its plume, its ram, or a
+ * crash right after its shove (a knockout).
  */
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'plume' | 'shower' | 'comet' | null;
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | null;
 /** How the President's battleship killed a ship, for the sponsor break. */
 const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
   battery: msg("Shot down by the President's battleship"),
@@ -572,6 +588,9 @@ const cometAway = new THREE.Vector3();
 const cometCourse = new THREE.Vector3();
 /** The velocity of what does not move: a ring of the tournament holds its place. */
 const STILL = new THREE.Vector3();
+/** Two ships in contact: the way from the first to the second, and where they touch. */
+const ramApart = new THREE.Vector3();
+const ramPoint = new THREE.Vector3();
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
 /** The beams of the flight school's gunner: red, the color of danger. */
 const DRILL_GUNNER_COLOR = new THREE.Color(1, 0.2, 0.25);
@@ -952,6 +971,12 @@ export class Game implements OnlineGame {
   private readonly coach = new Coach();
   /** The own pilot's streaks and grudges, for its big moments. */
   private readonly moments = new Moments();
+  /** The development log (see devlog.ts): `game.log` in the console; null in production. */
+  readonly log = devlog;
+  /** The rings of the round (see Bot.rings). */
+  private rings: Ring[] = [];
+  /** The race's gate a ship touched last (see touchesRing), -1 for none: where a gate crash happened, for the log. */
+  private gateStruck = -1;
   /** The impact warning is on (the flight school watches it). */
   private impactAhead = false;
   /** The flight school's sparring bot, and whether it may fire. */
@@ -1854,6 +1879,7 @@ export class Game implements OnlineGame {
     // the rocks a hook held are gone with the field
     this.clearHooks();
     this.venue = arena;
+    devlog?.begin(this.roundMode, arena.id);
     this.field.generate(arena.layout);
     // a race's course is laid out in the field as generated, the same on every browser
     if (this.course) {
@@ -1869,6 +1895,9 @@ export class Game implements OnlineGame {
     }
     this.flags = this.roundMode === 'flag' ? new Flags(this.field, arena.layout.seed) : null;
     if (this.flags) this.scene.add(this.flags.root);
+    // the rings the bots steer clear of: the race's gates, the bases
+    const course = this.course;
+    this.rings = course ? course.points.map((center, i) => ({ center, facing: course.normals[i], radius: GATE_RADIUS })) : (this.flags?.bases.map((center) => ({ center, facing: center.clone().normalize(), radius: BASE_RADIUS })) ?? []);
     // and the President's battleship, which comes in from a side that follows from the arena
     if (this.fleet) {
       this.scene.remove(this.fleet.root);
@@ -2219,7 +2248,7 @@ export class Game implements OnlineGame {
     victim.deaths = deaths;
     if (position) victim.flight.position.copy(position);
     if (velocity) victim.flight.velocity.copy(velocity);
-    this.shipDestroyed(victim, killer, nova && killer ? 'nova' : null);
+    this.shipDestroyed(victim, killer, nova && killer ? 'nova' : null, 'remote');
   }
 
   remoteWreck(id: string) {
@@ -2853,12 +2882,17 @@ export class Game implements OnlineGame {
         bot.ease = this.online ? 0 : this.ease;
         // a racing bot flies the course until it has finished, then it only fights
         // along the ideal line, bowed around the rock as it lies now
+        bot.rings = this.rings;
+        bot.through = this.course && ship.finish < 0 ? this.rings[ship.gates % GATES] : null;
         bot.waypoint = this.course && ship.finish < 0 ? this.approach(this.course, ship, this.course.line.target(ship.flight.position, ship.gates % GATES, ship.flight.velocity.length(), this.field, this.botPoint(bot))) : null;
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE)?.position ?? null;
         // a nova core close by, a battleship whose reactor went critical, the plume of one
         // hunting with its stern, a solar flare's front or a comet's route: away from it, out of
         // the plume to the side, away from the sun
-        bot.flee = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : this.flareNear(ship)) ?? this.cometDanger(ship);
+        const nova = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? null;
+        const danger = nova ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : this.flareNear(ship));
+        bot.flee = danger ?? this.cometDanger(ship);
+        if (devlog) bot.fleeFrom = nova ? 'nova' : danger ? (this.fleet ? 'battleship' : 'flare') : bot.flee ? 'comet' : '';
         // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
         // to a solar flare's safe pocket
         bot.home = this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : HOME_RADIUS;
@@ -2879,9 +2913,13 @@ export class Game implements OnlineGame {
       if (bot && !clamped && bot !== this.sparring?.bot && (bot.target || bot.siege) && ship.torpedoes > 0 && Math.random() < dt * BOT_TORPEDO_RATE) {
         // against the battleship every ship is on one side: whatever it locks on is a part
         const lock = this.torpedoTarget(ship);
-        if (lock && (!bot.target || lock === bot.target)) this.fireTorpedo(ship);
+        if (lock && (!bot.target || lock === bot.target)) {
+          this.fireTorpedo(ship);
+          devlog?.add({ kind: 'act', t: now, ship: ship.name, act: 'torpedo', detail: bot.target?.name ?? 'battleship' });
+        }
       }
       if (bot && !clamped) this.botHook(bot, dt, now);
+      if (bot?.shove && !clamped) this.thrusterKick(ship, bot.shove);
       // the target drone keeps its drive turned to the pilot, wherever the pilot flies: the
       // drills train hitting the drive, not getting around the armor
       if (ship === this.drone && me.alive) ship.flight.orientation.setFromRotationMatrix(facing.lookAt(me.flight.position, ship.flight.position, me.flight.up(upward)));
@@ -2904,6 +2942,7 @@ export class Game implements OnlineGame {
       this.scorch(ship, dt, now);
       this.exhaust(ship, dt);
     }
+    this.collideShips(now);
     if (this.flags) this.playFlags(this.flags, dt, now);
     if (this.fleet) this.playFleet(this.fleet, dt, now);
     this.hookOwn(now);
@@ -3200,9 +3239,11 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * A racer near its next gate but beside the opening, not yet through it, would fly into the
-   * coil's housings: it flies for a point on the gate's axis APPROACH_FAR before it first, and
-   * for its `waypoint` again once it is in front of the opening.
+   * A racer near its next gate that would not pass its opening with room to spare would fly
+   * into the coil's housings. Beside the opening it flies for a point on the gate's axis
+   * APPROACH_FAR before it first; in front of it, but on a way that crosses the gate's plane
+   * nearer the rim than APPROACH_CLEAR ship radii (or there already), it flies for the gate's
+   * center; otherwise for its `waypoint`.
    */
   private approach(course: Course, ship: Ship, waypoint: THREE.Vector3): THREE.Vector3 {
     const next = ship.gates % GATES;
@@ -3212,9 +3253,16 @@ export class Game implements OnlineGame {
     // the side it comes from: the gate counts either way
     const along = offset.dot(axis);
     if (Math.abs(along) > APPROACH_NEAR) return waypoint;
-    const beside = offset.addScaledVector(axis, -along).length();
-    if (beside < GATE_RADIUS) return waypoint;
-    return waypoint.copy(gate).addScaledVector(axis, (along < 0 ? -1 : 1) * APPROACH_FAR);
+    const lateral = offset.addScaledVector(axis, -along);
+    const beside = lateral.length();
+    if (beside >= GATE_RADIUS) return waypoint.copy(gate).addScaledVector(axis, (along < 0 ? -1 : 1) * APPROACH_FAR);
+    // where its way crosses the gate's plane, flying on as it does
+    const velocity = ship.flight.velocity;
+    const toward = velocity.dot(axis) * (along < 0 ? 1 : -1);
+    const safe = GATE_RADIUS - ship.radius * APPROACH_CLEAR;
+    if (toward > 0) lateral.addScaledVector(velocity, Math.abs(along) / toward).addScaledVector(axis, -lateral.dot(axis));
+    if (beside < safe && lateral.length() < safe) return waypoint;
+    return waypoint.copy(gate);
   }
 
   /** Capture the Flag in the HUD: the score, the own side, both cores, and where to fly; returns that point for the crosshair. */
@@ -4182,6 +4230,7 @@ export class Game implements OnlineGame {
     const distance = target.flight.position.distanceTo(ship.flight.position);
     if (distance < BOT_HOOK_MIN || distance > HOOK_RANGE * 0.9 || aimHook(ship, this.field, this.ships)?.anchor.ship !== target) return;
     this.fireHook(ship);
+    devlog?.add({ kind: 'act', t: now, ship: ship.name, act: 'hook', detail: target.name });
     bot.hookUntil = now + flightTime(distance) + BOT_HOOK_HOLD;
     bot.hookReadyAt = bot.hookUntil + BOT_HOOK_PAUSE;
   }
@@ -4621,7 +4670,7 @@ export class Game implements OnlineGame {
       this.linkHit(0.9, 0.6);
     }
     if (status === 'destroyed') {
-      this.shipDestroyed(ship, shooter);
+      this.shipDestroyed(ship, shooter, null, 'torpedo');
       // a streak's banner outranks the torpedo's
       if (shooter && shooter === this.me && !ship.allyOf(shooter)) this.moment('torpedo');
     }
@@ -4649,15 +4698,20 @@ export class Game implements OnlineGame {
     if (!me.alive || this.time < this.dodgeReadyAt) return;
     this.dodgeReadyAt = this.time + DODGE_RECHARGE;
     this.dodges++;
-    // a damaged thruster kicks weaker
-    const push = relative.set(direction.x, direction.y, 0).normalize().multiplyScalar(DODGE_SPEED * (0.25 + 0.75 * me.thrusters));
-    me.flight.velocity.add(push.applyQuaternion(me.flight.orientation));
+    this.thrusterKick(me, direction);
     this.strain = Math.min(1, this.strain + DODGE_STRAIN);
     this.kick = Math.min(2, this.kick + 0.8);
-    // the gas leaves on the side opposite to the kick
-    const nozzle = me.toWorld(scratch.set(-direction.x, -direction.y, 0).multiplyScalar(me.radius * 0.7), scratch);
-    for (let i = 0; i < 6; i++) this.effects.puff(nozzle, aimPoint.copy(push).multiplyScalar(-1.5).add(me.flight.velocity), me.radius * 0.25);
     this.sound.play('explosion', { volume: 0.5, rate: 2.6 });
+  }
+
+  /** A ship kicks its thrusters, sideways or up or down in its own frame: the dodge, and a bot's shove (see Bot.shove). */
+  private thrusterKick(ship: Ship, direction: { x: number; y: number }) {
+    // a damaged thruster kicks weaker
+    const push = relative.set(direction.x, direction.y, 0).normalize().multiplyScalar(DODGE_SPEED * (0.25 + 0.75 * ship.thrusters));
+    ship.flight.velocity.add(push.applyQuaternion(ship.flight.orientation));
+    // the gas leaves on the side opposite to the kick
+    const nozzle = ship.toWorld(scratch.set(-direction.x, -direction.y, 0).multiplyScalar(ship.radius * 0.7), scratch);
+    for (let i = 0; i < 6; i++) this.effects.puff(nozzle, aimPoint.copy(push).multiplyScalar(-1.5).add(ship.flight.velocity), ship.radius * 0.25);
   }
 
   /** The drive lights: the first moment of a burn is felt, with a jolt and a thump through the hull. */
@@ -4971,11 +5025,37 @@ export class Game implements OnlineGame {
       this.sound.beep(220, 0.25, 0.12);
       this.linkHit(zone === 'reactor' ? 1 : serious ? 0.7 : 0.3, serious ? 0.5 : 0.2);
     }
-    if (status === 'destroyed') this.shipDestroyed(ship, shooter, cause);
+    if (status === 'destroyed') this.shipDestroyed(ship, shooter, cause, cause ?? 'laser');
   }
 
-  /** `cause` says what killed a ship without a killer, where this browser saw it happen. */
-  private shipDestroyed(victim: Ship, killer: Ship | null, cause: DeathCause = null) {
+  /**
+   * `cause` says what killed a ship without a killer, where this browser saw it happen; `what`
+   * and `impact` (units/s) say it more closely for the development log (a laser, a torpedo; the
+   * rock, a battleship's hull or a gate struck, and how fast).
+   */
+  private shipDestroyed(victim: Ship, killer: Ship | null, cause: DeathCause = null, what?: string, impact = 0, note?: string) {
+    // a crash soon after a shove is the shover's knockout; the victim's browser decides it
+    const shover = victim.shovedBy;
+    if (!killer && shover && victim.owner === null && KNOCKOUTS.has(cause) && this.time - victim.shovedAt <= KNOCKOUT_SECONDS) {
+      killer = shover;
+      what ??= cause ?? undefined;
+      cause = 'knockout';
+    }
+    devlog?.death({
+      t: Math.round(this.time * 10) / 10,
+      ship: victim.name,
+      skill: this.skillOf(victim),
+      cause: cause === 'knockout' || cause === 'ram' || !what ? (cause ?? 'unknown') : what,
+      into: cause === 'knockout' ? (what ?? null) : null,
+      killer: killer?.name ?? null,
+      range: killer ? Math.round(killer.flight.position.distanceTo(victim.flight.position) * METERS_PER_UNIT) : null,
+      position: [Math.round(victim.flight.position.x * METERS_PER_UNIT), Math.round(victim.flight.position.y * METERS_PER_UNIT), Math.round(victim.flight.position.z * METERS_PER_UNIT)],
+      speed: Math.round(victim.flight.velocity.length() * METERS_PER_UNIT),
+      impact: Math.round(impact * METERS_PER_UNIT),
+      note: note ?? null,
+    });
+    const fleetDeath = cause && FLEET_DEATHS[cause];
+    const cometDeath = cause && COMET_DEATHS[cause];
     victim.respawnAt = this.time + RESPAWN_SECONDS;
     if (victim.engineLight) victim.engineLight.intensity = 0;
     if (victim === this.me && killer && killer !== victim) {
@@ -4990,12 +5070,12 @@ export class Game implements OnlineGame {
     if (victim === this.me) {
       if (killer) {
         // the killer's name with its mark goes where the translation puts {name}
-        const line = cause === 'nova' ? t('Vaporized by the nova of {name}') : cause === 'plume' ? t('Grilled in the drive plume of {name}') : t('Shot down by {name}');
+        const line = cause === 'nova' ? t('Vaporized by the nova of {name}') : cause === 'plume' ? t('Grilled in the drive plume of {name}') : cause === 'ram' ? t('Rammed by {name}') : cause === 'knockout' ? t('Knocked out by {name}') : t('Shot down by {name}');
         const [before, after = ''] = line.split('{name}');
         this.deathCause = [before, ...markedName(killer.kind, killer.name), after];
       } else if (cause === 'well') this.deathCause = t(WELL_DEATHS[this.venue.id] ?? msg('Crashed'));
       else if (cause === 'flare') this.deathCause = t('Burned up in the solar flare');
-      else if (cause && (FLEET_DEATHS[cause] ?? COMET_DEATHS[cause])) this.deathCause = t(FLEET_DEATHS[cause] ?? COMET_DEATHS[cause]!);
+      else if (fleetDeath || cometDeath) this.deathCause = t((fleetDeath || cometDeath)!);
       else this.deathCause = victim.outsideSince !== null ? t('Lost in deep space') : t('Crashed');
     }
     // a kill of the Host's own is bigger: more fire, a jolt, and the points where it happened
@@ -5045,12 +5125,12 @@ export class Game implements OnlineGame {
     }
     if (victim === this.me) this.moments.died(killer && killer !== victim ? killer.id : null);
     if (ownKill) {
-      const moment = this.moments.ownKill(victim.id, this.time, cause === 'nova');
+      const moment = this.moments.ownKill(victim.id, this.time, cause === 'nova') ?? (cause === 'knockout' ? 'knockout' : null);
       if (moment) this.moment(moment);
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
     const killedBy =
-      cause === 'well' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause && FLEET_DEATHS[cause] ? t('Battleship') : cause && COMET_DEATHS[cause] ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
+      cause === 'well' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
     this.hud.kill(this.time, killer ?? { kind: null, name: killedBy }, victim);
     // the last clone of a ship in Last Clone Standing: out, and everyone hears it
     if (this.out(victim)) {
@@ -5058,6 +5138,24 @@ export class Game implements OnlineGame {
       this.announce(pick(ANNOUNCER_OUT), victim, true);
       if (victim === this.me) this.speaker.say(COMPUTER.out, 'urgent');
     } else if (victim !== this.drone) this.commentOnDeath(victim, killer, cause);
+  }
+
+  /** Where a ship struck the gate it touched last, for the log: the gate, how far off its axis and its plane (m), and the angle of its flight to the axis (°). */
+  private gateNote(ship: Ship): string {
+    const course = this.course;
+    if (!course || this.gateStruck < 0) return '';
+    const i = this.gateStruck;
+    const offset = scratch.subVectors(ship.flight.position, course.points[i]);
+    const along = offset.dot(course.normals[i]);
+    const out = Math.sqrt(Math.max(0, offset.lengthSq() - along * along));
+    const angle = THREE.MathUtils.radToDeg(ship.flight.velocity.angleTo(course.normals[i]));
+    return `gate ${i} out ${Math.round(out * METERS_PER_UNIT)} m along ${Math.round(along * METERS_PER_UNIT)} m at ${Math.round(angle)}° next ${ship.gates % course.points.length}`;
+  }
+
+  /** The skill of a bot (see meanSkill), null for a Host's ship. */
+  private skillOf(ship: Ship): number | null {
+    const bot = this.bots.find((b) => b.ship === ship);
+    return bot ? meanSkill(bot.skills) : null;
   }
 
   /** In vacuum an explosion is only heard when its debris rattles against the own hull. */
@@ -5090,9 +5188,9 @@ export class Game implements OnlineGame {
     if (asteroid && this.field.resolve(asteroid, flight.position, ship.radius, normal)) {
       // the rock's surface moves with its drift and its spin; the tip of a long rock sweeps fast
       this.field.surfaceVelocity(asteroid, scratch.copy(flight.position).addScaledVector(normal, -ship.radius), surface);
-      this.bounce(ship, surface, now);
-    } else if (this.fleet?.resolve(flight.position, ship.radius, this.field.clock, normal)) this.bounce(ship, this.fleet.velocity, now);
-    else if (this.touchesRing(flight.position, ship.radius)) this.bounce(ship, STILL, now);
+      this.bounce(ship, surface, now, 'rock');
+    } else if (this.fleet?.resolve(flight.position, ship.radius, this.field.clock, normal)) this.bounce(ship, this.fleet.velocity, now, 'hull');
+    else if (this.touchesRing(flight.position, ship.radius)) this.bounce(ship, STILL, now, 'gate');
   }
 
   /**
@@ -5101,8 +5199,15 @@ export class Game implements OnlineGame {
    * flying into the coil is a crash. Moves the ship out and sets `normal` when it does.
    */
   private touchesRing(position: THREE.Vector3, radius: number): boolean {
+    this.gateStruck = -1;
     const course = this.course;
-    if (course) for (let i = 0; i < course.points.length; i++) if (touchRing(course.points[i], course.normals[i], GATE_RADIUS, position, radius, normal)) return true;
+    if (course) {
+      for (let i = 0; i < course.points.length; i++) {
+        if (!touchRing(course.points[i], course.normals[i], GATE_RADIUS, position, radius, normal)) continue;
+        this.gateStruck = i;
+        return true;
+      }
+    }
     const flags = this.flags;
     if (flags) {
       for (const base of flags.bases) if (touchRing(base, ringFacing.copy(base).normalize(), BASE_RADIUS, position, radius, normal)) return true;
@@ -5110,8 +5215,8 @@ export class Game implements OnlineGame {
     return !!this.school?.touchesRing(position, radius, normal);
   }
 
-  /** A ship touched a surface (a rock, a battleship's hull) moving at `moving`, with the outward `normal` of this frame: it bounces off, scrapes, and an impact hurts. */
-  private bounce(ship: Ship, moving: THREE.Vector3, now: number) {
+  /** A ship touched a surface (`what`: a rock, a battleship's hull, a gate) moving at `moving`, with the outward `normal` of this frame: it bounces off, scrapes, and an impact hurts. */
+  private bounce(ship: Ship, moving: THREE.Vector3, now: number, what: 'rock' | 'hull' | 'gate') {
     const approach = bounceOff(ship.flight.velocity, moving, normal);
     if (approach <= 0) return;
     if (ship === this.me) this.lastScrape = now;
@@ -5128,7 +5233,82 @@ export class Game implements OnlineGame {
       this.speaker.say(COMPUTER.impact, 'urgent');
       this.linkHit(Math.min(1, 0.4 + (approach - SAFE_IMPACT) / 1000), 0.6);
     }
-    if (status === 'destroyed') this.shipDestroyed(ship, null, 'rock');
+    if (status === 'destroyed') this.shipDestroyed(ship, null, 'rock', what, approach, devlog && what === 'gate' ? this.gateNote(ship) : undefined);
+  }
+
+  /**
+   * Ship vs ship: no hull passes through another. Two ships in contact (their hit spheres
+   * overlapping) are pushed apart and bounce off each other as two bodies of equal mass; a
+   * bump slower than RAM_SAFE only clunks, a faster one is a ram, and each ship takes damage
+   * where it was struck (see Ship.rammed): the armored nose little, the drive from behind a
+   * lot. Each browser decides for the ships it runs, from the closing speed both see alike, so
+   * neither ship is hurt twice; a ship a ram destroys counts as killed by the other.
+   */
+  private collideShips(now: number) {
+    const ships = this.ships;
+    for (let i = 0; i < ships.length; i++) {
+      const a = ships[i];
+      if (!a.alive) continue;
+      for (let j = i + 1; j < ships.length; j++) {
+        const b = ships[j];
+        if (!b.alive || (a.owner !== null && b.owner !== null)) continue;
+        ramApart.subVectors(b.flight.position, a.flight.position);
+        const distance = ramApart.length();
+        const reach = a.radius + b.radius;
+        if (distance >= reach) continue;
+        if (distance > 1e-6) ramApart.divideScalar(distance);
+        else ramApart.set(0, 1, 0);
+        const ownA = a.owner === null;
+        const ownB = b.owner === null;
+        // out of each other, each owner its own half
+        const overlap = (reach - distance) / 2;
+        if (ownA) a.flight.position.addScaledVector(ramApart, -overlap);
+        if (ownB) b.flight.position.addScaledVector(ramApart, overlap);
+        const closing = ram(a.flight.velocity, b.flight.velocity, ramApart, ownA, ownB);
+        if (closing <= 0) continue;
+        if (ownA) a.syncTransform();
+        if (ownB) b.syncTransform();
+        ramPoint.copy(a.flight.position).addScaledVector(ramApart, a.radius);
+        if (a.isLocal || b.isLocal) this.sound.play('explosion', { volume: Math.min(1.4, closing / 800), rate: closing < RAM_SAFE ? 2.4 : 1.6 });
+        const hullA = a.hull;
+        const hullB = b.hull;
+        if (closing >= SHOVE_SPEED) {
+          if (closing >= RAM_SAFE) this.effects.sparks(ramPoint, SCRAPE_COLOR, 60 + closing * 0.08);
+          // each struck from the other's side: b along the way from a, a along the way back
+          if (ownB) this.shoved(b, a, ramApart, closing, now);
+          if (ownA) this.shoved(a, b, ramApart.negate(), closing, now);
+        }
+        const outcome = closing < SHOVE_SPEED ? 'bump' : closing < RAM_SAFE ? 'shove' : 'ram';
+        devlog?.add({ kind: 'contact', t: now, a: a.name, b: b.name, closing: closing * METERS_PER_UNIT, impulse: ramImpulse(closing) * METERS_PER_UNIT, outcome, hullA: hullA - a.hull, hullB: hullB - b.hull });
+      }
+    }
+  }
+
+  /**
+   * A ship this browser runs was struck by `by`, shoved along `direction` at `closing` (units/s):
+   * it remembers who (see KNOCKOUT_SECONDS), its hull spins away from the blow, and above
+   * RAM_SAFE the blow hurts it where it landed.
+   */
+  private shoved(ship: Ship, by: Ship, direction: THREE.Vector3, closing: number, now: number) {
+    ship.shovedBy = by;
+    ship.shovedAt = now;
+    devlog?.add({ kind: 'shove', t: now, by: by.name, ship: ship.name, closing: closing * METERS_PER_UNIT });
+    const blow = ship.flight.toLocalDirection(direction, relative);
+    const spin = Math.min(SHOVE_SPIN_MAX, closing * SHOVE_SPIN);
+    // a blow from the side swings the nose and rolls the hull, one from above or below pitches it
+    ship.flight.angularVelocity.x += blow.y * spin;
+    ship.flight.angularVelocity.y -= blow.x * spin;
+    ship.flight.angularVelocity.z += blow.x * spin * 0.5;
+    if (ship.isLocal) this.kick = Math.min(2, this.kick + closing / 600);
+    if (closing < RAM_SAFE) return;
+    const { status } = ship.rammed(direction, closing, now);
+    if (ship.isLocal && status !== 'protected') {
+      this.hud.damaged();
+      this.hud.flashMessage(now, t('Rammed by {name} at {speed} m/s', { name: by.name, speed: Math.round(closing * METERS_PER_UNIT) }), 1.5);
+      this.speaker.say(COMPUTER.impact, 'urgent');
+      this.linkHit(Math.min(1, 0.4 + (closing - RAM_SAFE) / 1500), 0.6);
+    }
+    if (status === 'destroyed') this.shipDestroyed(ship, by, 'ram');
   }
 
   /** Ship vs debris: the piece is pulverized, the hull takes damage by the impact speed. */
@@ -5148,7 +5328,7 @@ export class Game implements OnlineGame {
       this.speaker.say(COMPUTER.debris);
       this.linkHit(0.5, 0.35);
     }
-    if (status === 'destroyed') this.shipDestroyed(ship, null, 'wreck');
+    if (status === 'destroyed') this.shipDestroyed(ship, null, 'wreck', 'wreck', impact);
   }
 
   /**

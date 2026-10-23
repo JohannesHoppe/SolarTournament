@@ -84,9 +84,10 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `assets.ts` | Loads the ship models and drive sprites, collects the assets generated in code |
 | `random.ts` | Deterministic random generator |
 | `storage.ts` | The browser's localStorage, where it is available |
+| `devlog.ts` | The development log: deaths, ship contacts, shoves and the bots' decisions of a round as data, read as `game.log`; null in production |
 | `i18n/` | The languages: `i18n.ts` (t(), msg(), the language chosen, the page's fixed texts) and the catalogs `de.ts`, `es.ts`, `fr.ts`; `tools/i18n/` collects every text to translate |
 | **`game/`** | **The round** |
-| `game/game.ts` | Game states, round flow (with each round's opening: intro flight, countdown, start lights, BURN!/FIGHT!), lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
+| `game/game.ts` | Game states, round flow (with each round's opening: intro flight, countdown, start lights, BURN!/FIGHT!), lasers, collisions (ships ramming and shoving each other, knockouts), arena, camera, the clone's body (g-forces, warnings) |
 | `game/race.ts` | The race: modes of rounds and rooms, the course of gates (laid out from the arena's field), points for gates and places |
 | `game/survival.ts` | Last Clone Standing: the clones of a round, the solar flare on the field time (a sphere of plasma coming from the sun, eating into the arena, the safe pocket it leaves on the far side) |
 | `game/flags.ts` | Capture the Flag: the two sides, their bases and sponsor cores; the lead browser's rules (sides, taking, sending home, capturing) and the state the others follow; how a core is shown: on its tow cable behind and below the carrier, faded to its outline where it would hide the ship or the crosshair, unseen from the own cockpit |
@@ -99,8 +100,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `game/items.ts` | Items: sponsor probes that show up on the round clock (the same on every browser), what they carry and what each does in a few words, dropped again when a clone dies; the nova core goes off in `Game.novaBlast` |
 | `game/torpedoes.ts` | Torpedoes: launch, homing, fuse, shot down by the laser; only the shooter's browser decides where one goes off |
 | `game/comet.ts` | Comets: when a round's comets come and on which route (from room, round and field time), the route bent by the arena's well until it swallows them, the pieces of their shower, the head breaking rock and shoving hull on a grid of field time, and how the scene shows head, coma, tail and shower, drawn out and flashing as a well swallows them |
-| `game/school.ts` | Flight school: five courses played on their own (basic training, racer, gladiator, arsenal, tactician), 52 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
-| `game/moments.ts` | The own pilot's big moments for the broadcast (streaks, revenge, supernova, a torpedo kill, …): which one, its banner, the crowd's reaction, the announcer's lines, its rank; only show, no score |
+| `game/school.ts` | Flight school: five courses played on their own (basic training, racer, gladiator, arsenal, tactician), 53 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
+| `game/moments.ts` | The own pilot's big moments for the broadcast (streaks, revenge, supernova, a knockout, a torpedo kill, …): which one, its banner, the crowd's reaction, the announcer's lines, its rank; only show, no score |
 | `game/coach.ts` | Nicole as a coach in real rounds: the briefing of a mode in a Host's first round of it, the tips of the fight the moment they matter, each only a few times; what the browser has heard |
 | `game/sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, how the clone died, the round so far |
 | `game/satire-ads.ts` | The invented sponsors of 2584 (Victory Cola, Space Burger, PrintMe Bodies, …): consumer satire in the ad slot until real sponsors take it |
@@ -111,7 +112,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `world/belt.ts` | The asteroid belt beyond the arena: instanced low-detail rocks as scenery |
 | `world/arenas.ts` | The seven arenas (belt, rings, Kessler field, gas giant, corona, event horizon, derelict): field layout, well, sun, cooling, storms; which arena a tournament round is in |
 | `world/asteroids.ts` | The field of an arena: rocks, ice, debris or hull from a layout, orbits, solid pieces (shoved by a comet), a massive body (well); collision with a rock's measured surface, a debris ellipsoid or a hull box, raycast, line of sight, gravity, fragments |
-| `world/gates.ts` | A ring of the tournament as a structure: armored coil housings with glowing windings, conduits, struts with blinking lights, a station module; shared by the race's gates, the flight school's rings and Capture the Flag's bases |
+| `world/gates.ts` | A ring of the tournament as a structure: armored coil housings with glowing windings, conduits, struts with blinking lights, a station module, all solid (touchRing); shared by the race's gates, the flight school's rings and Capture the Flag's bases |
 | `world/powercore.ts` | A sponsor's power core (the flag of Capture the Flag) as a structure: an armored octagonal canister with windings glowing in its side's color, the sponsor's sign, a cage where the tow cable grips; low poly, faded to its outline on demand |
 | `world/boxes.ts` | Boxes in their own frame: a sphere against a box, a ray into a box (the hull of a wreck, a battleship) |
 | `world/surface.ts` | A rock's surface as its collisions see it: measured from its mesh, how far it reaches in every direction |
@@ -123,8 +124,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `ship/models.ts` | The interceptors' hulls, low poly in code; collider, drive flame and glows come from the model files |
 | `ship/ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, drive animation |
 | `ship/flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`), and path steering, the autopilot's way of flying: the stick turns the path, the nose leads into the turn and drive and thrusters bend it |
-| `ship/impact.ts` | A ship striking a surface: how it bounces off and scrapes along, and what the impact costs its hull |
-| `ship/bots.ts` | Bot AI: desired velocity, turn and burn, dogfights in arcs, aiming with spread, a hand that eases every command in; every bot's skills (aim, reflexes, daring) |
+| `ship/impact.ts` | A ship striking a surface: how it bounces off and scrapes along, and what the impact costs its hull; two ships ramming: their bounce and what a ram costs by where it strikes |
+| `ship/bots.ts` | Bot AI: desired velocity, turn and burn, dogfights in arcs, aiming with spread, keeping clear of other ships and of the rings' housings, shoving a rival into rock, a hand that eases every command in; every bot's skills (aim, reflexes, daring) |
 | **`view/`** | **What the screen shows** |
 | `view/hud.ts` | DOM HUD, the flight computer's projection: gauges, markers (among them where the flight crosses the next ring's plane), warnings, tunnel vision, a solar flare's heat, the boot of a fresh clone's link |
 | `view/attitude.ts` | The HUD's attitude on a canvas: horizon line, pitch ladder and heading tape, as in a fighter's head-up display |
@@ -196,6 +197,7 @@ In dev mode the game hangs on the window as `window.game`. It lets you read and 
 - Disable bots: set the other ships to `alive = false` and `respawnAt = Infinity`
 - Multiplayer: open two tabs with `?local=1#t=<code>` (at least six letters or digits) and click "Join tournament" in both (BroadcastChannel, no internet); without `local=1` the same test runs over Trystero and real Nostr relays. Several tabs render too slowly without a GPU (frame gaps make browsers start over, see `CUT_OFF_MS`): switch rendering off with `game.composer.render = () => {}`. Cut a tab's link with `const t = game.online.session.transport; t._post = t.post; t.post = () => {}; t._recv = t.channel.onmessage; t.channel.onmessage = null` (restore both to reconnect); freeze it with a busy loop of a few seconds
 - Render music offline: `const { renderPreview } = await import('/src/music/preview.ts')`, then `renderPreview('Orbit Terror', 'round', undefined, fromSecond, seconds)` (the title is the seed; a flavor can be forced); returns a WAV file as base64 that can be saved and listened to
+- Read the development log (`src/devlog.ts`, only in development, cleared at every round's start): `game.log.summary()` counts the round's deaths by cause (rock, hull, gate, wreck, ram, knockout, laser, torpedo, nova, plume, flare, comet, shower, well, space, …), by ship, by what the victim was doing and by the decisions of victim and killer in the 3 seconds before, contacts between ships by outcome (bump, shove, ram) and shoves; `game.log.filter('death')` (or `'decision'`, `'contact'`, `'shove'`, `'act'`, or a function) lists the events, each death with position, speed, impact speed, killer and those decisions; `game.log.json()` is all of it. Every bot logs each change of its decision (race, attack, defend, flee, siege, probe, roam; avoiding rock, giving way to a ship) with its reason, and its acts (shove, hook, torpedo). The balance runs attach each round's log to the result (`test-results/`) and put the deaths by cause into a failure's detail
 - Trigger a glitch: `game.glitch.trigger(1, 5)`; idle glitches in the menu make element screenshots fail, so stop them with `game.nextIdleGlitch = Infinity`
 
 The test browser renders without a GPU; its frame rate says nothing about real hardware. Game feel and sound cannot be judged this way; Johannes tests those himself.

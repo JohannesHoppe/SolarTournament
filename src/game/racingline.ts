@@ -12,6 +12,12 @@ const GATE_FADE = 1600;
 /** A racer looks this far ahead along the line for where to fly (seconds of its flight), at least LOOK_MIN (units, 100 m). */
 const LOOK_SECONDS = 0.8;
 const LOOK_MIN = 2000;
+/**
+ * Before it is through its next gate, a racer looks no farther than this past it (units, 50 m):
+ * a point far around the corner after a gate pulls it off the gate's center towards the rim
+ * before it gets there.
+ */
+const LOOK_PAST = 1000;
 
 /**
  * Passes of bowing around one rock after another (see clear): BOW_PASSES_FREE always, up to
@@ -141,21 +147,31 @@ export class RacingLine {
    * `before` (units) short of the gate. Around a closed loop it may run past `length`.
    */
   progress(position: THREE.Vector3, next: number, before: number): number {
-    const from = next > 0 ? this.gates[next - 1] : this.closed ? this.gates[this.gates.length - 1] : 0;
-    let to = this.gates[next];
-    if (to <= from) to += this.length;
-    return Math.min(this.closest(position, from, to), to - before);
+    const from = this.gateBefore(next);
+    return Math.min(this.closest(position, from, this.gateAfter(next, from)), this.gateAfter(next, from) - before);
+  }
+
+  /** Where along the line the gate before gate `next` is (the start of an open line). */
+  private gateBefore(next: number): number {
+    return next > 0 ? this.gates[next - 1] : this.closed ? this.gates[this.gates.length - 1] : 0;
+  }
+
+  /** Where along the line gate `next` is, counted on from `from` (around a closed loop past `length`). */
+  private gateAfter(next: number, from: number): number {
+    const to = this.gates[next];
+    return to <= from ? to + this.length : to;
   }
 
   /**
    * Where a racer on its way to gate `next`, at `position` and `speed` (units/s), flies for: a
-   * point on the line (bowed around rock) a little ahead of it; past the gate's plane without
+   * point on the line (bowed around rock) a little ahead of it, but not far past the gate; past the gate's plane without
    * having gone through it, a point that far before the gate, to come at it again.
    */
   target(position: THREE.Vector3, next: number, speed: number, field: AsteroidField, out: THREE.Vector3): THREE.Vector3 {
     const look = Math.max(LOOK_MIN, speed * LOOK_SECONDS);
     if (this.beyond(position, next)) return this.clear(this.progress(position, next, look), field, out);
-    return this.clear(this.progress(position, next, 0) + look, field, out);
+    const gate = this.gateAfter(next, this.gateBefore(next));
+    return this.clear(Math.min(this.progress(position, next, 0) + look, gate + LOOK_PAST), field, out);
   }
 
   /** Whether `position` lies past the plane of gate `next`, square to the line there. */

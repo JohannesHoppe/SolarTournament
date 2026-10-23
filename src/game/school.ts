@@ -249,6 +249,18 @@ const HOOKED_CLOSE = 6000;
 /** The debris of the dodge kick drill: 150 m/s from 600 m off, four seconds, too fast to slide out of its way in time. */
 const KICK_DEBRIS_SPEED = 3000;
 const KICK_DEBRIS_START = 12000;
+/**
+ * The shove drill: the pilot and the drone drift side by side at SHOVE_DRIFT (units/s, 20 m/s)
+ * at a rock SHOVE_AHEAD (units, 200 m) ahead, the drone SHOVE_ABREAST (45 m, a few meters
+ * between the hulls) off the pilot's left, its way passing SHOVE_CLEAR (20 m) off the rock. A
+ * kick (40 m/s) throws it at the stone at some 26 m/s. The drone starts with SHOVE_DRONE_HULL,
+ * a wreck already: the stone finishes it (some 20 points at that speed), a knockout.
+ */
+const SHOVE_DRIFT = 400;
+const SHOVE_AHEAD = 4000;
+const SHOVE_ABREAST = 900;
+const SHOVE_CLEAR = 400;
+const SHOVE_DRONE_HULL = 15;
 /** The cover drills put the pilot this far off the surface of a rock (units, 150 m), the gunner or the torpedo's drone this far behind the pilot (1.2 km). */
 const COVER_STANDOFF = 3000;
 const COVER_GUNNER = 24000;
@@ -861,6 +873,36 @@ const DRILL = {
   // the tactician: how to win a dogfight, and how not to lose one
   // past fast debris with a dodge: sliding alone does not get there in time
   kick: debris(SCHOOL.kick, SCHOOL_PRAISE.kick, KICK_DEBRIS_START, KICK_DEBRIS_SPEED, true),
+  // the kick as a weapon: a drone beside the pilot, past a rock, shoved into the stone
+  shove: {
+    line: SCHOOL.shove,
+    praise: SCHOOL_PRAISE.shove,
+    keys: ['dodge'],
+    enter(ctx, a) {
+      stop(ctx);
+      const facing = faceRock(ctx, SHOVE_AHEAD);
+      if (!facing) return;
+      const rock = facing.rock;
+      const flight = ctx.me.flight;
+      // the pilot off the rock's right, the drone abreast between them, its way just clear of the stone
+      const left = new THREE.Vector3(-1, 0, 0).applyQuaternion(flight.orientation);
+      flight.position.addScaledVector(left, -(rock.radius + ctx.me.radius + SHOVE_CLEAR + SHOVE_ABREAST));
+      drift(ctx, SHOVE_DRIFT);
+      a.points = [rock.object.position];
+      a.reach = rock.radius;
+      ctx.spawnDrone(flight.position.clone().addScaledVector(left, SHOVE_ABREAST), flight.velocity);
+      if (ctx.drone) ctx.drone.hull = SHOVE_DRONE_HULL;
+    },
+    done(ctx, a) {
+      const drone = ctx.drone;
+      if (!a.points.length) return true;
+      return !!drone && drone.shovedBy === ctx.me && (!drone.alive || !!ctx.field.overlap(drone.flight.position, drone.radius * 1.1));
+    },
+    // the rock left behind, and the drone with it
+    fail: (ctx, a) => (a.points.length && local(ctx, a.points[0]).z > a.reach + SHOVE_ABREAST * 2 ? SCHOOL.again : null),
+    waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
+    mark: () => t('Shove it'),
+  },
   // a bot sits on the pilot's tail and fires: the armored nose has to come round to it
   onTail: sparring(SCHOOL.onTail, SCHOOL_PRAISE.onTail, ['turn', 'slide', 'fire'], true, TAIL_SKILL, 6000),
   // a kill without ever overheating the laser
@@ -1089,7 +1131,7 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
     saying(SCHOOL.done),
   ],
   arsenal: [saying(SCHOOL.arsenal), DRILL.torpedo, DRILL.torpedoDown, DRILL.overdrive, DRILL.probe, DRILL.hookShip, DRILL.nova, saying(SCHOOL.arsenalDone)],
-  tactician: [saying(SCHOOL.tactician), DRILL.kick, DRILL.onTail, DRILL.bursts, DRILL.slideShot, DRILL.cover, DRILL.torpedoCover, DRILL.comet, DRILL.exam, saying(SCHOOL.tacticianDone)],
+  tactician: [saying(SCHOOL.tactician), DRILL.kick, DRILL.shove, DRILL.onTail, DRILL.bursts, DRILL.slideShot, DRILL.cover, DRILL.torpedoCover, DRILL.comet, DRILL.exam, saying(SCHOOL.tacticianDone)],
 };
 
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
