@@ -1552,7 +1552,8 @@ body.nova-flash #hud::after {
   justify-content: safe center;
   overflow-y: auto;
   gap: 14px;
-  padding: 16px;
+  /* the bottom stays free for the transmission (the announcer goes on talking during the break) */
+  padding: 16px 16px 220px;
   /* the kill cam runs on behind the ad */
   background: rgba(2, 3, 10, 0.6);
   text-align: center;
@@ -1561,7 +1562,7 @@ body.nova-flash #hud::after {
 @media (max-height: 480px) {
   #sponsor {
     gap: 8px;
-    padding: 8px 16px;
+    padding: 8px 16px 72px;
   }
 
   #sponsor .sponsor-pitch {
@@ -2561,6 +2562,11 @@ body.touch #transmission {
   body.touch #transmission {
     bottom: 10px;
     max-width: min(360px, calc(100vw - 440px));
+  }
+
+  /* the sponsor break fills a phone's screen and scrolls; the transmission waits until it is over */
+  body.touch:has(#sponsor:not([hidden])) #transmission {
+    display: none;
   }
 
   body.touch #now-playing {
