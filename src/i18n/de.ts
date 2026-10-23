@@ -313,6 +313,7 @@ export const DE: Catalog = {
   'Debris impact': 'Trümmertreffer',
   'IMPACT IN {seconds} s': 'AUFPRALL IN {seconds} s',
   'LASER OVERHEATED': 'LASER ÜBERHITZT',
+  'LINK ESTABLISHED': 'VERBINDUNG STEHT',
   'TORPEDO INBOUND': 'TORPEDO IM ANFLUG',
   'DRIVE OVERHEATED': 'ANTRIEB ÜBERHITZT',
   'ON YOUR TAIL': 'IM NACKEN',

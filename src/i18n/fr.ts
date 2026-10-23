@@ -287,6 +287,7 @@ export const FR: Catalog = {
   'Debris impact': 'Impact de débris',
   'IMPACT IN {seconds} s': 'IMPACT DANS {seconds} s',
   'LASER OVERHEATED': 'LASER EN SURCHAUFFE',
+  'LINK ESTABLISHED': 'LIAISON ÉTABLIE',
   'TORPEDO INBOUND': 'TORPILLE EN APPROCHE',
   'DRIVE OVERHEATED': 'MOTEUR EN SURCHAUFFE',
   'ON YOUR TAIL': 'DANS TES SIX HEURES',

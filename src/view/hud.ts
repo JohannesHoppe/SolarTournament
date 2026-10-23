@@ -4,6 +4,7 @@ import { CONTROLS, keyLabel, type Command, type Device } from '../input/input';
 import { markedName, type Kind } from './marks';
 import { TEAM_TINTS } from '../game/flags';
 import { t } from '../i18n/i18n';
+import { Attitude } from './attitude';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const projected = new THREE.Vector3();
@@ -12,6 +13,8 @@ const KILLFEED_SECONDS = 5;
 /** A ship's name needs about this much room beside its mark (px); a name closer to one already written is left out. */
 const LABEL_WIDTH = 140;
 const LABEL_HEIGHT = 18;
+/** How long a fresh clone's projection takes to draw itself (s); style.css staggers its pieces within it. */
+const BOOT_SECONDS = 1.2;
 /** Display scale: one world unit is 5 cm, a ship is about 35 m long. */
 export const METERS_PER_UNIT = 0.05;
 /** The size of the window, as Game.resize last set it: reading it from the window after the HUD wrote to the page would force a layout. */
@@ -58,7 +61,10 @@ export class Hud {
   /** Where the names written this frame sit (x, y pairs, px), reused from frame to frame. */
   private readonly labeled: number[] = [];
   private readonly markerLayer = document.createElement('div');
+  private readonly attitude = new Attitude($<HTMLCanvasElement>('hud-attitude'));
   private messageUntil = 0;
+  /** The projection boots until then (see boot); -1 when it stands. */
+  private bootUntil = -1;
   private hitmarkerTimer = 0;
   private flashTimer = 0;
   /** The keys shown before the readouts at the bottom, and the device they are shown for. */
@@ -95,6 +101,12 @@ export class Hud {
   setViewport(width: number, height: number) {
     viewport.width = width;
     viewport.height = height;
+    this.attitude.setViewport(width, height, Math.min(window.devicePixelRatio, 2));
+  }
+
+  /** The horizon, the pitch ladder and the heading tape (see Attitude), while a clone flies; a phone leaves out the tape. */
+  updateAttitude(camera: THREE.Camera, show: boolean, phone: boolean) {
+    this.attitude.update(camera, show, !phone);
   }
 
   /** The crosshair shows while the own clone flies. */
@@ -121,8 +133,25 @@ export class Hud {
     this.center.hidden = true;
   }
 
+  /**
+   * A fresh clone's link comes up: the projection draws itself piece by piece over BOOT_SECONDS
+   * (see #hud.booting in style.css), then says the link stands.
+   */
+  boot(now: number) {
+    this.root.classList.remove('booting');
+    // a reflow between removing and adding the class restarts the animation
+    void this.root.offsetWidth;
+    this.root.classList.add('booting');
+    this.bootUntil = now + BOOT_SECONDS;
+  }
+
   /** secondsLeft is Infinity in rounds without a time limit. */
   update(now: number, secondsLeft: number, me: Ship) {
+    if (this.bootUntil >= 0 && now >= this.bootUntil) {
+      this.bootUntil = -1;
+      this.root.classList.remove('booting');
+      if (me.alive) this.flashMessage(now, t('LINK ESTABLISHED'), 1.5);
+    }
     const minutes = Math.floor(secondsLeft / 60);
     const seconds = Math.floor(secondsLeft % 60);
     setText(this.time, Number.isFinite(secondsLeft) ? `${minutes}:${String(seconds).padStart(2, '0')}` : '');

@@ -31,6 +31,8 @@ Radio 2584 follows the maintainer's taste, written down in the README section "R
 
 Sun orange `#ff9d00` (hue 37°) for everything you press and everything that hits; its complement azure blue (217°) for information: `#0062ff` exactly as neon glow, `#4d91ff` lightened as readable text. Neon is a tinted white tube with layered `text-shadow`s in shades of the color (`--neon-orange`, `--neon-blue` in `style.css`); flickering respects `prefers-reduced-motion`. Use neon deliberately: the "Tournament" of the logo, plate headings, the sponsor sign, the radio title.
 
+The HUD is the flight computer's projection and takes one color: azure (`--hud` and its shades in `style.css`), thin lines and letters with a soft glow and a dark hairline for readability, numbers in a fixed-width face. Orange in the HUD only for what the pilot has to act on now (a drive under the crosshair, a hit, a warning, the keys a drill asks for), red only for the ship in danger. What the flight computer draws into the world (the racing line, the flight school's markers) is HUD too; the world itself (gates, rocks, ships and their markers' tints) keeps its colors.
+
 ## Mandatory: every game principle is documented
 
 Everything we come up with for the game must be documented, so that we can understand the SolarTournament universe thoroughly later: physics, damage model, rules, points, story, world.
@@ -118,7 +120,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `ship/impact.ts` | A ship striking a surface: how it bounces off and scrapes along, and what the impact costs its hull |
 | `ship/bots.ts` | Bot AI: desired velocity, turn and burn, dogfights in arcs, aiming with spread, a hand that eases every command in; every bot's skills (aim, reflexes, daring) |
 | **`view/`** | **What the screen shows** |
-| `view/hud.ts` | DOM HUD: gauges, markers, warnings, tunnel vision |
+| `view/hud.ts` | DOM HUD, the flight computer's projection: gauges, markers, warnings, tunnel vision, the boot of a fresh clone's link |
+| `view/attitude.ts` | The HUD's attitude on a canvas: horizon line, pitch ladder and heading tape, as in a fighter's head-up display |
 | `view/effects.ts` | Particles (one draw call per texture), laser beams |
 | `view/killcam.ts` | The kill cam: keeps the last seconds of every ship and beam, replays the kill of the own clone in slow motion from behind the shooter |
 | `view/radar.ts` | The radar sphere: everything within 2.5 km around the own ship, ahead and behind, on a canvas |
