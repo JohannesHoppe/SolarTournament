@@ -12,7 +12,7 @@ import type { Catalog } from './i18n';
  * - the Orange President: le Président Orange; United Solar States: États Solaires Unis;
  *   Ministry of War: ministère de la Guerre; Presidential Games: Jeux présidentiels
  * - flight school: École de pilotage; course (of the school): module; drill: exercice;
- *   Basic training / Racer / Gladiator / Arsenal: Formation de base / Coureur / Gladiateur / Arsenal
+ *   Basic training / Racer / Gladiator / Arsenal / Tactician: Formation de base / Coureur / Gladiateur / Arsenal / Tacticien
  * - Hangar: Hangar; Solar Coins: Solar Coins (currency name kept); upgrade: amélioration;
  *   looks: apparence/style; The Sovereign: Le Souverain; interceptor: intercepteur
  * - drive / main drive: moteur / moteur principal; thrusters: propulseurs; radiators: radiateurs;
@@ -348,6 +348,9 @@ export const FR: Catalog = {
   'Racer': 'Coureur',
   'Gladiator': 'Gladiateur',
   'Arsenal': 'Arsenal',
+  'Tactician': 'Tacticien',
+  'Cover': 'Couvert',
+  'Win the dogfight: dodge, turn, fire in bursts, take cover.': 'Gagner le duel. Esquiver, se retourner, tirer en rafales, se mettre à couvert.',
   '{course} {n}/{total}': '{course} {n}/{total}',
   'Your next clone is being printed during this message': 'Ton prochain clone s’imprime pendant ce message',
   'The sponsor is happy': 'Le sponsor est content',
@@ -481,7 +484,7 @@ export const FR: Catalog = {
   'Tab (hold)': 'Tab (maintenir)',
   'Standings: kills, deaths, score, in a race the lap': 'Classement : éliminations, morts, score, et en course le tour',
   'This sheet': 'Cette fiche',
-  'Four courses, each on its own. Training clones are free.': 'Quatre modules, chacun indépendant. Les clones d’entraînement sont gratuits.',
+  'Five courses, each on its own. Training clones are free.': 'Cinq modules, chacun indépendant. Les clones d’entraînement sont gratuits.',
   'Back <kbd>Esc</kbd>': 'Retour <kbd>Esc</kbd>',
   'Class': 'Classe',
   'Cruise': 'Croisière',
@@ -581,6 +584,17 @@ export const FR: Catalog = {
   'Your hook bites ships too. Catch that runner, and reel it in.': 'Ton grappin mord aussi les vaisseaux. Attrape ce fuyard, et ramène-le à toi.',
   'This is a nova core. Everything around you dies when you set it off, and so does your clone. Fly close to the drone, and fire.': 'Voici un noyau nova. Tout ce qui t’entoure meurt quand tu le déclenches, ton clone aussi. Approche-toi du drone, et tire.',
   'Your arsenal is ready. Use all of it, and make the President proud.': 'Ton arsenal est prêt. Sers-toi de tout, et rends le Président fier.',
+  'Tactician training. How to win a dogfight, and how not to lose one. Most clones die flying a straight line.': 'Formation de tacticien. Comment gagner un duel, et comment ne pas le perdre. La plupart des clones meurent en ligne droite.',
+  'Debris, and it is fast. Too fast to slide. Tap a thruster twice, and every thruster kicks at once. Do not turn.': 'Des débris, et rapides. Trop rapides pour glisser. Tape deux fois sur un propulseur, et tous poussent d’un coup. Ne tourne pas.',
+  'Someone is right behind you, on your drive. Turn your armored nose to it, and fight back.': 'Quelqu’un est juste derrière toi, sur ton moteur. Tourne ton nez blindé vers lui, et riposte.',
+  'Kill this one without overheating. Short bursts, only when the crosshair glows.': 'Élimine celui-ci sans surchauffer. Des rafales courtes, seulement quand le viseur brille.',
+  'Too hot, darling. A locked laser is a dead clone. Short bursts. Again.': 'Trop chaud, mon chéri. Un laser bloqué, c’est un clone mort. Des rafales courtes. Encore une fois.',
+  'This one is good, and it is hunting you. Get the rock between you and it, and stay there.': 'Celui-ci est bon, et il te chasse. Mets le rocher entre toi et lui, et restes-y.',
+  'A torpedo is coming. Do not shoot it this time. Get behind the rock.': 'Une torpille arrive. Cette fois, ne l’abats pas. Passe derrière le rocher.',
+  'It got you. Put the rock between you and it. Again.': 'Elle t’a eu. Mets le rocher entre toi et elle. Encore une fois.',
+  'Shot down. Nice, but this time hide. Again.': 'Abattue. Joli, mais cette fois, cache-toi. Encore une fois.',
+  'Final exam, tactician. This bot flies as well as the field. Use everything.': 'Examen final, tacticien. Ce bot vole aussi bien que les autres. Sers-toi de tout.',
+  'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.': 'Tu te bats en tacticien maintenant. Bondis hors de la ligne de tir, ne leur montre jamais ton moteur, tire en rafales, et laisse les rochers encaisser. Va en gagner une pour le Président.',
   'Again.': 'Encore une fois.',
   'Nice. Turning only spins you around. It never moves you anywhere.': 'Joli. Tourner te fait seulement pivoter. Ça ne te déplace jamais.',
   'Precise. I like that.': 'Précis. J’aime ça.',
@@ -613,6 +627,12 @@ export const FR: Catalog = {
   'Two more torpedoes. Every probe shows its color. Blue plates you, green repairs you, white is the nova core.': 'Deux torpilles de plus. Chaque sonde affiche sa couleur. La bleue te blinde, la verte te répare, la blanche, c’est le noyau nova.',
   'Got it. You both pull on the same cable, and the slower one gets dragged.': 'Attrapé. Vous tirez tous les deux sur le même câble, et le plus lent se fait traîner.',
   'Glorious. The sponsors love it so much, your next clone is on them.': 'Glorieux. Les sponsors adorent, ils t’offrent ton prochain clone.',
+  'Every thruster at once, twenty-five meters per second sideways in a blink. Whoever aims at you has to find you again.': 'Tous les propulseurs d’un coup, vingt-cinq mètres par seconde de côté en un éclair. Qui te vise doit te retrouver.',
+  'A nose on your drive is the deadliest thing out here. Show them armor, and they only scratch paint.': 'Un nez braqué sur ton moteur, rien n’est plus mortel ici. Montre-leur ton blindage, et ils ne font que rayer la peinture.',
+  'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.': 'Froid et mortel. Chaque tir sur le blindage, c’est de la chaleur qui te manque quand le moteur se montre.',
+  'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.': 'Les lasers ne se courbent pas, et les capteurs ne voient pas à travers la roche. Derrière, tu n’existes pas.',
+  'Lost you. A seeker that loses its line never finds it again.': 'Perdu. Un autodirecteur qui perd sa ligne ne la retrouve jamais.',
+  'A real fight, and you won it. I am so proud of you, darling.': 'Un vrai combat, et tu l’as gagné. Je suis si fière de toi, mon chéri.',
 
   // Nicole, the flight computer: in the round
   'Reactor breach.': 'Brèche dans le réacteur.',

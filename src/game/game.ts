@@ -350,6 +350,7 @@ const SCHOOL_NOTES: Record<SchoolCourse, string> = {
   racer: msg('Rings, coils and the perfect start.'),
   gladiator: msg('The laser, free drift and the dogfight.'),
   arsenal: msg('Torpedoes, overdrive, probes, the hook on a ship and the nova core.'),
+  tactician: msg('Win the dogfight: dodge, turn, fire in bursts, take cover.'),
 };
 
 /** The courses a Host has completed, as this browser keeps them; whatever does not fit is dropped. */
@@ -717,6 +718,8 @@ export class Game implements OnlineGame {
   private torpedoesDown = 0;
   /** Torpedoes of the own pilot that hit a ship, for the flight school's drill. */
   private torpedoesHit = 0;
+  /** Dodges the own pilot has fired, for the flight school's drill. */
+  private dodges = 0;
   /** The flight school's line to its marker (see lineTo). */
   private schoolLine: { line: RacingLine; next: number; to: THREE.Vector3 } | null = null;
   /** Target drone of the flight school. */
@@ -3399,6 +3402,12 @@ export class Game implements OnlineGame {
       get torpedoesHit() {
         return game.torpedoesHit;
       },
+      get tracked() {
+        return game.torpedoes.list.some((torpedo) => torpedo.target === game.me);
+      },
+      get dodges() {
+        return game.dodges;
+      },
       spawnProbe: (position, kind) => {
         // a probe of its own each time: one taken is never shown again; it waits where it is
         // until the pilot comes for it
@@ -4101,6 +4110,7 @@ export class Game implements OnlineGame {
     const me = this.me!;
     if (!me.alive || this.time < this.dodgeReadyAt) return;
     this.dodgeReadyAt = this.time + DODGE_RECHARGE;
+    this.dodges++;
     // a damaged thruster kicks weaker
     const push = relative.set(direction.x, direction.y, 0).normalize().multiplyScalar(DODGE_SPEED * (0.25 + 0.75 * me.thrusters));
     me.flight.velocity.add(push.applyQuaternion(me.flight.orientation));

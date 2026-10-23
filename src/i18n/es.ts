@@ -12,7 +12,7 @@ import type { Catalog } from './i18n';
  * - Capture the Flag: Captura la bandera · The President's Fleet: La flota del Presidente
  * - Orange / Blue (sides): Naranja / Azul · side: bando · sponsor core: núcleo (de patrocinador)
  * - flight school: Escuela de vuelo · course: curso · drill: ejercicio
- * - Basic training / Racer / Gladiator / Arsenal: Entrenamiento básico / Piloto de carreras / Gladiador / Arsenal
+ * - Basic training / Racer / Gladiator / Arsenal / Tactician: Entrenamiento básico / Piloto de carreras / Gladiador / Arsenal / Táctico
  * - overdrive: overdrive · hook: gancho · harpoon: arpón · winch: cabrestante · cable: cable
  * - torpedo: torpedo · probe: sonda · nova core: núcleo nova · twin laser: láser doble
  * - coil: bobina · gate: puerta · ring: anillo · lap: vuelta · racing line: trazada
@@ -352,6 +352,9 @@ export const ES: Catalog = {
   Racer: 'Piloto de carreras',
   Gladiator: 'Gladiador',
   Arsenal: 'Arsenal',
+  Tactician: 'Táctico',
+  Cover: 'Cobertura',
+  'Win the dogfight: dodge, turn, fire in bursts, take cover.': 'Gana el duelo: esquiva, gira, dispara en ráfagas, ponte a cubierto.',
   '{course} {n}/{total}': '{course} {n}/{total}',
 
   // sponsor break
@@ -489,7 +492,7 @@ export const ES: Catalog = {
   'Tab (hold)': 'Tab (mantener)',
   'Standings: kills, deaths, score, in a race the lap': 'Clasificación: bajas, muertes, puntos; en una carrera, la vuelta',
   'This sheet': 'Esta hoja',
-  'Four courses, each on its own. Training clones are free.': 'Cuatro cursos, cada uno por separado. Los clones de entrenamiento son gratis.',
+  'Five courses, each on its own. Training clones are free.': 'Cinco cursos, cada uno por separado. Los clones de entrenamiento son gratis.',
   'Back <kbd>Esc</kbd>': 'Atrás <kbd>Esc</kbd>',
   Class: 'Clase',
   Cruise: 'Crucero',
@@ -595,6 +598,17 @@ export const ES: Catalog = {
   'Your hook bites ships too. Catch that runner, and reel it in.': 'Tu gancho también muerde naves. Atrapa a ese fugitivo, y arrástralo hacia ti.',
   'This is a nova core. Everything around you dies when you set it off, and so does your clone. Fly close to the drone, and fire.': 'Esto es un núcleo nova. Todo lo que te rodea muere cuando lo detonas, y tu clon también. Acércate al dron, y dispara.',
   'Your arsenal is ready. Use all of it, and make the President proud.': 'Tu arsenal está listo. Úsalo entero, y que el Presidente se sienta orgulloso.',
+  'Tactician training. How to win a dogfight, and how not to lose one. Most clones die flying a straight line.': 'Entrenamiento de táctico. Cómo ganar un duelo, y cómo no perderlo. Casi todos los clones mueren volando en línea recta.',
+  'Debris, and it is fast. Too fast to slide. Tap a thruster twice, and every thruster kicks at once. Do not turn.': 'Escombros, y van rápido. Demasiado para deslizarte. Pulsa un propulsor dos veces, y todos empujan a la vez. No gires.',
+  'Someone is right behind you, on your drive. Turn your armored nose to it, and fight back.': 'Alguien está justo detrás de ti, sobre tu motor. Gírale tu morro acorazado, y devuélvele el fuego.',
+  'Kill this one without overheating. Short bursts, only when the crosshair glows.': 'Acaba con este sin sobrecalentarte. Ráfagas cortas, solo cuando brille la mira.',
+  'Too hot, darling. A locked laser is a dead clone. Short bursts. Again.': 'Demasiado caliente, cariño. Un láser bloqueado es un clon muerto. Ráfagas cortas. Otra vez.',
+  'This one is good, and it is hunting you. Get the rock between you and it, and stay there.': 'Este es bueno, y te está cazando. Pon la roca entre tú y él, y quédate ahí.',
+  'A torpedo is coming. Do not shoot it this time. Get behind the rock.': 'Viene un torpedo. Esta vez no lo derribes. Ponte detrás de la roca.',
+  'It got you. Put the rock between you and it. Again.': 'Te ha dado. Pon la roca entre tú y él. Otra vez.',
+  'Shot down. Nice, but this time hide. Again.': 'Derribado. Bonito, pero esta vez escóndete. Otra vez.',
+  'Final exam, tactician. This bot flies as well as the field. Use everything.': 'Examen final, táctico. Este bot vuela tan bien como el resto. Úsalo todo.',
+  'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.': 'Ya peleas como un táctico. Sal de la línea de fuego de un golpe, nunca les enseñes tu motor, dispara en ráfagas, y deja que las rocas se lleven los impactos. Ve y gana una para el Presidente.',
   'Again.': 'Otra vez.',
 
   // Nicole: praise after a drill
@@ -631,6 +645,12 @@ export const ES: Catalog = {
   'Two more torpedoes. Every probe shows its color. Blue plates you, green repairs you, white is the nova core.': 'Dos torpedos más. Cada sonda muestra su color. La azul te blinda, la verde te repara, la blanca es el núcleo nova.',
   'Got it. You both pull on the same cable, and the slower one gets dragged.': 'Lo tienes. Los dos tiráis del mismo cable, y el más lento sale arrastrado.',
   'Glorious. The sponsors love it so much, your next clone is on them.': 'Glorioso. A los patrocinadores les ha encantado tanto que tu próximo clon corre de su cuenta.',
+  'Every thruster at once, twenty-five meters per second sideways in a blink. Whoever aims at you has to find you again.': 'Todos los propulsores a la vez, veinticinco metros por segundo de lado en un instante. Quien te apunte tiene que volver a encontrarte.',
+  'A nose on your drive is the deadliest thing out here. Show them armor, and they only scratch paint.': 'Un morro apuntando a tu motor es lo más mortal que hay aquí fuera. Enséñales coraza, y solo rascarán la pintura.',
+  'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.': 'Fría y mortal. Cada disparo a la coraza es calor que te falta cuando asoma el motor.',
+  'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.': 'Los láseres no se doblan, y los sensores no ven a través de la roca. Detrás de ella, no existes.',
+  'Lost you. A seeker that loses its line never finds it again.': 'Te ha perdido. Un buscador que pierde su línea nunca la vuelve a encontrar.',
+  'A real fight, and you won it. I am so proud of you, darling.': 'Un combate de verdad, y lo has ganado. Estoy muy orgullosa de ti, cariño.',
 
   // Nicole: in a round
   'Reactor breach.': 'Brecha en el reactor.',

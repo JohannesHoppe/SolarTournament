@@ -265,6 +265,17 @@ export const SCHOOL = {
   hookShip: 'Your hook bites ships too. Catch that runner, and reel it in.',
   nova: 'This is a nova core. Everything around you dies when you set it off, and so does your clone. Fly close to the drone, and fire.',
   arsenalDone: 'Your arsenal is ready. Use all of it, and make the President proud.',
+  tactician: 'Tactician training. How to win a dogfight, and how not to lose one. Most clones die flying a straight line.',
+  kick: 'Debris, and it is fast. Too fast to slide. Tap a thruster twice, and every thruster kicks at once. Do not turn.',
+  onTail: 'Someone is right behind you, on your drive. Turn your armored nose to it, and fight back.',
+  bursts: 'Kill this one without overheating. Short bursts, only when the crosshair glows.',
+  tooHot: 'Too hot, darling. A locked laser is a dead clone. Short bursts. Again.',
+  cover: 'This one is good, and it is hunting you. Get the rock between you and it, and stay there.',
+  torpedoCover: 'A torpedo is coming. Do not shoot it this time. Get behind the rock.',
+  torpedoCoverHit: 'It got you. Put the rock between you and it. Again.',
+  hideInstead: 'Shot down. Nice, but this time hide. Again.',
+  exam: 'Final exam, tactician. This bot flies as well as the field. Use everything.',
+  tacticianDone: 'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.',
   again: 'Again.',
 } as const;
 
@@ -304,6 +315,12 @@ export const SCHOOL_PRAISE = {
   probe: 'Two more torpedoes. Every probe shows its color. Blue plates you, green repairs you, white is the nova core.',
   hookShip: 'Got it. You both pull on the same cable, and the slower one gets dragged.',
   nova: 'Glorious. The sponsors love it so much, your next clone is on them.',
+  kick: 'Every thruster at once, twenty-five meters per second sideways in a blink. Whoever aims at you has to find you again.',
+  onTail: 'A nose on your drive is the deadliest thing out here. Show them armor, and they only scratch paint.',
+  bursts: 'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.',
+  cover: 'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.',
+  torpedoCover: 'Lost you. A seeker that loses its line never finds it again.',
+  exam: 'A real fight, and you won it. I am so proud of you, darling.',
 } as const;
 
 /** What the flight computer says when the screen shows a message. */

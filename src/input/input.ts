@@ -27,7 +27,7 @@ type ActionHandler = (action: Action) => void;
 export type Device = 'keyboard' | 'gamepad' | 'touch';
 
 /** What the Host can be asked to use, by the flight school's drills and by the HUD's labels. */
-export type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'fire' | 'autopilot' | 'camera' | 'hook' | 'overdrive' | 'torpedo';
+export type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'dodge' | 'fire' | 'autopilot' | 'camera' | 'hook' | 'overdrive' | 'torpedo';
 
 /**
  * The keys, buttons and sticks of each device for each command, as keycaps show them (the first
@@ -42,6 +42,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     brake: ['S'],
     flip: ['X'],
     slide: ['A', 'D'],
+    dodge: ['A A', 'D D'],
     fire: ['Space', msg('Click')],
     autopilot: ['T'],
     camera: ['C'],
@@ -56,6 +57,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     brake: ['B'],
     flip: ['Y'],
     slide: [msg('Right stick')],
+    dodge: ['LB'],
     fire: ['LT'],
     autopilot: ['R3'],
     camera: ['View'],
@@ -70,6 +72,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     brake: [msg('BRAKE')],
     flip: [msg('FLIP')],
     slide: [msg('Right stick')],
+    dodge: [msg('Right stick')],
     fire: [msg('FIRE')],
     autopilot: [msg('AUTO')],
     camera: [],

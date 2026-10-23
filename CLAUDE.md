@@ -92,7 +92,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `game/laps.ts` | The own laps in a race: lap clock, splits against the arena's best lap, the best lap and its ghost as the browser keeps them |
 | `game/items.ts` | Items: sponsor probes that show up on the round clock (the same on every browser), what they carry and what each does in a few words, dropped again when a clone dies; the nova core goes off in `Game.novaBlast` |
 | `game/torpedoes.ts` | Torpedoes: launch, homing, fuse, shot down by the laser; only the shooter's browser decides where one goes off |
-| `game/school.ts` | Flight school: four courses played on their own (basic training, racer, gladiator, arsenal), 39 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
+| `game/school.ts` | Flight school: five courses played on their own (basic training, racer, gladiator, arsenal, tactician), 47 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
 | `game/sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, how the clone died, the round so far |
 | `game/satire-ads.ts` | The invented sponsors of 2584 (Victory Cola, Space Burger, PrintMe Bodies, …): consumer satire in the ad slot until real sponsors take it |
 | **`world/`** | **The arena** |
@@ -174,7 +174,7 @@ Typography matters. Running text is always justified, never ragged, with hyphena
 In dev mode the game hangs on the window as `window.game`. It lets you read and set state (Playwright, `browser_evaluate`):
 
 - Start a solo round: `document.getElementById('start').click()` opens its choices, `document.getElementById('solo-launch').click()` launches it
-- Start a course of the flight school: `document.getElementById('school-racer').click()` (also `school-basic`, `school-gladiator`, `school-arsenal`); to start one at a drill, set `localStorage['solartournament.school-step']` to `{"arsenal": 3}` (the course and the drill's index) before
+- Start a course of the flight school: `document.getElementById('school-racer').click()` (also `school-basic`, `school-gladiator`, `school-arsenal`, `school-tactician`); to start one at a drill, set `localStorage['solartournament.school-step']` to `{"arsenal": 3}` (the course and the drill's index) before
 - Simulate keys: `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))`
 - Freeze time for screenshots: `game.timeScale = 0`
 - Disable bots: set the other ships to `alive = false` and `respawnAt = Infinity`

@@ -55,7 +55,7 @@ test('the hangar sells an upgrade for Solar Coins and keeps it, and the Sovereig
   expect(errors).toEqual([]);
 });
 
-for (const course of ['basic', 'racer', 'gladiator', 'arsenal']) {
+for (const course of ['basic', 'racer', 'gladiator', 'arsenal', 'tactician']) {
   test(`the flight school's ${course} course starts in the belt`, async ({ page }) => {
     const errors = await openGame(page);
     await page.click('#school');

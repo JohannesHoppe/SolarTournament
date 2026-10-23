@@ -52,6 +52,10 @@ export interface SchoolContext {
   readonly torpedoesDown: number;
   /** How many of the pilot's torpedoes have hit a ship so far. */
   readonly torpedoesHit: number;
+  /** A torpedo in flight still homes on the pilot. */
+  readonly tracked: boolean;
+  /** How many dodges the pilot has fired so far. */
+  readonly dodges: number;
   /** A probe carrying an item at a point; returns where it drifts. */
   spawnProbe(position: THREE.Vector3, kind: ItemKind): THREE.Vector3;
   /** A number of a countdown, or GO, in big neon. */
@@ -187,6 +191,19 @@ export const HOOK_STANDOFF = 10000;
 const OVERDRIVE_FAST = 2800;
 /** The ship hooked in the hook drill of the arsenal counts as reeled in this close (units, 300 m). */
 const HOOKED_CLOSE = 6000;
+/** The debris of the dodge kick drill: 150 m/s from 600 m off, four seconds, too fast to slide out of its way in time. */
+const KICK_DEBRIS_SPEED = 3000;
+const KICK_DEBRIS_START = 12000;
+/** The cover drills put the pilot this far off the surface of a rock (units, 150 m), the gunner or the torpedo's drone this far behind the pilot (1.2 km). */
+const COVER_STANDOFF = 3000;
+const COVER_GUNNER = 24000;
+/** Seconds out of the gunner's sight the cover drill wants. */
+const COVER_HOLD = 3;
+/** Skill of the tactician's sparring bots (see Bot): the one on the tail, the one for bursts, the hunter of the cover drill, and the exam's, as good as the middling bot of the field. */
+const TAIL_SKILL = 0.15;
+const BURST_SKILL = 0.25;
+const HUNTER_SKILL = 0.5;
+const EXAM_SKILL = 0.5;
 
 
 const scratch = new THREE.Vector3();
@@ -622,23 +639,7 @@ const DRILL = {
       return a.jinks >= JINKS;
     },
   },
-  dodge: {
-    line: SCHOOL.dodge,
-    praise: SCHOOL_PRAISE.dodge,
-    keys: ['slide'],
-    reps: 2,
-    enter(ctx, a, markers) {
-      stop(ctx);
-      const start = ahead(ctx, 0, 0, -9000);
-      const velocity = ctx.me.flight.position.clone().sub(start).setLength(DEBRIS_SPEED);
-      a.points = [markers.debris(start, velocity, DEBRIS_RADIUS)];
-    },
-    done: (ctx, a) => local(ctx, a.points[0]).z > 1500,
-    fail(ctx, a) {
-      if (ctx.me.flight.position.distanceTo(a.points[0]) < DEBRIS_RADIUS + ctx.me.radius) return SCHOOL.dodgeHit;
-      return turned(ctx, a) ? SCHOOL.noTurn : null;
-    },
-  },
+  dodge: debris(SCHOOL.dodge, SCHOOL_PRAISE.dodge, 9000, DEBRIS_SPEED, false),
   autopilotOn: {
     line: SCHOOL.autopilotOn,
     praise: SCHOOL_PRAISE.autopilotOn,
@@ -673,19 +674,9 @@ const DRILL = {
     keys: ['turn', 'fine', 'fire'],
     enter(ctx, a) {
       stop(ctx);
-      ctx.spawnDrone(clear(ctx, ahead(ctx, 0, 0, -30000), 2000), new THREE.Vector3());
-      a.count = ctx.torpedoesDown;
-      a.reach = ctx.me.hull;
-      a.lit = false;
+      incoming(ctx, a, clear(ctx, ahead(ctx, 0, 0, -30000), 2000));
     },
-    done(ctx, a) {
-      // the drone launches once the drill counts
-      if (!a.lit && ctx.drone) {
-        ctx.torpedoAt(ctx.drone);
-        a.lit = true;
-      }
-      return ctx.torpedoesDown > a.count;
-    },
+    done: (ctx, a) => launched(ctx, a) && ctx.torpedoesDown > a.count,
     fail: (ctx, a) => (ctx.me.hull < a.reach || (a.lit && ctx.torpedoes === 0 && ctx.torpedoesDown === a.count) ? SCHOOL.torpedoHit : null),
     waypoint: (ctx) => ctx.incoming,
     mark: () => t('Torpedo'),
@@ -725,7 +716,81 @@ const DRILL = {
     mark: () => t('Hook it'),
   },
   nova: atDrone(SCHOOL.nova, SCHOOL_PRAISE.nova, 10000, true),
+  // the tactician: how to win a dogfight, and how not to lose one
+  // past fast debris with a dodge: sliding alone does not get there in time
+  kick: debris(SCHOOL.kick, SCHOOL_PRAISE.kick, KICK_DEBRIS_START, KICK_DEBRIS_SPEED, true),
+  // a bot sits on the pilot's tail and fires: the armored nose has to come round to it
+  onTail: sparring(SCHOOL.onTail, SCHOOL_PRAISE.onTail, ['turn', 'slide', 'fire'], true, TAIL_SKILL, 6000),
+  // a kill without ever overheating the laser
+  bursts: {
+    ...sparring(SCHOOL.bursts, SCHOOL_PRAISE.bursts, ['fire'], true, BURST_SKILL),
+    fail: (ctx) => (ctx.me.overheated ? SCHOOL.tooHot : null),
+  },
+  // a better bot hunts the pilot: a rock between them hides the pilot from its sensors
+  cover: {
+    line: SCHOOL.cover,
+    praise: SCHOOL_PRAISE.cover,
+    keys: ['drive', 'slide'],
+    enter(ctx, a) {
+      const behind = takeCover(ctx, a);
+      if (behind) ctx.spawnBot(behind, true, HUNTER_SKILL);
+    },
+    done: (ctx, a) => !a.points.length || holdFor(ctx, a, !!ctx.bot && !ctx.field.lineOfSight(ctx.bot.flight.position, ctx.me.flight.position), COVER_HOLD),
+    leave: (ctx) => ctx.removeBot(),
+    waypoint: (_, a) => a.points[1] ?? null,
+    mark: () => t('Cover'),
+  },
+  // a torpedo homes on the pilot: a rock between them breaks its lock for good
+  torpedoCover: {
+    line: SCHOOL.torpedoCover,
+    praise: SCHOOL_PRAISE.torpedoCover,
+    keys: ['drive', 'slide'],
+    enter(ctx, a) {
+      const behind = takeCover(ctx, a);
+      if (behind) incoming(ctx, a, behind);
+    },
+    done: (ctx, a) => !a.points.length || (launched(ctx, a) && !ctx.tracked),
+    fail(ctx, a) {
+      if (ctx.me.hull < a.reach) return SCHOOL.torpedoCoverHit;
+      return ctx.torpedoesDown > a.count ? SCHOOL.hideInstead : null;
+    },
+    waypoint: (_, a) => a.points[1] ?? null,
+    mark: () => t('Cover'),
+  },
+  exam: sparring(SCHOOL.exam, SCHOOL_PRAISE.exam, ['drive', 'brake', 'slide', 'dodge', 'fire'], true, EXAM_SKILL),
 } satisfies Record<string, Drill>;
+
+/** A drone at a point that launches a torpedo at the pilot once the drill counts (see launched); the attempt keeps the hull and the torpedoes shot down so far. */
+function incoming(ctx: SchoolContext, a: Attempt, from: THREE.Vector3) {
+  ctx.spawnDrone(from, new THREE.Vector3());
+  a.count = ctx.torpedoesDown;
+  a.reach = ctx.me.hull;
+}
+
+/** Launches the drone's torpedo the first time it is asked; false then, true once it flies. */
+function launched(ctx: SchoolContext, a: Attempt): boolean {
+  if (a.lit) return true;
+  if (ctx.drone) ctx.torpedoAt(ctx.drone);
+  a.lit = true;
+  return false;
+}
+
+/**
+ * Sets up a cover drill: the pilot off a rock, facing it (see faceRock), the gunner or drone off
+ * to the pilot's right, and the attempt's points the rock and the spot in its lee, ahead and to
+ * the left: a slanting dash of about 1.4 times the rock's reach, a few seconds of burn, where
+ * going round the far side of a rock would take longer than a torpedo. Returns where the gunner
+ * or drone goes, or null without a rock.
+ */
+function takeCover(ctx: SchoolContext, a: Attempt): THREE.Vector3 | null {
+  stop(ctx);
+  const facing = faceRock(ctx, COVER_STANDOFF);
+  if (!facing) return null;
+  const rock = facing.rock;
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ctx.me.flight.orientation);
+  a.points = [rock.object.position, rock.object.position.clone().addScaledVector(right, -(rock.radius + COVER_STANDOFF))];
+  return clear(ctx, ctx.me.flight.position.clone().addScaledVector(right, COVER_GUNNER), 2000);
+}
 
 /** A drill against the target drone at rest `distance` ahead, done once it is gone; for the nova drill the clone holds a core first. */
 function atDrone(line: string, praise: string, distance: number, nova = false): Drill {
@@ -744,15 +809,20 @@ function atDrone(line: string, praise: string, distance: number, nova = false): 
   };
 }
 
-/** A drill against a sparring bot, armed or not, of a skill (see Bot). */
-function sparring(line: string, praise: string, keys: Command[], armed: boolean, skill: number): Drill {
+/**
+ * A drill against a sparring bot, armed or not, of a skill (see Bot), `at` units along the
+ * pilot's axis (negative: ahead, positive: on its tail). The laser starts the fight cool.
+ */
+function sparring(line: string, praise: string, keys: Command[], armed: boolean, skill: number, at = -8000): Drill {
   return {
     line,
     praise,
     keys,
     enter(ctx) {
       stop(ctx);
-      ctx.spawnBot(clear(ctx, ahead(ctx, 0, 0, -8000), 2000), armed, skill);
+      ctx.me.heat = 0;
+      ctx.me.overheated = false;
+      ctx.spawnBot(clear(ctx, ahead(ctx, 0, 0, at), 2000), armed, skill);
     },
     done: (ctx) => !!ctx.bot && !ctx.bot.alive,
     leave: (ctx) => ctx.removeBot(),
@@ -761,17 +831,44 @@ function sparring(line: string, praise: string, keys: Command[], armed: boolean,
   };
 }
 
+/**
+ * Debris from `distance` ahead drifting straight at the pilot at `speed`, twice: done once it is
+ * past, without turning; with `kick`, only past with a dodge fired.
+ */
+function debris(line: string, praise: string, distance: number, speed: number, kick: boolean): Drill {
+  return {
+    line,
+    praise,
+    keys: [kick ? 'dodge' : 'slide'],
+    reps: 2,
+    enter(ctx, a, markers) {
+      stop(ctx);
+      const start = ahead(ctx, 0, 0, -distance);
+      const velocity = ctx.me.flight.position.clone().sub(start).setLength(speed);
+      a.points = [markers.debris(start, velocity, DEBRIS_RADIUS)];
+      a.count = ctx.dodges;
+    },
+    done: (ctx, a) => local(ctx, a.points[0]).z > 1500 && (!kick || ctx.dodges > a.count),
+    fail(ctx, a) {
+      if (ctx.me.flight.position.distanceTo(a.points[0]) < DEBRIS_RADIUS + ctx.me.radius) return SCHOOL.dodgeHit;
+      return turned(ctx, a) ? SCHOOL.noTurn : null;
+    },
+  };
+}
+
 /** The courses of the flight school, each played on its own. */
-export type SchoolCourse = 'basic' | 'racer' | 'gladiator' | 'arsenal';
-export const SCHOOL_COURSES: readonly SchoolCourse[] = ['basic', 'racer', 'gladiator', 'arsenal'];
-export const COURSE_NAMES: Record<SchoolCourse, string> = { basic: msg('Basic training'), racer: msg('Racer'), gladiator: msg('Gladiator'), arsenal: msg('Arsenal') };
+export type SchoolCourse = 'basic' | 'racer' | 'gladiator' | 'arsenal' | 'tactician';
+export const SCHOOL_COURSES: readonly SchoolCourse[] = ['basic', 'racer', 'gladiator', 'arsenal', 'tactician'];
+export const COURSE_NAMES: Record<SchoolCourse, string> = { basic: msg('Basic training'), racer: msg('Racer'), gladiator: msg('Gladiator'), arsenal: msg('Arsenal'), tactician: msg('Tactician') };
 
 /**
  * The drills of each course, in the order a Host needs them. Basic training: turning, aiming,
  * the drive and the brake, stopping at a point and the rocks, all with the autopilot on. The
  * racer: the rings, their coils, the start and the hook. The gladiator: the laser and its heat, free
  * drift like a real spaceship, dodging, and the dogfight last. The arsenal: torpedoes (launching
- * one, shooting one down), the overdrive, a probe, the hook on a ship, the nova core.
+ * one, shooting one down), the overdrive, a probe, the hook on a ship, the nova core. The
+ * tactician: the dodge, a bot on the tail, bursts, cover from a hunter and from a torpedo, and an
+ * exam against a bot as good as the field's middling one.
  */
 const COURSES: Record<SchoolCourse, Drill[]> = {
   basic: [DRILL.briefing, DRILL.turn, DRILL.fineAim, DRILL.cockpit, DRILL.drive, DRILL.brake, DRILL.stopAt, DRILL.impact, saying(SCHOOL.basicDone)],
@@ -795,6 +892,7 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
     saying(SCHOOL.done),
   ],
   arsenal: [saying(SCHOOL.arsenal), DRILL.torpedo, DRILL.torpedoDown, DRILL.overdrive, DRILL.probe, DRILL.hookShip, DRILL.nova, saying(SCHOOL.arsenalDone)],
+  tactician: [saying(SCHOOL.tactician), DRILL.kick, DRILL.onTail, DRILL.bursts, DRILL.cover, DRILL.torpedoCover, DRILL.exam, saying(SCHOOL.tacticianDone)],
 };
 
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
