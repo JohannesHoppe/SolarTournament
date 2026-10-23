@@ -379,6 +379,22 @@ describe('evidence of what a ship did', () => {
     expect(evidence.blasted('s', v(500), 20000, 11)).toBe(false);
   });
 
+  it("counts a torpedo's hit on the battleship after its shooter died, a laser's only from a living one", () => {
+    const evidence = new Evidence();
+    const part = v(0, 0, 80000);
+    evidence.blast('s', v(0, 0, 81000), 10);
+    evidence.beam('s', v(0), v(0, 0, 80500), 10);
+    // the torpedo went off on the part: its hits count, its clone alive or dead
+    expect(evidence.fleetHit('s', true, part, 10, 20000, false, 11)).toBe(true);
+    expect(evidence.fleetHit('s', false, part, 10, 20000, false, 11)).toBe(true);
+    // a beam is fired by a living clone and hits at once
+    expect(evidence.fleetHit('s', true, part, 1, 20000, false, 11)).toBe(true);
+    expect(evidence.fleetHit('s', false, part, 1, 20000, false, 11)).toBe(false);
+    // no blast there, no hits, alive or dead
+    expect(evidence.fleetHit('s', false, v(0, 0, -80000), 10, 20000, false, 11)).toBe(false);
+    expect(evidence.fleetHit('t', false, part, 10, 20000, false, 11)).toBe(false);
+  });
+
   it('takes a hit on the own ship from a beam that starts near its shooter and passes near the ship', () => {
     const ahead = v(1, 0, 0);
     expect(beamShare(v(0), ahead, v(10000), v(50000, 5000))).toBeLessThan(1);

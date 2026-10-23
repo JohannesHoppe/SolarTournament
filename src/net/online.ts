@@ -211,14 +211,12 @@ export class Online {
     };
     session.onWreck = (id) => game.remoteWreck(id);
     session.onFleetHit = (zone, round, shooter, count) => {
-      // only a living shooter hits, with a beam that ended on the part, or a torpedo that went off there
+      // a living shooter's beam that ended on the part, or a torpedo that went off there (also
+      // one whose shooter died while it flew)
       const ship = this.find(shooter);
-      if (!ship?.alive) return;
+      if (!ship) return;
       const part = round === game.roundId ? game.fleetZoneAt(zone) : null;
-      if (part && !this.session.justJoined) {
-        const seen = count > 1 ? this.evidence.blasted(shooter, part, EVIDENCE_REACH, wall()) : this.evidence.beamEnded(shooter, part, EVIDENCE_REACH, wall());
-        if (!seen) return;
-      }
+      if (!this.evidence.fleetHit(shooter, ship.alive, part, count, EVIDENCE_REACH, this.session.justJoined, wall())) return;
       game.remoteFleetHit(zone, round, ship, count);
     };
     session.onTorpedo = (id, shooter, target, p, v) => {

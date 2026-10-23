@@ -531,6 +531,19 @@ export class Evidence {
     return (this.blasts.get(ship) ?? []).some((blast) => now - blast.at < EVIDENCE_SECONDS && blast.position.distanceTo(point) < reach);
   }
 
+  /**
+   * A report of a hit on a part of the battleship stands: a laser's (one hit) needs a living
+   * shooter whose beam ended on the part; a torpedo's (`count` > 1) one of its torpedoes that went
+   * off there, its shooter alive or not, for a torpedo launched by a living clone flies on after
+   * that clone died and counts where it lands. `part` is null for a part this browser does not
+   * know (another round), and a browser that has only just come takes the hit on trust.
+   */
+  fleetHit(ship: string, alive: boolean, part: THREE.Vector3 | null, count: number, reach: number, trusting: boolean, now: number): boolean {
+    if (count <= 1 && !alive) return false;
+    if (!part || trusting) return true;
+    return count > 1 ? this.blasted(ship, part, reach, now) : this.beamEnded(ship, part, reach, now);
+  }
+
   /** The ship launched a torpedo that may still fly. */
   launched(ship: string, now: number): boolean {
     return now - (this.launches.get(ship) ?? -Infinity) < LAUNCH_EVIDENCE;

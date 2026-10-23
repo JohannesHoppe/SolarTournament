@@ -172,6 +172,9 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
   // the battleship comes in on the field time; both tabs wait for it
   for (const page of [a, b]) await page.evaluate(() => window.game.field.setClock(13));
   await play(b, 2);
+  // the batteries hold their fire on the shooting tab's clone, which sits right above them: the
+  // test counts hits, and a clone shot down between two shots could not fire the next
+  await b.evaluate(() => (window.game.fireBattery = () => {}));
   const where = (page: Page) => page.evaluate(() => window.game.fleet.position.toArray());
   const [atA, atB] = [await where(a), await where(b)];
   expect(Math.hypot(atA[0] - atB[0], atA[1] - atB[1], atA[2] - atB[2])).toBeLessThan(2000);
@@ -210,8 +213,17 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
   }
   await play(a, 2);
   expect(await a.evaluate(() => window.game.fleet.hits[0])).toBe(10);
-  // a torpedo at the next battery locks on, goes off there, and both tabs count its hits
+  // a torpedo at the next battery locks on; its clone dies right after the launch, the torpedo
+  // flies on, goes off there, and both tabs count its hits
   expect(await fireAt(b, 1, true)).toBe('battleship.1');
+  expect(
+    await b.evaluate(() => {
+      const game = window.game;
+      if (game.me.structural(1e6, game.time) !== 'destroyed') return false;
+      game.shipDestroyed(game.me, null, 'battery');
+      return true;
+    }),
+  ).toBe(true);
   await play(b, 3);
   for (const page of [a, b]) expect(await page.evaluate(() => window.game.fleet.hits[1])).toBe(10);
   expect(errors).toEqual([]);
