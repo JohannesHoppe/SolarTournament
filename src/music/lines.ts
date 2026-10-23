@@ -206,7 +206,7 @@ export const ANNOUNCER_OPEN = ['radio twenty five eighty four. live from the are
 export const ANNOUNCER_START = {
   race: ['three laps. no brakes. the president wants a show', 'engines hot. clones ready. let them burn'],
   deathmatch: ['eight clones. one winner. the president is watching', 'ladies and gentlemen. let them bleed'],
-  survival: ['three clones each. the flare is hungry', 'only one walks out of this. well, flies'],
+  survival: ['three clones each. the flare is hungry', 'everybody dies tonight. the winner just does it last'],
   flag: ['orange against blue. bring the core home', 'two sides. two cores. no mercy'],
   fleet: ['the president sends his battleship. you will need luck', 'one battleship. all of you. the odds are fair. for him'],
 } as const;

@@ -764,7 +764,7 @@ export const FR: Catalog = {
   'eight clones. one winner. the president is watching': 'huit clones. un vainqueur. le président regarde',
   'ladies and gentlemen. let them bleed': 'mesdames et messieurs. qu’ils saignent',
   'three clones each. the flare is hungry': 'trois clones chacun. l’éruption a faim',
-  'only one walks out of this. well, flies': 'un seul sortira d’ici à pied. enfin, en volant',
+  'everybody dies tonight. the winner just does it last': 'ce soir, tout le monde meurt. le gagnant, juste en dernier',
   'orange against blue. bring the core home': 'orange contre bleu. ramenez le noyau à la base',
   'two sides. two cores. no mercy': 'deux camps. deux noyaux. aucune pitié',
   'the president sends his battleship. you will need luck': 'le président envoie son cuirassé. il vous faudra de la chance',
