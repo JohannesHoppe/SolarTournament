@@ -108,6 +108,8 @@ interface Attempt {
   litAt: number;
   count: number;
   early: boolean;
+  /** When the drill was done in this attempt (attempt seconds; NaN: not yet), see SURVIVE. */
+  doneAt: number;
 }
 
 interface Drill {
@@ -156,6 +158,8 @@ const GUNNER_INTERVAL = 0.7;
 const GUNNER_LAG = 0.35;
 /** Changes of side the jinking drill wants: left, right, left, right, left. */
 const JINKS = 4;
+/** A drill done counts only once the clone has lived through it this long after (s): dying right after is no success. */
+const SURVIVE = 1.5;
 /** A drill waits this long for the voice to say its lines (s), then goes on without. */
 const UNSAID_PATIENCE = 10;
 /**
@@ -1100,13 +1104,18 @@ export class FlightSchool {
     attempt.seconds += ctx.dt;
     this.markers.update(ctx.dt);
 
-    const failure = drill.fail?.(ctx, attempt) ?? null;
-    if (failure) {
-      this.pending = [failure];
-      this.restart = true;
-      return null;
+    // a drill done counts once the clone has lived through it for SURVIVE seconds: a clone that
+    // dies right after (flung into a rock off the hook, say) does the drill again
+    if (Number.isNaN(attempt.doneAt)) {
+      const failure = drill.fail?.(ctx, attempt) ?? null;
+      if (failure) {
+        this.pending = [failure];
+        this.restart = true;
+        return null;
+      }
+      if (drill.done(ctx, attempt, this.markers)) attempt.doneAt = attempt.seconds;
     }
-    if (drill.done(ctx, attempt, this.markers)) {
+    if (attempt.seconds - attempt.doneAt >= SURVIVE) {
       if (attempt.rep + 1 < (drill.reps ?? 1)) {
         this.begin(ctx, attempt.rep + 1);
       } else {
@@ -1127,7 +1136,7 @@ export class FlightSchool {
     const drill = this.drills[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false };
+    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN };
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
     const instruction = rep > 0 && drill.repLine ? drill.repLine : drill.line;
