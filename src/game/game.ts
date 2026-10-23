@@ -357,13 +357,14 @@ const OVERDRIVE_DRIVE_COOLDOWN = 4;
 const OVERDRIVE_RECHARGE = 60;
 /**
  * The dodge (a thruster key tapped twice, LB): the maneuvering thrusters fire all at once at
- * overload, a kick of DODGE_SPEED (units/s, 25 m/s) sideways or up or down. The autopilot lets
- * the drift be for DODGE_DRIFT seconds, so the ship really leaves the line of fire (about
- * 25 m, more than half a ship length), and the thrusters need DODGE_RECHARGE seconds before
- * the next one. It presses the clone into the side of the seat (DODGE_STRAIN).
+ * overload, a kick of DODGE_SPEED (units/s, 40 m/s) sideways or up or down. The autopilot lets
+ * the drift be for DODGE_DRIFT seconds, so the ship plainly leaves the line of fire (about
+ * 50 m, more than a ship length, before the autopilot takes the drift out), and the thrusters
+ * need DODGE_RECHARGE seconds before the next one. It presses the clone into the side of the
+ * seat (DODGE_STRAIN).
  */
-const DODGE_SPEED = 500;
-const DODGE_DRIFT = 0.7;
+const DODGE_SPEED = 800;
+const DODGE_DRIFT = 1.2;
 const DODGE_RECHARGE = 1.5;
 const DODGE_STRAIN = 0.15;
 /**

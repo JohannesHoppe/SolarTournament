@@ -338,7 +338,7 @@ export const SCHOOL_PRAISE = {
   probe: 'Two more torpedoes. Every probe shows its color. Blue plates you, green repairs you, white is the nova core.',
   hookShip: 'Got it. You both pull on the same cable, and the slower one gets dragged.',
   nova: 'Glorious. The sponsors love it so much, your next clone is on them.',
-  kick: 'Every thruster at once, twenty-five meters per second sideways in a blink. Whoever aims at you has to find you again.',
+  kick: 'Every thruster at once, forty meters per second sideways in a blink. Whoever aims at you has to find you again.',
   onTail: 'A nose on your drive is the deadliest thing out here. Show them armor, and they only scratch paint.',
   bursts: 'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.',
   cover: 'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.',

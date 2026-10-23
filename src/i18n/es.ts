@@ -664,7 +664,7 @@ export const ES: Catalog = {
   'Two more torpedoes. Every probe shows its color. Blue plates you, green repairs you, white is the nova core.': 'Dos torpedos más. Cada sonda muestra su color. La azul te blinda, la verde te repara, la blanca es el núcleo nova.',
   'Got it. You both pull on the same cable, and the slower one gets dragged.': 'Lo tienes. Los dos tiráis del mismo cable, y el más lento sale arrastrado.',
   'Glorious. The sponsors love it so much, your next clone is on them.': 'Glorioso. A los patrocinadores les ha encantado tanto que tu próximo clon corre de su cuenta.',
-  'Every thruster at once, twenty-five meters per second sideways in a blink. Whoever aims at you has to find you again.': 'Todos los propulsores a la vez, veinticinco metros por segundo de lado en un instante. Quien te apunte tiene que volver a encontrarte.',
+  'Every thruster at once, forty meters per second sideways in a blink. Whoever aims at you has to find you again.': 'Todos los propulsores a la vez, cuarenta metros por segundo de lado en un instante. Quien te apunte tiene que volver a encontrarte.',
   'A nose on your drive is the deadliest thing out here. Show them armor, and they only scratch paint.': 'Un morro apuntando a tu motor es lo más mortal que hay aquí fuera. Enséñales coraza, y solo rascarán la pintura.',
   'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.': 'Fría y mortal. Cada disparo a la coraza es calor que te falta cuando asoma el motor.',
   'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.': 'Los láseres no se doblan, y los sensores no ven a través de la roca. Detrás de ella, no existes.',

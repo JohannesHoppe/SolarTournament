@@ -646,7 +646,7 @@ export const FR: Catalog = {
   'Two more torpedoes. Every probe shows its color. Blue plates you, green repairs you, white is the nova core.': 'Deux torpilles de plus. Chaque sonde affiche sa couleur. La bleue te blinde, la verte te répare, la blanche, c’est le noyau nova.',
   'Got it. You both pull on the same cable, and the slower one gets dragged.': 'Attrapé. Vous tirez tous les deux sur le même câble, et le plus lent se fait traîner.',
   'Glorious. The sponsors love it so much, your next clone is on them.': 'Glorieux. Les sponsors adorent, ils t’offrent ton prochain clone.',
-  'Every thruster at once, twenty-five meters per second sideways in a blink. Whoever aims at you has to find you again.': 'Tous les propulseurs d’un coup, vingt-cinq mètres par seconde de côté en un éclair. Qui te vise doit te retrouver.',
+  'Every thruster at once, forty meters per second sideways in a blink. Whoever aims at you has to find you again.': 'Tous les propulseurs d’un coup, quarante mètres par seconde de côté en un éclair. Qui te vise doit te retrouver.',
   'A nose on your drive is the deadliest thing out here. Show them armor, and they only scratch paint.': 'Un nez braqué sur ton moteur, rien n’est plus mortel ici. Montre-leur ton blindage, et ils ne font que rayer la peinture.',
   'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.': 'Froid et mortel. Chaque tir sur le blindage, c’est de la chaleur qui te manque quand le moteur se montre.',
   'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.': 'Les lasers ne se courbent pas, et les capteurs ne voient pas à travers la roche. Derrière, tu n’existes pas.',
