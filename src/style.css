@@ -702,9 +702,14 @@ button.primary .mode-note {
   transition: none;
 }
 
-/* a long message breaks into a few compact lines in the middle, so the eye does not travel the whole screen */
+/*
+ * A long message breaks into a few compact lines in the middle, so the eye does not travel the
+ * whole screen. It sits above the crosshair; where the panel of a race or the flight school takes
+ * the top (and on touch screens), it follows the alarms below the crosshair in their column, so
+ * the two never cover each other. Fixed inside the column means: placed on the whole HUD.
+ */
 #hud-message {
-  position: absolute;
+  position: fixed;
   top: 30%;
   left: 50%;
   transform: translateX(-50%);
@@ -1098,9 +1103,11 @@ body.cinema #touch {
   }
 }
 
-/* the flight school's panel takes the upper third; messages move below the crosshair */
-#hud:has(#school-panel:not([hidden])) #hud-message {
-  top: 62%;
+#hud:has(#school-panel:not([hidden])) #hud-message,
+body.touch #hud-message {
+  position: static;
+  transform: none;
+  margin: 10px auto 0;
 }
 
 #killfeed {
@@ -2546,10 +2553,9 @@ body.touch #transmission {
     width: min(440px, calc(100% - 270px));
   }
 
-  body.touch #hud-message,
-  body.touch #hud:has(#school-panel:not([hidden])) #hud-message {
-    top: calc(50% + 78px);
-    width: calc(100% - 260px);
+  /* between the left stick and the drive and fire buttons */
+  body.touch #hud-message {
+    width: min(440px, calc(100% - 360px));
   }
 
   body.touch #transmission {
