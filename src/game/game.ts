@@ -828,7 +828,7 @@ export class Game implements OnlineGame {
     this.scene.add(this.replayEffects.group);
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
-    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.points, this.ghost.root, this.cables.group);
+    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.ghost.root, this.cables.group);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
@@ -2494,6 +2494,7 @@ export class Game implements OnlineGame {
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
     this.hud.setViewport(width, height);
+    this.guide.setViewport(width, height);
     this.redraw = true;
     this.glitch.setSize(width * this.renderer.getPixelRatio(), height * this.renderer.getPixelRatio());
     this.camera.aspect = width / height;

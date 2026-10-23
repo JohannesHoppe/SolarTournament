@@ -36,6 +36,25 @@ describe('every race course', () => {
   }
 });
 
+describe("every race course's racing line", () => {
+  for (const arena of ARENAS) {
+    it(`runs without stray points in ${arena.id}: two points 10 m apart along it lie within 100 m`, () => {
+      const field = gameField();
+      field.generate(arena.layout);
+      const line = new Course(field, arena.layout.seed).line;
+      const here = new THREE.Vector3();
+      const there = new THREE.Vector3();
+      const strays: number[] = [];
+      for (let s = 0; s < line.length; s += 200) {
+        line.clear(s, field, here);
+        line.clear(s + 200, field, there);
+        if (here.distanceTo(there) > 2000) strays.push(Math.round(s / 20));
+      }
+      expect(strays, 'meters along the line').toEqual([]);
+    });
+  }
+});
+
 describe("the flight school's ring courses", () => {
   // the pilot starts at rest: in the middle, and at the arena's edge with its nose outwards
   const starts = [

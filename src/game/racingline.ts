@@ -13,12 +13,24 @@ const GATE_FADE = 1600;
 const LOOK_SECONDS = 0.8;
 const LOOK_MIN = 2000;
 
-/** Passes of bowing around one rock after another (see clear). */
-const BOW_PASSES = 3;
+/**
+ * Passes of bowing around one rock after another (see clear): BOW_PASSES_FREE always, up to
+ * BOW_PASSES while the point is still within a rock's reach. Every pass moves a point only as
+ * far as the rocks around it ask, so neighbouring points move alike and the line stays smooth.
+ */
+const BOW_PASSES_FREE = 3;
+const BOW_PASSES = 8;
+/** How far inside a rock's circle a point bowed onto it may lie and still count as clear (units, 1 cm): it lies on the circle only to rounding. */
+const ROUNDING = 0.2;
 
 const sample = new THREE.Vector3();
 const plain = new THREE.Vector3();
-const cluster = new THREE.Sphere();
+
+/** Whether a point lies outside every rock's reach plus CLEARANCE. */
+function clearOf(field: AsteroidField, point: THREE.Vector3): boolean {
+  for (const rock of field.asteroids.values()) if (rock.object.position.distanceTo(point) < rock.radius + CLEARANCE - ROUNDING) return false;
+  return true;
+}
 const tangent = new THREE.Vector3();
 const off = new THREE.Vector3();
 
@@ -26,7 +38,7 @@ const off = new THREE.Vector3();
  * The ideal line of a course: a smooth curve (centripetal Catmull-Rom) through the center of
  * every gate, where its coil fires, in the order they are flown; closed for a race's loop, open
  * for the flight school's rings, from a lead-in point before the first. Positions on it are
- * given by their distance along it (units), so the racing line's dots sit on it at fixed
+ * given by their distance along it (units), so the racing line's dashes sit on it at fixed
  * spacing. Where rock lies close to it as the field is now, the line bows out around it (see
  * clear): the racing line shows that way, and racing bots fly it.
  */
@@ -100,34 +112,11 @@ export class RacingLine {
     this.point(s, out);
     this.point(s + 1, tangent).sub(out).normalize();
     plain.copy(out);
-    // around one rock may lead into the next: a few passes, and where the gap between rocks is
-    // too narrow, around all of them at once
+    // around one rock may lead into the next: pass after pass, as long as a point is still
+    // within some rock's reach (a few passes, more between rocks that lie close together)
     for (let pass = 0; pass < BOW_PASSES; pass++) {
       for (const rock of field.asteroids.values()) this.bow(out, rock.object.position, rock.radius + CLEARANCE);
-    }
-    let inside = null;
-    for (const rock of field.asteroids.values()) {
-      if (rock.object.position.distanceTo(out) >= rock.radius + CLEARANCE) continue;
-      inside = rock;
-      break;
-    }
-    if (inside) {
-      cluster.center.copy(inside.object.position);
-      cluster.radius = inside.radius + CLEARANCE;
-      for (let grown = true, round = 0; grown && round < BOW_PASSES * 2; round++) {
-        grown = false;
-        for (const rock of field.asteroids.values()) {
-          const reach = rock.radius + CLEARANCE;
-          const apart = rock.object.position.distanceTo(cluster.center);
-          if (apart >= cluster.radius + reach || apart + reach <= cluster.radius) continue;
-          // the smallest sphere around both
-          const radius = (apart + cluster.radius + reach) / 2;
-          cluster.center.lerp(rock.object.position, (radius - cluster.radius) / apart);
-          cluster.radius = radius;
-          grown = true;
-        }
-      }
-      this.bow(out.copy(plain), cluster.center, cluster.radius);
+      if (pass >= BOW_PASSES_FREE - 1 && clearOf(field, out)) break;
     }
     if (field.well) this.bow(out, field.well.position, field.well.radius + CLEARANCE * 2);
     // through a gate the line runs through its center, whatever lies beside it: the bow fades out towards it
