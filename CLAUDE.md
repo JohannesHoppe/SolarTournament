@@ -132,7 +132,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/lensing.ts` | The black hole's gravitational lens over the rendered picture |
 | `view/glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |
 | `view/guide.ts` | The racing line: a dashed ribbon on the ideal line, dashes every 20 m fixed in space, joined from the own ship's flight, with pulses of light, brighter the farther the ship is off it |
-| `view/showcase.ts` | The title screen's pad: the seal as a coin seen from above at a slant, the chosen ship hovering and circling above it in its upgrades' looks, a ship not earned as a silhouette; a view of its own behind the plates |
+| `view/showcase.ts` | The title screen's pad: a landing pad seen from above at a slant (stepped rim, hazard stripes, lamps, vents, the seal inlaid in gold), the chosen ship hovering and circling above it in its upgrades' looks, a ship not earned as a silhouette; a view of its own behind the plates |
 | `view/ghost.ts` | The ghost of the own best lap: the own hull as a faint blue hologram |
 | `view/datamosh.ts` | The clone's death: its last picture loses the key frames and rots with the camera's motion and the frames' changes (a pass with its own feedback buffers) |
 | `view/textures.ts` | Canvas textures: glows, sparks, smoke |
