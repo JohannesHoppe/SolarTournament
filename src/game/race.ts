@@ -110,6 +110,41 @@ export function ringCrossing(point: THREE.Vector3, normal: THREE.Vector3, radius
 }
 
 /**
+ * A racing bot within APPROACH_NEAR (units, 150 m) of its next gate's plane but beside its
+ * opening first flies for a point APPROACH_FAR (200 m) before the gate on its axis (see
+ * approachGate), so it never runs into the coil's housings from the side.
+ */
+const APPROACH_NEAR = 3000;
+const APPROACH_FAR = 4000;
+/** A racer passes a gate this many ship radii inside its rim (about 34 m), or flies for its center first (see approachGate). */
+const APPROACH_CLEAR = 2;
+const lateral = new THREE.Vector3();
+
+/**
+ * Where a racer near its next gate (at `gate`, facing `axis`, of `radius`) flies for: one that
+ * would not pass its opening with room to spare would fly into the coil's housings. Beside the
+ * opening it flies for a point on the gate's axis APPROACH_FAR before it first; in front of it,
+ * but on a way that crosses the gate's plane nearer the rim than APPROACH_CLEAR ship radii (or
+ * there already), it flies for the gate's center; otherwise for its `waypoint`. Writes into
+ * `waypoint` and returns it.
+ */
+export function approachGate(gate: THREE.Vector3, axis: THREE.Vector3, radius: number, position: THREE.Vector3, velocity: THREE.Vector3, shipRadius: number, waypoint: THREE.Vector3): THREE.Vector3 {
+  const offset = lateral.subVectors(position, gate);
+  // the side it comes from: the gate counts either way
+  const along = offset.dot(axis);
+  if (Math.abs(along) > APPROACH_NEAR) return waypoint;
+  offset.addScaledVector(axis, -along);
+  const beside = offset.length();
+  if (beside >= radius) return waypoint.copy(gate).addScaledVector(axis, (along < 0 ? -1 : 1) * APPROACH_FAR);
+  // where its way crosses the gate's plane, flying on as it does
+  const toward = velocity.dot(axis) * (along < 0 ? 1 : -1);
+  const safe = radius - shipRadius * APPROACH_CLEAR;
+  if (toward > 0) offset.addScaledVector(velocity, Math.abs(along) / toward).addScaledVector(axis, -offset.dot(axis));
+  if (beside < safe && offset.length() < safe) return waypoint;
+  return waypoint.copy(gate);
+}
+
+/**
  * Where a ship at `position`, flying on with `velocity` as it is, crosses the plane of a ring
  * (at `point`, facing `normal`, either way), written into `out`; returns how far from the
  * ring's center, or null when the flight does not reach the plane within `horizon` seconds.

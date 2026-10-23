@@ -223,8 +223,8 @@ export const LINE_COURSE: readonly [number, number, number][] = [
 ];
 /**
  * The full-speed drill wants its course flown at LINE_PACE on average (units/s, 200 m/s) along
- * its racing line, with LINE_SPARE seconds more for turning to the first ring and the burn up to
- * speed: only a drive held all the way gets there.
+ * its racing line, with LINE_SPARE seconds more for the burn up to speed (the pilot starts facing the first
+ * ring): only a drive held all the way gets there.
  */
 export const LINE_PACE = 4000;
 export const LINE_SPARE = 4;
@@ -411,17 +411,17 @@ function passRing(ctx: SchoolContext, a: Attempt): number | null {
 
 /**
  * A drill through a course of rings (see layRings) that wants every ring flown through: a ring
- * missed starts the attempt over with `missLine`, a pilot lost with "Again". With `drift` (units/s)
- * the pilot starts drifting at the first ring; with `coils` each ring's core throws it on.
+ * missed starts the attempt over with `missLine`, a pilot lost with "Again". With `drift` (units/s, 0 at rest)
+ * the pilot starts turned to the first ring, drifting at it; with `coils` each ring's core throws it on.
  */
-function ringDrill(line: string, praise: string, keys: Command[], course: readonly [number, number, number][], missLine: string, drift = 0, coils = false): Drill {
+function ringDrill(line: string, praise: string, keys: Command[], course: readonly [number, number, number][], missLine: string, drift: number | null = null, coils = false): Drill {
   return {
     line,
     praise,
     keys,
     enter(ctx, a, markers) {
       layRings(ctx, a, markers, course);
-      if (drift) headFor(ctx, a.points[0], drift);
+      if (drift !== null) headFor(ctx, a.points[0], drift);
     },
     done(ctx, a, markers) {
       const off = passRing(ctx, a);
@@ -1134,6 +1134,18 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
   tactician: [saying(SCHOOL.tactician), DRILL.kick, DRILL.shove, DRILL.onTail, DRILL.bursts, DRILL.slideShot, DRILL.cover, DRILL.torpedoCover, DRILL.comet, DRILL.exam, saying(SCHOOL.tacticianDone)],
 };
 
+/** Each drill's name, its key in DRILL; a course's opening and closing words are "opening" and "closing". */
+const DRILL_NAMES = new Map<Drill, string>(Object.entries(DRILL).map(([name, drill]) => [drill as Drill, name]));
+const drillName = (course: SchoolCourse, index: number) => DRILL_NAMES.get(COURSES[course][index]) ?? (index === 0 ? 'opening' : 'closing');
+
+/**
+ * Progress a browser keeps as a drill's number instead of its name counts the drills of this
+ * order: the tactician's without the shove drill, the other courses as they are.
+ */
+const NUMBERED: Partial<Record<SchoolCourse, string[]>> = {
+  tactician: ['opening', 'kick', 'onTail', 'bursts', 'slideShot', 'cover', 'torpedoCover', 'comet', 'exam', 'closing'],
+};
+
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
 class Markers {
   readonly root = new THREE.Group();
@@ -1253,6 +1265,19 @@ export class FlightSchool {
   /** Number of drills of a course, for the menu's "continue at drill n of m". */
   static drillsOf(course: SchoolCourse) {
     return COURSES[course].length;
+  }
+
+  /** The name a browser keeps for the drill a Host has reached, so drills added to a course later do not move it. */
+  static keep(course: SchoolCourse, index: number): string {
+    return drillName(course, index);
+  }
+
+  /** The drill a kept name (or number, see NUMBERED) stands for in a course; undefined for none. */
+  static reached(course: SchoolCourse, kept: unknown): number | undefined {
+    const name = Number.isInteger(kept) ? (NUMBERED[course]?.[kept as number] ?? (kept as number)) : kept;
+    if (typeof name === 'number') return name >= 0 && name < COURSES[course].length ? name : undefined;
+    const index = COURSES[course].findIndex((_, i) => drillName(course, i) === name);
+    return index >= 0 ? index : undefined;
   }
 
   /** Whether the autopilot is on at the starting drill: as the drills before it left it. */

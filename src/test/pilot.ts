@@ -4,7 +4,7 @@ import { Bot, evenSkills } from '../ship/bots';
 import { FlightModel, MAX_SPEED } from '../ship/flight';
 import { bounceOff, impactDamage } from '../ship/impact';
 import { MAX_HULL, type Ship } from '../ship/ship';
-import { coilPush, ringCrossing } from '../game/race';
+import { approachGate, coilPush, ringCrossing } from '../game/race';
 import type { RacingLine } from '../game/racingline';
 
 /** A ship's hit radius (units, 17 m), as the game's hulls have it. */
@@ -19,6 +19,8 @@ export interface Rings {
   radius: number;
   core: number;
   line: RacingLine;
+  /** Markers without a coil's housings (the curve drill's spheres): the racer flies the line alone, with no approach to a ring's center. */
+  open?: boolean;
 }
 
 /** How a flight went: the rings passed, how far off each center, how often it crossed the next ring's plane beside the ring, the seconds it took, the hull left, and whether the ship was lost (its hull gone on rock, or in a massive body). */
@@ -58,7 +60,9 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
   const result = (crashed: boolean): Flight => ({ passed: offs.length, offs, missed, seconds, hull, crashed });
   while (offs.length < rings.points.length && seconds < limit) {
     const next = offs.length;
-    bot.waypoint = rings.line.target(flight.position, next % rings.line.gateCount, flight.velocity.length(), field, goal);
+    // as the game's racers do: along the line, and near a ring for its center where the way would clip the rim
+    rings.line.target(flight.position, next % rings.line.gateCount, flight.velocity.length(), field, goal);
+    bot.waypoint = rings.open ? goal : approachGate(rings.points[next], rings.normals[next], rings.radius, flight.position, flight.velocity, SHIP_RADIUS, goal);
     const controls = bot.think(seconds, [ship], field, [bot]);
     field.gravity(flight.position, gravity);
     before.copy(flight.position);

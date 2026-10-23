@@ -6,7 +6,7 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 |---|---|
 | `game.ts` | The game: round flow and each round's opening show, scoring, respawns, warnings, the menus' wiring |
 | `alarms.ts` | The tiered alarms (caution, warning, critical), their tones, and the escape load of a gravity well |
-| `race.ts` | Round and room modes; the race course of gates (a gentle loop, flown at the speed limit), its points, and where a flight crosses a ring's plane |
+| `race.ts` | Round and room modes; the race course of gates (a gentle loop, flown at the speed limit), its points, where a flight crosses a ring's plane, and how a racer comes at its next gate clear of the housings |
 | `survival.ts` | Last Clone Standing: clones per round, the solar flare's plasma coming from the sun and the safe pocket it leaves |
 | `flags.ts` | Capture the Flag: sides, bases, sponsor cores, captures; how a core is shown (on its tow cable, out of the chase camera's view, faded where it would hide the ship or the crosshair) |
 | `fleet.ts` | The President's Fleet: the battleship, its parts, phases and sinking |

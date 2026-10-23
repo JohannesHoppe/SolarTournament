@@ -71,7 +71,7 @@ const lineOf = (layout: readonly (readonly [number, number, number])[]) => new R
 
 describe("the flight school's courses", () => {
   // the pilot starts in the middle, and at the arena's edge with its nose outwards; a drill that
-  // starts the pilot drifting turns it to the first ring or marker
+  // starts the pilot drifting, or at rest facing the course, turns it to the first ring or marker
   const starts = [
     { name: 'from the middle', position: new THREE.Vector3(0, 0, 0), facing: new THREE.Vector3(0, 0, -1) },
     { name: 'from the edge, facing out', position: new THREE.Vector3(ARENA_LIMIT * 0.9, 0, 0), facing: new THREE.Vector3(1, 0, 0) },
@@ -79,8 +79,8 @@ describe("the flight school's courses", () => {
   const drills = [
     // the curve: the bot at the drill's speed through every marker's sphere (crossing the plane square to the way there inside it passes within it)
     { drill: 'curve', layout: CURVE_COURSE, radius: CURVE_ZONE, core: 0, speed: CURVE_SPEED, drift: CURVE_SPEED, seconds: 60 },
-    { drill: 'ring', layout: RING_COURSE, radius: RING_RADIUS, core: 0, speed: RACE_SPEED, drift: 0, seconds: 60 },
-    { drill: 'coil', layout: COIL_COURSE, radius: RING_RADIUS, core: RING_RADIUS * CORE_SHARE, speed: RACE_SPEED, drift: 0, seconds: 60 },
+    { drill: 'ring', layout: RING_COURSE, radius: RING_RADIUS, core: 0, speed: RACE_SPEED, drift: null, seconds: 60 },
+    { drill: 'coil', layout: COIL_COURSE, radius: RING_RADIUS, core: RING_RADIUS * CORE_SHARE, speed: RACE_SPEED, drift: null, seconds: 60 },
     { drill: 'brake', layout: BRAKE_COURSE, radius: RING_RADIUS, core: 0, speed: RACE_SPEED, drift: MAX_SPEED, seconds: 60 },
     // the full-speed drill: within its time, which the line's length sets
     { drill: 'full-speed', layout: LINE_COURSE, radius: RING_RADIUS, core: BOOST_RADIUS, speed: RACE_SPEED, drift: 0, seconds: 0 },
@@ -94,9 +94,9 @@ describe("the flight school's courses", () => {
         const normals = points.map((point, i) => point.clone().sub(i === 0 ? start.position : points[i - 1]).normalize());
         // the game lays the rings clear of rock; here they fly in empty space
         const line = new RacingLine(points, false, start.position);
-        const facing = drift ? normals[0] : start.facing;
+        const facing = drift !== null ? normals[0] : start.facing;
         const limit = seconds || line.length / LINE_PACE + LINE_SPARE;
-        const flight = flyRings(gameField(), { points, normals, radius, core, line }, start.position, facing, SKILL, speed, limit, drift);
+        const flight = flyRings(gameField(), { points, normals, radius, core, line, open: drill === 'curve' }, start.position, facing, SKILL, speed, limit, drift ?? 0);
         expect(flight.passed, `${flight.passed} of ${points.length} in ${flight.seconds.toFixed(0)} of ${limit.toFixed(0)} s`).toBe(points.length);
         expect(flight.missed).toBe(0);
         // the coil drill wants every ring through its core

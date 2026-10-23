@@ -50,7 +50,7 @@ import type { Asteroid, FieldState } from '../world/asteroids';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
-import { BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
+import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { touchRing } from '../world/gates';
 import { COMET_SPEED, COMET_WARNING, cometEnd, cometsOf, cometStart, CometView, courseAt, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
@@ -114,15 +114,6 @@ const START_AT = INTRO_SECONDS + START_SECONDS;
 const START_LIGHTS = 5;
 /** How loud the stadium is over the intro and at each number of the countdown (0 silent, 1 on its feet); at the start word it erupts. */
 const CROWD_INTRO = 0.3;
-/**
- * A racing bot within APPROACH_NEAR (units, 150 m) of its next gate's plane but beside its
- * opening first flies for a point APPROACH_FAR (200 m) before the gate on its axis (see
- * approach), so it never runs into the coil's housings from the side.
- */
-const APPROACH_NEAR = 3000;
-const APPROACH_FAR = 4000;
-/** A racer passes a gate this many ship radii inside its rim (about 34 m), or flies for its center first (see approach). */
-const APPROACH_CLEAR = 2;
 const CROWD_COUNT: Record<number, number> = { 3: 0.45, 2: 0.65, 1: 0.85 };
 /** A smaller moment's cheer lasts this long (s), then the stadium settles back to its murmur (0..1). */
 const CHEER_SECONDS = 1.5;
@@ -480,16 +471,28 @@ function schoolDone(): Set<SchoolCourse> {
   }
 }
 
-/** The drill a Host has reached in each course. */
+/** The drill a Host has reached in each course, kept by its name (see FlightSchool.reached). */
 function schoolSteps(): Partial<Record<SchoolCourse, number>> {
   try {
     const kept: unknown = JSON.parse(storageGet(SCHOOL_STEP_KEY) ?? '{}');
     const steps: Partial<Record<SchoolCourse, number>> = {};
-    if (kept && typeof kept === 'object') for (const course of SCHOOL_COURSES) if (Number.isInteger((kept as Record<string, unknown>)[course])) steps[course] = (kept as Record<string, number>)[course];
+    if (kept && typeof kept === 'object') {
+      for (const course of SCHOOL_COURSES) {
+        const step = FlightSchool.reached(course, (kept as Record<string, unknown>)[course]);
+        if (step !== undefined) steps[course] = step;
+      }
+    }
     return steps;
   } catch {
     return {};
   }
+}
+
+/** Keeps the drill a Host has reached in each course, by its name; a course without one has none kept. */
+function keepSchoolSteps(steps: Partial<Record<SchoolCourse, number>>) {
+  const kept: Partial<Record<SchoolCourse, string>> = {};
+  for (const course of SCHOOL_COURSES) if (steps[course] !== undefined) kept[course] = FlightSchool.keep(course, steps[course]);
+  storageSet(SCHOOL_STEP_KEY, JSON.stringify(kept));
 }
 /** The solo round a Host chose last: mode, arena (none: by chance) and rivals. */
 const SOLO_KEY = 'solartournament.solo';
@@ -1161,7 +1164,7 @@ export class Game implements OnlineGame {
       reset.addEventListener('click', () => {
         const steps = schoolSteps();
         delete steps[course];
-        storageSet(SCHOOL_STEP_KEY, JSON.stringify(steps));
+        keepSchoolSteps(steps);
         this.showSchoolProgress();
       });
       $('school-courses').append(button, reset);
@@ -3238,31 +3241,10 @@ export class Game implements OnlineGame {
     return this.botPoints.get(bot) ?? this.botPoints.set(bot, new THREE.Vector3()).get(bot)!;
   }
 
-  /**
-   * A racer near its next gate that would not pass its opening with room to spare would fly
-   * into the coil's housings. Beside the opening it flies for a point on the gate's axis
-   * APPROACH_FAR before it first; in front of it, but on a way that crosses the gate's plane
-   * nearer the rim than APPROACH_CLEAR ship radii (or there already), it flies for the gate's
-   * center; otherwise for its `waypoint`.
-   */
+  /** Where a racer flies for near its next gate, clear of the coil's housings (see approachGate). */
   private approach(course: Course, ship: Ship, waypoint: THREE.Vector3): THREE.Vector3 {
     const next = ship.gates % GATES;
-    const gate = course.points[next];
-    const axis = course.normals[next];
-    const offset = toAim.subVectors(ship.flight.position, gate);
-    // the side it comes from: the gate counts either way
-    const along = offset.dot(axis);
-    if (Math.abs(along) > APPROACH_NEAR) return waypoint;
-    const lateral = offset.addScaledVector(axis, -along);
-    const beside = lateral.length();
-    if (beside >= GATE_RADIUS) return waypoint.copy(gate).addScaledVector(axis, (along < 0 ? -1 : 1) * APPROACH_FAR);
-    // where its way crosses the gate's plane, flying on as it does
-    const velocity = ship.flight.velocity;
-    const toward = velocity.dot(axis) * (along < 0 ? 1 : -1);
-    const safe = GATE_RADIUS - ship.radius * APPROACH_CLEAR;
-    if (toward > 0) lateral.addScaledVector(velocity, Math.abs(along) / toward).addScaledVector(axis, -lateral.dot(axis));
-    if (beside < safe && lateral.length() < safe) return waypoint;
-    return waypoint.copy(gate);
+    return approachGate(course.points[next], course.normals[next], GATE_RADIUS, ship.flight.position, ship.flight.velocity, ship.radius, waypoint);
   }
 
   /** Capture the Flag in the HUD: the score, the own side, both cores, and where to fly; returns that point for the crosshair. */
@@ -3886,11 +3868,11 @@ export class Game implements OnlineGame {
     const waypoint = school.update(context);
     if (school.stepIndex !== step) {
       this.sound.beep(880, 0.1, 0.15);
-      storageSet(SCHOOL_STEP_KEY, JSON.stringify({ ...schoolSteps(), [school.course]: school.stepIndex }));
+      keepSchoolSteps({ ...schoolSteps(), [school.course]: school.stepIndex });
     }
     if (school.finished) {
       storageSet(SCHOOL_DONE_KEY, JSON.stringify([...schoolDone().add(school.course)]));
-      storageSet(SCHOOL_STEP_KEY, JSON.stringify({ ...schoolSteps(), [school.course]: undefined }));
+      keepSchoolSteps({ ...schoolSteps(), [school.course]: undefined });
       // back on the school's plate: the next course is a key away
       this.showMenu();
       this.showSchool(true);
