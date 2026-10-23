@@ -6,6 +6,7 @@ import { SUN_DIRECTION } from '../world/space';
 import { SCHOOL, SCHOOL_PRAISE } from '../music/lines';
 import { RacingLine } from './racingline';
 import { ARENA_LIMIT } from '../world/arena';
+import { GateKit } from '../world/gates';
 import { GATE_RADIUS } from './race';
 import type { ItemKind } from './items';
 import { msg, t } from '../i18n/i18n';
@@ -899,13 +900,18 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
 class Markers {
   readonly root = new THREE.Group();
   private readonly buoyGeometry = new THREE.OctahedronGeometry(1, 0);
-  private readonly ringGeometry = new THREE.TorusGeometry(RING_RADIUS, 40, 8, 48);
+  /** The rings are a race's coils (see GateKit): the next one's windings glow orange, the others blue. */
+  private readonly kit = new GateKit(RING_RADIUS);
+  private readonly nextCoil = this.kit.coilMaterial(0xff8c00, 2.6);
+  private readonly laterCoil = this.kit.coilMaterial(0x4d91ff, 1.4);
   private readonly debrisGeometry = new THREE.IcosahedronGeometry(1, 0);
   private readonly zoneGeometry = new THREE.IcosahedronGeometry(1, 2);
   private readonly bright = new THREE.MeshBasicMaterial({ color: 0xff9d00, wireframe: true });
   private readonly dim = new THREE.MeshBasicMaterial({ color: 0x4d91ff, wireframe: true, transparent: true, opacity: 0.45 });
   private readonly rock = new THREE.MeshBasicMaterial({ color: 0xff4d2e, wireframe: true });
-  private rings: THREE.Mesh[] = [];
+  private rings: { root: THREE.Group; coil: THREE.Mesh }[] = [];
+  /** Seconds the props have run, for the rings' position lights. */
+  private clock = 0;
   private moving: { mesh: THREE.Object3D; position: THREE.Vector3; velocity: THREE.Vector3 }[] = [];
 
   /** A spinning diamond (150 units, about 7.5 m, by default). */
@@ -927,18 +933,16 @@ class Markers {
   }
 
   ring(position: THREE.Vector3, normal: THREE.Vector3) {
-    const mesh = new THREE.Mesh(this.ringGeometry, this.dim);
-    mesh.position.copy(position);
-    mesh.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), normal);
-    this.root.add(mesh);
-    this.rings.push(mesh);
+    const ring = this.kit.build(position, normal, this.laterCoil);
+    this.root.add(ring.root);
+    this.rings.push(ring);
   }
 
-  /** The next ring glows orange, passed rings disappear. */
+  /** The next ring's coil glows orange, passed rings disappear. */
   highlight(next: number) {
     this.rings.forEach((ring, i) => {
-      ring.visible = i >= next;
-      ring.material = i === next ? this.bright : this.dim;
+      ring.root.visible = i >= next;
+      ring.coil.material = i === next ? this.nextCoil : this.laterCoil;
     });
   }
 
@@ -954,6 +958,8 @@ class Markers {
   }
 
   update(dt: number) {
+    this.clock += dt;
+    this.kit.blink(this.clock);
     for (const { position, velocity } of this.moving) position.addScaledVector(velocity, dt);
     for (const child of this.root.children) {
       if (child.userData.spin) child.rotation.y += dt * 1.5;
@@ -969,7 +975,8 @@ class Markers {
   /** Frees the geometries and materials on the GPU when the flight school ends. */
   dispose() {
     this.clear();
-    for (const resource of [this.buoyGeometry, this.ringGeometry, this.debrisGeometry, this.zoneGeometry, this.bright, this.dim, this.rock]) resource.dispose();
+    for (const resource of [this.buoyGeometry, this.debrisGeometry, this.zoneGeometry, this.bright, this.dim, this.rock]) resource.dispose();
+    this.kit.dispose();
   }
 }
 
@@ -1030,6 +1037,17 @@ export class FlightSchool {
   get track(): { line: RacingLine; next: number } | null {
     const a = this.attempt;
     return a?.live && a.track && a.next < a.points.length ? { line: a.track, next: a.next } : null;
+  }
+
+  /** The next ring of a ring course while its drill counts, and the one after it, for the HUD's brackets; null without a ring course. */
+  get nextRing(): THREE.Vector3 | null {
+    const a = this.attempt;
+    return a?.live && a.track ? (a.points[a.next] ?? null) : null;
+  }
+
+  get ringAfter(): THREE.Vector3 | null {
+    const a = this.attempt;
+    return a?.live && a.track ? (a.points[a.next + 1] ?? null) : null;
   }
 
   dispose() {

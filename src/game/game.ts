@@ -33,7 +33,7 @@ import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { Belt, BELT_INNER } from '../world/belt';
-import { COURSE_NAMES, FlightSchool, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
+import { COURSE_NAMES, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
 import { ARENAS, arenaById, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile } from '../world/arenas';
@@ -2773,6 +2773,8 @@ export class Game implements OnlineGame {
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
     this.hud.setKeys(this.input.device);
     // a watching Host sees the race of the pilot on screen
+    // only a course of rings has its rings bracketed (see showRace, teach)
+    this.hud.setGates(this.camera, null, null, 0);
     const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : this.flags ? this.showFlags(this.flags, subject) : this.fleet ? this.showFleet(this.fleet, subject) : null;
     if (!this.course && !this.school) this.guide.hide();
     this.flyGhost(me);
@@ -3433,6 +3435,7 @@ export class Game implements OnlineGame {
     const gate = { n: next + 1, gates: GATES };
     const label = missed ? t('Missed · turn back') : next === 0 ? (me.gates === 0 ? t('Start') : lap === LAPS ? t('Finish') : t('Lap')) : t('Gate {n}/{gates}', gate);
     this.hud.setWaypoint(this.camera, course.points[next], label);
+    this.hud.setGates(this.camera, course.points[next], course.points[(next + 1) % GATES], GATE_RADIUS);
     if (me.alive) this.showGuide(me, course.line, next, missed);
     else this.guide.hide();
     // the running lap's clock, and the best lap of this arena to beat
@@ -3526,6 +3529,7 @@ export class Game implements OnlineGame {
     }
     this.hud.setSchool(school.status(context.device), context.device === 'keyboard');
     this.hud.setWaypoint(this.camera, waypoint, school.mark);
+    this.hud.setGates(this.camera, school.nextRing, school.ringAfter, RING_RADIUS);
     // a ring course has its racing line, as a race does; any other marker a line to it
     const me = this.me!;
     if (!waypoint) this.schoolLine = null;

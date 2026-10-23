@@ -108,6 +108,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `world/belt.ts` | The asteroid belt beyond the arena: instanced low-detail rocks as scenery |
 | `world/arenas.ts` | The seven arenas (belt, rings, Kessler field, gas giant, corona, event horizon, derelict): field layout, well, sun, cooling, storms; which arena a tournament round is in |
 | `world/asteroids.ts` | The field of an arena: rocks, ice, debris or hull from a layout, orbits, solid pieces, a massive body (well); collision with a rock's measured surface, a debris ellipsoid or a hull box, raycast, line of sight, gravity, fragments |
+| `world/gates.ts` | A ring of the tournament as a structure: armored coil housings with glowing windings, conduits, struts with blinking lights, a station module; shared by the race's gates, the flight school's rings and Capture the Flag's bases |
 | `world/boxes.ts` | Boxes in their own frame: a sphere against a box, a ray into a box (the hull of a wreck, a battleship) |
 | `world/surface.ts` | A rock's surface as its collisions see it: measured from its mesh, how far it reaches in every direction |
 | `world/shapes.ts` | The field shapes besides rock: ice, station debris, the world ship's hull sections (with computed collider boxes) |

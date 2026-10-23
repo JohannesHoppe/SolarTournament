@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
+import { GateKit } from '../world/gates';
 import { msg } from '../i18n/i18n';
 
 /**
@@ -88,7 +89,8 @@ export class Flags {
   private followed = false;
   private readonly meshes: THREE.Mesh[] = [];
   private readonly coreGeometry = new THREE.IcosahedronGeometry(CORE_RADIUS, 1);
-  private readonly ringGeometry = new THREE.TorusGeometry(BASE_RADIUS, 60, 10, 72);
+  /** A base's ring is a race's coil (see GateKit), its windings in its side's color. */
+  private readonly kit = new GateKit(BASE_RADIUS);
   private readonly materials: THREE.Material[] = [];
 
   /** The bases are laid out from the arena's freshly generated field and its seed, so every browser builds the same. */
@@ -108,16 +110,13 @@ export class Flags {
       this.cores.push({ carrier: null, home: true, position: base.clone(), velocity: new THREE.Vector3(), droppedAt: 0 });
       const color = new THREE.Color(tint);
       const glow = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(2.2), toneMapped: false });
-      const faint = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(0.9), transparent: true, opacity: 0.55, toneMapped: false });
-      this.materials.push(glow, faint);
+      this.materials.push(glow);
       // the ring faces the center, so a carrier flying home flies through it
-      const ring = new THREE.Mesh(this.ringGeometry, faint);
-      ring.position.copy(base);
-      ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), base.clone().normalize());
+      const ring = this.kit.build(base, base.clone().normalize(), this.kit.coilMaterial(color, 2));
       const core = new THREE.Mesh(this.coreGeometry, glow);
       core.position.copy(base);
       this.meshes.push(core);
-      this.root.add(ring, core);
+      this.root.add(ring.root, core);
     });
   }
 
@@ -254,11 +253,12 @@ export class Flags {
       mesh.position.copy(core.position);
       mesh.rotation.set(now * 0.7, now * 1.1, 0);
     });
+    this.kit.blink(now);
   }
 
   dispose() {
     this.coreGeometry.dispose();
-    this.ringGeometry.dispose();
+    this.kit.dispose();
     for (const material of this.materials) material.dispose();
   }
 

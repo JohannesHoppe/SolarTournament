@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import type { AsteroidField } from '../world/asteroids';
+import { GateKit } from '../world/gates';
 import { RacingLine } from './racingline';
 
 /** Gates of a lap, and laps of a race. */
@@ -112,14 +113,15 @@ export class Course {
   readonly normals: THREE.Vector3[] = [];
   /** The ideal line through the centers of the gates, around the loop (bowing around rock as it lies, see RacingLine.clear). */
   readonly line: RacingLine;
+  /** The windings of each gate (see GateKit): their glow tells the pilot which gate is which. */
   private readonly rings: THREE.Mesh[] = [];
-  private readonly geometry = new THREE.TorusGeometry(GATE_RADIUS, 70, 12, 72);
-  /** The next gate glows in the tournament's orange, the one after it in blue, the rest faintly; the start and finish is pink. */
-  private readonly next = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.55, 0).multiplyScalar(1.4), toneMapped: false });
-  private readonly after = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.3, 0.57, 1).multiplyScalar(1.6), toneMapped: false });
-  private readonly faint = new THREE.MeshBasicMaterial({ color: 0x2a4e8c, transparent: true, opacity: 0.35, toneMapped: false });
-  private readonly finish = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.25, 0.65).multiplyScalar(2), toneMapped: false });
-  private readonly fired = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.9, 0.75).multiplyScalar(3), toneMapped: false });
+  private readonly kit = new GateKit(GATE_RADIUS);
+  /** The next gate's coil glows in the tournament's orange, the one after it in blue, the rest faintly; the start and finish is pink. */
+  private readonly next = this.kit.coilMaterial(0xff8c00, 2.6);
+  private readonly after = this.kit.coilMaterial(0x4d91ff, 2);
+  private readonly faint = this.kit.coilMaterial(0x2a4e8c, 0.9, true);
+  private readonly finish = this.kit.coilMaterial(0xff4da6, 2.4);
+  private readonly fired = this.kit.coilMaterial(0xffe6bf, 4);
   /** Until when each ring glows from its coil firing (game time, s). */
   private readonly flashUntil: number[] = new Array<number>(GATES).fill(-Infinity);
 
@@ -145,11 +147,9 @@ export class Course {
     for (let i = 0; i < GATES; i++) {
       // each gate faces along the loop: from the gate before towards the gate after
       this.normals.push(this.points[(i + 1) % GATES].clone().sub(this.points[(i + GATES - 1) % GATES]).normalize());
-      const ring = new THREE.Mesh(this.geometry, this.faint);
-      ring.position.copy(this.points[i]);
-      ring.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), this.normals[i]);
-      this.rings.push(ring);
-      this.root.add(ring);
+      const gate = this.kit.build(this.points[i], this.normals[i], this.faint);
+      this.rings.push(gate.coil);
+      this.root.add(gate.root);
     }
     this.line = new RacingLine(this.points, true);
   }
@@ -167,11 +167,12 @@ export class Course {
     this.flashUntil[gate] = now + BOOST_FLASH;
   }
 
-  /** Shows the own pilot's next gates: the next one bright, the one after in blue, a ring that just fired white. */
+  /** Shows the own pilot's next gates: the next one bright, the one after in blue, a ring that just fired white; the gates' position lights blink. */
   highlight(next: number, now: number) {
     this.rings.forEach((ring, i) => {
       ring.material = now < this.flashUntil[i] ? this.fired : i === next ? this.next : i === (next + 1) % GATES ? this.after : i === 0 ? this.finish : this.faint;
     });
+    this.kit.blink(now);
   }
 
   /** Where a ship (re)starts that has passed `passed` gates, and which way it looks: before the start, or at the last gate passed, towards the next. */
@@ -189,7 +190,6 @@ export class Course {
 
   dispose() {
     this.root.clear();
-    this.geometry.dispose();
-    for (const material of [this.next, this.after, this.faint, this.finish, this.fired]) material.dispose();
+    this.kit.dispose();
   }
 }
