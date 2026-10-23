@@ -1064,8 +1064,7 @@ export const ES: Catalog = {
     'Los Juegos funcionan sin servidor central. Los navegadores de los Hosts construyen entre ellos la red del torneo y acuerdan por consenso lo que ocurre.',
   'They are meant to be flown with friends. Whoever cheats, cheats their friends. If that is fun for you, have fun while it lasts: the other Hosts will cast you out.':
     'Están hechos para volarlos con amigos. Quien hace trampas, se las hace a sus amigos. Si eso te divierte, diviértete mientras dure: los demás Hosts te expulsarán.',
-  "The Ministry has a word for a Host who cheats their friends. It does not fit on a sponsor's plate, but you know the one.":
-    'El Ministerio tiene una palabra para el Host que engaña a sus amigos. No cabe en el cartel de ningún patrocinador, pero ya sabes cuál es.',
+  'Whoever cheats their friends is an asshole. Period.': 'Quien engaña a sus amigos es un gilipollas. Punto.',
   'And yes, we know what DevTools are. Go ahead and edit your localStorage. Out there are Hosts who fly the flight school themselves and earn their Solar Coins round by round, to build the perfect ship the honest way. Online the upgrades count only up to their cap anyway.':
     'Y sí, sabemos lo que son las DevTools. Adelante, edita tu localStorage. Ahí fuera hay Hosts que vuelan la escuela de vuelo con sus propias manos y se ganan sus Solar Coins ronda a ronda, para construir la nave perfecta por el camino honrado. Total, online las mejoras solo cuentan hasta su límite.',
 };
