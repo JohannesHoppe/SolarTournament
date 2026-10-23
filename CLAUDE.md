@@ -91,6 +91,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `game/survival.ts` | Last Clone Standing: the clones of a round, the solar flare closing in on the field time |
 | `game/flags.ts` | Capture the Flag: the two sides, their bases and sponsor cores; the lead browser's rules (sides, taking, sending home, capturing) and the state the others follow |
 | `game/fleet.ts` | The President's Fleet: his battleship (hull, batteries, drives, reactor, built in code), its phases, how the lead browser flies it, its plume, its hull as cover, how it takes hits (lasers and torpedoes) and goes down, and the state the others follow |
+| `game/alarms.ts` | The alarms: tiers (caution, warning, critical) ranked so only the worst sounds, `Game.alarms.raise` for any danger (with direction and countdown), their tones, a gravity well's escape load and its thresholds |
 | `game/hook.ts` | The hook: harpoon, cable and winch; what it bites, how the cable pulls and swings, its lines on screen |
 | `game/racingline.ts` | The ideal line of a course: a smooth curve through the centers of the gates (or the flight school's rings), bowing around rock as it lies now; where a racer is on it and what it flies for |
 | `game/hangar.ts` | The hangar: Solar Coins paid out for a round's points, the upgrades of both interceptors and their prices, what they do (online up to a cap), the Sovereign earned by both complete; what the browser keeps of it |

@@ -382,6 +382,13 @@ export const COMPUTER = {
   fleetPlume: 'It is turning its drive on us. Get out from behind it!',
   reactorOpen: 'The reactor is open. Now, darling!',
   reactorCritical: 'Reactor critical! Get clear, darling!',
+  hullCritical: 'Hull failing. One more hit, and you are dead, darling.',
+  holeNear: 'Careful, darling. The black hole is near.',
+  holePull: 'The black hole is pulling us! Burn away from it!',
+  giantNear: 'Careful, darling. The giant is pulling at us.',
+  giantPull: 'The giant is dragging us down! Burn away from it!',
+  wellTight: 'Now it gets really tight! Full burn, now!',
+  wellLost: 'I am sorry, darling.',
 } as const;
 
 /**
