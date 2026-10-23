@@ -5,11 +5,13 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | File | What it does |
 |---|---|
 | `game.ts` | The game: round flow and each round's opening show, scoring, respawns, warnings, the menus' wiring |
+| `alarms.ts` | The tiered alarms (caution, warning, critical), their tones, and the escape load of a gravity well |
 | `race.ts` | Round and room modes; the race course of gates and its points |
 | `survival.ts` | Last Clone Standing: clones per round, the solar flare closing in |
 | `flags.ts` | Capture the Flag: sides, bases, sponsor cores, captures |
 | `fleet.ts` | The President's Fleet: the battleship, its parts, phases and sinking |
 | `torpedoes.ts` | Torpedoes: launch, homing, fuse, shot down by lasers |
+| `comet.ts` | Comets crossing the arena: schedule and route (bent and swallowed by a well), the shower's pieces, the head breaking rock and shoving hull, the comet as the scene shows it |
 | `items.ts` | Sponsor probes and what they carry |
 | `hook.ts` | The hook: harpoon, cable, winch, swing |
 | `racingline.ts` | The ideal line through gates or rings, bowing around rock |

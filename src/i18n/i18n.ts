@@ -70,6 +70,13 @@ export function fill(text: string, params?: Record<string, string | number>): st
   return params ? text.replace(/\{(\w+)\}/g, (all, key: string) => (key in params ? String(params[key]) : all)) : text;
 }
 
+/** Each sentence of a short text in a span the page keeps on one line where it fits (`.sentence`), so the text breaks between its sentences. */
+const sentences = (text: string) =>
+  text
+    .split(/(?<=[.!?…])\s+/)
+    .map((sentence) => `<span class="sentence">${sentence}</span>`)
+    .join(' ');
+
 /**
  * Translates the page's fixed texts: every element with data-i18n (its English text is the
  * key, kept in the attribute the first time), and every attribute named in data-i18n-attr.
@@ -78,7 +85,8 @@ export function translatePage(root: ParentNode = document) {
   for (const element of root.querySelectorAll<HTMLElement>('[data-i18n]')) {
     // a text that runs over several lines of the page is keyed as one line, as tools/i18n collects it
     element.dataset.i18n ||= element.innerHTML.replace(/\s+/g, ' ').trim();
-    element.innerHTML = t(element.dataset.i18n);
+    const text = t(element.dataset.i18n);
+    element.innerHTML = element.classList.contains('sentences') ? sentences(text) : text;
   }
   for (const element of root.querySelectorAll<HTMLElement>('[data-i18n-attr]')) {
     for (const name of element.dataset.i18nAttr!.split(' ')) {

@@ -5,7 +5,7 @@ The arena a round is fought in. Everything that every browser must build alike (
 | File | What it does |
 |---|---|
 | `arenas.ts` | The seven arenas: field layout, well, sun, storms; which one a tournament round uses |
-| `asteroids.ts` | The field: rocks, ice, debris or hull, orbits, gravity, collisions, raycasts, line of sight |
+| `asteroids.ts` | The field: rocks, ice, debris or hull (shoved by a comet), orbits, gravity, collisions, raycasts, line of sight |
 | `rocks.ts` | Generates the 16 asteroid shapes with integer math, identical on every browser |
 | `surface.ts` | A rock's measured surface, as collisions see it |
 | `shapes.ts` | Ice, station debris and the world ship's hull sections |
