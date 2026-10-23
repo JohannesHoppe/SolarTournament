@@ -74,6 +74,8 @@ body {
   color: var(--text);
   font-family: var(--font-body);
   user-select: none;
+  /* no paragraph ends in a lonely word */
+  text-wrap: pretty;
 }
 
 #game,
@@ -2805,7 +2807,8 @@ body.page {
   -webkit-hyphens: auto;
 }
 
-/* centered blocks are justified too and only center their last line */
+/* centered blocks are justified too and only center their last line; their lines run about
+   equally long, and a text marked `sentences` breaks between its sentences where they fit */
 #school-text,
 .sponsor-pitch,
 .tagline,
@@ -2814,6 +2817,11 @@ body.page {
 .satire-fine,
 #transmission-text {
   text-align-last: center;
+  text-wrap: balance;
+}
+
+.sentence {
+  display: inline-block;
 }
 
 /* The SolarTournament logo: the seal of the Ministry of War, glowing like everything the regime owns. */

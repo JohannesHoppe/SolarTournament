@@ -171,7 +171,7 @@ The code is licensed under AGPL-3.0-or-later (`LICENSE`), the repository is publ
 
 ### Typography
 
-Typography matters. Running text is always justified, never ragged, with hyphenation on (`hyphens: auto`, the pages declare `lang`). Centered blocks are justified too and only center their last line (`text-align-last: center`). Headings and signs in Michroma, text in the system sans-serif.
+Typography matters. Running text is always justified, never ragged, with hyphenation on (`hyphens: auto`, the pages declare `lang`). Centered blocks are justified too and only center their last line (`text-align-last: center`). No line ends in a lonely word: paragraphs wrap with `text-wrap: pretty`, centered blocks with `text-wrap: balance`, and a short fixed text of a few sentences (the tagline) carries the class `sentences`, so it breaks between its sentences. Headings and signs in Michroma, text in the system sans-serif.
 
 ## Code rules
 
