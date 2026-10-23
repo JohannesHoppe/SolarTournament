@@ -1325,6 +1325,16 @@ body.touch #hud-message {
   background: radial-gradient(ellipse at center, transparent var(--tunnel, 70%), rgba(0, 0, 0, 0.96) calc(var(--tunnel, 70%) + 25%));
 }
 
+/* a solar flare's heat: the edges of the picture glow in the plasma's orange, the middle stays readable */
+#flare-heat {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: radial-gradient(ellipse at center, rgba(255, 157, 0, 0.12) 30%, rgba(255, 110, 20, 0.55) 80%, rgba(255, 220, 160, 0.8) 110%);
+}
+
 .bar > div.low {
   background: var(--danger);
 }
