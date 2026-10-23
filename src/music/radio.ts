@@ -113,6 +113,11 @@ export class Radio {
     setInterval(() => this.tick(), TICK_MS);
   }
 
+  /** Where more of the broadcast joins the radio (the crowd): it is muffled, shaped and leveled with the music. */
+  get input(): AudioNode {
+    return this.muffler;
+  }
+
   /** Stops the music; the next cue starts it again from the cue's position. */
   stop() {
     this.cue = null;

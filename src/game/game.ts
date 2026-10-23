@@ -16,6 +16,7 @@ import { lapClock, LapTimer, parseLaps } from './laps';
 import { aimHook, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, pivotOf, pullOn, type Anchor, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
+import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
 import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_ROCK, ANNOUNCER_SURVIVOR, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
 import { Speaker } from '../sound/speaker';
@@ -75,6 +76,8 @@ const DECIDED_SECONDS = 5;
  * BOT_PERFECT_START.
  */
 const START_SECONDS = 3;
+/** How loud the stadium is at each number of the countdown (0 silent, 1 on its feet); at GO it erupts. */
+const CROWD_COUNT: Record<number, number> = { 3: 0.45, 2: 0.65, 1: 0.85 };
 const START_WINDOW = 0.3;
 const START_LATE = 0.2;
 const FALSE_START_STALL = 1.5;
@@ -769,6 +772,8 @@ export class Game implements OnlineGame {
   private laps: LapTimer | null = null;
   private readonly ghost = new Ghost();
   private readonly radio: Radio;
+  /** The stadium on Earth, heard through the broadcast (see Crowd). */
+  private readonly crowd: Crowd;
   /** The flight computer's voice: reads out what the screen shows. */
   private readonly speaker: Speaker;
   /** Nicole's briefings and tips in real rounds. */
@@ -815,6 +820,7 @@ export class Game implements OnlineGame {
     this.composer.addPass(this.glitch.pass);
     this.glitch.onStatic = (strength) => this.sound.crackle(strength);
     this.radio = new Radio(sound.context, sound.headset, (song) => this.announceSong(song), (spoken, delay) => this.subtitle(spoken, delay));
+    this.crowd = new Crowd(sound.context, this.radio.input);
     this.speaker = new Speaker(sound.context, sound.headset);
     this.speaker.prepare();
 
@@ -3263,11 +3269,16 @@ export class Game implements OnlineGame {
     }
   }
 
-  /** A number of a countdown, or GO, in big neon, with its beep. */
+  /** A number of a countdown, or GO, in big neon, with its beep; the stadium rises with every number and erupts at GO. */
   private count(text: string) {
     this.hud.countdown(text);
-    if (text === t('GO')) this.sound.beep(1320, 0.35, 0.22);
-    else this.sound.beep(660, 0.12, 0.2);
+    if (text === t('GO')) {
+      this.sound.beep(1320, 0.35, 0.22);
+      if (!this.school) this.crowd.erupt();
+    } else {
+      this.sound.beep(660, 0.12, 0.2);
+      if (!this.school) this.crowd.swell(CROWD_COUNT[Number(text)] ?? 0.5, 0.8, 1);
+    }
   }
 
   /** A false start: the drive was lit before GO and stalls (see FALSE_START_STALL). */
