@@ -8,5 +8,6 @@ Programs that run on a developer's machine or in a build, never in the player's 
 | [`crest/`](crest/) | The seal of the Ministry of War, `public/crest.svg` | `npm run crest` |
 | [`i18n/`](i18n/) | Lists the texts a language's catalog still lacks | `npm run i18n -- de` |
 | [`dupes/`](dupes/) | Finds style rules declared twice | `npm run dupes` (with jscpd) |
+| [`check/`](check/) | Runs every quality gate and sums them up | `npm run check`, `npm run check:full` |
 
 They are TypeScript run directly by Node (type stripping), except the clone, which is Python.
