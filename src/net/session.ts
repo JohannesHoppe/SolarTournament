@@ -3,6 +3,8 @@ import type { ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
 import { CHEATS, type Cheat } from './plausible';
 import { LocalTransport, TrysteroTransport, type Transport } from './transport';
+import { roomMode } from './room';
+import type { RoomMode } from '../game/race';
 import type { ProbeState } from '../game/items';
 import type { FlagsState } from '../game/flags';
 import { TORPEDO_HITS, type FleetState } from '../game/fleet';
@@ -29,7 +31,13 @@ const LIVENESS_MS = 2500;
  */
 const CUT_OFF_MS = 2000;
 /** A reported join time this much later than the known one means the peer started over (s); well above network jitter. */
-const RESTART_SLACK = 1;
+export const RESTART_SLACK = 1;
+/**
+ * A peer's start over is taken up (its ships judged afresh, the field sent again) at most once
+ * in this long (s): an honest browser starts over rarely, a stream of them would only cost the
+ * lead its bandwidth and wipe what the checks know.
+ */
+const PEER_RESTART_GAP = 10;
 /**
  * Seconds left in a round reported by a lead browser, at the least: the results after a round
  * last 12 s, a clock far below would hold everyone on the scoreboard.
@@ -55,13 +63,22 @@ const MAX_WRECK_HITS_PER_SECOND = 20;
 const MAX_TORPEDO_EVENTS_PER_SECOND = 12;
 /** The parts of a battleship are numbered from zero, far fewer than this (see game/fleet); one message counts a laser's hit or a torpedo's. */
 const MAX_FLEET_ZONE = 31;
+/**
+ * The field time of a peer's rock hits only moves on (s): one earlier than it reported before
+ * is a lie, beyond ROCK_ORDER_SLACK for messages that cross; one more than ROCK_RESTART
+ * earlier is a new round's (its field time starts over).
+ */
+const ROCK_ORDER_SLACK = 0.05;
+const ROCK_RESTART = 30;
 
 /**
  * Round clock of the lead browser: which round is running, how many seconds are left, and the
- * field time, so every browser turns and moves the asteroids alike; in Capture the Flag also
- * the sides and the cores (see game/flags), in the President's Fleet the battleship (see game/fleet).
+ * field time, so every browser turns and moves the asteroids alike; the room's modes as the lead
+ * plays them, so a Host who came by a link or a lobby listing that names others plays the same
+ * rounds; in Capture the Flag also the sides and the cores (see game/flags), in the President's
+ * Fleet the battleship (see game/fleet).
  */
-export type RoundState = { id: number; left: number; field: number; f?: FlagsState; b?: FleetState };
+export type RoundState = { id: number; left: number; field: number; m?: RoomMode; f?: FlagsState; b?: FleetState };
 
 export type Vec = number[];
 
@@ -113,15 +130,19 @@ export class Session {
   onHit: (target: string, origin: Vec, direction: Vec, shooter: string) => void = () => {};
   /** `position` and `velocity` are where the victim broke up, on its owner's screen. */
   onDestroyed: (victim: string, killer: string | null, deaths: number, position: Vec | null, velocity: Vec | null, nova: boolean) => void = () => {};
-  onRock: (id: string, at: number, round: number) => void = () => {};
+  /** `shooter` is the ship whose beam hit the rock, one the sender runs. */
+  onRock: (id: string, at: number, round: number, shooter: string) => void = () => {};
   /** A piece of wreckage was shot or rammed on another browser. */
   onWreck: (id: string) => void = () => {};
   /** A ship of another browser hit a part of the President's battleship in a round (see game/fleet). */
   onFleetHit: (zone: number, round: number, shooter: string, count: number) => void = () => {};
   /** A ship of another browser launched a torpedo, at a target or none. */
   onTorpedo: (id: string, shooter: string, target: string | null, position: Vec, velocity: Vec) => void = () => {};
-  /** A torpedo went off or was shot down, where. */
-  onTorpedoGone: (id: string, position: Vec) => void = () => {};
+  /**
+   * A torpedo went off or was shot down, where: told by the browser that launched it (`shooter`
+   * null), or by one whose ship `shooter` shot it down.
+   */
+  onTorpedoGone: (id: string, position: Vec, shooter: string | null) => void = () => {};
   /** Another browser's torpedo hit a ship this browser runs. */
   onTorpedoHit: (target: string, shooter: string, torpedo: string) => void = () => {};
   /** A ship of another browser took a probe, in the third of a race its browser names (see placeBucket). */
@@ -154,6 +175,19 @@ export class Session {
    * peer started over), never earlier, so no peer can push itself ahead of the others.
    */
   private readonly peerJoinedAt = new Map<string, number>();
+  /**
+   * Peers that showed up after this browser settled claiming to be older than the lead: lined up
+   * behind it (see plausibleJoin), and never close enough to it to make it step back.
+   */
+  private readonly linedUp = new Set<string>();
+  /** The lead each peer says it follows (its states carry it); a newcomer checks the oldest claim against them (see settle). */
+  private readonly follows = new Map<string, string>();
+  /** The newcomer has checked the join times it believed while it settled (see settle). */
+  private settled = false;
+  /** When each peer's start over was last taken up (see PEER_RESTART_GAP). */
+  private readonly peerRestartedAt = new Map<string, number>();
+  /** The field time of each peer's last rock hit (see ROCK_ORDER_SLACK). */
+  private readonly lastRockAt = new Map<string, number>();
   /** When each peer last spoke; kept when its link drops, so its return is noticed. */
   private readonly lastHeard = new Map<string, number>();
   /** When any peer last spoke. */
@@ -192,12 +226,7 @@ export class Session {
       const direction = vec(d?.d, 3, UNIT_LENGTH);
       if (!target || !shooter || !origin || !direction || ownerOf(shooter) !== from || !this.hitBudget.spend(from)) return;
       // one hit per shot and ship at most: the laser has a cooldown
-      const now = seconds();
-      const pair = `${shooter}>${target}`;
-      if (now - (this.lastHit.get(pair) ?? -Infinity) < MIN_HIT_INTERVAL) return;
-      this.lastHit.set(pair, now);
-      if (this.lastHit.size > 1024) for (const [key, at] of this.lastHit) if (now - at > 1) this.lastHit.delete(key);
-      this.guard(() => this.onHit(target, origin, direction, shooter));
+      if (this.spaced(`${shooter}>${target}`)) this.guard(() => this.onHit(target, origin, direction, shooter));
     });
     transport.on('x', (d, from) => {
       const victim = id(d?.v);
@@ -217,7 +246,10 @@ export class Session {
       const zone = int(d?.z, 0, MAX_FLEET_ZONE);
       const round = int(d?.n, 0, MAX_COUNT);
       const count = int(d?.c, 1, TORPEDO_HITS);
-      if (shooter && zone !== null && round !== null && count !== null && ownerOf(shooter) === from && this.hitBudget.spend(from)) this.guard(() => this.onFleetHit(zone, round, shooter, count));
+      if (!shooter || zone === null || round === null || count === null || ownerOf(shooter) !== from || !this.hitBudget.spend(from)) return;
+      // a laser hits one part a shot, as often as it fires; a torpedo's blast each part once
+      if (!this.spaced(count > 1 ? `${shooter}>@${zone}` : `${shooter}>@`)) return;
+      this.guard(() => this.onFleetHit(zone, round, shooter, count));
     });
     transport.on('tl', (d, from) => {
       const torpedo = id(d?.i);
@@ -231,7 +263,14 @@ export class Session {
     transport.on('tg', (d, from) => {
       const torpedo = id(d?.i);
       const position = vec(d?.p, 3, MAX_COORDINATE);
-      if (torpedo && position && this.torpedoBudget.spend(from)) this.guard(() => this.onTorpedoGone(torpedo, position));
+      if (!torpedo || !position || !this.torpedoBudget.spend(from)) return;
+      // the browser that launched it says where it went off; any other only for a ship of its own
+      // that shot it down (a torpedo's id is its shooter's and a number, see game.fireTorpedo)
+      if (ownerOf(torpedo.slice(0, torpedo.lastIndexOf('.'))) === from) this.guard(() => this.onTorpedoGone(torpedo, position, null));
+      else {
+        const shooter = id(d?.s);
+        if (shooter && ownerOf(shooter) === from) this.guard(() => this.onTorpedoGone(torpedo, position, shooter));
+      }
     });
     transport.on('ic', (d, from) => {
       const probe = id(d?.c);
@@ -275,7 +314,14 @@ export class Session {
       const rock = id(d?.i);
       const at = num(d?.t, 0, MAX_FIELD_TIME);
       const round = num(d?.n, 0, MAX_COUNT);
-      if (rock && at !== null && round !== null && this.rockBudget.spend(from)) this.guard(() => this.onRock(rock, at, round));
+      const shooter = id(d?.s);
+      if (!rock || at === null || round === null || !shooter || ownerOf(shooter) !== from || !this.rockBudget.spend(from)) return;
+      // a peer's hits come in the order of its field time (a new round starts the time over):
+      // one dated before the last it sent would take another Host's points (see game.remoteRock)
+      const last = this.lastRockAt.get(from) ?? -Infinity;
+      if (at < last - ROCK_ORDER_SLACK && last - at < ROCK_RESTART) return;
+      this.lastRockAt.set(from, at);
+      this.guard(() => this.onRock(rock, at, round, shooter));
     });
     transport.on('y', (d, from) => {
       // only a browser that just joined or started over takes a field, once, and only from a
@@ -376,6 +422,19 @@ export class Session {
     return earlier;
   }
 
+  /**
+   * Whether a peer (or this browser) holds one of the tournament's places: fewer than
+   * TOURNAMENT_SIZE of the peers here joined before it. Only they fly, and only they vote on a
+   * cheater (see Online.accuse): a browser cannot buy itself a place by saying it flies.
+   */
+  seated(peer: string): boolean {
+    const joined = peer === this.selfId ? this.startedAt : this.peerJoinedAt.get(peer);
+    if (joined === undefined) return false;
+    let earlier = peer !== this.selfId && this.startedAt < joined ? 1 : 0;
+    for (const other of this.peers) if (other !== peer && (this.peerJoinedAt.get(other) ?? Infinity) < joined) earlier++;
+    return earlier < TOURNAMENT_SIZE;
+  }
+
   /** This peer only just entered the room and does not know the others yet. */
   get justJoined() {
     return seconds() - this.joinedAt < SETTLE_MS / 1000;
@@ -387,6 +446,7 @@ export class Session {
     // no frames ran for a while (a hidden tab, a sleeping device): the others went on without it
     if (this.lastFrameAt && now - this.lastFrameAt > CUT_OFF_MS / 1000 && this.peers.length > 0) this.restart();
     this.lastFrameAt = now;
+    if (!this.settled && !this.justJoined) this.settle();
     // the lead changed to a peer this browser could not hear for a while: two groups that lost
     // each other meet again, and the one whose lead is not the oldest takes the other's world
     const lead = this.leadId;
@@ -405,7 +465,7 @@ export class Session {
   /** Sends the states of the own ships (see statesDue). */
   sendStates(now: number, states: ShipState[], round: RoundState | null) {
     this.nextStateAt = now + 1 / STATE_RATE;
-    this.transport.send('s', { s: states, r: round, g: this.age() });
+    this.transport.send('s', { s: states, r: round, g: this.age(), l: this.leadId });
   }
 
   sendFire(shooter: string, from: Vec, to: Vec) {
@@ -465,8 +525,9 @@ export class Session {
     this.transport.send('ic', { c: probe, s: ship, b: bucket });
   }
 
-  sendTorpedoGone(torpedo: string, position: Vec) {
-    this.transport.send('tg', { i: torpedo, p: position });
+  /** A torpedo went off where it was (told by the browser that launched it), or the own ship `shooter` shot it down there. */
+  sendTorpedoGone(torpedo: string, position: Vec, shooter: string | null) {
+    this.transport.send('tg', { i: torpedo, p: position, ...(shooter ? { s: shooter } : {}) });
   }
 
   /** Tells the browser that runs `target` that the own torpedo `torpedo` of `shooter` hit it. */
@@ -474,9 +535,9 @@ export class Session {
     this.transport.send('tk', { t: target, s: shooter, i: torpedo }, owner);
   }
 
-  /** `at` is the field time of the hit and `round` the round it fell in, so a rock breaks into the same fragments everywhere. */
-  sendRock(rock: string, at: number, round: number) {
-    this.transport.send('r', { i: rock, t: +at.toFixed(3), n: round });
+  /** `at` is the field time of the hit and `round` the round it fell in, so a rock breaks into the same fragments everywhere; `shooter` fired the beam. */
+  sendRock(rock: string, at: number, round: number, shooter: string) {
+    this.transport.send('r', { i: rock, t: +at.toFixed(3), n: round, s: shooter });
   }
 
   sendSync(to: string, field: FieldState, wrecks: WreckState[], probesTaken: string[], probes: ProbeState[]) {
@@ -510,13 +571,50 @@ export class Session {
    * The join time of a peer heard for the first time. A peer that shows up after this browser
    * has settled was not in the room before it: a claim to have been here longer than the
    * current lead is a lie (it would take the lead and the places of everyone), so it lines up
-   * behind the lead instead.
+   * behind the lead instead, clearly behind, so it can never make the lead step back as one of
+   * two that joined at once (see receiveStates).
    */
   private plausibleJoin(peer: string, joined: number): number {
     if (this.justJoined) return joined;
     const lead = this.leadId;
     const leadJoined = lead === this.selfId ? this.startedAt : (this.peerJoinedAt.get(lead) ?? this.startedAt);
-    return joined < leadJoined && peer !== lead ? leadJoined + RESTART_SLACK / 2 : joined;
+    if (joined >= leadJoined || peer === lead) return joined;
+    this.linedUp.add(peer);
+    return leadJoined + 2 * RESTART_SLACK;
+  }
+
+  /**
+   * A newcomer has settled. While settling it believed every join time it heard, so a peer that
+   * lied about its age would lead it alone, apart from everyone else. The others say whom they
+   * follow: when most of them follow another peer than the one it would elect, that one lines up
+   * behind the one they follow.
+   */
+  private settle() {
+    this.settled = true;
+    for (let tries = 0; tries < this.peers.length; tries++) {
+      const lead = this.leadId;
+      if (lead === this.selfId) return;
+      const votes = new Map<string, number>();
+      let reporters = 0;
+      for (const peer of this.peers) {
+        const followed = this.follows.get(peer);
+        if (peer === lead || followed === undefined) continue;
+        reporters++;
+        votes.set(followed, (votes.get(followed) ?? 0) + 1);
+      }
+      let best: string | null = null;
+      let most = 0;
+      for (const [peer, count] of votes) {
+        if (count > most) {
+          best = peer;
+          most = count;
+        }
+      }
+      const bestJoined = best === null ? undefined : this.peerJoinedAt.get(best);
+      if (best === null || best === lead || bestJoined === undefined || !this.peers.includes(best) || most * 2 <= reporters) return;
+      this.peerJoinedAt.set(lead, bestJoined + 2 * RESTART_SLACK);
+      this.linedUp.add(lead);
+    }
   }
 
   /** A peer spoke: notes when, and when it joined or started over. */
@@ -533,7 +631,10 @@ export class Session {
     else if (joined > known + RESTART_SLACK) {
       // the peer started over: it was the one that was gone
       this.peerJoinedAt.set(peer, joined);
-      this.guard(() => this.onPeerRestart(peer));
+      if (now - (this.peerRestartedAt.get(peer) ?? -Infinity) >= PEER_RESTART_GAP) {
+        this.peerRestartedAt.set(peer, now);
+        this.guard(() => this.onPeerRestart(peer));
+      }
     } else if (last !== undefined && cutOff) {
       // a peer this browser knew speaks again after it heard nobody for a while: its own link was down
       this.restart();
@@ -548,12 +649,14 @@ export class Session {
     // a peer only reports the ships it runs
     if (states.some((state) => state === null || ownerOf(state.id) !== from)) return;
     this.hear(from, age);
+    const followed = d.l === undefined ? null : id(d.l);
+    if (followed) this.follows.set(from, followed);
     const round = d.r === null ? null : this.roundState(d.r);
     if (round === undefined) return;
     // two browsers lead at once because their join times lie too close to tell apart over the
-    // network: the one with the higher id steps back (a peer that came clearly later cannot
-    // make the lead step back by sending a round clock)
-    const tie = Math.abs((this.peerJoinedAt.get(from) ?? Infinity) - this.startedAt) <= RESTART_SLACK;
+    // network: the one with the higher id steps back (a peer that came clearly later, or was
+    // lined up behind the lead, cannot make the lead step back by sending a round clock)
+    const tie = !this.linedUp.has(from) && Math.abs((this.peerJoinedAt.get(from) ?? Infinity) - this.startedAt) <= RESTART_SLACK;
     if (round && tie && this.isLead && this.isLive(from) && from < this.selfId) this.restart();
     this.guard(() => this.onStates(states as ShipState[], round, from));
   }
@@ -563,6 +666,11 @@ export class Session {
     const round = { id: int(x.id, 0, MAX_COUNT), left: num(x.left, MIN_ROUND_LEFT, ROUND_LIMIT), field: num(x.field, 0, MAX_FIELD_TIME) };
     if (round.id === null || round.left === null || round.field === null) return undefined;
     const state = round as RoundState;
+    if (x.m !== undefined) {
+      const mode = roomMode(x.m);
+      if (mode !== x.m) return undefined;
+      state.m = mode;
+    }
     if (x.f !== undefined) {
       const flags = flagsState(x.f);
       if (!flags) return undefined;
@@ -574,6 +682,15 @@ export class Session {
       state.b = fleet;
     }
     return state;
+  }
+
+  /** Whether a hit `pair` ("shooter>what") comes at least MIN_HIT_INTERVAL after the last; notes it. */
+  private spaced(pair: string): boolean {
+    const now = seconds();
+    if (now - (this.lastHit.get(pair) ?? -Infinity) < MIN_HIT_INTERVAL) return false;
+    this.lastHit.set(pair, now);
+    if (this.lastHit.size > 1024) for (const [key, at] of this.lastHit) if (now - at > 1) this.lastHit.delete(key);
+    return true;
   }
 
   /** Runs a handler unless this peer has left the room. */

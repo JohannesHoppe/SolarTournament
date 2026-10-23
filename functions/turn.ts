@@ -85,9 +85,9 @@ async function monthlyGb(env: Env): Promise<Usage> {
 }
 
 export async function onRequestGet({ env, request }: { env: Env; request: Request }): Promise<Response> {
-  // a page of another site that asks gets nothing (browsers say where a request comes from)
-  const site = request.headers.get('sec-fetch-site');
-  if (!HOSTS.has(new URL(request.url).hostname) || (site !== null && site !== 'same-origin')) return off('foreign site', 403);
+  // only the game's own pages get an answer: every browser says where a request comes from, so
+  // a page of another site, and a script that is no browser at all, get nothing
+  if (!HOSTS.has(new URL(request.url).hostname) || request.headers.get('sec-fetch-site') !== 'same-origin') return off('foreign site', 403);
   if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return off('not set up');
   const { gb, unread } = await monthlyGb(env);
   if (gb === Infinity) return off(`budget unreadable (${unread})`);

@@ -28,19 +28,27 @@ const REPRINT_GRACE = 10;
 const TORPEDO_SLACK = 2;
 /** A ship may claim this many kills beyond the deaths everyone saw, for reports that arrive after its state. */
 const KILL_SLACK = 2;
+/** A clone printed sooner than this after its death was seen (s) is not a new one: bots wait 3 s, a Host sits through the sponsor break. */
+const REPRINT_DELAY = 2;
+/** A ship's state may say it holds a nova core within this long after it took a probe whose contents this browser did not know (s). */
+const TAKE_WINDOW = 5;
 
 interface Track {
+  /** Where the ship was last seen alive, and when (game time). */
   x: number;
   y: number;
   z: number;
   at: number;
   alive: boolean;
-  deaths: number;
+  /** When this browser saw the clone die (game time), or -Infinity: its next clone may be printed anywhere, with a fresh load. */
+  diedAt: number;
+  /** When it last took a probe this browser could not see the contents of. */
+  tookAt: number;
   /** Jumps seen recently (times). */
   jumps: number[];
   /** No position check before this (game time). */
   graceUntil: number;
-  /** It took a nova core, or its state says it holds one. */
+  /** It took a nova core (or held one when first seen). */
   nova: boolean;
   /** Torpedoes launched by this clone, and how many it can have had. */
   launched: number;
@@ -50,11 +58,10 @@ interface Track {
   credits: number;
 }
 
-/** What a browser knows about a ship from its state: where, alive, deaths, kills, a nova core held. */
+/** What a browser knows about a ship from its state: where, alive, kills, a nova core held. */
 export interface Seen {
   p: number[];
   alive: boolean;
-  deaths?: number;
   kills?: number;
   nova?: boolean;
 }
@@ -65,7 +72,7 @@ export class Plausibility {
   private track(id: string, now: number): Track {
     let track = this.tracks.get(id);
     if (!track) {
-      track = { x: 0, y: 0, z: 0, at: -Infinity, alive: false, deaths: -1, jumps: [], graceUntil: now + REPRINT_GRACE, nova: false, launched: 0, torpedoes: LOAD, kills: null, credits: 0 };
+      track = { x: 0, y: 0, z: 0, at: -Infinity, alive: false, diedAt: -Infinity, tookAt: -Infinity, jumps: [], graceUntil: now + REPRINT_GRACE, nova: false, launched: 0, torpedoes: LOAD, kills: null, credits: 0 };
       this.tracks.set(id, track);
     }
     return track;
@@ -81,9 +88,24 @@ export class Plausibility {
     }
   }
 
-  /** A ship is gone (its browser left or started over): it is judged afresh when it shows again. */
+  /** A ship is gone (its browser left): it is judged afresh when it shows again. */
   forget(id: string) {
     this.tracks.delete(id);
+  }
+
+  /** A ship's browser started over: its clone is printed again, anywhere, with a fresh load; what it did before still counts. */
+  reprint(id: string, now: number) {
+    const track = this.tracks.get(id);
+    if (!track) return;
+    track.graceUntil = now + REPRINT_GRACE;
+    this.freshClone(track);
+  }
+
+  /** This browser saw a ship's clone die (its owner said so to everyone): the next clone is printed anew. */
+  died(id: string, now: number) {
+    const track = this.track(id, now);
+    track.diedAt = now;
+    track.nova = false;
   }
 
   private freshClone(track: Track) {
@@ -92,15 +114,24 @@ export class Plausibility {
     track.nova = false;
   }
 
-  /** A state of a remote ship arrived: a jump too far to fly since the last one is a cheat. */
+  /**
+   * A state of a remote ship arrived: a jump too far to fly since it was last seen alive is a
+   * cheat. Only what this browser saw makes a new clone (a death, a new round, a nova going off,
+   * a start over): a state that only says the ship died and lives again changes nothing, nor
+   * one that says it holds a nova core it never took.
+   */
   state(id: string, seen: Seen, now: number): Cheat | null {
     const track = this.track(id, now);
     const [x, y, z] = seen.p;
-    const deaths = seen.deaths ?? track.deaths;
+    const firstSight = !Number.isFinite(track.at);
     let cheat: Cheat | null = null;
-    // a new clone, or the first sight of the ship: its place is where it starts
-    const continuous = track.alive && seen.alive && deaths === track.deaths && now >= track.graceUntil;
-    if (continuous) {
+    // a clone printed after a death this browser saw: anywhere, with a fresh load
+    const reprinted = seen.alive && Number.isFinite(track.diedAt);
+    if (reprinted) {
+      if (now - track.diedAt >= REPRINT_DELAY) this.freshClone(track);
+      track.diedAt = -Infinity;
+    }
+    if (seen.alive && !firstSight && !reprinted && now >= track.graceUntil) {
       const flown = Math.hypot(x - track.x, y - track.y, z - track.z);
       if (flown > PLAUSIBLE_SPEED * (now - track.at) + PLAUSIBLE_SLACK) {
         track.jumps = track.jumps.filter((at) => now - at < TELEPORT_WINDOW);
@@ -108,9 +139,9 @@ export class Plausibility {
         if (track.jumps.length >= TELEPORT_STRIKES) cheat = 'teleport';
       }
     }
-    if (deaths !== track.deaths || (seen.alive && !track.alive)) this.freshClone(track);
-    if (!seen.alive) track.nova = false;
-    if (seen.nova) track.nova = true;
+    // a core held when the ship is first seen (it took it before this browser came), or right
+    // after it took a probe whose contents this browser did not know
+    if (seen.nova && seen.alive && (firstSight || now - track.tookAt < TAKE_WINDOW)) track.nova = true;
     // kills only grow with the deaths everyone saw; fewer than at first sight is a new round
     if (seen.kills !== undefined) {
       if (track.kills === null || seen.kills < track.kills) {
@@ -118,15 +149,17 @@ export class Plausibility {
         track.credits = 0;
       } else if (seen.kills > track.kills + track.credits + KILL_SLACK) cheat ??= 'kills';
     }
-    Object.assign(track, { x, y, z, at: now, alive: seen.alive, deaths });
+    if (seen.alive) Object.assign(track, { x, y, z, at: now });
+    track.alive = seen.alive;
     return cheat;
   }
 
-  /** A ship took a probe whose kind this browser knows. */
-  probe(id: string, kind: string, now: number) {
+  /** A ship took a probe: of a kind this browser knows, or null when it could not see what it held (it may have been either). */
+  probe(id: string, kind: string | null, now: number) {
     const track = this.track(id, now);
+    if (kind === null) track.tookAt = now;
     if (kind === 'nova') track.nova = true;
-    if (kind === 'torpedoes') track.torpedoes += 2;
+    if (kind === 'torpedoes' || kind === null) track.torpedoes += 2;
   }
 
   /** A ship killed another (`credit` kills), or lost one to a nova (-1), as everyone saw it. */
@@ -154,7 +187,7 @@ export class Plausibility {
 }
 
 /** A report about the own ship may be off this far from where this browser has it (units, 1 km): the shooter saw it up to half a second late. */
-const AIM_SLACK = 20000;
+export const AIM_SLACK = 20000;
 /** How far behind the shooter's last known place a beam may start (units): AIM_SLACK and half a second at full speed. */
 const ORIGIN_SLACK = AIM_SLACK + PLAUSIBLE_SPEED * 0.5;
 const toTarget = new THREE.Vector3();
@@ -170,6 +203,79 @@ export function plausibleBeam(origin: THREE.Vector3, direction: THREE.Vector3, s
 /** A torpedo hit on the own ship: the torpedo went off near it. */
 export function plausibleBlast(at: THREE.Vector3, target: THREE.Vector3): boolean {
   return at.distanceTo(target) < AIM_SLACK;
+}
+
+/** What a ship's beams and torpedoes did counts as evidence this long (s), its torpedo launches as long as a torpedo flies and a little more. */
+const EVIDENCE_SECONDS = 5;
+const LAUNCH_EVIDENCE = 15;
+/** Beams and blasts kept per ship: far more than fit into EVIDENCE_SECONDS of a twin laser's bursts. */
+const EVIDENCE_KEPT = 32;
+const closest = new THREE.Vector3();
+
+/** How far a point lies from the stretch between two others. */
+function offSegment(point: THREE.Vector3, from: THREE.Vector3, to: THREE.Vector3): number {
+  const length = from.distanceToSquared(to);
+  const along = length > 0 ? THREE.MathUtils.clamp(closest.subVectors(point, from).dot(toTarget.subVectors(to, from)) / length, 0, 1) : 0;
+  return point.distanceTo(closest.copy(from).addScaledVector(toTarget.subVectors(to, from), along));
+}
+
+/**
+ * What every browser sees of the other browsers' ships: the beams they fire (everyone is told of
+ * every beam), where their torpedoes went off and when they launched. A report of what a ship
+ * did elsewhere (a rock it broke, a torpedo it shot down, a part of the battleship it hit, a ship
+ * it killed) only counts with the evidence that it could have: a beam that ended there, a
+ * torpedo that went off there. Every bound is generous for lag.
+ */
+export class Evidence {
+  private readonly beams = new Map<string, { at: number; from: THREE.Vector3; to: THREE.Vector3 }[]>();
+  private readonly blasts = new Map<string, { at: number; position: THREE.Vector3 }[]>();
+  private readonly launches = new Map<string, number>();
+
+  beam(ship: string, from: THREE.Vector3, to: THREE.Vector3, now: number) {
+    keep(this.beams, ship, { at: now, from: from.clone(), to: to.clone() }, now);
+  }
+
+  blast(ship: string, position: THREE.Vector3, now: number) {
+    keep(this.blasts, ship, { at: now, position: position.clone() }, now);
+  }
+
+  launch(ship: string, now: number) {
+    this.launches.set(ship, now);
+  }
+
+  /** A beam of the ship ended within `reach` of a point lately: it hit what lies there. */
+  beamEnded(ship: string, point: THREE.Vector3, reach: number, now: number): boolean {
+    return (this.beams.get(ship) ?? []).some((beam) => now - beam.at < EVIDENCE_SECONDS && beam.to.distanceTo(point) < reach);
+  }
+
+  /** A beam of the ship passed near a point lately (AIM_SLACK): it may have hit a ship there. */
+  beamPassed(ship: string, point: THREE.Vector3, now: number): boolean {
+    return (this.beams.get(ship) ?? []).some((beam) => now - beam.at < EVIDENCE_SECONDS && offSegment(point, beam.from, beam.to) < AIM_SLACK);
+  }
+
+  /** A torpedo of the ship went off within `reach` of a point lately. */
+  blasted(ship: string, point: THREE.Vector3, reach: number, now: number): boolean {
+    return (this.blasts.get(ship) ?? []).some((blast) => now - blast.at < EVIDENCE_SECONDS && blast.position.distanceTo(point) < reach);
+  }
+
+  /** The ship launched a torpedo that may still fly. */
+  launched(ship: string, now: number): boolean {
+    return now - (this.launches.get(ship) ?? -Infinity) < LAUNCH_EVIDENCE;
+  }
+
+  forget(ship: string) {
+    this.beams.delete(ship);
+    this.blasts.delete(ship);
+    this.launches.delete(ship);
+  }
+}
+
+/** Keeps a ship's latest entries, the stale ones dropped. */
+function keep<T extends { at: number }>(map: Map<string, T[]>, ship: string, entry: T, now: number) {
+  const list = (map.get(ship) ?? []).filter((old) => now - old.at < LAUNCH_EVIDENCE);
+  list.push(entry);
+  if (list.length > EVIDENCE_KEPT) list.shift();
+  map.set(ship, list);
 }
 
 /** Accusations: a peer counts as a cheater once at least ACCUSERS Hosts who fly, the own one included, say so. */

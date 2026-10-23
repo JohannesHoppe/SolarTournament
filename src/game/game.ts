@@ -44,7 +44,7 @@ import { Showcase } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { buy, LEVELS, nextPrice, parseHangar, payOut, perksOf, sovereignEarned, UPGRADES } from './hangar';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
-import { contents, Probes, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
+import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { FieldState } from '../world/asteroids';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, SAFE_IMPACT } from '../ship/impact';
@@ -200,6 +200,8 @@ const IDLE_GLITCH_MIN = 5;
 const IDLE_GLITCH_RANGE = 9;
 /** Reach of the laser (units, 10 km), far beyond the arena; also the length of the rays that find the shadow of the rocks. */
 const LASER_RANGE = 200000;
+/** A probe another browser's ship took may lie this far beyond its reach here (units, 500 m, and half a second of the ship's flight): the taker is seen a moment late. */
+const PROBE_LAG = 10000;
 /** Points for destroying a ship: a kill is worth more than any rock. */
 const KILL_POINTS = 500;
 /**
@@ -716,8 +718,8 @@ export class Game implements OnlineGame {
   private resultsShownFor: number | null = null;
   /** Rock hits from other browsers for a round this browser has not started yet. */
   private readonly pendingRocks: { id: string; at: number; round: number }[] = [];
-  /** Rocks this browser's ships broke online: when, by whom, for how many points. */
-  private readonly brokenHere = new Map<string, { at: number; ship: Ship; points: number }>();
+  /** Rocks this browser's ships broke online: when, by whom, for how many points, and where the rock was and how far it reached. */
+  private readonly brokenHere = new Map<string, { at: number; ship: Ship; points: number; position: THREE.Vector3; radius: number }>();
   /** The last hit this browser's ships landed on each rock online that did not break it: when, by whom. */
   private readonly lastRockHit = new Map<string, { at: number; ship: Ship }>();
   /** The running flight school, or null in a tournament round. */
@@ -2061,7 +2063,7 @@ export class Game implements OnlineGame {
     if (own && own.at > at) {
       const points = ASTEROID_POINTS[destroyed.generation];
       own.ship.score += points;
-      this.brokenHere.set(id, { at: own.at, ship: own.ship, points });
+      this.brokenHere.set(id, { at: own.at, ship: own.ship, points, position: destroyed.object.position.clone(), radius: destroyed.radius });
     }
     this.effects.explosion(destroyed.object.position, destroyed.meanRadius * 0.6, destroyed.velocity);
     this.hearDebris(destroyed.object.position, destroyed.meanRadius);
@@ -2074,6 +2076,8 @@ export class Game implements OnlineGame {
   }
 
   syncRound(round: RoundState) {
+    // the room's modes are the lead's: a link or a lobby listing may have named others
+    if (round.m && this.room && round.m !== this.room.mode) this.room.mode = round.m;
     // the first round state a newcomer hears only tells it which round runs: its field is the
     // lead's snapshot already (see Online's onSync), not a fresh one. A browser that started
     // over in another round than its own leaves its own behind.
@@ -2124,7 +2128,7 @@ export class Game implements OnlineGame {
     const left = this.roundEndsAtWall - wallClock();
     this.roundEndsAt = this.time + left;
     this.followStart();
-    const round: RoundState = { id: this.roundId, left: +left.toFixed(3), field: +this.field.clock.toFixed(3) };
+    const round: RoundState = { id: this.roundId, left: +left.toFixed(3), field: +this.field.clock.toFixed(3), ...(this.room ? { m: this.room.mode } : {}) };
     if (this.flags) round.f = this.flags.toState();
     if (this.fleet) round.b = this.fleet.toState();
     return round;
@@ -3893,7 +3897,7 @@ export class Game implements OnlineGame {
   /** An own torpedo went off: on a ship (whose browser takes the damage), on the battleship, on a rock, or burnt out. */
   private detonate(torpedo: Torpedo, hit: Ship | null) {
     this.blowUp(torpedo);
-    this.online?.sendTorpedoGone(torpedo.id, torpedo.position);
+    this.online?.sendTorpedoGone(torpedo.id, torpedo.position, null);
     // every part of the battleship close to where it went off takes it
     if (this.fleet) for (const zone of this.fleet.blast(torpedo.position)) this.hitFleet(this.fleet, zone, torpedo.shooter, torpedo.position, TORPEDO_HITS);
     if (!hit) return;
@@ -3979,12 +3983,29 @@ export class Game implements OnlineGame {
    * lies two thirds from where this browser sees the taker (standings differ by a little lag,
    * not from first to last), then the third seen here.
    */
-  remoteProbe(id: string, ship: Ship | null, bucket: number): ItemKind | null {
+  remoteProbe(id: string, ship: Ship | null, bucket: number): ItemKind | null | undefined {
     const deathsOf = (s: string) => this.ships.find((other) => other.id === s)?.deaths ?? null;
-    const probe = this.probes.plausible(id, this.roundId, deathsOf) ? this.probes.takeId(id) : null;
+    if (!this.probes.plausible(id, this.roundId, deathsOf)) return undefined;
+    const probe = this.probes.takeId(id);
     if (!probe) return null;
     const seen = ship ? this.bucketOf(ship) : 1;
     return contents(probe, Math.abs(bucket - seen) <= 1 ? bucket : seen);
+  }
+
+  probeWithin(id: string, ship: Ship): boolean {
+    const probe = this.probes.find(id);
+    // the taker flew through it on its own screen: here it may be a moment behind, at full speed
+    return !probe || probe.position.distanceTo(ship.flight.position) < PROBE_RADIUS + ship.radius + PROBE_LAG + ship.flight.velocity.length() * 0.5;
+  }
+
+  rockAt(id: string): { position: THREE.Vector3; radius: number } | null {
+    const rock = this.field.asteroids.get(id);
+    if (rock) return { position: rock.object.position, radius: rock.radius };
+    return this.brokenHere.get(id) ?? null;
+  }
+
+  fleetZoneAt(zone: number): THREE.Vector3 | null {
+    return this.fleet?.present(this.field.clock) ? this.fleet.zoneAt(zone, new THREE.Vector3()) : null;
   }
 
   /** Several browsers found a Host cheating: everyone is told. */
@@ -4131,8 +4152,8 @@ export class Game implements OnlineGame {
   /** A beam went through a torpedo: it goes off where it is, on every browser. */
   private shootDown(torpedo: Torpedo, shooter: Ship) {
     this.blowUp(torpedo);
-    this.online?.sendTorpedoGone(torpedo.id, torpedo.position);
     if (shooter.owner !== null) return;
+    this.online?.sendTorpedoGone(torpedo.id, torpedo.position, shooter);
     shooter.score += TORPEDO_DOWN_POINTS;
     if (!shooter.isLocal) return;
     this.torpedoesDown++;
@@ -4397,7 +4418,6 @@ export class Game implements OnlineGame {
     if (torpedoHit) {
       asteroidHit = wreckHit = null;
       beamLength = torpedoHit.distance;
-      this.shootDown(torpedoHit.torpedo, shooter);
     }
     // the President's battleship stops it: on its armor, or on a part it breaks
     const fleetHit = torpedoHit ? null : (this.fleet?.raycast(origin, direction, beamLength, this.field.clock) ?? null);
@@ -4412,6 +4432,8 @@ export class Game implements OnlineGame {
     this.killcam.recordBeam(this.time, start, end, shooter.color);
     this.online?.sendFire(shooter, start, end);
     if (shooter.isLocal) this.sound.play('laser', { volume: 0.7 });
+    // after the beam: the other browsers take a torpedo shot down only with the beam that did it
+    if (torpedoHit) this.shootDown(torpedoHit.torpedo, shooter);
 
     for (const ship of [...this.ships]) {
       // a beam passes through the own side's ships
@@ -4453,11 +4475,11 @@ export class Game implements OnlineGame {
       if (asteroid.solid) return;
       const destroyed = this.field.hit(asteroid.id);
       if (this.online && !destroyed) this.lastRockHit.set(asteroid.id, { at: this.field.clock, ship: shooter });
-      this.online?.sendRock(asteroid.id, this.field.clock, this.roundId >= 0 ? this.roundId : (this.rejoinedFrom ?? 0));
+      this.online?.sendRock(asteroid.id, this.field.clock, this.roundId >= 0 ? this.roundId : (this.rejoinedFrom ?? 0), shooter);
       if (destroyed) {
         shooter.score += ASTEROID_POINTS[destroyed.generation];
         // online, another Host may have broken the same rock a moment earlier (see remoteRock)
-        if (this.online) this.brokenHere.set(asteroid.id, { at: this.field.clock, ship: shooter, points: ASTEROID_POINTS[destroyed.generation] });
+        if (this.online) this.brokenHere.set(asteroid.id, { at: this.field.clock, ship: shooter, points: ASTEROID_POINTS[destroyed.generation], position: destroyed.object.position.clone(), radius: destroyed.radius });
         this.effects.explosion(destroyed.object.position, destroyed.meanRadius * 0.6, destroyed.velocity);
         this.hearDebris(destroyed.object.position, destroyed.meanRadius);
         if (shooter.isLocal) {

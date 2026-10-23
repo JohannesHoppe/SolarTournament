@@ -1,7 +1,9 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { Accusations, accusersNeeded, Plausibility } from './plausible';
+import { Accusations, accusersNeeded, Evidence, Plausibility } from './plausible';
 
-const alive = (x: number, more = {}) => ({ p: [x, 0, 0], alive: true, deaths: 0, ...more });
+const alive = (x: number, more = {}) => ({ p: [x, 0, 0], alive: true, ...more });
+const dead = { p: [0, 0, 0], alive: false };
 
 /** A ship seen for the first time, past the grace of its first sight. */
 function flying(check: Plausibility, id = 's') {
@@ -21,17 +23,26 @@ describe('plausibility of what other browsers report', () => {
     expect(check.state('s', alive(0), 23.3)).toBe('teleport');
   });
 
-  it('let a ship be printed elsewhere after a death, a new round or its nova', () => {
+  it('let a ship be printed elsewhere after a death it saw, a new round or its nova', () => {
     const check = flying(new Plausibility());
-    check.state('s', { p: [0, 0, 0], alive: false, deaths: 1 }, 21);
-    check.state('s', alive(90000, { deaths: 1 }), 24);
-    expect(check.state('s', alive(90000, { deaths: 1 }), 34)).toBeNull();
+    check.died('s', 21);
+    check.state('s', dead, 21);
+    check.state('s', alive(90000), 24);
+    expect(check.state('s', alive(90000), 34)).toBeNull();
     check.newRound(35);
-    expect(check.state('s', alive(0, { deaths: 1 }), 35.1)).toBeNull();
-    expect(check.state('s', alive(90000, { deaths: 1 }), 35.2)).toBeNull();
+    expect(check.state('s', alive(0), 35.1)).toBeNull();
+    expect(check.state('s', alive(90000), 35.2)).toBeNull();
   });
 
-  it('take a nova only from a ship that holds a core, where it is', () => {
+  it('take no new clone from a state alone: dying and living again in its own states does not let a ship jump', () => {
+    const check = flying(new Plausibility());
+    check.state('s', dead, 21);
+    expect(check.state('s', alive(100000), 21.1)).toBeNull();
+    check.state('s', dead, 21.2);
+    expect(check.state('s', alive(0), 21.3)).toBe('teleport');
+  });
+
+  it('take a nova only from a ship that took a core, where it is', () => {
     const check = flying(new Plausibility());
     expect(check.nova('s', [0, 0, 0], 21)).toBe('nova');
     check.probe('s', 'nova', 21);
@@ -39,27 +50,50 @@ describe('plausibility of what other browsers report', () => {
     expect(check.nova('s', [100, 0, 0], 21.1)).toBeNull();
     // the core is spent
     expect(check.nova('s', [100, 0, 0], 21.2)).toBe('nova');
-    // a state that says it holds one is as good as the probe
+  });
+
+  it("take no core on a ship's own word, unless it holds one when first seen or just took a probe of unknown contents", () => {
+    const check = flying(new Plausibility());
     check.state('s', alive(0, { nova: true }), 40);
-    expect(check.nova('s', [0, 0, 0], 40.1)).toBeNull();
+    expect(check.nova('s', [0, 0, 0], 40.1)).toBe('nova');
+    // a ship first seen with a core took it before this browser came
+    check.state('t', alive(0, { nova: true }), 41);
+    expect(check.nova('t', [0, 0, 0], 41.1)).toBeNull();
+    // a probe this browser did not have: it may have held a core
+    check.probe('s', null, 50);
+    check.state('s', alive(0, { nova: true }), 51);
+    expect(check.nova('s', [0, 0, 0], 51.1)).toBeNull();
   });
 
   it('take no nova from a clone that died with it', () => {
     const check = flying(new Plausibility());
-    check.state('s', alive(0, { nova: true }), 21);
-    check.state('s', { p: [0, 0, 0], alive: false, deaths: 1 }, 22);
+    check.probe('s', 'nova', 21);
+    check.died('s', 22);
     expect(check.nova('s', [0, 0, 0], 22.1)).toBe('nova');
   });
 
-  it('count torpedoes per clone, with the tubes allowed online, probes and some slack', () => {
+  it('count torpedoes per clone, with the tubes allowed online, probes and some slack; a clone is new only after a death it saw', () => {
     const check = flying(new Plausibility());
     for (let i = 0; i < 5; i++) expect(check.torpedo('s', 21)).toBeNull();
     expect(check.torpedo('s', 21)).toBe('torpedoes');
-    check.state('s', { p: [0, 0, 0], alive: false, deaths: 1 }, 22);
-    check.state('s', alive(0, { deaths: 1 }), 25);
+    // dying and living again in its own states gives no fresh load
+    check.state('s', dead, 21.5);
+    check.state('s', alive(0), 21.6);
+    expect(check.torpedo('s', 21.7)).toBe('torpedoes');
+    check.died('s', 22);
+    check.state('s', dead, 22);
+    check.state('s', alive(0), 25);
     check.probe('s', 'torpedoes', 26);
     for (let i = 0; i < 7; i++) expect(check.torpedo('s', 27)).toBeNull();
     expect(check.torpedo('s', 27)).toBe('torpedoes');
+  });
+
+  it('give a browser that started over a new clone, without forgetting its kills', () => {
+    const check = flying(new Plausibility());
+    for (let i = 0; i < 5; i++) check.torpedo('s', 21);
+    check.reprint('s', 22);
+    expect(check.state('s', alive(100000), 22.1)).toBeNull();
+    expect(check.torpedo('s', 22.2)).toBeNull();
   });
 
   it('let kills grow only with the deaths everyone saw, double for a nova', () => {
@@ -72,6 +106,32 @@ describe('plausibility of what other browsers report', () => {
     check.newRound(4);
     expect(check.state('s', alive(0, { kills: 0 }), 5)).toBeNull();
     expect(check.state('s', alive(0, { kills: 2 }), 6)).toBeNull();
+  });
+});
+
+describe('evidence of what a ship did', () => {
+  const v = (x: number, y = 0) => new THREE.Vector3(x, y, 0);
+
+  it('counts a beam where it ended and along its way, for a few seconds', () => {
+    const evidence = new Evidence();
+    evidence.beam('s', v(0), v(100000), 10);
+    expect(evidence.beamEnded('s', v(100000, 5000), 20000, 11)).toBe(true);
+    expect(evidence.beamEnded('s', v(50000), 20000, 11)).toBe(false);
+    expect(evidence.beamPassed('s', v(50000, 10000), 11)).toBe(true);
+    expect(evidence.beamPassed('s', v(50000, 30000), 11)).toBe(false);
+    expect(evidence.beamEnded('s', v(100000), 20000, 16)).toBe(false);
+    expect(evidence.beamEnded('t', v(100000), 20000, 11)).toBe(false);
+  });
+
+  it('counts where a torpedo went off, and a launch while the torpedo may fly', () => {
+    const evidence = new Evidence();
+    evidence.blast('s', v(0), 10);
+    evidence.launch('s', 10);
+    expect(evidence.blasted('s', v(500), 20000, 11)).toBe(true);
+    expect(evidence.launched('s', 24)).toBe(true);
+    expect(evidence.launched('s', 26)).toBe(false);
+    evidence.forget('s');
+    expect(evidence.blasted('s', v(500), 20000, 11)).toBe(false);
   });
 });
 
