@@ -687,13 +687,18 @@ button.primary .mode-note {
   transition: none;
 }
 
+/* a long message breaks into a few compact lines in the middle, so the eye does not travel the whole screen */
 #hud-message {
   position: absolute;
   top: 30%;
-  left: 0;
-  right: 0;
-  text-align: center;
-  font-size: 1.6rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(46rem, calc(100% - 64px));
+  text-align: justify;
+  text-align-last: center;
+  hyphens: auto;
+  font-size: 1.25rem;
+  line-height: 1.4;
   color: var(--hud-bright);
 }
 
@@ -2095,8 +2100,7 @@ body.touch #transmission {
   body.touch #hud-message,
   body.touch #hud:has(#school-panel:not([hidden])) #hud-message {
     top: calc(50% + 78px);
-    left: 130px;
-    right: 130px;
+    width: calc(100% - 260px);
   }
 
   body.touch #transmission {
