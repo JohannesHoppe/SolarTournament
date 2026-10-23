@@ -18,7 +18,7 @@ import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
+import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
@@ -52,10 +52,30 @@ import { bounceOff, impactDamage, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { touchRing } from '../world/gates';
+import { COMET_SPEED, COMET_WARNING, cometEnd, cometsOf, cometStart, CometView, courseAt, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut, standing } from './survival';
 import { markedName } from '../view/marks';
 import { Coach, type Tip } from './coach';
+import {
+  ALARM_RANK,
+  AlarmTones,
+  Alarms,
+  CRITICAL_GLITCHES,
+  escapeLoad,
+  FIELD_CRITICAL,
+  HEART_HULL,
+  HEART_WELL,
+  HULL_CRITICAL,
+  IMPACT_CRITICAL,
+  SILENCE_BEFORE,
+  SILENCE_COOLDOWN,
+  SILENCE_SECONDS,
+  WELL_CRITICAL,
+  WELL_LOST,
+  WELL_RELEASE,
+  wellLevel,
+} from './alarms';
 import { MOMENTS, Moments, type Moment } from './moments';
 import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
 
@@ -217,8 +237,9 @@ const PLUME_BURN = 8;
  */
 const FLING_SECONDS = 1.2;
 const FLING_STEER = 0.1;
-/** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km). */
+/** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km); within TORPEDO_CRITICAL it is CRITICAL (units, 500 m). */
 const TORPEDO_WARNING = 40000;
+const TORPEDO_CRITICAL = 10000;
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
 const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: msg('Burned up in the clouds'), hole: msg('Crossed the event horizon') };
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
@@ -330,6 +351,11 @@ const LOCK_RANGE = 60000;
 const LOCK_TRACKING = 4;
 /** Vertical field of view of the camera (degrees). */
 const CAMERA_FOV = 70;
+/**
+ * The camera sees this far (units, 35 km): the horizon of the gas giant's clouds, 40 km in
+ * radius, lies up to 22 km off for a ship at the arena's edge (see arenas.ts).
+ */
+const CAMERA_FAR = 700000;
 /** A full burn widens the view by this much (degrees) and shakes the chase camera by this share of the ship radius: the drive is felt. */
 const DRIVE_FOV_KICK = 7;
 const DRIVE_SHAKE = 0.012;
@@ -473,13 +499,28 @@ type State = 'menu' | 'playing' | 'paused' | 'results';
  * What killed a ship without a killer, where this browser saw it happen: a rock, wreckage, deep
  * space, the arena's massive body; or, with a killer, its nova core.
  */
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'plume' | null;
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'plume' | 'shower' | 'comet' | null;
 /** How the President's battleship killed a ship, for the sponsor break. */
 const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
   battery: msg("Shot down by the President's battleship"),
   exhaust: msg("Burned up in the battleship's drive plume"),
   blast: msg('Taken along by the battleship'),
 };
+/** How a comet killed a ship: its head or its shower. */
+const COMET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
+  comet: msg('Run down by a comet'),
+  shower: msg("Riddled by a comet's shower"),
+};
+/**
+ * A comet's shower (see comet.ts) strikes a ship like a laser, armor or drive by where it comes
+ * from, unless rock within SHOWER_COVER (units, 300 m) upstream of the ship stands in its way:
+ * cover behind an asteroid is the best answer, the armored nose turned into it the next.
+ */
+const SHOWER_COVER = 6000;
+/** A bot this close to a comet's route (units, 500 m beyond the swarm's width) as the head nears or the swarm passes flies away from it, sideways. */
+const COMET_DANGER = 10000;
+/** The flight school's comet passes the point its drill names this long after the drill sends it (s): 2.25 km off at its speed. */
+const DRILL_COMET_LEAD = 15;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 /** The label of a menu mode button: the text of its first line, without the Enter key. */
@@ -508,6 +549,14 @@ const assistSteer = { yaw: 0, pitch: 0 };
 const sweep = new THREE.Vector3();
 const surface = new THREE.Vector3();
 const ringFacing = new THREE.Vector3();
+const cometHead = new THREE.Vector3();
+const cometVelocity = new THREE.Vector3();
+const cometOffset = new THREE.Vector3();
+const cometPiece = new THREE.Vector3();
+const cometCover = new THREE.Vector3();
+const cometRelative = new THREE.Vector3();
+const cometAway = new THREE.Vector3();
+const cometCourse = new THREE.Vector3();
 /** The velocity of what does not move: a ring of the tournament holds its place. */
 const STILL = new THREE.Vector3();
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
@@ -580,7 +629,7 @@ export class Game implements OnlineGame {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly composer: EffectComposer;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 10, 400000);
+  private readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 10, CAMERA_FAR);
   private readonly space = new Space();
   private readonly arena = new Arena();
   private readonly belt: Belt;
@@ -746,8 +795,17 @@ export class Game implements OnlineGame {
   private brakeFlip = false;
   /** The flight computer's output, reused from frame to frame. */
   private readonly computed: Controls = { ...IDLE };
-  /** Warnings below the crosshair, rebuilt every frame in the same array. */
-  private readonly warnings: string[] = [];
+  /**
+   * The own clone's alarms, raised anew every frame (see game/alarms.ts); any part of the game
+   * raises its own danger here, and the HUD and the headset show the worst.
+   */
+  readonly alarms = new Alarms();
+  private readonly alarmTones = new AlarmTones();
+  /** How far Nicole has warned of a gravity well (an alarm rank, 4: past return), reset once the pull lets go. */
+  private wellSaid = 0;
+  private hullWarned = false;
+  /** When the radio may fall silent again before an imminent death. */
+  private silenceReadyAt = 0;
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
   private readonly inSight = (ship: Ship) => this.field.lineOfSight(this.camera.position, ship.flight.position);
   /** Whether the own ship's sensors see a ship past the asteroids, for the radar. */
@@ -767,6 +825,19 @@ export class Game implements OnlineGame {
   ]);
   /** The President's battleship, in the regime's red. */
   private readonly fleetMark: RadarMark = { position: new THREE.Vector3(), label: t('Battleship'), color: '#ff2a3a' };
+  /** The comet of the round as the scene shows it, and on the radar. */
+  private readonly cometView = new CometView();
+  private readonly cometMark: RadarMark = { position: new THREE.Vector3(), label: t('Comet'), color: '#bfe6ff' };
+  /** The comets of the round (see cometsOf), and of which room, round and arena they are. */
+  private comets: Comet[] = [];
+  private cometsOfKey = '';
+  /** The flight school's comet, when a drill sends one. */
+  private drillComet: Comet | null = null;
+  /** The comet the flight computer has warned of, and the one whose shower flies now. */
+  private cometCalled: Comet | null = null;
+  private shower: Shower | null = null;
+  /** The pieces of the shower that already struck each ship: one strikes a ship once. */
+  private readonly struck = new Map<Ship, Uint8Array>();
   /** The ship holding a nova core, in white, so everyone sees where not to be. */
   private readonly novaMark: RadarMark = { position: new THREE.Vector3(), label: t('NOVA'), color: '#ffffff' };
   /** The marks the radar shows this frame (see radarMarks). */
@@ -801,14 +872,11 @@ export class Game implements OnlineGame {
   /** G-force strain of the own pilot, 0..1. */
   private strain = 0;
   private nextHeartbeat = 0;
-  private nextWarningBeep = 0;
-  /** The nova holder the own pilot was last warned about, and when the siren sounds next. */
+  /** The nova holder the own pilot was last warned about. */
   private novaWarned: Ship | null = null;
   private novaFlashTimer = 0;
   /** Things to say and show a little after a round started (see cue). */
   private readonly cues: { at: number; run: () => void }[] = [];
-  private nextNovaSiren = 0;
-  private nextLockBeep = 0;
   /** Speed of game time; 0 freezes the simulation while rendering continues. */
   timeScale = 1;
   /** The picture has to be drawn again even in a still pause (see frame). */
@@ -893,7 +961,7 @@ export class Game implements OnlineGame {
     this.scene.add(this.replayEffects.group);
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
-    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.ghost.root, this.cables.group);
+    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.ghost.root, this.cables.group, this.cometView.root);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
@@ -1538,11 +1606,11 @@ export class Game implements OnlineGame {
    */
   private commentOnDeath(victim: Ship, killer: Ship | null, cause: DeathCause) {
     // the flight school is on no broadcast; a death the announcer has no line for goes uncommented
-    if (this.school || (!killer && cause !== 'rock')) return;
+    if (this.school || (!killer && cause !== 'rock' && cause !== 'comet')) return;
     if (wallClock() < this.nextAnnouncement) return;
     const roll = hash(textSeed(victim.id), victim.deaths, 7);
     if (roll % 10 >= 7) return;
-    const lines = victim.type === 'alien' && roll % 2 === 0 ? ANNOUNCER_ALIEN : killer ? ANNOUNCER_KILL : ANNOUNCER_ROCK;
+    const lines = cause === 'comet' ? ANNOUNCER_COMET_KILL : victim.type === 'alien' && roll % 2 === 0 ? ANNOUNCER_ALIEN : killer ? ANNOUNCER_KILL : ANNOUNCER_ROCK;
     this.announce(lines[(roll >>> 4) % lines.length], victim);
   }
 
@@ -1720,7 +1788,7 @@ export class Game implements OnlineGame {
     if (state !== 'playing') {
       this.sound.setEngine(0, 0);
       // the look of a nova core belongs to the round; the next frame of play brings it back
-      document.body.classList.remove('nova-held', 'nova-alarm');
+      document.body.classList.remove('nova-held', 'alarm-critical');
     }
     if (state === 'menu' || state === 'results') {
       this.datamosh.stop();
@@ -1887,6 +1955,7 @@ export class Game implements OnlineGame {
       this.school = null;
       this.schoolContext = null;
     }
+    this.drillComet = null;
   }
 
   /**
@@ -2711,6 +2780,7 @@ export class Game implements OnlineGame {
     // Last Clone Standing: the solar flare's shell, the same on every browser by the field time
     const safe = this.safeRadius();
     this.arena.setEdge(safe, this.survival && this.field.clock >= FLARE_START);
+    this.playComet();
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -2736,7 +2806,7 @@ export class Game implements OnlineGame {
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE)?.position ?? null;
         // a nova core close by, a battleship whose reactor went critical, or the plume of one
         // hunting with its stern: away from it, out of the plume to the side
-        bot.flee = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : null);
+        bot.flee = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : null) ?? this.cometDanger(ship);
         // a bot goes out to the President's battleship on its orbit beyond the rocks
         bot.home = this.fleet ? FLEET_HOME : Math.min(HOME_RADIUS, safe * FLARE_KEEP);
         bot.prey = null;
@@ -2773,6 +2843,7 @@ export class Game implements OnlineGame {
       this.keepInArena(ship, now);
       if (this.survival && ship.flight.position.length() > safe) this.burn(ship, 1, FLARE_HEAT, FLARE_BURN, msg('Inside the solar flare · get back in'), null, 'flare', dt, now);
       this.collide(ship, now);
+      this.cometStrike(ship, now);
       this.hitWreckage(ship, now);
       this.scorch(ship, dt, now);
       this.exhaust(ship, dt);
@@ -3074,7 +3145,7 @@ export class Game implements OnlineGame {
   private playFleet(fleet: Fleet, dt: number, now: number) {
     const clock = this.field.clock;
     for (const ship of this.ships) ship.team = 0;
-    if (!this.online || this.online.isLead) fleet.lead(dt, clock, this.ships);
+    if (!this.online || this.online.isLead) fleet.lead(dt, clock, this.ships, this.comets);
     else fleet.glide(dt);
     fleet.update(clock, now);
     for (const { zone, shot } of fleet.firing(clock)) this.fireBattery(fleet, zone, shot);
@@ -3271,6 +3342,10 @@ export class Game implements OnlineGame {
     if (this.fleet?.present(this.field.clock)) {
       this.fleetMark.position.copy(this.fleet.position);
       list.push(this.fleetMark);
+    }
+    if (this.shower) {
+      headAt(this.shower.comet, this.field.clock, this.cometMark.position);
+      list.push(this.cometMark);
     }
     // torpedoes in flight, in red
     for (let i = 0; i < this.torpedoes.list.length && i < this.torpedoMarks.length; i++) {
@@ -3729,6 +3804,13 @@ export class Game implements OnlineGame {
       },
       get dodges() {
         return game.dodges;
+      },
+      launchComet: (through, direction) => {
+        this.drillComet = through && direction ? makeComet(this.field.clock + DRILL_COMET_LEAD, direction.clone().normalize(), through.clone(), Math.floor(this.time * 1000) + 1, this.field.well) : null;
+      },
+      get cometGone() {
+        const comet = game.drillComet;
+        return !comet || game.field.clock > Math.min(comet.at, comet.swallowed) + (SHOWER_LENGTH + SHOWER_WIDE) / COMET_SPEED;
       },
       spawnProbe: (position, kind) => {
         // a probe of its own each time: one taken is never shown again; it waits where it is
@@ -4295,23 +4377,18 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * Panic in the own cockpit while another ship with a nova core is close: a two-tone siren,
-   * the warning, the tint of an alarm on the screen, and Nicole urging the pilot away, once
-   * each time a holder comes close.
+   * Panic in the own cockpit while another ship with a nova core is close: a CRITICAL alarm
+   * with its two-tone siren and the red edge, and Nicole urging the pilot away, once each time
+   * a holder comes close.
    */
-  private novaAlarm(me: Ship, warnings: string[], now: number) {
+  private novaAlarm(me: Ship) {
     const holder = me.alive ? this.novaNear(me, NOVA_RADIUS * NOVA_FLEE) : null;
-    if (document.body.classList.contains('nova-alarm') !== !!holder) document.body.classList.toggle('nova-alarm', !!holder);
     if (!holder) {
       this.novaWarned = null;
       return;
     }
-    warnings.push(t('NOVA CORE ACTIVATED · {distance} · GET OUT', { distance: meters(holder.flight.position.distanceTo(me.flight.position)) }));
-    if (now >= this.nextNovaSiren) {
-      const high = Math.floor(now * 4) % 2 === 0;
-      this.sound.beep(high ? 1320 : 880, 0.2, 0.18);
-      this.nextNovaSiren = now + 0.25;
-    }
+    const away = relative.subVectors(holder.flight.position, me.flight.position);
+    this.alarms.raise({ id: 'nova', level: 'critical', text: t('NOVA CORE ACTIVATED · {distance} · GET OUT', { distance: meters(away.length()) }), direction: away, tone: 'nova' });
     if (this.novaWarned !== holder) {
       this.novaWarned = holder;
       this.speaker.say(COMPUTER.novaNear, 'urgent');
@@ -4788,7 +4865,7 @@ export class Game implements OnlineGame {
         this.deathCause = [before, ...markedName(killer.kind, killer.name), after];
       } else if (cause === 'well') this.deathCause = t(WELL_DEATHS[this.venue.id] ?? msg('Crashed'));
       else if (cause === 'flare') this.deathCause = t('Burned up in the solar flare');
-      else if (cause && FLEET_DEATHS[cause]) this.deathCause = t(FLEET_DEATHS[cause]);
+      else if (cause && (FLEET_DEATHS[cause] ?? COMET_DEATHS[cause])) this.deathCause = t(FLEET_DEATHS[cause] ?? COMET_DEATHS[cause]!);
       else this.deathCause = victim.outsideSince !== null ? t('Lost in deep space') : t('Crashed');
     }
     // a kill of the Host's own is bigger: more fire, a jolt, and the points where it happened
@@ -4843,7 +4920,7 @@ export class Game implements OnlineGame {
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
     const killedBy =
-      cause === 'well' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause && FLEET_DEATHS[cause] ? t('Battleship') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
+      cause === 'well' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause && FLEET_DEATHS[cause] ? t('Battleship') : cause && COMET_DEATHS[cause] ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
     this.hud.kill(this.time, killer ?? { kind: null, name: killedBy }, victim);
     // the last clone of a ship in Last Clone Standing: out, and everyone hears it
     if (this.out(victim)) {
@@ -4946,7 +5023,9 @@ export class Game implements OnlineGame {
 
   /**
    * What the own pilot feels and the flight computer reports: g-force strain with tunnel
-   * vision, impact warnings, an overheated laser.
+   * vision, a heartbeat, and the alarms (see game/alarms.ts) of an impact ahead, an overheated
+   * laser or drive, a nova core, a torpedo, a nose on the own ship, the field's edge, a
+   * gravity well and a failing hull, besides whatever other parts of the game raised.
    */
   private pilot(dt: number, now: number) {
     const me = this.me!;
@@ -4956,15 +5035,9 @@ export class Game implements OnlineGame {
     else this.strain -= dt / G_RECOVERY;
     this.strain = THREE.MathUtils.clamp(this.strain, 0, 1);
     this.hud.setStrain(this.strain);
-    if (this.strain > 0.4 && now >= this.nextHeartbeat) {
-      // heartbeat: faster and louder the harder the pilot is pressed into the seat
-      this.sound.beep(55, 0.12, 0.25 * this.strain);
-      this.sound.beep(48, 0.14, 0.2 * this.strain, 0.16);
-      this.nextHeartbeat = now + 1.1 - 0.5 * this.strain;
-    }
 
-    const warnings = this.warnings;
-    warnings.length = 0;
+    const alarms = this.alarms;
+    let impact = Infinity;
     const speed = flight.velocity.length();
     if (me.alive && speed > 100) {
       const heading = scratch.copy(flight.velocity).divideScalar(speed);
@@ -4979,34 +5052,199 @@ export class Game implements OnlineGame {
         const flipTime = ((turning / Math.PI) * FLIP_SECONDS + (turning > 0.35 ? FLIP_ROLL_SECONDS : 0)) / turnRate;
         const brakeTime = flipTime + speed / thrust / 2;
         if (timeToImpact < brakeTime + IMPACT_MARGIN) {
-          warnings.push(t('IMPACT IN {seconds} s', { seconds: timeToImpact.toFixed(1) }));
-          if (now >= this.nextWarningBeep) {
-            this.sound.beep(980, 0.05, 0.12);
-            this.nextWarningBeep = now + THREE.MathUtils.clamp(timeToImpact / 6, 0.1, 0.5);
-          }
+          impact = timeToImpact;
+          alarms.raise({ id: 'impact', level: timeToImpact < IMPACT_CRITICAL ? 'critical' : 'warning', text: t('IMPACT'), direction: heading, seconds: timeToImpact, tone: 'impact' });
         }
       }
     }
-    this.impactAhead = warnings.length > 0;
-    this.lockWarning(now);
+    this.impactAhead = impact < Infinity;
+    this.lockWarning();
     if (me.alive && me.overheated) {
-      warnings.push(t('LASER OVERHEATED'));
+      alarms.raise({ id: 'laser', level: 'caution', text: t('LASER OVERHEATED') });
       this.tip('hot');
     }
-    this.novaAlarm(me, warnings, now);
+    this.novaAlarm(me);
     // a torpedo homing on the own ship: shoot it down or dodge
     for (const torpedo of this.torpedoes.list) {
-      if (!me.alive || torpedo.target !== me || torpedo.position.distanceTo(flight.position) > TORPEDO_WARNING) continue;
-      warnings.push(t('TORPEDO INBOUND'));
+      if (!me.alive || torpedo.target !== me) continue;
+      const toward = relative.subVectors(torpedo.position, flight.position);
+      const distance = toward.length();
+      if (distance > TORPEDO_WARNING) continue;
+      alarms.raise({ id: 'torpedo', level: distance < TORPEDO_CRITICAL ? 'critical' : 'warning', text: t('TORPEDO INBOUND'), direction: toward, tone: 'torpedo' });
       this.tip('torpedo');
-      if (now >= this.nextWarningBeep) {
-        this.sound.beep(1480, 0.05, 0.16);
-        this.nextWarningBeep = now + 0.12;
-      }
       break;
     }
-    if (me.alive && me.driveOffline(now)) warnings.push(t('DRIVE OVERHEATED'));
-    this.hud.setWarning(warnings.join('\n'));
+    if (me.alive && me.driveOffline(now)) alarms.raise({ id: 'drive', level: 'caution', text: t('DRIVE OVERHEATED') });
+    this.cometAlarm(me);
+    if (me.alive && me.outsideSince !== null) {
+      // the field's edge: back towards its center before the clone is lost in deep space
+      const left = this.school ? null : Math.max(0, ARENA_GRACE - (now - me.outsideSince));
+      alarms.raise({ id: 'field', level: left !== null && left < FIELD_CRITICAL ? 'critical' : 'warning', text: t('OUT OF FIELD'), direction: relative.copy(flight.position).negate(), seconds: left });
+    }
+    const well = this.wellAlarm(me);
+    const hullCritical = me.alive && me.hull <= HULL_CRITICAL;
+    if (hullCritical) {
+      alarms.raise({ id: 'hull', level: 'warning', text: t('HULL FAILING') });
+      if (!this.hullWarned) this.speaker.say(COMPUTER.hullCritical, 'urgent');
+    }
+    this.hullWarned = hullCritical;
+
+    // a dead clone hears no alarms
+    if (!me.alive) alarms.begin();
+    alarms.finish();
+    this.hud.setAlarms(alarms.list, this.camera);
+    this.alarmTones.play(alarms.top, now, this.sound);
+    // heartbeat: faster and louder the harder the pilot is pressed into the seat, steady and loud one hit from death or deep in a well
+    const beat = Math.max(this.strain, hullCritical ? HEART_HULL : 0, well >= WELL_CRITICAL ? HEART_WELL : 0);
+    if (beat > 0.4 && now >= this.nextHeartbeat) {
+      this.sound.beep(55, 0.12, 0.25 * beat);
+      this.sound.beep(48, 0.14, 0.2 * beat, 0.16);
+      this.nextHeartbeat = now + 1.1 - 0.5 * beat;
+    }
+    if (alarms.top?.level === 'critical') {
+      // the link frays in a panic: short and seldom, never long enough to hide a warning
+      if (Math.random() < dt * CRITICAL_GLITCHES) this.glitch.trigger(0.2 + Math.random() * 0.2, 0.06 + Math.random() * 0.1);
+      // death is a breath away: the music drops out, only the heart and the alarm remain
+      if ((impact < SILENCE_BEFORE || well >= WELL_LOST) && now >= this.silenceReadyAt) {
+        this.radio.dropout(SILENCE_SECONDS);
+        this.silenceReadyAt = now + SILENCE_COOLDOWN;
+      }
+    }
+    alarms.begin();
+  }
+
+  /**
+   * A gravity well's hold on the own ship (see escapeLoad): the escape gauge, its alarm towards
+   * the well, and Nicole, once for each level it reaches until the pull lets go again: the well
+   * is near, it is pulling, full burn now, and past the point of no return a quiet goodbye.
+   * Returns the load (0 without a well).
+   */
+  private wellAlarm(me: Ship): number {
+    const well = this.field.well;
+    if (!me.alive || !well) {
+      this.hud.setEscape(null);
+      return 0;
+    }
+    const load = escapeLoad(well, me.flight.position, me.flight.velocity, MAIN_THRUST * Math.max(me.drive, 0.01));
+    this.hud.setEscape(load);
+    // the warnings come again once the well has let go of the ship for good
+    if (load < WELL_RELEASE) this.wellSaid = 0;
+    const level = wellLevel(load);
+    if (!level) return load;
+    const hole = this.venue.id === 'hole';
+    const lost = load >= WELL_LOST;
+    this.alarms.raise({ id: 'well', level, text: lost ? t('NO RETURN') : hole ? t('BLACK HOLE · BURN AWAY') : t('GRAVITY WELL · BURN AWAY'), direction: relative.subVectors(well.position, me.flight.position) });
+    const said = lost ? ALARM_RANK.critical + 1 : ALARM_RANK[level];
+    if (said > this.wellSaid) {
+      this.wellSaid = said;
+      const line = lost ? COMPUTER.wellLost : level === 'critical' ? COMPUTER.wellTight : level === 'warning' ? (hole ? COMPUTER.holePull : COMPUTER.giantPull) : hole ? COMPUTER.holeNear : COMPUTER.giantNear;
+      this.speaker.say(line, 'urgent');
+    }
+    return load;
+  }
+
+  /**
+   * The comet of the round (see comet.ts): its route, the warning before it comes, its shower
+   * shown at the field time and its head running down the rock in its way. The flight school
+   * sees only the comet its drill sends.
+   */
+  private playComet() {
+    const clock = this.field.clock;
+    let comet = this.drillComet;
+    if (!this.school && this.roundId >= 0) {
+      const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
+      const key = `${seed}.${this.roundId}.${this.venue.id}`;
+      if (key !== this.cometsOfKey) {
+        this.cometsOfKey = key;
+        this.comets = cometsOf(seed, this.roundId, this.field.well);
+      }
+      for (const next of this.comets) if (clock >= cometStart(next) - COMET_WARNING && clock <= cometEnd(next)) comet = next;
+    }
+    // the warning, once, as the head nears the arena's edge
+    if (comet && comet !== this.cometCalled && clock >= comet.edge - COMET_WARNING && clock < comet.at) {
+      this.cometCalled = comet;
+      this.speaker.say(COMPUTER.comet, 'urgent');
+      if (!this.school) this.radio.announce(pick(ANNOUNCER_COMET), null);
+      this.hud.flashMessage(this.time, t('Comet inbound · take cover behind a rock, or turn your nose into its shower'), 5);
+      this.sound.beep(980, 0.3, 0.2);
+    }
+    const flying = comet && clock >= cometStart(comet) && clock <= cometEnd(comet) ? comet : null;
+    if (this.shower?.comet !== flying) {
+      this.shower = flying ? new Shower(flying) : null;
+      this.struck.clear();
+    }
+    this.cometView.update(this.shower, clock);
+    if (!flying) return;
+    runDown(flying, this.field, clock, (rock) => this.burstRock(rock), (piece, point) => this.cometShove(piece, point));
+    // the battleship that did not get out of its way goes down: the lead browser decides
+    const fleet = this.fleet;
+    if (fleet?.present(clock) && (!this.online || this.online.isLead) && clock < flying.swallowed && fleet.touches(headAt(flying, clock, cometHead), HEAD_RADIUS)) {
+      this.hud.flashMessage(this.time, t('The comet rams the battleship'), 3);
+      this.fleetEvents(fleet.sink(), null);
+    }
+  }
+
+  /** The comet's head strikes a piece of the wreck's hull and shoves it: a flash, sparks and debris where it struck, heard as far as debris is. */
+  private cometShove(piece: Asteroid, point: THREE.Vector3) {
+    this.effects.explosion(point, HEAD_RADIUS * 1.5, piece.velocity);
+    this.effects.sparks(point, SCRAPE_COLOR, HEAD_RADIUS);
+    this.effects.debris(point, normal.subVectors(point, piece.object.position).normalize(), HEAD_RADIUS);
+    this.hearDebris(point, HEAD_RADIUS * 2);
+    this.witnessBlast(point, HEAD_RADIUS * 20, 0.6);
+  }
+
+  /**
+   * The comet meets a ship this browser runs: its head runs it down, whatever protects it, and
+   * each piece of its shower that comes within reach strikes it once, as a laser would, from
+   * where it comes; rock just upstream of the ship takes the piece instead.
+   */
+  private cometStrike(ship: Ship, now: number) {
+    const shower = this.shower;
+    if (!shower || !ship.alive) return;
+    const comet = shower.comet;
+    const clock = this.field.clock;
+    const position = ship.flight.position;
+    if (clock < comet.swallowed && position.distanceTo(headAt(comet, clock, cometHead)) < HEAD_RADIUS + ship.radius) {
+      ship.protectedUntil = Math.min(ship.protectedUntil, now);
+      if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, null, 'comet');
+      return;
+    }
+    // beside the swarm, ahead of it or behind it: nothing to strike
+    const when = routeNearest(comet, position, clock - SHOWER_LENGTH / COMET_SPEED, clock, cometOffset);
+    if (cometOffset.distanceTo(position) > SHOWER_WIDE + PIECE_RADIUS + ship.radius) return;
+    let struck = this.struck.get(ship);
+    if (!struck) this.struck.set(ship, (struck = new Uint8Array(SHOWER_PIECES)));
+    // the pieces come along the route, as fast as the head flew there
+    courseAt(comet, when, cometCourse);
+    cometVelocity.subVectors(headAt(comet, when + 0.5, cometPiece), headAt(comet, when - 0.5, cometCover));
+    const near = (ship.radius + PIECE_RADIUS) ** 2;
+    for (let i = 0; i < SHOWER_PIECES; i++) {
+      if (struck[i] || shower.gone(i, clock) || shower.pieceAt(i, clock, cometPiece).distanceToSquared(position) > near) continue;
+      struck[i] = 1;
+      if (!this.field.lineOfSight(cometCover.copy(position).addScaledVector(cometCourse, -SHOWER_COVER), position)) continue;
+      cometRelative.subVectors(cometVelocity, ship.flight.velocity).normalize();
+      this.applyLaserHit(ship, cometPiece, cometRelative, null, undefined, 'shower');
+      if (!ship.alive) return;
+    }
+  }
+
+  /** For a bot close to a comet's route as its head nears or its shower passes: the point of the route nearest it, to fly away from; else null. */
+  private cometDanger(ship: Ship): THREE.Vector3 | null {
+    const comet = this.shower?.comet ?? null;
+    if (!comet) return null;
+    const clock = this.field.clock;
+    routeNearest(comet, ship.flight.position, clock - (SHOWER_LENGTH + COMET_DANGER) / COMET_SPEED, clock + COMET_WARNING, cometAway);
+    return cometAway.distanceTo(ship.flight.position) > SHOWER_WIDE + COMET_DANGER ? null : cometAway;
+  }
+
+  /** The comet as an alarm towards its head: WARNING from the flight computer's call until the head passes, counting down to the arena's edge; CRITICAL while the own pilot is in its way. */
+  private cometAlarm(me: Ship) {
+    const comet = this.cometCalled;
+    const clock = this.field.clock;
+    if (!comet || !me.alive || clock > cometEnd(comet)) return;
+    const direction = relative.subVectors(headAt(comet, Math.min(clock, comet.swallowed), cometHead), me.flight.position);
+    if (this.shower?.comet === comet && this.cometDanger(me)) this.alarms.raise({ id: 'comet', level: 'critical', text: t('COMET SHOWER · NOSE INTO IT OR TAKE COVER'), direction });
+    else if (clock < comet.at) this.alarms.raise({ id: 'comet', level: 'warning', text: t('COMET INBOUND'), direction, seconds: clock < comet.edge ? comet.edge - clock : null });
   }
 
   /** A tip of the fight from Nicole, while it is still due (see Coach); the flight school teaches on its own. */
@@ -5018,8 +5256,10 @@ export class Game implements OnlineGame {
    * Another ship's nose on the own ship: LOCKED when its laser would hit now, TRACKED when
    * the nose is close to it, ON YOUR TAIL when it sits behind, where it reaches the drive. The
    * ship's sensors see where every other hull points; the faster beeping is the cue to act.
+   * Its line, with the shooter's mark, sits below the alarm list; its alarm (TRACKED a CAUTION,
+   * LOCKED and ON YOUR TAIL a WARNING) counts for the master caution and the beep.
    */
-  private lockWarning(now: number) {
+  private lockWarning() {
     const me = this.me!;
     // a solar storm blinds the sensors that would see a nose on the own ship
     if (!me.alive || this.storming) {
@@ -5050,10 +5290,7 @@ export class Game implements OnlineGame {
     const tail = me.tailToward(relative.subVectors(me.flight.position, shooter.flight.position));
     this.hud.setLock(tail ? t('ON YOUR TAIL') : level === 2 ? t('LOCKED') : t('TRACKED'), shooter);
     if (tail) this.tip('tail');
-    if (now >= this.nextLockBeep) {
-      this.sound.beep(tail ? 1760 : level === 2 ? 1560 : 1170, 0.04, tail ? 0.14 : 0.1);
-      this.nextLockBeep = now + (tail ? 0.08 : level === 2 ? 0.1 : 0.35);
-    }
+    this.alarms.raise({ id: 'lock', level: tail || level === 2 ? 'warning' : 'caution', text: '', direction: relative.negate(), tone: tail ? 'tail' : level === 2 ? 'locked' : 'tracked' });
   }
 
   /**

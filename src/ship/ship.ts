@@ -5,7 +5,7 @@ import type { Controls } from '../input/input';
 import { TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
 import { STOCK, type Perks } from '../game/hangar';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { runningLight } from '../view/textures';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
@@ -66,9 +66,16 @@ const GLOW_IDLE = 0.25;
 const ENGINE_LIGHT_OFFSET = 400;
 /** The drive flame's tint by the steps of its upgrade: stock, azure, violet, white-hot. */
 const FLAME_TINTS = [new THREE.Color(1, 1, 1), new THREE.Color(0.45, 0.75, 1.6), new THREE.Color(1.1, 0.45, 1.6), new THREE.Color(2, 2, 2.2)];
-/** The neon trim: sun orange along every edge of the hull that bends by more than TRIM_ANGLE (degrees). */
-const TRIM_COLOR = new THREE.Color(1, 0.62, 0.1);
-const TRIM_ANGLE = 25;
+/**
+ * The neon trim's light strips (see ship/models) in sun orange, by the steps of its upgrade: the
+ * flanks lit, then brighter with the stern bar, then brighter still with a running light.
+ */
+const TRIM_COLOR = new THREE.Color(0xff9d00);
+/** Kept low enough that the tube's core stays orange instead of burning out to white; from the second step it blooms. */
+const TRIM_BRIGHTNESS = [0, 0.8, 1.25, 1.5];
+/** The running light: pulses on a strip at once, and how many strips' lengths they travel per second. */
+const TRIM_PULSES = 2;
+const TRIM_RUN = 0.5;
 
 export type Zone = 'reactor' | 'drive' | 'thrusters' | 'armor';
 type DamageStatus ='protected' | 'hit' | 'destroyed';
@@ -188,8 +195,8 @@ export class Ship {
   thrusters = 1;
   /** What the ship's upgrades make of it (see game/hangar and outfit); stock for bots and other browsers' ships. */
   perks: Perks = STOCK;
-  /** The neon trim along the hull's edges, made the first time the ship wears one. */
-  private trim: THREE.LineSegments | null = null;
+  /** The neon trim's light strips and their light, the ship's own (see outfit). */
+  private readonly trim: { strips: THREE.Object3D; stern: THREE.Object3D; light: THREE.MeshBasicMaterial; running: THREE.Texture };
   heat = 0;
   overheated = false;
   /** Game time until which the main drive cools down after an overdrive. */
@@ -249,12 +256,17 @@ export class Ship {
     readonly isLocal: boolean,
   ) {
     this.model = assets.ships[type].clone(true);
-    // Materials are shared between clones; the engine flame animates its own copy.
+    // Materials are shared between clones; the engine flame and the trim's light animate their own copies.
+    const light = new THREE.MeshBasicMaterial({ toneMapped: false });
     this.model.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
       if (o.name.toLowerCase().startsWith('drive')) o.material = (o.material as THREE.Material).clone();
+      if (o.name === 'trimLight') o.material = light;
       o.castShadow = o.receiveShadow = !(o.material as THREE.Material).transparent;
     });
+    const running = runningLight().clone();
+    running.repeat.x = TRIM_PULSES;
+    this.trim = { strips: this.model.getObjectByName('trim')!, stern: this.model.getObjectByName('trimStern')!, light, running };
     this.radius = sharedRadius(assets);
     this.frames = assets.textures.flameFrames;
     this.color = new THREE.Color().setHSL((shipCounter++ * 0.137 + (type === 'alien' ? 0.33 : 0.55)) % 1, 0.8, 0.6);
@@ -268,24 +280,21 @@ export class Ship {
 
   /**
    * Fits the ship with its upgrades: how it flies and fights (read where they act), its neon
-   * trim (the hull's edges in sun orange, brighter with every step) and its drive flame's color.
+   * trim (TRIM_BRIGHTNESS: light strips along both flanks, then across the stern too, then with a
+   * running light towards the drives) and its drive flame's color.
    */
   outfit(perks: Perks) {
     this.perks = perks;
     if (this.engine.flameMaterial) this.engine.flameMaterial.color.copy(FLAME_TINTS[perks.flame]);
-    if (perks.neon > 0 && !this.trim) {
-      const edges: THREE.BufferGeometry[] = [];
-      this.model.traverse((o) => {
-        if (o instanceof THREE.Mesh && o.name.endsWith('Hull') && !(o.material instanceof THREE.MeshBasicMaterial)) edges.push(new THREE.EdgesGeometry(o.geometry, TRIM_ANGLE));
-      });
-      this.trim = new THREE.LineSegments(mergeGeometries(edges), new THREE.LineBasicMaterial({ transparent: true, toneMapped: false }));
-      this.model.add(this.trim);
+    const { strips, stern, light } = this.trim;
+    strips.visible = perks.neon > 0;
+    stern.visible = perks.neon > 1;
+    light.color.copy(TRIM_COLOR).multiplyScalar(TRIM_BRIGHTNESS[perks.neon]);
+    const map = perks.neon > 2 ? this.trim.running : null;
+    if (light.map !== map) {
+      light.map = map;
+      light.needsUpdate = true;
     }
-    if (!this.trim) return;
-    this.trim.visible = perks.neon > 0;
-    const material = this.trim.material as THREE.LineBasicMaterial;
-    material.color.copy(TRIM_COLOR).multiplyScalar(0.6 + 0.7 * perks.neon);
-    material.opacity = 0.35 + 0.2 * perks.neon;
   }
 
   /** The drive burning at a throttle without flying anywhere, for a ship on show (see view/showcase). */
@@ -664,5 +673,6 @@ export class Ship {
       glow.scale.set(glowScale, glowScale, 1);
     }
     if (this.engineLight) this.engineLight.intensity = 1.5e5 * throttle;
+    if (this.trim.light.map) this.trim.light.map.offset.x = -((this.flameTime * TRIM_RUN * TRIM_PULSES) % 1);
   }
 }

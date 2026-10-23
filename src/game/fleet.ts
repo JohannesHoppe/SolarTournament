@@ -6,6 +6,7 @@ import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
 import { boxUv, gleamingSurface, shine, surfaced } from '../view/surfaces';
 import type { Homing } from './torpedoes';
+import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS, routeNearest, SHOWER_LENGTH, SHOWER_WIDE, type Comet } from './comet';
 import { msg, t } from '../i18n/i18n';
 
 /**
@@ -87,6 +88,20 @@ export const SINK_BLAST = 20000;
 /** Nothing of a battleship lies farther than this from its center (units): its stern's nozzles at 400 m, and room. */
 const REACH = 8500;
 /**
+ * The battleship's sensors see a comet's route (see comet.ts) FLEET_LOOKOUT seconds before its
+ * head passes nearest it; while that route runs within FLEET_CLEAR of its center (units, 760 m:
+ * the shower's width, a piece, its own reach and 75 m to spare) it leaves its orbit and burns
+ * straight away from the route at EVADE_SPEED (units/s, 50 m/s), turning onto that course
+ * EVADE_BURN times as hard as onto its orbit, until the shower has passed. Clear of the route
+ * by 760 m from right on it takes it about 17 s. With its drives shot out it cannot get away.
+ */
+const FLEET_LOOKOUT = 40;
+const FLEET_CLEAR = SHOWER_WIDE + PIECE_RADIUS + REACH + 1500;
+const EVADE_SPEED = 1000;
+const EVADE_BURN = 2;
+/** How fast the battleship takes up its orbit's course (per s). */
+const STEER = 0.3;
+/**
  * The hull is HULL_WIDTH wide and twice HULL_HALF high (units: 120 m by 110 m); the flight deck
  * on top of it is a slab DECK_WIDTH wide (170 m) and DECK_THICK thick, from DECK_BOW to
  * DECK_STERN along the hull (360 m before its center to 270 m behind it).
@@ -136,6 +151,7 @@ const step = new THREE.Vector3();
 const closest = new THREE.Vector3();
 const toTarget = new THREE.Vector3();
 const want = new THREE.Vector3();
+const dodge = new THREE.Vector3();
 const look = new THREE.Matrix4();
 const turn = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
@@ -705,18 +721,21 @@ export class Fleet implements Obstacle {
 
   /**
    * The lead browser flies the battleship: in on its orbit around the field, its stern turned on
-   * the nearest pilot in its second phase, adrift without drives.
+   * the nearest pilot in its second phase, out of the way of the round's `comets`, adrift
+   * without drives.
    */
-  lead(dt: number, clock: number, ships: readonly Target[]) {
+  lead(dt: number, clock: number, ships: readonly Target[], comets: readonly Comet[] = []) {
     if (!this.present(clock)) return;
     const position = this.position;
-    if (this.drives > 0) {
+    const away = this.drives > 0 ? this.evasion(clock, comets, dodge) : null;
+    if (away) this.velocity.lerp(want.copy(away).multiplyScalar(EVADE_SPEED), Math.min(1, dt * STEER * EVADE_BURN));
+    else if (this.drives > 0) {
       // the orbit: along its circle around the center, back towards it when off
       const radial = local.copy(position).setY(0);
       const r = radial.length() || 1;
       want.crossVectors(UP, radial).divideScalar(r).multiplyScalar(FLEET_SPEED).addScaledVector(radial, ((ORBIT - r) / r) * 0.05);
       want.y = -position.y * 0.05;
-      this.velocity.lerp(want, Math.min(1, dt * 0.3));
+      this.velocity.lerp(want, Math.min(1, dt * STEER));
     } else this.velocity.multiplyScalar(Math.max(0, 1 - dt * 0.2));
     position.addScaledVector(this.velocity, dt);
     // its bow along its course, or in its second phase its stern on the nearest pilot
@@ -739,6 +758,21 @@ export class Fleet implements Obstacle {
     }
     this.burning = !!prey && this.quaternion.angleTo(turn) < PLUME_AIM;
     this.root.updateMatrixWorld();
+  }
+
+  /** The way out of a comet's route the battleship sees coming within FLEET_CLEAR (unit length, into `target`), or null when none does. */
+  private evasion(clock: number, comets: readonly Comet[], target: THREE.Vector3): THREE.Vector3 | null {
+    for (const comet of comets) {
+      if (clock < cometStart(comet) - FLEET_LOOKOUT || clock > cometEnd(comet)) continue;
+      const when = routeNearest(comet, this.position, cometStart(comet), comet.at + COMET_REACH / COMET_SPEED, target);
+      if (clock < when - FLEET_LOOKOUT || clock > when + SHOWER_LENGTH / COMET_SPEED) continue;
+      target.subVectors(this.position, target);
+      if (target.length() > FLEET_CLEAR) continue;
+      // right on the route: up or down, square to it
+      if (target.lengthSq() < 1) target.crossVectors(courseAt(comet, when, target), UP).cross(courseAt(comet, when, local));
+      return target.normalize();
+    }
+    return null;
   }
 
   /** The lead's state, for the other browsers. */

@@ -21,7 +21,7 @@ import type { Catalog } from './i18n';
  * - drive plume: chorro del motor · reactor: reactor
  * - armor (the hull's own): coraza · plating (upgrade and probe): blindaje
  * - thrusters: propulsores · radiators: radiadores · hull: casco · heat: calor
- * - neon trim: ribete de neón · drive flame: llama del motor · looks: estética
+ * - neon trim: franjas de neón · drive flame: llama del motor · looks: estética
  * - aim / reflexes / daring: Puntería / Reflejos / Audacia · fine aim: puntería fina
  * - kill: baja · death: muerte · score: puntos · standings: clasificación · round: ronda
  * - live link: enlace en vivo · sponsor: patrocinador · ad: anuncio · kill cam: killcam
@@ -90,6 +90,11 @@ export const ES: Catalog = {
   '{side} base': 'Base {side}',
   '{side} core': 'Núcleo {side}',
   Battleship: 'Acorazado',
+  Comet: 'Cometa',
+  "Riddled by a comet's shower": 'Acribillado por la lluvia de un cometa',
+  'Run down by a comet': 'Arrollado por un cometa',
+  'The comet rams the battleship': 'El cometa embiste al acorazado',
+  'Comet inbound · take cover behind a rock, or turn your nose into its shower': 'Cometa entrante · ponte a cubierto tras una roca, o gira el morro hacia su lluvia',
   NOVA: 'NOVA',
   'Your clone is dead': 'Tu clon ha muerto',
   Host: 'Host',
@@ -302,10 +307,21 @@ export const ES: Catalog = {
   Crash: 'Choque',
   'Impact at {speed} m/s': 'Impacto a {speed} m/s',
   'Debris impact': 'Impacto de escombros',
-  'IMPACT IN {seconds} s': 'IMPACTO EN {seconds} s',
+  'IMPACT': 'IMPACTO',
+  'OUT OF FIELD': 'FUERA DEL CAMPO',
+  'HULL FAILING': 'CASCO FALLANDO',
+  'NO RETURN': 'SIN RETORNO',
+  'BLACK HOLE · BURN AWAY': 'AGUJERO NEGRO · ALÉJATE A FONDO',
+  'GRAVITY WELL · BURN AWAY': 'POZO GRAVITATORIO · ALÉJATE A FONDO',
+  'CAUTION': 'PRECAUCIÓN',
+  'WARNING': 'ALERTA',
+  'CRITICAL': 'CRÍTICO',
+  'Pull': 'Tirón',
   'LASER OVERHEATED': 'LÁSER SOBRECALENTADO',
   'LINK ESTABLISHED': 'ENLACE ESTABLECIDO',
   'TORPEDO INBOUND': 'TORPEDO ENTRANTE',
+  'COMET INBOUND': 'COMETA ENTRANTE',
+  'COMET SHOWER · NOSE INTO IT OR TAKE COVER': 'LLUVIA DE COMETA · MORRO HACIA ELLA O A CUBIERTO',
   'DRIVE OVERHEATED': 'MOTOR SOBRECALENTADO',
   'ON YOUR TAIL': 'EN TU COLA',
   LOCKED: 'FIJADO',
@@ -322,8 +338,8 @@ export const ES: Catalog = {
   'More torpedoes per clone': 'Más torpedos por clon',
   Plating: 'Blindaje',
   'Every hit hurts less': 'Cada impacto duele menos',
-  'Neon trim': 'Ribete de neón',
-  'The hull glows in sun orange': 'El casco brilla en naranja solar',
+  'Neon trim': 'Franjas de neón',
+  'Light strips along both flanks': 'Franjas de luz en ambos flancos',
   'Drive flame': 'Llama del motor',
   'Azure, violet, white-hot': 'Azur, violeta, al rojo blanco',
 
@@ -458,7 +474,7 @@ export const ES: Catalog = {
   'Kessler Field': 'Campo Kessler',
   'A station blew up. Its pieces still cross each other at 25 m/s.': 'Una estación voló por los aires. Sus pedazos aún se cruzan a 25 m/s.',
   'Gas Giant': 'Gigante gaseoso',
-  'A world of storms below, pulling with three g at its clouds. Swing by it, or fall in.': 'Abajo, un mundo de tormentas que tira con tres g en sus nubes. Pasa rozándolo o cae dentro.',
+  'A world of storms below, eighty kilometers wide, pulling at everything. Dive along its clouds, or burn in them.': 'Abajo, un mundo de tormentas de ochenta kilómetros que tira de todo. Lánzate rozando sus nubes o arde en ellas.',
   Corona: 'Corona',
   'Close to the sun. Lasers barely cool in its glare, and its storms blind the sensors.': 'Cerca del sol. Los láseres apenas se enfrían bajo su resplandor, y sus tormentas ciegan los sensores.',
   'Event Horizon': 'Horizonte de sucesos',
@@ -631,6 +647,8 @@ export const ES: Catalog = {
   'Shot down. Nice, but this time hide. Again.': 'Derribado. Muy bonito, pero esta vez tenías que esconderte. Otra vez.',
   'Final exam, tactician. This bot flies as well as the field. Use everything.': 'Examen final, táctico. Este bot vuela tan bien como cualquiera del torneo. Usa todo lo que tienes.',
   'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.': 'Ya peleas como un táctico. Sal de la línea de fuego de un golpe, nunca les enseñes tu motor, dispara en ráfagas y deja que las rocas se lleven los impactos. Ahora ve y tráele la victoria al Presidente.',
+  'A comet, darling, from your right. Its head misses you, its tail will not: a storm of rock. Get behind the rock, or turn your armored nose into it. Never show it your drive.': 'Un cometa, cariño, por tu derecha. Su cabeza no te alcanza, su cola sí: una tormenta de roca. Ponte detrás de la roca, o gírale tu morro acorazado. Nunca le enseñes tu motor.',
+  'Your drive took the shower. Hide, or face it. Again.': 'Tu motor se llevó la lluvia. Escóndete, o plántale cara. Otra vez.',
   'Again.': 'Otra vez.',
 
   // Nicole: praise after a drill
@@ -672,6 +690,7 @@ export const ES: Catalog = {
   'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.': 'Sangre fría y letal. Cada disparo a la coraza te calienta, y luego te falta margen cuando asoma el motor.',
   'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.': 'Los láseres no se doblan, y los sensores no ven a través de la roca. Detrás de ella, no existes.',
   'Lost you. A seeker that loses its line never finds it again.': 'Te ha perdido. Un torpedo que pierde la línea de visión ya no la recupera.',
+  'Still in one piece. The head clears everything in its way, but the tail is what kills.': 'Sigues entero. La cabeza barre todo a su paso, pero lo que mata es la cola.',
   'A real fight, and you won it. I am so proud of you, darling.': 'Un combate de verdad, y lo has ganado. Estoy muy orgullosa de ti, cariño.',
 
   // Nicole: in a round
@@ -716,6 +735,14 @@ export const ES: Catalog = {
   'Capture the flag. Touch their core, and tow it into our ring. We only score while our own core is at home, so guard it, or bring it back.': 'Captura la bandera. Toca su núcleo y remólcalo hasta nuestro anillo. Solo puntuamos si nuestro núcleo está en casa, así que protégelo o recupéralo.',
   'The President’s fleet. We all fight his battleship together. Take out its batteries first, then its drives. When the reactor opens, hit it, and get clear before it blows. Keep moving: its batteries miss fast ships.': 'La flota del Presidente. Todos luchamos juntos contra su acorazado. Primero sus baterías, luego sus motores. Cuando se abra el reactor, dale y aléjate antes de que estalle. No dejes de moverte: sus baterías fallan contra naves rápidas.',
   'Someone is on your drive, darling. Turn your nose to them, now.': 'Alguien se te ha pegado a la cola, cariño. Encáralo, ya.',
+  'Hull failing. One more hit, and you are dead, darling.': 'El casco cede. Un impacto más, y estás muerto, cariño.',
+  'Careful, darling. The black hole is near.': 'Cuidado, cariño. El agujero negro está cerca.',
+  'The black hole is pulling us! Burn away from it!': '¡El agujero negro nos arrastra! ¡Acelera lejos de él!',
+  'Careful, darling. The giant is pulling at us.': 'Cuidado, cariño. El gigante tira de nosotros.',
+  'The giant is dragging us down! Burn away from it!': '¡El gigante nos hunde! ¡Acelera lejos de él!',
+  'Now it gets really tight! Full burn, now!': '¡Ahora sí que se pone feo! ¡A fondo, ya!',
+  'I am sorry, darling.': 'Lo siento, cariño.',
+  'Comet inbound, darling! Its tail is a storm of rock. Hide behind an asteroid, or turn your armored nose into it.': '¡Cometa entrante, cariño! Su cola es una tormenta de roca. Escóndete tras un asteroide, o gírale tu morro acorazado.',
   'Your laser is cooking. Short bursts, and only when the crosshair glows.': 'Tu láser está ardiendo. Ráfagas cortas, y solo cuando brille la mira.',
   'Torpedo! Shoot it down, or put a rock between you and it.': '¡Torpedo! Derríbalo o pon una roca entre tú y él.',
 
@@ -761,6 +788,10 @@ export const ES: Catalog = {
   '{name} is the last clone standing': '{name} es el último clon en pie',
   '{name} survives. the president is impressed': '{name} sobrevive. el presidente está impresionado',
   'here comes the flare. the arena is closing': 'llega la erupción. la arena se cierra',
+  'a comet is coming. its tail is full of rock. hide, little clones': 'viene un cometa. su cola está llena de roca. escondeos, clonitos',
+  'the heavens join the games. a comet, folks, courtesy of the president': 'el cielo se suma a los juegos. un cometa, amigos, por cortesía del presidente',
+  'and {name} meets the comet head on. the printer is warming up': 'y {name} se come el cometa de frente. la impresora ya se calienta',
+  'a comet takes {name}. even the sky votes for the president': 'un cometa se lleva a {name}. hasta el cielo vota al presidente',
   '{name} brings the core home': '{name} lleva el núcleo a casa',
   'and {name} scores. the sponsor core is theirs': 'y {name} marca. el núcleo del patrocinador es suyo',
   'three in a row for {name}. the crowd is on its feet': 'tres seguidas para {name}. el público se pone en pie',
