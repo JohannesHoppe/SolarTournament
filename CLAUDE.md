@@ -69,6 +69,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 
 **The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the eleven localStorage entries, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server and TURN relay, public tournament names, the cheat reports between the browsers), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, another TURN or STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
 
+**Every folder has a README** that says what the folder is for, what each file in it does and how it is used or run, short and for a human finding their way around. A new folder gets one, and a file added, removed or changed in what it does updates its folder's README in the same commit. The build leaves the READMEs in `public/` out of the site.
+
 `src/` is grouped by area:
 
 | File | Content |

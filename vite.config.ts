@@ -1,6 +1,6 @@
 import { defineConfig, type Plugin } from 'vite';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { basename, join, resolve } from 'node:path';
 
 /** Sends visitors of the Cloudflare Pages addresses of production and test on to our own domains, keeping path and room code. */
 const HOME_REDIRECT =
@@ -50,6 +50,9 @@ const pageShell: Plugin = {
     if (!building) return;
     const notFound = resolve(import.meta.dirname, 'dist/404.html');
     writeFileSync(notFound, redirect(readFileSync(notFound, 'utf8'), '404.html'));
+    // the folders' READMEs explain the repository, not the site: Vite copies public/ whole, they stay behind
+    const dist = resolve(import.meta.dirname, 'dist');
+    for (const file of readdirSync(dist, { recursive: true, encoding: 'utf8' })) if (basename(file) === 'README.md') rmSync(join(dist, file));
   },
 };
 

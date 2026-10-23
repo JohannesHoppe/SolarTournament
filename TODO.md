@@ -7,7 +7,7 @@ Worked through from top to bottom. Every finished item is also documented in the
 ### 1. Playable for new players
 
 - [x] Gamepad controls
-- [x] Touch controls for phones and tablets with nipplejs (as in ordpool's bitmap view: fixed stick left, dynamic stick right, protection against stuck sticks)
+- [x] Touch controls for phones and tablets with nipplejs (fixed stick left, dynamic stick right, protection against stuck sticks)
 - [x] Flight school: guided tutorial for thrust, drifting, flip-and-burn, impact warning, heat in the shadow
 
 ### 2. Multiplayer
