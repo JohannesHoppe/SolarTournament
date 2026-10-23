@@ -134,7 +134,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/ghost.ts` | The ghost of the own best lap: the own hull as a faint blue hologram |
 | `view/datamosh.ts` | The clone's death: its last picture loses the key frames and rots with the camera's motion and the frames' changes (a pass with its own feedback buffers) |
 | `view/textures.ts` | Canvas textures: glows, sparks, smoke |
-| `view/surfaces.ts` | Surfaces drawn on canvases from fixed seeds (color, roughness and metalness, bump): the fighters' worn depot paint, the world ship's craters and burns with embers, the battleship's gleam and glitter, the rings' industrial plating, probes, torpedoes, signs; box-projected texture coordinates, the reflection map |
+| `view/surfaces.ts` | Surfaces drawn on canvases from fixed seeds (color, roughness and metalness, bump): the fighters' worn depot paint, the world ship's craters and burns with embers, the battleship's polished armor plates, the rings' industrial plating, probes, torpedoes, signs; box-projected texture coordinates, the reflection map |
 | `view/marks.ts` | The marks before names: bot or Host, drawn as shapes, never as characters |
 | **`input/`** | **Controls** |
 | `input/input.ts` | Keyboard, mouse flight (the ship turns towards the visible pointer, its offset from the center is the stick) and gamepad, merges all input into `Controls` |

@@ -4,7 +4,7 @@ import { Randomizer } from '../random';
 import { FIELD_RADIUS, raySphere, type Obstacle } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
-import { boxUv, gleamingSurface, shine, surfaced } from '../view/surfaces';
+import { armorSurface, boxUv, shine, surfaced } from '../view/surfaces';
 import type { Homing } from './torpedoes';
 import { msg, t } from '../i18n/i18n';
 
@@ -14,7 +14,7 @@ import { msg, t } from '../i18n/i18n';
  * The Hosts win the round when it goes down; when the time runs out first, it got away, and
  * the President wins.
  *
- * A battleship, a golden carrier 745 m long, circles the field along its outer rocks like a shark. It has
+ * A battleship, a gilded carrier 750 m long, circles the field along its outer rocks like a shark. It has
  * six laser batteries, two drives and a reactor under an armored dome; its hull itself takes
  * no harm. Every laser hit on a part counts; a part takes ZONE_HITS hits. Its phases follow
  * from what is left of it:
@@ -41,9 +41,9 @@ export const ZONE_NAMES: Record<ZoneKind, string> = { battery: msg('Battery'), d
 export const ZONE_HITS: Record<ZoneKind, number> = { battery: 30, drive: 45, reactor: 90 };
 /** A torpedo counts this many hits on every part it goes off within TORPEDO_REACH of (units, 20 m beyond the part): a third of a battery. */
 export const TORPEDO_HITS = 10;
-/** The battleship's plating repeats every GLEAM_TILE units (20 m); its seams lie this deep (see surfaced). */
-const GLEAM_TILE = 400;
-const GLEAM_RELIEF = 0.8;
+/** The battleship's armor plating repeats every ARMOR_TILE units (20 m); its seams lie this deep (see surfaced). */
+const ARMOR_TILE = 400;
+const ARMOR_RELIEF = 0.8;
 const TORPEDO_REACH = 400;
 /** Points for a hit on a part, for the hit that breaks one, and for every ship of the side when the battleship goes down. */
 export const FLEET_HIT_POINTS = 10;
@@ -86,32 +86,38 @@ export const SINK_SECONDS = 4;
 export const SINK_BLAST = 20000;
 /** Nothing of a battleship lies farther than this from its center (units): its stern's nozzles at 400 m, and room. */
 const REACH = 8500;
+/** The flight deck's height above the hull's center, and the keel's depth below it (units: 65 m, 55 m). */
+const DECK_TOP = 1300;
+const KEEL = -1100;
 /**
- * The hull is HULL_WIDTH wide and twice HULL_HALF high (units: 120 m by 110 m); the flight deck
- * on top of it is a slab DECK_WIDTH wide (170 m) and DECK_THICK thick, from DECK_BOW to
- * DECK_STERN along the hull (360 m before its center to 270 m behind it).
+ * A cross section of the hull at `z` (units, in its frame; the bow points along -z): the flight
+ * deck on top at DECK_TOP, `half` wide to each side; the armored belt drops straight from the
+ * deck's edges to `belt`; below it the hull slopes in to the keel, `keelHalf` wide at `keel`.
  */
-const HULL_WIDTH = 2400;
-const HULL_HALF = 1100;
-const DECK_WIDTH = 3400;
-const DECK_THICK = 200;
-const DECK_TOP = HULL_HALF + DECK_THICK;
-const DECK_BOW = -7200;
-const DECK_STERN = 5400;
-/** Where the batteries sit (units, in its frame): four on sponsons along the flight deck's edges, two under the keel. */
+type Section = { z: number; half: number; top: number; belt: number; keelHalf: number; keel: number };
+/**
+ * The hull from bow to stern, straight between its sections: a dagger 55 m wide at the bow,
+ * its keel rising there, widening to 190 m 235 m aft and to 230 m at the superstructure's
+ * back, narrowing again over the drive section to the stern plate 710 m from the bow.
+ */
+const SECTIONS: readonly Section[] = [
+  { z: -7200, half: 550, top: DECK_TOP, belt: 900, keelHalf: 200, keel: 500 },
+  { z: -2500, half: 1900, top: DECK_TOP, belt: -100, keelHalf: 1200, keel: KEEL },
+  { z: 5400, half: 2300, top: DECK_TOP, belt: -200, keelHalf: 1200, keel: KEEL },
+  { z: 7000, half: 1900, top: 1200, belt: -300, keelHalf: 1000, keel: -900 },
+];
+/** Where the batteries sit (units, in its frame): two on sponsons forward, two on the deck's edges beside the superstructure, two under the keel. */
 const BATTERY_MOUNTS: readonly (readonly [number, number, number])[] = [
   [1800, DECK_TOP + 150, -4000],
   [-1800, DECK_TOP + 150, -4000],
   [1800, DECK_TOP + 150, 1500],
   [-1800, DECK_TOP + 150, 1500],
-  [0, -HULL_HALF - 350, -3000],
-  [0, -HULL_HALF - 350, 2500],
+  [0, KEEL - 350, -3000],
+  [0, KEEL - 350, 2500],
 ];
-/** The island, the bridge tower on the starboard edge of the deck (units, its center across and along). */
-const ISLAND_X = 1250;
-const ISLAND_Z = 2800;
-/** The halo of light above the island turns this fast (rad/s); the lights along the deck run forward this fast (lane lengths a second). */
-const HALO_SPIN = 0.25;
+/** Where the Ministry's seal sits on both flanks (units along the hull). */
+const SEAL_Z = -1000;
+/** The lights along the deck's edges run forward this fast (lane lengths a second). */
 const PROCESSION = 0.6;
 const BATTERIES = BATTERY_MOUNTS.length;
 
@@ -155,6 +161,72 @@ function taper(z0: number, z1: number, w0: number, h0: number, w1: number, h1: n
   return box;
 }
 
+/** The hull's cross section at `z`, between the two sections around it. */
+function sectionAt(z: number): Section {
+  let i = 0;
+  while (i < SECTIONS.length - 2 && z > SECTIONS[i + 1].z) i++;
+  const a = SECTIONS[i];
+  const b = SECTIONS[i + 1];
+  const t = THREE.MathUtils.clamp((z - a.z) / (b.z - a.z), 0, 1);
+  const mix = (key: Exclude<keyof Section, 'z'>) => THREE.MathUtils.lerp(a[key], b[key], t);
+  return { z, half: mix('half'), top: mix('top'), belt: mix('belt'), keelHalf: mix('keelHalf'), keel: mix('keel') };
+}
+
+/** How far the deck's edge moves out per unit along the hull at `z` (the belt's slant in plan). */
+function flare(z: number) {
+  const a = sectionAt(z - 1);
+  const b = sectionAt(z + 1);
+  return (b.half - a.half) / 2;
+}
+
+/**
+ * The hull between two sections, flat-faced: deck, belts, the slopes to the keel and the keel,
+ * each face with its own corners (so its normal is the face's), the ends closed where `caps` says.
+ */
+function hullBetween(a: Section, b: Section, caps: { front: boolean; back: boolean }): THREE.BufferGeometry {
+  const outline = (s: Section) => [
+    [-s.half, s.top],
+    [s.half, s.top],
+    [s.half, s.belt],
+    [s.keelHalf, s.keel],
+    [-s.keelHalf, s.keel],
+    [-s.half, s.belt],
+  ];
+  const front = outline(a);
+  const back = outline(b);
+  const positions: number[] = [];
+  const index: number[] = [];
+  const corner = new THREE.Vector3();
+  const across = new THREE.Vector3();
+  const along = new THREE.Vector3();
+  const middle = new THREE.Vector3();
+  // a face from its corners, turned so it faces away from `inside`
+  const face = (corners: THREE.Vector3[], inside: THREE.Vector3) => {
+    const first = positions.length / 3;
+    across.subVectors(corners[1], corners[0]);
+    along.subVectors(corners[corners.length - 1], corners[0]);
+    middle.set(0, 0, 0);
+    for (const c of corners) middle.add(c);
+    middle.divideScalar(corners.length).sub(inside);
+    const flip = across.cross(along).dot(middle) < 0;
+    for (const c of flip ? [...corners].reverse() : corners) positions.push(c.x, c.y, c.z);
+    for (let i = 1; i < corners.length - 1; i++) index.push(first, first + i, first + i + 1);
+  };
+  const axis = new THREE.Vector3(0, (a.top + a.keel + b.top + b.keel) / 4, (a.z + b.z) / 2);
+  for (let i = 0; i < 6; i++) {
+    const j = (i + 1) % 6;
+    face([new THREE.Vector3(front[i][0], front[i][1], a.z), new THREE.Vector3(front[j][0], front[j][1], a.z), new THREE.Vector3(back[j][0], back[j][1], b.z), new THREE.Vector3(back[i][0], back[i][1], b.z)], axis);
+  }
+  if (caps.front) face(front.map(([x, y]) => new THREE.Vector3(x, y, a.z)), corner.set(0, (a.top + a.keel) / 2, a.z + 1));
+  if (caps.back) face(back.map(([x, y]) => new THREE.Vector3(x, y, b.z)), corner.set(0, (b.top + b.keel) / 2, b.z - 1));
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(new Array((positions.length / 3) * 2).fill(0), 2));
+  geometry.setIndex(index);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
 /** The slogans the President's battleship carries in lights along its flanks. */
 const SLOGANS = [msg('THE GREATEST SHIP EVER BUILT'), msg('PAID FOR WITH YOUR SACRIFICE'), msg('THE PRESIDENT IS WATCHING YOU')] as const;
 
@@ -192,8 +264,8 @@ function signTexture(text: string, color = '#ffb347', width = 2048, height = 192
 }
 
 /**
- * The seal of the Ministry of War (the game's own crest, public/crest.svg), gilded and glowing,
- * drawn into a canvas once it has loaded; null where nothing can be drawn.
+ * The seal of the Ministry of War (the game's own crest, public/crest.svg), gilded, drawn into
+ * a canvas once it has loaded; null where nothing can be drawn.
  */
 function crestTexture(): THREE.CanvasTexture | null {
   if (typeof document === 'undefined') return null;
@@ -202,14 +274,7 @@ function crestTexture(): THREE.CanvasTexture | null {
   texture.colorSpace = THREE.SRGBColorSpace;
   const image = new Image();
   image.onload = () => {
-    const g = canvas.getContext('2d')!;
-    // a golden glow behind the seal, so it reads from a kilometer
-    const glow = g.createRadialGradient(512, 512, 300, 512, 512, 512);
-    glow.addColorStop(0, 'rgba(255, 190, 80, 0.55)');
-    glow.addColorStop(1, 'rgba(255, 120, 0, 0)');
-    g.fillStyle = glow;
-    g.fillRect(0, 0, 1024, 1024);
-    g.drawImage(image, 64, 64, 896, 896);
+    canvas.getContext('2d')!.drawImage(image, 0, 0, 1024, 1024);
     texture.needsUpdate = true;
   };
   image.src = new URL('crest.svg', document.baseURI).href;
@@ -267,9 +332,8 @@ export class Fleet implements Obstacle {
   private readonly burnt: THREE.MeshStandardMaterial;
   private readonly reactorGlow: THREE.MeshBasicMaterial;
   private readonly driveGlow: THREE.MeshBasicMaterial;
-  /** The lights running along the deck's edges, the halo of light over the island, and the signs' textures. */
+  /** The lights running along the deck's edges, and the signs' textures. */
   private readonly procession: THREE.ShaderMaterial;
-  private readonly halo: THREE.Group;
   private readonly textures: THREE.Texture[] = [];
   private lastClock = 0;
   /** The field time of the frame it was last shown in (see update). */
@@ -280,43 +344,26 @@ export class Fleet implements Obstacle {
   private afloat = false;
 
   constructor(private readonly seed: number) {
-    // A carrier refitted for the President, fresh from the newest dock: its hull gold under a
-    // clear lacquer whose thin film plays in all colors, glitter in it that sparkles in the dark
-    // too; the island in pearl, the flight deck in the regime's deep red with its markings in
-    // light; the regime's orange neon running along it in a procession
-    const gleam = gleamingSurface(seed);
-    const lacquer = {
-      ...surfaced(gleam, GLEAM_RELIEF),
-      envMap: shine(),
-      envMapIntensity: 1.8,
-      clearcoat: 1,
-      clearcoatRoughness: 0.05,
-      iridescence: 1,
-      iridescenceIOR: 1.5,
-      iridescenceThicknessRange: [220, 680] as [number, number],
-      emissive: 0xffffff,
-      emissiveMap: gleam.glow,
-      emissiveIntensity: 2.5,
-    };
-    const gold = this.material(new THREE.MeshPhysicalMaterial({ ...lacquer, color: 0xffcc4d, metalness: 0.7, envMapIntensity: 2.6 }));
-    const pearl = this.material(new THREE.MeshPhysicalMaterial({ ...lacquer, color: 0xf6f1e6, metalness: 0.45 }));
-    const deck = this.material(new THREE.MeshPhysicalMaterial({ ...lacquer, color: 0x6a0c18, metalness: 0.3, iridescence: 0.35, emissiveIntensity: 0.9 }));
+    // A carrier refitted for the President, fresh from the newest dock: a heavy hull of dark
+    // armor, polished, gilded on its edges, its turrets and its bridge; the runway in the
+    // regime's deep red, warm light in its hangars and in rows of windows, the regime's orange
+    // neon running along the deck's edges in a procession
+    const polished = { ...surfaced(armorSurface(seed), ARMOR_RELIEF), envMap: shine(), clearcoat: 1, clearcoatRoughness: 0.15 };
+    const armor = this.material(new THREE.MeshPhysicalMaterial({ ...polished, color: 0x2c3039, envMapIntensity: 1.2 }));
+    const gold = this.material(new THREE.MeshPhysicalMaterial({ ...polished, color: 0xe2aa3e, envMapIntensity: 2.4 }));
+    const runway = this.material(new THREE.MeshStandardMaterial({ color: 0x4a0b10, metalness: 0.3, roughness: 0.6 }));
+    const recess = this.material(new THREE.MeshStandardMaterial({ color: 0x07080a, roughness: 0.9 }));
     const gunmetal = this.material(new THREE.MeshStandardMaterial({ color: 0x3c414c, metalness: 0.6, roughness: 0.45, flatShading: true }));
+    const bell = this.material(new THREE.MeshStandardMaterial({ color: 0x25272c, metalness: 0.8, roughness: 0.5, side: THREE.DoubleSide }));
     this.burnt = this.material(new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 1 }));
     const light = (r: number, g: number, b: number, strength: number) => this.material(new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b).multiplyScalar(strength), toneMapped: false }));
-    // the regime's red for its guns and bridge, warm light in the hangars, white on the deck, the launch tube's cold blue
-    const neon = light(1, 0.08, 0.12, 2.2);
-    const hangar = light(1, 0.72, 0.38, 1.6);
+    // warm light in the windows and hangars, white on the deck, the drives' plasma white-hot
+    const lit = light(1, 0.8, 0.55, 1.2);
+    const hangar = light(1, 0.55, 0.22, 0.4);
     const marking = light(1, 0.95, 0.85, 1.3);
-    const launch = light(0.45, 0.85, 1, 2.6);
-    const thruster = light(0.4, 0.6, 1, 2);
+    const thruster = light(0.75, 0.85, 1, 1.6);
     this.reactorGlow = light(1, 0.75, 0.4, 2.5);
-    this.driveGlow = light(0.4, 0.6, 1, 2);
-    const glory = (opacity: number) => this.material(new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.78, 0.35).multiplyScalar(2), transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
-    const halo = glory(0.9);
-    const rays = glory(0.35);
-    const beams = this.material(new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }));
-    const sunburst = light(1, 0.7, 0.25, 1.8);
+    this.driveGlow = light(0.75, 0.85, 1, 1.4);
     const flame = this.material(new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.55, 0.2).multiplyScalar(1.5), transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
     // the procession: lights along the deck's edges that run forward in a wave towards the bow
     this.procession = this.material(
@@ -352,127 +399,178 @@ export class Fleet implements Obstacle {
     };
     const solid = (center: readonly number[], size: readonly number[]) => this.colliders.push({ center: new THREE.Vector3(center[0], center[1], center[2]), half: new THREE.Vector3(size[0], size[1], size[2]).multiplyScalar(0.5) });
     const block = (center: [number, number, number], size: [number, number, number], material: THREE.Material, collides = true) => {
-      put(boxUv(new THREE.BoxGeometry(...size).translate(...center), GLEAM_TILE), material);
+      put(boxUv(new THREE.BoxGeometry(...size).translate(...center), ARMOR_TILE), material);
       if (collides) solid(center, size);
     };
-    const shaped = (geometry: THREE.BufferGeometry, material: THREE.Material) => put(boxUv(geometry, GLEAM_TILE), material);
+    const shaped = (geometry: THREE.BufferGeometry, material: THREE.Material) => put(boxUv(geometry, ARMOR_TILE), material);
+    const along = new THREE.Vector3(0, 0, 1);
+    /** A bar `wide` by `high` from one point to another (trim, rails, recesses), not colliding. */
+    const bar = (from: THREE.Vector3, to: THREE.Vector3, wide: number, high: number, material: THREE.Material) => {
+      const span = to.clone().sub(from);
+      const turned = new THREE.Quaternion().setFromUnitVectors(along, span.clone().normalize());
+      const middle = from.clone().lerp(to, 0.5);
+      shaped(new THREE.BoxGeometry(wide, high, span.length()).applyQuaternion(turned).translate(middle.x, middle.y, middle.z), material);
+    };
+    /** A flat panel `width` long and `height` high on a flank's belt at `z`, lying on its slant. */
+    const onBelt = (side: number, z: number, y: number, width: number, height: number, lift = 4) =>
+      new THREE.PlaneGeometry(width, height).rotateY(side * (Math.PI / 2 + Math.atan(flare(z)))).translate(side * (sectionAt(z).half + lift), y, z);
+    const flank = (side: number, z: number, y: number, lift: number) => new THREE.Vector3(side * (sectionAt(z).half + lift), y, z);
 
-    // the hull: a long golden body, its bow a wedge under the deck's front, collides in steps
-    const hullLength = DECK_STERN - -2500;
-    block([0, 0, (DECK_STERN - 2500) / 2], [HULL_WIDTH, 2 * HULL_HALF, hullLength], gold);
-    shaped(taper(DECK_BOW, -2500, 500, 700, HULL_WIDTH, 2 * HULL_HALF, 450, 0), gold);
-    for (let i = 0; i < 3; i++) {
-      const t = (i + 0.5) / 3;
-      const z = THREE.MathUtils.lerp(DECK_BOW, -2500, t);
-      solid([0, THREE.MathUtils.lerp(450, 0, t), z], [THREE.MathUtils.lerp(500, HULL_WIDTH, t), THREE.MathUtils.lerp(700, 2 * HULL_HALF, t), (-2500 - DECK_BOW) / 3]);
+    // the hull, section by section. It collides first as one long box, its core from the deck
+    // to the keel between the bow's taper and the drive section (a ship pressed into it leaves
+    // through the nearest of its faces, not between two short boxes), then in boxes a hundred
+    // meters long or less: the belt's under the deck's full width, the slopes' halfway out
+    // between belt and keel
+    const [, waist, back] = SECTIONS;
+    solid([0, (DECK_TOP + KEEL) / 2, (waist.z + back.z) / 2], [2 * waist.keelHalf, DECK_TOP - KEEL, back.z - waist.z]);
+    SECTIONS.forEach((a, i) => {
+      const b = SECTIONS[i + 1];
+      if (!b) return;
+      shaped(hullBetween(a, b, { front: i === 0, back: i === SECTIONS.length - 2 }), armor);
+      const pieces = Math.ceil((b.z - a.z) / 2000);
+      const length = (b.z - a.z) / pieces;
+      for (let k = 0; k < pieces; k++) {
+        const s = sectionAt(a.z + (k + 0.5) * length);
+        solid([0, (s.top + s.belt) / 2, s.z], [2 * s.half, s.top - s.belt, length]);
+        solid([0, (s.belt + s.keel) / 2, s.z], [s.half + s.keelHalf, s.belt - s.keel, length]);
+      }
+      // gilded along the deck's edges, the belt's lower edge and the keel's; under the deck's edge a trench
+      // with a row of lit windows, gilded above and below
+      for (const side of [-1, 1]) {
+        const edge = (s: Section, y: number, lift = 0) => new THREE.Vector3(side * (s.half + lift), y, s.z);
+        bar(edge(a, a.top), edge(b, b.top), 90, 90, gold);
+        bar(edge(a, a.belt), edge(b, b.belt), 70, 70, gold);
+        bar(new THREE.Vector3(side * a.keelHalf, a.keel, a.z), new THREE.Vector3(side * b.keelHalf, b.keel, b.z), 60, 60, gold);
+        if (b.z <= SECTIONS[2].z) {
+          bar(edge(a, a.top - 170, 8), edge(b, b.top - 170, 8), 16, 150, recess);
+          bar(edge(a, a.top - 85, 10), edge(b, b.top - 85, 10), 24, 20, gold);
+          bar(edge(a, a.top - 255, 10), edge(b, b.top - 255, 10), 24, 20, gold);
+          for (let z = a.z + 120; z < b.z - 60; z += 95) if (z < SEAL_Z - 750 || z > SEAL_Z + 750) put(new THREE.BoxGeometry(30, 60, 40).translate(...flank(side, z, a.top - 170, 14).toArray()), lit);
+        }
+      }
+    });
+
+    // the forward belts carry plates of extra armor, laid in staggered courses under the trench
+    for (const side of [-1, 1]) {
+      for (let row = 0; row < 3; row++) {
+        const top = DECK_TOP - 320 - row * 340;
+        for (let z = SECTIONS[0].z + 300 + (row % 2) * 300; z < SECTIONS[1].z - 600; z += 600) {
+          if (sectionAt(z).belt > top - 340) continue;
+          bar(flank(side, z, top - 160, 14), flank(side, z + 560, top - 160, 14), 30, 300, armor);
+        }
+      }
     }
-    // the flight deck, overhanging the hull, with gold along its edges
-    const deckLength = DECK_STERN - DECK_BOW;
-    const deckMid = (DECK_STERN + DECK_BOW) / 2;
-    block([0, HULL_HALF + DECK_THICK / 2, deckMid], [DECK_WIDTH, DECK_THICK, deckLength], deck);
-    for (const side of [-1, 1]) block([side * (DECK_WIDTH / 2 + 30), HULL_HALF + DECK_THICK / 2, deckMid], [60, DECK_THICK + 60, deckLength], gold, false);
-    // the runway: a dashed centerline, two catapult rails at the bow glowing in their slots,
-    // and lights along both edges that run forward in a procession
-    for (let z = DECK_BOW + 400; z < DECK_STERN - 400; z += 600) block([0, DECK_TOP + 5, z], [80, 10, 300], marking, false);
-    for (const x of [-520, 520]) {
-      block([x, DECK_TOP + 10, -5300], [90, 20, 3600], gold, false);
-      block([x, DECK_TOP + 12, -5300], [30, 20, 3500], launch, false);
+
+    // the runway forward of the reactor in the regime's deep red, its centerline dashed, two
+    // catapult rails at the bow, and lights along the deck's edges that run forward in a procession
+    block([0, DECK_TOP + 4, -4700], [1000, 8, 4800], runway, false);
+    for (const z of [-7000, -6400]) block([0, DECK_TOP + 10, z], [80, 10, 300], marking, false);
+    for (const x of [-330, 330]) {
+      block([x, DECK_TOP + 12, -6550], [90, 20, 1200], gold, false);
+      block([x, DECK_TOP + 14, -6550], [30, 20, 1150], marking, false);
     }
     const lights: THREE.BufferGeometry[] = [];
+    const bow = SECTIONS[0].z;
+    const stern = SECTIONS[2].z;
     for (const side of [-1, 1]) {
-      for (let z = DECK_BOW + 150; z < DECK_STERN; z += 260) {
-        const lamp = new THREE.BoxGeometry(70, 40, 140).translate(side * (DECK_WIDTH / 2 - 60), DECK_TOP + 20, z);
-        lamp.setAttribute('lane', new THREE.BufferAttribute(new Float32Array(lamp.attributes.position.count).fill(1 - (z - DECK_BOW) / deckLength), 1));
+      for (let z = bow + 150; z < stern; z += 260) {
+        const lamp = new THREE.BoxGeometry(70, 40, 140).translate(side * (sectionAt(z).half - 90), DECK_TOP + 20, z);
+        lamp.setAttribute('lane', new THREE.BufferAttribute(new Float32Array(lamp.attributes.position.count).fill(1 - (z - bow) / (stern - bow)), 1));
         lights.push(lamp);
       }
     }
-    // the launch tube under the deck's front, glowing deep inside
-    block([0, HULL_HALF - 350, DECK_BOW + 300], [1800, 700, 600], gold);
-    shaped(new THREE.PlaneGeometry(1300, 450).rotateY(Math.PI).translate(0, HULL_HALF - 350, DECK_BOW - 2), launch);
-    // the bow's figurehead: a golden sun above the deck's front, its rays glowing all around it
-    shaped(new THREE.CylinderGeometry(520, 520, 80, 24).rotateX(Math.PI / 2).translate(0, DECK_TOP + 700, DECK_BOW + 120), gold);
-    for (let i = 0; i < 16; i++) {
-      const angle = (i / 16) * Math.PI * 2;
-      const length = i % 2 ? 420 : 700;
-      shaped(
-        taper(-length / 2, length / 2, 140, 40, 10, 10)
-          .rotateX(Math.PI / 2)
-          .rotateZ(angle - Math.PI / 2)
-          .translate(Math.cos(angle) * (520 + length / 2), DECK_TOP + 700 + Math.sin(angle) * (520 + length / 2), DECK_BOW + 120),
-        sunburst,
-      );
+    // the hangar's mouth in the bow, warm light deep inside, gilded around
+    shaped(new THREE.PlaneGeometry(960, 340).rotateY(Math.PI).translate(0, DECK_TOP - 200, bow - 3), gold);
+    shaped(new THREE.PlaneGeometry(860, 260).rotateY(Math.PI).translate(0, DECK_TOP - 200, bow - 6), hangar);
+    // hangar bays along both flanks aft, warm light inside, gilded around
+    for (const side of [-1, 1]) {
+      for (let z = 900; z <= 4500; z += 1200) {
+        shaped(onBelt(side, z, 330, 1000, 600, 3), gold);
+        shaped(onBelt(side, z, 330, 900, 500, 6), hangar);
+        shaped(onBelt(side, z, 540, 900, 40, 9), lit);
+      }
     }
 
-    // the island on the starboard edge: base, bridge in pearl with its windows lit, a golden
-    // spire with a crown, and above it a halo of light with its rays, turning slowly
-    block([ISLAND_X, DECK_TOP + 700, ISLAND_Z], [700, 1400, 2200], gold);
-    block([ISLAND_X, DECK_TOP + 1850, ISLAND_Z + 100], [560, 900, 1500], pearl);
-    for (const y of [DECK_TOP + 1700, DECK_TOP + 2050]) block([ISLAND_X, y, ISLAND_Z + 100], [580, 60, 1520], hangar, false);
-    block([ISLAND_X, DECK_TOP + 2320, ISLAND_Z + 100], [600, 40, 1540], neon, false);
-    shaped(new THREE.CylinderGeometry(120, 320, 1600, 4).rotateY(Math.PI / 4).translate(ISLAND_X, DECK_TOP + 3100, ISLAND_Z), gold);
-    solid([ISLAND_X, DECK_TOP + 3100, ISLAND_Z], [500, 1600, 500]);
-    shaped(new THREE.ConeGeometry(260, 500, 6).translate(ISLAND_X, DECK_TOP + 4150, ISLAND_Z), gold);
-    this.halo = new THREE.Group();
-    this.halo.position.set(ISLAND_X, DECK_TOP + 3900, ISLAND_Z);
-    this.halo.add(new THREE.Mesh(this.geometry(new THREE.TorusGeometry(760, 45, 8, 64).rotateX(Math.PI / 2)), halo));
-    const ray = this.geometry(taper(-500, 500, 120, 8, 6, 6).rotateY(Math.PI / 2).translate(1350, 0, 0));
-    for (let i = 0; i < 24; i++) {
-      const spoke = new THREE.Mesh(ray, rays);
-      spoke.rotation.y = (i / 24) * Math.PI * 2;
-      spoke.rotation.z = i % 2 ? 0.25 : -0.1;
-      this.halo.add(spoke);
-    }
-    this.root.add(this.halo);
-    // two searchlights sweep up into space from the island: the President's glory, fading out
-    // towards their far end
+    // the superstructure, stepped up towards the stern in tiers of armor, each sloping up from
+    // its front, gilded along its roof's edges, rows of windows in its flanks and its front
+    const tier = (z0: number, z1: number, w0: number, w1: number, base: number, h0: number, h1: number) => {
+      shaped(taper(z0, z1, w0, h0, w1, h1, base + h0 / 2, base + h1 / 2), armor);
+      const middle = (z0 + z1) / 2;
+      for (const [za, zb] of [
+        [z0, middle],
+        [middle, z1],
+      ]) {
+        const t = ((za + zb) / 2 - z0) / (z1 - z0);
+        const h = THREE.MathUtils.lerp(h0, h1, t);
+        solid([0, base + h / 2, (za + zb) / 2], [THREE.MathUtils.lerp(w0, w1, t), h, zb - za]);
+      }
+      for (const side of [-1, 1]) {
+        bar(new THREE.Vector3((side * w0) / 2, base + h0, z0), new THREE.Vector3((side * w1) / 2, base + h1, z1), 60, 60, gold);
+        for (const y of h0 > 400 ? [base + h0 * 0.35, base + h0 * 0.7] : [base + h0 * 0.55]) {
+          for (let z = z0 + 100; z < z1 - 60; z += 110) {
+            const t = (z - z0) / (z1 - z0);
+            put(new THREE.BoxGeometry(24, 50, 50).translate((side * THREE.MathUtils.lerp(w0, w1, t)) / 2, y, z), lit);
+          }
+        }
+      }
+      bar(new THREE.Vector3(-w0 / 2, base + h0, z0), new THREE.Vector3(w0 / 2, base + h0, z0), 60, 60, gold);
+      for (let x = -w0 / 2 + 100; x < w0 / 2 - 60; x += 110) put(new THREE.BoxGeometry(50, 50, 24).translate(x, base + h0 * 0.55, z0), lit);
+    };
+    tier(600, 5400, 2600, 3400, DECK_TOP, 300, 700);
+    tier(1700, 5400, 1800, 2500, DECK_TOP + 300, 450, 800);
+    tier(2900, 5300, 1200, 1700, DECK_TOP + 800, 450, 700);
+    // the bridge tower at the stern: its command deck spread wide above everything, a band of
+    // windows all around it, the sensor house on its roof, two masts above
+    block([0, 3200, 4000], [900, 1400, 1000], armor);
+    block([0, 4125, 3900], [2600, 450, 1200], armor);
+    for (let x = -1240; x <= 1240; x += 80) put(new THREE.BoxGeometry(50, 100, 24).translate(x, 4150, 3300), lit);
+    for (const side of [-1, 1]) for (let z = 3360; z <= 4440; z += 80) put(new THREE.BoxGeometry(24, 100, 50).translate(side * 1300, 4150, z), lit);
+    for (const side of [-1, 1]) bar(new THREE.Vector3(side * 1310, 4350, 3300), new THREE.Vector3(side * 1310, 4350, 4500), 60, 60, gold);
+    bar(new THREE.Vector3(-1310, 4350, 3300), new THREE.Vector3(1310, 4350, 3300), 60, 60, gold);
+    block([0, 4475, 4000], [1000, 250, 800], armor);
     for (const side of [-1, 1]) {
-      const cone = new THREE.ConeGeometry(500, 7000, 16, 4, true).translate(0, -3500, 0);
-      const height = cone.getAttribute('position');
-      const fade = new Float32Array(height.count * 3);
-      for (let i = 0; i < height.count; i++) fade.fill((1 + height.getY(i) / 7000) ** 2, i * 3, i * 3 + 3);
-      cone.setAttribute('color', new THREE.BufferAttribute(fade, 3));
-      shaped(cone.rotateX(Math.PI).rotateZ(side * 0.35).translate(ISLAND_X, DECK_TOP + 2400, ISLAND_Z + side * 500), beams);
+      block([side * 600, 5025, 4200], [70, 1350, 70], gunmetal);
+      for (const y of [4900, 5300]) block([side * 600, y, 4200], [40, 40, 500], gunmetal, false);
     }
 
-    // hangar bays along both flanks, warm light inside, and the slogans above them
-    for (const side of [-1, 1]) {
-      for (let z = 900; z <= 4500; z += 1200) shaped(new THREE.PlaneGeometry(900, 520).rotateY(side * (Math.PI / 2)).translate(side * (HULL_WIDTH / 2 + 2), -560, z), hangar);
-      for (let z = 900; z <= 4500; z += 1200) block([side * (HULL_WIDTH / 2 + 20), -560, z], [40, 640, 1020], gunmetal, false);
-    }
-    // parked on the deck: two fighters on the catapults, three in a row aft beside the island
+    // parked on the deck: two fighters on the catapults, four beside the reactor's dome
     const fighter = (x: number, z: number) => {
       shaped(new THREE.ConeGeometry(160, 700, 3).rotateX(-Math.PI / 2).translate(x, DECK_TOP + 90, z), gunmetal);
       shaped(new THREE.BoxGeometry(620, 30, 220).translate(x, DECK_TOP + 70, z + 150), gunmetal);
     };
-    for (const x of [-520, 520]) fighter(x, -6300);
-    for (let z = 2900; z <= 4900; z += 1000) fighter(-900, z);
+    for (const x of [-330, 330]) fighter(x, -6600);
+    for (const x of [-1300, 1300]) for (const z of [-2200, -200]) fighter(x, z);
 
-    // the batteries' sponsons along the deck's edges, and their pylons under the keel
+    // the batteries' sponsons where the deck is too narrow for them, gilded along their edge,
+    // and their pylons under the keel
     for (const at of BATTERY_MOUNTS) {
-      if (at[1] > 0) block([at[0], HULL_HALF + 50, at[2]], [700, 300, 900], gold);
-      else block([0, -HULL_HALF - 100, at[2]], [500, 200, 500], gold);
+      const s = sectionAt(at[2]);
+      if (at[1] < 0) block([0, (s.keel + 100 + KEEL - 200) / 2, at[2]], [600, s.keel + 100 - (KEEL - 200), 700], armor);
+      else if (Math.abs(at[0]) + 300 > s.half) {
+        const side = Math.sign(at[0]);
+        const inner = s.half - 200;
+        const outer = Math.abs(at[0]) + 340;
+        block([(side * (inner + outer)) / 2, DECK_TOP - 160, at[2]], [outer - inner, 320, 1000], armor);
+        block([side * outer, DECK_TOP - 160, at[2]], [60, 340, 1020], gold, false);
+      }
     }
-    // the drive block at the stern, its fins swept back, four smaller nozzles around the two drives
-    block([0, 0, DECK_STERN + 850], [3400, 2400, 1700], gold);
-    shaped(new THREE.BoxGeometry(80, 1600, 1400).rotateX(0.45).translate(0, HULL_HALF + 900, DECK_STERN + 1000), gold);
-    solid([0, HULL_HALF + 900, DECK_STERN + 1000], [100, 1400, 1200]);
+    // the stern: two great drive bells and four small ones around them
     for (const side of [-1, 1]) {
-      shaped(new THREE.BoxGeometry(2400, 100, 1300).rotateY(side * 0.3).translate(side * 2800, -200, DECK_STERN + 700), gold);
-      solid([side * 2700, -200, DECK_STERN + 700], [2200, 120, 1100]);
-      for (const y of [-800, 800]) shaped(new THREE.CylinderGeometry(260, 330, 400, 12).rotateX(Math.PI / 2).translate(side * 1350, y, DECK_STERN + 1900), thruster);
+      shaped(new THREE.CylinderGeometry(680, 520, 800, 16, 1, true).rotateX(Math.PI / 2).translate(side * 700, 0, 7450), bell);
+      for (const y of [800, -350]) {
+        shaped(new THREE.CylinderGeometry(260, 200, 350, 12, 1, true).rotateX(Math.PI / 2).translate(side * 1450, y, 7175), bell);
+        shaped(new THREE.CylinderGeometry(170, 190, 60, 12).rotateX(Math.PI / 2).translate(side * 1450, y, 7060), thruster);
+      }
     }
-    // neon rings around the drive block and along the hull's flanks
-    for (const z of [DECK_STERN + 100, DECK_STERN + 1600]) block([0, 0, z], [3440, 2440, 60], neon, false);
-    for (const side of [-1, 1]) block([side * (HULL_WIDTH / 2 + 15), HULL_HALF - 120, (DECK_STERN - 2500) / 2], [30, 80, hullLength], neon, false);
 
     for (const [material, list] of parts) this.root.add(new THREE.Mesh(this.geometry(mergeGeometries(list)), material));
     this.root.add(new THREE.Mesh(this.geometry(mergeGeometries(lights)), this.procession));
     for (const geometry of [...[...parts.values()].flat(), ...lights]) geometry.dispose();
 
-    // the Ministry of War's seal, large on both flanks and on the island; the slogans along the
-    // hull; the President's name painted across the deck in letters a hundred meters high
+    // the Ministry of War's seal, large on both flanks and on the bridge tower; the slogans along
+    // the hull; the President's slogan painted along the runway in letters twenty meters high
     const seal = crestTexture();
-    const sealed = this.material(new THREE.MeshBasicMaterial({ map: seal, transparent: true, depthWrite: false, toneMapped: false, color: new THREE.Color(1.6, 1.4, 1.1) }));
+    const sealed = this.material(new THREE.MeshBasicMaterial({ map: seal, transparent: true, depthWrite: false, toneMapped: false, color: new THREE.Color(1.25, 1.1, 0.9) }));
     const sign = (texture: THREE.Texture | null, geometry: THREE.BufferGeometry, color = new THREE.Color(1.4, 1.4, 1.4)) => {
       if (texture) this.textures.push(texture);
       const material = this.material(new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, color }));
@@ -480,28 +578,28 @@ export class Fleet implements Obstacle {
     };
     if (seal) this.textures.push(seal);
     for (const side of [-1, 1]) {
-      this.root.add(new THREE.Mesh(this.geometry(new THREE.PlaneGeometry(1900, 1900).rotateY(side * (Math.PI / 2)).translate(side * (HULL_WIDTH / 2 + 4), 0, -1000)), sealed));
-      this.root.add(new THREE.Mesh(this.geometry(new THREE.PlaneGeometry(1000, 1000).rotateY(side * (Math.PI / 2)).translate(ISLAND_X + side * 352, DECK_TOP + 700, ISLAND_Z)), sealed));
-      const slogan = t(SLOGANS[side < 0 ? 1 : 2]);
-      sign(signTexture(slogan), new THREE.PlaneGeometry(4400, 420).rotateY(side * (Math.PI / 2)).translate(side * (HULL_WIDTH / 2 + 4), 380, 2700));
+      this.root.add(new THREE.Mesh(this.geometry(onBelt(side, SEAL_Z, 480, 1100, 1100, 8)), sealed));
+      sign(signTexture(t(SLOGANS[side < 0 ? 1 : 2])), onBelt(side, 2700, 860, 4400, 380, 8));
     }
-    sign(signTexture(t(SLOGANS[0]), '#ffcf5a', 4096, 512, true), new THREE.PlaneGeometry(8000, 1000).rotateX(-Math.PI / 2).rotateY(Math.PI / 2).translate(-1150, DECK_TOP + 8, -1500), new THREE.Color(1.2, 1, 0.7));
+    this.root.add(new THREE.Mesh(this.geometry(new THREE.PlaneGeometry(800, 800).rotateY(Math.PI).translate(0, 3250, 3496)), sealed));
+    sign(signTexture(t(SLOGANS[0]), '#ffcf5a', 4096, 800, true), new THREE.PlaneGeometry(3600, 760).rotateX(-Math.PI / 2).rotateY(Math.PI / 2).translate(0, DECK_TOP + 10, -4200), new THREE.Color(1.2, 1, 0.7));
 
-    // the dome over the reactor: armor while it is closed (see open); always the last collider
-    this.dome = new THREE.Mesh(this.geometry(boxUv(new THREE.BoxGeometry(1300, 500, 1300), GLEAM_TILE)), gold);
+    // the dome over the reactor, an armored hatch on the deck: armor while it is closed (see
+    // open); always the last collider
+    this.dome = new THREE.Mesh(this.geometry(boxUv(new THREE.CylinderGeometry(450 * Math.SQRT2, 650 * Math.SQRT2, 500, 4).rotateY(Math.PI / 4), ARMOR_TILE)), armor);
     this.dome.position.set(0, DECK_TOP + 250, -1200);
     this.root.add(this.dome);
 
-    const barrel = this.geometry(new THREE.CylinderGeometry(55, 55, 900, 8).rotateX(Math.PI / 2).translate(0, 0, -450));
-    const mount = this.geometry(boxUv(new THREE.BoxGeometry(500, 300, 500), GLEAM_TILE));
+    // a battery: an armored turret sloping up from its front, a gilded collar, three barrels
+    const housing = this.geometry(boxUv(taper(-280, 280, 420, 200, 560, 300, -50, 0), ARMOR_TILE));
+    const collar = this.geometry(boxUv(new THREE.BoxGeometry(640, 60, 640).translate(0, -130, 0), ARMOR_TILE));
+    const barrels = this.geometry(mergeGeometries([-130, 0, 130].map((x) => new THREE.CylinderGeometry(40, 48, 1000, 8).rotateX(Math.PI / 2).translate(x, 0, -720))));
     for (const at of BATTERY_MOUNTS) {
       const turret = new THREE.Group();
       turret.position.set(...at);
-      const left = new THREE.Mesh(barrel, neon);
-      const right = new THREE.Mesh(barrel, neon);
-      left.position.x = -110;
-      right.position.x = 110;
-      turret.add(new THREE.Mesh(mount, pearl), left, right);
+      // under the keel it hangs upside down
+      if (at[1] < 0) turret.rotation.z = Math.PI;
+      turret.add(new THREE.Mesh(housing, armor), new THREE.Mesh(collar, gold), new THREE.Mesh(barrels, gunmetal));
       this.root.add(turret);
       this.zones.push({ kind: 'battery', at: new THREE.Vector3(...at), radius: 300, mesh: turret });
     }
@@ -819,7 +917,6 @@ export class Fleet implements Obstacle {
     this.flame.visible = this.burning;
     if (this.burning) this.flame.scale.set(1 + 0.08 * Math.sin(now * 40), 1 + 0.08 * Math.sin(now * 37), 1);
     this.procession.uniforms.time.value = now;
-    this.halo.rotation.y = now * HALO_SPIN;
   }
 
   dispose() {
