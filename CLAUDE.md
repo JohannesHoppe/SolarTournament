@@ -91,6 +91,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `game/survival.ts` | Last Clone Standing: the clones of a round, the solar flare closing in on the field time |
 | `game/flags.ts` | Capture the Flag: the two sides, their bases and sponsor cores; the lead browser's rules (sides, taking, sending home, capturing) and the state the others follow |
 | `game/fleet.ts` | The President's Fleet: his battleship (hull, batteries, drives, reactor, built in code), its phases, how the lead browser flies it (out of a comet's way too), its plume, its hull as cover, how it takes hits (lasers and torpedoes) and goes down, and the state the others follow |
+| `game/alarms.ts` | The alarms: tiers (caution, warning, critical) ranked so only the worst sounds, `Game.alarms.raise` for any danger (with direction and countdown), their tones, a gravity well's escape load and its thresholds |
 | `game/hook.ts` | The hook: harpoon, cable and winch; what it bites, how the cable pulls and swings, its lines on screen |
 | `game/racingline.ts` | The ideal line of a course: a smooth curve through the centers of the gates (or the flight school's rings), bowing around rock as it lies now; where a racer is on it and what it flies for |
 | `game/hangar.ts` | The hangar: Solar Coins paid out for a round's points, the upgrades of both interceptors and their prices, what they do (online up to a cap), the Sovereign earned by both complete; what the browser keeps of it |
@@ -135,6 +136,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/ghost.ts` | The ghost of the own best lap: the own hull as a faint blue hologram |
 | `view/datamosh.ts` | The clone's death: its last picture loses the key frames and rots with the camera's motion and the frames' changes (a pass with its own feedback buffers) |
 | `view/textures.ts` | Canvas textures: glows, sparks, smoke |
+| `view/surfaces.ts` | Surfaces drawn on canvases from fixed seeds (color, roughness and metalness, bump): the fighters' worn depot paint, the world ship's craters and burns with embers, the battleship's gleam and glitter, the rings' industrial plating, probes, torpedoes, signs; box-projected texture coordinates, the reflection map |
 | `view/marks.ts` | The marks before names: bot or Host, drawn as shapes, never as characters |
 | **`input/`** | **Controls** |
 | `input/input.ts` | Keyboard, mouse flight (the ship turns towards the visible pointer, its offset from the center is the stick) and gamepad, merges all input into `Controls` |
@@ -171,7 +173,7 @@ The code is licensed under AGPL-3.0-or-later (`LICENSE`), the repository is publ
 
 ### Typography
 
-Typography matters. Running text is always justified, never ragged, with hyphenation on (`hyphens: auto`, the pages declare `lang`). Centered blocks are justified too and only center their last line (`text-align-last: center`). Headings and signs in Michroma, text in the system sans-serif.
+Typography matters. Running text is always justified, never ragged, with hyphenation on (`hyphens: auto`, the pages declare `lang`). Centered blocks are justified too and only center their last line (`text-align-last: center`). No line ends in a lonely word: paragraphs wrap with `text-wrap: pretty`, centered blocks with `text-wrap: balance`, and a short fixed text of a few sentences (the tagline) carries the class `sentences`, so it breaks between its sentences. Headings and signs in Michroma, text in the system sans-serif.
 
 ## Code rules
 

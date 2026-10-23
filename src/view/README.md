@@ -4,7 +4,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 
 | File | What it does |
 |---|---|
-| `hud.ts` | The flight computer's projection: gauges, markers, warnings, the round's panel, the boot of a fresh clone's link; writes the DOM only when a value changes |
+| `hud.ts` | The flight computer's projection: gauges, markers, the alarms and the escape gauge, the round's panel, the boot of a fresh clone's link; writes the DOM only when a value changes |
 | `attitude.ts` | Horizon line, pitch ladder and heading tape on a canvas, as in a fighter's head-up display |
 | `radar.ts` | The radar sphere on a canvas |
 | `effects.ts` | Particles and laser beams, pooled |
@@ -16,6 +16,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `datamosh.ts` | The clone's death: its last picture rots |
 | `lensing.ts` | The black hole's gravitational lens |
 | `textures.ts` | Canvas textures: glows, sparks, smoke, and the canvas every texture drawn in code starts from |
+| `surfaces.ts` | The surfaces of everything built in code: worn depot paint, the world ship's craters and burns, the battleship's gleam, the rings' plating; texture coordinates for flat faces, the reflection map |
 | `marks.ts` | The bot or Host mark before a name |
 
 The styles of all of it live in `src/style.css`.

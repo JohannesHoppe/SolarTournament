@@ -2,6 +2,12 @@ import * as THREE from 'three';
 import { raySphere, type AsteroidField } from './asteroids';
 import { Randomizer, textSeed } from '../random';
 import { BELT_INNER } from './belt';
+import { boxUv, surfaced, wornSurface, type Wear } from '../view/surfaces';
+
+/** A wreck's plating: the old paint of a fighter torn off, blackened, scored and rusting (see wornSurface). */
+const TORN: Wear = { rust: 0.7, chips: 0.9, grime: 1, scratches: 0.8, seams: 0.7, stencils: ['07', 'NO STEP'], roughness: 0.7, metalness: 0.3 };
+/** A piece's plating repeats about once across it (its geometry is of unit size, see chunkGeometry). */
+const WRECK_TILE = 0.9;
 
 /** Pieces a destroyed ship breaks into. */
 const PIECES_PER_SHIP = 5;
@@ -42,7 +48,7 @@ function chunkGeometry(r: Randomizer): THREE.BufferGeometry {
     position.setXYZ(i, corner.x, corner.y * 0.5, corner.z);
   }
   geometry.computeVertexNormals();
-  return geometry;
+  return boxUv(geometry, WRECK_TILE);
 }
 
 const gravity = new THREE.Vector3();
@@ -66,9 +72,8 @@ export class Wrecks {
     const r = new Randomizer(textSeed(`${id}#${deaths}`));
     // the pieces of one ship cool down together: they share one material
     const material = new THREE.MeshStandardMaterial({
-      color: 0x3a3d42,
-      metalness: 0.7,
-      roughness: 0.45,
+      ...surfaced(wornSurface(13, TORN), 1),
+      color: 0x6a6e66,
       emissive: HOT,
       flatShading: true,
     });

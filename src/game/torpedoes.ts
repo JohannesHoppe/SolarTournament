@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { raySphere, type AsteroidField } from '../world/asteroids';
 import type { Ship } from '../ship/ship';
 import type { Effects } from '../view/effects';
+import { warheadBands } from '../view/surfaces';
 
 /** Torpedoes a fresh clone carries. */
 export const TORPEDOES = 2;
@@ -63,7 +64,7 @@ export class Torpedoes {
   /** The last torpedoes gone (see recent). */
   private readonly gone: Torpedo[] = [];
   private readonly geometry = new THREE.CylinderGeometry(25, 40, 260, 6).rotateX(Math.PI / 2);
-  private readonly material = new THREE.MeshStandardMaterial({ color: 0x9a9fa8, emissive: 0xff3300, emissiveIntensity: 0.6, roughness: 0.5, metalness: 0.3, flatShading: true });
+  private readonly material = new THREE.MeshStandardMaterial({ map: warheadBands(), emissive: 0xff3300, emissiveIntensity: 0.6, roughness: 0.5, metalness: 0.3, flatShading: true });
 
   constructor(private readonly effects: Effects) {}
 

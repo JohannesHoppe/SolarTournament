@@ -29,8 +29,17 @@ const STRUCK_MEMORY = 3;
 /** A bot fires at armor only while its laser is cooler than this (one shot heats it by 20), and only in some of its thinking spells (SNIPE_CHANCE): sparingly. */
 const ARMOR_FIRE_HEAT = 10;
 const SNIPE_CHANCE = 0.3;
-/** Racing bots fly to the next gate at this speed (units/s, 180 m/s), below the limit, so they still turn in time; a solo round may set another class (see Bot.raceSpeed). */
-export const RACE_SPEED = 3600;
+/**
+ * Racing bots fly from gate to gate at a speed of their own, by how good they are (see
+ * raceSpeedOf): RACE_SPEED_SLOW (units/s, 140 m/s) for the worst, RACE_SPEED_FAST (220 m/s,
+ * below the limit, so they still turn in time) for the best, RACE_SPEED (180 m/s) for a bot of
+ * middling skill.
+ */
+const RACE_SPEED_SLOW = 2800;
+const RACE_SPEED_FAST = 4400;
+export const RACE_SPEED = (RACE_SPEED_SLOW + RACE_SPEED_FAST) / 2;
+/** A bot's racing speed: the better it flies on average (aim, reflexes, daring), the faster. */
+export const raceSpeedOf = (skills: Skills) => RACE_SPEED_SLOW + (RACE_SPEED_FAST - RACE_SPEED_SLOW) * ((skills.aim + skills.reflexes + skills.daring) / 3);
 /** A racer only turns its nose to a ship this close to it (rad, about 30°): one ahead on the course. */
 const RACE_AIM_CONE = 0.5;
 /** A racer with a ship on its tail flips to shoot back for this long (s), at most once in LOOK_BACK_PAUSE (s). */
@@ -154,7 +163,7 @@ export class Bot {
    * never takes the hook on the way.
    */
   waypoint: THREE.Vector3 | null = null;
-  raceSpeed = RACE_SPEED;
+  raceSpeed: number;
   /** Set by the game: the nearest probe, which an idle bot goes for. */
   lure: THREE.Vector3 | null = null;
   /** Set by the game: a ship the bot hunts wherever it is, seen or not. */
@@ -196,7 +205,9 @@ export class Bot {
   constructor(
     readonly ship: Ship,
     readonly skills: Skills,
-  ) {}
+  ) {
+    this.raceSpeed = raceSpeedOf(skills);
+  }
 
   think(now: number, ships: Ship[], field: AsteroidField, bots: readonly Bot[]): Controls {
     const me = this.ship.flight;

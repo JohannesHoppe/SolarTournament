@@ -6,7 +6,7 @@ import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
-import { Bot, BOT_NAMES, evenSkills, HOME_RADIUS, RACE_SPEED, skillsOf, type Skills } from '../ship/bots';
+import { Bot, BOT_NAMES, evenSkills, HOME_RADIUS, raceSpeedOf, skillsOf, type Skills } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { Datamosh } from '../view/datamosh';
@@ -57,6 +57,25 @@ import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NA
 import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut, standing } from './survival';
 import { markedName } from '../view/marks';
 import { Coach, type Tip } from './coach';
+import {
+  ALARM_RANK,
+  AlarmTones,
+  Alarms,
+  CRITICAL_GLITCHES,
+  escapeLoad,
+  FIELD_CRITICAL,
+  HEART_HULL,
+  HEART_WELL,
+  HULL_CRITICAL,
+  IMPACT_CRITICAL,
+  SILENCE_BEFORE,
+  SILENCE_COOLDOWN,
+  SILENCE_SECONDS,
+  WELL_CRITICAL,
+  WELL_LOST,
+  WELL_RELEASE,
+  wellLevel,
+} from './alarms';
 import { MOMENTS, Moments, type Moment } from './moments';
 import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
 
@@ -156,8 +175,10 @@ const FLAG_HOME_SPEED = 4400;
 const FLAG_SWING = 4000;
 /** Against the President's battleships bots range out this far (units), to its orbit beyond the rocks. */
 const FLEET_HOME = ARENA_LIMIT * 0.95;
-/** The flight school's line to a marker shows from this far off it (units, 100 m), and is laid anew from the pilot when the marker moves this far. */
+/** The flight school's line to a marker shows from this far off it (units, 100 m). */
 const SCHOOL_LINE_MIN = 2000;
+/** The flight school's line is laid anew from the pilot whenever its marker moved this far (units, 10 m), so it keeps pointing at a ship or torpedo on the move. */
+const SCHOOL_LINE_MOVE = 200;
 /** Bots keep this far clear of the plume of a battleship hunting with its stern (units, 100 m). */
 const PLUME_MARGIN = 2000;
 /** What each event of Capture the Flag is worth to the ship that did it. */
@@ -216,8 +237,9 @@ const PLUME_BURN = 8;
  */
 const FLING_SECONDS = 1.2;
 const FLING_STEER = 0.1;
-/** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km). */
+/** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km); within TORPEDO_CRITICAL it is CRITICAL (units, 500 m). */
 const TORPEDO_WARNING = 40000;
+const TORPEDO_CRITICAL = 10000;
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
 const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: msg('Burned up in the clouds'), hole: msg('Crossed the event horizon') };
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
@@ -358,13 +380,14 @@ const OVERDRIVE_DRIVE_COOLDOWN = 4;
 const OVERDRIVE_RECHARGE = 60;
 /**
  * The dodge (a thruster key tapped twice, LB): the maneuvering thrusters fire all at once at
- * overload, a kick of DODGE_SPEED (units/s, 25 m/s) sideways or up or down. The autopilot lets
- * the drift be for DODGE_DRIFT seconds, so the ship really leaves the line of fire (about
- * 25 m, more than half a ship length), and the thrusters need DODGE_RECHARGE seconds before
- * the next one. It presses the clone into the side of the seat (DODGE_STRAIN).
+ * overload, a kick of DODGE_SPEED (units/s, 40 m/s) sideways or up or down. The autopilot lets
+ * the drift be for DODGE_DRIFT seconds, so the ship plainly leaves the line of fire (about
+ * 50 m, more than a ship length, before the autopilot takes the drift out), and the thrusters
+ * need DODGE_RECHARGE seconds before the next one. It presses the clone into the side of the
+ * seat (DODGE_STRAIN).
  */
-const DODGE_SPEED = 500;
-const DODGE_DRIFT = 0.7;
+const DODGE_SPEED = 800;
+const DODGE_DRIFT = 1.2;
 const DODGE_RECHARGE = 1.5;
 const DODGE_STRAIN = 0.15;
 /**
@@ -440,19 +463,9 @@ const SOLO_KEY = 'solartournament.solo';
 /** The best lap of each arena's course, with its ghost (see game/laps). */
 const LAPS_KEY = 'solartournament.laps';
 
-/**
- * The class of a solo race: how fast its bots race from gate to gate (units/s): 120 m/s,
- * 180 m/s as online, or 240 m/s, just below the limit, where they hardly make the turns.
- */
-type Pace = 'cruise' | 'pro' | 'max';
-const PACES: Record<Pace, { speed: number; note: string }> = {
-  cruise: { speed: 2400, note: msg('· bots race at 120 m/s') },
-  pro: { speed: RACE_SPEED, note: msg('· bots race at 180 m/s, as online') },
-  max: { speed: 4800, note: msg('· bots race at 240 m/s, at the limit') },
-};
-/** What a solo round plays: a race unless the Host asks for a deathmatch, its class, its arena (null: by chance), and the bots it flies against: a full grid unless the Host picks fewer. */
-type SoloChoice = { mode: RoundMode; pace: Pace; arena: ArenaId | null; rivals: string[] };
-const SOLO_DEFAULT: SoloChoice = { mode: 'race', pace: 'pro', arena: null, rivals: ['Laika', 'Sputnik', 'Juno', 'Ceres', 'Kessler', 'Orion', 'Vega'] };
+/** What a solo round plays: a race unless the Host asks for another mode, its arena (null: by chance), and the bots it flies against: a full grid unless the Host picks fewer (the rivals chosen set how fast and how hard it is). */
+type SoloChoice = { mode: RoundMode; arena: ArenaId | null; rivals: string[] };
+const SOLO_DEFAULT: SoloChoice = { mode: 'race', arena: null, rivals: ['Laika', 'Sputnik', 'Juno', 'Ceres', 'Kessler', 'Orion', 'Vega'] };
 const SOLO_NOTES: Record<RoundMode, string> = {
   race: msg('Three laps through eight gates. Killing your opponents is explicitly allowed.'),
   deathmatch: msg('For the hard pilots: five minutes, every clone for itself.'),
@@ -467,7 +480,6 @@ function loadSolo(): SoloChoice {
     const kept = JSON.parse(storageGet(SOLO_KEY) ?? '{}') as Partial<SoloChoice>;
     return {
       mode: kept.mode && ROUND_MODES.includes(kept.mode) ? kept.mode : SOLO_DEFAULT.mode,
-      pace: kept.pace && kept.pace in PACES ? kept.pace : SOLO_DEFAULT.pace,
       arena: ARENAS.some((a) => a.id === kept.arena) ? kept.arena! : null,
       rivals: Array.isArray(kept.rivals) ? BOT_NAMES.filter((n) => kept.rivals!.includes(n)).slice(0, TOURNAMENT_SIZE - 1) : [...SOLO_DEFAULT.rivals],
     };
@@ -778,8 +790,17 @@ export class Game implements OnlineGame {
   private brakeFlip = false;
   /** The flight computer's output, reused from frame to frame. */
   private readonly computed: Controls = { ...IDLE };
-  /** Warnings below the crosshair, rebuilt every frame in the same array. */
-  private readonly warnings: string[] = [];
+  /**
+   * The own clone's alarms, raised anew every frame (see game/alarms.ts); any part of the game
+   * raises its own danger here, and the HUD and the headset show the worst.
+   */
+  readonly alarms = new Alarms();
+  private readonly alarmTones = new AlarmTones();
+  /** How far Nicole has warned of a gravity well (an alarm rank, 4: past return), reset once the pull lets go. */
+  private wellSaid = 0;
+  private hullWarned = false;
+  /** When the radio may fall silent again before an imminent death. */
+  private silenceReadyAt = 0;
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
   private readonly inSight = (ship: Ship) => this.field.lineOfSight(this.camera.position, ship.flight.position);
   /** Whether the own ship's sensors see a ship past the asteroids, for the radar. */
@@ -846,14 +867,11 @@ export class Game implements OnlineGame {
   /** G-force strain of the own pilot, 0..1. */
   private strain = 0;
   private nextHeartbeat = 0;
-  private nextWarningBeep = 0;
-  /** The nova holder the own pilot was last warned about, and when the siren sounds next. */
+  /** The nova holder the own pilot was last warned about. */
   private novaWarned: Ship | null = null;
   private novaFlashTimer = 0;
   /** Things to say and show a little after a round started (see cue). */
   private readonly cues: { at: number; run: () => void }[] = [];
-  private nextNovaSiren = 0;
-  private nextLockBeep = 0;
   /** Speed of game time; 0 freezes the simulation while rendering continues. */
   timeScale = 1;
   /** The picture has to be drawn again even in a still pause (see frame). */
@@ -1149,7 +1167,6 @@ export class Game implements OnlineGame {
       return element;
     };
     for (const mode of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-mode"] button[data-value]')) choose(mode, () => (this.solo.mode = mode.dataset.value as RoundMode));
-    for (const pace of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-pace"] button[data-value]')) choose(pace, () => (this.solo.pace = pace.dataset.value as Pace));
     $('solo-arenas').append(
       button(t('By chance'), () => (this.solo.arena = null)),
       ...ARENAS.map((arena) => button(`${t(arena.name)}<small>${t(arena.tagline)}</small>`, () => (this.solo.arena = arena.id))),
@@ -1170,14 +1187,9 @@ export class Game implements OnlineGame {
 
   /** Marks the solo round's choices. */
   private renderSolo() {
-    const { mode, pace, arena, rivals } = this.solo;
-    for (const [choice, value] of [['solo-mode', mode], ['solo-pace', pace]]) {
-      for (const button of document.querySelectorAll<HTMLButtonElement>(`[data-choice="${choice}"] button[data-value]`)) button.classList.toggle('selected', button.dataset.value === value);
-    }
+    const { mode, arena, rivals } = this.solo;
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-choice="solo-mode"] button[data-value]')) button.classList.toggle('selected', button.dataset.value === mode);
     $('solo-mode-note').textContent = t(SOLO_NOTES[mode], { clones: CLONES });
-    // the class is the bots' racing speed: a deathmatch has none
-    $('solo-class').hidden = mode !== 'race';
-    $('solo-class-note').textContent = t(PACES[pace].note);
     [...$('solo-arenas').children].forEach((b, i) => b.classList.toggle('selected', i === 0 ? arena === null : ARENAS[i - 1].id === arena));
     [...$('solo-bots').children].forEach((b, i) => {
       const chosen = rivals.includes(BOT_NAMES[i]);
@@ -1771,7 +1783,7 @@ export class Game implements OnlineGame {
     if (state !== 'playing') {
       this.sound.setEngine(0, 0);
       // the look of a nova core belongs to the round; the next frame of play brings it back
-      document.body.classList.remove('nova-held', 'nova-alarm');
+      document.body.classList.remove('nova-held', 'alarm-critical');
     }
     if (state === 'menu' || state === 'results') {
       this.datamosh.stop();
@@ -2794,8 +2806,8 @@ export class Game implements OnlineGame {
         bot.home = this.fleet ? FLEET_HOME : Math.min(HOME_RADIUS, safe * FLARE_KEEP);
         bot.prey = null;
         bot.siege = this.fleet ? this.siegePoint(bot, this.fleet) : null;
-        // a race online at the tournament's pace, a solo race at its class's
-        bot.raceSpeed = this.flags ? FLAG_RAID_SPEED : this.online ? RACE_SPEED : PACES[this.solo.pace].speed;
+        // a race at the bot's own pace, by how good it is; a raid in Capture the Flag at the raiders'
+        bot.raceSpeed = this.flags ? FLAG_RAID_SPEED : raceSpeedOf(bot.skills);
         if (this.flags) this.flagRole(bot, this.flags);
       }
       const thought = bot ? bot.think(now, this.ships, this.field, this.bots) : null;
@@ -3722,9 +3734,9 @@ export class Game implements OnlineGame {
     return waypoint;
   }
 
-  /** The flight school's line to a marker: from where the pilot was when the marker came up (or last moved by SCHOOL_LINE_MIN), ending at it. */
+  /** The flight school's line to a marker: from where the pilot was when the marker came up (or last moved by SCHOOL_LINE_MOVE), ending at it. */
   private lineTo(me: Ship, waypoint: THREE.Vector3): { line: RacingLine; next: number } {
-    if (!this.schoolLine || this.schoolLine.to.distanceTo(waypoint) > SCHOOL_LINE_MIN) {
+    if (!this.schoolLine || this.schoolLine.to.distanceTo(waypoint) > SCHOOL_LINE_MOVE) {
       this.schoolLine = { line: new RacingLine([waypoint], false, me.flight.position, 0), next: 0, to: waypoint.clone() };
     }
     return this.schoolLine;
@@ -4360,23 +4372,18 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * Panic in the own cockpit while another ship with a nova core is close: a two-tone siren,
-   * the warning, the tint of an alarm on the screen, and Nicole urging the pilot away, once
-   * each time a holder comes close.
+   * Panic in the own cockpit while another ship with a nova core is close: a CRITICAL alarm
+   * with its two-tone siren and the red edge, and Nicole urging the pilot away, once each time
+   * a holder comes close.
    */
-  private novaAlarm(me: Ship, warnings: string[], now: number) {
+  private novaAlarm(me: Ship) {
     const holder = me.alive ? this.novaNear(me, NOVA_RADIUS * NOVA_FLEE) : null;
-    if (document.body.classList.contains('nova-alarm') !== !!holder) document.body.classList.toggle('nova-alarm', !!holder);
     if (!holder) {
       this.novaWarned = null;
       return;
     }
-    warnings.push(t('NOVA CORE ACTIVATED · {distance} · GET OUT', { distance: meters(holder.flight.position.distanceTo(me.flight.position)) }));
-    if (now >= this.nextNovaSiren) {
-      const high = Math.floor(now * 4) % 2 === 0;
-      this.sound.beep(high ? 1320 : 880, 0.2, 0.18);
-      this.nextNovaSiren = now + 0.25;
-    }
+    const away = relative.subVectors(holder.flight.position, me.flight.position);
+    this.alarms.raise({ id: 'nova', level: 'critical', text: t('NOVA CORE ACTIVATED · {distance} · GET OUT', { distance: meters(away.length()) }), direction: away, tone: 'nova' });
     if (this.novaWarned !== holder) {
       this.novaWarned = holder;
       this.speaker.say(COMPUTER.novaNear, 'urgent');
@@ -5011,7 +5018,9 @@ export class Game implements OnlineGame {
 
   /**
    * What the own pilot feels and the flight computer reports: g-force strain with tunnel
-   * vision, impact warnings, an overheated laser.
+   * vision, a heartbeat, and the alarms (see game/alarms.ts) of an impact ahead, an overheated
+   * laser or drive, a nova core, a torpedo, a nose on the own ship, the field's edge, a
+   * gravity well and a failing hull, besides whatever other parts of the game raised.
    */
   private pilot(dt: number, now: number) {
     const me = this.me!;
@@ -5021,15 +5030,9 @@ export class Game implements OnlineGame {
     else this.strain -= dt / G_RECOVERY;
     this.strain = THREE.MathUtils.clamp(this.strain, 0, 1);
     this.hud.setStrain(this.strain);
-    if (this.strain > 0.4 && now >= this.nextHeartbeat) {
-      // heartbeat: faster and louder the harder the pilot is pressed into the seat
-      this.sound.beep(55, 0.12, 0.25 * this.strain);
-      this.sound.beep(48, 0.14, 0.2 * this.strain, 0.16);
-      this.nextHeartbeat = now + 1.1 - 0.5 * this.strain;
-    }
 
-    const warnings = this.warnings;
-    warnings.length = 0;
+    const alarms = this.alarms;
+    let impact = Infinity;
     const speed = flight.velocity.length();
     if (me.alive && speed > 100) {
       const heading = scratch.copy(flight.velocity).divideScalar(speed);
@@ -5044,35 +5047,95 @@ export class Game implements OnlineGame {
         const flipTime = ((turning / Math.PI) * FLIP_SECONDS + (turning > 0.35 ? FLIP_ROLL_SECONDS : 0)) / turnRate;
         const brakeTime = flipTime + speed / thrust / 2;
         if (timeToImpact < brakeTime + IMPACT_MARGIN) {
-          warnings.push(t('IMPACT IN {seconds} s', { seconds: timeToImpact.toFixed(1) }));
-          if (now >= this.nextWarningBeep) {
-            this.sound.beep(980, 0.05, 0.12);
-            this.nextWarningBeep = now + THREE.MathUtils.clamp(timeToImpact / 6, 0.1, 0.5);
-          }
+          impact = timeToImpact;
+          alarms.raise({ id: 'impact', level: timeToImpact < IMPACT_CRITICAL ? 'critical' : 'warning', text: t('IMPACT'), direction: heading, seconds: timeToImpact, tone: 'impact' });
         }
       }
     }
-    this.impactAhead = warnings.length > 0;
-    this.lockWarning(now);
+    this.impactAhead = impact < Infinity;
+    this.lockWarning();
     if (me.alive && me.overheated) {
-      warnings.push(t('LASER OVERHEATED'));
+      alarms.raise({ id: 'laser', level: 'caution', text: t('LASER OVERHEATED') });
       this.tip('hot');
     }
-    this.novaAlarm(me, warnings, now);
+    this.novaAlarm(me);
     // a torpedo homing on the own ship: shoot it down or dodge
     for (const torpedo of this.torpedoes.list) {
-      if (!me.alive || torpedo.target !== me || torpedo.position.distanceTo(flight.position) > TORPEDO_WARNING) continue;
-      warnings.push(t('TORPEDO INBOUND'));
+      if (!me.alive || torpedo.target !== me) continue;
+      const toward = relative.subVectors(torpedo.position, flight.position);
+      const distance = toward.length();
+      if (distance > TORPEDO_WARNING) continue;
+      alarms.raise({ id: 'torpedo', level: distance < TORPEDO_CRITICAL ? 'critical' : 'warning', text: t('TORPEDO INBOUND'), direction: toward, tone: 'torpedo' });
       this.tip('torpedo');
-      if (now >= this.nextWarningBeep) {
-        this.sound.beep(1480, 0.05, 0.16);
-        this.nextWarningBeep = now + 0.12;
-      }
       break;
     }
-    if (me.alive && me.driveOffline(now)) warnings.push(t('DRIVE OVERHEATED'));
-    this.cometWarning(me, warnings);
-    this.hud.setWarning(warnings.join('\n'));
+    if (me.alive && me.driveOffline(now)) alarms.raise({ id: 'drive', level: 'caution', text: t('DRIVE OVERHEATED') });
+    this.cometAlarm(me);
+    if (me.alive && me.outsideSince !== null) {
+      // the field's edge: back towards its center before the clone is lost in deep space
+      const left = this.school ? null : Math.max(0, ARENA_GRACE - (now - me.outsideSince));
+      alarms.raise({ id: 'field', level: left !== null && left < FIELD_CRITICAL ? 'critical' : 'warning', text: t('OUT OF FIELD'), direction: relative.copy(flight.position).negate(), seconds: left });
+    }
+    const well = this.wellAlarm(me);
+    const hullCritical = me.alive && me.hull <= HULL_CRITICAL;
+    if (hullCritical) {
+      alarms.raise({ id: 'hull', level: 'warning', text: t('HULL FAILING') });
+      if (!this.hullWarned) this.speaker.say(COMPUTER.hullCritical, 'urgent');
+    }
+    this.hullWarned = hullCritical;
+
+    // a dead clone hears no alarms
+    if (!me.alive) alarms.begin();
+    alarms.finish();
+    this.hud.setAlarms(alarms.list, this.camera);
+    this.alarmTones.play(alarms.top, now, this.sound);
+    // heartbeat: faster and louder the harder the pilot is pressed into the seat, steady and loud one hit from death or deep in a well
+    const beat = Math.max(this.strain, hullCritical ? HEART_HULL : 0, well >= WELL_CRITICAL ? HEART_WELL : 0);
+    if (beat > 0.4 && now >= this.nextHeartbeat) {
+      this.sound.beep(55, 0.12, 0.25 * beat);
+      this.sound.beep(48, 0.14, 0.2 * beat, 0.16);
+      this.nextHeartbeat = now + 1.1 - 0.5 * beat;
+    }
+    if (alarms.top?.level === 'critical') {
+      // the link frays in a panic: short and seldom, never long enough to hide a warning
+      if (Math.random() < dt * CRITICAL_GLITCHES) this.glitch.trigger(0.2 + Math.random() * 0.2, 0.06 + Math.random() * 0.1);
+      // death is a breath away: the music drops out, only the heart and the alarm remain
+      if ((impact < SILENCE_BEFORE || well >= WELL_LOST) && now >= this.silenceReadyAt) {
+        this.radio.dropout(SILENCE_SECONDS);
+        this.silenceReadyAt = now + SILENCE_COOLDOWN;
+      }
+    }
+    alarms.begin();
+  }
+
+  /**
+   * A gravity well's hold on the own ship (see escapeLoad): the escape gauge, its alarm towards
+   * the well, and Nicole, once for each level it reaches until the pull lets go again: the well
+   * is near, it is pulling, full burn now, and past the point of no return a quiet goodbye.
+   * Returns the load (0 without a well).
+   */
+  private wellAlarm(me: Ship): number {
+    const well = this.field.well;
+    if (!me.alive || !well) {
+      this.hud.setEscape(null);
+      return 0;
+    }
+    const load = escapeLoad(well, me.flight.position, me.flight.velocity, MAIN_THRUST * Math.max(me.drive, 0.01));
+    this.hud.setEscape(load);
+    // the warnings come again once the well has let go of the ship for good
+    if (load < WELL_RELEASE) this.wellSaid = 0;
+    const level = wellLevel(load);
+    if (!level) return load;
+    const hole = this.venue.id === 'hole';
+    const lost = load >= WELL_LOST;
+    this.alarms.raise({ id: 'well', level, text: lost ? t('NO RETURN') : hole ? t('BLACK HOLE · BURN AWAY') : t('GRAVITY WELL · BURN AWAY'), direction: relative.subVectors(well.position, me.flight.position) });
+    const said = lost ? ALARM_RANK.critical + 1 : ALARM_RANK[level];
+    if (said > this.wellSaid) {
+      this.wellSaid = said;
+      const line = lost ? COMPUTER.wellLost : level === 'critical' ? COMPUTER.wellTight : level === 'warning' ? (hole ? COMPUTER.holePull : COMPUTER.giantPull) : hole ? COMPUTER.holeNear : COMPUTER.giantNear;
+      this.speaker.say(line, 'urgent');
+    }
+    return load;
   }
 
   /**
@@ -5169,14 +5232,14 @@ export class Game implements OnlineGame {
     return cometAway.distanceTo(ship.flight.position) > SHOWER_WIDE + COMET_DANGER ? null : cometAway;
   }
 
-  /** The comet in the warnings: the seconds until its head reaches the arena, then its shower while the own pilot is in its way. */
-  private cometWarning(me: Ship, warnings: string[]) {
+  /** The comet as an alarm towards its head: WARNING from the flight computer's call until the head passes, counting down to the arena's edge; CRITICAL while the own pilot is in its way. */
+  private cometAlarm(me: Ship) {
     const comet = this.cometCalled;
-    if (!comet || !me.alive) return;
     const clock = this.field.clock;
-    const edge = comet.edge;
-    if (clock < edge) warnings.push(t('COMET IN {seconds} s', { seconds: Math.ceil(edge - clock) }));
-    else if (this.shower?.comet === comet && this.cometDanger(me)) warnings.push(t('COMET SHOWER · NOSE INTO IT OR TAKE COVER'));
+    if (!comet || !me.alive || clock > cometEnd(comet)) return;
+    const direction = relative.subVectors(headAt(comet, Math.min(clock, comet.swallowed), cometHead), me.flight.position);
+    if (this.shower?.comet === comet && this.cometDanger(me)) this.alarms.raise({ id: 'comet', level: 'critical', text: t('COMET SHOWER · NOSE INTO IT OR TAKE COVER'), direction });
+    else if (clock < comet.at) this.alarms.raise({ id: 'comet', level: 'warning', text: t('COMET INBOUND'), direction, seconds: clock < comet.edge ? comet.edge - clock : null });
   }
 
   /** A tip of the fight from Nicole, while it is still due (see Coach); the flight school teaches on its own. */
@@ -5188,8 +5251,10 @@ export class Game implements OnlineGame {
    * Another ship's nose on the own ship: LOCKED when its laser would hit now, TRACKED when
    * the nose is close to it, ON YOUR TAIL when it sits behind, where it reaches the drive. The
    * ship's sensors see where every other hull points; the faster beeping is the cue to act.
+   * Its line, with the shooter's mark, sits below the alarm list; its alarm (TRACKED a CAUTION,
+   * LOCKED and ON YOUR TAIL a WARNING) counts for the master caution and the beep.
    */
-  private lockWarning(now: number) {
+  private lockWarning() {
     const me = this.me!;
     // a solar storm blinds the sensors that would see a nose on the own ship
     if (!me.alive || this.storming) {
@@ -5220,10 +5285,7 @@ export class Game implements OnlineGame {
     const tail = me.tailToward(relative.subVectors(me.flight.position, shooter.flight.position));
     this.hud.setLock(tail ? t('ON YOUR TAIL') : level === 2 ? t('LOCKED') : t('TRACKED'), shooter);
     if (tail) this.tip('tail');
-    if (now >= this.nextLockBeep) {
-      this.sound.beep(tail ? 1760 : level === 2 ? 1560 : 1170, 0.04, tail ? 0.14 : 0.1);
-      this.nextLockBeep = now + (tail ? 0.08 : level === 2 ? 0.1 : 0.35);
-    }
+    this.alarms.raise({ id: 'lock', level: tail || level === 2 ? 'warning' : 'caution', text: '', direction: relative.negate(), tone: tail ? 'tail' : level === 2 ? 'locked' : 'tracked' });
   }
 
   /**
