@@ -688,6 +688,14 @@ export const ES: Catalog = {
   'It is turning its drive on us. Get out from behind it!': 'Nos está apuntando con los motores. ¡Sal de detrás!',
   'The reactor is open. Now, darling!': 'El reactor está abierto. ¡Ahora, cariño!',
   'Reactor critical! Get clear, darling!': '¡Reactor crítico! ¡Aléjate, cariño!',
+  'A race, darling. Three laps through the rings. Fly through their very centers, and the coils throw you on. Follow the orange dots, and shoot whoever is ahead of you.': 'Una carrera, cariño. Tres vueltas por los anillos. Pasa justo por su centro, y las bobinas te lanzan. Sigue los puntos naranjas, y dispara a quien vaya por delante.',
+  'A deathmatch. Every kill counts. Hit their drives from behind, turn your armored nose to anyone behind you, and never fly a straight line.': 'Todos contra todos. Cada baja cuenta. Dale a sus motores por detrás, gira tu morro acorazado hacia quien tengas detrás, y nunca vueles en línea recta.',
+  'Last clone standing. Three clones, no more. After a minute a solar flare closes in from the edge. Stay inside its shell, and stay alive.': 'El último clon en pie. Tres clones, ni uno más. Pasado un minuto, una erupción solar se cierra desde el borde. Quédate dentro de su esfera, y sigue con vida.',
+  'Capture the flag. Touch their core, and tow it into our ring. We only score while our own core is at home, so guard it, or bring it back.': 'Captura la bandera. Toca su núcleo, y remólcalo hasta nuestro anillo. Solo puntuamos si nuestro núcleo está en casa, así que protégelo, o recupéralo.',
+  'The President’s fleet. We all fight his battleship together. Take out its batteries first, then its drives. When the reactor opens, hit it, and get clear before it blows. Keep moving: its batteries miss fast ships.': 'La flota del Presidente. Todos luchamos juntos contra su acorazado. Primero sus baterías, luego sus motores. Cuando se abra el reactor, dale, y aléjate antes de que estalle. No dejes de moverte: sus baterías fallan contra naves rápidas.',
+  'Someone is on your drive, darling. Turn your nose to them, now.': 'Alguien está sobre tu motor, cariño. Gírale el morro, ya.',
+  'Your laser is cooking. Short bursts, and only when the crosshair glows.': 'Tu láser está ardiendo. Ráfagas cortas, y solo cuando brille la mira.',
+  'Torpedo! Shoot it down, or put a rock between you and it.': '¡Torpedo! Derríbalo, o pon una roca entre tú y él.',
 
   // Nicole: the sponsor break
   'Oh, you died again, darling. No problem. Just watch this little ad, and I will have you up and ready again. I am rooting for you.':

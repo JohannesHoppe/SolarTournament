@@ -53,6 +53,7 @@ import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, 
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut } from './survival';
 import { markedName } from '../view/marks';
+import { Coach, type Tip } from './coach';
 import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
@@ -757,6 +758,8 @@ export class Game implements OnlineGame {
   private readonly radio: Radio;
   /** The flight computer's voice: reads out what the screen shows. */
   private readonly speaker: Speaker;
+  /** Nicole's briefings and tips in real rounds. */
+  private readonly coach = new Coach();
   /** The impact warning is on (the flight school watches it). */
   private impactAhead = false;
   /** The flight school's sparring bot, and whether it may fire. */
@@ -1863,8 +1866,11 @@ export class Game implements OnlineGame {
     if (mouse) this.cue(2.2, () => this.hud.flashMessage(this.time, t('The ship turns towards the mouse pointer'), 4));
     // the flight school starts with its briefing; a tournament clone just reports in, and
     // once Nicole is through, the announcer opens the broadcast
+    this.coach.newRound();
     if (mode !== 'school') {
       this.speaker.say(mouse ? [COMPUTER.launch, COMPUTER.mouse] : COMPUTER.launch, 'urgent');
+      // the first round of a mode: what it is about and how to win it, right after she reports in
+      this.coach.give(this.roundMode, (line) => this.speaker.say(line, 'lesson'));
       this.cue(ARENA_TITLE_DELAY, () => this.announceArena());
       this.cue(ANNOUNCER_OPEN_DELAY, () => this.openBroadcast());
     }
@@ -4625,12 +4631,16 @@ export class Game implements OnlineGame {
     }
     this.impactAhead = warnings.length > 0;
     this.lockWarning(now);
-    if (me.alive && me.overheated) warnings.push(t('LASER OVERHEATED'));
+    if (me.alive && me.overheated) {
+      warnings.push(t('LASER OVERHEATED'));
+      this.tip('hot');
+    }
     this.novaAlarm(me, warnings, now);
     // a torpedo homing on the own ship: shoot it down or dodge
     for (const torpedo of this.torpedoes.list) {
       if (!me.alive || torpedo.target !== me || torpedo.position.distanceTo(flight.position) > TORPEDO_WARNING) continue;
       warnings.push(t('TORPEDO INBOUND'));
+      this.tip('torpedo');
       if (now >= this.nextWarningBeep) {
         this.sound.beep(1480, 0.05, 0.16);
         this.nextWarningBeep = now + 0.12;
@@ -4639,6 +4649,11 @@ export class Game implements OnlineGame {
     }
     if (me.alive && me.driveOffline(now)) warnings.push(t('DRIVE OVERHEATED'));
     this.hud.setWarning(warnings.join('\n'));
+  }
+
+  /** A tip of the fight from Nicole, while it is still due (see Coach); the flight school teaches on its own. */
+  private tip(tip: Tip) {
+    if (!this.school) this.coach.give(tip, (line) => this.speaker.say(line, 'urgent'));
   }
 
   /**
@@ -4676,6 +4691,7 @@ export class Game implements OnlineGame {
     // from behind the shooter reaches the drive, the one place that hurts: turn to face it
     const tail = me.tailToward(relative.subVectors(me.flight.position, shooter.flight.position));
     this.hud.setLock(tail ? t('ON YOUR TAIL') : level === 2 ? t('LOCKED') : t('TRACKED'), shooter);
+    if (tail) this.tip('tail');
     if (now >= this.nextLockBeep) {
       this.sound.beep(tail ? 1760 : level === 2 ? 1560 : 1170, 0.04, tail ? 0.14 : 0.1);
       this.nextLockBeep = now + (tail ? 0.08 : level === 2 ? 0.1 : 0.35);

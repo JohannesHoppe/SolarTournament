@@ -362,6 +362,21 @@ export const COMPUTER = {
 } as const;
 
 /**
+ * Nicole as a coach in real rounds (see game/coach.ts): the briefing of each mode the first
+ * time a Host plays it, and the tips of the fight, the moment they matter.
+ */
+export const TIPS = {
+  race: 'A race, darling. Three laps through the rings. Fly through their very centers, and the coils throw you on. Follow the orange dots, and shoot whoever is ahead of you.',
+  deathmatch: 'A deathmatch. Every kill counts. Hit their drives from behind, turn your armored nose to anyone behind you, and never fly a straight line.',
+  survival: 'Last clone standing. Three clones, no more. After a minute a solar flare closes in from the edge. Stay inside its shell, and stay alive.',
+  flag: 'Capture the flag. Touch their core, and tow it into our ring. We only score while our own core is at home, so guard it, or bring it back.',
+  fleet: 'The President’s fleet. We all fight his battleship together. Take out its batteries first, then its drives. When the reactor opens, hit it, and get clear before it blows. Keep moving: its batteries miss fast ships.',
+  tail: 'Someone is on your drive, darling. Turn your nose to them, now.',
+  hot: 'Your laser is cooking. Short bursts, and only when the crosshair glows.',
+  torpedo: 'Torpedo! Shoot it down, or put a rock between you and it.',
+} as const;
+
+/**
  * Nicole in the sponsor break, one line picked at random each time: she comforts the Host,
  * makes the Host feel special, and only wants one thing, the next clone back in the war.
  */
@@ -397,7 +412,7 @@ export function allLines(language: Language): string[] {
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
       return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
-      return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...SPONSOR_BREAK, ...SPONSOR_HAPPY];
+      return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY];
   }
 }
 

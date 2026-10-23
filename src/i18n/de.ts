@@ -705,6 +705,14 @@ export const DE: Catalog = {
   'It is turning its drive on us. Get out from behind it!': 'Es richtet seinen Antrieb auf uns. Raus da hinter ihm!',
   'The reactor is open. Now, darling!': 'Der Reaktor ist offen. Jetzt, Schätzchen!',
   'Reactor critical! Get clear, darling!': 'Reaktor kritisch! Weg da, Schätzchen!',
+  'A race, darling. Three laps through the rings. Fly through their very centers, and the coils throw you on. Follow the orange dots, and shoot whoever is ahead of you.': 'Ein Rennen, Schätzchen. Drei Runden durch die Ringe. Flieg genau durch ihre Mitte, dann schleudern dich die Spulen weiter. Folg den orangen Punkten, und schieß auf jeden, der vor dir ist.',
+  'A deathmatch. Every kill counts. Hit their drives from behind, turn your armored nose to anyone behind you, and never fly a straight line.': 'Ein Deathmatch. Jeder Abschuss zählt. Triff ihre Antriebe von hinten, dreh jedem hinter dir deine gepanzerte Nase zu, und flieg nie geradeaus.',
+  'Last clone standing. Three clones, no more. After a minute a solar flare closes in from the edge. Stay inside its shell, and stay alive.': 'Der letzte Klon. Drei Klone, mehr nicht. Nach einer Minute rückt eine Sonneneruption vom Rand heran. Bleib in ihrer Hülle, und bleib am Leben.',
+  'Capture the flag. Touch their core, and tow it into our ring. We only score while our own core is at home, so guard it, or bring it back.': 'Capture the Flag. Berühr ihren Kern, und schlepp ihn in unseren Ring. Wir punkten nur, solange unser eigener Kern zu Hause ist, also bewach ihn, oder hol ihn zurück.',
+  'The President’s fleet. We all fight his battleship together. Take out its batteries first, then its drives. When the reactor opens, hit it, and get clear before it blows. Keep moving: its batteries miss fast ships.': 'Die Flotte des Präsidenten. Wir kämpfen alle zusammen gegen sein Schlachtschiff. Erst die Batterien, dann die Antriebe. Wenn der Reaktor offen ist, triff ihn, und mach dich davon, bevor er hochgeht. Bleib in Bewegung: Seine Batterien verfehlen schnelle Schiffe.',
+  'Someone is on your drive, darling. Turn your nose to them, now.': 'Jemand sitzt auf deinem Antrieb, Schätzchen. Dreh ihm deine Nase zu, sofort.',
+  'Your laser is cooking. Short bursts, and only when the crosshair glows.': 'Dein Laser kocht. Kurze Salven, und nur, wenn das Fadenkreuz leuchtet.',
+  'Torpedo! Shoot it down, or put a rock between you and it.': 'Torpedo! Schieß ihn ab, oder bring einen Felsen zwischen dich und ihn.',
 
   // Nicole in the sponsor break
   'Oh, you died again, darling. No problem. Just watch this little ad, and I will have you up and ready again. I am rooting for you.': 'Oh, du bist schon wieder gestorben, Schätzchen. Kein Problem. Schau dir nur diese kleine Werbung an, und ich mach dich wieder startklar. Ich drück dir die Daumen.',
