@@ -33,11 +33,13 @@ const CUT_OFF_MS = 2000;
 /** A reported join time this much later than the known one means the peer started over (s); well above network jitter. */
 const RESTART_SLACK = 1;
 /**
- * A peer's start over is taken up (its ships judged afresh, the field sent again) at most once
- * in this long (s): an honest browser starts over rarely, a stream of them would only cost the
- * lead its bandwidth and wipe what the checks know.
+ * A peer's start over is taken up (the field sent again, see Online) at most once in this long
+ * (s): an honest browser is cut off for at least CUT_OFF_MS before it starts over, so it never
+ * starts over faster; a stream of them would only cost the lead its bandwidth.
  */
-const PEER_RESTART_GAP = 10;
+const PEER_RESTART_GAP = 2;
+/** How often a settled browser checks its election against whom the others follow (s, see Session.reconcile). */
+const RECONCILE_SECONDS = 1;
 /**
  * Seconds left in a round reported by a lead browser, at the least: the results after a round
  * last 12 s, a clock far below would hold everyone on the scoreboard.
@@ -64,12 +66,12 @@ const MAX_TORPEDO_EVENTS_PER_SECOND = 12;
 /** The parts of a battleship are numbered from zero, far fewer than this (see game/fleet); one message counts a laser's hit or a torpedo's. */
 const MAX_FLEET_ZONE = 31;
 /**
- * The field time of a peer's rock hits only moves on (s): one earlier than it reported before
- * is a lie, beyond ROCK_ORDER_SLACK for messages that cross; one more than ROCK_RESTART
- * earlier is a new round's (its field time starts over).
+ * The field time of a peer's rock hits in a round only moves on (s): one earlier than it reported
+ * before is a lie, beyond ROCK_ORDER_SLACK. That slack is a second: a browser's field clock
+ * follows the lead's and may jump back by up to half a second (the game's FIELD_SNAP) when a late
+ * round state arrives, and messages cross. A new round starts the field time over.
  */
-const ROCK_ORDER_SLACK = 0.05;
-const ROCK_RESTART = 30;
+const ROCK_ORDER_SLACK = 1;
 
 /**
  * Round clock of the lead browser: which round is running, how many seconds are left, and the
@@ -180,13 +182,15 @@ export class Session {
    * behind it (see plausibleJoin), and never close enough to it to make it step back.
    */
   private readonly linedUp = new Set<string>();
-  /** The lead each peer says it follows (its states carry it); a newcomer checks the oldest claim against them (see settle). */
+  /** The lead each peer says it follows (its states carry it), checked against the own election (see reconcile). */
   private readonly follows = new Map<string, string>();
-  /** The newcomer has checked the join times it believed while it settled (see settle). */
-  private settled = false;
+  /** The join time each peer last claimed, on this browser's clock: believed for a peer most others follow (see reconcile). */
+  private readonly claimed = new Map<string, number>();
+  /** When the own election is next checked against whom the others follow (s). */
+  private nextReconcile = 0;
   /** When each peer's start over was last taken up (see PEER_RESTART_GAP). */
   private readonly peerRestartedAt = new Map<string, number>();
-  /** The field time of each peer's last rock hit (see ROCK_ORDER_SLACK). */
+  /** The latest field time of each peer's rock hits in each round ("peer:round", see ROCK_ORDER_SLACK). */
   private readonly lastRockAt = new Map<string, number>();
   /** When each peer last spoke; kept when its link drops, so its return is noticed. */
   private readonly lastHeard = new Map<string, number>();
@@ -315,11 +319,13 @@ export class Session {
       const round = num(d?.n, 0, MAX_COUNT);
       const shooter = id(d?.s);
       if (!rock || at === null || round === null || !shooter || ownerOf(shooter) !== from || !this.rockBudget.spend(from)) return;
-      // a peer's hits come in the order of its field time (a new round starts the time over):
-      // one dated before the last it sent would take another Host's points (see game.remoteRock)
-      const last = this.lastRockAt.get(from) ?? -Infinity;
-      if (at < last - ROCK_ORDER_SLACK && last - at < ROCK_RESTART) return;
-      this.lastRockAt.set(from, at);
+      // a peer's hits in a round come in the order of its field time: one dated before the last
+      // it sent would take another Host's points (see game.remoteRock)
+      const key = `${from}:${round}`;
+      const last = this.lastRockAt.get(key) ?? -Infinity;
+      if (at < last - ROCK_ORDER_SLACK) return;
+      if (last === -Infinity && this.lastRockAt.size > 256) this.lastRockAt.clear();
+      this.lastRockAt.set(key, Math.max(last, at));
       this.guard(() => this.onRock(rock, at, round, shooter));
     });
     transport.on('y', (d, from) => {
@@ -449,7 +455,10 @@ export class Session {
     // no frames ran for a while (a hidden tab, a sleeping device): the others went on without it
     if (this.lastFrameAt && now - this.lastFrameAt > CUT_OFF_MS / 1000 && this.peers.length > 0) this.restart();
     this.lastFrameAt = now;
-    if (!this.settled && !this.justJoined) this.settle();
+    if (!this.justJoined && now >= this.nextReconcile) {
+      this.nextReconcile = now + RECONCILE_SECONDS;
+      this.reconcile();
+    }
     // the lead changed to a peer this browser could not hear for a while: two groups that lost
     // each other meet again, and the one whose lead is not the oldest takes the other's world
     const lead = this.leadId;
@@ -587,35 +596,46 @@ export class Session {
   }
 
   /**
-   * A newcomer has settled. While settling it believed every join time it heard, so a peer that
-   * lied about its age would lead it alone, apart from everyone else. The others say whom they
-   * follow: when most of them follow another peer than the one it would elect, that one lines up
-   * behind the one they follow.
+   * Checks the own election against whom the others follow (their states say), once settled and
+   * every RECONCILE_SECONDS from then on. A newcomer believed every join time it heard while it
+   * settled, so a peer that lied about its age might lead it alone; and a browser that reached the
+   * others only after it settled lined them up behind its own lead (see plausibleJoin), so it
+   * might lead alone itself. When most of the live peers that follow another follow one peer, and
+   * not the one this browser elects, that one's own claim is believed and the one it would have
+   * elected lines up behind it; a browser that led alone starts over, behind them, and takes
+   * their world. A peer's vote for itself does not count, so a single liar never gets a majority;
+   * two browsers alone that reached each other only after settling cannot tell an honest older
+   * peer from a liar, and each keeps its own lead until a third joins them.
    */
-  private settle() {
-    this.settled = true;
-    for (let tries = 0; tries < this.peers.length; tries++) {
-      const lead = this.leadId;
-      if (lead === this.selfId) return;
-      const votes = new Map<string, number>();
-      let reporters = 0;
-      for (const peer of this.peers) {
-        const followed = this.follows.get(peer);
-        if (peer === lead || followed === undefined) continue;
-        reporters++;
-        votes.set(followed, (votes.get(followed) ?? 0) + 1);
+  private reconcile() {
+    const votes = new Map<string, number>();
+    let reporters = 0;
+    for (const peer of this.peers) {
+      const followed = this.follows.get(peer);
+      if (followed === undefined || followed === peer || !this.isLive(peer)) continue;
+      reporters++;
+      votes.set(followed, (votes.get(followed) ?? 0) + 1);
+    }
+    let best: string | null = null;
+    let most = 0;
+    for (const [peer, count] of votes) {
+      if (count > most) {
+        best = peer;
+        most = count;
       }
-      let best: string | null = null;
-      let most = 0;
-      for (const [peer, count] of votes) {
-        if (count > most) {
-          best = peer;
-          most = count;
-        }
-      }
-      const bestJoined = best === null ? undefined : this.peerJoinedAt.get(best);
-      if (best === null || best === lead || bestJoined === undefined || !this.peers.includes(best) || most * 2 <= reporters) return;
-      this.peerJoinedAt.set(lead, bestJoined + 2 * RESTART_SLACK);
+    }
+    const lead = this.leadId;
+    if (best === null || best === lead || best === this.selfId || most * 2 <= reporters || !this.peers.includes(best) || !this.isLive(best)) return;
+    const claim = Math.min(this.claimed.get(best) ?? Infinity, this.peerJoinedAt.get(best) ?? Infinity);
+    if (!Number.isFinite(claim)) return;
+    this.linedUp.delete(best);
+    this.peerJoinedAt.set(best, claim);
+    if (lead === this.selfId) {
+      this.restart();
+      return;
+    }
+    if ((this.peerJoinedAt.get(lead) ?? Infinity) <= claim) {
+      this.peerJoinedAt.set(lead, claim + 2 * RESTART_SLACK);
       this.linedUp.add(lead);
     }
   }
@@ -629,6 +649,7 @@ export class Session {
     if (last !== undefined && now - last > LIVENESS_MS / 1000) this.backAt.set(peer, now);
     this.lastHeard.set(peer, now);
     const joined = now - age;
+    this.claimed.set(peer, joined);
     const known = this.peerJoinedAt.get(peer);
     if (known === undefined) this.peerJoinedAt.set(peer, this.plausibleJoin(peer, joined));
     else if (joined > known + RESTART_SLACK) {

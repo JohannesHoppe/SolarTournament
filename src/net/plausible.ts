@@ -83,14 +83,24 @@ export class Plausibility {
     return track;
   }
 
-  /** A new round: every ship is printed again, its kills start over. */
+  /** A new round: every ship is printed again, its kills start over, no core is held. */
   newRound(now: number) {
     for (const track of this.tracks.values()) {
       track.graceUntil = now + REPRINT_GRACE;
       track.kills = null;
       track.credits = 0;
+      track.diedAt = -Infinity;
       this.freshClone(track);
+      track.nova = false;
     }
+  }
+
+  /**
+   * This browser started over: it heard nothing for a while, so every ship may be anywhere now;
+   * what they hold and did stands (the round goes on, and a new one is seen as such).
+   */
+  lostSight(now: number) {
+    for (const track of this.tracks.values()) track.graceUntil = now + REPRINT_GRACE;
   }
 
   /** A ship is gone (its browser left): it is judged afresh when it shows again. */
@@ -98,7 +108,11 @@ export class Plausibility {
     this.tracks.delete(id);
   }
 
-  /** A ship's browser started over: its clone is printed again, anywhere, with a fresh load; what it did before still counts. */
+  /**
+   * A ship's browser started over: its clone may be printed again, anywhere, with a fresh load;
+   * what it did before still counts, and a nova core it held it may still hold (a browser that
+   * starts over in the same round keeps its clone).
+   */
   reprint(id: string, now: number) {
     const track = this.tracks.get(id);
     if (!track) return;
@@ -113,10 +127,10 @@ export class Plausibility {
     track.nova = false;
   }
 
+  /** A clone printed anew: a fresh load of torpedoes. */
   private freshClone(track: Track) {
     track.launched = 0;
     track.torpedoes = LOAD;
-    track.nova = false;
   }
 
   /**
@@ -130,10 +144,12 @@ export class Plausibility {
     const [x, y, z] = seen.p;
     const firstSight = !Number.isFinite(track.at);
     let cheat: Cheat | null = null;
-    // a clone printed after a death this browser saw: anywhere, with a fresh load
+    // a clone printed after a death this browser saw: anywhere, and with a fresh load once its
+    // first state comes REPRINT_DELAY after the death (a state that comes earlier, bunched with
+    // the death's report by lag, may still be the last clone's, so the death stays pending)
     const reprinted = seen.alive && Number.isFinite(track.diedAt);
-    if (reprinted) {
-      if (now - track.diedAt >= REPRINT_DELAY) this.freshClone(track);
+    if (reprinted && now - track.diedAt >= REPRINT_DELAY) {
+      this.freshClone(track);
       track.diedAt = -Infinity;
     }
     if (seen.alive && !firstSight && !reprinted && now >= track.graceUntil && tooFar(track, seen.p, now)) {
@@ -175,6 +191,7 @@ export class Plausibility {
     if (!track.nova || (Number.isFinite(track.at) && tooFar(track, p, now))) return 'nova';
     // its clone burns up and is printed again elsewhere
     this.freshClone(track);
+    track.nova = false;
     track.graceUntil = now + REPRINT_GRACE;
     return null;
   }
@@ -304,6 +321,15 @@ export class Accusations {
     if (set.size < accusersNeeded(pilots) || this.announced.has(accused)) return false;
     this.announced.add(accused);
     return true;
+  }
+
+  /**
+   * A new round: what was said in the last one goes, so a single false report (a browser that
+   * caught an honest one through lag) never adds up with another one rounds later; a cheater is
+   * caught again soon enough.
+   */
+  newRound() {
+    this.accusers.clear();
   }
 
   /** A peer left: its accusations and the ones against it go with it. */

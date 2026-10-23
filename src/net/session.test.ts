@@ -32,6 +32,15 @@ class FakeTransport implements Transport {
 let clock = 0;
 const at = (seconds: number) => (clock = seconds * 1000);
 
+/** Runs a session's frames from one second to another, every tenth of a second, after `each` let its peers speak. */
+function frames(session: Session, from: number, to: number, each: (time: number) => void) {
+  for (let time = from; time < to; time += 0.1) {
+    at(time);
+    each(time);
+    session.tick();
+  }
+}
+
 function joined(self: string) {
   const transport = new FakeTransport(self);
   const created = new (Session as unknown as new (transport: Transport, room: string) => Session)(transport, 'room');
@@ -74,6 +83,57 @@ describe('the lead browser', () => {
     at(7);
     session.tick();
     expect(session.leadId).toBe('old');
+  });
+
+  it('gives up leading alone when the room it reached only after settling follows another', () => {
+    const { session, transport } = joined('n');
+    at(6.1);
+    session.tick();
+    expect(session.isLead).toBe(true);
+    // the room's lead and another Host connect late: lined up behind it, until it sees whom they follow
+    const room = (time: number) => {
+      transport.states('a', 100 + time, 'a', true);
+      transport.states('b', 50 + time, 'a');
+    };
+    frames(session, 7, 20, room);
+    expect(session.leadId).toBe('a');
+    expect(session.isLead).toBe(false);
+  });
+
+  it('follows the lead the others follow, also one it heard of only after settling', () => {
+    const { session, transport } = joined('n');
+    // only a peer that does not lead is reached while settling
+    frames(session, 1, 6.5, (time) => transport.states('b', 50 + time, 'a'));
+    frames(session, 6.5, 12, (time) => {
+      transport.states('a', 100 + time, 'a', true);
+      transport.states('b', 50 + time, 'a');
+    });
+    expect(session.leadId).toBe('a');
+  });
+
+  it('takes rock hits in the order of a round, with a second for a field clock that jumps back', () => {
+    const { transport, session } = joined('n');
+    const taken: number[] = [];
+    session.onRock = (_, time) => taken.push(time);
+    const hit = (time: number, round: number) => transport.handlers.get('r')!({ i: 'r1', t: time, n: round, s: 'p:x' }, 'x');
+    hit(100, 2);
+    hit(99.4, 2);
+    hit(98, 2);
+    hit(5, 3);
+    expect(taken).toEqual([100, 99.4, 5]);
+  });
+
+  it('hands the field again to a peer that starts over twice within seconds', () => {
+    const { session, transport } = joined('n');
+    let restarts = 0;
+    session.onPeerRestart = () => restarts++;
+    at(1);
+    transport.states('a', 100);
+    at(10);
+    transport.states('a', 0.1);
+    at(14);
+    transport.states('a', 0.1);
+    expect(restarts).toBe(2);
   });
 
   it('gives a vote only to the first Hosts in the room, as many as the tournament has places', () => {

@@ -85,9 +85,12 @@ async function monthlyGb(env: Env): Promise<Usage> {
 }
 
 export async function onRequestGet({ env, request }: { env: Env; request: Request }): Promise<Response> {
-  // only the game's own pages get an answer: every browser says where a request comes from, so
-  // a page of another site, and a script that is no browser at all, get nothing
-  if (!HOSTS.has(new URL(request.url).hostname) || request.headers.get('sec-fetch-site') !== 'same-origin') return off('foreign site', 403);
+  // only the game's own pages get an answer: a current browser says where a request comes from,
+  // so a page of another site gets nothing; an older one (Safari before 16.4) says nothing and is
+  // answered. A script can say anything: what keeps it from collecting credentials in bulk is the
+  // zone's rate limit (see README, Online tournament)
+  const site = request.headers.get('sec-fetch-site');
+  if (!HOSTS.has(new URL(request.url).hostname) || (site !== null && site !== 'same-origin')) return off('foreign site', 403);
   if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return off('not set up');
   const { gb, unread } = await monthlyGb(env);
   if (gb === Infinity) return off(`budget unreadable (${unread})`);

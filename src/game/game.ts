@@ -68,6 +68,11 @@ const STANDINGS_REFRESH = 0.25;
  */
 const DECIDED_SECONDS = 5;
 /**
+ * Online, a round is not decided in its first seconds (s): the other browsers' ships still carry
+ * the last round's deaths and finishes until their first states of the new one arrive.
+ */
+const DECIDE_GRACE = 3;
+/**
  * A race starts with a countdown of START_SECONDS on the round clock: the grid's clamps hold
  * every ship until GO, and the race time runs from GO. A drive lit within START_WINDOW seconds
  * before GO, or within START_LATE seconds after it, makes a perfect start: a shove of
@@ -569,6 +574,8 @@ export class Game implements OnlineGame {
   private roundEndsAt = 0;
   /** When the running round started (game time; see setRoundEnd). */
   private roundStartedAt = 0;
+  /** Online: when this browser arrived in the running round (game time; see DECIDE_GRACE). */
+  private roundArrivedAt = -Infinity;
   /** The same moment on the real-time clock (see setRoundEnd). */
   private roundEndsAtWall = 0;
   /** Online tournament this browser takes part in, or null offline. */
@@ -2181,6 +2188,7 @@ export class Game implements OnlineGame {
    * wreckage come back fresh, as in a solo round.
    */
   private startNextRound() {
+    this.roundArrivedAt = this.time;
     this.clearRound();
     this.freshRound();
     this.roundMode = this.onlineRoundMode();
@@ -2201,6 +2209,7 @@ export class Game implements OnlineGame {
    * again in it, on the grid in a race.
    */
   private arriveInRound(reprint: boolean) {
+    this.roundArrivedAt = this.time;
     const arena = this.roundArena();
     const mode = this.onlineRoundMode();
     const sameField = this.field.layout?.key === arena.layout.key;
@@ -2776,6 +2785,7 @@ export class Game implements OnlineGame {
    * the Flag once a side has captured enough, the President's Fleet once his battleship went up.
    */
   private decided() {
+    if (this.online && this.time - this.roundArrivedAt < DECIDE_GRACE) return false;
     if (this.survival) {
       const ships = this.standings();
       return ships.length > 1 && standing(ships) <= 1;

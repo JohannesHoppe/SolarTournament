@@ -88,6 +88,34 @@ describe('plausibility of what other browsers report', () => {
     expect(check.torpedo('s', 27)).toBe('torpedoes');
   });
 
+  it("give a fresh load only to a clone seen after the respawn's delay, even when lag brings its first state together with the death", () => {
+    const check = flying(new Plausibility());
+    for (let i = 0; i < 3; i++) check.torpedo('s', 21);
+    // the death and the next clone's first states arrive bunched, a moment apart
+    check.died('s', 30);
+    check.state('s', dead, 30.01);
+    check.state('s', alive(50000), 30.02);
+    // its states go on: the first one past the delay brings the fresh load
+    check.state('s', alive(50000), 32.1);
+    for (let i = 0; i < 3; i++) expect(check.torpedo('s', 33 + i)).toBeNull();
+  });
+
+  it('keep a nova core held through a start over, of the ship\'s browser or this one, until a new round', () => {
+    const check = new Plausibility();
+    check.state('s', alive(0, { nova: true }), 0);
+    check.state('s', alive(0, { nova: true }), 20);
+    check.reprint('s', 21);
+    check.state('s', alive(0, { nova: true }), 22);
+    check.lostSight(23);
+    check.state('s', alive(0, { nova: true }), 24);
+    expect(check.nova('s', [0, 0, 0], 25)).toBeNull();
+    const next = new Plausibility();
+    next.state('t', alive(0, { nova: true }), 0);
+    next.newRound(1);
+    next.state('t', alive(0, { nova: true }), 2);
+    expect(next.nova('t', [0, 0, 0], 3)).toBe('nova');
+  });
+
   it('give a browser that started over a new clone, without forgetting its kills', () => {
     const check = flying(new Plausibility());
     for (let i = 0; i < 5; i++) check.torpedo('s', 21);
@@ -136,6 +164,14 @@ describe('evidence of what a ship did', () => {
 });
 
 describe('accusations', () => {
+  it('forget what was said in the last round, so single false reports never add up over rounds', () => {
+    const accusations = new Accusations();
+    expect(accusations.add('c', 'a', true, 3)).toBe(false);
+    accusations.newRound();
+    expect(accusations.add('c', 'b', true, 3)).toBe(false);
+    expect(accusations.add('c', 'a', true, 3)).toBe(true);
+  });
+
   it('name a cheater once two Hosts who fly say so, never on its own word', () => {
     const accusations = new Accusations();
     expect(accusations.add('c', 'c', true, 3)).toBe(false);
