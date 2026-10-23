@@ -4,9 +4,10 @@ import { openGame, startSolo } from './game';
 /**
  * The HUD's pieces never cover each other: the race or school panel, the alarms with the
  * message, the subtitles of the transmission, the radar, the gauges, the radio, the kill feed
- * and the touch buttons. Each is filled as full as it gets (three alarms with a message, a long
- * line on the radio) and measured on a wide and on a small landscape screen, with keyboard and
- * with touch controls, in a race and in the flight school.
+ * and the touch buttons; and the share button in the radio box stays in view, nothing on top of
+ * it. Each is filled as full as it gets (three alarms with a message, a long line on the radio)
+ * and measured on a wide and on a small landscape screen, with keyboard and with touch controls,
+ * in a race and in the flight school.
  */
 const SCREENS = [
   { width: 1280, height: 720 },
@@ -73,6 +74,11 @@ async function overlaps(page: Page, touch: boolean): Promise<string[]> {
           if (x > 1 && y > 1) pairs.push(`${found[a].name} ${box2(p)} × ${found[b].name} ${box2(q)}`);
         }
       }
+      // the share button sits in the radio box, in view and on top: a click at its middle reaches it
+      const share = document.getElementById('share')!;
+      const at = share.getBoundingClientRect();
+      const hit = document.elementFromPoint(at.left + at.width / 2, at.top + at.height / 2);
+      if (at.width < 1 || !share.contains(hit)) pairs.push(`#share ${box2(at)} hidden or covered by ${hit?.id || hit?.className || hit?.nodeName}`);
       box.hidden = true;
       game.timeScale = 1;
       return pairs;

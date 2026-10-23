@@ -26,6 +26,7 @@ The files at this level:
 - `assets.ts`: loads the ship models and drive sprites, collects what is generated in code.
 - `random.ts`: the seeded random generator every browser shares, so all see the same world.
 - `storage.ts`: the browser's localStorage, safe where it is unavailable.
+- `share.ts`: the share button on every screen of the game (at the end of the radio box) and on the radio page and the handbook (alone in the corner): the link and text by where the Host is, the device's share sheet on touch, else a small menu to copy the link, e-mail it or post it through a network's plain share link. `share.test.ts` checks the links and texts.
 - `devlog.ts`: the development log, a ring buffer of the round's deaths, ship contacts, shoves and bot decisions, read in the console as `game.log`; only in development, null and free in production.
 - `style.css`: the styles of all pages.
 

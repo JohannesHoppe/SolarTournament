@@ -9,7 +9,7 @@ The online tournament, without a game server: browsers find each other through p
 | `online.ts` | Who owns which ship, what goes over the network, the lead's bots |
 | `validate.ts` | Checks the shape of every message from other browsers |
 | `plausible.ts` | Checks whether what a browser reports could have happened; a majority of the flying Hosts casts out a cheater |
-| `room.ts` | A room as its link describes it: code, name, mode, bots |
+| `room.ts` | A room as its link describes it: code, name, mode, bots; the link a friend follows into it (shared by the share button) |
 | `lobby.ts` | Public tournaments announce themselves; the list listens |
 
 Every message from outside is untrusted: it passes `validate.ts`, then the plausibility checks. Test with two tabs (`?local=1#t=<code>`) or `npm run e2e`; `datenschutz.html` names every data flow that goes over the network.

@@ -4,6 +4,7 @@ import { bindVolume, Radio } from './music/radio';
 import { createSong, ROUND_SECONDS, titleFor, type SectionKind, type Song, type Strategy } from './music/songs';
 import { showTransmission } from './music/transmission';
 import { initLocale, msg, t, translatePage } from './i18n/i18n';
+import { shareCorner } from './share';
 
 /**
  * Radio 2584's own page: enter a title, and the track it grows plays again or downloads as a
@@ -12,6 +13,7 @@ import { initLocale, msg, t, translatePage } from './i18n/i18n';
 
 initLocale();
 translatePage();
+shareCorner('radio');
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 

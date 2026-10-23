@@ -2332,6 +2332,120 @@ body.glitching #now-playing {
   display: none;
 }
 
+/* the flight school has no radio: only the share button stays in the box */
+#now-playing.silent > :not(#share) {
+  display: none;
+}
+
+/*
+ * Sharing (see share.ts): the share glyph on a small button at the end of the radio box, and on
+ * the station pages alone in the top right corner. Its menu drops down below it, a small plate.
+ */
+#share {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  color: var(--muted);
+}
+
+#share svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+#share:hover,
+#share[aria-expanded='true'] {
+  color: var(--tube-orange);
+  filter: drop-shadow(0 0 4px var(--accent));
+}
+
+.share-corner {
+  position: fixed;
+  top: 12px;
+  right: max(16px, env(safe-area-inset-right));
+  z-index: 20;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(5, 7, 13, 0.6);
+}
+
+.share-panel {
+  position: fixed;
+  z-index: 40;
+  width: min(280px, calc(100vw - 16px));
+  max-height: calc(100dvh - 64px);
+  overflow: auto;
+  padding: 12px;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  backdrop-filter: blur(6px);
+  font-size: 0.8rem;
+}
+
+.share-panel p {
+  margin: 0 0 8px;
+}
+
+.share-heading {
+  color: var(--accent-strong);
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* a private tournament's link lets anyone in: said quietly */
+.share-warning {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+/* the link itself, to be read and selected by hand where the clipboard is closed */
+.share-url {
+  color: var(--muted);
+  font-family: var(--font-numbers);
+  font-size: 0.65rem;
+  overflow-wrap: anywhere;
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.share-copy {
+  width: 100%;
+  padding: 6px 10px;
+  margin-bottom: 8px;
+}
+
+.share-targets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+.share-targets a {
+  padding: 5px 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.7rem;
+  text-align: center;
+  text-decoration: none;
+}
+
+.share-targets a:hover {
+  border-color: var(--accent);
+  color: var(--tube-orange);
+}
+
 /* on touch devices the radio keeps the top right corner, clear of the clock in the middle */
 body.touch #now-playing {
   max-width: calc(50vw - 120px);

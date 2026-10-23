@@ -28,7 +28,7 @@ import { gripOf, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, PathStee
 import { Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { Online, type OnlineGame } from '../net/online';
 import { Lobby, type Listing } from '../net/lobby';
-import { newRoom, roomFragment, roomFromFragment, type Room } from '../net/room';
+import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
@@ -81,6 +81,7 @@ import {
 import { MOMENTS, Moments, type Moment } from './moments';
 import { devlog } from '../devlog';
 import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
+import { ShareButton, type ShareWhere } from '../share';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
 const RESULTS_SECONDS = 12;
@@ -779,6 +780,16 @@ export class Game implements OnlineGame {
   private shipShown: ShipType = this.hangar.ship;
   private showcase: Showcase | null = null;
   private inHangar = false;
+  /**
+   * The share button at the end of the radio box, on every screen: the game's link, or in a
+   * running tournament the tournament's. While its menu is open the mouse does not steer, so the
+   * Host can reach it; the round runs on.
+   */
+  private readonly share = new ShareButton(
+    $('now-playing'),
+    () => this.shareWhere(),
+    (open) => this.input.steerWithMouse(this.state === 'playing' && !open),
+  );
   /** The drive lights, always in the scene; ships borrow them (see lendLight). */
   private readonly engineLights: THREE.PointLight[] = [];
   /** X is held: the flight computer turns the own ship towards `flipGoal`, fixed when the flip started. */
@@ -1127,7 +1138,7 @@ export class Game implements OnlineGame {
     $('resume').addEventListener('click', () => this.resume());
     $('quit').addEventListener('click', () => this.endRound());
     $('again').addEventListener('click', () => this.showMenu());
-    $('invite').addEventListener('click', () => void this.invite());
+    $('invite').addEventListener('click', () => void this.share.share());
     $('radio').addEventListener('click', () => this.toggleRadio());
     bindVolume($<HTMLInputElement>('radio-volume'));
     // the slider hands the focus back once let go, so Enter and Space go to the game again
@@ -1457,7 +1468,8 @@ export class Game implements OnlineGame {
       this.online = new Online(session, this, room.bots);
       this.showTournaments(false);
       this.startRound('online');
-      if (created) void this.invite();
+      // the creator's link is copied at once, to be sent to friends
+      if (created && (await this.share.copy())) this.hud.flashMessage(this.time, t('Invite link copied. Send it to your friends.'), 3);
     } catch (error) {
       console.error(error);
       // a session that never got going is left at once, so no relay stays connected
@@ -1612,25 +1624,13 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * Invites friends: the phone's share sheet where there is one, else the link to the
-   * clipboard. The link names the tournament, so a friend sees where they are going.
+   * Where the share button shares from: a running tournament shares its own link (on the page
+   * the game runs on, with the room in the fragment), everything else the game.
    */
-  private async invite() {
-    const button = $('invite');
-    const url = location.href;
-    const text = t('Fly with me in the SolarTournament "{name}"', { name: this.room?.name ?? t('Tournament') });
-    try {
-      if (navigator.share && this.input.touchActive) {
-        await navigator.share({ title: 'SolarTournament', text, url });
-        return;
-      }
-      await navigator.clipboard.writeText(url);
-      button.textContent = t('Invite link copied');
-      this.hud.flashMessage(this.time, t('Invite link copied. Send it to your friends.'), 3);
-    } catch {
-      // no clipboard here, or the share sheet was closed: the link is shown to copy by hand
-      button.textContent = url;
-    }
+  private shareWhere(): ShareWhere {
+    if (this.online && this.room) return { name: this.room.name, public: this.room.public, link: roomLink(this.room, `${location.origin}${location.pathname}${location.search}`) };
+    if (this.state === 'menu') return this.choosingSchool ? 'school' : this.choosingSolo ? 'solo' : 'menu';
+    return this.school ? 'school' : 'solo';
   }
 
   /** Leaves the tournament, and forgets its code, so the menu leads with the own choice again. */
@@ -1854,7 +1854,7 @@ export class Game implements OnlineGame {
     // a phone held upright is asked to turn sideways while a round is flown (see #turn-phone)
     document.body.classList.toggle('playing', state === 'playing');
     $('invite').hidden = !this.online;
-    $('invite').textContent = t('Invite friends');
+    this.share.close();
     // the A button that changed the screen does not also fire
     this.input.holdFire();
     if (state !== 'playing') this.sponsors.hide();
@@ -2001,7 +2001,7 @@ export class Game implements OnlineGame {
     this.markLeadMode();
     // a clone that died last leaves no muffled radio behind in the hangar
     this.radio.setMuffled(false);
-    $('now-playing').hidden = false;
+    $('now-playing').classList.remove('silent');
     this.setScreen('menu');
   }
 
@@ -2068,7 +2068,8 @@ export class Game implements OnlineGame {
     this.ghost.wear(this.assets.ships[this.selectedShip]);
     this.school = mode === 'school' ? new FlightSchool(this.schoolCourse, schoolSteps()[this.schoolCourse] ?? 0) : null;
     if (this.school) this.scene.add(this.school.root);
-    $('now-playing').hidden = mode === 'school';
+    // the flight school has no radio; the share button stays in its corner
+    $('now-playing').classList.toggle('silent', mode === 'school');
     if (mode === 'solo') this.setBotCount(this.solo.rivals.length, [], this.solo.rivals);
     this.respawn(this.me);
 
