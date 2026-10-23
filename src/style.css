@@ -1958,31 +1958,190 @@ body.touch #school-panel {
   pointer-events: none;
 }
 
-/* the zero point: the field's center, a ring with a dot and its distance, dimmer than what to fly for */
-#center {
+/*
+ * The fixed references (see Hud.setReferences): a small glyph each, dimmer than the ships' marks
+ * and what to fly for, with its label above it; at the screen's edge the label sits beside the
+ * glyph, towards the middle. Each kind of reference has a glyph of its own (data-glyph).
+ */
+#references {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 22px;
-  height: 22px;
-  margin: -11px 0 0 -11px;
-  border: 1.5px solid var(--hud-dim);
-  border-radius: 50%;
+  inset: 0;
+  overflow: hidden;
   pointer-events: none;
 }
 
-#center::before {
+.reference {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  opacity: 0.8;
+}
+
+.reference::before,
+.reference::after {
   content: '';
   position: absolute;
-  inset: 7px;
+  box-sizing: border-box;
+}
+
+.reference .hud-label {
+  top: auto;
+  bottom: calc(100% + 5px);
+  font-size: 0.62rem;
+  color: var(--hud-dim);
+}
+
+.reference.offscreen .hud-label {
+  bottom: auto;
+  top: 50%;
+  left: calc(100% + 6px);
+  translate: 0 -50%;
+}
+
+.reference.offscreen.east .hud-label {
+  left: auto;
+  right: calc(100% + 6px);
+}
+
+.reference.crowded .hud-label {
+  display: none;
+}
+
+/* the field's center: a ring with a dot */
+.reference[data-glyph='center']::before {
+  inset: 0;
+  border: 1.5px solid var(--hud-dim);
+  border-radius: 50%;
+}
+
+.reference[data-glyph='center']::after,
+.reference[data-glyph='sun']::after {
+  inset: 5px;
   border-radius: 50%;
   background: var(--hud-dim);
 }
 
-#center-distance {
-  top: auto;
-  bottom: calc(100% + 6px);
+/* the black hole: a heavy ring, its disk a thin line through it */
+.reference[data-glyph='hole']::before {
+  inset: 2px;
+  border: 3px solid var(--hud-dim);
+  border-radius: 50%;
+}
+
+.reference[data-glyph='hole']::after,
+.reference[data-glyph='planet']::after {
+  left: -5px;
+  right: -5px;
+  top: 7.5px;
+  height: 1px;
+  background: var(--hud-dim);
+}
+
+/* the sun: a dot in a broken ring of rays */
+.reference[data-glyph='sun']::before {
+  inset: 0;
+  border: 1.5px dashed var(--hud-dim);
+  border-radius: 50%;
+}
+
+/* a planet: a ring with its ring at a slant */
+.reference[data-glyph='planet']::before {
+  inset: 2px;
+  border: 1.5px solid var(--hud-dim);
+  border-radius: 50%;
+}
+
+.reference[data-glyph='planet']::after {
+  rotate: -20deg;
+}
+
+/* the gas giant's clouds: a chevron down onto a line */
+.reference[data-glyph='giant']::before {
+  left: 3px;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  border-right: 1.5px solid var(--hud-dim);
+  border-bottom: 1.5px solid var(--hud-dim);
+  rotate: 45deg;
+}
+
+.reference[data-glyph='giant']::after {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.5px;
+  background: var(--hud-dim);
+}
+
+/* a half of the world ship, the battleship: a hull from the side, the battleship's with its tower */
+.reference[data-glyph='hull']::before,
+.reference[data-glyph='battleship']::before {
+  left: -3px;
+  right: -3px;
+  top: 5px;
+  height: 7px;
+  border: 1.5px solid var(--hud-dim);
+}
+
+.reference[data-glyph='battleship']::after {
+  left: 6px;
+  top: 1px;
+  width: 5px;
+  height: 5px;
+  background: var(--hud-dim);
+}
+
+/* a base of Capture the Flag: a square pad with its core */
+.reference[data-glyph='base']::before {
+  inset: 1px;
+  border: 1.5px solid var(--hud-dim);
+}
+
+.reference[data-glyph='base']::after {
+  inset: 6px;
+  background: var(--hud-dim);
+}
+
+/* the height above the reference plane and the climb, right of the crosshair, as a fighter's altitude */
+#hud-altitude {
+  position: absolute;
+  top: 50%;
+  left: min(calc(50% + 20vw), calc(100% - 310px));
+  translate: 0 -50%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 8px;
+  border-left: 1px solid var(--hud-faint);
+  font-family: var(--font-numbers);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
   color: var(--hud-dim);
+  text-shadow: var(--hud-text-glow);
+  pointer-events: none;
+}
+
+#hud-altitude > span:first-child {
+  font-family: system-ui, sans-serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+#hud-height {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--hud);
+}
+
+/* the target's range and closure rate in the numbers' face */
+.marker.target > span:last-child {
+  font-family: var(--font-numbers);
+  font-variant-numeric: tabular-nums;
 }
 
 /* touch controls: only on touch devices (body.touch) */

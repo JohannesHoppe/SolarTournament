@@ -4,8 +4,8 @@ The arena a round is fought in. Everything that every browser must build alike (
 
 | File | What it does |
 |---|---|
-| `arenas.ts` | The seven arenas: field layout, well, sun, storms; which one a tournament round uses |
-| `asteroids.ts` | The field: rocks, ice, debris or hull (shoved by a comet), orbits, gravity, collisions, raycasts, line of sight |
+| `arenas.ts` | The seven arenas: field layout, well, sun, storms, the fixed references the HUD marks; which one a tournament round uses |
+| `reference.ts` | The reference plane through the field's center: height, climb, the bank's sky pointer, closure rate, an arena's fixed references || `asteroids.ts` | The field: rocks, ice, debris or hull (shoved by a comet), orbits, gravity, collisions, raycasts, line of sight |
 | `rocks.ts` | Generates the 16 asteroid shapes with integer math, identical on every browser |
 | `surface.ts` | A rock's measured surface, as collisions see it |
 | `shapes.ts` | Ice, station debris and the world ship's hull sections |
@@ -19,4 +19,4 @@ The arena a round is fought in. Everything that every browser must build alike (
 | `flare.ts` | The solar flare's plasma on screen: a sphere of roiling fire with filaments |
 | `space.ts` | Stars, nebula, the sun's light and shadows (heated by a solar flare), dust |
 
-`asteroids.test.ts`, `arenas.test.ts` and `wrecks.test.ts` check layouts, snapshots and collisions (`npm test`).
+`asteroids.test.ts`, `arenas.test.ts` and `wrecks.test.ts` check layouts, snapshots and collisions, `reference.test.ts` the reference plane in every arena, height, climb, the sky pointer, the closure rate and each arena's fixed references (`npm test`).

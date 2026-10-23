@@ -3,8 +3,8 @@ import { openGame, startSolo } from './game';
 
 /**
  * The HUD's pieces never cover each other: the race or school panel, the alarms with the
- * message, the subtitles of the transmission, the radar, the gauges, the radio, the kill feed
- * and the touch buttons. Each is filled as full as it gets (three alarms with a message, a long
+ * message, the subtitles of the transmission, the radar, the gauges, the radio, the kill feed,
+ * the touch buttons, the height and climb and the fixed references. Each is filled as full as it gets (three alarms with a message, a long
  * line on the radio) and measured on a wide and on a small landscape screen, with keyboard and
  * with touch controls, in a race and in the flight school.
  */
@@ -14,7 +14,7 @@ const SCREENS = [
 ];
 
 /** The pieces that must keep apart; a group's members (the alarm column) may stack, not overlap. */
-const PIECES = ['.hud-top', '#hud-room', '#school-panel', '#hud-split', '#hud-alerts > *', '#transmission', '#radar', '.hud-bottom', '#killfeed', '#now-playing', '.touch-button'];
+const PIECES = ['.hud-top', '#hud-room', '#school-panel', '#hud-split', '#hud-alerts > *', '#transmission', '#radar', '.hud-bottom', '#killfeed', '#now-playing', '.touch-button', '#hud-altitude', '.reference'];
 
 /** Fills the HUD and returns every pair of its pieces that overlap, with their boxes. */
 async function overlaps(page: Page, touch: boolean): Promise<string[]> {
@@ -33,6 +33,8 @@ async function overlaps(page: Page, touch: boolean): Promise<string[]> {
       box.hidden = false;
       document.getElementById('transmission-speaker')!.textContent = 'The Orange President';
       document.getElementById('transmission-text')!.textContent = 'Very stable orbit. Very stable genius. The best games, believe me, the very best.';
+      // the fixed references give way to the panels as they were laid out the frame before
+      for (let i = 0; i < 3; i++) await new Promise((resolve) => requestAnimationFrame(resolve));
       type Box = { left: number; top: number; right: number; bottom: number };
       const join = (a: Box | null, b: Box | null): Box | null => (!a ? b : !b ? a : { left: Math.min(a.left, b.left), top: Math.min(a.top, b.top), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom) });
       const range = document.createRange();
@@ -42,6 +44,8 @@ async function overlaps(page: Page, touch: boolean): Promise<string[]> {
         if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return null;
         const rect = element.getBoundingClientRect();
         if (rect.width < 1 || rect.height < 1) return null;
+        // a fixed reference draws its glyph in its own box, its label beside it
+        if (element.matches('.reference')) return join(rect, ink(element.firstElementChild!));
         const drawn = element.matches('canvas, button') || !/rgba\(0, 0, 0, 0\)|transparent/.test(style.backgroundColor) || parseFloat(style.borderTopWidth) + parseFloat(style.borderLeftWidth) > 0;
         if (drawn) return rect;
         let box: Box | null = null;

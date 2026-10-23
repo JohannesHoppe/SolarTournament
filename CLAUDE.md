@@ -31,7 +31,7 @@ Radio 2584 follows the maintainer's taste, written down in the README section "R
 
 Sun orange `#ff9d00` (hue 37°) for everything you press and everything that hits; its complement azure blue (217°) for information: `#0062ff` exactly as neon glow, `#4d91ff` lightened as readable text. Neon is a tinted white tube with layered `text-shadow`s in shades of the color (`--neon-orange`, `--neon-blue` in `style.css`); flickering respects `prefers-reduced-motion`. Use neon deliberately: the "Tournament" of the logo, plate headings, the sponsor sign, the radio title.
 
-The HUD is the flight computer's projection and takes one color: azure (`--hud` and its shades in `style.css`), thin lines and letters with a soft glow and a dark hairline for readability, numbers in a fixed-width face. Orange in the HUD only for what the pilot has to act on now (a drive under the crosshair, a hit, a warning, the keys a drill asks for), red only for the ship in danger. What the flight computer draws into the world (the racing line, the flight school's markers) is HUD too; the world itself (gates, rocks, ships and their markers' tints) keeps its colors.
+The HUD is the flight computer's projection and takes one color: azure (`--hud` and its shades in `style.css`), thin lines and letters with a soft glow and a dark hairline for readability, numbers in a fixed-width face. Orange in the HUD only for what the pilot has to act on now (a drive under the crosshair, a hit, a warning, the keys a drill asks for), red only for the ship in danger. What the flight computer draws into the world (the racing line, the flight school's markers, the reference plane's grid and the drop lines) is HUD too; the grid and the drop lines are an overlay drawn over everything, never hidden by rock, and kept faint; the world itself (gates, rocks, ships and their markers' tints) keeps its colors.
 
 ## Mandatory: every game principle is documented
 
@@ -148,7 +148,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `world/arena.ts` | The arena edge (`ARENA_LIMIT`, `ARENA_GRACE`) and its grid |
 | `world/flare.ts` | The solar flare's plasma on screen: a sphere of roiling fire, filaments, its front glowing brightest |
 | `world/belt.ts` | The asteroid belt beyond the arena: instanced low-detail rocks as scenery |
-| `world/arenas.ts` | The seven arenas (belt, rings, Kessler field, gas giant, corona, event horizon, derelict): field layout, well, sun, cooling, storms; which arena a tournament round is in |
+| `world/arenas.ts` | The seven arenas (belt, rings, Kessler field, gas giant, corona, event horizon, derelict): field layout, well, sun, cooling, storms, the fixed references the HUD marks (planets, clouds, black hole, bow and stern); which arena a tournament round is in |
+| `world/reference.ts` | The reference plane through the field's center that every aid to orientation refers to: height, climb, the bank's sky pointer, a target's closure rate, an arena's fixed references |
 | `world/asteroids.ts` | The field of an arena: rocks, ice, debris or hull from a layout, orbits, solid pieces (shoved by a comet), a massive body (well); collision with a rock's measured surface, a debris ellipsoid or a hull box, raycast, line of sight, gravity, fragments |
 | `world/gates.ts` | A ring of the tournament as a structure: armored coil housings with glowing windings, conduits, struts with blinking lights, a station module, all solid (touchRing); shared by the race's gates, the flight school's rings and Capture the Flag's bases |
 | `world/powercore.ts` | A sponsor's power core (the flag of Capture the Flag) as a structure: an armored octagonal canister with windings glowing in its side's color, the sponsor's sign, a cage where the tow cable grips; low poly, faded to its outline on demand |
@@ -165,8 +166,9 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `ship/impact.ts` | A ship striking a surface: how it bounces off and scrapes along, and what the impact costs its hull; two ships ramming: their bounce and what a ram costs by where it strikes |
 | `ship/bots.ts` | Bot AI: desired velocity, turn and burn, dogfights in arcs, aiming with spread, keeping clear of other ships and of the rings' housings, shoving a rival into rock, a hand that eases every command in; every bot's skills (aim, reflexes, daring) |
 | **`view/`** | **What the screen shows** |
-| `view/hud.ts` | DOM HUD, the flight computer's projection: gauges, markers (among them where the flight crosses the next ring's plane), warnings, tunnel vision, a solar flare's heat, the boot of a fresh clone's link |
-| `view/attitude.ts` | The HUD's attitude on a canvas: horizon line, pitch ladder and heading tape, as in a fighter's head-up display |
+| `view/hud.ts` | DOM HUD, the flight computer's projection: gauges, markers (among them where the flight crosses the next ring's plane, the target's closure rate), the fixed references, height and climb, warnings, tunnel vision, a solar flare's heat, the boot of a fresh clone's link |
+| `view/attitude.ts` | The HUD's attitude on a canvas: horizon line, pitch ladder, bank scale and heading tape, as in a fighter's head-up display |
+| `view/plane.ts` | The reference plane's grid and the drop lines to it, an overlay over everything in the HUD's azure |
 | `view/effects.ts` | Particles (one draw call per texture), laser beams |
 | `view/killcam.ts` | The kill cam: keeps the last seconds of every ship and beam, replays the kill of the own clone in slow motion from behind the shooter |
 | `view/radar.ts` | The radar sphere: everything within 2.5 km around the own ship, ahead and behind, on a canvas |

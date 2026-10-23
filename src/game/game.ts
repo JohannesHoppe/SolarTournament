@@ -11,6 +11,8 @@ import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
 import { Datamosh } from '../view/datamosh';
 import { GuideLine } from '../view/guide';
+import { ReferencePlane } from '../view/plane';
+import { referencesOf } from '../world/reference';
 import { Ghost } from '../view/ghost';
 import { lapClock, LapTimer, parseLaps } from './laps';
 import { aimHook, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, pivotOf, pullOn, type Anchor, type Tether } from './hook';
@@ -36,7 +38,7 @@ import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
-import { ARENAS, arenaById, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile } from '../world/arenas';
+import { ARENAS, arenaById, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
@@ -955,6 +957,20 @@ export class Game implements OnlineGame {
   private readonly datamosh = new Datamosh(this.camera);
   /** The racing line to the next gate. */
   private readonly guide = new GuideLine();
+  /** The reference plane's grid and the drop lines to it (see orient). */
+  private readonly plane = new ReferencePlane();
+  /** The sun as a fixed reference: always in the same direction, far beyond the arena. */
+  private readonly sunReference: Reference = { glyph: 'sun', label: msg('Sun'), position: new THREE.Vector3(), distance: false };
+  /** The bases of Capture the Flag and the President's battleship as fixed references. */
+  private readonly baseReferences: Reference[] = [
+    { glyph: 'base', label: msg('Orange base'), position: new THREE.Vector3(), distance: true },
+    { glyph: 'base', label: msg('Blue base'), position: new THREE.Vector3(), distance: true },
+  ];
+  private readonly fleetReference: Reference = { glyph: 'battleship', label: msg('Battleship'), position: new THREE.Vector3(), distance: true };
+  /** The arena's own fixed references, its center among them (see referencesOf). */
+  private arenaReferences: Reference[] = referencesOf(ARENAS[0]);
+  /** The fixed references the HUD marks this frame (see orient). */
+  private readonly shownReferences: Reference[] = [];
   /** The hooks out, by the ship that fired them, and their cables (see game/hook); when the own hook is ready again, and whether it was held last frame. */
   private readonly tethers = new Map<Ship, Tether>();
   private readonly cables = new Cables();
@@ -1036,7 +1052,7 @@ export class Game implements OnlineGame {
     this.scene.add(this.replayEffects.group);
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
-    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.ghost.root, this.cables.group, this.cometView.root);
+    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.ghost.root, this.cables.group, this.cometView.root, this.plane.group);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
@@ -1882,6 +1898,7 @@ export class Game implements OnlineGame {
     // the rocks a hook held are gone with the field
     this.clearHooks();
     this.venue = arena;
+    this.arenaReferences = referencesOf(arena);
     devlog?.begin(this.roundMode, arena.id);
     this.field.generate(arena.layout);
     // a race's course is laid out in the field as generated, the same on every browser
@@ -2974,11 +2991,10 @@ export class Game implements OnlineGame {
     // its gauges too: the own clone is not printed while the Host watches
     this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
     // a solar storm blinds the sensors: no ship shows a marker
-    this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight);
+    this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject));
     this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
     this.hud.updateVelocityMarkers(this.camera, subject);
     this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
-    this.hud.setCenter(this.camera, subject);
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
     const hook = this.tethers.get(me);
@@ -2995,6 +3011,7 @@ export class Game implements OnlineGame {
     if (racing) this.callRace(subject);
     this.pushRadio(racing && !this.spectating && me.finish < 0 && lapOf(me.gates) === LAPS);
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
+    this.orient(subject, waypoint);
     this.hud.showCrosshair(me.alive);
     this.hud.setOnTarget(me.alive ? this.onTarget : null);
 
@@ -5621,6 +5638,59 @@ export class Game implements OnlineGame {
     this.hud.setLock(tail ? t('ON YOUR TAIL') : level === 2 ? t('LOCKED') : t('TRACKED'), shooter);
     if (tail) this.tip('tail');
     this.alarms.raise({ id: 'lock', level: tail || level === 2 ? 'warning' : 'caution', text: '', direction: relative.negate(), tone: tail ? 'tail' : level === 2 ? 'locked' : 'tracked' });
+  }
+
+  /**
+   * The flight computer's aids to orientation (see world/reference): the reference plane's grid,
+   * drop lines to it from the pilot's own ship, the other ships in sight, the course's rings and
+   * the waypoint, the height and the climb, and the fixed references (the field's center, the
+   * sun, the arena's big things, the bases and the battleship).
+   */
+  private orient(subject: Ship, waypoint: THREE.Vector3 | null) {
+    const shown = subject.alive && this.state === 'playing' && !this.replaying;
+    const plane = this.plane;
+    plane.clearDrops();
+    if (shown) {
+      if (!this.storming) for (const ship of this.ships) if (ship !== subject && ship.alive && this.inSight(ship)) plane.drop(ship.flight.position, this.camera);
+      if (this.course && !this.school) for (const point of this.course.points) plane.drop(point, this.camera);
+      if (waypoint) plane.drop(waypoint, this.camera);
+    }
+    const aim = this.me?.alive ? aimPoint : this.camera.getWorldDirection(scratch).multiplyScalar(AIM_DEPTH).add(this.camera.position);
+    plane.update(shown, subject.flight.position, this.camera, aim, window.innerWidth, window.innerHeight, this.renderer.getPixelRatio());
+    this.hud.setAltitude(subject);
+    const references = this.shownReferences;
+    references.length = 0;
+    for (const reference of this.arenaReferences) references.push(reference);
+    // the sun lies beyond everything: its mark points along its direction from wherever the camera is
+    this.sunReference.position.copy(SUN_DIRECTION).multiplyScalar(ARENA_LIMIT * 100).add(this.camera.position);
+    references.push(this.sunReference);
+    for (let team = 0; this.flags && team < this.baseReferences.length; team++) {
+      this.baseReferences[team].position.copy(this.flags.bases[team]);
+      references.push(this.baseReferences[team]);
+    }
+    if (this.fleet?.present(this.field.clock)) {
+      this.fleetReference.position.copy(this.fleet.position);
+      references.push(this.fleetReference);
+    }
+    this.hud.setReferences(this.camera, subject, references);
+  }
+
+  /** The ship whose range and closure rate the HUD shows: what a torpedo would lock on now, else the nearest rival in sight. */
+  private cueTarget(subject: Ship): Ship | null {
+    if (!subject.alive) return null;
+    const locked = this.torpedoTarget(subject);
+    if (locked instanceof Ship) return locked;
+    let nearest: Ship | null = null;
+    let best = Infinity;
+    for (const ship of this.ships) {
+      if (ship === subject || !ship.alive || ship.allyOf(subject)) continue;
+      const distance = ship.flight.position.distanceToSquared(subject.flight.position);
+      if (distance < best && this.inSight(ship)) {
+        nearest = ship;
+        best = distance;
+      }
+    }
+    return nearest;
   }
 
   /**
