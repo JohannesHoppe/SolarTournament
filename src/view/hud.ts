@@ -8,6 +8,11 @@ import { Attitude } from './attitude';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const projected = new THREE.Vector3();
+const rim = new THREE.Vector3();
+const cameraUp = new THREE.Vector3();
+/** A ring is bracketed while its opening spans this many pixels on screen, up to this share of the screen's height (closer, it fills the view by itself). */
+const GATE_MARK_MIN = 18;
+const GATE_MARK_MAX = 1.4;
 /** Kills stay in the feed this long (s). */
 const KILLFEED_SECONDS = 5;
 /** A big moment's banner stands this long (s), as long as its animation in style.css. */
@@ -226,6 +231,44 @@ export class Hud {
   }
 
   /** Blinking diamond on a point in space with what it is, clamped to the screen edge when off screen. */
+  /**
+   * The flight computer brackets the next ring of a course on screen, sized to its opening of
+   * `radius` (units), with a reticle on its core, and the ring after it faintly (see
+   * .gate-mark); a ring behind, off screen, too far to see or filling the view goes unmarked.
+   */
+  setGates(camera: THREE.Camera, next: THREE.Vector3 | null, after: THREE.Vector3 | null, radius: number) {
+    this.markGate(this.gateNext, camera, next, radius);
+    this.markGate(this.gateAfter, camera, after, radius);
+  }
+
+  private readonly gateNext = { element: $('gate-mark'), x: NaN, y: NaN, size: NaN };
+  private readonly gateAfter = { element: $('gate-mark-after'), x: NaN, y: NaN, size: NaN };
+
+  private markGate(mark: { element: HTMLElement; x: number; y: number; size: number }, camera: THREE.Camera, point: THREE.Vector3 | null, radius: number) {
+    let size = 0;
+    if (point) {
+      projected.copy(point).project(camera);
+      cameraUp.setFromMatrixColumn(camera.matrixWorld, 1);
+      rim.copy(point).addScaledVector(cameraUp, radius).project(camera);
+      if (projected.z < 1 && Math.abs(projected.x) < 1.1 && Math.abs(projected.y) < 1.1) size = Math.abs(rim.y - projected.y) * viewport.height;
+    }
+    const shown = size >= GATE_MARK_MIN && size <= viewport.height * GATE_MARK_MAX;
+    setHidden(mark.element, !shown);
+    if (!shown) return;
+    const x = Math.round(((projected.x + 1) / 2) * viewport.width);
+    const y = Math.round(((1 - projected.y) / 2) * viewport.height);
+    const rounded = Math.round(size);
+    if (x !== mark.x || y !== mark.y) {
+      mark.element.style.translate = `${x}px ${y}px`;
+      mark.x = x;
+      mark.y = y;
+    }
+    if (rounded !== mark.size) {
+      mark.element.style.setProperty('--size', `${rounded}px`);
+      mark.size = rounded;
+    }
+  }
+
   setWaypoint(camera: THREE.Camera, point: THREE.Vector3 | null, label = '') {
     setHidden(this.waypoint, !point);
     if (!point) return;
