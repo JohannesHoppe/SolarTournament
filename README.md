@@ -321,7 +321,7 @@ Every round is fought somewhere else. A solo round picks an arena by chance, the
 - **Kessler Field.** A station blew up, and its debris goes on circling: 90 pieces of modules, girders and plating (60 to 320 m long), each on an orbit of its own about the field's center, 600 m to 2.7 km out, all at 25 m/s, so their paths cross. The station's core still hangs in the middle: an engine block and two spars, a cross 800 m wide, which no laser breaks. A blue world far below. Debris breaks easier (4 hits plus one per 25 m).
 - **Gas Giant.** A world of storms below, its cloud tops 2.25 km beneath the field's center (a planet of 2.5 km radius, much smaller than any real gas giant, so it fits the arena). It pulls with 3 g at its clouds, falling off with the square of the distance (about 0.8 g at the field's center): a ship can swing by it and fling itself across the field, or fall in. A ship that touches the clouds burns up. 22 rocks.
 - **Corona.** Close to the sun, which fills a quarter of the sky. In its glare the radiators shed only 35 % of their heat (7 % a second instead of 20 %), so the shadows of the 30 rocks are where lasers cool down. Every 50 seconds of field time a solar storm blinds the sensors for 8 seconds: no markers, no lock warnings, the link crackles, and the bots only see what lies within 750 m. The field time is shared, so a storm hits every Host at once.
-- **Event Horizon.** A black hole in the middle, its horizon 175 m in radius, pulls everything in: 1 g at 1 km, four times that at 500 m, falling off with the square of the distance. Within about 280 m no drive gets out (its pull beats the 13 g of the main drive), and a ship that touches the horizon is gone. Hot gas spirals into it in a glowing disk from 300 m to 1.4 km, and the hole bends light: the picture around it is drawn through a gravitational lens, so the disk and the stars behind it wrap around its black shadow; ships, rocks, gates and the racing line in front of the hole are seen as they are and never show up a second time in the bent picture (the lens reads the scene's depth: light it would bend that comes from something in front of the hole is looked for a little farther out on the same ray, or the pixel stays unbent). 20 rocks circle it in a flat ring 1.4 to 2.9 km out, at 25 m/s; a deliberate deviation: the hole's gravity would sling them around at 60 to 85 m/s, too fast to fight among.
+- **Event Horizon.** A black hole in the middle, its horizon 175 m in radius, pulls everything in: 1 g at 1 km, four times that at 500 m, falling off with the square of the distance. Within about 280 m no drive gets out (its pull beats the 13 g of the main drive), and a ship that touches the horizon is gone; the escape gauge and the flight computer's alarms warn long before (see Alarms). Hot gas spirals into it in a glowing disk from 300 m to 1.4 km, and the hole bends light: the picture around it is drawn through a gravitational lens, so the disk and the stars behind it wrap around its black shadow; ships, rocks, gates and the racing line in front of the hole are seen as they are and never show up a second time in the bent picture (the lens reads the scene's depth: light it would bend that comes from something in front of the hole is looked for a little farther out on the same ray, or the pixel stays unbent). 20 rocks circle it in a flat ring 1.4 to 2.9 km out, at 25 m/s; a deliberate deviation: the hole's gravity would sling them around at 60 to 85 m/s, too fast to fight among.
 - **The Derelict.** A world ship, broken in two, 4.5 km from bow to stern in sections of 700 m, and nothing else: no rocks, only its hull to hide behind. The bow with its bridge tower and the stern with its engines drifted apart (a gap of about 800 m, 1.4 km between the centers of the torn sections), and the stern tilted; the torn ends still glow, decks of windows still burn on emergency power, a Victory Cola sign flickers on the bow. The hull is solid: lasers only scorch it. It is industrial and angular, after the ships of *The Expanse*: boxes of plating on frames, a spine, containers along the flanks, decks of windows, a stepped bridge tower, trusses, engine blocks with three nozzles. Each section collides as its box, exactly where its frames end.
 
 The arenas' shapes are generated in code like the rocks: ice is the rock shapes frozen, the station's debris is boxes of modules, girders and plating, the world ship's hull sections are boxes. Rocks and ice collide with their measured surface (see Asteroids); the station's debris and the hull carry an invisible collider box whose size is computed, so the collision shape is the same on every browser (an ellipsoid of 90 % of the box for the debris, the box itself for the hull).
@@ -367,9 +367,38 @@ The laser draws no ammunition but produces heat. Each shot adds 20 % of the heat
 - **G-forces.** Above 3 g the pilot starts to grey out. A full burn (13 g) narrows the view to a tunnel within 5 seconds, with the pilot's heartbeat getting louder; 3 seconds without hard acceleration clear it again. On a phone the tunnel stays about twice as wide, since its picture is small to begin with.
 - **Line of sight.** Sensors need a clear line: a ship hidden behind an asteroid disappears from the HUD, and bots cannot see it either.
 
+### Alarms
+
+The flight computer ranks every danger to the clone in three tiers, like the master caution of a fighter. Below the crosshair a lit plate names the worst tier, and under it one line per danger, the worst first (at most four), in the tier's color, with an arrow towards where the danger comes from (up is ahead and above) and a countdown where it has one.
+
+| Tier | Color | Tone | What else |
+|---|---|---|---|
+| CAUTION | amber | a calm falling chime, again every 5 s | Nicole names it where it matters (a gravity well) |
+| WARNING | orange | a double beep every second | Nicole speaks |
+| CRITICAL | red | a two-tone siren | the plate blinks, the screen's edge pulses red, the link frays for a moment now and then (about every 2 s, under 0.2 s) |
+
+Only the worst alarm sounds; a danger with a beep of its own beeps that instead of its tier's tone. Without motion (`prefers-reduced-motion`) nothing blinks or pulses.
+
+| Danger | Tier | Line |
+|---|---|---|
+| Impact ahead (see Collisions) | WARNING, CRITICAL within 1.5 s | IMPACT with the seconds, its beep faster the closer it is |
+| Laser overheated | CAUTION | LASER OVERHEATED |
+| Drive overheated | CAUTION | DRIVE OVERHEATED |
+| A nose on the own ship (see Collisions) | TRACKED a CAUTION, LOCKED and ON YOUR TAIL a WARNING | its own line with the shooter, below the list; its beep |
+| Torpedo homing on the own ship | WARNING within 2 km, CRITICAL within 500 m | TORPEDO INBOUND, its fast beep |
+| Nova core close by | CRITICAL within 1.2 km | NOVA CORE ACTIVATED with the distance, its siren |
+| Outside the field | WARNING, CRITICAL in the last 3 s | OUT OF FIELD with the seconds left (no countdown in the flight school) |
+| Gravity well | by its hold, see below | BLACK HOLE · BURN AWAY (GRAVITY WELL in the gas giant), NO RETURN |
+| Hull failing (30 of 100 points or less) | WARNING | HULL FAILING, a steady loud heartbeat, and Nicole: one more hit and you are dead |
+
+- **Gravity wells.** The hold of a well is what the drive would need to get out, as a share of its thrust: the pull where the ship is, plus the braking it would take to stop a fall towards the body before it reaches it (v² / 2s for the speed towards it and the distance to the surface), over the thrust of the main drive (less with a damaged drive). From 8 % the HUD shows the escape gauge PULL with the percentage; CAUTION from 15 %, WARNING from 35 %, CRITICAL from 60 % (with a loud heartbeat), and at 100 % no drive gets out: NO RETURN. Nicole warns once for each tier the hold reaches ("The black hole is near", "It is pulling us, burn away from it", "Now it gets really tight, full burn, now"), and past the point of no return only says that she is sorry; once the hold has fallen below 10 % she warns again from the start. At rest near the black hole the gauge comes up at 980 m from its center, CAUTION at 720 m, WARNING at 470 m, CRITICAL at 360 m and NO RETURN at 280 m; a ship falling towards it gets them much earlier.
+- **Silence before death.** When death is a breath away (an impact within 0.8 s, or a well past return), the radio drops out for 1.2 s, at most once every 8 s: only the heart and the alarm are left.
+- Any part of the game raises its own alarm (`Game.alarms.raise` with an id, a tier, its line, and where it has them a direction and a countdown), meant for timed dangers such as a comet or a solar flare's front.
+- In the flight school the alarms work the same, but never cut off a lesson: an alarm's line is not said over one of Nicole's lessons.
+
 ### Sound
 
-There is no sound in vacuum. Everything the Host hears travels through the clone's hull and sounds muffled: the rumble of the drive, the hiss of the thrusters, the own laser, hits on the own ship, and debris of nearby explosions rattling against the hull. Clean beeps come from the ship's computer: hits, kills, the end of a flip, impact warnings. The radio and the static of a disturbed link play in the headset and are not muffled.
+There is no sound in vacuum. Everything the Host hears travels through the clone's hull and sounds muffled: the rumble of the drive, the hiss of the thrusters, the own laser, hits on the own ship, and debris of nearby explosions rattling against the hull. Clean beeps come from the ship's computer: hits, kills, the end of a flip, the alarms. The radio and the static of a disturbed link play in the headset and are not muffled.
 
 ### Modes
 

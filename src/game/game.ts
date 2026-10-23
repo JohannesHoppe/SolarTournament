@@ -56,6 +56,25 @@ import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NA
 import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut, standing } from './survival';
 import { markedName } from '../view/marks';
 import { Coach, type Tip } from './coach';
+import {
+  ALARM_RANK,
+  AlarmTones,
+  Alarms,
+  CRITICAL_GLITCHES,
+  escapeLoad,
+  FIELD_CRITICAL,
+  HEART_HULL,
+  HEART_WELL,
+  HULL_CRITICAL,
+  IMPACT_CRITICAL,
+  SILENCE_BEFORE,
+  SILENCE_COOLDOWN,
+  SILENCE_SECONDS,
+  WELL_CRITICAL,
+  WELL_LOST,
+  WELL_RELEASE,
+  wellLevel,
+} from './alarms';
 import { MOMENTS, Moments, type Moment } from './moments';
 import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
 
@@ -215,8 +234,9 @@ const PLUME_BURN = 8;
  */
 const FLING_SECONDS = 1.2;
 const FLING_STEER = 0.1;
-/** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km). */
+/** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km); within TORPEDO_CRITICAL it is CRITICAL (units, 500 m). */
 const TORPEDO_WARNING = 40000;
+const TORPEDO_CRITICAL = 10000;
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
 const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: msg('Burned up in the clouds'), hole: msg('Crossed the event horizon') };
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
@@ -743,8 +763,17 @@ export class Game implements OnlineGame {
   private brakeFlip = false;
   /** The flight computer's output, reused from frame to frame. */
   private readonly computed: Controls = { ...IDLE };
-  /** Warnings below the crosshair, rebuilt every frame in the same array. */
-  private readonly warnings: string[] = [];
+  /**
+   * The own clone's alarms, raised anew every frame (see game/alarms.ts); any part of the game
+   * raises its own danger here, and the HUD and the headset show the worst.
+   */
+  readonly alarms = new Alarms();
+  private readonly alarmTones = new AlarmTones();
+  /** How far Nicole has warned of a gravity well (an alarm rank, 4: past return), reset once the pull lets go. */
+  private wellSaid = 0;
+  private hullWarned = false;
+  /** When the radio may fall silent again before an imminent death. */
+  private silenceReadyAt = 0;
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
   private readonly inSight = (ship: Ship) => this.field.lineOfSight(this.camera.position, ship.flight.position);
   /** Whether the own ship's sensors see a ship past the asteroids, for the radar. */
@@ -798,14 +827,11 @@ export class Game implements OnlineGame {
   /** G-force strain of the own pilot, 0..1. */
   private strain = 0;
   private nextHeartbeat = 0;
-  private nextWarningBeep = 0;
-  /** The nova holder the own pilot was last warned about, and when the siren sounds next. */
+  /** The nova holder the own pilot was last warned about. */
   private novaWarned: Ship | null = null;
   private novaFlashTimer = 0;
   /** Things to say and show a little after a round started (see cue). */
   private readonly cues: { at: number; run: () => void }[] = [];
-  private nextNovaSiren = 0;
-  private nextLockBeep = 0;
   /** Speed of game time; 0 freezes the simulation while rendering continues. */
   timeScale = 1;
   /** The picture has to be drawn again even in a still pause (see frame). */
@@ -1717,7 +1743,7 @@ export class Game implements OnlineGame {
     if (state !== 'playing') {
       this.sound.setEngine(0, 0);
       // the look of a nova core belongs to the round; the next frame of play brings it back
-      document.body.classList.remove('nova-held', 'nova-alarm');
+      document.body.classList.remove('nova-held', 'alarm-critical');
     }
     if (state === 'menu' || state === 'results') {
       this.datamosh.stop();
@@ -4292,23 +4318,18 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * Panic in the own cockpit while another ship with a nova core is close: a two-tone siren,
-   * the warning, the tint of an alarm on the screen, and Nicole urging the pilot away, once
-   * each time a holder comes close.
+   * Panic in the own cockpit while another ship with a nova core is close: a CRITICAL alarm
+   * with its two-tone siren and the red edge, and Nicole urging the pilot away, once each time
+   * a holder comes close.
    */
-  private novaAlarm(me: Ship, warnings: string[], now: number) {
+  private novaAlarm(me: Ship) {
     const holder = me.alive ? this.novaNear(me, NOVA_RADIUS * NOVA_FLEE) : null;
-    if (document.body.classList.contains('nova-alarm') !== !!holder) document.body.classList.toggle('nova-alarm', !!holder);
     if (!holder) {
       this.novaWarned = null;
       return;
     }
-    warnings.push(t('NOVA CORE ACTIVATED · {distance} · GET OUT', { distance: meters(holder.flight.position.distanceTo(me.flight.position)) }));
-    if (now >= this.nextNovaSiren) {
-      const high = Math.floor(now * 4) % 2 === 0;
-      this.sound.beep(high ? 1320 : 880, 0.2, 0.18);
-      this.nextNovaSiren = now + 0.25;
-    }
+    const away = relative.subVectors(holder.flight.position, me.flight.position);
+    this.alarms.raise({ id: 'nova', level: 'critical', text: t('NOVA CORE ACTIVATED · {distance} · GET OUT', { distance: meters(away.length()) }), direction: away, tone: 'nova' });
     if (this.novaWarned !== holder) {
       this.novaWarned = holder;
       this.speaker.say(COMPUTER.novaNear, 'urgent');
@@ -4943,7 +4964,9 @@ export class Game implements OnlineGame {
 
   /**
    * What the own pilot feels and the flight computer reports: g-force strain with tunnel
-   * vision, impact warnings, an overheated laser.
+   * vision, a heartbeat, and the alarms (see game/alarms.ts) of an impact ahead, an overheated
+   * laser or drive, a nova core, a torpedo, a nose on the own ship, the field's edge, a
+   * gravity well and a failing hull, besides whatever other parts of the game raised.
    */
   private pilot(dt: number, now: number) {
     const me = this.me!;
@@ -4953,15 +4976,9 @@ export class Game implements OnlineGame {
     else this.strain -= dt / G_RECOVERY;
     this.strain = THREE.MathUtils.clamp(this.strain, 0, 1);
     this.hud.setStrain(this.strain);
-    if (this.strain > 0.4 && now >= this.nextHeartbeat) {
-      // heartbeat: faster and louder the harder the pilot is pressed into the seat
-      this.sound.beep(55, 0.12, 0.25 * this.strain);
-      this.sound.beep(48, 0.14, 0.2 * this.strain, 0.16);
-      this.nextHeartbeat = now + 1.1 - 0.5 * this.strain;
-    }
 
-    const warnings = this.warnings;
-    warnings.length = 0;
+    const alarms = this.alarms;
+    let impact = Infinity;
     const speed = flight.velocity.length();
     if (me.alive && speed > 100) {
       const heading = scratch.copy(flight.velocity).divideScalar(speed);
@@ -4976,34 +4993,94 @@ export class Game implements OnlineGame {
         const flipTime = ((turning / Math.PI) * FLIP_SECONDS + (turning > 0.35 ? FLIP_ROLL_SECONDS : 0)) / turnRate;
         const brakeTime = flipTime + speed / thrust / 2;
         if (timeToImpact < brakeTime + IMPACT_MARGIN) {
-          warnings.push(t('IMPACT IN {seconds} s', { seconds: timeToImpact.toFixed(1) }));
-          if (now >= this.nextWarningBeep) {
-            this.sound.beep(980, 0.05, 0.12);
-            this.nextWarningBeep = now + THREE.MathUtils.clamp(timeToImpact / 6, 0.1, 0.5);
-          }
+          impact = timeToImpact;
+          alarms.raise({ id: 'impact', level: timeToImpact < IMPACT_CRITICAL ? 'critical' : 'warning', text: t('IMPACT'), direction: heading, seconds: timeToImpact, tone: 'impact' });
         }
       }
     }
-    this.impactAhead = warnings.length > 0;
-    this.lockWarning(now);
+    this.impactAhead = impact < Infinity;
+    this.lockWarning();
     if (me.alive && me.overheated) {
-      warnings.push(t('LASER OVERHEATED'));
+      alarms.raise({ id: 'laser', level: 'caution', text: t('LASER OVERHEATED') });
       this.tip('hot');
     }
-    this.novaAlarm(me, warnings, now);
+    this.novaAlarm(me);
     // a torpedo homing on the own ship: shoot it down or dodge
     for (const torpedo of this.torpedoes.list) {
-      if (!me.alive || torpedo.target !== me || torpedo.position.distanceTo(flight.position) > TORPEDO_WARNING) continue;
-      warnings.push(t('TORPEDO INBOUND'));
+      if (!me.alive || torpedo.target !== me) continue;
+      const toward = relative.subVectors(torpedo.position, flight.position);
+      const distance = toward.length();
+      if (distance > TORPEDO_WARNING) continue;
+      alarms.raise({ id: 'torpedo', level: distance < TORPEDO_CRITICAL ? 'critical' : 'warning', text: t('TORPEDO INBOUND'), direction: toward, tone: 'torpedo' });
       this.tip('torpedo');
-      if (now >= this.nextWarningBeep) {
-        this.sound.beep(1480, 0.05, 0.16);
-        this.nextWarningBeep = now + 0.12;
-      }
       break;
     }
-    if (me.alive && me.driveOffline(now)) warnings.push(t('DRIVE OVERHEATED'));
-    this.hud.setWarning(warnings.join('\n'));
+    if (me.alive && me.driveOffline(now)) alarms.raise({ id: 'drive', level: 'caution', text: t('DRIVE OVERHEATED') });
+    if (me.alive && me.outsideSince !== null) {
+      // the field's edge: back towards its center before the clone is lost in deep space
+      const left = this.school ? null : Math.max(0, ARENA_GRACE - (now - me.outsideSince));
+      alarms.raise({ id: 'field', level: left !== null && left < FIELD_CRITICAL ? 'critical' : 'warning', text: t('OUT OF FIELD'), direction: relative.copy(flight.position).negate(), seconds: left });
+    }
+    const well = this.wellAlarm(me);
+    const hullCritical = me.alive && me.hull <= HULL_CRITICAL;
+    if (hullCritical) {
+      alarms.raise({ id: 'hull', level: 'warning', text: t('HULL FAILING') });
+      if (!this.hullWarned) this.speaker.say(COMPUTER.hullCritical, 'urgent');
+    }
+    this.hullWarned = hullCritical;
+
+    // a dead clone hears no alarms
+    if (!me.alive) alarms.begin();
+    alarms.finish();
+    this.hud.setAlarms(alarms.list, this.camera);
+    this.alarmTones.play(alarms.top, now, this.sound);
+    // heartbeat: faster and louder the harder the pilot is pressed into the seat, steady and loud one hit from death or deep in a well
+    const beat = Math.max(this.strain, hullCritical ? HEART_HULL : 0, well >= WELL_CRITICAL ? HEART_WELL : 0);
+    if (beat > 0.4 && now >= this.nextHeartbeat) {
+      this.sound.beep(55, 0.12, 0.25 * beat);
+      this.sound.beep(48, 0.14, 0.2 * beat, 0.16);
+      this.nextHeartbeat = now + 1.1 - 0.5 * beat;
+    }
+    if (alarms.top?.level === 'critical') {
+      // the link frays in a panic: short and seldom, never long enough to hide a warning
+      if (Math.random() < dt * CRITICAL_GLITCHES) this.glitch.trigger(0.2 + Math.random() * 0.2, 0.06 + Math.random() * 0.1);
+      // death is a breath away: the music drops out, only the heart and the alarm remain
+      if ((impact < SILENCE_BEFORE || well >= WELL_LOST) && now >= this.silenceReadyAt) {
+        this.radio.dropout(SILENCE_SECONDS);
+        this.silenceReadyAt = now + SILENCE_COOLDOWN;
+      }
+    }
+    alarms.begin();
+  }
+
+  /**
+   * A gravity well's hold on the own ship (see escapeLoad): the escape gauge, its alarm towards
+   * the well, and Nicole, once for each level it reaches until the pull lets go again: the well
+   * is near, it is pulling, full burn now, and past the point of no return a quiet goodbye.
+   * Returns the load (0 without a well).
+   */
+  private wellAlarm(me: Ship): number {
+    const well = this.field.well;
+    if (!me.alive || !well) {
+      this.hud.setEscape(null);
+      return 0;
+    }
+    const load = escapeLoad(well, me.flight.position, me.flight.velocity, MAIN_THRUST * Math.max(me.drive, 0.01));
+    this.hud.setEscape(load);
+    // the warnings come again once the well has let go of the ship for good
+    if (load < WELL_RELEASE) this.wellSaid = 0;
+    const level = wellLevel(load);
+    if (!level) return load;
+    const hole = this.venue.id === 'hole';
+    const lost = load >= WELL_LOST;
+    this.alarms.raise({ id: 'well', level, text: lost ? t('NO RETURN') : hole ? t('BLACK HOLE · BURN AWAY') : t('GRAVITY WELL · BURN AWAY'), direction: relative.subVectors(well.position, me.flight.position) });
+    const said = lost ? ALARM_RANK.critical + 1 : ALARM_RANK[level];
+    if (said > this.wellSaid) {
+      this.wellSaid = said;
+      const line = lost ? COMPUTER.wellLost : level === 'critical' ? COMPUTER.wellTight : level === 'warning' ? (hole ? COMPUTER.holePull : COMPUTER.giantPull) : hole ? COMPUTER.holeNear : COMPUTER.giantNear;
+      this.speaker.say(line, 'urgent');
+    }
+    return load;
   }
 
   /** A tip of the fight from Nicole, while it is still due (see Coach); the flight school teaches on its own. */
@@ -5015,8 +5092,10 @@ export class Game implements OnlineGame {
    * Another ship's nose on the own ship: LOCKED when its laser would hit now, TRACKED when
    * the nose is close to it, ON YOUR TAIL when it sits behind, where it reaches the drive. The
    * ship's sensors see where every other hull points; the faster beeping is the cue to act.
+   * Its line, with the shooter's mark, sits below the alarm list; its alarm (TRACKED a CAUTION,
+   * LOCKED and ON YOUR TAIL a WARNING) counts for the master caution and the beep.
    */
-  private lockWarning(now: number) {
+  private lockWarning() {
     const me = this.me!;
     // a solar storm blinds the sensors that would see a nose on the own ship
     if (!me.alive || this.storming) {
@@ -5047,10 +5126,7 @@ export class Game implements OnlineGame {
     const tail = me.tailToward(relative.subVectors(me.flight.position, shooter.flight.position));
     this.hud.setLock(tail ? t('ON YOUR TAIL') : level === 2 ? t('LOCKED') : t('TRACKED'), shooter);
     if (tail) this.tip('tail');
-    if (now >= this.nextLockBeep) {
-      this.sound.beep(tail ? 1760 : level === 2 ? 1560 : 1170, 0.04, tail ? 0.14 : 0.1);
-      this.nextLockBeep = now + (tail ? 0.08 : level === 2 ? 0.1 : 0.35);
-    }
+    this.alarms.raise({ id: 'lock', level: tail || level === 2 ? 'warning' : 'caution', text: '', direction: relative.negate(), tone: tail ? 'tail' : level === 2 ? 'locked' : 'tracked' });
   }
 
   /**

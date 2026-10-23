@@ -3,8 +3,19 @@ import { MAX_HEAT, MAX_HULL, type Ship } from '../ship/ship';
 import { CONTROLS, keyLabel, type Command, type Device } from '../input/input';
 import { markedName, type Kind } from './marks';
 import { TEAM_TINTS } from '../game/flags';
-import { t } from '../i18n/i18n';
+import { msg, t } from '../i18n/i18n';
 import { Attitude } from './attitude';
+import { WELL_GAUGE, WELL_LOST, wellLevel, type Alarm, type AlarmLevel } from '../game/alarms';
+
+/** The master caution above the alarm list names the worst level. */
+const MASTER: Record<AlarmLevel, string> = { caution: msg('CAUTION'), warning: msg('WARNING'), critical: msg('CRITICAL') };
+const LEVELS: readonly AlarmLevel[] = ['caution', 'warning', 'critical'];
+/** Lines of the alarm list; more alarms at once are left out, the mildest first. */
+const ALARM_ROWS = 4;
+/** Degrees a direction arrow turns in steps of, so a small drift does not rewrite its style. */
+const ARROW_STEP = 5;
+const unturn = new THREE.Quaternion();
+const toward = new THREE.Vector3();
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const projected = new THREE.Vector3();
@@ -37,6 +48,12 @@ export class Hud {
   private readonly heat = $('hud-heat');
   private readonly shadow = $('hud-shadow');
   private readonly warning = $('hud-warning');
+  private readonly master = $('hud-master');
+  private readonly alarmRows: { row: HTMLElement; arrow: HTMLElement; text: HTMLElement; angle: number }[] = [];
+  private readonly escape = $('hud-escape');
+  private readonly escapeFill = this.escape.querySelector('b') as HTMLElement;
+  private readonly escapeValue = $('hud-escape-value');
+  private escapeShown = -1;
   private readonly lock = $('hud-lock');
   private readonly vignette = $('g-vignette');
   private readonly speed = $('hud-speed');
@@ -84,6 +101,17 @@ export class Hud {
   constructor() {
     this.markerLayer.className = 'markers';
     this.root.prepend(this.markerLayer);
+    for (let i = 0; i < ALARM_ROWS; i++) {
+      const row = document.createElement('div');
+      row.className = 'alarm';
+      row.hidden = true;
+      const arrow = document.createElement('i');
+      arrow.className = 'alarm-arrow';
+      const text = document.createElement('span');
+      row.append(arrow, text);
+      this.warning.append(row);
+      this.alarmRows.push({ row, arrow, text, angle: NaN });
+    }
   }
 
   /**
@@ -315,9 +343,52 @@ export class Hud {
     setText(this.centerDistance, t('Center · {distance}', { distance: meters(me.flight.position.length()) }));
   }
 
-  /** Persistent warning below the crosshair (impact, overheating); empty text hides it. */
-  setWarning(text: string) {
-    setText(this.warning, text);
+  /**
+   * The alarms below the crosshair, the worst first (see game/alarms.ts): the master caution
+   * naming the worst level, one line per danger in its level's color with its countdown and an
+   * arrow towards where it comes from, and the red edge of the screen while one is CRITICAL.
+   */
+  setAlarms(alarms: readonly Alarm[], camera: THREE.Camera) {
+    const top = alarms[0]?.level ?? null;
+    setHidden(this.master, !top);
+    if (top) setText(this.master, t(MASTER[top]));
+    for (const level of LEVELS) setClass(this.master, level, level === top);
+    setClass(document.body, 'alarm-critical', top === 'critical');
+    const rows = this.alarmRows;
+    let shown = 0;
+    for (const alarm of alarms) {
+      if (!alarm.text || shown === rows.length) continue;
+      const line = rows[shown++];
+      setHidden(line.row, false);
+      setText(line.text, alarm.seconds === null ? alarm.text : `${alarm.text} · ${alarm.seconds.toFixed(1)} s`);
+      for (const level of LEVELS) setClass(line.row, level, level === alarm.level);
+      setHidden(line.arrow, !alarm.hasDirection);
+      if (!alarm.hasDirection) continue;
+      // the direction as the screen sees it: right and up of the camera
+      toward.copy(alarm.direction).applyQuaternion(unturn.copy(camera.quaternion).invert());
+      const angle = Math.round(THREE.MathUtils.radToDeg(Math.atan2(toward.x, toward.y)) / ARROW_STEP) * ARROW_STEP;
+      if (angle === line.angle) continue;
+      line.angle = angle;
+      line.arrow.style.rotate = `${angle}deg`;
+    }
+    for (; shown < rows.length; shown++) setHidden(rows[shown].row, true);
+  }
+
+  /**
+   * The escape gauge in a gravity well: how much of the drive's thrust the well's hold takes
+   * (see escapeLoad), from WELL_GAUGE on, in its alarm level's color; at 100 % there is no return.
+   */
+  setEscape(load: number | null) {
+    // whole percents below 100, and 100 only past the point of no return
+    const percent = load === null || load < WELL_GAUGE ? -1 : load >= WELL_LOST ? 100 : Math.min(99, Math.floor(load * 100));
+    if (percent === this.escapeShown) return;
+    this.escapeShown = percent;
+    setHidden(this.escape, percent < 0);
+    if (percent < 0) return;
+    this.escapeFill.style.width = `${percent}%`;
+    this.escapeValue.textContent = `${percent} %`;
+    const level = wellLevel(load!);
+    for (const each of LEVELS) setClass(this.escape, each, each === level);
   }
 
   /** Tunnel vision under sustained acceleration, 0..1. */

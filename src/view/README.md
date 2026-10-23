@@ -4,7 +4,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 
 | File | What it does |
 |---|---|
-| `hud.ts` | The flight computer's projection: gauges, markers, warnings, the round's panel, the boot of a fresh clone's link; writes the DOM only when a value changes |
+| `hud.ts` | The flight computer's projection: gauges, markers, the alarms and the escape gauge, the round's panel, the boot of a fresh clone's link; writes the DOM only when a value changes |
 | `attitude.ts` | Horizon line, pitch ladder and heading tape on a canvas, as in a fighter's head-up display |
 | `radar.ts` | The radar sphere on a canvas |
 | `effects.ts` | Particles and laser beams, pooled |
