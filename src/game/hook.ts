@@ -78,7 +78,9 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
   const forward = owner.flight.forward(heading);
   // the direction the harpoon flies: the nose's, or towards a rock beside it
   chosen.copy(forward);
-  let rock = field.raycast(origin, forward, HOOK_RANGE);
+  let rock = field.raycast(origin, forward, HOOK_RANGE, true);
+  // the well's body or the battleship's hull on the nose's line: no ship beyond it is bitten
+  const wall = rock && !rock.asteroid ? rock.distance : HOOK_RANGE;
   // nothing straight ahead: the rock whose surface comes closest to the nose's line within HOOK_CONE
   if (!rock?.asteroid) {
     let nearest = HOOK_CONE;
@@ -88,7 +90,7 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
       if (distance - asteroid.radius > HOOK_RANGE) continue;
       const off = line.angleTo(forward) - Math.asin(Math.min(1, asteroid.radius / distance));
       if (off >= nearest) continue;
-      const hit = field.raycast(origin, line.divideScalar(distance), HOOK_RANGE);
+      const hit = field.raycast(origin, line.divideScalar(distance), HOOK_RANGE, true);
       if (hit?.asteroid !== asteroid) continue;
       nearest = off;
       rock = hit;
@@ -103,7 +105,7 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
   for (const ship of ships) {
     if (ship === owner || !ship.alive) continue;
     const distance = raySphere(origin, forward, ship.flight.position, ship.radius);
-    if (distance === null || distance > HOOK_RANGE || (best && distance >= best.distance)) continue;
+    if (distance === null || distance > wall || (best && distance >= best.distance)) continue;
     best = { anchor: { rock: null, local: null, ship }, distance, at: ship.flight.position.clone() };
   }
   return best;

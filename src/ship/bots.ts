@@ -18,9 +18,14 @@ const STICKY = 0.7;
 /** At full ease (see Bot.ease) bots aim this much worse and react this much later (s). */
 const EASE_AIM = 1.5;
 const EASE_REACTION = 0.4;
-/** A ship within this distance (units, 1.5 km) on a bot's tail with its nose within THREAT_ANGLE (rad) of the bot makes it defend. */
-const THREAT_RANGE = 30000;
+/**
+ * A ship within this distance (units, 2 km: as far as a Host's aim assist reaches) on a bot's
+ * tail with its nose within THREAT_ANGLE (rad) of the bot makes it defend.
+ */
+const THREAT_RANGE = 40000;
 const THREAT_ANGLE = 0.3;
+/** A ship that hit a bot's drive makes it defend for this long (s), from however far it fired. */
+const STRUCK_MEMORY = 3;
 /** A bot fires at armor only while its laser is cooler than this (one shot heats it by 20), and only in some of its thinking spells (SNIPE_CHANCE): sparingly. */
 const ARMOR_FIRE_HEAT = 10;
 const SNIPE_CHANCE = 0.3;
@@ -178,6 +183,15 @@ export class Bot {
   /** The side the bot jinks to while it defends, and when it switches. */
   private dodge = 1;
   private nextDodge = 0;
+  /** The ship that last hit the drive, and until when the bot defends against it (see STRUCK_MEMORY). */
+  private struckBy: Ship | null = null;
+  private struckUntil = 0;
+
+  /** A shot into the drive: the bot turns its armor to the shooter, however far off it is. */
+  struck(shooter: Ship, now: number) {
+    this.struckBy = shooter;
+    this.struckUntil = now + STRUCK_MEMORY;
+  }
 
   constructor(
     readonly ship: Ship,
@@ -236,12 +250,15 @@ export class Bot {
     // it and jinks, because from behind the drive is open
     let defending = false;
     let chaser: Ship | null = null;
+    // a ship that just hit the drive is the one to turn to, wherever it fired from
+    const struck = this.struckBy && now < this.struckUntil && this.struckBy.alive ? this.struckBy : null;
     for (const ship of ships) {
       // as with targets: a fresh clone cannot hurt, nor can the own side, and a storm blinds the sensors beyond sight
-      if (ship === this.ship || !ship.alive || now < ship.protectedUntil || ship.allyOf(this.ship)) continue;
+      if (ship === this.ship || !ship.alive || now < ship.protectedUntil || ship.allyOf(this.ship) || (struck && ship !== struck)) continue;
       const line = toTarget.subVectors(me.position, ship.flight.position);
       const distance = line.length();
-      if (distance < Math.min(THREAT_RANGE, sight) && this.ship.tailToward(line) && ship.flight.angleTo(line) < THREAT_ANGLE && field.lineOfSight(me.position, ship.flight.position)) {
+      const threat = ship === struck || (distance < Math.min(THREAT_RANGE, sight) && this.ship.tailToward(line) && ship.flight.angleTo(line) < THREAT_ANGLE);
+      if (threat && field.lineOfSight(me.position, ship.flight.position)) {
         chaser = ship;
         // a racer does not turn around for it: it races on
         if (this.armed && !this.waypoint) {
@@ -327,15 +344,15 @@ export class Bot {
       }
     }
 
-    // rocks in the flight path: aim the velocity past them
+    // rocks, the well's body or the battleship's hull in the flight path: aim the velocity past them
     const speed = me.velocity.length();
     let danger = falling;
     if (speed > 50) {
       heading.copy(me.velocity).divideScalar(speed);
-      const hit = field.raycast(me.position, heading, speed * AVOID_HORIZON + this.ship.radius * 4);
+      const hit = field.raycast(me.position, heading, speed * AVOID_HORIZON + this.ship.radius * 4, true);
       if (hit) {
         danger ||= hit.distance < speed * AVOID_HORIZON * 0.6;
-        const away = local.subVectors(me.position, hit.asteroid?.object.position ?? well!.position);
+        const away = local.subVectors(me.position, hit.center);
         away.addScaledVector(heading, -away.dot(heading));
         if (away.lengthSq() < 1) away.set(0, 1, 0);
         desired.addScaledVector(away.normalize(), CRUISE_SPEED).addScaledVector(heading, -speed * 0.5);

@@ -6,6 +6,12 @@ export const SAFE_IMPACT = 250;
 const IMPACT_DAMAGE = 1 / 12;
 /** Share of the impact speed a ship keeps when it bounces off a rock. */
 const RESTITUTION = 0.3;
+/**
+ * Scraping along a surface takes sideways speed in proportion to how hard the hull was pushed
+ * off it (a friction coefficient): a strike at 50 m/s takes about 10 m/s, and a ship resting
+ * on a rock under its pull slides to a stop at the same rate whatever the frame rate.
+ */
+const FRICTION = 0.15;
 
 const relative = new THREE.Vector3();
 
@@ -18,9 +24,12 @@ export function bounceOff(velocity: THREE.Vector3, moving: THREE.Vector3, normal
   relative.subVectors(velocity, moving);
   const approach = -relative.dot(normal);
   if (approach <= 0) return 0;
-  velocity.addScaledVector(normal, approach * (1 + RESTITUTION));
+  const push = approach * (1 + RESTITUTION);
+  velocity.addScaledVector(normal, push);
   relative.subVectors(velocity, moving);
-  velocity.addScaledVector(relative.addScaledVector(normal, -relative.dot(normal)), -0.2);
+  const slide = relative.addScaledVector(normal, -relative.dot(normal));
+  const sliding = slide.length();
+  if (sliding > 1e-6) velocity.addScaledVector(slide, -Math.min(1, (FRICTION * push) / sliding));
   return approach;
 }
 

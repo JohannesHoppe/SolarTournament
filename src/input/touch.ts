@@ -27,8 +27,11 @@ export class TouchControls {
     const media = (query: string) => window.matchMedia?.(query).matches ?? false;
     this.setActive(media('(pointer: coarse)') && !media('(any-pointer: fine)'));
     window.addEventListener('keydown', (e) => {
-      // typing the callsign on a phone's on-screen keyboard is not a switch to a hardware keyboard
-      if (!(e.target instanceof HTMLInputElement)) this.setActive(false);
+      // typing the callsign on a phone's on-screen keyboard is not a switch to a hardware
+      // keyboard, nor are the phone's volume keys or a headset's media keys (no key code, or
+      // a key named Audio… or Media…)
+      if (e.target instanceof HTMLInputElement || !e.code || /^(Audio|Media)/.test(e.key) || /^(Audio|Media)/.test(e.code)) return;
+      this.setActive(false);
     });
     window.addEventListener('pointerdown', (e) => {
       // Only ever switch towards touch here: some browsers report touches as mouse events.
@@ -118,9 +121,12 @@ export class TouchControls {
     for (const button of document.querySelectorAll('.touch-button.held')) button.classList.remove('held');
   }
 
+  /** A button held while any finger is on it: a second finger lifting does not let go of it. */
   private hold(id: string, set: (down: boolean) => void) {
     const button = document.getElementById(id)!;
+    const fingers = new Set<number>();
     button.addEventListener('pointerdown', (e) => {
+      fingers.add(e.pointerId);
       button.classList.add('held');
       set(true);
       try {
@@ -130,7 +136,9 @@ export class TouchControls {
         // pointer already gone
       }
     });
-    const up = () => {
+    const up = (e: PointerEvent) => {
+      fingers.delete(e.pointerId);
+      if (fingers.size) return;
       button.classList.remove('held');
       set(false);
     };

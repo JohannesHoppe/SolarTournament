@@ -66,17 +66,17 @@ describe("the President's fleet", () => {
   it('hides what is behind its hull and sets off a torpedo that touches it', () => {
     const fleet = battleship();
     const across = new THREE.Vector3(1, 0, 0);
-    expect(fleet.blocks(new THREE.Vector3(-20000, 0, 0), across, 40000)).toBe(true);
+    expect(fleet.ray(new THREE.Vector3(-20000, 0, 0), across, 40000)).not.toBeNull();
     // a ray that stops short of it, or passes above it, sees past
-    expect(fleet.blocks(new THREE.Vector3(-20000, 0, 0), across, 10000)).toBe(false);
-    expect(fleet.blocks(new THREE.Vector3(-20000, 5000, 0), across, 40000)).toBe(false);
+    expect(fleet.ray(new THREE.Vector3(-20000, 0, 0), across, 10000)).toBeNull();
+    expect(fleet.ray(new THREE.Vector3(-20000, 5000, 0), across, 40000)).toBeNull();
     expect(fleet.touches(new THREE.Vector3(0, 900, 0), 120)).toBe(true);
     expect(fleet.touches(new THREE.Vector3(0, 2000, 0), 120)).toBe(false);
     // gone up, it is gone from the field
     breakAll(fleet, zonesOf(fleet, 'battery'));
     breakAll(fleet, zonesOf(fleet, 'reactor'));
     fleet.update(SINK_SECONDS + 100, 0);
-    expect(fleet.blocks(new THREE.Vector3(-20000, 0, 0), across, 40000)).toBe(false);
+    expect(fleet.ray(new THREE.Vector3(-20000, 0, 0), across, 40000)).toBeNull();
   });
 
   it('counts a torpedo as TORPEDO_HITS hits on every open part it goes off near, and lets one lock on them', () => {

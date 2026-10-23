@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import type { Ship } from '../ship/ship';
 import type { Effects } from './effects';
+import { TOURNAMENT_SIZE } from '../net/session';
 
 /** Frames the kill cam keeps: four seconds at 60 frames a second, more on slower devices. */
 const FRAMES = 240;
 /** Frames come at most this often (s, 60 a second, with room for jitter): a 144 Hz screen keeps the same four seconds. */
 const MIN_FRAME_GAP = 1 / 64;
-/** Ships a frame holds at most: a full tournament and a watching Host's clone. */
-const MAX_SHIPS = 9;
+/** Ships a frame holds at most: a full tournament, a watching Host's clone, and the flight school's drone and sparring bot. */
+const MAX_SHIPS = TOURNAMENT_SIZE + 3;
 /** Beams the kill cam keeps. */
 const MAX_BEAMS = 64;
 /** The replay shows the last WINDOW seconds before the kill at SPEED: slow motion, about three seconds long. */

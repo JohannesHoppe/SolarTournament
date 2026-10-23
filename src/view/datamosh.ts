@@ -118,6 +118,7 @@ export class Datamosh extends Pass {
     this.startedAt = performance.now() / 1000;
     this.fresh = true;
     this.enabled = true;
+    this.fit();
   }
 
   /** The next picture is the one that freezes: the kill cam waits for it. */
@@ -127,17 +128,32 @@ export class Datamosh extends Pass {
 
   stop() {
     this.enabled = false;
+    this.fit();
   }
 
   /** Switches the pass off once the picture is clean again. */
   update() {
-    if (this.enabled && performance.now() / 1000 - this.startedAt >= MOSH_SECONDS) this.enabled = false;
+    if (this.enabled && performance.now() / 1000 - this.startedAt >= MOSH_SECONDS) this.stop();
   }
 
   setSize(width: number, height: number) {
-    for (const target of [this.previous, ...this.moshes]) target.setSize(width, height);
+    this.size.set(width, height);
     (this.quad.material as THREE.ShaderMaterial).uniforms.resolution.value.set(width, height);
+    this.fit();
   }
+
+  /**
+   * The buffers hold the screen's size only while a picture rots (a few seconds per death),
+   * and shrink to a pixel otherwise: three half-float screens are many megabytes on a phone.
+   */
+  private fit() {
+    const width = this.enabled ? this.size.x : 1;
+    const height = this.enabled ? this.size.y : 1;
+    for (const target of [this.previous, ...this.moshes]) target.setSize(width, height);
+  }
+
+  /** The screen's size in pixels, as the composer last set it. */
+  private readonly size = new THREE.Vector2(1, 1);
 
   render(renderer: THREE.WebGLRenderer, writeBuffer: THREE.WebGLRenderTarget, readBuffer: THREE.WebGLRenderTarget, deltaTime: number) {
     const camera = this.camera;

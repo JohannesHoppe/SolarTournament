@@ -128,6 +128,8 @@ export class Input {
   private steering = false;
   private handler: ActionHandler = () => {};
   private readonly padPressed = new Set<number>();
+  /** The gamepad read this frame (see readPads): navigator.getGamepads() makes new objects on every call. */
+  private pad: Gamepad | null = null;
   /** A held since a screen changed (see holdFire). */
   private fireHeld = false;
   /** The thruster axes as last read, and the last time each was pushed fully one way (see dodge detection in read). */
@@ -234,7 +236,8 @@ export class Input {
     // Gamepad: left stick turns (pull back = nose up, as in aircraft), right stick pushes
     // sideways and up/down, right trigger is the main drive, left trigger or A fires.
     const pad = this.gamepad();
-    const stick = (i: number) => deadzone(pad?.axes[i] ?? 0);
+    // the sticks of any pad, the buttons only of one with the standard layout (see readPads)
+    const stick = (i: number) => deadzone(this.pad?.axes[i] ?? 0);
     const button = (i: number) => pad?.buttons[i]?.value ?? 0;
 
     const touch = this.touch;
@@ -295,6 +298,7 @@ export class Input {
 
   /** Polls gamepad buttons once per frame and turns new presses into actions. */
   poll() {
+    this.readPads();
     const pad = this.gamepad();
     if (!pad || !((pad.buttons[PAD.a]?.value ?? 0) > 0.5)) this.fireHeld = false;
     if (!pad) return;
@@ -315,14 +319,31 @@ export class Input {
     }
   }
 
-  /** The first connected gamepad with the standard layout, if any. */
+  /** The first connected gamepad with the standard layout, if any, as read this frame (see poll). */
   private gamepad(): Gamepad | null {
+    return this.pad?.mapping === 'standard' ? this.pad : null;
+  }
+
+  /**
+   * Reads the gamepads once a frame: the first connected one with the standard layout, else
+   * the first connected one at all. A pad whose layout the browser does not know only lends its
+   * two sticks (turn and thrusters, the first four axes nearly every pad shares): its buttons
+   * could mean anything.
+   */
+  private readPads() {
     const pads = navigator.getGamepads?.() ?? [];
+    let any: Gamepad | null = null;
+    this.pad = null;
     for (let i = 0; i < pads.length; i++) {
       const pad = pads[i];
-      if (pad?.connected && pad.mapping === 'standard') return pad;
+      if (!pad?.connected) continue;
+      if (pad.mapping === 'standard') {
+        this.pad = pad;
+        return;
+      }
+      any ??= pad;
     }
-    return null;
+    this.pad = any;
   }
 
   private onKey(e: KeyboardEvent, down: boolean) {

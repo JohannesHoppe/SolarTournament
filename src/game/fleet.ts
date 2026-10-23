@@ -339,9 +339,9 @@ export class Fleet implements Obstacle {
     return best;
   }
 
-  /** Its hull lies on a ray, while it is in the field (see Obstacle). */
-  blocks(origin: THREE.Vector3, direction: THREE.Vector3, distance: number): boolean {
-    return this.standing && raySphere(origin, direction, this.position, REACH) !== null && this.rayHull(origin, direction, distance) !== null;
+  /** How far along a ray its hull lies, while it is in the field (see Obstacle). */
+  ray(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
+    return this.standing && raySphere(origin, direction, this.position, REACH) !== null ? this.rayHull(origin, direction, max) : null;
   }
 
   /** A sphere touches its hull, while it is in the field (see Obstacle). */

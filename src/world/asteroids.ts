@@ -45,8 +45,10 @@ export interface Well {
 
 /** Something besides rocks that stands in the field, blocks the line of sight and sets off a torpedo (the President's battleship). */
 export interface Obstacle {
-  /** Whether it lies on the ray from `origin` along the normalized `direction` within `distance`. */
-  blocks(origin: THREE.Vector3, direction: THREE.Vector3, distance: number): boolean;
+  /** How far along the ray from `origin` along the normalized `direction` it lies, within `max`; null when not. */
+  ray(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null;
+  /** Its center, for whatever flies around it. */
+  readonly position: THREE.Vector3;
   /** Whether a sphere touches it. */
   touches(center: THREE.Vector3, radius: number): boolean;
 }
@@ -168,6 +170,9 @@ const v = new THREE.Vector3();
 const point = new THREE.Vector3();
 const pull = new THREE.Vector3();
 const sight = new THREE.Vector3();
+/** The rock of the last cast (see AsteroidField.cast), null for the well, an obstacle or nothing; and the center of what it hit. */
+let castRock: Asteroid | null = null;
+let castCenter: THREE.Vector3 | null = null;
 
 /**
  * The field of an arena: few, huge rocks (or chunks of ice, or the debris of a station, or the
@@ -391,10 +396,15 @@ export class AsteroidField {
       const templates = this.templates[asteroid.kind];
       for (let i = 0; i < count; i++) {
         const direction = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-        const position = origin.clone().addScaledVector(direction, asteroid.meanRadius * 0.6);
         const spinAxis = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-        const velocity = direction.multiplyScalar(FRAGMENT_SPEED * r.range(0.6, 1.4)).add(drift);
-        this.add(`${id}.${i}`, asteroid.kind, r.nextInt() % templates.length, scale, asteroid.generation + 1, at, position, spinAxis, velocity, asteroid.orbitAxis, asteroid.orbitRate);
+        const speed = FRAGMENT_SPEED * r.range(0.6, 1.4);
+        const type = r.nextInt() % templates.length;
+        // a fragment starts within the rock's own reach, so a ship close by (in its shadow, on
+        // a hook) never finds itself inside a piece of it
+        const out = Math.min(asteroid.meanRadius * 0.6, Math.max(0, asteroid.radius - this.boundingRadius(asteroid.kind, type, scale)));
+        const position = origin.clone().addScaledVector(direction, out);
+        const velocity = direction.multiplyScalar(speed).add(drift);
+        this.add(`${id}.${i}`, asteroid.kind, type, scale, asteroid.generation + 1, at, position, spinAxis, velocity, asteroid.orbitAxis, asteroid.orbitRate);
       }
     }
     return asteroid;
@@ -447,20 +457,13 @@ export class AsteroidField {
     this.setClock(state.t);
   }
 
-  /** Nearest rock hit by a ray, with the distance along the ray; the well's body counts too, as a hit without a rock (null). */
-  raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number): { asteroid: Asteroid | null; distance: number } | null {
-    let best: { asteroid: Asteroid | null; distance: number } | null = null;
-    for (const asteroid of this.asteroids.values()) {
-      if (raySphere(origin, direction, asteroid.object.position, asteroid.radius) === null) continue;
-      const distance = asteroid.box ? rayPiece(asteroid, origin, direction) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);
-      if (distance !== null && distance <= maxDistance && (!best || distance < best.distance)) best = { asteroid, distance };
-    }
-    const well = this.well;
-    if (well) {
-      const distance = raySphere(origin, direction, well.position, well.radius);
-      if (distance !== null && distance <= maxDistance && (!best || distance < best.distance)) best = { asteroid: null, distance };
-    }
-    return best;
+  /**
+   * Nearest rock hit by a ray, with the distance along the ray; the well's body counts too, as a
+   * hit without a rock (null), and with `obstacles` the obstacle's hull (the battleship) as well.
+   */
+  raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number, obstacles = false): { asteroid: Asteroid | null; distance: number; center: THREE.Vector3 } | null {
+    const distance = this.cast(origin, direction, maxDistance, false, obstacles);
+    return distance === null ? null : { asteroid: castRock, distance, center: castCenter! };
   }
 
   /** True when no rock (and not the well's body, nor an obstacle) lies between two points. */
@@ -468,7 +471,46 @@ export class AsteroidField {
     const distance = from.distanceTo(to);
     if (distance < 1) return true;
     sight.subVectors(to, from).divideScalar(distance);
-    return !this.obstacle?.blocks(from, sight, distance) && this.raycast(from, sight, distance) === null;
+    return this.cast(from, sight, distance, true, true) === null;
+  }
+
+  /**
+   * The distance of the nearest hit along a ray within `max` (the rock hit, if any, in castRock),
+   * or with `any` of the first hit found, which is all a line of sight needs; null for none.
+   * Rocks whose bounding sphere the ray enters beyond the best hit so far are skipped.
+   */
+  private cast(origin: THREE.Vector3, direction: THREE.Vector3, max: number, any: boolean, obstacles: boolean): number | null {
+    let best: number | null = null;
+    castRock = null;
+    castCenter = null;
+    const obstacle = obstacles ? this.obstacle : null;
+    const hull = obstacle?.ray(origin, direction, max) ?? null;
+    if (hull !== null) {
+      if (any) return hull;
+      best = hull;
+      castCenter = obstacle!.position;
+    }
+    const well = this.well;
+    if (well) {
+      const distance = raySphere(origin, direction, well.position, well.radius);
+      if (distance !== null && distance <= max && (best === null || distance < best)) {
+        if (any) return distance;
+        best = distance;
+        castCenter = well.position;
+      }
+    }
+    for (const asteroid of this.asteroids.values()) {
+      const enter = raySphere(origin, direction, asteroid.object.position, asteroid.radius);
+      if (enter === null || enter > (best ?? max)) continue;
+      const distance = asteroid.box ? rayPiece(asteroid, origin, direction) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);
+      if (distance !== null && distance <= max && (best === null || distance < best)) {
+        best = distance;
+        castRock = asteroid;
+        castCenter = asteroid.object.position;
+        if (any) return best;
+      }
+    }
+    return best;
   }
 
   /** Whether a sphere touches the well's body: a ship there is lost. */

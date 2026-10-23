@@ -213,6 +213,12 @@ const RESPAWN_SECONDS = 3;
 /** Each death of the Host by an enemy raises the bots' ease (see Bot.ease) by this much in a solo round; a kill by the Host lowers it by KILL_EASE. */
 const DEATH_EASE = 0.35;
 const KILL_EASE = 0.1;
+/**
+ * The longest step the round runs in (s): a longer frame is split into steps this short, so a
+ * laser's cadence, a collision's sweep and a bot's thinking come out the same at 20 frames a
+ * second or in a time-lapse as at 60.
+ */
+const MAX_STEP = 1 / 30;
 /** The aim assist takes ships within this angle of the nose (rad, about 4°) and this distance (units, 2 km). */
 const AIM_ASSIST_ANGLE = 0.07;
 const AIM_ASSIST_RANGE = 40000;
@@ -2451,15 +2457,18 @@ export class Game implements OnlineGame {
     this.timer.update();
     this.input.poll();
     const dt = Math.min(this.timer.getDelta(), 0.05) * this.timeScale;
-    // an online tournament does not stop for one pilot's pause menu
-    const running = this.state === 'playing' || (this.state === 'paused' && !!this.online);
-    if (this.state !== 'paused' || running) this.time += dt;
-
-    if (running) this.updateRound(dt);
-    if (this.state !== 'paused' || running) {
-      this.field.update(dt);
-      this.effects.update(dt);
+    // a long frame (a slow device, a time-lapse) runs as several steps of at most MAX_STEP, so
+    // shots, collisions and bots play the same game at any frame rate
+    const steps = Math.max(1, Math.ceil(dt / MAX_STEP - 1e-9));
+    for (let i = 0; i < steps; i++) {
+      // an online tournament does not stop for one pilot's pause menu
+      const running = this.state === 'playing' || (this.state === 'paused' && !!this.online);
+      if (this.state === 'paused' && !running) break;
+      this.time += dt / steps;
+      if (running) this.updateRound(dt / steps);
+      this.field.update(dt / steps);
     }
+    if (this.state !== 'paused' || this.online) this.effects.update(dt);
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
     // the ship on show, while the menu or the hangar shows it
     if (this.state === 'menu' && !this.choosingSolo && !this.choosingSchool && !this.browsing) this.showcase?.render(wallClock());
@@ -4413,6 +4422,8 @@ export class Game implements OnlineGame {
     }
     const { status, zone } = ship.laserHit(origin, direction, this.time);
     if (status === 'protected') return;
+    // a bot hit in the drive turns to the shooter, from however far it fired
+    if (shooter && (zone === 'drive' || zone === 'reactor')) this.bots.find((bot) => bot.ship === ship)?.struck(shooter, this.time);
     const along = distance ?? scratch.subVectors(ship.flight.position, origin).dot(direction);
     this.effects.sparks(scratch.copy(origin).addScaledVector(direction, along), shooter?.color ?? SCRAPE_COLOR, 60);
     if (shooter?.isLocal) {
@@ -4613,7 +4624,8 @@ export class Game implements OnlineGame {
     const speed = flight.velocity.length();
     if (me.alive && speed > 100) {
       const heading = scratch.copy(flight.velocity).divideScalar(speed);
-      const hit = this.field.raycast(flight.position, heading, speed * 20);
+      // a rock, the well's body or the battleship's hull
+      const hit = this.field.raycast(flight.position, heading, speed * 20, true);
       if (hit) {
         const timeToImpact = Math.max(0, hit.distance - me.radius) / speed;
         const thrust = MAIN_THRUST * Math.max(me.drive, 0.01);
