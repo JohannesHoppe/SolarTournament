@@ -3371,3 +3371,70 @@ button.quiet:focus-visible {
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
+
+/* the benchmark's panel and the frame meter (see src/bench.ts): developer tools, in the HUD's azure */
+.bench {
+  position: fixed;
+  inset: 12px;
+  z-index: 100;
+  overflow: auto;
+  padding: 12px 16px;
+  background: var(--plate);
+  border: 1px solid var(--hud-dim);
+  color: var(--hud-bright);
+  font-family: var(--font-numbers);
+  font-size: 0.75rem;
+  pointer-events: auto;
+}
+
+.bench h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--hud);
+}
+
+.bench-table {
+  overflow-x: auto;
+}
+
+.bench table {
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+.bench th,
+.bench td {
+  padding: 2px 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--hud-faint);
+}
+
+.bench th:nth-child(-n + 2),
+.bench td:nth-child(-n + 2) {
+  text-align: left;
+}
+
+.bench-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.bench-actions a {
+  color: var(--accent);
+}
+
+.bench-meter {
+  position: fixed;
+  left: 50%;
+  bottom: 4px;
+  z-index: 101;
+  margin: 0;
+  transform: translateX(-50%);
+  color: var(--hud-bright);
+  font-family: var(--font-numbers);
+  font-size: 0.7rem;
+  text-shadow: var(--hud-text-glow);
+  pointer-events: none;
+}

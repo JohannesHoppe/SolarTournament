@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Assets, ShipType } from '../assets';
 import type { Perks } from '../game/hangar';
 import { Ship } from '../ship/ship';
-import { shine } from './surfaces';
+import { lacquer, shine } from './surfaces';
 import { canvas, radialTexture, toTexture } from './textures';
 
 /**
@@ -157,8 +157,19 @@ export class Showcase {
     this.shown = ship;
   }
 
+  /** The pad's look (see Look.showcase in view/quality): pixel ratio, the floodlight's shadow, every how many frames it is drawn. */
+  setLook(look: { pixelRatio: number; shadows: boolean; every: number }) {
+    this.renderer.setPixelRatio(Math.min(look.pixelRatio, window.devicePixelRatio));
+    this.flood.castShadow = look.shadows;
+    this.every = look.every;
+  }
+
+  private every = 1;
+  private frames = 0;
+
   /** Draws a frame at `time` (s): the ship turned a little further on its pad. */
   render(time: number) {
+    if (++this.frames % this.every) return;
     const width = this.canvas.clientWidth;
     const height = this.canvas.clientHeight;
     if (width === 0 || height === 0) return;
@@ -246,7 +257,7 @@ export class Showcase {
     group.add(bolts(finishes.edge));
     // the seal, sunk into the rim: a disk mapped flat (u along x, v against z), so it lies
     // upright and unmirrored as seen from the front
-    const seal = new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 1, metalness: 1, clearcoat: 0.7, clearcoatRoughness: 0.12, envMap: reflection, emissive: 0xff9d00, emissiveIntensity: 0 });
+    const seal = lacquer(new THREE.MeshPhysicalMaterial({ color: 0xffffff, roughness: 1, metalness: 1, clearcoat: 0.7, clearcoatRoughness: 0.12, envMap: reflection, emissive: 0xff9d00, emissiveIntensity: 0 }));
     const face = new THREE.Mesh(new THREE.CircleGeometry(SEAL_RADIUS, ROUND), seal);
     face.rotation.x = -Math.PI / 2;
     face.position.y = -SEAL_DEPTH;

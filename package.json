@@ -12,6 +12,7 @@
     "e2e": "playwright test",
     "e2e:install": "playwright install chromium",
     "balance": "BALANCE=1 playwright test balance --reporter=line",
+    "bench": "BENCH=1 playwright test bench --reporter=line",
     "i18n": "node tools/i18n/list.ts",
     "dupes": "jscpd && node tools/dupes/css.ts",
     "voice": "node tools/voice/render.ts",

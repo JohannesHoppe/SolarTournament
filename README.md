@@ -13,8 +13,38 @@ npm install
 npm run dev        # http://127.0.0.1:5173/
 npm test           # unit tests (Vitest)
 npm run e2e        # browser tests (Playwright; first once: npm run e2e:install)
+npm run bench      # benchmark in the test browser (see Performance); PROFILE=pixel8 as the reference phone
 npm run build      # static site in dist/ (runs the unit tests first)
 ```
+
+## Performance
+
+The game draws the same world on every device, but not with the same effort: the picture's quality moves along a ladder of looks (`src/view/quality.ts`), from the picture as designed (rung 0) to the cheapest (rung 13). Each rung changes one or two knobs of the one above it, the largest saving for the least loss first. Only looks change: rocks, colliders, the round and everything that goes over the network are the same on every rung.
+
+| Rung | Change | Tier |
+|---|---|---|
+| 0 | Everything: up to 2 device pixels per CSS pixel, bloom at full resolution, the sun's shadows in a 4096 px map, lacquered hulls, all particles and dust, the whole belt (480 rocks), the rocks' full relief out to 12 of their radii, the title screen's pad with its shadow | **high** |
+| 1 | The rocks keep their full relief only out to 6 of their radii (a rock up close has 22 000 triangles, from afar 3 400; they are drawn twice, for the picture and for the sun's shadows) | |
+| 2 | 1.75 device pixels per CSS pixel | |
+| 3 | Shadow map 2048 px | |
+| 4 | Bloom at half resolution (a quarter of its pixels) | |
+| 5 | 1.5 device pixels per CSS pixel, the pad as well | **medium** |
+| 6 | Shadow map 1024 px, full relief out to 3 radii | |
+| 7 | 1.25 device pixels per CSS pixel; the pad at 1, without its shadow | |
+| 8 | Half the particles and dust, half the belt's rocks beyond the arena | |
+| 9 | No shadows | |
+| 10 | No lacquer on the hulls (the second specular layer and the battleship's film of colors) | |
+| 11 | 1 device pixel per CSS pixel, every rock of the field in less detail, a quarter of the belt, the pad drawn every second frame | **low** |
+| 12 | No bloom | |
+| 13 | 0.75 device pixels per CSS pixel, a third of the particles | |
+
+**Tiers and the governor.** The menu's row under the languages offers Auto, Low, Medium and High. A tier pins its rung. Auto starts where the device was last found smooth, or with a guess: a software renderer and every phone or tablet start low, a small machine (four cores or fewer, 4 GB or less) or an integrated Intel GPU medium, everything else high. Then the governor watches the frame rate in the menu and in a running round: below 50 frames a second over 2 seconds it takes a rung down; at 58 or more for 8 seconds, with the frame's own work under 60 % of the frame, it takes one up. After every change it waits 3 seconds. A rung left for being slow is barred for 30 seconds, then twice as long after each further time, so the picture never seesaws. A rung held for 20 seconds is kept in the browser as the start next time (`solartournament.quality`, the same entry as the pinned tier). Shadows on or off and the lacquer compile shaders anew; the governor changes them only where the hitch goes unseen (in the menu, on the results, while the own clone is dead), the other knobs at once.
+
+**The benchmark.** `?bench` on the game's address (`?bench=<seconds>` per measurement, default 3; the test stage works too, https://test.solartournament.games/?bench) plays a fixed scene: a solo deathmatch of the default rivals in the belt, the Host's clone watching, the camera on a fixed arc around the field. It measures the frame time with everything on, then with each feature off on its own (the occasional effects, glitch and datamosh, on), against the mean of everything on just before and after: post-processing as a whole, bloom, resolution, shadows, lacquer, rock detail, the field, the belt, the landmark, the sky, the dust, particles, ships, wreckage, the DOM HUD, the radar, the attitude display, sound. Then every rung of the ladder, every arena with and without its landmark (the black hole with and without its lens), the race with and without the racing line, Capture the Flag and the President's Fleet, and the title screen with and without its pad. It takes about ten minutes. The table shows on screen at the end, with buttons to copy or download it as JSON, and goes to the console; the frame time is the time between two frames shown (never below the screen's refresh), next to it the frame's own work and, where the browser can time the GPU (`EXT_disjoint_timer_query_webgl2`), the GPU's time, draw calls and triangles. `?fps` shows the frame rate, the frame's own work and the rung at the bottom of the screen, to watch the governor at work.
+
+On a phone: open the address with `?bench` (the test stage, or the dev server over the LAN), lay the phone sideways, wait until the table shows, and press "Copy JSON".
+
+`npm run bench` runs the same in the test browser (`e2e/bench.spec.ts`); `PROFILE=pixel8` pretends to be the reference phone, a Pixel 8 held sideways with its CPU slowed to the phone's browser speed (see `e2e/README.md`). The test browser draws without a GPU, so its numbers only compare the costs with each other.
 
 ## Deploy
 
@@ -461,7 +491,7 @@ A round is a **race**, a **deathmatch**, **Last Clone Standing**, **Capture the 
 The game collects as little as possible: no accounts, no cookies, no tracking, no ad network, nothing loaded from third-party servers. The German legal pages [Impressum](impressum.html) and [Datenschutz](datenschutz.html) are linked from the menu and the radio page. What happens to data:
 
 - **Hosting:** Cloudflare Pages delivers the site and sees connection data (IP address, time, file, user agent); Cloudflare also asks browsers to report failed connections (Network Error Logging). Links to GitHub carry no referrer.
-- **Browser storage:** eleven localStorage entries (callsign, personal best, the drill reached in each course of the flight school, the courses completed, how often Nicole's briefings and tips were heard, radio on or off, radio volume, the last solo round's choices, the best lap of each arena's race course with its ghost, the hangar: Solar Coins, the upgrades of the ships and the ship flown, the language chosen); they stay in the browser, only the callsign and the looks of the own ship (type, neon trim, drive flame) are shown to the other players of an online tournament.
+- **Browser storage:** twelve localStorage entries (callsign, personal best, the drill reached in each course of the flight school, the courses completed, how often Nicole's briefings and tips were heard, radio on or off, radio volume, the last solo round's choices, the best lap of each arena's race course with its ghost, the hangar: Solar Coins, the upgrades of the ships and the ship flown, the language chosen, the picture's quality: a tier pinned in the menu, or the rung the governor last found smooth on this device); they stay in the browser, only the callsign and the looks of the own ship (type, neon trim, drive flame) are shown to the other players of an online tournament.
 - **Online tournament** (only when a Host starts or joins one): the browsers connect directly over WebRTC, so the other players see the Host's IP address, callsign, ship and score. To find each other, the browsers post short connection messages (with network addresses) on public Nostr relays run by independent third parties. Each browser asks Cloudflare's STUN server for its public address; Trystero's default STUN servers of Google are replaced by Cloudflare's alone. Joining fetches short-lived credentials from `/turn`, and where no direct connection is possible the game data runs through Cloudflare's TURN relay (end-to-end encrypted by WebRTC). Every browser checks roughly whether what the others report is possible and tells them when it is not; once a majority of the other Hosts with a place (at least two; watching Hosts have no vote) say so, everyone in the tournament sees the cheater's callsign and stops sending to it. Nothing of it is stored. Opening the list of tournaments connects to the lobby the same way, and the names, codes, modes, Host counts and round times of public tournaments are visible to everyone there; with the code anyone can join.
 - **Sponsor break:** invented satire ads, no ad network. The privacy policy has to be extended before real ads are shown.
 
