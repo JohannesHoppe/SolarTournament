@@ -62,7 +62,41 @@ npm run check       # every quick quality gate in one run, summed up: types, dup
 npm run check:full  # the same, then the browser tests and the balance runs
 ```
 
-**Quality gates.** `npm run check` runs before every commit. `npm run check:full` runs after every change to bots, weapons, damage, a mode's rules, the network or the round flow, and in any case every few merges: the game changes fast, and only the full run catches a rule that quietly breaks a mode, a race nobody finishes or two tabs that stop agreeing. A red gate is fixed before the next push, never ignored.
+## How to work
+
+The same loop for every change, small or large. Follow it step by step; it holds everything that is easy to forget.
+
+1. **Start.** `git pull`, then `npm run dev`. The dev server renders the voices first: quick from the cache, but many minutes after spoken lines changed. When only code changed and the voices are rendered, `node_modules/.bin/vite` starts the server at once.
+2. **Fast loop while coding.**
+   - `npm run typecheck` (a second) and `npm test` (a few seconds) after every step.
+   - The dev server reloads the page by itself.
+   - In the browser, `window.game` reads and sets the game's state (see Testing in the browser).
+   - `game.log.summary()` sums up every death by its cause and the bots' decisions before it.
+3. **Diagnose, never guess.** A balance run or a bug is explained from the dev log, a measurement or a test, never from a plausible story. What is not measured is called unknown.
+4. **Texts.**
+   - Every text the player sees or hears is written in English where it is used and wrapped in `t()`, `msg()` or `data-i18n`.
+   - It gets its German, Spanish and French in the same commit; `npm run i18n -- de` (`es`, `fr`) lists what is missing, and the unit tests fail on a gap.
+   - Spoken lines are cloned in Nicole's voice by the workflow Voice after the push; until then they fall back to Kokoro.
+5. **Docs in the same commit.**
+   - README: every rule with its numbers.
+   - The folder's README: every file and what it does.
+   - The structure table below.
+   - `datenschutz.html`: every new data flow or storage key.
+6. **Before every commit.**
+   - `npm run check`: types, duplicates, unit tests, summed up in a table.
+   - Commit with explicit paths (`git add <files>`, never `-A`), with an English message that says what the change does and why; no attribution lines.
+7. **The full gates.**
+   - `npm run check:full` runs everything above, plus the browser tests and the balance runs (about half an hour).
+   - Run it after every change to bots, weapons, damage, a mode's rules, the network or the round flow, and in any case every few merges. The game changes fast, and only the full run catches a rule that quietly breaks a mode, a race nobody finishes or two tabs that stop agreeing.
+   - The balance runs leave the dev log of every round in `test-results/`, and a failure names the deaths by cause. `BALANCE_SLOW` gives them more time on a busy machine (see `e2e/README.md`).
+   - A red gate is fixed before the next push, never ignored.
+8. **Push.** `git push origin main main:stage_prod` (see Hosting below for when `stage_prod` stays behind).
+9. **Parallel work in worktrees.**
+   - Every checkout runs its own dev server on its own port (`DEV_PORT=5174 npm run e2e`).
+   - jscpd skips `.claude/worktrees` (ignored by git), so a worktree checks its duplicates on a copy outside it.
+   - A worktree merges `main` before it reports.
+   - Doc conflicts are resolved keeping both sides, one table row per line and one paragraph per bullet.
+   - Many browsers at once on one machine slow each other down. The GPU-less test browser renders the title screen's pad and plays the audio in every tab, so a test that times out under load is rerun before it is called broken.
 
 **Tests.** The unit tests (`src/**/*.test.ts`, helpers in `src/test/`) cover what every browser must compute alike and what guards the game: songs (same title, same notes, a jump lands on the same step, every note on the scale), the arena of a round, the field (same layout, snapshot and restore, orbits, a rock colliding where it is seen, box and well collision), the race course and its gates (its bends gentle enough to be flown at the speed limit), path steering, the modes of a room, the clones and the flare of Last Clone Standing, the sides, bases and cores of Capture the Flag, the President's battleship (its parts, phases, plume, the cover of its hull, torpedo hits and sinking), the lap timer and its ghost, the hook's cable, probes, wreckage, comets (the same comets and showers on every browser, rock broken and hull shoved at the same field times however the frames fall, a newcomer's snapshot carrying the shoved hull, the black hole and the gas giant bending and swallowing them, the battleship getting out of their way), the checks of messages from other browsers, room links, Nicole's coaching (each tip only so often). **Plausibility:** what a Host is asked to fly, a bot of middling skill (0.5) must manage; `src/game/courses.test.ts` flies it with the game's flight model, gravity, coils and rock collisions (`src/test/pilot.ts`): a lap of every arena's race course along its ideal line without being lost, and every course of the flight school (the curve, the ring, coil, brake and full-speed drills) from the arena's middle and from its edge, inside the arena, missing no ring (every coil through its core, the full-speed course within its time), the brake drill's bend tighter than path steering turns at the speed limit and the full-speed course's gentler, and the slide shot drill's bot long enough off the flight to hit. A new course, drill or arena gets such a test. The modes get theirs in the balance runs (`e2e/balance.spec.ts`, `npm run balance`, not part of `npm run e2e`): every mode of a solo round, twice, played out by the default rivals in time-lapse with the Host's ship taken out; the middling bot (Kessler) scores at least the median (in a race, where every bot flies the line alike, it finishes) and dies at most about once a minute and a half, a deathmatch sees six kills, Capture the Flag a capture, and the bots sink the battleship. Run them after every change to bots, weapons, damage or a mode's rules. Every change to these rules adds or updates a test; `npm run build` fails on a red one. The browser tests (`e2e/`, against the dev server) start a solo round of every mode and each course of the flight school without errors, buy an upgrade in the hangar and keep it, and let two tabs of one tournament see the same arena, round, rocks and ships, a torpedo of one hit the other, agree on the sides and cores of Capture the Flag, and see one battleship and count the same hits on it, a laser's and a torpedo's. Run them before pushing changes to the network or the round flow. How the game feels and sounds is tested by playing.
 
