@@ -105,15 +105,22 @@ const CREASE = Math.PI / 3;
 const LACQUER = 0.5;
 const LACQUER_ROUGHNESS = 0.15;
 /**
- * The brightest the lacquer mirrors a light (linear, before the lacquer's strength; the bloom
- * starts at 0.88). Uncapped, the sun in a flat panel at its mirror angle is hundreds of times
- * brighter and swallows the ship in its bloom; capped, the glint stays a bright, crisp
- * highlight with a short halo. The lacquer's reflection of the sky (see shine) stays as it is.
+ * The brightest the lacquer mirrors a light, per unit of the sun's intensity (linear, before
+ * the lacquer's strength; the bloom starts at 0.88). Out there no air dims the sun, and a
+ * smooth panel at its mirror angle throws it back nearly whole: the glint blinds, with a wide
+ * halo, the brighter the nearer the sun (the corona's twice the belt's). Uncapped it would be
+ * hundreds of times brighter and the bloom would swallow the whole ship. The lacquer's
+ * reflection of the sky (see shine) stays as it is.
  */
-const GLINT_PEAK = 2;
-const glintPeak = { value: GLINT_PEAK };
+const GLINT_PER_SUN = 1.25;
+const glintPeak = { value: GLINT_PER_SUN * 3.2 };
 
-/** Caps the lacquer's mirror image of the lights at GLINT_PEAK, keeping its hue. */
+/** The glint's cap for a sun of this intensity (see GLINT_PER_SUN); set with each arena's sun. */
+export function setGlint(sunIntensity: number) {
+  glintPeak.value = GLINT_PER_SUN * sunIntensity;
+}
+
+/** Caps the lacquer's mirror image of the lights at the glint's peak, keeping its hue. */
 function capGlint(shader: THREE.WebGLProgramParametersWithUniforms) {
   shader.uniforms.glintPeak = glintPeak;
   const direct = 'clearcoatSpecularDirect';
