@@ -383,6 +383,8 @@ export const DE: Catalog = {
   '*Beta not available to Hosts. Hosts are reminded that remembering is part of the job.': '*Beta nicht für Hosts verfügbar. Hosts werden daran erinnert, dass Erinnern zum Job gehört.',
   'The best steaks. Everybody says so. Tremendous steaks.': 'Die besten Steaks. Alle sagen das. Gewaltige Steaks.',
   'Steaks are a serving suggestion. Product contains no steak.': 'Steaks sind ein Serviervorschlag. Produkt enthält kein Steak.',
+  'Your health care now flies with the President. Proudly!*': 'Deine Gesundheitsvorsorge fliegt jetzt mit dem Präsidenten. Voller Stolz!*',
+  '*Every hospital closed paid for one golden deck plate. Feeling sick? Print a new clone.': '*Jedes geschlossene Krankenhaus bezahlte eine goldene Deckplatte. Krank? Druck dir einen neuen Klon.',
   'Advertisement': 'Werbung',
 
   // flight school markers and courses

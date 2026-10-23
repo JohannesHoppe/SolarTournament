@@ -355,6 +355,8 @@ export const FR: Catalog = {
   '*Beta not available to Hosts. Hosts are reminded that remembering is part of the job.': '*Bêta non disponible pour les Hôtes. Il est rappelé aux Hôtes que se souvenir fait partie du métier.',
   'The best steaks. Everybody says so. Tremendous steaks.': 'Les meilleurs steaks. Tout le monde le dit. Des steaks énormes.',
   'Steaks are a serving suggestion. Product contains no steak.': 'Steaks : suggestion de présentation. Le produit ne contient pas de steak.',
+  'Your health care now flies with the President. Proudly!*': 'Ta santé vole désormais avec le Président. Avec fierté !*',
+  '*Every hospital closed paid for one golden deck plate. Feeling sick? Print a new clone.': '*Chaque hôpital fermé a payé une plaque dorée du pont. Malade ? Imprime un nouveau clone.',
   'Advertisement': 'Publicité',
 
   // the flight school

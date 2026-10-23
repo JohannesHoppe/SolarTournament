@@ -76,6 +76,13 @@ const ADS: SatireAd[] = [
     color: '#ff7a1a',
     art: '<path d="M20 56 Q18 30 46 28 Q80 26 82 50 Q84 74 54 76 Q22 78 20 56 Z" fill="currentColor"/><path d="M34 46 L70 58 M36 58 L60 44" stroke="#2a1205" stroke-width="4"/>',
   },
+  {
+    brand: 'CarrierCare',
+    slogan: msg('Your health care now flies with the President. Proudly!*'),
+    fine: msg('*Every hospital closed paid for one golden deck plate. Feeling sick? Print a new clone.'),
+    color: '#ffd24d',
+    art: '<path d="M8 62 L92 62 L84 74 L16 74 Z" fill="currentColor"/><rect x="58" y="42" width="12" height="20" fill="currentColor"/><path d="M26 30 h10 v-10 h8 v10 h10 v8 h-10 v10 h-8 v-10 h-10 Z" fill="none" stroke="currentColor" stroke-width="3"/><path d="M20 30 L60 52" stroke="currentColor" stroke-width="3"/>',
+  },
 ];
 
 /** A number and its percent sign stay on one line, in every language: the space before % does not break. */

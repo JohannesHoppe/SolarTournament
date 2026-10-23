@@ -37,6 +37,9 @@ export const NOW_PLAYING_DE = 'es läuft';
 /** The Orange President, his regime and his sponsors. */
 export const PHRASES_EN = [
   'the golden age of the solar system begins right now',
+  'hospitals closed. carriers open. tremendous',
+  'who needs doctors. we have clones',
+  'every hospital became a golden deck plate. beautiful',
   'impulse drive prices are way down. way down',
   'cloning is cheaper than ever. believe me',
   'the last president could not clone a sandwich',
@@ -123,6 +126,8 @@ export const PHRASES_EN = [
 /** German lines for the motorik flavor and now and then elsewhere: rolling R wherever possible. */
 export const PHRASES_DE = [
   'rekord klone. rekord zahlen. rekord präsident',
+  'krankenhaus geschlossen. flugzeugträger eröffnet',
+  'wer braucht ärzte. wir haben klone',
   'achtung. klonfabrik',
   'brennen. bremsen. brennen',
   'der präsident ist zufrieden',
