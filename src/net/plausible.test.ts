@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { TORPEDO_LIFETIME } from '../game/torpedoes';
-import { Accusations, accusersNeeded, beamShare, Evidence, Plausibility, SenderClock, Strikes, type Margins, type Seen } from './plausible';
+import { HOOK_RANGE } from '../game/hook';
+import { Accusations, accusersNeeded, beamShare, Evidence, hookShare, Plausibility, SenderClock, Strikes, type Margins, type Seen } from './plausible';
 import { honestFlight, type Roughness } from '../test/honest';
 
 const alive = (x: number, more = {}) => ({ p: [x, 0, 0], alive: true, ...more });
@@ -386,6 +387,13 @@ describe('evidence of what a ship did', () => {
     expect(beamShare(v(0, 40000), ahead, v(0), v(50000, 40000))).toBeGreaterThan(1);
     expect(beamShare(v(0), ahead, v(0), v(50000, 40000))).toBeGreaterThan(1);
     expect(beamShare(v(0), ahead, v(0), v(-50000))).toBeGreaterThan(1);
+  });
+
+  it("takes a torpedo or probe on a ship's hook only within the hook's reach, give or take lag", () => {
+    // a probe 1 km off, the hook's reach, or 750 m beyond it for lag: fine; 2.5 km off, out of reach
+    expect(hookShare(v(0), v(HOOK_RANGE))).toBeLessThan(1);
+    expect(hookShare(v(0), v(HOOK_RANGE + 15000))).toBeLessThan(1);
+    expect(hookShare(v(0), v(HOOK_RANGE * 2.5))).toBeGreaterThan(1);
   });
 });
 

@@ -12,8 +12,8 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | `fleet.ts` | The President's Fleet: the battleship, its parts, phases and sinking |
 | `torpedoes.ts` | Torpedoes: launch, the flight (top speed, nose first, a seeker that reads its target late, less agile than a ship), the fuse at the hull, burnout, shot down by lasers; one on a hook's rope (a bomb on a string: its motor against the rope, its fuse live for every ship, the kill its holder's) |
 | `comet.ts` | Comets crossing the arena: schedule and route (bent and swallowed by a well), the shower's pieces, the head breaking rock and shoving hull, the comet as the scene shows it |
-| `items.ts` | Sponsor probes and what they carry |
-| `hook.ts` | The hook: harpoon (it bites rock, ships, probes, torpedoes and a core of Capture the Flag), cable, winch, swing; the cable as a rope between two bodies (see world/bodies), also a core's tow cable, and the tug of war on it; the cables' lines |
+| `items.ts` | Sponsor probes and what they carry; a probe on a hook's cable, and its flight back to its slot once the cable is gone |
+| `hook.ts` | The hook: harpoon (it bites rock, ships, probes, torpedoes and a core of Capture the Flag), cable, winch (one force on both ends, so a probe comes in fast and barely moves its ship), swing; the cable as a rope between two bodies (see world/bodies), also a core's tow cable, and the tug of war on it; the cables' lines |
 | `racingline.ts` | The ideal line through gates or rings, swerving around rock in gentle bumps; where a racer flies for (back on a wide loop to a gate it missed); how tight a line bends |
 | `laps.ts` | Lap clock, splits, the best lap and its ghost |
 | `hangar.ts` | Solar Coins, the wallet's cap, upgrades and their prices; the hangar as the browser keeps it, and what in it only an edit puts there |

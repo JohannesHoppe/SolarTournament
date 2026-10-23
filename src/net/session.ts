@@ -153,8 +153,8 @@ export class Session {
   onProbe: (probe: string, ship: string, bucket: number) => void = () => {};
   /** A ship of another browser set off its nova core, here. */
   onNova: (ship: string, position: Vec) => void = () => {};
-  /** A ship of another browser hooked a rock (a point in the rock's frame), a ship, a core of Capture the Flag (its side) or a torpedo (by id), with this much cable out; or let go (null). */
-  onHook: (ship: string, hold: { rock: string | null; local: Vec | null; target: string | null; core: number | null; torpedo: string | null; length: number } | null) => void = () => {};
+  /** A ship of another browser hooked a rock (a point in the rock's frame), a ship, a core of Capture the Flag (its side), a torpedo or a sponsor probe (by id), with this much cable out; or let go (null). */
+  onHook: (ship: string, hold: { rock: string | null; local: Vec | null; target: string | null; core: number | null; torpedo: string | null; probe: string | null; length: number } | null) => void = () => {};
   /** Another browser says a ship cheats (see plausible.ts). */
   onCheat: (ship: string, from: string) => void = () => {};
   /** The lead's field, the wreckage in flight, and the probes taken this round. */
@@ -295,15 +295,16 @@ export class Session {
         this.guard(() => this.onHook(ship, null));
         return;
       }
-      // a rock with a point on it, a ship, or a core; and the cable out
+      // a rock with a point on it, a ship, a core, a torpedo or a probe; and the cable out
       const rock = d?.r === undefined ? null : id(d.r);
       const local = d?.l === undefined ? null : vec(d.l, 3, MAX_COORDINATE);
       const target = d?.t === undefined ? null : id(d.t);
       const core = d?.c === undefined ? null : int(d.c, 0, 1);
       const torpedo = d?.o === undefined ? null : id(d.o);
+      const probe = d?.p === undefined ? null : id(d.p);
       const length = num(d?.n, 0, MAX_COORDINATE);
-      if (length === null || [rock, target, core, torpedo].filter((hold) => hold !== null).length !== 1 || (rock !== null) !== (local !== null)) return;
-      this.guard(() => this.onHook(ship, { rock, local, target, core, torpedo, length }));
+      if (length === null || [rock, target, core, torpedo, probe].filter((hold) => hold !== null).length !== 1 || (rock !== null) !== (local !== null)) return;
+      this.guard(() => this.onHook(ship, { rock, local, target, core, torpedo, probe, length }));
     });
     transport.on('nv', (d, from) => {
       const ship = id(d?.s);
@@ -522,11 +523,12 @@ export class Session {
   }
 
   /** A ship of this browser hooked a rock, a ship, a core or a torpedo, or let go (null). */
-  sendHook(ship: string, hold: { rock: string; local: Vec } | { target: string } | { core: number } | { torpedo: string } | null, length = 0) {
+  sendHook(ship: string, hold: { rock: string; local: Vec } | { target: string } | { core: number } | { torpedo: string } | { probe: string } | null, length = 0) {
     if (!hold) this.transport.send('hk', { s: ship, x: 1 });
     else if ('rock' in hold) this.transport.send('hk', { s: ship, r: hold.rock, l: hold.local, n: length });
     else if ('core' in hold) this.transport.send('hk', { s: ship, c: hold.core, n: length });
     else if ('torpedo' in hold) this.transport.send('hk', { s: ship, o: hold.torpedo, n: length });
+    else if ('probe' in hold) this.transport.send('hk', { s: ship, p: hold.probe, n: length });
     else this.transport.send('hk', { s: ship, t: hold.target, n: length });
   }
 

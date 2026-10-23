@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { raySphere, type Asteroid, type AsteroidField } from '../world/asteroids';
 import type { Ship } from '../ship/ship';
 import type { Torpedo } from './torpedoes';
+import type { Probe } from './items';
 import { MASS, rope, ropeFrom, share, type Body } from '../world/bodies';
 
 /**
@@ -20,7 +21,9 @@ import { MASS, rope, ropeFrom, share, type Body } from '../world/bodies';
  * HOOK_BRAKE, as late as it can): holding on never slams a ship into its rock. Letting go
  * before, the ship keeps all its speed; what it flies into is its pilot's business. In Capture
  * the Flag it also bites a core the ship may take (see Mark): the game hands the core to the
- * rules, which take it in tow on that cable (see game/flags).
+ * rules, which take it in tow on that cable (see game/flags). A sponsor probe or a torpedo it
+ * bites hangs on the rope as a body; a probe the winch reels in all the way, and the ship
+ * takes it when it arrives, as if it had flown through it (see game/items).
  */
 export const HOOK_RANGE = 20000;
 const HOOK_SPEED = 40000;
@@ -38,10 +41,10 @@ export const HOOK_RECHARGE = 1.2;
 
 /**
  * Something else the harpoon bites, where it is (followed as it moves): a sponsor core of
- * Capture the Flag (its side), a sponsor probe (its id, side -1), or a torpedo (side -1),
- * which then hangs on the rope as a body.
+ * Capture the Flag (its side), or a sponsor probe or a torpedo (side -1), which then hangs on
+ * the rope as a body: the winch reels a probe in to the ship, which takes it on arrival.
  */
-export type Mark = { readonly team: number; readonly position: THREE.Vector3; readonly probe?: string; readonly torpedo?: Torpedo };
+export type Mark = { readonly team: number; readonly position: THREE.Vector3; readonly probe?: Probe; readonly torpedo?: Torpedo };
 
 /** What a hook holds on to: a point on a rock (in the rock's own frame, so it turns and drifts with it), a ship, or a core (see Mark). */
 export type Anchor = { rock: Asteroid; local: THREE.Vector3; ship: null; mark: null } | { rock: null; local: null; ship: Ship; mark: null } | { rock: null; local: null; ship: null; mark: Mark };
@@ -133,9 +136,15 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
 /** The seconds a harpoon flies to bite at `distance`. */
 export const flightTime = (distance: number) => distance / HOOK_SPEED;
 
-/** The winch pulls a body lighter than a ship harder, by the ship's mass over its own, but at most WINCH_LIGHT times HOOK_PULL (32 g, a core's): the cable comes in no faster. */
+/**
+ * The winch's force gives a ship HOOK_PULL, and pulls both ends of its cable alike: a body
+ * lighter than a ship is pulled harder, by the ship's mass over its own, but at most
+ * WINCH_LIGHT times HOOK_PULL (32 g, a core's: the cable comes in no faster), and then the
+ * force is that much smaller for the heavier end. Two ships pull each other with 8 g each; a
+ * probe (half a tonne) comes in at 32 g while its ship feels a quarter of a g of it.
+ */
 const WINCH_LIGHT = 4;
-const winchOn = (body: Body) => HOOK_PULL * Math.min(MASS.ship / body.mass, WINCH_LIGHT);
+const winchOn = (body: Body, other: Body) => (HOOK_PULL * Math.min(MASS.ship, WINCH_LIGHT * Math.min(body.mass, other.mass))) / body.mass;
 
 /**
  * The cable between `body` and its `anchor` (see world/bodies), with `length` of cable out:
@@ -171,8 +180,8 @@ export function pullOn(body: Body, anchor: Body, length: number, reeling: boolea
     // the winch's force gives a ship HOOK_PULL, a lighter body more (see WINCH_LIGHT); with the
     // cable in to the floor it holds, and the rope alone pulls
     const room = stoppable - closing;
-    body.velocity.addScaledVector(toAnchor, Math.min(winchOn(body) * dt, room));
-    if (moveAnchor) anchor.velocity.addScaledVector(toAnchor, -Math.min(winchOn(anchor) * dt, room));
+    body.velocity.addScaledVector(toAnchor, Math.min(winchOn(body, anchor) * dt, room));
+    if (moveAnchor) anchor.velocity.addScaledVector(toAnchor, -Math.min(winchOn(anchor, body) * dt, room));
   }
   cable = Math.max(floor, cable);
   if (anchorEnd === 'elsewhere') ropeFrom(body, anchor, cable, dt);
@@ -190,8 +199,12 @@ export function pivotOf(anchor: Anchor, out: THREE.Vector3): THREE.Vector3 | nul
   return anchor.rock.object.parent ? out.copy(anchor.rock.object.position) : null;
 }
 
-/** How close the winch reels a ship to the pivot (see pivotOf): HOOK_SLACK ship radii off a ship, or that far beyond a rock's farthest reach. */
-export const floorOf = (ship: Ship, anchor: Anchor) => ship.radius * HOOK_SLACK + (anchor.rock ? anchor.rock.radius : 0);
+/**
+ * How close the winch reels a ship to the pivot (see pivotOf): HOOK_SLACK ship radii off a
+ * ship, or that far beyond a rock's farthest reach; a probe all the way in, to one ship radius,
+ * well within the reach that takes it.
+ */
+export const floorOf = (ship: Pick<Ship, 'radius'>, anchor: Anchor) => (anchor.mark?.probe ? ship.radius : ship.radius * HOOK_SLACK + (anchor.rock ? anchor.rock.radius : 0));
 
 /** The cables of all hooks out, as lines from each owner's nose; reused from hook to hook. */
 export class Cables {
