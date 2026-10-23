@@ -2055,6 +2055,49 @@ body.touch #touch {
   }
 }
 
+/* an edited hangar or flight school (see game/seal): named across the whole screen, over menu and round, until it is put back; it takes no input */
+#tampered {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2vh;
+  padding: 16px;
+  pointer-events: none;
+}
+
+#tampered strong {
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 13vw, 16rem);
+  font-weight: 400;
+  line-height: 1;
+  overflow-wrap: anywhere;
+  color: var(--tube-orange);
+  text-shadow: var(--neon-orange);
+  animation: neon-flicker 5s step-end infinite;
+}
+
+#tampered p {
+  margin: 0;
+  max-width: 40ch;
+  text-align: justify;
+  text-align-last: center;
+  hyphens: auto;
+  font-size: 1.1rem;
+  color: var(--tube-orange);
+  text-shadow: 0 0 2px rgba(2, 3, 10, 0.95), 0 0 10px #ff7b00;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tampered strong {
+    animation: none;
+  }
+}
+
 @media (orientation: portrait) {
   body.touch.playing #turn-phone,
   body.touch.upright-paused #turn-phone {

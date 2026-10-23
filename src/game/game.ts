@@ -33,7 +33,7 @@ import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { Belt, BELT_INNER } from '../world/belt';
-import { COURSE_NAMES, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
+import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
 import { ARENAS, arenaById, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile } from '../world/arenas';
@@ -43,7 +43,7 @@ import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
 import { Showcase } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
-import { buy, LEVELS, nextPrice, parseHangar, payOut, perksOf, sovereignEarned, UPGRADES } from './hangar';
+import { buy, emptyHangar, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, sovereignEarned, UPGRADES, WALLET } from './hangar';
 import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { Asteroid, FieldState } from '../world/asteroids';
@@ -450,6 +450,8 @@ const SHIP_NAMES: Record<ShipType, string> = { human: msg('Human Interceptor'), 
 const CALLSIGN_KEY = 'solartournament.callsign';
 /** The flight school's courses a Host has completed (a list); once the basic training is among them, the menu leads with the solo round. */
 const SCHOOL_DONE_KEY = 'solartournament.school';
+/** How often the hangar's and the completed courses' entries are looked at for a change made in the own tab, which raises no storage event (ms). */
+const EARNED_WATCH_MS = 2000;
 /** The drill a Host has reached in each course, so a reload continues there; a course's entry goes when it is complete or started over. */
 const SCHOOL_STEP_KEY = 'solartournament.school-step';
 /** What each course of the flight school teaches, on its button. */
@@ -460,16 +462,6 @@ const SCHOOL_NOTES: Record<SchoolCourse, string> = {
   arsenal: msg('Torpedoes, overdrive, probes, the hook on a ship and the nova core.'),
   tactician: msg('Win the dogfight: dodge, turn, fire in bursts, take cover.'),
 };
-
-/** The courses a Host has completed, as this browser keeps them; whatever does not fit is dropped. */
-function schoolDone(): Set<SchoolCourse> {
-  try {
-    const kept: unknown = JSON.parse(storageGet(SCHOOL_DONE_KEY) ?? '[]');
-    return new Set(Array.isArray(kept) ? SCHOOL_COURSES.filter((course) => kept.includes(course)) : []);
-  } catch {
-    return new Set();
-  }
-}
 
 /** The drill a Host has reached in each course, kept by its name (see FlightSchool.reached). */
 function schoolSteps(): Partial<Record<SchoolCourse, number>> {
@@ -773,10 +765,19 @@ export class Game implements OnlineGame {
   private cockpit = false;
   /** Cinema mode is on (see toggleCinema). */
   private cinema = false;
-  /** What the Host owns (see game/hangar), the ship it flies, the ship on show above the logo, and whether the hangar's plate is open. */
-  private readonly hangar = parseHangar(storageGet(HANGAR_KEY));
-  private selectedShip: ShipType = this.hangar.ship;
-  private shipShown: ShipType = this.hangar.ship;
+  /**
+   * What the Host owns (see game/hangar) and the courses of the flight school it completed (see
+   * readEarned), the ship it flies, the ship on show above the logo, and whether the hangar's
+   * plate is open.
+   */
+  private hangar = emptyHangar();
+  private coursesDone = new Set<SchoolCourse>();
+  /** The browser keeps values no Host can own: the screen says what it thinks of that, and nothing is kept over them. */
+  private tampered = false;
+  /** The hangar's and the completed courses' entries as last read, so a change to them is noticed. */
+  private earnedRead: [string | null, string | null] = [null, null];
+  private selectedShip: ShipType = 'human';
+  private shipShown: ShipType = 'human';
   private showcase: Showcase | null = null;
   private inHangar = false;
   /** The drive lights, always in the scene; ships borrow them (see lendLight). */
@@ -1046,6 +1047,12 @@ export class Game implements OnlineGame {
 
     this.input = new Input(this.renderer.domElement);
     this.input.onAction((action) => this.onAction(action));
+    this.readEarned();
+    // another tab changed what is kept, or the Host did by hand (no event in the own tab: looked at every two seconds)
+    window.addEventListener('storage', (event) => {
+      if (event.key === null || event.key === HANGAR_KEY || event.key === SCHOOL_DONE_KEY) this.readEarned();
+    });
+    setInterval(() => this.watchEarned(), EARNED_WATCH_MS);
     this.bindMenu();
     // the controls and the pause screen name the keys as the Host's keyboard prints them
     void learnKeyboardLayout().then(() => {
@@ -1151,7 +1158,7 @@ export class Game implements OnlineGame {
    */
   private leadMode(): 'online' | 'school' | 'start' {
     if (this.invitedRoom()) return 'online';
-    return schoolDone().has('basic') ? 'start' : 'school';
+    return this.coursesDone.has('basic') ? 'start' : 'school';
   }
 
   /** The flight school's plate: one button per course, each with a way to start it over. */
@@ -1180,7 +1187,7 @@ export class Game implements OnlineGame {
 
   /** The course Enter starts on the school's plate: the first one not completed, or the basic training again. */
   private nextCourse(): SchoolCourse {
-    const done = schoolDone();
+    const done = this.coursesDone;
     return SCHOOL_COURSES.find((course) => !done.has(course)) ?? 'basic';
   }
 
@@ -1196,7 +1203,7 @@ export class Game implements OnlineGame {
    */
   private showSchoolProgress() {
     const steps = schoolSteps();
-    const done = schoolDone();
+    const done = this.coursesDone;
     for (const course of SCHOOL_COURSES) {
       const button = $(`school-${course}`);
       const step = steps[course] ?? 0;
@@ -2632,8 +2639,45 @@ export class Game implements OnlineGame {
   }
 
   private saveHangar() {
-    storageSet(HANGAR_KEY, JSON.stringify(this.hangar));
+    this.keepEarned(HANGAR_KEY);
     this.renderShowcase();
+  }
+
+  /**
+   * Reads the hangar and the completed courses as the browser keeps them. A value only a hand
+   * puts there (see hangarFrom) is named on screen and not used: the game goes on with what it
+   * last read (stock, when it read nothing yet), until the entry holds possible values again or
+   * is cleared. What cannot be read counts as stock, with a warning in development only.
+   */
+  private readEarned() {
+    this.earnedRead = [storageGet(HANGAR_KEY), storageGet(SCHOOL_DONE_KEY)];
+    const { hangar, cheated, unreadable } = hangarFrom(this.earnedRead[0]);
+    const courses = coursesFrom(this.earnedRead[1]);
+    if (import.meta.env.DEV && unreadable.length > 0) console.warn(`unreadable in ${HANGAR_KEY}, taken as stock: ${unreadable.join(', ')}`);
+    if (import.meta.env.DEV && !courses) console.warn(`${SCHOOL_DONE_KEY} unreadable, taken as no course`);
+    this.coursesDone = courses ?? new Set();
+    this.tampered = cheated;
+    $('tampered').hidden = !cheated;
+    if (cheated) return;
+    this.hangar = hangar;
+    this.selectedShip = this.shipShown = hangar.ship;
+    if (this.showcase) {
+      this.renderShowcase();
+      this.showSchoolProgress();
+    }
+  }
+
+  /** Reads the kept entries again when they changed since. */
+  private watchEarned() {
+    if (storageGet(HANGAR_KEY) !== this.earnedRead[0] || storageGet(SCHOOL_DONE_KEY) !== this.earnedRead[1]) this.readEarned();
+  }
+
+  /** Keeps the hangar (put right, see keepable) or the completed courses; never over a hangar a hand edited, which is named first and stays until the Host puts it right. */
+  private keepEarned(key: typeof HANGAR_KEY | typeof SCHOOL_DONE_KEY) {
+    this.watchEarned();
+    if (this.tampered && key === HANGAR_KEY) return;
+    storageSet(key, key === HANGAR_KEY ? JSON.stringify(keepable(this.hangar)) : JSON.stringify([...this.coursesDone]));
+    this.earnedRead = [storageGet(HANGAR_KEY), storageGet(SCHOOL_DONE_KEY)];
   }
 
   /** The ship on show above the logo, its name and what it is; the hangar's note on its button. */
@@ -2660,7 +2704,8 @@ export class Game implements OnlineGame {
   /** The hangar's plate: the coins, and every upgrade of the ship on show with its steps and the price of the next. */
   private renderHangar() {
     const ship = this.shipShown;
-    $('hangar-coins').textContent = t('{coins} Solar Coins. Every point of a round pays one.', { coins: coinText(this.hangar.coins) });
+    const coins = { coins: coinText(this.hangar.coins) };
+    $('hangar-coins').textContent = this.hangar.coins >= WALLET ? t('{coins} Solar Coins. The wallet is full: rounds pay nothing until you spend.', coins) : t('{coins} Solar Coins. Every point of a round pays one.', coins);
     const list = $('hangar-upgrades');
     if (ship === 'sovereign') {
       list.textContent = sovereignEarned(this.hangar) ? t('The Sovereign flies with every upgrade, and wears every look.') : t('The Sovereign is the President’s gift for both interceptors made complete.');
@@ -3871,7 +3916,8 @@ export class Game implements OnlineGame {
       keepSchoolSteps({ ...schoolSteps(), [school.course]: school.stepIndex });
     }
     if (school.finished) {
-      storageSet(SCHOOL_DONE_KEY, JSON.stringify([...schoolDone().add(school.course)]));
+      this.coursesDone.add(school.course);
+      this.keepEarned(SCHOOL_DONE_KEY);
       keepSchoolSteps({ ...schoolSteps(), [school.course]: undefined });
       // back on the school's plate: the next course is a key away
       this.showMenu();
