@@ -6,16 +6,8 @@ import { Ship } from '../ship/ship';
 import { shine } from './surfaces';
 import { canvas, radialTexture, toTexture } from './textures';
 
-/**
- * The ship on show circles above the pad once in CIRCLE_SECONDS, CIRCLE_RADIUS (units) out,
- * banked by BANK (rad) into its turn, and rises and sinks by BOB (units) every BOB_SECONDS, its
- * nose following the rise a little: slow, smooth, never still.
- */
-const CIRCLE_SECONDS = 26;
-const CIRCLE_RADIUS = 170;
-const BANK = 0.22;
-const BOB = 40;
-const BOB_SECONDS = 7;
+/** The ship on show hovers level above the pad's middle and turns on the spot, once in TURN_SECONDS: an exhibit on a turntable. */
+const TURN_SECONDS = 30;
 /** The top of the pad's rim lies this high (units); the ship hovers HOVER above the pad's middle. */
 const PAD_TOP = 35;
 const HOVER = 280;
@@ -176,23 +168,14 @@ export class Showcase {
     this.last = time;
     const root = this.locked ? this.silhouette : this.shown?.root;
     if (root) {
-      // along its circle, nose ahead, banked into the turn; the nose lifts while it rises
-      const angle = (time / CIRCLE_SECONDS) * Math.PI * 2;
-      const bob = (time / BOB_SECONDS) * Math.PI * 2;
-      const x = Math.cos(angle) * CIRCLE_RADIUS;
-      const z = Math.sin(angle) * CIRCLE_RADIUS;
-      const y = HOVER + Math.sin(bob) * BOB;
-      root.position.set(x, y, z);
-      root.rotation.set(0, Math.PI - angle, 0);
-      root.rotateZ(BANK);
-      root.rotateX(Math.cos(bob) * 0.06);
-      // its lift lights the seal below it, brighter the lower it hovers; a silhouette lifts unlit
-      const near = this.locked ? 0 : 1 - (y - HOVER + BOB) / (4 * BOB);
-      this.pool.position.set(x, this.pool.position.y, z);
-      (this.pool.material as THREE.MeshBasicMaterial).opacity = 0.35 + 0.35 * near;
+      root.position.set(0, HOVER, 0);
+      root.rotation.set(0, (time / TURN_SECONDS) * Math.PI * 2, 0);
+      // its lift lights the seal below it; a silhouette lifts unlit
+      this.pool.position.set(0, this.pool.position.y, 0);
+      (this.pool.material as THREE.MeshBasicMaterial).opacity = 0.5;
       this.pool.visible = !this.locked;
-      this.lift.position.set(x, y - 120, z);
-      this.lift.intensity = this.locked ? 0 : 2 + 2 * near;
+      this.lift.position.set(0, HOVER - 120, 0);
+      this.lift.intensity = this.locked ? 0 : 3;
     }
     this.runLamps(time);
     this.shown?.idle(dt, 0.35);
