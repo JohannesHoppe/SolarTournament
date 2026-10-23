@@ -2,7 +2,7 @@
 
 The game in English, German, Spanish and French.
 
-- `i18n.ts`: `t('…')` translates a text where it is used, `msg('…')` marks one kept in a table and shown later through `t()`, `translatePage()` translates the pages' fixed texts (`data-i18n`, `data-i18n-attr`); the language chosen.
+- `i18n.ts`: `t('…')` translates a text where it is used, `msg('…')` marks one kept in a table and shown later through `t()`, `translatePage()` translates the pages' fixed texts (`data-i18n`, `data-i18n-attr`), filling in placeholders where a page hands it their values (the handbook's numbers); the language chosen.
 - `de.ts`, `es.ts`, `fr.ts`: the catalogs, keyed by the exact English text, each with its glossary and the voices' tone at the top.
 - `i18n.test.ts`: fails on a text without translation, a translation without text, or broken placeholders.
 

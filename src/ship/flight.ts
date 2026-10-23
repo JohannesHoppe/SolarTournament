@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { Controls } from '../input/input';
 
+/** Display scale: one world unit is 5 cm, a ship is about 35 m long. */
+export const METERS_PER_UNIT = 0.05;
 /** Acceleration of the main drive at full thrust (units/s²): 127.5 m/s², 13 g. Hard and quick: the speed limit is two seconds away, and so is a stop. */
 export const MAIN_THRUST = 2550;
 /** Acceleration of the maneuvering thrusters along any axis (units/s²): 40 m/s², about 4 g, so a sidestep left and right throws off an aim. */

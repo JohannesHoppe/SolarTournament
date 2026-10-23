@@ -1099,6 +1099,22 @@ export const SCHOOL_COURSES: readonly SchoolCourse[] = ['basic', 'racer', 'gladi
 export const COURSE_NAMES: Record<SchoolCourse, string> = { basic: msg('Basic training'), racer: msg('Racer'), gladiator: msg('Gladiator'), arsenal: msg('Arsenal'), tactician: msg('Tactician') };
 
 /**
+ * The completed courses as the browser kept them (none: no course), or null when the entry cannot
+ * be read as a list of names (it counts as none); a name this game does not know is passed over
+ * (a later one may have added it).
+ */
+export function coursesFrom(text: string | null): Set<SchoolCourse> | null {
+  if (text === null) return new Set();
+  try {
+    const kept: unknown = JSON.parse(text);
+    if (!Array.isArray(kept) || !kept.every((course) => typeof course === 'string')) return null;
+    return new Set(SCHOOL_COURSES.filter((course) => kept.includes(course)));
+  } catch {
+    return null;
+  }
+}
+
+/**
  * The drills of each course, in the order a Host needs them. Basic training: turning, aiming,
  * the drive and the brake, a curve with path steering, stopping at a point and the rocks, all
  * with the autopilot on. The racer: the rings and the X where the flight crosses them, their

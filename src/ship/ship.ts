@@ -1,12 +1,14 @@
 import * as THREE from 'three';
 import { colliderRadius, type Assets, type ShipType } from '../assets';
-import { FlightModel } from './flight';
+import { FlightModel, MAIN_THRUST, METERS_PER_UNIT } from './flight';
+import { MASS, type Body } from '../world/bodies';
 import { ramDamage, type RamZone } from './impact';
 import type { Controls } from '../input/input';
 import { TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
 import { STOCK, type Perks } from '../game/hangar';
 import { runningLight } from '../view/textures';
+import { botTint, SOVEREIGN_TINT, TINTS } from './tints';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
@@ -57,6 +59,46 @@ const COOLING_SHADOW = 50;
 const OVERHEAT_RESUME = 30;
 /** Minimum time between two shots (s), so a full bank fires as a quick burst. */
 const LASER_COOLDOWN = 0.18;
+
+/** One standard gravity in units/s² (1 unit = 5 cm). */
+export const G = 9.81 / METERS_PER_UNIT;
+/**
+ * The clone's body under g: above G_TOLERANCE (g) of its own engines' push it starts to grey
+ * out; at the main drive's full push (13 g) it takes G_ONSET seconds to full strain, and below
+ * the tolerance it recovers from full strain in G_RECOVERY seconds. Every clone alike, a Host's
+ * and a bot's: a Host's screen darkens at its edges, a bot aims wider and reacts later (see
+ * ship/bots).
+ */
+const G_TOLERANCE = 3;
+const G_ONSET = 5;
+const G_RECOVERY = 3;
+
+/** A clone's strain (0..1) after `dt` seconds under a push of `acceleration` (units/s²) from its own engines. */
+export function strainAfter(strain: number, acceleration: number, dt: number): number {
+  const load = acceleration / G;
+  const next = load > G_TOLERANCE ? strain + ((load - G_TOLERANCE) / (MAIN_THRUST / G - G_TOLERANCE)) * (dt / G_ONSET) : strain - dt / G_RECOVERY;
+  return THREE.MathUtils.clamp(next, 0, 1);
+}
+
+/** Ships farther away than this never show as having their nose on another (units, 3 km): the sensors' reach for a lock warning. */
+export const LOCK_RANGE = 60000;
+/** A nose within this many times the other ship's angular radius counts as TRACKED. */
+const LOCK_TRACKING = 4;
+
+/**
+ * How a ship's nose lies on another ship (`at`, of hit radius `radius`), as the sensors of the
+ * other one see it: 2 when its laser would hit now (LOCKED), 1 when the nose is close (TRACKED),
+ * 0 otherwise or beyond LOCK_RANGE. Line of sight is the caller's to check. The own lock warning
+ * and the bots' sense of a ship on their tail read the same.
+ */
+export function noseOn(shooter: FlightModel, at: THREE.Vector3, radius: number): 0 | 1 | 2 {
+  const line = local.subVectors(at, shooter.position);
+  const distance = line.length();
+  if (distance > LOCK_RANGE) return 0;
+  const angle = shooter.angleTo(line);
+  const size = radius / Math.max(distance, 1);
+  return angle < size ? 2 : angle < size * LOCK_TRACKING ? 1 : 0;
+}
 
 /** The engine flame slides this far (model units) into the hull at zero thrust. */
 const FLAME_RETRACT = 16;
@@ -132,11 +174,12 @@ export type ShipState = {
   it?: number;
   /** the looks of its upgrades: 4 × the neon trim's step + the drive flame's (see Perks) */
   lo?: number;
+  /** the tint its Host chose, an index into TINTS (see Ship.wish) */
+  co?: number;
   /** remaining spawn protection (s) */
   pr: number;
 };
 
-let shipCounter = 0;
 const force = new THREE.Vector3();
 const torque = new THREE.Vector3();
 const inverse = new THREE.Quaternion();
@@ -151,6 +194,8 @@ function sharedRadius(assets: Assets): number {
 
 export class Ship {
   readonly flight = new FlightModel();
+  /** The ship as a body on a rope or in a bump (see world/bodies): its flight, and an interceptor's mass. */
+  readonly body: Body = { position: this.flight.position, velocity: this.flight.velocity, mass: MASS.ship };
   /** Where the ship was before this frame's move, for the swept collision test. */
   readonly previous = new THREE.Vector3();
   /** Where the drive's exhaust was laid last frame, and whether the drive was burning then. */
@@ -173,7 +218,12 @@ export class Ship {
   readonly root = new THREE.Group();
   readonly model: THREE.Object3D;
   readonly radius: number;
-  readonly color: THREE.Color;
+  /** The color of its laser: its tint (see setTint). */
+  readonly color = new THREE.Color();
+  /** What it is marked in (CSS color, see tints.ts): a Host's tint as the round assigns it, a bot's own, the Sovereign's ivory. */
+  tint = '';
+  /** The tint its Host chose, an index into TINTS; two Hosts who chose the same one are told apart by assignTints. */
+  wish = TINTS.length - 1;
   /** Laser holes; they vent air for a few seconds and spark until the ship respawns. */
   readonly holes: Hole[] = [];
   /** Push and spin from venting air, in ship space, applied in the next update. */
@@ -200,6 +250,8 @@ export class Ship {
   private readonly trim: { strips: THREE.Object3D; stern: THREE.Object3D; light: THREE.MeshBasicMaterial; running: THREE.Texture };
   heat = 0;
   overheated = false;
+  /** The clone's g-force strain, 0..1 (see strainAfter); a coil, a dodge or the overdrive add to it at once. */
+  strain = 0;
   /** Game time until which the main drive cools down after an overdrive. */
   private driveOfflineUntil = 0;
   /** Shots fired, so the muzzles alternate per ship. */
@@ -273,7 +325,7 @@ export class Ship {
     this.trim = { strips: this.model.getObjectByName('trim')!, stern: this.model.getObjectByName('trimStern')!, light, running };
     this.radius = sharedRadius(assets);
     this.frames = assets.textures.flameFrames;
-    this.color = new THREE.Color().setHSL((shipCounter++ * 0.137 + (type === 'alien' ? 0.33 : 0.55)) % 1, 0.8, 0.6);
+    this.setTint(this.kind === 'host' ? TINTS[this.wish].hex : botTint(name));
     this.root.add(this.model);
     this.engine = this.findEngine(assets.textures.glow);
     this.root.name = 'ship:' + id;
@@ -287,6 +339,19 @@ export class Ship {
    * trim (TRIM_BRIGHTNESS: light strips along both flanks, then across the stern too, then with a
    * running light towards the drives) and its drive flame's color.
    */
+  /** The Sovereign, the President's gift: marked in its own ivory and gold, which no Host can pick. */
+  get sovereign() {
+    return this.type === 'sovereign';
+  }
+
+  /** Marks the ship in a tint (a Host's in the round, see Game.tintShips); the Sovereign always wears its ivory. */
+  setTint(hex: string) {
+    const tint = this.sovereign ? SOVEREIGN_TINT : hex;
+    if (tint === this.tint) return;
+    this.tint = tint;
+    this.color.set(tint);
+  }
+
   outfit(perks: Perks) {
     this.perks = perks;
     if (this.engine.flameMaterial) this.engine.flameMaterial.color.copy(FLAME_TINTS[perks.flame]);
@@ -357,6 +422,7 @@ export class Ship {
     this.nova = false;
     this.heat = 0;
     this.overheated = false;
+    this.strain = 0;
     this.driveOfflineUntil = 0;
     this.shovedBy = null;
     this.alive = true;
@@ -405,7 +471,7 @@ export class Ship {
     const f = this.flight;
     const round = (v: { toArray(): number[] }, digits = 0) => v.toArray().map((x) => +x.toFixed(digits));
     const items = packItems(this.twin, this.plating, this.nova);
-    const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}|${this.gates}|${this.finish}|${items}`;
+    const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}|${this.gates}|${this.finish}|${items}|${this.wish}`;
     const withSlow = full || slow !== this.slowSent || now - this.slowSentAt >= SLOW_STATE_SECONDS;
     if (withSlow) {
       this.slowSent = slow;
@@ -413,7 +479,7 @@ export class Ship {
     }
     return {
       id: this.id,
-      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items, lo: this.perks.neon * 4 + this.perks.flame } : {}),
+      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items, lo: this.perks.neon * 4 + this.perks.flame, co: this.wish } : {}),
       p: round(f.position),
       v: round(f.velocity, 1),
       q: round(f.orientation, 4),
@@ -454,6 +520,8 @@ export class Ship {
       const neon = state.lo! >> 2;
       const flame = state.lo! & 3;
       if (neon !== this.perks.neon || flame !== this.perks.flame) this.outfit({ ...STOCK, neon, flame });
+      // the tint it chose; which one it flies in, the round decides (see Game.tintShips)
+      this.wish = state.co!;
     }
     if (state.a && !this.alive) {
       // the owner booted a new clone
@@ -512,6 +580,7 @@ export class Ship {
     this.flight.thrusterFactor = (0.25 + 0.75 * this.thrusters) * this.perks.thrusters;
     this.vent(now);
     this.flight.update(dt, controls, gravity, this.ventForce, this.ventSpin);
+    this.strain = strainAfter(this.strain, this.flight.properAcceleration, dt);
     this.show(dt, now);
 
     this.heat = Math.max(0, this.heat - (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * this.perks.cooling * dt);

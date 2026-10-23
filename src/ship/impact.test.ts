@@ -1,9 +1,13 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ram, ramDamage, RAM_SAFE } from './impact';
+import { MASS } from '../world/bodies';
 
 /** m/s in units/s (1 unit = 5 cm). */
 const ms = (speed: number) => speed * 20;
+
+/** A ship's body moving at `velocity`. */
+const ship = (velocity: THREE.Vector3) => ({ position: new THREE.Vector3(), velocity, mass: MASS.ship });
 
 describe('two ships meeting', () => {
   it('only bump below 15 m/s: no damage wherever they meet', () => {
@@ -44,7 +48,7 @@ describe('two ships meeting', () => {
     const a = new THREE.Vector3(1000, 0, 0);
     const b = new THREE.Vector3(-1000, 0, 0);
     const apart = new THREE.Vector3(1, 0, 0);
-    const closing = ram(a, b, apart, true, true);
+    const closing = ram(ship(a), ship(b), apart, true, true);
     expect(closing).toBe(2000);
     expect(a.x + b.x).toBeCloseTo(0);
     expect(a.x).toBeLessThan(0);
@@ -55,7 +59,7 @@ describe('two ships meeting', () => {
     const a = new THREE.Vector3(1000, 0, 0);
     const b = new THREE.Vector3(0, 0, 0);
     const before = b.clone();
-    ram(a, b, new THREE.Vector3(1, 0, 0), true, false);
+    ram(ship(a), ship(b), new THREE.Vector3(1, 0, 0), true, false);
     expect(b).toEqual(before);
     expect(a.x).toBeLessThan(1000);
   });
@@ -63,7 +67,7 @@ describe('two ships meeting', () => {
   it('leave ships alone that already move apart', () => {
     const a = new THREE.Vector3(-500, 0, 0);
     const b = new THREE.Vector3(500, 0, 0);
-    expect(ram(a, b, new THREE.Vector3(1, 0, 0), true, true)).toBe(0);
+    expect(ram(ship(a), ship(b), new THREE.Vector3(1, 0, 0), true, true)).toBe(0);
     expect(a.x).toBe(-500);
   });
 });

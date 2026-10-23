@@ -56,7 +56,7 @@ export function startFlight(start: THREE.Vector3, facing: THREE.Vector3, drift =
  */
 export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector3, facing: THREE.Vector3, skill: number, speed: number, limit: number, drift = 0): Flight {
   const flight = startFlight(start, facing, drift);
-  const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, allyOf: () => false } as unknown as Ship;
+  const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, allyOf: () => false } as unknown as Ship;
   const bot = new Bot(ship, evenSkills(skill));
   bot.raceSpeed = speed;
   const goal = new THREE.Vector3();
@@ -64,7 +64,7 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
     // as the game's racers do: along the line, and near a ring for its center where the way would clip the rim
     rings.line.target(flight.position, next % rings.line.gateCount, flight.velocity.length(), field, goal);
     bot.waypoint = rings.open ? goal : approachGate(rings.points[next], rings.normals[next], rings.radius, flight.position, flight.velocity, SHIP_RADIUS, goal);
-    return bot.think(seconds, [ship], field, [bot]);
+    return bot.think(seconds, [ship], field);
   }, limit);
 }
 

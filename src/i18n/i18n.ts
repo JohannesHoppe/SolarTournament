@@ -80,12 +80,13 @@ const sentences = (text: string) =>
 /**
  * Translates the page's fixed texts: every element with data-i18n (its English text is the
  * key, kept in the attribute the first time), and every attribute named in data-i18n-attr.
+ * Placeholders in the texts are filled from `params` (the handbook's numbers).
  */
-export function translatePage(root: ParentNode = document) {
+export function translatePage(root: ParentNode = document, params?: Record<string, string | number>) {
   for (const element of root.querySelectorAll<HTMLElement>('[data-i18n]')) {
     // a text that runs over several lines of the page is keyed as one line, as tools/i18n collects it
     element.dataset.i18n ||= element.innerHTML.replace(/\s+/g, ' ').trim();
-    const text = t(element.dataset.i18n);
+    const text = t(element.dataset.i18n, params);
     element.innerHTML = element.classList.contains('sentences') ? sentences(text) : text;
   }
   for (const element of root.querySelectorAll<HTMLElement>('[data-i18n-attr]')) {

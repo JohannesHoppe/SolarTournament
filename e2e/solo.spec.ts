@@ -52,6 +52,29 @@ test('the hangar sells an upgrade for Solar Coins and keeps it, and the Sovereig
   expect(errors).toEqual([]);
 });
 
+test('a hangar edited to what no Host can own is named on screen and not used, until it is put back or cleared', async ({ page, context }) => {
+  const errors = await openGame(page);
+  const insult = page.locator('#tampered');
+  await expect(insult).toBeHidden();
+  // edited in another tab: the storage event brings the insult at once
+  const other = await context.newPage();
+  await other.goto('/datenschutz.html');
+  const honest = await other.evaluate(() => localStorage.getItem('solartournament.hangar'));
+  await other.evaluate(() => localStorage.setItem('solartournament.hangar', JSON.stringify({ coins: 999_999_999, ship: 'human' })));
+  await expect(insult).toBeVisible();
+  await expect(insult).toContainText('CHEATER');
+  await expect(page.locator('#hangar-note')).not.toContainText('999');
+  // put back the way it was found: gone
+  await other.evaluate((entry) => (entry === null ? localStorage.removeItem('solartournament.hangar') : localStorage.setItem('solartournament.hangar', entry)), honest);
+  await expect(insult).toBeHidden();
+  // edited in the own tab, which raises no storage event, it is noticed all the same, and clearing the storage forgives it
+  await page.evaluate(() => localStorage.setItem('solartournament.hangar', JSON.stringify({ levels: { human: { drive: 7 } } })));
+  await expect(insult).toBeVisible();
+  await page.evaluate(() => localStorage.clear());
+  await expect(insult).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
 for (const course of ['basic', 'racer', 'gladiator', 'arsenal', 'tactician']) {
   test(`the flight school's ${course} course starts in the belt`, async ({ page }) => {
     const errors = await openGame(page);

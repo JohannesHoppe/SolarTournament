@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { contact, IMMOVABLE, MASS, share, type Body } from '../world/bodies';
 
 /** Impacts slower than this (units/s) only scratch the paint. */
 export const SAFE_IMPACT = 250;
@@ -13,24 +14,29 @@ const RESTITUTION = 0.3;
  */
 const FRICTION = 0.15;
 
-const relative = new THREE.Vector3();
+/** The way from the second ship of a ram to the first (see ram). */
+const toFirst = new THREE.Vector3();
+/** A body bouncing off a surface, and the surface, which does not move (see bounceOff). */
+const mover = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: 1 };
+const wall = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: IMMOVABLE };
 
 /**
  * A ship's `velocity` bounces off a surface moving at `moving` with the outward `normal`, and
- * scraping along it bleeds off some sideways speed; returns how fast it struck (units/s), 0
- * when it was moving away.
+ * scraping along it bleeds off some sideways speed (a contact with a body that does not move,
+ * see contact); returns how fast it struck (units/s), 0 when it was moving away. A livelier
+ * body than a ship's hull passes its own `restitution`.
  */
-export function bounceOff(velocity: THREE.Vector3, moving: THREE.Vector3, normal: THREE.Vector3): number {
-  relative.subVectors(velocity, moving);
-  const approach = -relative.dot(normal);
-  if (approach <= 0) return 0;
-  const push = approach * (1 + RESTITUTION);
-  velocity.addScaledVector(normal, push);
-  relative.subVectors(velocity, moving);
-  const slide = relative.addScaledVector(normal, -relative.dot(normal));
-  const sliding = slide.length();
-  if (sliding > 1e-6) velocity.addScaledVector(slide, -Math.min(1, (FRICTION * push) / sliding));
+export function bounceOff(velocity: THREE.Vector3, moving: THREE.Vector3, normal: THREE.Vector3, restitution = RESTITUTION): number {
+  mover.velocity.copy(velocity);
+  wall.velocity.copy(moving);
+  const approach = contact(mover, wall, normal, restitution, FRICTION, true, false);
+  velocity.copy(mover.velocity);
   return approach;
+}
+
+/** Two bodies bump, `normal` from b to a, each of them shoved by its share as a ship off a rock (see contact); returns how fast they closed. */
+export function bump(a: Body, b: Body, normal: THREE.Vector3, restitution = RESTITUTION, moveA = true, moveB = true): number {
+  return contact(a, b, normal, restitution, FRICTION, moveA, moveB);
 }
 
 /** The hull an impact this fast (units/s) takes. */
@@ -82,21 +88,16 @@ export function ramDamage(closing: number, zone: RamZone): { hull: number; drive
   return { hull, drive: 0, thrusters: zone === 'flank' ? Math.min(1, hull * RAM_THRUSTERS) : 0 };
 }
 
-/** The change of velocity each of two ships of equal mass takes when they close at `closing` (units/s). */
-export const ramImpulse = (closing: number) => (closing * (1 + RAM_RESTITUTION)) / 2;
+/** The change of velocity each of two ships takes when they close at `closing` (units/s): a bump of two bodies of the same mass (see contact). */
+export const ramImpulse = (closing: number) => closing * (1 + RAM_RESTITUTION) * share(MASS.ship, MASS.ship);
 
 /**
- * Two ships of equal mass meet: `apart` points from the first to the second (unit length). Their
- * velocities change by the same impulse in opposite directions, as two bodies of equal mass
- * that keep RAM_RESTITUTION of their closing speed apart; `first`/`second` say whose velocity
- * this browser changes (it runs that ship). Returns the closing speed (units/s), 0 when they
- * were already moving apart.
+ * Two ships meet: `apart` points from the first to the second (unit length). They bump as two
+ * bodies (see contact in world/bodies), keeping RAM_RESTITUTION of their closing speed apart,
+ * each taking its share by mass (half each, two interceptors); `first`/`second` say whose
+ * velocity this browser changes (it runs that ship). Returns the closing speed (units/s), 0
+ * when they were already moving apart.
  */
-export function ram(a: THREE.Vector3, b: THREE.Vector3, apart: THREE.Vector3, first: boolean, second: boolean): number {
-  const closing = relative.subVectors(a, b).dot(apart);
-  if (closing <= 0) return 0;
-  const impulse = ramImpulse(closing);
-  if (first) a.addScaledVector(apart, -impulse);
-  if (second) b.addScaledVector(apart, impulse);
-  return closing;
+export function ram(a: Body, b: Body, apart: THREE.Vector3, first: boolean, second: boolean): number {
+  return contact(a, b, toFirst.copy(apart).negate(), RAM_RESTITUTION, 0, first, second);
 }

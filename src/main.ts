@@ -21,7 +21,17 @@ async function start() {
   // the loading screen stays until the game stands, so a failure still has a place to show
   loading.hidden = true;
   if (import.meta.env.DEV) Object.assign(window, { game });
+  // the benchmark and the frame meter, loaded only when the address asks for them (see bench.ts)
+  const params = new URLSearchParams(location.search);
+  if (params.has('bench') || params.has('fps')) {
+    const bench = await import('./bench');
+    bench.showMeter(game);
+    if (params.has('bench')) void bench.runBench(game, Number(params.get('bench')) || BENCH_SECONDS);
+  }
 }
+
+/** Seconds per measurement of the benchmark, unless `?bench=<seconds>` says otherwise. */
+const BENCH_SECONDS = 3;
 
 start().catch((error) => {
   const loading = document.getElementById('loading')!;
