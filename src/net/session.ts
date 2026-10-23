@@ -603,18 +603,32 @@ export class Session {
    * might lead alone itself. When most of the live peers that follow another follow one peer, and
    * not the one this browser elects, that one's own claim is believed and the one it would have
    * elected lines up behind it; a browser that led alone starts over, behind them, and takes
-   * their world. A peer's vote for itself does not count, so a single liar never gets a majority;
-   * two browsers alone that reached each other only after settling cannot tell an honest older
-   * peer from a liar, and each keeps its own lead until a third joins them.
+   * their world. A peer's vote for itself does not count, so a single liar never gets a majority.
+   * Browsers that each lead alone (two that reached each other only after settling) have no vote
+   * between them: the one with the higher id steps back, as two that joined at once do, so they
+   * never play on in two worlds; a liar can take the lead of such a room of two this way, never
+   * one where others vote.
    */
   private reconcile() {
     const votes = new Map<string, number>();
     let reporters = 0;
+    let rival: string | null = null;
     for (const peer of this.peers) {
       const followed = this.follows.get(peer);
-      if (followed === undefined || followed === peer || !this.isLive(peer)) continue;
+      if (!this.isLive(peer) || followed === undefined) continue;
+      // another browser that leads by itself
+      if (followed === peer) {
+        if (rival === null || peer < rival) rival = peer;
+        continue;
+      }
       reporters++;
       votes.set(followed, (votes.get(followed) ?? 0) + 1);
+    }
+    // browsers that each lead alone, with nobody to vote between them, cannot tell an honest
+    // older one from a liar: they settle it as two that joined at once, the higher id steps back
+    if (reporters === 0 && rival !== null && this.isLead && rival < this.selfId) {
+      this.restart();
+      return;
     }
     let best: string | null = null;
     let most = 0;

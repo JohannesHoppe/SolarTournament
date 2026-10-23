@@ -54,19 +54,33 @@ describe('the lead browser', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('is not taken by a peer that shows up later claiming to be older, however low its id', () => {
+  it('is not taken by a peer that shows up later claiming to be older, however low its id, where others vote', () => {
     const { session, transport } = joined('z');
-    at(7);
-    session.tick();
+    frames(session, 1, 7, (time) => transport.states('h', time - 0.5, 'z'));
     expect(session.isLead).toBe(true);
     // a stranger says it has been here for hours and sends a round clock, as a lead does
-    for (const time of [8, 8.1, 8.2]) {
-      at(time);
-      transport.states('a', 10000, 'a', true);
-      session.tick();
-    }
+    frames(session, 7, 15, (time) => {
+      transport.states('h', time - 0.5, 'z');
+      transport.states('a', 10000 + time, 'a', true);
+    });
     expect(session.isLead).toBe(true);
     expect(session.leadId).toBe('z');
+  });
+
+  it('settles two browsers that each lead alone and meet only after settling: the higher id steps back', () => {
+    const higher = joined('z');
+    at(7);
+    higher.session.tick();
+    frames(higher.session, 7, 12, (time) => higher.transport.states('a', 20 + time, 'a', true));
+    expect(higher.session.isLead).toBe(false);
+    expect(higher.session.leadId).toBe('a');
+    at(0);
+    const lower = joined('a');
+    at(7);
+    lower.session.tick();
+    frames(lower.session, 7, 12, (time) => lower.transport.states('z', 20 + time, 'z', true));
+    expect(lower.session.leadId).toBe('a');
+    expect(lower.session.isLead).toBe(true);
   });
 
   it('is the one most of the others follow, for a newcomer a liar told it was older', () => {
