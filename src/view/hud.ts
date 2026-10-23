@@ -411,10 +411,10 @@ export class Hud {
     for (const each of LEVELS) setClass(this.escape, each, each === level);
   }
 
-  /** Tunnel vision under sustained acceleration, 0..1. */
+  /** Tunnel vision under sustained acceleration, 0..1: only hinted, the edges darken a little and close in a little, so the picture stays readable. */
   setStrain(strain: number) {
     this.vignette.style.opacity = String(strain);
-    this.vignette.style.setProperty('--tunnel', `${Math.round(70 - strain * 45)}%`);
+    this.vignette.style.setProperty('--tunnel', `${Math.round(75 - strain * 20)}%`);
   }
 
   /** A solar flare's heat on the screen, 0..1: its edges glow orange, then the whole picture. */

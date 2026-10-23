@@ -374,7 +374,7 @@ The laser draws no ammunition but produces heat. Each shot adds 20 % of the heat
 
 ### The pilot
 
-- **G-forces.** Above 3 g the pilot starts to grey out. A full burn (13 g) narrows the view to a tunnel within 5 seconds, the hardest turn of path steering at the speed limit (about 15 g) within about 4, with the pilot's heartbeat getting louder; 3 seconds without hard acceleration clear it again. On a phone the tunnel stays about twice as wide, since its picture is small to begin with.
+- **G-forces.** Above 3 g the pilot starts to grey out. A full burn (13 g) brings on the full strain within 5 seconds, the hardest turn of path steering at the speed limit (about 15 g) within about 4, with the pilot's heartbeat getting louder; 3 seconds without hard acceleration clear it again. The tunnel vision is only hinted, so the picture stays readable: the edges darken to at most 55 % and close in by a fifth of the screen; on a phone only the very edges darken, to at most 30 %.
 - **Line of sight.** Sensors need a clear line: a ship hidden behind an asteroid disappears from the HUD, and bots cannot see it either.
 
 ### Alarms

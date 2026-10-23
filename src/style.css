@@ -1322,7 +1322,7 @@ body.touch #hud-message {
   position: absolute;
   inset: 0;
   opacity: 0;
-  background: radial-gradient(ellipse at center, transparent var(--tunnel, 70%), rgba(0, 0, 0, 0.96) calc(var(--tunnel, 70%) + 25%));
+  background: radial-gradient(ellipse at center, transparent var(--tunnel, 75%), rgba(0, 0, 0, 0.55) calc(var(--tunnel, 75%) + 30%));
 }
 
 /* a solar flare's heat: the edges of the picture glow in the plasma's orange, the middle stays readable */
@@ -2559,9 +2559,9 @@ body.touch #transmission {
     display: none;
   }
 
-  /* the view narrows less under g-forces: a phone's picture is small to begin with */
+  /* under g-forces only the very edges of a phone's small picture darken, faintly */
   body.touch #g-vignette {
-    background: radial-gradient(ellipse at center, transparent calc(var(--tunnel, 70%) / 2 + 35%), rgba(0, 0, 0, 0.96) calc(var(--tunnel, 70%) / 2 + 60%));
+    background: radial-gradient(ellipse at center, transparent calc(var(--tunnel, 75%) / 2 + 45%), rgba(0, 0, 0, 0.3) calc(var(--tunnel, 75%) / 2 + 75%));
   }
 }
 
