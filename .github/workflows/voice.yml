@@ -45,7 +45,10 @@ jobs:
         with:
           node-version: 24
           cache: npm
-      - run: npm ci
+      # no install scripts: this job holds a token that writes to the repository, and nothing it
+      # runs needs one (onnxruntime-node and sharp ship their Linux binaries in their packages;
+      # onnxruntime-node's script would only fetch CUDA libraries, unchecked, and ffmpeg is not used)
+      - run: npm ci --ignore-scripts
       # the store of this language and Nicole's voice (voice print and reference), as far as the
       # release has them; a download that fails stops the job, so a store that is there is never
       # taken for an empty one and overwritten. Nicole's voice is shared by all three jobs: only a
