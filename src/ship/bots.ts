@@ -211,8 +211,6 @@ export class Bot {
   rings: readonly Ring[] = [];
   /** Set by the game in a race: the ring the racer flies through next, which it comes at on its own way (see Game.approach), not steering clear of it. */
   through: Ring | null = null;
-  /** Set by the game in a race: no faster than this into the next gate's turn (units/s; see CORNER_PUSH in game.ts). */
-  cornerSpeed = Infinity;
   /** Set by the game: the nearest probe, which an idle bot goes for. */
   lure: THREE.Vector3 | null = null;
   /** Set by the game: a ship the bot hunts wherever it is, seen or not. */
@@ -361,7 +359,7 @@ export class Bot {
     } else if (racing) {
       // through the next gate, at speed; what a gate's coil gave it, it keeps
       toTarget.subVectors(this.waypoint!, me.position);
-      desired.copy(toTarget).normalize().multiplyScalar(Math.min(this.cornerSpeed, Math.max(this.raceSpeed, Math.min(me.velocity.length(), this.raceSpeed + BOOST_PUSH))));
+      desired.copy(toTarget).normalize().multiplyScalar(Math.max(this.raceSpeed, Math.min(me.velocity.length(), this.raceSpeed + BOOST_PUSH)));
       if (target) this.senseJink(target, dt, now);
     } else if (target) {
       toTarget.subVectors(target.flight.position, me.position);
@@ -451,9 +449,11 @@ export class Bot {
       // a shot into the drive is worth the heat; at the armor a bot only snipes now and then,
       // single shots from a nearly cool laser, so it keeps the heat for the drive
       const open = target.tailToward(line.subVectors(target.flight.position, me.position));
-      // a racer flies first: single shots only, even at an open drive, unless it looks back
-      const heatLimit = open && (!racing || lookingBack) ? this.hotHeat : ARMOR_FIRE_HEAT;
-      controls.fire = (open || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
+      // a racer flies first: single shots only, even at an open drive, and only now and then
+      // (in its sniping spells), unless it looks back; the pack is a race, not a shooting gallery
+      const flying = racing && !lookingBack;
+      const heatLimit = open && !flying ? this.hotHeat : ARMOR_FIRE_HEAT;
+      controls.fire = ((open && !flying) || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
     } else if (sieging) {
       // a part of a battleship holds still: the nose on it, and fire while the laser allows
       me.steer(toTarget, 3, controls);

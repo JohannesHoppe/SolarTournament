@@ -123,16 +123,6 @@ const APPROACH_NEAR = 3000;
 const APPROACH_FAR = 4000;
 /** A racer passes a gate this many ship radii inside its rim (about 34 m), or flies for its center first (see approach). */
 const APPROACH_CLEAR = 2;
-/**
- * A racer within CORNER_REACH (units, 600 m) of its next gate whose way runs across the gate's
- * axis (the sine of the angle above CORNER_ACROSS, about 17°) slows to a speed it can still turn
- * onto the axis at by then: the square root of CORNER_PUSH (units/s², half the main drive)
- * times the distance over that sine; 164 m/s at 300 m and 45° off, 86 m/s at 100 m and 60°
- * off. Faster, it comes in sideways and strikes the housings.
- */
-const CORNER_REACH = 12000;
-const CORNER_ACROSS = 0.3;
-const CORNER_PUSH = MAIN_THRUST / 2;
 const CROWD_COUNT: Record<number, number> = { 3: 0.45, 2: 0.65, 1: 0.85 };
 /** A smaller moment's cheer lasts this long (s), then the stadium settles back to its murmur (0..1). */
 const CHEER_SECONDS = 1.5;
@@ -2881,10 +2871,9 @@ export class Game implements OnlineGame {
         bot.ease = this.online ? 0 : this.ease;
         // a racing bot flies the course until it has finished, then it only fights
         // along the ideal line, bowed around the rock as it lies now
-        bot.cornerSpeed = Infinity;
         bot.rings = this.rings;
         bot.through = this.course && ship.finish < 0 ? this.rings[ship.gates % GATES] : null;
-        bot.waypoint = this.course && ship.finish < 0 ? this.approach(this.course, bot, this.course.line.target(ship.flight.position, ship.gates % GATES, ship.flight.velocity.length(), this.field, this.botPoint(bot))) : null;
+        bot.waypoint = this.course && ship.finish < 0 ? this.approach(this.course, ship, this.course.line.target(ship.flight.position, ship.gates % GATES, ship.flight.velocity.length(), this.field, this.botPoint(bot))) : null;
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE)?.position ?? null;
         // a nova core close by, a battleship whose reactor went critical, the plume of one
         // hunting with its stern, a solar flare's front or a comet's route: away from it, out of
@@ -3245,20 +3234,11 @@ export class Game implements OnlineGame {
    * nearer the rim than APPROACH_CLEAR ship radii (or there already), it flies for the gate's
    * center; otherwise for its `waypoint`.
    */
-  private approach(course: Course, bot: Bot, waypoint: THREE.Vector3): THREE.Vector3 {
-    const ship = bot.ship;
+  private approach(course: Course, ship: Ship, waypoint: THREE.Vector3): THREE.Vector3 {
     const next = ship.gates % GATES;
     const gate = course.points[next];
     const axis = course.normals[next];
     const offset = toAim.subVectors(ship.flight.position, gate);
-    // the turn into the gate: a way that still runs across its axis has to come round to it
-    // before the gate, so the racer comes in no faster than it can turn (see CORNER_PUSH)
-    const distance = offset.length();
-    const speed = ship.flight.velocity.length();
-    if (distance < CORNER_REACH && speed > 1) {
-      const across = Math.sqrt(Math.max(0, 1 - (ship.flight.velocity.dot(axis) / speed) ** 2));
-      if (across > CORNER_ACROSS) bot.cornerSpeed = Math.sqrt((CORNER_PUSH * distance) / across);
-    }
     // the side it comes from: the gate counts either way
     const along = offset.dot(axis);
     if (Math.abs(along) > APPROACH_NEAR) return waypoint;
@@ -5057,6 +5037,7 @@ export class Game implements OnlineGame {
       cause: cause === 'knockout' || cause === 'ram' || !what ? (cause ?? 'unknown') : what,
       into: cause === 'knockout' ? (what ?? null) : null,
       killer: killer?.name ?? null,
+      range: killer ? Math.round(killer.flight.position.distanceTo(victim.flight.position) * METERS_PER_UNIT) : null,
       position: [Math.round(victim.flight.position.x * METERS_PER_UNIT), Math.round(victim.flight.position.y * METERS_PER_UNIT), Math.round(victim.flight.position.z * METERS_PER_UNIT)],
       speed: Math.round(victim.flight.velocity.length() * METERS_PER_UNIT),
       impact: Math.round(impact * METERS_PER_UNIT),

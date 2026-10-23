@@ -44,6 +44,8 @@ export interface DeathEvent {
   /** For a knockout: what the shoved ship crashed into. */
   into: string | null;
   killer: string | null;
+  /** How far the killer was (m). */
+  range: number | null;
   /** Position (m), speed (m/s) and the speed of the impact that killed it (m/s; 0 when nothing struck). */
   position: [number, number, number];
   speed: number;
