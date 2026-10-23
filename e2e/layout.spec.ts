@@ -13,47 +13,56 @@ const SCREENS = [
   { width: 800, height: 360 },
 ];
 
-/** The pieces that must keep apart; a group's members (the alarm column) may stack, not overlap. */
-const PIECES = ['.hud-top', '#hud-room', '#school-panel', '#hud-split', '#hud-alerts > *', '#transmission', '#radar', '.hud-bottom', '#killfeed', '#now-playing', '.touch-button'];
+/**
+ * The pieces that must keep apart; a group's members (the alarm column) may stack, not overlap.
+ * The names beside the arrows of ships off screen keep apart from them and from each other.
+ */
+const PIECES = ['.hud-top', '#hud-room', '#school-panel', '#hud-split', '#hud-alerts > *', '#transmission', '#radar', '.hud-bottom', '#killfeed', '#now-playing', '.touch-button', '.marker.offscreen:not(.crowded) .tag'];
 
-/** Fills the HUD and returns every pair of its pieces that overlap, with their boxes. */
+/**
+ * Fills the HUD and returns every pair of its pieces that overlap, with their boxes; in a round
+ * with rivals, they fly off screen all around, some bunched at one edge, and on the wide screen
+ * at least one name must stand beside its arrow (on the small one, filled this full, the HUD may
+ * leave a name no room: then its arrow goes alone).
+ */
 async function overlaps(page: Page, touch: boolean): Promise<string[]> {
   return page.evaluate(
     async ([pieces, touch]) => {
       const game = window.game;
+      // the HUD's own measure of what a piece shows, as the dev server serves it
+      const inkModule: string = '/src/view/ink.ts';
+      const { ink } = (await import(inkModule)) as typeof import('../src/view/ink');
       document.body.classList.toggle('touch', touch);
       game.hud.flashMessage(game.time, 'Missed gate 3: turn back and fly through it', 100);
       await new Promise((resolve) => requestAnimationFrame(resolve));
       await new Promise((resolve) => requestAnimationFrame(resolve));
       game.timeScale = 0;
       const Vector = game.camera.position.constructor;
+      const camera = game.camera;
+      const rivals = game.ships.filter((ship: { id: string }) => ship !== game.me);
+      // four bunched just past the right edge, the others behind, all around; placed anew where the camera looks now
+      const place = () =>
+        rivals.forEach((ship: Record<string, any>, i: number) => {
+          const angle = (i * 2 * Math.PI) / rivals.length;
+          const offset = i < 4 ? new Vector(1500, 0, -600 + i * 120) : new Vector(Math.cos(angle) * 900, Math.sin(angle) * 900, 1500);
+          ship.alive = true;
+          ship.respawnAt = Infinity;
+          // in the camera's frame as the markers project it (the tests switch rendering off, which would update it)
+          ship.flight.position.copy(offset.applyMatrix4(camera.matrixWorld));
+        });
+      place();
       const alarm = (id: string, level: string, text: string) => ({ id, level, text, direction: new Vector(1, 0, 0), hasDirection: true, seconds: 3.2, tone: null, active: true, was: level });
       game.hud.setAlarms([alarm('impact', 'critical', 'IMPACT'), alarm('torpedo', 'warning', 'TORPEDO INBOUND'), alarm('laser', 'caution', 'LASER OVERHEATED')], game.camera);
       const box = document.getElementById('transmission')!;
       box.hidden = false;
       document.getElementById('transmission-speaker')!.textContent = 'The Orange President';
       document.getElementById('transmission-text')!.textContent = 'Very stable orbit. Very stable genius. The best games, believe me, the very best.';
+      // the HUD measures its pieces for the names at the edge twice a second: let it see these
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      place();
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      await new Promise((resolve) => requestAnimationFrame(resolve));
       type Box = { left: number; top: number; right: number; bottom: number };
-      const join = (a: Box | null, b: Box | null): Box | null => (!a ? b : !b ? a : { left: Math.min(a.left, b.left), top: Math.min(a.top, b.top), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom) });
-      const range = document.createRange();
-      /** What an element shows on screen: its whole box where it draws one (a plate, a canvas, a button), else the text and children inside it. */
-      const ink = (element: Element): Box | null => {
-        const style = getComputedStyle(element);
-        if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return null;
-        const rect = element.getBoundingClientRect();
-        if (rect.width < 1 || rect.height < 1) return null;
-        const drawn = element.matches('canvas, button') || !/rgba\(0, 0, 0, 0\)|transparent/.test(style.backgroundColor) || parseFloat(style.borderTopWidth) + parseFloat(style.borderLeftWidth) > 0;
-        if (drawn) return rect;
-        let box: Box | null = null;
-        for (const node of element.childNodes) {
-          if (node.nodeType === Node.TEXT_NODE && node.textContent!.trim()) {
-            range.selectNodeContents(node);
-            const r = range.getBoundingClientRect();
-            if (r.width > 0) box = join(box, r);
-          } else if (node instanceof Element) box = join(box, ink(node));
-        }
-        return box;
-      };
       const found: { name: string; rect: Box }[] = [];
       for (const selector of pieces) {
         document.querySelectorAll<HTMLElement>(selector).forEach((element, i) => {
@@ -73,6 +82,9 @@ async function overlaps(page: Page, touch: boolean): Promise<string[]> {
           if (x > 1 && y > 1) pairs.push(`${found[a].name} ${box2(p)} × ${found[b].name} ${box2(q)}`);
         }
       }
+      // (a solar storm of the Corona blinds the sensors: then no ship has an arrow at all)
+      const arrows = document.querySelectorAll('.marker.offscreen').length;
+      if (arrows && innerWidth >= 1000 && !found.some(({ name }) => name.includes('.tag'))) pairs.push(`none of ${arrows} ships off screen has its name beside its arrow`);
       box.hidden = true;
       game.timeScale = 1;
       return pairs;

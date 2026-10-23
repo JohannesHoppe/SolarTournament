@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { cleanName, fieldState, flagsState, fleetState, ids, shipState, wreckStates } from './validate';
+import { TINTS } from '../ship/tints';
 
 const ship = {
   id: 'p:abc',
@@ -14,7 +15,7 @@ const ship = {
   tr: 1,
   pr: 0,
 };
-const slow = { n: 'Nova', k: 'alien', s: 500, ki: 1, de: 2, g: 3, fi: -1, it: 3, lo: 6 };
+const slow = { n: 'Nova', k: 'alien', s: 500, ki: 1, de: 2, g: 3, fi: -1, it: 3, lo: 6, co: 2 };
 
 describe('messages from other browsers', () => {
   it('take a valid ship state, with or without its slow part', () => {
@@ -32,6 +33,11 @@ describe('messages from other browsers', () => {
     expect(shipState({ ...ship, p: [1, 2, Infinity] })).toBeNull();
     expect(shipState({ ...ship, q: [0, 0, 0, 0] })).toBeNull();
     expect(shipState({ ...ship, ...slow, it: 16 })).toBeNull();
+  });
+
+  it("take a Host's tint only as an entry of the palette, never as a color of its own", () => {
+    expect(shipState({ ...ship, ...slow, co: TINTS.length - 1 })?.co).toBe(TINTS.length - 1);
+    for (const co of [-1, TINTS.length, 1.5, '#000000', null]) expect(shipState({ ...ship, ...slow, co })).toBeNull();
   });
 
   it('drop a field snapshot without its arena', () => {

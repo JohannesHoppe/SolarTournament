@@ -437,11 +437,17 @@ export class Session {
    * cheater (see Online.accuse): a browser cannot buy itself a place by saying it flies.
    */
   seated(peer: string): boolean {
-    const joined = peer === this.selfId ? this.startedAt : this.peerJoinedAt.get(peer);
-    if (joined === undefined) return false;
+    const joined = this.joinedTime(peer);
+    if (joined === Infinity) return false;
     let earlier = peer !== this.selfId && this.startedAt < joined ? 1 : 0;
     for (const other of this.peers) if (other !== peer && (this.peerJoinedAt.get(other) ?? Infinity) < joined) earlier++;
     return earlier < TOURNAMENT_SIZE;
+  }
+
+  /** When a peer (or this browser) joined or last started over, on this browser's clock (s); Infinity for one not heard of. */
+  joinedTime(peer: string | null): number {
+    if (peer === this.selfId) return this.startedAt;
+    return (peer === null ? undefined : this.peerJoinedAt.get(peer)) ?? Infinity;
   }
 
   /** This peer only just entered the room and does not know the others yet. */

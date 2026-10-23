@@ -27,6 +27,7 @@ const world = (page: Page) =>
       round: game.roundId,
       ships: game.ships.map((ship: { id: string }) => ship.id).sort(),
       rocks: [...game.field.asteroids.keys()].sort(),
+      tints: game.ships.map((ship: { id: string; tint: string; kind: string }) => `${ship.kind} ${ship.id} ${ship.tint}`).sort(),
     };
   });
 
@@ -38,6 +39,10 @@ test('two tabs of one tournament see the same world', async ({ context }) => {
   expect(seenB.rocks).toEqual(seenA.rocks);
   // each sees both Hosts' ships and the lead's bots
   expect(seenB.ships).toEqual(seenA.ships);
+  // both tabs chose the same tint (one browser, one storage): both see the later one in another
+  expect(seenB.tints).toEqual(seenA.tints);
+  const hosts = seenA.tints.filter((entry: string) => entry.startsWith('host '));
+  expect(new Set(hosts.map((entry: string) => entry.split(' ')[2])).size).toBe(2);
   expect(errors).toEqual([]);
   // honest tabs never take each other for cheats
   for (const page of [a, b]) expect(await page.evaluate(() => window.game.online.reported.size)).toBe(0);

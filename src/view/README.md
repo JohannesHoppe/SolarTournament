@@ -4,7 +4,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 
 | File | What it does |
 |---|---|
-| `hud.ts` | The flight computer's projection: gauges, markers (the next ring's brackets and where the flight crosses its plane among them), the alarms and the escape gauge, the round's panel, the boot of a fresh clone's link; writes the DOM only when a value changes |
+| `hud.ts` | The flight computer's projection: gauges, markers (the next ring's brackets and where the flight crosses its plane among them; the ships' markers, their arrows at the screen's edge with the ships' names placed clear of each other and of the HUD), the alarms and the escape gauge, the round's panel, the boot of a fresh clone's link; writes the DOM only when a value changes |
 | `attitude.ts` | Horizon line, pitch ladder and heading tape on a canvas, as in a fighter's head-up display |
 | `radar.ts` | The radar sphere on a canvas |
 | `effects.ts` | Particles and laser beams, pooled |
@@ -17,6 +17,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `lensing.ts` | The black hole's gravitational lens |
 | `textures.ts` | Canvas textures: glows, sparks, smoke, and the canvas every texture drawn in code starts from; the running light of the neon trim |
 | `surfaces.ts` | The surfaces of everything built in code: worn depot paint (and where its lacquer is gone), the world ship's craters and burns, the battleship's gleam, the rings' plating; texture coordinates for flat faces, the reflection map |
-| `marks.ts` | The bot or Host mark before a name |
+| `marks.ts` | The bot or Host mark before a name, and the swatch of a pilot's tint beside it |
+| `ink.ts` | What an element shows on screen (its plate, or the text and children inside it): the HUD keeps the names at the edge clear of it, the layout test measures by it |
 
 The styles of all of it live in `src/style.css`.

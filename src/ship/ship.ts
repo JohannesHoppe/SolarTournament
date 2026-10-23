@@ -7,6 +7,7 @@ import { TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
 import { STOCK, type Perks } from '../game/hangar';
 import { runningLight } from '../view/textures';
+import { botTint, SOVEREIGN_TINT, TINTS } from './tints';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
@@ -132,11 +133,12 @@ export type ShipState = {
   it?: number;
   /** the looks of its upgrades: 4 × the neon trim's step + the drive flame's (see Perks) */
   lo?: number;
+  /** the tint its Host chose, an index into TINTS (see Ship.wish) */
+  co?: number;
   /** remaining spawn protection (s) */
   pr: number;
 };
 
-let shipCounter = 0;
 const force = new THREE.Vector3();
 const torque = new THREE.Vector3();
 const inverse = new THREE.Quaternion();
@@ -173,7 +175,12 @@ export class Ship {
   readonly root = new THREE.Group();
   readonly model: THREE.Object3D;
   readonly radius: number;
-  readonly color: THREE.Color;
+  /** The color of its laser: its tint (see setTint). */
+  readonly color = new THREE.Color();
+  /** What it is marked in (CSS color, see tints.ts): a Host's tint as the round assigns it, a bot's own, the Sovereign's ivory. */
+  tint = '';
+  /** The tint its Host chose, an index into TINTS; two Hosts who chose the same one are told apart by assignTints. */
+  wish = TINTS.length - 1;
   /** Laser holes; they vent air for a few seconds and spark until the ship respawns. */
   readonly holes: Hole[] = [];
   /** Push and spin from venting air, in ship space, applied in the next update. */
@@ -273,7 +280,7 @@ export class Ship {
     this.trim = { strips: this.model.getObjectByName('trim')!, stern: this.model.getObjectByName('trimStern')!, light, running };
     this.radius = sharedRadius(assets);
     this.frames = assets.textures.flameFrames;
-    this.color = new THREE.Color().setHSL((shipCounter++ * 0.137 + (type === 'alien' ? 0.33 : 0.55)) % 1, 0.8, 0.6);
+    this.setTint(this.kind === 'host' ? TINTS[this.wish].hex : botTint(name));
     this.root.add(this.model);
     this.engine = this.findEngine(assets.textures.glow);
     this.root.name = 'ship:' + id;
@@ -287,6 +294,19 @@ export class Ship {
    * trim (TRIM_BRIGHTNESS: light strips along both flanks, then across the stern too, then with a
    * running light towards the drives) and its drive flame's color.
    */
+  /** The Sovereign, the President's gift: marked in its own ivory and gold, which no Host can pick. */
+  get sovereign() {
+    return this.type === 'sovereign';
+  }
+
+  /** Marks the ship in a tint (a Host's in the round, see Game.tintShips); the Sovereign always wears its ivory. */
+  setTint(hex: string) {
+    const tint = this.sovereign ? SOVEREIGN_TINT : hex;
+    if (tint === this.tint) return;
+    this.tint = tint;
+    this.color.set(tint);
+  }
+
   outfit(perks: Perks) {
     this.perks = perks;
     if (this.engine.flameMaterial) this.engine.flameMaterial.color.copy(FLAME_TINTS[perks.flame]);
@@ -405,7 +425,7 @@ export class Ship {
     const f = this.flight;
     const round = (v: { toArray(): number[] }, digits = 0) => v.toArray().map((x) => +x.toFixed(digits));
     const items = packItems(this.twin, this.plating, this.nova);
-    const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}|${this.gates}|${this.finish}|${items}`;
+    const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}|${this.gates}|${this.finish}|${items}|${this.wish}`;
     const withSlow = full || slow !== this.slowSent || now - this.slowSentAt >= SLOW_STATE_SECONDS;
     if (withSlow) {
       this.slowSent = slow;
@@ -413,7 +433,7 @@ export class Ship {
     }
     return {
       id: this.id,
-      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items, lo: this.perks.neon * 4 + this.perks.flame } : {}),
+      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items, lo: this.perks.neon * 4 + this.perks.flame, co: this.wish } : {}),
       p: round(f.position),
       v: round(f.velocity, 1),
       q: round(f.orientation, 4),
@@ -454,6 +474,8 @@ export class Ship {
       const neon = state.lo! >> 2;
       const flame = state.lo! & 3;
       if (neon !== this.perks.neon || flame !== this.perks.flame) this.outfit({ ...STOCK, neon, flame });
+      // the tint it chose; which one it flies in, the round decides (see Game.tintShips)
+      this.wish = state.co!;
     }
     if (state.a && !this.alive) {
       // the owner booted a new clone

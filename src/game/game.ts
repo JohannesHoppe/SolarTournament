@@ -25,7 +25,8 @@ import { showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls } from '../input/input';
 import { MAX_HEAT, Ship, type ShipState, type Zone } from '../ship/ship';
 import { gripOf, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, PathSteering, RCS_THRUST } from '../ship/flight';
-import { Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
+import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
+import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS } from '../ship/tints';
 import { Online, type OnlineGame } from '../net/online';
 import { Lobby, type Listing } from '../net/lobby';
 import { newRoom, roomFragment, roomFromFragment, type Room } from '../net/room';
@@ -57,7 +58,7 @@ import { COMET_SPEED, COMET_WARNING, cometEnd, cometsOf, cometStart, CometView, 
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
 import { FlareView } from '../world/flare';
-import { markedName } from '../view/marks';
+import { markedName, swatch } from '../view/marks';
 import { Coach, type Tip } from './coach';
 import {
   ALARM_RANK,
@@ -86,6 +87,8 @@ import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i
 const RESULTS_SECONDS = 12;
 /** The standings held open with Tab are written anew this often (s, real time). */
 const STANDINGS_REFRESH = 0.25;
+/** The Hosts' tints are settled anew this often (s, real time, see Game.tintShips). */
+const TINT_SECONDS = 0.5;
 /**
  * Once a round is decided before its time (every Host has finished the race, one ship is left
  * standing, a side has captured enough, the battleship went up), it ends this many seconds
@@ -917,6 +920,10 @@ export class Game implements OnlineGame {
   private screenSince = 0;
   /** When the standings held open with Tab are written next (real time, s). */
   private standingsAt = 0;
+  /** When the Hosts' tints are settled next (s, real time, see tintShips). */
+  private tintedAt = 0;
+  /** The tint the Host chose in the menu, an index into TINTS. */
+  private tint = loadTint();
   /** Online round whose scoreboard has been shown and announced. */
   private resultsShownFor: number | null = null;
   /** Rock hits from other browsers for a round this browser has not started yet. */
@@ -1067,6 +1074,21 @@ export class Game implements OnlineGame {
     const callsign = $<HTMLInputElement>('callsign');
     callsign.value = storageGet(CALLSIGN_KEY) ?? '';
     callsign.placeholder = t('Host');
+    // the Host's tint, one of the palette's
+    $('tints').append(
+      ...TINTS.map((tint, index) => {
+        const button = Object.assign(document.createElement('button'), { type: 'button', title: t(tint.name) });
+        button.setAttribute('role', 'radio');
+        button.setAttribute('aria-label', t(tint.name));
+        button.style.setProperty('--tint', tint.hex);
+        button.addEventListener('click', () => {
+          this.tint = index;
+          saveTint(index);
+          this.renderTints();
+        });
+        return button;
+      }),
+    );
     // the languages, each named in itself
     $('languages').append(
       ...LOCALES.map((locale) => {
@@ -1253,7 +1275,7 @@ export class Game implements OnlineGame {
     );
     $('solo-bots').append(
       ...BOT_NAMES.map((name) =>
-        button(`${name}${skillScales(skillsOf(name))}`, () => {
+        button(`${swatch(botTint(name)).outerHTML}${name}${skillScales(skillsOf(name))}`, () => {
           const rivals = this.solo.rivals;
           if (rivals.includes(name)) rivals.splice(rivals.indexOf(name), 1);
           else if (rivals.length < TOURNAMENT_SIZE - 1) rivals.push(name);
@@ -2063,6 +2085,8 @@ export class Game implements OnlineGame {
     $('hud-room').textContent = '';
 
     this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, this.selectedShip, true);
+    this.me.wish = this.tint;
+    this.me.setTint(TINTS[this.tint].hex);
     // the own ship flies with its upgrades, online only up to their cap
     this.me.outfit(perksOf(this.hangar, this.selectedShip, !!this.online));
     this.ghost.wear(this.assets.ships[this.selectedShip]);
@@ -2153,6 +2177,19 @@ export class Game implements OnlineGame {
   /** The announcer opens the broadcast from the arena of the round. */
   private openBroadcast() {
     this.radio.announce(pick([ANNOUNCER_ARENA[this.venue.id], ...ANNOUNCER_OPEN]), null);
+  }
+
+  /**
+   * Settles the tints of the round's Hosts (see assignTints) in the order they joined the
+   * tournament, so every browser comes to the same; the Sovereign and the bots keep their own.
+   * Join times settle over the first seconds in a room, so it runs again every TINT_SECONDS.
+   */
+  private tintShips(now: number) {
+    this.tintedAt = now + TINT_SECONDS;
+    const hosts = this.ships.filter((ship) => ship.kind === 'host' && !ship.sovereign);
+    const session = this.online?.session;
+    if (session) hosts.sort((a, b) => session.joinedTime(ownerOf(a.id)) - session.joinedTime(ownerOf(b.id)) || (a.id < b.id ? -1 : 1));
+    assignTints(hosts.map((ship) => ship.wish)).forEach((index, i) => hosts[i].setTint(TINTS[index].hex));
   }
 
   private addShip(id: string, name: string, type: ShipType, isLocal: boolean): Ship {
@@ -2645,6 +2682,18 @@ export class Game implements OnlineGame {
     $('ship-note').textContent = locked ? t('Make both interceptors complete in the hangar, and it is yours.') : ship === this.selectedShip ? t('Your ship') : '';
     $('hangar-note').textContent = t('{coins} Solar Coins · upgrade your ships', { coins: coinText(this.hangar.coins) });
     if (this.inHangar) this.renderHangar();
+    this.renderTints();
+  }
+
+  /** Marks the Host's tint in the menu and names it; the Sovereign flies in its own ivory and gold instead. */
+  private renderTints() {
+    const sovereign = this.selectedShip === 'sovereign';
+    [...$('tints').children].forEach((button, i) => {
+      button.classList.toggle('selected', i === this.tint);
+      button.setAttribute('aria-checked', String(i === this.tint));
+    });
+    $('tints').classList.toggle('sovereign', sovereign);
+    $('tint-name').textContent = sovereign ? t('The Sovereign flies in ivory and gold') : t(TINTS[this.tint].name);
   }
 
   /** The next or the previous ship on show; one that is earned is the one the Host flies. */
@@ -2710,7 +2759,7 @@ export class Game implements OnlineGame {
       const row = table.insertRow();
       row.classList.toggle('me', ship === this.me);
       row.insertCell().textContent = String(i + 1);
-      row.insertCell().append(...markedName(ship.kind, ship.name));
+      row.insertCell().append(swatch(shownTint(ship), ship.sovereign), ...markedName(ship.kind, ship.name));
       if (race) row.insertCell().textContent = ship.finish >= 0 ? t('{time} s', { time: ship.finish.toFixed(1) }) : t('Lap {lap}/{laps}', { lap: lapOf(ship.gates), laps: LAPS });
       if (survival) row.insertCell().textContent = isOut(ship) ? t('Out') : t('{n} left', { n: clonesLeft(ship) });
       if (flags) {
@@ -2973,6 +3022,7 @@ export class Game implements OnlineGame {
     this.flags?.view(this.camera, subject, this.cockpit, dt);
     // its gauges too: the own clone is not printed while the Host watches
     this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
+    if (wallClock() >= this.tintedAt) this.tintShips(wallClock());
     // a solar storm blinds the sensors: no ship shows a marker
     this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight);
     this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
@@ -3609,7 +3659,7 @@ export class Game implements OnlineGame {
       title: t(MODE_NAMES[this.roundMode]),
       arena: t(this.venue.name),
       tagline: t(this.venue.tagline),
-      pilots: pilots.map((ship) => ({ name: ship.name, kind: ship.kind, skills: ship.kind === 'bot' ? skillScales(skillsOf(ship.name)) : '', own: ship === this.me })),
+      pilots: pilots.map((ship) => ({ name: ship.name, kind: ship.kind, tint: shownTint(ship), sovereign: ship.sovereign, skills: ship.kind === 'bot' ? skillScales(skillsOf(ship.name)) : '', own: ship === this.me })),
       skip: t('Skip'),
       onSkip: () => this.skipIntro(),
     });
