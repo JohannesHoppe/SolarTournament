@@ -108,7 +108,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `world/belt.ts` | The asteroid belt beyond the arena: instanced low-detail rocks as scenery |
 | `world/arenas.ts` | The seven arenas (belt, rings, Kessler field, gas giant, corona, event horizon, derelict): field layout, well, sun, cooling, storms; which arena a tournament round is in |
 | `world/asteroids.ts` | The field of an arena: rocks, ice, debris or hull from a layout, orbits, solid pieces, a massive body (well); collision with a rock's measured surface, a debris ellipsoid or a hull box, raycast, line of sight, gravity, fragments |
-| `world/gates.ts` | A ring of the tournament as a structure: armored coil housings with glowing windings, conduits, struts with blinking lights, a station module; shared by the race's gates, the flight school's rings and Capture the Flag's bases |
+| `world/gates.ts` | A ring of the tournament as a structure: armored coil housings with glowing windings, conduits, struts with blinking lights, a station module, all solid (touchRing); shared by the race's gates, the flight school's rings and Capture the Flag's bases |
 | `world/boxes.ts` | Boxes in their own frame: a sphere against a box, a ray into a box (the hull of a wreck, a battleship) |
 | `world/surface.ts` | A rock's surface as its collisions see it: measured from its mesh, how far it reaches in every direction |
 | `world/shapes.ts` | The field shapes besides rock: ice, station debris, the world ship's hull sections (with computed collider boxes) |
@@ -119,7 +119,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `ship/models.ts` | The interceptors' hulls, low poly in code; collider, drive flame and glows come from the model files |
 | `ship/ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, drive animation |
 | `ship/flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`) |
-| `ship/impact.ts` | A ship striking a surface: how it bounces off and scrapes along, and what the impact costs its hull |
+| `ship/impact.ts` | A ship striking a surface: how it bounces off and scrapes along, and what the impact costs its hull; two ships ramming: their bounce and what a ram costs by where it strikes |
 | `ship/bots.ts` | Bot AI: desired velocity, turn and burn, dogfights in arcs, aiming with spread, a hand that eases every command in; every bot's skills (aim, reflexes, daring) |
 | **`view/`** | **What the screen shows** |
 | `view/hud.ts` | DOM HUD, the flight computer's projection: gauges, markers, warnings, tunnel vision, the boot of a fresh clone's link |

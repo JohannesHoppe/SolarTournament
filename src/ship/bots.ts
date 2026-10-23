@@ -69,6 +69,17 @@ export const HOME_RADIUS = 50000;
  */
 const WELL_MARGIN = 15000;
 const WELL_PULL = 0.3;
+/**
+ * Bots do not ram by accident. They look KEEP_CLEAR_AHEAD seconds ahead: another ship whose way
+ * comes closer to theirs than KEEP_CLEAR ship radii (about 85 m) within that time (a racer a
+ * coil throws onto the one ahead, two fighters circling each other) pushes the bot's wanted
+ * velocity off the point where they would meet, up to KEEP_CLEAR_PUSH (units/s, 40 m/s) for a
+ * dead-center meeting; a ship already that close and closing pushes it straight away. Gentle
+ * enough that a racer stays near its line, clear of the rock beside it.
+ */
+const KEEP_CLEAR = 5;
+const KEEP_CLEAR_AHEAD = 1;
+const KEEP_CLEAR_PUSH = 800;
 
 const toTarget = new THREE.Vector3();
 const desired = new THREE.Vector3();
@@ -332,6 +343,7 @@ export class Bot {
     // a nova core close by: away from it, at full speed, with the main drive (see burning)
     if (this.flee) desired.copy(local.subVectors(me.position, this.flee).normalize()).multiplyScalar(CRUISE_SPEED * 2);
     if (me.position.length() > this.home) desired.addScaledVector(me.position, -CRUISE_SPEED / me.position.length());
+    this.keepClear(ships);
     // a massive body pulls: near it, away from it comes first
     const well = field.well;
     let falling = false;
@@ -404,6 +416,27 @@ export class Bot {
       controls.strafeX = this.dodge;
     }
     return this.byHand(controls, dt);
+  }
+
+  /** Off the way of any ship the bot would meet soon (see KEEP_CLEAR): the wanted velocity bends away from where they would come closest. */
+  private keepClear(ships: readonly Ship[]) {
+    const me = this.ship.flight;
+    const clear = this.ship.radius * KEEP_CLEAR;
+    for (const ship of ships) {
+      if (ship === this.ship || !ship.alive) continue;
+      // where the other ship is, and how fast the two close, as the bot sees it
+      local.subVectors(me.position, ship.flight.position);
+      line.subVectors(me.velocity, ship.flight.velocity);
+      const speed2 = line.lengthSq();
+      // the moment they come closest, within the look ahead (now, when they already part)
+      const when = speed2 > 1 ? THREE.MathUtils.clamp(-local.dot(line) / speed2, 0, KEEP_CLEAR_AHEAD) : 0;
+      local.addScaledVector(line, when);
+      const miss = local.length();
+      if (miss >= clear) continue;
+      if (miss < 1e-6) local.set(0, 1, 0);
+      else local.divideScalar(miss);
+      desired.addScaledVector(local, KEEP_CLEAR_PUSH * (1 - miss / clear));
+    }
   }
 
   /** A ship the bot may fight: alive, not its own, not of its side, and past its spawn protection (a freshly printed clone is left alone). */

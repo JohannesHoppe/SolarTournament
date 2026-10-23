@@ -9,7 +9,7 @@ The arena a round is fought in. Everything that every browser must build alike (
 | `rocks.ts` | Generates the 16 asteroid shapes with integer math, identical on every browser |
 | `surface.ts` | A rock's measured surface, as collisions see it |
 | `shapes.ts` | Ice, station debris and the world ship's hull sections |
-| `gates.ts` | The rings of the tournament as structures (coil housings, windings, struts, lights), shared by race gates, school rings and Capture the Flag bases |
+| `gates.ts` | The rings of the tournament as structures (coil housings, windings, struts, lights, a station module with a sponsor's plate), all solid but the lights, shared by race gates, school rings and Capture the Flag bases |
 | `boxes.ts` | A sphere or a ray against a box (wreck and battleship hulls) |
 | `wrecks.ts` | The pieces a destroyed ship breaks into |
 | `arena.ts` | The arena's edge and its grid |

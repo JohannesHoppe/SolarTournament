@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { boxContact } from './boxes';
 
 /**
  * A ring of the tournament as a structure in space: an electromagnetic coil built like the
@@ -9,8 +10,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
  * position lights, and on top sits a small station module with a sponsor's plate.
  *
  * Everything lies outside the opening (`radius`), so the rules of a ring stay those of its
- * radius alone. The housings are solid (see touchRing): flying through the opening is the
- * point, flying into the coil wrecks a ship like a rock does; struts and module are scenery.
+ * radius alone. All of it is solid but the lights and the windings' glow (see touchRing): flying
+ * through the opening is the point; flying into the coil, a strut, the module or its plate is a
+ * crash like one into rock.
  */
 const SEGMENTS = 10;
 /** Share of each segment's arc that is housing; the rest is the gap a conduit bridges. */
@@ -34,14 +36,106 @@ const matrix = new THREE.Matrix4();
 const offset = new THREE.Vector3();
 const outward = new THREE.Vector3();
 
+/** A block of a ring: `width` along the ring, `height` outward, `depth` along its axis, its center `out` from the ring's center at `angle` around the axis and `along` it. */
+interface Part {
+  width: number;
+  height: number;
+  depth: number;
+  angle: number;
+  out: number;
+  along: number;
+}
+
+/** The station module on top (two blocks) of a ring whose housings start at `inner`. */
+function moduleParts(inner: number): Part[] {
+  const top = Math.PI / 2;
+  return [
+    { width: 700, height: 260, depth: 300, angle: top, out: inner + THICKNESS + 130, along: 0 },
+    { width: 260, height: 180, depth: 220, angle: top, out: inner + THICKNESS + 350, along: 0 },
+  ];
+}
+
+/** The module's sponsor plates, facing along the axis both ways. */
+function plateParts(inner: number): Part[] {
+  const top = Math.PI / 2;
+  return [-1, 1].map((side) => ({ width: 560, height: 140, depth: 8, angle: top, out: inner + THICKNESS + 140, along: side * 154 }));
+}
+
+/** The four struts between housings, out to the position lights, each with the cap the light sits on. */
+function strutParts(inner: number): Part[] {
+  const step = (Math.PI * 2) / SEGMENTS;
+  const parts: Part[] = [];
+  for (let i = 0; i < 4; i++) {
+    const angle = (i + 0.5) * (Math.PI / 2) + step / 2;
+    parts.push({ width: 60, height: STRUT, depth: 60, angle, out: inner + THICKNESS + STRUT / 2, along: 0 });
+    parts.push({ width: 140, height: 100, depth: 140, angle, out: inner + THICKNESS + STRUT, along: 0 });
+  }
+  return parts;
+}
+
+/** A solid part as collisions see it: its center in the ring's frame, half its extents, and its turn about the axis (and back). */
+type SolidPart = { center: THREE.Vector3; half: THREE.Vector3; turn: THREE.Quaternion; back: THREE.Quaternion };
+/** The solid parts beyond the band of a ring of each opening radius, built once. */
+const solids = new Map<number, { parts: SolidPart[]; reach: number }>();
+
+function solidParts(radius: number) {
+  let kit = solids.get(radius);
+  if (!kit) {
+    const inner = radius + CLEARANCE;
+    const parts = [...moduleParts(inner), ...plateParts(inner), ...strutParts(inner)].map((part) => {
+      const turn = new THREE.Quaternion().setFromAxisAngle(axis, part.angle - Math.PI / 2);
+      return {
+        center: new THREE.Vector3(Math.cos(part.angle) * part.out, Math.sin(part.angle) * part.out, part.along),
+        half: new THREE.Vector3(part.width / 2, part.height / 2, part.depth / 2),
+        turn,
+        back: turn.clone().invert(),
+      };
+    });
+    // nothing of it lies farther from the ring's center than this
+    const reach = Math.max(...parts.map((part) => part.center.length() + part.half.length()));
+    kit = { parts, reach };
+    solids.set(radius, kit);
+  }
+  return kit;
+}
+
+const ringTurn = new THREE.Quaternion();
+const inRing = new THREE.Vector3();
+const inPart = new THREE.Vector3();
+const partNormal = new THREE.Vector3();
+const partClosest = new THREE.Vector3();
+
 /**
- * Whether a ship (a sphere at `position` of `shipRadius`) touches the housings of a ring at
- * `center`, facing `facing` (unit length), its opening `radius`: they form a solid band from
- * the opening's edge outwards, THICKNESS thick and DEPTH deep (the conduits close its gaps).
- * When it does, `position` moves out of the band and `normal` is the band's outward normal
- * there; true.
+ * Whether a ship (a sphere at `position` of `shipRadius`) touches a ring at `center`, facing
+ * `facing` (unit length), its opening `radius`: its housings (see touchBand), its station module
+ * with the sponsor's plates, or a strut. When it does, `position` moves out of it and `normal`
+ * is the outward normal there; true.
  */
 export function touchRing(center: THREE.Vector3, facing: THREE.Vector3, radius: number, position: THREE.Vector3, shipRadius: number, normal: THREE.Vector3): boolean {
+  if (touchBand(center, facing, radius, position, shipRadius, normal)) return true;
+  const { parts, reach } = solidParts(radius);
+  inRing.subVectors(position, center);
+  if (inRing.length() > reach + shipRadius) return false;
+  // into the ring's own frame, as the kit builds it (see GateKit.build)
+  ringTurn.setFromUnitVectors(axis, facing).invert();
+  inRing.applyQuaternion(ringTurn);
+  for (const part of parts) {
+    inPart.subVectors(inRing, part.center).applyQuaternion(part.back);
+    if (!boxContact(inPart, part.half, shipRadius, partNormal, partClosest)) continue;
+    ringTurn.invert();
+    normal.copy(partNormal).applyQuaternion(part.turn).applyQuaternion(ringTurn);
+    position.copy(partClosest).applyQuaternion(part.turn).add(part.center).applyQuaternion(ringTurn).add(center).addScaledVector(normal, shipRadius);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Whether a ship touches the housings of a ring: they form a solid band from the opening's
+ * edge outwards, THICKNESS thick and DEPTH deep (the conduits close its gaps). When it does,
+ * `position` moves out of the band and `normal` is the band's outward normal there; true.
+ */
+function touchBand(center: THREE.Vector3, facing: THREE.Vector3, radius: number, position: THREE.Vector3, shipRadius: number, normal: THREE.Vector3): boolean {
   offset.subVectors(position, center);
   const along = offset.dot(facing);
   // far off the band's plane, or far from its circle: no touch (cheap test first)
@@ -135,19 +229,12 @@ export class GateKit {
       const gap = angle + step / 2;
       for (const along of [-DEPTH * 0.3, DEPTH * 0.3]) frame.push(block(2 * (inner + THICKNESS * 0.6) * Math.sin(step / 2), 50, 50, gap, inner + THICKNESS * 0.6, along));
     }
-    // four struts between housings, out to the position lights
-    for (let i = 0; i < 4; i++) {
-      const angle = (i + 0.5) * (Math.PI / 2) + step / 2;
-      frame.push(block(60, STRUT, 60, angle, inner + THICKNESS + STRUT / 2));
-      frame.push(block(140, 100, 140, angle, inner + THICKNESS + STRUT));
-      lamps.push(block(70, 70, 70, angle, inner + THICKNESS + STRUT + 85));
-    }
-    // the station module on top, with its sponsor's plate facing along the axis both ways
-    const top = Math.PI / 2;
-    frame.push(block(700, 260, 300, top, inner + THICKNESS + 130));
-    frame.push(block(260, 180, 220, top, inner + THICKNESS + 350));
-    const plate = [block(560, 140, 8, top, inner + THICKNESS + 140, 154), block(560, 140, 8, top, inner + THICKNESS + 140, -154)];
-    lamps.push(block(50, 50, 50, top, inner + THICKNESS + 470));
+    // four struts out to the position lights, and the station module on top with its sponsor's plates
+    const solid = (part: Part) => block(part.width, part.height, part.depth, part.angle, part.out, part.along);
+    for (const part of [...strutParts(inner), ...moduleParts(inner)]) frame.push(solid(part));
+    for (let i = 0; i < 4; i++) lamps.push(block(70, 70, 70, (i + 0.5) * (Math.PI / 2) + step / 2, inner + THICKNESS + STRUT + 85));
+    const plate = plateParts(inner).map(solid);
+    lamps.push(block(50, 50, 50, Math.PI / 2, inner + THICKNESS + 470));
     this.frame = mergeGeometries(frame);
     this.coil = mergeGeometries(coil);
     this.lamps = mergeGeometries(lamps);

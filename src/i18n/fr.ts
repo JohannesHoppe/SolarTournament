@@ -290,6 +290,8 @@ export const FR: Catalog = {
   'Cinema mode: no HUD, a softer camera, for recordings': 'Mode cinéma : sans HUD, une caméra plus douce, pour les enregistrements',
   'Vaporized by the nova of {name}': 'Vaporisé par la nova de {name}',
   'Grilled in the drive plume of {name}': 'Grillé dans le panache de {name}',
+  'Rammed by {name}': 'Percuté par {name}',
+  'Rammed by {name} at {speed} m/s': 'Percuté par {name} à {speed} m/s',
   'Shot down by {name}': 'Abattu par {name}',
   'Crashed': 'Écrasé',
   'Burned up in the solar flare': 'Brûlé dans l’éruption solaire',

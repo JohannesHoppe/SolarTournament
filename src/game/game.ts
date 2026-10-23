@@ -48,7 +48,7 @@ import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, TORPEDOES, T
 import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { Asteroid, FieldState } from '../world/asteroids';
 import { RacingLine } from './racingline';
-import { bounceOff, impactDamage, SAFE_IMPACT } from '../ship/impact';
+import { bounceOff, impactDamage, ram, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { touchRing } from '../world/gates';
@@ -481,7 +481,7 @@ type State = 'menu' | 'playing' | 'paused' | 'results';
  * What killed a ship without a killer, where this browser saw it happen: a rock, wreckage, deep
  * space, the arena's massive body; or, with a killer, its nova core.
  */
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'plume' | null;
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'plume' | 'ram' | null;
 /** How the President's battleship killed a ship, for the sponsor break. */
 const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
   battery: msg("Shot down by the President's battleship"),
@@ -518,6 +518,9 @@ const surface = new THREE.Vector3();
 const ringFacing = new THREE.Vector3();
 /** The velocity of what does not move: a ring of the tournament holds its place. */
 const STILL = new THREE.Vector3();
+/** Two ships in contact: the way from the first to the second, and where they touch. */
+const ramApart = new THREE.Vector3();
+const ramPoint = new THREE.Vector3();
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
 /** The beams of the flight school's gunner: red, the color of danger. */
 const DRILL_GUNNER_COLOR = new THREE.Color(1, 0.2, 0.25);
@@ -2791,6 +2794,7 @@ export class Game implements OnlineGame {
       this.scorch(ship, dt, now);
       this.exhaust(ship, dt);
     }
+    this.collideShips(now);
     if (this.flags) this.playFlags(this.flags, dt, now);
     if (this.fleet) this.playFleet(this.fleet, dt, now);
     this.hookOwn(now);
@@ -4797,7 +4801,7 @@ export class Game implements OnlineGame {
     if (victim === this.me) {
       if (killer) {
         // the killer's name with its mark goes where the translation puts {name}
-        const line = cause === 'nova' ? t('Vaporized by the nova of {name}') : cause === 'plume' ? t('Grilled in the drive plume of {name}') : t('Shot down by {name}');
+        const line = cause === 'nova' ? t('Vaporized by the nova of {name}') : cause === 'plume' ? t('Grilled in the drive plume of {name}') : cause === 'ram' ? t('Rammed by {name}') : t('Shot down by {name}');
         const [before, after = ''] = line.split('{name}');
         this.deathCause = [before, ...markedName(killer.kind, killer.name), after];
       } else if (cause === 'well') this.deathCause = t(WELL_DEATHS[this.venue.id] ?? msg('Crashed'));
@@ -4936,6 +4940,61 @@ export class Game implements OnlineGame {
       this.linkHit(Math.min(1, 0.4 + (approach - SAFE_IMPACT) / 1000), 0.6);
     }
     if (status === 'destroyed') this.shipDestroyed(ship, null, 'rock');
+  }
+
+  /**
+   * Ship vs ship: no hull passes through another. Two ships in contact (their hit spheres
+   * overlapping) are pushed apart and bounce off each other as two bodies of equal mass; a
+   * bump slower than RAM_SAFE only clunks, a faster one is a ram, and each ship takes damage
+   * where it was struck (see Ship.rammed): the armored nose little, the drive from behind a
+   * lot. Each browser decides for the ships it runs, from the closing speed both see alike, so
+   * neither ship is hurt twice; a ship a ram destroys counts as killed by the other.
+   */
+  private collideShips(now: number) {
+    const ships = this.ships;
+    for (let i = 0; i < ships.length; i++) {
+      const a = ships[i];
+      if (!a.alive) continue;
+      for (let j = i + 1; j < ships.length; j++) {
+        const b = ships[j];
+        if (!b.alive || (a.owner !== null && b.owner !== null)) continue;
+        ramApart.subVectors(b.flight.position, a.flight.position);
+        const distance = ramApart.length();
+        const reach = a.radius + b.radius;
+        if (distance >= reach) continue;
+        if (distance > 1e-6) ramApart.divideScalar(distance);
+        else ramApart.set(0, 1, 0);
+        const ownA = a.owner === null;
+        const ownB = b.owner === null;
+        // out of each other, each owner its own half
+        const overlap = (reach - distance) / 2;
+        if (ownA) a.flight.position.addScaledVector(ramApart, -overlap);
+        if (ownB) b.flight.position.addScaledVector(ramApart, overlap);
+        const closing = ram(a.flight.velocity, b.flight.velocity, ramApart, ownA, ownB);
+        if (closing <= 0) continue;
+        if (ownA) a.syncTransform();
+        if (ownB) b.syncTransform();
+        ramPoint.copy(a.flight.position).addScaledVector(ramApart, a.radius);
+        if (a.isLocal || b.isLocal) this.sound.play('explosion', { volume: Math.min(1.4, closing / 800), rate: closing < RAM_SAFE ? 2.4 : 1.6 });
+        if (closing < RAM_SAFE) continue;
+        this.effects.sparks(ramPoint, SCRAPE_COLOR, 60 + closing * 0.08);
+        // each struck from the other's side: b along the way from a, a along the way back
+        if (ownB) this.rammed(b, a, ramApart, closing, now);
+        if (ownA) this.rammed(a, b, ramApart.negate(), closing, now);
+      }
+    }
+  }
+
+  /** A ship this browser runs was rammed by `rammer`, coming in along `direction` at `closing` (units/s). */
+  private rammed(ship: Ship, rammer: Ship, direction: THREE.Vector3, closing: number, now: number) {
+    const { status } = ship.rammed(direction, closing, now);
+    if (ship.isLocal && status !== 'protected') {
+      this.hud.damaged();
+      this.hud.flashMessage(now, t('Rammed by {name} at {speed} m/s', { name: rammer.name, speed: Math.round(closing * METERS_PER_UNIT) }), 1.5);
+      this.speaker.say(COMPUTER.impact, 'urgent');
+      this.linkHit(Math.min(1, 0.4 + (closing - RAM_SAFE) / 1500), 0.6);
+    }
+    if (status === 'destroyed') this.shipDestroyed(ship, rammer, 'ram');
   }
 
   /** Ship vs debris: the piece is pulverized, the hull takes damage by the impact speed. */

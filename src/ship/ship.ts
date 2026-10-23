@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { colliderRadius, type Assets, type ShipType } from '../assets';
 import { FlightModel } from './flight';
+import { ramDamage, type RamZone } from './impact';
 import type { Controls } from '../input/input';
 import { TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
@@ -571,6 +572,29 @@ export class Ship {
     this.drive = Math.max(0, this.drive - DRIVE_HIT);
     if (this.drive > 1e-6) return { status: this.structural(ARMOR_DAMAGE, now), zone: 'drive' };
     return { status: this.structural(Infinity, now), zone: 'reactor' };
+  }
+
+  /**
+   * Another ship rams this one, coming in along `direction` (from the rammer towards this ship)
+   * and closing at `closing` (units/s): where it strikes decides what breaks (see ramDamage),
+   * the drive from behind, a flank, or the armored nose.
+   */
+  rammed(direction: THREE.Vector3, closing: number, now: number): { status: DamageStatus; zone: RamZone } {
+    let zone: RamZone = 'drive';
+    if (!this.tailToward(direction)) {
+      this.flight.toLocalDirection(direction, local);
+      zone = Math.hypot(local.x, local.y) > Math.abs(local.z) ? 'flank' : 'nose';
+    }
+    if (!this.alive || now < this.protectedUntil) return { status: 'protected', zone };
+    const damage = ramDamage(closing, zone);
+    if (damage.hull <= 0) return { status: 'hit', zone };
+    this.thrusters = Math.max(0, this.thrusters - damage.thrusters);
+    if (damage.drive > 0) {
+      this.drive = Math.max(0, this.drive - damage.drive);
+      // the drive crushed: its reactor goes, as under the laser
+      if (this.drive <= 1e-6) return { status: this.structural(Infinity, now), zone };
+    }
+    return { status: this.structural(damage.hull, now), zone };
   }
 
   /**
