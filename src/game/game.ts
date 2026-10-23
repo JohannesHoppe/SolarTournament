@@ -2311,6 +2311,7 @@ export class Game implements OnlineGame {
     if (ship === this.me) {
       // the Host's mind locks onto the freshly printed clone: from here on we are the clone
       this.hud.flashMessage(this.time, t('Establishing live link to your clone…'), 2);
+      this.hud.boot(this.time);
       if (this.survival && clonesLeft(ship) === 1) this.speaker.say(COMPUTER.lastClone, 'urgent');
       this.glitch.trigger(0.9, 1.1);
       this.radio.setMuffled(false);
@@ -2727,6 +2728,7 @@ export class Game implements OnlineGame {
     this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight);
     this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
     this.hud.updateVelocityMarkers(this.camera, subject);
+    this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
     this.hud.setCenter(this.camera, subject);
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));

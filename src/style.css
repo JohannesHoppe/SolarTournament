@@ -21,6 +21,20 @@
   --tube-orange: #fff1dc;
   --tube-blue: #eef4ff;
   --neon-blue-soft: 0 0 3px #fff, 0 0 10px #4d91ff, 0 0 22px #0062ff;
+  /*
+   * The HUD is the flight computer's projection on the glass, in one color: azure lines and
+   * letters with a soft glow, a dark hairline under each so they stay readable over a sunlit
+   * rock; orange only where the pilot has to act now (a drive in the crosshair, a hit, a
+   * warning), red where the ship itself is in danger.
+   */
+  --hud: #4d91ff;
+  --hud-bright: #d6e5ff;
+  --hud-dim: rgba(77, 145, 255, 0.55);
+  --hud-faint: rgba(77, 145, 255, 0.18);
+  --hud-text-glow: 0 0 2px rgba(2, 3, 10, 0.95), 0 0 6px rgba(0, 98, 255, 0.8);
+  --hud-line-glow: 0 0 1px rgba(2, 3, 10, 0.9), 0 0 6px rgba(0, 98, 255, 0.7);
+  --hud-act-glow: 0 0 2px rgba(2, 3, 10, 0.95), 0 0 8px rgba(255, 157, 0, 0.85);
+  --font-numbers: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --danger: #ff5a4f;
   --text: #e8f1ff;
   --muted: #8ea3c0;
@@ -501,6 +515,8 @@ button.primary .mode-note {
   position: fixed;
   inset: 0;
   pointer-events: none;
+  color: var(--hud);
+  text-shadow: var(--hud-text-glow);
 }
 
 .hud-top {
@@ -512,12 +528,105 @@ button.primary .mode-note {
   justify-content: center;
   gap: 32px;
   font-size: 1.2rem;
-  font-weight: 700;
-  text-shadow: 0 0 8px rgba(0, 0, 0, 0.8);
+  color: var(--hud-bright);
 }
 
+#hud-time,
 #hud-score {
-  color: var(--accent-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+/* the projection's glass: scanlines over the HUD's layer, and brackets in its corners */
+#hud-glass {
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(to bottom, rgba(77, 145, 255, 0.035) 0 1px, transparent 1px 3px);
+}
+
+#hud-glass::before,
+#hud-glass::after {
+  content: '';
+  position: absolute;
+  inset: 10px;
+  --bracket: 36px;
+  background:
+    linear-gradient(var(--hud-dim), var(--hud-dim)) top left / var(--bracket) 1px no-repeat,
+    linear-gradient(var(--hud-dim), var(--hud-dim)) top left / 1px var(--bracket) no-repeat,
+    linear-gradient(var(--hud-dim), var(--hud-dim)) top right / var(--bracket) 1px no-repeat,
+    linear-gradient(var(--hud-dim), var(--hud-dim)) top right / 1px var(--bracket) no-repeat;
+}
+
+#hud-glass::after {
+  rotate: 180deg;
+}
+
+/*
+ * A fresh clone's link comes up (Hud.boot): the projection draws itself piece by piece, each
+ * piece wiping in from the left with a flicker, the brackets first and the instruments last.
+ */
+#hud.booting > :is(#hud-glass, #hud-attitude, .hud-top, #crosshair, #hud-room, #school-panel, #radar, .hud-bottom, #killfeed) {
+  animation: hud-boot 0.5s steps(6) both;
+}
+
+#hud.booting > #hud-attitude {
+  animation-delay: 0.15s;
+}
+
+#hud.booting > #crosshair {
+  animation-delay: 0.25s;
+}
+
+#hud.booting > :is(.hud-top, #hud-room, #school-panel) {
+  animation-delay: 0.4s;
+}
+
+#hud.booting > :is(#radar, #killfeed) {
+  animation-delay: 0.55s;
+}
+
+#hud.booting > .hud-bottom {
+  animation-delay: 0.7s;
+}
+
+@keyframes hud-boot {
+  from {
+    opacity: 0;
+    clip-path: inset(0 100% 0 0);
+  }
+  50% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 0.35;
+  }
+  to {
+    opacity: 1;
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #hud.booting > :is(#hud-glass, #hud-attitude, .hud-top, #crosshair, #hud-room, #school-panel, #radar, .hud-bottom, #killfeed) {
+    animation: hud-boot-fade 0.5s ease-out both;
+  }
+
+  #hud-glass {
+    background: none;
+  }
+}
+
+@keyframes hud-boot-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* the attitude: horizon, pitch ladder and heading tape, drawn on a canvas of its own */
+#hud-attitude {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
 }
 
 #crosshair {
@@ -528,8 +637,21 @@ button.primary .mode-note {
   width: 34px;
   height: 34px;
   transform: translate(-50%, -50%);
-  border: 2px solid rgba(63, 208, 255, 0.75);
+  border: 1.5px solid var(--hud);
   border-radius: 50%;
+  box-shadow: var(--hud-line-glow);
+}
+
+/* the gun's line: four short ticks around the ring, as on a fighter's sight */
+#crosshair::before {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  background:
+    linear-gradient(var(--hud), var(--hud)) top center / 1.5px 7px no-repeat,
+    linear-gradient(var(--hud), var(--hud)) bottom center / 1.5px 7px no-repeat,
+    linear-gradient(var(--hud), var(--hud)) center left / 7px 1.5px no-repeat,
+    linear-gradient(var(--hud), var(--hud)) center right / 7px 1.5px no-repeat;
 }
 
 #crosshair::after {
@@ -537,13 +659,14 @@ button.primary .mode-note {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
   transform: translate(-50%, -50%);
-  background: var(--accent);
+  background: var(--hud-bright);
   border-radius: 50%;
 }
 
+/* a hit lands: an orange diamond around the sight */
 #hitmarker {
   position: absolute;
   top: 0;
@@ -552,8 +675,9 @@ button.primary .mode-note {
   width: 48px;
   height: 48px;
   transform: translate(-50%, -50%) rotate(45deg);
-  border: 3px solid var(--accent-strong);
-  border-radius: 4px;
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 8px var(--accent);
+  border-radius: 2px;
   opacity: 0;
   transition: opacity 0.25s;
 }
@@ -570,8 +694,7 @@ button.primary .mode-note {
   right: 0;
   text-align: center;
   font-size: 1.6rem;
-  font-weight: 700;
-  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+  color: var(--hud-bright);
 }
 
 /* a race's split at each gate against the best lap: green ahead, red behind */
@@ -581,9 +704,9 @@ button.primary .mode-note {
   left: 0;
   right: 0;
   text-align: center;
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  text-shadow: 0 0 12px rgba(0, 0, 0, 0.9);
+  font-family: var(--font-numbers);
+  font-size: 1.25rem;
+  font-variant-numeric: tabular-nums;
 }
 
 #hud-split.ahead {
@@ -657,7 +780,7 @@ button.primary .mode-note {
   list-style: none;
   text-align: right;
   font-size: 0.9rem;
-  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
+  color: var(--hud);
 }
 
 #killfeed li {
@@ -665,16 +788,21 @@ button.primary .mode-note {
 }
 
 #killfeed b {
-  color: var(--accent-strong);
+  color: var(--hud-bright);
+  font-weight: 400;
 }
 
+/* the instruments along the bottom: a line of the projection runs under them */
 .hud-bottom {
   position: absolute;
   bottom: 18px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 24px;
+  align-items: flex-end;
+  gap: 22px;
+  padding-top: 8px;
+  border-top: 1px solid var(--hud-faint);
 }
 
 .gauge {
@@ -682,28 +810,38 @@ button.primary .mode-note {
   align-items: center;
   gap: 8px;
   white-space: nowrap;
-  font-size: 0.8rem;
-  color: var(--muted);
+  font-size: 0.75rem;
+  color: var(--hud-dim);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
 }
 
+/* a gauge with a bar: its name over it, as on an instrument panel */
+.gauge:has(.bar) {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  font-size: 0.65rem;
+}
+
+/* a gauge: a thin frame and its fill, drawn as lines of light */
 .bar {
-  width: 100px;
-  height: 8px;
-  background: rgba(255, 255, 255, 0.12);
-  border-radius: 4px;
-  overflow: hidden;
+  width: 90px;
+  height: 7px;
+  padding: 1px;
+  border: 1px solid var(--hud-dim);
+  box-shadow: var(--hud-line-glow);
 }
 
 .bar > div {
   height: 100%;
   width: 100%;
-  background: var(--accent);
+  background: var(--hud);
+  box-shadow: 0 0 6px rgba(0, 98, 255, 0.8);
 }
 
 #hud-heat {
-  background: var(--accent-strong);
+  background: var(--hud-bright);
 }
 
 #hud-heat.overheated {
@@ -712,7 +850,7 @@ button.primary .mode-note {
 }
 
 #hud-shadow {
-  color: var(--accent);
+  color: var(--hud-bright);
   font-size: 1rem;
   text-transform: none;
 }
@@ -732,12 +870,12 @@ button.primary .mode-note {
   text-align: center;
 }
 
+/* act now: the warnings in orange */
 #hud-warning,
 #hud-lock {
   font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--danger);
-  text-shadow: 0 0 10px rgba(0, 0, 0, 0.9);
+  color: var(--tube-orange);
+  text-shadow: var(--hud-act-glow);
   white-space: pre-line;
 }
 
@@ -754,8 +892,8 @@ button.primary .mode-note {
 
 .readout {
   min-width: 70px;
-  color: var(--text);
-  font-weight: 700;
+  color: var(--hud-bright);
+  font-family: var(--font-numbers);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
   text-transform: none;
@@ -768,16 +906,16 @@ button.primary .mode-note {
   width: 26px;
   height: 26px;
   margin: -13px 0 0 -13px;
-  border: 2px solid #9dffb0;
+  border: 1.5px solid var(--hud);
   border-radius: 50%;
-  opacity: 0.85;
+  box-shadow: var(--hud-line-glow);
 }
 
 #prograde::before,
 #prograde::after {
   content: '';
   position: absolute;
-  background: #9dffb0;
+  background: var(--hud);
 }
 
 /* prograde: circle with three fins, as in flight instruments */
@@ -795,12 +933,12 @@ button.primary .mode-note {
   right: -10px;
   height: 2px;
   margin-top: -1px;
-  background: linear-gradient(to right, #9dffb0 8px, transparent 8px, transparent calc(100% - 8px), #9dffb0 calc(100% - 8px));
+  background: linear-gradient(to right, var(--hud) 8px, transparent 8px, transparent calc(100% - 8px), var(--hud) calc(100% - 8px));
 }
 
-/* retrograde: circle with a cross */
+/* retrograde: a dashed circle with a cross, so it never reads as the course */
 #retrograde {
-  border-color: #ffb36b;
+  border-style: dashed;
 }
 
 #retrograde::before,
@@ -810,9 +948,9 @@ button.primary .mode-note {
   left: 50%;
   top: 50%;
   width: 30px;
-  height: 2px;
+  height: 1.5px;
   margin: -1px 0 0 -15px;
-  background: #ffb36b;
+  background: var(--hud);
   transform: rotate(45deg);
 }
 
@@ -1146,9 +1284,8 @@ body.nova-flash #hud::after {
   position: absolute;
   top: 18px;
   left: 16px;
-  color: var(--muted);
+  color: var(--hud-dim);
   font-size: 0.8rem;
-  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9);
 }
 
 body.touch #hud-room {
@@ -1167,6 +1304,7 @@ body.touch #hud-room {
 
 /* flight school */
 
+/* the round's panel (the flight school's drill, a race's lap): a pane of the projection, framed by brackets */
 #school-panel {
   position: absolute;
   top: 56px;
@@ -1174,17 +1312,24 @@ body.touch #hud-room {
   transform: translateX(-50%);
   width: min(560px, calc(100% - 32px));
   padding: 12px 16px;
-  background: var(--plate);
-  border: 1px solid var(--line);
-  border-radius: 12px;
+  background:
+    linear-gradient(var(--hud), var(--hud)) top left / 14px 1.5px no-repeat,
+    linear-gradient(var(--hud), var(--hud)) top left / 1.5px 14px no-repeat,
+    linear-gradient(var(--hud), var(--hud)) top right / 14px 1.5px no-repeat,
+    linear-gradient(var(--hud), var(--hud)) top right / 1.5px 14px no-repeat,
+    linear-gradient(var(--hud), var(--hud)) bottom left / 14px 1.5px no-repeat,
+    linear-gradient(var(--hud), var(--hud)) bottom left / 1.5px 14px no-repeat,
+    linear-gradient(var(--hud), var(--hud)) bottom right / 14px 1.5px no-repeat,
+    linear-gradient(var(--hud), var(--hud)) bottom right / 1.5px 14px no-repeat,
+    rgba(2, 8, 24, 0.45);
+  border: 1px solid var(--hud-faint);
   text-align: center;
 }
 
 #school-step {
-  color: var(--accent);
+  color: var(--hud);
   font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
 }
 
@@ -1192,6 +1337,7 @@ body.touch #hud-room {
   margin: 6px 0 0;
   font-size: 1rem;
   line-height: 1.4;
+  color: var(--hud-bright);
 }
 
 /* the keys of the drill as big keycaps */
@@ -1207,6 +1353,7 @@ body.touch #hud-room {
   display: none;
 }
 
+/* what to press now: the drill's keys stay orange */
 #school-keys kbd {
   margin: 0;
   min-width: 2.2em;
@@ -1215,10 +1362,11 @@ body.touch #hud-room {
   font-size: 0.95rem;
   text-align: center;
   color: var(--accent);
-  border-width: 2px;
-  border-radius: 6px;
+  text-shadow: var(--hud-act-glow);
+  border-width: 1.5px;
+  border-radius: 3px;
   opacity: 1;
-  box-shadow: 0 0 10px rgb(255 157 0 / 0.35);
+  box-shadow: 0 0 8px rgb(255 157 0 / 0.35);
 }
 
 body.touch #school-panel {
@@ -1239,7 +1387,8 @@ body.touch #school-panel {
   content: '';
   position: absolute;
   inset: 0;
-  border: 2px solid var(--accent-strong);
+  border: 1.5px solid var(--hud);
+  box-shadow: var(--hud-line-glow);
   rotate: 45deg;
   animation: blink 1s steps(2) infinite;
 }
@@ -1252,26 +1401,14 @@ body.touch #school-panel {
   left: 50%;
   translate: -50% 0;
   font-size: 0.7rem;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
   white-space: nowrap;
   text-transform: uppercase;
-  text-shadow: 0 0 4px rgba(0, 0, 0, 0.9);
+  color: var(--hud);
   pointer-events: none;
 }
 
-#waypoint .hud-label {
-  color: var(--accent-strong);
-}
-
-#prograde .hud-label {
-  color: #9dffb0;
-}
-
-#retrograde .hud-label {
-  color: #ffb36b;
-}
-
-/* the zero point: the field's center, a blue ring with a dot and its distance */
+/* the zero point: the field's center, a ring with a dot and its distance, dimmer than what to fly for */
 #center {
   position: absolute;
   top: 0;
@@ -1279,9 +1416,8 @@ body.touch #school-panel {
   width: 22px;
   height: 22px;
   margin: -11px 0 0 -11px;
-  border: 2px solid var(--accent-strong);
+  border: 1.5px solid var(--hud-dim);
   border-radius: 50%;
-  opacity: 0.8;
   pointer-events: none;
 }
 
@@ -1290,13 +1426,13 @@ body.touch #school-panel {
   position: absolute;
   inset: 7px;
   border-radius: 50%;
-  background: var(--accent-strong);
+  background: var(--hud-dim);
 }
 
 #center-distance {
   top: auto;
   bottom: calc(100% + 6px);
-  color: var(--accent-strong);
+  color: var(--hud-dim);
 }
 
 /* touch controls: only on touch devices (body.touch) */
@@ -2319,13 +2455,23 @@ body.page {
 }
 
 #hud-mode {
-  color: var(--accent-strong);
+  font-family: var(--font-body);
+  color: var(--hud);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
 }
 
+/* free drift: the flight computer lets the ship slide, written between the brackets of a mode it does not hold */
 #hud-mode.free {
-  color: var(--accent);
+  color: var(--hud-bright);
+}
+
+#hud-mode.free::before {
+  content: '[ ';
+}
+
+#hud-mode.free::after {
+  content: ' ]';
 }
 
 /* the key of a readout at the bottom, a small keycap before it */
@@ -2334,8 +2480,8 @@ body.page {
   padding: 0.05em 0.4em;
   font-family: var(--font-display);
   font-size: 0.7rem;
-  color: var(--accent);
-  border-radius: 4px;
+  color: var(--hud);
+  border-radius: 2px;
   opacity: 0.9;
 }
 
@@ -2402,8 +2548,8 @@ button.quiet:focus-visible {
 }
 
 .popup.points {
-  color: var(--accent-strong);
-  text-shadow: 0 0 6px rgba(0, 0, 0, 0.9), 0 0 10px var(--accent-strong);
+  color: var(--hud-bright);
+  text-shadow: var(--hud-text-glow);
 }
 
 @keyframes popup-rise {
@@ -2453,24 +2599,25 @@ button.quiet:focus-visible {
   opacity: 0.45;
 }
 
-/* the overdrive, the hook and the torpedoes: dim while they recharge, orange once they are ready */
+/* the overdrive, the hook and the torpedoes: dim while they recharge, bright once they are ready */
 #hud-overdrive,
 #hud-hook,
 #hud-torpedo {
-  color: var(--muted);
+  font-family: var(--font-body);
+  color: var(--hud-dim);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.1em;
 }
 
 #hud-overdrive.ready,
 #hud-hook.ready,
 #hud-torpedo.ready {
-  color: var(--accent);
+  color: var(--hud-bright);
 }
 
-/* a hook that holds: in the cable's blue */
+/* a hook that holds: the cable is out, in the projection's blue */
 #hud-hook.held {
-  color: var(--accent-strong);
+  color: var(--hud);
 }
 
 /*

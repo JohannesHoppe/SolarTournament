@@ -109,9 +109,9 @@ export class GuideLine {
           float lit = dash ? 1.0 : pulse * 0.8;
           if (lit < 0.02) discard;
           float core = smoothstep(1.0, 0.45, abs(vSide));
-          // the tournament's orange, white-hot where a pulse runs, in a dark rim that keeps it
-          // readable on a bright disk or a sunlit rock
-          vec3 color = mix(vec3(1.0, 0.55, 0.0), vec3(1.0, 0.92, 0.75), pulse) * (1.0 + 1.3 * pulse + boost);
+          // the flight computer's projection draws it: its azure (#4d91ff), white where a pulse
+          // runs, in a dark rim that keeps it readable on a bright disk or a sunlit rock
+          vec3 color = mix(vec3(0.3, 0.57, 1.0), vec3(0.9, 0.95, 1.0), pulse) * (1.0 + 1.3 * pulse + boost);
           gl_FragColor = vec4(color * core * lit, mix(0.55, 1.0, core) * lit * vFade);
         }
       `,
