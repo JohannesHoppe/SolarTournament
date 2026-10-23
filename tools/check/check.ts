@@ -21,6 +21,9 @@ const GATES: Gate[] = [
   { name: 'Types', script: 'typecheck' },
   { name: 'Duplicates', script: 'dupes' },
   { name: 'Unit tests', script: 'test' },
+  // the dev server the browser tests start renders the voices first; after changed lines that
+  // takes longer than it waits, so they are rendered here beforehand
+  { name: 'Voices', script: 'voice', full: true },
   { name: 'Browser tests', script: 'e2e', full: true },
   { name: 'Balance runs', script: 'balance', full: true },
 ];
