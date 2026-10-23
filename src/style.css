@@ -36,6 +36,9 @@
   --hud-act-glow: 0 0 2px rgba(2, 3, 10, 0.95), 0 0 8px rgba(255, 157, 0, 0.85);
   --font-numbers: ui-monospace, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --danger: #ff5a4f;
+  /* the Sovereign's ivory and the gold of its glow (SOVEREIGN_TINT, SOVEREIGN_GOLD in ship/tints.ts) */
+  --sovereign: #fff1c9;
+  --sovereign-gold: #ffc94d;
   --text: #e8f1ff;
   --muted: #8ea3c0;
   --plate: rgba(6, 12, 28, 0.82);
@@ -446,6 +449,41 @@ button.primary .mode-note {
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 8px 10px;
+}
+
+/* the Host's tint: a row of neon swatches beside its name */
+#tints {
+  display: flex;
+  gap: 6px;
+}
+
+#tints button {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 4px;
+  background: var(--tint) content-box;
+  box-shadow: 0 0 6px var(--tint);
+  cursor: pointer;
+}
+
+#tints button.selected {
+  border-color: var(--text);
+}
+
+/* the Sovereign wears its own colors: the palette steps back */
+#tints.sovereign button {
+  opacity: 0.3;
+}
+
+#tint-name {
+  font-size: 0.8rem;
+}
+
+#tints.sovereign + #tint-name {
+  color: var(--sovereign);
+  text-shadow: 0 0 6px var(--sovereign-gold);
 }
 
 .controls {
@@ -1547,6 +1585,72 @@ body.nova-flash #hud::after {
   border-bottom: 10px solid transparent;
   border-left: 18px solid var(--tint);
   transform: rotate(var(--angle));
+}
+
+/*
+ * Off screen the name stands beside the arrow, on a dark plate of exactly the box the HUD
+ * reserved for it (Hud.placeNames: --at from the arrow's point, --tag-width, --tag-size,
+ * --tag-line); a name too long is cut short. Where no box was free, only the arrow shows.
+ */
+.marker.offscreen .tag {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  translate: var(--at, 0 0);
+  box-sizing: border-box;
+  width: var(--tag-width);
+  padding: 0 3px;
+  font-size: var(--tag-size);
+  line-height: var(--tag-line);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: rgba(3, 6, 14, 0.5);
+  border-radius: 3px;
+}
+
+.marker.offscreen .distance,
+.marker.offscreen.crowded .tag {
+  display: none;
+}
+
+/* the Sovereign: a gold rim and a slow golden glow, in its ivory or in its side's color */
+.marker.sovereign {
+  animation: sovereign-glow 1.6s ease-in-out infinite alternate;
+}
+
+.marker.sovereign:not(.offscreen)::before {
+  box-shadow: 0 0 0 2px var(--sovereign-gold);
+}
+
+@keyframes sovereign-glow {
+  from {
+    filter: drop-shadow(0 0 1px var(--sovereign-gold));
+  }
+  to {
+    filter: drop-shadow(0 0 6px var(--sovereign-gold));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marker.sovereign {
+    animation: none;
+    filter: drop-shadow(0 0 3px var(--sovereign-gold));
+  }
+}
+
+/* a pilot's tint beside its name in the lists of pilots */
+.swatch {
+  display: inline-block;
+  width: 0.7em;
+  height: 0.7em;
+  margin-right: 0.45em;
+  border-radius: 2px;
+  background: var(--tint);
+  box-shadow: 0 0 6px var(--tint);
+}
+
+.swatch.sovereign {
+  box-shadow: 0 0 0 1px var(--sovereign-gold), 0 0 8px var(--sovereign-gold);
 }
 
 /* sponsor break before the next clone boots */

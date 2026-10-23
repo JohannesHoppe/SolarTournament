@@ -17,3 +17,12 @@ export function markedName(kind: Kind, name: string): Node[] {
   mark.setAttribute('aria-label', kind === 'bot' ? t('Bot') : t('Host'));
   return [mark, text];
 }
+
+/** A small square in a pilot's tint beside its name (see `.swatch` in style.css); the Sovereign's glows gold. */
+export function swatch(tint: string, sovereign = false): HTMLElement {
+  const element = document.createElement('i');
+  element.className = sovereign ? 'swatch sovereign' : 'swatch';
+  element.style.setProperty('--tint', tint);
+  element.setAttribute('aria-hidden', 'true');
+  return element;
+}

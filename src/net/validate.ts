@@ -2,6 +2,7 @@ import type { ShipState } from '../ship/ship';
 import type { AsteroidState, FieldState, ShovedState } from '../world/asteroids';
 import type { WreckState } from '../world/wrecks';
 import { KINDS, type ProbeState } from '../game/items';
+import { TINTS } from '../ship/tints';
 import type { FlagsState } from '../game/flags';
 import type { FleetState } from '../game/fleet';
 
@@ -90,7 +91,7 @@ export function cleanName(x: unknown, max = MAX_NAME): string {
 /** A ship's state; name, type, score, kills, deaths and race progress come all together or not at all (see ShipState). */
 export function shipState(x: unknown): ShipState | null {
   if (!isRecord(x)) return null;
-  const slowKeys = ['n', 'k', 's', 'ki', 'de', 'g', 'fi', 'it', 'lo'] as const;
+  const slowKeys = ['n', 'k', 's', 'ki', 'de', 'g', 'fi', 'it', 'lo', 'co'] as const;
   const present = slowKeys.filter((key) => key in x).length;
   if (present !== 0 && present !== slowKeys.length) return null;
   const slow =
@@ -106,6 +107,8 @@ export function shipState(x: unknown): ShipState | null {
           fi: num(x.fi, -1, ROUND_LIMIT),
           it: int(x.it, 0, 15),
           lo: int(x.lo, 0, 15),
+          // a Host's tint is an entry of the palette, never a color of its own
+          co: int(x.co, 0, TINTS.length - 1),
         };
   const state = complete<ShipState>({
     id: id(x.id),
