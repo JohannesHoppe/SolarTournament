@@ -18,13 +18,13 @@ const relative = new THREE.Vector3();
 /**
  * A ship's `velocity` bounces off a surface moving at `moving` with the outward `normal`, and
  * scraping along it bleeds off some sideways speed; returns how fast it struck (units/s), 0
- * when it was moving away.
+ * when it was moving away. A livelier body than a ship's hull passes its own `restitution`.
  */
-export function bounceOff(velocity: THREE.Vector3, moving: THREE.Vector3, normal: THREE.Vector3): number {
+export function bounceOff(velocity: THREE.Vector3, moving: THREE.Vector3, normal: THREE.Vector3, restitution = RESTITUTION): number {
   relative.subVectors(velocity, moving);
   const approach = -relative.dot(normal);
   if (approach <= 0) return 0;
-  const push = approach * (1 + RESTITUTION);
+  const push = approach * (1 + restitution);
   velocity.addScaledVector(normal, push);
   relative.subVectors(velocity, moving);
   const slide = relative.addScaledVector(normal, -relative.dot(normal));

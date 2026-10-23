@@ -72,7 +72,7 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
   expect(errors).toEqual([]);
 });
 
-test('two tabs of Capture the Flag agree on the sides and on who has a core in tow', async ({ context }) => {
+test('two tabs of Capture the Flag agree on the sides and on who has a core in tow, taken by a hook shot', async ({ context }) => {
   // two Hosts alone: bots would only slow two tabs without a GPU down
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}f&m=flag&bots=0`);
   const sides = (page: Page) =>
@@ -85,12 +85,17 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
   // the two Hosts fly for different sides
   const hosts = Object.entries(sidesA).filter(([id]) => id.startsWith('p:'));
   expect(new Set(hosts.map(([, team]) => team)).size).toBe(2);
-  // the second tab's clone takes the first side's core; the lead sees it and tells both
+  // the second tab's clone, 600 m in front of the other side's ring, its nose on the core,
+  // fires its harpoon at it; the lead hears of the bite, takes the core for it and tells both
   const thief = await b.evaluate(() => {
     const game = window.game;
-    game.me.flight.position.copy(game.flags.bases[1 - game.me.team]);
+    const base = game.flags.bases[1 - game.me.team];
+    const facing = game.flags.facings[1 - game.me.team];
+    game.me.flight.position.copy(base).addScaledVector(facing, -12000);
     game.me.flight.velocity.set(0, 0, 0);
+    game.me.flight.orientation.setFromUnitVectors(facing.clone().set(0, 0, -1), facing);
     game.autopilot = false;
+    game.fireHook(game.me);
     return game.me.id;
   });
   await play(b, 2);

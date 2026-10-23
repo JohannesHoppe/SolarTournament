@@ -187,13 +187,15 @@ export function flagsState(x: unknown): FlagsState | null {
   const sides = listOf(x.t, 2, (side) => listOf(side, MAX_SIDE, id));
   const captures = vec(x.c, 2, MAX_CAPTURES);
   const cores = x.f.map((core) => (core === null ? null : typeof core === 'string' ? (id(core) ?? undefined) : (vec(core, 6, MAX_COORDINATE) ?? undefined)));
+  // each core in tow where the lead has it, position and velocity
+  const towed = Array.isArray(x.w) && x.w.length === 2 ? x.w.map((core) => (core === null ? null : (vec(core, 6, MAX_COORDINATE) ?? undefined))) : null;
   const events = listOf(x.e, MAX_FLAG_EVENTS, (e) => {
     if (!Array.isArray(e) || e.length !== 4) return null;
     const event = [int(e[0], 1, MAX_COUNT), int(e[1], 0, 3), e[2] === null ? null : id(e[2]), int(e[3], 0, 1)] as const;
     return event[0] === null || event[1] === null || event[3] === null || (e[2] !== null && event[2] === null) ? null : (event as [number, number, string | null, number]);
   });
-  if (!sides || !captures || captures.some((c) => !Number.isInteger(c) || c < 0) || cores.some((core) => core === undefined) || !events) return null;
-  return { t: sides, c: captures, f: cores as (string | number[] | null)[], e: events };
+  if (!sides || !captures || captures.some((c) => !Number.isInteger(c) || c < 0) || cores.some((core) => core === undefined) || !towed || towed.some((core) => core === undefined) || !events) return null;
+  return { t: sides, c: captures, f: cores as (string | number[] | null)[], w: towed as (number[] | null)[], e: events };
 }
 
 /** A battleship's parts, with room (see game/fleet). */

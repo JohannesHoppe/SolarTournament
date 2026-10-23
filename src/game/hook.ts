@@ -17,7 +17,9 @@ import type { FlightModel } from '../ship/flight';
  * (the game gives the coils' limit); while the hook is held, the flight computer burns against
  * any speed towards the anchor it could no longer stop before that distance (with up to
  * HOOK_BRAKE, as late as it can): holding on never slams a ship into its rock. Letting go
- * before, the ship keeps all its speed; what it flies into is its pilot's business.
+ * before, the ship keeps all its speed; what it flies into is its pilot's business. In Capture
+ * the Flag it also bites a core the ship may take (see Mark): the game hands the core to the
+ * rules, which take it in tow on that cable (see game/flags).
  */
 export const HOOK_RANGE = 20000;
 const HOOK_SPEED = 40000;
@@ -28,11 +30,16 @@ const HOOK_CONE = 0.05;
 export const HOOK_PULL = 1570;
 const HOOK_SNAP = 1.5;
 const HOOK_SLACK = 4;
+/** A mark (a core) is bitten by a harpoon passing this close to its center (units, 20 m): a little more than the canister reaches, so a core need not be hit to the meter. */
+const MARK_REACH = 400;
 /** After the hook is let go, it is ready again after this long (s): the cable is reeled back. */
 export const HOOK_RECHARGE = 1.2;
 
-/** What a hook holds on to: a point on a rock (in the rock's own frame, so it turns and drifts with it), or a ship. */
-export type Anchor = { rock: Asteroid; local: THREE.Vector3; ship: null } | { rock: null; local: null; ship: Ship };
+/** Something else the harpoon bites: a sponsor core of Capture the Flag (its side, and where it is, followed as it moves). */
+export type Mark = { readonly team: number; readonly position: THREE.Vector3 };
+
+/** What a hook holds on to: a point on a rock (in the rock's own frame, so it turns and drifts with it), a ship, or a core (see Mark). */
+export type Anchor = { rock: Asteroid; local: THREE.Vector3; ship: null; mark: null } | { rock: null; local: null; ship: Ship; mark: null } | { rock: null; local: null; ship: null; mark: Mark };
 
 /** A hook of a ship: the harpoon in flight (`flying` seconds left), or holding (`length` of cable out). */
 export interface Tether {
@@ -57,6 +64,7 @@ const relative = new THREE.Vector3();
 
 /** Where an anchor is now (world), or null when what it held is gone. */
 function anchorPoint(anchor: Anchor, out: THREE.Vector3): THREE.Vector3 | null {
+  if (anchor.mark) return out.copy(anchor.mark.position);
   if (anchor.ship) return anchor.ship.alive ? out.copy(anchor.ship.flight.position) : null;
   const object = anchor.rock.object;
   if (!object.parent) return null;
@@ -66,14 +74,15 @@ function anchorPoint(anchor: Anchor, out: THREE.Vector3): THREE.Vector3 | null {
 /** An anchor on a rock at a world point: kept in the rock's frame. */
 function rockAnchor(rock: Asteroid, at: THREE.Vector3): Anchor {
   const local = at.clone().sub(rock.object.position).applyQuaternion(spin.copy(rock.object.quaternion).invert());
-  return { rock, local, ship: null };
+  return { rock, local, ship: null, mark: null };
 }
 
 /**
- * What the hook of `owner` bites, fired along its nose: the nearest rock or ship within reach,
- * the point it bites and how far it is; null for nothing.
+ * What the hook of `owner` bites, fired along its nose: the nearest rock, ship or mark (a core,
+ * reaching MARK_REACH from its center) within reach, the point it bites and how far it is; null
+ * for nothing.
  */
-export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[]): { anchor: Anchor; distance: number; at: THREE.Vector3 } | null {
+export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[], marks: readonly Mark[] = []): { anchor: Anchor; distance: number; at: THREE.Vector3 } | null {
   const origin = owner.nose(nose);
   const forward = owner.flight.forward(heading);
   // the direction the harpoon flies: the nose's, or towards a rock beside it
@@ -106,7 +115,12 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
     if (ship === owner || !ship.alive) continue;
     const distance = raySphere(origin, forward, ship.flight.position, ship.radius);
     if (distance === null || distance > wall || (best && distance >= best.distance)) continue;
-    best = { anchor: { rock: null, local: null, ship }, distance, at: ship.flight.position.clone() };
+    best = { anchor: { rock: null, local: null, ship, mark: null }, distance, at: ship.flight.position.clone() };
+  }
+  for (const mark of marks) {
+    const distance = raySphere(origin, forward, mark.position, MARK_REACH);
+    if (distance === null || distance > wall || (best && distance >= best.distance)) continue;
+    best = { anchor: { rock: null, local: null, ship: null, mark }, distance, at: mark.position.clone() };
   }
   return best;
 }
@@ -122,7 +136,7 @@ export const flightTime = (distance: number) => distance / HOOK_SPEED;
  * at rest. Hooked to another ship, `share` is half: the other ship takes the other half on its
  * own browser. Returns the length the cable has now, or null when it snapped.
  */
-export function pullOn(flight: FlightModel, anchorAt: THREE.Vector3, anchorVelocity: THREE.Vector3, length: number, reeling: boolean, share: number, floor: number, speedLimit: number, dt: number): number | null {
+export function pullOn(flight: Pick<FlightModel, 'position' | 'velocity'>, anchorAt: THREE.Vector3, anchorVelocity: THREE.Vector3, length: number, reeling: boolean, share: number, floor: number, speedLimit: number, dt: number): number | null {
   toAnchor.subVectors(anchorAt, flight.position);
   const distance = toAnchor.length();
   if (distance < 1) return length;
@@ -153,7 +167,7 @@ export function pullOn(flight: FlightModel, anchorAt: THREE.Vector3, anchorVeloc
  * what it held is gone.
  */
 export function pivotOf(anchor: Anchor, out: THREE.Vector3): THREE.Vector3 | null {
-  if (anchor.ship) return anchorPoint(anchor, out);
+  if (anchor.ship || anchor.mark) return anchorPoint(anchor, out);
   return anchor.rock.object.parent ? out.copy(anchor.rock.object.position) : null;
 }
 

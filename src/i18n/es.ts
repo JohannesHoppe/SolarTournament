@@ -222,6 +222,8 @@ export const ES: Catalog = {
   'with {name}': 'con {name}',
   someone: 'alguien',
   'Their core': 'Su núcleo',
+  'Their core · in hook range': 'Su núcleo · al alcance del gancho',
+  'Your core · in hook range': 'Tu núcleo · al alcance del gancho',
   Home: 'Casa',
   'Home · get your core back first': 'Casa · antes recupera tu núcleo',
   Thief: 'Ladrón',

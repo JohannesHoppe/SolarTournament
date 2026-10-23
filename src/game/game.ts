@@ -173,6 +173,8 @@ const BATTERY_COLOR = new THREE.Color(1, 0.1, 0.15);
 const FLAG_GUARDS = 3;
 const FLAG_RAID_SPEED = 2400;
 const FLAG_HOME_SPEED = 4400;
+/** A carrier whose flight is more than this off the way home (rad, about 35°) eases off to FLAG_RAID_SPEED for the turn, so the core in tow does not whip around. */
+const FLAG_TOW_TURN = 0.6;
 /** A raider swings out this far beyond the other side's base, and as far to one side, before it dives through the core (units, 200 m). */
 const FLAG_SWING = 4000;
 /** Against the President's battleships bots range out this far (units), to its orbit beyond the rocks. */
@@ -207,6 +209,8 @@ const BOT_HOOK_MIN = 3000;
 const BOT_HOOK_RATE = 0.25;
 const BOT_HOOK_HOLD = 1.5;
 const BOT_HOOK_PAUSE = 10;
+/** A bot of Capture the Flag fires its harpoon at a core it may take that lies this close to its nose's line (rad, about 3°; see Game.botHookCore). */
+const BOT_CORE_CONE = 0.05;
 /**
  * A nova core destroys every other ship within NOVA_RADIUS (units, 800 m) of its holder; its
  * shell runs out there in NOVA_EXPANSION seconds. A bot that holds one only sets it off with
@@ -3140,7 +3144,9 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * What a bot of Capture the Flag does: with the other side's core in tow it flies home; its
+   * What a bot of Capture the Flag does: with the other side's core in tow it flies home, through
+   * the middle of its base's ring and on until the core on its cable is through (see
+   * Flags.homeRun); its
    * own core adrift it fetches; every other bot goes for the other side's core, the rest guard
    * the base or escort a carrier of their own. A thief of the own core is hunted by the guards.
    */
@@ -3151,8 +3157,10 @@ export class Game implements OnlineGame {
     const own = flags.cores[side];
     const theirs = flags.cores[1 - side];
     if (theirs.carrier === ship.id) {
-      bot.waypoint = flags.bases[side];
-      bot.raceSpeed = FLAG_HOME_SPEED;
+      bot.waypoint = flags.homeRun(side, ship, this.botPoint(bot));
+      // the core on its rope would whip around in a tight turn: it eases off until it is round
+      const turn = ship.flight.velocity.angleTo(toAim.subVectors(bot.waypoint, ship.flight.position));
+      bot.raceSpeed = turn > FLAG_TOW_TURN ? FLAG_RAID_SPEED : FLAG_HOME_SPEED;
       return;
     }
     // every FLAG_GUARDS-th bot of a side guards (counted by hand: this runs every frame)
@@ -3228,6 +3236,8 @@ export class Game implements OnlineGame {
       goal = own.position;
       label = own.carrier ? t('Thief') : t('Your core');
     }
+    // a core the hook may bite from here: the harpoon takes it from afar
+    if (me.alive && flags.hookable(me).some((mark) => mark.position === goal) && me.flight.position.distanceTo(goal) < HOOK_RANGE) label = goal === own.position ? t('Your core · in hook range') : t('Their core · in hook range');
     this.hud.setWaypoint(this.camera, goal, label);
     this.hud.setSchool({ step, text: t('You fly for {side} · your core {own} · theirs {theirs}', { side: t(TEAM_NAMES[side]), own: where(own), theirs: where(theirs) }), keys: [] });
     return goal;
@@ -4167,6 +4177,7 @@ export class Game implements OnlineGame {
       if (now >= bot.hookUntil || (hooked && !hooked.alive)) this.unhook(ship);
       return;
     }
+    if (this.flags && bot.waypoint && now >= bot.hookReadyAt && this.botHookCore(bot, this.flags, now)) return;
     if (!target || bot === this.sparring?.bot || bot.waypoint || now < bot.hookReadyAt || Math.random() >= dt * BOT_HOOK_RATE * bot.skills.daring * (1 - bot.ease)) return;
     const distance = target.flight.position.distanceTo(ship.flight.position);
     if (distance < BOT_HOOK_MIN || distance > HOOK_RANGE * 0.9 || aimHook(ship, this.field, this.ships)?.anchor.ship !== target) return;
@@ -4175,9 +4186,36 @@ export class Game implements OnlineGame {
     bot.hookReadyAt = bot.hookUntil + BOT_HOOK_PAUSE;
   }
 
-  /** The harpoon leaves the nose: it bites what lies ahead within reach, or flies out and is reeled back. */
+  /**
+   * A bot of Capture the Flag flying for a core it may take (the other side's, or its own
+   * adrift) fires its harpoon at it once the core lies within BOT_CORE_CONE of its nose,
+   * between BOT_HOOK_MIN and nine tenths of the hook's reach, with nothing in between: a raider
+   * need not dive through the guards to the core. True when it fired.
+   */
+  private botHookCore(bot: Bot, flags: Flags, now: number): boolean {
+    const ship = bot.ship;
+    const marks = flags.hookable(ship);
+    for (const mark of marks) {
+      const line = toAim.subVectors(mark.position, ship.flight.position);
+      const distance = line.length();
+      if (distance < BOT_HOOK_MIN || distance > HOOK_RANGE * 0.9 || ship.flight.angleTo(line) > BOT_CORE_CONE) continue;
+      if (aimHook(ship, this.field, this.ships, marks)?.anchor.mark?.team !== mark.team) return false;
+      this.fireHook(ship);
+      bot.hookUntil = now + flightTime(distance) + 0.1;
+      bot.hookReadyAt = bot.hookUntil + BOT_HOOK_PAUSE;
+      return true;
+    }
+    return false;
+  }
+
+  /** The harpoon leaves the nose: it bites what lies ahead within reach (in Capture the Flag a core it may take too), or flies out and is reeled back. */
   private fireHook(ship: Ship) {
-    const aim = aimHook(ship, this.field, this.ships.filter((other) => other !== this.drone));
+    const aim = aimHook(
+      ship,
+      this.field,
+      this.ships.filter((other) => other !== this.drone),
+      this.flags?.hookable(ship),
+    );
     const end = aim ? aim.at : ship.nose(new THREE.Vector3()).addScaledVector(ship.flight.forward(forward), HOOK_RANGE);
     this.tethers.set(ship, { owner: ship, anchor: aim?.anchor ?? null, flying: flightTime(aim?.distance ?? HOOK_RANGE), end, length: 0, line: this.cables.take() });
     if (ship === this.me) this.sound.play('laser', { volume: 0.7, rate: 0.3 });
@@ -4189,7 +4227,8 @@ export class Game implements OnlineGame {
     if (!tether) return;
     this.tethers.delete(ship);
     this.cables.give(tether.line);
-    const held = !!tether.anchor && tether.flying <= 0;
+    // a core bitten was handed on to the rules: nothing held, nothing to fling
+    const held = !!tether.anchor && !tether.anchor.mark && tether.flying <= 0;
     if (ship.owner === null && held) this.online?.sendHook(ship, null);
     if (ship !== this.me) return;
     this.hookReadyAt = this.time + HOOK_RECHARGE;
@@ -4222,6 +4261,12 @@ export class Game implements OnlineGame {
             continue;
           }
           tether.length = owner.flight.position.distanceTo(at);
+          // a core bitten goes to the rules; its cable is the tow cable from then on
+          if (tether.anchor.mark) {
+            this.hookedCore(owner, tether.anchor.mark.team);
+            this.unhook(owner);
+            continue;
+          }
           this.hooked(owner, tether.anchor, tether.length);
         }
       }
@@ -4252,9 +4297,27 @@ export class Game implements OnlineGame {
     }
   }
 
+  /**
+   * A harpoon of this browser bit a core of Capture the Flag: the lead's rules decide whether it
+   * is taken (see Flags.claim); another browser's lead is told. The own pilot hears it bite.
+   */
+  private hookedCore(owner: Ship, team: number) {
+    if (owner.owner !== null || !this.flags) return;
+    if (!this.online || this.online.isLead) this.flags.claim(owner.id, team);
+    else this.online.sendHook(owner, { core: team });
+    if (owner !== this.me) return;
+    this.sound.play('explosion', { volume: 0.5, rate: 2.4 });
+    this.sound.beep(523, 0.08, 0.12);
+  }
+
+  /** A ship of another browser says its harpoon bit a core: the lead's rules decide (see Flags.claim). */
+  remoteCoreHook(owner: Ship, team: number) {
+    if (this.flags && this.online?.isLead) this.flags.claim(owner.id, team);
+  }
+
   /** A hook of this browser bit: the others are told, and the own pilot feels and hears it. */
   private hooked(owner: Ship, anchor: Anchor, length: number) {
-    if (owner.owner !== null) return;
+    if (owner.owner !== null || anchor.mark) return;
     this.online?.sendHook(owner, anchor.rock ? { rock: anchor.rock.id, local: anchor.local } : { target: anchor.ship }, length);
     if (owner !== this.me) return;
     this.sound.play('explosion', { volume: 0.5, rate: 2.4 });
@@ -4267,7 +4330,7 @@ export class Game implements OnlineGame {
   remoteHook(owner: Ship, rock: string | null, local: THREE.Vector3 | null, target: Ship | null, length: number) {
     this.unhook(owner);
     const asteroid = rock ? this.field.asteroids.get(rock) : undefined;
-    const anchor: Anchor | null = asteroid && local ? { rock: asteroid, local: local.clone(), ship: null } : target ? { rock: null, local: null, ship: target } : null;
+    const anchor: Anchor | null = asteroid && local ? { rock: asteroid, local: local.clone(), ship: null, mark: null } : target ? { rock: null, local: null, ship: target, mark: null } : null;
     if (!anchor) return;
     this.tethers.set(owner, { owner, anchor, flying: 0, end: new THREE.Vector3(), length, line: this.cables.take() });
     if (target === this.me) {

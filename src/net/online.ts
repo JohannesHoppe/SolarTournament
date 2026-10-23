@@ -73,6 +73,8 @@ export interface OnlineGame {
   novaBlast(holder: Ship, position: THREE.Vector3): void;
   /** A ship of another browser hooked a rock (by id, a point in its frame) or a ship, with this much cable out. */
   remoteHook(owner: Ship, rock: string | null, local: THREE.Vector3 | null, target: Ship | null, length: number): void;
+  /** A ship of another browser says its harpoon bit the core of side `team` (Capture the Flag). */
+  remoteCoreHook(owner: Ship, team: number): void;
   /** A ship of another browser let go of its hook. */
   remoteUnhook(owner: Ship): void;
   /** Several browsers found a Host cheating. */
@@ -228,6 +230,11 @@ export class Online {
       if (!owner) return;
       if (!hold) {
         game.remoteUnhook(owner);
+        return;
+      }
+      // a core: the lead's rules decide whether it is taken (from where they see ship and core)
+      if (hold.core !== null) {
+        game.remoteCoreHook(owner, hold.core);
         return;
       }
       const target = hold.target ? this.find(hold.target) : null;
@@ -391,10 +398,11 @@ export class Online {
     this.session.sendNova(ship.id, round(position));
   }
 
-  /** A ship of this browser hooked a rock (a point in its frame) or a ship, or let go (null). */
-  sendHook(ship: Ship, hold: { rock: string; local: THREE.Vector3 } | { target: Ship } | null, length = 0) {
+  /** A ship of this browser hooked a rock (a point in its frame), a ship or a core of Capture the Flag (its side, for the lead's rules), or let go (null). */
+  sendHook(ship: Ship, hold: { rock: string; local: THREE.Vector3 } | { target: Ship } | { core: number } | null, length = 0) {
     if (!hold) this.session.sendHook(ship.id, null);
     else if ('rock' in hold) this.session.sendHook(ship.id, { rock: hold.rock, local: round(hold.local) }, Math.round(length));
+    else if ('core' in hold) this.session.sendHook(ship.id, hold);
     else this.session.sendHook(ship.id, { target: hold.target.id }, Math.round(length));
   }
 

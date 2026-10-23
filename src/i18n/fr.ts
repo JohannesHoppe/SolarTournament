@@ -227,6 +227,8 @@ export const FR: Catalog = {
   'with {name}': 'aux mains de {name}',
   'someone': 'quelqu’un',
   'Their core': 'Leur noyau',
+  'Their core · in hook range': 'Leur noyau · à portée de grappin',
+  'Your core · in hook range': 'Ton noyau · à portée de grappin',
   'Home': 'Base',
   'Home · get your core back first': 'Base · récupère d’abord ton noyau',
   'Thief': 'Voleur',
