@@ -81,6 +81,9 @@ export const SINK_SECONDS = 4;
 export const SINK_BLAST = 20000;
 /** Nothing of a battleship lies farther than this from its center (units): its stern's nozzles at 400 m, and room. */
 const REACH = 8500;
+/** Where the batteries sit on the hull (units, in its frame): two pairs on the deck and the keel ahead of the bridge, one on each flank. */
+const BATTERY_MOUNTS: readonly (readonly [number, number, number])[] = [[0, 950, -4200], [0, 950, -2700], [0, -950, -4200], [0, -950, -2700], [1350, 0, 300], [-1350, 0, 300]];
+const BATTERIES = BATTERY_MOUNTS.length;
 
 type Zone = { kind: ZoneKind; at: THREE.Vector3; radius: number; mesh: THREE.Object3D };
 type Box = { center: THREE.Vector3; half: THREE.Vector3 };
@@ -163,6 +166,8 @@ export class Fleet implements Obstacle {
   private clock = 0;
   /** When the battleship went down (field time). */
   private sunkAt = -Infinity;
+  /** This browser has heard the lead's battleship still in the fight (see follow). */
+  private afloat = false;
 
   constructor(private readonly seed: number) {
     const hull = this.material(new THREE.MeshStandardMaterial({ color: 0x5a606c, metalness: 0.4, roughness: 0.55 }));
@@ -200,8 +205,7 @@ export class Fleet implements Obstacle {
 
     const barrel = this.geometry(new THREE.CylinderGeometry(60, 60, 900, 8).rotateX(Math.PI / 2).translate(0, 0, -450));
     const mount = this.geometry(new THREE.BoxGeometry(500, 300, 500));
-    const batteries: [number, number, number][] = [[0, 950, -4200], [0, 950, -2700], [0, -950, -4200], [0, -950, -2700], [1350, 0, 300], [-1350, 0, 300]];
-    for (const at of batteries) {
+    for (const at of BATTERY_MOUNTS) {
       const turret = new THREE.Group();
       turret.position.set(...at);
       turret.add(new THREE.Mesh(mount, dark), new THREE.Mesh(barrel, neon));
@@ -257,18 +261,24 @@ export class Fleet implements Obstacle {
 
   /** Batteries still firing. */
   get batteries() {
-    return this.zones.filter((zone, i) => zone.kind === 'battery' && !this.broken(i)).length;
+    return this.standingParts('battery');
   }
 
   get drives() {
-    return this.zones.filter((zone, i) => zone.kind === 'drive' && !this.broken(i)).length;
+    return this.standingParts('drive');
+  }
+
+  /** The parts of a kind still standing (counted by hand: bots and lines of sight ask every frame). */
+  private standingParts(kind: ZoneKind) {
+    let count = 0;
+    for (let i = 0; i < this.zones.length; i++) if (this.zones[i].kind === kind && !this.broken(i)) count++;
+    return count;
   }
 
   /** The battleship's phase: 1 while more than half its batteries stand, 2 below, 3 with all of them gone (the reactor open). */
   get phase() {
-    const all = this.zones.filter((zone) => zone.kind === 'battery').length;
     const left = this.batteries;
-    return left === 0 ? 3 : left * 2 <= all ? 2 : 1;
+    return left === 0 ? 3 : left * 2 <= BATTERIES ? 2 : 1;
   }
 
   /** A part can be hit: it stands, and the reactor only once its dome is open. */
@@ -453,7 +463,13 @@ export class Fleet implements Obstacle {
   /** Takes the lead's state: the battleship went down there first, the hits it counts, where it is. */
   follow(state: FleetState): FleetEvent[] {
     if (this.down) return [];
+    // a browser that came after it went down saw no fight: it is gone, without a blast or points
+    if (state.d && !this.afloat) {
+      this.down = true;
+      return [];
+    }
     if (state.d) return this.sink();
+    this.afloat = true;
     const events: FleetEvent[] = [];
     // hits only add up: the lead's count fills in hits not heard here
     const phase = this.phase;

@@ -65,6 +65,15 @@ export interface Flier {
 }
 
 const tow = new THREE.Vector3();
+/** The counts of the sides (see Flags.count), kept: the lead's rules run every frame. */
+const allSides = [0, 0];
+const hostSides = [0, 0];
+
+/** The ship of an id among the round's ships (a handful), or undefined. */
+function byId(ships: readonly Flier[], id: string): Flier | undefined {
+  for (const ship of ships) if (ship.id === id) return ship;
+  return undefined;
+}
 
 export class Flags {
   readonly root = new THREE.Group();
@@ -138,10 +147,9 @@ export class Flags {
    */
   lead(ships: readonly Flier[], now: number) {
     this.assign(ships);
-    const byId = new Map(ships.map((ship) => [ship.id, ship]));
     this.cores.forEach((core, team) => {
       if (core.carrier) {
-        const carrier = byId.get(core.carrier);
+        const carrier = byId(ships, core.carrier);
         // a carrier that died, left, or changed sides drops the core where it was
         if (!carrier?.alive || this.teamOf(carrier.id) === team) {
           if (carrier) core.velocity.copy(carrier.flight.velocity).multiplyScalar(DROP_DRIFT);
@@ -221,17 +229,21 @@ export class Flags {
     this.followed = true;
   }
 
-  /** The events since the game last asked, oldest first. */
-  takeEvents(): FlagEvent[] {
-    const fresh = this.events.filter((e) => e.seq > this.taken);
+  /** The events since the game last asked, oldest first (the same list each time, filled anew: the game asks every frame). */
+  takeEvents(): readonly FlagEvent[] {
+    const fresh = this.fresh;
+    fresh.length = 0;
+    for (const event of this.events) if (event.seq > this.taken) fresh.push(event);
     this.taken = this.seq;
     return fresh;
   }
 
+  private readonly fresh: FlagEvent[] = [];
+
   /** The cores where they are this frame: home, in tow behind their carrier, or drifting. */
   update(dt: number, ships: readonly Flier[], now: number) {
     this.cores.forEach((core, team) => {
-      const carrier = core.carrier ? ships.find((ship) => ship.id === core.carrier) : null;
+      const carrier = core.carrier ? byId(ships, core.carrier) : null;
       if (carrier) {
         // in tow behind the carrier, against its flight
         const speed = carrier.flight.velocity.length();
@@ -252,26 +264,27 @@ export class Flags {
 
   /** Sides for ships that have none, Hosts spread over both first; bots even out the numbers. */
   private assign(ships: readonly Flier[]) {
-    const present = new Set(ships.map((ship) => ship.id));
-    for (const id of [...this.teams.keys()]) if (!present.has(id)) this.teams.delete(id);
+    // a Map may lose entries while it is walked
+    for (const id of this.teams.keys()) if (!byId(ships, id)) this.teams.delete(id);
     for (const ship of ships) {
       if (this.teams.has(ship.id)) continue;
-      const [all, hosts] = [this.count(ships, null), this.count(ships, 'host')];
+      const all = this.count(ships, null, allSides);
+      const hosts = this.count(ships, 'host', hostSides);
       // a Host joins the side with fewer Hosts, a bot the smaller side; a tie goes to Orange
       const pick = ship.kind === 'host' && hosts[0] !== hosts[1] ? (hosts[0] < hosts[1] ? 0 : 1) : all[1] < all[0] ? 1 : 0;
       this.teams.set(ship.id, pick);
     }
     // a side two ships short gets a bot from the other one (never one with a core in tow)
-    const all = this.count(ships, null);
+    const all = this.count(ships, null, allSides);
     if (Math.abs(all[0] - all[1]) < 2) return;
     const bigger = all[0] > all[1] ? 0 : 1;
     const bot = ships.find((ship) => ship.kind === 'bot' && this.teams.get(ship.id) === bigger && this.carrying(ship.id) < 0);
     if (bot) this.teams.set(bot.id, 1 - bigger);
   }
 
-  /** Ships on each side, of a kind or all. */
-  private count(ships: readonly Flier[], kind: Flier['kind']): number[] {
-    const counts = [0, 0];
+  /** Ships on each side, of a kind or all, counted into `counts`. */
+  private count(ships: readonly Flier[], kind: Flier['kind'], counts: number[]): number[] {
+    counts[0] = counts[1] = 0;
     for (const ship of ships) {
       const team = this.teams.get(ship.id);
       if (team !== undefined && (kind === null || ship.kind === kind)) counts[team]++;

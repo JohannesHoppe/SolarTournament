@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { GHOST_STEP, LapTimer, parseLaps } from './laps';
+import { GHOST_STEP, lapClock, LapTimer, parseLaps } from './laps';
 import { GATES } from './race';
 
 /** Flies a lap of `seconds` from race time `start`: a gate every `seconds / GATES`, the ship moving along x at 100 units/s. */
@@ -11,6 +11,14 @@ function lap(timer: LapTimer, start: number, seconds: number) {
   events.push(timer.pass(0, start + seconds));
   return events;
 }
+
+describe('a lap time', () => {
+  it('reads as minutes and seconds to the hundredth, never as 60 seconds', () => {
+    expect(lapClock(62.345)).toBe('1:02.35');
+    expect(lapClock(59.996)).toBe('1:00.00');
+    expect(lapClock(9.5)).toBe('0:09.50');
+  });
+});
 
 describe('the lap timer', () => {
   it('times laps from the pink gate round to the pink gate, and keeps the best', () => {
