@@ -6,7 +6,9 @@ import { canvas, toTexture } from './textures';
  * The surfaces of everything built in code, drawn on canvases from fixed seeds, so every
  * session shows the same wear. A surface comes as three maps: a color map that the part's own
  * color is multiplied with, a map of roughness (green) and metalness (blue) as three.js reads
- * them, and a bump map of grooves and rivets. All of it is look only; nothing of it is shared.
+ * them, with how intact a clear lacquer over the paint is in its red (gone where the paint
+ * rusted or chipped, dull where it is scratched; read by the hulls, see ship/models.ts), and a
+ * bump map of grooves and rivets. All of it is look only; nothing of it is shared.
  *
  * The fighters of the Games come from the depots of centuries of war: their paint is worn,
  * chipped down to bare metal, streaked with rust and grime, stenciled over and over. The
@@ -78,7 +80,8 @@ function glowTexture(element: HTMLCanvasElement) {
 /** A surface with a layer that glows of its own (embers, glitter). */
 export type GlowingSurface = Surface & { glow: THREE.Texture };
 
-const ormColor = (roughness: number, metalness: number, alpha = 1) => `rgba(255, ${Math.round(roughness * 255)}, ${Math.round(metalness * 255)}, ${alpha})`;
+/** A color of the second map: how intact a lacquer over it is (red), roughness (green), metalness (blue). */
+const ormColor = (roughness: number, metalness: number, alpha = 1, lacquer = 1) => `rgba(${Math.round(lacquer * 255)}, ${Math.round(roughness * 255)}, ${Math.round(metalness * 255)}, ${alpha})`;
 
 /** The three canvases as repeating textures (the color map in sRGB, the others linear). */
 function textures(color: HTMLCanvasElement, orm: HTMLCanvasElement, bump: HTMLCanvasElement): Surface {
@@ -167,7 +170,7 @@ function rust(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRenderi
     gradient.addColorStop(1, 'rgba(140, 62, 22, 0)');
     color.fillStyle = gradient;
     color.fillRect(x, y, width, length);
-    orm.fillStyle = ormColor(0.95, 0.05, 0.8);
+    orm.fillStyle = ormColor(0.95, 0.05, 0.8, 0);
     orm.fillRect(x, y, width, length * 0.6);
   }
 }
@@ -179,7 +182,7 @@ function chips(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRender
     const y = r.range(0, SIZE);
     const size = r.range(1.5, 7);
     color.fillStyle = 'rgba(200, 200, 205, 0.9)';
-    orm.fillStyle = ormColor(0.25, 1);
+    orm.fillStyle = ormColor(0.25, 1, 1, 0);
     for (const g of [color, orm]) {
       g.beginPath();
       // an irregular flake: a few points around the spot
@@ -197,7 +200,7 @@ function chips(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRender
 /** Fine scratches, bright in roughness (scuffed) and a little darker in color. */
 function scratches(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRenderingContext2D, amount: number) {
   color.strokeStyle = 'rgba(0, 0, 0, 0.18)';
-  orm.strokeStyle = ormColor(0.35, 0.9, 0.7);
+  orm.strokeStyle = ormColor(0.35, 0.9, 0.7, 0.3);
   color.lineWidth = orm.lineWidth = 0.8;
   for (let i = 0; i < 50 * amount; i++) {
     const x = r.range(0, SIZE);

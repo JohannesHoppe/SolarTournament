@@ -1123,6 +1123,12 @@ export class FlightSchool {
     return a?.live && a.track ? (a.points[a.next + 1] ?? null) : null;
   }
 
+  /** Which way the next ring of a ring course faces, for where the flight crosses its plane; null without one. */
+  get nextNormal(): THREE.Vector3 | null {
+    const a = this.attempt;
+    return a?.live && a.track ? (a.normals[a.next] ?? null) : null;
+  }
+
   /**
    * Whether a ship touches the housings of a ring still standing in a ring course (see
    * touchRing; the rings passed are gone); moves it out and sets `normal` when it does.

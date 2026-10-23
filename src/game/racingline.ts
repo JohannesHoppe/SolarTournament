@@ -39,6 +39,13 @@ function clearOf(field: AsteroidField, point: THREE.Vector3): boolean {
 }
 const tangent = new THREE.Vector3();
 const off = new THREE.Vector3();
+const chord = new THREE.Vector3();
+
+/** The radius of the circle through three points (units): how tight a line through them bends there; Infinity on a straight. */
+export function bendRadius(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): number {
+  const twiceArea = off.subVectors(b, a).cross(chord.subVectors(c, a)).length();
+  return twiceArea < 1e-6 ? Infinity : (a.distanceTo(b) * b.distanceTo(c) * c.distanceTo(a)) / (2 * twiceArea);
+}
 
 /**
  * The ideal line of a course: a smooth curve (centripetal Catmull-Rom) through the center of

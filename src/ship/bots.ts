@@ -223,8 +223,9 @@ export class Bot {
   flee: THREE.Vector3 | null = null;
   /** What the bot flees, for the development log: a nova, the battleship, a comet. */
   fleeFrom = '';
-  /** Set by the game: the bot turns back towards the center beyond this distance (units), inside a solar flare's shell. */
+  /** Set by the game: the bot turns back beyond this distance (units) from `homeAt`, the field's center or a solar flare's safe pocket. */
   home = HOME_RADIUS;
+  homeAt: THREE.Vector3 | null = null;
   /** Set by the game: the bot's hook holds until then, and is ready again from then on (s). */
   hookUntil = 0;
   hookReadyAt = 0;
@@ -398,7 +399,9 @@ export class Bot {
     }
     // a nova core close by: away from it, at full speed, with the main drive (see burning)
     if (this.flee) desired.copy(local.subVectors(me.position, this.flee).normalize()).multiplyScalar(CRUISE_SPEED * 2);
-    if (me.position.length() > this.home) desired.addScaledVector(me.position, -CRUISE_SPEED / me.position.length());
+    const fromHome = this.homeAt ? local.subVectors(me.position, this.homeAt) : local.copy(me.position);
+    const homeDistance = fromHome.length();
+    if (homeDistance > this.home) desired.addScaledVector(fromHome, -CRUISE_SPEED / homeDistance);
     const givingWay = this.keepClear(ships);
     // a massive body pulls: near it, away from it comes first
     const well = field.well;
@@ -478,7 +481,7 @@ export class Bot {
       // what the bot does, the first that holds: running from danger, then its task
       const doing = this.flee ? 'flee' : falling ? 'escape well' : chaser && !this.armed ? 'run' : lookingBack ? 'look back' : racing ? 'race' : defending ? 'defend' : target ? 'attack' : this.siege ? 'siege' : this.lure ? 'probe' : 'roam';
       const about = this.flee ? this.fleeFrom : chaser && (!this.armed || lookingBack || defending) ? chaser.name : target ? target.name : '';
-      const extra = `${danger && !falling ? ' +avoid rock' : ''}${me.position.length() > this.home ? ' +home' : ''}${givingWay ? ` +give way to ${givingWay.name}` : ''}`;
+      const extra = `${danger && !falling ? ' +avoid rock' : ''}${homeDistance > this.home ? ' +home' : ''}${givingWay ? ` +give way to ${givingWay.name}` : ''}`;
       devlog.decide(now, this.ship.name, meanSkill(this.skills), doing + extra, about);
     }
     return this.byHand(controls, dt);

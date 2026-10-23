@@ -182,7 +182,7 @@ export const ANNOUNCER_WIN = ['{name} wins the race. glory to the president', 'a
 /** Last Clone Standing: a pilot loses its last clone, one is left, and the flare comes. */
 export const ANNOUNCER_OUT = ['{name} is out. no clones left', 'and {name} is gone. for good. well, for this round'];
 export const ANNOUNCER_SURVIVOR = ['{name} is the last clone standing', '{name} survives. the president is impressed'];
-export const ANNOUNCER_FLARE = 'here comes the flare. the arena is closing';
+export const ANNOUNCER_FLARE = 'here comes the flare. run from the sun, little clones';
 /** A comet crosses the arena, its shower after it (see game/comet.ts). */
 export const ANNOUNCER_COMET = ['a comet is coming. its tail is full of rock. hide, little clones', 'the heavens join the games. a comet, folks, courtesy of the president'];
 /** A comet's head runs a pilot down. */
@@ -249,7 +249,7 @@ export const SCHOOL = {
   fineAim: 'Hold fine aim, and you turn slowly. Center the marker. Exactly.',
   cockpit: 'Now look through your clone’s eyes. Switch to the cockpit, have a look around, and switch back.',
   drive: 'This is your main drive. Push it to fifty meters per second.',
-  freeDrift: 'Your autopilot keeps you flying where you point. Switch it off, and you drift like a real spaceship.',
+  freeDrift: 'Your autopilot steers your flight, not just your nose. Switch it off, and you drift like a real spaceship.',
   drift: 'Now let go. Nothing out here slows you down.',
   lookBack: 'Turn around while you drift. Your course stays the same. The green ring shows where you are going.',
   brake: 'Hold the brake. I flip you over and brake for you.',
@@ -261,7 +261,7 @@ export const SCHOOL = {
   slide: 'Someone is on your tail and shooting. Jink left and right with your thrusters, and the shots go past you.',
   dodge: 'Debris incoming. Slide out of its way. Do not turn.',
   dodgeHit: 'Ouch. Again.',
-  autopilotOn: 'Switch the autopilot back on. The thrusters catch every drift, and you fly where you point.',
+  autopilotOn: 'Switch the autopilot back on. You steer where you fly, and I bend your course with drive and thrusters.',
   rings: 'Fly through the rings. Brake when you need to.',
   shoot: 'Fire! Your laser only scorches armor. This drone shows you its drive. Hit the drive until it blows.',
   shootMoving: 'This one moves. Your laser hits the instant you fire, so just keep it in your crosshair. Fine aim helps.',
@@ -380,7 +380,7 @@ export const COMPUTER = {
   lostLead: 'You lost the lead.',
   passed: 'Nice pass.',
   passedBy: 'Someone got past you.',
-  flare: 'Solar flare, darling. The arena is closing in. Stay inside the shell.',
+  flare: 'Solar flare, darling. It comes from the sun. Fly to the far side, and keep a rock between you and the light.',
   lastClone: 'This is your last clone, darling. Make it count.',
   out: 'That was your last clone, darling. You are out. Sit back, and watch the others burn.',
   survivor: 'You are the last clone standing. I knew it, darling.',
@@ -409,7 +409,7 @@ export const COMPUTER = {
 export const TIPS = {
   race: 'A race, darling. Three laps through the rings. Fly through their very centers, and the coils throw you on. Follow the orange dots, and shoot whoever is ahead of you.',
   deathmatch: 'A deathmatch. Every kill counts. Hit their drives from behind, turn your armored nose to anyone behind you, and never fly a straight line.',
-  survival: 'Last clone standing. Three clones, no more. After a minute a solar flare closes in from the edge. Stay inside its shell, and stay alive.',
+  survival: 'Last clone standing. Three clones, no more. After a minute a solar flare sweeps in from the sun and burns the arena down to a pocket on the far side. Stay ahead of it, hide behind rock, and stay alive.',
   flag: 'Capture the flag. Touch their core, and tow it into our ring. We only score while our own core is at home, so guard it, or bring it back.',
   fleet: 'The President’s fleet. We all fight his battleship together. Take out its batteries first, then its drives. When the reactor opens, hit it, and get clear before it blows. Keep moving: its batteries miss fast ships.',
   tail: 'Someone is on your drive, darling. Turn your nose to them, now.',
