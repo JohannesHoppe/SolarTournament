@@ -4,7 +4,7 @@ import { ownerOf, TOURNAMENT_SIZE, type Session, type RoundState, type Vec } fro
 import type { Ship, ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
 import { unpackItems, type ItemKind, type ProbeState } from '../game/items';
-import { Accusations, AIM_SLACK, beamShare, Evidence, ORIGIN_SLACK, Plausibility, plausibleBlast, plausibleHook, SenderClock, Strikes, type Cheat, type Margins } from './plausible';
+import { Accusations, AIM_SLACK, beamShare, Evidence, ORIGIN_SLACK, Plausibility, plausibleBlast, hookShare, SenderClock, Strikes, type Cheat, type Margins } from './plausible';
 import { devlog, type SuspicionEvent } from '../devlog';
 import { HOOK_RANGE } from '../game/hook';
 import type { Homing, Torpedo } from '../game/torpedoes';
@@ -78,6 +78,10 @@ export interface OnlineGame {
   remoteCoreHook(owner: Ship, team: number): void;
   /** A ship of another browser took a torpedo on its hook (by id, with this much cable out): that browser decides where it goes off from now on. */
   remoteTorpedoHook(owner: Ship, id: string, length: number): void;
+  /** A ship of another browser took a sponsor probe on its hook (by id, with this much cable out): it is reeled in to that ship, pulled here from its states. */
+  remoteProbeHook(owner: Ship, id: string, length: number): void;
+  /** Where a probe is now, as this browser has it; null for one it does not have. */
+  probeAt(id: string): THREE.Vector3 | null;
   /** A ship of another browser let go of its hook. */
   remoteUnhook(owner: Ship): void;
   /** Several browsers found a Host cheating. */
@@ -266,8 +270,17 @@ export class Online {
       // a torpedo: only one within the hook's reach of the ship, as this browser sees them
       if (hold.torpedo !== null) {
         const torpedo = game.recentTorpedo(hold.torpedo);
-        if (!torpedo || this.caught(owner, plausibleHook(owner.flight.position, torpedo.position) ? null : 'hook')) return;
+        if (!torpedo || this.caught(owner, this.plausible.measure('hook', hookShare(owner.flight.position, torpedo.position)) ? 'hook' : null)) return;
         game.remoteTorpedoHook(owner, hold.torpedo, hold.length);
+        return;
+      }
+      // a probe: only a living ship's, one within the hook's reach as this browser sees them,
+      // and on a cable at least as long as the way between them (a cable said to be short would
+      // yank it aboard at once); a probe this browser no longer has was taken already
+      if (hold.probe !== null) {
+        const probe = game.probeAt(hold.probe);
+        if (!probe || !owner.alive || this.caught(owner, this.plausible.measure('hook', hookShare(owner.flight.position, probe)) ? 'hook' : null)) return;
+        game.remoteProbeHook(owner, hold.probe, Math.max(hold.length, owner.flight.position.distanceTo(probe)));
         return;
       }
       const target = hold.target ? this.find(hold.target) : null;
@@ -425,11 +438,11 @@ export class Online {
     this.session.sendNova(ship.id, round(position));
   }
 
-  /** A ship of this browser hooked a rock (a point in its frame), a ship, a core of Capture the Flag (its side, for the lead's rules) or a torpedo (by id: this browser decides where it goes off from now on), or let go (null). */
-  sendHook(ship: Ship, hold: { rock: string; local: THREE.Vector3 } | { target: Ship } | { core: number } | { torpedo: string } | null, length = 0) {
+  /** A ship of this browser hooked a rock (a point in its frame), a ship, a core of Capture the Flag (its side, for the lead's rules) a torpedo (by id: this browser decides where it goes off from now on) or a sponsor probe (by id: every browser reels it in on that cable), or let go (null). */
+  sendHook(ship: Ship, hold: { rock: string; local: THREE.Vector3 } | { target: Ship } | { core: number } | { torpedo: string } | { probe: string } | null, length = 0) {
     if (!hold) this.session.sendHook(ship.id, null);
     else if ('rock' in hold) this.session.sendHook(ship.id, { rock: hold.rock, local: round(hold.local) }, Math.round(length));
-    else if ('core' in hold || 'torpedo' in hold) this.session.sendHook(ship.id, hold, Math.round(length));
+    else if ('core' in hold || 'torpedo' in hold || 'probe' in hold) this.session.sendHook(ship.id, hold, Math.round(length));
     else this.session.sendHook(ship.id, { target: hold.target.id }, Math.round(length));
   }
 

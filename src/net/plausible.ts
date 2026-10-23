@@ -473,9 +473,13 @@ export function plausibleBlast(at: THREE.Vector3, target: THREE.Vector3): boolea
   return at.distanceTo(target) < AIM_SLACK;
 }
 
-/** A torpedo claimed by a ship's hook: it lay within the hook's reach of the ship, as this browser sees them, up to AIM_SLACK of lag. */
-export function plausibleHook(ship: THREE.Vector3, torpedo: THREE.Vector3): boolean {
-  return ship.distanceTo(torpedo) < HOOK_RANGE + AIM_SLACK;
+/**
+ * A torpedo or a sponsor probe claimed by a ship's hook lay within the hook's reach of the
+ * ship, as this browser sees them, up to AIM_SLACK of lag: the share of that bound (above 1:
+ * out of reach, a strike, see Strikes).
+ */
+export function hookShare(ship: THREE.Vector3, held: THREE.Vector3): number {
+  return ship.distanceTo(held) / (HOOK_RANGE + AIM_SLACK);
 }
 
 /** What a ship's beams and torpedoes did counts as evidence this long (s), its torpedo launches as long as a torpedo flies and a little more. */

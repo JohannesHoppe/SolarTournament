@@ -134,6 +134,62 @@ test('two tabs agree on a tug of war between their ships on one rope', async ({ 
   expect(errors).toEqual([]);
 });
 
+test('two tabs see a probe on a hook travel to the hooking ship, and be taken there', async ({ context }) => {
+  const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}p&bots=0`);
+  // the same probe on both tabs (as a dead clone's would be), above the field and at rest
+  // there; the second tab's clone keeps well away
+  for (const page of [a, b])
+    await page.evaluate(() => {
+      const game = window.game;
+      const at = game.me.flight.position.clone().set(0, 62000, 0);
+      game.probes.drop('e2e', 0, ['torpedoes'], at, at.clone().set(0, 0, 0), game.time);
+      const probe = game.probes.find('e2e.0.0');
+      game.probes.park(probe, at);
+      probe.until = Infinity;
+    });
+  await b.evaluate(() => {
+    const game = window.game;
+    game.autopilot = false;
+    game.me.flight.position.set(0, 62000, -60000);
+    game.me.flight.velocity.set(0, 0, 0);
+  });
+  // the first tab's clone, 400 m from the probe, its nose on it (straight ahead is -z)
+  const before = await a.evaluate(() => {
+    const game = window.game;
+    game.autopilot = false;
+    game.me.flight.position.set(0, 62000, 8000);
+    game.me.flight.velocity.set(0, 0, 0);
+    game.me.flight.orientation.set(0, 0, 0, 1);
+    return game.me.torpedoes;
+  });
+  await play(a, 1);
+  // it fires its hook and holds it, while the second tab watches where the probe is
+  const watch = b.evaluate(async () => {
+    const game = window.game;
+    const seen: number[] = [];
+    const start = game.time;
+    while (game.time - start < 6) {
+      const probe = game.probes.find('e2e.0.0');
+      seen.push(probe ? probe.position.z : NaN);
+      if (!probe) break;
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    return seen;
+  });
+  await a.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' })));
+  const seen = await watch;
+  await play(a, 1);
+  await a.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyV' })));
+  // the second tab saw it come more than half the way towards the hooking ship, then it was gone
+  expect(Math.max(...seen.filter((z) => !Number.isNaN(z)))).toBeGreaterThan(4000);
+  expect(Number.isNaN(seen[seen.length - 1])).toBe(true);
+  // taken by the ship that hooked it, on its arrival: two more torpedoes, and gone on both tabs
+  expect(await a.evaluate(() => window.game.me.torpedoes)).toBe(before + 2);
+  for (const page of [a, b]) expect(await page.evaluate(() => window.game.probes.find('e2e.0.0'))).toBeNull();
+  expect(errors).toEqual([]);
+  for (const page of [a, b]) expect(await page.evaluate(() => window.game.online.reported.size)).toBe(0);
+});
+
 test('two tabs of Capture the Flag agree on the sides and on who has a core in tow, taken by a hook shot', async ({ context }) => {
   // two Hosts alone: bots would only slow two tabs without a GPU down
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}f&m=flag&bots=0`);

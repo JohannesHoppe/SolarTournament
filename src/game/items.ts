@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { hash } from '../music/songs';
 import { textSeed } from '../random';
 import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
+import { MASS } from '../world/bodies';
+import type { Ship } from '../ship/ship';
 import { msg } from '../i18n/i18n';
 import { solarCells, surfaced, wornSurface, type Wear } from '../view/surfaces';
 
@@ -91,6 +93,18 @@ const TRACK_SPREAD = 800;
 const DROP_LIFETIME = 45;
 /** Dropped probes fly apart with up to this speed (units/s, 20 m/s) on top of the wreck's. */
 const DROP_SPREAD = 400;
+/**
+ * A probe a hook let go (its cable cut by its hooker's death, or let go before it arrived)
+ * drifts on with its speed, then its thrusters fly it back to its slot (see Probe.slot): up to
+ * PROBE_THRUST (units/s², 4 g), never faster than PROBE_RETURN towards it (units/s, 100 m/s),
+ * and slow enough to stop there with half that thrust. Within PROBE_SETTLE of its slot (units,
+ * 5 m) and as slow against it (units/s) it is back on it, where every browser has it alike
+ * again. A sponsor wants its probe where the pilots look for it; and a probe's place is the
+ * one thing all browsers agree on without a word.
+ */
+export const PROBE_THRUST = 785;
+const PROBE_RETURN = 2000;
+const PROBE_SETTLE = 100;
 
 export interface Probe {
   /** "r<round>.<n>" for the arena's probes, "<ship id>.<deaths>.<n>" for a dead clone's: the same probe on every browser. */
@@ -100,6 +114,15 @@ export interface Probe {
   luck: number | null;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
+  /** A probe is a body (see world/bodies) on a hook's cable: half a tonne. */
+  readonly mass: number;
+  /** Where the probe belongs now and how that place drifts: the same on every browser (round clock, or a dead clone's death). The probe flies there unless a hook moved it (see astray). */
+  readonly slot: THREE.Vector3;
+  readonly slotVelocity: THREE.Vector3;
+  /** The ship whose hook reels it in, or null. */
+  holder: Ship | null;
+  /** Off its slot: on a cable, or flying back to it after one let go (see PROBE_THRUST). */
+  astray: boolean;
   /** Gone after this (game time, s). */
   until: number;
   mesh: THREE.Group;
@@ -126,7 +149,9 @@ function probeParts() {
 /**
  * The probes of a round. Which probe shows up when, where and with what follows from the
  * room and round and the round clock, so every browser has the same probes without a word;
- * a dead clone's probes follow from its death. Taking a probe is told to the others.
+ * a dead clone's probes follow from its death. Taking a probe is told to the others. A hook
+ * moves a probe off its slot: every browser pulls it on that ship's cable (see game/hook), and
+ * once the cable is gone it flies back to its slot (see PROBE_THRUST).
  */
 export class Probes {
   readonly group = new THREE.Group();
@@ -197,9 +222,9 @@ export class Probes {
     return deaths !== null && Number(drop![2]) <= deaths + 1 && Number(drop![3]) < MAX_DROPS;
   }
 
-  /** The probes in flight, for a browser that joins: it takes them as they are, wherever they drift. */
+  /** The probes in flight, for a browser that joins: it takes them on their slots, wherever they drift (one on a cable just now is back there in a moment, see PROBE_THRUST). */
   snapshot(now: number): ProbeState[] {
-    return this.list.map((probe) => ({ i: probe.id, k: probe.kind, p: probe.position.toArray().map(Math.round), v: probe.velocity.toArray().map(Math.round), u: +(probe.until - now).toFixed(1), ...(probe.luck === null ? {} : { x: probe.luck }) }));
+    return this.list.map((probe) => ({ i: probe.id, k: probe.kind, p: probe.slot.toArray().map(Math.round), v: probe.slotVelocity.toArray().map(Math.round), u: +(probe.until - now).toFixed(1), ...(probe.luck === null ? {} : { x: probe.luck }) }));
   }
 
   /** Takes the probes in flight from the lead browser. */
@@ -230,15 +255,45 @@ export class Probes {
     mesh.add(new THREE.Mesh(body, this.hull), new THREE.Mesh(wing, this.panels), new THREE.Mesh(dish, this.hull), new THREE.Mesh(mast, this.hull), beacon, new THREE.Mesh(ring, neon));
     mesh.position.copy(position);
     this.group.add(mesh);
-    this.list.push({ id, kind, luck, position: mesh.position, velocity, until, mesh, beacon });
+    this.list.push({ id, kind, luck, position: mesh.position, velocity, mass: MASS.probe, slot: position.clone(), slotVelocity: velocity.clone(), holder: null, astray: false, until, mesh, beacon });
   }
 
-  /** Probes drift, turn slowly and blink; a dropped one is gone after its time, or in the arena's massive body. */
+  /** A probe of this round with its slot moved to `position` and at rest there (the flight school's probes wait where its drills put them). */
+  park(probe: Probe, position: THREE.Vector3) {
+    probe.position.copy(position);
+    probe.slot.copy(position);
+    probe.velocity.set(0, 0, 0);
+    probe.slotVelocity.set(0, 0, 0);
+  }
+
+  /** A hook took a probe on its cable: it leaves its slot. */
+  hook(probe: Probe, holder: Ship) {
+    probe.holder = holder;
+    probe.astray = true;
+  }
+
+  /** The hook of `holder` let go of its probe, if it held one: it flies back to its slot. */
+  letGo(probe: Probe, holder: Ship) {
+    if (probe.holder === holder) probe.holder = null;
+  }
+
+  /**
+   * Probes drift, turn slowly and blink; one a hook let go flies back to its slot; a dropped
+   * one is gone after its time, or in the arena's massive body.
+   */
   update(dt: number, now: number, field: AsteroidField) {
     this.sealed.color.setHSL((now * SEALED_CYCLE) % 1, 1, 0.6).multiplyScalar(2.5);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const probe = this.list[i];
+      probe.slot.addScaledVector(probe.slotVelocity, dt);
+      const returning = probe.astray && !probe.holder;
+      if (returning) homeIn(probe, dt);
       probe.position.addScaledVector(probe.velocity, dt);
+      if (returning && probe.position.distanceTo(probe.slot) < PROBE_SETTLE && probe.velocity.distanceTo(probe.slotVelocity) < PROBE_SETTLE) {
+        probe.position.copy(probe.slot);
+        probe.velocity.copy(probe.slotVelocity);
+        probe.astray = false;
+      }
       probe.mesh.rotation.copy(spin.set(0.3, now * 0.4, 0.15));
       probe.beacon.visible = now % 1 < 0.6;
       if (now >= probe.until || field.insideWell(probe.position, PROBE_RADIUS)) this.remove(probe);
@@ -293,6 +348,21 @@ export class Probes {
     if (index >= 0) this.list.splice(index, 1);
     this.group.remove(probe.mesh);
   }
+}
+
+const toSlot = new THREE.Vector3();
+const change = new THREE.Vector3();
+
+/** A probe off its slot burns towards the speed that brings it back there (see PROBE_THRUST). */
+function homeIn(probe: Probe, dt: number) {
+  toSlot.subVectors(probe.slot, probe.position);
+  const distance = toSlot.length();
+  const speed = Math.min(Math.sqrt(PROBE_THRUST * distance), PROBE_RETURN);
+  change.copy(probe.slotVelocity);
+  if (distance > 1e-6) change.addScaledVector(toSlot, speed / distance);
+  change.sub(probe.velocity);
+  const burn = change.length();
+  probe.velocity.addScaledVector(change, burn > 0 ? Math.min(1, (PROBE_THRUST * dt) / burn) : 0);
 }
 
 /** What a probe gives a taker in the `bucket` third of the field (see placeBucket): its kind, or for a sealed one what its luck and the place make of it. */

@@ -4253,7 +4253,7 @@ export class Game implements OnlineGame {
         // until the pilot comes for it
         this.probes.drop('school', Math.floor(this.time * 1000), [kind], position, new THREE.Vector3(), this.time);
         const probe = this.probes.list[this.probes.list.length - 1];
-        probe.velocity.set(0, 0, 0);
+        this.probes.park(probe, position);
         probe.until = Infinity;
         return probe.position;
       },
@@ -4502,7 +4502,8 @@ export class Game implements OnlineGame {
 
   /** The harpoon leaves the nose: it bites what lies ahead within reach (in Capture the Flag a core it may take too), or flies out and is reeled back. */
   private fireHook(ship: Ship) {
-    const marks: Mark[] = this.probes.list.map((probe) => ({ team: -1, probe: probe.id, position: probe.position }));
+    const marks: Mark[] = [];
+    for (const probe of this.probes.list) if (!probe.holder) marks.push({ team: -1, probe, position: probe.position });
     for (const torpedo of this.torpedoes.list) if (!torpedo.holder) marks.push({ team: -1, torpedo, position: torpedo.position });
     if (this.flags) marks.push(...this.flags.hookable(ship));
     const aim = aimHook(
@@ -4529,12 +4530,16 @@ export class Game implements OnlineGame {
       torpedo.flinger = ship;
       torpedo.releasedAt = this.time;
     }
-    // a core or probe bitten was handed on to the rules: nothing held, nothing to fling
-    const held = !!tether.anchor && (!tether.anchor.mark || !!torpedo) && tether.flying <= 0;
+    // a probe let go before it arrived flies back to its slot (see PROBE_THRUST)
+    const probe = tether.flying <= 0 ? tether.anchor?.mark?.probe : undefined;
+    if (probe) this.probes.letGo(probe, ship);
+    // a core bitten was handed on to the rules: nothing held, nothing to fling; a probe is too
+    // light to fling a ship
+    const held = !!tether.anchor && (!tether.anchor.mark || !!torpedo || !!probe) && tether.flying <= 0;
     if (ship.owner === null && held) this.online?.sendHook(ship, null);
     if (ship !== this.me) return;
     this.hookReadyAt = this.time + HOOK_RECHARGE;
-    if (held && ship.alive) this.flungUntil = this.time + FLING_SECONDS;
+    if (held && !probe && ship.alive) this.flungUntil = this.time + FLING_SECONDS;
   }
 
   private clearHooks() {
@@ -4563,17 +4568,16 @@ export class Game implements OnlineGame {
             continue;
           }
           tether.length = owner.flight.position.distanceTo(at);
-          // a core bitten goes to the rules, its cable the tow cable from then on; a probe
-          // bitten is the ship's (see hookedProbe); a torpedo hangs on the rope (see hookedTorpedo)
+          // a core bitten goes to the rules, its cable the tow cable from then on; a torpedo or
+          // a probe hangs on the rope (see hookedTorpedo, hookedProbe)
           const mark = tether.anchor.mark;
-          if (mark?.torpedo) {
-            if (!this.hookedTorpedo(owner, mark.torpedo, tether.length)) {
+          if (mark?.torpedo || mark?.probe) {
+            if (!(mark.torpedo ? this.hookedTorpedo(owner, mark.torpedo, tether.length) : this.hookedProbe(owner, mark.probe!, tether.length))) {
               this.unhook(owner);
               continue;
             }
           } else if (mark) {
-            if (mark.probe) this.hookedProbe(owner, mark.probe);
-            else this.hookedCore(owner, mark.team);
+            this.hookedCore(owner, mark.team);
             this.unhook(owner);
             continue;
           } else this.hooked(owner, tether.anchor, tether.length);
@@ -4583,15 +4587,19 @@ export class Game implements OnlineGame {
       Cables.draw(tether.line, nose, cableEnd(tether, nose, hookEnd));
       if (tether.flying > 0 || !tether.anchor) continue;
       const at = pivotOf(tether.anchor, hookPoint);
-      const held = tether.anchor.mark?.torpedo;
-      if (!at || (held && !this.torpedoes.list.includes(held))) {
+      // a torpedo gone off, or a probe taken (by the hooker on arrival, or by a ship that
+      // touched it first on the way): nothing left on the line
+      const torpedo = tether.anchor.mark?.torpedo;
+      const probe = tether.anchor.mark?.probe;
+      const held = torpedo ?? probe;
+      if (!at || (torpedo && !this.torpedoes.list.includes(torpedo)) || (probe && (!this.probes.list.includes(probe) || probe.holder !== owner))) {
         this.unhook(owner);
         continue;
       }
       // a ship hooked to a ship: one rope between two bodies of the same mass, each end pulled
-      // on the browser that runs it (both at once where one browser runs both); a torpedo, which
-      // every browser flies, pulled everywhere; hooked to a rock, the rock is the anchor, far
-      // too heavy to move
+      // on the browser that runs it (both at once where one browser runs both); a torpedo or a
+      // probe, which every browser has, pulled everywhere (another browser's ship as it last
+      // told of it); hooked to a rock, the rock is the anchor, far too heavy to move
       const target = tether.anchor.ship;
       const floor = floorOf(owner, tether.anchor);
       let length: number | null = tether.length;
@@ -4625,14 +4633,39 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * A harpoon of this browser bit a sponsor probe: the ship takes it as if it had flown through
-   * it. Half a tonne against a ship's sixty, the winch would have it aboard in a moment; and a
-   * probe is no one's to move (every browser has it in the same place on the round clock), so
-   * it is taken where it is, and the others hear of it as of any probe taken.
+   * A harpoon of this browser bit a sponsor probe: it hangs on the rope, and the winch reels it
+   * in to the ship, which takes it when it arrives (see items). Until then it is anyone's who
+   * touches it first. The others are told, and pull it on the same cable from the ship's
+   * states. False when it is gone or another hook holds it already.
    */
-  private hookedProbe(owner: Ship, id: string) {
+  private hookedProbe(owner: Ship, probe: Probe, length: number): boolean {
+    if (owner.owner !== null || probe.holder || !this.probes.list.includes(probe)) return false;
+    this.probes.hook(probe, owner);
+    this.online?.sendHook(owner, { probe: probe.id }, length);
+    if (owner === this.me) {
+      this.sound.play('explosion', { volume: 0.5, rate: 2.4 });
+      this.hud.flashMessage(this.time, t('PROBE ON THE LINE'), 2);
+    }
+    return true;
+  }
+
+  /**
+   * A ship of another browser hooked a probe (checked against the hook's reach where it
+   * arrives): it hangs on that ship's rope here too, pulled from that ship's states. Two hooks
+   * that bit the same probe at once: the ship with the lower id keeps it, on every browser.
+   */
+  remoteProbeHook(owner: Ship, id: string, length: number) {
     const probe = this.probes.find(id);
-    if (owner.owner === null && owner.alive && probe) this.takeProbe(owner, probe);
+    if (!probe || (probe.holder && probe.holder !== owner && probe.holder.id < owner.id)) return;
+    if (probe.holder && probe.holder !== owner) this.unhook(probe.holder);
+    this.unhook(owner);
+    this.probes.hook(probe, owner);
+    this.tethers.set(owner, { owner, anchor: { rock: null, local: null, ship: null, mark: { team: -1, probe, position: probe.position } }, flying: 0, end: new THREE.Vector3(), length, line: this.cables.take() });
+  }
+
+  /** Where a probe is now, as this browser has it, or null. */
+  probeAt(id: string): THREE.Vector3 | null {
+    return this.probes.find(id)?.position ?? null;
   }
 
   /**
@@ -4841,8 +4874,9 @@ export class Game implements OnlineGame {
 
   probeWithin(id: string, ship: Ship): boolean {
     const probe = this.probes.find(id);
-    // the taker flew through it, or bit it with its harpoon (see hookedProbe), on its own
-    // screen: here it may be a moment behind, at full speed
+    // the taker flew through it on its own screen: here it may be a moment behind, at full
+    // speed, and the probe may still lie where a hook took it from (a cable this browser has
+    // not heard of yet), up to the hook's reach away
     return !probe || probe.position.distanceTo(ship.flight.position) < HOOK_RANGE + PROBE_RADIUS + ship.radius + PROBE_LAG + ship.flight.velocity.length() * 0.5;
   }
 

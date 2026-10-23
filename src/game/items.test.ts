@@ -1,6 +1,10 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { contents, packItems, placeBucket, Probes, unpackItems } from './items';
+import { contents, packItems, placeBucket, PROBE_THRUST, Probes, unpackItems } from './items';
+import { floorOf, pullOn, type Anchor } from './hook';
+import { MASS, type Body } from '../world/bodies';
+import { MAX_SPEED } from '../ship/flight';
+import type { Ship } from '../ship/ship';
 import { ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
 
@@ -127,5 +131,111 @@ describe('probes', () => {
 
   it('pack the items a clone holds into its state and back', () => {
     for (const twin of [false, true]) for (const plating of [0, 1, 2]) for (const nova of [false, true]) expect(unpackItems(packItems(twin, plating, nova))).toEqual({ twin, plating, nova });
+  });
+});
+
+/** A ship's radius, and a ship at rest at `x` on the x axis, as a body and as the hook's owner. */
+const RADIUS = 340;
+const shipAt = (id: string, x = 0) => {
+  const body: Body = { position: new THREE.Vector3(x, 0, 0), velocity: new THREE.Vector3(), mass: MASS.ship };
+  return { body, ship: { id, radius: RADIUS } as unknown as Ship };
+};
+const DT = 1 / 120;
+const LIMIT = MAX_SPEED * 2;
+
+/** A probe 400 m off the origin, at rest on its slot, bitten by `hooker`'s hook. */
+function hooked(hooker: Ship) {
+  const field = testField();
+  const probes = new Probes();
+  probes.drop('x', 0, ['repair'], new THREE.Vector3(8000, 0, 0), new THREE.Vector3(), 0);
+  const probe = probes.list[0];
+  probes.park(probe, probe.position);
+  probe.until = Infinity;
+  probes.hook(probe, hooker);
+  const anchor: Anchor = { rock: null, local: null, ship: null, mark: { team: -1, probe, position: probe.position } };
+  return { field, probes, probe, floor: floorOf(hooker, anchor) };
+}
+
+/** One frame on the hooker's browser: the cable pulls ship and probe, the ship flies on, the probes move. Returns the cable's length. */
+function reel(state: ReturnType<typeof hooked>, ship: Body, length: number, t: number) {
+  const next = pullOn(ship, state.probe, length, true, state.floor, LIMIT, DT, 'moved');
+  ship.position.addScaledVector(ship.velocity, DT);
+  state.probes.update(DT, t, state.field);
+  return next;
+}
+
+describe('a probe on the hook', () => {
+  it('is reeled in to the ship over time and taken only when it arrives', () => {
+    const { body, ship } = shipAt('a');
+    const state = hooked(ship);
+    let length: number | null = 8000;
+    let arrived = -1;
+    for (let t = 0; t < 5 && arrived < 0; t += DT) {
+      length = reel(state, body, length!, t);
+      expect(length).not.toBeNull();
+      if (state.probes.touching(body.position, RADIUS)) arrived = t;
+    }
+    // not at once: half a tonne on 400 m of cable at 32 g, braked to arrive gently, takes some two and a half seconds
+    expect(arrived).toBeGreaterThan(1);
+    expect(arrived).toBeLessThan(3);
+    // the ship hardly moved for it: half a tonne against sixty
+    expect(body.position.length()).toBeLessThan(100);
+  });
+
+  it('goes to another ship that touches it on the way first', () => {
+    const { body, ship } = shipAt('a');
+    const thief = shipAt('b', 4000);
+    thief.body.position.y = 200;
+    const state = hooked(ship);
+    let length: number | null = 8000;
+    let first: string | null = null;
+    for (let t = 0; t < 5 && !first; t += DT) {
+      length = reel(state, body, length!, t);
+      if (state.probes.touching(thief.body.position, RADIUS)) first = 'thief';
+      else if (state.probes.touching(body.position, RADIUS)) first = 'hooker';
+    }
+    expect(first).toBe('thief');
+  });
+
+  it('is pulled alike on a browser that only hears of the hooker', () => {
+    const { body, ship } = shipAt('a');
+    const here = hooked(ship);
+    const there = hooked(ship);
+    // there, the hooker's ship is where its states put it: here's, a frame late
+    const told: Body = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: MASS.ship };
+    let length: number | null = 8000;
+    let lengthThere: number | null = 8000;
+    let gap = 0;
+    for (let t = 0; t < 1.2; t += DT) {
+      told.position.copy(body.position);
+      told.velocity.copy(body.velocity);
+      length = reel(here, body, length!, t);
+      lengthThere = pullOn(there.probe, told, lengthThere!, true, there.floor, LIMIT, DT, 'elsewhere');
+      there.probes.update(DT, t, there.field);
+      gap = Math.max(gap, here.probe.position.distanceTo(there.probe.position));
+    }
+    // within a few meters all the way in
+    expect(gap).toBeLessThan(100);
+  });
+
+  it('drifts on when its hooker dies, then flies back to its slot', () => {
+    const { body, ship } = shipAt('a');
+    const state = hooked(ship);
+    let length: number | null = 8000;
+    let t = 0;
+    for (; t < 0.6; t += DT) length = reel(state, body, length!, t);
+    const { probe, probes, field } = state;
+    const speed = probe.velocity.clone();
+    expect(speed.length()).toBeGreaterThan(1000);
+    // the hooker is shot: the cable is gone, the probe keeps its speed for the moment
+    probes.letGo(probe, ship);
+    probes.update(DT, (t += DT), field);
+    expect(probe.velocity.distanceTo(speed)).toBeLessThan(PROBE_THRUST * DT * 1.01);
+    expect(probe.astray).toBe(true);
+    // then its thrusters bring it back to its slot, where every browser has it
+    for (const end = t + 20; t < end && probe.astray; t += DT) probes.update(DT, t, field);
+    expect(probe.astray).toBe(false);
+    expect(probe.position.toArray()).toEqual([8000, 0, 0]);
+    expect(probe.velocity.length()).toBe(0);
   });
 });
