@@ -87,6 +87,36 @@ export function rope(a: Body, b: Body, length: number, moveA = true, moveB = tru
 }
 
 /**
+ * A rope's pull on `a` alone, whose other end `b` another browser runs (as it last told of it):
+ * the same rope, as a stiff, critically damped spring (ROPE_RATE), so that each end, pulled on
+ * its own browser by its own share, takes its part whatever either frame rate; a rigid rope
+ * there would let the end with more frames give in. Its damping goes by how fast the stretch
+ * changed since the last frame (see stretched), not by this frame's velocities, which already
+ * hold the frame's thrust. Only pulls; never more in a frame than the rigid rope would. True
+ * when it was taut.
+ */
+export function ropeFrom(a: Body, b: Body, length: number, dt: number): boolean {
+  line.subVectors(b.position, a.position);
+  const distance = line.length();
+  const over = distance - length;
+  const before = stretched.get(a);
+  stretched.set(a, Math.max(0, over));
+  if (over <= 0 || distance < 1e-6 || dt <= 0) return false;
+  line.divideScalar(distance);
+  const growing = before === undefined ? 0 : (over - before) / dt;
+  const apart = -relative.subVectors(a.velocity, b.velocity).dot(line);
+  const pull = Math.min(ROPE_RATE * ROPE_RATE * over + 2 * ROPE_RATE * growing, Math.max(0, apart) / dt + over / (dt * dt));
+  if (pull > 0) a.velocity.addScaledVector(line, pull * dt * share(a.mass, b.mass));
+  return true;
+}
+
+/** How far each body's rope between two browsers was stretched last frame (see ropeFrom). */
+const stretched = new WeakMap<Body, number>();
+
+/** The rate of a rope between two browsers (1/s): two interceptors burning their drives against each other stretch it some 2.5 m; slow enough that a browser at 20 frames a second pulls as hard as one at 120. */
+const ROPE_RATE = 10;
+
+/**
  * Two bodies touching, `normal` pointing from b to a: the speed at which they close is turned
  * around with `restitution` (the share of it they keep apart), and sliding along each other
  * bleeds off `friction` times that push; each body takes its share (see share). Returns how

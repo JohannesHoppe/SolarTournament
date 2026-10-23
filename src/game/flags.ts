@@ -469,7 +469,7 @@ export class Flags {
     sternOf(carrier, stern);
     sternAt.copy(stern);
     sternBody.velocity = flight.velocity;
-    const cable = pullOn(core, sternBody, core.cable, core.cable > length, length, Infinity, dt, local);
+    const cable = pullOn(core, sternBody, core.cable, core.cable > length, length, Infinity, dt, local ? 'moved' : 'elsewhere');
     flight.position.add(stern.sub(sternAt));
     if (cable !== null) core.cable = cable;
   }

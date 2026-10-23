@@ -104,7 +104,7 @@ describe('the hook', () => {
       let length: number | null = 6000;
       let closest = Infinity;
       for (let t = 0; t < 4 && length !== null; t += DT) {
-        length = pullOn(body(a), body(b), length, true, 1360, MAX_SPEED, DT, true);
+        length = pullOn(body(a), body(b), length, true, 1360, MAX_SPEED, DT, 'moved');
         a.position.addScaledVector(a.velocity, DT);
         b.position.addScaledVector(b.velocity, DT);
         closest = Math.min(closest, a.position.distanceTo(b.position));
@@ -134,7 +134,7 @@ describe('the hook', () => {
       for (let t = 0; t < seconds && length !== null; t += DT) {
         one.velocity.x -= a * DT;
         two.velocity.x += b * DT;
-        length = pullOn(body(one), body(two), length, true, 1400, MAX_SPEED, DT, true);
+        length = pullOn(body(one), body(two), length, true, 1400, MAX_SPEED, DT, 'moved');
         one.position.addScaledVector(one.velocity, DT);
         two.position.addScaledVector(two.velocity, DT);
       }

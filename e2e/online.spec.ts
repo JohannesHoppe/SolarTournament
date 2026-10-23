@@ -88,6 +88,9 @@ test('two tabs agree on a tug of war between their ships on one rope', async ({ 
       },
       [x, towards],
     );
+  // without a GPU the tabs render too slowly to keep the game's time (a frame counts 50 ms at
+  // most): each would play the tug at its own pace, so they draw nothing
+  for (const page of [a, b]) await page.evaluate(() => (window.game.composer.render = () => {}));
   await place(b, 6000, 1);
   await place(a, 0, 1);
   await play(a, 1);
@@ -95,13 +98,20 @@ test('two tabs agree on a tug of war between their ships on one rope', async ({ 
   await a.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' })));
   await play(a, 3);
   expect(await a.evaluate(() => window.game.me.flight.position.distanceTo(window.game.ships.find((s: { id: string }) => s.id !== window.game.me.id).flight.position))).toBeLessThan(2000);
-  // both turn away from each other and burn with full drives
-  await a.evaluate(() => window.game.me.flight.orientation.set(0, Math.SQRT1_2, 0, Math.SQRT1_2));
-  await b.evaluate(() => window.game.me.flight.orientation.set(0, -Math.SQRT1_2, 0, Math.SQRT1_2));
-  for (const page of [a, b]) await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' })));
-  await play(a, 3);
-  for (const page of [a, b]) await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' })));
-  await play(b, 1);
+  // both turn away from each other and burn with full drives for 3 s of their own game time,
+  // at once (one after the other, the second would burn on alone while the first is told)
+  await Promise.all(
+    [a, b].map((page, i) =>
+      page.evaluate(async (away) => {
+        const game = window.game;
+        game.me.flight.orientation.set(0, away * Math.SQRT1_2, 0, Math.SQRT1_2);
+        window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+        const start = game.time;
+        while (game.time - start < 3) await new Promise((resolve) => requestAnimationFrame(resolve));
+        window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
+      }, i === 0 ? 1 : -1),
+    ),
+  );
   // a stalemate: the pair has hardly moved, the rope held, and both tabs see the same
   const seen = (page: Page): Promise<Record<string, number[]>> => page.evaluate(() => Object.fromEntries(window.game.ships.map((s: { id: string; flight: { position: { toArray(): number[] } } }) => [s.id, s.flight.position.toArray()])));
   const [onA, onB] = [await seen(a), await seen(b)];
@@ -126,20 +136,22 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
   // the two Hosts fly for different sides
   const hosts = Object.entries(sidesA).filter(([id]) => id.startsWith('p:'));
   expect(new Set(hosts.map(([, team]) => team)).size).toBe(2);
-  // the second tab's clone, 600 m in front of the other side's ring, its nose on the core,
-  // fires its harpoon at it; the lead hears of the bite, takes the core for it and tells both
+  // the second tab's clone, 300 m in front of the other side's ring, its nose on the core,
+  // fires its harpoon at it (the hook held); the lead hears of the bite, takes the core for it
+  // and tells both
   const thief = await b.evaluate(() => {
     const game = window.game;
     const base = game.flags.bases[1 - game.me.team];
     const facing = game.flags.facings[1 - game.me.team];
-    game.me.flight.position.copy(base).addScaledVector(facing, -12000);
+    game.me.flight.position.copy(base).addScaledVector(facing, -6000);
     game.me.flight.velocity.set(0, 0, 0);
     game.me.flight.orientation.setFromUnitVectors(facing.clone().set(0, 0, -1), facing);
     game.autopilot = false;
-    game.fireHook(game.me);
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' }));
     return game.me.id;
   });
   await play(b, 2);
+  await b.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyV' })));
   for (const page of [a, b]) expect(await page.evaluate(() => window.game.flags.cores.map((core: { carrier: string | null }) => core.carrier))).toContain(thief);
   expect(errors).toEqual([]);
 });

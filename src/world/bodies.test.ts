@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { contact, IMMOVABLE, MASS, massOf, rope, share, type Body } from './bodies';
+import { contact, IMMOVABLE, MASS, massOf, rope, ropeFrom, share, type Body } from './bodies';
 
 const body = (mass: number, x: number, vx = 0): Body => ({ position: new THREE.Vector3(x, 0, 0), velocity: new THREE.Vector3(vx, 0, 0), mass });
 const momentum = (...bodies: Body[]) => bodies.reduce((sum, b) => sum + b.mass * b.velocity.x, 0);
@@ -63,6 +63,69 @@ describe('bodies', () => {
       rope(a, b, 1000, true, false);
       expect(a.velocity.x).toBeCloseTo(0);
       expect(b.velocity.x).toBe(400);
+    });
+  });
+
+  describe('on a rope between two browsers', () => {
+    /**
+     * Two ships 70 m apart on a rope, each run by its own browser at its own frame rate and
+     * pulled there from the other's last told state, burning away from each other with `a` and
+     * `b` (units/s²) for 3 s; where their middle went.
+     */
+    function tug(a: number, b: number, rateA: number, rateB: number) {
+      const one = body(MASS.ship, -700);
+      const two = body(MASS.ship, 700);
+      // what each browser last heard of the other (15 times a second), moved on with the
+      // velocity it was told of, as a remote ship is shown
+      const told = { one: body(MASS.ship, -700), two: body(MASS.ship, 700) };
+      const heard = { one: body(MASS.ship, -700), two: body(MASS.ship, 700) };
+      for (let t = 0, nextA = 0, nextB = 0, tell = 0, toldAt = 0; t < 3; t += 1 / 1200) {
+        if (t >= tell) {
+          told.one.position.copy(one.position);
+          told.one.velocity.copy(one.velocity);
+          told.two.position.copy(two.position);
+          told.two.velocity.copy(two.velocity);
+          toldAt = t;
+          tell += 1 / 15;
+        }
+        for (const end of ['one', 'two'] as const) {
+          heard[end].position.copy(told[end].position).addScaledVector(told[end].velocity, t - toldAt);
+          heard[end].velocity.copy(told[end].velocity);
+        }
+        if (t >= nextA) {
+          one.velocity.x -= a / rateA;
+          ropeFrom(one, heard.two, 1400, 1 / rateA);
+          one.position.addScaledVector(one.velocity, 1 / rateA);
+          nextA += 1 / rateA;
+        }
+        if (t >= nextB) {
+          two.velocity.x += b / rateB;
+          ropeFrom(two, heard.one, 1400, 1 / rateB);
+          two.position.addScaledVector(two.velocity, 1 / rateB);
+          nextB += 1 / rateB;
+        }
+      }
+      return { middle: (one.position.x + two.position.x) / 2, apart: two.position.x - one.position.x };
+    }
+
+    it('holds a stalemate between equal drives, whatever the frame rates', () => {
+      // a few meters at equal frame rates, a few dozen with one browser at 120 frames a second
+      // and the other at 20; the rope about its length
+      for (const [rateA, rateB, drift] of [
+        [60, 60, 100],
+        [120, 20, 1000],
+        [20, 120, 1000],
+      ]) {
+        const pull = tug(2550, 2550, rateA, rateB);
+        expect(Math.abs(pull.middle)).toBeLessThan(drift);
+        expect(pull.apart).toBeLessThan(1400 + 100);
+      }
+    });
+
+    it('goes to the stronger drive, whichever browser runs it faster', () => {
+      // a drive at 60 % against a full one: half the difference, about 115 m in 3 s
+      expect(tug(2550, 1530, 120, 20).middle).toBeLessThan(-1500);
+      expect(tug(2550, 1530, 20, 120).middle).toBeLessThan(-1500);
     });
   });
 

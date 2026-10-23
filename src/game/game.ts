@@ -4317,8 +4317,8 @@ export class Game implements OnlineGame {
       const runsAnchor = held ? true : target?.owner === null;
       // the winch yanks as hard as a coil throws: up to the limit plus a coil's push
       const limit = MAX_SPEED + BOOST_PUSH;
-      if (owner.owner === null) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor);
-      else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt);
+      if (owner.owner === null) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor ? 'moved' : target ? 'elsewhere' : 'fixed');
+      else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt, 'elsewhere');
       if (length === null) {
         if (owner === this.me) this.hud.flashMessage(this.time, t('Cable snapped'), 1.5);
         this.unhook(owner);

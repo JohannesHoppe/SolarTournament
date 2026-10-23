@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { raySphere, type Asteroid, type AsteroidField } from '../world/asteroids';
 import type { Ship } from '../ship/ship';
 import type { Torpedo } from './torpedoes';
-import { MASS, rope, share, type Body } from '../world/bodies';
+import { MASS, rope, ropeFrom, share, type Body } from '../world/bodies';
 
 /**
  * The hook: a harpoon on a cable, fired along the nose. It bites into a rock or a ship within
@@ -143,11 +143,13 @@ const winchOn = (body: Body) => HOOK_PULL * Math.min(MASS.ship / body.mass, WINC
  * past `speedLimit`); a taut cable is a rope (see rope): it only pulls, holds its length, and
  * splits its jerk by the two masses. Every speed counts against the anchor's, so two ships
  * flying side by side are pulled as two at rest. Only `body` is moved here, and the anchor
- * when `moveAnchor`: a ship run by another browser takes its share there, from the same
- * cable. A rock is millions of times a ship's mass: hooked to one, the ship takes all of it.
+ * as `anchorEnd` says: 'moved' here too; 'fixed', a rock (millions of times a ship's mass:
+ * hooked to one, the ship takes all of it); 'elsewhere', a body another browser runs, which
+ * takes its share there from the same cable, each end pulled as by a spring (see ropeFrom).
  * Returns the length the cable has now, or null when it snapped.
  */
-export function pullOn(body: Body, anchor: Body, length: number, reeling: boolean, floor: number, speedLimit: number, dt: number, moveAnchor = false): number | null {
+export function pullOn(body: Body, anchor: Body, length: number, reeling: boolean, floor: number, speedLimit: number, dt: number, anchorEnd: 'moved' | 'fixed' | 'elsewhere' = 'fixed'): number | null {
+  const moveAnchor = anchorEnd === 'moved';
   toAnchor.subVectors(anchor.position, body.position);
   const distance = toAnchor.length();
   if (distance < 1) return length;
@@ -173,7 +175,8 @@ export function pullOn(body: Body, anchor: Body, length: number, reeling: boolea
     if (moveAnchor) anchor.velocity.addScaledVector(toAnchor, -Math.min(winchOn(anchor) * dt, room));
   }
   cable = Math.max(floor, cable);
-  rope(body, anchor, cable, true, moveAnchor);
+  if (anchorEnd === 'elsewhere') ropeFrom(body, anchor, cable, dt);
+  else rope(body, anchor, cable, true, moveAnchor);
   return cable;
 }
 

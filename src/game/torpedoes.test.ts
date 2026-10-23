@@ -42,7 +42,7 @@ function tug(holder: Ship & { body: Body }, held: Torpedo, torpedoes: Torpedoes,
     holder.flight.velocity.x -= drive * DT;
     holder.flight.position.addScaledVector(holder.flight.velocity, DT);
     torpedoes.update(DT, t, SPACE, [holder], () => (detonated = true));
-    length = pullOn(holder.body, held, length ?? 1400, true, 1400, MAX_SPEED, DT, true);
+    length = pullOn(holder.body, held, length ?? 1400, true, 1400, MAX_SPEED, DT, 'moved');
   }
   return detonated;
 }
