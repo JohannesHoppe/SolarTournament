@@ -220,6 +220,17 @@ The code is licensed under AGPL-3.0-or-later (`LICENSE`), the repository is publ
 
 Typography matters. Running text is always justified, never ragged, with hyphenation on (`hyphens: auto`, the pages declare `lang`). Centered blocks are justified too and only center their last line (`text-align-last: center`). No line ends in a lonely word: text wraps with `text-wrap: pretty` (never `balance` on justified text: the shortened lines get stretched to full width again, with gaping spaces), and a short fixed text of a few sentences (the tagline) carries the class `sentences`, so it breaks between its sentences and is centered instead of justified. Headings and signs in Michroma, text in the system sans-serif.
 
+### Supply chain
+
+Every dependency is code that runs on Johannes' machine, in the build and in the players' browsers, so a new one is the exception and needs his yes.
+
+- Prefer the platform and our own code: a share menu, a hash, a small helper are written here, not installed.
+- No new package (npm, pip, a GitHub Action, a CDN script) without asking Johannes first, naming what it is for and why our own code will not do.
+- Before proposing one, check it: who publishes it and since when, its weekly downloads and repository, recent ownership changes, install scripts (`preinstall`/`postinstall`), what it pulls in transitively, `npm audit` and `npm audit signatures`, and that the name is not a typo of a known package.
+- Install exactly: `npm install --save-exact <name>@<version>` and commit the lockfile. Install only from the lockfile (`npm ci`) everywhere else; never run `npm install` in a worktree to "fix" a missing `node_modules`: link or `npm ci` instead.
+- GitHub Actions are pinned by commit SHA, Python packages by version and hash.
+- Updates of existing dependencies are a change like any other: one at a time, with the same check, the changelog read, and `npm run check:full` green.
+
 ## Code rules
 
 - **Determinism:** everything that concerns the shared world state (the arena of a round, its field, fragments, wreckage, the notes of Radio 2584) comes from seeded randomness (`Randomizer`), never from `Math.random()`. Otherwise peer-to-peer players see different worlds. `Math.random()` is only allowed for visuals (particles, flicker, glitches) and bot decisions.
