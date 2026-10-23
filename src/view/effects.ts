@@ -194,6 +194,11 @@ export class Effects {
     this.smoke.emit(position, velocity, 0.35 + Math.random() * 0.2, size, size * 3, VAPOR);
   }
 
+  /** An ember blown off a solar flare's front, drifting with `velocity` as it cools. */
+  ember(position: THREE.Vector3, velocity: THREE.Vector3, size: number) {
+    this.fire.emit(position, velocity, 1.5 + Math.random() * 1.5, size, size * 0.2, FIRE);
+  }
+
   /** Rock splinters and dust where a laser hits an asteroid. */
   debris(point: THREE.Vector3, normal: THREE.Vector3, size: number) {
     for (let i = 0; i < 14; i++) {

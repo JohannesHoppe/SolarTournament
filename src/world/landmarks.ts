@@ -29,8 +29,8 @@ const CORONA_DISTANCE = 240000;
 const DISK_INNER = 6000;
 const DISK_OUTER = 28000;
 
-/** Smooth value noise in 3D for the shaders of planets and suns (visuals only, so float hashing is fine). */
-const noise3 = /* glsl */ `
+/** Smooth value noise in 3D for the shaders of planets, suns and the solar flare (visuals only, so float hashing is fine). */
+export const noise3 = /* glsl */ `
   float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
   float noise(vec3 p) {
     vec3 i = floor(p); vec3 f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -39,7 +39,7 @@ const noise3 = /* glsl */ `
   }
 `;
 
-const bandsVertex = /* glsl */ `
+export const bandsVertex = /* glsl */ `
   varying vec3 vLocal;
   varying vec3 vNormal;
   varying vec3 vView;

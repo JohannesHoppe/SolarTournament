@@ -182,7 +182,7 @@ export const ANNOUNCER_WIN = ['{name} wins the race. glory to the president', 'a
 /** Last Clone Standing: a pilot loses its last clone, one is left, and the flare comes. */
 export const ANNOUNCER_OUT = ['{name} is out. no clones left', 'and {name} is gone. for good. well, for this round'];
 export const ANNOUNCER_SURVIVOR = ['{name} is the last clone standing', '{name} survives. the president is impressed'];
-export const ANNOUNCER_FLARE = 'here comes the flare. the arena is closing';
+export const ANNOUNCER_FLARE = 'here comes the flare. run from the sun, little clones';
 /** Capture the Flag: a pilot brings the other side's core home. */
 /** The announcer on the own pilot's biggest moments (see game/moments.ts). */
 export const ANNOUNCER_MOMENT = {
@@ -370,7 +370,7 @@ export const COMPUTER = {
   lostLead: 'You lost the lead.',
   passed: 'Nice pass.',
   passedBy: 'Someone got past you.',
-  flare: 'Solar flare, darling. The arena is closing in. Stay inside the shell.',
+  flare: 'Solar flare, darling. It comes from the sun. Fly to the far side, and keep a rock between you and the light.',
   lastClone: 'This is your last clone, darling. Make it count.',
   out: 'That was your last clone, darling. You are out. Sit back, and watch the others burn.',
   survivor: 'You are the last clone standing. I knew it, darling.',
@@ -391,7 +391,7 @@ export const COMPUTER = {
 export const TIPS = {
   race: 'A race, darling. Three laps through the rings. Fly through their very centers, and the coils throw you on. Follow the orange dots, and shoot whoever is ahead of you.',
   deathmatch: 'A deathmatch. Every kill counts. Hit their drives from behind, turn your armored nose to anyone behind you, and never fly a straight line.',
-  survival: 'Last clone standing. Three clones, no more. After a minute a solar flare closes in from the edge. Stay inside its shell, and stay alive.',
+  survival: 'Last clone standing. Three clones, no more. After a minute a solar flare sweeps in from the sun and burns the arena down to a pocket on the far side. Stay ahead of it, hide behind rock, and stay alive.',
   flag: 'Capture the flag. Touch their core, and tow it into our ring. We only score while our own core is at home, so guard it, or bring it back.',
   fleet: 'The President’s fleet. We all fight his battleship together. Take out its batteries first, then its drives. When the reactor opens, hit it, and get clear before it blows. Keep moving: its batteries miss fast ships.',
   tail: 'Someone is on your drive, darling. Turn your nose to them, now.',

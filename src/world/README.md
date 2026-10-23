@@ -15,6 +15,7 @@ The arena a round is fought in. Everything that every browser must build alike (
 | `arena.ts` | The arena's edge and its grid |
 | `belt.ts` | The asteroid belt beyond the arena, scenery only |
 | `landmarks.ts` | Each arena's scenery: planets, the sun, the black hole |
-| `space.ts` | Stars, nebula, the sun's light and shadows, dust |
+| `flare.ts` | The solar flare's plasma on screen: a sphere of roiling fire with filaments |
+| `space.ts` | Stars, nebula, the sun's light and shadows (heated by a solar flare), dust |
 
 `asteroids.test.ts`, `arenas.test.ts` and `wrecks.test.ts` check layouts, snapshots and collisions (`npm test`).

@@ -53,7 +53,8 @@ import { BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, 
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { touchRing } from '../world/gates';
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
-import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut, standing } from './survival';
+import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flarePocket, isOut, standing } from './survival';
+import { FlareView } from '../world/flare';
 import { markedName } from '../view/marks';
 import { Coach, type Tip } from './coach';
 import { MOMENTS, Moments, type Moment } from './moments';
@@ -455,7 +456,7 @@ const SOLO_DEFAULT: SoloChoice = { mode: 'race', pace: 'pro', arena: null, rival
 const SOLO_NOTES: Record<RoundMode, string> = {
   race: msg('Three laps through eight gates. Killing your opponents is explicitly allowed.'),
   deathmatch: msg('For the hard pilots: five minutes, every clone for itself.'),
-  survival: msg('{clones} clones each. A solar flare closes in on the arena. The last clone standing wins.'),
+  survival: msg('{clones} clones each. A solar flare sweeps in from the sun and drives everyone to the far side. The last clone standing wins.'),
   flag: msg('Orange against Blue, bots on both sides. Steal their sponsor core, bring it home, keep yours.'),
   fleet: msg('The President wants blood and sends a battleship into the ring. Because he can. Everyone against it: sink it before the time runs out.'),
 };
@@ -563,6 +564,19 @@ const hookEnd = new THREE.Vector3();
 const fleetGoal = new THREE.Vector3();
 const missBy = new THREE.Vector3();
 const plumeAxis = new THREE.Vector3();
+
+/** A solar flare's plasma center, the point of its front nearest the camera, an ember's drift, and the middle of a new clone's places. */
+const flareAt = new THREE.Vector3();
+const frontPoint = new THREE.Vector3();
+const emberDrift = new THREE.Vector3();
+const spawnMiddle = new THREE.Vector3();
+
+/** Within this distance of a solar flare's front (units, 1 km) the camera sees embers blown off it. */
+const EMBER_REACH = 20000;
+/** Within this distance of the front (units, 400 m) a bot flies away from it before anything else. */
+const FLARE_FLEE = 8000;
+/** The Host's screen glows with the flare's heat from this distance outside the front (units, 300 m) to full inside it. */
+const FLARE_GLOW = 6000;
 
 /** Where the ghost of the best lap is this frame. */
 const ghostPosition = new THREE.Vector3();
@@ -730,6 +744,11 @@ export class Game implements OnlineGame {
   /** What Last Clone Standing has said: the flare coming, the last one standing. */
   private flareCalled = false;
   private survivorCalled = false;
+  /** The solar flare's plasma as the screen shows it. */
+  private readonly flare = new FlareView();
+  /** The flare's safe pocket this frame (see flarePocket): its middle and radius (units). */
+  private readonly pocket = new THREE.Vector3();
+  private pocketRadius = ARENA_LIMIT;
   /** When each ship lost its last clone (game time, s): who held out longer places higher. */
   private readonly outAt = new Map<Ship, number>();
   /** The velocity of the ship the camera rides with, for the dust's streaks; null without one. */
@@ -777,6 +796,11 @@ export class Game implements OnlineGame {
   private readonly fleetMark: RadarMark = { position: new THREE.Vector3(), label: t('Battleship'), color: '#ff2a3a' };
   /** The ship holding a nova core, in white, so everyone sees where not to be. */
   private readonly novaMark: RadarMark = { position: new THREE.Vector3(), label: t('NOVA'), color: '#ffffff' };
+  /** A solar flare: the nearest point of its front in the sun's orange, the safe pocket in the information blue. */
+  private readonly flareMarks: RadarMark[] = [
+    { position: new THREE.Vector3(), label: t('Flare'), color: '#ff9d00' },
+    { position: new THREE.Vector3(), label: t('Safe zone'), color: '#4d91ff' },
+  ];
   /** The marks the radar shows this frame (see radarMarks). */
   private readonly shownMarks: RadarMark[] = [];
   /** How the own clone died last, for the sponsor break. */
@@ -902,7 +926,7 @@ export class Game implements OnlineGame {
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
     this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.ghost.root, this.cables.group);
-    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
+    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
       this.engineLights.push(light);
@@ -1246,7 +1270,7 @@ export class Game implements OnlineGame {
     const rounds = {
       deathmatch: () => t('Every round a deathmatch.'),
       race: () => t('Every round a race: {laps} laps through {gates} gates, lasers on.', { laps: LAPS, gates: GATES }),
-      survival: () => t('Every round Last Clone Standing: {clones} clones each, a solar flare closing in.', { clones: CLONES }),
+      survival: () => t('Every round Last Clone Standing: {clones} clones each, a solar flare sweeping in from the sun.', { clones: CLONES }),
       flag: () => t('Every round Capture the Flag: Orange against Blue, Hosts spread over both sides.'),
       fleet: () => t("Every round the President's Fleet: every Host and bot together against one of his battleships."),
       mixed: () => t('Every mode in turn, starting with a deathmatch.'),
@@ -1787,7 +1811,9 @@ export class Game implements OnlineGame {
     this.lastLapCalled = this.winCalled = false;
     this.flareCalled = this.survivorCalled = false;
     this.outAt.clear();
-    this.arena.setEdge(ARENA_LIMIT, false);
+    this.flare.hide();
+    this.pocket.set(0, 0, 0);
+    this.pocketRadius = ARENA_LIMIT;
     this.place = -1;
     if (state) this.field.restore(state, arena.layout);
     this.space.setSun(arena.sun);
@@ -1852,10 +1878,6 @@ export class Game implements OnlineGame {
     return this.spectating || (!!this.me && this.out(this.me));
   }
 
-  /** How far from the center a ship is safe now (units): the solar flare's shell in Last Clone Standing, else the arena's edge. */
-  private safeRadius() {
-    return this.survival ? flareRadius(this.field.clock) : ARENA_LIMIT;
-  }
 
   private showMenu() {
     this.leaveOnline();
@@ -2367,15 +2389,19 @@ export class Game implements OnlineGame {
       candidate.copy(course.points[ship.gates % GATES]);
       best = 0;
     }
-    // of a dozen random places on the edge of the field (well inside a solar flare's shell; in
-    // Capture the Flag around the own side's base), clear of rock, the one farthest from the
-    // nearest enemy, preferably hidden from every enemy behind the asteroids
-    const edge = Math.min(FIELD_RADIUS, this.safeRadius() * FLARE_KEEP);
+    // of a dozen random places on the edge of the field (in Last Clone Standing around the middle
+    // of a solar flare's safe pocket and clear of its plasma; in Capture the Flag around the own
+    // side's base), clear of rock, the one farthest from the nearest enemy, preferably hidden
+    // from every enemy behind the asteroids
+    const clock = this.field.clock;
+    const edge = this.survival ? Math.min(FIELD_RADIUS, flarePocket(clock, spawnMiddle) * FLARE_KEEP) : FIELD_RADIUS;
+    if (!this.survival) spawnMiddle.set(0, 0, 0);
+    const scorched = (point: THREE.Vector3) => this.survival && flareClearance(point, clock) < ship.radius * 10;
     const base = this.flags && ship.team >= 0 ? this.flags.bases[ship.team] : null;
     for (let attempt = 0; attempt < SPAWN_CANDIDATES && !course; attempt++) {
       if (base) candidate.randomDirection().multiplyScalar(BASE_RADIUS * (2 + Math.random() * 2)).add(base);
-      else candidate.randomDirection().multiplyScalar(edge * (0.9 + Math.random() * 0.2));
-      if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40)) continue;
+      else candidate.randomDirection().multiplyScalar(edge * (0.9 + Math.random() * 0.2)).add(spawnMiddle);
+      if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40) || scorched(candidate)) continue;
       let nearest = Infinity;
       let seen = false;
       for (const other of this.ships) {
@@ -2393,13 +2419,15 @@ export class Game implements OnlineGame {
     // none clear (a dense field, a base among rocks): the first of more tries that is clear of
     // rock and well at all, and as a last resort the open space just beyond the field's rocks
     for (let attempt = 0; attempt < SPAWN_CANDIDATES * 4 && best === -Infinity; attempt++) {
-      candidate.randomDirection().multiplyScalar(edge * (0.9 + Math.random() * 0.2));
-      if (this.field.overlap(candidate, ship.radius * 2) || this.field.insideWell(candidate, ship.radius * 40)) continue;
+      candidate.randomDirection().multiplyScalar(edge * (0.9 + Math.random() * 0.2)).add(spawnMiddle);
+      if (this.field.overlap(candidate, ship.radius * 2) || this.field.insideWell(candidate, ship.radius * 40) || scorched(candidate)) continue;
       best = 0;
       position.copy(candidate);
     }
-    if (best === -Infinity) position.randomDirection().multiplyScalar(Math.min(ARENA_LIMIT * 0.95, (this.field.layout?.radius ?? FIELD_RADIUS) * SPAWN_BEYOND));
-    ship.spawn(position, lookingAt(position, course ? candidate : scratch.set(0, 0, 0), UP), this.time);
+    // (in Last Clone Standing the open space behind the field, away from the sun, which no flare reaches)
+    if (best === -Infinity && this.survival) position.copy(SUN_DIRECTION).multiplyScalar(-ARENA_LIMIT * 0.85);
+    else if (best === -Infinity) position.randomDirection().multiplyScalar(Math.min(ARENA_LIMIT * 0.95, (this.field.layout?.radius ?? FIELD_RADIUS) * SPAWN_BEYOND));
+    ship.spawn(position, lookingAt(position, course ? candidate : spawnMiddle, UP), this.time);
     if (ship === this.me) {
       // the Host's mind locks onto the freshly printed clone: from here on we are the clone
       this.hud.flashMessage(this.time, t('Establishing live link to your clone…'), 2);
@@ -2722,9 +2750,8 @@ export class Game implements OnlineGame {
     const dodge = this.input.takeDodge();
     if (dodge && this.state === 'playing' && !this.spectating) this.dodge(dodge);
     const clamped = (this.clamped = this.startCountdown(myControls));
-    // Last Clone Standing: the solar flare's shell, the same on every browser by the field time
-    const safe = this.safeRadius();
-    this.arena.setEdge(safe, this.survival && this.field.clock >= FLARE_START);
+    // Last Clone Standing: the solar flare, the same on every browser by the field time
+    this.showFlare(dt);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -2748,11 +2775,14 @@ export class Game implements OnlineGame {
         // along the ideal line, bowed around the rock as it lies now
         bot.waypoint = this.course && ship.finish < 0 ? this.approach(this.course, ship, this.course.line.target(ship.flight.position, ship.gates % GATES, ship.flight.velocity.length(), this.field, this.botPoint(bot))) : null;
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE)?.position ?? null;
-        // a nova core close by, a battleship whose reactor went critical, or the plume of one
-        // hunting with its stern: away from it, out of the plume to the side
-        bot.flee = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : null);
-        // a bot goes out to the President's battleship on its orbit beyond the rocks
-        bot.home = this.fleet ? FLEET_HOME : Math.min(HOME_RADIUS, safe * FLARE_KEEP);
+        // a nova core close by, a battleship whose reactor went critical, the plume of one
+        // hunting with its stern, or a solar flare's front: away from it, out of the plume to the
+        // side, away from the sun
+        bot.flee = this.novaNear(ship, NOVA_RADIUS * NOVA_FLEE)?.flight.position ?? (this.fleet ? this.fleetDanger(ship, this.fleet) : this.flareNear(ship));
+        // a bot goes out to the President's battleship on its orbit beyond the rocks, and keeps
+        // to a solar flare's safe pocket
+        bot.home = this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : HOME_RADIUS;
+        bot.homeAt = this.survival ? this.pocket : null;
         bot.prey = null;
         bot.siege = this.fleet ? this.siegePoint(bot, this.fleet) : null;
         // a race online at the tournament's pace, a solo race at its class's
@@ -2785,7 +2815,11 @@ export class Game implements OnlineGame {
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
       if (this.course && !this.roundOver) this.passGates(ship, this.course);
       this.keepInArena(ship, now);
-      if (this.survival && ship.flight.position.length() > safe) this.burn(ship, 1, FLARE_HEAT, FLARE_BURN, msg('Inside the solar flare · get back in'), null, 'flare', dt, now);
+      // a rock between the ship and the sun shades it from the worst of the plasma
+      if (this.survival && flareClearance(ship.flight.position, this.field.clock) < 0) {
+        const message = ship.inShadow ? msg('Inside the solar flare · shaded by rock · away from the sun') : msg('Inside the solar flare · away from the sun');
+        this.burn(ship, ship.inShadow ? FLARE_SHADE : 1, FLARE_HEAT, FLARE_BURN, message, null, 'flare', dt, now);
+      }
       this.collide(ship, now);
       this.hitWreckage(ship, now);
       this.scorch(ship, dt, now);
@@ -2831,12 +2865,11 @@ export class Game implements OnlineGame {
     // a watching Host sees the race of the pilot on screen
     // only a course of rings has its rings bracketed (see showRace, teach)
     this.hud.setGates(this.camera, null, null, 0);
-    const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : this.flags ? this.showFlags(this.flags, subject) : this.fleet ? this.showFleet(this.fleet, subject) : null;
+    const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : this.flags ? this.showFlags(this.flags, subject) : this.fleet ? this.showFleet(this.fleet, subject) : this.survival ? this.callSurvival(me, subject) : null;
     if (!this.course && !this.school) this.guide.hide();
     this.flyGhost(me);
     const racing = !!this.course && !this.school && !this.clamped;
     if (racing) this.callRace(subject);
-    if (this.survival) this.callSurvival(me, safe);
     this.pushRadio(racing && !this.spectating && me.finish < 0 && lapOf(me.gates) === LAPS);
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
     this.hud.showCrosshair(me.alive);
@@ -2900,10 +2933,12 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * Last Clone Standing as it runs: the clones left, who still stands and the flare in the HUD;
-   * the announcer and Nicole call the flare and the last one standing.
+   * Last Clone Standing as it runs: the clones left, who still stands and the flare in the HUD
+   * (how far the front is from the pilot on screen, or how deep it is in the plasma), the safe
+   * pocket marked once the flare comes; the announcer and Nicole call the flare and the last one
+   * standing. Returns the pocket's middle for the crosshair, or null before the flare.
    */
-  private callSurvival(me: Ship, safe: number) {
+  private callSurvival(me: Ship, subject: Ship): THREE.Vector3 | null {
     const clock = this.field.clock;
     if (!this.flareCalled && clock >= FLARE_START) {
       this.flareCalled = true;
@@ -2921,14 +2956,62 @@ export class Game implements OnlineGame {
       if (last === me) this.speaker.say(COMPUTER.survivor, 'urgent');
     }
     const step = isOut(me) ? t('Out · {place}', { place: ordinal(ships.indexOf(me) + 1) }) : t('Last Clone Standing · {left}', { left: clonesLeftText(clonesLeft(me)) });
-    const reach = { meters: Math.round(safe * METERS_PER_UNIT) };
+    const clearance = flareClearance(subject.flight.position, clock);
+    const reach = { meters: Math.round(Math.abs(clearance) * METERS_PER_UNIT) };
     const flare =
       clock < FLARE_START
         ? t('solar flare in {seconds} s', { seconds: Math.ceil(FLARE_START - clock) })
-        : safe > FLARE_MIN
-          ? t('the flare closes in: {meters} m from the center', reach)
-          : t('the flare holds: {meters} m from the center', reach);
+        : clearance < 0
+          ? t('in the flare, {meters} m deep · away from the sun', reach)
+          : t('flare front {meters} m away', reach);
     this.hud.setSchool({ step, text: t('{n} of {total} standing · {flare}', { n: standing(ships), total: ships.length, flare }), keys: [] });
+    const pocket = clock >= FLARE_START ? this.pocket : null;
+    this.hud.setWaypoint(this.camera, pocket, t('Safe zone'));
+    return pocket;
+  }
+
+  /**
+   * The solar flare of Last Clone Standing on screen, from the field time alone: the plasma
+   * coming at the arena and eating into it, the sun swelling and burning white-hot, embers blown
+   * off the front near the camera, the Host's screen glowing with the heat; and the safe pocket
+   * for whoever keeps to it. Outside Last Clone Standing it shows nothing.
+   */
+  private showFlare(dt: number) {
+    const clock = this.field.clock;
+    const coming = FLARE_START - FLARE_APPROACH;
+    if (!this.survival || clock < coming) {
+      this.flare.hide();
+      this.space.flare(0);
+      this.hud.setFlareHeat(0);
+      this.pocket.set(0, 0, 0);
+      this.pocketRadius = ARENA_LIMIT;
+      return;
+    }
+    this.pocketRadius = flarePocket(clock, this.pocket);
+    flareCenter(clock, flareAt);
+    // it flares up over its approach, and the sun heats up until the front stops
+    const strength = THREE.MathUtils.smoothstep(clock, coming, FLARE_START);
+    this.flare.show(flareAt, strength, this.time, this.camera.position);
+    this.space.flare(strength * (0.6 + 0.4 * THREE.MathUtils.smoothstep(clock, FLARE_START, FLARE_END)));
+    // the front's point nearest the camera, and embers blown off it towards the far side
+    const eye = this.camera.position;
+    frontPoint.subVectors(eye, flareAt).setLength(FLARE_RADIUS).add(flareAt);
+    const near = eye.distanceTo(flareAt) - FLARE_RADIUS;
+    if (Math.abs(near) < EMBER_REACH && Math.random() < dt * 40 * strength) {
+      emberDrift.copy(SUN_DIRECTION).multiplyScalar(-1500 - Math.random() * 1500);
+      scratch.randomDirection().multiplyScalar(EMBER_REACH * 0.4 * Math.random()).add(frontPoint);
+      this.effects.ember(scratch, emberDrift, 120 + Math.random() * 200);
+    }
+    const subject = this.subject();
+    const clearance = subject.alive ? flareClearance(subject.flight.position, clock) : FLARE_GLOW;
+    this.hud.setFlareHeat(strength * (1 - THREE.MathUtils.smoothstep(clearance, -FLARE_GLOW, FLARE_GLOW)));
+  }
+
+  /** The point a bot flies away from when a solar flare's front is close: the plasma's center out towards the sun. */
+  private flareNear(ship: Ship): THREE.Vector3 | null {
+    if (!this.survival) return null;
+    const clock = this.field.clock;
+    return flareClearance(ship.flight.position, clock) < FLARE_FLEE ? flareCenter(clock, flareAt) : null;
   }
 
   /**
@@ -3260,7 +3343,7 @@ export class Game implements OnlineGame {
     return goal;
   }
 
-  /** The radar's marks: the field's center, and in a race the next gate of the ship it shows. */
+  /** The radar's marks: the field's center, in a race the next gate of the ship it shows, and what each mode adds. */
   private radarMarks(subject: Ship): RadarMark[] {
     const list = this.shownMarks;
     list.length = 0;
@@ -3285,6 +3368,14 @@ export class Game implements OnlineGame {
     if (this.fleet?.present(this.field.clock)) {
       this.fleetMark.position.copy(this.fleet.position);
       list.push(this.fleetMark);
+    }
+    // a solar flare: where its front is nearest, and the safe pocket
+    if (this.flare.mesh.visible) {
+      const [front, pocket] = this.flareMarks;
+      const center = flareCenter(this.field.clock, flareAt);
+      front.position.subVectors(subject.flight.position, center).setLength(FLARE_RADIUS).add(center);
+      pocket.position.copy(this.pocket);
+      list.push(front, pocket);
     }
     // torpedoes in flight, in red
     for (let i = 0; i < this.torpedoes.list.length && i < this.torpedoMarks.length; i++) {

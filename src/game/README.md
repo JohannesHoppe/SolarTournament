@@ -6,7 +6,7 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 |---|---|
 | `game.ts` | The game: round flow and each round's opening show, scoring, respawns, warnings, the menus' wiring |
 | `race.ts` | Round and room modes; the race course of gates and its points |
-| `survival.ts` | Last Clone Standing: clones per round, the solar flare closing in |
+| `survival.ts` | Last Clone Standing: clones per round, the solar flare's plasma coming from the sun and the safe pocket it leaves |
 | `flags.ts` | Capture the Flag: sides, bases, sponsor cores, captures |
 | `fleet.ts` | The President's Fleet: the battleship, its parts, phases and sinking |
 | `torpedoes.ts` | Torpedoes: launch, homing, fuse, shot down by lasers |
