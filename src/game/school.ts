@@ -6,7 +6,7 @@ import { SUN_DIRECTION } from '../world/space';
 import { SCHOOL, SCHOOL_PRAISE } from '../music/lines';
 import { RacingLine } from './racingline';
 import { ARENA_LIMIT } from '../world/arena';
-import { GateKit } from '../world/gates';
+import { GateKit, touchRing } from '../world/gates';
 import { GATE_RADIUS } from './race';
 import type { ItemKind } from './items';
 import { msg, t } from '../i18n/i18n';
@@ -139,7 +139,7 @@ interface Drill {
 /** 50 m/s and 5 m/s in world units (1 unit = 5 cm). */
 const FAST = 1000;
 const STOPPED = 100;
-/** Ring radius of the course: a race's gate (80 m), so the rings fly as a race does. */
+/** Ring radius of the course: a race's gate (120 m), so the rings fly as a race does. */
 export const RING_RADIUS = GATE_RADIUS;
 /** Radius of the zone the stop drill wants the ship to rest in: 200 m, shown as a sphere around the marker. */
 const STOP_RADIUS = 4000;
@@ -1048,6 +1048,17 @@ export class FlightSchool {
   get ringAfter(): THREE.Vector3 | null {
     const a = this.attempt;
     return a?.live && a.track ? (a.points[a.next + 1] ?? null) : null;
+  }
+
+  /**
+   * Whether a ship touches the housings of a ring still standing in a ring course (see
+   * touchRing; the rings passed are gone); moves it out and sets `normal` when it does.
+   */
+  touchesRing(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
+    const a = this.attempt;
+    if (!a?.live || !a.track) return false;
+    for (let i = a.next; i < a.points.length; i++) if (touchRing(a.points[i], a.normals[i], RING_RADIUS, position, radius, normal)) return true;
+    return false;
   }
 
   dispose() {

@@ -12,8 +12,11 @@ export const FINISH_GATES = GATES * LAPS + 1;
 
 /** The lap a ship flies after passing `gates` gates (1 to LAPS). */
 export const lapOf = (gates: number) => Math.min(LAPS, Math.floor(Math.max(0, gates - 1) / GATES) + 1);
-/** Radius of a gate (units, 80 m): wide enough for a pack of 35 m ships. */
-export const GATE_RADIUS = 1600;
+/**
+ * Radius of a gate's opening (units, 120 m): wide enough for a pack of 35 m ships, and for a
+ * racer coming in at speed a little off its center to pass the coil's solid housings.
+ */
+export const GATE_RADIUS = 2400;
 /** The course loops around the field's center at about this distance (units, 1.6 km), 300 m more or less. */
 const COURSE_RADIUS = 32000;
 const COURSE_SPREAD = 6000;
@@ -25,7 +28,7 @@ const COURSE_SPREAD = 6000;
 const COURSE_INNER = 0.55;
 /**
  * The gates are coils: a ship that flies through the inner third of a ring (BOOST_RADIUS,
- * about 27 m from its center) is pulled through by the ring's magnetic field and leaves it
+ * 40 m from its center) is pulled through by the ring's magnetic field and leaves it
  * BOOST_PUSH faster (units/s, 40 m/s), along the way it went through, though never faster
  * than the tournament's limit plus that push (see Game.boost). Off-center the field would drag
  * the hull into the coil, so the ring only fires for a ship in its core.
@@ -37,12 +40,14 @@ const BOOST_FLASH = 0.35;
 /** Up and down along the loop (units, up to 400 m), so the course is not flat. */
 const COURSE_RISE = 8000;
 /**
- * A gate keeps this many of its radii clear of rock, and four times as much of an arena's
+ * A gate keeps GATE_ROOM (units, 200 m) clear of rock, and four times as much of an arena's
  * massive body (see crowded); to find such a place it tries up to GATE_TRIES spots on a spiral
- * around where it would be, a golden angle apart (out to about 640 m).
+ * around where it would be, a golden angle apart, SPIRAL_STEP (units, 80 m) times the square
+ * root of the try out (out to about 640 m).
  */
-const GATE_CLEARANCE = 2.5;
+const GATE_ROOM = 4000;
 const GATE_TRIES = 64;
+const SPIRAL_STEP = 1600;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
 /** Points for every gate passed, and for the places at the finish; a kill in a race is worth less (see Game). */
 export const GATE_POINTS = 20;
@@ -68,11 +73,11 @@ const through = new THREE.Vector3();
 
 /**
  * Whether a gate at `point` lies too close to rock or to the arena's massive body: within
- * GATE_CLEARANCE of its radii of the farthest reach of a rock (however the rock turns, the tip
- * of a long one sweeps around it), or four times that of the massive body.
+ * GATE_ROOM of the farthest reach of a rock (however the rock turns, the tip of a long one
+ * sweeps around it), or four times that of the massive body.
  */
 export function crowded(field: AsteroidField, point: THREE.Vector3): boolean {
-  const room = GATE_RADIUS * GATE_CLEARANCE;
+  const room = GATE_ROOM;
   for (const rock of field.asteroids.values()) if (rock.object.position.distanceTo(point) < rock.radius + room) return true;
   return field.insideWell(point, room * 4);
 }
@@ -138,7 +143,7 @@ export class Course {
       const spot = point.clone();
       for (let attempt = 1; attempt < GATE_TRIES && crowded(field, point); attempt++) {
         const turn = attempt * GOLDEN_ANGLE;
-        const reach = GATE_RADIUS * Math.sqrt(attempt);
+        const reach = SPIRAL_STEP * Math.sqrt(attempt);
         point.copy(spot).addScaledVector(outward, Math.cos(turn) * reach);
         point.y += Math.sin(turn) * reach;
       }

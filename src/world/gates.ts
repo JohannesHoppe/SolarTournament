@@ -9,7 +9,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
  * position lights, and on top sits a small station module with a sponsor's plate.
  *
  * Everything lies outside the opening (`radius`), so the rules of a ring stay those of its
- * radius alone; the structure is scenery and nothing collides with it.
+ * radius alone. The housings are solid (see touchRing): flying through the opening is the
+ * point, flying into the coil wrecks a ship like a rock does; struts and module are scenery.
  */
 const SEGMENTS = 10;
 /** Share of each segment's arc that is housing; the rest is the gap a conduit bridges. */
@@ -30,6 +31,59 @@ const BLINK = 1.2;
 const BLINK_ON = 0.18;
 
 const matrix = new THREE.Matrix4();
+const offset = new THREE.Vector3();
+const outward = new THREE.Vector3();
+
+/**
+ * Whether a ship (a sphere at `position` of `shipRadius`) touches the housings of a ring at
+ * `center`, facing `facing` (unit length), its opening `radius`: they form a solid band from
+ * the opening's edge outwards, THICKNESS thick and DEPTH deep (the conduits close its gaps).
+ * When it does, `position` moves out of the band and `normal` is the band's outward normal
+ * there; true.
+ */
+export function touchRing(center: THREE.Vector3, facing: THREE.Vector3, radius: number, position: THREE.Vector3, shipRadius: number, normal: THREE.Vector3): boolean {
+  offset.subVectors(position, center);
+  const along = offset.dot(facing);
+  // far off the band's plane, or far from its circle: no touch (cheap test first)
+  if (Math.abs(along) > DEPTH / 2 + shipRadius) return false;
+  outward.copy(offset).addScaledVector(facing, -along);
+  const out = outward.length();
+  const inner = radius + CLEARANCE;
+  const outer = inner + THICKNESS;
+  if (out < inner - shipRadius || out > outer + shipRadius) return false;
+  if (out > 1e-6) outward.divideScalar(out);
+  else outward.set(1, 0, 0);
+  // the nearest point of the band's cross section (out, along) to the ship
+  let nearOut = THREE.MathUtils.clamp(out, inner, outer);
+  let nearAlong = THREE.MathUtils.clamp(along, -DEPTH / 2, DEPTH / 2);
+  let dOut = out - nearOut;
+  let dAlong = along - nearAlong;
+  const distance = Math.hypot(dOut, dAlong);
+  if (distance >= shipRadius) return false;
+  if (distance < 1e-6) {
+    // the ship's center inside the band: out through the nearest face
+    const toInner = out - inner;
+    const toOuter = outer - out;
+    const toFront = DEPTH / 2 - along;
+    const toBack = along + DEPTH / 2;
+    const least = Math.min(toInner, toOuter, toFront, toBack);
+    dOut = dAlong = 0;
+    if (least === toInner || least === toOuter) {
+      dOut = least === toInner ? -1 : 1;
+      nearOut = least === toInner ? inner : outer;
+    } else {
+      dAlong = least === toFront ? 1 : -1;
+      nearAlong = dAlong * (DEPTH / 2);
+    }
+  } else {
+    dOut /= distance;
+    dAlong /= distance;
+  }
+  normal.copy(outward).multiplyScalar(dOut).addScaledVector(facing, dAlong).normalize();
+  // onto the band's surface, one ship radius off
+  position.copy(center).addScaledVector(outward, nearOut).addScaledVector(facing, nearAlong).addScaledVector(normal, shipRadius);
+  return true;
+}
 const rotation = new THREE.Quaternion();
 const place = new THREE.Vector3();
 const size = new THREE.Vector3();

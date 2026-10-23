@@ -51,6 +51,7 @@ import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
+import { touchRing } from '../world/gates';
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut, standing } from './survival';
 import { markedName } from '../view/marks';
@@ -90,6 +91,13 @@ const START_AT = INTRO_SECONDS + START_SECONDS;
 const START_LIGHTS = 5;
 /** How loud the stadium is over the intro and at each number of the countdown (0 silent, 1 on its feet); at the start word it erupts. */
 const CROWD_INTRO = 0.3;
+/**
+ * A racing bot within APPROACH_NEAR (units, 150 m) of its next gate's plane but beside its
+ * opening first flies for a point APPROACH_FAR (200 m) before the gate on its axis (see
+ * approach), so it never runs into the coil's housings from the side.
+ */
+const APPROACH_NEAR = 3000;
+const APPROACH_FAR = 4000;
 const CROWD_COUNT: Record<number, number> = { 3: 0.45, 2: 0.65, 1: 0.85 };
 /** A smaller moment's cheer lasts this long (s), then the stadium settles back to its murmur (0..1). */
 const CHEER_SECONDS = 1.5;
@@ -507,6 +515,9 @@ const toAim = new THREE.Vector3();
 const assistSteer = { yaw: 0, pitch: 0 };
 const sweep = new THREE.Vector3();
 const surface = new THREE.Vector3();
+const ringFacing = new THREE.Vector3();
+/** The velocity of what does not move: a ring of the tournament holds its place. */
+const STILL = new THREE.Vector3();
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
 /** The beams of the flight school's gunner: red, the color of danger. */
 const DRILL_GUNNER_COLOR = new THREE.Color(1, 0.2, 0.25);
@@ -2735,7 +2746,7 @@ export class Game implements OnlineGame {
         bot.ease = this.online ? 0 : this.ease;
         // a racing bot flies the course until it has finished, then it only fights
         // along the ideal line, bowed around the rock as it lies now
-        bot.waypoint = this.course && ship.finish < 0 ? this.course.line.target(ship.flight.position, ship.gates % GATES, ship.flight.velocity.length(), this.field, this.botPoint(bot)) : null;
+        bot.waypoint = this.course && ship.finish < 0 ? this.approach(this.course, ship, this.course.line.target(ship.flight.position, ship.gates % GATES, ship.flight.velocity.length(), this.field, this.botPoint(bot))) : null;
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE)?.position ?? null;
         // a nova core close by, a battleship whose reactor went critical, or the plume of one
         // hunting with its stern: away from it, out of the plume to the side
@@ -3022,6 +3033,24 @@ export class Game implements OnlineGame {
   /** The point of its own a bot steers by (see botPoints). */
   private botPoint(bot: Bot) {
     return this.botPoints.get(bot) ?? this.botPoints.set(bot, new THREE.Vector3()).get(bot)!;
+  }
+
+  /**
+   * A racer near its next gate but beside the opening, not yet through it, would fly into the
+   * coil's housings: it flies for a point on the gate's axis APPROACH_FAR before it first, and
+   * for its `waypoint` again once it is in front of the opening.
+   */
+  private approach(course: Course, ship: Ship, waypoint: THREE.Vector3): THREE.Vector3 {
+    const next = ship.gates % GATES;
+    const gate = course.points[next];
+    const axis = course.normals[next];
+    const offset = toAim.subVectors(ship.flight.position, gate);
+    // the side it comes from: the gate counts either way
+    const along = offset.dot(axis);
+    if (Math.abs(along) > APPROACH_NEAR) return waypoint;
+    const beside = offset.addScaledVector(axis, -along).length();
+    if (beside < GATE_RADIUS) return waypoint;
+    return waypoint.copy(gate).addScaledVector(axis, (along < 0 ? -1 : 1) * APPROACH_FAR);
   }
 
   /** Capture the Flag in the HUD: the score, the own side, both cores, and where to fly; returns that point for the crosshair. */
@@ -4870,6 +4899,22 @@ export class Game implements OnlineGame {
       this.field.surfaceVelocity(asteroid, scratch.copy(flight.position).addScaledVector(normal, -ship.radius), surface);
       this.bounce(ship, surface, now);
     } else if (this.fleet?.resolve(flight.position, ship.radius, this.field.clock, normal)) this.bounce(ship, this.fleet.velocity, now);
+    else if (this.touchesRing(flight.position, ship.radius)) this.bounce(ship, STILL, now);
+  }
+
+  /**
+   * Whether a ship touches the housings of a ring (see touchRing): a race's gates, the bases of
+   * Capture the Flag, the flight school's rings still standing. Flying through is the point;
+   * flying into the coil is a crash. Moves the ship out and sets `normal` when it does.
+   */
+  private touchesRing(position: THREE.Vector3, radius: number): boolean {
+    const course = this.course;
+    if (course) for (let i = 0; i < course.points.length; i++) if (touchRing(course.points[i], course.normals[i], GATE_RADIUS, position, radius, normal)) return true;
+    const flags = this.flags;
+    if (flags) {
+      for (const base of flags.bases) if (touchRing(base, ringFacing.copy(base).normalize(), BASE_RADIUS, position, radius, normal)) return true;
+    }
+    return !!this.school?.touchesRing(position, radius, normal);
   }
 
   /** A ship touched a surface (a rock, a battleship's hull) moving at `moving`, with the outward `normal` of this frame: it bounces off, scrapes, and an impact hurts. */
