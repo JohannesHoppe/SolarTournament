@@ -303,6 +303,19 @@ button.primary .mode-note {
   line-height: 1.25;
 }
 
+/* the modes of a round in one row: small, a long name breaks over two lines */
+.choice-grid[data-choice$="-mode"] {
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.choice-grid[data-choice$="-mode"] button {
+  padding: 6px 4px;
+  font-size: 0.72rem;
+  hyphens: auto;
+  overflow-wrap: anywhere;
+}
+
 .choice-grid small,
 .upgrade small {
   display: block;

@@ -74,9 +74,6 @@ export const DE: Catalog = {
   'Torpedoes, overdrive, probes, the hook on a ship and the nova core.': 'Torpedos, Turbo, Sonden, der Haken am Schiff und der Nova-Kern.',
 
   // solo round plate
-  '· bots race at 120 m/s': '· Bots rasen mit 120 m/s',
-  '· bots race at 180 m/s, as online': '· Bots rasen mit 180 m/s, wie online',
-  '· bots race at 240 m/s, at the limit': '· Bots rasen mit 240 m/s, am Limit',
   'Three laps through eight gates. Killing your opponents is explicitly allowed.': 'Drei Runden durch acht Tore. Gegner abschießen ist ausdrücklich erlaubt.',
   'For the hard pilots: five minutes, every clone for itself.': 'Für die harten Piloten: fünf Minuten, jeder Klon für sich.',
   '{clones} clones each. A solar flare closes in on the arena. The last clone standing wins.': '{clones} Klone für jeden. Eine Sonneneruption zieht sich um die Arena zusammen. Wer als letzter Klon übrig bleibt, gewinnt.',
@@ -544,10 +541,6 @@ export const DE: Catalog = {
   'This sheet': 'Diese Übersicht',
   'Five courses, each on its own. Training clones are free.': 'Fünf Kurse, jeder für sich. Übungsklone sind gratis.',
   'Back <kbd>Esc</kbd>': 'Zurück <kbd>Esc</kbd>',
-  'Class': 'Klasse',
-  'Cruise': 'Locker',
-  'Pro': 'Profi',
-  'Max': 'Max',
   'Arena': 'Arena',
   'Rivals': 'Gegner',
   'Launch <kbd>Enter</kbd>': 'Start <kbd>Enter</kbd>',
