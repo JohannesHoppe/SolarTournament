@@ -43,8 +43,8 @@ export const COINS_PER_POINT = 1;
  * The upgrades. What they do per step: radiators shed heat 15 % faster, the thrusters push and
  * turn 8 % harder, the main drive pushes 5 % harder (the speed limit stays), the torpedo tubes
  * hold one more torpedo at the first and at the third step, the plating takes 7 % of every
- * damage away. Neon trims the hull, brighter with every step; the drive flame burns azure,
- * violet, then white-hot.
+ * damage away. The neon trim lights a strip along both flanks, adds one across the stern, then
+ * a running light (see Ship.outfit); the drive flame burns azure, violet, then white-hot.
  */
 export const UPGRADES: readonly Upgrade[] = [
   { id: 'radiators', name: msg('Radiators'), note: msg('Your laser cools faster'), prices: [1000, 2500, 5000], looks: false },
@@ -52,7 +52,7 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: 'drive', name: msg('Main drive'), note: msg('More push, same speed limit'), prices: [1000, 2500, 5000], looks: false },
   { id: 'tubes', name: msg('Torpedo tubes'), note: msg('More torpedoes per clone'), prices: [1500, 3000, 6000], looks: false },
   { id: 'plating', name: msg('Plating'), note: msg('Every hit hurts less'), prices: [1500, 3000, 6000], looks: false },
-  { id: 'neon', name: msg('Neon trim'), note: msg('The hull glows in sun orange'), prices: [500, 1500, 3000], looks: true },
+  { id: 'neon', name: msg('Neon trim'), note: msg('Light strips along both flanks'), prices: [500, 1500, 3000], looks: true },
   { id: 'flame', name: msg('Drive flame'), note: msg('Azure, violet, white-hot'), prices: [500, 1500, 3000], looks: true },
 ];
 

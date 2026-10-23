@@ -21,7 +21,7 @@ import type { Catalog } from './i18n';
  * - drive plume: chorro del motor · reactor: reactor
  * - armor (the hull's own): coraza · plating (upgrade and probe): blindaje
  * - thrusters: propulsores · radiators: radiadores · hull: casco · heat: calor
- * - neon trim: ribete de neón · drive flame: llama del motor · looks: estética
+ * - neon trim: franjas de neón · drive flame: llama del motor · looks: estética
  * - aim / reflexes / daring: Puntería / Reflejos / Audacia · fine aim: puntería fina
  * - kill: baja · death: muerte · score: puntos · standings: clasificación · round: ronda
  * - live link: enlace en vivo · sponsor: patrocinador · ad: anuncio · kill cam: killcam
@@ -338,8 +338,8 @@ export const ES: Catalog = {
   'More torpedoes per clone': 'Más torpedos por clon',
   Plating: 'Blindaje',
   'Every hit hurts less': 'Cada impacto duele menos',
-  'Neon trim': 'Ribete de neón',
-  'The hull glows in sun orange': 'El casco brilla en naranja solar',
+  'Neon trim': 'Franjas de neón',
+  'Light strips along both flanks': 'Franjas de luz en ambos flancos',
   'Drive flame': 'Llama del motor',
   'Azure, violet, white-hot': 'Azur, violeta, al rojo blanco',
 

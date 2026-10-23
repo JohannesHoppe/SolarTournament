@@ -342,7 +342,7 @@ export const FR: Catalog = {
   'Plating': 'Surblindage',
   'Every hit hurts less': 'Chaque coup fait moins mal',
   'Neon trim': 'Liseré néon',
-  'The hull glows in sun orange': 'La coque brille en orange soleil',
+  'Light strips along both flanks': 'Bandes lumineuses sur les deux flancs',
   'Drive flame': 'Flamme du moteur',
   'Azure, violet, white-hot': 'Azur, violet, chauffée à blanc',
   'Sealed probe': 'Sonde scellée',

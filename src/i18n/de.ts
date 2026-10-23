@@ -31,7 +31,7 @@ import type { Catalog } from './i18n';
  * - solar flare → Sonneneruption; field → Feld; deep space → tiefes All; arena → Arena
  * - kill → Abschuss; deaths → Tode; score → Punkte (pts → Pkt.); standings → Wertung; callsign → Rufzeichen;
  *   dogfight → Duell; crosshair → Fadenkreuz; marker → Markierung; live link → Live-Verbindung
- * - neon trim → Neonkanten; drive flame → Antriebsflamme; aim / reflexes / daring → Zielen / Reflexe / Wagemut
+ * - neon trim → Neonstreifen; drive flame → Antriebsflamme; aim / reflexes / daring → Zielen / Reflexe / Wagemut
  * - classes Cruise / Pro / Max → Locker / Profi / Max
  *
  * Spoken lines (the flight computer's and the announcer's) write numbers and units out in words, so the voice reads them
@@ -362,8 +362,8 @@ export const DE: Catalog = {
   'More torpedoes per clone': 'Mehr Torpedos pro Klon',
   'Plating': 'Panzerplatten',
   'Every hit hurts less': 'Jeder Treffer schmerzt weniger',
-  'Neon trim': 'Neonkanten',
-  'The hull glows in sun orange': 'Der Rumpf leuchtet sonnenorange',
+  'Neon trim': 'Neonstreifen',
+  'Light strips along both flanks': 'Leuchtstreifen an beiden Flanken',
   'Drive flame': 'Antriebsflamme',
   'Azure, violet, white-hot': 'Azur, Violett, weißglühend',
 
