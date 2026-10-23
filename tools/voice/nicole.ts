@@ -55,6 +55,12 @@ export const REFERENCE = {
 /** Where the cloned lines are kept: assets of one release of the public repository, never in its history. */
 export const RELEASE = { repo: 'JohannesHoppe/SolarTournament', tag: 'voice-nicole' } as const;
 export const releaseUrl = (file: string) => `https://github.com/${RELEASE.repo}/releases/download/${RELEASE.tag}/${file}`;
+/**
+ * A language's cloned audio in the release, named by its fingerprint (the start of its sha256,
+ * which the index names): an index uploaded after its audio, or not at all, never points at
+ * another audio, and builds of the older index keep finding theirs.
+ */
+export const cloneAudioName = (locale: Cloned, sha256: string) => `nicole-${locale}-${sha256.slice(0, 16)}.flac`;
 
 /** A line's name in the store of cloned lines: its language, its text and the settings it was cloned with. */
 export function cloneKey(locale: Cloned, text: string): string {

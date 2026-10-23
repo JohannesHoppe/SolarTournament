@@ -57,9 +57,15 @@ jobs:
         run: |
           mkdir -p "$WORK"
           assets=$(gh release view voice-nicole --json assets --jq '.assets[].name')
-          for file in "nicole-${{ matrix.language }}.flac" "nicole-${{ matrix.language }}.json" nicole-conds.pt reference.wav; do
+          for file in "nicole-${{ matrix.language }}.json" nicole-conds.pt reference.wav; do
             if grep -qx "$file" <<< "$assets"; then gh release download voice-nicole --dir "$WORK" --pattern "$file"; fi
           done
+          # the index names its audio by its fingerprint (see cloneAudioName in tools/voice/nicole.ts)
+          if [ -f "$WORK/nicole-${{ matrix.language }}.json" ]; then
+            audio="nicole-${{ matrix.language }}-$(node -p "require('$WORK/nicole-${{ matrix.language }}.json').audio.slice(0, 16)").flac"
+            if ! grep -qx "$audio" <<< "$assets"; then echo "The release lacks $audio, the audio its index names"; exit 1; fi
+            gh release download voice-nicole --pattern "$audio" --output "$WORK/nicole-${{ matrix.language }}.flac"
+          fi
           if grep -qx nicole-conds.pt <<< "$assets"; then echo "voice=kept" >> "$GITHUB_OUTPUT"; else echo "voice=new" >> "$GITHUB_OUTPUT"; fi
       - name: Prepare
         id: prepare
@@ -68,6 +74,8 @@ jobs:
           # without a voice print in the release, German makes it and the others wait for the
           # next run, so every language speaks with the same one
           if [ "${{ steps.store.outputs.voice }}" = new ] && [ "${{ matrix.language }}" != de ]; then echo "todo=0" >> "$GITHUB_OUTPUT"; exit 0; fi
+          # German makes the voice print even with nothing to clone
+          if [ "${{ steps.store.outputs.voice }}" = new ]; then echo "todo=voice" >> "$GITHUB_OUTPUT"; exit 0; fi
           echo "todo=$(node -p "require('$WORK/todo.json')['${{ matrix.language }}']")" >> "$GITHUB_OUTPUT"
       - if: steps.prepare.outputs.todo != '0'
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -85,15 +93,21 @@ jobs:
         name: Clone
         run: python tools/voice/clone/clone.py "$WORK" ${{ matrix.language }} 290
       # also after a clone that broke off: the store written every ten lines is kept. The audio
-      # goes up before its index, which names the audio by its fingerprint, so a build never
-      # cuts one by the other's clips.
+      # goes up under its fingerprint before its index, which names it, so an index never points
+      # at another audio; older audio of the language goes once the new index is up.
       - if: always() && steps.prepare.outputs.todo != '0'
         name: Upload the store
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          language=${{ matrix.language }}
+          if [ "${{ steps.store.outputs.voice }}" = new ] && [ "$language" = de ] && [ -f "$WORK/nicole-conds.pt" ]; then gh release upload voice-nicole "$WORK/nicole-conds.pt" "$WORK/reference.wav" --clobber; fi
           # a clone that broke off before its first ten lines wrote no store
-          [ -f "$WORK/nicole-${{ matrix.language }}.json" ] || exit 0
-          gh release upload voice-nicole "$WORK/nicole-${{ matrix.language }}.flac" --clobber
-          gh release upload voice-nicole "$WORK/nicole-${{ matrix.language }}.json" --clobber
-          if [ "${{ steps.store.outputs.voice }}" = new ] && [ "${{ matrix.language }}" = de ]; then gh release upload voice-nicole "$WORK/nicole-conds.pt" "$WORK/reference.wav" --clobber; fi
+          [ -f "$WORK/nicole-$language.json" ] || exit 0
+          audio="nicole-$language-$(node -p "require('$WORK/nicole-$language.json').audio.slice(0, 16)").flac"
+          cp "$WORK/nicole-$language.flac" "$WORK/$audio"
+          gh release upload voice-nicole "$WORK/$audio" --clobber
+          gh release upload voice-nicole "$WORK/nicole-$language.json" --clobber
+          for old in $(gh release view voice-nicole --json assets --jq '.assets[].name' | grep -E "^nicole-$language(-[0-9a-f]{16})?\.flac$" | grep -vx "$audio"); do
+            gh release delete-asset voice-nicole "$old" --yes
+          done

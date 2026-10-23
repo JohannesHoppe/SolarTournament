@@ -68,13 +68,14 @@ def write():
         offset += len(store[key])
     audio = np.concatenate([store[key] for key in keys]) if keys else np.zeros(1, dtype=np.float32)
     sf.write(store_audio, audio, rate, subtype='PCM_16')
-    # the index names its audio by its fingerprint: a build never cuts an older audio by a newer index
+    # the index names its audio by its fingerprint, and the release keeps the audio under it
+    # (see cloneAudioName in nicole.ts): no index ever cuts another audio
     audio_sha = hashlib.sha256(store_audio.read_bytes()).hexdigest()
     store_index.write_text(json.dumps({'sampleRate': rate, 'audio': audio_sha, 'clips': clips}, indent=1) + '\n')
     print(f'{language}: {len(keys)} of {len(lines)} lines in the store', flush=True)
 
 
-if not missing:
+if not missing and conds_path.exists():
     write()
     sys.exit(0)
 
@@ -88,6 +89,10 @@ if conds_path.exists():
 else:
     model.prepare_conditionals(str(work / 'reference.wav'), exaggeration=clone['exaggeration'])
     model.conds.save(conds_path)
+# a run that only had to make the voice print is done
+if not missing:
+    write()
+    sys.exit(0)
 hear = pipeline('automatic-speech-recognition', model=check['whisper'], revision=check['revision'], device='cpu')
 
 

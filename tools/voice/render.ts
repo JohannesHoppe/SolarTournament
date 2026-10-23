@@ -24,7 +24,7 @@ import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { allLines, clipKey, phraseKey, phrases, words, type Language } from '../../src/music/lines.ts';
-import { CATALOGS, CLONED, cloneKey, COMPUTER_VOICE, nicoleLines, releaseUrl, type Cloned } from './nicole.ts';
+import { CATALOGS, cloneAudioName, CLONED, cloneKey, COMPUTER_VOICE, nicoleLines, releaseUrl, type Cloned } from './nicole.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const out = join(root, 'public/assets/voice');
@@ -218,10 +218,10 @@ async function cloneAudio(locale: Cloned, index: CloneIndex): Promise<Float32Arr
   const file = join(clonesCache, `nicole-${locale}-${index.audio.slice(0, 16)}.flac`);
   try {
     if (!existsSync(file)) {
-      const answer = await fetch(releaseUrl(`nicole-${locale}.flac`), { signal: AbortSignal.timeout(120000) });
+      const answer = await fetch(releaseUrl(cloneAudioName(locale, index.audio)), { signal: AbortSignal.timeout(120000) });
       if (!answer.ok) throw new Error(`HTTP ${answer.status}`);
       const bytes = Buffer.from(await answer.arrayBuffer());
-      // the release is updated while a build reads it: an audio newer or older than its index is not used
+      // the audio is named by its fingerprint, which its index names; a download cut short is not used
       if (createHash('sha256').update(bytes).digest('hex') !== index.audio) throw new Error('audio and index do not match');
       mkdirSync(clonesCache, { recursive: true });
       writeFileSync(file, bytes);

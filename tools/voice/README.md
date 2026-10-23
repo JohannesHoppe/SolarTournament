@@ -31,7 +31,7 @@ Nicole was born in English: Kokoro's `af_nicole`. For the other languages she is
    │                             reference.wav     18 s of English Nicole (Kokoro)
    ▼
  2. clone.py   ──────────────►  nicole-conds.pt   Nicole's voice as Chatterbox holds it
-   │  Chatterbox + Whisper       nicole-de.flac    every German line, one after the other
+   │  Chatterbox + Whisper       nicole-de-….flac  every German line, one after the other
    │                             nicole-de.json    where each line starts and how long it is
    ▼
  3. the release "voice-nicole"   on GitHub, as assets: outside the repository's history
@@ -45,7 +45,7 @@ Nicole was born in English: Kokoro's `af_nicole`. For the other languages she is
 
 1. **Prepare** (`clone/prepare.ts`). It collects Nicole's lines in each language from the translation catalogs and gives each line a **key**: a fingerprint of the language, the exact text and the clone settings. A line whose text changes gets a new key, and so is cloned again; a line that stays the same keeps its key and its recording forever. It also renders the **reference**: Nicole saying a few sentences in English, about 18 seconds, with Kokoro.
 2. **Clone** (`clone/clone.py`). Chatterbox listens to the reference once and turns it into Nicole's voice print (the "conditionals"). That print is saved (`nicole-conds.pt`) and used for every later run, so Nicole keeps exactly the same voice even if Kokoro should ever change. Then, for every line not yet cloned, Chatterbox speaks it sentence by sentence (long lines in one go tend to ramble), with the settings chosen by ear. Whisper listens to each sentence; if what it hears differs too much from the text, or the sentence runs on far too long, the sentence is spoken again with another seed, up to four times, and the best take is kept. Every take uses a fixed seed derived from the line's key, so a line is reproducible.
-3. **Store** (the release `voice-nicole`). The cloned lines of a language sit in one lossless FLAC file, one after the other, with an index saying where each line starts. Both are assets of a GitHub release of the repository: public, versioned, but not part of the Git history (generated audio in the history would bloat every clone of the repository forever). The index carries the audio's fingerprint, so a build never cuts an old recording by a new index.
+3. **Store** (the release `voice-nicole`). The cloned lines of a language sit in one lossless FLAC file, one after the other, with an index saying where each line starts. Both are assets of a GitHub release of the repository: public, versioned, but not part of the Git history (generated audio in the history would bloat every clone of the repository forever). The index carries the audio's fingerprint, and the release keeps the audio under it (`nicole-de-1d66db33fb6d98eb.flac`, the index as `nicole-de.json`): an index always finds the very audio it was written for, so no build ever cuts one recording by another's clips.
 4. **Build** (`render.ts`, run by `npm run build` and `npm run dev`). It downloads each language's index and audio, cuts out every line Nicole says, and puts them into that language's sprite, together with the announcer. A line not cloned yet (new or just changed) is spoken by the fallback: Kokoro's Nicole reading the phonemes espeak-ng spells it in, with a heavy English accent, until its clone is there.
 5. **Game.** The browser loads the radio sprite and the sprite of the Host's language, and plays a line by cutting it from the sprite.
 
@@ -53,7 +53,7 @@ Nicole was born in English: Kokoro's `af_nicole`. For the other languages she is
 
 The cloning does not depend on anyone's computer. The GitHub Actions workflow `.github/workflows/voice.yml` runs whenever the lines, their translations or these tools change on `main`, and can be started by hand (Actions → Voice → Run workflow). For each language it downloads the store, clones what is missing, and puts the store back into the release. New lines take minutes. Cloning every line of a language from scratch takes a few hours; a job stops after about five hours and keeps what it has, and running the workflow again goes on from there. The three languages run side by side.
 
-The store is guarded on its way: a download that fails stops the job instead of starting from an empty store; `clone.py` refuses an audio that is not the one its index was written for; the audio goes up before its index; and the store written every ten lines goes up even when a clone breaks off. Without a voice print in the release, only German clones (and makes the print), the other languages follow on the next run, so all three speak with the same voice. The workflow's actions are pinned to their commits, and the token that writes the release is given only to the steps that read and write it.
+The store is guarded on its way: a download that fails stops the job instead of starting from an empty store; `clone.py` refuses an audio that is not the one its index was written for; the audio goes up under its fingerprint before its index, and older audio of the language goes only once the new index is up; and the store written every ten lines goes up even when a clone breaks off. Without a voice print in the release, only German runs and makes the print (even with nothing to clone), the other languages follow on the next run, so all three speak with the same voice. The workflow's actions are pinned to their commits, and the token that writes the release is given only to the steps that read and write it.
 
 Cloudflare's build usually runs before the workflow has finished: the new lines then play with the fallback voice until the next deploy builds the voices again. A build that cannot fetch a store the release has (a timeout, an upload under way) speaks those lines with the fallback too, but keeps no stamp and nothing in its cache, so the next build tries again.
 
@@ -81,15 +81,17 @@ The settings are the maintainer's choice by ear ("variant D"): unmistakably a ma
 **Clone on your own machine** (Python 3.11):
 
 ```
-gh release download voice-nicole --dir <work folder> --pattern 'nicole-*' --pattern reference.wav
+gh release download voice-nicole --dir <work folder> --pattern nicole-de.json --pattern nicole-conds.pt --pattern reference.wav
+gh release download voice-nicole --pattern nicole-de-<fingerprint>.flac --output <work folder>/nicole-de.flac
 node tools/voice/clone/prepare.ts <work folder>
 python -m venv .venv && .venv/bin/pip install -r <work folder>/requirements.txt
 .venv/bin/python tools/voice/clone/clone.py <work folder> de
-gh release upload voice-nicole <work folder>/nicole-de.flac --clobber
+cp <work folder>/nicole-de.flac <work folder>/nicole-de-<new fingerprint>.flac
+gh release upload voice-nicole <work folder>/nicole-de-<new fingerprint>.flac --clobber
 gh release upload voice-nicole <work folder>/nicole-de.json --clobber
 ```
 
-If the release had no voice print, `clone.py` made one: upload `nicole-conds.pt` and `reference.wav` too, before any other language is cloned.
+The fingerprint is the first 16 characters of `audio` in the index (`nicole-de.json`), before and after cloning. If the release had no voice print, `clone.py` made one: upload `nicole-conds.pt` and `reference.wav` too, before any other language is cloned. The workflow does all of this by itself, and also removes audio no index names any more.
 
 The first run downloads Chatterbox (about 3 GB) and Whisper into the Hugging Face cache.
 
