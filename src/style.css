@@ -2965,12 +2965,14 @@ body.page {
   line-height: 1.6;
 }
 
-.legal-home .logo {
+.legal-home .logo,
+.handbook-home .logo {
   display: block;
   margin: 0 0 20px;
 }
 
-.legal-eyebrow {
+.legal-eyebrow,
+.handbook-eyebrow {
   margin: 0;
   color: var(--accent);
   font-size: 0.75rem;
@@ -3068,7 +3070,9 @@ body.page {
 .satire-slogan,
 .satire-fine,
 .legal p,
-.legal li {
+.legal li,
+.handbook p,
+.handbook li {
   text-align: justify;
   hyphens: auto;
   -webkit-hyphens: auto;
@@ -3370,4 +3374,113 @@ button.quiet:focus-visible {
   font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* the way from a plate to the Pilot's Handbook: information, so azure */
+.plate-link,
+.source .handbook-link {
+  color: var(--accent-strong);
+  font-size: 0.85rem;
+}
+
+/*
+ * The Pilot's Handbook (handbook.html): a column of plates, one per section, the Ministry's
+ * headings in neon, the practical text justified, the keys as keycaps.
+ */
+.handbook {
+  max-width: 46rem;
+  line-height: 1.6;
+}
+
+.handbook h1 {
+  hyphens: manual;
+}
+
+.handbook-contents ol {
+  columns: 2 14rem;
+  margin: 24px 0 32px;
+  padding-left: 1.6em;
+}
+
+.handbook-contents a {
+  color: var(--accent-strong);
+}
+
+.handbook section {
+  margin: 0 0 24px;
+  padding: 4px 24px 12px;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  /* a link to a section leaves room above it */
+  scroll-margin-top: 16px;
+}
+
+.handbook h2 {
+  margin: 20px 0 8px;
+  color: var(--tube-orange);
+  font-size: clamp(1.05rem, 4.5vw, 1.4rem);
+  line-height: 1.4;
+  text-shadow: var(--neon-orange);
+}
+
+.handbook h3 {
+  margin: 1.4em 0 0.2em;
+  color: var(--accent-strong);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  scroll-margin-top: 16px;
+}
+
+.handbook h3 + p {
+  margin-top: 0;
+}
+
+.handbook li + li {
+  margin-top: 0.4em;
+}
+
+.handbook strong {
+  color: var(--tube-orange);
+}
+
+.handbook-keys {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0 0 12px;
+}
+
+/* a key and what it does are a short label, not running text: left-aligned */
+.handbook-keys dt {
+  justify-self: start;
+  align-self: start;
+  padding: 0 0.45em;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--tube-orange);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.handbook-keys dd {
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .handbook section {
+    padding: 2px 14px 10px;
+  }
+
+  .handbook-keys {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .handbook-keys dd {
+    margin-bottom: 8px;
+  }
 }

@@ -2572,6 +2572,8 @@ export class Game implements OnlineGame {
   }
 
   private pause() {
+    // the handbook opens at the section of what is being flown (its sections are named after the modes)
+    ($('pause-handbook') as HTMLAnchorElement).hash = this.school ? 'flying' : this.roundMode;
     this.setScreen('paused');
   }
 

@@ -15,12 +15,14 @@ The code is grouped by area, each folder with a README of its own:
 | [`music/`](music/) | Radio 2584: the generated techno and everything the voices say |
 | [`net/`](net/) | The online tournament: peer-to-peer messages, the lead browser, cheat checks |
 | [`i18n/`](i18n/) | The four languages and their catalogs |
+| [`handbook/`](handbook/) | The numbers of the Pilot's Handbook, kept in step with the game and the README |
 | [`test/`](test/) | Helpers shared by the unit tests |
 
 The files at this level:
 
 - `main.ts`: starts the game page (WebGL check, assets, the `Game`).
 - `radio-page.ts`: starts the radio page (tune in a title, play it, download it as WAV).
+- `handbook-page.ts`: starts the Pilot's Handbook (`handbook.html`): translates it into the Host's language and fills in the game's numbers.
 - `assets.ts`: loads the ship models and drive sprites, collects what is generated in code.
 - `random.ts`: the seeded random generator every browser shares, so all see the same world.
 - `storage.ts`: the browser's localStorage, safe where it is unavailable.

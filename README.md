@@ -171,6 +171,10 @@ The ring courses and the curve lie ahead of the pilot, or, where they would reac
 10. Final exam: a bot as good as the field's middling one (skill 0.5). Win the dogfight.
 11. A tactician now.
 
+## The Pilot's Handbook
+
+The flight school teaches one maneuver per drill; what does not fit into a drill stands in the Pilot's Handbook of the Ministry of War (`handbook.html`), a page of the site in the game's four languages: the controls on keyboard and mouse, gamepad and touch screen, flying with the autopilot and in free drift, racing, the dogfight, the dirty tricks the rules allow, every mode, the arenas, hazards and alarms, points and the hangar, and a word on honor among Hosts. Its headings speak the Ministry's bombast, its text is practical, and its numbers are the game's (see `src/handbook/`). The menu links it, the flight school's plate too, and the pause menu opens it at the section of the mode being flown; every section and the main maneuvers have an anchor of their own (`handbook.html#torpedoes`).
+
 ## Radio 2584
 
 The tournament broadcaster pumps hard techno into every cockpit, composed live by the game with [Tone.js](https://tonejs.github.io/). There are no fixed tracks: every round grows its own track from one of 1,168 titles, and a title comes again only by chance (within 20 rounds about once in seven times), unless someone remembers it. **The title is the seed**: "Orbit Terror" always grows the same track, note for note.

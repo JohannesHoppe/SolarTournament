@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MAX_HEAT, MAX_HULL, type Ship } from '../ship/ship';
+import { METERS_PER_UNIT } from '../ship/flight';
 import { CONTROLS, keyLabel, type Command, type Device } from '../input/input';
 import { markedName, type Kind } from './marks';
 import { TEAM_TINTS } from '../game/flags';
@@ -33,8 +34,7 @@ const LABEL_WIDTH = 140;
 const LABEL_HEIGHT = 18;
 /** How long a fresh clone's projection takes to draw itself (s); style.css staggers its pieces within it. */
 const BOOT_SECONDS = 1.2;
-/** Display scale: one world unit is 5 cm, a ship is about 35 m long. */
-export const METERS_PER_UNIT = 0.05;
+export { METERS_PER_UNIT };
 /** The size of the window, as Game.resize last set it: reading it from the window after the HUD wrote to the page would force a layout. */
 const viewport = { width: window.innerWidth, height: window.innerHeight };
 
