@@ -141,21 +141,27 @@ function nearestSample(path: Float64Array, point: THREE.Vector3, end: number): n
 /**
  * A comet passing `nearest` about field time `at` in `direction` at COMET_SPEED, seeded
  * `seed`, with its route through the well's gravity, flown from far off: aimed straight at it,
- * a well in the field draws it in; for a well outside the field, the aim is raised against its
- * pull (AIMING rounds, each by what the last one missed `nearest` by), so it still crosses the
- * field at `nearest`. A well swallows the head where it reaches its body; the route stands
+ * a well in the field draws it in; for a well outside the field, it is sent off from twice as
+ * far, its aim raised against the pull (AIMING rounds, each by what the last one missed
+ * `nearest` by), and its route timed so that it passes `nearest` at `at`, however much the pull
+ * sped it up on the way. A well swallows the head where it reaches its body; the route stands
  * still there.
  */
 export function makeComet(at: number, direction: THREE.Vector3, nearest: THREE.Vector3, seed: number, well: Well | null = null): Comet {
-  const from = at - (COMET_REACH + SHOWER_LENGTH) / COMET_SPEED;
-  const count = Math.ceil((COMET_REACH * 2 + SHOWER_LENGTH) / COMET_SPEED / PATH_STEP) + 2;
+  const outside = !!well && well.position.length() >= ARENA_LIMIT;
+  const launch = (COMET_REACH + SHOWER_LENGTH) * (outside ? 2 : 1);
+  let from = at - launch / COMET_SPEED;
+  const count = Math.ceil((launch + COMET_REACH) / COMET_SPEED / PATH_STEP) + 2;
   const path = new Float64Array(count * 3);
   const aim = nearest.clone();
   let inside = -1;
-  for (let round = well && well.position.length() >= ARENA_LIMIT ? AIMING : 1; round > 0; round--) {
-    position.copy(aim).addScaledVector(direction, (from - at) * COMET_SPEED);
+  for (let round = outside ? AIMING : 1; round > 0; round--) {
+    position.copy(aim).addScaledVector(direction, -launch);
     inside = fly(path, direction, well);
-    if (round > 1) aim.add(nearest).sub(position.fromArray(path, nearestSample(path, nearest, inside) * 3));
+    if (!outside) break;
+    const passed = nearestSample(path, nearest, inside);
+    if (round > 1) aim.add(nearest).sub(position.fromArray(path, passed * 3));
+    else from = at - passed * PATH_STEP;
   }
   if (inside >= 0) for (let i = inside + 1; i < count; i++) path.copyWithin(i * 3, inside * 3, inside * 3 + 3);
   // it starts out the last time it is COMET_REACH from the center before its nearest point
