@@ -44,7 +44,7 @@ import { KillCam } from '../view/killcam';
 import { Showcase } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { buy, LEVELS, nextPrice, parseHangar, payOut, perksOf, sovereignEarned, UPGRADES } from './hangar';
-import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
+import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { Asteroid, FieldState } from '../world/asteroids';
 import { RacingLine } from './racingline';
@@ -4220,6 +4220,7 @@ export class Game implements OnlineGame {
   /** The harpoon leaves the nose: it bites what lies ahead within reach (in Capture the Flag a core it may take too), or flies out and is reeled back. */
   private fireHook(ship: Ship) {
     const marks: Mark[] = this.probes.list.map((probe) => ({ team: -1, probe: probe.id, position: probe.position }));
+    for (const torpedo of this.torpedoes.list) if (!torpedo.holder) marks.push({ team: -1, torpedo, position: torpedo.position });
     if (this.flags) marks.push(...this.flags.hookable(ship));
     const aim = aimHook(
       ship,
@@ -4238,8 +4239,15 @@ export class Game implements OnlineGame {
     if (!tether) return;
     this.tethers.delete(ship);
     this.cables.give(tether.line);
-    // a core bitten was handed on to the rules: nothing held, nothing to fling
-    const held = !!tether.anchor && !tether.anchor.mark && tether.flying <= 0;
+    // a torpedo let go flies on from the string, still the flinger's for a moment (see FLING_CREDIT)
+    const torpedo = tether.flying <= 0 ? tether.anchor?.mark?.torpedo : undefined;
+    if (torpedo?.holder === ship) {
+      torpedo.holder = null;
+      torpedo.flinger = ship;
+      torpedo.releasedAt = this.time;
+    }
+    // a core or probe bitten was handed on to the rules: nothing held, nothing to fling
+    const held = !!tether.anchor && (!tether.anchor.mark || !!torpedo) && tether.flying <= 0;
     if (ship.owner === null && held) this.online?.sendHook(ship, null);
     if (ship !== this.me) return;
     this.hookReadyAt = this.time + HOOK_RECHARGE;
@@ -4273,37 +4281,44 @@ export class Game implements OnlineGame {
           }
           tether.length = owner.flight.position.distanceTo(at);
           // a core bitten goes to the rules, its cable the tow cable from then on; a probe
-          // bitten is the ship's (see hookedProbe)
+          // bitten is the ship's (see hookedProbe); a torpedo hangs on the rope (see hookedTorpedo)
           const mark = tether.anchor.mark;
-          if (mark) {
+          if (mark?.torpedo) {
+            if (!this.hookedTorpedo(owner, mark.torpedo, tether.length)) {
+              this.unhook(owner);
+              continue;
+            }
+          } else if (mark) {
             if (mark.probe) this.hookedProbe(owner, mark.probe);
             else this.hookedCore(owner, mark.team);
             this.unhook(owner);
             continue;
-          }
-          this.hooked(owner, tether.anchor, tether.length);
+          } else this.hooked(owner, tether.anchor, tether.length);
         }
       }
       const nose = owner.nose(hookNose);
       Cables.draw(tether.line, nose, cableEnd(tether, nose, hookEnd));
       if (tether.flying > 0 || !tether.anchor) continue;
       const at = pivotOf(tether.anchor, hookPoint);
-      if (!at) {
+      const held = tether.anchor.mark?.torpedo;
+      if (!at || (held && !this.torpedoes.list.includes(held))) {
         this.unhook(owner);
         continue;
       }
       // a ship hooked to a ship: one rope between two bodies of the same mass, each end pulled
-      // on the browser that runs it (both at once where one browser runs both); hooked to a
-      // rock, the rock is the anchor, far too heavy to move
+      // on the browser that runs it (both at once where one browser runs both); a torpedo, which
+      // every browser flies, pulled everywhere; hooked to a rock, the rock is the anchor, far
+      // too heavy to move
       const target = tether.anchor.ship;
       const floor = floorOf(owner, tether.anchor);
       let length: number | null = tether.length;
       const rock = tether.anchor.rock;
-      const anchor = target ? target.body : rockBody(rock ? massOf(rock) : IMMOVABLE, at, rock ? this.field.surfaceVelocity(rock, at, hookVelocity) : hookVelocity.set(0, 0, 0));
+      const anchor = target ? target.body : held ? held : rockBody(rock ? massOf(rock) : IMMOVABLE, at, rock ? this.field.surfaceVelocity(rock, at, hookVelocity) : hookVelocity.set(0, 0, 0));
+      const runsAnchor = held ? true : target?.owner === null;
       // the winch yanks as hard as a coil throws: up to the limit plus a coil's push
       const limit = MAX_SPEED + BOOST_PUSH;
-      if (owner.owner === null) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, target?.owner === null);
-      else if (target?.owner === null) length = pullOn(target.body, owner.body, length, true, floor, limit, dt);
+      if (owner.owner === null) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor);
+      else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt);
       if (length === null) {
         if (owner === this.me) this.hud.flashMessage(this.time, t('Cable snapped'), 1.5);
         this.unhook(owner);
@@ -4335,6 +4350,34 @@ export class Game implements OnlineGame {
   private hookedProbe(owner: Ship, id: string) {
     const probe = this.probes.find(id);
     if (owner.owner === null && owner.alive && probe) this.takeProbe(owner, probe);
+  }
+
+  /**
+   * A harpoon of this browser bit a torpedo (see FLING_CREDIT): it hangs on the rope, its motor
+   * still pushing for its target, and this browser decides from now on where it goes off; the
+   * others are told, its shooter's browser lets go of it. False when it is gone or someone else
+   * holds it already.
+   */
+  private hookedTorpedo(owner: Ship, torpedo: Torpedo, length: number): boolean {
+    if (owner.owner !== null || torpedo.holder || !this.torpedoes.list.includes(torpedo)) return false;
+    torpedo.holder = owner;
+    torpedo.own = true;
+    this.online?.sendHook(owner, { torpedo: torpedo.id }, length);
+    if (owner === this.me) {
+      this.sound.play('explosion', { volume: 0.5, rate: 2.4 });
+      this.hud.flashMessage(this.time, t('TORPEDO ON THE LINE'), 2);
+    }
+    return true;
+  }
+
+  /** A ship of another browser hooked a torpedo (checked against the hook's reach where it arrives): it hangs on that ship's rope here too, and that browser decides where it goes off. */
+  remoteTorpedoHook(owner: Ship, id: string, length: number) {
+    const torpedo = this.torpedoes.find(id);
+    if (!torpedo) return;
+    this.unhook(owner);
+    torpedo.holder = owner;
+    torpedo.own = false;
+    this.tethers.set(owner, { owner, anchor: { rock: null, local: null, ship: null, mark: { team: -1, torpedo, position: torpedo.position } }, flying: 0, end: new THREE.Vector3(), length, line: this.cables.take() });
   }
 
   /** A ship of another browser says its harpoon bit a core: the lead's rules decide (see Flags.claim). */
@@ -4410,13 +4453,16 @@ export class Game implements OnlineGame {
   /** An own torpedo went off: on a ship (whose browser takes the damage), on the battleship, on a rock, or burnt out. */
   private detonate(torpedo: Torpedo, hit: Ship | null) {
     this.blowUp(torpedo);
-    this.online?.sendTorpedoGone(torpedo.id, torpedo.position, null);
+    // one taken on a hook is its holder's to tell of (see Torpedoes.FLING_CREDIT), and its kill
+    const holder = torpedo.holder ?? torpedo.flinger;
+    this.online?.sendTorpedoGone(torpedo.id, torpedo.position, null, holder);
+    const credit = creditOf(torpedo, this.time);
     // every part of the battleship close to where it went off takes it
-    if (this.fleet) for (const zone of this.fleet.blast(torpedo.position)) this.hitFleet(this.fleet, zone, torpedo.shooter, torpedo.position, TORPEDO_HITS);
+    if (this.fleet) for (const zone of this.fleet.blast(torpedo.position)) this.hitFleet(this.fleet, zone, credit, torpedo.position, TORPEDO_HITS);
     if (!hit) return;
-    if (hit.owner === null) this.applyTorpedoHit(hit, torpedo.shooter);
-    else this.online?.sendTorpedoHit(hit, torpedo.shooter, torpedo.id);
-    if (torpedo.shooter.isLocal) {
+    if (hit.owner === null) this.applyTorpedoHit(hit, credit);
+    else this.online?.sendTorpedoHit(hit, credit, torpedo.id);
+    if (credit.isLocal) {
       this.hud.hit();
       this.landed(hit.flight.position, t('TORPEDO'));
     }

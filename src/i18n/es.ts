@@ -270,6 +270,7 @@ export const ES: Catalog = {
   'Cable snapped': 'Cable roto',
   'Hooked {name}': 'Enganchado: {name}',
   Hooked: 'Enganchado',
+  'TORPEDO ON THE LINE': 'TORPEDO EN EL GANCHO',
   'Hooked by {name}': 'Enganchado por {name}',
   'Torpedo away · {name}': 'Torpedo lanzado · {name}',
   'Torpedo away · no lock': 'Torpedo lanzado · sin fijar',

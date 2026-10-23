@@ -4,7 +4,7 @@ import { ownerOf, TOURNAMENT_SIZE, type Session, type RoundState, type Vec } fro
 import type { Ship, ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
 import { unpackItems, type ItemKind, type ProbeState } from '../game/items';
-import { Accusations, AIM_SLACK, Evidence, Plausibility, plausibleBeam, plausibleBlast, type Cheat } from './plausible';
+import { Accusations, AIM_SLACK, Evidence, Plausibility, plausibleBeam, plausibleBlast, plausibleHook, type Cheat } from './plausible';
 import { HOOK_RANGE } from '../game/hook';
 import type { Homing, Torpedo } from '../game/torpedoes';
 
@@ -75,6 +75,8 @@ export interface OnlineGame {
   remoteHook(owner: Ship, rock: string | null, local: THREE.Vector3 | null, target: Ship | null, length: number): void;
   /** A ship of another browser says its harpoon bit the core of side `team` (Capture the Flag). */
   remoteCoreHook(owner: Ship, team: number): void;
+  /** A ship of another browser took a torpedo on its hook (by id, with this much cable out): that browser decides where it goes off from now on. */
+  remoteTorpedoHook(owner: Ship, id: string, length: number): void;
   /** A ship of another browser let go of its hook. */
   remoteUnhook(owner: Ship): void;
   /** Several browsers found a Host cheating. */
@@ -206,11 +208,15 @@ export class Online {
       this.evidence.launch(shooter, wall());
       game.remoteTorpedo(id, ship, target ? (this.find(target) ?? game.beacon(target)) : null, from.fromArray(p), to.fromArray(v));
     };
-    session.onTorpedoGone = (id, p, shooter) => {
+    session.onTorpedoGone = (id, p, shooter, holder) => {
       from.fromArray(p);
-      // the browser that launched it says where it went off; another one only shot it down with
-      // a beam that ended there
-      if (shooter === null) this.evidence.blast(id.slice(0, id.lastIndexOf('.')), from, wall());
+      // the browser that launched it says where it went off, or the one whose ship took it on
+      // its hook (as this browser heard); another one only shot it down with a beam that ended there
+      if (holder !== null) {
+        const torpedo = game.recentTorpedo(id);
+        if (!torpedo || (torpedo.holder?.id !== holder && torpedo.flinger?.id !== holder)) return;
+        this.evidence.blast(holder, from, wall());
+      } else if (shooter === null) this.evidence.blast(id.slice(0, id.lastIndexOf('.')), from, wall());
       else if (!this.evidence.beamEnded(shooter, from, EVIDENCE_REACH, wall())) return;
       game.remoteTorpedoGone(id, from);
     };
@@ -235,6 +241,13 @@ export class Online {
       // a core: the lead's rules decide whether it is taken (from where they see ship and core)
       if (hold.core !== null) {
         game.remoteCoreHook(owner, hold.core);
+        return;
+      }
+      // a torpedo: only one within the hook's reach of the ship, as this browser sees them
+      if (hold.torpedo !== null) {
+        const torpedo = game.recentTorpedo(hold.torpedo);
+        if (!torpedo || this.caught(owner, plausibleHook(owner.flight.position, torpedo.position) ? null : 'hook')) return;
+        game.remoteTorpedoHook(owner, hold.torpedo, hold.length);
         return;
       }
       const target = hold.target ? this.find(hold.target) : null;
@@ -262,11 +275,12 @@ export class Online {
     session.onTorpedoHit = (target, shooter, id) => {
       const ship = this.find(target);
       // only ships this browser runs take damage here, and only from a torpedo of that shooter
-      // that flew here too and went off near the ship
+      // (or of the ship that held it on its hook, see FLING_CREDIT) that flew here too and went
+      // off near the ship
       if (!ship || ship.owner !== null) return;
       const gun = this.find(shooter);
       const torpedo = game.recentTorpedo(id);
-      if (!gun || this.caught(gun, torpedo?.shooter === gun && plausibleBlast(torpedo.position, ship.flight.position) ? null : 'hit')) return;
+      if (!gun || this.caught(gun, torpedo && [torpedo.shooter, torpedo.holder, torpedo.flinger].includes(gun) && plausibleBlast(torpedo.position, ship.flight.position) ? null : 'hit')) return;
       game.applyTorpedoHit(ship, gun);
     };
     session.onSync = (field, wrecks, probesTaken, probes) => {
@@ -398,11 +412,11 @@ export class Online {
     this.session.sendNova(ship.id, round(position));
   }
 
-  /** A ship of this browser hooked a rock (a point in its frame), a ship or a core of Capture the Flag (its side, for the lead's rules), or let go (null). */
-  sendHook(ship: Ship, hold: { rock: string; local: THREE.Vector3 } | { target: Ship } | { core: number } | null, length = 0) {
+  /** A ship of this browser hooked a rock (a point in its frame), a ship, a core of Capture the Flag (its side, for the lead's rules) or a torpedo (by id: this browser decides where it goes off from now on), or let go (null). */
+  sendHook(ship: Ship, hold: { rock: string; local: THREE.Vector3 } | { target: Ship } | { core: number } | { torpedo: string } | null, length = 0) {
     if (!hold) this.session.sendHook(ship.id, null);
     else if ('rock' in hold) this.session.sendHook(ship.id, { rock: hold.rock, local: round(hold.local) }, Math.round(length));
-    else if ('core' in hold) this.session.sendHook(ship.id, hold);
+    else if ('core' in hold || 'torpedo' in hold) this.session.sendHook(ship.id, hold, Math.round(length));
     else this.session.sendHook(ship.id, { target: hold.target.id }, Math.round(length));
   }
 
@@ -410,9 +424,9 @@ export class Online {
     this.session.sendProbe(id, ship.id, bucket);
   }
 
-  /** A torpedo of this browser went off (`shooter` null), or an own ship shot one down. */
-  sendTorpedoGone(id: string, position: THREE.Vector3, shooter: Ship | null) {
-    this.session.sendTorpedoGone(id, round(position), shooter?.id ?? null);
+  /** A torpedo of this browser went off (`shooter` null; `holder` the own ship whose hook took it, if one did), or an own ship shot one down. */
+  sendTorpedoGone(id: string, position: THREE.Vector3, shooter: Ship | null, holder: Ship | null = null) {
+    this.session.sendTorpedoGone(id, round(position), shooter?.id ?? null, holder?.id ?? null);
   }
 
   /** Tells the browser that runs a remote ship that an own torpedo hit it. */

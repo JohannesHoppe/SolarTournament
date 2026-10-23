@@ -294,6 +294,7 @@ export const DE: Catalog = {
   'Cable snapped': 'Seil gerissen',
   'Hooked {name}': '{name} am Haken',
   'Hooked': 'Eingehakt',
+  'TORPEDO ON THE LINE': 'TORPEDO AM HAKEN',
   'Hooked by {name}': '{name} hat dich am Haken',
   'Torpedo away · {name}': 'Torpedo los · {name}',
   'Torpedo away · no lock': 'Torpedo los · ohne Zielerfassung',

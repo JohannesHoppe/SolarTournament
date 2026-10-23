@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { MAX_SPEED } from '../ship/flight';
 import { TORPEDOES } from '../game/torpedoes';
+import { HOOK_RANGE } from '../game/hook';
 import { ONLINE_LEVEL, tubeTorpedoes } from '../game/hangar';
 
 /** The most torpedoes a clone carries online: the standard load and its tubes up to the online cap. */
@@ -12,8 +13,8 @@ const LOAD = TORPEDOES + tubeTorpedoes(ONLINE_LEVEL);
  * honest browser look like a cheater; only the impossible does: a ship that jumps across the
  * arena, a nova core nobody ever had, more torpedoes than a clone can carry, kills nobody died for.
  */
-export type Cheat = 'teleport' | 'nova' | 'torpedoes' | 'kills' | 'hit';
-export const CHEATS: readonly Cheat[] = ['teleport', 'nova', 'torpedoes', 'kills', 'hit'];
+export type Cheat = 'teleport' | 'nova' | 'torpedoes' | 'kills' | 'hit' | 'hook';
+export const CHEATS: readonly Cheat[] = ['teleport', 'nova', 'torpedoes', 'kills', 'hit', 'hook'];
 
 /** No ship flies faster than this (units/s, 750 m/s): three times the tournament limit, the overdrive and a gravity well included. */
 const PLAUSIBLE_SPEED = MAX_SPEED * 3;
@@ -221,6 +222,11 @@ export function plausibleBeam(origin: THREE.Vector3, direction: THREE.Vector3, s
 /** A torpedo hit on the own ship: the torpedo went off near it. */
 export function plausibleBlast(at: THREE.Vector3, target: THREE.Vector3): boolean {
   return at.distanceTo(target) < AIM_SLACK;
+}
+
+/** A torpedo claimed by a ship's hook: it lay within the hook's reach of the ship, as this browser sees them, up to AIM_SLACK of lag. */
+export function plausibleHook(ship: THREE.Vector3, torpedo: THREE.Vector3): boolean {
+  return ship.distanceTo(torpedo) < HOOK_RANGE + AIM_SLACK;
 }
 
 /** What a ship's beams and torpedoes did counts as evidence this long (s), its torpedo launches as long as a torpedo flies and a little more. */

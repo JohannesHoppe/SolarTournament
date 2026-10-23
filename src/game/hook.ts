@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { raySphere, type Asteroid, type AsteroidField } from '../world/asteroids';
 import type { Ship } from '../ship/ship';
+import type { Torpedo } from './torpedoes';
 import { MASS, rope, share, type Body } from '../world/bodies';
 
 /**
@@ -37,9 +38,10 @@ export const HOOK_RECHARGE = 1.2;
 
 /**
  * Something else the harpoon bites, where it is (followed as it moves): a sponsor core of
- * Capture the Flag (its side), or a sponsor probe (its id, side -1).
+ * Capture the Flag (its side), a sponsor probe (its id, side -1), or a torpedo (side -1),
+ * which then hangs on the rope as a body.
  */
-export type Mark = { readonly team: number; readonly position: THREE.Vector3; readonly probe?: string };
+export type Mark = { readonly team: number; readonly position: THREE.Vector3; readonly probe?: string; readonly torpedo?: Torpedo };
 
 /** What a hook holds on to: a point on a rock (in the rock's own frame, so it turns and drifts with it), a ship, or a core (see Mark). */
 export type Anchor = { rock: Asteroid; local: THREE.Vector3; ship: null; mark: null } | { rock: null; local: null; ship: Ship; mark: null } | { rock: null; local: null; ship: null; mark: Mark };
@@ -163,8 +165,9 @@ export function pullOn(body: Body, anchor: Body, length: number, reeling: boolea
     const brake = Math.min(closing - stoppable, HOOK_BRAKE * dt);
     body.velocity.addScaledVector(toAnchor, -brake * share(body.mass, anchor.mass));
     if (moveAnchor) anchor.velocity.addScaledVector(toAnchor, brake * share(anchor.mass, body.mass));
-  } else if (reeling && distance > floor && relative.length() < speedLimit) {
-    // the winch's force gives a ship HOOK_PULL, a lighter body more (see WINCH_LIGHT)
+  } else if (reeling && cable > floor && relative.length() < speedLimit) {
+    // the winch's force gives a ship HOOK_PULL, a lighter body more (see WINCH_LIGHT); with the
+    // cable in to the floor it holds, and the rope alone pulls
     const room = stoppable - closing;
     body.velocity.addScaledVector(toAnchor, Math.min(winchOn(body) * dt, room));
     if (moveAnchor) anchor.velocity.addScaledVector(toAnchor, -Math.min(winchOn(anchor) * dt, room));

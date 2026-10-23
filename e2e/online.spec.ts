@@ -72,6 +72,47 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
   expect(errors).toEqual([]);
 });
 
+test('two tabs agree on a tug of war between their ships on one rope', async ({ context }) => {
+  const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}w&bots=0`);
+  // above the field, 300 m apart along x: each tab puts its own clone there, at rest, its
+  // nose along x (a quarter turn about y: towards +x, or towards -x)
+  const place = (page: Page, x: number, towards: number) =>
+    page.evaluate(
+      ([x, towards]) => {
+        const game = window.game;
+        game.autopilot = false;
+        game.me.protectedUntil = 0;
+        game.me.flight.position.set(x, 62000, 0);
+        game.me.flight.velocity.set(0, 0, 0);
+        game.me.flight.orientation.set(0, -towards * Math.SQRT1_2, 0, Math.SQRT1_2);
+      },
+      [x, towards],
+    );
+  await place(b, 6000, 1);
+  await place(a, 0, 1);
+  await play(a, 1);
+  // the first tab's clone hooks the other, holding the hook; the winch reels it in to 70 m
+  await a.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' })));
+  await play(a, 3);
+  expect(await a.evaluate(() => window.game.me.flight.position.distanceTo(window.game.ships.find((s: { id: string }) => s.id !== window.game.me.id).flight.position))).toBeLessThan(2000);
+  // both turn away from each other and burn with full drives
+  await a.evaluate(() => window.game.me.flight.orientation.set(0, Math.SQRT1_2, 0, Math.SQRT1_2));
+  await b.evaluate(() => window.game.me.flight.orientation.set(0, -Math.SQRT1_2, 0, Math.SQRT1_2));
+  for (const page of [a, b]) await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' })));
+  await play(a, 3);
+  for (const page of [a, b]) await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' })));
+  await play(b, 1);
+  // a stalemate: the pair has hardly moved, the rope held, and both tabs see the same
+  const seen = (page: Page): Promise<Record<string, number[]>> => page.evaluate(() => Object.fromEntries(window.game.ships.map((s: { id: string; flight: { position: { toArray(): number[] } } }) => [s.id, s.flight.position.toArray()])));
+  const [onA, onB] = [await seen(a), await seen(b)];
+  const ids = Object.keys(onA);
+  const middle = (seen: Record<string, number[]>) => (seen[ids[0]][0] + seen[ids[1]][0]) / 2;
+  expect(Math.abs(middle(onA) - 3000)).toBeLessThan(4000);
+  expect(Math.abs(onA[ids[0]][0] - onA[ids[1]][0])).toBeLessThan(2000);
+  for (const id of ids) expect(Math.hypot(...onA[id].map((v, i) => v - onB[id][i]))).toBeLessThan(2000);
+  expect(errors).toEqual([]);
+});
+
 test('two tabs of Capture the Flag agree on the sides and on who has a core in tow, taken by a hook shot', async ({ context }) => {
   // two Hosts alone: bots would only slow two tabs without a GPU down
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}f&m=flag&bots=0`);

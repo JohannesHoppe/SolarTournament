@@ -142,17 +142,18 @@ export class Session {
   onTorpedo: (id: string, shooter: string, target: string | null, position: Vec, velocity: Vec) => void = () => {};
   /**
    * A torpedo went off or was shot down, where: told by the browser that launched it (`shooter`
-   * null), or by one whose ship `shooter` shot it down.
+   * null), by the browser whose ship `holder` took it on its hook (and decides for it since),
+   * or by one whose ship `shooter` shot it down.
    */
-  onTorpedoGone: (id: string, position: Vec, shooter: string | null) => void = () => {};
+  onTorpedoGone: (id: string, position: Vec, shooter: string | null, holder: string | null) => void = () => {};
   /** Another browser's torpedo hit a ship this browser runs. */
   onTorpedoHit: (target: string, shooter: string, torpedo: string) => void = () => {};
   /** A ship of another browser took a probe, in the third of a race its browser names (see placeBucket). */
   onProbe: (probe: string, ship: string, bucket: number) => void = () => {};
   /** A ship of another browser set off its nova core, here. */
   onNova: (ship: string, position: Vec) => void = () => {};
-  /** A ship of another browser hooked a rock (a point in the rock's frame), a ship or a core of Capture the Flag (its side), with this much cable out; or let go (null). */
-  onHook: (ship: string, hold: { rock: string | null; local: Vec | null; target: string | null; core: number | null; length: number } | null) => void = () => {};
+  /** A ship of another browser hooked a rock (a point in the rock's frame), a ship, a core of Capture the Flag (its side) or a torpedo (by id), with this much cable out; or let go (null). */
+  onHook: (ship: string, hold: { rock: string | null; local: Vec | null; target: string | null; core: number | null; torpedo: string | null; length: number } | null) => void = () => {};
   /** Another browser says a ship cheats (see plausible.ts). */
   onCheat: (ship: string, from: string) => void = () => {};
   /** The lead's field, the wreckage in flight, and the probes taken this round. */
@@ -268,12 +269,15 @@ export class Session {
       const torpedo = id(d?.i);
       const position = vec(d?.p, 3, MAX_COORDINATE);
       if (!torpedo || !position || !this.torpedoBudget.spend(from)) return;
-      // the browser that launched it says where it went off; any other only for a ship of its own
+      // the browser that launched it says where it went off, or the one of a ship of its own that
+      // took it on its hook (the game checks that it did); any other only for a ship of its own
       // that shot it down (a torpedo's id is its shooter's and a number, see game.fireTorpedo)
-      if (ownerOf(torpedo.slice(0, torpedo.lastIndexOf('.'))) === from) this.guard(() => this.onTorpedoGone(torpedo, position, null));
+      const holder = d?.h === undefined ? null : id(d.h);
+      if (holder && ownerOf(holder) === from) this.guard(() => this.onTorpedoGone(torpedo, position, null, holder));
+      else if (ownerOf(torpedo.slice(0, torpedo.lastIndexOf('.'))) === from) this.guard(() => this.onTorpedoGone(torpedo, position, null, null));
       else {
         const shooter = id(d?.s);
-        if (shooter && ownerOf(shooter) === from) this.guard(() => this.onTorpedoGone(torpedo, position, shooter));
+        if (shooter && ownerOf(shooter) === from) this.guard(() => this.onTorpedoGone(torpedo, position, shooter, null));
       }
     });
     transport.on('ic', (d, from) => {
@@ -295,9 +299,10 @@ export class Session {
       const local = d?.l === undefined ? null : vec(d.l, 3, MAX_COORDINATE);
       const target = d?.t === undefined ? null : id(d.t);
       const core = d?.c === undefined ? null : int(d.c, 0, 1);
+      const torpedo = d?.o === undefined ? null : id(d.o);
       const length = num(d?.n, 0, MAX_COORDINATE);
-      if (length === null || [rock, target, core].filter((hold) => hold !== null).length !== 1 || (rock !== null) !== (local !== null)) return;
-      this.guard(() => this.onHook(ship, { rock, local, target, core, length }));
+      if (length === null || [rock, target, core, torpedo].filter((hold) => hold !== null).length !== 1 || (rock !== null) !== (local !== null)) return;
+      this.guard(() => this.onHook(ship, { rock, local, target, core, torpedo, length }));
     });
     transport.on('nv', (d, from) => {
       const ship = id(d?.s);
@@ -509,11 +514,12 @@ export class Session {
     this.transport.send('tl', { i: torpedo, s: shooter, t: target, p: position, v: velocity });
   }
 
-  /** A ship of this browser hooked a rock, a ship or a core, or let go (null). */
-  sendHook(ship: string, hold: { rock: string; local: Vec } | { target: string } | { core: number } | null, length = 0) {
+  /** A ship of this browser hooked a rock, a ship, a core or a torpedo, or let go (null). */
+  sendHook(ship: string, hold: { rock: string; local: Vec } | { target: string } | { core: number } | { torpedo: string } | null, length = 0) {
     if (!hold) this.transport.send('hk', { s: ship, x: 1 });
     else if ('rock' in hold) this.transport.send('hk', { s: ship, r: hold.rock, l: hold.local, n: length });
     else if ('core' in hold) this.transport.send('hk', { s: ship, c: hold.core, n: length });
+    else if ('torpedo' in hold) this.transport.send('hk', { s: ship, o: hold.torpedo, n: length });
     else this.transport.send('hk', { s: ship, t: hold.target, n: length });
   }
 
@@ -539,9 +545,9 @@ export class Session {
     this.transport.send('ic', { c: probe, s: ship, b: bucket });
   }
 
-  /** A torpedo went off where it was (told by the browser that launched it), or the own ship `shooter` shot it down there. */
-  sendTorpedoGone(torpedo: string, position: Vec, shooter: string | null) {
-    this.transport.send('tg', { i: torpedo, p: position, ...(shooter ? { s: shooter } : {}) });
+  /** A torpedo went off where it was (told by the browser that launched it, or that of `holder`, whose hook took it), or the own ship `shooter` shot it down there. */
+  sendTorpedoGone(torpedo: string, position: Vec, shooter: string | null, holder: string | null = null) {
+    this.transport.send('tg', { i: torpedo, p: position, ...(shooter ? { s: shooter } : {}), ...(holder ? { h: holder } : {}) });
   }
 
   /** Tells the browser that runs `target` that the own torpedo `torpedo` of `shooter` hit it. */

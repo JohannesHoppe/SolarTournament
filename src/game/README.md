@@ -10,10 +10,10 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | `survival.ts` | Last Clone Standing: clones per round, the solar flare's plasma coming from the sun and the safe pocket it leaves |
 | `flags.ts` | Capture the Flag: sides, bases, sponsor cores, taking one (touch or hook shot), captures (the core itself through the ring); a core in tow as a trailer on the hook's rope (mass, jerks, bumps), adrift with its thrusters braking; the way a carrier flies home through the ring; how a core is shown (faded where it would hide the ship or the crosshair) |
 | `fleet.ts` | The President's Fleet: the battleship, its parts, phases and sinking |
-| `torpedoes.ts` | Torpedoes: launch, homing, fuse, shot down by lasers |
+| `torpedoes.ts` | Torpedoes: launch, homing, fuse, shot down by lasers; one on a hook's rope (a bomb on a string: its motor against the rope, its fuse live for every ship, the kill its holder's) |
 | `comet.ts` | Comets crossing the arena: schedule and route (bent and swallowed by a well), the shower's pieces, the head breaking rock and shoving hull, the comet as the scene shows it |
 | `items.ts` | Sponsor probes and what they carry |
-| `hook.ts` | The hook: harpoon (it bites rock, ships and a core of Capture the Flag), cable, winch, swing; the cable that only pulls, also a core's tow cable; the cables' lines |
+| `hook.ts` | The hook: harpoon (it bites rock, ships, probes, torpedoes and a core of Capture the Flag), cable, winch, swing; the cable as a rope between two bodies (see world/bodies), also a core's tow cable, and the tug of war on it; the cables' lines |
 | `racingline.ts` | The ideal line through gates or rings, bowing around rock; how tight a line bends |
 | `laps.ts` | Lap clock, splits, the best lap and its ghost |
 | `hangar.ts` | Solar Coins, upgrades and their prices |

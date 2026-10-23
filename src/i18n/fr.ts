@@ -273,6 +273,7 @@ export const FR: Catalog = {
   'Cable snapped': 'Câble rompu',
   'Hooked {name}': '{name} accroché',
   'Hooked': 'Accroché',
+  'TORPEDO ON THE LINE': 'TORPILLE AU GRAPPIN',
   'Hooked by {name}': 'Accroché par {name}',
   'Torpedo away · {name}': 'Torpille lancée · {name}',
   'Torpedo away · no lock': 'Torpille lancée · sans verrouillage',
