@@ -185,6 +185,23 @@ export class Space {
     this.lights.add(new THREE.HemisphereLight(0x7788bb, 0x2a201c, 1.6));
   }
 
+  /**
+   * The picture's quality (see view/quality): the sun's shadow map `shadows` px on an edge, 0
+   * for no shadows (the rocks then leave the ships lit), and the share of the dust drawn.
+   */
+  setLook(shadows: number, dust: number) {
+    const light = this.sunLight;
+    light.castShadow = shadows > 0;
+    if (shadows > 0 && light.shadow.mapSize.x !== shadows) {
+      light.shadow.mapSize.set(shadows, shadows);
+      // the map is made anew at its new size with the next frame
+      light.shadow.map?.dispose();
+      light.shadow.map = null;
+    }
+    this.dust.geometry.setDrawRange(0, Math.round(DUST_COUNT * dust));
+    this.streaks.geometry.setDrawRange(0, Math.round(DUST_COUNT * dust) * 2);
+  }
+
   /** The sun of an arena: its size in the sky, and how bright and in which color it lights the field. */
   setSun(sun: { size: number; intensity: number; color: number }) {
     this.sunBase.size = sun.size;

@@ -20,7 +20,8 @@ The code is grouped by area, each folder with a README of its own:
 
 The files at this level:
 
-- `main.ts`: starts the game page (WebGL check, assets, the `Game`).
+- `main.ts`: starts the game page (WebGL check, assets, the `Game`), and the benchmark or the frame meter when the address asks for them.
+- `bench.ts`: the benchmark (`?bench`, `?bench=<seconds>`): plays a fixed scene and measures what each feature, each rung of the quality ladder, each arena and each mode costs per frame, with a table on screen, in the console and as JSON; the frame meter (`?fps`) with the frame rate and the rung the governor is on. See the README's section "Performance".
 - `radio-page.ts`: starts the radio page (tune in a title, play it, download it as WAV).
 - `handbook-page.ts`: starts the Pilot's Handbook (`handbook.html`): translates it into the Host's language and fills in the game's numbers.
 - `assets.ts`: loads the ship models and drive sprites, collects what is generated in code.

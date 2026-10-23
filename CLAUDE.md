@@ -58,6 +58,8 @@ npm test            # unit tests of the deterministic core (Vitest, in Node, und
 npm run e2e         # browser tests (Playwright: solo start, two tabs online); first once: npm run e2e:install
                     # DEV_PORT=5174 moves the dev server and the browser tests, so a second checkout (a worktree) tests beside the first
 npm run balance     # balance runs (Playwright, about ten minutes): every mode played out by bots in time-lapse
+npm run bench       # benchmark (Playwright, about ten minutes): the cost per frame of every feature, quality rung, arena and mode
+                    # PROFILE=pixel8 as the reference phone (its screen, touch, its CPU speed); BENCH_SECONDS=<s> per measurement
 npm run build       # static site in dist/ (renders the voice, checks types, duplicates and unit tests first)
 npm run check       # every quick quality gate in one run, summed up: types, duplicates, unit tests (tools/check/)
 npm run check:full  # the same, then the browser tests and the balance runs
@@ -110,7 +112,7 @@ Never use `npx`, always the scripts from `package.json`.
 
 The repository root is the Vite project: `index.html` (the game), `radio.html` (Radio 2584), `handbook.html` (the Pilot's Handbook, linked from the menu, the flight school's plate and the pause menu, which opens it at the section of the mode flown), `impressum.html` and `datenschutz.html` (German legal pages, linked from the menu and the radio page) are its pages, `public/` holds the static files, `tools/` the generators that write into `public/`.
 
-**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the eleven localStorage entries, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server and TURN relay, public tournament names, the cheat reports between the browsers), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, another TURN or STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
+**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the twelve localStorage entries, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server and TURN relay, public tournament names, the cheat reports between the browsers), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, another TURN or STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
 
 **Every folder has a README** that says what the folder is for, what each file in it does and how it is used or run, short and for a human finding their way around. A new folder gets one, and a file added, removed or changed in what it does updates its folder's README in the same commit. The build leaves the READMEs in `public/` out of the site.
 
@@ -122,6 +124,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `radio-page.ts` | Startup of the radio page: tune in a title, play it, jump in it, download it as WAV |
 | `handbook-page.ts` | Startup of the Pilot's Handbook: its texts in the Host's language, the game's numbers filled in |
 | `handbook/` | The handbook's numbers (`numbers.ts`), taken from the game's constants or checked against the README |
+| `bench.ts` | The benchmark (`?bench`): a fixed scene, the cost per frame of every feature, quality rung, arena and mode, as a table on screen, in the console and as JSON; the frame meter (`?fps`) |
 | `style.css` | Styles of both pages |
 | `assets.ts` | Loads the ship models and drive sprites, collects the assets generated in code |
 | `random.ts` | Deterministic random generator |
@@ -183,6 +186,9 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/textures.ts` | Canvas textures: glows, sparks, smoke |
 | `view/surfaces.ts` | Surfaces drawn on canvases from fixed seeds (color, roughness and metalness, bump): the fighters' worn depot paint, the world ship's craters and burns with embers, the battleship's gleam and glitter, the rings' industrial plating, probes, torpedoes, signs; box-projected texture coordinates, the reflection map |
 | `view/marks.ts` | The marks before names: bot or Host, drawn as shapes, never as characters |
+| `view/quality.ts` | The picture's quality: the ladder of looks (resolution, bloom, shadows, lacquer, particles, rock detail, the belt, the title screen's pad), the tiers low, medium and high as presets on it, the guess of a device, the Host's choice as kept, the governor that moves along the ladder with the frame rate |
+| `view/graphics.ts` | Applies the ladder's rung to the renderer and the scene; feeds the governor; holds a knob that compiles shaders back until a hitch goes unseen |
+| `view/bloom.ts` | The bloom at a share of the picture's resolution |
 | **`input/`** | **Controls** |
 | `input/input.ts` | Keyboard, mouse flight (the ship turns towards the visible pointer, its offset from the center is the stick) and gamepad, merges all input into `Controls` |
 | `input/touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |
@@ -252,5 +258,6 @@ In dev mode the game hangs on the window as `window.game`. It lets you read and 
 - Render music offline: `const { renderPreview } = await import('/src/music/preview.ts')`, then `renderPreview('Orbit Terror', 'round', undefined, fromSecond, seconds)` (the title is the seed; a flavor can be forced); returns a WAV file as base64 that can be saved and listened to
 - Read the development log (`src/devlog.ts`, only in development, cleared at every round's start): `game.log.summary()` counts the round's deaths by cause (rock, hull, gate, wreck, ram, knockout, laser, torpedo, nova, plume, flare, comet, shower, well, space, …), by ship, by what the victim was doing and by the decisions of victim and killer in the 3 seconds before, contacts between ships by outcome (bump, shove, ram) and shoves; `game.log.filter('death')` (or `'decision'`, `'contact'`, `'shove'`, `'act'`, or a function) lists the events, each death with position, speed, impact speed, killer and those decisions; `game.log.json()` is all of it. Every bot logs each change of its decision (race, attack, defend, flee, siege, probe, roam; avoiding rock, giving way to a ship) with its reason, and its acts (shove, hook, torpedo). The balance runs attach each round's log to the result (`test-results/`) and put the deaths by cause into a failure's detail
 - Trigger a glitch: `game.glitch.trigger(1, 5)`; idle glitches in the menu make element screenshots fail, so stop them with `game.nextIdleGlitch = Infinity`
+- The picture's quality (`src/view/quality.ts`, README "Performance"): `game.graphics.rung` and `game.graphics.look` say what is drawn, `game.graphics.choose('low')` pins a tier (`'auto'` hands it back to the governor); the browser tests pin `low` in `localStorage['solartournament.quality']` before the page loads (`e2e/game.ts`). `?fps` shows the frame rate and the rung at the bottom of the screen; `?bench` (or `?bench=<seconds>`) runs the benchmark in the page, `npm run bench` in the test browser (`PROFILE=pixel8` as the reference phone)
 
-The test browser renders without a GPU; its frame rate says nothing about real hardware. Game feel and sound cannot be judged this way; Johannes tests those himself.
+The test browser renders without a GPU and composites the page without it (`--disable-gpu-compositing`, see `playwright.config.ts`); its frame rate says nothing about real hardware, the benchmark's table in it only compares costs with each other. Game feel and sound cannot be judged this way; Johannes tests those himself.
