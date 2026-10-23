@@ -34,7 +34,7 @@ const particleFragment = /* glsl */ `
  * one's place; the blending is additive, so their order does not matter), and only they are
  * drawn and uploaded. When all slots are in use, a new particle replaces the slots in turn.
  */
-export class ParticleSystem {
+class ParticleSystem {
   readonly points: THREE.Points;
   private readonly position = new Float32Array(PARTICLE_CAPACITY * 3);
   private readonly velocity = new Float32Array(PARTICLE_CAPACITY * 3);
@@ -151,11 +151,6 @@ const scratch = new THREE.Vector3();
 const scratchVelocity = new THREE.Vector3();
 const spread = new THREE.Vector3();
 
-/** A direction evenly spread over the sphere. */
-function randomDirection(target: THREE.Vector3) {
-  return target.randomDirection();
-}
-
 export class Effects {
   readonly group = new THREE.Group();
   private readonly fire: ParticleSystem;
@@ -176,20 +171,20 @@ export class Effects {
   explosion(center: THREE.Vector3, radius: number, drift: THREE.Vector3) {
     const count = Math.min(90, 24 + radius / 30);
     for (let i = 0; i < count; i++) {
-      randomDirection(scratchVelocity).multiplyScalar(radius * (0.4 + Math.random() * 1.6)).add(drift);
+      scratchVelocity.randomDirection().multiplyScalar(radius * (0.4 + Math.random() * 1.6)).add(drift);
       scratch.copy(center).addScaledVector(scratchVelocity, 0.05);
       this.fire.emit(scratch, scratchVelocity, 0.4 + Math.random() * 0.5, radius * 0.3, radius * 0.8, FIRE);
     }
     for (let i = 0; i < count * 0.6; i++) {
-      randomDirection(scratchVelocity).multiplyScalar(radius * (0.2 + Math.random() * 0.6)).add(drift);
-      scratch.copy(center).addScaledVector(randomDirection(spread), Math.random() * radius * 0.6);
+      scratchVelocity.randomDirection().multiplyScalar(radius * (0.2 + Math.random() * 0.6)).add(drift);
+      scratch.copy(center).addScaledVector(spread.randomDirection(), Math.random() * radius * 0.6);
       this.smoke.emit(scratch, scratchVelocity, 1.5 + Math.random() * 1.5, radius * 0.5, radius * 1.5, SMOKE);
     }
   }
 
   sparks(point: THREE.Vector3, color: THREE.Color, size: number) {
     for (let i = 0; i < 24; i++) {
-      randomDirection(scratchVelocity).multiplyScalar(size * (2 + Math.random() * 6));
+      scratchVelocity.randomDirection().multiplyScalar(size * (2 + Math.random() * 6));
       this.fire.emit(point, scratchVelocity, 0.25 + Math.random() * 0.3, size, size * 0.2, color);
     }
   }
@@ -202,7 +197,7 @@ export class Effects {
   /** Rock splinters and dust where a laser hits an asteroid. */
   debris(point: THREE.Vector3, normal: THREE.Vector3, size: number) {
     for (let i = 0; i < 14; i++) {
-      randomDirection(scratchVelocity).add(normal).normalize().multiplyScalar(size * (1 + Math.random() * 3));
+      scratchVelocity.randomDirection().add(normal).normalize().multiplyScalar(size * (1 + Math.random() * 3));
       this.smoke.emit(point, scratchVelocity, 1.2 + Math.random(), size * 0.6, size * 2.5, ROCK);
     }
   }

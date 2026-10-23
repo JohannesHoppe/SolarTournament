@@ -173,7 +173,8 @@ $('tuner').addEventListener('submit', (event) => {
   tune(input.value);
 });
 input.addEventListener('change', () => tune(input.value));
-$('random').addEventListener('click', () => tune(titleFor(1 + Math.floor(Math.random() * 2147483000))));
+const randomTitle = () => titleFor(1 + Math.floor(Math.random() * 2147483000));
+$('random').addEventListener('click', () => tune(randomTitle()));
 $('play').addEventListener('click', () => (playingSince === null ? play() : stop()));
 $('download').addEventListener('click', () => void download());
 seek.addEventListener('input', () => jump(Number(seek.value)));
@@ -181,6 +182,6 @@ seek.addEventListener('pointerdown', () => (dragging = true));
 window.addEventListener('pointerup', () => (dragging = false));
 bindVolume($<HTMLInputElement>('radio-volume'));
 
-tune(new URLSearchParams(location.search).get('title') ?? titleFor(1 + Math.floor(Math.random() * 2147483000)));
+tune(new URLSearchParams(location.search).get('title') ?? randomTitle());
 requestAnimationFrame(frame);
 setInterval(checkEnd, 500);

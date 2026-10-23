@@ -98,7 +98,7 @@ export interface Skills {
  * picks; on average they run from Laika (0.1) to Halley (0.85). The first three, who fill a
  * tournament first, average 0.4; Kessler is the middling one (0.5), whom the balance runs watch.
  */
-export const BOT_SKILLS: Record<string, Skills> = {
+const BOT_SKILLS: Record<string, Skills> = {
   Laika: { aim: 0.1, reflexes: 0.2, daring: 0 },
   Sputnik: { aim: 0.3, reflexes: 0.1, daring: 0.2 },
   Juno: { aim: 0.2, reflexes: 0.4, daring: 0.3 },
@@ -227,8 +227,7 @@ export class Bot {
     let targetDistance = sight;
     let best = Infinity;
     for (const ship of ships) {
-      // a freshly printed clone is left alone until its spawn protection runs out, and the own side always
-      if (ship === this.ship || !ship.alive || now < ship.protectedUntil || ship.allyOf(this.ship)) continue;
+      if (!this.rival(ship, now)) continue;
       const distance = ship.flight.position.distanceTo(me.position);
       if (distance >= sight) continue;
       let hunters = 0;
@@ -254,7 +253,7 @@ export class Bot {
     const struck = this.struckBy && now < this.struckUntil && this.struckBy.alive ? this.struckBy : null;
     for (const ship of ships) {
       // as with targets: a fresh clone cannot hurt, nor can the own side, and a storm blinds the sensors beyond sight
-      if (ship === this.ship || !ship.alive || now < ship.protectedUntil || ship.allyOf(this.ship) || (struck && ship !== struck)) continue;
+      if (!this.rival(ship, now) || (struck && ship !== struck)) continue;
       const line = toTarget.subVectors(me.position, ship.flight.position);
       const distance = line.length();
       const threat = ship === struck || (distance < Math.min(THREAT_RANGE, sight) && this.ship.tailToward(line) && ship.flight.angleTo(line) < THREAT_ANGLE);
@@ -379,12 +378,12 @@ export class Bot {
       // single shots from a nearly cool laser, so it keeps the heat for the drive
       const open = target.tailToward(line.subVectors(target.flight.position, me.position));
       // a racer flies first: single shots only, even at an open drive, unless it looks back
-      const heatLimit = open && (!racing || lookingBack) ? 40 + 50 * this.skills.daring : ARMOR_FIRE_HEAT;
+      const heatLimit = open && (!racing || lookingBack) ? this.hotHeat : ARMOR_FIRE_HEAT;
       controls.fire = (open || this.snipe) && this.onTargetFor > reaction && targetDistance < FIRE_RANGE && !this.ship.overheated && this.ship.heat < heatLimit;
     } else if (sieging) {
       // a part of a battleship holds still: the nose on it, and fire while the laser allows
       me.steer(toTarget, 3, controls);
-      controls.fire = me.angleTo(toTarget) < SIEGE_AIM && !this.ship.overheated && this.ship.heat < 40 + 50 * this.skills.daring;
+      controls.fire = me.angleTo(toTarget) < SIEGE_AIM && !this.ship.overheated && this.ship.heat < this.hotHeat;
     } else {
       me.steer(toTarget, 2.5, controls);
     }
@@ -403,6 +402,16 @@ export class Bot {
       controls.strafeX = this.dodge;
     }
     return this.byHand(controls, dt);
+  }
+
+  /** A ship the bot may fight: alive, not its own, not of its side, and past its spawn protection (a freshly printed clone is left alone). */
+  private rival(ship: Ship, now: number) {
+    return ship !== this.ship && ship.alive && now >= ship.protectedUntil && !ship.allyOf(this.ship);
+  }
+
+  /** How hot the bot runs its laser at a target worth the heat (one shot heats it by 20): the more daring, the hotter. */
+  private get hotHeat() {
+    return 40 + 50 * this.skills.daring;
   }
 
   /**

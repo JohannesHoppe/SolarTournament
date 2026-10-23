@@ -20,7 +20,8 @@ export class TouchControls {
   private sticks: Collection[] = [];
   private loading: Promise<void> | null = null;
 
-  constructor(onPause: () => void, onAutopilot: () => void, onOverdrive: () => void, onTorpedo: () => void) {
+  /** `onAction` hears the buttons that act at a tap: pause, autopilot, overdrive, torpedo. */
+  constructor(onAction: (action: 'pause' | 'autopilot' | 'overdrive' | 'torpedo') => void) {
     // touch controls from the start only where touch is the only way to point (phones,
     // tablets); a laptop with a touch screen or a tablet with a trackpad starts with the
     // mouse and switches on the first touch
@@ -38,15 +39,13 @@ export class TouchControls {
       if (e.pointerType === 'touch' || e.pointerType === 'pen') this.setActive(true);
     });
 
-    this.hold('touch-drive', (down) => (this.drive = down));
-    this.hold('touch-fire', (down) => (this.fire = down));
-    this.hold('touch-brake', (down) => (this.brake = down));
-    this.hold('touch-flip', (down) => (this.flip = down));
-    this.hold('touch-hook', (down) => (this.hook = down));
-    this.tap('touch-pause', onPause);
-    this.tap('touch-autopilot', onAutopilot);
-    this.tap('touch-overdrive', onOverdrive);
-    this.tap('touch-torpedo', onTorpedo);
+    for (const held of ['drive', 'fire', 'brake', 'flip', 'hook'] as const) this.hold(`touch-${held}`, (down) => (this[held] = down));
+    for (const action of ['pause', 'autopilot', 'overdrive', 'torpedo'] as const) {
+      document.getElementById(`touch-${action}`)!.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        onAction(action);
+      });
+    }
 
     // A stick can get stuck when the system swallows the touchend (app switch, incoming call):
     // rebuild the sticks in that case.
@@ -145,13 +144,6 @@ export class TouchControls {
     button.addEventListener('pointerup', up);
     button.addEventListener('pointercancel', up);
     button.addEventListener('lostpointercapture', up);
-  }
-
-  private tap(id: string, action: () => void) {
-    document.getElementById(id)!.addEventListener('pointerdown', (e) => {
-      e.preventDefault();
-      action();
-    });
   }
 }
 

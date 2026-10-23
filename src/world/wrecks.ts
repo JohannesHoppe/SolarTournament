@@ -148,10 +148,10 @@ export class Wrecks {
     const wanted = new Map(states.map((state) => [state.id, state]));
     const ships = new Set<string>();
     for (const state of states) {
-      const match = /^(.+)\.(\d+)\.\d+$/.exec(state.id);
-      if (!match || ships.has(`${match[1]}.${match[2]}`)) continue;
-      ships.add(`${match[1]}.${match[2]}`);
-      this.spawn(match[1], Number(match[2]), position.fromArray(state.p), velocity.fromArray(state.v), shipRadius, now);
+      const match = /^((.+)\.(\d+))\.\d+$/.exec(state.id);
+      if (!match || ships.has(match[1])) continue;
+      ships.add(match[1]);
+      this.spawn(match[2], Number(match[3]), position.fromArray(state.p), velocity.fromArray(state.v), shipRadius, now);
       // the pieces gone in the snapshot go at once, so the cap on pieces never takes wanted ones
       for (const wreck of [...this.list]) if (!wanted.has(wreck.id)) this.remove(wreck);
     }

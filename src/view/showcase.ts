@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Assets, ShipType } from '../assets';
 import type { Perks } from '../game/hangar';
 import { Ship } from '../ship/ship';
+import { canvas, toTexture } from './textures';
 
 /**
  * The ship on show circles above the pad once in CIRCLE_SECONDS, CIRCLE_RADIUS (units) out,
@@ -140,10 +141,9 @@ export class Showcase {
     // the seal drawn onto the face: crest.svg, as the station pages show it
     const image = new Image();
     image.onload = () => {
-      const canvas = Object.assign(document.createElement('canvas'), { width: 1024, height: 1024 });
-      canvas.getContext('2d')!.drawImage(image, 0, 0, 1024, 1024);
-      const texture = new THREE.CanvasTexture(canvas);
-      texture.colorSpace = THREE.SRGBColorSpace;
+      const [element, ctx] = canvas(1024);
+      ctx.drawImage(image, 0, 0, 1024, 1024);
+      const texture = toTexture(element);
       face.emissiveMap = texture;
       face.map = texture;
       face.needsUpdate = true;

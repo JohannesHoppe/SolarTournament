@@ -14,7 +14,6 @@
 :root {
   --accent: #ff9d00;
   --accent-strong: #4d91ff;
-  --complement: #0062ff;
   /* Neon: white tube, a halo in shades of the color (after Silvia O'Dwyer, CSS-Tricks 2021) */
   --neon-orange: 0 0 1px #fff, 0 0 3px #ffd9a0, 0 0 8px #ff9d00, 0 0 14px #ff9d00, 0 0 24px #ff7b00, 0 0 40px #ff5a00, 0 0 64px #ff5a00;
   --neon-blue: 0 0 1px #fff, 0 0 3px #cfe0ff, 0 0 8px #4d91ff, 0 0 14px #0062ff, 0 0 24px #0062ff, 0 0 40px #0048c0, 0 0 64px #0048c0;

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { canvas } from '../view/textures';
 
 /**
  * The two interceptors, built in code as low-poly hulls of flat facets (a few hundred
@@ -92,8 +93,7 @@ let mirrored: THREE.CubeTexture | null = null;
 function shine(): THREE.CubeTexture {
   if (mirrored) return mirrored;
   const face = (paint: (g: CanvasRenderingContext2D) => void) => {
-    const canvas = Object.assign(document.createElement('canvas'), { width: 128, height: 128 });
-    const g = canvas.getContext('2d')!;
+    const [element, g] = canvas(128);
     const sky = g.createLinearGradient(0, 0, 0, 128);
     sky.addColorStop(0, '#2a3242');
     sky.addColorStop(0.55, '#0a0d14');
@@ -101,7 +101,7 @@ function shine(): THREE.CubeTexture {
     g.fillStyle = sky;
     g.fillRect(0, 0, 128, 128);
     paint(g);
-    return canvas;
+    return element;
   };
   const streak = (color: string, y: number) => (g: CanvasRenderingContext2D) => {
     g.fillStyle = color;
@@ -122,12 +122,21 @@ function shine(): THREE.CubeTexture {
   return mirrored;
 }
 
-function hull(parts: THREE.BufferGeometry[], material: THREE.MeshStandardMaterial, glow?: { parts: THREE.BufferGeometry[]; material: THREE.Material }) {
-  material.envMap = shine();
-  material.envMapIntensity = SHEEN;
-  const group: THREE.Mesh[] = [new THREE.Mesh(mergeGeometries(parts), material)];
-  if (glow) group.push(new THREE.Mesh(mergeGeometries(glow.parts), glow.material));
-  return group;
+/**
+ * A hull on the model file's engine (see keepEngine): the painted `parts` as one flat-shaded,
+ * polished mesh of the given finish, and the `glow` parts, if any, lit in their color. Both
+ * meshes carry `name`.
+ */
+function hull(original: THREE.Object3D, name: string, finish: { roughness: number; metalness: number }, parts: THREE.BufferGeometry[], glow?: { parts: THREE.BufferGeometry[]; color: THREE.Color }): THREE.Object3D {
+  const root = keepEngine(original);
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, ...finish, side: THREE.DoubleSide, envMap: shine(), envMapIntensity: SHEEN });
+  const meshes: THREE.Mesh[] = [new THREE.Mesh(mergeGeometries(parts), material)];
+  if (glow) meshes.push(new THREE.Mesh(mergeGeometries(glow.parts), new THREE.MeshBasicMaterial({ color: glow.color, toneMapped: false })));
+  for (const mesh of meshes) {
+    mesh.name = name;
+    root.add(mesh);
+  }
+  return root;
 }
 
 const OLIVE = 0x56663f;
@@ -139,7 +148,6 @@ const GLASS = 0x0d1a2a;
 
 /** The human interceptor, after the original: about 32 m across and 29 m long. */
 export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
-  const root = keepEngine(original);
   const parts: THREE.BufferGeometry[] = [
     // fuselage: wide at the drives, narrowing to the nose
     paint(loft(OCTAGON, { z: 240, w: 70, h: 55, y: 5 }, { z: -170, w: 45, h: 40, y: 0 }), OLIVE),
@@ -162,11 +170,7 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
     // tournament stripes on the fins
     ...pair(paint(loft(RECTANGLE, { z: 150, w: 17, h: 8, x: 285, y: 70 }, { z: 60, w: 15, h: 8, x: 289, y: 64 }), STRIPE)),
   ];
-  for (const mesh of hull(parts, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.42, metalness: 0.45, side: THREE.DoubleSide }))) {
-    mesh.name = 'humanHull';
-    root.add(mesh);
-  }
-  return root;
+  return hull(original, 'humanHull', { roughness: 0.42, metalness: 0.45 }, parts);
 }
 
 const IVORY = 0xd9d3c3;
@@ -182,7 +186,6 @@ const SUN = new THREE.Color(1, 0.62, 0.1).multiplyScalar(2.2);
  * flames burn where the model file has them.
  */
 export function sovereign(original: THREE.Object3D): THREE.Object3D {
-  const root = keepEngine(original);
   const parts: THREE.BufferGeometry[] = [
     // the arrowhead: wide at the drives, a long, flat needle to the nose
     paint(loft(OCTAGON, { z: 250, w: 62, h: 40, y: 4 }, { z: -120, w: 40, h: 26 }), IVORY),
@@ -205,15 +208,7 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
     ...pair(loft(RECTANGLE, { z: -120, w: 2, h: 2, x: 40, y: 0 }, { z: -370, w: 2, h: 2, x: 4, y: -3 })),
     loft(RECTANGLE, { z: 240, w: 2, h: 2, y: 55 }, { z: 30, w: 2, h: 2, y: 42 }),
   ];
-  const meshes = hull(parts, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.3, metalness: 0.6, side: THREE.DoubleSide }), {
-    parts: neon,
-    material: new THREE.MeshBasicMaterial({ color: SUN, toneMapped: false }),
-  });
-  for (const mesh of meshes) {
-    mesh.name = 'sovereignHull';
-    root.add(mesh);
-  }
-  return root;
+  return hull(original, 'sovereignHull', { roughness: 0.3, metalness: 0.6 }, parts, { parts: neon, color: SUN });
 }
 
 const VOID = 0x15121c;
@@ -226,7 +221,6 @@ const VEIN = new THREE.Color(0.1, 1, 0.75).multiplyScalar(1.5);
  * the air rich in oxygen that its crew needs.
  */
 export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
-  const root = keepEngine(original);
   const parts: THREE.BufferGeometry[] = [
     // the dart: a long, narrow body ending in a needle
     paint(loft(OCTAGON, { z: 400, w: 34, h: 40, y: -10 }, { z: 60, w: 62, h: 52, y: 0 }), VOID),
@@ -246,13 +240,5 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...pair(loft(RECTANGLE, { z: 360, w: 2, h: 2, x: 104, y: -18 }, { z: 60, w: 2, h: 2, x: 148, y: -50 })),
     ...pair(loft(RECTANGLE, { z: 150, w: 2, h: 2, x: 64, y: 20 }, { z: -220, w: 2, h: 2, x: 20, y: 4 })),
   ];
-  const meshes = hull(parts, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.28, metalness: 0.5, side: THREE.DoubleSide }), {
-    parts: veins,
-    material: new THREE.MeshBasicMaterial({ color: VEIN, toneMapped: false }),
-  });
-  for (const mesh of meshes) {
-    mesh.name = 'alienHull';
-    root.add(mesh);
-  }
-  return root;
+  return hull(original, 'alienHull', { roughness: 0.28, metalness: 0.5 }, parts, { parts: veins, color: VEIN });
 }

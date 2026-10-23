@@ -3,11 +3,10 @@ import { colliderBox } from '../assets';
 import { Randomizer, textSeed } from '../random';
 import { Surface } from './surface';
 import { boxContact, rayBox } from './boxes';
+import { SHAPE_FILL } from './shapes';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
-/** A piece with a computed collider box (the station's debris) collides as an ellipsoid slightly smaller than the box; rocks and ice are measured instead (see Surface). */
-const SHAPE_FILL = 0.9;
 /** How fast a rock of the belt turns about its own axis (rad/s, a turn in about 2.6 minutes): slow, but the tip of a long rock sweeps. */
 export const SPIN_RATE = 0.04;
 /** Fragments are this much smaller than their parent. */
@@ -666,22 +665,27 @@ function pieceContact(asteroid: Asteroid, center: THREE.Vector3, radius: number,
   return boxContact(local, asteroid.semiAxes, radius / scale, normal, closest);
 }
 
-/** Distance along a normalized ray to a box piece's surface (slabs), or null. */
-function rayPiece(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
-  const o = localOrigin.copy(origin).applyMatrix4(asteroid.inverse).sub(asteroid.center);
-  const d = localEnd.copy(origin).add(direction).applyMatrix4(asteroid.inverse).sub(asteroid.center).sub(o);
-  return rayBox(o, d, asteroid.semiAxes);
+const localOrigin = new THREE.Vector3();
+/** One world unit along the ray, in the rock's own coordinates. */
+const localStep = new THREE.Vector3();
+
+/** A ray into the rock's own coordinates, relative to its center: into localOrigin and localStep. */
+function toLocalRay(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3) {
+  localOrigin.copy(origin).applyMatrix4(asteroid.inverse).sub(asteroid.center);
+  localStep.copy(origin).add(direction).applyMatrix4(asteroid.inverse).sub(asteroid.center).sub(localOrigin);
 }
 
-const localOrigin = new THREE.Vector3();
-const localEnd = new THREE.Vector3();
+/** Distance along a normalized ray to a box piece's surface (slabs), or null. */
+function rayPiece(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
+  toLocalRay(asteroid, origin, direction);
+  return rayBox(localOrigin, localStep, asteroid.semiAxes);
+}
 
 /** Distance along a normalized ray to the asteroid's ellipsoid surface, or null. */
 function rayEllipsoid(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
-  localOrigin.copy(origin).applyMatrix4(asteroid.inverse).sub(asteroid.center);
-  localEnd.copy(origin).add(direction).applyMatrix4(asteroid.inverse).sub(asteroid.center);
-  // one world unit along the ray in local coordinates, both scaled into the unit sphere
-  const d = localEnd.sub(localOrigin).divide(asteroid.semiAxes);
+  toLocalRay(asteroid, origin, direction);
+  // both scaled into the unit sphere
+  const d = localStep.divide(asteroid.semiAxes);
   const o = localOrigin.divide(asteroid.semiAxes);
   const a = d.dot(d);
   const b = 2 * o.dot(d);
@@ -705,11 +709,9 @@ const marching = new THREE.Vector3();
  * down between that step and the one before.
  */
 function raySurface(asteroid: Asteroid, surface: Surface, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
-  localOrigin.copy(origin).applyMatrix4(asteroid.inverse).sub(asteroid.center);
-  // one world unit along the ray, in the rock's own coordinates
-  const step = localEnd.copy(origin).add(direction).applyMatrix4(asteroid.inverse).sub(asteroid.center).sub(localOrigin);
-  const a = step.dot(step);
-  const b = 2 * localOrigin.dot(step);
+  toLocalRay(asteroid, origin, direction);
+  const a = localStep.dot(localStep);
+  const b = 2 * localOrigin.dot(localStep);
   const c = localOrigin.dot(localOrigin) - surface.reach * surface.reach;
   const discriminant = b * b - 4 * a * c;
   if (discriminant < 0) return null;
@@ -733,9 +735,9 @@ function raySurface(asteroid: Asteroid, surface: Surface, origin: THREE.Vector3,
   return null;
 }
 
-/** Whether the point `t` world units along the ray of raySurface (localOrigin, one unit = localEnd) lies inside the surface. */
+/** Whether the point `t` world units along the ray of raySurface (see toLocalRay) lies inside the surface. */
 function insideAlong(surface: Surface, t: number) {
-  marching.copy(localOrigin).addScaledVector(localEnd, t);
+  marching.copy(localOrigin).addScaledVector(localStep, t);
   return marching.length() < surface.radius(marching);
 }
 
