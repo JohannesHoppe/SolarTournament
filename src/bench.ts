@@ -7,7 +7,7 @@ import { FIELD_RADIUS } from './world/asteroids';
 import { ARENAS, type ArenaId } from './world/arenas';
 
 /**
- * The benchmark (`?bench`, `?bench=<seconds per measurement>`): it plays a fixed scene (a solo
+ * The benchmark (`?bench`, `?bench=<seconds per measurement>`, `&only=<sections>`): it plays a fixed scene (a solo
  * round of the default rivals, the Host's clone watching, the camera on a fixed circle around
  * the field) and measures the frame time with everything on, then with each feature switched off
  * on its own (the occasional effects, glitch and datamosh, switched on), every rung of the
@@ -45,6 +45,10 @@ export interface BenchResult {
   seconds: number;
   measurements: Measurement[];
 }
+
+/** The benchmark's sections; `&only=quality,arenas` runs only those. */
+export const BENCH_SECTIONS = ['menu', 'features', 'quality', 'arenas', 'modes'] as const;
+export type BenchSection = (typeof BENCH_SECTIONS)[number];
 
 /** Seconds of warm-up before each measurement: a switched feature compiles its shaders, buffers are made anew. */
 const WARMUP = 1;
@@ -93,7 +97,8 @@ class GpuTimer {
 }
 
 /** Runs the benchmark on the game, with an overlay that shows its progress and, at the end, its table. */
-export async function runBench(game: Game, seconds: number): Promise<BenchResult> {
+export async function runBench(game: Game, seconds: number, only: BenchSection[] = []): Promise<BenchResult> {
+  const runs = (section: BenchSection) => !only.length || only.includes(section);
   const panel = Object.assign(document.createElement('div'), { className: 'bench' });
   const status = Object.assign(document.createElement('p'), { className: 'bench-status' });
   panel.append(Object.assign(document.createElement('h2'), { textContent: t('Benchmark') }), status);
@@ -126,7 +131,9 @@ export async function runBench(game: Game, seconds: number): Promise<BenchResult
     camera.updateMatrixWorld();
   };
 
-  const total = 3 + 1 + (BENCH_FEATURES.length - 3) * 2 + LADDER.length + ARENAS.length * 3 + 2 + 3 + 2;
+  const counts: Record<BenchSection, number> = { menu: 3, features: (BENCH_FEATURES.length - 3) * 2, quality: LADDER.length, arenas: ARENAS.length * 3 + 2, modes: 3 + 2 };
+  // the round of the features and the ladder starts with one measurement of everything on
+  const total = BENCH_SECTIONS.filter(runs).reduce((sum, section) => sum + counts[section], runs('features') || runs('quality') ? 1 : 0);
   let done = 0;
   const measure = async (section: string, label: string): Promise<Measurement> => {
     status.textContent = t('Measuring {what} ({n} of {total})', { what: `${section}: ${label}`, n: ++done, total });
@@ -173,9 +180,17 @@ export async function runBench(game: Game, seconds: number): Promise<BenchResult
     const until = performance.now() + s * 1000;
     while (performance.now() < until) await nextFrame();
   };
-  /** A feature's cost against `base`: what it adds to the frame time. */
-  const cost = (m: Measurement, base: number, on: boolean) => {
-    m.costMs = on ? m.frameMs - base : base - m.frameMs;
+  /**
+   * A feature's cost against the mean of `bases`: what it adds per frame. Measured in GPU time
+   * where every measurement compared has it, since the frame time snaps to the screen's
+   * refresh; in frame time otherwise, and always for the title screen's pad, which draws in a
+   * context of its own that the GPU timer does not see.
+   */
+  const cost = (m: Measurement, bases: Measurement[], on: boolean, byFrame = false) => {
+    const all = [m, ...bases];
+    const times = !byFrame && all.every((x) => x.gpuMs !== null) ? all.map((x) => x.gpuMs!) : all.map((x) => x.frameMs);
+    const base = times.slice(1).reduce((sum, x) => sum + x, 0) / bases.length;
+    m.costMs = on ? times[0] - base : base - times[0];
     m.costShare = (m.costMs / base) * 100;
   };
   /** Measures `feature` switched, against the mean of everything on before and after. */
@@ -185,52 +200,59 @@ export async function runBench(game: Game, seconds: number): Promise<BenchResult
     const switched = await measure(section, on ? `+ ${feature}` : `− ${feature}`);
     game.setBench(feature, false);
     const after = await measure(section, t('everything on'));
-    cost(switched, (before.frameMs + after.frameMs) / 2, on);
+    cost(switched, [before, after], on, feature === 'showcase');
     return after;
   };
 
+  graphics.rung = 0;
+  graphics.apply(true, true);
   // the title screen, with and without the pad
-  graphics.rung = 0;
-  graphics.apply(true, true);
-  game.benchMenu();
-  await wait(SETTLE);
-  const menu = await measure(t('menu'), t('everything on'));
-  await compare(t('menu'), 'showcase', menu);
-
-  // the features, one by one, in the belt's deathmatch
-  game.benchRound('belt', 'deathmatch');
-  game.benchCamera = fly;
-  await wait(SETTLE);
-  let base = await measure(t('features'), t('everything on'));
-  for (const feature of BENCH_FEATURES) {
-    if (feature === 'showcase' || feature === 'guide' || feature === 'lens') continue;
-    base = await compare(t('features'), feature, base);
+  if (runs('menu')) {
+    game.benchMenu();
+    await wait(SETTLE);
+    const menu = await measure(t('menu'), t('everything on'));
+    await compare(t('menu'), 'showcase', menu);
   }
 
-  // the ladder, rung by rung
-  const full = base.frameMs;
-  for (let rung = 0; rung < LADDER.length; rung++) {
-    graphics.rung = rung;
-    graphics.apply(true, true);
-    const m = await measure(t('quality'), `${rung} (${t(TIER_NAMES[tierOf(rung)])})`);
-    cost(m, full, false);
+  // the features, one by one, in the belt's deathmatch, and the ladder, rung by rung
+  if (runs('features') || runs('quality')) {
+    await scene('belt', 'deathmatch');
+    let base = await measure(t('features'), t('everything on'));
+    if (runs('features')) {
+      for (const feature of BENCH_FEATURES) {
+        if (feature === 'showcase' || feature === 'guide' || feature === 'lens') continue;
+        base = await compare(t('features'), feature, base);
+      }
+    }
+    if (runs('quality')) {
+      for (let rung = 0; rung < LADDER.length; rung++) {
+        graphics.rung = rung;
+        graphics.apply(true, true);
+        const m = await measure(t('quality'), `${rung} (${t(TIER_NAMES[tierOf(rung)])})`);
+        cost(m, [base], false);
+      }
+      graphics.rung = 0;
+      graphics.apply(true, true);
+    }
   }
-  graphics.rung = 0;
-  graphics.apply(true, true);
 
   // every arena, and what its landmark costs; the black hole's lens too
-  for (const arena of ARENAS) {
-    await scene(arena.id, 'deathmatch');
-    const all = await measure(t('arenas'), arena.id);
-    await compare(t('arenas'), 'landmark', all);
-    if (arena.id === 'hole') await compare(t('arenas'), 'lens', all);
+  if (runs('arenas')) {
+    for (const arena of ARENAS) {
+      await scene(arena.id, 'deathmatch');
+      const all = await measure(t('arenas'), arena.id);
+      await compare(t('arenas'), 'landmark', all);
+      if (arena.id === 'hole') await compare(t('arenas'), 'lens', all);
+    }
   }
 
   // the modes with their scenery: gates and the racing line, the bases, the battleship
-  for (const mode of ['race', 'flag', 'fleet'] as RoundMode[]) {
-    await scene('belt', mode);
-    const all = await measure(t('modes'), mode);
-    if (mode === 'race') await compare(t('modes'), 'guide', all);
+  if (runs('modes')) {
+    for (const mode of ['race', 'flag', 'fleet'] as RoundMode[]) {
+      await scene('belt', mode);
+      const all = await measure(t('modes'), mode);
+      if (mode === 'race') await compare(t('modes'), 'guide', all);
+    }
   }
 
   async function scene(arena: ArenaId, mode: RoundMode) {

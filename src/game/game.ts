@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { Bloom } from '../view/bloom';
 import { Graphics } from '../view/graphics';
-import { LADDER, TIER_NAMES, TIERS, type BenchFeature, type Look, type Quality } from '../view/quality';
+import { TIER_NAMES, TIERS, type BenchFeature, type Look, type Quality } from '../view/quality';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
@@ -1624,7 +1624,7 @@ export class Game implements OnlineGame {
       shadows: { shadows: 0 },
       lacquer: { lacquer: false },
       detail: { rocks: 0 },
-      resolution: { pixelRatio: LADDER[this.graphics.rung].pixelRatio / 2 },
+      resolution: { pixelRatio: this.graphics.pixelRatio / 2 },
     };
     const knob = knobs[feature];
     if (knob) {

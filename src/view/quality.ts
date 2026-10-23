@@ -35,29 +35,29 @@ const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, part
 
 /**
  * The ladder, each rung a change to the one above it: the largest saving for the least loss
- * first. The field's rocks are most of a frame's triangles (22 000 each up close, drawn twice:
- * for the picture and for the sun's shadows), and their fine relief barely shows from a
- * distance, so the full relief keeps to closer range first. Fill rate is what a phone's GPU runs
- * out of next, and every full-screen pass costs per pixel, so the picture's resolution comes
- * down early and in small steps; the shadow map's edge and the bloom's resolution follow; the
- * title screen's pad keeps a simpler look from the middle on. Shadows and lacquer cost a shader
- * compile to switch and come late.
+ * first, in the order the benchmark measured (README "Performance"). The field's rocks are most
+ * of a frame's triangles (22 000 each up close, drawn twice: for the picture and for the sun's
+ * shadows), and their fine relief barely shows from a distance, so the full relief keeps to
+ * closer range first. Every full-screen pass costs per pixel, so the picture's resolution comes
+ * down early and in small steps, with the bloom's resolution and the shadow map's edge between
+ * them; the title screen's pad keeps a simpler look from the middle on. Shadows off costs a
+ * shader compile and comes late; the lacquer saved nothing measurable and goes last.
  */
 const STEPS: Partial<Look>[] = [
   {},
   { rocks: 0.5 },
+  { rocks: 0.25 },
   { pixelRatio: 1.75 },
-  { shadows: 2048 },
   { bloom: 0.5 },
+  { shadows: 2048 },
   { pixelRatio: 1.5, showcase: { pixelRatio: 1.5, shadows: true, every: 1 } },
-  { shadows: 1024, rocks: 0.25 },
+  { shadows: 1024 },
   { pixelRatio: 1.25, showcase: { pixelRatio: 1, shadows: false, every: 1 } },
   { particles: 0.5, belt: 0.5 },
   { shadows: 0 },
-  { lacquer: false },
   { pixelRatio: 1, rocks: 0, belt: 0.25, showcase: { pixelRatio: 1, shadows: false, every: 2 }, spokes: false },
   { bloom: 0 },
-  { pixelRatio: 0.75, particles: 0.35 },
+  { pixelRatio: 0.75, particles: 0.35, lacquer: false },
 ];
 
 /** The looks of the ladder's rungs, from the full picture (0) to the cheapest. */
@@ -66,7 +66,7 @@ export const LADDER: readonly Look[] = STEPS.reduce<Look[]>((rungs, step) => [..
 /** The menu's fixed choices: presets on the ladder. */
 export const TIERS = ['low', 'medium', 'high'] as const;
 export type Tier = (typeof TIERS)[number];
-export const TIER_RUNGS: Record<Tier, number> = { high: 0, medium: 5, low: 11 };
+export const TIER_RUNGS: Record<Tier, number> = { high: 0, medium: 6, low: 11 };
 /** The tiers as the menu names them. */
 export const TIER_NAMES: Record<Tier, string> = { low: msg('Low'), medium: msg('Medium'), high: msg('High') };
 

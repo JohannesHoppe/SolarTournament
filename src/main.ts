@@ -2,6 +2,7 @@ import { loadAssets } from './assets';
 import { Sound } from './sound/audio';
 import { Game } from './game/game';
 import { initLocale, t, translatePage } from './i18n/i18n';
+import type { BenchSection } from './bench';
 
 async function start() {
   initLocale();
@@ -26,7 +27,8 @@ async function start() {
   if (params.has('bench') || params.has('fps')) {
     const bench = await import('./bench');
     bench.showMeter(game);
-    if (params.has('bench')) void bench.runBench(game, Number(params.get('bench')) || BENCH_SECONDS);
+    const only = (params.get('only') ?? '').split(',').filter((section): section is BenchSection => (bench.BENCH_SECTIONS as readonly string[]).includes(section));
+    if (params.has('bench')) void bench.runBench(game, Number(params.get('bench')) || BENCH_SECONDS, only);
   }
 }
 

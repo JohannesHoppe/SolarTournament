@@ -20,7 +20,7 @@ test('the benchmark measures every feature, rung, arena and mode', async ({ page
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(String(error)));
   if (profile) await throttle(page, profile);
-  await page.goto(`/?bench=${seconds}`);
+  await page.goto(`/?bench=${seconds}${process.env.BENCH_ONLY ? `&only=${process.env.BENCH_ONLY}` : ''}`);
   await page.waitForFunction(() => 'benchResult' in window, null, { timeout: 60 * 60_000, polling: 2000 });
   const result = (await page.evaluate(() => (window as unknown as { benchResult: BenchResult }).benchResult)) as BenchResult;
   const table = format(result);

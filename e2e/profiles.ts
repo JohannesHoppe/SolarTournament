@@ -22,14 +22,14 @@ export interface Profile {
  * 2400 × 1080 device pixels (Notebookcheck's review; yesviz.com and blisk.io for viewport and
  * ratio). Chrome's bars take some of the height in a browser tab; the full screen counts here,
  * as in the game's fullscreen. Its Chrome 116 makes 136 runs/min in Speedometer 2.0
- * (Notebookcheck); cpuThrottling is a preliminary calibration against it (see e2e/README.md).
+ * (Notebookcheck); cpuThrottling is calibrated against it (see e2e/README.md).
  */
 export const PIXEL8: Profile = {
   viewport: { width: 915, height: 412 },
   deviceScaleFactor: 2.625,
   isMobile: true,
   hasTouch: true,
-  cpuThrottling: 4.5,
+  cpuThrottling: 6.3,
 };
 
 export const PROFILES: Record<string, Profile> = { pixel8: PIXEL8 };

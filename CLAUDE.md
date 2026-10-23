@@ -60,7 +60,7 @@ npm run e2e         # browser tests (Playwright: solo start, two tabs online); f
 npm run balance     # balance runs (Playwright, about ten minutes): every mode played out by bots in time-lapse
 npm run soak        # the cheat checks in honest play (Playwright, about a quarter of an hour): three tabs, a round of every mode, nobody reported
 npm run bench       # benchmark (Playwright, about ten minutes): the cost per frame of every feature, quality rung, arena and mode
-                    # PROFILE=pixel8 as the reference phone (its screen, touch, its CPU speed); BENCH_SECONDS=<s> per measurement
+                    # PROFILE=pixel8 as the reference phone (its screen, touch, its CPU speed); BENCH_SECONDS=<s> per measurement; BENCH_ONLY=quality for one section
 npm run build       # static site in dist/ (renders the voice, checks types, duplicates and unit tests first)
 npm run check       # every quick quality gate in one run, summed up: types, duplicates, unit tests (tools/check/)
 npm run check:full  # the same, then the browser tests and the balance runs
