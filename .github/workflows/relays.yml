@@ -9,8 +9,7 @@ on:
   schedule:
     - cron: '17 4 * * 1'
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: relays
@@ -20,6 +19,9 @@ jobs:
   check:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # the one permission it needs: pushing the list
+    permissions:
+      contents: write
     steps:
       # actions pinned to their commits; the token stays out of the checkout and out of the
       # install, only the step that pushes gets it
