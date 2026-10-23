@@ -1,11 +1,12 @@
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { boxUv, shine, surfaced, wornSurface, type Wear } from '../view/surfaces';
 
 /**
- * The two interceptors, built in code as low-poly hulls of flat facets (a few hundred
- * triangles each). From the model files they keep only what the game reads: the collider box
- * (so the shared hit radius stays as it is), the drive flame and the glows at the nozzles. The
+ * The two interceptors, built in code as low-poly hulls (a few hundred triangles each), shaded
+ * smooth around their bodies and hard at their edges. From the model files they keep only what
+ * the game reads: the collider box (so the shared hit radius stays as it is), the drive flame
+ * and the glows at the nozzles. The
  * human interceptor follows the original model: a fuselage with a canopy, two tall fins on
  * struts, a gun under the nose, two drives. The alien interceptor is a slim dart with a tall
  * dorsal blade, swept side blades and the glowing veins of its life support.
@@ -23,7 +24,8 @@ const BLADE: Section = [[-1, 0], [0, -1], [1, 0], [0, 1]];
 
 /**
  * A hull part lofted from one cross section to another: the section scaled to each end and
- * moved to its center, the sides joined facet by facet, both ends capped. Flat shaded.
+ * moved to its center, the sides joined facet by facet, both ends capped. Its normals are the
+ * facets' own (see hull for how the hull is shaded).
  */
 function loft(section: Section, back: End, front: End): THREE.BufferGeometry {
   const ring = (end: End) => section.map(([x, y]) => new THREE.Vector3((end.x ?? 0) + x * end.w, (end.y ?? 0) + y * end.h, end.z));
@@ -87,17 +89,43 @@ const SHEEN = 1.1;
 const TILE = 400;
 /** How deep the seams and rivets look (see surfaced). */
 const RELIEF = 1.5;
+/**
+ * Facets meeting at less than this angle (radians, 60°) are shaded as one curved surface, so a
+ * light's highlight slides across a body as it turns instead of flashing facet by facet; the
+ * octagonal bodies round off, while the corners of boxes (90°), caps and blade edges stay hard.
+ */
+const CREASE = Math.PI / 3;
+/**
+ * The clear lacquer over the paint: its strength (0..1) and roughness. Smooth enough that the
+ * sun, a drive's light or the hangar's lamps show as a small, crisp glint sliding over the
+ * rounded bodies; half strength, an old coat, so the glint stays a glint and a flat panel only
+ * flashes in the moment it mirrors the sun. Where the paint has rusted, chipped or been scratched, the lacquer is gone or dull (the red
+ * channel of the surface's map, see wornSurface).
+ */
+const LACQUER = 0.5;
+const LACQUER_ROUGHNESS = 0.15;
 
 /**
- * A hull on the model file's engine (see keepEngine): the painted `parts` as one flat-shaded mesh
- * with its `wear` (see wornSurface: the paint's color times the surface's, worn down to metal
- * where it chipped, mirroring the sky where it is smooth), and the `glow` parts, if any, lit in
- * their color. Both meshes carry `name`.
+ * A hull on the model file's engine (see keepEngine): the painted `parts` as one mesh with its
+ * `wear` (see wornSurface: the paint's color times the surface's, worn down to metal where it
+ * chipped, mirroring the sky where it is smooth) under a clear lacquer, and the `glow` parts, if
+ * any, lit in their color. Both meshes carry `name`.
  */
 function hull(original: THREE.Object3D, name: string, wear: Wear, seed: number, parts: THREE.BufferGeometry[], glow?: { parts: THREE.BufferGeometry[]; color: THREE.Color }): THREE.Object3D {
   const root = keepEngine(original);
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, ...surfaced(wornSurface(seed, wear), RELIEF), side: THREE.DoubleSide, envMap: shine(), envMapIntensity: SHEEN });
-  const meshes: THREE.Mesh[] = [new THREE.Mesh(boxUv(mergeGeometries(parts), TILE), material)];
+  const surface = wornSurface(seed, wear);
+  const material = new THREE.MeshPhysicalMaterial({
+    vertexColors: true,
+    ...surfaced(surface, RELIEF),
+    side: THREE.DoubleSide,
+    envMap: shine(),
+    envMapIntensity: SHEEN,
+    clearcoat: LACQUER,
+    clearcoatMap: surface.orm,
+    clearcoatRoughness: LACQUER_ROUGHNESS,
+  });
+  // the texture coordinates follow the facets (see boxUv), the normals the creases
+  const meshes: THREE.Mesh[] = [new THREE.Mesh(toCreasedNormals(boxUv(mergeGeometries(parts), TILE), CREASE), material)];
   if (glow) meshes.push(new THREE.Mesh(mergeGeometries(glow.parts), new THREE.MeshBasicMaterial({ color: glow.color, toneMapped: false })));
   for (const mesh of meshes) {
     mesh.name = name;
