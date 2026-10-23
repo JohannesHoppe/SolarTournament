@@ -1740,7 +1740,7 @@ body.nova-flash #hud::after {
 }
 
 body.touch #hud-room {
-  top: 96px;
+  top: 244px;
   left: max(12px, env(safe-area-inset-left));
 }
 
@@ -1821,7 +1821,7 @@ body.touch #hud-room {
 }
 
 body.touch #school-panel {
-  top: 92px;
+  top: 110px;
 }
 
 #waypoint {
@@ -2193,7 +2193,7 @@ body.touch #game canvas {
 
 /* gauges move to the top, the thumbs own the bottom of the screen */
 body.touch .hud-bottom {
-  top: 52px;
+  top: 62px;
   bottom: auto;
   gap: 12px;
 }
@@ -2207,7 +2207,7 @@ body.touch .bar {
   width: 56px;
 }
 
-/* below the radio box, which touch screens move down to 88 px */
+/* below the radio box and the gauges */
 body.touch #killfeed {
   top: 136px;
 }
@@ -2223,7 +2223,7 @@ body.touch #killfeed {
 }
 
 body.touch #radar {
-  top: 64px;
+  top: 106px;
   bottom: auto;
   left: max(12px, env(safe-area-inset-left));
   width: 130px;
@@ -2332,9 +2332,9 @@ body.glitching #now-playing {
   display: none;
 }
 
-/* on touch devices the gauges sit at the top: the track and the room go below them */
+/* on touch devices the radio keeps the top right corner, clear of the clock in the middle */
 body.touch #now-playing {
-  top: 88px;
+  max-width: calc(50vw - 120px);
 }
 
 @media (max-width: 640px) {
@@ -2384,8 +2384,9 @@ body.touch #now-playing {
   text-shadow: var(--neon-blue-soft);
 }
 
+/* between the thumbs at the bottom, below the alarms */
 body.touch #transmission {
-  bottom: 150px;
+  bottom: 24px;
 }
 
 /*
@@ -2582,16 +2583,16 @@ body.touch #transmission {
   }
 
   body.touch #radar {
-    top: 78px;
+    top: 88px;
   }
 
   body.touch #hud-room {
-    top: 186px;
+    top: 196px;
   }
 
   body.touch #school-panel,
   body.touch #killfeed {
-    top: 80px;
+    top: 88px;
   }
 
   body.touch #school-panel {
@@ -2605,7 +2606,30 @@ body.touch #transmission {
 
   body.touch #transmission {
     bottom: 10px;
-    max-width: min(360px, calc(100vw - 440px));
+    width: min(460px, calc(100vw - 340px));
+  }
+
+  /* the alarms close up below the crosshair, so the transmission below them keeps three lines */
+  body.touch #hud-alerts {
+    top: calc(50% + 16px);
+  }
+
+  body.touch #hud-warning,
+  body.touch #hud-lock {
+    font-size: 0.7rem;
+  }
+
+  body.touch #hud-master,
+  body.touch #hud-escape {
+    font-size: 0.6rem;
+  }
+
+  body.touch #hud-message {
+    margin-top: 4px;
+  }
+
+  body.touch #transmission-text {
+    font-size: 0.75rem;
   }
 
   /* the sponsor break fills a phone's screen and scrolls; the transmission waits until it is over */
@@ -2615,6 +2639,82 @@ body.touch #transmission {
 
   body.touch #now-playing {
     max-width: 210px;
+  }
+}
+
+/* A narrow screen with keyboard and mouse: the gauges close up, so their row fits across it. */
+@media (max-width: 1240px) {
+  body:not(.touch) .hud-bottom {
+    gap: 8px;
+  }
+
+  body:not(.touch) .gauge {
+    gap: 4px;
+    font-size: 0.55rem;
+    letter-spacing: 0.06em;
+  }
+
+  body:not(.touch) .bar {
+    width: 44px;
+  }
+
+  /* the radio keeps clear of the clock in the middle */
+  body:not(.touch) #now-playing {
+    max-width: calc(50vw - 120px);
+  }
+
+  body:not(.touch) .readout {
+    min-width: 0;
+  }
+}
+
+/*
+ * A low screen with keyboard and mouse: the radar shrinks below the round's panel, the alarms
+ * close up between the crosshair and the gauges, and the transmissions move to the left, clear
+ * of the alarms' column.
+ */
+@media (max-height: 500px) {
+  body:not(.touch) #radar {
+    width: 120px;
+    height: 120px;
+  }
+
+  body:not(.touch) #hud-alerts {
+    top: calc(50% + 22px);
+  }
+
+  body:not(.touch) #hud-warning,
+  body:not(.touch) #hud-lock {
+    font-size: 0.85rem;
+  }
+
+  body:not(.touch) #hud-master,
+  body:not(.touch) #hud-escape {
+    margin: 2px 0;
+    font-size: 0.65rem;
+  }
+
+  /* at most 390 px wide, so it ends where the transmission's column begins */
+  body:not(.touch) #hud-message {
+    width: min(46rem, 390px);
+    font-size: 0.9rem;
+  }
+
+  body:not(.touch) #hud:has(#school-panel:not([hidden])) #hud-message {
+    margin-top: 4px;
+  }
+
+  body:not(.touch) #transmission {
+    left: 16px;
+    bottom: 64px;
+    max-width: calc(50vw - 220px);
+    translate: none;
+    text-align: left;
+  }
+
+  body:not(.touch) #transmission-text {
+    font-size: 0.85rem;
+    text-align-last: left;
   }
 }
 
