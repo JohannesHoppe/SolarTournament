@@ -14,4 +14,5 @@ The ships and who flies them. Human and alien interceptor (and the Sovereign) fl
 | `bots.test.ts` | Bots fly by the Hosts' rules: their commands stay within a Host's stick, drive and thrusters and never move the ship themselves, no target behind rock, beyond sight or in a storm, a thief chased but not fired at unseen, hunters read from noses, the start's timing; the clone's strain and the nose on a ship as the sensors see it |
 | `tints.ts` | The colors ships are marked in: the palette of neon tints a Host picks from (kept in the browser), each bot's own, the Sovereign's ivory and gold, how two Hosts with the same choice are told apart, the side's color in Capture the Flag |
 | `tints.test.ts` | The palette: bright, clear of the HUD's azure, the sides' colors, red and each other; every bot its own tint; the tie rule between Hosts |
+
 Bots fly by the same rules as Hosts and know only what a Host's sensors show; a new ability of a ship is given to bots through their controls, never by setting their state. Bots are tuned with the balance runs (`npm run balance`, see `e2e/`): run them after every change here.
