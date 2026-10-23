@@ -11,7 +11,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `killcam.ts` | Records the last seconds and replays the own clone's death |
 | `guide.ts` | The racing line: a dashed ribbon with pulses of light |
 | `ghost.ts` | The best lap's hologram |
-| `showcase.ts` | The title screen: the seal as a pad, the ship circling above it |
+| `showcase.ts` | The title screen: a landing pad of gunmetal and steel with the seal inlaid in gold, the ship circling above it and throwing its shadow onto it |
 | `glitch.ts` | The disturbed link: a corrupted-stream shader and the HUD's glitch |
 | `datamosh.ts` | The clone's death: its last picture rots |
 | `lensing.ts` | The black hole's gravitational lens |
