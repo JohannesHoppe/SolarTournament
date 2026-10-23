@@ -86,7 +86,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `storage.ts` | The browser's localStorage, where it is available |
 | `i18n/` | The languages: `i18n.ts` (t(), msg(), the language chosen, the page's fixed texts) and the catalogs `de.ts`, `es.ts`, `fr.ts`; `tools/i18n/` collects every text to translate |
 | **`game/`** | **The round** |
-| `game/game.ts` | Game states, round flow, lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
+| `game/game.ts` | Game states, round flow (with each round's opening: intro flight, countdown, start lights, BURN!/FIGHT!), lasers, collisions, arena, camera, the clone's body (g-forces, warnings) |
 | `game/race.ts` | The race: modes of rounds and rooms, the course of gates (laid out from the arena's field), points for gates and places |
 | `game/survival.ts` | Last Clone Standing: the clones of a round, the solar flare closing in on the field time |
 | `game/flags.ts` | Capture the Flag: the two sides, their bases and sponsor cores; the lead browser's rules (sides, taking, sending home, capturing) and the state the others follow |

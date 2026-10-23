@@ -58,9 +58,9 @@ export interface SchoolContext {
   readonly dodges: number;
   /** A probe carrying an item at a point; returns where it drifts. */
   spawnProbe(position: THREE.Vector3, kind: ItemKind): THREE.Vector3;
-  /** A number of a countdown, or GO, in big neon. */
-  countdown(text: string): void;
-  /** The drive lit on GO: a perfect start's shove; lit too early: the drive stalls. */
+  /** A number of a countdown, or (`start`) the start word, in big neon. */
+  countdown(text: string, start: boolean): void;
+  /** The drive lit on BURN!: a perfect start's shove; lit too early: the drive stalls. */
   perfectStart(): void;
   stall(): void;
   /** The flight computer is still talking. */
@@ -179,7 +179,7 @@ export const COURSE_ROOM = 0.85;
 const COURSE_LOST = 50000;
 /** A coil fires for a pilot through this share of its ring's radius, as a race's gates do (see race.ts). */
 export const CORE_SHARE = 1 / 3;
-/** The start drill counts down to GO at this second of the attempt; the drive has to light at most START_EARLY before it and START_LATE after it, as in a race. */
+/** The start drill counts down to BURN! at this second of the attempt; the drive has to light at most START_EARLY before it and START_LATE after it, as in a race. */
 const START_GO = 3;
 const START_EARLY = 0.3;
 const START_LATE = 0.2;
@@ -439,7 +439,7 @@ const DRILL = {
     waypoint: (_, a) => a.points[a.next] ?? null,
     mark: (_, a) => t('Core {n}/{total}', { n: a.next + 1, total: a.points.length }),
   },
-  // the race's start: the clamps hold the ship until GO, and the drive must light on it
+  // the race's start: the clamps hold the ship until BURN!, and the drive must light on it
   start: {
     line: SCHOOL.start,
     praise: SCHOOL_PRAISE.start,
@@ -451,7 +451,7 @@ const DRILL = {
       a.lit = lit;
       const count = Math.max(0, Math.ceil(START_GO - a.seconds));
       if (count !== a.count) {
-        ctx.countdown(count > 0 ? String(count) : t('GO'));
+        ctx.countdown(count > 0 ? String(count) : t('BURN!'), count === 0);
         a.count = count;
       }
       if (count > 0) {

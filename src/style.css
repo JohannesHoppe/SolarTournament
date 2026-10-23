@@ -725,7 +725,7 @@ button.primary .mode-note {
 /* a race's 3, 2, 1, GO: big neon over the grid, each number popping in */
 #hud-countdown {
   position: absolute;
-  top: 16%;
+  top: 22%;
   left: 0;
   right: 0;
   text-align: center;
@@ -765,10 +765,268 @@ button.primary .mode-note {
   }
 }
 
+/* the start word: bigger, and it punches in from huge with a glitch's tremor */
+#hud-countdown.start {
+  top: 12%;
+  font-size: clamp(4rem, 20vw, 13rem);
+  letter-spacing: 0.04em;
+}
+
+#hud-countdown.start.pop {
+  animation: start-punch 1.6s ease-out forwards;
+}
+
+@keyframes start-punch {
+  from {
+    transform: scale(3);
+    opacity: 0;
+    filter: blur(6px);
+  }
+  12% {
+    transform: scale(0.94) translateX(-6px);
+    opacity: 1;
+    filter: none;
+  }
+  18% {
+    transform: scale(1.04) translateX(5px);
+  }
+  24% {
+    transform: scale(1) translateX(0);
+  }
+  75% {
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.1);
+    opacity: 0;
+  }
+}
+
+/* the start lights: dark tubes over the countdown, lit one by one, all out at the start */
+#start-lights {
+  position: absolute;
+  top: 13%;
+  left: 50%;
+  display: flex;
+  gap: clamp(10px, 2.5vw, 28px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+#start-lights i {
+  width: clamp(22px, 4.5vw, 54px);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 157, 0, 0.35);
+  background: rgba(20, 8, 0, 0.6);
+}
+
+#start-lights i.on {
+  border-color: #fff1dc;
+  background: radial-gradient(circle, #fff 0%, #ffcf80 30%, #ff9d00 65%, #ff5a00 100%);
+  box-shadow: 0 0 12px #ff9d00, 0 0 32px #ff7b00, 0 0 64px #ff5a00;
+}
+
+/* the start's flash over the whole picture */
+#start-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at center, rgba(255, 255, 255, 0.85), rgba(255, 157, 0, 0.35) 60%, transparent 85%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+#start-flash.flash {
+  animation: start-flash 0.7s ease-out forwards;
+}
+
+@keyframes start-flash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/*
+ * The intro's card: the round as a fight card, its pilots sliding in one after another, while
+ * the camera flies in; the rest of the HUD steps aside meanwhile.
+ */
+#hud.intro > :not(#intro-card, #hud-countdown, #start-lights, #start-flash),
+#hud.counting > #school-panel,
+#hud.counting > .markers {
+  opacity: 0;
+}
+
+#intro-card {
+  position: absolute;
+  left: max(24px, env(safe-area-inset-left));
+  bottom: 10%;
+  width: min(380px, 42vw);
+  padding: 18px 22px 14px;
+  background: linear-gradient(100deg, rgba(6, 12, 28, 0.9), rgba(6, 12, 28, 0.55));
+  border-left: 3px solid var(--accent);
+  border-radius: 4px 14px 14px 4px;
+  animation: intro-in 0.6s ease-out both;
+}
+
+@keyframes intro-in {
+  from {
+    transform: translateX(-40px);
+    opacity: 0;
+  }
+}
+
+#intro-card .intro-mode {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+#intro-card .intro-arena {
+  margin: 4px 0 2px;
+  font-family: var(--font-display);
+  font-size: clamp(1.4rem, 3.2vw, 2.4rem);
+  font-weight: 400;
+  color: var(--tube-orange);
+  text-shadow: var(--neon-orange);
+}
+
+#intro-card .intro-tagline {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  text-align: justify;
+  hyphens: auto;
+}
+
+#intro-card .intro-pilots {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+#intro-card .intro-pilots li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(77, 145, 255, 0.08);
+  font-size: 0.9rem;
+  white-space: nowrap;
+  animation: intro-pilot 0.4s ease-out both;
+  animation-delay: calc(0.6s + var(--i) * 0.28s);
+}
+
+#intro-card .intro-pilots li.own {
+  background: rgba(255, 157, 0, 0.18);
+  color: var(--tube-orange);
+}
+
+@keyframes intro-pilot {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+}
+
+#intro-card .intro-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* on the card the three scales stand side by side, without their names (their labels say them) */
+#intro-card .skills {
+  display: flex;
+  flex: none;
+  gap: 10px;
+  margin: 0;
+}
+
+#intro-card .skill > span:first-child {
+  display: none;
+}
+
+#intro-card .intro-skip {
+  margin-top: 10px;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  pointer-events: auto;
+}
+
+/* a low screen (a phone held sideways): the lights and the numbers below the HUD's rows, the card in the top left corner, the field in two columns, without skills */
+@media (max-height: 500px) {
+  #start-lights {
+    top: 26%;
+  }
+
+  #hud-countdown {
+    top: 38%;
+  }
+
+  #hud-countdown.start {
+    top: 30%;
+  }
+  #intro-card {
+    top: 8px;
+    bottom: auto;
+    left: max(12px, env(safe-area-inset-left));
+    width: min(420px, 58vw);
+    padding: 8px 12px 6px;
+  }
+
+  #intro-card .intro-arena {
+    font-size: 1.2rem;
+  }
+
+  #intro-card .intro-tagline,
+  #intro-card .skills {
+    display: none;
+  }
+
+  #intro-card .intro-pilots {
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 6px;
+    margin-top: 6px;
+  }
+
+  #intro-card .intro-pilots li {
+    font-size: 0.75rem;
+  }
+
+  #intro-card .intro-skip {
+    margin-top: 6px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   #hud-countdown.pop,
+  #hud-countdown.start.pop,
   #hud-banner.pop {
     animation-name: countdown-fade;
+  }
+
+  #start-flash.flash {
+    animation-duration: 0.2s;
+  }
+
+  #intro-card,
+  #intro-card .intro-pilots li {
+    animation: none;
   }
 }
 

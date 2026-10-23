@@ -43,6 +43,9 @@ export class Hud {
   private readonly retrograde = $('retrograde');
   private readonly message = $('hud-message');
   private readonly countdownText = $('hud-countdown');
+  private readonly startFlash = $('start-flash');
+  private readonly startLights = $('start-lights');
+  private readonly introCard = $('intro-card');
   private readonly splitText = $('hud-split');
   private splitUntil = 0;
   private readonly hitmarker = $('hitmarker');
@@ -131,6 +134,8 @@ export class Hud {
     this.countdownText.textContent = '';
     this.bannerText.textContent = '';
     this.bannerUntil = -Infinity;
+    this.startLights.hidden = true;
+    this.hideIntro();
     this.splitText.textContent = '';
     this.setSchool(null);
     this.waypoint.hidden = true;
@@ -286,9 +291,57 @@ export class Hud {
     this.splitUntil = now + seconds;
   }
 
-  /** A number of a race's countdown, or GO, in big neon: it pops in and fades out by itself. */
-  countdown(text: string) {
+  /** A number of a round's countdown, or (`start`) its start word, in big neon: it pops in and fades out by itself; the start word punches harder, with a flash over the picture. */
+  countdown(text: string, start = false) {
+    this.countdownText.classList.toggle('start', start);
     pop(this.countdownText, text);
+    if (start) restart(this.startFlash, 'flash');
+  }
+
+  /** The start lights over the countdown: `on` of `total` lit; none shows none. */
+  setStartLights(on: number, total: number) {
+    const lights = this.startLights;
+    while (lights.children.length < total) lights.append(document.createElement('i'));
+    for (let i = 0; i < lights.children.length; i++) lights.children[i].classList.toggle('on', i < on);
+    setHidden(lights, on === 0);
+    // the round's panel and the markers step aside while the lights count down
+    setClass(this.root, 'counting', on > 0);
+  }
+
+  /**
+   * The intro's card: the mode and arena of the round and its field, one pilot after another
+   * sliding in, the own pilot marked; the rest of the HUD steps aside while it shows.
+   */
+  showIntro(card: IntroCard) {
+    const intro = this.introCard;
+    intro.querySelector('.intro-mode')!.textContent = card.title;
+    intro.querySelector('.intro-arena')!.textContent = card.arena;
+    intro.querySelector('.intro-tagline')!.textContent = card.tagline;
+    const list = intro.querySelector('.intro-pilots')!;
+    list.replaceChildren(
+      ...card.pilots.map((pilot, i) => {
+        const row = document.createElement('li');
+        row.style.setProperty('--i', String(i));
+        row.classList.toggle('own', pilot.own);
+        const name = document.createElement('span');
+        name.className = 'intro-name';
+        name.append(...markedName(pilot.kind, pilot.name));
+        row.append(name);
+        // the skills come from the game's own table, never from another browser
+        if (pilot.skills) row.insertAdjacentHTML('beforeend', pilot.skills);
+        return row;
+      }),
+    );
+    const skip = intro.querySelector<HTMLButtonElement>('.intro-skip')!;
+    skip.textContent = card.skip;
+    skip.onclick = card.onSkip;
+    intro.hidden = false;
+    this.root.classList.add('intro');
+  }
+
+  hideIntro() {
+    this.introCard.hidden = true;
+    this.root.classList.remove('intro');
   }
 
   /**
@@ -441,16 +494,13 @@ export function meters(units: number): string {
   return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
 }
 
-/** Writes text only when it changed, so an unchanged HUD costs the browser no layout work. */
 /** Shows `text` in an element that pops in and fades out by its CSS animation (class `pop`). */
 function pop(element: HTMLElement, text: string) {
   element.textContent = text;
-  element.classList.remove('pop');
-  // a reflow between removing and adding the class restarts the animation
-  void element.offsetWidth;
-  element.classList.add('pop');
+  restart(element, 'pop');
 }
 
+/** Writes text only when it changed, so an unchanged HUD costs the browser no layout work. */
 function setText(element: HTMLElement, text: string) {
   if (element.textContent !== text) element.textContent = text;
 }
@@ -461,6 +511,23 @@ function setHidden(element: HTMLElement, hidden: boolean) {
 
 function setClass(element: HTMLElement, name: string, on: boolean) {
   if (element.classList.contains(name) !== on) element.classList.toggle(name, on);
+}
+
+/** Plays a class's animation from its start again: a reflow between removing and adding the class restarts it. */
+function restart(element: HTMLElement, name: string) {
+  element.classList.remove(name);
+  void element.offsetWidth;
+  element.classList.add(name);
+}
+
+/** What the intro's card shows (see Hud.showIntro): the skills are markup of the game's own table. */
+export interface IntroCard {
+  title: string;
+  arena: string;
+  tagline: string;
+  pilots: { name: string; kind: Kind; skills: string; own: boolean }[];
+  skip: string;
+  onSkip: () => void;
 }
 
 const ahead = new THREE.Vector3();
