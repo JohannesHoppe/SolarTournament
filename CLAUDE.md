@@ -193,7 +193,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/ghost.ts` | The ghost of the own best lap: the own hull as a faint blue hologram |
 | `view/datamosh.ts` | The clone's death: its last picture loses the key frames and rots with the camera's motion and the frames' changes (a pass with its own feedback buffers) |
 | `view/textures.ts` | Canvas textures: glows, sparks, smoke |
-| `view/surfaces.ts` | Surfaces drawn on canvases from fixed seeds (color, roughness and metalness, bump): the fighters' worn depot paint, the world ship's craters and burns with embers, the battleship's gleam and glitter, the rings' industrial plating, probes, torpedoes, signs; box-projected texture coordinates, the reflection map |
+| `view/surfaces.ts` | Surfaces drawn on canvases from fixed seeds (color, roughness and metalness, bump): the fighters' worn depot paint, the world ship's craters and burns with embers, the battleship's polished armor plates, the rings' industrial plating, probes, torpedoes, signs; box-projected texture coordinates, the reflection map |
 | `view/marks.ts` | The marks before names: bot or Host, drawn as shapes, never as characters; the swatch of a pilot's tint |
 | `view/ink.ts` | What an element shows on screen: the names at the screen's edge keep clear of the HUD's pieces by it, the layout test measures by it |
 | `view/quality.ts` | The picture's quality: the ladder of looks (resolution, bloom, shadows, lacquer, particles, rock detail, the belt, the title screen's pad), the tiers low, medium and high as presets on it, the guess of a device, the Host's choice as kept, the governor that moves along the ladder with the frame rate |

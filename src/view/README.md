@@ -18,7 +18,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `datamosh.ts` | The clone's death: its last picture rots |
 | `lensing.ts` | The black hole's gravitational lens |
 | `textures.ts` | Canvas textures: glows, sparks, smoke, and the canvas every texture drawn in code starts from; the running light of the neon trim |
-| `surfaces.ts` | The surfaces of everything built in code: worn depot paint (and where its lacquer is gone), the world ship's craters and burns, the battleship's gleam, the rings' plating; texture coordinates for flat faces, the reflection map |
+| `surfaces.ts` | The surfaces of everything built in code: worn depot paint (and where its lacquer is gone), the world ship's craters and burns, the battleship's polished armor plates, the rings' plating; texture coordinates for flat faces, the reflection map |
 | `marks.ts` | The bot or Host mark before a name, and the swatch of a pilot's tint beside it |
 | `ink.ts` | What an element shows on screen (its plate, or the text and children inside it; a fixed reference's glyph and label): the HUD keeps the names at the edge clear of it, the layout test measures by it |
 | `quality.ts` | The picture's quality: the ladder of looks from the full picture to the cheapest (resolution, bloom, shadows, lacquer, particles, rock detail, the belt, the title screen's pad), the tiers low, medium and high as presets on it, the guess of a device's tier, the Host's choice as the browser keeps it, the governor that moves along the ladder with the frame rate, the benchmark's features (tested in `quality.test.ts`) |
