@@ -10,6 +10,8 @@ import { openGame, play, startSolo } from './game';
 test('the mouse turns the flight about at 150 m/s, and the recorder keeps the flight', async ({ page }) => {
   const errors = await openGame(page);
   await startSolo(page, 'deathmatch');
+  // the opening's clamps hold every ship until the start
+  await page.waitForFunction(() => window.game.clamped, null, { timeout: 60_000 });
   await page.waitForFunction(() => !window.game.clamped && window.game.me?.alive && window.game.state === 'playing', null, { timeout: 60_000 });
   // alone, in open space, flying ahead at 150 m/s with the autopilot on
   const start = await page.evaluate(() => {
