@@ -137,12 +137,10 @@ export class Glitch {
   /** Breaks the picture up for `duration` seconds; a stronger glitch overrides a weaker one. */
   trigger(strength: number, duration: number) {
     const now = performance.now() / 1000;
-    if (now < this.until && strength < this.strength) {
-      this.until = Math.max(this.until, now + duration);
-      return;
-    }
-    this.strength = strength;
+    const weaker = now < this.until && strength < this.strength;
     this.until = Math.max(this.until, now + duration);
+    if (weaker) return;
+    this.strength = strength;
     // a new glitch shows at once, but with reduced motion the picture still changes no more
     // than CALM_FPS times a second, however many hits come in
     if (!reducedMotion.matches) this.nextFrame = 0;

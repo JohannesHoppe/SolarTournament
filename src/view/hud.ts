@@ -154,8 +154,8 @@ export class Hud {
   setSchool(status: { step: string; text: string; keys: string[] } | null, keyboard = true) {
     this.schoolPanel.hidden = !status;
     if (!status) return;
-    if (this.schoolStep.textContent !== status.step) this.schoolStep.textContent = status.step;
-    if (this.schoolText.textContent !== status.text) this.schoolText.textContent = status.text;
+    setText(this.schoolStep, status.step);
+    setText(this.schoolText, status.text);
     const keys = `${keyboard}|${status.keys.join('|')}`;
     if (this.schoolKeys.dataset.keys !== keys) {
       this.schoolKeys.dataset.keys = keys;
@@ -177,10 +177,8 @@ export class Hud {
 
   /** The crosshair glows orange while the laser would hit a drive, and dims over armor, where a shot does little. */
   setOnTarget(hit: 'drive' | 'armor' | null) {
-    const drive = hit === 'drive';
-    const armor = hit === 'armor';
-    if (this.crosshair.classList.contains('on-target') !== drive) this.crosshair.classList.toggle('on-target', drive);
-    if (this.crosshair.classList.contains('on-armor') !== armor) this.crosshair.classList.toggle('on-armor', armor);
+    setClass(this.crosshair, 'on-target', hit === 'drive');
+    setClass(this.crosshair, 'on-armor', hit === 'armor');
   }
 
   /** The crosshair and the hit marker sit where the nose points (see Game.aimCrosshair). */
@@ -200,7 +198,7 @@ export class Hud {
   /** The overdrive next to the flight mode: ready, or the seconds until it is. */
   setOverdrive(seconds: number) {
     setText(this.overdrive, seconds > 0 ? t('Overdrive {s} s', { s: Math.ceil(seconds) }) : t('Overdrive ready'));
-    if (this.overdrive.classList.contains('ready') !== (seconds <= 0)) this.overdrive.classList.toggle('ready', seconds <= 0);
+    setClass(this.overdrive, 'ready', seconds <= 0);
   }
 
   /** The hook: holding with so much cable out (m), recharging for `seconds`, or ready. */
@@ -215,7 +213,7 @@ export class Hud {
     // each item is a phrase of its own, joined by the separator
     const items = `${twin ? ` · ${t('Twin: fires twice as fast')}` : ''}${plating ? ` · ${t('Plating {n}: stops hits', { n: plating })}` : ''}${nova ? ` · ${t('Nova: next shot blows up everything around')}` : ''}`;
     setText(this.torpedo, `${torpedoes > 0 ? t('Torpedo {n}', { n: torpedoes }) : t('No torpedo')}${items}`);
-    if (this.torpedo.classList.contains('ready') !== torpedoes > 0) this.torpedo.classList.toggle('ready', torpedoes > 0);
+    setClass(this.torpedo, 'ready', torpedoes > 0);
   }
 
   /** The flight mode next to the velocity: AUTOPILOT in blue, FREE DRIFT in orange. */
@@ -238,7 +236,7 @@ export class Hud {
 
   /** Persistent warning below the crosshair (impact, overheating); empty text hides it. */
   setWarning(text: string) {
-    if (this.warning.textContent !== text) this.warning.textContent = text;
+    setText(this.warning, text);
   }
 
   /** Tunnel vision under sustained acceleration, 0..1. */
@@ -407,6 +405,10 @@ function setText(element: HTMLElement, text: string) {
 
 function setHidden(element: HTMLElement, hidden: boolean) {
   if (element.hidden !== hidden) element.hidden = hidden;
+}
+
+function setClass(element: HTMLElement, name: string, on: boolean) {
+  if (element.classList.contains(name) !== on) element.classList.toggle(name, on);
 }
 
 const ahead = new THREE.Vector3();

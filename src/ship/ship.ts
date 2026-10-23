@@ -71,7 +71,7 @@ const TRIM_COLOR = new THREE.Color(1, 0.62, 0.1);
 const TRIM_ANGLE = 25;
 
 export type Zone = 'reactor' | 'drive' | 'thrusters' | 'armor';
-export type DamageStatus = 'protected' | 'hit' | 'destroyed';
+type DamageStatus ='protected' | 'hit' | 'destroyed';
 
 interface EngineParts {
   flame: THREE.Mesh | null;
@@ -337,13 +337,11 @@ export class Ship {
     // the move to the spawn point is no flight: collisions and gates do not sweep along it
     this.previous.copy(position);
     this.holdTrigger();
-    this.hull = MAX_HULL;
-    this.drive = this.thrusters = 1;
+    this.repair();
     this.torpedoes = TORPEDOES + this.perks.torpedoes;
     this.twin = false;
     this.plating = 0;
     this.nova = false;
-    this.holes.length = 0;
     this.heat = 0;
     this.overheated = false;
     this.driveOfflineUntil = 0;
@@ -479,6 +477,11 @@ export class Ship {
     inverse.copy(r.orientation);
     if (spin > 1e-6) inverse.multiply(spinStep.setFromAxisAngle(offset.copy(r.spin).divideScalar(spin), spin * age));
     this.flight.orientation.slerp(inverse, blend);
+    this.show(dt, now);
+  }
+
+  /** Shows the ship where it flies now, blinking while spawn protection is active, its drive burning. */
+  private show(dt: number, now: number) {
     this.model.visible = now >= this.protectedUntil || Math.floor(now * 8) % 2 === 0;
     this.syncTransform();
     this.animateEngine(dt);
@@ -495,10 +498,7 @@ export class Ship {
     this.flight.thrusterFactor = (0.25 + 0.75 * this.thrusters) * this.perks.thrusters;
     this.vent(now);
     this.flight.update(dt, controls, gravity, this.ventForce, this.ventSpin);
-    // blink while spawn protection is active
-    this.model.visible = now >= this.protectedUntil || Math.floor(now * 8) % 2 === 0;
-    this.syncTransform();
-    this.animateEngine(dt);
+    this.show(dt, now);
 
     this.heat = Math.max(0, this.heat - (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * this.perks.cooling * dt);
     if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;

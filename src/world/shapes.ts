@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
 import type { TemplateSet } from './asteroids';
+import { canvas, toTexture } from '../view/textures';
 
 /**
  * The shapes the arenas are built from besides rock: chunks of ice, the debris of a station
@@ -11,8 +12,8 @@ import type { TemplateSet } from './asteroids';
  * for debris (see AsteroidField), the box itself for the hull.
  */
 
-/** The collision ellipsoid is this share of the collider box (SHAPE_FILL in asteroids.ts). */
-const FILL = 0.9;
+/** The collision ellipsoid of a piece that is no box is this share of its collider box (see AsteroidField). */
+export const SHAPE_FILL = 0.9;
 /** Seeds of the shapes: fixed, so every browser builds the same debris and hull. */
 const DEBRIS_SEED = 7351;
 const DEBRIS_COUNT = 8;
@@ -22,7 +23,7 @@ const DEBRIS_SIZE = 900;
 const HULL_LENGTH = 2000;
 
 /** An invisible box whose `fill` (90 % for rock-like pieces, all of it for a box piece) is the collision shape with these semi-axes. */
-function collider(semiAxes: THREE.Vector3, fill = FILL): THREE.Mesh {
+function collider(semiAxes: THREE.Vector3, fill = SHAPE_FILL): THREE.Mesh {
   const box = new THREE.Mesh(new THREE.BoxGeometry((semiAxes.x * 2) / fill, (semiAxes.y * 2) / fill, (semiAxes.z * 2) / fill));
   box.userData.collider = true;
   box.visible = false;
@@ -39,21 +40,22 @@ export function iceSet(rocks: TemplateSet): TemplateSet {
 /** A deck of windows: lit ones in runs, with dark stretches where the power is out (a wreck's emergency power still runs). */
 function windowTexture(seed: number): THREE.CanvasTexture {
   const r = new Randomizer(seed);
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 4;
-  const ctx = canvas.getContext('2d')!;
+  const [element, ctx] = canvas(256, 4);
   ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, element.width, element.height);
   let lit = true;
-  for (let x = 0; x < canvas.width; x += 4) {
+  for (let x = 0; x < element.width; x += 4) {
     if (r.nextFloat() < 0.12) lit = !lit;
     if (!lit || r.nextFloat() < 0.2) continue;
     ctx.fillStyle = r.nextFloat() < 0.85 ? '#ffd9a0' : '#9fc4ff';
-    ctx.fillRect(x, 0, 3, canvas.height);
+    ctx.fillRect(x, 0, 3, element.height);
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
+  return tiled(element);
+}
+
+/** A drawn canvas as a texture repeated across a surface. */
+function tiled(element: HTMLCanvasElement): THREE.CanvasTexture {
+  const texture = toTexture(element);
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   return texture;
 }
@@ -61,34 +63,29 @@ function windowTexture(seed: number): THREE.CanvasTexture {
 /** Panels on the plating: a grey that varies from panel to panel, as a color map. */
 function platingTexture(seed: number): THREE.CanvasTexture {
   const r = new Randomizer(seed);
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d')!;
-  for (let y = 0; y < canvas.height; y += 8) {
-    for (let x = 0; x < canvas.width; x += 16) {
+  const [element, ctx] = canvas(256, 128);
+  const { width, height } = element;
+  for (let y = 0; y < height; y += 8) {
+    for (let x = 0; x < width; x += 16) {
       const shade = Math.floor(r.range(70, 120));
       ctx.fillStyle = `rgb(${shade}, ${shade}, ${shade + 6})`;
       ctx.fillRect(x, y, 16, 8);
     }
   }
   ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
-  for (let y = 0; y <= canvas.height; y += 8) ctx.strokeRect(0, y, canvas.width, 0);
-  for (let x = 0; x <= canvas.width; x += 16) ctx.strokeRect(x, 0, 0, canvas.height);
+  for (let y = 0; y <= height; y += 8) ctx.strokeRect(0, y, width, 0);
+  for (let x = 0; x <= width; x += 16) ctx.strokeRect(x, 0, 0, height);
   // scorch marks of the battle that broke it
   for (let i = 0; i < 12; i++) {
-    const x = r.range(0, canvas.width);
-    const y = r.range(0, canvas.height);
+    const x = r.range(0, width);
+    const y = r.range(0, height);
     const gradient = ctx.createRadialGradient(x, y, 0, x, y, r.range(8, 30));
     gradient.addColorStop(0, 'rgba(10, 6, 4, 0.85)');
     gradient.addColorStop(1, 'rgba(10, 6, 4, 0)');
     ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(0, 0, width, height);
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
-  return texture;
+  return tiled(element);
 }
 
 /**

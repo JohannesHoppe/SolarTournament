@@ -138,13 +138,9 @@ export function colliderBox(root: THREE.Object3D): THREE.Box3 {
   return box;
 }
 
-/** Largest scale factor of an object's world transform. */
-export function worldScale(root: THREE.Object3D): number {
-  const scale = new THREE.Vector3().setFromMatrixScale(root.matrixWorld);
-  return Math.max(scale.x, scale.y, scale.z);
-}
-
-/** Radius of the bounding sphere of an object's collider, including its scale. */
+/** Radius of the bounding sphere of an object's collider, including its scale (the largest of its axes). */
 export function colliderRadius(root: THREE.Object3D): number {
-  return colliderBox(root).getBoundingSphere(new THREE.Sphere()).radius * worldScale(root);
+  const radius = colliderBox(root).getBoundingSphere(new THREE.Sphere()).radius;
+  const scale = new THREE.Vector3().setFromMatrixScale(root.matrixWorld);
+  return radius * Math.max(scale.x, scale.y, scale.z);
 }

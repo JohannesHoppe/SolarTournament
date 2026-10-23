@@ -1,12 +1,15 @@
 import * as THREE from 'three';
 
-function canvas(size: number): [HTMLCanvasElement, CanvasRenderingContext2D] {
+/** A canvas to draw a texture on (square without a height), with its 2D context. */
+export function canvas(width: number, height = width): [HTMLCanvasElement, CanvasRenderingContext2D] {
   const element = document.createElement('canvas');
-  element.width = element.height = size;
+  element.width = width;
+  element.height = height;
   return [element, element.getContext('2d')!];
 }
 
-function toTexture(element: HTMLCanvasElement): THREE.CanvasTexture {
+/** A drawn canvas as a color texture. */
+export function toTexture(element: HTMLCanvasElement): THREE.CanvasTexture {
   const texture = new THREE.CanvasTexture(element);
   texture.colorSpace = THREE.SRGBColorSpace;
   return texture;

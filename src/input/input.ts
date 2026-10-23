@@ -112,6 +112,20 @@ const PAD_ACTIONS: [number, Action][] = [
   [PAD.rb, 'overdrive'],
   [PAD.up, 'torpedo'],
 ];
+/** The keys that act at a press rather than fly while held. */
+const KEY_ACTIONS: Record<string, Action | undefined> = {
+  Enter: 'confirm',
+  Escape: 'pause',
+  KeyP: 'pause',
+  KeyQ: 'quit',
+  KeyC: 'camera',
+  KeyM: 'radio',
+  F1: 'help',
+  KeyT: 'autopilot',
+  KeyE: 'overdrive',
+  KeyG: 'torpedo',
+  Tab: 'watch',
+};
 
 /**
  * Mouse flight: the pointer stays visible and the ship turns towards it. Its offset from the
@@ -137,12 +151,7 @@ export class Input {
   private lastTap = { axis: '', sign: 0, at: -Infinity };
   /** A dodge asked for and not yet taken: sideways and up, each -1, 0 or 1. */
   private dodge: { x: number; y: number } | null = null;
-  private readonly touch = new TouchControls(
-    () => this.handler('pause'),
-    () => this.handler('autopilot'),
-    () => this.handler('overdrive'),
-    () => this.handler('torpedo'),
-  );
+  private readonly touch = new TouchControls((action) => this.handler(action));
 
   constructor(private readonly canvas: HTMLElement) {
     window.addEventListener('keydown', (e) => this.onKey(e, true));
@@ -209,17 +218,22 @@ export class Input {
 
   /** The flip is held: X, Y on the gamepad, or FLIP on touch. The flight computer turns the ship against the flight. */
   get flipping(): boolean {
-    return this.keys.has('KeyX') || this.touch.flip || (this.gamepad()?.buttons[PAD.y]?.pressed ?? false);
+    return this.keys.has('KeyX') || this.touch.flip || this.padHeld(PAD.y);
   }
 
   /** The brake is held: S, B on the gamepad, or BRAKE on touch. The flight computer flips and burns. */
   get braking(): boolean {
-    return this.keys.has('KeyS') || this.touch.brake || (this.gamepad()?.buttons[PAD.b]?.pressed ?? false);
+    return this.keys.has('KeyS') || this.touch.brake || this.padHeld(PAD.b);
   }
 
   /** The hook is held: V, the right mouse button, the D-pad down, or HOOK on touch. Pressed it fires, held it reels in, let go it releases. */
   get hooking(): boolean {
-    return this.keys.has('KeyV') || this.mouseHook || this.touch.hook || (this.gamepad()?.buttons[PAD.down]?.pressed ?? false);
+    return this.keys.has('KeyV') || this.mouseHook || this.touch.hook || this.padHeld(PAD.down);
+  }
+
+  /** A button of the gamepad (standard layout) is held. */
+  private padHeld(index: number): boolean {
+    return this.gamepad()?.buttons[index]?.pressed ?? false;
   }
 
   /** The standings are held open: Tab. */
@@ -303,20 +317,21 @@ export class Input {
     if (!pad || !((pad.buttons[PAD.a]?.value ?? 0) > 0.5)) this.fireHeld = false;
     if (!pad) return;
     // LB dodges the way the thruster stick points, sideways to the right when it rests
-    const lb = (pad.buttons[PAD.lb]?.value ?? 0) > 0.5;
-    if (lb && !this.padPressed.has(PAD.lb)) {
+    if (this.padPress(pad, PAD.lb)) {
       const x = Math.sign(deadzone(pad.axes[2] ?? 0));
       const y = -Math.sign(deadzone(pad.axes[3] ?? 0));
       this.dodge = x || y ? { x, y } : { x: 1, y: 0 };
     }
-    if (lb) this.padPressed.add(PAD.lb);
-    else this.padPressed.delete(PAD.lb);
-    for (const [index, action] of PAD_ACTIONS) {
-      const down = (pad.buttons[index]?.value ?? 0) > 0.5;
-      if (down && !this.padPressed.has(index)) this.handler(action);
-      if (down) this.padPressed.add(index);
-      else this.padPressed.delete(index);
-    }
+    for (const [index, action] of PAD_ACTIONS) if (this.padPress(pad, index)) this.handler(action);
+  }
+
+  /** Whether a button just went down: it counts once, not while it is held. */
+  private padPress(pad: Gamepad, index: number): boolean {
+    const down = (pad.buttons[index]?.value ?? 0) > 0.5;
+    const fresh = down && !this.padPressed.has(index);
+    if (down) this.padPressed.add(index);
+    else this.padPressed.delete(index);
+    return fresh;
   }
 
   /** The first connected gamepad with the standard layout, if any, as read this frame (see poll). */
@@ -378,16 +393,8 @@ export class Input {
     if (!down || e.repeat) return;
     const thruster = THRUSTER_KEYS[e.code];
     if (thruster) this.tapped(thruster.axis, thruster.sign);
-    if (e.code === 'Enter') this.handler('confirm');
-    if (e.code === 'Escape' || e.code === 'KeyP') this.handler('pause');
-    if (e.code === 'KeyQ') this.handler('quit');
-    if (e.code === 'KeyC') this.handler('camera');
-    if (e.code === 'KeyM') this.handler('radio');
-    if (e.code === 'F1') this.handler('help');
-    if (e.code === 'KeyT') this.handler('autopilot');
-    if (e.code === 'KeyE') this.handler('overdrive');
-    if (e.code === 'KeyG') this.handler('torpedo');
-    if (e.code === 'Tab') this.handler('watch');
+    const action = KEY_ACTIONS[e.code];
+    if (action) this.handler(action);
   }
 }
 
@@ -416,13 +423,10 @@ export function keyLabel(label: string): string {
 }
 
 /** Pointer offset (1 = full deflection) to stick deflection: dead zone in the center, clamped at the edge. */
-function mouseAxis(offset: number) {
-  const magnitude = Math.abs(offset);
-  return magnitude < MOUSE_DEADZONE ? 0 : clamp((Math.sign(offset) * (magnitude - MOUSE_DEADZONE)) / (1 - MOUSE_DEADZONE));
-}
+const mouseAxis = (offset: number) => clamp(deadzone(offset, MOUSE_DEADZONE));
 
-/** Removes the dead zone and rescales the rest of the stick travel to 0..1. */
-function deadzone(v: number) {
+/** Removes the dead zone and rescales the rest of the travel to 0..1. */
+function deadzone(v: number, zone = STICK_DEADZONE) {
   const magnitude = Math.abs(v);
-  return magnitude < STICK_DEADZONE ? 0 : (Math.sign(v) * (magnitude - STICK_DEADZONE)) / (1 - STICK_DEADZONE);
+  return magnitude < zone ? 0 : (Math.sign(v) * (magnitude - zone)) / (1 - zone);
 }

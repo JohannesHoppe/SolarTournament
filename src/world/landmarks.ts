@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { SUN_DIRECTION } from './space';
 import { sternAt, type ArenaId, type ArenaProfile } from './arenas';
+import { canvas, toTexture } from '../view/textures';
 
 /**
  * What an arena shows beyond its field: the ringed planet whose ring the arena lies in, the
@@ -130,12 +131,9 @@ const diskFragment = /* glsl */ `
 
 /** A neon sign: the text as a tube of white with layered glow, on black for additive blending. */
 function neonSign(text: string, color: string, glow: string): THREE.Mesh {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d')!;
+  const [element, ctx] = canvas(1024, 256);
   ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillRect(0, 0, element.width, element.height);
   ctx.font = '700 150px Michroma, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
@@ -143,11 +141,9 @@ function neonSign(text: string, color: string, glow: string): THREE.Mesh {
     ctx.shadowBlur = blur;
     ctx.shadowColor = style;
     ctx.fillStyle = style;
-    ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+    ctx.fillText(text, element.width / 2, element.height / 2);
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  const material = new THREE.MeshBasicMaterial({ map: texture, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
+  const material = new THREE.MeshBasicMaterial({ map: toTexture(element), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
   return new THREE.Mesh(new THREE.PlaneGeometry(10000, 2500), material);
 }
 
@@ -207,20 +203,16 @@ export class Landmarks {
     const planet = this.planet(KRONOS_RADIUS, [0xcdb58a, 0xe8dcc0, 0xa98a62], 0x9fc4ff);
     planet.position.copy(center);
     // the ring: bands of ice in the planet's equator plane, which is the arena's horizon
-    const canvas = document.createElement('canvas');
-    canvas.width = 1024;
-    canvas.height = 1;
-    const ctx = canvas.getContext('2d')!;
+    const [element, ctx] = canvas(1024, 1);
     const r = new Randomizer(1610);
-    for (let x = 0; x < canvas.width; x++) {
+    for (let x = 0; x < element.width; x++) {
       const density = 0.25 + 0.75 * r.nextFloat() * (0.6 + 0.4 * Math.sin(x * 0.05));
       const gap = x > 610 && x < 650 ? 0.05 : 1;
       ctx.fillStyle = `rgba(220, 230, 255, ${(density * gap * 0.55).toFixed(3)})`;
       ctx.fillRect(x, 0, 1, 1);
     }
-    const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    const ring = new THREE.RingGeometry(RING_INNER, RING_OUTER, 256, 1);
+    const texture = toTexture(element);
+    const ring =new THREE.RingGeometry(RING_INNER, RING_OUTER, 256, 1);
     // the texture runs from the inner to the outer edge
     const uv = ring.attributes.uv;
     const p = new THREE.Vector3();

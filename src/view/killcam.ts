@@ -19,7 +19,6 @@ const STRIDE = 8;
 
 const position = new THREE.Vector3();
 const orientation = new THREE.Quaternion();
-const from = new THREE.Vector3();
 const to = new THREE.Vector3();
 const offset = new THREE.Vector3();
 
@@ -152,7 +151,7 @@ export class KillCam {
       if (ship === replay.victim) to.copy(ship.root.position);
     }
     for (const beam of this.beams) {
-      if (beam.time > replay.lastBeam && beam.time <= time) this.effects.beam(from.copy(beam.from), offset.copy(beam.to), beam.color);
+      if (beam.time > replay.lastBeam && beam.time <= time) this.effects.beam(beam.from, beam.to, beam.color);
     }
     replay.lastBeam = time;
     if (killerSeen) {
