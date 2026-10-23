@@ -1312,6 +1312,74 @@ body.touch #touch {
   display: block;
 }
 
+/* a round is flown with the phone held sideways: upright, a plate asks to turn it */
+#turn-phone {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 24px;
+  background: rgba(2, 3, 10, 0.9);
+  text-align: center;
+}
+
+#turn-phone svg {
+  width: 96px;
+  height: 96px;
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 8px var(--accent));
+  animation: turn-phone 2.4s ease-in-out infinite;
+}
+
+#turn-phone circle {
+  fill: var(--accent);
+}
+
+#turn-phone p {
+  margin: 0;
+  max-width: 22ch;
+  text-align: justify;
+  text-align-last: center;
+  hyphens: auto;
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  line-height: 1.5;
+  color: var(--tube-orange);
+  text-shadow: var(--neon-orange);
+}
+
+@keyframes turn-phone {
+  0%,
+  20% {
+    transform: rotate(0deg);
+  }
+
+  60%,
+  100% {
+    transform: rotate(-90deg);
+  }
+}
+
+@media (orientation: portrait) {
+  body.touch.playing #turn-phone {
+    display: flex;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #turn-phone svg {
+    animation: none;
+  }
+}
+
 body.touch,
 body.touch #game canvas {
   touch-action: none;

@@ -1625,6 +1625,8 @@ export class Game implements OnlineGame {
     $('crest').hidden = state !== 'menu';
     $('pause').hidden = state !== 'paused';
     $('results').hidden = state !== 'results';
+    // a phone held upright is asked to turn sideways while a round is flown (see #turn-phone)
+    document.body.classList.toggle('playing', state === 'playing');
     $('invite').hidden = !this.online;
     $('invite').textContent = t('Invite friends');
     // the A button that changed the screen does not also fire

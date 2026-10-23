@@ -190,6 +190,7 @@ export const DE: Catalog = {
   'Tournament full · watching {watched} · Tab: next pilot · you fly as soon as a place is free': 'Turnier voll · im Bild: {watched} · Tab: nächster Pilot · du fliegst, sobald ein Platz frei wird',
   'Out · watching {watched} · Tab: next pilot': 'Raus · im Bild: {watched} · Tab: nächster Pilot',
   'Return to the field': 'Zurück ins Feld',
+  'Turn your phone sideways to fly.': 'Dreh dein Handy quer, um zu fliegen.',
   'Return to the field — {seconds}s': 'Zurück ins Feld — {seconds}s',
   'Flipped · drive brakes': 'Gewendet · Antrieb bremst',
   'Flip': 'Wende',
