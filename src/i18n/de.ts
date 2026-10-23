@@ -31,7 +31,7 @@ import type { Catalog } from './i18n';
  * - solar flare → Sonneneruption; field → Feld; deep space → tiefes All; arena → Arena
  * - kill → Abschuss; deaths → Tode; score → Punkte (pts → Pkt.); standings → Wertung; callsign → Rufzeichen;
  *   dogfight → Duell; crosshair → Fadenkreuz; marker → Markierung; live link → Live-Verbindung
- * - neon trim → Neonkanten; drive flame → Antriebsflamme; aim / reflexes / daring → Zielen / Reflexe / Wagemut
+ * - neon trim → Neonstreifen; drive flame → Antriebsflamme; aim / reflexes / daring → Zielen / Reflexe / Wagemut
  * - classes Cruise / Pro / Max → Locker / Profi / Max
  *
  * Spoken lines (the flight computer's and the announcer's) write numbers and units out in words, so the voice reads them
@@ -79,7 +79,7 @@ export const DE: Catalog = {
   // solo round plate
   'Three laps through eight gates. Killing your opponents is explicitly allowed.': 'Drei Runden durch acht Tore. Gegner abschießen ist ausdrücklich erlaubt.',
   'For the hard pilots: five minutes, every clone for itself.': 'Für die harten Piloten: fünf Minuten, jeder Klon für sich.',
-  '{clones} clones each. A solar flare closes in on the arena. The last clone standing wins.': '{clones} Klone für jeden. Eine Sonneneruption zieht sich um die Arena zusammen. Wer als letzter Klon übrig bleibt, gewinnt.',
+  '{clones} clones each. A solar flare sweeps in from the sun and drives everyone to the far side. The last clone standing wins.': '{clones} Klone für jeden. Eine Sonneneruption rollt von der Sonne heran und treibt alle auf die abgewandte Seite. Wer als letzter Klon übrig bleibt, gewinnt.',
   'Orange against Blue, bots on both sides. Steal their sponsor core, bring it home, keep yours.': 'Orange gegen Blau, Bots auf beiden Seiten. Klau ihren Sponsorkern, bring ihn heim, verteidige deinen.',
   'The President wants blood and sends a battleship into the ring. Because he can. Everyone against it: sink it before the time runs out.': 'Der Präsident will Blut und schickt ein Schlachtschiff in den Ring. Weil er es kann. Alle gegen eins: Versenk es, bevor die Zeit abläuft.',
   'Shot down by the President\'s battleship': 'Abgeschossen vom Schlachtschiff des Präsidenten',
@@ -134,7 +134,7 @@ export const DE: Catalog = {
   'No bots: only Hosts fly.': 'Keine Bots: Nur Hosts fliegen.',
   'Every round a deathmatch.': 'Jede Runde ein Deathmatch.',
   'Every round a race: {laps} laps through {gates} gates, lasers on.': 'Jede Runde ein Rennen: {laps} Runden durch {gates} Tore, Laser an.',
-  'Every round Last Clone Standing: {clones} clones each, a solar flare closing in.': 'Jede Runde „Der letzte Klon“: {clones} Klone für jeden, eine Sonneneruption rückt näher.',
+  'Every round Last Clone Standing: {clones} clones each, a solar flare sweeping in from the sun.': 'Jede Runde „Der letzte Klon“: {clones} Klone für jeden, eine Sonneneruption rollt von der Sonne heran.',
   'Every round Capture the Flag: Orange against Blue, Hosts spread over both sides.': 'Jede Runde Capture the Flag: Orange gegen Blau, die Hosts auf beide Seiten verteilt.',
   'Every round the President\'s Fleet: every Host and bot together against one of his battleships.': 'Jede Runde die Flotte des Präsidenten: alle Hosts und Bots gemeinsam gegen eines seiner Schlachtschiffe.',
   'Every mode in turn, starting with a deathmatch.': 'Alle Modi im Wechsel, los geht es mit einem Deathmatch.',
@@ -188,7 +188,9 @@ export const DE: Catalog = {
   'Next round in {seconds} s': 'Nächste Runde in {seconds} s',
 
   // HUD during a round
-  'Inside the solar flare · get back in': 'In der Sonneneruption · zurück nach innen',
+  'FLARE FRONT · {distance}': 'ERUPTIONSFRONT · {distance}',
+  'SOLAR FLARE · AWAY FROM THE SUN': 'SONNENERUPTION · WEG VON DER SONNE',
+  'SOLAR FLARE · SHADED · AWAY FROM THE SUN': 'SONNENERUPTION · IM SCHATTEN · WEG VON DER SONNE',
   'the field': 'das Feld',
   '{name} (your pick)': '{name} (deine Wahl)',
   '{name} (live, the director cuts)': '{name} (live, die Regie schneidet)',
@@ -215,8 +217,10 @@ export const DE: Catalog = {
   'Out · {place}': 'Raus · {place}',
   'Last Clone Standing · {left}': 'Der letzte Klon · {left}',
   'solar flare in {seconds} s': 'Sonneneruption in {seconds} s',
-  'the flare closes in: {meters} m from the center': 'die Eruption rückt näher: {meters} m vom Zentrum',
-  'the flare holds: {meters} m from the center': 'die Eruption steht: {meters} m vom Zentrum',
+  'in the flare, {meters} m deep · away from the sun': '{meters} m tief in der Eruption · weg von der Sonne',
+  'flare front {meters} m away': 'Eruptionsfront {meters} m entfernt',
+  'Flare': 'Eruption',
+  'Safe zone': 'Sichere Zone',
   '{n} of {total} standing · {flare}': '{n} von {total} im Spiel · {flare}',
 
   // Capture the Flag
@@ -362,8 +366,8 @@ export const DE: Catalog = {
   'More torpedoes per clone': 'Mehr Torpedos pro Klon',
   'Plating': 'Panzerplatten',
   'Every hit hurts less': 'Jeder Treffer schmerzt weniger',
-  'Neon trim': 'Neonkanten',
-  'The hull glows in sun orange': 'Der Rumpf leuchtet sonnenorange',
+  'Neon trim': 'Neonstreifen',
+  'Light strips along both flanks': 'Leuchtstreifen an beiden Flanken',
   'Drive flame': 'Antriebsflamme',
   'Azure, violet, white-hot': 'Azur, Violett, weißglühend',
 
@@ -500,7 +504,7 @@ export const DE: Catalog = {
   'Kessler Field': 'Kessler-Feld',
   'A station blew up. Its pieces still cross each other at 25 m/s.': 'Eine Station ist explodiert. Ihre Trümmer kreuzen sich noch immer mit 25 m/s.',
   'Gas Giant': 'Gasriese',
-  'A world of storms below, pulling with three g at its clouds. Swing by it, or fall in.': 'Unter dir eine Welt aus Stürmen, an ihren Wolken zieht sie mit drei g. Schwing dich vorbei oder stürz hinein.',
+  'A world of storms below, eighty kilometers wide, pulling at everything. Dive along its clouds, or burn in them.': 'Unter dir eine Welt aus Stürmen, achtzig Kilometer breit, und sie zieht an allem. Tauch an ihren Wolken entlang oder verglüh in ihnen.',
   'Corona': 'Korona',
   'Close to the sun. Lasers barely cool in its glare, and its storms blind the sensors.': 'Nah an der Sonne. In ihrem Glühen kühlen Laser kaum ab, und ihre Stürme blenden die Sensoren.',
   'Event Horizon': 'Ereignishorizont',
@@ -734,7 +738,7 @@ export const DE: Catalog = {
   'You lost the lead.': 'Du hast die Führung verloren.',
   'Nice pass.': 'Schön überholt.',
   'Someone got past you.': 'Jemand hat dich überholt.',
-  'Solar flare, darling. The arena is closing in. Stay inside the shell.': 'Sonneneruption, Schätzchen. Die Arena wird enger. Bleib innerhalb der Plasmahülle.',
+  'Solar flare, darling. It comes from the sun. Fly to the far side, and keep a rock between you and the light.': 'Sonneneruption, Schätzchen. Sie kommt von der Sonne. Flieg auf die abgewandte Seite, und halt einen Felsen zwischen dich und das Licht.',
   'This is your last clone, darling. Make it count.': 'Das ist dein letzter Klon, Schätzchen. Mach was draus.',
   'That was your last clone, darling. You are out. Sit back, and watch the others burn.': 'Das war dein letzter Klon, Schätzchen. Du bist raus. Lehn dich zurück und sieh zu, wie die anderen brennen.',
   'You are the last clone standing. I knew it, darling.': 'Du bist der letzte Klon. Ich wusste es, Schätzchen.',
@@ -748,7 +752,7 @@ export const DE: Catalog = {
   'Reactor critical! Get clear, darling!': 'Reaktor kritisch! Weg da, Schätzchen!',
   'A race, darling. Three laps through the rings. Fly through their very centers, and the coils throw you on. Follow the orange dots, and shoot whoever is ahead of you.': 'Ein Rennen, Schätzchen. Drei Runden durch die Ringe. Flieg genau durch ihre Mitte, dann schleudern dich die Spulen weiter. Folg den orangen Punkten und schieß auf jeden, der vor dir fliegt.',
   'A deathmatch. Every kill counts. Hit their drives from behind, turn your armored nose to anyone behind you, and never fly a straight line.': 'Ein Deathmatch. Jeder Abschuss zählt. Triff ihre Antriebe von hinten, dreh jedem hinter dir deine gepanzerte Nase zu und flieg nie geradeaus.',
-  'Last clone standing. Three clones, no more. After a minute a solar flare closes in from the edge. Stay inside its shell, and stay alive.': 'Der letzte Klon. Drei Klone, mehr nicht. Nach einer Minute rückt eine Sonneneruption vom Rand heran. Bleib innerhalb ihrer Hülle und bleib am Leben.',
+  'Last clone standing. Three clones, no more. After a minute a solar flare sweeps in from the sun and burns the arena down to a pocket on the far side. Stay ahead of it, hide behind rock, and stay alive.': 'Der letzte Klon. Drei Klone, mehr nicht. Nach einer Minute rollt eine Sonneneruption von der Sonne heran und brennt die Arena bis auf eine Tasche auf der abgewandten Seite nieder. Bleib vor ihr, versteck dich hinter Fels und bleib am Leben.',
   'Capture the flag. Touch their core, and tow it into our ring. We only score while our own core is at home, so guard it, or bring it back.': 'Capture the Flag. Berühr ihren Kern und schlepp ihn in unseren Ring. Wir punkten nur, solange unser eigener Kern zu Hause ist, also bewach ihn oder hol ihn zurück.',
   'The President’s fleet. We all fight his battleship together. Take out its batteries first, then its drives. When the reactor opens, hit it, and get clear before it blows. Keep moving: its batteries miss fast ships.': 'Die Flotte des Präsidenten. Wir kämpfen alle zusammen gegen sein Schlachtschiff. Erst die Batterien, dann die Antriebe. Wenn der Reaktor aufgeht, schieß drauf und mach dich davon, bevor er hochgeht. Bleib in Bewegung: Seine Batterien verfehlen schnelle Schiffe.',
   'Someone is on your drive, darling. Turn your nose to them, now.': 'Jemand hängt dir im Nacken, Schätzchen. Dreh ihm deine Nase zu, sofort.',
@@ -803,7 +807,7 @@ export const DE: Catalog = {
   'and {name} is gone. for good. well, for this round': 'Und {name} ist weg. Für immer. Na ja, für diese Runde',
   '{name} is the last clone standing': '{name} ist der letzte Klon',
   '{name} survives. the president is impressed': '{name} überlebt. Der Präsident ist beeindruckt',
-  'here comes the flare. the arena is closing': 'Da kommt die Eruption. Die Arena wird eng',
+  'here comes the flare. run from the sun, little clones': 'Da kommt die Eruption. Flieht vor der Sonne, kleine Klone',
   'a comet is coming. its tail is full of rock. hide, little clones': 'Ein Komet kommt. Sein Schweif ist voller Fels. Versteckt euch, kleine Klone',
   'the heavens join the games. a comet, folks, courtesy of the president': 'Der Himmel spielt mit. Ein Komet, Leute, mit freundlicher Empfehlung des Präsidenten',
   'and {name} meets the comet head on. the printer is warming up': 'Und {name} nimmt den Kometen frontal. Der Drucker läuft schon warm',

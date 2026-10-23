@@ -180,7 +180,12 @@ export class Cables {
     this.spare.push(line);
   }
 
-  /** Draws a cable from a nose to a point. */
+  dispose() {
+    for (const line of [...this.spare, ...(this.group.children as THREE.Line[])]) line.geometry.dispose();
+    this.material.dispose();
+  }
+
+  /** Draws a cable from a nose (or a stern) to a point. */
   static draw(line: THREE.Line, from: THREE.Vector3, to: THREE.Vector3) {
     const position = line.geometry.getAttribute('position') as THREE.BufferAttribute;
     position.setXYZ(0, from.x, from.y, from.z);

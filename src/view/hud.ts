@@ -56,6 +56,7 @@ export class Hud {
   private escapeShown = -1;
   private readonly lock = $('hud-lock');
   private readonly vignette = $('g-vignette');
+  private readonly flareHeat = $('flare-heat');
   private readonly speed = $('hud-speed');
   private readonly mode = $('hud-mode');
   private readonly overdrive = $('hud-overdrive');
@@ -414,6 +415,12 @@ export class Hud {
   setStrain(strain: number) {
     this.vignette.style.opacity = String(strain);
     this.vignette.style.setProperty('--tunnel', `${Math.round(70 - strain * 45)}%`);
+  }
+
+  /** A solar flare's heat on the screen, 0..1: its edges glow orange, then the whole picture. */
+  setFlareHeat(heat: number) {
+    const shown = heat < 0.01 ? '0' : heat.toFixed(2);
+    if (this.flareHeat.style.opacity !== shown) this.flareHeat.style.opacity = shown;
   }
 
   /** A split or lap time against the best lap, for a few seconds: ahead in green, behind in red, without a best in white. */

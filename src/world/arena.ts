@@ -21,16 +21,13 @@ const vertex = /* glsl */ `
 
 // Thin lines where the sphere cuts the planes of a world-space grid, one pixel wide at any
 // distance. Inside the arena they light up only near the pilot, so the middle of the field
-// stays clean; outside the whole edge shows, so the way back is always in sight. A solar
-// flare (see game/survival) glows hot all over, so its shell is seen from anywhere inside.
+// stays clean; outside the whole edge shows, so the way back is always in sight.
 const fragment = /* glsl */ `
   uniform float spacing;
   uniform float reach;
   uniform float outside;
-  uniform float flare;
   uniform vec3 inColor;
   uniform vec3 outColor;
-  uniform vec3 flareColor;
   varying vec3 vWorld;
   void main() {
     vec3 cell = vWorld / spacing;
@@ -38,16 +35,14 @@ const fragment = /* glsl */ `
     float grid = 1.0 - min(min(line.x, line.y), line.z);
     if (grid <= 0.0) discard;
     float near = 1.0 - smoothstep(0.0, reach, distance(vWorld, cameraPosition));
-    float strength = mix(mix(0.03 + 0.5 * near, 0.14 + 0.5 * near, outside), 0.45 + 0.6 * near, flare);
-    vec3 color = mix(mix(inColor, outColor, outside), flareColor, flare);
+    float strength = mix(0.03 + 0.5 * near, 0.14 + 0.5 * near, outside);
+    vec3 color = mix(inColor, outColor, outside);
     gl_FragColor = vec4(color * grid * strength, 1.0);
   }
 `;
 
-/** The arena's edge: a thin grid on the sphere a ship must not leave for long, or the shell of a solar flare closing in. */
+/** The arena's edge: a thin grid on the sphere a ship must not leave for long. */
 export class Arena {
-  /** The edge's radius now (units): the arena's limit, or a flare's shell inside it. */
-  private radius = ARENA_LIMIT;
   readonly mesh: THREE.Mesh;
   private readonly material: THREE.ShaderMaterial;
 
@@ -57,10 +52,8 @@ export class Arena {
         spacing: { value: GRID_SPACING },
         reach: { value: GRID_REACH },
         outside: { value: 0 },
-        flare: { value: 0 },
         inColor: { value: new THREE.Color(0.35, 0.55, 1) },
         outColor: { value: new THREE.Color(1, 0.55, 0.2) },
-        flareColor: { value: new THREE.Color(1, 0.4, 0.05).multiplyScalar(2) },
       },
       vertexShader: vertex,
       fragmentShader: fragment,
@@ -73,15 +66,8 @@ export class Arena {
     this.mesh.frustumCulled = false;
   }
 
-  /** The edge at a radius (units); `flare` makes it the shell of a solar flare. */
-  setEdge(radius: number, flare: boolean) {
-    this.radius = radius;
-    this.mesh.scale.setScalar(radius / ARENA_LIMIT);
-    this.material.uniforms.flare.value = flare ? 1 : 0;
-  }
-
   /** The grid turns orange while the pilot is outside. */
   update(camera: THREE.Camera) {
-    this.material.uniforms.outside.value = camera.position.length() > this.radius ? 1 : 0;
+    this.material.uniforms.outside.value = camera.position.length() > ARENA_LIMIT ? 1 : 0;
   }
 }

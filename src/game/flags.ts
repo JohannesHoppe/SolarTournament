@@ -3,6 +3,9 @@ import { Randomizer } from '../random';
 import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
 import { GateKit } from '../world/gates';
+import { CoreKit, GRIP, type CoreLook } from '../world/powercore';
+import { Cables } from './hook';
+import { sponsorSigns } from './satire-ads';
 import { msg } from '../i18n/i18n';
 
 /**
@@ -36,8 +39,33 @@ const DROP_DRIFT = 0.3;
 export const GRAB_POINTS = 100;
 export const RETURN_POINTS = 150;
 export const CAPTURE_POINTS = 1000;
-/** Radius of a core (units, 12 m). */
-const CORE_RADIUS = 240;
+/**
+ * How a core is shown (look only; the rules know only where it is, see update). In tow it
+ * hangs on a cable from the carrier's stern, TOW_CABLE ship radii long (about 75 m): beyond the
+ * chase camera, which hangs 2.6 radii behind the ship, so a ship flying ahead never has it in
+ * view. It trails against the flight and sags TOW_SAG of the cable below the ship, under the
+ * camera's line of sight, swinging after the ship's turns at TOW_SWING (1/s). It is shown at
+ * its size in tow, larger adrift and at home (CORE_SCALE), where it is a mark to fly for.
+ */
+const TOW_CABLE = 4.5;
+const TOW_SAG = 0.35;
+const TOW_SWING = 2.5;
+const CORE_SCALE = { tow: 1, adrift: 1.4, home: 2 } as const;
+/** A core let go glides from its cable to where the rules have it, if that is closer than this (units, 200 m); otherwise it is there at once. */
+const GLIDE_REACH = 4000;
+/**
+ * A core in tow that hides the ship the camera follows, or the line from it to its crosshair, fades to its
+ * outline at CORE_FADE (1/s), and back the same way once it is clear; only a core within
+ * FADE_NEAR of the camera (units, 300 m) is that big on screen. The crosshair's line is checked
+ * as far as AIM_REACH (units, 2 km); a core keeps FADE_MARGIN clear of it (in halves of the
+ * screen's height).
+ */
+const CORE_FADE = 8;
+const FADE_NEAR = 6000;
+const AIM_REACH = 40000;
+const FADE_MARGIN = 0.1;
+/** How far a core reaches from its center, for its size on screen (units at its tow size, 8.5 m). */
+const CORE_REACH = 170;
 /** Recent events the lead keeps in its state, so a follower that missed a state still hears of them. */
 const EVENT_KEEP = 6;
 
@@ -62,10 +90,22 @@ export interface Flier {
   readonly alive: boolean;
   readonly radius: number;
   readonly kind: 'bot' | 'host' | null;
-  readonly flight: { readonly position: THREE.Vector3; readonly velocity: THREE.Vector3 };
+  readonly flight: { readonly position: THREE.Vector3; readonly velocity: THREE.Vector3; readonly orientation: THREE.Quaternion };
 }
 
 const tow = new THREE.Vector3();
+const stern = new THREE.Vector3();
+const hang = new THREE.Vector3();
+const down = new THREE.Vector3();
+const cableAxis = new THREE.Vector3();
+const grip = new THREE.Vector3();
+const spin = new THREE.Quaternion();
+const onScreen = new THREE.Vector3();
+const shipOnScreen = new THREE.Vector3();
+const aimOnScreen = new THREE.Vector3();
+const ahead = new THREE.Vector3();
+const offset = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
 /** The counts of the sides (see Flags.count), kept: the lead's rules run every frame. */
 const allSides = [0, 0];
 const hostSides = [0, 0];
@@ -87,11 +127,15 @@ export class Flags {
   private seq = 0;
   private taken = 0;
   private followed = false;
-  private readonly meshes: THREE.Mesh[] = [];
-  private readonly coreGeometry = new THREE.IcosahedronGeometry(CORE_RADIUS, 1);
+  /** Each core's look, where it is shown (see TOW_CABLE), its tow cable while in tow, and how far it has faded (see view). */
+  private readonly looks: CoreLook[] = [];
+  private readonly shown: THREE.Vector3[] = [];
+  private readonly towLines: (THREE.Line | null)[] = [null, null];
+  private readonly faded = [1, 1];
+  private readonly coreKit = new CoreKit();
+  private readonly cables = new Cables();
   /** A base's ring is a race's coil (see GateKit), its windings in its side's color. */
   private readonly kit = new GateKit(BASE_RADIUS);
-  private readonly materials: THREE.Material[] = [];
 
   /** The bases are laid out from the arena's freshly generated field and its seed, so every browser builds the same. */
   constructor(field: AsteroidField, seed: number) {
@@ -104,20 +148,21 @@ export class Flags {
       axis.set(Math.cos(turn), r.range(-0.2, 0.2), Math.sin(turn)).normalize().multiplyScalar(BASE_DISTANCE);
       if (![1, -1].some((side) => blocked(field, tow.copy(axis).multiplyScalar(side)))) break;
     }
+    // each side's core carries the sign of the sponsor in its color
+    const sponsors = sponsorSigns();
     TEAM_TINTS.forEach((tint, team) => {
       const base = axis.clone().multiplyScalar(team === 0 ? 1 : -1);
       this.bases.push(base);
       this.cores.push({ carrier: null, home: true, position: base.clone(), velocity: new THREE.Vector3(), droppedAt: 0 });
-      const color = new THREE.Color(tint);
-      const glow = new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(2.2), toneMapped: false });
-      this.materials.push(glow);
       // the ring faces the center, so a carrier flying home flies through it
-      const ring = this.kit.build(base, base.clone().normalize(), this.kit.coilMaterial(color, 2));
-      const core = new THREE.Mesh(this.coreGeometry, glow);
-      core.position.copy(base);
-      this.meshes.push(core);
-      this.root.add(ring.root, core);
+      const ring = this.kit.build(base, base.clone().normalize(), this.kit.coilMaterial(tint, 2));
+      const look = this.coreKit.build(tint, (sponsors.find((sponsor) => sponsor.color === tint) ?? sponsors[team]).brand);
+      look.root.position.copy(base);
+      this.looks.push(look);
+      this.shown.push(base.clone());
+      this.root.add(ring.root, look.root);
     });
+    this.root.add(this.cables.group);
   }
 
   /** The side of a ship, or -1 before the lead has given it one. */
@@ -239,7 +284,11 @@ export class Flags {
 
   private readonly fresh: FlagEvent[] = [];
 
-  /** The cores where they are this frame: home, in tow behind their carrier, or drifting. */
+  /**
+   * The cores where they are this frame: home, in tow behind their carrier, or drifting; and
+   * where they are shown (see TOW_CABLE): a core in tow on its cable, one that was let go
+   * easing over to where the rules have it.
+   */
   update(dt: number, ships: readonly Flier[], now: number) {
     this.cores.forEach((core, team) => {
       const carrier = core.carrier ? byId(ships, core.carrier) : null;
@@ -249,17 +298,90 @@ export class Flags {
         tow.copy(carrier.flight.velocity).multiplyScalar(speed > 1 ? -1 / speed : 0);
         core.position.copy(carrier.flight.position).addScaledVector(tow, carrier.radius * 1.8);
       } else if (!core.home) core.position.addScaledVector(core.velocity, dt);
-      const mesh = this.meshes[team];
-      mesh.position.copy(core.position);
-      mesh.rotation.set(now * 0.7, now * 1.1, 0);
+      this.show(team, carrier ?? null, dt, now);
     });
     this.kit.blink(now);
   }
 
+  /** Where a core is shown and how it hangs: on its carrier's cable, adrift, or at home. */
+  private show(team: number, carrier: Flier | null, dt: number, now: number) {
+    const core = this.cores[team];
+    const root = this.looks[team].root;
+    const shown = this.shown[team];
+    const scale = carrier ? CORE_SCALE.tow : core.home ? CORE_SCALE.home : CORE_SCALE.adrift;
+    root.scale.setScalar(root.scale.x + (scale - root.scale.x) * (1 - Math.exp(-3 * dt)));
+    let line = this.towLines[team];
+    if (!carrier) {
+      if (line) this.cables.give(line);
+      this.towLines[team] = null;
+      // a core let go glides to where the rules have it; one sent home is there at once
+      if (core.home || shown.distanceTo(core.position) > GLIDE_REACH) shown.copy(core.position);
+      else shown.lerp(core.position, 1 - Math.exp(-4 * dt));
+      root.position.copy(shown);
+      root.rotation.set(core.home ? 0.35 : now * 0.35, now * (core.home ? 0.4 : 0.55), core.home ? 0.2 : 0);
+      return;
+    }
+    // the cable's end at the stern; the core trails against the flight (the stern's way when
+    // the ship hardly moves) and sags below the ship, swinging after its turns
+    const flight = carrier.flight;
+    const length = carrier.radius * TOW_CABLE;
+    stern.set(0, 0, carrier.radius * 0.8).applyQuaternion(flight.orientation).add(flight.position);
+    const speed = flight.velocity.length();
+    if (speed > 20) tow.copy(flight.velocity).divideScalar(-speed);
+    else tow.set(0, 0, 1).applyQuaternion(flight.orientation);
+    tow.addScaledVector(down.set(0, -1, 0).applyQuaternion(flight.orientation), TOW_SAG).setLength(length);
+    hang.subVectors(shown, stern);
+    // a core just taken comes in from where it was, but never farther than the cable
+    if (!line) {
+      line = this.towLines[team] = this.cables.take();
+      if (hang.length() > length) hang.setLength(length);
+    }
+    hang.lerp(tow, 1 - Math.exp(-TOW_SWING * dt)).clampLength(0, length);
+    shown.addVectors(stern, hang);
+    root.position.copy(shown);
+    // its cage towards the stern, turning slowly about its axis
+    cableAxis.copy(hang).negate().normalize();
+    root.quaternion.setFromUnitVectors(UP, cableAxis).multiply(spin.setFromAxisAngle(UP, now * 0.4));
+    Cables.draw(line, stern, grip.copy(shown).addScaledVector(cableAxis, GRIP * root.scale.x));
+  }
+
+  /**
+   * The cores as the camera sees them (after it moved this frame): a core in tow between the
+   * camera and the ship it follows, or the line from that ship to its crosshair, fades to its
+   * outline; in the cockpit, the core that ship tows is not seen at all, nor its cable. A core
+   * at home or adrift is a mark to fly for and stays whole.
+   */
+  view(camera: THREE.PerspectiveCamera, subject: Flier, cockpit: boolean, dt: number) {
+    const halfHeight = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    camera.getWorldDirection(ahead);
+    toScreen(shipOnScreen.copy(subject.flight.position), camera, ahead);
+    toScreen(aimOnScreen.set(0, 0, -AIM_REACH).applyQuaternion(subject.flight.orientation).add(subject.flight.position), camera, ahead);
+    this.cores.forEach((core, team) => {
+      const look = this.looks[team];
+      const towed = core.carrier === subject.id;
+      look.root.visible = !(cockpit && towed);
+      const line = this.towLines[team];
+      if (line) line.visible = look.root.visible;
+      const shown = this.shown[team];
+      const depth = onScreen.subVectors(shown, camera.position).dot(ahead);
+      let clear = true;
+      if (core.carrier && depth > 0 && depth < FADE_NEAR) {
+        // its size on screen, and how close it comes to the ship and to the crosshair's line
+        const size = (CORE_REACH * look.root.scale.x) / depth / halfHeight;
+        const ship = subject.alive ? (subject.radius / Math.max(1, shipOnScreen.z)) / halfHeight : 0;
+        toScreen(onScreen.copy(shown), camera, ahead);
+        clear = toSegment(onScreen, shipOnScreen, subject.alive ? aimOnScreen : shipOnScreen, camera.aspect) > size + Math.max(ship, FADE_MARGIN);
+      }
+      const faded = this.faded[team] + ((clear ? 1 : 0) - this.faded[team]) * (1 - Math.exp(-CORE_FADE * dt));
+      this.faded[team] = faded;
+      look.fade(faded > 0.99 ? 1 : faded < 0.01 ? 0 : faded);
+    });
+  }
+
   dispose() {
-    this.coreGeometry.dispose();
+    this.coreKit.dispose();
     this.kit.dispose();
-    for (const material of this.materials) material.dispose();
+    this.cables.dispose();
   }
 
   /** Sides for ships that have none, Hosts spread over both first; bots even out the numbers. */
@@ -308,6 +430,24 @@ export class Flags {
     this.events.push(event);
     if (this.events.length > EVENT_KEEP) this.events.shift();
   }
+}
+
+/** A point on screen: x and y as the camera projects it (-1..1), z its depth along the camera's view `ahead` (units). */
+function toScreen(point: THREE.Vector3, camera: THREE.Camera, ahead: THREE.Vector3): THREE.Vector3 {
+  const depth = offset.subVectors(point, camera.position).dot(ahead);
+  point.project(camera).z = depth;
+  return point;
+}
+
+/** How far a point on screen lies from the stretch between two others, in shares of the screen's height. */
+function toSegment(point: THREE.Vector3, from: THREE.Vector3, to: THREE.Vector3, aspect: number): number {
+  const dx = (to.x - from.x) * aspect;
+  const dy = to.y - from.y;
+  const px = (point.x - from.x) * aspect;
+  const py = point.y - from.y;
+  const span = dx * dx + dy * dy;
+  const along = span > 0 ? Math.max(0, Math.min(1, (px * dx + py * dy) / span)) : 0;
+  return Math.hypot(px - along * dx, py - along * dy);
 }
 
 /** A base's place is in rock or in a massive body. */

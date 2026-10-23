@@ -1325,6 +1325,16 @@ body.touch #hud-message {
   background: radial-gradient(ellipse at center, transparent var(--tunnel, 70%), rgba(0, 0, 0, 0.96) calc(var(--tunnel, 70%) + 25%));
 }
 
+/* a solar flare's heat: the edges of the picture glow in the plasma's orange, the middle stays readable */
+#flare-heat {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  mix-blend-mode: screen;
+  background: radial-gradient(ellipse at center, rgba(255, 157, 0, 0.12) 30%, rgba(255, 110, 20, 0.55) 80%, rgba(255, 220, 160, 0.8) 110%);
+}
+
 .bar > div.low {
   background: var(--danger);
 }
@@ -1552,7 +1562,8 @@ body.nova-flash #hud::after {
   justify-content: safe center;
   overflow-y: auto;
   gap: 14px;
-  padding: 16px;
+  /* the bottom stays free for the transmission (the announcer goes on talking during the break) */
+  padding: 16px 16px 220px;
   /* the kill cam runs on behind the ad */
   background: rgba(2, 3, 10, 0.6);
   text-align: center;
@@ -1561,7 +1572,7 @@ body.nova-flash #hud::after {
 @media (max-height: 480px) {
   #sponsor {
     gap: 8px;
-    padding: 8px 16px;
+    padding: 8px 16px 72px;
   }
 
   #sponsor .sponsor-pitch {
@@ -2597,6 +2608,11 @@ body.touch #transmission {
     max-width: min(360px, calc(100vw - 440px));
   }
 
+  /* the sponsor break fills a phone's screen and scrolls; the transmission waits until it is over */
+  body.touch:has(#sponsor:not([hidden])) #transmission {
+    display: none;
+  }
+
   body.touch #now-playing {
     max-width: 210px;
   }
@@ -2958,8 +2974,8 @@ body.page {
   -webkit-hyphens: auto;
 }
 
-/* centered blocks are justified too and only center their last line; their lines run about
-   equally long, and a text marked `sentences` breaks between its sentences where they fit */
+/* centered blocks are justified too and only center their last line (balanced lines would be
+   stretched to the full width again, so they wrap like any paragraph) */
 #school-text,
 .sponsor-pitch,
 .tagline,
@@ -2968,7 +2984,12 @@ body.page {
 .satire-fine,
 #transmission-text {
   text-align-last: center;
-  text-wrap: balance;
+}
+
+/* a text marked `sentences` breaks between its sentences where they fit; justified, the gaps
+   between whole sentences would gape, so its lines are centered */
+.sentences {
+  text-align: center;
 }
 
 .sentence {

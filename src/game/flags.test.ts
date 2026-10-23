@@ -15,7 +15,7 @@ function flags() {
 
 type Pilot = Flier & { alive: boolean; kind: 'bot' | 'host' };
 /** A pilot, high above the field, far from bases and cores until a test moves it. */
-const pilot = (id: string, kind: 'bot' | 'host' = 'bot'): Pilot => ({ id, alive: true, radius: 300, kind, flight: { position: new THREE.Vector3(0, 30000, 0), velocity: new THREE.Vector3() } });
+const pilot = (id: string, kind: 'bot' | 'host' = 'bot'): Pilot => ({ id, alive: true, radius: 300, kind, flight: { position: new THREE.Vector3(0, 30000, 0), velocity: new THREE.Vector3(), orientation: new THREE.Quaternion() } });
 
 describe('capture the flag', () => {
   it('lays out its bases alike on every browser, opposite each other and clear of rock', () => {
