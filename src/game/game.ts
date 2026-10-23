@@ -24,7 +24,7 @@ import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../
 import { showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls } from '../input/input';
 import { MAX_HEAT, Ship, type ShipState, type Zone } from '../ship/ship';
-import { gripOf, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, PathSteering, RCS_THRUST } from '../ship/flight';
+import { gripOf, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, PathSteering } from '../ship/flight';
 import { Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { Online, type OnlineGame } from '../net/online';
 import { Lobby, type Listing } from '../net/lobby';
@@ -80,6 +80,9 @@ import {
 } from './alarms';
 import { MOMENTS, Moments, type Moment } from './moments';
 import { devlog } from '../devlog';
+import { recorder, type FlightMode, type InputFrame } from '../recorder';
+import { CAMERA_FOLLOW, CAMERA_FOV, CAMERA_TURN, CHASE_DISTANCE, CHASE_HEIGHT, chaseOrientation } from '../view/chase';
+import { AIM_ASSIST_ANGLE, AIM_ASSIST_RANGE, assistAim, BRAKE_BURN_ANGLE, BRAKE_REST, Brake, keepUpright } from '../ship/computer';
 import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
@@ -292,40 +295,12 @@ const SHOVE_SPIN_MAX = 6;
  * second or in a time-lapse as at 60.
  */
 const MAX_STEP = 1 / 30;
-/** The aim assist takes ships within this angle of the nose (rad, about 4°) and this distance (units, 2 km). */
-const AIM_ASSIST_ANGLE = 0.07;
-const AIM_ASSIST_RANGE = 40000;
-/** How hard the aim assist pulls at most (0..1), and the steering gain it pulls with. */
-const AIM_ASSIST_STRENGTH = 0.85;
-const AIM_ASSIST_GAIN = 6;
+/** The on-target tick sounds at most this often (s), so a nose on the edge of a hull does not chatter. */
+const ON_TARGET_TICK = 0.25;
 /** The ease fades away over this many seconds of game time. */
 const EASE_FADE = 90;
 /** Explosions closer than this pelt the own hull with audible debris. */
 const DEBRIS_HEARING = 6000;
-/** The autopilot's thrusters push at full strength until the drift would be gone in this time (s), then ease off. */
-const AUTOPILOT_EASE = 0.3;
-/** The upright hold rolls at full rate from this roll error on (1/rad): firm, without overshooting. */
-const UPRIGHT_GAIN = 1.2;
-/** The upright hold fades out between these steepness values of the nose (sine of the climb angle: about 45° and 65°). */
-const UPRIGHT_LET_GO = 0.7;
-const UPRIGHT_FREE = 0.9;
-/** The brake burns once the nose is this close to retrograde (rad). */
-const BRAKE_BURN_ANGLE = 0.2;
-/** The brake eases the burn over the last BRAKE_EASE seconds of full thrust (s). */
-const BRAKE_EASE = 0.3;
-/** Below this speed the brake counts the ship as at rest (units/s, 1 m/s). */
-const BRAKE_REST = 20;
-/** Once at rest, the brake only burns again above this speed (units/s, 2 m/s). */
-const BRAKE_RESUME = 40;
-/**
- * Below this speed the brake stops the ship with the thrusters alone and does not turn it
- * (units/s, 50 m/s): the thrusters take it out in about the time a flip would take. A brake
- * that started a flip goes on flipping and burning down to BRAKE_SETTLE (units/s, 15 m/s),
- * though the thrusters take out drift during the turn; only the last few m/s are left to the
- * thrusters, so a slow drift that wanders in direction cannot make the ship flip back and forth.
- */
-const BRAKE_FINE = 1000;
-const BRAKE_SETTLE = 300;
 /** Confirm presses are ignored this long after a screen changes (ms). */
 const CONFIRM_LOCK_MS = 600;
 /** Drive lights in the scene: one for every place of a tournament, and one more for a watching Host's clone. */
@@ -368,8 +343,6 @@ const CROSSING_ANGLE = Math.PI / 3;
 const CROSSING_SPEED = 1200;
 /** A nose within this many times the own ship's angular radius counts as TRACKED. */
 const LOCK_TRACKING = 4;
-/** Vertical field of view of the camera (degrees). */
-const CAMERA_FOV = 70;
 /**
  * The camera sees this far (units, 35 km): the horizon of the gas giant's clouds, 40 km in
  * radius, lies up to 22 km off for a ship at the arena's edge (see arenas.ts).
@@ -378,9 +351,6 @@ const CAMERA_FAR = 700000;
 /** A full burn widens the view by this much (degrees) and shakes the chase camera by this share of the ship radius: the drive is felt. */
 const DRIVE_FOV_KICK = 7;
 const DRIVE_SHAKE = 0.012;
-/** How fast the chase camera follows the ship's position and turns (1/s): tight, so the ship feels direct. */
-const CAMERA_FOLLOW = 20;
-const CAMERA_TURN = 18;
 /**
  * Cinema mode (see toggleCinema): the chase camera hangs CINEMA_DISTANCE ship radii farther
  * back, follows and turns at CINEMA_SOFTNESS of its usual speed, and drifts around the ship by a
@@ -577,7 +547,6 @@ const normal = new THREE.Vector3();
 const relative = new THREE.Vector3();
 const aimPoint = new THREE.Vector3();
 const toAim = new THREE.Vector3();
-const assistSteer = { yaw: 0, pitch: 0 };
 const sweep = new THREE.Vector3();
 const surface = new THREE.Vector3();
 const ringFacing = new THREE.Vector3();
@@ -787,10 +756,9 @@ export class Game implements OnlineGame {
   /** The nose points at the flip's goal (it beeps once when it gets there). */
   private flipAligned = false;
   /**
-   * The autopilot flies the own ship by its path (see PathSteering): the stick turns the flight,
-   * and drive and thrusters bend it; slower than 20 m/s, or looking elsewhere, the stick turns the
-   * nose and the thrusters take out every drift across it. On at the start of a round; T switches
-   * to free drift and back.
+   * The autopilot flies the own ship onto the course the Host's input sets (see PathSteering),
+   * at every speed; in free drift the input turns the nose and nothing else. On at the start of a
+   * round; T switches to free drift and back at once.
    */
   private autopilot = false;
   private readonly steering = new PathSteering();
@@ -798,8 +766,8 @@ export class Game implements OnlineGame {
   private ease = 0;
   /** The nose is on a ship: the laser would hit now (see assistAim). */
   private onTarget: 'drive' | 'armor' | null = null;
-  /** Angle between the nose and the aim target (see aimTarget). */
-  private aimAngle = 0;
+  /** When the on-target tick last sounded (see ON_TARGET_TICK). */
+  private onTargetTickAt = -Infinity;
   /** Strength of the camera jolt after the own laser hit something, 0..2. */
   private kick = 0;
   /** Strength of the widened view after a coil boost, 0..1. */
@@ -853,10 +821,8 @@ export class Game implements OnlineGame {
   private lastScrape = -Infinity;
   /** When the overdrive can fire again (game time, s). */
   private overdriveReadyAt = 0;
-  /** The brake has brought the ship to rest (it beeps once). */
-  private braked = false;
-  /** The brake is flipping the ship to burn (see BRAKE_FINE). */
-  private brakeFlip = false;
+  /** The brake (S held; it beeps once at rest). */
+  private readonly brake = new Brake();
   /** The flight computer's output, reused from frame to frame. */
   private readonly computed: Controls = { ...IDLE };
   /**
@@ -976,6 +942,11 @@ export class Game implements OnlineGame {
   private readonly moments = new Moments();
   /** The development log (see devlog.ts): `game.log` in the console; null in production. */
   readonly log = devlog;
+  /** The input recorder (see recorder.ts): `game.recorder` in the console; null in production. */
+  readonly recorder = recorder;
+  /** What the flight computer flew the own ship by in the last step, for the recorder. */
+  private flightMode: FlightMode = 'dead';
+  private recording: InputFrame | null = null;
   /** The rings of the round (see Bot.rings). */
   private rings: Ring[] = [];
   /** The race's gate a ship touched last (see touchesRing), -1 for none: where a gate crash happened, for the log. */
@@ -1883,6 +1854,7 @@ export class Game implements OnlineGame {
     this.clearHooks();
     this.venue = arena;
     devlog?.begin(this.roundMode, arena.id);
+    recorder?.clear();
     this.field.generate(arena.layout);
     // a race's course is laid out in the field as generated, the same on every browser
     if (this.course) {
@@ -2856,7 +2828,10 @@ export class Game implements OnlineGame {
     this.ease = Math.max(0, this.ease - dt / EASE_FADE);
     this.weather(dt, now);
     this.direct(now);
-    const myControls = this.flightComputer(this.state === 'playing' ? this.input.read() : IDLE, dt);
+    const hand = this.state === 'playing' ? this.input.read() : IDLE;
+    if (recorder) this.record(hand, dt);
+    const myControls = this.flightComputer(hand, dt);
+    if (recorder) this.recorded(myControls);
     this.ignite(myControls);
     const dodge = this.input.takeDodge();
     if (dodge && this.state === 'playing' && !this.spectating) this.dodge(dodge);
@@ -2977,6 +2952,7 @@ export class Game implements OnlineGame {
     this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight);
     this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
     this.hud.updateVelocityMarkers(this.camera, subject);
+    this.hud.setCourse(this.camera, subject === me && this.onCourse ? this.steering.course : null, me.flight.forward(forward));
     this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
     this.hud.setCenter(this.camera, subject);
     this.hud.setAutopilot(this.autopilot);
@@ -2996,7 +2972,13 @@ export class Game implements OnlineGame {
     this.pushRadio(racing && !this.spectating && me.finish < 0 && lapOf(me.gates) === LAPS);
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
     this.hud.showCrosshair(me.alive);
-    this.hud.setOnTarget(me.alive ? this.onTarget : null);
+    const onTarget = me.alive ? this.onTarget : null;
+    // the nose comes onto a hull: a short tick, as the crosshair turns orange
+    if (onTarget && !this.hud.onTarget && now - this.onTargetTickAt > ON_TARGET_TICK) {
+      this.onTargetTickAt = now;
+      this.sound.beep(1760, 0.03, 0.07);
+    }
+    this.hud.setOnTarget(onTarget);
 
     const outside = me.alive && me.outsideSince !== null;
     if (!outside) this.toldToReturn = false;
@@ -3012,7 +2994,7 @@ export class Game implements OnlineGame {
     } else if (this.flipping) {
       this.hud.flashMessage(now, this.flipAligned ? t('Flipped · drive brakes') : t('Flip'), 0.2);
     } else if (this.input.braking && me.alive) {
-      this.hud.flashMessage(now, this.braked ? t('At rest') : t('Braking'), 0.2);
+      this.hud.flashMessage(now, this.brake.rested ? t('At rest') : t('Braking'), 0.2);
     }
 
     if (this.online) {
@@ -4019,7 +4001,8 @@ export class Game implements OnlineGame {
 
   /**
    * The own ship's flight computer. While the brake is held, it flips the ship head over
-   * and burns against the flight direction until the ship is at rest. While the flip is held,
+   * and burns against the flight direction until the ship is at rest (with the autopilot along
+   * its course, see PathSteering.fly). While the flip is held,
    * it only turns the nose against the flight and keeps it there; the pilot's drive pushes
    * once the nose points the right way. Otherwise it keeps the ship upright and, with the
    * autopilot, takes out the drift.
@@ -4029,58 +4012,40 @@ export class Game implements OnlineGame {
     const flight = me.flight;
     const braking = this.state === 'playing' && this.input.braking && me.alive;
     if (braking) {
-      this.steering.release();
+      this.flightMode = 'brake';
       this.flipping = false;
       this.aimTarget();
-      const speed = flight.velocity.length();
-      // at rest the brake holds still until gravity has pulled the ship clearly out of rest,
-      // so it does not flicker between resting and burning; the ship rights itself meanwhile
-      if (speed < (this.braked ? BRAKE_RESUME : BRAKE_REST)) {
-        if (!this.braked) this.sound.beep(660, 0.08);
-        this.braked = true;
-        this.brakeFlip = false;
-        const resting = this.keepUpright(Object.assign(this.computed, controls));
-        resting.thrust = 0;
-        return resting;
-      }
-      this.braked = false;
-      // the drift in ship space (the nose is -Z): +Z is the speed the drive brakes once flipped
-      const drift = flight.toLocalDirection(flight.velocity, relative);
-      retrograde.copy(flight.velocity).negate();
-      const aligned = flight.angleTo(retrograde) < BRAKE_BURN_ANGLE;
-      let burn: Controls;
-      this.brakeFlip = speed > BRAKE_FINE || (this.brakeFlip && speed > BRAKE_SETTLE);
-      if (this.brakeFlip) {
-        burn = flight.flip(retrograde, 3, Object.assign(this.computed, controls));
-        // the burn eases off at the end, so the ship comes to rest instead of reversing; a
-        // damaged drive pushes less, so it eases off later
-        burn.thrust = aligned ? Math.min(1, Math.max(0, drift.z) / (MAIN_THRUST * Math.max(me.drive, 0.05) * BRAKE_EASE)) : 0;
+      const rested = this.brake.rested;
+      let out: Controls;
+      if (this.autopilot) {
+        // the autopilot brakes along its course: braking changes the speed, not where the Host wants to go
+        this.steering.fly(flight, controls, this.field.gravity(flight.position, gravity), dt, Object.assign(this.computed, controls), true);
+        out = keepUpright(flight, this.computed);
+        this.brake.rested = flight.velocity.length() < BRAKE_REST;
       } else {
-        // the last few m/s: the nose stays where it is and the thrusters stop the ship, so a
-        // slow drift that wanders in direction cannot make the ship flip back and forth
-        burn = this.keepUpright(Object.assign(this.computed, controls));
-        burn.thrust = 0;
-        burn.strafeZ = THREE.MathUtils.clamp(drift.z / (RCS_THRUST * BRAKE_EASE), -1, 1);
+        this.steering.follow(flight);
+        out = this.brake.fly(flight, controls, me.drive, this.computed);
       }
-      // the thrusters take out the drift across the nose, which the drive cannot reach
-      burn.strafeX = THREE.MathUtils.clamp(-drift.x / (RCS_THRUST * BRAKE_EASE), -1, 1);
-      burn.strafeY = THREE.MathUtils.clamp(-drift.y / (RCS_THRUST * BRAKE_EASE), -1, 1);
-      return burn;
+      if (this.brake.rested && !rested) this.sound.beep(660, 0.08);
+      return out;
     }
-    this.braked = false;
-    this.brakeFlip = false;
+    this.brake.release();
     const flipping = this.state === 'playing' && this.input.flipping && me.alive;
     if (!flipping) {
       this.flipping = false;
       // flung off the hook: the flight computer turns the nose onto the new course, unless the
       // pilot steers, and the autopilot does not brake the swing meanwhile
       const flung = this.time < this.flungUntil && me.alive;
-      if (!this.autopilot || !me.alive || flung) this.steering.release();
+      // in free drift the pointer turns the nose, and the autopilot's course follows it, so
+      // switching back on takes over from where the ship points
+      if (!this.autopilot || !me.alive || flung) this.steering.follow(flight);
+      this.flightMode = !me.alive ? 'dead' : !this.autopilot ? 'free' : flung ? 'swing' : 'autopilot';
       const out = this.autopilot && me.alive && !flung ? this.trimDrift(controls, dt) : Object.assign(this.computed, controls);
       if (flung && Math.abs(controls.yaw) + Math.abs(controls.pitch) < FLING_STEER && flight.velocity.lengthSq() > 1) flight.steer(flight.velocity, 3, out);
-      return this.assistAim(this.keepUpright(out));
+      return this.assistAim(keepUpright(flight, out));
     }
-    this.steering.release();
+    this.flightMode = 'flip';
+    this.steering.follow(flight);
     if (!this.flipping) {
       // the goal is fixed when the flip starts: against the flight, or straight behind the nose
       // at rest; so a burn held past standstill speeds the ship up backwards instead of flipping again
@@ -4109,17 +4074,14 @@ export class Game implements OnlineGame {
     const target = this.aimTarget();
     if (!target) return out;
     const flight = this.me!.flight;
-    const angle = this.aimAngle;
-    flight.steer(toAim.subVectors(target.flight.position, flight.position), AIM_ASSIST_GAIN, assistSteer);
-    const pull = AIM_ASSIST_STRENGTH * (1 - angle / AIM_ASSIST_ANGLE) * (1 - THREE.MathUtils.smoothstep(Math.hypot(out.yaw, out.pitch), 0.3, 0.8));
-    out.yaw += (assistSteer.yaw - out.yaw) * pull;
-    out.pitch += (assistSteer.pitch - out.pitch) * pull;
-    return out;
+    return assistAim(flight, toAim.subVectors(target.flight.position, flight.position), out);
   }
 
   /**
-   * The ship in sight closest to the nose within AIM_ASSIST_ANGLE, or null; sets `onTarget`
-   * to what the laser would hit now and `aimAngle` to how far the nose is off the target.
+   * The ship in sight closest to the nose within AIM_ASSIST_ANGLE, or null; sets `onTarget` to
+   * what the laser would hit now: the closest hull
+   * in sight within the laser's reach whose radius covers the nose, as the laser's own hit test
+   * sees it. Only the nose counts, never the pointer.
    * It runs while the brake or the flip turns the nose too, so the crosshair always tells.
    */
   private aimTarget(): Ship | null {
@@ -4130,37 +4092,29 @@ export class Game implements OnlineGame {
     const nose = flight.forward(forward);
     let target: Ship | null = null;
     let angle = AIM_ASSIST_ANGLE;
-    let distance = 0;
+    // the hull the laser would hit: the nose within its radius as seen from here, the closest
+    let hit: Ship | null = null;
+    let hitRange = LASER_RANGE;
     for (const ship of this.ships) {
       if (ship === me || !ship.alive) continue;
       const line = toAim.subVectors(ship.flight.position, flight.position);
       const range = line.length();
-      if (range > AIM_ASSIST_RANGE) continue;
+      if (range > LASER_RANGE) continue;
       const off = nose.angleTo(line);
-      if (off < angle && this.field.lineOfSight(flight.position, ship.flight.position)) {
+      const onHull = off < ship.radius / Math.max(range, 1) && range < hitRange;
+      const assist = off < angle && range <= AIM_ASSIST_RANGE;
+      if ((!onHull && !assist) || !this.field.lineOfSight(flight.position, ship.flight.position)) continue;
+      if (onHull) {
+        hit = ship;
+        hitRange = range;
+      }
+      if (assist) {
         target = ship;
         angle = off;
-        distance = range;
       }
     }
-    this.aimAngle = angle;
-    if (!target) return null;
-    const line = toAim.subVectors(target.flight.position, flight.position);
-    if (angle < target.radius / Math.max(distance, 1)) this.onTarget = target.tailToward(line) ? 'drive' : 'armor';
+    if (hit) this.onTarget = hit.tailToward(toAim.subVectors(hit.flight.position, flight.position)) ? 'drive' : 'armor';
     return target;
-  }
-
-  /**
-   * The pilot does not roll; the flight computer keeps the ship upright to the arena (its
-   * north pole is up), so there is always a horizon. In steep climbs and dives it lets go,
-   * so a loop is not fought halfway through.
-   */
-  private keepUpright(out: Controls): Controls {
-    const up = this.me!.flight.toLocalDirection(scratch.set(0, 1, 0), scratch);
-    // the ship's nose is -Z, so |up.z| is how steeply it points up or down
-    const hold = 1 - THREE.MathUtils.smoothstep(Math.abs(up.z), UPRIGHT_LET_GO, UPRIGHT_FREE);
-    out.roll = THREE.MathUtils.clamp(Math.atan2(up.x, up.y) * UPRIGHT_GAIN, -1, 1) * hold;
-    return out;
   }
 
   /** E: the overdrive, a last resort; see OVERDRIVE_STRAIN. */
@@ -4744,6 +4698,44 @@ export class Game implements OnlineGame {
     this.sound.beep(1570, 0.08, 0.12, 0.06);
   }
 
+  /** The autopilot flies the own ship by its course this step (on its own, or braking along it): the camera looks along it and the HUD shows it. */
+  private get onCourse(): boolean {
+    return this.flightMode === 'autopilot' || (this.flightMode === 'brake' && this.autopilot);
+  }
+
+  /** The recorder's step (see recorder.ts): the own ship and the Host's hand before the flight computer. */
+  private record(hand: Readonly<Controls>, dt: number) {
+    const flight = this.me!.flight;
+    const steering = this.steering;
+    this.recording = {
+      t: this.time,
+      dt,
+      mode: this.flightMode,
+      controls: { ...hand },
+      pointer: this.input.pointer,
+      out: { ...IDLE },
+      gravity: this.field.gravity(flight.position, gravity).toArray(),
+      position: flight.position.toArray(),
+      velocity: flight.velocity.toArray(),
+      orientation: flight.orientation.toArray() as [number, number, number, number],
+      course: steering.course.toArray(),
+      cruise: steering.cruise,
+      recovering: steering.recovering,
+      drive: flight.driveFactor,
+      thrusters: flight.thrusterFactor,
+    };
+  }
+
+  /** The recorder's step, finished with what the flight computer flew. */
+  private recorded(out: Readonly<Controls>) {
+    const frame = this.recording;
+    if (!frame) return;
+    frame.mode = this.flightMode;
+    frame.out = { ...out };
+    recorder?.add(frame);
+    this.recording = null;
+  }
+
   /** T: the autopilot on or off. */
   private toggleAutopilot() {
     this.autopilot = !this.autopilot;
@@ -4751,23 +4743,19 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * The autopilot: path steering flies the ship by its path (see PathSteering). Where it does
-   * not (slower than 20 m/s, or the nose elsewhere), the thrusters push against every drift
-   * across the nose, so the ship flies where it points and the main drive (W) pushes it exactly
-   * that way. The pilot's own thruster input on an axis goes first.
+   * The autopilot: path steering flies the ship onto the course the Host's input sets, at every
+   * speed (see PathSteering). Right after a dodge and on a swing the drift is the point: the
+   * input turns the nose as in free drift, and the course follows it.
    */
   private trimDrift(controls: Readonly<Controls>, dt: number): Controls {
     const out = Object.assign(this.computed, controls);
     const me = this.me!;
-    // right after a dodge the drift is the point, and so is a swing on the hook
     if (this.time < this.dodgeReadyAt - DODGE_RECHARGE + DODGE_DRIFT || this.tethers.has(me)) {
-      this.steering.release();
+      this.flightMode = 'swing';
+      this.steering.follow(me.flight);
       return out;
     }
-    if (this.steering.fly(me.flight, controls, this.field.gravity(me.flight.position, gravity), dt, out)) return out;
-    const drift = me.flight.toLocalDirection(me.flight.velocity, relative).divideScalar(RCS_THRUST * AUTOPILOT_EASE);
-    if (!controls.strafeX) out.strafeX = THREE.MathUtils.clamp(-drift.x, -1, 1);
-    if (!controls.strafeY) out.strafeY = THREE.MathUtils.clamp(-drift.y, -1, 1);
+    this.steering.fly(me.flight, controls, this.field.gravity(me.flight.position, gravity), dt, out);
     return out;
   }
 
@@ -5680,10 +5668,12 @@ export class Game implements OnlineGame {
       const lag = me.alive ? flight.throttle * DRIVE_LAG : 0;
       const film = this.cinema ? 1 : 0;
       const drift = this.time * CINEMA_DRIFT;
-      flight.toWorld(cameraGoal.set(film * me.radius * Math.sin(drift), me.radius * (0.75 + film * (0.35 + 0.25 * Math.cos(drift * 0.7))), me.radius * (2.6 + film * CINEMA_DISTANCE + lag)), cameraGoal);
+      // with the autopilot flying the own ship, the camera looks along its course (see chaseOrientation)
+      chaseOrientation(flight, me === this.me && me.alive && this.onCourse ? this.steering.course : null, aim);
+      cameraGoal.set(film * me.radius * Math.sin(drift), me.radius * (CHASE_HEIGHT + film * (0.35 + 0.25 * Math.cos(drift * 0.7))), me.radius * (CHASE_DISTANCE + film * CINEMA_DISTANCE + lag)).applyQuaternion(aim).add(flight.position);
       const soft = this.cinema ? CINEMA_SOFTNESS : 1;
       this.camera.position.lerp(cameraGoal, 1 - Math.exp(-CAMERA_FOLLOW * soft * dt));
-      this.camera.quaternion.slerp(flight.orientation, 1 - Math.exp(-CAMERA_TURN * soft * dt));
+      this.camera.quaternion.slerp(aim, 1 - Math.exp(-CAMERA_TURN * soft * dt));
     }
     this.riding = me.alive ? flight.velocity : null;
     // the drive kicks: the view widens while it burns and with speed, and the chase camera trembles

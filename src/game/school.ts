@@ -185,8 +185,8 @@ export const COIL_COURSE: readonly [number, number, number][] = [
 ];
 /**
  * The markers of the curve drill, in the pilot's frame (units): 400 m straight ahead, a quarter
- * turn to the right on an arc of 800 m radius, and 600 m straight on after it, where letting go
- * of the stick is all it takes.
+ * turn to the right on an arc of 800 m radius, and 600 m straight on after it, where centered
+ * steering is all it takes.
  */
 export const CURVE_COURSE: readonly [number, number, number][] = [
   [0, 0, -8000],
@@ -541,8 +541,8 @@ const DRILL = {
     },
     done: (ctx) => speed(ctx) < STOPPED,
   },
-  // path steering: at speed the stick bends the flight along an arc of markers, and letting go
-  // flies straight on to the last
+  // path steering: steering puts the course through an arc of markers and the flight comes
+  // after it; once steering stops, the ship flies straight on to the last
   curve: {
     line: SCHOOL.curve,
     praise: SCHOOL_PRAISE.curve,

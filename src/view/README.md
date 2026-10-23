@@ -4,11 +4,12 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 
 | File | What it does |
 |---|---|
-| `hud.ts` | The flight computer's projection: gauges, markers (the next ring's brackets and where the flight crosses its plane among them), the alarms and the escape gauge, the round's panel, the boot of a fresh clone's link; writes the DOM only when a value changes |
+| `hud.ts` | The flight computer's projection: gauges, markers (the next ring's brackets and where the flight crosses its plane among them, the autopilot's course, the crosshair orange over a hull), the alarms and the escape gauge, the round's panel, the boot of a fresh clone's link; writes the DOM only when a value changes |
 | `attitude.ts` | Horizon line, pitch ladder and heading tape on a canvas, as in a fighter's head-up display |
 | `radar.ts` | The radar sphere on a canvas |
 | `effects.ts` | Particles and laser beams, pooled |
 | `killcam.ts` | Records the last seconds and replays the own clone's death |
+| `chase.ts` | The chase camera's field of view, how fast it follows and where it hangs, and where it looks: along the autopilot's course, else along the nose |
 | `guide.ts` | The racing line: a dashed ribbon with pulses of light, orange in the brake zones |
 | `ghost.ts` | The best lap's hologram |
 | `showcase.ts` | The title screen: a landing pad of gunmetal and steel with the seal inlaid in gold, the ship hovering above it, turning slowly on the spot and throwing its shadow onto it |

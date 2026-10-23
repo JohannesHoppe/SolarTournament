@@ -14,7 +14,7 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | `comet.ts` | Comets crossing the arena: schedule and route (bent and swallowed by a well), the shower's pieces, the head breaking rock and shoving hull, the comet as the scene shows it |
 | `items.ts` | Sponsor probes and what they carry |
 | `hook.ts` | The hook: harpoon, cable, winch, swing; the cables' lines (also a core's tow cable) |
-| `racingline.ts` | The ideal line through gates or rings, bowing around rock; how tight a line bends |
+| `racingline.ts` | The ideal line through gates or rings, swerving around rock in gentle bumps; where a racer flies for (back on a wide loop to a gate it missed); how tight a line bends |
 | `laps.ts` | Lap clock, splits, the best lap and its ghost |
 | `hangar.ts` | Solar Coins, upgrades and their prices |
 | `school.ts` | The flight school: five courses, their drills and markers |
@@ -22,4 +22,4 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | `moments.ts` | The own pilot's big moments (streaks, revenge, a knockout, …): banner, crowd and announcer |
 | `sponsors.ts`, `satire-ads.ts` | The sponsor break before a respawn, and its invented sponsors |
 
-Every rule here is also written down in the repository's README with its numbers; a change to one changes the other in the same commit. The `*.test.ts` files test the deterministic parts (`npm test`); `courses.test.ts` flies every race course and every course of the flight school with a bot of middling skill.
+Every rule here is also written down in the repository's README with its numbers; a change to one changes the other in the same commit. The `*.test.ts` files test the deterministic parts (`npm test`); `courses.test.ts` flies every race course and every course of the flight school with a bot of middling skill; `playability.test.ts`, `hostrace.test.ts` and `hostrace2.test.ts` fly them with a simulated Host at the mouse (see `src/test/human.ts`): what it cannot fly, no Host will.

@@ -62,6 +62,7 @@ export class Hud {
   private readonly overdrive = $('hud-overdrive');
   private readonly hook = $('hud-hook');
   private readonly torpedo = $('hud-torpedo');
+  private readonly courseMarker = $('course-marker');
   private readonly prograde = $('prograde');
   private readonly retrograde = $('retrograde');
   private readonly message = $('hud-message');
@@ -247,7 +248,15 @@ export class Hud {
     this.root.append(popup);
   }
 
-  /** The crosshair glows orange while the laser would hit a drive, and dims over armor, where a shot does little. */
+  /** What the crosshair shows the laser would hit now (see setOnTarget). */
+  get onTarget(): boolean {
+    return this.crosshair.classList.contains('on-target') || this.crosshair.classList.contains('on-armor');
+  }
+
+  /**
+   * The crosshair turns orange while the laser would hit a hull: bright and glowing over a drive,
+   * a plain orange ring over armor, where a shot only heats the laser.
+   */
   setOnTarget(hit: 'drive' | 'armor' | null) {
     setClass(this.crosshair, 'on-target', hit === 'drive');
     setClass(this.crosshair, 'on-armor', hit === 'armor');
@@ -539,6 +548,18 @@ export class Hud {
    * Prograde marker where the ship is drifting to, retrograde marker where to point the
    * drive to brake.
    */
+  /**
+   * The autopilot's course, where the Host wants to fly (see PathSteering): a thin diamond,
+   * held at the screen's edge when off screen or behind, fading out as the nose comes onto it,
+   * where the crosshair says it all. Null hides it (free drift, brake, flip).
+   */
+  setCourse(camera: THREE.Camera, course: THREE.Vector3 | null, nose: THREE.Vector3) {
+    setHidden(this.courseMarker, !course);
+    if (!course) return;
+    pin(this.courseMarker, camera, courseAhead.copy(course).multiplyScalar(100000).add(camera.position));
+    this.courseMarker.style.opacity = THREE.MathUtils.smoothstep(course.angleTo(nose), COURSE_FADE_FROM, COURSE_FADE).toFixed(2);
+  }
+
   updateVelocityMarkers(camera: THREE.Camera, me: Ship) {
     const velocity = me.flight.velocity;
     const show = me.alive && velocity.lengthSq() > 400;
@@ -613,6 +634,10 @@ function setBar(bar: HTMLElement, fraction: number) {
 }
 
 const origin = new THREE.Vector3();
+const courseAhead = new THREE.Vector3();
+/** The course marker fades in from this angle between course and nose (rad, about 1°) and shows fully from COURSE_FADE (about 3°). */
+const COURSE_FADE_FROM = 0.015;
+const COURSE_FADE = 0.05;
 
 /** Places a marker on a point in space, clamped to the screen edge when off screen or behind. */
 function pin(element: HTMLElement, camera: THREE.Camera, point: THREE.Vector3) {
