@@ -8,6 +8,7 @@ import { RacingLine } from './racingline';
 import { ARENA_LIMIT } from '../world/arena';
 import { GateKit, touchRing } from '../world/gates';
 import { GATE_RADIUS } from './race';
+import { MAX_SPEED } from '../ship/flight';
 import type { ItemKind } from './items';
 import { msg, t } from '../i18n/i18n';
 
@@ -91,7 +92,7 @@ interface Attempt {
   normals: THREE.Vector3[];
   /** Index of the next ring of the course. */
   next: number;
-  /** The ideal line through the rings of the course, from where the pilot started (see layRings). */
+  /** The ideal line through the rings of the course (see layRings) or the markers of the curve drill, from where the pilot started. */
   track: RacingLine | null;
   /** Signed distance of the pilot to the plane of the next ring, the frame before (NaN: no frame yet for this ring). */
   side: number;
@@ -182,7 +183,52 @@ export const COIL_COURSE: readonly [number, number, number][] = [
   [1000, 500, -30000],
   [-800, 1000, -52000],
 ];
-/** A ring course lies within this share of the arena's edge (see ringCourse); both courses (2.6 km) fit ahead of a pilot in the middle. */
+/**
+ * The markers of the curve drill, in the pilot's frame (units): 400 m straight ahead, a quarter
+ * turn to the right on an arc of 800 m radius, and 600 m straight on after it, where letting go
+ * of the stick is all it takes.
+ */
+export const CURVE_COURSE: readonly [number, number, number][] = [
+  [0, 0, -8000],
+  [4686, 0, -19314],
+  [16000, 0, -24000],
+  [28000, 0, -24000],
+];
+/** The curve drill starts drifting at this speed (units/s, 100 m/s): path steering flies it, and its arc takes the thrusters alone (1.3 g). */
+export const CURVE_SPEED = 2000;
+/** A marker of the curve drill counts within this distance (units, 100 m), shown as a sphere around it. */
+export const CURVE_ZONE = 2000;
+/**
+ * The rings of the brake drill: the first 1.5 km ahead, then a bend of about 220 m radius to the
+ * second, 630 m to the right, and on to the third. At the speed limit path steering turns no
+ * tighter than 415 m, so the racing line glows orange before the bend; at about 180 m/s, a
+ * middling racer's pace, it takes the bend.
+ */
+export const BRAKE_COURSE: readonly [number, number, number][] = [
+  [0, 0, -30000],
+  [12000, 0, -34000],
+  [20000, 0, -46000],
+];
+/**
+ * The rings of the full-speed drill: five, about 570 m apart, weaving 200 m to the right and 150 m
+ * to the left and rising by 100 m, 2.7 km ahead: the line bends no tighter than about 800 m, which
+ * a ship takes at the speed limit and beyond (a coil's 290 m/s), so it never glows orange.
+ */
+export const LINE_COURSE: readonly [number, number, number][] = [
+  [0, 0, -10000],
+  [3000, 1000, -21000],
+  [4000, 2000, -32000],
+  [1000, 1000, -43000],
+  [-3000, 0, -54000],
+];
+/**
+ * The full-speed drill wants its course flown at LINE_PACE on average (units/s, 200 m/s) along
+ * its racing line, with LINE_SPARE seconds more for turning to the first ring and the burn up to
+ * speed: only a drive held all the way gets there.
+ */
+export const LINE_PACE = 4000;
+export const LINE_SPARE = 4;
+/** A ring course lies within this share of the arena's edge (see ringCourse); every course fits ahead of a pilot in the middle. */
 export const COURSE_ROOM = 0.85;
 /** A pilot this far from the next ring (units, 2.5 km) has lost the course and starts again. */
 const COURSE_LOST = 50000;
@@ -212,6 +258,18 @@ const COVER_HOLD = 3;
 const COMET_ABOVE = 3000;
 /** The comet drill fails once the drive is down to this share: two pieces into it. */
 const COMET_DRIVE = 0.7;
+/**
+ * The slide shot drill: the pilot drifts at SLIDE_SPEED (units/s, 100 m/s) along its nose past
+ * an armed bot of SLIDE_SKILL that starts at SLIDE_BOT in the pilot's frame (250 m to the right,
+ * 600 m ahead); SLIDE_HITS hits with the nose more than SLIDE_ANGLE (rad, 60°) off the flight, in
+ * free drift and faster than SLIDE_MOVING (units/s, 20 m/s), and the autopilot on again.
+ */
+export const SLIDE_SPEED = 2000;
+export const SLIDE_BOT: [number, number, number] = [5000, 0, -12000];
+const SLIDE_SKILL = 0.15;
+export const SLIDE_HITS = 3;
+export const SLIDE_ANGLE = Math.PI / 3;
+const SLIDE_MOVING = 400;
 /** Skill of the tactician's sparring bots (see Bot): the one on the tail, the one for bursts, the hunter of the cover drill, and the exam's, as good as the middling bot of the field. */
 const TAIL_SKILL = 0.15;
 const BURST_SKILL = 0.25;
@@ -321,8 +379,9 @@ const saying = (line: string): Drill => ({
 });
 
 /**
- * Whether the pilot flew through the attempt's next ring this frame, either way: how far from
- * its center, or null. The ring then counts as passed.
+ * Whether the pilot crossed the plane of the attempt's next ring this frame, either way: how far
+ * from its center, or null. Inside the ring it counts as passed; beside it (RING_RADIUS or more)
+ * the ring is missed.
  */
 function passRing(ctx: SchoolContext, a: Attempt): number | null {
   const normal = a.normals[a.next];
@@ -332,10 +391,60 @@ function passRing(ctx: SchoolContext, a: Attempt): number | null {
   a.side = side;
   if (!crossed) return null;
   const off = offset.addScaledVector(normal, -side).length();
-  if (off >= RING_RADIUS) return null;
+  if (off >= RING_RADIUS) return off;
   a.next++;
   a.side = NaN;
   return off;
+}
+
+/**
+ * A drill through a course of rings (see layRings) that wants every ring flown through: a ring
+ * missed starts the attempt over with `missLine`, a pilot lost with "Again". With `drift` (units/s)
+ * the pilot starts drifting at the first ring; with `coils` each ring's core throws it on.
+ */
+function ringDrill(line: string, praise: string, keys: Command[], course: readonly [number, number, number][], missLine: string, drift = 0, coils = false): Drill {
+  return {
+    line,
+    praise,
+    keys,
+    enter(ctx, a, markers) {
+      layRings(ctx, a, markers, course);
+      if (drift) headFor(ctx, a.points[0], drift);
+    },
+    done(ctx, a, markers) {
+      const off = passRing(ctx, a);
+      if (off === null) return false;
+      if (off >= RING_RADIUS) {
+        a.warned = true;
+        return false;
+      }
+      markers.highlight(a.next);
+      if (coils && off < RING_RADIUS * CORE_SHARE) ctx.boost(a.normals[a.next - 1]);
+      return a.next >= a.points.length;
+    },
+    fail: (ctx, a) => (a.warned ? missLine : lost(ctx, a) ? SCHOOL.again : null),
+    waypoint: (_, a) => a.points[a.next] ?? null,
+    mark: (_, a) => t('Ring {n}/{total}', { n: a.next + 1, total: a.points.length }),
+  };
+}
+
+/** The markers of the curve drill not passed yet, each with its sphere; passed ones are gone. */
+function curveMarkers(a: Attempt, markers: Markers) {
+  markers.clear();
+  for (const point of a.points.slice(a.next)) {
+    markers.buoy(point);
+    markers.zone(point, CURVE_ZONE);
+  }
+}
+
+/** Seconds the full-speed drill gives its course: its racing line at LINE_PACE, and LINE_SPARE. */
+const lineTime = (a: Attempt) => (a.track ? a.track.length / LINE_PACE : 0) + LINE_SPARE;
+
+/** Turns the pilot to a point and sets it drifting there at `speed`. */
+function headFor(ctx: SchoolContext, point: THREE.Vector3, speed: number) {
+  const flight = ctx.me.flight;
+  flight.orientation.setFromRotationMatrix(new THREE.Matrix4().lookAt(flight.position, point, flight.up(new THREE.Vector3())));
+  drift(ctx, speed);
 }
 
 /**
@@ -420,19 +529,39 @@ const DRILL = {
     },
     done: (ctx) => speed(ctx) < STOPPED,
   },
-  rings: {
-    line: SCHOOL.rings,
-    praise: SCHOOL_PRAISE.rings,
-    keys: ['drive', 'brake', 'flip'],
-    enter: (ctx, a, markers) => layRings(ctx, a, markers, RING_COURSE),
+  // path steering: at speed the stick bends the flight along an arc of markers, and letting go
+  // flies straight on to the last
+  curve: {
+    line: SCHOOL.curve,
+    praise: SCHOOL_PRAISE.curve,
+    keys: ['turn', 'drive'],
+    enter(ctx, a, markers) {
+      stop(ctx);
+      a.points = ringCourse(ctx.me.flight.position, ctx.me.flight.orientation, CURVE_COURSE).map((point) => clear(ctx, point, CURVE_ZONE / 2));
+      curveMarkers(a, markers);
+      a.track = new RacingLine(a.points, false, ctx.me.flight.position);
+      headFor(ctx, a.points[0], CURVE_SPEED);
+    },
     done(ctx, a, markers) {
-      if (passRing(ctx, a) === null) return false;
-      markers.highlight(a.next);
+      if (ctx.me.flight.position.distanceTo(a.points[a.next]) >= CURVE_ZONE) return false;
+      a.next++;
+      curveMarkers(a, markers);
       return a.next >= a.points.length;
     },
     fail: (ctx, a) => (lost(ctx, a) ? SCHOOL.again : null),
     waypoint: (_, a) => a.points[a.next] ?? null,
-    mark: (_, a) => t('Ring {n}/{total}', { n: a.next + 1, total: a.points.length }),
+    mark: (_, a) => t('Marker {n}/{total}', { n: a.next + 1, total: a.points.length }),
+  },
+  // the X where the flight crosses the next ring's plane: steered into the ring, azure, it is a pass
+  rings: ringDrill(SCHOOL.rings, SCHOOL_PRAISE.rings, ['turn', 'drive', 'brake'], RING_COURSE, SCHOOL.missed),
+  // at the speed limit into a bend tighter than path steering turns there: the racing line glows
+  // orange before it, and only a brake in time makes the ring
+  brakeZone: ringDrill(SCHOOL.brakeZone, SCHOOL_PRAISE.brakeZone, ['turn', 'brake', 'drive'], BRAKE_COURSE, SCHOOL.tooFast, MAX_SPEED),
+  // the racing line at full speed: the drive held all the way, path steering bends it through the turns
+  fullSpeed: {
+    ...ringDrill(SCHOOL.fullSpeed, SCHOOL_PRAISE.fullSpeed, ['drive', 'turn'], LINE_COURSE, SCHOOL.missed, 0, true),
+    fail: (ctx, a) => (a.warned ? SCHOOL.missed : a.seconds > lineTime(a) ? SCHOOL.tooSlow : lost(ctx, a) ? SCHOOL.again : null),
+    mark: (_, a) => t('Ring {n}/{total} · {seconds} s left', { n: a.next + 1, total: a.points.length, seconds: Math.max(0, Math.ceil(lineTime(a) - a.seconds)) }),
   },
   // the rings of a race are coils: only their core throws a ship on
   coil: {
@@ -739,6 +868,40 @@ const DRILL = {
     ...sparring(SCHOOL.bursts, SCHOOL_PRAISE.bursts, ['fire'], true, BURST_SKILL),
     fail: (ctx) => (ctx.me.overheated ? SCHOOL.tooHot : null),
   },
+  // free drift in a dogfight: sliding past a bot, the nose turned onto it, firing sideways or
+  // back; then the autopilot on again to leave
+  slideShot: {
+    line: SCHOOL.slideShot,
+    praise: SCHOOL_PRAISE.slideShot,
+    keys: ['autopilot', 'turn', 'fire'],
+    enter(ctx, a) {
+      stop(ctx);
+      ctx.me.heat = 0;
+      ctx.me.overheated = false;
+      ctx.spawnBot(clear(ctx, ahead(ctx, ...SLIDE_BOT), 2000), true, SLIDE_SKILL);
+      drift(ctx, SLIDE_SPEED);
+      a.count = 0;
+      a.reach = ctx.bot?.hull ?? 0;
+    },
+    done(ctx, a) {
+      const bot = ctx.bot;
+      if (!bot) return true;
+      // a hit is the bot's hull going down; it counts with the nose well off the flight, in free drift
+      const flight = ctx.me.flight;
+      const sideways = !ctx.autopilot && speed(ctx) > SLIDE_MOVING && flight.angleTo(flight.velocity) > SLIDE_ANGLE;
+      if (bot.hull < a.reach && sideways) a.count++;
+      a.reach = bot.hull;
+      return a.count >= SLIDE_HITS && ctx.autopilot;
+    },
+    fail(ctx, a) {
+      if (ctx.bot && !ctx.bot.alive && a.count < SLIDE_HITS) return SCHOOL.slideShotStraight;
+      return ctx.bot && ctx.bot.flight.position.distanceTo(ctx.me.flight.position) > COURSE_LOST ? SCHOOL.again : null;
+    },
+    leave: (ctx) => ctx.removeBot(),
+    waypoint: (ctx) => (ctx.bot?.alive ? ctx.bot.flight.position : null),
+    mark: () => t('Bot'),
+    autopilotAfter: true,
+  },
   // a better bot hunts the pilot: a rock between them hides the pilot from its sensors
   cover: {
     line: SCHOOL.cover,
@@ -895,16 +1058,18 @@ export const COURSE_NAMES: Record<SchoolCourse, string> = { basic: msg('Basic tr
 
 /**
  * The drills of each course, in the order a Host needs them. Basic training: turning, aiming,
- * the drive and the brake, stopping at a point and the rocks, all with the autopilot on. The
- * racer: the rings, their coils, the start and the hook. The gladiator: the laser and its heat, free
- * drift like a real spaceship, dodging, and the dogfight last. The arsenal: torpedoes (launching
- * one, shooting one down), the overdrive, a probe, the hook on a ship, the nova core. The
- * tactician: the dodge, a bot on the tail, bursts, cover from a hunter and from a torpedo, and an
- * exam against a bot as good as the field's middling one.
+ * the drive and the brake, a curve with path steering, stopping at a point and the rocks, all
+ * with the autopilot on. The racer: the rings and the X where the flight crosses them, their
+ * coils, the racing line's brake zones, the line at full speed, the start and the hook. The
+ * gladiator: the laser and its heat, free drift like a real spaceship, dodging, and the dogfight
+ * last. The arsenal: torpedoes (launching one, shooting one down), the overdrive, a probe, the
+ * hook on a ship, the nova core. The tactician: the dodge, a bot on the tail, bursts, shooting
+ * sideways in free drift, cover from a hunter and from a torpedo, and an exam against a bot as
+ * good as the field's middling one.
  */
 const COURSES: Record<SchoolCourse, Drill[]> = {
-  basic: [DRILL.briefing, DRILL.turn, DRILL.fineAim, DRILL.cockpit, DRILL.drive, DRILL.brake, DRILL.stopAt, DRILL.impact, saying(SCHOOL.basicDone)],
-  racer: [saying(SCHOOL.racer), DRILL.rings, DRILL.coil, DRILL.start, DRILL.hook, saying(SCHOOL.racerDone)],
+  basic: [DRILL.briefing, DRILL.turn, DRILL.fineAim, DRILL.cockpit, DRILL.drive, DRILL.brake, DRILL.curve, DRILL.stopAt, DRILL.impact, saying(SCHOOL.basicDone)],
+  racer: [saying(SCHOOL.racer), DRILL.rings, DRILL.coil, DRILL.brakeZone, DRILL.fullSpeed, DRILL.start, DRILL.hook, saying(SCHOOL.racerDone)],
   gladiator: [
     saying(SCHOOL.gladiator),
     DRILL.shoot,
@@ -924,7 +1089,7 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
     saying(SCHOOL.done),
   ],
   arsenal: [saying(SCHOOL.arsenal), DRILL.torpedo, DRILL.torpedoDown, DRILL.overdrive, DRILL.probe, DRILL.hookShip, DRILL.nova, saying(SCHOOL.arsenalDone)],
-  tactician: [saying(SCHOOL.tactician), DRILL.kick, DRILL.onTail, DRILL.bursts, DRILL.cover, DRILL.torpedoCover, DRILL.comet, DRILL.exam, saying(SCHOOL.tacticianDone)],
+  tactician: [saying(SCHOOL.tactician), DRILL.kick, DRILL.onTail, DRILL.bursts, DRILL.slideShot, DRILL.cover, DRILL.torpedoCover, DRILL.comet, DRILL.exam, saying(SCHOOL.tacticianDone)],
 };
 
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
@@ -1064,7 +1229,7 @@ export class FlightSchool {
     return this.index >= this.drills.length;
   }
 
-  /** The ideal line of a ring course while its drill counts, with the next ring; null without one. */
+  /** The ideal line of a course (its rings, or the curve drill's markers) while its drill counts, with the next ring or marker; null without one. */
   get track(): { line: RacingLine; next: number } | null {
     const a = this.attempt;
     return a?.live && a.track && a.next < a.points.length ? { line: a.track, next: a.next } : null;
@@ -1073,18 +1238,18 @@ export class FlightSchool {
   /** The next ring of a ring course while its drill counts, and the one after it, for the HUD's brackets; null without a ring course. */
   get nextRing(): THREE.Vector3 | null {
     const a = this.attempt;
-    return a?.live && a.track ? (a.points[a.next] ?? null) : null;
+    return a?.live && a.normals.length ? (a.points[a.next] ?? null) : null;
   }
 
   get ringAfter(): THREE.Vector3 | null {
     const a = this.attempt;
-    return a?.live && a.track ? (a.points[a.next + 1] ?? null) : null;
+    return a?.live && a.normals.length ? (a.points[a.next + 1] ?? null) : null;
   }
 
   /** Which way the next ring of a ring course faces, for where the flight crosses its plane; null without one. */
   get nextNormal(): THREE.Vector3 | null {
     const a = this.attempt;
-    return a?.live && a.track ? (a.normals[a.next] ?? null) : null;
+    return a?.live ? (a.normals[a.next] ?? null) : null;
   }
 
   /**
@@ -1093,7 +1258,7 @@ export class FlightSchool {
    */
   touchesRing(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
     const a = this.attempt;
-    if (!a?.live || !a.track) return false;
+    if (!a?.live || !a.normals.length) return false;
     for (let i = a.next; i < a.points.length; i++) if (touchRing(a.points[i], a.normals[i], RING_RADIUS, position, radius, normal)) return true;
     return false;
   }

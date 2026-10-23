@@ -21,10 +21,11 @@ export interface Rings {
   line: RacingLine;
 }
 
-/** How a flight went: the rings passed, how far off each center, the seconds it took, the hull left, and whether the ship was lost (its hull gone on rock, or in a massive body). */
+/** How a flight went: the rings passed, how far off each center, how often it crossed the next ring's plane beside the ring, the seconds it took, the hull left, and whether the ship was lost (its hull gone on rock, or in a massive body). */
 export interface Flight {
   passed: number;
   offs: number[];
+  missed: number;
   seconds: number;
   hull: number;
   crashed: boolean;
@@ -33,13 +34,14 @@ export interface Flight {
 /**
  * A racing bot of the given skill flies a course of rings in a field, with the game's flight
  * model, gravity, coils and rock collisions (it bounces off and the hull takes what an impact
- * does), from `start` facing `facing`, until it passed every ring, was lost, or `limit` seconds
- * are up. The field's rocks move on with the time. Only the bot's own flight counts: no other
- * ships.
+ * does), from `start` facing `facing` and drifting that way at `drift` (units/s), until it
+ * passed every ring, was lost, or `limit` seconds are up. The field's rocks move on with the
+ * time. Only the bot's own flight counts: no other ships.
  */
-export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector3, facing: THREE.Vector3, skill: number, speed: number, limit: number): Flight {
+export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector3, facing: THREE.Vector3, skill: number, speed: number, limit: number, drift = 0): Flight {
   const flight = new FlightModel();
   flight.reset(start, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(start, facing.clone().add(start), new THREE.Vector3(0, 1, 0))));
+  flight.velocity.copy(facing).setLength(drift);
   const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, allyOf: () => false } as unknown as Ship;
   const bot = new Bot(ship, evenSkills(skill));
   bot.raceSpeed = speed;
@@ -52,7 +54,8 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
   const offs: number[] = [];
   let hull = MAX_HULL;
   let seconds = 0;
-  const result = (crashed: boolean): Flight => ({ passed: offs.length, offs, seconds, hull, crashed });
+  let missed = 0;
+  const result = (crashed: boolean): Flight => ({ passed: offs.length, offs, missed, seconds, hull, crashed });
   while (offs.length < rings.points.length && seconds < limit) {
     const next = offs.length;
     bot.waypoint = rings.line.target(flight.position, next % rings.line.gateCount, flight.velocity.length(), field, goal);
@@ -73,8 +76,13 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
       hull -= impactDamage(bounceOff(flight.velocity, surface, normal));
       if (hull <= 0) return result(true);
     }
-    const off = ringCrossing(rings.points[next], rings.normals[next], rings.radius, before, flight.position);
+    // where it crossed the next ring's plane, inside the ring or beside it
+    const off = ringCrossing(rings.points[next], rings.normals[next], Infinity, before, flight.position);
     if (off === null) continue;
+    if (off >= rings.radius) {
+      missed++;
+      continue;
+    }
     offs.push(off);
     if (off < rings.core) coilPush(flight.velocity, rings.normals[next], MAX_SPEED);
   }

@@ -351,6 +351,15 @@ const SPAWN_CANDIDATES = 12;
 const SPAWN_BEYOND = 1.1;
 /** Ships farther away than this never set off the lock warning (units, 3 km). */
 const LOCK_RANGE = 60000;
+/**
+ * Nicole's free drift tip in a deathmatch (see crossingTip): an enemy within CROSSING_RANGE
+ * (units, 500 m), more than CROSSING_ANGLE (rad, 60°) off the own nose and crossing faster than
+ * CROSSING_SPEED (units/s, 60 m/s) across the line between them, while the autopilot holds the
+ * nose on the path: free drift lets the nose follow it while the ship slides on.
+ */
+const CROSSING_RANGE = 10000;
+const CROSSING_ANGLE = Math.PI / 3;
+const CROSSING_SPEED = 1200;
 /** A nose within this many times the own ship's angular radius counts as TRACKED. */
 const LOCK_TRACKING = 4;
 /** Vertical field of view of the camera (degrees). */
@@ -627,6 +636,8 @@ const FLARE_GLOW = 6000;
 /** Where the ghost of the best lap is this frame. */
 const ghostPosition = new THREE.Vector3();
 const crossingPoint = new THREE.Vector3();
+/** How fast an enemy crosses the own line of sight to it (see crossingTip). */
+const crossingAcross = new THREE.Vector3();
 const ghostTurn = new THREE.Quaternion();
 
 /** The turn of a ship at `eye` that looks at `target`, `up` as up; a fresh quaternion for a new clone. */
@@ -5178,6 +5189,7 @@ export class Game implements OnlineGame {
     }
     this.impactAhead = impact < Infinity;
     this.lockWarning();
+    this.crossingTip(me);
     if (me.alive && me.overheated) {
       alarms.raise({ id: 'laser', level: 'caution', text: t('LASER OVERHEATED') });
       this.tip('hot');
@@ -5390,6 +5402,22 @@ export class Game implements OnlineGame {
   /** A tip of the fight from Nicole, while it is still due (see Coach); the flight school teaches on its own. */
   private tip(tip: Tip) {
     if (!this.school) this.coach.give(tip, (line) => this.speaker.say(line, 'urgent'));
+  }
+
+  /** In a deathmatch with the autopilot on, an enemy close by crossing the own flight (see CROSSING_RANGE): Nicole suggests free drift. */
+  private crossingTip(me: Ship) {
+    if (this.roundMode !== 'deathmatch' || !this.autopilot || !me.alive || !this.coach.due('crossing')) return;
+    for (const ship of this.ships) {
+      if (ship === me || !ship.alive || ship.allyOf(me)) continue;
+      const line = relative.subVectors(ship.flight.position, me.flight.position);
+      const distance = line.length();
+      if (distance > CROSSING_RANGE || distance < 1 || me.flight.angleTo(line) < CROSSING_ANGLE) continue;
+      const across = crossingAcross.subVectors(ship.flight.velocity, me.flight.velocity);
+      across.addScaledVector(line, -across.dot(line) / (distance * distance));
+      if (across.length() < CROSSING_SPEED) continue;
+      this.tip('crossing');
+      return;
+    }
   }
 
   /**

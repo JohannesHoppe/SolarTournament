@@ -22,4 +22,4 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | `moments.ts` | The own pilot's big moments: banner, crowd and announcer |
 | `sponsors.ts`, `satire-ads.ts` | The sponsor break before a respawn, and its invented sponsors |
 
-Every rule here is also written down in the repository's README with its numbers; a change to one changes the other in the same commit. The `*.test.ts` files test the deterministic parts (`npm test`); `courses.test.ts` flies every race course and ring drill with a bot of middling skill.
+Every rule here is also written down in the repository's README with its numbers; a change to one changes the other in the same commit. The `*.test.ts` files test the deterministic parts (`npm test`); `courses.test.ts` flies every race course and every course of the flight school with a bot of middling skill.
