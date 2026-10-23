@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { canvas } from '../view/textures';
+import { boxUv, shine, surfaced, wornSurface, type Wear } from '../view/surfaces';
 
 /**
  * The two interceptors, built in code as low-poly hulls of flat facets (a few hundred
@@ -81,56 +81,23 @@ function keepEngine(original: THREE.Object3D): THREE.Group {
   return root;
 }
 
-/** The sheen of every hull: what its polished plates mirror (see shine), and how strongly. */
+/** The sheen of every hull: what its plates mirror (see shine), and how strongly. */
 const SHEEN = 1.1;
-let mirrored: THREE.CubeTexture | null = null;
+/** A hull's surface repeats every this many units (20 m), so a panel is a few meters wide. */
+const TILE = 400;
+/** How deep the seams and rivets look (see surfaced). */
+const RELIEF = 1.5;
 
 /**
- * What a hull's plates mirror, painted in code: deep space, the sun blazing on one side, and
- * the tournament's neon in streaks, orange and azure. The glint of polished metal turning in
- * the light, built once for every hull.
+ * A hull on the model file's engine (see keepEngine): the painted `parts` as one flat-shaded mesh
+ * with its `wear` (see wornSurface: the paint's color times the surface's, worn down to metal
+ * where it chipped, mirroring the sky where it is smooth), and the `glow` parts, if any, lit in
+ * their color. Both meshes carry `name`.
  */
-function shine(): THREE.CubeTexture {
-  if (mirrored) return mirrored;
-  const face = (paint: (g: CanvasRenderingContext2D) => void) => {
-    const [element, g] = canvas(128);
-    const sky = g.createLinearGradient(0, 0, 0, 128);
-    sky.addColorStop(0, '#2a3242');
-    sky.addColorStop(0.55, '#0a0d14');
-    sky.addColorStop(1, '#020203');
-    g.fillStyle = sky;
-    g.fillRect(0, 0, 128, 128);
-    paint(g);
-    return element;
-  };
-  const streak = (color: string, y: number) => (g: CanvasRenderingContext2D) => {
-    g.fillStyle = color;
-    g.fillRect(0, y, 128, 6);
-  };
-  const sun = (g: CanvasRenderingContext2D) => {
-    const glow = g.createRadialGradient(64, 40, 0, 64, 40, 46);
-    glow.addColorStop(0, '#fffaf0');
-    glow.addColorStop(0.2, '#ffd9a0');
-    glow.addColorStop(1, 'rgba(255, 150, 40, 0)');
-    g.fillStyle = glow;
-    g.fillRect(0, 0, 128, 128);
-  };
-  // +x, -x, +y, -y, +z, -z
-  mirrored = new THREE.CubeTexture([face(sun), face(streak('#ff9d00', 70)), face(() => {}), face(() => {}), face(streak('#4d91ff', 76)), face(streak('#ff9d00', 60))]);
-  mirrored.colorSpace = THREE.SRGBColorSpace;
-  mirrored.needsUpdate = true;
-  return mirrored;
-}
-
-/**
- * A hull on the model file's engine (see keepEngine): the painted `parts` as one flat-shaded,
- * polished mesh of the given finish, and the `glow` parts, if any, lit in their color. Both
- * meshes carry `name`.
- */
-function hull(original: THREE.Object3D, name: string, finish: { roughness: number; metalness: number }, parts: THREE.BufferGeometry[], glow?: { parts: THREE.BufferGeometry[]; color: THREE.Color }): THREE.Object3D {
+function hull(original: THREE.Object3D, name: string, wear: Wear, seed: number, parts: THREE.BufferGeometry[], glow?: { parts: THREE.BufferGeometry[]; color: THREE.Color }): THREE.Object3D {
   const root = keepEngine(original);
-  const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, ...finish, side: THREE.DoubleSide, envMap: shine(), envMapIntensity: SHEEN });
-  const meshes: THREE.Mesh[] = [new THREE.Mesh(mergeGeometries(parts), material)];
+  const material = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, ...surfaced(wornSurface(seed, wear), RELIEF), side: THREE.DoubleSide, envMap: shine(), envMapIntensity: SHEEN });
+  const meshes: THREE.Mesh[] = [new THREE.Mesh(boxUv(mergeGeometries(parts), TILE), material)];
   if (glow) meshes.push(new THREE.Mesh(mergeGeometries(glow.parts), new THREE.MeshBasicMaterial({ color: glow.color, toneMapped: false })));
   for (const mesh of meshes) {
     mesh.name = name;
@@ -143,8 +110,17 @@ const OLIVE = 0x56663f;
 const OLIVE_DARK = 0x3d4a2d;
 const STEEL = 0x8c9198;
 const GUNMETAL = 0x34383e;
+/** The rims of the drives' bells, blued and bronzed by the heat of the burns. */
+const HEAT_TINT = 0x6a5440;
 const STRIPE = 0xff9d00;
 const GLASS = 0x0d1a2a;
+const TAIL_LIGHT = new THREE.Color(1, 0.12, 0.06).multiplyScalar(2.4);
+
+/**
+ * The human interceptor's wear: an old fighter of the depots, olive paint chipped down to the
+ * metal, rust running from its rivets, grime, and the stencils of every depot it passed through.
+ */
+const DEPOT: Wear = { rust: 0.8, chips: 0.7, grime: 0.6, scratches: 0.6, seams: 0.7, stencils: ['07', 'NO STEP', 'FUEL', 'DEPOT 41-C', 'RESCUE', '2511'], roughness: 0.62, metalness: 0.25 };
 
 /** The human interceptor, after the original: about 32 m across and 29 m long. */
 export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
@@ -169,8 +145,22 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...pair(paint(loft(RECTANGLE, { z: 260, w: 16, h: 78, x: 285, y: 8 }, { z: -110, w: 8, h: 30, x: 300, y: 30 }), OLIVE)),
     // tournament stripes on the fins
     ...pair(paint(loft(RECTANGLE, { z: 150, w: 17, h: 8, x: 285, y: 70 }, { z: 60, w: 15, h: 8, x: 289, y: 64 }), STRIPE)),
+    // the stern, what the pilot sees most of: flared bells around the nozzles, their rims tinted
+    // by the heat, a drive block between the nacelles with its cooling ribs, and a bulkhead with
+    // vents over it
+    ...pair(paint(loft(OCTAGON, { z: 292, w: 32, h: 28, x: 87, y: 2 }, { z: 272, w: 27, h: 23, x: 87, y: 2 }), HEAT_TINT)),
+    ...pair(paint(loft(OCTAGON, { z: 286, w: 22, h: 18, x: 87, y: 2 }, { z: 284, w: 30, h: 26, x: 87, y: 2 }), GUNMETAL)),
+    paint(loft(RECTANGLE, { z: 262, w: 40, h: 28, y: -2 }, { z: 200, w: 44, h: 32, y: 0 }), GUNMETAL),
+    ...[-18, -6, 6, 18].map((y) => paint(loft(RECTANGLE, { z: 266, w: 46, h: 2.5, y }, { z: 214, w: 46, h: 2.5, y }), STEEL)),
+    paint(loft(RECTANGLE, { z: 244, w: 56, h: 6, y: 48 }, { z: 214, w: 50, h: 6, y: 46 }), OLIVE_DARK),
+    ...[-36, -12, 12, 36].map((x) => paint(loft(RECTANGLE, { z: 246, w: 6, h: 2, x, y: 54 }, { z: 218, w: 6, h: 2, x, y: 52 }), GUNMETAL)),
   ];
-  return hull(original, 'humanHull', { roughness: 0.42, metalness: 0.45 }, parts);
+  const lights: THREE.BufferGeometry[] = [
+    // position lights at the fins' tops and on the stern
+    ...pair(loft(RECTANGLE, { z: 262, w: 5, h: 5, x: 285, y: 88 }, { z: 250, w: 5, h: 5, x: 285, y: 88 })),
+    ...pair(loft(RECTANGLE, { z: 264, w: 4, h: 4, x: 30, y: 30 }, { z: 256, w: 4, h: 4, x: 30, y: 30 })),
+  ];
+  return hull(original, 'humanHull', DEPOT, 41, parts, { parts: lights, color: TAIL_LIGHT });
 }
 
 const IVORY = 0xd9d3c3;
@@ -208,8 +198,11 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
     ...pair(loft(RECTANGLE, { z: -120, w: 2, h: 2, x: 40, y: 0 }, { z: -370, w: 2, h: 2, x: 4, y: -3 })),
     loft(RECTANGLE, { z: 240, w: 2, h: 2, y: 55 }, { z: 30, w: 2, h: 2, y: 42 }),
   ];
-  return hull(original, 'sovereignHull', { roughness: 0.3, metalness: 0.6 }, parts, { parts: neon, color: SUN });
+  return hull(original, 'sovereignHull', GIFT, 7, parts, { parts: neon, color: SUN });
 }
+
+/** The Sovereign's wear: a gift of the President, kept like new; a few scratches, its number in gold. */
+const GIFT: Wear = { rust: 0, chips: 0.05, grime: 0.1, scratches: 0.2, seams: 0.3, stencils: ['01'], roughness: 0.3, metalness: 0.6 };
 
 const VOID = 0x15121c;
 const VOID_SHEEN = 0x2b2438;
@@ -240,5 +233,8 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...pair(loft(RECTANGLE, { z: 360, w: 2, h: 2, x: 104, y: -18 }, { z: 60, w: 2, h: 2, x: 148, y: -50 })),
     ...pair(loft(RECTANGLE, { z: 150, w: 2, h: 2, x: 64, y: 20 }, { z: -220, w: 2, h: 2, x: 20, y: 4 })),
   ];
-  return hull(original, 'alienHull', { roughness: 0.28, metalness: 0.5 }, parts, { parts: veins, color: VEIN });
+  return hull(original, 'alienHull', SCARRED, 23, parts, { parts: veins, color: VEIN });
 }
+
+/** The alien interceptor's wear: a grown skin of fine scales, scored by countless fights, never rusting. */
+const SCARRED: Wear = { rust: 0, chips: 0.25, grime: 0.35, scratches: 0.9, seams: 0.6, stencils: [], roughness: 0.35, metalness: 0.55, scales: true };

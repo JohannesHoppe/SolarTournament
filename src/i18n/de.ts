@@ -74,9 +74,6 @@ export const DE: Catalog = {
   'Torpedoes, overdrive, probes, the hook on a ship and the nova core.': 'Torpedos, Turbo, Sonden, der Haken am Schiff und der Nova-Kern.',
 
   // solo round plate
-  '· bots race at 120 m/s': '· Bots rasen mit 120 m/s',
-  '· bots race at 180 m/s, as online': '· Bots rasen mit 180 m/s, wie online',
-  '· bots race at 240 m/s, at the limit': '· Bots rasen mit 240 m/s, am Limit',
   'Three laps through eight gates. Killing your opponents is explicitly allowed.': 'Drei Runden durch acht Tore. Gegner abschießen ist ausdrücklich erlaubt.',
   'For the hard pilots: five minutes, every clone for itself.': 'Für die harten Piloten: fünf Minuten, jeder Klon für sich.',
   '{clones} clones each. A solar flare closes in on the arena. The last clone standing wins.': '{clones} Klone für jeden. Eine Sonneneruption zieht sich um die Arena zusammen. Wer als letzter Klon übrig bleibt, gewinnt.',
@@ -385,6 +382,8 @@ export const DE: Catalog = {
   '*Beta not available to Hosts. Hosts are reminded that remembering is part of the job.': '*Beta nicht für Hosts verfügbar. Hosts werden daran erinnert, dass Erinnern zum Job gehört.',
   'The best steaks. Everybody says so. Tremendous steaks.': 'Die besten Steaks. Alle sagen das. Gewaltige Steaks.',
   'Steaks are a serving suggestion. Product contains no steak.': 'Steaks sind ein Serviervorschlag. Produkt enthält kein Steak.',
+  'Your health care now flies with the President. Proudly!*': 'Deine Gesundheitsvorsorge fliegt jetzt mit dem Präsidenten. Voller Stolz!*',
+  '*Every hospital closed paid for one golden deck plate. Feeling sick? Print a new clone.': '*Jedes geschlossene Krankenhaus bezahlte eine goldene Deckplatte. Krank? Druck dir einen neuen Klon.',
   'Advertisement': 'Werbung',
 
   // flight school markers and courses
@@ -544,10 +543,6 @@ export const DE: Catalog = {
   'This sheet': 'Diese Übersicht',
   'Five courses, each on its own. Training clones are free.': 'Fünf Kurse, jeder für sich. Übungsklone sind gratis.',
   'Back <kbd>Esc</kbd>': 'Zurück <kbd>Esc</kbd>',
-  'Class': 'Klasse',
-  'Cruise': 'Locker',
-  'Pro': 'Profi',
-  'Max': 'Max',
   'Arena': 'Arena',
   'Rivals': 'Gegner',
   'Launch <kbd>Enter</kbd>': 'Start <kbd>Enter</kbd>',
@@ -689,7 +684,7 @@ export const DE: Catalog = {
   'Two more torpedoes. Every probe shows its color. Blue plates you, green repairs you, white is the nova core.': 'Zwei Torpedos mehr. Jede Sonde zeigt ihre Farbe. Blau panzert dich, Grün repariert dich, Weiß ist der Nova-Kern.',
   'Got it. You both pull on the same cable, and the slower one gets dragged.': 'Erwischt. Ihr zieht beide am selben Seil, und der Langsamere wird mitgeschleift.',
   'Glorious. The sponsors love it so much, your next clone is on them.': 'Glorreich. Die Sponsoren lieben es so sehr, dass dein nächster Klon auf sie geht.',
-  'Every thruster at once, twenty-five meters per second sideways in a blink. Whoever aims at you has to find you again.': 'Alle Düsen auf einmal, fünfundzwanzig Meter pro Sekunde zur Seite, im Nu. Wer auf dich zielt, muss dich erst wiederfinden.',
+  'Every thruster at once, forty meters per second sideways in a blink. Whoever aims at you has to find you again.': 'Alle Düsen auf einmal, vierzig Meter pro Sekunde zur Seite, im Nu. Wer auf dich zielt, muss dich erst wiederfinden.',
   'A nose on your drive is the deadliest thing out here. Show them armor, and they only scratch paint.': 'Eine Nase auf deinem Antrieb ist das Tödlichste hier draußen. Zeig ihnen Panzerung, und sie kratzen nur am Lack.',
   'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.': 'Kühl und tödlich. Jeder Schuss auf Panzerung ist Hitze, die dir fehlt, wenn der Antrieb sich zeigt.',
   'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.': 'Laser biegen sich nicht, und Sensoren sehen nicht durch Fels. Dahinter gibt es dich nicht.',

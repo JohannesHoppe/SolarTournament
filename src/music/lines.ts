@@ -37,6 +37,9 @@ export const NOW_PLAYING_DE = 'es läuft';
 /** The Orange President, his regime and his sponsors. */
 export const PHRASES_EN = [
   'the golden age of the solar system begins right now',
+  'hospitals closed. carriers open. tremendous',
+  'who needs doctors. we have clones',
+  'every hospital became a golden deck plate. beautiful',
   'impulse drive prices are way down. way down',
   'cloning is cheaper than ever. believe me',
   'the last president could not clone a sandwich',
@@ -123,6 +126,8 @@ export const PHRASES_EN = [
 /** German lines for the motorik flavor and now and then elsewhere: rolling R wherever possible. */
 export const PHRASES_DE = [
   'rekord klone. rekord zahlen. rekord präsident',
+  'krankenhaus geschlossen. flugzeugträger eröffnet',
+  'wer braucht ärzte. wir haben klone',
   'achtung. klonfabrik',
   'brennen. bremsen. brennen',
   'der präsident ist zufrieden',
@@ -333,7 +338,7 @@ export const SCHOOL_PRAISE = {
   probe: 'Two more torpedoes. Every probe shows its color. Blue plates you, green repairs you, white is the nova core.',
   hookShip: 'Got it. You both pull on the same cable, and the slower one gets dragged.',
   nova: 'Glorious. The sponsors love it so much, your next clone is on them.',
-  kick: 'Every thruster at once, twenty-five meters per second sideways in a blink. Whoever aims at you has to find you again.',
+  kick: 'Every thruster at once, forty meters per second sideways in a blink. Whoever aims at you has to find you again.',
   onTail: 'A nose on your drive is the deadliest thing out here. Show them armor, and they only scratch paint.',
   bursts: 'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.',
   cover: 'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.',
