@@ -8,6 +8,12 @@ const GHOST_MAX = 3000;
 /** Numbers per pose: position (units, whole) and orientation (quaternion, three decimals). */
 const POSE = 7;
 
+/** A lap time as 1:02.34, rounded to hundredths before the minutes are split off (59.996 s is 1:00.00). */
+export function lapClock(seconds: number): string {
+  const hundredths = Math.round(seconds * 100);
+  return `${Math.floor(hundredths / 6000)}:${((hundredths % 6000) / 100).toFixed(2).padStart(5, '0')}`;
+}
+
 /**
  * The best lap a Host flew in an arena: its time from the pink gate round to the pink gate
  * (s), the split at each gate of the lap (s after the pink gate; index 0 unused), and the

@@ -137,5 +137,9 @@ describe("the President's fleet", () => {
     events = other.follow(JSON.parse(JSON.stringify(lead.toState())));
     expect(events.map((e) => e.kind)).toContain('sunk');
     expect(other.down).toBe(true);
+    // a browser that comes after it went down sees it gone, with no blast to set off
+    const late = new Fleet(7);
+    expect(late.follow(JSON.parse(JSON.stringify(lead.toState())))).toEqual([]);
+    expect(late.down).toBe(true);
   });
 });
