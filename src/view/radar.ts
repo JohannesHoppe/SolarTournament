@@ -11,6 +11,9 @@ const COMPRESSION = 0.6;
 const TILT = 0.5;
 /** The radar redraws this often (Hz): plenty for a glance, cheap on slow devices. */
 const RATE = 20;
+/** The radar's lettering, and the height of one of its lines (px). */
+const FONT = '600 9px system-ui, sans-serif';
+const LINE = 10;
 
 const local = new THREE.Vector3();
 const inverse = new THREE.Quaternion();
@@ -35,6 +38,8 @@ export class Radar {
   private size = 0;
   /** The canvas's width on the page (CSS pixels); 0 while it is hidden. */
   private css = 0;
+  /** The names written in this draw (x, y, width; px), reused from draw to draw. */
+  private readonly written: number[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -66,6 +71,7 @@ export class Radar {
     ctx.clearRect(0, 0, css, css);
     const center = css / 2;
     const radius = css / 2 - 14;
+    this.written.length = 0;
     this.frame(center, radius);
     if (blind) {
       // a storm: the sensors show static
@@ -117,7 +123,7 @@ export class Radar {
       ctx.beginPath();
       ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
       ctx.stroke();
-      this.text(mark.label, p.x + 6, p.y + 3, mark.color);
+      this.label(mark.label, p.x + 6, p.y + 3, mark.color);
     }
     for (const ship of ships) {
       if (ship === me || !ship.alive || !inSight(ship)) continue;
@@ -127,7 +133,7 @@ export class Radar {
       this.stalk(p, color);
       ctx.fillStyle = color;
       ctx.fillRect(p.x - 2.5, p.y - 2.5, 5, 5);
-      this.text(ship.name, p.x + 6, p.y + 3, color);
+      this.label(ship.name, p.x + 6, p.y + 3, color);
     }
     // the own ship in the middle, its nose up
     ctx.fillStyle = '#4d91ff';
@@ -176,9 +182,21 @@ export class Radar {
     ctx.globalAlpha = 1;
   }
 
+  /** A mark's name, unless it would run into a name already written: the marks come first, then the ships, each keeps its dot either way. */
+  private label(text: string, x: number, y: number, color: string) {
+    const written = this.written;
+    this.ctx.font = FONT;
+    const width = this.ctx.measureText(text).width;
+    for (let i = 0; i < written.length; i += 3) {
+      if (x < written[i] + written[i + 2] && written[i] < x + width && Math.abs(y - written[i + 1]) < LINE) return;
+    }
+    written.push(x, y, width);
+    this.text(text, x, y, color);
+  }
+
   private text(text: string, x: number, y: number, color: string, align: CanvasTextAlign = 'left') {
     const ctx = this.ctx;
-    ctx.font = '600 9px system-ui, sans-serif';
+    ctx.font = FONT;
     ctx.textAlign = align;
     ctx.fillStyle = color;
     ctx.fillText(text, x, y);

@@ -942,6 +942,11 @@ body.nova-flash #hud::after {
   font-size: 0;
 }
 
+/* a name that would run into another's: only the mark shows */
+.marker.crowded {
+  font-size: 0;
+}
+
 .marker.offscreen::before {
   border: none;
   border-radius: 0;
@@ -1625,6 +1630,270 @@ body.touch #now-playing {
 
 body.touch #transmission {
   bottom: 150px;
+}
+
+/*
+ * A phone: a small screen with touch controls. Everything shrinks and moves to the edges, so
+ * the middle of the picture stays free for flying. First what every phone shares, then where
+ * things sit when it is held sideways and upright.
+ */
+@media (max-height: 500px), (max-width: 600px) {
+  body.touch #touch-pause,
+  body.touch #touch-autopilot,
+  body.touch #touch-overdrive,
+  body.touch #touch-torpedo {
+    top: 8px;
+    height: 34px;
+    font-size: 0.55rem;
+  }
+
+  body.touch #touch-pause {
+    width: 34px;
+  }
+
+  body.touch #touch-autopilot {
+    left: calc(max(12px, env(safe-area-inset-left)) + 42px);
+    width: 46px;
+  }
+
+  body.touch #touch-overdrive {
+    left: calc(max(12px, env(safe-area-inset-left)) + 96px);
+    width: 52px;
+  }
+
+  body.touch #touch-torpedo {
+    left: calc(max(12px, env(safe-area-inset-left)) + 156px);
+    width: 52px;
+  }
+
+  body.touch #touch-fire {
+    bottom: 16px;
+    width: 72px;
+    height: 72px;
+  }
+
+  body.touch #touch-drive {
+    right: calc(max(20px, env(safe-area-inset-right)) + 84px);
+    bottom: 12px;
+    width: 60px;
+    height: 60px;
+  }
+
+  body.touch #touch-flip {
+    right: calc(max(20px, env(safe-area-inset-right)) + 10px);
+    bottom: 100px;
+    width: 52px;
+    height: 52px;
+  }
+
+  body.touch #touch-brake {
+    right: calc(max(20px, env(safe-area-inset-right)) + 92px);
+    bottom: 84px;
+    width: 44px;
+    height: 44px;
+  }
+
+  body.touch #touch-hook {
+    right: calc(max(20px, env(safe-area-inset-right)) + 14px);
+    bottom: 162px;
+    width: 44px;
+    height: 44px;
+  }
+
+  body.touch #touch-flip,
+  body.touch #touch-brake,
+  body.touch #touch-hook {
+    font-size: 0.55rem;
+  }
+
+  /* the gauges: label over bar */
+  body.touch .gauge {
+    flex-direction: column;
+    gap: 2px;
+    font-size: 0.5rem;
+  }
+
+  body.touch .bar {
+    width: 44px;
+    height: 5px;
+  }
+
+  body.touch .readout {
+    min-width: 0;
+  }
+
+  body.touch #radar {
+    width: 104px;
+    height: 104px;
+  }
+
+  body.touch #school-panel {
+    padding: 6px 10px;
+    border-radius: 10px;
+  }
+
+  body.touch #school-step {
+    font-size: 0.6rem;
+  }
+
+  body.touch #school-text {
+    margin-top: 2px;
+    font-size: 0.8rem;
+    line-height: 1.3;
+  }
+
+  body.touch #school-keys {
+    gap: 6px;
+    margin-top: 4px;
+  }
+
+  body.touch #school-keys kbd {
+    font-size: 0.65rem;
+  }
+
+  body.touch #hud-warning,
+  body.touch #hud-lock {
+    font-size: 0.85rem;
+  }
+
+  body.touch #hud-message,
+  body.touch #transmission-text {
+    font-size: 0.8rem;
+  }
+
+  body.touch #killfeed {
+    right: max(12px, env(safe-area-inset-right));
+    max-width: 180px;
+    font-size: 0.7rem;
+  }
+
+  body.touch .marker:not(.offscreen, .crowded) {
+    font-size: 0.65rem;
+  }
+
+  /* the radio: the switch and the title in the top right corner; the phone's own keys set the volume */
+  body.touch #now-playing {
+    top: 8px;
+    right: max(12px, env(safe-area-inset-right));
+    padding: 2px 6px 2px 2px;
+    font-size: 0.7rem;
+  }
+
+  body.touch #now-playing .volume,
+  body.touch #now-playing .np-label,
+  body.touch #radio-style {
+    display: none;
+  }
+
+  /* the view narrows less under g-forces: a phone's picture is small to begin with */
+  body.touch #g-vignette {
+    background: radial-gradient(ellipse at center, transparent calc(var(--tunnel, 70%) / 2 + 35%), rgba(0, 0, 0, 0.96) calc(var(--tunnel, 70%) / 2 + 60%));
+  }
+}
+
+/*
+ * Sideways: the buttons, the clock and the radio in one slim row at the top, the gauges below
+ * it, the round's panel narrow between the radar and the buttons, messages below the warnings,
+ * the transmissions at the bottom between the thumbs.
+ */
+@media (max-height: 500px) {
+  body.touch .hud-top {
+    top: 10px;
+    gap: 20px;
+    font-size: 1rem;
+  }
+
+  body.touch .hud-bottom {
+    top: 48px;
+    gap: 10px;
+  }
+
+  body.touch #radar {
+    top: 78px;
+  }
+
+  body.touch #hud-room {
+    top: 186px;
+  }
+
+  body.touch #school-panel,
+  body.touch #killfeed {
+    top: 80px;
+  }
+
+  body.touch #school-panel {
+    width: min(440px, calc(100% - 270px));
+  }
+
+  body.touch #hud-message,
+  body.touch #hud:has(#school-panel:not([hidden])) #hud-message {
+    top: calc(50% + 78px);
+    left: 130px;
+    right: 130px;
+  }
+
+  body.touch #transmission {
+    bottom: 10px;
+    max-width: min(360px, calc(100vw - 440px));
+  }
+
+  body.touch #now-playing {
+    max-width: 210px;
+  }
+}
+
+/*
+ * Upright: the buttons and the radio's switch at the top, the clock below them, the gauges in
+ * two rows below that, then the radar and the round's panel beside it; the transmissions above
+ * the thumbs' buttons.
+ */
+@media (max-width: 600px) {
+  body.touch .hud-top {
+    top: 50px;
+  }
+
+  body.touch .hud-bottom {
+    top: 84px;
+    left: 12px;
+    right: 12px;
+    transform: none;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px 10px;
+  }
+
+  body.touch #radar {
+    top: 156px;
+  }
+
+  body.touch #hud-room {
+    top: 264px;
+  }
+
+  body.touch #school-panel {
+    top: 156px;
+    left: auto;
+    right: 12px;
+    transform: none;
+    width: calc(100% - 140px);
+  }
+
+  body.touch #killfeed {
+    top: 268px;
+  }
+
+  body.touch #hud-message,
+  body.touch #hud:has(#school-panel:not([hidden])) #hud-message {
+    top: 40%;
+  }
+
+  body.touch #transmission {
+    bottom: 290px;
+  }
+
+  body.touch #now-playing {
+    max-width: calc(100vw - 236px);
+  }
 }
 
 /* The radio page and the legal pages: a scrolling document instead of the game's full screen. */

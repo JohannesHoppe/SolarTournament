@@ -9,6 +9,9 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const projected = new THREE.Vector3();
 /** Kills stay in the feed this long (s). */
 const KILLFEED_SECONDS = 5;
+/** A ship's name needs about this much room beside its mark (px); a name closer to one already written is left out. */
+const LABEL_WIDTH = 140;
+const LABEL_HEIGHT = 18;
 /** Display scale: one world unit is 5 cm, a ship is about 35 m long. */
 export const METERS_PER_UNIT = 0.05;
 /** The size of the window, as Game.resize last set it: reading it from the window after the HUD wrote to the page would force a layout. */
@@ -52,6 +55,8 @@ export class Hud {
   private readonly markers = new Map<string, HTMLElement>();
   /** Ships marked this frame, reused from frame to frame. */
   private readonly seen = new Set<string>();
+  /** Where the names written this frame sit (x, y pairs, px), reused from frame to frame. */
+  private readonly labeled: number[] = [];
   private readonly markerLayer = document.createElement('div');
   private messageUntil = 0;
   private hitmarkerTimer = 0;
@@ -312,6 +317,8 @@ export class Hud {
     const { width, height } = viewport;
     const seen = this.seen;
     seen.clear();
+    const labeled = this.labeled;
+    labeled.length = 0;
     for (const ship of ships) {
       if (ship === me || !ship.alive || !visible(ship)) continue;
       seen.add(ship.id);
@@ -346,8 +353,15 @@ export class Hud {
         x *= scale;
         y *= scale;
       }
+      const left = ((x + 1) / 2) * width;
+      const top = ((1 - y) / 2) * height;
+      // a name that would land on one already written keeps only its mark
+      let crowded = false;
+      for (let i = 0; !offscreen && i < labeled.length; i += 2) crowded ||= Math.abs(labeled[i] - left) < LABEL_WIDTH && Math.abs(labeled[i + 1] - top) < LABEL_HEIGHT;
+      if (!offscreen && !crowded) labeled.push(left, top);
       marker.classList.toggle('offscreen', offscreen);
-      marker.style.transform = `translate(${((x + 1) / 2) * width}px, ${((1 - y) / 2) * height}px)`;
+      marker.classList.toggle('crowded', crowded);
+      marker.style.transform = `translate(${left}px, ${top}px)`;
       if (offscreen) marker.style.setProperty('--angle', `${Math.atan2(-y, x)}rad`);
       setText(marker.lastElementChild as HTMLElement, ` · ${meters(ship.flight.position.distanceTo(me.flight.position))}`);
     }
