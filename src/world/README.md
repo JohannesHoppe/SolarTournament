@@ -10,6 +10,7 @@ The arena a round is fought in. Everything that every browser must build alike (
 | `surface.ts` | A rock's measured surface, as collisions see it |
 | `shapes.ts` | Ice, station debris and the world ship's hull sections |
 | `gates.ts` | The rings of the tournament as structures (coil housings, windings, struts, lights), shared by race gates, school rings and Capture the Flag bases |
+| `powercore.ts` | The sponsor core of Capture the Flag as a structure: an armored reactor canister with glowing windings, sign plates and a cage for the tow cable; fades to its outline |
 | `boxes.ts` | A sphere or a ray against a box (wreck and battleship hulls) |
 | `wrecks.ts` | The pieces a destroyed ship breaks into |
 | `arena.ts` | The arena's edge and its grid |

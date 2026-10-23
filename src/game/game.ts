@@ -2907,6 +2907,8 @@ export class Game implements OnlineGame {
     me.root.visible = me.alive && !this.cockpit;
     // a watching Host sees the tournament through the pilot it follows
     const subject = this.subject();
+    // a core keeps clear of the view on the pilot and its crosshair
+    this.flags?.view(this.camera, subject, this.cockpit, dt);
     // its gauges too: the own clone is not printed while the Host watches
     this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
     // a solar storm blinds the sensors: no ship shows a marker
