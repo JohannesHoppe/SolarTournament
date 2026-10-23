@@ -207,14 +207,14 @@ const KICK_DEBRIS_START = 12000;
  * The shove drill: the pilot and the drone drift side by side at SHOVE_DRIFT (units/s, 20 m/s)
  * at a rock SHOVE_AHEAD (units, 200 m) ahead, the drone SHOVE_ABREAST (45 m, a few meters
  * between the hulls) off the pilot's left, its way passing SHOVE_CLEAR (20 m) off the rock. A
- * kick (40 m/s) throws it at the stone at some 26 m/s. The drone starts with SHOVE_DRONE_HULL:
- * the blow at its drive (about 42) leaves it a wreck the stone finishes, a knockout.
+ * kick (40 m/s) throws it at the stone at some 26 m/s. The drone starts with SHOVE_DRONE_HULL,
+ * a wreck already: the stone finishes it (some 20 points at that speed), a knockout.
  */
 const SHOVE_DRIFT = 400;
 const SHOVE_AHEAD = 4000;
 const SHOVE_ABREAST = 900;
 const SHOVE_CLEAR = 400;
-const SHOVE_DRONE_HULL = 50;
+const SHOVE_DRONE_HULL = 15;
 /** The cover drills put the pilot this far off the surface of a rock (units, 150 m), the gunner or the torpedo's drone this far behind the pilot (1.2 km). */
 const COVER_STANDOFF = 3000;
 const COVER_GUNNER = 24000;

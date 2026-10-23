@@ -103,6 +103,11 @@ function solidParts(radius: number) {
   return kit;
 }
 
+/** How far from a ring's axis its housings begin and its struts end (units), for a ring of opening `radius`: what a ship steers clear of. */
+export function ringRim(radius: number): { inner: number; outer: number } {
+  return { inner: radius + CLEARANCE, outer: solidParts(radius).reach };
+}
+
 const ringTurn = new THREE.Quaternion();
 const inRing = new THREE.Vector3();
 const inPart = new THREE.Vector3();

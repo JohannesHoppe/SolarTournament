@@ -21,15 +21,22 @@ describe('two ships meeting', () => {
     expect(ramDamage(closing, 'nose').hull).toBeLessThan(ramDamage(closing, 'flank').hull);
     expect(ramDamage(closing, 'flank').hull).toBeLessThan(ramDamage(closing, 'drive').hull);
     expect(ramDamage(ms(40), 'flank').thrusters).toBeGreaterThan(0);
-    // 60 m/s into a drive takes all its thrust: its reactor goes
-    expect(ramDamage(ms(60), 'drive').drive).toBeGreaterThanOrEqual(1);
+    // 125 m/s into a drive takes all its thrust: its reactor goes
+    expect(ramDamage(ms(125), 'drive').drive).toBeGreaterThanOrEqual(1);
+    expect(ramDamage(ms(120), 'drive').drive).toBeLessThan(1);
+  });
+
+  it('let a pack jostle: a dodge into a flank or a bump into a drive at pack speeds costs a few points', () => {
+    expect(ramDamage(ms(40), 'flank').hull).toBeLessThan(5);
+    expect(ramDamage(ms(60), 'drive').hull).toBeLessThan(20);
+    expect(ramDamage(ms(60), 'drive').drive).toBeLessThan(0.25);
   });
 
   it('wreck both noses meeting at full speed, but leave an overdrive rammer alive', () => {
     expect(ramDamage(ms(220), 'nose').hull).toBeGreaterThanOrEqual(100);
     const rammer = ramDamage(ms(150), 'nose').hull;
-    expect(rammer).toBeGreaterThan(50);
-    expect(rammer).toBeLessThan(100);
+    expect(rammer).toBeGreaterThan(40);
+    expect(rammer).toBeLessThan(60);
     expect(ramDamage(ms(150), 'drive').drive).toBeGreaterThanOrEqual(1);
   });
 

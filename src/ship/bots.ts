@@ -4,6 +4,8 @@ import { IDLE, type Controls } from '../input/input';
 import type { Ship } from './ship';
 import { MAIN_THRUST, RCS_THRUST } from './flight';
 import { BOOST_PUSH } from '../game/race';
+import { devlog } from '../devlog';
+import { ringRim } from '../world/gates';
 
 /** Bots notice ships within this distance (units, 3.5 km: across the whole field), when no rock is in the way, so the fight finds a Host quickly. */
 const SIGHT_RANGE = 70000;
@@ -39,7 +41,16 @@ const RACE_SPEED_SLOW = 2800;
 const RACE_SPEED_FAST = 4400;
 export const RACE_SPEED = (RACE_SPEED_SLOW + RACE_SPEED_FAST) / 2;
 /** A bot's racing speed: the better it flies on average (aim, reflexes, daring), the faster. */
-export const raceSpeedOf = (skills: Skills) => RACE_SPEED_SLOW + (RACE_SPEED_FAST - RACE_SPEED_SLOW) * ((skills.aim + skills.reflexes + skills.daring) / 3);
+export const raceSpeedOf = (skills: Skills) => RACE_SPEED_SLOW + (RACE_SPEED_FAST - RACE_SPEED_SLOW) * meanSkill(skills);
+/** A bot's skill in one number: the mean of aim, reflexes and daring. */
+/** A ring of the round as a bot sees it: where it is, which way it faces (unit length), the radius of its opening. */
+export interface Ring {
+  center: THREE.Vector3;
+  facing: THREE.Vector3;
+  radius: number;
+}
+
+export const meanSkill = (skills: Skills) => (skills.aim + skills.reflexes + skills.daring) / 3;
 /** A racer only turns its nose to a ship this close to it (rad, about 30°): one ahead on the course. */
 const RACE_AIM_CONE = 0.5;
 /** A racer with a ship on its tail flips to shoot back for this long (s), at most once in LOOK_BACK_PAUSE (s). */
@@ -89,6 +100,15 @@ const WELL_PULL = 0.3;
 const KEEP_CLEAR = 5;
 const KEEP_CLEAR_AHEAD = 1;
 const KEEP_CLEAR_PUSH = 800;
+/**
+ * Bots do not fly into a ring's housings (a race's gate, a base of Capture the Flag). Where
+ * their way would cross a ring's plane within RING_HORIZON seconds on its housings or struts,
+ * or within RING_MARGIN ship radii of them, the wanted velocity is pushed sideways, up to
+ * CRUISE_SPEED the nearer the crossing: into the opening when the way meets the inner half of
+ * the housings, else out past them.
+ */
+const RING_HORIZON = 2;
+const RING_MARGIN = 1.5;
 /**
  * Bots shove on purpose. A rival beside the bot, its center within SHOVE_REACH ship radii (about
  * 50 m) and drifting against it slower than SHOVE_DRIFT (units/s, 15 m/s), with rock or a hull
@@ -187,6 +207,12 @@ export class Bot {
    */
   waypoint: THREE.Vector3 | null = null;
   raceSpeed: number;
+  /** Set by the game: the rings of the round, whose housings the bot steers clear of (see RING_HORIZON). */
+  rings: readonly Ring[] = [];
+  /** Set by the game in a race: the ring the racer flies through next, which it comes at on its own way (see Game.approach), not steering clear of it. */
+  through: Ring | null = null;
+  /** Set by the game in a race: no faster than this into the next gate's turn (units/s; see CORNER_PUSH in game.ts). */
+  cornerSpeed = Infinity;
   /** Set by the game: the nearest probe, which an idle bot goes for. */
   lure: THREE.Vector3 | null = null;
   /** Set by the game: a ship the bot hunts wherever it is, seen or not. */
@@ -195,6 +221,8 @@ export class Bot {
   siege: THREE.Vector3 | null = null;
   /** Set by the game: a ship with a nova core close by, which the bot gets away from first. */
   flee: THREE.Vector3 | null = null;
+  /** What the bot flees, for the development log: a nova, the battleship, a comet. */
+  fleeFrom = '';
   /** Set by the game: the bot turns back towards the center beyond this distance (units), inside a solar flare's shell. */
   home = HOME_RADIUS;
   /** Set by the game: the bot's hook holds until then, and is ready again from then on (s). */
@@ -332,7 +360,7 @@ export class Bot {
     } else if (racing) {
       // through the next gate, at speed; what a gate's coil gave it, it keeps
       toTarget.subVectors(this.waypoint!, me.position);
-      desired.copy(toTarget).normalize().multiplyScalar(Math.max(this.raceSpeed, Math.min(me.velocity.length(), this.raceSpeed + BOOST_PUSH)));
+      desired.copy(toTarget).normalize().multiplyScalar(Math.min(this.cornerSpeed, Math.max(this.raceSpeed, Math.min(me.velocity.length(), this.raceSpeed + BOOST_PUSH))));
       if (target) this.senseJink(target, dt, now);
     } else if (target) {
       toTarget.subVectors(target.flight.position, me.position);
@@ -371,7 +399,7 @@ export class Bot {
     // a nova core close by: away from it, at full speed, with the main drive (see burning)
     if (this.flee) desired.copy(local.subVectors(me.position, this.flee).normalize()).multiplyScalar(CRUISE_SPEED * 2);
     if (me.position.length() > this.home) desired.addScaledVector(me.position, -CRUISE_SPEED / me.position.length());
-    this.keepClear(ships);
+    const givingWay = this.keepClear(ships);
     // a massive body pulls: near it, away from it comes first
     const well = field.well;
     let falling = false;
@@ -398,6 +426,7 @@ export class Bot {
         if (away.lengthSq() < 1) away.set(0, 1, 0);
         desired.addScaledVector(away.normalize(), CRUISE_SPEED).addScaledVector(heading, -speed * 0.5);
       }
+      for (const ring of this.rings) if (ring !== this.through) this.clearRing(ring, speed);
     }
 
     error.subVectors(desired, me.velocity);
@@ -445,6 +474,13 @@ export class Bot {
     }
     this.shove = this.armed && now >= this.nextShove ? this.shoveAt(ships, field, now) : null;
     if (now < this.shoveDriftUntil) controls.strafeX = controls.strafeY = 0;
+    if (devlog) {
+      // what the bot does, the first that holds: running from danger, then its task
+      const doing = this.flee ? 'flee' : falling ? 'escape well' : chaser && !this.armed ? 'run' : lookingBack ? 'look back' : racing ? 'race' : defending ? 'defend' : target ? 'attack' : this.siege ? 'siege' : this.lure ? 'probe' : 'roam';
+      const about = this.flee ? this.fleeFrom : chaser && (!this.armed || lookingBack || defending) ? chaser.name : target ? target.name : '';
+      const extra = `${danger && !falling ? ' +avoid rock' : ''}${me.position.length() > this.home ? ' +home' : ''}${givingWay ? ` +give way to ${givingWay.name}` : ''}`;
+      devlog.decide(now, this.ship.name, meanSkill(this.skills), doing + extra, about);
+    }
     return this.byHand(controls, dt);
   }
 
@@ -464,6 +500,7 @@ export class Bot {
       this.nextShove = now + SHOVE_PAUSE;
       if (Math.random() > this.skills.daring) return null;
       this.shoveDriftUntil = now + SHOVE_DRIFT_SECONDS;
+      devlog?.add({ kind: 'act', t: now, ship: this.ship.name, act: 'shove', detail: ship.name });
       this.shoveKick.x = away.x;
       this.shoveKick.y = away.y;
       return this.shoveKick;
@@ -471,8 +508,10 @@ export class Bot {
     return null;
   }
 
-  /** Off the way of any ship the bot would meet soon (see KEEP_CLEAR): the wanted velocity bends away from where they would come closest. */
-  private keepClear(ships: readonly Ship[]) {
+  /** Off the way of any ship the bot would meet soon (see KEEP_CLEAR): the wanted velocity bends away from where they would come closest. Returns the ship it gives way to most, or null. */
+  private keepClear(ships: readonly Ship[]): Ship | null {
+    let most: Ship | null = null;
+    let least = Infinity;
     const me = this.ship.flight;
     const clear = this.ship.radius * KEEP_CLEAR;
     for (const ship of ships) {
@@ -489,7 +528,30 @@ export class Bot {
       if (miss < 1e-6) local.set(0, 1, 0);
       else local.divideScalar(miss);
       desired.addScaledVector(local, KEEP_CLEAR_PUSH * (1 - miss / clear));
+      if (miss < least) {
+        least = miss;
+        most = ship;
+      }
     }
+    return most;
+  }
+
+  /** Pushes the wanted velocity off a ring's housings that the way (along `heading` at `speed`) would meet (see RING_HORIZON). */
+  private clearRing(ring: Ring, speed: number) {
+    const me = this.ship.flight;
+    const toward = heading.dot(ring.facing);
+    if (Math.abs(toward) < 0.05) return;
+    // when and where the way crosses the ring's plane
+    const time = local.subVectors(ring.center, me.position).dot(ring.facing) / (toward * speed);
+    if (time < 0 || time > RING_HORIZON) return;
+    const cross = local.copy(me.position).addScaledVector(heading, speed * time).sub(ring.center);
+    const out = cross.length();
+    const { inner, outer } = ringRim(ring.radius);
+    const margin = this.ship.radius * RING_MARGIN;
+    if (out < inner - margin || out > outer + margin) return;
+    // nearer the opening: through it; else out past the struts
+    const inward = out < inner + (outer - inner) / 4;
+    desired.addScaledVector(cross.divideScalar(Math.max(out, 1)), (inward ? -1 : 1) * CRUISE_SPEED * (1 - time / RING_HORIZON));
   }
 
   /** A ship the bot may fight: alive, not its own, not of its side, and past its spawn protection (a freshly printed clone is left alone). */
