@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { openGame, type GameWindow } from './game';
+import { openGame, startSolo } from './game';
 import { ROUND_SECONDS } from '../src/music/songs';
 
 /**
@@ -21,12 +21,10 @@ type Round = { standings: Pilot[]; captures: number; sunk: boolean };
 /** Plays a whole solo round of `mode` with the Host out, and returns how it went. */
 async function playRound(page: Page, mode: string): Promise<Round> {
   await openGame(page);
-  await page.click('#start');
-  await page.click(`[data-choice="solo-mode"] button[data-value="${mode}"]`);
-  await page.click('#solo-launch');
+  await startSolo(page, mode);
   return page.evaluate(
     async ([lapse, roundSeconds]) => {
-      const game = (window as unknown as GameWindow).game;
+      const game = window.game;
       // the Host is no pilot here: its ship is gone for the round
       game.me.alive = false;
       game.me.root.visible = false;

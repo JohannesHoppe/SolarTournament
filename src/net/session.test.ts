@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Session } from './session';
-import type { Json, Transport } from './transport';
+import type { Transport } from './transport';
 
 /** A transport that only delivers what the test hands it. */
 class FakeTransport implements Transport {
@@ -8,7 +8,7 @@ class FakeTransport implements Transport {
   readonly handlers = new Map<string, (data: unknown, from: string) => void>();
   readonly connected: string[] = [];
   constructor(readonly selfId: string) {}
-  send(_type: string, _data: Json, _to?: string) {}
+  send() {}
   on(type: string, handler: (data: unknown, from: string) => void) {
     this.handlers.set(type, handler);
   }

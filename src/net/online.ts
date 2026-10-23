@@ -232,7 +232,7 @@ export class Online {
       this.novas.set(ship, game.time);
       game.novaBlast(holder, from.fromArray(p));
     };
-    session.onCheat = (ship, _cheat, accuser) => {
+    session.onCheat = (ship, accuser) => {
       const accused = ownerOf(ship);
       if (accused) this.accuse(accused, accuser);
     };
@@ -293,10 +293,6 @@ export class Online {
     let pilots = this.watching ? 0 : 1;
     for (const peer of this.flying) if (!this.session.isSilent(peer)) pilots++;
     return Math.min(pilots, TOURNAMENT_SIZE);
-  }
-
-  get spectating() {
-    return this.watching;
   }
 
   /** Sends the own ships; the lead browser adds the round clock. Rebalances bots when the lead changes. */

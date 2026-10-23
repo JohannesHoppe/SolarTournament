@@ -8,7 +8,7 @@
  * Run with `npm run dupes`.
  */
 import { globSync, readFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import postcss, { type Rule } from 'postcss';
 
@@ -52,7 +52,7 @@ for (const file of files) {
     rules++;
     const lines = declarations(rule);
     if (lines.length < MIN_DECLARATIONS || allowed(rule)) return;
-    found.push({ place: `${relative(root, join(root, file))}:${rule.source?.start?.line ?? 0} ${rule.selector.replace(/\s+/g, ' ')}`, key: `${context(rule)}|${lines.join(';')}` });
+    found.push({ place: `${file}:${rule.source?.start?.line ?? 0} ${rule.selector.replace(/\s+/g, ' ')}`, key: `${context(rule)}|${lines.join(';')}` });
   });
 }
 

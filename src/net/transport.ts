@@ -312,13 +312,13 @@ export class LocalTransport extends BaseTransport {
     const { t, d, to, from, skip } = message;
     if ((to && to !== this.selfId) || skip?.includes(this.selfId) || this.blocked.has(from)) return;
     if (t === '_bye') return this.drop(from);
-    if (!this.lastSeen.has(from)) {
-      this.lastSeen.set(from, performance.now() / 1000);
+    const known = this.lastSeen.has(from);
+    this.lastSeen.set(from, performance.now() / 1000);
+    if (!known) {
       // answer a newcomer, so it learns about us without waiting for the next heartbeat
       if (t === '_hello') this.post({ t: '_beat' });
       for (const handler of this.joinHandlers) handler(from);
     }
-    this.lastSeen.set(from, performance.now() / 1000);
     if (!t.startsWith('_')) this.dispatch(t, d, from);
   }
 

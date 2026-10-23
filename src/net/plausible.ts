@@ -58,6 +58,11 @@ interface Track {
   credits: number;
 }
 
+/** Whether a ship is farther from where it was last seen alive than it could have flown since. */
+function tooFar(track: Track, [x, y, z]: number[], now: number): boolean {
+  return Math.hypot(x - track.x, y - track.y, z - track.z) > PLAUSIBLE_SPEED * (now - track.at) + PLAUSIBLE_SLACK;
+}
+
 /** What a browser knows about a ship from its state: where, alive, kills, a nova core held. */
 export interface Seen {
   p: number[];
@@ -131,13 +136,10 @@ export class Plausibility {
       if (now - track.diedAt >= REPRINT_DELAY) this.freshClone(track);
       track.diedAt = -Infinity;
     }
-    if (seen.alive && !firstSight && !reprinted && now >= track.graceUntil) {
-      const flown = Math.hypot(x - track.x, y - track.y, z - track.z);
-      if (flown > PLAUSIBLE_SPEED * (now - track.at) + PLAUSIBLE_SLACK) {
-        track.jumps = track.jumps.filter((at) => now - at < TELEPORT_WINDOW);
-        track.jumps.push(now);
-        if (track.jumps.length >= TELEPORT_STRIKES) cheat = 'teleport';
-      }
+    if (seen.alive && !firstSight && !reprinted && now >= track.graceUntil && tooFar(track, seen.p, now)) {
+      track.jumps = track.jumps.filter((at) => now - at < TELEPORT_WINDOW);
+      track.jumps.push(now);
+      if (track.jumps.length >= TELEPORT_STRIKES) cheat = 'teleport';
     }
     // a core held when the ship is first seen (it took it before this browser came), or right
     // after it took a probe whose contents this browser did not know
@@ -170,8 +172,7 @@ export class Plausibility {
   /** A ship sets off a nova core at a place: only one that holds a core, and where it is. */
   nova(id: string, p: number[], now: number): Cheat | null {
     const track = this.track(id, now);
-    const far = Math.hypot(p[0] - track.x, p[1] - track.y, p[2] - track.z) > PLAUSIBLE_SPEED * (now - track.at) + PLAUSIBLE_SLACK;
-    if (!track.nova || (Number.isFinite(track.at) && far)) return 'nova';
+    if (!track.nova || (Number.isFinite(track.at) && tooFar(track, p, now))) return 'nova';
     // its clone burns up and is printed again elsewhere
     this.freshClone(track);
     track.graceUntil = now + REPRINT_GRACE;
@@ -279,7 +280,7 @@ function keep<T extends { at: number }>(map: Map<string, T[]>, ship: string, ent
 }
 
 /** Accusations: a peer counts as a cheater once at least ACCUSERS Hosts who fly, the own one included, say so. */
-export const ACCUSERS = 2;
+const ACCUSERS = 2;
 
 /**
  * How many accusers it takes among `pilots` Hosts who fly (the own one included, if it flies):

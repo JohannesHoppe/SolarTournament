@@ -1,5 +1,5 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test';
-import { openGame, play, type GameWindow } from './game';
+import { openGame, play } from './game';
 
 /** Joins a tournament of tabs in this browser (?local=1). */
 async function join(page: Page, room: string) {
@@ -21,7 +21,7 @@ async function pair(context: BrowserContext, room: string) {
 
 const world = (page: Page) =>
   page.evaluate(() => {
-    const game = (window as unknown as GameWindow).game;
+    const game = window.game;
     return {
       arena: game.venue.id,
       round: game.roundId,
@@ -40,14 +40,14 @@ test('two tabs of one tournament see the same world', async ({ context }) => {
   expect(seenB.ships).toEqual(seenA.ships);
   expect(errors).toEqual([]);
   // honest tabs never take each other for cheats
-  for (const page of [a, b]) expect(await page.evaluate(() => (window as unknown as GameWindow).game.online.reported.size)).toBe(0);
+  for (const page of [a, b]) expect(await page.evaluate(() => window.game.online.reported.size)).toBe(0);
 });
 
 test('a torpedo flies on both tabs and hits the ship of the other', async ({ context }) => {
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}t&bots=0`);
   // above the field, where no rock of whatever arena the room draws comes between the two
   const target = await b.evaluate(() => {
-    const game = (window as unknown as GameWindow).game;
+    const game = window.game;
     game.me.protectedUntil = 0;
     game.me.flight.position.set(0, 62000, 0);
     game.me.flight.velocity.set(0, 0, 0);
@@ -55,7 +55,7 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
     return { id: game.me.id, position: game.me.flight.position.toArray() };
   });
   await a.evaluate(({ position }) => {
-    const game = (window as unknown as GameWindow).game;
+    const game = window.game;
     const me = game.me;
     const at = me.flight.position.clone().set(position[0], position[1], position[2]);
     me.protectedUntil = 0;
@@ -66,9 +66,9 @@ test('a torpedo flies on both tabs and hits the ship of the other', async ({ con
     game.fireTorpedo(me);
   }, target);
   await play(b, 1);
-  expect(await b.evaluate(() => (window as unknown as GameWindow).game.torpedoes.list.length)).toBe(1);
+  expect(await b.evaluate(() => window.game.torpedoes.list.length)).toBe(1);
   await play(b, 8);
-  expect(await b.evaluate(() => (window as unknown as GameWindow).game.me.hull)).toBe(40);
+  expect(await b.evaluate(() => window.game.me.hull)).toBe(40);
   expect(errors).toEqual([]);
 });
 
@@ -77,7 +77,7 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}f&m=flag&bots=0`);
   const sides = (page: Page) =>
     page.evaluate(() => {
-      const game = (window as unknown as GameWindow).game;
+      const game = window.game;
       return Object.fromEntries(game.ships.map((ship: { id: string; team: number }) => [ship.id, ship.team]));
     });
   const [sidesA, sidesB] = [await sides(a), await sides(b)];
@@ -87,23 +87,23 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
   expect(new Set(hosts.map(([, team]) => team)).size).toBe(2);
   // the second tab's clone takes the first side's core; the lead sees it and tells both
   const thief = await b.evaluate(() => {
-    const game = (window as unknown as GameWindow).game;
+    const game = window.game;
     game.me.flight.position.copy(game.flags.bases[1 - game.me.team]);
     game.me.flight.velocity.set(0, 0, 0);
     game.autopilot = false;
     return game.me.id;
   });
   await play(b, 2);
-  for (const page of [a, b]) expect(await page.evaluate(() => (window as unknown as GameWindow).game.flags.cores.map((core: { carrier: string | null }) => core.carrier))).toContain(thief);
+  for (const page of [a, b]) expect(await page.evaluate(() => window.game.flags.cores.map((core: { carrier: string | null }) => core.carrier))).toContain(thief);
   expect(errors).toEqual([]);
 });
 
 test("two tabs of the President's Fleet see one battleship and count the same hits, a torpedo's too", async ({ context }) => {
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}b&m=fleet&bots=0`);
   // the battleship comes in on the field time; both tabs wait for it
-  for (const page of [a, b]) await page.evaluate(() => (window as unknown as GameWindow).game.field.setClock(13));
+  for (const page of [a, b]) await page.evaluate(() => window.game.field.setClock(13));
   await play(b, 2);
-  const where = (page: Page) => page.evaluate(() => (window as unknown as GameWindow).game.fleet.position.toArray());
+  const where = (page: Page) => page.evaluate(() => window.game.fleet.position.toArray());
   const [atA, atB] = [await where(a), await where(b)];
   expect(Math.hypot(atA[0] - atB[0], atA[1] - atB[1], atA[2] - atB[2])).toBeLessThan(2000);
   // the clone 150 m above a part of the battleship, its nose on it, fires its laser or a
@@ -111,7 +111,7 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
   const fireAt = (page: Page, zone: number, torpedo: boolean) =>
     page.evaluate(
       ([zone, torpedo]) => {
-        const game = (window as unknown as GameWindow).game;
+        const game = window.game;
         const part = game.fleet.zoneAt(zone);
         const above = part.clone().set(0, 1, 0).applyQuaternion(game.fleet.quaternion).multiplyScalar(3000).add(part);
         game.me.flight.position.copy(above);
@@ -131,11 +131,11 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
     await b.waitForTimeout(150);
   }
   await play(a, 2);
-  expect(await a.evaluate(() => (window as unknown as GameWindow).game.fleet.hits[0])).toBe(10);
+  expect(await a.evaluate(() => window.game.fleet.hits[0])).toBe(10);
   // a torpedo at the next battery locks on, goes off there, and both tabs count its hits
   expect(await fireAt(b, 1, true)).toBe('battleship.1');
   await play(b, 3);
-  for (const page of [a, b]) expect(await page.evaluate(() => (window as unknown as GameWindow).game.fleet.hits[1])).toBe(10);
+  for (const page of [a, b]) expect(await page.evaluate(() => window.game.fleet.hits[1])).toBe(10);
   expect(errors).toEqual([]);
 });
 
@@ -152,15 +152,15 @@ test('a nova from a ship without a core never goes off, and two tabs name its Ho
   const [a, b, cheat] = pages;
   for (const page of [a, b]) {
     await page.evaluate(() => {
-      const game = (window as unknown as GameWindow).game;
+      const game = window.game;
       game.cheaters = [];
       game.announceCheater = (name: string) => game.cheaters.push(name);
     });
   }
-  const victim = await a.evaluate(() => (window as unknown as GameWindow).game.me.flight.position.toArray().map(Math.round));
+  const victim = await a.evaluate(() => window.game.me.flight.position.toArray().map(Math.round));
   // the cheating tab says its clone set off a core it never had, right at the other's ship
   const { name, id: cheaterId } = await cheat.evaluate((at) => {
-    const game = (window as unknown as GameWindow).game;
+    const game = window.game;
     game.online.session.sendNova(game.me.id, at);
     return { name: game.me.name, id: game.me.id };
   }, victim);
@@ -168,7 +168,7 @@ test('a nova from a ship without a core never goes off, and two tabs name its Ho
   await play(b, 2);
   for (const page of [a, b]) {
     const seen = await page.evaluate(() => {
-      const game = (window as unknown as GameWindow).game;
+      const game = window.game;
       return { alive: game.me.alive, cheaters: game.cheaters };
     });
     expect(seen.alive).toBe(true);
@@ -176,8 +176,8 @@ test('a nova from a ship without a core never goes off, and two tabs name its Ho
   }
   // cast out: its ship is gone from the others, and the cheating tab is back in the menu
   for (const page of [a, b]) {
-    expect(await page.evaluate((id) => (window as unknown as GameWindow).game.ships.some((ship: { id: string }) => ship.id === id), cheaterId)).toBe(false);
+    expect(await page.evaluate((id) => window.game.ships.some((ship: { id: string }) => ship.id === id), cheaterId)).toBe(false);
   }
-  await cheat.waitForFunction(() => (window as unknown as GameWindow).game.state === 'menu', null, { timeout: 15_000 });
+  await cheat.waitForFunction(() => window.game.state === 'menu', null, { timeout: 15_000 });
   expect(errors).toEqual([]);
 });

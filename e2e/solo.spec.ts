@@ -1,14 +1,13 @@
 import { expect, test } from '@playwright/test';
-import { openGame, play, type GameWindow } from './game';
+import { openGame, play, startSolo } from './game';
 
 test('a solo round starts and runs without errors', async ({ page }) => {
   const errors = await openGame(page);
   // the solo plate opens with the default choice: a race against a full grid of seven rivals
-  await page.click('#start');
-  await page.click('#solo-launch');
+  await startSolo(page);
   await play(page, 5);
   const state = await page.evaluate(() => {
-    const game = (window as unknown as GameWindow).game;
+    const game = window.game;
     return { state: game.state, ships: game.ships.length, arena: game.venue.id, alive: game.me.alive };
   });
   expect(state.state).toBe('playing');
@@ -21,12 +20,10 @@ test('a solo round starts and runs without errors', async ({ page }) => {
 for (const mode of ['deathmatch', 'survival', 'flag', 'fleet']) {
   test(`a solo round of ${mode} starts and runs without errors`, async ({ page }) => {
     const errors = await openGame(page);
-    await page.click('#start');
-    await page.click(`[data-choice="solo-mode"] button[data-value="${mode}"]`);
-    await page.click('#solo-launch');
+    await startSolo(page, mode);
     await play(page, 3);
     const state = await page.evaluate(() => {
-      const game = (window as unknown as GameWindow).game;
+      const game = window.game;
       return { state: game.state, mode: game.roundMode, alive: game.me.alive };
     });
     expect(state).toEqual({ state: 'playing', mode, alive: true });
@@ -47,7 +44,7 @@ test('the hangar sells an upgrade for Solar Coins and keeps it, and the Sovereig
   await page.click('#ship-prev');
   await expect(page.locator('#ship-note')).toContainText('Make both interceptors complete');
   await page.reload();
-  await page.waitForFunction(() => (window as unknown as GameWindow).game?.composer);
+  await page.waitForFunction(() => window.game?.composer);
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.hangar')!));
   expect(kept.coins).toBe(200);
   expect(kept.levels.human.radiators).toBe(1);
@@ -61,7 +58,7 @@ for (const course of ['basic', 'racer', 'gladiator', 'arsenal', 'tactician']) {
     await page.click('#school');
     await page.click(`#school-${course}`);
     await play(page, 2);
-    expect(await page.evaluate(() => (window as unknown as GameWindow).game.venue.id)).toBe('belt');
+    expect(await page.evaluate(() => window.game.venue.id)).toBe('belt');
     await expect(page.locator('#school-step')).toContainText(/\d+\/\d+/);
     expect(errors).toEqual([]);
   });

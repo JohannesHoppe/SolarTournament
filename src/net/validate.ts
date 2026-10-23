@@ -21,7 +21,7 @@ const MAX_SPIN = 50;
 /** A unit vector, with room for rounding. */
 export const UNIT_LENGTH = 1.01;
 /** Callsigns as the menu allows them. */
-export const MAX_NAME = 16;
+const MAX_NAME = 16;
 /** Scores, kills, deaths and round numbers. */
 export const MAX_COUNT = 1e6;
 /** Field times and times in the room (s): far beyond any session. */
@@ -61,6 +61,18 @@ export function vec(x: unknown, length: number, limit: number): number[] | null 
   return x.every((v) => num(v, -limit, limit) !== null) ? (x as number[]) : null;
 }
 
+/** A list of at most `max` entries, each passing `check`, or null when it is no list or any entry fails. */
+function listOf<T>(x: unknown, max: number, check: (entry: unknown) => T | null): T[] | null {
+  if (!Array.isArray(x) || x.length > max) return null;
+  const list = x.map(check);
+  return list.some((entry) => entry === null) ? null : (list as T[]);
+}
+
+/** A record of checked fields as the type it stands for, or null when any field failed its check. */
+function complete<T>(fields: Record<string, unknown>): T | null {
+  return Object.values(fields).some((value) => value === null) ? null : (fields as T);
+}
+
 /** An id: a short string of printable characters, or null. */
 export function id(x: unknown): string | null {
   return typeof x === 'string' && x.length > 0 && x.length <= MAX_ID && /^[\w.:-]+$/.test(x) ? x : null;
@@ -95,7 +107,7 @@ export function shipState(x: unknown): ShipState | null {
           it: int(x.it, 0, 15),
           lo: int(x.lo, 0, 15),
         };
-  const state = {
+  const state = complete<ShipState>({
     id: id(x.id),
     ...slow,
     p: vec(x.p, 3, MAX_COORDINATE),
@@ -108,67 +120,48 @@ export function shipState(x: unknown): ShipState | null {
     dr: num(x.dr, 0, 1),
     tr: num(x.tr, 0, 1),
     pr: num(x.pr, 0, 10),
-  };
-  if (Object.values(state).some((value) => value === null)) return null;
+  });
   // a quaternion of length zero cannot be normalized
-  if (Math.hypot(...state.q!) < 0.5) return null;
-  return state as ShipState;
+  return state && Math.hypot(...state.q) >= 0.5 ? state : null;
 }
 
-export function asteroidState(x: unknown): AsteroidState | null {
-  if (!isRecord(x)) return null;
-  const rock = { id: id(x.id), hp: num(x.hp, 0, 1000), b: num(x.b, 0, MAX_FIELD_TIME) };
-  return rock.id !== null && rock.hp !== null && rock.b !== null ? (rock as AsteroidState) : null;
+function asteroidState(x: unknown): AsteroidState | null {
+  return isRecord(x) ? complete<AsteroidState>({ id: id(x.id), hp: num(x.hp, 0, 1000), b: num(x.b, 0, MAX_FIELD_TIME) }) : null;
 }
 
 /** A broken rock: its id and the field time it broke. */
-function breakState(x: unknown): { id: string; b: number } | null {
-  if (!isRecord(x)) return null;
-  const rock = { id: id(x.id), b: num(x.b, 0, MAX_FIELD_TIME) };
-  return rock.id !== null && rock.b !== null ? (rock as { id: string; b: number }) : null;
+type Break = { id: string; b: number };
+function breakState(x: unknown): Break | null {
+  return isRecord(x) ? complete<Break>({ id: id(x.id), b: num(x.b, 0, MAX_FIELD_TIME) }) : null;
 }
 
 /** A short list of ids (the probes taken in a round), or null. */
 export function ids(x: unknown): string[] | null {
-  if (!Array.isArray(x) || x.length > MAX_IDS) return null;
-  const list = x.map(id);
-  return list.some((entry) => entry === null) ? null : (list as string[]);
+  return listOf(x, MAX_IDS, id);
 }
 
 /** The probes in flight, or null: at most four of the arena and the drops of a few dead clones. */
 export function probeStates(x: unknown): ProbeState[] | null {
-  if (!Array.isArray(x) || x.length > MAX_PROBES) return null;
-  const probes = x.map((probe) => {
+  return listOf(x, MAX_PROBES, (probe) => {
     if (!isRecord(probe)) return null;
-    const state = { i: id(probe.i), k: KINDS.find((kind) => kind === probe.k) ?? null, p: vec(probe.p, 3, MAX_COORDINATE), v: vec(probe.v, 3, MAX_SPEED), u: num(probe.u, 0, MAX_PROBE_SECONDS) };
-    if (Object.values(state).some((value) => value === null)) return null;
+    const state = complete<ProbeState>({ i: id(probe.i), k: KINDS.find((kind) => kind === probe.k) ?? null, p: vec(probe.p, 3, MAX_COORDINATE), v: vec(probe.v, 3, MAX_SPEED), u: num(probe.u, 0, MAX_PROBE_SECONDS) });
     // a sealed probe's luck is a 32-bit hash
-    if (probe.x === undefined) return state as ProbeState;
+    if (!state || probe.x === undefined) return state;
     const luck = int(probe.x, 0, 0xffffffff);
-    return luck === null ? null : ({ ...state, x: luck } as ProbeState);
+    return luck === null ? null : { ...state, x: luck };
   });
-  return probes.some((probe) => probe === null) ? null : (probes as ProbeState[]);
 }
 
 /** The pieces of wreckage in flight, or null. */
 export function wreckStates(x: unknown): WreckState[] | null {
-  if (!Array.isArray(x) || x.length > MAX_WRECK_PIECES) return null;
-  const pieces = x.map((piece) => {
-    if (!isRecord(piece)) return null;
-    const state = { id: id(piece.id), p: vec(piece.p, 3, MAX_COORDINATE), v: vec(piece.v, 3, MAX_SPEED), g: num(piece.g, 0, MAX_FIELD_TIME) };
-    return Object.values(state).some((value) => value === null) ? null : (state as WreckState);
-  });
-  return pieces.some((piece) => piece === null) ? null : (pieces as WreckState[]);
+  return listOf(x, MAX_WRECK_PIECES, (piece) =>
+    isRecord(piece) ? complete<WreckState>({ id: id(piece.id), p: vec(piece.p, 3, MAX_COORDINATE), v: vec(piece.v, 3, MAX_SPEED), g: num(piece.g, 0, MAX_FIELD_TIME) }) : null,
+  );
 }
 
 export function fieldState(x: unknown): FieldState | null {
-  if (!isRecord(x) || !Array.isArray(x.a) || x.a.length > MAX_ROCKS || !Array.isArray(x.x) || x.x.length > MAX_ROCKS) return null;
-  const k = id(x.k);
-  const t = num(x.t, 0, MAX_FIELD_TIME);
-  const rocks = x.a.map(asteroidState);
-  const broken = x.x.map(breakState);
-  if (k === null || t === null || rocks.some((rock) => rock === null) || broken.some((rock) => rock === null)) return null;
-  return { k, t, a: rocks as AsteroidState[], x: broken as { id: string; b: number }[] };
+  if (!isRecord(x)) return null;
+  return complete<FieldState>({ k: id(x.k), t: num(x.t, 0, MAX_FIELD_TIME), a: listOf(x.a, MAX_ROCKS, asteroidState), x: listOf(x.x, MAX_ROCKS, breakState) });
 }
 
 /** Ships on one side of Capture the Flag: at most every place of a tournament, and those of a lead browser's bots with room. */
@@ -180,17 +173,17 @@ const MAX_FLAG_EVENTS = 16;
 
 /** The sides and cores of Capture the Flag as the lead browser sends them, or null. */
 export function flagsState(x: unknown): FlagsState | null {
-  if (!isRecord(x) || !Array.isArray(x.t) || x.t.length !== 2 || !Array.isArray(x.f) || x.f.length !== 2 || !Array.isArray(x.e) || x.e.length > MAX_FLAG_EVENTS) return null;
-  const sides = x.t.map((side) => (Array.isArray(side) && side.length <= MAX_SIDE ? ids(side) : null));
+  if (!isRecord(x) || !Array.isArray(x.t) || x.t.length !== 2 || !Array.isArray(x.f) || x.f.length !== 2) return null;
+  const sides = listOf(x.t, 2, (side) => listOf(side, MAX_SIDE, id));
   const captures = vec(x.c, 2, MAX_CAPTURES);
   const cores = x.f.map((core) => (core === null ? null : typeof core === 'string' ? (id(core) ?? undefined) : (vec(core, 6, MAX_COORDINATE) ?? undefined)));
-  const events = x.e.map((e) => {
+  const events = listOf(x.e, MAX_FLAG_EVENTS, (e) => {
     if (!Array.isArray(e) || e.length !== 4) return null;
     const event = [int(e[0], 1, MAX_COUNT), int(e[1], 0, 3), e[2] === null ? null : id(e[2]), int(e[3], 0, 1)] as const;
     return event[0] === null || event[1] === null || event[3] === null || (e[2] !== null && event[2] === null) ? null : (event as [number, number, string | null, number]);
   });
-  if (sides.some((side) => side === null) || !captures || captures.some((c) => !Number.isInteger(c) || c < 0) || cores.some((core) => core === undefined) || events.some((e) => e === null)) return null;
-  return { t: sides as string[][], c: captures, f: cores as (string | number[] | null)[], e: events as [number, number, string | null, number][] };
+  if (!sides || !captures || captures.some((c) => !Number.isInteger(c) || c < 0) || cores.some((core) => core === undefined) || !events) return null;
+  return { t: sides, c: captures, f: cores as (string | number[] | null)[], e: events };
 }
 
 /** A battleship's parts, with room (see game/fleet). */
@@ -198,16 +191,16 @@ const MAX_FLEET_ZONES = 32;
 
 /** The President's battleship as the lead browser sends it, or null. */
 export function fleetState(x: unknown): FleetState | null {
-  if (!isRecord(x) || !Array.isArray(x.h) || x.h.length > MAX_FLEET_ZONES) return null;
-  const hits = x.h.map((h) => int(h, 0, MAX_COUNT));
-  const state = {
+  if (!isRecord(x)) return null;
+  const state = complete<Omit<FleetState, 't'>>({
     d: int(x.d, 0, 1),
     p: vec(x.p, 3, MAX_COORDINATE),
     v: vec(x.v, 3, MAX_SPEED),
     q: vec(x.q, 4, UNIT_LENGTH),
     u: int(x.u, 0, 1),
-  };
+    h: listOf(x.h, MAX_FLEET_ZONES, (h) => int(h, 0, MAX_COUNT)),
+  });
   const target = x.t === null ? null : id(x.t);
-  if (Object.values(state).some((value) => value === null) || hits.some((h) => h === null) || (x.t !== null && target === null) || Math.hypot(...state.q!) < 0.5) return null;
-  return { ...(state as Omit<FleetState, 'h' | 't'>), h: hits as number[], t: target };
+  if (!state || (x.t !== null && target === null) || Math.hypot(...state.q) < 0.5) return null;
+  return { ...state, t: target };
 }

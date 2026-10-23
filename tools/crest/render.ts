@@ -27,13 +27,24 @@ function star(cx: number, cy: number, outer: number, inner = outer * 0.4, rotati
   return `<path d="${poly(points)}" fill="${ORANGE}"/>`;
 }
 
+/** Each letter's advance with `spacing` after it, and the width of the whole line (without the spacing after its last letter). */
+function advances(text: string, size: number, spacing: number) {
+  const widths = [...text].map((c) => font.getAdvanceWidth(c, size) + spacing);
+  return { widths, total: widths.reduce((a, b) => a + b, 0) - spacing };
+}
+
+/** The height of a capital letter. */
+const capHeight = (size: number) => -font.getPath('H', 0, 0, size).getBoundingBox().y1;
+
+/** Letters filled and outlined in one color: Michroma has one weight only, an outline makes it bolder. */
+const lettered = (glyphs: string[], color: string, weight: number) => `<g fill="${color}" stroke="${color}" stroke-width="${weight}" stroke-linejoin="miter">${glyphs.join('')}</g>`;
+
 /**
  * Lettering on a circle. On top the letters stand on the circle and read clockwise; at the
  * bottom they hang from it and read counter-clockwise, so both read left to right.
  */
 function arcText(text: string, radius: number, size: number, spacing: number, bottom: boolean) {
-  const widths = [...text].map((c) => font.getAdvanceWidth(c, size) + spacing);
-  const total = widths.reduce((a, b) => a + b, 0) - spacing;
+  const { widths, total } = advances(text, size, spacing);
   const span = (total / radius) * (180 / Math.PI);
   let angle = bottom ? 90 + span / 2 : -90 - span / 2;
   const glyphs: string[] = [];
@@ -46,8 +57,7 @@ function arcText(text: string, radius: number, size: number, spacing: number, bo
     if (path) glyphs.push(`<path transform="translate(${x} ${y}) rotate(${f(rotation)})" d="${path}"/>`);
     angle += (bottom ? -1 : 1) * (widths[i] / radius) * (180 / Math.PI);
   });
-  // Michroma has one weight only; an outline in the same color makes it bold
-  return `<g fill="${ORANGE}" stroke="${ORANGE}" stroke-width="${BOLD}" stroke-linejoin="miter">${glyphs.join('')}</g>`;
+  return lettered(glyphs, ORANGE, BOLD);
 }
 
 /** Stroke that thickens the lettering of the rings. */
@@ -72,9 +82,8 @@ function curveText(content: string, p0: [number, number], c: [number, number], p
   }
   const curveLength = table[samples].length;
   const tAt = (length: number) => table.find((entry) => entry.length >= length)?.t ?? 1;
-  const widths = [...content].map((ch) => font.getAdvanceWidth(ch, size) + spacing);
-  const total = widths.reduce((a, b) => a + b, 0) - spacing;
-  const cap = -font.getPath('H', 0, 0, size).getBoundingBox().y1;
+  const { widths, total } = advances(content, size, spacing);
+  const cap = capHeight(size);
   let position = (curveLength - total) / 2;
   const glyphs = [...content].map((ch, i) => {
     const t = tAt(position + (widths[i] - spacing) / 2);
@@ -86,13 +95,13 @@ function curveText(content: string, p0: [number, number], c: [number, number], p
     const d = font.getPath(ch, -(widths[i] - spacing) / 2, cap / 2, size).toPathData(2);
     return d ? `<path transform="translate(${f(x)} ${f(y)}) rotate(${f(angle)})" d="${d}"/>` : '';
   });
-  return `<g fill="${color}" stroke="${color}" stroke-width="${weight}" stroke-linejoin="miter">${glyphs.join('')}</g>`;
+  return lettered(glyphs, color, weight);
 }
 
 /** Straight lettering, centered. */
 function text(content: string, y: number, size: number, spacing: number, fill = ORANGE) {
-  const widths = [...content].map((c) => font.getAdvanceWidth(c, size) + spacing);
-  let x = -(widths.reduce((a, b) => a + b, 0) - spacing) / 2;
+  const { widths, total } = advances(content, size, spacing);
+  let x = -total / 2;
   const glyphs = [...content].map((c, i) => {
     const d = font.getPath(c, x, y, size).toPathData(2);
     x += widths[i];
@@ -119,10 +128,10 @@ const beads = Array.from({ length: 96 }, (_, i) => {
 // optically centered in the band, the letters standing on top and hanging below
 const LETTER_SIZE = 23;
 const BAND_MIDDLE = 243;
-const capHeight = -font.getPath('H', 0, 0, LETTER_SIZE).getBoundingBox().y1;
+const letterCap = capHeight(LETTER_SIZE);
 const lettering = [
-  arcText('MINISTRY OF WAR', BAND_MIDDLE - capHeight / 2, LETTER_SIZE, 9.5, false),
-  arcText('UNITED SOLAR STATES', BAND_MIDDLE + capHeight / 2, LETTER_SIZE, 6.5, true),
+  arcText('MINISTRY OF WAR', BAND_MIDDLE - letterCap / 2, LETTER_SIZE, 9.5, false),
+  arcText('UNITED SOLAR STATES', BAND_MIDDLE + letterCap / 2, LETTER_SIZE, 6.5, true),
   star(...point(BAND_MIDDLE, 180), 11, 4.4, -90),
   star(...point(BAND_MIDDLE, 0), 11, 4.4, 90),
 ];

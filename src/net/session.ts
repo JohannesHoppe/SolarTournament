@@ -31,7 +31,7 @@ const LIVENESS_MS = 2500;
  */
 const CUT_OFF_MS = 2000;
 /** A reported join time this much later than the known one means the peer started over (s); well above network jitter. */
-export const RESTART_SLACK = 1;
+const RESTART_SLACK = 1;
 /**
  * A peer's start over is taken up (its ships judged afresh, the field sent again) at most once
  * in this long (s): an honest browser starts over rarely, a stream of them would only cost the
@@ -152,7 +152,7 @@ export class Session {
   /** A ship of another browser hooked a rock (a point in the rock's frame) or a ship, with this much cable out; or let go (null). */
   onHook: (ship: string, hold: { rock: string | null; local: Vec | null; target: string | null; length: number } | null) => void = () => {};
   /** Another browser says a ship cheats (see plausible.ts). */
-  onCheat: (ship: string, cheat: Cheat, from: string) => void = () => {};
+  onCheat: (ship: string, from: string) => void = () => {};
   /** The lead's field, the wreckage in flight, and the probes taken this round. */
   onSync: (field: FieldState, wrecks: WreckState[], probesTaken: string[], probes: ProbeState[]) => void = () => {};
   onPeerJoin: (id: string) => void = () => {};
@@ -301,8 +301,7 @@ export class Session {
     });
     transport.on('ch', (d, from) => {
       const ship = id(d?.s);
-      const cheat = CHEATS.find((c) => c === d?.r);
-      if (ship && cheat && this.cheatBudget.spend(from)) this.guard(() => this.onCheat(ship, cheat, from));
+      if (ship && CHEATS.includes(d?.r) && this.cheatBudget.spend(from)) this.guard(() => this.onCheat(ship, from));
     });
     transport.on('tk', (d, from) => {
       const target = id(d?.t);
@@ -375,8 +374,8 @@ export class Session {
    */
   get isLead() {
     // a browser that has just started over waits to hear the others first (see isLive)
-    const startedOver = seconds() - this.restartedAt < (2 * LIVENESS_MS) / 1000 && this.peers.length > 0;
-    return !this.justJoined && !startedOver && this.leadId === this.selfId;
+    const waits = this.startedOver(seconds()) && this.peers.length > 0;
+    return !this.justJoined && !waits && this.leadId === this.selfId;
   }
 
   get leadId(): string {
@@ -399,11 +398,15 @@ export class Session {
    * (see LIVENESS_MS). A browser that has just started over itself was the one that was gone:
    * the others count as live as soon as it hears them, so it does not lead in the meantime.
    */
-  isLive(peer: string) {
+  private isLive(peer: string) {
     const now = seconds();
     const heard = now - (this.lastHeard.get(peer) ?? -Infinity) <= LIVENESS_MS / 1000;
-    const startedOver = now - this.restartedAt < (2 * LIVENESS_MS) / 1000;
-    return heard && (startedOver || now - (this.backAt.get(peer) ?? -Infinity) >= LIVENESS_MS / 1000);
+    return heard && (this.startedOver(now) || now - (this.backAt.get(peer) ?? -Infinity) >= LIVENESS_MS / 1000);
+  }
+
+  /** This browser started over within the last two LIVENESS_MS: it was the one that was gone. */
+  private startedOver(now: number) {
+    return now - this.restartedAt < (2 * LIVENESS_MS) / 1000;
   }
 
   /** Whether a peer has gone quiet: nothing heard from it for LIVENESS_MS. */

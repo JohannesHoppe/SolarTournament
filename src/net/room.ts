@@ -24,7 +24,7 @@ const MODES: readonly RoomMode[] = [...ROUND_MODES, 'mixed'];
 export const roomMode = (x: unknown): RoomMode => (MODES.includes(x as RoomMode) ? (x as RoomMode) : 'deathmatch');
 
 /** Longest room name (characters). */
-export const ROOM_NAME_MAX = 32;
+const ROOM_NAME_MAX = 32;
 /** Characters of the random part of a code: no 0/o, 1/l/i, so a code read aloud survives. */
 const ROOM_ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
 /**

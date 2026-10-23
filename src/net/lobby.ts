@@ -1,5 +1,5 @@
 import { LocalTransport, TrysteroTransport, type Transport } from './transport';
-import { num, ROUND_LIMIT } from './validate';
+import { isRecord, num, ROUND_LIMIT } from './validate';
 import { roomCode, roomMode, roomName } from './room';
 import type { RoomMode } from '../game/race';
 import { TOURNAMENT_SIZE } from './session';
@@ -104,9 +104,8 @@ export class Lobby {
    * An announcement from another browser; checked like every message from a peer. A browser
    * leads one tournament at a time, so its newest announcement replaces its earlier one.
    */
-  private hear(d: unknown, from: string) {
-    if (typeof d !== 'object' || d === null) return;
-    const x = d as Record<string, unknown>;
+  private hear(x: unknown, from: string) {
+    if (!isRecord(x)) return;
     const code = roomCode(x.c);
     const name = roomName(x.n);
     const hosts = num(x.h, 1, TOURNAMENT_SIZE);
