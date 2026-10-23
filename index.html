@@ -24,6 +24,7 @@
     </div>
     <div id="hud-room"></div>
     <div id="crosshair"></div>
+    <div id="course-marker" hidden></div>
     <div id="prograde" class="velocity-marker" hidden><span class="hud-label" data-i18n>Course</span></div>
     <div id="retrograde" class="velocity-marker" hidden><span class="hud-label" data-i18n>Brake</span></div>
     <div id="hitmarker"></div>
@@ -99,6 +100,7 @@
     <h1>Solar<span class="neon">Tour<span class="neon-loose">n</span>ament</span></h1>
     <p class="tagline sentences" data-i18n>Five minutes. Die for the President. Again and again.</p>
     <label class="field"><span data-i18n>Callsign</span> <input id="callsign" maxlength="16" autocomplete="off" spellcheck="false"></label>
+    <div class="field tint-field"><span data-i18n>Color</span> <span id="tints" role="radiogroup" aria-label="Your color" data-i18n-attr="aria-label"></span> <span id="tint-name"></span></div>
     <button type="button" id="school" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Flight school</span></span><span class="mode-note" data-i18n>Learn to fly. Training clones are free.</span></button>
     <button type="button" id="start" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Solo round</span></span><span class="mode-note" data-i18n>Race the gates or fight it out: your arena, your rivals.</span></button>
     <button type="button" id="online" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Online tournament</span></span><span class="mode-note" data-i18n>Real Hosts: join a public one or start your own.</span></button>

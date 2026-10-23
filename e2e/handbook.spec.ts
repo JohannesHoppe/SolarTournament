@@ -18,7 +18,7 @@ for (const locale of LOCALES) {
     const text = await page.locator('main').innerText();
     // every placeholder got its number
     expect(text).not.toMatch(/\{\w+\}/);
-    expect(await page.locator('section').count()).toBe(13);
+    expect(await page.locator('section').count()).toBe(14);
     // the language's own words: the contents differ from the English ones
     const contents = await page.locator('.handbook-contents').innerText();
     if (locale === 'en') expect(contents).toContain('Dirty tricks');

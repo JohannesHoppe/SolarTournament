@@ -2,6 +2,10 @@ import * as THREE from 'three';
 import type { AsteroidField } from '../world/asteroids';
 import type { Ship } from '../ship/ship';
 import { t } from '../i18n/i18n';
+import { shownTint, SOVEREIGN_GOLD } from '../ship/tints';
+
+/** How fast the Sovereign's ring on the radar pulses (rad/s, a beat in about two seconds). */
+const SOVEREIGN_PULSE = 3;
 
 /** What the radar covers around the ship (units, 2.5 km). */
 const RANGE = 50000;
@@ -129,10 +133,18 @@ export class Radar {
       if (ship === me || !ship.alive || !inSight(ship)) continue;
       const p = project(ship.flight.position);
       if (p.distance > RANGE) continue;
-      const color = ship.kind === 'bot' ? '#ffb347' : '#ff6a8a';
+      const color = shownTint(ship);
       this.stalk(p, color);
       ctx.fillStyle = color;
       ctx.fillRect(p.x - 2.5, p.y - 2.5, 5, 5);
+      if (ship.sovereign) {
+        // the Sovereign's dot wears a slowly pulsing gold ring, its side's color or not
+        ctx.strokeStyle = SOVEREIGN_GOLD;
+        ctx.globalAlpha = 0.6 + 0.4 * Math.sin(now * SOVEREIGN_PULSE);
+        ctx.lineWidth = 1.5;
+        ctx.strokeRect(p.x - 4.5, p.y - 4.5, 9, 9);
+        ctx.globalAlpha = 1;
+      }
       this.label(ship.name, p.x + 6, p.y + 3, color);
     }
     // the own ship in the middle, its nose up

@@ -86,9 +86,9 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
 };
 
 /** The pointer at this share of the shorter screen side away from the center turns at full rate. */
-const MOUSE_FULL_DEFLECTION = 0.25;
+export const MOUSE_FULL_DEFLECTION = 0.25;
 /** Around the center the pointer does not turn the ship (share of full deflection), so it can fly straight. */
-const MOUSE_DEADZONE = 0.08;
+export const MOUSE_DEADZONE = 0.08;
 /** Shift (fine aim) scales turning down to this share, for precise aiming. */
 const FINE_AIM = 0.3;
 /** Stick deflections below this are treated as zero, so worn sticks do not drift. */
@@ -141,6 +141,9 @@ export class Input {
   /** The controls read() hands out, the same object every frame. */
   private readonly controls: Controls = { ...IDLE };
   private readonly mouseStick = { x: 0, y: 0 };
+  /** The pointer's offset from the screen center in full deflections, as it lies (see pointer). */
+  private readonly mouseOffset = { x: 0, y: 0 };
+  private mouseMoved = false;
   private mouseFire = false;
   private mouseHook = false;
   private steering = false;
@@ -179,8 +182,11 @@ export class Input {
       // phones emulate mouse events for taps; they steer with the on-screen sticks
       if (!this.steering || this.touch.active) return;
       const full = Math.min(window.innerWidth, window.innerHeight) * MOUSE_FULL_DEFLECTION;
-      this.mouseStick.x = mouseAxis((e.clientX - window.innerWidth / 2) / full);
-      this.mouseStick.y = mouseAxis((window.innerHeight / 2 - e.clientY) / full);
+      this.mouseOffset.x = (e.clientX - window.innerWidth / 2) / full;
+      this.mouseOffset.y = (window.innerHeight / 2 - e.clientY) / full;
+      this.mouseStick.x = pointerAxis(this.mouseOffset.x);
+      this.mouseStick.y = pointerAxis(this.mouseOffset.y);
+      this.mouseMoved = true;
     });
     // a pointer outside the window does not keep the ship spinning
     document.documentElement.addEventListener('mouseleave', () => this.resetMouse());
@@ -215,8 +221,15 @@ export class Input {
     return this.touchActive ? 'touch' : this.gamepadActive ? 'gamepad' : 'keyboard';
   }
 
+  /** The mouse pointer's offset from the screen center in full deflections (x right, y up), for the recorder; null while the mouse has not steered. */
+  get pointer(): [number, number] | null {
+    return this.mouseMoved ? [this.mouseOffset.x, this.mouseOffset.y] : null;
+  }
+
   resetMouse() {
     this.mouseStick.x = this.mouseStick.y = 0;
+    this.mouseOffset.x = this.mouseOffset.y = 0;
+    this.mouseMoved = false;
     this.mouseFire = this.mouseHook = false;
   }
 
@@ -420,8 +433,8 @@ export function keyLabel(label: string): string {
   return label.replace(/\b[A-Z]\b/g, (letter) => layout.get('Key' + letter) ?? letter);
 }
 
-/** Pointer offset (1 = full deflection) to stick deflection: dead zone in the center, clamped at the edge. */
-const mouseAxis = (offset: number) => clamp(deadzone(offset, MOUSE_DEADZONE));
+/** Pointer offset (1 = full deflection) to turn input: dead zone in the center, clamped at the edge. */
+export const pointerAxis = (offset: number) => clamp(deadzone(offset, MOUSE_DEADZONE));
 
 /** Removes the dead zone and rescales the rest of the travel to 0..1. */
 function deadzone(v: number, zone = STICK_DEADZONE) {
