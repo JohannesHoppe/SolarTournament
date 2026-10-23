@@ -44,7 +44,7 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
   const flight = new FlightModel();
   flight.reset(start, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(start, facing.clone().add(start), new THREE.Vector3(0, 1, 0))));
   flight.velocity.copy(facing).setLength(drift);
-  const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, allyOf: () => false } as unknown as Ship;
+  const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, allyOf: () => false } as unknown as Ship;
   const bot = new Bot(ship, evenSkills(skill));
   bot.raceSpeed = speed;
   const gravity = new THREE.Vector3();
@@ -63,7 +63,7 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
     // as the game's racers do: along the line, and near a ring for its center where the way would clip the rim
     rings.line.target(flight.position, next % rings.line.gateCount, flight.velocity.length(), field, goal);
     bot.waypoint = rings.open ? goal : approachGate(rings.points[next], rings.normals[next], rings.radius, flight.position, flight.velocity, SHIP_RADIUS, goal);
-    const controls = bot.think(seconds, [ship], field, [bot]);
+    const controls = bot.think(seconds, [ship], field);
     field.gravity(flight.position, gravity);
     before.copy(flight.position);
     flight.update(STEP, controls, gravity);

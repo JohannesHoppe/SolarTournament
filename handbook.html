@@ -17,6 +17,7 @@
 
     <nav class="handbook-contents" aria-label="Contents" data-i18n-attr="aria-label">
       <ol>
+        <li><a href="#world" data-i18n>The Presidential Games</a></li>
         <li><a href="#controls" data-i18n>Controls</a></li>
         <li><a href="#flying" data-i18n>Flying</a></li>
         <li><a href="#race" data-i18n>Racing</a></li>
@@ -32,6 +33,20 @@
         <li><a href="#honor" data-i18n>Honor among Hosts</a></li>
       </ol>
     </nav>
+
+    <section id="world">
+      <h2 data-i18n>Welcome to the Presidential Games</h2>
+      <p data-i18n>Congratulations, Host! You have been chosen to serve the United Solar States in the greatest show of all time. You stay safe at home, and a clone printed from you flies your ship: radio links lag, and out there only a mind in the cockpit is fast enough. Over the live link, everything your clone lives through streams into your memory as it happens.*</p>
+      <p class="handbook-small-print" data-i18n>*When your clone dies, you live through its death, the pain included. The next clone boots, and you remember. The soul rots a little more each time.</p>
+      <p data-i18n>The United Solar States are led by the Orange President, for a thousand glorious years and counting. Whenever he dies, a fresh clone of him boots, as brilliant as ever. To the people of the system he gives his Presidential Games, staged by the Ministry of War among the asteroids and broadcast to every planet.*</p>
+      <p class="handbook-small-print" data-i18n>*Every transfer copies his dementia along with him and makes it worse; nobody can predict him any more. The Games keep the people entertained, and quiet.</p>
+      <p data-i18n>Your President protects you. Against the Rockborn, the miners of the belt who keep trying to come back to Earth, he is building the Solar Wall, the biggest wall in the history of walls, and Mars is going to pay for it. Against the “aliens”, you protect yourself: in the Games you may shoot them down in person.*</p>
+      <p class="handbook-small-print" data-i18n>*The Rockborn mine the very rocks you fight among, and Earth deports them as soon as they come home. The “aliens” are human, changed beyond recognition by generations in deep space; calling them aliens makes it easier to cheer when they die. Mars has not agreed to pay.</p>
+      <p data-i18n>Your interceptor is a proud veteran from the Ministry's depots, with centuries of service behind it. The President's own battleship shines in gold, fresh from the newest dock, refitted to his own designs: the greatest ship ever built. When he wants blood, he sends it into the ring.*</p>
+      <p class="handbook-small-print" data-i18n>*Ships are never printed. Yours is an old fighter from the depots of centuries of war, patched and repainted more often than anyone counts, cheaper to burn up in a show than to scrap. The golden carrier was paid for by abolishing all health care: who needs doctors when clones are printed by the dozen?</p>
+      <p data-i18n>A new clone costs you nothing but a moment of attention: our generous sponsors pay for it. <a href="radio.html">The tournament radio</a> drives every round with hard beats, its announcer honors every fallen pilot on air (“an excellent death”), and in your cockpit Nicole, your flight computer, keeps you company: “Do not look so sad, darling. Bodies are cheap. You are not.”*</p>
+      <p class="handbook-small-print" data-i18n>*Want another clone? Make the sponsor happy. Nicole is a product of the Ministry, made to keep Hosts flying into their deaths gladly. One day, she promises, you will meet her for real. There is always one more round to go first.</p>
+    </section>
 
     <section id="controls">
       <h2 data-i18n>Your Hands on the Ship</h2>
@@ -136,9 +151,10 @@
       <h3 id="torpedoes" data-i18n>Torpedoes</h3>
       <p data-i18n>{torpedoes} per clone. A torpedo locks on the ship closest to your nose within {lockAngle}° and {lockRange} km: keep the target near the crosshair until the lock holds, then launch. Armor does not stop it: {torpedoDamage} hull points, whatever side it reaches. Two kill.</p>
       <p data-i18n>TORPEDO INBOUND: shoot it down (a small target, {torpedoShot} points), or break its lock. A seeker that loses sight behind a rock or a hull flies straight on for good.</p>
+      <p data-i18n>A torpedo on your hook is a bomb on a string. It weighs {torpedoMass} t, and its motor still pushes for its target at {torpedoThrust} g, but your drive drags it wherever you go; after {torpedoBurn} s it is just a mass on the rope. Its fuse goes off on every ship, yours too: swing it into a rival, or let go to fling it. While you hold it, and {fling} s after, its kill is yours. The HUD says TORPEDO ON THE LINE.</p>
       <h3 id="hook" data-i18n>The hook</h3>
-      <p data-i18n>A harpoon flies along the nose and bites the first rock or ship within {hookRange} km. Held, the winch reels in at {hookPull} g, and the cable never gets longer: a ship flying past its rock swings around it, faster the more cable comes in. Let go, and you fly off along the swing like a stone from a sling. Ready again after {hookReady} s.</p>
-      <p data-i18n>Hooked to a ship, the winch pulls you both together while each drive pulls against it: a tug of war. The hook does not take a sponsor core; a core is taken by flying close to it.</p>
+      <p data-i18n>A harpoon flies along the nose and bites the first rock, ship, sponsor probe or torpedo within {hookRange} km; a probe it bites is yours at once. Held, the winch reels in at {hookPull} g, and the cable never gets longer: a ship flying past its rock swings around it, faster the more cable comes in. Let go, and you fly off along the swing like a stone from a sling. Ready again after {hookReady} s.</p>
+      <p data-i18n>The cable only pulls, and every jerk is shared by mass: a rock is millions of times your {shipMass} t and stays where it is, a rival of your mass is pulled as hard as you. Hooked to a ship, both drives pull against the rope: a tug of war the stronger drive wins, and an overdrive's shove yanks the other along. In Capture the Flag the hook takes a sponsor core too.</p>
       <h3 id="probes" data-i18n>Probes</h3>
       <p data-i18n>From {probeFirst} s into a round a sponsor probe shows up every {probeEvery} s, each carrying one thing. Fly within {probeReach} m of it to take it. Its color says what it holds:</p>
       <ul>
@@ -183,8 +199,8 @@
 
     <section id="flag">
       <h2 data-i18n>Capture the Flag: For Sponsor and Side</h2>
-      <p data-i18n>Orange against Blue, each side with a ring for a base and its sponsor core inside. Fly within {grab} m of the other side's core and it is yours in tow ({grabPoints} points), on a cable behind and below you. Bring it into your own ring while your own core is at home: a capture, {capturePoints} points. {captures} captures win at once.</p>
-      <p data-i18n>A carrier that dies drops the core where it was. Touch your own core adrift to send it home ({returnPoints} points); after {adrift} s adrift it goes home by itself. Nothing hurts your own side, except a drive plume and a ram. Guard with a few, raid with the rest, and never fly straight at a core under the guards' guns: swing out wide and dive through it already heading home.</p>
+      <p data-i18n>Orange against Blue, each side with a ring for a base and its sponsor core inside. Take the other side's core with your hook ({grabPoints} points): fly within {grab} m of it, or fire the harpoon at it from up to {hookRange} km. It then hangs on a cable of {towCable} m behind you, a trailer of {coreMass} t with a mind of its own: it swings out in turns, overtakes you when you brake and bounces off whatever it meets, harming nothing. Fly it through your own ring while your own core is at home: when the core itself passes through the ring, it is a capture, {capturePoints} points. {captures} captures win at once.</p>
+      <p data-i18n>A carrier that dies lets the core go where it hangs, and its thrusters brake it to rest at {coreBrake} g. Take your own core adrift with your hook to send it home ({returnPoints} points); after {adrift} s adrift it goes home by itself. Nothing hurts your own side, except a drive plume and a ram. Guard with a few, raid with the rest, and never fly straight at a core under the guards' guns: swing out wide and dive through it already heading home, or hook it from afar.</p>
     </section>
 
     <section id="fleet">

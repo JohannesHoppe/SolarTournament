@@ -3,16 +3,27 @@ import { raySphere, type AsteroidField } from '../world/asteroids';
 import type { Ship } from '../ship/ship';
 import type { Effects } from '../view/effects';
 import { warheadBands } from '../view/surfaces';
+import { MASS } from '../world/bodies';
 
 /** Torpedoes a fresh clone carries. */
 export const TORPEDOES = 2;
 /** A torpedo leaves the tube this much faster than its ship (units/s, 40 m/s). */
 const LAUNCH_SPEED = 800;
 /** Its drive pushes with 6 g (units/s²), and it closes in on its target with up to CLOSING (units/s, 200 m/s). */
-const THRUST = 1177;
+export const THRUST = 1177;
 const CLOSING = 4000;
-/** It burns out after this long (s) and is gone. */
-const LIFETIME = 12;
+/**
+ * Its motor burns this long (s); then a torpedo in free flight is gone. One on a hook's rope
+ * hangs on as a mass without a motor, and one let go from it flies on as a bomb for
+ * FLING_CREDIT seconds more.
+ */
+export const LIFETIME = 12;
+/**
+ * A torpedo on a hook's rope (see game/hook) is a deliberate dirty trick: a bomb on a string.
+ * Its fuse goes off on every ship, the one holding it included, and while it is held, or for
+ * FLING_CREDIT seconds (s) after it was let go, a ship it goes off on is the holder's kill.
+ */
+export const FLING_CREDIT = 3;
 /** Its own radius, for the laser that shoots it down (units, 6 m), and how close it has to come to a ship to go off (units, beyond the hull). */
 export const TORPEDO_RADIUS = 120;
 const FUSE = 150;
@@ -37,6 +48,12 @@ export interface Torpedo {
   /** "<shooter id>.<shot>": the same torpedo on every browser. */
   id: string;
   shooter: Ship;
+  /** A torpedo is a body (see world/bodies): a tonne. */
+  readonly mass: number;
+  /** The ship whose hook holds it, or null; the last ship that let it go from its hook, and when (-Infinity: never). */
+  holder: Ship | null;
+  flinger: Ship | null;
+  releasedAt: number;
   target: Homing | null;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
@@ -44,6 +61,25 @@ export interface Torpedo {
   /** This browser decides where it goes off (its shooter is a ship this browser runs). */
   own: boolean;
   mesh: THREE.Mesh;
+}
+
+/** Whether a torpedo is a bomb on a string: on a hook's rope, or let go from one within FLING_CREDIT. */
+export const onString = (torpedo: Torpedo, now: number) => !!torpedo.holder || now - torpedo.releasedAt < FLING_CREDIT;
+
+/** Whose kill a ship a torpedo goes off on is: the holder's (or flinger's) while it is on a string, otherwise its shooter's. */
+export function creditOf(torpedo: Torpedo, now: number): Ship {
+  return torpedo.holder ?? (onString(torpedo, now) && torpedo.flinger ? torpedo.flinger : torpedo.shooter);
+}
+
+/** The ship a torpedo's fuse goes off on, or null: any ship but its shooter and the shooter's side, or on a string any ship at all. */
+export function fused(torpedo: Torpedo, ships: readonly Ship[], now: number): Ship | null {
+  const string = onString(torpedo, now);
+  let hit: Ship | null = null;
+  for (const ship of ships) {
+    if (!ship.alive || (!string && (ship === torpedo.shooter || ship.allyOf(torpedo.shooter)))) continue;
+    if (ship.flight.position.distanceTo(torpedo.position) < ship.radius + FUSE) hit = ship;
+  }
+  return hit;
 }
 
 const intercept = new THREE.Vector3();
@@ -72,7 +108,7 @@ export class Torpedoes {
     const mesh = new THREE.Mesh(this.geometry, this.material);
     mesh.position.copy(position);
     this.group.add(mesh);
-    this.list.push({ id, shooter, target, position: mesh.position, velocity: velocity.clone(), bornAt: now, own, mesh });
+    this.list.push({ id, shooter, mass: MASS.torpedo, holder: null, flinger: null, releasedAt: -Infinity, target, position: mesh.position, velocity: velocity.clone(), bornAt: now, own, mesh });
   }
 
   /** The launch velocity of a torpedo from a ship: the ship's own and a push out of the tube. */
@@ -98,25 +134,24 @@ export class Torpedoes {
       } else {
         wanted.copy(torpedo.velocity).setLength(torpedo.velocity.length() + THRUST * dt);
       }
-      torpedo.velocity.add(wanted.sub(torpedo.velocity).clampLength(0, THRUST * dt));
+      // the motor pushes while it burns (on a rope too, against whatever pulls it, see game/hook)
+      const burning = now - torpedo.bornAt < LIFETIME;
+      if (burning) torpedo.velocity.add(wanted.sub(torpedo.velocity).clampLength(0, THRUST * dt));
       torpedo.position.addScaledVector(torpedo.velocity, dt);
       torpedo.mesh.lookAt(exhaust.copy(torpedo.position).add(torpedo.velocity));
       // a short bright trail behind it
-      if (Math.random() < dt * 30) this.effects.puff(nozzle.copy(torpedo.velocity).setLength(-160).add(torpedo.position), exhaust.copy(torpedo.velocity).multiplyScalar(0.6), 60);
+      if (burning && Math.random() < dt * 30) this.effects.puff(nozzle.copy(torpedo.velocity).setLength(-160).add(torpedo.position), exhaust.copy(torpedo.velocity).multiplyScalar(0.6), 60);
+      const spent = !burning && !torpedo.holder && now - torpedo.releasedAt > FLING_CREDIT;
       // another browser decides where its torpedo goes off; one whose word never came is gone after its time
       if (!torpedo.own) {
-        if (now - torpedo.bornAt > LIFETIME + 2) this.remove(torpedo);
+        if (spent && now - torpedo.bornAt > LIFETIME + 2 && now - torpedo.releasedAt > FLING_CREDIT + 2) this.remove(torpedo);
         continue;
       }
-      let hit: Ship | null = null;
-      for (const ship of ships) {
-        if (ship === torpedo.shooter || !ship.alive || ship.allyOf(torpedo.shooter)) continue;
-        if (ship.flight.position.distanceTo(torpedo.position) < ship.radius + FUSE) hit = ship;
-      }
+      const hit = fused(torpedo, ships, now);
       // a part of the battleship it homes on sets it off as a ship does, its hull as a rock does
       const reached = !!target && target.flight.position.distanceTo(torpedo.position) < target.radius + FUSE;
       const struck = reached || !!field.obstacle?.touches(torpedo.position, TORPEDO_RADIUS) || field.overlap(torpedo.position, TORPEDO_RADIUS) || field.insideWell(torpedo.position, TORPEDO_RADIUS);
-      if (hit || struck || now - torpedo.bornAt > LIFETIME) detonate(torpedo, hit);
+      if (hit || struck || spent) detonate(torpedo, hit);
     }
   }
 

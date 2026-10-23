@@ -2,6 +2,7 @@ import type { ShipState } from '../ship/ship';
 import type { AsteroidState, FieldState, ShovedState } from '../world/asteroids';
 import type { WreckState } from '../world/wrecks';
 import { KINDS, type ProbeState } from '../game/items';
+import { TINTS } from '../ship/tints';
 import type { FlagsState } from '../game/flags';
 import type { FleetState } from '../game/fleet';
 
@@ -90,7 +91,7 @@ export function cleanName(x: unknown, max = MAX_NAME): string {
 /** A ship's state; name, type, score, kills, deaths and race progress come all together or not at all (see ShipState). */
 export function shipState(x: unknown): ShipState | null {
   if (!isRecord(x)) return null;
-  const slowKeys = ['n', 'k', 's', 'ki', 'de', 'g', 'fi', 'it', 'lo'] as const;
+  const slowKeys = ['n', 'k', 's', 'ki', 'de', 'g', 'fi', 'it', 'lo', 'co'] as const;
   const present = slowKeys.filter((key) => key in x).length;
   if (present !== 0 && present !== slowKeys.length) return null;
   const slow =
@@ -106,6 +107,8 @@ export function shipState(x: unknown): ShipState | null {
           fi: num(x.fi, -1, ROUND_LIMIT),
           it: int(x.it, 0, 15),
           lo: int(x.lo, 0, 15),
+          // a Host's tint is an entry of the palette, never a color of its own
+          co: int(x.co, 0, TINTS.length - 1),
         };
   const state = complete<ShipState>({
     id: id(x.id),
@@ -187,13 +190,15 @@ export function flagsState(x: unknown): FlagsState | null {
   const sides = listOf(x.t, 2, (side) => listOf(side, MAX_SIDE, id));
   const captures = vec(x.c, 2, MAX_CAPTURES);
   const cores = x.f.map((core) => (core === null ? null : typeof core === 'string' ? (id(core) ?? undefined) : (vec(core, 6, MAX_COORDINATE) ?? undefined)));
+  // each core in tow where the lead has it, position and velocity
+  const towed = Array.isArray(x.w) && x.w.length === 2 ? x.w.map((core) => (core === null ? null : (vec(core, 6, MAX_COORDINATE) ?? undefined))) : null;
   const events = listOf(x.e, MAX_FLAG_EVENTS, (e) => {
     if (!Array.isArray(e) || e.length !== 4) return null;
     const event = [int(e[0], 1, MAX_COUNT), int(e[1], 0, 3), e[2] === null ? null : id(e[2]), int(e[3], 0, 1)] as const;
     return event[0] === null || event[1] === null || event[3] === null || (e[2] !== null && event[2] === null) ? null : (event as [number, number, string | null, number]);
   });
-  if (!sides || !captures || captures.some((c) => !Number.isInteger(c) || c < 0) || cores.some((core) => core === undefined) || !events) return null;
-  return { t: sides, c: captures, f: cores as (string | number[] | null)[], e: events };
+  if (!sides || !captures || captures.some((c) => !Number.isInteger(c) || c < 0) || cores.some((core) => core === undefined) || !towed || towed.some((core) => core === undefined) || !events) return null;
+  return { t: sides, c: captures, f: cores as (string | number[] | null)[], w: towed as (number[] | null)[], e: events };
 }
 
 /** A battleship's parts, with room (see game/fleet). */

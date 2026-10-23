@@ -523,6 +523,31 @@ export function boxUv(geometry: THREE.BufferGeometry, tile: number): THREE.Buffe
   return geometry;
 }
 
+/** The materials under a clear lacquer, with the strength of their lacquer and its film (see setLacquer). */
+const lacquered = new Map<THREE.MeshPhysicalMaterial, { clearcoat: number; iridescence: number }>();
+let lacquerOn = true;
+
+/** Registers a material's clear lacquer, so the picture's quality can take it off (see setLacquer). */
+export function lacquer<M extends THREE.MeshPhysicalMaterial>(material: M): M {
+  lacquered.set(material, { clearcoat: material.clearcoat, iridescence: material.iridescence });
+  material.addEventListener('dispose', () => lacquered.delete(material));
+  if (!lacquerOn) material.clearcoat = material.iridescence = 0;
+  return material;
+}
+
+/**
+ * Lacquer on or off on every registered material. Without it a hull is shaded as plain painted
+ * metal: three.js drops the second specular layer (and the film's colors) from the shader when
+ * their strength is 0, which costs a compile of the hulls' shaders once.
+ */
+export function setLacquer(on: boolean) {
+  lacquerOn = on;
+  for (const [material, kept] of lacquered) {
+    material.clearcoat = on ? kept.clearcoat : 0;
+    material.iridescence = on ? kept.iridescence : 0;
+  }
+}
+
 let mirrored: THREE.CubeTexture | null = null;
 
 /**

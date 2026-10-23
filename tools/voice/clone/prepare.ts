@@ -2,9 +2,9 @@
  * Prepares a clone run (see ../README.md): writes into a work folder the lines Nicole says in
  * each cloned language, under their keys and with the settings to clone them with
  * (lines.json), how many of them each language's store in the folder still lacks (todo.json),
- * the Python packages clone.py needs (requirements.txt), and, unless it is there
- * already, the English reference she is cloned from (reference.wav, Kokoro's Nicole on the
- * pinned revision).
+ * and, unless it is there already, the English reference she is cloned from (reference.wav,
+ * Kokoro's Nicole on the pinned revision). It refuses a Python lock (requirements.txt) that
+ * names another Chatterbox or soundfile than nicole.ts.
  *
  * usage: node tools/voice/clone/prepare.ts <work folder>
  */
@@ -18,9 +18,12 @@ mkdirSync(work, { recursive: true });
 
 const locales = Object.fromEntries(CLONED.map((locale) => [locale, nicoleLines(locale).map((text) => ({ key: cloneKey(locale, text), text }))]));
 writeFileSync(join(work, 'lines.json'), JSON.stringify({ clone: CLONE, check: CHECK, locales }, null, 1) + '\n');
-// what clone.py runs on (Python 3.11): Chatterbox at its pinned commit pins torch, transformers
-// (Whisper's too) and the rest itself
-writeFileSync(join(work, 'requirements.txt'), `chatterbox-tts @ ${CLONE.code}\nsoundfile==${CHECK.soundfile}\n`);
+// what clone.py runs on is locked in requirements.txt beside this file: it has to be the
+// Chatterbox and the soundfile that nicole.ts names (see ../README.md, "The Python lock")
+const lock = readFileSync(new URL('requirements.txt', import.meta.url), 'utf8');
+const commit = /@([0-9a-f]{40})$/.exec(CLONE.code)?.[1];
+if (!commit || !lock.includes(`/chatterbox/archive/${commit}.tar.gz`)) throw new Error('requirements.txt locks another Chatterbox than CLONE.code: lock again');
+if (!new RegExp(`^soundfile==${CHECK.soundfile.replaceAll('.', '\\.')} `, 'm').test(lock)) throw new Error('requirements.txt locks another soundfile than CHECK.soundfile: lock again');
 // how many lines of each language the store in the work folder (if downloaded) still lacks
 const todo = Object.fromEntries(
   CLONED.map((locale) => {

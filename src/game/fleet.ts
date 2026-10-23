@@ -4,7 +4,7 @@ import { Randomizer } from '../random';
 import { FIELD_RADIUS, raySphere, type Obstacle } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
-import { boxUv, gleamingSurface, shine, surfaced } from '../view/surfaces';
+import { boxUv, gleamingSurface, lacquer, shine, surfaced } from '../view/surfaces';
 import type { Homing } from './torpedoes';
 import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS, routeNearest, SHOWER_LENGTH, SHOWER_WIDE, type Comet } from './comet';
 import { msg, t } from '../i18n/i18n';
@@ -301,7 +301,7 @@ export class Fleet implements Obstacle {
     // too; the island in pearl, the flight deck in the regime's deep red with its markings in
     // light; the regime's orange neon running along it in a procession
     const gleam = gleamingSurface(seed);
-    const lacquer = {
+    const coat = {
       ...surfaced(gleam, GLEAM_RELIEF),
       envMap: shine(),
       envMapIntensity: 1.8,
@@ -314,9 +314,9 @@ export class Fleet implements Obstacle {
       emissiveMap: gleam.glow,
       emissiveIntensity: 2.5,
     };
-    const gold = this.material(new THREE.MeshPhysicalMaterial({ ...lacquer, color: 0xffcc4d, metalness: 0.7, envMapIntensity: 2.6 }));
-    const pearl = this.material(new THREE.MeshPhysicalMaterial({ ...lacquer, color: 0xf6f1e6, metalness: 0.45 }));
-    const deck = this.material(new THREE.MeshPhysicalMaterial({ ...lacquer, color: 0x6a0c18, metalness: 0.3, iridescence: 0.35, emissiveIntensity: 0.9 }));
+    const gold = this.material(lacquer(new THREE.MeshPhysicalMaterial({ ...coat, color: 0xffcc4d, metalness: 0.7, envMapIntensity: 2.6 })));
+    const pearl = this.material(lacquer(new THREE.MeshPhysicalMaterial({ ...coat, color: 0xf6f1e6, metalness: 0.45 })));
+    const deck = this.material(lacquer(new THREE.MeshPhysicalMaterial({ ...coat, color: 0x6a0c18, metalness: 0.3, iridescence: 0.35, emissiveIntensity: 0.9 })));
     const gunmetal = this.material(new THREE.MeshStandardMaterial({ color: 0x3c414c, metalness: 0.6, roughness: 0.45, flatShading: true }));
     this.burnt = this.material(new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 1 }));
     const light = (r: number, g: number, b: number, strength: number) => this.material(new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b).multiplyScalar(strength), toneMapped: false }));
