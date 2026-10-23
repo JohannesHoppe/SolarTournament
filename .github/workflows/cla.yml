@@ -51,9 +51,11 @@ jobs:
               if (maintainer && !own && !commit.commit.verification?.verified) unlinked.push(`${commit.sha.slice(0, 7)} (in the maintainer's name, not verified)`);
               else if (commit.author?.login) authors.add(commit.author.login);
               else unlinked.push(commit.sha.slice(0, 7));
-              // co-authors sign too; only a GitHub noreply address tells their login
+              // co-authors sign too; only a GitHub noreply address tells their login, and only one
+              // shaped like a login counts (the commit message is the author's free text, and the
+              // login goes into a file path and into the comment)
               for (const [, email] of commit.commit.message.matchAll(/^Co-authored-by:.*<([^>]+)>\s*$/gim)) {
-                const noreply = /^(?:\d+\+)?([^@]+)@users\.noreply\.github\.com$/i.exec(email);
+                const noreply = /^(?:\d+\+)?([A-Za-z0-9][A-Za-z0-9-]{0,38}(?:\[bot\])?)@users\.noreply\.github\.com$/i.exec(email);
                 if (noreply) authors.add(noreply[1]);
                 else unlinked.push(`co-author of ${commit.sha.slice(0, 7)}`);
               }
