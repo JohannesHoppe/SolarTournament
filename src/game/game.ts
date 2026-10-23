@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { Bloom } from '../view/bloom';
+import { Graphics } from '../view/graphics';
+import { LADDER, TIER_NAMES, TIERS, type BenchFeature, type Look, type Quality } from '../view/quality';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
@@ -681,7 +683,7 @@ const blind = () => false;
 const wallClock = () => performance.now() / 1000;
 
 export class Game implements OnlineGame {
-  private readonly renderer: THREE.WebGLRenderer;
+  readonly renderer: THREE.WebGLRenderer;
   private readonly composer: EffectComposer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 10, CAMERA_FAR);
@@ -955,6 +957,18 @@ export class Game implements OnlineGame {
   private glitched = false;
   private readonly glitch = new Glitch();
   private readonly datamosh = new Datamosh(this.camera);
+  private readonly bloom = new Bloom(new THREE.Vector2(256, 256), 0.6, 0.4, 0.88);
+  /** The picture's quality: the rung of the ladder, the governor, the Host's choice (see view/graphics). */
+  readonly graphics: Graphics;
+  /**
+   * What the benchmark (bench.ts) switches off, or for the occasional effects on, one at a
+   * time, to see what each costs; empty while the game is played.
+   */
+  private readonly bench = new Set<BenchFeature>();
+  /** The benchmark's camera: it flies a fixed path instead of following a ship (see bench.ts). */
+  benchCamera: ((camera: THREE.PerspectiveCamera) => void) | null = null;
+  /** The frame's own work (ms): script, simulation and the draw calls' submission. */
+  lastFrameMs = 0;
   /** The racing line to the next gate. */
   private readonly guide = new GuideLine();
   /** The reference plane's grid and the drop lines to it (see orient). */
@@ -1021,10 +1035,11 @@ export class Game implements OnlineGame {
     // no multisampled canvas: the composer draws the scene into its own targets and only puts
     // the finished picture on the canvas, so the canvas's samples would smooth nothing
     this.renderer = new THREE.WebGLRenderer({ antialias: false, powerPreference: 'high-performance' });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    // draw calls and triangles count for the whole frame, all passes together (see paint)
+    this.renderer.info.autoReset = false;
     container.append(this.renderer.domElement);
 
     this.composer = new EffectComposer(this.renderer);
@@ -1032,7 +1047,7 @@ export class Game implements OnlineGame {
     for (const target of [this.composer.renderTarget1, this.composer.renderTarget2]) target.depthTexture = new THREE.DepthTexture(1, 1);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.composer.addPass(this.lensing.pass);
-    this.composer.addPass(new UnrealBloomPass(new THREE.Vector2(256, 256), 0.6, 0.4, 0.88));
+    this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     this.composer.addPass(this.datamosh);
     this.composer.addPass(this.glitch.pass);
@@ -1045,6 +1060,7 @@ export class Game implements OnlineGame {
     this.scene.background = new THREE.Color(0x01020a);
     this.field = new AsteroidField(assets.fieldSets);
     this.belt = new Belt(assets.belt);
+    this.graphics = new Graphics(this.renderer, this.bloom, this.space, this.field, this.belt, this.plane, () => this.resize());
     this.effects = new Effects(assets.textures);
     // the kill cam fires the beams of its replay in effects of their own
     this.replayEffects = new Effects(assets.textures);
@@ -1092,8 +1108,22 @@ export class Game implements OnlineGame {
         return button;
       }),
     );
+    // the picture's quality: auto (the governor) or a tier pinned by hand
+    $('quality').append(
+      ...(['auto', ...TIERS] as const).map((choice) => {
+        const button = Object.assign(document.createElement('button'), { type: 'button' });
+        button.dataset.value = choice;
+        button.addEventListener('click', () => {
+          this.graphics.choose(choice);
+          this.showQuality();
+        });
+        return button;
+      }),
+    );
+    this.showQuality();
     // the ship on show above the logo, and the hangar
     this.showcase = new Showcase($<HTMLCanvasElement>('crest'), this.assets);
+    this.graphics.setShowcase(this.showcase);
     $('ship-prev').addEventListener('click', () => this.turnShowcase(-1));
     $('ship-next').addEventListener('click', () => this.turnShowcase(1));
     $('hangar').addEventListener('click', () => this.showHangar(true));
@@ -1532,6 +1562,42 @@ export class Game implements OnlineGame {
    * All places are taken by Hosts who came first: the own clone watches a pilot of the
    * tournament (Tab switches) until a place comes free, then it is printed and flies.
    */
+  /**
+   * The benchmark's round (see bench.ts): a solo round of `mode` in `arena` against the default
+   * rivals, the Host's clone watching, so the bots fight and nothing ends the round early.
+   */
+  benchRound(arena: ArenaId, mode: RoundMode) {
+    this.solo = { mode, arena, rivals: [...SOLO_DEFAULT.rivals] };
+    this.startRound('solo');
+    this.spectate(true);
+  }
+
+  /** Back to the menu, as the benchmark measures the title screen. */
+  benchMenu() {
+    this.showMenu();
+  }
+
+  /** The benchmark switches a feature off (or an occasional effect on, see BENCH_ON); `active` false restores it. */
+  setBench(feature: BenchFeature, active: boolean) {
+    if (active) this.bench.add(feature);
+    else this.bench.delete(feature);
+    const knobs: Partial<Record<BenchFeature, Partial<Look>>> = {
+      bloom: { bloom: 0 },
+      shadows: { shadows: 0 },
+      lacquer: { lacquer: false },
+      detail: { rocks: 0 },
+      resolution: { pixelRatio: LADDER[this.graphics.rung].pixelRatio / 2 },
+    };
+    const knob = knobs[feature];
+    if (knob) {
+      const override = { ...this.graphics.override };
+      for (const key of Object.keys(knob) as (keyof Look)[]) delete override[key];
+      this.graphics.override = active ? { ...override, ...knob } : override;
+      this.graphics.apply(true, true);
+    }
+    if (feature === 'audio') void (active ? this.sound.context.suspend() : this.sound.context.resume());
+  }
+
   spectate(watching: boolean) {
     const me = this.me!;
     this.spectating = watching;
@@ -2006,7 +2072,18 @@ export class Game implements OnlineGame {
   }
 
 
+  /** The quality's buttons: the choice lit, auto naming the tier the governor is on. */
+  private showQuality() {
+    const choice: Quality['choice'] = this.graphics.quality.choice;
+    for (const button of $('quality').querySelectorAll<HTMLButtonElement>('button')) {
+      const value = button.dataset.value as Quality['choice'];
+      button.classList.toggle('selected', value === choice);
+      button.textContent = value === 'auto' ? (choice === 'auto' ? t('Auto: {tier}', { tier: t(TIER_NAMES[this.graphics.tier]) }) : t('Auto')) : t(TIER_NAMES[value]);
+    }
+  }
+
   private showMenu() {
+    this.showQuality();
     this.leaveOnline();
     this.clearShips();
     // the hangar is no race: no gates behind the menu
@@ -2589,6 +2666,8 @@ export class Game implements OnlineGame {
   }
 
   private pause() {
+    // the handbook opens at the section of what is being flown (its sections are named after the modes)
+    ($('pause-handbook') as HTMLAnchorElement).hash = this.school ? 'flying' : this.roundMode;
     this.setScreen('paused');
   }
 
@@ -2775,8 +2854,8 @@ export class Game implements OnlineGame {
   private resize() {
     const width = window.innerWidth;
     const height = window.innerHeight;
-    // a zoom or another screen changes the pixel ratio as well
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    // a zoom or another screen changes the pixel ratio as well, and so does the picture's quality
+    this.renderer.setPixelRatio(this.graphics.pixelRatio);
     this.composer.setPixelRatio(this.renderer.getPixelRatio());
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
@@ -2790,7 +2869,21 @@ export class Game implements OnlineGame {
   }
 
   private frame() {
+    const began = performance.now();
     this.timer.update();
+    const drawn = this.draw();
+    this.lastFrameMs = performance.now() - began;
+    // the governor watches the frame rate where the picture moves: the menu and a running round
+    if (drawn && (this.state === 'menu' || this.state === 'playing')) {
+      const safe = this.state !== 'playing' || !this.me?.alive || this.sponsors.visible;
+      this.graphics.frame(this.timer.getDelta(), this.lastFrameMs / 1000, safe);
+    } else {
+      this.graphics.pause();
+    }
+  }
+
+  /** One frame of the game: input, simulation, sound and the picture; false when a still pause draws nothing. */
+  private draw(): boolean {
     this.input.poll();
     this.holdUpright();
     const dt = Math.min(this.timer.getDelta(), 0.05) * this.timeScale;
@@ -2808,7 +2901,7 @@ export class Game implements OnlineGame {
     if (this.state !== 'paused' || this.online) this.effects.update(dt);
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
     // the ship on show, while the menu or the hangar shows it
-    if (this.state === 'menu' && !this.choosingSolo && !this.choosingSchool && !this.browsing) this.showcase?.render(wallClock());
+    if (this.state === 'menu' && !this.choosingSolo && !this.choosingSchool && !this.browsing && !this.bench.has('showcase')) this.showcase?.render(wallClock());
 
     const cue = this.musicCue();
     if (cue) this.radio.setCue(cue);
@@ -2821,6 +2914,9 @@ export class Game implements OnlineGame {
         this.nextIdleGlitch = now + IDLE_GLITCH_MIN + Math.random() * IDLE_GLITCH_RANGE;
       }
     }
+    // the benchmark keeps the occasional effects running to see what they cost
+    if (this.bench.has('glitch') && !this.glitch.pass.enabled) this.glitch.trigger(1, 30);
+    if (this.bench.has('datamosh') && !this.datamosh.enabled) this.datamosh.trigger();
     this.glitch.update();
     this.datamosh.update();
     this.showStandings(wallClock());
@@ -2832,8 +2928,9 @@ export class Game implements OnlineGame {
     if (this.glitched && !glitching) this.redraw = true;
     this.glitched = glitching;
     const still = this.state === 'paused' && !this.online && !glitching;
-    if (still && !this.redraw) return;
+    if (still && !this.redraw) return false;
     this.redraw = false;
+    this.benchCamera?.(this.camera);
     // the kill cam borrows the ships' pictures and the camera for this one picture, from the
     // second picture after the death on: the first one is the cockpit's last, which rots
     const replaying = this.state === 'playing' && !this.datamosh.freezing && this.killcam.pose(this.camera);
@@ -2845,6 +2942,7 @@ export class Game implements OnlineGame {
     }
     this.paint();
     if (replaying) this.killcam.restore();
+    return true;
   }
 
   /** Draws the scene as the camera sees it: the sky around it, the arena's edge, its landmarks, a black hole's lens. */
@@ -2854,8 +2952,34 @@ export class Game implements OnlineGame {
     this.landmarks.update(this.field.clock);
     const well = this.field.well;
     // the scene is drawn into the composer's read buffer, which the lens reads right after
-    this.lensing.update(this.camera, this.venue.id === 'hole' && well ? well.position : null, well?.radius ?? 0, this.composer.readBuffer.depthTexture);
-    this.composer.render();
+    this.lensing.update(this.camera, this.venue.id === 'hole' && well && !this.bench.has('lens') ? well.position : null, well?.radius ?? 0, this.composer.readBuffer.depthTexture);
+    this.renderer.info.reset();
+    if (!this.bench.size) {
+      this.composer.render();
+      return;
+    }
+    // the benchmark hides what it measures for this one picture
+    const hidden = this.benchHidden().filter((object) => object.visible);
+    for (const object of hidden) object.visible = false;
+    if (this.bench.has('post')) this.renderer.render(this.scene, this.camera);
+    else this.composer.render();
+    for (const object of hidden) object.visible = true;
+  }
+
+  /** The parts of the scene the benchmark switched off. */
+  private benchHidden(): THREE.Object3D[] {
+    const parts: Partial<Record<BenchFeature, THREE.Object3D[]>> = {
+      field: [this.field.group],
+      belt: [this.belt.group],
+      landmark: [this.landmarks.group],
+      sky: [this.space.sky],
+      dust: [this.space.dust, this.space.streaks],
+      particles: [this.effects.group],
+      ships: this.ships.map((ship) => ship.root),
+      wrecks: [this.wrecks.group],
+      guide: [this.guide.ribbon],
+    };
+    return [...this.bench].flatMap((feature) => parts[feature] ?? []);
   }
 
   private updateRound(dt: number) {
@@ -2989,12 +3113,15 @@ export class Game implements OnlineGame {
     // a core keeps clear of the view on the pilot and its crosshair
     this.flags?.view(this.camera, subject, this.cockpit, dt);
     // its gauges too: the own clone is not printed while the Host watches
-    this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
-    // a solar storm blinds the sensors: no ship shows a marker
-    this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject));
-    this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
-    this.hud.updateVelocityMarkers(this.camera, subject);
-    this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
+    // (the benchmark leaves out the HUD, the radar or the attitude to see what each costs)
+    if (!this.bench.has('hud')) {
+      this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
+      // a solar storm blinds the sensors: no ship shows a marker
+      this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject));
+      this.hud.updateVelocityMarkers(this.camera, subject);
+    }
+    if (!this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
+    if (!this.bench.has('attitude')) this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
     const hook = this.tethers.get(me);
@@ -5642,12 +5769,13 @@ export class Game implements OnlineGame {
 
   /**
    * The flight computer's aids to orientation (see world/reference): the reference plane's grid,
-   * drop lines to it from the pilot's own ship, the other ships in sight, the course's rings and
-   * the waypoint, the height and the climb, and the fixed references (the field's center, the
-   * sun, the arena's big things, the bases and the battleship).
+   * drop lines to it from the other ships in sight, the course's rings and the waypoint, the
+   * height and the climb, and the fixed references (the field's center, the sun, the arena's big
+   * things, the bases and the battleship). The benchmark's HUD left out leaves them out too.
    */
   private orient(subject: Ship, waypoint: THREE.Vector3 | null) {
-    const shown = subject.alive && this.state === 'playing' && !this.replaying;
+    const hud = !this.bench.has('hud');
+    const shown = hud && subject.alive && this.state === 'playing' && !this.replaying;
     const plane = this.plane;
     plane.clearDrops();
     if (shown) {
@@ -5657,6 +5785,7 @@ export class Game implements OnlineGame {
     }
     const aim = this.me?.alive ? aimPoint : this.camera.getWorldDirection(scratch).multiplyScalar(AIM_DEPTH).add(this.camera.position);
     plane.update(shown, subject.flight.position, this.camera, aim, window.innerWidth, window.innerHeight, this.renderer.getPixelRatio());
+    if (!hud) return;
     this.hud.setAltitude(subject);
     const references = this.shownReferences;
     references.length = 0;

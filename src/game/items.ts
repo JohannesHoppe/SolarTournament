@@ -78,8 +78,8 @@ const COLORS: Record<ItemKind, number> = { twin: 0xff3fa4, plating: 0x4d91ff, to
  * PROBE_LIFETIME seconds unless taken: at most four at once, the same on every browser whatever
  * was taken when.
  */
-const PROBE_FIRST = 20;
-const PROBE_EVERY = 25;
+export const PROBE_FIRST = 20;
+export const PROBE_EVERY = 25;
 const PROBE_LIFETIME = PROBE_EVERY * 4;
 /** A dead clone drops at most this many probes: twin laser, plating, nova core. */
 const MAX_DROPS = 3;

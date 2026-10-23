@@ -8,16 +8,19 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `attitude.ts` | Horizon line, pitch ladder, bank scale with its sky pointer and heading tape on a canvas, as in a fighter's head-up display |
 | `plane.ts` | The reference plane's polar grid and the drop lines from ships, gates and the waypoint down or up to it: lines over everything, faded with distance, built once |
 | `radar.ts` | The radar sphere on a canvas |
-| `effects.ts` | Particles and laser beams, pooled |
+| `effects.ts` | Particles and laser beams, pooled; a cheaper picture emits a share of the particles |
 | `killcam.ts` | Records the last seconds and replays the own clone's death |
 | `guide.ts` | The racing line: a dashed ribbon with pulses of light, orange in the brake zones |
 | `ghost.ts` | The best lap's hologram |
-| `showcase.ts` | The title screen: a landing pad of gunmetal and steel with the seal inlaid in gold, the ship circling above it and throwing its shadow onto it |
+| `showcase.ts` | The title screen: a landing pad of gunmetal and steel with the seal inlaid in gold, the ship hovering above it, turning slowly on the spot and throwing its shadow onto it |
 | `glitch.ts` | The disturbed link: a corrupted-stream shader and the HUD's glitch |
 | `datamosh.ts` | The clone's death: its last picture rots |
 | `lensing.ts` | The black hole's gravitational lens |
 | `textures.ts` | Canvas textures: glows, sparks, smoke, and the canvas every texture drawn in code starts from; the running light of the neon trim |
 | `surfaces.ts` | The surfaces of everything built in code: worn depot paint (and where its lacquer is gone), the world ship's craters and burns, the battleship's gleam, the rings' plating; texture coordinates for flat faces, the reflection map |
 | `marks.ts` | The bot or Host mark before a name |
+| `quality.ts` | The picture's quality: the ladder of looks from the full picture to the cheapest (resolution, bloom, shadows, lacquer, particles, rock detail, the belt, the title screen's pad), the tiers low, medium and high as presets on it, the guess of a device's tier, the Host's choice as the browser keeps it, the governor that moves along the ladder with the frame rate, the benchmark's features (tested in `quality.test.ts`) |
+| `graphics.ts` | Applies the rung of the ladder to the renderer, the bloom, the sun's shadows, the hulls' lacquer, the particles, the rocks, the belt, the title screen's pad and the reference plane's grid; feeds the governor the frame times and holds back a knob that compiles shaders until a hitch goes unseen |
+| `bloom.ts` | The bloom at a share of the picture's resolution |
 
 The styles of all of it live in `src/style.css`.
