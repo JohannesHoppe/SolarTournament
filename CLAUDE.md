@@ -63,6 +63,7 @@ npm run bench       # benchmark (Playwright, about ten minutes): the cost per fr
 npm run build       # static site in dist/ (renders the voice, checks types, duplicates and unit tests first)
 npm run check       # every quick quality gate in one run, summed up: types, duplicates, unit tests (tools/check/)
 npm run check:full  # the same, then the browser tests and the balance runs
+npm run relays      # checks public Nostr relays and rewrites src/net/relays.json when the healthy ones changed (tools/relays/, weekly by a workflow)
 ```
 
 ## How to work
@@ -214,7 +215,10 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `net/lobby.ts` | The lobby: public tournaments announce themselves, the list of tournaments listens |
 | `net/validate.ts` | Checks every message from other browsers before the game uses it |
 | `net/plausible.ts` | Rough plausibility of what other browsers report (jumps, novas without a core, torpedoes, kills; a new clone only after a death everyone saw), the evidence of every ship's beams and torpedoes that a report of a rock, a torpedo shot down, a battleship hit or a kill needs, and the accusations: a peer a majority of the other Hosts with a place (at least two; watching Hosts have no vote) catch within a round is named a cheater and cast out |
-| `net/transport.ts` | Transport: Trystero (WebRTC over Nostr relays, STUN and the TURN relay from `/turn`) and BroadcastChannel for local tests (`?local=1`) |
+| `net/transport.ts` | Transport: Trystero (WebRTC over the Nostr relays of `net/relays.json`, Trystero's own as the fallback; STUN and the TURN relay from `/turn`) and BroadcastChannel for local tests (`?local=1`) |
+| `net/relays.json` | The public Nostr relays every browser connects to, written by `tools/relays/check.ts` (`npm run relays`) and checked every week by the workflow Relays; the build allows exactly these and Trystero's in the Content Security Policy |
+
+`tools/relays/check.ts` (`npm run relays`) keeps `src/net/relays.json`: it takes the list's relays, Trystero's built-in ones and those the NIP-66 relay monitors report (kind 30166 on a few directory relays), checks each the way Trystero uses it (subscribe, publish a burst of three ephemeral events and read them back, three rounds) and keeps the 12 healthy ones, one per operator, those already in the list first. The workflow `.github/workflows/relays.yml` runs it every Monday and commits a changed list to `main`; it runs only our own code, with `contents: write` and the `GITHUB_TOKEN` alone. The game never fetches a relay list at runtime.
 
 `tools/crest/render.ts` (`npm run crest`) draws the seal of the Ministry of War into `public/crest.svg`: computed rings, stars and sun, Michroma lettering as paths, and the eagle of `tools/crest/eagle.svg` (CC0) cut into angular facets.
 

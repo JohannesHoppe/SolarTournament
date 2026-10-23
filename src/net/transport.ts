@@ -5,6 +5,7 @@
  * - Local: BroadcastChannel between tabs of the same browser, for development and tests.
  */
 import { msg } from '../i18n/i18n';
+import relayList from './relays.json';
 
 export type Json = string | number | boolean | null | Json[] | { [key: string]: Json };
 type Handler = (data: any, from: string) => void;
@@ -27,6 +28,16 @@ export interface Transport {
 
 /** Identifies the game on the signaling relays; peers with other app ids never meet. */
 const APP_ID = 'solartournament-2584';
+/**
+ * The public Nostr relays every browser announces itself on, checked every week by
+ * tools/relays/check.ts (`npm run relays`): all browsers of a build share them, so two Hosts
+ * meet as long as one of them works for both.
+ */
+const SIGNALING_RELAYS: string[] = relayList.relays;
+/** How long the list's relays have to open a connection (ms) before Trystero's own relays take over. */
+const RELAY_PATIENCE_MS = 10_000;
+/** No relay of the list answered in this browser: from now on it uses Trystero's own choice. */
+let listFailed = false;
 /**
  * The STUN server a browser asks for its own public address: only Cloudflare's, which hosts
  * the game anyway, so no further company learns who plays (the privacy policy names it).
@@ -156,18 +167,19 @@ abstract class BaseTransport implements Transport {
 
 export class TrysteroTransport extends BaseTransport {
   readonly selfId: string;
-  private readonly room: import('trystero').Room;
-  private readonly action: import('trystero').MessageAction<Json>;
+  private room!: import('trystero').Room;
+  private action!: import('trystero').MessageAction<Json>;
   private readonly connected = new Set<string>();
   private targets: string[] | null = null;
   /** Trystero reads it for every new connection, so fresh credentials reach the next one too. */
   private readonly rtcConfig: RTCConfiguration;
   private readonly refresh: number;
+  private readonly fallback: number;
   private left = false;
 
   private constructor(
     private readonly trystero: typeof import('trystero'),
-    roomId: string,
+    private readonly roomId: string,
     relays: { servers: RTCIceServer[]; off: string | null },
   ) {
     super();
@@ -176,8 +188,17 @@ export class TrysteroTransport extends BaseTransport {
     if (openRooms++ === 0) trystero.resumeRelayReconnection();
     this.rtcConfig = { iceServers: relays.servers };
     this.relayOff = relays.off;
-    this.room = trystero.joinRoom({ appId: APP_ID, rtcConfig: this.rtcConfig, maxReceiveBytes: MAX_MESSAGE_BYTES }, roomId);
+    this.open(listFailed ? undefined : SIGNALING_RELAYS);
+    this.fallback = window.setTimeout(() => void this.fallBack(), RELAY_PATIENCE_MS);
     this.refresh = window.setInterval(() => void this.renewRelays(), TURN_REFRESH_MS);
+  }
+
+  /** Joins the room over the given signaling relays (none: Trystero's own choice from its built-in list). */
+  private open(relayUrls?: string[]) {
+    this.room = this.trystero.joinRoom(
+      { appId: APP_ID, rtcConfig: this.rtcConfig, maxReceiveBytes: MAX_MESSAGE_BYTES, relayConfig: relayUrls ? { urls: relayUrls } : undefined },
+      this.roomId,
+    );
     // one action for all message types keeps the channel setup small
     this.action = this.room.makeAction<Json>('st');
     this.action.onMessage = (message, { peerId }) => {
@@ -196,6 +217,22 @@ export class TrysteroTransport extends BaseTransport {
       this.retarget();
       for (const handler of this.leaveHandlers) handler(id);
     };
+  }
+
+  /**
+   * When no relay of the list has answered, joins again over Trystero's own choice. Trystero
+   * picks its relays when the first room opens, so the room is only joined again while it is the
+   * only one open; otherwise the next room this browser opens takes Trystero's choice.
+   */
+  private async fallBack() {
+    if (this.left || listFailed) return;
+    const sockets = Object.values(this.trystero.getRelaySockets() as Record<string, WebSocket>);
+    if (sockets.some((socket) => socket.readyState === WebSocket.OPEN)) return;
+    listFailed = true;
+    console.warn("SolarTournament: no relay of the list answered, falling back to Trystero's own relays");
+    if (openRooms > 1) return;
+    await this.room.leave();
+    if (!this.left) this.open();
   }
 
   protected forget(peer: string) {
@@ -251,6 +288,7 @@ export class TrysteroTransport extends BaseTransport {
     if (this.left) return;
     this.left = true;
     clearInterval(this.refresh);
+    clearTimeout(this.fallback);
     void this.room.leave();
     if (--openRooms > 0) return;
     this.trystero.pauseRelayReconnection();

@@ -1,0 +1,17 @@
+{
+  "updated": "2026-10-23",
+  "relays": [
+    "wss://0x-nostr-relay.fly.dev",
+    "wss://nostr.chaima.info",
+    "wss://nostr.christiansass.de",
+    "wss://nostr.nodesmap.com",
+    "wss://relay.bullishbounty.com",
+    "wss://relay.decentnewsroom.com",
+    "wss://relay.degmods.com",
+    "wss://relay.grigic.org",
+    "wss://relay.nearhood.co.uk",
+    "wss://relay.nostr.com",
+    "wss://relay.piazza.today",
+    "wss://relay.qstr.app"
+  ]
+}

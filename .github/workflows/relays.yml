@@ -1,0 +1,46 @@
+# The Nostr relays of the online tournament (see tools/relays/README.md): checks the relays in
+# src/net/relays.json, Trystero's built-in ones and those the NIP-66 relay monitors report, and
+# commits a new list to main when the healthy ones changed. Every Monday, and by hand
+# (Actions → Relays → Run workflow).
+name: Relays
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: relays
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      # actions pinned to their commits; the token stays out of the checkout and out of the
+      # install, only the step that pushes gets it
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24
+          cache: npm
+      # the check only needs Trystero, which runs no install scripts
+      - run: npm ci --ignore-scripts
+      - run: npm run relays
+      - name: Commit a changed list
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- src/net/relays.json; then echo "The list is unchanged."; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/net/relays.json
+          git commit -m "Relays: the weekly check's healthy Nostr relays for the online tournament"
+          git push "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:main
