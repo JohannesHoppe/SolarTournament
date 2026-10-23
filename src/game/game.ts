@@ -2328,6 +2328,29 @@ export class Game implements OnlineGame {
     this.setScreen('paused');
   }
 
+  /** A phone held upright (the touch controls on); see holdUpright. */
+  private readonly upright = window.matchMedia('(orientation: portrait)');
+  /** The solo round stands still because the phone is upright, and goes on by itself once it turns. */
+  private pausedUpright = false;
+
+  /**
+   * A round is flown with the phone held sideways (see #turn-phone): a solo round held upright
+   * stands still behind the plate and goes on as soon as the phone turns; an online tournament
+   * does not wait for one pilot.
+   */
+  private holdUpright() {
+    const up = this.upright.matches && this.input.touchActive;
+    if (up && this.state === 'playing' && !this.online) {
+      this.pausedUpright = true;
+      this.pause();
+    } else if (!up && this.pausedUpright) {
+      this.pausedUpright = false;
+      if (this.state === 'paused') this.resume();
+    }
+    const held = this.pausedUpright && this.state === 'paused';
+    if (document.body.classList.contains('upright-paused') !== held) document.body.classList.toggle('upright-paused', held);
+  }
+
   private resume() {
     // a solo round stood still during the pause; its real-time end moves on accordingly
     if (!this.online && Number.isFinite(this.roundEndsAt)) this.setRoundEnd(this.roundEndsAt - this.time);
@@ -2505,6 +2528,7 @@ export class Game implements OnlineGame {
   private frame() {
     this.timer.update();
     this.input.poll();
+    this.holdUpright();
     const dt = Math.min(this.timer.getDelta(), 0.05) * this.timeScale;
     // a long frame (a slow device, a time-lapse) runs as several steps of at most MAX_STEP, so
     // shots, collisions and bots play the same game at any frame rate

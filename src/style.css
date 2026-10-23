@@ -1370,7 +1370,8 @@ body.touch #touch {
 }
 
 @media (orientation: portrait) {
-  body.touch.playing #turn-phone {
+  body.touch.playing #turn-phone,
+  body.touch.upright-paused #turn-phone {
     display: flex;
   }
 }
@@ -1704,7 +1705,7 @@ body.touch #transmission {
 /*
  * A phone: a small screen with touch controls. Everything shrinks and moves to the edges, so
  * the middle of the picture stays free for flying. First what every phone shares, then where
- * things sit when it is held sideways and upright.
+ * things sit when it is held sideways, the way a round is flown.
  */
 @media (max-height: 500px), (max-width: 600px) {
   body.touch #touch-pause,
@@ -1918,55 +1919,8 @@ body.touch #transmission {
   }
 }
 
-/*
- * Upright: the buttons and the radio's switch at the top, the clock below them, the gauges in
- * two rows below that, then the radar and the round's panel beside it; the transmissions above
- * the thumbs' buttons.
- */
+/* Upright, a round is not flown (see #turn-phone): only the menu's radio has to fit beside the buttons. */
 @media (max-width: 600px) and (orientation: portrait) {
-  body.touch .hud-top {
-    top: 50px;
-  }
-
-  body.touch .hud-bottom {
-    top: 84px;
-    left: 12px;
-    right: 12px;
-    transform: none;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: 6px 10px;
-  }
-
-  body.touch #radar {
-    top: 156px;
-  }
-
-  body.touch #hud-room {
-    top: 264px;
-  }
-
-  body.touch #school-panel {
-    top: 156px;
-    left: auto;
-    right: 12px;
-    transform: none;
-    width: calc(100% - 140px);
-  }
-
-  body.touch #killfeed {
-    top: 268px;
-  }
-
-  body.touch #hud-message,
-  body.touch #hud:has(#school-panel:not([hidden])) #hud-message {
-    top: 40%;
-  }
-
-  body.touch #transmission {
-    bottom: 290px;
-  }
-
   body.touch #now-playing {
     max-width: calc(100vw - 236px);
   }

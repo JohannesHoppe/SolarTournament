@@ -250,8 +250,7 @@ export class Input {
     // Gamepad: left stick turns (pull back = nose up, as in aircraft), right stick pushes
     // sideways and up/down, right trigger is the main drive, left trigger or A fires.
     const pad = this.gamepad();
-    // the sticks of any pad, the buttons only of one with the standard layout (see readPads)
-    const stick = (i: number) => deadzone(this.pad?.axes[i] ?? 0);
+    const stick = (i: number) => deadzone(pad?.axes[i] ?? 0);
     const button = (i: number) => pad?.buttons[i]?.value ?? 0;
 
     const touch = this.touch;
@@ -336,29 +335,24 @@ export class Input {
 
   /** The first connected gamepad with the standard layout, if any, as read this frame (see poll). */
   private gamepad(): Gamepad | null {
-    return this.pad?.mapping === 'standard' ? this.pad : null;
+    return this.pad;
   }
 
   /**
-   * Reads the gamepads once a frame: the first connected one with the standard layout, else
-   * the first connected one at all. A pad whose layout the browser does not know only lends its
-   * two sticks (turn and thrusters, the first four axes nearly every pad shares): its buttons
-   * could mean anything.
+   * Reads the gamepads once a frame: the first connected one with the standard layout. A pad
+   * whose layout the browser does not know is left alone: its axes may rest anywhere (a trigger
+   * or a throttle at -1) and would fly the ship by themselves, its buttons could mean anything.
    */
   private readPads() {
     const pads = navigator.getGamepads?.() ?? [];
-    let any: Gamepad | null = null;
     this.pad = null;
     for (let i = 0; i < pads.length; i++) {
       const pad = pads[i];
-      if (!pad?.connected) continue;
-      if (pad.mapping === 'standard') {
+      if (pad?.connected && pad.mapping === 'standard') {
         this.pad = pad;
         return;
       }
-      any ??= pad;
     }
-    this.pad = any;
   }
 
   private onKey(e: KeyboardEvent, down: boolean) {

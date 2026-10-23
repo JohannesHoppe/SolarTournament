@@ -508,9 +508,11 @@ export class Ship {
     if (controls.fire && !this.triggerHeld && !this.overheated && now - this.lastShotAt >= LASER_COOLDOWN / twin) {
       this.heat += HEAT_PER_SHOT / twin;
       if (this.heat >= MAX_HEAT) this.overheated = true;
-      // a held trigger keeps the cadence exactly, however the steps fall: the next shot is due a
-      // cooldown after the last was, not after the step that fired it
-      this.lastShotAt = Math.max(this.lastShotAt + LASER_COOLDOWN / twin, now - dt);
+      // a held trigger keeps the cadence exactly, however the steps fall: a shot that was due
+      // within this step counts from when it was due; a fresh press counts from now, so tapping
+      // never beats the cooldown
+      const due = this.lastShotAt + LASER_COOLDOWN / twin;
+      this.lastShotAt = now - due < dt ? due : now;
       return true;
     }
     return false;

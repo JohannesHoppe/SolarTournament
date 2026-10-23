@@ -43,10 +43,12 @@ jobs:
             // the API lists at most 250 commits: a longer pull request cannot be checked whole
             if (pr.commits > commits.length) unlinked.push(`${pr.commits - commits.length} commits beyond the first ${commits.length}`);
             for (const commit of commits) {
-              // the maintainer needs no signature, so a commit in the maintainer's name counts
-              // only when GitHub verified it: anyone can write any e-mail address into a commit
+              // the maintainer needs no signature, so in someone else's pull request a commit in the
+              // maintainer's name counts only when GitHub verified it: anyone can write any e-mail
+              // address into a commit (the maintainer's own pull requests are the maintainer's)
               const maintainer = commit.author?.login?.toLowerCase() === MAINTAINER;
-              if (maintainer && !commit.commit.verification?.verified) unlinked.push(`${commit.sha.slice(0, 7)} (in the maintainer's name, not verified)`);
+              const own = pr.user.login.toLowerCase() === MAINTAINER;
+              if (maintainer && !own && !commit.commit.verification?.verified) unlinked.push(`${commit.sha.slice(0, 7)} (in the maintainer's name, not verified)`);
               else if (commit.author?.login) authors.add(commit.author.login);
               else unlinked.push(commit.sha.slice(0, 7));
               // co-authors sign too; only a GitHub noreply address tells their login
@@ -115,8 +117,8 @@ jobs:
                 : [
                     MARKER(state),
                     `**CLA missing.** Thank you for your pull request! Before it can be merged, every author has to sign the [Contributor License Agreement](${agreement}) once. You keep the copyright in your contribution; the agreement lets Johannes Hoppe license the code under other terms as well, next to the AGPL.`,
-                    ...missing.map((login) => `@${login}: please add the file \`contributors/${login}.txt\` to this pull request, with this content:\n\n${sentence(login)}`),
-                    ...(unlinked.length ? [`Not every author can be told: ${unlinked.join(', ')}. Commits have to be linked to a GitHub account (the commit e-mail address is one of the account's addresses), co-authors named with their GitHub noreply address, and a pull request of more than 250 commits has to be split.`] : []),
+                    ...missing.map((login) => `@${login}: please add the file \`contributors/${login}.txt\` to this pull request, in a commit of your own that GitHub shows as verified (made on github.com, or signed with a key of your account), with this content:\n\n${sentence(login)}`),
+                    ...(unlinked.length ? [`Not every author can be told: ${unlinked.join(', ')}. Commits have to be linked to a GitHub account (the commit e-mail address is one of the account's addresses), commits in the maintainer's name in someone else's pull request verified by GitHub, co-authors named with their GitHub noreply address, and a pull request of more than 250 commits has to be split.`] : []),
                     'This check runs again with every push to the pull request.',
                   ].join('\n\n');
               await github.rest.issues.createComment({ owner, repo, issue_number: number, body });

@@ -118,12 +118,18 @@ export class TouchControls {
     Object.assign(this.push, { x: 0, y: 0 });
     this.drive = this.fire = this.brake = this.flip = this.hook = false;
     for (const button of document.querySelectorAll('.touch-button.held')) button.classList.remove('held');
+    // a finger whose lifting the system swallowed (a call, a switch of apps) holds nothing any more
+    for (const fingers of this.fingers) fingers.clear();
   }
+
+  /** The fingers on each hold button (see hold). */
+  private readonly fingers: Set<number>[] = [];
 
   /** A button held while any finger is on it: a second finger lifting does not let go of it. */
   private hold(id: string, set: (down: boolean) => void) {
     const button = document.getElementById(id)!;
     const fingers = new Set<number>();
+    this.fingers.push(fingers);
     button.addEventListener('pointerdown', (e) => {
       fingers.add(e.pointerId);
       button.classList.add('held');

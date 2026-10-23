@@ -249,14 +249,16 @@ export class Bot {
     // it and jinks, because from behind the drive is open
     let defending = false;
     let chaser: Ship | null = null;
-    // a ship that just hit the drive is the one to turn to, wherever it fired from
+    // a ship that just hit the drive is the first to turn to, wherever it fired from; out of
+    // sight, any other ship on the tail still counts
     const struck = this.struckBy && now < this.struckUntil && this.struckBy.alive ? this.struckBy : null;
-    for (const ship of ships) {
+    for (let i = struck ? -1 : 0; i < ships.length; i++) {
+      const ship = i < 0 ? struck! : ships[i];
       // as with targets: a fresh clone cannot hurt, nor can the own side, and a storm blinds the sensors beyond sight
-      if (!this.rival(ship, now) || (struck && ship !== struck)) continue;
+      if (!this.rival(ship, now)) continue;
       const line = toTarget.subVectors(me.position, ship.flight.position);
       const distance = line.length();
-      const threat = ship === struck || (distance < Math.min(THREAT_RANGE, sight) && this.ship.tailToward(line) && ship.flight.angleTo(line) < THREAT_ANGLE);
+      const threat = i < 0 || (distance < Math.min(THREAT_RANGE, sight) && this.ship.tailToward(line) && ship.flight.angleTo(line) < THREAT_ANGLE);
       if (threat && field.lineOfSight(me.position, ship.flight.position)) {
         chaser = ship;
         // a racer does not turn around for it: it races on
