@@ -15,7 +15,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `glitch.ts` | The disturbed link: a corrupted-stream shader and the HUD's glitch |
 | `datamosh.ts` | The clone's death: its last picture rots |
 | `lensing.ts` | The black hole's gravitational lens |
-| `textures.ts` | Canvas textures: glows, sparks, smoke, and the canvas every texture drawn in code starts from |
+| `textures.ts` | Canvas textures: glows, sparks, smoke, and the canvas every texture drawn in code starts from; the running light of the neon trim |
 | `surfaces.ts` | The surfaces of everything built in code: worn depot paint, the world ship's craters and burns, the battleship's gleam, the rings' plating; texture coordinates for flat faces, the reflection map |
 | `marks.ts` | The bot or Host mark before a name |
 
