@@ -155,8 +155,10 @@ const FLAG_HOME_SPEED = 4400;
 const FLAG_SWING = 4000;
 /** Against the President's battleships bots range out this far (units), to its orbit beyond the rocks. */
 const FLEET_HOME = ARENA_LIMIT * 0.95;
-/** The flight school's line to a marker shows from this far off it (units, 100 m), and is laid anew from the pilot when the marker moves this far. */
+/** The flight school's line to a marker shows from this far off it (units, 100 m). */
 const SCHOOL_LINE_MIN = 2000;
+/** The flight school's line is laid anew from the pilot whenever its marker moved this far (units, 10 m), so it keeps pointing at a ship or torpedo on the move. */
+const SCHOOL_LINE_MOVE = 200;
 /** Bots keep this far clear of the plume of a battleship hunting with its stern (units, 100 m). */
 const PLUME_MARGIN = 2000;
 /** What each event of Capture the Flag is worth to the ship that did it. */
@@ -3662,9 +3664,9 @@ export class Game implements OnlineGame {
     return waypoint;
   }
 
-  /** The flight school's line to a marker: from where the pilot was when the marker came up (or last moved by SCHOOL_LINE_MIN), ending at it. */
+  /** The flight school's line to a marker: from where the pilot was when the marker came up (or last moved by SCHOOL_LINE_MOVE), ending at it. */
   private lineTo(me: Ship, waypoint: THREE.Vector3): { line: RacingLine; next: number } {
-    if (!this.schoolLine || this.schoolLine.to.distanceTo(waypoint) > SCHOOL_LINE_MIN) {
+    if (!this.schoolLine || this.schoolLine.to.distanceTo(waypoint) > SCHOOL_LINE_MOVE) {
       this.schoolLine = { line: new RacingLine([waypoint], false, me.flight.position, 0), next: 0, to: waypoint.clone() };
     }
     return this.schoolLine;
