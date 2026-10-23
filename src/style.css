@@ -2924,8 +2924,8 @@ body.page {
   -webkit-hyphens: auto;
 }
 
-/* centered blocks are justified too and only center their last line; their lines run about
-   equally long, and a text marked `sentences` breaks between its sentences where they fit */
+/* centered blocks are justified too and only center their last line (balanced lines would be
+   stretched to the full width again, so they wrap like any paragraph) */
 #school-text,
 .sponsor-pitch,
 .tagline,
@@ -2934,7 +2934,12 @@ body.page {
 .satire-fine,
 #transmission-text {
   text-align-last: center;
-  text-wrap: balance;
+}
+
+/* a text marked `sentences` breaks between its sentences where they fit; justified, the gaps
+   between whole sentences would gape, so its lines are centered */
+.sentences {
+  text-align: center;
 }
 
 .sentence {
