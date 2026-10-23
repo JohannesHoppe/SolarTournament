@@ -19,6 +19,8 @@ export function ink(element: Element): Box | null {
   if (style.display === 'none' || style.visibility === 'hidden' || Number(style.opacity) === 0) return null;
   const rect = element.getBoundingClientRect();
   if (rect.width < 1 || rect.height < 1) return null;
+  // a fixed reference draws its glyph in its own box, its label beside it
+  if (element.matches('.reference')) return join(rect, ink(element.firstElementChild!));
   const drawn = element.matches('canvas, button') || !/rgba\(0, 0, 0, 0\)|transparent/.test(style.backgroundColor) || parseFloat(style.borderTopWidth) + parseFloat(style.borderLeftWidth) > 0;
   if (drawn) return rect;
   range ??= document.createRange();

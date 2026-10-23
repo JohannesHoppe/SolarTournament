@@ -3,8 +3,8 @@ import { openGame, startSolo } from './game';
 
 /**
  * The HUD's pieces never cover each other: the race or school panel, the alarms with the
- * message, the subtitles of the transmission, the radar, the gauges, the radio, the kill feed
- * and the touch buttons. Each is filled as full as it gets (three alarms with a message, a long
+ * message, the subtitles of the transmission, the radar, the gauges, the radio, the kill feed,
+ * the touch buttons, the height and climb and the fixed references. Each is filled as full as it gets (three alarms with a message, a long
  * line on the radio) and measured on a wide and on a small landscape screen, with keyboard and
  * with touch controls, in a race and in the flight school.
  */
@@ -17,7 +17,7 @@ const SCREENS = [
  * The pieces that must keep apart; a group's members (the alarm column) may stack, not overlap.
  * The names beside the arrows of ships off screen keep apart from them and from each other.
  */
-const PIECES = ['.hud-top', '#hud-room', '#school-panel', '#hud-split', '#hud-alerts > *', '#transmission', '#radar', '.hud-bottom', '#killfeed', '#now-playing', '.touch-button', '.marker.offscreen:not(.crowded) .tag'];
+const PIECES = ['.hud-top', '#hud-room', '#school-panel', '#hud-split', '#hud-alerts > *', '#transmission', '#radar', '.hud-bottom', '#killfeed', '#now-playing', '.touch-button', '#hud-altitude', '.reference', '.marker.offscreen:not(.crowded) .tag'];
 
 /**
  * Fills the HUD and returns every pair of its pieces that overlap, with their boxes; in a round
@@ -57,11 +57,11 @@ async function overlaps(page: Page, touch: boolean): Promise<string[]> {
       box.hidden = false;
       document.getElementById('transmission-speaker')!.textContent = 'The Orange President';
       document.getElementById('transmission-text')!.textContent = 'Very stable orbit. Very stable genius. The best games, believe me, the very best.';
-      // the HUD measures its pieces for the names at the edge twice a second: let it see these
+      // the HUD measures its pieces for the names at the edge twice a second, and the fixed
+      // references give way to the panels as they were laid out the frame before: let both see these
       await new Promise((resolve) => setTimeout(resolve, 700));
       place();
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-      await new Promise((resolve) => requestAnimationFrame(resolve));
+      for (let i = 0; i < 3; i++) await new Promise((resolve) => requestAnimationFrame(resolve));
       type Box = { left: number; top: number; right: number; bottom: number };
       const found: { name: string; rect: Box }[] = [];
       for (const selector of pieces) {

@@ -1360,7 +1360,7 @@ body.touch #hud-message {
   position: absolute;
   inset: 0;
   opacity: 0;
-  background: radial-gradient(ellipse at center, transparent var(--tunnel, 70%), rgba(0, 0, 0, 0.96) calc(var(--tunnel, 70%) + 25%));
+  background: radial-gradient(ellipse at center, transparent var(--tunnel, 75%), rgba(0, 0, 0, 0.55) calc(var(--tunnel, 75%) + 30%));
 }
 
 /* a solar flare's heat: the edges of the picture glow in the plasma's orange, the middle stays readable */
@@ -2062,31 +2062,190 @@ body.touch #school-panel {
   pointer-events: none;
 }
 
-/* the zero point: the field's center, a ring with a dot and its distance, dimmer than what to fly for */
-#center {
+/*
+ * The fixed references (see Hud.setReferences): a small glyph each, dimmer than the ships' marks
+ * and what to fly for, with its label above it; at the screen's edge the label sits beside the
+ * glyph, towards the middle. Each kind of reference has a glyph of its own (data-glyph).
+ */
+#references {
   position: absolute;
-  top: 0;
-  left: 0;
-  width: 22px;
-  height: 22px;
-  margin: -11px 0 0 -11px;
-  border: 1.5px solid var(--hud-dim);
-  border-radius: 50%;
+  inset: 0;
+  overflow: hidden;
   pointer-events: none;
 }
 
-#center::before {
+.reference {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 16px;
+  height: 16px;
+  margin: -8px 0 0 -8px;
+  opacity: 0.8;
+}
+
+.reference::before,
+.reference::after {
   content: '';
   position: absolute;
-  inset: 7px;
+  box-sizing: border-box;
+}
+
+.reference .hud-label {
+  top: auto;
+  bottom: calc(100% + 5px);
+  font-size: 0.62rem;
+  color: var(--hud-dim);
+}
+
+.reference.offscreen .hud-label {
+  bottom: auto;
+  top: 50%;
+  left: calc(100% + 6px);
+  translate: 0 -50%;
+}
+
+.reference.offscreen.east .hud-label {
+  left: auto;
+  right: calc(100% + 6px);
+}
+
+.reference.crowded .hud-label {
+  display: none;
+}
+
+/* the field's center: a ring with a dot */
+.reference[data-glyph='center']::before {
+  inset: 0;
+  border: 1.5px solid var(--hud-dim);
+  border-radius: 50%;
+}
+
+.reference[data-glyph='center']::after,
+.reference[data-glyph='sun']::after {
+  inset: 5px;
   border-radius: 50%;
   background: var(--hud-dim);
 }
 
-#center-distance {
-  top: auto;
-  bottom: calc(100% + 6px);
+/* the black hole: a heavy ring, its disk a thin line through it */
+.reference[data-glyph='hole']::before {
+  inset: 2px;
+  border: 3px solid var(--hud-dim);
+  border-radius: 50%;
+}
+
+.reference[data-glyph='hole']::after,
+.reference[data-glyph='planet']::after {
+  left: -5px;
+  right: -5px;
+  top: 7.5px;
+  height: 1px;
+  background: var(--hud-dim);
+}
+
+/* the sun: a dot in a broken ring of rays */
+.reference[data-glyph='sun']::before {
+  inset: 0;
+  border: 1.5px dashed var(--hud-dim);
+  border-radius: 50%;
+}
+
+/* a planet: a ring with its ring at a slant */
+.reference[data-glyph='planet']::before {
+  inset: 2px;
+  border: 1.5px solid var(--hud-dim);
+  border-radius: 50%;
+}
+
+.reference[data-glyph='planet']::after {
+  rotate: -20deg;
+}
+
+/* the gas giant's clouds: a chevron down onto a line */
+.reference[data-glyph='giant']::before {
+  left: 3px;
+  top: 0;
+  width: 10px;
+  height: 10px;
+  border-right: 1.5px solid var(--hud-dim);
+  border-bottom: 1.5px solid var(--hud-dim);
+  rotate: 45deg;
+}
+
+.reference[data-glyph='giant']::after {
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.5px;
+  background: var(--hud-dim);
+}
+
+/* a half of the world ship, the battleship: a hull from the side, the battleship's with its tower */
+.reference[data-glyph='hull']::before,
+.reference[data-glyph='battleship']::before {
+  left: -3px;
+  right: -3px;
+  top: 5px;
+  height: 7px;
+  border: 1.5px solid var(--hud-dim);
+}
+
+.reference[data-glyph='battleship']::after {
+  left: 6px;
+  top: 1px;
+  width: 5px;
+  height: 5px;
+  background: var(--hud-dim);
+}
+
+/* a base of Capture the Flag: a square pad with its core */
+.reference[data-glyph='base']::before {
+  inset: 1px;
+  border: 1.5px solid var(--hud-dim);
+}
+
+.reference[data-glyph='base']::after {
+  inset: 6px;
+  background: var(--hud-dim);
+}
+
+/* the height above the reference plane and the climb, right of the crosshair, as a fighter's altitude */
+#hud-altitude {
+  position: absolute;
+  top: 50%;
+  left: min(calc(50% + 20vw), calc(100% - 310px));
+  translate: 0 -50%;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 8px;
+  border-left: 1px solid var(--hud-faint);
+  font-family: var(--font-numbers);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
   color: var(--hud-dim);
+  text-shadow: var(--hud-text-glow);
+  pointer-events: none;
+}
+
+#hud-altitude > span:first-child {
+  font-family: system-ui, sans-serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+#hud-height {
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--hud);
+}
+
+/* the target's range and closure rate in the numbers' face */
+.marker.target > span:last-child {
+  font-family: var(--font-numbers);
+  font-variant-numeric: tabular-nums;
 }
 
 /* touch controls: only on touch devices (body.touch) */
@@ -2156,6 +2315,49 @@ body.touch #touch {
   60%,
   100% {
     transform: rotate(-90deg);
+  }
+}
+
+/* an edited hangar or flight school (see game/seal): named across the whole screen, over menu and round, until it is put back; it takes no input */
+#tampered {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2vh;
+  padding: 16px;
+  pointer-events: none;
+}
+
+#tampered strong {
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-size: clamp(2.5rem, 13vw, 16rem);
+  font-weight: 400;
+  line-height: 1;
+  overflow-wrap: anywhere;
+  color: var(--tube-orange);
+  text-shadow: var(--neon-orange);
+  animation: neon-flicker 5s step-end infinite;
+}
+
+#tampered p {
+  margin: 0;
+  max-width: 40ch;
+  text-align: justify;
+  text-align-last: center;
+  hyphens: auto;
+  font-size: 1.1rem;
+  color: var(--tube-orange);
+  text-shadow: 0 0 2px rgba(2, 3, 10, 0.95), 0 0 10px #ff7b00;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #tampered strong {
+    animation: none;
   }
 }
 
@@ -2663,9 +2865,9 @@ body.touch #transmission {
     display: none;
   }
 
-  /* the view narrows less under g-forces: a phone's picture is small to begin with */
+  /* under g-forces only the very edges of a phone's small picture darken, faintly */
   body.touch #g-vignette {
-    background: radial-gradient(ellipse at center, transparent calc(var(--tunnel, 70%) / 2 + 35%), rgba(0, 0, 0, 0.96) calc(var(--tunnel, 70%) / 2 + 60%));
+    background: radial-gradient(ellipse at center, transparent calc(var(--tunnel, 75%) / 2 + 45%), rgba(0, 0, 0, 0.3) calc(var(--tunnel, 75%) / 2 + 75%));
   }
 }
 
@@ -3069,12 +3271,14 @@ body.page {
   line-height: 1.6;
 }
 
-.legal-home .logo {
+.legal-home .logo,
+.handbook-home .logo {
   display: block;
   margin: 0 0 20px;
 }
 
-.legal-eyebrow {
+.legal-eyebrow,
+.handbook-eyebrow {
   margin: 0;
   color: var(--accent);
   font-size: 0.75rem;
@@ -3172,7 +3376,9 @@ body.page {
 .satire-slogan,
 .satire-fine,
 .legal p,
-.legal li {
+.legal li,
+.handbook p,
+.handbook li {
   text-align: justify;
   hyphens: auto;
   -webkit-hyphens: auto;
@@ -3474,4 +3680,189 @@ button.quiet:focus-visible {
   font-size: 0.8rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* the way from a plate to the Pilot's Handbook: information, so azure */
+.plate-link,
+.source .handbook-link {
+  color: var(--accent-strong);
+  font-size: 0.85rem;
+}
+
+/*
+ * The Pilot's Handbook (handbook.html): a column of plates, one per section, the Ministry's
+ * headings in neon, the practical text justified, the keys as keycaps.
+ */
+.handbook {
+  max-width: 46rem;
+  line-height: 1.6;
+}
+
+.handbook h1 {
+  hyphens: manual;
+}
+
+.handbook-contents ol {
+  columns: 2 14rem;
+  margin: 24px 0 32px;
+  padding-left: 1.6em;
+}
+
+.handbook-contents a {
+  color: var(--accent-strong);
+}
+
+.handbook section {
+  margin: 0 0 24px;
+  padding: 4px 24px 12px;
+  background: var(--plate);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  /* a link to a section leaves room above it */
+  scroll-margin-top: 16px;
+}
+
+.handbook h2 {
+  margin: 20px 0 8px;
+  color: var(--tube-orange);
+  font-size: clamp(1.05rem, 4.5vw, 1.4rem);
+  line-height: 1.4;
+  text-shadow: var(--neon-orange);
+}
+
+.handbook h3 {
+  margin: 1.4em 0 0.2em;
+  color: var(--accent-strong);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  scroll-margin-top: 16px;
+}
+
+.handbook h3 + p {
+  margin-top: 0;
+}
+
+.handbook li + li {
+  margin-top: 0.4em;
+}
+
+.handbook strong {
+  color: var(--tube-orange);
+}
+
+/* the plain truth under the Ministry's words, set as the small print of an ad, in the azure of information */
+.handbook-small-print {
+  margin: -0.4em 0 1.2em;
+  padding-left: 12px;
+  border-left: 2px solid var(--hud-dim);
+  color: var(--hud);
+  font-size: 0.85rem;
+}
+
+.handbook-keys {
+  display: grid;
+  grid-template-columns: minmax(6.5rem, max-content) minmax(0, 1fr);
+  gap: 6px 14px;
+  margin: 0 0 12px;
+}
+
+/* a key and what it does are a short label, not running text: left-aligned */
+.handbook-keys dt {
+  justify-self: start;
+  align-self: start;
+  padding: 0 0.45em;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--tube-orange);
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.handbook-keys dd {
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  .handbook section {
+    padding: 2px 14px 10px;
+  }
+
+  .handbook-keys {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+
+  .handbook-keys dd {
+    margin-bottom: 8px;
+  }
+}
+
+/* the benchmark's panel and the frame meter (see src/bench.ts): developer tools, in the HUD's azure */
+.bench {
+  position: fixed;
+  inset: 12px;
+  z-index: 100;
+  overflow: auto;
+  padding: 12px 16px;
+  background: var(--plate);
+  border: 1px solid var(--hud-dim);
+  color: var(--hud-bright);
+  font-family: var(--font-numbers);
+  font-size: 0.75rem;
+  pointer-events: auto;
+}
+
+.bench h2 {
+  margin: 0 0 6px;
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--hud);
+}
+
+.bench-table {
+  overflow-x: auto;
+}
+
+.bench table {
+  border-collapse: collapse;
+  white-space: nowrap;
+}
+
+.bench th,
+.bench td {
+  padding: 2px 8px;
+  text-align: right;
+  border-bottom: 1px solid var(--hud-faint);
+}
+
+.bench th:nth-child(-n + 2),
+.bench td:nth-child(-n + 2) {
+  text-align: left;
+}
+
+.bench-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.bench-actions a {
+  color: var(--accent);
+}
+
+.bench-meter {
+  position: fixed;
+  left: 50%;
+  bottom: 4px;
+  z-index: 101;
+  margin: 0;
+  transform: translateX(-50%);
+  color: var(--hud-bright);
+  font-family: var(--font-numbers);
+  font-size: 0.7rem;
+  text-shadow: var(--hud-text-glow);
+  pointer-events: none;
 }

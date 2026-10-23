@@ -1,0 +1,6 @@
+# What builds the two packages of requirements.txt that come as source (Chatterbox and Perth,
+# archives of their commits), the input of build-requirements.txt. Installed first, so that pip
+# builds them without fetching build tools of its own (pip --no-build-isolation): every file
+# that runs in the job is locked by its hash.
+setuptools>=61   # Chatterbox's build backend
+uv_build~=0.12.7 # Perth's build backend

@@ -1,9 +1,11 @@
 import * as THREE from 'three';
+import { footOf, PLANE_UP, skyPointer } from '../world/reference';
 
 /**
  * The flight computer keeps the ship upright to the arena (its north pole is up), and the
  * projection shows it the way a fighter's head-up display does: a horizon line through the
- * view, a pitch ladder every PITCH_STEP degrees above and below it, and a heading tape on top.
+ * view where the reference plane lies (see world/reference), a pitch ladder every PITCH_STEP
+ * degrees above and below it, a bank scale over the ladder and a heading tape above the gauges.
  * All of it in the projection's blue, faint, and broken in the middle so the crosshair stays
  * free. A rung lies where that elevation really is in the picture, so it bends with the view.
  */
@@ -35,12 +37,21 @@ const FAR = 1000;
 const BEND = 6;
 const DASHED = [6, 5];
 const SOLID: number[] = [];
+/**
+ * The bank scale over the ladder: an arc around the picture's middle, BANK_ABOVE (px) beyond the
+ * ladder's reach, with ticks at BANK_TICKS (degrees to either side; the long ones at 0 and 30)
+ * and the sky pointer, a small triangle on the arc that points where the plane's up lies on
+ * screen, so it swings against the bank as a fighter's does. Past BANK_SPAN it rests at the
+ * scale's end.
+ */
+const BANK_ABOVE = 22;
+const BANK_TICKS = [0, 10, 20, 30, 45];
+const BANK_SPAN = 50;
 /** The rungs' numbers, written once: 0, 10, 20 … 90. */
 const LABELS = Array.from({ length: 90 / PITCH_STEP + 1 }, (_, i) => String(i * PITCH_STEP));
 /** The tape's numbers, written once: 000 … 359. */
 const HEADINGS = Array.from({ length: 360 }, (_, i) => String(i).padStart(3, '0'));
 
-const up = new THREE.Vector3(0, 1, 0);
 const forward = new THREE.Vector3();
 const level = new THREE.Vector3();
 const side = new THREE.Vector3();
@@ -81,21 +92,25 @@ export class Attitude {
     context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
     context.clearRect(0, 0, this.width, this.height);
     camera.getWorldDirection(forward);
-    level.set(forward.x, 0, forward.z);
+    // the horizon is the reference plane's, seen from the camera (see world/reference)
+    footOf(forward, level);
     // straight up or down there is no heading to keep a horizon by
     if (level.lengthSq() < 1e-6) return;
     level.normalize();
-    side.crossVectors(level, up);
+    side.crossVectors(level, PLANE_UP);
     context.lineWidth = 1.5;
     context.font = '11px ui-monospace, Menlo, Consolas, monospace';
     for (let pitch = -90; pitch <= 90; pitch += PITCH_STEP) this.rung(camera, pitch);
-    if (tape) this.tape(Math.atan2(forward.x, -forward.z));
+    if (tape) {
+      this.tape(Math.atan2(forward.x, -forward.z));
+      this.bank(skyPointer(camera.quaternion));
+    }
   }
 
   /** The horizon (pitch 0) or a rung of the ladder, where that elevation lies ahead in the picture. */
   private rung(camera: THREE.Camera, pitch: number) {
     const angle = THREE.MathUtils.degToRad(pitch);
-    direction.copy(level).multiplyScalar(Math.cos(angle)).addScaledVector(up, Math.sin(angle));
+    direction.copy(level).multiplyScalar(Math.cos(angle)).addScaledVector(PLANE_UP, Math.sin(angle));
     at.copy(camera.position).addScaledVector(direction, FAR).project(camera);
     if (at.z > 1) return;
     const x = ((at.x + 1) / 2) * this.width;
@@ -139,6 +154,43 @@ export class Attitude {
       if (pitch !== 0) context.lineTo(endX + bendX, endY + bendY);
     }
     context.stroke();
+  }
+
+  /** The bank scale and its sky pointer at `sky` (rad from the top, see skyPointer); without a bank (NaN) only the scale. */
+  private bank(sky: number) {
+    const context = this.context;
+    const x = this.width / 2;
+    const y = this.height / 2;
+    const radius = this.height * LADDER_REACH + BANK_ABOVE;
+    context.strokeStyle = LINE;
+    context.beginPath();
+    for (const degrees of BANK_TICKS) {
+      const long = degrees === 0 || degrees === 30 ? 9 : 5;
+      for (let sign = -1; sign <= (degrees ? 1 : -1); sign += 2) {
+        const angle = THREE.MathUtils.degToRad(degrees * sign);
+        const sin = Math.sin(angle);
+        const cos = Math.cos(angle);
+        context.moveTo(x + sin * radius, y - cos * radius);
+        context.lineTo(x + sin * (radius + long), y - cos * (radius + long));
+      }
+    }
+    context.stroke();
+    if (Number.isNaN(sky)) return;
+    const angle = THREE.MathUtils.clamp(sky, -THREE.MathUtils.degToRad(BANK_SPAN), THREE.MathUtils.degToRad(BANK_SPAN));
+    const sin = Math.sin(angle);
+    const cos = Math.cos(angle);
+    // a triangle inside the arc, its tip on it
+    const tipX = x + sin * (radius - 1);
+    const tipY = y - cos * (radius - 1);
+    const baseX = x + sin * (radius - 9);
+    const baseY = y - cos * (radius - 9);
+    context.fillStyle = LINE_STRONG;
+    context.beginPath();
+    context.moveTo(tipX, tipY);
+    context.lineTo(baseX + cos * 5, baseY + sin * 5);
+    context.lineTo(baseX - cos * 5, baseY - sin * 5);
+    context.closePath();
+    context.fill();
   }
 
   /** The heading tape: the degrees around the arena's north pole, with the nose's heading in a box. */
