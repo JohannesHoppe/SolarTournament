@@ -106,29 +106,34 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
   const where = (page: Page) => page.evaluate(() => (window as unknown as GameWindow).game.fleet.position.toArray());
   const [atA, atB] = [await where(a), await where(b)];
   expect(Math.hypot(atA[0] - atB[0], atA[1] - atB[1], atA[2] - atB[2])).toBeLessThan(2000);
-  // the second tab's clone lands ten hits on a battery: the first tab counts them too
-  await b.evaluate(() => {
-    const game = (window as unknown as GameWindow).game;
-    const zone = game.fleet.zones.findIndex((z: { kind: string }) => z.kind === 'battery');
-    const point = game.fleet.zoneAt(zone);
-    for (let i = 0; i < 10; i++) game.hitFleet(game.fleet, zone, game.me, point);
-  });
+  // the clone 150 m above a part of the battleship, its nose on it, fires its laser or a
+  // torpedo; returns what the torpedo locked on
+  const fireAt = (page: Page, zone: number, torpedo: boolean) =>
+    page.evaluate(
+      ([zone, torpedo]) => {
+        const game = (window as unknown as GameWindow).game;
+        const part = game.fleet.zoneAt(zone);
+        const above = part.clone().set(0, 1, 0).applyQuaternion(game.fleet.quaternion).multiplyScalar(3000).add(part);
+        game.me.flight.position.copy(above);
+        game.me.flight.velocity.set(0, 0, 0);
+        const bow = part.clone().set(0, 0, -1).applyQuaternion(game.fleet.quaternion);
+        game.me.flight.orientation.setFromRotationMatrix(game.fleet.root.matrixWorld.clone().lookAt(above, part, bow));
+        if (torpedo) game.fireTorpedo(game.me);
+        else game.fireLaser(game.me);
+        return game.torpedoes.list[0]?.target?.id;
+      },
+      [zone, torpedo] as const,
+    );
+  // ten shots into the first battery, as fast as the laser fires: the first tab sees the beams
+  // end there and counts the hits too
+  for (let i = 0; i < 10; i++) {
+    await fireAt(b, 0, false);
+    await b.waitForTimeout(150);
+  }
   await play(a, 2);
   expect(await a.evaluate(() => (window as unknown as GameWindow).game.fleet.hits[0])).toBe(10);
-  // above the next battery, its nose on it, the clone sends a torpedo: it locks on, goes off
-  // there, and both tabs count its hits
-  const lock = await b.evaluate(() => {
-    const game = (window as unknown as GameWindow).game;
-    const battery = game.fleet.zoneAt(1);
-    const above = battery.clone().set(0, 1, 0).applyQuaternion(game.fleet.quaternion).multiplyScalar(3000).add(battery);
-    game.me.flight.position.copy(above);
-    game.me.flight.velocity.set(0, 0, 0);
-    const bow = battery.clone().set(0, 0, -1).applyQuaternion(game.fleet.quaternion);
-    game.me.flight.orientation.setFromRotationMatrix(game.fleet.root.matrixWorld.clone().lookAt(above, battery, bow));
-    game.fireTorpedo(game.me);
-    return game.torpedoes.list[0]?.target?.id;
-  });
-  expect(lock).toBe('battleship.1');
+  // a torpedo at the next battery locks on, goes off there, and both tabs count its hits
+  expect(await fireAt(b, 1, true)).toBe('battleship.1');
   await play(b, 3);
   for (const page of [a, b]) expect(await page.evaluate(() => (window as unknown as GameWindow).game.fleet.hits[1])).toBe(10);
   expect(errors).toEqual([]);

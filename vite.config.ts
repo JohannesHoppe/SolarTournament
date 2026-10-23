@@ -1,10 +1,29 @@
 import { defineConfig, type Plugin } from 'vite';
+import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 /** Sends visitors of the Cloudflare Pages addresses of production and test on to our own domains, keeping path and room code. */
-const HOME_REDIRECT =
-  "<script>{ const home = { 'solartournament.pages.dev': 'solartournament.games', 'main.solartournament.pages.dev': 'test.solartournament.games' }[location.hostname]; if (home) location.replace('https://' + home + location.pathname + location.search + location.hash); }</script>";
+const HOME_SCRIPT =
+  "{ const home = { 'solartournament.pages.dev': 'solartournament.games', 'main.solartournament.pages.dev': 'test.solartournament.games' }[location.hostname]; if (home) location.replace('https://' + home + location.pathname + location.search + location.hash); }";
+const HOME_REDIRECT = `<script>${HOME_SCRIPT}</script>`;
+
+/**
+ * What the pages may load and run, sent by Cloudflare Pages with every page (dist/_headers,
+ * written by the build): scripts and styles of the site itself (the one inline script by its
+ * hash, and blob: for the audio worklets Tone.js writes for the radio), connections to the site and to the Nostr relays of the online tournament (wss:;
+ * WebRTC itself, STUN and TURN are not subject to it), no frames around the game. It keeps what
+ * the privacy policy promises (nothing from third-party servers) even if a bug slipped someone
+ * else's script into a page.
+ */
+const SECURITY_HEADERS = [
+  `Content-Security-Policy: default-src 'self'; script-src 'self' blob: 'sha256-${createHash('sha256').update(HOME_SCRIPT).digest('base64')}'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' wss: data: blob:; worker-src 'self' blob:; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'`,
+  'X-Content-Type-Options: nosniff',
+  'Referrer-Policy: no-referrer',
+];
+
+/** The dev server and the browser tests run on this port (DEV_PORT moves both, so a second checkout can test beside the first). */
+const DEV_PORT = Number(process.env.DEV_PORT ?? 5173);
 
 /** Writes `added` into a page right after (or before) `marker`, which has to stand there exactly once. */
 function insert(html: string, page: string, marker: string, added: string, before = false) {
@@ -50,14 +69,15 @@ const pageShell: Plugin = {
     if (!building) return;
     const notFound = resolve(import.meta.dirname, 'dist/404.html');
     writeFileSync(notFound, redirect(readFileSync(notFound, 'utf8'), '404.html'));
+    writeFileSync(resolve(import.meta.dirname, 'dist/_headers'), `/*\n${SECURITY_HEADERS.map((header) => `  ${header}\n`).join('')}`);
   },
 };
 
 export default defineConfig({
   base: './',
-  // the browser tests expect the dev server on 5173: taken, it stops rather than moving on to
-  // another port where the tests would meet some other checkout's server
-  server: { host: '127.0.0.1', port: 5173, strictPort: true },
+  // the browser tests expect the dev server on its port: taken, it stops rather than moving on
+  // to another port where the tests would meet some other checkout's server
+  server: { host: '127.0.0.1', port: DEV_PORT, strictPort: true },
   plugins: [pageShell],
   build: {
     target: 'es2022',
