@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { colliderRadius, type Assets, type ShipType } from '../assets';
 import { FlightModel } from './flight';
+import { MASS, type Body } from '../world/bodies';
 import type { Controls } from '../input/input';
 import { TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
@@ -150,6 +151,8 @@ function sharedRadius(assets: Assets): number {
 
 export class Ship {
   readonly flight = new FlightModel();
+  /** The ship as a body on a rope or in a bump (see world/bodies): its flight, and an interceptor's mass. */
+  readonly body: Body = { position: this.flight.position, velocity: this.flight.velocity, mass: MASS.ship };
   /** Where the ship was before this frame's move, for the swept collision test. */
   readonly previous = new THREE.Vector3();
   /** Where the drive's exhaust was laid last frame, and whether the drive was burning then. */

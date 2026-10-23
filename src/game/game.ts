@@ -13,7 +13,7 @@ import { Datamosh } from '../view/datamosh';
 import { GuideLine } from '../view/guide';
 import { Ghost } from '../view/ghost';
 import { lapClock, LapTimer, parseLaps } from './laps';
-import { aimHook, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, pivotOf, pullOn, type Anchor, type Tether } from './hook';
+import { aimHook, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, pivotOf, pullOn, type Anchor, type Mark, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
@@ -53,6 +53,7 @@ import { setGlint } from '../ship/models';
 import { BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { touchRing } from '../world/gates';
+import { IMMOVABLE, massOf, type Body } from '../world/bodies';
 import { COMET_SPEED, COMET_WARNING, cometEnd, cometsOf, cometStart, CometView, courseAt, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
@@ -602,6 +603,14 @@ const skillScales = (skills: Skills) =>
 /** A sum of Solar Coins as the Host's language writes it (1,000 / 1.000 / 1 000). */
 const coinText = (coins: number) => coins.toLocaleString(currentLocale());
 
+/** A rock (or what else a hook holds that is not a ship) as the body at a cable's end. */
+const heldBody = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: IMMOVABLE };
+function rockBody(mass: number, at: THREE.Vector3, velocity: THREE.Vector3): Body {
+  heldBody.mass = mass;
+  heldBody.position.copy(at);
+  heldBody.velocity.copy(velocity);
+  return heldBody;
+}
 /** A hook's anchor, the owner's nose and the cable's far end this frame. */
 const hookPoint = new THREE.Vector3();
 const hookNose = new THREE.Vector3();
@@ -4210,11 +4219,13 @@ export class Game implements OnlineGame {
 
   /** The harpoon leaves the nose: it bites what lies ahead within reach (in Capture the Flag a core it may take too), or flies out and is reeled back. */
   private fireHook(ship: Ship) {
+    const marks: Mark[] = this.probes.list.map((probe) => ({ team: -1, probe: probe.id, position: probe.position }));
+    if (this.flags) marks.push(...this.flags.hookable(ship));
     const aim = aimHook(
       ship,
       this.field,
       this.ships.filter((other) => other !== this.drone),
-      this.flags?.hookable(ship),
+      marks,
     );
     const end = aim ? aim.at : ship.nose(new THREE.Vector3()).addScaledVector(ship.flight.forward(forward), HOOK_RANGE);
     this.tethers.set(ship, { owner: ship, anchor: aim?.anchor ?? null, flying: flightTime(aim?.distance ?? HOOK_RANGE), end, length: 0, line: this.cables.take() });
@@ -4261,9 +4272,12 @@ export class Game implements OnlineGame {
             continue;
           }
           tether.length = owner.flight.position.distanceTo(at);
-          // a core bitten goes to the rules; its cable is the tow cable from then on
-          if (tether.anchor.mark) {
-            this.hookedCore(owner, tether.anchor.mark.team);
+          // a core bitten goes to the rules, its cable the tow cable from then on; a probe
+          // bitten is the ship's (see hookedProbe)
+          const mark = tether.anchor.mark;
+          if (mark) {
+            if (mark.probe) this.hookedProbe(owner, mark.probe);
+            else this.hookedCore(owner, mark.team);
             this.unhook(owner);
             continue;
           }
@@ -4278,16 +4292,18 @@ export class Game implements OnlineGame {
         this.unhook(owner);
         continue;
       }
-      // a ship hooked to a ship: the winch pulls both alike, each on the browser that runs it
+      // a ship hooked to a ship: one rope between two bodies of the same mass, each end pulled
+      // on the browser that runs it (both at once where one browser runs both); hooked to a
+      // rock, the rock is the anchor, far too heavy to move
       const target = tether.anchor.ship;
-      const share = target ? 0.5 : 1;
       const floor = floorOf(owner, tether.anchor);
       let length: number | null = tether.length;
-      // the winch yanks as hard as a coil throws: up to the limit plus a coil's push
       const rock = tether.anchor.rock;
-      const anchorVelocity = target ? target.flight.velocity : rock ? this.field.surfaceVelocity(rock, at, hookVelocity) : hookVelocity.set(0, 0, 0);
-      if (owner.owner === null) length = pullOn(owner.flight, at, anchorVelocity, length, true, share, floor, MAX_SPEED + BOOST_PUSH, dt);
-      if (length !== null && target && target.owner === null) length = pullOn(target.flight, owner.flight.position, owner.flight.velocity, length, true, share, floor, MAX_SPEED + BOOST_PUSH, dt);
+      const anchor = target ? target.body : rockBody(rock ? massOf(rock) : IMMOVABLE, at, rock ? this.field.surfaceVelocity(rock, at, hookVelocity) : hookVelocity.set(0, 0, 0));
+      // the winch yanks as hard as a coil throws: up to the limit plus a coil's push
+      const limit = MAX_SPEED + BOOST_PUSH;
+      if (owner.owner === null) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, target?.owner === null);
+      else if (target?.owner === null) length = pullOn(target.body, owner.body, length, true, floor, limit, dt);
       if (length === null) {
         if (owner === this.me) this.hud.flashMessage(this.time, t('Cable snapped'), 1.5);
         this.unhook(owner);
@@ -4308,6 +4324,17 @@ export class Game implements OnlineGame {
     if (owner !== this.me) return;
     this.sound.play('explosion', { volume: 0.5, rate: 2.4 });
     this.sound.beep(523, 0.08, 0.12);
+  }
+
+  /**
+   * A harpoon of this browser bit a sponsor probe: the ship takes it as if it had flown through
+   * it. Half a tonne against a ship's sixty, the winch would have it aboard in a moment; and a
+   * probe is no one's to move (every browser has it in the same place on the round clock), so
+   * it is taken where it is, and the others hear of it as of any probe taken.
+   */
+  private hookedProbe(owner: Ship, id: string) {
+    const probe = this.probes.find(id);
+    if (owner.owner === null && owner.alive && probe) this.takeProbe(owner, probe);
   }
 
   /** A ship of another browser says its harpoon bit a core: the lead's rules decide (see Flags.claim). */
@@ -4480,8 +4507,9 @@ export class Game implements OnlineGame {
 
   probeWithin(id: string, ship: Ship): boolean {
     const probe = this.probes.find(id);
-    // the taker flew through it on its own screen: here it may be a moment behind, at full speed
-    return !probe || probe.position.distanceTo(ship.flight.position) < PROBE_RADIUS + ship.radius + PROBE_LAG + ship.flight.velocity.length() * 0.5;
+    // the taker flew through it, or bit it with its harpoon (see hookedProbe), on its own
+    // screen: here it may be a moment behind, at full speed
+    return !probe || probe.position.distanceTo(ship.flight.position) < HOOK_RANGE + PROBE_RADIUS + ship.radius + PROBE_LAG + ship.flight.velocity.length() * 0.5;
   }
 
   rockAt(id: string): { position: THREE.Vector3; radius: number } | null {

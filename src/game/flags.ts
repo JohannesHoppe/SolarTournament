@@ -5,7 +5,8 @@ import { ARENA_LIMIT } from '../world/arena';
 import { GateKit } from '../world/gates';
 import { CoreKit, GRIP, type CoreLook } from '../world/powercore';
 import { touchRing } from '../world/gates';
-import { bounceOff } from '../ship/impact';
+import { bounceOff, bump } from '../ship/impact';
+import { MASS, share, type Body } from '../world/bodies';
 import { Cables, HOOK_RANGE, pullOn, type Mark } from './hook';
 import { sponsorSigns } from './satire-ads';
 import { msg } from '../i18n/i18n';
@@ -51,13 +52,14 @@ export const GRAB_POINTS = 100;
 export const RETURN_POINTS = 150;
 export const CAPTURE_POINTS = 1000;
 /**
- * A core in tow is a trailer on a rope: a body of CORE_MASS ship masses with its own momentum,
- * on a cable made fast at the carrier's stern (TOW_STERN ship radii behind its center),
- * TOW_CABLE ship radii long (about 75 m: beyond the chase camera, which hangs 2.6 radii behind
- * the ship). The cable is the hook's (see pullOn in game/hook): it only pulls, never pushes.
- * Slack, the core flies on by itself; taut, it jerks: the speed apart is taken from both by
- * their masses (the core takes four fifths, the ship one fifth), so towing costs a fifth of
- * the ship's acceleration and every jerk is felt as a tug. In a turn it swings out and whips
+ * A core in tow is a trailer on a rope: a body of a quarter of a ship's mass (see MASS in
+ * world/bodies) with its own momentum, on a cable made fast at the carrier's stern (TOW_STERN
+ * ship radii behind its center), TOW_CABLE ship radii long (about 75 m: beyond the chase
+ * camera, which hangs 2.6 radii behind the ship). The cable is the hook's (see pullOn in
+ * game/hook): it only pulls, never pushes. Slack, the core flies on by itself; taut, it jerks:
+ * the speed apart is taken from both by their masses (the core takes four fifths, the ship
+ * one fifth), so towing costs a fifth of the ship's acceleration and every jerk is felt as a
+ * tug. In a turn it swings out and whips
  * around; when the ship brakes hard it overtakes on its momentum and bumps into the hull (and
  * bounces off it, by the same shares) or comes taut ahead. A core bitten from afar comes in on
  * the harpoon's cable, reeled in by the hook's winch to TOW_CABLE, which then holds that length.
@@ -65,14 +67,10 @@ export const CAPTURE_POINTS = 1000;
  * let go there with its velocity. It is shown at its size in tow, larger adrift and at home
  * (CORE_SCALE), where it is a mark to fly for.
  */
-const CORE_MASS = 0.25;
 /** A core is a lively thing: it keeps this share of its speed into a rock, a ring or a hull when it bounces off (a ship's hull keeps 0.3). */
 const CORE_RESTITUTION = 0.6;
 const TOW_STERN = 0.8;
 const TOW_CABLE = 4.5;
-/** The two ends' shares of a jerk or a bump, by their masses: the core's, and the ship's. */
-const CORE_SHARE = 1 / (1 + CORE_MASS);
-const SHIP_SHARE = CORE_MASS / (1 + CORE_MASS);
 /** Every browser swings a core in tow on its own rope; one that does not run the carrier takes the lead's core (see toState) when its own is farther off than this (units, 100 m). */
 const TOW_CORRECTION = 2000;
 const CORE_SCALE = { tow: 1, adrift: 1.4, home: 2 } as const;
@@ -103,6 +101,7 @@ type Core = {
   carrier: string | null;
   home: boolean;
   readonly team: number;
+  readonly mass: number;
   readonly position: THREE.Vector3;
   readonly previous: THREE.Vector3;
   readonly velocity: THREE.Vector3;
@@ -135,6 +134,8 @@ export interface Flier {
   /** The browser that runs it, null for this one. */
   readonly owner: string | null;
   readonly flight: { readonly position: THREE.Vector3; readonly velocity: THREE.Vector3; readonly orientation: THREE.Quaternion };
+  /** Its flight as a body on a rope or in a bump (see world/bodies). */
+  readonly body: Body;
 }
 
 const tow = new THREE.Vector3();
@@ -146,10 +147,7 @@ const STILL = new THREE.Vector3();
 const stern = new THREE.Vector3();
 /** Both ends of a tow cable as they were before this frame's jerk (see Flags.tow), and the stern as a body the cable pulls. */
 const sternAt = new THREE.Vector3();
-const coreAt = new THREE.Vector3();
-const shipVelocity = new THREE.Vector3();
-const coreVelocity = new THREE.Vector3();
-const sternBody = { position: stern, velocity: shipVelocity };
+const sternBody = { position: stern, velocity: new THREE.Vector3(), mass: MASS.ship };
 const cableAxis = new THREE.Vector3();
 const grip = new THREE.Vector3();
 const spin = new THREE.Quaternion();
@@ -218,7 +216,7 @@ export class Flags {
       const base = axis.clone().multiplyScalar(team === 0 ? 1 : -1);
       this.bases.push(base);
       this.facings.push(base.clone().normalize());
-      this.cores.push({ carrier: null, home: true, team, position: base.clone(), previous: base.clone(), velocity: new THREE.Vector3(), droppedAt: 0, cable: 0, told: null });
+      this.cores.push({ carrier: null, home: true, team, mass: MASS.core, position: base.clone(), previous: base.clone(), velocity: new THREE.Vector3(), droppedAt: 0, cable: 0, told: null });
       this.told.push({ position: new THREE.Vector3(), velocity: new THREE.Vector3() });
       // the ring faces the center, so a carrier flying home flies through it
       const ring = this.kit.build(base, base.clone().normalize(), this.kit.coilMaterial(tint, 2));
@@ -453,7 +451,7 @@ export class Flags {
   }
 
   /**
-   * A core in tow (see CORE_MASS): it flies on its own momentum, bounces off rock, the bases'
+   * A core in tow (see TOW_CABLE): it flies on its own momentum, bounces off rock, the bases'
    * rings and ships, and hangs on the hook's cable from the carrier's stern. A core just taken
    * is on a cable as long as the way to it (no longer than the hook reaches), which the winch
    * reels in to TOW_CABLE. Taut, the cable pulls both ends by their masses; the carrier only
@@ -467,21 +465,12 @@ export class Flags {
     core.position.addScaledVector(core.velocity, dt);
     this.collide(core.position, core.velocity);
     this.bump(core, ships);
-    // both ends as they were, so each takes its share of the same jerk
+    // the rope between the core and the stern, which moves the ship with it
     sternOf(carrier, stern);
     sternAt.copy(stern);
-    coreAt.copy(core.position);
-    shipVelocity.copy(flight.velocity);
-    coreVelocity.copy(core.velocity);
-    const reeling = core.cable > length;
-    const cable = pullOn(core, sternAt, shipVelocity, core.cable, reeling, local ? CORE_SHARE : 1, length, Infinity, dt);
-    if (local) {
-      // the stern takes the ship's share, and the ship moves with it
-      sternBody.position = stern;
-      sternBody.velocity = flight.velocity;
-      pullOn(sternBody, coreAt, coreVelocity, core.cable, false, SHIP_SHARE, length, Infinity, dt);
-      flight.position.add(stern.sub(sternAt));
-    }
+    sternBody.velocity = flight.velocity;
+    const cable = pullOn(core, sternBody, core.cable, core.cable > length, length, Infinity, dt, local);
+    flight.position.add(stern.sub(sternAt));
     if (cable !== null) core.cable = cable;
   }
 
@@ -496,8 +485,8 @@ export class Flags {
 
   /**
    * A core that touches a ship bounces off it (CORE_RESTITUTION), both taking their shares of
-   * the bump by their masses; the ship only on the browser that runs it. A bump only shoves:
-   * it harms neither the ship nor the core.
+   * the bump by their masses (see world/bodies); the ship on the browser that runs it. A bump
+   * only shoves: it harms neither the ship nor the core.
    */
   private bump(core: Core, ships: readonly Flier[]) {
     for (const ship of ships) {
@@ -508,14 +497,10 @@ export class Flags {
       if (distance >= reach || distance < 1e-6) continue;
       apart.divideScalar(distance);
       const local = ship.owner === null;
-      core.position.addScaledVector(apart, (reach - distance) * (local ? CORE_SHARE : 1));
-      if (local) ship.flight.position.addScaledVector(apart, -(reach - distance) * SHIP_SHARE);
-      coreVelocity.copy(core.velocity);
-      if (!bounceOff(core.velocity, ship.flight.velocity, apart, CORE_RESTITUTION) || !local) continue;
-      // the change the core would see off an immovable hull, shared by the masses
-      shipVelocity.subVectors(core.velocity, coreVelocity);
-      core.velocity.copy(coreVelocity).addScaledVector(shipVelocity, CORE_SHARE);
-      ship.flight.velocity.addScaledVector(shipVelocity, -SHIP_SHARE);
+      const toCore = share(core.mass, ship.body.mass);
+      core.position.addScaledVector(apart, (reach - distance) * toCore);
+      if (local) ship.flight.position.addScaledVector(apart, -(reach - distance) * (1 - toCore));
+      bump(core, ship.body, apart, CORE_RESTITUTION, true, local);
     }
   }
 

@@ -4,6 +4,7 @@ import { ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
 import { ADRIFT_SECONDS, BASE_RADIUS, CORE_BRAKE, Flags, type Flier } from './flags';
 import { HOOK_RANGE } from './hook';
+import { MASS } from '../world/bodies';
 
 const belt = ARENAS.find((a) => a.id === 'belt')!.layout;
 const DT = 1 / 60;
@@ -17,7 +18,10 @@ function flags() {
 
 type Pilot = Flier & { alive: boolean; kind: 'bot' | 'host' };
 /** A pilot of this browser, a ship's radius (17 m), high above the field, far from bases and cores until a test moves it. */
-const pilot = (id: string, kind: 'bot' | 'host' = 'bot'): Pilot => ({ id, alive: true, radius: 340, kind, owner: null, flight: { position: new THREE.Vector3(0, 30000, 0), velocity: new THREE.Vector3(), orientation: new THREE.Quaternion() } });
+function pilot(id: string, kind: 'bot' | 'host' = 'bot'): Pilot {
+  const flight = { position: new THREE.Vector3(0, 30000, 0), velocity: new THREE.Vector3(), orientation: new THREE.Quaternion() };
+  return { id, alive: true, radius: 340, kind, owner: null, flight, body: { position: flight.position, velocity: flight.velocity, mass: MASS.ship } };
+}
 
 /** The ships fly on their velocities for `seconds` from `now`, the lead's rules and the cores running every frame; returns the time then. */
 function fly(f: Flags, ships: Pilot[], now: number, seconds: number, until: () => boolean = () => false): number {
