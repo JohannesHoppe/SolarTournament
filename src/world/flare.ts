@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { bandsVertex, noise3 } from './landmarks';
+import { bandsVertex, fbm, noise3 } from './landmarks';
 import { FLARE_RADIUS } from '../game/survival';
 
 /**
@@ -15,21 +15,12 @@ const fragment = /* glsl */ `
   varying vec3 vNormal;
   varying vec3 vView;
   ${noise3}
-  float fbm(vec3 p) {
-    float sum = 0.0;
-    float amplitude = 0.5;
-    for (int i = 0; i < 5; i++) {
-      sum += amplitude * noise(p);
-      p *= 2.03;
-      amplitude *= 0.5;
-    }
-    return sum;
-  }
+  ${fbm}
   void main() {
     // features of about 350 m on the 13.5 km sphere, boiling and drifting
     vec3 p = normalize(vLocal) * 40.0;
-    float roil = fbm(p + vec3(0.0, time * 0.15, time * 0.1));
-    float warp = fbm(p * 1.7 + roil * 2.0 - vec3(time * 0.2));
+    float roil = fbm(p + vec3(0.0, time * 0.15, time * 0.1), 1.0);
+    float warp = fbm(p * 1.7 + roil * 2.0 - vec3(time * 0.2), 1.0);
     // filaments: the ridges of a warped noise, thin and white-hot
     float filaments = pow(1.0 - abs(noise(p * 6.0 + warp * 3.0) * 2.0 - 1.0), 6.0);
     vec3 color = mix(vec3(0.55, 0.04, 0.0), vec3(1.0, 0.42, 0.04), smoothstep(0.25, 0.75, warp));

@@ -6,6 +6,16 @@ import { msg } from '../i18n/i18n';
 
 /** One standard gravity (units/s², 1 unit = 5 cm). */
 const G = 196.2;
+/**
+ * The gas giant below its arena: a planet of GIANT_RADIUS (units, 40 km) whose cloud tops lie
+ * GIANT_DEPTH (2.25 km) below the field's center, so its curved horizon fills the lower view. It
+ * pulls with GIANT_GRAVITY at its clouds, falling off with the square of the distance: about
+ * 0.83 g at the field's center, 0.75 g at its top, almost the same everywhere a ship flies, as
+ * near a real planet.
+ */
+const GIANT_RADIUS = 800000;
+const GIANT_DEPTH = 45000;
+const GIANT_GRAVITY = 0.93 * G;
 
 export type ArenaId = 'belt' | 'rings' | 'kessler' | 'giant' | 'corona' | 'hole' | 'derelict';
 
@@ -119,7 +129,7 @@ export const ARENAS: readonly ArenaProfile[] = [
   {
     id: 'giant',
     name: msg('Gas Giant'),
-    tagline: msg('A world of storms below, pulling with three g at its clouds. Swing by it, or fall in.'),
+    tagline: msg('A world of storms below, eighty kilometers wide, pulling at everything. Dive along its clouds, or burn in them.'),
     layout: {
       key: 'giant',
       seed: 47,
@@ -131,7 +141,7 @@ export const ARENAS: readonly ArenaProfile[] = [
       inner: 0,
       spin: SPIN_RATE,
       toughness: 800,
-      well: { position: new THREE.Vector3(0, -95000, 0), radius: 50000, surfaceGravity: 3 * G },
+      well: { position: new THREE.Vector3(0, -(GIANT_RADIUS + GIANT_DEPTH), 0), radius: GIANT_RADIUS, surfaceGravity: GIANT_GRAVITY },
     },
     cooling: 1,
     storms: false,

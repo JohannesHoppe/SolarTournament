@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { SUN_DIRECTION } from './space';
-import { sternAt, type ArenaId, type ArenaProfile } from './arenas';
+import { ARENAS, sternAt, type ArenaId, type ArenaProfile } from './arenas';
 import { canvas, toTexture } from '../view/textures';
 
 /**
@@ -22,6 +22,15 @@ const RING_FADE_FAR = 120000;
 /** Specks of ice drifting around the pilot in the ring, and the slab they fill (units). */
 const ICE_SPECKS = 2500;
 const ICE_SLAB = 60000;
+/** The ringed planet's axis leans this far towards the arena (rad), so its bands lie askew. */
+const KRONOS_TILT = 0.35;
+/**
+ * The gas giant shows only the cap around the point below the arena, this far around (rad, 35°):
+ * its horizon lies within 29° for a ship at the arena's top edge, a little more off to the side.
+ */
+const GIANT_CAP = 0.62;
+/** The arena hangs over this latitude of the gas giant (rad, 15° north): its belts run across the view. */
+const GIANT_LATITUDE = 0.26;
 /** The sun of the corona arena: a sphere this large at this distance (units). */
 const CORONA_RADIUS = 62000;
 const CORONA_DISTANCE = 240000;
@@ -52,33 +61,177 @@ export const bandsVertex = /* glsl */ `
   }
 `;
 
-/** A gas giant: bands of cloud by latitude, stirred by noise and slowly turning, lit by the sun, with a glowing rim of atmosphere. */
-const bandsFragment = /* glsl */ `
-  uniform float time;
-  uniform vec3 sun;
-  uniform vec3 colorA;
-  uniform vec3 colorB;
-  uniform vec3 colorC;
-  uniform vec3 rim;
-  varying vec3 vLocal;
-  varying vec3 vNormal;
-  varying vec3 vView;
-  ${noise3}
-  void main() {
-    vec3 p = normalize(vLocal);
-    float angle = time * 0.004;
-    p.xz = mat2(cos(angle), -sin(angle), sin(angle), cos(angle)) * p.xz;
-    float swirl = noise(p * 6.0) * 0.5 + noise(p * 17.0) * 0.25;
-    float band = sin(p.y * 22.0 + swirl * 3.0) * 0.5 + 0.5;
-    vec3 color = mix(colorA, colorB, band);
-    color = mix(color, colorC, smoothstep(0.55, 0.8, noise(p * 3.0 + vec3(0.0, time * 0.002, 0.0))) * 0.6);
-    float light = clamp(dot(normalize(vNormal), normalize(sun)), 0.0, 1.0);
-    float edge = 1.0 - clamp(dot(normalize(vNormal), normalize(vView)), 0.0, 1.0);
-    gl_FragColor = vec4(color * (0.04 + 1.1 * light) + rim * pow(edge, 3.0) * (0.25 + light), 1.0);
+/**
+ * Noise in octaves (fractal Brownian motion) over noise3: the first three octaves always, the
+ * finer ones weighed by `fine`, so detail that would only shimmer far off fades out there.
+ */
+export const fbm = /* glsl */ `
+  float fbm(vec3 p, float fine) {
+    float sum = 0.0;
+    float amplitude = 0.5;
+    for (int i = 0; i < 6; i++) {
+      if (i >= 3 && fine <= 0.0) break;
+      sum += amplitude * (i < 3 ? 1.0 : fine) * noise(p);
+      p = p * 2.03 + 17.1;
+      amplitude *= 0.5;
+    }
+    return sum;
   }
 `;
 
-/** The surface of a sun up close: boiling cells of plasma, hotter towards the middle. */
+/** A planet's vertex shader for the shaders below: its own point (for the pattern), its normal and position in the world (for light and view). */
+const planetVertex = /* glsl */ `
+  varying vec3 vLocal;
+  varying vec3 vNormal;
+  varying vec3 vWorld;
+  void main() {
+    vLocal = position;
+    vNormal = normalize(mat3(modelMatrix) * normal);
+    vec4 world = modelMatrix * vec4(position, 1.0);
+    vWorld = world.xyz;
+    gl_Position = projectionMatrix * viewMatrix * world;
+  }
+`;
+
+/**
+ * A gas giant's clouds: bands by latitude (in the planet's own frame, turned by `frame`, slowly
+ * spinning), bent by large flows and curling into eddies and festoons along their edges, drawn
+ * out into streaks by the winds, with fine cloud grain for a pilot just above the tops; a great storm turning in an oval (`spot`),
+ * white ovals along a band; sunlight with a soft terminator where the upper air scatters it red;
+ * lightning in the night side's storms and aurora over the poles (`storms`); haze along the limb.
+ */
+const gasFragment = /* glsl */ `
+  uniform float time;
+  uniform vec3 sun;
+  uniform mat3 frame;
+  uniform vec3 zone;
+  uniform vec3 belt;
+  uniform vec3 dark;
+  uniform vec3 haze;
+  uniform float spot;
+  uniform float storms;
+  varying vec3 vLocal;
+  varying vec3 vNormal;
+  varying vec3 vWorld;
+  ${noise3}
+  ${fbm}
+  /** An oval of half widths (lon, lat) around (lonC, latC): 1 at its rim, 0 in its middle. */
+  float oval(float lon, float lat, float lonC, float latC, vec2 size) {
+    float dLon = mod(lon - lonC + 3.14159265, 6.2831853) - 3.14159265;
+    return length(vec2(dLon / size.x, (lat - latC) / size.y));
+  }
+  void main() {
+    vec3 p = normalize(frame * vLocal);
+    float spin = time * 0.0004;
+    vec3 q = vec3(cos(spin) * p.x - sin(spin) * p.z, p.y, sin(spin) * p.x + cos(spin) * p.z);
+    float fine = clamp(1.0 - distance(cameraPosition, vWorld) / 250000.0, 0.0, 1.0);
+    float lat = asin(clamp(q.y, -1.0, 1.0));
+    float lon = atan(q.z, q.x);
+    // large flows bend the bands, swirls curl them into festoons, eddies fray their edges
+    float flow = fbm(q * 8.0, 0.0);
+    float swirl = fbm(q * 40.0 + flow * 3.0, 1.0);
+    float eddies = fbm(q * 160.0 + vec3(swirl * 6.0, 0.0, time * 0.002), fine);
+    float bent = lat + 0.04 * (flow - 0.5) + 0.02 * (swirl - 0.5) + 0.008 * (eddies - 0.5);
+    float profile = 0.6 * sin(bent * 70.0) + 0.4 * sin(bent * 23.0 + 1.0);
+    // the winds draw everything out along the bands: streaks long in longitude, thin in latitude
+    float streaks = fbm(vec3(q.x * 50.0, bent * 1200.0, q.z * 50.0), fine);
+    float inBelt = smoothstep(-0.3, 0.3, profile);
+    float tint = 0.5 + 0.5 * sin(bent * 9.0 + 1.3);
+    vec3 color = mix(zone, mix(belt, dark, tint * 0.5), inBelt);
+    // within the belts dark streaks, within the zones bright puffs, both drawn by the eddies
+    color = mix(color, dark, inBelt * smoothstep(0.45, 0.75, eddies) * 0.5);
+    color = mix(color, zone * 1.15, (1.0 - inBelt) * smoothstep(0.5, 0.8, swirl) * 0.4);
+    color *= 0.85 + 0.3 * streaks;
+    // the grain of the cloud tops, seen from just above them
+    float grain = fbm(q * 900.0 + eddies * 3.0, fine);
+    color *= 0.75 + 0.5 * mix(0.5, grain, fine);
+    if (spot > 0.0) {
+      // the great storm: a red oval turning in itself, a pale collar around it
+      float r = oval(lon, lat, -0.16, 0.18, vec2(0.12, 0.06));
+      color = mix(color, zone * 1.15, smoothstep(1.4, 1.05, r) * 0.6);
+      if (r < 1.05) {
+        float dLon = mod(lon + 0.16 + 3.14159265, 6.2831853) - 3.14159265;
+        float turn = atan(lat - 0.18, dLon * 0.5) + r * 5.0 - time * 0.02;
+        float arms = 0.5 + 0.5 * sin(turn * 3.0 + fbm(q * 200.0, fine) * 4.0);
+        vec3 storm = mix(vec3(0.6, 0.2, 0.1), vec3(0.88, 0.45, 0.26), arms);
+        color = mix(color, storm, smoothstep(1.05, 0.8, r));
+      }
+      // white ovals, smaller storms of their own along a band to the north
+      for (int i = 0; i < 4; i++) {
+        float o = oval(lon, lat, -0.1 + float(i) * 0.11, 0.33, vec2(0.025, 0.014));
+        color = mix(color, vec3(0.95, 0.93, 0.88), smoothstep(1.0, 0.6, o + 0.2 * (eddies - 0.5)));
+      }
+    }
+    vec3 n = normalize(vNormal);
+    vec3 view = normalize(cameraPosition - vWorld);
+    float light = dot(n, normalize(sun));
+    float day = smoothstep(-0.08, 0.3, light);
+    // daylight stays below the bloom's threshold, so the clouds never glow
+    vec3 lit = color * (0.03 + 0.95 * day);
+    // the terminator glows: sunlight scattered red through the upper air
+    lit += vec3(1.0, 0.45, 0.2) * exp(-pow(light * 7.0, 2.0)) * 0.18;
+    if (storms > 0.0) {
+      // lightning flickering in the night side's storms
+      vec3 cells = q * 260.0;
+      float flash = hash(floor(cells) + floor(time * 4.0));
+      float bolt = step(0.9993, flash) * smoothstep(0.5, 0.0, length(fract(cells) - 0.5));
+      lit += vec3(0.75, 0.82, 1.0) * bolt * (1.0 - day) * 1.6;
+      // aurora over the poles
+      float polar = smoothstep(0.82, 0.95, abs(q.y));
+      lit += vec3(0.3, 1.0, 0.6) * polar * (0.5 + 0.5 * sin(lon * 20.0 + time * 0.3)) * (1.0 - day) * 0.4;
+    }
+    // haze along the limb
+    float limb = 1.0 - clamp(dot(n, view), 0.0, 1.0);
+    lit = mix(lit, haze * (0.15 + day), pow(limb, 4.0) * 0.8);
+    gl_FragColor = vec4(lit, 1.0);
+  }
+`;
+
+/**
+ * A world with air and water, worn by the regime: dark oceans with the sun's glint, grey and
+ * brown continents, ice at the poles, clouds that drift, and on the night side the orange glow of
+ * its sprawling cities; blue haze along the limb.
+ */
+const worldFragment = /* glsl */ `
+  uniform float time;
+  uniform vec3 sun;
+  varying vec3 vLocal;
+  varying vec3 vNormal;
+  varying vec3 vWorld;
+  ${noise3}
+  ${fbm}
+  void main() {
+    vec3 p = normalize(vLocal);
+    float fine = clamp(1.0 - distance(cameraPosition, vWorld) / 600000.0, 0.0, 1.0);
+    float height = fbm(p * 3.0 + fbm(p * 6.0, 1.0) * 0.6, fine);
+    float land = smoothstep(0.49, 0.52, height);
+    float ice = smoothstep(0.78, 0.86, abs(p.y) + (height - 0.5) * 0.2);
+    vec3 ocean = mix(vec3(0.02, 0.07, 0.2), vec3(0.04, 0.16, 0.34), smoothstep(0.3, 0.49, height));
+    vec3 ground = mix(vec3(0.32, 0.29, 0.24), vec3(0.2, 0.22, 0.17), fbm(p * 30.0, fine));
+    vec3 color = mix(mix(ocean, ground, land), vec3(0.9, 0.93, 0.97), ice);
+    float clouds = smoothstep(0.56, 0.8, fbm(p * 7.0 + vec3(time * 0.003, 0.0, 0.0) + fbm(p * 14.0, fine), fine));
+    color = mix(color, vec3(0.9), clouds * 0.85);
+    vec3 n = normalize(vNormal);
+    vec3 view = normalize(cameraPosition - vWorld);
+    vec3 toSun = normalize(sun);
+    float light = dot(n, toSun);
+    float day = smoothstep(-0.05, 0.25, light);
+    vec3 lit = color * (0.02 + 0.8 * day);
+    // the sun's glint on open water
+    lit += vec3(1.0, 0.92, 0.8) * pow(max(dot(reflect(-toSun, n), view), 0.0), 60.0) * (1.0 - land) * (1.0 - clouds) * day * 0.8;
+    // the cities at night: the regime never switches off the lights of its sprawl
+    float cities = step(0.62, noise(p * 260.0)) * smoothstep(0.55, 0.7, noise(p * 40.0));
+    lit += vec3(1.0, 0.6, 0.25) * cities * land * (1.0 - ice) * (1.0 - clouds) * (1.0 - day) * 0.9;
+    float limb = 1.0 - clamp(dot(n, view), 0.0, 1.0);
+    lit = mix(lit, vec3(0.3, 0.55, 1.0) * (0.1 + 0.8 * day), pow(limb, 3.0) * 0.7);
+    gl_FragColor = vec4(lit, 1.0);
+  }
+`;
+
+/**
+ * The surface of a sun up close: boiling cells of plasma, a fine granulation over them, groups of
+ * dark sunspots with their paler rims, hotter towards the middle.
+ */
 const sunFragment = /* glsl */ `
   uniform float time;
   varying vec3 vLocal;
@@ -87,17 +240,24 @@ const sunFragment = /* glsl */ `
   ${noise3}
   void main() {
     vec3 p = normalize(vLocal);
-    float cells = noise(p * 14.0 + time * 0.05) * 0.6 + noise(p * 40.0 - time * 0.11) * 0.4;
+    float cells = noise(p * 14.0 + time * 0.05) * 0.5 + noise(p * 40.0 - time * 0.11) * 0.3 + noise(p * 160.0 + time * 0.3) * 0.2;
     float center = clamp(dot(normalize(vNormal), normalize(vView)), 0.0, 1.0);
     vec3 color = mix(vec3(1.0, 0.35, 0.05), vec3(1.0, 0.85, 0.5), cells * 0.7 + center * 0.5);
-    gl_FragColor = vec4(color * (1.6 + 1.4 * center), 1.0);
+    float spots = noise(p * 5.0 + 11.0) * 0.7 + noise(p * 24.0) * 0.3;
+    float penumbra = smoothstep(0.7, 0.73, spots);
+    float umbra = smoothstep(0.75, 0.78, spots);
+    color *= 1.0 - 0.45 * penumbra - 0.45 * umbra;
+    // bright enough to bloom, not so bright that the cells and spots wash out to white
+    gl_FragColor = vec4(color * (0.75 + 0.55 * center), 1.0);
   }
 `;
 
 const diskVertex = /* glsl */ `
   varying vec2 vPlane;
+  varying vec3 vToCamera;
   void main() {
     vPlane = position.xy;
+    vToCamera = (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz - position;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
@@ -108,24 +268,26 @@ const diskFragment = /* glsl */ `
   uniform float inner;
   uniform float outer;
   varying vec2 vPlane;
-  float hash(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
-  float noise(vec2 p) {
-    vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + vec2(1, 0)), f.x), mix(hash(i + vec2(0, 1)), hash(i + vec2(1, 1)), f.x), f.y);
-  }
+  varying vec3 vToCamera;
+  ${noise3}
   void main() {
     float r = length(vPlane);
     float t = clamp((r - inner) / (outer - inner), 0.0, 1.0);
     float angle = atan(vPlane.y, vPlane.x);
-    // the inner gas circles faster: the spiral winds up towards the hole
-    float spin = angle + time * (0.9 / (0.15 + t)) ;
-    float streaks = noise(vec2(spin * 6.0, t * 18.0)) * 0.6 + noise(vec2(spin * 19.0, t * 50.0)) * 0.4;
+    // the inner gas circles faster: the spiral winds up towards the hole; the streams are drawn
+    // on a circle, so they close without a seam
+    float spin = angle + time * (0.9 / (0.15 + t));
+    vec2 around = vec2(cos(spin), sin(spin));
+    float streaks = noise(vec3(around * 6.0, t * 18.0)) * 0.5 + noise(vec3(around * 19.0, t * 50.0)) * 0.3 + noise(vec3(around * 60.0, t * 160.0)) * 0.2;
     float heat = pow(1.0 - t, 2.2);
     vec3 color = mix(vec3(0.9, 0.25, 0.04), vec3(1.0, 0.85, 0.65), heat);
     float fade = smoothstep(0.0, 0.04, t) * (1.0 - smoothstep(0.6, 1.0, t));
     // dark lanes between the bright streams, so the spiral reads
     float lanes = smoothstep(0.35, 0.75, streaks);
-    gl_FragColor = vec4(color * (0.08 + 0.9 * heat) * lanes * fade, 1.0);
+    // where the gas streams towards the pilot it shines brighter and bluer, where it streams away dimmer
+    float beaming = dot(vec3(-sin(angle), cos(angle), 0.0), normalize(vToCamera));
+    color = mix(color, color * vec3(0.8, 0.9, 1.3), max(beaming, 0.0) * (1.0 - t));
+    gl_FragColor = vec4(color * (0.08 + 0.9 * heat) * lanes * fade * (1.0 + 0.5 * beaming), 1.0);
   }
 `;
 
@@ -180,27 +342,47 @@ export class Landmarks {
     for (const sign of this.flicker) (sign.material as THREE.MeshBasicMaterial).opacity = Math.random() < 0.03 ? 0.25 : 1;
   }
 
-  private planet(radius: number, colors: [number, number, number], rim: number): THREE.Mesh {
+  /**
+   * A gas planet over `geometry`: its bands in `palette` (zone, belt, dark, haze), its own frame
+   * turned by `frame`; `storms` adds the great storm, lightning and aurora.
+   */
+  private gas(geometry: THREE.BufferGeometry, palette: [number, number, number, number], frame: THREE.Matrix3, storms: boolean): THREE.Mesh {
+    const [zone, belt, dark, haze] = palette.map((color) => new THREE.Color(color));
     const material = new THREE.ShaderMaterial({
       uniforms: {
         time: { value: 0 },
         sun: { value: SUN_DIRECTION.clone() },
-        colorA: { value: new THREE.Color(colors[0]) },
-        colorB: { value: new THREE.Color(colors[1]) },
-        colorC: { value: new THREE.Color(colors[2]) },
-        rim: { value: new THREE.Color(rim) },
+        frame: { value: frame },
+        zone: { value: zone },
+        belt: { value: belt },
+        dark: { value: dark },
+        haze: { value: haze },
+        spot: { value: storms ? 1 : 0 },
+        storms: { value: storms ? 1 : 0 },
       },
-      vertexShader: bandsVertex,
-      fragmentShader: bandsFragment,
+      vertexShader: planetVertex,
+      fragmentShader: gasFragment,
     });
     this.timed.push(material);
-    return new THREE.Mesh(new THREE.SphereGeometry(radius, 96, 48), material);
+    return new THREE.Mesh(geometry, material);
+  }
+
+  /** A world with air and water (see worldFragment). */
+  private world(radius: number): THREE.Mesh {
+    const material = new THREE.ShaderMaterial({
+      uniforms: { time: { value: 0 }, sun: { value: SUN_DIRECTION.clone() } },
+      vertexShader: planetVertex,
+      fragmentShader: worldFragment,
+    });
+    this.timed.push(material);
+    return new THREE.Mesh(new THREE.SphereGeometry(radius, 128, 64), material);
   }
 
   private rings(): THREE.Group {
     const group = new THREE.Group();
     const center = new THREE.Vector3(-0.85, 0, 0.5).normalize().multiplyScalar(KRONOS_DISTANCE);
-    const planet = this.planet(KRONOS_RADIUS, [0xcdb58a, 0xe8dcc0, 0xa98a62], 0x9fc4ff);
+    // pale bands, its axis tilted a little towards the arena, so the ring and the bands lie askew
+    const planet = this.gas(new THREE.SphereGeometry(KRONOS_RADIUS, 128, 64), [0xe8dcc0, 0xcdb58a, 0x9c7c56, 0x9fc4ff], new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationX(KRONOS_TILT)), false);
     planet.position.copy(center);
     // the ring: bands of ice in the planet's equator plane, which is the arena's horizon
     const [element, ctx] = canvas(1024, 1);
@@ -267,17 +449,25 @@ export class Landmarks {
 
   private kessler(): THREE.Group {
     const group = new THREE.Group();
-    // the world the station circled, far below, blue with white cloud
-    const planet = this.planet(180000, [0x1f4f9a, 0x2a6cc8, 0xe8f0ff], 0x6fa8ff);
+    // the world the station circled, far below: oceans, clouds, the lights of its cities
+    const planet = this.world(180000);
     planet.position.set(-120000, -330000, -60000);
     group.add(planet);
     return group;
   }
 
+  /**
+   * The gas giant, where the arena's well is: only the cap a pilot can see is built, the rest lies
+   * beyond the horizon; its frame turns its bands so the arena hangs over its northern belts, the
+   * great storm, 10 km wide, turning some 7 km off and drifting past as the planet spins.
+   */
   private giant(): THREE.Group {
     const group = new THREE.Group();
-    const planet = this.planet(50000, [0xb5652c, 0xe2b07a, 0x7a3a1c], 0xffb070);
-    planet.position.set(0, -95000, 0);
+    const well = ARENAS.find((arena) => arena.id === 'giant')!.layout.well!;
+    const cap = new THREE.SphereGeometry(well.radius, 256, 96, 0, Math.PI * 2, 0, GIANT_CAP);
+    const frame = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationZ(GIANT_LATITUDE - Math.PI / 2));
+    const planet = this.gas(cap, [0xead8b4, 0xb0683a, 0x6e3418, 0xffc490], frame, true);
+    planet.position.copy(well.position);
     group.add(planet);
     return group;
   }

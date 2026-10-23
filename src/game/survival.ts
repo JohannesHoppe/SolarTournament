@@ -15,10 +15,11 @@ export const CLONES = 3;
  * into the field. FLARE_APPROACH seconds of field time before FLARE_START it shows up
  * FLARE_APPROACH_REACH beyond the arena's edge and comes at it; from FLARE_START its front eats
  * into the arena from the sun's side, evenly, until FLARE_END, where it stands FLARE_FRONT_END
- * from the center on the far side (1.7 km): what is left is a pocket on the side away from the
- * sun, a sliver of the arena 1.7 km deep at its middle and about 6 km across where the front meets
- * the arena's edge, its side towards the center among the field's outer rocks (they reach out to
- * 2.25 km), so there is cover and a fight to the end. A ship in the plasma takes FLARE_HEAT heat and FLARE_BURN hull
+ * from the center on the far side (2 km): what is left is a pocket on the side away from the
+ * sun, a sliver of the arena 1.35 km deep at its middle and about 6 km across where the front
+ * meets the arena's edge, thinning out towards that rim; its side towards the center cuts through
+ * the field's outermost rocks (they reach out to 2.25 km), so there is some cover, but no room to
+ * keep out of each other's way. A ship in the plasma takes FLARE_HEAT heat and FLARE_BURN hull
  * per second (about 17 s from a whole hull to nothing, and the laser locks from the heat long
  * before), only FLARE_SHADE of that with a rock between it and the sun.
  */
@@ -27,7 +28,7 @@ export const FLARE_END = 240;
 export const FLARE_APPROACH = 30;
 export const FLARE_APPROACH_REACH = ARENA_LIMIT * 2;
 export const FLARE_RADIUS = ARENA_LIMIT * 4;
-export const FLARE_FRONT_END = -FIELD_RADIUS * 0.75;
+export const FLARE_FRONT_END = -FIELD_RADIUS * 0.9;
 export const FLARE_HEAT = 40;
 export const FLARE_BURN = 6;
 export const FLARE_SHADE = 0.25;
