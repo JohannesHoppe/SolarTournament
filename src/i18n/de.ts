@@ -588,7 +588,7 @@ export const DE: Catalog = {
 
   // Nicole, the flight computer: the flight school
   'Hi, I am Nicole. Your personal flight computer.': 'Hi, ich bin Nicole. Dein persönlicher Bordcomputer.',
-  'The year is 2584. The Orange President wants his games, and you are one of his chosen Hosts. Your printed clones fly for you, and every death they die streams straight into your mind. Training clones are free. Shall we?': 'Wir schreiben das Jahr fünfundzwanzighundertvierundachtzig. Der Orange Präsident will seine Spiele, und du bist einer seiner auserwählten Hosts. Deine gedruckten Klone fliegen für dich, und jeder Tod, den sie sterben, strömt direkt in deinen Kopf. Übungsklone sind gratis. Wollen wir?',
+  'The year is 2584. The Orange President wants his games, and you are one of his chosen Hosts. Your printed clones fly for you, and every death they die streams straight into your mind. Training clones are free. Shall we?': 'Wir schreiben das Jahr zweitausendfünfhundertvierundachtzig. Der Orange Präsident will seine Spiele, und du bist einer seiner auserwählten Hosts. Deine gedruckten Klone fliegen für dich, und jeder Tod, den sie sterben, strömt direkt in deinen Kopf. Übungsklone sind gratis. Wollen wir?',
   'Turn the ship. Put the marker in your crosshair.': 'Dreh das Schiff. Bring die Markierung in dein Fadenkreuz.',
   'Hold fine aim, and you turn slowly. Center the marker. Exactly.': 'Halt Feinzielen gedrückt, dann drehst du dich langsam. Bring die Markierung in die Mitte. Ganz genau.',
   'Now look through your clone’s eyes. Switch to the cockpit, have a look around, and switch back.': 'Jetzt schau durch die Augen deines Klons. Schalt ins Cockpit, sieh dich um und schalt wieder zurück.',
