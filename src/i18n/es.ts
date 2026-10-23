@@ -796,6 +796,13 @@ export const ES: Catalog = {
   'Thrusters damaged.': 'Propulsores dañados.',
   'Armor holds.': 'La coraza aguanta.',
   'Impact!': '¡Impacto!',
+  'Torpedo!': '¡Torpedo!',
+  'One thousand.': 'Mil.',
+  'Five hundred.': 'Quinientos.',
+  'Three hundred.': 'Trescientos.',
+  'Two hundred.': 'Doscientos.',
+  'One hundred.': 'Cien.',
+  'Break!': '¡Vira!',
   'Debris impact.': 'Impacto de escombros.',
   'Asteroid cracked.': 'Asteroide partido.',
   'Come back to the field, darling.': 'Vuelve al campo, cariño.',
@@ -1061,6 +1068,8 @@ export const ES: Catalog = {
     '{torpedoes} por clon. Un torpedo fija la nave más cercana a tu morro dentro de {lockAngle}° y {lockRange} km: mantén el blanco cerca de la mira hasta que quede fijado, y lanza. La coraza no lo detiene: {torpedoDamage} puntos de casco, llegue por el lado que llegue. Dos matan.',
   'TORPEDO INBOUND: shoot it down (a small target, {torpedoShot} points), or break its lock. A seeker that loses sight behind a rock or a hull flies straight on for good.':
     'TORPEDO ENTRANTE: derríbalo (un blanco pequeño, {torpedoShot} puntos) o rompe su fijación. Un buscador que pierde la vista tras una roca o un casco sigue recto para siempre.',
+  'Or outfly it. A torpedo flies at up to {torpedoSpeed} m/s, more than your {limit} m/s: running straight away only buys time, and only an overdrive outruns it, for a moment. But it turns with {torpedoTurn} g, you with {grip}. Nicole counts it down (a thousand, five hundred, three hundred, two hundred, a hundred meters) and calls “Break!” about {torpedoBreak} s before it hits: turn hard across its path now, or dodge a moment later, and it overshoots. Hold the turn, and it comes round again; jink one way, then the other, and it burns out after {torpedoBurn} s.':
+    'O esquívalo volando. Un torpedo vuela a hasta {torpedoSpeed} m/s, más que tus {limit} m/s: huir en línea recta solo gana tiempo, y solo el overdrive lo deja atrás, por un momento. Pero gira con {torpedoTurn} g, y tú con {grip}. Nicole hace la cuenta atrás (mil, quinientos, trescientos, doscientos, cien metros) y grita «¡Vira!» unos {torpedoBreak} s antes del impacto: gira fuerte cruzando su trayectoria ahora, o esquiva un momento después, y se pasa de largo. Mantén el giro, y vuelve a por ti; zigzaguea a un lado, luego al otro, y se apaga tras {torpedoBurn} s.',
   "A torpedo on your hook is a bomb on a string. It weighs {torpedoMass} t, and its motor still pushes for its target at {torpedoThrust} g, but your drive drags it wherever you go; after {torpedoBurn} s it is just a mass on the rope. Its fuse goes off on every ship, yours too: swing it into a rival, or let go to fling it. While you hold it, and {fling} s after, its kill is yours. The HUD says TORPEDO ON THE LINE.": "Un torpedo en tu gancho es una bomba atada a un hilo. Pesa {torpedoMass} t, y su motor sigue empujando hacia su objetivo a {torpedoThrust} g, pero tu motor lo arrastra adonde vayas; tras {torpedoBurn} s no es más que una masa en el cable. Su espoleta estalla con cualquier nave, también con la tuya: lánzalo contra un rival de un latigazo, o suelta para arrojarlo. Mientras lo sujetas, y {fling} s después, su derribo es tuyo. El HUD dice TORPEDO EN EL GANCHO.",
   'The hook': 'El gancho',
   "A harpoon flies along the nose and bites the first rock, ship, sponsor probe or torpedo within {hookRange} km; a probe it bites is yours at once. Held, the winch reels in at {hookPull} g, and the cable never gets longer: a ship flying past its rock swings around it, faster the more cable comes in. Let go, and you fly off along the swing like a stone from a sling. Ready again after {hookReady} s.": "Un arpón sale en la dirección del morro y muerde la primera roca, nave, sonda de patrocinador o torpedo a menos de {hookRange} km; una sonda que muerde es tuya al instante. Mientras mantienes, el cabrestante recoge a {hookPull} g, y el cable nunca se alarga: una nave que pasa junto a su roca gira a su alrededor, más rápido cuanto más cable entra. Suelta, y sales disparado siguiendo el giro como una piedra de una honda. De nuevo listo tras {hookReady} s.",

@@ -22,7 +22,7 @@ import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY } from '../music/lines';
+import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
@@ -50,7 +50,7 @@ import { KillCam } from '../view/killcam';
 import { Showcase } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { buy, emptyHangar, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, sovereignEarned, UPGRADES, WALLET } from './hangar';
-import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
+import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LAUNCH, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
 import type { Asteroid, FieldState } from '../world/asteroids';
 import { RacingLine } from './racingline';
@@ -199,8 +199,6 @@ const FLAG_POINTS: Record<FlagEvent['kind'], number> = { grab: GRAB_POINTS, retu
 const RACE_KILL_POINTS = 200;
 /** Points for shooting down a torpedo, and how often a bot with a lock fires one (per second). */
 const TORPEDO_DOWN_POINTS = 50;
-/** A flight school drill's torpedo leaves its drone at this speed towards the pilot (units/s, 40 m/s, as from a tube). */
-const DRILL_TORPEDO_LAUNCH = 800;
 /** A torpedo another browser says went off is this close (units, 1.5 km) to where it flies here, or the report is ignored: torpedoes fly alike everywhere, up to the lag. */
 const TORPEDO_GONE_SLACK = 30000;
 const BOT_TORPEDO_RATE = 0.08;
@@ -254,6 +252,21 @@ const FLING_STEER = 0.1;
 /** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km); within TORPEDO_CRITICAL it is CRITICAL (units, 500 m). */
 const TORPEDO_WARNING = 40000;
 const TORPEDO_CRITICAL = 10000;
+/**
+ * Nicole counts an incoming torpedo down at these distances (units: 1000, 500, 300, 200, 100 m),
+ * each mark only while TORPEDO_MARK_SECONDS remain at the closing speed: a mark said later would
+ * talk over the moment to act.
+ */
+const TORPEDO_MARKS: readonly (readonly [number, string])[] = [
+  [20000, COMPUTER.torpedo1000],
+  [10000, COMPUTER.torpedo500],
+  [6000, COMPUTER.torpedo300],
+  [4000, COMPUTER.torpedo200],
+  [2000, COMPUTER.torpedo100],
+];
+const TORPEDO_MARK_SECONDS = 2.2;
+/** Nicole's tips: while one is said, she does not cut it off with the call of a torpedo. */
+const TIP_LINES: ReadonlySet<string> = new Set(Object.values(TIPS));
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
 const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: msg('Burned up in the clouds'), hole: msg('Crossed the event horizon') };
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
@@ -545,6 +558,7 @@ const gravity = new THREE.Vector3();
 const retrograde = new THREE.Vector3();
 const normal = new THREE.Vector3();
 const relative = new THREE.Vector3();
+const closingVelocity = new THREE.Vector3();
 const aimPoint = new THREE.Vector3();
 const toAim = new THREE.Vector3();
 const sweep = new THREE.Vector3();
@@ -861,6 +875,8 @@ export class Game implements OnlineGame {
   /** How far Nicole has warned of a gravity well (an alarm rank, 4: past return), reset once the pull lets go. */
   private wellSaid = 0;
   private hullWarned = false;
+  /** The torpedo Nicole counts down (see torpedoAlarm): the next of TORPEDO_MARKS, and whether she called the break. */
+  private torpedoCall: { torpedo: Torpedo; mark: number; broke: boolean } | null = null;
   /** When the radio may fall silent again before an imminent death. */
   private silenceReadyAt = 0;
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
@@ -4957,11 +4973,11 @@ export class Game implements OnlineGame {
     this.moment('interception');
   }
 
-  /** A flight school drill's torpedo: from a ship (the drone), homing on the own pilot, launched straight at it. */
+  /** A flight school drill's torpedo: from a ship (the drone), homing on the own pilot, launched straight at it as from a tube. */
   private drillTorpedo(from: Ship) {
     const me = this.me!;
     const position = from.flight.position.clone();
-    const velocity = toAim.subVectors(me.flight.position, position).setLength(DRILL_TORPEDO_LAUNCH).clone();
+    const velocity = toAim.subVectors(me.flight.position, position).setLength(TORPEDO_LAUNCH).clone();
     this.torpedoes.launch(`${from.id}.${from.torpedoesFired++}`, from, me, position, velocity, this.time, true);
   }
 
@@ -5730,16 +5746,7 @@ export class Game implements OnlineGame {
       this.tip('hot');
     }
     this.novaAlarm(me);
-    // a torpedo homing on the own ship: shoot it down or dodge
-    for (const torpedo of this.torpedoes.list) {
-      if (!me.alive || torpedo.target !== me) continue;
-      const toward = relative.subVectors(torpedo.position, flight.position);
-      const distance = toward.length();
-      if (distance > TORPEDO_WARNING) continue;
-      alarms.raise({ id: 'torpedo', level: distance < TORPEDO_CRITICAL ? 'critical' : 'warning', text: t('TORPEDO INBOUND'), direction: toward, tone: 'torpedo' });
-      this.tip('torpedo');
-      break;
-    }
+    this.torpedoAlarm(me);
     if (me.alive && me.driveOffline(now)) alarms.raise({ id: 'drive', level: 'caution', text: t('DRIVE OVERHEATED') });
     this.cometAlarm(me);
     this.flareAlarm(me);
@@ -5935,8 +5942,57 @@ export class Game implements OnlineGame {
   }
 
   /** A tip of the fight from Nicole, while it is still due (see Coach); the flight school teaches on its own. */
-  private tip(tip: Tip) {
-    if (!this.school) this.coach.give(tip, (line) => this.speaker.say(line, 'urgent'));
+  private tip(tip: Tip): boolean {
+    return !this.school && this.coach.give(tip, (line) => this.speaker.say(line, 'urgent'));
+  }
+
+  /**
+   * The closest torpedo homing on the own ship within TORPEDO_WARNING: TORPEDO INBOUND with the
+   * seconds to its hit at the closing speed (the warning tone beats faster as they run out), and
+   * Nicole counting it down: "Torpedo!" as it comes into range (unless a tip of hers is being
+   * said, or the coach's tip of the torpedo comes now), the distance marks while there is time
+   * to hear them, and "Break!" when a hard turn now makes it overshoot. One that went past
+   * starts the count over when it comes round.
+   */
+  private torpedoAlarm(me: Ship) {
+    let torpedo: Torpedo | null = null;
+    let distance = TORPEDO_WARNING;
+    if (me.alive) {
+      for (const candidate of this.torpedoes.list) {
+        if (candidate.target !== me) continue;
+        const away = candidate.position.distanceTo(me.flight.position);
+        if (away < distance) {
+          torpedo = candidate;
+          distance = away;
+        }
+      }
+    }
+    if (!torpedo) {
+      this.torpedoCall = null;
+      return;
+    }
+    const toward = relative.subVectors(torpedo.position, me.flight.position);
+    const closing = toward.dot(closingVelocity.subVectors(me.flight.velocity, torpedo.velocity)) / Math.max(distance, 1);
+    const seconds = closing > 0 ? distance / closing : null;
+    this.alarms.raise({ id: 'torpedo', level: distance < TORPEDO_CRITICAL ? 'critical' : 'warning', text: t('TORPEDO INBOUND'), direction: toward, seconds, tone: 'torpedo' });
+    let call = this.torpedoCall;
+    if (call && (call.torpedo !== torpedo || seconds === null)) call = this.torpedoCall = null;
+    if (seconds === null) return;
+    let line: string | null = null;
+    if (!call) {
+      // the marks already behind it pass unsaid
+      let mark = 0;
+      while (mark < TORPEDO_MARKS.length && distance < TORPEDO_MARKS[mark][0]) mark++;
+      call = this.torpedoCall = { torpedo, mark, broke: false };
+      if (seconds > TORPEDO_BREAK && !this.tip('torpedo') && !this.speaker.sayingAny(TIP_LINES)) this.speaker.say(COMPUTER.torpedo, 'urgent');
+    }
+    while (call.mark < TORPEDO_MARKS.length && distance < TORPEDO_MARKS[call.mark][0]) line = TORPEDO_MARKS[call.mark++][1];
+    if (!call.broke && seconds <= TORPEDO_BREAK) {
+      call.broke = true;
+      this.speaker.say(COMPUTER.torpedoBreak, 'urgent');
+    } else if (line && seconds >= TORPEDO_MARK_SECONDS) {
+      this.speaker.say(line, 'chatter');
+    }
   }
 
   /** In a deathmatch with the autopilot on, an enemy close by crossing the own flight (see CROSSING_RANGE): Nicole suggests free drift. */

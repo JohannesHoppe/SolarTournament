@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { TORPEDO_LIFETIME } from '../game/torpedoes';
 import { Accusations, accusersNeeded, Evidence, Plausibility } from './plausible';
 
 const alive = (x: number, more = {}) => ({ p: [x, 0, 0], alive: true, ...more });
@@ -156,8 +157,8 @@ describe('evidence of what a ship did', () => {
     evidence.blast('s', v(0), 10);
     evidence.launch('s', 10);
     expect(evidence.blasted('s', v(500), 20000, 11)).toBe(true);
-    expect(evidence.launched('s', 24)).toBe(true);
-    expect(evidence.launched('s', 26)).toBe(false);
+    expect(evidence.launched('s', 10 + TORPEDO_LIFETIME + 2)).toBe(true);
+    expect(evidence.launched('s', 10 + TORPEDO_LIFETIME + 4)).toBe(false);
     evidence.forget('s');
     expect(evidence.blasted('s', v(500), 20000, 11)).toBe(false);
   });

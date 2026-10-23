@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MAX_SPEED } from '../ship/flight';
-import { TORPEDOES } from '../game/torpedoes';
+import { TORPEDO_LIFETIME, TORPEDOES } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
 import { ONLINE_LEVEL, tubeTorpedoes } from '../game/hangar';
 
@@ -231,7 +231,7 @@ export function plausibleHook(ship: THREE.Vector3, torpedo: THREE.Vector3): bool
 
 /** What a ship's beams and torpedoes did counts as evidence this long (s), its torpedo launches as long as a torpedo flies and a little more. */
 const EVIDENCE_SECONDS = 5;
-const LAUNCH_EVIDENCE = 15;
+const LAUNCH_EVIDENCE = TORPEDO_LIFETIME + 3;
 /** Beams and blasts kept per ship: far more than fit into EVIDENCE_SECONDS of a twin laser's bursts. */
 const EVIDENCE_KEPT = 32;
 const closest = new THREE.Vector3();

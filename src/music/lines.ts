@@ -412,6 +412,13 @@ export const COMPUTER = {
   wellTight: 'Now it gets really tight! Full burn, now!',
   wellLost: 'I am sorry, darling.',
   comet: 'Comet inbound, darling! Its tail is a storm of rock. Hide behind an asteroid, or turn your armored nose into it.',
+  torpedo: 'Torpedo!',
+  torpedo1000: 'One thousand.',
+  torpedo500: 'Five hundred.',
+  torpedo300: 'Three hundred.',
+  torpedo200: 'Two hundred.',
+  torpedo100: 'One hundred.',
+  torpedoBreak: 'Break!',
 } as const;
 
 /**

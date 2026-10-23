@@ -42,6 +42,9 @@ export interface Flight {
  */
 export type Driver = (flight: FlightModel, next: number, seconds: number, gravity: THREE.Vector3) => Readonly<Controls>;
 
+/** Looks at a flight after each step (of `step` seconds) and ends it by returning true. */
+export type Each = (flight: FlightModel, step: number) => boolean;
+
 /** A ship at `start`, facing `facing`, drifting that way at `drift` (units/s). */
 export function startFlight(start: THREE.Vector3, facing: THREE.Vector3, drift = 0): FlightModel {
   const flight = new FlightModel();
@@ -52,9 +55,10 @@ export function startFlight(start: THREE.Vector3, facing: THREE.Vector3, drift =
 
 /**
  * A racing bot of the given skill flies a course of rings in a field (see flyCourse), from
- * `start` facing `facing` and drifting that way at `drift` (units/s).
+ * `start` facing `facing` and drifting that way at `drift` (units/s). `each` sees the flight
+ * after every step and ends it by returning true.
  */
-export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector3, facing: THREE.Vector3, skill: number, speed: number, limit: number, drift = 0): Flight {
+export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector3, facing: THREE.Vector3, skill: number, speed: number, limit: number, drift = 0, each?: Each): Flight {
   const flight = startFlight(start, facing, drift);
   const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, allyOf: () => false } as unknown as Ship;
   const bot = new Bot(ship, evenSkills(skill));
@@ -65,16 +69,17 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
     rings.line.target(flight.position, next % rings.line.gateCount, flight.velocity.length(), field, goal);
     bot.waypoint = rings.open ? goal : approachGate(rings.points[next], rings.normals[next], rings.radius, flight.position, flight.velocity, SHIP_RADIUS, goal);
     return bot.think(seconds, [ship], field);
-  }, limit);
+  }, limit, undefined, each);
 }
 
 /**
  * A ship flies a course of rings in a field, with the game's flight model, gravity, coils and
  * rock collisions (it bounces off and the hull takes what an impact does), as `driver` commands
  * it, until it passed every ring, was lost, or `limit` seconds are up. The field's rocks move on
- * with the time. Only this ship's flight counts: no other ships. `onMiss` hears of every miss.
+ * with the time. Only this ship's flight counts: no other ships. `onMiss` hears of every miss;
+ * `each` sees the flight after every step and ends it by returning true.
  */
-export function flyCourse(field: AsteroidField, rings: Rings, flight: FlightModel, driver: Driver, limit: number, onMiss?: (ring: number, off: number) => void): Flight {
+export function flyCourse(field: AsteroidField, rings: Rings, flight: FlightModel, driver: Driver, limit: number, onMiss?: (ring: number, off: number) => void, each?: Each): Flight {
   const gravity = new THREE.Vector3();
   const before = new THREE.Vector3();
   const path = new THREE.Vector3();
@@ -104,6 +109,7 @@ export function flyCourse(field: AsteroidField, rings: Rings, flight: FlightMode
       hull -= impactDamage(bounceOff(flight.velocity, surface, normal));
       if (hull <= 0) return result(true);
     }
+    if (each?.(flight, STEP)) return result(false);
     // where it crossed the next ring's plane, inside the ring or beside it
     const off = ringCrossing(rings.points[next], rings.normals[next], Infinity, before, flight.position);
     if (off === null) continue;

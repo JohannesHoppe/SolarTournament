@@ -58,6 +58,12 @@ export class Speaker {
     return this.context.currentTime < this.busyUntil;
   }
 
+  /** Whether one of these lines is being said or waits to be said. */
+  sayingAny(lines: ReadonlySet<string>): boolean {
+    for (const line of this.sources.values()) if (lines.has(line)) return true;
+    return false;
+  }
+
   /**
    * Says lines of the flight computer (see COMPUTER and SCHOOL), one after the other;
    * each line is rendered whole. How it meets a line still being said depends on its

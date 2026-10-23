@@ -3,13 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { BOOST_PUSH, BOOST_RADIUS, Course, GATE_RADIUS, GATES } from './race';
 import { RACE_SPEED } from '../ship/bots';
 import { cornerSpeed, MAX_SPEED, turnRadius } from '../ship/flight';
-import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, COURSE_ROOM, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, LINE_SPARE, RING_COURSE, RING_RADIUS, ringCourse, SLIDE_ANGLE, SLIDE_BOT, SLIDE_HITS, SLIDE_SPEED } from './school';
+import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, COURSE_ROOM, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, COVER_DRONE, COVER_STANDOFF, coverSpots, facingRock, LINE_SPARE, RING_COURSE, RING_RADIUS, ringCourse, SLIDE_ANGLE, SLIDE_BOT, SLIDE_HITS, SLIDE_SPEED } from './school';
 import { ARENA_LIMIT } from '../world/arena';
 import { ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
-import { flyRings } from '../test/pilot';
+import { flyRings, SHIP_RADIUS } from '../test/pilot';
 import { bendRadius, RacingLine } from './racingline';
 import { DETAIL } from '../world/rocks';
+import { flyTorpedo, strikes, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS } from './torpedoes';
 
 /** The rocks as the game collides with them: their reach decides where gates lie and how the line bows. */
 const gameField = () => testField(DETAIL);
@@ -127,5 +128,53 @@ describe("the flight school's courses", () => {
       if (toBot.length() < 20000 && toBot.angleTo(flight) > SLIDE_ANGLE) seconds += 0.1;
     }
     expect(seconds).toBeGreaterThan(SLIDE_HITS);
+  });
+
+  it('sends the cover drill’s torpedo at a pilot sitting still in about 6 s', () => {
+    const pilot = { position: new THREE.Vector3(), velocity: new THREE.Vector3() };
+    const torpedo = { position: new THREE.Vector3(COVER_DRONE, 0, 0), velocity: new THREE.Vector3(-TORPEDO_LAUNCH, 0, 0), push: new THREE.Vector3(), seen: new THREE.Vector3() };
+    let seconds = 0;
+    while (torpedo.position.length() > SHIP_RADIUS && seconds < TORPEDO_LIFETIME) {
+      flyTorpedo(torpedo, pilot, 1 / 60);
+      seconds += 1 / 60;
+    }
+    expect(seconds).toBeGreaterThan(5.5);
+    expect(seconds).toBeLessThan(7);
+  });
+
+  it('lets a middling bot reach cover from the cover drill’s torpedo behind every rock near the middle of the belt, before it hits', () => {
+    const field = gameField();
+    field.generate(ARENAS.find((arena) => arena.id === 'belt')!.layout);
+    const start = new THREE.Vector3();
+    const outward = new THREE.Vector3();
+    const rocks = [...field.asteroids.values()].sort((p, q) => p.object.position.length() - q.object.position.length());
+    const outcomes: string[] = [];
+    let tried = 0;
+    for (const rock of rocks) {
+      if (tried === 8) break;
+      if (!facingRock(field, rock, COVER_STANDOFF, SHIP_RADIUS * 4, start, outward)) continue;
+      const orientation = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(start, rock.object.position, new THREE.Vector3(0, 1, 0)));
+      const { lee, gunner } = coverSpots(rock, start, orientation, COVER_DRONE);
+      // a drone that starts in rock or out of sight asks nothing of the pilot
+      if (field.overlap(gunner, 2000) || !field.lineOfSight(gunner, start)) continue;
+      tried++;
+      const torpedo = { position: gunner.clone(), velocity: start.clone().sub(gunner).setLength(TORPEDO_LAUNCH), push: new THREE.Vector3(), seen: new THREE.Vector3() };
+      const before = new THREE.Vector3();
+      let outcome = 'neither';
+      let time = 0;
+      const toLee = lee.clone().sub(start).normalize();
+      // the bot dashes for the lee as for a ring there; the torpedo homes on it until a rock is between them
+      flyRings(field, { points: [lee], normals: [toLee], radius: RING_RADIUS, core: 0, line: new RacingLine([lee], false, start) }, start.clone(), outward, SKILL, RACE_SPEED, TORPEDO_LIFETIME, 0, (flight, step) => {
+        time += step;
+        before.copy(torpedo.position);
+        flyTorpedo(torpedo, flight, step);
+        if (strikes(before, torpedo.position, flight, SHIP_RADIUS, step)) outcome = 'hit';
+        else if (!field.lineOfSight(torpedo.position, flight.position) || field.overlap(torpedo.position, TORPEDO_RADIUS)) outcome = 'covered';
+        return outcome !== 'neither';
+      });
+      outcomes.push(`${outcome} after ${time.toFixed(1)} s behind a rock of ${Math.round(rock.radius / 20)} m`);
+    }
+    expect(tried).toBe(8);
+    expect(outcomes.filter((outcome) => !outcome.startsWith('covered')), outcomes.join('; ')).toEqual([]);
   });
 });
