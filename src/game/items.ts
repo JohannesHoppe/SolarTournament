@@ -3,6 +3,10 @@ import { hash } from '../music/songs';
 import { textSeed } from '../random';
 import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
 import { msg } from '../i18n/i18n';
+import { solarCells, surfaced, wornSurface, type Wear } from '../view/surfaces';
+
+/** The wear of a sponsor's probe (see wornSurface). */
+const PROBE_WEAR: Wear = { rust: 0.15, chips: 0.3, grime: 0.3, scratches: 0.4, seams: 0.5, stencils: ['PROPERTY OF SPONSOR', 'SN 0451', 'DO NOT OPEN'], roughness: 0.5, metalness: 0.35 };
 
 /**
  * Items: sponsor probes that drift in the arena, each carrying one thing, like the item boxes
@@ -131,8 +135,9 @@ export class Probes {
   private shown = 0;
   private readonly taken = new Set<string>();
   private readonly parts = probeParts();
-  private readonly hull = new THREE.MeshStandardMaterial({ color: 0x8c9198, roughness: 0.5, metalness: 0.3, flatShading: true });
-  private readonly panels = new THREE.MeshStandardMaterial({ color: 0x1b2a55, emissive: 0x0a1430, roughness: 0.3, metalness: 0.4 });
+  /** A sponsor's probe is cheap and used again and again: light wear, a serial and the sponsor's warning stenciled on. */
+  private readonly hull = new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(11, PROBE_WEAR), 1), color: 0xb4bac2, flatShading: true });
+  private readonly panels = new THREE.MeshStandardMaterial({ map: solarCells(), emissive: 0x0a1430, roughness: 0.25, metalness: 0.5 });
   private readonly beacons = new Map<ItemKind, THREE.MeshBasicMaterial>();
   private readonly sealed = new THREE.MeshBasicMaterial({ toneMapped: false });
 

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { industrialSurface, shine, signTexture, surfaced } from '../view/surfaces';
+import { sponsorSigns } from '../game/satire-ads';
 
 /**
  * A ring of the tournament as a structure in space: an electromagnetic coil built like the
@@ -29,6 +31,8 @@ const STRUT = 500;
 /** The position lights blink once every BLINK seconds, lit for BLINK_ON of it. */
 const BLINK = 1.2;
 const BLINK_ON = 0.18;
+/** The seed of the rings' plating (see industrialSurface). */
+const GATE_SEED = 2584;
 
 const matrix = new THREE.Matrix4();
 const offset = new THREE.Vector3();
@@ -106,12 +110,19 @@ export class GateKit {
   private readonly coil: THREE.BufferGeometry;
   private readonly lamps: THREE.BufferGeometry;
   private readonly plate: THREE.BufferGeometry;
-  /** Gray armor, with a faint glow of its own (the coils' heat and the arena's light), so its side away from the sun still shows. */
-  private readonly metal = new THREE.MeshStandardMaterial({ color: 0x6a707c, metalness: 0.45, roughness: 0.55, flatShading: true, emissive: 0x141c2a, emissiveIntensity: 1 });
-  private readonly sign = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.55, 0.05).multiplyScalar(1.6), toneMapped: false });
+  /**
+   * Gray armor plating, riveted, grimy, with hazard stripes and stenciled coil numbers (see
+   * industrialSurface), with a faint glow of its own (the coils' heat and the arena's light), so
+   * its side away from the sun still shows.
+   */
+  private readonly metal = new THREE.MeshStandardMaterial({ ...surfaced(industrialSurface(GATE_SEED), 1.5), color: 0x8a909c, flatShading: true, emissive: 0x141c2a, emissiveIntensity: 1, envMap: shine(), envMapIntensity: 0.6 });
+  /** The sponsors' lit signs on the station modules, one sponsor a ring, in turn (see build). */
+  private readonly signs = sponsorSigns().map(({ brand, color }) => new THREE.MeshBasicMaterial({ map: signTexture(brand, color), color: new THREE.Color(1, 1, 1).multiplyScalar(1.4), toneMapped: false }));
   private readonly lights = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.12, 0.08), toneMapped: false });
   private readonly coils: THREE.Material[] = [];
   private lit = true;
+  /** Rings built so far, for whose sign comes next. */
+  private built = 0;
 
   constructor(radius: number) {
     const frame: THREE.BufferGeometry[] = [];
@@ -162,11 +173,16 @@ export class GateKit {
     return material;
   }
 
-  /** A ring at a point, its opening facing along `normal`, its windings glowing in `coil`; the windings' mesh changes material with the ring's state. */
+  /**
+   * A ring at a point, its opening facing along `normal`, its windings glowing in `coil`; the
+   * windings' mesh changes material with the ring's state. Each ring built carries the next
+   * sponsor's sign.
+   */
   build(position: THREE.Vector3, normal: THREE.Vector3, coil: THREE.Material): { root: THREE.Group; coil: THREE.Mesh } {
     const root = new THREE.Group();
     const windings = new THREE.Mesh(this.coil, coil);
-    root.add(new THREE.Mesh(this.frame, this.metal), windings, new THREE.Mesh(this.lamps, this.lights), new THREE.Mesh(this.plate, this.sign));
+    const sign = this.signs[this.built++ % this.signs.length];
+    root.add(new THREE.Mesh(this.frame, this.metal), windings, new THREE.Mesh(this.lamps, this.lights), new THREE.Mesh(this.plate, sign));
     root.position.copy(position);
     root.quaternion.setFromUnitVectors(axis, normal);
     return { root, coil: windings };
@@ -182,6 +198,7 @@ export class GateKit {
 
   dispose() {
     for (const geometry of [this.frame, this.coil, this.lamps, this.plate]) geometry.dispose();
-    for (const material of [this.metal, this.sign, this.lights, ...this.coils]) material.dispose();
+    for (const material of [this.metal, this.lights, ...this.signs, ...this.coils]) material.dispose();
+    for (const sign of this.signs) sign.map?.dispose();
   }
 }

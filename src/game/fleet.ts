@@ -3,6 +3,7 @@ import { Randomizer } from '../random';
 import { FIELD_RADIUS, raySphere, type Obstacle } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
+import { boxUv, gleamingSurface, shine, surfaced } from '../view/surfaces';
 import type { Homing } from './torpedoes';
 import { msg, t } from '../i18n/i18n';
 
@@ -39,6 +40,9 @@ export const ZONE_NAMES: Record<ZoneKind, string> = { battery: msg('Battery'), d
 export const ZONE_HITS: Record<ZoneKind, number> = { battery: 30, drive: 45, reactor: 90 };
 /** A torpedo counts this many hits on every part it goes off within TORPEDO_REACH of (units, 20 m beyond the part): a third of a battery. */
 export const TORPEDO_HITS = 10;
+/** The battleship's plating repeats every GLEAM_TILE units (20 m); its seams lie this deep (see surfaced). */
+const GLEAM_TILE = 400;
+const GLEAM_RELIEF = 0.8;
 const TORPEDO_REACH = 400;
 /** Points for a hit on a part, for the hit that breaks one, and for every ship of the side when the battleship goes down. */
 export const FLEET_HIT_POINTS = 10;
@@ -170,8 +174,25 @@ export class Fleet implements Obstacle {
   private afloat = false;
 
   constructor(private readonly seed: number) {
-    const hull = this.material(new THREE.MeshStandardMaterial({ color: 0x5a606c, metalness: 0.4, roughness: 0.55 }));
-    const dark = this.material(new THREE.MeshStandardMaterial({ color: 0x2a2e36, metalness: 0.4, roughness: 0.7 }));
+    // fresh from the newest dock, and the President likes it to shine: pearl-white chrome under a
+    // clear lacquer whose thin film plays in all colors, glitter in it that sparkles in the dark
+    // too, the superstructure in gold; the pearl is only half metal, so it stays white in shadow
+    const gleam = gleamingSurface(seed);
+    const lacquer = {
+      ...surfaced(gleam, GLEAM_RELIEF),
+      envMap: shine(),
+      envMapIntensity: 1.6,
+      clearcoat: 1,
+      clearcoatRoughness: 0.06,
+      iridescence: 1,
+      iridescenceIOR: 1.45,
+      iridescenceThicknessRange: [180, 620] as [number, number],
+      emissive: 0xffffff,
+      emissiveMap: gleam.glow,
+      emissiveIntensity: 2.5,
+    };
+    const hull = this.material(new THREE.MeshPhysicalMaterial({ ...lacquer, color: 0xeef0f6, metalness: 0.5 }));
+    const dark = this.material(new THREE.MeshPhysicalMaterial({ ...lacquer, color: 0xd9a63c, iridescence: 0.5 }));
     this.burnt = this.material(new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 1 }));
     // the regime's neon is red, the color of danger
     const neon = this.material(new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.08, 0.12).multiplyScalar(2.2), toneMapped: false }));
@@ -182,7 +203,7 @@ export class Fleet implements Obstacle {
     // the hull: a long armored body with a bridge tower aft and the drive block at the stern
     // (the bow points along -z, as every ship's nose); it collides as these boxes
     const box = (center: [number, number, number], size: [number, number, number], material: THREE.Material, solid = true) => {
-      const mesh = new THREE.Mesh(this.geometry(new THREE.BoxGeometry(...size)), material);
+      const mesh = new THREE.Mesh(this.geometry(boxUv(new THREE.BoxGeometry(...size), GLEAM_TILE)), material);
       mesh.position.set(...center);
       this.root.add(mesh);
       if (solid) this.colliders.push({ center: new THREE.Vector3(...center), half: new THREE.Vector3(...size).multiplyScalar(0.5) });
@@ -204,7 +225,7 @@ export class Fleet implements Obstacle {
     this.dome = box([0, 1000, -1200], [1300, 400, 1300], dark);
 
     const barrel = this.geometry(new THREE.CylinderGeometry(60, 60, 900, 8).rotateX(Math.PI / 2).translate(0, 0, -450));
-    const mount = this.geometry(new THREE.BoxGeometry(500, 300, 500));
+    const mount = this.geometry(boxUv(new THREE.BoxGeometry(500, 300, 500), GLEAM_TILE));
     for (const at of BATTERY_MOUNTS) {
       const turret = new THREE.Group();
       turret.position.set(...at);

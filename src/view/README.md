@@ -16,6 +16,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `datamosh.ts` | The clone's death: its last picture rots |
 | `lensing.ts` | The black hole's gravitational lens |
 | `textures.ts` | Canvas textures: glows, sparks, smoke, and the canvas every texture drawn in code starts from |
+| `surfaces.ts` | The surfaces of everything built in code: worn depot paint, the world ship's craters and burns, the battleship's gleam, the rings' plating; texture coordinates for flat faces, the reflection map |
 | `marks.ts` | The bot or Host mark before a name |
 
 The styles of all of it live in `src/style.css`.

@@ -81,6 +81,9 @@ const ADS: SatireAd[] = [
 /** A number and its percent sign stay on one line, in every language: the space before % does not break. */
 const unbroken = (text: string) => text.replace(/ %/g, ' %');
 
+/** The sponsors' names and colors, as their signs show them on the rings of the tournament (see GateKit), in the Host's language. */
+export const sponsorSigns = () => ADS.map((ad) => ({ brand: t(ad.brand), color: ad.color }));
+
 /** Seconds a satire ad runs before the clone can boot. */
 const AD_SECONDS = 6;
 

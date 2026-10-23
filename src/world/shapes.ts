@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
 import type { TemplateSet } from './asteroids';
 import { canvas, toTexture } from '../view/textures';
+import { boxUv, ravagedSurface, surfaced, wornSurface, type Wear } from '../view/surfaces';
 
 /**
  * The shapes the arenas are built from besides rock: chunks of ice, the debris of a station
@@ -60,33 +61,22 @@ function tiled(element: HTMLCanvasElement): THREE.CanvasTexture {
   return texture;
 }
 
-/** Panels on the plating: a grey that varies from panel to panel, as a color map. */
-function platingTexture(seed: number): THREE.CanvasTexture {
-  const r = new Randomizer(seed);
-  const [element, ctx] = canvas(256, 128);
-  const { width, height } = element;
-  for (let y = 0; y < height; y += 8) {
-    for (let x = 0; x < width; x += 16) {
-      const shade = Math.floor(r.range(70, 120));
-      ctx.fillStyle = `rgb(${shade}, ${shade}, ${shade + 6})`;
-      ctx.fillRect(x, y, 16, 8);
-    }
-  }
-  ctx.strokeStyle = 'rgba(0, 0, 0, 0.6)';
-  for (let y = 0; y <= height; y += 8) ctx.strokeRect(0, y, width, 0);
-  for (let x = 0; x <= width; x += 16) ctx.strokeRect(x, 0, 0, height);
-  // scorch marks of the battle that broke it
-  for (let i = 0; i < 12; i++) {
-    const x = r.range(0, width);
-    const y = r.range(0, height);
-    const gradient = ctx.createRadialGradient(x, y, 0, x, y, r.range(8, 30));
-    gradient.addColorStop(0, 'rgba(10, 6, 4, 0.85)');
-    gradient.addColorStop(1, 'rgba(10, 6, 4, 0)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, width, height);
-  }
-  return tiled(element);
+/**
+ * The plating of what broke in battle (see ravagedSurface): craters, burns with their heat
+ * tint, soot and rust, the last embers glowing in a few craters. Little metalness of its own:
+ * without a reflected environment, metal turns black on its shadowed side.
+ */
+function ravaged(color: THREE.ColorRepresentation): THREE.MeshStandardMaterial {
+  const surface = ravagedSurface(DEBRIS_SEED + 1);
+  return new THREE.MeshStandardMaterial({ ...surfaced(surface, RELIEF), color, metalness: 0.35, emissive: 0xff6a1a, emissiveMap: surface.glow, emissiveIntensity: 1.6 });
 }
+
+/** How deep seams, rivets and craters look (see surfaced), and how large a tile of plating is (units, 8 m). */
+const RELIEF = 2;
+const TILE = 160;
+
+/** The paint of a station's modules: off-white, worn, scorched at the edges. */
+const STATION: Wear = { rust: 0.4, chips: 0.5, grime: 0.8, scratches: 0.5, seams: 0.6, stencils: ['DECK 7', 'AIRLOCK', 'O2', 'SECTOR C'], roughness: 0.75, metalness: 0.15 };
 
 /**
  * Debris of a station: modules, plates and girders torn apart, a few boxes each, pointing
@@ -94,8 +84,8 @@ function platingTexture(seed: number): THREE.CanvasTexture {
  */
 export function debrisSet(): TemplateSet {
   const r = new Randomizer(DEBRIS_SEED);
-  const metal = new THREE.MeshStandardMaterial({ map: platingTexture(DEBRIS_SEED), roughness: 0.55, metalness: 0.7 });
-  const paint = new THREE.MeshStandardMaterial({ color: 0xd8d2c4, roughness: 0.7, metalness: 0.2 });
+  const metal = ravaged(0xffffff);
+  const paint = new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(DEBRIS_SEED, STATION), RELIEF), color: 0xd8d2c4 });
   const light = new THREE.MeshStandardMaterial({ color: 0x110805, emissive: 0xff7a1a, emissiveIntensity: 2.2 });
   const near: THREE.Object3D[] = [];
   for (let i = 0; i < DEBRIS_COUNT; i++) {
@@ -125,7 +115,7 @@ export function debrisSet(): TemplateSet {
     }
     lights.push(new THREE.BoxGeometry(length * 0.6, length * 0.015, length * 0.015).translate(0, length * 0.19, length * 0.1));
     const group = new THREE.Group();
-    const body = new THREE.Mesh(mergeGeometries(parts.map((p) => p.toNonIndexed())), r.nextFloat() < 0.3 ? paint : metal);
+    const body = new THREE.Mesh(boxUv(mergeGeometries(parts.map((p) => p.toNonIndexed())), TILE), r.nextFloat() < 0.3 ? paint : metal);
     group.add(body, new THREE.Mesh(mergeGeometries(lights), light));
     body.geometry.computeBoundingBox();
     const size = body.geometry.boundingBox!.getSize(new THREE.Vector3());
@@ -134,26 +124,6 @@ export function debrisSet(): TemplateSet {
     near.push(group);
   }
   return { near, far: [] };
-}
-
-/**
- * Texture coordinates for boxy parts: each face takes the plating at the same density
- * (one tile per `tile` units), projected along its dominant axis, so long and short parts look alike.
- */
-function boxUv(geometry: THREE.BufferGeometry, tile: number): THREE.BufferGeometry {
-  const position = geometry.attributes.position;
-  const normal = geometry.attributes.normal;
-  const uv = new Float32Array(position.count * 2);
-  for (let i = 0; i < position.count; i++) {
-    const nx = Math.abs(normal.getX(i));
-    const ny = Math.abs(normal.getY(i));
-    const nz = Math.abs(normal.getZ(i));
-    const [u, v] = nx >= ny && nx >= nz ? [position.getZ(i), position.getY(i)] : ny >= nz ? [position.getX(i), position.getZ(i)] : [position.getX(i), position.getY(i)];
-    uv[i * 2] = u / tile;
-    uv[i * 2 + 1] = v / tile;
-  }
-  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-  return geometry;
 }
 
 /** A box of size (x, y, z) centered at (cx, cy, cz), as a part of a hull. */
@@ -167,10 +137,8 @@ const block = (x: number, y: number, z: number, cx = 0, cy = 0, cz = 0) => new T
  * 4 a long truss.
  */
 export function hullSet(): TemplateSet {
-  const plating = platingTexture(DEBRIS_SEED + 1);
-  // little metalness: without a reflected environment, metal turns black on its shadowed side
-  const metal = new THREE.MeshStandardMaterial({ map: plating, color: 0xb8bec8, roughness: 0.7, metalness: 0.2 });
-  const dark = new THREE.MeshStandardMaterial({ color: 0x4a4e57, roughness: 0.6, metalness: 0.25 });
+  const metal = ravaged(0xb8bec8);
+  const dark = ravaged(0x4a4e57);
   const windows = new THREE.MeshBasicMaterial({ map: windowTexture(DEBRIS_SEED + 2), color: new THREE.Color(1, 1, 1).multiplyScalar(1.6), toneMapped: false });
   const ember = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.35, 0.05).multiplyScalar(2), toneMapped: false });
   const drive = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 0.5, 1).multiplyScalar(1.4), toneMapped: false });
@@ -247,7 +215,7 @@ export function hullSet(): TemplateSet {
     build(half, parts, lights, glow);
     const group = new THREE.Group();
     const body = mergeGeometries(parts.map((p) => p.deleteAttribute('uv')));
-    group.add(new THREE.Mesh(boxUv(body, 160), half.y < L * 0.05 ? dark : metal));
+    group.add(new THREE.Mesh(boxUv(body, TILE), half.y < L * 0.05 ? dark : metal));
     if (lights.length) group.add(new THREE.Mesh(boxUv(mergeGeometries(lights.map((p) => p.deleteAttribute('uv'))), 400), windows));
     if (glow.length) group.add(new THREE.Mesh(mergeGeometries(glow.map((p) => p.deleteAttribute('uv'))), half.x < L * 0.3 ? drive : ember));
     group.add(collider(half.clone().round(), 1));
