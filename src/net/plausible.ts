@@ -28,7 +28,7 @@ const REPRINT_GRACE = 10;
 const TORPEDO_SLACK = 2;
 /** A ship may claim this many kills beyond the deaths everyone saw, for reports that arrive after its state. */
 const KILL_SLACK = 2;
-/** A clone printed sooner than this after its death was seen (s) is not a new one: bots wait 3 s, a Host sits through the sponsor break. */
+/** A clone printed sooner than this after its death was seen (s) is not a new one: a Host's and a bot's next clone both take 9 s at the soonest (the respawn delay and the sponsor break's ad). */
 const REPRINT_DELAY = 2;
 /** A ship's state may say it holds a nova core within this long after it took a probe whose contents this browser did not know (s). */
 const TAKE_WINDOW = 5;

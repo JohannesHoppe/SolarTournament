@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { colliderRadius, type Assets, type ShipType } from '../assets';
-import { FlightModel } from './flight';
+import { FlightModel, MAIN_THRUST, METERS_PER_UNIT } from './flight';
 import { ramDamage, type RamZone } from './impact';
 import type { Controls } from '../input/input';
 import { TORPEDOES } from '../game/torpedoes';
@@ -57,6 +57,46 @@ const COOLING_SHADOW = 50;
 const OVERHEAT_RESUME = 30;
 /** Minimum time between two shots (s), so a full bank fires as a quick burst. */
 const LASER_COOLDOWN = 0.18;
+
+/** One standard gravity in units/s² (1 unit = 5 cm). */
+export const G = 9.81 / METERS_PER_UNIT;
+/**
+ * The clone's body under g: above G_TOLERANCE (g) of its own engines' push it starts to grey
+ * out; at the main drive's full push (13 g) it takes G_ONSET seconds to full strain, and below
+ * the tolerance it recovers from full strain in G_RECOVERY seconds. Every clone alike, a Host's
+ * and a bot's: a Host's screen darkens at its edges, a bot aims wider and reacts later (see
+ * ship/bots).
+ */
+const G_TOLERANCE = 3;
+const G_ONSET = 5;
+const G_RECOVERY = 3;
+
+/** A clone's strain (0..1) after `dt` seconds under a push of `acceleration` (units/s²) from its own engines. */
+export function strainAfter(strain: number, acceleration: number, dt: number): number {
+  const load = acceleration / G;
+  const next = load > G_TOLERANCE ? strain + ((load - G_TOLERANCE) / (MAIN_THRUST / G - G_TOLERANCE)) * (dt / G_ONSET) : strain - dt / G_RECOVERY;
+  return THREE.MathUtils.clamp(next, 0, 1);
+}
+
+/** Ships farther away than this never show as having their nose on another (units, 3 km): the sensors' reach for a lock warning. */
+export const LOCK_RANGE = 60000;
+/** A nose within this many times the other ship's angular radius counts as TRACKED. */
+const LOCK_TRACKING = 4;
+
+/**
+ * How a ship's nose lies on another ship (`at`, of hit radius `radius`), as the sensors of the
+ * other one see it: 2 when its laser would hit now (LOCKED), 1 when the nose is close (TRACKED),
+ * 0 otherwise or beyond LOCK_RANGE. Line of sight is the caller's to check. The own lock warning
+ * and the bots' sense of a ship on their tail read the same.
+ */
+export function noseOn(shooter: FlightModel, at: THREE.Vector3, radius: number): 0 | 1 | 2 {
+  const line = local.subVectors(at, shooter.position);
+  const distance = line.length();
+  if (distance > LOCK_RANGE) return 0;
+  const angle = shooter.angleTo(line);
+  const size = radius / Math.max(distance, 1);
+  return angle < size ? 2 : angle < size * LOCK_TRACKING ? 1 : 0;
+}
 
 /** The engine flame slides this far (model units) into the hull at zero thrust. */
 const FLAME_RETRACT = 16;
@@ -200,6 +240,8 @@ export class Ship {
   private readonly trim: { strips: THREE.Object3D; stern: THREE.Object3D; light: THREE.MeshBasicMaterial; running: THREE.Texture };
   heat = 0;
   overheated = false;
+  /** The clone's g-force strain, 0..1 (see strainAfter); a coil, a dodge or the overdrive add to it at once. */
+  strain = 0;
   /** Game time until which the main drive cools down after an overdrive. */
   private driveOfflineUntil = 0;
   /** Shots fired, so the muzzles alternate per ship. */
@@ -357,6 +399,7 @@ export class Ship {
     this.nova = false;
     this.heat = 0;
     this.overheated = false;
+    this.strain = 0;
     this.driveOfflineUntil = 0;
     this.shovedBy = null;
     this.alive = true;
@@ -512,6 +555,7 @@ export class Ship {
     this.flight.thrusterFactor = (0.25 + 0.75 * this.thrusters) * this.perks.thrusters;
     this.vent(now);
     this.flight.update(dt, controls, gravity, this.ventForce, this.ventSpin);
+    this.strain = strainAfter(this.strain, this.flight.properAcceleration, dt);
     this.show(dt, now);
 
     this.heat = Math.max(0, this.heat - (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * this.perks.cooling * dt);
