@@ -104,6 +104,22 @@ const CREASE = Math.PI / 3;
  */
 const LACQUER = 0.5;
 const LACQUER_ROUGHNESS = 0.15;
+/**
+ * The brightest the lacquer mirrors a light (linear, before the lacquer's strength; the bloom
+ * starts at 0.88). Uncapped, the sun in a flat panel at its mirror angle is hundreds of times
+ * brighter and swallows the ship in its bloom; capped, the glint stays a bright, crisp
+ * highlight with a short halo. The lacquer's reflection of the sky (see shine) stays as it is.
+ */
+const GLINT_PEAK = 2;
+const glintPeak = { value: GLINT_PEAK };
+
+/** Caps the lacquer's mirror image of the lights at GLINT_PEAK, keeping its hue. */
+function capGlint(shader: THREE.WebGLProgramParametersWithUniforms) {
+  shader.uniforms.glintPeak = glintPeak;
+  const direct = 'clearcoatSpecularDirect';
+  const capped = `${direct} * min( 1.0, glintPeak / max( max( ${direct}.r, ${direct}.g ), max( ${direct}.b, 1e-4 ) ) )`;
+  shader.fragmentShader = 'uniform float glintPeak;\n' + shader.fragmentShader.replace(`( ${direct} + clearcoatSpecularIndirect )`, `( ${capped} + clearcoatSpecularIndirect )`);
+}
 
 /**
  * A hull on the model file's engine (see keepEngine): the painted `parts` as one mesh with its
@@ -125,6 +141,7 @@ function hull(original: THREE.Object3D, name: string, wear: Wear, seed: number, 
     clearcoatMap: surface.orm,
     clearcoatRoughness: LACQUER_ROUGHNESS,
   });
+  material.onBeforeCompile = capGlint;
   // the texture coordinates follow the facets (see boxUv), the normals the creases
   const meshes: THREE.Mesh[] = [new THREE.Mesh(toCreasedNormals(boxUv(mergeGeometries(parts), TILE), CREASE), material)];
   if (glow) meshes.push(new THREE.Mesh(mergeGeometries(glow.parts), new THREE.MeshBasicMaterial({ color: glow.color, toneMapped: false })));
