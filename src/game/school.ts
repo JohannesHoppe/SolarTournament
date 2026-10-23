@@ -261,9 +261,14 @@ const SHOVE_AHEAD = 4000;
 const SHOVE_ABREAST = 900;
 const SHOVE_CLEAR = 400;
 const SHOVE_DRONE_HULL = 15;
-/** The cover drills put the pilot this far off the surface of a rock (units, 150 m), the gunner or the torpedo's drone this far behind the pilot (1.2 km). */
-const COVER_STANDOFF = 3000;
+/**
+ * The cover drills put the pilot this far off the surface of a rock (units, 150 m), the gunner
+ * this far off to its right (1.2 km), and the torpedo's drone farther (2 km): a torpedo is quick,
+ * and from there it arrives in about 6 s, time for the dash into cover.
+ */
+export const COVER_STANDOFF = 3000;
 const COVER_GUNNER = 24000;
+export const COVER_DRONE = 40000;
 /** Seconds out of the gunner's sight the cover drill wants. */
 const COVER_HOLD = 3;
 /** The comet drill's route passes this far above the pilot (units, 150 m): its head goes over, its shower engulfs it. */
@@ -356,6 +361,17 @@ function nearestAsteroid(ctx: SchoolContext): Asteroid | null {
 }
 
 /**
+ * The spot `standoff` units off the surface of a rock, between it and the field's center, into
+ * `start`, and the way from the center out to the rock into `outward`; false when the spot is
+ * not open space for `room` units or another rock lies between it and the rock.
+ */
+export function facingRock(field: AsteroidField, rock: Asteroid, standoff: number, room: number, start: THREE.Vector3, outward: THREE.Vector3): boolean {
+  outward.copy(rock.object.position).normalize();
+  start.copy(rock.object.position).addScaledVector(outward, -(rock.radius + standoff));
+  return !field.overlap(start, room) && field.raycast(start, outward, Infinity)?.asteroid === rock;
+}
+
+/**
  * Puts the pilot `standoff` units off the surface of a rock, between it and the field's
  * center, facing it: the nearest rock whose spot lies in open space and whose way there no
  * other rock blocks. Returns the rock and the way from the center out to it; null for none.
@@ -366,10 +382,7 @@ function faceRock(ctx: SchoolContext, standoff: number): { rock: Asteroid; outwa
   const start = new THREE.Vector3();
   const outward = new THREE.Vector3();
   for (const rock of rocks) {
-    outward.copy(rock.object.position).normalize();
-    start.copy(rock.object.position).addScaledVector(outward, -(rock.radius + standoff));
-    if (ctx.field.overlap(start, ctx.me.radius * 4)) continue;
-    if (ctx.field.raycast(start, outward, Infinity)?.asteroid !== rock) continue;
+    if (!facingRock(ctx.field, rock, standoff, ctx.me.radius * 4, start, outward)) continue;
     flight.position.copy(start);
     flight.orientation.setFromRotationMatrix(new THREE.Matrix4().lookAt(start, rock.object.position, new THREE.Vector3(0, 1, 0)));
     return { rock, outward };
@@ -964,7 +977,7 @@ const DRILL = {
     praise: SCHOOL_PRAISE.torpedoCover,
     keys: ['drive', 'slide'],
     enter(ctx, a) {
-      const behind = takeCover(ctx, a);
+      const behind = takeCover(ctx, a, COVER_DRONE);
       if (behind) incoming(ctx, a, behind);
     },
     done: (ctx, a) => !a.points.length || (launched(ctx, a) && !ctx.tracked),
@@ -1017,16 +1030,22 @@ function launched(ctx: SchoolContext, a: Attempt): boolean {
  * to the pilot's right, and the attempt's points the rock and the spot in its lee, ahead and to
  * the left: a slanting dash of about 1.4 times the rock's reach, a few seconds of burn, where
  * going round the far side of a rock would take longer than a torpedo. Returns where the gunner
- * or drone goes, or null without a rock.
+ * or drone goes, `away` units off, or null without a rock.
  */
-function takeCover(ctx: SchoolContext, a: Attempt): THREE.Vector3 | null {
+function takeCover(ctx: SchoolContext, a: Attempt, away = COVER_GUNNER): THREE.Vector3 | null {
   stop(ctx);
   const facing = faceRock(ctx, COVER_STANDOFF);
   if (!facing) return null;
   const rock = facing.rock;
-  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ctx.me.flight.orientation);
-  a.points = [rock.object.position, rock.object.position.clone().addScaledVector(right, -(rock.radius + COVER_STANDOFF))];
-  return clear(ctx, ctx.me.flight.position.clone().addScaledVector(right, COVER_GUNNER), 2000);
+  const { lee, gunner } = coverSpots(rock, ctx.me.flight.position, ctx.me.flight.orientation, away);
+  a.points = [rock.object.position, lee];
+  return clear(ctx, gunner, 2000);
+}
+
+/** The cover drills' spots for a pilot facing a rock: its lee ahead and to the left, and the gunner or drone `away` units off to the right. */
+export function coverSpots(rock: Asteroid, pilot: THREE.Vector3, orientation: THREE.Quaternion, away: number): { lee: THREE.Vector3; gunner: THREE.Vector3 } {
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(orientation);
+  return { lee: rock.object.position.clone().addScaledVector(right, -(rock.radius + COVER_STANDOFF)), gunner: pilot.clone().addScaledVector(right, away) };
 }
 
 /** A drill against the target drone at rest `distance` ahead, done once it is gone; for the nova drill the clone holds a core first. */

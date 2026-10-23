@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { MAX_SPEED } from '../ship/flight';
-import { TORPEDOES } from '../game/torpedoes';
+import { TORPEDO_LIFETIME, TORPEDOES } from '../game/torpedoes';
 import { ONLINE_LEVEL, tubeTorpedoes } from '../game/hangar';
 
 /** The most torpedoes a clone carries online: the standard load and its tubes up to the online cap. */
@@ -225,7 +225,7 @@ export function plausibleBlast(at: THREE.Vector3, target: THREE.Vector3): boolea
 
 /** What a ship's beams and torpedoes did counts as evidence this long (s), its torpedo launches as long as a torpedo flies and a little more. */
 const EVIDENCE_SECONDS = 5;
-const LAUNCH_EVIDENCE = 15;
+const LAUNCH_EVIDENCE = TORPEDO_LIFETIME + 3;
 /** Beams and blasts kept per ship: far more than fit into EVIDENCE_SECONDS of a twin laser's bursts. */
 const EVIDENCE_KEPT = 32;
 const closest = new THREE.Vector3();

@@ -2,7 +2,7 @@ import { MAIN_THRUST, MAX_SPEED, METERS_PER_UNIT, OVERDRIVE_PUSH, PATH_GRIP } fr
 import { MAX_HULL } from '../ship/ship';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS } from '../game/race';
-import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_DAMAGE, TORPEDOES } from '../game/torpedoes';
+import { LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_TOP_SPEED, TORPEDOES } from '../game/torpedoes';
 import { HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
 import { PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
 import { CLONES, FLARE_BURN, FLARE_HEAT } from '../game/survival';
@@ -43,6 +43,11 @@ export const FROM_CODE: Record<string, number> = {
   lockAngle: Math.round((LOCK_ANGLE * 180) / Math.PI),
   lockRange: km(LOCK_DISTANCE),
   torpedoDamage: TORPEDO_DAMAGE,
+  torpedoSpeed: meters(TORPEDO_TOP_SPEED),
+  torpedoTurn: g(TORPEDO_LATERAL),
+  grip: g(PATH_GRIP),
+  torpedoBreak: TORPEDO_BREAK,
+  torpedoLife: TORPEDO_LIFETIME,
   hookRange: km(HOOK_RANGE),
   hookPull: g(HOOK_PULL),
   hookReady: HOOK_RECHARGE,

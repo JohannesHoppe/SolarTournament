@@ -7,15 +7,36 @@ import { warheadBands } from '../view/surfaces';
 /** Torpedoes a fresh clone carries. */
 export const TORPEDOES = 2;
 /** A torpedo leaves the tube this much faster than its ship (units/s, 40 m/s). */
-const LAUNCH_SPEED = 800;
-/** Its drive pushes with 6 g (units/s²), and it closes in on its target with up to CLOSING (units/s, 200 m/s). */
-const THRUST = 1177;
-const CLOSING = 4000;
-/** It burns out after this long (s) and is gone. */
-const LIFETIME = 12;
-/** Its own radius, for the laser that shoots it down (units, 6 m), and how close it has to come to a ship to go off (units, beyond the hull). */
+export const TORPEDO_LAUNCH = 800;
+/**
+ * Its top speed (units/s, 360 m/s): a notch above a ship's 250 m/s, so a ship flying straight
+ * is caught at 110 m/s, and below an overdrive's 400 m/s. As for a ship, a push beyond it adds
+ * no speed.
+ */
+export const TORPEDO_TOP_SPEED = 7200;
+/** Its main drive along its flight (units/s², 20 g): from a standing launch to top speed in under 2 s, quick on a straight line. */
+export const TORPEDO_THRUST = 3924;
+/**
+ * Its thrusters across its flight, and against it to brake (units/s², 9 g): less than the 15 g a
+ * ship turns with, so a hard turn at the right moment leaves it wide. At top speed it turns on a
+ * circle of about 1.5 km; one that went past brakes and comes round again.
+ */
+export const TORPEDO_LATERAL = 1766;
+/** How hard it steers for the velocity it wants (1/s): a gap of 100 m/s asks for 10 g. */
+const STEER_GAIN = 2;
+/** Its seeker reads the target's velocity this late (s, the time constant of its smoothing): a jink is seen only after it began. */
+const SEEKER_LAG = 0.4;
+/** Its drive and thrusters follow the steering this late again (s): a jink at the last moment is answered too late. */
+const STEER_LAG = 0.25;
+/**
+ * The moment to break (s before the hit at the closing speed): a hard turn started 0.6 to 2 s
+ * before the hit makes a torpedo overshoot, a dodge 0.6 to 1.2 s before; Nicole calls it here.
+ */
+export const TORPEDO_BREAK = 1.5;
+/** It burns out after this long (s) and is gone: a torpedo shaken off a few times dies on its own. */
+export const TORPEDO_LIFETIME = 15;
+/** Its own radius, for the laser that shoots it down and for the rock it strikes (units, 6 m). It goes off at a ship's hull (see strikes). */
 export const TORPEDO_RADIUS = 120;
-const FUSE = 150;
 /** Hull points a torpedo takes from the ship it hits, whatever side it hits: armor does not stop it. */
 export const TORPEDO_DAMAGE = 60;
 /** A torpedo locks on a ship (or a part of the President's battleship) within this angle of the nose (rad, about 17°) and this distance (units, 3 km), in sight. */
@@ -40,19 +61,98 @@ export interface Torpedo {
   target: Homing | null;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
+  /** The push of its drive and thrusters this moment (units/s²), following its steering late (see STEER_LAG). */
+  push: THREE.Vector3;
+  /** The target's velocity as its seeker reads it, late (see SEEKER_LAG). */
+  seen: THREE.Vector3;
   bornAt: number;
   /** This browser decides where it goes off (its shooter is a ship this browser runs). */
   own: boolean;
   mesh: THREE.Mesh;
 }
 
-const intercept = new THREE.Vector3();
-const wanted = new THREE.Vector3();
+/** What flies a torpedo (see flyTorpedo): where it is, how fast, its push, and the target's velocity as its seeker reads it. */
+export interface TorpedoFlight {
+  readonly position: THREE.Vector3;
+  readonly velocity: THREE.Vector3;
+  readonly push: THREE.Vector3;
+  readonly seen: THREE.Vector3;
+}
+
+/** Where a torpedo's target is and how fast it flies. */
+export interface Mover {
+  readonly position: THREE.Vector3;
+  readonly velocity: THREE.Vector3;
+}
+
+const aim = new THREE.Vector3();
+const command = new THREE.Vector3();
+const course = new THREE.Vector3();
+const across = new THREE.Vector3();
+const from = new THREE.Vector3();
+const step = new THREE.Vector3();
+const previous = new THREE.Vector3();
 const nozzle = new THREE.Vector3();
 const exhaust = new THREE.Vector3();
 
 /**
- * Torpedoes: few, slow to start and homing. A torpedo flies on every browser alike from its
+ * Bounds a push to what a torpedo can give, in place: along its flight (`course`, unit length)
+ * up to TORPEDO_THRUST forwards and TORPEDO_LATERAL backwards, never more than stops it within
+ * `dt`; across it up to TORPEDO_LATERAL. Its main drive only pushes it on, nose first.
+ */
+function bound(push: THREE.Vector3, speed: number, dt: number): THREE.Vector3 {
+  const along = push.dot(course);
+  across.copy(push).addScaledVector(course, -along).clampLength(0, TORPEDO_LATERAL);
+  return push.copy(across).addScaledVector(course, THREE.MathUtils.clamp(along, -Math.min(TORPEDO_LATERAL, speed / dt), TORPEDO_THRUST));
+}
+
+/**
+ * One step of a torpedo's flight, the same on every browser. With a target it wants to fly at
+ * its top speed towards where the target will be when it gets there, the target's velocity as
+ * its seeker reads it held: the first time t with |aim + v t| = top · t. A target faster than
+ * the torpedo (an overdrive) is chased where it is. It steers for that velocity, its push follows
+ * the steering STEER_LAG late, bounded by its drive and thrusters (see bound). Without a target
+ * it burns on straight ahead.
+ */
+export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: number) {
+  const { position, velocity, push, seen } = torpedo;
+  const speed = velocity.length();
+  if (target) {
+    seen.lerp(target.velocity, 1 - Math.exp(-dt / SEEKER_LAG));
+    aim.subVectors(target.position, position);
+    const a = seen.lengthSq() - TORPEDO_TOP_SPEED * TORPEDO_TOP_SPEED;
+    const b = aim.dot(seen);
+    if (a < 0) aim.addScaledVector(seen, (b + Math.sqrt(b * b - a * aim.lengthSq())) / -a);
+    command.copy(aim).setLength(TORPEDO_TOP_SPEED).sub(velocity).multiplyScalar(STEER_GAIN);
+  } else {
+    command.copy(velocity).setLength(TORPEDO_THRUST);
+  }
+  // the direction of its flight; nearly at rest, where it wants to go
+  if (speed > 1) course.copy(velocity).divideScalar(speed);
+  else course.copy(command).normalize();
+  push.lerp(bound(command, speed, dt), 1 - Math.exp(-dt / STEER_LAG));
+  bound(push, speed, dt);
+  velocity.addScaledVector(push, dt);
+  const limit = Math.max(speed, TORPEDO_TOP_SPEED);
+  if (velocity.lengthSq() > limit * limit) velocity.setLength(limit);
+  position.addScaledVector(velocity, dt);
+}
+
+/**
+ * Whether a torpedo that flew from `before` to `after` within `dt` passed within `radius` of a
+ * target (at `target` now, flying at its velocity): the closest approach along the step in the
+ * target's frame, so a fast pass between two frames goes off all the same.
+ */
+export function strikes(before: THREE.Vector3, after: THREE.Vector3, target: Mover, radius: number, dt: number): boolean {
+  from.copy(before).addScaledVector(target.velocity, dt);
+  step.subVectors(after, from);
+  const length = step.lengthSq();
+  const along = length > 0 ? THREE.MathUtils.clamp(aim.subVectors(target.position, from).dot(step) / length, 0, 1) : 0;
+  return from.addScaledVector(step, along).distanceToSquared(target.position) < radius * radius;
+}
+
+/**
+ * Torpedoes: few, fast and homing, but less agile than a ship. A torpedo flies on every browser alike from its
  * launch, but only the browser of its shooter decides when it goes off: on a ship (then that
  * ship's browser takes the damage), on the President's battleship (then every browser counts
  * the hits on its parts), on a rock, or burnt out. A laser beam shoots one down,
@@ -72,17 +172,18 @@ export class Torpedoes {
     const mesh = new THREE.Mesh(this.geometry, this.material);
     mesh.position.copy(position);
     this.group.add(mesh);
-    this.list.push({ id, shooter, target, position: mesh.position, velocity: velocity.clone(), bornAt: now, own, mesh });
+    const seen = target ? target.flight.velocity.clone() : new THREE.Vector3();
+    this.list.push({ id, shooter, target, position: mesh.position, velocity: velocity.clone(), push: new THREE.Vector3(), seen, bornAt: now, own, mesh });
   }
 
   /** The launch velocity of a torpedo from a ship: the ship's own and a push out of the tube. */
   static launchVelocity(ship: Ship): THREE.Vector3 {
-    return ship.flight.forward(new THREE.Vector3()).multiplyScalar(LAUNCH_SPEED).add(ship.flight.velocity);
+    return ship.flight.forward(new THREE.Vector3()).multiplyScalar(TORPEDO_LAUNCH).add(ship.flight.velocity);
   }
 
   /**
-   * Flies every torpedo: it turns its push towards where its target will be and closes in.
-   * For the own ones, `detonate` is called where they go off (with the ship they hit, or null).
+   * Flies every torpedo (see flyTorpedo). For the own ones, `detonate` is called where they go
+   * off (with the ship they hit, or null).
    */
   update(dt: number, now: number, field: AsteroidField, ships: readonly Ship[], detonate: (torpedo: Torpedo, hit: Ship | null) => void) {
     for (let i = this.list.length - 1; i >= 0; i--) {
@@ -90,33 +191,26 @@ export class Torpedoes {
       // its seeker needs a clear line: a ship that slips behind a rock loses it for good
       if (torpedo.target && (!torpedo.target.alive || !field.lineOfSight(torpedo.position, torpedo.target.flight.position))) torpedo.target = null;
       const target = torpedo.target;
-      if (target) {
-        // lead the target: where it will be when the torpedo closes the distance
-        const distance = intercept.subVectors(target.flight.position, torpedo.position).length();
-        intercept.addScaledVector(target.flight.velocity, distance / CLOSING).normalize();
-        wanted.copy(target.flight.velocity).addScaledVector(intercept, CLOSING);
-      } else {
-        wanted.copy(torpedo.velocity).setLength(torpedo.velocity.length() + THRUST * dt);
-      }
-      torpedo.velocity.add(wanted.sub(torpedo.velocity).clampLength(0, THRUST * dt));
-      torpedo.position.addScaledVector(torpedo.velocity, dt);
+      previous.copy(torpedo.position);
+      flyTorpedo(torpedo, target?.flight ?? null, dt);
       torpedo.mesh.lookAt(exhaust.copy(torpedo.position).add(torpedo.velocity));
       // a short bright trail behind it
       if (Math.random() < dt * 30) this.effects.puff(nozzle.copy(torpedo.velocity).setLength(-160).add(torpedo.position), exhaust.copy(torpedo.velocity).multiplyScalar(0.6), 60);
       // another browser decides where its torpedo goes off; one whose word never came is gone after its time
       if (!torpedo.own) {
-        if (now - torpedo.bornAt > LIFETIME + 2) this.remove(torpedo);
+        if (now - torpedo.bornAt > TORPEDO_LIFETIME + 2) this.remove(torpedo);
         continue;
       }
+      // it goes off at the hull of any ship it passes, its target or not
       let hit: Ship | null = null;
       for (const ship of ships) {
         if (ship === torpedo.shooter || !ship.alive || ship.allyOf(torpedo.shooter)) continue;
-        if (ship.flight.position.distanceTo(torpedo.position) < ship.radius + FUSE) hit = ship;
+        if (strikes(previous, torpedo.position, ship.flight, ship.radius, dt)) hit = ship;
       }
       // a part of the battleship it homes on sets it off as a ship does, its hull as a rock does
-      const reached = !!target && target.flight.position.distanceTo(torpedo.position) < target.radius + FUSE;
+      const reached = !!target && strikes(previous, torpedo.position, target.flight, target.radius, dt);
       const struck = reached || !!field.obstacle?.touches(torpedo.position, TORPEDO_RADIUS) || field.overlap(torpedo.position, TORPEDO_RADIUS) || field.insideWell(torpedo.position, TORPEDO_RADIUS);
-      if (hit || struck || now - torpedo.bornAt > LIFETIME) detonate(torpedo, hit);
+      if (hit || struck || now - torpedo.bornAt > TORPEDO_LIFETIME) detonate(torpedo, hit);
     }
   }
 

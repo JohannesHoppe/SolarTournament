@@ -8,7 +8,7 @@ import { approachGate, coilPush, ringCrossing } from '../game/race';
 import type { RacingLine } from '../game/racingline';
 
 /** A ship's hit radius (units, 17 m), as the game's hulls have it. */
-const SHIP_RADIUS = 340;
+export const SHIP_RADIUS = 340;
 /** The simulation steps at 30 frames a second, a slow browser's rate. */
 const STEP = 1 / 30;
 
@@ -38,9 +38,10 @@ export interface Flight {
  * model, gravity, coils and rock collisions (it bounces off and the hull takes what an impact
  * does), from `start` facing `facing` and drifting that way at `drift` (units/s), until it
  * passed every ring, was lost, or `limit` seconds are up. The field's rocks move on with the
- * time. Only the bot's own flight counts: no other ships.
+ * time. Only the bot's own flight counts: no other ships. `each` sees the flight after every
+ * step and ends it by returning true.
  */
-export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector3, facing: THREE.Vector3, skill: number, speed: number, limit: number, drift = 0): Flight {
+export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector3, facing: THREE.Vector3, skill: number, speed: number, limit: number, drift = 0, each?: (flight: FlightModel, step: number) => boolean): Flight {
   const flight = new FlightModel();
   flight.reset(start, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(start, facing.clone().add(start), new THREE.Vector3(0, 1, 0))));
   flight.velocity.copy(facing).setLength(drift);
@@ -80,6 +81,7 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
       hull -= impactDamage(bounceOff(flight.velocity, surface, normal));
       if (hull <= 0) return result(true);
     }
+    if (each?.(flight, STEP)) return result(false);
     // where it crossed the next ring's plane, inside the ring or beside it
     const off = ringCrossing(rings.points[next], rings.normals[next], Infinity, before, flight.position);
     if (off === null) continue;
