@@ -96,6 +96,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `game/items.ts` | Items: sponsor probes that show up on the round clock (the same on every browser), what they carry and what each does in a few words, dropped again when a clone dies; the nova core goes off in `Game.novaBlast` |
 | `game/torpedoes.ts` | Torpedoes: launch, homing, fuse, shot down by the laser; only the shooter's browser decides where one goes off |
 | `game/school.ts` | Flight school: five courses played on their own (basic training, racer, gladiator, arsenal, tactician), 47 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
+| `game/moments.ts` | The own pilot's big moments for the broadcast (streaks, revenge, supernova, a torpedo kill, …): which one, its banner, the crowd's reaction, the announcer's lines, its rank; only show, no score |
 | `game/coach.ts` | Nicole as a coach in real rounds: the briefing of a mode in a Host's first round of it, the tips of the fight the moment they matter, each only a few times; what the browser has heard |
 | `game/sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, how the clone died, the round so far |
 | `game/satire-ads.ts` | The invented sponsors of 2584 (Victory Cola, Space Burger, PrintMe Bodies, …): consumer satire in the ad slot until real sponsors take it |

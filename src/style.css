@@ -638,8 +638,62 @@ button.primary .mode-note {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  #hud-countdown.pop {
+  #hud-countdown.pop,
+  #hud-banner.pop {
     animation-name: countdown-fade;
+  }
+}
+
+/* cinema mode (H): nothing but the picture, for recordings and trailers */
+body.cinema #hud,
+body.cinema #now-playing,
+body.cinema #transmission,
+body.cinema #touch {
+  display: none;
+}
+
+/* a big moment of the own pilot (DOUBLE KILL, REVENGE, …): neon above the crosshair, never on it */
+#hud-banner {
+  position: absolute;
+  top: 21%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-family: var(--font-display);
+  font-size: clamp(1.3rem, 4.5vw, 2.6rem);
+  letter-spacing: 0.12em;
+  color: var(--tube-orange);
+  text-shadow: var(--neon-orange);
+  pointer-events: none;
+}
+
+#hud-banner.pop {
+  animation: banner-pop 2.4s ease-out forwards;
+}
+
+/* it slams in, wide and bright, flickers once like a tube that catches, holds, and fades */
+@keyframes banner-pop {
+  from {
+    transform: scale(1.8);
+    letter-spacing: 0.5em;
+    opacity: 0;
+  }
+  8% {
+    transform: scale(1);
+    letter-spacing: 0.12em;
+    opacity: 1;
+  }
+  12% {
+    opacity: 0.35;
+  }
+  16% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
   }
 }
 

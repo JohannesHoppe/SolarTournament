@@ -9,6 +9,8 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 const projected = new THREE.Vector3();
 /** Kills stay in the feed this long (s). */
 const KILLFEED_SECONDS = 5;
+/** A big moment's banner stands this long (s), as long as its animation in style.css. */
+const BANNER_SECONDS = 2.4;
 /** A ship's name needs about this much room beside its mark (px); a name closer to one already written is left out. */
 const LABEL_WIDTH = 140;
 const LABEL_HEIGHT = 18;
@@ -115,6 +117,8 @@ export class Hud {
     this.markers.clear();
     this.message.textContent = '';
     this.countdownText.textContent = '';
+    this.bannerText.textContent = '';
+    this.bannerUntil = -Infinity;
     this.splitText.textContent = '';
     this.setSchool(null);
     this.waypoint.hidden = true;
@@ -255,13 +259,23 @@ export class Hud {
 
   /** A number of a race's countdown, or GO, in big neon: it pops in and fades out by itself. */
   countdown(text: string) {
-    const element = this.countdownText;
-    element.textContent = text;
-    element.classList.remove('pop');
-    // a reflow between removing and adding the class restarts the animation
-    void element.offsetWidth;
-    element.classList.add('pop');
+    pop(this.countdownText, text);
   }
+
+  /**
+   * A big moment's banner (see game/moments.ts), above the crosshair: it pops in and fades out by
+   * itself after BANNER_SECONDS; meanwhile only a moment of the same `rank` or higher replaces it.
+   */
+  banner(now: number, text: string, rank: number) {
+    if (now < this.bannerUntil && rank < this.bannerRank) return;
+    this.bannerUntil = now + BANNER_SECONDS;
+    this.bannerRank = rank;
+    pop(this.bannerText, text);
+  }
+
+  private readonly bannerText = $('hud-banner');
+  private bannerUntil = -Infinity;
+  private bannerRank = 0;
 
   flashMessage(now: number, text: string, seconds = 2) {
     this.message.textContent = text;
@@ -399,6 +413,15 @@ export function meters(units: number): string {
 }
 
 /** Writes text only when it changed, so an unchanged HUD costs the browser no layout work. */
+/** Shows `text` in an element that pops in and fades out by its CSS animation (class `pop`). */
+function pop(element: HTMLElement, text: string) {
+  element.textContent = text;
+  element.classList.remove('pop');
+  // a reflow between removing and adding the class restarts the animation
+  void element.offsetWidth;
+  element.classList.add('pop');
+}
+
 function setText(element: HTMLElement, text: string) {
   if (element.textContent !== text) element.textContent = text;
 }

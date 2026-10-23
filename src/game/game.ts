@@ -55,6 +55,7 @@ import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NA
 import { CLONES, clonesLeft, FLARE_BURN, FLARE_HEAT, FLARE_KEEP, FLARE_MIN, FLARE_START, flareRadius, isOut, standing } from './survival';
 import { markedName } from '../view/marks';
 import { Coach, type Tip } from './coach';
+import { MOMENTS, Moments, type Moment } from './moments';
 import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
@@ -78,6 +79,9 @@ const DECIDED_SECONDS = 5;
 const START_SECONDS = 3;
 /** How loud the stadium is at each number of the countdown (0 silent, 1 on its feet); at GO it erupts. */
 const CROWD_COUNT: Record<number, number> = { 3: 0.45, 2: 0.65, 1: 0.85 };
+/** A smaller moment's cheer lasts this long (s), then the stadium settles back to its murmur (0..1). */
+const CHEER_SECONDS = 1.5;
+const CROWD_MURMUR = 0.25;
 const START_WINDOW = 0.3;
 const START_LATE = 0.2;
 const FALSE_START_STALL = 1.5;
@@ -296,6 +300,14 @@ const DRIVE_SHAKE = 0.012;
 /** How fast the chase camera follows the ship's position and turns (1/s): tight, so the ship feels direct. */
 const CAMERA_FOLLOW = 20;
 const CAMERA_TURN = 18;
+/**
+ * Cinema mode (see toggleCinema): the chase camera hangs CINEMA_DISTANCE ship radii farther
+ * back, follows and turns at CINEMA_SOFTNESS of its usual speed, and drifts around the ship by a
+ * ship radius sideways and a quarter up and down, slowly (CINEMA_DRIFT, rad/s).
+ */
+const CINEMA_DISTANCE = 1.4;
+const CINEMA_SOFTNESS = 0.3;
+const CINEMA_DRIFT = 0.25;
 /** A landed hit jolts the camera by this share of the ship radius (a kill by twice that), fading at KICK_FADE (1/s). */
 const KICK_SHAKE = 0.06;
 const KICK_FADE = 9;
@@ -623,6 +635,8 @@ export class Game implements OnlineGame {
   private bots: Bot[] = [];
   private me: Ship | null = null;
   private cockpit = false;
+  /** Cinema mode is on (see toggleCinema). */
+  private cinema = false;
   /** What the Host owns (see game/hangar), the ship it flies, the ship on show above the logo, and whether the hangar's plate is open. */
   private readonly hangar = parseHangar(storageGet(HANGAR_KEY));
   private selectedShip: ShipType = this.hangar.ship;
@@ -778,6 +792,8 @@ export class Game implements OnlineGame {
   private readonly speaker: Speaker;
   /** Nicole's briefings and tips in real rounds. */
   private readonly coach = new Coach();
+  /** The own pilot's streaks and grudges, for its big moments. */
+  private readonly moments = new Moments();
   /** The impact warning is on (the flight school watches it). */
   private impactAhead = false;
   /** The flight school's sparring bot, and whether it may fire. */
@@ -1533,6 +1549,7 @@ export class Game implements OnlineGame {
     if (racing && this.place >= 0 && place !== this.place && now >= this.nextPlaceCall) {
       const line = place === 0 ? COMPUTER.lead : this.place === 0 ? COMPUTER.lostLead : place < this.place ? COMPUTER.passed : COMPUTER.passedBy;
       if (this.speaker.say(line, 'chatter')) this.nextPlaceCall = now + PLACE_CALL_COOLDOWN;
+      if (place < this.place) this.moment(place === 0 ? 'lead' : 'pass');
     }
     this.place = racing ? place : -1;
   }
@@ -1625,6 +1642,7 @@ export class Game implements OnlineGame {
         }
         // a watching Host has no cockpit of its own
         if (action === 'camera' && !this.watching()) this.cockpit = !this.cockpit;
+        if (action === 'cinema') this.toggleCinema();
         if (action === 'autopilot' && this.me?.alive) this.toggleAutopilot();
         // the grid's clamps hold the overdrive and the torpedoes too
         if (action === 'overdrive' && this.countdown === 0) this.overdrive();
@@ -1909,6 +1927,23 @@ export class Game implements OnlineGame {
   private briefRound() {
     this.coach.newRound();
     this.coach.give(this.roundMode, (line) => this.speaker.say(line, 'lesson'));
+  }
+
+  /**
+   * A big moment of the own pilot (see game/moments.ts): its banner above the crosshair, the
+   * crowd (on its feet for the biggest, a cheer that settles again for the rest) and, for the
+   * biggest, the announcer. Not in the flight school, which is on no broadcast.
+   */
+  private moment(moment: Moment) {
+    if (this.school || !this.me) return;
+    const { banner, crowd, lines, rank } = MOMENTS[moment];
+    this.hud.banner(this.time, t(banner), rank);
+    if (crowd >= 1) this.crowd.erupt();
+    else {
+      this.crowd.swell(crowd, 0.2, CHEER_SECONDS);
+      this.cue(CHEER_SECONDS, () => this.crowd.swell(CROWD_MURMUR, 2));
+    }
+    if (lines) this.announce(pick(lines), this.me);
   }
 
   /** Runs `run` this many seconds of round time from now. */
@@ -2245,6 +2280,7 @@ export class Game implements OnlineGame {
     }
     this.brokenHere.clear();
     this.lastRockHit.clear();
+    this.moments.reset();
     this.wrecks.clear();
     this.probes.reset();
     $('results').hidden = true;
@@ -2869,6 +2905,7 @@ export class Game implements OnlineGame {
       this.hud.flashMessage(now, t('{side} captures · {score}', { side: t(TEAM_NAMES[side]), score: this.flagScore() }), 4);
       if (ship) this.announce(pick(ANNOUNCER_CAPTURE), ship, true);
       this.speaker.say(side === me.team ? COMPUTER.captured : COMPUTER.theyCaptured, 'urgent');
+      if (ship === me) this.moment('capture');
       this.fanfare();
     }
   }
@@ -3088,6 +3125,7 @@ export class Game implements OnlineGame {
     }
     this.hud.flashMessage(now, t('Battleship down · the round is yours · +{points}', { points: SINK_POINTS }), DECIDED_SECONDS);
     this.witnessBlast(position, SINK_BLAST * 3, 0.35);
+    this.moment('sunk');
   }
 
   /** A blast the camera sees within `reach` blinds the link for a moment and is heard from far, deeper the bigger it is (`rate`); returns whether it was seen. */
@@ -4202,6 +4240,7 @@ export class Game implements OnlineGame {
     if (!shooter.isLocal) return;
     this.torpedoesDown++;
     this.hud.popup(this.camera, torpedo.position, t('TORPEDO DOWN +{points}', { points: TORPEDO_DOWN_POINTS }), 'points');
+    this.moment('interception');
   }
 
   /** A flight school drill's torpedo: from a ship (the drone), homing on the own pilot, launched straight at it. */
@@ -4239,7 +4278,11 @@ export class Game implements OnlineGame {
       this.sound.play('explosion', { volume: 1.5, rate: 0.9 });
       this.linkHit(0.9, 0.6);
     }
-    if (status === 'destroyed') this.shipDestroyed(ship, shooter);
+    if (status === 'destroyed') {
+      this.shipDestroyed(ship, shooter);
+      // a streak's banner outranks the torpedo's
+      if (shooter && shooter === this.me && !ship.allyOf(shooter)) this.moment('torpedo');
+    }
   }
 
   remoteTorpedo(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3) {
@@ -4652,6 +4695,11 @@ export class Game implements OnlineGame {
         this.sound.beep(1760, 0.12, 0.15, 0.09);
       }
     }
+    if (victim === this.me) this.moments.died(killer && killer !== victim ? killer.id : null);
+    if (ownKill) {
+      const moment = this.moments.ownKill(victim.id, this.time, cause === 'nova');
+      if (moment) this.moment(moment);
+    }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
     const killedBy =
       cause === 'well' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : cause && FLEET_DEATHS[cause] ? t('Battleship') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
@@ -4901,11 +4949,15 @@ export class Game implements OnlineGame {
       look.lookAt(this.camera.position, flight.position, flight.up(scratch));
       this.camera.quaternion.slerp(aim.setFromRotationMatrix(look), 1 - Math.exp(-CAMERA_TURN * 0.5 * dt));
     } else {
-      // a burn presses the ship ahead of the camera, which hangs back a little
+      // a burn presses the ship ahead of the camera, which hangs back a little; in cinema mode
+      // it hangs farther back, follows softer and drifts slowly around the ship
       const lag = me.alive ? flight.throttle * DRIVE_LAG : 0;
-      flight.toWorld(cameraGoal.set(0, me.radius * 0.75, me.radius * (2.6 + lag)), cameraGoal);
-      this.camera.position.lerp(cameraGoal, 1 - Math.exp(-CAMERA_FOLLOW * dt));
-      this.camera.quaternion.slerp(flight.orientation, 1 - Math.exp(-CAMERA_TURN * dt));
+      const film = this.cinema ? 1 : 0;
+      const drift = this.time * CINEMA_DRIFT;
+      flight.toWorld(cameraGoal.set(film * me.radius * Math.sin(drift), me.radius * (0.75 + film * (0.35 + 0.25 * Math.cos(drift * 0.7))), me.radius * (2.6 + film * CINEMA_DISTANCE + lag)), cameraGoal);
+      const soft = this.cinema ? CINEMA_SOFTNESS : 1;
+      this.camera.position.lerp(cameraGoal, 1 - Math.exp(-CAMERA_FOLLOW * soft * dt));
+      this.camera.quaternion.slerp(flight.orientation, 1 - Math.exp(-CAMERA_TURN * soft * dt));
     }
     this.riding = me.alive ? flight.velocity : null;
     // the drive kicks: the view widens while it burns and with speed, and the chase camera trembles
@@ -4922,6 +4974,17 @@ export class Game implements OnlineGame {
     this.kick *= Math.exp(-KICK_FADE * dt);
     // the HUD projects with this frame's camera, not the one of the last rendered frame
     this.camera.updateMatrixWorld();
+  }
+
+  /**
+   * Cinema mode, for recordings and trailers: the whole HUD, the radio's title and the
+   * subtitles step aside (body.cinema), and the chase camera hangs farther back, follows softer
+   * and drifts a little (see updateCamera). The same key brings everything back.
+   */
+  private toggleCinema() {
+    this.cinema = !this.cinema;
+    document.body.classList.toggle('cinema', this.cinema);
+    if (!this.cinema) this.hud.flashMessage(this.time, t('Cinema mode off'), 1.5);
   }
 
   /** A new field of view: the particles keep their size in the world with it. */

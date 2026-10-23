@@ -20,14 +20,14 @@ export interface Controls {
 
 export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 
-export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'radio' | 'help' | 'autopilot' | 'overdrive' | 'torpedo' | 'watch';
+export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'cinema' | 'radio' | 'help' | 'autopilot' | 'overdrive' | 'torpedo' | 'watch';
 type ActionHandler = (action: Action) => void;
 
 /** What the Host flies with. */
 export type Device = 'keyboard' | 'gamepad' | 'touch';
 
 /** What the Host can be asked to use, by the flight school's drills and by the HUD's labels. */
-export type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'dodge' | 'fire' | 'autopilot' | 'camera' | 'hook' | 'overdrive' | 'torpedo';
+export type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'dodge' | 'fire' | 'autopilot' | 'camera' | 'cinema' | 'hook' | 'overdrive' | 'torpedo';
 
 /**
  * The keys, buttons and sticks of each device for each command, as keycaps show them (the first
@@ -46,6 +46,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     fire: ['Space', msg('Click')],
     autopilot: ['T'],
     camera: ['C'],
+    cinema: ['H'],
     hook: ['V', msg('Right click')],
     overdrive: ['E'],
     torpedo: ['G'],
@@ -61,6 +62,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     fire: ['LT'],
     autopilot: ['R3'],
     camera: ['View'],
+    cinema: [],
     hook: [msg('D-pad down')],
     overdrive: ['RB'],
     torpedo: [msg('D-pad up')],
@@ -76,6 +78,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     fire: [msg('FIRE')],
     autopilot: [msg('AUTO')],
     camera: [],
+    cinema: [],
     hook: [msg('HOOK')],
     overdrive: [msg('OVERDRIVE')],
     torpedo: [msg('TORPEDO')],
@@ -119,6 +122,7 @@ const KEY_ACTIONS: Record<string, Action | undefined> = {
   KeyP: 'pause',
   KeyQ: 'quit',
   KeyC: 'camera',
+  KeyH: 'cinema',
   KeyM: 'radio',
   F1: 'help',
   KeyT: 'autopilot',
