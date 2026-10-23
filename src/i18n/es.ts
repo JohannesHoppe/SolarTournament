@@ -474,7 +474,7 @@ export const ES: Catalog = {
   'Kessler Field': 'Campo Kessler',
   'A station blew up. Its pieces still cross each other at 25 m/s.': 'Una estación voló por los aires. Sus pedazos aún se cruzan a 25 m/s.',
   'Gas Giant': 'Gigante gaseoso',
-  'A world of storms below, pulling with three g at its clouds. Swing by it, or fall in.': 'Abajo, un mundo de tormentas que tira con tres g en sus nubes. Pasa rozándolo o cae dentro.',
+  'A world of storms below, eighty kilometers wide, pulling at everything. Dive along its clouds, or burn in them.': 'Abajo, un mundo de tormentas de ochenta kilómetros que tira de todo. Lánzate rozando sus nubes o arde en ellas.',
   Corona: 'Corona',
   'Close to the sun. Lasers barely cool in its glare, and its storms blind the sensors.': 'Cerca del sol. Los láseres apenas se enfrían bajo su resplandor, y sus tormentas ciegan los sensores.',
   'Event Horizon': 'Horizonte de sucesos',

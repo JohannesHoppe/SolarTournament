@@ -351,6 +351,11 @@ const LOCK_RANGE = 60000;
 const LOCK_TRACKING = 4;
 /** Vertical field of view of the camera (degrees). */
 const CAMERA_FOV = 70;
+/**
+ * The camera sees this far (units, 35 km): the horizon of the gas giant's clouds, 40 km in
+ * radius, lies up to 22 km off for a ship at the arena's edge (see arenas.ts).
+ */
+const CAMERA_FAR = 700000;
 /** A full burn widens the view by this much (degrees) and shakes the chase camera by this share of the ship radius: the drive is felt. */
 const DRIVE_FOV_KICK = 7;
 const DRIVE_SHAKE = 0.012;
@@ -624,7 +629,7 @@ export class Game implements OnlineGame {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly composer: EffectComposer;
   private readonly scene = new THREE.Scene();
-  private readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 10, 400000);
+  private readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV, 1, 10, CAMERA_FAR);
   private readonly space = new Space();
   private readonly arena = new Arena();
   private readonly belt: Belt;
