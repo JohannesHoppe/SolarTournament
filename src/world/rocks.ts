@@ -211,8 +211,17 @@ bakedNormal.nearby = new THREE.Vector3();
 /** The step to either side for a baked normal (share of the way out, about 3°), as world/asteroids.ts uses for a collision normal. */
 const NORMAL_STEP = 0.05;
 
+/**
+ * Where cell (i, j) of tile `tile` lies in the data of an atlas of `tiles` square tiles of
+ * `res` cells laid out side by side (a texture `tiles · res` wide, `res` high): row j runs across
+ * every tile, as WebGL reads a DataTexture row by row.
+ */
+export function atlasOffset(tile: number, tiles: number, res: number, i: number, j: number): number {
+  return ((j * tiles + tile) * res + i) * 4;
+}
+
 /** Edge length, in cells, of each of a normal atlas's 6 faces. */
-const ATLAS_RES = 48;
+export const ATLAS_RES = 48;
 const normalAtlases = new Map<number, THREE.DataTexture>();
 
 /**
@@ -223,7 +232,7 @@ const normalAtlases = new Map<number, THREE.DataTexture>();
  * then turns the sampled normal into world space with the object's own normalMatrix, exactly as
  * it would a vertex normal. Baked once per shape and reused by every mesh and LOD level of it.
  */
-function normalAtlas(index: number): THREE.DataTexture {
+export function normalAtlas(index: number): THREE.DataTexture {
   let atlas = normalAtlases.get(index);
   if (atlas) return atlas;
   const recipe = rockRecipe(index);
@@ -238,7 +247,7 @@ function normalAtlas(index: number): THREE.DataTexture {
         const s = ((i + 0.5) / ATLAS_RES) * 2 - 1;
         faceDirection(face, s, t, direction);
         bakedNormal(noise, recipe, direction, normal);
-        const o = ((face * ATLAS_RES + j) * ATLAS_RES + i) * 4;
+        const o = atlasOffset(face, 6, ATLAS_RES, i, j);
         data[o] = Math.round((normal.x * 0.5 + 0.5) * 255);
         data[o + 1] = Math.round((normal.y * 0.5 + 0.5) * 255);
         data[o + 2] = Math.round((normal.z * 0.5 + 0.5) * 255);
@@ -414,7 +423,7 @@ function bakeImpostor(index: number): { albedo: THREE.DataTexture; normal: THREE
       for (let i = 0; i < IMPOSTOR_RES; i++) {
         const u = (((i + 0.5) / IMPOSTOR_RES) * 2 - 1) * reach;
         origin.copy(right).multiplyScalar(u).addScaledVector(up, v).addScaledVector(view, reach * 2);
-        const o = ((tile * IMPOSTOR_RES + j) * IMPOSTOR_RES + i) * 4;
+        const o = atlasOffset(tile, IMPOSTOR_VIEWS, IMPOSTOR_RES, i, j);
         // march from far along +view towards the shape (t grows from 0); first hit, refined by bisection
         let hit = -1;
         const steps = IMPOSTOR_MARCH_STEPS;
