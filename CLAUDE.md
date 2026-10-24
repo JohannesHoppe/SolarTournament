@@ -159,17 +159,17 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `world/space.ts` | Stars, nebula, sun with shadows (swelling and white-hot in a solar flare), space dust |
 | `world/arena.ts` | The arena edge (`ARENA_LIMIT`, `ARENA_GRACE`) and its grid |
 | `world/flare.ts` | The solar flare's plasma on screen: a sphere of roiling fire, filaments, its front glowing brightest |
-| `world/belt.ts` | The asteroid belt beyond the arena: instanced low-detail rocks as scenery |
+| `world/belt.ts` | The asteroid belt beyond the arena: instanced scenery, real low-poly rocks close to its inner edge, billboards (see view/impostor) for the rest of the ring |
 | `world/arenas.ts` | The seven arenas (belt, rings, Kessler field, gas giant, corona, event horizon, derelict): field layout, well, sun, cooling, storms, the fixed references the HUD marks (planets, clouds, black hole, bow and stern); which arena a tournament round is in |
 | `world/reference.ts` | The reference plane through the field's center that every aid to orientation refers to: height, climb, the bank's sky pointer, a target's closure rate, an arena's fixed references |
-| `world/asteroids.ts` | The field of an arena: rocks, ice, debris or hull from a layout, orbits, solid pieces (shoved by a comet), a massive body (well); collision with a rock's measured surface, a debris ellipsoid or a hull box, raycast, line of sight, gravity, fragments |
+| `world/asteroids.ts` | The field of an arena: rocks, ice, debris or hull from a layout, orbits, solid pieces (shoved by a comet), a massive body (well); collision with a rock's measured surface, a debris ellipsoid or a hull box, raycast, line of sight, gravity, fragments; a rock or ice piece draws its near mesh up close, a lighter far one farther, a billboard (see view/impostor) farther yet |
 | `world/gates.ts` | A ring of the tournament as a structure: armored coil housings with glowing windings, conduits, struts with blinking lights, a station module, all solid (touchRing); shared by the race's gates, the flight school's rings and Capture the Flag's bases |
 | `world/powercore.ts` | A sponsor's power core (the flag of Capture the Flag) as a structure: an armored octagonal canister with windings glowing in its side's color, the sponsor's sign, a cage where the tow cable grips; low poly, faded to its outline on demand |
 | `world/boxes.ts` | Boxes in their own frame: a sphere against a box, a ray into a box (the hull of a wreck, a battleship) |
 | `world/surface.ts` | A rock's surface as its collisions see it: measured from its mesh, how far it reaches in every direction |
 | `world/shapes.ts` | The field shapes besides rock: ice, station debris, the world ship's hull sections (with computed collider boxes) |
 | `world/landmarks.ts` | The arenas' scenery: ringed planet, the world below the Kessler field, gas giant, the sun up close, black hole and its disk, the derelict's neon |
-| `world/rocks.ts` | Generates the 16 asteroid shapes: noise, craters, four kinds of rock; integer hashing and polynomials only, so every browser builds identical shapes |
+| `world/rocks.ts` | Generates the 16 asteroid shapes: noise, craters, four kinds of rock; integer hashing and polynomials only, so every browser builds identical shapes; a full-detail shape for collisions, light meshes for drawing with their fine relief baked into an object-space normal map instead of triangles, and a billboard (see view/impostor) |
 | `world/wrecks.ts` | Wreckage of destroyed ships |
 | **`ship/`** | **Ships and who flies them** |
 | `ship/models.ts` | The interceptors' hulls, low poly in code; collider, drive flame and glows come from the model files |
@@ -192,12 +192,13 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/guide.ts` | The racing line: a dashed ribbon on the ideal line, dashes every 20 m fixed in space, joined from the own ship's flight, with pulses of light, brighter the farther the ship is off it, orange where it bends too tight for the ship's speed |
 | `view/showcase.ts` | The title screen's pad: a landing pad seen from above at a slant (stepped rim, hazard stripes, lamps, vents, the seal inlaid in gold), the chosen ship hovering above it and turning slowly on the spot in its upgrades' looks, a ship not earned as a silhouette; a view of its own behind the plates |
 | `view/ghost.ts` | The ghost of the own best lap: the own hull as a faint blue hologram |
+| `view/impostor.ts` | A billboard for a rock or ice shape seen from far away (the belt, the farthest LOD level of the field's rocks and ice): a camera-facing quad showing one of 8 pre-rendered views picked by how the shape is actually turned, lit from its own baked normal map and the real sun so a solar flare still shows |
 | `view/datamosh.ts` | The clone's death: its last picture loses the key frames and rots with the camera's motion and the frames' changes (a pass with its own feedback buffers) |
 | `view/textures.ts` | Canvas textures: glows, sparks, smoke |
 | `view/surfaces.ts` | Surfaces drawn on canvases from fixed seeds (color, roughness and metalness, bump): the fighters' worn depot paint, the world ship's craters and burns with embers, the battleship's polished armor plates, the rings' industrial plating, probes, torpedoes, signs; box-projected texture coordinates, the reflection map |
 | `view/marks.ts` | The marks before names: bot or Host, drawn as shapes, never as characters; the swatch of a pilot's tint |
 | `view/ink.ts` | What an element shows on screen: the names at the screen's edge keep clear of the HUD's pieces by it, the layout test measures by it |
-| `view/quality.ts` | The picture's quality: the ladder of looks (resolution, bloom, shadows, lacquer, particles, rock detail, the belt, the title screen's pad), the tiers low, medium and high as presets on it, the guess of a device, the Host's choice as kept, the governor that moves along the ladder with the frame rate |
+| `view/quality.ts` | The picture's quality: the ladder of looks (resolution, bloom, shadows, lacquer, particles, rock detail, the belt, the title screen's pad), the tiers low, medium and high as presets on it, the guess of a device and its starting rung (lower yet on a touch screen), the Host's choice as kept, the governor that moves along the ladder with the frame rate (faster down, more cautious up on a touch screen) |
 | `view/graphics.ts` | Applies the ladder's rung to the renderer and the scene; feeds the governor; holds a knob that compiles shaders back until a hitch goes unseen |
 | `view/bloom.ts` | The bloom at a share of the picture's resolution |
 | **`input/`** | **Controls** |

@@ -1,5 +1,9 @@
 import * as THREE from 'three';
 import { radialTexture } from '../view/textures';
+import { IMPOSTOR_SUN } from '../view/impostor';
+
+/** How much of the sun's directional light a billboard's simplified shading shows (see IMPOSTOR_SUN, view/impostor), tuned by eye against a real lit rock. */
+const IMPOSTOR_SUN_SCALE = 0.28;
 
 const STAR_COUNT = 6000;
 const SKY_RADIUS = 300000;
@@ -183,6 +187,8 @@ export class Space {
     this.lights.add(sunLight, sunLight.target);
     this.sunLight = sunLight;
     this.lights.add(new THREE.HemisphereLight(0x7788bb, 0x2a201c, 1.6));
+    IMPOSTOR_SUN.direction.value.copy(SUN_DIRECTION);
+    this.flare(0);
   }
 
   /**
@@ -221,6 +227,7 @@ export class Space {
     this.sun.material.color.copy(base.color).lerp(WHITE_HOT, heat);
     this.sunLight.intensity = base.intensity * (1 + (FLARE_GLARE - 1) * heat);
     this.sunLight.color.copy(base.color).lerp(WHITE_HOT, heat * 0.6);
+    IMPOSTOR_SUN.color.value.copy(this.sunLight.color).multiplyScalar(this.sunLight.intensity * IMPOSTOR_SUN_SCALE);
   }
 
   /** Keeps the sky at infinity; the dust streaks along `velocity`, the motion of whoever the camera rides with. */

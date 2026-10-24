@@ -3,7 +3,7 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { Bloom } from '../view/bloom';
 import { Graphics } from '../view/graphics';
-import { TIER_NAMES, TIERS, type BenchFeature, type Look, type Quality } from '../view/quality';
+import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quality } from '../view/quality';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
@@ -964,6 +964,8 @@ export class Game implements OnlineGame {
   /** The picture has to be drawn again even in a still pause (see frame). */
   private redraw = true;
   private glitched = false;
+  /** Counts frames on the medium tier, where shadows are still on but a device may be weak (see paint): the sun's shadow map is refreshed only every other one, since what casts it barely moves between two frames. */
+  private shadowFrame = 0;
   private readonly glitch = new Glitch();
   private readonly datamosh = new Datamosh(this.camera);
   private readonly bloom = new Bloom(new THREE.Vector2(256, 256), 0.6, 0.4, 0.88);
@@ -1075,7 +1077,7 @@ export class Game implements OnlineGame {
 
     this.scene.background = new THREE.Color(0x01020a);
     this.field = new AsteroidField(assets.fieldSets);
-    this.belt = new Belt(assets.belt);
+    this.belt = new Belt(assets.belt.near, assets.belt.impostor);
     this.graphics = new Graphics(this.renderer, this.bloom, this.space, this.field, this.belt, this.plane, () => this.resize());
     this.effects = new Effects(assets.textures);
     // the kill cam fires the beams of its replay in effects of their own
@@ -3059,6 +3061,7 @@ export class Game implements OnlineGame {
     // the scene is drawn into the composer's read buffer, which the lens reads right after
     this.lensing.update(this.camera, this.venue.id === 'hole' && well && !this.bench.has('lens') ? well.position : null, well?.radius ?? 0, this.composer.readBuffer.depthTexture);
     this.renderer.info.reset();
+    this.updateShadowMap();
     if (!this.bench.size) {
       this.composer.render();
       return;
@@ -3069,6 +3072,21 @@ export class Game implements OnlineGame {
     if (this.bench.has('post')) this.renderer.render(this.scene, this.camera);
     else this.composer.render();
     for (const object of hidden) object.visible = true;
+  }
+
+  /**
+   * On the medium tier (shadows still on, a device that may still be weak), the sun's shadow
+   * map is refreshed only every other frame: a rock's spin and a ship's flight barely change
+   * its shadows between two frames, so the saved pass goes unseen. Elsewhere the renderer
+   * refreshes it itself (the default), including during the benchmark, which measures features
+   * one frame at a time.
+   */
+  private updateShadowMap() {
+    const medium = !this.bench.size && this.graphics.look.shadows > 0 && this.graphics.rung >= TIER_RUNGS.medium;
+    this.renderer.shadowMap.autoUpdate = !medium;
+    if (!medium) return;
+    this.shadowFrame = (this.shadowFrame + 1) % 2;
+    this.renderer.shadowMap.needsUpdate = this.shadowFrame === 0;
   }
 
   /** The parts of the scene the benchmark switched off. */

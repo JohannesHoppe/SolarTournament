@@ -6,8 +6,8 @@ The arena a round is fought in. Everything that every browser must build alike (
 |---|---|
 | `arenas.ts` | The seven arenas: field layout, well, sun, storms, the fixed references the HUD marks; which one a tournament round uses |
 | `reference.ts` | The reference plane through the field's center: height, climb, the bank's sky pointer, closure rate, an arena's fixed references |
-| `asteroids.ts` | The field: rocks, ice, debris or hull (shoved by a comet), orbits, gravity, collisions, raycasts, line of sight; how close up rocks keep their full relief (the picture's quality) |
-| `rocks.ts` | Generates the 16 asteroid shapes with integer math, identical on every browser |
+| `asteroids.ts` | The field: rocks, ice, debris or hull (shoved by a comet), orbits, gravity, collisions, raycasts, line of sight; how close up a rock or an ice piece keeps its near mesh before the far one, then a billboard, takes over (the picture's quality) |
+| `rocks.ts` | Generates the 16 asteroid shapes with integer math, identical on every browser: a full-detail shape for collisions, light near and far meshes for drawing (their fine relief a baked, object-space normal map, not triangles), and a billboard (see view/impostor) for the belt and for rocks and ice far from the field |
 | `surface.ts` | A rock's measured surface, as collisions see it |
 | `bodies.ts` | Bodies and their masses (ship, core, probe, torpedo, wreckage, the field's pieces by volume and density, the battleship; rings immovable); the rope that only pulls (between two browsers as a stiff spring, each end pulled where it is run) and the bump, both split by mass |
 | `shapes.ts` | Ice, station debris and the world ship's hull sections |
@@ -16,7 +16,7 @@ The arena a round is fought in. Everything that every browser must build alike (
 | `boxes.ts` | A sphere or a ray against a box (wreck and battleship hulls) |
 | `wrecks.ts` | The pieces a destroyed ship breaks into |
 | `arena.ts` | The arena's edge and its grid |
-| `belt.ts` | The asteroid belt beyond the arena, scenery only; a cheaper picture draws a share of its rocks |
+| `belt.ts` | The asteroid belt beyond the arena, scenery only; close to its inner edge real low-poly rocks, the rest of the ring billboards (see view/impostor); a cheaper picture draws a share of it |
 | `landmarks.ts` | Each arena's scenery: planets, the sun, the black hole |
 | `flare.ts` | The solar flare's plasma on screen: a sphere of roiling fire with filaments |
 | `space.ts` | Stars, nebula, the sun's light and shadows (heated by a solar flare; their map's size or none at all, as the picture's quality says), dust |

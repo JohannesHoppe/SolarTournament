@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { colliderBox } from '../assets';
 import { Randomizer, textSeed } from '../random';
-import { Surface } from './surface';
+import { Surface, tangentDirections } from './surface';
 import { boxContact, rayBox } from './boxes';
 import { SHAPE_FILL } from './shapes';
 
@@ -17,6 +17,14 @@ const MAX_GENERATION = 2;
 const FRAGMENT_SPEED = 150;
 /** Rocks farther than this many of their mean radii from the camera are drawn in less detail (about 5° of the view). */
 const FAR_LEVEL = 12;
+/**
+ * Rocks farther than this many of their mean radii are drawn as a billboard (see view/impostor):
+ * small enough on screen that a flat, camera-facing sprite looks the same as the shape it
+ * stands in for. Kept high (the smallest rocks still switch only beyond about 7 km) so a fight
+ * reaching across a large arena never sees the switch; the field's rocks only rarely get this
+ * far from a ship anyway, unlike the belt's, which this spares the most (see world/belt).
+ */
+const IMPOSTOR_LEVEL = 80;
 /** Surface gravity per unit of mean radius (1/s²): uniform density, so bigger rocks pull harder. */
 const GRAVITY_PER_RADIUS = 0.004;
 
@@ -28,8 +36,15 @@ const SOLID = 1000;
 /** The kinds of shapes a field is built from: rocks, ice, the debris of a station, the hull sections of a wreck. */
 export type TemplateKind = 'rock' | 'ice' | 'debris' | 'hull';
 
-/** The shapes of one kind, in full detail and (optionally) in less detail for afar; `box` shapes collide as their collider box itself. */
-export type TemplateSet = { near: THREE.Object3D[]; far: THREE.Object3D[]; box?: boolean };
+/**
+ * The shapes of one kind: `near` is what is drawn up close, `far` (optional) replaces it afar,
+ * `impostor` (optional) a billboard for the farthest LOD level; `box` shapes collide as their
+ * collider box itself. `collision` (optional), parallel to `near`, is what a shape's surface is
+ * measured from (see world/surface): the full-detail geometry, so collisions stay identical
+ * however light `near` is drawn; without it, `near` itself is measured (a shape that is never
+ * simplified for drawing, or a test field that does not care).
+ */
+export type TemplateSet = { near: THREE.Object3D[]; far: THREE.Object3D[]; impostor?: THREE.Object3D[]; collision?: THREE.Object3D[]; box?: boolean };
 
 /**
  * A massive body at the center of an arena or near it (a planet, a black hole): it pulls with
@@ -165,6 +180,8 @@ interface Template {
   scale: number;
   /** The same shape in less detail, or null. */
   far: THREE.Object3D | null;
+  /** A billboard for the farthest LOD level, or null (see view/impostor). */
+  impostor: THREE.Object3D | null;
   /** Collides as its box (see Asteroid.box). */
   box: boolean;
   /** The measured surface of a shape without a collider box (see Asteroid.surface). */
@@ -196,7 +213,9 @@ export class AsteroidField {
   clock = 0;
   /**
    * The share of FAR_LEVEL at which rocks switch to less detail (see view/quality): a cheaper
-   * picture draws the full relief only closer up. Only the picture: collisions use the full shapes.
+   * picture draws the full relief only closer up. The switch to a billboard (IMPOSTOR_LEVEL)
+   * stays fixed regardless, far enough out that it is never seen happening. Only the picture:
+   * collisions use the full shapes.
    */
   private detail = 1;
   /** Rocks broken so far, with the field time each broke (for snapshot). */
@@ -209,13 +228,20 @@ export class AsteroidField {
   /** Something else in the field that blocks the line of sight and torpedoes, if a round has one. */
   obstacle: Obstacle | null = null;
 
-  /** Each set's `far` holds the same shapes in less detail, drawn for rocks beyond FAR_LEVEL; collisions always use the full shapes. */
+  /**
+   * Each set's `far` holds the same shapes in less detail, drawn for rocks beyond FAR_LEVEL;
+   * `impostor`, a billboard drawn beyond IMPOSTOR_LEVEL. Collisions always use the full shapes
+   * (`collision`, or `near` itself without one).
+   */
   constructor(sets: Record<TemplateKind, TemplateSet>) {
     const templates = (set: TemplateSet) =>
       set.near.map((object, i): Template => {
-        const box = colliderBox(object);
-        // rounded to whole units, so tiny floating point differences between browsers vanish;
-        // a box piece is its whole box, a rock fills only part of it
+        // the surface is measured from the full-detail shape when one is given, so collisions
+        // stay identical however light the drawn mesh is; a box piece is its whole box, a rock
+        // fills only part of it
+        const reference = set.collision?.[i] ?? object;
+        const box = colliderBox(reference);
+        // rounded to whole units, so tiny floating point differences between browsers vanish
         const center = box.getCenter(new THREE.Vector3()).round();
         let collider = false;
         object.traverse((o) => (collider ||= !!o.userData.collider));
@@ -225,9 +251,10 @@ export class AsteroidField {
           semiAxes: box.getSize(new THREE.Vector3()).multiplyScalar(0.5 * (set.box ? 1 : SHAPE_FILL)).round(),
           scale: Math.max(object.scale.x, object.scale.y, object.scale.z),
           far: set.far[i] ?? null,
+          impostor: set.impostor?.[i] ?? null,
           box: !!set.box,
           // a shape without a computed collider is measured: a rock collides where it is seen
-          surface: set.box || collider ? null : new Surface(object, center),
+          surface: set.box || collider ? null : new Surface(reference, center),
         };
       });
     this.templates = { rock: templates(sets.rock), ice: templates(sets.ice), debris: templates(sets.debris), hull: templates(sets.hull) };
@@ -317,18 +344,27 @@ export class AsteroidField {
     const meanRadius = ((template.semiAxes.x + template.semiAxes.y + template.semiAxes.z) / 3) * s;
     let object: THREE.Object3D = template.object.clone(true);
     if (template.far) {
-      // the full relief up close, fewer triangles from afar, in the shadow pass as well
+      // fewer triangles from afar (in the shadow pass as well), a billboard farther yet
       const lod = new THREE.LOD();
       lod.addLevel(object, 0);
       lod.addLevel(template.far.clone(true), meanRadius * FAR_LEVEL * this.detail);
       lod.userData.far = meanRadius * FAR_LEVEL;
+      if (template.impostor) {
+        // fixed, never scaled down by the "rocks" quality knob (see setDetail): a billboard
+        // must never show up close, whatever the rung, or the switch would be seen
+        lod.addLevel(template.impostor.clone(), meanRadius * IMPOSTOR_LEVEL);
+        lod.userData.impostor = meanRadius * IMPOSTOR_LEVEL;
+      }
       lod.scale.copy(template.object.scale);
       object.scale.set(1, 1, 1);
       lod.children[1].scale.set(1, 1, 1);
+      if (lod.children[2]) lod.children[2].scale.set(1, 1, 1);
       object = lod;
     }
     object.scale.multiplyScalar(scale);
     object.traverse((o) => (o.castShadow = o.receiveShadow = o instanceof THREE.Mesh));
+    // a billboard is too thin and flat to cast or receive a believable shadow
+    if (object instanceof THREE.LOD && object.children[2]) object.children[2].castShadow = object.children[2].receiveShadow = false;
     this.group.add(object);
     const asteroid: Asteroid = {
       id,
@@ -372,7 +408,10 @@ export class AsteroidField {
   /** Draws the full relief only within `share` of FAR_LEVEL (see detail); 0 draws every rock in less detail. */
   setDetail(share: number) {
     this.detail = share;
-    for (const object of this.group.children) if (object instanceof THREE.LOD) object.levels[1].distance = object.userData.far * share;
+    for (const object of this.group.children) {
+      if (!(object instanceof THREE.LOD)) continue;
+      object.levels[1].distance = object.userData.far * share;
+    }
   }
 
   update(dt: number) {
@@ -705,8 +744,7 @@ const base = new THREE.Vector3();
 function surfaceNormal(surface: Surface, local: THREE.Vector3, normal: THREE.Vector3): THREE.Vector3 {
   const direction = here.copy(local).normalize();
   // two directions across the way out
-  side.set(Math.abs(direction.x) < 0.9 ? 1 : 0, Math.abs(direction.x) < 0.9 ? 0 : 1, 0).cross(direction).normalize();
-  across.crossVectors(direction, side);
+  tangentDirections(direction, side, across);
   const point0 = base.copy(direction).multiplyScalar(surface.radius(direction));
   nearby.copy(direction).addScaledVector(side, NORMAL_STEP).normalize();
   const point1 = there.copy(nearby).multiplyScalar(surface.radius(nearby)).sub(point0);

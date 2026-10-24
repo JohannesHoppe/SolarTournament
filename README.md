@@ -21,24 +21,28 @@ npm run build      # static site in dist/ (runs the unit tests first)
 
 The game draws the same world on every device, but not with the same effort: the picture's quality moves along a ladder of looks (`src/view/quality.ts`), from the picture as designed (rung 0) to the cheapest (rung 13). Each rung changes one or two knobs of the one above it, the largest saving for the least loss first. Only looks change: rocks, colliders, the round and everything that goes over the network are the same on every rung.
 
+**Rocks and ice draw few triangles; their relief is a normal map, not geometry.** A near rock has 2 000 triangles, one seen from afar 500 (`src/world/rocks.ts`; `NEAR_DETAIL`, `FAR_DETAIL`), a sliver of the 22 000-triangle shape its collisions are still measured from (see world/surface: the measured surface never changes, so every browser collides the same whatever a rock draws). The fine relief (crags, small craters) instead comes from a normal map baked once per shape (16 of them) into a small 6-face cube atlas, indexed by the direction from the rock's own center (a rock is star-shaped around it: every direction meets its surface once, so the map needs no UV unwrap and has no seams). A shader samples it directly from the mesh's own local position and turns it into world space with the object's normal matrix, exactly as it would a vertex normal; the near and far meshes, and ice (the same shapes, frozen), share the same atlas, so the fine relief looks identical at any of them. The far switch (below) only trades the coarser silhouette's few hundred triangles for fewer yet, the surface shading staying as it was.
+
+**Farther yet, a rock or an ice piece draws as a billboard** (`src/view/impostor.ts`): a camera-facing quad, at a fixed distance regardless of the ladder's rung (80 of the shape's mean radii: far enough that the switch is never seen even across a large arena), showing one of 8 pre-rendered views picked by how the shape is actually turned now. Each view is a small baked tile of color and silhouette; lit at that moment from the shape's own normal map (the same one, reused) and the real sun, so its shading tracks a solar flare instead of going stale as the shape turns. The same billboards draw almost all of the belt beyond the arena (`src/world/belt.ts`): only rocks within 1.4 × the belt's inner edge, close enough that a ship coasting past the arena's limit could still reach them, keep the real low-poly geometry; the rest of the ring, the great majority of its 480 rocks, is cheap enough as billboards (two triangles each, one draw call per shape) that the rungs below no longer need to cull it by direction.
+
 | Rung | Change | Tier |
 |---|---|---|
-| 0 | Everything: up to 2 device pixels per CSS pixel, bloom at full resolution, the sun's shadows in a 4096 px map, lacquered hulls, all particles and dust, the whole belt (480 rocks), the rocks' full relief out to 12 of their radii, the title screen's pad with its shadow | **high** |
-| 1 | The rocks keep their full relief only out to 6 of their radii (a rock up close has 22 000 triangles, from afar 3 400; they are drawn twice, for the picture and for the sun's shadows) | |
-| 2 | Full relief only out to 3 radii | |
+| 0 | Everything: up to 2 device pixels per CSS pixel, bloom at full resolution, the sun's shadows in a 4096 px map, lacquered hulls, all particles and dust, the whole belt (480 rocks), the field's rocks keep their near mesh out to 12 of their radii, the title screen's pad with its shadow | **high** |
+| 1 | The rocks keep their near mesh (2 000 triangles, drawn twice: for the picture and for the sun's shadows) only out to 6 of their radii; farther, the coarser far mesh (500 triangles), its relief unchanged (see above) | |
+| 2 | The near mesh only out to 3 radii | |
 | 3 | 1.75 device pixels per CSS pixel | |
 | 4 | Bloom at half resolution (a quarter of its pixels) | |
 | 5 | Shadow map 2048 px | |
-| 6 | 1.5 device pixels per CSS pixel, the pad as well | **medium** |
+| 6 | 1.5 device pixels per CSS pixel, the pad as well; the sun's shadow map (still on through rung 9) is refreshed only every other frame, not every one (`Game.updateShadowMap`): what casts it barely moves between two | **medium** |
 | 7 | Shadow map 1024 px | |
 | 8 | 1.25 device pixels per CSS pixel; the pad at 1, without its shadow | |
 | 9 | Half the particles and dust, half the belt's rocks beyond the arena | |
 | 10 | No shadows | |
-| 11 | 1 device pixel per CSS pixel, every rock of the field in less detail, a quarter of the belt, the pad drawn every second frame, the reference plane's grid only its rings | **low** |
+| 11 | 1 device pixel per CSS pixel, every rock of the field keeps only its far mesh, a quarter of the belt, the pad drawn every second frame, the reference plane's grid only its rings | **low** |
 | 12 | No bloom | |
 | 13 | 0.75 device pixels per CSS pixel, a third of the particles, no lacquer on the hulls (the second specular layer and the battleship's film of colors) | |
 
-**Tiers and the governor.** The menu's row under the languages offers Auto, Low, Medium and High. A tier pins its rung. Auto starts where the device was last found smooth, or with a guess: a software renderer and every phone or tablet start low, a small machine (four cores or fewer, 4 GB or less) or an integrated Intel GPU medium, everything else high. Then the governor watches the frame rate in the menu and in a running round: below 50 frames a second over 2 seconds it takes a rung down; at 58 or more for 8 seconds, with the frame's own work under 60 % of the frame, it takes one up. After every change it waits 3 seconds. A rung left for being slow is barred for 30 seconds, then twice as long after each further time, so the picture never seesaws. A rung held for 20 seconds is kept in the browser as the start next time (`solartournament.quality`, the same entry as the pinned tier). Shadows on or off and the lacquer compile shaders anew; the governor changes them only where the hitch goes unseen (in the menu, on the results, while the own clone is dead), the other knobs at once.
+**Tiers and the governor.** The menu's row under the languages offers Auto, Low, Medium and High. A tier pins its rung. Auto starts where the device was last found smooth, or with a guess: a software renderer starts on the Low tier's own rung (11); a phone or tablet starts lower yet, on the ladder's very last rung (13), since a fight must never stutter and a touch screen's GPU is the one most likely to struggle; a small machine (four cores or fewer, 4 GB or less) or an integrated Intel GPU starts on Medium, everything else on High. Then the governor watches the frame rate in the menu and in a running round: below 50 frames a second over 2 seconds (1 second on a touch device) it takes a rung down; at 58 or more for 8 seconds (14 seconds touched), with the frame's own work under 60 % of the frame, it takes one up — a touch device steps down faster and climbs back up more cautiously than that. After every change it waits 3 seconds. A rung left for being slow is barred for 30 seconds, then twice as long after each further time, so the picture never seesaws. A rung held for 20 seconds is kept in the browser as the start next time (`solartournament.quality`, the same entry as the pinned tier). Shadows on or off and the lacquer compile shaders anew; the governor changes them only where the hitch goes unseen (in the menu, on the results, while the own clone is dead), the other knobs at once.
 
 **The benchmark.** `?bench` on the game's address (`?bench=<seconds>` per measurement, default 3; the test stage works too, https://test.solartournament.games/?bench) plays a fixed scene: a solo deathmatch of the default rivals in the belt, the Host's clone watching, the camera on a fixed arc around the field. It measures the frame time with everything on, then with each feature off on its own (the occasional effects, glitch and datamosh, on), against the mean of everything on just before and after: post-processing as a whole, bloom, resolution, shadows, lacquer, rock detail, the field, the belt, the landmark, the sky, the dust, particles, ships, wreckage, the DOM HUD, the radar, the attitude display, sound. Then every rung of the ladder, every arena with and without its landmark (the black hole with and without its lens), the race with and without the racing line, Capture the Flag and the President's Fleet, and the title screen with and without its pad. It takes about ten minutes. The table shows on screen at the end, with buttons to copy or download it as JSON, and goes to the console; the frame time is the time between two frames shown (never below the screen's refresh), next to it the frame's own work and, where the browser can time the GPU (`EXT_disjoint_timer_query_webgl2`), the GPU's time, draw calls and triangles. `?fps` shows the frame rate, the frame's own work and the rung at the bottom of the screen, to watch the governor at work.
 
@@ -46,17 +50,35 @@ On a phone: open the address with `?bench` (the test stage, or the dev server ov
 
 `npm run bench` runs the same in the test browser (`e2e/bench.spec.ts`); `PROFILE=pixel8` pretends to be the reference phone, a Pixel 8 held sideways with its CPU slowed to the phone's browser speed (see `e2e/README.md`); `BENCH_ONLY=quality` (or `menu`, `features`, `arenas`, `modes`, comma-separated; `&only=` on the address) runs only those sections. A feature's cost is counted in GPU time where the browser times the GPU, since the frame time snaps to the screen's refresh; the title screen's pad draws in a context of its own and is counted in frame time.
 
-**Measured costs.** Two runs each in the test browser on an Apple M4, the machine otherwise quiet, 5 seconds per measurement; the test browser draws without a GPU (swiftshader), so the milliseconds are its own and only the costs next to each other mean something: what a feature costs here is no promise of what it costs on a phone's GPU. "Desktop" is 1280 × 720 at 1 device pixel per CSS pixel, "Pixel 8" the phone's screen held sideways (915 × 412 at 2.625, 2.6 million pixels) with its CPU speed. Cost per frame of each feature switched off (glitch and datamosh switched on), in GPU time, as a share of the frame with everything on:
+**Measured triangles.** `BENCH_ONLY=quality` under the Pixel 8 profile, in the belt arena (`npm run bench`), triangles submitted per frame at each rung, before and after the rocks' low-poly meshes, their normal map and the billboards above (two runs, back to back on the same machine so only the two columns next to each other mean something; the machine was busy with other work at the time, so these GPU milliseconds are not the quiet-machine ones below, only the triangle counts are load-independent):
+
+| Rung | Triangles before | Triangles after | GPU ms before | GPU ms after |
+|---|---|---|---|---|
+| 0 high | 1 511 288 | 528 118 | 480.9 | 283.5 |
+| 1 | 979 111 | 481 741 | 303.9 | 299.8 |
+| 2 | 735 304 | 463 394 | 261.4 | 292.9 |
+| 3 | 747 439 | 463 154 | 386.6 | 247.5 |
+| 4 | 733 354 | 463 413 | 264.8 | 203.3 |
+| 5 | 734 969 | 464 052 | 196.3 | 170.1 |
+| 6 medium | 738 199 | 467 183 | 188.2 | 161.6 |
+| 7 | 737 034 | 468 234 | 269.1 | 167.7 |
+| 8 | 742 235 | 467 598 | 279.8 | 138.1 |
+| 9 | 506 704 | 273 062 | 165.4 | 103.5 |
+| 10 | 365 248 | 250 154 | 190.2 | 97.9 |
+| 11 low | 254 417 | 138 956 | 153.6 | 78.4 |
+| 12 | 254 846 | 140 145 | 79.0 | 67.1 |
+| 13 | 252 360 | 138 998 | 71.6 | 64.4 |
+
+Triangles drop by a third to two thirds on every rung, most where the belt and the field's near mesh used to cost most (rung 0: 65 % fewer); GPU time (noisy on a shared machine, but measured the same way both times) drops on 12 of the 14 rungs too, most at the top of the ladder. The per-feature and quiet-machine ladder tables below are from before this change and need a fresh `npm run bench` (ten minutes, a quiet machine) to replace: the rocks' "full relief" and "the belt" no longer mean what they measured then, now that relief is a normal map and most of the belt a billboard.
+
+**Measured costs (before the rocks' low-poly meshes and billboards above; kept for the other features, which did not change).** Two runs each in the test browser on an Apple M4, the machine otherwise quiet, 5 seconds per measurement; the test browser draws without a GPU (swiftshader), so the milliseconds are its own and only the costs next to each other mean something: what a feature costs here is no promise of what it costs on a phone's GPU. "Desktop" is 1280 × 720 at 1 device pixel per CSS pixel, "Pixel 8" the phone's screen held sideways (915 × 412 at 2.625, 2.6 million pixels) with its CPU speed. Cost per frame of each feature switched off (glitch and datamosh switched on), in GPU time, as a share of the frame with everything on:
 
 | Feature | Desktop (run 1 / run 2) | Pixel 8 (run 1 / run 2) |
 |---|---|---|
-| The field's rocks, all of them | 55 % / 54 % | 45 % / 44 % |
-| Their full relief (all in less detail) | 37 % / 34 % | 26 % / 28 % |
 | Shadows | 36 % / 37 % | 30 % / 30 % |
 | Half the resolution | (not measured) | 33 % / 34 % |
 | Post-processing as a whole | 25 % / 15 % | 16 % / 22 % |
 | Bloom | 19 % / 21 % | 22 % / 17 % |
-| The belt | 12 % / 15 % | 11 % / 15 % |
 | Datamosh (while on) | 13 % / 8 % | 12 % / 13 % |
 | Glitch (while on) | 4 % / −4 % | 2 % / 4 % |
 | DOM HUD, radar, attitude, sound, particles, dust, sky, ships, wreckage, lacquer, landmark of the belt | each within ±6 % | each within ±5 % |
@@ -64,26 +86,7 @@ On a phone: open the address with `?bench` (the test stage, or the dev server ov
 | Landmark of the gas giant / the rings / the black hole | 20 % / 7–9 % / 7–8 % | 21 % / 8–9 % / 7–11 % |
 | The black hole's lens | 13 % / 16 % | 14 % / 12 % |
 
-The ladder, rung by rung, in the same scene (GPU time per frame, and the frame rate the test browser made of it):
-
-| Rung | Desktop, GPU ms (run 1 / run 2) | Pixel 8, GPU ms (run 1 / run 2) |
-|---|---|---|
-| 0 high | 157 / 160 | 222 / 219 |
-| 1 | 138 / 140 | 205 / 178 |
-| 2 | 106 / 112 | 165 / 167 |
-| 3 | 108 / 107 | 147 / 144 |
-| 4 | 93 / 94 | 128 / 124 |
-| 5 | 85 / 84 | 126 / 122 |
-| 6 medium | 85 / 87 | 105 / 106 |
-| 7 | 82 / 79 | 103 / 104 |
-| 8 | 82 / 78 | 94 / 91 |
-| 9 | 69 / 66 | 81 / 77 |
-| 10 | 55 / 51 | 67 / 64 |
-| 11 low | 46 / 46 | 52 / 52 |
-| 12 | 37 / 37 | 48 / 47 |
-| 13 | 28 / 28 | 40 / 46 |
-
-The desktop's rungs of resolution (3, 6, 8, 11, 13) change little there: at 1 device pixel per CSS pixel, the picture is already drawn at its lowest. Under the Pixel 8's CPU speed the frame's own work (script, simulation, submitting the draw calls) took 13 to 18 ms on every rung in these runs, close to the 16.7 ms of a 60 Hz frame; the GPU's share on the phone itself is what `?bench` on the phone measures.
+The desktop's rungs of resolution (3, 6, 8, 11, 13) change little there: at 1 device pixel per CSS pixel, the picture is already drawn at its lowest.
 
 ## Deploy
 

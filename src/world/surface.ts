@@ -39,6 +39,17 @@ function cubeFace(x: number, y: number, z: number, out: { face: number; s: numbe
 const cell = (s: number) => Math.min(CELLS - 1, Math.max(0, Math.floor(((s + 1) / 2) * CELLS)));
 const where = { face: 0, s: 0, t: 0 };
 
+/**
+ * Two directions across `direction` (itself a unit vector), for estimating by finite
+ * differences how a surface indexed by direction (a measured Surface, or an analytic one, e.g.
+ * a rock's noise function) slopes there: used for collision normals and for baking a rock's
+ * normal map alike.
+ */
+export function tangentDirections(direction: THREE.Vector3, side: THREE.Vector3, across: THREE.Vector3) {
+  side.set(Math.abs(direction.x) < 0.9 ? 1 : 0, Math.abs(direction.x) < 0.9 ? 0 : 1, 0).cross(direction).normalize();
+  across.crossVectors(direction, side);
+}
+
 export class Surface {
   /** How far the surface reaches in each cell (units, whole, in the rock's own unscaled coordinates). */
   private readonly radii = new Float32Array(6 * CELLS * CELLS);

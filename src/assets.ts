@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createRocks, DISTANT_DETAIL, FAR_DETAIL } from './world/rocks';
+import { createImpostors, createRocks, DETAIL, FAR_DETAIL, NEAR_DETAIL } from './world/rocks';
 import { debrisSet, hullSet, iceSet } from './world/shapes';
 import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
 import type { TemplateKind, TemplateSet } from './world/asteroids';
@@ -12,9 +12,9 @@ export type ShipType = 'human' | 'alien' | 'sovereign';
 
 export interface Assets {
   ships: Record<ShipType, THREE.Object3D>;
-  /** The rock shapes in low detail, for the belt beyond the arena. */
-  belt: THREE.Mesh[];
-  /** Every kind of shape the arenas' fields are built from (see world/shapes); the rocks also in less detail for afar. */
+  /** The rock shapes for the belt beyond the arena (see world/belt): `near` close to its inner edge, `impostor` (a billboard, see view/impostor) for the rest of it. */
+  belt: { near: THREE.Mesh[]; impostor: THREE.Mesh[] };
+  /** Every kind of shape the arenas' fields are built from (see world/shapes); the rocks also in less detail for afar, and as a billboard farther yet. */
   fieldSets: Record<TemplateKind, TemplateSet>;
   textures: {
     flameFrames: THREE.Texture[];
@@ -93,9 +93,12 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   // every file is requested at once, and the rocks are generated while they are on their way
   const ships = Promise.all(['human-interceptor.glb', 'alien-interceptor.glb'].map(model));
   const flames = Promise.all(['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture));
-  const asteroids = createRocks();
+  // full detail only to measure collisions from (see world/surface); drawn meshes stay light, their
+  // relief coming from a baked normal map (see world/rocks, applyRockRelief) instead of triangles
+  const asteroidsCollision = createRocks(DETAIL);
+  const asteroidsNear = createRocks(NEAR_DETAIL);
   const asteroidsFar = createRocks(FAR_DETAIL);
-  const belt = createRocks(DISTANT_DETAIL);
+  const asteroidImpostors = createImpostors();
   const [human, alien] = await ships;
   const flameFrames = (await flames).map(softEdges);
   flameFrames.forEach((t) => (t.flipY = false));
@@ -109,11 +112,11 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     [1, '#000000'],
   ]);
 
-  const rock = { near: asteroids, far: asteroidsFar };
+  const rock = { near: asteroidsNear, far: asteroidsFar, impostor: asteroidImpostors, collision: asteroidsCollision };
   return {
     // the hulls are built in code; the model files give collider, drive flame and glows
     ships: { human: humanInterceptor(human), alien: alienInterceptor(alien), sovereign: sovereign(human) },
-    belt,
+    belt: { near: asteroidsNear, impostor: asteroidImpostors },
     fieldSets: { rock, ice: iceSet(rock), debris: debrisSet(), hull: hullSet() },
     textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), glow },
     sounds: synthesizeSounds(audio),
