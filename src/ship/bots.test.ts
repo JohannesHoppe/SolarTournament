@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { Bot, evenSkills, skillsOf, startTiming } from './bots';
+import { Bot, BOT_NAMES, evenSkills, meanSkill, missOf, reactionOf, skillsOf, startTiming } from './bots';
 import { FlightModel, MAIN_THRUST } from './flight';
 import { LOCK_RANGE, noseOn, Ship, strainAfter } from './ship';
 import { testField } from '../test/field';
@@ -155,6 +155,24 @@ describe('bots fly by the Hosts\' rules', () => {
     const fresh = new Bot(me, evenSkills(0.5));
     fresh.think(0, ships, f);
     expect(fresh.target).toBe(near);
+  });
+
+  it('fight better the better their skills, but none fires sooner than a quick Host or aims like a machine', () => {
+    // Kessler is the middling one, even in every skill
+    expect(skillsOf('Kessler')).toEqual(evenSkills(0.5));
+    for (const name of BOT_NAMES) {
+      const { aim, reflexes } = skillsOf(name);
+      expect(reactionOf(reflexes)).toBeGreaterThanOrEqual(0.15);
+      expect(missOf(aim)).toBeGreaterThanOrEqual(0.2 - 1e-9);
+    }
+    for (let skill = 0; skill < 0.8; skill += 0.1) {
+      expect(reactionOf(skill + 0.1)).toBeLessThanOrEqual(reactionOf(skill));
+      expect(missOf(skill + 0.1)).toBeLessThan(missOf(skill));
+    }
+    // the middling bot's reaction and aim sit halfway between the worst and the best
+    expect(reactionOf(0.5)).toBeCloseTo(0.3);
+    expect(missOf(0.5)).toBeCloseTo(0.5);
+    expect(meanSkill(skillsOf('Kessler'))).toBe(0.5);
   });
 
   it('time their start as a Host would, closer to BURN! the better their reflexes', () => {

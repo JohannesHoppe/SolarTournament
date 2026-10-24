@@ -57,7 +57,7 @@ npm run dupes       # duplicated code (jscpd) and duplicated style rules (tools/
 npm test            # unit tests of the deterministic core (Vitest, in Node, under a second)
 npm run e2e         # browser tests (Playwright: solo start, two tabs online); first once: npm run e2e:install
                     # DEV_PORT=5174 moves the dev server and the browser tests, so a second checkout (a worktree) tests beside the first
-npm run balance     # balance runs (Playwright, about half an hour): every mode played out by bots in time-lapse in every arena
+npm run balance     # balance runs (Playwright, about forty minutes): every mode played out by bots in time-lapse in every arena
 npm run soak        # the cheat checks in honest play (Playwright, about a quarter of an hour): three tabs, a round of every mode, nobody reported
 npm run bench       # benchmark (Playwright, about ten minutes): the cost per frame of every feature, quality rung, arena and mode
                     # PROFILE=pixel8 as the reference phone (its screen, touch, its CPU speed); BENCH_SECONDS=<s> per measurement; BENCH_ONLY=quality for one section
@@ -93,7 +93,7 @@ The same loop for every change, small or large. Follow it step by step; it holds
    - A change to the flight model, the flight computer, the input or the HUD's steering cues (the course marker, the crosshair, the racing line) has to pass the simulated Host's tests (`src/game/playability.test.ts`, `hostrace.test.ts`, `hostrace2.test.ts`, part of `npm test`): a human with ordinary hands must be able to fly the race and the flight school. Never loosen them to make a change pass; fix the change.
    - Commit with explicit paths (`git add <files>`, never `-A`), with an English message that says what the change does and why; no attribution lines.
 7. **The full gates.**
-   - `npm run check:full` runs everything above, plus the browser tests and the balance runs (about three quarters of an hour).
+   - `npm run check:full` runs everything above, plus the browser tests and the balance runs (about an hour).
    - Run it after every change to bots, weapons, damage, a mode's rules, the network or the round flow, and in any case every few merges. The game changes fast, and only the full run catches a rule that quietly breaks a mode, a race nobody finishes or two tabs that stop agreeing.
    - The balance runs leave the dev log of every round in `test-results/`, and a failure names the deaths by cause. `BALANCE_SLOW` gives them more time on a busy machine, `BALANCE_PAGES` plays fewer rounds side by side (see `e2e/README.md`).
    - A red gate is fixed before the next push, never ignored.

@@ -17,6 +17,23 @@ const STORM_SIGHT = 15000;
 const MAX_HUNTERS = 2;
 /** A bot keeps its target unless another is clearly better: the current one counts this much nearer. */
 const STICKY = 0.7;
+/**
+ * How skill shows in a fight, steep enough that the better pilot visibly wins more often. A bot
+ * pulls the trigger once its target has been in its sights for REACTION_SLOW seconds at reflexes
+ * 0, REACTION_PER_REFLEX less per unit of reflexes, never sooner than REACTION_MIN (about a
+ * quick human's). Its aim misses by up to AIM_SPREAD ship radii at aim 0 and nothing at aim 1, and
+ * wanders by up to twice AIM_ANGLE at aim 0 down to nothing; skills above AIM_BEST count as
+ * AIM_BEST, so no bot aims like a machine.
+ */
+const REACTION_SLOW = 0.55;
+const REACTION_PER_REFLEX = 0.5;
+const REACTION_MIN = 0.15;
+const AIM_SPREAD = 1.8;
+const AIM_BEST = 0.8;
+/** How long a bot of these reflexes holds its target in its sights before it fires (s), at ease and unstrained. */
+export const reactionOf = (reflexes: number) => Math.max(REACTION_MIN, REACTION_SLOW - REACTION_PER_REFLEX * reflexes);
+/** How far a bot of this aim misses, as a share of the misses at aim 0 (see aimError). */
+export const missOf = (aim: number) => 1 - Math.min(aim, AIM_BEST);
 /** At full ease (see Bot.ease) bots aim this much worse and react this much later (s). */
 const EASE_AIM = 1.5;
 const EASE_REACTION = 0.4;
@@ -170,8 +187,8 @@ const BOT_SKILLS: Record<string, Skills> = {
   Laika: { aim: 0.1, reflexes: 0.2, daring: 0 },
   Sputnik: { aim: 0.3, reflexes: 0.1, daring: 0.2 },
   Juno: { aim: 0.2, reflexes: 0.4, daring: 0.3 },
-  Ceres: { aim: 0.5, reflexes: 0.3, daring: 0.4 },
-  Kessler: { aim: 0.4, reflexes: 0.5, daring: 0.6 },
+  Ceres: { aim: 0.4, reflexes: 0.4, daring: 0.4 },
+  Kessler: { aim: 0.5, reflexes: 0.5, daring: 0.5 },
   Orion: { aim: 0.7, reflexes: 0.5, daring: 0.6 },
   Vega: { aim: 0.6, reflexes: 0.9, daring: 0.6 },
   Halley: { aim: 0.9, reflexes: 0.8, daring: 0.85 },
@@ -474,7 +491,7 @@ export class Bot {
       const angularSize = (target.radius * 0.8) / Math.max(targetDistance, 1);
       const onTarget = me.angleTo(aimPoint) < angularSize + this.ship.radius / Math.max(targetDistance, 1);
       this.onTargetFor = onTarget ? this.onTargetFor + dt : 0;
-      const reaction = 0.45 - 0.3 * this.skills.reflexes + EASE_REACTION * this.ease + STRAIN_REACTION * this.ship.strain;
+      const reaction = reactionOf(this.skills.reflexes) + EASE_REACTION * this.ease + STRAIN_REACTION * this.ship.strain;
       // a shot into the drive is worth the heat; at the armor a bot only snipes now and then,
       // single shots from a nearly cool laser, so it keeps the heat for the drive
       const open = target.tailToward(line.subVectors(target.flight.position, me.position));
@@ -643,8 +660,8 @@ export class Bot {
    * target is hard to hit, as it would be for any eye.
    */
   private aimError(distance: number) {
-    const aim = this.skills.aim;
-    return (this.ship.radius * (1.6 - 1.4 * aim) + distance * AIM_ANGLE * (1.5 - aim)) * (1 + EASE_AIM * this.ease + STRAIN_AIM * this.ship.strain);
+    const miss = missOf(this.skills.aim);
+    return (this.ship.radius * AIM_SPREAD * miss + distance * AIM_ANGLE * 2 * miss) * (1 + EASE_AIM * this.ease + STRAIN_AIM * this.ship.strain);
   }
 
   /**
