@@ -48,6 +48,24 @@ test('two tabs of one tournament see the same world', async ({ context }) => {
   for (const page of [a, b]) expect(await page.evaluate(() => window.game.online.reported.size)).toBe(0);
 });
 
+test('two tabs show a ping for each other and agree on who leads', async ({ context }) => {
+  const { a, b } = await pair(context, `e2e-${Date.now().toString(36)}p`);
+  const read = (page: Page) =>
+    page.evaluate(() => {
+      const online = window.game.online;
+      const session = online.session;
+      return { selfId: online.selfId, leadId: session.leadId, pings: (session.peers as string[]).map((peer) => session.pingTo(peer)) };
+    });
+  const [seenA, seenB] = [await read(a), await read(b)];
+  // a BroadcastChannel round trip (?local=1) answers at once: both measured a ping to the other
+  expect(seenA.pings.length).toBeGreaterThan(0);
+  expect(seenA.pings.every((ms) => typeof ms === 'number' && ms >= 0)).toBe(true);
+  expect(seenB.pings.every((ms) => typeof ms === 'number' && ms >= 0)).toBe(true);
+  // the first tab leads, and both name the same browser
+  expect(seenA.leadId).toBe(seenA.selfId);
+  expect(seenB.leadId).toBe(seenA.selfId);
+});
+
 test('a torpedo flies on both tabs and hits the ship of the other', async ({ context }) => {
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}t&bots=0`);
   // above the field, where no rock of whatever arena the room draws comes between the two

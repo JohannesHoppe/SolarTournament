@@ -133,6 +133,8 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   noReturn: { value: 280, readme: 'Within about # m no drive gets out' },
   impactKill: { value: 72, readme: 'at about # m/s a ship is destroyed' },
   towCable: { value: 75, readme: 'on a cable of about # m' },
+  pingWarn: { value: 150, readme: 'orange from # ms' },
+  pingCritical: { value: 300, readme: 'red from # ms' },
 };
 
 /** Every number of the handbook by its placeholder. */

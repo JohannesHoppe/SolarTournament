@@ -31,7 +31,7 @@ import { LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '.
 import { gripOf, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, PathSteering } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS } from '../ship/tints';
-import { Online, type OnlineGame } from '../net/online';
+import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
 import { Lobby, type Listing } from '../net/lobby';
 import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
@@ -64,7 +64,7 @@ import { COMET_SPEED, COMET_WARNING, cometEnd, cometsOf, cometStart, CometView, 
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
 import { FlareView } from '../world/flare';
-import { markedName, swatch } from '../view/marks';
+import { markedName, markLead, swatch } from '../view/marks';
 import { Coach, type Tip } from './coach';
 import {
   ALARM_RANK,
@@ -97,6 +97,9 @@ import { ShareButton, type ShareWhere } from '../share';
 const RESULTS_SECONDS = 12;
 /** The standings held open with Tab are written anew this often (s, real time). */
 const STANDINGS_REFRESH = 0.25;
+/** The standings' ping turns orange from this delay, and red from twice that (ms): only once it starts to matter. */
+const PING_WARN_MS = 150;
+const PING_CRITICAL_MS = 2 * PING_WARN_MS;
 /** The Hosts' tints are settled anew this often (s, real time, see Game.tintShips). */
 const TINT_SECONDS = 0.5;
 /**
@@ -2896,7 +2899,8 @@ export class Game implements OnlineGame {
     const race = this.roundMode === 'race';
     const survival = this.survival;
     const flags = this.flags;
-    const heads = ['#', t('Host'), race && t('Race'), survival && t('Clones'), flags && t('Side'), t('Kills'), t('Deaths'), t('Score')];
+    const online = this.online;
+    const heads = ['#', t('Host'), race && t('Race'), survival && t('Clones'), flags && t('Side'), t('Kills'), t('Deaths'), t('Score'), online && t('Ping')];
     table.innerHTML = `<tr>${heads.map((head) => (head ? `<th>${head}</th>` : '')).join('')}</tr>`;
     // Capture the Flag names the sides' captures above the pilots
     if (flags) table.createCaption().textContent = flags.leading >= 0 ? t('{score} · {side} leads', { score: this.flagScore(), side: t(TEAM_NAMES[flags.leading]) }) : this.flagScore();
@@ -2909,7 +2913,10 @@ export class Game implements OnlineGame {
       const row = table.insertRow();
       row.classList.toggle('me', ship === this.me);
       row.insertCell().textContent = String(i + 1);
-      row.insertCell().append(swatch(shownTint(ship), ship.sovereign), ...markedName(ship.kind, ship.name));
+      const name = row.insertCell();
+      name.append(swatch(shownTint(ship), ship.sovereign));
+      if (online && isLeadHost(ship.id, online.session.leadId)) name.append(markLead());
+      name.append(...markedName(ship.kind, ship.name));
       if (race) row.insertCell().textContent = ship.finish >= 0 ? t('{time} s', { time: ship.finish.toFixed(1) }) : t('Lap {lap}/{laps}', { lap: lapOf(ship.gates), laps: LAPS });
       if (survival) row.insertCell().textContent = isOut(ship) ? t('Out') : t('{n} left', { n: clonesLeft(ship) });
       if (flags) {
@@ -2918,7 +2925,24 @@ export class Game implements OnlineGame {
         side.style.color = TEAM_TINTS[ship.team] ?? '';
       }
       for (const value of [ship.kills, ship.deaths, ship.score]) row.insertCell().textContent = String(value);
+      if (online) row.insertCell().append(this.pingReading(online, ship));
     });
+  }
+
+  /**
+   * A Host's reading in the standings' ping column: its browser's measured delay (a bot's, the
+   * lead's, since the lead runs it), in the HUD's azure, orange and red once it grows enough to
+   * matter; a dash for this own browser (and, while it leads, its own bots), and before the
+   * first pong has come back.
+   */
+  private pingReading(online: Online, ship: Ship): Node {
+    const peer = pingPeerOf(ship.id, online.selfId);
+    const ms = peer === null ? null : online.session.pingTo(peer);
+    if (ms === null) return document.createTextNode('–');
+    const reading = document.createElement('span');
+    reading.className = 'ping' + (ms >= PING_CRITICAL_MS ? ' critical' : ms >= PING_WARN_MS ? ' warn' : '');
+    reading.textContent = t('{ms} ms', { ms: Math.round(ms) });
+    return reading;
   }
 
   /** The captures of Capture the Flag, both sides named: Orange 2 : 1 Blue. */

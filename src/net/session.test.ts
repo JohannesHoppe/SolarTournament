@@ -7,8 +7,12 @@ class FakeTransport implements Transport {
   readonly relayOff = null;
   readonly handlers = new Map<string, (data: unknown, from: string) => void>();
   readonly connected: string[] = [];
+  /** What the session sent, in order: to everyone (`to` undefined) or one peer. */
+  readonly sent: { type: string; data: unknown; to?: string }[] = [];
   constructor(readonly selfId: string) {}
-  send() {}
+  send(type: string, data: unknown, to?: string) {
+    this.sent.push({ type, data, to });
+  }
   on(type: string, handler: (data: unknown, from: string) => void) {
     this.handlers.set(type, handler);
   }
@@ -161,5 +165,56 @@ describe('the lead browser', () => {
     expect(session.seated('me')).toBe(false);
     expect(session.seated('late')).toBe(false);
     expect(session.seated('stranger')).toBe(false);
+  });
+});
+
+describe('the ping to a peer', () => {
+  beforeEach(() => {
+    clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+  });
+  afterEach(() => vi.restoreAllMocks());
+
+  it('answers a peer\'s ping with a pong naming the same number', () => {
+    const { transport } = joined('me');
+    transport.handlers.get('pi')!({ n: 3 }, 'a');
+    expect(transport.sent).toEqual([{ type: 'po', data: { n: 3 }, to: 'a' }]);
+  });
+
+  it('answers no ping without a number within range, and sends no pong for it', () => {
+    const { transport } = joined('me');
+    for (const bad of [{ n: 'nope' }, { n: -1 }, {}]) transport.handlers.get('pi')!(bad, 'a');
+    expect(transport.sent.filter((m) => m.type === 'po')).toEqual([]);
+  });
+
+  it('answers a peer\'s pings only up to the rate limit', () => {
+    const { transport } = joined('me');
+    for (let i = 0; i < 10; i++) transport.handlers.get('pi')!({ n: i }, 'a');
+    const pongs = transport.sent.filter((m) => m.type === 'po');
+    expect(pongs.length).toBeGreaterThan(0);
+    expect(pongs.length).toBeLessThan(10);
+  });
+
+  it('times the round trip from a sent ping to its matching pong, in milliseconds', () => {
+    const { session, transport } = joined('me');
+    transport.connected.push('a');
+    at(1);
+    session.tick(); // pings every peer once a round (see PING_INTERVAL)
+    expect(session.pingTo('a')).toBeNull();
+    const ping = transport.sent.find((m) => m.type === 'pi' && m.to === 'a')!;
+    at(1.042);
+    transport.handlers.get('po')!({ n: (ping.data as { n: number }).n }, 'a');
+    expect(session.pingTo('a')).toBeCloseTo(42, 0);
+  });
+
+  it('ignores a pong that answers an older ping than the one outstanding', () => {
+    const { session, transport } = joined('me');
+    transport.connected.push('a');
+    at(1);
+    session.tick(); // sends the first ping, number 1
+    at(2);
+    session.tick(); // sends a fresh one, number 2; number 1 is no longer outstanding
+    transport.handlers.get('po')!({ n: 1 }, 'a');
+    expect(session.pingTo('a')).toBeNull();
   });
 });

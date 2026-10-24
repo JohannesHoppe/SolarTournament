@@ -33,6 +33,7 @@ import type { Catalog } from './i18n';
  *   dogfight → Duell; crosshair → Fadenkreuz; marker → Markierung; live link → Live-Verbindung
  * - neon trim → Neonstreifen; drive flame → Antriebsflamme; aim / reflexes / daring → Zielen / Reflexe / Wagemut
  * - classes Cruise / Pro / Max → Locker / Profi / Max
+ * - ping → Ping (the gamer term, kept)
  *
  * Spoken lines (the flight computer's and the announcer's) write numbers and units out in words, so the voice reads them
  * well. The announcer's bot names stay lowercase: they are the keys of their rendered clips.
@@ -194,6 +195,8 @@ export const DE: Catalog = {
   'The battleship got away · the President wins': 'Das Schlachtschiff ist entkommen · der Präsident gewinnt',
   'The battleship is coming': 'Das Schlachtschiff kommt',
   '{time} s': '{time} s',
+  'Ping': 'Ping',
+  '{ms} ms': '{ms} ms',
   'Lap {lap}/{laps}': 'Runde {lap}/{laps}',
   'Out': 'Raus',
   '{n} left': 'noch {n}',
@@ -444,6 +447,9 @@ export const DE: Catalog = {
   'Lock on': 'Erfassen',
   'Probe': 'Sonde',
   'Bot': 'Bot',
+  'Lead browser: runs the round and the bots': 'Führender Browser: steuert die Runde und die Bots',
+  "The standings (held with Tab, or shown between rounds) name each other Host's ping beside their name: in milliseconds, calm blue until it climbs, orange from {pingWarn} ms and red from {pingCritical} ms. A bot's ping always goes to the lead browser, the one that runs it; yours shows a dash, and so does a bot's while you lead. A small star marks the browser that leads: it runs the round and the bots.":
+    'Die Wertung (mit Tab gehalten, oder zwischen den Runden gezeigt) nennt neben jedem Namen den Ping zu diesem Host: in Millisekunden, ruhig blau, solange er niedrig bleibt, orange ab {pingWarn} ms und rot ab {pingCritical} ms. Der Ping eines Bots geht immer zum führenden Browser, der ihn steuert; dein eigener zeigt einen Strich, ebenso der eines Bots, solange du führst. Ein kleiner Stern markiert den führenden Browser: er steuert die Runde und die Bots.',
   'Basic training': 'Grundausbildung',
   'Racer': 'Rennpilot',
   'Gladiator': 'Gladiator',

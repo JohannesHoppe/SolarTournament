@@ -30,6 +30,7 @@ import type { Catalog } from './i18n';
  * - Aim / Reflexes / Daring: Visée / Réflexes / Audace; Orange / Blue (sides): Orange / Bleu
  * - Radio 2584 announcer: commentateur (addresses the audience and pilots with "vous");
  *   Nicole calls the Host "mon chéri"
+ * - ping: Ping (the gamer term, kept)
  * Ordinals: places only run up to the size of a tournament (8), so '{n}st' is always 1st: 1er, 2e, 3e…
  * Key names stay as printed on keyboards and pads (Esc, Enter, Tab, Shift, RT…); Space is Espace.
  * Typography: a no-break space ( ) before : ; ? ! and inside « », so justified text never
@@ -183,6 +184,8 @@ export const FR: Catalog = {
   'The battleship got away · the President wins': 'Le cuirassé s’est échappé · le Président gagne',
   'The battleship is coming': 'Le cuirassé arrive',
   '{time} s': '{time} s',
+  'Ping': 'Ping',
+  '{ms} ms': '{ms} ms',
   'Lap {lap}/{laps}': 'Tour {lap}/{laps}',
   'Out': 'Éliminé',
   '{n} left': 'encore {n}',
@@ -421,6 +424,9 @@ export const FR: Catalog = {
   'Lock on': 'Verrouille',
   'Probe': 'Sonde',
   'Bot': 'Bot',
+  'Lead browser: runs the round and the bots': 'Navigateur meneur : il dirige la manche et les bots',
+  "The standings (held with Tab, or shown between rounds) name each other Host's ping beside their name: in milliseconds, calm blue until it climbs, orange from {pingWarn} ms and red from {pingCritical} ms. A bot's ping always goes to the lead browser, the one that runs it; yours shows a dash, and so does a bot's while you lead. A small star marks the browser that leads: it runs the round and the bots.":
+    "Le classement (maintenu avec Tab, ou affiché entre les manches) indique à côté de chaque nom le ping vers cet Hôte : en millisecondes, bleu calme tant qu'il reste bas, orange à partir de {pingWarn} ms et rouge à partir de {pingCritical} ms. Le ping d'un bot va toujours au navigateur meneur, celui qui le dirige ; le tien affiche un tiret, comme celui d'un bot tant que tu es le meneur. Une petite étoile marque le navigateur meneur : il dirige la manche et les bots.",
   'Basic training': 'Formation de base',
   'Racer': 'Coureur',
   'Gladiator': 'Gladiateur',

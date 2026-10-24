@@ -29,6 +29,7 @@ import type { Catalog } from './i18n';
  * - The Orange President: el Presidente Naranja · United Solar States: Estados Solares Unidos
  * - Ministry of War: Ministerio de la Guerra · Presidential Games: Juegos Presidenciales
  * - Rockborn: Rockborn (a faction's name, kept) · The Sovereign: El Soberano
+ * - ping: Ping (the gamer term, kept)
  * - Nicole calls the pilot "cariño", always.
  * - Ordinals: {n}.º for all four English endings.
  * - The announcer's lines stay lower case without ¿ ¡, as the English ones: the screen
@@ -178,6 +179,8 @@ export const ES: Catalog = {
   'The battleship got away · the President wins': 'El acorazado ha escapado · gana el Presidente',
   'The battleship is coming': 'Llega el acorazado',
   '{time} s': '{time} s',
+  Ping: 'Ping',
+  '{ms} ms': '{ms} ms',
   'Lap {lap}/{laps}': 'Vuelta {lap}/{laps}',
   Out: 'Fuera',
   '{n} left': 'Quedan: {n}',
@@ -420,6 +423,9 @@ export const ES: Catalog = {
   'Lock on': 'Fija el blanco',
   Probe: 'Sonda',
   Bot: 'Bot',
+  'Lead browser: runs the round and the bots': 'Navegador líder: dirige la ronda y los bots',
+  "The standings (held with Tab, or shown between rounds) name each other Host's ping beside their name: in milliseconds, calm blue until it climbs, orange from {pingWarn} ms and red from {pingCritical} ms. A bot's ping always goes to the lead browser, the one that runs it; yours shows a dash, and so does a bot's while you lead. A small star marks the browser that leads: it runs the round and the bots.":
+    'La clasificación (mantenida con Tab, o mostrada entre rondas) indica junto a cada nombre el ping a ese Host: en milisegundos, azul tranquilo mientras se mantiene bajo, naranja a partir de {pingWarn} ms y rojo a partir de {pingCritical} ms. El ping de un bot va siempre al navegador líder, el que lo controla; el tuyo muestra un guion, igual que el de un bot mientras tú lideras. Una pequeña estrella marca el navegador líder: dirige la ronda y los bots.',
   'Basic training': 'Entrenamiento básico',
   Racer: 'Piloto de carreras',
   Gladiator: 'Gladiador',
