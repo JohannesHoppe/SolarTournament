@@ -28,7 +28,7 @@ export interface Look {
   spokes: boolean;
   /** Share of the gas giant landmark's full segment count (see world/landmarks, Landmarks.setDetail): only the giant arena's cap sphere costs enough to be worth a cheaper mesh. */
   landmark: number;
-  /** Rays the black hole's lens traces per pixel toward its source (see view/lensing): fewer leaves the bend coarser, never unbent. */
+  /** Steps the black hole's lens marches along each pixel's ray toward its source (see view/lensing): fewer leaves the bend coarser, never unbent. */
   lens: number;
 }
 

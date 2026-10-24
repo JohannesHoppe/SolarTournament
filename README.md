@@ -33,14 +33,14 @@ The game draws the same world on every device, but not with the same effort: the
 | 1 | The rocks keep their near mesh (2 000 triangles, drawn twice: for the picture and for the sun's shadows) only out to 6 of their radii; farther, the coarser far mesh (500 triangles), its relief unchanged (see above) | |
 | 2 | The near mesh only out to 3 radii; the gas giant landmark's cap (seen only in its own arena) at 128 × 48 segments instead of 256 × 96 | |
 | 3 | 1.75 device pixels per CSS pixel | |
-| 4 | Bloom at half resolution (a quarter of its pixels); the black hole's lens (seen only in its own arena) traces 4 rays per pixel instead of 6 | |
+| 4 | Bloom at half resolution (a quarter of its pixels); the black hole's lens (seen only in its own arena) marches 4 steps along each pixel's ray instead of 6 | |
 | 5 | Shadow map 2048 px | |
 | 6 | 1.5 device pixels per CSS pixel, the pad as well; the sun's shadow map (still on through rung 9) is refreshed only every other frame, not every one (`Game.updateShadowMap`): what casts it barely moves between two | **medium** |
 | 7 | Shadow map 1024 px | |
 | 8 | 1.25 device pixels per CSS pixel; the pad at 1, without its shadow | |
 | 9 | Half the particles and dust, half the belt's rocks beyond the arena; the gas giant's cap at 64 × 24 segments | |
 | 10 | No shadows | |
-| 11 | 1 device pixel per CSS pixel, every rock of the field keeps only its far mesh, a quarter of the belt, the pad drawn every second frame, the reference plane's grid only its rings; the lens down to 2 rays per pixel | **low** |
+| 11 | 1 device pixel per CSS pixel, every rock of the field keeps only its far mesh, a quarter of the belt, the pad drawn every second frame, the reference plane's grid only its rings; the lens down to 2 steps | **low** |
 | 12 | No bloom | |
 | 13 | 0.75 device pixels per CSS pixel, a third of the particles, no lacquer on the hulls (the second specular layer and the battleship's film of colors) | |
 

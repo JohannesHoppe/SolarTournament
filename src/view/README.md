@@ -17,7 +17,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `showcase.ts` | The title screen: a landing pad of gunmetal and steel with the seal inlaid in gold, the ship hovering above it, turning slowly on the spot and throwing its shadow onto it |
 | `glitch.ts` | The disturbed link: a corrupted-stream shader and the HUD's glitch |
 | `datamosh.ts` | The clone's death: its last picture rots |
-| `lensing.ts` | The black hole's gravitational lens; a cheaper picture marches fewer rays per pixel looking for its source |
+| `lensing.ts` | The black hole's gravitational lens; a cheaper picture marches fewer steps along each pixel's ray looking for its source |
 | `textures.ts` | Canvas textures: glows, sparks, smoke, and the canvas every texture drawn in code starts from; the running light of the neon trim |
 | `surfaces.ts` | The surfaces of everything built in code: worn depot paint (and where its lacquer is gone), the world ship's craters and burns, the battleship's polished armor plates, the rings' plating; texture coordinates for flat faces, the reflection map |
 | `marks.ts` | The bot or Host mark before a name, the swatch of a pilot's tint beside it, and the star that marks the lead browser in the standings |
