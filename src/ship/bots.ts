@@ -76,6 +76,8 @@ const HAND_TIME_FAST = 0.12;
 const RESPAWN_GAP = 1;
 /** Seconds ahead a bot checks its flight path for asteroids. */
 const AVOID_HORIZON = 5;
+/** The way a bot checks is a tube this many ship radii wide around its line of flight (about 50 m): its hull's sweep with room to spare. */
+const AVOID_TUBE = 3;
 /** A velocity error larger than this makes the bot turn and burn instead of fighting. */
 const BURN_THRESHOLD = 500;
 /** Angular aim error at an aim of one half (rad, about 1.1°; see aimError): at 1 km, its firing range, it scatters by about 20 m, a little more than a ship's radius (17 m). */
@@ -140,6 +142,11 @@ const jinkStep = new THREE.Vector3();
 const line = new THREE.Vector3();
 const swing = new THREE.Vector3();
 const hunt = new THREE.Vector3();
+const across = new THREE.Vector3();
+const across2 = new THREE.Vector3();
+const wayOrigin = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
+const SIDE = new THREE.Vector3(1, 0, 0);
 
 export { BOT_NAMES } from '../music/lines';
 
@@ -440,7 +447,7 @@ export class Bot {
     let danger = falling;
     if (speed > 50) {
       heading.copy(me.velocity).divideScalar(speed);
-      const hit = field.raycast(me.position, heading, speed * AVOID_HORIZON + this.ship.radius * 4, true);
+      const hit = this.wayAhead(field, heading, speed * AVOID_HORIZON + this.ship.radius * 4);
       if (hit) {
         danger ||= hit.distance < speed * AVOID_HORIZON * 0.6;
         const away = local.subVectors(me.position, hit.center);
@@ -531,6 +538,27 @@ export class Bot {
       return this.shoveKick;
     }
     return null;
+  }
+
+  /**
+   * The nearest rock, well or hull the way along `direction` (unit length) meets within `length`:
+   * the way as the hull sweeps it, a tube of AVOID_TUBE ship radii around the line of flight
+   * (its center line and four lines along its wall), so a rock the line itself only grazes counts.
+   */
+  private wayAhead(field: AsteroidField, direction: THREE.Vector3, length: number): { distance: number; center: THREE.Vector3 } | null {
+    const position = this.ship.flight.position;
+    const wall = this.ship.radius * AVOID_TUBE;
+    // two directions across the flight
+    across.crossVectors(direction, Math.abs(direction.y) < 0.9 ? UP : SIDE).normalize();
+    across2.crossVectors(direction, across);
+    let best: { distance: number; center: THREE.Vector3 } | null = null;
+    for (let i = 0; i < 5; i++) {
+      wayOrigin.copy(position);
+      if (i > 0) wayOrigin.addScaledVector(i < 3 ? across : across2, i % 2 ? wall : -wall);
+      const hit = field.raycast(wayOrigin, direction, best ? best.distance : length, true);
+      if (hit && (!best || hit.distance < best.distance)) best = hit;
+    }
+    return best;
   }
 
   /** Off the way of any ship the bot would meet soon (see KEEP_CLEAR): the wanted velocity bends away from where they would come closest. Returns the ship it gives way to most, or null. */

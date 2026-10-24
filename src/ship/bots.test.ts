@@ -111,6 +111,32 @@ describe('bots fly by the Hosts\' rules', () => {
     expect(fly(3, true)).toBe(true);
   });
 
+  it('keeps its hull clear of a rock its line of flight only just misses', () => {
+    const f = field(true);
+    // the rock's highest point along the line z = 0: the line of flight passes half a ship radius
+    // above it, clear of the rock, while the hull around the line would strike it
+    const down = at(0, -1);
+    let top = -Infinity;
+    for (let x = -12000; x <= 12000; x += 100) {
+      const hit = f.raycast(at(x, 50000), down, 100000);
+      if (hit) top = Math.max(top, 50000 - hit.distance);
+    }
+    expect(top).toBeGreaterThan(0);
+    const height = top + RADIUS / 2;
+    const me = ship('Kessler', at(-40000, height), at(1));
+    me.flight.velocity.set(3000, 0, 0);
+    expect(f.raycast(me.flight.position, at(1), 80000)).toBeNull();
+    const bot = new Bot(me, evenSkills(0.5));
+    // a probe beyond the rock, straight along the line: the bot wants to fly on along it
+    bot.lure = at(60000, height);
+    const gravity = new THREE.Vector3();
+    for (let t = 0; t < 60 && me.flight.position.x < 15000; t += STEP) {
+      me.flight.update(STEP, bot.think(t, [me], f), gravity);
+      expect(f.overlap(me.flight.position, RADIUS)).toBeNull();
+    }
+    expect(me.flight.position.x).toBeGreaterThan(15000);
+  });
+
   it('reads who hunts whom from the noses it sees, not from the other bots\' minds', () => {
     const f = field(false);
     const me = ship('Kessler', at(0), at(1));
