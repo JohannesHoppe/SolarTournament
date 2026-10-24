@@ -259,6 +259,10 @@ export class Effects {
 
 const beamGeometry = new THREE.CylinderGeometry(1, 1, 1, 8, 1, true).rotateX(Math.PI / 2).translate(0, 0, 0.5);
 const Z_AXIS = new THREE.Vector3(0, 0, 1);
+/** How far a beam's core leans from white to its shooter's tint (0 to 1), and how bright core and halo glow (times the tint). */
+const CORE_TINT = 0.85;
+const CORE_GLOW = 1.5;
+const HALO_GLOW = 2.5;
 
 /** A laser beam: bright core plus a soft halo, fading out quickly. */
 class Beam {
@@ -284,8 +288,10 @@ class Beam {
     this.mesh.position.copy(from);
     this.mesh.scale.set(1, 1, direction.length());
     this.mesh.quaternion.setFromUnitVectors(Z_AXIS, direction.normalize());
-    this.core.material.color.set(0xffffff).lerp(color, 0.25).multiplyScalar(4);
-    this.halo.material.color.copy(color).multiplyScalar(1.5);
+    // a neon tube: the core keeps the shooter's tint (bright enough to bloom, not so bright it
+    // burns out to white), the halo glows in it
+    this.core.material.color.set(0xffffff).lerp(color, CORE_TINT).multiplyScalar(CORE_GLOW);
+    this.halo.material.color.copy(color).multiplyScalar(HALO_GLOW);
     this.age = 0;
     this.mesh.visible = true;
   }
