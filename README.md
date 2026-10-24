@@ -23,7 +23,7 @@ The game draws the same world on every device, but not with the same effort: the
 
 **Rocks and ice draw few triangles; their relief is a normal map, not geometry.** A near rock has 2 000 triangles, one seen from afar 500 (`src/world/rocks.ts`; `NEAR_DETAIL`, `FAR_DETAIL`), a sliver of the 22 000-triangle shape its collisions are still measured from (see world/surface: the measured surface never changes, so every browser collides the same whatever a rock draws). The fine relief (crags, small craters) instead comes from a normal map baked once per shape (16 of them) into a small 6-face cube atlas, indexed by the direction from the rock's own center (a rock is star-shaped around it: every direction meets its surface once, so the map needs no UV unwrap and has no seams). A shader samples it directly from the mesh's own local position and turns it into world space with the object's normal matrix, exactly as it would a vertex normal; the near and far meshes, and ice (the same shapes, frozen), share the same atlas, so the fine relief looks identical at any of them. The far switch (below) only trades the coarser silhouette's few hundred triangles for fewer yet, the surface shading staying as it was.
 
-**Farther yet, a rock or an ice piece draws as a billboard** (`src/view/impostor.ts`): a camera-facing quad, at a fixed distance regardless of the ladder's rung (80 of the shape's mean radii: far enough that the switch is never seen even across a large arena), showing one of 8 pre-rendered views picked by how the shape is actually turned now. Each view is a small baked tile of color and silhouette; lit at that moment from the shape's own normal map (the same one, reused) and the real sun, so its shading tracks a solar flare instead of going stale as the shape turns. The same billboards draw almost all of the belt beyond the arena (`src/world/belt.ts`): only rocks within 1.4 × the belt's inner edge, close enough that a ship coasting past the arena's limit could still reach them, keep the real low-poly geometry; the rest of the ring, the great majority of its 480 rocks, is cheap enough as billboards (two triangles each, one draw call per shape) that the rungs below no longer need to cull it by direction.
+**Farther yet, a rock or an ice piece draws as a billboard** (`src/view/impostor.ts`): a camera-facing quad, at a fixed distance regardless of the ladder's rung (80 of the shape's mean radii: far enough that the switch is never seen even across a large arena), showing one of 8 pre-rendered views picked by how the shape is actually turned now. Each view is a small baked tile of color and silhouette; lit at that moment from the shape's own normal map (the same one, reused) and the real sun, so its shading tracks a solar flare instead of going stale as the shape turns. The same billboards draw almost all of the belt beyond the arena (`src/world/belt.ts`): only rocks within 1.4 × the belt's inner edge, close enough that a ship coasting past the arena's limit could still reach them, keep the real low-poly geometry; the rest of the ring, the great majority of its 480 rocks, is cheap enough as billboards (two triangles each, one draw call per shape) that it needs no culling by direction.
 
 | Rung | Change | Tier |
 |---|---|---|
@@ -50,28 +50,26 @@ On a phone: open the address with `?bench` (the test stage, or the dev server ov
 
 `npm run bench` runs the same in the test browser (`e2e/bench.spec.ts`); `PROFILE=pixel8` pretends to be the reference phone, a Pixel 8 held sideways with its CPU slowed to the phone's browser speed (see `e2e/README.md`); `BENCH_ONLY=quality` (or `menu`, `features`, `arenas`, `modes`, comma-separated; `&only=` on the address) runs only those sections. A feature's cost is counted in GPU time where the browser times the GPU, since the frame time snaps to the screen's refresh; the title screen's pad draws in a context of its own and is counted in frame time.
 
-**Measured triangles.** `BENCH_ONLY=quality` under the Pixel 8 profile, in the belt arena (`npm run bench`), triangles submitted per frame at each rung, before and after the rocks' low-poly meshes, their normal map and the billboards above (two runs, back to back on the same machine so only the two columns next to each other mean something; the machine was busy with other work at the time, so these GPU milliseconds are not the quiet-machine ones below, only the triangle counts are load-independent):
+**Measured triangles.** `BENCH_ONLY=quality` under the Pixel 8 profile, in the belt arena (`npm run bench`), triangles submitted per frame and GPU time at each rung (one run on a busy machine: the triangle counts do not depend on the load, the milliseconds do and are no quiet-machine figures):
 
-| Rung | Triangles before | Triangles after | GPU ms before | GPU ms after |
-|---|---|---|---|---|
-| 0 high | 1 511 288 | 528 118 | 480.9 | 283.5 |
-| 1 | 979 111 | 481 741 | 303.9 | 299.8 |
-| 2 | 735 304 | 463 394 | 261.4 | 292.9 |
-| 3 | 747 439 | 463 154 | 386.6 | 247.5 |
-| 4 | 733 354 | 463 413 | 264.8 | 203.3 |
-| 5 | 734 969 | 464 052 | 196.3 | 170.1 |
-| 6 medium | 738 199 | 467 183 | 188.2 | 161.6 |
-| 7 | 737 034 | 468 234 | 269.1 | 167.7 |
-| 8 | 742 235 | 467 598 | 279.8 | 138.1 |
-| 9 | 506 704 | 273 062 | 165.4 | 103.5 |
-| 10 | 365 248 | 250 154 | 190.2 | 97.9 |
-| 11 low | 254 417 | 138 956 | 153.6 | 78.4 |
-| 12 | 254 846 | 140 145 | 79.0 | 67.1 |
-| 13 | 252 360 | 138 998 | 71.6 | 64.4 |
+| Rung | Triangles | GPU ms |
+|---|---|---|
+| 0 high | 528 118 | 283.5 |
+| 1 | 481 741 | 299.8 |
+| 2 | 463 394 | 292.9 |
+| 3 | 463 154 | 247.5 |
+| 4 | 463 413 | 203.3 |
+| 5 | 464 052 | 170.1 |
+| 6 medium | 467 183 | 161.6 |
+| 7 | 468 234 | 167.7 |
+| 8 | 467 598 | 138.1 |
+| 9 | 273 062 | 103.5 |
+| 10 | 250 154 | 97.9 |
+| 11 low | 138 956 | 78.4 |
+| 12 | 140 145 | 67.1 |
+| 13 | 138 998 | 64.4 |
 
-Triangles drop by a third to two thirds on every rung, most where the belt and the field's near mesh used to cost most (rung 0: 65 % fewer); GPU time (noisy on a shared machine, but measured the same way both times) drops on 12 of the 14 rungs too, most at the top of the ladder. The per-feature and quiet-machine ladder tables below are from before this change and need a fresh `npm run bench` (ten minutes, a quiet machine) to replace: the rocks' "full relief" and "the belt" no longer mean what they measured then, now that relief is a normal map and most of the belt a billboard.
-
-**Measured costs (before the rocks' low-poly meshes and billboards above; kept for the other features, which did not change).** Two runs each in the test browser on an Apple M4, the machine otherwise quiet, 5 seconds per measurement; the test browser draws without a GPU (swiftshader), so the milliseconds are its own and only the costs next to each other mean something: what a feature costs here is no promise of what it costs on a phone's GPU. "Desktop" is 1280 × 720 at 1 device pixel per CSS pixel, "Pixel 8" the phone's screen held sideways (915 × 412 at 2.625, 2.6 million pixels) with its CPU speed. Cost per frame of each feature switched off (glitch and datamosh switched on), in GPU time, as a share of the frame with everything on:
+**Measured costs of the other features.** Two runs each in the test browser on an Apple M4, the machine otherwise quiet, 5 seconds per measurement, with the rocks drawn from their full 22 000-triangle shapes; a fresh `npm run bench` on a quiet machine gives the shares beside today's rocks. The test browser draws without a GPU (swiftshader), so the milliseconds are its own and only the costs next to each other mean something: what a feature costs here is no promise of what it costs on a phone's GPU. "Desktop" is 1280 × 720 at 1 device pixel per CSS pixel, "Pixel 8" the phone's screen held sideways (915 × 412 at 2.625, 2.6 million pixels) with its CPU speed. Cost per frame of each feature switched off (glitch and datamosh switched on), in GPU time, as a share of the frame with everything on:
 
 | Feature | Desktop (run 1 / run 2) | Pixel 8 (run 1 / run 2) |
 |---|---|---|
@@ -86,7 +84,7 @@ Triangles drop by a third to two thirds on every rung, most where the belt and t
 | Landmark of the gas giant / the rings / the black hole | 20 % / 7–9 % / 7–8 % | 21 % / 8–9 % / 7–11 % |
 | The black hole's lens | 13 % / 16 % | 14 % / 12 % |
 
-The desktop's rungs of resolution (3, 6, 8, 11, 13) change little there: at 1 device pixel per CSS pixel, the picture is already drawn at its lowest.
+On the desktop the rungs of resolution (3, 6, 8, 11, 13) change little: at 1 device pixel per CSS pixel, the picture is already drawn at its lowest.
 
 ## Deploy
 
