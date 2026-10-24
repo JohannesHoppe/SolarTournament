@@ -4,7 +4,7 @@ import type { Belt } from '../world/belt';
 import type { Space } from '../world/space';
 import type { Bloom } from './bloom';
 import { setParticleShare } from './effects';
-import { COMPILING, deviceHints, guessTier, Governor, LADDER, loadQuality, saveQuality, tierOf, TIER_RUNGS, type Look, type Quality, type Tier } from './quality';
+import { COMPILING, deviceHints, guessStartRung, guessTier, Governor, LADDER, loadQuality, saveQuality, tierOf, TIER_RUNGS, TOUCH_DOWN_SECONDS, TOUCH_UP_SECONDS, type Look, type Quality, type Tier } from './quality';
 import type { ReferencePlane } from './plane';
 import type { Showcase } from './showcase';
 import { setLacquer } from './surfaces';
@@ -22,6 +22,10 @@ export class Graphics {
   /** The tier the device's hints suggest (see guessTier). */
   readonly guessed: Tier;
   readonly renderer: string;
+  /** A touch screen is the main input (see device Hints): the governor steps down faster and climbs back up more cautiously (see watch). */
+  private readonly touch: boolean;
+  /** The rung the device's hints suggest it starts on (see guessStartRung): a touch device starts lower than its tier's own rung. */
+  private readonly guessedRung: number;
   rung: number;
   /** What is drawn now; the compiling knobs of the rung may still wait (see settle). */
   look: Look;
@@ -53,6 +57,8 @@ export class Graphics {
     const hints = deviceHints(renderer.getContext());
     this.renderer = hints.renderer;
     this.guessed = guessTier(hints);
+    this.touch = hints.touch;
+    this.guessedRung = guessStartRung(hints);
     this.quality = loadQuality();
     this.rung = this.startRung();
     this.look = LADDER[this.rung];
@@ -123,7 +129,7 @@ export class Graphics {
 
   private startRung(): number {
     const { choice, rung } = this.quality;
-    return choice === 'auto' ? (rung ?? TIER_RUNGS[this.guessed]) : TIER_RUNGS[choice];
+    return choice === 'auto' ? (rung ?? this.guessedRung) : TIER_RUNGS[choice];
   }
 
   private watch() {
@@ -131,7 +137,8 @@ export class Graphics {
       this.governor = null;
       return;
     }
-    this.governor = new Governor(this.rung);
+    const tuning = this.touch ? { downSeconds: TOUCH_DOWN_SECONDS, upSeconds: TOUCH_UP_SECONDS } : undefined;
+    this.governor = new Governor(this.rung, undefined, tuning);
     // the rung that held is where this device starts next time
     this.governor.stable = (rung) => {
       if (this.quality.choice !== 'auto' || this.quality.rung === rung) return;

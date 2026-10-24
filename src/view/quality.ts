@@ -102,6 +102,14 @@ export function guessTier(hints: DeviceHints): Tier {
   return 'high';
 }
 
+/** A touch device starts on the ladder's very last rung (see LADDER): a fight must never stutter, and the governor climbs back up within TOUCH_UP_SECONDS once it finds the device keeps up at a cheaper one. */
+const TOUCH_START_RUNG = LADDER.length - 1;
+
+/** The rung a device starts the ladder on before the governor has seen it play (see guessTier): a touch device starts lower yet, at TOUCH_START_RUNG, every other device at its tier's first rung. */
+export function guessStartRung(hints: DeviceHints): number {
+  return hints.touch ? TOUCH_START_RUNG : TIER_RUNGS[guessTier(hints)];
+}
+
 /** The browser's hints about its device, for guessTier. */
 export function deviceHints(gl: WebGLRenderingContext | WebGL2RenderingContext): DeviceHints {
   const debug = gl.getExtension('WEBGL_debug_renderer_info');
@@ -146,6 +154,13 @@ export const DOWN_SECONDS = 2;
 export const UP_FPS = 58;
 export const UP_SECONDS = 8;
 const HEADROOM = 0.6;
+/**
+ * A touch device (a phone or a tablet) steps down after a shorter stretch of trouble and climbs
+ * back up only after a longer stretch of calm than DOWN_SECONDS/UP_SECONDS: a fight must never
+ * stutter, and a small screen's GPU is the one most likely to struggle (see guessStartRung).
+ */
+export const TOUCH_DOWN_SECONDS = 1;
+export const TOUCH_UP_SECONDS = 14;
 /** After every change the governor waits this long (s): the new picture settles, its buffers are made. */
 export const COOLDOWN_SECONDS = 3;
 /**
@@ -160,8 +175,9 @@ const STALL = 0.25;
 
 /**
  * Watches the frame rate and moves along the ladder: down a rung when a stretch of
- * DOWN_SECONDS runs below TARGET_FPS, up a rung after UP_SECONDS at UP_FPS or above with
- * headroom to spare. Fed the real frame times; only what is drawn depends on it.
+ * DOWN_SECONDS (TOUCH_DOWN_SECONDS on a touch device) runs below TARGET_FPS, up a rung after
+ * UP_SECONDS (TOUCH_UP_SECONDS touched) at UP_FPS or above with headroom to spare. Fed the real
+ * frame times; only what is drawn depends on it.
  */
 export class Governor {
   private frames = 0;
@@ -181,6 +197,7 @@ export class Governor {
   constructor(
     public rung: number,
     private readonly last = LADDER.length - 1,
+    private readonly tuning: { downSeconds: number; upSeconds: number } = { downSeconds: DOWN_SECONDS, upSeconds: UP_SECONDS },
   ) {}
 
   /** Starts watching anew (after a pause, a change of the screen), with a moment to settle. */
@@ -208,7 +225,7 @@ export class Governor {
       this.held = -Infinity;
       this.stable(this.rung);
     }
-    if (this.seconds < DOWN_SECONDS) return null;
+    if (this.seconds < this.tuning.downSeconds) return null;
     const fps = this.frames / this.seconds;
     const spare = this.work / this.seconds < HEADROOM;
     const stretch = this.seconds;
@@ -220,7 +237,7 @@ export class Governor {
     }
     this.smooth = fps >= UP_FPS && spare ? this.smooth + stretch : 0;
     const up = this.rung - 1;
-    if (this.smooth >= UP_SECONDS && up >= 0 && (this.barred.get(up)?.until ?? 0) <= this.clock) return this.step(up);
+    if (this.smooth >= this.tuning.upSeconds && up >= 0 && (this.barred.get(up)?.until ?? 0) <= this.clock) return this.step(up);
     return null;
   }
 
