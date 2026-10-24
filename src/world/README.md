@@ -17,7 +17,7 @@ The arena a round is fought in. Everything that every browser must build alike (
 | `wrecks.ts` | The pieces a destroyed ship breaks into |
 | `arena.ts` | The arena's edge and its grid |
 | `belt.ts` | The asteroid belt beyond the arena, scenery only; close to its inner edge real low-poly rocks, the rest of the ring billboards (see view/impostor); a cheaper picture draws a share of it |
-| `landmarks.ts` | Each arena's scenery: planets, the sun, the black hole |
+| `landmarks.ts` | Each arena's scenery: planets, the sun, the black hole; the gas giant's cap at a cheaper segment count on a cheaper picture (see view/quality) |
 | `flare.ts` | The solar flare's plasma on screen: a sphere of roiling fire with filaments |
 | `space.ts` | Stars, nebula, the sun's light and shadows (heated by a solar flare; their map's size or none at all, as the picture's quality says), dust |
 

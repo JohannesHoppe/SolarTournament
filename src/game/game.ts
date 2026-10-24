@@ -1073,7 +1073,7 @@ export class Game implements OnlineGame {
     this.scene.background = new THREE.Color(0x01020a);
     this.field = new AsteroidField(assets.fieldSets);
     this.belt = new Belt(assets.belt.near, assets.belt.impostor);
-    this.graphics = new Graphics(this.renderer, this.bloom, this.space, this.field, this.belt, this.plane, () => this.resize());
+    this.graphics = new Graphics(this.renderer, this.bloom, this.space, this.field, this.belt, this.plane, this.landmarks, this.lensing, () => this.resize());
     this.effects = new Effects(assets.textures);
     // the kill cam fires the beams of its replay in effects of their own
     this.replayEffects = new Effects(assets.textures);

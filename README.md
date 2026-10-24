@@ -25,20 +25,22 @@ The game draws the same world on every device, but not with the same effort: the
 
 **Farther yet, a rock or an ice piece draws as a billboard** (`src/view/impostor.ts`): a camera-facing quad, at a fixed distance regardless of the ladder's rung (80 of the shape's mean radii: far enough that the switch is never seen even across a large arena), showing one of 8 pre-rendered views picked by how the shape is actually turned now. Each view is a small baked tile of color and silhouette; lit at that moment from the shape's own normal map (the same one, reused) and the real sun, so its shading tracks a solar flare instead of going stale as the shape turns. The same billboards draw almost all of the belt beyond the arena (`src/world/belt.ts`): only rocks within 1.4 × the belt's inner edge, close enough that a ship coasting past the arena's limit could still reach them, keep the real low-poly geometry; the rest of the ring, the great majority of its 480 rocks, is cheap enough as billboards (two triangles each, one draw call per shape) that it needs no culling by direction.
 
+**A landmark seen only in its own arena sheds detail cheaply, since it never shares a frame with the others.** The gas giant's cap (`src/world/landmarks.ts`, `Landmarks.setDetail`) is a sphere built once at three segment counts; a cheaper rung only swaps which one its mesh uses, so the saving costs nothing to apply. Its bands and storms live in the fragment shader (noise, not geometry), so the coarser sphere still shows them, only with a rounder-looking limb up close. The black hole's lens (`src/view/lensing.ts`) marches a fixed number of steps outward along each pixel's bent ray looking for what it should show; a cheaper rung marches fewer, so the bend reads a little coarser at its edge, never unbent.
+
 | Rung | Change | Tier |
 |---|---|---|
 | 0 | Everything: up to 2 device pixels per CSS pixel, bloom at full resolution, the sun's shadows in a 4096 px map, lacquered hulls, all particles and dust, the whole belt (480 rocks), the field's rocks keep their near mesh out to 12 of their radii, the title screen's pad with its shadow | **high** |
 | 1 | The rocks keep their near mesh (2 000 triangles, drawn twice: for the picture and for the sun's shadows) only out to 6 of their radii; farther, the coarser far mesh (500 triangles), its relief unchanged (see above) | |
-| 2 | The near mesh only out to 3 radii | |
+| 2 | The near mesh only out to 3 radii; the gas giant landmark's cap (seen only in its own arena) at 128 × 48 segments instead of 256 × 96 | |
 | 3 | 1.75 device pixels per CSS pixel | |
-| 4 | Bloom at half resolution (a quarter of its pixels) | |
+| 4 | Bloom at half resolution (a quarter of its pixels); the black hole's lens (seen only in its own arena) traces 4 rays per pixel instead of 6 | |
 | 5 | Shadow map 2048 px | |
 | 6 | 1.5 device pixels per CSS pixel, the pad as well; the sun's shadow map (still on through rung 9) is refreshed only every other frame, not every one (`Game.updateShadowMap`): what casts it barely moves between two | **medium** |
 | 7 | Shadow map 1024 px | |
 | 8 | 1.25 device pixels per CSS pixel; the pad at 1, without its shadow | |
-| 9 | Half the particles and dust, half the belt's rocks beyond the arena | |
+| 9 | Half the particles and dust, half the belt's rocks beyond the arena; the gas giant's cap at 64 × 24 segments | |
 | 10 | No shadows | |
-| 11 | 1 device pixel per CSS pixel, every rock of the field keeps only its far mesh, a quarter of the belt, the pad drawn every second frame, the reference plane's grid only its rings | **low** |
+| 11 | 1 device pixel per CSS pixel, every rock of the field keeps only its far mesh, a quarter of the belt, the pad drawn every second frame, the reference plane's grid only its rings; the lens down to 2 rays per pixel | **low** |
 | 12 | No bloom | |
 | 13 | 0.75 device pixels per CSS pixel, a third of the particles, no lacquer on the hulls (the second specular layer and the battleship's film of colors) | |
 
@@ -50,41 +52,41 @@ On a phone: open the address with `?bench` (the test stage, or the dev server ov
 
 `npm run bench` runs the same in the test browser (`e2e/bench.spec.ts`); `PROFILE=pixel8` pretends to be the reference phone, a Pixel 8 held sideways with its CPU slowed to the phone's browser speed (see `e2e/README.md`); `BENCH_ONLY=quality` (or `menu`, `features`, `arenas`, `modes`, comma-separated; `&only=` on the address) runs only those sections. A feature's cost is counted in GPU time where the browser times the GPU, since the frame time snaps to the screen's refresh; the title screen's pad draws in a context of its own and is counted in frame time.
 
-**Measured triangles.** `BENCH_ONLY=quality` under the Pixel 8 profile, in the belt arena (`npm run bench`), triangles submitted per frame and GPU time at each rung (one run on a busy machine: the triangle counts do not depend on the load, the milliseconds do and are no quiet-machine figures):
+**Measured triangles.** `BENCH_ONLY=quality` under the Pixel 8 profile, in the belt arena (`npm run bench`), triangles submitted per frame and GPU time at each rung (quiet machine, an Apple M4):
 
 | Rung | Triangles | GPU ms |
 |---|---|---|
-| 0 high | 528 118 | 283.5 |
-| 1 | 481 741 | 299.8 |
-| 2 | 463 394 | 292.9 |
-| 3 | 463 154 | 247.5 |
-| 4 | 463 413 | 203.3 |
-| 5 | 464 052 | 170.1 |
-| 6 medium | 467 183 | 161.6 |
-| 7 | 468 234 | 167.7 |
-| 8 | 467 598 | 138.1 |
-| 9 | 273 062 | 103.5 |
-| 10 | 250 154 | 97.9 |
-| 11 low | 138 956 | 78.4 |
-| 12 | 140 145 | 67.1 |
-| 13 | 138 998 | 64.4 |
+| 0 high | 547 089 | 200.1 |
+| 1 | 502 459 | 163.9 |
+| 2 | 484 180 | 158.0 |
+| 3 | 484 219 | 139.8 |
+| 4 | 483 947 | 116.8 |
+| 5 | 483 941 | 107.1 |
+| 6 medium | 470 804 | 87.2 |
+| 7 | 470 722 | 72.9 |
+| 8 | 470 621 | 62.4 |
+| 9 | 276 232 | 51.6 |
+| 10 | 264 175 | 47.5 |
+| 11 low | 153 595 | 33.1 |
+| 12 | 153 572 | 30.4 |
+| 13 | 153 591 | 25.7 |
 
-**Measured costs of the other features.** Two runs each in the test browser on an Apple M4, the machine otherwise quiet, 5 seconds per measurement, with the rocks drawn from their full 22 000-triangle shapes; a fresh `npm run bench` on a quiet machine gives the shares beside today's rocks. The test browser draws without a GPU (swiftshader), so the milliseconds are its own and only the costs next to each other mean something: what a feature costs here is no promise of what it costs on a phone's GPU. "Desktop" is 1280 × 720 at 1 device pixel per CSS pixel, "Pixel 8" the phone's screen held sideways (915 × 412 at 2.625, 2.6 million pixels) with its CPU speed. Cost per frame of each feature switched off (glitch and datamosh switched on), in GPU time, as a share of the frame with everything on:
+**Measured costs of the other features.** One run each in the test browser on an Apple M4, the machine otherwise quiet, 5 seconds per measurement. The test browser draws without a GPU (swiftshader), so the milliseconds are its own and only the costs next to each other mean something: what a feature costs here is no promise of what it costs on a phone's GPU. "Desktop" is 1280 × 720 at 1 device pixel per CSS pixel, "Pixel 8" the phone's screen held sideways (915 × 412 at 2.625, 2.6 million pixels) with its CPU speed. Cost per frame of each feature switched off (glitch and datamosh switched on), in GPU time, as a share of the frame with everything on:
 
-| Feature | Desktop (run 1 / run 2) | Pixel 8 (run 1 / run 2) |
+| Feature | Desktop | Pixel 8 |
 |---|---|---|
-| Shadows | 36 % / 37 % | 30 % / 30 % |
-| Half the resolution | (not measured) | 33 % / 34 % |
-| Post-processing as a whole | 25 % / 15 % | 16 % / 22 % |
-| Bloom | 19 % / 21 % | 22 % / 17 % |
-| Datamosh (while on) | 13 % / 8 % | 12 % / 13 % |
-| Glitch (while on) | 4 % / −4 % | 2 % / 4 % |
-| DOM HUD, radar, attitude, sound, particles, dust, sky, ships, wreckage, lacquer, landmark of the belt | each within ±6 % | each within ±5 % |
-| The title screen's pad (frame time, in the menu) | 25 % / 31 % | 25 % / 25 % |
-| Landmark of the gas giant / the rings / the black hole | 20 % / 7–9 % / 7–8 % | 21 % / 8–9 % / 7–11 % |
-| The black hole's lens | 13 % / 16 % | 14 % / 12 % |
+| Shadows | 17 % | 18 % |
+| Half the resolution | 39 % | 41 % |
+| Post-processing as a whole | 37 % | 34 % |
+| Bloom | 32 % | 32 % |
+| Datamosh (while on) | 22 % | 14 % |
+| Glitch (while on) | 7 % | 2 % |
+| DOM HUD, radar, attitude, sound, particles, dust, sky, ships, wreckage, lacquer, landmark of the belt | each within ±3 % | each within ±8 % |
+| The title screen's pad (frame time, in the menu) | 44 % | 38 % |
+| Landmark of the gas giant / the rings / the black hole | 25 % / 6 % / 6 % | 21 % / 12 % / 8 % |
+| The black hole's lens | 15 % | 14 % |
 
-On the desktop the rungs of resolution (3, 6, 8, 11, 13) change little: at 1 device pixel per CSS pixel, the picture is already drawn at its lowest.
+On the desktop the ladder's own resolution rungs (3, 6, 8, 11, 13) change little: at 1 device pixel per CSS pixel, the picture is already drawn at its lowest; the "Half the resolution" row above forces a cut below that floor to measure the full-screen passes' cost per pixel on their own.
 
 ## Deploy
 

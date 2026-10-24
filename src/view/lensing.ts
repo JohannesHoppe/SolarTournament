@@ -19,6 +19,8 @@ const shader = {
     /** The Einstein ring and the shadow, as shares of the screen height. */
     ring: { value: 0 },
     shadow: { value: 0 },
+    /** How many steps the ray is marched outward looking for its source (see Look.lens, view/quality): fewer leaves the bend coarser, never unbent. */
+    samples: { value: 6 },
   },
   vertexShader: /* glsl */ `
     varying vec2 vUv;
@@ -35,6 +37,7 @@ const shader = {
     uniform float aspect;
     uniform float ring;
     uniform float shadow;
+    uniform int samples;
     varying vec2 vUv;
     void main() {
       // a ship or rock in front of the hole is seen as it is
@@ -55,6 +58,7 @@ const shader = {
       // where none is found the pixel shows unbent; so nothing near is ever seen twice
       vec4 color = texture2D(tDiffuse, vUv);
       for (int i = 0; i < 6; i++) {
+        if (i >= samples) break;
         vec2 source = clamp(center + along * beta * (1.0 + 0.2 * float(i)), 0.0, 1.0);
         if (texture2D(tDepth, source).x >= holeDepth) {
           color = texture2D(tDiffuse, source);
@@ -77,6 +81,11 @@ export class Lensing {
 
   constructor() {
     this.pass.enabled = false;
+  }
+
+  /** The picture's quality (see view/quality, Look.lens): how many steps the ray marches outward for its source. */
+  setSamples(samples: number) {
+    this.pass.uniforms.samples.value = samples;
   }
 
   /**

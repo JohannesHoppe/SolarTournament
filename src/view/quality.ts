@@ -26,12 +26,16 @@ export interface Look {
   showcase: { pixelRatio: number; shadows: boolean; every: number };
   /** The reference plane's grid with its spokes, or only its rings (see ReferencePlane.setDetail). */
   spokes: boolean;
+  /** Share of the gas giant landmark's full segment count (see world/landmarks, Landmarks.setDetail): only the giant arena's cap sphere costs enough to be worth a cheaper mesh. */
+  landmark: number;
+  /** Rays the black hole's lens traces per pixel toward its source (see view/lensing): fewer leaves the bend coarser, never unbent. */
+  lens: number;
 }
 
 /** Knobs whose change compiles shaders anew: the governor turns them only where a hitch goes unseen (see Look, safe). */
 export const COMPILING: readonly (keyof Look)[] = ['shadows', 'lacquer'];
 
-const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, particles: 1, rocks: 1, belt: 1, showcase: { pixelRatio: 2, shadows: true, every: 1 }, spokes: true };
+const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, particles: 1, rocks: 1, belt: 1, showcase: { pixelRatio: 2, shadows: true, every: 1 }, spokes: true, landmark: 1, lens: 6 };
 
 /**
  * The ladder, each rung a change to the one above it: the largest saving for the least loss
@@ -41,21 +45,24 @@ const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, part
  * closer range first. Every full-screen pass costs per pixel, so the picture's resolution comes
  * down early and in small steps, with the bloom's resolution and the shadow map's edge between
  * them; the title screen's pad keeps a simpler look from the middle on. Shadows off costs a
- * shader compile and comes late; the lacquer saved nothing measurable and goes last.
+ * shader compile and comes late; the lacquer saved nothing measurable and goes last. The gas
+ * giant landmark (seen only in its own arena) sheds its segments alongside the rocks it costs
+ * about as much as; the black hole's lens (seen only in its own arena) traces fewer rays
+ * alongside the bloom, both full-screen passes of a similar cost.
  */
 const STEPS: Partial<Look>[] = [
   {},
   { rocks: 0.5 },
-  { rocks: 0.25 },
+  { rocks: 0.25, landmark: 0.5 },
   { pixelRatio: 1.75 },
-  { bloom: 0.5 },
+  { bloom: 0.5, lens: 4 },
   { shadows: 2048 },
   { pixelRatio: 1.5, showcase: { pixelRatio: 1.5, shadows: true, every: 1 } },
   { shadows: 1024 },
   { pixelRatio: 1.25, showcase: { pixelRatio: 1, shadows: false, every: 1 } },
-  { particles: 0.5, belt: 0.5 },
+  { particles: 0.5, belt: 0.5, landmark: 0.25 },
   { shadows: 0 },
-  { pixelRatio: 1, rocks: 0, belt: 0.25, showcase: { pixelRatio: 1, shadows: false, every: 2 }, spokes: false },
+  { pixelRatio: 1, rocks: 0, belt: 0.25, showcase: { pixelRatio: 1, shadows: false, every: 2 }, spokes: false, lens: 2 },
   { bloom: 0 },
   { pixelRatio: 0.75, particles: 0.35, lacquer: false },
 ];

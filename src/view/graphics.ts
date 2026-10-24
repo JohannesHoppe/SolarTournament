@@ -1,9 +1,11 @@
 import type * as THREE from 'three';
 import type { AsteroidField } from '../world/asteroids';
 import type { Belt } from '../world/belt';
+import type { Landmarks } from '../world/landmarks';
 import type { Space } from '../world/space';
 import type { Bloom } from './bloom';
 import { setParticleShare } from './effects';
+import type { Lensing } from './lensing';
 import { COMPILING, deviceHints, guessStartRung, guessTier, Governor, LADDER, loadQuality, saveQuality, tierOf, TIER_RUNGS, TOUCH_DOWN_SECONDS, TOUCH_UP_SECONDS, type Look, type Quality, type Tier } from './quality';
 import type { ReferencePlane } from './plane';
 import type { Showcase } from './showcase';
@@ -12,8 +14,8 @@ import { setLacquer } from './surfaces';
 /**
  * The picture's quality as the game draws it: the rung of the ladder (see view/quality) the
  * Host pinned in the menu or the governor found, applied to the renderer, the bloom, the sun's
- * shadows, the hulls' lacquer, the particles, the title screen's pad and the reference plane's
- * grid. A knob that compiles
+ * shadows, the hulls' lacquer, the particles, the title screen's pad, the reference plane's
+ * grid, the gas giant landmark's segments and the black hole's lens. A knob that compiles
  * shaders anew (COMPILING) waits for a moment where a hitch goes unseen: the menu, the results,
  * a dead clone; the others change at once.
  */
@@ -51,6 +53,8 @@ export class Graphics {
     private readonly field: AsteroidField,
     private readonly belt: Belt,
     private readonly plane: ReferencePlane,
+    private readonly landmarks: Landmarks,
+    private readonly lensing: Lensing,
     /** Called when the picture's resolution changes: the game sizes its buffers anew. */
     private readonly resize: () => void,
   ) {
@@ -124,6 +128,8 @@ export class Graphics {
     setParticleShare(next.particles);
     this.showcase?.setLook(next.showcase);
     this.plane.setDetail(next.spokes);
+    this.landmarks.setDetail(next.landmark);
+    this.lensing.setSamples(next.lens);
     if (next.pixelRatio !== before.pixelRatio) this.resize();
   }
 

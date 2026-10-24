@@ -36,6 +36,18 @@ const CORONA_DISTANCE = 240000;
 /** The black hole's disk: from and to (units, 300 m to 1.4 km). */
 const DISK_INNER = 6000;
 const DISK_OUTER = 28000;
+/**
+ * Segment counts the gas giant's cap is built at (width, height), from the full picture down:
+ * its bands and storms are a per-pixel pattern in the fragment shader (see gasFragment), not
+ * geometry, so the mesh only has to stay round enough that its smooth-shaded curvature does not
+ * facet; the cap itself (see GIANT_CAP) spans only a thin band of latitude, which the height
+ * count already concentrates there.
+ */
+const GIANT_SEGMENTS: readonly [width: number, height: number][] = [
+  [256, 96],
+  [128, 48],
+  [64, 24],
+];
 
 /** Smooth value noise in 3D for the shaders of planets, suns and the solar flare (visuals only, so float hashing is fine). */
 export const noise3 = /* glsl */ `
@@ -315,6 +327,10 @@ export class Landmarks {
   private readonly timed: THREE.ShaderMaterial[] = [];
   private readonly flicker: THREE.Mesh[] = [];
   private shown: ArenaId | null = null;
+  /** The gas giant's cap, and its geometry at each of GIANT_SEGMENTS, swapped by setDetail. */
+  private giantMesh!: THREE.Mesh;
+  private readonly giantCaps: THREE.BufferGeometry[] = [];
+  private giantDetail = 0;
 
   constructor() {
     this.scenes.set('rings', this.rings());
@@ -339,6 +355,14 @@ export class Landmarks {
     for (const material of this.timed) material.uniforms.time.value = time;
     // the neon of the derelict stutters now and then, as a sign on emergency power does
     for (const sign of this.flicker) (sign.material as THREE.MeshBasicMaterial).opacity = Math.random() < 0.03 ? 0.25 : 1;
+  }
+
+  /** The picture's quality (see view/quality, Look.landmark): the gas giant's cap at a share of its full segment count (see GIANT_SEGMENTS). */
+  setDetail(share: number) {
+    const tier = share >= 0.75 ? 0 : share >= 0.375 ? 1 : 2;
+    if (tier === this.giantDetail) return;
+    this.giantDetail = tier;
+    this.giantMesh.geometry = this.giantCaps[tier];
   }
 
   /**
@@ -463,9 +487,10 @@ export class Landmarks {
   private giant(): THREE.Group {
     const group = new THREE.Group();
     const well = ARENAS.find((arena) => arena.id === 'giant')!.layout.well!;
-    const cap = new THREE.SphereGeometry(well.radius, 256, 96, 0, Math.PI * 2, 0, GIANT_CAP);
+    this.giantCaps.push(...GIANT_SEGMENTS.map(([width, height]) => new THREE.SphereGeometry(well.radius, width, height, 0, Math.PI * 2, 0, GIANT_CAP)));
     const frame = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationZ(GIANT_LATITUDE - Math.PI / 2));
-    const planet = this.gas(cap, [0xead8b4, 0xb0683a, 0x6e3418, 0xffc490], frame, true);
+    const planet = this.gas(this.giantCaps[0], [0xead8b4, 0xb0683a, 0x6e3418, 0xffc490], frame, true);
+    this.giantMesh = planet;
     planet.position.copy(well.position);
     group.add(planet);
     return group;
