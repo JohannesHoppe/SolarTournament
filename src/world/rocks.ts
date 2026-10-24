@@ -297,9 +297,14 @@ export function applyRockRelief(material: THREE.MeshStandardMaterial, index: num
     shader.uniforms.rockNormalAtlas = { value: atlas };
     shader.uniforms.rockAxes = { value: axes };
     shader.uniforms.rockInset = { value: 0.5 / ATLAS_RES };
+    // an instance's own turn (the belt draws its rocks instanced) is not in normalMatrix, so it
+    // goes to the fragment as the three columns of instanceMatrix, the identity otherwise
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRockPosition;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\n\tvRockPosition = position;');
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRockPosition;\nvarying vec3 vRockTurnX;\nvarying vec3 vRockTurnY;\nvarying vec3 vRockTurnZ;')
+      .replace(
+        '#include <begin_vertex>',
+        '#include <begin_vertex>\n\tvRockPosition = position;\n#ifdef USE_INSTANCING\n\tvRockTurnX = instanceMatrix[0].xyz;\n\tvRockTurnY = instanceMatrix[1].xyz;\n\tvRockTurnZ = instanceMatrix[2].xyz;\n#else\n\tvRockTurnX = vec3( 1.0, 0.0, 0.0 );\n\tvRockTurnY = vec3( 0.0, 1.0, 0.0 );\n\tvRockTurnZ = vec3( 0.0, 0.0, 1.0 );\n#endif',
+      );
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
@@ -307,9 +312,9 @@ export function applyRockRelief(material: THREE.MeshStandardMaterial, index: num
         // in object space (ours never is: the rock's normal comes from this atlas instead), so
         // it is declared here; three.js sets it for every object regardless of a material's own
         // uniforms, by name, so no extra uniform value is needed on our side.
-        `#include <common>\nuniform mat3 normalMatrix;\nuniform sampler2D rockNormalAtlas;\nuniform vec3 rockAxes;\nuniform float rockInset;\nvarying vec3 vRockPosition;\n${ROCK_NORMAL_GLSL}`,
+        `#include <common>\nuniform mat3 normalMatrix;\nuniform sampler2D rockNormalAtlas;\nuniform vec3 rockAxes;\nuniform float rockInset;\nvarying vec3 vRockPosition;\nvarying vec3 vRockTurnX;\nvarying vec3 vRockTurnY;\nvarying vec3 vRockTurnZ;\n${ROCK_NORMAL_GLSL}`,
       )
-      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n\tnormal = normalize( normalMatrix * rockNormal( normalize( vRockPosition / rockAxes ) ) );');
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n\tnormal = normalize( normalMatrix * ( mat3( vRockTurnX, vRockTurnY, vRockTurnZ ) * rockNormal( normalize( vRockPosition / rockAxes ) ) ) );');
   };
 }
 
