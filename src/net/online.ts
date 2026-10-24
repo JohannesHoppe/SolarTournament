@@ -641,3 +641,19 @@ export class Online {
 }
 
 const round = (v: THREE.Vector3): Vec => v.toArray().map(Math.round);
+
+/**
+ * The peer a ship's ping is measured to, read from its id: a bot's id embeds the peer that runs
+ * it, always the lead browser (only the lead runs bots), a Host's id its own peer. Null for a
+ * ship this very browser runs, its own clone or, while it leads, its own bots: there is no link
+ * to oneself.
+ */
+export function pingPeerOf(shipId: string, selfId: string): string | null {
+  const peer = ownerOf(shipId);
+  return peer === selfId ? null : peer;
+}
+
+/** Whether a Host's ship (never a bot) belongs to the browser that leads the tournament: it runs the round and the bots. */
+export function isLeadHost(shipId: string, leadId: string): boolean {
+  return shipId.startsWith('p:') && ownerOf(shipId) === leadId;
+}

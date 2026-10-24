@@ -11,9 +11,10 @@ const MIN_FRAME_GAP = 1 / 64;
 const MAX_SHIPS = TOURNAMENT_SIZE + 3;
 /** Beams the kill cam keeps. */
 const MAX_BEAMS = 64;
-/** The replay shows the last WINDOW seconds before the kill at SPEED: slow motion, about three seconds long. */
+/** The replay shows the last WINDOW seconds before the kill at SPEED: slow motion, REPLAY_SECONDS long, no longer than the next clone takes to print (see RESPAWN_SECONDS), so a Host who watches it to its end waits no longer than a bot. */
 const WINDOW = 2;
-const SPEED = 0.6;
+const SPEED = 2 / 3;
+export const REPLAY_SECONDS = WINDOW / SPEED;
 /** Floats per ship and frame: position, orientation, alive. */
 const STRIDE = 8;
 

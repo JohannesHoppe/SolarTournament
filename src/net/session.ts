@@ -72,6 +72,12 @@ const MAX_FLEET_ZONE = 31;
  * round state arrives, and messages cross. A new round starts the field time over.
  */
 const ROCK_ORDER_SLACK = 1;
+/** A browser pings every peer this often (s): the scoreboard's reading is never far stale. */
+const PING_INTERVAL = 1;
+/** The reading shown is the median of a peer's last this many round trips, so one slow or lost packet does not jump it around. */
+const PING_SAMPLES = 5;
+/** Pings and pongs a peer may send per second, each: a browser pings once a second, this allows for jitter and a peer that just reconnected. */
+const MAX_PING_RATE = 4;
 
 /**
  * Round clock of the lead browser: which round is running, how many seconds are left, and the
@@ -121,7 +127,9 @@ class Budget {
  * wreck are deterministic. The lead browser (the peer
  * longest in the room that is still sending) runs the bots and the round clock and brings
  * newcomers up to date. A browser that lost the others for a while starts over as the newest
- * in the room: the others went on without it, so it takes their round and field.
+ * in the room: the others went on without it, so it takes their round and field. It also pings
+ * every peer once a second with a number it echoes back, and times the pong for the scoreboard's
+ * reading of the link's delay (see pingTo).
  *
  * Nothing that arrives is trusted: every message is checked (see validate.ts), messages about
  * a ship only count from the peer that runs it, and every kind of message has a rate limit.
@@ -214,6 +222,16 @@ export class Session {
   private readonly cheatBudget = new Budget(MAX_CHEAT_REPORTS_PER_SECOND);
   private readonly stateBudget = new Budget(STATE_RATE * 3);
   private readonly beamBudget = new Budget(MAX_HITS_PER_SECOND);
+  private readonly pingBudget = new Budget(MAX_PING_RATE);
+  private readonly pongBudget = new Budget(MAX_PING_RATE);
+  /** When every peer is next pinged (see tick). */
+  private nextPingAt = 0;
+  /** The number of the ping outstanding to each peer: a pong naming any other is stale and ignored. */
+  private readonly pingSeq = new Map<string, number>();
+  /** When the outstanding ping to each peer went out, on this browser's clock (s). */
+  private readonly pingSentAt = new Map<string, number>();
+  /** Each peer's last few round trips (ms, see PING_SAMPLES), for the median pingTo reads. */
+  private readonly pingSamples = new Map<string, number[]>();
   private synced = false;
   private left = false;
 
@@ -336,6 +354,22 @@ export class Session {
       this.lastRockAt.set(key, Math.max(last, at));
       this.guard(() => this.onRock(rock, at, round, shooter));
     });
+    transport.on('pi', (d, from) => {
+      const seq = int(d?.n, 0, MAX_COUNT);
+      if (seq === null || !this.pingBudget.spend(from)) return;
+      this.transport.send('po', { n: seq }, from);
+    });
+    transport.on('po', (d, from) => {
+      const seq = int(d?.n, 0, MAX_COUNT);
+      if (seq === null || !this.pongBudget.spend(from) || seq !== this.pingSeq.get(from)) return;
+      const sentAt = this.pingSentAt.get(from);
+      if (sentAt === undefined) return;
+      this.pingSentAt.delete(from);
+      const samples = this.pingSamples.get(from) ?? [];
+      samples.push((seconds() - sentAt) * 1000);
+      if (samples.length > PING_SAMPLES) samples.shift();
+      this.pingSamples.set(from, samples);
+    });
     transport.on('y', (d, from) => {
       // only a browser that just joined or started over takes a field, once, and only from a
       // peer that was here before it
@@ -357,8 +391,11 @@ export class Session {
     transport.onPeerLeave((peer) => {
       // join time and last word stay: a link that comes back belongs to the same peer
       this.backAt.delete(peer);
-      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.stateBudget, this.beamBudget]) budget.forget(peer);
+      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.stateBudget, this.beamBudget, this.pingBudget, this.pongBudget]) budget.forget(peer);
       for (const key of this.lastHit.keys()) if (ownerOf(key.slice(0, key.indexOf('>'))) === peer) this.lastHit.delete(key);
+      this.pingSeq.delete(peer);
+      this.pingSentAt.delete(peer);
+      this.pingSamples.delete(peer);
       if (!this.left) this.guard(() => this.onPeerLeave(peer));
     });
   }
@@ -429,6 +466,17 @@ export class Session {
   }
 
   /**
+   * The link's delay to a peer (ms): the median of its last few round trips (see PING_SAMPLES),
+   * so one slow or lost ping does not jump the reading around; null before the first pong.
+   */
+  pingTo(peer: string): number | null {
+    const samples = this.pingSamples.get(peer);
+    if (!samples?.length) return null;
+    const sorted = [...samples].sort((a, b) => a - b);
+    return sorted[Math.floor(sorted.length / 2)];
+  }
+
+  /**
    * How many peers joined before this one: 0 for the first in the room. While it settles, a
    * newcomer cannot know yet who came first and counts every peer it is connected to.
    */
@@ -472,6 +520,10 @@ export class Session {
     if (!this.justJoined && now >= this.nextReconcile) {
       this.nextReconcile = now + RECONCILE_SECONDS;
       this.reconcile();
+    }
+    if (now >= this.nextPingAt) {
+      this.nextPingAt = now + PING_INTERVAL;
+      for (const peer of this.peers) this.sendPing(peer);
     }
     // the lead changed to a peer this browser could not hear for a while: two groups that lost
     // each other meet again, and the one whose lead is not the oldest takes the other's world
@@ -582,6 +634,14 @@ export class Session {
   /** Seconds since this peer joined or last started over, reported to the others for the lead election. */
   private age() {
     return +(seconds() - this.startedAt).toFixed(3);
+  }
+
+  /** Pings a peer once (see tick): its pong times the round trip (see pingTo). A stale pong (an older number) is ignored, so only the latest ping in flight to it counts. */
+  private sendPing(peer: string) {
+    const seq = (this.pingSeq.get(peer) ?? 0) + 1;
+    this.pingSeq.set(peer, seq);
+    this.pingSentAt.set(peer, seconds());
+    this.transport.send('pi', { n: seq }, peer);
   }
 
   /**

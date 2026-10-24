@@ -1,4 +1,4 @@
-import { SatireAds } from './satire-ads';
+import { AD_SECONDS, SatireAds } from './satire-ads';
 import { t } from '../i18n/i18n';
 
 /**
@@ -12,6 +12,15 @@ export interface AdProvider {
   /** Fills the slot with one ad; resolves once it has run long enough to count as watched. */
   render(slot: HTMLElement): Promise<void>;
 }
+
+/**
+ * A clone's death takes RESPAWN_SECONDS before the next is printed; then a Host sits through
+ * the sponsor break, whose ad runs AD_SECONDS before the clone can boot. The wait is the price
+ * of dying. A bot's next clone waits as long as a Host's at the soonest, booted the moment the
+ * button shows: BOT_RESPAWN_SECONDS.
+ */
+export const RESPAWN_SECONDS = 3;
+export const BOT_RESPAWN_SECONDS = RESPAWN_SECONDS + AD_SECONDS;
 
 /** The boot button appears after this long at the latest (ms), whatever the ad does. */
 const AD_TIMEOUT_MS = 20000;

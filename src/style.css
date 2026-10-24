@@ -3756,6 +3756,26 @@ button.quiet:focus-visible {
   --shape: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><circle cx='8' cy='4.4' r='3.6'/><path d='M1 16c0-4.2 3.1-7.2 7-7.2s7 3 7 7.2z'/></svg>");
 }
 
+/* the lead browser, which runs the round and the bots: a small star before its name */
+.mark.lead {
+  --shape: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><path d='M8 1L9.6 5.7 14.7 5.8 10.7 8.9 12.1 13.7 8 10.8 3.9 13.7 5.3 8.9 1.3 5.8 6.4 5.7Z'/></svg>");
+}
+
+/* the ping to a Host's browser (a bot's, to the lead that runs it): the HUD's azure, orange and
+   red only once it is high enough to matter, numbers in the HUD's fixed-width face */
+.ping {
+  color: var(--hud);
+  font-family: var(--font-numbers);
+}
+
+.ping.warn {
+  color: var(--accent);
+}
+
+.ping.critical {
+  color: var(--danger);
+}
+
 /* the list of public tournaments: a name, who flies, and the way in */
 #tournament-list {
   display: grid;

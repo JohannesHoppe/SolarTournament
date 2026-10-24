@@ -20,6 +20,6 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | `school.ts` | The flight school: five courses, their drills and markers; the completed courses as the browser keeps them |
 | `coach.ts` | Nicole's briefings and tips in real rounds |
 | `moments.ts` | The own pilot's big moments (streaks, revenge, a knockout, …): banner, crowd and announcer |
-| `sponsors.ts`, `satire-ads.ts` | The sponsor break before a respawn, and its invented sponsors |
+| `sponsors.ts`, `satire-ads.ts` | The sponsor break before a respawn, how long a Host's and a bot's next clone takes, and the invented sponsors; `sponsors.test.ts` holds a bot to a Host's soonest wait |
 
 Every rule here is also written down in the repository's README with its numbers; a change to one changes the other in the same commit. The `*.test.ts` files test the deterministic parts (`npm test`); `courses.test.ts` flies every race course and every course of the flight school with a bot of middling skill, and the dash into cover from the cover drill's torpedo; `playability.test.ts`, `hostrace.test.ts` and `hostrace2.test.ts` fly them with a simulated Host at the mouse (see `src/test/human.ts`): what it cannot fly, no Host will; `torpedoes.test.ts` flies torpedoes against ships flying straight, breaking, jinking and dodging.

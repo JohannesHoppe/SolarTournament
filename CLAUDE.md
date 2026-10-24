@@ -196,7 +196,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/datamosh.ts` | The clone's death: its last picture loses the key frames and rots with the camera's motion and the frames' changes (a pass with its own feedback buffers) |
 | `view/textures.ts` | Canvas textures: glows, sparks, smoke |
 | `view/surfaces.ts` | Surfaces drawn on canvases from fixed seeds (color, roughness and metalness, bump): the fighters' worn depot paint, the world ship's craters and burns with embers, the battleship's polished armor plates, the rings' industrial plating, probes, torpedoes, signs; box-projected texture coordinates, the reflection map |
-| `view/marks.ts` | The marks before names: bot or Host, drawn as shapes, never as characters; the swatch of a pilot's tint |
+| `view/marks.ts` | The marks before names: bot or Host, drawn as shapes, never as characters; the swatch of a pilot's tint; the star that marks the lead browser in the standings |
 | `view/ink.ts` | What an element shows on screen: the names at the screen's edge keep clear of the HUD's pieces by it, the layout test measures by it |
 | `view/quality.ts` | The picture's quality: the ladder of looks (resolution, bloom, shadows, lacquer, particles, rock detail, the belt, the title screen's pad), the tiers low, medium and high as presets on it, the guess of a device and its starting rung (lower yet on a touch screen), the Host's choice as kept, the governor that moves along the ladder with the frame rate (faster down, more cautious up on a touch screen) |
 | `view/graphics.ts` | Applies the ladder's rung to the renderer and the scene; feeds the governor; holds a knob that compiles shaders back until a hitch goes unseen |
@@ -218,8 +218,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `music/crowd.ts` | The stadium's crowd on the broadcast: a recorded roar (CC0), looped, through overdriven loudspeakers; it swells, erupts and hushes with the show |
 | `music/voice.ts` | Loads the pre-rendered voices for the Host's language: the radio's sprite and the language's, joined (once, shared) |
 | **`net/`** | **Online tournament** |
-| `net/online.ts` | Ship ownership, what goes over the network, the lead browser's bots (a new lead adopts them) |
-| `net/session.ts` | Tournament protocol: message types, sender checks and rate limits, election of the lead browser (longest in the room and still sending; late claims lined up behind the lead, every browser checks its choice once a second against whom the others follow), the places of the tournament by join time, starting over after a lost link |
+| `net/online.ts` | Ship ownership, what goes over the network, the lead browser's bots (a new lead adopts them); the peer a ship's ping is measured to (a bot's is the lead that runs it) and whether a Host's ship belongs to the lead |
+| `net/session.ts` | Tournament protocol: message types, sender checks and rate limits, election of the lead browser (longest in the room and still sending; late claims lined up behind the lead, every browser checks its choice once a second against whom the others follow), the places of the tournament by join time, starting over after a lost link, the ping to every peer (once a second, a tiny message of its own, the median of the last few round trips) |
 | `net/room.ts` | A tournament room as its link describes it: code, name, public or private, bots or not, deathmatch, race or both |
 | `net/lobby.ts` | The lobby: public tournaments announce themselves, the list of tournaments listens |
 | `net/validate.ts` | Checks every message from other browsers before the game uses it |

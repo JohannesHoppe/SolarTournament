@@ -20,7 +20,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `lensing.ts` | The black hole's gravitational lens |
 | `textures.ts` | Canvas textures: glows, sparks, smoke, and the canvas every texture drawn in code starts from; the running light of the neon trim |
 | `surfaces.ts` | The surfaces of everything built in code: worn depot paint (and where its lacquer is gone), the world ship's craters and burns, the battleship's polished armor plates, the rings' plating; texture coordinates for flat faces, the reflection map |
-| `marks.ts` | The bot or Host mark before a name, and the swatch of a pilot's tint beside it |
+| `marks.ts` | The bot or Host mark before a name, the swatch of a pilot's tint beside it, and the star that marks the lead browser in the standings |
 | `ink.ts` | What an element shows on screen (its plate, or the text and children inside it; a fixed reference's glyph and label): the HUD keeps the names at the edge clear of it, the layout test measures by it |
 | `quality.ts` | The picture's quality: the ladder of looks from the full picture to the cheapest (resolution, bloom, shadows, lacquer, particles, rock detail, the belt, the title screen's pad), the tiers low, medium and high as presets on it, the guess of a device's tier, the Host's choice as the browser keeps it, the governor that moves along the ladder with the frame rate, the benchmark's features (tested in `quality.test.ts`) |
 | `graphics.ts` | Applies the rung of the ladder to the renderer, the bloom, the sun's shadows, the hulls' lacquer, the particles, the rocks, the belt, the title screen's pad and the reference plane's grid; feeds the governor the frame times and holds back a knob that compiles shaders until a hitch goes unseen |
