@@ -1132,8 +1132,8 @@ export const ES: Catalog = {
     '<strong>Campo Kessler.</strong> Escombros de estación en órbitas que se cruzan, todos a {kesslerOrbit} m/s: tu cobertura se mueve. El núcleo de la estación, en el centro, nunca se rompe.',
   '<strong>Gas Giant.</strong> Its pull, almost a g, drags everything towards the clouds below, and the clouds burn up whatever touches them. Never drift for long.':
     '<strong>Gigante gaseoso.</strong> Su atracción, casi una g, arrastra todo hacia las nubes de abajo, y las nubes calcinan todo lo que las toca. Nunca derives mucho rato.',
-  "<strong>Corona.</strong> In the sun's glare the radiators shed only about a third of their heat: fight from the shadows. Every {stormEvery} s a solar storm blinds the sensors for {stormLength} s.":
-    '<strong>Corona.</strong> Bajo el resplandor del sol, los radiadores solo disipan un tercio de su calor, más o menos: lucha desde las sombras. Cada {stormEvery} s una tormenta solar ciega los sensores durante {stormLength} s.',
+  "<strong>Corona.</strong> In the sun's glare the radiators shed only about half their heat: fight from the shadows. Every {stormEvery} s a solar storm blinds the sensors for {stormLength} s.":
+    '<strong>Corona.</strong> Bajo el resplandor del sol, los radiadores solo disipan más o menos la mitad de su calor: lucha desde las sombras. Cada {stormEvery} s una tormenta solar ciega los sensores durante {stormLength} s.',
   '<strong>Event Horizon.</strong> A black hole in the middle. Within about {noReturn} m no drive gets out; watch the PULL gauge and burn away early.':
     '<strong>Horizonte de sucesos.</strong> Un agujero negro en el centro. A menos de unos {noReturn} m ningún motor consigue salir; vigila el indicador TIRÓN y aléjate a fondo a tiempo.',
   '<strong>The Derelict.</strong> A broken world ship and nothing else: no rocks, only its hull to hide behind, and lasers only scorch it.':

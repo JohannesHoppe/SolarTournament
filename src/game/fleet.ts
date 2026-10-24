@@ -45,8 +45,8 @@ export const ZONE_NAMES: Record<ZoneKind, string> = { battery: msg('Battery'), d
  */
 const SIEGE_FACE = 2;
 /** Hits a part takes. */
-export const ZONE_HITS: Record<ZoneKind, number> = { battery: 48, drive: 70, reactor: 140 };
-/** A torpedo counts this many hits on every part it goes off within TORPEDO_REACH of (units, 20 m beyond the part): about a fifth of a battery. */
+export const ZONE_HITS: Record<ZoneKind, number> = { battery: 64, drive: 94, reactor: 188 };
+/** A torpedo counts this many hits on every part it goes off within TORPEDO_REACH of (units, 20 m beyond the part): about a sixth of a battery. */
 export const TORPEDO_HITS = 10;
 /** The battleship's armor plating repeats every ARMOR_TILE units (20 m); its seams lie this deep (see surfaced). */
 const ARMOR_TILE = 400;

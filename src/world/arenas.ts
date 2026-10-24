@@ -183,7 +183,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     name: msg('Corona'),
     tagline: msg('Close to the sun. Lasers barely cool in its glare, and its storms blind the sensors.'),
     layout: { key: 'corona', seed: 59, kind: 'rock', count: 30, minScale: 2.5, maxScale: 6, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800 },
-    cooling: 0.35,
+    cooling: 0.6,
     storms: true,
     sun: { size: 150000, intensity: 6, color: 0xffd7a0 },
     references: [],

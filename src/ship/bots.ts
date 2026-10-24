@@ -242,7 +242,7 @@ export class Bot {
   raceSpeed: number;
   /** Set by the game: the rings of the round, whose housings the bot steers clear of (see RING_HORIZON). */
   rings: readonly Ring[] = [];
-  /** Set by the game in a race: the ring the racer flies through next, which it comes at on its own way (see Game.approach), not steering clear of it. */
+  /** Set by the game in a race: the ring the racer flies through next, which it comes at on its own way (see Game.approach); its housings only push the bot into the opening. */
   through: Ring | null = null;
   /** Set by the game: the nearest probe, which an idle bot goes for. */
   lure: THREE.Vector3 | null = null;
@@ -472,7 +472,7 @@ export class Bot {
         if (away.lengthSq() < 1) away.set(0, 1, 0);
         desired.addScaledVector(away.normalize(), CRUISE_SPEED).addScaledVector(heading, -speed * 0.5);
       }
-      for (const ring of this.rings) if (ring !== this.through) this.clearRing(ring, speed);
+      for (const ring of this.rings) this.clearRing(ring, speed, ring === this.through);
     }
 
     error.subVectors(desired, me.velocity);
@@ -607,8 +607,12 @@ export class Bot {
     return most;
   }
 
-  /** Pushes the wanted velocity off a ring's housings that the way (along `heading` at `speed`) would meet (see RING_HORIZON). */
-  private clearRing(ring: Ring, speed: number) {
+  /**
+   * Pushes the wanted velocity off a ring's housings that the way (along `heading` at `speed`)
+   * would meet (see RING_HORIZON): into the opening for the ring a racer flies `through`, and for
+   * any other where the way meets the inner quarter of the housings, else out past them.
+   */
+  private clearRing(ring: Ring, speed: number, through: boolean) {
     const me = this.ship.flight;
     const toward = heading.dot(ring.facing);
     if (Math.abs(toward) < 0.05) return;
@@ -620,8 +624,7 @@ export class Bot {
     const { inner, outer } = ringRim(ring.radius);
     const margin = this.ship.radius * RING_MARGIN;
     if (out < inner - margin || out > outer + margin) return;
-    // nearer the opening: through it; else out past the struts
-    const inward = out < inner + (outer - inner) / 4;
+    const inward = through || out < inner + (outer - inner) / 4;
     desired.addScaledVector(cross.divideScalar(Math.max(out, 1)), (inward ? -1 : 1) * CRUISE_SPEED * (1 - time / RING_HORIZON));
   }
 
