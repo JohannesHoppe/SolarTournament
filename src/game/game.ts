@@ -39,8 +39,7 @@ import { Space, SUN_DIRECTION } from '../world/space';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
-import { SponsorBreak } from './sponsors';
-import { AD_SECONDS } from './satire-ads';
+import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
 import { ARENAS, arenaById, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
@@ -301,13 +300,6 @@ const KILL_POINTS = 500;
  * reason to get out of the blast radius fast.
  */
 const NOVA_KILL_CREDIT = 2;
-/**
- * A clone's death takes RESPAWN_SECONDS before the next is printed; then a Host sits through
- * the sponsor break, whose ad runs AD_SECONDS before the clone can boot. A bot's next clone
- * waits as long as a Host's could at the soonest: BOT_RESPAWN_SECONDS.
- */
-const RESPAWN_SECONDS = 3;
-const BOT_RESPAWN_SECONDS = RESPAWN_SECONDS + AD_SECONDS;
 /** Each death of the Host by an enemy raises the bots' ease (see Bot.ease) by this much in a solo round; a kill by the Host lowers it by KILL_EASE. */
 const DEATH_EASE = 0.35;
 const KILL_EASE = 0.1;
