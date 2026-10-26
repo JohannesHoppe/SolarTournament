@@ -6,7 +6,7 @@ import type { Space } from '../world/space';
 import type { Bloom } from './bloom';
 import { setParticleShare } from './effects';
 import type { Lensing } from './lensing';
-import { COMPILING, deviceHints, guessStartRung, guessTier, Governor, LADDER, loadQuality, saveQuality, tierOf, TIER_RUNGS, TOUCH_DOWN_SECONDS, TOUCH_UP_SECONDS, type Look, type Quality, type Tier } from './quality';
+import { COMPILING, deviceHints, guessStartRung, guessTier, Governors, LADDER, loadQuality, saveQuality, tierOf, TIER_RUNGS, TOUCH_DOWN_SECONDS, TOUCH_UP_SECONDS, type Look, type Quality, type Scene, type Tier } from './quality';
 import type { ReferencePlane } from './plane';
 import type { Showcase } from './showcase';
 import { setLacquer } from './surfaces';
@@ -37,7 +37,7 @@ export class Graphics {
   hold = false;
   /** Compiling knobs of the rung wait for a safe moment. */
   private waiting = false;
-  private governor: Governor | null = null;
+  private governor: Governors | null = null;
   private showcase: Showcase | null = null;
   /** The frame rate (frames/s) and the frame's own work (ms) as last measured, for the overlays. */
   fps = 0;
@@ -75,9 +75,9 @@ export class Graphics {
     return Math.min(window.devicePixelRatio, this.look.pixelRatio);
   }
 
-  /** The tier the menu shows: the one chosen, or the one the governor is on. */
+  /** The tier the menu shows: the one chosen, or the one the governor is on in a round. */
   get tier(): Tier {
-    return this.quality.choice === 'auto' ? tierOf(this.rung) : this.quality.choice;
+    return this.quality.choice === 'auto' ? tierOf(this.governor?.round ?? this.rung) : this.quality.choice;
   }
 
   /** The title screen's pad, once the menu built it. */
@@ -96,14 +96,16 @@ export class Graphics {
   }
 
   /**
-   * One frame: `dt` seconds since the last, `busy` seconds of the frame's own work. `safe`
-   * says whether a hitch would go unseen now (see Graphics).
+   * One frame: `dt` seconds since the last, `busy` seconds of the frame's own work, drawn in
+   * the menu or a running round (`scene`, see Governors). `safe` says whether a hitch would go
+   * unseen now (see Graphics); so does the frame the screen changes on.
    */
-  frame(dt: number, busy: number, safe: boolean) {
+  frame(dt: number, busy: number, safe: boolean, scene: Scene) {
     this.measure(dt, busy);
-    const rung = this.hold ? null : (this.governor?.sample(dt, busy) ?? null);
+    const switched = !this.hold && !!this.governor && this.governor.scene !== scene;
+    const rung = this.hold ? null : (this.governor?.sample(dt, busy, scene) ?? null);
     if (rung !== null) this.rung = rung;
-    if (rung !== null || (safe && this.waiting)) this.apply(safe);
+    if (rung !== null || (safe && this.waiting)) this.apply(safe || switched);
   }
 
   /** Starts the governor's watch anew: after a pause, a hidden tab, a change of screen. */
@@ -144,8 +146,8 @@ export class Graphics {
       return;
     }
     const tuning = this.touch ? { downSeconds: TOUCH_DOWN_SECONDS, upSeconds: TOUCH_UP_SECONDS } : undefined;
-    this.governor = new Governor(this.rung, undefined, tuning);
-    // the rung that held is where this device starts next time
+    this.governor = new Governors(this.rung, tuning, this.governor?.scene);
+    // the rung that held in a round is where this device starts next time
     this.governor.stable = (rung) => {
       if (this.quality.choice !== 'auto' || this.quality.rung === rung) return;
       this.quality = { choice: 'auto', rung };

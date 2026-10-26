@@ -2994,10 +2994,10 @@ export class Game implements OnlineGame {
     this.timer.update();
     const drawn = this.draw();
     this.lastFrameMs = performance.now() - began;
-    // the governor watches the frame rate where the picture moves: the menu and a running round
+    // the governor watches the frame rate where the picture moves: the menu and a running round, each on a rung of its own
     if (drawn && (this.state === 'menu' || this.state === 'playing')) {
       const safe = this.state !== 'playing' || !this.me?.alive || this.sponsors.visible;
-      this.graphics.frame(this.timer.getDelta(), this.lastFrameMs / 1000, safe);
+      this.graphics.frame(this.timer.getDelta(), this.lastFrameMs / 1000, safe, this.state === 'playing' ? 'round' : 'menu');
     } else {
       this.graphics.pause();
     }
