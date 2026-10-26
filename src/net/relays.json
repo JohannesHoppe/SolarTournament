@@ -1,5 +1,5 @@
 {
-  "updated": "2026-10-23",
+  "updated": "2026-10-26",
   "relays": [
     "wss://0x-nostr-relay.fly.dev",
     "wss://nostr.chaima.info",
@@ -8,10 +8,10 @@
     "wss://relay.bullishbounty.com",
     "wss://relay.decentnewsroom.com",
     "wss://relay.degmods.com",
-    "wss://relay.grigic.org",
     "wss://relay.nearhood.co.uk",
     "wss://relay.nostr.com",
     "wss://relay.piazza.today",
-    "wss://relay.qstr.app"
+    "wss://relay.qstr.app",
+    "wss://top.testrelay.top"
   ]
 }
