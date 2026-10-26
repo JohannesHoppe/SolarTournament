@@ -4,7 +4,8 @@ The ships and who flies them. Human and alien interceptor (and the Sovereign) fl
 
 | File | What it does |
 |---|---|
-| `ship.ts` | A ship: its body (an interceptor's mass, see world/bodies), hull, hit zones, holes and decompression, laser heat, the clone's g-force strain, drive animation; how one ship's nose lies on another, as the lock warning and the bots read it |
+| `ship.ts` | A ship: its body (an interceptor's mass, see world/bodies), hull, hit zones, holes and decompression, laser heat, the clone's g-force strain, drive animation; how one ship's nose lies on another, as the lock warning and the bots read it; its state over the network, and how a new lead adopts a bot |
+| `ship.test.ts` | A bot adopted by a new lead flies on with the torpedoes its last state told of; the count goes out with the state whenever it changes |
 | `flight.ts` | The Newtonian flight model and its flight computer (`steer()`), and path steering, the autopilot's way of flying: steering moves a course in the world, and drive and thrusters bring the flight onto it at every speed |
 | `flight.test.ts` | Path steering with realistic input (`src/test/cockpit.ts`): the pointer held off center, a hand sweeping it, a turn about at 150 m/s, the autopilot taking over from free drift, switching modes in a turn, gravity, a steady turn and race bends at full speed, the nose at rest; how fast the flight comes onto the course and how far it swings past; a recorded flight replaying the same |
 | `computer.ts` | The own ship's flight computer besides path steering: the upright hold, the brake to rest, the aim assist; the game and the simulated Host of the tests fly with it |

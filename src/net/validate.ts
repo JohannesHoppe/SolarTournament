@@ -39,6 +39,8 @@ const MAX_ROCKS = 1200;
 /** Probes in flight at once, and the seconds a probe drifts at most (see game/items). */
 const MAX_PROBES = 64;
 const MAX_PROBE_SECONDS = 200;
+/** Torpedoes a clone holds: its load with every tube, and two from each probe it took, far below this. */
+const MAX_TORPEDOES = 99;
 /** Lists of ids (the probes taken in a round: one every 25 s and the dead clones' ones) stay below this. */
 const MAX_IDS = 200;
 /** The arena never holds more pieces of wreckage than this (MAX_WRECKS in world/wrecks, with room). */
@@ -91,7 +93,7 @@ export function cleanName(x: unknown, max = MAX_NAME): string {
 /** A ship's state; name, type, score, kills, deaths and race progress come all together or not at all (see ShipState). */
 export function shipState(x: unknown): ShipState | null {
   if (!isRecord(x)) return null;
-  const slowKeys = ['n', 'k', 's', 'ki', 'de', 'g', 'fi', 'it', 'lo', 'co'] as const;
+  const slowKeys = ['n', 'k', 's', 'ki', 'de', 'g', 'fi', 'it', 'lo', 'co', 'to'] as const;
   const present = slowKeys.filter((key) => key in x).length;
   if (present !== 0 && present !== slowKeys.length) return null;
   const slow =
@@ -109,6 +111,7 @@ export function shipState(x: unknown): ShipState | null {
           lo: int(x.lo, 0, 15),
           // a Host's tint is an entry of the palette, never a color of its own
           co: int(x.co, 0, TINTS.length - 1),
+          to: int(x.to, 0, MAX_TORPEDOES),
         };
   const state = complete<ShipState>({
     id: id(x.id),
