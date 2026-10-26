@@ -375,6 +375,12 @@ export class Input {
   private onKey(e: KeyboardEvent, down: boolean) {
     // releasing a key always counts, wherever the focus is, so no key stays held
     if (!down) this.keys.delete(e.code);
+    // macOS sends no keyup for a key let go while Command (Meta) is held: around Command every
+    // key counts as let go, and a key pressed with it is a shortcut of the system, not the game's
+    if (e.metaKey || e.code === 'MetaLeft' || e.code === 'MetaRight') {
+      for (const code of this.keys) if (!MODIFIERS.has(code)) this.keys.delete(code);
+      if (down) return;
+    }
     // the Enter that commits an input method's composition only ends the composition
     if (e.isComposing || e.keyCode === 229) return;
     // a slider (the radio's volume) takes no typing: the game's keys still fly the ship
@@ -410,6 +416,9 @@ export class Input {
 }
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+
+/** The modifier keys: they stay held around a press of Command (see Input.onKey). */
+const MODIFIERS = new Set(['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight']);
 
 /** Letters of the keyboard layout in use, by physical key; empty where the browser does not tell. */
 const layout = new Map<string, string>();
