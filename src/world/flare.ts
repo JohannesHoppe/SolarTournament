@@ -27,7 +27,8 @@ const fragment = /* glsl */ `
     color = mix(color, vec3(1.0, 0.9, 0.7), filaments * 0.8);
     float facing = abs(dot(normalize(vNormal), normalize(vView)));
     // seen up close the sphere fills the sky, nearly all of it at a slant: only its very rim glows
-    float edge = pow(1.0 - facing, 6.0);
+    // clamped: rounding can carry facing a hair over 1, and pow() of a negative base is undefined
+    float edge = pow(max(1.0 - facing, 0.0), 6.0);
     float glow = strength * (0.2 + 0.6 * warp + 0.5 * filaments) * (0.6 + 0.8 * edge);
     gl_FragColor = vec4(color * glow * 1.3, 1.0);
   }

@@ -66,7 +66,9 @@ const shader = {
         }
       }
       // the light that grazes the shadow piles up into a thin bright ring
-      float photon = exp(-pow((theta - shadow * 1.05) / (shadow * 0.08 + 0.0005), 2.0));
+      // squared by hand: GLSL ES leaves pow() of a negative base undefined (NaN on some GPUs)
+      float ring = (theta - shadow * 1.05) / (shadow * 0.08 + 0.0005);
+      float photon = exp(-ring * ring);
       gl_FragColor = color + vec4(vec3(1.0, 0.75, 0.45) * photon * 0.8, 0.0);
     }
   `,

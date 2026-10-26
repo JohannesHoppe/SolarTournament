@@ -180,7 +180,9 @@ const gasFragment = /* glsl */ `
     // daylight stays below the bloom's threshold, so the clouds never glow
     vec3 lit = color * (0.03 + 0.95 * day);
     // the terminator glows: sunlight scattered red through the upper air
-    lit += vec3(1.0, 0.45, 0.2) * exp(-pow(light * 7.0, 2.0)) * 0.18;
+    // squared by hand: GLSL ES leaves pow() of a negative base (the night side) undefined
+    float dusk = light * 7.0;
+    lit += vec3(1.0, 0.45, 0.2) * exp(-dusk * dusk) * 0.18;
     if (storms > 0.0) {
       // lightning flickering in the night side's storms
       vec3 cells = q * 260.0;
