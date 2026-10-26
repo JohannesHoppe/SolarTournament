@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { FlightModel, MAIN_THRUST, MAX_SPEED, OVERDRIVE_PUSH } from '../ship/flight';
-import { HOOK_PULL, HOOK_RANGE, pullOn } from './hook';
+import { HOOK_PULL, HOOK_RANGE, keepsHold, pullOn } from './hook';
 import { HOOK_FLING, HOOK_STANDOFF } from './school';
 import { SAFE_IMPACT } from '../ship/impact';
 import { IMMOVABLE, MASS, type Body } from '../world/bodies';
@@ -182,4 +182,17 @@ describe('the hook', () => {
       expect(flight.velocity.length()).toBeGreaterThan(HOOK_FLING);
     });
   }
+});
+
+describe('two hooks on one probe or torpedo', () => {
+  it('leave it with exactly one ship on every browser: each browser keeps or yields it alike', () => {
+    const ships = ['p:a1', 'p:zz', 'b:lead:0', 'b:lead:3'];
+    for (const mine of ships) {
+      for (const theirs of ships) {
+        if (mine === theirs) continue;
+        // here the own ship holds it and the other claims it; there the other way round
+        expect(keepsHold(mine, theirs)).not.toBe(keepsHold(theirs, mine));
+      }
+    }
+  });
 });

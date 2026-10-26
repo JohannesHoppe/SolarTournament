@@ -137,6 +137,13 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
 export const flightTime = (distance: number) => distance / HOOK_SPEED;
 
 /**
+ * Two hooks bit the same probe or torpedo at once, on two browsers: whether the ship that holds
+ * it here keeps it against the one another browser says took it. The lower id keeps it, so
+ * every browser comes to the same holder, and exactly one browser is in charge of a torpedo.
+ */
+export const keepsHold = (holder: string, claimant: string) => holder < claimant;
+
+/**
  * The winch's force gives a ship HOOK_PULL, and pulls both ends of its cable alike: a body
  * lighter than a ship is pulled harder, by the ship's mass over its own, but at most
  * WINCH_LIGHT times HOOK_PULL (32 g, a core's: the cable comes in no faster), and then the

@@ -67,6 +67,14 @@ export type RoomMode = RoundMode | 'mixed';
 /** Every mode, in the order a mixed room plays them. */
 export const ROUND_MODES: readonly RoundMode[] = ['deathmatch', 'race', 'survival', 'flag', 'fleet'];
 
+/**
+ * Whether a round takes `start` (on the round's real-time clock) as its start: a solo round
+ * always does (a pause or a skipped intro moves it); online a round's start, once `known`,
+ * moves only by up to `snap` (the jitter the lead's clock is smoothed by), so an end the lead
+ * brings forward never moves the race's time or the probes' schedule.
+ */
+export const takesStart = (online: boolean, known: number | null, start: number, snap: number) => !online || known === null || Math.abs(start - known) <= snap;
+
 /** The mode of a round: a mixed room starts with a deathmatch and then plays every mode in turn. */
 export const modeOfRound = (mode: RoomMode, round: number): RoundMode => (mode === 'mixed' ? ROUND_MODES[round % ROUND_MODES.length] : mode);
 

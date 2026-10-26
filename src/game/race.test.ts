@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BOOST_RADIUS, Course, GATE_RADIUS, GATES, modeOfRound, ROUND_MODES } from './race';
+import { BOOST_RADIUS, Course, GATE_RADIUS, GATES, modeOfRound, ROUND_MODES, takesStart } from './race';
 import { ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
 import { MAX_SPEED, turnRadius } from '../ship/flight';
@@ -67,5 +67,20 @@ describe('the mode of a round', () => {
     expect(turns[0]).toBe('deathmatch');
     expect(new Set(turns)).toEqual(new Set(ROUND_MODES));
     expect(modeOfRound('mixed', ROUND_MODES.length)).toBe('deathmatch');
+  });
+});
+
+describe('the start of a round', () => {
+  it('online, is kept once known: the lead smooths it by a jitter, but an end it brings forward never moves it', () => {
+    // the first clock of a round names its start
+    expect(takesStart(true, null, 100, 0.25)).toBe(true);
+    expect(takesStart(true, 100, 100.1, 0.25)).toBe(true);
+    // a race all finished, a side that won: the end comes 200 s sooner, the start stays
+    expect(takesStart(true, 100, -100, 0.25)).toBe(false);
+    expect(takesStart(true, 100, 130, 0.25)).toBe(false);
+  });
+
+  it('solo, follows the end: a pause or a skipped intro moves both', () => {
+    expect(takesStart(false, 100, 160, 0.25)).toBe(true);
   });
 });
