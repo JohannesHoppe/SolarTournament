@@ -8,6 +8,7 @@ import { touchRing } from '../world/gates';
 import { bounceOff, bump } from '../ship/impact';
 import { MASS, share, type Body } from '../world/bodies';
 import { Cables, HOOK_RANGE, pullOn, type Mark } from './hook';
+import { ringCrossing } from './race';
 import { sponsorSigns } from './satire-ads';
 import { msg } from '../i18n/i18n';
 
@@ -332,13 +333,7 @@ export class Flags {
 
   /** The core passed through the opening of the ring of `side`'s base since the frame before (either way). */
   private through(side: number, core: Core): boolean {
-    const base = this.bases[side];
-    const facing = this.facings[side];
-    const before = crossing.subVectors(core.previous, base).dot(facing);
-    const after = crossing.subVectors(core.position, base).dot(facing);
-    if (before === after || before * after > 0) return false;
-    crossing.lerpVectors(core.previous, core.position, before / (before - after)).sub(base);
-    return crossing.length() < BASE_RADIUS;
+    return ringCrossing(this.bases[side], this.facings[side], BASE_RADIUS, core.previous, core.position) !== null;
   }
 
   /**
