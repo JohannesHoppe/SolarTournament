@@ -1,4 +1,12 @@
 type Collection = ReturnType<(typeof import('nipplejs'))['create']>;
+type StickName = 'turn' | 'push';
+
+/** The two sticks, each in its zone `#touch-<name>`: turning fixed in its middle, the thrusters under the thumb. */
+const STICKS: readonly StickName[] = ['turn', 'push'];
+const STICK_LOOK = {
+  turn: { mode: 'static', position: { left: '50%', top: '50%' }, color: '#ff9d00', size: 120 },
+  push: { mode: 'dynamic', color: '#3fd0ff', size: 110 },
+} as const;
 
 /**
  * Touch controls for phones and tablets, shown on touch devices and hidden as soon as a key
@@ -17,7 +25,7 @@ export class TouchControls {
   flip = false;
   hook = false;
 
-  private sticks: Collection[] = [];
+  private readonly sticks: Partial<Record<StickName, Collection>> = {};
   private loading: Promise<void> | null = null;
 
   /** `onAction` hears the buttons that act at a tap: pause, autopilot, overdrive, torpedo. */
@@ -53,8 +61,18 @@ export class TouchControls {
       if (document.visibilityState === 'hidden') this.destroySticks();
       else if (this.active) void this.createSticks();
     });
-    document.addEventListener('touchcancel', () => {
-      this.destroySticks();
+    // a cancelled touch rebuilds only the stick it held: a finger on the other stick or on a
+    // button holds on (a button hears its own pointercancel, see hold)
+    document.addEventListener('touchcancel', (e) => {
+      for (const name of STICKS) {
+        const zone = document.getElementById(`touch-${name}`)!;
+        let held = false;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+          const target = e.changedTouches[i].target;
+          held ||= target instanceof Node && zone.contains(target);
+        }
+        if (held) this.destroyStick(name);
+      }
       if (this.active) void this.createSticks();
     });
   }
@@ -69,28 +87,19 @@ export class TouchControls {
     else this.release();
   }
 
+  /** Builds the sticks not there yet (both at first, or the one a cancelled touch took down). */
   private createSticks(): Promise<void> {
-    if (this.sticks.length) return Promise.resolve();
+    if (this.sticks.turn && this.sticks.push) return Promise.resolve();
     this.loading ??= import('nipplejs').then(({ default: nipplejs }) => {
       this.loading = null;
-      const turn = nipplejs.create({
-        zone: document.getElementById('touch-turn')!,
-        mode: 'static',
-        position: { left: '50%', top: '50%' },
-        color: '#ff9d00',
-        size: 120,
-      });
-      turn.on('move', (e) => Object.assign(this.turn, quantize(e.data.vector)));
-      turn.on('end', () => Object.assign(this.turn, { x: 0, y: 0 }));
-      const push = nipplejs.create({
-        zone: document.getElementById('touch-push')!,
-        mode: 'dynamic',
-        color: '#3fd0ff',
-        size: 110,
-      });
-      push.on('move', (e) => Object.assign(this.push, quantize(e.data.vector)));
-      push.on('end', () => Object.assign(this.push, { x: 0, y: 0 }));
-      this.sticks = [turn, push];
+      for (const name of STICKS) {
+        if (this.sticks[name]) continue;
+        const stick = nipplejs.create({ zone: document.getElementById(`touch-${name}`)!, ...STICK_LOOK[name] });
+        const axes = this[name];
+        stick.on('move', (e) => Object.assign(axes, quantize(e.data.vector)));
+        stick.on('end', () => Object.assign(axes, { x: 0, y: 0 }));
+        this.sticks[name] = stick;
+      }
     });
     // a chunk that failed to load (a dropped connection) is asked for again next time
     this.loading = this.loading.catch((error) => {
@@ -101,15 +110,19 @@ export class TouchControls {
   }
 
   private destroySticks() {
-    for (const stick of this.sticks) {
-      try {
-        stick.destroy();
-      } catch {
-        // already gone
-      }
-    }
-    this.sticks = [];
+    for (const name of STICKS) this.destroyStick(name);
     this.release();
+  }
+
+  /** Takes one stick down and lets go of what it held. */
+  private destroyStick(name: StickName) {
+    try {
+      this.sticks[name]?.destroy();
+    } catch {
+      // already gone
+    }
+    delete this.sticks[name];
+    Object.assign(this[name], { x: 0, y: 0 });
   }
 
   /** Lets go of everything, e.g. when the touch UI hides. */
