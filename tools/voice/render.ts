@@ -11,7 +11,7 @@
  * Host's language.
  *
  * The sprites are not kept in the repository: `npm run build` and `npm run dev` render them into
- * public/assets/voice/ (ffmpeg comes with the ffmpeg-static package), and only when the lines,
+ * public/assets/voice/ (with a pinned ffmpeg, see ffmpeg.ts), and only when the lines,
  * their translations, Nicole's clones, this tool or the speech engines have changed since the
  * last time. Sprites, Kokoro model and clones are kept in a build cache (see cacheRoot), so a
  * fresh checkout copies sprites rendered before instead of rendering them.
@@ -19,11 +19,11 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { createRequire } from 'node:module';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { allLines, clipKey, phraseKey, phrases, words, type Language } from '../../src/music/lines.ts';
+import { ffmpegBinary, ffmpegHash } from './ffmpeg.ts';
 import { CATALOGS, cloneAudioName, CLONED, cloneKey, COMPUTER_VOICE, nicoleLines, releaseUrl, type Cloned } from './nicole.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -45,8 +45,8 @@ const REGIME: Record<'en' | 'de', Espeak> = {
 /** The announcer talks fast and lively, in every language with the same voice variant. */
 const ANNOUNCER = { rate: 170, pitch: 45, range: 60 };
 const ANNOUNCER_LANGUAGE: Record<Locale, string> = { en: 'en-us', de: 'de', es: 'es', fr: 'fr' };
-/** Every package whose version changes what the sprites sound like: the speech engines, Kokoro's phonemizer and runtime, the encoder. */
-const ENGINES = ['kokoro-js', 'phonemizer', '@huggingface/transformers', 'onnxruntime-node', '@echogarden/espeak-ng-emscripten', 'ffmpeg-static'];
+/** Every package whose version changes what the sprites sound like: the speech engines, Kokoro's phonemizer and runtime (the encoder, ffmpeg, by its pinned hash). */
+const ENGINES = ['kokoro-js', 'phonemizer', '@huggingface/transformers', 'onnxruntime-node', '@echogarden/espeak-ng-emscripten'];
 
 interface Worker {
   set_voice(voice: string): void;
@@ -75,9 +75,24 @@ const tryCache = (action: () => void) => {
   }
 };
 
+/**
+ * A store of clones (its index or its audio) that could not be had: the sprites speak its lines
+ * without it, keep no stamp and go into no cache, so the next build tries again. A build for the
+ * site (CI, as Cloudflare Pages and GitHub Actions set it) stops instead, so the site never goes
+ * out without Nicole's clones.
+ */
+let cloneMissed = false;
+const building = Boolean(process.env.CI || process.env.CF_PAGES);
+function missClones(locale: Cloned, reason: string) {
+  const message = `Nicole's ${locale} clones not used (${reason})`;
+  if (building) throw new Error(`${message}; a build for the site does not go out without them`);
+  console.warn(message);
+  cloneMissed = true;
+}
+
 // Nicole cloned into the other languages (see README.md): the index of each language's store
 // from the release, or the copy the cache kept of the last one; a line without a clone there
-// (new, or the store out of reach) she speaks as Kokoro does
+// (new, not cloned yet) she speaks as Kokoro does
 type CloneIndex = { sampleRate: number; audio: string; clips: Record<string, [number, number]> };
 const clonesCache = join(cacheRoot, 'clones');
 async function cloneIndex(locale: Cloned): Promise<CloneIndex | null> {
@@ -86,14 +101,20 @@ async function cloneIndex(locale: Cloned): Promise<CloneIndex | null> {
     const answer = await fetch(releaseUrl(`nicole-${locale}.json`), { signal: AbortSignal.timeout(20000) });
     if (!answer.ok) throw new Error(`HTTP ${answer.status}`);
     const text = await answer.text();
+    const index = JSON.parse(text) as CloneIndex;
     tryCache(() => {
       mkdirSync(clonesCache, { recursive: true });
       writeFileSync(copy, text);
     });
-    return JSON.parse(text) as CloneIndex;
+    return index;
   } catch (error) {
-    console.warn(`Nicole's ${locale} clones not reachable (${(error as Error).message})${existsSync(copy) ? ', the cached ones are used' : ''}`);
-    return existsSync(copy) ? (JSON.parse(readFileSync(copy, 'utf8')) as CloneIndex) : null;
+    const reason = `index not reachable: ${(error as Error).message}`;
+    if (existsSync(copy)) {
+      console.warn(`Nicole's ${locale} clones: ${reason}, the cached index is used`);
+      return JSON.parse(readFileSync(copy, 'utf8')) as CloneIndex;
+    }
+    missClones(locale, reason);
+    return null;
   }
 }
 const clones = Object.fromEntries(await Promise.all(CLONED.map(async (locale) => [locale, await cloneIndex(locale)] as const))) as Record<Cloned, CloneIndex | null>;
@@ -102,28 +123,36 @@ const clones = Object.fromEntries(await Promise.all(CLONED.map(async (locale) =>
 // their translations, Nicole's clones, this tool (with the model revision) and the engines'
 // versions; a fresh checkout without cached sprites renders them
 const packageVersion = (name: string) => (JSON.parse(readFileSync(join(root, 'node_modules', name, 'package.json'), 'utf8')) as { version: string }).version;
-const hash = createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).update(readFileSync(join(root, 'tools/voice/nicole.ts'))).update(ENGINES.map(packageVersion).join());
+const hash = createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).update(readFileSync(join(root, 'tools/voice/nicole.ts'))).update(ENGINES.map(packageVersion).join()).update(ffmpegHash() ?? 'no ffmpeg');
 hash.update(readFileSync(join(root, 'src/music/lines.ts')));
 // of the catalogs only what is spoken: a text of the screen never renders the voice again
 for (const locale of CLONED) for (const line of [...allLines('mod'), ...allLines('sys')]) hash.update(`${line}\u0000${CATALOGS[locale][line] ?? ''}\u0000`);
 for (const locale of CLONED) hash.update(clones[locale]?.audio ?? '-');
 const inputs = hash.digest('hex').slice(0, 12);
 const upToDate = SPRITES.every((sprite) => existsSync(manifest(sprite)) && (JSON.parse(readFileSync(manifest(sprite), 'utf8')) as { inputs?: string }).inputs === inputs);
-if (upToDate) {
+// with a store missed, the key cannot tell what the sprites should hold: neither the stamped
+// sprites nor a cached render are trusted
+if (upToDate && !cloneMissed) {
   console.log('Voice sprites up to date');
   process.exit(0);
 }
 
 const cached = join(cacheRoot, 'voice', inputs);
-if (files.every((file) => existsSync(join(cached, file)))) {
+if (!cloneMissed && files.every((file) => existsSync(join(cached, file)))) {
   mkdirSync(out, { recursive: true });
   for (const file of files) cpSync(join(cached, file), join(out, file));
   console.log('Voice sprites from the build cache');
   process.exit(0);
 }
 
-// ffmpeg from the ffmpeg-static package, so no machine needs one installed
-const ffmpeg = createRequire(import.meta.url)('ffmpeg-static') as string;
+// ffmpeg, pinned by its hash, kept in the build cache (see ffmpeg.ts); where the cache cannot be
+// written, it lands in node_modules
+let ffmpegFolder = join(root, 'node_modules', '.cache', 'solartournament-ffmpeg');
+tryCache(() => {
+  mkdirSync(join(cacheRoot, 'ffmpeg'), { recursive: true });
+  ffmpegFolder = join(cacheRoot, 'ffmpeg');
+});
+const ffmpeg = await ffmpegBinary(ffmpegFolder);
 
 const espeakPath = join(root,'node_modules/@echogarden/espeak-ng-emscripten/espeak-ng.js');
 const { default: init } = (await import(pathToFileURL(espeakPath).href)) as { default: () => Promise<{ eSpeakNGWorker: new () => Worker }> };
@@ -210,9 +239,6 @@ const kokoro = await KokoroTTS.from_pretrained(COMPUTER_VOICE.model, { dtype: 'f
 if (modelsCached) tryCache(() => writeFileSync(complete, COMPUTER_VOICE.revision + '\n'));
 const tokenizer = (kokoro as unknown as { tokenizer: (text: string, options: object) => { input_ids: unknown } }).tokenizer;
 
-/** A store of clones its index names could not be had: the sprites speak those lines without it, and the next build tries again. */
-let cloneMissed = false;
-
 /** A language's store of cloned lines as samples, fetched once (and kept in the cache under its fingerprint); null when it cannot be had or is not the one its index names. */
 async function cloneAudio(locale: Cloned, index: CloneIndex): Promise<Float32Array | null> {
   const file = join(clonesCache, `nicole-${locale}-${index.audio.slice(0, 16)}.flac`);
@@ -231,8 +257,7 @@ async function cloneAudio(locale: Cloned, index: CloneIndex): Promise<Float32Arr
     const bytes = decoded.stdout;
     return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
   } catch (error) {
-    console.warn(`Nicole's ${locale} clones not used (${(error as Error).message})`);
-    cloneMissed = true;
+    missClones(locale, (error as Error).message);
     return null;
   }
 }
