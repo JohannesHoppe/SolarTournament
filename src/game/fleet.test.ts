@@ -138,6 +138,21 @@ describe("the President's fleet", () => {
     expect(center.y).toBeGreaterThan(800 + 300);
   });
 
+  it('stays solid while it sinks, for ships as for rays and torpedoes, and is gone once it went up', () => {
+    const fleet = battleship();
+    breakAll(fleet, zonesOf(fleet, 'battery'));
+    breakAll(fleet, zonesOf(fleet, 'reactor'));
+    const sinking = SINK_SECONDS / 2;
+    fleet.update(sinking, 0);
+    expect(fleet.present(sinking)).toBe(false);
+    expect(fleet.touches(new THREE.Vector3(0, 900, 0), 120)).toBe(true);
+    expect(fleet.resolve(new THREE.Vector3(0, 700, 0), 300, sinking)).not.toBeNull();
+    const gone = SINK_SECONDS + 100;
+    fleet.update(gone, 0);
+    expect(fleet.touches(new THREE.Vector3(0, 900, 0), 120)).toBe(false);
+    expect(fleet.resolve(new THREE.Vector3(0, 700, 0), 300, gone)).toBeNull();
+  });
+
   it('turns its stern on the nearest pilot in its second phase and burns it', () => {
     const fleet = battleship();
     const batteries = zonesOf(fleet, 'battery');

@@ -835,9 +835,9 @@ export class Fleet implements Obstacle {
     return this.colliders.some((box) => this.solid(box) && boxContact(this.toLocal(center, local).sub(box.center), box.half, radius, step, closest) !== null);
   }
 
-  /** Pushes a sphere out of the hull; returns the outward normal when they touched (and moves `center` onto the hull), otherwise null. */
+  /** Pushes a sphere out of the hull while it is in the field, sinking too, as rays and torpedoes find it; returns the outward normal when they touched (and moves `center` onto the hull), otherwise null. */
   resolve(center: THREE.Vector3, radius: number, clock: number, normal = new THREE.Vector3()): THREE.Vector3 | null {
-    if (!this.present(clock) || center.distanceTo(this.position) > REACH + radius) return null;
+    if (!this.inField(clock) || center.distanceTo(this.position) > REACH + radius) return null;
     for (const box of this.colliders) {
       if (!this.solid(box)) continue;
       this.toLocal(center, local).sub(box.center);
@@ -1052,7 +1052,12 @@ export class Fleet implements Obstacle {
 
   /** It is in the field as of the last frame shown: in the fight, or burning before it goes up. */
   private get standing() {
-    return this.present(this.clock) || this.dying(this.clock);
+    return this.inField(this.clock);
+  }
+
+  /** Its hull is in the field at a field time: in the fight, or burning before it goes up. */
+  private inField(clock: number) {
+    return this.present(clock) || this.dying(clock);
   }
 
   /** A collider is there: every box of the hull, the dome's only while it is closed. */
