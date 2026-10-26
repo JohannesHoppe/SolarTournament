@@ -80,4 +80,33 @@ describe('the crowd on the broadcast', () => {
     expect(last(gains[0])).toBe(0);
     expect(gains[0].filter(([value, at]) => at >= 11 && value > 0)).toEqual([]);
   });
+
+  it('takes a failed answer for no recording, and tries again only after a pause', async () => {
+    const fetch = vi.fn(() => Promise.resolve({ ok: false, status: 404, arrayBuffer: () => Promise.resolve(new ArrayBuffer(8)) }));
+    vi.stubGlobal('fetch', fetch);
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const { context } = fakeContext();
+    const decode = vi.spyOn(context, 'decodeAudioData');
+    const crowd = new Crowd(context, {} as AudioNode);
+    crowd.air(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(decode).not.toHaveBeenCalled();
+    // every cheer of the next seconds asks for nothing
+    for (let i = 0; i < 5; i++) crowd.swell(1, 0.2);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    now = 11000;
+    crowd.swell(1, 0.2);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(fetch).toHaveBeenCalledTimes(2);
+    // the next pause is twice as long
+    now = 25000;
+    crowd.swell(1, 0.2);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    now = 32000;
+    crowd.swell(1, 0.2);
+    expect(fetch).toHaveBeenCalledTimes(3);
+    vi.restoreAllMocks();
+  });
 });

@@ -29,6 +29,8 @@ const HUSH = 1.5;
 /** At a round's end the crowd stays on its feet this long (s), then fades out over about FINALE_FADE (s), under the results. */
 const FINALE = 3;
 const FINALE_FADE = 4;
+/** After a failed load of the recording, the first new try waits this long (s), each further one twice as long as the last. */
+const RETRY = 10;
 
 export class Crowd {
   private readonly bed: GainNode;
@@ -38,6 +40,9 @@ export class Crowd {
   private started = false;
   /** The broadcast shows the stadium (see air). */
   private live = false;
+  /** Failed loads of the recording so far, and no new try before this (performance.now(), ms). */
+  private failures = 0;
+  private retryAt = 0;
 
   constructor(
     private readonly context: AudioContext,
@@ -61,12 +66,19 @@ export class Crowd {
     speakers.connect(lows).connect(highs).connect(destination);
   }
 
-  /** Loads the recording the first time the crowd is wanted, and starts its loops once it is there. */
+  /**
+   * Loads the recording the first time the crowd is wanted, and starts its loops once it is
+   * there. After a failed load the next try waits RETRY seconds, twice as long after each
+   * further failure, so a missing file is not fetched at every cheer.
+   */
   private start() {
-    if (this.started || this.loading) return;
+    if (this.started || this.loading || performance.now() < this.retryAt) return;
     this.loading = true;
     fetch(new URL(RECORDING, document.baseURI))
-      .then((answer) => answer.arrayBuffer())
+      .then((answer) => {
+        if (!answer.ok) throw new Error(`crowd: ${answer.status}`);
+        return answer.arrayBuffer();
+      })
       .then((data) => this.context.decodeAudioData(data))
       .then((recording) => {
         this.recording = recording;
@@ -75,7 +87,11 @@ export class Crowd {
         this.loop(this.layer, LAYER_RATE, LAYER_OFFSET);
       })
       // no crowd this time: the show goes on without it
-      .catch(() => (this.loading = false));
+      .catch(() => {
+        this.loading = false;
+        this.retryAt = performance.now() + RETRY * 1000 * 2 ** this.failures;
+        this.failures++;
+      });
   }
 
   private loop(into: GainNode, rate: number, offset: number) {

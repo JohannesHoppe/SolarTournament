@@ -13,4 +13,4 @@ Radio 2584, the station of the games: hard techno generated from a track's title
 | `lines.ts` | Every line spoken: the regime, the announcer, Nicole's lessons and tips |
 | `transmission.ts` | Shows what the radio says, in neon, while it is spoken |
 
-A new or changed line in `lines.ts` needs its translations in `src/i18n/`; the voice is rendered again by `tools/voice/` and Nicole's clone by the workflow Voice. `songs.test.ts` checks that a title always gives the same song.
+A new or changed line in `lines.ts` needs its translations in `src/i18n/`; the voice is rendered again by `tools/voice/` and Nicole's clone by the workflow Voice. `songs.test.ts` checks that a title always gives the same song; `crowd.test.ts` that the crowd is heard only on air, cheers a round's end and fades out, and tries its recording again only after a pause once it failed.
