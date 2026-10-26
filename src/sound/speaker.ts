@@ -45,6 +45,12 @@ export class Speaker {
     this.loading = loadVoice()
       .then((voice) => {
         this.voice = voice;
+        // without the language's lines (Nicole's), asked for again after a pause: loadVoice
+        // tries the language's sprite once more when its own pause is over
+        if (voice.partial) {
+          this.loading = null;
+          this.retryAt = performance.now() + VOICE_RETRY_MS;
+        }
       })
       .catch((error) => {
         // tried again with a line said after a pause, not with every line of every frame

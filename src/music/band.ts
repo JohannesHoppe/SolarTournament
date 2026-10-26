@@ -48,6 +48,8 @@ const ANNOUNCER_DUCK = 0.2;
 export interface Voice {
   buffer: AudioBuffer;
   clips: Record<string, [number, number]>;
+  /** Only the radio's sprite: the language's failed to load and is tried again (see loadVoice). */
+  partial?: boolean;
 }
 
 /** A word on its way out, for the subtitles. */
@@ -587,6 +589,8 @@ export class Band {
     if (!this.voice) return;
     let position = t;
     const list = this.clips(line.language, line.text, line.style === 'chop');
+    // a line without a single clip (its sprite not loaded) is not on air: no duck, no transmission
+    if (!list.length) return;
     list.forEach(({ clip, stop }, i) => {
       const start = line.style === 'chop' ? t + Math.ceil((position - t) / eighth - 1e-6) * eighth : position;
       this.playClip(clip, start, this.voiceIn);
@@ -609,10 +613,13 @@ export class Band {
   /** The announcer cuts in over the radio: static, the words, static. */
   announce(text: string, name: string | null, t: number) {
     if (!this.voice) return;
+    // a Host's clone is called "pilot", in the Host's language
+    const list = this.clips('mod', text, false, name ?? i18n.t('pilot'));
+    // without a clip of the line (the language's sprite not loaded) the announcer stays off air
+    if (!list.length) return;
     this.crackle(0.15, t, 0.9);
     let position = t + 0.18;
-    // a Host's clone is called "pilot", in the Host's language
-    for (const { clip, stop } of this.clips('mod', text, false, name ?? i18n.t('pilot'))) {
+    for (const { clip, stop } of list) {
       this.playClip(clip, position, this.announcerIn);
       position += clip[1] + 0.03 + (stop ? 0.22 : 0);
     }

@@ -1,7 +1,15 @@
 import type { Voice } from './band';
 import { currentLocale } from '../i18n/i18n';
 
+/** After the language's sprite failed to load, the next try waits this long (ms), twice as long after each further failure. */
+const LANGUAGE_RETRY_MS = 10000;
+
 let loading: Promise<Voice> | null = null;
+let radioSprite: Promise<Sprite> | null = null;
+/** The voice being loaded or loaded lacks the language's sprite: it is loaded again from languageRetryAt (performance.now(), ms). */
+let partial = false;
+let languageFailures = 0;
+let languageRetryAt = 0;
 
 type Sprite = { buffer: AudioBuffer; manifest: Manifest };
 type Manifest = { sampleRate: number; version: string; clips: Record<string, [number, number]> };
@@ -11,17 +19,33 @@ type Manifest = { sampleRate: number; version: string; clips: Record<string, [nu
  * reloads it): the radio's sprite (the regime's words, the same in every language) and the
  * sprite of the language (the announcer and the flight computer), joined into one, each an MP3
  * sprite with a manifest of its clips. Loaded once and shared by the radio and the flight
- * computer; without the language's sprite the regime still speaks, and a failed load of the
- * radio's is tried again the next time a voice is wanted.
+ * computer. A failed load of the radio's sprite is tried again the next time a voice is wanted.
+ * Without the language's sprite the regime still speaks: the voice comes back `partial`, and a
+ * voice wanted again after a pause (10 s, doubling with each failure) tries the language's
+ * sprite once more, so a dropped connection does not leave the flight computer silent.
  */
 export function loadVoice(): Promise<Voice> {
-  loading ??= Promise.all([load('radio'), load(currentLocale()).catch((error) => (console.warn('Voice of the language unavailable', error), null))])
+  if (loading && partial && performance.now() >= languageRetryAt) loading = null;
+  if (loading) return loading;
+  partial = false;
+  radioSprite ??= load('radio').catch((error) => {
+    radioSprite = null;
+    throw error;
+  });
+  const language = load(currentLocale()).catch((error) => {
+    console.warn('Voice of the language unavailable', error);
+    partial = true;
+    languageRetryAt = performance.now() + LANGUAGE_RETRY_MS * 2 ** languageFailures++;
+    return null;
+  });
+  const voice = Promise.all([radioSprite, language])
     .then(([radio, language]) => join(radio, language))
     .catch((error) => {
-      loading = null;
+      if (loading === voice) loading = null;
       throw error;
     });
-  return loading;
+  loading = voice;
+  return voice;
 }
 
 async function load(sprite: string): Promise<Sprite> {
@@ -43,7 +67,7 @@ async function load(sprite: string): Promise<Sprite> {
 
 /** Two sprites as one: the second one's samples after the first's, its clips moved along. */
 function join(first: Sprite, second: Sprite | null): Voice {
-  if (!second) return { buffer: first.buffer, clips: first.manifest.clips };
+  if (!second) return { buffer: first.buffer, clips: first.manifest.clips, partial: true };
   const buffer = new AudioBuffer({ length: first.buffer.length + second.buffer.length, sampleRate: first.buffer.sampleRate, numberOfChannels: 1 });
   buffer.copyToChannel(first.buffer.getChannelData(0), 0, 0);
   buffer.copyToChannel(second.buffer.getChannelData(0), 0, first.buffer.length);

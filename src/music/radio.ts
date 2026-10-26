@@ -212,8 +212,11 @@ export class Radio {
 
   private async loadBandVoice() {
     try {
-      this.band!.setVoice(await loadVoice());
-      this.voiced = true;
+      const voice = await loadVoice();
+      this.band!.setVoice(voice);
+      // without the language's sprite (the announcer's lines), asked for again after a pause
+      this.voiced = !voice.partial;
+      if (voice.partial) this.retryAt = performance.now() + RETRY_SECONDS * 1000;
     } catch (error) {
       // without the voice the music still plays
       console.warn('Radio voice unavailable', error);
