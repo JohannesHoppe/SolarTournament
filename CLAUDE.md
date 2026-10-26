@@ -57,6 +57,7 @@ npm run dupes       # duplicated code (jscpd) and duplicated style rules (tools/
 npm test            # unit tests of the deterministic core (Vitest, in Node, under a second)
 npm run e2e         # browser tests (Playwright: solo start, two tabs online); first once: npm run e2e:install
                     # DEV_PORT=5174 moves the dev server and the browser tests, so a second checkout (a worktree) tests beside the first
+                    # the tests start their own dev server and stop if the port is taken; E2E_REUSE=1 tests against this checkout's server already running
 npm run balance     # balance runs (Playwright, about forty minutes): every mode played out by bots in time-lapse in every arena
 npm run soak        # the cheat checks in honest play (Playwright, about a quarter of an hour): three tabs, a round of every mode, nobody reported
 npm run bench       # benchmark (Playwright, about ten minutes): the cost per frame of every feature, quality rung, arena and mode
