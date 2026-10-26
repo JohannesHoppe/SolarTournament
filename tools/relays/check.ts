@@ -19,7 +19,8 @@
  *
  * The list keeps the relays that passed every round: those already in it first (so the list
  * stays stable and browsers of builds a week apart still meet), then the fastest, one per
- * operator (domain), up to LIST_SIZE. Latency is measured from wherever the check runs. The
+ * operator (domain), up to LIST_SIZE, with at most MAX_NEW_FROM_DIRECTORY relays a run that
+ * only the directory names. Latency is measured from wherever the check runs. The
  * file is only rewritten when the relays change; with fewer than MIN_RELAYS healthy ones it is
  * left alone and the check fails.
  *
@@ -43,6 +44,14 @@ const DIRECTORY_RELAYS = ['wss://relay.nostr.watch', 'wss://monitorlizard.nostr1
 const DIRECTORY_WINDOW_S = 3600;
 /** A relay a single monitor reports is not taken: monitors can be wrong or malicious (NIP-66). */
 const MIN_MONITORS = 2;
+/**
+ * Relays only the directory names that one run adds to the list at most. A monitor's key costs
+ * nothing, so a few made-up monitors could push relays of one hand into the directory; capped,
+ * such relays take over the list only over many weeks of commits, where a reader of the
+ * history sees them come. Trystero's built-in relays come with the dependency and are allowed
+ * by the Content Security Policy anyway: they are not counted.
+ */
+const MAX_NEW_FROM_DIRECTORY = 2;
 /** Requirements (NIP-11 limitations, NIP-66 `R` tags) the game cannot meet. */
 const UNMET_REQUIREMENTS = ['auth', 'payment', 'pow', 'writes'];
 /** The directory's candidates probed at most, those seen by the most monitors first. */
@@ -309,15 +318,19 @@ results.sort((a, b) => a.ms - b.ms);
 
 const chosen: string[] = [];
 const operators = new Set<string>();
+const onlyDirectory = (url: string) => !current.includes(url) && !trystero.includes(url);
+let newFromDirectory = 0;
 for (const result of [...results.filter((r) => current.includes(r.url)), ...results.filter((r) => !current.includes(r.url))]) {
   if (!result.healthy || chosen.length >= LIST_SIZE || operators.has(operator(result.url))) continue;
+  if (onlyDirectory(result.url) && newFromDirectory >= MAX_NEW_FROM_DIRECTORY) continue;
+  if (onlyDirectory(result.url)) newFromDirectory++;
   chosen.push(result.url);
   operators.add(operator(result.url));
 }
 
 console.log('\nRelay                                             write ms  result');
 for (const result of results) {
-  const mark = chosen.includes(result.url) ? 'chosen' : result.healthy ? 'healthy' : `failed: ${result.why}`;
+  const mark = chosen.includes(result.url) ? 'chosen' : result.healthy ? (onlyDirectory(result.url) && newFromDirectory >= MAX_NEW_FROM_DIRECTORY ? 'healthy (new from the directory, over this run\'s cap)' : 'healthy') : `failed: ${result.why}`;
   console.log(`${result.url.padEnd(50)}${(result.healthy ? String(result.ms) : '-').padStart(8)}  ${mark}`);
 }
 
