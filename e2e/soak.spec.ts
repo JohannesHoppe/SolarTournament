@@ -42,6 +42,25 @@ async function join(page: Page, room: string) {
       game.cheaters.push(name);
       announce(name);
     };
+    // every report this tab sends, kept for the whole test: the tournament's own record of them
+    // (online.reported) starts over with every round, before a verdict could read it
+    game.reports = [];
+    let online = game.online;
+    Object.defineProperty(game, 'online', {
+      configurable: true,
+      get: () => online,
+      set: (value) => {
+        online = value;
+        const session = value && Object.getPrototypeOf(value.session);
+        if (!session || session.sendCheat.hooked) return;
+        const send = session.sendCheat;
+        session.sendCheat = function (this: unknown, ship: string, cheat: string) {
+          game.reports.push(`round ${game.roundId as number}: ${ship} ${cheat}`);
+          return send.call(this, ship, cheat);
+        };
+        session.sendCheat.hooked = true;
+      },
+    });
     document.getElementById('online')!.click();
   });
   return errors;
@@ -74,7 +93,7 @@ async function wildHand(page: Page) {
   });
 }
 
-/** What a tab's checks found: reports, cheaters named, failed checks, margins. */
+/** What a tab's checks found: every report it sent, the peers reported this round, cheaters named, failed checks, margins. */
 const verdict = (page: Page) =>
   page.evaluate(() => {
     const game = window.game;
@@ -84,6 +103,7 @@ const verdict = (page: Page) =>
       mode: game.roundMode as string,
       arena: game.venue.id as string,
       state: game.state as string,
+      reports: game.reports as string[],
       reported: online ? [...online.reported] : [],
       cheaters: game.cheaters as string[],
       suspicions: online ? online.suspicions.map((s: { ship: string; cheat: string; strikes: number; share: number; round: number; reported: boolean }) => `${s.ship} ${s.cheat} ×${s.strikes} share ${s.share} round ${s.round}${s.reported ? ' reported' : ''}`) : [],
@@ -122,7 +142,7 @@ test('honest tabs play a round of every mode and never take each other for cheat
     const seen = [];
     for (const page of pages) seen.push(await verdict(page));
     rounds.push({ round, seen });
-    console.log(JSON.stringify({ round, seen: seen.map(({ mode, arena, reported, cheaters, suspicions, ships, state }) => ({ mode, arena, reported, cheaters, suspicions, ships, state })) }));
+    console.log(JSON.stringify({ round, seen: seen.map(({ mode, arena, reports, cheaters, suspicions, ships, state }) => ({ mode, arena, reports, cheaters, suspicions, ships, state })) }));
   }
   await play(lead, 2);
   const last = [];
@@ -133,9 +153,10 @@ test('honest tabs play a round of every mode and never take each other for cheat
   console.log(JSON.stringify(last.map((tab) => tab.margins)));
   for (const tab of last) {
     expect(tab.state).not.toBe('menu');
+    expect(tab.reports).toEqual([]);
     expect(tab.reported).toEqual([]);
     expect(tab.cheaters).toEqual([]);
   }
-  expect(rounds.every(({ seen }) => seen.every((tab) => tab.reported.length === 0 && tab.cheaters.length === 0))).toBe(true);
+  expect(rounds.every(({ seen }) => seen.every((tab) => tab.reports.length === 0 && tab.cheaters.length === 0))).toBe(true);
   expect(errors).toEqual([]);
 });
