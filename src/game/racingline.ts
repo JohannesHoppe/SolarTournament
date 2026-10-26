@@ -8,7 +8,7 @@ const SAMPLES = 48;
 const RUN_OUT = 6000;
 /** The line keeps this far from the farthest reach of a rock (units, 100 m: six ship radii, room for a Host's hand), and from a massive body. */
 const CLEARANCE = 2000;
-/** Within this distance along the line of a gate (units, 80 m: a gate's radius) the line bows less, and through the gate not at all. */
+/** Within this distance along the line of a gate (units, 80 m, two thirds of a gate's 120 m radius) the line bows less, and through the gate not at all. */
 const GATE_FADE = 1600;
 /** The swerves around rock bend no tighter than this (units, 400 m: a ship at 245 m/s takes it, see cornerSpeed), and fade out over SWERVE_FADE (units, 300 m) towards a gate. */
 const BOW_RADIUS = 8000;

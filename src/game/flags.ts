@@ -33,7 +33,7 @@ export const TEAM_TINTS = ['#ff9d00', '#4d91ff'] as const;
 export const CAPTURES_TO_WIN = 3;
 /** The bases lie this far from the field's center (units, 1.8 km), opposite each other. */
 const BASE_DISTANCE = FIELD_RADIUS * 0.8;
-/** A base's ring (units, 80 m radius, a gate's): a core in tow that passes through its opening captures. It keeps twice that clear of rock. */
+/** A base's ring (units, 80 m radius, smaller than a race gate's 120 m): a core in tow that passes through its opening captures. It keeps twice that clear of rock. */
 export const BASE_RADIUS = 1600;
 /** A ship whose hull comes this close to a core (units, 40 m) grabs it with its hook: takes it, or sends its own home. */
 export const GRAB_REACH = 800;

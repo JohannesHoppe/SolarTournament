@@ -87,7 +87,7 @@ const PROBE_LIFETIME = PROBE_EVERY * 4;
 const MAX_DROPS = 3;
 /** A probe's reach (units, 15 m): a ship that comes this close plus its own radius takes it. */
 export const PROBE_RADIUS = 300;
-/** In a race, a probe lies this far (units, up to 40 m on each axis) off the line between two gates: well inside a gate's 80 m. */
+/** In a race, a probe lies this far (units, up to 40 m on each axis) off the line between two gates: well inside a gate's 120 m radius. */
 const TRACK_SPREAD = 800;
 /** A probe a dead clone dropped drifts this long (s) before it is gone. */
 const DROP_LIFETIME = 45;
