@@ -2980,7 +2980,7 @@ export class Game implements OnlineGame {
     this.composer.setPixelRatio(this.renderer.getPixelRatio());
     this.renderer.setSize(width, height);
     this.composer.setSize(width, height);
-    this.hud.setViewport(width, height);
+    this.hud.setViewport(width, height, this.renderer.getPixelRatio());
     this.guide.setViewport(width, height);
     this.redraw = true;
     this.glitch.setSize(width * this.renderer.getPixelRatio(), height * this.renderer.getPixelRatio());
@@ -3013,14 +3013,18 @@ export class Game implements OnlineGame {
     // a long frame (a slow device, a time-lapse) runs as several steps of at most MAX_STEP, so
     // shots, collisions and bots play the same game at any frame rate
     const steps = Math.max(1, Math.ceil(dt / MAX_STEP - 1e-9));
+    let stepped = false;
     for (let i = 0; i < steps; i++) {
       // an online tournament does not stop for one pilot's pause menu
       const running = this.state === 'playing' || (this.state === 'paused' && !!this.online);
       if (this.state === 'paused' && !running) break;
       this.time += dt / steps;
       if (running) this.updateRound(dt / steps);
+      stepped ||= running;
       this.field.update(dt / steps);
     }
+    // the screen shows the round as the last step left it, once a frame
+    if (stepped && this.me && (this.state === 'playing' || (this.state === 'paused' && !!this.online))) this.presentRound();
     if (this.state !== 'paused' || this.online) this.effects.update(dt);
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
     // the ship on show, while the menu or the hangar shows it
@@ -3258,24 +3262,6 @@ export class Game implements OnlineGame {
     const subject = this.subject();
     // a core keeps clear of the view on the pilot and its crosshair
     this.flags?.view(this.camera, subject, this.cockpit, dt);
-    // its gauges too: the own clone is not printed while the Host watches
-    if (wallClock() >= this.tintedAt) this.tintShips(wallClock());
-    // (the benchmark leaves out the HUD, the radar or the attitude to see what each costs)
-    if (!this.bench.has('hud')) {
-      this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
-      // a solar storm blinds the sensors: no ship shows a marker
-      this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject));
-      this.hud.updateVelocityMarkers(this.camera, subject);
-      this.hud.setCourse(this.camera, subject === me && this.onCourse ? this.steering.course : null, me.flight.forward(forward));
-    }
-    if (!this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
-    if (!this.bench.has('attitude')) this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
-    this.hud.setAutopilot(this.autopilot);
-    this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
-    const hook = this.tethers.get(me);
-    this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now));
-    this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
-    this.hud.setKeys(this.input.device);
     // a watching Host sees the race of the pilot on screen
     // only a course of rings has its rings bracketed (see showRace, teach)
     this.hud.setGates(this.camera, null, null, 0);
@@ -3327,6 +3313,36 @@ export class Game implements OnlineGame {
       if (this.decided() && this.roundEndsAt - now > DECIDED_SECONDS) this.setRoundEnd(DECIDED_SECONDS);
       if (now >= this.roundEndsAt) this.endRound();
     }
+  }
+
+  /**
+   * What the screen shows of the round, once a frame after its steps (see draw): the ships'
+   * tints, the HUD's gauges and markers, the radar, the attitude and the g-force strain. A slow
+   * frame runs several steps, but the DOM and the canvases are written only for the last.
+   */
+  private presentRound() {
+    const me = this.me!;
+    const now = this.time;
+    const subject = this.subject();
+    // its gauges too: the own clone is not printed while the Host watches
+    if (wallClock() >= this.tintedAt) this.tintShips(wallClock());
+    // (the benchmark leaves out the HUD, the radar or the attitude to see what each costs)
+    if (!this.bench.has('hud')) {
+      this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
+      // a solar storm blinds the sensors: no ship shows a marker
+      this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject));
+      this.hud.updateVelocityMarkers(this.camera, subject);
+      this.hud.setCourse(this.camera, subject === me && this.onCourse ? this.steering.course : null, me.flight.forward(forward));
+    }
+    if (!this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
+    if (!this.bench.has('attitude')) this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
+    this.hud.setAutopilot(this.autopilot);
+    this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
+    const hook = this.tethers.get(me);
+    this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now));
+    this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
+    this.hud.setKeys(this.input.device);
+    this.hud.setStrain(me.alive ? me.strain : 0);
   }
 
   /**
@@ -5807,10 +5823,8 @@ export class Game implements OnlineGame {
   private pilot(dt: number, now: number) {
     const me = this.me!;
     const flight = me.flight;
-    // the clone's body takes the strain in Ship.update, a bot's alike
+    // the clone's body takes the strain in Ship.update, a bot's alike (the HUD shows it, see presentRound)
     const strain = me.alive ? me.strain : 0;
-    this.hud.setStrain(strain);
-
     const alarms = this.alarms;
     let impact = Infinity;
     const speed = flight.velocity.length();

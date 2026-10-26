@@ -65,12 +65,16 @@ export class Attitude {
   private height = 1;
   private ratio = 1;
   private drawn = false;
+  /** What the picture on the canvas was drawn for: the camera's turn and lens, and the tape shown or not (see update). */
+  private readonly drawnTurn = new THREE.Quaternion();
+  private readonly drawnLens = [0, 0];
+  private drawnTape = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     this.context = canvas.getContext('2d')!;
   }
 
-  /** The picture's size in CSS pixels and the device's pixel ratio. */
+  /** The picture's size in CSS pixels and the canvas's pixels per CSS pixel. */
   setViewport(width: number, height: number, ratio: number) {
     this.width = width;
     this.height = height;
@@ -80,7 +84,12 @@ export class Attitude {
     this.drawn = false;
   }
 
-  /** Draws the attitude for the camera; `show` false clears it. The heading tape only where `tape` (not on a phone, whose top row holds its buttons). */
+  /**
+   * Draws the attitude for the camera; `show` false clears it. The heading tape only where
+   * `tape` (not on a phone, whose top row holds its buttons). What it draws depends only on how
+   * the camera is turned and its lens (every line is a direction, wherever the camera stands),
+   * so while neither changed the picture on the canvas stays as it is.
+   */
   update(camera: THREE.Camera, show: boolean, tape: boolean) {
     const context = this.context;
     if (!show) {
@@ -88,7 +97,13 @@ export class Attitude {
       this.drawn = false;
       return;
     }
+    const lens = camera.projectionMatrix.elements;
+    if (this.drawn && tape === this.drawnTape && camera.quaternion.equals(this.drawnTurn) && lens[0] === this.drawnLens[0] && lens[5] === this.drawnLens[1]) return;
     this.drawn = true;
+    this.drawnTape = tape;
+    this.drawnTurn.copy(camera.quaternion);
+    this.drawnLens[0] = lens[0];
+    this.drawnLens[1] = lens[5];
     context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
     context.clearRect(0, 0, this.width, this.height);
     camera.getWorldDirection(forward);

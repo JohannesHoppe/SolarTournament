@@ -5,7 +5,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | File | What it does |
 |---|---|
 | `hud.ts` | The flight computer's projection: gauges, markers (the next ring's brackets and where the flight crosses its plane among them, the autopilot's course, the crosshair orange over a hull, the target's range and closure rate; the ships' markers, their arrows at the screen's edge with the ships' names placed clear of each other and of the HUD), the fixed references (center, sun, the arena's big things, bases, battleship) at their place or the screen's edge, height and climb, the alarms and the escape gauge, the round's panel, the boot of a fresh clone's link; writes the DOM only when a value changes |
-| `attitude.ts` | Horizon line, pitch ladder, bank scale with its sky pointer and heading tape on a canvas, as in a fighter's head-up display |
+| `attitude.ts` | Horizon line, pitch ladder, bank scale with its sky pointer and heading tape on a canvas, as in a fighter's head-up display; as sharp as the picture's resolution, drawn anew only when the camera turns |
 | `plane.ts` | The reference plane's polar grid and the drop lines from ships, gates and the waypoint down or up to it: lines over everything, faded with distance, built once |
 | `radar.ts` | The radar sphere on a canvas |
 | `effects.ts` | Particles and laser beams, pooled; a cheaper picture emits a share of the particles |
