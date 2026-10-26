@@ -4977,6 +4977,9 @@ export class Game implements OnlineGame {
     // the holder's clone burns up in its own core, leaving nothing behind; no one is blamed for
     // it, and the sponsors are so thrilled by the show that the next clone comes without an ad
     if (holder.owner === null && holder.alive) {
+      // no cable survives the reprint: the clone's own, nor one hooked on its hull
+      this.unhook(holder);
+      for (const tether of [...this.tethers.values()]) if (tether.anchor?.ship === holder) this.unhook(tether.owner);
       this.respawn(holder);
       if (holder === this.me) {
         this.speaker.say(COMPUTER.novaReprint, 'urgent');
