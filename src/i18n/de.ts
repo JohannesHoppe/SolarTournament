@@ -319,7 +319,6 @@ export const DE: Catalog = {
   'Torpedo away · no lock': 'Torpedo los · ohne Zielerfassung',
   'TORPEDO': 'TORPEDO',
   'CHEATER · {name}': 'SCHUMMLER · {name}',
-  'The other Hosts named you a cheater and cast you out of the tournament.': 'Die anderen Hosts haben dich als Schummler entlarvt und aus dem Turnier geworfen.',
   'Sponsors thrilled · no ad · next clone ready': 'Sponsoren begeistert · keine Werbung · nächster Klon bereit',
   'NOVA · {name}': 'NOVA · {name}',
   'NOVA CORE ACTIVATED · {distance} · GET OUT': 'NOVA-KERN AKTIVIERT · {distance} · RAUS HIER',

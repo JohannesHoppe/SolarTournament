@@ -427,8 +427,6 @@ const ZONE_MESSAGES: Record<Zone, string> = {
   armor: msg('Armor hit'),
 };
 const BEST_SCORE_KEY = 'solartournament.best';
-/** A Host the others cast out as a cheater sees the call this long before it is back in the menu (ms). */
-const CAST_OUT_MS = 3000;
 /** What the Host owns: Solar Coins, the upgrades of its ships, the ship it flies (see game/hangar). */
 const HANGAR_KEY = 'solartournament.hangar';
 /** The ships as the menu names them. */
@@ -1574,17 +1572,6 @@ export class Game implements OnlineGame {
   private toggleFullscreen() {
     if (document.fullscreenElement) void document.exitFullscreen().catch(() => {});
     else this.enterFullscreen();
-  }
-
-  castOut() {
-    // after the call, so the Host still sees its name on the cheater's line; a Host who has
-    // left that tournament meanwhile is not taken out of what it does now
-    const tournament = this.online;
-    window.setTimeout(() => {
-      if (!tournament || this.online !== tournament) return;
-      this.showMenu();
-      this.notice(t('The other Hosts named you a cheater and cast you out of the tournament.'));
-    }, CAST_OUT_MS);
   }
 
   /** A line in the menu for what went wrong; empty hides it. */

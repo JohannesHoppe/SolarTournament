@@ -77,6 +77,8 @@ interface Track {
   diedAt: number;
   /** When it last took a probe this browser could not see the contents of. */
   tookAt: number;
+  /** The probes it said it took this round: each counts once (see probe). */
+  probes: Set<string>;
   /** No position or nose check before this (real time). */
   graceUntil: number;
   /** It took a nova core (or held one when first seen). */
@@ -138,6 +140,8 @@ function turned(q: THREE.Quaternion, w: THREE.Vector3, seconds: number, target: 
 
 export class Plausibility {
   private readonly tracks = new Map<string, Track>();
+  /** The probes of the round some ship took without this browser seeing what they held (see probe). */
+  private readonly unseenProbes = new Set<string>();
   /** The most each check measured, as a share of its bound (see Margins): in honest play the margin to a cheat, above 1 a strike. */
   readonly margins: Margins = {};
   /** The share each check measured when it last failed (see measure), for the log; until it first fails, the last it measured. */
@@ -154,6 +158,7 @@ export class Plausibility {
         alive: false,
         diedAt: -Infinity,
         tookAt: -Infinity,
+        probes: new Set(),
         graceUntil: now + REPRINT_GRACE,
         nova: false,
         launched: 0,
@@ -179,8 +184,9 @@ export class Plausibility {
     return share > 1;
   }
 
-  /** A new round: every ship is printed again, its kills start over, no core is held. */
+  /** A new round: every ship is printed again, its kills start over, no core is held, every probe is new. */
   newRound(now: number) {
+    this.unseenProbes.clear();
     for (const track of this.tracks.values()) {
       this.regrace(track, now);
       track.kills = null;
@@ -189,6 +195,7 @@ export class Plausibility {
       track.diedAt = -Infinity;
       this.freshClone(track);
       track.nova = false;
+      track.probes.clear();
     }
   }
 
@@ -207,9 +214,9 @@ export class Plausibility {
     track.beams.length = 0;
   }
 
-  /** A ship is gone (its browser left): it is judged afresh when it shows again. */
-  forget(id: string) {
-    this.tracks.delete(id);
+  /** Ships are gone (their browser left): each one `gone` names is judged afresh when it shows again. */
+  forget(gone: (id: string) => boolean) {
+    for (const id of this.tracks.keys()) if (gone(id)) this.tracks.delete(id);
   }
 
   /**
@@ -354,10 +361,23 @@ export class Plausibility {
     return first.some((p) => second.some((q) => Math.abs(p.at - q.at) <= TRAIL_STEP * 2 && p.p.distanceTo(q.p) < reach));
   }
 
-  /** A ship took a probe: of a kind this browser knows, or null when it could not see what it held (it may have been either). */
-  probe(id: string, kind: string | null, now: number) {
+  /**
+   * A ship took the probe `probe`: of a kind this browser knows, or null when it could not see
+   * what it held (it did not have the probe, or it refused the take, the taker too far as it
+   * sees them; it may have held either). A probe is taken once: each ship's word counts once per
+   * probe, and a probe whose contents this browser did not see opens the window for a core and
+   * adds its torpedoes only for the first ship that names it. A second honest taker of the same
+   * probe (two that reached it at once, each first on its own screen) is left with TORPEDO_SLACK.
+   */
+  probe(id: string, probe: string, kind: string | null, now: number) {
     const track = this.track(id, now);
-    if (kind === null) track.tookAt = now;
+    if (track.probes.has(probe)) return;
+    track.probes.add(probe);
+    if (kind === null) {
+      if (this.unseenProbes.has(probe)) return;
+      this.unseenProbes.add(probe);
+      track.tookAt = now;
+    }
     if (kind === 'nova') track.nova = true;
     if (kind === 'torpedoes' || kind === null) track.torpedoes += 2;
   }
@@ -449,8 +469,9 @@ export class Strikes {
     this.seen.clear();
   }
 
-  forget(ship: string) {
-    for (const key of this.seen.keys()) if (key.startsWith(`${ship}|`)) this.seen.delete(key);
+  /** The strikes of the ships `gone` names go: their browser left. */
+  forget(gone: (ship: string) => boolean) {
+    for (const key of this.seen.keys()) if (gone(key.slice(0, key.lastIndexOf('|')))) this.seen.delete(key);
   }
 }
 
@@ -553,10 +574,9 @@ export class Evidence {
     return now - (this.launches.get(ship) ?? -Infinity) < LAUNCH_EVIDENCE;
   }
 
-  forget(ship: string) {
-    this.beams.delete(ship);
-    this.blasts.delete(ship);
-    this.launches.delete(ship);
+  /** What the ships `gone` names did goes: their browser left. */
+  forget(gone: (ship: string) => boolean) {
+    for (const map of [this.beams, this.blasts, this.launches]) for (const ship of map.keys()) if (gone(ship)) map.delete(ship);
   }
 }
 
@@ -574,7 +594,8 @@ const ACCUSERS = 2;
 /**
  * How many accusers it takes among `pilots` Hosts who fly (the own one included, if it flies):
  * a majority of them besides the accused, at least ACCUSERS, so two tabs of one Host cannot
- * vote an honest one out of a fuller round. Watching Hosts neither vote nor count.
+ * vote an honest one out of a round of five or more (in one of three or four they can, which is
+ * why the accused never casts itself out, see Online.accuse). Watching Hosts neither vote nor count.
  */
 export function accusersNeeded(pilots: number): number {
   return Math.max(ACCUSERS, Math.floor((pilots - 1) / 2) + 1);
