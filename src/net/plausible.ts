@@ -22,9 +22,11 @@ export const CHEATS: readonly Cheat[] = ['teleport', 'nova', 'torpedoes', 'kills
 /**
  * No ship flies faster than this (units/s, 1 km/s): four times the tournament limit. An honest
  * ship comes to about 700 m/s at the most, and only for a moment: the limit, the overdrive's
- * shove and a dodge on top, or a winch reeling it in towards a ship flying the other way.
+ * shove and a dodge on top, or a winch reeling it in towards a ship flying the other way. A
+ * fall into the black hole, which the limit does not hold back, ends at its horizon at about
+ * 520 m/s, from the arena's edge with the overdrive's shove.
  */
-const PLAUSIBLE_SPEED = MAX_SPEED * 4;
+export const PLAUSIBLE_SPEED = MAX_SPEED * 4;
 /** On top of that, a ship may be off by this much (units, 500 m): prediction, rounding, a state that comes late. */
 const PLAUSIBLE_SLACK = 10000;
 /** After a new round or a nova a ship is printed somewhere else: its position and nose are not checked this long (s). */

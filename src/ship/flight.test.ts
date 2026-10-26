@@ -4,7 +4,11 @@ import { InputRecorder } from '../recorder';
 import { Cockpit, Hand, STEP, convergence, flyLine, replay } from '../test/cockpit';
 import { RacingLine } from '../game/racingline';
 import { CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, LINE_SPARE, RING_RADIUS } from '../game/school';
-import { MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, RCS_THRUST, turnRadius } from './flight';
+import { FlightModel, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, RCS_THRUST, turnRadius } from './flight';
+import { IDLE } from '../input/input';
+import { arenaById } from '../world/arenas';
+import { ARENA_LIMIT } from '../world/arena';
+import { PLAUSIBLE_SPEED } from '../net/plausible';
 
 /** A degree (rad). */
 const DEGREE = Math.PI / 180;
@@ -242,5 +246,54 @@ describe('the input recorder', () => {
     expect(replayed.flown).toBe(300);
     expect(replayed.position).toBeLessThan(1e-6);
     expect(replayed.cockpit.flight.position.distanceTo(flight.position)).toBeLessThan(1e-6);
+  });
+});
+
+/**
+ * A ship dropped towards the black hole of Event Horizon from `distance` (units) at `speed`
+ * (units/s), its nose on the hole and its drive at `thrust`, until it touches the horizon or
+ * `seconds` pass. Returns its speed after every step.
+ */
+function fall(distance: number, speed: number, thrust: number, seconds = 30) {
+  const well = arenaById('hole')!.layout.well!;
+  const flight = new FlightModel();
+  flight.reset(new THREE.Vector3(distance, 0, 0).add(well.position), new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, -1), new THREE.Vector3(-1, 0, 0)));
+  flight.velocity.set(-speed, 0, 0);
+  const gravity = new THREE.Vector3();
+  const controls = { ...IDLE, thrust };
+  const speeds: number[] = [];
+  for (let t = 0; t < seconds && flight.position.distanceTo(well.position) > well.radius; t += STEP) {
+    gravity.subVectors(well.position, flight.position);
+    const r = Math.max(gravity.length(), well.radius);
+    gravity.setLength((well.surfaceGravity * well.radius * well.radius) / (r * r));
+    flight.update(STEP, controls, gravity);
+    speeds.push(flight.velocity.length());
+  }
+  return speeds;
+}
+
+describe('the speed limit', () => {
+  it('holds against the own drive and thrusters: a full burn never passes it', () => {
+    const flight = new FlightModel();
+    flight.reset(new THREE.Vector3(), new THREE.Quaternion());
+    const controls = { ...IDLE, thrust: 1, strafeZ: 1, strafeX: 1 };
+    for (let t = 0; t < 5; t += STEP) flight.update(STEP, controls, new THREE.Vector3());
+    expect(flight.velocity.length()).toBeLessThanOrEqual(MAX_SPEED + 1e-6);
+    expect(flight.velocity.length()).toBeGreaterThan(MAX_SPEED * 0.999);
+  });
+
+  it("holds only against the ship's own push: a well pulls it past, and the flight computer never brakes that back", () => {
+    // at the limit, the drive burning towards the hole from 1.5 km
+    const burning = fall(30000, MAX_SPEED, 1);
+    expect(Math.max(...burning)).toBeGreaterThan(MAX_SPEED * 1.3);
+    // drifting in, the speed only grows on the way down
+    const drifting = fall(30000, MAX_SPEED, 0);
+    for (let i = 1; i < drifting.length; i++) expect(drifting[i]).toBeGreaterThanOrEqual(drifting[i - 1] - 1e-6);
+    expect(drifting[drifting.length - 1]).toBeGreaterThan(MAX_SPEED * 1.3);
+  });
+
+  it("keeps a fall into the black hole inside the cheat checks' bound on speed", () => {
+    // from the arena's edge at the limit plus an overdrive's shove, burning all the way down
+    const speeds = fall(ARENA_LIMIT, MAX_SPEED + OVERDRIVE_PUSH, 1, 60);    expect(Math.max(...speeds)).toBeLessThan(PLAUSIBLE_SPEED * 0.7);
   });
 });

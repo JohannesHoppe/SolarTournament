@@ -7,7 +7,7 @@ export const METERS_PER_UNIT = 0.05;
 export const MAIN_THRUST = 2550;
 /** Acceleration of the maneuvering thrusters along any axis (units/s²): 40 m/s², about 4 g, so a sidestep left and right throws off an aim. */
 export const RCS_THRUST = 800;
-/** Tournament rule: no ship flies faster than this (units/s, 250 m/s); the flight computer cuts any push beyond it. */
+/** Tournament rule: no ship's own push makes it faster than this (units/s, 250 m/s); the flight computer cuts any push of drive and thrusters beyond it. Gravity is no push of the ship's and pulls it past. */
 export const MAX_SPEED = 5000;
 /** The overdrive's shove along the nose (units/s, 150 m/s): past the tournament's limit, see Game.overdrive. */
 export const OVERDRIVE_PUSH = 3000;
@@ -29,6 +29,7 @@ const local = new THREE.Vector3();
 const inverse = new THREE.Quaternion();
 const acceleration = new THREE.Vector3();
 const targetRate = new THREE.Vector3();
+const AXES = ['x', 'y', 'z'] as const;
 
 /**
  * Newtonian flight model. The main drive pushes along the nose, the maneuvering thrusters
@@ -76,7 +77,7 @@ export class FlightModel {
     const thrusters = this.thrusterFactor;
     targetRate.set(controls.pitch * MAX_TURN_RATE, -controls.yaw * MAX_TURN_RATE, -controls.roll * MAX_ROLL_RATE).multiplyScalar(0.3 + 0.7 * thrusters);
     const maxStep = TURN_ACCELERATION * thrusters * dt;
-    for (const k of ['x', 'y', 'z'] as const) {
+    for (const k of AXES) {
       const step = THREE.MathUtils.clamp(targetRate[k] - this.angularVelocity[k], -maxStep, maxStep);
       this.angularVelocity[k] += step;
       this.turnThrust[k] = maxStep > 0 ? step / maxStep : 0;
@@ -107,12 +108,16 @@ export class FlightModel {
     this.limited = speed >= MAX_SPEED;
     this.properAcceleration = acceleration.length();
     if (push) acceleration.add(push);
-    acceleration.applyQuaternion(this.orientation).add(gravity);
+    acceleration.applyQuaternion(this.orientation);
     this.velocity.addScaledVector(acceleration, dt);
     // a step that crosses the limit ends on it, however long the frame was; at or past the
-    // limit (after an overdrive) a push across the course turns the flight but never adds speed
+    // limit (after an overdrive, or a fall into a well) a push across the course turns the
+    // flight but never adds speed
     const limit = Math.max(speed, MAX_SPEED);
     if (this.velocity.lengthSq() > limit * limit) this.velocity.setLength(limit);
+    // gravity is no push of the ship's: the limit holds only against its own, so a well pulls
+    // a ship past it, and the flight computer never brakes the speed it gained
+    this.velocity.addScaledVector(gravity, dt);
     this.position.addScaledVector(this.velocity, dt);
     this.throttle += (drive - this.throttle) * (1 - Math.exp(-(drive > this.throttle ? THROTTLE_RISE : THROTTLE_FALL) * dt));
   }
