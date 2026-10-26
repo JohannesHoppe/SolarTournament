@@ -192,10 +192,21 @@ function probeWrite(url: string): Promise<Probe> {
   );
 }
 
-/** Asks a directory relay for the monitors' reports of the last hour. */
-function readDirectory(url: string): Promise<{ tags: string[][]; pubkey: string }[]> {
+type Report = { tags: string[][]; pubkey: string };
+
+/** A monitor's report as the directory hands it on, or null for anything malformed: public events are anyone's, so nothing in them is trusted to have its shape. */
+function report(message: unknown): Report | null {
+  if (!Array.isArray(message) || message[0] !== 'EVENT') return null;
+  const event = message[2] as { tags?: unknown; pubkey?: unknown } | null;
+  if (typeof event !== 'object' || event === null || typeof event.pubkey !== 'string' || !Array.isArray(event.tags)) return null;
+  const tags = event.tags.filter((tag): tag is string[] => Array.isArray(tag) && tag.every((part) => typeof part === 'string'));
+  return { tags, pubkey: event.pubkey };
+}
+
+/** Asks a directory relay for the monitors' reports of the last hour; a message that is not JSON or not a well-formed report is skipped. */
+function readDirectory(url: string): Promise<Report[]> {
   return new Promise((resolve) => {
-    const events: { tags: string[][]; pubkey: string }[] = [];
+    const events: Report[] = [];
     let socket: WebSocket;
     const done = () => {
       clearTimeout(timer);
@@ -215,8 +226,15 @@ function readDirectory(url: string): Promise<{ tags: string[][]; pubkey: string 
     socket.onopen = () => socket.send(JSON.stringify(['REQ', 'directory', { kinds: [30166], since: Math.floor(Date.now() / 1000) - DIRECTORY_WINDOW_S, limit: 5000 }]));
     socket.onerror = done;
     socket.onmessage = (event) => {
-      const message = JSON.parse(String(event.data)) as unknown[];
-      if (message[0] === 'EVENT') events.push(message[2] as { tags: string[][]; pubkey: string });
+      let message: unknown;
+      try {
+        message = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      if (!Array.isArray(message)) return;
+      const found = report(message);
+      if (found) events.push(found);
       else if (message[0] === 'EOSE' || message[0] === 'CLOSED') done();
     };
   });
@@ -229,7 +247,7 @@ async function directoryCandidates(): Promise<string[]> {
     console.log(`Directory ${DIRECTORY_RELAYS[index]}: ${events.length} reports`);
     for (const { tags, pubkey } of events) {
       const url = normalize(tags.find((tag) => tag[0] === 'd')?.[1] ?? '');
-      if (!url || !Array.isArray(tags)) continue;
+      if (!url) continue;
       const report = reports.get(url) ?? { monitors: new Set(), rtt: [], unmet: false };
       report.monitors.add(pubkey);
       const rtt = Number(tags.find((tag) => tag[0] === 'rtt-open')?.[1]);
