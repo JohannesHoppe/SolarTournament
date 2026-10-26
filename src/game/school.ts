@@ -497,7 +497,7 @@ function layRings(ctx: SchoolContext, a: Attempt, markers: Markers, course: read
   markers.highlight(0);
 }
 
-const DRILL = {
+export const DRILL = {
   briefing: saying(SCHOOL.briefing),
   turn: {
     line: SCHOOL.turn,
@@ -1170,6 +1170,17 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
 };
 
 /** Each drill's name, its key in DRILL; a course's opening and closing words are "opening" and "closing". */
+/**
+ * How an attempt stands in this moment: done (true), failed (the line to say) or neither
+ * (null). The drill done goes first, so what does it counts even when it also ends the means:
+ * the last torpedo's hit, the kill with the shot that overheats the laser. A missed ring or a
+ * drive lit too early fails in the moment it happens, before the drill can be done.
+ */
+export function judge(drill: Drill, ctx: SchoolContext, attempt: Attempt, markers: Markers): true | string | null {
+  if (drill.done(ctx, attempt, markers)) return true;
+  return drill.fail?.(ctx, attempt) ?? null;
+}
+
 const DRILL_NAMES = new Map<Drill, string>(Object.entries(DRILL).map(([name, drill]) => [drill as Drill, name]));
 const drillName = (course: SchoolCourse, index: number) => DRILL_NAMES.get(COURSES[course][index]) ?? (index === 0 ? 'opening' : 'closing');
 
@@ -1407,13 +1418,13 @@ export class FlightSchool {
     // a drill done counts once the clone has lived through it for SURVIVE seconds: a clone that
     // dies right after (flung into a rock off the hook, say) does the drill again
     if (Number.isNaN(attempt.doneAt)) {
-      const failure = drill.fail?.(ctx, attempt) ?? null;
-      if (failure) {
-        this.pending = [failure];
+      const verdict = judge(drill, ctx, attempt, this.markers);
+      if (verdict === true) attempt.doneAt = attempt.seconds;
+      else if (verdict) {
+        this.pending = [verdict];
         this.restart = true;
         return null;
       }
-      if (drill.done(ctx, attempt, this.markers)) attempt.doneAt = attempt.seconds;
     }
     if (attempt.seconds - attempt.doneAt >= SURVIVE) {
       if (attempt.rep + 1 < (drill.reps ?? 1)) {
