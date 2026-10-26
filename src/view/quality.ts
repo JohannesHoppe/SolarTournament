@@ -40,8 +40,8 @@ const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, part
 /**
  * The ladder, each rung a change to the one above it: the largest saving for the least loss
  * first, in the order the benchmark measured (README "Performance"). The field's rocks are most
- * of a frame's triangles (22 000 each up close, drawn twice: for the picture and for the sun's
- * shadows), and their fine relief barely shows from a distance, so the full relief keeps to
+ * of a frame's triangles (2 000 each up close, drawn twice: for the picture and for the sun's
+ * shadows), and their silhouette barely shows from a distance, so the near mesh keeps to
  * closer range first. Every full-screen pass costs per pixel, so the picture's resolution comes
  * down early and in small steps, with the bloom's resolution and the shadow map's edge between
  * them; the title screen's pad keeps a simpler look from the middle on. Shadows off costs a

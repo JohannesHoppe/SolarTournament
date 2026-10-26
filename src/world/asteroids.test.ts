@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ARENAS } from './arenas';
-import type { FieldLayout } from './asteroids';
+import { ARENA_LIMIT } from './arena';
+import { impostorDistance, IMPOSTOR_MIN, type FieldLayout } from './asteroids';
 import { testField } from '../test/field';
 import { DETAIL } from './rocks';
 
@@ -154,5 +155,21 @@ describe('a massive body', () => {
     expect(near).toBeGreaterThan(far * 10);
     expect(field.lineOfSight(new THREE.Vector3(-20000, 0, 0), new THREE.Vector3(20000, 0, 0))).toBe(false);
     expect(field.insideWell(new THREE.Vector3(3000, 0, 0), 100)).toBe(true);
+  });
+});
+
+describe('the billboards of the field', () => {
+  it('take over from no piece, however small, within the arena across', () => {
+    const field = testField();
+    const across = ARENA_LIMIT * 2;
+    for (const arena of ARENAS) {
+      field.generate(arena.layout);
+      for (const piece of field.asteroids.values()) {
+        // the piece, a fragment of it and a fragment of that (each 0.55 of its parent)
+        for (const share of [1, 0.55, 0.55 * 0.55]) expect(impostorDistance(piece.meanRadius * share)).toBeGreaterThan(across);
+      }
+    }
+    // a large rock keeps its billboard farther out yet, in proportion to its size
+    expect(impostorDistance(IMPOSTOR_MIN)).toBeGreaterThan(IMPOSTOR_MIN * 10);
   });
 });

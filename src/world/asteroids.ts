@@ -18,13 +18,24 @@ const FRAGMENT_SPEED = 150;
 /** Rocks farther than this many of their mean radii from the camera are drawn in less detail (about 5° of the view). */
 const FAR_LEVEL = 12;
 /**
- * Rocks farther than this many of their mean radii are drawn as a billboard (see view/impostor):
- * small enough on screen that a flat, camera-facing sprite looks the same as the shape it
- * stands in for. Kept high (the smallest rocks still switch only beyond about 7 km) so a fight
- * reaching across a large arena never sees the switch; the field's rocks only rarely get this
- * far from a ship anyway, unlike the belt's, which this spares the most (see world/belt).
+ * Rocks farther than this many of their mean radii, and at least IMPOSTOR_MIN, are drawn as a
+ * billboard (see view/impostor): small enough on screen that a flat, camera-facing sprite looks
+ * the same as the shape it stands in for.
  */
 const IMPOSTOR_LEVEL = 80;
+/**
+ * The nearest a field piece switches to its billboard (units, 7 km), however small it is (a
+ * fragment of a fragment, a chunk of ice): farther than a fight reaches across the largest
+ * arena, so the switch is never seen. Within it a small piece draws its far mesh (a few hundred
+ * triangles; the Rings' 90 ice chunks are the most of them). The belt beyond the arena chooses
+ * its billboards by itself (see world/belt).
+ */
+export const IMPOSTOR_MIN = 140000;
+
+/** How far (units) from the camera a field piece of `meanRadius` draws as its billboard (see IMPOSTOR_LEVEL, IMPOSTOR_MIN). */
+export function impostorDistance(meanRadius: number): number {
+  return Math.max(meanRadius * IMPOSTOR_LEVEL, IMPOSTOR_MIN);
+}
 /** Surface gravity per unit of mean radius (1/s²): uniform density, so bigger rocks pull harder. */
 const GRAVITY_PER_RADIUS = 0.004;
 
@@ -352,8 +363,9 @@ export class AsteroidField {
       if (template.impostor) {
         // fixed, never scaled down by the "rocks" quality knob (see setDetail): a billboard
         // must never show up close, whatever the rung, or the switch would be seen
-        lod.addLevel(template.impostor.clone(), meanRadius * IMPOSTOR_LEVEL);
-        lod.userData.impostor = meanRadius * IMPOSTOR_LEVEL;
+        const billboard = impostorDistance(meanRadius);
+        lod.addLevel(template.impostor.clone(), billboard);
+        lod.userData.impostor = billboard;
       }
       lod.scale.copy(template.object.scale);
       object.scale.set(1, 1, 1);

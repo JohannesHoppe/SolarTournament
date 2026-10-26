@@ -85,6 +85,9 @@ uniform vec3 sunDirection;
 uniform vec3 sunColor;
 uniform vec3 skyColor;
 uniform vec3 groundColor;
+uniform vec3 paint;
+uniform float painted;
+uniform vec3 emissive;
 
 varying vec2 vUv;
 varying float vTile;
@@ -101,7 +104,9 @@ void main() {
   vec3 normal = normalize( local.x * vBasisRight + local.y * vBasisUp + local.z * vBasisForward );
   float diffuse = max( dot( normal, sunDirection ), 0.0 );
   vec3 ambient = mix( groundColor, skyColor, normal.y * 0.5 + 0.5 );
-  vec3 outgoingLight = albedo.rgb * ( ambient + sunColor * diffuse );
+  // a painted shape (ice) shows its material's one color over the baked rock's, and glows like it
+  vec3 base = mix( albedo.rgb, paint, painted );
+  vec3 outgoingLight = base * ( ambient + sunColor * diffuse ) + emissive;
   gl_FragColor = vec4( outgoingLight, 1.0 );
 
   #include <tonemapping_fragment>
@@ -134,8 +139,27 @@ export function impostorGeometry(radius: number): THREE.BufferGeometry {
   return geometry;
 }
 
-/** A billboard material for one shape: `albedo` (rgb + silhouette alpha) and `normal` (object-space, encoded) are atlases of IMPOSTOR_VIEWS tiles (see world/rocks, bakeImpostorAtlas). */
-export function impostorMaterial(albedo: THREE.Texture, normal: THREE.Texture, atlasResolution: number, radius: number): THREE.ShaderMaterial {
+/** The one color a shape's material paints it in (instead of the baked rock's), and its glow: what the billboard of an ice piece shows (see world/shapes). */
+export interface ImpostorPaint {
+  color: THREE.ColorRepresentation;
+  emissive: THREE.ColorRepresentation;
+}
+
+/** A billboard of the same shape as `template` (sharing its quad and atlases), painted in one color (see ImpostorPaint). */
+export function paintedImpostor(template: THREE.Mesh, paint: ImpostorPaint): THREE.Mesh {
+  const { uniforms } = template.material as THREE.ShaderMaterial;
+  const material = impostorMaterial(uniforms.albedoAtlas.value, uniforms.normalAtlas.value, 0.5 / uniforms.inset.value, uniforms.radius.value, paint);
+  const painted = new THREE.Mesh(template.geometry, material);
+  painted.name = `${template.name}-painted`;
+  return painted;
+}
+
+/**
+ * A billboard material for one shape: `albedo` (rgb + silhouette alpha) and `normal`
+ * (object-space, encoded) are atlases of IMPOSTOR_VIEWS tiles (see world/rocks,
+ * bakeImpostorAtlas); `paint`, when given, replaces the albedo's color (its silhouette stays).
+ */
+export function impostorMaterial(albedo: THREE.Texture, normal: THREE.Texture, atlasResolution: number, radius: number, paint?: ImpostorPaint): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
       albedoAtlas: { value: albedo },
@@ -146,6 +170,9 @@ export function impostorMaterial(albedo: THREE.Texture, normal: THREE.Texture, a
       sunColor: IMPOSTOR_SUN.color,
       skyColor: IMPOSTOR_SUN.sky,
       groundColor: IMPOSTOR_SUN.ground,
+      paint: { value: new THREE.Color(paint?.color ?? 0xffffff) },
+      painted: { value: paint ? 1 : 0 },
+      emissive: { value: new THREE.Color(paint?.emissive ?? 0x000000) },
     },
     vertexShader,
     fragmentShader,
