@@ -23,6 +23,12 @@ const HIGH_CUT = 5000;
 /** At an eruption the crowd stays on its feet this long (s) before it settles to a murmur of MURMUR. */
 const ERUPTION = 4;
 const MURMUR = 0.25;
+/** Back on air, the murmur returns over this long (s); taken off, the crowd falls silent over HUSH (s). */
+const MURMUR_RETURN = 2;
+const HUSH = 1.5;
+/** At a round's end the crowd stays on its feet this long (s), then fades out over about FINALE_FADE (s), under the results. */
+const FINALE = 3;
+const FINALE_FADE = 4;
 
 export class Crowd {
   private readonly bed: GainNode;
@@ -30,6 +36,8 @@ export class Crowd {
   private recording: AudioBuffer | null = null;
   private loading = false;
   private started = false;
+  /** The broadcast shows the stadium (see air). */
+  private live = false;
 
   constructor(
     private readonly context: AudioContext,
@@ -82,10 +90,36 @@ export class Crowd {
   }
 
   /**
+   * Whether the broadcast shows the stadium: while a round is flown and seen. Put on air, the
+   * crowd comes back to its murmur; taken off, it hushes. Off air it neither swells nor erupts,
+   * so a cheer cued in the round does not wake it under a menu.
+   */
+  air(on: boolean) {
+    if (on === this.live) return;
+    this.live = on;
+    if (on) this.swell(MURMUR, MURMUR_RETURN);
+    else this.hush();
+  }
+
+  /**
+   * The round is over: the crowd cheers the result, on its feet, and fades out over the
+   * results; the broadcast leaves the stadium with it.
+   */
+  finale() {
+    if (!this.live) return;
+    this.live = false;
+    const now = this.context.currentTime;
+    this.bed.gain.setTargetAtTime(LEVEL, now, 0.05);
+    this.layer.gain.setTargetAtTime(LAYER_LEVEL, now, 0.05);
+    for (const gain of [this.bed, this.layer]) gain.gain.setTargetAtTime(0, now + FINALE, FINALE_FADE / 3);
+  }
+
+  /**
    * The crowd swells to `level` (0 silent, 1 on its feet) over `seconds`; for `excited` seconds
    * the second layer joins in, as loud as the crowd is above half.
    */
   swell(level: number, seconds: number, excited = 0) {
+    if (!this.live) return;
     this.start();
     const now = this.context.currentTime;
     this.bed.gain.setTargetAtTime(level * LEVEL, now, seconds / 3);
@@ -96,6 +130,7 @@ export class Crowd {
 
   /** The crowd erupts: on its feet at once, both layers, then settling to a murmur. */
   erupt(seconds = ERUPTION) {
+    if (!this.live) return;
     this.start();
     const now = this.context.currentTime;
     this.bed.gain.setTargetAtTime(LEVEL, now, 0.05);
@@ -104,10 +139,14 @@ export class Crowd {
     this.layer.gain.setTargetAtTime(0, now + seconds, seconds / 3);
   }
 
-  /** Quiet: the broadcast cuts away from the stadium. */
-  hush(seconds = 1.5) {
+  /** Quiet: the broadcast cuts away from the stadium (a cheer still fading out is cut short too). */
+  hush(seconds = HUSH) {
+    this.live = false;
     const now = this.context.currentTime;
-    for (const gain of [this.bed, this.layer]) gain.gain.setTargetAtTime(0, now, seconds / 3);
+    for (const gain of [this.bed, this.layer]) {
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setTargetAtTime(0, now, seconds / 3);
+    }
   }
 }
 

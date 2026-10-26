@@ -2119,6 +2119,8 @@ export class Game implements OnlineGame {
     this.markLeadMode();
     // a clone that died last leaves no muffled radio behind in the hangar
     this.radio.setMuffled(false);
+    // the broadcast has left the stadium, a cheer of the round's end included
+    this.crowd.hush();
     $('now-playing').classList.remove('silent');
     this.setScreen('menu');
   }
@@ -2758,6 +2760,8 @@ export class Game implements OnlineGame {
     }
     // the lessons of a flight school that is left end with it
     if (this.school) this.speaker.stop();
+    // a round flown to its end is cheered; one left from the pause menu is not
+    if (this.time >= this.roundEndsAt) this.crowd.finale();
     this.renderScoreboard();
     $('results-next').textContent = '';
     $('again').innerHTML = `${t('Back to hangar')} <kbd>Enter</kbd>`;
@@ -2963,6 +2967,7 @@ export class Game implements OnlineGame {
     // a browser that started over does not announce the round it was in once more
     if (this.roundId >= 0 && this.resultsShownFor !== this.roundId) {
       this.resultsShownFor = this.roundId;
+      this.crowd.finale();
       this.renderScoreboard();
       $('again').textContent = t('Leave tournament');
       this.speaker.say(COMPUTER.roundOver, 'urgent');
@@ -3003,6 +3008,15 @@ export class Game implements OnlineGame {
     }
   }
 
+  /**
+   * The broadcast shows the stadium while a round of the tournament is flown and seen: not in
+   * the flight school, under a pause menu or a sponsor break (the broadcast cuts to the ads), nor
+   * once the round is over (see Crowd.finale) or in the menu.
+   */
+  private stadiumOnAir() {
+    return this.state === 'playing' && !this.school && !this.sponsors.visible && this.time < this.roundEndsAt;
+  }
+
   /** One frame of the game: input, simulation, sound and the picture; false when a still pause draws nothing. */
   private draw(): boolean {
     this.input.poll();
@@ -3013,6 +3027,7 @@ export class Game implements OnlineGame {
     // a long frame (a slow device, a time-lapse) runs as several steps of at most MAX_STEP, so
     // shots, collisions and bots play the same game at any frame rate
     const steps = Math.max(1, Math.ceil(dt / MAX_STEP - 1e-9));
+    this.crowd.air(this.stadiumOnAir());
     for (let i = 0; i < steps; i++) {
       // an online tournament does not stop for one pilot's pause menu
       const running = this.state === 'playing' || (this.state === 'paused' && !!this.online);
