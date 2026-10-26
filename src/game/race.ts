@@ -52,6 +52,13 @@ const GATE_ROOM = 4000;
 const GATE_TRIES = 64;
 const SPIRAL_STEP = 1600;
 const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+/**
+ * The grid lies GRID_BEFORE (units, 300 m) before the first gate; a racer's new clone starts
+ * RESPAWN_PAST (units, 120 m, a gate's radius) beyond the last gate it passed, within the rock
+ * free room the gate keeps (GATE_ROOM).
+ */
+const GRID_BEFORE = -6000;
+const RESPAWN_PAST = GATE_RADIUS;
 /** Points for every gate passed, and for the places at the finish; a kill in a race is worth less (see Game). */
 export const GATE_POINTS = 20;
 export const PLACE_POINTS = [1000, 800, 650, 500, 400, 300, 200, 100];
@@ -229,10 +236,14 @@ export class Course {
     this.kit.blink(now);
   }
 
-  /** Where a ship (re)starts that has passed `passed` gates, and which way it looks: before the start, or at the last gate passed, towards the next. */
+  /**
+   * Where a ship (re)starts that has passed `passed` gates: on the grid before the start, or
+   * RESPAWN_PAST beyond the last gate passed, so the eight slots, up to 111 m from the gate's
+   * axis, stay clear of its housings.
+   */
   startOf(passed: number, slot: number, position: THREE.Vector3): THREE.Vector3 {
     const gate = passed === 0 ? 0 : (passed - 1) % GATES;
-    const behind = passed === 0 ? -6000 : 0;
+    const behind = passed === 0 ? GRID_BEFORE : RESPAWN_PAST;
     // ships side by side, so a grid of eight does not start in one place
     const side = toGate.set(0, 1, 0).cross(this.normals[gate]).normalize();
     return position

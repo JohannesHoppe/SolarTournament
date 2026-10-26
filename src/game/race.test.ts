@@ -5,6 +5,7 @@ import { ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
 import { MAX_SPEED, turnRadius } from '../ship/flight';
 import { bendRadius } from './racingline';
+import { touchRing } from '../world/gates';
 
 const course = (arena = ARENAS[0]) => {
   const field = testField();
@@ -27,6 +28,25 @@ describe('the race course', () => {
       const gates = new Course(field, arena.layout.seed);
       const blocked = gates.points.filter((point) => field.overlap(point, GATE_RADIUS));
       expect(blocked.length, arena.id).toBe(0);
+    }
+  });
+
+  it("starts a racer's new clone clear of the gate it passed, of its housings and of rock, past its plane", () => {
+    // a ship's hit radius (17 m)
+    const ship = 340;
+    for (const arena of ARENAS) {
+      const field = testField();
+      field.generate(arena.layout);
+      const gates = new Course(field, arena.layout.seed);
+      for (let passed = 1; passed <= GATES; passed++) {
+        const gate = passed - 1;
+        for (let slot = 0; slot < 8; slot++) {
+          const at = gates.startOf(passed, slot, new THREE.Vector3());
+          expect(touchRing(gates.points[gate], gates.normals[gate], GATE_RADIUS, at.clone(), ship, new THREE.Vector3()), `${arena.id} gate ${gate} slot ${slot}`).toBe(false);
+          expect(field.overlap(at, ship), `${arena.id} gate ${gate} slot ${slot}`).toBeFalsy();
+          expect(at.clone().sub(gates.points[gate]).dot(gates.normals[gate])).toBeGreaterThan(0);
+        }
+      }
     }
   });
 
