@@ -197,9 +197,10 @@ export class Radio {
       const T = await import('tone');
       T.setContext(this.context);
       const band = new Band(T);
-      band.output.connect(this.muffler);
       band.onSpeak = (spoken) => this.onSpeak(spoken, (spoken.time - this.context.currentTime) * 1000);
       await band.ready();
+      // only a band that is ready goes on air: one that failed is left unconnected for the next try
+      band.output.connect(this.muffler);
       this.band = band;
       await this.loadBandVoice();
     } catch (error) {
