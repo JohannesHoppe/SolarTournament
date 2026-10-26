@@ -157,6 +157,24 @@ describe('bots fly by the Hosts\' rules', () => {
     expect(fresh.target).toBe(near);
   });
 
+  it('counts only the hunters within its own sight, a storm\'s shorter reach included', () => {
+    const f = field(false);
+    const me = ship('Kessler', at(0), at(1));
+    const near = ship('Laika', at(10000), at(1));
+    // two hunters beyond the near one, their noses on it: within a storm-blind bot's sight of the prey, not of the bot
+    const hunters = [ship('Vega', at(18000, 1000), at(-1, -0.1)), ship('Orion', at(18000, -1000), at(-1, 0.1))];
+    const ships = [me, near, ...hunters];
+    for (const s of [me, ...hunters]) s.team = 0;
+    near.team = 1;
+    const clear = new Bot(me, evenSkills(0.5));
+    clear.think(0, ships, f);
+    expect(clear.target).toBeNull();
+    const blind = new Bot(me, evenSkills(0.5));
+    blind.blind = true;
+    blind.think(0, ships, f);
+    expect(blind.target).toBe(near);
+  });
+
   it('fight better the better their skills, but none fires sooner than a quick Host or aims like a machine', () => {
     // Kessler is the middling one, even in every skill
     expect(skillsOf('Kessler')).toEqual(evenSkills(0.5));
@@ -173,6 +191,10 @@ describe('bots fly by the Hosts\' rules', () => {
     expect(reactionOf(0.5)).toBeCloseTo(0.3);
     expect(missOf(0.5)).toBeCloseTo(0.5);
     expect(meanSkill(skillsOf('Kessler'))).toBe(0.5);
+  });
+
+  it('give a bot whose name another browser made up the even skills, also a name every object inherits', () => {
+    for (const name of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'Nobody']) expect(skillsOf(name)).toEqual(evenSkills(0.4));
   });
 
   it('time their start as a Host would, closer to BURN! the better their reflexes', () => {
