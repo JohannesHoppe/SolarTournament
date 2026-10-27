@@ -52,7 +52,7 @@ Each arena gets a look of its own, recognized at first glance, cheap on phones (
 - [x] Corona: prominences arcing over the limb and falling back as coronal rain, sunspots drifting, ships' radiators glowing red (no heat shimmer)
 - [x] Event horizon: the side of the accretion disk turning towards us brighter, two thin jets from the poles, gas spiraling in
 - [x] The derelict is the PAAA 01, "Per aspera ad astra", a world ship from a long-gone, more hopeful age: no sponsors and no neon on it (the Victory Cola sign goes), its name and motto painted on the hull like a ship's lettering, weathered, chipped and scratched, with a faded registry and the emblem of a united Earth; its dead drifting frozen around the break, crew and settlers blown out when it broke, in work suits and everyday clothes, rimed with frost, turning slowly (low poly, never gory); rows of windows with emergency light flickering here and there, shattered biodomes with frozen gardens, red beacons, frost on its shadow side, crystal mist at the break pattering on a hull flying through
-- [ ] Every arena its own light and color mood and nebula: Saturn cool silver and gold, the Corona orange-white, the Belt dusty and warm, the Event horizon deep violet
+- [x] Every arena its own light and color mood and nebula: Saturn cool silver and gold, the Corona orange-white, the Belt dusty and warm, the Event horizon deep violet
 
 ### 5. Game modes
 

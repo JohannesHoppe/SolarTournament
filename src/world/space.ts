@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { radialTexture } from '../view/textures';
 import { IMPOSTOR_SUN } from '../view/impostor';
+import { CLOUD_SHAPES, MAX_NEBULAE, cloudTexture, type Mood } from './nebula';
 
 /** How much of the sun's directional light a billboard's simplified shading shows (see IMPOSTOR_SUN, view/impostor), tuned by eye against a real lit rock. */
 const IMPOSTOR_SUN_SCALE = 0.28;
@@ -25,9 +26,10 @@ const dustVertex = /* glsl */ `
 `;
 
 const dustFragment = /* glsl */ `
+  uniform vec3 tint;
   varying float vFade;
   void main() {
-    gl_FragColor = vec4(vec3(0.55, 0.6, 0.7) * vFade, 1.0);
+    gl_FragColor = vec4(tint * vFade, 1.0);
   }
 `;
 
@@ -100,10 +102,8 @@ const SHADOW_REACH = 140000;
 /** Direction towards the sun; it sits in front of the ships at spawn. */
 export const SUN_DIRECTION = new THREE.Vector3(0.25, 0.15, -1).normalize();
 
-/** The sky's faint light from all around: bluish from above, a dark brown from below, this strong. */
-const SKY_COLOR = new THREE.Color(0x7788bb);
-const GROUND_COLOR = new THREE.Color(0x2a201c);
-const SKY_INTENSITY = 1.6;
+/** The dust's streaks are this much brighter than the dust's motes, in the dust's tint. */
+const STREAK_GAIN = 1.2;
 
 /** How much larger the sun looks at a solar flare's height. */
 const FLARE_SWELL = 2.5;
@@ -122,8 +122,20 @@ export class Space {
   readonly streaks: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private readonly sun: THREE.Sprite;
   private readonly sunLight: THREE.DirectionalLight;
-  /** The sky's faint light from all around (see shade). */
-  private readonly skyLight = new THREE.HemisphereLight(SKY_COLOR, GROUND_COLOR, SKY_INTENSITY);
+  /** The sky's faint light from all around (see shade), and the arena's own (see setMood). */
+  private readonly skyLight = new THREE.HemisphereLight();
+  private readonly skyColor = new THREE.Color();
+  private readonly groundColor = new THREE.Color();
+  private skyIntensity = 1;
+  /** What the screen shows where nothing is drawn, in the arena's space (see setMood). */
+  readonly background = new THREE.Color();
+  private readonly stars: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
+  /** The sky's nebulae, MAX_NEBULAE sprites: an arena shows as many as it has, the rest are hidden (see setMood). */
+  private readonly nebulae: THREE.Sprite[] = [];
+  /** The clouds' shapes, made once; each arena tints, places and turns them (see setMood). */
+  private readonly clouds = Array.from({ length: CLOUD_SHAPES }, (_, shape) => cloudTexture(shape + 1));
+  private readonly dustTint = new THREE.Color();
+  private readonly streakTint = new THREE.Color();
   /** The share of the sun's light that reaches the camera through an arena's haze (see shade), and how bright the sun shines before it (see flare). */
   private sunShare = 1;
   private sunBright = 1;
@@ -148,20 +160,12 @@ export class Space {
     const stars = new THREE.Points(geometry, new THREE.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: true, depthWrite: false }));
     stars.frustumCulled = false;
     this.sky.add(stars);
+    this.stars = stars;
 
-    const nebulae: [THREE.Vector3, string, number][] = [
-      [new THREE.Vector3(-1, 0.3, 0.2), 'rgba(90, 60, 200, 0.35)', 260000],
-      [new THREE.Vector3(0.6, -0.5, 0.8), 'rgba(30, 140, 190, 0.28)', 220000],
-      [new THREE.Vector3(0.2, 0.9, 0.4), 'rgba(200, 70, 120, 0.18)', 200000],
-    ];
-    for (const [direction, tint, size] of nebulae) {
-      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: radialTexture([[0, tint], [1, 'rgba(0, 0, 0, 0)']]),
-        blending: THREE.AdditiveBlending,
-        depthWrite: false,
-      }));
-      sprite.position.copy(direction.normalize()).multiplyScalar(SKY_RADIUS * 0.9);
-      sprite.scale.setScalar(size);
+    for (let i = 0; i < MAX_NEBULAE; i++) {
+      const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.clouds[i % CLOUD_SHAPES], blending: THREE.AdditiveBlending, depthWrite: false }));
+      sprite.visible = false;
+      this.nebulae.push(sprite);
       this.sky.add(sprite);
     }
 
@@ -181,7 +185,7 @@ export class Space {
     const dustGeometry = new THREE.BufferGeometry();
     dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
     this.dust = new THREE.Points(dustGeometry, new THREE.ShaderMaterial({
-      uniforms: { size: { value: DUST_SIZE } },
+      uniforms: { size: { value: DUST_SIZE }, tint: { value: this.dustTint } },
       vertexShader: dustVertex,
       fragmentShader: dustFragment,
       blending: THREE.AdditiveBlending,
@@ -190,7 +194,7 @@ export class Space {
     }));
     this.dust.frustumCulled = false;
 
-    this.streaks = dustStreaks(dustPositions, DUST_SIZE, new THREE.Color(0.6, 0.72, 0.9));
+    this.streaks = dustStreaks(dustPositions, DUST_SIZE, this.streakTint);
 
     // The asteroids cast shadows over the whole field; a ship in their shadow goes dark.
     const sunLight = new THREE.DirectionalLight(0xfff0dd, 3.2);
@@ -241,6 +245,33 @@ export class Space {
   }
 
   /**
+   * An arena's light and color mood (see Mood): its space's color, the sky's light, its
+   * nebulae, how bright its stars show, the dust's tint. The color grade is the output pass's
+   * (see view/grade).
+   */
+  setMood(mood: Mood) {
+    this.background.set(mood.space);
+    this.skyColor.set(mood.sky);
+    this.groundColor.set(mood.ground);
+    this.skyIntensity = mood.ambient;
+    this.stars.material.color.setScalar(mood.stars);
+    this.nebulae.forEach((sprite, i) => {
+      const nebula = mood.nebulae[i];
+      sprite.visible = !!nebula;
+      if (!nebula) return;
+      const material = sprite.material;
+      material.map = this.clouds[nebula.shape % CLOUD_SHAPES];
+      material.color.setRGB(...nebula.color);
+      material.rotation = nebula.turn;
+      sprite.position.set(...nebula.at).normalize().multiplyScalar(SKY_RADIUS * 0.9);
+      sprite.scale.setScalar(nebula.size);
+    });
+    this.dustTint.setRGB(...mood.dust);
+    this.streakTint.copy(this.dustTint).multiplyScalar(STREAK_GAIN);
+    this.shade(1, 1, null, null);
+  }
+
+  /**
    * The sun in a solar flare, `heat` from 0 (calm) to 1 (the flare at its height): it swells to
    * FLARE_SWELL times its size and burns FLARE_GLARE times as bright, white-hot, so every rock
    * throws a long hard shadow across the field.
@@ -262,9 +293,9 @@ export class Space {
   shade(sun: number, sky: number, deck: THREE.Color | null, deep: THREE.Color | null) {
     this.sunShare = sun;
     const light = this.skyLight;
-    light.intensity = SKY_INTENSITY * sky;
-    light.color.copy(SKY_COLOR);
-    light.groundColor.copy(GROUND_COLOR);
+    light.intensity = this.skyIntensity * sky;
+    light.color.copy(this.skyColor);
+    light.groundColor.copy(this.groundColor);
     if (deck && deep) {
       light.color.lerp(deck, 1 - sun);
       light.groundColor.lerp(deep, 1 - sun);

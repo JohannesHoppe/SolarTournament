@@ -4,13 +4,13 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { Bloom } from '../view/bloom';
 import { Graphics } from '../view/graphics';
 import { TIER_NAMES, TIER_RUNGS, TIERS, type BenchFeature, type Look, type Quality } from '../view/quality';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import type { Assets, ShipType } from '../assets';
 import { ASTEROID_POINTS, AsteroidField, FIELD_RADIUS, raySphere } from '../world/asteroids';
 import { Sound } from '../sound/audio';
 import { Bot, BOT_NAMES, evenSkills, HOME_RADIUS, meanSkill, raceSpeedOf, SIEGE_DISTANCE, skillsOf, startTiming, type Ring, type Skills } from '../ship/bots';
 import { Effects } from '../view/effects';
 import { Glitch } from '../view/glitch';
+import { GradedOutputPass } from '../view/grade';
 import { Datamosh } from '../view/datamosh';
 import { GuideLine } from '../view/guide';
 import { ReferencePlane } from '../view/plane';
@@ -328,8 +328,6 @@ const SHOVE_SPIN_MAX = 6;
  * second or in a time-lapse as at 60.
  */
 const MAX_STEP = 1 / 30;
-/** What the screen shows where nothing is drawn, in space. */
-const SPACE_BACKGROUND = 0x01020a;
 /** Under a planet's cloud deck that is the haze's light, darkening towards its depths' over this depth (units, 1.2 km; see view/haze). */
 const BACKGROUND_DEPTH = 24000;
 /**
@@ -757,8 +755,10 @@ export class Game implements OnlineGame {
   readonly mining = new Mining();
   /** The haze of an arena's air in the picture (see view/haze). */
   readonly haze = new Haze();
-  /** What the screen shows where nothing is drawn: space's dark, or under a planet's cloud deck its haze (see airWeather). */
-  private readonly background = new THREE.Color(SPACE_BACKGROUND);
+  /** What the screen shows where nothing is drawn: the arena's space (see Space.setMood), or under a planet's cloud deck its haze (see airWeather). */
+  private readonly background = new THREE.Color();
+  /** Tone mapping, the arena's color grade and the screen's encoding, in one pass (see view/grade). */
+  private readonly output = new GradedOutputPass();
   /** The light that reaches a sheet of cloud this deep (units) under the deck (see world/jupiter). */
   private readonly sheetLight = (depth: number) => skyLight(-depth);
   private readonly lensing = new Lensing();
@@ -1143,7 +1143,7 @@ export class Game implements OnlineGame {
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.composer.addPass(this.lensing.pass);
     this.composer.addPass(this.bloom);
-    this.composer.addPass(new OutputPass());
+    this.composer.addPass(this.output);
     this.composer.addPass(this.datamosh);
     this.composer.addPass(this.glitch.pass);
     this.glitch.onStatic = (strength) => this.sound.crackle(strength);
@@ -2121,6 +2121,8 @@ export class Game implements OnlineGame {
     this.place = -1;
     if (state) this.field.restore(state, arena.layout);
     this.space.setSun(arena.sun);
+    this.space.setMood(arena.mood);
+    this.output.set(arena.mood.grade);
     setGlint(arena.sun.intensity);
     this.landmarks.show(arena);
     setHullFrost(arena.id === 'derelict');
@@ -4340,7 +4342,7 @@ export class Game implements OnlineGame {
     const jupiter = this.landmarks.jupiter;
     if (!air) {
       this.space.shade(1, 1, null, null);
-      this.background.set(SPACE_BACKGROUND);
+      this.background.copy(this.space.background);
       this.sound.setWind(0, 0);
       return;
     }
@@ -4349,7 +4351,7 @@ export class Game implements OnlineGame {
     this.space.shade(shade.sun, shade.sky, jupiter.deckLight, jupiter.deepLight);
     const depth = altitudeIn(air, eye);
     if (depth < 0) this.background.copy(jupiter.deepLight).lerp(jupiter.deckLight, Math.exp(depth / BACKGROUND_DEPTH));
-    else this.background.set(SPACE_BACKGROUND);
+    else this.background.copy(this.space.background);
     const struck = jupiter.update(this.field.clock, dt, eye, this.sheetLight);
     // the own ship in the air hears it: none in the menu, none for a dead clone
     const me = this.state === 'playing' ? this.me : null;
