@@ -66,8 +66,8 @@ export class Arena {
     this.mesh.frustumCulled = false;
   }
 
-  /** The grid turns orange while the pilot is outside. */
-  update(camera: THREE.Camera) {
-    this.material.uniforms.outside.value = camera.position.length() > ARENA_LIMIT ? 1 : 0;
+  /** The grid turns orange while the own pilot's ship (null: no clone flies) is outside, wherever the camera hangs. */
+  update(ship: THREE.Vector3 | null) {
+    this.material.uniforms.outside.value = ship && ship.length() > ARENA_LIMIT ? 1 : 0;
   }
 }

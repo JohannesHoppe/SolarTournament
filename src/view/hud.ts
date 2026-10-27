@@ -81,6 +81,8 @@ export class Hud {
   private escapeShown = -1;
   private readonly lock = $('hud-lock');
   private readonly vignette = $('g-vignette');
+  /** The strain the vignette shows (see setStrain). */
+  private strainShown = '';
   private readonly flareHeat = $('flare-heat');
   private readonly speed = $('hud-speed');
   private readonly mode = $('hud-mode');
@@ -193,12 +195,16 @@ export class Hud {
     if (!visible) this.clearPopups();
   }
 
-  /** The window's new size (see viewport). */
-  setViewport(width: number, height: number) {
+  /**
+   * The window's new size (see viewport) and the picture's pixels per CSS pixel (see
+   * view/graphics): the attitude's canvas covers the whole screen, so it is drawn as sharp as the
+   * picture under it, at least one pixel per CSS pixel and at most two.
+   */
+  setViewport(width: number, height: number, pixelRatio: number) {
     viewport.width = width;
     viewport.height = height;
     this.blockedStale = true;
-    this.attitude.setViewport(width, height, Math.min(window.devicePixelRatio, 2));
+    this.attitude.setViewport(width, height, Math.min(Math.max(pixelRatio, Math.min(1, window.devicePixelRatio)), 2));
   }
 
   /** The horizon, the pitch ladder and the heading tape (see Attitude), while a clone flies; a phone leaves out the tape. */
@@ -569,8 +575,12 @@ export class Hud {
 
   /** Tunnel vision under sustained acceleration, 0..1: only hinted, the edges darken a little and close in a little, so the picture stays readable. */
   setStrain(strain: number) {
-    this.vignette.style.opacity = String(strain);
-    this.vignette.style.setProperty('--tunnel', `${Math.round(75 - strain * 20)}%`);
+    // in hundredths, written only when they change: a style write every frame restyles the overlay
+    const shown = strain < 0.005 ? '0' : strain.toFixed(2);
+    if (shown === this.strainShown) return;
+    this.strainShown = shown;
+    this.vignette.style.opacity = shown;
+    this.vignette.style.setProperty('--tunnel', `${Math.round(75 - Number(shown) * 20)}%`);
   }
 
   /** A solar flare's heat on the screen, 0..1: its edges glow orange, then the whole picture. */

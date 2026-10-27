@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AsteroidField } from '../world/asteroids';
+import type { AsteroidField, RayHit } from '../world/asteroids';
 import { IDLE, type Controls } from '../input/input';
 import { noseOn, type Ship } from './ship';
 import { MAIN_THRUST, RCS_THRUST } from './flight';
@@ -162,6 +162,9 @@ const hunt = new THREE.Vector3();
 const across = new THREE.Vector3();
 const across2 = new THREE.Vector3();
 const wayOrigin = new THREE.Vector3();
+/** The rays of wayAhead (and the shove's check): each cast's hit, and the nearest of them, reused every step. */
+const wayHit: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
+const wayBest: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
 const UP = new THREE.Vector3(0, 1, 0);
 const SIDE = new THREE.Vector3(1, 0, 0);
 
@@ -543,7 +546,7 @@ export class Bot {
       const distance = away.length();
       if (distance > this.ship.radius * SHOVE_REACH || line.subVectors(ship.flight.velocity, me.velocity).lengthSq() > SHOVE_DRIFT * SHOVE_DRIFT) continue;
       away.divideScalar(distance);
-      if (!field.raycast(ship.flight.position, away, SHOVE_TARGET, true)) continue;
+      if (!field.raycast(ship.flight.position, away, SHOVE_TARGET, true, wayHit)) continue;
       // the thrusters kick sideways and up and down: a rival ahead or behind is out of reach
       me.toLocalDirection(away, away);
       if (Math.hypot(away.x, away.y) < 0.7) continue;
@@ -569,12 +572,12 @@ export class Bot {
     // two directions across the flight
     across.crossVectors(direction, Math.abs(direction.y) < 0.9 ? UP : SIDE).normalize();
     across2.crossVectors(direction, across);
-    let best: { distance: number; center: THREE.Vector3 } | null = null;
+    let best: RayHit | null = null;
     for (let i = 0; i < 5; i++) {
       wayOrigin.copy(position);
       if (i > 0) wayOrigin.addScaledVector(i < 3 ? across : across2, i % 2 ? wall : -wall);
-      const hit = field.raycast(wayOrigin, direction, best ? best.distance : length, true);
-      if (hit && (!best || hit.distance < best.distance)) best = hit;
+      const hit = field.raycast(wayOrigin, direction, best ? best.distance : length, true, wayHit);
+      if (hit && (!best || hit.distance < best.distance)) best = Object.assign(wayBest, hit);
     }
     return best;
   }

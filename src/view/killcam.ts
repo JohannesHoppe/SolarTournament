@@ -22,6 +22,8 @@ const position = new THREE.Vector3();
 const orientation = new THREE.Quaternion();
 const to = new THREE.Vector3();
 const offset = new THREE.Vector3();
+const between = new THREE.Vector3();
+const turned = new THREE.Quaternion();
 
 type Frame = { time: number; ships: (Ship | null)[]; data: Float32Array };
 type Beam = { time: number; from: THREE.Vector3; to: THREE.Vector3; color: THREE.Color };
@@ -90,7 +92,8 @@ export class KillCam {
 
   /** The own clone was shot down at game time `time`: replays the moments before. */
   start(killer: Ship, victim: Ship, time: number) {
-    const oldest = Math.min(...this.frames.map((frame) => frame.time));
+    let oldest = Infinity;
+    for (const frame of this.frames) oldest = Math.min(oldest, frame.time);
     // beams from before the window are not fired again at its start
     const start = Math.max(oldest, time - WINDOW);
     this.replay = { killer, victim, start, end: time, startedAt: performance.now() / 1000, lastBeam: start, loop: false };
@@ -128,6 +131,10 @@ export class KillCam {
     }
     const frame = this.frameAt(time);
     if (!frame) return false;
+    // the slow motion falls between the kept frames: each ship is put between the frame before
+    // and the one after, so it glides instead of jumping from frame to frame
+    const after = this.frameAfter(time);
+    const share = after ? (time - frame.time) / (after.time - frame.time) : 0;
     this.savedCount = 0;
     let killerSeen = false;
     for (let i = 0; i < MAX_SHIPS; i++) {
@@ -142,6 +149,11 @@ export class KillCam {
       saved.visible = ship.root.visible;
       ship.root.position.fromArray(d, at);
       ship.root.quaternion.fromArray(d, at + 3);
+      // the same ship, alive in both frames (a respawn would sweep it across the field)
+      if (after && after.ships[i] === ship && d[at + 7] > 0 && after.data[at + 7] > 0) {
+        ship.root.position.lerp(between.fromArray(after.data, at), share);
+        ship.root.quaternion.slerp(turned.fromArray(after.data, at + 3), share);
+      }
       // the victim still flies in the replay; it breaks up when the replay ends
       ship.root.visible = d[at + 7] > 0 || ship === replay.victim;
       if (ship === replay.killer) {
@@ -179,6 +191,13 @@ export class KillCam {
   private frameAt(time: number): Frame | null {
     let best: Frame | null = null;
     for (const frame of this.frames) if (frame.time <= time && (!best || frame.time > best.time)) best = frame;
+    return best;
+  }
+
+  /** The kept frame closest after a moment, or null past the last. */
+  private frameAfter(time: number): Frame | null {
+    let best: Frame | null = null;
+    for (const frame of this.frames) if (frame.time > time && (!best || frame.time < best.time)) best = frame;
     return best;
   }
 }

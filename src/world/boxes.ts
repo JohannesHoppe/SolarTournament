@@ -20,8 +20,11 @@ export function boxContact(local: THREE.Vector3, half: THREE.Vector3, radius: nu
     return closest;
   }
   // the center is inside: out through the nearest face
-  const depths = [half.x - Math.abs(local.x), half.y - Math.abs(local.y), half.z - Math.abs(local.z)];
-  const axis = depths.indexOf(Math.min(...depths));
+  const dx = half.x - Math.abs(local.x);
+  const dy = half.y - Math.abs(local.y);
+  const dz = half.z - Math.abs(local.z);
+  // the shallowest depth, the first axis on a tie
+  const axis = dx <= dy && dx <= dz ? 0 : dy <= dz ? 1 : 2;
   normal.set(0, 0, 0).setComponent(axis, Math.sign(local.getComponent(axis)) || 1);
   closest.copy(local).setComponent(axis, normal.getComponent(axis) * half.getComponent(axis));
   return closest;

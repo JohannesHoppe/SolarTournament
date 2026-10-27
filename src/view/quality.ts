@@ -40,8 +40,8 @@ const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, part
 /**
  * The ladder, each rung a change to the one above it: the largest saving for the least loss
  * first, in the order the benchmark measured (README "Performance"). The field's rocks are most
- * of a frame's triangles (22 000 each up close, drawn twice: for the picture and for the sun's
- * shadows), and their fine relief barely shows from a distance, so the full relief keeps to
+ * of a frame's triangles (2 000 each up close, drawn twice: for the picture and for the sun's
+ * shadows), and their silhouette barely shows from a distance, so the near mesh keeps to
  * closer range first. Every full-screen pass costs per pixel, so the picture's resolution comes
  * down early and in small steps, with the bloom's resolution and the shadow map's edge between
  * them; the title screen's pad keeps a simpler look from the middle on. Shadows off costs a
@@ -179,12 +179,23 @@ export const BACKOFF_SECONDS = 30;
 export const STABLE_SECONDS = 20;
 /** A frame longer than this (s) is a stall (a shader compiled, the tab came back), not the frame rate. */
 const STALL = 0.25;
+/**
+ * A screen capped below TARGET_FPS (a phone's battery saver holds it at 30 Hz) is slow on every
+ * rung, with the frame's own work well under HEADROOM. After CAP_STEPS steps down in a row that
+ * raised the frame rate by less than CAP_GAIN (a share) with that much headroom, the governor
+ * takes the cap for the screen's, goes back to the rung before them and holds it (see Governor.cap).
+ */
+export const CAP_STEPS = 2;
+const CAP_GAIN = 1.05;
+/** Under a cap, a stretch this much slower than the cap (a share of it) is the device's own slowness again, and the governor steps down. */
+const CAP_SLACK = 0.9;
 
 /**
  * Watches the frame rate and moves along the ladder: down a rung when a stretch of
  * DOWN_SECONDS (TOUCH_DOWN_SECONDS on a touch device) runs below TARGET_FPS, up a rung after
- * UP_SECONDS (TOUCH_UP_SECONDS touched) at UP_FPS or above with headroom to spare. Fed the real
- * frame times; only what is drawn depends on it.
+ * UP_SECONDS (TOUCH_UP_SECONDS touched) at UP_FPS or above with headroom to spare. A screen
+ * that refreshes slower than TARGET_FPS is told apart from a slow device (see CAP_STEPS). Fed
+ * the real frame times; only what is drawn depends on it.
  */
 export class Governor {
   private frames = 0;
@@ -198,6 +209,10 @@ export class Governor {
   /** The clock (s of frames seen), and per rung: until when it is barred after being left for slow, and how often it was. */
   private clock = 0;
   private readonly barred = new Map<number, { until: number; times: number }>();
+  /** The steps down with headroom to spare that have not raised the frame rate yet: the rung and frame rate they began at, and how many. */
+  private probe: { from: number; fps: number; steps: number } | null = null;
+  /** The frame rate (frames/s) the screen is capped at, or 0: while capped, the governor neither steps down nor names a rung stable. */
+  cap = 0;
   /** Called once the current rung held STABLE_SECONDS (see held). */
   stable: (rung: number) => void = () => {};
 
@@ -227,7 +242,8 @@ export class Governor {
     this.frames++;
     this.seconds += dt;
     this.work += busy;
-    this.held += dt;
+    // a capped screen's rung says nothing about the device: it is never kept
+    this.held = this.cap ? 0 : this.held + dt;
     if (this.held >= STABLE_SECONDS) {
       this.held = -Infinity;
       this.stable(this.rung);
@@ -237,15 +253,36 @@ export class Governor {
     const spare = this.work / this.seconds < HEADROOM;
     const stretch = this.seconds;
     this.frames = this.seconds = this.work = 0;
-    if (fps < TARGET_FPS && this.rung < this.last) {
-      const bar = this.barred.get(this.rung) ?? { until: 0, times: 0 };
-      this.barred.set(this.rung, { until: this.clock + BACKOFF_SECONDS * 2 ** bar.times, times: bar.times + 1 });
-      return this.step(this.rung + 1);
+    if (fps >= TARGET_FPS) this.cap = 0;
+    else if (this.cap && fps >= this.cap * CAP_SLACK) {
+      this.smooth = 0;
+      return null;
     }
+    if (fps < TARGET_FPS && this.rung < this.last) return this.slow(fps, spare);
+    this.probe = null;
     this.smooth = fps >= UP_FPS && spare ? this.smooth + stretch : 0;
     const up = this.rung - 1;
     if (this.smooth >= this.tuning.upSeconds && up >= 0 && (this.barred.get(up)?.until ?? 0) <= this.clock) return this.step(up);
     return null;
+  }
+
+  /** A stretch at `fps`, below TARGET_FPS: a rung down, or back up to where the steps began once they show a capped screen (see CAP_STEPS). */
+  private slow(fps: number, spare: boolean): number {
+    this.cap = 0;
+    const probe = this.probe;
+    if (spare && probe && fps < probe.fps * CAP_GAIN) {
+      probe.steps++;
+      if (probe.steps >= CAP_STEPS) {
+        // the screen, not the picture, holds the frame rate: the rungs left were not too slow
+        for (let rung = probe.from; rung < this.rung; rung++) this.barred.delete(rung);
+        this.cap = probe.fps;
+        this.probe = null;
+        return this.step(probe.from);
+      }
+    } else this.probe = spare ? { from: this.rung, fps, steps: 0 } : null;
+    const bar = this.barred.get(this.rung) ?? { until: 0, times: 0 };
+    this.barred.set(this.rung, { until: this.clock + BACKOFF_SECONDS * 2 ** bar.times, times: bar.times + 1 });
+    return this.step(this.rung + 1);
   }
 
   private step(rung: number): number {
@@ -253,6 +290,49 @@ export class Governor {
     this.held = 0;
     this.reset();
     return rung;
+  }
+}
+
+/** Where the picture is drawn: the menu (the title screen's pad) or a running round. */
+export type Scene = 'menu' | 'round';
+
+/**
+ * A governor each for the menu and for a running round: the title screen's pad costs what a
+ * fight does not and the other way round, so what one finds (its rung, the rungs it left for
+ * slow, a capped screen) never decides the other's. Only the round's rung is named stable,
+ * the device's start next time.
+ */
+export class Governors {
+  private readonly governors: Record<Scene, Governor>;
+  /** Called once the round's rung held STABLE_SECONDS (see Governor.stable). */
+  stable: (rung: number) => void = () => {};
+
+  constructor(
+    rung: number,
+    tuning?: { downSeconds: number; upSeconds: number },
+    public scene: Scene = 'menu',
+  ) {
+    this.governors = { menu: new Governor(rung, undefined, tuning), round: new Governor(rung, undefined, tuning) };
+    this.governors.round.stable = (held) => this.stable(held);
+  }
+
+  /** The round's rung, the device's as far as it is known. */
+  get round() {
+    return this.governors.round.rung;
+  }
+
+  /** One frame drawn in `scene`: the rung to switch to (the scene's own when it changed), or null to keep the current one. */
+  sample(dt: number, busy: number, scene: Scene): number | null {
+    if (scene === this.scene) return this.governors[scene].sample(dt, busy);
+    this.scene = scene;
+    const governor = this.governors[scene];
+    governor.reset();
+    return governor.rung;
+  }
+
+  /** Starts the current scene's watch anew (see Governor.reset). */
+  reset() {
+    this.governors[this.scene].reset();
   }
 }
 

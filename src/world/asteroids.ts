@@ -18,13 +18,24 @@ const FRAGMENT_SPEED = 150;
 /** Rocks farther than this many of their mean radii from the camera are drawn in less detail (about 5° of the view). */
 const FAR_LEVEL = 12;
 /**
- * Rocks farther than this many of their mean radii are drawn as a billboard (see view/impostor):
- * small enough on screen that a flat, camera-facing sprite looks the same as the shape it
- * stands in for. Kept high (the smallest rocks still switch only beyond about 7 km) so a fight
- * reaching across a large arena never sees the switch; the field's rocks only rarely get this
- * far from a ship anyway, unlike the belt's, which this spares the most (see world/belt).
+ * Rocks farther than this many of their mean radii, and at least IMPOSTOR_MIN, are drawn as a
+ * billboard (see view/impostor): small enough on screen that a flat, camera-facing sprite looks
+ * the same as the shape it stands in for.
  */
 const IMPOSTOR_LEVEL = 80;
+/**
+ * The nearest a field piece switches to its billboard (units, 7 km), however small it is (a
+ * fragment of a fragment, a chunk of ice): farther than a fight reaches across the largest
+ * arena, so the switch is never seen. Within it a small piece draws its far mesh (a few hundred
+ * triangles; the Rings' 90 ice chunks are the most of them). The belt beyond the arena chooses
+ * its billboards by itself (see world/belt).
+ */
+export const IMPOSTOR_MIN = 140000;
+
+/** How far (units) from the camera a field piece of `meanRadius` draws as its billboard (see IMPOSTOR_LEVEL, IMPOSTOR_MIN). */
+export function impostorDistance(meanRadius: number): number {
+  return Math.max(meanRadius * IMPOSTOR_LEVEL, IMPOSTOR_MIN);
+}
 /** Surface gravity per unit of mean radius (1/s²): uniform density, so bigger rocks pull harder. */
 const GRAVITY_PER_RADIUS = 0.004;
 
@@ -44,6 +55,9 @@ export type TemplateKind = 'rock' | 'ice' | 'debris' | 'hull';
  * however light `near` is drawn; without it, `near` itself is measured (a shape that is never
  * simplified for drawing, or a test field that does not care).
  */
+/** A ray's nearest hit (see AsteroidField.raycast): the rock (null for the well's body or an obstacle), the distance along the ray, and the center of what it hit. */
+export type RayHit = { asteroid: Asteroid | null; distance: number; center: THREE.Vector3 };
+
 export type TemplateSet = { near: THREE.Object3D[]; far: THREE.Object3D[]; impostor?: THREE.Object3D[]; collision?: THREE.Object3D[]; box?: boolean };
 
 /**
@@ -352,8 +366,9 @@ export class AsteroidField {
       if (template.impostor) {
         // fixed, never scaled down by the "rocks" quality knob (see setDetail): a billboard
         // must never show up close, whatever the rung, or the switch would be seen
-        lod.addLevel(template.impostor.clone(), meanRadius * IMPOSTOR_LEVEL);
-        lod.userData.impostor = meanRadius * IMPOSTOR_LEVEL;
+        const billboard = impostorDistance(meanRadius);
+        lod.addLevel(template.impostor.clone(), billboard);
+        lod.userData.impostor = billboard;
       }
       lod.scale.copy(template.object.scale);
       object.scale.set(1, 1, 1);
@@ -567,10 +582,17 @@ export class AsteroidField {
   /**
    * Nearest rock hit by a ray, with the distance along the ray; the well's body counts too, as a
    * hit without a rock (null), and with `obstacles` the obstacle's hull (the battleship) as well.
+   * The hit is written into `into`: a caller in a hot loop passes one of its own it reuses (and
+   * reads it before the next cast), the others get a fresh one.
    */
-  raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number, obstacles = false): { asteroid: Asteroid | null; distance: number; center: THREE.Vector3 } | null {
+  raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number, obstacles = false, into?: RayHit): RayHit | null {
     const distance = this.cast(origin, direction, maxDistance, false, obstacles);
-    return distance === null ? null : { asteroid: castRock, distance, center: castCenter! };
+    if (distance === null) return null;
+    const hit = into ?? { asteroid: null, distance: 0, center: castCenter! };
+    hit.asteroid = castRock;
+    hit.distance = distance;
+    hit.center = castCenter!;
+    return hit;
   }
 
   /** True when no rock (and not the well's body, nor an obstacle) lies between two points. */
@@ -714,8 +736,17 @@ function ellipsoidContact(asteroid: Asteroid, center: THREE.Vector3, radius: num
   const axes = v.copy(asteroid.semiAxes).addScalar(radius / scale);
   const local = u.copy(center).applyMatrix4(asteroid.inverse).sub(asteroid.center);
   const length = Math.hypot(local.x / axes.x, local.y / axes.y, local.z / axes.z);
-  return length < 1 ? { local, axes, length } : null;
+  if (length >= 1) return null;
+  ellipsoidTouch.length = length;
+  return ellipsoidTouch;
 }
+
+/**
+ * The contacts the two functions report, reused: every caller reads one before the next
+ * contact is asked for, and a ship's collisions ask for many every step.
+ */
+const ellipsoidTouch = { local: u, axes: v, length: 0 };
+const surfaceTouch = { local: u, length: 0, reach: 0, scale: 1 };
 
 /**
  * A sphere against a rock's measured surface: the sphere's center in the rock's own
@@ -727,7 +758,11 @@ function surfaceContact(asteroid: Asteroid, surface: Surface, center: THREE.Vect
   const local = u.copy(center).applyMatrix4(asteroid.inverse).sub(asteroid.center);
   const length = local.length();
   const reach = surface.radius(local) + radius / scale;
-  return length < reach ? { local, length, reach, scale } : null;
+  if (length >= reach) return null;
+  surfaceTouch.length = length;
+  surfaceTouch.reach = reach;
+  surfaceTouch.scale = scale;
+  return surfaceTouch;
 }
 
 const side = new THREE.Vector3();
