@@ -16,7 +16,7 @@ Everything the game says out loud is rendered ahead of time, by the tools in thi
 - **Kokoro** is a small neural speech model (82 million parameters, Apache-2.0). Its voice `af_nicole` is Nicole: breathy, close, a little too warm. Kokoro speaks English well, but has no German, Spanish or French voices of its own.
 - **Chatterbox Multilingual** (Resemble AI, MIT license) is a larger neural speech model (about 3 GB) that speaks 23 languages and can **clone** a voice: give it a few seconds of someone speaking, and it speaks any text, in any of its languages, in that voice. No training is involved. The model is used as it is, with a short recording as a reference.
 - **Whisper** (OpenAI; the `whisper-small` model, Apache-2.0) is a speech recognizer. Here it only checks the clone's work: it listens to every sentence Chatterbox spoke and writes down what it heard, so a mumbled or garbled take is caught and done again.
-- **ffmpeg** encodes the MP3 files and decodes the clone store; it comes with the `ffmpeg-static` package.
+- **ffmpeg** encodes the MP3 files and decodes the clone store. `ffmpeg.ts` fetches a static build of ffmpeg 6.1.1 (the release `b6.1.1` of the ffmpeg-static project, one binary per platform) only when the build cache lacks it, and uses it only if its SHA-256 is the one pinned there for the machine's platform (macOS on Apple silicon and Intel, Linux x86-64 and ARM64); a download that does not match stops the build. It is kept in `_solartournament/ffmpeg/` in the build cache, so Cloudflare fetches it once and not for every build.
 - **Perth** is Resemble AI's watermark: every sentence Chatterbox speaks carries an inaudible mark saying it was made by an AI. It cannot be switched off, and we would not want to.
 
 ## How Nicole learns other languages
@@ -78,7 +78,7 @@ node lock.ts
 
 `requirements.in` follows Chatterbox's `pyproject.toml` at the new commit (and Perth's commit, if it moves); `lock.ts` swaps torch and torchaudio for their CPU builds and adds Chatterbox at the commit in `CLONE.code`. pip-compile resolves for the machine it runs on; the packages here pull in nothing that only Linux needs, so a lock made on a Mac holds on the runner (worth checking again after larger changes). Look at what changed before committing: a new package or a new maintainer is a new dependency (see CLAUDE.md, "Supply chain").
 
-Cloudflare's build usually runs before the workflow has finished: the new lines then play with the fallback voice until the next deploy builds the voices again. A build that cannot fetch a store the release has (a timeout, an upload under way) speaks those lines with the fallback too, but keeps no stamp and nothing in its cache, so the next build tries again.
+Cloudflare's build usually runs before the workflow has finished: the new lines then play with the fallback voice until the next deploy builds the voices again. A store that cannot be had (its index out of reach with no copy of it in the cache, or its audio not fetched: a timeout, an upload under way) is handled by where the build runs. On a developer's machine the sprites speak those lines with the fallback, keep no stamp and nothing in the cache, so the next build tries again. A build for the site (`CI` or `CF_PAGES` set, as Cloudflare Pages and GitHub Actions do) stops with an error instead, so the site never goes out without Nicole's clones; running the deployment again tries again.
 
 ## What makes Nicole Nicole, and where it is written down
 
@@ -126,6 +126,7 @@ The first run downloads Chatterbox (about 3 GB) and Whisper into the Hugging Fac
 | File | What it does |
 |---|---|
 | `render.ts` | Renders all sprites (`npm run voice`, run by build and dev): radio, announcer, Nicole |
+| `ffmpeg.ts` | ffmpeg for `render.ts`: the release it comes from, the SHA-256 of each platform's binary, fetched only when the cache lacks it |
 | `nicole.ts` | What Nicole is made of: Kokoro voice, reference, clone settings, the release, the keys of her lines |
 | `clone/prepare.ts` | Writes the list of lines to clone and the reference, checks the Python lock against `nicole.ts` |
 | `clone/clone.py` | Clones the missing lines of one language with Chatterbox, checks them with Whisper |
@@ -136,4 +137,4 @@ The first run downloads Chatterbox (about 3 GB) and Whisper into the Hugging Fac
 
 ## Licenses
 
-espeak-ng is GPL-3.0; the audio it produces is not covered by the GPL. Kokoro and the Whisper model are Apache-2.0, Chatterbox (code and weights) and Perth are MIT. None of them is part of the game: they only run where the voices are made. The rendered voices are not kept in the repository.
+espeak-ng and the ffmpeg build are GPL-3.0; the audio they produce is not covered by the GPL. Kokoro and the Whisper model are Apache-2.0, Chatterbox (code and weights) and Perth are MIT. None of them is part of the game: they only run where the voices are made. The rendered voices are not kept in the repository.

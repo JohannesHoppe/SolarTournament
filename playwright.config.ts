@@ -20,10 +20,13 @@ export default defineConfig({
     // second and slows a second tab's start until the online tests time out
     launchOptions: { args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--disable-gpu-compositing', '--autoplay-policy=no-user-gesture-required'] },
   },
+  // the tests start a dev server of this checkout and stop with an error when the port is
+  // taken, so they never test whatever another checkout serves there; E2E_REUSE=1 tests against
+  // a server already running (one's own, kept up between runs)
   webServer: {
     command: 'npm run dev',
     url: `http://127.0.0.1:${port}`,
-    reuseExistingServer: true,
+    reuseExistingServer: Boolean(process.env.E2E_REUSE),
     timeout: 300_000,
   },
 });
