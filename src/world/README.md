@@ -19,6 +19,6 @@ The arena a round is fought in. Everything that every browser must build alike (
 | `belt.ts` | The asteroid belt beyond the arena, scenery only; close to its inner edge real low-poly rocks, the rest of the ring billboards (see view/impostor); a cheaper picture draws a share of it |
 | `landmarks.ts` | Each arena's scenery: planets, the sun, the black hole; the gas giant's cap at a cheaper segment count on a cheaper picture (see view/quality) |
 | `flare.ts` | The solar flare's plasma on screen: a sphere of roiling fire with filaments |
-| `space.ts` | Stars, nebula, the sun's light and shadows (heated by a solar flare; their map's size or none at all, as the picture's quality says), dust |
+| `space.ts` | Stars, nebula, the sun's light and shadows (heated by a solar flare; their map's size or none at all, as the picture's quality says), dust and its streaks at speed (`dustStreaks`, also the dust of a comet's tail) |
 
 `asteroids.test.ts`, `arenas.test.ts` and `wrecks.test.ts` check layouts, snapshots and collisions (and that no field piece switches to its billboard within the arena across), `bodies.test.ts` the rope and the bump, `reference.test.ts` the reference plane in every arena, height, climb, the sky pointer, the closure rate and each arena's fixed references, `rocks.test.ts` that a rock's normal atlas, read row by row as the GPU reads it, holds the outward normal of every cell's direction and that the shapes the collisions measure are the drawn rocks vertex for vertex (`npm test`).

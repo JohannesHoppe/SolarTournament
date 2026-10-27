@@ -4,10 +4,12 @@ import { hash } from '../music/songs';
 import { radialTexture } from '../view/textures';
 import { ARENA_LIMIT } from '../world/arena';
 import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
+import { dustStreaks, SUN_DIRECTION } from '../world/space';
 
 /**
  * Comets: now and then a comet crosses the arena, its glowing head first, a swarm of small
- * rocks of ice and dust (its shower) after it. The head keeps its route, bent only by the
+ * rocks of ice and dust (its shower) after it, its two harmless tails of gas and dust streaming
+ * away from the sun. The head keeps its route, bent only by the
  * arena's massive body, and clears whatever stands in its way: rock breaks, the wreck's hull
  * is shoved aside, ships are run down. The shower is the real danger, a storm of pieces that
  * strike a ship like lasers: the armor shrugs them off, the drive does not. A black hole or a
@@ -65,6 +67,42 @@ const FLASH = 1.5;
 /** A solid piece the head strikes (the wreck's hull) drifts on SHOVE (units/s, 5 m/s) faster along the comet's course and turns at up to SHOVE_SPIN (rad/s). */
 const SHOVE = 100;
 const SHOVE_SPIN = 0.12;
+
+/**
+ * The tails, pure looks that harm nothing: gas and dust the sun boils off the head, blown
+ * straight away from the sun whichever way the comet flies, as real comets' are. The ion tail
+ * (ionized gas, cold blue) runs straight down the sun's line, ION_TAIL long (units, 25 km), its
+ * half width from ION_WIDTH[0] (200 m) at the head to ION_WIDTH[1] (1.2 km); the dust tail
+ * (white-yellow, sunlight on dust) is broader, DUST_WIDTH from 400 m to 4 km, DUST_TAIL long
+ * (22 km), and its far end lags DUST_LAG of its length back along the route, curved, since the
+ * heavier dust is pushed away more slowly than the gas. Both open out from the head (the half
+ * width grows with the way along to the power TAIL_OPENING), brighten over the first TAIL_RISE
+ * of their length out of the coma and fade out towards their end. Drawn in by a well, they
+ * shrink in width with their length.
+ */
+const ION_TAIL = 500000;
+const ION_WIDTH: readonly [number, number] = [4000, 24000];
+const DUST_TAIL = 440000;
+const DUST_WIDTH: readonly [number, number] = [8000, 80000];
+const DUST_LAG = 0.3;
+const TAIL_OPENING = 0.7;
+const TAIL_RISE = 0.04;
+/** Segments of each tail's ribbon, closer together near the head (the k-th of them at (k / TAIL_SEGMENTS) ** TAIL_SPACING of the length), where the tail opens out: enough for the curve and the rise to look smooth. */
+const TAIL_SEGMENTS = 32;
+const TAIL_SPACING = 1.8;
+/** The tails fade in over this many seconds as the comet comes into view (s), so they do not pop up. */
+const TAIL_FADE_IN = 2;
+/** The tails fade out within this distance of the camera (units, from 150 m to 1.5 km): from inside a tail the dust is too thin to see, it is felt instead (see Game.cometTail). */
+const TAIL_NEAR: readonly [number, number] = [3000, 30000];
+/** Each piece of the shower glints in the sunlight this large (units, 20 m across), at least GLINT_PIXELS on screen however far off, so the swarm shows as the danger it is. */
+const GLINT = 400;
+const GLINT_PIXELS = 3;
+/** Inside a tail, the dust the ship flies through: MOTES of it in a cube of MOTE_BOX (units, 600 m) around the camera, drawn as streaks MOTE_SECONDS (s) of their flight past the ship long. */
+const MOTES = 400;
+const MOTE_BOX = 12000;
+const MOTE_SECONDS = 0.08;
+/** The dust and gas stream away from the sun this fast besides the head's motion (units/s, 50 m/s). */
+const OUTFLOW = 1000;
 
 /** One comet of a round: when and where it passes nearest the field's center, its route as gravity bends it, and the seed of its shower. */
 export interface Comet {
@@ -375,8 +413,140 @@ function touches(comet: Comet, field: AsteroidField, rock: Asteroid, time: numbe
 }
 
 /**
- * The comet of the round as the scene shows it: its head, its glowing coma and tail, its
- * shower; near a well the head drawn out, then a flash where it went, its tail drawn in after.
+ * A tail as a ribbon that faces the camera, turned about the tail's axis: each vertex sits on
+ * the axis (`position`) and is pushed out `edge` (-1 or 1) half widths to the side, square to
+ * the axis and to the line of sight. Across, it is brightest on the axis, as a glowing column
+ * is; it fades out close to the camera (TAIL_NEAR), where it is seen along its axis and where
+ * the camera comes within a few of its widths of the axis.
+ */
+const ribbonVertex = /* glsl */ `
+  attribute vec3 axis;
+  attribute float edge;
+  attribute float width;
+  attribute float bright;
+  attribute vec3 tint;
+  varying vec3 vColor;
+  varying float vEdge;
+  varying vec3 vWorld;
+  void main() {
+    vec3 side = cross(axis, cameraPosition - position);
+    float l = length(side);
+    side = l > 1.0 ? side / l : normalize(cross(axis, vec3(0.0, 1.0, 0.1)));
+    vWorld = position + side * edge * width;
+    // seen along its axis, or from within a few widths of it, a flat ribbon turns edge-on, twists
+    // or fills the view with its edges: it fades out there
+    float edgeOn = smoothstep(0.1, 0.35, l / max(length(cameraPosition - position), 1.0));
+    float within = smoothstep(width * 1.2, width * 3.0, l);
+    vColor = tint * bright * edgeOn * within;
+    vEdge = edge;
+    gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
+  }
+`;
+
+const ribbonFragment = /* glsl */ `
+  uniform vec2 near;
+  varying vec3 vColor;
+  varying float vEdge;
+  varying vec3 vWorld;
+  void main() {
+    float across = 1.0 - vEdge * vEdge;
+    float fade = smoothstep(near.x, near.y, distance(vWorld, cameraPosition));
+    gl_FragColor = vec4(vColor * across * across * fade, 1.0);
+  }
+`;
+
+/** The shower's glints: a warm core in an orange halo, at least GLINT_PIXELS wide, turning slowly brighter and dimmer as a piece tumbles (a few seconds a cycle, never a strobe). */
+const glintVertex = /* glsl */ `
+  uniform float time;
+  uniform float pixels;
+  attribute float phase;
+  varying float vLight;
+  void main() {
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    float size = ${GLINT.toFixed(1)} * projectionMatrix[1][1] * pixels / max(-mv.z, 1.0);
+    gl_PointSize = clamp(size, ${GLINT_PIXELS.toFixed(1)}, 40.0);
+    vLight = (0.65 + 0.35 * sin(time * 1.3 + phase)) * clamp(size / ${GLINT_PIXELS.toFixed(1)}, 0.6, 1.0);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+const glintFragment = /* glsl */ `
+  varying float vLight;
+  void main() {
+    vec2 c = gl_PointCoord * 2.0 - 1.0;
+    float r = dot(c, c);
+    if (r > 1.0) discard;
+    vec3 color = vec3(1.0, 0.5, 0.0) * (1.0 - r) * (1.0 - r) + vec3(1.0, 0.75, 0.4) * exp(-r * 40.0) * 0.8;
+    gl_FragColor = vec4(color * vLight, 1.0);
+  }
+`;
+
+/** The two tails: how long, how wide at the head and at the end, how far their end lags back along the route, how bright at the head, and their color. */
+const TAILS: readonly { length: number; width: readonly [number, number]; lag: number; bright: number; tint: THREE.Color }[] = [
+  { length: ION_TAIL, width: ION_WIDTH, lag: 0, bright: 0.9, tint: new THREE.Color(0.35, 0.62, 1) },
+  { length: DUST_TAIL, width: DUST_WIDTH, lag: DUST_LAG, bright: 0.32, tint: new THREE.Color(1, 0.9, 0.7) },
+];
+/** Vertices of one tail's ribbon. */
+const TAIL_VERTICES = (TAIL_SEGMENTS + 1) * 2;
+
+/** Away from the sun: where the tails stream. */
+const AWAY = SUN_DIRECTION.clone().negate();
+const behind = new THREE.Vector3();
+const lane = new THREE.Vector3();
+const next = new THREE.Vector3();
+const flow = new THREE.Vector3();
+const along = new THREE.Vector3();
+
+/** The way the dust tail lags for a head flying along `course`: back along it, square to the sun's line (unit length; zero when the comet flies along the sun's line). */
+function lagOf(course: THREE.Vector3, target: THREE.Vector3): THREE.Vector3 {
+  target.copy(course).addScaledVector(AWAY, -course.dot(AWAY)).negate();
+  return target.lengthSq() > 1e-6 ? target.normalize() : target.set(0, 0, 0);
+}
+
+/** How far along its tail (0 at the head, 1 at the end) the k-th point of its ribbon lies. */
+const shareOf = (k: number) => (k / TAIL_SEGMENTS) ** TAIL_SPACING;
+
+/** A tail's half width (units) at share `s` of its length, `scale` of it drawn (see TAILS). */
+const halfWidth = (t: number, s: number, scale: number) => (TAILS[t].width[0] + (TAILS[t].width[1] - TAILS[t].width[0]) * s ** TAIL_OPENING) * scale;
+
+/** The point of tail `t` at share `s` of its length, `scale` of it drawn, for a head at `head` whose dust lags along `lag` (see lagOf). */
+function tailAt(t: number, s: number, head: THREE.Vector3, lag: THREE.Vector3, scale: number, target: THREE.Vector3): THREE.Vector3 {
+  const length = TAILS[t].length * scale;
+  return target.copy(head).addScaledVector(AWAY, s * length).addScaledVector(lag, TAILS[t].lag * s * s * length);
+}
+
+/**
+ * How deep `point` lies in the deeper of a comet's two tails, its head at `head` flying along
+ * `course` and `scale` of their length drawn: 0 outside, 1 on the axis at the head, falling off
+ * to the edge and towards the end. Pure looks and feel: nothing in a tail harms a ship.
+ */
+export function tailDepth(head: THREE.Vector3, course: THREE.Vector3, scale: number, point: THREE.Vector3): number {
+  lagOf(course, behind);
+  let deepest = 0;
+  for (let t = 0; t < TAILS.length; t++) {
+    tailAt(t, 0, head, behind, scale, lane);
+    for (let k = 0; k < TAIL_SEGMENTS; k++) {
+      const s0 = shareOf(k);
+      const s1 = shareOf(k + 1);
+      tailAt(t, s1, head, behind, scale, next);
+      along.subVectors(next, lane);
+      const span = along.lengthSq();
+      const f = span > 0 ? Math.min(1, Math.max(0, flow.subVectors(point, lane).dot(along) / span)) : 0;
+      const s = s0 + (s1 - s0) * f;
+      const half = halfWidth(t, s, scale);
+      const off = flow.copy(lane).addScaledVector(along, f).distanceTo(point);
+      if (off < half) deepest = Math.max(deepest, (1 - off / half) * (1 - s));
+      lane.copy(next);
+    }
+  }
+  return deepest;
+}
+
+/**
+ * The comet of the round as the scene shows it: its head and coma, its two tails streaming
+ * away from the sun, its shower glinting along the route; near a well the head drawn out, then
+ * a flash where it went, its tails and shower drawn in after. Inside a tail, the dust streaks
+ * past the camera.
  */
 export class CometView {
   readonly root = new THREE.Group();
@@ -385,8 +555,19 @@ export class CometView {
   private readonly headMesh: THREE.Mesh;
   private readonly coma: THREE.Sprite;
   private readonly flash: THREE.Sprite;
-  private readonly tail: THREE.Mesh;
+  /** Both tails in one draw call. */
+  private readonly tails: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private readonly pieces: THREE.InstancedMesh;
+  private readonly glints: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  private readonly motes: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  /** How strongly the tails show now (0..1): faded in as the comet comes, drawn in after a well swallowed it. */
+  private strength = 0;
+  /** The dust's velocity in the tails (units/s): the head's, and away from the sun. */
+  private readonly dustVelocity = new THREE.Vector3();
+  /** Where the head is and flies, and how much of the tails' length is drawn (see update). */
+  private readonly head = new THREE.Vector3();
+  private readonly course = new THREE.Vector3();
+  private scale = 1;
   private shower: Shower | null = null;
 
   constructor() {
@@ -406,8 +587,8 @@ export class CometView {
     const glow = new THREE.SpriteMaterial({
       map: radialTexture([
         [0, 'rgba(255,255,255,1)'],
-        [0.15, 'rgba(200,235,255,0.85)'],
-        [0.45, 'rgba(110,190,255,0.3)'],
+        [0.12, 'rgba(210,238,255,0.9)'],
+        [0.4, 'rgba(120,195,255,0.35)'],
         [1, 'rgba(60,120,255,0)'],
       ]),
       blending: THREE.AdditiveBlending,
@@ -415,41 +596,74 @@ export class CometView {
       toneMapped: false,
     });
     this.coma = new THREE.Sprite(glow);
-    this.coma.scale.setScalar(HEAD_RADIUS * 9);
     this.flash = new THREE.Sprite(glow.clone());
-    // the tail: a long cone of glowing dust, brightest at the head, fading out behind
-    const cone = new THREE.ConeGeometry(SHOWER_WIDE * 1.1, SHOWER_LENGTH * 1.4, 24, 1, true);
-    cone.translate(0, -SHOWER_LENGTH * 0.7, 0);
-    this.tail = new THREE.Mesh(
-      cone,
+    // the tails: two ribbons, laid out anew every frame (see layTail), in one geometry
+    const tails = new THREE.BufferGeometry();
+    const count = TAIL_VERTICES * TAILS.length;
+    const dynamic = (size: number) => new THREE.BufferAttribute(new Float32Array(count * size), size).setUsage(THREE.DynamicDrawUsage);
+    tails.setAttribute('position', dynamic(3));
+    tails.setAttribute('axis', dynamic(3));
+    tails.setAttribute('width', dynamic(1));
+    tails.setAttribute('bright', dynamic(1));
+    const edges = new Float32Array(count);
+    const tints = new Float32Array(count * 3);
+    const index: number[] = [];
+    TAILS.forEach((tail, t) => {
+      for (let v = 0; v < TAIL_VERTICES; v++) {
+        edges[t * TAIL_VERTICES + v] = v % 2 ? 1 : -1;
+        tail.tint.toArray(tints, (t * TAIL_VERTICES + v) * 3);
+      }
+      for (let k = 0; k < TAIL_SEGMENTS; k++) {
+        const a = t * TAIL_VERTICES + k * 2;
+        index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      }
+    });
+    tails.setAttribute('edge', new THREE.BufferAttribute(edges, 1));
+    tails.setAttribute('tint', new THREE.BufferAttribute(tints, 3));
+    tails.setIndex(index);
+    this.tails = new THREE.Mesh(
+      tails,
       new THREE.ShaderMaterial({
+        uniforms: { near: { value: new THREE.Vector2(TAIL_NEAR[0], TAIL_NEAR[1]) } },
+        vertexShader: ribbonVertex,
+        fragmentShader: ribbonFragment,
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
         side: THREE.DoubleSide,
-        uniforms: { length: { value: SHOWER_LENGTH * 1.4 } },
-        vertexShader: /* glsl */ `
-          uniform float length;
-          varying float vAlong;
-          void main() {
-            vAlong = clamp(-position.y / length, 0.0, 1.0);
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: /* glsl */ `
-          varying float vAlong;
-          void main() {
-            float glow = pow(1.0 - vAlong, 2.2) * 0.35;
-            gl_FragColor = vec4(vec3(0.55, 0.8, 1.0) * glow, glow);
-          }
-        `,
       }),
     );
-    // the shower: small bright pieces of ice, clearly seen against the dark
-    this.pieces = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(PIECE_RADIUS * 1.3, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(0.75, 0.92, 1).multiplyScalar(2.2), toneMapped: false }), SHOWER_PIECES);
+    this.tails.frustumCulled = false;
+    // the shower: small bright pieces of ice and rock, each glinting in a halo of the orange of what hits, so the danger does not read as the tails' harmless blue and white
+    this.pieces = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(PIECE_RADIUS * 1.3, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.75, 0.45).multiplyScalar(1.2), toneMapped: false }), SHOWER_PIECES);
     this.pieces.frustumCulled = false;
-    this.root.add(this.body, this.coma, this.flash, this.tail, this.pieces);
+    const glints = new THREE.BufferGeometry();
+    glints.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SHOWER_PIECES * 3), 3).setUsage(THREE.DynamicDrawUsage));
+    const phases = new Float32Array(SHOWER_PIECES);
+    for (let i = 0; i < SHOWER_PIECES; i++) phases[i] = r.range(0, Math.PI * 2);
+    glints.setAttribute('phase', new THREE.BufferAttribute(phases, 1));
+    this.glints = new THREE.Points(
+      glints,
+      new THREE.ShaderMaterial({
+        uniforms: { time: { value: 0 }, pixels: { value: 360 } },
+        vertexShader: glintVertex,
+        fragmentShader: glintFragment,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    );
+    this.glints.frustumCulled = false;
+    const motes = new Float32Array(MOTES * 3);
+    for (let i = 0; i < motes.length; i++) motes[i] = r.nextFloat() * MOTE_BOX;
+    this.motes = dustStreaks(motes, MOTE_BOX, new THREE.Color(0.85, 0.85, 0.8));
+    this.root.add(this.body, this.coma, this.flash, this.tails, this.pieces, this.glints, this.motes);
     this.root.visible = false;
+  }
+
+  /** The glints keep their size in the world on a picture `heightPx` device pixels high. */
+  setViewport(heightPx: number) {
+    this.glints.material.uniforms.pixels.value = heightPx / 2;
   }
 
   /** Shows a comet's shower at a field time, or nothing. */
@@ -457,6 +671,7 @@ export class CometView {
     this.shower = shower;
     if (!shower) {
       this.root.visible = false;
+      this.strength = 0;
       return;
     }
     const comet = shower.comet;
@@ -467,13 +682,12 @@ export class CometView {
     courseAt(comet, time, course);
     this.body.visible = this.coma.visible = flying;
     this.body.position.copy(head);
-    // the cone's axis (+Y) points along the flight, so its body trails behind; the head's frame too
     this.body.quaternion.setFromUnitVectors(UP, course);
     const drawn = Math.max(0, 1 - left / STRETCH);
     this.body.scale.set(1 / (1 + drawn), 1 + 3 * drawn, 1 / (1 + drawn));
     this.headMesh.rotation.set(time * 0.11, time * 0.07, 0);
     this.coma.position.copy(head);
-    this.coma.scale.setScalar(HEAD_RADIUS * (9 + 6 * drawn));
+    this.coma.scale.setScalar(HEAD_RADIUS * (14 + 6 * drawn));
     this.flash.visible = !flying && -left < FLASH;
     if (this.flash.visible) {
       const fade = -left / FLASH;
@@ -481,23 +695,80 @@ export class CometView {
       this.flash.scale.setScalar(HEAD_RADIUS * (12 + 30 * fade));
       this.flash.material.opacity = 1 - fade;
     }
-    this.tail.position.copy(head);
-    this.tail.quaternion.copy(this.body.quaternion);
-    // after the head, its tail is drawn in as the shower follows it
-    const tail = flying ? 1 : Math.max(0, 1 + (left * COMET_SPEED) / SHOWER_LENGTH);
-    this.tail.scale.set(Math.max(tail, 0.01), Math.max(tail, 0.01), Math.max(tail, 0.01));
-    this.tail.visible = tail > 0;
+    // after the head, its tails are drawn in as the shower follows it
+    const drawnIn = flying ? 1 : Math.max(0, 1 + (left * COMET_SPEED) / SHOWER_LENGTH);
+    this.strength = Math.min(1, Math.max(0, (time - comet.start) / TAIL_FADE_IN)) * drawnIn;
+    this.tails.visible = this.strength > 0;
+    this.scale = Math.max(drawnIn, 0.01);
+    this.head.copy(head);
+    this.course.copy(course);
+    for (let t = 0; t < TAILS.length; t++) this.layTail(t);
+    const tailGeometry = this.tails.geometry;
+    for (const name of ['position', 'axis', 'width', 'bright']) tailGeometry.getAttribute(name).needsUpdate = true;
+    // the dust in the tails flies on with the head, pushed away from the sun
+    this.dustVelocity.subVectors(headAt(comet, time + 0.5, piece), headAt(comet, time - 0.5, stone)).addScaledVector(AWAY, OUTFLOW);
+    const glints = this.glints.geometry.getAttribute('position') as THREE.BufferAttribute;
     for (let i = 0; i < SHOWER_PIECES; i++) {
-      if (shower.gone(i, time)) dummy.scale.setScalar(0);
-      else {
+      if (shower.gone(i, time)) {
+        dummy.scale.setScalar(0);
+        // far beyond what the camera draws
+        glints.setXYZ(i, 0, 1e9, 0);
+      } else {
         dummy.scale.setScalar(1);
         shower.pieceAt(i, time, dummy.position);
         dummy.rotation.set(i + time * 1.3, i * 0.7 + time, 0);
+        glints.setXYZ(i, dummy.position.x, dummy.position.y, dummy.position.z);
       }
       dummy.updateMatrix();
       this.pieces.setMatrixAt(i, dummy.matrix);
     }
     this.pieces.instanceMatrix.needsUpdate = true;
+    glints.needsUpdate = true;
+    this.glints.material.uniforms.time.value = time;
+  }
+
+  /** Lays out the ribbon of tail `t` for the head as update left it: its points (see tailAt), the way it runs there, its half width, and its light, rising out of the coma and fading towards the end. */
+  private layTail(t: number) {
+    const geometry = this.tails.geometry;
+    const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
+    const axes = geometry.getAttribute('axis') as THREE.BufferAttribute;
+    const widths = geometry.getAttribute('width') as THREE.BufferAttribute;
+    const lights = geometry.getAttribute('bright') as THREE.BufferAttribute;
+    lagOf(this.course, behind);
+    for (let k = 0; k <= TAIL_SEGMENTS; k++) {
+      const s = shareOf(k);
+      tailAt(t, s, this.head, behind, this.scale, lane);
+      along.copy(AWAY).addScaledVector(behind, 2 * TAILS[t].lag * s).normalize();
+      const half = halfWidth(t, s, this.scale);
+      const light = TAILS[t].bright * this.strength * Math.min(1, s / TAIL_RISE) * (1 - s) ** 1.5;
+      for (let e = 0; e < 2; e++) {
+        const v = t * TAIL_VERTICES + k * 2 + e;
+        positions.setXYZ(v, lane.x, lane.y, lane.z);
+        axes.setXYZ(v, along.x, along.y, along.z);
+        widths.setX(v, half);
+        lights.setX(v, light);
+      }
+    }
+  }
+
+  /**
+   * How deep `point` lies in a tail (0 outside, 1 on the axis at the head), as the tails are
+   * laid out now; and, for the camera riding with `velocity`, the dust streaking past as deep
+   * in it.
+   */
+  feel(point: THREE.Vector3 | null, velocity: THREE.Vector3 | null): number {
+    const depth = point && this.root.visible && this.tails.visible ? tailDepth(this.head, this.course, this.scale, point) * this.strength : 0;
+    const motes = this.motes;
+    motes.visible = depth > 0 && velocity !== null;
+    if (!motes.visible || !velocity) return depth;
+    const uniforms = motes.material.uniforms;
+    uniforms.strength.value = Math.min(1, depth * 3);
+    // where the motes have flown with the dust, and the way they seem to come from the ship
+    const clock = this.glints.material.uniforms.time.value as number;
+    flow.copy(this.dustVelocity).multiplyScalar(clock);
+    uniforms.drift.value.set(flow.x % MOTE_BOX, flow.y % MOTE_BOX, flow.z % MOTE_BOX);
+    uniforms.velocity.value.subVectors(velocity, this.dustVelocity).multiplyScalar(MOTE_SECONDS);
+    return depth;
   }
 
   get current(): Shower | null {
@@ -505,7 +776,7 @@ export class CometView {
   }
 
   dispose() {
-    for (const mesh of [this.headMesh, this.tail, this.pieces]) {
+    for (const mesh of [this.headMesh, this.tails, this.pieces, this.glints, this.motes]) {
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }

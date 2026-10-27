@@ -38,11 +38,12 @@ const dustFragment = /* glsl */ `
 const streakVertex = /* glsl */ `
   uniform float size;
   uniform vec3 velocity;
+  uniform vec3 drift;
   uniform float strength;
   attribute float tail;
   varying float vFade;
   void main() {
-    vec3 offset = mod(position - cameraPosition + size * 0.5, size) - size * 0.5;
+    vec3 offset = mod(position + drift - cameraPosition + size * 0.5, size) - size * 0.5;
     vFade = (1.0 - smoothstep(size * 0.2, size * 0.45, length(offset))) * strength * (1.0 - tail * 0.85);
     vec3 world = cameraPosition + offset + velocity * tail;
     gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
@@ -50,11 +51,45 @@ const streakVertex = /* glsl */ `
 `;
 
 const streakFragment = /* glsl */ `
+  uniform vec3 tint;
   varying float vFade;
   void main() {
-    gl_FragColor = vec4(vec3(0.6, 0.72, 0.9) * vFade, 1.0);
+    gl_FragColor = vec4(tint * vFade, 1.0);
   }
 `;
+
+/**
+ * Motes drawn as streaks (see streakVertex), one line each from `positions` (x, y, z per mote,
+ * within a cube of edge `size` that wraps around the camera), in `tint`. The uniforms say how:
+ * `velocity` the way a mote seems to have come in a streak's time (zero draws a point),
+ * `strength` how bright, `drift` how far the motes have moved with what carries them (zero for
+ * dust at rest).
+ */
+export function dustStreaks(positions: Float32Array, size: number, tint: THREE.Color): THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial> {
+  // every mote twice: its head where it is, its tail where it was
+  const count = positions.length / 3;
+  const ends = new Float32Array(count * 6);
+  const tails = new Float32Array(count * 2);
+  for (let i = 0; i < count; i++) {
+    ends.set(positions.subarray(i * 3, i * 3 + 3), i * 6);
+    ends.set(positions.subarray(i * 3, i * 3 + 3), i * 6 + 3);
+    tails[i * 2 + 1] = 1;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(ends, 3));
+  geometry.setAttribute('tail', new THREE.BufferAttribute(tails, 1));
+  const streaks = new THREE.LineSegments(geometry, new THREE.ShaderMaterial({
+    uniforms: { size: { value: size }, velocity: { value: new THREE.Vector3() }, drift: { value: new THREE.Vector3() }, strength: { value: 0 }, tint: { value: tint } },
+    vertexShader: streakVertex,
+    fragmentShader: streakFragment,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+    transparent: true,
+  }));
+  streaks.frustumCulled = false;
+  streaks.visible = false;
+  return streaks;
+}
 /** A streak is as long as the way the ship travels in this time (s): 250 m/s draws 12.5 m lines. */
 const STREAK_SECONDS = 0.05;
 /** Streaks show from this speed on (units/s, 20 m/s) and are at full strength from STREAK_FULL (units/s, 200 m/s). */
@@ -146,27 +181,7 @@ export class Space {
     }));
     this.dust.frustumCulled = false;
 
-    // every mote twice: its head where it is, its tail where it was
-    const streakPositions = new Float32Array(DUST_COUNT * 6);
-    const tails = new Float32Array(DUST_COUNT * 2);
-    for (let i = 0; i < DUST_COUNT; i++) {
-      streakPositions.set(dustPositions.subarray(i * 3, i * 3 + 3), i * 6);
-      streakPositions.set(dustPositions.subarray(i * 3, i * 3 + 3), i * 6 + 3);
-      tails[i * 2 + 1] = 1;
-    }
-    const streakGeometry = new THREE.BufferGeometry();
-    streakGeometry.setAttribute('position', new THREE.BufferAttribute(streakPositions, 3));
-    streakGeometry.setAttribute('tail', new THREE.BufferAttribute(tails, 1));
-    this.streaks = new THREE.LineSegments(streakGeometry, new THREE.ShaderMaterial({
-      uniforms: { size: { value: DUST_SIZE }, velocity: { value: new THREE.Vector3() }, strength: { value: 0 } },
-      vertexShader: streakVertex,
-      fragmentShader: streakFragment,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      transparent: true,
-    }));
-    this.streaks.frustumCulled = false;
-    this.streaks.visible = false;
+    this.streaks = dustStreaks(dustPositions, DUST_SIZE, new THREE.Color(0.6, 0.72, 0.9));
 
     // The asteroids cast shadows over the whole field; a ship in their shadow goes dark.
     const sunLight = new THREE.DirectionalLight(0xfff0dd, 3.2);

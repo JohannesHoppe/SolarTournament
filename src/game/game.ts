@@ -527,6 +527,14 @@ const COMET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
 const SHOWER_COVER = 6000;
 /** A bot this close to a comet's route (units, 500 m beyond the swarm's width) as the head nears or the swarm passes flies away from it, sideways. */
 const COMET_DANGER = 10000;
+/**
+ * In a comet's tail (see Game.cometTail), deepest on its axis at the head: bursts of dust
+ * patter on the hull about TAIL_PATTER times a second, the link crackles about TAIL_STATIC
+ * times a second, with a glitch of TAIL_GLITCH strength (a slight one: a hit is 0.4 and more).
+ */
+const TAIL_PATTER = 25;
+const TAIL_STATIC = 1.5;
+const TAIL_GLITCH = 0.15;
 /** The flight school's comet passes the point its drill names this long after the drill sends it (s): 2.25 km off at its speed. */
 const DRILL_COMET_LEAD = 15;
 
@@ -917,6 +925,9 @@ export class Game implements OnlineGame {
   private drillComet: Comet | null = null;
   /** The comet the flight computer has warned of, and the one whose shower flies now. */
   private cometCalled: Comet | null = null;
+  /** The comet whose tail the own clone has been told is harmless, and whether it is in a tail now. */
+  private tailCalled: Comet | null = null;
+  private inTail = false;
   private shower: Shower | null = null;
   /** The pieces of the shower that already struck each ship: one strikes a ship once. */
   private readonly struck = new Map<Ship, Uint8Array>();
@@ -3021,6 +3032,7 @@ export class Game implements OnlineGame {
     this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
     this.effects.setViewport(height * this.renderer.getPixelRatio(), this.camera.fov);
+    this.cometView.setViewport(height * this.renderer.getPixelRatio());
   }
 
   private frame() {
@@ -3197,7 +3209,7 @@ export class Game implements OnlineGame {
     if (clamped) this.steering.follow(me.flight);
     // Last Clone Standing: the solar flare, the same on every browser by the field time
     this.showFlare(dt);
-    this.playComet();
+    this.playComet(dt, me);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -5995,7 +6007,7 @@ export class Game implements OnlineGame {
    * shown at the field time and its head running down the rock in its way. The flight school
    * sees only the comet its drill sends.
    */
-  private playComet() {
+  private playComet(dt: number, me: Ship) {
     const clock = this.field.clock;
     let comet = this.drillComet;
     if (!this.school && this.roundId >= 0) {
@@ -6021,6 +6033,7 @@ export class Game implements OnlineGame {
       this.struck.clear();
     }
     this.cometView.update(this.shower, clock);
+    this.cometTail(me, dt);
     if (!flying) return;
     runDown(flying, this.field, clock, (rock) => this.burstRock(rock), (piece, point) => this.cometShove(piece, point));
     // the battleship that did not get out of its way goes down: the lead browser decides
@@ -6029,6 +6042,29 @@ export class Game implements OnlineGame {
       this.hud.flashMessage(this.time, t('The comet rams the battleship'), 3);
       this.fleetEvents(fleet.sink(), null);
     }
+  }
+
+  /**
+   * The own clone in a comet's tail (see CometView.feel): harmless dust and gas, felt all the
+   * same. The dust patters on the hull, the link crackles now and then, the dust streaks past;
+   * the first time in a comet's tail the flight computer says it is harmless, so the Host keeps
+   * fearing the shower and not the tail.
+   */
+  private cometTail(me: Ship, dt: number) {
+    const depth = this.cometView.feel(me.alive && !this.spectating ? me.flight.position : null, this.riding);
+    const inside = depth > 0;
+    if (inside && !this.inTail) {
+      this.linkHit(TAIL_GLITCH, 0.25);
+      const comet = this.shower?.comet ?? null;
+      if (comet !== this.tailCalled) {
+        this.tailCalled = comet;
+        this.hud.flashMessage(this.time, t('Comet tail · only dust and gas, harmless'), 3);
+      }
+    }
+    this.inTail = inside;
+    if (!inside) return;
+    if (Math.random() < dt * TAIL_PATTER * depth) this.sound.patter(depth);
+    if (Math.random() < dt * TAIL_STATIC * depth) this.glitch.trigger(TAIL_GLITCH * (0.5 + Math.random() * 0.5), 0.05 + Math.random() * 0.1);
   }
 
   /** The comet's head strikes a piece of the wreck's hull and shoves it: a flash, sparks and debris where it struck, heard as far as debris is. */
