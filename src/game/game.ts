@@ -39,6 +39,7 @@ import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
 import { airBurn, airHeat, altitudeIn, density, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH } from '../world/air';
 import { Haze, installHaze, skyLight } from '../view/haze';
+import { Reentry } from '../view/reentry';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
@@ -46,7 +47,8 @@ import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
 import { ARENAS, arenaById, DEFAULT_ARENA, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
-import { stutterWindows } from '../world/shapes';
+import { animateHull, setHullFrost } from '../world/worldship';
+import { Mining } from '../world/mining';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
@@ -63,7 +65,7 @@ import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES,
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { touchRing } from '../world/gates';
 import { IMMOVABLE, massOf, type Body } from '../world/bodies';
-import { COMET_SPEED, COMET_WARNING, cometEnd, cometsOf, cometStart, CometView, courseAt, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
+import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, HEAD_RADIUS, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
 import { FlareView } from '../world/flare';
@@ -552,9 +554,12 @@ const COMET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
 /**
  * A comet's shower (see comet.ts) strikes a ship like a laser, armor or drive by where it comes
  * from, unless rock within SHOWER_COVER (units, 300 m) upstream of the ship stands in its way:
- * cover behind an asteroid is the best answer, the armored nose turned into it the next.
+ * cover behind an asteroid is the best answer, the armored nose turned into it the next. Each
+ * piece weighs SHOWER_WEIGHT laser hits: 3 hull on the armor, 0.3 of the thrust in the drive,
+ * so the fourth piece into the drive sends its reactor critical.
  */
 const SHOWER_COVER = 6000;
+const SHOWER_WEIGHT = 1.5;
 /** A bot this close to a comet's route (units, 500 m beyond the swarm's width) as the head nears or the swarm passes flies away from it, sideways. */
 const COMET_DANGER = 10000;
 /**
@@ -572,8 +577,15 @@ const TAIL_GLITCH = 0.15;
  */
 const GRAIN_PATTER = 12;
 const GRAIN_PATTER_SPEED = 2000;
-/** The flight school's comet passes the point its drill names this long after the drill sends it (s): 6 km off at its speed. */
-const DRILL_COMET_LEAD = 15;
+/** The mist of ice crystals at the derelict's break (see world/derelict) patters on the hull about MIST_PATTER times a second where it is thickest, at GRAIN_PATTER_SPEED and faster. */
+const MIST_PATTER = 15;
+/**
+ * Flying through the dust a drill hole blows on the Belt's rocks (see Mining.dustAt, Game.drillDust):
+ * it patters on the hull about DUST_PATTER times a second in the heart of a plume at
+ * DUST_PATTER_SPEED (units/s, 50 m/s) and faster, the fewer the thinner the dust and the slower the ship.
+ */
+const DUST_PATTER = 18;
+const DUST_PATTER_SPEED = 1000;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 /** The label of a menu mode button: the text of its first line, without the Enter key. */
@@ -726,6 +738,8 @@ export class Game implements OnlineGame {
   private readonly belt: Belt;
   readonly field: AsteroidField;
   private readonly effects: Effects;
+  /** Ships flying hot through a planet's air: their plasma, glowing hulls and fireballs (see view/reentry). */
+  private readonly reentry: Reentry;
   private readonly replayEffects: Effects;
   private readonly killcam: KillCam;
   private readonly torpedoes: Torpedoes;
@@ -740,6 +754,8 @@ export class Game implements OnlineGame {
   /** The arena the round is played in (see enterArena), and its scenery. */
   private venue: ArenaProfile = DEFAULT_ARENA;
   private readonly landmarks: Landmarks;
+  /** The Rockborn's mining on the Belt's rocks (see world/mining). */
+  readonly mining = new Mining();
   /** The haze of an arena's air in the picture (see view/haze). */
   readonly haze = new Haze();
   /** What the screen shows where nothing is drawn: space's dark, or under a planet's cloud deck its haze (see airWeather). */
@@ -964,12 +980,10 @@ export class Game implements OnlineGame {
   /** The comet of the round as the scene shows it, and on the radar. */
   private readonly cometView = new CometView();
   private readonly cometMark: RadarMark = { position: new THREE.Vector3(), label: t('Comet'), color: '#bfe6ff' };
-  /** The comets of the round (see cometsOf), and of which room, round and arena they are. */
+  /** The comets of the round (see roundComets), and of which room, round, arena and venue they are. */
   private comets: Comet[] = [];
   private cometsOfKey = '';
-  /** The flight school's comet, when a drill sends one. */
-  private drillComet: Comet | null = null;
-  /** The comet the flight computer has warned of, and the one whose shower flies now. */
+  /** The comet the flight computer has warned of while it comes, and the one whose shower flies now. */
   private cometCalled: Comet | null = null;
   /** The comet whose tail the own clone has been told is harmless, and whether it is in a tail now. */
   private tailCalled: Comet | null = null;
@@ -1143,8 +1157,9 @@ export class Game implements OnlineGame {
     this.field = new AsteroidField(assets.fieldSets);
     this.belt = new Belt(assets.belt.near, assets.belt.impostor);
     this.landmarks = new Landmarks(assets.planets);
-    this.graphics = new Graphics(this.renderer, this.bloom, this.space, this.field, this.belt, this.plane, this.landmarks, this.lensing, () => this.resize());
+    this.graphics = new Graphics(this.renderer, this.bloom, this.space, this.field, this.belt, this.plane, this.landmarks, this.mining, this.lensing, () => this.resize());
     this.effects = new Effects(assets.textures);
+    this.reentry = new Reentry(this.effects);
     // the kill cam fires the beams of its replay in effects of their own
     this.replayEffects = new Effects(assets.textures);
     this.replayEffects.group.visible = false;
@@ -1152,7 +1167,7 @@ export class Game implements OnlineGame {
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
     this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.ghost.root, this.cables.group, this.cometView.root, this.plane.group);
-    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
+    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.mining.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group, this.reentry.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
       this.engineLights.push(light);
@@ -2108,11 +2123,14 @@ export class Game implements OnlineGame {
     this.space.setSun(arena.sun);
     setGlint(arena.sun.intensity);
     this.landmarks.show(arena);
+    setHullFrost(arena.id === 'derelict');
     // a planet's air: its haze in every shader that draws the world (see view/haze)
     const air = arena.layout.air ?? null;
     this.scene.fog = air ? this.haze.fog : null;
     this.haze.setAir(air, this.landmarks.jupiter.deckLight, this.landmarks.jupiter.deepLight);
     this.belt.group.visible = arena.id === 'belt';
+    this.mining.dress(arena.id === 'belt' ? this.field : null);
+    this.mining.setSun(arena.sun.color, arena.sun.intensity);
     if (!keepWreckage) {
       this.wrecks.clear();
       this.torpedoes.clear();
@@ -2230,7 +2248,9 @@ export class Game implements OnlineGame {
       this.school = null;
       this.schoolContext = null;
     }
-    this.drillComet = null;
+    // the comet called belongs to the round that ends: the next venue's field time starts over
+    this.cometCalled = null;
+    this.tailCalled = null;
   }
 
   /**
@@ -2453,6 +2473,7 @@ export class Game implements OnlineGame {
   }
 
   showBeam(shooter: Ship, from: THREE.Vector3, to: THREE.Vector3) {
+    if (shooter.owner !== null) shooter.warm();
     this.effects.beam(from, to, shooter.color);
     this.killcam.recordBeam(this.time, from, to, shooter.color);
   }
@@ -3085,6 +3106,7 @@ export class Game implements OnlineGame {
     this.effects.setViewport(height * this.renderer.getPixelRatio(), this.camera.fov);
     this.cometView.setViewport(height * this.renderer.getPixelRatio());
     this.landmarks.setViewport(height * this.renderer.getPixelRatio());
+    this.mining.setViewport(height * this.renderer.getPixelRatio());
   }
 
   private frame() {
@@ -3133,7 +3155,10 @@ export class Game implements OnlineGame {
     }
     // the screen shows the round as the last step left it, once a frame
     if (stepped && this.me && (this.state === 'playing' || (this.state === 'paused' && !!this.online))) this.presentRound();
-    if (this.state !== 'paused' || this.online) this.effects.update(dt);
+    if (this.state !== 'paused' || this.online) {
+      this.reentry.update(dt, this.ships, this.field.air, this.me ? this.subject() : null, this.camera);
+      this.effects.update(dt);
+    }
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
     this.airWeather(dt);
     // the ship on show, while the menu or the hangar shows it
@@ -3186,8 +3211,9 @@ export class Game implements OnlineGame {
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     this.landmarks.update(this.field.clock);
+    this.mining.update(this.field, this.field.clock);
     this.landmarks.follow(this.camera, this.state === 'menu' ? null : this.riding);
-    if (this.venue.id === 'derelict') stutterWindows();
+    if (this.venue.id === 'derelict') animateHull(this.field.clock);
     const well = this.field.well;
     // the scene is drawn into the composer's read buffer, which the lens reads right after
     this.lensing.update(this.camera, this.venue.id === 'hole' && well && !this.bench.has('lens') ? well.position : null, well?.radius ?? 0, this.composer.readBuffer.depthTexture);
@@ -3225,7 +3251,7 @@ export class Game implements OnlineGame {
     const parts: Partial<Record<BenchFeature, THREE.Object3D[]>> = {
       field: [this.field.group],
       belt: [this.belt.group],
-      landmark: [this.landmarks.group],
+      landmark: [this.landmarks.group, this.mining.group],
       sky: [this.space.sky],
       dust: [this.space.dust, this.space.streaks],
       particles: [this.effects.group],
@@ -3263,6 +3289,8 @@ export class Game implements OnlineGame {
     this.showFlare(dt);
     this.playComet(dt, me);
     this.ringGrains(me, dt);
+    this.breakMist(me, dt);
+    this.drillDust(me, dt);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -4320,6 +4348,7 @@ export class Game implements OnlineGame {
       this.space.shade(1, 1, null, null);
       this.background.set(SPACE_BACKGROUND);
       this.sound.setWind(0, 0);
+      this.sound.setPlasma(0, false, dt);
       return;
     }
     const eye = this.camera.position;
@@ -4334,9 +4363,11 @@ export class Game implements OnlineGame {
     const inAir = !!me?.alive && altitudeIn(air, me.flight.position) < 0;
     if (!me || !inAir) {
       this.sound.setWind(0, 0);
+      this.sound.setPlasma(0, false, dt);
       return;
     }
     const speed = me.flight.velocity.length() / MAX_SPEED;
+    this.sound.setPlasma(this.reentry.plasmaOf(me), this.reentry.burning(me), dt);
     this.sound.setWind(Math.min(1, density(altitudeIn(air, me.flight.position)) * speed * speed * WIND_FULL), Math.min(1, speed));
     if (struck) {
       const distance = jupiter.strikePoint.distanceTo(me.flight.position);
@@ -4480,13 +4511,6 @@ export class Game implements OnlineGame {
       },
       get dodges() {
         return game.dodges;
-      },
-      launchComet: (through, direction) => {
-        this.drillComet = through && direction ? makeComet(this.field.clock + DRILL_COMET_LEAD, direction.clone().normalize(), through.clone(), Math.floor(this.time * 1000) + 1, this.field.well) : null;
-      },
-      get cometGone() {
-        const comet = game.drillComet;
-        return !comet || game.field.clock > Math.min(comet.at, comet.swallowed) + (SHOWER_LENGTH + SHOWER_WIDE) / COMET_SPEED;
       },
       spawnProbe: (position, kind) => {
         // a probe of its own each time: one taken is never shown again; it waits where it is
@@ -5676,7 +5700,7 @@ export class Game implements OnlineGame {
    * A laser beam went through a ship this browser simulates: damage, feedback, destruction.
    * Also called for beams from other peers.
    */
-  applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number, cause: DeathCause = null) {
+  applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number, cause: DeathCause = null, weight = 1) {
     if (shooter && ship.allyOf(shooter)) return;
     // plating (an item) takes a hit into the drive
     // where the beam meets the ship
@@ -5687,7 +5711,7 @@ export class Game implements OnlineGame {
       if (ship.isLocal) this.hud.flashMessage(this.time, ship.plating ? t('Plating holds') : t('Plating gone'), 1.2);
       return;
     }
-    const { status, zone } = ship.laserHit(origin, direction, this.time);
+    const { status, zone } = ship.laserHit(origin, direction, this.time, weight);
     if (status === 'protected') return;
     // a hit into the drive hurts; the armor only scorches
     const serious = zone === 'drive' || zone === 'reactor';
@@ -6132,25 +6156,24 @@ export class Game implements OnlineGame {
   /**
    * The comet of the round (see comet.ts): its route, the warning before it comes, its shower
    * shown at the field time and its head running down the rock in its way. The flight school
-   * sees only the comet its drill sends.
+   * sees none (see roundComets), so nothing there warns of one either.
    */
   private playComet(dt: number, me: Ship) {
     const clock = this.field.clock;
-    let comet = this.drillComet;
-    if (!this.school && this.roundId >= 0) {
-      const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
-      const key = `${seed}.${this.roundId}.${this.venue.id}`;
-      if (key !== this.cometsOfKey) {
-        this.cometsOfKey = key;
-        this.comets = cometsOf(seed, this.roundId, this.field.well);
-      }
-      for (const next of this.comets) if (clock >= cometStart(next) - COMET_WARNING && clock <= cometEnd(next)) comet = next;
+    const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
+    const key = `${seed}.${this.roundId}.${this.venue.id}.${!!this.school}`;
+    if (key !== this.cometsOfKey) {
+      this.cometsOfKey = key;
+      this.comets = roundComets(seed, this.roundId, this.field.well, !!this.school);
     }
+    const comet = cometAt(this.comets, clock);
+    // the alarm follows only the comet that comes now
+    if (!comet) this.cometCalled = null;
     // the warning, once, as the head nears the arena's edge
     if (comet && comet !== this.cometCalled && clock >= comet.edge - COMET_WARNING && clock < comet.at) {
       this.cometCalled = comet;
       this.speaker.say(COMPUTER.comet, 'urgent');
-      if (!this.school) this.radio.announce(pick(ANNOUNCER_COMET), null);
+      this.radio.announce(pick(ANNOUNCER_COMET), null);
       this.hud.flashMessage(this.time, t('Comet inbound · take cover behind a rock, or turn your nose into its shower'), 5);
       this.sound.beep(980, 0.3, 0.2);
     }
@@ -6203,6 +6226,24 @@ export class Game implements OnlineGame {
     if (Math.random() < dt * GRAIN_PATTER * depth * pace) this.sound.patter(0.5 * depth * pace);
   }
 
+  /** The own clone flying through the ice crystals escaping at the derelict's break: harmless, but they patter on the hull, the more the thicker the mist and the faster the ship. */
+  private breakMist(me: Ship, dt: number) {
+    if (!me.alive || this.spectating) return;
+    const density = this.landmarks.mistAt(me.flight.position);
+    if (density <= 0) return;
+    const pace = Math.min(1, me.flight.velocity.length() / GRAIN_PATTER_SPEED);
+    if (Math.random() < dt * MIST_PATTER * density * pace) this.sound.patter(0.4 * density * pace);
+  }
+
+  /** The own clone flying through the dust a drill hole blows (see Mining.dustAt): harmless, but it patters on the hull, the more the thicker and the faster. */
+  private drillDust(me: Ship, dt: number) {
+    if (!me.alive || this.spectating) return;
+    const thick = this.mining.dustAt(me.flight.position);
+    if (thick <= 0) return;
+    const pace = Math.min(1, me.flight.velocity.length() / DUST_PATTER_SPEED);
+    if (Math.random() < dt * DUST_PATTER * thick * pace) this.sound.patter(0.6 * thick * pace);
+  }
+
   /** The comet's head strikes a piece of the wreck's hull and shoves it: a flash, sparks and debris where it struck, heard as far as debris is. */
   private cometShove(piece: Asteroid, point: THREE.Vector3) {
     this.effects.explosion(point, HEAD_RADIUS * 1.5, piece.velocity);
@@ -6243,7 +6284,7 @@ export class Game implements OnlineGame {
       // only rock gives cover, haze does not
       if (!this.field.lineOfSight(cometCover.copy(position).addScaledVector(cometCourse, -SHOWER_COVER), position, Infinity)) continue;
       cometRelative.subVectors(cometVelocity, ship.flight.velocity).normalize();
-      this.applyLaserHit(ship, cometPiece, cometRelative, null, undefined, 'shower');
+      this.applyLaserHit(ship, cometPiece, cometRelative, null, undefined, 'shower', SHOWER_WEIGHT);
       if (!ship.alive) return;
     }
   }

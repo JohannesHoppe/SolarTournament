@@ -747,8 +747,6 @@ export const ES: Catalog = {
   'Shot down. Nice, but this time hide. Again.': 'Derribado. Muy bonito, pero esta vez tenías que esconderte. Otra vez.',
   'Final exam, tactician. This bot flies as well as the field. Use everything.': 'Examen final, táctico. Este bot vuela tan bien como cualquiera del torneo. Usa todo lo que tienes.',
   'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.': 'Ya peleas como un táctico. Sal de la línea de fuego de un golpe, nunca les enseñes tu motor, dispara en ráfagas y deja que las rocas se lleven los impactos. Ahora ve y tráele la victoria al Presidente.',
-  'A comet, darling, from your right. Its head misses you, its shower will not: a storm of rock. Get behind the rock, or turn your armored nose into it. Never show it your drive.': 'Un cometa, cariño, por tu derecha. Su cabeza no te alcanza, su lluvia sí: una tormenta de roca. Ponte detrás de la roca, o gírale tu morro acorazado. Nunca le enseñes tu motor.',
-  'Your drive took the shower. Hide, or face it. Again.': 'Tu motor se llevó la lluvia. Escóndete, o plántale cara. Otra vez.',
   'Again.': 'Otra vez.',
 
   // Nicole: praise after a drill
@@ -794,7 +792,6 @@ export const ES: Catalog = {
   'Your nose on them, your flight somewhere else. They cannot dodge what they do not see coming, darling.': 'El morro sobre ellos, tu vuelo en otra parte. No pueden esquivar lo que no ven venir, cariño.',
   'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.': 'Los láseres no se doblan, y los sensores no ven a través de la roca. Detrás de ella, no existes.',
   'Lost you. A seeker that loses its line never finds it again.': 'Te ha perdido. Un torpedo que pierde la línea de visión ya no la recupera.',
-  'Still in one piece. The head clears everything in its way, but the shower is what kills.': 'Sigues entero. La cabeza barre todo a su paso, pero lo que mata es la lluvia.',
   'A real fight, and you won it. I am so proud of you, darling.': 'Un combate de verdad, y lo has ganado. Estoy muy orgullosa de ti, cariño.',
 
   // Nicole: in a round
@@ -1080,6 +1077,8 @@ export const ES: Catalog = {
   'Heat and bursts': 'Calor y ráfagas',
   "The laser needs no ammunition, only cooling. Each shot adds {heatShot} % heat: a cool laser fires a burst of {burstSun} in sunlight, {burstShade} in a rock's shadow. Overheated, it locks until it has cooled to {cooled} %. Fire short bursts while the crosshair glows, and cool off in the shade (☾ beside the heat gauge).":
     'El láser no necesita munición, solo refrigeración. Cada disparo añade un {heatShot} % de calor: un láser frío dispara una ráfaga de {burstSun} a la luz del sol, {burstShade} a la sombra de una roca. Sobrecalentado, se bloquea hasta enfriarse al {cooled} %. Dispara ráfagas cortas mientras brilla la mira, y enfríate a la sombra (☾ junto al indicador de calor).',
+  'Hot radiators glow for everyone to see: dull red, then orange-red as the laser nears its lock. A rival glowing bright is about to fall silent; while yours glow, every rival knows the same of you.':
+    'Los radiadores calientes brillan a la vista de todos: rojo apagado, luego rojo anaranjado a medida que el láser se acerca a su bloqueo. Un rival que brilla con fuerza está a punto de callar; mientras los tuyos brillan, todos tus rivales saben lo mismo de ti.',
   "Rock stops everything: beams, sensors and torpedo seekers. A ship behind a rock vanishes from the HUD, and the bots cannot see it either. In a rock's shadow your laser also cools more than twice as fast.":
     'La roca lo detiene todo: rayos, sensores y buscadores de torpedos. Una nave detrás de una roca desaparece del HUD, y los bots tampoco la ven. A la sombra de una roca, además, tu láser se enfría más del doble de rápido.',
   Torpedoes: 'Torpedos',
@@ -1143,7 +1142,7 @@ export const ES: Catalog = {
   'Take out the batteries first: every {batteryPeriod} s each fires at the nearest ship it sees within {batteryRange} km, and speed spoils its aim. With half its batteries gone it turns its stern on the nearest pilot and lights its drives: stay out of that plume. With every battery gone the reactor opens. When it breaks, get clear: four seconds later the ship goes up and takes everything within {blast} km. Sinking it scores {sink} for everyone; if the five minutes run out first, the President wins.':
     'Elimina primero las baterías: cada {batteryPeriod} s, cada una dispara a la nave más cercana que ve a menos de {batteryRange} km, y la velocidad le estropea la puntería. Perdida la mitad de sus baterías, vuelve la popa hacia el piloto más cercano y enciende sus motores: no te metas en ese chorro. Sin ninguna batería, el reactor queda al descubierto. Cuando se rompe, aléjate: cuatro segundos después la nave estalla y se lleva todo lo que haya a menos de {blast} km. Hundirlo da {sink} a todos; si los cinco minutos se acaban antes, gana el Presidente.',
   'Seven Arenas, One Glorious Death': 'Siete arenas, una muerte gloriosa',
-  '<strong>The Belt.</strong> The home of the Games: forty huge rocks, cover everywhere.': '<strong>El Cinturón.</strong> El hogar de los Juegos: cuarenta rocas enormes, cobertura por todas partes.',
+  '<strong>The Belt.</strong> The home of the Games: forty huge rocks, cover everywhere. The Rockborn mine them: their rigs, buoys and cutting lasers are no cover, a ship flies straight through them. The dust from their drill holes does no harm, it only patters on the hull.': '<strong>El Cinturón.</strong> El hogar de los Juegos: cuarenta rocas enormes, cobertura por todas partes. Los Rockborn las explotan: sus torres de perforación, boyas y láseres de corte no sirven de cobertura, una nave los atraviesa sin más. El polvo de sus pozos de perforación no hace daño, solo repiquetea en el casco.',
   '<strong>The Satellite Junkyard.</strong> The dead satellites, spent stages and fairings of the Orbital Freedom Network on crossing orbits, all at {junkOrbit} m/s: your cover moves. The dead relay hub in the middle never breaks. Earth glows below, out of reach.*':
     '<strong>El Desguace de Satélites.</strong> Satélites muertos, etapas agotadas y cofias de la Orbital Freedom Network en órbitas que se cruzan, todos a {junkOrbit} m/s: tu cobertura se mueve. El nodo de enlace muerto, en el centro, nunca se rompe. Abajo brilla la Tierra, fuera de tu alcance.*',
   '*They promised internet for everyone. Now everyone gets junk, darling.': '*Prometieron internet para todos. Ahora todos reciben chatarra, cariño.',
@@ -1155,8 +1154,9 @@ export const ES: Catalog = {
     '<strong>Corona.</strong> Bajo el resplandor del sol, los radiadores solo disipan más o menos la mitad de su calor: lucha desde las sombras. Cada {stormEvery} s una tormenta solar ciega los sensores durante {stormLength} s.',
   '<strong>Event Horizon.</strong> A black hole in the middle. Within about {noReturn} m no drive gets out; watch the PULL gauge and burn away early.':
     '<strong>Horizonte de sucesos.</strong> Un agujero negro en el centro. A menos de unos {noReturn} m ningún motor consigue salir; vigila el indicador TIRÓN y aléjate a fondo a tiempo.',
-  '<strong>The Derelict.</strong> A broken world ship and nothing else: no rocks, only its hull to hide behind, and lasers only scorch it.':
-    '<strong>El Pecio.</strong> Una nave mundo rota y nada más: sin rocas, solo su casco para esconderte, y los láseres solo lo chamuscan.',
+  '<strong>The Derelict.</strong> A broken world ship and nothing else: no rocks, only its hull to hide behind, and lasers only scorch it. The mist of ice crystals still escaping at the break does no harm, it only patters on the hull. Its dead drift there, frozen; nothing you fire touches them.*':
+    '<strong>El Pecio.</strong> Una nave mundo rota y nada más: sin rocas, solo su casco para esconderte, y los láseres solo lo chamuscan. La niebla de cristales de hielo que aún escapa por la rotura no hace daño, solo repiquetea sobre el casco. Allí flotan sus muertos, congelados; nada de lo que disparas los toca.*',
+  '*They set out together for the stars. Now they watch you die over their grave, darling. Mind them as you pass.': '*Partieron juntos hacia las estrellas. Ahora te ven morir sobre su tumba, cariño. Ten cuidado con ellos al pasar.',
   'Hazards and Alarms': 'Peligros y alarmas',
   'Below the crosshair the flight computer names the worst danger: CAUTION in azure, WARNING in orange, CRITICAL in red with a siren. One line per danger, with an arrow to where it comes from and a countdown where it has one.':
     'Bajo la mira, el ordenador de vuelo nombra el peor peligro: PRECAUCIÓN en azul, ALERTA en naranja, CRÍTICO en rojo con sirena. Una línea por peligro, con una flecha hacia donde viene y una cuenta atrás si la tiene.',
@@ -1164,8 +1164,8 @@ export const ES: Catalog = {
   'IMPACT means your course hits something sooner than you could flip and brake. Turn or brake now. Below {impactSafe} m/s a rock only scratches the paint; at about {impactKill} m/s it wrecks the ship.':
     'IMPACTO significa que tu rumbo choca con algo antes de lo que tardarías en voltear y frenar. Gira o frena ya. Por debajo de {impactSafe} m/s una roca solo raya la pintura; a unos {impactKill} m/s destroza la nave.',
   Comets: 'Cometas',
-  'COMET INBOUND comes {cometWarning} s before a comet reaches the arena. Its head destroys whatever it meets. Its two tails, pointing away from the sun, are only dust and gas and harm nobody. The danger is the shower that glints orange along its route behind the head: every piece strikes like a laser beam. Get into the lee of a rock, or turn your armored nose into the shower.':
-    'COMETA ENTRANTE aparece {cometWarning} s antes de que un cometa llegue a la arena. Su cabeza destruye lo que encuentra. Sus dos colas, que apuntan lejos del sol, son solo polvo y gas y no dañan a nadie. El peligro es la lluvia que brilla en naranja a lo largo de su ruta, tras la cabeza: cada fragmento golpea como un rayo láser. Ponte al abrigo de una roca, o gira tu morro acorazado hacia la lluvia.',
+  'COMET INBOUND comes {cometWarning} s before a comet reaches the arena. Its head destroys whatever it meets. Its two tails, pointing away from the sun, are only dust and gas and harm nobody. The danger is the shower that glints orange along its route behind the head: every piece strikes half again as hard as a laser beam. Get into the lee of a rock, or turn your armored nose into the shower.':
+    'COMETA ENTRANTE aparece {cometWarning} s antes de que un cometa llegue a la arena. Su cabeza destruye lo que encuentra. Sus dos colas, que apuntan lejos del sol, son solo polvo y gas y no dañan a nadie. El peligro es la lluvia que brilla en naranja a lo largo de su ruta, tras la cabeza: cada fragmento golpea con una vez y media la fuerza de un rayo láser. Ponte al abrigo de una roca, o gira tu morro acorazado hacia la lluvia.',
   'Gravity wells': 'Pozos gravitatorios',
   "In Jupiter's clouds": 'En las nubes de Júpiter',
   "The haze hides whatever is in it: just under the deck you see about {seeDeck} km, a kilometer down {seeKm} m, two kilometers down {seeTwoKm} m. Ships turn into shadows, then into nothing. Your laser reaches as far as you see, the radar twice as far, a torpedo's lock two thirds as far. The deck itself is a veil: dive through it, and a chaser above loses sight of you, unless it looks almost straight down.":

@@ -1,0 +1,56 @@
+import * as THREE from 'three';
+import { describe, expect, it } from 'vitest';
+import { sternAt } from './arenas';
+import { Derelict, mistDensity } from './derelict';
+import { HULL_PAINT } from './shapes';
+import { stencilable } from '../view/lettering';
+
+/** The middle of the gap between the world ship's torn ends. */
+const GAP = new THREE.Vector3(-14200, 0, 0).add(new THREE.Vector3(...sternAt(9200), 3000)).multiplyScalar(0.5);
+
+describe('the derelict', () => {
+  it('lets its mist escape from both torn ends into the gap, thick on the jets and nowhere else', () => {
+    // just off each torn end, on its jet's axis
+    expect(mistDensity(new THREE.Vector3(-13000, 0, 0))).toBeGreaterThan(0.5);
+    const stern = new THREE.Vector3(...sternAt(8000), 3000);
+    expect(mistDensity(stern)).toBeGreaterThan(0.5);
+    // inside the hull behind a torn end, far off to the side, and far beyond the jets' reach
+    expect(mistDensity(new THREE.Vector3(-20000, 0, 0))).toBe(0);
+    expect(mistDensity(new THREE.Vector3(-10000, 0, 8000))).toBe(0);
+    expect(mistDensity(new THREE.Vector3(-30000, 0, 0))).toBe(0);
+    expect(mistDensity(new THREE.Vector3(0, 20000, 0))).toBe(0);
+  });
+
+  it('keeps its dead drifting slowly about the break, turning, never wandering off', () => {
+    const wreck = new Derelict(new THREE.Color(1, 1, 1));
+    const dead = wreck.group.children.filter((child): child is THREE.InstancedMesh => child instanceof THREE.InstancedMesh);
+    expect(dead.reduce((sum, mesh) => sum + mesh.count, 0)).toBeGreaterThanOrEqual(30);
+    const matrix = new THREE.Matrix4();
+    const at = (mesh: THREE.InstancedMesh, i: number) => new THREE.Vector3().setFromMatrixPosition((mesh.getMatrixAt(i, matrix), matrix));
+    const turn = (mesh: THREE.InstancedMesh, i: number) => new THREE.Quaternion().setFromRotationMatrix((mesh.getMatrixAt(i, matrix), matrix));
+    for (const time of [0, 100, 1000, 10000]) {
+      wreck.update(time);
+      const before = dead.flatMap((mesh) => Array.from({ length: mesh.count }, (_, i) => ({ at: at(mesh, i), turn: turn(mesh, i) })));
+      wreck.update(time + 1);
+      let k = 0;
+      for (const mesh of dead) {
+        for (let i = 0; i < mesh.count; i++, k++) {
+          const now = at(mesh, i);
+          // within 800 m of the gap's middle (the torn ends are 600 m apart)
+          expect(now.distanceTo(GAP)).toBeLessThan(16000);
+          // drifting at no more than 2 m/s, turning at no more than 0.12 rad/s
+          expect(now.distanceTo(before[k].at)).toBeLessThan(40);
+          expect(turn(mesh, i).angleTo(before[k].turn)).toBeLessThan(0.121);
+        }
+      }
+    }
+  });
+
+  it('paints its name, motto and registry only in letters its stencil has', () => {
+    for (const lettering of Object.values(HULL_PAINT)) {
+      expect(stencilable(`${lettering.name ?? ''}${lettering.registry ?? ''}`)).toBe(true);
+    }
+    expect(HULL_PAINT[5].name).toBe('PER ASPERA');
+    expect(HULL_PAINT[7].name).toBe('AD ASTRA');
+  });
+});

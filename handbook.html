@@ -202,6 +202,7 @@
       <p data-i18n>So a fight is won by position: get behind the other ship, and keep your armored nose to anyone behind you. The crosshair glows orange only over a drive. ON YOUR TAIL means: turn your nose to that ship, now.</p>
       <h3 id="heat" data-i18n>Heat and bursts</h3>
       <p data-i18n>The laser needs no ammunition, only cooling. Each shot adds {heatShot} % heat: a cool laser fires a burst of {burstSun} in sunlight, {burstShade} in a rock's shadow. Overheated, it locks until it has cooled to {cooled} %. Fire short bursts while the crosshair glows, and cool off in the shade (☾ beside the heat gauge).</p>
+      <p data-i18n>Hot radiators glow for everyone to see: dull red, then orange-red as the laser nears its lock. A rival glowing bright is about to fall silent; while yours glow, every rival knows the same of you.</p>
       <h3 id="cover" data-i18n>Cover</h3>
       <p data-i18n>Rock stops everything: beams, sensors and torpedo seekers. A ship behind a rock vanishes from the HUD, and the bots cannot see it either. In a rock's shadow your laser also cools more than twice as fast.</p>
       <h3 id="torpedoes" data-i18n>Torpedoes</h3>
@@ -269,7 +270,7 @@
     <section id="arenas">
       <h2 data-i18n>Seven Arenas, One Glorious Death</h2>
       <ul class="handbook-list">
-        <li data-i18n><strong>The Belt.</strong> The home of the Games: forty huge rocks, cover everywhere.</li>
+        <li data-i18n><strong>The Belt.</strong> The home of the Games: forty huge rocks, cover everywhere. The Rockborn mine them: their rigs, buoys and cutting lasers are no cover, a ship flies straight through them. The dust from their drill holes does no harm, it only patters on the hull.</li>
         <li data-i18n><strong>Rings of Saturn.</strong> Inside Saturn's ring: a layer of ice grains {ringLayer} m thick runs through the middle, small chunks of ice in it, a few big ones in the open space above and below. The grains do no harm, they only patter on the hull; dive through the layer to shake off a chaser, or hide among its chunks. The race course dives through it four times a lap. The sun gives a hundredth of the light it gives Earth; the flight computer's sensors brighten the picture to make up for it. Ice breaks easier, and the weaker sun lets lasers cool a little faster.</li>
         <li>
           <p data-i18n><strong>The Satellite Junkyard.</strong> The dead satellites, spent stages and fairings of the Orbital Freedom Network on crossing orbits, all at {junkOrbit} m/s: your cover moves. The dead relay hub in the middle never breaks. Earth glows below, out of reach.*</p>
@@ -278,7 +279,10 @@
         <li data-i18n><strong>Jupiter.</strong> Its cloud deck runs through the middle of the arena: above it open space, below it the air, thicker the deeper you go, and its pull, almost a g, draws everything down into it. Half the fight is in the clouds (see In Jupiter's clouds).</li>
         <li data-i18n><strong>Corona.</strong> In the sun's glare the radiators shed only about half their heat: fight from the shadows. Every {stormEvery} s a solar storm blinds the sensors for {stormLength} s.</li>
         <li data-i18n><strong>Event Horizon.</strong> A black hole in the middle. Within about {noReturn} m no drive gets out; watch the PULL gauge and burn away early.</li>
-        <li data-i18n><strong>The Derelict.</strong> A broken world ship and nothing else: no rocks, only its hull to hide behind, and lasers only scorch it.</li>
+        <li>
+          <p data-i18n><strong>The Derelict.</strong> A broken world ship and nothing else: no rocks, only its hull to hide behind, and lasers only scorch it. The mist of ice crystals still escaping at the break does no harm, it only patters on the hull. Its dead drift there, frozen; nothing you fire touches them.*</p>
+          <p class="handbook-small-print" data-i18n>*They set out together for the stars. Now they watch you die over their grave, darling. Mind them as you pass.</p>
+        </li>
       </ul>
     </section>
 
@@ -288,7 +292,7 @@
       <h3 data-i18n>Impact</h3>
       <p data-i18n>IMPACT means your course hits something sooner than you could flip and brake. Turn or brake now. Below {impactSafe} m/s a rock only scratches the paint; at about {impactKill} m/s it wrecks the ship.</p>
       <h3 id="comets" data-i18n>Comets</h3>
-      <p data-i18n>COMET INBOUND comes {cometWarning} s before a comet reaches the arena. Its head destroys whatever it meets. Its two tails, pointing away from the sun, are only dust and gas and harm nobody. The danger is the shower that glints orange along its route behind the head: every piece strikes like a laser beam. Get into the lee of a rock, or turn your armored nose into the shower.</p>
+      <p data-i18n>COMET INBOUND comes {cometWarning} s before a comet reaches the arena. Its head destroys whatever it meets. Its two tails, pointing away from the sun, are only dust and gas and harm nobody. The danger is the shower that glints orange along its route behind the head: every piece strikes half again as hard as a laser beam. Get into the lee of a rock, or turn your armored nose into the shower.</p>
       <h3 id="wells" data-i18n>Gravity wells</h3>
       <p data-i18n>Near the black hole and over Jupiter the PULL gauge shows how much of your drive it would take to get out: CAUTION from {wellCaution} %, WARNING from {wellWarning} %, CRITICAL from {wellCritical} %, and when it would take all of it, NO RETURN. Burn away early: falling, the gauge climbs fast. The speed limit holds only against your own drive; gravity pulls you past {limit} m/s.</p>
       <h3 id="air" data-i18n>In Jupiter's clouds</h3>

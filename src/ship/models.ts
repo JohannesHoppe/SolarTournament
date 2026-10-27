@@ -167,14 +167,34 @@ function capGlint(this: THREE.Material, shader: THREE.WebGLProgramParametersWith
   shader.fragmentShader = 'uniform float glintPeak;\n' + shader.fragmentShader.replace(`( ${direct} + clearcoatSpecularIndirect )`, `( ${capped} + clearcoatSpecularIndirect )`);
 }
 
+/** A radiator's skin stands this far off the part it covers (units, 3 cm), so it never fights the hull for a pixel. */
+const RADIATOR_SKIN = 0.6;
+
+/**
+ * The glowing skin of a radiator: the part lofted from `back` to `front`, a little larger all
+ * round (see RADIATOR_SKIN), its vertices as hot as `warmth` says at their place (0..1, the
+ * glow's share there: hottest where the coolant comes in).
+ */
+function radiator(section: Section, back: End, front: End, warmth: (p: THREE.Vector3) => number): THREE.BufferGeometry {
+  const grow = (end: End, dz: number): End => ({ ...end, z: end.z + dz, w: end.w + RADIATOR_SKIN, h: end.h + RADIATOR_SKIN });
+  const geometry = loft(section, grow(back, RADIATOR_SKIN), grow(front, -RADIATOR_SKIN));
+  const position = geometry.attributes.position;
+  const colors = new Float32Array(position.count * 3);
+  const p = new THREE.Vector3();
+  for (let i = 0; i < position.count; i++) colors.fill(warmth(p.fromBufferAttribute(position, i)), i * 3, i * 3 + 3);
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return geometry;
+}
+
 /**
  * A hull on the model file's engine (see keepEngine): the painted `parts` as one mesh with its
  * `wear` (see wornSurface: the paint's color times the surface's, worn down to metal where it
  * chipped, mirroring the sky where it is smooth) under a clear lacquer, and the `glow` parts, if
  * any, lit in their color. Both meshes carry `name`. The `trim` comes along hidden (see
- * lightStrips).
+ * lightStrips), and so do the `radiators`, one mesh named `radiator` that glows over them as the
+ * laser's heat rises (see Ship.radiate).
  */
-function hull(original: THREE.Object3D, name: string, wear: Wear, seed: number, parts: THREE.BufferGeometry[], trim: THREE.Object3D, glow?: { parts: THREE.BufferGeometry[]; color: THREE.Color }): THREE.Object3D {
+function hull(original: THREE.Object3D, name: string, wear: Wear, seed: number, parts: THREE.BufferGeometry[], trim: THREE.Object3D, radiators: THREE.BufferGeometry[], glow?: { parts: THREE.BufferGeometry[]; color: THREE.Color }): THREE.Object3D {
   const root = keepEngine(original);
   const surface = wornSurface(seed, wear);
   const material = lacquer(
@@ -198,6 +218,13 @@ function hull(original: THREE.Object3D, name: string, wear: Wear, seed: number, 
     root.add(mesh);
   }
   root.add(trim);
+  const skin = new THREE.Mesh(
+    mergeGeometries(radiators),
+    new THREE.MeshBasicMaterial({ color: 0x000000, vertexColors: true, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, toneMapped: false }),
+  );
+  skin.name = 'radiator';
+  skin.visible = false;
+  root.add(skin);
   return root;
 }
 
@@ -325,6 +352,10 @@ const TAIL_LIGHT = new THREE.Color(1, 0.12, 0.06).multiplyScalar(2.4);
  */
 const DEPOT: Wear = { rust: 0.8, chips: 0.7, grime: 0.6, scratches: 0.6, seams: 0.7, stencils: ['07', 'NO STEP', 'FUEL', 'DEPOT 41-C', 'RESCUE', '2511'], roughness: 0.62, metalness: 0.25 };
 
+/** The heights of the cooling ribs across the human interceptor's drive block, and where the vents sit on the bulkhead over it (units). */
+const RIBS = [-18, -6, 6, 18];
+const VENTS = [-36, -12, 12, 36];
+
 /** The human interceptor's fuselage, from the nose back. */
 const HUMAN_BODY: End[] = [{ z: -290, w: 12, h: 10, y: -8 }, { z: -170, w: 45, h: 40, y: 0 }, { z: 240, w: 70, h: 55, y: 5 }];
 
@@ -357,9 +388,9 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...pair(paint(loft(OCTAGON, { z: 292, w: 32, h: 28, x: 87, y: 2 }, { z: 272, w: 27, h: 23, x: 87, y: 2 }), HEAT_TINT)),
     ...pair(paint(loft(OCTAGON, { z: 286, w: 22, h: 18, x: 87, y: 2 }, { z: 284, w: 30, h: 26, x: 87, y: 2 }), GUNMETAL)),
     paint(loft(RECTANGLE, { z: 262, w: 40, h: 28, y: -2 }, { z: 200, w: 44, h: 32, y: 0 }), GUNMETAL),
-    ...[-18, -6, 6, 18].map((y) => paint(loft(RECTANGLE, { z: 266, w: 46, h: 2.5, y }, { z: 214, w: 46, h: 2.5, y }), STEEL)),
+    ...RIBS.map((y) => paint(loft(RECTANGLE, { z: 266, w: 46, h: 2.5, y }, { z: 214, w: 46, h: 2.5, y }), STEEL)),
     paint(loft(RECTANGLE, { z: 244, w: 56, h: 6, y: 48 }, { z: 214, w: 50, h: 6, y: 46 }), OLIVE_DARK),
-    ...[-36, -12, 12, 36].map((x) => paint(loft(RECTANGLE, { z: 246, w: 6, h: 2, x, y: 54 }, { z: 218, w: 6, h: 2, x, y: 52 }), GUNMETAL)),
+    ...VENTS.map((x) => paint(loft(RECTANGLE, { z: 246, w: 6, h: 2, x, y: 54 }, { z: 218, w: 6, h: 2, x, y: 52 }), GUNMETAL)),
     ...thrusterQuads(THRUSTER_LAYOUTS.human, GUNMETAL, STEEL),
   ];
   const lights: THREE.BufferGeometry[] = [
@@ -369,13 +400,22 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
   ];
   // the trim along the fuselage's shoulders, above the nacelles, and across the bulkhead
   const trim = lightStrips(flankLine(HUMAN_BODY, 0.45, -230, 240), { width: 96, y: 48, z: 244 });
-  return hull(original, 'humanHull', DEPOT, 41, parts, trim, { parts: lights, color: TAIL_LIGHT });
+  // the radiators: the drive block's cooling ribs, hottest at the back where the coolant comes
+  // from the drives, and the vents on the bulkhead over them
+  const radiators = [
+    ...RIBS.map((y) => radiator(RECTANGLE, { z: 266, w: 46, h: 2.5, y }, { z: 214, w: 46, h: 2.5, y }, (p) => 0.55 + 0.45 * THREE.MathUtils.smoothstep(p.z, 214, 266))),
+    ...VENTS.map((x) => radiator(RECTANGLE, { z: 246, w: 6, h: 2, x, y: 54 }, { z: 218, w: 6, h: 2, x, y: 52 }, () => 0.8)),
+  ];
+  return hull(original, 'humanHull', DEPOT, 41, parts, trim, radiators, { parts: lights, color: TAIL_LIGHT });
 }
 
 const IVORY = 0xd9d3c3;
 const GOLD = 0xc9a227;
 const GOLD_DARK = 0x7a5f14;
 const AMBER_GLASS = 0x3a2608;
+
+/** The Sovereign's delta wing, from its trailing edge to its leading edge (the right one; the left one mirrors it). */
+const SOVEREIGN_WING: [End, End] = [{ z: 230, w: 120, h: 9, x: 150, y: 0 }, { z: -40, w: 30, h: 6, x: 70, y: 2 }];
 
 /** The Sovereign's arrowhead, from the nose back. */
 const SOVEREIGN_BODY: End[] = [{ z: -380, w: 4, h: 4, y: -4 }, { z: -120, w: 40, h: 26 }, { z: 250, w: 62, h: 40, y: 4 }];
@@ -395,7 +435,7 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
     paint(loft(OCTAGON, { z: 20, w: 24, h: 12, y: 30 }, { z: -150, w: 12, h: 5, y: 22 }), AMBER_GLASS),
     paint(loft(RECTANGLE, { z: 240, w: 8, h: 8, y: 46 }, { z: 20, w: 6, h: 3, y: 38 }), GOLD),
     // delta wings swept back to gold tips
-    ...pair(paint(loft(BLADE, { z: 230, w: 120, h: 9, x: 150, y: 0 }, { z: -40, w: 30, h: 6, x: 70, y: 2 }), IVORY)),
+    ...pair(paint(loft(BLADE, ...SOVEREIGN_WING), IVORY)),
     ...pair(paint(loft(RECTANGLE, { z: 250, w: 14, h: 30, x: 272, y: 8 }, { z: 140, w: 8, h: 14, x: 268, y: 10 }), GOLD)),
     // forward canards near the nose
     ...pair(paint(loft(BLADE, { z: -170, w: 46, h: 5, x: 64, y: 4 }, { z: -250, w: 14, h: 3, x: 40, y: 4 }), GOLD_DARK)),
@@ -406,7 +446,9 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
   ];
   // the trim high on the arrowhead's flanks, above the wings and the nacelles, and across its stern
   const trim = lightStrips(flankLine(SOVEREIGN_BODY, 0.5, -340, 250), { width: 100, y: 20, z: 250 });
-  return hull(original, 'sovereignHull', GIFT, 7, parts, trim);
+  // the delta wings are its radiators, hottest at their roots towards the trailing edge
+  const radiators = pair(radiator(BLADE, SOVEREIGN_WING[0], SOVEREIGN_WING[1], (p) => THREE.MathUtils.smoothstep(p.z, -40, 230) * (1 - 0.6 * THREE.MathUtils.smoothstep(Math.abs(p.x), 90, 270))));
+  return hull(original, 'sovereignHull', GIFT, 7, parts, trim, radiators);
 }
 
 /** The Sovereign's wear: a gift of the President, kept like new; a few scratches, its number in gold. */
@@ -415,6 +457,9 @@ const GIFT: Wear = { rust: 0, chips: 0.05, grime: 0.1, scratches: 0.2, seams: 0.
 const VOID = 0x15121c;
 const VOID_SHEEN = 0x2b2438;
 const VEIN = new THREE.Color(0.1, 1, 0.75).multiplyScalar(1.5);
+
+/** The alien interceptor's inner side blade, from its trailing edge to its leading edge (the right one). */
+const ALIEN_FIN: [End, End] = [{ z: 200, w: 70, h: 10, x: 60, y: -30 }, { z: 0, w: 40, h: 6, x: 60, y: -20 }];
 
 /** The alien interceptor's dart, from the needle back. */
 const ALIEN_BODY: End[] = [{ z: -330, w: 6, h: 8, y: -10 }, { z: 60, w: 62, h: 52 }, { z: 400, w: 34, h: 40, y: -10 }];
@@ -434,7 +479,7 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
     paint(loft(BLADE, { z: 300, w: 8, h: 50, y: -90 }, { z: 40, w: 10, h: 10, y: -40 }), VOID),
     // side blades, swept, carrying the drives
     ...pair(paint(loft(BLADE, { z: 380, w: 14, h: 26, x: 104, y: -44 }, { z: 40, w: 8, h: 10, x: 150, y: -60 }), VOID_SHEEN)),
-    ...pair(paint(loft(BLADE, { z: 200, w: 70, h: 10, x: 60, y: -30 }, { z: 0, w: 40, h: 6, x: 60, y: -20 }), VOID)),
+    ...pair(paint(loft(BLADE, ...ALIEN_FIN), VOID)),
     ...pair(paint(loft(OCTAGON, { z: 410, w: 18, h: 18, x: 104, y: -44 }, { z: 280, w: 16, h: 16, x: 104, y: -44 }), VOID)),
     ...thrusterQuads(THRUSTER_LAYOUTS.alien, VOID_SHEEN, VOID),
   ];
@@ -447,7 +492,9 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
   ];
   // the trim along the dart's flanks, below the veins and above the side blades, and across its stern
   const trim = lightStrips(flankLine(ALIEN_BODY, 0.1, -290, 400), { width: 56, y: 4, z: 400 });
-  return hull(original, 'alienHull', SCARRED, 23, parts, trim, { parts: veins, color: VEIN });
+  // the inner side blades are its radiators, hottest at the body
+  const radiators = pair(radiator(BLADE, ALIEN_FIN[0], ALIEN_FIN[1], (p) => 1 - 0.7 * THREE.MathUtils.smoothstep(Math.abs(p.x), 60, 130)));
+  return hull(original, 'alienHull', SCARRED, 23, parts, trim, radiators, { parts: veins, color: VEIN });
 }
 
 /** The alien interceptor's wear: a grown skin of fine scales, scored by countless fights, never rusting. */

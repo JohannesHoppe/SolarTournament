@@ -20,5 +20,5 @@ export function testField(detail = DISTANT_DETAIL): AsteroidField {
     group.add(collider);
     return group;
   };
-  return new AsteroidField({ rock: rocks, ice: rocks, debris: rocks, hull: { near: Array.from({ length: 5 }, box), far: [], box: true } });
+  return new AsteroidField({ rock: rocks, ice: rocks, debris: rocks, hull: { near: Array.from({ length: 8 }, box), far: [], box: true } });
 }

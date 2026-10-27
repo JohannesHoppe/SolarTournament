@@ -292,6 +292,16 @@ export class Effects {
     this.fire.emit(position, velocity, 1.5 + Math.random() * 1.5, size, size * 0.2, FIRE);
   }
 
+  /** A glowing particle of any kind (plasma, a burning flake): additive, `size` growing to `endSize` over `life` seconds. */
+  glow(position: THREE.Vector3, velocity: THREE.Vector3, life: number, size: number, endSize: number, color: THREE.Color) {
+    this.fire.emit(position, velocity, life, size, endSize, color);
+  }
+
+  /** A puff of smoke of any color (soot, a charred flake). */
+  soot(position: THREE.Vector3, velocity: THREE.Vector3, life: number, size: number, endSize: number, color: THREE.Color) {
+    this.smoke.emit(position, velocity, life, size, endSize, color);
+  }
+
   /** Rock splinters and dust where a laser hits an asteroid. */
   debris(point: THREE.Vector3, normal: THREE.Vector3, size: number) {
     for (let i = 0; i < 14; i++) {
