@@ -341,7 +341,7 @@ export class Governors {
  * after the scene (all of them, or one), the knobs of the ladder, the scene's parts, the DOM
  * and canvas overlays, the sound; the occasional effects (glitch, datamosh) it switches on.
  */
-export const BENCH_FEATURES = ['post', 'bloom', 'lens', 'resolution', 'shadows', 'lacquer', 'detail', 'field', 'belt', 'landmark', 'sky', 'dust', 'particles', 'ships', 'wrecks', 'guide', 'hud', 'radar', 'attitude', 'audio', 'showcase', 'glitch', 'datamosh'] as const;
+export const BENCH_FEATURES = ['post', 'bloom', 'lens', 'resolution', 'shadows', 'lacquer', 'detail', 'field', 'belt', 'landmark', 'sky', 'dust', 'particles', 'ships', 'wrecks', 'guide', 'hud', 'radar', 'attitude', 'streaks', 'audio', 'showcase', 'glitch', 'datamosh'] as const;
 export type BenchFeature = (typeof BENCH_FEATURES)[number];
 /** The benchmark's features that are switched on to measure them; all others are switched off. */
 export const BENCH_ON: readonly BenchFeature[] = ['glitch', 'datamosh'];

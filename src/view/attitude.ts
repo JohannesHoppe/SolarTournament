@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { footOf, PLANE_UP, skyPointer } from '../world/reference';
+import { Overlay } from './overlay';
 
 /**
  * The flight computer keeps the ship upright to the arena (its north pole is up), and the
@@ -59,28 +60,14 @@ const direction = new THREE.Vector3();
 const at = new THREE.Vector3();
 const beside = new THREE.Vector3();
 
-export class Attitude {
-  private readonly context: CanvasRenderingContext2D;
-  private width = 1;
-  private height = 1;
-  private ratio = 1;
+export class Attitude extends Overlay {
   private drawn = false;
   /** What the picture on the canvas was drawn for: the camera's turn and lens, and the tape shown or not (see update). */
   private readonly drawnTurn = new THREE.Quaternion();
   private readonly drawnLens = [0, 0];
   private drawnTape = false;
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
-    this.context = canvas.getContext('2d')!;
-  }
-
-  /** The picture's size in CSS pixels and the canvas's pixels per CSS pixel. */
-  setViewport(width: number, height: number, ratio: number) {
-    this.width = width;
-    this.height = height;
-    this.ratio = ratio;
-    this.canvas.width = Math.round(width * ratio);
-    this.canvas.height = Math.round(height * ratio);
+  protected resized() {
     this.drawn = false;
   }
 
