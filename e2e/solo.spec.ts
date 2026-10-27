@@ -76,12 +76,12 @@ test('a hangar edited to what no Host can own is named on screen and not used, u
 });
 
 for (const course of ['basic', 'racer', 'gladiator', 'arsenal', 'tactician']) {
-  test(`the flight school's ${course} course starts in the belt`, async ({ page }) => {
+  test(`the flight school's ${course} course starts in the Rings of Kronos`, async ({ page }) => {
     const errors = await openGame(page);
     await page.click('#school');
     await page.click(`#school-${course}`);
     await play(page, 2);
-    expect(await page.evaluate(() => window.game.venue.id)).toBe('belt');
+    expect(await page.evaluate(() => window.game.venue.id)).toBe('rings');
     await expect(page.locator('#school-step')).toContainText(/\d+\/\d+/);
     expect(errors).toEqual([]);
   });
@@ -129,8 +129,6 @@ for (const kick of [true, false]) {
       const out = 2420 - victim.radius - 200;
       place(victim, out);
       place(me, out - 900);
-      // placed by hand: the autopilot's course is where the Host's ship now points
-      game.steering.follow(me.flight);
       const kills = me.kills;
       const deaths = victim.deaths;
       const start = game.time;

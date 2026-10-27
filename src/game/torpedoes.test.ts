@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { MAIN_THRUST, MAX_SPEED, PATH_GRIP } from '../ship/flight';
+import { gripAt, MAIN_THRUST, MAX_SPEED, RCS_THRUST } from '../ship/flight';
 import type { Ship as GameShip } from '../ship/ship';
 import type { Effects } from '../view/effects';
 import type { AsteroidField } from '../world/asteroids';
@@ -15,8 +15,10 @@ const HULL = 340;
 /** A tube's push (units/s, 40 m/s) and a dodge's (units/s, 40 m/s). */
 const LAUNCH = 800;
 const DODGE = 800;
+/** A hard break across a torpedo's path (units/s², 15 g): in free drift, the nose turned 60° across the flight and the drive burning, the thrusters pushing the same way. */
+const BREAK = MAIN_THRUST * Math.sin(Math.PI / 3) + RCS_THRUST;
 
-/** How a ship flies against a torpedo: its acceleration this frame (units/s², at most PATH_GRIP), a dodge (a kick in units/s), or nothing. */
+/** How a ship flies against a torpedo: its acceleration this frame (units/s², at most BREAK), a dodge (a kick in units/s), or nothing. */
 type Evasion = (state: { t: number; seconds: number; ship: Ship; torpedo: TorpedoFlight }) => { push?: THREE.Vector3; kick?: THREE.Vector3 } | null;
 interface Ship {
   position: THREE.Vector3;
@@ -55,7 +57,7 @@ function chase(ship: Ship, torpedoAt: THREE.Vector3, torpedoVelocity: THREE.Vect
     if (action?.kick) ship.velocity.add(action.kick);
     if (action?.push) {
       const speed = ship.velocity.length();
-      ship.velocity.addScaledVector(action.push.clampLength(0, PATH_GRIP), DT);
+      ship.velocity.addScaledVector(action.push.clampLength(0, BREAK), DT);
       const limit = Math.max(speed, MAX_SPEED);
       if (ship.velocity.length() > limit) ship.velocity.setLength(limit);
     }
@@ -93,7 +95,7 @@ function breaking(before: number, side: (since: number) => number = () => 1): Ev
     if (since === null) return null;
     const line = new THREE.Vector3().subVectors(torpedo.position, ship.position);
     const push = v(side(t - since), 0, 0);
-    return { push: push.addScaledVector(line, -push.dot(line) / line.lengthSq()).setLength(PATH_GRIP) };
+    return { push: push.addScaledVector(line, -push.dot(line) / line.lengthSq()).setLength(BREAK) };
   };
 }
 /** One dodge across the line to the torpedo, `before` seconds before it hits. */
@@ -117,7 +119,7 @@ describe('a torpedo', () => {
   it('is faster than a ship in normal flight, slower than an overdrive, and less agile', () => {
     expect(TORPEDO_TOP_SPEED).toBeGreaterThan(MAX_SPEED);
     expect(TORPEDO_TOP_SPEED).toBeLessThan(400 / 0.05);
-    expect(TORPEDO_LATERAL).toBeLessThan(PATH_GRIP);
+    expect(TORPEDO_LATERAL).toBeLessThan(gripAt(MAX_SPEED));
   });
 
   it('catches a ship flying straight: from 1 km behind one fleeing at full speed in under 10 s, one at rest, one coming head-on', () => {

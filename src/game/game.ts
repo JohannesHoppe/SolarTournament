@@ -29,7 +29,7 @@ import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../
 import { showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls } from '../input/input';
 import { LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
-import { gripOf, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, PathSteering } from '../ship/flight';
+import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
@@ -42,8 +42,9 @@ import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
-import { ARENAS, arenaById, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
+import { ARENAS, arenaById, DEFAULT_ARENA, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
+import { stutterWindows } from '../world/shapes';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
@@ -88,7 +89,7 @@ import {
 import { MOMENTS, Moments, type Moment } from './moments';
 import { devlog } from '../devlog';
 import { recorder, type FlightMode, type InputFrame } from '../recorder';
-import { CAMERA_FOLLOW, CAMERA_FOV, CAMERA_TURN, CHASE_DISTANCE, CHASE_HEIGHT, chaseOrientation } from '../view/chase';
+import { CAMERA_FOLLOW, CAMERA_FOV, CAMERA_TURN, CHASE_DISTANCE, CHASE_HEIGHT } from '../view/chase';
 import { AIM_ASSIST_ANGLE, AIM_ASSIST_RANGE, assistAim, BRAKE_BURN_ANGLE, BRAKE_REST, Brake, keepUpright } from '../ship/computer';
 import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
 import { ShareButton, type ShareWhere } from '../share';
@@ -478,9 +479,9 @@ const SOLO_KEY = 'solartournament.solo';
 /** The best lap of each arena's course, with its ghost (see game/laps). */
 const LAPS_KEY = 'solartournament.laps';
 
-/** What a solo round plays: a race unless the Host asks for another mode, its arena (null: by chance), and the bots it flies against: a full grid unless the Host picks fewer (the rivals chosen set how fast and how hard it is). */
+/** What a solo round plays: a race unless the Host asks for another mode, its arena (the default arena unless the Host asks for another; null: by chance), and the bots it flies against: a full grid unless the Host picks fewer (the rivals chosen set how fast and how hard it is). */
 type SoloChoice = { mode: RoundMode; arena: ArenaId | null; rivals: string[] };
-const SOLO_DEFAULT: SoloChoice = { mode: 'race', arena: null, rivals: ['Laika', 'Sputnik', 'Juno', 'Ceres', 'Kessler', 'Orion', 'Vega'] };
+const SOLO_DEFAULT: SoloChoice = { mode: 'race', arena: DEFAULT_ARENA.id, rivals: ['Laika', 'Sputnik', 'Juno', 'Ceres', 'Kessler', 'Orion', 'Vega'] };
 const SOLO_NOTES: Record<RoundMode, string> = {
   race: msg('Three laps through eight gates. Killing your opponents is explicitly allowed.'),
   deathmatch: msg('For the hard pilots: five minutes, every clone for itself.'),
@@ -495,7 +496,8 @@ function loadSolo(): SoloChoice {
     const kept = JSON.parse(storageGet(SOLO_KEY) ?? '{}') as Partial<SoloChoice>;
     return {
       mode: kept.mode && ROUND_MODES.includes(kept.mode) ? kept.mode : SOLO_DEFAULT.mode,
-      arena: ARENAS.some((a) => a.id === kept.arena) ? kept.arena! : null,
+      // null is a choice of its own: by chance
+      arena: kept.arena === null ? null : ARENAS.some((a) => a.id === kept.arena) ? kept.arena! : SOLO_DEFAULT.arena,
       rivals: Array.isArray(kept.rivals) ? BOT_NAMES.filter((n) => kept.rivals!.includes(n)).slice(0, TOURNAMENT_SIZE - 1) : [...SOLO_DEFAULT.rivals],
     };
   } catch {
@@ -705,7 +707,7 @@ export class Game implements OnlineGame {
   private replaying = false;
   private readonly wrecks = new Wrecks();
   /** The arena the round is played in (see enterArena), and its scenery. */
-  private venue: ArenaProfile = ARENAS[0];
+  private venue: ArenaProfile = DEFAULT_ARENA;
   private readonly landmarks = new Landmarks();
   private readonly lensing = new Lensing();
   /** A solar storm blinds the sensors (see STORM_PERIOD). */
@@ -817,12 +819,11 @@ export class Game implements OnlineGame {
   /** The nose points at the flip's goal (it beeps once when it gets there). */
   private flipAligned = false;
   /**
-   * The autopilot flies the own ship onto the course the Host's input sets (see PathSteering),
-   * at every speed; in free drift the input turns the nose and nothing else. On at the start of a
-   * round; T switches to free drift and back at once.
+   * The autopilot flies the own ship where its nose points (see flyByNose); in free drift the
+   * input turns the nose and nothing else, and the ship slides on. On at the start of a round; T
+   * switches to free drift and back at once.
    */
   private autopilot = false;
-  private readonly steering = new PathSteering();
   /** How much the bots go easy on the Host in a solo round, 0..1 (see DEATH_EASE). */
   private ease = 0;
   /** The nose is on a ship: the laser would hit now (see assistAim). */
@@ -1014,7 +1015,7 @@ export class Game implements OnlineGame {
   ];
   private readonly fleetReference: Reference = { glyph: 'battleship', label: msg('Battleship'), position: new THREE.Vector3(), distance: true };
   /** The arena's own fixed references, its center among them (see referencesOf). */
-  private arenaReferences: Reference[] = referencesOf(ARENAS[0]);
+  private arenaReferences: Reference[] = referencesOf(DEFAULT_ARENA);
   /** The fixed references the HUD marks this frame (see orient). */
   private readonly shownReferences: Reference[] = [];
   /** The hooks out, by the ship that fired them, and their cables (see game/hook); when the own hook is ready again, and whether it was held last frame. */
@@ -1043,8 +1044,6 @@ export class Game implements OnlineGame {
   /** What the flight computer flew the own ship by in the last step, for the recorder. */
   private flightMode: FlightMode = 'dead';
   private recording: InputFrame | null = null;
-  /** The own clone was alive in the last step of the flight computer (see flightComputer): a new one starts its course from its nose. */
-  private flewAlive = false;
   /** The rings of the round (see Bot.rings). */
   private rings: Ring[] = [];
   /** The race's gate a ship touched last (see touchesRing), -1 for none: where a gate crash happened, for the log. */
@@ -2141,7 +2140,7 @@ export class Game implements OnlineGame {
     this.clearShips();
     // the hangar is no race: no gates behind the menu
     this.roundMode = 'deathmatch';
-    this.enterArena(ARENAS[0]);
+    this.enterArena(DEFAULT_ARENA);
     const best = Number(storageGet(BEST_SCORE_KEY) ?? 0);
     $('best-score').textContent = best ? t('Personal best: {points} pts', { points: best }) : '';
     this.showSchoolProgress();
@@ -2200,13 +2199,13 @@ export class Game implements OnlineGame {
     if (this.choosingSchool) this.showSchool(false);
 
     this.clearShips();
-    // the flight school trains in the belt; a solo round is in an arena of chance; online the
+    // the flight school trains in the default arena; a solo round is in the arena chosen; online the
     // room and round decide, so a first round starts in the room's first arena (see arriveInRound)
     this.roundId = mode === 'online' ? -1 : 0;
-    // a solo round plays what the Host chose, its arena by chance unless one was chosen
+    // a solo round plays what the Host chose, in the arena chosen or one by chance
     this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? this.solo.mode : 'deathmatch';
     if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0));
-    else this.enterArena(mode === 'school' ? ARENAS[0] : (ARENAS.find((a) => a.id === this.solo.arena) ?? pick(ARENAS)));
+    else this.enterArena(mode === 'school' ? DEFAULT_ARENA : (ARENAS.find((a) => a.id === this.solo.arena) ?? pick(ARENAS)));
     this.hud.reset();
     this.resetOpening();
     $('hud-room').textContent = '';
@@ -3136,6 +3135,7 @@ export class Game implements OnlineGame {
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     this.landmarks.update(this.field.clock);
+    if (this.venue.id === 'derelict') stutterWindows();
     const well = this.field.well;
     // the scene is drawn into the composer's read buffer, which the lens reads right after
     this.lensing.update(this.camera, this.venue.id === 'hole' && well && !this.bench.has('lens') ? well.position : null, well?.radius ?? 0, this.composer.readBuffer.depthTexture);
@@ -3201,15 +3201,12 @@ export class Game implements OnlineGame {
     this.direct(now);
     const hand = this.state === 'playing' ? this.input.read() : IDLE;
     if (recorder) this.record(hand, dt);
-    const myControls = this.flightComputer(hand, dt);
+    const myControls = this.flightComputer(hand);
     if (recorder) this.recorded(myControls);
     this.ignite(myControls);
     const dodge = this.input.takeDodge();
     if (dodge && this.state === 'playing' && !this.spectating) this.dodge(dodge);
     const clamped = (this.clamped = this.startCountdown(myControls));
-    // held by the clamps the ship goes nowhere: the course is where it points, so the flight
-    // sets off that way when they let go
-    if (clamped) this.steering.follow(me.flight);
     // Last Clone Standing: the solar flare, the same on every browser by the field time
     this.showFlare(dt);
     this.playComet(dt, me);
@@ -3392,7 +3389,6 @@ export class Game implements OnlineGame {
       this.hud.updateVelocityMarkers(this.camera, subject, subject === me, !this.autopilot);
       // a solar storm blinds the sensors: no ship shows a marker
       this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject));
-      this.hud.setCourse(this.camera, subject === me && this.onCourse ? this.steering.course : null, me.flight.forward(forward));
     }
     if (!this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
     if (!this.bench.has('attitude')) this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
@@ -4161,7 +4157,7 @@ export class Game implements OnlineGame {
   private showGuide(me: Ship, line: RacingLine, next: number, missed: boolean) {
     const speed = me.flight.velocity.length();
     const heading = speed > 20 ? scratch.copy(me.flight.velocity).divideScalar(speed) : me.flight.forward(scratch);
-    this.guide.show(me.flight.position, heading, speed, gripOf(me.flight), line, this.field, next, missed, wallClock());
+    this.guide.show(me.flight.position, heading, speed, me.flight, line, this.field, next, missed, wallClock());
   }
 
   /** The own racer's next gate in the HUD, with lap, gate and place; returns the gate for the crosshair. */
@@ -4424,34 +4420,21 @@ export class Game implements OnlineGame {
 
   /**
    * The own ship's flight computer. While the brake is held, it flips the ship head over
-   * and burns against the flight direction until the ship is at rest (with the autopilot along
-   * its course, see PathSteering.fly). While the flip is held,
+   * and burns against the flight direction until the ship is at rest. While the flip is held,
    * it only turns the nose against the flight and keeps it there; the pilot's drive pushes
    * once the nose points the right way. Otherwise it keeps the ship upright and, with the
-   * autopilot, takes out the drift.
+   * autopilot, flies the ship where its nose points (see flyByNose).
    */
-  private flightComputer(controls: Readonly<Controls>, dt: number): Controls {
+  private flightComputer(controls: Readonly<Controls>): Controls {
     const me = this.me!;
     const flight = me.flight;
-    // a fresh clone sets off where it points
-    if (me.alive && !this.flewAlive) this.steering.follow(flight);
-    this.flewAlive = me.alive;
     const braking = this.state === 'playing' && this.input.braking && me.alive;
     if (braking) {
       this.flightMode = 'brake';
       this.flipping = false;
       this.aimTarget();
       const rested = this.brake.rested;
-      let out: Controls;
-      if (this.autopilot) {
-        // the autopilot brakes along its course: braking changes the speed, not where the Host wants to go
-        this.steering.fly(flight, controls, this.field.gravity(flight.position, gravity), dt, Object.assign(this.computed, controls), true);
-        out = keepUpright(flight, this.computed);
-        this.brake.rested = flight.velocity.length() < BRAKE_REST;
-      } else {
-        this.steering.follow(flight);
-        out = this.brake.fly(flight, controls, me.drive, this.computed);
-      }
+      const out = this.brake.fly(flight, controls, me.drive, this.computed);
       if (this.brake.rested && !rested) this.sound.beep(660, 0.08);
       return out;
     }
@@ -4462,16 +4445,13 @@ export class Game implements OnlineGame {
       // flung off the hook: the flight computer turns the nose onto the new course, unless the
       // pilot steers, and the autopilot does not brake the swing meanwhile
       const flung = this.time < this.flungUntil && me.alive;
-      // in free drift the pointer turns the nose, and the autopilot's course follows it, so
-      // switching back on takes over from where the ship points
-      if (!this.autopilot || !me.alive || flung) this.steering.follow(flight);
+      // in free drift the pointer turns the nose and the ship slides on
       this.flightMode = !me.alive ? 'dead' : !this.autopilot ? 'free' : flung ? 'swing' : 'autopilot';
-      const out = this.autopilot && me.alive && !flung ? this.trimDrift(controls, dt) : Object.assign(this.computed, controls);
+      const out = this.autopilot && me.alive && !flung ? this.trimDrift(controls) : Object.assign(this.computed, controls);
       if (flung && Math.abs(controls.yaw) + Math.abs(controls.pitch) < FLING_STEER && flight.velocity.lengthSq() > 1) flight.steer(flight.velocity, 3, out);
       return this.assistAim(keepUpright(flight, out));
     }
     this.flightMode = 'flip';
-    this.steering.follow(flight);
     if (!this.flipping) {
       // the goal is fixed when the flip starts: against the flight, or straight behind the nose
       // at rest; so a burn held past standstill speeds the ship up backwards instead of flipping again
@@ -5290,15 +5270,9 @@ export class Game implements OnlineGame {
     this.sound.beep(1570, 0.08, 0.12, 0.06);
   }
 
-  /** The autopilot flies the own ship by its course this step (on its own, or braking along it): the camera looks along it and the HUD shows it. */
-  private get onCourse(): boolean {
-    return this.flightMode === 'autopilot' || (this.flightMode === 'brake' && this.autopilot);
-  }
-
   /** The recorder's step (see recorder.ts): the own ship and the Host's hand before the flight computer. */
   private record(hand: Readonly<Controls>, dt: number) {
     const flight = this.me!.flight;
-    const steering = this.steering;
     this.recording = {
       t: this.time,
       dt,
@@ -5310,9 +5284,6 @@ export class Game implements OnlineGame {
       position: flight.position.toArray(),
       velocity: flight.velocity.toArray(),
       orientation: flight.orientation.toArray() as [number, number, number, number],
-      course: steering.course.toArray(),
-      cruise: steering.cruise,
-      recovering: steering.recovering,
       drive: flight.driveFactor,
       thrusters: flight.thrusterFactor,
     };
@@ -5337,20 +5308,17 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * The autopilot: path steering flies the ship onto the course the Host's input sets, at every
-   * speed (see PathSteering). Right after a dodge and on a swing the drift is the point: the
-   * input turns the nose as in free drift, and the course follows it.
+   * The autopilot: the ship flies where its nose points (see flyByNose). Right after a dodge and
+   * on a swing the drift is the point: the input turns the nose as in free drift.
    */
-  private trimDrift(controls: Readonly<Controls>, dt: number): Controls {
+  private trimDrift(controls: Readonly<Controls>): Controls {
     const out = Object.assign(this.computed, controls);
     const me = this.me!;
     if (this.time < this.dodgeReadyAt - DODGE_RECHARGE + DODGE_DRIFT || this.tethers.has(me)) {
       this.flightMode = 'swing';
-      this.steering.follow(me.flight);
       return out;
     }
-    this.steering.fly(me.flight, controls, this.field.gravity(me.flight.position, gravity), dt, out);
-    return out;
+    return flyByNose(me.flight, controls, this.field.gravity(me.flight.position, gravity), out);
   }
 
   /**
@@ -6376,12 +6344,10 @@ export class Game implements OnlineGame {
       const lag = me.alive ? flight.throttle * DRIVE_LAG : 0;
       const film = this.cinema ? 1 : 0;
       const drift = this.time * CINEMA_DRIFT;
-      // with the autopilot flying the own ship, the camera looks along its course (see chaseOrientation)
-      chaseOrientation(flight, me === this.me && me.alive && this.onCourse ? this.steering.course : null, aim);
-      cameraGoal.set(film * me.radius * Math.sin(drift), me.radius * (CHASE_HEIGHT + film * (0.35 + 0.25 * Math.cos(drift * 0.7))), me.radius * (CHASE_DISTANCE + film * CINEMA_DISTANCE + lag)).applyQuaternion(aim).add(flight.position);
+      flight.toWorld(cameraGoal.set(film * me.radius * Math.sin(drift), me.radius * (CHASE_HEIGHT + film * (0.35 + 0.25 * Math.cos(drift * 0.7))), me.radius * (CHASE_DISTANCE + film * CINEMA_DISTANCE + lag)), cameraGoal);
       const soft = this.cinema ? CINEMA_SOFTNESS : 1;
       this.camera.position.lerp(cameraGoal, 1 - Math.exp(-CAMERA_FOLLOW * soft * dt));
-      this.camera.quaternion.slerp(aim, 1 - Math.exp(-CAMERA_TURN * soft * dt));
+      this.camera.quaternion.slerp(flight.orientation, 1 - Math.exp(-CAMERA_TURN * soft * dt));
     }
     this.riding = me.alive ? flight.velocity : null;
     // the drive kicks: the view widens while it burns and with speed, and the chase camera trembles

@@ -108,7 +108,7 @@ function derelict(): Placement[] {
   return pieces;
 }
 
-/** Every arena. A tournament plays them in an order of its own; the belt is the home of the flight school. */
+/** Every arena. A tournament plays them in an order of its own; the default arena (see DEFAULT_ARENA) is the home of the flight school. */
 export const ARENAS: readonly ArenaProfile[] = [
   {
     id: 'belt',
@@ -235,6 +235,9 @@ export const ARENAS: readonly ArenaProfile[] = [
 ];
 
 export const arenaById = (id: string): ArenaProfile | undefined => ARENAS.find((arena) => arena.id === id);
+
+/** The arena the game shows unless something else is chosen: the menu's backdrop, the flight school's home and the solo round's first choice. */
+export const DEFAULT_ARENA: ArenaProfile = arenaById('rings')!;
 
 /** The arena whose field has this layout key (see FieldState). */
 export const arenaByKey = (key: string): ArenaProfile | undefined => ARENAS.find((arena) => arena.layout.key === key);

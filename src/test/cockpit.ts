@@ -1,32 +1,31 @@
 import * as THREE from 'three';
 import { IDLE, pointerAxis, type Controls } from '../input/input';
-import { FlightModel, PathSteering } from '../ship/flight';
+import { flyByNose, FlightModel, MAX_TURN_RATE } from '../ship/flight';
+import { Brake } from '../ship/computer';
 import type { Recording } from '../recorder';
-import { chaseOrientation } from '../view/chase';
 import type { RacingLine } from '../game/racingline';
 
 /** The simulation steps at 60 frames a second. */
 export const STEP = 1 / 60;
 
-/** Where the ship was at a moment: its flight (unit), nose, course and speed (units/s). */
+/** Where the ship was at a moment: its flight (unit), nose and speed (units/s). */
 export interface Sample {
   t: number;
   path: THREE.Vector3;
   nose: THREE.Vector3;
-  course: THREE.Vector3;
   speed: number;
   /** The Host's turn input of the step (0 when centered). */
   input: number;
 }
 
 /**
- * The own ship as the game flies it, without the game: the flight model, and the autopilot's
- * path steering (or, in free drift, the Host's controls straight to the ship, the course
- * following the nose), as Game.flightComputer does. No gravity unless a test sets it.
+ * The own ship as the game flies it, without the game: the flight model, and the autopilot (or,
+ * in free drift, the Host's controls straight to the ship; the brake while it is held), as
+ * Game.flightComputer does. No gravity unless a test sets it.
  */
 export class Cockpit {
   readonly flight = new FlightModel();
-  readonly steering = new PathSteering();
+  readonly brake = new Brake();
   readonly out: Controls = { ...IDLE };
   readonly gravity = new THREE.Vector3();
   readonly samples: Sample[] = [];
@@ -37,15 +36,15 @@ export class Cockpit {
   constructor(speed = 0, heading = new THREE.Vector3(0, 0, -1)) {
     this.flight.reset(new THREE.Vector3(), new THREE.Quaternion());
     this.flight.velocity.copy(heading).normalize().multiplyScalar(speed);
-    this.steering.follow(this.flight);
   }
 
-  /** One step with the Host's controls. */
-  step(controls: Readonly<Controls>, dt = STEP) {
-    if (this.autopilot) this.steering.fly(this.flight, controls, this.gravity, dt, this.out);
+  /** One step with the Host's controls, the brake held or not. */
+  step(controls: Readonly<Controls>, dt = STEP, braking = false) {
+    if (braking) this.brake.fly(this.flight, controls, this.flight.driveFactor, this.out);
     else {
-      this.steering.follow(this.flight);
-      Object.assign(this.out, controls);
+      this.brake.release();
+      if (this.autopilot) flyByNose(this.flight, controls, this.gravity, this.out);
+      else Object.assign(this.out, controls);
     }
     this.flight.update(dt, this.out, this.gravity);
     this.t += dt;
@@ -54,7 +53,6 @@ export class Cockpit {
       t: this.t,
       path: this.flight.velocity.clone().divideScalar(Math.max(speed, 1e-6)),
       nose: this.flight.forward(),
-      course: this.steering.course.clone(),
       speed,
       input: Math.hypot(controls.yaw, controls.pitch),
     });
@@ -67,16 +65,14 @@ export class Cockpit {
   }
 }
 
-/** Yaw and pitch of a world direction as the screen shows it (rad; right and up positive): the chase camera looks along the course (see chaseOrientation). */
+/** Yaw and pitch of a world direction off the nose (rad; right and up positive), as the crosshair shows it: the chase camera looks along the nose. */
 function bearing(cockpit: Cockpit, direction: THREE.Vector3, target = { yaw: 0, pitch: 0 }) {
-  chaseOrientation(cockpit.flight, cockpit.steering.course, view);
-  const local = scratch.copy(direction).applyQuaternion(view.invert()).normalize();
+  const local = cockpit.flight.toLocalDirection(direction, scratch).normalize();
   target.yaw = Math.atan2(local.x, -local.z);
   target.pitch = Math.atan2(local.y, Math.hypot(local.x, local.z));
   return target;
 }
 const scratch = new THREE.Vector3();
-const view = new THREE.Quaternion();
 /** The hand lets go within FINE (rad, about 1°) of its goal, and short of that pushes at least NUDGE (full deflections), just past the dead zone. */
 const FINE = 0.017;
 const NUDGE = 0.1;
@@ -86,16 +82,15 @@ const DRIFT_SMOOTH = 0.1;
 /** The hand's spring is integrated in steps no longer than this (s). */
 const SPRING_STEP = 1 / 240;
 const want = { yaw: 0, pitch: 0 };
-const have = { yaw: 0, pitch: 0 };
 
 /**
- * A Host's hand on the mouse: it sees where the course marker is and where it wants to go, and
- * moves the pointer to bring the one onto the other, as a person does. It reacts a moment late
- * (`reaction`, s), moves the pointer in eased strokes (a critically damped spring of `stroke`
- * seconds), pushes harder the farther off the marker is, and has learned how fast the
- * marker answers: it closes the gap at about `gain` per second (as much deflection as turns the
- * course that fast, see PathSteering.rate), and so overshoots a little and corrects back. Its pointer offset becomes turn input through the
- * game's own dead zone (see pointerAxis).
+ * A Host's hand on the mouse: it sees how far off the crosshair (the nose) its goal is, and moves
+ * the pointer to turn the nose onto it, as a person does. It reacts a moment late (`reaction`,
+ * s), moves the pointer in eased strokes (a critically damped spring of `stroke` seconds), pushes
+ * harder the farther off the goal is, and has learned how fast the nose answers: it closes the
+ * gap at about `gain` per second (as much deflection as turns the nose that fast), and so
+ * overshoots a little and corrects back. Its pointer offset becomes turn input through the game's
+ * own dead zone (see pointerAxis).
  */
 export class Hand {
   readonly pointer = { x: 0, y: 0 };
@@ -115,13 +110,12 @@ export class Hand {
   /** One step of the hand towards `goal` (a world direction): the controls it gives. */
   steer(cockpit: Cockpit, goal: THREE.Vector3): Partial<Controls> {
     bearing(cockpit, goal, want);
-    bearing(cockpit, cockpit.steering.course, have);
-    return this.move(want.yaw - have.yaw, want.pitch - have.pitch, PathSteering.rate(cockpit.flight));
+    return this.move(want.yaw, want.pitch, MAX_TURN_RATE * (0.3 + 0.7 * cockpit.flight.thrusterFactor));
   }
 
   /**
-   * One step of the hand, seeing the course marker `yaw` and `pitch` (rad) off where it wants it
-   * now, the course turning at `rate` (rad/s) for full deflection: the controls it gives.
+   * One step of the hand, seeing the goal `yaw` and `pitch` (rad) off the crosshair, the nose
+   * turning at `rate` (rad/s) for full deflection: the controls it gives.
    */
   move(yaw: number, pitch: number, rate: number): Partial<Controls> {
     yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));
@@ -158,7 +152,7 @@ export interface LineFlight {
 
 /**
  * A Host's hand flies a racing line through `points` (empty space, no rocks), as a Host follows
- * the ribbon on screen: it steers the course at the line a little ahead of the ship (0.8 s of
+ * the ribbon on screen: it turns the nose at the line a little ahead of the ship (0.8 s of
  * flight, at least 100 m), with the drive held or not, until it is past the last point (its
  * plane square to the way from the point before) or `limit` seconds are up.
  */
@@ -188,7 +182,7 @@ export function flyLine(cockpit: Cockpit, line: RacingLine, points: readonly THR
   return { closest, seconds: cockpit.t - start };
 }
 
-/** How a flight came onto a direction: when it stayed within `tolerance` for good, and how far it swung past. */
+/** How the flight came onto a direction: when it stayed within `tolerance` for good, and how far it swung past. */
 export interface Convergence {
   /** Seconds from `from` until the flight stays within the tolerance of the direction, Infinity if never. */
   seconds: number;
@@ -219,6 +213,9 @@ export function convergence(samples: readonly Sample[], direction: THREE.Vector3
   return { seconds: settled, overshoot: Math.asin(Math.min(1, overshoot)), noseOff: after.at(-1)!.nose.angleTo(direction) };
 }
 
+/** The slip of a sample: the angle between the flight and the nose (rad). */
+export const slip = (sample: Sample) => sample.path.angleTo(sample.nose);
+
 /** A replayed flight: what the autopilot did with the recorded input, and how far that is from what was recorded. */
 export interface Replay {
   cockpit: Cockpit;
@@ -230,10 +227,10 @@ export interface Replay {
 }
 
 /**
- * Replays a recording (see recorder.ts) through the flight model and path steering: every step
+ * Replays a recording (see recorder.ts) through the flight model and the autopilot: every step
  * the autopilot flew is flown again from the recorded input; a step flown otherwise (free drift,
  * brake, flip, a swing) takes the recorded state as it was. Roll and the aim assist come from the
- * recording's commands (the game adds them to path steering's).
+ * recording's commands (the game adds them to the autopilot's).
  */
 export function replay(recording: Recording): Replay {
   const cockpit = new Cockpit();
@@ -255,15 +252,12 @@ export function replay(recording: Recording): Replay {
       flight.position.fromArray(frame.position);
       flight.velocity.fromArray(frame.velocity);
       flight.orientation.fromArray(frame.orientation);
-      cockpit.steering.course.fromArray(frame.course);
-      cockpit.steering.cruise = frame.cruise;
-      cockpit.steering.recovering = frame.recovering;
     }
     flight.driveFactor = frame.drive;
     flight.thrusterFactor = frame.thrusters;
     cockpit.gravity.fromArray(frame.gravity);
     if (frame.mode !== 'autopilot') continue;
-    cockpit.steering.fly(flight, frame.controls, cockpit.gravity, frame.dt, cockpit.out);
+    flyByNose(flight, frame.controls, cockpit.gravity, cockpit.out);
     cockpit.out.roll = frame.out.roll;
     flight.update(frame.dt, cockpit.out, cockpit.gravity);
     flown++;

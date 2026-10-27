@@ -3,7 +3,7 @@ import type { Controls } from './input/input';
 /**
  * The input recorder: the own ship's flight step by step, what the Host's hand did and what the
  * flight computer made of it, so a flight that feels wrong can be saved, read and replayed in a
- * test (see src/test/replay.ts). It exists only in development, like the dev log; in production
+ * test (see replay in src/test/cockpit.ts). It exists only in development, like the dev log; in production
  * `recorder` is null and every call site (`recorder?.…`) costs nothing. A ring buffer of the last
  * RECORDER_CAPACITY steps, cleared at the start of every round; in the console:
  * `game.recorder.download()` saves the last minute as JSON.
@@ -32,10 +32,6 @@ export interface InputFrame {
   position: Vec3;
   velocity: Vec3;
   orientation: [number, number, number, number];
-  /** The autopilot's course (unit), cruise speed (units/s) and whether a turn about is under way, before the step. */
-  course: Vec3;
-  cruise: number;
-  recovering: boolean;
   /** Drive and thrusters, 0..1. */
   drive: number;
   thrusters: number;

@@ -39,6 +39,21 @@ Worked through from top to bottom. Every finished item is also documented in the
 - [x] Event horizon: a black hole that pulls everything in, with a gravitational lens
 - [x] The derelict: a broken world ship as the only cover
 
+### 4b. The arenas, more beautiful
+
+Each arena gets a look of its own, recognized at first glance, cheap on phones (few draw calls, effects scaled by the quality ladder, no flicker).
+
+- [ ] Saturn: the real Saturn and ring textures in their real colors, the planet's shadow on the ring and the ring's on the planet, every object shadowing the ring material near it, a little glitter of ice in the rings; the gas giant with the real Jupiter map
+- [ ] Rings of Saturn: the ring as a thin, dense layer of glittering ice through the arena's middle, open space above and below; flying through it, the grains rush past and sparkle in the sun
+- [ ] Comets faster but playable (about 400 m/s, the warning growing with it), and the README naming the deviation from real comets (5 to 25 km/s)
+- [ ] The Belt: the Rockborn's mining (rigs with work lights, cutting lasers, dust from drill holes, half-mined rocks with smooth cuts and glowing tunnels), beacon buoys, neon graffiti, dust lit against the sun
+- [ ] Kessler field becomes The Satellite Junkyard (de: Satellitenschrottfeld), the junk field of the Orbital Freedom Network; Earth below is its fixed reference, seen from its night side in beautiful images, far more lit cities than today (the 26th century's humanity), the terminator and the airglow at its rim; the junk field of the Orbital Freedom Network ("Internet for everyone, junk forever"): a mega-constellation owned by a billionaire friend of the President, rotting in low orbit around Earth; thousands of flat satellites with their single long solar wing, many still in strings, some shredded, some tumbling, between them burnt-out upper stages, fairings and clouds of fragments; Earth below at night with city lights, now and then a satellite burning up in its air; panels flashing in the sun as they tumble; the README names the deviation (real debris meets at up to 10 km/s, here at 25 m/s)
+- [ ] The gas giant becomes Jupiter, and its cloud deck runs through the arena's middle: above it open space, the planet's real map as the curved horizon (bands, the Great Red Spot); below it the atmosphere, denser with depth: haze and cloud layers in the clouds' own colors cutting the view from kilometers to a few hundred meters, drag that slows a ship and lets it turn sharply at the cost of speed and heat (too deep and too fast overheats it), shorter radar and laser reach, lightning lighting the clouds from inside, and the first sound from outside in the game (wind and thunder, since there is air); a fight changes level, diving to shake a chaser, climbing to gain speed against the pull; height fog computed in the shaders and a few translucent cloud layers, cheap on phones; auroras at the poles and a moon or two
+- [ ] Corona: prominences arcing over the limb and falling back as coronal rain, sunspots drifting, ships' radiators glowing red (no heat shimmer)
+- [ ] Event horizon: the side of the accretion disk turning towards us brighter, two thin jets from the poles, gas spiraling in
+- [ ] The derelict: its dead drifting frozen around the break, crew and settlers blown out when it broke, in work suits and everyday clothes, rimed with frost, turning slowly (low poly, never gory); rows of windows with emergency light flickering here and there, shattered biodomes with frozen gardens, old neon ads on the hull, red beacons, frost on its shadow side, crystal mist at the break
+- [ ] Every arena its own light and color mood and nebula: Saturn cool silver and gold, the Corona orange-white, the Belt dusty and warm, the Event horizon deep violet
+
 ### 5. Game modes
 
 - [x] Race: three laps through eight gates, lasers on; rooms play deathmatch, race, or both in turn

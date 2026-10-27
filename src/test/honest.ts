@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { IDLE, type Controls } from '../input/input';
-import { FlightModel, MAX_SPEED, OVERDRIVE_PUSH, PathSteering } from '../ship/flight';
+import { FlightModel, flyByNose, MAX_SPEED, OVERDRIVE_PUSH } from '../ship/flight';
+import { Brake } from '../ship/computer';
 import { Randomizer } from '../random';
 import type { Seen } from '../net/plausible';
 
@@ -38,7 +39,7 @@ export function honestFlight(seed: number, seconds: number, rough: Roughness): M
   const r = new Randomizer(seed);
   const flight = new FlightModel();
   flight.reset(new THREE.Vector3(), new THREE.Quaternion());
-  const path = new PathSteering();
+  const brake = new Brake();
   const controls: Controls = { ...IDLE };
   const steered: Controls = { ...IDLE };
   const gravity = random(r, r.range(0, 400));
@@ -47,7 +48,7 @@ export function honestFlight(seed: number, seconds: number, rough: Roughness): M
   const goal = new THREE.Vector3();
   const nose = new THREE.Vector3();
   const messages: Message[] = [];
-  let mode: 'stick' | 'flip' | 'path' = 'stick';
+  let mode: 'stick' | 'flip' | 'autopilot' = 'stick';
   let nextChoice = 0;
   let nextState = 0;
   let firing = false;
@@ -62,7 +63,7 @@ export function honestFlight(seed: number, seconds: number, rough: Roughness): M
     if (t >= nextChoice) {
       nextChoice = t + r.range(0.15, 0.6);
       const pick = r.nextFloat();
-      mode = pick < 0.15 ? 'flip' : pick < 0.4 ? 'path' : 'stick';
+      mode = pick < 0.15 ? 'flip' : pick < 0.4 ? 'autopilot' : 'stick';
       goal.copy(random(r));
       Object.assign(controls, {
         yaw: r.nextFloat() < 0.5 ? Math.sign(r.range(-1, 1)) : r.range(-1, 1),
@@ -97,11 +98,14 @@ export function honestFlight(seed: number, seconds: number, rough: Roughness): M
     flight.thrusterFactor = rough.wrecked ? 0.25 : 1.08;
     let command: Controls = controls;
     if (mode === 'flip') command = Object.assign(steered, IDLE, flight.flip(goal, 2.5, { yaw: 0, pitch: 0, roll: 0 }), { thrust: 0 });
-    else if (mode === 'path') {
-      // the autopilot: the course where the Host points, braking now and then
-      path.fly(flight, controls, gravity, dt, steered, controls.thrust === 0 && controls.roll !== 0);
-      command = steered;
-    } else path.follow(flight);
+    else if (mode === 'autopilot') {
+      // the autopilot: the ship flies where its nose points, braking now and then
+      if (controls.thrust === 0 && controls.roll !== 0) command = brake.fly(flight, controls, flight.driveFactor, steered);
+      else {
+        brake.release();
+        command = flyByNose(flight, controls, gravity, steered);
+      }
+    }
     flight.update(dt, command, gravity, push, t < ventUntil ? spin : undefined);
     const arrive = (sentAt: number) => {
       if (r.nextFloat() < dt / rough.stalls) stallUntil = sentAt + r.range(1, 3);

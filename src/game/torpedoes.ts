@@ -18,8 +18,8 @@ export const TORPEDO_TOP_SPEED = 7200;
 /** Its main drive along its flight (units/s², 20 g): from a standing launch to top speed in under 2 s, quick on a straight line. */
 export const TORPEDO_THRUST = 3924;
 /**
- * Its thrusters across its flight, and against it to brake (units/s², 9 g): less than the 15 g a
- * ship turns with, so a hard turn at the right moment leaves it wide. At top speed it turns on a
+ * Its thrusters across its flight, and against it to brake (units/s², 9 g): less than the nearly 10 g
+ * a ship turns with at the speed limit (see gripAt), so a hard turn at the right moment leaves it wide. At top speed it turns on a
  * circle of about 1.5 km; one that went past brakes and comes round again.
  */
 export const TORPEDO_LATERAL = 1766;

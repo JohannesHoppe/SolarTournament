@@ -66,7 +66,7 @@ describe('the race course', () => {
     expect(c.crossing(0, before.clone().addScaledVector(side, BOOST_RADIUS * 2), after.clone().addScaledVector(side, BOOST_RADIUS * 2))!).toBeGreaterThan(BOOST_RADIUS);
   });
 
-  it('bends gently enough everywhere to be flown at the speed limit with path steering', () => {
+  it('bends gently enough everywhere to be flown at the speed limit with the autopilot', () => {
     // a quarter more room than the tightest turn at the limit, for a pilot who is not perfect
     const tightest = turnRadius(MAX_SPEED) * 1.25;
     const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];

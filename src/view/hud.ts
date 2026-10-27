@@ -93,7 +93,6 @@ export class Hud {
   private readonly overdrive = $('hud-overdrive');
   private readonly hook = $('hud-hook');
   private readonly torpedo = $('hud-torpedo');
-  private readonly courseMarker = $('course-marker');
   private readonly prograde = $('prograde');
   private readonly retrograde = $('retrograde');
   private readonly message = $('hud-message');
@@ -723,18 +722,6 @@ export class Hud {
   }
 
   /**
-   * The autopilot's course, where the Host wants to fly (see PathSteering): a thin diamond,
-   * held at the screen's edge when off screen or behind, fading out as the nose comes onto it,
-   * where the crosshair says it all. Null hides it (free drift, brake, flip).
-   */
-  setCourse(camera: THREE.Camera, course: THREE.Vector3 | null, nose: THREE.Vector3) {
-    setHidden(this.courseMarker, !course);
-    if (!course) return;
-    pin(this.courseMarker, camera, courseAhead.copy(course).multiplyScalar(100000).add(camera.position));
-    this.courseMarker.style.opacity = THREE.MathUtils.smoothstep(course.angleTo(nose), COURSE_FADE_FROM, COURSE_FADE).toFixed(2);
-  }
-
-  /**
    * The prograde marker ("Course") where the ship drifts to, the retrograde marker ("Brake")
    * where to point the drive to brake. In free drift (`free`, the Host's own clone `own`), where
    * the nose and the flight part, two aids show from DRIFT_AID_SPEED on (see driftAidsShown): a
@@ -1045,10 +1032,6 @@ function setBar(bar: HTMLElement, fraction: number) {
   bar.classList.toggle('low', fraction < 0.35);
 }
 
-const courseAhead = new THREE.Vector3();
-/** The course marker fades in from this angle between course and nose (rad, about 1°) and shows fully from COURSE_FADE (about 3°). */
-const COURSE_FADE_FROM = 0.015;
-const COURSE_FADE = 0.05;
 /** Where a point in space shows on screen (see toScreen), reused from call to call. */
 const spot: FramePoint = { x: 0, y: 0, offscreen: false, angle: 0 };
 

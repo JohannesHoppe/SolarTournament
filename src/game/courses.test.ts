@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { BOOST_PUSH, BOOST_RADIUS, Course, GATE_RADIUS, GATES } from './race';
 import { RACE_SPEED } from '../ship/bots';
 import { cornerSpeed, MAX_SPEED, turnRadius } from '../ship/flight';
-import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, COURSE_ROOM, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, COVER_DRONE, COVER_STANDOFF, coverSpots, facingRock, LINE_SPARE, RING_COURSE, RING_RADIUS, ringCourse, SLIDE_ANGLE, SLIDE_BOT, SLIDE_HITS, SLIDE_SPEED } from './school';
+import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, COURSE_ROOM, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, COVER_DRONE, COVER_STANDOFF, coverSpots, facingRock, LINE_SPARE, RING_COURSE, RING_RADIUS, ringCourse, SLIDE_ANGLE, SLIDE_BOT, SLIDE_HITS, SLIDE_SPEED, clearOfRock } from './school';
 import { ARENA_LIMIT } from '../world/arena';
-import { ARENAS } from '../world/arenas';
+import { ARENAS, DEFAULT_ARENA } from '../world/arenas';
 import { testField } from '../test/field';
 import { flyRings, SHIP_RADIUS } from '../test/pilot';
 import { bendRadius, RacingLine } from './racingline';
@@ -88,16 +88,20 @@ describe("the flight school's courses", () => {
   ];
   for (const { drill, layout, radius, core, speed, drift, seconds } of drills) {
     for (const start of starts) {
-      it(`lays the ${drill} drill inside the arena and lets a middling bot fly it ${start.name}, missing nothing`, () => {
-        const turn = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(start.position, start.facing.clone().add(start.position), new THREE.Vector3(0, 1, 0)));
-        const points = ringCourse(start.position, turn, layout);
+      it(`lays the ${drill} drill inside the ${DEFAULT_ARENA.id} arena and lets a middling bot fly it ${start.name}, missing nothing`, () => {
+        // the flight school's arena, its rock as it starts out; the pilot where no rock is
+        const field = gameField();
+        field.generate(DEFAULT_ARENA.layout);
+        const position = clearOfRock(field, start.position.clone(), SHIP_RADIUS * 3);
+        const turn = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(position, start.facing.clone().add(position), new THREE.Vector3(0, 1, 0)));
+        // the rings laid clear of rock, as the game lays them
+        const points = ringCourse(position, turn, layout, field).map((point) => clearOfRock(field, point, drill === 'curve' ? CURVE_ZONE / 2 : RING_RADIUS * 1.5));
         for (const point of points) expect(point.length()).toBeLessThan(ARENA_LIMIT * COURSE_ROOM);
-        const normals = points.map((point, i) => point.clone().sub(i === 0 ? start.position : points[i - 1]).normalize());
-        // the game lays the rings clear of rock; here they fly in empty space
-        const line = new RacingLine(points, false, start.position);
+        const normals = points.map((point, i) => point.clone().sub(i === 0 ? position : points[i - 1]).normalize());
+        const line = new RacingLine(points, false, position);
         const facing = drift !== null ? normals[0] : start.facing;
         const limit = seconds || line.length / LINE_PACE + LINE_SPARE;
-        const flight = flyRings(gameField(), { points, normals, radius, core, line, open: drill === 'curve' }, start.position, facing, SKILL, speed, limit, drift ?? 0);
+        const flight = flyRings(field, { points, normals, radius, core, line, open: drill === 'curve' }, position, facing, SKILL, speed, limit, drift ?? 0);
         expect(flight.passed, `${flight.passed} of ${points.length} in ${flight.seconds.toFixed(0)} of ${limit.toFixed(0)} s`).toBe(points.length);
         expect(flight.missed).toBe(0);
         // the coil drill wants every ring through its core
@@ -106,13 +110,13 @@ describe("the flight school's courses", () => {
     }
   }
 
-  it('bends the brake drill tighter than path steering turns at the speed limit, so its racing line glows orange there', () => {
+  it('bends the brake drill tighter than the autopilot turns at the speed limit, so its racing line glows orange there', () => {
     const line = lineOf(BRAKE_COURSE);
     expect(turnRadius(MAX_SPEED)).toBeGreaterThan(tightest(line));
     expect(cornerSpeed(tightest(line))).toBeLessThan(MAX_SPEED * 0.95);
   });
 
-  it('bends the full-speed drill no tighter than path steering turns at the speed limit plus a coil, and the curve no tighter than at the speed limit', () => {
+  it('bends the full-speed drill no tighter than the autopilot turns at the speed limit plus a coil, and the curve no tighter than at the speed limit', () => {
     expect(cornerSpeed(tightest(lineOf(LINE_COURSE)))).toBeGreaterThan(MAX_SPEED + BOOST_PUSH);
     expect(cornerSpeed(tightest(lineOf(CURVE_COURSE)))).toBeGreaterThan(MAX_SPEED);
   });
@@ -142,9 +146,9 @@ describe("the flight school's courses", () => {
     expect(seconds).toBeLessThan(7);
   });
 
-  it('lets a middling bot reach cover from the cover drill’s torpedo behind every rock near the middle of the belt, before it hits', () => {
+  it(`lets a middling bot reach cover from the cover drill’s torpedo behind every rock near the middle of the ${DEFAULT_ARENA.id} arena, before it hits`, () => {
     const field = gameField();
-    field.generate(ARENAS.find((arena) => arena.id === 'belt')!.layout);
+    field.generate(DEFAULT_ARENA.layout);
     const start = new THREE.Vector3();
     const outward = new THREE.Vector3();
     const rocks = [...field.asteroids.values()].sort((p, q) => p.object.position.length() - q.object.position.length());

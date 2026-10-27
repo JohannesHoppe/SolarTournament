@@ -53,7 +53,7 @@
       <p data-i18n>The flight computer reads whatever hands you bring. Mouse and keyboard work together: one hand on the mouse, one on the keys is how the Ministry's aces fly.</p>
       <h3 data-i18n>Keyboard and mouse</h3>
       <dl class="handbook-keys">
-        <dt data-i18n>Mouse / Arrows</dt><dd data-i18n>Steer: the pointer marks where you want to go</dd>
+        <dt data-i18n>Mouse / Arrows</dt><dd data-i18n>Turn the nose: push the pointer the way to turn</dd>
         <dt>W</dt><dd data-i18n>Main drive</dd>
         <dt data-i18n>Space / Click</dt><dd data-i18n>Fire laser</dd>
         <dt>S</dt><dd data-i18n>Brake: flips, burns and stops by itself</dd>
@@ -109,14 +109,14 @@
       <h2 data-i18n>The Doctrine of Flight</h2>
       <p data-i18n>Out there nothing slows you down. The main drive pushes along the nose with {drive} g: the speed limit of {limit} m/s is two seconds of burn away, and so is a stop. Let go, and you drift forever.</p>
       <h3 id="autopilot" data-i18n>The autopilot</h3>
-      <p data-i18n>Every round starts with the autopilot on. Point where you want to go: the flight computer flies the path there with drive and thrusters, the nose follows, and the camera looks where you want to go. Steering all the way is the hardest turn the ship can fly, at the speed limit a circle of about {turn} m radius. W pushes along the path and S brakes along it; stop steering and you fly straight on.</p>
+      <p data-i18n>Every round starts with the autopilot on: the ship flies where it points. Turn the nose, and the flight computer brings your flight round behind it with thrusters and drive; the crosshair is where you fly and where you shoot. At speed the flight follows slowly, so the nose waits for it: at the speed limit it leads by at most {lead}°, and the flight is back within {onNose}° of the nose {settle} s after you stop turning. The hardest turn at the speed limit is a circle of about {turn} m radius, and the drive only helps while you hold it, or at the limit: coasting below it, a hard turn costs speed. To turn about fast, brake first.</p>
       <h3 id="free-drift" data-i18n>Free drift</h3>
       <p data-i18n>T hands you the nose and nothing else. The ship slides on along its course and steering only turns the nose: look back, shoot sideways, drift past a rival with your gun on it. The crosshair is where you shoot, the Course marker where you really go: a faint dashed line joins the two, the marker flashes as you switch, and when it slips off screen an arrow at the edge points to it.</p>
       <p data-i18n>Wherever the nose points, the HUD shows where you move: faint blue streaks flow out of the Course marker the way the world rushes past, faster the faster you go. Sliding sideways, they sweep across the screen; flying backwards, they stream into the Brake marker.</p>
       <h3 data-i18n>The quick switch</h3>
       <p data-i18n>The pros switch all the time: autopilot to get somewhere, free drift for the shot, autopilot again before the next rock. The choice outlives a clone, so read the HUD: AUTOPILOT, or [ FREE DRIFT ] in brighter letters.</p>
       <h3 id="flip" data-i18n>Flip and burn</h3>
-      <p data-i18n>Coasting never slows you down: in space only a burn against the flight brakes. The brake (S) does it all and stops by itself: it flips the ship, burns, takes out the drift sideways too and holds you at rest; slow, it stops you with the thrusters alone, and with the autopilot it brakes along your path. The flip (X) only turns the nose against the flight and holds it there. With W you burn as long as you hold it: let go early and keep some speed, hold on past zero and you speed up backwards. The flip alone changes nothing: you fly on backwards, gun first, which is how you shoot at whatever chases you.</p>
+      <p data-i18n>Coasting never slows you down: in space only a burn against the flight brakes. The brake (S) does it all and stops by itself: it flips the ship, burns, takes out the drift sideways too and holds you at rest; slow, it stops you with the thrusters alone. The flip (X) only turns the nose against the flight and holds it there. With W you burn as long as you hold it: let go early and keep some speed, hold on past zero and you speed up backwards. The flip alone changes nothing: you fly on backwards, gun first, which is how you shoot at whatever chases you.</p>
       <h3 id="dodge" data-i18n>The dodge</h3>
       <p data-i18n>Tap a thruster twice: every thruster kicks the ship {dodge} m/s that way, more than a ship's length out of the line of fire, ready again after {dodgeRecharge} s. A laser hits the instant it fires, so nobody outruns a beam; a dodge beats the aim.</p>
       <h3 id="overdrive" data-i18n>The overdrive</h3>
@@ -131,7 +131,7 @@
       <h3 data-i18n>The X</h3>
       <p data-i18n>The X marks where your flight, held as it is, crosses the next gate's plane. Azure: you will pass through. Orange: you will miss. Steer the X into the ring. A missed gate has to be flown again, from either side.</p>
       <h3 id="brake-zones" data-i18n>Brake zones</h3>
-      <p data-i18n>Where the line ahead bends tighter than you can turn at your speed, it glows orange. Ease off or brake before the orange, not in it. The bends at the gates can be taken at the speed limit; the bends around rock are the trap.</p>
+      <p data-i18n>Where the line ahead bends tighter than you can turn at your speed, it glows orange: brake before the orange, not in it. Hold the drive with your nose on the line, and you take every bend at the speed limit; only rock on the move bends it tighter.</p>
       <h3 id="coils" data-i18n>The coils</h3>
       <p data-i18n>Every gate is a coil {gateRadius} m in radius. Through its inner third, within {core} m of the center, it throws you on {boost} m/s faster, even past the speed limit. Off-center it gives nothing, and the housing is solid: hitting it is a crash like rock. The clean line is the fast one.</p>
       <h3 data-i18n>The start</h3>

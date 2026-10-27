@@ -2,10 +2,10 @@ import { expect, test } from '@playwright/test';
 import { openGame, play, startSolo } from './game';
 
 /**
- * Mouse flight as a Host's hand does it: the pointer pushed to the side turns the autopilot's
- * course, and centered it leaves the course where it is. A turn about at 150 m/s: the pointer is
- * held to the right until the course points back, then centered; the flight computer flips, burns
- * and brings the flight round onto the course, at about the speed it had.
+ * Mouse flight as a Host's hand does it: the pointer pushed to the side turns the nose, and with
+ * the autopilot the flight follows it. A turn about at 150 m/s with the drive held: the pointer
+ * is held to the right until the flight points back, then centered; the ship flies on where its
+ * nose points.
  */
 test('the mouse turns the flight about at 150 m/s, and the recorder keeps the flight', async ({ page }) => {
   const errors = await openGame(page);
@@ -46,44 +46,43 @@ test('the mouse turns the flight about at 150 m/s, and the recorder keeps the fl
   await play(page, 0.3);
   const viewport = page.viewportSize()!;
   const center = { x: viewport.width / 2, y: viewport.height / 2 };
-  // the pointer to the right, held until the course points back, then centered
+  // the drive held, the pointer to the right until the flight points back, then centered
   await page.mouse.move(center.x, center.y);
+  await page.keyboard.down('KeyW');
   await page.mouse.move(center.x + Math.min(viewport.width, viewport.height) * 0.22, center.y, { steps: 8 });
   await page.waitForFunction(
     (start) => {
-      const course = window.game.steering.course;
-      return course.x * start.x + course.y * start.y + course.z * start.z < -0.95;
+      const velocity = window.game.me.flight.velocity;
+      const speed = velocity.length();
+      return (velocity.x * start.x + velocity.y * start.y + velocity.z * start.z) / speed < -0.95;
     },
     start,
     { timeout: 120_000 },
   );
   await page.mouse.move(center.x, center.y, { steps: 8 });
-  const held = await page.evaluate(() => window.game.steering.course.clone());
-  await play(page, 6);
+  await play(page, 2);
+  await page.keyboard.up('KeyW');
   const end = await page.evaluate(
-    ({ start, held }) => {
+    ({ start }) => {
       const game = window.game;
       const flight = game.me.flight;
       const path = flight.velocity.clone().normalize();
-      const course = game.steering.course;
       const frames = game.recorder.frames();
       return {
         alive: game.me.alive,
         speed: flight.velocity.length() / 20,
         back: path.x * start.x + path.y * start.y + path.z * start.z,
-        onCourse: path.angleTo(course),
-        courseKept: Math.acos(Math.min(1, course.x * held.x + course.y * held.y + course.z * held.z)),
+        onNose: path.angleTo(flight.forward(path.clone())),
         recorded: frames.length,
         steered: frames.some((frame: any) => frame.mode === 'autopilot' && frame.pointer && frame.controls.yaw > 0.5),
       };
     },
-    { start, held: { x: held.x, y: held.y, z: held.z } },
+    { start },
   );
   expect(end.alive).toBe(true);
-  // the flight points back, onto the course the pointer left, which stayed where it was put
+  // the flight points back, where the nose points
   expect(end.back).toBeLessThan(-0.9);
-  expect(end.onCourse).toBeLessThan(0.05);
-  expect(end.courseKept).toBeLessThan(0.01);
+  expect(end.onNose).toBeLessThan(0.26);
   expect(end.speed).toBeGreaterThan(120);
   expect(end.recorded).toBeGreaterThan(100);
   expect(end.steered).toBe(true);

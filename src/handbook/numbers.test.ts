@@ -27,7 +27,7 @@ describe("the Pilot's Handbook", () => {
   it('takes its numbers from the game', () => {
     for (const [name, value] of Object.entries(FROM_CODE)) expect(Number.isFinite(value) && value > 0, name).toBe(true);
     expect(FROM_CODE.limit).toBe(250);
-    expect(FROM_CODE.turn).toBe(415);
+    expect(FROM_CODE.turn).toBe(585);
   });
 
   it('writes every number as a placeholder, and has one for each', () => {
