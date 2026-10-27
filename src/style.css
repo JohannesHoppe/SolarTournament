@@ -3910,53 +3910,102 @@ button.quiet:focus-visible {
 }
 
 /*
- * The plain truth under the Ministry's words, which no brochure would print: a sticky note
- * Nicole has slapped onto the page, signed like a reviewer's comment, a little askew. Paper
- * and ink are the note's own, outside the page's orange and azure.
+ * The plain truth under the Ministry's words, which no brochure would print: Nicole's comment
+ * on the paragraph, shown beside it the way a reviewer's comment shows in a document's margin,
+ * the passage it is about marked. She is the flight computer, so her comments are in the azure
+ * of information. On a narrow screen the comment follows its paragraph.
  */
+.handbook-commented > p:first-child {
+  margin-bottom: 0.6em;
+  border-radius: 2px;
+}
+
+/* the passage a comment is about lights up while either is pointed at */
+.handbook-commented:hover > p:first-child {
+  background: var(--hud-faint);
+  box-shadow: 0 0 0 4px var(--hud-faint);
+}
+
+.handbook-commented:hover > .handbook-small-print {
+  border-color: var(--hud);
+}
+
 .handbook-small-print {
-  --note-paper: #fff1a6;
-  --note-ink: #2b2410;
-  --note-author: #b3246b;
   position: relative;
-  width: min(100%, 26rem);
-  margin: -0.5em 0 1.6em auto;
-  padding: 14px 16px 12px;
-  background: var(--note-paper);
-  color: var(--note-ink);
+  margin: 0 0 1.2em 16px;
+  padding: 8px 12px 10px;
+  background: rgb(10 22 44 / 92%);
+  border: 1px solid var(--hud-dim);
+  border-left: 3px solid var(--hud);
+  border-radius: 4px;
+  color: var(--tube-blue);
   font-size: 0.85rem;
   line-height: 1.45;
-  border-radius: 2px 2px 14px 2px;
-  box-shadow: 0 8px 16px rgb(0 0 0 / 45%);
-  transform: rotate(-1.2deg);
 }
 
-.handbook-small-print.askew {
-  margin-right: 1.2rem;
-  transform: rotate(0.9deg);
-}
-
-/* a strip of tape holds it on the page */
-.handbook-small-print::before {
-  content: '';
-  position: absolute;
-  top: -9px;
-  left: 50%;
-  width: 72px;
-  height: 18px;
-  background: rgb(255 255 255 / 30%);
-  transform: translateX(-50%) rotate(-3deg);
-}
-
+/* the comment's author, as the margin signs it: her initial in a circle, then her line */
 .handbook-note-author {
-  display: block;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 4px;
-  color: var(--note-author);
+  color: var(--hud);
   font-size: 0.75rem;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
   text-align: left;
-  text-transform: uppercase;
+}
+
+.handbook-note-author::before {
+  content: 'N';
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--hud);
+  color: rgb(2 3 10);
+  font-size: 0.7rem;
+}
+
+/* wide enough for a margin beside the plate: the comment moves there, a dashed line leads to it */
+@media (min-width: 90rem) {
+  .handbook-commented {
+    position: relative;
+  }
+
+  /* as in a document's margin, a comment pushed down by the one above it keeps clear of it (see handbook-page) */
+  .handbook-small-print {
+    position: absolute;
+    top: var(--pushed, 0px);
+    left: calc(100% + 46px);
+    width: 19rem;
+    margin: 0;
+    font-size: 0.8rem;
+    line-height: 1.4;
+  }
+
+  /* the line from the passage's first line to the comment, bent down where the comment was pushed */
+  .handbook-small-print::before,
+  .handbook-small-print::after {
+    content: '';
+    position: absolute;
+    width: 22px;
+  }
+
+  .handbook-small-print::before {
+    top: calc(14px - var(--pushed, 0px));
+    left: -44px;
+    border-top: 1px dashed var(--hud-dim);
+  }
+
+  .handbook-small-print::after {
+    top: calc(14px - var(--pushed, 0px));
+    left: -22px;
+    height: var(--pushed, 0px);
+    border-left: 1px dashed var(--hud-dim);
+    border-bottom: 1px dashed var(--hud-dim);
+  }
 }
 
 .handbook-keys {
