@@ -5,11 +5,11 @@ import type { TemplateSet } from './asteroids';
 import { applyRockRelief } from './rocks';
 import { paintedImpostor, type ImpostorPaint } from '../view/impostor';
 import { canvas, toTexture } from '../view/textures';
-import { boxUv, ravagedSurface, surfaced, wornSurface, type Wear } from '../view/surfaces';
+import { boxUv, ravagedSurface, signTexture, solarCells, surfaced, wornSurface, type Wear } from '../view/surfaces';
 
 /**
- * The shapes the arenas are built from besides rock: chunks of ice, the debris of a station
- * and the hull sections of a wrecked world ship. Ice collides with its measured surface, as the
+ * The shapes the arenas are built from besides rock: chunks of ice, the junk of a satellite
+ * network (see debrisSet) and the hull sections of a wrecked world ship. Ice collides with its measured surface, as the
  * rocks do (see world/surface); debris and hull carry an invisible collider box whose size is
  * computed, so the collision shape is the same on every browser: an ellipsoid of 90 % of the box
  * for debris (see AsteroidField), the box itself for the hull.
@@ -102,51 +102,105 @@ export function stutterWindows() {
 const RELIEF = 2;
 const TILE = 160;
 
-/** The paint of a station's modules: off-white, worn, scorched at the edges. */
-const STATION: Wear = { rust: 0.4, chips: 0.5, grime: 0.8, scratches: 0.5, seams: 0.6, stencils: ['DECK 7', 'AIRLOCK', 'O2', 'SECTOR C'], roughness: 0.75, metalness: 0.15 };
+/** The paint of the Orbital Freedom Network's stages and fairings: white once, sooted by the burns, its name stenciled on. */
+const NETWORK: Wear = { rust: 0.1, chips: 0.4, grime: 0.55, scratches: 0.5, seams: 0.5, stencils: ['ORBITAL FREEDOM', 'OFN-7', 'NO STEP', 'INTERNET FOR ALL'], roughness: 0.6, metalness: 0.15 };
+
+/** The kinds of junk among the templates, in turn: a satellite, an upper stage, a fairing half, a stack, a shredded satellite, a stage, a satellite, a stack with its neon. */
+const JUNK_KINDS = ['satellite', 'stage', 'fairing', 'stack', 'shredded', 'stage', 'satellite', 'sign'] as const;
 
 /**
- * Debris of a station: modules, plates and girders torn apart, a few boxes each, pointing
- * along their longest axis. Their emergency lights still glow.
+ * The junk of the Orbital Freedom Network, its mega-constellation rotting in low orbit, each
+ * template pointing along its longest axis: a flat satellite with its single long solar wing
+ * (whole, or shredded, its wing broken off in pieces), a spent upper stage with its cold engine
+ * bell, half of a payload fairing, a stack of flat satellites that was never released, one of
+ * them still lighting the network's name in neon. The solar cells are glossy: as a piece turns,
+ * they flash in the sun. Each collides as an ellipsoid hugging its bulk (see SHAPE_FILL).
  */
 export function debrisSet(): TemplateSet {
   const r = new Randomizer(DEBRIS_SEED);
-  const metal = ravaged(0xffffff, true);
-  const paint = new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(DEBRIS_SEED, STATION), RELIEF), color: 0xd8d2c4 });
-  const light = new THREE.MeshStandardMaterial({ color: 0x110805, emissive: 0xff7a1a, emissiveIntensity: 2.2 });
+  const metal = ravaged(0xffffff, false);
+  const paint = new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(DEBRIS_SEED, NETWORK), RELIEF), color: 0xe4e0d8, side: THREE.DoubleSide });
+  const cells = new THREE.MeshStandardMaterial({ map: solarCells(), color: 0xc8d4ff, roughness: 0.22, metalness: 0.35 });
+  const bus = new THREE.MeshStandardMaterial({ color: 0x9a9ea6, roughness: 0.45, metalness: 0.5 });
+  const neon = new THREE.MeshBasicMaterial({ map: signTexture('ORBITAL FREEDOM', '#ff4fd8'), color: new THREE.Color().setScalar(1.5), toneMapped: false });
   const near: THREE.Object3D[] = [];
+  /** A satellite along x from `x0`: its flat bus, a boom and the single wing reaching on to `x1`, the wing cut into `pieces` (shredded: some missing, the rest bent). */
+  const satellite = (length: number, x0: number, x1: number, shredded: boolean, y = 0, frames: THREE.BufferGeometry[] = [], wings: THREE.BufferGeometry[] = []) => {
+    const busLength = length * 0.26;
+    frames.push(new THREE.BoxGeometry(busLength, length * 0.03, length * 0.15).translate(x0 + busLength / 2, y, 0));
+    frames.push(new THREE.BoxGeometry(length * 0.04, length * 0.008, length * 0.008).translate(x0 + busLength + length * 0.02, y, 0));
+    const start = x0 + busLength + length * 0.04;
+    const pieces = shredded ? 4 : 1;
+    const piece = (x1 - start) / pieces;
+    for (let k = 0; k < pieces; k++) {
+      if (shredded && k > 0 && r.nextFloat() < 0.35) continue;
+      const wing = new THREE.BoxGeometry(piece * 0.96, length * 0.006, length * 0.14);
+      if (shredded) wing.rotateX(r.range(-0.6, 0.6)).rotateZ(r.range(-0.25, 0.25));
+      wings.push(wing.translate(start + piece * (k + 0.5), y + (shredded ? r.range(-0.03, 0.03) * length : 0), 0));
+    }
+    return { frames, wings };
+  };
   for (let i = 0; i < DEBRIS_COUNT; i++) {
-    const parts: THREE.BufferGeometry[] = [];
-    const lights: THREE.BufferGeometry[] = [];
     const length = DEBRIS_SIZE * r.range(1.4, 2.4);
-    const kind = i % 3;
-    if (kind === 0) {
-      // a module: a box with ribs, torn open at one end
-      parts.push(new THREE.BoxGeometry(length, length * 0.35, length * 0.35));
-      for (let rib = 0; rib < 5; rib++) parts.push(new THREE.BoxGeometry(length * 0.04, length * 0.42, length * 0.42).translate(length * (rib / 4 - 0.5) * 0.9, 0, 0));
-    } else if (kind === 1) {
-      // a girder: a lattice of beams
-      const side = length * 0.12;
-      for (const [y, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) parts.push(new THREE.BoxGeometry(length, side * 0.18, side * 0.18).translate(0, y * side, z * side));
-      for (let k = 0; k < 8; k++) parts.push(new THREE.BoxGeometry(side * 0.15, side * 2, side * 0.15).translate(length * (k / 7 - 0.5), 0, 0));
-    } else {
-      // a sheet of plating with a frame, bent
-      parts.push(new THREE.BoxGeometry(length, length * 0.04, length * 0.55));
-      parts.push(new THREE.BoxGeometry(length * 0.6, length * 0.04, length * 0.4).rotateZ(0.5).translate(length * 0.5, length * 0.12, 0));
-    }
-    // loose bits and a strip of emergency lights
-    const bits = 2 + (r.nextInt() % 3);
-    for (let b = 0; b < bits; b++) {
-      const size = length * r.range(0.08, 0.2);
-      parts.push(new THREE.BoxGeometry(size, size, size).translate(r.range(-0.4, 0.4) * length, r.range(-0.1, 0.1) * length, r.range(-0.1, 0.1) * length));
-    }
-    lights.push(new THREE.BoxGeometry(length * 0.6, length * 0.015, length * 0.015).translate(0, length * 0.19, length * 0.1));
+    const kind = JUNK_KINDS[i];
     const group = new THREE.Group();
-    const body = new THREE.Mesh(boxUv(mergeGeometries(parts.map((p) => p.toNonIndexed())), TILE), r.nextFloat() < 0.3 ? paint : metal);
-    group.add(body, new THREE.Mesh(mergeGeometries(lights), light));
-    body.geometry.computeBoundingBox();
-    const size = body.geometry.boundingBox!.getSize(new THREE.Vector3());
-    // the collision ellipsoid hugs the bulk of the piece, not its loose bits
+    const body: THREE.BufferGeometry[] = [];
+    let frames: THREE.BufferGeometry[] = [];
+    let wings: THREE.BufferGeometry[] = [];
+    let bell: THREE.BufferGeometry | null = null;
+    if (kind === 'satellite' || kind === 'shredded') {
+      ({ frames, wings } = satellite(length, -length / 2, length / 2, kind === 'shredded'));
+    } else if (kind === 'stage') {
+      // a spent upper stage: tank, interstage ring, a cold engine bell at the back
+      const radius = length * 0.13;
+      body.push(new THREE.CylinderGeometry(radius, radius, length * 0.72, 16).rotateZ(Math.PI / 2).translate(-length * 0.1, 0, 0));
+      body.push(new THREE.CylinderGeometry(radius * 1.04, radius * 1.04, length * 0.08, 16, 1, true).rotateZ(Math.PI / 2).translate(-length * 0.44, 0, 0));
+      bell = new THREE.CylinderGeometry(radius * 0.35, radius * 0.95, length * 0.22, 16, 1, true).rotateZ(Math.PI / 2).translate(length * 0.37, 0, 0);
+    } else if (kind === 'fairing') {
+      // half of a payload fairing: a shell open on one side, its ogive nose
+      const radius = length * 0.2;
+      body.push(new THREE.CylinderGeometry(radius, radius, length * 0.6, 16, 1, true, 0, Math.PI).rotateZ(Math.PI / 2).translate(-length * 0.2, 0, 0));
+      // (turned the other way, its narrow end ahead: the other half of its circle lies on the shell's side)
+      body.push(new THREE.CylinderGeometry(radius * 0.15, radius, length * 0.4, 16, 1, true, Math.PI, Math.PI).rotateZ(-Math.PI / 2).translate(length * 0.3, 0, 0));
+    } else {
+      // a stack of flat satellites as they were launched, never released, held by four posts
+      const layers = 9;
+      for (let k = 0; k < layers; k++) {
+        const y = (k - (layers - 1) / 2) * length * 0.04;
+        const loose = k === layers - 1 ? 0.35 : r.range(-0.04, 0.04);
+        frames.push(new THREE.BoxGeometry(length * 0.7, length * 0.025, length * 0.3).rotateY(loose).translate(0, y, 0));
+      }
+      for (const [x, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) frames.push(new THREE.BoxGeometry(length * 0.02, length * 0.4, length * 0.02).translate(x * length * 0.33, 0, z * length * 0.14));
+      // the stack's own wing, folded flat on top
+      wings.push(new THREE.BoxGeometry(length * 0.66, length * 0.006, length * 0.26).translate(0, length * 0.2, 0));
+      if (kind === 'sign') {
+        // the network's name, still lit in neon on the stack's flank
+        const sign = new THREE.Mesh(new THREE.PlaneGeometry(length * 0.6, length * 0.15), neon);
+        sign.position.set(0, 0, length * 0.155);
+        group.add(sign);
+      }
+    }
+    const meshOf = (parts: THREE.BufferGeometry[], material: THREE.Material) => new THREE.Mesh(boxUv(mergeGeometries(parts.map((p) => p.toNonIndexed())), TILE), material);
+    const meshes: THREE.Mesh[] = [];
+    if (body.length) meshes.push(meshOf(body, paint));
+    if (bell) meshes.push(meshOf([bell], metal));
+    if (frames.length) meshes.push(meshOf(frames, bus));
+    if (wings.length) {
+      // the cells' texture runs along the wing, one cell texture per wing's width
+      const wing = mergeGeometries(wings.map((p) => p.toNonIndexed()));
+      meshes.push(new THREE.Mesh(boxUv(wing, length * 0.14), cells));
+    }
+    group.add(...meshes);
+    const box = new THREE.Box3();
+    for (const mesh of meshes) {
+      mesh.geometry.computeBoundingBox();
+      box.union(mesh.geometry.boundingBox!);
+    }
+    // centered on its bulk, where the collision ellipsoid sits
+    const middle = box.getCenter(new THREE.Vector3());
+    for (const part of group.children) part.position.sub(middle);
+    const size = box.getSize(new THREE.Vector3());
+    // the collision ellipsoid hugs the bulk of the piece, never thinner than a few percent of it
     group.add(collider(new THREE.Vector3(size.x * 0.48, Math.max(size.y * 0.42, length * 0.06), Math.max(size.z * 0.42, length * 0.06)).round()));
     near.push(group);
   }

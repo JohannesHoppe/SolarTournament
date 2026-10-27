@@ -35,7 +35,7 @@ export const MASS = {
 
 /**
  * Density of the field's pieces (kg/m³) over the volume of their mean radius: rock about
- * 2,000, ice 900, a station's debris (decks and frames, mostly empty) 300, the world ship's
+ * 2,000, ice 900, a satellite network's junk (thin panels, empty tanks and shells) 300, the world ship's
  * hull sections (armor around empty holds) 500. A rock of 100 m is some 10 million tonnes,
  * millions of times a ship: on a rope or in a bump it does not move, and the field keeps its
  * motion (shared by every browser) as it is.

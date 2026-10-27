@@ -221,7 +221,7 @@ export const ANNOUNCER_PERFECT = ['what a start. the crowd goes wild', 'a perfec
 export const ANNOUNCER_ARENA = {
   belt: 'live from the belt. forty rocks. no mercy',
   rings: 'live from the rings of saturn. mind the ice',
-  kessler: 'live from the kessler field. the station died. so will you',
+  junkyard: 'live from the satellite junkyard. internet for everyone. junk forever',
   giant: 'live from the gas giant. do not fall in',
   corona: 'live from the corona. it is hot today',
   hole: 'live from the event horizon. nobody comes back',

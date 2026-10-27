@@ -4008,6 +4008,11 @@ button.quiet:focus-visible {
   border-radius: 2px;
 }
 
+/* an item of a list with a comment: its paragraph starts where the item's text would */
+.handbook li > .handbook-commented > p:first-child {
+  margin-top: 0;
+}
+
 /* the passage a comment is about lights up while either is pointed at */
 .handbook-commented:hover > p:first-child {
   background: var(--hud-faint);

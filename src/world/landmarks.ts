@@ -1,13 +1,14 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { SUN_DIRECTION } from './space';
-import { ARENAS, HOLE_RADIUS, KESSLER_WORLD, SATURN_CENTER, sternAt, type ArenaId, type ArenaProfile } from './arenas';
+import { ARENAS, HOLE_RADIUS, SATURN_CENTER, sternAt, type ArenaId, type ArenaProfile } from './arenas';
 import { canvas, toTexture } from '../view/textures';
 import { loadPlanetMap, type Planet, type PlanetMaps } from '../assets';
+import { junkyard } from './junkyard';
 
 /**
- * What an arena shows beyond its field: Saturn, whose ring the arena lies in, the planet below
- * the Kessler field, the gas giant, the sun up close, the black hole with its disk, the neon sign
+ * What an arena shows beyond its field: Saturn, whose ring the arena lies in, Earth and the
+ * junk around the Satellite Junkyard (see world/junkyard), the gas giant, the sun up close, the black hole with its disk, the neon sign
  * on the derelict. Scenery only; what pulls and blocks is the field's well.
  */
 
@@ -221,47 +222,6 @@ const gasFragment = /* glsl */ `
     // haze along the limb, lit as the clouds below it
     float limb = 1.0 - clamp(dot(n, view), 0.0, 1.0);
     lit = mix(lit, haze * light * (0.1 + 0.8 * day * shade), pow(limb, 4.0) * 0.5);
-    gl_FragColor = vec4(lit, 1.0);
-  }
-`;
-
-/**
- * A world with air and water, worn by the regime: dark oceans with the sun's glint, grey and
- * brown continents, ice at the poles, clouds that drift, and on the night side the orange glow of
- * its sprawling cities; blue haze along the limb.
- */
-const worldFragment = /* glsl */ `
-  uniform float time;
-  uniform vec3 sun;
-  varying vec3 vLocal;
-  varying vec3 vNormal;
-  varying vec3 vWorld;
-  ${noise3}
-  ${fbm}
-  void main() {
-    vec3 p = normalize(vLocal);
-    float fine = clamp(1.0 - distance(cameraPosition, vWorld) / 600000.0, 0.0, 1.0);
-    float height = fbm(p * 3.0 + fbm(p * 6.0, 1.0) * 0.6, fine);
-    float land = smoothstep(0.49, 0.52, height);
-    float ice = smoothstep(0.78, 0.86, abs(p.y) + (height - 0.5) * 0.2);
-    vec3 ocean = mix(vec3(0.02, 0.07, 0.2), vec3(0.04, 0.16, 0.34), smoothstep(0.3, 0.49, height));
-    vec3 ground = mix(vec3(0.32, 0.29, 0.24), vec3(0.2, 0.22, 0.17), fbm(p * 30.0, fine));
-    vec3 color = mix(mix(ocean, ground, land), vec3(0.9, 0.93, 0.97), ice);
-    float clouds = smoothstep(0.56, 0.8, fbm(p * 7.0 + vec3(time * 0.003, 0.0, 0.0) + fbm(p * 14.0, fine), fine));
-    color = mix(color, vec3(0.9), clouds * 0.85);
-    vec3 n = normalize(vNormal);
-    vec3 view = normalize(cameraPosition - vWorld);
-    vec3 toSun = normalize(sun);
-    float light = dot(n, toSun);
-    float day = smoothstep(-0.05, 0.25, light);
-    vec3 lit = color * (0.02 + 0.8 * day);
-    // the sun's glint on open water
-    lit += vec3(1.0, 0.92, 0.8) * pow(max(dot(reflect(-toSun, n), view), 0.0), 60.0) * (1.0 - land) * (1.0 - clouds) * day * 0.8;
-    // the cities at night: the regime never switches off the lights of its sprawl
-    float cities = step(0.62, noise(p * 260.0)) * smoothstep(0.55, 0.7, noise(p * 40.0));
-    lit += vec3(1.0, 0.6, 0.25) * cities * land * (1.0 - ice) * (1.0 - clouds) * (1.0 - day) * 0.9;
-    float limb = 1.0 - clamp(dot(n, view), 0.0, 1.0);
-    lit = mix(lit, vec3(0.3, 0.55, 1.0) * (0.1 + 0.8 * day), pow(limb, 3.0) * 0.7);
     gl_FragColor = vec4(lit, 1.0);
   }
 `;
@@ -523,7 +483,7 @@ export class Landmarks {
 
   constructor(private readonly maps: PlanetMaps) {
     this.scenes.set('rings', this.rings());
-    this.scenes.set('kessler', this.kessler());
+    this.scenes.set('junkyard', this.junkyard());
     this.scenes.set('giant', this.giant());
     this.scenes.set('corona', this.corona());
     this.scenes.set('hole', this.hole());
@@ -554,8 +514,8 @@ export class Landmarks {
 
   /**
    * The picture's quality (see view/quality, Look.landmark): the gas giant's cap at a share of its
-   * full segment count (see GIANT_SEGMENTS), and the planets' maps sharp (2048 × 1024) from half
-   * the share on, else as the page loaded them (1024 × 512). The sharp maps are fetched the first
+   * full segment count (see GIANT_SEGMENTS), and the planets' maps sharp (2048 wide) from half
+   * the share on, else as the page loaded them (1024 wide). The sharp maps are fetched the first
    * time a rung asks for them and take over once they are there.
    */
   setDetail(share: number) {
@@ -614,17 +574,6 @@ export class Landmarks {
     this.timed.push(material);
     this.planets.set(planet, material);
     return material;
-  }
-
-  /** A world with air and water (see worldFragment). */
-  private world(radius: number): THREE.Mesh {
-    const material = new THREE.ShaderMaterial({
-      uniforms: { time: { value: 0 }, sun: { value: SUN_DIRECTION.clone() } },
-      vertexShader: planetVertex,
-      fragmentShader: worldFragment,
-    });
-    this.timed.push(material);
-    return new THREE.Mesh(new THREE.SphereGeometry(radius, 128, 64), material);
   }
 
   private rings(): THREE.Group {
@@ -706,13 +655,14 @@ export class Landmarks {
     return group;
   }
 
-  private kessler(): THREE.Group {
-    const group = new THREE.Group();
-    // the world the station circled, far below: oceans, clouds, the lights of its cities
-    const planet = this.world(180000);
-    planet.position.copy(KESSLER_WORLD);
-    group.add(planet);
-    return group;
+  /** The Satellite Junkyard (see world/junkyard): Earth below at night, its map swapped by quality like the other planets', and the junk beyond the arena. */
+  private junkyard(): THREE.Group {
+    const scene = junkyard(this.maps.maps.earth, this.light);
+    this.planets.set('earth', scene.earth);
+    this.timed.push(...scene.timed);
+    this.sized.push(...scene.sized);
+    this.flicker.push(...scene.flicker);
+    return scene.group;
   }
 
   /**

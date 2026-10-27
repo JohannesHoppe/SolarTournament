@@ -40,9 +40,9 @@ describe('the field of an arena', () => {
   });
 
   it('carries circling rocks along their orbits', () => {
-    const kessler = ARENAS.find((a) => a.id === 'kessler')!.layout;
+    const junkyard = ARENAS.find((a) => a.id === 'junkyard')!.layout;
     const field = testField();
-    field.generate(kessler);
+    field.generate(junkyard);
     const rock = field.asteroids.get('0')!;
     const start = rock.object.position.length();
     field.setClock(60);
