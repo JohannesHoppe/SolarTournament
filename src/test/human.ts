@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { IDLE, MOUSE_DEADZONE, MOUSE_FULL_DEFLECTION, pointerAxis, type Controls } from '../input/input';
-import { cornerSpeed, gripOf, MAX_SPEED, PathSteering, type FlightModel } from '../ship/flight';
+import { cornerSpeed, flyByNose, MAX_SPEED, MAX_TURN_RATE, type FlightModel } from '../ship/flight';
 import { AIM_ASSIST_RANGE, assistAim, Brake, keepUpright } from '../ship/computer';
-import { CAMERA_FOLLOW, CAMERA_FOV, CAMERA_TURN, CHASE_DISTANCE, CHASE_HEIGHT, chaseOrientation } from '../view/chase';
+import { CAMERA_FOLLOW, CAMERA_FOV, CAMERA_TURN, CHASE_DISTANCE, CHASE_HEIGHT } from '../view/chase';
 import { Randomizer } from '../random';
 import { bendRadius } from '../game/racingline';
 import type { AsteroidField } from '../world/asteroids';
@@ -24,16 +24,12 @@ export interface Hands {
 /** An ordinary Host's hand. */
 export const ORDINARY: Hands = { reaction: 0.25, stroke: 0.15, noise: 3 };
 const WOBBLE = 0.3;
-/** How much a Host's pace drops with its lag (exponent: 1 keeps the distance it flies in its lag). */
-const PACE = 3;
-/** A Host steers the course no faster than this share of the inverse of its lag (its reaction and its stroke): faster, every correction would swing past. */
+/** A Host turns the nose no faster than this share of the inverse of its lag (its reaction and its stroke): faster, every correction would swing past. */
 const CALM = 0.8;
 /** Pixels per radian near the screen's middle. */
 const PIXELS_PER_RADIAN = HEIGHT / 2 / Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
 /** The pointer's spring is integrated in steps no longer than this (s). */
 const SPRING_STEP = 1 / 240;
-/** The fastest an ordinary Host races when nothing on screen says slower (units/s, 200 m/s): the drive is let go there. */
-export const HUMAN_CRUISE = MAX_SPEED * 0.8;
 /** A Host looks this far ahead along the ribbon (s of flight, at least LOOK_MIN units, 200 m), through the rings as the ribbon runs on. */
 const LOOK = 1.6;
 const LOOK_MIN = 4000;
@@ -42,22 +38,18 @@ const RIBBON_REACH = 25600;
 const RIBBON_STEP = 1600;
 const BEND_SPAN = 1200;
 /**
- * The ribbon glows orange where the speed passes GLOW of what its bend allows: a Host lets go of
- * the drive at the first glow. It brakes for a bend within BRAKE_SECONDS (s) of flight that is
- * too tight for its speed beyond HARD of what it allows, and holds the brake until the speed is
- * down to GLOW of that.
+ * The ribbon glows orange where the speed passes GLOW of what its bend allows: a Host drives no
+ * faster. It brakes for a bend within BRAKE_SECONDS (s) of flight that is too tight for its speed
+ * beyond HARD of what it allows, and holds the brake until the speed is down to GLOW of that.
  */
 const GLOW = 0.95;
 const HARD = 1.1;
-const BRAKE_SECONDS = 2.5;
-/** A racing Host brakes once it flies faster than this share of its pace (see racer), back down to GLOW of it. */
-const TOO_FAST = 1.3;
+const SLOW = 0.7;
+const BRAKE_SECONDS = 4;
 /** Past a ring it missed, a Host slows to this speed to turn back (units/s, 80 m/s). */
 const RETURN_SPEED = 1600;
-/** A Host holds the drive only while its flight points within ON_LINE of where it looks (rad, about 30°). */
+/** A Host holds the drive only while its nose points within ON_LINE of where it looks (rad, about 30°). */
 const ON_LINE = 0.5;
-/** Slower than this (units/s, 20 m/s) the flight points nowhere yet: the drive is held to get going. */
-const ON_LINE_FROM = 400;
 /** A Host rereads the ribbon every this many steps (a glance, not a computation every frame). */
 const GLANCE = 4;
 
@@ -67,6 +59,10 @@ export type Pedal = 'drive' | 'coast' | 'brake';
 const projected = new THREE.Vector3();
 const seen = { x: 0, y: 0 };
 const sight = { x: 0, y: 0 };
+const course = { x: 0, y: 0 };
+/** How much the Host steers by the prograde marker rather than the crosshair (0..1), once the ship flies faster than EYE_FROM (units/s, 20 m/s). */
+const COURSE_EYE = 0.5;
+const EYE_FROM = 400;
 const reticle = new THREE.Vector3();
 const aim = new THREE.Vector3();
 /** The pointer's dead zone around the screen's middle (px). */
@@ -75,16 +71,15 @@ const DEAD = MOUSE_DEADZONE * FULL;
 const past = (offset: number, reach: number) => (Math.abs(offset) < 1 ? 0 : Math.sign(offset) * (DEAD + Math.abs(offset) * reach));
 
 /**
- * A simulated Host at keyboard and mouse, flying through the game's own input pipeline: it puts
- * the mouse pointer on what it wants to fly to, as the screen shows it, and the pointer's offset
+ * A simulated Host at keyboard and mouse, flying through the game's own input pipeline: it steers
+ * the crosshair (the nose) onto what it wants to fly to, as the screen shows it, pushing the
+ * pointer from the screen's middle the way the crosshair has to go, and the pointer's offset
  * becomes turn input through the game's dead zone (pointerAxis); W and S are held or not; the
- * game's flight computer turns that into commands (path steering with the autopilot, the brake,
- * the upright hold), never a bot's shortcut. The chase camera follows as the game's does (along
- * the course with the autopilot, see chaseOrientation). The Host sees a quarter second late,
- * moves the pointer in eased strokes, and aims a few pixels off.
+ * game's flight computer turns that into commands (the autopilot, the brake, the upright hold),
+ * never a bot's shortcut. The chase camera follows the nose as the game's does. The Host sees a
+ * quarter second late, moves the pointer in eased strokes, and aims a few pixels off.
  */
 export class Human {
-  readonly steering = new PathSteering();
   readonly brake = new Brake();
   readonly out: Controls = { ...IDLE };
   readonly camera = new THREE.PerspectiveCamera(CAMERA_FOV, WIDTH / HEIGHT, 10, 1e7);
@@ -94,7 +89,6 @@ export class Human {
   autopilot = true;
   private readonly random: Randomizer;
   private readonly goal = new THREE.Vector3();
-  private readonly look = new THREE.Quaternion();
   private readonly wobble = { x: 0, y: 0, toX: 0, toY: 0, left: 0 };
   /** What the Host saw, oldest first: it acts on what it saw its reaction time ago. */
   private readonly seen: { x: number; y: number }[] = [];
@@ -106,30 +100,37 @@ export class Human {
     private readonly hands: Hands = ORDINARY,
   ) {
     this.random = new Randomizer(seed);
-    this.steering.follow(flight);
     this.follow(flight, 1);
   }
 
   /**
-   * One step: the Host looks at `mark` (a point in the world) and puts the pointer on it, with
-   * `pedal` on drive, brake or neither; the flight computer flies, with the game's aim assist for
-   * `ship` (a ship the Host aims at). Returns the commands for the flight model.
+   * One step: the Host looks at `mark` (a point in the world) and steers the crosshair onto it,
+   * with `pedal` on drive, brake or neither; the flight computer flies, with the game's aim assist
+   * for `ship` (a ship the Host aims at). Returns the commands for the flight model.
    */
   fly(flight: FlightModel, mark: THREE.Vector3, pedal: Pedal, gravity: THREE.Vector3, ship?: THREE.Vector3): Controls {
     this.follow(flight, 1 - Math.exp(-CAMERA_FOLLOW * this.step), 1 - Math.exp(-CAMERA_TURN * this.step));
+    // the crosshair is the nose, at the mark's distance: the Host sees how far the mark is off it
+    // and pushes the pointer from the middle that way
     this.pixel(mark, seen);
-    // with the autopilot the screen's middle is the course; in free drift the Host brings the
-    // crosshair (the nose, at the mark's distance) onto the mark, and pushes from the middle
-    if (!this.autopilot) {
-      flight.forward(reticle).multiplyScalar(mark.distanceTo(flight.position)).add(flight.position);
-      this.pixel(reticle, sight);
-      seen.x -= sight.x;
-      seen.y -= sight.y;
+    const distance = mark.distanceTo(flight.position);
+    flight.forward(reticle).multiplyScalar(distance).add(flight.position);
+    this.pixel(reticle, sight);
+    // with the autopilot the Host also watches the prograde marker: it wants the flight on the
+    // mark, not only the nose, so it steers by a point between the two
+    const speed = flight.velocity.length();
+    if (this.autopilot && speed > EYE_FROM) {
+      reticle.copy(flight.velocity).multiplyScalar(distance / speed).add(flight.position);
+      this.pixel(reticle, course);
+      sight.x += (course.x - sight.x) * COURSE_EYE;
+      sight.y += (course.y - sight.y) * COURSE_EYE;
     }
+    seen.x -= sight.x;
+    seen.y -= sight.y;
     this.wander();
-    // a Host learns how hard the course answers the pointer, and holds it no farther out than its
-    // own lag lets it steer without swinging: the course turns at `rate` for a full deflection
-    const answer = PathSteering.rate(flight) / (FULL / PIXELS_PER_RADIAN);
+    // a Host learns how hard the nose answers the pointer, and holds it no farther out than its
+    // own lag lets it steer without swinging: the nose turns at `rate` for a full deflection
+    const answer = (MAX_TURN_RATE * (0.3 + 0.7 * flight.thrusterFactor)) / (FULL / PIXELS_PER_RADIAN);
     const reach = Math.min(1, CALM / ((this.hands.reaction + this.hands.stroke) * answer));
     // and it knows the dead zone around the middle: it pushes past it for anything it sees off
     this.seen.push({ x: past(seen.x + this.wobble.x, reach), y: past(seen.y + this.wobble.y, reach) });
@@ -145,16 +146,11 @@ export class Human {
       }
     }
     const controls = { ...IDLE, yaw: pointerAxis(this.pointer.x / FULL), pitch: pointerAxis(this.pointer.y / FULL), thrust: pedal === 'drive' ? 1 : 0 };
-    // the brake: with the autopilot the computer brakes along the course (see PathSteering.fly),
-    // in free drift it flips and burns to rest
-    const braking = pedal === 'brake';
-    if (braking && !this.autopilot) return this.brake.fly(flight, controls, flight.driveFactor, this.out);
+    // the brake flips and burns to rest
+    if (pedal === 'brake') return this.brake.fly(flight, controls, flight.driveFactor, this.out);
     this.brake.release();
-    if (this.autopilot) this.steering.fly(flight, controls, gravity, this.step, this.out, braking);
-    else {
-      this.steering.follow(flight);
-      Object.assign(this.out, controls);
-    }
+    if (this.autopilot) flyByNose(flight, controls, gravity, this.out);
+    else Object.assign(this.out, controls);
     keepUpright(flight, this.out);
     // the game's aim assist, for a ship close to the nose
     if (ship && aim.subVectors(ship, flight.position).length() < AIM_ASSIST_RANGE) assistAim(flight, aim, this.out);
@@ -163,10 +159,9 @@ export class Human {
 
   /** The chase camera, as the game's follows the ship: `move` and `turn` of the way there this step (0..1). */
   private follow(flight: FlightModel, move: number, turn = move) {
-    chaseOrientation(flight, this.autopilot ? this.steering.course : null, this.look);
-    this.goal.set(0, SHIP_RADIUS * CHASE_HEIGHT, SHIP_RADIUS * CHASE_DISTANCE).applyQuaternion(this.look).add(flight.position);
+    flight.toWorld(this.goal.set(0, SHIP_RADIUS * CHASE_HEIGHT, SHIP_RADIUS * CHASE_DISTANCE), this.goal);
     this.camera.position.lerp(this.goal, move);
-    this.camera.quaternion.slerp(this.look, turn);
+    this.camera.quaternion.slerp(flight.orientation, turn);
     this.camera.updateMatrixWorld();
   }
 
@@ -204,17 +199,17 @@ export class Human {
 }
 
 /**
- * A Host racing a course of rings as the screen shows it (see flyCourse): it puts the pointer on
- * the ribbon about LOOK seconds ahead, through the rings as the ribbon runs on, and past a ring it
- * missed on the way back the game's line shows, slowed down to turn. It holds the drive up to its
- * pace (`cruise`, less for slower hands, see PACE), lets it go where the ribbon ahead glows
- * orange, brakes for a bend far too fast for it, and brakes back when the coils threw it far past
- * its pace. `drive` false never touches the drive (a drill that starts drifting).
+ * A Host racing a course of rings as the screen shows it (see flyCourse): it steers the
+ * crosshair onto the ribbon about LOOK seconds ahead, through the rings as the ribbon runs on,
+ * and past a ring it missed onto the way back the game's line shows, slowed down to turn. With
+ * the autopilot the ship turns hardest with the drive held (and at the speed limit, where its push
+ * along the flight is free), so the Host holds the drive while the nose points about where it
+ * looks, up to `cruise`. The brake flips the ship and takes the nose off the line for seconds, so
+ * a racing Host brakes only to turn back for a ring it missed, or, with `brakes` (a drill that
+ * asks for it), for a bend ahead far too fast for it, holding the brake until it is slow enough.
+ * `drive` false never touches the drive (a drill that starts drifting).
  */
-export function racer(field: AsteroidField, rings: Rings, flight: FlightModel, cruise = HUMAN_CRUISE, drive = true, seed = 1, hands = ORDINARY): Driver {
-  // a Host with slower hands races slower: as fast as the ordinary Host, for its lag
-  const lag = ORDINARY.reaction + ORDINARY.stroke;
-  const pace = cruise * Math.min(1, (lag / (hands.reaction + hands.stroke)) ** PACE);
+export function racer(field: AsteroidField, rings: Rings, flight: FlightModel, cruise = MAX_SPEED, drive = true, seed = 1, hands = ORDINARY, brakes = false): Driver {
   const human = new Human(flight, STEP, seed, hands);
   const mark = new THREE.Vector3();
   const a = new THREE.Vector3();
@@ -222,8 +217,6 @@ export function racer(field: AsteroidField, rings: Rings, flight: FlightModel, c
   const c = new THREE.Vector3();
   let pedal: Pedal = 'coast';
   let glance = 0;
-  /** The speed the ribbon close ahead allows, as last read. */
-  let slowest = Infinity;
   return (flight, next, _seconds, gravity) => {
     const line = rings.line;
     const gate = next % line.gateCount;
@@ -234,24 +227,19 @@ export function racer(field: AsteroidField, rings: Rings, flight: FlightModel, c
     if (missed) line.target(flight.position, gate, speed, field, mark);
     else line.clear(line.progress(flight.position, gate, 0) + Math.max(LOOK_MIN, speed * LOOK), field, mark);
     if (glance++ % GLANCE === 0) {
-      // the ribbon ahead: orange where its bend is too tight for the speed
-      const grip = gripOf(flight);
+      // the ribbon ahead within BRAKE_SECONDS: the speed its bends allow (where it glows orange)
       const from = line.progress(flight.position, gate, 0);
-      let glow = false;
-      slowest = Infinity;
-      for (let s = from; s < from + RIBBON_REACH; s += RIBBON_STEP) {
-        const allowed = cornerSpeed(bendRadius(line.clear(s - BEND_SPAN, field, a), line.clear(s, field, b), line.clear(s + BEND_SPAN, field, c)), grip);
-        if (speed > allowed * GLOW) glow = true;
-        if (s - from < speed * BRAKE_SECONDS) slowest = Math.min(slowest, allowed);
+      let slowest = missed ? RETURN_SPEED : Infinity;
+      for (let s = from; s < from + Math.min(RIBBON_REACH, speed * BRAKE_SECONDS); s += RIBBON_STEP) {
+        slowest = Math.min(slowest, cornerSpeed(bendRadius(line.clear(s - BEND_SPAN, field, a), line.clear(s, field, b), line.clear(s + BEND_SPAN, field, c)), flight));
       }
-      // a Host brakes for a bend far too fast for it, and holds the brake until it is slow enough
-      if (missed) slowest = Math.min(slowest, RETURN_SPEED);
-      // thrown far past its pace (by the coils), a Host brakes back to what it can handle
-      if (drive) slowest = Math.min(slowest, pace * TOO_FAST);
-      const braking = speed > slowest * (pedal === 'brake' ? GLOW : HARD);
-      // and it holds the drive only while the ship flies about where it looks, not through a turn
-      const onLine = speed < ON_LINE_FROM || flight.velocity.angleTo(a.subVectors(mark, flight.position)) < ON_LINE;
-      pedal = braking ? 'brake' : drive && !glow && !missed && onLine && speed < pace ? 'drive' : 'coast';
+      const braking = (missed || brakes) && speed > slowest * (pedal === 'brake' ? SLOW : HARD);
+      // and it holds the drive while the nose points about where it looks, or nearer to it than
+      // the flight goes: the drive pushes along the nose
+      a.subVectors(mark, flight.position);
+      const off = flight.forward(b).angleTo(a);
+      const onLine = off < ON_LINE || (speed > 1 && off < flight.velocity.angleTo(a));
+      pedal = braking ? 'brake' : drive && onLine && speed < Math.min(cruise, slowest * GLOW) ? 'drive' : 'coast';
     }
     return human.fly(flight, mark, pedal, gravity);
   };
@@ -261,7 +249,7 @@ export function racer(field: AsteroidField, rings: Rings, flight: FlightModel, c
 export const SPREAD: Hands[] = [{ reaction: 0.2, stroke: 0.12, noise: 2 }, ORDINARY, { reaction: 0.3, stroke: 0.18, noise: 4 }, { reaction: 0.35, stroke: 0.2, noise: 5 }];
 /** The seeds of each hand's imprecision the race tests fly. */
 export const SEEDS = [1, 2];
-/** A lap is given this long (s): the slowest hands race slower. */
+/** A lap is given this long (s). */
 export const LAP_LIMIT = 160;
 
 /** An arena's race course as the game lays it out in `field` as it starts: where the grid's first slot is, which way it faces, and a lap of rings (the pink gate again at its end). */

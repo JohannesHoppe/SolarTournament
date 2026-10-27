@@ -185,41 +185,41 @@ export const COIL_COURSE: readonly [number, number, number][] = [
 ];
 /**
  * The markers of the curve drill, in the pilot's frame (units): 400 m straight ahead, a quarter
- * turn to the right on an arc of 800 m radius, and 600 m straight on after it, where centered
+ * turn to the right on an arc of 1.3 km radius, and 600 m straight on after it, where centered
  * steering is all it takes.
  */
 export const CURVE_COURSE: readonly [number, number, number][] = [
   [0, 0, -8000],
-  [4686, 0, -19314],
-  [16000, 0, -24000],
-  [28000, 0, -24000],
+  [7615, 0, -26385],
+  [26000, 0, -34000],
+  [38000, 0, -34000],
 ];
-/** The curve drill starts drifting at this speed (units/s, 100 m/s): path steering flies it, and its arc takes the thrusters alone (1.3 g). */
+/** The curve drill starts drifting at this speed (units/s, 100 m/s): the autopilot flies it, and its arc takes the thrusters alone (0.8 g). */
 export const CURVE_SPEED = 2000;
 /** A marker of the curve drill counts within this distance (units, 100 m), shown as a sphere around it. */
 export const CURVE_ZONE = 2000;
 /**
- * The rings of the brake drill: the first 1.5 km ahead, then a bend of about 220 m radius to the
- * second, 630 m to the right, and on to the third. At the speed limit path steering turns no
- * tighter than 415 m, so the racing line glows orange before the bend; at about 180 m/s, a
- * middling racer's pace, it takes the bend.
+ * The rings of the brake drill: the first 1.5 km ahead, then a bend of about 470 m radius to the
+ * second, 475 m to the right, and on to the third. At the speed limit the autopilot turns no
+ * tighter than about 585 m (see turnRadius), so the racing line glows orange before the bend; at
+ * about 225 m/s it takes the bend, after a short brake.
  */
 export const BRAKE_COURSE: readonly [number, number, number][] = [
   [0, 0, -30000],
-  [12000, 0, -34000],
-  [20000, 0, -46000],
+  [9500, 0, -38500],
+  [20000, 0, -48000],
 ];
 /**
- * The rings of the full-speed drill: five, about 570 m apart, weaving 200 m to the right and 150 m
- * to the left and rising by 100 m, 2.7 km ahead: the line bends no tighter than about 800 m, which
+ * The rings of the full-speed drill: five, about 570 m apart, weaving 125 m to the right and 100 m
+ * to the left and rising by 70 m, 2.7 km ahead: the line bends no tighter than about 1.2 km, which
  * a ship takes at the speed limit and beyond (a coil's 290 m/s), so it never glows orange.
  */
 export const LINE_COURSE: readonly [number, number, number][] = [
   [0, 0, -10000],
-  [3000, 1000, -21000],
-  [4000, 2000, -32000],
-  [1000, 1000, -43000],
-  [-3000, 0, -54000],
+  [2000, 700, -21000],
+  [2500, 1400, -32000],
+  [500, 700, -43000],
+  [-2000, 0, -54000],
 ];
 /**
  * The full-speed drill wants its course flown at LINE_PACE on average (units/s, 200 m/s) along
@@ -554,8 +554,8 @@ export const DRILL = {
     },
     done: (ctx) => speed(ctx) < STOPPED,
   },
-  // path steering: steering puts the course through an arc of markers and the flight comes
-  // after it; once steering stops, the ship flies straight on to the last
+  // the autopilot: the nose through an arc of markers, and the flight comes after it; once
+  // steering stops, the ship flies straight on to the last
   curve: {
     line: SCHOOL.curve,
     praise: SCHOOL_PRAISE.curve,
@@ -579,10 +579,10 @@ export const DRILL = {
   },
   // the X where the flight crosses the next ring's plane: steered into the ring, azure, it is a pass
   rings: ringDrill(SCHOOL.rings, SCHOOL_PRAISE.rings, ['turn', 'drive', 'brake'], RING_COURSE, SCHOOL.missed),
-  // at the speed limit into a bend tighter than path steering turns there: the racing line glows
+  // at the speed limit into a bend tighter than the autopilot turns there: the racing line glows
   // orange before it, and only a brake in time makes the ring
   brakeZone: ringDrill(SCHOOL.brakeZone, SCHOOL_PRAISE.brakeZone, ['turn', 'brake', 'drive'], BRAKE_COURSE, SCHOOL.tooFast, MAX_SPEED),
-  // the racing line at full speed: the drive held all the way, path steering bends it through the turns
+  // the racing line at full speed: the drive held all the way, the autopilot bends it through the turns
   fullSpeed: {
     ...ringDrill(SCHOOL.fullSpeed, SCHOOL_PRAISE.fullSpeed, ['drive', 'turn'], LINE_COURSE, SCHOOL.missed, 0, true),
     fail: (ctx, a) => (a.warned ? SCHOOL.missed : a.seconds > lineTime(a) ? SCHOOL.tooSlow : lost(ctx, a) ? SCHOOL.again : null),
@@ -1135,7 +1135,7 @@ export function coursesFrom(text: string | null): Set<SchoolCourse> | null {
 
 /**
  * The drills of each course, in the order a Host needs them. Basic training: turning, aiming,
- * the drive and the brake, a curve with path steering, stopping at a point and the rocks, all
+ * the drive and the brake, a curve with the autopilot, stopping at a point and the rocks, all
  * with the autopilot on. The racer: the rings and the X where the flight crosses them, their
  * coils, the racing line's brake zones, the line at full speed, the start and the hook. The
  * gladiator: the laser and its heat, free drift like a real spaceship, dodging, and the dogfight

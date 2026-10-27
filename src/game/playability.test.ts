@@ -5,7 +5,7 @@ import { MAX_SPEED } from '../ship/flight';
 import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, LINE_SPARE, RING_COURSE, RING_RADIUS, ringCourse } from './school';
 import { testField } from '../test/field';
 import { flyCourse, SHIP_RADIUS, startFlight, STEP } from '../test/pilot';
-import { Human, racer } from '../test/human';
+import { Human, ORDINARY, racer, type Pedal } from '../test/human';
 import { RacingLine } from './racingline';
 import { DETAIL } from '../world/rocks';
 
@@ -36,8 +36,8 @@ describe("a simulated Host flies the flight school's drills", () => {
       const field = gameField();
       const flight = startFlight(position, drift !== null ? normals[0] : facing, drift ?? 0);
       const limit = seconds || line.length / LINE_PACE + LINE_SPARE;
-      // a drill that starts drifting is flown without the drive, the others with it; the full-speed drill all the way
-      const host = flyCourse(field, rings, flight, racer(field, rings, flight, drill === 'full-speed' ? Infinity : undefined, drift === null || drift === 0), limit);
+      // the curve drill starts drifting and is flown without the drive, the others with it; the full-speed drill all the way
+      const host = flyCourse(field, rings, flight, racer(field, rings, flight, drill === 'full-speed' ? Infinity : undefined, drill !== 'curve', 1, ORDINARY, drill === 'brake'), limit);
       const summary = `${host.passed} of ${points.length} in ${host.seconds.toFixed(1)} of ${limit.toFixed(0)} s, ${host.missed} missed, offs ${host.offs.map((off) => (off / 20).toFixed(0)).join(', ')} m`;
       console.info(`Host in the ${drill} drill: ${summary}`);
       expect(host.passed, summary).toBe(points.length);
@@ -48,30 +48,44 @@ describe("a simulated Host flies the flight school's drills", () => {
 });
 
 describe('a simulated Host in open space', () => {
-  /** A Host flying `seconds` with its pointer on a point the function gives, from `speed` (units/s) ahead (-Z), with the autopilot or in free drift; in free drift the point is a ship, and the aim assist pulls onto it. */
-  function fly(speed: number, seconds: number, mark: (t: number) => THREE.Vector3, each: (flight: ReturnType<typeof startFlight>, t: number) => void = () => {}, autopilot = true) {
+  /**
+   * A Host flying `seconds` with the crosshair on a point the function gives, from `speed` (units/s)
+   * ahead (-Z), with the autopilot or in free drift, its feet on the pedals a function gives; in
+   * free drift the point is a ship, and the aim assist pulls onto it.
+   */
+  function fly(speed: number, seconds: number, mark: (t: number) => THREE.Vector3, each: (flight: ReturnType<typeof startFlight>, t: number) => void = () => {}, autopilot = true, pedal: (flight: ReturnType<typeof startFlight>, t: number) => Pedal = () => 'coast') {
     const flight = startFlight(new THREE.Vector3(), new THREE.Vector3(0, 0, -1), speed);
     const human = new Human(flight, STEP);
     human.autopilot = autopilot;
     const gravity = new THREE.Vector3();
     for (let t = 0; t < seconds; t += STEP) {
-      flight.update(STEP, human.fly(flight, mark(t), 'coast', gravity, autopilot ? undefined : mark(t)), gravity);
+      flight.update(STEP, human.fly(flight, mark(t), pedal(flight, t), gravity, autopilot ? undefined : mark(t)), gravity);
       each(flight, t);
     }
     return flight;
   }
 
+  // the ship flies where it points, and a fast flight bends slowly: a Host turns about by braking
+  // (the flip and burn), turning the nose onto the target and pushing back up to speed
   it('turns about at 150 m/s towards a target behind, and flies at it', () => {
     const target = new THREE.Vector3(300, 0, 40000);
-    const flight = fly(3000, 8, () => target);
+    const toTarget = new THREE.Vector3();
+    let rested = false;
+    const flight = fly(3000, 8, () => target, () => {}, true, (flight) => {
+      toTarget.subVectors(target, flight.position);
+      const speed = flight.velocity.length();
+      rested ||= speed < 100;
+      if (!rested) return 'brake';
+      return speed < 3000 && flight.forward().angleTo(toTarget) < 0.5 ? 'drive' : 'coast';
+    });
     const off = flight.velocity.angleTo(target.clone().sub(flight.position));
     console.info(`Host turning about: ${((off * 180) / Math.PI).toFixed(1)}° off the target after 8 s, at ${(flight.velocity.length() / 20).toFixed(0)} m/s`);
     expect(off).toBeLessThan(0.05);
     expect(flight.velocity.length()).toBeGreaterThan(2400);
   });
 
-  // the autopilot flies where the pointer is and the nose follows as the flight bends; to keep
-  // the nose on a crossing ship a Host switches to free drift, where the pointer turns the nose
+  // with the autopilot the nose waits for a fast flight; to keep the nose on a crossing ship a
+  // Host switches to free drift, where the nose turns freely and the ship slides on
   it('holds a crossing bot under the crosshair long enough to hit it, in free drift', () => {
     // a bot 600 m ahead and to the right, crossing at 40 m/s
     const bot = (t: number) => new THREE.Vector3(4000 - 800 * t, 1000, -12000);

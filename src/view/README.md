@@ -4,13 +4,13 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 
 | File | What it does |
 |---|---|
-| `hud.ts` | The flight computer's projection: gauges, markers (the next ring's brackets and where the flight crosses its plane among them, the autopilot's course, the crosshair orange over a hull, the target's range and closure rate; the ships' markers, their arrows at the screen's edge with the ships' names placed clear of each other and of the HUD), the fixed references (center, sun, the arena's big things, bases, battleship) at their place or the screen's edge, height and climb, the alarms and the escape gauge, the round's panel, the boot of a fresh clone's link; writes the DOM only when a value changes |
+| `hud.ts` | The flight computer's projection: gauges, markers (the next ring's brackets and where the flight crosses its plane among them, the crosshair orange over a hull, the target's range and closure rate; the ships' markers, their arrows at the screen's edge with the ships' names placed clear of each other and of the HUD), the fixed references (center, sun, the arena's big things, bases, battleship) at their place or the screen's edge, height and climb, the alarms and the escape gauge, the round's panel, the boot of a fresh clone's link; writes the DOM only when a value changes |
 | `attitude.ts` | Horizon line, pitch ladder, bank scale with its sky pointer and heading tape on a canvas, as in a fighter's head-up display; as sharp as the picture's resolution, drawn anew only when the camera turns |
 | `plane.ts` | The reference plane's polar grid and the drop lines from ships, gates and the waypoint down or up to it: lines over everything, faded with distance, built once |
 | `radar.ts` | The radar sphere on a canvas |
 | `effects.ts` | Particles and laser beams, pooled; a cheaper picture emits a share of the particles |
 | `killcam.ts` | Records the last seconds and replays the own clone's death in slow motion, each ship put between the two kept frames around the moment shown (tested in `killcam.test.ts`) |
-| `chase.ts` | The chase camera's field of view, how fast it follows and where it hangs, and where it looks: along the autopilot's course, else along the nose |
+| `chase.ts` | The chase camera's field of view, how fast it follows and where it hangs, looking along the nose |
 | `guide.ts` | The racing line: a dashed ribbon with pulses of light, orange in the brake zones |
 | `ghost.ts` | The best lap's hologram |
 | `impostor.ts` | A billboard for a shape seen from far away (the belt's rocks, the field's farthest rocks and ice): a camera-facing quad showing one of a few pre-rendered views, lit from the shape's own baked normal map and the real sun so it tracks a solar flare; an ice piece's painted in the ice's color and glow (tested in `impostor.test.ts`) |

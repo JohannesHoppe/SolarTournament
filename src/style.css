@@ -1423,21 +1423,6 @@ body.touch #hud-message {
   background: linear-gradient(to right, var(--hud) 8px, transparent 8px, transparent calc(100% - 8px), var(--hud) calc(100% - 8px));
 }
 
-/* the autopilot's course, where the Host wants to fly: a thin, faint diamond, apart from the
-   prograde's circle (where the ship flies) until the two meet */
-#course-marker {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 14px;
-  height: 14px;
-  margin: -7px 0 0 -7px;
-  border: 1px solid var(--hud);
-  transform: rotate(45deg);
-  box-shadow: var(--hud-line-glow);
-  pointer-events: none;
-}
-
 /* retrograde: a dashed circle with a cross, so it never reads as the course */
 #retrograde {
   border-style: dashed;

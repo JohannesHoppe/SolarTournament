@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { InputRecorder } from '../recorder';
-import { Cockpit, Hand, STEP, convergence, flyLine, replay } from '../test/cockpit';
+import { Cockpit, Hand, STEP, convergence, flyLine, replay, slip } from '../test/cockpit';
 import { RacingLine } from '../game/racingline';
 import { CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, LINE_SPARE, RING_RADIUS } from '../game/school';
-import { FlightModel, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, RCS_THRUST, turnRadius } from './flight';
+import { FlightModel, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, turnRadius } from './flight';
 import { IDLE } from '../input/input';
 import { arenaById } from '../world/arenas';
 import { ARENA_LIMIT } from '../world/arena';
@@ -18,36 +18,33 @@ const MS = 20;
 /** A direction `yaw` right of ahead (-Z) and `pitch` up (rad). */
 const direction = (yaw: number, pitch = 0) => new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
 
-/** The course only moves while the Host steers: never by itself, the camera or the nose. */
-function courseMovesOnlyWithInput(cockpit: Cockpit) {
-  for (let i = 1; i < cockpit.samples.length; i++) {
-    const sample = cockpit.samples[i];
-    if (sample.input === 0) expect(sample.course.angleTo(cockpit.samples[i - 1].course)).toBeLessThan(1e-6);
-  }
+/** Seconds from `from` until the flight stays within ON_NOSE of the nose for good. */
+function backOnNose(cockpit: Cockpit, from: number) {
+  let settled = Infinity;
+  const after = cockpit.samples.filter((s) => s.t >= from);
+  for (let i = after.length - 1; i >= 0 && slip(after[i]) <= ON_NOSE; i--) settled = after[i].t - from;
+  return settled;
 }
 
-/** Once well under way (within 150° of the goal), the flight never swings back away from it by more than `slack` (rad). */
-function neverSwingsBack(cockpit: Cockpit, goal: THREE.Vector3, slack = DEGREE) {
-  let closest = (5 * Math.PI) / 6;
-  for (const sample of cockpit.samples) {
-    const off = sample.path.angleTo(goal);
-    if (off > closest && closest === (5 * Math.PI) / 6) continue;
-    closest = Math.min(closest, off);
-    expect(off).toBeLessThan(closest + slack);
-  }
+/** The stick held full to the right until the nose has turned `angle` (rad) from where it pointed: the time it took. */
+function turnBy(cockpit: Cockpit, angle: number, thrust = 0) {
+  const start = cockpit.flight.forward();
+  const from = cockpit.t;
+  while (cockpit.flight.forward().angleTo(start) < angle && cockpit.t - from < 20) cockpit.step({ ...IDLE, yaw: 1, thrust });
+  return cockpit.t - from;
 }
 
-describe('path steering: the pointer sets the course', () => {
-  it('at rest turns the nose onto the course and keeps the ship where it is', () => {
+describe('the autopilot: the ship flies where its nose points', () => {
+  it('at rest turns the nose as the stick says, and keeps the ship where it is', () => {
     const ship = new Cockpit(0);
     ship.fly(0.5, () => ({ yaw: 0.5 }));
-    const released = ship.t;
-    ship.fly(1.5);
-    const nose = convergence(ship.samples, ship.steering.course, released, DEGREE, 'nose');
-    expect(nose.seconds).toBeLessThan(0.3);
-    expect(nose.overshoot).toBeLessThan(DEGREE);
+    const turned = ship.flight.forward().angleTo(new THREE.Vector3(0, 0, -1));
+    expect(turned).toBeGreaterThan(0.5 * MAX_TURN_RATE * 0.5 * 0.8);
+    const nose = ship.flight.forward();
+    ship.fly(1);
+    // let go, the nose stops where it is
+    expect(ship.flight.forward().angleTo(nose)).toBeLessThan(0.1);
     expect(ship.flight.velocity.length()).toBeLessThan(0.5 * MS);
-    courseMovesOnlyWithInput(ship);
   });
 
   it('at rest a hand puts the nose on a marker, and the ship stays at rest', () => {
@@ -61,19 +58,19 @@ describe('path steering: the pointer sets the course', () => {
     expect(ship.flight.velocity.length()).toBeLessThan(0.5 * MS);
   });
 
-  it('brings the flight onto a course the pointer set, held off center, without overshoot', () => {
+  it('brings the flight onto the nose once the stick is let go, without swinging past', () => {
     const ship = new Cockpit(100 * MS);
     ship.fly(1, () => ({ yaw: 0.6, pitch: 0.3 }));
     const released = ship.t;
     ship.fly(3);
-    const flight = convergence(ship.samples, ship.steering.course, released);
-    expect(flight.seconds).toBeLessThan(1);
+    const nose = ship.flight.forward();
+    const flight = convergence(ship.samples, nose, released);
+    expect(backOnNose(ship, released)).toBeLessThan(LEAD_TIME);
+    expect(flight.seconds).toBeLessThan(1.5);
     expect(flight.overshoot).toBeLessThan(2 * DEGREE);
-    expect(flight.noseOff).toBeLessThan(DEGREE);
-    courseMovesOnlyWithInput(ship);
   });
 
-  it('follows a hand sweeping the pointer with eased strokes, overshoot and corrections', () => {
+  it('follows a hand that turns the nose to a goal, with eased strokes, overshoot and corrections', () => {
     const ship = new Cockpit(120 * MS);
     const goal = direction(1.2, 0.35);
     const hand = new Hand();
@@ -82,48 +79,42 @@ describe('path steering: the pointer sets the course', () => {
     expect(flight.seconds).toBeLessThan(4);
     expect(flight.overshoot).toBeLessThan(3 * DEGREE);
     expect(flight.noseOff).toBeLessThan(1.5 * DEGREE);
-    courseMovesOnlyWithInput(ship);
   });
 
-  it('turns about on its own when the course lies behind, at the speed it had', () => {
-    const ship = new Cockpit(150 * MS);
-    const back = new THREE.Vector3(0, 0, 1);
-    ship.steering.course.copy(back);
-    ship.fly(5);
-    const flight = convergence(ship.samples, back);
-    expect(flight.seconds).toBeLessThan(3);
-    expect(flight.overshoot).toBeLessThan(DEGREE);
-    expect(flight.noseOff).toBeLessThan(DEGREE);
-    expect(ship.flight.velocity.length()).toBeGreaterThan(145 * MS);
-    neverSwingsBack(ship, back);
-  });
-
-  it('turns about when a hand swings the pointer round to a target behind', () => {
+  it('turns about at 150 m/s as a Host does it: the brake, the nose round to a target behind, the drive back to the speed it had', () => {
     const ship = new Cockpit(150 * MS);
     const target = direction(Math.PI - 0.05);
     const hand = new Hand();
-    ship.fly(7, (cockpit) => hand.steer(cockpit, target));
+    // S held until the ship rests: the brake flips it against the flight and burns
+    while (!ship.brake.rested && ship.t < 5) ship.step({ ...IDLE }, STEP, true);
+    const rested = ship.t;
+    // then the nose onto the target, W held until the speed is back
+    let driving = true;
+    ship.fly(8 - rested, (cockpit) => {
+      driving &&= cockpit.flight.velocity.length() < 150 * MS;
+      return { ...hand.steer(cockpit, target), thrust: driving ? 1 : 0 };
+    });
     const flight = convergence(ship.samples, target);
-    expect(flight.seconds).toBeLessThan(5);
+    console.info(`Turning about at 150 m/s: at rest after ${rested.toFixed(1)} s, on the target within 2° after ${flight.seconds.toFixed(1)} s`);
+    expect(flight.seconds).toBeLessThan(6);
     expect(flight.overshoot).toBeLessThan(3 * DEGREE);
     expect(flight.noseOff).toBeLessThan(1.5 * DEGREE);
-    courseMovesOnlyWithInput(ship);
+    expect(ship.flight.velocity.length()).toBeGreaterThan(145 * MS);
   });
 
-  it('takes over from free drift where the nose points, without a jolt', () => {
-    // sliding sideways: the nose ahead, the flight to the right
-    const ship = new Cockpit(80 * MS, new THREE.Vector3(1, 0, 0));
+  it('takes over from free drift where the nose points, the nose left where it is', () => {
+    // sliding: the nose ahead, the flight 45° to the right
+    const ship = new Cockpit(80 * MS, new THREE.Vector3(1, 0, -1));
     ship.autopilot = false;
     ship.fly(0.5);
     const nose = ship.flight.forward();
     ship.autopilot = true;
-    ship.step({ yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false });
-    expect(ship.steering.course.angleTo(nose)).toBeLessThan(0.01);
+    const from = ship.t;
     ship.fly(4);
-    const flight = convergence(ship.samples, nose);
+    expect(ship.flight.forward().angleTo(nose)).toBeLessThan(DEGREE);
+    const flight = convergence(ship.samples, nose, from);
     expect(flight.seconds).toBeLessThan(2.5);
     expect(flight.overshoot).toBeLessThan(2 * DEGREE);
-    expect(flight.noseOff).toBeLessThan(DEGREE);
   });
 
   it('switches between autopilot and free drift in a turn with no jump beyond what drive and thrusters do', () => {
@@ -140,7 +131,7 @@ describe('path steering: the pointer sets the course', () => {
       if (i % 7 === 0) ship.autopilot = !ship.autopilot;
       velocity.copy(ship.flight.velocity);
       orientation.copy(ship.flight.orientation);
-      const controls = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false, ...hand.steer(ship, goal) };
+      const controls = { ...IDLE, ...hand.steer(ship, goal) };
       ship.step(controls);
       expect(ship.flight.velocity.distanceTo(velocity)).toBeLessThan(push);
       expect(ship.flight.orientation.angleTo(orientation)).toBeLessThan(turn);
@@ -148,33 +139,42 @@ describe('path steering: the pointer sets the course', () => {
     }
   });
 
-  it('holds the course against gravity across the flight', () => {
+  it('holds the flight on the nose against gravity across it', () => {
     const ship = new Cockpit(100 * MS);
     ship.gravity.set(0, -196.2, 0);
     ship.fly(4);
     expect(ship.samples.at(-1)!.path.angleTo(new THREE.Vector3(0, 0, -1))).toBeLessThan(DEGREE);
   });
+
+  it(`at any speed, after a hard turn, has the flight back within ${Math.round(ON_NOSE / DEGREE)}° of the nose within ${LEAD_TIME} s, and never lets the nose lead it farther than its limit`, () => {
+    for (const speed of [30, 60, 100, 150, 200, 250].map((v) => v * MS)) {
+      const ship = new Cockpit(speed);
+      turnBy(ship, Math.PI / 2);
+      const released = ship.t;
+      ship.fly(3);
+      const widest = Math.max(...ship.samples.map(slip));
+      expect(widest, `${speed / MS} m/s`).toBeLessThan(leadLimit(speed) + 2 * DEGREE);
+      expect(backOnNose(ship, released), `${speed / MS} m/s`).toBeLessThan(LEAD_TIME + 0.05);
+    }
+  });
 });
 
-describe('path steering at full speed', () => {
-  it('turns at the speed limit about four times tighter than the thrusters alone, and stops turning when let go', () => {
+describe('the autopilot at full speed', () => {
+  it('turns at the speed limit more than twice as tight as the thrusters alone, and has the flight back on the nose after a 90° turn', () => {
     const ship = new Cockpit(MAX_SPEED);
-    ship.fly(1.5, () => ({ yaw: 1 }));
-    // a steady turn: the radius from how fast the path turns
-    const v0 = ship.flight.velocity.clone();
-    ship.fly(0.5, () => ({ yaw: 1 }));
-    const radius = ship.flight.velocity.length() / (v0.angleTo(ship.flight.velocity) / 0.5);
-    expect(ship.flight.velocity.length()).toBeGreaterThan(MAX_SPEED * 0.97);
-    expect(radius).toBeLessThan(turnRadius(MAX_SPEED) * 1.15);
-    expect(radius).toBeLessThan(turnRadius(MAX_SPEED, RCS_THRUST) / 3);
-    // the nose leads into the turn: to the right of the path
-    expect(ship.flight.toLocalDirection(ship.flight.velocity, new THREE.Vector3()).x).toBeLessThan(0);
+    const seconds = turnBy(ship, Math.PI / 2);
+    // a steady turn: the radius from how fast the flight turns
+    const v0 = ship.samples.at(-31)!.path;
+    const radius = MAX_SPEED / (v0.angleTo(ship.samples.at(-1)!.path) / (30 * STEP));
     const released = ship.t;
-    ship.fly(2);
-    const flight = convergence(ship.samples, ship.steering.course, released);
-    expect(flight.seconds).toBeLessThan(0.6);
-    expect(flight.overshoot).toBeLessThan(DEGREE);
-    expect(flight.noseOff).toBeLessThan(DEGREE);
+    ship.fly(3);
+    const back = backOnNose(ship, released);
+    console.info(`At the speed limit: a 90° turn of the nose takes ${seconds.toFixed(1)} s, on a radius of ${(radius / MS).toFixed(0)} m (thrusters alone ${(turnRadius(MAX_SPEED, { driveFactor: 0, thrusterFactor: 1 }) / MS).toFixed(0)} m); the flight is back within ${Math.round(ON_NOSE / DEGREE)}° of the nose ${back.toFixed(2)} s after letting go, the slip at most ${(Math.max(...ship.samples.map(slip)) / DEGREE).toFixed(0)}°`);
+    expect(ship.flight.velocity.length()).toBeGreaterThan(MAX_SPEED * 0.97);
+    expect(radius).toBeLessThan(turnRadius(MAX_SPEED) * 1.1);
+    expect(radius).toBeLessThan((MAX_SPEED * MAX_SPEED) / RCS_THRUST / 2);
+    expect(back).toBeLessThan(LEAD_TIME + 0.05);
+    expect(convergence(ship.samples, ship.flight.forward(), released).overshoot).toBeLessThan(DEGREE);
   });
 
   it('takes a race bend at full drive as a hand steers it, keeping its speed', () => {
@@ -182,12 +182,25 @@ describe('path steering at full speed', () => {
     const hand = new Hand();
     for (const goal of [direction(0.45), direction(-0.2, 0.25)]) {
       const from = ship.t;
-      ship.fly(4, (cockpit) => ({ ...hand.steer(cockpit, goal), thrust: 1 }));
+      ship.fly(5, (cockpit) => ({ ...hand.steer(cockpit, goal), thrust: 1 }));
       const flight = convergence(ship.samples, goal, from);
-      expect(flight.seconds).toBeLessThan(3);
+      expect(flight.seconds).toBeLessThan(4);
       expect(flight.overshoot).toBeLessThan(3 * DEGREE);
     }
     expect(Math.min(...ship.samples.map((sample) => sample.speed))).toBeGreaterThan(MAX_SPEED * 0.97);
+  });
+});
+
+describe('free drift', () => {
+  it('turns the nose and nothing else: the flight keeps its direction and speed', () => {
+    const ship = new Cockpit(MAX_SPEED);
+    ship.autopilot = false;
+    turnBy(ship, Math.PI / 2);
+    ship.fly(2);
+    const last = ship.samples.at(-1)!;
+    expect(last.path.angleTo(new THREE.Vector3(0, 0, -1))).toBeLessThan(1e-6);
+    expect(Math.abs(last.speed - MAX_SPEED)).toBeLessThan(1e-6);
+    expect(slip(last)).toBeGreaterThan(Math.PI / 2 - 0.1);
   });
 });
 
@@ -215,14 +228,14 @@ describe("a Host's hand on the flight school's lines", () => {
 });
 
 describe('the input recorder', () => {
-  it('records a flight that replays the same through path steering', () => {
+  it('records a flight that replays the same through the autopilot', () => {
     const ship = new Cockpit(120 * MS);
     const hand = new Hand();
     const goal = direction(-1, 0.3);
     const recorder = new InputRecorder();
     const flight = ship.flight;
     for (let i = 0; i < 300; i++) {
-      const controls = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false, ...hand.steer(ship, goal) };
+      const controls = { ...IDLE, ...hand.steer(ship, goal) };
       const frame = {
         t: ship.t,
         dt: STEP,
@@ -233,9 +246,6 @@ describe('the input recorder', () => {
         position: flight.position.toArray(),
         velocity: flight.velocity.toArray(),
         orientation: flight.orientation.toArray() as [number, number, number, number],
-        course: ship.steering.course.toArray(),
-        cruise: ship.steering.cruise,
-        recovering: ship.steering.recovering,
         drive: 1,
         thrusters: 1,
       };

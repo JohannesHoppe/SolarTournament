@@ -1,4 +1,4 @@
-import { MAIN_THRUST, MAX_SPEED, METERS_PER_UNIT, OVERDRIVE_PUSH, PATH_GRIP } from '../ship/flight';
+import { gripAt, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, turnRadius } from '../ship/flight';
 import { MAX_HULL } from '../ship/ship';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS } from '../game/race';
@@ -30,7 +30,11 @@ export const FROM_CODE: Record<string, number> = {
   limit: meters(MAX_SPEED),
   drive: g(MAIN_THRUST),
   // the hardest turn of the autopilot at the speed limit, rounded to 5 m as the README gives it
-  turn: Math.round(meters(MAX_SPEED ** 2 / PATH_GRIP) / 5) * 5,
+  turn: Math.round(meters(turnRadius(MAX_SPEED)) / 5) * 5,
+  // how far the nose leads the flight at most at the speed limit (degrees), and how soon the flight is back on it (s)
+  lead: Math.round((leadLimit(MAX_SPEED) * 180) / Math.PI),
+  settle: LEAD_TIME,
+  onNose: Math.round((ON_NOSE * 180) / Math.PI),
   overdrive: meters(OVERDRIVE_PUSH),
   gates: GATES,
   laps: LAPS,
@@ -46,7 +50,7 @@ export const FROM_CODE: Record<string, number> = {
   torpedoDamage: TORPEDO_DAMAGE,
   torpedoSpeed: meters(TORPEDO_TOP_SPEED),
   torpedoTurn: g(TORPEDO_LATERAL),
-  grip: g(PATH_GRIP),
+  grip: g(gripAt(MAX_SPEED)),
   torpedoBreak: TORPEDO_BREAK,
   torpedoMass: MASS.torpedo / 1000,
   torpedoThrust: g(TORPEDO_THRUST),

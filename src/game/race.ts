@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Randomizer } from '../random';
 import type { AsteroidField } from '../world/asteroids';
 import { GateKit } from '../world/gates';
-import { RacingLine } from './racingline';
+import { BOW_RADIUS, CLEARANCE, RacingLine } from './racingline';
 
 /** Gates of a lap, and laps of a race. */
 export const GATES = 8;
@@ -18,17 +18,23 @@ export const lapOf = (gates: number) => Math.min(LAPS, Math.floor(Math.max(0, ga
  */
 export const GATE_RADIUS = 2400;
 /**
- * The course loops around the field's center at about this distance (units, 2 km), 150 m more
- * or less, through the outer rocks: a lap of about 12.5 km, gates 1 to 1.9 km apart, so the
- * bends stay gentle enough for path steering at the speed limit (see PATH_GRIP: a 415 m turn;
- * the racing line's tightest bend has 600 m and more).
+ * The course is a smooth loop around the field's center at about this distance (units, 2 km),
+ * swelling and shrinking by up to COURSE_SWELL of it twice around and rising and falling by up to
+ * COURSE_RISE: a lap of about 12.5 km that bends no tighter than about 1.5 km, so the racing
+ * line, bowed around rock (see RacingLine.clear), can be flown at the speed limit. The gates sit
+ * on the loop, about 1.5 km apart, each up to COURSE_JITTER (rad, about 2°) off its even place.
  */
 const COURSE_RADIUS = 40000;
-const COURSE_SPREAD = 3000;
-/** Every other gate lies this much closer to the center (about 1.9 km out): the loop weaves a little, past rock at speed. */
-const COURSE_INNER = 0.95;
-/** Each gate lies up to this angle (rad, about 5°) off its even place around the loop. */
-const COURSE_JITTER = 0.08;
+const COURSE_SWELL = 0.04;
+const COURSE_JITTER = 0.04;
+/** The loop is laid through this many points, and the gates (see Course). */
+const LOOP_POINTS = 48;
+/** The loop's distances from the center tried (units, 1.8 to 2.2 km), the turns of its swell tried (half a turn apart, see Course), and the points along it where rock is looked for. */
+const LOOP_RADII = [40000, 38000, 42000, 36000, 44000];
+const LOOP_TURNS = 8;
+/** The heights of the loop above the field's plane tried (units, 0 and 600 m up and down): over a flat ring of rock, it may run above or below it. */
+const LOOP_LIFTS = [0, 12000, -12000];
+const LOOP_CHECKS = 256;
 /**
  * The gates are coils: a ship that flies through the inner third of a ring (BOOST_RADIUS,
  * 40 m from its center) is pulled through by the ring's magnetic field and leaves it
@@ -40,18 +46,20 @@ export const BOOST_RADIUS = GATE_RADIUS / 3;
 export const BOOST_PUSH = 800;
 /** A ring that fired glows white this long (s). */
 const BOOST_FLASH = 0.35;
-/** Up and down along the loop (units, up to 400 m), so the course is not flat. */
-const COURSE_RISE = 8000;
+/** Up and down along the loop (units, up to 200 m), so the course is not flat. */
+const COURSE_RISE = 4000;
 /**
  * A gate keeps GATE_ROOM (units, 200 m) clear of rock, and four times as much of an arena's
- * massive body (see crowded); to find such a place it tries up to GATE_TRIES spots on a spiral
- * around where it would be (up and down, along the loop), a golden angle apart, SPIRAL_STEP
- * (units, 80 m) times the square root of the try out (out to about 640 m).
+ * massive body (see crowded), and stays off the stretches where the racing line bows around
+ * rock: the bow, the bends into it and out, and GATE_RUN (units, 100 m) more; a rock counts once
+ * its reach plus clearance comes within RUN_ROOM (units, 100 m) of the loop. To find such a place
+ * a gate moves along the loop, back and forth by GATE_STEP (units, 80 m) more each try, up to
+ * GATE_TRIES tries (about 720 m either way).
  */
 const GATE_ROOM = 4000;
-const GATE_TRIES = 64;
-const SPIRAL_STEP = 1600;
-const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+const GATE_RUN = 6000;
+const GATE_TRIES = 18;
+const GATE_STEP = 1600;
 /**
  * The grid lies GRID_BEFORE (units, 300 m) before the first gate; a racer's new clone starts
  * RESPAWN_PAST (units, 120 m, a gate's radius) beyond the last gate it passed, within the rock
@@ -88,6 +96,7 @@ export const modeOfRound = (mode: RoomMode, round: number): RoundMode => (mode =
 const crossing = new THREE.Vector3();
 const toGate = new THREE.Vector3();
 const through = new THREE.Vector3();
+const probe = new THREE.Vector3();
 
 /**
  * Whether a gate at `point` lies too close to rock or to the arena's massive body: within
@@ -197,30 +206,113 @@ export class Course {
   constructor(field: AsteroidField, seed: number) {
     const r = new Randomizer(seed * 7 + 3);
     const start = r.range(0, Math.PI * 2);
-    for (let i = 0; i < GATES; i++) {
-      const angle = start + (i / GATES) * Math.PI * 2 + r.range(-COURSE_JITTER, COURSE_JITTER);
-      const distance = (COURSE_RADIUS + r.range(-COURSE_SPREAD, COURSE_SPREAD)) * (i % 2 ? COURSE_INNER : 1);
-      const point = new THREE.Vector3(Math.cos(angle) * distance, Math.sin(angle * 2 + start) * COURSE_RISE, Math.sin(angle) * distance);
-      // away from rock and from the arena's massive body: on a widening spiral up, down, back
-      // and forth along the loop around where the gate would be, which bends the loop least
-      const along = new THREE.Vector3(-Math.sin(angle), 0, Math.cos(angle));
-      const spot = point.clone();
-      for (let attempt = 1; attempt < GATE_TRIES && crowded(field, point); attempt++) {
-        const turn = attempt * GOLDEN_ANGLE;
-        const reach = SPIRAL_STEP * Math.sqrt(attempt);
-        point.copy(spot).addScaledVector(along, Math.cos(turn) * reach);
-        point.y += Math.sin(turn) * reach;
+    const jitter = Array.from({ length: GATES }, () => r.range(-COURSE_JITTER, COURSE_JITTER));
+    const shape = { lift: 0, radius: COURSE_RADIUS, swell: 0, phase: 0 };
+    const loop = (angle: number, out: THREE.Vector3) => {
+      const distance = shape.radius * (1 + shape.swell * Math.sin(angle * 2 + shape.phase));
+      return out.set(Math.cos(angle) * distance, shape.lift + Math.sin(angle * 2 + start) * COURSE_RISE, Math.sin(angle) * distance);
+    };
+    // of LOOP_LIFTS heights, LOOP_RADII distances, swells and turns of the swell, the loop whose
+    // gates lie least deep in rock or in the racing line's bows around it, then the one that runs
+    // through least rock
+    let best = { ...shape };
+    let bestAngles: number[] = [];
+    let least = [Infinity, Infinity];
+    for (const lift of LOOP_LIFTS) {
+      for (const radius of LOOP_RADII) {
+        for (const swell of [0, COURSE_SWELL]) {
+          for (let turn = 0; turn < (swell ? LOOP_TURNS : 1); turn++) {
+            Object.assign(shape, { lift, radius, swell, phase: (turn / LOOP_TURNS) * Math.PI });
+            const { angles, badness, intrusion } = this.layout(field, loop, start, jitter);
+            if (badness < least[0] - 1e-9 || (badness < least[0] + 1e-9 && intrusion < least[1])) {
+              least = [badness, intrusion];
+              best = { ...shape };
+              bestAngles = angles;
+            }
+          }
+        }
       }
+    }
+    Object.assign(shape, best);
+    const angles = bestAngles;
+    for (const angle of angles) {
+      const point = loop(angle, new THREE.Vector3());
       this.points.push(point);
+      this.normals.push(loop(angle + 1e-4, new THREE.Vector3()).sub(point).normalize());
     }
     for (let i = 0; i < GATES; i++) {
-      // each gate faces along the loop: from the gate before towards the gate after
-      this.normals.push(this.points[(i + 1) % GATES].clone().sub(this.points[(i + GATES - 1) % GATES]).normalize());
       const gate = this.kit.build(this.points[i], this.normals[i], this.faint);
       this.rings.push(gate.coil);
       this.root.add(gate.root);
     }
-    this.line = new RacingLine(this.points, true);
+    // the line runs along the loop, through every gate: the loop's points between the gates
+    const through: THREE.Vector3[] = [];
+    const at: number[] = [];
+    for (let i = 0; i < GATES; i++) {
+      at.push(through.length);
+      through.push(this.points[i]);
+      const to = i + 1 < GATES ? angles[i + 1] : angles[0] + Math.PI * 2;
+      const steps = Math.max(1, Math.round(((to - angles[i]) / (Math.PI * 2)) * LOOP_POINTS));
+      for (let k = 1; k < steps; k++) through.push(loop(angles[i] + ((to - angles[i]) * k) / steps, new THREE.Vector3()));
+    }
+    this.line = new RacingLine(through, true, undefined, undefined, at);
+  }
+
+  /**
+   * The gates on a loop (`loop`: a point at an angle around the center): each near its even place
+   * (from `start`, `jitter` off it), away from rock, from the arena's massive body and from the
+   * stretches where the racing line bows around rock (the bow, as wide as a circle of BOW_RADIUS
+   * makes it, the S-bends of that radius into it and out, and GATE_RUN more): a gate there would
+   * pin the line onto the loop in the middle of a bend. It moves back and forth along the loop;
+   * where every place is in a bow, it takes the place least deep in one. Returns the gates'
+   * angles, how deep they lie in rock or bows together (rad, 0 for none), and how far the loop
+   * runs into rock all along (units, summed over LOOP_CHECKS points).
+   */
+  private layout(field: AsteroidField, loop: (angle: number, out: THREE.Vector3) => THREE.Vector3, start: number, jitter: readonly number[]) {
+    const bows: { angle: number; half: number }[] = [];
+    let intrusion = 0;
+    const bowAround = (center: THREE.Vector3, reach: number) => {
+      let deepest = -Infinity;
+      let angle = 0;
+      for (let k = 0; k < LOOP_CHECKS; k++) {
+        const depth = reach - loop((k / LOOP_CHECKS) * Math.PI * 2, probe).distanceTo(center);
+        if (depth > 0) intrusion += depth;
+        if (depth > deepest) {
+          deepest = depth;
+          angle = (k / LOOP_CHECKS) * Math.PI * 2;
+        }
+      }
+      const radius = loop(angle, probe).setY(0).length();
+      if (deepest > 0 && radius > 0) bows.push({ angle, half: (2 * Math.sqrt(BOW_RADIUS * deepest) + GATE_RUN) / radius });
+    };
+    for (const rock of field.asteroids.values()) bowAround(rock.object.position, rock.radius + CLEARANCE);
+    if (field.well) bowAround(field.well.position, field.well.radius + CLEARANCE * 2);
+    // how far into a bow a gate at `angle` would lie (rad, 0 outside every bow)
+    const inBow = (angle: number) => {
+      let deepest = 0;
+      for (const bow of bows) deepest = Math.max(deepest, bow.half - Math.abs(Math.atan2(Math.sin(angle - bow.angle), Math.cos(angle - bow.angle))));
+      return deepest;
+    };
+    const spacing = (Math.PI * 2) / GATES;
+    const angles: number[] = [];
+    let badness = 0;
+    for (let i = 0; i < GATES; i++) {
+      const even = start + i * spacing + jitter[i];
+      let angle = even;
+      let worst = Infinity;
+      for (let attempt = 0; attempt <= GATE_TRIES && worst > 0; attempt++) {
+        const step = loop(even, probe).length();
+        const tried = even + (attempt % 2 ? 1 : -1) * Math.ceil(attempt / 2) * (GATE_STEP / step);
+        const bad = (crowded(field, loop(tried, probe)) ? Math.PI : 0) + inBow(tried);
+        if (bad < worst) {
+          worst = bad;
+          angle = tried;
+        }
+      }
+      angles.push(angle);
+      badness += worst;
+    }
+    return { angles, badness, intrusion };
   }
 
   /**

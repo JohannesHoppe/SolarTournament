@@ -106,13 +106,13 @@ describe("the flight school's courses", () => {
     }
   }
 
-  it('bends the brake drill tighter than path steering turns at the speed limit, so its racing line glows orange there', () => {
+  it('bends the brake drill tighter than the autopilot turns at the speed limit, so its racing line glows orange there', () => {
     const line = lineOf(BRAKE_COURSE);
     expect(turnRadius(MAX_SPEED)).toBeGreaterThan(tightest(line));
     expect(cornerSpeed(tightest(line))).toBeLessThan(MAX_SPEED * 0.95);
   });
 
-  it('bends the full-speed drill no tighter than path steering turns at the speed limit plus a coil, and the curve no tighter than at the speed limit', () => {
+  it('bends the full-speed drill no tighter than the autopilot turns at the speed limit plus a coil, and the curve no tighter than at the speed limit', () => {
     expect(cornerSpeed(tightest(lineOf(LINE_COURSE)))).toBeGreaterThan(MAX_SPEED + BOOST_PUSH);
     expect(cornerSpeed(tightest(lineOf(CURVE_COURSE)))).toBeGreaterThan(MAX_SPEED);
   });

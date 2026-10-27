@@ -129,8 +129,6 @@ for (const kick of [true, false]) {
       const out = 2420 - victim.radius - 200;
       place(victim, out);
       place(me, out - 900);
-      // placed by hand: the autopilot's course is where the Host's ship now points
-      game.steering.follow(me.flight);
       const kills = me.kills;
       const deaths = victim.deaths;
       const start = game.time;
