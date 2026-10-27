@@ -17,6 +17,8 @@ const MAX_WRECKS = 60;
 const GLOW_TIME = 4;
 /** Speed the pieces fly apart with (units/s, 20 m/s), on top of the ship's own. */
 const SPREAD_SPEED = 400;
+/** A piece flies in fixed steps of its own age (s), so its path is the same at any frame rate. */
+const WRECK_STEP = 1 / 30;
 
 export interface Wreck {
   /** "<ship id>.<death count>.<piece>": the same piece on every browser. */
@@ -27,6 +29,9 @@ export interface Wreck {
   spinRate: number;
   radius: number;
   bornAt: number;
+  /** Where its flight stands after `steps` fixed steps of WRECK_STEP since it was born (the mesh shows it on to the frame's moment). */
+  at: THREE.Vector3;
+  steps: number;
 }
 
 /** A piece of wreckage as it travels to a browser that joins: where it is, how it drifts, how long it has glowed (s). */
@@ -60,9 +65,15 @@ const HOT = new THREE.Color(1, 0.35, 0.08);
 /**
  * Debris of destroyed ships. It keeps drifting with the wreck's momentum, falls towards the
  * asteroids, rips open hulls that run into it and blocks laser beams. The pieces are seeded
- * by the destroyed ship and its death count, so every client sees the same debris; online,
- * the owner of the destroyed ship tells where it broke up, a piece shot or rammed goes on
- * every screen (see Game.remoteWreck), and a browser that joins takes the pieces in flight.
+ * by the destroyed ship and its death count, so every client breaks a ship into the same
+ * pieces, and they fly in fixed steps of their age (WRECK_STEP), so their paths do not depend
+ * on the frame rate. Online, the owner of the destroyed ship tells where it broke up, a piece
+ * shot or rammed goes on every screen (see Game.remoteWreck), and a browser that joins takes
+ * the pieces in flight. The paths still differ a little between browsers (where each saw the
+ * ship break up, its own game clock, the rocks' gravity at its own field time), and each
+ * browser takes a piece away on its own where it grinds into rock, falls into a massive body or
+ * drifts into the belt, without telling the others: the debris is about the same everywhere,
+ * not exactly.
  */
 export class Wrecks {
   readonly group = new THREE.Group();
@@ -94,6 +105,8 @@ export class Wrecks {
         spinRate: r.range(0.5, 3),
         radius,
         bornAt: now,
+        at: mesh.position.clone(),
+        steps: 0,
       });
     }
     while (this.list.length > MAX_WRECKS) this.remove(this.list[0]);
@@ -103,9 +116,14 @@ export class Wrecks {
     // backwards, so removing a piece does not skip the next
     for (let i = this.list.length - 1; i >= 0; i--) {
       const wreck = this.list[i];
-      const { mesh } = wreck;
-      wreck.velocity.addScaledVector(field.gravity(mesh.position, gravity), dt);
-      mesh.position.addScaledVector(wreck.velocity, dt);
+      const { mesh, at } = wreck;
+      const age = now - wreck.bornAt;
+      while ((wreck.steps + 1) * WRECK_STEP <= age) {
+        wreck.velocity.addScaledVector(field.gravity(at, gravity), WRECK_STEP);
+        at.addScaledVector(wreck.velocity, WRECK_STEP);
+        wreck.steps++;
+      }
+      mesh.position.copy(at).addScaledVector(wreck.velocity, age - wreck.steps * WRECK_STEP);
       mesh.quaternion.premultiply(spin.setFromAxisAngle(wreck.spinAxis, wreck.spinRate * dt));
       mesh.material.emissiveIntensity = 2 * Math.exp(-(now - wreck.bornAt) / GLOW_TIME);
       // debris that hits a rock grinds to dust, debris that falls into the arena's massive body
@@ -163,8 +181,12 @@ export class Wrecks {
     for (const wreck of this.list) {
       const state = wanted.get(wreck.id)!;
       wreck.mesh.position.fromArray(state.p);
+      wreck.at.fromArray(state.p);
       wreck.velocity.fromArray(state.v);
+      // its steps go on from the age it has in the snapshot
       wreck.bornAt = now - state.g;
+      wreck.steps = Math.floor(state.g / WRECK_STEP);
+      wreck.at.addScaledVector(wreck.velocity, wreck.steps * WRECK_STEP - state.g);
     }
   }
 
