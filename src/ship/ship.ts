@@ -53,8 +53,8 @@ const SPAWN_PROTECTION = 5;
 /** The laser heats the ship; radiators shed the heat, much better in the shadow of an asteroid. */
 export const MAX_HEAT = 100;
 const HEAT_PER_SHOT = 20;
-const COOLING_SUN = 20;
-const COOLING_SHADOW = 50;
+export const COOLING_SUN = 20;
+export const COOLING_SHADOW = 50;
 /** An overheated laser stays locked until the ship has cooled down to this. */
 const OVERHEAT_RESUME = 30;
 /** Minimum time between two shots (s), so a full bank fires as a quick burst. */
@@ -261,10 +261,15 @@ export class Ship {
   /** The rarely changing part of the state as last sent, and when (see toState). */
   private slowSent = '';
   private slowSentAt = -Infinity;
-  /** Set by the game: an asteroid blocks the sun. */
+  /** Set by the game: an asteroid blocks the sun, or the clouds above it in a planet's air. */
   inShadow = false;
   /** Set by the game: how well the radiators shed heat in sunlight in this arena (the sun's glare: less). */
   sunCooling = 1;
+
+  /** How much heat the radiators shed per second where the ship is now (heat units/s, MAX_HEAT the laser's limit). */
+  get cooling() {
+    return (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * this.perks.cooling;
+  }
   alive = true;
   score = 0;
   kills = 0;
@@ -587,7 +592,7 @@ export class Ship {
     this.strain = strainAfter(this.strain, this.flight.properAcceleration, dt);
     this.show(dt, now);
 
-    this.heat = Math.max(0, this.heat - (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * this.perks.cooling * dt);
+    this.heat = Math.max(0, this.heat - this.cooling * dt);
     if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;
     // a twin laser (an item) fires twice as fast at half the heat per shot
     const twin = this.twin ? 2 : 1;

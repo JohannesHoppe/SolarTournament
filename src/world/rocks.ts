@@ -3,6 +3,7 @@ import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
 import { tangentDirections } from './surface';
 import { impostorDirections, impostorGeometry, impostorMaterial, IMPOSTOR_VIEWS } from '../view/impostor';
+import { hazeUniforms } from '../view/haze';
 
 /** Fixed seed: every client builds the same rock shapes, so their measured surfaces match (see world/surface). */
 const ROCK_SEED = 2584;
@@ -294,6 +295,8 @@ export function applyRockRelief(material: THREE.MeshStandardMaterial, index: num
   const atlas = normalAtlas(index);
   const axes = rockRecipe(index).axes.clone();
   material.onBeforeCompile = (shader) => {
+    // the haze, as every material takes it (see view/haze)
+    hazeUniforms(shader, material);
     shader.uniforms.rockNormalAtlas = { value: atlas };
     shader.uniforms.rockAxes = { value: axes };
     shader.uniforms.rockInset = { value: 0.5 / ATLAS_RES };

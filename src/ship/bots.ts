@@ -6,6 +6,7 @@ import { MAIN_THRUST, RCS_THRUST } from './flight';
 import { BOOST_PUSH } from '../game/race';
 import { devlog } from '../devlog';
 import { ringRim } from '../world/gates';
+import { airHeat, altitudeIn, LOCK_DEPTH, RADAR_DEPTH, safeSpeed } from '../world/air';
 
 /** Bots notice ships within this distance (units, 3.5 km: across the whole field), when no rock is in the way, so the fight finds a Host quickly. */
 const SIGHT_RANGE = 70000;
@@ -117,6 +118,18 @@ export const HOME_RADIUS = 50000;
 const WELL_MARGIN = 15000;
 const WELL_PULL = 0.3;
 /**
+ * In a planet's air (see Bot.air): a bot wants no more than AIR_MARGIN of the safe speed at its
+ * depth, climbs straight out once its hull is hotter than AIR_HOT (the laser's heat; 100 locks
+ * it) while the air still heats it, until it has cooled below AIR_COOL, and under attack drifts
+ * down at AIR_DIVE (units/s, 40 m/s) while it is less than AIR_DIVE_DEPTH below the deck (units,
+ * 300 m).
+ */
+const AIR_MARGIN = 0.85;
+const AIR_HOT = 60;
+const AIR_COOL = 30;
+const AIR_DIVE = 800;
+const AIR_DIVE_DEPTH = 6000;
+/**
  * Bots do not ram by accident. They look KEEP_CLEAR_AHEAD seconds ahead: another ship whose way
  * comes closer to theirs than KEEP_CLEAR ship radii (about 85 m) within that time (a racer a
  * coil throws onto the one ahead, two fighters circling each other) pushes the bot's wanted
@@ -166,6 +179,8 @@ const wayOrigin = new THREE.Vector3();
 const wayHit: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
 const wayBest: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
 const UP = new THREE.Vector3(0, 1, 0);
+/** Up from a planet's center through the bot (see Bot.air). */
+const up = new THREE.Vector3();
 const SIDE = new THREE.Vector3(1, 0, 0);
 
 export { BOT_NAMES } from '../music/lines';
@@ -290,6 +305,8 @@ export class Bot {
   private readonly shoveKick = { x: 0, y: 0 };
   private nextShove = 0;
   private shoveDriftUntil = 0;
+  /** The bot climbs out of a planet's air to cool its hull (see air). */
+  private climbing = false;
   /** The ship that last hit the drive, and until when the bot defends against it (see STRUCK_MEMORY). */
   private struckBy: Ship | null = null;
   private struckUntil = 0;
@@ -343,15 +360,17 @@ export class Bot {
       const hunters = this.huntersOf(ship, ships, field, sight);
       if (hunters >= MAX_HUNTERS) continue;
       const cost = distance * (1 + hunters) * (ship === this.target ? STICKY : 1);
-      if (cost < best && field.lineOfSight(me.position, ship.flight.position)) {
+      // in a planet's haze the radar finds it farther off than the eye sees (see world/air)
+      if (cost < best && field.lineOfSight(me.position, ship.flight.position, RADAR_DEPTH)) {
         best = cost;
         target = ship;
         targetDistance = distance;
       }
     }
     // a ship the game names as prey (the thief of the own side's core, which a Host's HUD marks
-    // wherever it is) is chased wherever it is, but only fired at in sight
-    let inSight = true;
+    // wherever it is) is chased wherever it is, but only fired at in sight; in a planet's haze
+    // so is a ship the radar shows, as the laser reaches no farther than the eye
+    let inSight = !field.air || !target || field.lineOfSight(me.position, target.flight.position);
     if (this.prey?.alive) {
       target = this.prey;
       targetDistance = this.prey.flight.position.distanceTo(me.position);
@@ -373,7 +392,7 @@ export class Bot {
       const line = toTarget.subVectors(me.position, ship.flight.position);
       const distance = line.length();
       const threat = i < 0 || (this.ship.tailToward(line) && noseOn(ship.flight, me.position, this.ship.radius) > 0);
-      if (threat && field.lineOfSight(me.position, ship.flight.position)) {
+      if (threat && field.lineOfSight(me.position, ship.flight.position, LOCK_DEPTH)) {
         chaser = ship;
         // a racer does not turn around for it: it races on
         if (this.armed && !this.waypoint) {
@@ -450,6 +469,7 @@ export class Bot {
     const homeDistance = fromHome.length();
     if (homeDistance > this.home) desired.addScaledVector(fromHome, -CRUISE_SPEED / homeDistance);
     const givingWay = this.keepClear(ships, field);
+    const hot = this.air(field, defending);
     // a massive body pulls: near it, away from it comes first
     const well = field.well;
     let falling = false;
@@ -465,7 +485,7 @@ export class Bot {
 
     // rocks, the well's body or the battleship's hull in the flight path: aim the velocity past them
     const speed = me.velocity.length();
-    let danger = falling;
+    let danger = falling || hot;
     if (speed > 50) {
       heading.copy(me.velocity).divideScalar(speed);
       const hit = this.wayAhead(field, heading, speed * AVOID_HORIZON + this.ship.radius * 4);
@@ -529,12 +549,37 @@ export class Bot {
     if (now < this.shoveDriftUntil) controls.strafeX = controls.strafeY = 0;
     if (devlog) {
       // what the bot does, the first that holds: running from danger, then its task
-      const doing = this.flee ? 'flee' : falling ? 'escape well' : chaser && !this.armed ? 'run' : lookingBack ? 'look back' : racing ? 'race' : defending ? 'defend' : target ? 'attack' : this.siege ? 'siege' : this.lure ? 'probe' : 'roam';
+      const doing = this.flee ? 'flee' : falling ? 'escape well' : hot ? 'climb out of the heat' : chaser && !this.armed ? 'run' : lookingBack ? 'look back' : racing ? 'race' : defending ? 'defend' : target ? 'attack' : this.siege ? 'siege' : this.lure ? 'probe' : 'roam';
       const about = this.flee ? this.fleeFrom : chaser && (!this.armed || lookingBack || defending) ? chaser.name : target ? target.name : '';
       const extra = `${danger && !falling ? ' +avoid rock' : ''}${homeDistance > this.home ? ' +home' : ''}${givingWay ? ` +give way to ${givingWay.name}` : ''}`;
       devlog.decide(now, this.ship.name, meanSkill(this.skills), doing + extra, about);
     }
     return this.byHand(controls, dt);
+  }
+
+  /**
+   * In a planet's air the bot reads what a Host's HUD shows (see Game.airAlarm): the safe speed
+   * at its depth, which it keeps its wanted velocity under (AIR_MARGIN of it), and the hull heat
+   * alarm, on which it climbs out of the air with its drive (returns true then). Under attack
+   * above the deck's depths it slips down into the clouds (AIR_DIVE), which break a chaser's
+   * line of sight (see world/air).
+   */
+  private air(field: AsteroidField, defending: boolean): boolean {
+    const air = field.air;
+    if (!air) return false;
+    const me = this.ship.flight;
+    const altitude = altitudeIn(air, me.position);
+    const cooling = this.ship.cooling;
+    up.subVectors(me.position, air.center).normalize();
+    if (defending && altitude > -AIR_DIVE_DEPTH) desired.addScaledVector(up, -AIR_DIVE);
+    const safe = safeSpeed(altitude, cooling) * AIR_MARGIN;
+    if (desired.lengthSq() > safe * safe) desired.setLength(safe);
+    // the alarm: the air heats the hull faster than it cools, and the heat is up; the bot climbs
+    // until the hull has cooled again
+    if (this.ship.heat > AIR_HOT && airHeat(altitude, me.velocity.length()) > cooling) this.climbing = true;
+    else if (this.ship.heat < AIR_COOL) this.climbing = false;
+    if (this.climbing) desired.copy(up).multiplyScalar(Math.min(safe, CRUISE_SPEED));
+    return this.climbing;
   }
 
   /** A rival to shove into the rock beside it (see SHOVE_REACH): the kick, or null. */

@@ -29,7 +29,7 @@ import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../
 import { showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls } from '../input/input';
 import { LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
-import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH } from '../ship/flight';
+import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
@@ -37,6 +37,8 @@ import { Lobby, type Listing } from '../net/lobby';
 import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
+import { airBurn, airHeat, altitudeIn, density, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH } from '../world/air';
+import { Haze, installHaze, skyLight } from '../view/haze';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
@@ -274,7 +276,7 @@ const TORPEDO_MARK_SECONDS = 2.2;
 /** Nicole's tips: while one is said, she does not cut it off with the call of a torpedo. */
 const TIP_LINES: ReadonlySet<string> = new Set(Object.values(TIPS));
 /** How a ship that touches an arena's massive body dies, for the sponsor break. */
-const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: msg('Burned up in the clouds'), hole: msg('Crossed the event horizon') };
+const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: msg('Crushed in the depths'), hole: msg('Crossed the event horizon') };
 /** A client's round clock jumps to the lead browser's when it is this far off (s), and drifts towards it otherwise. */
 const ROUND_SNAP = 0.25;
 /** A rock hit from another browser counts only within this much field time (s) of the own clock; the clocks agree to a fraction of a second. */
@@ -315,7 +317,7 @@ const KILL_EASE = 0.1;
 const SHOVE_SPEED = 100;
 const KNOCKOUT_SECONDS = 3;
 /** The crashes a shove can end in: what a ship flies into, not what shoots it. */
-const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'space', 'well', 'flare', 'comet']);
+const KNOCKOUTS: ReadonlySet<DeathCause> = new Set<DeathCause>(['rock', 'wreck', 'space', 'well', 'air', 'flare', 'comet']);
 /** A shove sets the hull spinning by this much per unit of closing speed (rad/s per units/s; 3.2 rad/s at 40 m/s), up to SHOVE_SPIN_MAX; the flight computer catches it within a fraction of a second. */
 const SHOVE_SPIN = 0.004;
 const SHOVE_SPIN_MAX = 6;
@@ -325,6 +327,28 @@ const SHOVE_SPIN_MAX = 6;
  * second or in a time-lapse as at 60.
  */
 const MAX_STEP = 1 / 30;
+/** What the screen shows where nothing is drawn, in space. */
+const SPACE_BACKGROUND = 0x01020a;
+/** Under a planet's cloud deck that is the haze's light, darkening towards its depths' over this depth (units, 1.2 km; see view/haze). */
+const BACKGROUND_DEPTH = 24000;
+/**
+ * In a planet's air (see airWeather): sound runs at SOUND_SPEED (units/s, 900 m/s, as in cold
+ * hydrogen and helium); thunder is at its loudest THUNDER_LOUD close by and a quarter of that at
+ * THUNDER_REACH (units, 1 km, also how far its crack carries); the wind roars at full strength
+ * once the air's push on the hull (density times speed squared) is WIND_FULL of its push at the
+ * deck at the speed limit.
+ */
+const SOUND_SPEED = 18000;
+const THUNDER_LOUD = 1;
+const THUNDER_REACH = 20000;
+const WIND_FULL = 0.8;
+/**
+ * The air's heat alarm (see airAlarm): WARNING from AIR_HOT of the laser's heat on, Nicole warns
+ * again once the hull has cooled below AIR_COOL; the screen's glow by level (0..1).
+ */
+const AIR_HOT = 70;
+const AIR_COOL = 40;
+const AIR_GLOW = { caution: 0.12, warning: 0.3, critical: 0.6 } as const;
 /** The on-target tick sounds at most this often (s), so a nose on the edge of a hull does not chatter. */
 const ON_TARGET_TICK = 0.25;
 /** The ease fades away over this many seconds of game time. */
@@ -364,8 +388,9 @@ const CROSSING_RANGE = 10000;
 const CROSSING_ANGLE = Math.PI / 3;
 const CROSSING_SPEED = 1200;
 /**
- * The camera sees this far (units, 35 km): the horizon of the gas giant's clouds, 40 km in
- * radius, lies up to 22 km off for a ship at the arena's edge (see arenas.ts).
+ * The camera sees this far (units, 35 km): the horizon of Jupiter's cloud deck, 40 km in
+ * radius, lies up to 17 km off for a ship at the arena's edge (see arenas.ts), and its auroras
+ * and moons are drawn on the sky within it (see world/jupiter).
  */
 const CAMERA_FAR = 700000;
 /** A full burn widens the view by this much (degrees) and shakes the chase camera by this share of the ship radius: the drive is felt. */
@@ -512,7 +537,7 @@ type State = 'menu' | 'playing' | 'paused' | 'results';
  * space, the arena's massive body; or, with a killer, its nova core, its plume, its ram, or a
  * crash right after its shove (a knockout).
  */
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | null;
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | null;
 /** How the President's battleship killed a ship, for the sponsor break. */
 const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
   battery: msg("Shot down by the President's battleship"),
@@ -552,6 +577,8 @@ const pick = <T,>(list: readonly T[]): T => list[Math.floor(Math.random() * list
 const scratch = new THREE.Vector3();
 const forward = new THREE.Vector3();
 const upward = new THREE.Vector3();
+/** Up from a planet's center, through the camera or a ship (see airWeather, airAlarm). */
+const up = new THREE.Vector3();
 const facing = new THREE.Matrix4();
 const muzzle = new THREE.Vector3();
 const cameraGoal = new THREE.Vector3();
@@ -709,6 +736,12 @@ export class Game implements OnlineGame {
   /** The arena the round is played in (see enterArena), and its scenery. */
   private venue: ArenaProfile = DEFAULT_ARENA;
   private readonly landmarks: Landmarks;
+  /** The haze of an arena's air in the picture (see view/haze). */
+  readonly haze = new Haze();
+  /** What the screen shows where nothing is drawn: space's dark, or under a planet's cloud deck its haze (see airWeather). */
+  private readonly background = new THREE.Color(SPACE_BACKGROUND);
+  /** The light that reaches a sheet of cloud this deep (units) under the deck (see world/jupiter). */
+  private readonly sheetLight = (depth: number) => skyLight(-depth);
   private readonly lensing = new Lensing();
   /** A solar storm blinds the sensors (see STORM_PERIOD). */
   private storming = false;
@@ -895,6 +928,11 @@ export class Game implements OnlineGame {
   private readonly alarmTones = new AlarmTones();
   /** How far Nicole has warned of a gravity well (an alarm rank, 4: past return), reset once the pull lets go. */
   private wellSaid = 0;
+  /** How far Nicole has warned of the air's heat (1 heating, 2 burning), reset once the hull has cooled (see airAlarm). */
+  private airSaid = 0;
+  /** How much the screen glows with a solar flare's heat and with the air's (0..1), the larger shown (see showFlare, airAlarm). */
+  private flareGlow = 0;
+  private airGlow = 0;
   private hullWarned = false;
   /** The torpedo Nicole counts down (see torpedoAlarm): the next of TORPEDO_MARKS, and whether she called the break. */
   private torpedoCall: { torpedo: Torpedo; mark: number; broke: boolean } | null = null;
@@ -902,8 +940,8 @@ export class Game implements OnlineGame {
   private silenceReadyAt = 0;
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
   private readonly inSight = (ship: Ship) => this.field.lineOfSight(this.camera.position, ship.flight.position);
-  /** Whether the own ship's sensors see a ship past the asteroids, for the radar. */
-  private readonly sensed = (ship: Ship) => this.field.lineOfSight(this.subject().flight.position, ship.flight.position);
+  /** Whether the own ship's sensors see a ship past the asteroids (and through the haze, see world/air), for the radar. */
+  private readonly sensed = (ship: Ship) => this.field.lineOfSight(this.subject().flight.position, ship.flight.position, RADAR_DEPTH);
   private readonly radar = new Radar($<HTMLCanvasElement>('radar'));
   /** The radar's marks besides ships and rocks, reused from frame to frame. */
   private readonly marks: RadarMark[] = [
@@ -1095,7 +1133,9 @@ export class Game implements OnlineGame {
     this.speaker = new Speaker(sound.context, sound.headset);
     this.speaker.prepare();
 
-    this.scene.background = new THREE.Color(0x01020a);
+    this.scene.background = this.background;
+    // the haze of an arena's air goes into the shaders before any compiles (see view/haze)
+    installHaze();
     this.field = new AsteroidField(assets.fieldSets);
     this.belt = new Belt(assets.belt.near, assets.belt.impostor);
     this.landmarks = new Landmarks(assets.planets);
@@ -2064,6 +2104,10 @@ export class Game implements OnlineGame {
     this.space.setSun(arena.sun);
     setGlint(arena.sun.intensity);
     this.landmarks.show(arena);
+    // a planet's air: its haze in every shader that draws the world (see view/haze)
+    const air = arena.layout.air ?? null;
+    this.scene.fog = air ? this.haze.fog : null;
+    this.haze.setAir(air, this.landmarks.jupiter.deckLight, this.landmarks.jupiter.deepLight);
     this.belt.group.visible = arena.id === 'belt';
     if (!keepWreckage) {
       this.wrecks.clear();
@@ -3087,6 +3131,7 @@ export class Game implements OnlineGame {
     if (stepped && this.me && (this.state === 'playing' || (this.state === 'paused' && !!this.online))) this.presentRound();
     if (this.state !== 'paused' || this.online) this.effects.update(dt);
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
+    this.airWeather(dt);
     // the ship on show, while the menu or the hangar shows it
     if (this.state === 'menu' && !this.choosingSolo && !this.choosingSchool && !this.browsing && !this.bench.has('showcase')) this.showcase?.render(wallClock());
 
@@ -3278,11 +3323,13 @@ export class Game implements OnlineGame {
       // in the clamps of a round's opening the ship is held: no push, no pull, no shot
       if (clamped) ship.flight.velocity.set(0, 0, 0);
       const controls = clamped ? IDLE : ship === me ? myControls : (thought ?? IDLE);
-      this.field.gravity(ship.flight.position, gravity);
+      this.outside(ship.flight, dt, gravity);
       if (clamped) gravity.set(0, 0, 0);
-      ship.inShadow = this.field.raycast(ship.flight.position, SUN_DIRECTION, LASER_RANGE, false, shadeHit) !== null;
+      // under a planet's cloud deck the clouds hide the sun, as a rock does
+      ship.inShadow = this.underDeck(ship.flight.position) || this.field.raycast(ship.flight.position, SUN_DIRECTION, LASER_RANGE, false, shadeHit) !== null;
       ship.sunCooling = this.venue.cooling;
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
+      this.friction(ship, dt, now);
       if (this.course && !this.roundOver) this.passGates(ship, this.course);
       this.keepInArena(ship, now);
       // a rock between the ship and the sun shades it from the worst of the plasma; the own
@@ -3479,7 +3526,7 @@ export class Game implements OnlineGame {
     if (!this.survival || clock < coming) {
       this.flare.hide();
       this.space.flare(0);
-      this.hud.setFlareHeat(0);
+      this.flareGlow = 0;
       this.pocket.set(0, 0, 0);
       this.pocketRadius = ARENA_LIMIT;
       return;
@@ -3501,7 +3548,7 @@ export class Game implements OnlineGame {
     }
     const subject = this.subject();
     const clearance = subject.alive ? flareClearance(subject.flight.position, clock) : FLARE_GLOW;
-    this.hud.setFlareHeat(strength * (1 - THREE.MathUtils.smoothstep(clearance, -FLARE_GLOW, FLARE_GLOW)));
+    this.flareGlow = strength * (1 - THREE.MathUtils.smoothstep(clearance, -FLARE_GLOW, FLARE_GLOW));
   }
 
   /** The point a bot flies away from when a solar flare's front is close: the plasma's center out towards the sun. */
@@ -4250,6 +4297,74 @@ export class Game implements OnlineGame {
     this.storming = storm;
     for (const bot of this.bots) bot.blind = storm;
     if (storm && Math.random() < dt * 2) this.glitch.trigger(0.25 + Math.random() * 0.35, 0.1 + Math.random() * 0.3);
+  }
+
+  /**
+   * A planet's air around the camera, once a frame (see world/jupiter, view/haze): the sheets of
+   * cloud, the sky and the lightning; the sun's and the sky's light as the haze lets them through;
+   * where nothing is drawn, the deep haze's color under the deck; and what the own pilot hears of
+   * the air outside: the wind by its push on the hull, thunder after lightning, coming as fast as
+   * sound runs through hydrogen (SOUND_SPEED), only while the own ship is in the air.
+   */
+  private airWeather(dt: number) {
+    const air = this.field.air;
+    const jupiter = this.landmarks.jupiter;
+    if (!air) {
+      this.space.shade(1, 1, null, null);
+      this.background.set(SPACE_BACKGROUND);
+      this.sound.setWind(0, 0);
+      return;
+    }
+    const eye = this.camera.position;
+    const shade = this.haze.shadeAt(eye, SUN_DIRECTION.dot(up.subVectors(eye, air.center).normalize()));
+    this.space.shade(shade.sun, shade.sky, jupiter.deckLight, jupiter.deepLight);
+    const depth = altitudeIn(air, eye);
+    if (depth < 0) this.background.copy(jupiter.deepLight).lerp(jupiter.deckLight, Math.exp(depth / BACKGROUND_DEPTH));
+    else this.background.set(SPACE_BACKGROUND);
+    const struck = jupiter.update(this.field.clock, dt, eye, this.sheetLight);
+    // the own ship in the air hears it: none in the menu, none for a dead clone
+    const me = this.state === 'playing' ? this.me : null;
+    const inAir = !!me?.alive && altitudeIn(air, me.flight.position) < 0;
+    if (!me || !inAir) {
+      this.sound.setWind(0, 0);
+      return;
+    }
+    const speed = me.flight.velocity.length() / MAX_SPEED;
+    this.sound.setWind(Math.min(1, density(altitudeIn(air, me.flight.position)) * speed * speed * WIND_FULL), Math.min(1, speed));
+    if (struck) {
+      const distance = jupiter.strikePoint.distanceTo(me.flight.position);
+      this.sound.thunder(Math.min(1, THUNDER_LOUD / (1 + (distance / THUNDER_REACH) ** 2)), distance / SOUND_SPEED, Math.exp(-distance / THUNDER_REACH));
+    }
+  }
+
+  /**
+   * The air's heat on the own hull (see world/air): CAUTION once the air heats it faster than its
+   * radiators shed, naming the safe speed at its depth (see safeSpeed), WARNING once the heat has
+   * the laser nearly locked, CRITICAL while the hull burns; the alarm points up, out of the air.
+   * Nicole speaks once for each level until the hull has cooled again; the screen glows with the heat.
+   */
+  private airAlarm(me: Ship) {
+    const air = this.field.air;
+    this.airGlow = 0;
+    if (!air || !me.alive) {
+      this.airSaid = 0;
+      return;
+    }
+    const altitude = altitudeIn(air, me.flight.position);
+    const cooling = me.cooling;
+    if (airHeat(altitude, me.flight.velocity.length()) <= cooling) {
+      if (me.heat < AIR_COOL) this.airSaid = 0;
+      return;
+    }
+    const level = me.heat >= MAX_HEAT ? 'critical' : me.heat >= AIR_HOT ? 'warning' : 'caution';
+    const safe = Math.round(safeSpeed(altitude, cooling) * METERS_PER_UNIT);
+    this.alarms.raise({ id: 'air', level, text: t('HULL HEAT · SAFE {speed} m/s', { speed: safe }), direction: up.subVectors(me.flight.position, air.center) });
+    this.airGlow = AIR_GLOW[level];
+    const said = level === 'critical' ? 2 : 1;
+    if (said > this.airSaid && level !== 'warning') {
+      this.airSaid = said;
+      this.speaker.say(said === 2 ? COMPUTER.airBurn : COMPUTER.airHot, said === 2 ? 'urgent' : undefined);
+    }
   }
 
   /** Runs the flight school for this frame; returns the point its HUD marker sits on. */
@@ -5282,7 +5397,7 @@ export class Game implements OnlineGame {
       controls: { ...hand },
       pointer: this.input.pointer,
       out: { ...IDLE },
-      gravity: this.field.gravity(flight.position, gravity).toArray(),
+      gravity: this.outside(flight, dt, gravity).toArray(),
       position: flight.position.toArray(),
       velocity: flight.velocity.toArray(),
       orientation: flight.orientation.toArray() as [number, number, number, number],
@@ -5320,7 +5435,34 @@ export class Game implements OnlineGame {
       this.flightMode = 'swing';
       return out;
     }
-    return flyByNose(me.flight, controls, this.field.gravity(me.flight.position, gravity), out);
+    return flyByNose(me.flight, controls, this.outside(me.flight, MAX_STEP, gravity), out);
+  }
+
+  /** What pulls and brakes a ship from outside over a step of `dt` (units/s²): the field's gravity, and the drag of an arena's air (see world/air). */
+  private outside(flight: FlightModel, dt: number, target: THREE.Vector3): THREE.Vector3 {
+    this.field.gravity(flight.position, target);
+    if (this.field.air) dragOn(this.field.air, flight.position, flight.velocity, dt, target);
+    return target;
+  }
+
+  /** Whether a point lies under the cloud deck of an arena's air. */
+  private underDeck(position: THREE.Vector3): boolean {
+    return !!this.field.air && altitudeIn(this.field.air, position) < 0;
+  }
+
+  /**
+   * The air of an arena heats a ship this browser runs by its speed and depth (see world/air):
+   * the heat goes into its radiators as the laser's does (see world/air, airBurn), and what the full
+   * radiators cannot shed burns the hull. A clone that burns up counts as a knockout of whoever
+   * shoved it last (see KNOCKOUTS).
+   */
+  private friction(ship: Ship, dt: number, now: number) {
+    const air = this.field.air;
+    if (!air || !ship.alive) return;
+    const heat = airHeat(altitudeIn(air, ship.flight.position), ship.flight.velocity.length()) * dt;
+    if (heat < 1e-4) return;
+    const burn = airBurn(ship, heat, dt, MAX_HEAT);
+    if (burn > 0 && ship.structural(burn, now) === 'destroyed') this.shipDestroyed(ship, null, 'air');
   }
 
   /**
@@ -5432,10 +5574,12 @@ export class Game implements OnlineGame {
     }
     const origin = shooter.nose(muzzle);
     const direction = shooter.flight.forward(forward);
-    let asteroidHit = this.field.raycast(origin, direction, LASER_RANGE, false, laserHit);
-    let wreckHit = this.wrecks.raycast(origin, direction, asteroidHit?.distance ?? LASER_RANGE);
+    // in an arena's haze the beam scatters: it reaches as far as the eye sees (see world/air)
+    const reach = this.field.air ? reachIn(this.field.air, origin, direction, SIGHT_DEPTH, LASER_RANGE) : LASER_RANGE;
+    let asteroidHit = this.field.raycast(origin, direction, reach, false, laserHit);
+    let wreckHit = this.wrecks.raycast(origin, direction, asteroidHit?.distance ?? reach);
     if (wreckHit) asteroidHit = null;
-    let beamLength = wreckHit?.distance ?? asteroidHit?.distance ?? LASER_RANGE;
+    let beamLength = wreckHit?.distance ?? asteroidHit?.distance ?? reach;
     // a torpedo in the way takes the beam and goes off
     const torpedoHit = this.torpedoes.raycast(origin, direction, beamLength, shooter, this.time);
     if (torpedoHit) {
@@ -5612,6 +5756,7 @@ export class Game implements OnlineGame {
         const [before, after = ''] = line.split('{name}');
         this.deathCause = [before, ...markedName(killer.kind, killer.name), after];
       } else if (cause === 'well') this.deathCause = t(WELL_DEATHS[this.venue.id] ?? msg('Crashed'));
+      else if (cause === 'air') this.deathCause = t('Burned up in the clouds');
       else if (cause === 'flare') this.deathCause = t('Burned up in the solar flare');
       else if (fleetDeath || cometDeath) this.deathCause = t((fleetDeath || cometDeath)!);
       else this.deathCause = victim.outsideSince !== null ? t('Lost in deep space') : t('Crashed');
@@ -5668,7 +5813,7 @@ export class Game implements OnlineGame {
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
     const killedBy =
-      cause === 'well' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
+      cause === 'well' || cause === 'air' ? t(this.venue.name) : cause === 'flare' ? t('Solar flare') : fleetDeath ? t('Battleship') : cometDeath ? t('Comet') : victim.outsideSince !== null ? t('Deep space') : t('Crash');
     this.hud.kill(this.time, killer ?? { kind: null, name: killedBy }, victim);
     // the last clone of a ship in Last Clone Standing: out, and everyone hears it
     if (this.out(victim)) {
@@ -5708,7 +5853,7 @@ export class Game implements OnlineGame {
   /** Ship vs asteroid: the ship bounces off; fast impacts wreck the hull. */
   private collide(ship: Ship, now: number) {
     const flight = ship.flight;
-    // the clouds of a gas giant burn a ship up, a black hole swallows it; no protection holds
+    // the depths of a planet's air crush a ship, a black hole swallows it; no protection holds
     if (this.field.insideWell(flight.position, ship.radius)) {
       ship.protectedUntil = Math.min(ship.protectedUntil, now);
       if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, null, 'well');
@@ -5913,6 +6058,8 @@ export class Game implements OnlineGame {
     if (me.alive && me.driveOffline(now)) alarms.raise({ id: 'drive', level: 'caution', text: t('DRIVE OVERHEATED') });
     this.cometAlarm(me);
     this.flareAlarm(me);
+    this.airAlarm(me);
+    this.hud.setFlareHeat(Math.max(this.flareGlow, this.airGlow));
     if (me.alive && me.outsideSince !== null) {
       // the field's edge: back towards its center before the clone is lost in deep space
       const left = this.school ? null : Math.max(0, ARENA_GRACE - (now - me.outsideSince));
@@ -5974,7 +6121,7 @@ export class Game implements OnlineGame {
     const said = lost ? ALARM_RANK.critical + 1 : ALARM_RANK[level];
     if (said > this.wellSaid) {
       this.wellSaid = said;
-      const line = lost ? COMPUTER.wellLost : level === 'critical' ? COMPUTER.wellTight : level === 'warning' ? (hole ? COMPUTER.holePull : COMPUTER.giantPull) : hole ? COMPUTER.holeNear : COMPUTER.giantNear;
+      const line = lost ? COMPUTER.wellLost : level === 'critical' ? COMPUTER.wellTight : level === 'warning' ? (hole ? COMPUTER.holePull : COMPUTER.jupiterPull) : hole ? COMPUTER.holeNear : COMPUTER.jupiterNear;
       this.speaker.say(line, 'urgent');
     }
     return load;
@@ -6082,7 +6229,8 @@ export class Game implements OnlineGame {
     for (let i = 0; i < SHOWER_PIECES; i++) {
       if (struck[i] || shower.gone(i, clock) || shower.pieceAt(i, clock, cometPiece).distanceToSquared(position) > near) continue;
       struck[i] = 1;
-      if (!this.field.lineOfSight(cometCover.copy(position).addScaledVector(cometCourse, -SHOWER_COVER), position)) continue;
+      // only rock gives cover, haze does not
+      if (!this.field.lineOfSight(cometCover.copy(position).addScaledVector(cometCourse, -SHOWER_COVER), position, Infinity)) continue;
       cometRelative.subVectors(cometVelocity, ship.flight.velocity).normalize();
       this.applyLaserHit(ship, cometPiece, cometRelative, null, undefined, 'shower');
       if (!ship.alive) return;
@@ -6218,7 +6366,7 @@ export class Game implements OnlineGame {
       // the target drone and the unarmed sparring bot never shoot
       if (ship === me || !ship.alive || ship === this.drone || (ship === this.sparring?.bot.ship && !this.sparring.armed)) continue;
       const sighted = noseOn(ship.flight, me.flight.position, me.radius);
-      if (sighted > level && this.field.lineOfSight(ship.flight.position, me.flight.position)) {
+      if (sighted > level && this.field.lineOfSight(ship.flight.position, me.flight.position, LOCK_DEPTH)) {
         level = sighted;
         shooter = ship;
       }

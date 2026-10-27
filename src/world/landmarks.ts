@@ -4,10 +4,11 @@ import { SUN_DIRECTION } from './space';
 import { ARENAS, HOLE_RADIUS, KESSLER_WORLD, SATURN_CENTER, sternAt, type ArenaId, type ArenaProfile } from './arenas';
 import { canvas, toTexture } from '../view/textures';
 import { loadPlanetMap, type Planet, type PlanetMaps } from '../assets';
+import { Jupiter } from './jupiter';
 
 /**
  * What an arena shows beyond its field: Saturn, whose ring the arena lies in, the planet below
- * the Kessler field, the gas giant, the sun up close, the black hole with its disk, the neon sign
+ * the Kessler field, Jupiter, the sun up close, the black hole with its disk, the neon sign
  * on the derelict. Scenery only; what pulls and blocks is the field's well.
  */
 
@@ -39,20 +40,20 @@ const ICE_SPECK_PIXELS = 6;
  */
 const GLINT_CELL = 400;
 /**
- * The gas giant shows only the cap around the point below the arena, this far around (rad, 35°):
- * its horizon lies within 29° for a ship at the arena's top edge, a little more off to the side.
+ * Jupiter shows only the cap around the point below the arena, this far around (rad, 35°):
+ * its horizon lies within 23° for a ship at the arena's top edge, 3.4 km over the deck.
  */
-const GIANT_CAP = 0.62;
+const JUPITER_CAP = 0.62;
 /**
- * The arena hangs over this latitude of the gas giant (rad, 13° south), between its southern
+ * The arena hangs over this latitude of Jupiter (rad, 13° south), between its southern
  * belts, so they run across the view; its great red storm (on the map at 20° south) lies some
  * 6 km off to the south and east.
  */
-const GIANT_LATITUDE = -0.22;
+const JUPITER_LATITUDE = -0.22;
 /** Where the map's longitude 0 lies (a share of a turn): the great storm, at 0.3625 on the map, 0.1 rad east of the point below the arena. */
-const GIANT_LONGITUDE = 0.3625 + 0.1 / (2 * Math.PI);
-/** Up to this distance (units, 12.5 km) the gas giant's clouds show fine detail beyond its map's texels (see gasFragment). */
-const GIANT_FINE_REACH = 250000;
+const JUPITER_LONGITUDE = 0.3625 + 0.1 / (2 * Math.PI);
+/** Up to this distance (units, 12.5 km) Jupiter's clouds show fine detail beyond its map's texels (see gasFragment). */
+const JUPITER_FINE_REACH = 250000;
 /** The light a planet's lit side gets on top of the arena's sun (the sky's faint glow), a share of the sun's. */
 const PLANET_AMBIENT = 0.02;
 /** The sun of the corona arena: a sphere this large at this distance (units). */
@@ -62,13 +63,13 @@ const CORONA_DISTANCE = 240000;
 const DISK_INNER = 6000;
 const DISK_OUTER = 28000;
 /**
- * Segment counts the gas giant's cap is built at (width, height), from the full picture down:
+ * Segment counts Jupiter's cap is built at (width, height), from the full picture down:
  * its bands and storms are its map and a per-pixel pattern in the fragment shader (see
  * gasFragment), not geometry, so the mesh only has to stay round enough that its smooth-shaded curvature does not
- * facet; the cap itself (see GIANT_CAP) spans only a thin band of latitude, which the height
+ * facet; the cap itself (see JUPITER_CAP) spans only a thin band of latitude, which the height
  * count already concentrates there.
  */
-const GIANT_SEGMENTS: readonly [width: number, height: number][] = [
+const JUPITER_SEGMENTS: readonly [width: number, height: number][] = [
   [256, 96],
   [128, 48],
   [64, 24],
@@ -133,7 +134,7 @@ const planetVertex = /* glsl */ `
  * A gas planet's clouds from its map (cylindrical: longitude across, latitude up, in the planet's
  * own frame, turned by `frame` and slowly spinning east). The map is sampled by the longitude
  * whose change across the pixel is smaller of two that wrap at opposite sides, so its seam never
- * shows as a line. Within `reach` of the pilot (the gas giant, flown just above its tops), eddies
+ * shows as a line. Within `reach` of the pilot (Jupiter, flown just above its tops), eddies
  * finer than the map's texels bend the map's clouds a few texels and draw them out into streaks
  * and grain, drifting with the winds. Lit by the arena's sun (`light`: its color and strength,
  * Lambert's diffuse light), with a soft terminator where the upper air scatters it red; on the
@@ -506,10 +507,12 @@ export class Landmarks {
   private readonly timed: THREE.ShaderMaterial[] = [];
   private readonly flicker: THREE.Mesh[] = [];
   private shown: ArenaId | null = null;
-  /** The gas giant's cap, and its geometry at each of GIANT_SEGMENTS, swapped by setDetail. */
-  private giantMesh!: THREE.Mesh;
-  private readonly giantCaps: THREE.BufferGeometry[] = [];
-  private giantDetail = 0;
+  /** Jupiter's cap, and its geometry at each of JUPITER_SEGMENTS, swapped by setDetail. */
+  private jupiterMesh!: THREE.Mesh;
+  private readonly jupiterCaps: THREE.BufferGeometry[] = [];
+  private jupiterDetail = 0;
+  /** Jupiter's deck, its sheets of cloud, its sky and weather (see world/jupiter). */
+  jupiter!: Jupiter;
   /** The planets' materials, whose map setDetail swaps between the page's and the sharp one. */
   private readonly planets = new Map<Planet, THREE.ShaderMaterial>();
   /** The sharp maps (see loadPlanetMap), once asked for, and once loaded. */
@@ -524,7 +527,7 @@ export class Landmarks {
   constructor(private readonly maps: PlanetMaps) {
     this.scenes.set('rings', this.rings());
     this.scenes.set('kessler', this.kessler());
-    this.scenes.set('giant', this.giant());
+    this.scenes.set('giant', this.jupiterScene());
     this.scenes.set('corona', this.corona());
     this.scenes.set('hole', this.hole());
     this.scenes.set('derelict', this.derelict());
@@ -539,6 +542,8 @@ export class Landmarks {
     this.shown = arena.id;
     for (const [id, scene] of this.scenes) scene.visible = id === arena.id;
     this.light.set(arena.sun.color).multiplyScalar(arena.sun.intensity / Math.PI);
+    if (arena.id === 'giant') this.jupiter.shine();
+    else this.jupiter.calm();
   }
 
   /** The picture's height in device pixels: the ring's specks keep their size in the world with it. */
@@ -553,8 +558,8 @@ export class Landmarks {
   }
 
   /**
-   * The picture's quality (see view/quality, Look.landmark): the gas giant's cap at a share of its
-   * full segment count (see GIANT_SEGMENTS), and the planets' maps sharp (2048 × 1024) from half
+   * The picture's quality (see view/quality, Look.landmark): Jupiter's cap at a share of its
+   * full segment count (see JUPITER_SEGMENTS), and the planets' maps sharp (2048 × 1024) from half
    * the share on, else as the page loaded them (1024 × 512). The sharp maps are fetched the first
    * time a rung asks for them and take over once they are there.
    */
@@ -574,9 +579,10 @@ export class Landmarks {
     }
     this.useMaps();
     const tier = share >= 0.75 ? 0 : share >= 0.375 ? 1 : 2;
-    if (tier === this.giantDetail) return;
-    this.giantDetail = tier;
-    this.giantMesh.geometry = this.giantCaps[tier];
+    if (tier === this.jupiterDetail) return;
+    this.jupiterDetail = tier;
+    this.jupiterMesh.geometry = this.jupiterCaps[tier];
+    this.jupiter.setDetail(tier);
   }
 
   /** Each planet's map as setDetail wants it, the page's until the sharp one is there. */
@@ -716,20 +722,24 @@ export class Landmarks {
   }
 
   /**
-   * The gas giant, where the arena's well is: only the cap a pilot can see is built, the rest lies
-   * beyond the horizon; its frame turns its map so the arena hangs over its southern belts (see
-   * GIANT_LATITUDE), the great red storm turning some 6 km off and drifting past as the planet spins.
+   * Jupiter, whose cloud deck runs through the arena: its map lies on the deck, of which only the
+   * cap a pilot can see is built, the rest lies beyond the horizon (see world/jupiter for the deck,
+   * the air below it and the sky); its frame turns its map so the arena hangs over its southern belts (see
+   * JUPITER_LATITUDE), the great red storm turning some 6 km off and drifting past as the planet spins.
    */
-  private giant(): THREE.Group {
+  private jupiterScene(): THREE.Group {
     const group = new THREE.Group();
-    const well = ARENAS.find((arena) => arena.id === 'giant')!.layout.well!;
-    this.giantCaps.push(...GIANT_SEGMENTS.map(([width, height]) => new THREE.SphereGeometry(well.radius, width, height, 0, Math.PI * 2, 0, GIANT_CAP)));
-    // turns the cap's top (straight below the arena) to the latitude GIANT_LATITUDE
-    const frame = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationZ(GIANT_LATITUDE - Math.PI / 2));
-    const planet = new THREE.Mesh(this.giantCaps[0], this.gas('giant', { frame, longitude: GIANT_LONGITUDE, haze: 0xffd2a8, reach: GIANT_FINE_REACH, storms: true }));
-    this.giantMesh = planet;
-    planet.position.copy(well.position);
-    group.add(planet);
+    // the map lies on the cloud deck, which is the top of the planet's air
+    const air = ARENAS.find((arena) => arena.id === 'giant')!.layout.air!;
+    this.jupiterCaps.push(...JUPITER_SEGMENTS.map(([width, height]) => new THREE.SphereGeometry(air.radius, width, height, 0, Math.PI * 2, 0, JUPITER_CAP)));
+    // turns the cap's top (straight below the arena) to the latitude JUPITER_LATITUDE
+    const frame = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationZ(JUPITER_LATITUDE - Math.PI / 2));
+    const planet = new THREE.Mesh(this.jupiterCaps[0], this.gas('giant', { frame, longitude: JUPITER_LONGITUDE, haze: 0xffd2a8, reach: JUPITER_FINE_REACH, storms: true }));
+    this.jupiterMesh = planet;
+    planet.position.copy(air.center);
+    // its deck, the sheets below it, its sky and weather (see world/jupiter)
+    this.jupiter = new Jupiter(air, planet, this.jupiterCaps, this.light);
+    group.add(planet, this.jupiter.group);
     return group;
   }
 

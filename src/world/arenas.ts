@@ -7,15 +7,19 @@ import { msg } from '../i18n/i18n';
 /** One standard gravity (units/s², 1 unit = 5 cm). */
 const G = 196.2;
 /**
- * The gas giant below its arena: a planet of GIANT_RADIUS (units, 40 km) whose cloud tops lie
- * GIANT_DEPTH (2.25 km) below the field's center, so its curved horizon fills the lower view. It
- * pulls with GIANT_GRAVITY at its clouds, falling off with the square of the distance: about
- * 0.83 g at the field's center, 0.75 g at its top, almost the same everywhere a ship flies, as
- * near a real planet.
+ * Jupiter, whose cloud deck runs through its arena: a planet of JUPITER_RADIUS (units, 40 km) to
+ * the deck, which lies in the reference plane at the field's center, so half the arena is open
+ * space over its curved horizon and half is its air (see world/air). It pulls with JUPITER_GRAVITY
+ * at the deck, falling off with the square of the distance from its center: 0.71 g at the
+ * arena's top, 0.99 g at its bottom, as near a real planet. Its scale is the game's: the real
+ * Jupiter is 140 000 km wide and pulls with 2.5 g; a planet of 80 km shows its curve from a few
+ * kilometers up. The arena's well, what a ship cannot fly into, is its core JUPITER_FLOOR (units,
+ * 5 km) below the deck, deeper than the air lets any ship get alive.
  */
-const GIANT_RADIUS = 800000;
-const GIANT_DEPTH = 45000;
-const GIANT_GRAVITY = 0.93 * G;
+const JUPITER_RADIUS = 800000;
+const JUPITER_FLOOR = 100000;
+const JUPITER_GRAVITY = 0.83 * G;
+const JUPITER_CENTER = new THREE.Vector3(0, -JUPITER_RADIUS, 0);
 /** The black hole's event horizon (units, 175 m), in the middle of its arena. */
 export const HOLE_RADIUS = 3500;
 
@@ -160,8 +164,8 @@ export const ARENAS: readonly ArenaProfile[] = [
   },
   {
     id: 'giant',
-    name: msg('Gas Giant'),
-    tagline: msg('A world of storms below, eighty kilometers wide, pulling at everything. Dive along its clouds, or burn in them.'),
+    name: msg('Jupiter'),
+    tagline: msg('Half in space, half in the clouds. The deeper, the thicker the air: it hides, it brakes, it burns.'),
     layout: {
       key: 'giant',
       seed: 47,
@@ -173,13 +177,14 @@ export const ARENAS: readonly ArenaProfile[] = [
       inner: 0,
       spin: SPIN_RATE,
       toughness: 800,
-      well: { position: new THREE.Vector3(0, -(GIANT_RADIUS + GIANT_DEPTH), 0), radius: GIANT_RADIUS, surfaceGravity: GIANT_GRAVITY },
+      well: { position: JUPITER_CENTER, radius: JUPITER_RADIUS - JUPITER_FLOOR, surfaceGravity: JUPITER_GRAVITY * (JUPITER_RADIUS / (JUPITER_RADIUS - JUPITER_FLOOR)) ** 2 },
+      air: { center: JUPITER_CENTER, radius: JUPITER_RADIUS },
     },
     cooling: 1,
     storms: false,
     sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
-    // straight down to the clouds, and how far they are
-    references: [{ glyph: 'giant', label: msg('Clouds'), position: new THREE.Vector3(0, -(GIANT_RADIUS + GIANT_DEPTH), 0), distance: true, radius: GIANT_RADIUS }],
+    // straight down, and how high above the cloud deck
+    references: [{ glyph: 'giant', label: msg('Jupiter'), position: JUPITER_CENTER, distance: true, radius: JUPITER_RADIUS }],
   },
   {
     id: 'corona',

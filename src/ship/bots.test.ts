@@ -2,9 +2,11 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { Bot, BOT_NAMES, evenSkills, meanSkill, missOf, reactionOf, skillsOf, startTiming } from './bots';
 import { FlightModel, MAIN_THRUST } from './flight';
-import { LOCK_RANGE, noseOn, Ship, strainAfter } from './ship';
+import { LOCK_RANGE, MAX_HEAT, noseOn, Ship, strainAfter } from './ship';
 import { testField } from '../test/field';
 import type { AsteroidField } from '../world/asteroids';
+import { arenaById } from '../world/arenas';
+import { airBurn, airHeat, altitudeIn, dragOn, safeSpeed } from '../world/air';
 
 /** A ship's hit radius (units, 17 m), as the game's hulls have it. */
 const RADIUS = 340;
@@ -13,7 +15,7 @@ const STEP = 1 / 30;
 /** A ship with the game's rules for sides and its tail, but no model: the bots only read its flight and state. */
 function ship(name: string, position: THREE.Vector3, facing: THREE.Vector3): Ship {
   const s = Object.create(Ship.prototype) as Ship;
-  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, protectedUntil: 0, team: -1, strain: 0, heat: 0, overheated: false, flight: new FlightModel() });
+  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, protectedUntil: 0, team: -1, strain: 0, heat: 0, overheated: false, inShadow: false, sunCooling: 1, perks: { cooling: 1 }, flight: new FlightModel() });
   s.flight.reset(position, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(position, facing.clone().add(position), new THREE.Vector3(0, 1, 0))));
   return s;
 }
@@ -201,6 +203,96 @@ describe('bots fly by the Hosts\' rules', () => {
     for (const r of [0, 0.5, 1]) for (const x of [0, 0.25, 0.5, 0.75, 1]) expect(Math.abs(startTiming(r, x))).toBeLessThanOrEqual(0.9);
     expect(Math.abs(startTiming(1, 0))).toBeLessThan(Math.abs(startTiming(0, 0)));
     expect(startTiming(0.5, 0.5)).toBe(0);
+  });
+});
+
+describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
+  const jupiter = arenaById('giant')!.layout;
+  /** Jupiter's field without its rocks: only the air, the deck and the pull. */
+  const air = () => {
+    const f = testField();
+    f.generate(jupiter);
+    f.asteroids.clear();
+    return f;
+  };
+  /** A point `depth` (m) under the deck, `x` (m) off the field's center. */
+  const deep = (depth: number, x = 0) => {
+    const radius = jupiter.air!.radius;
+    return at(x * 20, Math.sqrt((radius - depth * 20) ** 2 - (x * 20) ** 2) - radius);
+  };
+
+  it('keep under the safe speed deep down and never let the air burn the hull', () => {
+    const f = air();
+    const me = ship('Kessler', deep(1500), at(1));
+    const bot = new Bot(me, evenSkills(0.5));
+    // a probe far off, deeper still: the bot wants to fly there as fast as it may
+    bot.lure = deep(2200, 2500);
+    const outside = new THREE.Vector3();
+    let hottest = 0;
+    let fastest = 0;
+    let burnt = 0;
+    for (let t = 0; t < 60; t += STEP) {
+      // the game's rules (see Game.outside, Game.friction): gravity and drag, the clouds' shade, the air's heat
+      f.gravity(me.flight.position, outside);
+      dragOn(f.air!, me.flight.position, me.flight.velocity, STEP, outside);
+      me.inShadow = altitudeIn(f.air!, me.flight.position) < 0;
+      me.flight.update(STEP, bot.think(t, [me], f), outside);
+      me.heat = Math.max(0, me.heat - me.cooling * STEP);
+      burnt += airBurn(me, airHeat(altitudeIn(f.air!, me.flight.position), me.flight.velocity.length()) * STEP, STEP, MAX_HEAT);
+      hottest = Math.max(hottest, me.heat);
+      fastest = Math.max(fastest, me.flight.velocity.length() / safeSpeed(altitudeIn(f.air!, me.flight.position), me.cooling));
+    }
+    expect(hottest).toBeLessThan(MAX_HEAT);
+    expect(burnt).toBe(0);
+    expect(fastest).toBeLessThan(1);
+    // it did get on its way
+    expect(me.flight.position.distanceTo(deep(1500))).toBeGreaterThan(20000);
+  });
+
+  it('climb out of the air once its heat alarm sounds', () => {
+    const f = air();
+    const me = ship('Kessler', deep(1800), at(1));
+    me.inShadow = true;
+    me.heat = 90;
+    me.flight.velocity.set(4500, 0, 0);
+    const bot = new Bot(me, evenSkills(0.5));
+    bot.lure = deep(2000, 3000);
+    const outside = new THREE.Vector3();
+    const start = altitudeIn(f.air!, me.flight.position);
+    for (let t = 0; t < 4; t += STEP) {
+      f.gravity(me.flight.position, outside);
+      dragOn(f.air!, me.flight.position, me.flight.velocity, STEP, outside);
+      me.flight.update(STEP, bot.think(t, [me], f), outside);
+    }
+    expect(altitudeIn(f.air!, me.flight.position)).toBeGreaterThan(start);
+  });
+
+  it('find a ship in the haze by radar farther than they see it, and fire only at what they see', () => {
+    const f = air();
+    const me = ship('Kessler', deep(1000), at(1));
+    const bot = new Bot(me, evenSkills(1));
+    // 1.2 km off a kilometer down: beyond the eye's 790 m, within the radar's 1.6 km
+    const rival = ship('Halley', deep(1000, 1200), at(-1));
+    let fired = false;
+    for (let t = 0; t < 3; t += STEP) fired ||= bot.think(t, [me, rival], f).fire;
+    expect(bot.target).toBe(rival);
+    expect(fired).toBe(false);
+    // 2 km off: beyond the radar too
+    rival.flight.position.copy(deep(1000, 2000));
+    bot.think(3, [me, rival], f);
+    expect(bot.target).toBeNull();
+  });
+
+  it('lose a ship that dived under the deck, seen at a slant from above it', () => {
+    const f = air();
+    const me = ship('Kessler', deep(-150), at(1));
+    const bot = new Bot(me, evenSkills(0.5));
+    const rival = ship('Halley', deep(-50, 1500), at(-1));
+    bot.think(0, [me, rival], f);
+    expect(bot.target).toBe(rival);
+    rival.flight.position.copy(deep(100, 1500));
+    bot.think(0.1, [me, rival], f);
+    expect(bot.target).toBeNull();
   });
 });
 

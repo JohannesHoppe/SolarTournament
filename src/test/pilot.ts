@@ -4,7 +4,8 @@ import { Bot, evenSkills } from '../ship/bots';
 import { FlightModel, MAX_SPEED } from '../ship/flight';
 import type { Controls } from '../input/input';
 import { bounceOff, impactDamage } from '../ship/impact';
-import { MAX_HULL, type Ship } from '../ship/ship';
+import { COOLING_SHADOW, COOLING_SUN, MAX_HEAT, MAX_HULL, type Ship } from '../ship/ship';
+import { airBurn, airHeat, altitudeIn, dragOn } from '../world/air';
 import { approachGate, coilPush, ringCrossing } from '../game/race';
 import type { RacingLine } from '../game/racingline';
 
@@ -60,7 +61,8 @@ export function startFlight(start: THREE.Vector3, facing: THREE.Vector3, drift =
  */
 export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector3, facing: THREE.Vector3, skill: number, speed: number, limit: number, drift = 0, each?: Each): Flight {
   const flight = startFlight(start, facing, drift);
-  const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, allyOf: () => false } as unknown as Ship;
+  // the hull's heat the bot reads, as its HUD shows it (see flyCourse)
+  const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, heat: 0, allyOf: () => false, get cooling() { return coolingAt(field, flight.position); } } as unknown as Ship;
   const bot = new Bot(ship, evenSkills(skill));
   bot.raceSpeed = speed;
   const goal = new THREE.Vector3();
@@ -69,17 +71,22 @@ export function flyRings(field: AsteroidField, rings: Rings, start: THREE.Vector
     rings.line.target(flight.position, next % rings.line.gateCount, flight.velocity.length(), field, goal);
     bot.waypoint = rings.open ? goal : approachGate(rings.points[next], rings.normals[next], rings.radius, flight.position, flight.velocity, SHIP_RADIUS, goal);
     return bot.think(seconds, [ship], field);
-  }, limit, undefined, each);
+  }, limit, undefined, each, ship);
 }
+
+/** How fast the radiators shed heat at a place, as the game has it (see Ship.cooling): in the shade under a planet's cloud deck, else in the sun (rocks' shadows left out). */
+const coolingAt = (field: AsteroidField, position: THREE.Vector3) => (field.air && altitudeIn(field.air, position) < 0 ? COOLING_SHADOW : COOLING_SUN);
 
 /**
  * A ship flies a course of rings in a field, with the game's flight model, gravity, coils and
- * rock collisions (it bounces off and the hull takes what an impact does), as `driver` commands
- * it, until it passed every ring, was lost, or `limit` seconds are up. The field's rocks move on
- * with the time. Only this ship's flight counts: no other ships. `onMiss` hears of every miss;
- * `each` sees the flight after every step and ends it by returning true.
+ * rock collisions (it bounces off and the hull takes what an impact does), and in a planet's air
+ * its drag and heat (the radiators shed what they can, what they cannot burns the hull, see
+ * Game.friction), as `driver` commands it, until it passed every ring, was lost, or `limit`
+ * seconds are up. The field's rocks move on with the time. Only this ship's flight counts: no
+ * other ships. `onMiss` hears of every miss; `each` sees the flight after every step and ends it
+ * by returning true; `hot`, if given, holds the hull's heat as it goes (a racing bot reads it).
  */
-export function flyCourse(field: AsteroidField, rings: Rings, flight: FlightModel, driver: Driver, limit: number, onMiss?: (ring: number, off: number) => void, each?: Each): Flight {
+export function flyCourse(field: AsteroidField, rings: Rings, flight: FlightModel, driver: Driver, limit: number, onMiss?: (ring: number, off: number) => void, each?: Each, hot: { heat: number } = { heat: 0 }): Flight {
   const gravity = new THREE.Vector3();
   const before = new THREE.Vector3();
   const path = new THREE.Vector3();
@@ -93,12 +100,20 @@ export function flyCourse(field: AsteroidField, rings: Rings, flight: FlightMode
   while (offs.length < rings.points.length && seconds < limit) {
     const next = offs.length;
     field.gravity(flight.position, gravity);
+    if (field.air) dragOn(field.air, flight.position, flight.velocity, STEP, gravity);
     const controls = driver(flight, next, seconds, gravity);
     before.copy(flight.position);
     flight.update(STEP, controls, gravity);
     field.update(STEP);
     seconds += STEP;
     if (field.insideWell(flight.position, SHIP_RADIUS)) return result(true);
+    if (field.air) {
+      // the radiators shed, then the air heats, as the game steps a ship (see Ship.update, Game.friction)
+      const radiators = { heat: Math.max(0, hot.heat - coolingAt(field, flight.position) * STEP), overheated: false, cooling: coolingAt(field, flight.position) };
+      hull -= airBurn(radiators, airHeat(altitudeIn(field.air, flight.position), flight.velocity.length()) * STEP, STEP, MAX_HEAT);
+      hot.heat = radiators.heat;
+      if (hull <= 0) return result(true);
+    }
     // as the game does: a fast ship stops where its path first touched rock, and bounces off
     const moved = flight.position.distanceTo(before);
     const hit = moved > SHIP_RADIUS ? field.raycast(before, path.subVectors(flight.position, before).divideScalar(moved), moved) : null;

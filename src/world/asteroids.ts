@@ -4,6 +4,7 @@ import { Randomizer, textSeed } from '../random';
 import { Surface, tangentDirections } from './surface';
 import { boxContact, rayBox } from './boxes';
 import { SHAPE_FILL } from './shapes';
+import { opticalDepth, SIGHT_DEPTH, type Air } from './air';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
@@ -122,6 +123,8 @@ export interface FieldLayout {
   /** Pieces placed by hand (the hulk of a wreck). */
   placements?: Placement[];
   well?: Well;
+  /** The air of a planet the arena dips into (see world/air): its haze hides, brakes and heats. */
+  air?: Air;
 }
 export interface Asteroid {
   id: string;
@@ -239,6 +242,8 @@ export class AsteroidField {
   layout: FieldLayout | null = null;
   /** The massive body of the arena, if it has one. */
   well: Well | null = null;
+  /** The air of the arena, if it dips into a planet's (see world/air). */
+  air: Air | null = null;
   /** Something else in the field that blocks the line of sight and torpedoes, if a round has one. */
   obstacle: Obstacle | null = null;
 
@@ -277,6 +282,7 @@ export class AsteroidField {
   generate(layout: FieldLayout) {
     this.layout = layout;
     this.well = layout.well ?? null;
+    this.air = layout.air ?? null;
     this.clear();
     this.clock = 0;
     const r = new Randomizer(layout.seed);
@@ -595,10 +601,15 @@ export class AsteroidField {
     return hit;
   }
 
-  /** True when no rock (and not the well's body, nor an obstacle) lies between two points. */
-  lineOfSight(from: THREE.Vector3, to: THREE.Vector3): boolean {
+  /**
+   * True when no rock (and not the well's body, nor an obstacle) lies between two points, and
+   * the haze of the arena's air between them sums up to no more than `haze` (see world/air: the
+   * eye's reach by default; the radar's or a lock's shorter or longer, Infinity for cover alone).
+   */
+  lineOfSight(from: THREE.Vector3, to: THREE.Vector3, haze = SIGHT_DEPTH): boolean {
     const distance = from.distanceTo(to);
     if (distance < 1) return true;
+    if (this.air && opticalDepth(this.air, from, to) > haze) return false;
     sight.subVectors(to, from).divideScalar(distance);
     return this.cast(from, sight, distance, true, true) === null;
   }

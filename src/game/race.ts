@@ -34,6 +34,12 @@ const LOOP_RADII = [40000, 38000, 42000, 36000, 44000];
 const LOOP_TURNS = 8;
 /** The heights of the loop above the field's plane tried (units, 0 and 600 m up and down): over a flat ring of rock, it may run above or below it. */
 const LOOP_LIFTS = [0, 12000, -12000];
+/**
+ * In a planet's air the loop keeps to its cloud deck (see world/air), which runs through the
+ * field's plane: it dives up to COURSE_RISE (200 m) into the clouds and climbs out of them twice
+ * a lap, never deep enough for the air to heat a hull at the tournament's limit.
+ */
+const AIR_LIFTS = [0];
 const LOOP_CHECKS = 256;
 /**
  * The gates are coils: a ship that flies through the inner third of a ring (BOOST_RADIUS,
@@ -218,7 +224,7 @@ export class Course {
     let best = { ...shape };
     let bestAngles: number[] = [];
     let least = [Infinity, Infinity];
-    for (const lift of LOOP_LIFTS) {
+    for (const lift of field.air ? AIR_LIFTS : LOOP_LIFTS) {
       for (const radius of LOOP_RADII) {
         for (const swell of [0, COURSE_SWELL]) {
           for (let turn = 0; turn < (swell ? LOOP_TURNS : 1); turn++) {

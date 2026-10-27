@@ -19,20 +19,25 @@ const particleVertex = /* glsl */ `
   attribute vec4 tint;
   varying vec4 vTint;
   uniform float pixelScale;
+  #include <fog_pars_vertex>
   void main() {
     vTint = tint;
     vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
     gl_PointSize = size * pixelScale / -mvPosition.z;
     gl_Position = projectionMatrix * mvPosition;
+    #include <fog_vertex>
   }
 `;
 
+/** A particle's glow, fading in the haze of an arena's air (see view/haze). */
 const particleFragment = /* glsl */ `
   uniform sampler2D map;
   varying vec4 vTint;
+  #include <fog_pars_fragment>
   void main() {
     vec4 texel = texture2D(map, gl_PointCoord);
     gl_FragColor = vec4(texel.rgb * vTint.rgb * vTint.a, 1.0);
+    #include <fog_fragment>
   }
 `;
 
@@ -73,6 +78,7 @@ class ParticleSystem {
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       transparent: true,
+      fog: true,
     });
     geometry.setDrawRange(0, 0);
     this.points = new THREE.Points(geometry, this.material);

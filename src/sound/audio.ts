@@ -2,6 +2,8 @@
  * Sound in vacuum: nothing outside the own ship is audible. What the pilot hears travels
  * through the hull (muffled by a low-pass filter): the own laser, the drive, the thrusters,
  * hits and debris on the own ship. Cockpit beeps from the ship's computer are unfiltered.
+ * Inside a planet's air (Jupiter, see world/air) sound carries outside too: the wind roaring
+ * past the hull and thunder after lightning, through the hull like the rest.
  */
 export class Sound {
   readonly context = new AudioContext();
@@ -9,9 +11,13 @@ export class Sound {
   private readonly hull = this.context.createBiquadFilter();
   private readonly driveGain = this.context.createGain();
   private readonly thrusterGain = this.context.createGain();
+  private readonly windGain = this.context.createGain();
+  private readonly windFilter = this.context.createBiquadFilter();
   private buffers: Record<string, AudioBuffer | null> = {};
   private loopsStarted = false;
   private whiteNoise: AudioBuffer | null = null;
+  /** Brown noise for thunder, made at its first strike. */
+  private rumble: AudioBuffer | null = null;
 
   constructor() {
     this.master.gain.value = 0.6;
@@ -22,6 +28,7 @@ export class Sound {
     this.hull.connect(this.master);
     this.driveGain.gain.value = 0;
     this.thrusterGain.gain.value = 0;
+    this.windGain.gain.value = 0;
     // Browsers only start audio after a user gesture; for a finger that is its lifting
     // (pointerup, touchend), for a mouse or a key already the press.
     const unlock = () => {
@@ -122,6 +129,43 @@ export class Sound {
     this.thrusterGain.gain.setTargetAtTime(thrusters * 0.25, now, 0.03);
   }
 
+  /**
+   * The wind of a planet's air roaring past the hull: `strength` 0..1 (the air's push on the
+   * hull, see Game.listen), `pitch` 0..1 (the speed through it: a deep rumble slow, a howl fast).
+   */
+  setWind(strength: number, pitch: number) {
+    const now = this.context.currentTime;
+    this.windGain.gain.setTargetAtTime(strength * 0.7, now, 0.15);
+    this.windFilter.frequency.setTargetAtTime(160 + 1100 * pitch, now, 0.2);
+  }
+
+  /**
+   * Thunder after lightning, `delay` seconds from now (its sound's way through the air), through
+   * the hull: a crack when it is `near` (0..1), then a long rolling rumble, `volume` 0..1.
+   */
+  thunder(volume: number, delay: number, near: number) {
+    if (this.context.state !== 'running' || volume < 0.02) return;
+    const start = this.context.currentTime + delay;
+    const length = 2.5 + 2 * (1 - near);
+    const source = this.context.createBufferSource();
+    source.buffer = this.rumble ??= this.noiseBuffer();
+    source.playbackRate.value = 0.55 + 0.25 * near;
+    const filter = this.context.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.value = 220 + 900 * near * near;
+    const gain = this.context.createGain();
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(volume * (0.5 + 0.5 * near), start + 0.02 + 0.3 * (1 - near));
+    // it rolls on: a second swell, then dies away
+    gain.gain.exponentialRampToValueAtTime(volume * 0.35, start + length * 0.35);
+    gain.gain.exponentialRampToValueAtTime(volume * 0.5, start + length * 0.5);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + length);
+    source.connect(filter).connect(gain).connect(this.hull);
+    source.loop = true;
+    source.start(start, Math.random());
+    source.stop(start + length + 0.05);
+  }
+
   private startLoops() {
     if (this.loopsStarted) return;
     this.loopsStarted = true;
@@ -146,6 +190,16 @@ export class Sound {
     hissFilter.Q.value = 0.8;
     hiss.connect(hissFilter).connect(this.thrusterGain).connect(this.hull);
     hiss.start();
+
+    // the wind: white noise through a band that rises with the speed, silent outside any air
+    const wind = this.context.createBufferSource();
+    wind.buffer = this.whiteNoise ??= this.createWhiteNoise();
+    wind.loop = true;
+    this.windFilter.type = 'bandpass';
+    this.windFilter.frequency.value = 160;
+    this.windFilter.Q.value = 0.6;
+    wind.connect(this.windFilter).connect(this.windGain).connect(this.hull);
+    wind.start();
   }
 
   private createWhiteNoise(): AudioBuffer {

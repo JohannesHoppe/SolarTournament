@@ -26,7 +26,7 @@ export interface Look {
   showcase: { pixelRatio: number; shadows: boolean; every: number };
   /** The reference plane's grid with its spokes, or only its rings (see ReferencePlane.setDetail). */
   spokes: boolean;
-  /** Share of the gas giant landmark's full segment count (see world/landmarks, Landmarks.setDetail): only the giant arena's cap sphere costs enough to be worth a cheaper mesh. */
+  /** Share of the Jupiter landmark's full detail (see world/landmarks, Landmarks.setDetail): only its cap sphere and its sheets of cloud cost enough to be worth a cheaper picture. */
   landmark: number;
   /** Steps the black hole's lens marches along each pixel's ray toward its source (see view/lensing): fewer leaves the bend coarser, never unbent. */
   lens: number;
@@ -45,8 +45,8 @@ const FULL: Look = { pixelRatio: 2, bloom: 1, shadows: 4096, lacquer: true, part
  * closer range first. Every full-screen pass costs per pixel, so the picture's resolution comes
  * down early and in small steps, with the bloom's resolution and the shadow map's edge between
  * them; the title screen's pad keeps a simpler look from the middle on. Shadows off costs a
- * shader compile and comes late; the lacquer saved nothing measurable and goes last. The gas
- * giant landmark (seen only in its own arena) sheds its segments alongside the rocks it costs
+ * shader compile and comes late; the lacquer saved nothing measurable and goes last. The
+ * Jupiter landmark (seen only in its own arena) sheds its segments alongside the rocks it costs
  * about as much as; the black hole's lens (seen only in its own arena) traces fewer rays
  * alongside the bloom, both full-screen passes of a similar cost.
  */

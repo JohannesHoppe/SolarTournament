@@ -4,6 +4,7 @@ import type { Ship } from '../ship/ship';
 import type { Effects } from '../view/effects';
 import { warheadBands } from '../view/surfaces';
 import { MASS } from '../world/bodies';
+import { LOCK_DEPTH } from '../world/air';
 
 /** Torpedoes a fresh clone carries. */
 export const TORPEDOES = 2;
@@ -67,8 +68,8 @@ export interface Homing {
   inSight?(from: THREE.Vector3, field: AsteroidField): boolean;
 }
 
-/** Whether a seeker at `from` sees what it homes on. */
-export const seesTarget = (target: Homing, from: THREE.Vector3, field: AsteroidField) => (target.inSight ? target.inSight(from, field) : field.lineOfSight(from, target.flight.position));
+/** Whether a seeker at `from` sees what it homes on: in an arena's haze no farther than a lock reaches (see world/air). */
+export const seesTarget = (target: Homing, from: THREE.Vector3, field: AsteroidField) => (target.inSight ? target.inSight(from, field) : field.lineOfSight(from, target.flight.position, LOCK_DEPTH));
 
 export interface Torpedo {
   /** "<shooter id>.<shot>": the same torpedo on every browser. */

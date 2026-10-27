@@ -14,7 +14,7 @@ describe('the reference plane', () => {
     expect(footOf(new THREE.Vector3(300, 2000, -500), new THREE.Vector3()).toArray()).toEqual([300, 0, -500]);
   });
 
-  it('holds every arena: its rings and disks lie in it, its giant straight below, the derelict along it', () => {
+  it('holds every arena: its rings and disks lie in it, Jupiter straight below, the derelict along it', () => {
     for (const arena of ARENAS) {
       // a flat field is a disk in the plane
       if (arena.layout.flat !== undefined) expect(arena.layout.flat).toBeLessThan(arena.layout.radius / 5);
@@ -69,12 +69,14 @@ describe('the fixed references of an arena', () => {
     }
   });
 
-  it('mark the world ship by its bow and stern, and the gas giant straight below', () => {
+  it('mark the world ship by its bow and stern, and Jupiter straight below', () => {
     expect(referencesOf(arenaById('derelict')!).map((reference) => reference.label)).toEqual(['Center', 'Bow', 'Stern']);
-    const giant = referencesOf(arenaById('giant')!).find((reference) => reference.glyph === 'giant')!;
-    expect(giant.position.x).toBe(0);
-    expect(giant.position.z).toBe(0);
-    // its distance is measured to the clouds, 2.25 km below the center
-    expect(giant.position.length() - giant.radius!).toBeCloseTo(45000);
+    const jupiter = referencesOf(arenaById('giant')!).find((reference) => reference.glyph === 'giant')!;
+    expect(jupiter.position.x).toBe(0);
+    expect(jupiter.position.z).toBe(0);
+    // its distance is measured to the cloud deck, which runs through the center: the reference plane
+    expect(jupiter.position.length() - jupiter.radius!).toBeCloseTo(0);
+    const air = arenaById('giant')!.layout.air!;
+    expect(air.center.length() - air.radius).toBeCloseTo(0);
   });
 });

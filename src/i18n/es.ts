@@ -52,6 +52,7 @@ export const ES: Catalog = {
   "The President's Fleet": 'La flota del Presidente',
   'Every mode in turn': 'Todos los modos, uno tras otro',
   'Burned up in the clouds': 'Calcinado en las nubes',
+  'Crushed in the depths': 'Aplastado en las profundidades',
   'Crossed the event horizon': 'Cruzó el horizonte de sucesos',
   REACTOR: 'REACTOR',
   DRIVE: 'MOTOR',
@@ -343,6 +344,7 @@ export const ES: Catalog = {
   'NO RETURN': 'SIN RETORNO',
   'BLACK HOLE · BURN AWAY': 'AGUJERO NEGRO · ALÉJATE A FONDO',
   'GRAVITY WELL · BURN AWAY': 'POZO GRAVITATORIO · ALÉJATE A FONDO',
+  'HULL HEAT · SAFE {speed} m/s': 'CALOR DEL CASCO · SEGURO {speed} m/s',
   'CAUTION': 'PRECAUCIÓN',
   'WARNING': 'ALERTA',
   'CRITICAL': 'CRÍTICO',
@@ -506,7 +508,6 @@ export const ES: Catalog = {
   'Blue base': 'Base Azul',
   Saturn: 'Saturno',
   Planet: 'Planeta',
-  Clouds: 'Nubes',
   'Black hole': 'Agujero negro',
   Bow: 'Proa',
   Stern: 'Popa',
@@ -520,8 +521,8 @@ export const ES: Catalog = {
   'Inside a ring of ice, as thin as a sheet. Up and down are open.': 'Dentro de un anillo de hielo, fino como una hoja. Por arriba y por abajo, vía libre.',
   'Kessler Field': 'Campo Kessler',
   'A station blew up. Its pieces still cross each other at 25 m/s.': 'Una estación voló por los aires. Sus pedazos aún se cruzan a 25 m/s.',
-  'Gas Giant': 'Gigante gaseoso',
-  'A world of storms below, eighty kilometers wide, pulling at everything. Dive along its clouds, or burn in them.': 'Abajo, un mundo de tormentas de ochenta kilómetros que tira de todo. Lánzate rozando sus nubes o arde en ellas.',
+  Jupiter: 'Júpiter',
+  'Half in space, half in the clouds. The deeper, the thicker the air: it hides, it brakes, it burns.': 'Medio en el espacio, medio en las nubes. Cuanto más hondo, más denso el aire: oculta, frena, quema.',
   Corona: 'Corona',
   'Close to the sun. Lasers barely cool in its glare, and its storms blind the sensors.': 'Cerca del sol. Los láseres apenas se enfrían bajo su resplandor, y sus tormentas ciegan los sensores.',
   'Event Horizon': 'Horizonte de sucesos',
@@ -848,8 +849,10 @@ export const ES: Catalog = {
   'Hull failing. One more hit, and you are dead, darling.': 'El casco cede. Un impacto más, y estás muerto, cariño.',
   'Careful, darling. The black hole is near.': 'Cuidado, cariño. El agujero negro está cerca.',
   'The black hole is pulling us! Burn away from it!': '¡El agujero negro nos arrastra! ¡Acelera lejos de él!',
-  'Careful, darling. The giant is pulling at us.': 'Cuidado, cariño. El gigante tira de nosotros.',
-  'The giant is dragging us down! Burn away from it!': '¡El gigante nos hunde! ¡Acelera lejos de él!',
+  'Careful, darling. Jupiter is pulling at us.': 'Cuidado, cariño. Júpiter tira de nosotros.',
+  'Jupiter is dragging us down! Burn away from it!': '¡Júpiter nos hunde! ¡Acelera lejos de él!',
+  'The hull is heating up, darling. Slow down, or climb.': 'El casco se calienta, cariño. Frena, o sube.',
+  'We are burning up! Climb, darling!': '¡Nos quemamos! ¡Sube, cariño!',
   'Now it gets really tight! Full burn, now!': '¡Ahora sí que se pone feo! ¡A fondo, ya!',
   'I am sorry, darling.': 'Lo siento, cariño.',
   'Comet inbound, darling! Its shower is a storm of rock. Hide behind an asteroid, or turn your armored nose into it.': '¡Cometa entrante, cariño! Su lluvia es una tormenta de roca. Escóndete tras un asteroide, o gírale tu morro acorazado.',
@@ -939,7 +942,7 @@ export const ES: Catalog = {
   'live from the belt. forty rocks. no mercy': 'en directo desde el cinturón. cuarenta rocas. sin piedad',
   'live from the rings of saturn. mind the ice': 'en directo desde los anillos de saturno. cuidado con el hielo',
   'live from the kessler field. the station died. so will you': 'en directo desde el campo kessler. la estación murió. tú también morirás',
-  'live from the gas giant. do not fall in': 'en directo desde el gigante gaseoso. no te caigas dentro',
+  'live from jupiter. the clouds are hungry today': 'en directo desde júpiter. hoy las nubes tienen hambre',
   'live from the corona. it is hot today': 'en directo desde la corona. hoy hace calor',
   'live from the event horizon. nobody comes back': 'en directo desde el horizonte de sucesos. nadie regresa',
   'live from the derelict. a world ship, broken in two': 'en directo desde el pecio. una nave mundo partida en dos',
@@ -1135,8 +1138,8 @@ export const ES: Catalog = {
     '<strong>Anillos de Saturno.</strong> Dentro del anillo de Saturno: hielo en una capa fina, abierta por arriba y por abajo. El sol da aquí una centésima parte de la luz que da a la Tierra; los sensores del ordenador de vuelo aclaran la imagen para compensarlo. El hielo se rompe más fácilmente, y el sol más débil deja que los láseres se enfríen un poco más rápido.',
   "<strong>Kessler Field.</strong> Station debris on crossing orbits, all at {kesslerOrbit} m/s: your cover moves. The station's core in the middle never breaks.":
     '<strong>Campo Kessler.</strong> Escombros de estación en órbitas que se cruzan, todos a {kesslerOrbit} m/s: tu cobertura se mueve. El núcleo de la estación, en el centro, nunca se rompe.',
-  '<strong>Gas Giant.</strong> Its pull, almost a g, drags everything towards the clouds below, and the clouds burn up whatever touches them. Never drift for long.':
-    '<strong>Gigante gaseoso.</strong> Su atracción, casi una g, arrastra todo hacia las nubes de abajo, y las nubes calcinan todo lo que las toca. Nunca derives mucho rato.',
+  "<strong>Jupiter.</strong> Its cloud deck runs through the middle of the arena: above it open space, below it the air, thicker the deeper you go, and its pull, almost a g, draws everything down into it. Half the fight is in the clouds (see In Jupiter's clouds).":
+    '<strong>Júpiter.</strong> Su capa de nubes atraviesa el centro de la arena: encima, espacio abierto; debajo, el aire, más denso cuanto más bajas, y su atracción, casi una g, lo arrastra todo hacia él. Media pelea se libra en las nubes (ver En las nubes de Júpiter).',
   "<strong>Corona.</strong> In the sun's glare the radiators shed only about half their heat: fight from the shadows. Every {stormEvery} s a solar storm blinds the sensors for {stormLength} s.":
     '<strong>Corona.</strong> Bajo el resplandor del sol, los radiadores solo disipan más o menos la mitad de su calor: lucha desde las sombras. Cada {stormEvery} s una tormenta solar ciega los sensores durante {stormLength} s.',
   '<strong>Event Horizon.</strong> A black hole in the middle. Within about {noReturn} m no drive gets out; watch the PULL gauge and burn away early.':
@@ -1153,8 +1156,15 @@ export const ES: Catalog = {
   'COMET INBOUND comes {cometWarning} s before a comet reaches the arena. Its head destroys whatever it meets. Its two tails, pointing away from the sun, are only dust and gas and harm nobody. The danger is the shower that glints orange along its route behind the head: every piece strikes like a laser beam. Get into the lee of a rock, or turn your armored nose into the shower.':
     'COMETA ENTRANTE aparece {cometWarning} s antes de que un cometa llegue a la arena. Su cabeza destruye lo que encuentra. Sus dos colas, que apuntan lejos del sol, son solo polvo y gas y no dañan a nadie. El peligro es la lluvia que brilla en naranja a lo largo de su ruta, tras la cabeza: cada fragmento golpea como un rayo láser. Ponte al abrigo de una roca, o gira tu morro acorazado hacia la lluvia.',
   'Gravity wells': 'Pozos gravitatorios',
-  'Near the black hole and over the gas giant the PULL gauge shows how much of your drive it would take to get out: CAUTION from {wellCaution} %, WARNING from {wellWarning} %, CRITICAL from {wellCritical} %, and when it would take all of it, NO RETURN. Burn away early: falling, the gauge climbs fast. The speed limit holds only against your own drive; gravity pulls you past {limit} m/s.':
-    'Cerca del agujero negro y sobre el gigante gaseoso, el indicador TIRÓN muestra cuánto de tu motor haría falta para salir: PRECAUCIÓN desde el {wellCaution} %, ALERTA desde el {wellWarning} %, CRÍTICO desde el {wellCritical} %, y cuando haría falta todo, SIN RETORNO. Aléjate a fondo a tiempo: en caída, el indicador sube rápido. El límite de velocidad solo rige para tu propio motor; la gravedad te arrastra más allá de {limit} m/s.',
+  "In Jupiter's clouds": 'En las nubes de Júpiter',
+  "The haze hides whatever is in it: just under the deck you see about {seeDeck} km, a kilometer down {seeKm} m, two kilometers down {seeTwoKm} m. Ships turn into shadows, then into nothing. Your laser reaches as far as you see, the radar twice as far, a torpedo's lock two thirds as far. The deck itself is a veil: dive through it, and a chaser above loses sight of you, unless it looks almost straight down.":
+    'La neblina oculta lo que hay en ella: justo bajo la capa de nubes ves unos {seeDeck} km; un kilómetro más abajo, {seeKm} m; dos kilómetros más abajo, {seeTwoKm} m. Las naves se vuelven sombras y luego nada. Tu láser llega hasta donde ves, el radar el doble, el fijado de un torpedo dos tercios. La capa de nubes es un velo: atraviésala en picado y quien te persigue desde arriba te pierde de vista, salvo que mire casi en vertical hacia abajo.',
+  'The air brakes you by your speed squared, {dragDeck} g at the deck at {limit} m/s and ten times as much two kilometers down: a hard turn in the clouds costs speed, a climb out of them lets you have it back. It heats your hull too. At {limit} m/s it gets too hot from {hotDepth} m below the deck on; a kilometer down {safeKm} m/s is safe, two kilometers down {safeTwoKm} m/s. HULL HEAT names the safe speed where you are. The heat locks your laser first, then it burns the hull: slow down, or climb.':
+    'El aire te frena con el cuadrado de tu velocidad: {dragDeck} g en la capa de nubes a {limit} m/s, y diez veces más dos kilómetros más abajo. Un giro brusco en las nubes cuesta velocidad; subir fuera de ellas te la devuelve. También calienta tu casco. A {limit} m/s se calienta demasiado a partir de {hotDepth} m bajo la capa; un kilómetro más abajo son seguros {safeKm} m/s; dos kilómetros más abajo, {safeTwoKm} m/s. CALOR DEL CASCO indica la velocidad segura donde estás. El calor bloquea primero tu láser y luego quema el casco: frena o sube.',
+  'In the air, for once, you hear what is outside: the wind roaring past the hull, and thunder after the lightning in the clouds.':
+    'En el aire, por una vez, oyes lo que hay fuera: el viento rugiendo contra el casco y los truenos tras los relámpagos en las nubes.',
+  'Near the black hole and over Jupiter the PULL gauge shows how much of your drive it would take to get out: CAUTION from {wellCaution} %, WARNING from {wellWarning} %, CRITICAL from {wellCritical} %, and when it would take all of it, NO RETURN. Burn away early: falling, the gauge climbs fast. The speed limit holds only against your own drive; gravity pulls you past {limit} m/s.':
+    'Cerca del agujero negro y sobre Júpiter, el indicador TIRÓN muestra cuánto de tu motor haría falta para salir: PRECAUCIÓN desde el {wellCaution} %, ALERTA desde el {wellWarning} %, CRÍTICO desde el {wellCritical} %, y cuando haría falta todo, SIN RETORNO. Aléjate a fondo a tiempo: en caída, el indicador sube rápido. El límite de velocidad solo rige para tu propio motor; la gravedad te arrastra más allá de {limit} m/s.',
   "The arena's edge": 'El borde de la arena',
   'Space has no walls, but the Games do. More than {edge} km from the center the clock runs: {grace} s to get back, or the clone is lost in deep space. Outside, the whole edge glows orange, so the way home is always in sight.':
     'El espacio no tiene paredes, pero los Juegos sí. A más de {edge} km del centro corre el reloj: {grace} s para volver, o el clon se pierde en el espacio profundo. Fuera, todo el borde brilla en naranja, así que el camino a casa siempre está a la vista.',

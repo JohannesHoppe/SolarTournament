@@ -28,6 +28,7 @@ function directionsGLSL(): string {
 
 const vertexShader = /* glsl */ `
 #include <common>
+#include <fog_pars_vertex>
 uniform float radius;
 varying vec2 vUv;
 varying float vTile;
@@ -73,11 +74,16 @@ void main() {
   vUv = position.xy / radius * 0.5 + 0.5;
 
   gl_Position = projectionMatrix * viewMatrix * vec4( worldPosition, 1.0 );
+  // the haze of an arena's air (see view/haze)
+  #ifdef USE_FOG
+    vHazeWorld = worldPosition;
+  #endif
 }
 `;
 
 const fragmentShader = /* glsl */ `
 #include <common>
+#include <fog_pars_fragment>
 uniform sampler2D albedoAtlas;
 uniform sampler2D normalAtlas;
 uniform float inset;
@@ -108,6 +114,7 @@ void main() {
   vec3 base = mix( albedo.rgb, paint, painted );
   vec3 outgoingLight = base * ( ambient + sunColor * diffuse ) + emissive;
   gl_FragColor = vec4( outgoingLight, 1.0 );
+  #include <fog_fragment>
 
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
@@ -178,5 +185,6 @@ export function impostorMaterial(albedo: THREE.Texture, normal: THREE.Texture, a
     fragmentShader,
     // the custom billboard transform can flip winding depending on the view angle
     side: THREE.DoubleSide,
+    fog: true,
   });
 }

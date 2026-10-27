@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { boxUv, lacquer, shine, surfaced, wornSurface, type Wear } from '../view/surfaces';
+import { hazeUniforms } from '../view/haze';
 
 /**
  * The two interceptors, built in code as low-poly hulls (a few hundred triangles each), shaded
@@ -120,8 +121,9 @@ export function setGlint(sunIntensity: number) {
   glintPeak.value = GLINT_PER_SUN * sunIntensity;
 }
 
-/** Caps the lacquer's mirror image of the lights at the glint's peak, keeping its hue. */
-function capGlint(shader: THREE.WebGLProgramParametersWithUniforms) {
+/** Caps the lacquer's mirror image of the lights at the glint's peak, keeping its hue; the hull takes the haze as every material does (see view/haze). */
+function capGlint(this: THREE.Material, shader: THREE.WebGLProgramParametersWithUniforms) {
+  hazeUniforms(shader, this);
   shader.uniforms.glintPeak = glintPeak;
   const direct = 'clearcoatSpecularDirect';
   const capped = `${direct} * min( 1.0, glintPeak / max( max( ${direct}.r, ${direct}.g ), max( ${direct}.b, 1e-4 ) ) )`;

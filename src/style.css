@@ -2272,7 +2272,7 @@ body.touch #school-panel {
   rotate: -20deg;
 }
 
-/* the gas giant's clouds: a chevron down onto a line */
+/* Jupiter, straight down to its cloud deck: a chevron down onto a line */
 .reference[data-glyph='giant']::before {
   left: 3px;
   top: 0;

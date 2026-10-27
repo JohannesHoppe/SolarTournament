@@ -100,6 +100,11 @@ const SHADOW_REACH = 140000;
 /** Direction towards the sun; it sits in front of the ships at spawn. */
 export const SUN_DIRECTION = new THREE.Vector3(0.25, 0.15, -1).normalize();
 
+/** The sky's faint light from all around: bluish from above, a dark brown from below, this strong. */
+const SKY_COLOR = new THREE.Color(0x7788bb);
+const GROUND_COLOR = new THREE.Color(0x2a201c);
+const SKY_INTENSITY = 1.6;
+
 /** How much larger the sun looks at a solar flare's height. */
 const FLARE_SWELL = 2.5;
 /** How much brighter it lights the field then. */
@@ -117,6 +122,11 @@ export class Space {
   readonly streaks: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private readonly sun: THREE.Sprite;
   private readonly sunLight: THREE.DirectionalLight;
+  /** The sky's faint light from all around (see shade). */
+  private readonly skyLight = new THREE.HemisphereLight(SKY_COLOR, GROUND_COLOR, SKY_INTENSITY);
+  /** The share of the sun's light that reaches the camera through an arena's haze (see shade), and how bright the sun shines before it (see flare). */
+  private sunShare = 1;
+  private sunBright = 1;
   /** The arena's sun as setSun set it, which a solar flare heats up (see flare). */
   private readonly sunBase = { size: 30000, intensity: 3.2, color: new THREE.Color(0xfff0dd) };
 
@@ -149,7 +159,6 @@ export class Space {
         map: radialTexture([[0, tint], [1, 'rgba(0, 0, 0, 0)']]),
         blending: THREE.AdditiveBlending,
         depthWrite: false,
-        fog: false,
       }));
       sprite.position.copy(direction.normalize()).multiplyScalar(SKY_RADIUS * 0.9);
       sprite.scale.setScalar(size);
@@ -201,7 +210,7 @@ export class Space {
     sunLight.shadow.camera.updateProjectionMatrix();
     this.lights.add(sunLight, sunLight.target);
     this.sunLight = sunLight;
-    this.lights.add(new THREE.HemisphereLight(0x7788bb, 0x2a201c, 1.6));
+    this.lights.add(this.skyLight);
     IMPOSTOR_SUN.direction.value.copy(SUN_DIRECTION);
     this.flare(0);
   }
@@ -240,8 +249,32 @@ export class Space {
     const base = this.sunBase;
     this.sun.scale.setScalar(base.size * (1 + (FLARE_SWELL - 1) * heat));
     this.sun.material.color.copy(base.color).lerp(WHITE_HOT, heat);
-    this.sunLight.intensity = base.intensity * (1 + (FLARE_GLARE - 1) * heat);
+    this.sunBright = base.intensity * (1 + (FLARE_GLARE - 1) * heat);
     this.sunLight.color.copy(base.color).lerp(WHITE_HOT, heat * 0.6);
+    this.shine();
+  }
+
+  /**
+   * The light in an arena's haze (see view/haze): `sun` of the sun's light and `sky` of the sky's
+   * reach the camera; where the sun's light is lost, the sky's light takes the haze's colors, `deck`
+   * from above and `deep` from below (none outside any haze).
+   */
+  shade(sun: number, sky: number, deck: THREE.Color | null, deep: THREE.Color | null) {
+    this.sunShare = sun;
+    const light = this.skyLight;
+    light.intensity = SKY_INTENSITY * sky;
+    light.color.copy(SKY_COLOR);
+    light.groundColor.copy(GROUND_COLOR);
+    if (deck && deep) {
+      light.color.lerp(deck, 1 - sun);
+      light.groundColor.lerp(deep, 1 - sun);
+    }
+    this.shine();
+  }
+
+  /** The sun's light as the flare and the haze leave it. */
+  private shine() {
+    this.sunLight.intensity = this.sunBright * this.sunShare;
     IMPOSTOR_SUN.color.value.copy(this.sunLight.color).multiplyScalar(this.sunLight.intensity * IMPOSTOR_SUN_SCALE);
   }
 

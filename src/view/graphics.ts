@@ -15,7 +15,7 @@ import { setLacquer } from './surfaces';
  * The picture's quality as the game draws it: the rung of the ladder (see view/quality) the
  * Host pinned in the menu or the governor found, applied to the renderer, the bloom, the sun's
  * shadows, the hulls' lacquer, the particles, the title screen's pad, the reference plane's
- * grid, the gas giant landmark's segments and the black hole's lens. A knob that compiles
+ * grid, Jupiter's cap and sheets of cloud and the black hole's lens. A knob that compiles
  * shaders anew (COMPILING) waits for a moment where a hitch goes unseen: the menu, the results,
  * a dead clone; the others change at once.
  */

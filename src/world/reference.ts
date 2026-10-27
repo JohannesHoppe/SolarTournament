@@ -6,7 +6,7 @@ import type { ArenaProfile, Reference } from './arenas';
  * The reference plane: the horizontal plane through the field's center, square to the arena's
  * north pole (+Y). Every arena lies in it: the belt's and the Kessler field's balls of rock and
  * debris around it, the ring of ice and the black hole's disk in it, the derelict's bow along it,
- * the gas giant's clouds straight below it. The attitude's horizon, the pitch ladder, the bank
+ * Jupiter's cloud deck in it, the planet straight below. The attitude's horizon, the pitch ladder, the bank
  * scale, the grid, the drop lines, the height and the climb all refer to it, so they agree.
  */
 export const PLANE_UP: Readonly<THREE.Vector3> = new THREE.Vector3(0, 1, 0);

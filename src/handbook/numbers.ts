@@ -1,5 +1,6 @@
 import { gripAt, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, turnRadius } from '../ship/flight';
-import { MAX_HULL } from '../ship/ship';
+import { COOLING_SHADOW, G, MAX_HULL } from '../ship/ship';
+import { dragAt, reachAt, safeSpeed, SIGHT_DEPTH } from '../world/air';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS } from '../game/race';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES } from '../game/torpedoes';
@@ -95,7 +96,24 @@ export const FROM_CODE: Record<string, number> = {
   rock1: ASTEROID_POINTS[0],
   rock2: ASTEROID_POINTS[1],
   rock3: ASTEROID_POINTS[2],
+  // Jupiter's air (see world/air): what the eye sees just under the deck, a kilometer and two
+  // kilometers down (rounded to 10 m); its drag at the deck at the limit; where the limit starts
+  // to heat the hull (to 100 m), and what is safe a kilometer and two kilometers down
+  seeDeck: Math.round(km(reachAt(-1, SIGHT_DEPTH)) * 10) / 10,
+  seeKm: Math.round(meters(reachAt(-20000, SIGHT_DEPTH)) / 10) * 10,
+  seeTwoKm: Math.round(meters(reachAt(-40000, SIGHT_DEPTH)) / 10) * 10,
+  dragDeck: Math.round((dragAt(-1, MAX_SPEED) / G) * 10) / 10,
+  hotDepth: Math.round(hotDepth() / 100) * 100,
+  safeKm: Math.round(meters(safeSpeed(-20000, COOLING_SHADOW))),
+  safeTwoKm: Math.round(meters(safeSpeed(-40000, COOLING_SHADOW))),
 };
+
+/** How deep under Jupiter's deck the speed limit starts to heat a hull in the air's shade (m). */
+function hotDepth(): number {
+  let depth = 0;
+  while (safeSpeed(-depth / METERS_PER_UNIT, COOLING_SHADOW) >= MAX_SPEED) depth += 1;
+  return depth;
+}
 
 /**
  * Numbers the code keeps where the handbook cannot reach them (inside the round's flow), each

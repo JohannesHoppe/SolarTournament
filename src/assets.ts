@@ -27,7 +27,7 @@ export interface Assets {
   planets: PlanetMaps;
 }
 
-/** The planets drawn from real maps (see world/landmarks): Saturn and the gas giant. */
+/** The planets drawn from real maps (see world/landmarks): Saturn and Jupiter (its key `giant`, as its map files are named). */
 export type Planet = 'saturn' | 'giant';
 export interface PlanetMaps {
   maps: Record<Planet, THREE.Texture>;
@@ -47,7 +47,7 @@ const textureLoader = new THREE.TextureLoader();
 
 /**
  * A planet's map or ring: color in sRGB, the longitude wrapping around, filtered at a slant
- * (the gas giant's cap is mostly seen at a grazing angle; the renderer caps it at what the GPU offers).
+ * (Jupiter's cap is mostly seen at a grazing angle; the renderer caps it at what the GPU offers).
  */
 async function planetTexture(file: string): Promise<THREE.Texture> {
   const texture = await textureLoader.loadAsync(base + PLANET_MAPS + file);
