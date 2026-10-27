@@ -4,7 +4,7 @@ The arena a round is fought in. Everything that every browser must build alike (
 
 | File | What it does |
 |---|---|
-| `arenas.ts` | The seven arenas: field layout, well, sun, storms, the fixed references the HUD marks; which one a tournament round uses |
+| `arenas.ts` | The seven arenas: field layout, well, sun, storms, the fixed references the HUD marks; which one a tournament round uses; the default arena (the Rings of Kronos) |
 | `reference.ts` | The reference plane through the field's center: height, climb, the bank's sky pointer, closure rate, an arena's fixed references |
 | `asteroids.ts` | The field: rocks, ice, debris or hull (shoved by a comet), orbits, gravity, collisions, raycasts, line of sight; how close up a rock or an ice piece keeps its near mesh before the far one, then a billboard, takes over (the picture's quality) |
 | `rocks.ts` | Generates the 16 asteroid shapes with integer math, identical on every browser: a full-detail shape for collisions (its vertices only, never drawn), light near and far meshes for drawing (their fine relief a baked, object-space normal map, not triangles), and a billboard (see view/impostor) for the belt and for rocks and ice far from the field |

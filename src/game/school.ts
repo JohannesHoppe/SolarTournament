@@ -314,7 +314,22 @@ function aimError(ctx: SchoolContext, point: THREE.Vector3) {
 
 /** Moves a point out of any asteroid, so markers never sit inside rock. */
 function clear(ctx: SchoolContext, point: THREE.Vector3, radius: number) {
-  for (let i = 0; i < 12 && ctx.field.overlap(point, radius); i++) point.add(scratch.randomDirection().multiplyScalar(radius * 2));
+  return clearOfRock(ctx.field, point, radius);
+}
+
+/**
+ * Moves a point (a sphere of `radius` around it) out of the rock of `field`: away from each rock
+ * it touches, straight out beyond the rock's farthest reach (upwards from a rock's very center),
+ * up to 12 times for rocks side by side.
+ */
+export function clearOfRock(field: AsteroidField, point: THREE.Vector3, radius: number) {
+  for (let i = 0; i < 12; i++) {
+    const rock = field.overlap(point, radius);
+    if (!rock) break;
+    scratch.subVectors(point, rock.object.position);
+    if (scratch.lengthSq() < 1) scratch.set(0, 1, 0);
+    point.copy(rock.object.position).addScaledVector(scratch.normalize(), rock.radius + radius + 1);
+  }
   return point;
 }
 
@@ -475,22 +490,56 @@ function headFor(ctx: SchoolContext, point: THREE.Vector3, speed: number) {
 /**
  * Where the rings of a course (in the pilot's frame) lie for a pilot at `position` turned by
  * `orientation`: ahead of it, or, where they would reach out beyond COURSE_ROOM of the arena's
- * edge, towards the arena's center instead, and the pilot turns to the first ring.
+ * edge, towards the arena's center instead, and the pilot turns to the first ring. With the rock
+ * of a `field`, a course whose way would run through rock (within COURSE_CLEAR of it) tilts up or
+ * down by COURSE_TILTS, the first way clear of rock (or the one least in it): out of a sheet of
+ * ice, say.
  */
-export function ringCourse(position: THREE.Vector3, orientation: THREE.Quaternion, course: readonly (readonly [number, number, number])[]): THREE.Vector3[] {
+export function ringCourse(position: THREE.Vector3, orientation: THREE.Quaternion, course: readonly (readonly [number, number, number])[], field?: AsteroidField): THREE.Vector3[] {
   const frame = orientation.clone();
   const place = ([x, y, z]: readonly [number, number, number]) => new THREE.Vector3(x, y, z).applyQuaternion(frame).add(position);
   if (position.lengthSq() > 1 && course.some((point) => place(point).length() > ARENA_LIMIT * COURSE_ROOM)) {
     const up = new THREE.Vector3(0, 1, 0).applyQuaternion(orientation);
     frame.setFromRotationMatrix(new THREE.Matrix4().lookAt(position, new THREE.Vector3(), up));
   }
-  return course.map(place);
+  if (!field) return course.map(place);
+  const straight = frame.clone();
+  let best: THREE.Vector3[] = [];
+  let least = Infinity;
+  // a tilted course starts COURSE_RUN farther on where the arena has room for it, so the pilot
+  // has room to climb or dive into it
+  for (const [tilt, run] of COURSE_TILTS.flatMap((tilt) => (tilt ? [[tilt, COURSE_RUN], [tilt, 0]] : [[0, 0]]))) {
+    frame.copy(straight).multiply(tilted.setFromAxisAngle(sideways, tilt));
+    const points = course.map(([x, y, z]) => place([x, y, z - run]));
+    if (points.some((point) => point.length() > ARENA_LIMIT * COURSE_ROOM)) continue;
+    // the way from the pilot through the rings, looked at every COURSE_CLEAR
+    let blocked = 0;
+    let from = position;
+    for (const point of points) {
+      const steps = Math.ceil(from.distanceTo(point) / COURSE_CLEAR);
+      for (let i = 1; i <= steps; i++) if (field.overlap(scratch.lerpVectors(from, point, i / steps), COURSE_CLEAR)) blocked++;
+      from = point;
+    }
+    if (blocked < least) {
+      least = blocked;
+      best = points;
+    }
+    if (blocked === 0) break;
+  }
+  return best.length ? best : course.map(place);
 }
+/** A course's way keeps this clear of rock (units, 180 m, the room a ring keeps, see layRings), or it tilts (rad: straight, then 15°, 30° and 45° up and down). */
+const COURSE_CLEAR = RING_RADIUS * 1.5;
+/** A tilted course starts this much farther from the pilot (units, 800 m). */
+const COURSE_RUN = 16000;
+const COURSE_TILTS = [0, 0.26, -0.26, 0.52, -0.52, 0.79, -0.79];
+const sideways = new THREE.Vector3(1, 0, 0);
+const tilted = new THREE.Quaternion();
 
 /** Lays out a course of rings for the pilot (see ringCourse), each facing the way from the one before. */
 function layRings(ctx: SchoolContext, a: Attempt, markers: Markers, course: readonly [number, number, number][]) {
   stop(ctx);
-  a.points = ringCourse(ctx.me.flight.position, ctx.me.flight.orientation, course).map((point) => clear(ctx, point, RING_RADIUS * 1.5));
+  a.points = ringCourse(ctx.me.flight.position, ctx.me.flight.orientation, course, ctx.field).map((point) => clear(ctx, point, RING_RADIUS * 1.5));
   a.normals = a.points.map((point, i) => point.clone().sub(i === 0 ? ctx.me.flight.position : a.points[i - 1]).normalize());
   a.points.forEach((point, i) => markers.ring(point, a.normals[i]));
   a.track = new RacingLine(a.points, false, ctx.me.flight.position);
@@ -562,7 +611,7 @@ export const DRILL = {
     keys: ['turn', 'drive'],
     enter(ctx, a, markers) {
       stop(ctx);
-      a.points = ringCourse(ctx.me.flight.position, ctx.me.flight.orientation, CURVE_COURSE).map((point) => clear(ctx, point, CURVE_ZONE / 2));
+      a.points = ringCourse(ctx.me.flight.position, ctx.me.flight.orientation, CURVE_COURSE, ctx.field).map((point) => clear(ctx, point, CURVE_ZONE / 2));
       curveMarkers(a, markers);
       a.track = new RacingLine(a.points, false, ctx.me.flight.position);
       headFor(ctx, a.points[0], CURVE_SPEED);

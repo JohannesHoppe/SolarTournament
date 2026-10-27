@@ -41,7 +41,7 @@ import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
 import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
-import { ARENAS, arenaById, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
+import { ARENAS, arenaById, DEFAULT_ARENA, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
@@ -475,9 +475,9 @@ const SOLO_KEY = 'solartournament.solo';
 /** The best lap of each arena's course, with its ghost (see game/laps). */
 const LAPS_KEY = 'solartournament.laps';
 
-/** What a solo round plays: a race unless the Host asks for another mode, its arena (null: by chance), and the bots it flies against: a full grid unless the Host picks fewer (the rivals chosen set how fast and how hard it is). */
+/** What a solo round plays: a race unless the Host asks for another mode, its arena (the default arena unless the Host asks for another; null: by chance), and the bots it flies against: a full grid unless the Host picks fewer (the rivals chosen set how fast and how hard it is). */
 type SoloChoice = { mode: RoundMode; arena: ArenaId | null; rivals: string[] };
-const SOLO_DEFAULT: SoloChoice = { mode: 'race', arena: null, rivals: ['Laika', 'Sputnik', 'Juno', 'Ceres', 'Kessler', 'Orion', 'Vega'] };
+const SOLO_DEFAULT: SoloChoice = { mode: 'race', arena: DEFAULT_ARENA.id, rivals: ['Laika', 'Sputnik', 'Juno', 'Ceres', 'Kessler', 'Orion', 'Vega'] };
 const SOLO_NOTES: Record<RoundMode, string> = {
   race: msg('Three laps through eight gates. Killing your opponents is explicitly allowed.'),
   deathmatch: msg('For the hard pilots: five minutes, every clone for itself.'),
@@ -492,7 +492,8 @@ function loadSolo(): SoloChoice {
     const kept = JSON.parse(storageGet(SOLO_KEY) ?? '{}') as Partial<SoloChoice>;
     return {
       mode: kept.mode && ROUND_MODES.includes(kept.mode) ? kept.mode : SOLO_DEFAULT.mode,
-      arena: ARENAS.some((a) => a.id === kept.arena) ? kept.arena! : null,
+      // null is a choice of its own: by chance
+      arena: kept.arena === null ? null : ARENAS.some((a) => a.id === kept.arena) ? kept.arena! : SOLO_DEFAULT.arena,
       rivals: Array.isArray(kept.rivals) ? BOT_NAMES.filter((n) => kept.rivals!.includes(n)).slice(0, TOURNAMENT_SIZE - 1) : [...SOLO_DEFAULT.rivals],
     };
   } catch {
@@ -694,7 +695,7 @@ export class Game implements OnlineGame {
   private replaying = false;
   private readonly wrecks = new Wrecks();
   /** The arena the round is played in (see enterArena), and its scenery. */
-  private venue: ArenaProfile = ARENAS[0];
+  private venue: ArenaProfile = DEFAULT_ARENA;
   private readonly landmarks = new Landmarks();
   private readonly lensing = new Lensing();
   /** A solar storm blinds the sensors (see STORM_PERIOD). */
@@ -999,7 +1000,7 @@ export class Game implements OnlineGame {
   ];
   private readonly fleetReference: Reference = { glyph: 'battleship', label: msg('Battleship'), position: new THREE.Vector3(), distance: true };
   /** The arena's own fixed references, its center among them (see referencesOf). */
-  private arenaReferences: Reference[] = referencesOf(ARENAS[0]);
+  private arenaReferences: Reference[] = referencesOf(DEFAULT_ARENA);
   /** The fixed references the HUD marks this frame (see orient). */
   private readonly shownReferences: Reference[] = [];
   /** The hooks out, by the ship that fired them, and their cables (see game/hook); when the own hook is ready again, and whether it was held last frame. */
@@ -2124,7 +2125,7 @@ export class Game implements OnlineGame {
     this.clearShips();
     // the hangar is no race: no gates behind the menu
     this.roundMode = 'deathmatch';
-    this.enterArena(ARENAS[0]);
+    this.enterArena(DEFAULT_ARENA);
     const best = Number(storageGet(BEST_SCORE_KEY) ?? 0);
     $('best-score').textContent = best ? t('Personal best: {points} pts', { points: best }) : '';
     this.showSchoolProgress();
@@ -2183,13 +2184,13 @@ export class Game implements OnlineGame {
     if (this.choosingSchool) this.showSchool(false);
 
     this.clearShips();
-    // the flight school trains in the belt; a solo round is in an arena of chance; online the
+    // the flight school trains in the default arena; a solo round is in the arena chosen; online the
     // room and round decide, so a first round starts in the room's first arena (see arriveInRound)
     this.roundId = mode === 'online' ? -1 : 0;
-    // a solo round plays what the Host chose, its arena by chance unless one was chosen
+    // a solo round plays what the Host chose, in the arena chosen or one by chance
     this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? this.solo.mode : 'deathmatch';
     if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0));
-    else this.enterArena(mode === 'school' ? ARENAS[0] : (ARENAS.find((a) => a.id === this.solo.arena) ?? pick(ARENAS)));
+    else this.enterArena(mode === 'school' ? DEFAULT_ARENA : (ARENAS.find((a) => a.id === this.solo.arena) ?? pick(ARENAS)));
     this.hud.reset();
     this.resetOpening();
     $('hud-room').textContent = '';
