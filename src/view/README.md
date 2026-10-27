@@ -9,7 +9,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `plane.ts` | The reference plane's polar grid and the drop lines from ships, gates and the waypoint down or up to it: lines over everything, faded with distance, built once |
 | `radar.ts` | The radar sphere on a canvas |
 | `effects.ts` | Particles and laser beams, pooled; a cheaper picture emits a share of the particles |
-| `killcam.ts` | Records the last seconds and replays the own clone's death |
+| `killcam.ts` | Records the last seconds and replays the own clone's death in slow motion, each ship put between the two kept frames around the moment shown (tested in `killcam.test.ts`) |
 | `chase.ts` | The chase camera's field of view, how fast it follows and where it hangs, and where it looks: along the autopilot's course, else along the nose |
 | `guide.ts` | The racing line: a dashed ribbon with pulses of light, orange in the brake zones |
 | `ghost.ts` | The best lap's hologram |
