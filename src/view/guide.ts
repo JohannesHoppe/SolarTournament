@@ -20,6 +20,8 @@ const JOIN_MIN = 3000;
 /** Pulses of light run along the line towards the gate, PULSE_GAP apart (units, 400 m) at PULSE_SPEED (units/s, 600 m/s), across the gaps too. */
 const PULSE_GAP = 8000;
 const PULSE_SPEED = 12000;
+/** The time the pulses take to move on by one gap (s): after it the line looks the same again. */
+const PULSE_PERIOD = PULSE_GAP / PULSE_SPEED;
 /** Width of the ribbon (units, 4 m); on screen it keeps WIDTH_MIN to WIDTH_MAX pixels. */
 const WIDTH = 80;
 const WIDTH_MIN = 4;
@@ -207,7 +209,9 @@ export class GuideLine {
     // off the line, the line shows brighter and wider
     const off = from.distanceTo(line.clear(at, field, onLine));
     this.uniforms.boost.value = OFF_BOOST * THREE.MathUtils.smoothstep(off, OFF_NEAR, OFF_FAR);
-    this.uniforms.time.value = time;
+    // the pulses repeat every PULSE_GAP / PULSE_SPEED seconds: the shader gets the time within
+    // that period, so a float in the GPU keeps its precision however long the page has run
+    this.uniforms.time.value = time % PULSE_PERIOD;
     const attributes = this.ribbon.geometry.attributes;
     for (const name of CHANGING) attributes[name].needsUpdate = true;
     this.ribbon.visible = true;
