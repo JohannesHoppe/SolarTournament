@@ -28,8 +28,8 @@ export interface Assets {
   planets: PlanetMaps;
 }
 
-/** The planets drawn from real maps (see world/landmarks): Saturn, Jupiter (its key `giant`, as its map files are named), and Earth's night below the Satellite Junkyard (see world/junkyard). */
-export type Planet = 'saturn' | 'giant' | 'earth';
+/** The planets drawn from real maps (see world/landmarks): Saturn, Jupiter (its key `giant`, as its map files are named), and Earth below the Satellite Junkyard (see world/junkyard), its night and its day side each from a map of its own. */
+export type Planet = 'saturn' | 'giant' | 'earth' | 'earth-day';
 export interface PlanetMaps {
   maps: Record<Planet, THREE.Texture>;
   ring: THREE.Texture;
@@ -37,8 +37,8 @@ export interface PlanetMaps {
 
 /**
  * The planets' maps (`public/assets/planets/`, cylindrical, 2:1; Earth's only the region below
- * its arena, 4:3): `<planet>-1k.jpg` (1024 wide) loads with the page, `<planet>-2k.jpg` (2048
- * wide) only once a rung sharp enough to show it
+ * its arena, its day side's only the part of it the sun reaches): `<planet>-1k.jpg` loads with
+ * the page, `<planet>-2k.jpg` (twice as wide) only once a rung sharp enough to show it
  * is reached (see loadPlanetMap, Landmarks.setDetail), so a phone on the cheaper rungs never
  * downloads it.
  */
@@ -59,7 +59,7 @@ async function planetTexture(file: string): Promise<THREE.Texture> {
   return texture;
 }
 
-/** A planet's sharp map (2048 × 1024), loaded when first asked for. */
+/** A planet's sharp map (twice as wide as the page's), loaded when first asked for. */
 export function loadPlanetMap(planet: Planet): Promise<THREE.Texture> {
   return planetTexture(`${planet}-2k.jpg`);
 }
@@ -130,7 +130,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   // every file is requested at once, and the rocks are generated while they are on their way
   const ships = Promise.all(['human-interceptor.glb', 'alien-interceptor.glb'].map(model));
   const flames = Promise.all(['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture));
-  const planetMaps = Promise.all([planetTexture('saturn-1k.jpg'), planetTexture('giant-1k.jpg'), planetTexture('saturn-ring.png'), planetTexture('earth-1k.jpg')]);
+  const planetMaps = Promise.all([planetTexture('saturn-1k.jpg'), planetTexture('giant-1k.jpg'), planetTexture('saturn-ring.png'), planetTexture('earth-1k.jpg'), planetTexture('earth-day-1k.jpg')]);
   // full detail only to measure collisions from (see world/surface); drawn meshes stay light, their
   // relief coming from a baked normal map (see world/rocks, applyRockRelief) instead of triangles
   const asteroidsCollision = createRockShapes(DETAIL);
@@ -150,7 +150,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     [1, '#000000'],
   ]);
 
-  const [saturn, giant, ring, earth] = await planetMaps;
+  const [saturn, giant, ring, earth, earthDay] = await planetMaps;
   // the ring is a strip across its radius: it never wraps, and its edges stay sharp
   ring.wrapS = THREE.ClampToEdgeWrapping;
 
@@ -162,7 +162,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     fieldSets: { rock, ice: iceSet(rock), debris: debrisSet(), hull: hullSet() },
     textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), gas: gasTexture(), glow },
     sounds: synthesizeSounds(audio),
-    planets: { maps: { saturn, giant, earth }, ring },
+    planets: { maps: { saturn, giant, earth, 'earth-day': earthDay }, ring },
   };
 }
 

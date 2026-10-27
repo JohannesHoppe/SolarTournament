@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { EARTH_ALTITUDE, EARTH_CENTER, EARTH_DOWN, EARTH_RADIUS } from './arenas';
 import { BELT_INNER } from './belt';
-import { junkData } from './junkyard';
+import { DAY_FROM, DAY_REGION, EARTH_CAP, earthFrame, junkData } from './junkyard';
 import { SUN_DIRECTION } from './space';
 
 describe('the Satellite Junkyard', () => {
@@ -17,6 +17,34 @@ describe('the Satellite Junkyard', () => {
     const miss = Math.sqrt(toCenter.lengthSq() - Math.max(along, 0) ** 2);
     expect(miss).toBeGreaterThan(EARTH_RADIUS);
     expect(EARTH_CENTER.length()).toBeCloseTo(EARTH_RADIUS + EARTH_ALTITUDE);
+  });
+
+  it('has its day map cover every part of the built cap the sun reaches', () => {
+    const up = EARTH_DOWN.clone().negate();
+    const side = new THREE.Vector3().crossVectors(up, new THREE.Vector3(0, 0, 1)).normalize();
+    const other = new THREE.Vector3().crossVectors(up, side);
+    const frame = earthFrame();
+    const n = new THREE.Vector3();
+    const q = new THREE.Vector3();
+    let lit = 0;
+    for (let a = 0; a <= EARTH_CAP; a += EARTH_CAP / 60) {
+      for (let b = 0; b < Math.PI * 2; b += Math.PI / 90) {
+        n.copy(up).multiplyScalar(Math.cos(a)).addScaledVector(side, Math.sin(a) * Math.cos(b)).addScaledVector(other, Math.sin(a) * Math.sin(b));
+        // a little short of where daylight sets in, for the texture's filtering
+        if (n.dot(SUN_DIRECTION) < DAY_FROM - 0.02) continue;
+        lit++;
+        q.copy(n).applyMatrix3(frame);
+        // as the shader reads the map: longitude and latitude in Earth's own frame
+        const x = (Math.atan2(-q.z, q.x) - DAY_REGION.x) / DAY_REGION.z;
+        const y = (Math.asin(q.y) - DAY_REGION.y) / DAY_REGION.w;
+        expect(x).toBeGreaterThan(0.01);
+        expect(x).toBeLessThan(0.99);
+        expect(y).toBeGreaterThan(0.01);
+        expect(y).toBeLessThan(0.99);
+      }
+    }
+    // the sun reaches a good part of the cap: its far side towards the west
+    expect(lit).toBeGreaterThan(1000);
   });
 
   it('keeps every piece of junk where no ship reaches it, and within the camera\'s reach', () => {

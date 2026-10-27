@@ -801,8 +801,8 @@ export class Landmarks {
   private wreck!: Derelict;
   /** The Corona's sun, its spots, glow and prominences (see world/corona). */
   private sun!: Corona;
-  /** The planets' materials, whose map setDetail swaps between the page's and the sharp one. */
-  private readonly planets = new Map<Planet, THREE.ShaderMaterial>();
+  /** How each planet's map is put on its material, which setDetail swaps between the page's and the sharp one. */
+  private readonly planets = new Map<Planet, (map: THREE.Texture) => void>();
   /** The sharp maps (see loadPlanetMap), once asked for, and once loaded. */
   private sharpAsked = false;
   private readonly sharp = new Map<Planet, THREE.Texture>();
@@ -887,8 +887,8 @@ export class Landmarks {
 
   /**
    * The picture's quality (see view/quality, Look.landmark): Jupiter's cap at a share of its
-   * full segment count (see JUPITER_SEGMENTS), and the planets' maps sharp (2048 wide) from half
-   * the share on, else as the page loaded them (1024 wide). The sharp maps are fetched the first
+   * full segment count (see JUPITER_SEGMENTS), and the planets' maps sharp (`-2k`, twice as wide)
+   * from half the share on, else as the page loaded them (`-1k`). The sharp maps are fetched the first
    * time a rung asks for them and take over once they are there. The black hole's gas as
    * holeDetail says.
    */
@@ -918,11 +918,7 @@ export class Landmarks {
 
   /** Each planet's map as setDetail wants it, the page's until the sharp one is there. */
   private useMaps() {
-    for (const [planet, material] of this.planets) {
-      const map = (this.sharpWanted && this.sharp.get(planet)) || this.maps.maps[planet];
-      material.uniforms.map.value = map;
-      material.uniforms.texel.value = 1 / (map.image as { width: number }).width;
-    }
+    for (const [planet, use] of this.planets) use((this.sharpWanted && this.sharp.get(planet)) || this.maps.maps[planet]);
   }
 
   /**
@@ -949,7 +945,10 @@ export class Landmarks {
       fragmentShader: gasFragment,
     });
     this.timed.push(material);
-    this.planets.set(planet, material);
+    this.planets.set(planet, (map) => {
+      material.uniforms.map.value = map;
+      material.uniforms.texel.value = 1 / (map.image as { width: number }).width;
+    });
     return material;
   }
 
@@ -1039,10 +1038,11 @@ export class Landmarks {
     return material;
   }
 
-  /** The Satellite Junkyard (see world/junkyard): Earth below at night, its map swapped by quality like the other planets', and the junk beyond the arena. */
+  /** The Satellite Junkyard (see world/junkyard): Earth below, its night and day maps swapped by quality like the other planets', and the junk beyond the arena. */
   private junkyard(): THREE.Group {
-    const scene = junkyard(this.maps.maps.earth, this.light);
-    this.planets.set('earth', scene.earth);
+    const scene = junkyard(this.maps.maps.earth, this.maps.maps['earth-day'], this.light);
+    this.planets.set('earth', (map) => (scene.earth.uniforms.map.value = map));
+    this.planets.set('earth-day', (map) => (scene.earth.uniforms.dayMap.value = map));
     this.timed.push(...scene.timed);
     this.sized.push(...scene.sized);
     this.flicker.push(...scene.flicker);
