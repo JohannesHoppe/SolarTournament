@@ -110,7 +110,7 @@
       <p data-i18n>Out there nothing slows you down. The main drive pushes along the nose with {drive} g: the speed limit of {limit} m/s is two seconds of burn away, and so is a stop. Let go, and you drift forever.</p>
       <h3 id="thrusters" data-i18n>The maneuvering thrusters</h3>
       <p data-i18n>Besides the main drive your ship carries {nozzles} small nozzles: {quads} clusters of {quadNozzles}, one at each corner of the hull, fore and aft on both flanks. Each nozzle of a cluster points another way: out from the flank, up, down, and along the ship. Gas leaving a nozzle pushes the ship the other way.</p>
-      <p data-i18n>Nozzles on one side firing together move the ship without turning it: both clusters of the right flank puff, and the ship slides left, with up to {thrust} g. Two nozzles at opposite corners pushing opposite ways turn the ship about its center without moving it, up to {turnRate}° a second, reached in {turnReach} s; the other two stop the turn, because out there nothing else does. The flight computer picks the nozzles for you. Only the main drive pushes harder, and only forward.</p>
+      <p data-i18n>Nozzles on one side firing together move the ship without turning it: both clusters of the right flank fire, and the ship slides left, with up to {thrust} g. Two nozzles at opposite corners pushing opposite ways turn the ship about its center without moving it, up to {turnRate}° a second, reached in {turnReach} s; the other two stop the turn, because out there nothing else does. The flight computer picks the nozzles for you. Only the main drive pushes harder, and only forward.</p>
       <figure class="thrusters" aria-label="The maneuvering thrusters at work, seen from above" data-i18n-attr="aria-label">
         <svg class="thrust-defs" aria-hidden="true">
           <defs>
@@ -133,7 +133,7 @@
             <g class="thrust-ship thrust-left"><use href="#thrust-hull" /></g>
             <g transform="rotate(180)"><use class="thrust-stop" href="#thrust-puff" x="66.5" y="36" /><use class="thrust-stop" href="#thrust-puff" x="83.5" y="-50" /></g>
           </svg>
-          <p class="thrust-caption" data-i18n>Slide left: the right flank puffs, the ship slides, the left flank stops it.</p>
+          <p class="thrust-caption" data-i18n>Slide left: the right flank fires, the ship slides, the left flank stops it.</p>
         </div>
         <div class="thrust-phase">
           <svg viewBox="-150 -100 300 228" aria-hidden="true">
@@ -142,7 +142,7 @@
             <g class="thrust-ship thrust-right"><use href="#thrust-hull" /></g>
             <use class="thrust-stop" href="#thrust-puff" x="66.5" y="-36" /><use class="thrust-stop" href="#thrust-puff" x="83.5" y="50" />
           </svg>
-          <p class="thrust-caption" data-i18n>Slide right: the left flank puffs, the ship slides, the right flank stops it.</p>
+          <p class="thrust-caption" data-i18n>Slide right: the left flank fires, the ship slides, the right flank stops it.</p>
         </div>
         <div class="thrust-phase">
           <svg viewBox="-150 -100 300 228" aria-hidden="true">
@@ -151,7 +151,7 @@
             <g class="thrust-ship thrust-back"><use href="#thrust-hull" /></g>
             <g transform="rotate(90)"><use class="thrust-stop" href="#thrust-puff" x="84.5" y="-33" /><use class="thrust-stop" href="#thrust-puff" x="84.5" y="33" /></g>
           </svg>
-          <p class="thrust-caption" data-i18n>Back: the front clusters puff forward, the ship backs off, the rear ones stop it.</p>
+          <p class="thrust-caption" data-i18n>Back: the front clusters fire forward, the ship backs off, the rear ones stop it.</p>
         </div>
         <div class="thrust-phase">
           <svg viewBox="-150 -100 300 228" aria-hidden="true">
@@ -160,7 +160,7 @@
             <g class="thrust-ship thrust-turn"><use href="#thrust-hull" /></g>
             <g transform="rotate(-40)"><use class="thrust-stop" href="#thrust-puff" x="39.5" y="50" /><g transform="rotate(180)"><use class="thrust-stop" href="#thrust-puff" x="22.5" y="36" /></g></g>
           </svg>
-          <p class="thrust-caption" data-i18n>Turn: two opposite corners puff, the ship turns on the spot, the other two stop it.</p>
+          <p class="thrust-caption" data-i18n>Turn: two opposite corners fire, the ship turns on the spot, the other two stop it.</p>
         </div>
       </figure>
       <h3 id="autopilot" data-i18n>The autopilot</h3>
