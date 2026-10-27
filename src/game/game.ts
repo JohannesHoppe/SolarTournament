@@ -39,6 +39,7 @@ import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
 import { airBurn, airHeat, altitudeIn, density, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH } from '../world/air';
 import { Haze, installHaze, skyLight } from '../view/haze';
+import { Reentry } from '../view/reentry';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
@@ -729,6 +730,8 @@ export class Game implements OnlineGame {
   private readonly belt: Belt;
   readonly field: AsteroidField;
   private readonly effects: Effects;
+  /** Ships flying hot through a planet's air: their plasma, glowing hulls and fireballs (see view/reentry). */
+  private readonly reentry: Reentry;
   private readonly replayEffects: Effects;
   private readonly killcam: KillCam;
   private readonly torpedoes: Torpedoes;
@@ -1148,6 +1151,7 @@ export class Game implements OnlineGame {
     this.landmarks = new Landmarks(assets.planets);
     this.graphics = new Graphics(this.renderer, this.bloom, this.space, this.field, this.belt, this.plane, this.landmarks, this.lensing, () => this.resize());
     this.effects = new Effects(assets.textures);
+    this.reentry = new Reentry(this.effects);
     // the kill cam fires the beams of its replay in effects of their own
     this.replayEffects = new Effects(assets.textures);
     this.replayEffects.group.visible = false;
@@ -1155,7 +1159,7 @@ export class Game implements OnlineGame {
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
     this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.ghost.root, this.cables.group, this.cometView.root, this.plane.group);
-    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
+    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group, this.reentry.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
       this.engineLights.push(light);
@@ -3136,7 +3140,10 @@ export class Game implements OnlineGame {
     }
     // the screen shows the round as the last step left it, once a frame
     if (stepped && this.me && (this.state === 'playing' || (this.state === 'paused' && !!this.online))) this.presentRound();
-    if (this.state !== 'paused' || this.online) this.effects.update(dt);
+    if (this.state !== 'paused' || this.online) {
+      this.reentry.update(dt, this.ships, this.field.air, this.me ? this.subject() : null, this.camera);
+      this.effects.update(dt);
+    }
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
     this.airWeather(dt);
     // the ship on show, while the menu or the hangar shows it
@@ -4322,6 +4329,7 @@ export class Game implements OnlineGame {
       this.space.shade(1, 1, null, null);
       this.background.set(SPACE_BACKGROUND);
       this.sound.setWind(0, 0);
+      this.sound.setPlasma(0, false, dt);
       return;
     }
     const eye = this.camera.position;
@@ -4336,9 +4344,11 @@ export class Game implements OnlineGame {
     const inAir = !!me?.alive && altitudeIn(air, me.flight.position) < 0;
     if (!me || !inAir) {
       this.sound.setWind(0, 0);
+      this.sound.setPlasma(0, false, dt);
       return;
     }
     const speed = me.flight.velocity.length() / MAX_SPEED;
+    this.sound.setPlasma(this.reentry.plasmaOf(me), this.reentry.burning(me), dt);
     this.sound.setWind(Math.min(1, density(altitudeIn(air, me.flight.position)) * speed * speed * WIND_FULL), Math.min(1, speed));
     if (struck) {
       const distance = jupiter.strikePoint.distanceTo(me.flight.position);

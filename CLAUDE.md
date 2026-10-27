@@ -196,6 +196,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/killcam.ts` | The kill cam: keeps the last seconds of every ship and beam, replays the kill of the own clone in slow motion from behind the shooter |
 | `view/radar.ts` | The radar sphere: everything within 2.5 km around the own ship, ahead and behind, on a canvas |
 | `view/lensing.ts` | The black hole's gravitational lens over the rendered picture |
+| `view/reentry.ts` | A ship flying hot through a planet's air, from its own altitude and speed with the air model (alike for the own ship, bots and other Hosts' ships; looks only): the plasma's shock layer and tail, its trail, the burning hull's glow, sparks and flakes, the fireball of a ship that burns up and its pieces sinking, the plasma licking past the view's edges; two draw calls per hot ship, the rest particles |
 | `view/haze.ts` | A planet's haze in the picture: three.js's fog chunks as a height fog that sums the haze along the view ray as world/air does, in every material's shader while the scene has a fog (only in an arena with air), additive glows only fading; lightning lighting the haze; how much of the sun's and the sky's light reaches the camera |
 | `view/glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |
 | `view/chase.ts` | The chase camera: field of view, how fast it follows, where it hangs, looking along the nose |
@@ -215,7 +216,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `input/input.ts` | Keyboard, mouse flight (the ship turns towards the visible pointer, its offset from the center is the stick) and gamepad, merges all input into `Controls` |
 | `input/touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |
 | **`sound/`** | **What the pilot hears besides the radio** |
-| `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static, dust pattering on the hull; in a planet's air the wind and thunder from outside |
+| `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static, dust pattering on the hull; in a planet's air the wind, a hot hull's plasma and thunder from outside |
 | `sound/sounds.ts` | Synthesized sound effects: laser, explosion |
 | `sound/speaker.ts` | Nicole, the flight computer's voice: reads out what the screen shows, whole lines from the sprite |
 | **`music/`** | **Radio 2584** |
