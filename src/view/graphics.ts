@@ -2,6 +2,7 @@ import type * as THREE from 'three';
 import type { AsteroidField } from '../world/asteroids';
 import type { Belt } from '../world/belt';
 import type { Landmarks } from '../world/landmarks';
+import type { Mining } from '../world/mining';
 import type { Space } from '../world/space';
 import type { Bloom } from './bloom';
 import { setParticleShare } from './effects';
@@ -54,6 +55,7 @@ export class Graphics {
     private readonly belt: Belt,
     private readonly plane: ReferencePlane,
     private readonly landmarks: Landmarks,
+    private readonly mining: Mining,
     private readonly lensing: Lensing,
     /** Called when the picture's resolution changes: the game sizes its buffers anew. */
     private readonly resize: () => void,
@@ -132,6 +134,7 @@ export class Graphics {
     this.plane.setDetail(next.spokes);
     this.landmarks.setDetail(next.landmark);
     this.landmarks.setGrains(next.particles);
+    this.mining.setShare(next.particles);
     this.lensing.setSamples(next.lens);
     if (next.pixelRatio !== before.pixelRatio) this.resize();
   }

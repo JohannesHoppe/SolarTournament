@@ -112,7 +112,8 @@ export class Lensing {
     uniforms.center.value.set(projected.x * 0.5 + 0.5, projected.y * 0.5 + 0.5);
     uniforms.tDepth.value = depth;
     uniforms.holeDepth.value = projected.z * 0.5 + 0.5;
-    uniforms.aspect.value = camera.aspect;
+    // the picture's own shape: a camera showing a cut of a wider view (the menu's preview) has the wider one's aspect
+    uniforms.aspect.value = camera.view?.enabled ? camera.view.width / camera.view.height : camera.aspect;
     // the hole's angular radius as a share of the screen height
     const angular = Math.atan(horizon / distance) / THREE.MathUtils.degToRad(camera.fov);
     uniforms.shadow.value = angular * 1.3;

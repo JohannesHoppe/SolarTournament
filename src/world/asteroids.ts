@@ -409,7 +409,11 @@ export class AsteroidField {
       object = lod;
     }
     object.scale.multiplyScalar(scale);
-    object.traverse((o) => (o.castShadow = o.receiveShadow = o instanceof THREE.Mesh));
+    // what is see-through (glass, paint) casts no shadow
+    object.traverse((o) => {
+      o.receiveShadow = o instanceof THREE.Mesh;
+      o.castShadow = o.receiveShadow && !o.userData.shadowless;
+    });
     // a billboard is too thin and flat to cast or receive a believable shadow
     if (object instanceof THREE.LOD && object.children[2]) object.children[2].castShadow = object.children[2].receiveShadow = false;
     this.group.add(object);

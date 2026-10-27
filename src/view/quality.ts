@@ -26,7 +26,7 @@ export interface Look {
   showcase: { pixelRatio: number; shadows: boolean; every: number };
   /** The reference plane's grid with its spokes, or only its rings (see ReferencePlane.setDetail). */
   spokes: boolean;
-  /** Share of the Jupiter landmark's full detail (see world/landmarks, Landmarks.setDetail): only its cap sphere and its sheets of cloud cost enough to be worth a cheaper picture. */
+  /** Share of the landmarks' full detail (see world/landmarks, Landmarks.setDetail): Jupiter's cap sphere and its sheets of cloud, the Corona's prominences and its sun's finest grain. */
   landmark: number;
   /** Steps the black hole's lens marches along each pixel's ray toward its source (see view/lensing): fewer leaves the bend coarser, never unbent. */
   lens: number;

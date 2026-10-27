@@ -28,7 +28,7 @@ describe('the derelict', () => {
     const pieces = arenaByKey('derelict')!.layout.placements!;
     // the spars (type 4): the bow's and the stern's, at the stern section's middle
     const [bowSpar, sternSpar] = pieces.filter((piece) => piece.type === 4);
-    const sternHull = pieces.find((piece) => piece.type === 0 && piece.position.equals(sternSpar.position))!;
+    const sternHull = pieces.find((piece) => piece.type !== 4 && piece.position.equals(sternSpar.position))!;
     const along = (piece: (typeof pieces)[number], x: number, y: number, z: number) => new THREE.Vector3(x, y, z).applyQuaternion(piece.orientation);
     // both spars lie across the ship, level
     for (const spar of [bowSpar, sternSpar]) {

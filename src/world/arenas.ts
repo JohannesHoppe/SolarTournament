@@ -94,7 +94,7 @@ const STERN_SHIFT = 3000;
 /** Where a point along the stern's axis lies, `offset` units from where it broke. */
 export const sternAt = (offset: number) => [offset * Math.cos(STERN_TILT), -STERN_DROP + offset * Math.sin(STERN_TILT)] as const;
 
-/** The hull of the wrecked world ship: two halves broken apart, hull sections of `hullSet` (0 section, 1 torn, 2 engine, 3 tower, 4 spar). */
+/** The hull of the wrecked world ship: two halves broken apart, hull sections of `hullSet` (1 torn, 2 engine, 3 tower, 4 spar; 5, 6, 7 sections with its paint: PER ASPERA, emblem and registry, AD ASTRA). */
 function derelict(): Placement[] {
   const pieces: Placement[] = [];
   const turn = new THREE.Euler();
@@ -109,10 +109,11 @@ function derelict(): Placement[] {
       orientation: new THREE.Quaternion().setFromEuler(turn.set(roll, yaw, pitch, order)),
       solid: true,
     });
-  // the bow half: two sections of 700 m, the bridge tower on top, a spar across, the torn end
+  // the bow half: two sections of 700 m (the emblem and registry by the bridge, PER ASPERA aft
+  // of it), the bridge tower on top, a spar across, the torn end
   // facing the gap
-  add(0, 7, -43000, 0, 0);
-  add(0, 7, -30000, 0, 0);
+  add(6, 7, -43000, 0, 0);
+  add(5, 7, -30000, 0, 0);
   add(3, 7, -36000, 3200, 0);
   add(1, 7, -17000, 0, 0);
   add(4, 7, -30000, 0, 0, Math.PI / 2);
@@ -120,7 +121,7 @@ function derelict(): Placement[] {
   const [x1, y1] = sternAt(12000);
   add(1, 7, x1, y1, STERN_SHIFT, Math.PI, -STERN_TILT);
   const [x2, y2] = sternAt(25000);
-  add(0, 7, x2, y2, STERN_SHIFT, 0, STERN_TILT);
+  add(7, 7, x2, y2, STERN_SHIFT, 0, STERN_TILT);
   const [x3, y3] = sternAt(37000);
   add(2, 7, x3, y3, STERN_SHIFT - 3000, 0, STERN_TILT);
   add(2, 7, x3, y3, STERN_SHIFT + 3000, 0, STERN_TILT);
