@@ -43,6 +43,7 @@ import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
 import { ARENAS, arenaById, DEFAULT_ARENA, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
+import { stutterWindows } from '../world/shapes';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
@@ -3131,6 +3132,7 @@ export class Game implements OnlineGame {
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     this.landmarks.update(this.field.clock);
+    if (this.venue.id === 'derelict') stutterWindows();
     const well = this.field.well;
     // the scene is drawn into the composer's read buffer, which the lens reads right after
     this.lensing.update(this.camera, this.venue.id === 'hole' && well && !this.bench.has('lens') ? well.position : null, well?.radius ?? 0, this.composer.readBuffer.depthTexture);

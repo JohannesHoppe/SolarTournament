@@ -77,12 +77,25 @@ function tiled(element: HTMLCanvasElement): THREE.CanvasTexture {
 
 /**
  * The plating of what broke in battle (see ravagedSurface): craters, burns with their heat
- * tint, soot and rust, the last embers glowing in a few craters. Little metalness of its own:
- * without a reflected environment, metal turns black on its shadowed side.
+ * tint, soot and rust, with `embers` the last embers glowing in a few craters (a fresh wreck;
+ * an old one has long gone cold). Little metalness of its own: without a reflected environment,
+ * metal turns black on its shadowed side.
  */
-function ravaged(color: THREE.ColorRepresentation): THREE.MeshStandardMaterial {
+function ravaged(color: THREE.ColorRepresentation, embers: boolean): THREE.MeshStandardMaterial {
   const surface = ravagedSurface(DEBRIS_SEED + 1);
-  return new THREE.MeshStandardMaterial({ ...surfaced(surface, RELIEF), color, metalness: 0.35, emissive: 0xff6a1a, emissiveMap: surface.glow, emissiveIntensity: 1.6 });
+  const glow = embers ? { emissive: 0xff6a1a, emissiveMap: surface.glow, emissiveIntensity: 1.6 } : {};
+  return new THREE.MeshStandardMaterial({ ...surfaced(surface, RELIEF), color, metalness: 0.35, ...glow });
+}
+
+/** How bright the derelict's windows burn on its emergency power, and how often a frame they dip (0..1). */
+const WINDOW_LIGHT = 1.3;
+const WINDOW_DIP = 0.05;
+/** The derelict's window decks (see hullSet), whose emergency power stutters (see stutterWindows). */
+const hullWindows: THREE.MeshBasicMaterial[] = [];
+
+/** The derelict's emergency power stutters: now and then its windows dip for a frame. A visual only. */
+export function stutterWindows() {
+  for (const windows of hullWindows) windows.color.setScalar(WINDOW_LIGHT * (Math.random() < WINDOW_DIP ? 0.35 : 1));
 }
 
 /** How deep seams, rivets and craters look (see surfaced), and how large a tile of plating is (units, 8 m). */
@@ -98,7 +111,7 @@ const STATION: Wear = { rust: 0.4, chips: 0.5, grime: 0.8, scratches: 0.5, seams
  */
 export function debrisSet(): TemplateSet {
   const r = new Randomizer(DEBRIS_SEED);
-  const metal = ravaged(0xffffff);
+  const metal = ravaged(0xffffff, true);
   const paint = new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(DEBRIS_SEED, STATION), RELIEF), color: 0xd8d2c4 });
   const light = new THREE.MeshStandardMaterial({ color: 0x110805, emissive: 0xff7a1a, emissiveIntensity: 2.2 });
   const near: THREE.Object3D[] = [];
@@ -146,16 +159,16 @@ const block = (x: number, y: number, z: number, cx = 0, cy = 0, cz = 0) => new T
 /**
  * The hull sections of a wrecked world ship, industrial and angular: boxes of plating on
  * frames, a spine, containers along the flanks, decks of lit windows, all within the section's
- * collider box, which is its collision shape. 0 a hull section, 1 a section torn off at one end
- * (still glowing where it broke), 2 an engine block with three nozzles, 3 a bridge tower,
- * 4 a long truss.
+ * collider box, which is its collision shape. 0 a hull section, 1 a section torn off at one end,
+ * 2 an engine block with three nozzles, 3 a bridge tower, 4 a long truss. The ship died long
+ * ago: its plating, its break and its drive are cold and dark, and only the emergency power
+ * still lights some of its windows.
  */
 export function hullSet(): TemplateSet {
-  const metal = ravaged(0xb8bec8);
-  const dark = ravaged(0x4a4e57);
-  const windows = new THREE.MeshBasicMaterial({ map: windowTexture(DEBRIS_SEED + 2), color: new THREE.Color(1, 1, 1).multiplyScalar(1.6), toneMapped: false });
-  const ember = new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.35, 0.05).multiplyScalar(2), toneMapped: false });
-  const drive = new THREE.MeshBasicMaterial({ color: new THREE.Color(0.25, 0.5, 1).multiplyScalar(1.4), toneMapped: false });
+  const metal = ravaged(0xb8bec8, false);
+  const dark = ravaged(0x4a4e57, false);
+  const windows = new THREE.MeshBasicMaterial({ map: windowTexture(DEBRIS_SEED + 2), color: new THREE.Color().setScalar(WINDOW_LIGHT), toneMapped: false });
+  hullWindows.push(windows);
   const r = new Randomizer(DEBRIS_SEED + 3);
   const L = HULL_LENGTH;
 
@@ -175,29 +188,26 @@ export function hullSet(): TemplateSet {
     }
   };
 
-  const shapes: [THREE.Vector3, (half: THREE.Vector3, parts: THREE.BufferGeometry[], lights: THREE.BufferGeometry[], glow: THREE.BufferGeometry[]) => void][] = [
+  const shapes: [THREE.Vector3, (half: THREE.Vector3, parts: THREE.BufferGeometry[], lights: THREE.BufferGeometry[]) => void][] = [
     [new THREE.Vector3(L * 0.5, L * 0.16, L * 0.14), (half, parts, lights) => section(half, half.x, parts, lights)],
     [
       new THREE.Vector3(L * 0.5, L * 0.16, L * 0.14),
-      (half, parts, lights, glow) => {
+      (half, parts, lights) => {
         // the hull ends at 40 % of the length, torn plates reach on to the end of the box
         section(half, half.x * 0.4, parts, lights);
         for (let k = 0; k < 9; k++) {
           const length = r.range(0.2, 0.6) * half.x;
           parts.push(block(length, r.range(10, 30), half.z * r.range(0.4, 1.4), half.x * 0.4 + length / 2, r.range(-0.75, 0.75) * half.y, r.range(-0.3, 0.3) * half.z));
         }
-        glow.push(block(20, half.y * 1.5, half.z * 1.5, half.x * 0.4 + 12));
       },
     ],
     [
       new THREE.Vector3(L * 0.22, L * 0.2, L * 0.2),
-      (half, parts, _, glow) => {
+      (half, parts) => {
         parts.push(block(half.x * 1.2, half.y * 2, half.z * 2, -half.x * 0.4));
-        // three nozzles out of the back, their throats still glowing
+        // three nozzles out of the back, cold
         for (const [y, z] of [[0.45, 0], [-0.3, 0.45], [-0.3, -0.45]]) {
-          const nozzle = new THREE.CylinderGeometry(half.y * 0.32, half.y * 0.48, half.x * 0.8, 8, 1, true).rotateZ(Math.PI / 2).translate(half.x * 0.6, y * half.y, z * half.z).toNonIndexed();
-          parts.push(nozzle);
-          glow.push(new THREE.CircleGeometry(half.y * 0.3, 8).rotateY(Math.PI / 2).translate(half.x * 0.25, y * half.y, z * half.z).toNonIndexed());
+          parts.push(new THREE.CylinderGeometry(half.y * 0.32, half.y * 0.48, half.x * 0.8, 8, 1, true).rotateZ(Math.PI / 2).translate(half.x * 0.6, y * half.y, z * half.z).toNonIndexed());
         }
       },
     ],
@@ -225,13 +235,11 @@ export function hullSet(): TemplateSet {
   const near = shapes.map(([half, build]) => {
     const parts: THREE.BufferGeometry[] = [];
     const lights: THREE.BufferGeometry[] = [];
-    const glow: THREE.BufferGeometry[] = [];
-    build(half, parts, lights, glow);
+    build(half, parts, lights);
     const group = new THREE.Group();
     const body = mergeGeometries(parts.map((p) => p.deleteAttribute('uv')));
     group.add(new THREE.Mesh(boxUv(body, TILE), half.y < L * 0.05 ? dark : metal));
     if (lights.length) group.add(new THREE.Mesh(boxUv(mergeGeometries(lights.map((p) => p.deleteAttribute('uv'))), 400), windows));
-    if (glow.length) group.add(new THREE.Mesh(mergeGeometries(glow.map((p) => p.deleteAttribute('uv'))), half.x < L * 0.3 ? drive : ember));
     group.add(collider(half.clone().round(), 1));
     return group;
   });
