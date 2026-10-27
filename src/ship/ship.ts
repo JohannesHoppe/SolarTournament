@@ -334,11 +334,6 @@ export class Ship {
     this.root.add(this.aura);
   }
 
-  /**
-   * Fits the ship with its upgrades: how it flies and fights (read where they act), its neon
-   * trim (TRIM_BRIGHTNESS: light strips along both flanks, then across the stern too, then with a
-   * running light towards the drives) and its drive flame's color.
-   */
   /** The Sovereign, the President's gift: marked in its own ivory and gold, which no Host can pick. */
   get sovereign() {
     return this.type === 'sovereign';
@@ -352,6 +347,11 @@ export class Ship {
     this.color.set(tint);
   }
 
+  /**
+   * Fits the ship with its upgrades: how it flies and fights (read where they act), its neon
+   * trim (TRIM_BRIGHTNESS: light strips along both flanks, then across the stern too, then with a
+   * running light towards the drives) and its drive flame's color.
+   */
   outfit(perks: Perks) {
     this.perks = perks;
     if (this.engine.flameMaterial) this.engine.flameMaterial.color.copy(FLAME_TINTS[perks.flame]);

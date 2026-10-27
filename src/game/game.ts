@@ -1594,10 +1594,6 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * All places are taken by Hosts who came first: the own clone watches a pilot of the
-   * tournament (Tab switches) until a place comes free, then it is printed and flies.
-   */
-  /**
    * The benchmark's round (see bench.ts): a solo round of `mode` in `arena` against the default
    * rivals, the Host's clone watching, so the bots fight and nothing ends the round early.
    */
@@ -1633,6 +1629,10 @@ export class Game implements OnlineGame {
     if (feature === 'audio') void (active ? this.sound.context.suspend() : this.sound.context.resume());
   }
 
+  /**
+   * All places are taken by Hosts who came first: the own clone watches a pilot of the
+   * tournament (Tab switches) until a place comes free, then it is printed and flies.
+   */
   spectate(watching: boolean) {
     const me = this.me!;
     this.spectating = watching;
@@ -4088,13 +4088,13 @@ export class Game implements OnlineGame {
   private rankedOf: Ship[] | null = null;
   private rankedCount = -1;
 
-  /** The racing line from a ship on to gate `next` of an ideal line: it leaves along the flight, or along the nose of a ship that hardly moves. */
   /** The next ring of a course in the HUD: its brackets, the ring after it, and where the own flight crosses its plane (see Hud.setGates). */
   private markRings(me: Ship, next: THREE.Vector3 | null, normal: THREE.Vector3 | null, after: THREE.Vector3 | null, radius: number) {
     const off = next && normal && me.alive ? pathCrossing(me.flight.position, me.flight.velocity, next, normal, CROSSING_HORIZON, crossingPoint) : null;
     this.hud.setGates(this.camera, next, after, radius, off === null ? null : crossingPoint, off !== null && off < radius);
   }
 
+  /** The racing line from a ship on to gate `next` of an ideal line: it leaves along the flight, or along the nose of a ship that hardly moves. */
   private showGuide(me: Ship, line: RacingLine, next: number, missed: boolean) {
     const speed = me.flight.velocity.length();
     const heading = speed > 20 ? scratch.copy(me.flight.velocity).divideScalar(speed) : me.flight.forward(scratch);

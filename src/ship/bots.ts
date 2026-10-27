@@ -58,7 +58,6 @@ const RACE_SPEED_FAST = 4400;
 export const RACE_SPEED = (RACE_SPEED_SLOW + RACE_SPEED_FAST) / 2;
 /** A bot's racing speed: the better it flies on average (aim, reflexes, daring), the faster. */
 export const raceSpeedOf = (skills: Skills) => RACE_SPEED_SLOW + (RACE_SPEED_FAST - RACE_SPEED_SLOW) * meanSkill(skills);
-/** A bot's skill in one number: the mean of aim, reflexes and daring. */
 /** A ring of the round as a bot sees it: where it is, which way it faces (unit length), the radius of its opening. */
 export interface Ring {
   center: THREE.Vector3;
@@ -66,6 +65,7 @@ export interface Ring {
   radius: number;
 }
 
+/** A bot's skill in one number: the mean of aim, reflexes and daring. */
 export const meanSkill = (skills: Skills) => (skills.aim + skills.reflexes + skills.daring) / 3;
 /** A racer only turns its nose to a ship this close to it (rad, about 30°): one ahead on the course. */
 const RACE_AIM_CONE = 0.5;
