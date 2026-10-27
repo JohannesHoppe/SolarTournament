@@ -5,6 +5,7 @@ The online tournament, without a game server: browsers find each other through p
 | File | What it does |
 |---|---|
 | `transport.ts` | The wire: Trystero (over the relays of `relays.json`, Trystero's own when none of them answers within 10 seconds; with STUN and the TURN relay from `/turn`), or a BroadcastChannel for local tests (`?local=1`) |
+| `turn.test.ts` | The relay's credentials function (`functions/turn.ts`) names only a fixed reason when it hands out nothing, never what an upstream service answered |
 | `relays.json` | The public Nostr relays every browser connects to; written by `npm run relays` (`tools/relays/`), checked every week, never edited by hand |
 | `session.ts` | The protocol: message types (a hook's hold: rock, ship, core, torpedo, whose browser then decides for it, or probe, reeled in on every browser), rate limits, who leads, starting over after a lost link, the ping to every peer (once a second, the median of its last few round trips) |
 | `online.ts` | Who owns which ship, what goes over the network, the lead's bots; the peer a ship's ping is measured to (a bot's is the lead that runs it) and whether a Host's ship belongs to the browser that leads |
