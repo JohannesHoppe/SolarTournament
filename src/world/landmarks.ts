@@ -6,10 +6,11 @@ import { canvas, toTexture } from '../view/textures';
 import { loadPlanetMap, type Planet, type PlanetMaps } from '../assets';
 import { junkyard } from './junkyard';
 import { Jupiter } from './jupiter';
+import { Corona } from './corona';
 
 /**
  * What an arena shows beyond its field: Saturn, whose ring the arena lies in, Earth and the
- * junk around the Satellite Junkyard (see world/junkyard), Jupiter (see world/jupiter), the sun up close, the black hole with its disk, the neon sign
+ * junk around the Satellite Junkyard (see world/junkyard), Jupiter (see world/jupiter), the sun up close (see world/corona), the black hole with its disk, the neon sign
  * on the derelict. Scenery only; what pulls and blocks is the field's well.
  */
 
@@ -78,9 +79,6 @@ const JUPITER_LONGITUDE = 0.3625 + 0.1 / (2 * Math.PI);
 const JUPITER_FINE_REACH = 250000;
 /** The light a planet's lit side gets on top of the arena's sun (the sky's faint glow), a share of the sun's. */
 const PLANET_AMBIENT = 0.02;
-/** The sun of the corona arena: a sphere this large at this distance (units). */
-const CORONA_RADIUS = 62000;
-const CORONA_DISTANCE = 240000;
 /** The black hole's disk: from and to (units, 300 m to 1.4 km). */
 const DISK_INNER = 6000;
 const DISK_OUTER = 28000;
@@ -245,30 +243,6 @@ const gasFragment = /* glsl */ `
     float limb = 1.0 - clamp(dot(n, view), 0.0, 1.0);
     lit = mix(lit, haze * light * (0.1 + 0.8 * day * shade), pow(limb, 4.0) * 0.5);
     gl_FragColor = vec4(lit, 1.0);
-  }
-`;
-
-/**
- * The surface of a sun up close: boiling cells of plasma, a fine granulation over them, groups of
- * dark sunspots with their paler rims, hotter towards the middle.
- */
-const sunFragment = /* glsl */ `
-  uniform float time;
-  varying vec3 vLocal;
-  varying vec3 vNormal;
-  varying vec3 vView;
-  ${noise3}
-  void main() {
-    vec3 p = normalize(vLocal);
-    float cells = noise(p * 14.0 + time * 0.05) * 0.5 + noise(p * 40.0 - time * 0.11) * 0.3 + noise(p * 160.0 + time * 0.3) * 0.2;
-    float center = clamp(dot(normalize(vNormal), normalize(vView)), 0.0, 1.0);
-    vec3 color = mix(vec3(1.0, 0.35, 0.05), vec3(1.0, 0.85, 0.5), cells * 0.7 + center * 0.5);
-    float spots = noise(p * 5.0 + 11.0) * 0.7 + noise(p * 24.0) * 0.3;
-    float penumbra = smoothstep(0.7, 0.73, spots);
-    float umbra = smoothstep(0.75, 0.78, spots);
-    color *= 1.0 - 0.45 * penumbra - 0.45 * umbra;
-    // bright enough to bloom, not so bright that the cells and spots wash out to white
-    gl_FragColor = vec4(color * (0.75 + 0.55 * center), 1.0);
   }
 `;
 
@@ -579,6 +553,8 @@ export class Landmarks {
   private jupiterDetail = 0;
   /** Jupiter's deck, its sheets of cloud, its sky and weather (see world/jupiter). */
   jupiter!: Jupiter;
+  /** The Corona's sun, its spots, glow and prominences (see world/corona). */
+  private sun!: Corona;
   /** The planets' materials, whose map setDetail swaps between the page's and the sharp one. */
   private readonly planets = new Map<Planet, THREE.ShaderMaterial>();
   /** The sharp maps (see loadPlanetMap), once asked for, and once loaded. */
@@ -646,6 +622,7 @@ export class Landmarks {
 
   update(time: number) {
     for (const material of this.timed) material.uniforms.time.value = time;
+    this.sun.update(time);
     // the neon of the derelict stutters now and then, as a sign on emergency power does
     for (const sign of this.flicker) (sign.material as THREE.MeshBasicMaterial).opacity = Math.random() < 0.03 ? 0.25 : 1;
   }
@@ -671,6 +648,7 @@ export class Landmarks {
       }
     }
     this.useMaps();
+    this.sun.setDetail(share);
     const tier = share >= 0.75 ? 0 : share >= 0.375 ? 1 : 2;
     if (tier === this.jupiterDetail) return;
     this.jupiterDetail = tier;
@@ -834,13 +812,8 @@ export class Landmarks {
   }
 
   private corona(): THREE.Group {
-    const group = new THREE.Group();
-    const material = new THREE.ShaderMaterial({ uniforms: { time: { value: 0 } }, vertexShader: bandsVertex, fragmentShader: sunFragment, toneMapped: false });
-    this.timed.push(material);
-    const sun = new THREE.Mesh(new THREE.SphereGeometry(CORONA_RADIUS, 96, 48), material);
-    sun.position.copy(SUN_DIRECTION).multiplyScalar(CORONA_DISTANCE);
-    group.add(sun);
-    return group;
+    this.sun = new Corona();
+    return this.sun.group;
   }
 
   private hole(): THREE.Group {

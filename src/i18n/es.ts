@@ -1070,6 +1070,8 @@ export const ES: Catalog = {
   'Heat and bursts': 'Calor y ráfagas',
   "The laser needs no ammunition, only cooling. Each shot adds {heatShot} % heat: a cool laser fires a burst of {burstSun} in sunlight, {burstShade} in a rock's shadow. Overheated, it locks until it has cooled to {cooled} %. Fire short bursts while the crosshair glows, and cool off in the shade (☾ beside the heat gauge).":
     'El láser no necesita munición, solo refrigeración. Cada disparo añade un {heatShot} % de calor: un láser frío dispara una ráfaga de {burstSun} a la luz del sol, {burstShade} a la sombra de una roca. Sobrecalentado, se bloquea hasta enfriarse al {cooled} %. Dispara ráfagas cortas mientras brilla la mira, y enfríate a la sombra (☾ junto al indicador de calor).',
+  'Hot radiators glow for everyone to see: dull red, then orange-red as the laser nears its lock. A rival glowing bright is about to fall silent; while yours glow, every rival knows the same of you.':
+    'Los radiadores calientes brillan a la vista de todos: rojo apagado, luego rojo anaranjado a medida que el láser se acerca a su bloqueo. Un rival que brilla con fuerza está a punto de callar; mientras los tuyos brillan, todos tus rivales saben lo mismo de ti.',
   "Rock stops everything: beams, sensors and torpedo seekers. A ship behind a rock vanishes from the HUD, and the bots cannot see it either. In a rock's shadow your laser also cools more than twice as fast.":
     'La roca lo detiene todo: rayos, sensores y buscadores de torpedos. Una nave detrás de una roca desaparece del HUD, y los bots tampoco la ven. A la sombra de una roca, además, tu láser se enfría más del doble de rápido.',
   Torpedoes: 'Torpedos',

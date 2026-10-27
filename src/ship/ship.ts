@@ -57,6 +57,13 @@ export const COOLING_SUN = 20;
 export const COOLING_SHADOW = 50;
 /** An overheated laser stays locked until the ship has cooled down to this. */
 const OVERHEAT_RESUME = 30;
+/**
+ * The radiators glow with the heat they shed (see models' radiator): from RADIATOR_GLOW of the
+ * laser's limit on, dull red, deepening to orange-red at the limit, as hot metal does. The metal
+ * follows the heat over RADIATOR_LAG seconds, so a shot's heat warms it instead of flashing it.
+ */
+const RADIATOR_GLOW = 0.25;
+const RADIATOR_LAG = 0.4;
 /** Minimum time between two shots (s), so a full bank fires as a quick burst. */
 const LASER_COOLDOWN = 0.18;
 
@@ -252,6 +259,9 @@ export class Ship {
   private readonly trim: { strips: THREE.Object3D; stern: THREE.Object3D; light: THREE.MeshBasicMaterial; running: THREE.Texture };
   heat = 0;
   overheated = false;
+  /** The radiators' skin and how hot it glows, 0..1 of the laser's limit (see radiate). */
+  private readonly radiators: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+  private glow = 0;
   /** The clone's g-force strain, 0..1 (see strainAfter); a coil, a dodge or the overdrive add to it at once. */
   strain = 0;
   /** Game time until which the main drive cools down after an overdrive. */
@@ -325,11 +335,13 @@ export class Ship {
       if (!(o instanceof THREE.Mesh)) return;
       if (o.name.toLowerCase().startsWith('drive')) o.material = (o.material as THREE.Material).clone();
       if (o.name === 'trimLight') o.material = light;
+      if (o.name === 'radiator') o.material = (o.material as THREE.Material).clone();
       o.castShadow = o.receiveShadow = !(o.material as THREE.Material).transparent;
     });
     const running = runningLight().clone();
     running.repeat.x = TRIM_PULSES;
     this.trim = { strips: this.model.getObjectByName('trim')!, stern: this.model.getObjectByName('trimStern')!, light, running };
+    this.radiators = this.model.getObjectByName('radiator') as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
     this.radius = sharedRadius(assets);
     this.frames = assets.textures.flameFrames;
     this.setTint(this.kind === 'host' ? TINTS[this.wish].hex : botTint(name));
@@ -535,6 +547,7 @@ export class Ship {
     if (state.a && !this.alive) {
       // the owner booted a new clone
       this.alive = true;
+      this.heat = 0;
       this.holes.length = 0;
       this.root.visible = true;
       this.flight.position.copy(r.position);
@@ -554,6 +567,7 @@ export class Ship {
       if (this.engineLight) this.engineLight.intensity = 0;
       return;
     }
+    this.heat = Math.max(0, this.heat - this.cooling * dt);
     const r = this.remote;
     const age = Math.min(now - r.at, 1);
     local.copy(r.position).addScaledVector(r.velocity, age);
@@ -576,6 +590,23 @@ export class Ship {
     this.model.visible = now >= this.protectedUntil || Math.floor(now * 8) % 2 === 0;
     this.syncTransform();
     this.animateEngine(dt);
+    this.radiate(dt);
+  }
+
+  /** The radiators glow as hot as the ship is (see RADIATOR_GLOW): dull red, then orange-red; unseen while cool. */
+  private radiate(dt: number) {
+    this.glow += (this.heat / MAX_HEAT - this.glow) * (1 - Math.exp(-dt / RADIATOR_LAG));
+    const t = THREE.MathUtils.smoothstep(this.glow, RADIATOR_GLOW, 1);
+    this.radiators.visible = t > 0.01;
+    if (this.radiators.visible) this.radiators.material.color.setRGB(0.95 * t ** 1.5, 0.22 * t ** 3, 0.03 * t ** 5);
+  }
+
+  /**
+   * A ship another browser runs fired a shot: its laser's heat, as far as this browser can tell,
+   * for its radiators' glow; that browser keeps the real heat.
+   */
+  warm() {
+    this.heat = Math.min(MAX_HEAT, this.heat + HEAT_PER_SHOT / (this.twin ? 2 : 1));
   }
 
   /** Advances flight and laser; returns true when the ship fires this frame. */
