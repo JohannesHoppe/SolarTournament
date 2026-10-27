@@ -38,6 +38,8 @@ export interface ArenaProfile {
   preview?: { from: [number, number, number]; at?: [number, number, number] };
   /** The big things that never move, besides the field's center and the sun, which the HUD marks (see Reference). */
   references: Reference[];
+  /** Half the thickness (units) of a layer of ice grains in the horizon plane, a ring's: harmless, but felt on the hull flying through (see Game.ringGrains). */
+  grains?: number;
 }
 
 /** How the HUD draws a fixed reference: each kind has a glyph of its own in style.css (.reference[data-glyph]). */
@@ -59,6 +61,8 @@ export interface Reference {
 
 /** Saturn, beside the Rings of Saturn (units, 13 km off), whose ring runs through the arena in the horizon plane. */
 export const SATURN_CENTER = new THREE.Vector3(-0.85, 0, 0.5).normalize().multiplyScalar(260000);
+/** Half the thickness of the ring's layer of ice grains through the arena's middle (units, 125 m: a layer 250 m thick). */
+export const RING_LAYER = 2500;
 /** The world the Kessler field's station circled, far below (units). */
 export const KESSLER_WORLD = new THREE.Vector3(-120000, -330000, -60000);
 
@@ -125,7 +129,23 @@ export const ARENAS: readonly ArenaProfile[] = [
     id: 'rings',
     name: msg('Rings of Saturn'),
     tagline: msg('Inside a ring of ice, as thin as a sheet. Up and down are open.'),
-    layout: { key: 'rings', seed: 23, kind: 'ice', count: 90, minScale: 0.8, maxScale: 3.2, radius: FIELD_RADIUS * 1.3, inner: 0, flat: 5000, spin: 0.08, toughness: 500 },
+    // small chunks in the ring's layer, cover and obstacles among its grains; a few large ones
+    // in the open space above and below it
+    layout: {
+      key: 'rings',
+      seed: 23,
+      kind: 'ice',
+      count: 120,
+      minScale: 0.5,
+      maxScale: 1.5,
+      radius: FIELD_RADIUS * 1.3,
+      inner: 0,
+      flat: 1600,
+      open: { count: 16, minScale: 2, maxScale: 2.6, from: 8000, to: 24000, radius: FIELD_RADIUS },
+      spin: 0.08,
+      toughness: 500,
+    },
+    grains: RING_LAYER,
     cooling: 1.2,
     storms: false,
     sun: { size: 26000, intensity: 3, color: 0xf2f4ff },

@@ -540,7 +540,14 @@ const COMET_DANGER = 10000;
 const TAIL_PATTER = 25;
 const TAIL_STATIC = 1.5;
 const TAIL_GLITCH = 0.15;
-/** The flight school's comet passes the point its drill names this long after the drill sends it (s): 2.25 km off at its speed. */
+/**
+ * Flying through a ring's layer of ice grains (see ArenaProfile.grains, Game.ringGrains): grains
+ * patter on the hull about GRAIN_PATTER times a second at GRAIN_PATTER_SPEED (units/s, 100 m/s)
+ * and faster, the fewer the slower the ship flies and the nearer the layer's faces.
+ */
+const GRAIN_PATTER = 12;
+const GRAIN_PATTER_SPEED = 2000;
+/** The flight school's comet passes the point its drill names this long after the drill sends it (s): 6 km off at its speed. */
 const DRILL_COMET_LEAD = 15;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -3137,6 +3144,7 @@ export class Game implements OnlineGame {
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     this.landmarks.update(this.field.clock);
+    this.landmarks.follow(this.camera, this.state === 'menu' ? null : this.riding);
     if (this.venue.id === 'derelict') stutterWindows();
     const well = this.field.well;
     // the scene is drawn into the composer's read buffer, which the lens reads right after
@@ -3212,6 +3220,7 @@ export class Game implements OnlineGame {
     // Last Clone Standing: the solar flare, the same on every browser by the field time
     this.showFlare(dt);
     this.playComet(dt, me);
+    this.ringGrains(me, dt);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -6043,6 +6052,15 @@ export class Game implements OnlineGame {
     if (!inside) return;
     if (Math.random() < dt * TAIL_PATTER * depth) this.sound.patter(depth);
     if (Math.random() < dt * TAIL_STATIC * depth) this.glitch.trigger(TAIL_GLITCH * (0.5 + Math.random() * 0.5), 0.05 + Math.random() * 0.1);
+  }
+
+  /** The own clone flying through a ring's layer of ice grains: harmless, but they patter on the hull, the more the faster it flies. */
+  private ringGrains(me: Ship, dt: number) {
+    const layer = this.venue.grains;
+    if (!layer || !me.alive || this.spectating) return;
+    const depth = 1 - THREE.MathUtils.smoothstep(Math.abs(me.flight.position.y), 0.8 * layer, layer);
+    const pace = Math.min(1, me.flight.velocity.length() / GRAIN_PATTER_SPEED);
+    if (Math.random() < dt * GRAIN_PATTER * depth * pace) this.sound.patter(0.5 * depth * pace);
   }
 
   /** The comet's head strikes a piece of the wreck's hull and shoves it: a flash, sparks and debris where it struck, heard as far as debris is. */

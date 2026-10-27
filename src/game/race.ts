@@ -49,6 +49,13 @@ const BOOST_FLASH = 0.35;
 /** Up and down along the loop (units, up to 200 m), so the course is not flat. */
 const COURSE_RISE = 4000;
 /**
+ * Over a thin disk with open space above and below it (a ring's layer, see FieldLayout.open) the
+ * loop runs through the disk's plane and dives up and down by this much instead (units, 300 m):
+ * a lap crosses the layer four times, about a quarter of it within the layer, at no more than
+ * about 18°, its dives no tighter than 2.7 km (on the loop's tightest distance, 1.8 km).
+ */
+const COURSE_DIVE = 6000;
+/**
  * A gate keeps GATE_ROOM (units, 200 m) clear of rock, and four times as much of an arena's
  * massive body (see crowded), and stays off the stretches where the racing line bows around
  * rock: the bow, the bends into it and out, and GATE_RUN (units, 100 m) more; a rock counts once
@@ -208,17 +215,20 @@ export class Course {
     const start = r.range(0, Math.PI * 2);
     const jitter = Array.from({ length: GATES }, () => r.range(-COURSE_JITTER, COURSE_JITTER));
     const shape = { lift: 0, radius: COURSE_RADIUS, swell: 0, phase: 0 };
+    // through a ring's layer, diving up and down through it (see COURSE_DIVE)
+    const dives = !!field.layout?.open;
+    const rise = dives ? COURSE_DIVE : COURSE_RISE;
     const loop = (angle: number, out: THREE.Vector3) => {
       const distance = shape.radius * (1 + shape.swell * Math.sin(angle * 2 + shape.phase));
-      return out.set(Math.cos(angle) * distance, shape.lift + Math.sin(angle * 2 + start) * COURSE_RISE, Math.sin(angle) * distance);
+      return out.set(Math.cos(angle) * distance, shape.lift + Math.sin(angle * 2 + start) * rise, Math.sin(angle) * distance);
     };
-    // of LOOP_LIFTS heights, LOOP_RADII distances, swells and turns of the swell, the loop whose
+    // of LOOP_LIFTS heights (only the plane's through a ring's layer), LOOP_RADII distances, swells and turns of the swell, the loop whose
     // gates lie least deep in rock or in the racing line's bows around it, then the one that runs
     // through least rock
     let best = { ...shape };
     let bestAngles: number[] = [];
     let least = [Infinity, Infinity];
-    for (const lift of LOOP_LIFTS) {
+    for (const lift of dives ? [0] : LOOP_LIFTS) {
       for (const radius of LOOP_RADII) {
         for (const swell of [0, COURSE_SWELL]) {
           for (let turn = 0; turn < (swell ? LOOP_TURNS : 1); turn++) {
