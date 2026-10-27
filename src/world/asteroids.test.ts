@@ -158,6 +158,24 @@ describe('a massive body', () => {
   });
 });
 
+describe('a ray into the field', () => {
+  it('writes its hit into the one it is given, the same hit as a fresh one', () => {
+    const field = testField();
+    field.generate(ARENAS[0].layout);
+    const rock = [...field.asteroids.values()][0];
+    const origin = rock.object.position.clone().add(new THREE.Vector3(0, 0, 40000));
+    const direction = new THREE.Vector3(0, 0, -1);
+    const fresh = field.raycast(origin, direction, 80000)!;
+    const into = { asteroid: null, distance: 0, center: new THREE.Vector3() };
+    const reused = field.raycast(origin, direction, 80000, false, into)!;
+    expect(reused).toBe(into);
+    expect(reused.asteroid).toBe(fresh.asteroid);
+    expect(reused.distance).toBe(fresh.distance);
+    expect(reused.center).toBe(fresh.center);
+    expect(field.raycast(origin, direction.negate(), 1, false, into)).toBeNull();
+  });
+});
+
 describe('the billboards of the field', () => {
   it('take over from no piece, however small, within the arena across', () => {
     const field = testField();

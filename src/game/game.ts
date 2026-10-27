@@ -51,7 +51,7 @@ import { storageGet, storageSet } from '../storage';
 import { buy, emptyHangar, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, sovereignEarned, UPGRADES, WALLET } from './hangar';
 import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
-import type { Asteroid, FieldState } from '../world/asteroids';
+import type { Asteroid, FieldState, RayHit } from '../world/asteroids';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
@@ -557,6 +557,16 @@ const closingVelocity = new THREE.Vector3();
 const aimPoint = new THREE.Vector3();
 const toAim = new THREE.Vector3();
 const sweep = new THREE.Vector3();
+/** A ray's hit into the field, reused: one per place that casts every step, each read before that place casts again. */
+const rayHit = (): RayHit => ({ asteroid: null, distance: 0, center: new THREE.Vector3() });
+const shadeHit = rayHit();
+const sweepHit = rayHit();
+const impactHit = rayHit();
+const aimHit = rayHit();
+const laserHit = rayHit();
+/** A laser beam's ends, reused shot after shot. */
+const beamEnd = new THREE.Vector3();
+const beamStart = new THREE.Vector3();
 const surface = new THREE.Vector3();
 const ringFacing = new THREE.Vector3();
 const cometHead = new THREE.Vector3();
@@ -725,6 +735,8 @@ export class Game implements OnlineGame {
   /** The lobby: open while browsing, or while leading a public tournament (see updateLobby). */
   private lobby: Lobby | null = null;
   private lobbyOpening = false;
+  /** The own public tournament as the lobby announces it: one listing, brought up to date every frame in place (the lobby keeps it and sends it as it stands). */
+  private readonly listing: Listing = { code: '', name: '', hosts: 0, bots: false, mode: 'race', left: 0 };
   /** The rows of the list of tournaments, by room code (see renderTournaments). */
   private readonly tournamentRows = new Map<string, { item: HTMLLIElement; name: HTMLElement; meta: HTMLElement; join: HTMLButtonElement; listing: Listing }>();
   /** Counts down the time left of the listed tournaments while the list is open. */
@@ -1508,8 +1520,18 @@ export class Game implements OnlineGame {
         .finally(() => (this.lobbyOpening = false));
       return;
     }
-    const left = Number.isFinite(this.roundEndsAt) ? this.roundEndsAt - this.time : ROUND_SECONDS;
-    this.lobby.announce(announcing ? { code: this.room!.code, name: this.room!.name, hosts: this.online!.pilots, bots: this.room!.bots, mode: this.room!.mode, left } : null);
+    if (!announcing) {
+      this.lobby.announce(null);
+      return;
+    }
+    const listing = this.listing;
+    listing.code = this.room!.code;
+    listing.name = this.room!.name;
+    listing.hosts = this.online!.pilots;
+    listing.bots = this.room!.bots;
+    listing.mode = this.room!.mode;
+    listing.left = Number.isFinite(this.roundEndsAt) ? this.roundEndsAt - this.time : ROUND_SECONDS;
+    this.lobby.announce(listing);
   }
 
   /** Joins a tournament room, then starts playing in it; `created` invites friends at once. */
@@ -3222,7 +3244,7 @@ export class Game implements OnlineGame {
       const controls = clamped ? IDLE : ship === me ? myControls : (thought ?? IDLE);
       this.field.gravity(ship.flight.position, gravity);
       if (clamped) gravity.set(0, 0, 0);
-      ship.inShadow = this.field.raycast(ship.flight.position, SUN_DIRECTION, LASER_RANGE) !== null;
+      ship.inShadow = this.field.raycast(ship.flight.position, SUN_DIRECTION, LASER_RANGE, false, shadeHit) !== null;
       ship.sunCooling = this.venue.cooling;
       if (ship.update(dt, now, controls, gravity)) this.fireLaser(ship);
       if (this.course && !this.roundOver) this.passGates(ship, this.course);
@@ -5381,7 +5403,7 @@ export class Game implements OnlineGame {
     }
     const origin = shooter.nose(muzzle);
     const direction = shooter.flight.forward(forward);
-    let asteroidHit = this.field.raycast(origin, direction, LASER_RANGE);
+    let asteroidHit = this.field.raycast(origin, direction, LASER_RANGE, false, laserHit);
     let wreckHit = this.wrecks.raycast(origin, direction, asteroidHit?.distance ?? LASER_RANGE);
     if (wreckHit) asteroidHit = null;
     let beamLength = wreckHit?.distance ?? asteroidHit?.distance ?? LASER_RANGE;
@@ -5398,8 +5420,9 @@ export class Game implements OnlineGame {
       beamLength = fleetHit.distance;
     }
 
-    const end = new THREE.Vector3().copy(origin).addScaledVector(direction, beamLength);
-    const start = shooter.muzzle(new THREE.Vector3());
+    // the beam's ends are copied wherever they are kept (the effects, the kill cam, the message)
+    const end = beamEnd.copy(origin).addScaledVector(direction, beamLength);
+    const start = shooter.muzzle(beamStart);
     this.effects.beam(start, end, shooter.color);
     this.killcam.recordBeam(this.time, start, end, shooter.color);
     this.online?.sendFire(shooter, start, end);
@@ -5407,7 +5430,10 @@ export class Game implements OnlineGame {
     // after the beam: the other browsers take a torpedo shot down only with the beam that did it
     if (torpedoHit) this.shootDown(torpedoHit.torpedo, shooter);
 
-    for (const ship of [...this.ships]) {
+    // the ships as the shot found them: removing a ship replaces the list, a ship added on the way is not in the beam
+    const ships = this.ships;
+    for (let i = 0, count = ships.length; i < count; i++) {
+      const ship = ships[i];
       // a beam passes through the own side's ships
       if (ship === shooter || !ship.alive || ship.allyOf(shooter)) continue;
       const distance = raySphere(origin, direction, ship.flight.position, ship.radius);
@@ -5664,7 +5690,7 @@ export class Game implements OnlineGame {
     const moved = flight.position.distanceTo(ship.previous);
     if (moved > ship.radius) {
       sweep.subVectors(flight.position, ship.previous).divideScalar(moved);
-      const hit = this.field.raycast(ship.previous, sweep, moved);
+      const hit = this.field.raycast(ship.previous, sweep, moved, false, sweepHit);
       if (hit) flight.position.copy(ship.previous).addScaledVector(sweep, Math.max(0, hit.distance - 1));
     }
     const asteroid = this.field.overlap(flight.position, ship.radius);
@@ -5831,7 +5857,7 @@ export class Game implements OnlineGame {
     if (me.alive && speed > 100) {
       const heading = scratch.copy(flight.velocity).divideScalar(speed);
       // a rock, the well's body or the battleship's hull
-      const hit = this.field.raycast(flight.position, heading, speed * 20, true);
+      const hit = this.field.raycast(flight.position, heading, speed * 20, true, impactHit);
       if (hit) {
         const timeToImpact = Math.max(0, hit.distance - me.radius) / speed;
         const thrust = MAIN_THRUST * Math.max(me.drive, 0.01);
@@ -6219,7 +6245,7 @@ export class Game implements OnlineGame {
     const me = this.me!;
     const flight = me.flight;
     const direction = flight.forward(forward);
-    let depth = waypoint ? waypoint.distanceTo(flight.position) : (this.field.raycast(flight.position, direction, AIM_DEPTH)?.distance ?? AIM_DEPTH);
+    let depth = waypoint ? waypoint.distanceTo(flight.position) : (this.field.raycast(flight.position, direction, AIM_DEPTH, false, aimHit)?.distance ?? AIM_DEPTH);
     if (!waypoint) {
       depth = this.wrecks.raycast(flight.position, direction, depth)?.distance ?? depth;
       for (const ship of this.ships) {

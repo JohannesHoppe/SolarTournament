@@ -55,6 +55,9 @@ export type TemplateKind = 'rock' | 'ice' | 'debris' | 'hull';
  * however light `near` is drawn; without it, `near` itself is measured (a shape that is never
  * simplified for drawing, or a test field that does not care).
  */
+/** A ray's nearest hit (see AsteroidField.raycast): the rock (null for the well's body or an obstacle), the distance along the ray, and the center of what it hit. */
+export type RayHit = { asteroid: Asteroid | null; distance: number; center: THREE.Vector3 };
+
 export type TemplateSet = { near: THREE.Object3D[]; far: THREE.Object3D[]; impostor?: THREE.Object3D[]; collision?: THREE.Object3D[]; box?: boolean };
 
 /**
@@ -579,10 +582,17 @@ export class AsteroidField {
   /**
    * Nearest rock hit by a ray, with the distance along the ray; the well's body counts too, as a
    * hit without a rock (null), and with `obstacles` the obstacle's hull (the battleship) as well.
+   * The hit is written into `into`: a caller in a hot loop passes one of its own it reuses (and
+   * reads it before the next cast), the others get a fresh one.
    */
-  raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number, obstacles = false): { asteroid: Asteroid | null; distance: number; center: THREE.Vector3 } | null {
+  raycast(origin: THREE.Vector3, direction: THREE.Vector3, maxDistance: number, obstacles = false, into?: RayHit): RayHit | null {
     const distance = this.cast(origin, direction, maxDistance, false, obstacles);
-    return distance === null ? null : { asteroid: castRock, distance, center: castCenter! };
+    if (distance === null) return null;
+    const hit = into ?? { asteroid: null, distance: 0, center: castCenter! };
+    hit.asteroid = castRock;
+    hit.distance = distance;
+    hit.center = castCenter!;
+    return hit;
   }
 
   /** True when no rock (and not the well's body, nor an obstacle) lies between two points. */
@@ -726,8 +736,17 @@ function ellipsoidContact(asteroid: Asteroid, center: THREE.Vector3, radius: num
   const axes = v.copy(asteroid.semiAxes).addScalar(radius / scale);
   const local = u.copy(center).applyMatrix4(asteroid.inverse).sub(asteroid.center);
   const length = Math.hypot(local.x / axes.x, local.y / axes.y, local.z / axes.z);
-  return length < 1 ? { local, axes, length } : null;
+  if (length >= 1) return null;
+  ellipsoidTouch.length = length;
+  return ellipsoidTouch;
 }
+
+/**
+ * The contacts the two functions report, reused: every caller reads one before the next
+ * contact is asked for, and a ship's collisions ask for many every step.
+ */
+const ellipsoidTouch = { local: u, axes: v, length: 0 };
+const surfaceTouch = { local: u, length: 0, reach: 0, scale: 1 };
 
 /**
  * A sphere against a rock's measured surface: the sphere's center in the rock's own
@@ -739,7 +758,11 @@ function surfaceContact(asteroid: Asteroid, surface: Surface, center: THREE.Vect
   const local = u.copy(center).applyMatrix4(asteroid.inverse).sub(asteroid.center);
   const length = local.length();
   const reach = surface.radius(local) + radius / scale;
-  return length < reach ? { local, length, reach, scale } : null;
+  if (length >= reach) return null;
+  surfaceTouch.length = length;
+  surfaceTouch.reach = reach;
+  surfaceTouch.scale = scale;
+  return surfaceTouch;
 }
 
 const side = new THREE.Vector3();
