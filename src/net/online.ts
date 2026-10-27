@@ -4,7 +4,7 @@ import { ownerOf, TOURNAMENT_SIZE, type Session, type RoundState, type Vec } fro
 import type { Ship, ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
 import { unpackItems, type ItemKind, type ProbeState } from '../game/items';
-import { Accusations, AIM_SLACK, beamShare, Evidence, ORIGIN_SLACK, Plausibility, plausibleBlast, hookShare, SenderClock, Strikes, type Cheat, type Margins } from './plausible';
+import { Accusations, AIM_SLACK, beamShare, Evidence, ORIGIN_SLACK, Plausibility, plausibleBlast, hookShare, SenderClock, Standings, Strikes, type Cheat, type Margins } from './plausible';
 import { devlog, type SuspicionEvent } from '../devlog';
 import { HOOK_RANGE } from '../game/hook';
 import type { Homing, Torpedo } from '../game/torpedoes';
@@ -37,8 +37,6 @@ export interface OnlineGame {
   fleetZoneAt(zone: number): THREE.Vector3 | null;
   /** Another peer shot or rammed a piece of wreckage. */
   remoteWreck(id: string): void;
-  /** The other browsers named this one a cheater and cast it out: it leaves the tournament. */
-  castOut(): void;
   /** A ship of another peer hit a part of the President's battleship in a round, this many times (a torpedo counts several). */
   remoteFleetHit(zone: number, round: number, shooter: Ship, count: number): void;
   /** A part of the President's battleship as a torpedo homes on it, by its id. */
@@ -88,6 +86,9 @@ export interface OnlineGame {
   announceCheater(name: string): void;
   /** Number of the running online round. */
   readonly roundId: number;
+  /** Seconds since the running round started (0 while it is not known), and on the race clock (since BURN!). */
+  roundSeconds(): number;
+  raceSeconds(): number;
   /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
   leadRound(): RoundState;
@@ -146,6 +147,8 @@ export class Online {
   private readonly strikes = new Strikes();
   /** When the other browsers sent their states, on their own clocks. */
   private readonly clock = new SenderClock();
+  /** How far the other browsers' ships stand in the round, as fast as a ship gets there. */
+  private readonly standings = new Standings();
   /** Peers this browser has reported this round, once each. */
   readonly reported = new Set<string>();
   /** Every check a ship of another browser failed, whether it led to a report or not (the latest SUSPICIONS_KEPT), for the browser tests and the console. */
@@ -168,14 +171,16 @@ export class Online {
       from.fromArray(a);
       to.fromArray(b);
       const ship = this.find(shooter);
+      // only a ship that is here fires (what a made-up id did is not kept)
+      if (!ship) return;
       // a living ship's beam leaves from near where it flies here, or it is no beam of its; the
       // next state of the ship judges whether it left along a nose the ship could have had
-      if (ship?.alive && ship.owner !== null) {
+      if (ship.alive && ship.owner !== null) {
         if (this.caught(ship, this.plausible.measure('aim', from.distanceTo(ship.flight.position) / ORIGIN_SLACK) ? 'aim' : null)) return;
         this.plausible.beam(shooter, from, to);
       }
       this.evidence.beam(shooter, from, to, wall());
-      if (ship) game.showBeam(ship, from, to);
+      game.showBeam(ship, from, to);
     };
     session.onHit = (target, o, d, shooter) => {
       const ship = this.find(target);
@@ -192,19 +197,20 @@ export class Online {
     };
     session.onDestroyed = (victim, killer, deaths, p, u, nova) => {
       const ship = this.find(victim);
-      const where = p ? from.fromArray(p) : (ship?.flight.position ?? null);
-      // the kill counts for the killer only with evidence that it could have made it
-      const credited = killer !== null && where !== null && this.witnessed(killer, victim, where, nova) ? killer : null;
+      // a ship dies once per clone: only a ship that is here and alive, its count of deaths going
+      // up; any other report changes nothing, and credits no killer either
+      if (!ship || ship.owner === null || !ship.alive || deaths <= ship.deaths) return;
+      const gun = killer === null ? null : this.find(killer);
+      const where = p ? from.fromArray(p) : ship.flight.position;
+      // the kill counts for the killer, a ship that is here, only with evidence that it could have made it
+      const credited = killer !== null && gun !== null && this.witnessed(killer, victim, where, nova) ? killer : null;
       // the kills its states may show: every death another browser than the killer's names it
       // for counts (that browser saw it die by it); one of its own browser's ships only with
       // that evidence (a lead browser's Host or bot killing one of its bots)
-      const counted = killer !== null && (credited !== null || ownerOf(killer) !== ownerOf(victim)) ? killer : null;
+      const counted = killer !== null && gun !== null && (credited !== null || ownerOf(killer) !== ownerOf(victim)) ? killer : null;
       this.credit(victim, counted, nova && counted !== null);
       this.plausible.died(victim, wall());
-      // a ship dies once per clone: a dead one cannot die again, and the count only goes up
-      if (ship && ship.owner !== null && ship.alive && deaths > ship.deaths) {
-        game.remoteDestroyed(ship, credited ? this.find(credited) : null, deaths, p && from.fromArray(p), u && to.fromArray(u), nova && credited !== null);
-      }
+      game.remoteDestroyed(ship, credited ? gun : null, deaths, p && from.fromArray(p), u && to.fromArray(u), nova && credited !== null);
     };
     session.onRock = (id, at, round, shooter) => {
       // a rock of the running round breaks only for a beam of the shooter that ended on it (a
@@ -240,20 +246,23 @@ export class Online {
         const torpedo = game.recentTorpedo(id);
         if (!torpedo || (torpedo.holder?.id !== holder && torpedo.flinger?.id !== holder)) return;
         this.evidence.blast(holder, from, wall());
-      } else if (shooter === null) this.evidence.blast(id.slice(0, id.lastIndexOf('.')), from, wall());
-      else if (!this.evidence.beamEnded(shooter, from, EVIDENCE_REACH, wall())) return;
+      } else if (shooter === null) {
+        const launcher = id.slice(0, id.lastIndexOf('.'));
+        if (this.find(launcher)) this.evidence.blast(launcher, from, wall());
+      } else if (!this.evidence.beamEnded(shooter, from, EVIDENCE_REACH, wall())) return;
       game.remoteTorpedoGone(id, from);
     };
     session.onProbe = (id, ship, bucket) => {
       const taker = this.find(ship);
       // taken only by a ship near the probe, as this browser sees them; one refused here (lag may
-      // have put the taker too far) may still have held a nova core it sets off later
+      // have put the taker too far) may still have held a nova core it sets off later. The checks
+      // count each probe once (see Plausibility.probe), and only for a ship that is here
       if (taker && !game.probeWithin(id, taker)) {
-        this.plausible.probe(ship, null, wall());
+        this.plausible.probe(ship, id, null, wall());
         return;
       }
       const kind = game.remoteProbe(id, taker, bucket);
-      if (kind !== undefined) this.plausible.probe(ship, kind, wall());
+      if (kind !== undefined && taker) this.plausible.probe(ship, id, kind, wall());
     };
     session.onHook = (ship, hold) => {
       const owner = this.find(ship);
@@ -302,8 +311,9 @@ export class Online {
       game.novaBlast(holder, from.fromArray(p));
     };
     session.onCheat = (ship, accuser) => {
+      // only a browser in the room (or this one) can be accused: made-up peers are not kept
       const accused = ownerOf(ship);
-      if (accused) this.accuse(accused, accuser);
+      if (accused && (accused === this.selfId || this.session.peers.includes(accused))) this.accuse(accused, accuser);
     };
     session.onTorpedoHit = (target, shooter, id) => {
       const ship = this.find(target);
@@ -498,6 +508,7 @@ export class Online {
     if (this.game.roundId === this.checkedRound) return;
     this.checkedRound = this.game.roundId;
     this.plausible.newRound(wall());
+    this.standings.newRound();
     this.accusations.newRound();
     this.strikes.newRound();
     this.reported.clear();
@@ -525,6 +536,12 @@ export class Online {
       // first shows once a state brings its name and type
       const known = this.find(state.id);
       if (!known && state.n === undefined) continue;
+      // score, gates and finish as fast as a ship makes them (see Standings), on the race clock
+      // of when the state was sent
+      if (state.n !== undefined) {
+        const race = this.game.raceSeconds() - (clock === null ? 0 : this.clock.age(peer, sent, now));
+        ({ s: state.s, g: state.g, fi: state.fi } = this.standings.take(state.id, { s: state.s!, g: state.g!, fi: state.fi! }, now, this.game.roundSeconds(), race));
+      }
       const ship = known ?? this.game.addRemoteShip(state, peer);
       if (ship.owner !== peer || ownerOf(ship.id) !== peer) continue;
       const report = { p: state.p, alive: state.a, kills: state.ki, nova: state.it === undefined ? undefined : unpackItems(state.it).nova, q: state.q, w: state.w };
@@ -613,26 +630,26 @@ export class Online {
    * leave this tournament as if it had gone. Only the Hosts who hold a place vote, and the
    * majority is counted among them: a cheater who comes in to watch, with as many tabs as it
    * likes, has no say. Every honest browser comes to the same vote, so the cheater is left
-   * alone; a browser cast out itself is told so and leaves.
+   * alone. Votes carry no evidence, so a browser never casts itself out on the others' word: it
+   * sees its own callsign called and plays on with whoever still listens to it (a cheater's
+   * browser would ignore the call all the same).
    */
   private accuse(accused: string, accuser: string) {
     if (!this.accusations.add(accused, accuser, this.session.seated(accuser), this.voters)) return;
     const ships = this.game.allShips().filter((ship) => ship.owner === accused || (accused === this.selfId && ship.owner === null));
     const host = ships.find((ship) => ship.id.startsWith('p:')) ?? ships[0];
     this.game.announceCheater(host?.name ?? accused);
-    if (accused === this.selfId) this.game.castOut();
-    else this.session.castOut(accused);
+    if (accused !== this.selfId) this.session.castOut(accused);
   }
 
-  /** A peer left: what this browser knows of its ships goes with it. */
+  /** A peer left: what this browser knows of its ships goes with it, by their ids (whatever ids it named). */
   private forgetShipsOf(peer: string) {
-    for (const ship of this.game.allShips()) {
-      if (ownerOf(ship.id) !== peer) continue;
-      this.plausible.forget(ship.id);
-      this.evidence.forget(ship.id);
-      this.strikes.forget(ship.id);
-      this.novas.delete(ship.id);
-    }
+    const gone = (id: string) => ownerOf(id) === peer;
+    this.plausible.forget(gone);
+    this.standings.forget(gone);
+    this.evidence.forget(gone);
+    this.strikes.forget(gone);
+    for (const id of this.novas.keys()) if (gone(id)) this.novas.delete(id);
   }
 
   private find(id: string): Ship | null {

@@ -49,7 +49,7 @@ const TURN_PATIENCE_MS = 3000;
 /** The credentials hold an hour (functions/turn.ts); fresh ones are fetched well before (ms). */
 const TURN_REFRESH_MS = 50 * 60 * 1000;
 
-/** Why functions/turn.ts hands out no relay, in the words the HUD translates; its details (a status code, an error) go to the console. */
+/** Why functions/turn.ts hands out no relay, in the words the HUD translates (the function names nothing else; what an upstream answered stays in its log); any other answer goes to the console. */
 const RELAY_REASONS = [msg('foreign site'), msg('not set up'), msg('monthly budget spent'), msg('budget unreadable'), msg('Cloudflare answered')];
 
 function relayReason(off: string): string {

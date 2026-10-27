@@ -14,7 +14,11 @@ test('the mouse turns the flight about at 150 m/s, and the recorder keeps the fl
   await page.waitForFunction(() => window.game.clamped, null, { timeout: 60_000 });
   await page.waitForFunction(() => !window.game.clamped && window.game.me?.alive && window.game.state === 'playing', null, { timeout: 60_000 });
   // alone, in open space, flying ahead at 150 m/s with the autopilot on
-  const start = await page.evaluate(() => {
+  const start = await page.evaluate(async () => {
+    // the game's seeded generator, as the dev server serves it: the same places tried every run
+    const module = '/src/random.ts';
+    const { Randomizer } = await import(module);
+    const random = new Randomizer(7919);
     const game = window.game;
     const me = game.me;
     for (const ship of game.ships) {
@@ -28,15 +32,17 @@ test('the mouse turns the flight about at 150 m/s, and the recorder keeps the fl
     const side = new Vector3(0, 1, 0).cross(nose).normalize();
     const clear = (at: any) => [nose, nose.clone().negate(), side, side.clone().negate()].every((way: any) => !game.field.raycast(at, way, 30000)) && !game.field.overlap(at, 2000);
     let place = me.flight.position.clone();
-    for (let i = 0; i < 400 && !clear(place); i++) place = new Vector3((Math.random() - 0.5) * 120000, (Math.random() - 0.5) * 40000, (Math.random() - 0.5) * 120000);
+    for (let i = 0; i < 400 && !clear(place); i++) place = new Vector3(random.range(-60000, 60000), random.range(-20000, 20000), random.range(-60000, 60000));
+    const open = clear(place);
     me.flight.position.copy(place);
     me.flight.velocity.copy(nose).multiplyScalar(3000);
     me.flight.angularVelocity.set(0, 0, 0);
     me.protectedUntil = Infinity;
     me.syncTransform();
     game.autopilot = true;
-    return { x: nose.x, y: nose.y, z: nose.z };
+    return { x: nose.x, y: nose.y, z: nose.z, open };
   });
+  expect(start.open, 'a place clear of rock to fly the turn about in').toBe(true);
   await play(page, 0.3);
   const viewport = page.viewportSize()!;
   const center = { x: viewport.width / 2, y: viewport.height / 2 };

@@ -176,6 +176,8 @@ export type ShipState = {
   lo?: number;
   /** the tint its Host chose, an index into TINTS (see Ship.wish) */
   co?: number;
+  /** torpedoes left to its clone: a lead that adopts a bot flies it on with them (see adopt) */
+  to?: number;
   /** remaining spawn protection (s) */
   pr: number;
 };
@@ -438,8 +440,8 @@ export class Ship {
 
   /**
    * Takes over a ship another peer ran, as its last state left it (moved on by its velocity):
-   * score, kills, deaths, damage and whether its clone lives. A new lead browser adopts the
-   * bots of the one before it this way.
+   * score, kills, deaths, damage, the torpedoes its clone has left and whether its clone lives.
+   * A new lead browser adopts the bots of the one before it this way.
    */
   adopt(from: Ship, now: number) {
     const r = from.remote;
@@ -456,6 +458,7 @@ export class Ship {
     this.twin = from.twin;
     this.plating = from.plating;
     this.nova = from.nova;
+    this.torpedoes = from.torpedoes;
     this.gates = from.gates;
     this.finish = from.finish;
     this.alive = r.alive;
@@ -471,7 +474,7 @@ export class Ship {
     const f = this.flight;
     const round = (v: { toArray(): number[] }, digits = 0) => v.toArray().map((x) => +x.toFixed(digits));
     const items = packItems(this.twin, this.plating, this.nova);
-    const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}|${this.gates}|${this.finish}|${items}|${this.wish}`;
+    const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}|${this.gates}|${this.finish}|${items}|${this.wish}|${this.torpedoes}`;
     const withSlow = full || slow !== this.slowSent || now - this.slowSentAt >= SLOW_STATE_SECONDS;
     if (withSlow) {
       this.slowSent = slow;
@@ -479,7 +482,7 @@ export class Ship {
     }
     return {
       id: this.id,
-      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items, lo: this.perks.neon * 4 + this.perks.flame, co: this.wish } : {}),
+      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items, lo: this.perks.neon * 4 + this.perks.flame, co: this.wish, to: this.torpedoes } : {}),
       p: round(f.position),
       v: round(f.velocity, 1),
       q: round(f.orientation, 4),
@@ -522,6 +525,7 @@ export class Ship {
       if (neon !== this.perks.neon || flame !== this.perks.flame) this.outfit({ ...STOCK, neon, flame });
       // the tint it chose; which one it flies in, the round decides (see Game.tintShips)
       this.wish = state.co!;
+      this.torpedoes = state.to!;
     }
     if (state.a && !this.alive) {
       // the owner booted a new clone

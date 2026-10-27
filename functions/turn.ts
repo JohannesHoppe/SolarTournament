@@ -42,8 +42,15 @@ const HOSTS = new Set(['solartournament.games', 'test.solartournament.games']);
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
 
-/** No relay, and why: the game shows the reason in the HUD, so a Host who cannot connect knows. */
-const off = (reason: string, status = 200) => json({ iceServers: [], off: reason }, status);
+/**
+ * No relay, and why: the game shows the reason in the HUD, so a Host who cannot connect knows.
+ * The reason is one of a few fixed words; what an upstream answered (a status, an error's text)
+ * goes to the function's log only, never to the public.
+ */
+const off = (reason: 'foreign site' | 'not set up' | 'budget unreadable' | 'monthly budget spent' | 'Cloudflare answered', status = 200, detail?: string) => {
+  if (detail) console.error(`turn: ${reason}: ${detail}`);
+  return json({ iceServers: [], off: reason }, status);
+};
 
 /** The month's outbound traffic (GB), or Infinity and why it could not be read. */
 type Usage = { gb: number; unread: string };
@@ -93,14 +100,14 @@ export async function onRequestGet({ env, request }: { env: Env; request: Reques
   if (!HOSTS.has(new URL(request.url).hostname) || (site !== null && site !== 'same-origin')) return off('foreign site', 403);
   if (!env.TURN_KEY_ID || !env.TURN_KEY_API_TOKEN) return off('not set up');
   const { gb, unread } = await monthlyGb(env);
-  if (gb === Infinity) return off(`budget unreadable (${unread})`);
+  if (gb === Infinity) return off('budget unreadable', 200, unread);
   if (gb >= MONTHLY_BUDGET_GB) return off('monthly budget spent');
   const answer = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${env.TURN_KEY_ID}/credentials/generate-ice-servers`, {
     method: 'POST',
     headers: { authorization: `Bearer ${env.TURN_KEY_API_TOKEN}`, 'content-type': 'application/json' },
     body: JSON.stringify({ ttl: TTL }),
   });
-  if (!answer.ok) return off(`Cloudflare answered ${answer.status}`);
+  if (!answer.ok) return off('Cloudflare answered', 200, `status ${answer.status}`);
   const { iceServers } = (await answer.json()) as { iceServers: { urls: string[]; username?: string; credential?: string }[] };
   // browsers block port 53, and a TURN address on it only times out
   return json({ iceServers: iceServers.map((server) => ({ ...server, urls: server.urls.filter((url) => !/:53\b/.test(url)) })).filter((server) => server.urls.length) });

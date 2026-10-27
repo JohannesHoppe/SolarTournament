@@ -316,7 +316,7 @@ test('a nova from a ship without a core never goes off; once is forgiven, and wh
     pages.push(page);
   }
   const [a, b, cheat] = pages;
-  for (const page of [a, b]) {
+  for (const page of pages) {
     await page.evaluate(() => {
       const game = window.game;
       game.cheaters = [];
@@ -356,10 +356,12 @@ test('a nova from a ship without a core never goes off; once is forgiven, and wh
     expect(seen.alive).toBe(true);
     expect(seen.cheaters).toEqual([name]);
   }
-  // cast out: its ship is gone from the others, and the cheating tab is back in the menu
+  // cast out: its ship is gone from the others; the tab named sees its callsign called, but never
+  // leaves on the others' word (votes carry no evidence)
   for (const page of [a, b]) {
     expect(await page.evaluate((id) => window.game.ships.some((ship: { id: string }) => ship.id === id), cheaterId)).toBe(false);
   }
-  await cheat.waitForFunction(() => window.game.state === 'menu', null, { timeout: 15_000 });
+  await cheat.waitForFunction((called) => window.game.cheaters.includes(called), name, { timeout: 15_000 });
+  expect(await cheat.evaluate(() => window.game.state)).not.toBe('menu');
   expect(errors).toEqual([]);
 });

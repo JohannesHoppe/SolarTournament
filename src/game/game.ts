@@ -17,7 +17,7 @@ import { ReferencePlane } from '../view/plane';
 import { referencesOf } from '../world/reference';
 import { Ghost } from '../view/ghost';
 import { lapClock, LapTimer, parseLaps } from './laps';
-import { aimHook, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, pivotOf, pullOn, type Anchor, type Mark, type Tether } from './hook';
+import { aimHook, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, pivotOf, pullOn, type Anchor, type Mark, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
@@ -55,7 +55,7 @@ import type { Asteroid, FieldState, RayHit } from '../world/asteroids';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
-import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, type RoomMode, type RoundMode } from './race';
+import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { touchRing } from '../world/gates';
 import { IMMOVABLE, massOf, type Body } from '../world/bodies';
@@ -427,8 +427,6 @@ const ZONE_MESSAGES: Record<Zone, string> = {
   armor: msg('Armor hit'),
 };
 const BEST_SCORE_KEY = 'solartournament.best';
-/** A Host the others cast out as a cheater sees the call this long before it is back in the menu (ms). */
-const CAST_OUT_MS = 3000;
 /** What the Host owns: Solar Coins, the upgrades of its ships, the ship it flies (see game/hangar). */
 const HANGAR_KEY = 'solartournament.hangar';
 /** The ships as the menu names them. */
@@ -711,6 +709,8 @@ export class Game implements OnlineGame {
   private roundEndsAt = 0;
   /** When the running round started (game time; see setRoundEnd). */
   private roundStartedAt = 0;
+  /** The same moment on the round's real-time clock, once known (see followStart); null before a round's first clock. */
+  private roundStartWall: number | null = null;
   /** Online: when this browser arrived in the running round (game time; see DECIDE_GRACE). */
   private roundArrivedAt = -Infinity;
   /** The same moment on the round's real-time clock (see setRoundEnd, roundClock). */
@@ -1602,17 +1602,6 @@ export class Game implements OnlineGame {
     else this.enterFullscreen();
   }
 
-  castOut() {
-    // after the call, so the Host still sees its name on the cheater's line; a Host who has
-    // left that tournament meanwhile is not taken out of what it does now
-    const tournament = this.online;
-    window.setTimeout(() => {
-      if (!tournament || this.online !== tournament) return;
-      this.showMenu();
-      this.notice(t('The other Hosts named you a cheater and cast you out of the tournament.'));
-    }, CAST_OUT_MS);
-  }
-
   /** A line in the menu for what went wrong; empty hides it. */
   private notice(text: string) {
     $('menu-notice').textContent = text;
@@ -2225,6 +2214,7 @@ export class Game implements OnlineGame {
     this.pendingRocks.length = 0;
     this.soloSeed = 1 + Math.floor(Math.random() * 2147483000);
     // online, the lead browser's clock decides (see leadRound and syncRound)
+    this.roundStartWall = null;
     if (mode === 'solo') this.setRoundEnd(ROUND_SECONDS);
     else this.roundEndsAt = this.roundEndsAtWall = Infinity;
     this.cockpit = false;
@@ -2479,6 +2469,8 @@ export class Game implements OnlineGame {
   rejoin() {
     if (this.roundId >= 0) this.rejoinedFrom = this.roundId;
     this.roundId = -1;
+    // the lead's clock may differ from the one this browser ran alone: its start comes with it
+    this.roundStartWall = null;
     this.pendingRocks.length = 0;
   }
 
@@ -2502,18 +2494,19 @@ export class Game implements OnlineGame {
       this.roundId = round.id;
       this.startNextRound();
     } else if (round.id < this.roundId) return;
-    // the radio plays on this clock, so it follows the lead browser closely: jumps when far
-    // off, otherwise smooths out the jitter of the network
+    // the asteroids follow the lead browser's field time: jump when far off, otherwise smooth
+    // out the jitter of the network
+    const drift = round.field - this.field.clock;
+    this.field.setClock(Math.abs(drift) > FIELD_SNAP ? round.field : this.field.clock + drift * 0.1);
+    // the sides and cores of Capture the Flag are the lead's, and so is the President's
+    // battleship: followed before the clock, so a round the lead ends early (a side won, the
+    // battleship went down) is decided here too when its shortened clock arrives
+    if (round.f && this.flags) this.flags.follow(round.f, this.time);
+    if (round.b && this.fleet) this.fleetEvents(this.fleet.follow(round.b), null);
+    // the radio plays on this clock, so it follows the lead browser closely the same way
     const endsAt = this.roundClock() + round.left;
     if (Math.abs(endsAt - this.roundEndsAtWall) > ROUND_SNAP || !Number.isFinite(this.roundEndsAtWall)) this.setRoundEnd(round.left);
     else this.setRoundEnd(this.roundEndsAtWall + (endsAt - this.roundEndsAtWall) * 0.05 - this.roundClock());
-    // the asteroids follow the lead browser's field time the same way
-    const drift = round.field - this.field.clock;
-    this.field.setClock(Math.abs(drift) > FIELD_SNAP ? round.field : this.field.clock + drift * 0.1);
-    // and the sides and cores of Capture the Flag are the lead's
-    if (round.f && this.flags) this.flags.follow(round.f, this.time);
-    // and so is the President's battleship
-    if (round.b && this.fleet) this.fleetEvents(this.fleet.follow(round.b), null);
   }
 
   leadRound(): RoundState {
@@ -2564,10 +2557,16 @@ export class Game implements OnlineGame {
   /**
    * The round started ROUND_SECONDS before its end, on the same real-time clock; once it is
    * decided early it ends sooner, but keeps its start (race times and the probes count from
-   * there).
+   * there). Online the start is known from the round's first clock on: the lead's clock may
+   * smooth it by a jitter's worth (ROUND_SNAP), never jump it, so an end the lead brings forward
+   * (a race all finished, a side that won) never moves the race's time or the probes' schedule,
+   * even before this browser sees the round decided itself.
    */
   private followStart() {
-    if (!this.decided()) this.roundStartedAt = this.roundEndsAt - ROUND_SECONDS;
+    const start = this.roundEndsAtWall - ROUND_SECONDS;
+    if (this.decided() || !takesStart(this.online !== null, this.roundStartWall, start, ROUND_SNAP)) return;
+    this.roundStartWall = start;
+    this.roundStartedAt = this.roundEndsAt - ROUND_SECONDS;
   }
 
   /**
@@ -2586,6 +2585,8 @@ export class Game implements OnlineGame {
     // hits that arrived before this browser started the round
     const pending = this.pendingRocks.splice(0);
     for (const rock of pending) if (rock.round >= this.roundId) this.remoteRock(rock.id, rock.at, rock.round);
+    // the new round's start comes with its first clock (see followStart)
+    this.roundStartWall = null;
   }
 
   /**
@@ -4163,6 +4164,14 @@ export class Game implements OnlineGame {
     return this.raceTime() - START_AT;
   }
 
+  roundSeconds() {
+    return this.raceTime();
+  }
+
+  raceSeconds() {
+    return this.raceClock();
+  }
+
   /**
    * The own racer flew through gate `gate` of the lap: the split against the best lap, or the
    * lap's time; a new best lap is kept in this browser, with its ghost.
@@ -4732,7 +4741,7 @@ export class Game implements OnlineGame {
    */
   remoteProbeHook(owner: Ship, id: string, length: number) {
     const probe = this.probes.find(id);
-    if (!probe || (probe.holder && probe.holder !== owner && probe.holder.id < owner.id)) return;
+    if (!probe || (probe.holder && probe.holder !== owner && keepsHold(probe.holder.id, owner.id))) return;
     if (probe.holder && probe.holder !== owner) this.unhook(probe.holder);
     this.unhook(owner);
     this.probes.hook(probe, owner);
@@ -4762,10 +4771,16 @@ export class Game implements OnlineGame {
     return true;
   }
 
-  /** A ship of another browser hooked a torpedo (checked against the hook's reach where it arrives): it hangs on that ship's rope here too, and that browser decides where it goes off. */
+  /**
+   * A ship of another browser hooked a torpedo (checked against the hook's reach where it
+   * arrives): it hangs on that ship's rope here too, and that browser decides where it goes off.
+   * Two hooks that bit the same torpedo at once: the ship with the lower id keeps it, on every
+   * browser, so exactly one browser is in charge of it.
+   */
   remoteTorpedoHook(owner: Ship, id: string, length: number) {
     const torpedo = this.torpedoes.find(id);
-    if (!torpedo) return;
+    if (!torpedo || (torpedo.holder && torpedo.holder !== owner && keepsHold(torpedo.holder.id, owner.id))) return;
+    if (torpedo.holder && torpedo.holder !== owner) this.unhook(torpedo.holder);
     this.unhook(owner);
     torpedo.holder = owner;
     torpedo.own = false;

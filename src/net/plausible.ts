@@ -3,6 +3,7 @@ import { MAX_SPEED } from '../ship/flight';
 import { TORPEDO_LIFETIME, TORPEDOES } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
 import { ONLINE_LEVEL, tubeTorpedoes } from '../game/hangar';
+import { FINISH_GATES } from '../game/race';
 
 /** The most torpedoes a clone carries online: the standard load and its tubes up to the online cap. */
 const LOAD = TORPEDOES + tubeTorpedoes(ONLINE_LEVEL);
@@ -77,6 +78,8 @@ interface Track {
   diedAt: number;
   /** When it last took a probe this browser could not see the contents of. */
   tookAt: number;
+  /** The probes it said it took this round: each counts once (see probe). */
+  probes: Set<string>;
   /** No position or nose check before this (real time). */
   graceUntil: number;
   /** It took a nova core (or held one when first seen). */
@@ -138,6 +141,8 @@ function turned(q: THREE.Quaternion, w: THREE.Vector3, seconds: number, target: 
 
 export class Plausibility {
   private readonly tracks = new Map<string, Track>();
+  /** The probes of the round some ship took without this browser seeing what they held (see probe). */
+  private readonly unseenProbes = new Set<string>();
   /** The most each check measured, as a share of its bound (see Margins): in honest play the margin to a cheat, above 1 a strike. */
   readonly margins: Margins = {};
   /** The share each check measured when it last failed (see measure), for the log; until it first fails, the last it measured. */
@@ -154,6 +159,7 @@ export class Plausibility {
         alive: false,
         diedAt: -Infinity,
         tookAt: -Infinity,
+        probes: new Set(),
         graceUntil: now + REPRINT_GRACE,
         nova: false,
         launched: 0,
@@ -179,8 +185,9 @@ export class Plausibility {
     return share > 1;
   }
 
-  /** A new round: every ship is printed again, its kills start over, no core is held. */
+  /** A new round: every ship is printed again, its kills start over, no core is held, every probe is new. */
   newRound(now: number) {
+    this.unseenProbes.clear();
     for (const track of this.tracks.values()) {
       this.regrace(track, now);
       track.kills = null;
@@ -189,6 +196,7 @@ export class Plausibility {
       track.diedAt = -Infinity;
       this.freshClone(track);
       track.nova = false;
+      track.probes.clear();
     }
   }
 
@@ -207,9 +215,9 @@ export class Plausibility {
     track.beams.length = 0;
   }
 
-  /** A ship is gone (its browser left): it is judged afresh when it shows again. */
-  forget(id: string) {
-    this.tracks.delete(id);
+  /** Ships are gone (their browser left): each one `gone` names is judged afresh when it shows again. */
+  forget(gone: (id: string) => boolean) {
+    for (const id of this.tracks.keys()) if (gone(id)) this.tracks.delete(id);
   }
 
   /**
@@ -354,10 +362,23 @@ export class Plausibility {
     return first.some((p) => second.some((q) => Math.abs(p.at - q.at) <= TRAIL_STEP * 2 && p.p.distanceTo(q.p) < reach));
   }
 
-  /** A ship took a probe: of a kind this browser knows, or null when it could not see what it held (it may have been either). */
-  probe(id: string, kind: string | null, now: number) {
+  /**
+   * A ship took the probe `probe`: of a kind this browser knows, or null when it could not see
+   * what it held (it did not have the probe, or it refused the take, the taker too far as it
+   * sees them; it may have held either). A probe is taken once: each ship's word counts once per
+   * probe, and a probe whose contents this browser did not see opens the window for a core and
+   * adds its torpedoes only for the first ship that names it. A second honest taker of the same
+   * probe (two that reached it at once, each first on its own screen) is left with TORPEDO_SLACK.
+   */
+  probe(id: string, probe: string, kind: string | null, now: number) {
     const track = this.track(id, now);
-    if (kind === null) track.tookAt = now;
+    if (track.probes.has(probe)) return;
+    track.probes.add(probe);
+    if (kind === null) {
+      if (this.unseenProbes.has(probe)) return;
+      this.unseenProbes.add(probe);
+      track.tookAt = now;
+    }
     if (kind === 'nova') track.nova = true;
     if (kind === 'torpedoes' || kind === null) track.torpedoes += 2;
   }
@@ -407,6 +428,12 @@ export class SenderClock {
     return least === undefined ? clock : Math.min(clock, now - least + LATE_SLACK);
   }
 
+  /** How long ago (s, real time) a state the peer sent at `sent` (its clock, see sent) left it, beyond the least delay of its states: the time it waited in a jammed link or a browser that stood still. */
+  age(peer: string, sent: number, now: number): number {
+    const least = this.least.get(peer);
+    return least === undefined ? 0 : Math.max(0, now - sent - least);
+  }
+
   /** The time it is now on a peer's clock, at the latest (for what it sends without its age). */
   now(peer: string, now: number): number {
     const least = this.least.get(peer);
@@ -449,8 +476,9 @@ export class Strikes {
     this.seen.clear();
   }
 
-  forget(ship: string) {
-    for (const key of this.seen.keys()) if (key.startsWith(`${ship}|`)) this.seen.delete(key);
+  /** The strikes of the ships `gone` names go: their browser left. */
+  forget(gone: (ship: string) => boolean) {
+    for (const key of this.seen.keys()) if (gone(key.slice(0, key.lastIndexOf('|')))) this.seen.delete(key);
   }
 }
 
@@ -553,10 +581,9 @@ export class Evidence {
     return now - (this.launches.get(ship) ?? -Infinity) < LAUNCH_EVIDENCE;
   }
 
-  forget(ship: string) {
-    this.beams.delete(ship);
-    this.blasts.delete(ship);
-    this.launches.delete(ship);
+  /** What the ships `gone` names did goes: their browser left. */
+  forget(gone: (ship: string) => boolean) {
+    for (const map of [this.beams, this.blasts, this.launches]) for (const ship of map.keys()) if (gone(ship)) map.delete(ship);
   }
 }
 
@@ -568,13 +595,108 @@ function keep<T extends { at: number }>(map: Map<string, T[]>, ship: string, ent
   map.set(ship, list);
 }
 
+/**
+ * A ship's score as other browsers take it rises by at most SCORE_RATE points a second, in
+ * bursts of up to SCORE_BURST: far beyond honest play (a nova core that takes seven ships at once
+ * is 7,000 points, the battleship's reactor and its sinking 1,500, a race's win 1,000), and a
+ * score said to be higher shows as high as that allows. It falls as it likes (deaths cost points).
+ */
+const SCORE_RATE = 200;
+const SCORE_BURST = 10000;
+/**
+ * It passes at most GATE_RATE gates a second, two at once for states that come bunched: the
+ * gates lie 1 to 1.9 km apart, some two seconds even at 450 m/s, more than a ship flies but for
+ * a moment.
+ */
+const GATE_RATE = 1;
+const GATE_BURST = 2;
+/**
+ * A finish counts once all FINISH_GATES are, at a time on the race clock no later than
+ * FINISH_SLACK (s, the clocks' offset, lag and the slow part's second) after this browser's own,
+ * and no earlier than FINISH_SLACK before the last state that showed the ship still racing, nor
+ * than the gates could have been passed at GATE_RATE.
+ */
+const FINISH_SLACK = 3;
+const FASTEST_RACE = (FINISH_GATES - 1) / GATE_RATE;
+
+/** What a ship's state says of its standing: score, gates passed in a race, and its finish on the race clock (-1 while racing). */
+export interface Standing {
+  s: number;
+  g: number;
+  fi: number;
+}
+
+interface Tally extends Standing {
+  /** When the last state came (real time), and what score and gates it may still rise by. */
+  at: number;
+  points: number;
+  passes: number;
+  /** The race clock of the last state that showed the ship racing. */
+  racing: number;
+}
+
+/** Takes up `claimed` from the `held` value with the allowance `tokens`: falls at once, rises by what the allowance holds. */
+function rise(held: number, claimed: number, tokens: number): [number, number] {
+  if (claimed <= held) return [claimed, tokens];
+  const step = Math.min(claimed - held, tokens);
+  return [held + step, tokens - step];
+}
+
+/**
+ * How far each ship of another browser stands in the round as this browser takes it: score and
+ * gates rise no faster than a ship makes them, and a finish only counts once the gates are passed,
+ * at a time that fits when this browser saw the ship racing (see the bounds above). A ship first
+ * seen in a round may have made what the time since the round started allows.
+ */
+export class Standings {
+  private readonly ships = new Map<string, Tally>();
+
+  /**
+   * A state of a ship with its standing `claimed`, arriving at `now` (real time), `round` seconds
+   * into the round, sent at `race` on this browser's race clock (a state that waited in a jammed
+   * link, or while this browser stood still, counts from when it was sent): the standing this
+   * browser takes.
+   */
+  take(id: string, claimed: Standing, now: number, round: number, race: number): Standing {
+    let ship = this.ships.get(id);
+    if (!ship) {
+      ship = { at: now, s: Math.min(0, claimed.s), g: 0, fi: -1, points: SCORE_BURST + SCORE_RATE * Math.max(0, round), passes: GATE_BURST + GATE_RATE * Math.max(0, round), racing: FASTEST_RACE };
+      this.ships.set(id, ship);
+    }
+    const dt = Math.max(0, now - ship.at);
+    ship.at = now;
+    ship.points = Math.min(Math.max(ship.points, SCORE_BURST), ship.points + SCORE_RATE * dt);
+    ship.passes = Math.min(Math.max(ship.passes, GATE_BURST), ship.passes + GATE_RATE * dt);
+    [ship.s, ship.points] = rise(ship.s, claimed.s, ship.points);
+    [ship.g, ship.passes] = rise(ship.g, Math.min(claimed.g, FINISH_GATES), ship.passes);
+    if (claimed.fi < 0) {
+      ship.fi = -1;
+      ship.racing = Math.max(ship.racing, race);
+    } else if (ship.fi < 0 && ship.g >= FINISH_GATES && claimed.fi <= race + FINISH_SLACK && claimed.fi >= Math.max(FASTEST_RACE, ship.racing - FINISH_SLACK)) {
+      ship.fi = claimed.fi;
+    }
+    return { s: ship.s, g: ship.g, fi: ship.fi };
+  }
+
+  /** A new round: every ship starts from nothing. */
+  newRound() {
+    this.ships.clear();
+  }
+
+  /** The ships `gone` names left with their browser. */
+  forget(gone: (id: string) => boolean) {
+    for (const id of this.ships.keys()) if (gone(id)) this.ships.delete(id);
+  }
+}
+
 /** Accusations: a peer counts as a cheater once at least ACCUSERS Hosts who fly, the own one included, say so. */
 const ACCUSERS = 2;
 
 /**
  * How many accusers it takes among `pilots` Hosts who fly (the own one included, if it flies):
  * a majority of them besides the accused, at least ACCUSERS, so two tabs of one Host cannot
- * vote an honest one out of a fuller round. Watching Hosts neither vote nor count.
+ * vote an honest one out of a round of five or more (in one of three or four they can, which is
+ * why the accused never casts itself out, see Online.accuse). Watching Hosts neither vote nor count.
  */
 export function accusersNeeded(pilots: number): number {
   return Math.max(ACCUSERS, Math.floor((pilots - 1) / 2) + 1);

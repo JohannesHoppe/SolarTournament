@@ -200,7 +200,8 @@ const BOT_SKILLS: Record<string, Skills> = {
 /** Skills that are all the same, for a bot of a name without its own (0.4) or one the flight school sets. */
 export const evenSkills = (skill: number): Skills => ({ aim: skill, reflexes: skill, daring: skill });
 
-export const skillsOf = (name: string) => BOT_SKILLS[name] ?? evenSkills(0.4);
+/** A bot's skills by its name; only the table's own entries count, never what every object inherits (a name another browser sends may be "constructor"). */
+export const skillsOf = (name: string) => (Object.hasOwn(BOT_SKILLS, name) ? BOT_SKILLS[name] : evenSkills(0.4));
 
 /**
  * Newtonian pursuit AI. Bots only see ships they have a line of sight to. It works out the velocity it wants (close in on its target,
@@ -339,7 +340,7 @@ export class Bot {
       if (!this.rival(ship, now)) continue;
       const distance = ship.flight.position.distanceTo(me.position);
       if (distance >= sight) continue;
-      const hunters = this.huntersOf(ship, ships, field);
+      const hunters = this.huntersOf(ship, ships, field, sight);
       if (hunters >= MAX_HUNTERS) continue;
       const cost = distance * (1 + hunters) * (ship === this.target ? STICKY : 1);
       if (cost < best && field.lineOfSight(me.position, ship.flight.position)) {
@@ -671,15 +672,18 @@ export class Bot {
   }
 
   /**
-   * How many others hunt a ship, as the bot sees them: ships in sight within FIRE_RANGE of it
-   * with their noses on it (see HUNT_ANGLE). Another bot's mind it cannot read.
+   * How many others hunt a ship, as the bot sees them: ships in sight (within `sight` of the
+   * bot, the storm's shorter reach included, and no rock between) within FIRE_RANGE of it with
+   * their noses on it (see HUNT_ANGLE). Another bot's mind it cannot read.
    */
-  private huntersOf(prey: Ship, ships: readonly Ship[], field: AsteroidField) {
+  private huntersOf(prey: Ship, ships: readonly Ship[], field: AsteroidField, sight: number) {
     let hunters = 0;
+    const eye = this.ship.flight.position;
     for (const ship of ships) {
       if (ship === this.ship || ship === prey || !ship.alive || ship.allyOf(prey)) continue;
+      if (ship.flight.position.distanceTo(eye) >= sight) continue;
       const line = hunt.subVectors(prey.flight.position, ship.flight.position);
-      if (line.length() > FIRE_RANGE || ship.flight.angleTo(line) > HUNT_ANGLE || !field.lineOfSight(this.ship.flight.position, ship.flight.position)) continue;
+      if (line.length() > FIRE_RANGE || ship.flight.angleTo(line) > HUNT_ANGLE || !field.lineOfSight(eye, ship.flight.position)) continue;
       hunters++;
     }
     return hunters;

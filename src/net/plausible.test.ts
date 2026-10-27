@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { TORPEDO_LIFETIME } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
-import { Accusations, accusersNeeded, beamShare, Evidence, hookShare, Plausibility, SenderClock, Strikes, type Margins, type Seen } from './plausible';
+import { Accusations, accusersNeeded, beamShare, Evidence, hookShare, Plausibility, SenderClock, Standings, Strikes, type Margins, type Seen, type Standing } from './plausible';
 import { honestFlight, type Roughness } from '../test/honest';
 
 const alive = (x: number, more = {}) => ({ p: [x, 0, 0], alive: true, ...more });
@@ -57,7 +57,7 @@ describe('plausibility of what other browsers report', () => {
   it('take a nova only from a ship that took a core, where it is', () => {
     const check = flying(new Plausibility());
     expect(check.nova('s', [0, 0, 0], 21)).toBe('nova');
-    check.probe('s', 'nova', 21);
+    check.probe('s', '1.0', 'nova', 21);
     expect(check.nova('s', [200000, 0, 0], 21.1)).toBe('nova');
     expect(check.nova('s', [100, 0, 0], 21.1)).toBeNull();
     // the core is spent
@@ -72,14 +72,38 @@ describe('plausibility of what other browsers report', () => {
     check.state('t', alive(0, { nova: true }), 41);
     expect(check.nova('t', [0, 0, 0], 41.1)).toBeNull();
     // a probe this browser did not have: it may have held a core
-    check.probe('s', null, 50);
+    check.probe('s', '1.1', null, 50);
     check.state('s', alive(0, { nova: true }), 51);
     expect(check.nova('s', [0, 0, 0], 51.1)).toBeNull();
   });
 
+  it('count a probe once: a take said again and again, refused or of a probe already gone, adds no torpedoes and opens no window for a core', () => {
+    const check = flying(new Plausibility());
+    // a take refused here (the taker too far, as lag may have it) may have held a core or torpedoes, once
+    check.probe('s', '3.0', null, 21);
+    for (let t = 21.1; t < 30; t += 0.1) check.probe('s', '3.0', null, t);
+    for (let i = 0; i < 7; i++) expect(check.torpedo('s', 30)).toBeNull();
+    expect(check.torpedo('s', 30)).toBe('torpedoes');
+    check.state('s', alive(0, { nova: true }), 30);
+    expect(check.nova('s', [0, 0, 0], 30.1)).toBe('nova');
+    // another ship naming the same probe whose contents nobody here saw gains nothing either
+    const other = flying(new Plausibility(), 't');
+    other.probe('s', '4.0', null, 21);
+    other.probe('t', '4.0', null, 21.5);
+    for (let i = 0; i < 5; i++) expect(other.torpedo('t', 22)).toBeNull();
+    expect(other.torpedo('t', 22)).toBe('torpedoes');
+    other.state('t', alive(0, { nova: true }), 22);
+    expect(other.nova('t', [0, 0, 0], 22.1)).toBe('nova');
+    // a new round brings new probes
+    check.newRound(40);
+    check.probe('s', '3.0', null, 41);
+    check.state('s', alive(0, { nova: true }), 42);
+    expect(check.nova('s', [0, 0, 0], 42.1)).toBeNull();
+  });
+
   it('take no nova from a clone that died with it', () => {
     const check = flying(new Plausibility());
-    check.probe('s', 'nova', 21);
+    check.probe('s', '1.0', 'nova', 21);
     check.died('s', 22);
     expect(check.nova('s', [0, 0, 0], 22.1)).toBe('nova');
   });
@@ -95,7 +119,7 @@ describe('plausibility of what other browsers report', () => {
     check.died('s', 22);
     check.state('s', dead, 22);
     check.state('s', alive(0), 25);
-    check.probe('s', 'torpedoes', 26);
+    check.probe('s', '1.0', 'torpedoes', 26);
     for (let i = 0; i < 7; i++) expect(check.torpedo('s', 27)).toBeNull();
     expect(check.torpedo('s', 27)).toBe('torpedoes');
   });
@@ -268,7 +292,74 @@ describe("a ship's nose", () => {
   });
 });
 
+describe('the standing of another browser\'s ship', () => {
+  const at = (s: number, g = 0, fi = -1): Standing => ({ s, g, fi });
+
+  it('lets the score fall at once and rise no faster than a ship makes points, in a burst of a nova or a win', () => {
+    const standings = new Standings();
+    expect(standings.take('s', at(0), 0, 0, 0)).toEqual(at(0));
+    // a nova core that takes seven ships at once, then a death
+    expect(standings.take('s', at(7000), 1, 1, 1).s).toBe(7000);
+    expect(standings.take('s', at(6500), 2, 2, 2).s).toBe(6500);
+    // a million in a second shows as what a second more allows
+    expect(standings.take('s', at(1000000), 3, 3, 3).s).toBeLessThan(6500 + 10000);
+    let s = 0;
+    for (let t = 4; t <= 14; t++) s = standings.take('s', at(1000000), t, t, t).s;
+    expect(s).toBeLessThan(6500 + 10000 + 200 * 12);
+  });
+
+  it('takes what a ship first seen could have made since the round started', () => {
+    const standings = new Standings();
+    expect(standings.take('s', at(25000), 100, 100, 85).s).toBe(25000);
+    expect(standings.take('t', at(-1500), 100, 100, 85).s).toBe(-1500);
+    expect(standings.take('u', at(500000), 100, 100, 85).s).toBe(10000 + 200 * 100);
+  });
+
+  it('counts gates no faster than a ship flies from one to the next, and a finish only after the last at a time it fits', () => {
+    const standings = new Standings();
+    standings.take('s', at(0), 0, 0, 0);
+    // all the gates at once: two, no finish
+    expect(standings.take('s', at(0, 25, 1), 0.1, 10.1, 0.1)).toEqual(at(0, 2, -1));
+    // an honest race: a gate every five seconds, the finish two minutes in
+    let seen = at(0);
+    for (let gate = 1; gate <= 25; gate++) seen = standings.take('s', at(0, gate, -1), 5 * gate, 10 + 5 * gate, 5 * gate);
+    expect(seen.g).toBe(25);
+    expect(standings.take('s', at(0, 25, 125.4), 125.5, 135.5, 125.5).fi).toBe(125.4);
+    // a finish earlier than the ship was seen racing never counts
+    const liar = new Standings();
+    for (let gate = 1; gate <= 25; gate++) liar.take('l', at(0, gate, -1), 5 * gate, 10 + 5 * gate, 5 * gate);
+    expect(liar.take('l', at(0, 25, 30), 125.5, 135.5, 125.5).fi).toBe(-1);
+    // nor one later than the race clock when it was sent
+    expect(liar.take('l', at(0, 25, 200), 126, 136, 126).fi).toBe(-1);
+  });
+
+  it('takes the finish of a ship first seen after it finished, no faster than its gates allow', () => {
+    const standings = new Standings();
+    expect(standings.take('s', at(1000, 25, 131.2), 200, 210, 200)).toEqual(at(1000, 25, 131.2));
+    expect(standings.take('t', at(1000, 25, 5), 200, 210, 200).fi).toBe(-1);
+  });
+
+  it('starts every ship over in a new round, and forgets those of a browser that left', () => {
+    const standings = new Standings();
+    standings.take('s', at(0), 0, 0, 0);
+    expect(standings.take('s', at(90000), 1, 1, 1).s).toBe(10000);
+    standings.newRound();
+    expect(standings.take('s', at(0), 2, 0, 0).s).toBe(0);
+    standings.take('b:x:1', at(0), 2, 0, 0);
+    standings.forget((id) => id.startsWith('b:x:'));
+    expect(standings.take('b:x:1', at(20000), 3, 50, 35).s).toBe(20000);
+  });
+});
+
 describe("a sender's clock", () => {
+  it('tells how long a state waited beyond the least delay of its peer\'s states', () => {
+    const clock = new SenderClock();
+    clock.sent('p', 10, 100.05);
+    const sent = clock.sent('p', 12, 104.05);
+    expect(clock.age('p', sent, 104.05)).toBeCloseTo(2);
+    expect(clock.age('q', 5, 104.05)).toBe(0);
+  });
+
   it('counts the time between states as they were sent, not as they arrived', () => {
     const clock = new SenderClock();
     expect(clock.sent('p', 10, 100.05)).toBe(10);
@@ -376,8 +467,32 @@ describe('evidence of what a ship did', () => {
     expect(evidence.blasted('s', v(500), 20000, 11)).toBe(true);
     expect(evidence.launched('s', 10 + TORPEDO_LIFETIME + 2)).toBe(true);
     expect(evidence.launched('s', 10 + TORPEDO_LIFETIME + 4)).toBe(false);
-    evidence.forget('s');
+    evidence.forget((ship) => ship === 's');
     expect(evidence.blasted('s', v(500), 20000, 11)).toBe(false);
+  });
+
+  it('forgets everything of the ships of a browser that left, also of ids no ship of it ever had', () => {
+    const evidence = new Evidence();
+    const strikes = new Strikes();
+    const check = new Plausibility();
+    for (const ship of ['p:gone', 'b:gone:7', 'b:gone:123456', 'p:stays']) {
+      evidence.beam(ship, v(0), v(1000), 10);
+      strikes.add(ship, 'aim', 10);
+      check.died(ship, 10);
+      check.probe(ship, '1.0', 'torpedoes', 10);
+    }
+    const gone = (ship: string) => ship === 'p:gone' || ship.startsWith('b:gone:');
+    evidence.forget(gone);
+    strikes.forget(gone);
+    check.forget(gone);
+    expect(evidence.beamEnded('b:gone:123456', v(1000), 100, 11)).toBe(false);
+    expect(evidence.beamEnded('p:stays', v(1000), 100, 11)).toBe(true);
+    expect(strikes.count('b:gone:7', 'aim')).toBe(0);
+    expect(strikes.count('p:stays', 'aim')).toBe(1);
+    // a forgotten ship starts with a fresh load: the probe's torpedoes went with it
+    for (let i = 0; i < 5; i++) check.torpedo('p:gone', 11);
+    expect(check.torpedo('p:gone', 11)).toBe('torpedoes');
+    for (let i = 0; i < 7; i++) expect(check.torpedo('p:stays', 11)).toBeNull();
   });
 
   it("counts a torpedo's hit on the battleship after its shooter died, a laser's only from a living one", () => {

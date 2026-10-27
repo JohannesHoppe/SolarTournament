@@ -19,7 +19,8 @@
  *
  * The list keeps the relays that passed every round: those already in it first (so the list
  * stays stable and browsers of builds a week apart still meet), then the fastest, one per
- * operator (domain), up to LIST_SIZE. Latency is measured from wherever the check runs. The
+ * operator (domain), up to LIST_SIZE, with at most MAX_NEW_FROM_DIRECTORY relays a run that
+ * only the directory names. Latency is measured from wherever the check runs. The
  * file is only rewritten when the relays change; with fewer than MIN_RELAYS healthy ones it is
  * left alone and the check fails.
  *
@@ -43,6 +44,14 @@ const DIRECTORY_RELAYS = ['wss://relay.nostr.watch', 'wss://monitorlizard.nostr1
 const DIRECTORY_WINDOW_S = 3600;
 /** A relay a single monitor reports is not taken: monitors can be wrong or malicious (NIP-66). */
 const MIN_MONITORS = 2;
+/**
+ * Relays only the directory names that one run adds to the list at most. A monitor's key costs
+ * nothing, so a few made-up monitors could push relays of one hand into the directory; capped,
+ * such relays take over the list only over many weeks of commits, where a reader of the
+ * history sees them come. Trystero's built-in relays come with the dependency and are allowed
+ * by the Content Security Policy anyway: they are not counted.
+ */
+const MAX_NEW_FROM_DIRECTORY = 2;
 /** Requirements (NIP-11 limitations, NIP-66 `R` tags) the game cannot meet. */
 const UNMET_REQUIREMENTS = ['auth', 'payment', 'pow', 'writes'];
 /** The directory's candidates probed at most, those seen by the most monitors first. */
@@ -192,10 +201,21 @@ function probeWrite(url: string): Promise<Probe> {
   );
 }
 
-/** Asks a directory relay for the monitors' reports of the last hour. */
-function readDirectory(url: string): Promise<{ tags: string[][]; pubkey: string }[]> {
+type Report = { tags: string[][]; pubkey: string };
+
+/** A monitor's report as the directory hands it on, or null for anything malformed: public events are anyone's, so nothing in them is trusted to have its shape. */
+function report(message: unknown): Report | null {
+  if (!Array.isArray(message) || message[0] !== 'EVENT') return null;
+  const event = message[2] as { tags?: unknown; pubkey?: unknown } | null;
+  if (typeof event !== 'object' || event === null || typeof event.pubkey !== 'string' || !Array.isArray(event.tags)) return null;
+  const tags = event.tags.filter((tag): tag is string[] => Array.isArray(tag) && tag.every((part) => typeof part === 'string'));
+  return { tags, pubkey: event.pubkey };
+}
+
+/** Asks a directory relay for the monitors' reports of the last hour; a message that is not JSON or not a well-formed report is skipped. */
+function readDirectory(url: string): Promise<Report[]> {
   return new Promise((resolve) => {
-    const events: { tags: string[][]; pubkey: string }[] = [];
+    const events: Report[] = [];
     let socket: WebSocket;
     const done = () => {
       clearTimeout(timer);
@@ -215,8 +235,15 @@ function readDirectory(url: string): Promise<{ tags: string[][]; pubkey: string 
     socket.onopen = () => socket.send(JSON.stringify(['REQ', 'directory', { kinds: [30166], since: Math.floor(Date.now() / 1000) - DIRECTORY_WINDOW_S, limit: 5000 }]));
     socket.onerror = done;
     socket.onmessage = (event) => {
-      const message = JSON.parse(String(event.data)) as unknown[];
-      if (message[0] === 'EVENT') events.push(message[2] as { tags: string[][]; pubkey: string });
+      let message: unknown;
+      try {
+        message = JSON.parse(String(event.data));
+      } catch {
+        return;
+      }
+      if (!Array.isArray(message)) return;
+      const found = report(message);
+      if (found) events.push(found);
       else if (message[0] === 'EOSE' || message[0] === 'CLOSED') done();
     };
   });
@@ -229,7 +256,7 @@ async function directoryCandidates(): Promise<string[]> {
     console.log(`Directory ${DIRECTORY_RELAYS[index]}: ${events.length} reports`);
     for (const { tags, pubkey } of events) {
       const url = normalize(tags.find((tag) => tag[0] === 'd')?.[1] ?? '');
-      if (!url || !Array.isArray(tags)) continue;
+      if (!url) continue;
       const report = reports.get(url) ?? { monitors: new Set(), rtt: [], unmet: false };
       report.monitors.add(pubkey);
       const rtt = Number(tags.find((tag) => tag[0] === 'rtt-open')?.[1]);
@@ -291,15 +318,19 @@ results.sort((a, b) => a.ms - b.ms);
 
 const chosen: string[] = [];
 const operators = new Set<string>();
+const onlyDirectory = (url: string) => !current.includes(url) && !trystero.includes(url);
+let newFromDirectory = 0;
 for (const result of [...results.filter((r) => current.includes(r.url)), ...results.filter((r) => !current.includes(r.url))]) {
   if (!result.healthy || chosen.length >= LIST_SIZE || operators.has(operator(result.url))) continue;
+  if (onlyDirectory(result.url) && newFromDirectory >= MAX_NEW_FROM_DIRECTORY) continue;
+  if (onlyDirectory(result.url)) newFromDirectory++;
   chosen.push(result.url);
   operators.add(operator(result.url));
 }
 
 console.log('\nRelay                                             write ms  result');
 for (const result of results) {
-  const mark = chosen.includes(result.url) ? 'chosen' : result.healthy ? 'healthy' : `failed: ${result.why}`;
+  const mark = chosen.includes(result.url) ? 'chosen' : result.healthy ? (onlyDirectory(result.url) && newFromDirectory >= MAX_NEW_FROM_DIRECTORY ? 'healthy (new from the directory, over this run\'s cap)' : 'healthy') : `failed: ${result.why}`;
   console.log(`${result.url.padEnd(50)}${(result.healthy ? String(result.ms) : '-').padStart(8)}  ${mark}`);
 }
 
