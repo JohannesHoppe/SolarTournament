@@ -388,12 +388,19 @@ function sealTextures(image: HTMLImageElement, anisotropy: number) {
   const ormPixels = o.createImageData(SEAL_SIZE, SEAL_SIZE);
   const bumpPixels = b.createImageData(SEAL_SIZE, SEAL_SIZE);
   const p = pixels.data;
+  // written channel by channel: millions of pixels, no array per pixel
+  const ormData = ormPixels.data;
+  const bumpData = bumpPixels.data;
   for (let i = 0; i < p.length; i += 4) {
     // how much of the gold lies here: the seal's lines are orange, its field near black
     const gold = Math.min(1, Math.max(p[i], p[i + 1]) / 200);
-    ormPixels.data.set([255, Math.round(255 * (0.38 - 0.16 * gold)), Math.round(255 * (0.45 + 0.55 * gold)), 255], i);
+    ormData[i] = 255;
+    ormData[i + 1] = Math.round(255 * (0.38 - 0.16 * gold));
+    ormData[i + 2] = Math.round(255 * (0.45 + 0.55 * gold));
+    ormData[i + 3] = 255;
     const height = Math.round(90 + 140 * gold);
-    bumpPixels.data.set([height, height, height, 255], i);
+    bumpData[i] = bumpData[i + 1] = bumpData[i + 2] = height;
+    bumpData[i + 3] = 255;
     // gold where the seal's lines run, dark gunmetal under the lacquer everywhere else
     const field = 1 - gold;
     p[i] = Math.round(255 * gold + 46 * field);
