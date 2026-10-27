@@ -582,6 +582,8 @@ export class CometView {
     }
     rock.computeVertexNormals();
     this.headMesh = new THREE.Mesh(rock, new THREE.MeshStandardMaterial({ color: 0x8fa3b8, roughness: 0.7, metalness: 0.1, flatShading: true, emissive: 0x2a5a88, emissiveIntensity: 0.6 }));
+    // the head's rock throws a shadow as it crosses the field
+    this.headMesh.castShadow = this.headMesh.receiveShadow = true;
     this.body.add(this.headMesh);
     // the coma: a cold blue-white glow around the head, seen from far off; the same light flares where a well swallows it
     const glow = new THREE.SpriteMaterial({

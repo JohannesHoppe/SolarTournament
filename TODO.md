@@ -32,7 +32,7 @@ Worked through from top to bottom. Every finished item is also documented in the
 ### 4. Arenas with their own physics
 
 - [x] Every round in another arena; tournaments walk through all of them in an order of their own
-- [x] Rings of Kronos: chunks of ice in a thin sheet
+- [x] Rings of Saturn: chunks of ice in a thin sheet
 - [x] Kessler field: debris of a destroyed station on crossing orbits
 - [x] Gas giant: strong gravity, swing-by as a weapon
 - [x] Corona: close to the sun, radiators barely cool, solar storms blind the sensors
@@ -43,7 +43,7 @@ Worked through from top to bottom. Every finished item is also documented in the
 
 Each arena gets a look of its own, recognized at first glance, cheap on phones (few draw calls, effects scaled by the quality ladder, no flicker).
 
-- [ ] Saturn: the real Saturn and ring textures in their real colors, the planet's shadow on the ring and the ring's on the planet, every object shadowing the ring material near it, a little glitter of ice in the rings; the gas giant with the real Jupiter map
+- [x] Saturn: the real Saturn and ring textures in their real colors, the planet's shadow on the ring and the ring's on the planet, every object shadowing the ring material near it, a little glitter of ice in the rings; the gas giant with the real Jupiter map
 - [ ] Rings of Saturn: the ring as a thin, dense layer of glittering ice through the arena's middle, open space above and below; flying through it, the grains rush past and sparkle in the sun
 - [ ] Comets faster but playable (about 400 m/s, the warning growing with it), and the README naming the deviation from real comets (5 to 25 km/s)
 - [ ] The Belt: the Rockborn's mining (rigs with work lights, cutting lasers, dust from drill holes, half-mined rocks with smooth cuts and glowing tunnels), beacon buoys, neon graffiti, dust lit against the sun

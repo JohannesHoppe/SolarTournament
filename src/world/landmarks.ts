@@ -1,35 +1,60 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { SUN_DIRECTION } from './space';
-import { ARENAS, HOLE_RADIUS, KESSLER_WORLD, KRONOS_CENTER, sternAt, type ArenaId, type ArenaProfile } from './arenas';
+import { ARENAS, HOLE_RADIUS, KESSLER_WORLD, SATURN_CENTER, sternAt, type ArenaId, type ArenaProfile } from './arenas';
 import { canvas, toTexture } from '../view/textures';
+import { loadPlanetMap, type Planet, type PlanetMaps } from '../assets';
 
 /**
- * What an arena shows beyond its field: the ringed planet whose ring the arena lies in, the
- * planet below the Kessler field, the gas giant, the sun up close, the black hole with its
- * disk, the neon sign on the derelict. Scenery only; what pulls and blocks is the field's well.
+ * What an arena shows beyond its field: Saturn, whose ring the arena lies in, the planet below
+ * the Kessler field, the gas giant, the sun up close, the black hole with its disk, the neon sign
+ * on the derelict. Scenery only; what pulls and blocks is the field's well.
  */
 
-/** The ringed planet's radius (units); it lies at KRONOS_CENTER, its ring runs through the arena. */
-const KRONOS_RADIUS = 90000;
-/** The ring around it, from and to (units). */
+/** Saturn's radius (units); it lies at SATURN_CENTER, its ring runs through the arena. */
+const SATURN_RADIUS = 90000;
+/** The ring around it, from the inner edge of its faint inner ring to the outer edge of its outer bright one (units). */
 const RING_INNER = 150000;
 const RING_OUTER = 330000;
 /** The ring's sheet fades in between these distances from the pilot (units, 1.5 to 6 km). */
 const RING_FADE_NEAR = 30000;
 const RING_FADE_FAR = 120000;
-/** Specks of ice drifting around the pilot in the ring, and the slab they fill (units). */
-const ICE_SPECKS = 2500;
-const ICE_SLAB = 60000;
-/** The ringed planet's axis leans this far towards the arena (rad), so its bands lie askew. */
-const KRONOS_TILT = 0.35;
+/**
+ * Specks of ice in the ring around the pilot: so many in a square of the ring's plane ICE_SLAB
+ * to each side of the pilot (units, 1.6 km), which moves along with the pilot (a speck left
+ * behind comes back on the far side, faded in and out at the square's edge), ICE_THICKNESS above
+ * and below the plane (units, 125 m, the field's sheet). Dense enough that a rock's or a ship's
+ * shadow shows as a dark lane through them.
+ */
+const ICE_SPECKS = 16000;
+const ICE_SLAB = 32000;
+const ICE_THICKNESS = 2500;
+/** A speck's size (units, 3 m), drawn at no less than a pixel and no more than ICE_SPECK_PIXELS (device px), so one passing close by stays a speck. */
+const ICE_SPECK_SIZE = 60;
+const ICE_SPECK_PIXELS = 6;
+/**
+ * The ice crystals that catch the sun in the ring's sheet: one in a cell of this edge (units,
+ * 20 m) may glint; cells smaller on screen than a few pixels show none, so the glitter never
+ * crawls or shimmers in the distance.
+ */
+const GLINT_CELL = 400;
 /**
  * The gas giant shows only the cap around the point below the arena, this far around (rad, 35°):
  * its horizon lies within 29° for a ship at the arena's top edge, a little more off to the side.
  */
 const GIANT_CAP = 0.62;
-/** The arena hangs over this latitude of the gas giant (rad, 15° north): its belts run across the view. */
-const GIANT_LATITUDE = 0.26;
+/**
+ * The arena hangs over this latitude of the gas giant (rad, 13° south), between its southern
+ * belts, so they run across the view; its great red storm (on the map at 20° south) lies some
+ * 6 km off to the south and east.
+ */
+const GIANT_LATITUDE = -0.22;
+/** Where the map's longitude 0 lies (a share of a turn): the great storm, at 0.3625 on the map, 0.1 rad east of the point below the arena. */
+const GIANT_LONGITUDE = 0.3625 + 0.1 / (2 * Math.PI);
+/** Up to this distance (units, 12.5 km) the gas giant's clouds show fine detail beyond its map's texels (see gasFragment). */
+const GIANT_FINE_REACH = 250000;
+/** The light a planet's lit side gets on top of the arena's sun (the sky's faint glow), a share of the sun's. */
+const PLANET_AMBIENT = 0.02;
 /** The sun of the corona arena: a sphere this large at this distance (units). */
 const CORONA_RADIUS = 62000;
 const CORONA_DISTANCE = 240000;
@@ -38,8 +63,8 @@ const DISK_INNER = 6000;
 const DISK_OUTER = 28000;
 /**
  * Segment counts the gas giant's cap is built at (width, height), from the full picture down:
- * its bands and storms are a per-pixel pattern in the fragment shader (see gasFragment), not
- * geometry, so the mesh only has to stay round enough that its smooth-shaded curvature does not
+ * its bands and storms are its map and a per-pixel pattern in the fragment shader (see
+ * gasFragment), not geometry, so the mesh only has to stay round enough that its smooth-shaded curvature does not
  * facet; the cap itself (see GIANT_CAP) spans only a thin band of latitude, which the height
  * count already concentrates there.
  */
@@ -105,97 +130,97 @@ const planetVertex = /* glsl */ `
 `;
 
 /**
- * A gas giant's clouds: bands by latitude (in the planet's own frame, turned by `frame`, slowly
- * spinning), bent by large flows and curling into eddies and festoons along their edges, drawn
- * out into streaks by the winds, with fine cloud grain for a pilot just above the tops; a great storm turning in an oval (`spot`),
- * white ovals along a band; sunlight with a soft terminator where the upper air scatters it red;
- * lightning in the night side's storms and aurora over the poles (`storms`); haze along the limb.
+ * A gas planet's clouds from its map (cylindrical: longitude across, latitude up, in the planet's
+ * own frame, turned by `frame` and slowly spinning east). The map is sampled by the longitude
+ * whose change across the pixel is smaller of two that wrap at opposite sides, so its seam never
+ * shows as a line. Within `reach` of the pilot (the gas giant, flown just above its tops), eddies
+ * finer than the map's texels bend the map's clouds a few texels and draw them out into streaks
+ * and grain, drifting with the winds. Lit by the arena's sun (`light`: its color and strength,
+ * Lambert's diffuse light), with a soft terminator where the upper air scatters it red; on the
+ * night side lightning in the storms and aurora over the poles (`storms`); haze along the limb.
+ * With RING, the ring's shadow: the way from the cloud tops to the sun crosses the ring's plane
+ * (through `center`, square to world y) and loses what the ring's opacity there holds back.
  */
 const gasFragment = /* glsl */ `
   uniform float time;
   uniform vec3 sun;
+  uniform vec3 light;
   uniform mat3 frame;
-  uniform vec3 zone;
-  uniform vec3 belt;
-  uniform vec3 dark;
+  uniform sampler2D map;
+  uniform float texel;
+  uniform float longitude;
+  uniform float reach;
   uniform vec3 haze;
-  uniform float spot;
   uniform float storms;
+  #ifdef RING
+  uniform sampler2D ring;
+  uniform vec3 center;
+  uniform vec2 radii;
+  #endif
   varying vec3 vLocal;
   varying vec3 vNormal;
   varying vec3 vWorld;
   ${noise3}
   ${fbm}
-  /** An oval of half widths (lon, lat) around (lonC, latC): 1 at its rim, 0 in its middle. */
-  float oval(float lon, float lat, float lonC, float latC, vec2 size) {
-    float dLon = mod(lon - lonC + 3.14159265, 6.2831853) - 3.14159265;
-    return length(vec2(dLon / size.x, (lat - latC) / size.y));
-  }
   void main() {
     vec3 p = normalize(frame * vLocal);
     float spin = time * 0.0004;
     vec3 q = vec3(cos(spin) * p.x - sin(spin) * p.z, p.y, sin(spin) * p.x + cos(spin) * p.z);
-    float fine = clamp(1.0 - distance(cameraPosition, vWorld) / 250000.0, 0.0, 1.0);
+    float fine = reach > 0.0 ? clamp(1.0 - distance(cameraPosition, vWorld) / reach, 0.0, 1.0) : 0.0;
     float lat = asin(clamp(q.y, -1.0, 1.0));
-    float lon = atan(q.z, q.x);
-    // large flows bend the bands, swirls curl them into festoons, eddies fray their edges
-    float flow = fbm(q * 8.0, 0.0);
-    float swirl = fbm(q * 40.0 + flow * 3.0, 1.0);
-    float eddies = fbm(q * 160.0 + vec3(swirl * 6.0, 0.0, time * 0.002), fine);
-    float bent = lat + 0.04 * (flow - 0.5) + 0.02 * (swirl - 0.5) + 0.008 * (eddies - 0.5);
-    float profile = 0.6 * sin(bent * 70.0) + 0.4 * sin(bent * 23.0 + 1.0);
-    // the winds draw everything out along the bands: streaks long in longitude, thin in latitude
-    float streaks = fbm(vec3(q.x * 50.0, bent * 1200.0, q.z * 50.0), fine);
-    float inBelt = smoothstep(-0.3, 0.3, profile);
-    float tint = 0.5 + 0.5 * sin(bent * 9.0 + 1.3);
-    vec3 color = mix(zone, mix(belt, dark, tint * 0.5), inBelt);
-    // within the belts dark streaks, within the zones bright puffs, both drawn by the eddies
-    color = mix(color, dark, inBelt * smoothstep(0.45, 0.75, eddies) * 0.5);
-    color = mix(color, zone * 1.15, (1.0 - inBelt) * smoothstep(0.5, 0.8, swirl) * 0.4);
-    color *= 0.85 + 0.3 * streaks;
-    // the grain of the cloud tops, seen from just above them
-    float grain = fbm(q * 900.0 + eddies * 3.0, fine);
-    color *= 0.75 + 0.5 * mix(0.5, grain, fine);
-    if (spot > 0.0) {
-      // the great storm: a red oval turning in itself, a pale collar around it
-      float r = oval(lon, lat, -0.16, 0.18, vec2(0.12, 0.06));
-      color = mix(color, zone * 1.15, smoothstep(1.4, 1.05, r) * 0.6);
-      if (r < 1.05) {
-        float dLon = mod(lon + 0.16 + 3.14159265, 6.2831853) - 3.14159265;
-        float turn = atan(lat - 0.18, dLon * 0.5) + r * 5.0 - time * 0.02;
-        float arms = 0.5 + 0.5 * sin(turn * 3.0 + fbm(q * 200.0, fine) * 4.0);
-        vec3 storm = mix(vec3(0.6, 0.2, 0.1), vec3(0.88, 0.45, 0.26), arms);
-        color = mix(color, storm, smoothstep(1.05, 0.8, r));
-      }
-      // white ovals, smaller storms of their own along a band to the north
-      for (int i = 0; i < 4; i++) {
-        float o = oval(lon, lat, -0.1 + float(i) * 0.11, 0.33, vec2(0.025, 0.014));
-        color = mix(color, vec3(0.95, 0.93, 0.88), smoothstep(1.0, 0.6, o + 0.2 * (eddies - 0.5)));
-      }
+    // the angle grows westward, the map's longitude eastward (as seen from outside, north up)
+    vec2 uv = vec2(longitude - atan(q.z, q.x) / 6.2831853, 0.5 + lat / 3.14159265);
+    float detail = 1.0;
+    if (fine > 0.0) {
+      // eddies finer than the map's texels curl its clouds and drift with the winds
+      float swirl = fbm(q * 40.0 + vec3(0.0, 0.0, time * 0.001), 1.0);
+      float eddies = fbm(q * 160.0 + vec3(swirl * 6.0, 0.0, time * 0.002), fine);
+      uv += (vec2(swirl, eddies) - 0.5) * texel * 3.0 * fine;
+      // the winds draw them out along the bands: streaks long in longitude, thin in latitude
+      float streaks = fbm(vec3(q.x * 50.0, (lat + 0.004 * (eddies - 0.5)) * 1200.0, q.z * 50.0), fine);
+      // the grain of the cloud tops, seen from just above them
+      float grain = fbm(q * 900.0 + eddies * 3.0, fine);
+      detail = mix(1.0, (0.8 + 0.4 * streaks) * (0.75 + 0.5 * grain), fine);
     }
+    float east = fract(uv.x);
+    float west = fract(uv.x + 0.5) - 0.5;
+    uv.x = fwidth(east) <= fwidth(west) ? east : west;
+    vec3 color = texture2D(map, uv).rgb * detail;
     vec3 n = normalize(vNormal);
     vec3 view = normalize(cameraPosition - vWorld);
-    float light = dot(n, normalize(sun));
-    float day = smoothstep(-0.08, 0.3, light);
-    // daylight stays below the bloom's threshold, so the clouds never glow
-    vec3 lit = color * (0.03 + 0.95 * day);
+    vec3 toSun = normalize(sun);
+    float facing = dot(n, toSun);
+    // the upper air carries a little light past the geometric terminator
+    float incidence = clamp((facing + 0.04) / 1.04, 0.0, 1.0);
+    // cloud tops scatter the light from within their haze (Lommel-Seeliger's law, 1 for the sun
+    // and the eye straight above): at a low sun they keep more light than a solid surface would
+    float day = 2.0 * incidence / (incidence + max(dot(n, view), 0.05));
+    day = min(day, 1.0) * smoothstep(0.0, 0.08, incidence);
+    float shade = 1.0;
+    #ifdef RING
+    // the ring's shadow: where the way to the sun crosses the ring's plane, and how opaque the ring is there
+    float along = (center.y - vWorld.y) / toSun.y;
+    float u = (length(vWorld.xz + toSun.xz * along - center.xz) - radii.x) / (radii.y - radii.x);
+    shade -= texture2D(ring, vec2(clamp(u, 0.0, 1.0), 0.5)).a * step(0.0, along) * step(0.0, u) * step(u, 1.0);
+    #endif
+    vec3 lit = color * (light * day * shade + light * ${PLANET_AMBIENT});
     // the terminator glows: sunlight scattered red through the upper air
     // squared by hand: GLSL ES leaves pow() of a negative base (the night side) undefined
-    float dusk = light * 7.0;
-    lit += vec3(1.0, 0.45, 0.2) * exp(-dusk * dusk) * 0.18;
+    float dusk = facing * 7.0;
+    lit += vec3(1.0, 0.45, 0.2) * light * exp(-dusk * dusk) * 0.05 * shade;
     if (storms > 0.0) {
       // lightning flickering in the night side's storms
       vec3 cells = q * 260.0;
       float flash = hash(floor(cells) + floor(time * 4.0));
       float bolt = step(0.9993, flash) * smoothstep(0.5, 0.0, length(fract(cells) - 0.5));
-      lit += vec3(0.75, 0.82, 1.0) * bolt * (1.0 - day) * 1.6;
+      lit += vec3(0.75, 0.82, 1.0) * bolt * (1.0 - smoothstep(-0.08, 0.3, facing)) * 1.6;
       // aurora over the poles
       float polar = smoothstep(0.82, 0.95, abs(q.y));
-      lit += vec3(0.3, 1.0, 0.6) * polar * (0.5 + 0.5 * sin(lon * 20.0 + time * 0.3)) * (1.0 - day) * 0.4;
+      lit += vec3(0.3, 1.0, 0.6) * polar * (0.5 + 0.5 * sin(atan(q.z, q.x) * 20.0 + time * 0.3)) * (1.0 - smoothstep(-0.08, 0.3, facing)) * 0.4;
     }
-    // haze along the limb
+    // haze along the limb, lit as the clouds below it
     float limb = 1.0 - clamp(dot(n, view), 0.0, 1.0);
-    lit = mix(lit, haze * (0.15 + day), pow(limb, 4.0) * 0.8);
+    lit = mix(lit, haze * light * (0.1 + 0.8 * day * shade), pow(limb, 4.0) * 0.5);
     gl_FragColor = vec4(lit, 1.0);
   }
 `;
@@ -304,6 +329,158 @@ const diskFragment = /* glsl */ `
   }
 `;
 
+/**
+ * What a ShaderMaterial with `lights: true` needs to read the sun's shadow map as three.js's own
+ * materials do (`getShadowMask()`: 1 lit, 0 in the shadow of whatever casts one): the vertex
+ * stage's declarations, the lines its main runs once `worldPosition` and `mvPosition` are set,
+ * and the fragment stage's declarations. On a rung without shadows the renderer leaves
+ * USE_SHADOWMAP undefined and the mask is 1 at no cost.
+ */
+const shadowVertexPars = /* glsl */ `
+  #include <common>
+  #include <shadowmap_pars_vertex>
+`;
+const shadowVertex = /* glsl */ `
+  #ifdef HAS_NORMAL
+    vec3 transformedNormal = normalMatrix * normal;
+  #endif
+  #include <shadowmap_vertex>
+`;
+const shadowFragmentPars = /* glsl */ `
+  #include <common>
+  #include <packing>
+  #include <bsdfs>
+  #include <lights_pars_begin>
+  #include <shadowmap_pars_fragment>
+  #include <shadowmask_pars_fragment>
+`;
+
+/** A lit ShaderMaterial's uniforms: the lights' (filled by the renderer) and its own, which are kept as given (never cloned). */
+function litUniforms(own: Record<string, THREE.IUniform>): Record<string, THREE.IUniform> {
+  return { ...THREE.UniformsUtils.clone(THREE.UniformsLib.lights), ...own };
+}
+
+/**
+ * An ice crystal catching the sun: the sun mirrored by a facet of `facet` (a direction) towards
+ * the eye, a tight highlight that only shows from a few directions, so it glints and is gone as
+ * the pilot moves; still, it never changes with time alone.
+ */
+const glint = /* glsl */ `
+  float glint(vec3 facet, vec3 toSun, vec3 view, float sharpness) {
+    return pow(max(dot(normalize(facet), normalize(toSun + view)), 0.0), sharpness);
+  }
+`;
+
+const ringVertex = /* glsl */ `
+  ${shadowVertexPars}
+  varying vec2 vUv;
+  varying vec3 vWorld;
+  void main() {
+    vUv = uv;
+    vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+    vec4 mvPosition = viewMatrix * worldPosition;
+    vWorld = worldPosition.xyz;
+    gl_Position = projectionMatrix * mvPosition;
+    ${shadowVertex}
+  }
+`;
+
+/**
+ * Saturn's ring, a sheet in the world's horizontal plane through the planet: its color and
+ * opacity from the strip `map`, inner edge to outer. The face the sun shines on scatters the
+ * sunlight back; seen from the other face, only what the thin parts let through shows (most
+ * where the ring is half opaque, almost none through the dense ring). The planet's shadow: where
+ * the way to the sun runs through its sphere, with a soft edge for the sun's disk. Up close the
+ * sheet fades out (`near` to `far` from the pilot), and within the sun's shadow map it takes the
+ * shadows of everything there (the field's ice, ships, gates, the battleship, a comet). Here and
+ * there an ice crystal glints in the sun (see glint, GLINT_CELL).
+ */
+const ringFragment = /* glsl */ `
+  ${shadowFragmentPars}
+  uniform sampler2D map;
+  uniform float near;
+  uniform float far;
+  uniform vec3 sun;
+  uniform vec3 light;
+  uniform vec3 center;
+  uniform float radius;
+  varying vec2 vUv;
+  varying vec3 vWorld;
+  ${noise3}
+  ${glint}
+  void main() {
+    vec4 color = texture2D(map, vUv);
+    vec3 toSun = normalize(sun);
+    vec3 view = normalize(cameraPosition - vWorld);
+    vec3 toCenter = center - vWorld;
+    float along = dot(toCenter, toSun);
+    float miss = dot(toCenter, toCenter) - along * along;
+    float sunny = 1.0 - step(0.0, along) * smoothstep(radius * radius * 1.03, radius * radius * 0.97, miss);
+    sunny *= getShadowMask();
+    float front = step(0.0, (cameraPosition.y - vWorld.y) * toSun.y);
+    float through = 2.0 * color.a * (1.0 - color.a) + 0.04;
+    vec3 lit = color.rgb * light * (mix(through, 1.0, front) * sunny + ${PLANET_AMBIENT});
+    // ice crystals: one in some cells, a dot of a pixel or two, only while the cells are large enough on screen
+    vec2 cells = vWorld.xz / ${GLINT_CELL.toFixed(1)};
+    vec2 cell = floor(cells);
+    float pixel = length(fwidth(cells));
+    vec2 spot = cell + 0.2 + 0.6 * vec2(hash(vec3(cell, 3.0)), hash(vec3(cell, 4.0)));
+    float dot = smoothstep(1.5 * pixel, 0.5 * pixel, length(cells - spot)) * smoothstep(0.4, 0.12, pixel);
+    vec3 facet = vec3(hash(vec3(cell, 1.0)) - 0.5, 0.6, hash(vec3(cell, 2.0)) - 0.5);
+    lit += vec3(1.0, 0.96, 0.88) * light * 2.5 * dot * step(0.5, hash(vec3(cell, 5.0))) * glint(facet, toSun, view, 80.0) * front * sunny;
+    color.a *= smoothstep(near, far, distance(vWorld, cameraPosition));
+    gl_FragColor = vec4(lit, color.a);
+  }
+`;
+
+const speckVertex = /* glsl */ `
+  ${shadowVertexPars}
+  uniform float size;
+  uniform float viewport;
+  uniform float slab;
+  attribute vec3 facet;
+  varying vec3 vFacet;
+  varying vec3 vWorld;
+  varying float vFade;
+  void main() {
+    vFacet = facet;
+    // the square moves with the pilot: every speck within slab of the camera along the plane
+    vec2 offset = mod(position.xz - cameraPosition.xz + slab, 2.0 * slab) - slab;
+    vFade = 1.0 - smoothstep(0.7 * slab, slab, max(abs(offset.x), abs(offset.y)));
+    vec4 worldPosition = vec4(cameraPosition.x + offset.x, position.y, cameraPosition.z + offset.y, 1.0);
+    vec4 mvPosition = viewMatrix * worldPosition;
+    vWorld = worldPosition.xyz;
+    gl_Position = projectionMatrix * mvPosition;
+    gl_PointSize = clamp(size * projectionMatrix[1][1] * viewport * 0.5 / -mvPosition.z, 1.0, ${ICE_SPECK_PIXELS.toFixed(1)});
+    ${shadowVertex}
+  }
+`;
+
+/**
+ * A speck of the ring's ice around the pilot: a soft round grain, lit by the sun where nothing
+ * stands between it and the sun (the sun's shadow map), its facet glinting when it mirrors the
+ * sun towards the eye.
+ */
+const speckFragment = /* glsl */ `
+  ${shadowFragmentPars}
+  uniform vec3 sun;
+  uniform vec3 light;
+  uniform vec3 color;
+  varying vec3 vFacet;
+  varying vec3 vWorld;
+  varying float vFade;
+  ${glint}
+  void main() {
+    vec2 at = gl_PointCoord - 0.5;
+    float round = smoothstep(0.25, 0.1, dot(at, at)) * vFade;
+    if (round <= 0.0) discard;
+    vec3 toSun = normalize(sun);
+    float sunny = getShadowMask();
+    vec3 lit = color * light * (0.55 * sunny + 0.12) + vec3(1.0, 0.96, 0.88) * light * 2.0 * glint(vFacet, toSun, normalize(cameraPosition - vWorld), 60.0) * sunny;
+    gl_FragColor = vec4(lit, round * 0.85);
+  }
+`;
+
 /** A neon sign: the text as a tube of white with layered glow, on black for additive blending. */
 function neonSign(text: string, color: string, glow: string): THREE.Mesh {
   const [element, ctx] = canvas(1024, 256);
@@ -333,8 +510,18 @@ export class Landmarks {
   private giantMesh!: THREE.Mesh;
   private readonly giantCaps: THREE.BufferGeometry[] = [];
   private giantDetail = 0;
+  /** The planets' materials, whose map setDetail swaps between the page's and the sharp one. */
+  private readonly planets = new Map<Planet, THREE.ShaderMaterial>();
+  /** The sharp maps (see loadPlanetMap), once asked for, and once loaded. */
+  private sharpAsked = false;
+  private readonly sharp = new Map<Planet, THREE.Texture>();
+  private sharpWanted = false;
+  /** What the sun gives the planets, the ring and its specks: its color times its strength over π (Lambert's diffuse light), the arena's (see show). */
+  private readonly light = new THREE.Color();
+  /** The materials of the ring's specks, which size them by the picture's height (see setViewport). */
+  private readonly sized: THREE.ShaderMaterial[] = [];
 
-  constructor() {
+  constructor(private readonly maps: PlanetMaps) {
     this.scenes.set('rings', this.rings());
     this.scenes.set('kessler', this.kessler());
     this.scenes.set('giant', this.giant());
@@ -351,6 +538,12 @@ export class Landmarks {
     if (this.shown === arena.id) return;
     this.shown = arena.id;
     for (const [id, scene] of this.scenes) scene.visible = id === arena.id;
+    this.light.set(arena.sun.color).multiplyScalar(arena.sun.intensity / Math.PI);
+  }
+
+  /** The picture's height in device pixels: the ring's specks keep their size in the world with it. */
+  setViewport(height: number) {
+    for (const material of this.sized) material.uniforms.viewport.value = height;
   }
 
   update(time: number) {
@@ -359,37 +552,68 @@ export class Landmarks {
     for (const sign of this.flicker) (sign.material as THREE.MeshBasicMaterial).opacity = Math.random() < 0.03 ? 0.25 : 1;
   }
 
-  /** The picture's quality (see view/quality, Look.landmark): the gas giant's cap at a share of its full segment count (see GIANT_SEGMENTS). */
+  /**
+   * The picture's quality (see view/quality, Look.landmark): the gas giant's cap at a share of its
+   * full segment count (see GIANT_SEGMENTS), and the planets' maps sharp (2048 × 1024) from half
+   * the share on, else as the page loaded them (1024 × 512). The sharp maps are fetched the first
+   * time a rung asks for them and take over once they are there.
+   */
   setDetail(share: number) {
+    this.sharpWanted = share >= 0.5;
+    if (this.sharpWanted && !this.sharpAsked) {
+      this.sharpAsked = true;
+      for (const planet of this.planets.keys()) {
+        loadPlanetMap(planet).then(
+          (texture) => {
+            this.sharp.set(planet, texture);
+            this.useMaps();
+          },
+          (error: unknown) => console.warn(`The sharp map of ${planet} did not load`, error),
+        );
+      }
+    }
+    this.useMaps();
     const tier = share >= 0.75 ? 0 : share >= 0.375 ? 1 : 2;
     if (tier === this.giantDetail) return;
     this.giantDetail = tier;
     this.giantMesh.geometry = this.giantCaps[tier];
   }
 
+  /** Each planet's map as setDetail wants it, the page's until the sharp one is there. */
+  private useMaps() {
+    for (const [planet, material] of this.planets) {
+      const map = (this.sharpWanted && this.sharp.get(planet)) || this.maps.maps[planet];
+      material.uniforms.map.value = map;
+      material.uniforms.texel.value = 1 / (map.image as { width: number }).width;
+    }
+  }
+
   /**
-   * A gas planet over `geometry`: its bands in `palette` (zone, belt, dark, haze), its own frame
-   * turned by `frame`; `storms` adds the great storm, lightning and aurora.
+   * A gas planet's material from its map (see gasFragment), its own frame turned by `frame` with
+   * the map's longitude 0 at `longitude` (a share of a turn); `haze` along its limb, fine detail
+   * within `reach` (0 for none), `storms` adds lightning and aurora on its night side.
    */
-  private gas(geometry: THREE.BufferGeometry, palette: [number, number, number, number], frame: THREE.Matrix3, storms: boolean): THREE.Mesh {
-    const [zone, belt, dark, haze] = palette.map((color) => new THREE.Color(color));
+  private gas(planet: Planet, options: { frame: THREE.Matrix3; longitude: number; haze: number; reach: number; storms: boolean }): THREE.ShaderMaterial {
+    const map = this.maps.maps[planet];
     const material = new THREE.ShaderMaterial({
       uniforms: {
         time: { value: 0 },
         sun: { value: SUN_DIRECTION.clone() },
-        frame: { value: frame },
-        zone: { value: zone },
-        belt: { value: belt },
-        dark: { value: dark },
-        haze: { value: haze },
-        spot: { value: storms ? 1 : 0 },
-        storms: { value: storms ? 1 : 0 },
+        light: { value: this.light },
+        frame: { value: options.frame },
+        map: { value: map },
+        texel: { value: 1 / (map.image as { width: number }).width },
+        longitude: { value: options.longitude },
+        reach: { value: options.reach },
+        haze: { value: new THREE.Color(options.haze) },
+        storms: { value: options.storms ? 1 : 0 },
       },
       vertexShader: planetVertex,
       fragmentShader: gasFragment,
     });
     this.timed.push(material);
-    return new THREE.Mesh(geometry, material);
+    this.planets.set(planet, material);
+    return material;
   }
 
   /** A world with air and water (see worldFragment). */
@@ -405,21 +629,15 @@ export class Landmarks {
 
   private rings(): THREE.Group {
     const group = new THREE.Group();
-    const center = KRONOS_CENTER;
-    // pale bands, its axis tilted a little towards the arena, so the ring and the bands lie askew
-    const planet = this.gas(new THREE.SphereGeometry(KRONOS_RADIUS, 128, 64), [0xe8dcc0, 0xcdb58a, 0x9c7c56, 0x9fc4ff], new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationX(KRONOS_TILT)), false);
+    const center = SATURN_CENTER;
+    // its bands lie in its equator's plane, as its ring does, which is the arena's horizon
+    const material = this.gas('saturn', { frame: new THREE.Matrix3(), longitude: 0, haze: 0xd9c9a3, reach: 0, storms: false });
+    // the ring's shadow on its clouds (see gasFragment)
+    material.defines = { RING: '' };
+    Object.assign(material.uniforms, { ring: { value: this.maps.ring }, center: { value: center }, radii: { value: new THREE.Vector2(RING_INNER, RING_OUTER) } });
+    const planet = new THREE.Mesh(new THREE.SphereGeometry(SATURN_RADIUS, 128, 64), material);
     planet.position.copy(center);
-    // the ring: bands of ice in the planet's equator plane, which is the arena's horizon
-    const [element, ctx] = canvas(1024, 1);
-    const r = new Randomizer(1610);
-    for (let x = 0; x < element.width; x++) {
-      const density = 0.25 + 0.75 * r.nextFloat() * (0.6 + 0.4 * Math.sin(x * 0.05));
-      const gap = x > 610 && x < 650 ? 0.05 : 1;
-      ctx.fillStyle = `rgba(220, 230, 255, ${(density * gap * 0.55).toFixed(3)})`;
-      ctx.fillRect(x, 0, 1, 1);
-    }
-    const texture = toTexture(element);
-    const ring =new THREE.RingGeometry(RING_INNER, RING_OUTER, 256, 1);
+    const ring = new THREE.RingGeometry(RING_INNER, RING_OUTER, 256, 1);
     // the texture runs from the inner to the outer edge
     const uv = ring.attributes.uv;
     const p = new THREE.Vector3();
@@ -429,32 +647,22 @@ export class Landmarks {
     }
     // seen from inside the ring the sheet would fill the view: up close it fades out, and the
     // chunks of ice and the specks around the pilot are the ring
+    const sun = SUN_DIRECTION.clone();
     const disk = new THREE.Mesh(
       ring,
       new THREE.ShaderMaterial({
-        uniforms: { map: { value: texture }, near: { value: RING_FADE_NEAR }, far: { value: RING_FADE_FAR } },
-        vertexShader: /* glsl */ `
-          varying vec2 vUv;
-          varying vec3 vWorld;
-          void main() {
-            vUv = uv;
-            vec4 world = modelMatrix * vec4(position, 1.0);
-            vWorld = world.xyz;
-            gl_Position = projectionMatrix * viewMatrix * world;
-          }
-        `,
-        fragmentShader: /* glsl */ `
-          uniform sampler2D map;
-          uniform float near;
-          uniform float far;
-          varying vec2 vUv;
-          varying vec3 vWorld;
-          void main() {
-            vec4 color = texture2D(map, vUv);
-            color.a *= smoothstep(near, far, distance(vWorld, cameraPosition));
-            gl_FragColor = color;
-          }
-        `,
+        uniforms: litUniforms({
+          map: { value: this.maps.ring },
+          near: { value: RING_FADE_NEAR },
+          far: { value: RING_FADE_FAR },
+          sun: { value: sun },
+          light: { value: this.light },
+          center: { value: center },
+          radius: { value: SATURN_RADIUS },
+        }),
+        vertexShader: ringVertex,
+        fragmentShader: ringFragment,
+        lights: true,
         transparent: true,
         depthWrite: false,
         side: THREE.DoubleSide,
@@ -462,12 +670,38 @@ export class Landmarks {
     );
     disk.rotation.x = -Math.PI / 2;
     disk.position.copy(center);
-    // specks of ice all around the pilot, flat like the ring
+    disk.receiveShadow = true;
+    // specks of ice all around the pilot, flat like the ring, each with a facet of its own to glint with
+    const r = new Randomizer(1610);
     const specks = new Float32Array(ICE_SPECKS * 3);
-    for (let i = 0; i < ICE_SPECKS; i++) specks.set([r.range(-1, 1) * ICE_SLAB * 1.6, r.range(-1, 1) * 2500, r.range(-1, 1) * ICE_SLAB * 1.6], i * 3);
+    const facets = new Float32Array(ICE_SPECKS * 3);
+    for (let i = 0; i < ICE_SPECKS; i++) {
+      specks.set([r.range(-1, 1) * ICE_SLAB, r.range(-1, 1) * ICE_THICKNESS, r.range(-1, 1) * ICE_SLAB], i * 3);
+      facets.set([r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)], i * 3);
+    }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(specks, 3));
-    const ice = new THREE.Points(geometry, new THREE.PointsMaterial({ color: 0xcfe0ff, size: 60, transparent: true, opacity: 0.8, depthWrite: false }));
+    geometry.setAttribute('facet', new THREE.BufferAttribute(facets, 3));
+    const speckMaterial = new THREE.ShaderMaterial({
+      uniforms: litUniforms({
+        sun: { value: sun },
+        light: { value: this.light },
+        color: { value: new THREE.Color(0xe6e1d8) },
+        size: { value: ICE_SPECK_SIZE },
+        viewport: { value: 1000 },
+        slab: { value: ICE_SLAB },
+      }),
+      vertexShader: speckVertex,
+      fragmentShader: speckFragment,
+      lights: true,
+      transparent: true,
+      depthWrite: false,
+    });
+    this.sized.push(speckMaterial);
+    const ice = new THREE.Points(geometry, speckMaterial);
+    ice.receiveShadow = true;
+    // the shader places the specks around the camera, wherever it is
+    ice.frustumCulled = false;
     group.add(planet, disk, ice);
     return group;
   }
@@ -483,15 +717,16 @@ export class Landmarks {
 
   /**
    * The gas giant, where the arena's well is: only the cap a pilot can see is built, the rest lies
-   * beyond the horizon; its frame turns its bands so the arena hangs over its northern belts, the
-   * great storm, 10 km wide, turning some 7 km off and drifting past as the planet spins.
+   * beyond the horizon; its frame turns its map so the arena hangs over its southern belts (see
+   * GIANT_LATITUDE), the great red storm turning some 6 km off and drifting past as the planet spins.
    */
   private giant(): THREE.Group {
     const group = new THREE.Group();
     const well = ARENAS.find((arena) => arena.id === 'giant')!.layout.well!;
     this.giantCaps.push(...GIANT_SEGMENTS.map(([width, height]) => new THREE.SphereGeometry(well.radius, width, height, 0, Math.PI * 2, 0, GIANT_CAP)));
+    // turns the cap's top (straight below the arena) to the latitude GIANT_LATITUDE
     const frame = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationZ(GIANT_LATITUDE - Math.PI / 2));
-    const planet = this.gas(this.giantCaps[0], [0xead8b4, 0xb0683a, 0x6e3418, 0xffc490], frame, true);
+    const planet = new THREE.Mesh(this.giantCaps[0], this.gas('giant', { frame, longitude: GIANT_LONGITUDE, haze: 0xffd2a8, reach: GIANT_FINE_REACH, storms: true }));
     this.giantMesh = planet;
     planet.position.copy(well.position);
     group.add(planet);

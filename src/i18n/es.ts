@@ -504,7 +504,7 @@ export const ES: Catalog = {
   Sun: 'Sol',
   'Orange base': 'Base Naranja',
   'Blue base': 'Base Azul',
-  Kronos: 'Kronos',
+  Saturn: 'Saturno',
   Planet: 'Planeta',
   Clouds: 'Nubes',
   'Black hole': 'Agujero negro',
@@ -516,7 +516,7 @@ export const ES: Catalog = {
   // arenas
   'The Belt': 'El Cinturón',
   'Forty rocks, ten ships long each. Cover is everywhere.': 'Cuarenta rocas, cada una tan larga como diez naves. Hay cobertura por todas partes.',
-  'Rings of Kronos': 'Anillos de Cronos',
+  'Rings of Saturn': 'Anillos de Saturno',
   'Inside a ring of ice, as thin as a sheet. Up and down are open.': 'Dentro de un anillo de hielo, fino como una hoja. Por arriba y por abajo, vía libre.',
   'Kessler Field': 'Campo Kessler',
   'A station blew up. Its pieces still cross each other at 25 m/s.': 'Una estación voló por los aires. Sus pedazos aún se cruzan a 25 m/s.',
@@ -937,7 +937,7 @@ export const ES: Catalog = {
   'a perfect launch. the sponsors are taking notes': 'un despegue perfecto. los patrocinadores toman nota',
   'this is your announcer. the games continue': 'aquí tu locutor. los juegos continúan',
   'live from the belt. forty rocks. no mercy': 'en directo desde el cinturón. cuarenta rocas. sin piedad',
-  'live from the rings of kronos. mind the ice': 'en directo desde los anillos de cronos. cuidado con el hielo',
+  'live from the rings of saturn. mind the ice': 'en directo desde los anillos de saturno. cuidado con el hielo',
   'live from the kessler field. the station died. so will you': 'en directo desde el campo kessler. la estación murió. tú también morirás',
   'live from the gas giant. do not fall in': 'en directo desde el gigante gaseoso. no te caigas dentro',
   'live from the corona. it is hot today': 'en directo desde la corona. hoy hace calor',
@@ -1129,8 +1129,8 @@ export const ES: Catalog = {
     'Elimina primero las baterías: cada {batteryPeriod} s, cada una dispara a la nave más cercana que ve a menos de {batteryRange} km, y la velocidad le estropea la puntería. Perdida la mitad de sus baterías, vuelve la popa hacia el piloto más cercano y enciende sus motores: no te metas en ese chorro. Sin ninguna batería, el reactor queda al descubierto. Cuando se rompe, aléjate: cuatro segundos después la nave estalla y se lleva todo lo que haya a menos de {blast} km. Hundirlo da {sink} a todos; si los cinco minutos se acaban antes, gana el Presidente.',
   'Seven Arenas, One Glorious Death': 'Siete arenas, una muerte gloriosa',
   '<strong>The Belt.</strong> The home of the Games: forty huge rocks, cover everywhere.': '<strong>El Cinturón.</strong> El hogar de los Juegos: cuarenta rocas enormes, cobertura por todas partes.',
-  '<strong>Rings of Kronos.</strong> Ice in a thin sheet, open above and below. Ice breaks easier, and the weaker sun lets lasers cool a little faster.':
-    '<strong>Anillos de Cronos.</strong> Hielo en una capa fina, abierta por arriba y por abajo. El hielo se rompe más fácilmente, y el sol más débil deja que los láseres se enfríen un poco más rápido.',
+  '<strong>Rings of Saturn.</strong> Inside Saturn\'s ring: ice in a thin sheet, open above and below. The sun gives a hundredth of the light it gives Earth; the flight computer\'s sensors brighten the picture to make up for it. Ice breaks easier, and the weaker sun lets lasers cool a little faster.':
+    '<strong>Anillos de Saturno.</strong> Dentro del anillo de Saturno: hielo en una capa fina, abierta por arriba y por abajo. El sol da aquí una centésima parte de la luz que da a la Tierra; los sensores del ordenador de vuelo aclaran la imagen para compensarlo. El hielo se rompe más fácilmente, y el sol más débil deja que los láseres se enfríen un poco más rápido.',
   "<strong>Kessler Field.</strong> Station debris on crossing orbits, all at {kesslerOrbit} m/s: your cover moves. The station's core in the middle never breaks.":
     '<strong>Campo Kessler.</strong> Escombros de estación en órbitas que se cruzan, todos a {kesslerOrbit} m/s: tu cobertura se mueve. El núcleo de la estación, en el centro, nunca se rompe.',
   '<strong>Gas Giant.</strong> Its pull, almost a g, drags everything towards the clouds below, and the clouds burn up whatever touches them. Never drift for long.':

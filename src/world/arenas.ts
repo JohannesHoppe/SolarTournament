@@ -57,8 +57,8 @@ export interface Reference {
   radius?: number;
 }
 
-/** The ringed planet beside the Rings of Kronos (units, 13 km off), whose ring runs through the arena in the horizon plane. */
-export const KRONOS_CENTER = new THREE.Vector3(-0.85, 0, 0.5).normalize().multiplyScalar(260000);
+/** Saturn, beside the Rings of Saturn (units, 13 km off), whose ring runs through the arena in the horizon plane. */
+export const SATURN_CENTER = new THREE.Vector3(-0.85, 0, 0.5).normalize().multiplyScalar(260000);
 /** The world the Kessler field's station circled, far below (units). */
 export const KESSLER_WORLD = new THREE.Vector3(-120000, -330000, -60000);
 
@@ -123,13 +123,13 @@ export const ARENAS: readonly ArenaProfile[] = [
   },
   {
     id: 'rings',
-    name: msg('Rings of Kronos'),
+    name: msg('Rings of Saturn'),
     tagline: msg('Inside a ring of ice, as thin as a sheet. Up and down are open.'),
     layout: { key: 'rings', seed: 23, kind: 'ice', count: 90, minScale: 0.8, maxScale: 3.2, radius: FIELD_RADIUS * 1.3, inner: 0, flat: 5000, spin: 0.08, toughness: 500 },
     cooling: 1.2,
     storms: false,
     sun: { size: 26000, intensity: 3, color: 0xf2f4ff },
-    references: [{ glyph: 'planet', label: msg('Kronos'), position: KRONOS_CENTER, distance: false }],
+    references: [{ glyph: 'planet', label: msg('Saturn'), position: SATURN_CENTER, distance: false }],
   },
   {
     id: 'kessler',

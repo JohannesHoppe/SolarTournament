@@ -676,6 +676,10 @@ export class Fleet implements Obstacle {
     this.flame = new THREE.Mesh(this.geometry(new THREE.ConeGeometry(PLUME_REACH * PLUME_SPREAD, PLUME_REACH, 24, 1, true).rotateX(-Math.PI / 2).translate(0, 0, 7700 + PLUME_REACH / 2)), flame);
     this.flame.visible = false;
     this.root.add(this.flame);
+    // the hull throws its shadow and takes those of the rocks; glowing exhaust and glass do neither
+    this.root.traverse((o) => {
+      if (o instanceof THREE.Mesh) o.castShadow = o.receiveShadow = !(o.material as THREE.Material).transparent;
+    });
     this.hits = this.zones.map(() => 0);
     this.beacons = this.zones.map((_, i) => new Beacon(this, i));
     this.enter();

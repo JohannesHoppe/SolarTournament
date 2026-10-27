@@ -23,9 +23,44 @@ export interface Assets {
     glow: THREE.Texture;
   };
   sounds: Record<'laser' | 'explosion', AudioBuffer | null>;
+  /** The planets' maps at the size every rung can afford (see PLANET_MAPS), and Saturn's ring as a strip from its inner to its outer edge. */
+  planets: PlanetMaps;
 }
 
+/** The planets drawn from real maps (see world/landmarks): Saturn and the gas giant. */
+export type Planet = 'saturn' | 'giant';
+export interface PlanetMaps {
+  maps: Record<Planet, THREE.Texture>;
+  ring: THREE.Texture;
+}
+
+/**
+ * The planets' maps (`public/assets/planets/`, cylindrical, 2:1): `<planet>-1k.jpg` (1024 × 512)
+ * loads with the page, `<planet>-2k.jpg` (2048 × 1024) only once a rung sharp enough to show it
+ * is reached (see loadPlanetMap, Landmarks.setDetail), so a phone on the cheaper rungs never
+ * downloads it.
+ */
+const PLANET_MAPS = 'planets/';
+
 const base = import.meta.env.BASE_URL + 'assets/';
+const textureLoader = new THREE.TextureLoader();
+
+/**
+ * A planet's map or ring: color in sRGB, the longitude wrapping around, filtered at a slant
+ * (the gas giant's cap is mostly seen at a grazing angle; the renderer caps it at what the GPU offers).
+ */
+async function planetTexture(file: string): Promise<THREE.Texture> {
+  const texture = await textureLoader.loadAsync(base + PLANET_MAPS + file);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.anisotropy = 8;
+  return texture;
+}
+
+/** A planet's sharp map (2048 × 1024), loaded when first asked for. */
+export function loadPlanetMap(planet: Planet): Promise<THREE.Texture> {
+  return planetTexture(`${planet}-2k.jpg`);
+}
 
 /** Share of the sprite's width over which the flame fades out towards each edge. */
 const FLAME_EDGE_FADE = 0.25;
@@ -93,6 +128,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   // every file is requested at once, and the rocks are generated while they are on their way
   const ships = Promise.all(['human-interceptor.glb', 'alien-interceptor.glb'].map(model));
   const flames = Promise.all(['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture));
+  const planetMaps = Promise.all([planetTexture('saturn-1k.jpg'), planetTexture('giant-1k.jpg'), planetTexture('saturn-ring.png')]);
   // full detail only to measure collisions from (see world/surface); drawn meshes stay light, their
   // relief coming from a baked normal map (see world/rocks, applyRockRelief) instead of triangles
   const asteroidsCollision = createRockShapes(DETAIL);
@@ -112,6 +148,10 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     [1, '#000000'],
   ]);
 
+  const [saturn, giant, ring] = await planetMaps;
+  // the ring is a strip across its radius: it never wraps, and its edges stay sharp
+  ring.wrapS = THREE.ClampToEdgeWrapping;
+
   const rock = { near: asteroidsNear, far: asteroidsFar, impostor: asteroidImpostors, collision: asteroidsCollision };
   return {
     // the hulls are built in code; the model files give collider, drive flame and glows
@@ -120,6 +160,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     fieldSets: { rock, ice: iceSet(rock), debris: debrisSet(), hull: hullSet() },
     textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), glow },
     sounds: synthesizeSounds(audio),
+    planets: { maps: { saturn, giant }, ring },
   };
 }
 

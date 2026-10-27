@@ -220,7 +220,7 @@ export const ANNOUNCER_PERFECT = ['what a start. the crowd goes wild', 'a perfec
 /** The announcer names the arena of the round (see world/arenas). */
 export const ANNOUNCER_ARENA = {
   belt: 'live from the belt. forty rocks. no mercy',
-  rings: 'live from the rings of kronos. mind the ice',
+  rings: 'live from the rings of saturn. mind the ice',
   kessler: 'live from the kessler field. the station died. so will you',
   giant: 'live from the gas giant. do not fall in',
   corona: 'live from the corona. it is hot today',

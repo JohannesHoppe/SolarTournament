@@ -704,7 +704,7 @@ export class Game implements OnlineGame {
   private readonly wrecks = new Wrecks();
   /** The arena the round is played in (see enterArena), and its scenery. */
   private venue: ArenaProfile = DEFAULT_ARENA;
-  private readonly landmarks = new Landmarks();
+  private readonly landmarks: Landmarks;
   private readonly lensing = new Lensing();
   /** A solar storm blinds the sensors (see STORM_PERIOD). */
   private storming = false;
@@ -1094,6 +1094,7 @@ export class Game implements OnlineGame {
     this.scene.background = new THREE.Color(0x01020a);
     this.field = new AsteroidField(assets.fieldSets);
     this.belt = new Belt(assets.belt.near, assets.belt.impostor);
+    this.landmarks = new Landmarks(assets.planets);
     this.graphics = new Graphics(this.renderer, this.bloom, this.space, this.field, this.belt, this.plane, this.landmarks, this.lensing, () => this.resize());
     this.effects = new Effects(assets.textures);
     // the kill cam fires the beams of its replay in effects of their own
@@ -3031,6 +3032,7 @@ export class Game implements OnlineGame {
     this.camera.updateProjectionMatrix();
     this.effects.setViewport(height * this.renderer.getPixelRatio(), this.camera.fov);
     this.cometView.setViewport(height * this.renderer.getPixelRatio());
+    this.landmarks.setViewport(height * this.renderer.getPixelRatio());
   }
 
   private frame() {

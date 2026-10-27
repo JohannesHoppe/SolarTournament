@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { ARENAS, arenaById, KRONOS_CENTER } from './arenas';
+import { ARENAS, arenaById, SATURN_CENTER } from './arenas';
 import { climbOf, closure, footOf, heightOf, referencesOf, skyPointer } from './reference';
 
 const view = (pitch: number, yaw: number, roll: number) => new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, yaw, roll, 'YXZ'));
@@ -22,7 +22,7 @@ describe('the reference plane', () => {
       const well = arena.layout.well;
       if (well) expect(Math.hypot(well.position.x, well.position.z)).toBe(0);
     }
-    expect(heightOf(KRONOS_CENTER)).toBe(0);
+    expect(heightOf(SATURN_CENTER)).toBe(0);
     expect(heightOf(arenaById('giant')!.layout.well!.position)).toBeLessThan(0);
     expect(heightOf(arenaById('hole')!.layout.well!.position)).toBe(0);
     expect(heightOf(arenaById('derelict')!.references[0].position)).toBe(0);

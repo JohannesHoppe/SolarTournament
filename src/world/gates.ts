@@ -275,6 +275,8 @@ export class GateKit {
     const windings = new THREE.Mesh(this.coil, coil);
     const sign = this.signs[this.built++ % this.signs.length];
     root.add(new THREE.Mesh(this.frame, this.metal), windings, new THREE.Mesh(this.lamps, this.lights), new THREE.Mesh(this.plate, sign));
+    // a solid ring stands in the sun: it throws a shadow and takes those of the rocks
+    for (const part of root.children) part.castShadow = part.receiveShadow = true;
     root.position.copy(position);
     root.quaternion.setFromUnitVectors(axis, normal);
     return { root, coil: windings };

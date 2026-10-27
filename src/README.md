@@ -24,7 +24,7 @@ The files at this level:
 - `bench.ts`: the benchmark (`?bench`, `?bench=<seconds>`, `&only=<sections>`): plays a fixed scene and measures what each feature, each rung of the quality ladder, each arena and each mode costs per frame, with a table on screen, in the console and as JSON; the frame meter (`?fps`) with the frame rate and the rung the governor is on. See the README's section "Performance".
 - `radio-page.ts`: starts the radio page (tune in a title, play it, download it as WAV).
 - `handbook-page.ts`: starts the Pilot's Handbook (`handbook.html`): translates it into the Host's language and fills in the game's numbers.
-- `assets.ts`: loads the ship models and drive sprites, collects what is generated in code.
+- `assets.ts`: loads the ship models, drive sprites and the planets' maps (the sharp ones only when the picture's quality asks for them), collects what is generated in code.
 - `random.ts`: the seeded random generator every browser shares, so all see the same world.
 - `storage.ts`: the browser's localStorage, safe where it is unavailable.
 - `recorder.ts`: the input recorder, a ring buffer of the own ship's last minute step by step (the Host's controls, the mouse pointer, the commands flown, the ship before the step), read in the console as `game.recorder` and saved with `game.recorder.download()`; replayed in tests by `src/test/cockpit.ts`; only in development, null and free in production.
