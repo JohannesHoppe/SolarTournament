@@ -39,6 +39,21 @@ Worked through from top to bottom. Every finished item is also documented in the
 - [x] Event horizon: a black hole that pulls everything in, with a gravitational lens
 - [x] The derelict: a broken world ship as the only cover
 
+### 4b. The arenas, more beautiful
+
+Each arena gets a look of its own, recognized at first glance, cheap on phones (few draw calls, effects scaled by the quality ladder, no flicker).
+
+- [ ] Saturn: the real Saturn and ring textures in their real colors, the planet's shadow on the ring and the ring's on the planet, every object shadowing the ring material near it, a little glitter of ice in the rings; the gas giant with the real Jupiter map
+- [ ] Rings of Saturn: the ring as a thin, dense layer of glittering ice through the arena's middle, open space above and below; flying through it, the grains rush past and sparkle in the sun
+- [ ] Comets faster but playable (about 400 m/s, the warning growing with it), and the README naming the deviation from real comets (5 to 25 km/s)
+- [ ] The Belt: the Rockborn's mining (rigs with work lights, cutting lasers, dust from drill holes, half-mined rocks with smooth cuts and glowing tunnels), beacon buoys, neon graffiti, dust lit against the sun
+- [ ] Kessler field: the world below at night with city lights and debris burning up in its air, the station's broken sponsor signs flickering, solar panels flashing as they turn, venting air freezing into glittering crystals
+- [ ] Gas giant: auroras at the poles, a great storm as its landmark, stronger lightning deep in the clouds, a moon or two, haze when diving into the upper clouds
+- [ ] Corona: prominences arcing over the limb and falling back as coronal rain, sunspots drifting, ships' radiators glowing red (no heat shimmer)
+- [ ] Event horizon: the side of the accretion disk turning towards us brighter, two thin jets from the poles, gas spiraling in
+- [ ] The derelict: rows of windows with emergency light flickering here and there, shattered biodomes with frozen gardens, old neon ads on the hull, red beacons, frost on its shadow side, crystal mist at the break
+- [ ] Every arena its own light and color mood and nebula: Saturn cool silver and gold, the Corona orange-white, the Belt dusty and warm, the Event horizon deep violet
+
 ### 5. Game modes
 
 - [x] Race: three laps through eight gates, lasers on; rooms play deathmatch, race, or both in turn
