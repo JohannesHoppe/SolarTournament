@@ -2468,6 +2468,7 @@ export class Game implements OnlineGame {
   }
 
   showBeam(shooter: Ship, from: THREE.Vector3, to: THREE.Vector3) {
+    if (shooter.owner !== null) shooter.warm();
     this.effects.beam(from, to, shooter.color);
     this.killcam.recordBeam(this.time, from, to, shooter.color);
   }
