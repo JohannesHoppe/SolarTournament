@@ -71,6 +71,36 @@ describe('the lead browser', () => {
     expect(session.leadId).toBe('z');
   });
 
+  it('does not step back for a peer that shows up later claiming to have joined just after it, as if the two had come at once', () => {
+    const { session, transport } = joined('z');
+    frames(session, 1, 9, (time) => transport.states('h', time - 0.5, 'z'));
+    expect(session.isLead).toBe(true);
+    // first heard at 9 s, it says it came half a second after this browser, and sends a round clock
+    frames(session, 9, 15, (time) => {
+      transport.states('h', time - 0.5, 'z');
+      transport.states('a', time - 0.5, 'a', true);
+    });
+    expect(session.isLead).toBe(true);
+    expect(session.leadId).toBe('z');
+    // and it cannot have come long before it was first heard: no place ahead of those here
+    expect(session.joinedTime('a')).toBeGreaterThanOrEqual(9 - 6);
+    expect(session.joinedTime('a')).toBeGreaterThan(session.joinedTime('h'));
+  });
+
+  it('takes the field only from the lead it elects, not from any peer that was here before it', () => {
+    const { session, transport } = joined('n');
+    const synced: string[] = [];
+    session.onSync = (field) => synced.push(field.k);
+    const field = (k: string) => ({ f: { k, t: 5, a: [], x: [] }, w: [], p: [], q: [] });
+    at(1);
+    transport.states('old', 100, 'old', true);
+    transport.states('h2', 50, 'old');
+    transport.handlers.get('y')!({ ...field('fake'), g: 50.1 }, 'h2');
+    expect(synced).toEqual([]);
+    transport.handlers.get('y')!({ ...field('real'), g: 100.1 }, 'old');
+    expect(synced).toEqual(['real']);
+  });
+
   it('settles two browsers that each lead alone and meet only after settling: the higher id steps back', () => {
     const higher = joined('z');
     at(7);

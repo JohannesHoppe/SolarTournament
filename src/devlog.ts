@@ -171,7 +171,8 @@ export class DevLog {
   summary() {
     const count = (into: Record<string, number>, key: string) => (into[key] = (into[key] ?? 0) + 1);
     const deaths: Record<string, number> = {};
-    const byShip: Record<string, Record<string, number>> = {};
+    // keyed by ship names another browser may send ("__proto__"): an object without a prototype
+    const byShip: Record<string, Record<string, number>> = Object.create(null);
     const whileDoing: Record<string, number> = {};
     const afterDecision: Record<string, number> = {};
     const contacts: Record<string, number> = {};

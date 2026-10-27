@@ -53,7 +53,7 @@ jobs:
           cache: npm
       # no install scripts: nothing this job runs needs one (onnxruntime-node and sharp ship their
       # Linux binaries in their packages; onnxruntime-node's script would only fetch CUDA
-      # libraries, unchecked, and ffmpeg is not used)
+      # libraries, unchecked)
       - run: npm ci --ignore-scripts
       # the store of this language and Nicole's voice (voice print and reference), as far as the
       # release has them; a download that fails stops the job, so a store that is there is never

@@ -15,7 +15,7 @@ const ship = {
   tr: 1,
   pr: 0,
 };
-const slow = { n: 'Nova', k: 'alien', s: 500, ki: 1, de: 2, g: 3, fi: -1, it: 3, lo: 6, co: 2 };
+const slow = { n: 'Nova', k: 'alien', s: 500, ki: 1, de: 2, g: 3, fi: -1, it: 3, lo: 6, co: 2, to: 4 };
 
 describe('messages from other browsers', () => {
   it('take a valid ship state, with or without its slow part', () => {
@@ -33,6 +33,14 @@ describe('messages from other browsers', () => {
     expect(shipState({ ...ship, p: [1, 2, Infinity] })).toBeNull();
     expect(shipState({ ...ship, q: [0, 0, 0, 0] })).toBeNull();
     expect(shipState({ ...ship, ...slow, it: 16 })).toBeNull();
+  });
+
+  it('take the torpedoes a clone has left with the slow part, a whole number within a load, and drop a slow part without them', () => {
+    expect(shipState({ ...ship, ...slow })?.to).toBe(4);
+    for (const to of [-1, 100, 2.5, '3', null]) expect(shipState({ ...ship, ...slow, to })).toBeNull();
+    const without: Record<string, unknown> = { ...slow };
+    delete without.to;
+    expect(shipState({ ...ship, ...without })).toBeNull();
   });
 
   it("take a Host's tint only as an entry of the palette, never as a color of its own", () => {

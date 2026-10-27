@@ -33,6 +33,11 @@ const CUT_OFF_MS = 2000;
 /** A reported join time this much later than the known one means the peer started over (s); well above network jitter. */
 const RESTART_SLACK = 1;
 /**
+ * A peer first heard after this browser settled joined at most this long before it was first
+ * heard (s): the time a WebRTC link takes to form, as long as a newcomer waits for the others.
+ */
+const LINK_SLACK = SETTLE_MS / 1000;
+/**
  * A peer's start over is taken up (the field sent again, see Online) at most once in this long
  * (s): an honest browser is cut off for at least CUT_OFF_MS before it starts over, so it never
  * starts over faster; a stream of them would only cost the lead its bandwidth.
@@ -192,6 +197,8 @@ export class Session {
    * behind it (see plausibleJoin), and never close enough to it to make it step back.
    */
   private readonly linedUp = new Set<string>();
+  /** Peers first heard after this browser settled: their join time is no earlier than LINK_SLACK before that, and never a tie with the lead (see plausibleJoin). */
+  private readonly late = new Set<string>();
   /** The lead each peer says it follows (its states carry it), checked against the own election (see reconcile). */
   private readonly follows = new Map<string, string>();
   /** The join time each peer last claimed, on this browser's clock: believed for a peer most others follow (see reconcile). */
@@ -371,8 +378,8 @@ export class Session {
       this.pingSamples.set(from, samples);
     });
     transport.on('y', (d, from) => {
-      // only a browser that just joined or started over takes a field, once, and only from a
-      // peer that was here before it
+      // only a browser that just joined or started over takes a field, once, and only from the
+      // lead it elects, a peer that was here before it
       const field = fieldState(d?.f);
       const wrecks = wreckStates(d?.w);
       const taken = ids(d?.p);
@@ -381,7 +388,7 @@ export class Session {
       if (!field || !wrecks || !taken || !probes || age === null) return;
       this.hear(from, age);
       if (this.synced || seconds() - this.startedAt >= SETTLE_MS / 1000) return;
-      if ((this.peerJoinedAt.get(from) ?? Infinity) >= this.startedAt) return;
+      if (from !== this.leadId || (this.peerJoinedAt.get(from) ?? Infinity) >= this.startedAt) return;
       this.synced = true;
       this.guard(() => this.onSync(field, wrecks, taken, probes));
     });
@@ -665,6 +672,12 @@ export class Session {
    */
   private plausibleJoin(peer: string, joined: number): number {
     if (this.justJoined) return joined;
+    // nor can it have come much before this browser first heard it: its link forms within
+    // LINK_SLACK, so a claim to be older is moved up to then (a peer that really was here longer
+    // is believed once most of the others follow it, see reconcile), and it never ties with the
+    // lead (see receiveStates)
+    this.late.add(peer);
+    joined = Math.max(joined, seconds() - LINK_SLACK);
     const lead = this.leadId;
     const leadJoined = lead === this.selfId ? this.startedAt : (this.peerJoinedAt.get(lead) ?? this.startedAt);
     if (joined >= leadJoined || peer === lead) return joined;
@@ -771,7 +784,7 @@ export class Session {
     // two browsers lead at once because their join times lie too close to tell apart over the
     // network: the one with the higher id steps back (a peer that came clearly later, or was
     // lined up behind the lead, cannot make the lead step back by sending a round clock)
-    const tie = !this.linedUp.has(from) && Math.abs((this.peerJoinedAt.get(from) ?? Infinity) - this.startedAt) <= RESTART_SLACK;
+    const tie = !this.linedUp.has(from) && !this.late.has(from) && Math.abs((this.peerJoinedAt.get(from) ?? Infinity) - this.startedAt) <= RESTART_SLACK;
     if (round && tie && this.isLead && this.isLive(from) && from < this.selfId) this.restart();
     const sent = d.c === undefined ? null : num(d.c, 0, MAX_FIELD_TIME);
     if (sent === null && d.c !== undefined) return;
