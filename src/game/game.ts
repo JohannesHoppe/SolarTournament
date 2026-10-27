@@ -554,9 +554,12 @@ const COMET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
 /**
  * A comet's shower (see comet.ts) strikes a ship like a laser, armor or drive by where it comes
  * from, unless rock within SHOWER_COVER (units, 300 m) upstream of the ship stands in its way:
- * cover behind an asteroid is the best answer, the armored nose turned into it the next.
+ * cover behind an asteroid is the best answer, the armored nose turned into it the next. Each
+ * piece weighs SHOWER_WEIGHT laser hits: 3 hull on the armor, 0.3 of the thrust in the drive,
+ * so the fourth piece into the drive sends its reactor critical.
  */
 const SHOWER_COVER = 6000;
+const SHOWER_WEIGHT = 1.5;
 /** A bot this close to a comet's route (units, 500 m beyond the swarm's width) as the head nears or the swarm passes flies away from it, sideways. */
 const COMET_DANGER = 10000;
 /**
@@ -5704,7 +5707,7 @@ export class Game implements OnlineGame {
    * A laser beam went through a ship this browser simulates: damage, feedback, destruction.
    * Also called for beams from other peers.
    */
-  applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number, cause: DeathCause = null) {
+  applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number, cause: DeathCause = null, weight = 1) {
     if (shooter && ship.allyOf(shooter)) return;
     // plating (an item) takes a hit into the drive
     // where the beam meets the ship
@@ -5715,7 +5718,7 @@ export class Game implements OnlineGame {
       if (ship.isLocal) this.hud.flashMessage(this.time, ship.plating ? t('Plating holds') : t('Plating gone'), 1.2);
       return;
     }
-    const { status, zone } = ship.laserHit(origin, direction, this.time);
+    const { status, zone } = ship.laserHit(origin, direction, this.time, weight);
     if (status === 'protected') return;
     // a hit into the drive hurts; the armor only scorches
     const serious = zone === 'drive' || zone === 'reactor';
@@ -6288,7 +6291,7 @@ export class Game implements OnlineGame {
       // only rock gives cover, haze does not
       if (!this.field.lineOfSight(cometCover.copy(position).addScaledVector(cometCourse, -SHOWER_COVER), position, Infinity)) continue;
       cometRelative.subVectors(cometVelocity, ship.flight.velocity).normalize();
-      this.applyLaserHit(ship, cometPiece, cometRelative, null, undefined, 'shower');
+      this.applyLaserHit(ship, cometPiece, cometRelative, null, undefined, 'shower', SHOWER_WEIGHT);
       if (!ship.alive) return;
     }
   }

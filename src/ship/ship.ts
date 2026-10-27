@@ -662,17 +662,18 @@ export class Ship {
 
   /**
    * A laser beam passes through the ship. The point where it comes closest to the center
-   * decides which part it destroys; entry and exit leave holes.
+   * decides which part it destroys; entry and exit leave holes. `weight` scales what it costs
+   * armor, thrusters and drive (a comet's shower strikes harder than a beam).
    */
-  laserHit(origin: THREE.Vector3, direction: THREE.Vector3, now: number): { status: DamageStatus; zone: Zone } {
+  laserHit(origin: THREE.Vector3, direction: THREE.Vector3, now: number, weight = 1): { status: DamageStatus; zone: Zone } {
     if (!this.alive || now < this.protectedUntil) return { status: 'protected', zone: 'armor' };
     if (!this.tailToward(direction)) {
       // the armor takes it: a scorch mark and a few points, no hole; a beam into the flanks,
       // more than 45° off the ship's axis, also shakes the maneuvering thrusters
       this.flight.toLocalDirection(direction, local);
       const flank = Math.hypot(local.x, local.y) > Math.abs(local.z);
-      if (flank) this.thrusters = Math.max(0, this.thrusters - THRUSTER_HIT);
-      return { status: this.structural(ARMOR_DAMAGE, now), zone: flank ? 'thrusters' : 'armor' };
+      if (flank) this.thrusters = Math.max(0, this.thrusters - THRUSTER_HIT * weight);
+      return { status: this.structural(ARMOR_DAMAGE * weight, now), zone: flank ? 'thrusters' : 'armor' };
     }
     offset.subVectors(this.flight.position, origin);
     const along = offset.dot(direction);
@@ -691,8 +692,8 @@ export class Ship {
     }
 
     // into the drive: it loses thrust, and once nothing is left its reactor goes critical
-    this.drive = Math.max(0, this.drive - DRIVE_HIT);
-    if (this.drive > 1e-6) return { status: this.structural(ARMOR_DAMAGE, now), zone: 'drive' };
+    this.drive = Math.max(0, this.drive - DRIVE_HIT * weight);
+    if (this.drive > 1e-6) return { status: this.structural(ARMOR_DAMAGE * weight, now), zone: 'drive' };
     return { status: this.structural(Infinity, now), zone: 'reactor' };
   }
 

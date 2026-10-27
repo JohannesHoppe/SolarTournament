@@ -26,23 +26,25 @@ export const COMET_WINDOWS: readonly { from: number; to: number; chance: number 
   { from: 175, to: 235, chance: 0.4 },
 ];
 /**
- * The head flies this fast (units/s, 400 m/s) where it passes the field's center; a well's
- * gravity changes that elsewhere. Far slower than a real comet (5 to 25 km/s past a planet,
- * through the arena in under a second): slow enough to be seen coming and dodged.
+ * The head flies this fast (units/s, 600 m/s) where it passes the field's center; a well's
+ * gravity changes that elsewhere. It crosses the arena (6.75 km) in about 11 s: far slower
+ * than a real comet (5 to 25 km/s past a planet, through the arena in under a second), slow
+ * enough to be watched coming and dodged, fast enough not to keep the Host waiting.
  */
-export const COMET_SPEED = 8000;
+export const COMET_SPEED = 12000;
 /**
  * The head starts this far before the point of its route nearest the field's center (units,
- * 8 km), 4.6 km beyond the arena's edge, and flies as far beyond it: at COMET_SPEED it shows
- * about as long before it reaches the edge as the warning comes before (see COMET_WARNING).
+ * 8.8 km), 5.4 km beyond the arena's edge, and flies as far beyond it: at COMET_SPEED it shows
+ * 9 s before it reaches the edge, just before the warning (see COMET_WARNING), and is in view
+ * about 25 s until its shower has left the arena (9 s coming, 11 s across, 5 s of shower).
  */
-export const COMET_REACH = 160000;
+export const COMET_REACH = 176000;
 /** The route passes the field's center within this much (units, 800 m), so it crosses the thick of the field. */
 const COMET_MISS = 16000;
 /** The route lies within this angle (rad, 35°) of the arena's horizon plane, where the field is. */
 const COMET_TILT = 0.6;
-/** A massive body in the field's middle (the black hole) is aimed at: the route passes it within this many of its radii, close enough to be caught: at COMET_SPEED the hole's pull bends a route aimed 1.3 radii off into its body. */
-const CAPTURE = 1.2;
+/** A massive body in the field's middle (the black hole) is aimed at: the route passes it within this many of its radii, close enough to be caught: at COMET_SPEED the hole's pull bends a route aimed 1.14 radii off into its body. */
+const CAPTURE = 1.05;
 /** Towards a massive body outside the field (Jupiter) the route dives at an angle of this range (rad, 26° to 43°) as it crosses the center: steep enough that it comes from above its cloud deck, so the body's pull bends it down through it into its depths. */
 const DIVE: readonly [number, number] = [0.45, 0.75];
 /** Radius of the solid head (units, 70 m). */
@@ -50,12 +52,12 @@ export const HEAD_RADIUS = 1400;
 /**
  * The flight computer warns this many seconds before the head reaches the arena's edge (s): at
  * COMET_SPEED the head is 4.8 km beyond the edge then, and it crosses from the edge to the
- * center in another 8.4 s.
+ * center in another 5.6 s.
  */
-export const COMET_WARNING = 12;
+export const COMET_WARNING = 8;
 /**
  * The shower: SHOWER_PIECES pieces from SHOWER_GAP (units, 60 m) behind the head back to
- * SHOWER_LENGTH (3 km, 7.5 s at COMET_SPEED) behind it, the swarm widening from SHOWER_NARROW (60 m) to SHOWER_WIDE
+ * SHOWER_LENGTH (3 km, 5 s at COMET_SPEED) behind it, the swarm widening from SHOWER_NARROW (60 m) to SHOWER_WIDE
  * (260 m) around the route, denser near the head. Each piece follows the head's route a little
  * later, so the swarm bends with it.
  */
