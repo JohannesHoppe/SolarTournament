@@ -13,6 +13,7 @@ import { COMET_WARNING } from '../game/comet';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
 import { ASTEROID_POINTS } from '../world/asteroids';
 import { ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
+import { RING_LAYER } from '../world/arenas';
 
 /**
  * The numbers of the Pilot's Handbook (handbook.html), filled into its texts as {placeholders}
@@ -95,6 +96,8 @@ export const FROM_CODE: Record<string, number> = {
   rock1: ASTEROID_POINTS[0],
   rock2: ASTEROID_POINTS[1],
   rock3: ASTEROID_POINTS[2],
+  // the Rings of Saturn's layer of ice grains, top to bottom
+  ringLayer: meters(2 * RING_LAYER),
 };
 
 /**

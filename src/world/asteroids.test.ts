@@ -39,6 +39,28 @@ describe('the field of an arena', () => {
     expect(newcomer.asteroids.get(second)!.hitPoints).toBe(lead.asteroids.get(second)!.hitPoints);
   });
 
+  it("lays the Rings' small chunks within the layer of grains, its large ones in the open space above and below", () => {
+    const rings = ARENAS.find((a) => a.id === 'rings')!;
+    const { layout } = rings;
+    const field = testField();
+    field.generate(layout);
+    const pieces = [...field.asteroids.values()];
+    expect(pieces).toHaveLength(layout.count + layout.open!.count);
+    for (const piece of pieces) {
+      const height = Math.abs(piece.object.position.y);
+      if (Number(piece.id) < layout.count) expect(height).toBeLessThanOrEqual(rings.grains!);
+      else {
+        expect(height).toBeGreaterThanOrEqual(layout.open!.from);
+        expect(height).toBeLessThanOrEqual(layout.open!.to);
+        // clear of the layer, however it is turned
+        expect(height - piece.radius).toBeGreaterThan(rings.grains!);
+      }
+    }
+    // either side of it
+    const open = pieces.filter((piece) => Number(piece.id) >= layout.count);
+    expect(open.some((piece) => piece.object.position.y > 0) && open.some((piece) => piece.object.position.y < 0)).toBe(true);
+  });
+
   it('carries circling rocks along their orbits', () => {
     const junkyard = ARENAS.find((a) => a.id === 'junkyard')!.layout;
     const field = testField();

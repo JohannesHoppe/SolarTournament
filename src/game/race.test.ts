@@ -21,6 +21,15 @@ describe('the race course', () => {
     expect(a.points).toHaveLength(GATES);
   });
 
+  it("dives through the Rings of Saturn's layer of grains, its gates above, within and below it", () => {
+    const rings = ARENAS.find((arena) => arena.id === 'rings')!;
+    const layer = rings.grains!;
+    const heights = course(rings).points.map((point) => point.y);
+    expect(heights.some((y) => y > layer)).toBe(true);
+    expect(heights.some((y) => y < -layer)).toBe(true);
+    expect(heights.some((y) => Math.abs(y) < layer)).toBe(true);
+  });
+
   it('keeps its gates clear of rock as the field starts out', () => {
     for (const arena of ARENAS) {
       const field = testField();
