@@ -4,7 +4,7 @@ import { ownerOf, TOURNAMENT_SIZE, type Session, type RoundState, type Vec } fro
 import type { Ship, ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
 import { unpackItems, type ItemKind, type ProbeState } from '../game/items';
-import { Accusations, AIM_SLACK, beamShare, Evidence, ORIGIN_SLACK, Plausibility, plausibleBlast, hookShare, SenderClock, Strikes, type Cheat, type Margins } from './plausible';
+import { Accusations, AIM_SLACK, beamShare, Evidence, ORIGIN_SLACK, Plausibility, plausibleBlast, hookShare, SenderClock, Standings, Strikes, type Cheat, type Margins } from './plausible';
 import { devlog, type SuspicionEvent } from '../devlog';
 import { HOOK_RANGE } from '../game/hook';
 import type { Homing, Torpedo } from '../game/torpedoes';
@@ -86,6 +86,9 @@ export interface OnlineGame {
   announceCheater(name: string): void;
   /** Number of the running online round. */
   readonly roundId: number;
+  /** Seconds since the running round started (0 while it is not known), and on the race clock (since BURN!). */
+  roundSeconds(): number;
+  raceSeconds(): number;
   /** The lead browser's round clock and field time. */
   syncRound(round: RoundState): void;
   leadRound(): RoundState;
@@ -144,6 +147,8 @@ export class Online {
   private readonly strikes = new Strikes();
   /** When the other browsers sent their states, on their own clocks. */
   private readonly clock = new SenderClock();
+  /** How far the other browsers' ships stand in the round, as fast as a ship gets there. */
+  private readonly standings = new Standings();
   /** Peers this browser has reported this round, once each. */
   readonly reported = new Set<string>();
   /** Every check a ship of another browser failed, whether it led to a report or not (the latest SUSPICIONS_KEPT), for the browser tests and the console. */
@@ -503,6 +508,7 @@ export class Online {
     if (this.game.roundId === this.checkedRound) return;
     this.checkedRound = this.game.roundId;
     this.plausible.newRound(wall());
+    this.standings.newRound();
     this.accusations.newRound();
     this.strikes.newRound();
     this.reported.clear();
@@ -530,6 +536,12 @@ export class Online {
       // first shows once a state brings its name and type
       const known = this.find(state.id);
       if (!known && state.n === undefined) continue;
+      // score, gates and finish as fast as a ship makes them (see Standings), on the race clock
+      // of when the state was sent
+      if (state.n !== undefined) {
+        const race = this.game.raceSeconds() - (clock === null ? 0 : this.clock.age(peer, sent, now));
+        ({ s: state.s, g: state.g, fi: state.fi } = this.standings.take(state.id, { s: state.s!, g: state.g!, fi: state.fi! }, now, this.game.roundSeconds(), race));
+      }
       const ship = known ?? this.game.addRemoteShip(state, peer);
       if (ship.owner !== peer || ownerOf(ship.id) !== peer) continue;
       const report = { p: state.p, alive: state.a, kills: state.ki, nova: state.it === undefined ? undefined : unpackItems(state.it).nova, q: state.q, w: state.w };
@@ -634,6 +646,7 @@ export class Online {
   private forgetShipsOf(peer: string) {
     const gone = (id: string) => ownerOf(id) === peer;
     this.plausible.forget(gone);
+    this.standings.forget(gone);
     this.evidence.forget(gone);
     this.strikes.forget(gone);
     for (const id of this.novas.keys()) if (gone(id)) this.novas.delete(id);

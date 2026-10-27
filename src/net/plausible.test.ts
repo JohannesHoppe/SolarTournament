@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { TORPEDO_LIFETIME } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
-import { Accusations, accusersNeeded, beamShare, Evidence, hookShare, Plausibility, SenderClock, Strikes, type Margins, type Seen } from './plausible';
+import { Accusations, accusersNeeded, beamShare, Evidence, hookShare, Plausibility, SenderClock, Standings, Strikes, type Margins, type Seen, type Standing } from './plausible';
 import { honestFlight, type Roughness } from '../test/honest';
 
 const alive = (x: number, more = {}) => ({ p: [x, 0, 0], alive: true, ...more });
@@ -292,7 +292,74 @@ describe("a ship's nose", () => {
   });
 });
 
+describe('the standing of another browser\'s ship', () => {
+  const at = (s: number, g = 0, fi = -1): Standing => ({ s, g, fi });
+
+  it('lets the score fall at once and rise no faster than a ship makes points, in a burst of a nova or a win', () => {
+    const standings = new Standings();
+    expect(standings.take('s', at(0), 0, 0, 0)).toEqual(at(0));
+    // a nova core that takes seven ships at once, then a death
+    expect(standings.take('s', at(7000), 1, 1, 1).s).toBe(7000);
+    expect(standings.take('s', at(6500), 2, 2, 2).s).toBe(6500);
+    // a million in a second shows as what a second more allows
+    expect(standings.take('s', at(1000000), 3, 3, 3).s).toBeLessThan(6500 + 10000);
+    let s = 0;
+    for (let t = 4; t <= 14; t++) s = standings.take('s', at(1000000), t, t, t).s;
+    expect(s).toBeLessThan(6500 + 10000 + 200 * 12);
+  });
+
+  it('takes what a ship first seen could have made since the round started', () => {
+    const standings = new Standings();
+    expect(standings.take('s', at(25000), 100, 100, 85).s).toBe(25000);
+    expect(standings.take('t', at(-1500), 100, 100, 85).s).toBe(-1500);
+    expect(standings.take('u', at(500000), 100, 100, 85).s).toBe(10000 + 200 * 100);
+  });
+
+  it('counts gates no faster than a ship flies from one to the next, and a finish only after the last at a time it fits', () => {
+    const standings = new Standings();
+    standings.take('s', at(0), 0, 0, 0);
+    // all the gates at once: two, no finish
+    expect(standings.take('s', at(0, 25, 1), 0.1, 10.1, 0.1)).toEqual(at(0, 2, -1));
+    // an honest race: a gate every five seconds, the finish two minutes in
+    let seen = at(0);
+    for (let gate = 1; gate <= 25; gate++) seen = standings.take('s', at(0, gate, -1), 5 * gate, 10 + 5 * gate, 5 * gate);
+    expect(seen.g).toBe(25);
+    expect(standings.take('s', at(0, 25, 125.4), 125.5, 135.5, 125.5).fi).toBe(125.4);
+    // a finish earlier than the ship was seen racing never counts
+    const liar = new Standings();
+    for (let gate = 1; gate <= 25; gate++) liar.take('l', at(0, gate, -1), 5 * gate, 10 + 5 * gate, 5 * gate);
+    expect(liar.take('l', at(0, 25, 30), 125.5, 135.5, 125.5).fi).toBe(-1);
+    // nor one later than the race clock when it was sent
+    expect(liar.take('l', at(0, 25, 200), 126, 136, 126).fi).toBe(-1);
+  });
+
+  it('takes the finish of a ship first seen after it finished, no faster than its gates allow', () => {
+    const standings = new Standings();
+    expect(standings.take('s', at(1000, 25, 131.2), 200, 210, 200)).toEqual(at(1000, 25, 131.2));
+    expect(standings.take('t', at(1000, 25, 5), 200, 210, 200).fi).toBe(-1);
+  });
+
+  it('starts every ship over in a new round, and forgets those of a browser that left', () => {
+    const standings = new Standings();
+    standings.take('s', at(0), 0, 0, 0);
+    expect(standings.take('s', at(90000), 1, 1, 1).s).toBe(10000);
+    standings.newRound();
+    expect(standings.take('s', at(0), 2, 0, 0).s).toBe(0);
+    standings.take('b:x:1', at(0), 2, 0, 0);
+    standings.forget((id) => id.startsWith('b:x:'));
+    expect(standings.take('b:x:1', at(20000), 3, 50, 35).s).toBe(20000);
+  });
+});
+
 describe("a sender's clock", () => {
+  it('tells how long a state waited beyond the least delay of its peer\'s states', () => {
+    const clock = new SenderClock();
+    clock.sent('p', 10, 100.05);
+    const sent = clock.sent('p', 12, 104.05);
+    expect(clock.age('p', sent, 104.05)).toBeCloseTo(2);
+    expect(clock.age('q', 5, 104.05)).toBe(0);
+  });
+
   it('counts the time between states as they were sent, not as they arrived', () => {
     const clock = new SenderClock();
     expect(clock.sent('p', 10, 100.05)).toBe(10);

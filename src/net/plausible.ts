@@ -3,6 +3,7 @@ import { MAX_SPEED } from '../ship/flight';
 import { TORPEDO_LIFETIME, TORPEDOES } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
 import { ONLINE_LEVEL, tubeTorpedoes } from '../game/hangar';
+import { FINISH_GATES } from '../game/race';
 
 /** The most torpedoes a clone carries online: the standard load and its tubes up to the online cap. */
 const LOAD = TORPEDOES + tubeTorpedoes(ONLINE_LEVEL);
@@ -427,6 +428,12 @@ export class SenderClock {
     return least === undefined ? clock : Math.min(clock, now - least + LATE_SLACK);
   }
 
+  /** How long ago (s, real time) a state the peer sent at `sent` (its clock, see sent) left it, beyond the least delay of its states: the time it waited in a jammed link or a browser that stood still. */
+  age(peer: string, sent: number, now: number): number {
+    const least = this.least.get(peer);
+    return least === undefined ? 0 : Math.max(0, now - sent - least);
+  }
+
   /** The time it is now on a peer's clock, at the latest (for what it sends without its age). */
   now(peer: string, now: number): number {
     const least = this.least.get(peer);
@@ -586,6 +593,100 @@ function keep<T extends { at: number }>(map: Map<string, T[]>, ship: string, ent
   list.push(entry);
   if (list.length > EVIDENCE_KEPT) list.shift();
   map.set(ship, list);
+}
+
+/**
+ * A ship's score as other browsers take it rises by at most SCORE_RATE points a second, in
+ * bursts of up to SCORE_BURST: far beyond honest play (a nova core that takes seven ships at once
+ * is 7,000 points, the battleship's reactor and its sinking 1,500, a race's win 1,000), and a
+ * score said to be higher shows as high as that allows. It falls as it likes (deaths cost points).
+ */
+const SCORE_RATE = 200;
+const SCORE_BURST = 10000;
+/**
+ * It passes at most GATE_RATE gates a second, two at once for states that come bunched: the
+ * gates lie 1 to 1.9 km apart, some two seconds even at 450 m/s, more than a ship flies but for
+ * a moment.
+ */
+const GATE_RATE = 1;
+const GATE_BURST = 2;
+/**
+ * A finish counts once all FINISH_GATES are, at a time on the race clock no later than
+ * FINISH_SLACK (s, the clocks' offset, lag and the slow part's second) after this browser's own,
+ * and no earlier than FINISH_SLACK before the last state that showed the ship still racing, nor
+ * than the gates could have been passed at GATE_RATE.
+ */
+const FINISH_SLACK = 3;
+const FASTEST_RACE = (FINISH_GATES - 1) / GATE_RATE;
+
+/** What a ship's state says of its standing: score, gates passed in a race, and its finish on the race clock (-1 while racing). */
+export interface Standing {
+  s: number;
+  g: number;
+  fi: number;
+}
+
+interface Tally extends Standing {
+  /** When the last state came (real time), and what score and gates it may still rise by. */
+  at: number;
+  points: number;
+  passes: number;
+  /** The race clock of the last state that showed the ship racing. */
+  racing: number;
+}
+
+/** Takes up `claimed` from the `held` value with the allowance `tokens`: falls at once, rises by what the allowance holds. */
+function rise(held: number, claimed: number, tokens: number): [number, number] {
+  if (claimed <= held) return [claimed, tokens];
+  const step = Math.min(claimed - held, tokens);
+  return [held + step, tokens - step];
+}
+
+/**
+ * How far each ship of another browser stands in the round as this browser takes it: score and
+ * gates rise no faster than a ship makes them, and a finish only counts once the gates are passed,
+ * at a time that fits when this browser saw the ship racing (see the bounds above). A ship first
+ * seen in a round may have made what the time since the round started allows.
+ */
+export class Standings {
+  private readonly ships = new Map<string, Tally>();
+
+  /**
+   * A state of a ship with its standing `claimed`, arriving at `now` (real time), `round` seconds
+   * into the round, sent at `race` on this browser's race clock (a state that waited in a jammed
+   * link, or while this browser stood still, counts from when it was sent): the standing this
+   * browser takes.
+   */
+  take(id: string, claimed: Standing, now: number, round: number, race: number): Standing {
+    let ship = this.ships.get(id);
+    if (!ship) {
+      ship = { at: now, s: Math.min(0, claimed.s), g: 0, fi: -1, points: SCORE_BURST + SCORE_RATE * Math.max(0, round), passes: GATE_BURST + GATE_RATE * Math.max(0, round), racing: FASTEST_RACE };
+      this.ships.set(id, ship);
+    }
+    const dt = Math.max(0, now - ship.at);
+    ship.at = now;
+    ship.points = Math.min(Math.max(ship.points, SCORE_BURST), ship.points + SCORE_RATE * dt);
+    ship.passes = Math.min(Math.max(ship.passes, GATE_BURST), ship.passes + GATE_RATE * dt);
+    [ship.s, ship.points] = rise(ship.s, claimed.s, ship.points);
+    [ship.g, ship.passes] = rise(ship.g, Math.min(claimed.g, FINISH_GATES), ship.passes);
+    if (claimed.fi < 0) {
+      ship.fi = -1;
+      ship.racing = Math.max(ship.racing, race);
+    } else if (ship.fi < 0 && ship.g >= FINISH_GATES && claimed.fi <= race + FINISH_SLACK && claimed.fi >= Math.max(FASTEST_RACE, ship.racing - FINISH_SLACK)) {
+      ship.fi = claimed.fi;
+    }
+    return { s: ship.s, g: ship.g, fi: ship.fi };
+  }
+
+  /** A new round: every ship starts from nothing. */
+  newRound() {
+    this.ships.clear();
+  }
+
+  /** The ships `gone` names left with their browser. */
+  forget(gone: (id: string) => boolean) {
+    for (const id of this.ships.keys()) if (gone(id)) this.ships.delete(id);
+  }
 }
 
 /** Accusations: a peer counts as a cheater once at least ACCUSERS Hosts who fly, the own one included, say so. */

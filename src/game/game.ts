@@ -4122,6 +4122,14 @@ export class Game implements OnlineGame {
     return this.raceTime() - START_AT;
   }
 
+  roundSeconds() {
+    return this.raceTime();
+  }
+
+  raceSeconds() {
+    return this.raceClock();
+  }
+
   /**
    * The own racer flew through gate `gate` of the lap: the split against the best lap, or the
    * lap's time; a new best lap is kept in this browser, with its ghost.
