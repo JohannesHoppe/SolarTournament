@@ -352,6 +352,8 @@ The system is ruled by the **United Solar States**, the heir of an America that 
 
 The year is **2584**, a nod to George Orwell's *1984*, where a whole society watches and is watched.
 
+The world ship broken in two that the Derelict is fought around is the **PAAA 01**, *Per aspera ad astra*, "through hardship to the stars". A united Earth built it in a long-gone, more hopeful age, before the sponsors and before the President, to carry its settlers to another star; it broke apart and never arrived. Nothing on it is for sale: no sponsor, no neon, only its name and motto painted on its hull like a ship's lettering.
+
 ### Factions
 
 - **Earth**: the United Solar States under the Orange President. They own the tournament, the clone printers and the broadcast. And the Navy: when the President wants blood, he sends his battleships into the ring, because he can (see Modes, the President's Fleet). Hosts of every faction fight them side by side, and the broadcast calls it a show of loyalty.
