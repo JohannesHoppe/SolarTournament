@@ -1,16 +1,17 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { SUN_DIRECTION } from './space';
-import { ARENAS, HOLE_RADIUS, RING_LAYER, SATURN_CENTER, sternAt, type ArenaId, type ArenaProfile } from './arenas';
-import { canvas, toTexture } from '../view/textures';
+import { ARENAS, HOLE_RADIUS, RING_LAYER, SATURN_CENTER, type ArenaId, type ArenaProfile } from './arenas';
+import { Derelict, mistDensity } from './derelict';
+import { sizeBeacons } from './worldship';
 import { loadPlanetMap, type Planet, type PlanetMaps } from '../assets';
 import { junkyard } from './junkyard';
 import { Jupiter } from './jupiter';
 
 /**
  * What an arena shows beyond its field: Saturn, whose ring the arena lies in, Earth and the
- * junk around the Satellite Junkyard (see world/junkyard), Jupiter (see world/jupiter), the sun up close, the black hole with its disk, the neon sign
- * on the derelict. Scenery only; what pulls and blocks is the field's well.
+ * junk around the Satellite Junkyard (see world/junkyard), Jupiter (see world/jupiter), the sun up close, the black hole with its disk, the mist
+ * and the dead at the derelict's break (see world/derelict). Scenery only; what pulls and blocks is the field's well.
  */
 
 /** Saturn's radius (units); it lies at SATURN_CENTER, its ring runs through the arena. */
@@ -516,24 +517,6 @@ const streakFragment = /* glsl */ `
   }
 `;
 
-/** A neon sign: the text as a tube of white with layered glow, on black for additive blending. */
-function neonSign(text: string, color: string, glow: string): THREE.Mesh {
-  const [element, ctx] = canvas(1024, 256);
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, element.width, element.height);
-  ctx.font = '700 150px Michroma, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  for (const [blur, style] of [[60, glow], [28, glow], [10, color], [0, '#fff']] as const) {
-    ctx.shadowBlur = blur;
-    ctx.shadowColor = style;
-    ctx.fillStyle = style;
-    ctx.fillText(text, element.width / 2, element.height / 2);
-  }
-  const material = new THREE.MeshBasicMaterial({ map: toTexture(element), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
-  return new THREE.Mesh(new THREE.PlaneGeometry(10000, 2500), material);
-}
-
 /** `count` specks of ice, each where `place` puts it (x, y, z), with a facet of its own to glint with (see iceFragmentPars). */
 function iceGeometry(count: number, r: Randomizer, place: () => number[]): THREE.BufferGeometry {
   const positions = new Float32Array(count * 3);
@@ -579,6 +562,8 @@ export class Landmarks {
   private jupiterDetail = 0;
   /** Jupiter's deck, its sheets of cloud, its sky and weather (see world/jupiter). */
   jupiter!: Jupiter;
+  /** The derelict's break: its mist and its dead (see world/derelict). */
+  private wreck!: Derelict;
   /** The planets' materials, whose map setDetail swaps between the page's and the sharp one. */
   private readonly planets = new Map<Planet, THREE.ShaderMaterial>();
   /** The sharp maps (see loadPlanetMap), once asked for, and once loaded. */
@@ -615,9 +600,16 @@ export class Landmarks {
     else this.jupiter.calm();
   }
 
-  /** The picture's height in device pixels: the ring's specks keep their size in the world with it. */
+  /** The picture's height in device pixels: the ring's specks, the derelict's mist and beacons keep their size in the world with it. */
   setViewport(height: number) {
     for (const material of this.sized) material.uniforms.viewport.value = height;
+    this.wreck.setViewport(height);
+    sizeBeacons(height);
+  }
+
+  /** How thick the mist escaping at the derelict's break is at `point` (0..1; 0 in every other arena). */
+  mistAt(point: THREE.Vector3): number {
+    return this.shown === 'derelict' ? mistDensity(point) : 0;
   }
 
   /**
@@ -642,12 +634,14 @@ export class Landmarks {
     const count = Math.round(GRAINS * share);
     this.grains.geometry.setDrawRange(0, count);
     this.streaks.geometry.setDrawRange(0, count * 2);
+    this.wreck.setParticles(share);
   }
 
   update(time: number) {
     for (const material of this.timed) material.uniforms.time.value = time;
-    // the neon of the derelict stutters now and then, as a sign on emergency power does
+    // a neon sign stutters now and then, as a sign on emergency power does
     for (const sign of this.flicker) (sign.material as THREE.MeshBasicMaterial).opacity = Math.random() < 0.03 ? 0.25 : 1;
+    if (this.shown === 'derelict') this.wreck.update(time);
   }
 
   /**
@@ -863,20 +857,9 @@ export class Landmarks {
     return group;
   }
 
+  /** The derelict's break (see world/derelict): the mist escaping from its torn ends, lit by the arena's sun, and its dead. */
   private derelict(): THREE.Group {
-    const group = new THREE.Group();
-    // a sponsor's sign on both flanks of the bow, still lit, and one on the stern
-    const sign = neonSign('VICTORY COLA', '#ff3fa4', '#ff0080');
-    sign.position.set(-30000, 0, 2300);
-    const back = sign.clone();
-    back.position.z = -2300;
-    back.rotation.y = Math.PI;
-    const name = neonSign('SOLAR WALL', '#7fb2ff', '#0062ff');
-    const [x, y] = sternAt(25000);
-    name.position.set(x, y, 5400);
-    name.rotation.z = 0.22;
-    this.flicker.push(sign, back);
-    group.add(sign, back, name);
-    return group;
+    this.wreck = new Derelict(this.light);
+    return this.wreck.group;
   }
 }

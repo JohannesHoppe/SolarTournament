@@ -6,6 +6,8 @@ import { applyRockRelief } from './rocks';
 import { paintedImpostor, type ImpostorPaint } from '../view/impostor';
 import { canvas, toTexture } from '../view/textures';
 import { boxUv, ravagedSurface, signTexture, solarCells, surfaced, wornSurface, type Wear } from '../view/surfaces';
+import type { Lettering } from '../view/lettering';
+import { beacons, biodome, domeGlass, FAILING_SHARE, frosted, paint, rimed, windowMaterials } from './worldship';
 
 /**
  * The shapes the arenas are built from besides rock: chunks of ice, the junk of a satellite
@@ -85,17 +87,6 @@ function ravaged(color: THREE.ColorRepresentation, embers: boolean): THREE.MeshS
   const surface = ravagedSurface(DEBRIS_SEED + 1);
   const glow = embers ? { emissive: 0xff6a1a, emissiveMap: surface.glow, emissiveIntensity: 1.6 } : {};
   return new THREE.MeshStandardMaterial({ ...surfaced(surface, RELIEF), color, metalness: 0.35, ...glow });
-}
-
-/** How bright the derelict's windows burn on its emergency power, and how often a frame they dip (0..1). */
-const WINDOW_LIGHT = 1.3;
-const WINDOW_DIP = 0.05;
-/** The derelict's window decks (see hullSet), whose emergency power stutters (see stutterWindows). */
-const hullWindows: THREE.MeshBasicMaterial[] = [];
-
-/** The derelict's emergency power stutters: now and then its windows dip for a frame. A visual only. */
-export function stutterWindows() {
-  for (const windows of hullWindows) windows.color.setScalar(WINDOW_LIGHT * (Math.random() < WINDOW_DIP ? 0.35 : 1));
 }
 
 /** How deep seams, rivets and craters look (see surfaced), and how large a tile of plating is (units, 8 m). */
@@ -211,53 +202,112 @@ export function debrisSet(): TemplateSet {
 const block = (x: number, y: number, z: number, cx = 0, cy = 0, cz = 0) => new THREE.BoxGeometry(x, y, z).translate(cx, cy, cz).toNonIndexed();
 
 /**
- * The hull sections of a wrecked world ship, industrial and angular: boxes of plating on
- * frames, a spine, containers along the flanks, decks of lit windows, all within the section's
+ * What the world ship PAAA 01 carries painted along its flanks (see view/lettering), by hull
+ * template (5, 6, 7): its motto split where it broke, PER ASPERA on the bow, AD ASTRA on the
+ * stern, the emblem of the united Earth that built it and its registry near the bridge, the
+ * registry again on the stern.
+ */
+export const HULL_PAINT: Record<number, Lettering> = {
+  5: { name: 'PER ASPERA' },
+  6: { emblem: true, registry: 'PAAA 01' },
+  7: { name: 'AD ASTRA', registry: 'PAAA 01' },
+};
+/**
+ * A biodome's radius and how high it rises over its ring (template units; 37 m and 22 m on the
+ * derelict, whose sections are scaled 7-fold): a flat cupola between two frames over the spine,
+ * under the top of the collider box.
+ */
+const DOME_RADIUS = 105;
+const DOME_RISE = 0.6;
+/** The livery's paint on the band along the flanks: off-white, worn, chipped and scratched over the centuries, the name's dark blue reading clearly on it. */
+const LIVERY: Wear = { rust: 0.15, chips: 0.5, grime: 0.6, scratches: 0.6, seams: 0.35, stencils: [], roughness: 0.75, metalness: 0.1 };
+
+/** What a hull template is built of before it is merged: plating, the runs of windows (steady and on the two failing circuits), the domes' glass and gardens, beacons, paint. */
+interface HullParts {
+  parts: THREE.BufferGeometry[];
+  livery: THREE.BufferGeometry[];
+  lights: THREE.BufferGeometry[];
+  failing: [THREE.BufferGeometry[], THREE.BufferGeometry[]];
+  glass: THREE.BufferGeometry[];
+  garden: THREE.BufferGeometry[];
+  beacons: number[];
+  decals: THREE.Mesh[];
+}
+
+/**
+ * The hull sections of the world ship PAAA 01 (see README, "The universe"), industrial and
+ * angular: boxes of plating on frames, a spine, containers along the flanks, a smooth band of
+ * plating on each flank carrying the livery, rows of windows below it, all within the section's
  * collider box, which is its collision shape. 0 a hull section, 1 a section torn off at one end,
- * 2 an engine block with three nozzles, 3 a bridge tower, 4 a long truss. The ship died long
- * ago: its plating, its break and its drive are cold and dark, and only the emergency power
- * still lights some of its windows.
+ * 2 an engine block with three nozzles, 3 a bridge tower, 4 a long truss; 5, 6 and 7 hull
+ * sections with the ship's paint (see HULL_PAINT). The sections carry shattered biodomes on
+ * their backs. The ship died long ago: its plating, its break and its drive are cold and dark,
+ * frost grows on its shadow side, and only the emergency power still lights some of its windows
+ * and its red beacons (see world/worldship).
  */
 export function hullSet(): TemplateSet {
-  const metal = ravaged(0xb8bec8, false);
-  const dark = ravaged(0x4a4e57, false);
-  const windows = new THREE.MeshBasicMaterial({ map: windowTexture(DEBRIS_SEED + 2), color: new THREE.Color().setScalar(WINDOW_LIGHT), toneMapped: false });
-  hullWindows.push(windows);
+  const metal = frosted(ravaged(0xb8bec8, false));
+  const dark = frosted(ravaged(0x4a4e57, false));
+  const windows = windowMaterials(windowTexture(DEBRIS_SEED + 2));
+  const glass = domeGlass();
+  const garden = rimed();
+  const livery = frosted(new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(DEBRIS_SEED + 4, LIVERY), RELIEF), color: 0xc4c0b4 }));
   const r = new Randomizer(DEBRIS_SEED + 3);
   const L = HULL_LENGTH;
 
-  /** A section's body: a core on frames, a spine on top, containers and window decks on both flanks. */
-  const section = (half: THREE.Vector3, end: number, parts: THREE.BufferGeometry[], lights: THREE.BufferGeometry[]) => {
+  /** A section's body: a core on frames, a spine on top, containers, the livery's band and window decks on both flanks, biodomes on its back with `domes`. */
+  const section = (half: THREE.Vector3, end: number, into: HullParts, domes: boolean) => {
+    const { parts } = into;
     const start = -half.x;
     const length = end - start;
     const middle = (start + end) / 2;
+    const frame = length / 7;
     parts.push(block(length, half.y * 1.6, half.z * 1.6, middle));
-    for (let x = start + 40; x < end; x += length / 7) parts.push(block(60, half.y * 2, half.z * 2, x));
-    parts.push(block(length * 0.9, half.y * 0.2, half.z * 0.5, middle, half.y * 0.9));
+    // the frames stop a hair short of the band's face, so the two never fight
+    for (let x = start + 40; x < end; x += frame) parts.push(block(60, half.y * 2, half.z * 1.96, x));
+    // the spine on top, broken by the domes where they sit
+    if (domes) for (let k = 0; k < 7; k += 2) parts.push(block(frame - 60, half.y * 0.2, half.z * 0.5, start + 40 + (k + 0.5) * frame, half.y * 0.9));
+    else parts.push(block(length * 0.9, half.y * 0.2, half.z * 0.5, middle, half.y * 0.9));
     for (const side of [1, -1]) {
       for (let x = start + 120; x < end - 160; x += r.range(160, 260)) {
         parts.push(block(r.range(90, 150), half.y * r.range(0.35, 0.6), half.z * 0.16, x, r.range(-0.3, 0.3) * half.y, side * half.z * 0.88));
       }
-      for (const deck of [-0.45, -0.15, 0.15, 0.45]) lights.push(block(length * r.range(0.5, 0.9), 10, 6, middle + r.range(-0.1, 0.1) * length, deck * half.y, side * half.z * 0.81));
+      // the band the livery is painted on, flush with the collider's flank
+      into.livery.push(block(length * 0.94, half.y * 0.72, half.z * 0.1, middle, half.y * 0.45, side * half.z * 0.95));
+      for (const deck of [-0.62, -0.38, -0.14]) {
+        const run = block(length * r.range(0.5, 0.9), 10, 6, middle + r.range(-0.1, 0.1) * length, deck * half.y, side * half.z * 0.81);
+        const circuit = r.nextFloat();
+        (circuit < FAILING_SHARE ? into.failing[circuit < FAILING_SHARE / 2 ? 0 : 1] : into.lights).push(run);
+      }
     }
+    // beacons at both ends of the spine and on each flank's middle above the band
+    into.beacons.push(start + 60, half.y, 0, end - 60, half.y, 0, middle, half.y * 0.86, half.z, middle, half.y * 0.86, -half.z);
+    if (!domes) return;
+    // a dome between every other pair of frames
+    for (let k = 1; k < 7; k += 2) biodome(r, start + 40 + (k + 0.5) * frame, half.y * 0.8, 0, DOME_RADIUS, DOME_RISE, into.glass, parts, into.garden);
+  };
+  const painted = (type: number) => (half: THREE.Vector3, into: HullParts) => {
+    section(half, half.x, into, true);
+    into.decals.push(paint(HULL_PAINT[type], DEBRIS_SEED + 10 + type, 0, half.y * 0.45, half.z, half.x * 1.8));
   };
 
-  const shapes: [THREE.Vector3, (half: THREE.Vector3, parts: THREE.BufferGeometry[], lights: THREE.BufferGeometry[]) => void][] = [
-    [new THREE.Vector3(L * 0.5, L * 0.16, L * 0.14), (half, parts, lights) => section(half, half.x, parts, lights)],
+  const SECTION = new THREE.Vector3(L * 0.5, L * 0.16, L * 0.14);
+  const shapes: [THREE.Vector3, (half: THREE.Vector3, into: HullParts) => void][] = [
+    [SECTION, (half, into) => section(half, half.x, into, true)],
     [
-      new THREE.Vector3(L * 0.5, L * 0.16, L * 0.14),
-      (half, parts, lights) => {
+      SECTION,
+      (half, into) => {
         // the hull ends at 40 % of the length, torn plates reach on to the end of the box
-        section(half, half.x * 0.4, parts, lights);
+        section(half, half.x * 0.4, into, false);
         for (let k = 0; k < 9; k++) {
           const length = r.range(0.2, 0.6) * half.x;
-          parts.push(block(length, r.range(10, 30), half.z * r.range(0.4, 1.4), half.x * 0.4 + length / 2, r.range(-0.75, 0.75) * half.y, r.range(-0.3, 0.3) * half.z));
+          into.parts.push(block(length, r.range(10, 30), half.z * r.range(0.4, 1.4), half.x * 0.4 + length / 2, r.range(-0.75, 0.75) * half.y, r.range(-0.3, 0.3) * half.z));
         }
       },
     ],
     [
       new THREE.Vector3(L * 0.22, L * 0.2, L * 0.2),
-      (half, parts) => {
+      (half, { parts }) => {
         parts.push(block(half.x * 1.2, half.y * 2, half.z * 2, -half.x * 0.4));
         // three nozzles out of the back, cold
         for (const [y, z] of [[0.45, 0], [-0.3, 0.45], [-0.3, -0.45]]) {
@@ -267,33 +317,46 @@ export function hullSet(): TemplateSet {
     ],
     [
       new THREE.Vector3(L * 0.12, L * 0.3, L * 0.1),
-      (half, parts, lights) => {
-        // stepped levels, a bridge on top, and a mast
+      (half, { parts, lights, beacons }) => {
+        // stepped levels, a bridge on top, and a mast with a beacon
         for (let level = 0; level < 4; level++) {
           const shrink = 1 - level * 0.18;
           parts.push(block(half.x * 2 * shrink, half.y * 0.4, half.z * 2 * shrink, 0, -half.y + half.y * 0.2 + level * half.y * 0.4));
           lights.push(block(half.x * 2 * shrink + 2, 8, half.z * 1.2 * shrink, 0, -half.y + half.y * 0.32 + level * half.y * 0.4));
         }
         parts.push(block(16, half.y * 0.4, 16, 0, half.y * 0.8));
+        beacons.push(0, half.y - 4, 0);
       },
     ],
     [
       new THREE.Vector3(L * 0.5, L * 0.04, L * 0.04),
-      (half, parts) => {
+      (half, { parts }) => {
         // a truss: four rails and their struts
         for (const [y, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) parts.push(block(half.x * 2, 14, 14, 0, y * (half.y - 7), z * (half.z - 7)));
         for (let x = -half.x; x <= half.x; x += half.x / 10) parts.push(block(10, half.y * 2, 10, x), block(10, 10, half.z * 2, x));
       },
     ],
+    [SECTION, painted(5)],
+    [SECTION, painted(6)],
+    [SECTION, painted(7)],
   ];
+  const flat = (geometries: THREE.BufferGeometry[]) => mergeGeometries(geometries.map((p) => (p.hasAttribute('uv') ? p.deleteAttribute('uv') : p)));
   const near = shapes.map(([half, build]) => {
-    const parts: THREE.BufferGeometry[] = [];
-    const lights: THREE.BufferGeometry[] = [];
-    build(half, parts, lights);
+    const into: HullParts = { parts: [], livery: [], lights: [], failing: [[], []], glass: [], garden: [], beacons: [], decals: [] };
+    build(half, into);
     const group = new THREE.Group();
-    const body = mergeGeometries(parts.map((p) => p.deleteAttribute('uv')));
-    group.add(new THREE.Mesh(boxUv(body, TILE), half.y < L * 0.05 ? dark : metal));
-    if (lights.length) group.add(new THREE.Mesh(boxUv(mergeGeometries(lights.map((p) => p.deleteAttribute('uv'))), 400), windows));
+    group.add(new THREE.Mesh(boxUv(flat(into.parts), TILE), half.y < L * 0.05 ? dark : metal));
+    if (into.livery.length) group.add(new THREE.Mesh(boxUv(flat(into.livery), TILE), livery));
+    if (into.lights.length) group.add(new THREE.Mesh(boxUv(flat(into.lights), 400), windows.steady));
+    into.failing.forEach((runs, i) => runs.length && group.add(new THREE.Mesh(boxUv(flat(runs), 400), windows.failing[i])));
+    if (into.glass.length) {
+      const pane = new THREE.Mesh(flat(into.glass), glass);
+      pane.userData.shadowless = true;
+      group.add(pane);
+    }
+    if (into.garden.length) group.add(new THREE.Mesh(flat(into.garden), garden));
+    if (into.beacons.length) group.add(beacons(into.beacons, r));
+    for (const decal of into.decals) group.add(decal);
     group.add(collider(half.clone().round(), 1));
     return group;
   });

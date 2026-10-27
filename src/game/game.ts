@@ -46,7 +46,7 @@ import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
 import { ARENAS, arenaById, DEFAULT_ARENA, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
-import { stutterWindows } from '../world/shapes';
+import { animateHull, setHullFrost } from '../world/worldship';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
@@ -572,6 +572,8 @@ const TAIL_GLITCH = 0.15;
  */
 const GRAIN_PATTER = 12;
 const GRAIN_PATTER_SPEED = 2000;
+/** The mist of ice crystals at the derelict's break (see world/derelict) patters on the hull about MIST_PATTER times a second where it is thickest, at GRAIN_PATTER_SPEED and faster. */
+const MIST_PATTER = 15;
 /** The flight school's comet passes the point its drill names this long after the drill sends it (s): 6 km off at its speed. */
 const DRILL_COMET_LEAD = 15;
 
@@ -2111,6 +2113,7 @@ export class Game implements OnlineGame {
     this.space.setSun(arena.sun);
     setGlint(arena.sun.intensity);
     this.landmarks.show(arena);
+    setHullFrost(arena.id === 'derelict');
     // a planet's air: its haze in every shader that draws the world (see view/haze)
     const air = arena.layout.air ?? null;
     this.scene.fog = air ? this.haze.fog : null;
@@ -3190,7 +3193,7 @@ export class Game implements OnlineGame {
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     this.landmarks.update(this.field.clock);
     this.landmarks.follow(this.camera, this.state === 'menu' ? null : this.riding);
-    if (this.venue.id === 'derelict') stutterWindows();
+    if (this.venue.id === 'derelict') animateHull(this.field.clock);
     const well = this.field.well;
     // the scene is drawn into the composer's read buffer, which the lens reads right after
     this.lensing.update(this.camera, this.venue.id === 'hole' && well && !this.bench.has('lens') ? well.position : null, well?.radius ?? 0, this.composer.readBuffer.depthTexture);
@@ -3266,6 +3269,7 @@ export class Game implements OnlineGame {
     this.showFlare(dt);
     this.playComet(dt, me);
     this.ringGrains(me, dt);
+    this.breakMist(me, dt);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -6208,6 +6212,15 @@ export class Game implements OnlineGame {
     const depth = 1 - THREE.MathUtils.smoothstep(Math.abs(me.flight.position.y), 0.8 * layer, layer);
     const pace = Math.min(1, me.flight.velocity.length() / GRAIN_PATTER_SPEED);
     if (Math.random() < dt * GRAIN_PATTER * depth * pace) this.sound.patter(0.5 * depth * pace);
+  }
+
+  /** The own clone flying through the ice crystals escaping at the derelict's break: harmless, but they patter on the hull, the more the thicker the mist and the faster the ship. */
+  private breakMist(me: Ship, dt: number) {
+    if (!me.alive || this.spectating) return;
+    const density = this.landmarks.mistAt(me.flight.position);
+    if (density <= 0) return;
+    const pace = Math.min(1, me.flight.velocity.length() / GRAIN_PATTER_SPEED);
+    if (Math.random() < dt * MIST_PATTER * density * pace) this.sound.patter(0.4 * density * pace);
   }
 
   /** The comet's head strikes a piece of the wreck's hull and shoves it: a flash, sparks and debris where it struck, heard as far as debris is. */

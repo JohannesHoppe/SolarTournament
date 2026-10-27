@@ -1145,8 +1145,9 @@ export const ES: Catalog = {
     '<strong>Corona.</strong> Bajo el resplandor del sol, los radiadores solo disipan más o menos la mitad de su calor: lucha desde las sombras. Cada {stormEvery} s una tormenta solar ciega los sensores durante {stormLength} s.',
   '<strong>Event Horizon.</strong> A black hole in the middle. Within about {noReturn} m no drive gets out; watch the PULL gauge and burn away early.':
     '<strong>Horizonte de sucesos.</strong> Un agujero negro en el centro. A menos de unos {noReturn} m ningún motor consigue salir; vigila el indicador TIRÓN y aléjate a fondo a tiempo.',
-  '<strong>The Derelict.</strong> A broken world ship and nothing else: no rocks, only its hull to hide behind, and lasers only scorch it.':
-    '<strong>El Pecio.</strong> Una nave mundo rota y nada más: sin rocas, solo su casco para esconderte, y los láseres solo lo chamuscan.',
+  '<strong>The Derelict.</strong> A broken world ship and nothing else: no rocks, only its hull to hide behind, and lasers only scorch it. The mist of ice crystals still escaping at the break does no harm, it only patters on the hull. Its dead drift there, frozen; nothing you fire touches them.*':
+    '<strong>El Pecio.</strong> Una nave mundo rota y nada más: sin rocas, solo su casco para esconderte, y los láseres solo lo chamuscan. La niebla de cristales de hielo que aún escapa por la rotura no hace daño, solo repiquetea sobre el casco. Allí flotan sus muertos, congelados; nada de lo que disparas los toca.*',
+  '*They set out together for the stars. Now they watch you die over their grave, darling. Mind them as you pass.': '*Partieron juntos hacia las estrellas. Ahora te ven morir sobre su tumba, cariño. Ten cuidado con ellos al pasar.',
   'Hazards and Alarms': 'Peligros y alarmas',
   'Below the crosshair the flight computer names the worst danger: CAUTION in azure, WARNING in orange, CRITICAL in red with a siren. One line per danger, with an arrow to where it comes from and a countdown where it has one.':
     'Bajo la mira, el ordenador de vuelo nombra el peor peligro: PRECAUCIÓN en azul, ALERTA en naranja, CRÍTICO en rojo con sirena. Una línea por peligro, con una flecha hacia donde viene y una cuenta atrás si la tiene.',
