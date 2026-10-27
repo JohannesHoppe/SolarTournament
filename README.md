@@ -530,7 +530,7 @@ Only the worst alarm sounds; a danger with a beep of its own beeps that instead 
 
 ### Sound
 
-There is no sound in vacuum. Everything the Host hears travels through the clone's hull and sounds muffled: the rumble of the drive, the hiss of the thrusters, the own laser, hits on the own ship, and debris of nearby explosions rattling against the hull. Clean beeps come from the ship's computer: hits, kills, the end of a flip, the alarms. The radio and the static of a disturbed link play in the headset and are not muffled.
+There is no sound in vacuum. Everything the Host hears travels through the clone's hull and sounds muffled: the rumble of the drive, the hiss of the thrusters, the own laser, hits on the own ship, and debris of nearby explosions rattling against the hull. Clean beeps come from the ship's computer: hits, kills, the end of a flip, the alarms. The radio and the static of a disturbed link play in the headset and are not muffled. While the tab is hidden the drive and the thrusters fall silent (an online round runs on without its picture), until the tab is back.
 
 ### Modes
 

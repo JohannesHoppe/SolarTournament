@@ -1118,7 +1118,11 @@ export class Game implements OnlineGame {
     window.addEventListener('resize', () => this.resize());
     // a hidden tab runs no frames: a solo round pauses instead of running out unseen
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden && this.state === 'playing' && !this.online) this.pause();
+      if (!document.hidden) return;
+      // a hidden tab draws no frames, so nothing would turn the drive's roar down: an online
+      // round runs on without the picture, and the drive falls silent until the tab is back
+      this.sound.setEngine(0, 0);
+      if (this.state === 'playing' && !this.online) this.pause();
     });
     this.resize();
     this.showMenu();
