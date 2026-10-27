@@ -3909,13 +3909,54 @@ button.quiet:focus-visible {
   color: var(--tube-orange);
 }
 
-/* the plain truth under the Ministry's words, set as the small print of an ad, in the azure of information */
+/*
+ * The plain truth under the Ministry's words, which no brochure would print: a sticky note
+ * Nicole has slapped onto the page, signed like a reviewer's comment, a little askew. Paper
+ * and ink are the note's own, outside the page's orange and azure.
+ */
 .handbook-small-print {
-  margin: -0.4em 0 1.2em;
-  padding-left: 12px;
-  border-left: 2px solid var(--hud-dim);
-  color: var(--hud);
+  --note-paper: #fff1a6;
+  --note-ink: #2b2410;
+  --note-author: #b3246b;
+  position: relative;
+  width: min(100%, 26rem);
+  margin: -0.5em 0 1.6em auto;
+  padding: 14px 16px 12px;
+  background: var(--note-paper);
+  color: var(--note-ink);
   font-size: 0.85rem;
+  line-height: 1.45;
+  border-radius: 2px 2px 14px 2px;
+  box-shadow: 0 8px 16px rgb(0 0 0 / 45%);
+  transform: rotate(-1.2deg);
+}
+
+.handbook-small-print.askew {
+  margin-right: 1.2rem;
+  transform: rotate(0.9deg);
+}
+
+/* a strip of tape holds it on the page */
+.handbook-small-print::before {
+  content: '';
+  position: absolute;
+  top: -9px;
+  left: 50%;
+  width: 72px;
+  height: 18px;
+  background: rgb(255 255 255 / 30%);
+  transform: translateX(-50%) rotate(-3deg);
+}
+
+.handbook-note-author {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--note-author);
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
 }
 
 .handbook-keys {

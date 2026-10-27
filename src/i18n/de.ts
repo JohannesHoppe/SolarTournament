@@ -971,6 +971,7 @@ export const DE: Catalog = {
   // the Pilot's Handbook (handbook.html) and the links to it
   'Pilot\'s Handbook': 'Piloten-Handbuch',
   'More tactics than any drill: the Pilot\'s Handbook': 'Mehr Taktik als jede Übung: das Piloten-Handbuch',
+  'Note from Nicole': 'Anmerkung von Nicole',
   'Ministry of War · United Solar States': 'Kriegsministerium · Vereinigte Sonnenstaaten',
   'Pilot\'s <span class="neon">Handbook</span>': 'Piloten-<span class="neon">Handbuch</span>',
   'Issued to every Host by order of the Orange President. Read it between deaths: every rule in here is the rule out there, with its numbers.': 'Ausgegeben an jeden Host auf Befehl des Orangen Präsidenten. Lies es zwischen zwei Toden: Jede Regel hier drin ist die Regel da draußen, mit ihren Zahlen.',

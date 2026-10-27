@@ -954,6 +954,7 @@ export const ES: Catalog = {
   // the Pilot's Handbook (handbook.html) and the links to it
   "Pilot's Handbook": 'Manual del piloto',
   "More tactics than any drill: the Pilot's Handbook": 'Más táctica que cualquier ejercicio: el Manual del piloto',
+  'Note from Nicole': 'Nota de Nicole',
   'Ministry of War · United Solar States': 'Ministerio de la Guerra · Estados Solares Unidos',
   'Pilot\'s <span class="neon">Handbook</span>': 'Manual del <span class="neon">piloto</span>',
   'Issued to every Host by order of the Orange President. Read it between deaths: every rule in here is the rule out there, with its numbers.':
