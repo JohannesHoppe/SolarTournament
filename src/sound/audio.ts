@@ -3,7 +3,8 @@
  * through the hull (muffled by a low-pass filter): the own laser, the drive, the thrusters,
  * hits and debris on the own ship. Cockpit beeps from the ship's computer are unfiltered.
  * Inside a planet's air (Jupiter, see world/air) sound carries outside too: the wind roaring
- * past the hull and thunder after lightning, through the hull like the rest.
+ * past the hull, the roar of the plasma around a hull flying hot through it, and thunder after
+ * lightning, through the hull like the rest.
  */
 export class Sound {
   readonly context = new AudioContext();
@@ -13,6 +14,8 @@ export class Sound {
   private readonly thrusterGain = this.context.createGain();
   private readonly windGain = this.context.createGain();
   private readonly windFilter = this.context.createBiquadFilter();
+  private readonly plasmaGain = this.context.createGain();
+  private readonly plasmaFilter = this.context.createBiquadFilter();
   private buffers: Record<string, AudioBuffer | null> = {};
   private loopsStarted = false;
   private whiteNoise: AudioBuffer | null = null;
@@ -29,6 +32,7 @@ export class Sound {
     this.driveGain.gain.value = 0;
     this.thrusterGain.gain.value = 0;
     this.windGain.gain.value = 0;
+    this.plasmaGain.gain.value = 0;
     // Browsers only start audio after a user gesture; for a finger that is its lifting
     // (pointerup, touchend), for a mouse or a key already the press.
     const unlock = () => {
@@ -140,6 +144,19 @@ export class Sound {
   }
 
   /**
+   * The plasma around a hull flying hot through a planet's air (see view/reentry), 0..1: a roar
+   * that swells and brightens with the heating, the hiss of the shock layer over it; `burning`
+   * adds the crackle of the hull's plates ablating, some fifteen ticks a second over a frame of
+   * `dt` seconds, as the dust taps on it (see patter).
+   */
+  setPlasma(strength: number, burning: boolean, dt: number) {
+    const now = this.context.currentTime;
+    this.plasmaGain.gain.setTargetAtTime(strength * strength * 0.9, now, 0.2);
+    this.plasmaFilter.frequency.setTargetAtTime(250 + 650 * strength, now, 0.25);
+    if (burning && Math.random() < dt * 15) this.patter(0.6 + 0.4 * strength);
+  }
+
+  /**
    * Thunder after lightning, `delay` seconds from now (its sound's way through the air), through
    * the hull: a crack when it is `near` (0..1), then a long rolling rumble, `volume` 0..1.
    */
@@ -200,6 +217,25 @@ export class Sound {
     this.windFilter.Q.value = 0.6;
     wind.connect(this.windFilter).connect(this.windGain).connect(this.hull);
     wind.start();
+
+    // the plasma: brown noise's roar and white noise's hiss through a low band that rises with the heat
+    const roar = this.context.createBufferSource();
+    roar.buffer = noise;
+    roar.loop = true;
+    roar.playbackRate.value = 1.6;
+    const sheet = this.context.createBufferSource();
+    sheet.buffer = this.whiteNoise;
+    sheet.loop = true;
+    const sheetGain = this.context.createGain();
+    sheetGain.gain.value = 0.35;
+    this.plasmaFilter.type = 'lowpass';
+    this.plasmaFilter.frequency.value = 250;
+    this.plasmaFilter.Q.value = 1.2;
+    roar.connect(this.plasmaFilter);
+    sheet.connect(sheetGain).connect(this.plasmaFilter);
+    this.plasmaFilter.connect(this.plasmaGain).connect(this.hull);
+    roar.start();
+    sheet.start(0, 1);
   }
 
   private createWhiteNoise(): AudioBuffer {

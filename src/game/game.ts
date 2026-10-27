@@ -39,6 +39,7 @@ import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
 import { airBurn, airHeat, altitudeIn, density, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH } from '../world/air';
 import { Haze, installHaze, skyLight } from '../view/haze';
+import { Reentry } from '../view/reentry';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { Belt, BELT_INNER } from '../world/belt';
 import { COURSE_NAMES, coursesFrom, FlightSchool, RING_RADIUS, SCHOOL_COURSES, type SchoolContext, type SchoolCourse } from './school';
@@ -64,7 +65,7 @@ import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES,
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { touchRing } from '../world/gates';
 import { IMMOVABLE, massOf, type Body } from '../world/bodies';
-import { COMET_SPEED, COMET_WARNING, cometEnd, cometsOf, cometStart, CometView, courseAt, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
+import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, HEAD_RADIUS, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
 import { FlareView } from '../world/flare';
@@ -551,9 +552,12 @@ const COMET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
 /**
  * A comet's shower (see comet.ts) strikes a ship like a laser, armor or drive by where it comes
  * from, unless rock within SHOWER_COVER (units, 300 m) upstream of the ship stands in its way:
- * cover behind an asteroid is the best answer, the armored nose turned into it the next.
+ * cover behind an asteroid is the best answer, the armored nose turned into it the next. Each
+ * piece weighs SHOWER_WEIGHT laser hits: 3 hull on the armor, 0.3 of the thrust in the drive,
+ * so the fourth piece into the drive sends its reactor critical.
  */
 const SHOWER_COVER = 6000;
+const SHOWER_WEIGHT = 1.5;
 /** A bot this close to a comet's route (units, 500 m beyond the swarm's width) as the head nears or the swarm passes flies away from it, sideways. */
 const COMET_DANGER = 10000;
 /**
@@ -580,8 +584,6 @@ const MIST_PATTER = 15;
  */
 const DUST_PATTER = 18;
 const DUST_PATTER_SPEED = 1000;
-/** The flight school's comet passes the point its drill names this long after the drill sends it (s): 6 km off at its speed. */
-const DRILL_COMET_LEAD = 15;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 /** The label of a menu mode button: the text of its first line, without the Enter key. */
@@ -638,11 +640,8 @@ const ramPoint = new THREE.Vector3();
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
 /** The beams of the flight school's gunner: red, the color of danger. */
 const DRILL_GUNNER_COLOR = new THREE.Color(1, 0.2, 0.25);
-/** Axes of the rotation thrusters in ship space, and the lever of each pair as a share of the ship radius: nose and tail for pitch and yaw, the wing tips for roll. */
-const TURN_AXES = ['x', 'y', 'z'] as const;
-const TURN_AXIS = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) };
-const TURN_LEVERS = { x: new THREE.Vector3(0, 0, 0.6), y: new THREE.Vector3(0, 0, 0.6), z: new THREE.Vector3(0.5, 0, 0) };
-const TURN_ENDS = [1, -1];
+/** A nozzle puffing less than this share of its full push shows nothing (see showJets). */
+const JET_SHOWN = 0.05;
 const SCRAPE_COLOR = new THREE.Color(1, 0.7, 0.3);
 /** The sparks of a hit the plating takes: the plating probe's blue. */
 const PLATING_COLOR = new THREE.Color(0.3, 0.57, 1);
@@ -737,6 +736,8 @@ export class Game implements OnlineGame {
   private readonly belt: Belt;
   readonly field: AsteroidField;
   private readonly effects: Effects;
+  /** Ships flying hot through a planet's air: their plasma, glowing hulls and fireballs (see view/reentry). */
+  private readonly reentry: Reentry;
   private readonly replayEffects: Effects;
   private readonly killcam: KillCam;
   private readonly torpedoes: Torpedoes;
@@ -979,12 +980,10 @@ export class Game implements OnlineGame {
   /** The comet of the round as the scene shows it, and on the radar. */
   private readonly cometView = new CometView();
   private readonly cometMark: RadarMark = { position: new THREE.Vector3(), label: t('Comet'), color: '#bfe6ff' };
-  /** The comets of the round (see cometsOf), and of which room, round and arena they are. */
+  /** The comets of the round (see roundComets), and of which room, round, arena and venue they are. */
   private comets: Comet[] = [];
   private cometsOfKey = '';
-  /** The flight school's comet, when a drill sends one. */
-  private drillComet: Comet | null = null;
-  /** The comet the flight computer has warned of, and the one whose shower flies now. */
+  /** The comet the flight computer has warned of while it comes, and the one whose shower flies now. */
   private cometCalled: Comet | null = null;
   /** The comet whose tail the own clone has been told is harmless, and whether it is in a tail now. */
   private tailCalled: Comet | null = null;
@@ -1160,6 +1159,7 @@ export class Game implements OnlineGame {
     this.landmarks = new Landmarks(assets.planets);
     this.graphics = new Graphics(this.renderer, this.bloom, this.space, this.field, this.belt, this.plane, this.landmarks, this.mining, this.lensing, () => this.resize());
     this.effects = new Effects(assets.textures);
+    this.reentry = new Reentry(this.effects);
     // the kill cam fires the beams of its replay in effects of their own
     this.replayEffects = new Effects(assets.textures);
     this.replayEffects.group.visible = false;
@@ -1167,7 +1167,7 @@ export class Game implements OnlineGame {
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
     this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.ghost.root, this.cables.group, this.cometView.root, this.plane.group);
-    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.mining.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
+    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.mining.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group, this.reentry.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
       this.engineLights.push(light);
@@ -2250,7 +2250,9 @@ export class Game implements OnlineGame {
       this.school = null;
       this.schoolContext = null;
     }
-    this.drillComet = null;
+    // the comet called belongs to the round that ends: the next venue's field time starts over
+    this.cometCalled = null;
+    this.tailCalled = null;
   }
 
   /**
@@ -3155,7 +3157,10 @@ export class Game implements OnlineGame {
     }
     // the screen shows the round as the last step left it, once a frame
     if (stepped && this.me && (this.state === 'playing' || (this.state === 'paused' && !!this.online))) this.presentRound();
-    if (this.state !== 'paused' || this.online) this.effects.update(dt);
+    if (this.state !== 'paused' || this.online) {
+      this.reentry.update(dt, this.ships, this.field.air, this.me ? this.subject() : null, this.camera);
+      this.effects.update(dt);
+    }
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
     this.airWeather(dt);
     // the ship on show, while the menu or the hangar shows it
@@ -3481,6 +3486,7 @@ export class Game implements OnlineGame {
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
     this.hud.setKeys(this.input.device);
     this.hud.setStrain(me.alive ? me.strain : 0);
+    this.showJets();
   }
 
   /**
@@ -4344,6 +4350,7 @@ export class Game implements OnlineGame {
       this.space.shade(1, 1, null, null);
       this.background.copy(this.space.background);
       this.sound.setWind(0, 0);
+      this.sound.setPlasma(0, false, dt);
       return;
     }
     const eye = this.camera.position;
@@ -4358,9 +4365,11 @@ export class Game implements OnlineGame {
     const inAir = !!me?.alive && altitudeIn(air, me.flight.position) < 0;
     if (!me || !inAir) {
       this.sound.setWind(0, 0);
+      this.sound.setPlasma(0, false, dt);
       return;
     }
     const speed = me.flight.velocity.length() / MAX_SPEED;
+    this.sound.setPlasma(this.reentry.plasmaOf(me), this.reentry.burning(me), dt);
     this.sound.setWind(Math.min(1, density(altitudeIn(air, me.flight.position)) * speed * speed * WIND_FULL), Math.min(1, speed));
     if (struck) {
       const distance = jupiter.strikePoint.distanceTo(me.flight.position);
@@ -4504,13 +4513,6 @@ export class Game implements OnlineGame {
       },
       get dodges() {
         return game.dodges;
-      },
-      launchComet: (through, direction) => {
-        this.drillComet = through && direction ? makeComet(this.field.clock + DRILL_COMET_LEAD, direction.clone().normalize(), through.clone(), Math.floor(this.time * 1000) + 1, this.field.well) : null;
-      },
-      get cometGone() {
-        const comet = game.drillComet;
-        return !comet || game.field.clock > Math.min(comet.at, comet.swallowed) + (SHOWER_LENGTH + SHOWER_WIDE) / COMET_SPEED;
       },
       spawnProbe: (position, kind) => {
         // a probe of its own each time: one taken is never shown again; it waits where it is
@@ -5365,9 +5367,24 @@ export class Game implements OnlineGame {
     const push = relative.set(direction.x, direction.y, 0).normalize().multiplyScalar(DODGE_SPEED * (0.25 + 0.75 * ship.thrusters));
     ship.flight.velocity.add(push.applyQuaternion(ship.flight.orientation));
     ship.strain = Math.min(1, ship.strain + DODGE_STRAIN);
-    // the gas leaves on the side opposite to the kick
-    const nozzle = ship.toWorld(scratch.set(-direction.x, -direction.y, 0).multiplyScalar(ship.radius * 0.7), scratch);
-    for (let i = 0; i < 6; i++) this.effects.puff(nozzle, aimPoint.copy(push).multiplyScalar(-1.5).add(ship.flight.velocity), ship.radius * 0.25);
+    ship.kickJets(scratch.set(direction.x, direction.y, 0));
+  }
+
+  /**
+   * The puffs of gas from every living ship's firing nozzles (see Ship.fireJets), white-blue and
+   * tiny, laid anew each frame at the nozzles' mouths, so they stay on the hull however it moves.
+   */
+  private showJets() {
+    for (const ship of this.ships) {
+      if (!ship.alive || !ship.root.visible) continue;
+      const { nozzles } = ship.nozzles;
+      for (let i = 0; i < nozzles.length; i++) {
+        const strength = ship.jets[i];
+        if (strength < JET_SHOWN) continue;
+        const mouth = ship.toWorld(nozzles[i].mouth, scratch);
+        this.effects.jet(mouth, relative.copy(nozzles[i].exhaust).applyQuaternion(ship.flight.orientation), strength);
+      }
+    }
   }
 
   /** The drive lights: the first moment of a burn is felt, with a jolt and a thump through the hull. */
@@ -5554,29 +5571,9 @@ export class Game implements OnlineGame {
     } else {
       ship.trailing = false;
     }
-    const rcs = flight.rcs;
-    if (rcs.lengthSq() > 0.01 && Math.random() < dt * 30) {
-      // the exhaust leaves on the side opposite to the push
-      const nozzle = ship.toWorld(scratch.copy(rcs).normalize().multiplyScalar(-ship.radius * 0.7), scratch);
-      relative.copy(rcs).normalize().applyQuaternion(flight.orientation).multiplyScalar(-600).add(flight.velocity);
-      this.effects.puff(nozzle, relative, ship.radius * 0.12);
-    }
-    // rotation thrusters fire in pairs on opposite levers (nose and tail for pitch and yaw,
-    // the wing tips for roll), when a turn speeds up and when it is stopped
-    const turn = flight.turnThrust;
-    for (const k of TURN_AXES) {
-      const thrust = turn[k];
-      if (Math.abs(thrust) < 0.2 || Math.random() > dt * 40 * Math.abs(thrust)) continue;
-      const lever = TURN_LEVERS[k];
-      for (const end of TURN_ENDS) {
-        // a push F = axis × lever at the lever turns the ship about the axis; the gas leaves against F
-        scratch.copy(lever).multiplyScalar(end * ship.radius);
-        relative.copy(TURN_AXIS[k]).cross(scratch).normalize().multiplyScalar(-Math.sign(thrust));
-        const nozzle = ship.toWorld(scratch, scratch);
-        relative.applyQuaternion(flight.orientation).multiplyScalar(500).add(flight.velocity);
-        this.effects.puff(nozzle, relative, ship.radius * 0.08);
-      }
-    }
+    // the maneuvering thrusters' nozzles that push and turn the ship (see ship/thrusters); drawn
+    // once a frame by showJets
+    ship.fireJets(dt, this.time);
     for (const hole of ship.holes) {
       const strength = ship.ventStrength(hole, this.time);
       const position = ship.toWorld(hole.point, scratch);
@@ -5705,7 +5702,7 @@ export class Game implements OnlineGame {
    * A laser beam went through a ship this browser simulates: damage, feedback, destruction.
    * Also called for beams from other peers.
    */
-  applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number, cause: DeathCause = null) {
+  applyLaserHit(ship: Ship, origin: THREE.Vector3, direction: THREE.Vector3, shooter: Ship | null, distance?: number, cause: DeathCause = null, weight = 1) {
     if (shooter && ship.allyOf(shooter)) return;
     // plating (an item) takes a hit into the drive
     // where the beam meets the ship
@@ -5716,7 +5713,7 @@ export class Game implements OnlineGame {
       if (ship.isLocal) this.hud.flashMessage(this.time, ship.plating ? t('Plating holds') : t('Plating gone'), 1.2);
       return;
     }
-    const { status, zone } = ship.laserHit(origin, direction, this.time);
+    const { status, zone } = ship.laserHit(origin, direction, this.time, weight);
     if (status === 'protected') return;
     // a hit into the drive hurts; the armor only scorches
     const serious = zone === 'drive' || zone === 'reactor';
@@ -6161,25 +6158,24 @@ export class Game implements OnlineGame {
   /**
    * The comet of the round (see comet.ts): its route, the warning before it comes, its shower
    * shown at the field time and its head running down the rock in its way. The flight school
-   * sees only the comet its drill sends.
+   * sees none (see roundComets), so nothing there warns of one either.
    */
   private playComet(dt: number, me: Ship) {
     const clock = this.field.clock;
-    let comet = this.drillComet;
-    if (!this.school && this.roundId >= 0) {
-      const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
-      const key = `${seed}.${this.roundId}.${this.venue.id}`;
-      if (key !== this.cometsOfKey) {
-        this.cometsOfKey = key;
-        this.comets = cometsOf(seed, this.roundId, this.field.well);
-      }
-      for (const next of this.comets) if (clock >= cometStart(next) - COMET_WARNING && clock <= cometEnd(next)) comet = next;
+    const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
+    const key = `${seed}.${this.roundId}.${this.venue.id}.${!!this.school}`;
+    if (key !== this.cometsOfKey) {
+      this.cometsOfKey = key;
+      this.comets = roundComets(seed, this.roundId, this.field.well, !!this.school);
     }
+    const comet = cometAt(this.comets, clock);
+    // the alarm follows only the comet that comes now
+    if (!comet) this.cometCalled = null;
     // the warning, once, as the head nears the arena's edge
     if (comet && comet !== this.cometCalled && clock >= comet.edge - COMET_WARNING && clock < comet.at) {
       this.cometCalled = comet;
       this.speaker.say(COMPUTER.comet, 'urgent');
-      if (!this.school) this.radio.announce(pick(ANNOUNCER_COMET), null);
+      this.radio.announce(pick(ANNOUNCER_COMET), null);
       this.hud.flashMessage(this.time, t('Comet inbound · take cover behind a rock, or turn your nose into its shower'), 5);
       this.sound.beep(980, 0.3, 0.2);
     }
@@ -6290,7 +6286,7 @@ export class Game implements OnlineGame {
       // only rock gives cover, haze does not
       if (!this.field.lineOfSight(cometCover.copy(position).addScaledVector(cometCourse, -SHOWER_COVER), position, Infinity)) continue;
       cometRelative.subVectors(cometVelocity, ship.flight.velocity).normalize();
-      this.applyLaserHit(ship, cometPiece, cometRelative, null, undefined, 'shower');
+      this.applyLaserHit(ship, cometPiece, cometRelative, null, undefined, 'shower', SHOWER_WEIGHT);
       if (!ship.alive) return;
     }
   }

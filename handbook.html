@@ -108,6 +108,61 @@
     <section id="flying">
       <h2 data-i18n>The Doctrine of Flight</h2>
       <p data-i18n>Out there nothing slows you down. The main drive pushes along the nose with {drive} g: the speed limit of {limit} m/s is two seconds of burn away, and so is a stop. Let go, and you drift forever.</p>
+      <h3 id="thrusters" data-i18n>The maneuvering thrusters</h3>
+      <p data-i18n>Besides the main drive your ship carries {nozzles} small nozzles: {quads} clusters of {quadNozzles}, one at each corner of the hull, fore and aft on both flanks. Each nozzle of a cluster points another way: out from the flank, up, down, and along the ship. Gas leaving a nozzle pushes the ship the other way.</p>
+      <p data-i18n>Nozzles on one side firing together move the ship without turning it: both clusters of the right flank puff, and the ship slides left, with up to {thrust} g. Two nozzles at opposite corners pushing opposite ways turn the ship about its center without moving it, up to {turnRate}° a second, reached in {turnReach} s; the other two stop the turn, because out there nothing else does. The flight computer picks the nozzles for you. Only the main drive pushes harder, and only forward.</p>
+      <figure class="thrusters" aria-label="The maneuvering thrusters at work, seen from above" data-i18n-attr="aria-label">
+        <svg class="thrust-defs" aria-hidden="true">
+          <defs>
+            <radialGradient id="thrust-gas" cx="0.2" cy="0.5" r="0.8">
+              <stop offset="0" stop-color="#fff" />
+              <stop offset="0.4" stop-color="#cfe0ff" stop-opacity="0.7" />
+              <stop offset="1" stop-color="#4d91ff" stop-opacity="0" />
+            </radialGradient>
+            <path id="thrust-puff" d="M0-2.5 26-11Q38 0 26 11L0 2.5Z" fill="url(#thrust-gas)" />
+            <g id="thrust-hull">
+              <path d="M0-70 11-42 17 56H-17L-11-42ZM17 4 66 0V30L17 32ZM-17 4-66 0V30L-17 32ZM66-24H74V62H66ZM-66-24H-74V62H-66ZM18 14H29V64H18ZM-18 14H-29V64H-18Z" />
+              <path class="thrust-quad" d="M12.5-39.5h7v7h-7ZM-19.5-39.5h7v7h-7ZM29.5 46.5h7v7h-7ZM-36.5 46.5h7v7h-7ZM19.5-36h3M-19.5-36h-3M16-39.5v-3M-16-39.5v-3M36.5 50h3M-36.5 50h-3M33 53.5v3M-33 53.5v3" />
+            </g>
+          </defs>
+        </svg>
+        <div class="thrust-phase">
+          <svg viewBox="-150 -100 300 228" aria-hidden="true">
+            <use class="thrust-ghost" href="#thrust-hull" /><path class="thrust-track" d="M0 0H-44" />
+            <use class="thrust-puff" href="#thrust-puff" x="22.5" y="-36" /><use class="thrust-puff" href="#thrust-puff" x="39.5" y="50" />
+            <g class="thrust-ship thrust-left"><use href="#thrust-hull" /></g>
+            <g transform="rotate(180)"><use class="thrust-stop" href="#thrust-puff" x="66.5" y="36" /><use class="thrust-stop" href="#thrust-puff" x="83.5" y="-50" /></g>
+          </svg>
+          <p class="thrust-caption" data-i18n>Slide left: the right flank puffs, the ship slides, the left flank stops it.</p>
+        </div>
+        <div class="thrust-phase">
+          <svg viewBox="-150 -100 300 228" aria-hidden="true">
+            <use class="thrust-ghost" href="#thrust-hull" /><path class="thrust-track" d="M0 0H44" />
+            <g transform="rotate(180)"><use class="thrust-puff" href="#thrust-puff" x="22.5" y="36" /><use class="thrust-puff" href="#thrust-puff" x="39.5" y="-50" /></g>
+            <g class="thrust-ship thrust-right"><use href="#thrust-hull" /></g>
+            <use class="thrust-stop" href="#thrust-puff" x="66.5" y="-36" /><use class="thrust-stop" href="#thrust-puff" x="83.5" y="50" />
+          </svg>
+          <p class="thrust-caption" data-i18n>Slide right: the left flank puffs, the ship slides, the right flank stops it.</p>
+        </div>
+        <div class="thrust-phase">
+          <svg viewBox="-150 -100 300 228" aria-hidden="true">
+            <use class="thrust-ghost" href="#thrust-hull" /><path class="thrust-track" d="M0 0V28" />
+            <g transform="rotate(-90)"><use class="thrust-puff" href="#thrust-puff" x="42.5" y="-16" /><use class="thrust-puff" href="#thrust-puff" x="42.5" y="16" /></g>
+            <g class="thrust-ship thrust-back"><use href="#thrust-hull" /></g>
+            <g transform="rotate(90)"><use class="thrust-stop" href="#thrust-puff" x="84.5" y="-33" /><use class="thrust-stop" href="#thrust-puff" x="84.5" y="33" /></g>
+          </svg>
+          <p class="thrust-caption" data-i18n>Back: the front clusters puff forward, the ship backs off, the rear ones stop it.</p>
+        </div>
+        <div class="thrust-phase">
+          <svg viewBox="-150 -100 300 228" aria-hidden="true">
+            <use class="thrust-ghost" href="#thrust-hull" /><path class="thrust-track" d="M0-80A80 80 0 0 0-51.4-61.3" />
+            <use class="thrust-puff" href="#thrust-puff" x="22.5" y="-36" /><g transform="rotate(180)"><use class="thrust-puff" href="#thrust-puff" x="39.5" y="-50" /></g>
+            <g class="thrust-ship thrust-turn"><use href="#thrust-hull" /></g>
+            <g transform="rotate(-40)"><use class="thrust-stop" href="#thrust-puff" x="39.5" y="50" /><g transform="rotate(180)"><use class="thrust-stop" href="#thrust-puff" x="22.5" y="36" /></g></g>
+          </svg>
+          <p class="thrust-caption" data-i18n>Turn: two opposite corners puff, the ship turns on the spot, the other two stop it.</p>
+        </div>
+      </figure>
       <h3 id="autopilot" data-i18n>The autopilot</h3>
       <p data-i18n>Every round starts with the autopilot on: the ship flies where it points. Turn the nose, and the flight computer brings your flight round behind it with thrusters and drive; the crosshair is where you fly and where you shoot. At speed the flight follows slowly, so the nose waits for it: at the speed limit it leads by at most {lead}°, and the flight is back within {onNose}° of the nose {settle} s after you stop turning. The hardest turn at the speed limit is a circle of about {turn} m radius, and the drive only helps while you hold it, or at the limit: coasting below it, a hard turn costs speed. To turn about fast, brake first.</p>
       <h3 id="free-drift" data-i18n>Free drift</h3>
@@ -237,7 +292,7 @@
       <h3 data-i18n>Impact</h3>
       <p data-i18n>IMPACT means your course hits something sooner than you could flip and brake. Turn or brake now. Below {impactSafe} m/s a rock only scratches the paint; at about {impactKill} m/s it wrecks the ship.</p>
       <h3 id="comets" data-i18n>Comets</h3>
-      <p data-i18n>COMET INBOUND comes {cometWarning} s before a comet reaches the arena. Its head destroys whatever it meets. Its two tails, pointing away from the sun, are only dust and gas and harm nobody. The danger is the shower that glints orange along its route behind the head: every piece strikes like a laser beam. Get into the lee of a rock, or turn your armored nose into the shower.</p>
+      <p data-i18n>COMET INBOUND comes {cometWarning} s before a comet reaches the arena. Its head destroys whatever it meets. Its two tails, pointing away from the sun, are only dust and gas and harm nobody. The danger is the shower that glints orange along its route behind the head: every piece strikes half again as hard as a laser beam. Get into the lee of a rock, or turn your armored nose into the shower.</p>
       <h3 id="wells" data-i18n>Gravity wells</h3>
       <p data-i18n>Near the black hole and over Jupiter the PULL gauge shows how much of your drive it would take to get out: CAUTION from {wellCaution} %, WARNING from {wellWarning} %, CRITICAL from {wellCritical} %, and when it would take all of it, NO RETURN. Burn away early: falling, the gauge climbs fast. The speed limit holds only against your own drive; gravity pulls you past {limit} m/s.</p>
       <h3 id="air" data-i18n>In Jupiter's clouds</h3>

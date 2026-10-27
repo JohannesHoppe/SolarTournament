@@ -42,30 +42,20 @@ const particleFragment = /* glsl */ `
 `;
 
 /**
- * All particles of one texture live in a single buffer and render with one draw call.
- * Each particle has position, velocity, size, color and a lifetime after which it is recycled.
- * The living particles are packed at the front of the buffers (a dying one takes the last
- * one's place; the blending is additive, so their order does not matter), and only they are
- * drawn and uploaded. When all slots are in use, a new particle replaces the slots in turn.
+ * Points of one texture in a single buffer, drawn with one draw call: where each is, its size in
+ * the world and its color with its brightness. Only the first `count` are drawn and uploaded.
  */
-class ParticleSystem {
+class PointCloud {
   readonly points: THREE.Points;
-  private readonly position = new Float32Array(PARTICLE_CAPACITY * 3);
-  private readonly velocity = new Float32Array(PARTICLE_CAPACITY * 3);
-  private readonly size = new Float32Array(PARTICLE_CAPACITY);
-  private readonly startSize = new Float32Array(PARTICLE_CAPACITY);
-  private readonly endSize = new Float32Array(PARTICLE_CAPACITY);
-  private readonly tint = new Float32Array(PARTICLE_CAPACITY * 4);
-  private readonly color = new Float32Array(PARTICLE_CAPACITY * 3);
-  private readonly age = new Float32Array(PARTICLE_CAPACITY);
-  private readonly life = new Float32Array(PARTICLE_CAPACITY);
-  /** The slot a new particle takes when all are in use. */
-  private next = 0;
-  /** Particles alive: the first `live` slots. */
-  private live = 0;
+  protected readonly position: Float32Array;
+  protected readonly size: Float32Array;
+  protected readonly tint: Float32Array;
   private readonly material: THREE.ShaderMaterial;
 
-  constructor(texture: THREE.Texture) {
+  constructor(texture: THREE.Texture, capacity: number) {
+    this.position = new Float32Array(capacity * 3);
+    this.size = new Float32Array(capacity);
+    this.tint = new Float32Array(capacity * 4);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(this.position, 3).setUsage(THREE.DynamicDrawUsage));
     geometry.setAttribute('size', new THREE.BufferAttribute(this.size, 1).setUsage(THREE.DynamicDrawUsage));
@@ -90,6 +80,48 @@ class ParticleSystem {
     this.material.uniforms.pixelScale.value = heightPx / (2 * Math.tan(THREE.MathUtils.degToRad(fovDeg) / 2));
   }
 
+  /** Nothing drawn now, and nothing to draw: the buffers on the GPU need nothing. */
+  protected idle(count: number) {
+    return count === 0 && this.points.geometry.drawRange.count === 0;
+  }
+
+  /** Draws the first `count` points, uploading only them. */
+  protected upload(count: number) {
+    const geometry = this.points.geometry;
+    geometry.setDrawRange(0, count);
+    for (const [name, size] of [['position', 3], ['size', 1], ['tint', 4]] as const) {
+      const attribute = geometry.attributes[name] as THREE.BufferAttribute;
+      attribute.clearUpdateRanges();
+      if (count === 0) continue;
+      attribute.addUpdateRange(0, count * size);
+      attribute.needsUpdate = true;
+    }
+  }
+}
+
+/**
+ * All particles of one texture live in a single buffer and render with one draw call.
+ * Each particle has position, velocity, size, color and a lifetime after which it is recycled.
+ * The living particles are packed at the front of the buffers (a dying one takes the last
+ * one's place; the blending is additive, so their order does not matter), and only they are
+ * drawn and uploaded. When all slots are in use, a new particle replaces the slots in turn.
+ */
+class ParticleSystem extends PointCloud {
+  private readonly velocity = new Float32Array(PARTICLE_CAPACITY * 3);
+  private readonly startSize = new Float32Array(PARTICLE_CAPACITY);
+  private readonly endSize = new Float32Array(PARTICLE_CAPACITY);
+  private readonly color = new Float32Array(PARTICLE_CAPACITY * 3);
+  private readonly age = new Float32Array(PARTICLE_CAPACITY);
+  private readonly life = new Float32Array(PARTICLE_CAPACITY);
+  /** The slot a new particle takes when all are in use. */
+  private next = 0;
+  /** Particles alive: the first `live` slots. */
+  private live = 0;
+
+  constructor(texture: THREE.Texture) {
+    super(texture, PARTICLE_CAPACITY);
+  }
+
   emit(position: THREE.Vector3, velocity: THREE.Vector3, life: number, startSize: number, endSize: number, color: THREE.Color) {
     if (particleShare < 1 && Math.random() >= particleShare) return;
     let i: number;
@@ -111,9 +143,7 @@ class ParticleSystem {
   }
 
   update(dt: number) {
-    const geometry = this.points.geometry;
-    // nothing alive: nothing is drawn, the buffers on the GPU need nothing
-    if (this.live === 0 && geometry.drawRange.count === 0) return;
+    if (this.idle(this.live)) return;
     // backwards, so the particle that takes a dying one's place has been moved already
     for (let i = this.live - 1; i >= 0; i--) {
       this.age[i] += dt;
@@ -130,14 +160,7 @@ class ParticleSystem {
       this.tint[i * 4 + 3] = t < 0.1 ? t / 0.1 : 1 - (t - 0.1) / 0.9;
     }
     if (this.next >= this.live) this.next = 0;
-    geometry.setDrawRange(0, this.live);
-    for (const [name, size] of [['position', 3], ['size', 1], ['tint', 4]] as const) {
-      const attribute = geometry.attributes[name] as THREE.BufferAttribute;
-      attribute.clearUpdateRanges();
-      if (this.live === 0) continue;
-      attribute.addUpdateRange(0, this.live * size);
-      attribute.needsUpdate = true;
-    }
+    this.upload(this.live);
   }
 
   /** Moves the particle in slot `from` to slot `to`. */
@@ -152,6 +175,54 @@ class ParticleSystem {
     this.endSize[to] = this.endSize[from];
     this.age[to] = this.age[from];
     this.life[to] = this.life[from];
+  }
+}
+
+/** Points of the thrusters' puffs drawn at once (see Jets): sixteen nozzles of every ship, a plume of three points each. */
+const JET_CAPACITY = 2048;
+/** A puff at full push: how far its gas reaches from the nozzle's mouth and how wide it spreads there (units, 5.5 m and 4 m). */
+const JET_LENGTH = 110;
+const JET_WIDTH = 80;
+/** The gas of a maneuvering thruster: cold, white-blue, added on top of whatever is behind it. */
+const JET_COLOR = new THREE.Color(0.7, 0.85, 1.25);
+
+/** Points a puff is drawn with by the share of particles (see setParticleShare): a plume of three on a full picture, one on the cheapest. */
+function jetPoints() {
+  return particleShare >= 0.75 ? 3 : particleShare >= 0.4 ? 2 : 1;
+}
+
+/**
+ * The maneuvering thrusters' puffs of gas: laid anew every frame at the mouths of the nozzles
+ * that fire (see Game.showJets), a short plume of points widening away from the mouth, so they
+ * sit on the hull however fast it flies and never flicker. One draw call for all ships, with the
+ * particles' shaders.
+ */
+class Jets extends PointCloud {
+  private count = 0;
+
+  constructor(texture: THREE.Texture) {
+    super(texture, JET_CAPACITY);
+  }
+
+  /** A puff at `mouth`, its gas leaving along `exhaust` (unit, world), at `strength` of the nozzle's full push. */
+  add(mouth: THREE.Vector3, exhaust: THREE.Vector3, strength: number) {
+    const n = jetPoints();
+    // fewer points glow brighter each, so the puff keeps its light on a cheaper picture
+    const light = strength * Math.sqrt(3 / n);
+    for (let j = 0; j < n && this.count < JET_CAPACITY; j++) {
+      const along = (j + 0.5) / n;
+      const i = this.count++;
+      scratch.copy(mouth).addScaledVector(exhaust, along * JET_LENGTH * (0.4 + 0.6 * strength)).toArray(this.position, i * 3);
+      this.size[i] = JET_WIDTH * (0.3 + 0.7 * along) * (0.5 + 0.5 * strength);
+      const fade = light * (1 - 0.6 * along);
+      this.tint.set([JET_COLOR.r, JET_COLOR.g, JET_COLOR.b, fade], i * 4);
+    }
+  }
+
+  /** Draws the puffs laid since the last frame, and starts the next frame's. */
+  update() {
+    if (!this.idle(this.count)) this.upload(this.count);
+    this.count = 0;
   }
 }
 
@@ -171,17 +242,23 @@ export class Effects {
   readonly group = new THREE.Group();
   private readonly fire: ParticleSystem;
   private readonly smoke: ParticleSystem;
+  private readonly jets: Jets;
   private readonly beams: Beam[] = [];
 
-  constructor(textures: { smoke: THREE.Texture; spark: THREE.Texture }) {
+  constructor(textures: { smoke: THREE.Texture; spark: THREE.Texture; gas: THREE.Texture }) {
     this.fire = new ParticleSystem(textures.spark);
     this.smoke = new ParticleSystem(textures.smoke);
-    this.group.add(this.smoke.points, this.fire.points);
+    this.jets = new Jets(textures.gas);
+    this.group.add(this.smoke.points, this.jets.points, this.fire.points);
   }
 
   setViewport(heightPx: number, fovDeg: number) {
-    this.fire.setViewport(heightPx, fovDeg);
-    this.smoke.setViewport(heightPx, fovDeg);
+    for (const cloud of [this.fire, this.smoke, this.jets]) cloud.setViewport(heightPx, fovDeg);
+  }
+
+  /** A maneuvering thruster's puff this frame (see Jets): at `mouth`, its gas leaving along `exhaust` (unit, world), at `strength` of its push. */
+  jet(mouth: THREE.Vector3, exhaust: THREE.Vector3, strength: number) {
+    this.jets.add(mouth, exhaust, strength);
   }
 
   explosion(center: THREE.Vector3, radius: number, drift: THREE.Vector3) {
@@ -205,7 +282,7 @@ export class Effects {
     }
   }
 
-  /** Thruster exhaust or venting atmosphere: a short, pale puff. */
+  /** Venting atmosphere or a torpedo's exhaust: a short, pale puff. */
   puff(position: THREE.Vector3, velocity: THREE.Vector3, size: number) {
     this.smoke.emit(position, velocity, 0.35 + Math.random() * 0.2, size, size * 3, VAPOR);
   }
@@ -213,6 +290,16 @@ export class Effects {
   /** An ember blown off a solar flare's front, drifting with `velocity` as it cools. */
   ember(position: THREE.Vector3, velocity: THREE.Vector3, size: number) {
     this.fire.emit(position, velocity, 1.5 + Math.random() * 1.5, size, size * 0.2, FIRE);
+  }
+
+  /** A glowing particle of any kind (plasma, a burning flake): additive, `size` growing to `endSize` over `life` seconds. */
+  glow(position: THREE.Vector3, velocity: THREE.Vector3, life: number, size: number, endSize: number, color: THREE.Color) {
+    this.fire.emit(position, velocity, life, size, endSize, color);
+  }
+
+  /** A puff of smoke of any color (soot, a charred flake). */
+  soot(position: THREE.Vector3, velocity: THREE.Vector3, life: number, size: number, endSize: number, color: THREE.Color) {
+    this.smoke.emit(position, velocity, life, size, endSize, color);
   }
 
   /** Rock splinters and dust where a laser hits an asteroid. */
@@ -259,6 +346,7 @@ export class Effects {
   update(dt: number) {
     this.fire.update(dt);
     this.smoke.update(dt);
+    this.jets.update();
     for (const beam of this.beams) beam.update(dt);
   }
 }

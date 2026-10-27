@@ -153,7 +153,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `game/items.ts` | Items: sponsor probes that show up on the round clock (the same on every browser), what they carry and what each does in a few words, dropped again when a clone dies; a probe on a hook's cable and its flight back to its slot once let go; the nova core goes off in `Game.novaBlast` |
 | `game/torpedoes.ts` | Torpedoes: launch, homing, fuse, shot down by the laser; only the shooter's browser decides where one goes off |
 | `game/comet.ts` | Comets: when a round's comets come and on which route (from room, round and field time), the route bent by the arena's well until it swallows them, the pieces of their shower, the head breaking rock and shoving hull on a grid of field time, and how the scene shows head, coma, the two harmless tails streaming away from the sun (ion and dust) and the shower glinting orange, drawn out and flashing as a well swallows them; how deep a point lies in a tail (felt by the own clone in `Game.cometTail`) |
-| `game/school.ts` | Flight school: five courses played on their own (basic training, racer, gladiator, arsenal, tactician), 53 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
+| `game/school.ts` | Flight school: five courses played on their own (basic training, racer, gladiator, arsenal, tactician), 52 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
 | `game/moments.ts` | The own pilot's big moments for the broadcast (streaks, revenge, supernova, a knockout, a torpedo kill, …): which one, its banner, the crowd's reaction, the announcer's lines, its rank; only show, no score |
 | `game/coach.ts` | Nicole as a coach in real rounds: the briefing of a mode in a Host's first round of it, the tips of the fight the moment they matter, each only a few times; what the browser has heard |
 | `game/sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, how the clone died, the round so far |
@@ -183,7 +183,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `world/rocks.ts` | Generates the 16 asteroid shapes: noise, craters, four kinds of rock; integer hashing and polynomials only, so every browser builds identical shapes; a full-detail shape for collisions, light meshes for drawing with their fine relief baked into an object-space normal map instead of triangles, and a billboard (see view/impostor) |
 | `world/wrecks.ts` | Wreckage of destroyed ships |
 | **`ship/`** | **Ships and who flies them** |
-| `ship/models.ts` | The interceptors' hulls, low poly in code, with the glowing skin over their radiators; collider, drive flame and glows come from the model files |
+| `ship/models.ts` | The interceptors' hulls, low poly in code, with the glowing skin over their radiators and their maneuvering thrusters' clusters; collider, drive flame and glows come from the model files |
+| `ship/thrusters.ts` | The maneuvering thrusters as built: four clusters of four nozzles at the hull's corners; which nozzles push the ship along an axis and which couples turn it, for the puffs on screen and the handbook |
 | `ship/ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat and the radiators glowing with it, the clone's g-force strain, drive animation; a nose on a ship as the sensors see it |
 | `ship/flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`), and the autopilot: the ship flies where its nose points, thrusters and drive taking out the drift across the nose, the nose leading the flight no farther than they bring it back within a second; the hardest turn at a speed |
 | `ship/computer.ts` | The own ship's flight computer besides the autopilot: the upright hold, the brake to rest, the aim assist |
@@ -197,10 +198,11 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/overlay.ts` | A canvas over the whole picture the HUD draws on (the attitude, the motion streaks), sized with the picture's resolution |
 | `view/attitude.ts` | The HUD's attitude on a canvas: horizon line, pitch ladder, bank scale and heading tape, as in a fighter's head-up display |
 | `view/plane.ts` | The reference plane's grid and the drop lines to it, an overlay over everything in the HUD's azure |
-| `view/effects.ts` | Particles (one draw call per texture), laser beams; both fade in a planet's haze |
+| `view/effects.ts` | Particles (one draw call per texture), laser beams; both fade in a planet's haze; the maneuvering thrusters' puffs at their firing nozzles |
 | `view/killcam.ts` | The kill cam: keeps the last seconds of every ship and beam, replays the kill of the own clone in slow motion from behind the shooter |
 | `view/radar.ts` | The radar sphere: everything within 2.5 km around the own ship, ahead and behind, on a canvas |
 | `view/lensing.ts` | The black hole's gravitational lens over the rendered picture |
+| `view/reentry.ts` | A ship flying hot through a planet's air, from its own altitude and speed with the air model (alike for the own ship, bots and other Hosts' ships; looks only): the plasma's shock layer and tail, its trail, the burning hull's glow, sparks and flakes, the fireball of a ship that burns up and its pieces sinking, the plasma licking past the view's edges; two draw calls per hot ship, the rest particles |
 | `view/haze.ts` | A planet's haze in the picture: three.js's fog chunks as a height fog that sums the haze along the view ray as world/air does, in every material's shader while the scene has a fog (only in an arena with air), additive glows only fading; lightning lighting the haze; how much of the sun's and the sky's light reaches the camera |
 | `view/glitch.ts` | Disturbed link to the clone: a shader imitating a corrupted JPEG stream (the look of the REVEALED inscriptions), plus the glitch of the DOM HUD |
 | `view/chase.ts` | The chase camera: field of view, how fast it follows, where it hangs, looking along the nose |
@@ -222,7 +224,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `input/input.ts` | Keyboard, mouse flight (the ship turns towards the visible pointer, its offset from the center is the stick) and gamepad, merges all input into `Controls` |
 | `input/touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |
 | **`sound/`** | **What the pilot hears besides the radio** |
-| `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static, dust pattering on the hull; in a planet's air the wind and thunder from outside |
+| `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static, dust pattering on the hull; in a planet's air the wind, a hot hull's plasma and thunder from outside |
 | `sound/sounds.ts` | Synthesized sound effects: laser, explosion |
 | `sound/speaker.ts` | Nicole, the flight computer's voice: reads out what the screen shows, whole lines from the sprite |
 | **`music/`** | **Radio 2584** |

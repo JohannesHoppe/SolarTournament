@@ -35,6 +35,16 @@ export function sparkTexture(): THREE.CanvasTexture {
   ], 128);
 }
 
+/** A thruster's cold gas: a soft white blob on black for additive blending, without a hot core, tinted where it is drawn (see view/effects, Jets). */
+export function gasTexture(): THREE.CanvasTexture {
+  return radialTexture([
+    [0, '#e6e6e6'],
+    [0.3, '#737373'],
+    [0.65, '#1c1c1c'],
+    [1, '#000000'],
+  ], 64);
+}
+
 /** Particle of smoke and vapor: a lumpy puff made of overlapping soft blobs. */
 export function smokeTexture(): THREE.CanvasTexture {
   const size = 128;

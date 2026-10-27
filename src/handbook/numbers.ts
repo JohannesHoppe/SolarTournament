@@ -1,4 +1,5 @@
-import { gripAt, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, turnRadius } from '../ship/flight';
+import { gripAt, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
+import { NOZZLES, NOZZLES_PER_QUAD, QUADS } from '../ship/thrusters';
 import { COOLING_SHADOW, G, MAX_HULL } from '../ship/ship';
 import { dragAt, reachAt, safeSpeed, SIGHT_DEPTH } from '../world/air';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
@@ -31,6 +32,14 @@ const percent = (share: number) => Math.round(share * 100);
 export const FROM_CODE: Record<string, number> = {
   limit: meters(MAX_SPEED),
   drive: g(MAIN_THRUST),
+  // the maneuvering thrusters: their clusters and nozzles, their push, how fast they turn the
+  // ship (degrees a second) and how soon they reach it (s)
+  quads: QUADS,
+  quadNozzles: NOZZLES_PER_QUAD,
+  nozzles: NOZZLES,
+  thrust: g(RCS_THRUST),
+  turnRate: Math.round((MAX_TURN_RATE * 180) / Math.PI),
+  turnReach: MAX_TURN_RATE / TURN_ACCELERATION,
   // the hardest turn of the autopilot at the speed limit, rounded to 5 m as the README gives it
   turn: Math.round(meters(turnRadius(MAX_SPEED)) / 5) * 5,
   // how far the nose leads the flight at most at the speed limit (degrees), and how soon the flight is back on it (s)

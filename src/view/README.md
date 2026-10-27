@@ -11,7 +11,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `attitude.ts` | Horizon line, pitch ladder, bank scale with its sky pointer and heading tape on a canvas, as in a fighter's head-up display; as sharp as the picture's resolution, drawn anew only when the camera turns |
 | `plane.ts` | The reference plane's polar grid and the drop lines from ships, gates and the waypoint down or up to it: lines over everything, faded with distance, built once |
 | `radar.ts` | The radar sphere on a canvas |
-| `effects.ts` | Particles and laser beams, pooled, fading in a planet's haze; a cheaper picture emits a share of the particles |
+| `effects.ts` | Particles and laser beams, pooled, fading in a planet's haze; a cheaper picture emits a share of the particles; the maneuvering thrusters' puffs, laid anew each frame at the firing nozzles, fewer points on a cheaper picture |
 | `killcam.ts` | Records the last seconds and replays the own clone's death in slow motion, each ship put between the two kept frames around the moment shown (tested in `killcam.test.ts`) |
 | `chase.ts` | The chase camera's field of view, how fast it follows and where it hangs, looking along the nose |
 | `guide.ts` | The racing line: a dashed ribbon with pulses of light, orange in the brake zones |
@@ -21,8 +21,9 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `glitch.ts` | The disturbed link: a corrupted-stream shader and the HUD's glitch |
 | `datamosh.ts` | The clone's death: its last picture rots |
 | `lensing.ts` | The black hole's gravitational lens; a cheaper picture marches fewer steps along each pixel's ray looking for its source |
+| `reentry.ts` | A ship flying hot through a planet's air, from its own altitude and speed (the same for every ship): the shock layer of plasma on the side it flies towards with its tail, the plasma trail, the hull's glow, sparks and flakes once it burns, the fireball of a ship that dies burning and its pieces sinking, the plasma licking past the edges of the view; two draw calls per hot ship, the rest particles of `effects.ts` (tested in `reentry.test.ts`) |
 | `haze.ts` | A planet's haze in the picture: three.js's fog chunks as a height fog summing the haze along each view ray in closed form, as world/air does, in every material's shader while the scene carries a fog (only in an arena with air), glows only fading; lightning lighting it; how much of the sun's and the sky's light reaches the camera |
-| `textures.ts` | Canvas textures: glows, sparks, smoke, and the canvas every texture drawn in code starts from; the running light of the neon trim |
+| `textures.ts` | Canvas textures: glows, sparks, smoke, the thrusters' cold gas, and the canvas every texture drawn in code starts from; the running light of the neon trim |
 | `surfaces.ts` | The surfaces of everything built in code: worn depot paint (and where its lacquer is gone), the world ship's craters and burns, the battleship's polished armor plates, the rings' plating; texture coordinates for flat faces, the reflection map |
 | `lettering.ts` | Paint on a hull: a name and registry in stenciled block letters built from bars (the same on every device), the emblem of the united Earth, a livery stripe, weathered (faded, chipped, scratched, pitted), drawn on a canvas with transparency for a decal |
 | `marks.ts` | The bot or Host mark before a name, the swatch of a pilot's tint beside it, and the star that marks the lead browser in the standings |

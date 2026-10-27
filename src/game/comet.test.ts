@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { COMET_REACH, COMET_SPEED, COMET_WINDOWS, cometEnd, cometsOf, cometStart, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, tailDepth, type Comet } from './comet';
+import { COMET_REACH, COMET_SPEED, COMET_WARNING, COMET_WINDOWS, cometAt, cometEnd, cometsOf, cometStart, roundComets, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, tailDepth, type Comet } from './comet';
 import { SUN_DIRECTION } from '../world/space';
 import { Fleet } from './fleet';
 import { ARENAS } from '../world/arenas';
@@ -61,6 +61,36 @@ describe('the comets of a round', () => {
       }
     }
     expect(seen).toBeGreaterThan(50);
+  });
+
+  it('never come to the flight school, nor outside a round, so nothing there warns of one', () => {
+    const wells = [null, ...ARENAS.map((arena) => arena.layout.well ?? null)];
+    for (let seed = 1; seed < 60; seed++) {
+      for (let round = 0; round < 4; round++) {
+        for (const well of wells) {
+          const comets = roundComets(seed, round, well, true);
+          expect(comets).toEqual([]);
+          for (let clock = 0; clock < 6 * 60; clock += 0.5) expect(cometAt(comets, clock)).toBeNull();
+        }
+      }
+      expect(roundComets(seed, -1, null, false)).toEqual([]);
+    }
+  });
+
+  it('come to a round as cometsOf lays them out, each followed from its warning to the end of its shower and then let go', () => {
+    let seen = 0;
+    for (let seed = 1; seed < 60; seed++) {
+      const comets = roundComets(seed, 1, null, false);
+      expect(comets).toEqual(cometsOf(seed, 1));
+      for (const comet of comets) {
+        seen++;
+        expect(cometAt(comets, cometStart(comet) - COMET_WARNING - 0.1)).not.toBe(comet);
+        expect(cometAt(comets, comet.edge - COMET_WARNING)).toBe(comet);
+        expect(cometAt(comets, comet.at)).toBe(comet);
+        expect(cometAt(comets, cometEnd(comet) + 0.1)).not.toBe(comet);
+      }
+    }
+    expect(seen).toBeGreaterThan(30);
   });
 
   it("dive through the field into Jupiter's depths, coming from above its cloud deck", () => {

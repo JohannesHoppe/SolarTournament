@@ -311,8 +311,6 @@ export const SCHOOL = {
   torpedoCover: 'A torpedo is coming. Do not shoot it this time. Get behind the rock.',
   torpedoCoverHit: 'It got you. Put the rock between you and it. Again.',
   hideInstead: 'Shot down. Nice, but this time hide. Again.',
-  comet: 'A comet, darling, from your right. Its head misses you, its shower will not: a storm of rock. Get behind the rock, or turn your armored nose into it. Never show it your drive.',
-  cometDrive: 'Your drive took the shower. Hide, or face it. Again.',
   exam: 'Final exam, tactician. This bot flies as well as the field. Use everything.',
   tacticianDone: 'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.',
   again: 'Again.',
@@ -364,7 +362,6 @@ export const SCHOOL_PRAISE = {
   bursts: 'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.',
   cover: 'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.',
   torpedoCover: 'Lost you. A seeker that loses its line never finds it again.',
-  comet: 'Still in one piece. The head clears everything in its way, but the shower is what kills.',
   exam: 'A real fight, and you won it. I am so proud of you, darling.',
 } as const;
 
