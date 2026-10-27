@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { colliderRadius, type Assets, type ShipType } from '../assets';
-import { FlightModel, MAIN_THRUST, METERS_PER_UNIT } from './flight';
+import { FlightModel, MAIN_THRUST, METERS_PER_UNIT, RCS_THRUST, TURN_ACCELERATION } from './flight';
+import { firing, NOZZLES, thrustersOf, type Thrusters } from './thrusters';
+import { THRUSTER_LAYOUTS } from './models';
 import { MASS, type Body } from '../world/bodies';
 import { ramDamage, type RamZone } from './impact';
 import type { Controls } from '../input/input';
@@ -119,6 +121,28 @@ const TRIM_BRIGHTNESS = [0, 0.8, 1.25, 1.5];
 /** The running light: pulses on a strip at once, and how many strips' lengths they travel per second. */
 const TRIM_PULSES = 2;
 const TRIM_RUN = 0.5;
+/** Each hull's maneuvering thrusters (see ship/thrusters), where models.ts puts them. */
+const THRUSTERS: Record<ShipType, Thrusters> = {
+  human: thrustersOf(THRUSTER_LAYOUTS.human),
+  alien: thrustersOf(THRUSTER_LAYOUTS.alien),
+  sovereign: thrustersOf(THRUSTER_LAYOUTS.sovereign),
+};
+/** How fast a nozzle's puff follows its firing (1/s): there at once, gone a little slower, so a flight computer's quick corrections do not flicker. */
+const JET_RISE = 40;
+const JET_FALL = 14;
+/** How long the dodge's kick fires its nozzles at full push (s). */
+const JET_KICK = 0.15;
+/**
+ * Another browser's ship: the push and turn of its thrusters read from how its velocity and spin
+ * changed between two states (see applyState), shown only above these shares of their full push
+ * and turn, so the pull of a rock or the network's rounding does not fire them. Ignored after
+ * this long without a state (s).
+ */
+const REMOTE_PUSH_FLOOR = 0.3;
+const REMOTE_TURN_FLOOR = 0.2;
+const REMOTE_JETS_HOLD = 0.3;
+const firingNow = new Float32Array(NOZZLES);
+const jetPush = new THREE.Vector3();
 
 export type Zone = 'reactor' | 'drive' | 'thrusters' | 'armor';
 type DamageStatus ='protected' | 'hit' | 'destroyed';
@@ -203,6 +227,12 @@ export class Ship {
   /** Where the drive's exhaust was laid last frame, and whether the drive was burning then. */
   readonly trailFrom = new THREE.Vector3();
   trailing = false;
+  /** Its maneuvering thrusters, and how hard each nozzle puffs now (0..1, eased, see fireJets). */
+  readonly nozzles: Thrusters;
+  readonly jets = new Float32Array(NOZZLES);
+  /** The dodge's kick in ship space, and how long its nozzles still fire (s). */
+  private readonly kick = new THREE.Vector3();
+  private kickLeft = 0;
   /**
    * Who flies the ship, read from its id, which no Host can choose: a bot, a real Host, or
    * nobody (the flight school's target drone). The HUD marks names with it (see view/marks).
@@ -319,6 +349,7 @@ export class Ship {
     readonly isLocal: boolean,
   ) {
     this.model = assets.ships[type].clone(true);
+    this.nozzles = THRUSTERS[type];
     // Materials are shared between clones; the engine flame and the trim's light animate their own copies.
     const light = new THREE.MeshBasicMaterial({ toneMapped: false });
     this.model.traverse((o) => {
@@ -417,6 +448,8 @@ export class Ship {
 
   spawn(position: THREE.Vector3, orientation: THREE.Quaternion, now: number) {
     this.trailing = false;
+    this.jets.fill(0);
+    this.kickLeft = 0;
     this.protectedUntil = now + SPAWN_PROTECTION;
     this.flight.reset(position, orientation);
     // the move to the spawn point is no flight: collisions and gates do not sweep along it
@@ -504,6 +537,7 @@ export class Ship {
   /** Takes over the state another peer sent for its ship. */
   applyState(state: ShipState, now: number) {
     const r = this.remote;
+    this.readThrusters(state, now - r.at);
     r.position.fromArray(state.p);
     r.velocity.fromArray(state.v);
     r.orientation.fromArray(state.q).normalize();
@@ -542,6 +576,59 @@ export class Ship {
     } else if (!state.a && this.alive) {
       this.alive = false;
       this.root.visible = false;
+    }
+  }
+
+  /**
+   * Another browser's ship, as far as its states show it: its thrusters' push (what changed its
+   * velocity besides the drive along the nose) and turn (what changed its spin) over the `dt`
+   * since the last state, as shares of their full push and turn, into its flight's rcs and
+   * turnThrust for the puffs (see fireJets). A fresh clone or a long gap shows nothing.
+   */
+  private readThrusters(state: ShipState, dt: number) {
+    const f = this.flight;
+    f.rcs.set(0, 0, 0);
+    f.turnThrust.set(0, 0, 0);
+    if (!this.alive || !state.a || dt < 0.01 || dt > REMOTE_JETS_HOLD) return;
+    const r = this.remote;
+    f.toLocalDirection(jetPush.fromArray(state.v).sub(r.velocity).divideScalar(dt), f.rcs);
+    f.rcs.z += MAIN_THRUST * state.th;
+    f.rcs.divideScalar(RCS_THRUST);
+    if (f.rcs.length() < REMOTE_PUSH_FLOOR) f.rcs.set(0, 0, 0);
+    f.rcs.clampLength(0, 1);
+    jetPush.fromArray(state.w).sub(r.spin).divideScalar(dt * TURN_ACCELERATION);
+    for (let k = 0; k < 3; k++) {
+      const share = jetPush.getComponent(k);
+      f.turnThrust.setComponent(k, Math.abs(share) < REMOTE_TURN_FLOOR ? 0 : THREE.MathUtils.clamp(share, -1, 1));
+    }
+  }
+
+  /** The dodge's kick (see Game.thrusterKick) in ship space: its nozzles fire at full push for a moment. */
+  kickJets(direction: THREE.Vector3) {
+    this.kick.copy(direction).normalize();
+    this.kickLeft = JET_KICK;
+  }
+
+  /**
+   * Eases each nozzle's puff towards how hard it fires for the flight's thruster push and turn
+   * (see ship/thrusters), the dodge's kick on top. Another browser's ship holds what its last
+   * state showed only for a moment. Only looks: the flight model reckons with push and turn.
+   */
+  fireJets(dt: number, now: number) {
+    const f = this.flight;
+    if (this.owner !== null && now - this.remote.at > REMOTE_JETS_HOLD) {
+      f.rcs.set(0, 0, 0);
+      f.turnThrust.set(0, 0, 0);
+    }
+    jetPush.copy(f.rcs);
+    if (this.kickLeft > 0) {
+      this.kickLeft -= dt;
+      jetPush.add(this.kick).clampLength(0, 1);
+    }
+    firing(this.nozzles, jetPush, f.turnThrust, firingNow);
+    for (let i = 0; i < NOZZLES; i++) {
+      const target = this.alive ? firingNow[i] : 0;
+      this.jets[i] += (target - this.jets[i]) * (1 - Math.exp(-(target > this.jets[i] ? JET_RISE : JET_FALL) * dt));
     }
   }
 

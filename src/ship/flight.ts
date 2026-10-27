@@ -17,8 +17,8 @@ export const OVERDRIVE_PUSH = 3000;
  * stops where it should; a half turn takes about a second.
  */
 export const MAX_TURN_RATE = 3;
-const MAX_ROLL_RATE = 3.2;
-const TURN_ACCELERATION = 24;
+export const MAX_ROLL_RATE = 3.2;
+export const TURN_ACCELERATION = 24;
 /** How fast the visible drive output follows the thrust command (1/s): the flame is there at once and dies a little slower. */
 const THROTTLE_RISE = 40;
 const THROTTLE_FALL = 12;

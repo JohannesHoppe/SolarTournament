@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { boxUv, lacquer, shine, surfaced, wornSurface, type Wear } from '../view/surfaces';
 import { hazeUniforms } from '../view/haze';
+import { NOZZLE_LENGTH, QUAD_SIZE, quadsOf, thrustersOf, type QuadLayout } from './thrusters';
 
 /**
  * The two interceptors, built in code as low-poly hulls (a few hundred triangles each), shaded
@@ -69,6 +70,42 @@ function mirror(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
 
 /** Both sides of a part. */
 const pair = (geometry: THREE.BufferGeometry) => [geometry, mirror(geometry)];
+
+/** A nozzle's throat and mouth, half their size (units): 35 cm across at the housing, flaring to 60 cm. */
+const THROAT = 3.5;
+const MOUTH = 6;
+const AHEAD = new THREE.Vector3(0, 0, -1);
+
+/**
+ * The maneuvering thrusters of a hull (see ship/thrusters): at each of the layout's four corners
+ * a housing in `housing` paint, its four nozzles flaring out of it in `nozzle` paint.
+ */
+function thrusterQuads(layout: QuadLayout, housing: number, nozzle: number): THREE.BufferGeometry[] {
+  const parts = quadsOf(layout).map((q) => paint(loft(RECTANGLE, { z: q.z + QUAD_SIZE, w: QUAD_SIZE, h: QUAD_SIZE, x: q.x, y: q.y }, { z: q.z - QUAD_SIZE, w: QUAD_SIZE, h: QUAD_SIZE, x: q.x, y: q.y }), housing));
+  const turn = new THREE.Quaternion();
+  for (const { mouth, exhaust } of thrustersOf(layout).nozzles) {
+    // a bell along -z from the housing's face, turned the way its gas leaves
+    const bell = loft(RECTANGLE, { z: 0, w: THROAT, h: THROAT }, { z: -NOZZLE_LENGTH, w: MOUTH, h: MOUTH });
+    const throat = mouth.clone().addScaledVector(exhaust, -NOZZLE_LENGTH);
+    parts.push(paint(bell.applyQuaternion(turn.setFromUnitVectors(AHEAD, exhaust)).translate(throat.x, throat.y, throat.z), nozzle));
+  }
+  return parts;
+}
+
+/**
+ * Where each hull's maneuvering thrusters sit, its right-hand clusters (see ship/thrusters): fore
+ * on the flank of the fuselage behind the nose, aft far back and, where the hull reaches out
+ * there, far out, so the couples that turn the ship have long levers; all near the height of the
+ * ship's center, so a push moves it without turning it.
+ */
+export const THRUSTER_LAYOUTS: Record<'human' | 'alien' | 'sovereign', QuadLayout> = {
+  // the fuselage's flank behind the canopy; the outside of the drive nacelles
+  human: { fore: new THREE.Vector3(58, 0, -150), aft: new THREE.Vector3(127, 2, 200) },
+  // the dart's flank ahead of its widest and near its stern, above the drive pods
+  alien: { fore: new THREE.Vector3(48, -5, -120), aft: new THREE.Vector3(52, -8, 330) },
+  // the arrowhead's flank behind the canards; the outside of the gold wing tips
+  sovereign: { fore: new THREE.Vector3(53, 0, -100), aft: new THREE.Vector3(298, 8, 200) },
+};
 
 /** A new root for a hull: the model file's collider, drive flame and glows, where they were. */
 function keepEngine(original: THREE.Object3D): THREE.Group {
@@ -323,6 +360,7 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...[-18, -6, 6, 18].map((y) => paint(loft(RECTANGLE, { z: 266, w: 46, h: 2.5, y }, { z: 214, w: 46, h: 2.5, y }), STEEL)),
     paint(loft(RECTANGLE, { z: 244, w: 56, h: 6, y: 48 }, { z: 214, w: 50, h: 6, y: 46 }), OLIVE_DARK),
     ...[-36, -12, 12, 36].map((x) => paint(loft(RECTANGLE, { z: 246, w: 6, h: 2, x, y: 54 }, { z: 218, w: 6, h: 2, x, y: 52 }), GUNMETAL)),
+    ...thrusterQuads(THRUSTER_LAYOUTS.human, GUNMETAL, STEEL),
   ];
   const lights: THREE.BufferGeometry[] = [
     // position lights at the fins' tops and on the stern
@@ -364,6 +402,7 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
     // the drive nacelles, gold, with their nozzles where the flames burn
     ...pair(paint(loft(OCTAGON, { z: 250, w: 28, h: 24, x: 87, y: 2 }, { z: 40, w: 18, h: 16, x: 70, y: 4 }), GOLD)),
     ...pair(paint(loft(OCTAGON, { z: 275, w: 26, h: 22, x: 87, y: 2 }, { z: 250, w: 28, h: 24, x: 87, y: 2 }), GOLD_DARK)),
+    ...thrusterQuads(THRUSTER_LAYOUTS.sovereign, IVORY, GOLD_DARK),
   ];
   // the trim high on the arrowhead's flanks, above the wings and the nacelles, and across its stern
   const trim = lightStrips(flankLine(SOVEREIGN_BODY, 0.5, -340, 250), { width: 100, y: 20, z: 250 });
@@ -397,6 +436,7 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...pair(paint(loft(BLADE, { z: 380, w: 14, h: 26, x: 104, y: -44 }, { z: 40, w: 8, h: 10, x: 150, y: -60 }), VOID_SHEEN)),
     ...pair(paint(loft(BLADE, { z: 200, w: 70, h: 10, x: 60, y: -30 }, { z: 0, w: 40, h: 6, x: 60, y: -20 }), VOID)),
     ...pair(paint(loft(OCTAGON, { z: 410, w: 18, h: 18, x: 104, y: -44 }, { z: 280, w: 16, h: 16, x: 104, y: -44 }), VOID)),
+    ...thrusterQuads(THRUSTER_LAYOUTS.alien, VOID_SHEEN, VOID),
   ];
   const veins: THREE.BufferGeometry[] = [
     // along the body and up the blade: the life support's glow

@@ -630,11 +630,8 @@ const ramPoint = new THREE.Vector3();
 const VENT_COLOR = new THREE.Color(1, 0.6, 0.25);
 /** The beams of the flight school's gunner: red, the color of danger. */
 const DRILL_GUNNER_COLOR = new THREE.Color(1, 0.2, 0.25);
-/** Axes of the rotation thrusters in ship space, and the lever of each pair as a share of the ship radius: nose and tail for pitch and yaw, the wing tips for roll. */
-const TURN_AXES = ['x', 'y', 'z'] as const;
-const TURN_AXIS = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) };
-const TURN_LEVERS = { x: new THREE.Vector3(0, 0, 0.6), y: new THREE.Vector3(0, 0, 0.6), z: new THREE.Vector3(0.5, 0, 0) };
-const TURN_ENDS = [1, -1];
+/** A nozzle puffing less than this share of its full push shows nothing (see showJets). */
+const JET_SHOWN = 0.05;
 const SCRAPE_COLOR = new THREE.Color(1, 0.7, 0.3);
 /** The sparks of a hit the plating takes: the plating probe's blue. */
 const PLATING_COLOR = new THREE.Color(0.3, 0.57, 1);
@@ -3459,6 +3456,7 @@ export class Game implements OnlineGame {
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
     this.hud.setKeys(this.input.device);
     this.hud.setStrain(me.alive ? me.strain : 0);
+    this.showJets();
   }
 
   /**
@@ -5343,9 +5341,24 @@ export class Game implements OnlineGame {
     const push = relative.set(direction.x, direction.y, 0).normalize().multiplyScalar(DODGE_SPEED * (0.25 + 0.75 * ship.thrusters));
     ship.flight.velocity.add(push.applyQuaternion(ship.flight.orientation));
     ship.strain = Math.min(1, ship.strain + DODGE_STRAIN);
-    // the gas leaves on the side opposite to the kick
-    const nozzle = ship.toWorld(scratch.set(-direction.x, -direction.y, 0).multiplyScalar(ship.radius * 0.7), scratch);
-    for (let i = 0; i < 6; i++) this.effects.puff(nozzle, aimPoint.copy(push).multiplyScalar(-1.5).add(ship.flight.velocity), ship.radius * 0.25);
+    ship.kickJets(scratch.set(direction.x, direction.y, 0));
+  }
+
+  /**
+   * The puffs of gas from every living ship's firing nozzles (see Ship.fireJets), white-blue and
+   * tiny, laid anew each frame at the nozzles' mouths, so they stay on the hull however it moves.
+   */
+  private showJets() {
+    for (const ship of this.ships) {
+      if (!ship.alive || !ship.root.visible) continue;
+      const { nozzles } = ship.nozzles;
+      for (let i = 0; i < nozzles.length; i++) {
+        const strength = ship.jets[i];
+        if (strength < JET_SHOWN) continue;
+        const mouth = ship.toWorld(nozzles[i].mouth, scratch);
+        this.effects.jet(mouth, relative.copy(nozzles[i].exhaust).applyQuaternion(ship.flight.orientation), strength);
+      }
+    }
   }
 
   /** The drive lights: the first moment of a burn is felt, with a jolt and a thump through the hull. */
@@ -5532,29 +5545,9 @@ export class Game implements OnlineGame {
     } else {
       ship.trailing = false;
     }
-    const rcs = flight.rcs;
-    if (rcs.lengthSq() > 0.01 && Math.random() < dt * 30) {
-      // the exhaust leaves on the side opposite to the push
-      const nozzle = ship.toWorld(scratch.copy(rcs).normalize().multiplyScalar(-ship.radius * 0.7), scratch);
-      relative.copy(rcs).normalize().applyQuaternion(flight.orientation).multiplyScalar(-600).add(flight.velocity);
-      this.effects.puff(nozzle, relative, ship.radius * 0.12);
-    }
-    // rotation thrusters fire in pairs on opposite levers (nose and tail for pitch and yaw,
-    // the wing tips for roll), when a turn speeds up and when it is stopped
-    const turn = flight.turnThrust;
-    for (const k of TURN_AXES) {
-      const thrust = turn[k];
-      if (Math.abs(thrust) < 0.2 || Math.random() > dt * 40 * Math.abs(thrust)) continue;
-      const lever = TURN_LEVERS[k];
-      for (const end of TURN_ENDS) {
-        // a push F = axis × lever at the lever turns the ship about the axis; the gas leaves against F
-        scratch.copy(lever).multiplyScalar(end * ship.radius);
-        relative.copy(TURN_AXIS[k]).cross(scratch).normalize().multiplyScalar(-Math.sign(thrust));
-        const nozzle = ship.toWorld(scratch, scratch);
-        relative.applyQuaternion(flight.orientation).multiplyScalar(500).add(flight.velocity);
-        this.effects.puff(nozzle, relative, ship.radius * 0.08);
-      }
-    }
+    // the maneuvering thrusters' nozzles that push and turn the ship (see ship/thrusters); drawn
+    // once a frame by showJets
+    ship.fireJets(dt, this.time);
     for (const hole of ship.holes) {
       const strength = ship.ventStrength(hole, this.time);
       const position = ship.toWorld(hole.point, scratch);

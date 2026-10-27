@@ -5,7 +5,7 @@ import { debrisSet, hullSet, iceSet } from './world/shapes';
 import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
 import type { TemplateKind, TemplateSet } from './world/asteroids';
 import { synthesizeSounds } from './sound/sounds';
-import { radialTexture, smokeTexture, sparkTexture } from './view/textures';
+import { gasTexture, radialTexture, smokeTexture, sparkTexture } from './view/textures';
 
 /** The ships a Host can fly: the two interceptors, and the Sovereign once earned (see game/hangar). */
 export type ShipType = 'human' | 'alien' | 'sovereign';
@@ -20,6 +20,7 @@ export interface Assets {
     flameFrames: THREE.Texture[];
     smoke: THREE.Texture;
     spark: THREE.Texture;
+    gas: THREE.Texture;
     glow: THREE.Texture;
   };
   sounds: Record<'laser' | 'explosion', AudioBuffer | null>;
@@ -159,7 +160,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     ships: { human: humanInterceptor(human), alien: alienInterceptor(alien), sovereign: sovereign(human) },
     belt: { near: asteroidsNear, impostor: asteroidImpostors },
     fieldSets: { rock, ice: iceSet(rock), debris: debrisSet(), hull: hullSet() },
-    textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), glow },
+    textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), gas: gasTexture(), glow },
     sounds: synthesizeSounds(audio),
     planets: { maps: { saturn, giant, earth }, ring },
   };

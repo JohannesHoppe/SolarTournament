@@ -178,7 +178,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `world/rocks.ts` | Generates the 16 asteroid shapes: noise, craters, four kinds of rock; integer hashing and polynomials only, so every browser builds identical shapes; a full-detail shape for collisions, light meshes for drawing with their fine relief baked into an object-space normal map instead of triangles, and a billboard (see view/impostor) |
 | `world/wrecks.ts` | Wreckage of destroyed ships |
 | **`ship/`** | **Ships and who flies them** |
-| `ship/models.ts` | The interceptors' hulls, low poly in code; collider, drive flame and glows come from the model files |
+| `ship/models.ts` | The interceptors' hulls, low poly in code, with their maneuvering thrusters' clusters; collider, drive flame and glows come from the model files |
+| `ship/thrusters.ts` | The maneuvering thrusters as built: four clusters of four nozzles at the hull's corners; which nozzles push the ship along an axis and which couples turn it, for the puffs on screen and the handbook |
 | `ship/ship.ts` | Ship: hull, hit zones, holes with decompression, laser heat, the clone's g-force strain, drive animation; a nose on a ship as the sensors see it |
 | `ship/flight.ts` | Newtonian flight model with flight computer (rate control, `steer()`), and the autopilot: the ship flies where its nose points, thrusters and drive taking out the drift across the nose, the nose leading the flight no farther than they bring it back within a second; the hardest turn at a speed |
 | `ship/computer.ts` | The own ship's flight computer besides the autopilot: the upright hold, the brake to rest, the aim assist |
@@ -192,7 +193,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/overlay.ts` | A canvas over the whole picture the HUD draws on (the attitude, the motion streaks), sized with the picture's resolution |
 | `view/attitude.ts` | The HUD's attitude on a canvas: horizon line, pitch ladder, bank scale and heading tape, as in a fighter's head-up display |
 | `view/plane.ts` | The reference plane's grid and the drop lines to it, an overlay over everything in the HUD's azure |
-| `view/effects.ts` | Particles (one draw call per texture), laser beams; both fade in a planet's haze |
+| `view/effects.ts` | Particles (one draw call per texture), laser beams; both fade in a planet's haze; the maneuvering thrusters' puffs at their firing nozzles |
 | `view/killcam.ts` | The kill cam: keeps the last seconds of every ship and beam, replays the kill of the own clone in slow motion from behind the shooter |
 | `view/radar.ts` | The radar sphere: everything within 2.5 km around the own ship, ahead and behind, on a canvas |
 | `view/lensing.ts` | The black hole's gravitational lens over the rendered picture |
