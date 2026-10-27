@@ -152,14 +152,14 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `game/laps.ts` | The own laps in a race: lap clock, splits against the arena's best lap, the best lap and its ghost as the browser keeps them |
 | `game/items.ts` | Items: sponsor probes that show up on the round clock (the same on every browser), what they carry and what each does in a few words, dropped again when a clone dies; a probe on a hook's cable and its flight back to its slot once let go; the nova core goes off in `Game.novaBlast` |
 | `game/torpedoes.ts` | Torpedoes: launch, homing, fuse, shot down by the laser; only the shooter's browser decides where one goes off |
-| `game/comet.ts` | Comets: when a round's comets come and on which route (from room, round and field time), the route bent by the arena's well until it swallows them, the pieces of their shower, the head breaking rock and shoving hull on a grid of field time, and how the scene shows head, coma, tail and shower, drawn out and flashing as a well swallows them |
+| `game/comet.ts` | Comets: when a round's comets come and on which route (from room, round and field time), the route bent by the arena's well until it swallows them, the pieces of their shower, the head breaking rock and shoving hull on a grid of field time, and how the scene shows head, coma, the two harmless tails streaming away from the sun (ion and dust) and the shower glinting orange, drawn out and flashing as a well swallows them; how deep a point lies in a tail (felt by the own clone in `Game.cometTail`) |
 | `game/school.ts` | Flight school: five courses played on their own (basic training, racer, gladiator, arsenal, tactician), 53 drills, one maneuver each, with spoken line, keys, markers in space (buoys, rings, debris), success and failure conditions, repetitions and praise |
 | `game/moments.ts` | The own pilot's big moments for the broadcast (streaks, revenge, supernova, a knockout, a torpedo kill, …): which one, its banner, the crowd's reaction, the announcer's lines, its rank; only show, no score |
 | `game/coach.ts` | Nicole as a coach in real rounds: the briefing of a mode in a Host's first round of it, the tips of the fight the moment they matter, each only a few times; what the browser has heard |
 | `game/sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, how the clone died, the round so far |
 | `game/satire-ads.ts` | The invented sponsors of 2584 (Victory Cola, Space Burger, PrintMe Bodies, …): consumer satire in the ad slot until real sponsors take it |
 | **`world/`** | **The arena** |
-| `world/space.ts` | Stars, nebula, sun with shadows (swelling and white-hot in a solar flare), space dust |
+| `world/space.ts` | Stars, nebula, sun with shadows (swelling and white-hot in a solar flare), space dust and its streaks (also drawn for a comet tail's dust) |
 | `world/arena.ts` | The arena edge (`ARENA_LIMIT`, `ARENA_GRACE`) and its grid |
 | `world/flare.ts` | The solar flare's plasma on screen: a sphere of roiling fire, filaments, its front glowing brightest |
 | `world/belt.ts` | The asteroid belt beyond the arena: instanced scenery, real low-poly rocks close to its inner edge, billboards (see view/impostor) for the rest of the ring |
@@ -208,7 +208,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `input/input.ts` | Keyboard, mouse flight (the ship turns towards the visible pointer, its offset from the center is the stick) and gamepad, merges all input into `Controls` |
 | `input/touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |
 | **`sound/`** | **What the pilot hears besides the radio** |
-| `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static |
+| `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static, dust pattering on the hull |
 | `sound/sounds.ts` | Synthesized sound effects: laser, explosion |
 | `sound/speaker.ts` | Nicole, the flight computer's voice: reads out what the screen shows, whole lines from the sprite |
 | **`music/`** | **Radio 2584** |

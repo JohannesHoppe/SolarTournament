@@ -96,6 +96,7 @@ export const ES: Catalog = {
   'Run down by a comet': 'Arrollado por un cometa',
   'The comet rams the battleship': 'El cometa embiste al acorazado',
   'Comet inbound · take cover behind a rock, or turn your nose into its shower': 'Cometa entrante · ponte a cubierto tras una roca, o gira el morro hacia su lluvia',
+  'Comet tail · only dust and gas, harmless': 'Cola del cometa · solo polvo y gas, inofensiva',
   NOVA: 'NOVA',
   'Your clone is dead': 'Tu clon ha muerto',
   Host: 'Host',
@@ -745,7 +746,7 @@ export const ES: Catalog = {
   'Shot down. Nice, but this time hide. Again.': 'Derribado. Muy bonito, pero esta vez tenías que esconderte. Otra vez.',
   'Final exam, tactician. This bot flies as well as the field. Use everything.': 'Examen final, táctico. Este bot vuela tan bien como cualquiera del torneo. Usa todo lo que tienes.',
   'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.': 'Ya peleas como un táctico. Sal de la línea de fuego de un golpe, nunca les enseñes tu motor, dispara en ráfagas y deja que las rocas se lleven los impactos. Ahora ve y tráele la victoria al Presidente.',
-  'A comet, darling, from your right. Its head misses you, its tail will not: a storm of rock. Get behind the rock, or turn your armored nose into it. Never show it your drive.': 'Un cometa, cariño, por tu derecha. Su cabeza no te alcanza, su cola sí: una tormenta de roca. Ponte detrás de la roca, o gírale tu morro acorazado. Nunca le enseñes tu motor.',
+  'A comet, darling, from your right. Its head misses you, its shower will not: a storm of rock. Get behind the rock, or turn your armored nose into it. Never show it your drive.': 'Un cometa, cariño, por tu derecha. Su cabeza no te alcanza, su lluvia sí: una tormenta de roca. Ponte detrás de la roca, o gírale tu morro acorazado. Nunca le enseñes tu motor.',
   'Your drive took the shower. Hide, or face it. Again.': 'Tu motor se llevó la lluvia. Escóndete, o plántale cara. Otra vez.',
   'Again.': 'Otra vez.',
 
@@ -792,7 +793,7 @@ export const ES: Catalog = {
   'Your nose on them, your flight somewhere else. They cannot dodge what they do not see coming, darling.': 'El morro sobre ellos, tu vuelo en otra parte. No pueden esquivar lo que no ven venir, cariño.',
   'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.': 'Los láseres no se doblan, y los sensores no ven a través de la roca. Detrás de ella, no existes.',
   'Lost you. A seeker that loses its line never finds it again.': 'Te ha perdido. Un torpedo que pierde la línea de visión ya no la recupera.',
-  'Still in one piece. The head clears everything in its way, but the tail is what kills.': 'Sigues entero. La cabeza barre todo a su paso, pero lo que mata es la cola.',
+  'Still in one piece. The head clears everything in its way, but the shower is what kills.': 'Sigues entero. La cabeza barre todo a su paso, pero lo que mata es la lluvia.',
   'A real fight, and you won it. I am so proud of you, darling.': 'Un combate de verdad, y lo has ganado. Estoy muy orgullosa de ti, cariño.',
 
   // Nicole: in a round
@@ -851,7 +852,7 @@ export const ES: Catalog = {
   'The giant is dragging us down! Burn away from it!': '¡El gigante nos hunde! ¡Acelera lejos de él!',
   'Now it gets really tight! Full burn, now!': '¡Ahora sí que se pone feo! ¡A fondo, ya!',
   'I am sorry, darling.': 'Lo siento, cariño.',
-  'Comet inbound, darling! Its tail is a storm of rock. Hide behind an asteroid, or turn your armored nose into it.': '¡Cometa entrante, cariño! Su cola es una tormenta de roca. Escóndete tras un asteroide, o gírale tu morro acorazado.',
+  'Comet inbound, darling! Its shower is a storm of rock. Hide behind an asteroid, or turn your armored nose into it.': '¡Cometa entrante, cariño! Su lluvia es una tormenta de roca. Escóndete tras un asteroide, o gírale tu morro acorazado.',
   'Your laser is cooking. Short bursts, and only when the crosshair glows.': 'Tu láser está ardiendo. Ráfagas cortas, y solo cuando brille la mira.',
   'Torpedo! Shoot it down, or put a rock between you and it.': '¡Torpedo! Derríbalo o pon una roca entre tú y él.',
   'It is crossing you, darling. Free drift: slide on, and turn your nose onto it.': 'Te está cruzando, cariño. Deriva libre: sigue deslizándote y gira el morro hacia él.',
@@ -898,7 +899,7 @@ export const ES: Catalog = {
   '{name} is the last clone standing': '{name} es el último clon en pie',
   '{name} survives. the president is impressed': '{name} sobrevive. el presidente está impresionado',
   'here comes the flare. run from the sun, little clones': 'llega la erupción. huid del sol, clonitos',
-  'a comet is coming. its tail is full of rock. hide, little clones': 'viene un cometa. su cola está llena de roca. escondeos, clonitos',
+  'a comet is coming. its shower is full of rock. hide, little clones': 'viene un cometa. su lluvia está llena de roca. escondeos, clonitos',
   'the heavens join the games. a comet, folks, courtesy of the president': 'el cielo se suma a los juegos. un cometa, amigos, por cortesía del presidente',
   'and {name} meets the comet head on. the printer is warming up': 'y {name} se come el cometa de frente. la impresora ya se calienta',
   'a comet takes {name}. even the sky votes for the president': 'un cometa se lleva a {name}. hasta el cielo vota al presidente',
@@ -954,6 +955,7 @@ export const ES: Catalog = {
   // the Pilot's Handbook (handbook.html) and the links to it
   "Pilot's Handbook": 'Manual del piloto',
   "More tactics than any drill: the Pilot's Handbook": 'Más táctica que cualquier ejercicio: el Manual del piloto',
+  'Note from Nicole': 'Nota de Nicole',
   'Ministry of War · United Solar States': 'Ministerio de la Guerra · Estados Solares Unidos',
   'Pilot\'s <span class="neon">Handbook</span>': 'Manual del <span class="neon">piloto</span>',
   'Issued to every Host by order of the Orange President. Read it between deaths: every rule in here is the rule out there, with its numbers.':
@@ -1146,8 +1148,8 @@ export const ES: Catalog = {
   'IMPACT means your course hits something sooner than you could flip and brake. Turn or brake now. Below {impactSafe} m/s a rock only scratches the paint; at about {impactKill} m/s it wrecks the ship.':
     'IMPACTO significa que tu rumbo choca con algo antes de lo que tardarías en voltear y frenar. Gira o frena ya. Por debajo de {impactSafe} m/s una roca solo raya la pintura; a unos {impactKill} m/s destroza la nave.',
   Comets: 'Cometas',
-  'COMET INBOUND comes {cometWarning} s before a comet reaches the arena. Its head destroys whatever it meets. The shower in its tail is the real danger: every piece strikes like a laser beam. Get into the lee of a rock, or turn your armored nose into the shower.':
-    'COMETA ENTRANTE aparece {cometWarning} s antes de que un cometa llegue a la arena. Su cabeza destruye lo que encuentra. La lluvia de su cola es el verdadero peligro: cada fragmento golpea como un rayo láser. Ponte al abrigo de una roca, o gira tu morro acorazado hacia la lluvia.',
+  'COMET INBOUND comes {cometWarning} s before a comet reaches the arena. Its head destroys whatever it meets. Its two tails, pointing away from the sun, are only dust and gas and harm nobody. The danger is the shower that glints orange along its route behind the head: every piece strikes like a laser beam. Get into the lee of a rock, or turn your armored nose into the shower.':
+    'COMETA ENTRANTE aparece {cometWarning} s antes de que un cometa llegue a la arena. Su cabeza destruye lo que encuentra. Sus dos colas, que apuntan lejos del sol, son solo polvo y gas y no dañan a nadie. El peligro es la lluvia que brilla en naranja a lo largo de su ruta, tras la cabeza: cada fragmento golpea como un rayo láser. Ponte al abrigo de una roca, o gira tu morro acorazado hacia la lluvia.',
   'Gravity wells': 'Pozos gravitatorios',
   'Near the black hole and over the gas giant the PULL gauge shows how much of your drive it would take to get out: CAUTION from {wellCaution} %, WARNING from {wellWarning} %, CRITICAL from {wellCritical} %, and when it would take all of it, NO RETURN. Burn away early: falling, the gauge climbs fast. The speed limit holds only against your own drive; gravity pulls you past {limit} m/s.':
     'Cerca del agujero negro y sobre el gigante gaseoso, el indicador TIRÓN muestra cuánto de tu motor haría falta para salir: PRECAUCIÓN desde el {wellCaution} %, ALERTA desde el {wellWarning} %, CRÍTICO desde el {wellCritical} %, y cuando haría falta todo, SIN RETORNO. Aléjate a fondo a tiempo: en caída, el indicador sube rápido. El límite de velocidad solo rige para tu propio motor; la gravedad te arrastra más allá de {limit} m/s.',

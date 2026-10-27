@@ -86,6 +86,30 @@ export class Sound {
     source.stop(now + 0.08);
   }
 
+  /**
+   * Dust pattering on the hull: a few grains ticking on the plates in quick succession, heard
+   * through the hull, louder the thicker the dust (`strength` 0..1).
+   */
+  patter(strength: number) {
+    if (this.context.state !== 'running') return;
+    const now = this.context.currentTime;
+    const grains = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < grains; i++) {
+      const start = now + Math.random() * 0.04;
+      const source = this.context.createBufferSource();
+      source.buffer = this.whiteNoise ??= this.createWhiteNoise();
+      const filter = this.context.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.value = 400 + Math.random() * 400;
+      const gain = this.context.createGain();
+      gain.gain.setValueAtTime((0.1 + 0.3 * strength) * (0.5 + Math.random() * 0.5), start);
+      gain.gain.exponentialRampToValueAtTime(0.001, start + 0.012);
+      source.connect(filter).connect(gain).connect(this.hull);
+      source.start(start, Math.random());
+      source.stop(start + 0.02);
+    }
+  }
+
   /** Where the cockpit radio plays: straight into the headset, like the beeps. */
   get headset(): AudioNode {
     return this.master;

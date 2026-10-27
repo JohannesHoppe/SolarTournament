@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { COMET_REACH, COMET_SPEED, COMET_WINDOWS, cometEnd, cometsOf, cometStart, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, type Comet } from './comet';
+import { COMET_REACH, COMET_SPEED, COMET_WINDOWS, cometEnd, cometsOf, cometStart, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, tailDepth, type Comet } from './comet';
+import { SUN_DIRECTION } from '../world/space';
 import { Fleet } from './fleet';
 import { ARENAS } from '../world/arenas';
 import { ARENA_LIMIT } from '../world/arena';
@@ -180,5 +181,37 @@ describe("the President's battleship and a comet", () => {
     const comet = makeComet(at, new THREE.Vector3(0.6, 0.1, 0.8).normalize(), sail(null, false, at).where, 3);
     expect(sail(comet, false, at).struck).toBe(true);
     expect(sail(comet, true, at).struck).toBe(false);
+  });
+});
+
+describe("a comet's tails", () => {
+  const head = new THREE.Vector3(1000, 2000, -3000);
+  const away = SUN_DIRECTION.clone().negate();
+  const across = new THREE.Vector3().crossVectors(SUN_DIRECTION, new THREE.Vector3(0, 1, 0)).normalize();
+  const at = (direction: THREE.Vector3, meters: number, from = head) => from.clone().addScaledVector(direction, meters * 20);
+
+  it('stream away from the sun whichever way the comet flies, 25 km long', () => {
+    for (const course of [new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 0.3, 1).normalize(), away.clone(), SUN_DIRECTION.clone()]) {
+      expect(tailDepth(head, course, 1, at(away, 3000))).toBeGreaterThan(0.8);
+      expect(tailDepth(head, course, 1, at(away, 24000))).toBeGreaterThan(0);
+      expect(tailDepth(head, course, 1, at(away, 26000))).toBe(0);
+      // towards the sun there is none
+      expect(tailDepth(head, course, 1, at(SUN_DIRECTION, 3000))).toBe(0);
+    }
+  });
+
+  it('lie apart from the route, where the shower flies, once it is out of the coma', () => {
+    for (const meters of [600, 1200, 1800]) expect(tailDepth(head, across, 1, at(across, -meters))).toBe(0);
+  });
+
+  it('bend the dust tail back along the route, the ion tail not', () => {
+    // 15 km down, the dust tail's axis lies 30 % of its 22 km times (15/22)², about 3 km, back along the route
+    const lagged = at(across, -3000, at(away, 15000));
+    expect(tailDepth(head, across, 1, lagged)).toBeGreaterThan(0.1);
+    expect(tailDepth(head, across.clone().negate(), 1, lagged)).toBe(0);
+  });
+
+  it('are drawn in with the comet', () => {
+    expect(tailDepth(head, across, 0.1, at(away, 3000))).toBe(0);
   });
 });
