@@ -46,6 +46,7 @@ import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
 import { ARENAS, arenaById, DEFAULT_ARENA, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
+import { Mining } from '../world/mining';
 import { stutterWindows } from '../world/shapes';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
@@ -572,6 +573,13 @@ const TAIL_GLITCH = 0.15;
  */
 const GRAIN_PATTER = 12;
 const GRAIN_PATTER_SPEED = 2000;
+/**
+ * Flying through the dust a drill hole blows on the Belt's rocks (see Mining.dustAt, Game.drillDust):
+ * it patters on the hull about DUST_PATTER times a second in the heart of a plume at
+ * DUST_PATTER_SPEED (units/s, 50 m/s) and faster, the fewer the thinner the dust and the slower the ship.
+ */
+const DUST_PATTER = 18;
+const DUST_PATTER_SPEED = 1000;
 /** The flight school's comet passes the point its drill names this long after the drill sends it (s): 6 km off at its speed. */
 const DRILL_COMET_LEAD = 15;
 
@@ -743,6 +751,8 @@ export class Game implements OnlineGame {
   /** The arena the round is played in (see enterArena), and its scenery. */
   private venue: ArenaProfile = DEFAULT_ARENA;
   private readonly landmarks: Landmarks;
+  /** The Rockborn's mining on the Belt's rocks (see world/mining). */
+  readonly mining = new Mining();
   /** The haze of an arena's air in the picture (see view/haze). */
   readonly haze = new Haze();
   /** What the screen shows where nothing is drawn: space's dark, or under a planet's cloud deck its haze (see airWeather). */
@@ -1146,7 +1156,7 @@ export class Game implements OnlineGame {
     this.field = new AsteroidField(assets.fieldSets);
     this.belt = new Belt(assets.belt.near, assets.belt.impostor);
     this.landmarks = new Landmarks(assets.planets);
-    this.graphics = new Graphics(this.renderer, this.bloom, this.space, this.field, this.belt, this.plane, this.landmarks, this.lensing, () => this.resize());
+    this.graphics = new Graphics(this.renderer, this.bloom, this.space, this.field, this.belt, this.plane, this.landmarks, this.mining, this.lensing, () => this.resize());
     this.effects = new Effects(assets.textures);
     // the kill cam fires the beams of its replay in effects of their own
     this.replayEffects = new Effects(assets.textures);
@@ -1155,7 +1165,7 @@ export class Game implements OnlineGame {
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
     this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.ghost.root, this.cables.group, this.cometView.root, this.plane.group);
-    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
+    this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.mining.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
       this.engineLights.push(light);
@@ -2116,6 +2126,8 @@ export class Game implements OnlineGame {
     this.scene.fog = air ? this.haze.fog : null;
     this.haze.setAir(air, this.landmarks.jupiter.deckLight, this.landmarks.jupiter.deepLight);
     this.belt.group.visible = arena.id === 'belt';
+    this.mining.dress(arena.id === 'belt' ? this.field : null);
+    this.mining.setSun(arena.sun.color, arena.sun.intensity);
     if (!keepWreckage) {
       this.wrecks.clear();
       this.torpedoes.clear();
@@ -3088,6 +3100,7 @@ export class Game implements OnlineGame {
     this.effects.setViewport(height * this.renderer.getPixelRatio(), this.camera.fov);
     this.cometView.setViewport(height * this.renderer.getPixelRatio());
     this.landmarks.setViewport(height * this.renderer.getPixelRatio());
+    this.mining.setViewport(height * this.renderer.getPixelRatio());
   }
 
   private frame() {
@@ -3189,6 +3202,7 @@ export class Game implements OnlineGame {
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     this.landmarks.update(this.field.clock);
+    this.mining.update(this.field, this.field.clock);
     this.landmarks.follow(this.camera, this.state === 'menu' ? null : this.riding);
     if (this.venue.id === 'derelict') stutterWindows();
     const well = this.field.well;
@@ -3228,7 +3242,7 @@ export class Game implements OnlineGame {
     const parts: Partial<Record<BenchFeature, THREE.Object3D[]>> = {
       field: [this.field.group],
       belt: [this.belt.group],
-      landmark: [this.landmarks.group],
+      landmark: [this.landmarks.group, this.mining.group],
       sky: [this.space.sky],
       dust: [this.space.dust, this.space.streaks],
       particles: [this.effects.group],
@@ -3266,6 +3280,7 @@ export class Game implements OnlineGame {
     this.showFlare(dt);
     this.playComet(dt, me);
     this.ringGrains(me, dt);
+    this.drillDust(me, dt);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -6208,6 +6223,15 @@ export class Game implements OnlineGame {
     const depth = 1 - THREE.MathUtils.smoothstep(Math.abs(me.flight.position.y), 0.8 * layer, layer);
     const pace = Math.min(1, me.flight.velocity.length() / GRAIN_PATTER_SPEED);
     if (Math.random() < dt * GRAIN_PATTER * depth * pace) this.sound.patter(0.5 * depth * pace);
+  }
+
+  /** The own clone flying through the dust a drill hole blows (see Mining.dustAt): harmless, but it patters on the hull, the more the thicker and the faster. */
+  private drillDust(me: Ship, dt: number) {
+    if (!me.alive || this.spectating) return;
+    const thick = this.mining.dustAt(me.flight.position);
+    if (thick <= 0) return;
+    const pace = Math.min(1, me.flight.velocity.length() / DUST_PATTER_SPEED);
+    if (Math.random() < dt * DUST_PATTER * thick * pace) this.sound.patter(0.6 * thick * pace);
   }
 
   /** The comet's head strikes a piece of the wreck's hull and shoves it: a flash, sparks and debris where it struck, heard as far as debris is. */
