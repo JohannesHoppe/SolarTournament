@@ -77,13 +77,15 @@ export const sternAt = (offset: number) => [offset * Math.cos(STERN_TILT), -STER
 function derelict(): Placement[] {
   const pieces: Placement[] = [];
   const turn = new THREE.Euler();
-  const add = (type: number, scale: number, x: number, y: number, z: number, yaw = 0, pitch = 0, roll = 0) =>
+  // turned by roll, yaw and pitch in that order; 'ZYX' pitches last, about the world's z, as the
+  // stern's hull is tilted, whatever the yaw
+  const add = (type: number, scale: number, x: number, y: number, z: number, yaw = 0, pitch = 0, roll = 0, order: THREE.EulerOrder = 'XYZ') =>
     pieces.push({
       kind: 'hull',
       type,
       scale,
       position: new THREE.Vector3(x, y, z),
-      orientation: new THREE.Quaternion().setFromEuler(turn.set(roll, yaw, pitch)),
+      orientation: new THREE.Quaternion().setFromEuler(turn.set(roll, yaw, pitch, order)),
       solid: true,
     });
   // the bow half: two sections of 700 m, the bridge tower on top, a spar across, the torn end
@@ -101,7 +103,8 @@ function derelict(): Placement[] {
   const [x3, y3] = sternAt(37000);
   add(2, 7, x3, y3, STERN_SHIFT - 3000, 0, STERN_TILT);
   add(2, 7, x3, y3, STERN_SHIFT + 3000, 0, STERN_TILT);
-  add(4, 7, x2, y2, STERN_SHIFT, Math.PI / 2, 0, STERN_TILT);
+  // the spar across the stern tilts with its hull: level across, turned about the hull's tilt
+  add(4, 7, x2, y2, STERN_SHIFT, Math.PI / 2, STERN_TILT, 0, 'ZYX');
   return pieces;
 }
 

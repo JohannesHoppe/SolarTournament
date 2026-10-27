@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ARENAS, arenaByKey, arenaOfRound } from './arenas';
 
@@ -19,5 +20,21 @@ describe('the arena of a tournament round', () => {
 
   it('is found by its layout key, as a snapshot names it', () => {
     for (const arena of ARENAS) expect(arenaByKey(arena.layout.key)).toBe(arena);
+  });
+});
+
+describe('the derelict', () => {
+  it('tilts the spar across its stern as the stern hull is tilted: level across, its up the hull\'s', () => {
+    const pieces = arenaByKey('derelict')!.layout.placements!;
+    // the spars (type 4): the bow's and the stern's, at the stern section's middle
+    const [bowSpar, sternSpar] = pieces.filter((piece) => piece.type === 4);
+    const sternHull = pieces.find((piece) => piece.type === 0 && piece.position.equals(sternSpar.position))!;
+    const along = (piece: (typeof pieces)[number], x: number, y: number, z: number) => new THREE.Vector3(x, y, z).applyQuaternion(piece.orientation);
+    // both spars lie across the ship, level
+    for (const spar of [bowSpar, sternSpar]) {
+      expect(Math.abs(along(spar, 1, 0, 0).z)).toBeCloseTo(1);
+      expect(along(spar, 1, 0, 0).y).toBeCloseTo(0);
+    }
+    expect(along(sternSpar, 0, 1, 0).distanceTo(along(sternHull, 0, 1, 0))).toBeCloseTo(0);
   });
 });
