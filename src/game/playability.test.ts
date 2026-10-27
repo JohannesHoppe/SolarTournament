@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { BOOST_RADIUS } from './race';
-import { MAX_SPEED } from '../ship/flight';
+import { flyByNose, FlightModel, leadLimit, MAX_SPEED } from '../ship/flight';
+import { keepUpright } from '../ship/computer';
+import { IDLE, MOUSE_FULL_DEFLECTION, pointerAxis } from '../input/input';
 import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, LINE_SPARE, RING_COURSE, RING_RADIUS, ringCourse } from './school';
 import { testField } from '../test/field';
 import { flyCourse, SHIP_RADIUS, startFlight, STEP } from '../test/pilot';
@@ -83,6 +85,55 @@ describe('a simulated Host in open space', () => {
     expect(off).toBeLessThan(0.05);
     expect(flight.velocity.length()).toBeGreaterThan(2400);
   });
+
+  // the pointer held to the right turns the nose about the ship's own up, the upright hold keeps
+  // the wings level, and the nose waits at the lead's limit for the flight: the nose circles
+  // without climbing or diving, whether it started level or (as a spawn facing the field's
+  // middle leaves it) up or down
+  for (const climb of [0, 10, -20]) {
+    it(`turns about with the pointer held to the right at 150 m/s and the drive held, the nose ${climb ? `${Math.abs(climb)}° ${climb > 0 ? 'up' : 'down'}` : 'level'}, without climbing or diving`, () => {
+      const flight = new FlightModel();
+      const start = new THREE.Quaternion().setFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(climb), 0, 0, 'YXZ'));
+      flight.reset(new THREE.Vector3(), start);
+      flight.forward(flight.velocity).multiplyScalar(3000);
+      // the pointer 0.22 of the shorter screen side to the right, as the browser test holds it
+      const controls = { ...IDLE, yaw: pointerAxis(0.22 / MOUSE_FULL_DEFLECTION), thrust: 1 };
+      const out = { ...IDLE };
+      const gravity = new THREE.Vector3();
+      const heading = new THREE.Vector3(0, 0, -1);
+      const nose = new THREE.Vector3();
+      const level = new THREE.Vector3();
+      const elevation = (direction: THREE.Vector3) => THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(direction.y / direction.length(), -1, 1)));
+      let back = Infinity;
+      let steepest = 0;
+      let slip = 0;
+      let overLimit = 0;
+      for (let t = 0; t < 20; t += STEP) {
+        // as Game.flightComputer: the autopilot, then the upright hold
+        flyByNose(flight, controls, gravity, out);
+        keepUpright(flight, out);
+        flight.update(STEP, out, gravity);
+        flight.forward(nose);
+        steepest = Math.max(steepest, Math.abs(elevation(nose)));
+        const off = flight.velocity.angleTo(nose);
+        slip = Math.max(slip, off);
+        overLimit = Math.max(overLimit, off - leadLimit(flight.velocity.length()));
+        level.set(flight.velocity.x, 0, flight.velocity.z).normalize();
+        if (back === Infinity && level.dot(heading) < -0.95) back = t + STEP;
+      }
+      const height = flight.position.y / 20;
+      const summary = `back in ${back.toFixed(1)} s, the nose at most ${steepest.toFixed(1)}° off level, height ${height.toFixed(0)} m, slip at most ${THREE.MathUtils.radToDeg(slip).toFixed(1)}°`;
+      console.info(`Host turning about with the pointer, the nose ${climb}°: ${summary}`);
+      // the flight's heading comes round to point back
+      expect(back, summary).toBeLessThan(10);
+      // the nose climbs or dives no steeper than it started
+      expect(steepest, summary).toBeLessThan(Math.abs(climb) + 2);
+      // level, it stays level: the height changes by no more than a few meters
+      if (climb === 0) expect(Math.abs(height), summary).toBeLessThan(10);
+      // the nose leads the flight no farther than the lead's limit
+      expect(overLimit, summary).toBeLessThan(THREE.MathUtils.degToRad(1));
+    });
+  }
 
   // with the autopilot the nose waits for a fast flight; to keep the nose on a crossing ship a
   // Host switches to free drift, where the nose turns freely and the ship slides on

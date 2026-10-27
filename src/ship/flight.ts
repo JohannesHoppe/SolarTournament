@@ -309,9 +309,41 @@ function hold(flight: FlightModel, lead: number, moving: number, out: Controls) 
   const slip = Math.acos(THREE.MathUtils.clamp(path.dot(nose), -1, 1));
   const thrusters = flight.thrusterFactor;
   const allowed = Math.sqrt(2 * TURN_ACCELERATION * thrusters * Math.max(0, lead - slip)) / (MAX_TURN_RATE * (0.3 + 0.7 * thrusters));
-  const back = Math.max(0, away - allowed) * moving;
-  out.yaw = THREE.MathUtils.clamp(out.yaw + x * back, -1, 1);
-  out.pitch = THREE.MathUtils.clamp(out.pitch + y * back, -1, 1);
+  if (away <= allowed) return;
+  // the turn nearest the Host's that turns away no faster than allowed: on the line where it
+  // turns away at exactly that rate, the point nearest the Host's turn, `t` along the line from
+  // there (along (-y, x), square to the flight). The hold only takes back what the Host turns:
+  // each axis stays between nothing and the Host's own command, so it never turns the nose on
+  // an axis the Host does not (a level turn with the nose up or down would otherwise pitch
+  // towards the flight, which lies a little above or below the nose, and spiral into a climb
+  // or a dive)
+  const yaw = out.yaw + x * (away - allowed);
+  const pitch = out.pitch + y * (away - allowed);
+  let low = -Infinity;
+  let high = Infinity;
+  for (const [at, step, command] of [
+    [yaw, -y, out.yaw],
+    [pitch, x, out.pitch],
+  ]) {
+    const from = Math.min(0, command) - at;
+    const to = Math.max(0, command) - at;
+    if (Math.abs(step) < 1e-9) {
+      if (from > 1e-9 || to < -1e-9) return stop(out, moving);
+      continue;
+    }
+    low = Math.max(low, Math.min(from / step, to / step));
+    high = Math.min(high, Math.max(from / step, to / step));
+  }
+  if (low > high) return stop(out, moving);
+  const t = THREE.MathUtils.clamp(0, low, high);
+  out.yaw = THREE.MathUtils.lerp(out.yaw, yaw - y * t, moving);
+  out.pitch = THREE.MathUtils.lerp(out.pitch, pitch + x * t, moving);
+}
+
+/** The Host's turn held back altogether (`moving` of it): the nose waits for the flight. */
+function stop(out: Controls, moving: number) {
+  out.yaw *= 1 - moving;
+  out.pitch *= 1 - moving;
 }
 
 /**

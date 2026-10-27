@@ -27,12 +27,17 @@ test('the mouse turns the flight about at 150 m/s, and the recorder keeps the fl
       ship.respawnAt = Infinity;
     }
     const Vector3 = me.flight.position.constructor;
+    // the nose level, the spawn's heading kept: the spawn faces the field's middle, up or down
+    // by chance, and a held turn keeps the nose as high as it is
+    const spawned = me.flight.forward(new Vector3());
+    me.flight.orientation.setFromAxisAngle(new Vector3(0, 1, 0), Math.atan2(-spawned.x, -spawned.z));
     const nose = me.flight.forward(new Vector3());
-    // a place with no rock within 1.5 km ahead, behind and to either side
+    // a place with no rock within 1.5 km ahead, behind and to either side, and within 2.5 km of
+    // the center, so the turn about stays inside the arena (3.4 km)
     const side = new Vector3(0, 1, 0).cross(nose).normalize();
-    const clear = (at: any) => [nose, nose.clone().negate(), side, side.clone().negate()].every((way: any) => !game.field.raycast(at, way, 30000)) && !game.field.overlap(at, 2000);
+    const clear = (at: any) => at.length() < 50000 && [nose, nose.clone().negate(), side, side.clone().negate()].every((way: any) => !game.field.raycast(at, way, 30000)) && !game.field.overlap(at, 2000);
     let place = me.flight.position.clone();
-    for (let i = 0; i < 400 && !clear(place); i++) place = new Vector3(random.range(-60000, 60000), random.range(-20000, 20000), random.range(-60000, 60000));
+    for (let i = 0; i < 400 && !clear(place); i++) place = new Vector3(random.range(-50000, 50000), random.range(-20000, 20000), random.range(-50000, 50000));
     const open = clear(place);
     me.flight.position.copy(place);
     me.flight.velocity.copy(nose).multiplyScalar(3000);
