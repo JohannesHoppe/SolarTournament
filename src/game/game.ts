@@ -2748,6 +2748,8 @@ export class Game implements OnlineGame {
     // the handbook opens at the section of what is being flown (its sections are named after the modes)
     ($('pause-handbook') as HTMLAnchorElement).hash = this.school ? 'flying' : this.roundMode;
     this.setScreen('paused');
+    // Enter resumes, so the keyboard's focus starts there too
+    $('resume').focus();
   }
 
   /** A phone held upright (the touch controls on); see holdUpright. */

@@ -221,7 +221,9 @@ h1 .neon {
   color: var(--muted);
 }
 
-button {
+/* a link that leads somewhere from a plate looks and acts like its buttons */
+button,
+a.button {
   font: inherit;
   color: var(--text);
   background: transparent;
@@ -231,17 +233,22 @@ button {
   cursor: pointer;
 }
 
+a.button {
+  text-decoration: none;
+}
+
 button:hover,
-button:focus-visible {
+button:focus-visible,
+a.button:hover {
   border-color: var(--accent);
   outline: none;
 }
 
-/* keyboard focus is always visible, on every button and link, primary buttons included */
+/* keyboard focus is always visible, on every button and link, primary buttons included, in the orange of whatever is pressed */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible {
-  outline: 2px solid var(--accent-strong);
+  outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
 
