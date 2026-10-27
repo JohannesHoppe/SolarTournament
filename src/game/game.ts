@@ -19,6 +19,7 @@ import { Ghost } from '../view/ghost';
 import { lapClock, LapTimer, parseLaps } from './laps';
 import { aimHook, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, pivotOf, pullOn, type Anchor, type Mark, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
+import { STREAKS } from '../view/streaks';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
@@ -94,6 +95,8 @@ import { ShareButton, type ShareWhere } from '../share';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
 const RESULTS_SECONDS = 12;
+/** The motion streaks follow the share of particles drawn, but keep at least this share of STREAKS: they say where the ship moves. */
+const STREAKS_LEAST = 0.75;
 /** The standings held open with Tab are written anew this often (s, real time). */
 const STANDINGS_REFRESH = 0.25;
 /** The standings' ping turns orange from this delay, and red from twice that (ms): only once it starts to matter. */
@@ -3385,13 +3388,16 @@ export class Game implements OnlineGame {
     // (the benchmark leaves out the HUD, the radar or the attitude to see what each costs)
     if (!this.bench.has('hud')) {
       this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
+      // the velocity markers first: the names at the screen's edge keep clear of the Course arrow
+      this.hud.updateVelocityMarkers(this.camera, subject, subject === me, !this.autopilot);
       // a solar storm blinds the sensors: no ship shows a marker
       this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject));
-      this.hud.updateVelocityMarkers(this.camera, subject);
       this.hud.setCourse(this.camera, subject === me && this.onCourse ? this.steering.course : null, me.flight.forward(forward));
     }
     if (!this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
     if (!this.bench.has('attitude')) this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
+    // the motion streaks, fewer on a cheaper picture (see view/streaks)
+    if (!this.bench.has('streaks')) this.hud.updateStreaks(now, this.camera, subject.flight.velocity, subject.alive, Math.round(STREAKS * Math.max(STREAKS_LEAST, this.graphics.look.particles)));
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
     const hook = this.tethers.get(me);
@@ -5325,6 +5331,8 @@ export class Game implements OnlineGame {
   /** T: the autopilot on or off. */
   private toggleAutopilot() {
     this.autopilot = !this.autopilot;
+    // nose and flight part from here on: the Course marker shows where the ship really flies
+    if (!this.autopilot) this.hud.flashCourse();
     this.sound.beep(this.autopilot ? 880 : 440, 0.08);
   }
 
