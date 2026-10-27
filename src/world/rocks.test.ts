@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ATLAS_RES, normalAtlas } from './rocks';
+import { ATLAS_RES, createRocks, createRockShapes, DISTANT_DETAIL, normalAtlas } from './rocks';
 
 /** The direction a cube face's cell stands for, as the shader's rockNormal looks it up (face order +x, −x, +y, −y, +z, −z). */
 function cellDirection(face: number, s: number, t: number) {
@@ -29,5 +29,19 @@ describe("a rock's normal atlas", () => {
       // crater walls and crags tilt a normal, but the surface faces outward almost everywhere
       expect(outward / cells).toBeGreaterThan(0.95);
     }
+  });
+});
+
+describe('the shapes the collisions measure', () => {
+  it('are the drawn rocks vertex for vertex, without colors, normals or a material of their own', () => {
+    const drawn = createRocks(DISTANT_DETAIL);
+    const shapes = createRockShapes(DISTANT_DETAIL);
+    expect(shapes).toHaveLength(drawn.length);
+    shapes.forEach((shape, i) => {
+      expect(Array.from(shape.geometry.getAttribute('position').array)).toEqual(Array.from(drawn[i].geometry.getAttribute('position').array));
+      expect(shape.geometry.getAttribute('color')).toBeUndefined();
+      expect(shape.geometry.getAttribute('normal')).toBeUndefined();
+      expect(shape.material).toBe(shapes[0].material);
+    });
   });
 });

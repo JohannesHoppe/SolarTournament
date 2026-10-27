@@ -325,27 +325,7 @@ export function applyRockRelief(material: THREE.MeshStandardMaterial, index: num
  */
 function createRock(index: number, detail: number): THREE.Mesh {
   const recipe = rockRecipe(index);
-  const noise = new Noise(recipe.noiseSeed);
-  const geometry = sphere(detail).clone();
-
-  const position = geometry.attributes.position;
-  const colors = new Float32Array(position.count * 3);
-  const direction = new THREE.Vector3();
-  const point = new THREE.Vector3();
-  const [red, green, blue] = recipe.composition.color;
-  for (let i = 0; i < position.count; i++) {
-    direction.fromBufferAttribute(position, i).normalize();
-    const { shade } = surfacePoint(noise, recipe, direction, point);
-    position.setXYZ(i, point.x, point.y, point.z);
-    colors[i * 3] = red * shade;
-    colors[i * 3 + 1] = green * shade;
-    colors[i * 3 + 2] = blue * shade;
-  }
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-  geometry.computeVertexNormals();
-  geometry.computeBoundingBox();
-  geometry.computeBoundingSphere();
-
+  const geometry = rockGeometry(index, detail, true);
   const material = new THREE.MeshStandardMaterial({
     vertexColors: true,
     roughness: recipe.composition.roughness,
@@ -358,11 +338,57 @@ function createRock(index: number, detail: number): THREE.Mesh {
 }
 
 /**
+ * A rock's shape at a detail: the sphere's vertices moved onto its surface; with `drawn` also
+ * the colors of its composition and its normals, which only a mesh that is drawn needs.
+ */
+function rockGeometry(index: number, detail: number, drawn: boolean): THREE.BufferGeometry {
+  const recipe = rockRecipe(index);
+  const noise = new Noise(recipe.noiseSeed);
+  const geometry = sphere(detail).clone();
+  const position = geometry.attributes.position;
+  const colors = drawn ? new Float32Array(position.count * 3) : null;
+  const direction = new THREE.Vector3();
+  const point = new THREE.Vector3();
+  const [red, green, blue] = recipe.composition.color;
+  for (let i = 0; i < position.count; i++) {
+    direction.fromBufferAttribute(position, i).normalize();
+    const { shade } = surfacePoint(noise, recipe, direction, point);
+    position.setXYZ(i, point.x, point.y, point.z);
+    if (!colors) continue;
+    colors[i * 3] = red * shade;
+    colors[i * 3 + 1] = green * shade;
+    colors[i * 3 + 2] = blue * shade;
+  }
+  if (colors) {
+    geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geometry.computeVertexNormals();
+  }
+  geometry.computeBoundingBox();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+/**
  * The rock shapes of the asteroid field, identical on every client; with a lower detail,
  * the same shapes for rocks so far away that even their coarse silhouette barely shows.
  */
 export function createRocks(detail = DETAIL): THREE.Mesh[] {
   return Array.from({ length: ROCK_COUNT }, (_, i) => createRock(i, detail));
+}
+
+/** Never drawn: the material of the shapes only the collisions measure. */
+const UNDRAWN = new THREE.MeshBasicMaterial();
+
+/**
+ * The rock shapes as the collisions measure them (see world/surface): their vertices only, in
+ * full detail by default, without colors, normals or a material of their own, as nobody draws them.
+ */
+export function createRockShapes(detail = DETAIL): THREE.Mesh[] {
+  return Array.from({ length: ROCK_COUNT }, (_, i) => {
+    const mesh = new THREE.Mesh(rockGeometry(i, detail, false), UNDRAWN);
+    mesh.name = `rock-shape-${i}`;
+    return mesh;
+  });
 }
 
 /** Edge length, in cells, of each view tile of an impostor atlas: coarse, as a billboard only ever shows where a real mesh would be a speck of a few pixels. */

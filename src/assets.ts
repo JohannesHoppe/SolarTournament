@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createImpostors, createRocks, DETAIL, FAR_DETAIL, NEAR_DETAIL } from './world/rocks';
+import { createImpostors, createRocks, createRockShapes, DETAIL, FAR_DETAIL, NEAR_DETAIL } from './world/rocks';
 import { debrisSet, hullSet, iceSet } from './world/shapes';
 import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
 import type { TemplateKind, TemplateSet } from './world/asteroids';
@@ -95,7 +95,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   const flames = Promise.all(['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture));
   // full detail only to measure collisions from (see world/surface); drawn meshes stay light, their
   // relief coming from a baked normal map (see world/rocks, applyRockRelief) instead of triangles
-  const asteroidsCollision = createRocks(DETAIL);
+  const asteroidsCollision = createRockShapes(DETAIL);
   const asteroidsNear = createRocks(NEAR_DETAIL);
   const asteroidsFar = createRocks(FAR_DETAIL);
   const asteroidImpostors = createImpostors();
