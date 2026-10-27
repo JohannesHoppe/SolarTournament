@@ -14,6 +14,7 @@ import { COMET_WARNING } from '../game/comet';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
 import { ASTEROID_POINTS } from '../world/asteroids';
 import { ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
+import { RING_LAYER } from '../world/arenas';
 
 /**
  * The numbers of the Pilot's Handbook (handbook.html), filled into its texts as {placeholders}
@@ -106,6 +107,8 @@ export const FROM_CODE: Record<string, number> = {
   hotDepth: Math.round(hotDepth() / 100) * 100,
   safeKm: Math.round(meters(safeSpeed(-20000, COOLING_SHADOW))),
   safeTwoKm: Math.round(meters(safeSpeed(-40000, COOLING_SHADOW))),
+  // the Rings of Saturn's layer of ice grains, top to bottom
+  ringLayer: meters(2 * RING_LAYER),
 };
 
 /** How deep under Jupiter's deck the speed limit starts to heat a hull in the air's shade (m). */
@@ -149,7 +152,7 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   closeCall: { value: 25, readme: 'earns # points' },
   flareSpeed: { value: 30, readme: 'evenly at # m/s' },
   pocket: { value: 1.35, readme: '# km deep at its middle' },
-  kesslerOrbit: { value: 25, readme: 'all at # m/s' },
+  junkOrbit: { value: 25, readme: 'all at # m/s' },
   stormEvery: { value: 50, readme: 'Every # seconds of field time a solar storm' },
   stormLength: { value: 8, readme: 'blinds the sensors for # seconds' },
   noReturn: { value: 280, readme: 'Within about # m no drive gets out' },

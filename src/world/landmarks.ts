@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { SUN_DIRECTION } from './space';
-import { ARENAS, HOLE_RADIUS, KESSLER_WORLD, SATURN_CENTER, sternAt, type ArenaId, type ArenaProfile } from './arenas';
+import { ARENAS, HOLE_RADIUS, RING_LAYER, SATURN_CENTER, sternAt, type ArenaId, type ArenaProfile } from './arenas';
 import { canvas, toTexture } from '../view/textures';
 import { loadPlanetMap, type Planet, type PlanetMaps } from '../assets';
+import { junkyard } from './junkyard';
 import { Jupiter } from './jupiter';
 
 /**
- * What an arena shows beyond its field: Saturn, whose ring the arena lies in, the planet below
- * the Kessler field, Jupiter, the sun up close, the black hole with its disk, the neon sign
+ * What an arena shows beyond its field: Saturn, whose ring the arena lies in, Earth and the
+ * junk around the Satellite Junkyard (see world/junkyard), Jupiter (see world/jupiter), the sun up close, the black hole with its disk, the neon sign
  * on the derelict. Scenery only; what pulls and blocks is the field's well.
  */
 
@@ -23,16 +24,37 @@ const RING_FADE_FAR = 120000;
 /**
  * Specks of ice in the ring around the pilot: so many in a square of the ring's plane ICE_SLAB
  * to each side of the pilot (units, 1.6 km), which moves along with the pilot (a speck left
- * behind comes back on the far side, faded in and out at the square's edge), ICE_THICKNESS above
- * and below the plane (units, 125 m, the field's sheet). Dense enough that a rock's or a ship's
- * shadow shows as a dark lane through them.
+ * behind comes back on the far side, faded in and out at the square's edge), within the ring's
+ * layer (RING_LAYER above and below the plane, 125 m). Dense enough that a rock's or a ship's
+ * shadow shows as a dark lane through them; from above or below they show the layer as a
+ * glittering floor or ceiling.
  */
 const ICE_SPECKS = 16000;
 const ICE_SLAB = 32000;
-const ICE_THICKNESS = 2500;
 /** A speck's size (units, 3 m), drawn at no less than a pixel and no more than ICE_SPECK_PIXELS (device px), so one passing close by stays a speck. */
 const ICE_SPECK_SIZE = 60;
 const ICE_SPECK_PIXELS = 6;
+/**
+ * The grains of the ring's layer close by: GRAINS of them in a cube of GRAIN_BOX to each side
+ * of the camera (units, 60 m), fixed in space, so they rush past a ship flying through and
+ * wrap around to the far side of the cube (faded in and out from 30 m on); only those within
+ * the layer show, thinning out over its outer fifth, so the cube is empty above and below it.
+ * Each is GRAIN_SIZE across (units, 20 cm, drawn at 1 to GRAIN_PIXELS device px) and drawn
+ * besides as a streak from where it is to where it was GRAIN_STREAK seconds before, seen from
+ * the moving ship, from GRAIN_STREAK_START (units/s, 20 m/s) on, at full strength from
+ * GRAIN_STREAK_FULL (200 m/s). Within GRAIN_NEAR of the camera (units, 6 to 15 m) the grains
+ * fade out: one that close would sweep across the whole screen in a frame.
+ */
+const GRAINS = 32000;
+const GRAIN_BOX = 1200;
+const GRAIN_SIZE = 4;
+const GRAIN_PIXELS = 3;
+const GRAIN_STREAK = 0.025;
+const GRAIN_STREAK_START = 400;
+const GRAIN_STREAK_FULL = 4000;
+const GRAIN_NEAR: readonly [number, number] = [120, 300];
+/** A streak's brightness as a share of its grain's, at its head: the grain moves on, so the streak is a smear of its light. */
+const GRAIN_STREAK_GLOW = 0.35;
 /**
  * The ice crystals that catch the sun in the ring's sheet: one in a cell of this edge (units,
  * 20 m) may glint; cells smaller on screen than a few pixels show none, so the glitter never
@@ -227,47 +249,6 @@ const gasFragment = /* glsl */ `
 `;
 
 /**
- * A world with air and water, worn by the regime: dark oceans with the sun's glint, grey and
- * brown continents, ice at the poles, clouds that drift, and on the night side the orange glow of
- * its sprawling cities; blue haze along the limb.
- */
-const worldFragment = /* glsl */ `
-  uniform float time;
-  uniform vec3 sun;
-  varying vec3 vLocal;
-  varying vec3 vNormal;
-  varying vec3 vWorld;
-  ${noise3}
-  ${fbm}
-  void main() {
-    vec3 p = normalize(vLocal);
-    float fine = clamp(1.0 - distance(cameraPosition, vWorld) / 600000.0, 0.0, 1.0);
-    float height = fbm(p * 3.0 + fbm(p * 6.0, 1.0) * 0.6, fine);
-    float land = smoothstep(0.49, 0.52, height);
-    float ice = smoothstep(0.78, 0.86, abs(p.y) + (height - 0.5) * 0.2);
-    vec3 ocean = mix(vec3(0.02, 0.07, 0.2), vec3(0.04, 0.16, 0.34), smoothstep(0.3, 0.49, height));
-    vec3 ground = mix(vec3(0.32, 0.29, 0.24), vec3(0.2, 0.22, 0.17), fbm(p * 30.0, fine));
-    vec3 color = mix(mix(ocean, ground, land), vec3(0.9, 0.93, 0.97), ice);
-    float clouds = smoothstep(0.56, 0.8, fbm(p * 7.0 + vec3(time * 0.003, 0.0, 0.0) + fbm(p * 14.0, fine), fine));
-    color = mix(color, vec3(0.9), clouds * 0.85);
-    vec3 n = normalize(vNormal);
-    vec3 view = normalize(cameraPosition - vWorld);
-    vec3 toSun = normalize(sun);
-    float light = dot(n, toSun);
-    float day = smoothstep(-0.05, 0.25, light);
-    vec3 lit = color * (0.02 + 0.8 * day);
-    // the sun's glint on open water
-    lit += vec3(1.0, 0.92, 0.8) * pow(max(dot(reflect(-toSun, n), view), 0.0), 60.0) * (1.0 - land) * (1.0 - clouds) * day * 0.8;
-    // the cities at night: the regime never switches off the lights of its sprawl
-    float cities = step(0.62, noise(p * 260.0)) * smoothstep(0.55, 0.7, noise(p * 40.0));
-    lit += vec3(1.0, 0.6, 0.25) * cities * land * (1.0 - ice) * (1.0 - clouds) * (1.0 - day) * 0.9;
-    float limb = 1.0 - clamp(dot(n, view), 0.0, 1.0);
-    lit = mix(lit, vec3(0.3, 0.55, 1.0) * (0.1 + 0.8 * day), pow(limb, 3.0) * 0.7);
-    gl_FragColor = vec4(lit, 1.0);
-  }
-`;
-
-/**
  * The surface of a sun up close: boiling cells of plasma, a fine granulation over them, groups of
  * dark sunspots with their paler rims, hotter towards the middle.
  */
@@ -434,35 +415,73 @@ const ringFragment = /* glsl */ `
   }
 `;
 
-const speckVertex = /* glsl */ `
+/** What a speck of the ring's ice is drawn with: its size, the facet it glints with, where it is and how faded. */
+const speckVertexPars = /* glsl */ `
   ${shadowVertexPars}
   uniform float size;
   uniform float viewport;
-  uniform float slab;
   attribute vec3 facet;
   varying vec3 vFacet;
   varying vec3 vWorld;
   varying float vFade;
+`;
+
+/** Draws a speck at `worldPosition`, `size` across in the world, from 1 to `pixels` device px, in the sun's shadows. */
+const speckPlace = (pixels: number) => /* glsl */ `
+    vec4 mvPosition = viewMatrix * worldPosition;
+    vWorld = worldPosition.xyz;
+    gl_Position = projectionMatrix * mvPosition;
+    gl_PointSize = clamp(size * projectionMatrix[1][1] * viewport * 0.5 / -mvPosition.z, 1.0, ${pixels.toFixed(1)});
+    ${shadowVertex}
+`;
+
+const speckVertex = /* glsl */ `
+  ${speckVertexPars}
+  uniform float slab;
   void main() {
     vFacet = facet;
     // the square moves with the pilot: every speck within slab of the camera along the plane
     vec2 offset = mod(position.xz - cameraPosition.xz + slab, 2.0 * slab) - slab;
     vFade = 1.0 - smoothstep(0.7 * slab, slab, max(abs(offset.x), abs(offset.y)));
     vec4 worldPosition = vec4(cameraPosition.x + offset.x, position.y, cameraPosition.z + offset.y, 1.0);
-    vec4 mvPosition = viewMatrix * worldPosition;
-    vWorld = worldPosition.xyz;
-    gl_Position = projectionMatrix * mvPosition;
-    gl_PointSize = clamp(size * projectionMatrix[1][1] * viewport * 0.5 / -mvPosition.z, 1.0, ${ICE_SPECK_PIXELS.toFixed(1)});
-    ${shadowVertex}
+    ${speckPlace(ICE_SPECK_PIXELS)}
   }
 `;
 
 /**
- * A speck of the ring's ice around the pilot: a soft round grain, lit by the sun where nothing
- * stands between it and the sun (the sun's shadow map), its facet glinting when it mirrors the
- * sun towards the eye.
+ * A grain of the ring's layer close by (see GRAINS): fixed in the world, in a cube that wraps
+ * around the camera, shown only within the layer. With STREAK, the grain's streak: a line from
+ * where it is (`tail` 0) to where it was a streak's time ago (`tail` 1, `trail` away), seen from
+ * the moving ship, fading out towards its tail.
  */
-const speckFragment = /* glsl */ `
+const grainVertex = /* glsl */ `
+  ${speckVertexPars}
+  uniform float box;
+  uniform float layer;
+  uniform vec3 trail;
+  uniform float strength;
+  #ifdef STREAK
+    attribute float tail;
+  #endif
+  void main() {
+    vFacet = facet;
+    vec3 offset = mod(position - cameraPosition + box, 2.0 * box) - box;
+    vec4 worldPosition = vec4(cameraPosition + offset, 1.0);
+    float reach = length(offset);
+    vFade = smoothstep(${GRAIN_NEAR[0].toFixed(1)}, ${GRAIN_NEAR[1].toFixed(1)}, reach) * (1.0 - smoothstep(0.5 * box, box, reach)) * (1.0 - smoothstep(0.8 * layer, layer, abs(worldPosition.y)));
+    #ifdef STREAK
+      worldPosition.xyz += trail * tail;
+      vFade *= strength * (1.0 - tail);
+    #endif
+    ${speckPlace(GRAIN_PIXELS)}
+  }
+`;
+
+/**
+ * The ice of the ring around the pilot, lit by the sun where nothing stands between it and the
+ * sun (the sun's shadow map), its facet glinting when it mirrors the sun towards the eye.
+ */
+const iceFragmentPars = /* glsl */ `
   ${shadowFragmentPars}
   uniform vec3 sun;
   uniform vec3 light;
@@ -471,14 +490,29 @@ const speckFragment = /* glsl */ `
   varying vec3 vWorld;
   varying float vFade;
   ${glint}
+  vec3 iceLit() {
+    float sunny = getShadowMask();
+    return color * light * (0.55 * sunny + 0.12) + vec3(1.0, 0.96, 0.88) * light * 2.0 * glint(vFacet, normalize(sun), normalize(cameraPosition - vWorld), 60.0) * sunny;
+  }
+`;
+
+/** A speck or grain of the ring's ice: a soft round dot. */
+const speckFragment = /* glsl */ `
+  ${iceFragmentPars}
   void main() {
     vec2 at = gl_PointCoord - 0.5;
     float round = smoothstep(0.25, 0.1, dot(at, at)) * vFade;
     if (round <= 0.0) discard;
-    vec3 toSun = normalize(sun);
-    float sunny = getShadowMask();
-    vec3 lit = color * light * (0.55 * sunny + 0.12) + vec3(1.0, 0.96, 0.88) * light * 2.0 * glint(vFacet, toSun, normalize(cameraPosition - vWorld), 60.0) * sunny;
-    gl_FragColor = vec4(lit, round * 0.85);
+    gl_FragColor = vec4(iceLit(), round * 0.85);
+  }
+`;
+
+/** A grain's streak, added to the picture: as bright as the grain is lit, fading towards its tail. */
+const streakFragment = /* glsl */ `
+  ${iceFragmentPars}
+  void main() {
+    if (vFade <= 0.0) discard;
+    gl_FragColor = vec4(iceLit() * vFade * ${GRAIN_STREAK_GLOW.toFixed(2)}, 1.0);
   }
 `;
 
@@ -498,6 +532,38 @@ function neonSign(text: string, color: string, glow: string): THREE.Mesh {
   }
   const material = new THREE.MeshBasicMaterial({ map: toTexture(element), blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, toneMapped: false });
   return new THREE.Mesh(new THREE.PlaneGeometry(10000, 2500), material);
+}
+
+/** `count` specks of ice, each where `place` puts it (x, y, z), with a facet of its own to glint with (see iceFragmentPars). */
+function iceGeometry(count: number, r: Randomizer, place: () => number[]): THREE.BufferGeometry {
+  const positions = new Float32Array(count * 3);
+  const facets = new Float32Array(count * 3);
+  for (let i = 0; i < count; i++) {
+    positions.set(place(), i * 3);
+    facets.set([r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)], i * 3);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('facet', new THREE.BufferAttribute(facets, 3));
+  return geometry;
+}
+
+/** The specks of `geometry` as streaks (see grainVertex): every speck twice, its head (`tail` 0) and its tail (`tail` 1). */
+function streaksOf(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  const streaks = new THREE.BufferGeometry();
+  for (const name of ['position', 'facet']) {
+    const from = geometry.getAttribute(name).array as Float32Array;
+    const ends = new Float32Array(from.length * 2);
+    for (let i = 0; i < from.length / 3; i++) {
+      ends.set(from.subarray(i * 3, i * 3 + 3), i * 6);
+      ends.set(from.subarray(i * 3, i * 3 + 3), i * 6 + 3);
+    }
+    streaks.setAttribute(name, new THREE.BufferAttribute(ends, 3));
+  }
+  const tails = new Float32Array(geometry.getAttribute('position').count * 2);
+  for (let i = 1; i < tails.length; i += 2) tails[i] = 1;
+  streaks.setAttribute('tail', new THREE.BufferAttribute(tails, 1));
+  return streaks;
 }
 
 /** The scenery of every arena, built once; only the one of the arena in play is shown. */
@@ -523,10 +589,13 @@ export class Landmarks {
   private readonly light = new THREE.Color();
   /** The materials of the ring's specks, which size them by the picture's height (see setViewport). */
   private readonly sized: THREE.ShaderMaterial[] = [];
+  /** The grains of the ring's layer close by, and their streaks (see GRAINS). */
+  private grains!: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  private streaks!: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
 
   constructor(private readonly maps: PlanetMaps) {
     this.scenes.set('rings', this.rings());
-    this.scenes.set('kessler', this.kessler());
+    this.scenes.set('junkyard', this.junkyard());
     this.scenes.set('giant', this.jupiterScene());
     this.scenes.set('corona', this.corona());
     this.scenes.set('hole', this.hole());
@@ -551,6 +620,30 @@ export class Landmarks {
     for (const material of this.sized) material.uniforms.viewport.value = height;
   }
 
+  /**
+   * The ring's grains around `camera`, drawn only while their cube reaches into the layer, and
+   * streaking along `velocity`, the motion of whoever the camera rides with (none without), as
+   * fast as it goes (see GRAIN_STREAK).
+   */
+  follow(camera: THREE.Camera, velocity: THREE.Vector3 | null) {
+    const speed = velocity?.length() ?? 0;
+    const strength = THREE.MathUtils.smoothstep(speed, GRAIN_STREAK_START, GRAIN_STREAK_FULL);
+    this.grains.visible = Math.abs(camera.position.y) < RING_LAYER + GRAIN_BOX;
+    this.streaks.visible = this.grains.visible && strength > 0;
+    if (!velocity || !this.streaks.visible) return;
+    const uniforms = this.streaks.material.uniforms;
+    uniforms.strength.value = strength;
+    // the tail lies where the grain was, seen from the ship: ahead along the ship's own motion
+    uniforms.trail.value.copy(velocity).multiplyScalar(GRAIN_STREAK);
+  }
+
+  /** The share of the ring's grains drawn close by (see view/quality, Look.particles). */
+  setGrains(share: number) {
+    const count = Math.round(GRAINS * share);
+    this.grains.geometry.setDrawRange(0, count);
+    this.streaks.geometry.setDrawRange(0, count * 2);
+  }
+
   update(time: number) {
     for (const material of this.timed) material.uniforms.time.value = time;
     // the neon of the derelict stutters now and then, as a sign on emergency power does
@@ -559,8 +652,8 @@ export class Landmarks {
 
   /**
    * The picture's quality (see view/quality, Look.landmark): Jupiter's cap at a share of its
-   * full segment count (see JUPITER_SEGMENTS), and the planets' maps sharp (2048 × 1024) from half
-   * the share on, else as the page loaded them (1024 × 512). The sharp maps are fetched the first
+   * full segment count (see JUPITER_SEGMENTS), and the planets' maps sharp (2048 wide) from half
+   * the share on, else as the page loaded them (1024 wide). The sharp maps are fetched the first
    * time a rung asks for them and take over once they are there.
    */
   setDetail(share: number) {
@@ -622,17 +715,6 @@ export class Landmarks {
     return material;
   }
 
-  /** A world with air and water (see worldFragment). */
-  private world(radius: number): THREE.Mesh {
-    const material = new THREE.ShaderMaterial({
-      uniforms: { time: { value: 0 }, sun: { value: SUN_DIRECTION.clone() } },
-      vertexShader: planetVertex,
-      fragmentShader: worldFragment,
-    });
-    this.timed.push(material);
-    return new THREE.Mesh(new THREE.SphereGeometry(radius, 128, 64), material);
-  }
-
   private rings(): THREE.Group {
     const group = new THREE.Group();
     const center = SATURN_CENTER;
@@ -679,46 +761,54 @@ export class Landmarks {
     disk.receiveShadow = true;
     // specks of ice all around the pilot, flat like the ring, each with a facet of its own to glint with
     const r = new Randomizer(1610);
-    const specks = new Float32Array(ICE_SPECKS * 3);
-    const facets = new Float32Array(ICE_SPECKS * 3);
-    for (let i = 0; i < ICE_SPECKS; i++) {
-      specks.set([r.range(-1, 1) * ICE_SLAB, r.range(-1, 1) * ICE_THICKNESS, r.range(-1, 1) * ICE_SLAB], i * 3);
-      facets.set([r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)], i * 3);
+    const specks = iceGeometry(ICE_SPECKS, r, () => [r.range(-1, 1) * ICE_SLAB, r.range(-1, 1) * RING_LAYER, r.range(-1, 1) * ICE_SLAB]);
+    const ice = new THREE.Points(specks, this.iceMaterial({ size: { value: ICE_SPECK_SIZE }, slab: { value: ICE_SLAB } }, speckVertex, speckFragment));
+    // the grains close by, anywhere in their cube (the shader keeps those in the layer), and their streaks
+    const grains = iceGeometry(GRAINS, r, () => [r.range(0, 2) * GRAIN_BOX, r.range(0, 2) * GRAIN_BOX, r.range(0, 2) * GRAIN_BOX]);
+    const near = { box: { value: GRAIN_BOX }, layer: { value: RING_LAYER }, trail: { value: new THREE.Vector3() }, strength: { value: 0 } };
+    this.grains = new THREE.Points(grains, this.iceMaterial({ size: { value: GRAIN_SIZE }, ...near }, grainVertex, speckFragment));
+    const streakMaterial = this.iceMaterial({ size: { value: GRAIN_SIZE }, ...near }, grainVertex, streakFragment);
+    streakMaterial.defines = { STREAK: '' };
+    streakMaterial.blending = THREE.AdditiveBlending;
+    this.streaks = new THREE.LineSegments(streaksOf(grains), streakMaterial);
+    this.streaks.visible = false;
+    for (const points of [ice, this.grains, this.streaks]) {
+      points.receiveShadow = true;
+      // the shaders place them around the camera, wherever it is
+      points.frustumCulled = false;
     }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(specks, 3));
-    geometry.setAttribute('facet', new THREE.BufferAttribute(facets, 3));
-    const speckMaterial = new THREE.ShaderMaterial({
+    group.add(planet, disk, ice, this.grains, this.streaks);
+    return group;
+  }
+
+  /** A material for the ring's ice around the pilot (see iceFragmentPars), lit by the arena's sun, sized by the picture's height (see setViewport). */
+  private iceMaterial(own: Record<string, THREE.IUniform>, vertexShader: string, fragmentShader: string): THREE.ShaderMaterial {
+    const material = new THREE.ShaderMaterial({
       uniforms: litUniforms({
-        sun: { value: sun },
+        sun: { value: SUN_DIRECTION.clone() },
         light: { value: this.light },
         color: { value: new THREE.Color(0xe6e1d8) },
-        size: { value: ICE_SPECK_SIZE },
         viewport: { value: 1000 },
-        slab: { value: ICE_SLAB },
+        ...own,
       }),
-      vertexShader: speckVertex,
-      fragmentShader: speckFragment,
+      vertexShader,
+      fragmentShader,
       lights: true,
       transparent: true,
       depthWrite: false,
     });
-    this.sized.push(speckMaterial);
-    const ice = new THREE.Points(geometry, speckMaterial);
-    ice.receiveShadow = true;
-    // the shader places the specks around the camera, wherever it is
-    ice.frustumCulled = false;
-    group.add(planet, disk, ice);
-    return group;
+    this.sized.push(material);
+    return material;
   }
 
-  private kessler(): THREE.Group {
-    const group = new THREE.Group();
-    // the world the station circled, far below: oceans, clouds, the lights of its cities
-    const planet = this.world(180000);
-    planet.position.copy(KESSLER_WORLD);
-    group.add(planet);
-    return group;
+  /** The Satellite Junkyard (see world/junkyard): Earth below at night, its map swapped by quality like the other planets', and the junk beyond the arena. */
+  private junkyard(): THREE.Group {
+    const scene = junkyard(this.maps.maps.earth, this.light);
+    this.planets.set('earth', scene.earth);
+    this.timed.push(...scene.timed);
+    this.sized.push(...scene.sized);
+    this.flicker.push(...scene.flicker);
+    return scene.group;
   }
 
   /**

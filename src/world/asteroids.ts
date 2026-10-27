@@ -28,7 +28,7 @@ const IMPOSTOR_LEVEL = 80;
  * The nearest a field piece switches to its billboard (units, 7 km), however small it is (a
  * fragment of a fragment, a chunk of ice): farther than a fight reaches across the largest
  * arena, so the switch is never seen. Within it a small piece draws its far mesh (a few hundred
- * triangles; the Rings' 90 ice chunks are the most of them). The belt beyond the arena chooses
+ * triangles; the Rings' 136 ice chunks are the most of them). The belt beyond the arena chooses
  * its billboards by itself (see world/belt).
  */
 export const IMPOSTOR_MIN = 140000;
@@ -110,6 +110,12 @@ export interface FieldLayout {
   inner: number;
   /** Half the thickness of a flat disk in the horizon plane (units); a ball when absent. */
   flat?: number;
+  /**
+   * Pieces in the open space above and below the disk, after the disk's: `count` of them, of a
+   * scale from `minScale` to `maxScale`, from `from` to `to` (units) above or below the horizon
+   * plane (either side by chance), within `radius` of the center's vertical axis.
+   */
+  open?: { count: number; minScale: number; maxScale: number; from: number; to: number; radius: number };
   /**
    * The rocks circle the center: about the vertical axis or each about an axis of its own
    * (crossing orbits), at `speed` (units/s) or, with a well, at the speed its gravity holds
@@ -286,25 +292,52 @@ export class AsteroidField {
     this.clear();
     this.clock = 0;
     const r = new Randomizer(layout.seed);
-    const templates = this.templates[layout.kind];
     const direction = new THREE.Vector3();
+    this.scatter(r, layout, 0, layout.count, layout.minScale, layout.maxScale, (position) => {
+      if (layout.flat === undefined) {
+        direction.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
+        const inner = layout.inner / layout.radius;
+        position.copy(direction).multiplyScalar(layout.radius * Math.cbrt(inner ** 3 + (1 - inner ** 3) * r.nextFloat()));
+      } else {
+        // evenly over the disk's area
+        const angle = r.range(0, Math.PI * 2);
+        const distance = Math.sqrt(r.range(layout.inner ** 2, layout.radius ** 2));
+        position.set(Math.cos(angle) * distance, r.range(-layout.flat, layout.flat), Math.sin(angle) * distance);
+      }
+    });
+    const open = layout.open;
+    if (open) {
+      // above or below the disk, evenly over the area within the open pieces' radius
+      this.scatter(r, layout, layout.count, open.count, open.minScale, open.maxScale, (position) => {
+        const angle = r.range(0, Math.PI * 2);
+        const distance = Math.sqrt(r.nextFloat()) * open.radius;
+        const height = r.range(open.from, open.to) * (r.nextFloat() < 0.5 ? -1 : 1);
+        position.set(Math.cos(angle) * distance, height, Math.sin(angle) * distance);
+      });
+    }
+    for (const [i, piece] of (layout.placements ?? []).entries()) {
+      const id = `h${i}`;
+      this.add(id, piece.kind, piece.type, piece.scale, 0, 0, piece.position, new THREE.Vector3(0, 1, 0), new THREE.Vector3(), new THREE.Vector3(0, 1, 0), 0, piece.solid);
+      const asteroid = this.asteroids.get(id)!;
+      asteroid.baseOrientation.copy(piece.orientation).multiply(asteroid.object.quaternion);
+      this.place(asteroid);
+    }
+  }
+
+  /**
+   * Adds `count` pieces of the layout's kind, ids from `first` on, of a scale between `min` and
+   * `max`, each where `place` puts it, with a few attempts to keep them apart; the sequence is
+   * seeded, so it stays deterministic.
+   */
+  private scatter(r: Randomizer, layout: FieldLayout, first: number, count: number, min: number, max: number, place: (position: THREE.Vector3) => void) {
+    const templates = this.templates[layout.kind];
     const position = new THREE.Vector3();
-    for (let i = 0; i < layout.count; i++) {
+    for (let i = first; i < first + count; i++) {
       const type = r.nextInt() % templates.length;
-      const scale = r.range(layout.minScale, layout.maxScale);
+      const scale = r.range(min, max);
       const spinAxis = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-      // a few attempts to keep the rocks apart; the sequence is seeded, so it stays deterministic
       for (let attempt = 0; attempt < 8; attempt++) {
-        if (layout.flat === undefined) {
-          direction.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-          const inner = layout.inner / layout.radius;
-          position.copy(direction).multiplyScalar(layout.radius * Math.cbrt(inner ** 3 + (1 - inner ** 3) * r.nextFloat()));
-        } else {
-          // evenly over the disk's area
-          const angle = r.range(0, Math.PI * 2);
-          const distance = Math.sqrt(r.range(layout.inner ** 2, layout.radius ** 2));
-          position.set(Math.cos(angle) * distance, r.range(-layout.flat, layout.flat), Math.sin(angle) * distance);
-        }
+        place(position);
         const clear = this.boundingRadius(layout.kind, type, scale) * 1.3;
         if (!this.overlap(position, clear) && !this.insideWell(position, clear)) break;
       }
@@ -315,13 +348,6 @@ export class AsteroidField {
       }
       const orbitRate = layout.orbit ? this.orbitRate(position, layout.orbit.speed) : 0;
       this.add(String(i), layout.kind, type, scale, 0, 0, position, spinAxis, new THREE.Vector3(), orbitAxis, orbitRate);
-    }
-    for (const [i, piece] of (layout.placements ?? []).entries()) {
-      const id = `h${i}`;
-      this.add(id, piece.kind, piece.type, piece.scale, 0, 0, piece.position, new THREE.Vector3(0, 1, 0), new THREE.Vector3(), new THREE.Vector3(0, 1, 0), 0, piece.solid);
-      const asteroid = this.asteroids.get(id)!;
-      asteroid.baseOrientation.copy(piece.orientation).multiply(asteroid.object.quaternion);
-      this.place(asteroid);
     }
   }
 

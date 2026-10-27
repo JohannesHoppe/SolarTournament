@@ -3,6 +3,7 @@ import { FIELD_RADIUS, SPIN_RATE, type FieldLayout, type Placement } from './ast
 import { hash } from '../music/songs';
 import { textSeed } from '../random';
 import { msg } from '../i18n/i18n';
+import { SUN_DIRECTION } from './space';
 
 /** One standard gravity (units/s², 1 unit = 5 cm). */
 const G = 196.2;
@@ -23,7 +24,7 @@ const JUPITER_CENTER = new THREE.Vector3(0, -JUPITER_RADIUS, 0);
 /** The black hole's event horizon (units, 175 m), in the middle of its arena. */
 export const HOLE_RADIUS = 3500;
 
-export type ArenaId = 'belt' | 'rings' | 'kessler' | 'giant' | 'corona' | 'hole' | 'derelict';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -42,6 +43,8 @@ export interface ArenaProfile {
   preview?: { from: [number, number, number]; at?: [number, number, number] };
   /** The big things that never move, besides the field's center and the sun, which the HUD marks (see Reference). */
   references: Reference[];
+  /** Half the thickness (units) of a layer of ice grains in the horizon plane, a ring's: harmless, but felt on the hull flying through (see Game.ringGrains). */
+  grains?: number;
 }
 
 /** How the HUD draws a fixed reference: each kind has a glyph of its own in style.css (.reference[data-glyph]). */
@@ -63,8 +66,22 @@ export interface Reference {
 
 /** Saturn, beside the Rings of Saturn (units, 13 km off), whose ring runs through the arena in the horizon plane. */
 export const SATURN_CENTER = new THREE.Vector3(-0.85, 0, 0.5).normalize().multiplyScalar(260000);
-/** The world the Kessler field's station circled, far below (units). */
-export const KESSLER_WORLD = new THREE.Vector3(-120000, -330000, -60000);
+/**
+ * Earth below the Satellite Junkyard, at its real size (EARTH_RADIUS, units, 6,371 km), the
+ * field's center EARTH_ALTITUDE (550 km) above it in low orbit: it fills the sky below a horizon
+ * 23° beneath the arena. Not straight below: tilted EARTH_TILT (23°) towards the sun, so the
+ * point beneath the arena lies in night (the sun 14.6° below its horizon), the terminator with
+ * its sliver of day shows towards the sun along the horizon, and the arena itself, high above,
+ * still lies in sunlight. Scenery only: it neither pulls nor blocks.
+ */
+export const EARTH_RADIUS = 127420000;
+export const EARTH_ALTITUDE = 11000000;
+const EARTH_TILT = 0.4;
+/** Straight down to the point beneath the arena, from the field's center. */
+export const EARTH_DOWN = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z).normalize().multiplyScalar(Math.sin(EARTH_TILT)).add(new THREE.Vector3(0, -Math.cos(EARTH_TILT), 0));
+export const EARTH_CENTER = EARTH_DOWN.clone().multiplyScalar(EARTH_RADIUS + EARTH_ALTITUDE);
+/** Half the thickness of the ring's layer of ice grains through the arena's middle (units, 125 m: a layer 250 m thick). */
+export const RING_LAYER = 2500;
 
 /** The camera of an arena's preview picture: far out and above, onto the center, so the landmark shows (see ArenaProfile.preview). */
 export const PREVIEW_FROM: [number, number, number] = [70000, 30000, 70000];
@@ -129,18 +146,34 @@ export const ARENAS: readonly ArenaProfile[] = [
     id: 'rings',
     name: msg('Rings of Saturn'),
     tagline: msg('Inside a ring of ice, as thin as a sheet. Up and down are open.'),
-    layout: { key: 'rings', seed: 23, kind: 'ice', count: 90, minScale: 0.8, maxScale: 3.2, radius: FIELD_RADIUS * 1.3, inner: 0, flat: 5000, spin: 0.08, toughness: 500 },
+    // small chunks in the ring's layer, cover and obstacles among its grains; a few large ones
+    // in the open space above and below it
+    layout: {
+      key: 'rings',
+      seed: 23,
+      kind: 'ice',
+      count: 120,
+      minScale: 0.5,
+      maxScale: 1.5,
+      radius: FIELD_RADIUS * 1.3,
+      inner: 0,
+      flat: 1600,
+      open: { count: 16, minScale: 2, maxScale: 2.6, from: 8000, to: 24000, radius: FIELD_RADIUS },
+      spin: 0.08,
+      toughness: 500,
+    },
+    grains: RING_LAYER,
     cooling: 1.2,
     storms: false,
     sun: { size: 26000, intensity: 3, color: 0xf2f4ff },
     references: [{ glyph: 'planet', label: msg('Saturn'), position: SATURN_CENTER, distance: false }],
   },
   {
-    id: 'kessler',
-    name: msg('Kessler Field'),
-    tagline: msg('A station blew up. Its pieces still cross each other at 25 m/s.'),
+    id: 'junkyard',
+    name: msg('The Satellite Junkyard'),
+    tagline: msg('The Orbital Freedom Network rots in low orbit. Its junk crosses at 25 m/s; Earth glows below.'),
     layout: {
-      key: 'kessler',
+      key: 'junkyard',
       seed: 31,
       kind: 'debris',
       count: 90,
@@ -151,6 +184,7 @@ export const ARENAS: readonly ArenaProfile[] = [
       orbit: { axis: 'random', speed: 500 },
       spin: 0.15,
       toughness: 500,
+      // the network's dead relay hub in the middle: an engine block and two spars across
       placements: [
         { kind: 'hull', type: 2, scale: 6, position: new THREE.Vector3(0, 0, 0), orientation: new THREE.Quaternion(), solid: true },
         { kind: 'hull', type: 4, scale: 8, position: new THREE.Vector3(0, 0, 0), orientation: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), solid: true },
@@ -160,7 +194,8 @@ export const ARENAS: readonly ArenaProfile[] = [
     cooling: 1,
     storms: false,
     sun: { size: 30000, intensity: 3.2, color: 0xfff0dd },
-    references: [{ glyph: 'planet', label: msg('Planet'), position: KESSLER_WORLD, distance: false }],
+    // the mark lies on the way down to Earth, within the camera's reach (the HUD marks only what lies there)
+    references: [{ glyph: 'planet', label: msg('Earth'), position: EARTH_DOWN.clone().multiplyScalar(450000), distance: false }],
   },
   {
     id: 'giant',

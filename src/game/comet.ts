@@ -12,8 +12,8 @@ import { dustStreaks, SUN_DIRECTION } from '../world/space';
  * away from the sun. The head keeps its route, bent only by the
  * arena's massive body, and clears whatever stands in its way: rock breaks, the wreck's hull
  * is shoved aside, ships are run down. The shower is the real danger, a storm of pieces that
- * strike a ship like lasers: the armor shrugs them off, the drive does not. A black hole or a
- * gas giant's clouds swallow a comet, its shower after it.
+ * strike a ship like lasers: the armor shrugs them off, the drive does not. A black hole or
+ * Jupiter's depths swallow a comet, its shower after it.
  *
  * Everything about a comet follows from the room's seed, the round and the field time, which
  * every browser shares: when it comes, from where, how gravity bends it, where each piece of
@@ -25,31 +25,43 @@ export const COMET_WINDOWS: readonly { from: number; to: number; chance: number 
   { from: 75, to: 135, chance: 0.75 },
   { from: 175, to: 235, chance: 0.4 },
 ];
-/** The head flies this fast (units/s, 150 m/s) where it passes the field's center; a well's gravity changes that elsewhere. */
-export const COMET_SPEED = 3000;
-/** The head starts this far before the point of its route nearest the field's center (units, 4.4 km), beyond the arena's edge, and flies as far beyond it. */
-export const COMET_REACH = 88000;
+/**
+ * The head flies this fast (units/s, 400 m/s) where it passes the field's center; a well's
+ * gravity changes that elsewhere. Far slower than a real comet (5 to 25 km/s past a planet,
+ * through the arena in under a second): slow enough to be seen coming and dodged.
+ */
+export const COMET_SPEED = 8000;
+/**
+ * The head starts this far before the point of its route nearest the field's center (units,
+ * 8 km), 4.6 km beyond the arena's edge, and flies as far beyond it: at COMET_SPEED it shows
+ * about as long before it reaches the edge as the warning comes before (see COMET_WARNING).
+ */
+export const COMET_REACH = 160000;
 /** The route passes the field's center within this much (units, 800 m), so it crosses the thick of the field. */
 const COMET_MISS = 16000;
 /** The route lies within this angle (rad, 35°) of the arena's horizon plane, where the field is. */
 const COMET_TILT = 0.6;
-/** A massive body in the field's middle (the black hole) is aimed at: the route passes it within this many of its radii, close enough to be caught. */
-const CAPTURE = 2;
-/** Towards a massive body outside the field (the gas giant) the route dives at an angle of this range (rad, 26° to 43°) as it crosses the center: steep enough that it comes from above its clouds, so the body's pull bends it down into them. */
+/** A massive body in the field's middle (the black hole) is aimed at: the route passes it within this many of its radii, close enough to be caught: at COMET_SPEED the hole's pull bends a route aimed 1.3 radii off into its body. */
+const CAPTURE = 1.2;
+/** Towards a massive body outside the field (Jupiter) the route dives at an angle of this range (rad, 26° to 43°) as it crosses the center: steep enough that it comes from above its cloud deck, so the body's pull bends it down through it into its depths. */
 const DIVE: readonly [number, number] = [0.45, 0.75];
 /** Radius of the solid head (units, 70 m). */
 export const HEAD_RADIUS = 1400;
-/** The flight computer warns this many seconds before the head reaches the arena's edge. */
+/**
+ * The flight computer warns this many seconds before the head reaches the arena's edge (s): at
+ * COMET_SPEED the head is 4.8 km beyond the edge then, and it crosses from the edge to the
+ * center in another 8.4 s.
+ */
 export const COMET_WARNING = 12;
 /**
  * The shower: SHOWER_PIECES pieces from SHOWER_GAP (units, 60 m) behind the head back to
- * SHOWER_LENGTH (1.8 km) behind it, the swarm widening from SHOWER_NARROW (60 m) to SHOWER_WIDE
+ * SHOWER_LENGTH (3 km, 7.5 s at COMET_SPEED) behind it, the swarm widening from SHOWER_NARROW (60 m) to SHOWER_WIDE
  * (260 m) around the route, denser near the head. Each piece follows the head's route a little
  * later, so the swarm bends with it.
  */
-export const SHOWER_PIECES = 600;
+export const SHOWER_PIECES = 800;
 const SHOWER_GAP = 1200;
-export const SHOWER_LENGTH = 36000;
+export const SHOWER_LENGTH = 60000;
 const SHOWER_NARROW = 1200;
 export const SHOWER_WIDE = 5200;
 /** Radius of a piece (units, 3 m): a ship within its own radius plus this is struck. */

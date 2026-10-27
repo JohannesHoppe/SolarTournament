@@ -63,7 +63,7 @@ describe('the comets of a round', () => {
     expect(seen).toBeGreaterThan(50);
   });
 
-  it("dive through the field into the gas giant's clouds, coming from above them", () => {
+  it("dive through the field into Jupiter's depths, coming from above its cloud deck", () => {
     const well = layoutOf('giant').well!;
     for (let seed = 1; seed < 80; seed++) {
       for (const comet of cometsOf(seed, 2, well)) {

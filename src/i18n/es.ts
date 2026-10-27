@@ -507,7 +507,7 @@ export const ES: Catalog = {
   'Orange base': 'Base Naranja',
   'Blue base': 'Base Azul',
   Saturn: 'Saturno',
-  Planet: 'Planeta',
+  Earth: 'Tierra',
   'Black hole': 'Agujero negro',
   Bow: 'Proa',
   Stern: 'Popa',
@@ -519,8 +519,8 @@ export const ES: Catalog = {
   'Forty rocks, ten ships long each. Cover is everywhere.': 'Cuarenta rocas, cada una tan larga como diez naves. Hay cobertura por todas partes.',
   'Rings of Saturn': 'Anillos de Saturno',
   'Inside a ring of ice, as thin as a sheet. Up and down are open.': 'Dentro de un anillo de hielo, fino como una hoja. Por arriba y por abajo, vía libre.',
-  'Kessler Field': 'Campo Kessler',
-  'A station blew up. Its pieces still cross each other at 25 m/s.': 'Una estación voló por los aires. Sus pedazos aún se cruzan a 25 m/s.',
+  'The Satellite Junkyard': 'El Desguace de Satélites',
+  'The Orbital Freedom Network rots in low orbit. Its junk crosses at 25 m/s; Earth glows below.': 'La Orbital Freedom Network se pudre en órbita baja. Su chatarra se cruza a 25 m/s; abajo brilla la Tierra.',
   Jupiter: 'Júpiter',
   'Half in space, half in the clouds. The deeper, the thicker the air: it hides, it brakes, it burns.': 'Medio en el espacio, medio en las nubes. Cuanto más hondo, más denso el aire: oculta, frena, quema.',
   Corona: 'Corona',
@@ -941,7 +941,7 @@ export const ES: Catalog = {
   'this is your announcer. the games continue': 'aquí tu locutor. los juegos continúan',
   'live from the belt. forty rocks. no mercy': 'en directo desde el cinturón. cuarenta rocas. sin piedad',
   'live from the rings of saturn. mind the ice': 'en directo desde los anillos de saturno. cuidado con el hielo',
-  'live from the kessler field. the station died. so will you': 'en directo desde el campo kessler. la estación murió. tú también morirás',
+  'live from the satellite junkyard. internet for everyone. junk forever': 'en directo desde el desguace de satélites. internet para todos. chatarra para siempre',
   'live from jupiter. the clouds are hungry today': 'en directo desde júpiter. hoy las nubes tienen hambre',
   'live from the corona. it is hot today': 'en directo desde la corona. hoy hace calor',
   'live from the event horizon. nobody comes back': 'en directo desde el horizonte de sucesos. nadie regresa',
@@ -1134,10 +1134,11 @@ export const ES: Catalog = {
     'Elimina primero las baterías: cada {batteryPeriod} s, cada una dispara a la nave más cercana que ve a menos de {batteryRange} km, y la velocidad le estropea la puntería. Perdida la mitad de sus baterías, vuelve la popa hacia el piloto más cercano y enciende sus motores: no te metas en ese chorro. Sin ninguna batería, el reactor queda al descubierto. Cuando se rompe, aléjate: cuatro segundos después la nave estalla y se lleva todo lo que haya a menos de {blast} km. Hundirlo da {sink} a todos; si los cinco minutos se acaban antes, gana el Presidente.',
   'Seven Arenas, One Glorious Death': 'Siete arenas, una muerte gloriosa',
   '<strong>The Belt.</strong> The home of the Games: forty huge rocks, cover everywhere.': '<strong>El Cinturón.</strong> El hogar de los Juegos: cuarenta rocas enormes, cobertura por todas partes.',
-  '<strong>Rings of Saturn.</strong> Inside Saturn\'s ring: ice in a thin sheet, open above and below. The sun gives a hundredth of the light it gives Earth; the flight computer\'s sensors brighten the picture to make up for it. Ice breaks easier, and the weaker sun lets lasers cool a little faster.':
-    '<strong>Anillos de Saturno.</strong> Dentro del anillo de Saturno: hielo en una capa fina, abierta por arriba y por abajo. El sol da aquí una centésima parte de la luz que da a la Tierra; los sensores del ordenador de vuelo aclaran la imagen para compensarlo. El hielo se rompe más fácilmente, y el sol más débil deja que los láseres se enfríen un poco más rápido.',
-  "<strong>Kessler Field.</strong> Station debris on crossing orbits, all at {kesslerOrbit} m/s: your cover moves. The station's core in the middle never breaks.":
-    '<strong>Campo Kessler.</strong> Escombros de estación en órbitas que se cruzan, todos a {kesslerOrbit} m/s: tu cobertura se mueve. El núcleo de la estación, en el centro, nunca se rompe.',
+  '<strong>The Satellite Junkyard.</strong> The dead satellites, spent stages and fairings of the Orbital Freedom Network on crossing orbits, all at {junkOrbit} m/s: your cover moves. The dead relay hub in the middle never breaks. Earth glows below, out of reach.*':
+    '<strong>El Desguace de Satélites.</strong> Satélites muertos, etapas agotadas y cofias de la Orbital Freedom Network en órbitas que se cruzan, todos a {junkOrbit} m/s: tu cobertura se mueve. El nodo de enlace muerto, en el centro, nunca se rompe. Abajo brilla la Tierra, fuera de tu alcance.*',
+  '*They promised internet for everyone. Now everyone gets junk, darling.': '*Prometieron internet para todos. Ahora todos reciben chatarra, cariño.',
+  '<strong>Rings of Saturn.</strong> Inside Saturn\'s ring: a layer of ice grains {ringLayer} m thick runs through the middle, small chunks of ice in it, a few big ones in the open space above and below. The grains do no harm, they only patter on the hull; dive through the layer to shake off a chaser, or hide among its chunks. The race course dives through it four times a lap. The sun gives a hundredth of the light it gives Earth; the flight computer\'s sensors brighten the picture to make up for it. Ice breaks easier, and the weaker sun lets lasers cool a little faster.':
+    '<strong>Anillos de Saturno.</strong> Dentro del anillo de Saturno: una capa de granos de hielo de {ringLayer} m de grosor atraviesa el centro, con pequeños trozos de hielo dentro y unos pocos grandes en el espacio abierto por encima y por debajo. Los granos no hacen daño, solo repiquetean en el casco; atraviesa la capa en picado para quitarte de encima a un perseguidor, o escóndete entre sus trozos. La pista de carreras la atraviesa cuatro veces por vuelta. El sol da aquí una centésima parte de la luz que da a la Tierra; los sensores del ordenador de vuelo aclaran la imagen para compensarlo. El hielo se rompe más fácilmente, y el sol más débil deja que los láseres se enfríen un poco más rápido.',
   "<strong>Jupiter.</strong> Its cloud deck runs through the middle of the arena: above it open space, below it the air, thicker the deeper you go, and its pull, almost a g, draws everything down into it. Half the fight is in the clouds (see In Jupiter's clouds).":
     '<strong>Júpiter.</strong> Su capa de nubes atraviesa el centro de la arena: encima, espacio abierto; debajo, el aire, más denso cuanto más bajas, y su atracción, casi una g, lo arrastra todo hacia él. Media pelea se libra en las nubes (ver En las nubes de Júpiter).',
   "<strong>Corona.</strong> In the sun's glare the radiators shed only about half their heat: fight from the shadows. Every {stormEvery} s a solar storm blinds the sensors for {stormLength} s.":
