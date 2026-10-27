@@ -271,6 +271,21 @@ export function cometsOf(seed: number, round: number, well: Well | null = null):
   return comets;
 }
 
+/**
+ * The comets a venue brings: in a round (`round` 0 or more) those of cometsOf; none in the
+ * flight school and none outside a round, so nothing there ever warns of one.
+ */
+export function roundComets(seed: number, round: number, well: Well | null, school: boolean): Comet[] {
+  return school || round < 0 ? [] : cometsOf(seed, round, well);
+}
+
+/** The comet a browser follows at field time `clock`: the last of `comets` from COMET_WARNING before it starts out to its shower's end; null between them. */
+export function cometAt(comets: readonly Comet[], clock: number): Comet | null {
+  let comet: Comet | null = null;
+  for (const next of comets) if (clock >= cometStart(next) - COMET_WARNING && clock <= cometEnd(next)) comet = next;
+  return comet;
+}
+
 const sample = new THREE.Vector3();
 
 /** Where a comet's head is at a field time: on its route, beyond its ends straight on. */

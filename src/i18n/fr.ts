@@ -736,8 +736,6 @@ export const FR: Catalog = {
   'A torpedo is coming. Do not shoot it this time. Get behind the rock.': 'Une torpille arrive. Cette fois, ne l’abats pas. Passe derrière le rocher.',
   'It got you. Put the rock between you and it. Again.': 'Elle t’a eu. Mets le rocher entre toi et elle. Encore une fois.',
   'Shot down. Nice, but this time hide. Again.': 'Abattue. Joli, mais cette fois, cache-toi. Encore une fois.',
-  'A comet, darling, from your right. Its head misses you, its shower will not: a storm of rock. Get behind the rock, or turn your armored nose into it. Never show it your drive.': 'Une comète, mon chéri, sur ta droite. Sa tête te manque, sa pluie non : une tempête de roche. Passe derrière le rocher, ou tourne ton nez blindé vers elle. Ne lui montre jamais ton moteur.',
-  'Your drive took the shower. Hide, or face it. Again.': 'Ton moteur a pris la pluie. Cache-toi, ou fais-lui face. Encore une fois.',
   'Final exam, tactician. This bot flies as well as the field. Use everything.': 'Examen final, tacticien. Ce bot vole aussi bien que les autres. Sers-toi de tout.',
   'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.': 'Tu te bats en tacticien maintenant. Bondis hors de la ligne de tir, ne leur montre jamais ton moteur, tire en rafales, et laisse les rochers encaisser. Et maintenant, va offrir la victoire au Président.',
   'Again.': 'Encore une fois.',
@@ -782,7 +780,6 @@ export const FR: Catalog = {
   'Your nose on them, your flight somewhere else. They cannot dodge what they do not see coming, darling.': 'Ton nez sur eux, ton vol ailleurs. On n’esquive pas ce qu’on ne voit pas venir, mon chéri.',
   'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.': 'Les lasers ne se courbent pas, et les capteurs ne voient pas à travers la roche. Derrière, tu n’existes pas.',
   'Lost you. A seeker that loses its line never finds it again.': 'Elle t’a perdu. Un autodirecteur qui perd sa cible de vue ne la retrouve jamais.',
-  'Still in one piece. The head clears everything in its way, but the shower is what kills.': 'Encore entier. La tête balaie tout sur son passage, mais c’est la pluie qui tue.',
   'A real fight, and you won it. I am so proud of you, darling.': 'Un vrai combat, et tu l’as gagné. Je suis si fière de toi, mon chéri.',
 
   // Nicole, the flight computer: in the round

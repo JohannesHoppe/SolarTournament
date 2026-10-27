@@ -65,7 +65,7 @@ import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES,
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { touchRing } from '../world/gates';
 import { IMMOVABLE, massOf, type Body } from '../world/bodies';
-import { COMET_SPEED, COMET_WARNING, cometEnd, cometsOf, cometStart, CometView, courseAt, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
+import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, HEAD_RADIUS, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
 import { FlareView } from '../world/flare';
@@ -583,8 +583,6 @@ const MIST_PATTER = 15;
  */
 const DUST_PATTER = 18;
 const DUST_PATTER_SPEED = 1000;
-/** The flight school's comet passes the point its drill names this long after the drill sends it (s): 6 km off at its speed. */
-const DRILL_COMET_LEAD = 15;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 /** The label of a menu mode button: the text of its first line, without the Enter key. */
@@ -982,12 +980,10 @@ export class Game implements OnlineGame {
   /** The comet of the round as the scene shows it, and on the radar. */
   private readonly cometView = new CometView();
   private readonly cometMark: RadarMark = { position: new THREE.Vector3(), label: t('Comet'), color: '#bfe6ff' };
-  /** The comets of the round (see cometsOf), and of which room, round and arena they are. */
+  /** The comets of the round (see roundComets), and of which room, round, arena and venue they are. */
   private comets: Comet[] = [];
   private cometsOfKey = '';
-  /** The flight school's comet, when a drill sends one. */
-  private drillComet: Comet | null = null;
-  /** The comet the flight computer has warned of, and the one whose shower flies now. */
+  /** The comet the flight computer has warned of while it comes, and the one whose shower flies now. */
   private cometCalled: Comet | null = null;
   /** The comet whose tail the own clone has been told is harmless, and whether it is in a tail now. */
   private tailCalled: Comet | null = null;
@@ -2252,7 +2248,9 @@ export class Game implements OnlineGame {
       this.school = null;
       this.schoolContext = null;
     }
-    this.drillComet = null;
+    // the comet called belongs to the round that ends: the next venue's field time starts over
+    this.cometCalled = null;
+    this.tailCalled = null;
   }
 
   /**
@@ -4513,13 +4511,6 @@ export class Game implements OnlineGame {
       get dodges() {
         return game.dodges;
       },
-      launchComet: (through, direction) => {
-        this.drillComet = through && direction ? makeComet(this.field.clock + DRILL_COMET_LEAD, direction.clone().normalize(), through.clone(), Math.floor(this.time * 1000) + 1, this.field.well) : null;
-      },
-      get cometGone() {
-        const comet = game.drillComet;
-        return !comet || game.field.clock > Math.min(comet.at, comet.swallowed) + (SHOWER_LENGTH + SHOWER_WIDE) / COMET_SPEED;
-      },
       spawnProbe: (position, kind) => {
         // a probe of its own each time: one taken is never shown again; it waits where it is
         // until the pilot comes for it
@@ -6169,25 +6160,24 @@ export class Game implements OnlineGame {
   /**
    * The comet of the round (see comet.ts): its route, the warning before it comes, its shower
    * shown at the field time and its head running down the rock in its way. The flight school
-   * sees only the comet its drill sends.
+   * sees none (see roundComets), so nothing there warns of one either.
    */
   private playComet(dt: number, me: Ship) {
     const clock = this.field.clock;
-    let comet = this.drillComet;
-    if (!this.school && this.roundId >= 0) {
-      const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
-      const key = `${seed}.${this.roundId}.${this.venue.id}`;
-      if (key !== this.cometsOfKey) {
-        this.cometsOfKey = key;
-        this.comets = cometsOf(seed, this.roundId, this.field.well);
-      }
-      for (const next of this.comets) if (clock >= cometStart(next) - COMET_WARNING && clock <= cometEnd(next)) comet = next;
+    const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
+    const key = `${seed}.${this.roundId}.${this.venue.id}.${!!this.school}`;
+    if (key !== this.cometsOfKey) {
+      this.cometsOfKey = key;
+      this.comets = roundComets(seed, this.roundId, this.field.well, !!this.school);
     }
+    const comet = cometAt(this.comets, clock);
+    // the alarm follows only the comet that comes now
+    if (!comet) this.cometCalled = null;
     // the warning, once, as the head nears the arena's edge
     if (comet && comet !== this.cometCalled && clock >= comet.edge - COMET_WARNING && clock < comet.at) {
       this.cometCalled = comet;
       this.speaker.say(COMPUTER.comet, 'urgent');
-      if (!this.school) this.radio.announce(pick(ANNOUNCER_COMET), null);
+      this.radio.announce(pick(ANNOUNCER_COMET), null);
       this.hud.flashMessage(this.time, t('Comet inbound · take cover behind a rock, or turn your nose into its shower'), 5);
       this.sound.beep(980, 0.3, 0.2);
     }

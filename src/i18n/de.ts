@@ -767,8 +767,6 @@ export const DE: Catalog = {
   'Shot down. Nice, but this time hide. Again.': 'Abgeschossen. Hübsch, aber diesmal sollst du dich verstecken. Nochmal.',
   'Final exam, tactician. This bot flies as well as the field. Use everything.': 'Abschlussprüfung, Taktiker. Dieser Bot fliegt so gut wie die anderen im Feld. Setz alles ein.',
   'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.': 'Du kämpfst jetzt wie ein Taktiker. Spring aus der Schusslinie, zeig ihnen nie deinen Antrieb, feuer in Salven und lass die Felsen die Treffer einstecken. Und jetzt hol den Sieg für den Präsidenten.',
-  'A comet, darling, from your right. Its head misses you, its shower will not: a storm of rock. Get behind the rock, or turn your armored nose into it. Never show it your drive.': 'Ein Komet, Schätzchen, von rechts. Sein Kopf verfehlt dich, sein Schauer nicht: ein Sturm aus Gestein. Ab hinter den Felsen, oder dreh ihm deine gepanzerte Nase zu. Zeig ihm nie deinen Antrieb.',
-  'Your drive took the shower. Hide, or face it. Again.': 'Dein Antrieb hat den Schauer abbekommen. Versteck dich, oder stell dich ihm. Nochmal.',
   'Again.': 'Nochmal.',
 
   // Nicole's praise after a drill
@@ -813,7 +811,6 @@ export const DE: Catalog = {
   'Your nose on them, your flight somewhere else. They cannot dodge what they do not see coming, darling.': 'Deine Nase auf ihnen, dein Flug ganz woanders. Dem, was sie nicht kommen sehen, können sie nicht ausweichen, Schätzchen.',
   'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.': 'Laser biegen sich nicht, und Sensoren sehen nicht durch Fels. Dahinter gibt es dich nicht.',
   'Lost you. A seeker that loses its line never finds it again.': 'Er hat dich verloren. Ein Suchkopf, der seine Sichtlinie verliert, findet sie nie wieder.',
-  'Still in one piece. The head clears everything in its way, but the shower is what kills.': 'Noch ganz. Der Kopf räumt alles aus dem Weg, aber töten tut der Schauer.',
   'A real fight, and you won it. I am so proud of you, darling.': 'Ein echter Kampf, und du hast ihn gewonnen. Ich bin so stolz auf dich, Schätzchen.',
 
   // Nicole during a round

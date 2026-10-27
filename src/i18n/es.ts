@@ -747,8 +747,6 @@ export const ES: Catalog = {
   'Shot down. Nice, but this time hide. Again.': 'Derribado. Muy bonito, pero esta vez tenías que esconderte. Otra vez.',
   'Final exam, tactician. This bot flies as well as the field. Use everything.': 'Examen final, táctico. Este bot vuela tan bien como cualquiera del torneo. Usa todo lo que tienes.',
   'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.': 'Ya peleas como un táctico. Sal de la línea de fuego de un golpe, nunca les enseñes tu motor, dispara en ráfagas y deja que las rocas se lleven los impactos. Ahora ve y tráele la victoria al Presidente.',
-  'A comet, darling, from your right. Its head misses you, its shower will not: a storm of rock. Get behind the rock, or turn your armored nose into it. Never show it your drive.': 'Un cometa, cariño, por tu derecha. Su cabeza no te alcanza, su lluvia sí: una tormenta de roca. Ponte detrás de la roca, o gírale tu morro acorazado. Nunca le enseñes tu motor.',
-  'Your drive took the shower. Hide, or face it. Again.': 'Tu motor se llevó la lluvia. Escóndete, o plántale cara. Otra vez.',
   'Again.': 'Otra vez.',
 
   // Nicole: praise after a drill
@@ -794,7 +792,6 @@ export const ES: Catalog = {
   'Your nose on them, your flight somewhere else. They cannot dodge what they do not see coming, darling.': 'El morro sobre ellos, tu vuelo en otra parte. No pueden esquivar lo que no ven venir, cariño.',
   'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.': 'Los láseres no se doblan, y los sensores no ven a través de la roca. Detrás de ella, no existes.',
   'Lost you. A seeker that loses its line never finds it again.': 'Te ha perdido. Un torpedo que pierde la línea de visión ya no la recupera.',
-  'Still in one piece. The head clears everything in its way, but the shower is what kills.': 'Sigues entero. La cabeza barre todo a su paso, pero lo que mata es la lluvia.',
   'A real fight, and you won it. I am so proud of you, darling.': 'Un combate de verdad, y lo has ganado. Estoy muy orgullosa de ti, cariño.',
 
   // Nicole: in a round
