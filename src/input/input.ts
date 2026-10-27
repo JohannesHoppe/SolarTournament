@@ -261,33 +261,29 @@ export class Input {
   /** Reads the current controls. */
   read(): Controls {
     const keys = this.keys;
-    const key = (code: string) => keys.has(code);
-    const axis = (plus: string, minus: string) => (keys.has(plus) ? 1 : 0) - (keys.has(minus) ? 1 : 0);
 
     // Gamepad: left stick turns (pull back = nose up, as in aircraft), right stick pushes
     // sideways and up/down, right trigger is the main drive, left trigger or A fires.
     const pad = this.gamepad();
-    const stick = (i: number) => deadzone(pad?.axes[i] ?? 0);
-    const button = (i: number) => pad?.buttons[i]?.value ?? 0;
 
     const touch = this.touch;
     // fine aim: Shift, or pressing the left stick in
-    const aim = key('ShiftLeft') || key('ShiftRight') || button(PAD.leftStick) > 0.5 ? FINE_AIM : 1;
+    const aim = keys.has('ShiftLeft') || keys.has('ShiftRight') || button(pad, PAD.leftStick) > 0.5 ? FINE_AIM : 1;
 
-    // the same object every frame: reading the controls allocates nothing
+    // the same object every frame, and no function made per call: reading the controls allocates nothing
     const out = this.controls;
-    out.yaw = clamp(axis('ArrowRight', 'ArrowLeft') + this.mouseStick.x + stick(0) + touch.turn.x) * aim;
-    out.pitch = clamp(axis('ArrowUp', 'ArrowDown') + this.mouseStick.y + stick(1) + touch.turn.y) * aim;
+    out.yaw = clamp(keyAxis(keys, 'ArrowRight', 'ArrowLeft') + this.mouseStick.x + stick(pad, 0) + touch.turn.x) * aim;
+    out.pitch = clamp(keyAxis(keys, 'ArrowUp', 'ArrowDown') + this.mouseStick.y + stick(pad, 1) + touch.turn.y) * aim;
     // the pilot does not roll: the flight computer keeps the ship upright (see Game.flightComputer)
     out.roll = 0;
-    out.thrust = Math.max(key('KeyW') || touch.drive ? 1 : 0, button(PAD.rt));
-    out.strafeX = clamp(axis('KeyD', 'KeyA') + stick(2) + touch.push.x);
-    out.strafeY = clamp(axis('KeyR', 'KeyF') - stick(3) + touch.push.y);
-    out.strafeZ = -button(PAD.x);
-    out.fire = key('Space') || this.mouseFire || touch.fire || button(PAD.lt) > 0.5 || (button(PAD.a) > 0.5 && !this.fireHeld);
+    out.thrust = Math.max(keys.has('KeyW') || touch.drive ? 1 : 0, button(pad, PAD.rt));
+    out.strafeX = clamp(keyAxis(keys, 'KeyD', 'KeyA') + stick(pad, 2) + touch.push.x);
+    out.strafeY = clamp(keyAxis(keys, 'KeyR', 'KeyF') - stick(pad, 3) + touch.push.y);
+    out.strafeZ = -button(pad, PAD.x);
+    out.fire = keys.has('Space') || this.mouseFire || touch.fire || button(pad, PAD.lt) > 0.5 || (button(pad, PAD.a) > 0.5 && !this.fireHeld);
     // keys are told apart by their events (see onKey), the sticks by their travel from frame to frame
-    this.detectDodge('x', stick(2) + touch.push.x);
-    this.detectDodge('y', -stick(3) + touch.push.y);
+    this.detectDodge('x', stick(pad, 2) + touch.push.x);
+    this.detectDodge('y', -stick(pad, 3) + touch.push.y);
     return out;
   }
 
@@ -416,6 +412,11 @@ export class Input {
 }
 
 const clamp = (v: number) => Math.max(-1, Math.min(1, v));
+/** Two keys as one axis: +1 for `plus` held, -1 for `minus`, 0 for both or neither. */
+const keyAxis = (keys: ReadonlySet<string>, plus: string, minus: string) => (keys.has(plus) ? 1 : 0) - (keys.has(minus) ? 1 : 0);
+/** A gamepad's axis past its deadzone, and a button's travel (0..1); 0 without a pad. */
+const stick = (pad: Gamepad | null, i: number) => deadzone(pad?.axes[i] ?? 0);
+const button = (pad: Gamepad | null, i: number) => pad?.buttons[i]?.value ?? 0;
 
 /** The modifier keys: they stay held around a press of Command (see Input.onKey). */
 const MODIFIERS = new Set(['ShiftLeft', 'ShiftRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight', 'MetaLeft', 'MetaRight']);

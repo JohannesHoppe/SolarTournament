@@ -147,6 +147,8 @@ const BATTERIES = BATTERY_MOUNTS.length;
 /** A part: its kind, where it sits and how big it is (in the battleship's frame), the way it faces (from that side it shows itself) and its mesh. */
 type Zone = { kind: ZoneKind; at: THREE.Vector3; radius: number; face: THREE.Vector3; mesh: THREE.Object3D };
 type Box = { center: THREE.Vector3; half: THREE.Vector3 };
+/** A battery's shot (see Fleet.firing): the part that fires and the number of its shot. */
+type Shot = { zone: number; shot: number };
 
 /** What the lead browser sends: whether the battleship went down, the hits on each part, where it is, its motion and turn, whom its stern hunts and whether its drives burn. */
 export type FleetState = { d: number; h: number[]; p: number[]; v: number[]; q: number[]; t: string | null; u: number };
@@ -868,20 +870,32 @@ export class Fleet implements Obstacle {
     return along < 0 ? null : target.copy(want).addScaledVector(toTarget, along);
   }
 
-  /** The batteries that fire this frame, each with the number of its shot: the same moments and numbers on every browser, by the field time. */
-  firing(clock: number): { zone: number; shot: number }[] {
-    const fired: { zone: number; shot: number }[] = [];
+  /**
+   * The batteries that fire this frame, each with the number of its shot: the same moments and
+   * numbers on every browser, by the field time. The list and its entries are reused every
+   * frame: read them before the next call.
+   */
+  firing(clock: number): readonly Readonly<Shot>[] {
+    const fired = this.fired;
+    fired.length = 0;
     if (this.present(clock) && clock > this.lastClock) {
-      this.zones.forEach((zone, i) => {
-        if (zone.kind !== 'battery' || this.broken(i)) return;
+      for (let i = 0; i < this.zones.length; i++) {
+        if (this.zones[i].kind !== 'battery' || this.broken(i)) continue;
         const offset = i * 0.27;
         const shot = Math.floor((clock + offset) / BATTERY_PERIOD);
-        if (shot > Math.floor((this.lastClock + offset) / BATTERY_PERIOD)) fired.push({ zone: i, shot });
-      });
+        if (shot <= Math.floor((this.lastClock + offset) / BATTERY_PERIOD)) continue;
+        const entry = (this.shots[fired.length] ??= { zone: 0, shot: 0 });
+        entry.zone = i;
+        entry.shot = shot;
+        fired.push(entry);
+      }
     }
     this.lastClock = clock;
     return fired;
   }
+  /** What firing hands out, kept for the next frame. */
+  private readonly fired: Shot[] = [];
+  private readonly shots: Shot[] = [];
 
   /**
    * The lead browser flies the battleship: in on its orbit around the field, its stern turned on
@@ -1006,12 +1020,13 @@ export class Fleet implements Obstacle {
     this.clock = clock;
     const dying = this.dying(clock);
     this.root.visible = this.present(clock) || dying;
-    this.beacons.forEach((beacon, i) => this.zoneAt(i, beacon.flight.position));
+    for (let i = 0; i < this.beacons.length; i++) this.zoneAt(i, this.beacons[i].flight.position);
     // a broken drive is burnt out; a broken battery or reactor is gone
-    this.zones.forEach((zone, i) => {
+    for (let i = 0; i < this.zones.length; i++) {
+      const zone = this.zones[i];
       if (zone.kind === 'drive') (zone.mesh as THREE.Mesh).material = this.broken(i) ? this.burnt : this.driveGlow;
       else zone.mesh.visible = !this.broken(i);
-    });
+    }
     this.dome.visible = this.phase < 3 && !dying;
     this.reactorGlow.color.setRGB(1, 0.75, 0.4).multiplyScalar(dying ? 3 + 2 * Math.sin(now * 30) : this.phase === 3 ? 2 + Math.sin(now * 8) : 1.5);
     this.flame.visible = this.burning;

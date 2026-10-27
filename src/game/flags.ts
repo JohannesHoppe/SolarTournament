@@ -257,7 +257,8 @@ export class Flags {
    */
   lead(ships: readonly Flier[], now: number) {
     this.assign(ships);
-    this.cores.forEach((core, team) => {
+    for (let team = 0; team < this.cores.length; team++) {
+      const core = this.cores[team];
       if (core.carrier) {
         const carrier = byId(ships, core.carrier);
         // a carrier that died, left, or changed sides lets the core go where it hangs, flying
@@ -272,7 +273,7 @@ export class Flags {
         this.goHome(team);
         this.event('return', null, team);
       }
-    });
+    }
     // a harpoon that bit a core takes it as a touch does, if the ship is still within the hook's reach
     for (const { ship: id, team } of this.claims) {
       const ship = byId(ships, id);
@@ -424,7 +425,8 @@ export class Flags {
    * browser easing over to where the lead has it.
    */
   update(dt: number, ships: readonly Flier[], now: number) {
-    this.cores.forEach((core, team) => {
+    for (let team = 0; team < this.cores.length; team++) {
+      const core = this.cores[team];
       core.previous.copy(core.position);
       const carrier = core.carrier ? (byId(ships, core.carrier) ?? null) : null;
       if (carrier) {
@@ -441,7 +443,7 @@ export class Flags {
       }
       core.told = null;
       this.show(team, carrier, dt, now);
-    });
+    }
     this.kit.blink(now);
   }
 
@@ -553,7 +555,8 @@ export class Flags {
     camera.getWorldDirection(ahead);
     toScreen(shipOnScreen.copy(subject.flight.position), camera, ahead);
     toScreen(aimOnScreen.set(0, 0, -AIM_REACH).applyQuaternion(subject.flight.orientation).add(subject.flight.position), camera, ahead);
-    this.cores.forEach((core, team) => {
+    for (let team = 0; team < this.cores.length; team++) {
+      const core = this.cores[team];
       const look = this.looks[team];
       const towed = core.carrier === subject.id;
       look.root.visible = !(cockpit && towed);
@@ -572,7 +575,7 @@ export class Flags {
       const faded = this.faded[team] + ((clear ? 1 : 0) - this.faded[team]) * (1 - Math.exp(-CORE_FADE * dt));
       this.faded[team] = faded;
       look.fade(faded > 0.99 ? 1 : faded < 0.01 ? 0 : faded);
-    });
+    }
   }
 
   dispose() {

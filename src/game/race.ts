@@ -230,9 +230,9 @@ export class Course {
 
   /** Shows the own pilot's next gates: the next one bright, the one after in blue, a ring that just fired white; the gates' position lights blink. */
   highlight(next: number, now: number) {
-    this.rings.forEach((ring, i) => {
-      ring.material = now < this.flashUntil[i] ? this.fired : i === next ? this.next : i === (next + 1) % GATES ? this.after : i === 0 ? this.finish : this.faint;
-    });
+    for (let i = 0; i < this.rings.length; i++) {
+      this.rings[i].material = now < this.flashUntil[i] ? this.fired : i === next ? this.next : i === (next + 1) % GATES ? this.after : i === 0 ? this.finish : this.faint;
+    }
     this.kit.blink(now);
   }
 
