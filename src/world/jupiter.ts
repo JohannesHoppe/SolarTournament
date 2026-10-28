@@ -95,6 +95,232 @@ const WISP_TEXTURE = 128;
 /** How many samples a ray in the haze takes of its clouds on each tier of detail (see view/haze, hazeClouds). */
 const CLOUD_SAMPLES = [2, 1, 1];
 
+/**
+ * The cloud tops' turbulence (see topsGlsl), on the deck and the sheets below it, on top of the
+ * map's bands: everything in units on the deck, east (x) and north (y), drawn out east-west as the
+ * winds shear it by its STRETCH (x as many times longer). The patterns are tiles of the noise
+ * texture (TOPS_SIZE² texels, each channel noise whose coarsest cells are a quarter of the tile),
+ * mipmapped, so a pattern finer than a pixel fades to its mean by itself; what is shaped beyond
+ * the texture (an edge, a thread, a vortex) fades out where it is smaller than a few pixels.
+ *
+ * - WARP: the large eddies, a tile of WARP_TILE (units, 3 km north-south, eddies some 750 m
+ *   across), shoving the clouds (and the map's colors) up to half of WARP_SHOVE (units, 550 m)
+ *   aside; EDDY the small ones inside them (eddies some 175 m across, up to 200 m), on the full
+ *   picture only.
+ * - BILLOWS: the clouds' light and dark, a tile of 1.5 km, edged sharp where they rise above the
+ *   rest; FINE their grain (tile 250 m), not on the cheapest rung; FILAMENT bright threads drawn
+ *   out along the shear (tile 2 km).
+ * - VORTEX_CELLS: on grids of cells 2 km and 600 m wide, about half the cells hold a vortex 12 to
+ *   29 % of the cell tall, an oval OVAL times as wide as tall, whose clouds are wound into a
+ *   spiral (TWIST rad more at its heart than at its rim) turning slowly (SPIN_RATE rad/s more at
+ *   its heart, so the spiral winds no more than a few turns tighter in a long round); one in
+ *   five of them, turning the other way, carries a white oval at its heart, ringed darker.
+ * - GREAT_STORM: the great red storm on the map turns as one such spiral, GREAT_TWIST at its heart.
+ * - POP_TILE: bright clouds that have risen above the tops, on a grid of cells POP_CELL across
+ *   (units, 150 m), about a third of them with a cloud 35 to 95 m across, brighter over the light
+ *   zones, each casting a soft shadow POP_SHADOW of a cell away from the low sun.
+ * - RELIEF: the billows lit from the side by the low sun (their height compared RELIEF units,
+ *   50 m, towards the sun), on the full picture only.
+ * - SHEAR: the light zones drift east and the dark belts west, SHEAR (units/s, 2 m/s) each way,
+ *   on top of the planet's turn.
+ */
+const TOPS_SIZE = 256;
+const WARP_TILE = 60000;
+const WARP_STRETCH = 2.5;
+const WARP_SHOVE = 22000;
+const EDDY_TILE = 14000;
+const EDDY_STRETCH = 1.6;
+const EDDY_SHOVE = 8000;
+const BILLOWS_TILE = 30000;
+const BILLOWS_STRETCH = 3;
+const FINE_TILE = 5000;
+const FINE_STRETCH = 2;
+const FILAMENT_TILE = 40000;
+const FILAMENT_STRETCH = 5;
+const VORTEX_CELLS = [40000, 12000];
+const OVAL = 1.6;
+const TWIST = 7;
+const SPIN_RATE = 0.004;
+const GREAT_TWIST = 3;
+const POP_TILE = 48000;
+const POP_CELL = POP_TILE / 16;
+const POP_SHADOW = 0.16;
+const RELIEF = 1000;
+const SHEAR = 40;
+/** The great red storm where the map shows it: its latitude (rad, 22° south), its longitude east of the map's 0 (rad, see landmarks' JUPITER_LONGITUDE), half its height (units, 2.8 km; as an oval 9 km wide). */
+const GREAT_STORM = { latitude: -0.38, longitude: 0.1, height: 56000 };
+
+/**
+ * The noise the cloud tops are made of (see TOPS_SIZE), tiling seamlessly, the same every time:
+ * red, green and blue three octave sums of gradient noise (four cells per tile and up, each
+ * spread to a mean of 0.5), alpha the pop-up clouds (see POP_UPS): soft round bumps, one in about
+ * half of a grid of 16 by 16 cells, each its own size and height.
+ */
+export function topsTexture(): THREE.DataTexture {
+  const size = TOPS_SIZE;
+  const random = new Randomizer(0x10ff7);
+  const channels = [5, 5, 6].map((octaves) => {
+    const sums = new Float32Array(size * size);
+    let amplitude = 1;
+    for (let octave = 0, cells = 4; octave < octaves; octave++, cells *= 2, amplitude *= 0.55) {
+      const angles = Float32Array.from({ length: cells * cells }, () => random.nextFloat() * Math.PI * 2);
+      const dot = (i: number, j: number, x: number, y: number) => {
+        const angle = angles[((j + cells) % cells) * cells + ((i + cells) % cells)];
+        return Math.cos(angle) * x + Math.sin(angle) * y;
+      };
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const u = (x / size) * cells;
+          const v = (y / size) * cells;
+          const i = Math.floor(u);
+          const j = Math.floor(v);
+          const fu = u - i;
+          const fv = v - j;
+          const su = fu * fu * fu * (fu * (fu * 6 - 15) + 10);
+          const sv = fv * fv * fv * (fv * (fv * 6 - 15) + 10);
+          const top = dot(i, j, fu, fv) + (dot(i + 1, j, fu - 1, fv) - dot(i, j, fu, fv)) * su;
+          const bottom = dot(i, j + 1, fu, fv - 1) + (dot(i + 1, j + 1, fu - 1, fv - 1) - dot(i, j + 1, fu, fv - 1)) * su;
+          sums[y * size + x] += amplitude * (top + (bottom - top) * sv);
+        }
+      }
+    }
+    // spread to a mean of 0.5 and a deviation of an eighth
+    let mean = 0;
+    for (const value of sums) mean += value / sums.length;
+    let spread = 0;
+    for (const value of sums) spread += (value - mean) ** 2 / sums.length;
+    const scale = 0.125 / Math.sqrt(spread);
+    return sums.map((value) => THREE.MathUtils.clamp(0.5 + (value - mean) * scale, 0, 1));
+  });
+  const grid = 16;
+  const cell = size / grid;
+  const bumps = Array.from({ length: grid * grid }, () => {
+    const present = random.nextFloat() < 0.3;
+    return { x: random.nextFloat(), y: random.nextFloat(), radius: 0.12 + 0.2 * random.nextFloat(), height: 0.6 + 0.4 * random.nextFloat(), present };
+  });
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const o = (y * size + x) * 4;
+      for (let k = 0; k < 3; k++) data[o + k] = Math.round(channels[k][y * size + x] * 255);
+      let pop = 0;
+      const ci = Math.floor(x / cell);
+      const cj = Math.floor(y / cell);
+      for (let dj = -1; dj <= 1; dj++) {
+        for (let di = -1; di <= 1; di++) {
+          const bump = bumps[((cj + dj + grid) % grid) * grid + ((ci + di + grid) % grid)];
+          if (!bump.present) continue;
+          // the bump's center inside its cell, kept clear of the cell's edges by its radius
+          const bx = (ci + di + bump.radius + bump.x * (1 - 2 * bump.radius)) * cell;
+          const by = (cj + dj + bump.radius + bump.y * (1 - 2 * bump.radius)) * cell;
+          const d = Math.hypot(x + 0.5 - bx, y + 0.5 - by) / (bump.radius * cell);
+          if (d < 1) pop = Math.max(pop, bump.height * (1 - d * d) ** 2);
+        }
+      }
+      data[o + 3] = Math.round(pop * 255);
+    }
+  }
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+const g = (value: number) => value.toFixed(6);
+/** A tile's scale for a texture lookup: across the tile's width east-west (`stretch` times longer) and its height north-south. */
+const tile = (size: number, stretch = 1) => `vec2(${g(1 / (size * stretch))}, ${g(1 / size)})`;
+
+/**
+ * The cloud tops (see TOPS_SIZE) at a point of the deck, `s` (units, east and north, in the
+ * planet's own frame, so it turns with it), seen with `pixel` units to a pixel; `zone` how light
+ * the map's band is there (0 a dark belt, 1 a white zone), `sunFlat` the way to the sun along the
+ * deck (east, north). `level` 0 is the full picture, 1 without the small eddies and the relief, 2
+ * without the grain and the pop-ups' shadows. Returns the shove of the map's colors (xy, units),
+ * how much lighter or darker the tops are (z, around 0) and how white (w, 0..1).
+ */
+const topsGlsl = /* glsl */ `
+  uniform sampler2D tops;
+  uniform float level;
+  // a feature size units across shows in full from 8 pixels, fades out below 3
+  float shows(float size, float pixel) { return smoothstep(3.0, 8.0, size / pixel); }
+  // turns s around the center of an oval vortex of half height r (wider by OVAL), wound by twist at its heart
+  vec2 wind(vec2 s, vec2 center, float r, float twist, out float heart) {
+    vec2 d = (s - center) / vec2(${g(OVAL)} * r, r);
+    float rim = 1.0 - length(d);
+    heart = max(rim, 0.0);
+    if (rim <= 0.0) return s;
+    float a = twist * rim * rim;
+    d = mat2(cos(a), sin(a), -sin(a), cos(a)) * d;
+    return center + d * vec2(${g(OVAL)} * r, r);
+  }
+  // the vortex of s's cell on a grid cell units wide, if it holds one (seed tells the grids apart); white the share of a white oval
+  vec2 vortex(vec2 s, float cell, float seed, float pixel, inout float white, inout float ring) {
+    vec2 id = floor(s / cell);
+    float a = hash(vec3(id, seed));
+    if (a < 0.45) return s;
+    float b = hash(vec3(id, seed + 3.1));
+    float c = hash(vec3(id, seed + 5.7));
+    float r = cell * (0.06 + 0.085 * b);
+    // the oval inside its cell, its rim clear of the cell's edges
+    vec2 room = vec2(0.5 * cell - ${g(OVAL)} * r, 0.5 * cell - r);
+    vec2 center = (id + 0.5) * cell + (vec2(c, fract(c * 7.3)) - 0.5) * 2.0 * room;
+    float sense = a < 0.72 ? 1.0 : -1.0;
+    float heart;
+    vec2 wound = wind(s, center, r, sense * (${g(TWIST)} + ${g(SPIN_RATE)} * time) * shows(2.0 * r, pixel), heart);
+    // anticyclones (turning the other way) now and then carry a white oval, ringed darker
+    float oval = sense < 0.0 && b > 0.62 ? shows(2.0 * r, pixel) : 0.0;
+    white = max(white, oval * 0.7 * smoothstep(0.05, 0.7, heart));
+    ring = max(ring, oval * smoothstep(0.02, 0.12, heart) * (1.0 - smoothstep(0.14, 0.26, heart)));
+    return wound;
+  }
+  vec4 cloudTops(vec2 s, float pixel, float zone, vec2 sunFlat, vec2 storm) {
+    vec2 start = s;
+    float white = 0.0;
+    float ring = 0.0;
+    float heart;
+    // the great storm turns as one spiral; the vortices wind the clouds around them
+    s = wind(s, storm, ${g(GREAT_STORM.height)}, ${g(GREAT_TWIST)}, heart);
+    s = vortex(s, ${g(VORTEX_CELLS[0])}, 1.0, pixel, white, ring);
+    s = vortex(s, ${g(VORTEX_CELLS[1])}, 2.0, pixel, white, ring);
+    // the eddies shove the clouds about, the large ones first
+    s += (texture2D(tops, s * ${tile(WARP_TILE, WARP_STRETCH)}).rg - 0.5) * ${g(WARP_SHOVE)};
+    if (level < 0.5) s += (texture2D(tops, s * ${tile(EDDY_TILE, EDDY_STRETCH)} + 0.37).gr - 0.5) * ${g(EDDY_SHOVE)} * shows(${g(EDDY_TILE / 4)}, pixel);
+    vec2 shove = s - start;
+    float billows = texture2D(tops, s * ${tile(BILLOWS_TILE, BILLOWS_STRETCH)}).b - 0.5;
+    float rise = billows;
+    if (level < 1.5) rise += (texture2D(tops, s * ${tile(FINE_TILE, FINE_STRETCH)} + 0.61).r - 0.5) * 0.7 * shows(${g(FINE_TILE / 8)}, pixel);
+    // the clouds that rise above the rest, edged as sharp as the pixels allow
+    float edge = max(0.03, 1.5 * fwidth(rise));
+    float cover = smoothstep(-edge, edge, rise);
+    float light = rise * 1.7 + (cover - 0.5) * 0.35;
+    white = max(white, cover * zone * 0.3);
+    // bright threads along the shear where the noise crosses its middle
+    float thread = 1.0 - abs(texture2D(tops, s * ${tile(FILAMENT_TILE, FILAMENT_STRETCH)} + 0.13).g - 0.5) * 8.0;
+    white = max(white, clamp(thread, 0.0, 1.0) * 0.6 * shows(${g(FILAMENT_TILE / 40)}, pixel) * (0.4 + 0.6 * zone));
+    if (level < 0.5) {
+      // lit from the side by the low sun: brighter where the billows rise towards it
+      float towards = texture2D(tops, (s + sunFlat * ${g(RELIEF)}) * ${tile(BILLOWS_TILE, BILLOWS_STRETCH)}).b - 0.5;
+      light += (billows - towards) * 6.0 * shows(${g(RELIEF * 2)}, pixel);
+    }
+    // the pop-up clouds, white, and their shadows away from the sun
+    vec2 pops = mix(start, s, 0.25) * ${tile(POP_TILE)};
+    float shown = shows(${g(POP_CELL / 2)}, pixel) * (0.5 + 0.5 * zone);
+    float pop = texture2D(tops, pops).a * shown;
+    white = max(white, smoothstep(0.0, 0.7, pop));
+    light += pop * 0.5;
+    if (level < 1.5) {
+      float over = texture2D(tops, pops + sunFlat * ${g(POP_SHADOW / 16)}).a * shown;
+      light -= max(over - pop, 0.0) * 1.6;
+    }
+    light -= ring * 0.25;
+    return vec4(shove, light, white);
+  }
+`;
+
 /** The vertex stage of the sheets and moons: their own point, their normal and place in the world, and the haze's (see view/haze). */
 const sheetVertex = /* glsl */ `
   #include <fog_pars_vertex>
@@ -113,13 +339,17 @@ const sheetVertex = /* glsl */ `
 
 /**
  * A sheet of Jupiter's clouds from its map (in the planet's frame, slowly spinning east, as the
- * map's sphere: see landmarks' gasFragment). DECK is the cloud deck: the map sharp, drawn out
- * by the winds within `reach` of the eye, with gaps where it thins; seen from above lit by the
- * sun as cloud tops are, from below glowing dimly with the light that comes through. A sheet
- * below it is the map blurred, in the light the haze lets down to it (`glow`), with wider gaps.
- * The thicker a sheet looks the more slanted the view through it; it fades out up close; the
- * lightning lights it from within; the haze (see view/haze) lies over it as over everything.
- * Built when first used, as landmarks (whose noise it takes) imports this module.
+ * map's sphere: see landmarks' gasFragment). DECK is the cloud deck: the map sharp, its colors
+ * stirred and its tops built up by the turbulence of cloudTops (see TOPS_SIZE), the light zones
+ * whiter and a little bluer, the dark belts browner, with gaps where it thins; seen from above
+ * lit by the sun as cloud tops are, from below glowing dimly with the light that comes through.
+ * A sheet below it is the map blurred and shoved about by the large eddies only, in the light the
+ * haze lets down to it (`glow`), with wider gaps. The thicker a sheet looks the more slanted the
+ * view through it; it fades out up close; the lightning lights it from within; the haze (see
+ * view/haze) lies over it as over everything. `meridian` is the longitude of the cap's middle in
+ * the map's frame before it turns (rad), from which the deck's own coordinates are measured, so
+ * they never cross the map's seam; `zones` the map's mean brightness there, between belts and
+ * zones. Built when first used, as landmarks (whose noise it takes) imports this module.
  */
 const sheetFragment = () => /* glsl */ `
   uniform float time;
@@ -127,9 +357,9 @@ const sheetFragment = () => /* glsl */ `
   uniform vec3 light;
   uniform mat3 frame;
   uniform sampler2D map;
-  uniform float texel;
   uniform float longitude;
-  uniform float reach;
+  uniform float meridian;
+  uniform float zones;
   uniform float cover;
   uniform float glow;
   uniform vec4 sheet;
@@ -138,38 +368,56 @@ const sheetFragment = () => /* glsl */ `
   varying vec3 vWorld;
   #include <fog_pars_fragment>
   ${noise3}
-  ${fbm}
+  ${topsGlsl}
   void main() {
     vec3 planet = normalize(frame * vLocal);
     float turn = time * 0.0004;
     vec3 q = vec3(cos(turn) * planet.x - sin(turn) * planet.z, planet.y, sin(turn) * planet.x + cos(turn) * planet.z);
     float latitude = asin(clamp(q.y, -1.0, 1.0));
     vec2 uv = vec2(longitude - atan(q.z, q.x) / 6.2831853, 0.5 + latitude / 3.14159265);
-    // the map's seam: the longitude whose change across the pixel is smaller
-    float wrapped = fract(uv.x + 0.5) - 0.5;
-    uv.x = fwidth(fract(uv.x)) <= fwidth(wrapped) ? fract(uv.x) : wrapped;
+    // the deck's own coordinates (units east and north), turning with the planet
+    float span = sheet.w * cos(latitude);
+    float around = mod(atan(planet.z, planet.x) - meridian + 3.14159265, 6.2831853) - 3.14159265;
+    vec2 s = vec2(-(around + turn) * span, latitude * sheet.w);
+    float pixel = length(fwidth(s));
     // from above, a view that dipped through the sheet rises out of it again farther on: the
     // sheet's underside there is the same cloud, already drawn where the view went in
     if (!gl_FrontFacing && distance(cameraPosition, sheet.xyz) > sheet.w) discard;
     float away = distance(cameraPosition, vWorld);
     vec3 view = normalize(cameraPosition - vWorld);
     vec3 n = normalize(vNormal);
-    // gaps in the sheet, on a pattern that evens out where its cells shrink to a few pixels
+    // the map's seam: the longitude whose change across the pixel is smaller
+    float wrapped = fract(uv.x + 0.5) - 0.5;
+    uv.x = fwidth(fract(uv.x)) <= fwidth(wrapped) ? fract(uv.x) : wrapped;
+    vec2 toMap = vec2(1.0 / (6.2831853 * span), 1.0 / (3.14159265 * sheet.w));
     #if DECK_SHEET
-      vec3 cells = q * 260.0 + vec3(0.0, 0.0, time * 0.002);
+      // a belt or a zone: the map's brightness around the point against its mean
+      vec3 broad = texture2D(map, uv, 5.0).rgb;
+      float zone = smoothstep(-0.06, 0.06, dot(broad, vec3(0.2126, 0.7152, 0.0722)) - zones);
+      // the light zones drift east against the dark belts, the turbulence with them
+      s.x += ${g(SHEAR)} * time * (2.0 * zone - 1.0);
+      vec2 east = normalize(vec2(planet.z, -planet.x));
+      vec3 toSunHere = frame * normalize(sun);
+      vec2 sunFlat = vec2(dot(toSunHere.xz, east), toSunHere.y * length(planet.xz) - dot(planet.xz, toSunHere.xz) * planet.y / max(length(planet.xz), 0.001));
+      sunFlat /= max(length(sunFlat), 0.001);
+      float stormAround = mod(${g(GREAT_STORM.longitude)} - meridian + 3.14159265, 6.2831853) - 3.14159265;
+      vec2 storm = vec2(-stormAround * span, ${g(GREAT_STORM.latitude)} * sheet.w);
+      vec4 cloud = cloudTops(s, pixel, zone, sunFlat, storm);
+      vec3 color = texture2D(map, uv + cloud.xy * toMap).rgb;
+      // pushed a little towards the look of the close-ups: richer, the tops lighter and darker
+      float grey = dot(color, vec3(0.2126, 0.7152, 0.0722));
+      color = max(mix(vec3(grey), color, 1.4) * (1.0 + 0.6 * cloud.z), 0.0);
+      // the white clouds a cool blue-white over the zones, cream over the belts
+      vec3 white = mix(vec3(1.0, 0.88, 0.7), vec3(0.84, 0.92, 1.0), zone) * clamp(grey * 2.4, 0.55, 0.95);
+      color = mix(color, white, cloud.w * 0.85);
+      float thick = texture2D(tops, s * ${tile(12000)}).r;
     #else
-      vec3 cells = q * 120.0 + vec3(0.0, 0.0, time * 0.001);
+      vec2 shove = (texture2D(tops, s * ${tile(WARP_TILE, WARP_STRETCH)}).rg - 0.5) * ${g(WARP_SHOVE)};
+      vec3 color = texture2D(map, uv + shove * toMap, 4.0).rgb;
+      float thick = texture2D(tops, s * ${tile(26000)}).r;
     #endif
-    float blur = length(fwidth(cells));
-    float thick = mix(fbm(cells, 0.0), 0.5, smoothstep(0.25, 0.8, blur));
+    // gaps in the sheet, on a pattern that evens out where it shrinks to a few pixels
     float alpha = cover * mix(0.55, 1.0, smoothstep(0.32, 0.62, thick));
-    #if DECK_SHEET
-      float fine = reach > 0.0 ? clamp(1.0 - away / reach, 0.0, 1.0) : 0.0;
-      float streaks = fine > 0.0 ? fbm(vec3(q.x * 50.0, latitude * 1200.0, q.z * 50.0) + time * 0.001, fine) : 0.5;
-      vec3 color = texture2D(map, uv).rgb * mix(1.0, 0.8 + 0.4 * streaks, fine);
-    #else
-      vec3 color = texture2D(map, uv, 4.0).rgb;
-    #endif
     vec3 toSun = normalize(sun);
     float facing = dot(n, toSun);
     float incidence = clamp((facing + 0.04) / 1.04, 0.0, 1.0);
@@ -444,8 +692,6 @@ export class Jupiter {
   private nextStrike = STRIKE_EVERY;
   /** The map's mean color around the point below the arena (linear). */
   private readonly cloudColor = new THREE.Color(0.55, 0.42, 0.3);
-  /** How far from the eye the deck draws the winds' fine streaks, on the rungs that do (units). */
-  private readonly fineReach: number;
   /** How many samples a ray in the haze takes of its clouds (see CLOUD_SAMPLES). */
   private samples = CLOUD_SAMPLES[0];
 
@@ -456,12 +702,21 @@ export class Jupiter {
     private readonly light: THREE.Color,
   ) {
     const material = deck.material;
-    this.fineReach = material.uniforms.reach.value as number;
     const fragmentShader = sheetFragment();
     // the map's sphere becomes the deck: see-through where it thins, seen from both sides
     Object.assign(material, { vertexShader: sheetVertex, fragmentShader, transparent: true, depthWrite: false, side: THREE.DoubleSide, fog: true });
     material.defines = { DECK_SHEET: 1 };
-    Object.assign(material.uniforms, { cover: { value: 0.88 }, glow: { value: 1 }, sheet: { value: new THREE.Vector4(air.center.x, air.center.y, air.center.z, air.radius) } });
+    // the cap's middle (its top, straight below the arena) in the map's frame, whence the deck's own coordinates run
+    const middle = new THREE.Vector3(0, 1, 0).applyMatrix3(material.uniforms.frame.value as THREE.Matrix3);
+    Object.assign(material.uniforms, {
+      cover: { value: 0.88 },
+      glow: { value: 1 },
+      sheet: { value: new THREE.Vector4(air.center.x, air.center.y, air.center.z, air.radius) },
+      tops: { value: topsTexture() },
+      level: { value: 0 },
+      meridian: { value: Math.atan2(middle.z, middle.x) },
+      zones: { value: 0.3 },
+    });
     for (const sheet of SHEETS) {
       // the same map, frame and clock as the deck's (the uniforms are shared), its own cover and light
       const below = new THREE.ShaderMaterial({
@@ -585,6 +840,7 @@ export class Jupiter {
       for (let i = 0; i < data.length; i += 4) for (let k = 0; k < 3; k++) sum[k] += data[i + k];
       const count = (data.length / 4) * 255;
       this.cloudColor.setRGB(sum[0] / count, sum[1] / count, sum[2] / count, THREE.SRGBColorSpace);
+      material.uniforms.zones.value = this.cloudColor.r * 0.2126 + this.cloudColor.g * 0.7152 + this.cloudColor.b * 0.0722;
     } catch {
       // where the map cannot be read, the colors stay as set
     }
@@ -598,13 +854,12 @@ export class Jupiter {
 
   /**
    * The picture's quality (tier 0 the full picture, see Landmarks.setDetail): both sheets below
-   * the deck, the first, or none; on the cheapest the deck without the winds' fine streaks; fewer
-   * wisps, and the haze's clouds sampled once instead of twice along a ray (see view/haze).
+   * the deck, the first, or none; the cloud tops at the tier's level (see topsGlsl); fewer wisps,
+   * and the haze's clouds sampled once instead of twice along a ray (see view/haze).
    */
   setDetail(tier: number) {
     this.sheets.forEach((sheet, i) => (sheet.mesh.visible = sheet.depth === 0 || i < SHEETS.length - tier));
-    const deck = this.sheets.at(-1)!.mesh.material;
-    deck.uniforms.reach.value = tier < 2 ? this.fineReach : 0;
+    this.sheets.at(-1)!.mesh.material.uniforms.level.value = tier;
     this.wisps.geometry.setDrawRange(0, WISPS[tier] * 6);
     this.samples = CLOUD_SAMPLES[tier];
   }

@@ -46,6 +46,13 @@ const CLOUD_LIGHT = 13000;
 const RISE_LIGHT = 6000;
 const LIGHTEST = 1.3;
 const CLOUD_FADE = 500;
+/**
+ * The cloud tops' eddies under the deck (see world/jupiter): the banks and towers are shoved about
+ * by up to SWIRL_SHOVE (units, 300 m right under the deck, smaller deeper as the clouds are) on a
+ * noise SWIRL_WIDTH across (units, 600 m), so they curl as the tops above them do.
+ */
+const SWIRL_WIDTH = 12000;
+const SWIRL_SHOVE = 12000;
 const SAMPLE_NEAR = 0.8;
 const SAMPLE_FAR = 2;
 /** The noise the clouds are made of: NOISE_SIZE² texels of value noise, the second channel the first shifted by NOISE_SHIFT per layer, so one lookup reads two layers of a 3D noise. */
@@ -106,10 +113,20 @@ const CLOUD_GLSL = /* glsl */ `
     vec2 layers = texture2D(hazeNoise, (uv + 0.5) / ${f(NOISE_SIZE)}).yx;
     return mix(layers.x, layers.y, s.z);
   }
+  // two layers of the noise at once, smooth across a cell (as hazeNoise3 at a whole layer)
+  vec2 hazeNoise2(vec2 x) {
+    vec2 s = fract(x);
+    return texture2D(hazeNoise, (floor(x) + s * s * (3.0 - 2.0 * s) + 0.5) / ${f(NOISE_SIZE)}).yx;
+  }
   float hazeCloud(vec3 point, vec3 up, float altitude) {
     vec3 q = point - hazeClouds.xyz;
     vec3 across = q - up * dot(q, up);
     float grow = exp(-min(altitude, 0.0) / ${f(CLOUD_SHRINK)});
+    // the eddies of the cloud tops reach down: the banks shoved about in swirls across the deck's plane
+    vec3 side = normalize(cross(up, abs(up.y) < 0.9 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0)));
+    vec3 ahead = cross(up, side);
+    vec2 eddy = hazeNoise2(vec2(dot(across, side), dot(across, ahead)) * (grow / ${f(SWIRL_WIDTH)})) - 0.5;
+    across += (side * eddy.x + ahead * eddy.y) * (${f(SWIRL_SHOVE)} / grow);
     // the height's coordinate grows as the clouds shrink, so a bank keeps its height in its own depth
     float level = -grow * ${f(CLOUD_SHRINK / BANK_HEIGHT)};
     vec3 bank = across * (grow / ${f(BANK_WIDTH)}) + up * level;
