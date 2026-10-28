@@ -76,8 +76,6 @@ const JUPITER_CAP = 0.62;
 const JUPITER_LATITUDE = -0.22;
 /** Where the map's longitude 0 lies (a share of a turn): the great storm, at 0.3625 on the map, 0.1 rad east of the point below the arena. */
 const JUPITER_LONGITUDE = 0.3625 + 0.1 / (2 * Math.PI);
-/** Up to this distance (units, 12.5 km) Jupiter's clouds show fine detail beyond its map's texels (see gasFragment). */
-const JUPITER_FINE_REACH = 250000;
 /** The light a planet's lit side gets on top of the arena's sun (the sky's faint glow), a share of the sun's. */
 const PLANET_AMBIENT = 0.02;
 /** The black hole's disk: from and to (units, 300 m to 1.4 km). */
@@ -183,9 +181,7 @@ const planetVertex = /* glsl */ `
  * A gas planet's clouds from its map (cylindrical: longitude across, latitude up, in the planet's
  * own frame, turned by `frame` and slowly spinning east). The map is sampled by the longitude
  * whose change across the pixel is smaller of two that wrap at opposite sides, so its seam never
- * shows as a line. Within `reach` of the pilot (Jupiter, flown just above its tops), eddies
- * finer than the map's texels bend the map's clouds a few texels and draw them out into streaks
- * and grain, drifting with the winds. Lit by the arena's sun (`light`: its color and strength,
+ * shows as a line (Jupiter's cap takes the cloud deck's shader instead, see world/jupiter). Lit by the arena's sun (`light`: its color and strength,
  * Lambert's diffuse light), with a soft terminator where the upper air scatters it red; on the
  * night side lightning in the storms and aurora over the poles (`storms`); haze along the limb.
  * With RING, the ring's shadow: the way from the cloud tops to the sun crosses the ring's plane
@@ -197,9 +193,7 @@ const gasFragment = /* glsl */ `
   uniform vec3 light;
   uniform mat3 frame;
   uniform sampler2D map;
-  uniform float texel;
   uniform float longitude;
-  uniform float reach;
   uniform vec3 haze;
   uniform float storms;
   #ifdef RING
@@ -211,31 +205,17 @@ const gasFragment = /* glsl */ `
   varying vec3 vNormal;
   varying vec3 vWorld;
   ${noise3}
-  ${fbm}
   void main() {
     vec3 p = normalize(frame * vLocal);
     float spin = time * 0.0004;
     vec3 q = vec3(cos(spin) * p.x - sin(spin) * p.z, p.y, sin(spin) * p.x + cos(spin) * p.z);
-    float fine = reach > 0.0 ? clamp(1.0 - distance(cameraPosition, vWorld) / reach, 0.0, 1.0) : 0.0;
     float lat = asin(clamp(q.y, -1.0, 1.0));
     // the angle grows westward, the map's longitude eastward (as seen from outside, north up)
     vec2 uv = vec2(longitude - atan(q.z, q.x) / 6.2831853, 0.5 + lat / 3.14159265);
-    float detail = 1.0;
-    if (fine > 0.0) {
-      // eddies finer than the map's texels curl its clouds and drift with the winds
-      float swirl = fbm(q * 40.0 + vec3(0.0, 0.0, time * 0.001), 1.0);
-      float eddies = fbm(q * 160.0 + vec3(swirl * 6.0, 0.0, time * 0.002), fine);
-      uv += (vec2(swirl, eddies) - 0.5) * texel * 3.0 * fine;
-      // the winds draw them out along the bands: streaks long in longitude, thin in latitude
-      float streaks = fbm(vec3(q.x * 50.0, (lat + 0.004 * (eddies - 0.5)) * 1200.0, q.z * 50.0), fine);
-      // the grain of the cloud tops, seen from just above them
-      float grain = fbm(q * 900.0 + eddies * 3.0, fine);
-      detail = mix(1.0, (0.8 + 0.4 * streaks) * (0.75 + 0.5 * grain), fine);
-    }
     float east = fract(uv.x);
     float west = fract(uv.x + 0.5) - 0.5;
     uv.x = fwidth(east) <= fwidth(west) ? east : west;
-    vec3 color = texture2D(map, uv).rgb * detail;
+    vec3 color = texture2D(map, uv).rgb;
     vec3 n = normalize(vNormal);
     vec3 view = normalize(cameraPosition - vWorld);
     vec3 toSun = normalize(sun);
@@ -798,10 +778,9 @@ export class Landmarks {
 
   /**
    * A gas planet's material from its map (see gasFragment), its own frame turned by `frame` with
-   * the map's longitude 0 at `longitude` (a share of a turn); `haze` along its limb, fine detail
-   * within `reach` (0 for none), `storms` adds lightning and aurora on its night side.
+   * the map's longitude 0 at `longitude` (a share of a turn); `haze` along its limb, `storms` adds lightning and aurora on its night side.
    */
-  private gas(planet: Planet, options: { frame: THREE.Matrix3; longitude: number; haze: number; reach: number; storms: boolean }): THREE.ShaderMaterial {
+  private gas(planet: Planet, options: { frame: THREE.Matrix3; longitude: number; haze: number; storms: boolean }): THREE.ShaderMaterial {
     const map = this.maps.maps[planet];
     const material = new THREE.ShaderMaterial({
       uniforms: {
@@ -810,9 +789,7 @@ export class Landmarks {
         light: { value: this.light },
         frame: { value: options.frame },
         map: { value: map },
-        texel: { value: 1 / (map.image as { width: number }).width },
         longitude: { value: options.longitude },
-        reach: { value: options.reach },
         haze: { value: new THREE.Color(options.haze) },
         storms: { value: options.storms ? 1 : 0 },
       },
@@ -820,10 +797,7 @@ export class Landmarks {
       fragmentShader: gasFragment,
     });
     this.timed.push(material);
-    this.planets.set(planet, (map) => {
-      material.uniforms.map.value = map;
-      material.uniforms.texel.value = 1 / (map.image as { width: number }).width;
-    });
+    this.planets.set(planet, (map) => (material.uniforms.map.value = map));
     return material;
   }
 
@@ -831,7 +805,7 @@ export class Landmarks {
     const group = new THREE.Group();
     const center = SATURN_CENTER;
     // its bands lie in its equator's plane, as its ring does, which is the arena's horizon
-    const material = this.gas('saturn', { frame: new THREE.Matrix3(), longitude: 0, haze: 0xd9c9a3, reach: 0, storms: false });
+    const material = this.gas('saturn', { frame: new THREE.Matrix3(), longitude: 0, haze: 0xd9c9a3, storms: false });
     // the ring's shadow on its clouds (see gasFragment)
     material.defines = { RING: '' };
     Object.assign(material.uniforms, { ring: { value: this.maps.ring }, center: { value: center }, radii: { value: new THREE.Vector2(RING_INNER, RING_OUTER) } });
@@ -937,7 +911,7 @@ export class Landmarks {
     this.jupiterCaps.push(...JUPITER_SEGMENTS.map(([width, height]) => new THREE.SphereGeometry(air.radius, width, height, 0, Math.PI * 2, 0, JUPITER_CAP)));
     // turns the cap's top (straight below the arena) to the latitude JUPITER_LATITUDE
     const frame = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationZ(JUPITER_LATITUDE - Math.PI / 2));
-    const planet = new THREE.Mesh(this.jupiterCaps[0], this.gas('giant', { frame, longitude: JUPITER_LONGITUDE, haze: 0xffd2a8, reach: JUPITER_FINE_REACH, storms: true }));
+    const planet = new THREE.Mesh(this.jupiterCaps[0], this.gas('giant', { frame, longitude: JUPITER_LONGITUDE, haze: 0xffd2a8, storms: true }));
     this.jupiterMesh = planet;
     planet.position.copy(air.center);
     // its deck, the sheets below it, its sky and weather (see world/jupiter)
