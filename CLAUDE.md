@@ -103,6 +103,7 @@ The same loop for every change, small or large. Follow it step by step; it holds
 9. **Parallel work in worktrees.**
    - Every checkout runs its own dev server on its own port (`DEV_PORT=5174 npm run e2e`).
    - jscpd skips `.claude/worktrees` (ignored by git), so a worktree checks its duplicates on a copy outside it.
+   - The dev server does not watch `.claude/`, so a worktree's edits never reload the main checkout's pages under a running test.
    - A worktree merges `main` before it reports.
    - Doc conflicts are resolved keeping both sides, one table row per line and one paragraph per bullet.
    - Benchmarks run one at a time on a quiet machine (1-minute load average below 3, no other browser busy), never beside another benchmark, test run or the code they are compared with; their numbers mean nothing otherwise. Every browser, tab and dev server a check opens is closed once it is done.
