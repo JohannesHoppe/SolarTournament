@@ -2,11 +2,13 @@ import * as THREE from 'three';
 import { fbm, noise3 } from './landmarks';
 import { SUN_DIRECTION } from './space';
 import type { Air } from './air';
-import { HAZE_UNIFORMS } from '../view/haze';
+import { CLOUD_SHRINK, FLASH_COLOR, HAZE_UNIFORMS, LIGHT_DEPTH } from '../view/haze';
+import { Randomizer } from '../random';
 
 /**
  * Jupiter around its arena, besides its map (see world/landmarks): the cloud deck as a
- * translucent sheet in the map's colors, two thinner sheets below it, lightning in the clouds,
+ * translucent sheet in the map's colors, two thinner sheets below it, the haze below them, wisps
+ * of cloud streaming past under the deck, the wind that carries them, lightning in the clouds,
  * the auroras over the south pole and two of its moons in the sky. Scenery only; what the air
  * does is world/air's, what the haze hides is drawn by view/haze.
  */
@@ -25,10 +27,14 @@ const SHEET_NEAR = 1000;
 /**
  * Under the sheets, FLOOR_DEPTH below the deck (units, 5 km, where the arena's well begins), a
  * sphere catches every view that goes down, out to FLOOR_CAP around the arena (rad, 57°): the
- * haze over it is so thick that only the haze's light shows, never the space behind.
+ * haze over it is so thick that only the haze's light shows, never the space behind. While the eye
+ * is under the deck, a sphere BACKDROP around it (units, 15 km) takes the floor's place and
+ * catches every view the sheets and the floor would leave empty (a shallow look down passes
+ * under the floor and leaves the deck's cap), so every view ends in the haze and its clouds.
  */
 const FLOOR_DEPTH = 100000;
 const FLOOR_CAP = 1;
+const BACKDROP = 300000;
 /**
  * Lightning: a strike every STRIKE_EVERY seconds on average (visuals, by chance on each browser),
  * within STRIKE_REACH of the eye across (units, 3 km) and between STRIKE_TOP and STRIKE_BOTTOM
@@ -65,6 +71,29 @@ const MOONS = [
 /** The deck's light from above, as a share of the lit map's (its haze: the light scattered under it); the depths', a share of that, tinted rust-brown. */
 const DECK_LIGHT = 0.7;
 const DEEP_LIGHT = new THREE.Color(0.32, 0.2, 0.13);
+/** The wind under the deck carries the clouds (the haze's and the wisps') east at WIND (units/s, 30 m/s). */
+const WIND = 600;
+/**
+ * Wisps of cloud under the deck, streaming past a ship: soft streaks drawn out along the wind,
+ * WISP_MIN to WISP_MAX long (units, 50 to 180 m) right under the deck, shorter deeper as the
+ * haze's clouds are (see view/haze, CLOUD_SHRINK, to no less than WISP_SMALLEST of it), a fourth
+ * as tall, in a box WISP_BOX wide (units, 900 m) that wraps around the eye, fading out before its
+ * edges, within WISP_NEAR of their own length of the eye, and above WISP_TOP under the deck (units,
+ * 50 m, full from four times that). WISPS of them on the full picture, fewer on cheaper rungs
+ * (see setDetail); they hold back at most WISP_OPACITY of what lies behind them.
+ */
+const WISPS = [96, 56, 32];
+const WISP_MIN = 1000;
+const WISP_MAX = 3600;
+const WISP_SMALLEST = 0.35;
+const WISP_BOX = 9000;
+const WISP_NEAR = 0.25;
+const WISP_TOP = 1000;
+const WISP_OPACITY = 0.55;
+/** The texture of a wisp: WISP_TEXTURE wide, half as tall. */
+const WISP_TEXTURE = 128;
+/** How many samples a ray in the haze takes of its clouds on each tier of detail (see view/haze, hazeClouds). */
+const CLOUD_SAMPLES = [2, 1, 1];
 
 /** The vertex stage of the sheets and moons: their own point, their normal and place in the world, and the haze's (see view/haze). */
 const sheetVertex = /* glsl */ `
@@ -221,6 +250,138 @@ const floorFragment = /* glsl */ `
   }
 `;
 
+/**
+ * The wisps (see WISPS): each quad's corner (position.xy), its place in the box and its size,
+ * shade and mirror (`seed`); laid where the box wraps around the eye, carried by the wind (`drift`),
+ * drawn out along the wind as the eye sees it and turned to face the eye. In the light of its
+ * depth (the haze's, see view/haze), lighter on top, a lighter or darker cloud by its seed, lit
+ * from within by lightning nearby; the haze lies over it as over everything.
+ */
+const wispVertex = /* glsl */ `
+  attribute vec4 seed;
+  uniform vec3 eye;
+  uniform vec3 drift;
+  uniform vec3 wind;
+  uniform vec3 planet;
+  uniform float radius;
+  varying vec2 vUv;
+  varying float vFade;
+  varying float vAltitude;
+  varying float vTone;
+  varying vec3 vCenter;
+  #include <fog_pars_vertex>
+  void main() {
+    vec3 center = eye + mod(seed.xyz * ${WISP_BOX.toFixed(1)} + drift - eye, ${WISP_BOX.toFixed(1)}) - ${(WISP_BOX / 2).toFixed(1)};
+    vec3 up = normalize(center - planet);
+    float altitude = length(center - planet) - radius;
+    float size = mix(${WISP_MIN.toFixed(1)}, ${WISP_MAX.toFixed(1)}, fract(seed.w * 7.0)) * clamp(exp(altitude / ${CLOUD_SHRINK.toFixed(1)}), ${WISP_SMALLEST}, 1.0);
+    vec3 toEye = eye - center;
+    float away = length(toEye);
+    toEye /= max(away, 1.0);
+    vec3 along = wind - toEye * dot(wind, toEye);
+    float across = length(along);
+    along /= max(across, 0.001);
+    vec3 side = cross(toEye, along);
+    vec3 world = center + along * (position.x * size) + side * (position.y * size * 0.25);
+    vUv = vec2(fract(seed.w * 13.0) < 0.5 ? position.x : -position.x, position.y) * 0.5 + 0.5;
+    vFade = smoothstep(${(WISP_BOX * 0.5).toFixed(1)}, ${(WISP_BOX * 0.38).toFixed(1)}, away)
+      * smoothstep(${WISP_NEAR.toFixed(2)} * size, ${(WISP_NEAR * 3).toFixed(2)} * size, away)
+      * smoothstep(${(-WISP_TOP).toFixed(1)}, ${(-WISP_TOP * 4).toFixed(1)}, altitude)
+      * smoothstep(0.15, 0.5, across);
+    vAltitude = altitude;
+    vTone = (seed.w < 0.35 ? 0.45 : 1.3) * (1.0 + 0.3 * position.y * sign(dot(side, up)));
+    vCenter = center;
+    vec4 mvPosition = viewMatrix * vec4(world, 1.0);
+    gl_Position = projectionMatrix * mvPosition;
+    #include <fog_vertex>
+  }
+`;
+const wispFragment = /* glsl */ `
+  uniform sampler2D map;
+  varying vec2 vUv;
+  varying float vFade;
+  varying float vAltitude;
+  varying float vTone;
+  varying vec3 vCenter;
+  #include <fog_pars_fragment>
+  void main() {
+    float thick = texture2D(map, vUv).r;
+    float alpha = thick * vFade * ${WISP_OPACITY.toFixed(2)};
+    if (alpha < 0.004) discard;
+    vec3 color = vec3(0.3, 0.22, 0.16) * vTone;
+    #ifdef USE_FOG
+      // its depth's light, the darker for a denser core seen from below
+      color = mix(hazeDeep, hazeDeck, clamp(exp(vAltitude / ${LIGHT_DEPTH.toFixed(1)}) * vTone * (1.1 - 0.25 * thick), 0.0, 1.4));
+      color += vec3(${FLASH_COLOR.r.toFixed(3)}, ${FLASH_COLOR.g.toFixed(3)}, ${FLASH_COLOR.b.toFixed(3)}) * hazeFlash.w * 1.5 * exp(-distance(vCenter, hazeFlash.xyz) / 12000.0);
+    #endif
+    gl_FragColor = vec4(color, alpha);
+    #include <fog_fragment>
+  }
+`;
+
+/** A wisp's texture: a soft streak, ragged at its edges and streaked along its length (value noise, the same every time). */
+function wispTexture(): THREE.DataTexture {
+  const width = WISP_TEXTURE;
+  const height = WISP_TEXTURE / 2;
+  const random = new Randomizer(0x77157);
+  const grid = Float32Array.from({ length: 64 * 64 }, () => random.nextFloat());
+  const value = (x: number, y: number) => {
+    const ix = Math.floor(x);
+    const iy = Math.floor(y);
+    const sx = x - ix;
+    const sy = y - iy;
+    const at = (i: number, j: number) => grid[(((j & 63) * 64) + (i & 63))];
+    const top = at(ix, iy) + (at(ix + 1, iy) - at(ix, iy)) * sx;
+    const bottom = at(ix, iy + 1) + (at(ix + 1, iy + 1) - at(ix, iy + 1)) * sx;
+    return top + (bottom - top) * sy;
+  };
+  const data = new Uint8Array(width * height * 4);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const u = (x + 0.5) / width;
+      const v = (y + 0.5) / height;
+      // streaks drawn out along the length, billows across
+      const streaks = 0.5 * value(u * 4, v * 14) + 0.3 * value(u * 9 + 20, v * 28) + 0.2 * value(u * 20 + 40, v * 40);
+      const dx = (u - 0.5) * 2;
+      const dy = (v - 0.5) * 2 + 0.35 * (value(u * 3 + 7, 3) - 0.5);
+      const edge = Math.sqrt(dx * dx + dy * dy * 1.3) + 0.45 * (streaks - 0.5);
+      // nothing at the texture's border, so no quad shows its edge
+      const border = THREE.MathUtils.smoothstep(1 - Math.abs(dx), 0, 0.2) * THREE.MathUtils.smoothstep(1 - Math.abs((v - 0.5) * 2), 0, 0.3);
+      const shape = THREE.MathUtils.smoothstep(1 - edge, 0, 0.6) * border;
+      const o = (y * width + x) * 4;
+      data[o] = Math.round(255 * shape * THREE.MathUtils.clamp(0.35 + streaks, 0, 1));
+      data[o + 3] = 255;
+    }
+  }
+  const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/** The wisps' quads (see WISPS): their corners and seeds, the same every time. */
+function wispGeometry(): THREE.BufferGeometry {
+  const count = WISPS[0];
+  const random = new Randomizer(0x3c1d);
+  const corners = new Float32Array(count * 12);
+  const seeds = new Float32Array(count * 16);
+  const index: number[] = [];
+  for (let i = 0; i < count; i++) {
+    const seed = [random.nextFloat(), random.nextFloat(), random.nextFloat(), random.nextFloat()];
+    [-1, -1, 1, -1, 1, 1, -1, 1].forEach((value, k) => (corners[i * 12 + Math.floor(k / 2) * 3 + (k % 2)] = value));
+    for (let k = 0; k < 4; k++) seeds.set(seed, i * 16 + k * 4);
+    index.push(i * 4, i * 4 + 1, i * 4 + 2, i * 4, i * 4 + 2, i * 4 + 3);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(corners, 3));
+  geometry.setAttribute('seed', new THREE.BufferAttribute(seeds, 4));
+  geometry.setIndex(index);
+  return geometry;
+}
+
 /** A moon: its surface in two tones (and with `cracks`, lines across its ice), lit by the sun. */
 const moonFragment = () => /* glsl */ `
   uniform vec3 sun;
@@ -273,12 +434,20 @@ export class Jupiter {
   private readonly sheets: { mesh: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>; depth: number }[] = [];
   private readonly timed: THREE.ShaderMaterial[] = [];
   private readonly aurora: THREE.ShaderMaterial;
+  /** The wisps streaming past under the deck (see WISPS), and the way the wind blows (east, a unit vector). */
+  private readonly wisps: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  private readonly wind = new THREE.Vector3();
+  /** The depths under the sheets, and the haze around the eye that takes their place under the deck (see BACKDROP). */
+  private readonly floor: THREE.Mesh;
+  private readonly backdrop: THREE.Mesh;
   private strike: Strike | null = null;
   private nextStrike = STRIKE_EVERY;
   /** The map's mean color around the point below the arena (linear). */
   private readonly cloudColor = new THREE.Color(0.55, 0.42, 0.3);
   /** How far from the eye the deck draws the winds' fine streaks, on the rungs that do (units). */
   private readonly fineReach: number;
+  /** How many samples a ray in the haze takes of its clouds (see CLOUD_SAMPLES). */
+  private samples = CLOUD_SAMPLES[0];
 
   constructor(
     private readonly air: Air,
@@ -357,7 +526,39 @@ export class Jupiter {
     // its far reaches lie beyond the camera's reach, where its haze still shows
     floor.frustumCulled = false;
     floor.position.copy(air.center);
-    this.group.add(floor);
+    this.floor = floor;
+    // under the deck, the haze all around the eye instead (see BACKDROP)
+    this.backdrop = new THREE.Mesh(
+      new THREE.SphereGeometry(BACKDROP, 32, 16),
+      new THREE.ShaderMaterial({ vertexShader: floorVertex, fragmentShader: floorFragment, fog: true, side: THREE.BackSide }),
+    );
+    this.backdrop.frustumCulled = false;
+    this.backdrop.visible = false;
+    this.group.add(floor, this.backdrop);
+    // the wind blows east around the planet's axis (the pole's direction turned back), over the point below the arena
+    this.wind.crossVectors(pole.clone().negate(), across.copy(air.center).negate().normalize()).normalize();
+    this.wisps = new THREE.Mesh(
+      wispGeometry(),
+      new THREE.ShaderMaterial({
+        uniforms: {
+          eye: { value: new THREE.Vector3() },
+          drift: { value: new THREE.Vector3() },
+          wind: { value: this.wind },
+          planet: { value: air.center },
+          radius: { value: air.radius },
+          map: { value: wispTexture() },
+        },
+        vertexShader: wispVertex,
+        fragmentShader: wispFragment,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        fog: true,
+      }),
+    );
+    // the quads are laid in the vertex shader around the eye
+    this.wisps.frustumCulled = false;
+    this.group.add(this.wisps);
     this.timed.push(material, this.aurora);
     this.colors(material);
   }
@@ -397,12 +598,15 @@ export class Jupiter {
 
   /**
    * The picture's quality (tier 0 the full picture, see Landmarks.setDetail): both sheets below
-   * the deck, the first, or none; on the cheapest the deck without the winds' fine streaks.
+   * the deck, the first, or none; on the cheapest the deck without the winds' fine streaks; fewer
+   * wisps, and the haze's clouds sampled once instead of twice along a ray (see view/haze).
    */
   setDetail(tier: number) {
     this.sheets.forEach((sheet, i) => (sheet.mesh.visible = sheet.depth === 0 || i < SHEETS.length - tier));
     const deck = this.sheets.at(-1)!.mesh.material;
     deck.uniforms.reach.value = tier < 2 ? this.fineReach : 0;
+    this.wisps.geometry.setDrawRange(0, WISPS[tier] * 6);
+    this.samples = CLOUD_SAMPLES[tier];
   }
 
   /**
@@ -419,6 +623,17 @@ export class Jupiter {
       mesh.material.uniforms.glow.value = shade(depth);
     }
     this.sky.position.copy(eye);
+    // the clouds carried by the wind, the wisps around the eye while it is under the deck
+    const clouds = HAZE_UNIFORMS.hazeClouds.value;
+    clouds.set(this.wind.x * WIND * time, this.wind.y * WIND * time, this.wind.z * WIND * time, this.samples);
+    const wisps = this.wisps.material.uniforms;
+    this.wisps.visible = altitude < -WISP_TOP;
+    this.backdrop.visible = altitude < 0;
+    this.floor.visible = !this.backdrop.visible;
+    this.backdrop.position.copy(eye);
+    this.wisps.position.copy(eye);
+    wisps.eye.value.copy(eye);
+    wisps.drift.value.set(clouds.x, clouds.y, clouds.z);
     this.aurora.uniforms.horizon.value = altitude > 0 ? -Math.acos(this.air.radius / (this.air.radius + altitude)) : 0;
     this.nextStrike -= dt;
     let begun = false;
