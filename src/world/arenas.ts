@@ -72,14 +72,15 @@ export const SATURN_CENTER = new THREE.Vector3(-0.85, 0, 0.5).normalize().multip
 /**
  * Earth below the Satellite Junkyard, at its real size (EARTH_RADIUS, units, 6,371 km), the
  * field's center EARTH_ALTITUDE (550 km) above it in low orbit: it fills the sky below a horizon
- * 23° beneath the arena. Not straight below: tilted EARTH_TILT (23°) towards the sun, so the
- * point beneath the arena lies in night (the sun 14.6° below its horizon), the terminator with
- * its sliver of day shows towards the sun along the horizon, and the arena itself, high above,
- * still lies in sunlight. Scenery only: it neither pulls nor blocks.
+ * 23° beneath the arena. Not straight below: tilted EARTH_TILT (11.5°) towards the sun, so the
+ * point beneath the arena lies in the dusk (the sun 3.2° below its horizon): the terminator runs
+ * through the view below, the day side towards the sun, the night with its cities away from it,
+ * and the arena itself, high above, lies in sunlight (the sun 20° above Earth's rim as seen from
+ * it). Scenery only: it neither pulls nor blocks.
  */
 export const EARTH_RADIUS = 127420000;
 export const EARTH_ALTITUDE = 11000000;
-const EARTH_TILT = 0.4;
+const EARTH_TILT = 0.2;
 /** Straight down to the point beneath the arena, from the field's center. */
 export const EARTH_DOWN = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z).normalize().multiplyScalar(Math.sin(EARTH_TILT)).add(new THREE.Vector3(0, -Math.cos(EARTH_TILT), 0));
 export const EARTH_CENTER = EARTH_DOWN.clone().multiplyScalar(EARTH_RADIUS + EARTH_ALTITUDE);

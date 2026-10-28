@@ -7,7 +7,8 @@ import { fbm, noise3 } from './landmarks';
 import { signTexture } from '../view/surfaces';
 
 /**
- * The scenery of the Satellite Junkyard: Earth below at night, its air glowing along the rim,
+ * The scenery of the Satellite Junkyard: Earth below, the terminator running through it, the
+ * day towards the sun and the night with its cities away from it, its air glowing along the rim,
  * now and then a satellite burning up in it, and the thousands of dead satellites, spent upper
  * stages and clouds of fragments of the Orbital Freedom Network rotting in their orbits beyond
  * the arena, with a billboard satellite still flickering the network's name. Scenery only: none
@@ -27,22 +28,49 @@ const MAP_WIDTH = THREE.MathUtils.degToRad(68);
 const MAP_HEIGHT = THREE.MathUtils.degToRad(56);
 /**
  * The day map (`public/assets/planets/earth-day-*.jpg`, a crop of NASA's Blue Marble: Next
- * Generation, July) covers only the part of that region the sun reaches: the same west and south
- * edges and height, 32° wide, to 18° east; east of it the cap lies in the night
+ * Generation, July) covers only the part of that region the sun or the twilight reaches: the same
+ * west and south edges and height, 50° wide, to 36° east; east of it the cap lies in the night
  * (see junkyard.test.ts).
  */
-export const DAY_REGION = new THREE.Vector4(MAP_WEST, MAP_SOUTH, THREE.MathUtils.degToRad(32), MAP_HEIGHT);
+export const DAY_REGION = new THREE.Vector4(MAP_WEST, MAP_SOUTH, THREE.MathUtils.degToRad(50), MAP_HEIGHT);
 /**
- * The terminator, as the sine of the sun's elevation: daylight sets in at DAY_FROM (the sun
- * 2.3° below the horizon, the light bent and scattered over it) and is full sunlight from
- * DAY_FULL (0.3, the sun 17° up), dimmer and redder below. The day map needs to cover only what
- * lies above DAY_FROM.
+ * The terminator, by the sun's elevation over a point (degrees), as on Earth: the sun's disk sets
+ * at SUN_SET (its upper limb lifted over the horizon by the air's refraction), its light reddened
+ * and dimmed by the air it crosses (TAU, see sunThrough); after it the twilight, the sky's light
+ * falling by a factor e every TWILIGHT_FALL degrees (civil twilight to 6°, nautical to 12°), gone
+ * where it no longer shows on screen, at TWILIGHT_END. Clouds CLOUD_DIP (2.5°, some 6 km up) and
+ * the haze LIMB_DIP (5°, some 25 km up) see the sun after the ground has lost it. The cities light
+ * up between LIGHTS_ON and LIGHTS_FULL, as the sky darkens. The day map needs to cover only what
+ * lies above DAY_FROM, the sine of TWILIGHT_END.
  */
-export const DAY_FROM = -0.04;
-const DAY_FULL = 0.3;
+const SUN_SET = -0.85;
+const TWILIGHT_FALL = 3;
+const TWILIGHT_END = -9;
+export const DAY_FROM = Math.sin(THREE.MathUtils.degToRad(TWILIGHT_END));
+const CLOUD_DIP = 2.5;
+const LIMB_DIP = 5;
+const LIGHTS_ON = -1.5;
+const LIGHTS_FULL = -8;
+/**
+ * The air's optical depth straight up for red, green and blue (Rayleigh scattering and a little
+ * aerosol): the low sun through 38 air masses at the horizon is a deep red.
+ */
+const TAU = [0.15, 0.21, 0.33];
+/**
+ * The sky's light on the ground (a share of the sun's overhead): SKY_DUSK with the sun on the
+ * horizon, SKY_DAY more with it high.
+ */
+const SKY_DUSK = 0.035;
+const SKY_DAY = 0.12;
+/**
+ * The day side is shown as an eye adapted to the low sun sees it: brighter by DAY_EXPOSURE than
+ * the sun overhead would light it, so the land under a sun 10° to 20° up reads clearly beside
+ * the cities' lights.
+ */
+const DAY_EXPOSURE = 2.8;
 /** The day map's seas are drawn darker by this factor, so the sun's glint stands out on them and the land against them. */
 const SEA_SHADE = 0.6;
-/** The point beneath the arena: over the Ionian Sea (35° north, 20° east), Europe, Africa's north and the Middle East at night around it, the sun set beyond Spain. */
+/** The point beneath the arena: over the Ionian Sea (35° north, 20° east) at dusk, Spain, the Maghreb and the western Mediterranean in the day towards the sun, Greece, Turkey, Egypt and the Middle East in the night away from it. */
 const BELOW_LATITUDE = THREE.MathUtils.degToRad(35);
 const BELOW_LONGITUDE = THREE.MathUtils.degToRad(20);
 /** How the map packs land and light into one grey value: 0 ocean, MAP_LAND land without light, up to 1 the brightest light. */
@@ -134,12 +162,33 @@ const earthVertex = /* glsl */ `
 `;
 
 /**
- * Earth at night, from its night map (see MAP_LAND), in the 26th century: the lights of today
- * grown into megacities (their glow spread wide, white and neon in the hearts of the biggest),
- * the coasts lit end to end, new cities in what is empty land today; on the side towards the
- * sun the terminator's red and the day side from its day map (see DAY_REGION): land and darker
- * seas in a low sun, dimmer and redder towards the terminator, the sun's glint on the water,
- * clouds over it and the air's blue haze towards the limb.
+ * The light of the sun and the sky through Earth's air, by the sun's elevation (degrees, see
+ * SUN_SET): `elevation` from its sine; `sunThrough`, the sunlight that reaches a point, relative
+ * to the sun overhead (the air mass by Kasten and Young, the colors dimmed by TAU, the disk setting
+ * at SUN_SET); `twilight`, the sky's light on the ground, holding on after sunset and fading with
+ * TWILIGHT_FALL until TWILIGHT_END.
+ */
+const twilight = /* glsl */ `
+  float elevation(float s) { return degrees(asin(clamp(s, -1.0, 1.0))); }
+  vec3 sunThrough(float e) {
+    float h = max(e, 0.0);
+    float mass = 1.0 / (sin(radians(h)) + 0.50572 * pow(h + 6.07995, -1.6364));
+    return exp(-vec3(${TAU.map(f).join(', ')}) * (mass - 1.0)) * smoothstep(${f(SUN_SET)}, ${f(SUN_SET + 1.2)}, e);
+  }
+  float twilight(float e) {
+    float day = ${f(SKY_DUSK)} + ${f(SKY_DAY)} * (1.0 - exp(-max(e, 0.0) / 12.0));
+    return day * exp(min(e, 0.0) / ${f(TWILIGHT_FALL)}) * smoothstep(${f(TWILIGHT_END)}, ${f(TWILIGHT_END + 3)}, e);
+  }
+`;
+
+/**
+ * Earth from its night map (see MAP_LAND) and its day map (see DAY_REGION), lit by the sun as on
+ * Earth (see twilight): on the side towards the sun land and darker seas in a low sun, the light
+ * dimmer and redder towards the terminator, the sun's glint on the water; the clouds catching the
+ * last red light after the ground lies in the dusk; the twilight's blue fading into the night,
+ * where the lights come on as the sky darkens: the lights of the 26th century, today's grown into
+ * megacities (their glow spread wide, white and neon in the hearts of the biggest), the coasts
+ * lit end to end, new cities in what is empty land today; the air's haze towards the limb.
  * Clouds drift and dim the lights below. Detail finer than the map shows only while it is a few
  * pixels large, so nothing crawls in the distance. Now and then a satellite burns up in the air
  * as a streak with a fiery head (see BURN_EVERY).
@@ -158,6 +207,7 @@ const earthFragment = () => /* glsl */ `
   varying vec3 vWorld;
   ${noise3}
   ${fbm}
+  ${twilight}
   float land(float v) { return smoothstep(0.04, 0.1, v); }
   float lit(float v) { return max(v - ${f(MAP_LAND)}, 0.0) / ${f(1 - MAP_LAND)}; }
   // a satellite burning up: lane k's turn at this time, where it starts, which way it runs
@@ -204,21 +254,27 @@ const earthFragment = () => /* glsl */ `
     vec3 view = normalize(cameraPosition - vWorld);
     vec3 toSun = normalize(sun);
     float facing = dot(n, toSun);
-    float day = smoothstep(${f(DAY_FROM)}, 0.05, facing);
-    float night = 1.0 - smoothstep(-0.1, 0.03, facing);
+    float e = elevation(facing);
     float clouds = smoothstep(0.52, 0.78, fbm(q * 9.0 + vec3(time * 0.002, 0.0, 0.0) + fbm(q * 18.0, 1.0), 1.0));
-    // the day side from the day map, its seas darker; the sun low over it: its light fades with
-    // its elevation towards the terminator (never quite to nothing while it is up, the air
-    // scatters it) and turns red where it runs the longest way through the air
+    // the day side from the day map, its seas darker, in the sun's light through the air (on the
+    // ground as it falls, the sun's disk a little over the horizon after it has set, bent by the
+    // air) and the sky's: its light fades and reddens towards the terminator, the twilight's blue
+    // holds on after it
     float solid = smoothstep(${f(LAND_SEEN * 0.3)}, ${f(LAND_SEEN * 0.7)}, v);
     vec3 surface = texture2D(dayMap, vec2((lon - dayRegion.x) / dayRegion.z, uv.y)).rgb;
     surface *= mix(${f(SEA_SHADE)}, 1.0, solid);
-    vec3 color = mix(surface, vec3(0.8), clouds * 0.85);
-    float sunlight = day * (0.3 + 0.7 * smoothstep(0.0, ${f(DAY_FULL)}, facing));
-    vec3 low = mix(vec3(1.0, 0.68, 0.45), vec3(1.0), smoothstep(-0.02, 0.15, facing));
-    vec3 shade = color * light * low * sunlight;
-    shade += vec3(1.0, 0.92, 0.8) * light * low * pow(max(dot(reflect(-toSun, n), view), 0.0), 90.0) * (1.0 - solid) * (1.0 - clouds) * day;
-    // the night side: land faintly lit by the moon and the glow of the cities
+    vec3 sunlight = sunThrough(e);
+    float sky = twilight(e);
+    vec3 skyColor = mix(vec3(0.4, 0.5, 1.0), vec3(0.6, 0.72, 1.0), smoothstep(-4.0, 10.0, e));
+    vec3 onGround = sunlight * max(facing + 0.015, 0.0) + skyColor * sky;
+    // the clouds stand higher: the sun lights their tops a while after the ground lies in the
+    // dusk, the deepest red of all, and their flanks catch the low sun
+    vec3 onClouds = sunThrough(e + ${f(CLOUD_DIP)}) * (0.15 + max(facing + 0.05, 0.0)) + skyColor * sky;
+    vec3 shade = mix(surface * onGround, vec3(0.8) * onClouds, clouds * 0.85) * light * ${f(DAY_EXPOSURE)};
+    shade += vec3(1.0, 0.92, 0.8) * light * sunlight * pow(max(dot(reflect(-toSun, n), view), 0.0), 90.0) * (1.0 - solid) * (1.0 - clouds) * smoothstep(-0.5, 3.0, e);
+    // the night: land faintly lit by the moon and the glow of the cities, and the lights coming
+    // on as the sky darkens
+    float night = smoothstep(${f(LIGHTS_ON)}, ${f(LIGHTS_FULL)}, e);
     shade += mix(vec3(0.002, 0.004, 0.012), vec3(0.016, 0.02, 0.036), ground) * night;
     // the lights of the 26th century: today's, boosted and grown together, the coasts lit, new
     // cities in the empty land; the fine grain of streets only while it is large enough on screen
@@ -238,12 +294,11 @@ const earthFragment = () => /* glsl */ `
     // clouds dim the lights and glow from them below
     shade += cities * night * (1.0 - clouds * 0.75) * 0.6;
     shade += warm * sprawl * clouds * night * 0.15;
-    // the terminator: sunlight scattered red through the air
-    float dusk = (facing + 0.02) * 16.0;
-    shade += vec3(1.0, 0.38, 0.14) * light * exp(-dusk * dusk) * 0.015;
-    // blue haze along the limb, lit on the day side
+    // haze along the limb: blue where the sun lights it from high above, its light reddening
+    // beyond the terminator, dark in the night
     float limb = 1.0 - clamp(dot(n, view), 0.0, 1.0);
-    shade = mix(shade, vec3(0.25, 0.5, 1.0) * light * (0.02 + 0.35 * sunlight), pow(limb, 5.0) * 0.6);
+    vec3 hazeLight = vec3(0.25, 0.5, 1.0) * (0.35 * sunThrough(e + ${f(LIMB_DIP)}) + 2.0 * sky) + vec3(0.002, 0.003, 0.006);
+    shade = mix(shade, hazeLight * light, pow(limb, 5.0) * 0.6);
     shade += burn(n, 0.0) + burn(n, 1.0);
     gl_FragColor = vec4(shade, 1.0);
   }
@@ -254,8 +309,9 @@ const earthFragment = () => /* glsl */ `
  * runs through the hazy lower air and through the airglow's thin layer (analytically, as the
  * chords of their spheres; only the stretch in front of Earth where the ray meets it). Seen from
  * above they are faint, along the rim they add up to a thin bright line: blue where the sun
- * shines, red at the terminator, the faint green of the airglow on the night side, set apart
- * from the planet's dark rim by a dark band.
+ * stands high, yellow, orange and red where it sets (the colors reaching a few degrees into the
+ * night, where the high air still sees the sun), the faint green of the airglow on the night
+ * side, set apart from the planet's dark rim by a dark band.
  */
 const airFragment = /* glsl */ `
   uniform vec3 sun;
@@ -263,6 +319,7 @@ const airFragment = /* glsl */ `
   uniform vec3 center;
   uniform float radius;
   varying vec3 vWorld;
+  ${twilight}
   float chord(float b2, float r) { return 2.0 * sqrt(max(r * r - b2, 0.0)); }
   float through(float b2, float low, float high) {
     float stretch = chord(b2, high) - chord(b2, low);
@@ -281,12 +338,16 @@ const airFragment = /* glsl */ `
     float glow = through(b2, ${f(1 + GLOW_LOW)}, ${f(1 + GLOW_HIGH)}) / ${f(GLOW_HIGH - GLOW_LOW)};
     // the sun on that air: where the ray meets the planet, or above the point nearest it
     vec3 at = b2 < 1.0 ? from + ray * (nearest - sqrt(1.0 - b2)) : closest;
-    float facing = dot(normalize(at), normalize(sun));
-    float day = smoothstep(-0.06, 0.2, facing);
-    float dusk = (facing + 0.02) * 16.0;
-    // the terminator's red full along the rim, faint in front of the planet, where the land at dusk shows
-    vec3 color = haze * light * (vec3(0.2, 0.42, 1.0) * day * 0.03 + vec3(1.0, 0.42, 0.16) * exp(-dusk * dusk) * (b2 < 1.0 ? 0.006 : 0.02));
-    color += glow * vec3(0.45, 0.9, 0.4) * 0.0006 * (1.0 - day * 0.8);
+    float e = elevation(dot(normalize(at), normalize(sun)));
+    // the haze high above sees the sun after the ground has lost it (see LIMB_DIP): blue where
+    // the sun stands high over it, yellow, orange and red as it sinks and its light runs the
+    // long way through the air, the twilight's deep blue after it, then the dark
+    vec3 lit = sunThrough(e + ${f(LIMB_DIP)});
+    float dusk = (e + 2.0) / 4.5;
+    vec3 sunset = vec3(1.0, 0.45, 0.16) * exp(-dusk * dusk) + vec3(1.0, 0.75, 0.35) * 0.4 * exp(-pow((e - 3.0) / 4.0, 2.0));
+    // the colors full along the rim, faint in front of the planet, where the land at dusk shows
+    vec3 color = haze * light * (vec3(0.2, 0.42, 1.0) * 0.03 * (lit + 4.0 * twilight(e)) + sunset * (b2 < 1.0 ? 0.005 : 0.02));
+    color += glow * vec3(0.45, 0.9, 0.4) * 0.0006 * (1.0 - 0.8 * smoothstep(-6.0, 4.0, e));
     gl_FragColor = vec4(color, 1.0);
   }
 `;
