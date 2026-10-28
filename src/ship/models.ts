@@ -146,7 +146,7 @@ const LACQUER_ROUGHNESS = 0.15;
  * The brightest the lacquer mirrors a light, per unit of the sun's intensity (linear, before
  * the lacquer's strength; the bloom starts at 0.88). Out there no air dims the sun, and a
  * smooth panel at its mirror angle throws it back nearly whole: the glint blinds, with a wide
- * halo, the brighter the nearer the sun (the corona's twice the belt's). Uncapped it would be
+ * halo, the brighter the nearer the sun (the corona's nearly three times the belt's). Uncapped it would be
  * hundreds of times brighter and the bloom would swallow the whole ship. The lacquer's
  * reflection of the sky (see shine) stays as it is.
  */

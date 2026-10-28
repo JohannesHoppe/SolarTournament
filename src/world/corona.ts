@@ -7,9 +7,11 @@ import { bandsVertex, noise3 } from './landmarks';
  * The sun of the Corona up close: its face boiling with cells, its spots drifting across it as
  * it turns, the glow of its chromosphere and inner corona along the limb, and the prominences:
  * arcs of plasma rising over the limb along magnetic loops, swelling and fading over minutes,
- * their plasma raining back down along them in bright knots. Scenery only, three draw calls;
- * everything moves on the field time, so every browser shows the same sun. Nothing in it
- * distorts the picture behind it: no heat shimmer, which would read as flicker on a phone.
+ * their plasma raining back down along them in bright knots. Around it the sky a star lights:
+ * its scattered light filling the whole sky, never black, and the veil its glare lays over the
+ * picture through the camera's lens. Scenery only, five draw calls; everything moves on the
+ * field time, so every browser shows the same sun. Nothing in it distorts the picture behind
+ * it: no heat shimmer, which would read as flicker on a phone.
  */
 
 /** The sun: a sphere this large at this distance (units, 3.1 km in radius, 12 km off): it fills about 30° of the sky. */
@@ -349,10 +351,101 @@ function prominences(): THREE.BufferGeometry {
   return geometry;
 }
 
+/**
+ * A quad over the whole picture, drawn straight in clip space at `depth` (1 for the far plane,
+ * behind everything; any for an overlay): each pixel gets its ray in the camera's frame and the
+ * way to the sun's middle in it, and the sun's angular radius from where the camera is.
+ */
+const screenVertex = (depth: number) => /* glsl */ `
+  uniform vec3 center;
+  uniform float radius;
+  uniform float behind;
+  varying vec3 vRay;
+  varying vec3 vSun;
+  varying float vSize;
+  varying vec2 vScreen;
+  void main() {
+    vec3 toSun = center - cameraPosition;
+    vSun = normalize(mat3(viewMatrix) * toSun);
+    vSize = asin(radius / length(toSun));
+    vRay = vec3(position.x / projectionMatrix[0][0], position.y / projectionMatrix[1][1], -1.0);
+    vScreen = position.xy;
+    // an overlay that has nothing to add with the sun this far behind is never drawn
+    gl_Position = vSun.z > behind ? vec4(2.0, 2.0, 2.0, 1.0) : vec4(position.xy, ${depth.toFixed(1)}, 1.0);
+  }
+`;
+
+/** A pixel's angle from the sun's middle, in sun radii (1 on the limb). */
+const SUN_ANGLE = /* glsl */ `
+  float sunAngle() {
+    return acos(clamp(dot(normalize(vRay), vSun), -1.0, 1.0)) / vSize;
+  }
+`;
+
+/**
+ * The sky next to a star: never black. The outer corona and the dust around the sun (seen from
+ * Earth far out as the zodiacal light) scatter its light into every direction, brightest along
+ * the limb (SCATTER_STRENGTH, linear) and falling off with the angle from the sun's middle about
+ * as its square does (SCATTER_FALL, in sun radii), white near the sun and orange farther out;
+ * facing away, a dim warm floor (SCATTER_FLOOR, linear) remains. Smooth in every direction,
+ * nothing in it to shimmer.
+ */
+const SCATTER_NEAR = [1.0, 0.86, 0.66] as const;
+const SCATTER_FAR = [0.9, 0.42, 0.13] as const;
+const SCATTER_FLOOR = [0.05, 0.022, 0.008] as const;
+const SCATTER_STRENGTH = 1.6;
+const SCATTER_FALL = 2.1;
+const vec3 = (rgb: readonly number[]) => `vec3(${rgb.map((c) => c.toFixed(3)).join(', ')})`;
+const scatterFragment = /* glsl */ `
+  varying vec3 vRay;
+  varying vec3 vSun;
+  varying float vSize;
+  varying vec2 vScreen;
+  ${SUN_ANGLE}
+  void main() {
+    float e = max(sunAngle(), 1.0);
+    float near = pow(e, -${SCATTER_FALL.toFixed(1)});
+    vec3 color = mix(${vec3(SCATTER_FAR)}, ${vec3(SCATTER_NEAR)}, near) * near * ${SCATTER_STRENGTH.toFixed(2)};
+    // the floor, a little warmer on the sun's side of the sky
+    float side = 0.5 + 0.5 * dot(normalize(vRay), vSun);
+    gl_FragColor = vec4(color + ${vec3(SCATTER_FLOOR)} * (0.6 + 0.8 * side), 1.0);
+  }
+`;
+
+/**
+ * The lens's veil: the sun's light scattered in the camera's own optics over the whole picture,
+ * rocks and ships included, by each pixel's angle from the sun (GLARE_STRENGTH, linear, at the
+ * sun's middle, falling to about a third over GLARE_REACH sun radii), so it shows as much when the sun stands just past the picture's edge as when it
+ * is in view; the edge of the picture on the sun's side flares up more (GLARE_EDGE). It depends
+ * on nothing but the camera's direction: no flicker, nothing hidden or revealed by a rock.
+ */
+const GLARE = [1.0, 0.8, 0.55] as const;
+const GLARE_STRENGTH = 0.14;
+const GLARE_REACH = 2.2;
+const GLARE_EDGE = 0.8;
+/** The veil fades out as the sun goes behind the camera and is not drawn at all from here on (the cosine of the sun's angle to straight back: 0.35 is 110° off the view). */
+const GLARE_BEHIND = 0.35;
+const glareFragment = /* glsl */ `
+  varying vec3 vRay;
+  varying vec3 vSun;
+  varying float vSize;
+  varying vec2 vScreen;
+  ${SUN_ANGLE}
+  void main() {
+    float e = sunAngle();
+    float veil = exp(-e / ${GLARE_REACH.toFixed(1)});
+    // the picture's edge, towards the sun
+    vec2 toward = normalize(vSun.xy + 1e-5);
+    float edge = smoothstep(0.55, 1.0, max(abs(vScreen.x), abs(vScreen.y))) * max(dot(normalize(vScreen + 1e-5), toward), 0.0);
+    float fade = 1.0 - smoothstep(${(GLARE_BEHIND - 0.3).toFixed(2)}, ${GLARE_BEHIND.toFixed(2)}, vSun.z);
+    gl_FragColor = vec4(${vec3(GLARE)} * veil * (1.0 + ${GLARE_EDGE.toFixed(1)} * edge) * fade * ${GLARE_STRENGTH.toFixed(2)}, 1.0);
+  }
+`;
+
 /** Indices a loop takes in the prominences' mesh. */
 const LOOP_INDICES = LOOP_SEGMENTS * 6;
 
-/** The Corona's sun: its face, the glow along its limb and its prominences (see the top of this file). */
+/** The Corona's sun: its face, the glow along its limb, its prominences, the sky it lights and its glare in the lens (see the top of this file). */
 export class Corona {
   readonly group = new THREE.Group();
   private readonly face: THREE.ShaderMaterial;
@@ -392,7 +485,29 @@ export class Corona {
     // the ribbons rise and fall in the shader, a little beyond their resting bounds
     loops.frustumCulled = false;
     this.loops = loops;
-    this.group.add(sun, glow, loops);
+
+    // the scattered light: at the far plane, where nothing else is drawn, and before every other
+    // see-through thing, so they lie over it as over black space; the stars beneath it drown in it
+    const screen = new THREE.PlaneGeometry(2, 2);
+    const scatter = new THREE.Mesh(screen, new THREE.ShaderMaterial({
+      uniforms: { center: { value: CENTER }, radius: { value: CORONA_RADIUS }, behind: { value: 2 } },
+      vertexShader: screenVertex(1),
+      fragmentShader: scatterFragment,
+      ...additive,
+    }));
+    scatter.renderOrder = -1000;
+    // the lens's veil: over everything, last
+    const glare = new THREE.Mesh(screen, new THREE.ShaderMaterial({
+      uniforms: { center: { value: CENTER }, radius: { value: CORONA_RADIUS }, behind: { value: GLARE_BEHIND } },
+      vertexShader: screenVertex(0),
+      fragmentShader: glareFragment,
+      depthTest: false,
+      ...additive,
+    }));
+    glare.renderOrder = 1000;
+    // both are placed in clip space, wherever the camera looks
+    scatter.frustumCulled = glare.frustumCulled = false;
+    this.group.add(scatter, sun, glow, loops, glare);
   }
 
   /** The sun at field time `time`: its face turned by SPIN, the glow's streamers and the prominences' lives. */
