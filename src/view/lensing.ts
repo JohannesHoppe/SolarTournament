@@ -1,15 +1,26 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { DISK_UNIFORMS, HOLE_SHADOW, diskGas } from '../world/landmarks';
 
 /**
  * The black hole bends light: a pass over the rendered picture that moves every pixel around
  * the hole as a gravitational lens would. A source at angle β from the hole shows at θ with
  * β = θ − θE²/θ: the stars and the disk behind it wrap around into a ring (the Einstein ring,
- * θE), a mirrored image shows inside it, and the middle stays black: the hole's shadow. What
+ * θE), a mirrored image shows inside it, and the middle is the hole's shadow. The hole has no
+ * mesh, so the disk's far side behind it is in the picture to be bent into the halo over and
+ * under the shadow; the shadow is black but for the disk's near side crossing in front of it,
+ * its gas summed along each pixel's ray up to the shadow (see world/landmarks, diskGas). What
  * lies in front of the hole (by the depth) is neither bent nor lent to the bent picture.
  */
 const shader = {
   uniforms: {
+    ...DISK_UNIFORMS,
+    /** Each pixel's ray, for the disk's near side in front of the shadow: the camera's frame, its projection undone, and where it is seen from the hole. */
+    cameraWorld: { value: new THREE.Matrix4() },
+    projectionInverse: { value: new THREE.Matrix4() },
+    eye: { value: new THREE.Vector3() },
+    /** The sphere the shadow is (units): the gas behind it is hidden. */
+    shadowRadius: { value: 0 },
     tDiffuse: { value: null as THREE.Texture | null },
     /** The scene's depth, and the hole's depth in it: only what lies behind the hole is bent. */
     tDepth: { value: null as THREE.Texture | null },
@@ -38,7 +49,12 @@ const shader = {
     uniform float ring;
     uniform float shadow;
     uniform int samples;
+    uniform mat4 cameraWorld;
+    uniform mat4 projectionInverse;
+    uniform vec3 eye;
+    uniform float shadowRadius;
     varying vec2 vUv;
+    ${diskGas}
     void main() {
       // a ship or rock in front of the hole is seen as it is
       if (texture2D(tDepth, vUv).x < holeDepth) {
@@ -48,7 +64,14 @@ const shader = {
       vec2 d = (vUv - center) * vec2(aspect, 1.0);
       float theta = length(d);
       if (theta < shadow) {
-        gl_FragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        // black, but for the disk's gas in front of the hole: along the pixel's ray up to the shadow's sphere (or, past its edge, the hole's nearest point)
+        vec4 view = projectionInverse * vec4(vUv * 2.0 - 1.0, -1.0, 1.0);
+        vec3 rd = normalize((cameraWorld * vec4(view.xyz / view.w, 0.0)).xyz);
+        float b = dot(eye, rd);
+        float h = b * b - dot(eye, eye) + shadowRadius * shadowRadius;
+        float far = h > 0.0 ? -b - sqrt(h) : -b;
+        float near = diskEntry(eye, rd);
+        gl_FragColor = vec4(far > near ? diskGas(eye, rd, near, far) : vec3(0.0), 1.0);
         return;
       }
       float beta = theta - ring * ring / theta;
@@ -116,8 +139,16 @@ export class Lensing {
     uniforms.aspect.value = camera.view?.enabled ? camera.view.width / camera.view.height : camera.aspect;
     // the hole's angular radius as a share of the screen height
     const angular = Math.atan(horizon / distance) / THREE.MathUtils.degToRad(camera.fov);
-    uniforms.shadow.value = angular * 1.3;
+    uniforms.shadow.value = angular * HOLE_SHADOW;
     uniforms.ring.value = angular * 2.4;
+    uniforms.shadowRadius.value = horizon * HOLE_SHADOW;
+    // the camera as this frame draws it, so the near side in the shadow sits on the disk around it
+    camera.updateMatrixWorld();
+    uniforms.cameraWorld.value.copy(camera.matrixWorld);
+    uniforms.projectionInverse.value.copy(camera.projectionMatrixInverse);
+    uniforms.eye.value.setFromMatrixPosition(camera.matrixWorld).sub(hole);
+    uniforms.diskTime.value = DISK_UNIFORMS.diskTime.value;
+    uniforms.diskFine.value = DISK_UNIFORMS.diskFine.value;
     this.pass.enabled = true;
   }
 }

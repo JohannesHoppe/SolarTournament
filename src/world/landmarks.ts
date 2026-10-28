@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { SUN_DIRECTION } from './space';
-import { ARENAS, HOLE_RADIUS, RING_LAYER, SATURN_CENTER, type ArenaId, type ArenaProfile } from './arenas';
+import { ARENAS, RING_LAYER, SATURN_CENTER, type ArenaId, type ArenaProfile } from './arenas';
 import { Derelict, mistDensity } from './derelict';
 import { sizeBeacons } from './worldship';
 import { loadPlanetMap, type Planet, type PlanetMaps } from '../assets';
@@ -84,14 +84,33 @@ const PLANET_AMBIENT = 0.02;
 const DISK_INNER = 6000;
 const DISK_OUTER = 28000;
 /**
- * How fast the disk's gas circles (see diskFragment): DISK_SPIN / (0.15 + t) rad/s, t from the
+ * How fast the disk's gas circles (see diskGas): DISK_SPIN / (0.15 + t) rad/s, t from the
  * inner edge 0 to the outer 1, so once a second at the inner edge and once in about 8 s at the
- * outer. Its streaks lie in DISK_RINGS octaves of concentric rings, so many across the disk
- * (the finest left out below the full picture); each ring circles at its own speed, dark at its
- * edges where the next one slides past.
+ * outer. Its clumps circle in DISK_BANDS bands across the disk, each turning as a whole and
+ * blended softly into the next, so the gas never shears into finer streaks however long it turns.
  */
 const DISK_SPIN = 0.9;
-const DISK_RINGS = [24, 60, 150] as const;
+const DISK_BANDS = 6;
+/**
+ * The disk's thickness (units): its gas thins out above and below the middle plane as a bell
+ * curve whose width grows outward, DISK_THICK + DISK_FLARE · r (19 m at the inner edge, 32 m at
+ * the outer), so its near side crosses the shadow as a thin bright band.
+ */
+const DISK_THICK = 300;
+const DISK_FLARE = 0.012;
+/**
+ * A deliberate deviation for the look: the inner disk's far side, behind the hole as the pilot
+ * sees it, swells by up to DISK_PUFF (units, 225 m) above and below, the more edge-on the disk is
+ * seen and the farther behind the hole, out to DISK_PUFF_REACH. A real hole's gravity bends the
+ * light of its far side's face up over the shadow and under it; the lens over the picture only
+ * bends what it sees, a thin edge, so the swollen far side gives it the broad bright halo instead.
+ */
+const DISK_PUFF = 4500;
+const DISK_PUFF_REACH = 20000;
+/** How far above and below the middle plane the gas is drawn (units): where hardly any of the swollen far side is left. */
+const DISK_TOP = 2.6 * (DISK_THICK + DISK_FLARE * 10000 + DISK_PUFF);
+/** The hole's shadow as the lens draws it, a share more than its horizon (see view/lensing): the disk's near side shows in front of it. */
+export const HOLE_SHADOW = 1.3;
 /**
  * Segment counts Jupiter's cap is built at (width, height), from the full picture down:
  * its bands and storms are its map and a per-pixel pattern in the fragment shader (see
@@ -256,61 +275,152 @@ const gasFragment = /* glsl */ `
   }
 `;
 
+/**
+ * The black hole's disk as the shaders share it: its clock and its share of the picture's
+ * detail (see Landmarks.holeDetail). The disk's material uses these very uniforms; the lens
+ * copies them to draw the disk's near side in front of the shadow (see view/lensing).
+ */
+export const DISK_UNIFORMS = { diskTime: { value: 0 }, diskFine: { value: 1 } };
+
+/**
+ * The black hole's disk as glowing gas, measured along a ray (in the hole's frame, the disk in
+ * its xz plane): `diskEntry` says where a ray from `ro` enters the slab the gas fills, `diskGas`
+ * how much light the gas between `near` and `far` sends back along it.
+ *
+ * The gas shines white-hot at the inner edge, peach further out, orange and dark at the outer
+ * edge, its inner edge soft. It thins out above and below the middle plane as a bell curve (see
+ * DISK_THICK), summed exactly along each stretch of the ray (with the error function), so the disk
+ * reads thin seen from above and as a bright band seen edge-on, where a ray runs through more
+ * gas. Its brightness varies in large soft clumps, a few around the disk and a few across it,
+ * circling counterclockwise seen from above (as the arena's rocks do), the inner ones faster
+ * (see DISK_SPIN, DISK_BANDS), and drifting slowly; nothing in it is finer than a clump, so
+ * nothing shimmers. Below the full picture (`diskFine` 0) the smaller of its two sizes of clumps
+ * and a few of the stretches it is summed in are left out; the look stays. Where the gas streams
+ * towards the pilot it shines much brighter and whiter, where it streams away dimmer and redder
+ * (Doppler beaming), so one side of the disk outshines the other.
+ */
+export const diskGas = /* glsl */ `
+  uniform float diskTime;
+  uniform float diskFine;
+  ${noise3}
+  // the error function, closely enough (Winitzki's approximation)
+  float diskErf(float x) {
+    float x2 = x * x;
+    return sign(x) * sqrt(1.0 - exp(-x2 * (1.2732395 + 0.147 * x2) / (1.0 + 0.147 * x2)));
+  }
+  // where a ray enters the slab of gas: the cylinder around the disk and the planes above and below it (0 from inside)
+  float diskEntry(vec3 ro, vec3 rd) {
+    float near = 0.0;
+    if (abs(rd.y) > 1e-6) near = max(near, min((-${DISK_TOP.toFixed(1)} - ro.y) / rd.y, (${DISK_TOP.toFixed(1)} - ro.y) / rd.y));
+    float a = dot(rd.xz, rd.xz);
+    float b = dot(ro.xz, rd.xz);
+    float c = dot(ro.xz, ro.xz) - ${(DISK_OUTER * DISK_OUTER).toFixed(1)};
+    float h = b * b - a * c;
+    if (a > 1e-8 && h > 0.0) near = max(near, (-b - sqrt(h)) / a);
+    return near;
+  }
+  // the gas's light per column by its place across the disk, t from the inner edge 0 to the outer 1
+  float diskEmission(float t) {
+    return smoothstep(-0.05, 0.07, t) * exp(-3.0 * t) * (1.0 - smoothstep(0.65, 1.0, t));
+  }
+  // its color: white-hot inside, peach, orange, dark red at the outer edge; hotter where it streams towards the pilot
+  vec3 diskColor(float t) {
+    vec3 color = mix(vec3(1.0, 0.88, 0.72), vec3(1.0, 0.6, 0.36), smoothstep(0.0, 0.2, t));
+    color = mix(color, vec3(0.95, 0.34, 0.08), smoothstep(0.15, 0.45, t));
+    return mix(color, vec3(0.5, 0.08, 0.03), smoothstep(0.4, 0.85, t));
+  }
+  // one band of clumps, turning as a whole at the speed of its middle
+  float diskBand(float phi, float t, float band, float fine) {
+    float middle = clamp((band + 0.5) / ${DISK_BANDS.toFixed(1)}, 0.0, 1.0);
+    float spin = phi - diskTime * ${DISK_SPIN.toFixed(2)} / (0.15 + middle);
+    // drawn on a circle, so the clumps close without a seam
+    vec2 around = vec2(cos(spin), sin(spin));
+    float drift = diskTime * 0.02;
+    float clumps = noise(vec3(around * 1.7, t * 3.5 + drift));
+    if (fine > 0.0) clumps = mix(clumps, clumps * 0.65 + 0.35 * noise(vec3(around * 3.6 + 7.0, t * 7.0 - drift)), fine);
+    return clumps;
+  }
+  // the clumps at a point of the disk: two neighboring bands blended, so no band shows an edge
+  float diskClumps(vec3 p) {
+    float t = clamp((length(p.xz) - ${DISK_INNER.toFixed(1)}) / ${(DISK_OUTER - DISK_INNER).toFixed(1)}, 0.0, 1.0);
+    // counterclockwise seen from above: the angle grows from +x towards -z
+    float phi = atan(-p.z, p.x);
+    float u = t * ${DISK_BANDS.toFixed(1)} - 0.5;
+    float band = floor(u);
+    float clumps = mix(diskBand(phi, t, band, diskFine), diskBand(phi, t, band + 1.0, diskFine), smoothstep(0.0, 1.0, u - band));
+    return clumps;
+  }
+  vec3 diskGas(vec3 ro, vec3 rd, float near, float far) {
+    float stretches = diskFine > 0.0 ? 8.0 : 5.0;
+    float len = (far - near) / stretches;
+    vec3 light = vec3(0.0);
+    vec3 middle = vec3(0.0);
+    float weight = 0.0;
+    // towards the hole as the pilot looks, and how edge-on the disk is seen (1 in its plane, 0 straight from above or below)
+    vec3 ahead = -normalize(ro);
+    float edgeOn = 1.0 - abs(ahead.y);
+    for (int i = 0; i < 8; i++) {
+      if (float(i) >= stretches) break;
+      float s0 = near + float(i) * len;
+      vec3 p = ro + rd * (s0 + 0.5 * len);
+      float r = length(p.xz);
+      float t = (r - ${DISK_INNER.toFixed(1)}) / ${(DISK_OUTER - DISK_INNER).toFixed(1)};
+      float emission = diskEmission(t);
+      if (emission <= 0.0) continue;
+      // the bell curve across the plane, summed exactly along this stretch (heights in its width);
+      // the inner far side swollen (see DISK_PUFF)
+      float thin = ${DISK_THICK.toFixed(1)} + ${DISK_FLARE.toFixed(3)} * r;
+      float puff = ${DISK_PUFF.toFixed(1)} * edgeOn * smoothstep(0.0, 8000.0, dot(p, ahead)) * (1.0 - smoothstep(8000.0, ${DISK_PUFF_REACH.toFixed(1)}, r));
+      float width = thin + puff;
+      float y0 = (ro.y + rd.y * s0) / width;
+      float y1 = (ro.y + rd.y * (s0 + len)) / width;
+      float dy = y1 - y0;
+      float column = abs(dy) > 0.05 ? (diskErf(y1) - diskErf(y0)) / dy * 0.8862269 : exp(-0.25 * (y0 + y1) * (y0 + y1));
+      // per width of the bell curve, so a column straight through the thin disk is as bright however thick it is; the swollen gas a little brighter
+      float gas = emission * column * len / (sqrt(thin * width) * 1.7724539);
+      // Doppler beaming: the gas's flow (counterclockwise seen from above) towards the pilot or away
+      float toward = dot(vec2(p.z, -p.x) / max(r, 1.0), -rd.xz);
+      float boost = pow(max(1.0 + (0.55 - 0.25 * clamp(t, 0.0, 1.0)) * toward, 0.05), 3.0);
+      light += diskColor(t - 0.12 * toward) * gas * boost;
+      middle += p * gas;
+      weight += gas;
+    }
+    if (weight <= 0.0) return vec3(0.0);
+    // the clumps once, where the gas along the ray lies; where it is thin it glows redder, in faint wisps
+    float clumps = diskClumps(middle / weight);
+    light *= (0.35 + 1.3 * clumps) * 0.4 * mix(vec3(1.0, 0.55, 0.5), vec3(1.0), 0.4 + 0.6 * smoothstep(0.25, 0.5, clumps));
+    // the brightest gas held below a ceiling, so the edge-on band glows instead of burning out
+    return light / (1.0 + dot(light, vec3(0.3, 0.5, 0.2)) / 1.6);
+  }
+`;
+
+/** The disk's shell: the slab its gas fills, drawn from the inside faces (see diskGas). */
 const diskVertex = /* glsl */ `
-  varying vec2 vPlane;
-  varying vec3 vToCamera;
+  varying vec3 vPoint;
+  varying vec3 vCamera;
   void main() {
-    vPlane = position.xy;
-    vToCamera = (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz - position;
+    vPoint = position;
+    vCamera = (inverse(modelMatrix) * vec4(cameraPosition, 1.0)).xyz;
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
 
 /**
- * The black hole's disk: hot gas spiraling in, white-hot at the inner edge, orange and dark
- * further out, streaked in fine concentric rings (see DISK_RINGS). The gas circles
- * counterclockwise seen from above (as the arena's rocks do), the inner rings faster (see
- * DISK_SPIN); a ring turns as a whole, so the streaks never shear finer however long it turns.
- * An octave of rings evens out to its mean where its rings shrink below a pixel, so nothing
- * shimmers in the distance, and below the full picture the finest octave is left out (`fine`).
- * Where the gas streams towards the pilot it shines brighter and bluer, where it streams away
- * dimmer.
+ * The black hole's disk: the gas along the pilot's ray through its slab (see diskGas), up to
+ * the slab's far side or the nearest surface in front of it. Behind the hole too: the lens
+ * bends that light around the shadow, which it draws itself (see view/lensing).
  */
 const diskFragment = /* glsl */ `
-  uniform float time;
-  uniform float inner;
-  uniform float outer;
-  uniform float fine;
-  varying vec2 vPlane;
-  varying vec3 vToCamera;
-  ${noise3}
-  // \`count\` rings across the disk, each with its own brightness and clumps along it, turning at its own speed
-  float rings(float angle, float t, float count) {
-    float band = floor(t * count);
-    float spin = angle - time * ${DISK_SPIN.toFixed(2)} / (0.15 + (band + 0.5) / count);
-    // drawn on a circle, so the clumps close without a seam
-    vec2 around = vec2(cos(spin), sin(spin));
-    float clumps = noise(vec3(around * 3.0, band * 1.7 + count));
-    float bright = hash(vec3(band, count, 0.0));
-    float ring = sin(3.1416 * fract(t * count)) * (0.3 + 0.7 * bright) * (0.3 + 0.7 * clumps);
-    // its mean (about 0.27) where its rings are finer than a pixel
-    return mix(ring, 0.27, smoothstep(0.4, 0.8, fwidth(t * count)));
-  }
+  varying vec3 vPoint;
+  varying vec3 vCamera;
+  ${diskGas}
   void main() {
-    float r = length(vPlane);
-    float t = clamp((r - inner) / (outer - inner), 0.0, 1.0);
-    float angle = atan(vPlane.y, vPlane.x);
-    float finest = mix(0.27, rings(angle, t, ${DISK_RINGS[2].toFixed(1)}), fine);
-    float streaked = rings(angle, t, ${DISK_RINGS[0].toFixed(1)}) * 0.5 + rings(angle, t, ${DISK_RINGS[1].toFixed(1)}) * 0.3 + finest * 0.2;
-    float heat = pow(1.0 - t, 2.2);
-    vec3 color = mix(vec3(0.9, 0.25, 0.04), vec3(1.0, 0.85, 0.65), heat);
-    float fade = smoothstep(0.0, 0.04, t) * (1.0 - smoothstep(0.6, 1.0, t));
-    // dark lanes between the bright rings, so the streaks read
-    float lanes = smoothstep(0.1, 0.5, streaked);
-    // where the gas streams towards the pilot (counterclockwise seen from above) it shines brighter and bluer, where it streams away dimmer
-    float beaming = dot(vec3(-sin(angle), cos(angle), 0.0), normalize(vToCamera));
-    color = mix(color, color * vec3(0.8, 0.9, 1.3), max(beaming, 0.0) * (1.0 - t));
-    gl_FragColor = vec4(color * (0.08 + 0.9 * heat) * lanes * fade * (1.0 + 0.5 * beaming), 1.0);
+    vec3 toward = vPoint - vCamera;
+    float far = length(toward);
+    vec3 rd = toward / far;
+    float near = diskEntry(vCamera, rd);
+    if (far <= near) discard;
+    gl_FragColor = vec4(diskGas(vCamera, rd, near, far), 1.0);
   }
 `;
 
@@ -578,8 +688,6 @@ export class Landmarks {
   private readonly light = new THREE.Color();
   /** The materials of the ring's specks, which size them by the picture's height (see setViewport). */
   private readonly sized: THREE.ShaderMaterial[] = [];
-  /** The black hole's disk, whose finest streaks holeDetail leaves out. */
-  private disk!: THREE.ShaderMaterial;
   /** The grains of the ring's layer close by, and their streaks (see GRAINS). */
   private grains!: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private streaks!: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
@@ -645,6 +753,7 @@ export class Landmarks {
 
   update(time: number) {
     for (const material of this.timed) material.uniforms.time.value = time;
+    DISK_UNIFORMS.diskTime.value = time;
     this.sun.update(time);
     // a neon sign stutters now and then, as a sign on emergency power does
     for (const sign of this.flicker) (sign.material as THREE.MeshBasicMaterial).opacity = Math.random() < 0.03 ? 0.25 : 1;
@@ -842,30 +951,35 @@ export class Landmarks {
     return this.sun.group;
   }
 
+  /**
+   * The black hole: only its disk, as the slab of gas it fills (see diskGas), drawn from its
+   * inside faces so it shows from without and within. The hole itself is no mesh: the lens
+   * draws its shadow and needs the disk's light from behind it to bend around it (see view/lensing).
+   */
   private hole(): THREE.Group {
     const group = new THREE.Group();
-    const horizon = new THREE.Mesh(new THREE.SphereGeometry(HOLE_RADIUS, 48, 24), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-    this.disk = new THREE.ShaderMaterial({
-      uniforms: { time: { value: 0 }, inner: { value: DISK_INNER }, outer: { value: DISK_OUTER }, fine: { value: 1 } },
+    const material = new THREE.ShaderMaterial({
+      uniforms: DISK_UNIFORMS,
       vertexShader: diskVertex,
       fragmentShader: diskFragment,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
       transparent: true,
-      side: THREE.DoubleSide,
+      side: THREE.BackSide,
       toneMapped: false,
     });
-    this.timed.push(this.disk);
-    const disk = new THREE.Mesh(new THREE.RingGeometry(DISK_INNER, DISK_OUTER, 256, 8), this.disk);
-    disk.rotation.x = -Math.PI / 2;
-    group.add(horizon, disk);
+    // its rim just outside the round slab, so the slab's every point lies within the shell
+    const sides = 64;
+    const shell = new THREE.CylinderGeometry(DISK_OUTER / Math.cos(Math.PI / sides), DISK_OUTER / Math.cos(Math.PI / sides), 2 * DISK_TOP, sides, 1);
+    group.add(new THREE.Mesh(shell, material));
     return group;
   }
 
-  /** The black hole's share of the picture's quality (see setDetail): the disk's finest streaks on the full picture only. */
+  /** The black hole's share of the picture's quality (see setDetail): the disk's smaller clumps and finer sums on the full picture only. */
   private holeDetail(share: number) {
-    this.disk.uniforms.fine.value = share >= 0.75 ? 1 : 0;
+    DISK_UNIFORMS.diskFine.value = share >= 0.75 ? 1 : 0;
   }
+
 
   /** The derelict's break (see world/derelict): the mist escaping from its torn ends, lit by the arena's sun, and its dead. */
   private derelict(): THREE.Group {

@@ -6607,6 +6607,17 @@ export class Game implements OnlineGame {
     this.effects.setViewport(window.innerHeight * this.renderer.getPixelRatio(), fov);
   }
 
+  /**
+   * Ends the solo plate's view beside it (see updateMenuCamera): the camera shows the whole
+   * picture again, in the picture's own shape (cutting a view from a wider one sets the
+   * camera's aspect to the wider one's, and clearing the cut leaves it there).
+   */
+  private endPreview() {
+    if (!this.camera.view?.enabled) return;
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.clearViewOffset();
+  }
+
   private updateMenuCamera() {
     this.riding = null;
     if (this.camera.fov !== CAMERA_FOV) this.setFov(CAMERA_FOV);
@@ -6628,12 +6639,5 @@ export class Game implements OnlineGame {
     const t = this.time * 0.08;
     this.camera.position.set(0, 0, 0);
     this.camera.lookAt(Math.cos(t), Math.sin(t * 0.7) * 0.2, Math.sin(t));
-  }
-
-  /** Ends the solo plate's view cut from a wider picture (see updateMenuCamera): the cut set the camera's aspect to the wider picture's, so the screen's is put back, or the round would be drawn squeezed. */
-  private endPreview() {
-    if (!this.camera.view?.enabled) return;
-    this.camera.aspect = window.innerWidth / window.innerHeight;
-    this.camera.clearViewOffset();
   }
 }
