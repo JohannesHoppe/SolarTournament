@@ -2039,7 +2039,7 @@ export class Game implements OnlineGame {
     this.redraw = true;
     this.state = state;
     // the solo plate's view beside it (see updateMenuCamera) ends with the menu
-    if (state !== 'menu' && this.camera.view?.enabled) this.camera.clearViewOffset();
+    if (state !== 'menu') this.endPreview();
     $('menu').hidden = state !== 'menu';
     $('crest').hidden = state !== 'menu';
     $('pause').hidden = state !== 'paused';
@@ -6624,9 +6624,16 @@ export class Game implements OnlineGame {
       this.camera.setViewOffset(width + 2 * shift, height, 2 * shift, 0, width, height);
       return;
     }
-    if (this.camera.view?.enabled) this.camera.clearViewOffset();
+    this.endPreview();
     const t = this.time * 0.08;
     this.camera.position.set(0, 0, 0);
     this.camera.lookAt(Math.cos(t), Math.sin(t * 0.7) * 0.2, Math.sin(t));
+  }
+
+  /** Ends the solo plate's view cut from a wider picture (see updateMenuCamera): the cut set the camera's aspect to the wider picture's, so the screen's is put back, or the round would be drawn squeezed. */
+  private endPreview() {
+    if (!this.camera.view?.enabled) return;
+    this.camera.aspect = window.innerWidth / window.innerHeight;
+    this.camera.clearViewOffset();
   }
 }
