@@ -170,7 +170,8 @@ export class Space {
     }
 
     const sun = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: radialTexture([[0, '#ffffff'], [0.08, '#fff6d8'], [0.25, 'rgba(255, 200, 120, 0.45)'], [1, 'rgba(255, 140, 60, 0)']]),
+      // seen from space the sun is white: a blinding disk in a pale glare, no orange of a sunset
+      map: radialTexture([[0, '#ffffff'], [0.14, '#ffffff'], [0.22, 'rgba(255, 250, 238, 0.55)'], [0.5, 'rgba(255, 244, 225, 0.14)'], [1, 'rgba(255, 238, 215, 0)']]),
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     }));
