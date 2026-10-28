@@ -255,6 +255,7 @@ export class Space {
     this.skyColor.set(mood.sky);
     this.groundColor.set(mood.ground);
     this.skyIntensity = mood.ambient;
+    this.skyLight.position.copy(mood.sunward ? SUN_DIRECTION : THREE.Object3D.DEFAULT_UP);
     this.stars.material.color.setScalar(mood.stars);
     this.nebulae.forEach((sprite, i) => {
       const nebula = mood.nebulae[i];

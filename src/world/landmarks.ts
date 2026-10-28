@@ -11,7 +11,7 @@ import { Corona } from './corona';
 
 /**
  * What an arena shows beyond its field: Saturn, whose ring the arena lies in, Earth and the
- * junk around the Satellite Junkyard (see world/junkyard), Jupiter (see world/jupiter), the sun up close (see world/corona), the black hole with its disk, jets and infalling gas, the mist
+ * junk around the Satellite Junkyard (see world/junkyard), Jupiter (see world/jupiter), the sun up close (see world/corona), the black hole with its disk, the mist
  * and the dead at the derelict's break (see world/derelict). Scenery only; what pulls and blocks is the field's well.
  */
 
@@ -84,48 +84,14 @@ const PLANET_AMBIENT = 0.02;
 const DISK_INNER = 6000;
 const DISK_OUTER = 28000;
 /**
- * How fast the disk's gas circles at its inner edge, as a share of the speed of light; further
- * out it slows as an orbit does (with one over the root of the radius, 0.21 at the outer edge).
- * It turns the way the arena's rocks circle (counterclockwise seen from above). The speed sets
- * the relativistic Doppler beaming: gas streaming towards the pilot shines brighter and bluer,
- * gas streaming away dimmer and redder (see diskFragment).
+ * How fast the disk's gas circles (see diskFragment): DISK_SPIN / (0.15 + t) rad/s, t from the
+ * inner edge 0 to the outer 1, so once a second at the inner edge and once in about 8 s at the
+ * outer. Its streaks lie in DISK_RINGS octaves of concentric rings, so many across the disk
+ * (the finest left out below the full picture); each ring circles at its own speed, dark at its
+ * edges where the next one slides past.
  */
-const DISK_BETA = 0.45;
-/**
- * The disk's flow (see diskFragment): its streams are carried around for so long (s) and then
- * faded into a fresh copy, so the inner gas, circling faster, shears them into a spiral that
- * never winds up finer than the picture can draw.
- */
-const DISK_FLOW = 7;
-/**
- * The two jets from the hole's poles (see jetFragment): from just over the horizon out to
- * JET_LENGTH (units, 5 km), JET_WIDTH wide at the base and at the end (units, 40 m to 250 m: a
- * narrow bright spine in a faint sheath), never narrower on screen than RIBBON_PIXELS. Knots of
- * brighter plasma travel out along them at JET_KNOT_SPEED (a share of their length per second,
- * 100 m/s), and the jets as a whole pulse slowly. Their plasma streams out at JET_BETA of the
- * speed of light, so the jet turned towards the pilot shines brighter and bluer than the one
- * turned away. Scenery only: nothing in them pushes or burns.
- */
-const JET_LENGTH = 100000;
-const JET_WIDTH: readonly [base: number, end: number] = [800, 5000];
-const JET_KNOT_SPEED = 0.02;
-const JET_BETA = 0.3;
-/**
- * The gas falling onto the disk from outside (see inflowFragment): INFLOWS streams, each
- * spiraling INFLOW_TURNS times around the hole (the way the disk turns) from INFLOW_START
- * (units, 3.5 km out, up to INFLOW_HEIGHT above or below the disk's plane, 450 m) down onto the
- * disk's outer part, INFLOW_WIDTH wide at the start and at the end (units, 150 m to 50 m).
- * Clumps of gas run along them at INFLOW_SPEED (a share of a stream's length per second, about
- * 200 m/s), heating up from a dull red to the disk's orange as they come in.
- */
-const INFLOWS = 3;
-const INFLOW_TURNS = 1.2;
-const INFLOW_START = 70000;
-const INFLOW_HEIGHT = 9000;
-const INFLOW_WIDTH: readonly [start: number, end: number] = [3000, 1000];
-const INFLOW_SPEED = 0.012;
-/** A ribbon (a jet, an inflowing stream) is never narrower on screen than this (device px): a thinner one would flicker as it crosses the pixels. Its light then spreads over the width. */
-const RIBBON_PIXELS = 2;
+const DISK_SPIN = 0.9;
+const DISK_RINGS = [24, 60, 150] as const;
 /**
  * Segment counts Jupiter's cap is built at (width, height), from the full picture down:
  * its bands and storms are its map and a per-pixel pattern in the fragment shader (see
@@ -301,171 +267,50 @@ const diskVertex = /* glsl */ `
 `;
 
 /**
- * What the black hole's gas is drawn with: the color of glowing gas by its temperature (`k`,
- * about T / 6500 K: dull red, orange, white, blue-white), and the relativistic Doppler factor of
- * gas moving at `beta` of the speed of light at angle cos θ = `toward` to the line of sight,
- * δ = 1 / (γ (1 − β cos θ)). Its light comes in shifted to δ times its temperature and δ³ times
- * as bright (beaming). The factor is taken against gas seen moving sideways (δ = 1 / γ), so
- * the disk seen from straight above keeps the colors it is tuned to and only the line of sight's
- * share of the motion shifts it.
- */
-const relativistic = /* glsl */ `
-  vec3 blackbody(float k) {
-    vec3 color = mix(vec3(0.9, 0.22, 0.03), vec3(1.0, 0.55, 0.18), smoothstep(0.3, 0.55, k));
-    color = mix(color, vec3(1.0, 0.88, 0.72), smoothstep(0.55, 0.9, k));
-    return mix(color, vec3(0.5, 0.68, 1.0), smoothstep(0.9, 1.6, k));
-  }
-  // a light no brighter than \`most\` in any channel, so the brightest gas keeps its hue instead of clipping to white
-  vec3 keepHue(vec3 light, float most) {
-    return light * min(1.0, most / max(max(light.r, max(light.g, light.b)), 1e-4));
-  }
-  float doppler(float beta, float toward) {
-    return 1.0 / (1.0 - beta * toward);
-  }
-`;
-
-/** Value noise in 2D that repeats every `period` cells along x: drawn around a circle, it closes without a seam (visuals only). */
-const periodicNoise = /* glsl */ `
-  float hash2(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
-  float periodic(vec2 p, float period) {
-    vec2 i = floor(p); vec2 f = fract(p); f = f * f * (3.0 - 2.0 * f);
-    float x0 = mod(i.x, period); float x1 = mod(i.x + 1.0, period);
-    return mix(mix(hash2(vec2(x0, i.y)), hash2(vec2(x1, i.y)), f.x), mix(hash2(vec2(x0, i.y + 1.0)), hash2(vec2(x1, i.y + 1.0)), f.x), f.y);
-  }
-`;
-
-/**
  * The black hole's disk: hot gas spiraling in, white-hot at the inner edge, orange and dark
- * further out. The gas circles counterclockwise seen from above (as the arena's rocks do), the
- * inner gas faster, so its streams shear into a spiral; a stream is carried for DISK_FLOW
- * seconds and fades into a fresh copy meanwhile, so the spiral never winds up finer than a
- * pixel. The finest streams fade out where they would be smaller than a pixel, and below the
- * full picture they are left out (`fine`). Doppler beaming (see relativistic, DISK_BETA): the
- * side turning towards the pilot brighter and bluer, the side turning away dimmer and redder;
- * seen from above, neither.
+ * further out, streaked in fine concentric rings (see DISK_RINGS). The gas circles
+ * counterclockwise seen from above (as the arena's rocks do), the inner rings faster (see
+ * DISK_SPIN); a ring turns as a whole, so the streaks never shear finer however long it turns.
+ * An octave of rings evens out to its mean where its rings shrink below a pixel, so nothing
+ * shimmers in the distance, and below the full picture the finest octave is left out (`fine`).
+ * Where the gas streams towards the pilot it shines brighter and bluer, where it streams away
+ * dimmer.
  */
 const diskFragment = /* glsl */ `
   uniform float time;
   uniform float inner;
   uniform float outer;
-  uniform float beta;
-  uniform float flow;
   uniform float fine;
   varying vec2 vPlane;
   varying vec3 vToCamera;
-  ${periodicNoise}
-  ${relativistic}
-  // the streams at a share of a turn around, carried for \`age\` seconds; \`seed\` picks a copy
-  float streams(float turn, float t, float age, float seed, float fineness) {
-    float around = turn - age * 0.9 / (0.3 + t) / 6.2832;
-    float y = t + seed;
-    float streaks = periodic(vec2(around * 36.0, y * 18.0), 36.0) * 0.5 + periodic(vec2(around * 120.0, y * 50.0), 120.0) * 0.3;
-    float detail = fine * (1.0 - smoothstep(0.5, 1.0, fineness));
-    streaks += mix(0.1, periodic(vec2(around * 360.0, y * 160.0), 360.0) * 0.2, detail);
-    // dark lanes between the bright streams, so the spiral reads
-    return smoothstep(0.35, 0.75, streaks);
+  ${noise3}
+  // \`count\` rings across the disk, each with its own brightness and clumps along it, turning at its own speed
+  float rings(float angle, float t, float count) {
+    float band = floor(t * count);
+    float spin = angle - time * ${DISK_SPIN.toFixed(2)} / (0.15 + (band + 0.5) / count);
+    // drawn on a circle, so the clumps close without a seam
+    vec2 around = vec2(cos(spin), sin(spin));
+    float clumps = noise(vec3(around * 3.0, band * 1.7 + count));
+    float bright = hash(vec3(band, count, 0.0));
+    float ring = sin(3.1416 * fract(t * count)) * (0.3 + 0.7 * bright) * (0.3 + 0.7 * clumps);
+    // its mean (about 0.27) where its rings are finer than a pixel
+    return mix(ring, 0.27, smoothstep(0.4, 0.8, fwidth(t * count)));
   }
   void main() {
     float r = length(vPlane);
     float t = clamp((r - inner) / (outer - inner), 0.0, 1.0);
     float angle = atan(vPlane.y, vPlane.x);
-    float turn = angle / 6.2832;
-    // how large the finest streams' cells are on screen, across the seam of atan too
-    float fineness = max(fwidth(t * 160.0), min(fwidth(turn), fwidth(fract(turn + 0.5))) * 360.0);
-    float phase = fract(time / flow);
-    float weight = 1.0 - abs(2.0 * phase - 1.0);
-    float lanes = mix(streams(turn, t, fract(phase + 0.5) * flow, 7.0, fineness), streams(turn, t, phase * flow, 0.0, fineness), weight);
+    float finest = mix(0.27, rings(angle, t, ${DISK_RINGS[2].toFixed(1)}), fine);
+    float streaked = rings(angle, t, ${DISK_RINGS[0].toFixed(1)}) * 0.5 + rings(angle, t, ${DISK_RINGS[1].toFixed(1)}) * 0.3 + finest * 0.2;
     float heat = pow(1.0 - t, 2.2);
+    vec3 color = mix(vec3(0.9, 0.25, 0.04), vec3(1.0, 0.85, 0.65), heat);
     float fade = smoothstep(0.0, 0.04, t) * (1.0 - smoothstep(0.6, 1.0, t));
-    // the gas circles as an orbit does, slower further out
-    float speed = beta * sqrt(inner / r);
-    float toward = dot(vec3(-sin(angle), cos(angle), 0.0), normalize(vToCamera));
-    float shift = doppler(speed, toward);
-    vec3 color = blackbody(mix(0.3, 1.0, heat) * shift);
-    float beaming = shift * shift * shift;
-    gl_FragColor = vec4(keepHue(color * (0.08 + 0.9 * heat) * lanes * fade * beaming, 1.6), 1.0);
-  }
-`;
-
-/**
- * A ribbon in space (a jet, an inflowing stream): the line through `position` along `tangent`,
- * turned to face the camera and `width` wide (units), but never narrower on screen than
- * RIBBON_PIXELS, its light then spread over the width it is drawn at (`vThin`). `side` is the
- * edge (−1 or 1), `along` how far along the ribbon (0 to 1). Up close it fades out (`vNear`), so
- * a ship flying through it is not blinded. `vToward` is how much the ribbon's tangent points
- * towards the camera (cos θ, for the Doppler factor).
- */
-const ribbonVertex = /* glsl */ `
-  attribute vec3 tangent;
-  attribute float side;
-  attribute float along;
-  attribute float width;
-  uniform float viewport;
-  varying float vSide;
-  varying float vAlong;
-  varying float vThin;
-  varying float vNear;
-  varying float vToward;
-  void main() {
-    vec3 center = (modelMatrix * vec4(position, 1.0)).xyz;
-    vec3 direction = normalize(mat3(modelMatrix) * tangent);
-    vec3 toCamera = cameraPosition - center;
-    float distance = length(toCamera);
-    vec3 across = cross(direction, toCamera);
-    // seen straight along the ribbon, any direction across it will do
-    across = length(across) > 1e-3 * distance ? normalize(across) : normalize(cross(direction, vec3(0.31, 0.83, 0.47)));
-    float pixel = 2.0 * distance / (projectionMatrix[1][1] * viewport);
-    float drawn = max(width, ${RIBBON_PIXELS.toFixed(1)} * pixel);
-    vThin = width / drawn;
-    vSide = side;
-    vAlong = along;
-    vNear = smoothstep(width * 2.0, width * 8.0, distance);
-    vToward = dot(direction, toCamera / distance);
-    gl_Position = projectionMatrix * viewMatrix * vec4(center + across * side * drawn * 0.5, 1.0);
-  }
-`;
-
-/** The jets (see JET_LENGTH): a bluish-white thread, brightest near the hole, knots travelling out, the whole pulsing slowly; beamed by its speed (see relativistic). */
-const jetFragment = /* glsl */ `
-  uniform float time;
-  uniform float beta;
-  varying float vSide;
-  varying float vAlong;
-  varying float vThin;
-  varying float vNear;
-  varying float vToward;
-  ${relativistic}
-  void main() {
-    // a narrow bright spine in a faint sheath
-    float core = exp(-vSide * vSide * 30.0) + 0.25 * exp(-vSide * vSide * 4.0);
-    float knots = 0.2 + 0.8 * pow(0.5 + 0.5 * sin((vAlong * 9.0 - time * ${JET_KNOT_SPEED.toFixed(3)} * 9.0) * 6.2832), 8.0);
-    float pulse = 0.8 + 0.2 * sin(time * 0.7);
-    float fade = smoothstep(0.0, 0.03, vAlong) * pow(1.0 - vAlong, 2.5);
-    float shift = doppler(beta, vToward);
-    vec3 color = blackbody(1.25 * shift);
-    gl_FragColor = vec4(color * 0.22 * core * knots * pulse * fade * min(shift * shift * shift, 3.0) * vThin * vNear, 1.0);
-  }
-`;
-
-/** The gas falling onto the disk (see INFLOWS): faint streams, clumps running in along them, heating up as they come; beamed by their speed as the disk is. */
-const inflowFragment = /* glsl */ `
-  uniform float time;
-  uniform float beta;
-  varying float vSide;
-  varying float vAlong;
-  varying float vThin;
-  varying float vNear;
-  varying float vToward;
-  ${relativistic}
-  void main() {
-    float core = exp(-vSide * vSide * 4.0);
-    // clumps of uneven size and spacing, running in
-    float run = vAlong - time * ${INFLOW_SPEED.toFixed(3)};
-    float clumps = 0.2 + 0.8 * pow(0.5 + 0.25 * sin(run * 37.7) + 0.25 * sin(run * 91.1 + 1.3), 3.0);
-    float fade = smoothstep(0.0, 0.4, vAlong) * (1.0 - smoothstep(0.8, 1.0, vAlong));
-    float shift = doppler(beta * vAlong, vToward);
-    vec3 color = blackbody(mix(0.3, 0.5, vAlong) * shift);
-    gl_FragColor = vec4(color * 0.18 * core * clumps * fade * min(shift * shift * shift, 3.0) * vThin * vNear, 1.0);
+    // dark lanes between the bright rings, so the streaks read
+    float lanes = smoothstep(0.1, 0.5, streaked);
+    // where the gas streams towards the pilot (counterclockwise seen from above) it shines brighter and bluer, where it streams away dimmer
+    float beaming = dot(vec3(-sin(angle), cos(angle), 0.0), normalize(vToCamera));
+    color = mix(color, color * vec3(0.8, 0.9, 1.3), max(beaming, 0.0) * (1.0 - t));
+    gl_FragColor = vec4(color * (0.08 + 0.9 * heat) * lanes * fade * (1.0 + 0.5 * beaming), 1.0);
   }
 `;
 
@@ -674,84 +519,6 @@ const streakFragment = /* glsl */ `
   }
 `;
 
-/** A line in space for a ribbon (see ribbonVertex): where it is and how wide, at a share `s` of the way along it. */
-interface RibbonLine {
-  point(s: number, target: THREE.Vector3): THREE.Vector3;
-  width(s: number): number;
-}
-
-/** The ribbons of `lines` in one geometry (see ribbonVertex), each a strip of `segments` quads. */
-function ribbons(lines: RibbonLine[], segments: number): THREE.BufferGeometry {
-  const count = lines.length * (segments + 1) * 2;
-  const positions = new Float32Array(count * 3);
-  const tangents = new Float32Array(count * 3);
-  const sides = new Float32Array(count);
-  const alongs = new Float32Array(count);
-  const widths = new Float32Array(count);
-  const index: number[] = [];
-  const at = new THREE.Vector3();
-  const ahead = new THREE.Vector3();
-  const behind = new THREE.Vector3();
-  let vertex = 0;
-  for (const line of lines) {
-    for (let i = 0; i <= segments; i++) {
-      const s = i / segments;
-      line.point(s, at);
-      line.point(Math.min(s + 1e-3, 1), ahead).sub(line.point(Math.max(s - 1e-3, 0), behind)).normalize();
-      for (const side of [-1, 1]) {
-        positions.set([at.x, at.y, at.z], vertex * 3);
-        tangents.set([ahead.x, ahead.y, ahead.z], vertex * 3);
-        sides[vertex] = side;
-        alongs[vertex] = s;
-        widths[vertex] = line.width(s);
-        vertex++;
-      }
-      if (i < segments) {
-        const a = vertex - 2;
-        index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
-      }
-    }
-  }
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-  geometry.setAttribute('tangent', new THREE.BufferAttribute(tangents, 3));
-  geometry.setAttribute('side', new THREE.BufferAttribute(sides, 1));
-  geometry.setAttribute('along', new THREE.BufferAttribute(alongs, 1));
-  geometry.setAttribute('width', new THREE.BufferAttribute(widths, 1));
-  geometry.setIndex(index);
-  // the ribbons are drawn wider than their lines on screen: bound them generously, so they are never culled while in view
-  geometry.computeBoundingSphere();
-  geometry.boundingSphere!.radius += JET_WIDTH[1];
-  return geometry;
-}
-
-/** The two jets (see JET_LENGTH): from just over the horizon straight up and straight down the disk's axis. */
-function jetLines(): RibbonLine[] {
-  return [1, -1].map((sign) => ({
-    point: (s, target) => target.set(0, sign * (HOLE_RADIUS * 1.2 + s * (JET_LENGTH - HOLE_RADIUS * 1.2)), 0),
-    width: (s) => JET_WIDTH[0] + (JET_WIDTH[1] - JET_WIDTH[0]) * s,
-  }));
-}
-
-/** The streams falling onto the disk (see INFLOWS): each from its own start around the hole, from above or below the disk, spiraling down onto it the way it turns. */
-function inflowLines(): RibbonLine[] {
-  const heights = [1, -0.7, 0.6];
-  const reaches = [1, 0.85, 0.92];
-  return heights.slice(0, INFLOWS).map((height, i) => {
-    const start = (i / INFLOWS) * 2 * Math.PI + 0.4 * i * i;
-    const from = INFLOW_START * reaches[i];
-    return {
-      point: (s, target) => {
-        const r = from + (DISK_OUTER * 0.75 - from) * s;
-        // counterclockwise seen from above, as the disk turns (see DISK_BETA)
-        const angle = start + INFLOW_TURNS * 2 * Math.PI * s;
-        return target.set(r * Math.cos(angle), height * INFLOW_HEIGHT * (1 - s) ** 2, -r * Math.sin(angle));
-      },
-      width: (s) => INFLOW_WIDTH[0] + (INFLOW_WIDTH[1] - INFLOW_WIDTH[0]) * s,
-    };
-  });
-}
-
 /** `count` specks of ice, each where `place` puts it (x, y, z), with a facet of its own to glint with (see iceFragmentPars). */
 function iceGeometry(count: number, r: Randomizer, place: () => number[]): THREE.BufferGeometry {
   const positions = new Float32Array(count * 3);
@@ -811,9 +578,8 @@ export class Landmarks {
   private readonly light = new THREE.Color();
   /** The materials of the ring's specks, which size them by the picture's height (see setViewport). */
   private readonly sized: THREE.ShaderMaterial[] = [];
-  /** The black hole's disk and the gas falling onto it, which holeDetail thins out. */
+  /** The black hole's disk, whose finest streaks holeDetail leaves out. */
   private disk!: THREE.ShaderMaterial;
-  private inflow!: THREE.Mesh;
   /** The grains of the ring's layer close by, and their streaks (see GRAINS). */
   private grains!: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private streaks!: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
@@ -889,7 +655,7 @@ export class Landmarks {
    * The picture's quality (see view/quality, Look.landmark): Jupiter's cap at a share of its
    * full segment count (see JUPITER_SEGMENTS), and the planets' maps sharp (`-2k`, twice as wide)
    * from half the share on, else as the page loaded them (`-1k`). The sharp maps are fetched the first
-   * time a rung asks for them and take over once they are there. The black hole's gas as
+   * time a rung asks for them and take over once they are there. The black hole's disk as
    * holeDetail says.
    */
   setDetail(share: number) {
@@ -1079,36 +845,26 @@ export class Landmarks {
   private hole(): THREE.Group {
     const group = new THREE.Group();
     const horizon = new THREE.Mesh(new THREE.SphereGeometry(HOLE_RADIUS, 48, 24), new THREE.MeshBasicMaterial({ color: 0x000000 }));
-    const glow = { blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, side: THREE.DoubleSide, toneMapped: false };
     this.disk = new THREE.ShaderMaterial({
-      uniforms: { time: { value: 0 }, inner: { value: DISK_INNER }, outer: { value: DISK_OUTER }, beta: { value: DISK_BETA }, flow: { value: DISK_FLOW }, fine: { value: 1 } },
+      uniforms: { time: { value: 0 }, inner: { value: DISK_INNER }, outer: { value: DISK_OUTER }, fine: { value: 1 } },
       vertexShader: diskVertex,
       fragmentShader: diskFragment,
-      ...glow,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      transparent: true,
+      side: THREE.DoubleSide,
+      toneMapped: false,
     });
     this.timed.push(this.disk);
     const disk = new THREE.Mesh(new THREE.RingGeometry(DISK_INNER, DISK_OUTER, 256, 8), this.disk);
     disk.rotation.x = -Math.PI / 2;
-    // the jets and the inflowing gas: thin ribbons, a draw call each, sized on screen (see ribbonVertex)
-    const ribbon = (fragmentShader: string, beta: number) => {
-      const material = new THREE.ShaderMaterial({ uniforms: { time: { value: 0 }, beta: { value: beta }, viewport: { value: 1000 } }, vertexShader: ribbonVertex, fragmentShader, ...glow });
-      this.timed.push(material);
-      this.sized.push(material);
-      return material;
-    };
-    const jets = new THREE.Mesh(ribbons(jetLines(), 48), ribbon(jetFragment, JET_BETA));
-    this.inflow = new THREE.Mesh(ribbons(inflowLines(), 96), ribbon(inflowFragment, DISK_BETA * Math.sqrt(DISK_INNER / DISK_OUTER)));
-    group.add(horizon, disk, jets, this.inflow);
+    group.add(horizon, disk);
     return group;
   }
 
-  /**
-   * The black hole's share of the picture's quality (see setDetail): the disk's finest streams
-   * on the full picture only, the inflowing gas from half the landmark's detail on.
-   */
+  /** The black hole's share of the picture's quality (see setDetail): the disk's finest streaks on the full picture only. */
   private holeDetail(share: number) {
     this.disk.uniforms.fine.value = share >= 0.75 ? 1 : 0;
-    this.inflow.visible = share >= 0.375;
   }
 
   /** The derelict's break (see world/derelict): the mist escaping from its torn ends, lit by the arena's sun, and its dead. */

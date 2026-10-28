@@ -199,19 +199,22 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.72, 0.6, 0.45],
     grade: { gain: [1.04, 1, 0.92], lift: [0.0024, 0.0014, 0.0005], saturation: 1 },
   },
-  // orange-white and blinding: the glare lights everything from all around and lifts the
-  // shadows, drowns most stars, and the sun's outer streamers glow across the sky
+  // orange-white and blinding: the sky is the sun's scattered light, never black (see
+  // world/corona), and lights everything warm from the sun's side, dim and orange from the far
+  // side, so the shadows stay hard and dark; it drowns most stars, and the sun's outer
+  // streamers glow across the sky
   corona: {
     space: 0x0a0402,
-    sky: 0xffd0a0,
-    ground: 0x60300f,
-    ambient: 2.4,
+    sky: 0xffe2bc,
+    ground: 0x5a2a0c,
+    ambient: 1.3,
+    sunward: true,
     nebulae: [
       { at: [0.5, 0.3, -1], color: [0.36, 0.26, 0.14], size: 756000, shape: 2, turn: 0.9 },
       { at: [-0.3, 0.05, -1], color: [0.24, 0.15, 0.07], size: 684000, shape: 0, turn: 2.5 },
       { at: [-0.6, -0.4, 0.7], color: [0.091, 0.039, 0.013], size: 540000, shape: 1, turn: 4.2 },
     ],
-    stars: 0.3,
+    stars: 0.15,
     dust: [0.9, 0.7, 0.5],
     grade: { gain: [1.06, 1, 0.9], lift: [0.006, 0.0032, 0.0011], saturation: 1 },
   },
@@ -351,7 +354,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     layout: { key: 'corona', seed: 59, kind: 'rock', count: 30, minScale: 2.5, maxScale: 6, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800 },
     cooling: 0.6,
     storms: true,
-    sun: { size: 150000, intensity: 6, color: 0xffd7a0 },
+    sun: { size: 150000, intensity: 9, color: 0xffe0b4 },
     mood: MOODS.corona,
     references: [],
   },
