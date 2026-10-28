@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { altitudeIn, HAZE_SHAPE, type Air } from '../world/air';
+import { Randomizer } from '../random';
 
 /**
  * The haze of an arena's air (see world/air) in the picture: a height fog computed in the
@@ -14,21 +15,109 @@ import { altitudeIn, HAZE_SHAPE, type Air } from '../world/air';
  * hazeDeep LIGHT_DEPTH (units, 1.2 km) deeper, taken where the ray gathers most of its haze;
  * lightning (hazeFlash: where, and how bright) lights the haze around it within FLASH_REACH
  * (units, 400 m) in FLASH_COLOR. Additive materials (glows, beams, particles) only fade.
+ *
+ * Under the deck the haze's light is not one color: it is the light of the clouds the ray runs
+ * into (see CLOUD_GLSL), lighter banks and darker belts and towers, brighter looking up towards
+ * the deck and darker looking down. That only changes the light the haze scatters, never how
+ * much of a point's own light gets through, so what the senses see is what the eye sees.
  */
-const LIGHT_DEPTH = 24000;
+export const LIGHT_DEPTH = 24000;
 const FLASH_REACH = 8000;
-const FLASH_COLOR = new THREE.Color(0.75, 0.82, 1);
+export const FLASH_COLOR = new THREE.Color(0.75, 0.82, 1);
 
-/** The haze's uniforms, shared by every material that draws it. */
+/**
+ * The clouds in the haze: banks BANK_WIDTH across and BANK_HEIGHT tall right under the deck
+ * (units, 300 m and 70 m, flat as layers of cloud are), dark towers TOWER_WIDTH across and
+ * TOWER_HEIGHT tall (units, 200 m and 1.5 km), all smaller by e every CLOUD_SHRINK deeper (units,
+ * 1.3 km: a tenth at 3 km), so they keep their size against what the eye sees there. They shift
+ * the depth whose light the haze scatters by up to CLOUD_LIGHT (units, 650 m) up or down, a view
+ * straight up by RISE_LIGHT up (units, 300 m), a view straight down as far down; the light's
+ * share of the deck's grows past the deck's own up to LIGHTEST (the lighter zones, paler than
+ * the haze right under the deck). They fade in over CLOUD_FADE under the deck (units, 25 m). The ray samples them where it gathers its haze: SAMPLE_NEAR and SAMPLE_FAR of
+ * the distance at which the eye's haze reaches an optical depth of 1, never beyond the point,
+ * so a point the haze hides has the light of what lies behind it.
+ */
+const BANK_WIDTH = 6000;
+const BANK_HEIGHT = 1400;
+const TOWER_WIDTH = 4000;
+const TOWER_HEIGHT = 30000;
+export const CLOUD_SHRINK = 26000;
+const CLOUD_LIGHT = 13000;
+const RISE_LIGHT = 6000;
+const LIGHTEST = 1.3;
+const CLOUD_FADE = 500;
+const SAMPLE_NEAR = 0.8;
+const SAMPLE_FAR = 2;
+/** The noise the clouds are made of: NOISE_SIZE² texels of value noise, the second channel the first shifted by NOISE_SHIFT per layer, so one lookup reads two layers of a 3D noise. */
+const NOISE_SIZE = 256;
+const NOISE_SHIFT = [37, 17];
+
+/** The clouds' noise texture (see NOISE_SIZE), the same on every browser. */
+function cloudNoise(): THREE.DataTexture {
+  const random = new Randomizer(0x5a17c0d);
+  const values = Float32Array.from({ length: NOISE_SIZE * NOISE_SIZE }, () => random.nextFloat());
+  const data = new Uint8Array(NOISE_SIZE * NOISE_SIZE * 4);
+  for (let y = 0; y < NOISE_SIZE; y++) {
+    for (let x = 0; x < NOISE_SIZE; x++) {
+      const o = (y * NOISE_SIZE + x) * 4;
+      const shifted = ((y + NOISE_SHIFT[1]) % NOISE_SIZE) * NOISE_SIZE + ((x + NOISE_SHIFT[0]) % NOISE_SIZE);
+      data[o] = Math.round(values[shifted] * 255);
+      data[o + 1] = Math.round(values[y * NOISE_SIZE + x] * 255);
+      data[o + 3] = 255;
+    }
+  }
+  const texture = new THREE.DataTexture(data, NOISE_SIZE, NOISE_SIZE, THREE.RGBAFormat);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.minFilter = texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/**
+ * The haze's uniforms, shared by every material that draws it. hazeClouds: how far the wind has
+ * carried the clouds (xyz, units) and how many samples a ray takes of them (w: 0 none, 1 or 2;
+ * see Jupiter.setDetail).
+ */
 export const HAZE_UNIFORMS = {
   hazeCenter: { value: new THREE.Vector3() },
   hazeRadius: { value: 0 },
   hazeDeck: { value: new THREE.Color() },
   hazeDeep: { value: new THREE.Color() },
   hazeFlash: { value: new THREE.Vector4() },
+  hazeClouds: { value: new THREE.Vector4() },
+  hazeNoise: { value: cloudNoise() },
 };
 
 const f = (value: number) => value.toFixed(8);
+
+/**
+ * The clouds in the haze (see BANK_WIDTH): hazeCloud(p, up) is how much lighter (up to 1) or
+ * darker (down to about -2) the clouds at a point make the haze's light, `up` the deck's normal
+ * near the eye.
+ */
+const CLOUD_GLSL = /* glsl */ `
+  float hazeNoise3(vec3 x) {
+    vec3 p = floor(x);
+    vec3 s = fract(x);
+    s = s * s * (3.0 - 2.0 * s);
+    vec2 uv = p.xy + vec2(${f(NOISE_SHIFT[0])}, ${f(NOISE_SHIFT[1])}) * p.z + s.xy;
+    vec2 layers = texture2D(hazeNoise, (uv + 0.5) / ${f(NOISE_SIZE)}).yx;
+    return mix(layers.x, layers.y, s.z);
+  }
+  float hazeCloud(vec3 point, vec3 up, float altitude) {
+    vec3 q = point - hazeClouds.xyz;
+    vec3 across = q - up * dot(q, up);
+    float grow = exp(-min(altitude, 0.0) / ${f(CLOUD_SHRINK)});
+    // the height's coordinate grows as the clouds shrink, so a bank keeps its height in its own depth
+    float level = -grow * ${f(CLOUD_SHRINK / BANK_HEIGHT)};
+    vec3 bank = across * (grow / ${f(BANK_WIDTH)}) + up * level;
+    float banks = 0.65 * hazeNoise3(bank) + 0.35 * hazeNoise3(bank * 2.7 + 11.3);
+    vec3 tower = across * (grow / ${f(TOWER_WIDTH)}) + up * (level * ${f(BANK_HEIGHT / TOWER_HEIGHT)}) + 37.0;
+    return 2.6 * (banks - 0.5) - 1.6 * smoothstep(0.58, 0.85, hazeNoise3(tower));
+  }
+`;
 
 /**
  * The haze along a ray from `eye` to `point` (both in the world): the light it scatters towards
@@ -41,6 +130,9 @@ export const HAZE_GLSL = /* glsl */ `
   uniform vec3 hazeDeck;
   uniform vec3 hazeDeep;
   uniform vec4 hazeFlash;
+  uniform vec4 hazeClouds;
+  uniform sampler2D hazeNoise;
+  ${CLOUD_GLSL}
   float hazeHeight(float altitude) { return altitude > 0.0 ? ${f(HAZE_SHAPE.top)} : ${f(HAZE_SHAPE.scale)}; }
   float hazeShare(float altitude) { return altitude > 0.0 ? ${f(HAZE_SHAPE.topDensity)} : 1.0; }
   float hazeFalloff(float altitude) { return exp(-max(altitude, ${f(-HAZE_SHAPE.deepest * HAZE_SHAPE.scale)}) / hazeHeight(altitude)); }
@@ -54,9 +146,26 @@ export const HAZE_GLSL = /* glsl */ `
     vec3 ray = point - eye;
     float depth = ${f(HAZE_SHAPE.haze)} * length(ray) * mean;
     float deep = min(mix(from, to, 0.5 / max(depth, 1.0)), 0.0);
-    vec3 light = mix(hazeDeep, hazeDeck, exp(deep / ${f(LIGHT_DEPTH)}));
+    float cloud = 0.0;
+    if (hazeClouds.w > 0.5 && from < 0.0) {
+      // the clouds where the ray gathers its haze, and the light from above
+      float far = length(ray);
+      vec3 view = ray / max(far, 1.0);
+      vec3 up = normalize(eye - hazeCenter);
+      float gather = 1.0 / (${f(HAZE_SHAPE.haze)} * hazeDensity(from));
+      float near = min(${f(SAMPLE_NEAR)} * gather, far);
+      cloud = hazeCloud(eye + view * near, up, from + dot(view, up) * near);
+      if (hazeClouds.w > 1.5) {
+        float beyond = min(${f(SAMPLE_FAR)} * gather, far);
+        cloud = mix(cloud, hazeCloud(eye + view * beyond, up, from + dot(view, up) * beyond), 0.45);
+      }
+      cloud *= smoothstep(0.0, ${f(-CLOUD_FADE)}, from);
+      deep += cloud * ${f(CLOUD_LIGHT)} + smoothstep(0.0, ${f(-CLOUD_FADE)}, from) * dot(view, up) * ${f(RISE_LIGHT)};
+    }
+    vec3 light = mix(hazeDeep, hazeDeck, min(exp(deep / ${f(LIGHT_DEPTH)}), ${f(LIGHTEST)}));
+    // lightning lights the clouds around it, the dense ones most
     vec3 closest = eye + ray * clamp(dot(hazeFlash.xyz - eye, ray) / max(dot(ray, ray), 1.0), 0.0, 1.0);
-    light += vec3(${f(FLASH_COLOR.r)}, ${f(FLASH_COLOR.g)}, ${f(FLASH_COLOR.b)}) * hazeFlash.w * exp(-distance(closest, hazeFlash.xyz) / ${f(FLASH_REACH)});
+    light += vec3(${f(FLASH_COLOR.r)}, ${f(FLASH_COLOR.g)}, ${f(FLASH_COLOR.b)}) * hazeFlash.w * max(1.0 + 0.6 * cloud, 0.2) * exp(-distance(closest, hazeFlash.xyz) / ${f(FLASH_REACH)});
     return vec4(light, exp(-depth));
   }
 `;
