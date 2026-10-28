@@ -520,7 +520,7 @@ export const ES: Catalog = {
   'Rings of Saturn': 'Anillos de Saturno',
   'Inside a ring of ice, as thin as a sheet. Up and down are open.': 'Dentro de un anillo de hielo, fino como una hoja. Por arriba y por abajo, vía libre.',
   'The Satellite Junkyard': 'El Desguace de Satélites',
-  'The Orbital Freedom Network rots in low orbit. Its junk crosses at 25 m/s; Earth glows below.': 'La Orbital Freedom Network se pudre en órbita baja. Su chatarra se cruza a 25 m/s; abajo brilla la Tierra.',
+  'The Orbital Freedom Network rots in orbit. Its junk crosses at 25 m/s; Earth glows below.': 'La Orbital Freedom Network se pudre en órbita. Su chatarra se cruza a 25 m/s; abajo brilla la Tierra.',
   Jupiter: 'Júpiter',
   'Half in space, half in the clouds. The deeper, the thicker the air: it hides, it brakes, it burns.': 'Medio en el espacio, medio en las nubes. Cuanto más hondo, más denso el aire: oculta, frena, quema.',
   Corona: 'Corona',

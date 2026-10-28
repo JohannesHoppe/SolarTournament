@@ -100,7 +100,7 @@ const NETWORK: Wear = { rust: 0.1, chips: 0.4, grime: 0.55, scratches: 0.5, seam
 const JUNK_KINDS = ['satellite', 'stage', 'fairing', 'stack', 'shredded', 'stage', 'satellite', 'sign'] as const;
 
 /**
- * The junk of the Orbital Freedom Network, its mega-constellation rotting in low orbit, each
+ * The junk of the Orbital Freedom Network, its mega-constellation rotting in orbit, each
  * template pointing along its longest axis: a flat satellite with its single long solar wing
  * (whole, or shredded, its wing broken off in pieces), a spent upper stage with its cold engine
  * bell, half of a payload fairing, a stack of flat satellites that was never released, one of

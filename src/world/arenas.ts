@@ -71,15 +71,19 @@ export interface Reference {
 export const SATURN_CENTER = new THREE.Vector3(-0.85, 0, 0.5).normalize().multiplyScalar(260000);
 /**
  * Earth below the Satellite Junkyard, at its real size (EARTH_RADIUS, units, 6,371 km), the
- * field's center EARTH_ALTITUDE (550 km) above it in low orbit: it fills the sky below a horizon
- * 23° beneath the arena. Not straight below: tilted EARTH_TILT (11.5°) towards the sun, so the
- * point beneath the arena lies in the dusk (the sun 3.2° below its horizon): the terminator runs
- * through the view below, the day side towards the sun, the night with its cities away from it,
- * and the arena itself, high above, lies in sunlight (the sun 20° above Earth's rim as seen from
- * it). Scenery only: it neither pulls nor blocks.
+ * field's center EARTH_ALTITUDE (units, 5,000 km) above it: a ball 68° across beneath the arena,
+ * its disk wholly in front of the camera while the camera looks within 56° of its middle, and
+ * beyond that only its rim in the picture, so it shows round, never as the pointed dome a horizon
+ * reaching behind the camera makes (a deliberate deviation, see README: a real
+ * mega-constellation orbits at some 550 km, where Earth is a floor filling half the sky). Not
+ * straight below: tilted EARTH_TILT (11.5°) towards the sun, so the point beneath the arena lies
+ * in the dusk (the sun 3.2° below its horizon): the terminator runs through the middle of the
+ * ball, the day side towards the sun, the night with its cities away from it, and the arena
+ * itself, high above, lies in sunlight (the sun 53° above Earth's rim as seen from it). Scenery
+ * only: it neither pulls nor blocks.
  */
 export const EARTH_RADIUS = 127420000;
-export const EARTH_ALTITUDE = 11000000;
+export const EARTH_ALTITUDE = 100000000;
 const EARTH_TILT = 0.2;
 /** Straight down to the point beneath the arena, from the field's center. */
 export const EARTH_DOWN = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z).normalize().multiplyScalar(Math.sin(EARTH_TILT)).add(new THREE.Vector3(0, -Math.cos(EARTH_TILT), 0));
@@ -295,7 +299,7 @@ export const ARENAS: readonly ArenaProfile[] = [
   {
     id: 'junkyard',
     name: msg('The Satellite Junkyard'),
-    tagline: msg('The Orbital Freedom Network rots in low orbit. Its junk crosses at 25 m/s; Earth glows below.'),
+    tagline: msg('The Orbital Freedom Network rots in orbit. Its junk crosses at 25 m/s; Earth glows below.'),
     layout: {
       key: 'junkyard',
       seed: 31,

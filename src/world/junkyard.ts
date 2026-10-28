@@ -17,22 +17,21 @@ import { signTexture } from '../view/surfaces';
  */
 
 /**
- * The region of Earth's night map (`public/assets/planets/earth-*.jpg`, a crop of NASA's Black
- * Marble 2016): longitude and latitude of its west and south edges and its spans (rad), so it
- * covers the whole cap a pilot sees around the point beneath the arena (14° west to 54° east,
- * 7° to 63° north).
+ * Earth's night map (`public/assets/planets/earth-*.jpg`, from NASA's Black Marble 2016) shows
+ * Earth as seen from far above the point beneath the arena: an orthographic projection centered
+ * on it, north up, east to the right, its square reaching MAP_CAP (rad, 62°) from that point to
+ * every side (the sine of it, MAP_REACH, in Earth radii), so its circle holds the whole cap a
+ * pilot sees (see EARTH_CAP and junkyard.test.ts) at the same detail all around, the pole and the
+ * limb included.
  */
-const MAP_WEST = THREE.MathUtils.degToRad(-14);
-const MAP_SOUTH = THREE.MathUtils.degToRad(7);
-const MAP_WIDTH = THREE.MathUtils.degToRad(68);
-const MAP_HEIGHT = THREE.MathUtils.degToRad(56);
+const MAP_CAP = THREE.MathUtils.degToRad(62);
+export const MAP_REACH = Math.sin(MAP_CAP);
 /**
- * The day map (`public/assets/planets/earth-day-*.jpg`, a crop of NASA's Blue Marble: Next
- * Generation, July) covers only the part of that region the sun or the twilight reaches: the same
- * west and south edges and height, 50° wide, to 36° east; east of it the cap lies in the night
- * (see junkyard.test.ts).
+ * The day map (`public/assets/planets/earth-day-*.jpg`, from NASA's Blue Marble: Next Generation,
+ * July) is the same projection cut off at DAY_SHARE of its width from the west: the part the sun
+ * or the twilight reaches; east of it the cap lies in the night (see junkyard.test.ts).
  */
-export const DAY_REGION = new THREE.Vector4(MAP_WEST, MAP_SOUTH, THREE.MathUtils.degToRad(50), MAP_HEIGHT);
+export const DAY_SHARE = 0.62;
 /**
  * The terminator, by the sun's elevation over a point (degrees), as on Earth: the sun's disk sets
  * at SUN_SET (its upper limb lifted over the horizon by the air's refraction), its light reddened
@@ -70,7 +69,7 @@ const SKY_DAY = 0.12;
 const DAY_EXPOSURE = 2.8;
 /** The day map's seas are drawn darker by this factor, so the sun's glint stands out on them and the land against them. */
 const SEA_SHADE = 0.6;
-/** The point beneath the arena: over the Ionian Sea (35° north, 20° east) at dusk, Spain, the Maghreb and the western Mediterranean in the day towards the sun, Greece, Turkey, Egypt and the Middle East in the night away from it. */
+/** The point beneath the arena: over the Ionian Sea (35° north, 20° east) at dusk, the Atlantic, western Europe, the Sahara and West Africa in the day towards the sun, eastern Europe, Russia, Egypt, the Middle East and India in the night away from it. */
 const BELOW_LATITUDE = THREE.MathUtils.degToRad(35);
 const BELOW_LONGITUDE = THREE.MathUtils.degToRad(20);
 /** How the map packs land and light into one grey value: 0 ocean, MAP_LAND land without light, up to 1 the brightest light. */
@@ -81,8 +80,8 @@ const MAP_LAND = 0.12;
  * lights read the map as they were tuned to.
  */
 const LAND_SEEN = ((MAP_LAND + 0.055) / 1.055) ** 2.4;
-/** The cap of Earth that is built (rad, 26° around the point beneath the arena): its horizon lies 23° around it. */
-export const EARTH_CAP = 0.45;
+/** The cap of Earth that is built (rad, 57.6° around the point beneath the arena): to its horizon, which lies 55.9° around it, and a little beyond. */
+export const EARTH_CAP = Math.acos(EARTH_RADIUS / (EARTH_RADIUS + EARTH_ALTITUDE)) + 0.03;
 /**
  * Earth lies far beyond the camera's far plane: it is drawn behind everything else, at this
  * depth (clip space, a share of the way to the far plane), in front of the stars, which it hides.
@@ -91,8 +90,9 @@ const BEHIND_ALL = 0.99999;
 /**
  * The air above Earth, as shares of its radius: the blue of the day side scattered within
  * HAZE (51 km, its densest part), the green airglow of the night side in a thin layer from
- * GLOW_LOW to GLOW_HIGH (90 to 105 km, as the real one: seen along the horizon from 550 km up
- * a line of a few pixels, never a flickering hairline). The shell drawn around it reaches AIR.
+ * GLOW_LOW to GLOW_HIGH (90 to 105 km, as the real one: seen along the horizon from 5,000 km up
+ * a line about a pixel wide, smoothed over the pixel, see airFragment). The shell drawn around it
+ * reaches AIR.
  */
 const HAZE = 0.008;
 /** How quickly the haze in front of the planet saturates, per layer it is seen through (the haze seen through a slant of n layers is (1 - e^(-n·HAZE_DEPTH)) / HAZE_DEPTH, at most four layers' worth). */
@@ -103,8 +103,10 @@ const AIR = 0.022;
 /**
  * Satellites burning up in the air: two lanes take a turn every BURN_EVERY seconds of field time
  * (16 s, half a turn apart) and light a streak in BURN_SHARE of their turns (60 %), so one starts
- * about every 13 s, somewhere in the cap beneath the arena; each runs BURN_SECONDS (12 s) across
- * about 160 km, faster than a real one (some 7.5 km/s), so it shows within a fight.
+ * about every 13 s, somewhere within 2,300 km of the point beneath the arena; each runs
+ * BURN_SECONDS (12 s) across about 160 km, faster than a real one (some 7.5 km/s), so it shows
+ * within a fight: from 5,000 km up a short fiery streak far below, never thinner than a pixel and
+ * a half.
  */
 const BURN_EVERY = 16;
 const BURN_SHARE = 0.6;
@@ -200,18 +202,20 @@ const earthFragment = () => /* glsl */ `
   uniform vec3 center;
   uniform vec3 below;
   uniform mat3 frame;
+  uniform vec3 mapEast;
+  uniform vec3 mapNorth;
   uniform sampler2D map;
   uniform sampler2D dayMap;
-  uniform vec4 region;
-  uniform vec4 dayRegion;
   varying vec3 vWorld;
   ${noise3}
   ${fbm}
   ${twilight}
   float land(float v) { return smoothstep(0.04, 0.1, v); }
   float lit(float v) { return max(v - ${f(MAP_LAND)}, 0.0) / ${f(1 - MAP_LAND)}; }
+  // how far noise of this grain shows: in full while it is a few pixels large, faded out before it crawls
+  float seen(vec3 p) { return smoothstep(0.6, 0.25, length(fwidth(p))); }
   // a satellite burning up: lane k's turn at this time, where it starts, which way it runs
-  vec3 burn(vec3 n, float k) {
+  vec3 burn(vec3 n, float k, float pixel) {
     float turn = time / ${f(BURN_EVERY)} + k * 0.5;
     float slot = floor(turn);
     float age = fract(turn) * ${f(BURN_EVERY)};
@@ -232,20 +236,19 @@ const earthFragment = () => /* glsl */ `
     // (exp() only of what lies behind the head: ahead of it, it would overflow)
     float trail = step(0.0, behind) * exp(-max(behind, 0.0) / 0.012) * (1.0 - smoothstep(0.0, 0.04, behind));
     float flare = smoothstep(0.0, 0.4, age) * (1.0 - smoothstep(${f(BURN_SECONDS - 1)}, ${f(BURN_SECONDS)}, age));
-    float width = 0.0016 + behind * 0.03;
+    // (never thinner than a pixel and a half, the pieces never than one: a thinner line would flicker)
+    float width = max(0.0016 + behind * 0.03, 1.5 * pixel);
     float line = exp(-across * across / (width * width)) * trail * flare;
-    float head = exp(-(behind * behind + across * across) / 0.000004) * flare;
+    float head = exp(-(behind * behind + across * across) / max(0.000004, 2.25 * pixel * pixel)) * flare;
     // pieces breaking off: two fainter trails beside the main one
-    float pieces = exp(-pow(abs(across - 0.0035) / 0.0007, 2.0)) * step(0.0, behind - 0.004) * exp(-max(behind, 0.0) / 0.008) * flare;
+    float pieces = exp(-pow(abs(across - 0.0035) / max(0.0007, pixel), 2.0)) * step(0.0, behind - 0.004) * exp(-max(behind, 0.0) / 0.008) * flare;
     return vec3(1.0, 0.55, 0.22) * (line * 2.5 + pieces * 0.8) + vec3(1.0, 0.9, 0.75) * head * 3.0;
   }
   void main() {
     vec3 n = normalize(vWorld - center);
     vec3 q = frame * n;
-    float lat = asin(clamp(q.y, -1.0, 1.0));
-    float lon = atan(-q.z, q.x);
-    vec2 uv = vec2((lon - region.x) / region.z, (lat - region.y) / region.w);
-    float inside = smoothstep(0.0, 0.02, min(min(uv.x, 1.0 - uv.x), min(uv.y, 1.0 - uv.y)));
+    vec2 uv = 0.5 + 0.5 * vec2(dot(n, mapEast), dot(n, mapNorth)) / ${f(MAP_REACH)};
+    float inside = 1.0 - smoothstep(0.97, 1.0, length(uv * 2.0 - 1.0));
     float v = texture2D(map, uv).r * inside;
     // the map seen blurred, eight texels wide: how much land is around, how much light
     float wide = texture2D(map, uv, 3.0).r * inside;
@@ -261,7 +264,7 @@ const earthFragment = () => /* glsl */ `
     // air) and the sky's: its light fades and reddens towards the terminator, the twilight's blue
     // holds on after it
     float solid = smoothstep(${f(LAND_SEEN * 0.3)}, ${f(LAND_SEEN * 0.7)}, v);
-    vec3 surface = texture2D(dayMap, vec2((lon - dayRegion.x) / dayRegion.z, uv.y)).rgb;
+    vec3 surface = texture2D(dayMap, vec2(uv.x / ${f(DAY_SHARE)}, uv.y)).rgb;
     surface *= mix(${f(SEA_SHADE)}, 1.0, solid);
     vec3 sunlight = sunThrough(e);
     float sky = twilight(e);
@@ -278,18 +281,22 @@ const earthFragment = () => /* glsl */ `
     shade += mix(vec3(0.002, 0.004, 0.012), vec3(0.016, 0.02, 0.036), ground) * night;
     // the lights of the 26th century: today's, boosted and grown together, the coasts lit, new
     // cities in the empty land; the fine grain of streets only while it is large enough on screen
-    // (districts 3.5 km across, blocks 900 m, each faded out before it is smaller than a few pixels)
+    // (districts 3.5 km across, blocks 900 m, the coasts' and the new cities' patches and the neon
+    // hearts' colors, each faded to its mean before it is smaller than a few pixels)
     vec3 district = q * 1800.0;
     vec3 block = q * 7000.0;
-    float grain = mix(1.0, 0.35 + 1.3 * noise(district), smoothstep(0.6, 0.25, length(fwidth(district))));
-    grain *= mix(1.0, 0.5 + 1.0 * noise(block), smoothstep(0.6, 0.25, length(fwidth(block))));
+    vec3 shore = q * 400.0;
+    vec3 hearts = q * 140.0;
+    vec3 towns = q * 90.0;
+    float grain = mix(1.0, 0.35 + 1.3 * noise(district), seen(district));
+    grain *= mix(1.0, 0.5 + 1.0 * noise(block), seen(block));
     float today = lit(v);
     float sprawl = lit(wide);
-    float settled = ground * smoothstep(0.66, 0.8, noise(q * 90.0)) * smoothstep(0.4, 0.6, noise(q * 11.0));
-    float glow = pow(today, 0.85) * 1.5 * grain + sprawl * 0.9 + coast * 0.4 * (0.6 + 0.8 * noise(q * 400.0)) * grain + settled * 0.15 * grain;
+    float settled = ground * mix(0.12, smoothstep(0.66, 0.8, noise(towns)), seen(towns)) * smoothstep(0.4, 0.6, noise(q * 11.0));
+    float glow = pow(today, 0.85) * 1.5 * grain + sprawl * 0.9 + coast * 0.4 * (0.6 + 0.8 * mix(0.5, noise(shore), seen(shore))) * grain + settled * 0.15 * grain;
     vec3 warm = vec3(1.0, 0.6, 0.27);
     vec3 white = vec3(1.0, 0.9, 0.78);
-    vec3 neon = mix(vec3(0.35, 0.8, 1.0), vec3(1.0, 0.35, 0.85), step(0.5, noise(q * 140.0)));
+    vec3 neon = mix(vec3(0.35, 0.8, 1.0), vec3(1.0, 0.35, 0.85), mix(0.5, step(0.5, noise(hearts)), seen(hearts)));
     vec3 cities = warm * glow + white * smoothstep(0.35, 0.9, today) * 0.8 + neon * smoothstep(0.55, 0.9, sprawl) * 0.5;
     // clouds dim the lights and glow from them below
     shade += cities * night * (1.0 - clouds * 0.75) * 0.6;
@@ -299,7 +306,9 @@ const earthFragment = () => /* glsl */ `
     float limb = 1.0 - clamp(dot(n, view), 0.0, 1.0);
     vec3 hazeLight = vec3(0.25, 0.5, 1.0) * (0.35 * sunThrough(e + ${f(LIMB_DIP)}) + 2.0 * sky) + vec3(0.002, 0.003, 0.006);
     shade = mix(shade, hazeLight * light, pow(limb, 5.0) * 0.6);
-    shade += burn(n, 0.0) + burn(n, 1.0);
+    // the size of a pixel on the ground, in Earth radii
+    float pixel = length(fwidth(n));
+    shade += burn(n, 0.0, pixel) + burn(n, 1.0, pixel);
     gl_FragColor = vec4(shade, 1.0);
   }
 `;
@@ -325,6 +334,7 @@ const airFragment = /* glsl */ `
     float stretch = chord(b2, high) - chord(b2, low);
     return b2 < 1.0 ? 0.5 * stretch : stretch;
   }
+  float airglow(float b) { return through(b * b, ${f(1 + GLOW_LOW)}, ${f(1 + GLOW_HIGH)}) / ${f(GLOW_HIGH - GLOW_LOW)}; }
   void main() {
     vec3 ray = normalize(vWorld - cameraPosition);
     vec3 from = (cameraPosition - center) / radius;
@@ -335,7 +345,11 @@ const airFragment = /* glsl */ `
     // in front of the planet the haze saturates (what lies deeper in it is hidden by what lies
     // nearer), so the day side's land shows through it up to the horizon; past the rim it does not
     if (b2 < 1.0) haze = (1.0 - exp(-haze * ${f(HAZE_DEPTH)})) / ${f(HAZE_DEPTH)};
-    float glow = through(b2, ${f(1 + GLOW_LOW)}, ${f(1 + GLOW_HIGH)}) / ${f(GLOW_HIGH - GLOW_LOW)};
+    // the airglow's layer seen edge-on is about a pixel wide: taken at three points across the
+    // pixel, so its line is smooth and never flickers
+    float b = sqrt(b2);
+    float across = 0.35 * fwidth(b);
+    float glow = (airglow(b - across) + airglow(b) + airglow(b + across)) / 3.0;
     // the sun on that air: where the ray meets the planet, or above the point nearest it
     vec3 at = b2 < 1.0 ? from + ray * (nearest - sqrt(1.0 - b2)) : closest;
     float e = elevation(dot(normalize(at), normalize(sun)));
@@ -472,13 +486,16 @@ export interface Junkyard {
   flicker: THREE.Mesh[];
 }
 
+/** The way up, east and north at the point beneath the arena, in the world: the axes of Earth's maps (see MAP_REACH). The sun has set in the west. */
+export function mapAxes(): { up: THREE.Vector3; east: THREE.Vector3; north: THREE.Vector3 } {
+  const up = EARTH_DOWN.clone().negate();
+  const east = SUN_DIRECTION.clone().addScaledVector(up, -SUN_DIRECTION.dot(up)).normalize().negate();
+  return { up, east, north: new THREE.Vector3().crossVectors(up, east) };
+}
+
 /** Earth's frame: from a direction out of its center in the world to the same in its own (x through latitude 0, longitude 0; y through the north pole; east along -z). */
 export function earthFrame(): THREE.Matrix3 {
-  const up = EARTH_DOWN.clone().negate();
-  // the sun has set in the west
-  const toSun = new THREE.Vector3().copy(SUN_DIRECTION);
-  const east = toSun.addScaledVector(up, -toSun.dot(up)).normalize().negate();
-  const north = new THREE.Vector3().crossVectors(up, east);
+  const { up, east, north } = mapAxes();
   const [lat, lon] = [BELOW_LATITUDE, BELOW_LONGITUDE];
   const ownUp = new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon));
   const ownEast = new THREE.Vector3(-Math.sin(lon), 0, -Math.cos(lon));
@@ -496,6 +513,7 @@ function cap(radius: number, angle: number, width: number, height: number): THRE
 
 /** Earth below, and the air above it. */
 function earth(map: THREE.Texture, dayMap: THREE.Texture, light: THREE.Color): { planet: THREE.Mesh; air: THREE.Mesh; material: THREE.ShaderMaterial } {
+  const axes = mapAxes();
   const material = new THREE.ShaderMaterial({
     uniforms: {
       time: { value: 0 },
@@ -504,10 +522,10 @@ function earth(map: THREE.Texture, dayMap: THREE.Texture, light: THREE.Color): {
       center: { value: EARTH_CENTER },
       below: { value: EARTH_DOWN.clone().negate() },
       frame: { value: earthFrame() },
+      mapEast: { value: axes.east },
+      mapNorth: { value: axes.north },
       map: { value: map },
       dayMap: { value: dayMap },
-      region: { value: new THREE.Vector4(MAP_WEST, MAP_SOUTH, MAP_WIDTH, MAP_HEIGHT) },
-      dayRegion: { value: DAY_REGION },
     },
     vertexShader: earthVertex,
     fragmentShader: earthFragment(),
