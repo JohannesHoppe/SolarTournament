@@ -89,7 +89,9 @@ export default defineConfig({
   base: './',
   // the browser tests expect the dev server on its port: taken, it stops rather than moving on
   // to another port where the tests would meet some other checkout's server
-  server: { host: '127.0.0.1', port: DEV_PORT, strictPort: true },
+  // the worktrees of parallel work live inside this checkout (.claude/worktrees): their edits must
+  // not reload this checkout's pages, which would cut a browser test or a balance run short
+  server: { host: '127.0.0.1', port: DEV_PORT, strictPort: true, watch: { ignored: ['**/.claude/**'] } },
   plugins: [pageShell],
   build: {
     target: 'es2022',
