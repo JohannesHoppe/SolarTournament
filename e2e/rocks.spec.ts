@@ -2,9 +2,9 @@ import { expect, test } from '@playwright/test';
 
 /**
  * A rock shades alike however it is drawn: the belt draws its rocks instanced, the field as
- * meshes of their own, and the baked normal map (world/rocks, applyRockRelief) must turn with
- * the instance as it turns with the mesh. The same rock, turned the same way, rendered both ways
- * in the test browser, gives the same picture.
+ * meshes of their own, and the baked relief map with the detail map laid over it up close
+ * (world/rocks, applyRockRelief) must turn with the instance as it turns with the mesh. The same
+ * rock, turned the same way, rendered both ways in the test browser, gives the same picture.
  */
 test('a rock drawn as an instance shades as the same rock drawn as a mesh', async ({ page }) => {
   await page.goto('/radio.html');
@@ -15,7 +15,7 @@ test('a rock drawn as an instance shades as the same rock drawn as a mesh', asyn
     const THREE = (await import(threeUrl)) as typeof import('three');
     const rocksModule: string = '/src/world/rocks.ts';
     const { createRocks, NEAR_DETAIL } = (await import(rocksModule)) as typeof import('../src/world/rocks');
-    const rock = createRocks(NEAR_DETAIL)[3];
+    const rock = createRocks(NEAR_DETAIL, true)[3];
     const size = 128;
     const canvas = document.createElement('canvas');
     canvas.width = canvas.height = size;

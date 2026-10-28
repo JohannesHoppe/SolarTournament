@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { createImpostors, createRocks, createRockShapes, DETAIL, FAR_DETAIL, NEAR_DETAIL } from './world/rocks';
+import { bakeReliefMaps, createImpostors, createRocks, createRockShapes, DETAIL, FAR_DETAIL, NEAR_DETAIL } from './world/rocks';
 import { debrisSet, hullSet, iceSet } from './world/shapes';
 import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
 import type { TemplateKind, TemplateSet } from './world/asteroids';
@@ -131,12 +131,15 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   const ships = Promise.all(['human-interceptor.glb', 'alien-interceptor.glb'].map(model));
   const flames = Promise.all(['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture));
   const planetMaps = Promise.all([planetTexture('saturn-1k.jpg'), planetTexture('giant-1k.jpg'), planetTexture('saturn-ring.png'), planetTexture('earth-1k.jpg'), planetTexture('earth-day-1k.jpg')]);
+  // the rocks' relief maps bake in background workers while the rest is built here
+  const reliefs = bakeReliefMaps();
   // full detail only to measure collisions from (see world/surface); drawn meshes stay light, their
-  // relief coming from a baked normal map (see world/rocks, applyRockRelief) instead of triangles
+  // relief coming from a baked relief map (see world/rocks, applyRockRelief) instead of triangles
   const asteroidsCollision = createRockShapes(DETAIL);
-  const asteroidsNear = createRocks(NEAR_DETAIL);
-  const asteroidsFar = createRocks(FAR_DETAIL);
   const asteroidImpostors = createImpostors();
+  await reliefs;
+  const asteroidsNear = createRocks(NEAR_DETAIL, true);
+  const asteroidsFar = createRocks(FAR_DETAIL);
   const [human, alien] = await ships;
   const flameFrames = (await flames).map(softEdges);
   flameFrames.forEach((t) => (t.flipY = false));

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
 import type { TemplateSet } from './asteroids';
-import { applyRockRelief } from './rocks';
+import { applyRockRelief, type ReliefLook } from './rocks';
 import { paintedImpostor, type ImpostorPaint } from '../view/impostor';
 import { canvas, toTexture } from '../view/textures';
 import { boxUv, ravagedSurface, signTexture, solarCells, surfaced, wornSurface, type Wear } from '../view/surfaces';
@@ -38,20 +38,23 @@ function collider(semiAxes: THREE.Vector3, fill = SHAPE_FILL): THREE.Mesh {
 /** The color of ice and its cold glow in the shadow, up close and as a billboard alike. */
 const ICE: ImpostorPaint = { color: 0xf2f7ff, emissive: 0x0d1a2e };
 
+/** How ice shows the rock's relief (see ReliefLook): the craters and cracks in full, the rock's dirt faintly on its clean surface, the fine detail softer up close, as frost fills it and its gloss would glitter on every grain. */
+const ICE_RELIEF: Record<'near' | 'far', ReliefLook> = { near: { shade: 0.3, detail: 0.35 }, far: { shade: 0.3, detail: 0 } };
+
 /**
  * Ice: the rock shapes, frozen. Clean, pale and glossy, with a cold glow in the shadow. One
  * material per shape (not shared, unlike a rock's own), so each can be patched with that
- * shape's own baked normal map (see applyRockRelief); the collider is the rocks' own, and the
+ * shape's own baked relief map (see applyRockRelief, ICE_RELIEF); the collider is the rocks' own, and the
  * billboard the rocks' silhouette and relief painted in the ice's color (see view/impostor).
  */
 export function iceSet(rocks: TemplateSet): TemplateSet {
-  const freeze = (object: THREE.Object3D, index: number) => {
+  const freeze = (closeUp: boolean) => (object: THREE.Object3D, index: number) => {
     const material = new THREE.MeshStandardMaterial({ color: ICE.color, roughness: 0.3, metalness: 0.15, emissive: ICE.emissive, emissiveIntensity: 1 });
-    applyRockRelief(material, index);
+    applyRockRelief(material, index, ICE_RELIEF[closeUp ? 'near' : 'far']);
     return new THREE.Mesh((object as THREE.Mesh).geometry, material);
   };
   const impostor = rocks.impostor?.map((template) => paintedImpostor(template as THREE.Mesh, ICE));
-  return { near: rocks.near.map(freeze), far: rocks.far.map(freeze), impostor, collision: rocks.collision };
+  return { near: rocks.near.map(freeze(true)), far: rocks.far.map(freeze(false)), impostor, collision: rocks.collision };
 }
 
 /** A deck of windows: lit ones in runs, with dark stretches where the power is out (a wreck's emergency power still runs). */

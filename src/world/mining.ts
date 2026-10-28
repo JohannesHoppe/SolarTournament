@@ -3,6 +3,7 @@ import { Randomizer } from '../random';
 import type { Asteroid, AsteroidField } from './asteroids';
 import { SUN_DIRECTION } from './space';
 import { hazeUniforms } from '../view/haze';
+import { rockTone } from './rocks';
 
 /**
  * The Rockborn's mining in the Belt: rigs with work lights on some of its rocks, cutting lasers
@@ -553,23 +554,10 @@ function disc(kit: Kit, site: Site, at: THREE.Vector3, normal: THREE.Vector3, ra
   for (const [x, y] of [[-1, -1], [1, -1], [1, 1], [-1, -1], [1, 1], [-1, 1]]) corner(x, y);
 }
 
-/** The rock's color near a direction, from its drawn mesh's vertex colors (dark grey without). */
+/** The rock's color around a direction, as its relief map paints it (see world/rocks, rockTone); dark grey for a piece that is no rock shape. */
 function rockColor(site: Site, direction: THREE.Vector3): THREE.Color {
   const mesh = drawnMesh(site.asteroid);
-  const colors = mesh?.geometry.getAttribute('color');
-  if (!mesh || !colors) return new THREE.Color(0.2, 0.19, 0.18);
-  const position = mesh.geometry.getAttribute('position');
-  const sum = new THREE.Color(0, 0, 0);
-  let n = 0;
-  for (let i = 0; i < position.count; i++) {
-    scratch.fromBufferAttribute(position, i).sub(site.asteroid.center).normalize();
-    if (scratch.dot(direction) < 0.9) continue;
-    sum.r += colors.getX(i);
-    sum.g += colors.getY(i);
-    sum.b += colors.getZ(i);
-    n++;
-  }
-  return n ? sum.multiplyScalar(1 / n) : new THREE.Color(0.2, 0.19, 0.18);
+  return (mesh && rockTone(mesh, direction)) ?? new THREE.Color(0.2, 0.19, 0.18);
 }
 
 /**
