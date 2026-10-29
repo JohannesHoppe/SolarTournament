@@ -24,6 +24,7 @@ import {
   type ReliefSampler,
   type ReliefTexel,
   type RockRecipe,
+  WHOLE_SHAPE,
 } from './rocks';
 
 /**
@@ -268,14 +269,6 @@ export function iceTexel(index: number, direction: THREE.Vector3): ReliefTexel {
   return iceSampler(index)(direction, { bump: 0, value: 0 });
 }
 
-/** The look of a kind of ice between the ramp's steps (see ICE_RAMP), its tint written into `tint`. */
-export function iceLook(kind: number, tint: [number, number, number]): [number, number, number] {
-  const s = clamp01(kind) * 4;
-  const at = Math.min(3, Math.floor(s)), f = s - at;
-  for (let c = 0; c < 3; c++) tint[c] = ICE_RAMP[at].tint[c] + (ICE_RAMP[at + 1].tint[c] - ICE_RAMP[at].tint[c]) * f;
-  return tint;
-}
-
 let detailTexture: THREE.DataTexture | undefined;
 
 /**
@@ -368,18 +361,23 @@ vec3 iceHash( vec3 p ) {
 }
 `;
 
-/**
- * The kind of ice worked into the color (the tile's shift on it up close), its roughness and
- * how much light it lets through; and the frost grain of this pixel's cell, fixed on the chunk:
- * where it sits, the face it mirrors with (see ICE_DIRECT), how much of its dot this pixel shows.
- */
-const ICE_COLOR_CHUNK = /* glsl */ `
+/** The kind of ice (the tile's shift on it up close; on a piece's fracture face clear, glassy ice) worked into the color, and how it answers the light (ICE_RESPONSE): what the meshes and the billboards (see iceImpostor) paint alike. */
+const ICE_TINT_CHUNK = /* glsl */ `
 	float iceKind = clamp( mix( reliefTexel.a + ( reliefTile - 0.5 ) * reliefNear, ${glsl(ICE_BREAK)} + ( reliefBreak - 0.5 ) * 0.5, reliefFracture ), 0.0, 1.0 );
 	float iceStep = iceKind * 4.0;
 	int iceAt = int( min( floor( iceStep ), 3.0 ) );
 	float iceMix = iceStep - float( iceAt );
 	diffuseColor.rgb *= mix( ICE_TINT[ iceAt ], ICE_TINT[ iceAt + 1 ], iceMix );
 	vec3 iceResponse = mix( ICE_RESPONSE[ iceAt ], ICE_RESPONSE[ iceAt + 1 ], iceMix );
+`;
+
+/**
+ * The kind of ice worked into the color (see ICE_TINT_CHUNK), its roughness and
+ * how much light it lets through; and the frost grain of this pixel's cell, fixed on the chunk:
+ * where it sits, the face it mirrors with (see ICE_DIRECT), how much of its dot this pixel shows.
+ */
+const ICE_COLOR_CHUNK = /* glsl */ `
+	${ICE_TINT_CHUNK}
 	iceRoughness = iceResponse.x;
 	iceThrough = iceResponse.y;
 	vec3 iceCells = vRockPosition / ${glsl(ICE_GLINT_CELL)};
@@ -436,7 +434,7 @@ const ICE_THROUGH = /* glsl */ `
  * sunlight through it. One material per shape, for its own map; `piece` for the pieces of a broken chunk (see world/fracture), whose fracture faces show clear, glassy ice.
  */
 export function iceMaterial(index: number, closeUp: boolean, piece = false): THREE.MeshStandardMaterial {
-  const material = new THREE.MeshStandardMaterial({ color: ICE_COLOR, roughness: 1, metalness: 0, emissive: ICE_EMISSIVE, emissiveIntensity: 1 });
+  const material = new THREE.MeshStandardMaterial({ ...iceSurface(), emissive: ICE_EMISSIVE, emissiveIntensity: 1 });
   const { axes } = rockRecipe(index);
   patchRelief(material, {
     kind: 'ice',
@@ -458,27 +456,15 @@ export function iceMaterial(index: number, closeUp: boolean, piece = false): THR
   return material;
 }
 
-/** What an ice billboard glows with besides its baked color (see view/impostor): the mesh's glow, and the sunlight through it, blue. */
+/** What the ice's standard material is made of, its meshes' and its billboards' alike (its roughness the meshes then take by the kind of ice, see ICE_COLOR_CHUNK). */
+const iceSurface = () => ({ color: new THREE.Color(ICE_COLOR), roughness: 1, metalness: 0 });
+
+/** What an ice billboard glows with besides its color (see view/impostor): the mesh's glow, and the sunlight through it, blue. */
 const ICE_GLOW: ImpostorGlow = { emissive: ICE_EMISSIVE, translucent: new THREE.Color(0.03, 0.09, 0.2) };
 
-/** A linear channel as an sRGB texture stores it. */
-const toSRGB = (c: number) => (c <= 0.0031308 ? 12.92 * c : 1.055 * Math.pow(c, 1 / 2.4) - 0.055);
-
-/** A billboard of an ice shape (see world/rocks, shapeImpostor): the rock's silhouette and normals, painted with the colors of the ice's own relief map. */
+/** A billboard of an ice shape (see world/rocks, shapeImpostor): the rock's silhouette, painted from the ice's own relief map as its meshes paint it (ICE_TINT_CHUNK). */
 function iceImpostor(index: number): THREE.Mesh {
-  const sample = iceSampler(index);
-  const base = new THREE.Color(ICE_COLOR);
-  const texel = { bump: 0, value: 0 };
-  const tint: [number, number, number] = [0, 0, 0];
-  const linear = [base.r, base.g, base.b];
-  const impostor = shapeImpostor(
-    index,
-    (direction, out) => {
-      iceLook(sample(direction, texel).value, tint);
-      for (let c = 0; c < 3; c++) out[c] = toSRGB(linear[c] * tint[c]);
-    },
-    ICE_GLOW,
-  );
+  const impostor = shapeImpostor(index, { ...iceSurface(), relief: iceReliefMap(index), pars: ICE_PARS, chunk: WHOLE_SHAPE + ICE_TINT_CHUNK, glow: ICE_GLOW });
   impostor.name = `ice-impostor-${index}`;
   return impostor;
 }

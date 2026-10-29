@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
 import { tangentDirections } from './surface';
-import { impostorDirections, impostorGeometry, impostorMaterial, IMPOSTOR_VIEWS, type ImpostorGlow } from '../view/impostor';
+import { impostorGeometry, impostorMaterial, impostorViews, IMPOSTOR_VIEWS, type ImpostorLook } from '../view/impostor';
 import { hazeUniforms } from '../view/haze';
 
 /** Fixed seed: every client builds the same rock shapes, so their measured surfaces match (see world/surface). */
@@ -377,37 +377,23 @@ function cubeTexelDirection(face: number, s: number, t: number, out: THREE.Vecto
   return out.normalize();
 }
 
-/** The finite-difference normal at a direction, from the same recipe a mesh's vertices come from (see surfacePoint): the true surface normal there, independent of how many triangles draw it. */
-function bakedNormal(noise: Noise, recipe: RockRecipe, direction: THREE.Vector3, out: THREE.Vector3): THREE.Vector3 {
-  const side = bakedNormal.side, across = bakedNormal.across;
-  const p0 = bakedNormal.p0, p1 = bakedNormal.p1, p2 = bakedNormal.p2, nearby = bakedNormal.nearby;
-  tangentDirections(direction, side, across);
-  surfacePoint(noise, recipe, direction, p0);
-  nearby.copy(direction).addScaledVector(side, NORMAL_STEP).normalize();
-  surfacePoint(noise, recipe, nearby, p1).point.sub(p0);
-  nearby.copy(direction).addScaledVector(across, NORMAL_STEP).normalize();
-  surfacePoint(noise, recipe, nearby, p2).point.sub(p0);
-  out.crossVectors(p1, p2).normalize();
-  if (out.dot(direction) < 0) out.negate();
+/** The same table read backwards (see cubeTexelDirection): the face a direction (x, y, z) lies on and its `s`, `t` there, written into `out`. */
+function cubeCoordinates(x: number, y: number, z: number, out: { face: number; s: number; t: number }) {
+  const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z);
+  if (ax >= ay && ax >= az) {
+    out.face = x >= 0 ? 0 : 1;
+    out.s = (x >= 0 ? -z : z) / ax;
+    out.t = -y / ax;
+  } else if (ay >= az) {
+    out.face = y >= 0 ? 2 : 3;
+    out.s = x / ay;
+    out.t = (y >= 0 ? z : -z) / ay;
+  } else {
+    out.face = z >= 0 ? 4 : 5;
+    out.s = (z >= 0 ? x : -x) / az;
+    out.t = -y / az;
+  }
   return out;
-}
-bakedNormal.side = new THREE.Vector3();
-bakedNormal.across = new THREE.Vector3();
-bakedNormal.p0 = new THREE.Vector3();
-bakedNormal.p1 = new THREE.Vector3();
-bakedNormal.p2 = new THREE.Vector3();
-bakedNormal.nearby = new THREE.Vector3();
-
-/** The step to either side for a baked normal (share of the way out, about 3°), as world/asteroids.ts uses for a collision normal. */
-const NORMAL_STEP = 0.05;
-
-/**
- * Where cell (i, j) of tile `tile` lies in the data of an atlas of `tiles` square tiles of
- * `res` cells laid out side by side (a texture `tiles · res` wide, `res` high): row j runs across
- * every tile, as WebGL reads a DataTexture row by row.
- */
-export function atlasOffset(tile: number, tiles: number, res: number, i: number, j: number): number {
-  return ((j * tiles + tile) * res + i) * 4;
 }
 
 /** Edge length, in texels, of each of the 6 faces of a rock's relief map: about 0.7° a texel, 1.5 to 4 m on a rock of the field. */
@@ -947,14 +933,31 @@ export function applyRockRelief(material: THREE.MeshStandardMaterial, index: num
     axes: recipe.axes.clone(),
     detail: closeUp ? detailMap() : null,
     strength: ROCK_DETAIL,
-    uniforms: { rockFresh: { value: new THREE.Vector3(...recipe.composition.fresh) } },
-    pars: 'uniform vec3 rockFresh;',
+    uniforms: rockUniforms(index),
+    pars: ROCK_PARS,
     color: ROCK_RELIEF_COLOR,
   });
 }
 
+/** What ROCK_RELIEF_COLOR declares besides what every relief map's material has: the tint of fresh material. */
+const ROCK_PARS = 'uniform vec3 rockFresh;';
+
+/** The uniforms ROCK_PARS declares, for a rock shape. */
+function rockUniforms(index: number): Record<string, THREE.IUniform> {
+  return { rockFresh: { value: new THREE.Vector3(...rockRecipe(index).composition.fresh) } };
+}
+
 /** How bright a fresh fracture face is against the weathered surface (the multiplier of the composition's color, before the break tile's grain): pale, unweathered rock, wholly in the fresh tint. */
 const ROCK_BREAK = 1.45;
+
+/**
+ * What a billboard (see view/impostor) states before the meshes' color code, which reads it as
+ * the relief's code states it for a piece (see RELIEF_READ): a whole shape, no fracture face.
+ */
+export const WHOLE_SHAPE = /* glsl */ `
+	float reliefFracture = 0.0;
+	float reliefBreak = 0.5;
+`;
 
 /** The relief's shade worked into the rock's color, the grain of the detail tile on it up close, fresh material tinted; on a piece's fracture face the fresh break's paler color and its grain instead. */
 const ROCK_RELIEF_COLOR = /* glsl */ `
@@ -981,12 +984,7 @@ function createRock(index: number, detail: number, closeUp: boolean): THREE.Mesh
 
 /** A rock shape's material in its composition's color, shaded by its relief map (see applyRockRelief); `piece` for the pieces of a broken rock (see world/fracture). */
 function rockMaterial(index: number, closeUp: boolean, piece: boolean): THREE.MeshStandardMaterial {
-  const { composition } = rockRecipe(index);
-  const material = new THREE.MeshStandardMaterial({
-    color: new THREE.Color().setRGB(...composition.color, THREE.LinearSRGBColorSpace),
-    roughness: composition.roughness,
-    metalness: composition.metalness,
-  });
+  const material = new THREE.MeshStandardMaterial(rockSurface(index));
   applyRockRelief(material, index, closeUp, piece);
   return material;
 }
@@ -1046,188 +1044,245 @@ export function createRockShapes(detail = DETAIL): THREE.Mesh[] {
   });
 }
 
-/** Edge length, in cells, of each view tile of an impostor atlas: coarse, as a billboard only ever shows where a real mesh would be a speck of a few pixels. */
-const IMPOSTOR_RES = 20;
-/** Steps (then binary-search halvings) a ray marches to find the shape's surface for a given view and pixel. */
-const IMPOSTOR_MARCH_STEPS = 14;
-const IMPOSTOR_MARCH_REFINE = 4;
-
 /**
- * The rock's bump at a direction, from fewer octaves and without the fine crags or the
- * patch/grain shading (see surfaceSample): enough to march a ray to the right silhouette
- * (craters, the large lumps) without paying for detail a billboard never shows mid-march; the
- * hit point's exact shade and normal are still read with the full surfaceSample/bakedNormal.
+ * Edge length, in cells, of each view of a shape's billboard (see impostorShape): about a cell a
+ * pixel where the belt's largest rocks show biggest as billboards (90 px across), its mipmaps
+ * calming the smaller ones.
  */
-function approxBump(noise: Noise, recipe: RockRecipe, direction: THREE.Vector3): number {
-  const x = direction.x * recipe.frequency, y = direction.y * recipe.frequency, z = direction.z * recipe.frequency;
-  let crater = 0;
-  for (const c of recipe.craters) crater += craterHeight(direction, c);
-  return recipe.roughness * noise.fractal(x, y, z, 3, recipe.ridged) + crater;
-}
+export const IMPOSTOR_RES = 48;
+/** Cells along an edge of each of the 6 faces of the table of a shape's bump that the billboard's rays are marched through (about 2.8° a cell). */
+const BUMP_CELLS = 32;
+/** The quad reaches this much beyond the farthest the table finds the surface: the surface may reach a little farther between its cells. */
+const QUAD_MARGIN = 1.08;
+/** Steps a ray takes through the sphere the shape fits in; then halvings to its first hit, and to where it passes the surface closest. */
+const MARCH_STEPS = 12;
+const MARCH_REFINE = 6;
+/** How far a cell's alpha lies from 0.5 per cell of the view it lies inside (more) or outside (less) the silhouette: the edge's ramp spans four cells, so filtering finds it between them. */
+export const EDGE_SLOPE = 0.25;
 
-/** Where within a billboard's pixel its shade is sampled (in half pixels from its center): a small rotated grid. */
-const FOOTPRINT: [number, number][] = [[0.25, 0.75], [-0.75, 0.25], [-0.25, -0.75], [0.75, -0.25]];
-
-/** What a shape's billboards share whatever they are painted (see impostorShape): the quad, the normal atlas, where each atlas cell meets the shape. */
+/** What a shape's billboards share whatever they are painted (see impostorShape): the quad, half its edge, the views. */
 interface ImpostorShape {
   geometry: THREE.BufferGeometry;
-  normal: THREE.DataTexture;
   radius: number;
-  /** Per atlas cell: the direction from the shape's center where its ray meets the surface (xyz) and how wide the cell is there (radians), 0 where it misses. */
-  hits: Float32Array;
+  atlas: THREE.DataArrayTexture;
 }
 
 const impostorShapes = new Map<number, ImpostorShape>();
 
 /**
- * The impostor of a rock shape (see view/impostor) besides its colors: its `normal` atlas
- * (object-space, same encoding as a relief map's), one IMPOSTOR_RES square tile per fixed view
- * direction, side by side, and where each cell meets the shape. Each tile is filled by marching
- * a ray from that direction into the shape's own implicit surface (the same recipe a mesh's
- * vertices come from), so the silhouette and the normal agree with the real shape without
- * rendering it. Shared by the billboards of rock and ice (see impostorAtlas).
+ * A shape's bump (see surfaceSample, the very one its meshes' vertices take) on a table of
+ * BUMP_CELLS² cells on each face of a cube, read bilinearly between them by the direction
+ * (x, y, z) on the shape's ellipsoid, any length; the farthest the table finds the surface
+ * from the center (units), and its highest bump.
+ */
+function bumpTable(recipe: RockRecipe): { bump: (x: number, y: number, z: number) => number; reach: number; highest: number } {
+  const N = BUMP_CELLS;
+  const noise = new Noise(recipe.noiseSeed);
+  const table = new Float32Array(6 * N * N);
+  const d = new THREE.Vector3();
+  let reach = 0, highest = -Infinity;
+  for (let face = 0; face < 6; face++) {
+    for (let j = 0; j < N; j++) {
+      for (let i = 0; i < N; i++) {
+        cubeTexelDirection(face, ((i + 0.5) / N) * 2 - 1, ((j + 0.5) / N) * 2 - 1, d);
+        const bump = surfaceSample(noise, recipe, d).bump;
+        table[(face * N + j) * N + i] = bump;
+        reach = Math.max(reach, Math.hypot(d.x * recipe.axes.x, d.y * recipe.axes.y, d.z * recipe.axes.z) * (1 + bump));
+        highest = Math.max(highest, bump);
+      }
+    }
+  }
+  const at = { face: 0, s: 0, t: 0 };
+  const half = N / 2;
+  const bump = (x: number, y: number, z: number) => {
+    cubeCoordinates(x, y, z, at);
+    let fx = (at.s + 1) * half - 0.5, fy = (at.t + 1) * half - 0.5;
+    fx = fx < 0 ? 0 : fx > N - 1 ? N - 1 : fx;
+    fy = fy < 0 ? 0 : fy > N - 1 ? N - 1 : fy;
+    const i = fx >= N - 1 ? N - 2 : fx | 0, j = fy >= N - 1 ? N - 2 : fy | 0;
+    const u = fx - i, v = fy - j, o = (at.face * N + j) * N + i;
+    return (table[o] * (1 - u) + table[o + 1] * u) * (1 - v) + (table[o + N] * (1 - u) + table[o + N + 1] * u) * v;
+  };
+  return { bump, reach, highest };
+}
+
+/**
+ * The views of a shape's billboards (see view/impostor), IMPOSTOR_VIEWS layers of IMPOSTOR_RES²
+ * cells, mipmapped, and what else they share. Each cell's ray, from the view's direction
+ * through the cell's center, is marched through the shape's bump (see bumpTable): where it first
+ * meets the surface, the cell holds the direction its relief map is read in there (rgb, encoded
+ * as 0.5 + 0.5 · d), and where it misses, the direction where it passes the surface closest, so
+ * filtering across the silhouette blends neighbouring places of the surface. Its alpha says how
+ * far (in cells, EDGE_SLOPE a cell) inside or outside the silhouette it lies, 0.5 on it, so the
+ * silhouette is found between the cells however much the billboard is magnified. Baked once per
+ * shape and shared by the billboards of rock and ice.
  */
 function impostorShape(index: number): ImpostorShape {
   const known = impostorShapes.get(index);
   if (known) return known;
   const recipe = rockRecipe(index);
-  const noise = new Noise(recipe.noiseSeed);
-  const reach = Math.max(recipe.axes.x, recipe.axes.y, recipe.axes.z) * 1.35;
-  const normalData = new Uint8Array(IMPOSTOR_VIEWS * IMPOSTOR_RES * IMPOSTOR_RES * 4);
-  const hits = new Float32Array(IMPOSTOR_VIEWS * IMPOSTOR_RES * IMPOSTOR_RES * 4);
+  const { axes } = recipe;
+  const { bump, reach, highest } = bumpTable(recipe);
+  const radius = reach * QUAD_MARGIN;
+  const cell = (2 * radius) / IMPOSTOR_RES;
+  const R = IMPOSTOR_RES;
+  const data = new Uint8Array(IMPOSTOR_VIEWS * R * R * 4);
+  // the shape lies within its ellipsoid grown by its highest bump (a little more, between the table's cells)
+  const bound = (1 + Math.max(0, highest)) * 1.02;
 
-  const view = new THREE.Vector3();
-  const right = new THREE.Vector3();
-  const up = new THREE.Vector3();
-  const origin = new THREE.Vector3();
-  const sample = new THREE.Vector3();
-  const direction = new THREE.Vector3();
-  const normal = new THREE.Vector3();
-
-  const warped = new THREE.Vector3();
-  /** Whether a point at `t` along the march (from `origin`, towards the camera along `-view`) already lies inside the shape's cheap approximate bump (see approxBump). */
-  const inside = (t: number): boolean => {
-    sample.copy(origin).addScaledVector(view, -t);
-    const length = sample.length();
-    if (length < 1e-6) return true;
-    direction.copy(sample).normalize();
-    warped.copy(sample).divide(recipe.axes);
-    return warped.length() < 1 + approxBump(noise, recipe, direction);
+  // the ray through a cell: its point across the view (l) and the view's direction (v); a point
+  // `s` along it (from the plane through the center, towards the camera) lies outside the surface
+  // by `outside(s)` on the shape's ellipsoid (negative inside), where `w` is that point divided by
+  // the axes and `scale` the units one of those spans there
+  let lx = 0, ly = 0, lz = 0, vx = 0, vy = 0, vz = 0, wx = 0, wy = 0, wz = 0, scale = 1;
+  const outside = (s: number): number => {
+    const px = lx + vx * s, py = ly + vy * s, pz = lz + vz * s;
+    wx = px / axes.x;
+    wy = py / axes.y;
+    wz = pz / axes.z;
+    const w = Math.sqrt(wx * wx + wy * wy + wz * wz);
+    if (w < 1e-9) return -1;
+    scale = Math.sqrt(px * px + py * py + pz * pz) / w;
+    return w - 1 - bump(wx, wy, wz);
   };
+  const encode = (o: number, alpha: number) => {
+    const w = Math.sqrt(wx * wx + wy * wy + wz * wz) || 1;
+    data[o] = Math.round((wx / w) * 127.5 + 127.5);
+    data[o + 1] = Math.round((wy / w) * 127.5 + 127.5);
+    data[o + 2] = Math.round((wz / w) * 127.5 + 127.5);
+    data[o + 3] = alpha;
+  };
+  /** A cell's alpha from how far (in its own units on the ellipsoid) the ray passes outside the surface at most, negative where it goes in. */
+  const edge = (gap: number) => Math.min(1, Math.max(0, 0.5 - (EDGE_SLOPE * gap * scale) / cell)) * 255;
 
-  impostorDirections().forEach((d, tile) => {
-    view.copy(d);
-    // a right/up basis across the view direction, as the shader side computes its own from the object's turn
-    tangentDirections(view, right, up);
-    for (let j = 0; j < IMPOSTOR_RES; j++) {
-      const v = (((j + 0.5) / IMPOSTOR_RES) * 2 - 1) * reach;
-      for (let i = 0; i < IMPOSTOR_RES; i++) {
-        const u = (((i + 0.5) / IMPOSTOR_RES) * 2 - 1) * reach;
-        origin.copy(right).multiplyScalar(u).addScaledVector(up, v).addScaledVector(view, reach * 2);
-        const o = atlasOffset(tile, IMPOSTOR_VIEWS, IMPOSTOR_RES, i, j);
-        // march from far along +view towards the shape (t grows from 0); first hit, refined by bisection
-        let hit = -1;
-        const steps = IMPOSTOR_MARCH_STEPS;
-        const span = reach * 4;
-        let previous = inside(0);
-        for (let k = 1; k <= steps && hit < 0; k++) {
-          const t = (k / steps) * span;
-          const now = inside(t);
-          if (now && !previous) {
-            let lo = ((k - 1) / steps) * span, hi = t;
-            for (let r = 0; r < IMPOSTOR_MARCH_REFINE; r++) {
-              const mid = (lo + hi) / 2;
-              if (inside(mid)) hi = mid; else lo = mid;
-            }
-            hit = hi;
-          }
-          previous = now;
+  impostorViews().forEach(({ direction: view, right, up }, layer) => {
+    vx = view.x;
+    vy = view.y;
+    vz = view.z;
+    const bx = vx / axes.x, by = vy / axes.y, bz = vz / axes.z;
+    const bb = bx * bx + by * by + bz * bz;
+    for (let j = 0; j < R; j++) {
+      const v = (((j + 0.5) / R) * 2 - 1) * radius;
+      for (let i = 0; i < R; i++) {
+        const u = (((i + 0.5) / R) * 2 - 1) * radius;
+        lx = right.x * u + up.x * v;
+        ly = right.y * u + up.y * v;
+        lz = right.z * u + up.z * v;
+        const o = ((layer * R + j) * R + i) * 4;
+        // where the ray meets the bounding ellipsoid: on the ellipsoid's own scale it is a + b·s
+        const ax = lx / axes.x, ay = ly / axes.y, az = lz / axes.z;
+        const ab = ax * bx + ay * by + az * bz;
+        const nearest = -ab / bb;
+        const gap = nearest * nearest - (ax * ax + ay * ay + az * az - bound * bound) / bb;
+        if (gap <= 0) {
+          // it misses the shape: transparent, pointing where the ray passes the surface closest
+          encode(o, Math.min(127, Math.round(edge(outside(nearest)))));
+          continue;
         }
-        if (hit < 0) continue;
-        sample.copy(origin).addScaledVector(view, -hit);
-        direction.copy(sample).normalize();
-        hits[o] = direction.x;
-        hits[o + 1] = direction.y;
-        hits[o + 2] = direction.z;
-        hits[o + 3] = reach / IMPOSTOR_RES / sample.length();
-        bakedNormal(noise, recipe, direction, normal);
-        normalData[o] = Math.round((normal.x * 0.5 + 0.5) * 255);
-        normalData[o + 1] = Math.round((normal.y * 0.5 + 0.5) * 255);
-        normalData[o + 2] = Math.round((normal.z * 0.5 + 0.5) * 255);
-        normalData[o + 3] = 255;
+        // march through the bounding ellipsoid, from the camera's side to the far one
+        const half = Math.sqrt(gap);
+        const top = nearest + half;
+        const step = (2 * half) / MARCH_STEPS;
+        let closest = Infinity, closestK = 0, firstK = -1;
+        for (let k = 0; k <= MARCH_STEPS; k++) {
+          const f = outside(top - k * step);
+          if (f < closest) {
+            closest = f;
+            closestK = k;
+          }
+          if (f < 0 && firstK < 0) firstK = k;
+        }
+        let closestS = top - closestK * step;
+        if (firstK < 0) {
+          // where it passes the surface closest, between the steps around the closest one (a golden section search)
+          let lo = top - Math.min(MARCH_STEPS, closestK + 1) * step, hi = top - Math.max(0, closestK - 1) * step;
+          for (let r = 0; r < MARCH_REFINE; r++) {
+            const a = hi - (hi - lo) * 0.618, b = lo + (hi - lo) * 0.618;
+            if (outside(a) < outside(b)) hi = b;
+            else lo = a;
+          }
+          const f = outside((lo + hi) / 2);
+          if (f < closest) {
+            closest = f;
+            closestS = (lo + hi) / 2;
+          }
+          if (closest >= 0) {
+            outside(closestS);
+            encode(o, Math.min(127, Math.round(edge(closest))));
+            continue;
+          }
+          firstK = closestK;
+        }
+        outside(closestS);
+        const alpha = Math.max(129, Math.round(edge(closest)));
+        // the first hit: halvings between the last step outside and the first inside
+        let outer = top - Math.max(0, firstK - 1) * step, inner = firstK === closestK ? closestS : top - firstK * step;
+        for (let r = 0; r < MARCH_REFINE; r++) {
+          const mid = (outer + inner) / 2;
+          if (outside(mid) < 0) inner = mid;
+          else outer = mid;
+        }
+        outside(inner);
+        encode(o, alpha);
       }
     }
   });
 
-  const normalMap = new THREE.DataTexture(normalData, IMPOSTOR_RES * IMPOSTOR_VIEWS, IMPOSTOR_RES, THREE.RGBAFormat);
-  normalMap.colorSpace = THREE.NoColorSpace;
-  normalMap.minFilter = normalMap.magFilter = THREE.LinearFilter;
-  normalMap.generateMipmaps = false;
-  normalMap.needsUpdate = true;
-  const shape = { geometry: impostorGeometry(reach), normal: normalMap, radius: reach, hits };
+  const atlas = new THREE.DataArrayTexture(data, R, R, IMPOSTOR_VIEWS);
+  atlas.colorSpace = THREE.NoColorSpace;
+  atlas.magFilter = THREE.LinearFilter;
+  atlas.minFilter = THREE.LinearMipmapLinearFilter;
+  atlas.generateMipmaps = true;
+  atlas.needsUpdate = true;
+  const shape = { geometry: impostorGeometry(radius), radius, atlas };
   impostorShapes.set(index, shape);
   return shape;
 }
 
-/** The color (0..1 a channel, as the atlas stores it) a billboard shows where the surface lies at a direction, written into `out`. */
-export type ImpostorColor = (direction: THREE.Vector3, out: [number, number, number]) => void;
-
 /**
- * The albedo atlas of a shape's billboards (see impostorShape): color and silhouette alpha,
- * the color averaged over each cell's footprint on the shape as a far mesh's mipmaps average its
- * relief map.
+ * Bakes the views of every shape's billboards (see impostorShape) ahead of their materials:
+ * those read the relief maps, these do not, so they bake here while the workers bake the maps.
  */
-export function impostorAtlas(index: number, color: ImpostorColor): THREE.DataTexture {
-  const { hits } = impostorShape(index);
-  const data = new Uint8Array(hits.length);
-  const direction = new THREE.Vector3(), offset = new THREE.Vector3(), side = new THREE.Vector3(), across = new THREE.Vector3();
-  const sum: [number, number, number] = [0, 0, 0], one: [number, number, number] = [0, 0, 0];
-  for (let o = 0; o < hits.length; o += 4) {
-    const footprint = hits[o + 3];
-    if (footprint === 0) continue;
-    direction.set(hits[o], hits[o + 1], hits[o + 2]);
-    tangentDirections(direction, side, across);
-    sum.fill(0);
-    for (const [a, b] of FOOTPRINT) {
-      color(offset.copy(direction).addScaledVector(side, a * footprint).addScaledVector(across, b * footprint).normalize(), one);
-      for (let c = 0; c < 3; c++) sum[c] += one[c] / FOOTPRINT.length;
-    }
-    for (let c = 0; c < 3; c++) data[o + c] = Math.round(Math.min(1, Math.max(0, sum[c])) * 255);
-    data[o + 3] = 255;
-  }
-  const albedo = new THREE.DataTexture(data, IMPOSTOR_RES * IMPOSTOR_VIEWS, IMPOSTOR_RES, THREE.RGBAFormat);
-  albedo.colorSpace = THREE.SRGBColorSpace;
-  albedo.minFilter = albedo.magFilter = THREE.LinearFilter;
-  albedo.generateMipmaps = false;
-  albedo.needsUpdate = true;
-  return albedo;
+export function bakeImpostors() {
+  for (let i = 0; i < ROCK_COUNT; i++) impostorShape(i);
 }
 
-/** A billboard of a shape, painted by `color` (see impostorAtlas), with `glow` its material's own light (see view/impostor). */
-export function shapeImpostor(index: number, color: ImpostorColor, glow?: ImpostorGlow): THREE.Mesh {
-  const { geometry, normal, radius } = impostorShape(index);
-  return new THREE.Mesh(geometry, impostorMaterial(impostorAtlas(index, color), normal, IMPOSTOR_RES, radius, glow));
+/** A billboard of a shape (see impostorShape), painted as `look` says (see view/impostor). */
+export function shapeImpostor(index: number, look: ImpostorLook): THREE.Mesh {
+  const { geometry, atlas, radius } = impostorShape(index);
+  return new THREE.Mesh(geometry, impostorMaterial(atlas, radius, look));
+}
+
+/** What a rock shape's standard material is made of, its meshes' and its billboard's alike: its composition's color (linear), roughness and metalness. */
+function rockSurface(index: number): { color: THREE.Color; roughness: number; metalness: number } {
+  const { color, roughness, metalness } = rockRecipe(index).composition;
+  return { color: new THREE.Color().setRGB(...color, THREE.LinearSRGBColorSpace), roughness, metalness };
 }
 
 const impostors = new Map<number, THREE.Mesh>();
 
 /**
- * A billboard template for a rock shape (see view/impostor): a quad with a material sampling
- * this shape's baked impostor atlases, the color the relief map's shade gives. Built once per
- * shape and cloned (sharing geometry and material) for every field rock and belt instance of it.
+ * A billboard template for a rock shape (see view/impostor): its views, painted from its relief
+ * map as its meshes paint it (ROCK_RELIEF_COLOR). Built once per shape and cloned (sharing
+ * geometry and material) for every field rock and belt instance of it.
  */
 function rockImpostor(index: number): THREE.Mesh {
   let impostor = impostors.get(index);
   if (impostor) return impostor;
-  const recipe = rockRecipe(index), relief = rockRelief(index), noise = new Noise(recipe.noiseSeed);
-  const sampled = { bump: 0, shade: 1 };
-  impostor = shapeImpostor(index, (direction, out) => tone(recipe, reliefSample(noise, recipe, relief, direction, sampled).shade, out));
+  impostor = shapeImpostor(index, {
+    ...rockSurface(index),
+    relief: reliefMap(index),
+    pars: ROCK_PARS,
+    chunk: WHOLE_SHAPE + ROCK_RELIEF_COLOR,
+    uniforms: rockUniforms(index),
+  });
   impostor.name = `rock-impostor-${index}`;
   impostors.set(index, impostor);
   return impostor;
 }
 
-/** A billboard template for every rock shape (see rockImpostor), in shape order, reused by the field's rocks and the belt. */
+/** A billboard template for every rock shape (see rockImpostor), in shape order, reused by the field's rocks and the belt; after the relief maps are baked (see bakeReliefMaps). */
 export function createImpostors(): THREE.Mesh[] {
   return Array.from({ length: ROCK_COUNT }, (_, i) => rockImpostor(i));
 }
+
