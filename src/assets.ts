@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { bakeReliefMaps, createImpostors, createRocks, createRockShapes, DETAIL, FAR_DETAIL, NEAR_DETAIL } from './world/rocks';
-import { debrisSet, hullSet, iceSet } from './world/shapes';
+import { debrisSet, hullSet } from './world/shapes';
+import { iceSet } from './world/ice';
 import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
 import type { TemplateKind, TemplateSet } from './world/asteroids';
 import { synthesizeSounds } from './sound/sounds';
