@@ -4,6 +4,7 @@ import type { Asteroid, AsteroidField } from './asteroids';
 import { SUN_DIRECTION } from './space';
 import { hazeUniforms } from '../view/haze';
 import { rockTone } from './rocks';
+import { boxUv, shine, surfaced, wornSurface, type Wear } from '../view/surfaces';
 
 /**
  * The Rockborn's mining in the Belt: rigs with work lights on some of its rocks, cutting lasers
@@ -63,6 +64,19 @@ const SWEEP_SECONDS = 9;
  */
 const CLOUDS = 60;
 const DUST_G = 0.55;
+/**
+ * The steel of the rigs and buoys: second-hand plating, riveted and patched, rusting from its
+ * seams, grimy, dented, chipped and stenciled with the claims' marks. One tile of it covers
+ * STEEL_TILE (units, 6 m) on every face, twice that along a beam (so a slim beam is not cut into
+ * short plates); hazard paint runs in stripes STRIPE long (1.2 m, on a beam twice that) across
+ * it, and the Belt's dust darkens the steel towards the rock, fully at the ground and none
+ * SOIL_REACH (12 m) above it.
+ */
+const STEEL_SEED = 2584;
+const STEEL_WEAR: Wear = { rust: 0.6, chips: 0.4, grime: 0.6, scratches: 0.6, seams: 0.6, dents: 0.8, stencils: ['CLAIM 07', 'NO STEP', 'HI-PRESS', 'RB-12', 'ORE 3'], roughness: 0.72, metalness: 0.3 };
+const STEEL_TILE = 6 * M;
+const STRIPE = 1.2 * M;
+const SOIL_REACH = 12 * M;
 /** The drill dust a ship flies through (see dustAt): the plume is DUST_REACH high (units, 50 m) and DUST_WIDTH wide at its foot, widening as it rises. */
 const DUST_REACH = 50 * M;
 const DUST_WIDTH = 14 * M;
@@ -444,32 +458,73 @@ function frameOf(site: Site, origin: THREE.Vector3, up: THREE.Vector3, turn: num
   return new THREE.Matrix4().makeBasis(x, up, z).setPosition(origin).multiply(new THREE.Matrix4().makeScale(1 / site.scale, 1 / site.scale, 1 / site.scale));
 }
 
-/** Adds a shape (in world units, placed by `frame`) to a lit kit, in a color, glowing by `glow` (its own work lights on it). */
-function addShape(kit: Kit, slot: number, shape: THREE.BufferGeometry, frame: THREE.Matrix4, color: THREE.Color, glow = 0.04) {
+/** What a part stands on: the rock's tone around it and the height of the ground in the part's frame (units). */
+interface Soil {
+  tone: THREE.Color;
+  ground: number;
+}
+
+/**
+ * Adds a shape (in world units, placed by `frame`) to the steel kit, in a color, glowing by
+ * `glow` (its own work lights on it; above 0.5 a lit pane, glowing in its own color), painted in
+ * hazard stripes by `hazard` (1 all over, 'sides' only on its faces that look neither up nor
+ * down), and dusted in the rock's tone towards the ground of `soil`. The steel's surface tiles
+ * across its faces (see boxUv), unless the shape brings its own coordinates (`userData.mapped`).
+ */
+function addShape(kit: Kit, slot: number, shape: THREE.BufferGeometry, frame: THREE.Matrix4, color: THREE.Color, glow = 0.04, hazard: number | 'sides' = 0, soil: Soil | null = null) {
   const geometry = shape.index ? shape.toNonIndexed() : shape;
-  geometry.applyMatrix4(frame);
+  if (!shape.userData.mapped) boxUv(geometry, STEEL_TILE);
   const position = geometry.getAttribute('position');
+  const local = position.clone();
+  const up = geometry.getAttribute('normal').clone();
+  geometry.applyMatrix4(frame);
   const normal = geometry.getAttribute('normal');
   const uv = geometry.getAttribute('uv');
+  const tint = new THREE.Color();
   for (let i = 0; i < position.count; i++) {
     kit.push('position', position.getX(i), position.getY(i), position.getZ(i));
     kit.push('normal', normal.getX(i), normal.getY(i), normal.getZ(i));
-    kit.push('color', color.r, color.g, color.b);
-    kit.push('uv', uv ? uv.getX(i) : 0, uv ? uv.getY(i) : 0);
+    const dust = soil ? 1 - THREE.MathUtils.smoothstep(local.getY(i), soil.ground, soil.ground + SOIL_REACH) : 0;
+    tint.copy(color);
+    if (soil) tint.lerp(soil.tone, dust * 0.8);
+    kit.push('color', tint.r, tint.g, tint.b);
+    kit.push('uv', uv.getX(i), uv.getY(i));
     kit.push('glow', glow);
+    kit.push('hazard', hazard === 'sides' ? (Math.abs(up.getY(i)) < 0.5 ? 1 : 0) : hazard);
     kit.push('rock', slot);
   }
   shape.dispose();
   geometry.dispose();
 }
 
-/** A beam of square section `thickness` from `from` to `to` (world units, in the part's frame). */
+/** How far a beam's edges are cut off, as a share of its thickness: the chamfer catches the light along every edge. */
+const CHAMFER = 0.18;
+
+/** A beam of square section `thickness` with chamfered edges from `from` to `to` (world units, in the part's frame), its surface running along it. */
 function strut(from: THREE.Vector3, to: THREE.Vector3, thickness: number): THREE.BufferGeometry {
   const length = from.distanceTo(to);
-  const box = new THREE.BoxGeometry(thickness, length, thickness);
+  // an octagonal prism whose corners are pulled onto a square, cut at its corners
+  const beam = new THREE.CylinderGeometry(1, 1, length, 8, 1, false, Math.PI / 8).toNonIndexed();
+  const position = beam.getAttribute('position');
+  const h = thickness / 2;
+  const c = thickness * CHAMFER;
+  for (let i = 0; i < position.count; i++) {
+    const x = position.getX(i);
+    const z = position.getZ(i);
+    if (Math.abs(x) < 1e-6 && Math.abs(z) < 1e-6) continue;
+    const wide = Math.abs(x) > Math.abs(z);
+    position.setXYZ(i, Math.sign(x) * (wide ? h : h - c), position.getY(i), Math.sign(z) * (wide ? h - c : h));
+  }
+  beam.computeVertexNormals();
+  boxUv(beam, STEEL_TILE * 2);
   const turn = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), scratch.subVectors(to, from).normalize());
-  return box.applyMatrix4(new THREE.Matrix4().compose(from.clone().lerp(to, 0.5), turn, new THREE.Vector3(1, 1, 1)));
+  beam.applyMatrix4(new THREE.Matrix4().compose(from.clone().lerp(to, 0.5), turn, new THREE.Vector3(1, 1, 1)));
+  beam.userData.mapped = true;
+  return beam;
 }
+
+/** A box of world units at a place in the part's frame. */
+const block = (width: number, height: number, depth: number, x: number, y: number, z: number) => new THREE.BoxGeometry(width, height, depth).translate(x, y, z);
 
 const v3 = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 
@@ -577,12 +632,15 @@ function rig(plan: Plan, site: Site, r: Randomizer, cutter: boolean) {
   // in the part's frame: y up from the surface's center point, in world units
   const level = deck * site.scale;
   const legDepth = (foot.bottom * site.scale) - 10 * M;
-  const steel = new THREE.Color(0.32, 0.31, 0.3);
-  const hazard = new THREE.Color(0.75, 0.55, 0.08);
-  const rust = new THREE.Color(0.45, 0.18, 0.1);
-  const add = (shape: THREE.BufferGeometry, color: THREE.Color, glow = 0.04) => addShape(plan.steel, site.slot, shape, frame, color, glow);
-  // platform and legs
-  add(new THREE.BoxGeometry(32 * M, 2.5 * M, 32 * M).translate(0, level, 0), hazard);
+  const steel = new THREE.Color(0.42, 0.4, 0.37);
+  const dark = new THREE.Color(0.3, 0.3, 0.31);
+  const hazard = new THREE.Color(0.85, 0.6, 0.08);
+  const rust = new THREE.Color(0.55, 0.24, 0.13);
+  const soil: Soil = { tone: rockColor(site, foot.normal), ground: foot.top * site.scale };
+  const add = (shape: THREE.BufferGeometry, color: THREE.Color, glow = 0.04, paint: number | 'sides' = 0) => addShape(plan.steel, site.slot, shape, frame, color, glow, paint, soil);
+  // platform and legs: the deck's rim in hazard stripes, its plating dark
+  add(block(32 * M, 2.5 * M, 32 * M, 0, level, 0), hazard, 0.04, 'sides');
+  add(block(29 * M, 0.3 * M, 29 * M, 0, level + 1.3 * M, 0), dark);
   for (const [x, z] of [[-14, -14], [14, -14], [14, 14], [-14, 14]]) add(strut(v3(x * M, level, z * M), v3(x * M * 1.15, legDepth, z * M * 1.15), 2.2 * M), steel);
   // the derrick: four corner posts leaning in, braced at three levels
   const tall = 46 * M;
@@ -592,17 +650,31 @@ function rig(plan: Plan, site: Site, r: Randomizer, cutter: boolean) {
     const y = level + tall * k;
     for (const [a, b] of [[[-1, -1], [1, -1]], [[1, -1], [1, 1]], [[1, 1], [-1, 1]], [[-1, 1], [-1, -1]]]) add(strut(v3(a[0] * half, y, a[1] * half), v3(b[0] * half, y, b[1] * half), 1.6 * M), steel);
   }
-  // the drill string into the rock and its head over the platform
+  // the drill string into the rock and its head over the platform, striped as a moving part
   add(new THREE.CylinderGeometry(1.2 * M, 1.2 * M, level - legDepth + tall * 0.9, 8).translate(0, (legDepth + level + tall * 0.9) / 2, 0), steel);
-  add(new THREE.BoxGeometry(5 * M, 4 * M, 5 * M).translate(0, level + tall * 0.9, 0), hazard);
-  // the crew hut: a pressurized can lying on the deck, a strip of lit windows along it
+  add(block(5 * M, 4 * M, 5 * M, 0, level + tall * 0.9, 0), hazard, 0.04, 'sides');
+  // the crew hut: a pressurized can lying on the deck, a row of lit windows along it, the control panels' screens beside them
   add(new THREE.CylinderGeometry(5 * M, 5 * M, 16 * M, 12).rotateZ(Math.PI / 2).translate(-6 * M, level + 6 * M, 10 * M), rust);
-  add(new THREE.BoxGeometry(12 * M, 1 * M, 0.4 * M).translate(-6 * M, level + 7 * M, 15 * M), new THREE.Color(1.0, 0.72, 0.35), 1.6);
-  // lamps: sodium at the platform's corners, floodlights halfway up the derrick, red on its top
-  for (const [x, z] of [[-15, -15], [15, -15], [15, 15], [-15, 15]]) addLight(plan.lights, site.slot, v3(x * M, level + 4 * M, z * M).applyMatrix4(frame), SODIUM, 3 * M);
-  for (const [x, z] of [[-5, 5], [5, -5]]) addLight(plan.lights, site.slot, v3(x * M, level + tall * 0.55, z * M).applyMatrix4(frame), WHITE, 3.5 * M);
+  for (const x of [-11, -7.5, -4]) add(block(2.8 * M, 1.4 * M, 0.4 * M, x * M, level + 7 * M, 15 * M), new THREE.Color(1.0, 0.72, 0.35), 1.6);
+  add(block(1.6 * M, 1 * M, 0.4 * M, -0.6 * M, level + 6.6 * M, 15.1 * M), new THREE.Color(0.2, 1.0, 0.75), 1.2);
+  add(block(1 * M, 0.6 * M, 0.4 * M, -0.6 * M, level + 5.3 * M, 15.1 * M), new THREE.Color(1.0, 0.35, 0.2), 1.2);
+  // the cab: a box at the deck's corner beside the derrick, its window and a strip of light looking out over the rock
+  add(block(6 * M, 6 * M, 6 * M, 12.5 * M, level + 4.2 * M, -10 * M), steel);
+  add(block(0.4 * M, 2.6 * M, 5 * M, 15.6 * M, level + 5.2 * M, -10 * M), new THREE.Color(0.55, 0.85, 1.0), 1.4);
+  add(block(0.4 * M, 0.5 * M, 5 * M, 15.6 * M, level + 2.6 * M, -10 * M), new THREE.Color(1.0, 0.62, 0.08), 1.2);
+  // lamps: sodium at the platform's corners under their hoods on posts, floodlights in housings halfway up the derrick, red on its top
+  for (const [x, z] of [[-15, -15], [15, -15], [15, 15], [-15, 15]]) {
+    add(strut(v3(x * M, level, z * M), v3(x * M, level + 4.6 * M, z * M), 0.6 * M), dark);
+    add(block(2.4 * M, 0.8 * M, 2.4 * M, x * M, level + 4.9 * M, z * M), dark);
+    addLight(plan.lights, site.slot, v3(x * M, level + 4 * M, z * M).applyMatrix4(frame), SODIUM, 3 * M);
+  }
+  for (const [x, z] of [[-5, 5], [5, -5]]) {
+    add(block(2.6 * M, 2.6 * M, 2.6 * M, x * 0.8 * M, level + tall * 0.55, z * 0.8 * M), steel);
+    addLight(plan.lights, site.slot, v3(x * M, level + tall * 0.55, z * M).applyMatrix4(frame), WHITE, 3.5 * M);
+  }
+  add(block(1.6 * M, 1.2 * M, 1.6 * M, 0, level + tall + 0.4 * M, 0), dark);
   addLight(plan.lights, site.slot, v3(0, level + tall + 2 * M, 0).applyMatrix4(frame), RED, 2.5 * M, [2.8, r.nextFloat(), 0.45]);
-  for (const x of [-10, -6, -2]) addLight(plan.lights, site.slot, v3(x * M, level + 7 * M, 15.5 * M).applyMatrix4(frame), SODIUM, 0.9 * M);
+  for (const x of [-11, -7.5, -4]) addLight(plan.lights, site.slot, v3(x * M, level + 7 * M, 15.5 * M).applyMatrix4(frame), SODIUM, 0.9 * M);
   // the lamps' light on the rock around the rig
   const side = v3(1, 0, 0).transformDirection(frame);
   decal(plan.glow, site, foot.center, foot.normal, side, 150 * M, 150 * M, ROUND_CELL, SODIUM.clone().multiplyScalar(0.22));
@@ -613,7 +685,7 @@ function rig(plan: Plan, site: Site, r: Randomizer, cutter: boolean) {
   if (!cutter) return;
   // the boom and its cutting head, reaching out over the rock
   const head = v3(46 * M, level + 30 * M, 0);
-  add(strut(v3(0, level + tall * 0.75, 0), head, 1.8 * M), hazard);
+  add(strut(v3(0, level + tall * 0.75, 0), head, 1.8 * M), hazard, 0.04, 1);
   add(strut(v3(0, level, 0), v3(40 * M, level + 28 * M, 0), 1.4 * M), steel);
   add(new THREE.BoxGeometry(5 * M, 5 * M, 5 * M).translate(head.x, head.y, head.z), steel);
   const nozzle = head.clone().setY(head.y - 3 * M).applyMatrix4(frame);
@@ -783,15 +855,16 @@ function graffiti(plan: Plan, site: Site, r: Randomizer, slogan: number) {
   plan.paint.push({ slot: site.slot, at: foot.center, up: foot.normal });
 }
 
-/** A buoy marking a claim: a can on a mast anchored in the rock, its amber light blinking slowly. */
+/** A buoy marking a claim: a can in orange and black stripes on a mast anchored in the rock, its amber light blinking slowly. */
 function buoy(plan: Plan, site: Site, r: Randomizer) {
   const direction = v3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
   const foot = footing(site, direction, 4 * M);
   const frame = frameOf(site, foot.center, foot.normal, r.range(0, Math.PI));
   const tall = r.range(18, 34) * M;
   const deep = foot.bottom * site.scale - 4 * M;
-  addShape(plan.steel, site.slot, strut(v3(0, deep, 0), v3(0, tall, 0), 1.5 * M), frame, new THREE.Color(0.3, 0.3, 0.3));
-  addShape(plan.steel, site.slot, new THREE.CylinderGeometry(2.2 * M, 2.2 * M, 5 * M, 10).translate(0, tall, 0), frame, new THREE.Color(0.8, 0.35, 0.05), 0.1);
+  const soil: Soil = { tone: rockColor(site, foot.normal), ground: foot.top * site.scale };
+  addShape(plan.steel, site.slot, strut(v3(0, deep, 0), v3(0, tall, 0), 1.5 * M), frame, new THREE.Color(0.42, 0.41, 0.4), 0.04, 0, soil);
+  addShape(plan.steel, site.slot, new THREE.CylinderGeometry(2.2 * M, 2.2 * M, 5 * M, 10).translate(0, tall, 0), frame, new THREE.Color(0.9, 0.4, 0.06), 0.1, 1);
   addLight(plan.lights, site.slot, v3(0, tall + 3.5 * M, 0).applyMatrix4(frame), AMBER, 2.2 * M, [r.range(3, 4.5), r.nextFloat(), 0.3]);
 }
 
@@ -809,7 +882,7 @@ export function planMining(field: AsteroidField): Plan {
   const claimed = order.slice(0, Math.min(CLAIMS, SLOTS, order.length));
   const plan: Plan = {
     ids: claimed.map((a) => a.id),
-    steel: new Kit({ position: 3, normal: 3, color: 3, uv: 2, glow: 1, rock: 1 }),
+    steel: new Kit({ position: 3, normal: 3, color: 3, uv: 2, glow: 1, hazard: 1, rock: 1 }),
     stone: new Kit({ position: 3, normal: 3, color: 3, uv: 2, glow: 1, rock: 1 }),
     glow: new Kit({ position: 3, uv: 2, cell: 4, tint: 3, sweepAt: 2, rock: 1 }),
     lights: new Kit({ position: 3, tint: 3, size: 1, blink: 3, rock: 1 }),
@@ -999,20 +1072,41 @@ function sawTexture(): THREE.CanvasTexture {
   return texture;
 }
 
-/** A lit material whose vertices stand in their rock's frame (see ROCK_GLSL), glowing by their `glow` in their own color. */
-function rockBound(material: THREE.MeshStandardMaterial, rocks: THREE.IUniform): THREE.MeshStandardMaterial {
+/**
+ * Hazard paint: dark stripes across a part's surface coordinates, STRIPE long, diagonal. Each
+ * edge is smoothed over the pixel it falls in, and where a pixel spans a whole stripe the paint
+ * turns to its mean, so the stripes never crawl or shimmer on a small screen.
+ */
+const HAZARD_GLSL = /* glsl */ `
+  if (vHazard > 0.0) {
+    float x = (vPaint.x + vPaint.y) * ${(STEEL_TILE / STRIPE).toFixed(2)};
+    float w = max(fwidth(x), 1e-4);
+    float band = clamp((abs(fract(x) - 0.5) - 0.25) / w + 0.5, 0.0, 1.0);
+    band = mix(band, 0.5, smoothstep(0.35, 0.7, w));
+    diffuseColor.rgb *= mix(1.0, 0.08, band * vHazard);
+  }
+`;
+
+/**
+ * A lit material whose vertices stand in their rock's frame (see ROCK_GLSL), glowing by their
+ * `glow`: a little in their surface's color (the work lights on them), a lit pane (glow above
+ * 0.5) in its own color. With `hazard`, its vertices carry a `hazard` share of hazard stripes.
+ */
+function rockBound(material: THREE.MeshStandardMaterial, rocks: THREE.IUniform, hazard = false): THREE.MeshStandardMaterial {
   material.onBeforeCompile = (shader) => {
     hazeUniforms(shader, material);
     shader.uniforms.rocks = rocks;
+    const paint = hazard ? 'attribute float hazard;\nvarying float vHazard;\nvarying vec2 vPaint;' : '';
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', `#include <common>\n${ROCK_GLSL}\nattribute float glow;\nvarying float vGlow;`)
-      .replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\n\tmat4 rockFrame = rockMatrix();\n\tobjectNormal = normalize( mat3( rockFrame ) * objectNormal );\n\tvGlow = glow;')
+      .replace('#include <common>', `#include <common>\n${ROCK_GLSL}\nattribute float glow;\nvarying float vGlow;\n${paint}`)
+      .replace('#include <beginnormal_vertex>', `#include <beginnormal_vertex>\n\tmat4 rockFrame = rockMatrix();\n\tobjectNormal = normalize( mat3( rockFrame ) * objectNormal );\n\tvGlow = glow;${hazard ? '\n\tvHazard = hazard;\n\tvPaint = uv;' : ''}`)
       .replace('#include <begin_vertex>', '#include <begin_vertex>\n\ttransformed = ( rockFrame * vec4( transformed, 1.0 ) ).xyz;');
     shader.fragmentShader = shader.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vGlow;')
-      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += vColor.rgb * vGlow;');
+      .replace('#include <common>', `#include <common>\nvarying float vGlow;\n${hazard ? 'varying float vHazard;\nvarying vec2 vPaint;' : ''}`)
+      .replace('#include <color_fragment>', `#include <color_fragment>\n${hazard ? HAZARD_GLSL : ''}`)
+      .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n\ttotalEmissiveRadiance += ( vGlow > 0.5 ? vColor.rgb : diffuseColor.rgb ) * vGlow;');
   };
-  material.customProgramCacheKey = () => 'mining';
+  material.customProgramCacheKey = () => (hazard ? 'mining-steel' : 'mining');
   return material;
 }
 
@@ -1047,7 +1141,7 @@ export class Mining {
     this.holes.length = 0;
     for (let i = 0; i < plan.holes.length; i++) this.holes.push({ at: new THREE.Vector3(), up: new THREE.Vector3(), live: false });
     const rocks = this.rocks;
-    const steel = new THREE.Mesh(plan.steel.geometry(), rockBound(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.7, metalness: 0.4 }), rocks));
+    const steel = new THREE.Mesh(plan.steel.geometry(), rockBound(new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(STEEL_SEED, STEEL_WEAR), 1.5), vertexColors: true, envMap: shine(), envMapIntensity: 0.35 }), rocks, true));
     const stone = new THREE.Mesh(plan.stone.geometry(), rockBound(new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0.05, flatShading: false, map: sawTexture() }), rocks));
     for (const mesh of [steel, stone]) mesh.receiveShadow = true;
     const additive = { blending: THREE.AdditiveBlending, depthWrite: false, transparent: true };
