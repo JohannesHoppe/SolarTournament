@@ -1,27 +1,21 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { impostorGeometry, impostorMaterial, IMPOSTOR_SUN, paintedImpostor } from './impostor';
+import { impostorMaterial, IMPOSTOR_SUN } from './impostor';
 
-describe('a painted billboard', () => {
+describe("a billboard's own light", () => {
   const atlas = () => new THREE.DataTexture(new Uint8Array(4), 1, 1);
-  const template = new THREE.Mesh(impostorGeometry(100), impostorMaterial(atlas(), atlas(), 20, 100));
 
-  it("keeps the shape's quad, atlases and the shared sun, and shows the paint's color and glow", () => {
-    const painted = paintedImpostor(template, { color: 0xf2f7ff, emissive: 0x0d1a2e });
-    const own = (template.material as THREE.ShaderMaterial).uniforms;
-    const { uniforms } = painted.material as THREE.ShaderMaterial;
-    expect(painted.geometry).toBe(template.geometry);
-    expect(uniforms.albedoAtlas.value).toBe(own.albedoAtlas.value);
-    expect(uniforms.normalAtlas.value).toBe(own.normalAtlas.value);
-    expect(uniforms.inset.value).toBeCloseTo(own.inset.value, 9);
-    expect(uniforms.radius.value).toBe(100);
+  it('shares the sun of every billboard, and glows and lets the sun through only with a glow of its own', () => {
+    const rock = impostorMaterial(atlas(), atlas(), 20, 100).uniforms;
+    const ice = impostorMaterial(atlas(), atlas(), 20, 100, { emissive: 0x0d1a2e, translucent: new THREE.Color(0.03, 0.09, 0.2) }).uniforms;
     // the sun moves every billboard at once (see IMPOSTOR_SUN)
-    expect(uniforms.sunDirection).toBe(IMPOSTOR_SUN.direction);
-    expect(uniforms.painted.value).toBe(1);
-    expect(uniforms.paint.value.getHex()).toBe(0xf2f7ff);
-    expect(uniforms.emissive.value.getHex()).toBe(0x0d1a2e);
-    // a rock's own billboard shows its baked colors and does not glow
-    expect(own.painted.value).toBe(0);
-    expect(own.emissive.value.getHex()).toBe(0);
+    expect(ice.sunDirection).toBe(IMPOSTOR_SUN.direction);
+    expect(rock.sunDirection).toBe(IMPOSTOR_SUN.direction);
+    expect(ice.inset.value).toBeCloseTo(0.5 / 20, 9);
+    expect(ice.emissive.value.getHex()).toBe(0x0d1a2e);
+    expect(ice.translucent.value.b).toBeCloseTo(0.2, 6);
+    // a rock's own billboard shows its baked colors and nothing else
+    expect(rock.emissive.value.getHex()).toBe(0);
+    expect(rock.translucent.value.getHex()).toBe(0);
   });
 });

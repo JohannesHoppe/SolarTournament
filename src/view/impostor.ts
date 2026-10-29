@@ -35,6 +35,7 @@ varying float vTile;
 varying vec3 vBasisRight;
 varying vec3 vBasisUp;
 varying vec3 vBasisForward;
+varying vec3 vToCamera;
 
 ${directionsGLSL()}
 
@@ -55,6 +56,7 @@ void main() {
 
   // the view direction in the shape's own (turning) frame picks which baked view to show
   vec3 toCamera = normalize( cameraPosition - center );
+  vToCamera = toCamera;
   vec3 localView = vec3( dot( toCamera, right ), dot( toCamera, up ), dot( toCamera, forward ) );
   float best = -2.0;
   float tile = 0.0;
@@ -91,15 +93,15 @@ uniform vec3 sunDirection;
 uniform vec3 sunColor;
 uniform vec3 skyColor;
 uniform vec3 groundColor;
-uniform vec3 paint;
-uniform float painted;
 uniform vec3 emissive;
+uniform vec3 translucent;
 
 varying vec2 vUv;
 varying float vTile;
 varying vec3 vBasisRight;
 varying vec3 vBasisUp;
 varying vec3 vBasisForward;
+varying vec3 vToCamera;
 
 void main() {
   vec2 uv = clamp( vUv, inset, 1.0 - inset );
@@ -110,9 +112,10 @@ void main() {
   vec3 normal = normalize( local.x * vBasisRight + local.y * vBasisUp + local.z * vBasisForward );
   float diffuse = max( dot( normal, sunDirection ), 0.0 );
   vec3 ambient = mix( groundColor, skyColor, normal.y * 0.5 + 0.5 );
-  // a painted shape (ice) shows its material's one color over the baked rock's, and glows like it
-  vec3 base = mix( albedo.rgb, paint, painted );
-  vec3 outgoingLight = base * ( ambient + sunColor * diffuse ) + emissive;
+  // what lets the sun through (ice): its side away from the sun glows, most when the sun stands behind it
+  float behind = max( -dot( normal, sunDirection ), 0.0 );
+  float backlit = pow( max( -dot( vToCamera, sunDirection ), 0.0 ), 4.0 );
+  vec3 outgoingLight = albedo.rgb * ( ambient + sunColor * diffuse ) + emissive + translucent * sunColor * behind * ( 0.25 + backlit );
   gl_FragColor = vec4( outgoingLight, 1.0 );
   #include <fog_fragment>
 
@@ -146,27 +149,23 @@ export function impostorGeometry(radius: number): THREE.BufferGeometry {
   return geometry;
 }
 
-/** The one color a shape's material paints it in (instead of the baked rock's), and its glow: what the billboard of an ice piece shows (see world/shapes). */
-export interface ImpostorPaint {
-  color: THREE.ColorRepresentation;
+/**
+ * A billboard's own light besides the sun's and the sky's on its baked color: what an ice
+ * piece's billboard shows (see world/ice) as its meshes do, its cold glow in the shadow and the
+ * sunlight it lets through on its side away from the sun.
+ */
+export interface ImpostorGlow {
   emissive: THREE.ColorRepresentation;
-}
-
-/** A billboard of the same shape as `template` (sharing its quad and atlases), painted in one color (see ImpostorPaint). */
-export function paintedImpostor(template: THREE.Mesh, paint: ImpostorPaint): THREE.Mesh {
-  const { uniforms } = template.material as THREE.ShaderMaterial;
-  const material = impostorMaterial(uniforms.albedoAtlas.value, uniforms.normalAtlas.value, 0.5 / uniforms.inset.value, uniforms.radius.value, paint);
-  const painted = new THREE.Mesh(template.geometry, material);
-  painted.name = `${template.name}-painted`;
-  return painted;
+  /** The share of the sun's light, by color, that comes through. */
+  translucent: THREE.ColorRepresentation;
 }
 
 /**
  * A billboard material for one shape: `albedo` (rgb + silhouette alpha) and `normal`
  * (object-space, encoded) are atlases of IMPOSTOR_VIEWS tiles (see world/rocks,
- * bakeImpostorAtlas); `paint`, when given, replaces the albedo's color (its silhouette stays).
+ * impostorAtlas); `glow`, when given, its own light (see ImpostorGlow), none for rock.
  */
-export function impostorMaterial(albedo: THREE.Texture, normal: THREE.Texture, atlasResolution: number, radius: number, paint?: ImpostorPaint): THREE.ShaderMaterial {
+export function impostorMaterial(albedo: THREE.Texture, normal: THREE.Texture, atlasResolution: number, radius: number, glow?: ImpostorGlow): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
       albedoAtlas: { value: albedo },
@@ -177,9 +176,8 @@ export function impostorMaterial(albedo: THREE.Texture, normal: THREE.Texture, a
       sunColor: IMPOSTOR_SUN.color,
       skyColor: IMPOSTOR_SUN.sky,
       groundColor: IMPOSTOR_SUN.ground,
-      paint: { value: new THREE.Color(paint?.color ?? 0xffffff) },
-      painted: { value: paint ? 1 : 0 },
-      emissive: { value: new THREE.Color(paint?.emissive ?? 0x000000) },
+      emissive: { value: new THREE.Color(glow?.emissive ?? 0x000000) },
+      translucent: { value: new THREE.Color(glow?.translucent ?? 0x000000) },
     },
     vertexShader,
     fragmentShader,

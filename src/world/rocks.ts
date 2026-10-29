@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
 import { tangentDirections } from './surface';
-import { impostorDirections, impostorGeometry, impostorMaterial, IMPOSTOR_VIEWS } from '../view/impostor';
+import { impostorDirections, impostorGeometry, impostorMaterial, IMPOSTOR_VIEWS, type ImpostorGlow } from '../view/impostor';
 import { hazeUniforms } from '../view/haze';
 
 /** Fixed seed: every client builds the same rock shapes, so their measured surfaces match (see world/surface). */
 const ROCK_SEED = 2584;
-const ROCK_COUNT = 16;
+export const ROCK_COUNT = 16;
 /** Edge subdivisions of the base icosahedron a rock's surface is measured from (20 · 33² ≈ 22 000 triangles): never drawn, built once per shape and kept only for Surface (see world/asteroids, world/surface), so collisions stay identical however light the drawn mesh is. */
 export const DETAIL = 32;
 /** Subdivisions of the mesh drawn up close (20 · 10² = 2000 triangles): the fine relief (crags, craters, grooves, cracks) lives in a baked relief map (see reliefMap), not in the mesh, so this stays low. */
@@ -41,7 +41,7 @@ const COMPOSITIONS: Composition[] = [
  * Smooth 3D value noise in [-1, 1]. It uses integer hashing and polynomial blending only,
  * no transcendental functions, so every browser computes exactly the same shapes.
  */
-class Noise {
+export class Noise {
   constructor(private readonly seed: number) {}
 
   private lattice(x: number, y: number, z: number): number {
@@ -82,7 +82,7 @@ class Noise {
   }
 }
 
-interface Crater {
+export interface Crater {
   center: THREE.Vector3;
   /** Rim radius as chord length on the unit sphere. */
   width: number;
@@ -99,7 +99,7 @@ function craterHeight(direction: THREE.Vector3, crater: Crater): number {
 }
 
 /** Everything a rock shape is built from, drawn once from its seed (see rockRecipe) and shared by every detail level, the relief map and the impostor atlas alike. */
-interface RockRecipe {
+export interface RockRecipe {
   noiseSeed: number;
   composition: Composition;
   axes: THREE.Vector3;
@@ -112,7 +112,7 @@ interface RockRecipe {
 const recipes = new Map<number, RockRecipe>();
 
 /** The fixed recipe of a rock shape (its composition, proportions, roughness and craters), the same on every call and every browser. */
-function rockRecipe(index: number): RockRecipe {
+export function rockRecipe(index: number): RockRecipe {
   let recipe = recipes.get(index);
   if (recipe) return recipe;
   const r = new Randomizer(ROCK_SEED * 7919 + index * 104729);
@@ -148,7 +148,7 @@ function rockRecipe(index: number): RockRecipe {
  * agree on the shape wherever they sample it; `crags` scales the small crags (the relief map
  * takes them softer, see MAP_CRAGS), 1 for the shape itself.
  */
-function surfaceSample(noise: Noise, recipe: RockRecipe, direction: THREE.Vector3, crags = 1): { bump: number; shade: number } {
+export function surfaceSample(noise: Noise, recipe: RockRecipe, direction: THREE.Vector3, crags = 1): { bump: number; shade: number } {
   const x = direction.x * recipe.frequency, y = direction.y * recipe.frequency, z = direction.z * recipe.frequency;
   // large lumps, plus sharp crags and boulders on a smaller scale
   let height = recipe.roughness * noise.fractal(x, y, z, 5, recipe.ridged);
@@ -209,10 +209,38 @@ const MAP_CRAGS = 0.5;
 
 /** Cells per unit of the pit grid over [-1, 1]³ (see Relief.pitGrid). */
 const PIT_GRID = 8;
-const pitCell = (x: number, y: number, z: number) => {
+/** The cell of the pit grid a direction (unit vector) lies in. */
+export const pitCell = (x: number, y: number, z: number) => {
   const c = (v: number) => Math.min(2 * PIT_GRID - 1, Math.max(0, Math.floor((v + 1) * PIT_GRID)));
   return c(x) + 2 * PIT_GRID * (c(y) + 2 * PIT_GRID * c(z));
 };
+
+/** How far a direction (unit vector) lies from a pit's center, in its widths. */
+export function pitDistance(d: THREE.Vector3, pit: Crater): number {
+  const dx = d.x - pit.center.x, dy = d.y - pit.center.y, dz = d.z - pit.center.z;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz) / pit.width;
+}
+
+/** Pits (anything round at a direction, `width` across as a chord on the unit sphere) listed in every cell of the pit grid they reach into within `reach` of their width, so a sample checks only the few near it (see pitCell). */
+export function pitGrid<T extends Crater>(pits: T[], reach: number): Map<number, T[]> {
+  const grid = new Map<number, T[]>();
+  for (const pit of pits) {
+    const span = pit.width * reach;
+    const lo = (v: number) => Math.max(0, Math.floor((v - span + 1) * PIT_GRID));
+    const hi = (v: number) => Math.min(2 * PIT_GRID - 1, Math.floor((v + span + 1) * PIT_GRID));
+    for (let z = lo(pit.center.z); z <= hi(pit.center.z); z++) {
+      for (let y = lo(pit.center.y); y <= hi(pit.center.y); y++) {
+        for (let x = lo(pit.center.x); x <= hi(pit.center.x); x++) {
+          const key = x + 2 * PIT_GRID * (y + 2 * PIT_GRID * z);
+          const list = grid.get(key);
+          if (list) list.push(pit);
+          else grid.set(key, [pit]);
+        }
+      }
+    }
+  }
+  return grid;
+}
 
 const reliefs = new Map<number, Relief>();
 
@@ -231,22 +259,6 @@ function rockRelief(index: number): Relief {
     const fresh = r.nextFloat();
     pits.push({ center: new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize(), width, depth: width * r.range(0.24, 0.36), fresh: fresh * fresh });
   }
-  const pitGrid = new Map<number, Pit[]>();
-  for (const pit of pits) {
-    const reach = pit.width * 1.6;
-    const lo = (v: number) => Math.max(0, Math.floor((v - reach + 1) * PIT_GRID));
-    const hi = (v: number) => Math.min(2 * PIT_GRID - 1, Math.floor((v + reach + 1) * PIT_GRID));
-    for (let z = lo(pit.center.z); z <= hi(pit.center.z); z++) {
-      for (let y = lo(pit.center.y); y <= hi(pit.center.y); y++) {
-        for (let x = lo(pit.center.x); x <= hi(pit.center.x); x++) {
-          const key = x + 2 * PIT_GRID * (y + 2 * PIT_GRID * z);
-          const list = pitGrid.get(key);
-          if (list) list.push(pit);
-          else pitGrid.set(key, [pit]);
-        }
-      }
-    }
-  }
   // grooves run along the longest axis, as on the elongated real asteroids (Phobos, Eros)
   const { axes } = recipe;
   const long = axes.x >= axes.y && axes.x >= axes.z ? new THREE.Vector3(1, 0, 0) : axes.y >= axes.z ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(0, 0, 1);
@@ -261,7 +273,7 @@ function rockRelief(index: number): Relief {
   }
   const fissures = r.nextFloat() < 0.8 ? r.range(0.004, 0.009) : 0;
   const boulders = r.range(0.42, 0.6);
-  relief = { pits, pitGrid, grooves, meanAxis: (axes.x + axes.y + axes.z) / 3, fissures, boulders };
+  relief = { pits, pitGrid: pitGrid(pits, 1.6), grooves, meanAxis: (axes.x + axes.y + axes.z) / 3, fissures, boulders };
   reliefs.set(index, relief);
   return relief;
 }
@@ -279,8 +291,7 @@ function reliefSample(noise: Noise, recipe: RockRecipe, relief: Relief, d: THREE
   const pits = relief.pitGrid.get(pitCell(d.x, d.y, d.z));
   if (pits) {
     for (const pit of pits) {
-      const dx = d.x - pit.center.x, dy = d.y - pit.center.y, dz = d.z - pit.center.z;
-      const t = Math.sqrt(dx * dx + dy * dy + dz * dz) / pit.width;
+      const t = pitDistance(d, pit);
       if (t >= 1.6) continue;
       if (t < 1) {
         // the bowl, its floor fresher the younger the pit
@@ -401,12 +412,32 @@ export function atlasOffset(tile: number, tiles: number, res: number, i: number,
 
 /** Edge length, in texels, of each of the 6 faces of a rock's relief map: about 0.7° a texel, 1.5 to 4 m on a rock of the field. */
 export const RELIEF_RES = 128;
-const reliefMaps = new Map<number, THREE.CubeTexture>();
+/** What a relief map holds at a direction: how far the surface reaches there (a share added to 1 on the shape's ellipsoid, see surfacePoint) and the value its alpha keeps (0..1). */
+export interface ReliefTexel {
+  bump: number;
+  value: number;
+}
+/** A shape's surface as a relief map shows it: what it holds at a direction (unit vector), written into `out`. */
+export type ReliefSampler = (direction: THREE.Vector3, out: ReliefTexel) => ReliefTexel;
+/** The materials with a relief map of their own per shape: rock, and ice (see world/ice). */
+export type ReliefKind = 'rock' | 'ice';
 
-/** The rock's surface point as its maps show it (see reliefSample), written into `target`; its shade in `sampled.shade`. */
-function reliefPoint(noise: Noise, recipe: RockRecipe, relief: Relief, direction: THREE.Vector3, target: THREE.Vector3, sampled: { bump: number; shade: number }): THREE.Vector3 {
-  const { bump } = reliefSample(noise, recipe, relief, direction, sampled);
-  return target.set(direction.x * recipe.axes.x * (1 + bump), direction.y * recipe.axes.y * (1 + bump), direction.z * recipe.axes.z * (1 + bump));
+/** The surface point a sampler gives at a direction, on the ellipsoid of `axes`, written into `target`. */
+function reliefPoint(axes: THREE.Vector3, sample: ReliefSampler, direction: THREE.Vector3, target: THREE.Vector3, sampled: ReliefTexel): THREE.Vector3 {
+  const { bump } = sample(direction, sampled);
+  return target.set(direction.x * axes.x * (1 + bump), direction.y * axes.y * (1 + bump), direction.z * axes.z * (1 + bump));
+}
+
+/** A rock shape's surface as its relief map shows it (see reliefSample): its alpha holds half the shade. */
+function rockSampler(index: number): ReliefSampler {
+  const recipe = rockRecipe(index), relief = rockRelief(index), noise = new Noise(recipe.noiseSeed);
+  const sampled = { bump: 0, shade: 1 };
+  return (direction, out) => {
+    reliefSample(noise, recipe, relief, direction, sampled);
+    out.bump = sampled.bump;
+    out.value = Math.min(1, sampled.shade / 2);
+    return out;
+  };
 }
 
 /**
@@ -419,27 +450,36 @@ function reliefPoint(noise: Noise, recipe: RockRecipe, relief: Relief, direction
  * faces' edges and builds its mipmaps, so it shows no seam and no shimmer however small the rock.
  * The surface is sampled once per texel, with a texel's rim around each face, and the normal is
  * the cross product of the differences to the neighbouring texels. Baked once per shape and
- * shared by every mesh and LOD level of it, rock and ice.
+ * shared by every mesh and LOD level of it; ice has maps of its own (see world/ice).
  */
 export function reliefMap(index: number): THREE.CubeTexture {
-  let map = reliefMaps.get(index);
+  return cachedRelief('rock', index, bakeRelief);
+}
+
+const reliefMaps = new Map<string, THREE.CubeTexture>();
+
+/** The relief map of a shape of a kind: baked by a worker already (see bakeReliefMaps), else by `bake` here and now. */
+export function cachedRelief(kind: ReliefKind, index: number, bake: (index: number) => Uint8Array[]): THREE.CubeTexture {
+  let map = reliefMaps.get(kind + index);
   if (map) return map;
-  map = cubeMap(bakeRelief(index));
-  reliefMaps.set(index, map);
+  map = cubeMap(bake(index));
+  reliefMaps.set(kind + index, map);
   return map;
 }
 
-/** The six faces of a rock shape's relief map (see reliefMap), each RELIEF_RES² texels of RGBA, rows from the face's t = −1 on, as WebGL takes a cube map's face. */
+/** The six faces of a rock shape's relief map (see reliefMap). */
 export function bakeRelief(index: number): Uint8Array[] {
-  const recipe = rockRecipe(index);
-  const relief = rockRelief(index);
-  const noise = new Noise(recipe.noiseSeed);
+  return bakeCube(rockRecipe(index).axes, rockSampler(index));
+}
+
+/** The six faces of a relief map of a shape on the ellipsoid of `axes` (see reliefMap), each RELIEF_RES² texels of RGBA, rows from the face's t = −1 on, as WebGL takes a cube map's face. */
+export function bakeCube(axes: THREE.Vector3, sample: ReliefSampler): Uint8Array[] {
   const R = RELIEF_RES, W = R + 2;
   const points = new Float32Array(W * W * 3);
   const shades = new Float32Array(W * W);
   const direction = new THREE.Vector3();
   const point = new THREE.Vector3();
-  const sampled = { bump: 0, shade: 1 };
+  const sampled = { bump: 0, value: 0 };
   const du = new THREE.Vector3(), dv = new THREE.Vector3(), normal = new THREE.Vector3();
   const faces: Uint8Array[] = [];
   for (let face = 0; face < 6; face++) {
@@ -448,12 +488,12 @@ export function bakeRelief(index: number): Uint8Array[] {
       for (let i = -1; i <= R; i++) {
         const s = ((i + 0.5) / R) * 2 - 1;
         cubeTexelDirection(face, s, t, direction);
-        reliefPoint(noise, recipe, relief, direction, point, sampled);
+        reliefPoint(axes, sample, direction, point, sampled);
         const k = (j + 1) * W + i + 1;
         points[k * 3] = point.x;
         points[k * 3 + 1] = point.y;
         points[k * 3 + 2] = point.z;
-        shades[k] = sampled.shade;
+        shades[k] = sampled.value;
       }
     }
     const data = new Uint8Array(R * R * 4);
@@ -470,7 +510,7 @@ export function bakeRelief(index: number): Uint8Array[] {
         data[o] = Math.round((normal.x * 0.5 + 0.5) * 255);
         data[o + 1] = Math.round((normal.y * 0.5 + 0.5) * 255);
         data[o + 2] = Math.round((normal.z * 0.5 + 0.5) * 255);
-        data[o + 3] = Math.round(Math.min(1, shades[k] / 2) * 255);
+        data[o + 3] = Math.round(Math.min(1, Math.max(0, shades[k])) * 255);
       }
     }
     faces.push(data);
@@ -491,17 +531,21 @@ function cubeMap(faces: Uint8Array[]): THREE.CubeTexture {
   return map;
 }
 
+/** A relief map a worker bakes: its kind and its shape. */
+export type ReliefJob = [ReliefKind, number];
+
 /**
- * Bakes every rock shape's relief map (see bakeRelief) in background workers, a few shapes
- * each, side by side: the startup waits for the slowest worker instead of all 16 shapes in a
- * row, and the page keeps loading meanwhile. Where workers are missing or fail, reliefMap bakes
- * a shape itself when it is first asked for.
+ * Bakes the relief maps of every rock shape and of every ice shape (see bakeRelief, world/ice)
+ * in background workers, a few shapes each, side by side: the startup waits for the slowest
+ * worker instead of all 32 maps in a row, and the page keeps loading meanwhile. Where workers
+ * are missing or fail, a map is baked here when it is first asked for (see cachedRelief).
  */
 export async function bakeReliefMaps(): Promise<void> {
   if (typeof Worker === 'undefined') return;
   const count = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
-  const shapes = (w: number) => Array.from({ length: ROCK_COUNT }, (_, i) => i).filter((i) => i % count === w);
-  const bake = (indices: number[]) =>
+  const jobs = Array.from({ length: ROCK_COUNT }, (_, i): ReliefJob[] => [['rock', i], ['ice', i]]).flat();
+  const shapes = (w: number) => jobs.filter((_, k) => k % count === w);
+  const bake = (indices: ReliefJob[]) =>
     new Promise<void>((resolve) => {
       let worker: Worker;
       try {
@@ -515,9 +559,9 @@ export async function bakeReliefMaps(): Promise<void> {
         worker.terminate();
         resolve();
       };
-      worker.onmessage = (event: MessageEvent<{ index: number; faces: Uint8Array[] }>) => {
-        const { index, faces } = event.data;
-        if (!reliefMaps.has(index)) reliefMaps.set(index, cubeMap(faces));
+      worker.onmessage = (event: MessageEvent<{ kind: ReliefKind; index: number; faces: Uint8Array[] }>) => {
+        const { kind, index, faces } = event.data;
+        if (!reliefMaps.has(kind + index)) reliefMaps.set(kind + index, cubeMap(faces));
         if (--left === 0) done();
       };
       worker.onerror = done;
@@ -528,12 +572,16 @@ export async function bakeReliefMaps(): Promise<void> {
 
 /** The surface normal of a rock shape as its relief map holds it (see reliefMap), from finite differences `step` (radians) to either side: what a test reads the baked map against. */
 export function reliefNormal(index: number, direction: THREE.Vector3, step: number): THREE.Vector3 {
-  const recipe = rockRecipe(index), relief = rockRelief(index), noise = new Noise(recipe.noiseSeed);
-  const sampled = { bump: 0, shade: 1 };
+  return samplerNormal(rockRecipe(index).axes, rockSampler(index), direction, step);
+}
+
+/** The surface normal a sampler gives on the ellipsoid of `axes` (see bakeCube), from finite differences `step` (radians) to either side. */
+export function samplerNormal(axes: THREE.Vector3, sample: ReliefSampler, direction: THREE.Vector3, step: number): THREE.Vector3 {
+  const sampled = { bump: 0, value: 0 };
   const side = new THREE.Vector3(), across = new THREE.Vector3(), nearby = new THREE.Vector3();
   const p = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
   tangentDirections(direction, side, across);
-  [side, side.clone().negate(), across, across.clone().negate()].forEach((offset, i) => reliefPoint(noise, recipe, relief, nearby.copy(direction).addScaledVector(offset, step).normalize(), p[i], sampled));
+  [side, side.clone().negate(), across, across.clone().negate()].forEach((offset, i) => reliefPoint(axes, sample, nearby.copy(direction).addScaledVector(offset, step).normalize(), p[i], sampled));
   const normal = new THREE.Vector3().crossVectors(p[0].sub(p[1]), p[2].sub(p[3])).normalize();
   return normal.dot(direction) < 0 ? normal.negate() : normal;
 }
@@ -596,24 +644,7 @@ export function detailMap(): THREE.DataTexture {
   const R = DETAIL_RES;
   const height = new Float32Array(R * R);
   const shade = new Float32Array(R * R).fill(1);
-  const wrap = (v: number) => ((v % R) + R) % R;
-  // grain: value noise on a lattice that repeats with the tile, in octaves
-  const lattice = (x: number, y: number, period: number, seed: number) => {
-    let h = Math.imul(wrap(x) % period, 374761393) ^ Math.imul(wrap(y) % period, 668265263) ^ seed;
-    h = Math.imul(h ^ (h >>> 13), 1274126177);
-    h ^= h >>> 16;
-    return (h & 0xffff) / 32767.5 - 1;
-  };
-  const valueNoise = (x: number, y: number, cells: number, seed: number) => {
-    const size = R / cells;
-    const gx = x / size, gy = y / size;
-    const xi = Math.floor(gx), yi = Math.floor(gy);
-    const fx = gx - xi, fy = gy - yi;
-    const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
-    const a = lattice(xi, yi, cells, seed), b = lattice(xi + 1, yi, cells, seed);
-    const c = lattice(xi, yi + 1, cells, seed), d = lattice(xi + 1, yi + 1, cells, seed);
-    return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
-  };
+  const valueNoise = tileNoise;
   for (let y = 0; y < R; y++) {
     for (let x = 0; x < R; x++) {
       const k = y * R + x;
@@ -630,95 +661,137 @@ export function detailMap(): THREE.DataTexture {
     const cx = r.nextFloat() * R, cy = r.nextFloat() * R;
     const depth = radius * r.range(0.2, 0.35);
     const fresh = r.nextFloat() * r.nextFloat();
-    const reach = Math.ceil(radius * 1.6);
-    for (let y = Math.floor(cy) - reach; y <= Math.floor(cy) + reach; y++) {
-      for (let x = Math.floor(cx) - reach; x <= Math.floor(cx) + reach; x++) {
-        const t = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / radius;
-        if (t >= 1.6) continue;
-        const k = wrap(y) * R + wrap(x);
-        if (t < 1) {
-          height[k] += depth * (t * t - 1) + depth * 0.3 * t * t * t * t;
-          shade[k] *= 1 + (0.1 + 0.4 * fresh) * (1 - t * t);
-        } else {
-          const rim = (1.6 - t) / 0.6;
-          height[k] += depth * 0.3 * rim * rim;
-          shade[k] *= 1 + (fresh * 0.3 - 0.08) * rim;
-        }
+    stampTile(cx, cy, radius, 1.6, (k, t) => {
+      if (t < 1) {
+        height[k] += depth * (t * t - 1) + depth * 0.3 * t * t * t * t;
+        shade[k] *= 1 + (0.1 + 0.4 * fresh) * (1 - t * t);
+      } else {
+        const rim = (1.6 - t) / 0.6;
+        height[k] += depth * 0.3 * rim * rim;
+        shade[k] *= 1 + (fresh * 0.3 - 0.08) * rim;
       }
-    }
+    });
   }
   // boulders and pebbles: round lumps, a little brighter than the dust they lie in
   for (let n = 0; n < 320; n++) {
     const radius = 0.8 + 2.6 * r.nextFloat() * r.nextFloat();
     const cx = r.nextFloat() * R, cy = r.nextFloat() * R;
-    const reach = Math.ceil(radius);
-    for (let y = Math.floor(cy) - reach; y <= Math.floor(cy) + reach; y++) {
-      for (let x = Math.floor(cx) - reach; x <= Math.floor(cx) + reach; x++) {
-        const t = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / radius;
-        if (t >= 1) continue;
-        const k = wrap(y) * R + wrap(x);
-        height[k] += radius * 0.7 * Math.sqrt(1 - t * t);
-        shade[k] *= 1.08;
-      }
+    stampTile(cx, cy, radius, 1, (k, t) => {
+      height[k] += radius * 0.7 * Math.sqrt(1 - t * t);
+      shade[k] *= 1.08;
+    });
+  }
+  for (let k = 0; k < shade.length; k++) shade[k] /= 2;
+  detailTexture = tileTexture(height, shade);
+  return detailTexture;
+}
+
+/** Calls `stamp` for every texel of a detail tile within `reach` radii of a round mark at (cx, cy), the tile's edges wrapping round: `k` the texel's index, `t` its distance in radii. */
+export function stampTile(cx: number, cy: number, radius: number, reach: number, stamp: (k: number, t: number) => void) {
+  const span = Math.ceil(radius * reach);
+  for (let y = Math.floor(cy) - span; y <= Math.floor(cy) + span; y++) {
+    for (let x = Math.floor(cx) - span; x <= Math.floor(cx) + span; x++) {
+      const t = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / radius;
+      if (t < reach) stamp(wrapTile(y) * DETAIL_RES + wrapTile(x), t);
     }
   }
+}
+
+/** A cell's place on a detail tile (see DETAIL_RES), its edges wrapping round. */
+export const wrapTile = (v: number) => ((v % DETAIL_RES) + DETAIL_RES) % DETAIL_RES;
+
+/** The value of a tile's lattice of `period` cells at a point of it, from an integer hash. */
+function tileLattice(x: number, y: number, period: number, seed: number): number {
+  let h = Math.imul(wrapTile(x) % period, 374761393) ^ Math.imul(wrapTile(y) % period, 668265263) ^ seed;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h & 0xffff) / 32767.5 - 1;
+}
+
+/** Smooth value noise in [-1, 1] over a detail tile, `cells` across it, repeating with the tile, at the tile's texel (x, y). */
+export function tileNoise(x: number, y: number, cells: number, seed: number): number {
+  const size = DETAIL_RES / cells;
+  const gx = x / size, gy = y / size;
+  const xi = Math.floor(gx), yi = Math.floor(gy);
+  const fx = gx - xi, fy = gy - yi;
+  const u = fx * fx * (3 - 2 * fx), v = fy * fy * (3 - 2 * fy);
+  const a = tileLattice(xi, yi, cells, seed), b = tileLattice(xi + 1, yi, cells, seed);
+  const c = tileLattice(xi, yi + 1, cells, seed), d = tileLattice(xi + 1, yi + 1, cells, seed);
+  return a + (b - a) * u + (c - a) * v + (a - b - c + d) * u * v;
+}
+
+/**
+ * A detail tile (DETAIL_RES² texels) as a texture that repeats, mipmapped: from its height field
+ * the slope (rg: −∂h/∂u and −∂h/∂v, encoded as 0.5 + 0.5 · slope), and `third` (0..1) in b.
+ */
+export function tileTexture(height: Float32Array, third: Float32Array): THREE.DataTexture {
+  const R = DETAIL_RES;
   const data = new Uint8Array(R * R * 4);
   const encode = (slope: number) => Math.round(Math.min(1, Math.max(0, 0.5 + 0.5 * slope)) * 255);
   for (let y = 0; y < R; y++) {
     for (let x = 0; x < R; x++) {
       const k = y * R + x, o = k * 4;
-      data[o] = encode(-(height[y * R + wrap(x + 1)] - height[y * R + wrap(x - 1)]) / 2);
-      data[o + 1] = encode(-(height[wrap(y + 1) * R + x] - height[wrap(y - 1) * R + x]) / 2);
-      data[o + 2] = Math.round(Math.min(1, shade[k] / 2) * 255);
+      data[o] = encode(-(height[y * R + wrapTile(x + 1)] - height[y * R + wrapTile(x - 1)]) / 2);
+      data[o + 1] = encode(-(height[wrapTile(y + 1) * R + x] - height[wrapTile(y - 1) * R + x]) / 2);
+      data[o + 2] = Math.round(Math.min(1, Math.max(0, third[k])) * 255);
       data[o + 3] = 255;
     }
   }
-  detailTexture = new THREE.DataTexture(data, R, R, THREE.RGBAFormat);
-  detailTexture.colorSpace = THREE.NoColorSpace;
-  detailTexture.wrapS = detailTexture.wrapT = THREE.RepeatWrapping;
-  detailTexture.magFilter = THREE.LinearFilter;
-  detailTexture.minFilter = THREE.LinearMipmapLinearFilter;
-  detailTexture.generateMipmaps = true;
-  detailTexture.anisotropy = 4;
-  detailTexture.needsUpdate = true;
-  return detailTexture;
+  const texture = new THREE.DataTexture(data, R, R, THREE.RGBAFormat);
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+  return texture;
 }
 
-/** How a material shows a rock's relief (see applyRockRelief). */
-export interface ReliefLook {
-  /** How much of the relief map's shade the color takes: 1 for rock, less for ice, whose clean surface shows the dirt faintly. */
-  shade: number;
-  /** Whether the detail map is laid over it up close (the meshes drawn near, never the far ones), and how strongly it tilts the normal. */
-  detail: number;
+/** What a material shading with a shape's relief map is given (see patchRelief). */
+export interface ReliefPatch {
+  /** Which program it compiles to: rock or ice, each with and without the detail tile. */
+  kind: ReliefKind;
+  map: THREE.CubeTexture;
+  /** The shape's ellipsoid, which maps a point of the mesh to the direction the map is read in. */
+  axes: THREE.Vector3;
+  /** The tile laid over the relief up close (the meshes drawn near, never the far ones), or null. */
+  detail: THREE.DataTexture | null;
+  /** How strongly the tile tilts the normal up close. */
+  strength: number;
+  /** The material's own uniforms. */
+  uniforms: Record<string, THREE.IUniform>;
+  /** The material's own declarations, after the shared ones (see RELIEF_PARS). */
+  pars: string;
+  /** What it works into the color right after three.js sets it, from `reliefTexel` (the map's texel), `reliefTile` (the tile's b, 0.5 without it) and `reliefNear` (how much of the tile shows); `reliefNormal` is the normal it shades with. */
+  color: string;
+  /** Any further change to the fragment shader. */
+  fragment?: (source: string) => string;
 }
 
 /**
- * Patches a rock or ice material to shade with the shape's relief map (see reliefMap) instead
- * of its low-poly mesh: the normal and the shade come from a cube lookup by the direction from
- * the rock's own center, so the fine relief looks the same at any detail; fresh material takes
- * the composition's fresh tint. Up close (`look.detail`), the shared detail map (see detailMap)
- * adds the smallest craters and boulders, projected along the rock's own three axes and blended
- * by the normal, fading out with distance.
+ * Patches a material to shade with a shape's relief map instead of its low-poly mesh: the
+ * normal and what the map's alpha holds come from a cube lookup by the direction from the
+ * shape's own center, so the fine relief looks the same at any detail. Up close (`detail`), the
+ * tile adds what is finer yet, projected along the shape's own three axes and blended by the
+ * mesh's facing, fading out with distance.
  */
-export function applyRockRelief(material: THREE.MeshStandardMaterial, index: number, look: ReliefLook = { shade: 1, detail: 0 }) {
-  const map = reliefMap(index);
-  const recipe = rockRecipe(index);
-  const axes = recipe.axes.clone();
-  const fresh = new THREE.Vector3(...recipe.composition.fresh);
-  const detail = look.detail > 0 ? detailMap() : null;
+export function patchRelief(material: THREE.MeshStandardMaterial, patch: ReliefPatch) {
   // a define, not a uniform, so the near meshes' program and the far meshes' are cached apart
-  if (detail) material.defines = { ...material.defines, ROCK_DETAIL: '' };
+  if (patch.detail) material.defines = { ...material.defines, RELIEF_DETAIL: '' };
+  // rock and ice share this function, so its source cannot tell their programs apart
+  material.customProgramCacheKey = () => `relief-${patch.kind}`;
+  const fade = new THREE.Vector2(DETAIL_NEAR, DETAIL_FAR);
   material.onBeforeCompile = (shader) => {
     // the haze, as every material takes it (see view/haze)
     hazeUniforms(shader, material);
-    shader.uniforms.rockRelief = { value: map };
-    shader.uniforms.rockAxes = { value: axes };
-    shader.uniforms.rockFresh = { value: fresh };
-    shader.uniforms.rockShade = { value: look.shade };
-    shader.uniforms.rockDetail = { value: detail };
-    shader.uniforms.rockDetailStrength = { value: look.detail };
-    shader.uniforms.rockDetailTile = { value: DETAIL_TILE };
-    shader.uniforms.rockDetailFade = { value: new THREE.Vector2(DETAIL_NEAR, DETAIL_FAR) };
+    Object.assign(shader.uniforms, patch.uniforms);
+    shader.uniforms.reliefMap = { value: patch.map };
+    shader.uniforms.reliefAxes = { value: patch.axes };
+    shader.uniforms.reliefDetail = { value: patch.detail };
+    shader.uniforms.reliefDetailStrength = { value: patch.strength };
+    shader.uniforms.reliefDetailTile = { value: DETAIL_TILE };
+    shader.uniforms.reliefDetailFade = { value: fade };
     // an instance's own turn (the belt draws its rocks instanced) is not in normalMatrix, so it
     // goes to the fragment as the three columns of instanceMatrix, the identity otherwise
     shader.vertexShader = shader.vertexShader
@@ -727,29 +800,29 @@ export function applyRockRelief(material: THREE.MeshStandardMaterial, index: num
         '#include <begin_vertex>',
         '#include <begin_vertex>\n\tvRockPosition = position;\n\tvRockFacing = normal;\n#ifdef USE_INSTANCING\n\tvRockTurnX = instanceMatrix[0].xyz;\n\tvRockTurnY = instanceMatrix[1].xyz;\n\tvRockTurnZ = instanceMatrix[2].xyz;\n#else\n\tvRockTurnX = vec3( 1.0, 0.0, 0.0 );\n\tvRockTurnY = vec3( 0.0, 1.0, 0.0 );\n\tvRockTurnZ = vec3( 0.0, 0.0, 1.0 );\n#endif',
       );
-    shader.fragmentShader = shader.fragmentShader
+    let fragment = shader.fragmentShader
       .replace(
         '#include <common>',
         // normalMatrix has no fragment-side declaration unless a material's own normalMap is
-        // in object space (ours never is: the rock's normal comes from the relief map instead),
+        // in object space (ours never is: the shape's normal comes from the relief map instead),
         // so it is declared here; three.js sets it for every object regardless of a material's
         // own uniforms, by name, so no extra uniform value is needed on our side.
-        `#include <common>\nuniform mat3 normalMatrix;\n${ROCK_RELIEF_PARS}`,
+        `#include <common>\nuniform mat3 normalMatrix;\n${RELIEF_PARS}\n${patch.pars}`,
       )
-      .replace('#include <color_fragment>', `#include <color_fragment>\n${ROCK_RELIEF_COLOR}`)
-      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n\tnormal = normalize( normalMatrix * ( mat3( vRockTurnX, vRockTurnY, vRockTurnZ ) * rockNormal ) );');
+      .replace('#include <color_fragment>', `#include <color_fragment>\n${RELIEF_READ}\n${patch.color}`)
+      .replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n\tnormal = normalize( normalMatrix * ( mat3( vRockTurnX, vRockTurnY, vRockTurnZ ) * reliefNormal ) );');
+    if (patch.fragment) fragment = patch.fragment(fragment);
+    shader.fragmentShader = fragment;
   };
 }
 
-const ROCK_RELIEF_PARS = /* glsl */ `
-uniform samplerCube rockRelief;
-uniform vec3 rockAxes;
-uniform vec3 rockFresh;
-uniform float rockShade;
-uniform sampler2D rockDetail;
-uniform float rockDetailStrength;
-uniform float rockDetailTile;
-uniform vec2 rockDetailFade;
+const RELIEF_PARS = /* glsl */ `
+uniform samplerCube reliefMap;
+uniform vec3 reliefAxes;
+uniform sampler2D reliefDetail;
+uniform float reliefDetailStrength;
+uniform float reliefDetailTile;
+uniform vec2 reliefDetailFade;
 varying vec3 vRockPosition;
 varying vec3 vRockFacing;
 varying vec3 vRockTurnX;
@@ -757,31 +830,56 @@ varying vec3 vRockTurnY;
 varying vec3 vRockTurnZ;
 `;
 
-/** The relief's normal (kept for normal_fragment_maps) and shade, worked into the color right after three.js sets it. */
-const ROCK_RELIEF_COLOR = /* glsl */ `
-	vec4 rockTexel = textureCube( rockRelief, normalize( vRockPosition / rockAxes ) );
-	vec3 rockNormal = normalize( rockTexel.xyz * 2.0 - 1.0 );
-	float rockMultiplier = rockTexel.a * 2.0;
-#ifdef ROCK_DETAIL
+/** The relief map's texel and normal (kept for normal_fragment_maps), with the detail tile's tilt and its b up close. */
+const RELIEF_READ = /* glsl */ `
+	vec4 reliefTexel = textureCube( reliefMap, normalize( vRockPosition / reliefAxes ) );
+	vec3 reliefNormal = normalize( reliefTexel.xyz * 2.0 - 1.0 );
+	float reliefNear = 0.0;
+	float reliefTile = 0.5;
+#ifdef RELIEF_DETAIL
 	// sampled everywhere, never inside a branch, so the mipmaps' choice stays well defined; fading by distance
-	float rockNear = 1.0 - smoothstep( rockDetailFade.x, rockDetailFade.y, length( vViewPosition ) );
+	reliefNear = 1.0 - smoothstep( reliefDetailFade.x, reliefDetailFade.y, length( vViewPosition ) );
 	// weighed by the mesh's own facing, not the relief's: the tile lies along the mesh's surface, and a crater wall tilted off it would smear it
-	vec3 rockWeights = pow( abs( normalize( vRockFacing ) ), vec3( 4.0 ) );
-	rockWeights /= rockWeights.x + rockWeights.y + rockWeights.z;
-	vec3 rockTile = vRockPosition / rockDetailTile;
-	vec4 rockAlongX = texture2D( rockDetail, rockTile.yz );
-	vec4 rockAlongY = texture2D( rockDetail, rockTile.xz );
-	vec4 rockAlongZ = texture2D( rockDetail, rockTile.xy );
-	vec3 rockTilt = rockWeights.x * vec3( 0.0, rockAlongX.xy * 2.0 - 1.0 ) + rockWeights.y * vec3( rockAlongY.x * 2.0 - 1.0, 0.0, rockAlongY.y * 2.0 - 1.0 ) + rockWeights.z * vec3( rockAlongZ.xy * 2.0 - 1.0, 0.0 );
-	rockNormal = normalize( rockNormal + rockTilt * rockDetailStrength * rockNear );
-	float rockGrain = ( rockWeights.x * rockAlongX.b + rockWeights.y * rockAlongY.b + rockWeights.z * rockAlongZ.b ) * 2.0;
-	rockMultiplier *= mix( 1.0, rockGrain, rockNear );
+	vec3 reliefWeights = pow( abs( normalize( vRockFacing ) ), vec3( 4.0 ) );
+	reliefWeights /= reliefWeights.x + reliefWeights.y + reliefWeights.z;
+	vec3 reliefAt = vRockPosition / reliefDetailTile;
+	vec4 reliefAlongX = texture2D( reliefDetail, reliefAt.yz );
+	vec4 reliefAlongY = texture2D( reliefDetail, reliefAt.xz );
+	vec4 reliefAlongZ = texture2D( reliefDetail, reliefAt.xy );
+	vec3 reliefTilt = reliefWeights.x * vec3( 0.0, reliefAlongX.xy * 2.0 - 1.0 ) + reliefWeights.y * vec3( reliefAlongY.x * 2.0 - 1.0, 0.0, reliefAlongY.y * 2.0 - 1.0 ) + reliefWeights.z * vec3( reliefAlongZ.xy * 2.0 - 1.0, 0.0 );
+	reliefNormal = normalize( reliefNormal + reliefTilt * reliefDetailStrength * reliefNear );
+	reliefTile = reliefWeights.x * reliefAlongX.b + reliefWeights.y * reliefAlongY.b + reliefWeights.z * reliefAlongZ.b;
 #endif
-	float rockFreshness = clamp( ( rockMultiplier - 1.0 ) * 1.5, 0.0, 1.0 );
-	diffuseColor.rgb *= mix( vec3( 1.0 ), rockMultiplier * mix( vec3( 1.0 ), rockFresh, rockFreshness ), rockShade );
 `;
 
-/** How strongly the detail map tilts a rock's normal up close (see ReliefLook). */
+/**
+ * Patches a rock's material to shade with its relief map (see reliefMap, patchRelief): the
+ * normal and the shade come from the map, fresh material takes the composition's fresh tint;
+ * `closeUp` for the meshes drawn near, which lay the shared detail map (see detailMap) over it:
+ * the smallest craters and boulders.
+ */
+export function applyRockRelief(material: THREE.MeshStandardMaterial, index: number, closeUp: boolean) {
+  const recipe = rockRecipe(index);
+  patchRelief(material, {
+    kind: 'rock',
+    map: reliefMap(index),
+    axes: recipe.axes.clone(),
+    detail: closeUp ? detailMap() : null,
+    strength: ROCK_DETAIL,
+    uniforms: { rockFresh: { value: new THREE.Vector3(...recipe.composition.fresh) } },
+    pars: 'uniform vec3 rockFresh;',
+    color: ROCK_RELIEF_COLOR,
+  });
+}
+
+/** The relief's shade worked into the rock's color, the grain of the detail tile on it up close, fresh material tinted. */
+const ROCK_RELIEF_COLOR = /* glsl */ `
+	float rockMultiplier = reliefTexel.a * 2.0 * mix( 1.0, reliefTile * 2.0, reliefNear );
+	float rockFreshness = clamp( ( rockMultiplier - 1.0 ) * 1.5, 0.0, 1.0 );
+	diffuseColor.rgb *= rockMultiplier * mix( vec3( 1.0 ), rockFresh, rockFreshness );
+`;
+
+/** How strongly the detail map tilts a rock's normal up close. */
 const ROCK_DETAIL = 1;
 
 /**
@@ -797,7 +895,7 @@ function createRock(index: number, detail: number, closeUp: boolean): THREE.Mesh
     roughness: recipe.composition.roughness,
     metalness: recipe.composition.metalness,
   });
-  applyRockRelief(material, index, { shade: 1, detail: closeUp ? ROCK_DETAIL : 0 });
+  applyRockRelief(material, index, closeUp);
   const mesh = new THREE.Mesh(geometry, material);
   mesh.name = `rock-${index}`;
   // which shape it is, for what is built onto it in its colors (see rockTone)
@@ -874,22 +972,33 @@ function approxBump(noise: Noise, recipe: RockRecipe, direction: THREE.Vector3):
 /** Where within a billboard's pixel its shade is sampled (in half pixels from its center): a small rotated grid. */
 const FOOTPRINT: [number, number][] = [[0.25, 0.75], [-0.75, 0.25], [-0.25, -0.75], [0.75, -0.25]];
 
+/** What a shape's billboards share whatever they are painted (see impostorShape): the quad, the normal atlas, where each atlas cell meets the shape. */
+interface ImpostorShape {
+  geometry: THREE.BufferGeometry;
+  normal: THREE.DataTexture;
+  radius: number;
+  /** Per atlas cell: the direction from the shape's center where its ray meets the surface (xyz) and how wide the cell is there (radians), 0 where it misses. */
+  hits: Float32Array;
+}
+
+const impostorShapes = new Map<number, ImpostorShape>();
+
 /**
- * The impostor atlases of a rock shape (see view/impostor): `albedo` (color and silhouette
- * alpha) and `normal` (object-space, same encoding as a relief map's), one IMPOSTOR_RES square
- * tile per fixed view direction, side by side. Each tile is filled by marching a ray from that
- * direction into the shape's own implicit surface (the same recipe a mesh's vertices come
- * from), so the silhouette and the normal agree with the real shape without rendering it.
+ * The impostor of a rock shape (see view/impostor) besides its colors: its `normal` atlas
+ * (object-space, same encoding as a relief map's), one IMPOSTOR_RES square tile per fixed view
+ * direction, side by side, and where each cell meets the shape. Each tile is filled by marching
+ * a ray from that direction into the shape's own implicit surface (the same recipe a mesh's
+ * vertices come from), so the silhouette and the normal agree with the real shape without
+ * rendering it. Shared by the billboards of rock and ice (see impostorAtlas).
  */
-function bakeImpostor(index: number): { albedo: THREE.DataTexture; normal: THREE.DataTexture; radius: number } {
+function impostorShape(index: number): ImpostorShape {
+  const known = impostorShapes.get(index);
+  if (known) return known;
   const recipe = rockRecipe(index);
   const noise = new Noise(recipe.noiseSeed);
   const reach = Math.max(recipe.axes.x, recipe.axes.y, recipe.axes.z) * 1.35;
-  const albedoData = new Uint8Array(IMPOSTOR_VIEWS * IMPOSTOR_RES * IMPOSTOR_RES * 4);
   const normalData = new Uint8Array(IMPOSTOR_VIEWS * IMPOSTOR_RES * IMPOSTOR_RES * 4);
-  const color: [number, number, number] = [0, 0, 0];
-  const relief = rockRelief(index);
-  const sampled = { bump: 0, shade: 1 };
+  const hits = new Float32Array(IMPOSTOR_VIEWS * IMPOSTOR_RES * IMPOSTOR_RES * 4);
 
   const view = new THREE.Vector3();
   const right = new THREE.Vector3();
@@ -897,9 +1006,6 @@ function bakeImpostor(index: number): { albedo: THREE.DataTexture; normal: THREE
   const origin = new THREE.Vector3();
   const sample = new THREE.Vector3();
   const direction = new THREE.Vector3();
-  const offset = new THREE.Vector3();
-  const side = new THREE.Vector3();
-  const across = new THREE.Vector3();
   const normal = new THREE.Vector3();
 
   const warped = new THREE.Vector3();
@@ -941,23 +1047,13 @@ function bakeImpostor(index: number): { albedo: THREE.DataTexture; normal: THREE
           }
           previous = now;
         }
-        if (hit < 0) {
-          albedoData[o + 3] = 0;
-          continue;
-        }
+        if (hit < 0) continue;
         sample.copy(origin).addScaledVector(view, -hit);
         direction.copy(sample).normalize();
-        // the relief map's shade, averaged over the pixel as the map's mipmaps average it on a far mesh
-        const footprint = reach / IMPOSTOR_RES / sample.length();
-        tangentDirections(direction, side, across);
-        let shade = 0;
-        for (const [a, b] of FOOTPRINT) {
-          offset.copy(direction).addScaledVector(side, a * footprint).addScaledVector(across, b * footprint).normalize();
-          shade += reliefSample(noise, recipe, relief, offset, sampled).shade / FOOTPRINT.length;
-        }
-        tone(recipe, shade, color);
-        for (let c = 0; c < 3; c++) albedoData[o + c] = Math.round(Math.min(1, color[c]) * 255);
-        albedoData[o + 3] = 255;
+        hits[o] = direction.x;
+        hits[o + 1] = direction.y;
+        hits[o + 2] = direction.z;
+        hits[o + 3] = reach / IMPOSTOR_RES / sample.length();
         bakedNormal(noise, recipe, direction, normal);
         normalData[o] = Math.round((normal.x * 0.5 + 0.5) * 255);
         normalData[o + 1] = Math.round((normal.y * 0.5 + 0.5) * 255);
@@ -967,37 +1063,75 @@ function bakeImpostor(index: number): { albedo: THREE.DataTexture; normal: THREE
     }
   });
 
-  const albedo = new THREE.DataTexture(albedoData, IMPOSTOR_RES * IMPOSTOR_VIEWS, IMPOSTOR_RES, THREE.RGBAFormat);
-  albedo.colorSpace = THREE.SRGBColorSpace;
-  albedo.minFilter = albedo.magFilter = THREE.LinearFilter;
-  albedo.generateMipmaps = false;
-  albedo.needsUpdate = true;
   const normalMap = new THREE.DataTexture(normalData, IMPOSTOR_RES * IMPOSTOR_VIEWS, IMPOSTOR_RES, THREE.RGBAFormat);
   normalMap.colorSpace = THREE.NoColorSpace;
   normalMap.minFilter = normalMap.magFilter = THREE.LinearFilter;
   normalMap.generateMipmaps = false;
   normalMap.needsUpdate = true;
-  return { albedo, normal: normalMap, radius: reach };
+  const shape = { geometry: impostorGeometry(reach), normal: normalMap, radius: reach, hits };
+  impostorShapes.set(index, shape);
+  return shape;
+}
+
+/** The color (0..1 a channel, as the atlas stores it) a billboard shows where the surface lies at a direction, written into `out`. */
+export type ImpostorColor = (direction: THREE.Vector3, out: [number, number, number]) => void;
+
+/**
+ * The albedo atlas of a shape's billboards (see impostorShape): color and silhouette alpha,
+ * the color averaged over each cell's footprint on the shape as a far mesh's mipmaps average its
+ * relief map.
+ */
+export function impostorAtlas(index: number, color: ImpostorColor): THREE.DataTexture {
+  const { hits } = impostorShape(index);
+  const data = new Uint8Array(hits.length);
+  const direction = new THREE.Vector3(), offset = new THREE.Vector3(), side = new THREE.Vector3(), across = new THREE.Vector3();
+  const sum: [number, number, number] = [0, 0, 0], one: [number, number, number] = [0, 0, 0];
+  for (let o = 0; o < hits.length; o += 4) {
+    const footprint = hits[o + 3];
+    if (footprint === 0) continue;
+    direction.set(hits[o], hits[o + 1], hits[o + 2]);
+    tangentDirections(direction, side, across);
+    sum.fill(0);
+    for (const [a, b] of FOOTPRINT) {
+      color(offset.copy(direction).addScaledVector(side, a * footprint).addScaledVector(across, b * footprint).normalize(), one);
+      for (let c = 0; c < 3; c++) sum[c] += one[c] / FOOTPRINT.length;
+    }
+    for (let c = 0; c < 3; c++) data[o + c] = Math.round(Math.min(1, Math.max(0, sum[c])) * 255);
+    data[o + 3] = 255;
+  }
+  const albedo = new THREE.DataTexture(data, IMPOSTOR_RES * IMPOSTOR_VIEWS, IMPOSTOR_RES, THREE.RGBAFormat);
+  albedo.colorSpace = THREE.SRGBColorSpace;
+  albedo.minFilter = albedo.magFilter = THREE.LinearFilter;
+  albedo.generateMipmaps = false;
+  albedo.needsUpdate = true;
+  return albedo;
+}
+
+/** A billboard of a shape, painted by `color` (see impostorAtlas), with `glow` its material's own light (see view/impostor). */
+export function shapeImpostor(index: number, color: ImpostorColor, glow?: ImpostorGlow): THREE.Mesh {
+  const { geometry, normal, radius } = impostorShape(index);
+  return new THREE.Mesh(geometry, impostorMaterial(impostorAtlas(index, color), normal, IMPOSTOR_RES, radius, glow));
 }
 
 const impostors = new Map<number, THREE.Mesh>();
 
 /**
  * A billboard template for a rock shape (see view/impostor): a quad with a material sampling
- * this shape's baked impostor atlases. Built once per shape and cloned (sharing geometry and
- * material) for every field rock, ice piece and belt instance of it.
+ * this shape's baked impostor atlases, the color the relief map's shade gives. Built once per
+ * shape and cloned (sharing geometry and material) for every field rock and belt instance of it.
  */
 function rockImpostor(index: number): THREE.Mesh {
   let impostor = impostors.get(index);
   if (impostor) return impostor;
-  const { albedo, normal, radius } = bakeImpostor(index);
-  impostor = new THREE.Mesh(impostorGeometry(radius), impostorMaterial(albedo, normal, IMPOSTOR_RES, radius));
+  const recipe = rockRecipe(index), relief = rockRelief(index), noise = new Noise(recipe.noiseSeed);
+  const sampled = { bump: 0, shade: 1 };
+  impostor = shapeImpostor(index, (direction, out) => tone(recipe, reliefSample(noise, recipe, relief, direction, sampled).shade, out));
   impostor.name = `rock-impostor-${index}`;
   impostors.set(index, impostor);
   return impostor;
 }
 
-/** A billboard template for every rock shape (see rockImpostor), in shape order, reused by rock, ice and the belt alike. */
+/** A billboard template for every rock shape (see rockImpostor), in shape order, reused by the field's rocks and the belt. */
 export function createImpostors(): THREE.Mesh[] {
   return Array.from({ length: ROCK_COUNT }, (_, i) => rockImpostor(i));
 }

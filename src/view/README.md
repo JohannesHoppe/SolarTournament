@@ -16,7 +16,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `chase.ts` | The chase camera's field of view, how fast it follows and where it hangs, looking along the nose |
 | `guide.ts` | The racing line: a dashed ribbon with pulses of light, orange in the brake zones |
 | `ghost.ts` | The best lap's hologram |
-| `impostor.ts` | A billboard for a shape seen from far away (the belt's rocks, the field's farthest rocks and ice): a camera-facing quad showing one of a few pre-rendered views, lit from the shape's own baked normal map and the real sun so it tracks a solar flare, in a planet's haze as everything is; an ice piece's painted in the ice's color and glow (tested in `impostor.test.ts`) |
+| `impostor.ts` | A billboard for a shape seen from far away (the belt's rocks, the field's farthest rocks and ice): a camera-facing quad showing one of a few pre-rendered views, lit from the shape's own baked normal map and the real sun so it tracks a solar flare, in a planet's haze as everything is; an ice piece's with the ice's cold glow and the sunlight coming through its side away from the sun (tested in `impostor.test.ts`) |
 | `showcase.ts` | The title screen: a landing pad of gunmetal and steel with the seal inlaid in gold, the ship hovering above it, turning slowly on the spot and throwing its shadow onto it |
 | `glitch.ts` | The disturbed link: a corrupted-stream shader and the HUD's glitch |
 | `datamosh.ts` | The clone's death: its last picture rots |
