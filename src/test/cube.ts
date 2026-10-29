@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { expect } from 'vitest';
 import { Randomizer } from '../random';
 
 /**
@@ -41,6 +42,20 @@ export function texel(map: THREE.CubeTexture, face: number, i: number, j: number
 export function texelAt(map: THREE.CubeTexture, d: THREE.Vector3, res: number): number[] {
   const { face, i, j } = cubeTexel(d, res);
   return texel(map, face, i, j);
+}
+
+/** A relief map of a shape's own (ice's, the comet nucleus's): not `other`'s, six square faces of `res` texels, mipmapped by WebGL. */
+export function expectOwnCubeMap(map: THREE.CubeTexture, other: THREE.CubeTexture, res: number) {
+  expect(map).not.toBe(other);
+  const faces = map.image as THREE.DataTexture[];
+  expect(faces).toHaveLength(6);
+  for (const face of faces) expect([face.image.width, face.image.height]).toEqual([res, res]);
+  expect(map.generateMipmaps).toBe(true);
+}
+
+/** Two bakes of a relief map alike byte for byte. */
+export function expectSameBake(a: Uint8Array[], b: Uint8Array[]) {
+  a.forEach((face, i) => expect(Buffer.from(face).equals(Buffer.from(b[i]))).toBe(true));
 }
 
 /** A texel's normal, decoded from 0.5 + 0.5 · n. */

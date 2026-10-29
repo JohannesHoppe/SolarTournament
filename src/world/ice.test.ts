@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { bakeIceRelief, ICE_KIND, iceDetailMap, iceFacets, iceNormal, iceReliefMap, iceSet, iceTexel } from './ice';
 import { createImpostors, createRocks, createRockShapes, DETAIL_RES, DISTANT_DETAIL, FAR_DETAIL, RELIEF_RES, reliefMap, rockRecipe } from './rocks';
-import { cubeTexel, decode, directions, median, normalFit, texel, texelAt, texelCenter, tileStats } from '../test/cube';
+import { cubeTexel, decode, directions, expectOwnCubeMap, expectSameBake, median, normalFit, texel, texelAt, texelCenter, tileStats } from '../test/cube';
 
 /** The share of a map's texels of each kind of ice, rounded to the ramp's steps (fracture, glass, frost, dusty, dust). */
 function kinds(map: THREE.CubeTexture): number[] {
@@ -19,17 +19,11 @@ describe("an ice chunk's relief map", () => {
   const step = Math.PI / 2 / RELIEF_RES;
 
   it("is a cube map of its own beside the rock's, six square faces WebGL builds mipmaps for", () => {
-    const map = iceReliefMap(0);
-    expect(map).not.toBe(reliefMap(0));
-    const faces = map.image as THREE.DataTexture[];
-    expect(faces).toHaveLength(6);
-    for (const face of faces) expect([face.image.width, face.image.height]).toEqual([RELIEF_RES, RELIEF_RES]);
-    expect(map.generateMipmaps).toBe(true);
+    expectOwnCubeMap(iceReliefMap(0), reliefMap(0), RELIEF_RES);
   });
 
   it('is baked the same on every call, from integer hashing and seeds alone', () => {
-    const a = bakeIceRelief(2), b = bakeIceRelief(2);
-    a.forEach((face, i) => expect(Buffer.from(face).equals(Buffer.from(b[i]))).toBe(true));
+    expectSameBake(bakeIceRelief(2), bakeIceRelief(2));
   });
 
   it('holds, read as the GPU picks a texel for a direction, the surface normal there, and mirrored it would not', () => {
@@ -120,23 +114,22 @@ describe('the ice set', () => {
     expect(((ice.far[4] as THREE.Mesh).material as THREE.MeshStandardMaterial).defines?.RELIEF_DETAIL).toBeUndefined();
   });
 
-  it("paints its billboards in the ice's colors on the rock's silhouette, a cool white", () => {
+  it("paints its billboards on the rock's silhouette from the ice's own relief map, as its far meshes paint it", () => {
     for (const index of [0, 9]) {
-      const own = ((ice.impostor![index] as THREE.Mesh).material as THREE.ShaderMaterial).uniforms;
+      const billboard = (ice.impostor![index] as THREE.Mesh).material as THREE.ShaderMaterial;
+      const own = billboard.uniforms;
       const rock = ((impostor[index] as THREE.Mesh).material as THREE.ShaderMaterial).uniforms;
-      expect(own.normalAtlas.value).toBe(rock.normalAtlas.value);
-      const a = own.albedoAtlas.value.image.data as Uint8Array, b = rock.albedoAtlas.value.image.data as Uint8Array;
-      let cells = 0, red = 0, blue = 0;
-      for (let o = 0; o < a.length; o += 4) {
-        expect(a[o + 3]).toBe(b[o + 3]);
-        if (!a[o + 3]) continue;
-        cells++;
-        red += a[o];
-        blue += a[o + 2];
-      }
-      // bright on average, dust and cracks dimming it a little, and bluer than red
-      expect(blue / cells).toBeGreaterThan(200);
-      expect(blue).toBeGreaterThan(red);
+      const mesh = (ice.far[index] as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      // the rock's very views: its silhouette, and where each cell meets the shape
+      expect(own.atlas.value).toBe(rock.atlas.value);
+      expect(own.reliefMap.value).toBe(iceReliefMap(index));
+      expect(own.reliefMap.value).not.toBe(reliefMap(index));
+      expect((own.baseColor.value as THREE.Color).getHex()).toBe(mesh.color.getHex());
+      expect(own.metalness.value).toBe(mesh.metalness);
+      // the kind of ice turns into its tint as on the meshes, and the ice glows and lets the sun through
+      expect(billboard.fragmentShader).toContain('mix( ICE_TINT[ iceAt ], ICE_TINT[ iceAt + 1 ], iceMix )');
+      expect((own.emissive.value as THREE.Color).getHex()).toBe(mesh.emissive.getHex());
+      expect((own.translucent.value as THREE.Color).b).toBeGreaterThan((own.translucent.value as THREE.Color).r);
     }
   });
 });

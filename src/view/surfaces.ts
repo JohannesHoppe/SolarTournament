@@ -66,10 +66,10 @@ function blank(wear: Pick<Wear, 'roughness' | 'metalness'>) {
 }
 
 /** What of a surface glows of its own (an emissive map): black, drawn on in light. */
-function glowLayer() {
-  const layer = canvas(SIZE);
+function glowLayer(size = SIZE) {
+  const layer = canvas(size);
   layer[1].fillStyle = '#000';
-  layer[1].fillRect(0, 0, SIZE, SIZE);
+  layer[1].fillRect(0, 0, size, size);
   return layer;
 }
 
@@ -272,93 +272,374 @@ export function wornSurface(seed: number, wear: Wear): Surface {
   return surface;
 }
 
-let ravaged: GlowingSurface | null = null;
-const blankGlowing = (): GlowingSurface => ({ ...blankSurface(), glow: new THREE.Texture() });
+/**
+ * A surface whose relief is baked into a normal map (`normal`) besides its bump map, with what
+ * glows of its own, and in the red of its second map how deep a point lies in a recess (a seam,
+ * a crater's floor, a hatch's groove: 0 flush, 1 deep), where frost and dust gather.
+ */
+export type PlatingSurface = GlowingSurface & { normal: THREE.Texture };
+
+/** Texture size of the plating (px): finer than the other surfaces, as a world ship's hull is seen up close over hundreds of meters. */
+const PLATING = 512;
+/**
+ * The plating's heights in its bump map: PLATING_GRAY steps of gray a unit of height, around
+ * the middle gray; and how steep the normal map tilts per step of that gray (see normalPixels):
+ * a rise of one unit over a pixel tilts the normal by about 1.6 (58°).
+ */
+const PLATING_GRAY = 50;
+const PLATING_SLOPE = 4;
+
+const ravaged = new Map<number, PlatingSurface>();
+const blankPlating = (): PlatingSurface => ({ ...blankSurface(), glow: new THREE.Texture(), normal: new THREE.Texture() });
+
+/** The plating's maps while they are drawn: height (pixels' worth of relief), color (0..255, sRGB), roughness, metalness, per pixel, wrapping at the edges. */
+class PlatingMaps {
+  readonly height = new Float32Array(PLATING * PLATING);
+  readonly color = new Float32Array(PLATING * PLATING * 3);
+  readonly rough = new Float32Array(PLATING * PLATING).fill(0.72);
+  readonly metal = new Float32Array(PLATING * PLATING).fill(0.3);
+
+  /** The index of a pixel, wrapped into the tile. */
+  at(x: number, y: number) {
+    const s = PLATING;
+    return (((Math.round(y) % s) + s) % s) * s + (((Math.round(x) % s) + s) % s);
+  }
+
+  /** Multiplies a pixel's color by `k`, or mixes it towards (r, g, b) by `k` with `to`. */
+  shade(i: number, k: number, to?: [number, number, number]) {
+    const c = this.color;
+    for (let n = 0; n < 3; n++) c[i * 3 + n] = to ? c[i * 3 + n] + (to[n] - c[i * 3 + n]) * k : c[i * 3 + n] * k;
+  }
+
+  /** Mixes a pixel's roughness and metalness towards (rough, metal) by `k`. */
+  finish(i: number, rough: number, metal: number, k = 1) {
+    this.rough[i] += (rough - this.rough[i]) * k;
+    this.metal[i] += (metal - this.metal[i]) * k;
+  }
+
+  /** Runs `paint(i, dx, dy)` over every pixel within `reach` of (cx, cy), wrapped, with its offset from there. */
+  around(cx: number, cy: number, reachX: number, reachY: number, paint: (i: number, dx: number, dy: number) => void) {
+    for (let y = Math.floor(cy - reachY); y <= Math.ceil(cy + reachY); y++) {
+      for (let x = Math.floor(cx - reachX); x <= Math.ceil(cx + reachX); x++) paint(this.at(x, y), x - cx, y - cy);
+    }
+  }
+}
+
+/** Plates in courses of 2 and 4 m along the hull, of different lengths and greys, a few replaced with fresher ones, some stiffened by a rib; grooved seams with rivet rows on both sides. */
+function plates(r: Randomizer, m: PlatingMaps) {
+  const S = PLATING;
+  for (let top = 0; top < S; ) {
+    const course = S - top >= 64 && r.nextFloat() < 0.6 ? 64 : 32;
+    const start = Math.floor(r.range(0, 8)) * 16;
+    for (let x = start; x < start + S; ) {
+      const width = Math.min([64, 96, 128, 192][r.nextInt() % 4], start + S - x);
+      const fresh = r.nextFloat() < 0.08;
+      const shade = fresh ? r.range(0.86, 0.92) : r.range(0.76, 0.87);
+      const warm = r.range(-0.03, 0.03);
+      const lift = r.range(-0.12, 0.12);
+      const rib = width >= 96 && r.nextFloat() < 0.3 ? top + course / 2 : -1;
+      for (let y = top; y < top + course; y++) {
+        for (let u = x; u < x + width; u++) {
+          const i = m.at(u, y);
+          m.color[i * 3] = 255 * shade * (1 + warm);
+          m.color[i * 3 + 1] = 255 * shade;
+          m.color[i * 3 + 2] = 255 * shade * (1.02 - warm);
+          m.height[i] = lift + (Math.abs(y - rib) <= 1 ? 0.35 : 0);
+          if (fresh) m.finish(i, 0.6, 0.4);
+        }
+      }
+      // the seam at the plate's start, and rivets every 40 cm a hand off both sides of it
+      for (let y = top; y < top + course; y++) groove(m, m.at(x, y), m.at(x + 1, y));
+      for (let y = top + 3; y < top + course - 2; y += 6) rivet(m, x + 4, y), rivet(m, x - 4, y);
+      x += width;
+    }
+    for (let x = 0; x < S; x++) groove(m, m.at(x, top), m.at(x, top + 1));
+    for (let x = 2; x < S; x += 6) rivet(m, x, top + 4), rivet(m, x, top - 4);
+    top += course;
+  }
+}
+
+/** A seam: a groove a pixel wide, beveled into the next. */
+function groove(m: PlatingMaps, line: number, bevel: number) {
+  m.height[line] -= 0.6;
+  m.height[bevel] -= 0.2;
+  m.shade(line, 0.45);
+  m.shade(bevel, 0.85);
+}
+
+/** A rivet's head: a small dome. */
+function rivet(m: PlatingMaps, x: number, y: number) {
+  m.around(x, y, 1, 1, (i, dx, dy) => {
+    m.height[i] += dx === 0 && dy === 0 ? 0.35 : 0.12;
+  });
+  m.shade(m.at(x, y), 1.08);
+}
+
+/** Access hatches with a recessed frame, hinges and a handle's recess; vents as grilles of grooves. */
+function hatches(r: Randomizer, m: PlatingMaps) {
+  for (let k = 0; k < 5; k++) {
+    const x = Math.floor(r.range(0, PLATING));
+    const y = Math.floor(r.range(0, PLATING));
+    const w = Math.floor(r.range(18, 34));
+    const h = Math.floor(r.range(14, 26));
+    const shade = r.range(0.85, 1.05);
+    for (let v = 0; v <= h; v++) {
+      for (let u = 0; u <= w; u++) {
+        const i = m.at(x + u, y + v);
+        const edge = u === 0 || v === 0 || u === w || v === h;
+        if (edge) {
+          m.height[i] -= 0.55;
+          m.shade(i, 0.45);
+        } else {
+          m.height[i] += 0.06;
+          m.shade(i, shade);
+        }
+      }
+    }
+    // hinges on its left, the handle's recess on its right
+    for (const hinge of [0.25, 0.75]) {
+      m.around(x - 1, y + h * hinge, 1, 2, (i) => {
+        m.height[i] += 0.3;
+        m.finish(i, 0.45, 0.7);
+      });
+    }
+    m.around(x + w - 4, y + h / 2, 1, 3, (i) => {
+      m.height[i] -= 0.4;
+      m.shade(i, 0.55);
+    });
+  }
+  for (let k = 0; k < 3; k++) {
+    const x = Math.floor(r.range(0, PLATING));
+    const y = Math.floor(r.range(0, PLATING));
+    const slots = 5 + Math.floor(r.range(0, 6));
+    const length = Math.floor(r.range(16, 30));
+    for (let s = 0; s < slots; s++) {
+      for (let u = 0; u < length; u++) {
+        const i = m.at(x + u, y + s * 3);
+        m.height[i] -= 0.5;
+        m.shade(i, 0.35);
+        m.finish(i, 0.95, 0.1);
+      }
+    }
+  }
+}
+
+/** A smooth noise wrapping across the tile: random values on a grid of `cells`, interpolated. */
+function tileNoise(r: Randomizer, cells: number): (x: number, y: number) => number {
+  const grid = Array.from({ length: cells * cells }, () => r.nextFloat());
+  const cell = PLATING / cells;
+  const at = (gx: number, gy: number) => grid[(((gy % cells) + cells) % cells) * cells + (((gx % cells) + cells) % cells)];
+  const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+  return (x, y) => {
+    const ix = Math.floor(x / cell);
+    const iy = Math.floor(y / cell);
+    const sx = smoothstep(0, 1, x / cell - ix);
+    const sy = smoothstep(0, 1, y / cell - iy);
+    return lerp(lerp(at(ix, iy), at(ix, iy + 1), sy), lerp(at(ix + 1, iy), at(ix + 1, iy + 1), sy), sx);
+  };
+}
+
+/** Weathering over the whole tile: patches where the plating darkened or bleached, and the pits of centuries of micrometeorites. */
+function weathering(r: Randomizer, m: PlatingMaps) {
+  const patches = tileNoise(r, 8);
+  const fine = tileNoise(r, 32);
+  for (let y = 0; y < PLATING; y++) {
+    for (let x = 0; x < PLATING; x++) {
+      const i = y * PLATING + x;
+      m.shade(i, 0.9 + 0.14 * patches(x, y) + 0.04 * fine(x, y));
+      m.rough[i] += (fine(x, y) - 0.5) * 0.12;
+    }
+  }
+  for (let k = 0; k < 2500; k++) {
+    const i = m.at(r.range(0, PLATING), r.range(0, PLATING));
+    m.height[i] -= r.range(0.08, 0.25);
+    m.shade(i, r.range(0.7, 0.9));
+  }
+}
 
 /**
- * The world ship's plating after the battle that broke it: panels of grey, meteorite craters
- * with raised rims, burns with the blue and violet tint of heat around a black core, soot
- * streaked along the hull, rust; the last embers glow in a few craters (see emissive).
+ * Impact craters of a few sizes, the large ones rare: a bowl with a dark, pitted floor, a rim
+ * raised and scoured to bright metal, faint rays of ejecta around; the last embers in a few of
+ * the large ones (see emissive; the world ship's are cold).
  */
-export function ravagedSurface(seed: number): GlowingSurface {
-  if (ravaged) return ravaged;
-  if (!drawable) return blankGlowing();
-  const r = new Randomizer(seed);
-  const { color, orm, bump } = blank({ roughness: 0.75, metalness: 0.35 });
-  const g = color[1];
-  // panels of different greys
-  for (let y = 0; y < SIZE; y += 32) {
-    for (let x = 0; x < SIZE; x += 64) {
-      const shade = Math.floor(r.range(150, 225));
-      g.fillStyle = `rgb(${shade}, ${shade}, ${shade + 6})`;
-      g.fillRect(x, y, 64, 32);
-    }
-  }
-  panels(r, g, bump[1], 0.6);
-  // soot streaks along the hull, as the fire ran with the ship's flight
-  for (let i = 0; i < 14; i++) {
-    const y = r.range(0, SIZE);
-    const gradient = g.createLinearGradient(0, y, SIZE, y);
-    gradient.addColorStop(0, 'rgba(15, 12, 10, 0)');
-    gradient.addColorStop(r.range(0.2, 0.8), 'rgba(15, 12, 10, 0.55)');
-    gradient.addColorStop(1, 'rgba(15, 12, 10, 0)');
-    g.fillStyle = gradient;
-    g.fillRect(0, y, SIZE, r.range(3, 12));
-  }
-  // burns: a black core in rings of heat tint
-  for (let i = 0; i < 6; i++) {
-    const x = r.range(0, SIZE);
-    const y = r.range(0, SIZE);
-    const radius = r.range(20, 50);
-    const burn = g.createRadialGradient(x, y, 0, x, y, radius);
-    burn.addColorStop(0, 'rgba(5, 4, 4, 0.95)');
-    burn.addColorStop(0.45, 'rgba(40, 24, 60, 0.7)');
-    burn.addColorStop(0.7, 'rgba(60, 70, 140, 0.45)');
-    burn.addColorStop(0.85, 'rgba(150, 110, 50, 0.3)');
-    burn.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    g.fillStyle = burn;
-    g.fillRect(x - radius, y - radius, radius * 2, radius * 2);
-    orm[1].fillStyle = ormColor(1, 0);
-    orm[1].beginPath();
-    orm[1].arc(x, y, radius * 0.5, 0, Math.PI * 2);
-    orm[1].fill();
-  }
-  // craters: a dark pit, a raised rim, fine ejecta around
-  const embers = glowLayer();
-  for (let i = 0; i < 22; i++) {
-    const x = r.range(0, SIZE);
-    const y = r.range(0, SIZE);
-    const radius = r.range(3, 14);
-    g.fillStyle = 'rgba(8, 7, 6, 0.95)';
-    g.beginPath();
-    g.arc(x, y, radius, 0, Math.PI * 2);
-    g.fill();
-    g.strokeStyle = 'rgba(230, 225, 215, 0.6)';
-    g.lineWidth = 1.5;
-    g.stroke();
-    bump[1].fillStyle = '#101010';
-    bump[1].beginPath();
-    bump[1].arc(x, y, radius, 0, Math.PI * 2);
-    bump[1].fill();
-    bump[1].strokeStyle = '#f0f0f0';
-    bump[1].lineWidth = 2;
-    bump[1].stroke();
-    for (let k = 0; k < 6; k++) {
-      g.fillStyle = 'rgba(20, 18, 16, 0.5)';
-      g.fillRect(x + r.range(-3, 3) * radius, y + r.range(-3, 3) * radius, 1.5, 1.5);
-    }
-    // the last embers in some of the deeper pits
-    if (radius > 9 && r.nextFloat() < 0.5) {
-      const glow = embers[1].createRadialGradient(x, y, 0, x, y, radius * 0.7);
+function craters(r: Randomizer, m: PlatingMaps, embers: CanvasRenderingContext2D) {
+  const sizes = [...Array.from({ length: 24 }, () => r.range(1.5, 3.5)), ...Array.from({ length: 4 }, () => r.range(4, 9)), r.range(12, 18), r.range(26, 34)];
+  for (const radius of sizes) {
+    const cx = r.range(0, PLATING);
+    const cy = r.range(0, PLATING);
+    const depth = 0.15 * radius + 0.25;
+    const rim = 0.04 * radius + 0.1;
+    const rays = Array.from({ length: 14 }, () => (r.nextFloat() < 0.45 ? r.range(0.4, 1) : 0));
+    const reach = radius * 2.6;
+    m.around(cx, cy, reach, reach, (i, dx, dy) => {
+      const q = Math.hypot(dx, dy) / radius;
+      if (q >= 2.6) return;
+      if (q < 1) {
+        m.height[i] += depth * (q * q - 1) + rim * smoothstep(0.7, 1, q);
+        const floor = 1 - smoothstep(0.6, 0.95, q);
+        m.shade(i, 1 - floor * r.range(0.55, 0.75));
+        m.finish(i, 0.95, 0.15, floor);
+      } else {
+        m.height[i] += rim * (1 - smoothstep(1, 1.7, q));
+      }
+      const scour = 1 - smoothstep(0.06, 0.2, Math.abs(q - 1));
+      m.shade(i, 1 + 0.15 * scour);
+      m.finish(i, 0.4, 0.7, scour);
+      if (q > 1.1) {
+        const ray = rays[Math.floor(((Math.atan2(dy, dx) + Math.PI) / (Math.PI * 2)) * rays.length) % rays.length];
+        m.shade(i, 1 - 0.3 * ray * (1 - (q - 1.1) / 1.5));
+      }
+    });
+    if (radius > 12 && r.nextFloat() < 0.5) {
+      const glow = embers.createRadialGradient(cx, cy, 0, cx, cy, radius * 0.7);
       glow.addColorStop(0, 'rgba(255, 120, 30, 1)');
       glow.addColorStop(1, 'rgba(255, 60, 0, 0)');
-      embers[1].fillStyle = glow;
-      embers[1].fillRect(x - radius, y - radius, radius * 2, radius * 2);
+      embers.fillStyle = glow;
+      embers.fillRect(cx - radius, cy - radius, radius * 2, radius * 2);
     }
   }
-  rust(r, g, orm[1], 0.6);
-  ravaged = { ...textures(color[0], orm[0], bump[0]), glow: glowTexture(embers[0]) };
-  return ravaged;
+}
+
+/**
+ * A hole punched through the plating: a jagged edge of petals bent outwards, the dark inside
+ * with the ship's structure in it (a frame across, a deck below), soot around.
+ */
+function hole(r: Randomizer, m: PlatingMaps) {
+  const cx = r.range(0, PLATING);
+  const cy = r.range(0, PLATING);
+  const radius = r.range(18, 26);
+  const petals = Array.from({ length: 11 }, () => r.range(-0.25, 0.3));
+  const frame = r.range(-0.4, 0.4) * radius;
+  const deck = r.range(0, 0.5) * radius;
+  const reach = radius * 2.4;
+  m.around(cx, cy, reach, reach, (i, dx, dy) => {
+    const a = ((Math.atan2(dy, dx) + Math.PI) / (Math.PI * 2)) * petals.length;
+    const p0 = petals[Math.floor(a) % petals.length];
+    const p1 = petals[(Math.floor(a) + 1) % petals.length];
+    const edge = radius * (1 + p0 + (p1 - p0) * (a - Math.floor(a)));
+    const d = Math.hypot(dx, dy);
+    if (d < edge) {
+      // the drop eased over a few pixels: a cliff in a normal map lights up as a line
+      const structure = Math.abs(dx - frame) < 2;
+      m.height[i] = (structure ? -0.4 : -0.9) * smoothstep(edge, edge - 4, d);
+      const c = structure ? 48 : dy > deck ? 22 : 7;
+      m.shade(i, 1, [c, c, c * 1.05]);
+      m.finish(i, structure ? 0.8 : 1, structure ? 0.4 : 0);
+    } else if (d < edge + 3) {
+      m.height[i] += 0.25 * (1 - (d - edge) / 3);
+      m.shade(i, 0.8);
+      m.finish(i, 0.45, 0.6);
+    } else {
+      const soot = 1 - smoothstep(edge, radius * 2.4, d);
+      m.shade(i, soot * 0.6, [26, 21, 18]);
+      m.finish(i, 0.95, 0.1, soot * 0.6);
+    }
+  });
+}
+
+/**
+ * Burns: soot streaked along the hull from where the fire touched it, as the fire ran with the
+ * ship's flight, its edge faintly tempered to straw and blue by the heat; cold, long since.
+ */
+function scorch(r: Randomizer, m: PlatingMaps) {
+  const streaks = Array.from({ length: PLATING }, () => r.range(0.35, 1));
+  for (let k = 0; k < 5; k++) {
+    const cx = r.range(0, PLATING);
+    const cy = r.range(0, PLATING);
+    const length = r.range(60, 200);
+    const width = r.range(12, 30);
+    const strength = r.range(0.6, 0.9);
+    m.around(cx + length * 0.4, cy, length * 1.4, width * 2, (i, dx, dy) => {
+      const along = (dx - length * 0.4) / length;
+      const across = dy / width;
+      const s = Math.exp(-across * across * 2) * smoothstep(-1, -0.5, along) * (1 - smoothstep(-0.1, 1, along)) * streaks[Math.floor(i / PLATING)] * strength;
+      if (s < 0.01) return;
+      m.shade(i, s * 0.85, [28, 22, 18]);
+      m.shade(i, 0.1 * smoothstep(0.08, 0.25, s) * (1 - smoothstep(0.3, 0.55, s)), [182, 132, 74]);
+      m.shade(i, 0.1 * smoothstep(0.02, 0.08, s) * (1 - smoothstep(0.1, 0.2, s)), [92, 104, 156]);
+      m.finish(i, 0.95, 0.1, s);
+    });
+  }
+}
+
+const smoothstep = (a: number, b: number, x: number) => {
+  const t = Math.min(1, Math.max(0, (x - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+/**
+ * How deep each point lies below what is around it (0..1): the plating's height against its
+ * blur over a few pixels, wrapped. Dust settles there, and frost (see world/worldship).
+ */
+function recesses(height: Float32Array): Float32Array {
+  const S = PLATING;
+  const R = 3;
+  const pass = (from: Float32Array, step: (x: number, y: number, d: number) => number) => {
+    const to = new Float32Array(S * S);
+    for (let y = 0; y < S; y++) {
+      for (let x = 0; x < S; x++) {
+        let sum = 0;
+        for (let d = -R; d <= R; d++) sum += from[step(x, y, d)];
+        to[y * S + x] = sum / (2 * R + 1);
+      }
+    }
+    return to;
+  };
+  const blur = pass(pass(height, (x, y, d) => y * S + ((x + d + S) % S)), (x, y, d) => ((y + d + S) % S) * S + x);
+  return blur.map((b, i) => Math.min(1, Math.max(0, (b - height[i]) * 1.4)));
+}
+
+/**
+ * The world ship's plating after centuries in space and the battle that broke it, at a real
+ * scale (see hullSet: a tile is about 34 m): plates in courses with grooved seams and rows of
+ * rivets, access hatches and vents, the pits of micrometeorites, impact craters (few large
+ * ones), holes punched through to the structure, soot streaked along the hull by the burns,
+ * dust in every recess. Its relief is baked into a normal map from the heights (and kept as a
+ * bump map); a surface per seed, built once.
+ */
+export function ravagedSurface(seed: number): PlatingSurface {
+  const kept = ravaged.get(seed);
+  if (kept) return kept;
+  if (!drawable) return blankPlating();
+  const r = new Randomizer(seed);
+  const m = new PlatingMaps();
+  const embers = glowLayer(PLATING);
+  plates(r, m);
+  hatches(r, m);
+  weathering(r, m);
+  scorch(r, m);
+  craters(r, m, embers[1]);
+  hole(r, m);
+  const recess = recesses(m.height);
+  const S = PLATING;
+  const [colorCanvas, color] = canvas(S);
+  const [ormCanvas, orm] = canvas(S);
+  const [normalCanvas, normal] = canvas(S);
+  const [bumpCanvas, bump] = canvas(S);
+  const c = color.createImageData(S, S);
+  const o = orm.createImageData(S, S);
+  const n = normal.createImageData(S, S);
+  const b = bump.createImageData(S, S);
+  for (let i = 0; i < S * S; i++) {
+    const dust = recess[i] * 0.4;
+    for (let k = 0; k < 3; k++) c.data[i * 4 + k] = m.color[i * 3 + k] + ([150, 145, 136][k] - m.color[i * 3 + k]) * dust;
+    o.data[i * 4] = recess[i] * 255;
+    o.data[i * 4 + 1] = Math.min(1, Math.max(0, m.rough[i])) * 255;
+    o.data[i * 4 + 2] = Math.min(1, Math.max(0, m.metal[i])) * 255;
+    b.data[i * 4] = b.data[i * 4 + 1] = b.data[i * 4 + 2] = 128 + m.height[i] * PLATING_GRAY;
+    c.data[i * 4 + 3] = o.data[i * 4 + 3] = b.data[i * 4 + 3] = 255;
+  }
+  n.data.set(normalPixels(b.data, S, PLATING_SLOPE));
+  color.putImageData(c, 0, 0);
+  orm.putImageData(o, 0, 0);
+  normal.putImageData(n, 0, 0);
+  bump.putImageData(b, 0, 0);
+  const normalMap = new THREE.CanvasTexture(normalCanvas);
+  normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
+  normalMap.anisotropy = 4;
+  const surface = { ...textures(colorCanvas, ormCanvas, bumpCanvas), glow: glowTexture(embers[0]), normal: normalMap };
+  ravaged.set(seed, surface);
+  return surface;
 }
 
 /**

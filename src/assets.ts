@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { bakeReliefMaps, createImpostors, createRocks, createRockShapes, DETAIL, FAR_DETAIL, NEAR_DETAIL } from './world/rocks';
+import { bakeImpostors, bakeReliefMaps, createImpostors, createRocks, createRockShapes, DETAIL, FAR_DETAIL, NEAR_DETAIL } from './world/rocks';
 import { debrisSet, hullSet } from './world/shapes';
 import { iceSet } from './world/ice';
 import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
@@ -137,8 +137,10 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   // full detail only to measure collisions from (see world/surface); drawn meshes stay light, their
   // relief coming from a baked relief map (see world/rocks, applyRockRelief) instead of triangles
   const asteroidsCollision = createRockShapes(DETAIL);
-  const asteroidImpostors = createImpostors();
+  // the billboards' views need no relief map, their materials read it (see world/rocks)
+  bakeImpostors();
   await reliefs;
+  const asteroidImpostors = createImpostors();
   const asteroidsNear = createRocks(NEAR_DETAIL, true);
   const asteroidsFar = createRocks(FAR_DETAIL);
   const [human, alien] = await ships;
@@ -155,8 +157,13 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   ]);
 
   const [saturn, giant, ring, earth, earthDay] = await planetMaps;
-  // the ring is a strip across its radius: it never wraps, and its edges stay sharp
+  // the ring is a strip across its radius: it never wraps, and its edges stay sharp. One texel
+  // high, it is read along its length alone, so its plain mipmaps filter it by a pixel's footprint
+  // along it; anisotropic filtering finds no footprint across it (its height never changes from
+  // pixel to pixel), reads it far too sharp where a pixel spans many texels and turns the planet's
+  // band of the ring's shadow and the sheet's far side into moiré
   ring.wrapS = THREE.ClampToEdgeWrapping;
+  ring.anisotropy = 1;
 
   const rock = { near: asteroidsNear, far: asteroidsFar, impostor: asteroidImpostors, collision: asteroidsCollision };
   return {
