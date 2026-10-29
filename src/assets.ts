@@ -157,8 +157,13 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   ]);
 
   const [saturn, giant, ring, earth, earthDay] = await planetMaps;
-  // the ring is a strip across its radius: it never wraps, and its edges stay sharp
+  // the ring is a strip across its radius: it never wraps, and its edges stay sharp. One texel
+  // high, it is read along its length alone, so its plain mipmaps filter it by a pixel's footprint
+  // along it; anisotropic filtering finds no footprint across it (its height never changes from
+  // pixel to pixel), reads it far too sharp where a pixel spans many texels and turns the planet's
+  // band of the ring's shadow and the sheet's far side into moiré
   ring.wrapS = THREE.ClampToEdgeWrapping;
+  ring.anisotropy = 1;
 
   const rock = { near: asteroidsNear, far: asteroidsFar, impostor: asteroidImpostors, collision: asteroidsCollision };
   return {
