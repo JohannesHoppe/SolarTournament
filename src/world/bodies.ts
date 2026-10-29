@@ -22,7 +22,8 @@ export const IMMOVABLE = Infinity;
  * times a fighter jet of today, for its reactor, drive and armor. A sponsor core (an armored
  * reactor canister 14 m long) a quarter of that; a sponsor probe half a tonne; a torpedo a
  * tonne (its 20 g motor makes about 196 kN); a piece of wreckage five tonnes; the President's
- * battleship (750 m) 400,000 t, as heavy as the largest ships ever built on Earth.
+ * battleship (1,150 m) 1.35 million t, twice as heavy as the largest ships ever built on Earth
+ * (its mass goes with the cube of its size, FLEET_SCALE in game/fleet).
  */
 export const MASS = {
   ship: 60_000,
@@ -30,7 +31,7 @@ export const MASS = {
   probe: 500,
   torpedo: 1_000,
   wreck: 5_000,
-  battleship: 4e8,
+  battleship: 1.35e9,
 } as const;
 
 /**

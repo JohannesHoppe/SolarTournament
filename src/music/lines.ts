@@ -276,7 +276,7 @@ export const SCHOOL = {
   duel: 'Final exam. A real bot, and it knows the trick too. Win the dogfight.',
   done: 'Well done, pilot. Remember: firing at armor only heats your laser. Win the dogfight, get on their tail, and hit the drive. You are cleared for the tournament. Go and die for the President.',
   basicDone: 'Basic training complete. You can fly, darling. Now choose your trade: racer or gladiator.',
-  racer: 'Racer training. Rings, coils, the racing line and a clean start. Out here, speed is everything.',
+  racer: 'Racer training. A clean start, the rings, their coils and the racing line. Out here, speed is everything.',
   coil: 'The rings of a race are coils. Fly through the very center, and the coil throws you on. Put the X on the center of all three.',
   coilMiss: 'Off center, darling. The coil only fires in the core. Again.',
   brakeZone: 'Orange on the line means: too fast for that bend. Brake before the orange, then steer through.',

@@ -75,7 +75,7 @@ describe("the President's fleet", () => {
     expect(fleet.ray(new THREE.Vector3(-20000, 0, 0), across, 10000)).toBeNull();
     expect(fleet.ray(new THREE.Vector3(-20000, 5000, 0), across, 40000)).toBeNull();
     expect(fleet.touches(new THREE.Vector3(0, 900, 0), 120)).toBe(true);
-    expect(fleet.touches(new THREE.Vector3(0, 2000, 0), 120)).toBe(false);
+    expect(fleet.touches(new THREE.Vector3(0, 3000, 0), 120)).toBe(false);
     // gone up, it is gone from the field
     breakAll(fleet, zonesOf(fleet, 'battery'));
     breakAll(fleet, zonesOf(fleet, 'reactor'));
@@ -256,10 +256,13 @@ describe("the battleship's hangars", () => {
   // motion as it leads a crossing ship: the near mouth from afar, the far mouth from 400 m out
   for (const speed of [3000, 5000]) {
     it(`let a Host fly through at ${speed * 0.05} m/s without touching, every hand`, () => {
+      const fleet = battleship();
       for (const z of HANGARS) {
         for (const hands of SPREAD) {
           for (const seed of SEEDS) {
-            const fleet = battleship();
+            // the same battleship for every flight, back at the center
+            fleet.position.set(0, 0, 0);
+            fleet.root.updateMatrixWorld();
             fleet.velocity.set(0, 0, -FLEET_SPEED);
             const flight = startFlight(new THREE.Vector3(20000, middle, z), new THREE.Vector3(-1, 0, 0), speed);
             const human = new Human(flight, STEP, seed, hands);

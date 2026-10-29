@@ -46,21 +46,22 @@ describe("the machinery on the hangars' walls", () => {
     }
   });
 
-  it('keeps the hangar deck light enough for a phone: outside it, its six walls a picture on a plate each; inside, the machinery in full under 50,000 triangles', () => {
+  it("keeps the hangar deck light enough for a phone: outside it, its six walls a picture on a plate each; inside, the machinery in full of the tunnel shown under 50,000 triangles", () => {
     for (const arena of ARENAS) {
       const fleet = new Fleet(arena.layout.seed);
       let outside = 0;
       fleet.root.traverse((object) => {
-        if (object instanceof THREE.Mesh && object.material.vertexColors && object !== fleet.machinery) outside += object.geometry.index.count / 3;
+        if (object instanceof THREE.Mesh && object.material.vertexColors && !fleet.machinery.includes(object)) outside += object.geometry.index.count / 3;
       });
       expect(outside, arena.layout.key).toBeLessThan(2000);
-      expect(fleet.machinery.geometry.index!.count / 3, arena.layout.key).toBeLessThan(50000);
+      expect(fleet.machinery).toHaveLength(HANGARS.length);
+      for (const mesh of fleet.machinery) expect(mesh.geometry.index!.count / 3, arena.layout.key).toBeLessThan(50000);
     }
   });
 
   it('draws each wall as a picture of its machinery, and the rest of the deck in its own colors', () => {
     const fleet = new Fleet(ARENAS[0].layout.seed);
-    const { data, width, height } = (fleet.machinery.material as THREE.MeshBasicMaterial).map!.image as { data: Uint8Array; width: number; height: number };
+    const { data, width, height } = (fleet.machinery[0].material as THREE.MeshBasicMaterial).map!.image as { data: Uint8Array; width: number; height: number };
     // the white block every other piece of the deck samples
     const white = ((height - 8) * width + width / 2) * 4;
     expect([data[white], data[white + 1], data[white + 2]]).toEqual([255, 255, 255]);
@@ -72,21 +73,22 @@ describe("the machinery on the hangars' walls", () => {
     }
   });
 
-  it('shows the machinery in full only from inside the hangar deck or close to it', () => {
+  it("shows a tunnel's machinery in full only from inside it or close to it, one tunnel's at a time", () => {
     const fleet = new Fleet(ARENAS[0].layout.seed);
     fleet.root.visible = true;
     fleet.root.updateMatrixWorld();
+    /** The tunnels whose machinery shows from a point in the battleship's frame. */
     const seen = (x: number, y: number, z: number) => {
       fleet.view(new THREE.Vector3(x, y, z).applyMatrix4(fleet.root.matrixWorld));
-      return fleet.machinery.visible;
+      return fleet.machinery.flatMap((mesh, i) => (mesh.visible ? [i] : []));
     };
-    for (const z of HANGARS) {
-      expect(seen(0, 450, z)).toBe(true);
-      expect(seen(4000, 450, z)).toBe(true);
-      expect(seen(20000, 450, z)).toBe(false);
-    }
-    expect(seen(0, 8000, HANGARS[1])).toBe(false);
-    expect(seen(0, 450, -6000)).toBe(false);
+    HANGARS.forEach((z, i) => {
+      expect(seen(0, 450, z)).toEqual([i]);
+      expect(seen(5000, 450, z)).toEqual([i]);
+      expect(seen(20000, 450, z)).toEqual([]);
+    });
+    expect(seen(0, 8000, HANGARS[1])).toEqual([]);
+    expect(seen(0, 450, -6000)).toEqual([]);
   });
 
 });
