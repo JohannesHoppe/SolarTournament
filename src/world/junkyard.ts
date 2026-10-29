@@ -439,11 +439,14 @@ const junkVertex = /* glsl */ `
     // (the halfway vector vanishes with the sun straight behind the piece: no glint then, never a NaN)
     vec3 halfway = toSun + toEye;
     float mirror = pow(max(dot(seen, halfway) * inversesqrt(max(dot(halfway, halfway), 1e-6)), 0.0), kind > 2.5 ? 60.0 : kind > 1.5 ? 30.0 : 400.0);
-    // the cells face the sun, the panel's back is white
-    vec3 face = dot(normal, toEye) > 0.0 ? vec3(0.16, 0.22, 0.42) : vec3(0.62, 0.62, 0.6);
-    vec3 paint = kind > 1.5 ? vec3(0.72, 0.7, 0.66) : face;
+    // the colors of the junk up close (see world/shapes): the deep blue cells facing the sun, the
+    // panel's off-white back, the stages' white paint, a fragment of paint or of gold foil
+    vec3 face = dot(normal, toEye) > 0.0 ? vec3(0.13, 0.18, 0.37) : vec3(0.66, 0.65, 0.61);
+    vec3 gold = vec3(0.66, 0.5, 0.26);
+    vec3 paint = kind > 2.5 ? (vSeed < 0.3 ? gold : vec3(0.72, 0.7, 0.66)) : kind > 1.5 ? vec3(0.74, 0.72, 0.68) : face;
     vWing = (paint * (0.08 + 0.92 * sunny) + vec3(1.0, 0.96, 0.9) * mirror * (kind > 2.5 ? 1.2 : 2.6)) * light * fade;
-    vBus = vec3(0.55, 0.56, 0.6) * (0.35 + 0.65 * max(dot(radial, toSun), 0.0)) * light * fade;
+    // the bus in its foil: gold mostly, silver now and then
+    vBus = (vSeed > 0.75 ? vec3(0.6, 0.62, 0.65) : gold) * (0.35 + 0.65 * max(dot(radial, toSun), 0.0)) * light * fade;
   }
 `;
 
@@ -465,6 +468,8 @@ const junkFragment = /* glsl */ `
     // a shredded wing has lost pieces
     if (vKind > 0.5 && vKind < 1.5) body *= step(0.3, fract(t * 2.7 + vSeed));
     vec3 color = vWing * body;
+    // a stage sooted towards its engine
+    if (vKind > 1.5 && vKind < 2.5) color *= mix(1.0, 0.45, smoothstep(0.7, 1.0, t));
     float cover = body;
     if (vKind < 1.5) {
       // the bus at the wing's root

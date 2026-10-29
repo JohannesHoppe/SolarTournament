@@ -569,3 +569,331 @@ export function shine(): THREE.CubeTexture {
   mirrored.needsUpdate = true;
   return mirrored;
 }
+
+/** A crinkled foil blanket: its color (each facet a little brighter or darker) and the facets' tilts as a normal map. */
+export type Foil = { map: THREE.Texture; normalMap: THREE.Texture };
+
+const foils = new Map<string, Foil>();
+
+/**
+ * The thermal blankets a satellite's bus is wrapped in: gold-colored or silver foil, crinkled
+ * into facets that each catch the sun at their own angle, the blankets' edges taped over. The
+ * facets lie in the normal map, so the texture's smaller levels average them into a plain sheen
+ * afar instead of letting them shimmer.
+ */
+export function foilSurface(tone: 'gold' | 'silver'): Foil {
+  const kept = foils.get(tone);
+  if (kept) return kept;
+  if (!drawable) return { map: new THREE.Texture(), normalMap: new THREE.Texture() };
+  const r = new Randomizer(tone === 'gold' ? 61 : 62);
+  // one crinkle point jittered in each cell of a grid, so a pixel finds its facet among the nine cells around
+  const grid = 12;
+  const cell = SIZE / grid;
+  const points = Array.from({ length: grid * grid }, (_, k) => ({ x: ((k % grid) + r.range(0.1, 0.9)) * cell, y: (Math.floor(k / grid) + r.range(0.1, 0.9)) * cell, nx: r.range(-0.15, 0.15), ny: r.range(-0.15, 0.15), shade: r.range(0.96, 1.04) }));
+  const base = tone === 'gold' ? [232, 184, 96] : [210, 214, 220];
+  const [colorElement, color] = canvas(SIZE);
+  const [normalElement, normal] = canvas(SIZE);
+  const colors = color.createImageData(SIZE, SIZE);
+  const normals = normal.createImageData(SIZE, SIZE);
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      // the nearest crinkle point on the repeating tile: its facet
+      let best = Infinity;
+      let facet = points[0];
+      const cx = Math.floor(x / cell);
+      const cy = Math.floor(y / cell);
+      for (let oy = -1; oy <= 1; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          const p = points[((cy + oy + grid) % grid) * grid + ((cx + ox + grid) % grid)];
+          const dx = Math.min(Math.abs(p.x - x), SIZE - Math.abs(p.x - x));
+          const dy = Math.min(Math.abs(p.y - y), SIZE - Math.abs(p.y - y));
+          const d = dx * dx + dy * dy;
+          if (d < best) {
+            best = d;
+            facet = p;
+          }
+        }
+      }
+      // tape over the blankets' edges: flat and a shade duller
+      const tape = y % 128 < 6;
+      const i = (y * SIZE + x) * 4;
+      const shade = tape ? 0.82 : facet.shade;
+      for (let c = 0; c < 3; c++) colors.data[i + c] = Math.min(255, base[c] * shade);
+      const nx = tape ? 0 : facet.nx;
+      const ny = tape ? 0 : facet.ny;
+      normals.data[i] = (nx * 0.5 + 0.5) * 255;
+      normals.data[i + 1] = (ny * 0.5 + 0.5) * 255;
+      normals.data[i + 2] = (Math.sqrt(1 - nx * nx - ny * ny) * 0.5 + 0.5) * 255;
+      colors.data[i + 3] = normals.data[i + 3] = 255;
+    }
+  }
+  color.putImageData(colors, 0, 0);
+  normal.putImageData(normals, 0, 0);
+  const map = toTexture(colorElement);
+  const normalMap = new THREE.CanvasTexture(normalElement);
+  for (const texture of [map, normalMap]) {
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 4;
+  }
+  const foil = { map, normalMap };
+  foils.set(tone, foil);
+  return foil;
+}
+
+/**
+ * Where a solar wing's two faces lie on its texture (see solarWing), as texture heights
+ * [from, to]: the cells on the front, the white sheet on the back; the rows between only keep the
+ * two apart in the texture's smaller levels.
+ */
+export const WING_FRONT: readonly [number, number] = [0.53, 0.97];
+export const WING_BACK: readonly [number, number] = [0.03, 0.47];
+/** Cells along a wing in one repeat of its texture, and across its width. */
+export const WING_CELLS_ALONG = 12;
+export const WING_CELLS_ACROSS = 6;
+
+let wing: { map: THREE.Texture; orm: THREE.Texture } | null = null;
+
+/**
+ * A solar wing's two faces on one texture (see WING_FRONT, WING_BACK): glossy cells of deep
+ * blue, each a shade of its own, the backsheet showing at their cut corners, between gaps barely
+ * lighter than the cells, and the wing's frame along its edges; the back a matte white sheet over
+ * the panel's honeycomb. Nothing in it stands out far from the cells' mean color, so the
+ * texture's smaller levels fade the cells into that color afar instead of a moiré.
+ */
+export function solarWing(): { map: THREE.Texture; orm: THREE.Texture } {
+  if (wing) return wing;
+  if (!drawable) return (wing = { map: new THREE.Texture(), orm: new THREE.Texture() });
+  const r = new Randomizer(64);
+  const [colorElement, color] = canvas(SIZE);
+  const [ormElement, orm] = canvas(SIZE);
+  // canvas rows from the top: the texture's height runs from the bottom
+  const rows = ([from, to]: readonly [number, number]) => [SIZE * (1 - to), SIZE * (1 - from)];
+  const [frontTop, frontBottom] = rows(WING_FRONT);
+  const [backTop, backBottom] = rows(WING_BACK);
+  // the back: an off-white sheet, the honeycomb panel's frame faintly through it
+  color.fillStyle = '#d8d4c8';
+  color.fillRect(0, SIZE / 2, SIZE, SIZE / 2);
+  color.fillStyle = 'rgba(90, 90, 80, 0.12)';
+  for (let x = 0; x < SIZE; x += SIZE / 3) color.fillRect(x, backTop, 3, backBottom - backTop);
+  color.fillRect(0, (backTop + backBottom) / 2, SIZE, 3);
+  orm.fillStyle = ormColor(0.85, 0);
+  orm.fillRect(0, SIZE / 2, SIZE, SIZE / 2);
+  // the front: the frame, then the cells in their gaps
+  const frame = 4;
+  color.fillStyle = '#4a505e';
+  color.fillRect(0, 0, SIZE, SIZE / 2);
+  orm.fillStyle = ormColor(0.45, 0.6);
+  orm.fillRect(0, 0, SIZE, SIZE / 2);
+  color.fillStyle = '#2a3452';
+  color.fillRect(0, frontTop + frame, SIZE, frontBottom - frontTop - frame * 2);
+  orm.fillStyle = ormColor(0.22, 0.35);
+  orm.fillRect(0, frontTop + frame, SIZE, frontBottom - frontTop - frame * 2);
+  const cellWidth = SIZE / WING_CELLS_ALONG;
+  const cellHeight = (frontBottom - frontTop - frame * 2) / WING_CELLS_ACROSS;
+  for (let j = 0; j < WING_CELLS_ACROSS; j++) {
+    for (let i = 0; i < WING_CELLS_ALONG; i++) {
+      const x = i * cellWidth + 1;
+      const y = frontTop + frame + j * cellHeight + 1;
+      const w = cellWidth - 2;
+      const h = cellHeight - 2;
+      const shade = r.range(0.85, 1.08);
+      color.fillStyle = `rgb(${Math.round(24 * shade)}, ${Math.round(38 * shade)}, ${Math.round(92 * shade)})`;
+      color.fillRect(x, y, w, h);
+      // the cut corners show the backsheet, the busbars run across a cell
+      color.fillStyle = 'rgba(150, 160, 185, 0.5)';
+      const cut = Math.min(w, h) * 0.16;
+      for (const [cx, cy, sx, sy] of [[x, y, 1, 1], [x + w, y, -1, 1], [x, y + h, 1, -1], [x + w, y + h, -1, -1]]) {
+        color.beginPath();
+        color.moveTo(cx, cy);
+        color.lineTo(cx + sx * cut, cy);
+        color.lineTo(cx, cy + sy * cut);
+        color.fill();
+      }
+      color.fillStyle = 'rgba(140, 150, 175, 0.16)';
+      color.fillRect(x + w / 3, y, 1, h);
+      color.fillRect(x + (2 * w) / 3, y, 1, h);
+    }
+  }
+  const map = toTexture(colorElement);
+  const ormMap = new THREE.CanvasTexture(ormElement);
+  for (const texture of [map, ormMap]) {
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.ClampToEdgeWrapping;
+    texture.anisotropy = 4;
+  }
+  return (wing = { map, orm: ormMap });
+}
+
+/**
+ * Where the parts painted in the Orbital Freedom Network's livery lie on its texture (see
+ * networkLivery), as texture heights [from, to]: an upper stage's tank all around (its front at
+ * `to`), a fairing half's outside (the nose's tip at `to`, its base at `from`) and its lining.
+ */
+export const LIVERY_STAGE: readonly [number, number] = [1 - 432 / 1024, 1];
+export const LIVERY_FAIRING: readonly [number, number] = [1 - 832 / 1024, 1 - 448 / 1024];
+export const LIVERY_LINING: readonly [number, number] = [1 - 1008 / 1024, 1 - 848 / 1024];
+
+let livery: Surface | null = null;
+
+/**
+ * The Orbital Freedom Network's livery for its upper stages and fairings, laid once around each
+ * part, never repeated (see LIVERY_STAGE): white paint in real panels (barrel sections welded
+ * end to end, the cable raceway along the tank), the network's name stenciled once or twice and
+ * worn, a few large scuffs down to bare metal, soot thickening in streaks towards the engine, the
+ * fairing's band and its nose scorched by the ascent, and inside it the quilted blankets that
+ * muffled the launch. Look only.
+ */
+export function networkLivery(): Surface {
+  if (livery) return livery;
+  if (!drawable) return (livery = blankSurface());
+  const r = new Randomizer(65);
+  const W = 512;
+  const H = 1024;
+  const [colorElement, color] = canvas(W, H);
+  const [ormElement, orm] = canvas(W / 2, H / 2);
+  const [bumpElement, bump] = canvas(W / 2, H / 2);
+  // roughness, metalness and bump at half the color's resolution, drawn in its coordinates
+  orm.scale(0.5, 0.5);
+  bump.scale(0.5, 0.5);
+  color.fillStyle = '#e4e1da';
+  color.fillRect(0, 0, W, H);
+  orm.fillStyle = ormColor(0.6, 0.1);
+  orm.fillRect(0, 0, W, H);
+  bump.fillStyle = '#808080';
+  bump.fillRect(0, 0, W, H);
+  // a part's rows on the canvas
+  const span = ([from, to]: readonly [number, number]) => ({ top: H * (1 - to), height: H * (to - from) });
+  const stage = span(LIVERY_STAGE);
+  const fairing = span(LIVERY_FAIRING);
+  const lining = span(LIVERY_LINING);
+  // large, soft blotches of age in the paint
+  for (let i = 0; i < 40; i++) {
+    const x = r.range(40, W - 40);
+    const y = r.range(0, 832);
+    const radius = r.range(30, 90);
+    const gradient = color.createRadialGradient(x, y, 0, x, y, radius);
+    const tone = r.nextFloat() < 0.5 ? '70, 64, 56' : '255, 255, 250';
+    gradient.addColorStop(0, `rgba(${tone}, 0.07)`);
+    gradient.addColorStop(1, `rgba(${tone}, 0)`);
+    color.fillStyle = gradient;
+    color.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
+  /** A seam: a dark line in the paint, a groove in the bump. */
+  const seam = (x: number, y: number, w: number, h: number) => {
+    color.fillStyle = 'rgba(40, 38, 34, 0.35)';
+    color.fillRect(x, y, w, h);
+    bump.fillStyle = '#404040';
+    bump.fillRect(x, y, w, h);
+  };
+  /** Stenciled text along a part, reading from its front to its back, its middle at (x, y), `size` pixels high, worn. */
+  const stencil = (text: string, x: number, y: number, size: number) => {
+    color.save();
+    color.translate(x, y);
+    color.rotate(Math.PI / 2);
+    color.font = `bold ${size}px monospace`;
+    color.textAlign = 'center';
+    color.textBaseline = 'middle';
+    color.fillStyle = 'rgba(24, 26, 32, 0.85)';
+    color.fillText(text, 0, 0);
+    // worn: flecks of the white paint back over the letters
+    const width = color.measureText(text).width;
+    color.fillStyle = 'rgba(228, 225, 218, 0.8)';
+    for (let i = 0; i < text.length * 6; i++) color.fillRect(r.range(-width / 2, width / 2), r.range(-size / 2, size / 2), r.range(1, 3), r.range(1, 2.5));
+    color.restore();
+  };
+  /** A large scuff: the paint scraped off down to the metal in an irregular patch, scratched along one direction. */
+  const scuff = (x: number, y: number, size: number) => {
+    const angle = r.range(0, Math.PI);
+    const strokes = Array.from({ length: 7 }, () => [r.range(-0.6, 0.6) * size, size * r.range(0.25, 0.45), size * r.range(0.08, 0.2)]);
+    color.fillStyle = 'rgba(172, 174, 180, 0.6)';
+    orm.fillStyle = ormColor(0.45, 0.5, 0.8, 0);
+    for (const g of [color, orm]) {
+      for (const [along, a, b] of strokes) {
+        g.beginPath();
+        g.ellipse(x + Math.cos(angle) * along, y + Math.sin(angle) * along, a, b, angle, 0, Math.PI * 2);
+        g.fill();
+      }
+    }
+    color.strokeStyle = 'rgba(60, 60, 64, 0.35)';
+    color.lineWidth = 0.8;
+    for (let k = 0; k < 24; k++) {
+      const ox = r.range(-0.5, 0.5) * size;
+      const oy = r.range(-0.5, 0.5) * size;
+      const length = r.range(0.3, 0.8) * size;
+      color.beginPath();
+      color.moveTo(x + ox, y + oy);
+      color.lineTo(x + ox + Math.cos(angle) * length, y + oy + Math.sin(angle) * length);
+      color.stroke();
+    }
+  };
+  // the stage's tank: barrel sections welded end to end, panels between longitudinal seams, the cable raceway
+  for (const t of [0.04, 0.26, 0.5, 0.74, 0.96]) seam(0, stage.top + t * stage.height, W, 2);
+  for (const u of [0.07, 0.32, 0.57, 0.82]) seam(u * W, stage.top, 1.5, stage.height);
+  color.fillStyle = '#7d8088';
+  color.fillRect(0.66 * W, stage.top + 0.02 * stage.height, 12, stage.height * 0.96);
+  bump.fillStyle = '#d0d0d0';
+  bump.fillRect(0.66 * W, stage.top + 0.02 * stage.height, 12, stage.height * 0.96);
+  stencil('ORBITAL FREEDOM', 0.2 * W, stage.top + 0.45 * stage.height, 34);
+  stencil('INTERNET FOR ALL', 0.45 * W, stage.top + 0.4 * stage.height, 16);
+  stencil('OFN-7', 0.88 * W, stage.top + 0.12 * stage.height, 20);
+  stencil('NO STEP', 0.62 * W, stage.top + 0.2 * stage.height, 9);
+  scuff(0.38 * W, stage.top + 0.7 * stage.height, 70);
+  scuff(0.78 * W, stage.top + 0.35 * stage.height, 90);
+  scuff(0.12 * W, stage.top + 0.15 * stage.height, 50);
+  // soot from the engine: thickening towards the tank's back, in streaks
+  const soot = color.createLinearGradient(0, stage.top + stage.height * 0.55, 0, stage.top + stage.height);
+  soot.addColorStop(0, 'rgba(34, 28, 24, 0)');
+  soot.addColorStop(1, 'rgba(34, 28, 24, 0.8)');
+  color.fillStyle = soot;
+  color.fillRect(0, stage.top, W, stage.height);
+  orm.fillStyle = ormColor(0.95, 0.02, 0.5, 0);
+  orm.fillRect(0, stage.top + stage.height * 0.85, W, stage.height * 0.15);
+  for (let i = 0; i < 120; i++) {
+    const length = r.range(0.05, 0.45) * stage.height;
+    const x = r.range(0, W);
+    const streak = color.createLinearGradient(0, stage.top + stage.height - length, 0, stage.top + stage.height);
+    streak.addColorStop(0, 'rgba(30, 24, 20, 0)');
+    streak.addColorStop(1, `rgba(30, 24, 20, ${r.range(0.15, 0.35)})`);
+    color.fillStyle = streak;
+    color.fillRect(x, stage.top + stage.height - length, r.range(2, 8), length);
+  }
+  // the fairing's outside: its seams, the network's band near the base, its name once along the crown
+  for (const t of [0.4, 0.7]) seam(0, fairing.top + t * fairing.height, W, 2);
+  for (const u of [0.33, 0.67]) seam(u * W, fairing.top + 0.4 * fairing.height, 1.5, fairing.height * 0.6);
+  color.fillStyle = '#b8389e';
+  color.fillRect(0, fairing.top + 0.89 * fairing.height, W, 0.04 * fairing.height);
+  stencil('ORBITAL FREEDOM', 0.5 * W, fairing.top + 0.67 * fairing.height, 40);
+  stencil('INTERNET FOR ALL', 0.26 * W, fairing.top + 0.6 * fairing.height, 18);
+  scuff(0.75 * W, fairing.top + 0.8 * fairing.height, 80);
+  scuff(0.4 * W, fairing.top + 0.48 * fairing.height, 60);
+  // the nose scorched by the ascent, the split line grimy
+  const scorch = color.createLinearGradient(0, fairing.top + fairing.height * 0.25, 0, fairing.top);
+  scorch.addColorStop(0, 'rgba(90, 60, 36, 0)');
+  scorch.addColorStop(1, 'rgba(70, 46, 30, 0.7)');
+  color.fillStyle = scorch;
+  color.fillRect(0, fairing.top, W, fairing.height);
+  color.fillStyle = 'rgba(40, 36, 30, 0.45)';
+  color.fillRect(0, fairing.top, 8, fairing.height);
+  color.fillRect(W - 8, fairing.top, 8, fairing.height);
+  // the lining: quilted acoustic blankets, a few torn open
+  color.fillStyle = '#b4b2ab';
+  color.fillRect(0, lining.top - 8, W, lining.height + 16);
+  orm.fillStyle = ormColor(0.9, 0);
+  orm.fillRect(0, lining.top - 8, W, lining.height + 16);
+  const quilt = W / 8;
+  const row = lining.height / 4;
+  for (let y = lining.top; y < lining.top + lining.height - 1; y += row) {
+    for (let x = 0; x < W; x += quilt) {
+      const puff = color.createRadialGradient(x + quilt / 2, y + row / 2, 0, x + quilt / 2, y + row / 2, quilt * 0.6);
+      puff.addColorStop(0, 'rgba(255, 255, 250, 0.18)');
+      puff.addColorStop(1, 'rgba(60, 58, 54, 0.18)');
+      color.fillStyle = r.nextFloat() < 0.12 ? 'rgba(70, 66, 60, 0.6)' : puff;
+      color.fillRect(x, y, quilt, row);
+      seam(x, y, 1, row);
+    }
+    seam(0, y, W, 1);
+  }
+  livery = textures(colorElement, ormElement, bumpElement);
+  for (const texture of [livery.map, livery.orm, livery.bump]) texture.wrapT = THREE.ClampToEdgeWrapping;
+  return livery;
+}
