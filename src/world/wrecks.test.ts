@@ -16,6 +16,36 @@ describe('wreckage', () => {
     expect(newcomer.find('p:abc.2.1')).toBeNull();
   });
 
+  it('draws each piece about as far as its collisions reach, a plate with its skin outside and its innards inside', () => {
+    const wrecks = new Wrecks();
+    for (let deaths = 0; deaths < 20; deaths++) wrecks.spawn('p:abc', deaths, new THREE.Vector3(), new THREE.Vector3(), 350, 0);
+    const corner = new THREE.Vector3();
+    for (const { mesh } of wrecks.list) {
+      const { position, normal } = mesh.geometry.attributes;
+      let reach = 0;
+      for (let i = 0; i < position.count; i++) reach = Math.max(reach, corner.fromBufferAttribute(position, i).length());
+      expect(reach).toBeGreaterThan(0.7);
+      expect(reach).toBeLessThan(1.3);
+      // the skin's faces and the innards' face away from each other: up and down the plate
+      const [skin, innards] = mesh.geometry.groups;
+      expect(skin.materialIndex).toBe(0);
+      expect(innards.materialIndex).toBe(1);
+      expect(normal.getY(0)).toBeGreaterThan(0.9);
+      expect(normal.getY(innards.start)).toBeLessThan(-0.9);
+      // every triangle wound to face where its normal points, so none is culled from the side it shows
+      const [a, b, c, n] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+      let turned = 0;
+      for (let i = 0; i < position.count; i += 3) {
+        a.fromBufferAttribute(position, i);
+        b.fromBufferAttribute(position, i + 1).sub(a);
+        c.fromBufferAttribute(position, i + 2).sub(a);
+        const face = b.cross(c);
+        if (face.lengthSq() > 1e-12 && face.dot(n.fromBufferAttribute(normal, i)) <= 0) turned++;
+      }
+      expect(turned).toBe(0);
+    }
+  });
+
   it('flies the same path at any frame rate, falling towards the rocks', () => {
     const field = testField();
     field.generate(ARENAS[0].layout);

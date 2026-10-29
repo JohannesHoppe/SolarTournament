@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { raySphere, type AsteroidField } from '../world/asteroids';
 import type { Ship } from '../ship/ship';
 import type { Effects } from '../view/effects';
-import { warheadBands } from '../view/surfaces';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { CASING_PLAIN, shine, torpedoCasing } from '../view/surfaces';
 import { MASS } from '../world/bodies';
 import { LOCK_DEPTH } from '../world/air';
 
@@ -197,6 +198,112 @@ export function strikes(before: THREE.Vector3, after: THREE.Vector3, target: Mov
   return from.addScaledVector(step, along).distanceToSquared(target.position) < radius * radius;
 }
 
+/** A torpedo's length (units, 13 m), its body's radius (units, 1.5 m) and how far its fins reach out (units, 2.9 m): looks only, its radius for every rule is TORPEDO_RADIUS. */
+const LENGTH = 260;
+const BODY = 30;
+const FIN_REACH = 58;
+/** Sides around its round parts: smooth at the closest look, a few hundred triangles. */
+const AROUND = 24;
+
+/** The casing's row of a point along the axis (z, nose +LENGTH/2): 0 at the nose's tip, 1 at the nozzle's lip (see torpedoCasing). */
+const casingRow = (z: number) => (LENGTH / 2 - z) / LENGTH;
+
+/**
+ * A round part: the profile `[radius, z]` turned about the axis, painted from the casing by
+ * where it lies along it. Built along y and turned onto z with the rest (see torpedoGeometry).
+ */
+function turned(profile: readonly [number, number][]): THREE.BufferGeometry {
+  const geometry = new THREE.LatheGeometry(profile.map(([radius, z]) => new THREE.Vector2(radius, z)), AROUND);
+  const position = geometry.attributes.position;
+  const uv = geometry.attributes.uv;
+  for (let i = 0; i < position.count; i++) uv.setY(i, 1 - casingRow(position.getY(i)));
+  return geometry.toNonIndexed();
+}
+
+/** A flat fin or strake at an angle about the axis: its root `base` out from the axis between the two points of `root` along it, its tip `reach` out between those of `tip`, `thickness` thick. */
+function fin(angle: number, root: [number, number], tip: [number, number], base: number, reach: number, thickness: number): THREE.BufferGeometry {
+  const shape = new THREE.Shape([new THREE.Vector2(base, root[0]), new THREE.Vector2(base, root[1]), new THREE.Vector2(reach, tip[1]), new THREE.Vector2(reach, tip[0])]);
+  const geometry = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false }).translate(0, 0, -thickness / 2);
+  const out = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
+  const side = new THREE.Vector3(-Math.cos(angle), 0, Math.sin(angle));
+  geometry.applyMatrix4(new THREE.Matrix4().makeBasis(out, new THREE.Vector3(0, 1, 0), side));
+  // its paint: the casing's plain strip at its place along the body
+  const position = geometry.attributes.position;
+  const uv = geometry.attributes.uv;
+  for (let i = 0; i < position.count; i++) uv.setXY(i, CASING_PLAIN / 2, 1 - casingRow(position.getY(i)));
+  return geometry;
+}
+
+/** A part lit by its own color (the glow material, see Torpedoes): vertex colors brighter than white, for the bloom. */
+function glowing(geometry: THREE.BufferGeometry, color: THREE.Color): THREE.BufferGeometry {
+  const part = geometry.index ? geometry.toNonIndexed() : geometry;
+  part.deleteAttribute('uv');
+  part.deleteAttribute('normal');
+  const colors = new Float32Array(part.attributes.position.count * 3);
+  for (let i = 0; i < colors.length; i += 3) color.toArray(colors, i);
+  part.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+  return part;
+}
+
+/** The seeker's eye (a red glow behind the glass) and the motor's throat (orange-white heat), linear colors above 1 so the bloom takes them. */
+const SEEKER_GLOW = new THREE.Color(1.1, 0.06, 0.03);
+const NOZZLE_GLOW = new THREE.Color(1.3, 0.55, 0.16);
+
+/**
+ * A torpedo as built: a round body ending in an ogive nose with the seeker's dark window at its
+ * tip, a boat tail narrowing to the nozzle's bell, four strakes along the body and four fins
+ * at the tail, crossed at 45° to them. Two groups: the painted casing (0) and what glows (1),
+ * the seeker's eye and the motor's throat. Its nose points along +z, as lookAt turns it.
+ */
+function torpedoGeometry(): THREE.BufferGeometry {
+  const half = LENGTH / 2;
+  const nose: [number, number][] = [];
+  for (let k = 0; k <= 8; k++) {
+    const s = k / 8;
+    nose.push([9 + (BODY - 9) * Math.cos((s * Math.PI) / 2) ** 0.85, 58 + s * (half - 12 - 58)]);
+  }
+  const body = [
+    // the bell's outside, its lip and its inside down to the throat (inside out: faces inwards)
+    turned([[12, -half + 12], [17, -half], [19, -half], [21, -half + 16]]),
+    // the boat tail, the body, the nose
+    turned([[21, -half + 16], [BODY, -96]]),
+    turned([[BODY, -96], [BODY, 58]]),
+    turned(nose),
+    // the seeker's dome of dark glass
+    turned(Array.from({ length: 5 }, (_, k): [number, number] => [9 * Math.cos((k / 4) * (Math.PI / 2)), half - 12 + 9 * Math.sin((k / 4) * (Math.PI / 2))])),
+  ];
+  for (let k = 0; k < 4; k++) {
+    const angle = (k * Math.PI) / 2;
+    body.push(fin(angle + Math.PI / 4, [-half + 10, -62], [-half + 6, -96], 18, FIN_REACH, 2.5));
+    body.push(fin(angle, [-40, 50], [-28, 38], BODY - 1, BODY + 7, 3));
+  }
+  // the eye: a small cap of red light just through the dome's top
+  const eye = new THREE.SphereGeometry(4.5, 12, 4, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, half - 7, 0);
+  const throat = new THREE.CircleGeometry(12, AROUND).rotateX(Math.PI / 2).translate(0, -half + 12, 0);
+  const casingPart = mergeGeometries(body)!;
+  const glowPart = mergeGeometries([glowing(eye, SEEKER_GLOW), glowing(throat, NOZZLE_GLOW)])!;
+  // the casing's parts and the glowing ones carry different attributes: put together as groups of one geometry
+  const geometry = new THREE.BufferGeometry();
+  const count = casingPart.attributes.position.count + glowPart.attributes.position.count;
+  const join = (name: string, size: number, fill: number) => {
+    const values = new Float32Array(count * size).fill(fill);
+    const a = casingPart.getAttribute(name) as THREE.BufferAttribute | undefined;
+    const b = glowPart.getAttribute(name) as THREE.BufferAttribute | undefined;
+    if (a) values.set(a.array as Float32Array, 0);
+    if (b) values.set(b.array as Float32Array, casingPart.attributes.position.count * size);
+    geometry.setAttribute(name, new THREE.BufferAttribute(values, size));
+  };
+  join('position', 3, 0);
+  join('normal', 3, 0);
+  join('uv', 2, 0);
+  join('color', 3, 1);
+  geometry.addGroup(0, casingPart.attributes.position.count, 0);
+  geometry.addGroup(casingPart.attributes.position.count, glowPart.attributes.position.count, 1);
+  geometry.rotateX(Math.PI / 2);
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
 /**
  * Torpedoes: few, fast and homing, but less agile than a ship. A torpedo flies on every browser alike from its
  * launch, but only the browser of its shooter decides when it goes off: on a ship (then that
@@ -209,8 +316,12 @@ export class Torpedoes {
   readonly list: Torpedo[] = [];
   /** The last torpedoes gone (see recent). */
   private readonly gone: Torpedo[] = [];
-  private readonly geometry = new THREE.CylinderGeometry(25, 40, 260, 6).rotateX(Math.PI / 2);
-  private readonly material = new THREE.MeshStandardMaterial({ map: warheadBands(), emissive: 0xff3300, emissiveIntensity: 0.6, roughness: 0.5, metalness: 0.3, flatShading: true });
+  private readonly geometry = torpedoGeometry();
+  /** The casing lit by the scene, a little of the sky mirrored in its metal; what glows lit by itself alone. */
+  private readonly material = [
+    new THREE.MeshStandardMaterial({ map: torpedoCasing(casingRow), roughness: 0.6, metalness: 0.2, envMap: shine(), envMapIntensity: 0.4 }),
+    new THREE.MeshBasicMaterial({ vertexColors: true }),
+  ];
 
   constructor(private readonly effects: Effects) {}
 
