@@ -17,7 +17,7 @@ import { msg, t } from '../i18n/i18n';
  * The Hosts win the round when it goes down; when the time runs out first, it got away, and
  * the President wins.
  *
- * A battleship, a gilded carrier 750 m long, circles the field along its outer rocks like a shark. It has
+ * A battleship, a gilded carrier 1,150 m long, circles the field along its outer rocks like a shark. It has
  * six laser batteries, two drives and a reactor under an armored dome; its hull itself takes
  * no harm. Every laser hit on a part counts; a part takes ZONE_HITS hits. Its phases follow
  * from what is left of it:
@@ -40,6 +40,19 @@ import { msg, t } from '../i18n/i18n';
  * Each browser fires the batteries at the ships it runs, and burns them in the plume.
  */
 export type ZoneKind = 'battery' | 'drive' | 'reactor';
+/**
+ * The battleship's size (a factor). Its hull, superstructure and parts are laid out in design
+ * units and grown by FLEET_SCALE into the world, while its hangar deck keeps its size in world
+ * units, made for a fighter to fly through (see HANGAR_WIDTH): at 1.5 the hull is 1,065 m long
+ * and a tunnel 75 m wide is a narrow slot in its flank, as a hangar is in a ship of that size.
+ * What the battleship does (speeds, hits, ranges, the plume's reach, the blast) does not grow
+ * with it.
+ */
+export const FLEET_SCALE = 1.5;
+/** A length of the battleship's design in world units. */
+const sized = (length: number) => length * FLEET_SCALE;
+/** A geometry of the battleship's design grown into the world. */
+const grow = <T extends THREE.BufferGeometry>(geometry: T): T => geometry.scale(FLEET_SCALE, FLEET_SCALE, FLEET_SCALE);
 export const ZONE_NAMES: Record<ZoneKind, string> = { battery: msg('Battery'), drive: msg('Drive'), reactor: msg('Reactor') };
 /**
  * How far a ship attacking a part turns its way there towards the side the part faces (see
@@ -58,16 +71,9 @@ export const ZONE_POINTS: Record<ZoneKind, number> = { battery: 150, drive: 200,
 export const SINK_POINTS = 500;
 /** The battleship comes this long after the round starts (s of field time). */
 export const ARRIVAL = 12;
-/**
- * A battleship circles the center this far out (units, 2.5 km), along the outer rocks and
- * almost 1 km inside the arena's edge, so a pilot can attack it from every side, at
- * FLEET_SPEED (units/s, 30 m/s); it turns at FLEET_TURN (rad/s).
- */
-const ORBIT = FIELD_RADIUS * 1.1;
+/** A battleship circles the center (see ORBIT) at FLEET_SPEED (units/s, 30 m/s); it turns at FLEET_TURN (rad/s). */
 export const FLEET_SPEED = 600;
 const FLEET_TURN = 0.12;
-/** It comes in from this far out (units), just inside the arena's edge. */
-const ENTRY = ARENA_LIMIT * 0.95;
 /** A battery fires every BATTERY_PERIOD seconds at the nearest ship within BATTERY_RANGE (units, 1.5 km) it sees. */
 export const BATTERY_PERIOD = 1.6;
 export const BATTERY_RANGE = 30000;
@@ -91,18 +97,23 @@ const PLUME_HUNT = 36000;
 /** A battleship going down burns SINK_SECONDS with its reactor critical, then goes up and destroys every ship within SINK_BLAST of it (units, 1 km). */
 export const SINK_SECONDS = 4;
 export const SINK_BLAST = 20000;
-/** Nothing of a battleship lies farther than this from its center (units): its stern's nozzles at 400 m, and room. */
-const REACH = 8500;
-/** The flight deck's height above the hull's center, and the keel's depth below it (units: 65 m, 55 m). */
+/** Nothing of a battleship lies farther than this from its center (units, 640 m): its stern's nozzles at 580 m, and room. */
+const REACH = sized(8500);
+/** It comes in from this far out (units, 2.7 km), its whole hull inside the arena's edge. */
+const ENTRY = ARENA_LIMIT - REACH;
+/** The nozzles' plane behind the center (units, 580 m along the hull), and how far the plume reaches out from its axis there, around both drive bells (units, 105 m). */
+const NOZZLES = sized(7700);
+const PLUME_BASE = sized(1400);
+/** The flight deck's height above the hull's center, and the keel's depth below it (design units). */
 const DECK_TOP = 1300;
 const KEEL = -1100;
 /**
  * The battleship's sensors see a comet's route (see comet.ts) FLEET_LOOKOUT seconds before its
- * head passes nearest it; while that route runs within FLEET_CLEAR of its center (units, 760 m:
+ * head passes nearest it; while that route runs within FLEET_CLEAR of its center (units, 975 m:
  * the shower's width, a piece, its own reach and 75 m to spare) it leaves its orbit and burns
  * straight away from the route at EVADE_SPEED (units/s, 50 m/s), turning onto that course
  * EVADE_BURN times as hard as onto its orbit, until the shower has passed. Clear of the route
- * by 760 m from right on it takes it about 17 s. With its drives shot out it cannot get away.
+ * by 975 m from right on it takes it about 21 s. With its drives shot out it cannot get away.
  */
 const FLEET_LOOKOUT = 40;
 const FLEET_CLEAR = SHOWER_WIDE + PIECE_RADIUS + REACH + 1500;
@@ -111,15 +122,16 @@ const EVADE_BURN = 2;
 /** How fast the battleship takes up its orbit's course (per s). */
 const STEER = 0.3;
 /**
- * A cross section of the hull at `z` (units, in its frame; the bow points along -z): the flight
+ * A cross section of the hull at `z` (in its frame; the bow points along -z): the flight
  * deck on top at DECK_TOP, `half` wide to each side; the armored belt drops straight from the
  * deck's edges to `belt`; below it the hull slopes in to the keel, `keelHalf` wide at `keel`.
  */
 type Section = { z: number; half: number; top: number; belt: number; keelHalf: number; keel: number };
 /**
- * The hull from bow to stern, straight between its sections: a dagger 55 m wide at the bow,
- * its keel rising there, widening to 190 m 235 m aft and to 230 m at the superstructure's
- * back, narrowing again over the drive section to the stern plate 710 m from the bow.
+ * The hull from bow to stern (design units), straight between its sections: a dagger 83 m wide
+ * at the bow, its keel rising there, widening to 285 m 350 m aft and to 345 m at the
+ * superstructure's back, narrowing again over the drive section to the stern plate 1,065 m
+ * from the bow.
  */
 const SECTIONS: readonly Section[] = [
   { z: -7200, half: 550, top: DECK_TOP, belt: 900, keelHalf: 200, keel: 500 },
@@ -127,7 +139,13 @@ const SECTIONS: readonly Section[] = [
   { z: 5400, half: 2300, top: DECK_TOP, belt: -200, keelHalf: 1200, keel: KEEL },
   { z: 7000, half: 1900, top: 1200, belt: -300, keelHalf: 1000, keel: -900 },
 ];
-/** Where the batteries sit (units, in its frame): two on sponsons forward, two on the deck's edges beside the superstructure, two under the keel. */
+/**
+ * A battleship circles the center this far out (units, 2.5 km), its inner flank along the outer
+ * rocks and its outer one some 800 m inside the arena's edge, so a pilot can attack it from
+ * every side.
+ */
+const ORBIT = FIELD_RADIUS * 1.05 + sized(Math.max(...SECTIONS.map((s) => s.half)));
+/** Where the batteries sit (design units, in its frame): two on sponsons forward, two on the deck's edges beside the superstructure, two under the keel. */
 const BATTERY_MOUNTS: readonly (readonly [number, number, number])[] = [
   [1800, DECK_TOP + 150, -4000],
   [-1800, DECK_TOP + 150, -4000],
@@ -136,23 +154,24 @@ const BATTERY_MOUNTS: readonly (readonly [number, number, number])[] = [
   [0, KEEL - 350, -3000],
   [0, KEEL - 350, 2500],
 ];
-/** How far the armored casemate of the bow's hangar door stands out of the hull (units, 11 m). */
+/** How far the armored casemate of the bow's hangar door stands out of the hull (design units). */
 const DOOR_DEPTH = 220;
 /**
- * The hangar deck: three tunnels run straight across the hull under the flight deck, from the
- * belt of one flank to the other's (208 to 226 m), centered at HANGARS along the hull (units, in
- * its frame). Each is HANGAR_WIDTH clear along the hull (75 m) between the machinery on its walls,
- * and runs from HANGAR_FLOOR to HANGAR_CEILING (53 m), the flight deck 16 m thick above it. A
+ * The hangar deck, in world units whatever the battleship's size: three tunnels run straight
+ * across the hull under the flight deck, from the belt of one flank to the other's (310 to
+ * 340 m), centered at HANGARS along the hull (units, in its frame), HANGAR_PITCH of the design
+ * apart. Each is HANGAR_WIDTH clear along the hull (75 m) between the machinery on its walls,
+ * and runs from HANGAR_FLOOR to HANGAR_CEILING (53 m), the flight deck 49 m thick above it. A
  * fighter's hit sphere (34 m across) has 20 m to spare to either side and 9.5 m above and below:
- * room to fly through at fighting speed, little to wander. The walls between them are
- * HANGAR_WALL thick (15 m, the machinery on both sides included). Nothing in them collides but
- * floor, ceiling and walls, so rays, sight and torpedoes pass through along a tunnel.
+ * room to fly through at fighting speed, little to wander. The walls between them are 60 m
+ * thick, the machinery on both sides included. Nothing in them collides but floor, ceiling and
+ * walls, so rays, sight and torpedoes pass through along a tunnel.
  */
 export const HANGAR_WIDTH = 1500;
 export const HANGAR_FLOOR = -80;
 export const HANGAR_CEILING = 980;
-const HANGAR_WALL = 300;
-export const HANGARS: readonly number[] = [0, 1, 2].map((i) => 1000 + i * (HANGAR_WIDTH + HANGAR_WALL));
+const HANGAR_PITCH = 1800;
+export const HANGARS: readonly number[] = [0, 1, 2].map((i) => sized(1000 + i * HANGAR_PITCH));
 /** The mouths are cut this much wider than a tunnel's clear width on both sides (units, 3 m), showing the front layer of the machinery on its walls. */
 const HANGAR_REVEAL = 60;
 /**
@@ -162,16 +181,18 @@ const HANGAR_REVEAL = 60;
  */
 const HANGAR_MACHINERY = 120;
 /**
- * The machinery is drawn in full only while the camera is in the hangar deck or this close to it
- * (units, 100 m: two thirds of a second at 150 m/s, so it is there before a ship flies in); from
- * farther, each wall is a flat picture of it (see Elevation), a plate of two triangles.
+ * A tunnel's machinery is drawn in full only while the camera is in the hangar deck or this close
+ * to it (units, 100 m: two thirds of a second at 150 m/s, so it is there before a ship flies in),
+ * and only the tunnel's nearest the camera along the hull: from inside one tunnel the others are
+ * out of sight. Everywhere else each wall is a flat picture of it (see Elevation), a plate of
+ * two triangles.
  */
 const HANGAR_APPROACH = 2000;
 /**
  * The walls' pictures share one texture with the hangar deck's baked colors: six walls one above
- * another, ELEVATION_ROWS each, ELEVATION_WIDTH across (a texel about 21 cm across the hull and
- * 32 cm up), and a white block above them that every other piece of the deck samples, so its
- * vertex colors show as they are and all of it stays one mesh.
+ * another, ELEVATION_ROWS each, ELEVATION_WIDTH across (a texel about 33 cm across the hull at the
+ * widest wall and 32 cm up), and a white block above them that every other piece of the deck
+ * samples, so its vertex colors show as they are and all of it stays one mesh.
  */
 const ELEVATION_WIDTH = 1024;
 const ELEVATION_ROWS = 168;
@@ -180,7 +201,7 @@ const ELEVATION_HEIGHT = 1024;
 const WHITE_UV = [0.5, (ELEVATION_HEIGHT - 8) / ELEVATION_HEIGHT] as const;
 /** The hull's faces are laid in strips no longer than this along it (units, 50 m; see hullBetween). */
 const HULL_STRIP = 1000;
-/** Where the Ministry's seal sits on both flanks (units along the hull). */
+/** Where the Ministry's seal sits on both flanks (design units along the hull). */
 const SEAL_Z = -1000;
 /** The lights along the deck's edges run forward this fast (lane lengths a second). */
 const PROCESSION = 0.6;
@@ -235,7 +256,7 @@ function taper(z0: number, z1: number, w0: number, h0: number, w1: number, h1: n
   return box;
 }
 
-/** The hull's cross section at `z`, between the two sections around it. */
+/** The hull's cross section at `z` (design units), between the two sections around it. */
 function sectionAt(z: number): Section {
   let i = 0;
   while (i < SECTIONS.length - 2 && z > SECTIONS[i + 1].z) i++;
@@ -246,8 +267,18 @@ function sectionAt(z: number): Section {
   return { z, half: mix('half'), top: mix('top'), belt: mix('belt'), keelHalf: mix('keelHalf'), keel: mix('keel') };
 }
 
+/** A section of the design in the world. */
+function grown(s: Section): Section {
+  return { z: sized(s.z), half: sized(s.half), top: sized(s.top), belt: sized(s.belt), keelHalf: sized(s.keelHalf), keel: sized(s.keel) };
+}
+
+/** The hull's cross section at `z` in the world (units). */
+function hullAt(z: number): Section {
+  return grown(sectionAt(z / FLEET_SCALE));
+}
+
 /**
- * A point on a flank's slope below the belt at `z` (units along the hull), `down` of the way
+ * A point on a flank's slope below the belt at `z` (design units along the hull), `down` of the way
  * from the belt's lower edge (0) to the keel's (1), `lift` out from its face along its normal.
  */
 function slopePoint(side: number, z: number, down: number, lift: number, target = new THREE.Vector3()): THREE.Vector3 {
@@ -262,7 +293,7 @@ function slopePoint(side: number, z: number, down: number, lift: number, target 
 const HANGAR_SPANS: readonly (readonly [number, number])[] = HANGARS.map((z) => [z - HANGAR_WIDTH / 2 - HANGAR_REVEAL, z + HANGAR_WIDTH / 2 + HANGAR_REVEAL]);
 
 /** How far the hangar deck reaches out from the hull's middle at its widest: its flanks (units). */
-const DECK_REACH = Math.max(...HANGAR_SPANS.flat().map((z) => sectionAt(z).half));
+const DECK_REACH = Math.max(...HANGAR_SPANS.flat().map((z) => hullAt(z).half));
 
 /**
  * The hangar deck as the motes' shelter (see world/space): from the hull's frame into a box of
@@ -276,7 +307,7 @@ const SHELTER_BOX = (() => {
     .multiply(new THREE.Matrix4().makeTranslation(0, -(HANGAR_FLOOR + HANGAR_CEILING) / 2, -(z0 + z1) / 2));
 })();
 
-/** How far the deck's edge moves out per unit along the hull at `z` (the belt's slant in plan). */
+/** How far the deck's edge moves out per unit along the hull at `z` (design units; the belt's slant in plan). */
 function flare(z: number) {
   const a = sectionAt(z - 1);
   const b = sectionAt(z + 1);
@@ -284,7 +315,7 @@ function flare(z: number) {
 }
 
 /**
- * The hull between two sections, flat-faced: deck, belts, the slopes to the keel and the keel,
+ * The hull between two sections in the world, flat-faced: deck, belts, the slopes to the keel and the keel,
  * each face with its own corners (so its normal is the face's), the ends closed where `caps` says,
  * the hangars' mouths cut out of both belts from HANGAR_FLOOR to HANGAR_CEILING over the spans
  * along the hull in `holes` (in order).
@@ -461,8 +492,8 @@ export class Fleet implements Obstacle {
   private heardFresh = false;
   private readonly colliders: Box[] = [];
   private readonly dome: THREE.Mesh;
-  /** The hangar walls' machinery in full, drawn only while the camera is in the hangar deck or close to it (see view). */
-  readonly machinery: THREE.Mesh;
+  /** The hangar walls' machinery in full, a mesh for each tunnel from the bow aft, each drawn only while the camera is in it or close to it (see view). */
+  readonly machinery: THREE.Mesh[];
   private readonly flame: THREE.Mesh;
   private readonly materials: THREE.Material[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
@@ -552,34 +583,46 @@ export class Fleet implements Obstacle {
     );
 
     // Everything that never changes is merged into one mesh per material; what collides is a
-    // list of boxes in the ship's frame (the bow points along -z, as every ship's nose)
+    // list of boxes in the ship's frame (the bow points along -z, as every ship's nose), in world
+    // units. The hull and the hangar deck are laid out in the world (lay, layShaped, collide,
+    // rail), everything else in design units and grown into the world (put, shaped, solid,
+    // block, bar); the armor's texture coordinates are laid in the world, so its plates keep
+    // their size
     const parts = new Map<THREE.Material, THREE.BufferGeometry[]>();
-    const put = (geometry: THREE.BufferGeometry, material: THREE.Material) => {
+    const lay = (geometry: THREE.BufferGeometry, material: THREE.Material) => {
       const list = parts.get(material) ?? [];
       list.push(geometry);
       parts.set(material, list);
     };
-    const solid = (center: readonly number[], size: readonly number[]) => this.colliders.push({ center: new THREE.Vector3(center[0], center[1], center[2]), half: new THREE.Vector3(size[0], size[1], size[2]).multiplyScalar(0.5) });
-    const block = (center: [number, number, number], size: [number, number, number], material: THREE.Material, collides = true) => {
-      put(boxUv(new THREE.BoxGeometry(...size).translate(...center), ARMOR_TILE, 'lengthwise'), material);
-      if (collides) solid(center, size);
-    };
-    const shaped = (geometry: THREE.BufferGeometry, material: THREE.Material) => put(boxUv(geometry, ARMOR_TILE, 'lengthwise'), material);
+    const layShaped = (geometry: THREE.BufferGeometry, material: THREE.Material) => lay(boxUv(geometry, ARMOR_TILE, 'lengthwise'), material);
+    const collide = (center: readonly number[], size: readonly number[]) => this.colliders.push({ center: new THREE.Vector3(center[0], center[1], center[2]), half: new THREE.Vector3(size[0], size[1], size[2]).multiplyScalar(0.5) });
     const along = new THREE.Vector3(0, 0, 1);
-    /** A bar `wide` by `high` from one point to another (trim, rails, recesses), not colliding. */
-    const bar = (from: THREE.Vector3, to: THREE.Vector3, wide: number, high: number, material: THREE.Material) => {
+    /** A bar `wide` by `high` from one point to another (trim, rails, recesses), not colliding, in the world. */
+    const rail = (from: THREE.Vector3, to: THREE.Vector3, wide: number, high: number, material: THREE.Material) => {
       const span = to.clone().sub(from);
       const turned = new THREE.Quaternion().setFromUnitVectors(along, span.clone().normalize());
       const middle = from.clone().lerp(to, 0.5);
-      shaped(new THREE.BoxGeometry(wide, high, span.length()).applyQuaternion(turned).translate(middle.x, middle.y, middle.z), material);
+      layShaped(new THREE.BoxGeometry(wide, high, span.length()).applyQuaternion(turned).translate(middle.x, middle.y, middle.z), material);
     };
+    const put = (geometry: THREE.BufferGeometry, material: THREE.Material) => lay(grow(geometry), material);
+    const shaped = (geometry: THREE.BufferGeometry, material: THREE.Material) => layShaped(grow(geometry), material);
+    const solid = (center: readonly number[], size: readonly number[]) => collide(center.map(sized), size.map(sized));
+    const block = (center: [number, number, number], size: [number, number, number], material: THREE.Material, collides = true) => {
+      shaped(new THREE.BoxGeometry(...size).translate(...center), material);
+      if (collides) solid(center, size);
+    };
+    const bar = (from: THREE.Vector3, to: THREE.Vector3, wide: number, high: number, material: THREE.Material) =>
+      rail(from.clone().multiplyScalar(FLEET_SCALE), to.clone().multiplyScalar(FLEET_SCALE), sized(wide), sized(high), material);
     /** A flat panel `width` long and `height` high on a flank's belt at `z`, lying on its slant. */
     const onBelt = (side: number, z: number, y: number, width: number, height: number, lift = 4) =>
       new THREE.PlaneGeometry(width, height).rotateY(side * (Math.PI / 2 + Math.atan(flare(z)))).translate(side * (sectionAt(z).half + lift), y, z);
     const flank = (side: number, z: number, y: number, lift: number) => new THREE.Vector3(side * (sectionAt(z).half + lift), y, z);
+    /** The same in the world. */
+    const hullFlank = (side: number, z: number, y: number, lift: number) => new THREE.Vector3(side * (hullAt(z).half + lift), y, z);
     /**
      * A sign `width` long at `z` on a flank's slope below the belt, `height` down the slope from
-     * `down` of its way to the keel, following its face in steps of 10 m and reading from outside.
+     * `down` of its way to the keel (design units), following its face in steps of 15 m and
+     * reading from outside.
      */
     const onSlope = (side: number, z: number, width: number, height: number, down = 0.1) => {
       const steps = Math.ceil(width / 200);
@@ -614,47 +657,50 @@ export class Fleet implements Obstacle {
     // full width, the slopes' halfway out between belt and keel. Where a hangar runs through, the
     // belt's box leaves its clear width open: a box over it up to the deck and one under it down
     // to the belt's lower edge
-    const [, waist, back] = SECTIONS;
-    const core = (z0: number, z1: number, bottom: number, top: number) => solid([0, (top + bottom) / 2, (z0 + z1) / 2], [2 * waist.keelHalf, top - bottom, z1 - z0]);
+    const [, waist, back] = SECTIONS.map(grown);
+    const [keel, deck] = [sized(KEEL), sized(DECK_TOP)];
+    const core = (z0: number, z1: number, bottom: number, top: number) => collide([0, (top + bottom) / 2, (z0 + z1) / 2], [2 * waist.keelHalf, top - bottom, z1 - z0]);
     let cored = waist.z;
     for (const z of HANGARS) {
-      core(cored, z - HANGAR_WIDTH / 2, KEEL, DECK_TOP);
-      core(z - HANGAR_WIDTH / 2, z + HANGAR_WIDTH / 2, KEEL, HANGAR_FLOOR);
-      core(z - HANGAR_WIDTH / 2, z + HANGAR_WIDTH / 2, HANGAR_CEILING, DECK_TOP);
+      core(cored, z - HANGAR_WIDTH / 2, keel, deck);
+      core(z - HANGAR_WIDTH / 2, z + HANGAR_WIDTH / 2, keel, HANGAR_FLOOR);
+      core(z - HANGAR_WIDTH / 2, z + HANGAR_WIDTH / 2, HANGAR_CEILING, deck);
       cored = z + HANGAR_WIDTH / 2;
     }
-    core(cored, back.z, KEEL, DECK_TOP);
+    core(cored, back.z, keel, deck);
     SECTIONS.forEach((a, i) => {
       const b = SECTIONS[i + 1];
       if (!b) return;
-      // a mouth reaching past a section is cut out of both hull pieces, each its own share
-      const holes = HANGAR_SPANS.filter(([z0, z1]) => z1 > a.z && z0 < b.z).map(([z0, z1]) => [Math.max(z0, a.z), Math.min(z1, b.z)] as const);
-      shaped(hullBetween(a, b, { front: i === 0, back: i === SECTIONS.length - 2 }, holes), armor);
+      // the hull and its colliders in the world, around the hangars' mouths: a mouth reaching
+      // past a section is cut out of both hull pieces, each its own share
+      const [wa, wb] = [grown(a), grown(b)];
+      const holes = HANGAR_SPANS.filter(([z0, z1]) => z1 > wa.z && z0 < wb.z).map(([z0, z1]) => [Math.max(z0, wa.z), Math.min(z1, wb.z)] as const);
+      layShaped(hullBetween(wa, wb, { front: i === 0, back: i === SECTIONS.length - 2 }, holes), armor);
       // the stretches of hull between the hangars' clear widths, and those widths
       const stretches: { z0: number; z1: number; open: boolean }[] = [];
       const closed = (z0: number, z1: number) => {
         const pieces = Math.ceil((z1 - z0) / 2000);
         for (let k = 0; k < pieces; k++) stretches.push({ z0: THREE.MathUtils.lerp(z0, z1, k / pieces), z1: THREE.MathUtils.lerp(z0, z1, (k + 1) / pieces), open: false });
       };
-      let from = a.z;
+      let from = wa.z;
       for (const z of HANGARS) {
-        if (z < a.z || z > b.z) continue;
+        if (z < wa.z || z > wb.z) continue;
         closed(from, z - HANGAR_WIDTH / 2);
         stretches.push({ z0: z - HANGAR_WIDTH / 2, z1: z + HANGAR_WIDTH / 2, open: true });
         from = z + HANGAR_WIDTH / 2;
       }
-      closed(from, b.z);
+      closed(from, wb.z);
       for (const { z0, z1, open } of stretches) {
-        const s = sectionAt((z0 + z1) / 2);
+        const s = hullAt((z0 + z1) / 2);
         const length = z1 - z0;
         if (open) {
-          solid([0, (s.top + HANGAR_CEILING) / 2, s.z], [2 * s.half, s.top - HANGAR_CEILING, length]);
-          solid([0, (HANGAR_FLOOR + s.belt) / 2, s.z], [2 * s.half, HANGAR_FLOOR - s.belt, length]);
-        } else solid([0, (s.top + s.belt) / 2, s.z], [2 * s.half, s.top - s.belt, length]);
-        solid([0, (s.belt + s.keel) / 2, s.z], [s.half + s.keelHalf, s.belt - s.keel, length]);
+          collide([0, (s.top + HANGAR_CEILING) / 2, s.z], [2 * s.half, s.top - HANGAR_CEILING, length]);
+          collide([0, (HANGAR_FLOOR + s.belt) / 2, s.z], [2 * s.half, HANGAR_FLOOR - s.belt, length]);
+        } else collide([0, (s.top + s.belt) / 2, s.z], [2 * s.half, s.top - s.belt, length]);
+        collide([0, (s.belt + s.keel) / 2, s.z], [s.half + s.keelHalf, s.belt - s.keel, length]);
       }
-      // gilded along the deck's edges, the belt's lower edge and the keel's; under the deck's edge a trench
-      // with a row of lit windows, gilded above and below
+      // in the design: gilded along the deck's edges, the belt's lower edge and the keel's; under
+      // the deck's edge a trench with a row of lit windows, gilded above and below
       for (const side of [-1, 1]) {
         const edge = (s: Section, y: number, lift = 0) => new THREE.Vector3(side * (s.half + lift), y, s.z);
         bar(edge(a, a.top), edge(b, b.top), 90, 90, gold);
@@ -670,7 +716,7 @@ export class Fleet implements Obstacle {
     });
 
     // the forward belts carry strakes of extra armor under the trench, three belts running along
-    // the flank, each strake of its own length (45 to 130 m) so their butts never line up in a bond
+    // the flank, each strake of its own length (68 to 195 m) so their butts never line up in a bond
     const STRAKES = [
       [1500, 900, 2100, 1200, 2600],
       [2400, 1100, 1700, 2000],
@@ -704,12 +750,12 @@ export class Fleet implements Obstacle {
     const stern = SECTIONS[2].z;
     for (const side of [-1, 1]) {
       for (let z = bow + 150; z < stern; z += 260) {
-        const lamp = new THREE.BoxGeometry(70, 40, 140).translate(side * (sectionAt(z).half - 90), DECK_TOP + 20, z);
+        const lamp = grow(new THREE.BoxGeometry(70, 40, 140).translate(side * (sectionAt(z).half - 90), DECK_TOP + 20, z));
         lamp.setAttribute('lane', new THREE.BufferAttribute(new Float32Array(lamp.attributes.position.count).fill(1 - (z - bow) / (stern - bow)), 1));
         lights.push(lamp);
       }
     }
-    // the bow's hangar, too low for a fighter (13 m), shut: an armored casemate standing
+    // the bow's hangar, too low for a fighter (20 m), shut: an armored casemate standing
     // DOOR_DEPTH out of the hull, gilded around its mouth, its blast door just inside, a lit seam
     // down its middle and warning lamps over it. It collides as one box
     {
@@ -731,7 +777,7 @@ export class Fleet implements Obstacle {
       solid([0, DECK_TOP - 200, bow - deep / 2], [width + 2 * rim, height + 2 * rim, deep]);
     }
 
-    // the hangar deck: each tunnel under a ceiling of dark steel girders, lit warm by rows of lamps between them, the deck dark
+    // the hangar deck, in the world: each tunnel under a ceiling of dark steel girders, lit warm by rows of lamps between them, the deck dark
     // with lit markings along it (a dashed line down its middle, its edges, a bar at each mouth),
     // dense machinery on its walls (see game/machinery), a gilded frame and a lamp at each corner
     // of its mouths. All of it merged into the hull's meshes: no draw call of its own. The
@@ -775,10 +821,10 @@ export class Fleet implements Obstacle {
         geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
         return geometry;
       };
-      const lamplit = (geometry: THREE.BufferGeometry, color: THREE.Color, glowing = false) => put(baked(geometry, color, glowing), hangar);
+      const lamplit = (geometry: THREE.BufferGeometry, color: THREE.Color, glowing = false) => lay(baked(geometry, color, glowing), hangar);
       // the walls' pictures, painted as their machinery is laid out, and the machinery itself
       const pictures = new Uint8Array(ELEVATION_WIDTH * ELEVATION_HEIGHT * 4).fill(255);
-      const detail: THREE.BufferGeometry[] = [];
+      const detail: THREE.BufferGeometry[][] = HANGARS.map(() => []);
       /** What shows where no machinery lies: the wall's dark back in the lamps' light. */
       const behind = new THREE.Color(0x0b0c0e);
       let walls = 0;
@@ -796,13 +842,13 @@ export class Fleet implements Obstacle {
         geometry.computeVertexNormals();
         return geometry;
       };
-      const across = (z: number, y: number, side: number) => new THREE.Vector3(side * sectionAt(z).half, y, z);
+      const across = (z: number, y: number, side: number) => new THREE.Vector3(side * hullAt(z).half, y, z);
       const v3 = (x: number, y: number) => new THREE.Vector3(x, y, 0);
       HANGARS.forEach((center, tunnel) => {
         const front = center - HANGAR_WIDTH / 2;
         const rear = center + HANGAR_WIDTH / 2;
         const [w0, w1] = [front - HANGAR_REVEAL, rear + HANGAR_REVEAL];
-        const reach = Math.min(sectionAt(w0).half, sectionAt(w1).half);
+        const reach = Math.min(hullAt(w0).half, hullAt(w1).half);
         // floor and ceiling, under and over the machinery too
         const [m0, m1] = [front - HANGAR_MACHINERY, rear + HANGAR_MACHINERY];
         lamplit(panel([across(m0, HANGAR_FLOOR, -1), across(m0, HANGAR_FLOOR, 1), across(m1, HANGAR_FLOOR, 1), across(m1, HANGAR_FLOOR, -1)], UP), deck);
@@ -817,14 +863,14 @@ export class Fleet implements Obstacle {
           [front, 1],
           [rear, -1],
         ] as const) {
-          const edge = Math.min(sectionAt(face).half, sectionAt(face - facing * HANGAR_MACHINERY).half);
+          const edge = Math.min(hullAt(face).half, hullAt(face - facing * HANGAR_MACHINERY).half);
           const frame = new THREE.Matrix4().makeBasis(new THREE.Vector3(facing, 0, 0), UP, new THREE.Vector3(0, 0, facing)).setPosition(0, 0, face);
           const wall = { reach: edge - 30, edge, floor: HANGAR_FLOOR, ceiling: HANGAR_CEILING, depth: HANGAR_MACHINERY, frame };
           const row = ELEVATION_ROWS * walls++;
           const picture = new Elevation(wall, pictures, ELEVATION_WIDTH, row, ELEVATION_ROWS, behind);
           machinery(random, wall, EMPHASES[tunnel], (geometry, color, glowing) => {
             picture.draw(baked(geometry, color, glowing, face, facing));
-            detail.push(geometry);
+            detail[tunnel].push(geometry);
           });
           // the picture on a plate just behind the machinery's back, facing the tunnel: hidden
           // behind the machinery up close, the wall itself from farther
@@ -834,23 +880,23 @@ export class Fleet implements Obstacle {
           const [low, high] = [row / ELEVATION_HEIGHT, (row + ELEVATION_ROWS) / ELEVATION_HEIGHT];
           plate.setAttribute('uv', new THREE.Float32BufferAttribute([0, low, 1, low, 1, high, 0, high], 2));
           plate.setAttribute('color', new THREE.Float32BufferAttribute(new Array(12).fill(1), 3));
-          put(plate, hangar);
+          lay(plate, hangar);
         }
         // two rows of lamps under the ceiling, a warm band along each wall's top
-        for (const z of [center - HANGAR_WIDTH / 4, center + HANGAR_WIDTH / 4]) for (let x = -reach + 150; x < reach - 100; x += 300) put(new THREE.BoxGeometry(160, 16, 60).translate(x, HANGAR_CEILING - 10, z), lit);
+        for (const z of [center - HANGAR_WIDTH / 4, center + HANGAR_WIDTH / 4]) for (let x = -reach + 150; x < reach - 100; x += 300) lay(new THREE.BoxGeometry(160, 16, 60).translate(x, HANGAR_CEILING - 10, z), lit);
         for (const z of [front + 10, rear - 10]) lamplit(new THREE.BoxGeometry(2 * reach, 40, 20).translate(0, HANGAR_CEILING - 60, z), glow, true);
         // the deck's markings: a dashed line down the middle, its edges, and a bar at each mouth
-        for (let x = -reach + 300; x < reach - 300; x += 400) put(new THREE.BoxGeometry(200, 4, 30).translate(x, HANGAR_FLOOR + 2, center), marking);
-        for (const z of [front + 120, rear - 120]) put(new THREE.BoxGeometry(2 * reach - 200, 4, 24).translate(0, HANGAR_FLOOR + 2, z), marking);
+        for (let x = -reach + 300; x < reach - 300; x += 400) lay(new THREE.BoxGeometry(200, 4, 30).translate(x, HANGAR_FLOOR + 2, center), marking);
+        for (const z of [front + 120, rear - 120]) lay(new THREE.BoxGeometry(2 * reach - 200, 4, 24).translate(0, HANGAR_FLOOR + 2, z), marking);
         for (const side of [-1, 1]) {
-          put(new THREE.BoxGeometry(60, 4, HANGAR_WIDTH - 200).translate(side * (reach - 150), HANGAR_FLOOR + 2, center), marking);
+          lay(new THREE.BoxGeometry(60, 4, HANGAR_WIDTH - 200).translate(side * (reach - 150), HANGAR_FLOOR + 2, center), marking);
           // the mouth on this flank: gilded around, over the reveals, a lamp at each corner
           const lift = 20;
-          const corner = (z: number, y: number) => flank(side, z, y, lift);
-          for (const z of [front - HANGAR_REVEAL / 2, rear + HANGAR_REVEAL / 2]) bar(corner(z, HANGAR_FLOOR - HANGAR_REVEAL), corner(z, HANGAR_CEILING + HANGAR_REVEAL / 2), 60, 60, gold);
-          bar(corner(w0 - 30, HANGAR_CEILING + 15), corner(w1 + 30, HANGAR_CEILING + 15), 30, 30, gold);
-          bar(corner(w0 - 30, HANGAR_FLOOR - 40), corner(w1 + 30, HANGAR_FLOOR - 40), 40, 40, gold);
-          for (const z of [w0, w1]) for (const y of [HANGAR_FLOOR + 40, HANGAR_CEILING - 40]) put(new THREE.BoxGeometry(50, 50, 50).translate(...flank(side, z + (z === w0 ? 50 : -50), y, 30).toArray()), lit);
+          const corner = (z: number, y: number) => hullFlank(side, z, y, lift);
+          for (const z of [front - HANGAR_REVEAL / 2, rear + HANGAR_REVEAL / 2]) rail(corner(z, HANGAR_FLOOR - HANGAR_REVEAL), corner(z, HANGAR_CEILING + HANGAR_REVEAL / 2), 60, 60, gold);
+          rail(corner(w0 - 30, HANGAR_CEILING + 15), corner(w1 + 30, HANGAR_CEILING + 15), 30, 30, gold);
+          rail(corner(w0 - 30, HANGAR_FLOOR - 40), corner(w1 + 30, HANGAR_FLOOR - 40), 40, 40, gold);
+          for (const z of [w0, w1]) for (const y of [HANGAR_FLOOR + 40, HANGAR_CEILING - 40]) lay(new THREE.BoxGeometry(50, 50, 50).translate(...hullFlank(side, z + (z === w0 ? 50 : -50), y, 30).toArray()), lit);
         }
       });
       const texture = new THREE.DataTexture(pictures, ELEVATION_WIDTH, ELEVATION_HEIGHT, THREE.RGBAFormat);
@@ -861,11 +907,14 @@ export class Fleet implements Obstacle {
       texture.needsUpdate = true;
       this.textures.push(texture);
       hangar.map = texture;
-      // the machinery in full, shown only up close (see view)
-      this.machinery = new THREE.Mesh(this.geometry(mergeGeometries(detail)), hangar);
-      this.machinery.visible = false;
-      this.root.add(this.machinery);
-      for (const geometry of detail) geometry.dispose();
+      // the machinery in full, each tunnel's shown only up close (see view)
+      this.machinery = detail.map((list) => {
+        const mesh = new THREE.Mesh(this.geometry(mergeGeometries(list)), hangar);
+        mesh.visible = false;
+        this.root.add(mesh);
+        for (const geometry of list) geometry.dispose();
+        return mesh;
+      });
     }
 
     // the superstructure, stepped up towards the stern in tiers of armor, each sloping up from
@@ -946,35 +995,35 @@ export class Fleet implements Obstacle {
     for (const geometry of [...[...parts.values()].flat(), ...lights]) geometry.dispose();
 
     // the Ministry of War's seal, large on both flanks and on the bridge tower; the slogans along
-    // the slopes under the hangars' mouths; the President's slogan painted along the runway in letters twenty meters high
+    // the slopes under the hangars' mouths; the President's slogan painted along the runway in letters thirty meters high
     const seal = crestTexture();
     const sealed = this.material(new THREE.MeshBasicMaterial({ map: seal, transparent: true, depthWrite: false, toneMapped: false, color: new THREE.Color(1.25, 1.1, 0.9) }));
     const sign = (texture: THREE.Texture | null, geometry: THREE.BufferGeometry, color = new THREE.Color(1.4, 1.4, 1.4)) => {
       if (texture) this.textures.push(texture);
       const material = this.material(new THREE.MeshBasicMaterial({ map: texture, transparent: true, toneMapped: false, color }));
-      this.root.add(new THREE.Mesh(this.geometry(geometry), material));
+      this.root.add(new THREE.Mesh(this.geometry(grow(geometry)), material));
     };
     if (seal) this.textures.push(seal);
     for (const side of [-1, 1]) {
-      this.root.add(new THREE.Mesh(this.geometry(onBelt(side, SEAL_Z, 480, 1100, 1100, 8)), sealed));
+      this.root.add(new THREE.Mesh(this.geometry(grow(onBelt(side, SEAL_Z, 480, 1100, 1100, 8))), sealed));
       sign(signTexture(t(SLOGANS[side < 0 ? 1 : 2])), onSlope(side, 2800, 4400, 400));
     }
-    this.root.add(new THREE.Mesh(this.geometry(new THREE.PlaneGeometry(800, 800).rotateY(Math.PI).translate(0, 3250, 3496)), sealed));
+    this.root.add(new THREE.Mesh(this.geometry(grow(new THREE.PlaneGeometry(800, 800).rotateY(Math.PI).translate(0, 3250, 3496))), sealed));
     sign(signTexture(t(SLOGANS[0]), '#ffcf5a', 4096, 800, true), new THREE.PlaneGeometry(3600, 760).rotateX(-Math.PI / 2).rotateY(Math.PI / 2).translate(0, DECK_TOP + 10, -4200), new THREE.Color(1.2, 1, 0.7));
 
     // the dome over the reactor, an armored hatch on the deck: armor while it is closed (see
     // open); always the last collider
-    this.dome = new THREE.Mesh(this.geometry(boxUv(new THREE.CylinderGeometry(450 * Math.SQRT2, 650 * Math.SQRT2, 500, 4).rotateY(Math.PI / 4), ARMOR_TILE, 'lengthwise')), armor);
-    this.dome.position.set(0, DECK_TOP + 250, -1200);
+    this.dome = new THREE.Mesh(this.geometry(boxUv(grow(new THREE.CylinderGeometry(450 * Math.SQRT2, 650 * Math.SQRT2, 500, 4).rotateY(Math.PI / 4)), ARMOR_TILE, 'lengthwise')), armor);
+    this.dome.position.set(0, sized(DECK_TOP + 250), sized(-1200));
     this.root.add(this.dome);
 
     // a battery: an armored turret sloping up from its front on the ring it turns on, a gilded
     // collar, three barrels in armored sleeves with muzzle rings, a rangefinder across its roof,
     // cooling vents in its back
-    const housing = this.geometry(boxUv(taper(-280, 280, 420, 200, 560, 300, -50, 0), ARMOR_TILE, 'lengthwise'));
-    const collar = this.geometry(boxUv(new THREE.BoxGeometry(640, 60, 640).translate(0, -130, 0), ARMOR_TILE, 'lengthwise'));
+    const housing = this.geometry(boxUv(grow(taper(-280, 280, 420, 200, 560, 300, -50, 0)), ARMOR_TILE, 'lengthwise'));
+    const collar = this.geometry(boxUv(grow(new THREE.BoxGeometry(640, 60, 640).translate(0, -130, 0)), ARMOR_TILE, 'lengthwise'));
     const barrels = this.geometry(
-      mergeGeometries([
+      grow(mergeGeometries([
         ...[-130, 0, 130].flatMap((x) => [
           new THREE.CylinderGeometry(40, 48, 1000, 8).rotateX(Math.PI / 2).translate(x, 0, -720),
           new THREE.CylinderGeometry(64, 64, 240, 8).rotateX(Math.PI / 2).translate(x, 0, -380),
@@ -983,35 +1032,35 @@ export class Fleet implements Obstacle {
         new THREE.CylinderGeometry(300, 320, 60, 16).translate(0, -190, 0),
         new THREE.BoxGeometry(380, 50, 70).translate(0, 145, 120),
         ...[-1, 1].map((s) => new THREE.CylinderGeometry(40, 40, 90, 8).rotateX(Math.PI / 2).translate(s * 210, 145, 120)),
-      ]),
+      ])),
     );
-    const vents = this.geometry(mergeGeometries([-195, -65, 65, 195].map((x) => new THREE.BoxGeometry(90, 170, 12).translate(x, 0, 282))));
+    const vents = this.geometry(grow(mergeGeometries([-195, -65, 65, 195].map((x) => new THREE.BoxGeometry(90, 170, 12).translate(x, 0, 282)))));
     for (const at of BATTERY_MOUNTS) {
       const turret = new THREE.Group();
-      turret.position.set(...at);
+      turret.position.set(...at).multiplyScalar(FLEET_SCALE);
       // under the keel it hangs upside down
       if (at[1] < 0) turret.rotation.z = Math.PI;
       turret.add(new THREE.Mesh(housing, armor), new THREE.Mesh(collar, gold), new THREE.Mesh(barrels, gunmetal), new THREE.Mesh(vents, recess));
       this.root.add(turret);
       // on deck it shows itself above the deck and over its edge, under the keel below it
       const face = at[1] < 0 ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(Math.sign(at[0]) * 0.5, 1, 0).normalize();
-      this.zones.push({ kind: 'battery', at: new THREE.Vector3(...at), radius: 300, face, mesh: turret });
+      this.zones.push({ kind: 'battery', at: turret.position.clone(), radius: sized(300), face, mesh: turret });
     }
-    const nozzle = this.geometry(new THREE.CylinderGeometry(420, 520, 600, 16).rotateX(Math.PI / 2));
+    const nozzle = this.geometry(grow(new THREE.CylinderGeometry(420, 520, 600, 16).rotateX(Math.PI / 2)));
     for (const side of [-1, 1]) {
       const drive = new THREE.Mesh(nozzle, this.driveGlow);
-      drive.position.set(side * 700, 0, 7400);
+      drive.position.set(sized(side * 700), 0, sized(7400));
       this.root.add(drive);
       // astern and out to its side, clear of the plume
-      this.zones.push({ kind: 'drive', at: drive.position.clone(), radius: 480, face: new THREE.Vector3(side * 0.6, 0, 1).normalize(), mesh: drive });
+      this.zones.push({ kind: 'drive', at: drive.position.clone(), radius: sized(480), face: new THREE.Vector3(side * 0.6, 0, 1).normalize(), mesh: drive });
     }
-    const reactor = new THREE.Mesh(this.geometry(new THREE.IcosahedronGeometry(420, 1)), this.reactorGlow);
-    reactor.position.set(0, DECK_TOP, -1200);
+    const reactor = new THREE.Mesh(this.geometry(grow(new THREE.IcosahedronGeometry(420, 1))), this.reactorGlow);
+    reactor.position.set(0, sized(DECK_TOP), sized(-1200));
     this.root.add(reactor);
-    this.zones.push({ kind: 'reactor', at: reactor.position.clone(), radius: 450, face: new THREE.Vector3(0, 1, 0), mesh: reactor });
+    this.zones.push({ kind: 'reactor', at: reactor.position.clone(), radius: sized(450), face: new THREE.Vector3(0, 1, 0), mesh: reactor });
     solid([0, DECK_TOP + 250, -1200], [1300, 500, 1300]);
     // the plume behind the drives, while they burn
-    this.flame = new THREE.Mesh(this.geometry(new THREE.ConeGeometry(PLUME_REACH * PLUME_SPREAD, PLUME_REACH, 24, 1, true).rotateX(-Math.PI / 2).translate(0, 0, 7700 + PLUME_REACH / 2)), flame);
+    this.flame = new THREE.Mesh(this.geometry(new THREE.ConeGeometry(PLUME_REACH * PLUME_SPREAD, PLUME_REACH, 24, 1, true).rotateX(-Math.PI / 2).translate(0, 0, NOZZLES + PLUME_REACH / 2)), flame);
     this.flame.visible = false;
     this.root.add(this.flame);
     // the hull throws its shadow and takes those of the rocks; glowing exhaust and glass do neither
@@ -1019,7 +1068,7 @@ export class Fleet implements Obstacle {
       if (o instanceof THREE.Mesh) o.castShadow = o.receiveShadow = !(o.material as THREE.Material).transparent;
     });
     // inside the hull, where the sun never reaches
-    this.machinery.castShadow = false;
+    for (const mesh of this.machinery) mesh.castShadow = false;
     this.hits = this.zones.map(() => 0);
     this.beacons = this.zones.map((_, i) => new Beacon(this, i));
     this.enter();
@@ -1186,7 +1235,7 @@ export class Fleet implements Obstacle {
     if (!this.standing || point.distanceTo(this.position) > REACH) return false;
     this.toLocal(point, local);
     if (local.y < HANGAR_FLOOR || local.y > HANGAR_CEILING) return false;
-    for (const z of HANGARS) if (Math.abs(local.z - z) < HANGAR_WIDTH / 2) return Math.abs(local.x) < sectionAt(z).half;
+    for (const z of HANGARS) if (Math.abs(local.z - z) < HANGAR_WIDTH / 2) return Math.abs(local.x) < hullAt(z).half;
     return false;
   }
 
@@ -1366,24 +1415,28 @@ export class Fleet implements Obstacle {
   }
 
   /**
-   * The battleship as it looks this frame: broken parts burnt out, the dome open, the reactor
-   * pulsing, the plume burning; once it went down it stays until it goes up.
-   */
-  /**
-   * Shows the hangar walls' machinery in full only while `eye` (the camera) is in the hangar deck
-   * or within HANGAR_APPROACH of it; from anywhere else the walls' pictures stand in for it.
+   * Shows a tunnel's machinery in full only while `eye` (the camera) is in the hangar deck or
+   * within HANGAR_APPROACH of it, and of the tunnel nearest it along the hull; from anywhere else
+   * the walls' pictures stand in for it.
    */
   view(eye: THREE.Vector3) {
     const local = EYE.copy(eye).applyMatrix4(UNDO.copy(this.root.matrixWorld).invert());
-    this.machinery.visible =
+    const near =
       this.root.visible &&
       Math.abs(local.x) < DECK_REACH + HANGAR_APPROACH &&
       local.y > HANGAR_FLOOR - HANGAR_APPROACH &&
       local.y < HANGAR_CEILING + HANGAR_APPROACH &&
       local.z > HANGARS[0] - HANGAR_WIDTH / 2 - HANGAR_APPROACH &&
       local.z < HANGARS[HANGARS.length - 1] + HANGAR_WIDTH / 2 + HANGAR_APPROACH;
+    let nearest = 0;
+    for (let i = 1; i < HANGARS.length; i++) if (Math.abs(local.z - HANGARS[i]) < Math.abs(local.z - HANGARS[nearest])) nearest = i;
+    for (let i = 0; i < this.machinery.length; i++) this.machinery[i].visible = near && i === nearest;
   }
 
+  /**
+   * The battleship as it looks this frame: broken parts burnt out, the dome open, the reactor
+   * pulsing, the plume burning; once it went down it stays until it goes up.
+   */
   update(clock: number, now: number) {
     this.clock = clock;
     const dying = this.dying(clock);
@@ -1469,12 +1522,12 @@ export class Fleet implements Obstacle {
   /** How far behind the nozzles a sphere lies in the plume's cone, or -1 outside it; leaves the stern's direction in `toTarget` and the nozzles in `want`. */
   private plume(point: THREE.Vector3, radius: number): number {
     const back = toTarget.set(0, 0, 1).applyQuaternion(this.quaternion);
-    const nozzle = want.set(0, 0, 7700).applyMatrix4(this.root.matrixWorld);
+    const nozzle = want.set(0, 0, NOZZLES).applyMatrix4(this.root.matrixWorld);
     const away = local.subVectors(point, nozzle);
     const along = away.dot(back);
     if (along <= 0 || along > PLUME_REACH) return -1;
     const across = away.addScaledVector(back, -along).length();
-    return across > radius + 1400 + along * PLUME_SPREAD ? -1 : along;
+    return across > radius + PLUME_BASE + along * PLUME_SPREAD ? -1 : along;
   }
 
   private material<T extends THREE.Material>(material: T): T {
