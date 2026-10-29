@@ -115,7 +115,15 @@ const frostUniforms = { frost: { value: 0 }, frostSun: { value: SUN_DIRECTION.cl
 const RIME = 'vec3(0.86, 0.91, 0.98)';
 const RIME_GLOW = 'vec3(0.015, 0.025, 0.045)';
 
-export function frosted<M extends THREE.MeshStandardMaterial>(material: M): M {
+/**
+ * With `plating` (the hull's plating, see ravagedSurface), the frost gathers in the plating's
+ * recesses on either side (their depth in the red of the roughness map), deepest in the shadow,
+ * and the plating's tone varies in patches about a hundred meters across: plates replaced over
+ * the centuries, soot of the battle. So neighboring stretches never look alike, and nothing that
+ * large can shimmer.
+ */
+export function frosted<M extends THREE.MeshStandardMaterial>(material: M, plating = false): M {
+  if (plating) material.defines = { ...material.defines, PLATING: '' };
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, frostUniforms);
     shader.vertexShader = shader.vertexShader
@@ -141,14 +149,23 @@ export function frosted<M extends THREE.MeshStandardMaterial>(material: M): M {
           + 0.17 * sin(p.y * 2.9 - p.z * 1.1 + sin(p.x * 1.3 + p.z))
           + 0.13 * sin((p.z - p.x) * 4.7 + sin(p.y * 3.1));
         patches += 0.25 * (0.5 - dot(diffuseColor.rgb, vec3(0.3, 0.5, 0.2)));
-        rime = frost * smoothstep(0.05, -0.4, dot(normalize(vFrostNormal), frostSun)) * (0.4 + 0.6 * smoothstep(0.3, 0.6, patches));
+        float shade = smoothstep(0.05, -0.4, dot(normalize(vFrostNormal), frostSun));
+        rime = shade * (0.55 + 0.45 * smoothstep(0.25, 0.65, patches));
+        #ifdef PLATING
+          vec3 q = vFrostAt * 0.0027;
+          float tone = 0.5 + 0.25 * sin(q.x * 0.9 + sin(q.y * 1.7 + q.z)) * sin(q.z * 1.3 + q.y * 0.7)
+            + 0.25 * sin(q.x * 2.3 + q.z * 1.9 + 1.7 + sin(q.y * 2.1));
+          diffuseColor.rgb *= mix(vec3(0.74, 0.72, 0.7), vec3(1.06), tone);
+          rime = max(rime, texture2D(roughnessMap, vRoughnessMapUv).r * (0.45 + 0.55 * shade));
+        #endif
+        rime *= frost;
         diffuseColor.rgb = mix(diffuseColor.rgb, ${RIME}, rime * 0.75);`,
       )
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.85, rime);')
       .replace('#include <metalnessmap_fragment>', '#include <metalnessmap_fragment>\nmetalnessFactor = mix(metalnessFactor, 0.0, rime);')
       .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>\ntotalEmissiveRadiance += ${RIME_GLOW} * rime;`);
   };
-  material.customProgramCacheKey = () => 'frosted';
+  material.customProgramCacheKey = () => (plating ? 'frosted-plating' : 'frosted');
   return material;
 }
 
@@ -177,6 +194,22 @@ export function paint(lettering: Lettering, seed: number, x: number, y: number, 
     polygonOffsetFactor: -2,
     polygonOffsetUnits: -4,
   });
+  material.onBeforeCompile = (shader) => {
+    shader.fragmentShader = shader.fragmentShader.replace(
+      '#include <map_fragment>',
+      `#include <map_fragment>
+      // seen up close, a texel spans many pixels and filtering draws an edge of the paint as a
+      // blurred staircase; there the edge is redrawn where its coverage crosses one half, a
+      // pixel wide, smooth along the shape's true outline. Soft fading and the picture from
+      // afar keep the coverage as filtered.
+      float coverage = sampledDiffuseColor.a;
+      float texels = length(fwidth(vMapUv * vec2(textureSize(map, 0))));
+      float edge = smoothstep(0.15, 0.4, fwidth(coverage) / max(texels, 1e-4)) * smoothstep(1.0, 0.5, texels);
+      float crisp = clamp((coverage - 0.5) / max(fwidth(coverage), 1e-4) + 0.5, 0.0, 1.0);
+      diffuseColor.a = opacity * mix(coverage, crisp, edge);`,
+    );
+  };
+  material.customProgramCacheKey = () => 'paint';
   // both flanks in one draw call
   const flanks = [1, -1].map((side) => {
     const plane = new THREE.PlaneGeometry(length, length / PAINT_ASPECT);

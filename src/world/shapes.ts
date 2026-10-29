@@ -57,8 +57,8 @@ function tiled(element: HTMLCanvasElement): THREE.CanvasTexture {
 }
 
 /**
- * The plating of what broke in battle (see ravagedSurface): craters, burns with their heat
- * tint, soot and rust, with `embers` the last embers glowing in a few craters (a fresh wreck;
+ * The plating of what broke in battle (see ravagedSurface): craters, holes, burns with
+ * their heat tint, soot, with `embers` the last embers glowing in a few craters (a fresh wreck;
  * an old one has long gone cold). Little metalness of its own: without a reflected environment,
  * metal turns black on its shadowed side.
  */
@@ -200,6 +200,21 @@ const DOME_RADIUS = 105;
 const DOME_RISE = 0.6;
 /** The livery's paint on the band along the flanks: off-white, worn, chipped and scratched over the centuries, the name's dark blue reading clearly on it. */
 const LIVERY: Wear = { rust: 0.15, chips: 0.5, grime: 0.6, scratches: 0.6, seams: 0.35, stencils: [], roughness: 0.75, metalness: 0.1 };
+/**
+ * A tile of the hull's plating (template units; about 34 m on the derelict, whose sections are
+ * scaled 7-fold): plates in courses of 2 and 4 m, rivets 40 cm apart (see ravagedSurface).
+ */
+const PLATING_TILE = 96;
+
+/**
+ * The hull's plating in `color` (see ravagedSurface): its relief as a normal map, frost and dust
+ * in its recesses, its tone varying across the hull (see frosted). Little metalness of its own:
+ * without a reflected environment, metal turns black on its shadowed side.
+ */
+function plating(color: THREE.ColorRepresentation): THREE.MeshStandardMaterial {
+  const surface = ravagedSurface(DEBRIS_SEED + 1);
+  return frosted(new THREE.MeshStandardMaterial({ map: surface.map, roughnessMap: surface.orm, metalnessMap: surface.orm, roughness: 1, metalness: 1, normalMap: surface.normal, color }), true);
+}
 
 /** What a hull template is built of before it is merged: plating, the runs of windows (steady and on the two failing circuits), the domes' glass and gardens, beacons, paint. */
 interface HullParts {
@@ -225,8 +240,9 @@ interface HullParts {
  * and its red beacons (see world/worldship).
  */
 export function hullSet(): TemplateSet {
-  const metal = frosted(ravaged(0xb8bec8, false));
-  const dark = frosted(ravaged(0x4a4e57, false));
+  const metal = plating(0xb8bec8);
+  const dark = plating(0x4a4e57);
+  const uvs = new Randomizer(DEBRIS_SEED + 5);
   const windows = windowMaterials(windowTexture(DEBRIS_SEED + 2));
   const glass = domeGlass();
   const garden = rimed();
@@ -320,11 +336,21 @@ export function hullSet(): TemplateSet {
     [SECTION, painted(7)],
   ];
   const flat = (geometries: THREE.BufferGeometry[]) => mergeGeometries(geometries.map((p) => (p.hasAttribute('uv') ? p.deleteAttribute('uv') : p)));
+  // each part takes the plating at its own place, mirrored or not, so neighbors never show the same stretch of it
+  const plated = (geometries: THREE.BufferGeometry[]) =>
+    mergeGeometries(
+      geometries.map((p) => {
+        const uv = boxUv(p, PLATING_TILE).getAttribute('uv');
+        const [du, dv, mirror] = [uvs.nextFloat(), uvs.nextFloat(), uvs.nextFloat() < 0.5 ? -1 : 1];
+        for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * mirror + du, uv.getY(i) + dv);
+        return p;
+      }),
+    );
   const near = shapes.map(([half, build]) => {
     const into: HullParts = { parts: [], livery: [], lights: [], failing: [[], []], glass: [], garden: [], beacons: [], decals: [] };
     build(half, into);
     const group = new THREE.Group();
-    group.add(new THREE.Mesh(boxUv(flat(into.parts), TILE), half.y < L * 0.05 ? dark : metal));
+    group.add(new THREE.Mesh(plated(into.parts), half.y < L * 0.05 ? dark : metal));
     if (into.livery.length) group.add(new THREE.Mesh(boxUv(flat(into.livery), TILE), livery));
     if (into.lights.length) group.add(new THREE.Mesh(boxUv(flat(into.lights), 400), windows.steady));
     into.failing.forEach((runs, i) => runs.length && group.add(new THREE.Mesh(boxUv(flat(runs), 400), windows.failing[i])));

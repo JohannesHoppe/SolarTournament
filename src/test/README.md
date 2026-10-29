@@ -2,7 +2,7 @@
 
 Helpers for the unit tests (`npm test`, Vitest in Node), not part of the game.
 
-- `cube.ts`: reads a baked cube map back the way the GPU does (the face and texel a direction picks, the direction a texel stands for, a texel's normal) and a detail tile's seams and means; the tests of the relief maps of rock and ice use it.
+- `cube.ts`: reads a baked cube map back the way the GPU does (the face and texel a direction picks, the direction a texel stands for, a texel's normal) and a detail tile's seams and means, and checks that a shape's map is its own, square and mipmapped, and baked alike every time; the tests of the relief maps of rock, ice and the comet's nucleus use it.
 - `field.ts`: an asteroid field with the real rock shapes (in the detail a test asks for), rock and ice breaking into pieces of themselves cut at that detail, and plain boxes for hull pieces.
 - `honest.ts`: an honest ship flown wildly with the game's flight model (slammed sticks, flips, the autopilot, beams), blown about by shoves, hits and venting air, on a browser that stutters and a link that stalls; returns its states and beams as another browser receives them, for the cheat checks (`src/net/plausible.test.ts`) to prove they never take it for a cheat.
 - `cockpit.ts`: the own ship as the game flies it, without the game (flight model and the autopilot, free drift or the brake); a Host's hand on the mouse that turns the nose onto a goal in eased strokes, a moment late, overshooting and correcting; how a flight came onto a direction (time, overshoot, nose), the slip between flight and nose; and the replay of a recording of the input recorder (`src/recorder.ts`) through the autopilot. The scenarios of `src/ship/flight.test.ts` use it.

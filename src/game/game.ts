@@ -6184,7 +6184,8 @@ export class Game implements OnlineGame {
       this.shower = flying ? new Shower(flying) : null;
       this.struck.clear();
     }
-    this.cometView.update(this.shower, clock);
+    this.cometView.setDetail(this.graphics.look.rocks);
+    this.cometView.update(this.shower, clock, this.camera.position);
     this.cometTail(me, dt);
     if (!flying) return;
     runDown(flying, this.field, clock, (rock) => this.burstRock(rock), (piece, point) => this.cometShove(piece, point));
