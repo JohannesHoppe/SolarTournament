@@ -488,7 +488,7 @@ const TAIL_LIGHT = new THREE.Color(1, 0.12, 0.06).multiplyScalar(2.4);
  * The human interceptor's wear: an old fighter of the depots, olive paint chipped down to the
  * metal, rust running from its rivets, grime, and the stencils of every depot it passed through.
  */
-const DEPOT: Wear = { rust: 0.8, chips: 0.7, grime: 0.6, scratches: 0.6, seams: 0.7, stencils: ['07', 'NO STEP', 'FUEL', 'DEPOT 41-C', 'RESCUE', '2511'], roughness: 0.62, metalness: 0.25, flakes: true };
+export const DEPOT: Wear = { rust: 0.8, chips: 0.7, grime: 0.6, scratches: 0.6, seams: 0.7, stencils: ['07', 'NO STEP', 'FUEL', 'DEPOT 41-C', 'RESCUE', '2511'], roughness: 0.62, metalness: 0.25, flakes: true };
 /** Its fins: the same paint and wear on ribbed plates in riveted frames. */
 const DEPOT_FINS: Wear = { ...DEPOT, stencils: ['07', 'NO STEP'], relief: 'ribs' };
 
@@ -648,8 +648,12 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
   return hull(original, 'sovereignHull', coats, trim, radiators);
 }
 
-/** The Sovereign's wear: a gift of the President, kept like new; a few scratches, its number in gold. */
-const GIFT: Wear = { rust: 0, chips: 0.05, grime: 0.1, scratches: 0.2, seams: 0.3, stencils: ['01'], roughness: 0.3, metalness: 0.6 };
+/**
+ * The Sovereign's wear: a gift of the President, kept like new; a few scratches, its number in
+ * gold. Its plates are flush, welded and bonded with thin, crisp panel lines, and not a rivet
+ * (a technique of the age of steam): its only fasteners are flush bolts on a few hatches.
+ */
+export const GIFT: Wear = { rust: 0, chips: 0.05, grime: 0.1, scratches: 0.2, seams: 0.3, stencils: ['01'], roughness: 0.3, metalness: 0.6, relief: 'flush' };
 /**
  * Its gold: polished metal, brushed along its length and engraved in bands of interlaced waves
  * and the regime's stars (see engraving in view/surfaces), barely touched. Gold needs no paint and
