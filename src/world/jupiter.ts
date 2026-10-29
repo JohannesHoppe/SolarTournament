@@ -66,15 +66,16 @@ const AURORA_FOOT = 2000;
 const AURORA_TOP = 8000;
 const AURORA_LOWEST = 16000;
 /**
- * Within the curtains, fine rays, AURORA_RAYS per degree along the arc, brighten and dim each on
- * its own about AURORA_FLICKER times a second (smoothly, a noise in time) and travel along the
- * curtain by AURORA_GLIDE rays a second; patches of the curtain pulse every second or so.
- * Rays narrower than a few pixels fade into the curtain's even glow. With reduced motion, the rays
- * stand still and only the folds wave.
+ * The auroras are calm. Within the curtains, soft vertical rays, AURORA_RAYS per degree along the
+ * arc, change their brightness and height only as slowly as the folds drift (a noise in time
+ * advancing AURORA_DRIFT a second, so a ray takes most of a minute to change); stretches of the
+ * curtain brighten and dim gently, AURORA_PULSE a second (some 8 s from bright to dim and back),
+ * as real auroras pulse slowly. Rays narrower than a few pixels fade into the curtain's even glow,
+ * so nothing sparkles. With reduced motion the pulsing holds still and only the folds drift.
  */
 const AURORA_RAYS = 1.5;
-const AURORA_FLICKER = 2;
-const AURORA_GLIDE = 0.8;
+const AURORA_DRIFT = 0.02;
+const AURORA_PULSE = 0.12;
 /** The curtains drawn one behind the other on each tier of the picture's quality (see setDetail). */
 const AURORA_LAYERS = [3, 2, 1];
 const reducedMotion = typeof window === 'undefined' ? null : window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -463,8 +464,8 @@ const sheetFragment = () => /* glsl */ `
  * see update) with a margin, so only the arc itself is shaded. In it, `layers` curtains one
  * behind the other, each a ribbon folded along the arc and waving slowly: a bright pale
  * blue-white lower edge, glowing violet and magenta above and fading upwards, brighter where a
- * fold is seen edge-on; fine rays in it, each its own height, brightening and dimming and
- * travelling along the curtain (see AURORA_RAYS; `motion` 0 holds them still). Added to what lies
+ * fold is seen edge-on; soft rays in it, each its own height, changing slowly, and stretches of
+ * it brightening and dimming over seconds (see AURORA_RAYS; `motion` 0 holds that still). Added to what lies
  * behind, fading out at the strip's ends; the haze dims it to nothing below the deck.
  */
 const auroraVertex = /* glsl */ `
@@ -509,7 +510,7 @@ const auroraFragment = /* glsl */ `
     float along = vUv.x * ${((AURORA_SPAN * 2 * 180) / Math.PI).toFixed(2)};
     float height = (vElevation - foot) / (top - foot);
     float pixel = fwidth(height);
-    float flick = time * motion;
+    float breath = time * motion * ${AURORA_PULSE.toFixed(2)};
     float fine = 1.0 - smoothstep(0.3, 0.6, fwidth(along * ${AURORA_RAYS.toFixed(2)}));
     vec3 light = vec3(0.0);
     for (int i = 0; i < 3; i++) {
@@ -519,13 +520,12 @@ const auroraFragment = /* glsl */ `
       float fold = noise2(vec2(along * 0.09 + layer * 7.3, time * 0.03 + layer));
       float y = height - (fold - 0.5) * 0.45 - layer * 0.12;
       float edgeOn = 0.55 + 0.9 * smoothstep(0.5, 0.85, noise2(vec2(along * 0.16 - time * 0.02, layer * 3.1 + time * 0.04)));
-      // the rays: one per lattice step, each brightening and dimming on its own and gliding along
-      float ray = along * ${AURORA_RAYS.toFixed(2)} + flick * ${AURORA_GLIDE.toFixed(2)} + layer * 17.0;
-      float shine = noise2(vec2(ray, flick * ${AURORA_FLICKER.toFixed(2)} + layer * 5.0));
-      float rays = mix(0.7, 0.2 + 1.5 * shine * shine, fine);
-      float reach = mix(0.75, 0.45 + 0.75 * shine, fine);
-      // patches pulsing, a second or so
-      float pulse = 0.75 + 0.5 * noise2(vec2(along * 0.3 - flick * 0.5, flick * 0.8 + layer * 9.0));
+      // the rays: one per lattice step, each its own brightness and height, changing as slowly as the folds drift
+      float shine = noise2(vec2(along * ${AURORA_RAYS.toFixed(2)} + layer * 17.0, time * ${AURORA_DRIFT.toFixed(3)} + layer * 5.0));
+      float rays = mix(0.8, 0.45 + 0.9 * shine, fine);
+      float reach = mix(0.75, 0.5 + 0.6 * shine, fine);
+      // stretches of the curtain brightening and dimming gently over seconds
+      float pulse = 0.75 + 0.5 * noise2(vec2(along * 0.08 + layer * 9.0, breath + layer * 3.0));
       float soft = max(0.1, 1.5 * pixel);
       float profile = smoothstep(-soft, soft * 0.5, y) * exp(-max(y, 0.0) / (0.32 * reach)) * (1.0 - smoothstep(0.7, 1.15, y));
       vec3 color = mix(vec3(0.72, 0.8, 1.0), vec3(0.95, 0.32, 1.0), smoothstep(0.0, 0.28, y));
