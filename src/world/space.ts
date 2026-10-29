@@ -9,13 +9,38 @@ const DUST_COUNT = 1500;
 /** Edge length of the dust volume that wraps around the camera. */
 const DUST_SIZE = 12000;
 
+/**
+ * A room in space that motes stay out of: the matrix takes a point of the world into a box of
+ * ±1 on every axis, and every mote drawn around the camera (the dust, the Rings' specks and
+ * grains) is gone inside it, fading in over 3 % of its half sizes outside it, so none pops
+ * where it crosses the box and none shows half faded against a wall within: motes against a
+ * room's walls would read as stars seen through them. The President's battleship puts its
+ * hangar deck here while it is shown (see game/fleet); otherwise the box sits nowhere (every
+ * point lands outside it). Looks only.
+ */
+export const shelter = { value: new THREE.Matrix4() };
+/** Puts the shelter nowhere: every point of the world lands at (2, 2, 2), outside the box. */
+export function unshelter() {
+  shelter.value.makeScale(0, 0, 0).setPosition(2, 2, 2);
+}
+unshelter();
+/** GLSL: `outside(world)` is 1 for a point of the world outside the shelter, 0 inside, soft in between. */
+export const shelterPars = /* glsl */ `
+  uniform mat4 shelter;
+  float outside(vec3 world) {
+    vec3 at = abs((shelter * vec4(world, 1.0)).xyz);
+    return smoothstep(1.0, 1.03, max(at.x, max(at.y, at.z)));
+  }
+`;
+
 const dustVertex = /* glsl */ `
   uniform float size;
   varying float vFade;
+  ${shelterPars}
   void main() {
     // the dust is fixed in the world; the volume wraps around the camera
     vec3 offset = mod(position - cameraPosition + size * 0.5, size) - size * 0.5;
-    vFade = 1.0 - smoothstep(size * 0.25, size * 0.5, length(offset));
+    vFade = (1.0 - smoothstep(size * 0.25, size * 0.5, length(offset))) * outside(cameraPosition + offset);
     vec4 mvPosition = viewMatrix * vec4(cameraPosition + offset, 1.0);
     gl_PointSize = clamp(1500.0 / -mvPosition.z, 1.0, 3.0);
     gl_Position = projectionMatrix * mvPosition;
@@ -41,9 +66,10 @@ const streakVertex = /* glsl */ `
   uniform float strength;
   attribute float tail;
   varying float vFade;
+  ${shelterPars}
   void main() {
     vec3 offset = mod(position + drift - cameraPosition + size * 0.5, size) - size * 0.5;
-    vFade = (1.0 - smoothstep(size * 0.2, size * 0.45, length(offset))) * strength * (1.0 - tail * 0.85);
+    vFade = (1.0 - smoothstep(size * 0.2, size * 0.45, length(offset))) * strength * (1.0 - tail * 0.85) * outside(cameraPosition + offset);
     vec3 world = cameraPosition + offset + velocity * tail;
     gl_Position = projectionMatrix * viewMatrix * vec4(world, 1.0);
   }
@@ -78,7 +104,7 @@ export function dustStreaks(positions: Float32Array, size: number, tint: THREE.C
   geometry.setAttribute('position', new THREE.BufferAttribute(ends, 3));
   geometry.setAttribute('tail', new THREE.BufferAttribute(tails, 1));
   const streaks = new THREE.LineSegments(geometry, new THREE.ShaderMaterial({
-    uniforms: { size: { value: size }, velocity: { value: new THREE.Vector3() }, drift: { value: new THREE.Vector3() }, strength: { value: 0 }, tint: { value: tint } },
+    uniforms: { size: { value: size }, velocity: { value: new THREE.Vector3() }, drift: { value: new THREE.Vector3() }, strength: { value: 0 }, tint: { value: tint }, shelter },
     vertexShader: streakVertex,
     fragmentShader: streakFragment,
     blending: THREE.AdditiveBlending,
@@ -183,7 +209,7 @@ export class Space {
     const dustGeometry = new THREE.BufferGeometry();
     dustGeometry.setAttribute('position', new THREE.BufferAttribute(dustPositions, 3));
     this.dust = new THREE.Points(dustGeometry, new THREE.ShaderMaterial({
-      uniforms: { size: { value: DUST_SIZE }, tint: { value: this.dustTint } },
+      uniforms: { size: { value: DUST_SIZE }, tint: { value: this.dustTint }, shelter },
       vertexShader: dustVertex,
       fragmentShader: dustFragment,
       blending: THREE.AdditiveBlending,

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
-import { SUN_DIRECTION } from './space';
+import { shelter, shelterPars, SUN_DIRECTION } from './space';
 import { ARENAS, RING_LAYER, SATURN_CENTER, type ArenaId, type ArenaProfile } from './arenas';
 import { Derelict, mistDensity } from './derelict';
 import { sizeBeacons } from './worldship';
@@ -549,6 +549,7 @@ const speckVertexPars = /* glsl */ `
   varying vec3 vFacet;
   varying vec3 vWorld;
   varying float vFade;
+  ${shelterPars}
 `;
 
 /** Draws a speck at `worldPosition`, `size` across in the world, from 1 to `pixels` device px, in the sun's shadows. */
@@ -567,8 +568,8 @@ const speckVertex = /* glsl */ `
     vFacet = facet;
     // the square moves with the pilot: every speck within slab of the camera along the plane
     vec2 offset = mod(position.xz - cameraPosition.xz + slab, 2.0 * slab) - slab;
-    vFade = 1.0 - smoothstep(0.7 * slab, slab, max(abs(offset.x), abs(offset.y)));
     vec4 worldPosition = vec4(cameraPosition.x + offset.x, position.y, cameraPosition.z + offset.y, 1.0);
+    vFade = (1.0 - smoothstep(0.7 * slab, slab, max(abs(offset.x), abs(offset.y)))) * outside(worldPosition.xyz);
     ${speckPlace(ICE_SPECK_PIXELS)}
   }
 `;
@@ -593,7 +594,7 @@ const grainVertex = /* glsl */ `
     vec3 offset = mod(position - cameraPosition + box, 2.0 * box) - box;
     vec4 worldPosition = vec4(cameraPosition + offset, 1.0);
     float reach = length(offset);
-    vFade = smoothstep(${GRAIN_NEAR[0].toFixed(1)}, ${GRAIN_NEAR[1].toFixed(1)}, reach) * (1.0 - smoothstep(0.5 * box, box, reach)) * (1.0 - smoothstep(0.8 * layer, layer, abs(worldPosition.y)));
+    vFade = smoothstep(${GRAIN_NEAR[0].toFixed(1)}, ${GRAIN_NEAR[1].toFixed(1)}, reach) * (1.0 - smoothstep(0.5 * box, box, reach)) * (1.0 - smoothstep(0.8 * layer, layer, abs(worldPosition.y))) * outside(worldPosition.xyz);
     #ifdef STREAK
       worldPosition.xyz += trail * tail;
       vFade *= strength * (1.0 - tail);
@@ -907,6 +908,7 @@ export class Landmarks {
         light: { value: this.light },
         color: { value: new THREE.Color(0xe6e1d8) },
         viewport: { value: 1000 },
+        shelter,
         ...own,
       }),
       vertexShader,

@@ -4,6 +4,7 @@ import { Randomizer } from '../random';
 import { FIELD_RADIUS, raySphere, type AsteroidField, type Obstacle } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
+import { shelter, unshelter } from '../world/space';
 import { ARMOR_TILE, armorSurface, boxUv, lacquer, shine } from '../view/surfaces';
 import type { Homing } from './torpedoes';
 import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS, routeNearest, SHOWER_LENGTH, SHOWER_WIDE, type Comet } from './comet';
@@ -233,6 +234,19 @@ function slopePoint(side: number, z: number, down: number, lift: number, target 
 
 /** The spans along the hull a hangar takes, wall to wall (its clear width and the racks on both sides). */
 const HANGAR_SPANS: readonly (readonly [number, number])[] = HANGARS.map((z) => [z - HANGAR_WIDTH / 2 - HANGAR_RACKS, z + HANGAR_WIDTH / 2 + HANGAR_RACKS]);
+
+/**
+ * The hangar deck as the motes' shelter (see world/space): from the hull's frame into a box of
+ * ±1 around all three tunnels, flank to flank, floor to ceiling. The walls between the tunnels
+ * lie in it too, where no mote shows anyway.
+ */
+const SHELTER_BOX = (() => {
+  const [z0, z1] = [HANGAR_SPANS[0][0], HANGAR_SPANS[HANGAR_SPANS.length - 1][1]];
+  const reach = Math.max(...HANGAR_SPANS.flat().map((z) => sectionAt(z).half));
+  return new THREE.Matrix4()
+    .makeScale(1 / reach, 2 / (HANGAR_CEILING - HANGAR_FLOOR), 2 / (z1 - z0))
+    .multiply(new THREE.Matrix4().makeTranslation(0, -(HANGAR_FLOOR + HANGAR_CEILING) / 2, -(z0 + z1) / 2));
+})();
 
 /** How far the deck's edge moves out per unit along the hull at `z` (the belt's slant in plan). */
 function flare(z: number) {
@@ -475,7 +489,9 @@ export class Fleet implements Obstacle {
     // hangars' ceilings glow softly, their lamps bright, so a tunnel reads lit without blooming
     // into one block from outside
     const lit = light(1, 0.8, 0.55, 1.2);
-    const hangar = light(1, 0.6, 0.28, 0.32);
+    // the hangar deck's inside, lit by its own lamps in the colors baked into its corners (see
+    // lamplit), so its bulkheads read lit where neither the sun nor the sky reaches
+    const hangar = this.material(new THREE.MeshBasicMaterial({ vertexColors: true, toneMapped: false }));
     const marking = light(1, 0.95, 0.85, 1.3);
     const thruster = light(0.75, 0.85, 1, 1.6);
     this.reactorGlow = light(1, 0.75, 0.4, 2.5);
@@ -688,9 +704,41 @@ export class Fleet implements Obstacle {
     // with lit markings along it (a dashed line down its middle, its edges, a bar at each mouth),
     // racks of the regime's red cargo on its walls, a gilded frame and a lamp at each corner of
     // its mouths. All of it merged into the hull's meshes: no draw call of its own. The racks stand
-    // within HANGAR_RACKS of the walls, inside the walls' colliders
+    // within HANGAR_RACKS of the walls, inside the walls' colliders. Inside, the hull's shadow
+    // keeps out the sun and the walls hide the sky, so the bulkheads, the deck, the racks and
+    // their cargo carry their light in their corners (see lamplit) instead of taking the scene's
     {
       const random = new Randomizer(seed * 7 + 3);
+      const paint = new Randomizer(seed * 7 + 5);
+      /** The ceiling's soft glow (linear RGB): warm, dim enough not to bloom into one block from outside. */
+      const glow = new THREE.Color(1, 0.6, 0.28).multiplyScalar(0.32);
+      /** The lamps' warm light on what faces them squarely. */
+      const lamps = new THREE.Color(1, 0.74, 0.48);
+      /**
+       * `geometry` in `color` as the hangar's lamps light it, baked into its corners: a face
+       * looking up at them in full, a face standing upright grazed, brighter towards the ceiling,
+       * a face looking down only by what the deck throws back; with `glowing`, `color` as it is.
+       */
+      const lamplit = (geometry: THREE.BufferGeometry, color: THREE.Color, glowing = false) => {
+        const position = geometry.getAttribute('position');
+        const normal = geometry.getAttribute('normal');
+        const colors = new Float32Array(position.count * 3);
+        const shown = new THREE.Color();
+        for (let i = 0; i < position.count; i++) {
+          const up = THREE.MathUtils.clamp((position.getY(i) - HANGAR_FLOOR) / (HANGAR_CEILING - HANGAR_FLOOR), 0, 1);
+          const facing = normal.getY(i);
+          const shade = facing > 0.5 ? 0.75 : facing < -0.5 ? 0.12 : 0.18 + 0.82 * up * up;
+          if (glowing) shown.copy(color);
+          else shown.copy(color).multiply(lamps).multiplyScalar(shade);
+          shown.toArray(colors, i * 3);
+        }
+        geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+        put(geometry, hangar);
+      };
+      const bulkhead = new THREE.Color(0x8c929c);
+      const steel = new THREE.Color(0x3c414c);
+      const deck = new THREE.Color(0x2a2d33);
+      const cargo = new THREE.Color(0x8a1a1a);
       /** A flat panel through four corners, facing `facing`. */
       const panel = (corners: THREE.Vector3[], facing: THREE.Vector3) => {
         const normal = new THREE.Vector3().subVectors(corners[1], corners[0]).cross(new THREE.Vector3().subVectors(corners[2], corners[0]));
@@ -708,32 +756,44 @@ export class Fleet implements Obstacle {
         const [w0, w1] = [front - HANGAR_RACKS, rear + HANGAR_RACKS];
         const reach = Math.min(sectionAt(w0).half, sectionAt(w1).half);
         // floor, ceiling and the walls behind the racks
-        put(panel([across(w0, HANGAR_FLOOR, -1), across(w0, HANGAR_FLOOR, 1), across(w1, HANGAR_FLOOR, 1), across(w1, HANGAR_FLOOR, -1)], UP), recess);
-        put(panel([across(w0, HANGAR_CEILING, -1), across(w0, HANGAR_CEILING, 1), across(w1, HANGAR_CEILING, 1), across(w1, HANGAR_CEILING, -1)], new THREE.Vector3(0, -1, 0)), hangar);
+        lamplit(panel([across(w0, HANGAR_FLOOR, -1), across(w0, HANGAR_FLOOR, 1), across(w1, HANGAR_FLOOR, 1), across(w1, HANGAR_FLOOR, -1)], UP), deck);
+        lamplit(panel([across(w0, HANGAR_CEILING, -1), across(w0, HANGAR_CEILING, 1), across(w1, HANGAR_CEILING, 1), across(w1, HANGAR_CEILING, -1)], new THREE.Vector3(0, -1, 0)), glow, true);
+        const posts: number[] = [];
+        for (let x = -reach + 200; x <= reach - 200; x += 400) posts.push(x);
         for (const [z, facing] of [
           [w0, 1],
           [w1, -1],
         ] as const) {
-          put(panel([across(z, HANGAR_FLOOR, -1), across(z, HANGAR_FLOOR, 1), across(z, HANGAR_CEILING, 1), across(z, HANGAR_CEILING, -1)], new THREE.Vector3(0, 0, facing)), gunmetal);
+          // the wall in painted plates, a bay between two posts wide and a shelf high, each a
+          // shade of its own; its outer bays run out to the flanks
+          const columns = [-sectionAt(z).half, ...posts, sectionAt(z).half];
+          const rows = [HANGAR_FLOOR, HANGAR_FLOOR + 300, HANGAR_FLOOR + 580, HANGAR_FLOOR + 820, HANGAR_CEILING];
+          for (let c = 0; c < columns.length - 1; c++) {
+            for (let r = 0; r < rows.length - 1; r++) {
+              const [x0, x1, y0, y1] = [columns[c], columns[c + 1], rows[r], rows[r + 1]];
+              const plate = [new THREE.Vector3(x0, y0, z), new THREE.Vector3(x1, y0, z), new THREE.Vector3(x1, y1, z), new THREE.Vector3(x0, y1, z)];
+              lamplit(panel(plate, new THREE.Vector3(0, 0, facing)), bulkhead.clone().multiplyScalar(paint.range(0.8, 1.15)));
+            }
+          }
           // racks: posts every 20 m, three shelves, crates on them where the seed puts some
           const face = z + facing * (HANGAR_RACKS / 2);
           const shelves = [HANGAR_FLOOR + 20, HANGAR_FLOOR + 300, HANGAR_FLOOR + 580];
-          for (let x = -reach + 200; x <= reach - 200; x += 400) {
-            put(new THREE.BoxGeometry(30, HANGAR_CEILING - HANGAR_FLOOR - 200, HANGAR_RACKS).translate(x, (HANGAR_CEILING + HANGAR_FLOOR - 200) / 2, face), gunmetal);
+          for (const x of posts) {
+            lamplit(new THREE.BoxGeometry(30, HANGAR_CEILING - HANGAR_FLOOR - 200, HANGAR_RACKS).translate(x, (HANGAR_CEILING + HANGAR_FLOOR - 200) / 2, face), steel);
             if (x + 400 > reach - 200) continue;
             for (const y of shelves) {
-              put(new THREE.BoxGeometry(400, 16, HANGAR_RACKS).translate(x + 200, y, face), gunmetal);
+              lamplit(new THREE.BoxGeometry(400, 16, HANGAR_RACKS).translate(x + 200, y, face), steel);
               if (random.nextFloat() < 0.75) {
                 const width = random.range(140, 340);
                 const tall = random.range(90, 230);
-                put(new THREE.BoxGeometry(width, tall, HANGAR_RACKS - 10).translate(x + 200 + random.range(-1, 1) * (180 - width / 2), y + 8 + tall / 2, face), runway);
+                lamplit(new THREE.BoxGeometry(width, tall, HANGAR_RACKS - 10).translate(x + 200 + random.range(-1, 1) * (180 - width / 2), y + 8 + tall / 2, face), cargo.clone().multiplyScalar(paint.range(0.75, 1.2)));
               }
             }
           }
         }
         // two rows of lamps under the ceiling, a warm band along each wall's top
         for (const z of [center - HANGAR_WIDTH / 4, center + HANGAR_WIDTH / 4]) for (let x = -reach + 150; x < reach - 100; x += 300) put(new THREE.BoxGeometry(160, 16, 60).translate(x, HANGAR_CEILING - 10, z), lit);
-        for (const z of [front + 10, rear - 10]) put(new THREE.BoxGeometry(2 * reach, 40, 20).translate(0, HANGAR_CEILING - 60, z), hangar);
+        for (const z of [front + 10, rear - 10]) lamplit(new THREE.BoxGeometry(2 * reach, 40, 20).translate(0, HANGAR_CEILING - 60, z), glow, true);
         // the deck's markings: a dashed line down the middle, its edges, and a bar at each mouth
         for (let x = -reach + 300; x < reach - 300; x += 400) put(new THREE.BoxGeometry(200, 4, 30).translate(x, HANGAR_FLOOR + 2, center), marking);
         for (const z of [front + 120, rear - 120]) put(new THREE.BoxGeometry(2 * reach - 200, 4, 24).translate(0, HANGAR_FLOOR + 2, z), marking);
@@ -1253,6 +1313,10 @@ export class Fleet implements Obstacle {
     this.clock = clock;
     const dying = this.dying(clock);
     this.root.visible = this.present(clock) || dying;
+    // the motes stay out of the hangar deck while the battleship is shown
+    this.root.updateMatrix();
+    if (this.root.visible) shelter.value.copy(this.root.matrix).invert().premultiply(SHELTER_BOX);
+    else unshelter();
     for (let i = 0; i < this.beacons.length; i++) this.zoneAt(i, this.beacons[i].flight.position);
     // a broken drive is burnt out; a broken battery or reactor is gone
     for (let i = 0; i < this.zones.length; i++) {
@@ -1268,6 +1332,7 @@ export class Fleet implements Obstacle {
   }
 
   dispose() {
+    unshelter();
     for (const material of this.materials) material.dispose();
     for (const geometry of this.geometries) geometry.dispose();
     for (const texture of this.textures) texture.dispose();
