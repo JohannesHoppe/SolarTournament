@@ -39,6 +39,8 @@ const PAGES = Number(process.env.BALANCE_PAGES ?? 7);
 const SLOW = Number(process.env.BALANCE_SLOW ?? 1);
 /** Real seconds a round may take at most, its loading included. */
 const ROUND_BUDGET = 120;
+/** Only this arena's rounds (BALANCE_ARENA=<id>, see src/world/arenas.ts), to look at one arena after a change to it; the checks then judge its rounds alone. */
+const ONLY = process.env.BALANCE_ARENA;
 /** Game seconds a round may run past its five minutes (its opening, a sinking battleship) before its clock counts as stuck. */
 const ROUND_GRACE = 30;
 
@@ -87,7 +89,9 @@ async function arenas(browser: Browser): Promise<string[]> {
   const page = await browser.newPage();
   try {
     await page.goto('/');
-    return await page.evaluate(async (path) => (await import(path)).ARENAS.map((arena: { id: string }) => arena.id), '/src/world/arenas.ts');
+    const ids: string[] = await page.evaluate(async (path) => (await import(path)).ARENAS.map((arena: { id: string }) => arena.id), '/src/world/arenas.ts');
+    if (ONLY && !ids.includes(ONLY)) throw new Error(`no arena ${ONLY}`);
+    return ONLY ? [ONLY] : ids;
   } finally {
     await page.close();
   }
@@ -125,8 +129,8 @@ async function playRounds(browser: Browser, mode: string) {
   return { ...result, rounds, detail: JSON.stringify(detail) };
 }
 
-/** The arenas there are, for the time the rounds take (checked in playRounds). */
-const ARENA_COUNT = 7;
+/** The arenas played, for the time the rounds take (checked in playRounds): all seven, or the one of BALANCE_ARENA. */
+const ARENA_COUNT = ONLY ? 1 : 7;
 /** Long enough for every round of a mode, PAGES at a time. */
 const timeout = (mode: string) => Math.ceil((ARENA_COUNT * ROUNDS_PER_ARENA[mode]) / PAGES) * ROUND_BUDGET * 1000 * SLOW + 60_000;
 
