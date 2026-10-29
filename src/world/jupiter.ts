@@ -49,14 +49,35 @@ const STRIKE_SECONDS = 0.45;
 /** A stroke's light in the haze at its height (see view/haze's flash): the clouds around it light up without blinding. */
 const FLASH_STRENGTH = 0.5;
 /**
- * The auroras around the south pole, 77° from the arena across the planet: a band of curtains on
- * the sky over the southern horizon, AURORA_DISTANCE from the eye (units, 30 km, inside the
- * camera's reach), AURORA_SPAN to either side of the pole's direction (rad, 35°), rising
- * AURORA_RISE over the horizon (rad, 4°).
+ * The auroras around the south pole, 77° from the arena across the planet: curtains of light in
+ * the thin shell of the upper air where Jupiter's auroras glow, a few hundred kilometers above
+ * its clouds on a planet of 71,500 km (at the game's scale, about 1/1,750, some 150 to 300 m).
+ * They hang from AURORA_FOOT to AURORA_TOP over the deck (units, 100 to 400 m, lifted a little so
+ * they show), and are seen as a thin arc lying on the planet's rim towards the pole: as high over
+ * the limb as that shell rises over it seen from the eye, and from no lower than AURORA_LOWEST
+ * (units, 800 m), so they keep their height near the deck. A deliberate deviation: the oval
+ * itself lies beyond the horizon of a ship in the arena (whose horizon is within 23°), so its
+ * curtains are drawn on the limb, AURORA_DISTANCE from the eye (units, 30 km, inside the camera's
+ * reach), AURORA_SPAN to either side of the pole's direction (rad, 35°).
  */
 const AURORA_DISTANCE = 600000;
 const AURORA_SPAN = 0.6;
-const AURORA_RISE = 0.07;
+const AURORA_FOOT = 2000;
+const AURORA_TOP = 8000;
+const AURORA_LOWEST = 16000;
+/**
+ * Within the curtains, fine rays, AURORA_RAYS per degree along the arc, brighten and dim each on
+ * its own about AURORA_FLICKER times a second (smoothly, a noise in time) and travel along the
+ * curtain by AURORA_GLIDE rays a second; patches of the curtain pulse every second or so.
+ * Rays narrower than a few pixels fade into the curtain's even glow. With reduced motion, the rays
+ * stand still and only the folds wave.
+ */
+const AURORA_RAYS = 1.5;
+const AURORA_FLICKER = 2;
+const AURORA_GLIDE = 0.8;
+/** The curtains drawn one behind the other on each tier of the picture's quality (see setDetail). */
+const AURORA_LAYERS = [3, 2, 1];
+const reducedMotion = typeof window === 'undefined' ? null : window.matchMedia('(prefers-reduced-motion: reduce)');
 /**
  * Two of its moons in the sky, drawn MOON_DISTANCE from the eye (units, 27.5 km): Io, sulphur
  * yellow with dark volcanic spots, and Europa, white ice with rust-red cracks, each in its
@@ -437,39 +458,82 @@ const sheetFragment = () => /* glsl */ `
 `;
 
 /**
- * The auroras: curtains of light on a band of the sky (see AURORA_DISTANCE), rising from the
- * horizon (`horizon`, the elevation where the planet's limb lies as seen from the eye, rad) and
- * fading upwards, green at their foot and violet above, rippling slowly along the band, fading
- * out at its ends. Added to what lies behind; the haze dims it to nothing below the deck.
+ * The auroras (see AURORA_FOOT): a strip of the sky along the limb, laid in the vertex shader
+ * between the elevations of the curtains' foot and top (`foot`, `top`, rad above the horizontal,
+ * see update) with a margin, so only the arc itself is shaded. In it, `layers` curtains one
+ * behind the other, each a ribbon folded along the arc and waving slowly: a bright pale
+ * blue-white lower edge, glowing violet and magenta above and fading upwards, brighter where a
+ * fold is seen edge-on; fine rays in it, each its own height, brightening and dimming and
+ * travelling along the curtain (see AURORA_RAYS; `motion` 0 holds them still). Added to what lies
+ * behind, fading out at the strip's ends; the haze dims it to nothing below the deck.
  */
 const auroraVertex = /* glsl */ `
   #include <fog_pars_vertex>
+  uniform float foot;
+  uniform float top;
   varying vec2 vUv;
   varying float vElevation;
   void main() {
     vUv = uv;
-    vElevation = atan(position.y, length(position.xz));
-    vec4 mvPosition = modelViewMatrix * vec4(position, 1.0);
+    float span = top - foot;
+    vElevation = mix(foot - 0.6 * span, top + 0.4 * span, uv.y);
+    vec3 placed = vec3(position.x, ${AURORA_DISTANCE.toFixed(1)} * tan(vElevation), position.z);
+    vec4 mvPosition = modelViewMatrix * vec4(placed, 1.0);
     gl_Position = projectionMatrix * mvPosition;
     #include <fog_vertex>
   }
 `;
-const auroraFragment = () => /* glsl */ `
+const auroraFragment = /* glsl */ `
   uniform float time;
-  uniform float horizon;
+  uniform float foot;
+  uniform float top;
+  uniform float layers;
+  uniform float motion;
   varying vec2 vUv;
   varying float vElevation;
   #include <fog_pars_fragment>
-  ${noise3}
+  // value noise in 2D on a hash without sines, steady for the large arguments a long round's clock gives
+  float hash2(vec2 p) {
+    vec3 q = fract(vec3(p.xyx) * 0.1031);
+    q += dot(q, q.yzx + 33.33);
+    return fract((q.x + q.y) * q.z);
+  }
+  float noise2(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(hash2(i), hash2(i + vec2(1.0, 0.0)), f.x), mix(hash2(i + vec2(0.0, 1.0)), hash2(i + vec2(1.0, 1.0)), f.x), f.y);
+  }
   void main() {
-    float above = vElevation - horizon;
-    float ripple = noise(vec3(vUv.x * 9.0, time * 0.12, 0.0));
-    float rays = 0.55 + 0.45 * sin(vUv.x * 170.0 + ripple * 9.0 + time * 0.4);
-    float rise = ${AURORA_RISE.toFixed(3)} * (0.6 + 0.8 * noise(vec3(vUv.x * 4.0, time * 0.05, 3.0)));
-    float height = smoothstep(-0.004, 0.006, above) * (1.0 - smoothstep(0.0, rise, above));
+    // degrees along the arc, and the height in the shell (0 at the foot, 1 at the top)
+    float along = vUv.x * ${((AURORA_SPAN * 2 * 180) / Math.PI).toFixed(2)};
+    float height = (vElevation - foot) / (top - foot);
+    float pixel = fwidth(height);
+    float flick = time * motion;
+    float fine = 1.0 - smoothstep(0.3, 0.6, fwidth(along * ${AURORA_RAYS.toFixed(2)}));
+    vec3 light = vec3(0.0);
+    for (int i = 0; i < 3; i++) {
+      float layer = float(i);
+      if (layer >= layers) break;
+      // the ribbon's fold: its foot waving up and down along the arc, brighter where it turns edge-on
+      float fold = noise2(vec2(along * 0.09 + layer * 7.3, time * 0.03 + layer));
+      float y = height - (fold - 0.5) * 0.45 - layer * 0.12;
+      float edgeOn = 0.55 + 0.9 * smoothstep(0.5, 0.85, noise2(vec2(along * 0.16 - time * 0.02, layer * 3.1 + time * 0.04)));
+      // the rays: one per lattice step, each brightening and dimming on its own and gliding along
+      float ray = along * ${AURORA_RAYS.toFixed(2)} + flick * ${AURORA_GLIDE.toFixed(2)} + layer * 17.0;
+      float shine = noise2(vec2(ray, flick * ${AURORA_FLICKER.toFixed(2)} + layer * 5.0));
+      float rays = mix(0.7, 0.2 + 1.5 * shine * shine, fine);
+      float reach = mix(0.75, 0.45 + 0.75 * shine, fine);
+      // patches pulsing, a second or so
+      float pulse = 0.75 + 0.5 * noise2(vec2(along * 0.3 - flick * 0.5, flick * 0.8 + layer * 9.0));
+      float soft = max(0.1, 1.5 * pixel);
+      float profile = smoothstep(-soft, soft * 0.5, y) * exp(-max(y, 0.0) / (0.32 * reach)) * (1.0 - smoothstep(0.7, 1.15, y));
+      vec3 color = mix(vec3(0.72, 0.8, 1.0), vec3(0.95, 0.32, 1.0), smoothstep(0.0, 0.28, y));
+      color = mix(color, vec3(0.45, 0.2, 1.0), smoothstep(0.35, 0.95, y));
+      light += color * profile * rays * edgeOn * pulse * (1.0 - layer * 0.25);
+    }
     float ends = smoothstep(0.0, 0.25, vUv.x) * smoothstep(1.0, 0.75, vUv.x);
-    vec3 color = mix(vec3(0.15, 1.0, 0.55), vec3(0.75, 0.25, 1.0), smoothstep(0.0, rise * 0.7, above));
-    gl_FragColor = vec4(color * rays * height * ends * 0.55, 1.0);
+    gl_FragColor = vec4(light * ends * 0.5, 1.0);
     #include <fog_fragment>
   }
 `;
@@ -738,23 +802,20 @@ export class Jupiter {
     this.sheets.push({ mesh: deck, depth: 0 });
 
     this.aurora = new THREE.ShaderMaterial({
-      uniforms: { time: material.uniforms.time, horizon: { value: 0 } },
+      uniforms: { time: material.uniforms.time, foot: { value: 0 }, top: { value: 0.03 }, layers: { value: AURORA_LAYERS[0] }, motion: { value: 1 } },
       vertexShader: auroraVertex,
-      fragmentShader: auroraFragment(),
+      fragmentShader: auroraFragment,
       blending: THREE.AdditiveBlending,
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
       fog: true,
     });
-    // the band faces the south pole: its direction from the arena (the map's frame turns the
-    // planet's axis), laid flat; it spans the elevations from 26° below the horizontal to 14° above
+    // the strip faces the south pole: its direction from the arena (the map's frame turns the
+    // planet's axis), laid flat; its height is set in the vertex shader
     const frame = material.uniforms.frame.value as THREE.Matrix3;
     const pole = new THREE.Vector3(0, -1, 0).applyMatrix3(frame.clone().transpose());
-    const bottom = Math.tan(-0.45);
-    const top = Math.tan(0.25);
-    const band = new THREE.CylinderGeometry(AURORA_DISTANCE, AURORA_DISTANCE, AURORA_DISTANCE * (top - bottom), 48, 1, true, Math.atan2(pole.x, pole.z) - AURORA_SPAN, AURORA_SPAN * 2);
-    band.translate(0, (AURORA_DISTANCE * (top + bottom)) / 2, 0);
+    const band = new THREE.CylinderGeometry(AURORA_DISTANCE, AURORA_DISTANCE, 1, 48, 1, true, Math.atan2(pole.x, pole.z) - AURORA_SPAN, AURORA_SPAN * 2);
     const aurora = new THREE.Mesh(band, this.aurora);
     aurora.frustumCulled = false;
     // drawn before the sheets of cloud (see update), which hide its foot behind the planet's limb
@@ -855,13 +916,15 @@ export class Jupiter {
   /**
    * The picture's quality (tier 0 the full picture, see Landmarks.setDetail): both sheets below
    * the deck, the first, or none; the cloud tops at the tier's level (see topsGlsl); fewer wisps,
-   * and the haze's clouds sampled once instead of twice along a ray (see view/haze).
+   * the haze's clouds sampled once instead of twice along a ray (see view/haze), and fewer
+   * curtains of the auroras (see AURORA_LAYERS).
    */
   setDetail(tier: number) {
     this.sheets.forEach((sheet, i) => (sheet.mesh.visible = sheet.depth === 0 || i < SHEETS.length - tier));
     this.sheets.at(-1)!.mesh.material.uniforms.level.value = tier;
     this.wisps.geometry.setDrawRange(0, WISPS[tier] * 6);
     this.samples = CLOUD_SAMPLES[tier];
+    this.aurora.uniforms.layers.value = AURORA_LAYERS[tier];
   }
 
   /**
@@ -889,7 +952,7 @@ export class Jupiter {
     this.wisps.position.copy(eye);
     wisps.eye.value.copy(eye);
     wisps.drift.value.set(clouds.x, clouds.y, clouds.z);
-    this.aurora.uniforms.horizon.value = altitude > 0 ? -Math.acos(this.air.radius / (this.air.radius + altitude)) : 0;
+    this.auroraHeights(altitude);
     this.nextStrike -= dt;
     let begun = false;
     if (this.nextStrike <= 0) {
@@ -899,6 +962,22 @@ export class Jupiter {
     }
     this.flicker(time);
     return begun;
+  }
+
+  /**
+   * Where the auroras' foot and top lie on the sky seen from `altitude` over the deck (units): on
+   * the limb (rad below the horizontal), and over it by as much as the shell from AURORA_FOOT to
+   * AURORA_TOP rises over the limb seen from that height, at least from AURORA_LOWEST.
+   */
+  private auroraHeights(altitude: number) {
+    const radius = this.air.radius;
+    const limb = altitude > 0 ? -Math.acos(radius / (radius + altitude)) : 0;
+    const eye = radius + Math.max(altitude, AURORA_LOWEST);
+    const over = (height: number) => Math.acos(radius / eye) - Math.acos((radius + height) / eye);
+    const uniforms = this.aurora.uniforms;
+    uniforms.foot.value = limb + over(AURORA_FOOT);
+    uniforms.top.value = limb + over(AURORA_TOP);
+    uniforms.motion.value = reducedMotion?.matches ? 0 : 1;
   }
 
   /** A strike from `time` on: at `at`, or by chance somewhere around and below `eye`. The screenshots start one by hand. */
