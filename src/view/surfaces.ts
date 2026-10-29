@@ -1022,26 +1022,145 @@ export function solarCells(): THREE.Texture {
   return cells;
 }
 
-let bands: THREE.Texture | null = null;
+/**
+ * A torpedo's casing as a lathe wraps it: once around (u, CASING_AROUND pixels) and its whole
+ * length from the nose's tip at the top to the nozzle's lip at the bottom (v, CASING_ALONG
+ * pixels). The two sizes keep the pixels square on its body (about 2 pixels per unit around its
+ * 188 units and along its 260), so bands and stencils are drawn at their true proportions.
+ */
+export const CASING_AROUND = 384;
+export const CASING_ALONG = 512;
+/** A strip of plain paint along the casing (u up to this share), left free of stencils: the fins and strakes take their paint from it. */
+export const CASING_PLAIN = 0.03;
 
-/** A torpedo's casing, around (u) and along (v): gunmetal with yellow and black warning bands near the nose and a stenciled lot number. */
-export function warheadBands(): THREE.Texture {
-  if (bands) return bands;
-  if (!drawable) return (bands = new THREE.Texture());
-  const [element, g] = canvas(64, 128);
-  g.fillStyle = '#9a9fa8';
-  g.fillRect(0, 0, 64, 128);
-  for (let y = 8; y < 30; y += 6) {
-    g.fillStyle = (y / 6) % 2 < 1 ? '#ffc400' : '#141414';
-    g.fillRect(0, y, 64, 6);
+let casing: THREE.Texture | null = null;
+
+/**
+ * A torpedo's casing: dark olive military paint, the radome a shade browner, the seeker's
+ * glass black at the tip; a yellow warhead band just behind the nose (high explosive), seams
+ * around the body, an arming hatch, the type and lot stenciled along it twice, and the tail
+ * blued and sooted by its motor. `along(z)` turns a point along its axis into a row (see
+ * torpedoes.ts); only plain fills and gentle gradients, so it holds still on a phone's screen.
+ */
+export function torpedoCasing(along: (z: number) => number): THREE.Texture {
+  if (casing) return casing;
+  if (!drawable) return (casing = new THREE.Texture());
+  const W = CASING_AROUND;
+  const H = CASING_ALONG;
+  const [element, g] = canvas(W, H);
+  const row = (z: number) => Math.round(along(z) * H);
+  const nose = row(58);
+  const tail = row(-96);
+  // the body's paint, the radome a shade browner, the seeker's window at the tip black glass
+  g.fillStyle = '#5d6650';
+  g.fillRect(0, 0, W, H);
+  g.fillStyle = '#6b6356';
+  g.fillRect(0, 0, W, nose);
+  g.fillStyle = '#0b0c0e';
+  g.fillRect(0, 0, W, row(118));
+  // faint streaks of wear along the body, low in contrast
+  const r = new Randomizer(2584);
+  for (let i = 0; i < 70; i++) {
+    g.fillStyle = r.nextFloat() < 0.5 ? 'rgba(255, 255, 240, 0.035)' : 'rgba(0, 0, 0, 0.06)';
+    g.fillRect(Math.round(r.range(W * CASING_PLAIN, W)), Math.round(r.range(nose, tail)), Math.round(r.range(2, 6)), Math.round(r.range(20, 90)));
   }
-  g.fillStyle = '#b02010';
-  g.fillRect(0, 0, 64, 8);
-  g.fillStyle = 'rgba(10, 10, 10, 0.7)';
-  g.font = 'bold 9px monospace';
-  g.fillText('MK-IV', 6, 70);
-  bands = toTexture(element);
-  return bands;
+  // the warhead band: broad yellow, a thin one behind it
+  g.fillStyle = '#e0a800';
+  g.fillRect(0, nose + 6, W, 16);
+  g.fillRect(0, nose + 28, W, 4);
+  // seams around the body: a dark groove with the light catching its lip
+  for (const z of [58, 20, -44, -96]) {
+    const y = row(z);
+    g.fillStyle = 'rgba(0, 0, 0, 0.55)';
+    g.fillRect(0, y - 1, W, 2);
+    g.fillStyle = 'rgba(255, 255, 255, 0.10)';
+    g.fillRect(0, y + 1, W, 1);
+  }
+  // a seam along the body, opposite the fins' strip
+  g.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  g.fillRect(W / 2 - 1, nose, 2, tail - nose);
+  // the arming hatch: a panel with four screws, its word stenciled beside it
+  const hx = Math.round(W * 0.5) + 14;
+  const hy = row(-58);
+  g.strokeStyle = 'rgba(0, 0, 0, 0.6)';
+  g.lineWidth = 2;
+  g.strokeRect(hx, hy, 36, 26);
+  g.fillStyle = 'rgba(0, 0, 0, 0.5)';
+  for (const [x, y] of [[4, 4], [30, 4], [4, 20], [30, 20]]) g.fillRect(hx + x, hy + y, 2, 2);
+  g.fillStyle = 'rgba(225, 222, 205, 0.8)';
+  g.font = 'bold 11px monospace';
+  g.textBaseline = 'top';
+  g.fillText('ARM', hx + 6, hy + 30);
+  // the type and the lot along the body, twice around, so one side always shows it
+  for (const u of [0.25, 0.75]) {
+    g.save();
+    g.translate(Math.round(W * u), row(10));
+    g.rotate(Math.PI / 2);
+    g.textBaseline = 'middle';
+    g.fillStyle = 'rgba(225, 222, 205, 0.85)';
+    g.font = 'bold 16px monospace';
+    g.fillText('MK-IV ST-9', 0, -9);
+    g.font = 'bold 11px monospace';
+    g.fillText('LOT 2584-07  HE 60', 0, 9);
+    g.restore();
+  }
+  // the tail: blued and sooted by the motor towards the nozzle
+  const heat = g.createLinearGradient(0, row(-80), 0, H);
+  heat.addColorStop(0, 'rgba(30, 28, 40, 0)');
+  heat.addColorStop(0.5, 'rgba(36, 34, 58, 0.55)');
+  heat.addColorStop(1, 'rgba(10, 9, 12, 0.9)');
+  g.fillStyle = heat;
+  g.fillRect(0, row(-80), W, H - row(-80));
+  casing = toTexture(element);
+  casing.anisotropy = 4;
+  return casing;
+}
+
+let innards: Surface | null = null;
+
+/**
+ * The inside of a fighter's hull, as a torn piece shows it: frames and stringers in a grid
+ * over panels of dull yellow-green primer, lightening holes in the frames, bundles of cable
+ * along them, scorched in patches; rough and dull, a repeating tile like the plating's.
+ */
+export function wreckInnards(): Surface {
+  if (innards) return innards;
+  if (!drawable) return blankSurface();
+  const r = new Randomizer(41);
+  const { color, orm, bump } = blank({ roughness: 0.85, metalness: 0.35 });
+  const g = color[1];
+  const b = bump[1];
+  g.fillStyle = '#7d7a48';
+  g.fillRect(0, 0, SIZE, SIZE);
+  // frames across, stringers along: raised in the bump, a darker bare metal in the color
+  for (let p = 0; p < SIZE; p += 64) {
+    g.fillStyle = '#4a4c48';
+    g.fillRect(p, 0, 10, SIZE);
+    g.fillRect(0, p, SIZE, 6);
+    b.fillStyle = '#d0d0d0';
+    b.fillRect(p, 0, 10, SIZE);
+    b.fillRect(0, p, SIZE, 6);
+    // lightening holes in the frame
+    for (let q = 20; q < SIZE; q += 32) {
+      g.fillStyle = '#1a1a18';
+      g.beginPath();
+      g.arc(p + 5, q, 3, 0, Math.PI * 2);
+      g.fill();
+    }
+  }
+  // cable bundles along the stringers, a few colored jackets among the grey
+  for (let p = 0; p < SIZE; p += 64) {
+    for (let k = 0; k < 3; k++) {
+      g.fillStyle = ['#2b2b2b', '#5a1d14', '#23324a'][k];
+      g.fillRect(0, p + 10 + k * 3, SIZE, 2);
+      b.fillStyle = '#b0b0b0';
+      b.fillRect(0, p + 10 + k * 3, SIZE, 2);
+    }
+  }
+  grime(r, g, 0.9);
+  scratches(r, g, orm[1], 0.4);
+  innards = textures(color[0], orm[0], bump[0]);
+  return innards;
 }
 
 /** A lit sign: a sponsor's name in neon letters on a dark plate, framed. */
