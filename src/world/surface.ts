@@ -50,59 +50,78 @@ export function tangentDirections(direction: THREE.Vector3, side: THREE.Vector3,
   across.crossVectors(direction, side);
 }
 
-export class Surface {
-  /** How far the surface reaches in each cell (units, whole, in the rock's own unscaled coordinates). */
-  private readonly radii = new Float32Array(6 * CELLS * CELLS);
-  /** The farthest the surface reaches in any direction. */
-  readonly reach: number;
+/** Keeps a point (relative to the center) in the cell of `radii` it lies in, if it reaches farther than what the cell holds. */
+function keepFarthest(radii: Float32Array, x: number, y: number, z: number) {
+  const length = Math.sqrt(x * x + y * y + z * z);
+  if (length < 1e-6) return;
+  cubeFace(x, y, z, where);
+  const index = where.face * CELLS * CELLS + cell(where.t) * CELLS + cell(where.s);
+  radii[index] = Math.max(radii[index], Math.ceil(length));
+}
 
-  /** Measures the visible meshes of `root`, around `center` (in root's own coordinates without its scale). */
-  constructor(root: THREE.Object3D, center: THREE.Vector3) {
-    const radii = this.radii;
-    root.updateMatrixWorld(true);
-    const inverseRoot = new THREE.Matrix4().copy(root.matrixWorld).invert();
-    root.traverse((o) => {
-      if (!(o instanceof THREE.Mesh) || !o.visible) return;
-      toLocal.multiplyMatrices(inverseRoot, o.matrixWorld);
-      const position = o.geometry.getAttribute('position');
-      for (let k = 0; k < position.count; k++) {
-        corner.fromBufferAttribute(position, k).applyMatrix4(toLocal).sub(center);
-        const length = corner.length();
-        if (length < 1e-6) continue;
-        cubeFace(corner.x, corner.y, corner.z, where);
-        const index = where.face * CELLS * CELLS + cell(where.t) * CELLS + cell(where.s);
-        radii[index] = Math.max(radii[index], Math.ceil(length));
-      }
-    });
-    // a coarse mesh leaves cells without a vertex: they take the mean of their filled neighbours on the face
-    for (let pass = 0; pass < CELLS && radii.includes(0); pass++) {
-      const before = radii.slice();
-      for (let f = 0; f < 6; f++) {
-        for (let j = 0; j < CELLS; j++) {
-          for (let i = 0; i < CELLS; i++) {
-            const index = f * CELLS * CELLS + j * CELLS + i;
-            if (before[index]) continue;
-            let sum = 0;
-            let filled = 0;
-            for (let dj = -1; dj <= 1; dj++) {
-              for (let di = -1; di <= 1; di++) {
-                const ni = i + di;
-                const nj = j + dj;
-                const r = ni >= 0 && ni < CELLS && nj >= 0 && nj < CELLS ? before[f * CELLS * CELLS + nj * CELLS + ni] : 0;
-                if (r) {
-                  sum += r;
-                  filled++;
-                }
+/** A coarse mesh leaves cells without a vertex: they take the mean of their filled neighbours on the face. */
+function fillGaps(radii: Float32Array) {
+  for (let pass = 0; pass < CELLS && radii.includes(0); pass++) {
+    const before = radii.slice();
+    for (let f = 0; f < 6; f++) {
+      for (let j = 0; j < CELLS; j++) {
+        for (let i = 0; i < CELLS; i++) {
+          const index = f * CELLS * CELLS + j * CELLS + i;
+          if (before[index]) continue;
+          let sum = 0;
+          let filled = 0;
+          for (let dj = -1; dj <= 1; dj++) {
+            for (let di = -1; di <= 1; di++) {
+              const ni = i + di;
+              const nj = j + dj;
+              const r = ni >= 0 && ni < CELLS && nj >= 0 && nj < CELLS ? before[f * CELLS * CELLS + nj * CELLS + ni] : 0;
+              if (r) {
+                sum += r;
+                filled++;
               }
             }
-            if (filled) radii[index] = Math.ceil(sum / filled);
           }
+          if (filled) radii[index] = Math.ceil(sum / filled);
         }
       }
     }
-    this.reach = radii.reduce((max, r) => Math.max(max, r), 0);
   }
+}
 
+/** A surface's cells (see Surface) measured from points (xyz, a flat list) around `center`: what a worker hands over for Surface.from (a piece of a broken rock, see world/fracture). */
+export function measureRadii(points: ArrayLike<number>, center: THREE.Vector3): Float32Array {
+  const radii = new Float32Array(6 * CELLS * CELLS);
+  for (let k = 0; k < points.length; k += 3) keepFarthest(radii, points[k] - center.x, points[k + 1] - center.y, points[k + 2] - center.z);
+  fillGaps(radii);
+  return radii;
+}
+
+export class Surface {
+  /** How far the surface reaches in each cell (units, whole, in the rock's own unscaled coordinates). */
+  private readonly radii: Float32Array;
+  /** The farthest the surface reaches in any direction. */
+  readonly reach: number;
+
+  /** Measures the visible meshes of `root`, around `center` (in root's own coordinates without its scale); or takes cells measured already (see measureRadii). */
+  constructor(root: THREE.Object3D | Float32Array, center = new THREE.Vector3()) {
+    if (root instanceof Float32Array) this.radii = root;
+    else {
+      const radii = (this.radii = new Float32Array(6 * CELLS * CELLS));
+      root.updateMatrixWorld(true);
+      const inverseRoot = new THREE.Matrix4().copy(root.matrixWorld).invert();
+      root.traverse((o) => {
+        if (!(o instanceof THREE.Mesh) || !o.visible) return;
+        toLocal.multiplyMatrices(inverseRoot, o.matrixWorld);
+        const position = o.geometry.getAttribute('position');
+        for (let k = 0; k < position.count; k++) {
+          corner.fromBufferAttribute(position, k).applyMatrix4(toLocal).sub(center);
+          keepFarthest(radii, corner.x, corner.y, corner.z);
+        }
+      });
+      fillGaps(radii);
+    }
+    this.reach = this.radii.reduce((max, r) => Math.max(max, r), 0);
+  }
   /** How far the surface reaches in the direction of a point (relative to the center, the rock's own coordinates). */
   radius(local: THREE.Vector3): number {
     cubeFace(local.x, local.y, local.z, where);
