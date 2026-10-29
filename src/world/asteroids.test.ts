@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ARENAS } from './arenas';
 import { ARENA_LIMIT } from './arena';
-import { impostorDistance, IMPOSTOR_MIN, type FieldLayout } from './asteroids';
+import { impostorDistance, IMPOSTOR_MIN, SPIN_RATE, type AsteroidField, type FieldLayout } from './asteroids';
 import { testField } from '../test/field';
 import { DETAIL } from './rocks';
 
@@ -124,6 +124,89 @@ describe('collision with a rock', () => {
   });
 });
 
+describe('a rock that breaks', () => {
+  /** A spinning rock alone, turned, as a field of its own in the detail the game measures collisions at; the points of its surface a sample of rays from all around finds. */
+  const lone = (type: number) => {
+    const field = testField(DETAIL);
+    const orientation = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.7, -1.3, 0.4));
+    field.generate({ key: `lone${type}`, seed: 1, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: 1, inner: 0, spin: SPIN_RATE, toughness: 800, placements: [{ kind: 'rock', type, scale: 4, position: new THREE.Vector3(1000, -2000, 500), orientation, solid: false }] });
+    field.setClock(20);
+    const rock = field.asteroids.get('h0')!;
+    const center = rock.object.position.clone();
+    const points: THREE.Vector3[] = [];
+    for (let k = 0; k < 300; k++) {
+      // a spiral of directions over the sphere
+      const y = 1 - (2 * (k + 0.5)) / 300, r = Math.sqrt(1 - y * y), a = k * 2.399963;
+      const direction = new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r);
+      const origin = center.clone().addScaledVector(direction, rock.radius * 2);
+      const hit = field.raycast(origin, direction.clone().negate(), rock.radius * 2);
+      if (hit) points.push(origin.addScaledVector(direction, -hit.distance));
+    }
+    return { field, rock, center, points };
+  };
+  /** The share of points, moved towards or away from the center by `scale`, that some piece of the field touches. */
+  const touched = (field: AsteroidField, center: THREE.Vector3, points: THREE.Vector3[], scale: number) => points.filter((p) => field.overlap(p.clone().sub(center).multiplyScalar(scale).add(center), 1)).length / points.length;
+
+  it('splits into pieces of itself that start where they lay: together they fill the rock, and nothing more', () => {
+    for (const type of [1, 8, 14]) {
+      const { field, rock, center, points } = lone(type);
+      expect(points.length).toBeGreaterThan(280);
+      const mass = rock.meanRadius ** 3;
+      field.shatter('h0', 20);
+      const pieces = [...field.asteroids.values()];
+      expect(pieces.map((p) => p.id)).toEqual(['h0.0', 'h0.1', 'h0.2']);
+      // just inside the rock's surface is a piece, a little outside none
+      expect(touched(field, center, points, 0.96), `${type}`).toBeGreaterThan(0.95);
+      expect(touched(field, center, points, 1.08), `${type}`).toBeLessThan(0.05);
+      // a piece's mass from its share of the rock's volume: the pieces weigh what the rock did
+      expect(pieces.reduce((sum, p) => sum + p.meanRadius ** 3, 0) / mass).toBeCloseTo(1, 2);
+      // they fly apart from the rock's center, at a few meters a second over what its drift and spin gave them
+      for (const piece of pieces) {
+        const own = field.surfaceVelocity(rock, piece.object.position);
+        const push = piece.velocity.clone().sub(own);
+        expect(push.length()).toBeGreaterThan(80);
+        expect(push.length()).toBeLessThan(220);
+        expect(push.dot(piece.object.position.clone().sub(center))).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('breaks again into pieces of the piece, which break no more', () => {
+    const { field, center, points } = lone(5);
+    field.shatter('h0', 20);
+    field.shatter('h0.1', 20);
+    const ids = [...field.asteroids.keys()];
+    expect(ids.filter((id) => id.startsWith('h0.1.')).length).toBeGreaterThanOrEqual(2);
+    expect(field.asteroids.get('h0.1.0')!.generation).toBe(2);
+    // at the moment of the second break the pieces still fill the rock
+    expect(touched(field, center, points, 0.96)).toBeGreaterThan(0.95);
+    expect(touched(field, center, points, 1.08)).toBeLessThan(0.05);
+    field.shatter('h0.1.0', 20);
+    expect([...field.asteroids.keys()].some((id) => id.startsWith('h0.1.0.'))).toBe(false);
+  });
+
+  it('breaks into the same pieces in the same places on every browser, and a newcomer gets them from the snapshot', () => {
+    const belt = ARENAS.find((a) => a.id === 'belt')!.layout;
+    const lead = testField();
+    const other = testField();
+    for (const field of [lead, other]) {
+      field.generate(belt);
+      field.setClock(12);
+      field.shatter('3', 12);
+      field.setClock(15);
+      field.shatter('3.2', 15);
+      field.setClock(25);
+    }
+    expect(positions(other)).toEqual(positions(lead));
+    const newcomer = testField();
+    newcomer.generate(belt);
+    newcomer.restore(lead.snapshot(), belt);
+    expect(positions(newcomer)).toEqual(positions(lead));
+    const quaternions = (f: AsteroidField) => [...f.asteroids.values()].map((a) => a.object.quaternion.toArray().map((v) => v.toFixed(5)).join(','));
+    expect(quaternions(newcomer)).toEqual(quaternions(lead));
+  });
+});
+
 describe('collision with a box piece', () => {
   const layout: FieldLayout = {
     key: 'test',
@@ -205,8 +288,8 @@ describe('the billboards of the field', () => {
     for (const arena of ARENAS) {
       field.generate(arena.layout);
       for (const piece of field.asteroids.values()) {
-        // the piece, a fragment of it and a fragment of that (each 0.55 of its parent)
-        for (const share of [1, 0.55, 0.55 * 0.55]) expect(impostorDistance(piece.meanRadius * share)).toBeGreaterThan(across);
+        // the piece, a piece of it and a piece of that (each at least a ninth of its parent's volume, see fracture.test)
+        for (const share of [1, Math.cbrt(1 / 9), Math.cbrt(1 / 81)]) expect(impostorDistance(piece.meanRadius * share)).toBeGreaterThan(across);
       }
     }
     // a large rock keeps its billboard farther out yet, in proportion to its size

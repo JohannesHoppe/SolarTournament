@@ -748,6 +748,55 @@ export function tileTexture(height: Float32Array, third: Float32Array): THREE.Da
   return texture;
 }
 
+/** How many units of a shape's own (unscaled) frame one tile of the break map spans (see breakMap): 6 m on the template, 15 to 40 m on a rock of the field. */
+const BREAK_TILE = 120;
+let breakTexture: THREE.DataTexture | undefined;
+
+/**
+ * The fresh fracture face every piece of a broken rock or chunk of ice shares (see
+ * world/fracture), one tile that repeats seamlessly, made like the detail map (see detailMap):
+ * conchoidal ripples and sharp hackle ridges running across the break, and fine grain, as
+ * slope (rg); and its crystals as shade (b, half the multiplier): grains of their own tone with
+ * sharp edges, a few glinting brighter. Its mean b is 0.5 and its mean slope none, so far off,
+ * mipmapped, it calms into the plain fresh color instead of shimmering.
+ */
+export function breakMap(): THREE.DataTexture {
+  if (breakTexture) return breakTexture;
+  const R = DETAIL_RES;
+  const height = new Float32Array(R * R);
+  const shade = new Float32Array(R * R);
+  /** Grains on a jittered grid of GRAINS cells across the tile, each with its own tone: a cell's point and tone from an integer hash. */
+  const GRAINS = 32;
+  const grainHash = (x: number, y: number, seed: number) => (tileLattice(x, y, GRAINS, seed) + 1) / 2;
+  const size = R / GRAINS;
+  for (let y = 0; y < R; y++) {
+    for (let x = 0; x < R; x++) {
+      const k = y * R + x;
+      height[k] = 3 * tileNoise(x, y, 4, 61) + 2.2 * Math.abs(tileNoise(x, y, 8, 67)) + 0.9 * tileNoise(x, y, 32, 71) + 0.45 * tileNoise(x, y, 128, 73);
+      // the nearest grain's point among the cells around
+      const gx = Math.floor(x / size), gy = Math.floor(y / size);
+      let best = Infinity, tone = 0.5;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const cx = gx + dx, cy = gy + dy;
+          const px = (cx + grainHash(cx, cy, 79)) * size, py = (cy + grainHash(cx, cy, 83)) * size;
+          const d = (px - x - 0.5) ** 2 + (py - y - 0.5) ** 2;
+          if (d < best) {
+            best = d;
+            tone = grainHash(cx, cy, 89);
+          }
+        }
+      }
+      shade[k] = 1 + 0.22 * (tone - 0.5) + (tone > 0.95 ? 0.25 : 0) + 0.05 * tileNoise(x, y, 64, 97);
+    }
+  }
+  let mean = 0;
+  for (const s of shade) mean += s / shade.length;
+  for (let k = 0; k < shade.length; k++) shade[k] = (shade[k] / mean) * 0.5;
+  breakTexture = tileTexture(height, shade);
+  return breakTexture;
+}
+
 /** What a material shading with a shape's relief map is given (see patchRelief). */
 export interface ReliefPatch {
   /** Which program it compiles to: rock or ice, each with and without the detail tile. */
@@ -767,6 +816,10 @@ export interface ReliefPatch {
   color: string;
   /** Any further change to the fragment shader. */
   fragment?: (source: string) => string;
+  /** For the pieces of a broken shape (see world/fracture): their meshes carry `fracture`, 1 on a fresh fracture face, which shades with its own normal and the break tile (see breakMap) instead of the relief map; `reliefFracture` says how much of it a pixel is, `reliefBreak` the tile's b there (0.5 elsewhere). */
+  piece?: boolean;
+  /** How strongly the break tile tilts a fracture face's normal. */
+  breakStrength?: number;
 }
 
 /**
@@ -779,8 +832,10 @@ export interface ReliefPatch {
 export function patchRelief(material: THREE.MeshStandardMaterial, patch: ReliefPatch) {
   // a define, not a uniform, so the near meshes' program and the far meshes' are cached apart
   if (patch.detail) material.defines = { ...material.defines, RELIEF_DETAIL: '' };
+  if (patch.piece) material.defines = { ...material.defines, RELIEF_PIECE: '' };
   // rock and ice share this function, so its source cannot tell their programs apart
-  material.customProgramCacheKey = () => `relief-${patch.kind}`;
+  const key = `relief-${patch.kind}${patch.piece ? '-piece' : ''}`;
+  material.customProgramCacheKey = () => key;
   const fade = new THREE.Vector2(DETAIL_NEAR, DETAIL_FAR);
   material.onBeforeCompile = (shader) => {
     // the haze, as every material takes it (see view/haze)
@@ -792,13 +847,16 @@ export function patchRelief(material: THREE.MeshStandardMaterial, patch: ReliefP
     shader.uniforms.reliefDetailStrength = { value: patch.strength };
     shader.uniforms.reliefDetailTile = { value: DETAIL_TILE };
     shader.uniforms.reliefDetailFade = { value: fade };
+    shader.uniforms.reliefBreakMap = { value: patch.piece ? breakMap() : null };
+    shader.uniforms.reliefBreakTile = { value: BREAK_TILE };
+    shader.uniforms.reliefBreakStrength = { value: patch.breakStrength ?? 1 };
     // an instance's own turn (the belt draws its rocks instanced) is not in normalMatrix, so it
     // goes to the fragment as the three columns of instanceMatrix, the identity otherwise
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vRockPosition;\nvarying vec3 vRockFacing;\nvarying vec3 vRockTurnX;\nvarying vec3 vRockTurnY;\nvarying vec3 vRockTurnZ;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vRockPosition;\nvarying vec3 vRockFacing;\nvarying vec3 vRockTurnX;\nvarying vec3 vRockTurnY;\nvarying vec3 vRockTurnZ;\nvarying float vRockFracture;\n#ifdef RELIEF_PIECE\nattribute float fracture;\n#endif')
       .replace(
         '#include <begin_vertex>',
-        '#include <begin_vertex>\n\tvRockPosition = position;\n\tvRockFacing = normal;\n#ifdef USE_INSTANCING\n\tvRockTurnX = instanceMatrix[0].xyz;\n\tvRockTurnY = instanceMatrix[1].xyz;\n\tvRockTurnZ = instanceMatrix[2].xyz;\n#else\n\tvRockTurnX = vec3( 1.0, 0.0, 0.0 );\n\tvRockTurnY = vec3( 0.0, 1.0, 0.0 );\n\tvRockTurnZ = vec3( 0.0, 0.0, 1.0 );\n#endif',
+        '#include <begin_vertex>\n\tvRockPosition = position;\n\tvRockFacing = normal;\n#ifdef RELIEF_PIECE\n\tvRockFracture = fracture;\n#else\n\tvRockFracture = 0.0;\n#endif\n#ifdef USE_INSTANCING\n\tvRockTurnX = instanceMatrix[0].xyz;\n\tvRockTurnY = instanceMatrix[1].xyz;\n\tvRockTurnZ = instanceMatrix[2].xyz;\n#else\n\tvRockTurnX = vec3( 1.0, 0.0, 0.0 );\n\tvRockTurnY = vec3( 0.0, 1.0, 0.0 );\n\tvRockTurnZ = vec3( 0.0, 0.0, 1.0 );\n#endif',
       );
     let fragment = shader.fragmentShader
       .replace(
@@ -828,6 +886,10 @@ varying vec3 vRockFacing;
 varying vec3 vRockTurnX;
 varying vec3 vRockTurnY;
 varying vec3 vRockTurnZ;
+varying float vRockFracture;
+uniform sampler2D reliefBreakMap;
+uniform float reliefBreakTile;
+uniform float reliefBreakStrength;
 `;
 
 /** The relief map's texel and normal (kept for normal_fragment_maps), with the detail tile's tilt and its b up close. */
@@ -850,6 +912,23 @@ const RELIEF_READ = /* glsl */ `
 	reliefNormal = normalize( reliefNormal + reliefTilt * reliefDetailStrength * reliefNear );
 	reliefTile = reliefWeights.x * reliefAlongX.b + reliefWeights.y * reliefAlongY.b + reliefWeights.z * reliefAlongZ.b;
 #endif
+	float reliefFracture = vRockFracture;
+	float reliefBreak = 0.5;
+#ifdef RELIEF_PIECE
+	{
+		// a fracture face: its own facing, tilted by the break tile laid on from three sides; sampled everywhere, never in a branch, for the mipmaps
+		vec3 breakFacing = normalize( vRockFacing );
+		vec3 breakWeights = pow( abs( breakFacing ), vec3( 4.0 ) );
+		breakWeights /= breakWeights.x + breakWeights.y + breakWeights.z;
+		vec3 breakAt = vRockPosition / reliefBreakTile;
+		vec4 breakAlongX = texture2D( reliefBreakMap, breakAt.yz );
+		vec4 breakAlongY = texture2D( reliefBreakMap, breakAt.xz );
+		vec4 breakAlongZ = texture2D( reliefBreakMap, breakAt.xy );
+		vec3 breakTilt = breakWeights.x * vec3( 0.0, breakAlongX.xy * 2.0 - 1.0 ) + breakWeights.y * vec3( breakAlongY.x * 2.0 - 1.0, 0.0, breakAlongY.y * 2.0 - 1.0 ) + breakWeights.z * vec3( breakAlongZ.xy * 2.0 - 1.0, 0.0 );
+		reliefNormal = normalize( mix( reliefNormal, normalize( breakFacing + breakTilt * reliefBreakStrength ), reliefFracture ) );
+		reliefBreak = mix( 0.5, breakWeights.x * breakAlongX.b + breakWeights.y * breakAlongY.b + breakWeights.z * breakAlongZ.b, reliefFracture );
+	}
+#endif
 `;
 
 /**
@@ -858,9 +937,10 @@ const RELIEF_READ = /* glsl */ `
  * `closeUp` for the meshes drawn near, which lay the shared detail map (see detailMap) over it:
  * the smallest craters and boulders.
  */
-export function applyRockRelief(material: THREE.MeshStandardMaterial, index: number, closeUp: boolean) {
+export function applyRockRelief(material: THREE.MeshStandardMaterial, index: number, closeUp: boolean, piece = false) {
   const recipe = rockRecipe(index);
   patchRelief(material, {
+    piece,
     kind: 'rock',
     map: reliefMap(index),
     axes: recipe.axes.clone(),
@@ -872,10 +952,13 @@ export function applyRockRelief(material: THREE.MeshStandardMaterial, index: num
   });
 }
 
-/** The relief's shade worked into the rock's color, the grain of the detail tile on it up close, fresh material tinted. */
+/** How bright a fresh fracture face is against the weathered surface (the multiplier of the composition's color, before the break tile's grain): pale, unweathered rock, wholly in the fresh tint. */
+const ROCK_BREAK = 1.45;
+
+/** The relief's shade worked into the rock's color, the grain of the detail tile on it up close, fresh material tinted; on a piece's fracture face the fresh break's paler color and its grain instead. */
 const ROCK_RELIEF_COLOR = /* glsl */ `
-	float rockMultiplier = reliefTexel.a * 2.0 * mix( 1.0, reliefTile * 2.0, reliefNear );
-	float rockFreshness = clamp( ( rockMultiplier - 1.0 ) * 1.5, 0.0, 1.0 );
+	float rockMultiplier = mix( reliefTexel.a * 2.0 * mix( 1.0, reliefTile * 2.0, reliefNear ), ${ROCK_BREAK.toFixed(2)} * reliefBreak * 2.0, reliefFracture );
+	float rockFreshness = max( clamp( ( rockMultiplier - 1.0 ) * 1.5, 0.0, 1.0 ), reliefFracture );
 	diffuseColor.rgb *= rockMultiplier * mix( vec3( 1.0 ), rockFresh, rockFreshness );
 `;
 
@@ -888,19 +971,31 @@ const ROCK_DETAIL = 1;
  * regardless of `detail`; `closeUp` for the meshes drawn near, which take the detail map too.
  */
 function createRock(index: number, detail: number, closeUp: boolean): THREE.Mesh {
-  const recipe = rockRecipe(index);
-  const geometry = rockGeometry(index, detail, true);
-  const material = new THREE.MeshStandardMaterial({
-    color: new THREE.Color().setRGB(...recipe.composition.color, THREE.LinearSRGBColorSpace),
-    roughness: recipe.composition.roughness,
-    metalness: recipe.composition.metalness,
-  });
-  applyRockRelief(material, index, closeUp);
-  const mesh = new THREE.Mesh(geometry, material);
+  const mesh = new THREE.Mesh(rockGeometry(index, detail, true), rockMaterial(index, closeUp, false));
   mesh.name = `rock-${index}`;
   // which shape it is, for what is built onto it in its colors (see rockTone)
   mesh.userData.rockShape = index;
   return mesh;
+}
+
+/** A rock shape's material in its composition's color, shaded by its relief map (see applyRockRelief); `piece` for the pieces of a broken rock (see world/fracture). */
+function rockMaterial(index: number, closeUp: boolean, piece: boolean): THREE.MeshStandardMaterial {
+  const { composition } = rockRecipe(index);
+  const material = new THREE.MeshStandardMaterial({
+    color: new THREE.Color().setRGB(...composition.color, THREE.LinearSRGBColorSpace),
+    roughness: composition.roughness,
+    metalness: composition.metalness,
+  });
+  applyRockRelief(material, index, closeUp, piece);
+  return material;
+}
+
+const pieceMaterials = new Map<string, THREE.MeshStandardMaterial>();
+
+/** The material of the pieces of a broken rock of a shape (see world/fracture), near with `closeUp`: one for all its pieces, made once. */
+export function rockPieceMaterial(index: number, closeUp: boolean): THREE.MeshStandardMaterial {
+  const key = `${index}:${closeUp}`;
+  return pieceMaterials.get(key) ?? pieceMaterials.set(key, rockMaterial(index, closeUp, true)).get(key)!;
 }
 
 /**
@@ -908,7 +1003,7 @@ function createRock(index: number, detail: number, closeUp: boolean): THREE.Mesh
  * its normals, which only a mesh that is drawn needs (its color and fine relief come from its
  * relief map, see applyRockRelief).
  */
-function rockGeometry(index: number, detail: number, drawn: boolean): THREE.BufferGeometry {
+export function rockGeometry(index: number, detail: number, drawn: boolean): THREE.BufferGeometry {
   const recipe = rockRecipe(index);
   const noise = new Noise(recipe.noiseSeed);
   const geometry = sphere(detail).clone();

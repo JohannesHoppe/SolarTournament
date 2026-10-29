@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Randomizer } from '../random';
 import type { TemplateSet } from './asteroids';
 import type { ImpostorGlow } from '../view/impostor';
+import { fractureSet } from './fracture';
 import {
   bakeCube,
   cachedRelief,
@@ -343,6 +344,15 @@ const ICE_FORWARD = 1.5;
 const glsl = (v: number) => v.toFixed(4);
 const glslVec = (v: readonly number[]) => `vec3( ${v.map(glsl).join(', ')} )`;
 
+/** The kind of ice a fresh fracture face of a piece shows (see ICE_KIND, world/fracture): clear glassy ice, the break tile's grain shifting it a little towards a fracture's blue or the frost's white. */
+const ICE_BREAK = 0.2;
+/** How much a fresh fracture face glitters, as the frost's grains do (0..1): its crystal faces catch the sun. */
+const ICE_BREAK_GLINT = 0.6;
+/** How deep (mean radii) the light comes through the piece behind a fracture face that looks away from the sun. */
+const ICE_BREAK_DEPTH = 0.3;
+/** How strongly the break tile tilts a fracture face of ice: gentler than rock's, ice breaks smoother. */
+const ICE_BREAK_STRENGTH = 0.6;
+
 const ICE_PARS = /* glsl */ `
 uniform float iceMeanAxis;
 const vec3 ICE_TINT[ 5 ] = vec3[ 5 ]( ${ICE_RAMP.map((k) => glslVec(k.tint)).join(', ')} );
@@ -364,7 +374,7 @@ vec3 iceHash( vec3 p ) {
  * where it sits, the face it mirrors with (see ICE_DIRECT), how much of its dot this pixel shows.
  */
 const ICE_COLOR_CHUNK = /* glsl */ `
-	float iceKind = clamp( reliefTexel.a + ( reliefTile - 0.5 ) * reliefNear, 0.0, 1.0 );
+	float iceKind = clamp( mix( reliefTexel.a + ( reliefTile - 0.5 ) * reliefNear, ${glsl(ICE_BREAK)} + ( reliefBreak - 0.5 ) * 0.5, reliefFracture ), 0.0, 1.0 );
 	float iceStep = iceKind * 4.0;
 	int iceAt = int( min( floor( iceStep ), 3.0 ) );
 	float iceMix = iceStep - float( iceAt );
@@ -379,7 +389,7 @@ const ICE_COLOR_CHUNK = /* glsl */ `
 	vec3 iceOff = iceCells - ( iceCell + 0.25 + 0.5 * iceHash( iceCell ) );
 	vec3 iceUp = normalize( vRockFacing );
 	iceOff -= dot( iceOff, iceUp ) * iceUp;
-	iceSpot = smoothstep( 2.0 * icePixel, 0.7 * icePixel, length( iceOff ) ) * smoothstep( 0.17, 0.08, icePixel ) * iceResponse.z;
+	iceSpot = smoothstep( 2.0 * icePixel, 0.7 * icePixel, length( iceOff ) ) * smoothstep( 0.17, 0.08, icePixel ) * mix( iceResponse.z, ${glsl(ICE_BREAK_GLINT)}, reliefFracture );
 	vec3 iceFace = normalize( reliefNormal + ( iceHash( iceCell + 17.0 ) - 0.5 ) * 1.4 );
 	iceFacet = normalize( normalMatrix * ( mat3( vRockTurnX, vRockTurnY, vRockTurnZ ) * iceFace ) );
 `;
@@ -411,6 +421,8 @@ const ICE_THROUGH = /* glsl */ `
 		iceFrom /= max( length( iceFrom ), 1e-4 );
 		vec3 iceWay = iceSun / reliefAxes;
 		float iceDepth = -2.0 * dot( iceFrom, iceWay ) / dot( iceWay, iceWay ) / iceMeanAxis;
+		// a piece's fracture face lies inside the whole chunk's ellipsoid: what lights it through is the piece behind it, a thin share of the chunk where the face looks away from the sun
+		iceDepth = mix( iceDepth, ${glsl(ICE_BREAK_DEPTH)} * step( dot( normalize( vRockFacing ), iceSun ), 0.0 ), reliefFracture );
 		vec3 iceCame = exp( -iceDepth * ${glslVec(ICE_EXTINCTION)} ) * smoothstep( 0.0, 0.06, iceDepth );
 		float iceForward = pow( saturate( dot( geometryViewDir, -iceToSun ) ), 6.0 );
 		reflectedLight.directDiffuse += directionalLights[ 0 ].color * diffuseColor.rgb * iceCame * iceThrough * ( ${glsl(ICE_SCATTER)} + ${glsl(ICE_FORWARD)} * iceForward );
@@ -421,13 +433,15 @@ const ICE_THROUGH = /* glsl */ `
 /**
  * An ice shape's material: its own relief map and, up close (`closeUp`), its own detail tile
  * (see patchRelief), its response by the kind of ice (ICE_RAMP), the glitter of its frost and the
- * sunlight through it. One material per shape, for its own map.
+ * sunlight through it. One material per shape, for its own map; `piece` for the pieces of a broken chunk (see world/fracture), whose fracture faces show clear, glassy ice.
  */
-export function iceMaterial(index: number, closeUp: boolean): THREE.MeshStandardMaterial {
+export function iceMaterial(index: number, closeUp: boolean, piece = false): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({ color: ICE_COLOR, roughness: 1, metalness: 0, emissive: ICE_EMISSIVE, emissiveIntensity: 1 });
   const { axes } = rockRecipe(index);
   patchRelief(material, {
     kind: 'ice',
+    piece,
+    breakStrength: ICE_BREAK_STRENGTH,
     map: iceReliefMap(index),
     axes: axes.clone(),
     detail: closeUp ? iceDetailMap() : null,
@@ -477,5 +491,12 @@ function iceImpostor(index: number): THREE.Mesh {
 export function iceSet(rocks: TemplateSet): TemplateSet {
   const freeze = (closeUp: boolean) => (object: THREE.Object3D, index: number) => new THREE.Mesh((object as THREE.Mesh).geometry, iceMaterial(index, closeUp));
   const impostor = rocks.impostor ? Array.from({ length: ROCK_COUNT }, (_, i) => iceImpostor(i)) : undefined;
-  return { near: rocks.near.map(freeze(true)), far: rocks.far.map(freeze(false)), impostor, collision: rocks.collision };
+  // a broken chunk splits as the rock of its shape does, its pieces in ice
+  const pieceMaterials = new Map<string, THREE.Material>();
+  const pieceMaterial = (index: number, closeUp: boolean) => {
+    const key = `${index}:${closeUp}`;
+    return pieceMaterials.get(key) ?? pieceMaterials.set(key, iceMaterial(index, closeUp, true)).get(key)!;
+  };
+  const fracture = rocks.fracture && fractureSet(rocks.fracture.details, pieceMaterial);
+  return { near: rocks.near.map(freeze(true)), far: rocks.far.map(freeze(false)), impostor, collision: rocks.collision, fracture };
 }
