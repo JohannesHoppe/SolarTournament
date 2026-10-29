@@ -5,10 +5,10 @@ import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
 import { MASS } from '../world/bodies';
 import type { Ship } from '../ship/ship';
 import { msg } from '../i18n/i18n';
-import { solarCells, surfaced, wornSurface, type Wear } from '../view/surfaces';
+import { shine, solarPanel, surfaced, wornSurface, type Wear } from '../view/surfaces';
 
 /** The wear of a sponsor's probe (see wornSurface). */
-const PROBE_WEAR: Wear = { rust: 0.15, chips: 0.3, grime: 0.3, scratches: 0.4, seams: 0.5, stencils: ['PROPERTY OF SPONSOR', 'SN 0451', 'DO NOT OPEN'], roughness: 0.5, metalness: 0.35 };
+const PROBE_WEAR: Wear = { rust: 0.3, chips: 0.15, grime: 0.75, scratches: 0.6, seams: 0.85, dents: 0.4, stencils: ['PROPERTY OF SPONSOR', 'SN 0451', 'DO NOT OPEN'], roughness: 0.55, metalness: 0.4 };
 
 /**
  * Items: sponsor probes that drift in the arena, each carrying one thing, like the item boxes
@@ -133,6 +133,25 @@ export interface Probe {
 const spin = new THREE.Euler();
 
 /**
+ * A probe's neon dims as the camera comes close, to NEON_NEAR of its brightness within
+ * NEON_CLOSE (units, 15 m) and in full from NEON_FULL on (100 m): from afar it blooms so a
+ * pilot sees what a probe carries, up close its glow no longer swamps the probe it rings.
+ */
+const NEON_NEAR = 0.5;
+const NEON_CLOSE = 300;
+const NEON_FULL = 2000;
+
+/** A neon material that dims up close (see NEON_NEAR), by its depth in the view, in its own shaders. */
+function nearDim(material: THREE.MeshBasicMaterial): THREE.MeshBasicMaterial {
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace('void main() {', 'varying float vNeon;\nvoid main() {').replace('#include <project_vertex>', `#include <project_vertex>\n  vNeon = mix(${NEON_NEAR.toFixed(2)}, 1.0, smoothstep(${NEON_CLOSE.toFixed(1)}, ${NEON_FULL.toFixed(1)}, -mvPosition.z));`);
+    shader.fragmentShader = shader.fragmentShader.replace('void main() {', 'varying float vNeon;\nvoid main() {').replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= vNeon;');
+  };
+  material.customProgramCacheKey = () => 'probe-neon';
+  return material;
+}
+
+/**
  * A small probe: a body, two wide solar wings, a dish, a beacon on a mast and a neon ring
  * around it in the color of what it carries, so it shows from afar (about 30 m wide).
  */
@@ -160,14 +179,15 @@ export class Probes {
   private shown = 0;
   private readonly taken = new Set<string>();
   private readonly parts = probeParts();
-  /** A sponsor's probe is cheap and used again and again: light wear, a serial and the sponsor's warning stenciled on. */
-  private readonly hull = new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(11, PROBE_WEAR), 1), color: 0xb4bac2, flatShading: true });
-  private readonly panels = new THREE.MeshStandardMaterial({ map: solarCells(), emissive: 0x0a1430, roughness: 0.25, metalness: 0.5 });
+  /** A sponsor's probe is cheap and used again and again: grimy, dented, scratched, a serial and the sponsor's warning stenciled on, a little sheen of the sky on its metal. */
+  private readonly hull = new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(11, PROBE_WEAR), 1.2), color: 0xa8afb8, flatShading: true, envMap: shine(), envMapIntensity: 0.5 });
+  /** The wings' solar cells under glass (see solarPanel): a sheen of the sky runs over them as the probe turns. */
+  private readonly panels = new THREE.MeshStandardMaterial({ map: solarPanel().map, roughnessMap: solarPanel().orm, metalnessMap: solarPanel().orm, roughness: 1, metalness: 1, emissive: 0x050a18, envMap: shine(), envMapIntensity: 1.2 });
   private readonly beacons = new Map<ItemKind, THREE.MeshBasicMaterial>();
-  private readonly sealed = new THREE.MeshBasicMaterial({ toneMapped: false });
+  private readonly sealed = nearDim(new THREE.MeshBasicMaterial({ toneMapped: false }));
 
   constructor() {
-    for (const kind of KINDS) this.beacons.set(kind, new THREE.MeshBasicMaterial({ color: new THREE.Color(COLORS[kind]).multiplyScalar(2.5), toneMapped: false }));
+    for (const kind of KINDS) this.beacons.set(kind, nearDim(new THREE.MeshBasicMaterial({ color: new THREE.Color(COLORS[kind]).multiplyScalar(2.5), toneMapped: false })));
   }
 
   /** A new round: no probes, and the arena's probes count from the start. */

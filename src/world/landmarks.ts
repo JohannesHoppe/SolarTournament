@@ -20,6 +20,23 @@ const SATURN_RADIUS = 90000;
 /** The ring around it, from the inner edge of its faint inner ring to the outer edge of its outer bright one (units). */
 const RING_INNER = 150000;
 const RING_OUTER = 330000;
+/**
+ * The ring is not the same all around: its optical depth swells and thins in clumps drawn out
+ * along the orbit, some 3 km long and 400 m across (RING_CLUMP_TURNS of them in noise around the
+ * whole ring, RING_CLUMP_ACROSS units across), by up to RING_CLUMPING of itself, a little
+ * brighter where denser (RING_CLUMP_SHADE); and in patches faint wakes run through it, ridges
+ * RING_WAKE_SPACING apart (units, 75 m) slanting some 20° off the orbit (RING_WAKE_TURNS of them
+ * around it), changing its depth by up to RING_WAKING, as the ring's self-gravity pulls its
+ * particles into them. The wakes fade out where they would be closer on screen than about a
+ * dozen pixels, so they never shimmer; the clumps are far wider than a pixel wherever the sheet shows.
+ */
+const RING_CLUMP_TURNS = 4.3;
+const RING_CLUMP_ACROSS = 8000;
+const RING_CLUMPING = 0.6;
+const RING_CLUMP_SHADE = 0.12;
+const RING_WAKE_SPACING = 1500;
+const RING_WAKE_TURNS = 392;
+const RING_WAKING = 0.1;
 /** The ring's sheet fades in between these distances from the pilot (units, 1.5 to 6 km). */
 const RING_FADE_NEAR = 30000;
 const RING_FADE_FAR = 120000;
@@ -485,6 +502,21 @@ const ringFragment = /* glsl */ `
   ${glint}
   void main() {
     vec4 color = texture2D(map, vUv);
+    // clumps along the orbit and wakes across it (see RING_CLUMP_TURNS): the ring's optical depth
+    // thicker or thinner there, so the dense ring stays opaque and only the thin parts show them
+    vec2 plane = vWorld.xz - center.xz;
+    float r = length(plane);
+    float theta = atan(plane.y, plane.x);
+    vec3 orbit = vec3(cos(theta), sin(theta), 0.0);
+    float clumps = 0.65 * noise(orbit * ${RING_CLUMP_TURNS.toFixed(1)} + vec3(0.0, 0.0, r / ${RING_CLUMP_ACROSS.toFixed(1)}))
+      + 0.35 * noise(orbit * ${(RING_CLUMP_TURNS * 2.7).toFixed(1)} + vec3(5.2, 1.3, r / ${(RING_CLUMP_ACROSS / 2.7).toFixed(1)}));
+    float width = length(fwidth(plane));
+    float wakes = sin(${RING_WAKE_TURNS.toFixed(1)} * theta + r * ${((2 * Math.PI) / RING_WAKE_SPACING).toFixed(6)})
+      * smoothstep(0.5, 0.75, noise(orbit * ${(RING_CLUMP_TURNS * 4.0).toFixed(1)} + vec3(2.7, 9.1, r / ${(RING_CLUMP_ACROSS / 2.0).toFixed(1)})))
+      * smoothstep(0.25, 0.08, width / ${RING_WAKE_SPACING.toFixed(1)});
+    float depth = -log(1.0 - min(color.a, 0.995)) * (1.0 + ${RING_CLUMPING.toFixed(2)} * (2.0 * clumps - 1.0) + ${RING_WAKING.toFixed(2)} * wakes);
+    color.a = 1.0 - exp(-max(depth, 0.0));
+    color.rgb *= 1.0 + ${RING_CLUMP_SHADE.toFixed(2)} * (2.0 * clumps - 1.0);
     vec3 toSun = normalize(sun);
     vec3 view = normalize(cameraPosition - vWorld);
     vec3 toCenter = center - vWorld;

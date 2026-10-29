@@ -3,7 +3,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Assets, ShipType } from '../assets';
 import type { Perks } from '../game/hangar';
 import { Ship } from '../ship/ship';
-import { lacquer, shine } from './surfaces';
+import { hazardSurface, lacquer, shine } from './surfaces';
 import { canvas, radialTexture, toTexture } from './textures';
 
 /** The ship on show hovers level above the pad's middle and turns on the spot, once in TURN_SECONDS: an exhibit on a turntable. */
@@ -44,6 +44,11 @@ const SEAL_DEPTH = 12;
 const SEAL_RADIUS = 438;
 /** Around the pad: plates of the rim (each with two bolts), lamps on the step, vents in the skirt. */
 const RIM_PLATES = 24;
+/** The rim's texture holds this many plates, each worn its own way (see rimTexture); RIM_PLATES is a multiple of it. */
+const RIM_TILE = 4;
+/** The worn hazard paint (see hazardSurface) repeats this often around the step, the grime of the turned faces (see usedTexture) this often. */
+const HAZARD_TILES = 8;
+const USED_TILES = 6;
 const LAMPS = 16;
 const VENTS = 48;
 /** Polygons around the pad: enough that its rim and the seal's edge stay round up close. */
@@ -217,13 +222,22 @@ export class Showcase {
     const metal = (color: number, roughness: number, extra: THREE.MeshStandardMaterialParameters = {}) =>
       new THREE.MeshStandardMaterial({ color, roughness, metalness: 1, envMap: reflection, envMapIntensity: 1.4, ...extra });
     const rimTile = rimTexture(anisotropy);
+    const used = usedTexture(anisotropy);
+    const worn = { map: used.color, roughnessMap: used.orm, metalnessMap: used.orm };
+    const paint = hazardSurface();
+    const stripes = (texture: THREE.Texture) => {
+      const copy = texture.clone();
+      copy.repeat.set(HAZARD_TILES, 1);
+      copy.anisotropy = anisotropy;
+      return copy;
+    };
     const finishes: Record<Finish, THREE.Material> = {
-      dark: metal(0x30343b, 0.55),
+      dark: metal(0x30343b, 0.55, worn),
       edge: metal(0xd8dde6, 0.18),
-      steel: metal(0x6d737d, 0.4),
+      steel: metal(0x6d737d, 0.4, worn),
       rim: metal(0xa9afb9, 1, { roughnessMap: rimTile.orm, metalnessMap: rimTile.orm, bumpMap: rimTile.bump, bumpScale: 1.5, map: rimTile.color }),
-      hazard: new THREE.MeshStandardMaterial({ map: hazardTexture(anisotropy), roughness: 0.55, metalness: 0.3, envMap: reflection }),
-      skirt: metal(0x23262c, 0.5, { emissive: 0x0062ff, emissiveMap: ventTexture(anisotropy), emissiveIntensity: 1.6 }),
+      hazard: new THREE.MeshStandardMaterial({ map: stripes(paint.map), roughnessMap: stripes(paint.orm), metalnessMap: stripes(paint.orm), bumpMap: stripes(paint.bump), bumpScale: 1, roughness: 1, metalness: 1, envMap: reflection }),
+      skirt: metal(0x23262c, 0.5, { ...worn, emissive: 0x0062ff, emissiveMap: ventTexture(anisotropy), emissiveIntensity: 1.6 }),
     };
     // each step of the profile turned on its own, so its edges stay hard
     const steps: THREE.BufferGeometry[] = [];
@@ -315,49 +329,144 @@ function around(element: HTMLCanvasElement, times: number, anisotropy: number, c
   return texture;
 }
 
-/** The rim's plates: steel brushed around the pad, a seam between plates; its color, roughness and metalness, and bump. */
+/** A small fixed hash (0..1) for the pad's wear: the same scuffs on every visit. */
+const wear = (n: number) => {
+  const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+/**
+ * The rim's plates, RIM_TILE of them to a texture so no two neighbors wear alike: steel brushed
+ * around the pad, a seam between plates and a finer one splitting each into two panels, the
+ * brushing a shade different on either side of it; scuffed bright and smooth where boots and
+ * cargo dragged, dark skid marks of landing gear sweeping across, grime gathered along the seams
+ * and the edges. Its color, roughness and metalness, and bump.
+ */
 function rimTexture(anisotropy: number) {
-  const [color, c] = canvas(256, 64);
-  const [orm, o] = canvas(256, 64);
-  const [bump, b] = canvas(256, 64);
+  const [width, height] = [256 * RIM_TILE, 64];
+  const [color, c] = canvas(width, height);
+  const [orm, o] = canvas(width, height);
+  const [bump, b] = canvas(width, height);
   c.fillStyle = '#fff';
-  c.fillRect(0, 0, 256, 64);
+  c.fillRect(0, 0, width, height);
   o.fillStyle = 'rgb(255, 90, 255)';
-  o.fillRect(0, 0, 256, 64);
+  o.fillRect(0, 0, width, height);
   b.fillStyle = '#808080';
-  b.fillRect(0, 0, 256, 64);
-  // brushing: fine lines along the turn, each a little rougher or smoother, lighter or darker
-  for (let y = 0; y < 64; y++) {
-    const grain = Math.sin(y * 12.9898) * 43758.5453;
-    const f = grain - Math.floor(grain);
-    o.fillStyle = `rgb(255, ${Math.round(70 + 50 * f)}, 255)`;
-    o.fillRect(0, y, 256, 1);
-    c.fillStyle = `rgba(0, 0, 0, ${0.04 + 0.08 * f})`;
-    c.fillRect(0, y, 256, 1);
+  b.fillRect(0, 0, width, height);
+  for (let plate = 0; plate < RIM_TILE; plate++) {
+    const x0 = plate * 256;
+    // brushing: fine lines along the turn, each a little rougher or smoother, lighter or darker, its two panels apart
+    for (const [from, span, shift] of [[0, 110, 0], [110, 146, 1]]) {
+      for (let y = 0; y < height; y++) {
+        const f = wear(y + plate * 97 + shift * 1000);
+        o.fillStyle = `rgb(255, ${Math.round(70 + 50 * f)}, 255)`;
+        o.fillRect(x0 + from, y, span, 1);
+        c.fillStyle = `rgba(0, 0, 0, ${0.04 + 0.08 * f + shift * 0.05})`;
+        c.fillRect(x0 + from, y, span, 1);
+      }
+    }
+    // the seam between two plates, and the finer one between the panels of a plate
+    c.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    c.fillRect(x0, 0, 3, height);
+    b.fillStyle = '#202020';
+    b.fillRect(x0, 0, 3, height);
+    c.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    c.fillRect(x0 + 110, 0, 1.5, height);
+    b.fillStyle = '#4a4a4a';
+    b.fillRect(x0 + 110, 0, 1.5, height);
+    // grime in the seams' corners and along the rim's two edges
+    for (const x of [x0 + 2, x0 + 111]) {
+      const dirt = c.createLinearGradient(x, 0, x + 18, 0);
+      dirt.addColorStop(0, 'rgba(24, 20, 14, 0.4)');
+      dirt.addColorStop(1, 'rgba(24, 20, 14, 0)');
+      c.fillStyle = dirt;
+      c.fillRect(x, 0, 18, height);
+    }
+    for (const [y, toward] of [[0, 10], [height, height - 10]]) {
+      const dirt = c.createLinearGradient(0, y, 0, toward);
+      dirt.addColorStop(0, 'rgba(24, 20, 14, 0.45)');
+      dirt.addColorStop(1, 'rgba(24, 20, 14, 0)');
+      c.fillStyle = dirt;
+      c.fillRect(x0, Math.min(y, toward), 256, 10);
+    }
+    // scuffs: patches rubbed smooth and bright
+    for (let i = 0; i < 5; i++) {
+      const x = x0 + 10 + wear(plate * 31 + i) * 230;
+      const y = wear(plate * 17 + i * 3) * height;
+      const radius = 6 + wear(plate * 7 + i * 5) * 16;
+      const rub = o.createRadialGradient(x, y, 0, x, y, radius);
+      rub.addColorStop(0, 'rgba(255, 55, 255, 0.4)');
+      rub.addColorStop(1, 'rgba(255, 55, 255, 0)');
+      o.fillStyle = rub;
+      o.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+      const light = c.createRadialGradient(x, y, 0, x, y, radius);
+      light.addColorStop(0, 'rgba(255, 255, 255, 0.12)');
+      light.addColorStop(1, 'rgba(255, 255, 255, 0)');
+      c.fillStyle = light;
+      c.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    }
+    // skid marks: soft, dark, dull smears of rubber sweeping across the rim, on some plates
+    // (three strokes, wide to narrow, for a soft edge)
+    if (wear(plate * 5 + 2) < 0.6) {
+      const x = x0 + 30 + wear(plate * 13) * 160;
+      const tilt = (wear(plate * 3) - 0.5) * 140;
+      const width = 12 + wear(plate * 11) * 10;
+      for (const share of [1, 0.7, 0.4]) {
+        c.strokeStyle = `rgba(14, 12, 10, ${0.1 + 0.08 * wear(plate * 9)})`;
+        o.strokeStyle = 'rgba(255, 200, 220, 0.3)';
+        c.lineWidth = o.lineWidth = width * share;
+        for (const g of [c, o]) {
+          g.beginPath();
+          g.moveTo(x, -4);
+          g.quadraticCurveTo(x + tilt * 0.6, height / 2, x + tilt, height + 4);
+          g.stroke();
+        }
+      }
+    }
   }
-  // the seam between two plates
-  c.fillStyle = 'rgba(0, 0, 0, 0.7)';
-  c.fillRect(0, 0, 3, 64);
-  b.fillStyle = '#202020';
-  b.fillRect(0, 0, 3, 64);
-  return { color: around(color, RIM_PLATES, anisotropy), orm: around(orm, RIM_PLATES, anisotropy, false), bump: around(bump, RIM_PLATES, anisotropy, false) };
+  const plates = RIM_PLATES / RIM_TILE;
+  return { color: around(color, plates, anisotropy), orm: around(orm, plates, anisotropy, false), bump: around(bump, plates, anisotropy, false) };
 }
 
-/** Hazard stripes in yellow and black on the step around the rim, worn at the edge. */
-function hazardTexture(anisotropy: number): THREE.CanvasTexture {
-  const [element, g] = canvas(64, 32);
-  g.fillStyle = '#16171a';
-  g.fillRect(0, 0, 64, 32);
-  g.fillStyle = '#e8b400';
-  for (const x of [-32, 32]) {
-    g.beginPath();
-    g.moveTo(x, 32);
-    g.lineTo(x + 32, 0);
-    g.lineTo(x + 64, 0);
-    g.lineTo(x + 32, 32);
-    g.fill();
+/**
+ * The pad's turned faces of gunmetal and steel as used: grime run down in streaks from the
+ * edges above, oily patches a little darker and smoother, the rest a shade rougher; a color to
+ * multiply with the finish's own and a roughness (green) to multiply with its roughness, the
+ * metal left whole (blue). USED_TILES tiles around the pad.
+ */
+function usedTexture(anisotropy: number) {
+  const [width, height] = [512, 64];
+  const [color, c] = canvas(width, height);
+  const [orm, o] = canvas(width, height);
+  c.fillStyle = '#fff';
+  c.fillRect(0, 0, width, height);
+  o.fillStyle = 'rgb(255, 225, 255)';
+  o.fillRect(0, 0, width, height);
+  for (let i = 0; i < 70; i++) {
+    const x = wear(i * 3.1) * width;
+    const length = 10 + wear(i * 7.7) * 50;
+    const streak = c.createLinearGradient(0, 0, 0, length);
+    streak.addColorStop(0, `rgba(30, 24, 16, ${0.2 + 0.3 * wear(i * 1.3)})`);
+    streak.addColorStop(1, 'rgba(30, 24, 16, 0)');
+    c.fillStyle = streak;
+    c.fillRect(x, 0, 1 + wear(i * 5.3) * 5, length);
   }
-  return around(element, 64, anisotropy);
+  for (let i = 0; i < 12; i++) {
+    const x = wear(i * 9.7 + 1) * width;
+    const y = wear(i * 4.9 + 2) * height;
+    const radius = 10 + wear(i * 2.3) * 30;
+    const oil = c.createRadialGradient(x, y, 0, x, y, radius);
+    oil.addColorStop(0, 'rgba(10, 10, 14, 0.25)');
+    oil.addColorStop(1, 'rgba(10, 10, 14, 0)');
+    c.fillStyle = oil;
+    c.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    const slick = o.createRadialGradient(x, y, 0, x, y, radius);
+    slick.addColorStop(0, 'rgba(255, 150, 255, 0.6)');
+    slick.addColorStop(1, 'rgba(255, 150, 255, 0)');
+    o.fillStyle = slick;
+    o.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
+  return { color: around(color, USED_TILES, anisotropy), orm: around(orm, USED_TILES, anisotropy, false) };
 }
 
 /** The vents in the skirt: slots glowing with the lift's azure, black between them. */

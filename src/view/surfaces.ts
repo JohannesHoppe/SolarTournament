@@ -813,8 +813,10 @@ function normalFrom(height: CanvasRenderingContext2D): THREE.CanvasTexture {
 let industrial: Surface | null = null;
 
 /**
- * The tournament's rings: industrial armor plating, riveted and grimy, with yellow and black
- * hazard stripes along its edges and coil numbers stenciled on.
+ * The tournament's rings: industrial armor plating, riveted and grimy, its plates patched in
+ * over the years in lighter and darker steel, scuffed bare along their edges, streaked with
+ * rust and soot, with coil numbers stenciled on. The hazard paint is a surface of its own (see
+ * hazardSurface), laid only where it warns.
  */
 export function industrialSurface(seed: number): Surface {
   if (industrial) return industrial;
@@ -822,28 +824,279 @@ export function industrialSurface(seed: number): Surface {
   const r = new Randomizer(seed);
   const { color, orm, bump } = blank({ roughness: 0.6, metalness: 0.45 });
   const g = color[1];
-  panels(r, g, bump[1], 0.7);
-  grime(r, g, 0.7);
-  rust(r, g, orm[1], 0.35);
-  scratches(r, g, orm[1], 0.5);
-  // hazard stripes along one edge of the tile
-  g.save();
-  g.beginPath();
-  g.rect(0, SIZE - 22, SIZE, 18);
-  g.clip();
-  for (let x = -40; x < SIZE + 40; x += 20) {
-    g.fillStyle = (x / 20) % 2 === 0 ? 'rgba(255, 196, 0, 0.95)' : 'rgba(20, 20, 20, 0.95)';
-    g.beginPath();
-    g.moveTo(x, SIZE - 22);
-    g.lineTo(x + 10, SIZE - 22);
-    g.lineTo(x - 8, SIZE - 4);
-    g.lineTo(x - 18, SIZE - 4);
-    g.fill();
+  // patched plates: some rows' plates a shade lighter (fresh steel) or darker (old, oily), rougher or smoother
+  for (let y = 0; y < SIZE; y += 64) {
+    for (let x = 0; x < SIZE; ) {
+      const width = [32, 64, 96][r.nextInt() % 3];
+      const shade = r.range(-1, 1);
+      g.fillStyle = shade > 0 ? `rgba(255, 250, 240, ${0.18 * shade})` : `rgba(12, 14, 18, ${-0.3 * shade})`;
+      g.fillRect(x, y, width, 64);
+      orm[1].fillStyle = ormColor(0.45 + 0.3 * r.nextFloat(), 0.45, 0.6);
+      orm[1].fillRect(x, y, width, 64);
+      x += width;
+    }
   }
-  g.restore();
+  panels(r, g, bump[1], 0.9);
+  grime(r, g, 0.9);
+  rust(r, g, orm[1], 0.45);
+  chips(r, g, orm[1], 0.12);
+  scratches(r, g, orm[1], 0.6);
+  // soot streaked down from the seams, where the coils' heat leaks
+  for (let i = 0; i < 14; i++) {
+    const x = r.range(0, SIZE);
+    const y = Math.floor(r.range(0, 4)) * 64 + 2;
+    const streak = g.createLinearGradient(0, y, 0, y + r.range(20, 60));
+    streak.addColorStop(0, 'rgba(8, 8, 10, 0.55)');
+    streak.addColorStop(1, 'rgba(8, 8, 10, 0)');
+    g.fillStyle = streak;
+    g.fillRect(x, y, r.range(3, 12), 60);
+  }
   stencils(r, g, ['COIL 07', 'HV 40 kA', 'NO DOCKING', 'MOW-2584']);
   industrial = textures(color[0], orm[0], bump[0]);
   return industrial;
+}
+
+let hazard: Surface | null = null;
+/** The hazard paint's tile (px): HAZARD_PERIODS pairs of a yellow and a black stripe across a band HAZARD_HEIGHT high. */
+const HAZARD_PERIODS = 8;
+const HAZARD_HEIGHT = 64;
+
+/**
+ * Hazard paint: yellow and black stripes slanting across a band (u along it, v across it, one
+ * band high), the paint of a depot gone over again and again and never cleaned: chipped down to
+ * the steel, scuffed by docking clamps, worn ragged along both edges, grimy towards the lower
+ * one. HAZARD_PERIODS pairs of stripes to a tile, each worn its own way, so the wear does not
+ * repeat stripe by stripe.
+ */
+export function hazardSurface(): Surface {
+  if (hazard) return hazard;
+  if (!drawable) return blankSurface();
+  const r = new Randomizer(1977);
+  const width = HAZARD_PERIODS * HAZARD_HEIGHT;
+  const color = canvas(width, HAZARD_HEIGHT);
+  const orm = canvas(width, HAZARD_HEIGHT);
+  const bump = canvas(width, HAZARD_HEIGHT);
+  const [c, o, b] = [color[1], orm[1], bump[1]];
+  c.fillStyle = '#1a1b1e';
+  c.fillRect(0, 0, width, HAZARD_HEIGHT);
+  o.fillStyle = ormColor(0.62, 0.15);
+  o.fillRect(0, 0, width, HAZARD_HEIGHT);
+  b.fillStyle = '#808080';
+  b.fillRect(0, 0, width, HAZARD_HEIGHT);
+  const h = HAZARD_HEIGHT;
+  for (let x = -h; x < width + h; x += h) {
+    // each stripe a slightly different yellow, as repainted by hand
+    c.fillStyle = `rgb(${Math.round(r.range(214, 236))}, ${Math.round(r.range(162, 184))}, ${Math.round(r.range(0, 24))})`;
+    c.beginPath();
+    c.moveTo(x, h);
+    c.lineTo(x + h / 2, 0);
+    c.lineTo(x + h, 0);
+    c.lineTo(x + h / 2, h);
+    c.fill();
+  }
+  // paint chipped off down to the steel: bare, smooth, metallic, a little sunk
+  for (let i = 0; i < 45; i++) {
+    const x = r.range(0, width);
+    const edge = r.nextFloat() < 0.6;
+    const y = edge ? (r.nextFloat() < 0.5 ? r.range(0, 6) : h - r.range(0, 6)) : r.range(0, h);
+    const size = r.range(1.5, edge ? 6 : 4);
+    c.fillStyle = `rgba(${Math.round(r.range(64, 88))}, ${Math.round(r.range(66, 90))}, 96, 0.95)`;
+    o.fillStyle = ormColor(0.5, 0.9);
+    b.fillStyle = '#5a5a5a';
+    for (const g of [c, o, b]) {
+      g.beginPath();
+      for (let k = 0; k < 6; k++) {
+        const angle = (k / 6) * Math.PI * 2;
+        const reach = size * r.range(0.5, 1.3);
+        g[k ? 'lineTo' : 'moveTo'](x + Math.cos(angle) * reach * 1.6, y + Math.sin(angle) * reach);
+      }
+      g.fill();
+    }
+  }
+  // scuffs along the band: the clamps and the hulls that rubbed past, dull and lighter
+  for (let i = 0; i < 26; i++) {
+    const x = r.range(0, width);
+    const y = r.range(6, h - 6);
+    const length = r.range(20, 120);
+    const slope = r.range(-0.08, 0.08);
+    c.strokeStyle = `rgba(200, 200, 205, ${r.range(0.12, 0.3)})`;
+    o.strokeStyle = ormColor(0.85, 0.5, 0.8);
+    c.lineWidth = o.lineWidth = r.range(0.6, 2.2);
+    for (const g of [c, o]) {
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x + length, y + length * slope);
+      g.stroke();
+    }
+  }
+  // grime settled towards the lower edge, soot in patches
+  const settled = c.createLinearGradient(0, 0, 0, h);
+  settled.addColorStop(0, 'rgba(20, 16, 10, 0.05)');
+  settled.addColorStop(0.7, 'rgba(20, 16, 10, 0.18)');
+  settled.addColorStop(1, 'rgba(20, 16, 10, 0.55)');
+  c.fillStyle = settled;
+  c.fillRect(0, 0, width, h);
+  for (let i = 0; i < 10; i++) {
+    const x = r.range(0, width);
+    const y = r.range(0, h);
+    const radius = r.range(12, 40);
+    const soot = c.createRadialGradient(x, y, 0, x, y, radius);
+    soot.addColorStop(0, 'rgba(10, 9, 8, 0.4)');
+    soot.addColorStop(1, 'rgba(10, 9, 8, 0)');
+    c.fillStyle = soot;
+    c.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
+  hazard = textures(color[0], orm[0], bump[0]);
+  return hazard;
+}
+
+/** The texture of a coil's windings (px, square): WINDING_TURNS turns of wire across it, a clamp strap across them over its first WINDING_STRAP of its width. */
+const WINDING_SIZE = 128;
+const WINDING_TURNS = 8;
+const WINDING_STRAP = 0.12;
+/** How steeply the turns' relief tilts the light (see normalPixels): round wire. */
+const WINDING_SLOPE = 3;
+/** The relief's gray in the grooves between turns, and how much higher a turn's crown rises (0..255). */
+const WINDING_GROOVE = 40;
+const WINDING_CROWN = 160;
+/** The wire's glow map is bright on the turns' crowns and dark in the grooves, about two thirds on the whole: lifted by this, a coil as a whole glows at about its brightness. */
+export const WIRE_GLOW = 1.5;
+
+/**
+ * The relief of wound wire, as a square canvas of heights (gray, `size` px): `turns` round
+ * turns stacked across it (v), each highest along its crown, and a flat strap raised over them
+ * across the first `strap` of its width (u), with a bevel. It wraps around its edges, as the
+ * winding goes on.
+ */
+export function windingHeights(size: number, turns: number, strap: number): Uint8ClampedArray {
+  const data = new Uint8ClampedArray(size * size * 4);
+  const pitch = size / turns;
+  const band = strap * size;
+  for (let y = 0; y < size; y++) {
+    const t = ((y % pitch) + 0.5) / pitch;
+    const crown = Math.sqrt(Math.max(0, 1 - (2 * t - 1) ** 2));
+    for (let x = 0; x < size; x++) {
+      // the strap's bevel: two pixels each side
+      const inStrap = Math.min(x + 0.5, band - x - 0.5);
+      const strapHeight = inStrap > 0 ? Math.min(1, inStrap / 2) : 0;
+      const height = Math.max(WINDING_GROOVE + WINDING_CROWN * crown, strapHeight * 235);
+      data.fill(Math.round(height), (y * size + x) * 4, (y * size + x) * 4 + 3);
+      data[(y * size + x) * 4 + 3] = 255;
+    }
+  }
+  return data;
+}
+
+/** A coil's windings: copper color, what glows of the wire, and the turns' relief as a normal map. */
+export type WindingSurface = { map: THREE.Texture; glow: THREE.Texture; normal: THREE.Texture };
+let windings: WindingSurface | null = null;
+
+/**
+ * Copper wire wound in turns (see windingHeights), clamped by a steel strap: the copper bright
+ * on each turn's crown, dark in the grooves between, tarnished turn by turn; what glows of it is
+ * the wire, brightest along the crowns and dark under the strap, so a lit coil shows its turns
+ * through the glow and an unlit one its copper. One tile is WINDING_TURNS turns high; a part
+ * repeats it (see GateKit, CoreKit), mipmapped, so far off the turns calm into their mean.
+ */
+export function windingSurface(): WindingSurface {
+  if (windings) return windings;
+  if (!drawable) return (windings = { map: new THREE.Texture(), glow: new THREE.Texture(), normal: new THREE.Texture() });
+  const r = new Randomizer(4096);
+  const size = WINDING_SIZE;
+  const heights = windingHeights(size, WINDING_TURNS, WINDING_STRAP);
+  const [colorCanvas, c] = canvas(size);
+  const [glowCanvas, g] = canvas(size);
+  const colorPixels = c.createImageData(size, size);
+  const glowPixels = g.createImageData(size, size);
+  const pitch = size / WINDING_TURNS;
+  const tarnish = Array.from({ length: WINDING_TURNS }, () => r.range(0.75, 1.05));
+  for (let y = 0; y < size; y++) {
+    const turn = Math.floor(y / pitch);
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      // how high on its turn's crown (0 in the groove, 1 on top; see windingHeights)
+      const crown = Math.min(1, Math.max(0, (heights[i] - WINDING_GROOVE) / WINDING_CROWN));
+      const strap = x < WINDING_STRAP * size;
+      // copper by the crown's height and the turn's tarnish; the strap gunmetal
+      const lit = strap ? 0.35 : (0.25 + 0.85 * crown) * tarnish[turn];
+      const [cr, cg, cb] = strap ? [120, 124, 132] : [222, 132, 72];
+      colorPixels.data[i] = Math.min(255, cr * lit);
+      colorPixels.data[i + 1] = Math.min(255, cg * lit);
+      colorPixels.data[i + 2] = Math.min(255, cb * lit);
+      colorPixels.data[i + 3] = 255;
+      const glow = strap ? 0.04 : 0.18 + 0.82 * crown ** 2;
+      glowPixels.data.fill(Math.round(255 * glow), i, i + 3);
+      glowPixels.data[i + 3] = 255;
+    }
+  }
+  c.putImageData(colorPixels, 0, 0);
+  g.putImageData(glowPixels, 0, 0);
+  const [normalCanvas, n] = canvas(size);
+  const normalImage = n.createImageData(size, size);
+  normalImage.data.set(normalPixels(heights, size, WINDING_SLOPE));
+  n.putImageData(normalImage, 0, 0);
+  const wrap = <T extends THREE.Texture>(texture: T): T => {
+    texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+    texture.anisotropy = 4;
+    return texture;
+  };
+  // the glow and the normals are data, read as they are; only the color is sRGB
+  windings = { map: wrap(toTexture(colorCanvas)), glow: wrap(new THREE.CanvasTexture(glowCanvas)), normal: wrap(new THREE.CanvasTexture(normalCanvas)) };
+  return windings;
+}
+
+let panel: { map: THREE.Texture; orm: THREE.Texture } | null = null;
+
+/**
+ * A solar wing as one tile across its whole face (512 × 128 px): an aluminium frame around a
+ * field of 32 × 8 cells of deep blue polycrystalline silicon, each with its own grain and two
+ * thin busbars, light gaps between them, a few cells darker where they aged. The glass over the
+ * cells is smooth (a sheen moves over it as the wing turns, see shine), the frame rougher.
+ * Mipmapped: far off the grid calms into the panel's mean blue, never a crawling grid.
+ */
+export function solarPanel(): { map: THREE.Texture; orm: THREE.Texture } {
+  if (panel) return panel;
+  if (!drawable) return (panel = { map: new THREE.Texture(), orm: new THREE.Texture() });
+  const r = new Randomizer(808);
+  const [width, height, cell, rim] = [512, 128, 15, 4];
+  const [colorCanvas, c] = canvas(width, height);
+  const [ormCanvas, o] = canvas(width, height);
+  c.fillStyle = '#9aa3ae';
+  c.fillRect(0, 0, width, height);
+  o.fillStyle = ormColor(0.45, 0.9);
+  o.fillRect(0, 0, width, height);
+  // the cells' field, lighter gaps (the backsheet) between them
+  c.fillStyle = '#5d6c86';
+  c.fillRect(rim, rim, width - 2 * rim, height - 2 * rim);
+  const across = Math.floor((width - 2 * rim) / (cell + 1));
+  const down = Math.floor((height - 2 * rim) / (cell + 1));
+  const x0 = (width - across * (cell + 1) + 1) / 2;
+  const y0 = (height - down * (cell + 1) + 1) / 2;
+  for (let j = 0; j < down; j++) {
+    for (let i = 0; i < across; i++) {
+      const x = x0 + i * (cell + 1);
+      const y = y0 + j * (cell + 1);
+      const aged = r.nextFloat() < 0.06 ? 0.65 : r.range(0.88, 1.05);
+      c.fillStyle = `rgb(${Math.round(20 * aged)}, ${Math.round(36 * aged)}, ${Math.round(92 * aged)})`;
+      c.fillRect(x, y, cell, cell);
+      // the silicon's crystals: a few facets a shade lighter or darker
+      for (let k = 0; k < 5; k++) {
+        c.fillStyle = r.nextFloat() < 0.5 ? 'rgba(120, 150, 230, 0.12)' : 'rgba(0, 0, 20, 0.18)';
+        c.fillRect(x + r.range(0, cell - 5), y + r.range(0, cell - 5), r.range(3, 8), r.range(3, 8));
+      }
+      c.fillStyle = 'rgba(190, 200, 215, 0.55)';
+      c.fillRect(x + cell * 0.3, y, 1, cell);
+      c.fillRect(x + cell * 0.7, y, 1, cell);
+      o.fillStyle = ormColor(r.range(0.12, 0.22), 0.55);
+      o.fillRect(x, y, cell, cell);
+    }
+  }
+  const texture = <T extends THREE.Texture>(made: T): T => {
+    made.anisotropy = 8;
+    return made;
+  };
+  panel = { map: texture(toTexture(colorCanvas)), orm: texture(new THREE.CanvasTexture(ormCanvas)) };
+  return panel;
 }
 
 let cells: THREE.Texture | null = null;
