@@ -3749,6 +3749,7 @@ export class Game implements OnlineGame {
     if (!this.online || this.online.isLead) fleet.lead(dt, clock, this.ships, this.comets);
     else fleet.glide(dt);
     fleet.update(clock, now);
+    fleet.view(this.camera.position);
     for (const { zone, shot } of fleet.firing(clock)) this.fireBattery(fleet, zone, shot);
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive) continue;

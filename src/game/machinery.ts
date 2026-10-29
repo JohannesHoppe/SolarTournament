@@ -609,3 +609,87 @@ export function machinery(random: Randomizer, wall: Wall, emphasis: Emphasis, pa
     emit(sweep([start, ...path], r, 5), COLOR.rubber);
   }
 }
+
+/** Linear light (0 to 1, in 4096 steps) as an sRGB byte; past 1 a light's glow shows as its color at full. */
+const SRGB = Uint8Array.from({ length: 4097 }, (_, i) => {
+  const c = i / 4096;
+  return Math.round(255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055));
+});
+const srgbByte = (c: number) => SRGB[Math.round(Math.min(1, Math.max(0, c)) * 4096)];
+
+/**
+ * A wall's machinery drawn flat, as seen straight on from the tunnel: each texel takes the
+ * baked color of the piece nearest the tunnel over it (an orthographic view along the wall's z,
+ * depth-tested in code), so the wall seen from outside the battleship is one textured plate
+ * instead of tens of thousands of triangles (see game/fleet). The picture fills `height` rows
+ * of `pixels` (RGBA, sRGB, `width` wide) from `row` up, the wall's -edge to edge across it and
+ * its floor to ceiling up it; where no piece lies, `background` shows.
+ */
+export class Elevation {
+  private readonly nearest: Float32Array;
+  private readonly inverse: THREE.Matrix4;
+  private readonly corner = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  /** The three corners' colors of the triangle being drawn (linear RGB, one after another). */
+  private readonly tint = new Float32Array(9);
+
+  constructor(
+    private readonly wall: Wall,
+    private readonly pixels: Uint8Array,
+    private readonly width: number,
+    private readonly row: number,
+    private readonly height: number,
+    background: THREE.Color,
+  ) {
+    this.nearest = new Float32Array(width * height).fill(-Infinity);
+    this.inverse = wall.frame.clone().invert();
+    const [r, g, b] = [srgbByte(background.r), srgbByte(background.g), srgbByte(background.b)];
+    for (let o = row * width * 4; o < (row + height) * width * 4; o += 4) [pixels[o], pixels[o + 1], pixels[o + 2], pixels[o + 3]] = [r, g, b, 255];
+  }
+
+  /** Draws a piece, in the hull's frame and with its baked colors (linear RGB), into the picture. */
+  draw(geometry: THREE.BufferGeometry) {
+    const position = geometry.getAttribute('position');
+    const color = geometry.getAttribute('color');
+    const index = geometry.getIndex();
+    const count = index ? index.count : position.count;
+    const { edge, floor, ceiling } = this.wall;
+    const [a, b, c] = this.corner;
+    const tint = this.tint;
+    const { width, height, nearest, pixels } = this;
+    for (let t = 0; t < count; t += 3) {
+      for (let k = 0; k < 3; k++) {
+        const at = index ? index.getX(t + k) : t + k;
+        const p = this.corner[k].fromBufferAttribute(position, at).applyMatrix4(this.inverse);
+        p.set(((p.x + edge) / (2 * edge)) * width, ((p.y - floor) / (ceiling - floor)) * height, p.z);
+        tint[k * 3] = color.getX(at);
+        tint[k * 3 + 1] = color.getY(at);
+        tint[k * 3 + 2] = color.getZ(at);
+      }
+      const area = (b.x - a.x) * (c.y - a.y) - (c.x - a.x) * (b.y - a.y);
+      if (Math.abs(area) < 1e-9) continue;
+      const x0 = Math.max(0, Math.floor(Math.min(a.x, b.x, c.x)));
+      const x1 = Math.min(width - 1, Math.ceil(Math.max(a.x, b.x, c.x)));
+      const y0 = Math.max(0, Math.floor(Math.min(a.y, b.y, c.y)));
+      const y1 = Math.min(height - 1, Math.ceil(Math.max(a.y, b.y, c.y)));
+      for (let y = y0; y <= y1; y++) {
+        const py = y + 0.5;
+        for (let x = x0; x <= x1; x++) {
+          const px = x + 0.5;
+          const wa = ((b.x - px) * (c.y - py) - (c.x - px) * (b.y - py)) / area;
+          if (wa < 0) continue;
+          const wb = ((c.x - px) * (a.y - py) - (a.x - px) * (c.y - py)) / area;
+          const wc = 1 - wa - wb;
+          if (wb < 0 || wc < 0) continue;
+          const z = wa * a.z + wb * b.z + wc * c.z;
+          const i = y * width + x;
+          if (z <= nearest[i]) continue;
+          nearest[i] = z;
+          const o = ((this.row + y) * width + x) * 4;
+          pixels[o] = srgbByte(wa * tint[0] + wb * tint[3] + wc * tint[6]);
+          pixels[o + 1] = srgbByte(wa * tint[1] + wb * tint[4] + wc * tint[7]);
+          pixels[o + 2] = srgbByte(wa * tint[2] + wb * tint[5] + wc * tint[8]);
+        }
+      }
+    }
+  }
+}
