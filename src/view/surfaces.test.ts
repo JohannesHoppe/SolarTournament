@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ARMOR_RELIEF_SIZE, ARMOR_SLOPE, ARMOR_TILE, armorLayout, armorRelief, normalPixels } from './surfaces';
+import { ARMOR_RELIEF_SIZE, ARMOR_SLOPE, ARMOR_TILE, armorLayout, armorRelief, normalPixels, windingHeights } from './surfaces';
 
 /** A gray canvas of `size` pixels, its height at each pixel from `height(column, row)` (0..255). */
 function heights(size: number, height: (x: number, y: number) => number) {
@@ -105,5 +105,41 @@ describe("the battleship's armor", () => {
   it('is laid out alike from the same seed', () => {
     expect(armorLayout(7)).toEqual(layout);
     expect(armorLayout(8)).not.toEqual(layout);
+  });
+});
+
+describe("a coil's windings baked as a normal map", () => {
+  const size = 64;
+  const turns = 8;
+  const pitch = size / turns;
+  const strap = size / 8;
+  const map = normalPixels(windingHeights(size, turns, strap / size), size, 3);
+  /** The texture coordinate v of the middle of a canvas row, as the GPU reads it (first row at v = 1). */
+  const v = (row: number) => 1 - (row + 0.5) / size;
+
+  it('rounds every turn: its crown faces straight out, its flanks lean away from it across the turns', () => {
+    for (let turn = 0; turn < turns; turn++) {
+      const crown = turn * pitch + pitch / 2;
+      const top = sample(map, size, 0.5, v(crown - 0.5));
+      expect(Math.abs(top[1])).toBeLessThan(0.35);
+      expect(top[2]).toBeGreaterThan(0.9);
+      // the flank lower on the canvas lies lower in v: it rises towards the crown, so it leans back along -v
+      expect(sample(map, size, 0.5, v(crown + pitch / 4 - 0.5))[1]).toBeLessThan(-0.2);
+      expect(sample(map, size, 0.5, v(crown - pitch / 4 - 1.5))[1]).toBeGreaterThan(0.2);
+      // along a turn (u) the wire is straight
+      expect(Math.abs(sample(map, size, 0.5, v(crown + pitch / 4 - 0.5))[0])).toBeLessThan(0.01);
+    }
+  });
+
+  it('lays the clamp strap flat across the turns, its edges beveled', () => {
+    for (let row = 0; row < size; row++) {
+      const [x, y, z] = sample(map, size, strap / 2 / size, v(row));
+      expect(Math.abs(x)).toBeLessThan(0.01);
+      expect(Math.abs(y)).toBeLessThan(0.01);
+      expect(z).toBeGreaterThan(0.99);
+    }
+    // between two turns, its rising edge leans back along -u, its falling edge along +u
+    expect(sample(map, size, 0.5 / size, v(pitch))[0]).toBeLessThan(-0.1);
+    expect(sample(map, size, (strap - 0.5) / size, v(pitch))[0]).toBeGreaterThan(0.1);
   });
 });

@@ -1,11 +1,12 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { boxUv, industrialSurface, shine, signTexture, surfaced } from '../view/surfaces';
+import { boxUv, industrialSurface, shine, signTexture, surfaced, windingSurface, WIRE_GLOW } from '../view/surfaces';
 
 /**
  * A sponsor's power core, the flag of Capture the Flag, as a thing of the tournament: a
- * machined reactor cell, an octagonal canister 14 m long. Its heart glows in its side's color
- * through four windings and between six armor staves; two plates carry the sponsor's lit sign;
+ * machined reactor cell, an octagonal canister 14 m long, its armor dark and oily. Its heart, a
+ * coil of copper wound tight, glows in its side's color through four windings and between six
+ * armor staves, every turn of their wire showing; two plates carry the sponsor's lit sign;
  * chamfered caps close both ends, and on top two crossed bails form the cage the tow cable
  * grips; a vent glows at the bottom. Low poly and built once: every core is a few meshes over
  * the kit's geometries, with materials of its own, so each fades alone (see CoreLook.fade).
@@ -23,9 +24,17 @@ const CAP_RADIUS = 70;
 const BAIL = 34;
 /** Where the tow cable grips the core (units along its axis, 8.7 m from its center). */
 export const GRIP = HALF + CAP + BAIL;
-/** The windings' heart glows at this brightness (above 1 it blooms), the windings brighter. */
-const HEART_GLOW = 1.3;
-const WINDING_GLOW = 2.6;
+/**
+ * The heart, a coil wound tight, glows at this brightness (above 1 it blooms), the windings
+ * brighter; both show their turns of copper (see windingSurface), a tile every WIND_AROUND units
+ * around them and every WIND_ALONG along them (a turn every 20 cm).
+ */
+const HEART_GLOW = 0.8;
+const WINDING_GLOW = 2.2;
+const WIND_AROUND = 120;
+const WIND_ALONG = 32;
+/** The armor's paint: dark, oily gunmetal, so the glow stands out against it rather than washing over it. */
+const ARMOR = 0x5a6069;
 /** The outline a faded core keeps (see CoreLook.fade): this opacity at the faintest. */
 const OUTLINE = 0.45;
 /** The seed of the canister's plating (see industrialSurface), the rings': the same depots built both. */
@@ -36,6 +45,14 @@ const turn = new THREE.Quaternion();
 const place = new THREE.Vector3();
 const unit = new THREE.Vector3(1, 1, 1);
 const Y = new THREE.Vector3(0, 1, 0);
+
+/** A coil of `radius` and `height` along the axis, its texture coordinates tiling its turns (see WIND_AROUND). */
+function wound(radius: number, height: number): THREE.BufferGeometry {
+  const coil = new THREE.CylinderGeometry(radius, radius, height, 8);
+  const uv = coil.attributes.uv;
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * 2 * Math.PI * radius) / WIND_AROUND, (uv.getY(i) * height) / WIND_ALONG);
+  return coil;
+}
 
 /** A box standing along the axis, `out` from it at `angle` around it, facing outwards. */
 function stave(width: number, height: number, depth: number, angle: number, out: number, y = 0) {
@@ -79,9 +96,9 @@ export class CoreKit {
     for (const angle of [0, Math.PI / 2]) hull.push(new THREE.TorusGeometry(BAIL, 6, 4, 8, Math.PI).rotateY(angle).translate(0, HALF + CAP, 0));
     hull.push(new THREE.CylinderGeometry(10, 10, 14, 6).translate(0, GRIP, 0));
     // the heart, its windings, and the vent at the bottom
-    const heart = new THREE.CylinderGeometry(RADIUS - 14, RADIUS - 14, HALF * 1.8, 8);
-    for (let w = 0; w < 4; w++) windings.push(new THREE.CylinderGeometry(RADIUS - 6, RADIUS - 6, 16, 8).translate(0, ((w + 0.5) / 4 - 0.5) * HALF * 1.5, 0));
-    windings.push(new THREE.CylinderGeometry(CAP_RADIUS * 0.4, CAP_RADIUS * 0.4, 8, 8).translate(0, -(HALF + CAP + 2), 0));
+    const heart = wound(RADIUS - 14, HALF * 1.8);
+    for (let w = 0; w < 4; w++) windings.push(wound(RADIUS - 6, 16).translate(0, ((w + 0.5) / 4 - 0.5) * HALF * 1.5, 0));
+    windings.push(wound(CAP_RADIUS * 0.4, 8).translate(0, -(HALF + CAP + 2), 0));
     this.hull = boxUv(mergeGeometries(hull), 180);
     this.heart = heart;
     this.windings = mergeGeometries(windings);
@@ -101,8 +118,11 @@ export class CoreKit {
     };
     const sign = signTexture(brand, tint);
     this.textures.push(sign);
-    const metal = material(new THREE.MeshStandardMaterial({ ...this.surface, color: 0x9aa0aa, flatShading: true, emissive: color.clone().multiplyScalar(0.06), envMap: shine(), envMapIntensity: 0.7 }));
-    const glows = [HEART_GLOW, WINDING_GLOW].map((glow) => material(new THREE.MeshBasicMaterial({ color: color.clone().multiplyScalar(glow), toneMapped: false })));
+    const metal = material(new THREE.MeshStandardMaterial({ ...this.surface, color: ARMOR, flatShading: true, emissive: color.clone().multiplyScalar(0.04), envMap: shine(), envMapIntensity: 0.45 }));
+    const wire = windingSurface();
+    const glows = [HEART_GLOW, WINDING_GLOW].map((glow) =>
+      material(new THREE.MeshStandardMaterial({ map: wire.map, normalMap: wire.normal, roughness: 0.35, metalness: 1, envMap: shine(), envMapIntensity: 0.8, emissive: color, emissiveMap: wire.glow, emissiveIntensity: glow * WIRE_GLOW, toneMapped: false })),
+    );
     const plate = material(new THREE.MeshBasicMaterial({ map: sign, color: new THREE.Color(1, 1, 1).multiplyScalar(1.4), toneMapped: false }));
     const solid = [metal, ...glows, plate];
     const lines = material(new THREE.LineBasicMaterial({ color: color.clone().multiplyScalar(2), toneMapped: false, depthWrite: false }));
