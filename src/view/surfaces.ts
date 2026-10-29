@@ -281,8 +281,13 @@ export type PlatingSurface = GlowingSurface & { normal: THREE.Texture };
 
 /** Texture size of the plating (px): finer than the other surfaces, as a world ship's hull is seen up close over hundreds of meters. */
 const PLATING = 512;
-/** How steep the plating's relief turns its normals: a height step of 1 over one pixel tilts them by this much. */
-const PLATING_RELIEF = 1.6;
+/**
+ * The plating's heights in its bump map: PLATING_GRAY steps of gray a unit of height, around
+ * the middle gray; and how steep the normal map tilts per step of that gray (see normalPixels):
+ * a rise of one unit over a pixel tilts the normal by about 1.6 (58°).
+ */
+const PLATING_GRAY = 50;
+const PLATING_SLOPE = 4;
 
 const ravaged = new Map<number, PlatingSurface>();
 const blankPlating = (): PlatingSurface => ({ ...blankSurface(), glow: new THREE.Texture(), normal: new THREE.Texture() });
@@ -615,28 +620,16 @@ export function ravagedSurface(seed: number): PlatingSurface {
   const o = orm.createImageData(S, S);
   const n = normal.createImageData(S, S);
   const b = bump.createImageData(S, S);
-  const h = (x: number, y: number) => m.height[(((y + S) % S) * S) + ((x + S) % S)];
-  for (let y = 0; y < S; y++) {
-    for (let x = 0; x < S; x++) {
-      const i = y * S + x;
-      const dust = recess[i] * 0.4;
-      for (let k = 0; k < 3; k++) c.data[i * 4 + k] = m.color[i * 3 + k] + ([150, 145, 136][k] - m.color[i * 3 + k]) * dust;
-      o.data[i * 4] = recess[i] * 255;
-      o.data[i * 4 + 1] = Math.min(1, Math.max(0, m.rough[i])) * 255;
-      o.data[i * 4 + 2] = Math.min(1, Math.max(0, m.metal[i])) * 255;
-      // the slope by a Sobel filter; the canvas runs down where the texture's v runs up
-      const gx = (h(x + 1, y - 1) + 2 * h(x + 1, y) + h(x + 1, y + 1) - h(x - 1, y - 1) - 2 * h(x - 1, y) - h(x - 1, y + 1)) / 8;
-      const gy = (h(x - 1, y + 1) + 2 * h(x, y + 1) + h(x + 1, y + 1) - h(x - 1, y - 1) - 2 * h(x, y - 1) - h(x + 1, y - 1)) / 8;
-      const nx = -gx * PLATING_RELIEF;
-      const ny = gy * PLATING_RELIEF;
-      const length = Math.hypot(nx, ny, 1);
-      n.data[i * 4] = (nx / length) * 127.5 + 127.5;
-      n.data[i * 4 + 1] = (ny / length) * 127.5 + 127.5;
-      n.data[i * 4 + 2] = (1 / length) * 127.5 + 127.5;
-      b.data[i * 4] = b.data[i * 4 + 1] = b.data[i * 4 + 2] = 128 + m.height[i] * 50;
-      c.data[i * 4 + 3] = o.data[i * 4 + 3] = n.data[i * 4 + 3] = b.data[i * 4 + 3] = 255;
-    }
+  for (let i = 0; i < S * S; i++) {
+    const dust = recess[i] * 0.4;
+    for (let k = 0; k < 3; k++) c.data[i * 4 + k] = m.color[i * 3 + k] + ([150, 145, 136][k] - m.color[i * 3 + k]) * dust;
+    o.data[i * 4] = recess[i] * 255;
+    o.data[i * 4 + 1] = Math.min(1, Math.max(0, m.rough[i])) * 255;
+    o.data[i * 4 + 2] = Math.min(1, Math.max(0, m.metal[i])) * 255;
+    b.data[i * 4] = b.data[i * 4 + 1] = b.data[i * 4 + 2] = 128 + m.height[i] * PLATING_GRAY;
+    c.data[i * 4 + 3] = o.data[i * 4 + 3] = b.data[i * 4 + 3] = 255;
   }
+  n.data.set(normalPixels(b.data, S, PLATING_SLOPE));
   color.putImageData(c, 0, 0);
   orm.putImageData(o, 0, 0);
   normal.putImageData(n, 0, 0);
