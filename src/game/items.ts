@@ -5,7 +5,7 @@ import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
 import { MASS } from '../world/bodies';
 import type { Ship } from '../ship/ship';
 import { msg } from '../i18n/i18n';
-import { shine, solarPanel, surfaced, wornSurface, type Wear } from '../view/surfaces';
+import { shine, solarWing, surfaced, WING_BACK, WING_CELLS_ACROSS, WING_CELLS_ALONG, WING_FRONT, wornSurface, type Wear } from '../view/surfaces';
 
 /** The wear of a sponsor's probe (see wornSurface). */
 const PROBE_WEAR: Wear = { rust: 0.3, chips: 0.15, grime: 0.75, scratches: 0.6, seams: 0.85, dents: 0.4, stencils: ['PROPERTY OF SPONSOR', 'SN 0451', 'DO NOT OPEN'], roughness: 0.55, metalness: 0.4 };
@@ -137,7 +137,7 @@ const spin = new THREE.Euler();
  * NEON_CLOSE (units, 15 m) and in full from NEON_FULL on (100 m): from afar it blooms so a
  * pilot sees what a probe carries, up close its glow no longer swamps the probe it rings.
  */
-const NEON_NEAR = 0.5;
+const NEON_NEAR = 0.35;
 const NEON_CLOSE = 300;
 const NEON_FULL = 2000;
 
@@ -151,13 +151,32 @@ function nearDim(material: THREE.MeshBasicMaterial): THREE.MeshBasicMaterial {
   return material;
 }
 
+/** The solar wings' box, both wings in one (units: 28 m span, 40 cm thick, 7.5 m wide). */
+const WING = [560, 8, 150] as const;
+
+/**
+ * The solar wing's texture on the wings' box (see solarWing): cells on the face towards +y, the
+ * white back on the one towards -y, the frame's row on the edges; the cells as wide as the
+ * junk's, WING_CELLS_ACROSS of them across the wing. BoxGeometry's faces in its order: ±x, ±y, ±z.
+ */
+function cells(box: THREE.BoxGeometry): THREE.BoxGeometry {
+  const uv = box.attributes.uv;
+  const tile = (WING[2] / WING_CELLS_ACROSS) * WING_CELLS_ALONG;
+  for (let i = 0; i < uv.count; i++) {
+    const face = Math.floor(i / 4);
+    const [from, to] = face === 2 ? WING_FRONT : face === 3 ? WING_BACK : [WING_FRONT[1], WING_FRONT[1]];
+    uv.setXY(i, (uv.getX(i) * WING[0]) / tile, from + (to - from) * uv.getY(i));
+  }
+  return box;
+}
+
 /**
  * A small probe: a body, two wide solar wings, a dish, a beacon on a mast and a neon ring
  * around it in the color of what it carries, so it shows from afar (about 30 m wide).
  */
 function probeParts() {
   const body = new THREE.CylinderGeometry(70, 90, 160, 6).rotateX(Math.PI / 2);
-  const wing = new THREE.BoxGeometry(560, 8, 150);
+  const wing = cells(new THREE.BoxGeometry(WING[0], WING[1], WING[2]));
   const dish = new THREE.ConeGeometry(70, 40, 10, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -110);
   const mast = new THREE.CylinderGeometry(6, 6, 90, 4).translate(0, 90, 0);
   const beacon = new THREE.SphereGeometry(34, 10, 6).translate(0, 140, 0);
@@ -181,8 +200,8 @@ export class Probes {
   private readonly parts = probeParts();
   /** A sponsor's probe is cheap and used again and again: grimy, dented, scratched, a serial and the sponsor's warning stenciled on, a little sheen of the sky on its metal. */
   private readonly hull = new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(11, PROBE_WEAR), 1.2), color: 0xa8afb8, flatShading: true, envMap: shine(), envMapIntensity: 0.5 });
-  /** The wings' solar cells under glass (see solarPanel): a sheen of the sky runs over them as the probe turns. */
-  private readonly panels = new THREE.MeshStandardMaterial({ map: solarPanel().map, roughnessMap: solarPanel().orm, metalnessMap: solarPanel().orm, roughness: 1, metalness: 1, emissive: 0x050a18, envMap: shine(), envMapIntensity: 1.2 });
+  /** The wings' solar cells under glass (see solarWing): a sheen of the sky runs over them as the probe turns. */
+  private readonly panels = new THREE.MeshStandardMaterial({ map: solarWing().map, roughnessMap: solarWing().orm, metalnessMap: solarWing().orm, roughness: 1, metalness: 1, emissive: 0x050a18, envMap: shine(), envMapIntensity: 1.2 });
   private readonly beacons = new Map<ItemKind, THREE.MeshBasicMaterial>();
   private readonly sealed = nearDim(new THREE.MeshBasicMaterial({ toneMapped: false }));
 

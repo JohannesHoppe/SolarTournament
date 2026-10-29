@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { bakeImpostors, bakeReliefMaps, createImpostors, createRocks, createRockShapes, DETAIL, FAR_DETAIL, NEAR_DETAIL } from './world/rocks';
+import { bakeImpostors, bakeReliefMaps, createImpostors, createRocks, createRockShapes, DETAIL, FAR_DETAIL, NEAR_DETAIL, rockPieceMaterial } from './world/rocks';
+import { fractureSet } from './world/fracture';
 import { debrisSet, hullSet } from './world/shapes';
 import { iceSet } from './world/ice';
 import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
@@ -165,7 +166,9 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   ring.wrapS = THREE.ClampToEdgeWrapping;
   ring.anisotropy = 1;
 
-  const rock = { near: asteroidsNear, far: asteroidsFar, impostor: asteroidImpostors, collision: asteroidsCollision };
+  // a broken rock splits into pieces of itself, cut from the same shapes (see world/fracture)
+  const fracture = fractureSet({ collision: DETAIL, near: NEAR_DETAIL, far: FAR_DETAIL }, rockPieceMaterial);
+  const rock = { near: asteroidsNear, far: asteroidsFar, impostor: asteroidImpostors, collision: asteroidsCollision, fracture };
   return {
     // the hulls are built in code; the model files give collider, drive flame and glows
     ships: { human: humanInterceptor(human), alien: alienInterceptor(alien), sovereign: sovereign(human) },
