@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { Bot, BOT_NAMES, evenSkills, meanSkill, missOf, reactionOf, skillsOf, startTiming } from './bots';
-import { FlightModel, MAIN_THRUST } from './flight';
+import { FlightModel, MAIN_THRUST, MAX_SPEED } from './flight';
 import { LOCK_RANGE, MAX_HEAT, noseOn, Ship, strainAfter } from './ship';
 import { testField } from '../test/field';
 import type { AsteroidField } from '../world/asteroids';
@@ -293,6 +293,49 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
     rival.flight.position.copy(deep(100, 1500));
     bot.think(0.1, [me, rival], f);
     expect(bot.target).toBeNull();
+  });
+});
+
+describe('bots near the black hole, whose grip they know', () => {
+  /** Event Horizon's field without its rocks: only the hole and its pull. */
+  const hole = () => {
+    const f = testField();
+    f.generate(arenaById('hole')!.layout);
+    f.asteroids.clear();
+    return f;
+  };
+  /** Flies the bot under the hole's pull for `seconds`; returns its nearest distance to the horizon (units). */
+  const fly = (f: AsteroidField, bot: Bot, me: Ship, seconds: number) => {
+    const well = f.well!;
+    const outside = new THREE.Vector3();
+    let nearest = Infinity;
+    for (let t = 0; t < seconds; t += STEP) {
+      f.gravity(me.flight.position, outside);
+      me.flight.update(STEP, bot.think(t, [me], f), outside);
+      nearest = Math.min(nearest, me.flight.position.distanceTo(well.position) - well.radius);
+    }
+    return nearest;
+  };
+
+  it('never fly into the hole for a probe on its far side', () => {
+    for (const skill of [0, 0.5, 1]) {
+      const f = hole();
+      const me = ship('Kessler', at(30000), at(-1));
+      const bot = new Bot(me, evenSkills(skill));
+      bot.lure = at(-30000);
+      expect(fly(f, bot, me, 60)).toBeGreaterThan(RADIUS * 2);
+    }
+  });
+
+  it('burn out of a dive at the speed limit, straight at it from 1.5 km', () => {
+    for (const skill of [0, 0.5, 1]) {
+      const f = hole();
+      const me = ship('Kessler', at(30000), at(-1));
+      me.flight.velocity.set(-MAX_SPEED, 0, 0);
+      const bot = new Bot(me, evenSkills(skill));
+      bot.lure = at(-30000);
+      expect(fly(f, bot, me, 20)).toBeGreaterThan(RADIUS * 2);
+    }
   });
 });
 

@@ -3,6 +3,7 @@ import { Randomizer } from '../random';
 import type { AsteroidField } from '../world/asteroids';
 import { GateKit } from '../world/gates';
 import { BOW_RADIUS, CLEARANCE, RacingLine } from './racingline';
+import { inGrip, WELL_CAUTION } from './alarms';
 
 /** Gates of a lap, and laps of a race. */
 export const GATES = 8;
@@ -63,7 +64,7 @@ const COURSE_RISE = 4000;
 const COURSE_DIVE = 6000;
 /**
  * A gate keeps GATE_ROOM (units, 200 m) clear of rock, and four times as much of an arena's
- * massive body (see crowded), and stays off the stretches where the racing line bows around
+ * massive body and out of its grip (see crowded), and stays off the stretches where the racing line bows around
  * rock: the bow, the bends into it and out, and GATE_RUN (units, 100 m) more; a rock counts once
  * its reach plus clearance comes within RUN_ROOM (units, 100 m) of the loop. To find such a place
  * a gate moves along the loop, back and forth by GATE_STEP (units, 80 m) more each try, up to
@@ -114,12 +115,13 @@ const probe = new THREE.Vector3();
 /**
  * Whether a gate at `point` lies too close to rock or to the arena's massive body: within
  * GATE_ROOM of the farthest reach of a rock (however the rock turns, the tip of a long one
- * sweeps around it), or four times that of the massive body.
+ * sweeps around it), or four times that of the massive body, or where its pull alone would
+ * sound the CAUTION of the escape gauge (see inGrip).
  */
 export function crowded(field: AsteroidField, point: THREE.Vector3): boolean {
   const room = GATE_ROOM;
   for (const rock of field.asteroids.values()) if (rock.object.position.distanceTo(point) < rock.radius + room) return true;
-  return field.insideWell(point, room * 4);
+  return field.insideWell(point, room * 4) || inGrip(field.well, point, WELL_CAUTION);
 }
 
 /** A coil throws a velocity on along its axis, the way it flies along it, by BOOST_PUSH; never beyond `limit` plus that push (a faster ship keeps its speed). */

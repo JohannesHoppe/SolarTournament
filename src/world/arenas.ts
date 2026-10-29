@@ -22,8 +22,17 @@ const JUPITER_RADIUS = 800000;
 const JUPITER_FLOOR = 100000;
 const JUPITER_GRAVITY = 0.83 * G;
 const JUPITER_CENTER = new THREE.Vector3(0, -JUPITER_RADIUS, 0);
-/** The black hole's event horizon (units, 175 m), in the middle of its arena. */
-export const HOLE_RADIUS = 3500;
+/**
+ * The black hole's event horizon (units, 350 m), in the middle of its arena. It pulls with
+ * HOLE_PULL (units/s², 1 g) at HOLE_PULL_AT (units, 2 km), falling off with the square of the
+ * distance: 4 g at 1 km, and the main drive's 13 g gets out from no nearer than about 555 m,
+ * 1.6 times the horizon, so the zone no drive escapes begins just outside it; touching the
+ * horizon is death. Its pull is the game's: a real hole of this size weighs about 0.12 suns (its
+ * horizon is 2.95 km per sun) and pulls with some 400 billion g at 2 km (see README, Event Horizon).
+ */
+export const HOLE_RADIUS = 7000;
+const HOLE_PULL = G;
+const HOLE_PULL_AT = 40000;
 
 export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict';
 
@@ -365,7 +374,7 @@ export const ARENAS: readonly ArenaProfile[] = [
   {
     id: 'hole',
     name: msg('Event Horizon'),
-    tagline: msg('A black hole in the middle pulls everything in. Past 280 m no drive gets out.'),
+    tagline: msg('A black hole in the middle pulls everything in. Past 555 m no drive gets out.'),
     layout: {
       key: 'hole',
       seed: 61,
@@ -379,13 +388,13 @@ export const ARENAS: readonly ArenaProfile[] = [
       orbit: { axis: 'vertical', speed: 500 },
       spin: 0.06,
       toughness: 800,
-      well: { position: new THREE.Vector3(0, 0, 0), radius: HOLE_RADIUS, surfaceGravity: (1 * G * 20000 * 20000) / (HOLE_RADIUS * HOLE_RADIUS) },
+      well: { position: new THREE.Vector3(0, 0, 0), radius: HOLE_RADIUS, surfaceGravity: (HOLE_PULL * HOLE_PULL_AT * HOLE_PULL_AT) / (HOLE_RADIUS * HOLE_RADIUS) },
     },
     cooling: 1,
     storms: false,
     sun: { size: 20000, intensity: 2.6, color: 0xffe6cc },
     mood: MOODS.hole,
-    preview: { from: [20000, 8000, 20000] },
+    preview: { from: [40000, 16000, 40000] },
     // the hole is the field's center: it takes the center's mark, measured to its horizon
     references: [{ glyph: 'hole', label: msg('Black hole'), position: new THREE.Vector3(), distance: true, radius: HOLE_RADIUS }],
   },

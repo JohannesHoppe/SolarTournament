@@ -44,7 +44,7 @@ export const COMET_REACH = 176000;
 const COMET_MISS = 16000;
 /** The route lies within this angle (rad, 35°) of the arena's horizon plane, where the field is. */
 const COMET_TILT = 0.6;
-/** A massive body in the field's middle (the black hole) is aimed at: the route passes it within this many of its radii, close enough to be caught: at COMET_SPEED the hole's pull bends a route aimed 1.14 radii off into its body. */
+/** A massive body in the field's middle (the black hole) is aimed at: the route passes it within this many of its radii, close enough to be caught: at COMET_SPEED the hole's pull bends a route aimed 1.27 radii off into its body. */
 const CAPTURE = 1.05;
 /** Towards a massive body outside the field (Jupiter) the route dives at an angle of this range (rad, 26° to 43°) as it crosses the center: steep enough that it comes from above its cloud deck, so the body's pull bends it down through it into its depths. */
 const DIVE: readonly [number, number] = [0.45, 0.75];

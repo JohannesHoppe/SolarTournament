@@ -11,6 +11,7 @@ import { Cables, HOOK_RANGE, pullOn, type Mark } from './hook';
 import { ringCrossing } from './race';
 import { sponsorSigns } from './satire-ads';
 import { msg } from '../i18n/i18n';
+import { inGrip, WELL_CAUTION } from './alarms';
 
 /**
  * Capture the Flag: two sides, Orange and Blue, each with a base on opposite sides of the
@@ -662,7 +663,7 @@ function toSegment(point: THREE.Vector3, from: THREE.Vector3, to: THREE.Vector3,
   return Math.hypot(px - along * dx, py - along * dy);
 }
 
-/** A base's place is in rock or in a massive body. */
+/** A base's place is in rock, in a massive body or in its grip (where its pull alone sounds the CAUTION of the escape gauge, see inGrip). */
 function blocked(field: AsteroidField, point: THREE.Vector3) {
-  return !!field.overlap(point, BASE_RADIUS * 2) || field.insideWell(point, BASE_RADIUS * 8);
+  return !!field.overlap(point, BASE_RADIUS * 2) || field.insideWell(point, BASE_RADIUS * 8) || inGrip(field.well, point, WELL_CAUTION);
 }

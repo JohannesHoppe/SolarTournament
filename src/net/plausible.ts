@@ -25,7 +25,7 @@ export const CHEATS: readonly Cheat[] = ['teleport', 'nova', 'torpedoes', 'kills
  * ship comes to about 700 m/s at the most, and only for a moment: the limit, the overdrive's
  * shove and a dodge on top, or a winch reeling it in towards a ship flying the other way. A
  * fall into the black hole, which the limit does not hold back, ends at its horizon at about
- * 520 m/s, from the arena's edge with the overdrive's shove.
+ * 600 m/s, from the arena's edge with the overdrive's shove.
  */
 export const PLAUSIBLE_SPEED = MAX_SPEED * 4;
 /** On top of that, a ship may be off by this much (units, 500 m): prediction, rounding, a state that comes late. */

@@ -15,7 +15,7 @@ import { COMET_WARNING } from '../game/comet';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
 import { ASTEROID_POINTS } from '../world/asteroids';
 import { ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
-import { RING_LAYER } from '../world/arenas';
+import { arenaById, RING_LAYER } from '../world/arenas';
 
 /**
  * The numbers of the Pilot's Handbook (handbook.html), filled into its texts as {placeholders}
@@ -104,6 +104,8 @@ export const FROM_CODE: Record<string, number> = {
   wellCaution: percent(WELL_CAUTION),
   wellWarning: percent(WELL_WARNING),
   wellCritical: percent(WELL_CRITICAL),
+  // where the black hole's pull beats the main drive (rounded to 5 m as the README gives it)
+  noReturn: Math.round(meters(noReturn()) / 5) * 5,
   edge: Math.round(km(ARENA_LIMIT) * 10) / 10,
   grace: ARENA_GRACE,
   hullCritical: HULL_CRITICAL,
@@ -123,6 +125,12 @@ export const FROM_CODE: Record<string, number> = {
   // the Rings of Saturn's layer of ice grains, top to bottom
   ringLayer: meters(2 * RING_LAYER),
 };
+
+/** How far from the black hole's center its pull equals the main drive's thrust (units). */
+function noReturn(): number {
+  const well = arenaById('hole')!.layout.well!;
+  return well.radius * Math.sqrt(well.surfaceGravity / MAIN_THRUST);
+}
 
 /** How deep under Jupiter's deck the speed limit starts to heat a hull in the air's shade (m). */
 function hotDepth(): number {
@@ -168,7 +176,6 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   junkOrbit: { value: 25, readme: 'all at # m/s' },
   stormEvery: { value: 50, readme: 'Every # seconds of field time a solar storm' },
   stormLength: { value: 8, readme: 'blinds the sensors for # seconds' },
-  noReturn: { value: 280, readme: 'Within about # m no drive gets out' },
   impactKill: { value: 72, readme: 'at about # m/s a ship is destroyed' },
   towCable: { value: 75, readme: 'on a cable of about # m' },
   pingWarn: { value: 150, readme: 'orange from # ms' },

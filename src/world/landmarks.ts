@@ -95,9 +95,9 @@ const JUPITER_LATITUDE = -0.22;
 const JUPITER_LONGITUDE = 0.3625 + 0.1 / (2 * Math.PI);
 /** The light a planet's lit side gets on top of the arena's sun (the sky's faint glow), a share of the sun's. */
 const PLANET_AMBIENT = 0.02;
-/** The black hole's disk: from and to (units, 300 m to 1.4 km). */
-const DISK_INNER = 6000;
-const DISK_OUTER = 28000;
+/** The black hole's disk: from and to (units, 600 m to 2.8 km, 1.7 to 8 times its horizon). */
+const DISK_INNER = 12000;
+const DISK_OUTER = 56000;
 /**
  * How fast the disk's gas circles (see diskGas): DISK_SPIN / (0.15 + t) rad/s, t from the
  * inner edge 0 to the outer 1, so once a second at the inner edge and once in about 8 s at the
@@ -108,22 +108,24 @@ const DISK_SPIN = 0.9;
 const DISK_BANDS = 6;
 /**
  * The disk's thickness (units): its gas thins out above and below the middle plane as a bell
- * curve whose width grows outward, DISK_THICK + DISK_FLARE · r (19 m at the inner edge, 32 m at
+ * curve whose width grows outward, DISK_THICK + DISK_FLARE · r (37 m at the inner edge, 64 m at
  * the outer), so its near side crosses the shadow as a thin bright band.
  */
-const DISK_THICK = 300;
+const DISK_THICK = 600;
 const DISK_FLARE = 0.012;
 /**
  * A deliberate deviation for the look: the inner disk's far side, behind the hole as the pilot
- * sees it, swells by up to DISK_PUFF (units, 225 m) above and below, the more edge-on the disk is
- * seen and the farther behind the hole, out to DISK_PUFF_REACH. A real hole's gravity bends the
- * light of its far side's face up over the shadow and under it; the lens over the picture only
- * bends what it sees, a thin edge, so the swollen far side gives it the broad bright halo instead.
+ * sees it, swells by up to DISK_PUFF (units, 450 m) above and below, the more edge-on the disk is
+ * seen and the farther behind the hole (in full from DISK_PUFF_FROM, units, 800 m), out to
+ * DISK_PUFF_REACH (units, 2 km). A real hole's gravity bends the light of its far side's face up
+ * over the shadow and under it; the lens over the picture only bends what it sees, a thin edge,
+ * so the swollen far side gives it the broad bright halo instead.
  */
-const DISK_PUFF = 4500;
-const DISK_PUFF_REACH = 20000;
+const DISK_PUFF = 9000;
+const DISK_PUFF_FROM = 16000;
+const DISK_PUFF_REACH = 40000;
 /** How far above and below the middle plane the gas is drawn (units): where hardly any of the swollen far side is left. */
-const DISK_TOP = 2.6 * (DISK_THICK + DISK_FLARE * 10000 + DISK_PUFF);
+const DISK_TOP = 2.6 * (DISK_THICK + DISK_FLARE * DISK_PUFF_REACH * 0.5 + DISK_PUFF);
 /** The hole's shadow as the lens draws it, a share more than its horizon (see view/lensing): the disk's near side shows in front of it. */
 export const HOLE_SHADOW = 1.3;
 /**
@@ -367,7 +369,7 @@ export const diskGas = /* glsl */ `
       // the bell curve across the plane, summed exactly along this stretch (heights in its width);
       // the inner far side swollen (see DISK_PUFF)
       float thin = ${DISK_THICK.toFixed(1)} + ${DISK_FLARE.toFixed(3)} * r;
-      float puff = ${DISK_PUFF.toFixed(1)} * edgeOn * smoothstep(0.0, 8000.0, dot(p, ahead)) * (1.0 - smoothstep(8000.0, ${DISK_PUFF_REACH.toFixed(1)}, r));
+      float puff = ${DISK_PUFF.toFixed(1)} * edgeOn * smoothstep(0.0, ${DISK_PUFF_FROM.toFixed(1)}, dot(p, ahead)) * (1.0 - smoothstep(${DISK_PUFF_FROM.toFixed(1)}, ${DISK_PUFF_REACH.toFixed(1)}, r));
       float width = thin + puff;
       float y0 = (ro.y + rd.y * s0) / width;
       float y1 = (ro.y + rd.y * (s0 + len)) / width;

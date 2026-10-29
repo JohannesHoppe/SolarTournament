@@ -5,6 +5,7 @@ import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
 import { MASS } from '../world/bodies';
 import type { Ship } from '../ship/ship';
 import { msg } from '../i18n/i18n';
+import { inGrip, WELL_WARNING } from './alarms';
 import { shine, solarWing, surfaced, WING_BACK, WING_CELLS_ACROSS, WING_CELLS_ALONG, WING_FRONT, wornSurface, type Wear } from '../view/surfaces';
 
 /** The wear of a sponsor's probe (see wornSurface). */
@@ -219,8 +220,9 @@ export class Probes {
   /**
    * The arena's probes due by `elapsed` seconds into round `round` of `seed`'s room (or solo
    * round): each at a place in the field and with a kind its number decides; places taken by
-   * rock are skipped over to the next one. In a race they lie on the track: between two
-   * gates of `track`, close to the straight line from one to the next.
+   * rock, or so deep in a massive body's grip that its pull alone would sound the escape gauge's
+   * WARNING (see inGrip), are skipped over to the next one. In a race they lie on the track:
+   * between two gates of `track`, close to the straight line from one to the next.
    */
   schedule(seed: number, round: number, elapsed: number, now: number, field: AsteroidField, track: readonly THREE.Vector3[] = []) {
     while (PROBE_FIRST + this.shown * PROBE_EVERY <= elapsed) {
@@ -239,7 +241,7 @@ export class Probes {
         } else {
           position.set(h(1) * 2 - 1, (h(2) * 2 - 1) * 0.5, h(3) * 2 - 1).multiplyScalar(FIELD_RADIUS * 0.8);
         }
-        if (!field.overlap(position, PROBE_RADIUS * 4) && !field.insideWell(position, PROBE_RADIUS * 20)) break;
+        if (!field.overlap(position, PROBE_RADIUS * 4) && !field.insideWell(position, PROBE_RADIUS * 20) && !inGrip(field.well, position, WELL_WARNING)) break;
       }
       // in a race the probe is sealed: its luck and the taker's place decide what it holds
       const luck = hash(seed, round, n, 99);

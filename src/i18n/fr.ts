@@ -525,7 +525,7 @@ export const FR: Catalog = {
   'Corona': 'Couronne',
   'Close to the sun. Lasers barely cool in its glare, and its storms blind the sensors.': 'Tout près du soleil. Les lasers refroidissent à peine dans son éclat, et ses tempêtes aveuglent les capteurs.',
   'Event Horizon': 'Horizon des événements',
-  'A black hole in the middle pulls everything in. Past 280 m no drive gets out.': 'Un trou noir au centre aspire tout. Passé 280 m, aucun moteur n’en ressort.',
+  'A black hole in the middle pulls everything in. Past 555 m no drive gets out.': 'Un trou noir au centre aspire tout. Passé 555 m, aucun moteur n’en ressort.',
   'The Derelict': 'L’Épave',
   'A world ship, broken in two. Nothing else out here: only its hull to hide behind.': 'Un vaisseau-monde, brisé en deux. Rien d’autre ici : seulement sa coque pour se cacher.',
 

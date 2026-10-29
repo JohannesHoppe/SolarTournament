@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Well } from '../world/asteroids';
+import { MAIN_THRUST } from '../ship/flight';
 
 /**
  * The flight computer's alarms, tiered like a fighter's master caution: CAUTION (something to
@@ -204,6 +205,17 @@ export const WELL_RELEASE = 0.1;
 
 export function wellLevel(load: number): AlarmLevel | null {
   return load >= WELL_CRITICAL ? 'critical' : load >= WELL_WARNING ? 'warning' : load >= WELL_CAUTION ? 'caution' : null;
+}
+
+const REST = new THREE.Vector3();
+
+/**
+ * Whether a ship at rest at `point`, its drive whole, would be held by the well at `load` or
+ * more (see escapeLoad): what the game places (a new clone, a gate, a base, a probe) keeps out
+ * of the grip whose alarm that load sounds, however large the well.
+ */
+export function inGrip(well: Well | null, point: THREE.Vector3, load: number): boolean {
+  return !!well && escapeLoad(well, point, REST, MAIN_THRUST) >= load;
 }
 
 /** The hull is failing at or below this (of MAX_HULL 100): one more hit may be the last. */

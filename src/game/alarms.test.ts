@@ -95,8 +95,9 @@ describe('the escape load of a gravity well', () => {
   const rest = new THREE.Vector3();
 
   it('is the pull over the thrust for a ship at rest', () => {
-    // 1 g at 1 km from the black hole
-    expect(escapeLoad(hole, new THREE.Vector3(20000, 0, 0), rest, MAIN_THRUST)).toBeCloseTo(196.2 / MAIN_THRUST, 4);
+    // 1 g at 2 km from the black hole, 4 g at 1 km
+    expect(escapeLoad(hole, new THREE.Vector3(40000, 0, 0), rest, MAIN_THRUST)).toBeCloseTo(196.2 / MAIN_THRUST, 4);
+    expect(escapeLoad(hole, new THREE.Vector3(20000, 0, 0), rest, MAIN_THRUST)).toBeCloseTo((4 * 196.2) / MAIN_THRUST, 4);
   });
 
   it('grows with the fall towards the body, and not with a climb away from it', () => {
@@ -104,8 +105,8 @@ describe('the escape load of a gravity well', () => {
     const still = escapeLoad(hole, at, rest, MAIN_THRUST);
     const falling = escapeLoad(hole, at, new THREE.Vector3(-4000, 0, 0), MAIN_THRUST);
     const climbing = escapeLoad(hole, at, new THREE.Vector3(4000, 0, 0), MAIN_THRUST);
-    // 200 m/s towards the hole with 825 m to its horizon: 4000² / (2 · 16500) units/s² more to brake
-    expect(falling).toBeCloseTo(still + (4000 * 4000) / (2 * 16500) / MAIN_THRUST, 4);
+    // 200 m/s towards the hole with 650 m to its horizon: 4000² / (2 · 13000) units/s² more to brake
+    expect(falling).toBeCloseTo(still + (4000 * 4000) / (2 * 13000) / MAIN_THRUST, 4);
     expect(climbing).toBeCloseTo(still, 6);
   });
 

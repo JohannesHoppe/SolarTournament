@@ -82,9 +82,11 @@ import {
   HEART_WELL,
   HULL_CRITICAL,
   IMPACT_CRITICAL,
+  inGrip,
   SILENCE_BEFORE,
   SILENCE_COOLDOWN,
   SILENCE_SECONDS,
+  WELL_CAUTION,
   WELL_CRITICAL,
   WELL_LOST,
   WELL_RELEASE,
@@ -2751,16 +2753,16 @@ export class Game implements OnlineGame {
     if (course) {
       // a racer starts on the grid before the first gate, and a new clone takes up the race
       // where the last one died, facing the next gate; where the last one passed its last gate
-      // when that spot lies in rock, in a well or out of the arena
+      // when that spot lies in rock, in a well or its grip, or out of the arena
       const spot = ship.flight.position;
-      if (ship.gates > 0 && ship.outsideSince === null && !this.field.overlap(spot, ship.radius * 4) && !this.field.insideWell(spot, ship.radius * 40)) position.copy(spot);
+      if (ship.gates > 0 && ship.outsideSince === null && !this.field.overlap(spot, ship.radius * 4) && !this.field.insideWell(spot, ship.radius * 40) && !inGrip(this.field.well, spot, WELL_CAUTION)) position.copy(spot);
       else course.startOf(ship.gates, Math.max(0, this.ships.indexOf(ship)) % 8, position);
       candidate.copy(course.points[ship.gates % GATES]);
       best = 0;
     }
     // of a dozen random places on the edge of the field (in Last Clone Standing around the middle
     // of a solar flare's safe pocket and clear of its plasma; in Capture the Flag around the own
-    // side's base), clear of rock, the one farthest from the nearest enemy, preferably hidden
+    // side's base), clear of rock and of a massive body's grip (no alarm at the start), the one farthest from the nearest enemy, preferably hidden
     // from every enemy behind the asteroids
     const clock = this.field.clock;
     const edge = this.survival ? Math.min(FIELD_RADIUS, flarePocket(clock, spawnMiddle) * FLARE_KEEP) : FIELD_RADIUS;
@@ -2770,7 +2772,7 @@ export class Game implements OnlineGame {
     for (let attempt = 0; attempt < SPAWN_CANDIDATES && !course; attempt++) {
       if (base) candidate.randomDirection().multiplyScalar(BASE_RADIUS * (2 + Math.random() * 2)).add(base);
       else candidate.randomDirection().multiplyScalar(edge * (0.9 + Math.random() * 0.2)).add(spawnMiddle);
-      if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40) || scorched(candidate)) continue;
+      if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40) || inGrip(this.field.well, candidate, WELL_CAUTION) || scorched(candidate)) continue;
       let nearest = Infinity;
       let seen = false;
       for (const other of this.ships) {
@@ -2786,10 +2788,10 @@ export class Game implements OnlineGame {
       }
     }
     // none clear (a dense field, a base among rocks): the first of more tries that is clear of
-    // rock and well at all, and as a last resort the open space just beyond the field's rocks
+    // rock, well and grip at all, and as a last resort the open space just beyond the field's rocks
     for (let attempt = 0; attempt < SPAWN_CANDIDATES * 4 && best === -Infinity; attempt++) {
       candidate.randomDirection().multiplyScalar(edge * (0.9 + Math.random() * 0.2)).add(spawnMiddle);
-      if (this.field.overlap(candidate, ship.radius * 2) || this.field.insideWell(candidate, ship.radius * 40) || scorched(candidate)) continue;
+      if (this.field.overlap(candidate, ship.radius * 2) || this.field.insideWell(candidate, ship.radius * 40) || inGrip(this.field.well, candidate, WELL_CAUTION) || scorched(candidate)) continue;
       best = 0;
       position.copy(candidate);
     }

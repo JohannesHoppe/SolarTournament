@@ -526,7 +526,7 @@ export const ES: Catalog = {
   Corona: 'Corona',
   'Close to the sun. Lasers barely cool in its glare, and its storms blind the sensors.': 'Cerca del sol. Los láseres apenas se enfrían bajo su resplandor, y sus tormentas ciegan los sensores.',
   'Event Horizon': 'Horizonte de sucesos',
-  'A black hole in the middle pulls everything in. Past 280 m no drive gets out.': 'Un agujero negro en el centro lo engulle todo. A menos de 280 m, ningún motor logra escapar.',
+  'A black hole in the middle pulls everything in. Past 555 m no drive gets out.': 'Un agujero negro en el centro lo engulle todo. A menos de 555 m, ningún motor logra escapar.',
   'The Derelict': 'El Pecio',
   'A world ship, broken in two. Nothing else out here: only its hull to hide behind.': 'Una nave mundo partida en dos. Aquí no hay nada más: solo su casco para esconderte.',
 
