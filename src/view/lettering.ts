@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
-import { canvas, toTexture } from './textures';
+import { canvas } from './textures';
 
 /**
  * Paint on a hull: a ship's name, its registry and an emblem, in large stenciled block letters
@@ -58,12 +58,12 @@ function stencil(g: CanvasRenderingContext2D, text: string, x: number, y: number
 /**
  * The emblem of the united Earth that built the ship (a design of the game's own): the globe
  * with its meridians and parallels, an orbit tilted around it, and five stars in an arc above,
- * the way out. Painted white on a blue disc, centered at (x, y), `radius` pixels.
+ * the way out. Painted in `paint` on a disc of `disc`, centered at (x, y), `radius` pixels.
  */
-function emblem(g: CanvasRenderingContext2D, x: number, y: number, radius: number, paint: string) {
+function emblem(g: CanvasRenderingContext2D, x: number, y: number, radius: number, paint: string, disc: string) {
   g.save();
   g.translate(x, y);
-  g.fillStyle = '#23407a';
+  g.fillStyle = disc;
   g.beginPath();
   g.arc(0, 0, radius, 0, Math.PI * 2);
   g.fill();
@@ -150,7 +150,8 @@ function weather(r: Randomizer, g: CanvasRenderingContext2D, width: number, heig
     }
     g.fill();
   }
-  // pits of micrometeorites
+  // pits of micrometeorites, smaller than a pixel: they thin the paint, never cut its outline into teeth
+  g.fillStyle = 'rgba(0, 0, 0, 0.35)';
   for (let i = 0; i < width * 1.2; i++) g.fillRect(r.range(0, width), r.range(0, height), 1, 1);
   // long scratches, mostly along the hull
   g.strokeStyle = 'rgba(0, 0, 0, 0.8)';
@@ -168,9 +169,10 @@ function weather(r: Randomizer, g: CanvasRenderingContext2D, width: number, heig
   g.restore();
 }
 
-/** The paint's colors: the name in the deep blue of the ship's livery, the emblem's lines in off-white. */
+/** The paint's colors: the name in the deep blue of the ship's livery, the emblem's lines in off-white on its blue disc. */
 const NAME_PAINT = '#1a2d55';
 const EMBLEM_PAINT = '#e9e4d6';
+const EMBLEM_DISC = '#23407a';
 
 /** What a stretch of hull carries: a name, a smaller registry after it, the emblem before them, in this order from the left. */
 export interface Lettering {
@@ -187,12 +189,50 @@ const PAINT_HEIGHT = 256;
  * The paint of a stretch of hull as a texture with transparency, everything centered: the
  * emblem as high as the stretch, the name in letters of 70 % of it, the registry half as large,
  * set on the name's baseline, a livery stripe above and below. Weathered from `seed`.
+ *
+ * Color and coverage are drawn apart and joined pixel by pixel: the color runs on under the
+ * transparent parts, so filtering blends an edge from paint to nothing, smooth however close it
+ * is seen. (A canvas keeps its pixels premultiplied: a transparent pixel loses its color, and a
+ * faint one keeps a coarse step of it, which shows as a dark, stair-stepped rim.)
  */
 export function letteringTexture(lettering: Lettering, seed: number): THREE.Texture {
   if (typeof document === 'undefined') return new THREE.Texture();
   const height = PAINT_HEIGHT;
   const width = height * PAINT_ASPECT;
-  const [element, g] = canvas(width, height);
+  const [, color] = canvas(width, height);
+  const [, coverage] = canvas(width, height);
+  color.fillStyle = NAME_PAINT;
+  color.fillRect(0, 0, width, height);
+  lay(color, lettering, width, height, false);
+  lay(coverage, lettering, width, height, true);
+  weather(new Randomizer(seed), coverage, width, height);
+  const rgb = color.getImageData(0, 0, width, height).data;
+  const alpha = coverage.getImageData(0, 0, width, height).data;
+  const data = new Uint8Array(width * height * 4);
+  // a data texture's first row is its bottom, a canvas's its top
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const from = (y * width + x) * 4;
+      const to = ((height - 1 - y) * width + x) * 4;
+      data[to] = rgb[from];
+      data[to + 1] = rgb[from + 1];
+      data[to + 2] = rgb[from + 2];
+      data[to + 3] = alpha[from + 3];
+    }
+  }
+  const texture = new THREE.DataTexture(data, width, height, THREE.RGBAFormat);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = 4;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+/** Lays out and paints a stretch's lettering (see letteringTexture) in its colors, or with `coverage` all of it in white. */
+function lay(g: CanvasRenderingContext2D, lettering: Lettering, width: number, height: number, coverage: boolean) {
+  const ink = (paint: string) => (coverage ? '#fff' : paint);
   const unit = (height * 0.7) / GLYPH_HEIGHT;
   const small = unit * 0.5;
   const gap = unit * 4;
@@ -204,21 +244,18 @@ export function letteringTexture(lettering: Lettering, seed: number): THREE.Text
   let x = (width - total) / 2;
   const top = (height - GLYPH_HEIGHT * unit) / 2;
   // the livery's stripes, the full length of the stretch
-  g.fillStyle = NAME_PAINT;
-  g.fillRect(0, 2, width, height * 0.035);
-  g.fillRect(0, height - 2 - height * 0.035, width, height * 0.035);
+  const margin = height / 128;
+  g.fillStyle = ink(NAME_PAINT);
+  g.fillRect(0, margin, width, height * 0.035);
+  g.fillRect(0, height - margin - height * 0.035, width, height * 0.035);
   if (lettering.emblem) {
-    emblem(g, x + emblemSize / 2, height / 2, emblemSize / 2, EMBLEM_PAINT);
+    emblem(g, x + emblemSize / 2, height / 2, emblemSize / 2, ink(EMBLEM_PAINT), ink(EMBLEM_DISC));
     x += emblemSize + gap;
   }
-  g.fillStyle = NAME_PAINT;
+  g.fillStyle = ink(NAME_PAINT);
   if (lettering.name) {
     stencil(g, lettering.name, x, top, unit);
     x += nameWidth + gap;
   }
   if (lettering.registry) stencil(g, lettering.registry, x, top + (GLYPH_HEIGHT * unit - GLYPH_HEIGHT * small), small);
-  weather(new Randomizer(seed), g, width, height);
-  const texture = toTexture(element);
-  texture.anisotropy = 4;
-  return texture;
 }
