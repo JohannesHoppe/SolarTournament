@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalPixels } from './surfaces';
+import { ARMOR_RELIEF_SIZE, ARMOR_SLOPE, ARMOR_TILE, armorLayout, armorRelief, normalPixels } from './surfaces';
 
 /** A gray canvas of `size` pixels, its height at each pixel from `height(column, row)` (0..255). */
 function heights(size: number, height: (x: number, y: number) => number) {
@@ -47,5 +47,60 @@ describe('the armor relief baked as a normal map', () => {
     expect(left[0]).toBeGreaterThan(0.1);
     expect(right[0]).toBeLessThan(-0.1);
     for (const n of [left, right]) expect(Math.hypot(...n)).toBeCloseTo(1, 1);
+  });
+});
+
+describe("the battleship's armor", () => {
+  const S = ARMOR_RELIEF_SIZE;
+  const meter = S / (ARMOR_TILE * 0.05);
+  const { layout, height, color } = armorRelief(7);
+  const normals = normalPixels(height, S, ARMOR_SLOPE, 1);
+  const u = (x: number) => (x + 0.5) / S;
+  const v = (y: number) => 1 - (y + 0.5) / S;
+
+  it('is laid in plates that cover the tile once, of many sizes, not in courses of bricks', () => {
+    const covered = new Uint8Array(S * S);
+    for (const p of layout.plates) for (let y = p.y; y < p.y + p.h; y++) for (let x = p.x; x < p.x + p.w; x++) covered[(y % S) * S + (x % S)]++;
+    expect(covered.every((n) => n === 1)).toBe(true);
+    expect(new Set(layout.plates.map((p) => `${p.w}x${p.h}`)).size).toBeGreaterThan(layout.plates.length * 0.8);
+    expect(new Set(layout.plates.map((p) => p.h)).size).toBeGreaterThanOrEqual(4);
+    expect(Math.max(...layout.plates.map((p) => p.w)) / meter).toBeGreaterThan(30);
+    for (const kind of ['doubler', 'access', 'hardpoint'] as const) expect(layout.insets.some((p) => p.kind === kind)).toBe(true);
+    expect(layout.welds.length).toBeGreaterThan(5);
+    expect(layout.ports.length).toBeGreaterThan(0);
+  });
+
+  it('steps a plate laid over it out of the armor: its edges face away from it as the GPU reads them', () => {
+    const doubler = layout.insets.find((p) => p.kind === 'doubler')!;
+    const middleY = doubler.y + Math.floor(doubler.h / 2);
+    const middleX = doubler.x + Math.floor(doubler.w / 2);
+    expect(sample(normals, S, u(doubler.x + 1), v(middleY))[0]).toBeLessThan(-0.3);
+    expect(sample(normals, S, u(doubler.x + doubler.w - 2), v(middleY))[0]).toBeGreaterThan(0.3);
+    expect(sample(normals, S, u(middleX), v(doubler.y + 1))[1]).toBeGreaterThan(0.3);
+    expect(sample(normals, S, u(middleX), v(doubler.y + doubler.h - 2))[1]).toBeLessThan(-0.3);
+    // its face is flat, the line around it a thin dark cut
+    expect(sample(normals, S, u(middleX), v(middleY))[2]).toBeGreaterThan(0.99);
+    const line = ((middleY % S) * S + (doubler.x % S)) * 3;
+    const inside = ((middleY % S) * S + (middleX % S)) * 3;
+    expect(color[line]).toBeLessThan(color[inside] * 0.7);
+  });
+
+  it('calms with distance: its normal map averaged as a mipmap 16 times smaller lies nearly flat everywhere', () => {
+    const block = 16;
+    let steepest = 0;
+    for (let by = 0; by < S; by += block) {
+      for (let bx = 0; bx < S; bx += block) {
+        const mean = [0, 0, 0];
+        for (let y = by; y < by + block; y++) for (let x = bx; x < bx + block; x++) for (let k = 0; k < 3; k++) mean[k] += normals[(y * S + x) * 4 + k] / 255 / (block * block);
+        const [nx, ny, nz] = mean.map((c) => c * 2 - 1);
+        steepest = Math.max(steepest, Math.acos(nz / Math.hypot(nx, ny, nz)));
+      }
+    }
+    expect((steepest * 180) / Math.PI).toBeLessThan(15);
+  });
+
+  it('is laid out alike from the same seed', () => {
+    expect(armorLayout(7)).toEqual(layout);
+    expect(armorLayout(8)).not.toEqual(layout);
   });
 });

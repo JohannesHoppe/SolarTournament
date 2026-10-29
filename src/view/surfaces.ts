@@ -643,130 +643,276 @@ export function ravagedSurface(seed: number): PlatingSurface {
 }
 
 /**
- * The battleship's armor repeats every ARMOR_TILE units (80 m) across its hull, at 12.8 pixels a
- * meter in its relief (ARMOR_RELIEF_SIZE) and half that in its color and finish (ARMOR_SIZE):
- * sharp enough for a seam of 20 cm and a rivet's head a pilot flies past, and with its mipmaps
- * about 8 MB on the GPU, light enough for a phone.
+ * The battleship's armor repeats every ARMOR_TILE units (100 m) across its hull, at about ten
+ * pixels a meter in its relief (ARMOR_RELIEF_SIZE) and half that in its color and finish
+ * (ARMOR_SIZE): sharp enough for a panel line of 20 cm a pilot flies past, a tile long enough
+ * that its panels never line up into a pattern along a hull of 710 m, and with its mipmaps about
+ * 8 MB on the GPU, light enough for a phone.
  */
-export const ARMOR_TILE = 1600;
-const ARMOR_RELIEF_SIZE = 1024;
+export const ARMOR_TILE = 2000;
+export const ARMOR_RELIEF_SIZE = 1024;
 const ARMOR_SIZE = 512;
-/** A plate is 10 m long and a course 5 m high (relief pixels); every fourth course a riveted belt strap. */
-const PLATE = 128;
-const COURSE = 64;
-const BELT_EVERY = 4;
-/** How steep the relief's slopes are in the normal map (normal map units per height step of the canvas). */
-const ARMOR_SLOPE = 6;
+/** Relief pixels a meter of hull. */
+const METER = ARMOR_RELIEF_SIZE / (ARMOR_TILE * 0.05);
+/** How steep the relief's slopes are in the normal map (normal map units per height step of the canvas, see normalPixels). */
+export const ARMOR_SLOPE = 6;
+/** How deep a panel line is cut (steps of gray below the panels beside it). */
+const LINE_DEPTH = 26;
+/**
+ * How much of that depth each pixel in from a panel's edge is cut: the pixel at the edge fully,
+ * the next two in a soft bevel. A step of a single pixel catches the sun as a hairline that
+ * breaks into dashes wherever the hull lies at a slant to the screen.
+ */
+const LINE_PROFILE = [1, 0.35, 0.08];
 
 /** The battleship's armor: its color, its finish (roughness and metalness, see ormColor) and its relief as a normal map. */
 export type ArmorSurface = { map: THREE.Texture; orm: THREE.Texture; normal: THREE.Texture };
 let armored: ArmorSurface | null = null;
 
 /**
- * The plates of the armor, laid out once from the seed: where each lies (relief pixels), its
- * shade (lighter or darker than its neighbors, -1..1), its polish, whether a hatch sits in it,
- * and whether an edge of it is rubbed bright (the ship is new: a few only).
+ * A rectangle of the armor in relief pixels (it may run over the tile's edge and wraps): a
+ * plate of the hull, or what is set into one (an armor plate laid over it, an access panel, a
+ * hatch, a hardpoint). `lift` is how far it stands out of what is around it (steps of gray,
+ * negative when recessed), `line` how deep the line around it is cut; `shade` its tone against
+ * its neighbors (-1..1), `rough` its polish, `across` whether it is brushed along v instead of u.
  */
-type Plate = { x: number; y: number; width: number; shade: number; roughness: number; hatch: number[] | null; rubbed: boolean };
+export type ArmorPanel = { x: number; y: number; w: number; h: number; lift: number; line: number; shade: number; rough: number; across: boolean; kind: 'plate' | 'doubler' | 'access' | 'hatch' | 'hardpoint' };
+/** The armor laid out from a seed: the plates (covering the tile once), what is set into them, the welded butts between strakes, the sensor ports, and the flush bolts of the hatches (the only fasteners on the hull: no rivets). */
+export type ArmorLayout = { plates: ArmorPanel[]; insets: ArmorPanel[]; welds: { x: number; y: number; h: number }[]; ports: { x: number; y: number; radius: number }[]; bolts: { x: number; y: number; radius: number }[] };
 
-const shifted = (p: Plate, dx: number): Plate => ({ ...p, x: p.x + dx, hatch: p.hatch && [p.hatch[0] + dx, ...p.hatch.slice(1)] });
-
-function armorPlates(r: Randomizer): Plate[] {
-  const plates: Plate[] = [];
-  for (let y = 0; y < ARMOR_RELIEF_SIZE; y += COURSE) {
-    const shift = (y / COURSE) % 2 ? PLATE / 2 : 0;
-    for (let x = shift; x < ARMOR_RELIEF_SIZE + shift; x += PLATE) {
-      const hatch = r.nextFloat() < 0.18 ? [x + r.range(16, PLATE - 48), y + r.range(14, COURSE - 30), r.range(18, 30), r.range(12, 18)] : null;
-      plates.push({ x, y, width: PLATE, shade: r.range(-1, 1), roughness: r.range(0.26, 0.4), hatch, rubbed: r.nextFloat() < 0.12 });
+/**
+ * The armor's plates: strakes along the hull in bands of different heights (3.5 to 16 m), each
+ * band a strake or a row of big panels of its own lengths (the low bands long strakes of 20 to 55
+ * m, the high ones panels of 10 to 28 m, a few split in two), their butts welded or set apart
+ * by a panel line, now and then a band standing out as a heavier belt; into the plates, armor
+ * plates laid over them, access panels, hatches, hardpoints and sensor ports, none touching an
+ * edge or each other.
+ */
+export function armorLayout(seed: number): ArmorLayout {
+  const r = new Randomizer(seed);
+  const S = ARMOR_RELIEF_SIZE;
+  const px = (meters: number) => Math.round(meters * METER);
+  const plates: ArmorPanel[] = [];
+  const welds: ArmorLayout['welds'] = [];
+  const plate = (x: number, y: number, w: number, h: number, lift: number, across = false): ArmorPanel => ({ x, y, w, h, lift, line: LINE_DEPTH, shade: r.range(-1, 1), rough: r.range(0.24, 0.36), across, kind: 'plate' });
+  const split = (total: number, pick: () => number, least: number) => {
+    const sizes: number[] = [];
+    for (let left = total; left > 0; ) {
+      const size = px(pick());
+      if (left - size < least) {
+        sizes.push(left);
+        break;
+      }
+      sizes.push(size);
+      left -= size;
+    }
+    return sizes;
+  };
+  const bands = split(S, () => [3.5, 5, 6, 8, 8, 10, 12, 16][r.nextInt() % 8], px(3));
+  let y = Math.floor(r.range(0, S));
+  for (const h of bands) {
+    const lift = r.nextFloat() < 0.15 ? 12 : 0;
+    const high = h >= px(10);
+    let x = Math.floor(r.range(0, S));
+    for (const w of split(S, () => (high ? r.range(10, 28) : r.range(20, 55)), px(8))) {
+      if (high && r.nextFloat() < 0.3) {
+        const top = Math.round(h * r.range(0.35, 0.65));
+        plates.push(plate(x, y, w, top, lift), plate(x, y + top, w, h - top, lift, r.nextFloat() < 0.5));
+      } else plates.push(plate(x, y, w, h, lift, high && r.nextFloat() < 0.3));
+      x += w;
+      // a butt welded through instead of set apart by a line (the plates beside it run on as one)
+      if (!high && r.nextFloat() < 0.6) welds.push({ x: x % S, y, h });
+    }
+    y += h;
+  }
+  const insets: ArmorPanel[] = [];
+  const ports: ArmorLayout['ports'] = [];
+  const bolts: ArmorLayout['ports'] = [];
+  for (const p of plates) {
+    const margin = px(1);
+    const room = { x: p.x + margin, y: p.y + margin, w: p.w - 2 * margin, h: p.h - 2 * margin };
+    const taken: { x: number; y: number; w: number; h: number }[] = [];
+    const place = (w: number, h: number) => {
+      if (w > room.w || h > room.h) return null;
+      for (let tries = 0; tries < 6; tries++) {
+        const at = { x: Math.round(room.x + r.range(0, room.w - w)), y: Math.round(room.y + r.range(0, room.h - h)), w, h };
+        if (taken.every((t) => at.x + at.w + margin <= t.x || t.x + t.w + margin <= at.x || at.y + at.h + margin <= t.y || t.y + t.h + margin <= at.y)) {
+          taken.push(at);
+          return at;
+        }
+      }
+      return null;
+    };
+    const inset = (kind: ArmorPanel['kind'], w: number, h: number, lift: number, line: number, shade: number, rough: number) => {
+      const at = place(w, h);
+      if (at) insets.push({ ...at, lift, line, shade, rough, across: p.across, kind });
+      return at;
+    };
+    // an armor plate laid over a big plate, stepping out of it
+    if (p.w >= px(14) && p.h >= px(5) && r.nextFloat() < 0.3) inset('doubler', Math.round(p.w * r.range(0.4, 0.75)), Math.round((p.h - 2 * margin) * r.range(0.55, 1)), 16, 20, p.shade + r.range(-0.4, 0.4), p.rough + r.range(-0.03, 0.03));
+    for (let k = r.nextInt() % 3; k > 0; k--) if (r.nextFloat() < 0.45) inset('access', px(r.range(1.5, 3.5)), px(r.range(1, 2.4)), -3, 24, p.shade + r.range(-0.6, 0.6), p.rough + 0.04);
+    if (p.h >= px(6) && r.nextFloat() < 0.1) {
+      const hatch = inset('hatch', px(3), px(3), 0, 28, p.shade - 0.3, p.rough);
+      if (hatch) bolts.push(...[0, 1].flatMap((a) => [0, 1].map((b) => ({ x: hatch.x + px(0.2) + a * (hatch.w - 2 * px(0.2)), y: hatch.y + px(0.2) + b * (hatch.h - 2 * px(0.2)), radius: 1.3 }))));
+      if (hatch) insets.push({ x: hatch.x + px(0.4), y: hatch.y + px(0.4), w: hatch.w - 2 * px(0.4), h: hatch.h - 2 * px(0.4), lift: 2, line: 14, shade: p.shade - 0.3, rough: p.rough, across: p.across, kind: 'hatch' });
+    }
+    if (r.nextFloat() < 0.12) {
+      const side = px(r.range(1.4, 2.6));
+      inset('hardpoint', side, side, -22, 8, -1, 0.5);
+    }
+    if (p.h >= px(4) && r.nextFloat() < 0.14) {
+      const radius = px(r.range(0.35, 0.9));
+      const at = place(radius * 2 + 2, radius * 2 + 2);
+      if (at) ports.push({ x: at.x + at.w / 2, y: at.y + at.h / 2, radius });
     }
   }
-  return plates;
+  return { plates, insets, welds, ports, bolts };
+}
+
+/** A smooth value noise of the plane (0..1), from integer hashing only: the grain of brushed metal. */
+function grain(x: number, y: number, seed: number) {
+  const hash = (i: number, j: number) => {
+    let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(seed, 2147483647);
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+  };
+  const i = Math.floor(x);
+  const j = Math.floor(y);
+  const fx = x - i;
+  const fy = y - j;
+  const sx = fx * fx * (3 - 2 * fx);
+  const sy = fy * fy * (3 - 2 * fy);
+  const top = hash(i, j) + (hash(i + 1, j) - hash(i, j)) * sx;
+  const bottom = hash(i, j + 1) + (hash(i + 1, j + 1) - hash(i, j + 1)) * sx;
+  return top + (bottom - top) * sy;
 }
 
 /**
- * The President's battleship, fresh from the dock: heavy armor plates of dark gunmetal laid in
- * staggered courses (5 m high, 10 m long, each course shifted by half a plate), deep seams
- * between them with a row of rivets along each, every fourth course a belt strap standing out of
- * the armor with two rows of rivets, here and there a flush hatch; each plate a shade lighter or
- * darker than its neighbors and a little more or less polished, a few edges rubbed bright where
- * the dock's cranes set them. The relief is a normal map, not a bump map: mipmapped like the
- * color, it fades evenly with distance instead of shimmering on a phone's small screen.
+ * The armor drawn into plain arrays at the relief's size, wrapping at the tile's edges: heights
+ * (steps of gray around 128, see normalPixels), color (sRGB, 0..255, three a pixel) and
+ * roughness and metalness (0..1). Plain numbers, so the unit tests read it in Node.
+ */
+export function armorRelief(seed: number) {
+  const S = ARMOR_RELIEF_SIZE;
+  const layout = armorLayout(seed);
+  const height = new Float32Array(S * S).fill(128);
+  const color = new Float32Array(S * S * 3);
+  const rough = new Float32Array(S * S);
+  const metal = new Float32Array(S * S).fill(0.6);
+  const at = (x: number, y: number) => (((y % S) + S) % S) * S + (((x % S) + S) % S);
+  const welded = new Set(layout.welds.map((w) => `${w.x},${w.y}`));
+  /**
+   * Paints a panel: its face lifted by `lift` over what lies under it, the line around it cut
+   * into its edge (across a welded butt none); its tone, polish and brushing.
+   */
+  const paint = (p: ArmorPanel, base: boolean) => {
+    const openLeft = base && welded.has(`${p.x % S},${p.y}`);
+    const openRight = base && welded.has(`${(p.x + p.w) % S},${p.y}`);
+    const tone = 1 + p.shade * 0.035;
+    for (let dy = 0; dy < p.h; dy++) {
+      for (let dx = 0; dx < p.w; dx++) {
+        const i = at(p.x + dx, p.y + dy);
+        const edge = Math.min(dy, p.h - 1 - dy, openLeft ? Infinity : dx, openRight ? Infinity : p.w - 1 - dx);
+        const u = p.x + dx;
+        const v = p.y + dy;
+        const [along, across] = p.across ? [v, u] : [u, v];
+        const brush = grain(along / 160, across / 1.6, seed) * 0.6 + grain(along / 320, across / 5, seed + 1) * 0.4 - 0.5;
+        const under = base ? 128 : height[i];
+        const cut = LINE_PROFILE[edge] ?? 0;
+        height[i] = under + p.lift - (p.lift + p.line) * cut;
+        const shade = (1 - 0.45 * cut) * tone * (1 + brush * 0.02);
+        for (let k = 0; k < 3; k++) color[i * 3 + k] = [238, 240, 244][k] * shade;
+        rough[i] = p.rough + brush * 0.05 + (0.5 - p.rough) * cut;
+        if (p.kind === 'hardpoint' && edge > 0) metal[i] = 0.45;
+      }
+    }
+  };
+  for (const p of layout.plates) paint(p, true);
+  // the welds: a low bead along the butt, ground smooth, a faint tint of the heat beside it
+  for (const w of layout.welds) {
+    for (let dy = 1; dy < w.h - 1; dy++) {
+      for (let dx = -6; dx <= 5; dx++) {
+        const off = dx + 0.5;
+        const i = at(w.x + dx, w.y + dy);
+        const bead = Math.max(0, 1 - (off / 1.8) ** 2);
+        height[i] += 9 * bead;
+        const heat = Math.max(0, 1 - Math.abs(off) / 6) * 0.06;
+        const tint = Math.abs(off) < 3 ? [214, 196, 160] : [150, 170, 214];
+        for (let k = 0; k < 3; k++) color[i * 3 + k] += (tint[k] - color[i * 3 + k]) * heat - color[i * 3 + k] * 0.08 * bead;
+        rough[i] += (0.48 - rough[i]) * bead;
+      }
+    }
+  }
+  for (const p of layout.insets) paint(p, false);
+  // the sensor ports: a round recess with a polished rim, dark glass in it
+  for (const port of layout.ports) {
+    const reach = port.radius + 2;
+    for (let dy = -reach; dy <= reach; dy++) {
+      for (let dx = -reach; dx <= reach; dx++) {
+        const i = at(Math.floor(port.x + dx), Math.floor(port.y + dy));
+        const rho = Math.hypot(dx + 0.5, dy + 0.5);
+        const recess = 1 - smoothstep(port.radius - 0.7, port.radius + 0.7, rho);
+        height[i] -= 20 * recess;
+        const glass = 1 - smoothstep(port.radius - 2.2, port.radius - 1.2, rho);
+        const rim = Math.max(0, 1 - Math.abs(rho - port.radius) / 1.2);
+        for (let k = 0; k < 3; k++) color[i * 3 + k] += ([40, 48, 62][k] - color[i * 3 + k]) * glass + (255 - color[i * 3 + k]) * rim * 0.06;
+        rough[i] += (0.08 - rough[i]) * Math.max(glass, rim * 0.7);
+        metal[i] += (0.15 - metal[i]) * glass;
+      }
+    }
+  }
+  // the hatches' bolts: sunk flush into their corners, a small dark hole each
+  for (const bolt of layout.bolts) {
+    for (let dy = -3; dy <= 3; dy++) {
+      for (let dx = -3; dx <= 3; dx++) {
+        const i = at(Math.floor(bolt.x + dx), Math.floor(bolt.y + dy));
+        const hole = 1 - smoothstep(bolt.radius - 0.6, bolt.radius + 0.6, Math.hypot(dx + 0.5, dy + 0.5));
+        height[i] -= 8 * hole;
+        for (let k = 0; k < 3; k++) color[i * 3 + k] *= 1 - 0.35 * hole;
+      }
+    }
+  }
+  return { layout, height, color, rough, metal };
+}
+
+/**
+ * The President's battleship, fresh from the dock: armor of dark gunmetal in large plates of
+ * many sizes (see armorLayout), set apart by thin panel lines with a polished bevel on each side
+ * or welded butt to butt, armor plates stepping out of it here and there, access panels,
+ * hatches, recessed hardpoints and sensor ports between them; each plate a shade lighter or
+ * darker than its neighbors, a little more or less polished, brushed along its length. No
+ * rivets and barely a mark: it is new. The relief is a normal map, not a bump map: mipmapped like
+ * the color, it fades evenly with distance instead of shimmering on a phone's small screen.
  */
 export function armorSurface(seed: number): ArmorSurface {
   if (armored) return armored;
   if (!drawable) return { map: new THREE.Texture(), orm: new THREE.Texture(), normal: new THREE.Texture() };
-  const plates = armorPlates(new Randomizer(seed));
-  const [colorCanvas, color] = canvas(ARMOR_SIZE);
-  const [ormCanvas, orm] = canvas(ARMOR_SIZE);
-  const [, height] = canvas(ARMOR_RELIEF_SIZE);
-  // color and finish are drawn in the relief's pixels, at half the size
-  color.scale(ARMOR_SIZE / ARMOR_RELIEF_SIZE, ARMOR_SIZE / ARMOR_RELIEF_SIZE);
-  orm.scale(ARMOR_SIZE / ARMOR_RELIEF_SIZE, ARMOR_SIZE / ARMOR_RELIEF_SIZE);
-  height.fillStyle = '#808080';
-  height.fillRect(0, 0, ARMOR_RELIEF_SIZE, ARMOR_RELIEF_SIZE);
-  const rivets = (g: CanvasRenderingContext2D, x0: number, x1: number, y: number, fill: string, size: number) => {
-    g.fillStyle = fill;
-    for (let x = x0 + 8; x < x1 - 4; x += 16) g.fillRect(x - size / 2, y - size / 2, size, size);
-  };
-  // a plate that runs over the tile's right edge is drawn again from its left edge
-  for (const p of plates.flatMap((p) => (p.x + p.width > ARMOR_RELIEF_SIZE ? [p, shifted(p, -ARMOR_RELIEF_SIZE)] : [p]))) {
-    const shade = Math.round(p.shade * 7);
-    color.fillStyle = `rgb(${236 + shade}, ${238 + shade}, ${242 + shade})`;
-    color.fillRect(p.x, p.y, p.width, COURSE);
-    orm.fillStyle = ormColor(p.roughness, 0.6);
-    orm.fillRect(p.x, p.y, p.width, COURSE);
-    // the seams: a groove with soft shoulders, dark in color and duller
-    height.fillStyle = '#6a6a6a';
-    height.fillRect(p.x, p.y, p.width, 5);
-    height.fillRect(p.x, p.y, 5, COURSE);
-    height.fillStyle = '#303030';
-    height.fillRect(p.x, p.y + 1, p.width, 3);
-    height.fillRect(p.x + 1, p.y, 3, COURSE);
-    color.fillStyle = 'rgba(20, 22, 28, 0.5)';
-    color.fillRect(p.x, p.y, p.width, 4);
-    color.fillRect(p.x, p.y, 4, COURSE);
-    orm.fillStyle = ormColor(0.6, 0.4);
-    orm.fillRect(p.x, p.y, p.width, 4);
-    orm.fillRect(p.x, p.y, 4, COURSE);
-    // a row of rivets just under the plate's upper seam
-    rivets(height, p.x, p.x + p.width, p.y + 9, '#c4c4c4', 3);
-    rivets(color, p.x, p.x + p.width, p.y + 9, 'rgba(255, 255, 255, 0.22)', 2);
-    if (p.hatch) {
-      const [hx, hy, hw, hh] = p.hatch;
-      height.strokeStyle = '#4a4a4a';
-      height.lineWidth = 2;
-      height.strokeRect(hx, hy, hw, hh);
-      color.strokeStyle = 'rgba(20, 22, 28, 0.5)';
-      color.lineWidth = 2;
-      color.strokeRect(hx, hy, hw, hh);
-      rivets(height, hx - 6, hx + hw + 6, hy + hh / 2, '#b0b0b0', 2);
-    }
-    if (p.rubbed) {
-      // bare metal rubbed bright along the plate's lower edge: lighter, smoother
-      color.fillStyle = 'rgba(255, 255, 255, 0.25)';
-      color.fillRect(p.x + 6, p.y + COURSE - 4, p.width * 0.6, 2);
-      orm.fillStyle = ormColor(0.18, 0.95);
-      orm.fillRect(p.x + 6, p.y + COURSE - 4, p.width * 0.6, 2);
+  const { height, color, rough, metal } = armorRelief(seed);
+  const S = ARMOR_RELIEF_SIZE;
+  const [colorCanvas, colorContext] = canvas(ARMOR_SIZE);
+  const [ormCanvas, ormContext] = canvas(ARMOR_SIZE);
+  const [normalCanvas, normalContext] = canvas(S);
+  const c = colorContext.createImageData(ARMOR_SIZE, ARMOR_SIZE);
+  const o = ormContext.createImageData(ARMOR_SIZE, ARMOR_SIZE);
+  // color and finish at half the relief's size, each pixel the mean of the four under it
+  for (let y = 0; y < ARMOR_SIZE; y++) {
+    for (let x = 0; x < ARMOR_SIZE; x++) {
+      const four = [2 * y * S + 2 * x, 2 * y * S + 2 * x + 1, (2 * y + 1) * S + 2 * x, (2 * y + 1) * S + 2 * x + 1];
+      const mean = (values: Float32Array, stride = 1, k = 0) => four.reduce((sum, i) => sum + values[i * stride + k], 0) / 4;
+      const i = (y * ARMOR_SIZE + x) * 4;
+      for (let k = 0; k < 3; k++) c.data[i + k] = mean(color, 3, k);
+      o.data[i] = 255;
+      o.data[i + 1] = mean(rough) * 255;
+      o.data[i + 2] = mean(metal) * 255;
+      c.data[i + 3] = o.data[i + 3] = 255;
     }
   }
-  // the belt straps: a band 1 m high standing out of the armor, grooved along both edges, riveted twice
-  // (drawn at both ends of the tile, so the band wraps around its edge)
-  for (let y = 0; y <= ARMOR_RELIEF_SIZE; y += COURSE * BELT_EVERY) {
-    height.fillStyle = '#b4b4b4';
-    height.fillRect(0, y - 6, ARMOR_RELIEF_SIZE, 13);
-    height.fillStyle = '#3a3a3a';
-    height.fillRect(0, y - 8, ARMOR_RELIEF_SIZE, 2);
-    height.fillRect(0, y + 7, ARMOR_RELIEF_SIZE, 2);
-    color.fillStyle = 'rgb(214, 218, 226)';
-    color.fillRect(0, y - 6, ARMOR_RELIEF_SIZE, 13);
-    orm.fillStyle = ormColor(0.32, 0.65);
-    orm.fillRect(0, y - 6, ARMOR_RELIEF_SIZE, 13);
-    rivets(height, 0, ARMOR_RELIEF_SIZE, y - 3, '#e0e0e0', 3);
-    rivets(height, 0, ARMOR_RELIEF_SIZE, y + 3, '#e0e0e0', 3);
-    rivets(color, 0, ARMOR_RELIEF_SIZE, y - 3, 'rgba(255, 255, 255, 0.3)', 2);
-    rivets(color, 0, ARMOR_RELIEF_SIZE, y + 3, 'rgba(255, 255, 255, 0.3)', 2);
-  }
-  armored = { map: armorTexture(toTexture(colorCanvas)), orm: armorTexture(new THREE.CanvasTexture(ormCanvas)), normal: armorTexture(normalFrom(height)) };
+  colorContext.putImageData(c, 0, 0);
+  ormContext.putImageData(o, 0, 0);
+  const n = normalContext.createImageData(S, S);
+  n.data.set(normalPixels(height, S, ARMOR_SLOPE, 1));
+  normalContext.putImageData(n, 0, 0);
+  armored = { map: armorTexture(toTexture(colorCanvas)), orm: armorTexture(new THREE.CanvasTexture(ormCanvas)), normal: armorTexture(new THREE.CanvasTexture(normalCanvas)) };
   return armored;
 }
 
@@ -779,12 +925,14 @@ function armorTexture<T extends THREE.Texture>(texture: T): T {
 /**
  * A tangent-space normal map from a square canvas of heights (gray, wrapping around its edges):
  * each pixel tilts against the slope across it, by `slope` per step of the canvas's gray (0..1).
- * Texture coordinates run as the GPU reads a canvas texture: u along a row, v up the canvas (its
- * first row at v = 1); red holds the normal along u, green along v, blue out of the surface.
+ * The heights are a canvas's pixels (`stride` 4, the gray in red) or one number a pixel (`stride`
+ * 1, steps of gray that need not be whole). Texture coordinates run as the GPU reads a canvas
+ * texture: u along a row, v up the canvas (its first row at v = 1); red holds the normal along u,
+ * green along v, blue out of the surface.
  */
-export function normalPixels(heights: ArrayLike<number>, size: number, slope: number): Uint8ClampedArray {
+export function normalPixels(heights: ArrayLike<number>, size: number, slope: number, stride = 4): Uint8ClampedArray {
   const out = new Uint8ClampedArray(size * size * 4);
-  const at = (x: number, y: number) => heights[(((y + size) % size) * size + ((x + size) % size)) * 4] / 255;
+  const at = (x: number, y: number) => heights[(((y + size) % size) * size + ((x + size) % size)) * stride] / 255;
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       // rising along u tilts the normal back along -u; rising down the canvas is falling along v
@@ -799,15 +947,6 @@ export function normalPixels(heights: ArrayLike<number>, size: number, slope: nu
     }
   }
   return out;
-}
-
-function normalFrom(height: CanvasRenderingContext2D): THREE.CanvasTexture {
-  const size = height.canvas.width;
-  const [element, g] = canvas(size);
-  const image = g.createImageData(size, size);
-  image.data.set(normalPixels(height.getImageData(0, 0, size, size).data, size, ARMOR_SLOPE));
-  g.putImageData(image, 0, 0);
-  return new THREE.CanvasTexture(element);
 }
 
 let industrial: Surface | null = null;
@@ -924,9 +1063,10 @@ export function surfaced(surface: Surface, bumpScale: number) {
 /**
  * Texture coordinates for flat-faced parts: each face takes the surface at the same density
  * (one tile per `tile` units), projected along its dominant axis, so long and short parts look
- * alike.
+ * alike. `lengthwise` turns the surface on faces looking up or down so its u runs along z, as
+ * on the flanks: a hull's strakes then run along it on its deck too.
  */
-export function boxUv(geometry: THREE.BufferGeometry, tile: number): THREE.BufferGeometry {
+export function boxUv(geometry: THREE.BufferGeometry, tile: number, lengthwise = false): THREE.BufferGeometry {
   const position = geometry.attributes.position;
   const normal = geometry.attributes.normal;
   const uv = new Float32Array(position.count * 2);
@@ -934,7 +1074,7 @@ export function boxUv(geometry: THREE.BufferGeometry, tile: number): THREE.Buffe
     const nx = Math.abs(normal.getX(i));
     const ny = Math.abs(normal.getY(i));
     const nz = Math.abs(normal.getZ(i));
-    const [u, v] = nx >= ny && nx >= nz ? [position.getZ(i), position.getY(i)] : ny >= nz ? [position.getX(i), position.getZ(i)] : [position.getX(i), position.getY(i)];
+    const [u, v] = nx >= ny && nx >= nz ? [position.getZ(i), position.getY(i)] : ny >= nz ? (lengthwise ? [position.getZ(i), position.getX(i)] : [position.getX(i), position.getZ(i)]) : [position.getX(i), position.getY(i)];
     uv[i * 2] = u / tile;
     uv[i * 2 + 1] = v / tile;
   }

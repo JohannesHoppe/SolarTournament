@@ -381,8 +381,8 @@ export class Fleet implements Obstacle {
     // neon running along the deck's edges in a procession
     // The armor is dark gunmetal, not a black mirror: metal enough to glint and mirror the sky
     // (its metalness 0.6 in the plates' finish, see armorSurface), dielectric enough that the sun
-    // and the sky's light show its form on every face; the plates' seams, rivets and belt straps
-    // are a normal map at the plates' real size, the lacquer over them smooth. The gold is plain
+    // and the sky's light show its form on every face; its panel lines, welds, stepped plates,
+    // hatches and ports are a normal map at their real size, the lacquer over them smooth. The gold is plain
     // polished metal without the plates, rough enough that the sun spreads along its edges.
     const plating = armorSurface(seed);
     const armor = this.material(
@@ -451,10 +451,10 @@ export class Fleet implements Obstacle {
     };
     const solid = (center: readonly number[], size: readonly number[]) => this.colliders.push({ center: new THREE.Vector3(center[0], center[1], center[2]), half: new THREE.Vector3(size[0], size[1], size[2]).multiplyScalar(0.5) });
     const block = (center: [number, number, number], size: [number, number, number], material: THREE.Material, collides = true) => {
-      put(boxUv(new THREE.BoxGeometry(...size).translate(...center), ARMOR_TILE), material);
+      put(boxUv(new THREE.BoxGeometry(...size).translate(...center), ARMOR_TILE, true), material);
       if (collides) solid(center, size);
     };
-    const shaped = (geometry: THREE.BufferGeometry, material: THREE.Material) => put(boxUv(geometry, ARMOR_TILE), material);
+    const shaped = (geometry: THREE.BufferGeometry, material: THREE.Material) => put(boxUv(geometry, ARMOR_TILE, true), material);
     const along = new THREE.Vector3(0, 0, 1);
     /** A bar `wide` by `high` from one point to another (trim, rails, recesses), not colliding. */
     const bar = (from: THREE.Vector3, to: THREE.Vector3, wide: number, high: number, material: THREE.Material) => {
@@ -659,15 +659,15 @@ export class Fleet implements Obstacle {
 
     // the dome over the reactor, an armored hatch on the deck: armor while it is closed (see
     // open); always the last collider
-    this.dome = new THREE.Mesh(this.geometry(boxUv(new THREE.CylinderGeometry(450 * Math.SQRT2, 650 * Math.SQRT2, 500, 4).rotateY(Math.PI / 4), ARMOR_TILE)), armor);
+    this.dome = new THREE.Mesh(this.geometry(boxUv(new THREE.CylinderGeometry(450 * Math.SQRT2, 650 * Math.SQRT2, 500, 4).rotateY(Math.PI / 4), ARMOR_TILE, true)), armor);
     this.dome.position.set(0, DECK_TOP + 250, -1200);
     this.root.add(this.dome);
 
     // a battery: an armored turret sloping up from its front on the ring it turns on, a gilded
     // collar, three barrels in armored sleeves with muzzle rings, a rangefinder across its roof,
     // cooling vents in its back
-    const housing = this.geometry(boxUv(taper(-280, 280, 420, 200, 560, 300, -50, 0), ARMOR_TILE));
-    const collar = this.geometry(boxUv(new THREE.BoxGeometry(640, 60, 640).translate(0, -130, 0), ARMOR_TILE));
+    const housing = this.geometry(boxUv(taper(-280, 280, 420, 200, 560, 300, -50, 0), ARMOR_TILE, true));
+    const collar = this.geometry(boxUv(new THREE.BoxGeometry(640, 60, 640).translate(0, -130, 0), ARMOR_TILE, true));
     const barrels = this.geometry(
       mergeGeometries([
         ...[-130, 0, 130].flatMap((x) => [
