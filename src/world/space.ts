@@ -3,9 +3,6 @@ import { radialTexture } from '../view/textures';
 import { IMPOSTOR_SUN } from '../view/impostor';
 import { CLOUD_SHAPES, MAX_NEBULAE, cloudTexture, type Mood } from './nebula';
 
-/** How much of the sun's directional light a billboard's simplified shading shows (see IMPOSTOR_SUN, view/impostor), tuned by eye against a real lit rock. */
-const IMPOSTOR_SUN_SCALE = 0.28;
-
 const STAR_COUNT = 6000;
 const SKY_RADIUS = 300000;
 const DUST_COUNT = 1500;
@@ -305,10 +302,14 @@ export class Space {
     this.shine();
   }
 
-  /** The sun's light as the flare and the haze leave it. */
+  /** The sun's light as the flare and the haze leave it; the billboards take the sun's and the sky's light as the lights give them (see view/impostor). */
   private shine() {
     this.sunLight.intensity = this.sunBright * this.sunShare;
-    IMPOSTOR_SUN.color.value.copy(this.sunLight.color).multiplyScalar(this.sunLight.intensity * IMPOSTOR_SUN_SCALE);
+    IMPOSTOR_SUN.color.value.copy(this.sunLight.color).multiplyScalar(this.sunLight.intensity);
+    const sky = this.skyLight;
+    IMPOSTOR_SUN.sky.value.copy(sky.color).multiplyScalar(sky.intensity);
+    IMPOSTOR_SUN.ground.value.copy(sky.groundColor).multiplyScalar(sky.intensity);
+    IMPOSTOR_SUN.up.value.copy(sky.position).normalize();
   }
 
   /** Keeps the sky at infinity; the dust streaks along `velocity`, the motion of whoever the camera rides with. */

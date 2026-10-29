@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { bakeReliefMaps, createImpostors, createRocks, createRockShapes, DETAIL, FAR_DETAIL, NEAR_DETAIL } from './world/rocks';
+import { bakeImpostors, bakeReliefMaps, createImpostors, createRocks, createRockShapes, DETAIL, FAR_DETAIL, NEAR_DETAIL } from './world/rocks';
 import { debrisSet, hullSet } from './world/shapes';
 import { iceSet } from './world/ice';
 import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
@@ -137,8 +137,10 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   // full detail only to measure collisions from (see world/surface); drawn meshes stay light, their
   // relief coming from a baked relief map (see world/rocks, applyRockRelief) instead of triangles
   const asteroidsCollision = createRockShapes(DETAIL);
-  const asteroidImpostors = createImpostors();
+  // the billboards' views need no relief map, their materials read it (see world/rocks)
+  bakeImpostors();
   await reliefs;
+  const asteroidImpostors = createImpostors();
   const asteroidsNear = createRocks(NEAR_DETAIL, true);
   const asteroidsFar = createRocks(FAR_DETAIL);
   const [human, alien] = await ships;

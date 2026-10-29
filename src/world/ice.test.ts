@@ -120,23 +120,22 @@ describe('the ice set', () => {
     expect(((ice.far[4] as THREE.Mesh).material as THREE.MeshStandardMaterial).defines?.RELIEF_DETAIL).toBeUndefined();
   });
 
-  it("paints its billboards in the ice's colors on the rock's silhouette, a cool white", () => {
+  it("paints its billboards on the rock's silhouette from the ice's own relief map, as its far meshes paint it", () => {
     for (const index of [0, 9]) {
-      const own = ((ice.impostor![index] as THREE.Mesh).material as THREE.ShaderMaterial).uniforms;
+      const billboard = (ice.impostor![index] as THREE.Mesh).material as THREE.ShaderMaterial;
+      const own = billboard.uniforms;
       const rock = ((impostor[index] as THREE.Mesh).material as THREE.ShaderMaterial).uniforms;
-      expect(own.normalAtlas.value).toBe(rock.normalAtlas.value);
-      const a = own.albedoAtlas.value.image.data as Uint8Array, b = rock.albedoAtlas.value.image.data as Uint8Array;
-      let cells = 0, red = 0, blue = 0;
-      for (let o = 0; o < a.length; o += 4) {
-        expect(a[o + 3]).toBe(b[o + 3]);
-        if (!a[o + 3]) continue;
-        cells++;
-        red += a[o];
-        blue += a[o + 2];
-      }
-      // bright on average, dust and cracks dimming it a little, and bluer than red
-      expect(blue / cells).toBeGreaterThan(200);
-      expect(blue).toBeGreaterThan(red);
+      const mesh = (ice.far[index] as THREE.Mesh).material as THREE.MeshStandardMaterial;
+      // the rock's very views: its silhouette, and where each cell meets the shape
+      expect(own.atlas.value).toBe(rock.atlas.value);
+      expect(own.reliefMap.value).toBe(iceReliefMap(index));
+      expect(own.reliefMap.value).not.toBe(reliefMap(index));
+      expect((own.baseColor.value as THREE.Color).getHex()).toBe(mesh.color.getHex());
+      expect(own.metalness.value).toBe(mesh.metalness);
+      // the kind of ice turns into its tint as on the meshes, and the ice glows and lets the sun through
+      expect(billboard.fragmentShader).toContain('mix( ICE_TINT[ iceAt ], ICE_TINT[ iceAt + 1 ], iceMix )');
+      expect((own.emissive.value as THREE.Color).getHex()).toBe(mesh.emissive.getHex());
+      expect((own.translucent.value as THREE.Color).b).toBeGreaterThan((own.translucent.value as THREE.Color).r);
     }
   });
 });
