@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { ARMOR_RELIEF_SIZE, ARMOR_SLOPE, ARMOR_TILE, armorLayout, armorRelief, normalPixels, windingHeights } from './surfaces';
+import { DEPOT, GIFT } from '../ship/models';
+import { Randomizer } from '../random';
+import { ARMOR_RELIEF_SIZE, ARMOR_SLOPE, ARMOR_TILE, armorLayout, armorRelief, normalPixels, panelLayout, windingHeights } from './surfaces';
 
 /** A gray canvas of `size` pixels, its height at each pixel from `height(column, row)` (0..255). */
 function heights(size: number, height: (x: number, y: number) => number) {
@@ -141,5 +143,27 @@ describe("a coil's windings baked as a normal map", () => {
     // between two turns, its rising edge leans back along -u, its falling edge along +u
     expect(sample(map, size, 0.5 / size, v(pitch))[0]).toBeLessThan(-0.1);
     expect(sample(map, size, (strap - 0.5) / size, v(pitch))[0]).toBeGreaterThan(0.1);
+  });
+});
+
+describe('the fighters\' plating', () => {
+  const hatch = (bolts: [number, number][], hatches: [number, number][]) => bolts.every(([x, y]) => hatches.some(([hx, hy]) => x > hx && x < hx + 16 && y > hy && y < hy + 12));
+
+  it('is flush on the Sovereign: not a rivet, flush bolts only in the corners of a few hatches', () => {
+    expect(GIFT.relief).toBe('flush');
+    const { rivets, hatches, bolts } = panelLayout(new Randomizer(7), GIFT.relief);
+    expect(rivets).toHaveLength(0);
+    expect(hatches.length).toBeGreaterThan(0);
+    expect(hatches.length).toBeLessThanOrEqual(3);
+    expect(bolts).toHaveLength(hatches.length * 4);
+    expect(hatch(bolts, hatches)).toBe(true);
+  });
+
+  it('keeps its rivets on the human interceptor, an old depot fighter, in the same panels', () => {
+    const riveted = panelLayout(new Randomizer(41), DEPOT.relief);
+    expect(riveted.rivets.length).toBeGreaterThan(100);
+    expect(riveted.bolts).toHaveLength(0);
+    // the same seed lays out the same panels, riveted or flush
+    expect(panelLayout(new Randomizer(41), 'flush').seams).toEqual(riveted.seams);
   });
 });

@@ -8,7 +8,7 @@ import { canvas, toTexture } from './textures';
  * color is multiplied with, a map of roughness (green) and metalness (blue) as three.js reads
  * them, with how intact a clear lacquer over the paint is in its red (gone where the paint
  * rusted or chipped, dull where it is scratched; read by the hulls, see ship/models.ts), and a
- * bump map of grooves and rivets. All of it is look only; nothing of it is shared.
+ * bump map of grooves, rivets and bolts. All of it is look only; nothing of it is shared.
  *
  * The fighters of the Games come from the depots of centuries of war: their paint is worn,
  * chipped down to bare metal, streaked with rust and grime, stenciled over and over. The
@@ -48,9 +48,10 @@ export interface Wear {
   /**
    * What the relief is instead of riveted panels: a fine pattern of scales (the alien hull),
    * ribs in riveted frames (the human interceptor's fins), polished metal engraved in bands
-   * (the Sovereign's gold).
+   * (the Sovereign's gold), flush plates welded and bonded without a rivet, a few hatches with
+   * flush bolts (the Sovereign's ivory).
    */
-  relief?: 'scales' | 'ribs' | 'engraved';
+  relief?: 'scales' | 'ribs' | 'engraved' | 'flush';
   /** Dents beaten into the plating (0..1; none when left out). */
   dents?: number;
   /** The chips as small flakes, a rim of primer around bare metal (see flakes), instead of plain scars. */
@@ -106,36 +107,86 @@ function textures(color: HTMLCanvasElement, orm: HTMLCanvasElement, bump: HTMLCa
   return { map: repeat(toTexture(color)), orm: linear(orm), bump: linear(bump) };
 }
 
-/** Panels of riveted plating: seams as grooves, rivets as bumps along them. */
-function panels(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, seams: number) {
-  const rows = [0, 64, 128, 192, 256];
-  color.strokeStyle = `rgba(0, 0, 0, ${0.12 + 0.28 * seams})`;
-  bump.strokeStyle = '#404040';
-  color.lineWidth = bump.lineWidth = 1.5;
-  for (const y of rows) {
-    for (const g of [color, bump]) {
-      g.beginPath();
-      g.moveTo(0, y);
-      g.lineTo(SIZE, y);
-      g.stroke();
-    }
+/** The height of a row of panels (px of SIZE, 5 m), the rows down the tile, and the widths a panel comes in. */
+const PANEL_ROW = 64;
+const PANEL_WIDTHS = [32, 48, 64, 96];
+/** An access hatch of flush plating (px of SIZE: about 1.25 by 0.95 m), how many sit on a tile, and how far its bolts sit in from its corners. */
+const HATCH_W = 16;
+const HATCH_H = 12;
+const HATCHES = 2;
+const BOLT_INSET = 2;
+
+/**
+ * Where a tile of panels has its seams, its rivets, its hatches and their bolts (px of SIZE),
+ * computed from the seed's draws without drawing, so the unit tests read it in Node. Riveted
+ * plating has a row of rivets just off every seam; flush plating (`relief` 'flush') is welded and bonded,
+ * with no rivets at all: its only fasteners are the bolts sunk into the corners of a few hatches.
+ */
+export function panelLayout(r: Randomizer, relief?: Wear['relief']) {
+  const flush = relief === 'flush';
+  const seams: [number, number, number, number][] = [];
+  const rivets: [number, number][] = [];
+  const panes: [number, number, number][] = [];
+  for (let y = 0; y <= SIZE; y += PANEL_ROW) {
+    seams.push([0, y, SIZE, y]);
     // the panels of a row are of different widths, as plates patched in over the years
     for (let x = 0; x < SIZE; ) {
-      const width = [32, 48, 64, 96][r.nextInt() % 4];
-      for (const g of [color, bump]) {
-        g.beginPath();
-        g.moveTo(x, y);
-        g.lineTo(x, y + 64);
-        g.stroke();
-      }
+      const width = PANEL_WIDTHS[r.nextInt() % PANEL_WIDTHS.length];
+      seams.push([x, y, x, y + PANEL_ROW]);
+      if (y < SIZE && x + width <= SIZE && width >= 48) panes.push([x, y, width]);
       x += width;
     }
-    // rivets in a row just off the seam
-    for (let x = 4; x < SIZE; x += 8) {
-      bump.fillStyle = '#c8c8c8';
-      bump.fillRect(x, y + 4, 2, 2);
-      color.fillStyle = 'rgba(0, 0, 0, 0.18)';
-      color.fillRect(x + 1, y + 5, 1.5, 1.5);
+    if (!flush) for (let x = 4; x < SIZE; x += 8) rivets.push([x, y + 4]);
+  }
+  const hatches: [number, number][] = [];
+  const bolts: [number, number][] = [];
+  if (flush) {
+    for (let i = 0; i < HATCHES && panes.length; i++) {
+      const [x, y, width] = panes.splice(r.nextInt() % panes.length, 1)[0];
+      const hx = Math.round(x + r.range(8, width - HATCH_W - 8));
+      const hy = Math.round(y + r.range(10, PANEL_ROW - HATCH_H - 10));
+      hatches.push([hx, hy]);
+      for (const [cx, cy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) bolts.push([hx + BOLT_INSET + cx * (HATCH_W - 2 * BOLT_INSET), hy + BOLT_INSET + cy * (HATCH_H - 2 * BOLT_INSET)]);
+    }
+  }
+  return { seams, rivets, hatches, bolts };
+}
+
+/**
+ * Panels of plating: seams as grooves, and on riveted plating rivets as bumps along them; flush
+ * plating (`relief` 'flush', the Sovereign's) has thin, crisp panel lines, a few hatches outlined the same
+ * way and flush bolts sunk into their corners (see panelLayout).
+ */
+function panels(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, seams: number, relief?: Wear['relief']) {
+  const layout = panelLayout(r, relief);
+  const flush = relief === 'flush';
+  color.strokeStyle = flush ? `rgba(0, 0, 0, ${0.1 + 0.3 * seams})` : `rgba(0, 0, 0, ${0.12 + 0.28 * seams})`;
+  bump.strokeStyle = flush ? '#5c5c5c' : '#404040';
+  color.lineWidth = bump.lineWidth = flush ? 0.7 : 1.5;
+  // each seam a stroke of its own, so where two cross the groove is a shade darker
+  for (const [x0, y0, x1, y1] of layout.seams) {
+    for (const g of [color, bump]) {
+      g.beginPath();
+      g.moveTo(x0, y0);
+      g.lineTo(x1, y1);
+      g.stroke();
+    }
+  }
+  for (const [x, y] of layout.hatches) for (const g of [color, bump]) g.strokeRect(x, y, HATCH_W, HATCH_H);
+  for (const [x, y] of layout.rivets) {
+    bump.fillStyle = '#c8c8c8';
+    bump.fillRect(x, y, 2, 2);
+    color.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    color.fillRect(x + 1, y + 1, 1.5, 1.5);
+  }
+  // a flush bolt: a small round head sunk level into the plate, its ring a hairline
+  for (const [x, y] of layout.bolts) {
+    bump.fillStyle = '#6c6c6c';
+    color.fillStyle = 'rgba(0, 0, 0, 0.22)';
+    for (const g of [bump, color]) {
+      g.beginPath();
+      g.arc(x, y, 0.8, 0, Math.PI * 2);
+      g.fill();
     }
   }
 }
@@ -455,7 +506,7 @@ function drawWorn(seed: number, wear: Wear, detail = 1, glowing = false) {
   if (wear.relief === 'scales') scales(r, color[1], bump[1], wear.seams, glow?.[1]);
   else if (wear.relief === 'ribs') ribs(color[1], bump[1], wear.seams);
   else if (wear.relief === 'engraved') engraving(r, color[1], orm[1], bump[1], wear);
-  else panels(r, color[1], bump[1], wear.seams);
+  else panels(r, color[1], bump[1], wear.seams, wear.relief);
   if (wear.dents) dents(r, color[1], bump[1], wear.dents);
   grime(r, color[1], wear.grime);
   rust(r, color[1], orm[1], wear.rust);
