@@ -29,7 +29,8 @@ import { msg, t } from '../i18n/i18n';
  * within SINK_BLAST along.
  *
  * Its hull blocks the line of sight like a rock: a battery does not fire through it, and a pilot
- * on the far side is hidden from the others. A torpedo locks on a part as on a ship and goes off
+ * on the far side is hidden from the others. Its hangar deck runs open through it from flank to
+ * flank (see HANGARS): ships fly through, beams and sight pass along it. A torpedo locks on a part as on a ship and goes off
  * on it, or on the hull; it counts TORPEDO_HITS hits on every part it goes off near.
  *
  * Online the lead browser flies the battleship and sends where it is with the round clock (see
@@ -61,7 +62,7 @@ export const ARRIVAL = 12;
  * FLEET_SPEED (units/s, 30 m/s); it turns at FLEET_TURN (rad/s).
  */
 const ORBIT = FIELD_RADIUS * 1.1;
-const FLEET_SPEED = 600;
+export const FLEET_SPEED = 600;
 const FLEET_TURN = 0.12;
 /** It comes in from this far out (units), just inside the arena's edge. */
 const ENTRY = ARENA_LIMIT * 0.95;
@@ -133,8 +134,27 @@ const BATTERY_MOUNTS: readonly (readonly [number, number, number])[] = [
   [0, KEEL - 350, -3000],
   [0, KEEL - 350, 2500],
 ];
-/** How far a hangar opening's armored casemate stands out of the hull (units, 11 m). */
-const HANGAR_DEPTH = 220;
+/** How far the armored casemate of the bow's hangar door stands out of the hull (units, 11 m). */
+const DOOR_DEPTH = 220;
+/**
+ * The hangar deck: three tunnels run straight across the hull under the flight deck, from the
+ * belt of one flank to the other's (208 to 226 m), centered at HANGARS along the hull (units, in
+ * its frame). Each is HANGAR_WIDTH clear along the hull (75 m) between the racks on its walls,
+ * and runs from HANGAR_FLOOR to HANGAR_CEILING (53 m), the flight deck 16 m thick above it. A
+ * fighter's hit sphere (34 m across) has 20 m to spare to either side and 9.5 m above and below:
+ * room to fly through at fighting speed, little to wander. The walls between them are
+ * HANGAR_WALL thick (15 m, the racks on both sides included). Nothing in them collides but
+ * floor, ceiling and walls, so rays, sight and torpedoes pass through along a tunnel.
+ */
+export const HANGAR_WIDTH = 1500;
+export const HANGAR_FLOOR = -80;
+export const HANGAR_CEILING = 980;
+const HANGAR_WALL = 300;
+export const HANGARS: readonly number[] = [0, 1, 2].map((i) => 1000 + i * (HANGAR_WIDTH + HANGAR_WALL));
+/** The racks along a hangar's walls stand this deep (units, 3 m): inside the wall's collider, so nothing in a tunnel stands in the way. */
+const HANGAR_RACKS = 60;
+/** The hull's faces are laid in strips no longer than this along it (units, 50 m; see hullBetween). */
+const HULL_STRIP = 1000;
 /** Where the Ministry's seal sits on both flanks (units along the hull). */
 const SEAL_Z = -1000;
 /** The lights along the deck's edges run forward this fast (lane lengths a second). */
@@ -199,6 +219,21 @@ function sectionAt(z: number): Section {
   return { z, half: mix('half'), top: mix('top'), belt: mix('belt'), keelHalf: mix('keelHalf'), keel: mix('keel') };
 }
 
+/**
+ * A point on a flank's slope below the belt at `z` (units along the hull), `down` of the way
+ * from the belt's lower edge (0) to the keel's (1), `lift` out from its face along its normal.
+ */
+function slopePoint(side: number, z: number, down: number, lift: number, target = new THREE.Vector3()): THREE.Vector3 {
+  const s = sectionAt(z);
+  const across = s.half - s.keelHalf;
+  const fall = s.belt - s.keel;
+  const length = Math.hypot(across, fall);
+  return target.set(side * (THREE.MathUtils.lerp(s.half, s.keelHalf, down) + (lift * fall) / length), THREE.MathUtils.lerp(s.belt, s.keel, down) - (lift * across) / length, z);
+}
+
+/** The spans along the hull a hangar takes, wall to wall (its clear width and the racks on both sides). */
+const HANGAR_SPANS: readonly (readonly [number, number])[] = HANGARS.map((z) => [z - HANGAR_WIDTH / 2 - HANGAR_RACKS, z + HANGAR_WIDTH / 2 + HANGAR_RACKS]);
+
 /** How far the deck's edge moves out per unit along the hull at `z` (the belt's slant in plan). */
 function flare(z: number) {
   const a = sectionAt(z - 1);
@@ -208,9 +243,11 @@ function flare(z: number) {
 
 /**
  * The hull between two sections, flat-faced: deck, belts, the slopes to the keel and the keel,
- * each face with its own corners (so its normal is the face's), the ends closed where `caps` says.
+ * each face with its own corners (so its normal is the face's), the ends closed where `caps` says,
+ * the hangars' mouths cut out of both belts from HANGAR_FLOOR to HANGAR_CEILING over the spans
+ * along the hull in `holes` (in order).
  */
-function hullBetween(a: Section, b: Section, caps: { front: boolean; back: boolean }): THREE.BufferGeometry {
+function hullBetween(a: Section, b: Section, caps: { front: boolean; back: boolean }, holes: readonly (readonly [number, number])[] = []): THREE.BufferGeometry {
   const outline = (s: Section) => [
     [-s.half, s.top],
     [s.half, s.top],
@@ -240,9 +277,34 @@ function hullBetween(a: Section, b: Section, caps: { front: boolean; back: boole
     for (let i = 1; i < corners.length - 1; i++) index.push(first, first + i, first + i + 1);
   };
   const axis = new THREE.Vector3(0, (a.top + a.keel + b.top + b.keel) / 4, (a.z + b.z) / 2);
+  // a corner of the outline at `z`, between the two sections
+  const at = (k: number, z: number, y?: number) => {
+    const t = (z - a.z) / (b.z - a.z);
+    return new THREE.Vector3(THREE.MathUtils.lerp(front[k][0], back[k][0], t), y ?? THREE.MathUtils.lerp(front[k][1], back[k][1], t), z);
+  };
+  // the faces in strips at most HULL_STRIP long: a slope is twisted between two sections, and
+  // shorter strips keep it close to the surface the signs on it follow (see slopePoint)
+  const strips = Math.ceil((b.z - a.z) / HULL_STRIP);
   for (let i = 0; i < 6; i++) {
     const j = (i + 1) % 6;
-    face([new THREE.Vector3(front[i][0], front[i][1], a.z), new THREE.Vector3(front[j][0], front[j][1], a.z), new THREE.Vector3(back[j][0], back[j][1], b.z), new THREE.Vector3(back[i][0], back[i][1], b.z)], axis);
+    // a belt (straight down from the deck's edge) with the hangars' mouths cut out of it
+    const belt = (i === 1 || i === 5) && holes.length > 0;
+    if (belt) {
+      const [top, low] = i === 1 ? [i, j] : [j, i];
+      face([at(top, a.z, HANGAR_CEILING), at(top, a.z), at(top, b.z), at(top, b.z, HANGAR_CEILING)], axis);
+      face([at(low, a.z), at(low, a.z, HANGAR_FLOOR), at(low, b.z, HANGAR_FLOOR), at(low, b.z)], axis);
+      let from = a.z;
+      for (const [z0, z1] of [...holes, [b.z, b.z]]) {
+        if (z0 > from) face([at(top, from, HANGAR_FLOOR), at(top, from, HANGAR_CEILING), at(top, z0, HANGAR_CEILING), at(top, z0, HANGAR_FLOOR)], axis);
+        from = z1;
+      }
+      continue;
+    }
+    for (let k = 0; k < strips; k++) {
+      const z0 = THREE.MathUtils.lerp(a.z, b.z, k / strips);
+      const z1 = THREE.MathUtils.lerp(a.z, b.z, (k + 1) / strips);
+      face([at(i, z0), at(j, z0), at(j, z1), at(i, z1)], axis);
+    }
   }
   if (caps.front) face(front.map(([x, y]) => new THREE.Vector3(x, y, a.z)), corner.set(0, (a.top + a.keel) / 2, a.z + 1));
   if (caps.back) face(back.map(([x, y]) => new THREE.Vector3(x, y, b.z)), corner.set(0, (b.top + b.keel) / 2, b.z - 1));
@@ -409,9 +471,11 @@ export class Fleet implements Obstacle {
     const bell = this.material(new THREE.MeshStandardMaterial({ color: 0x25272c, metalness: 0.8, roughness: 0.5, side: THREE.DoubleSide }));
     this.burnt = this.material(new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 1 }));
     const light = (r: number, g: number, b: number, strength: number) => this.material(new THREE.MeshBasicMaterial({ color: new THREE.Color(r, g, b).multiplyScalar(strength), toneMapped: false }));
-    // warm light in the windows and hangars, white on the deck, the drives' plasma white-hot
+    // warm light in the windows and hangars, white on the deck, the drives' plasma white-hot; the
+    // hangars' ceilings glow softly, their lamps bright, so a tunnel reads lit without blooming
+    // into one block from outside
     const lit = light(1, 0.8, 0.55, 1.2);
-    const hangar = light(1, 0.6, 0.28, 0.7);
+    const hangar = light(1, 0.6, 0.28, 0.32);
     const marking = light(1, 0.95, 0.85, 1.3);
     const thruster = light(0.75, 0.85, 1, 1.6);
     this.reactorGlow = light(1, 0.75, 0.4, 2.5);
@@ -467,23 +531,79 @@ export class Fleet implements Obstacle {
     const onBelt = (side: number, z: number, y: number, width: number, height: number, lift = 4) =>
       new THREE.PlaneGeometry(width, height).rotateY(side * (Math.PI / 2 + Math.atan(flare(z)))).translate(side * (sectionAt(z).half + lift), y, z);
     const flank = (side: number, z: number, y: number, lift: number) => new THREE.Vector3(side * (sectionAt(z).half + lift), y, z);
+    /**
+     * A sign `width` long at `z` on a flank's slope below the belt, `height` down the slope from
+     * `down` of its way to the keel, following its face in steps of 10 m and reading from outside.
+     */
+    const onSlope = (side: number, z: number, width: number, height: number, down = 0.1) => {
+      const steps = Math.ceil(width / 200);
+      const positions: number[] = [];
+      const uvs: number[] = [];
+      const index: number[] = [];
+      const point = new THREE.Vector3();
+      for (let k = 0; k <= steps; k++) {
+        // left to right as seen from outside: towards the bow on the right flank
+        const u = k / steps;
+        const at = z + side * (0.5 - u) * width;
+        const length = Math.hypot(sectionAt(at).half - sectionAt(at).keelHalf, sectionAt(at).belt - sectionAt(at).keel);
+        for (const v of [0, 1]) {
+          positions.push(...slopePoint(side, at, down + (1 - v) * (height / length), 25, point).toArray());
+          uvs.push(u, v);
+        }
+        if (k > 0) index.push(2 * k - 2, 2 * k, 2 * k + 1, 2 * k - 2, 2 * k + 1, 2 * k - 1);
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+      geometry.setIndex(index);
+      geometry.computeVertexNormals();
+      return geometry;
+    };
 
-    // the hull, section by section. It collides first as one long box, its core from the deck
-    // to the keel between the bow's taper and the drive section (a ship pressed into it leaves
-    // through the nearest of its faces, not between two short boxes), then in boxes a hundred
-    // meters long or less: the belt's under the deck's full width, the slopes' halfway out
-    // between belt and keel
+    // the hull, section by section. It collides first in its core, between the bow's taper and
+    // the drive section, from the deck to the keel: a box for every stretch between the hangars
+    // and two for each hangar, under its floor and over its ceiling (a ship pressed into it
+    // leaves through the nearest of its faces, into a hangar where one is nearest, not between
+    // two short boxes), then in boxes a hundred meters long or less: the belt's under the deck's
+    // full width, the slopes' halfway out between belt and keel. Where a hangar runs through, the
+    // belt's box leaves its clear width open: a box over it up to the deck and one under it down
+    // to the belt's lower edge
     const [, waist, back] = SECTIONS;
-    solid([0, (DECK_TOP + KEEL) / 2, (waist.z + back.z) / 2], [2 * waist.keelHalf, DECK_TOP - KEEL, back.z - waist.z]);
+    const core = (z0: number, z1: number, bottom: number, top: number) => solid([0, (top + bottom) / 2, (z0 + z1) / 2], [2 * waist.keelHalf, top - bottom, z1 - z0]);
+    let cored = waist.z;
+    for (const z of HANGARS) {
+      core(cored, z - HANGAR_WIDTH / 2, KEEL, DECK_TOP);
+      core(z - HANGAR_WIDTH / 2, z + HANGAR_WIDTH / 2, KEEL, HANGAR_FLOOR);
+      core(z - HANGAR_WIDTH / 2, z + HANGAR_WIDTH / 2, HANGAR_CEILING, DECK_TOP);
+      cored = z + HANGAR_WIDTH / 2;
+    }
+    core(cored, back.z, KEEL, DECK_TOP);
     SECTIONS.forEach((a, i) => {
       const b = SECTIONS[i + 1];
       if (!b) return;
-      shaped(hullBetween(a, b, { front: i === 0, back: i === SECTIONS.length - 2 }), armor);
-      const pieces = Math.ceil((b.z - a.z) / 2000);
-      const length = (b.z - a.z) / pieces;
-      for (let k = 0; k < pieces; k++) {
-        const s = sectionAt(a.z + (k + 0.5) * length);
-        solid([0, (s.top + s.belt) / 2, s.z], [2 * s.half, s.top - s.belt, length]);
+      const holes = HANGAR_SPANS.filter(([z0, z1]) => z0 >= a.z && z1 <= b.z);
+      shaped(hullBetween(a, b, { front: i === 0, back: i === SECTIONS.length - 2 }, holes), armor);
+      // the stretches of hull between the hangars' clear widths, and those widths
+      const stretches: { z0: number; z1: number; open: boolean }[] = [];
+      const closed = (z0: number, z1: number) => {
+        const pieces = Math.ceil((z1 - z0) / 2000);
+        for (let k = 0; k < pieces; k++) stretches.push({ z0: THREE.MathUtils.lerp(z0, z1, k / pieces), z1: THREE.MathUtils.lerp(z0, z1, (k + 1) / pieces), open: false });
+      };
+      let from = a.z;
+      for (const z of HANGARS) {
+        if (z < a.z || z > b.z) continue;
+        closed(from, z - HANGAR_WIDTH / 2);
+        stretches.push({ z0: z - HANGAR_WIDTH / 2, z1: z + HANGAR_WIDTH / 2, open: true });
+        from = z + HANGAR_WIDTH / 2;
+      }
+      closed(from, b.z);
+      for (const { z0, z1, open } of stretches) {
+        const s = sectionAt((z0 + z1) / 2);
+        const length = z1 - z0;
+        if (open) {
+          solid([0, (s.top + HANGAR_CEILING) / 2, s.z], [2 * s.half, s.top - HANGAR_CEILING, length]);
+          solid([0, (HANGAR_FLOOR + s.belt) / 2, s.z], [2 * s.half, HANGAR_FLOOR - s.belt, length]);
+        } else solid([0, (s.top + s.belt) / 2, s.z], [2 * s.half, s.top - s.belt, length]);
         solid([0, (s.belt + s.keel) / 2, s.z], [s.half + s.keelHalf, s.belt - s.keel, length]);
       }
       // gilded along the deck's edges, the belt's lower edge and the keel's; under the deck's edge a trench
@@ -542,36 +662,92 @@ export class Fleet implements Obstacle {
         lights.push(lamp);
       }
     }
-    /**
-     * A hangar opening `width` by `height` at `center` on the hull, facing `out`: an armored
-     * casemate standing HANGAR_DEPTH out of the hull, gilded around its mouth; inside, its
-     * ceiling and walls in warm light, a row of lamps under the ceiling, the back and the floor
-     * dark, so it reads as a deep, lit bay from any angle. It collides as one box.
-     */
-    const opening = (center: THREE.Vector3, out: THREE.Vector3, width: number, height: number) => {
-      const frame = new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(UP, out), UP, out).setPosition(center);
-      const add = (geometry: THREE.BufferGeometry, material: THREE.Material) => shaped(geometry.applyMatrix4(frame), material);
-      const deep = HANGAR_DEPTH;
+    // the bow's hangar, too low for a fighter (13 m), shut: an armored casemate standing
+    // DOOR_DEPTH out of the hull, gilded around its mouth, its blast door just inside, a lit seam
+    // down its middle and warning lamps over it. It collides as one box
+    {
+      const width = 860;
+      const height = 260;
+      const deep = DOOR_DEPTH;
       const rim = 60;
-      add(new THREE.PlaneGeometry(width, height).translate(0, 0, 2), recess);
-      add(new THREE.PlaneGeometry(width, deep).rotateX(-Math.PI / 2).translate(0, -height / 2, deep / 2), recess);
-      add(new THREE.PlaneGeometry(width, deep).rotateX(Math.PI / 2).translate(0, height / 2, deep / 2), hangar);
-      for (const s of [-1, 1]) add(new THREE.PlaneGeometry(deep, height).rotateY(-s * (Math.PI / 2)).translate((s * width) / 2, 0, deep / 2), hangar);
-      for (let x = -width / 2 + 60; x < width / 2 - 30; x += 90) add(new THREE.BoxGeometry(40, 20, 20).translate(x, height / 2 - 20, 12), lit);
+      const frame = new THREE.Matrix4().makeBasis(new THREE.Vector3(1, 0, 0), UP, new THREE.Vector3(0, 0, -1)).setPosition(0, DECK_TOP - 200, bow);
+      const add = (geometry: THREE.BufferGeometry, material: THREE.Material) => shaped(geometry.applyMatrix4(frame), material);
+      add(new THREE.BoxGeometry(width, height, 40).translate(0, 0, deep - 60), armor);
+      add(new THREE.BoxGeometry(12, height, 10).translate(0, 0, deep - 36), marking);
+      for (let x = -width / 2 + 60; x < width / 2 - 30; x += 90) add(new THREE.BoxGeometry(40, 20, 20).translate(x, height / 2 - 20, deep - 30), lit);
       for (const s of [-1, 1]) {
         add(new THREE.BoxGeometry(width + 2 * rim, rim, deep).translate(0, s * (height / 2 + rim / 2), deep / 2), armor);
         add(new THREE.BoxGeometry(rim, height, deep).translate(s * (width / 2 + rim / 2), 0, deep / 2), armor);
         add(new THREE.BoxGeometry(width + 2 * rim + 30, 30, 30).translate(0, s * (height / 2 + rim), deep), gold);
         add(new THREE.BoxGeometry(30, height + 2 * rim, 30).translate(s * (width / 2 + rim), 0, deep), gold);
       }
-      const middle = center.clone().addScaledVector(out, deep / 2);
-      const across = width + 2 * rim;
-      solid(middle.toArray(), Math.abs(out.x) > Math.abs(out.z) ? [deep, height + 2 * rim, across] : [across, height + 2 * rim, deep]);
-    };
-    // the hangar's mouth in the bow, and hangar bays along both flanks aft
-    opening(new THREE.Vector3(0, DECK_TOP - 200, bow), new THREE.Vector3(0, 0, -1), 860, 260);
-    for (const side of [-1, 1]) {
-      for (let z = 900; z <= 4500; z += 1200) opening(flank(side, z, 330, 0), new THREE.Vector3(side, 0, -side * flare(z)).normalize(), 900, 480);
+      solid([0, DECK_TOP - 200, bow - deep / 2], [width + 2 * rim, height + 2 * rim, deep]);
+    }
+
+    // the hangar deck: each tunnel lit warm from its ceiling with rows of lamps, the deck dark
+    // with lit markings along it (a dashed line down its middle, its edges, a bar at each mouth),
+    // racks of the regime's red cargo on its walls, a gilded frame and a lamp at each corner of
+    // its mouths. All of it merged into the hull's meshes: no draw call of its own. The racks stand
+    // within HANGAR_RACKS of the walls, inside the walls' colliders
+    {
+      const random = new Randomizer(seed * 7 + 3);
+      /** A flat panel through four corners, facing `facing`. */
+      const panel = (corners: THREE.Vector3[], facing: THREE.Vector3) => {
+        const normal = new THREE.Vector3().subVectors(corners[1], corners[0]).cross(new THREE.Vector3().subVectors(corners[2], corners[0]));
+        const ordered = normal.dot(facing) < 0 ? [...corners].reverse() : corners;
+        const geometry = new THREE.BufferGeometry().setFromPoints(ordered);
+        geometry.setIndex([0, 1, 2, 0, 2, 3]);
+        geometry.setAttribute('uv', new THREE.Float32BufferAttribute([0, 0, 1, 0, 1, 1, 0, 1], 2));
+        geometry.computeVertexNormals();
+        return geometry;
+      };
+      const across = (z: number, y: number, side: number) => new THREE.Vector3(side * sectionAt(z).half, y, z);
+      for (const center of HANGARS) {
+        const front = center - HANGAR_WIDTH / 2;
+        const rear = center + HANGAR_WIDTH / 2;
+        const [w0, w1] = [front - HANGAR_RACKS, rear + HANGAR_RACKS];
+        const reach = Math.min(sectionAt(w0).half, sectionAt(w1).half);
+        // floor, ceiling and the walls behind the racks
+        put(panel([across(w0, HANGAR_FLOOR, -1), across(w0, HANGAR_FLOOR, 1), across(w1, HANGAR_FLOOR, 1), across(w1, HANGAR_FLOOR, -1)], UP), recess);
+        put(panel([across(w0, HANGAR_CEILING, -1), across(w0, HANGAR_CEILING, 1), across(w1, HANGAR_CEILING, 1), across(w1, HANGAR_CEILING, -1)], new THREE.Vector3(0, -1, 0)), hangar);
+        for (const [z, facing] of [
+          [w0, 1],
+          [w1, -1],
+        ] as const) {
+          put(panel([across(z, HANGAR_FLOOR, -1), across(z, HANGAR_FLOOR, 1), across(z, HANGAR_CEILING, 1), across(z, HANGAR_CEILING, -1)], new THREE.Vector3(0, 0, facing)), gunmetal);
+          // racks: posts every 20 m, three shelves, crates on them where the seed puts some
+          const face = z + facing * (HANGAR_RACKS / 2);
+          const shelves = [HANGAR_FLOOR + 20, HANGAR_FLOOR + 300, HANGAR_FLOOR + 580];
+          for (let x = -reach + 200; x <= reach - 200; x += 400) {
+            put(new THREE.BoxGeometry(30, HANGAR_CEILING - HANGAR_FLOOR - 200, HANGAR_RACKS).translate(x, (HANGAR_CEILING + HANGAR_FLOOR - 200) / 2, face), gunmetal);
+            if (x + 400 > reach - 200) continue;
+            for (const y of shelves) {
+              put(new THREE.BoxGeometry(400, 16, HANGAR_RACKS).translate(x + 200, y, face), gunmetal);
+              if (random.nextFloat() < 0.75) {
+                const width = random.range(140, 340);
+                const tall = random.range(90, 230);
+                put(new THREE.BoxGeometry(width, tall, HANGAR_RACKS - 10).translate(x + 200 + random.range(-1, 1) * (180 - width / 2), y + 8 + tall / 2, face), runway);
+              }
+            }
+          }
+        }
+        // two rows of lamps under the ceiling, a warm band along each wall's top
+        for (const z of [center - HANGAR_WIDTH / 4, center + HANGAR_WIDTH / 4]) for (let x = -reach + 150; x < reach - 100; x += 300) put(new THREE.BoxGeometry(160, 16, 60).translate(x, HANGAR_CEILING - 10, z), lit);
+        for (const z of [front + 10, rear - 10]) put(new THREE.BoxGeometry(2 * reach, 40, 20).translate(0, HANGAR_CEILING - 60, z), hangar);
+        // the deck's markings: a dashed line down the middle, its edges, and a bar at each mouth
+        for (let x = -reach + 300; x < reach - 300; x += 400) put(new THREE.BoxGeometry(200, 4, 30).translate(x, HANGAR_FLOOR + 2, center), marking);
+        for (const z of [front + 120, rear - 120]) put(new THREE.BoxGeometry(2 * reach - 200, 4, 24).translate(0, HANGAR_FLOOR + 2, z), marking);
+        for (const side of [-1, 1]) {
+          put(new THREE.BoxGeometry(60, 4, HANGAR_WIDTH - 200).translate(side * (reach - 150), HANGAR_FLOOR + 2, center), marking);
+          // the mouth on this flank: gilded around, over the racks' ends, a lamp at each corner
+          const lift = 20;
+          const corner = (z: number, y: number) => flank(side, z, y, lift);
+          for (const z of [front - HANGAR_RACKS / 2, rear + HANGAR_RACKS / 2]) bar(corner(z, HANGAR_FLOOR - HANGAR_RACKS), corner(z, HANGAR_CEILING + HANGAR_RACKS / 2), 60, 60, gold);
+          bar(corner(w0 - 30, HANGAR_CEILING + 15), corner(w1 + 30, HANGAR_CEILING + 15), 30, 30, gold);
+          bar(corner(w0 - 30, HANGAR_FLOOR - 40), corner(w1 + 30, HANGAR_FLOOR - 40), 40, 40, gold);
+          for (const z of [w0, w1]) for (const y of [HANGAR_FLOOR + 40, HANGAR_CEILING - 40]) put(new THREE.BoxGeometry(50, 50, 50).translate(...flank(side, z + (z === w0 ? 50 : -50), y, 30).toArray()), lit);
+        }
+      }
     }
 
     // the superstructure, stepped up towards the stern in tiers of armor, each sloping up from
@@ -652,7 +828,7 @@ export class Fleet implements Obstacle {
     for (const geometry of [...[...parts.values()].flat(), ...lights]) geometry.dispose();
 
     // the Ministry of War's seal, large on both flanks and on the bridge tower; the slogans along
-    // the hull; the President's slogan painted along the runway in letters twenty meters high
+    // the slopes under the hangars' mouths; the President's slogan painted along the runway in letters twenty meters high
     const seal = crestTexture();
     const sealed = this.material(new THREE.MeshBasicMaterial({ map: seal, transparent: true, depthWrite: false, toneMapped: false, color: new THREE.Color(1.25, 1.1, 0.9) }));
     const sign = (texture: THREE.Texture | null, geometry: THREE.BufferGeometry, color = new THREE.Color(1.4, 1.4, 1.4)) => {
@@ -663,7 +839,7 @@ export class Fleet implements Obstacle {
     if (seal) this.textures.push(seal);
     for (const side of [-1, 1]) {
       this.root.add(new THREE.Mesh(this.geometry(onBelt(side, SEAL_Z, 480, 1100, 1100, 8)), sealed));
-      sign(signTexture(t(SLOGANS[side < 0 ? 1 : 2])), onBelt(side, 2700, 860, 4400, 380, 8));
+      sign(signTexture(t(SLOGANS[side < 0 ? 1 : 2])), onSlope(side, 2800, 4400, 400));
     }
     this.root.add(new THREE.Mesh(this.geometry(new THREE.PlaneGeometry(800, 800).rotateY(Math.PI).translate(0, 3250, 3496)), sealed));
     sign(signTexture(t(SLOGANS[0]), '#ffcf5a', 4096, 800, true), new THREE.PlaneGeometry(3600, 760).rotateX(-Math.PI / 2).rotateY(Math.PI / 2).translate(0, DECK_TOP + 10, -4200), new THREE.Color(1.2, 1, 0.7));
@@ -883,6 +1059,15 @@ export class Fleet implements Obstacle {
   touches(center: THREE.Vector3, radius: number): boolean {
     if (!this.standing || center.distanceTo(this.position) > REACH + radius) return false;
     return this.colliders.some((box) => this.solid(box) && boxContact(this.toLocal(center, local).sub(box.center), box.half, radius, step, closest) !== null);
+  }
+
+  /** A point lies in one of its hangars, between its flanks, while it is in the field (see Obstacle). */
+  within(point: THREE.Vector3): boolean {
+    if (!this.standing || point.distanceTo(this.position) > REACH) return false;
+    this.toLocal(point, local);
+    if (local.y < HANGAR_FLOOR || local.y > HANGAR_CEILING) return false;
+    for (const z of HANGARS) if (Math.abs(local.z - z) < HANGAR_WIDTH / 2) return Math.abs(local.x) < sectionAt(z).half;
+    return false;
   }
 
   /** Pushes a sphere out of the hull while it is in the field, sinking too, as rays and torpedoes find it; returns the outward normal when they touched (and moves `center` onto the hull), otherwise null. */

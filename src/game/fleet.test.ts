@@ -1,8 +1,11 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ARRIVAL, BATTERY_PERIOD, Fleet, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
-import { SIEGE_DISTANCE } from '../ship/bots';
+import { ARRIVAL, BATTERY_PERIOD, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
+import { Bot, evenSkills, SIEGE_DISTANCE } from '../ship/bots';
+import type { Ship } from '../ship/ship';
 import { testField } from '../test/field';
+import { Human, SEEDS, SPREAD } from '../test/human';
+import { SHIP_RADIUS, startFlight, STEP } from '../test/pilot';
 
 /** A battleship in the arena, its bow along -z at the center, unturned. */
 function battleship() {
@@ -132,7 +135,7 @@ describe("the President's fleet", () => {
 
   it('pushes a ship out of its hull', () => {
     const fleet = battleship();
-    const center = new THREE.Vector3(0, 700, 0);
+    const center = new THREE.Vector3(0, 700, -1000);
     const normal = fleet.resolve(center, 300, 1)!;
     expect(normal.y).toBeCloseTo(1);
     expect(center.y).toBeGreaterThan(800 + 300);
@@ -189,5 +192,119 @@ describe("the President's fleet", () => {
     const late = new Fleet(7);
     expect(late.follow(JSON.parse(JSON.stringify(lead.toState())))).toEqual([]);
     expect(late.down).toBe(true);
+  });
+});
+
+describe("the battleship's hangars", () => {
+  const middle = (HANGAR_FLOOR + HANGAR_CEILING) / 2;
+  /** How far a ship's center may stray from a hangar's middle without touching (units): along the hull, and up and down. */
+  const room = { z: HANGAR_WIDTH / 2 - SHIP_RADIUS - 5, y: (HANGAR_CEILING - HANGAR_FLOOR) / 2 - SHIP_RADIUS - 5 };
+
+  it('leave nothing solid in a tunnel from flank to flank, and the hull around it solid', () => {
+    const fleet = battleship();
+    for (const z of HANGARS) {
+      for (let x = -6000; x <= 6000; x += 100) {
+        for (const [dy, dz] of [
+          [0, 0],
+          [room.y, room.z],
+          [-room.y, -room.z],
+          [room.y, -room.z],
+          [-room.y, room.z],
+        ]) {
+          expect(fleet.touches(new THREE.Vector3(x, middle + dy, z + dz), SHIP_RADIUS), `x ${x} y ${dy} z ${dz}`).toBe(false);
+        }
+      }
+      // within the hull a ship that strays farther touches a wall, the deck above or the floor
+      for (const at of [new THREE.Vector3(0, HANGAR_CEILING - SHIP_RADIUS + 20, z), new THREE.Vector3(0, HANGAR_FLOOR + SHIP_RADIUS - 20, z), new THREE.Vector3(0, middle, z + HANGAR_WIDTH / 2 - SHIP_RADIUS + 20)]) {
+        expect(fleet.touches(at, SHIP_RADIUS)).toBe(true);
+      }
+      // a ship scraping the ceiling is pushed down into the tunnel, one at a wall back into it
+      const scraping = new THREE.Vector3(0, HANGAR_CEILING - SHIP_RADIUS + 20, z);
+      expect(fleet.resolve(scraping, SHIP_RADIUS, 1)!.y).toBeCloseTo(-1);
+      const walled = new THREE.Vector3(0, middle, z - HANGAR_WIDTH / 2 + SHIP_RADIUS - 20);
+      expect(fleet.resolve(walled, SHIP_RADIUS, 1)!.z).toBeCloseTo(1);
+      // and its middle counts as inside, the hull around it not
+      expect(fleet.within(new THREE.Vector3(0, middle, z))).toBe(true);
+      expect(fleet.within(new THREE.Vector3(0, middle, z + HANGAR_WIDTH / 2 + 150))).toBe(false);
+      expect(fleet.within(new THREE.Vector3(0, HANGAR_CEILING + 100, z))).toBe(false);
+    }
+  });
+
+  it('let beams, sight and torpedoes through along a tunnel, and hide a ship in it from everywhere else', () => {
+    const fleet = battleship();
+    const across = new THREE.Vector3(1, 0, 0);
+    const down = new THREE.Vector3(0, -1, 0);
+    for (const z of HANGARS) {
+      expect(fleet.ray(new THREE.Vector3(-20000, middle, z), across, 40000)).toBeNull();
+      expect(fleet.ray(new THREE.Vector3(-20000, middle + room.y, z - room.z), across, 40000)).toBeNull();
+      // beside the tunnel, above it and below it, the hull stops a beam
+      expect(fleet.ray(new THREE.Vector3(-20000, middle, z + HANGAR_WIDTH / 2 + 150), across, 40000)).not.toBeNull();
+      expect(fleet.ray(new THREE.Vector3(-20000, HANGAR_CEILING + 150, z), across, 40000)).not.toBeNull();
+      expect(fleet.ray(new THREE.Vector3(-20000, HANGAR_FLOOR - 50, z), across, 40000)).not.toBeNull();
+      // a ship inside, seen from above or from ahead, is behind the hull
+      const inside = new THREE.Vector3(0, middle, z);
+      expect(fleet.ray(new THREE.Vector3(0, 20000, z), down, 20000 - middle)).not.toBeNull();
+      expect(fleet.ray(new THREE.Vector3(0, middle, -20000), new THREE.Vector3(0, 0, 1), 20000 + z)).not.toBeNull();
+      // and seen along the tunnel from far out, it is in sight; a torpedo flies in without touching
+      expect(fleet.ray(new THREE.Vector3(20000, middle, z), across.clone().negate(), 20000)).toBeNull();
+      expect(fleet.touches(inside, 60)).toBe(false);
+    }
+  });
+
+  // a Host dives through a hangar of the battleship as it flies its orbit: it comes in from
+  // abeam, the crosshair (and the flight with it) on the tunnel, leading it by the battleship's
+  // motion as it leads a crossing ship: the near mouth from afar, the far mouth from 400 m out
+  for (const speed of [3000, 5000]) {
+    it(`let a Host fly through at ${speed * 0.05} m/s without touching, every hand`, () => {
+      for (const z of HANGARS) {
+        for (const hands of SPREAD) {
+          for (const seed of SEEDS) {
+            const fleet = battleship();
+            fleet.velocity.set(0, 0, -FLEET_SPEED);
+            const flight = startFlight(new THREE.Vector3(20000, middle, z), new THREE.Vector3(-1, 0, 0), speed);
+            const human = new Human(flight, STEP, seed, hands);
+            const gravity = new THREE.Vector3();
+            const mark = new THREE.Vector3();
+            const local = new THREE.Vector3();
+            let through = false;
+            for (let t = 0; t < 20 && !through; t += STEP) {
+              local.subVectors(flight.position, fleet.position);
+              mark.set(local.x > 8000 ? 2300 : -6000, middle, z).add(fleet.position);
+              mark.addScaledVector(fleet.velocity, mark.distanceTo(flight.position) / Math.max(1000, flight.velocity.length()));
+              flight.update(STEP, human.fly(flight, mark, 'coast', gravity), gravity);
+              fleet.position.addScaledVector(fleet.velocity, STEP);
+              fleet.root.updateMatrixWorld();
+              expect(fleet.touches(flight.position, SHIP_RADIUS), `${hands.reaction} s, seed ${seed}, tunnel at ${z}, t ${t.toFixed(2)}`).toBe(false);
+              through = flight.position.x - fleet.position.x < -5000;
+            }
+            expect(through).toBe(true);
+          }
+        }
+      }
+    });
+  }
+
+  it('let a bot of middling skill caught in a tunnel fly out of it without touching', () => {
+    const field = testField();
+    for (const z of HANGARS) {
+      for (const [dy, dz] of [
+        [0, 0],
+        [100, 200],
+        [-100, -300],
+      ]) {
+        const fleet = battleship();
+        field.obstacle = fleet;
+        const flight = startFlight(new THREE.Vector3(1500, middle + dy, z + dz), new THREE.Vector3(-1, 0, 0), 3000);
+        const ship = { id: 'bot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, heat: 0, allyOf: () => false, cooling: 1 } as unknown as Ship;
+        const bot = new Bot(ship, evenSkills(0.5));
+        bot.waypoint = new THREE.Vector3(-20000, middle, z);
+        const gravity = new THREE.Vector3();
+        for (let t = 0; t < 4; t += STEP) {
+          flight.update(STEP, bot.think(t, [ship], field), gravity);
+          expect(fleet.touches(flight.position, SHIP_RADIUS), `tunnel at ${z}, ${dy}/${dz}, t ${t.toFixed(2)}`).toBe(false);
+        }
+        expect(flight.position.x).toBeLessThan(-5000);
+      }
+    }
   });
 });

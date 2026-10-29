@@ -83,6 +83,8 @@ export interface Obstacle {
   readonly position: THREE.Vector3;
   /** Whether a sphere touches it. */
   touches(center: THREE.Vector3, radius: number): boolean;
+  /** Whether a point lies in a space open through it (a hangar of the battleship). */
+  within(point: THREE.Vector3): boolean;
 }
 
 /** A piece placed by hand: a template of a kind at a position and turn, with the template's own size times `scale`. */

@@ -610,6 +610,8 @@ export class Bot {
    * The nearest rock, well or hull the way along `direction` (unit length) meets within `length`:
    * the way as the hull sweeps it, a tube of AVOID_TUBE ship radii around the line of flight
    * (its center line and four lines along its wall), so a rock the line itself only grazes counts.
+   * In one of the battleship's hangars the tube is wider than the tunnel: there a line along the
+   * wall that starts inside the hull is left out, and the way on is what the tunnel leaves open.
    */
   private wayAhead(field: AsteroidField, direction: THREE.Vector3, length: number): { distance: number; center: THREE.Vector3 } | null {
     const position = this.ship.flight.position;
@@ -618,9 +620,11 @@ export class Bot {
     across.crossVectors(direction, Math.abs(direction.y) < 0.9 ? UP : SIDE).normalize();
     across2.crossVectors(direction, across);
     let best: RayHit | null = null;
+    const inside = !!field.obstacle?.within(position);
     for (let i = 0; i < 5; i++) {
       wayOrigin.copy(position);
       if (i > 0) wayOrigin.addScaledVector(i < 3 ? across : across2, i % 2 ? wall : -wall);
+      if (i > 0 && inside && field.obstacle!.touches(wayOrigin, 1)) continue;
       const hit = field.raycast(wayOrigin, direction, best ? best.distance : length, true, wayHit);
       if (hit && (!best || hit.distance < best.distance)) best = Object.assign(wayBest, hit);
     }

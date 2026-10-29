@@ -10,7 +10,7 @@ import { PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
 import { CLONES, FLARE_BURN, FLARE_HEAT } from '../game/survival';
 import { ADRIFT_SECONDS, CAPTURE_POINTS, CAPTURES_TO_WIN, CORE_BRAKE, GRAB_POINTS, GRAB_REACH, RETURN_POINTS } from '../game/flags';
 import { MASS } from '../world/bodies';
-import { ARRIVAL, BATTERY_PERIOD, BATTERY_RANGE, SINK_BLAST, SINK_POINTS, TORPEDO_HITS, ZONE_HITS } from '../game/fleet';
+import { ARRIVAL, BATTERY_PERIOD, BATTERY_RANGE, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, SINK_BLAST, SINK_POINTS, TORPEDO_HITS, ZONE_HITS } from '../game/fleet';
 import { COMET_WARNING } from '../game/comet';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
 import { ASTEROID_POINTS } from '../world/asteroids';
@@ -96,6 +96,10 @@ export const FROM_CODE: Record<string, number> = {
   batteryRange: km(BATTERY_RANGE),
   blast: km(SINK_BLAST),
   sink: SINK_POINTS,
+  hangars: HANGARS.length,
+  hangarWidth: meters(HANGAR_WIDTH),
+  hangarHeight: meters(HANGAR_CEILING - HANGAR_FLOOR),
+  fleetSpeed: meters(FLEET_SPEED),
   cometWarning: COMET_WARNING,
   wellCaution: percent(WELL_CAUTION),
   wellWarning: percent(WELL_WARNING),
