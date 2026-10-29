@@ -47,6 +47,8 @@ export interface Wear {
   metalness: number;
   /** A fine pattern of scales instead of riveted panels (the alien hull). */
   scales?: boolean;
+  /** Dents beaten into the plating (0..1; none when left out). */
+  dents?: number;
 }
 
 /** The three canvases of a surface, filled: color white, paint's roughness and metalness, flat bump. */
@@ -216,6 +218,27 @@ function scratches(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRe
   }
 }
 
+/** Dents: shallow dips in the bump, a shade darker in their hollow, the light catching their rim. */
+function dents(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, amount: number) {
+  for (let i = 0; i < 16 * amount; i++) {
+    const x = r.range(0, SIZE);
+    const y = r.range(0, SIZE);
+    const radius = r.range(6, 22);
+    const dip = bump.createRadialGradient(x, y, 0, x, y, radius);
+    dip.addColorStop(0, 'rgba(40, 40, 40, 0.8)');
+    dip.addColorStop(0.75, 'rgba(110, 110, 110, 0.4)');
+    dip.addColorStop(0.9, 'rgba(170, 170, 170, 0.35)');
+    dip.addColorStop(1, 'rgba(128, 128, 128, 0)');
+    bump.fillStyle = dip;
+    bump.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    const shade = color.createRadialGradient(x, y, 0, x, y, radius);
+    shade.addColorStop(0, 'rgba(0, 0, 0, 0.18)');
+    shade.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    color.fillStyle = shade;
+    color.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
+}
+
 /** Stencils: numbers and warnings in dark paint, half worn off, the paint of a depot. */
 function stencils(r: Randomizer, color: CanvasRenderingContext2D, texts: readonly string[]) {
   color.font = 'bold 13px monospace';
@@ -238,6 +261,7 @@ export function wornSurface(seed: number, wear: Wear): Surface {
   const { color, orm, bump } = blank(wear);
   if (wear.scales) scales(color[1], bump[1], wear.seams);
   else panels(r, color[1], bump[1], wear.seams);
+  if (wear.dents) dents(r, color[1], bump[1], wear.dents);
   grime(r, color[1], wear.grime);
   rust(r, color[1], orm[1], wear.rust);
   chips(r, color[1], orm[1], wear.chips);
