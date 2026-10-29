@@ -219,7 +219,7 @@ export function debrisSet(): TemplateSet {
   // the details have a sequence of their own, so the outlines draw the same numbers whatever details there are
   const d = new Randomizer(DEBRIS_SEED + 2);
   const foils = { gold: foilSurface('gold'), silver: foilSurface('silver') };
-  const foil = (tone: 'gold' | 'silver') => new THREE.MeshStandardMaterial({ map: foils[tone].map, normalMap: foils[tone].normalMap, roughness: 0.5, metalness: 0.7, envMap: shine(), envMapIntensity: 0.8 });
+  const foil = (tone: 'gold' | 'silver') => new THREE.MeshStandardMaterial({ map: foils[tone].map, normalMap: foils[tone].normalMap, roughness: 0.44, metalness: 0.7, envMap: shine(), envMapIntensity: 0.7 });
   const foilMaterials = { gold: foil('gold'), silver: foil('silver') };
   const panels = solarWing();
   const cells = new THREE.MeshStandardMaterial({ map: panels.map, roughnessMap: panels.orm, metalnessMap: panels.orm, roughness: 1, metalness: 1, envMap: shine(), envMapIntensity: 0.4 });
@@ -291,7 +291,7 @@ export function debrisSet(): TemplateSet {
       outline.push(new THREE.CylinderGeometry(R, R, L * 0.72, 16).rotateZ(Math.PI / 2).translate(-L * 0.1, 0, 0));
       outline.push(new THREE.CylinderGeometry(R * 1.04, R * 1.04, L * 0.08, 16, 1, true).rotateZ(Math.PI / 2).translate(-L * 0.44, 0, 0));
       outline.push(new THREE.CylinderGeometry(R * 0.35, R * 0.95, L * 0.22, 16, 1, true).rotateZ(Math.PI / 2).translate(L * 0.37, 0, 0));
-      painted.push(revolve([[-L * 0.46, R], [L * 0.26, R]], 32, { u: [1, 0], v: [LIVERY_STAGE[1], LIVERY_STAGE[0]] }));
+      painted.push(revolve([[-L * 0.46, R], [L * 0.26, R]], 32, { v: [LIVERY_STAGE[1], LIVERY_STAGE[0]] }));
       parts.push(tint(revolve([[-L * 0.474, 0], [-L * 0.47, R * 0.55], [-L * 0.465, R * 0.85], [-L * 0.46, R]], 32), 0xc9c5ba));
       parts.push(tint(revolve([[-L * 0.48, R * 0.3], [-L * 0.48, R * 0.47], [-L * 0.472, R * 0.62]], 24), METAL));
       parts.push(tint(revolve([[-L * 0.48, R * 1.04], [-L * 0.4, R * 1.04]], 32), (x) => new THREE.Color(x < -L * 0.474 ? DARK : 0xb4b6ba)));
@@ -331,7 +331,7 @@ export function debrisSet(): TemplateSet {
         }),
       ];
       painted.push(revolve([...shell(1), [L * 0.5, 0]], 24, { sweep: Math.PI, u: [1, 0], v: LIVERY_FAIRING }));
-      painted.push(revolve(shell(0.985), 24, { sweep: Math.PI, u: [1, 0], v: LIVERY_LINING, inward: true }));
+      painted.push(revolve(shell(0.985), 24, { sweep: Math.PI, v: LIVERY_LINING, inward: true }));
       // the separation rails along its open edges, the ring at its base
       for (const side of [1, -1]) parts.push(tint(new THREE.BoxGeometry(L * 0.6, L * 0.012, L * 0.01).translate(-L * 0.2, L * 0.006, side * R), DARK));
       parts.push(tint(revolve([[-L * 0.5, R * 0.96], [-L * 0.5, R * 1.015], [-L * 0.49, R * 1.015]], 24, { sweep: Math.PI }), METAL));

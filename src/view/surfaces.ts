@@ -726,57 +726,62 @@ export function shine(): THREE.CubeTexture {
   return mirrored;
 }
 
-/** A crinkled foil blanket: its color (each facet a little brighter or darker) and the facets' tilts as a normal map. */
+/** A crinkled foil blanket: its color (the metal's, darker along the creases) and its folds as a normal map. */
 export type Foil = { map: THREE.Texture; normalMap: THREE.Texture };
 
 const foils = new Map<string, Foil>();
 
 /**
- * The thermal blankets a satellite's bus is wrapped in: gold-colored or silver foil, crinkled
- * into facets that each catch the sun at their own angle, the blankets' edges taped over. The
- * facets lie in the normal map, so the texture's smaller levels average them into a plain sheen
- * afar instead of letting them shimmer.
+ * The thermal blankets a satellite's bus is wrapped in: gold-colored or silver foil of one hue,
+ * crinkled by straight folds crossing it every way, each face between them catching the sun at
+ * its own angle, the creases darker, the blankets' edges taped over. The color map is the metal's
+ * reflectance (see debrisSet: metallic, glossy, mirroring the reflection map). The folds lie in
+ * the normal map, so the texture's smaller levels average them into a plain sheen afar instead of
+ * letting them shimmer.
  */
 export function foilSurface(tone: 'gold' | 'silver'): Foil {
   const kept = foils.get(tone);
   if (kept) return kept;
   if (!drawable) return { map: new THREE.Texture(), normalMap: new THREE.Texture() };
   const r = new Randomizer(tone === 'gold' ? 61 : 62);
-  // one crinkle point jittered in each cell of a grid, so a pixel finds its facet among the nine cells around
-  const grid = 12;
-  const cell = SIZE / grid;
-  const points = Array.from({ length: grid * grid }, (_, k) => ({ x: ((k % grid) + r.range(0.1, 0.9)) * cell, y: (Math.floor(k / grid) + r.range(0.1, 0.9)) * cell, nx: r.range(-0.15, 0.15), ny: r.range(-0.15, 0.15), shade: r.range(0.96, 1.04) }));
-  const base = tone === 'gold' ? [232, 184, 96] : [210, 214, 220];
+  // the folds: straight creases crossing the blanket every way, each a ridge or a valley sharp
+  // at its crease (|sin| of a wave whose whole periods fit the tile, so the tile repeats seamlessly)
+  // (the finer a fold, the lower: the large folds shape the blanket, the fine ones only crinkle it)
+  const folds = Array.from({ length: 14 }, () => {
+    const kx = Math.floor(r.range(1, 6)) * (r.nextFloat() < 0.5 ? -1 : 1);
+    const ky = Math.floor(r.range(0, 6));
+    return { kx, ky, phase: r.range(0, Math.PI), height: r.range(0.4, 1) / Math.sqrt(Math.hypot(kx, ky)) };
+  });
+  // the reflectance of the metal: a clear golden yellow (or silver), one hue all over
+  const base = tone === 'gold' ? [255, 206, 96] : [204, 208, 214];
   const [colorElement, color] = canvas(SIZE);
   const [normalElement, normal] = canvas(SIZE);
   const colors = color.createImageData(SIZE, SIZE);
   const normals = normal.createImageData(SIZE, SIZE);
+  /** How steep the folds are: the slope of the foil's surface per unit of a fold's height. */
+  const steep = 0.1;
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
-      // the nearest crinkle point on the repeating tile: its facet
-      let best = Infinity;
-      let facet = points[0];
-      const cx = Math.floor(x / cell);
-      const cy = Math.floor(y / cell);
-      for (let oy = -1; oy <= 1; oy++) {
-        for (let ox = -1; ox <= 1; ox++) {
-          const p = points[((cy + oy + grid) % grid) * grid + ((cx + ox + grid) % grid)];
-          const dx = Math.min(Math.abs(p.x - x), SIZE - Math.abs(p.x - x));
-          const dy = Math.min(Math.abs(p.y - y), SIZE - Math.abs(p.y - y));
-          const d = dx * dx + dy * dy;
-          if (d < best) {
-            best = d;
-            facet = p;
-          }
-        }
+      let hx = 0;
+      let hy = 0;
+      let crease = 1;
+      for (const fold of folds) {
+        const angle = (Math.PI * (fold.kx * x + fold.ky * y)) / SIZE + fold.phase;
+        const wave = Math.sin(angle);
+        const slope = fold.height * Math.sign(wave) * Math.cos(angle);
+        hx += slope * fold.kx;
+        hy += slope * fold.ky;
+        // right on a crease the foil is folded sharp and catches less light
+        crease = Math.min(crease, 0.75 + 0.25 * THREE.MathUtils.smoothstep(Math.abs(wave), 0, 0.12 / fold.height));
       }
       // tape over the blankets' edges: flat and a shade duller
       const tape = y % 128 < 6;
       const i = (y * SIZE + x) * 4;
-      const shade = tape ? 0.82 : facet.shade;
+      const shade = tape ? 0.85 : crease;
       for (let c = 0; c < 3; c++) colors.data[i + c] = Math.min(255, base[c] * shade);
-      const nx = tape ? 0 : facet.nx;
-      const ny = tape ? 0 : facet.ny;
+      const length = Math.hypot(hx * steep, hy * steep, 1);
+      const nx = tape ? 0 : (-hx * steep) / length;
+      const ny = tape ? 0 : (hy * steep) / length;
       normals.data[i] = (nx * 0.5 + 0.5) * 255;
       normals.data[i + 1] = (ny * 0.5 + 0.5) * 255;
       normals.data[i + 2] = (Math.sqrt(1 - nx * nx - ny * ny) * 0.5 + 0.5) * 255;
