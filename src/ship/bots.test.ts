@@ -15,7 +15,7 @@ const STEP = 1 / 30;
 /** A ship with the game's rules for sides and its tail, but no model: the bots only read its flight and state. */
 function ship(name: string, position: THREE.Vector3, facing: THREE.Vector3): Ship {
   const s = Object.create(Ship.prototype) as Ship;
-  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, protectedUntil: 0, team: -1, strain: 0, heat: 0, overheated: false, inShadow: false, sunCooling: 1, perks: { cooling: 1 }, flight: new FlightModel() });
+  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, heat: 0, overheated: false, inShadow: false, sunCooling: 1, perks: { cooling: 1 }, flight: new FlightModel() });
   s.flight.reset(position, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(position, facing.clone().add(position), new THREE.Vector3(0, 1, 0))));
   return s;
 }
@@ -296,7 +296,7 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
   });
 });
 
-describe('bots near the black hole, whose grip they know', () => {
+describe('bots near the black hole, by their escape gauge', () => {
   /** Event Horizon's field without its rocks: only the hole and its pull. */
   const hole = () => {
     const f = testField();

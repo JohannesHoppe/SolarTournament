@@ -4,6 +4,7 @@ import { IDLE, type Controls } from '../input/input';
 import { noseOn, type Ship } from './ship';
 import { MAIN_THRUST, RCS_THRUST } from './flight';
 import { BOOST_PUSH } from '../game/race';
+import { escapeLoad } from '../game/alarms';
 import { devlog } from '../devlog';
 import { ringRim } from '../world/gates';
 import { airHeat, altitudeIn, LOCK_DEPTH, RADAR_DEPTH, safeSpeed } from '../world/air';
@@ -113,7 +114,11 @@ const SIEGE_AIM = 0.02;
 export const HOME_RADIUS = 50000;
 /**
  * Near a massive body a bot burns away from it: within WELL_MARGIN (units, 750 m) of its
- * surface, or where its pull reaches WELL_PULL of the main drive (a black hole's grip).
+ * surface, or once its escape gauge reads WELL_PULL (a black hole's grip: the pull, and the
+ * braking its fall towards the body would take; see escapeLoad). The gauge counts what a shot
+ * drive has left only while the bot falls towards the body: over a planet, whose pull fills the
+ * arena, a bot with a weak drive would otherwise burn away from it for the rest of the round
+ * instead of flying.
  */
 const WELL_MARGIN = 15000;
 const WELL_PULL = 0.3;
@@ -476,8 +481,8 @@ export class Bot {
     if (well) {
       const away = local.subVectors(me.position, well.position);
       const distance = away.length();
-      const escape = Math.max(well.radius + WELL_MARGIN, Math.sqrt((well.surfaceGravity * well.radius * well.radius) / (WELL_PULL * MAIN_THRUST)));
-      if (distance < escape) {
+      const thrust = me.velocity.dot(away) < 0 ? MAIN_THRUST * Math.max(this.ship.drive, 0.01) : MAIN_THRUST;
+      if (distance < well.radius + WELL_MARGIN || escapeLoad(well, me.position, me.velocity, thrust) >= WELL_PULL) {
         falling = true;
         desired.addScaledVector(away.divideScalar(Math.max(distance, 1)), CRUISE_SPEED * 2);
       }
