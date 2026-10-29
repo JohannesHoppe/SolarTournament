@@ -47,6 +47,8 @@ export interface Wear {
   metalness: number;
   /** A fine pattern of scales instead of riveted panels (the alien hull). */
   scales?: boolean;
+  /** Dents beaten into the plating (0..1; none when left out). */
+  dents?: number;
 }
 
 /** The three canvases of a surface, filled: color white, paint's roughness and metalness, flat bump. */
@@ -216,6 +218,27 @@ function scratches(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRe
   }
 }
 
+/** Dents: shallow dips in the bump, a shade darker in their hollow, the light catching their rim. */
+function dents(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, amount: number) {
+  for (let i = 0; i < 16 * amount; i++) {
+    const x = r.range(0, SIZE);
+    const y = r.range(0, SIZE);
+    const radius = r.range(6, 22);
+    const dip = bump.createRadialGradient(x, y, 0, x, y, radius);
+    dip.addColorStop(0, 'rgba(40, 40, 40, 0.8)');
+    dip.addColorStop(0.75, 'rgba(110, 110, 110, 0.4)');
+    dip.addColorStop(0.9, 'rgba(170, 170, 170, 0.35)');
+    dip.addColorStop(1, 'rgba(128, 128, 128, 0)');
+    bump.fillStyle = dip;
+    bump.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    const shade = color.createRadialGradient(x, y, 0, x, y, radius);
+    shade.addColorStop(0, 'rgba(0, 0, 0, 0.18)');
+    shade.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    color.fillStyle = shade;
+    color.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+  }
+}
+
 /** Stencils: numbers and warnings in dark paint, half worn off, the paint of a depot. */
 function stencils(r: Randomizer, color: CanvasRenderingContext2D, texts: readonly string[]) {
   color.font = 'bold 13px monospace';
@@ -238,6 +261,7 @@ export function wornSurface(seed: number, wear: Wear): Surface {
   const { color, orm, bump } = blank(wear);
   if (wear.scales) scales(color[1], bump[1], wear.seams);
   else panels(r, color[1], bump[1], wear.seams);
+  if (wear.dents) dents(r, color[1], bump[1], wear.dents);
   grime(r, color[1], wear.grime);
   rust(r, color[1], orm[1], wear.rust);
   chips(r, color[1], orm[1], wear.chips);
@@ -625,40 +649,172 @@ export function ravagedSurface(seed: number): PlatingSurface {
   return surface;
 }
 
-let armored: Surface | null = null;
+/**
+ * The battleship's armor repeats every ARMOR_TILE units (80 m) across its hull, at 12.8 pixels a
+ * meter in its relief (ARMOR_RELIEF_SIZE) and half that in its color and finish (ARMOR_SIZE):
+ * sharp enough for a seam of 20 cm and a rivet's head a pilot flies past, and with its mipmaps
+ * about 8 MB on the GPU, light enough for a phone.
+ */
+export const ARMOR_TILE = 1600;
+const ARMOR_RELIEF_SIZE = 1024;
+const ARMOR_SIZE = 512;
+/** A plate is 10 m long and a course 5 m high (relief pixels); every fourth course a riveted belt strap. */
+const PLATE = 128;
+const COURSE = 64;
+const BELT_EVERY = 4;
+/** How steep the relief's slopes are in the normal map (normal map units per height step of the canvas). */
+const ARMOR_SLOPE = 6;
+
+/** The battleship's armor: its color, its finish (roughness and metalness, see ormColor) and its relief as a normal map. */
+export type ArmorSurface = { map: THREE.Texture; orm: THREE.Texture; normal: THREE.Texture };
+let armored: ArmorSurface | null = null;
 
 /**
- * The President's battleship, fresh from the dock: heavy armor plates laid in staggered courses
- * (5 m high, 10 m long, each course shifted by half a plate), deep seams between them, each plate
- * a shade lighter or darker than its neighbors, polished smooth.
+ * The plates of the armor, laid out once from the seed: where each lies (relief pixels), its
+ * shade (lighter or darker than its neighbors, -1..1), its polish, whether a hatch sits in it,
+ * and whether an edge of it is rubbed bright (the ship is new: a few only).
  */
-export function armorSurface(seed: number): Surface {
-  if (armored) return armored;
-  if (!drawable) return blankSurface();
-  const r = new Randomizer(seed);
-  const { color, orm, bump } = blank({ roughness: 0.22, metalness: 0.9 });
-  const g = color[1];
-  const course = 64;
-  const plate = 128;
-  for (let y = 0; y < SIZE; y += course) {
-    const shift = (y / course) % 2 ? plate / 2 : 0;
-    for (let x = -shift; x < SIZE; x += plate) {
-      const shade = Math.round(r.range(-14, 14));
-      g.fillStyle = shade < 0 ? `rgba(0, 0, 0, ${-shade / 100})` : `rgba(255, 255, 255, ${shade / 100})`;
-      g.fillRect(x, y, plate, course);
-      orm[1].fillStyle = ormColor(r.range(0.16, 0.3), 0.9);
-      orm[1].fillRect(x, y, plate, course);
-      // the plate's seams: dark in color, grooves in the bump
-      g.fillStyle = 'rgba(0, 0, 0, 0.55)';
-      g.fillRect(x, y, plate, 2);
-      g.fillRect(x, y, 2, course);
-      bump[1].fillStyle = '#303030';
-      bump[1].fillRect(x, y, plate, 2);
-      bump[1].fillRect(x, y, 2, course);
+type Plate = { x: number; y: number; width: number; shade: number; roughness: number; hatch: number[] | null; rubbed: boolean };
+
+const shifted = (p: Plate, dx: number): Plate => ({ ...p, x: p.x + dx, hatch: p.hatch && [p.hatch[0] + dx, ...p.hatch.slice(1)] });
+
+function armorPlates(r: Randomizer): Plate[] {
+  const plates: Plate[] = [];
+  for (let y = 0; y < ARMOR_RELIEF_SIZE; y += COURSE) {
+    const shift = (y / COURSE) % 2 ? PLATE / 2 : 0;
+    for (let x = shift; x < ARMOR_RELIEF_SIZE + shift; x += PLATE) {
+      const hatch = r.nextFloat() < 0.18 ? [x + r.range(16, PLATE - 48), y + r.range(14, COURSE - 30), r.range(18, 30), r.range(12, 18)] : null;
+      plates.push({ x, y, width: PLATE, shade: r.range(-1, 1), roughness: r.range(0.26, 0.4), hatch, rubbed: r.nextFloat() < 0.12 });
     }
   }
-  armored = textures(color[0], orm[0], bump[0]);
+  return plates;
+}
+
+/**
+ * The President's battleship, fresh from the dock: heavy armor plates of dark gunmetal laid in
+ * staggered courses (5 m high, 10 m long, each course shifted by half a plate), deep seams
+ * between them with a row of rivets along each, every fourth course a belt strap standing out of
+ * the armor with two rows of rivets, here and there a flush hatch; each plate a shade lighter or
+ * darker than its neighbors and a little more or less polished, a few edges rubbed bright where
+ * the dock's cranes set them. The relief is a normal map, not a bump map: mipmapped like the
+ * color, it fades evenly with distance instead of shimmering on a phone's small screen.
+ */
+export function armorSurface(seed: number): ArmorSurface {
+  if (armored) return armored;
+  if (!drawable) return { map: new THREE.Texture(), orm: new THREE.Texture(), normal: new THREE.Texture() };
+  const plates = armorPlates(new Randomizer(seed));
+  const [colorCanvas, color] = canvas(ARMOR_SIZE);
+  const [ormCanvas, orm] = canvas(ARMOR_SIZE);
+  const [, height] = canvas(ARMOR_RELIEF_SIZE);
+  // color and finish are drawn in the relief's pixels, at half the size
+  color.scale(ARMOR_SIZE / ARMOR_RELIEF_SIZE, ARMOR_SIZE / ARMOR_RELIEF_SIZE);
+  orm.scale(ARMOR_SIZE / ARMOR_RELIEF_SIZE, ARMOR_SIZE / ARMOR_RELIEF_SIZE);
+  height.fillStyle = '#808080';
+  height.fillRect(0, 0, ARMOR_RELIEF_SIZE, ARMOR_RELIEF_SIZE);
+  const rivets = (g: CanvasRenderingContext2D, x0: number, x1: number, y: number, fill: string, size: number) => {
+    g.fillStyle = fill;
+    for (let x = x0 + 8; x < x1 - 4; x += 16) g.fillRect(x - size / 2, y - size / 2, size, size);
+  };
+  // a plate that runs over the tile's right edge is drawn again from its left edge
+  for (const p of plates.flatMap((p) => (p.x + p.width > ARMOR_RELIEF_SIZE ? [p, shifted(p, -ARMOR_RELIEF_SIZE)] : [p]))) {
+    const shade = Math.round(p.shade * 7);
+    color.fillStyle = `rgb(${236 + shade}, ${238 + shade}, ${242 + shade})`;
+    color.fillRect(p.x, p.y, p.width, COURSE);
+    orm.fillStyle = ormColor(p.roughness, 0.6);
+    orm.fillRect(p.x, p.y, p.width, COURSE);
+    // the seams: a groove with soft shoulders, dark in color and duller
+    height.fillStyle = '#6a6a6a';
+    height.fillRect(p.x, p.y, p.width, 5);
+    height.fillRect(p.x, p.y, 5, COURSE);
+    height.fillStyle = '#303030';
+    height.fillRect(p.x, p.y + 1, p.width, 3);
+    height.fillRect(p.x + 1, p.y, 3, COURSE);
+    color.fillStyle = 'rgba(20, 22, 28, 0.5)';
+    color.fillRect(p.x, p.y, p.width, 4);
+    color.fillRect(p.x, p.y, 4, COURSE);
+    orm.fillStyle = ormColor(0.6, 0.4);
+    orm.fillRect(p.x, p.y, p.width, 4);
+    orm.fillRect(p.x, p.y, 4, COURSE);
+    // a row of rivets just under the plate's upper seam
+    rivets(height, p.x, p.x + p.width, p.y + 9, '#c4c4c4', 3);
+    rivets(color, p.x, p.x + p.width, p.y + 9, 'rgba(255, 255, 255, 0.22)', 2);
+    if (p.hatch) {
+      const [hx, hy, hw, hh] = p.hatch;
+      height.strokeStyle = '#4a4a4a';
+      height.lineWidth = 2;
+      height.strokeRect(hx, hy, hw, hh);
+      color.strokeStyle = 'rgba(20, 22, 28, 0.5)';
+      color.lineWidth = 2;
+      color.strokeRect(hx, hy, hw, hh);
+      rivets(height, hx - 6, hx + hw + 6, hy + hh / 2, '#b0b0b0', 2);
+    }
+    if (p.rubbed) {
+      // bare metal rubbed bright along the plate's lower edge: lighter, smoother
+      color.fillStyle = 'rgba(255, 255, 255, 0.25)';
+      color.fillRect(p.x + 6, p.y + COURSE - 4, p.width * 0.6, 2);
+      orm.fillStyle = ormColor(0.18, 0.95);
+      orm.fillRect(p.x + 6, p.y + COURSE - 4, p.width * 0.6, 2);
+    }
+  }
+  // the belt straps: a band 1 m high standing out of the armor, grooved along both edges, riveted twice
+  // (drawn at both ends of the tile, so the band wraps around its edge)
+  for (let y = 0; y <= ARMOR_RELIEF_SIZE; y += COURSE * BELT_EVERY) {
+    height.fillStyle = '#b4b4b4';
+    height.fillRect(0, y - 6, ARMOR_RELIEF_SIZE, 13);
+    height.fillStyle = '#3a3a3a';
+    height.fillRect(0, y - 8, ARMOR_RELIEF_SIZE, 2);
+    height.fillRect(0, y + 7, ARMOR_RELIEF_SIZE, 2);
+    color.fillStyle = 'rgb(214, 218, 226)';
+    color.fillRect(0, y - 6, ARMOR_RELIEF_SIZE, 13);
+    orm.fillStyle = ormColor(0.32, 0.65);
+    orm.fillRect(0, y - 6, ARMOR_RELIEF_SIZE, 13);
+    rivets(height, 0, ARMOR_RELIEF_SIZE, y - 3, '#e0e0e0', 3);
+    rivets(height, 0, ARMOR_RELIEF_SIZE, y + 3, '#e0e0e0', 3);
+    rivets(color, 0, ARMOR_RELIEF_SIZE, y - 3, 'rgba(255, 255, 255, 0.3)', 2);
+    rivets(color, 0, ARMOR_RELIEF_SIZE, y + 3, 'rgba(255, 255, 255, 0.3)', 2);
+  }
+  armored = { map: armorTexture(toTexture(colorCanvas)), orm: armorTexture(new THREE.CanvasTexture(ormCanvas)), normal: armorTexture(normalFrom(height)) };
   return armored;
+}
+
+function armorTexture<T extends THREE.Texture>(texture: T): T {
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.anisotropy = 8;
+  return texture;
+}
+
+/**
+ * A tangent-space normal map from a square canvas of heights (gray, wrapping around its edges):
+ * each pixel tilts against the slope across it, by `slope` per step of the canvas's gray (0..1).
+ * Texture coordinates run as the GPU reads a canvas texture: u along a row, v up the canvas (its
+ * first row at v = 1); red holds the normal along u, green along v, blue out of the surface.
+ */
+export function normalPixels(heights: ArrayLike<number>, size: number, slope: number): Uint8ClampedArray {
+  const out = new Uint8ClampedArray(size * size * 4);
+  const at = (x: number, y: number) => heights[(((y + size) % size) * size + ((x + size) % size)) * 4] / 255;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // rising along u tilts the normal back along -u; rising down the canvas is falling along v
+      const nx = -(at(x + 1, y) - at(x - 1, y)) * slope;
+      const ny = (at(x, y + 1) - at(x, y - 1)) * slope;
+      const length = Math.hypot(nx, ny, 1);
+      const i = (y * size + x) * 4;
+      out[i] = Math.round((nx / length / 2 + 0.5) * 255);
+      out[i + 1] = Math.round((ny / length / 2 + 0.5) * 255);
+      out[i + 2] = Math.round((1 / length / 2 + 0.5) * 255);
+      out[i + 3] = 255;
+    }
+  }
+  return out;
+}
+
+function normalFrom(height: CanvasRenderingContext2D): THREE.CanvasTexture {
+  const size = height.canvas.width;
+  const [element, g] = canvas(size);
+  const image = g.createImageData(size, size);
+  image.data.set(normalPixels(height.getImageData(0, 0, size, size).data, size, ARMOR_SLOPE));
+  g.putImageData(image, 0, 0);
+  return new THREE.CanvasTexture(element);
 }
 
 let industrial: Surface | null = null;
