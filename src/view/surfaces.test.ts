@@ -65,6 +65,9 @@ describe("the battleship's armor", () => {
     expect(new Set(layout.plates.map((p) => `${p.w}x${p.h}`)).size).toBeGreaterThan(layout.plates.length * 0.8);
     expect(new Set(layout.plates.map((p) => p.h)).size).toBeGreaterThanOrEqual(4);
     expect(Math.max(...layout.plates.map((p) => p.w)) / meter).toBeGreaterThan(30);
+    // most of the hull is long plates along it, 30 m and more
+    const long = layout.plates.filter((p) => p.w >= 30 * meter).reduce((sum, p) => sum + p.w * p.h, 0);
+    expect(long / (S * S)).toBeGreaterThan(0.6);
     for (const kind of ['doubler', 'access', 'hardpoint'] as const) expect(layout.insets.some((p) => p.kind === kind)).toBe(true);
     expect(layout.welds.length).toBeGreaterThan(5);
     expect(layout.ports.length).toBeGreaterThan(0);

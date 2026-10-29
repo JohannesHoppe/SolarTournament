@@ -502,15 +502,26 @@ export class Fleet implements Obstacle {
       }
     });
 
-    // the forward belts carry plates of extra armor, laid in staggered courses under the trench
+    // the forward belts carry strakes of extra armor under the trench, three belts running along
+    // the flank, each strake of its own length (45 to 130 m) so their butts never line up in a bond
+    const STRAKES = [
+      [1500, 900, 2100, 1200, 2600],
+      [2400, 1100, 1700, 2000],
+      [1300, 2600, 1000, 1900],
+    ];
+    const strakesEnd = SECTIONS[1].z - 600;
     for (const side of [-1, 1]) {
-      for (let row = 0; row < 3; row++) {
+      STRAKES.forEach((lengths, row) => {
         const top = DECK_TOP - 320 - row * 340;
-        for (let z = SECTIONS[0].z + 300 + (row % 2) * 300; z < SECTIONS[1].z - 600; z += 600) {
-          if (sectionAt(z).belt > top - 340) continue;
-          bar(flank(side, z, top - 160, 14), flank(side, z + 560, top - 160, 14), 30, 300, armor);
+        // the belt falls towards the stern, so a strake starts where the flank is tall enough for it
+        let z = SECTIONS[0].z + 300;
+        while (z < strakesEnd && sectionAt(z).belt > top - 340) z += 100;
+        for (let i = 0; z < strakesEnd - 400; i++) {
+          const length = Math.min(lengths[i % lengths.length], strakesEnd - z);
+          bar(flank(side, z, top - 160, 14), flank(side, z + length - 20, top - 160, 14), 30, 300, armor);
+          z += length;
         }
-      }
+      });
     }
 
     // the runway forward of the reactor in the regime's deep red, its centerline dashed, two

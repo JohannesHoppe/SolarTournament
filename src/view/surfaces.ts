@@ -656,14 +656,22 @@ const ARMOR_SIZE = 512;
 const METER = ARMOR_RELIEF_SIZE / (ARMOR_TILE * 0.05);
 /** How steep the relief's slopes are in the normal map (normal map units per height step of the canvas, see normalPixels). */
 export const ARMOR_SLOPE = 6;
-/** How deep a panel line is cut (steps of gray below the panels beside it). */
-const LINE_DEPTH = 26;
 /**
- * How much of that depth each pixel in from a panel's edge is cut: the pixel at the edge fully,
- * the next two in a soft bevel. A step of a single pixel catches the sun as a hairline that
- * breaks into dashes wherever the hull lies at a slant to the screen.
+ * How deep the line between two flush plates is cut (steps of gray below the plates beside it):
+ * barely, so it shows as a thin dark cut in the color and the plates on both sides read as one
+ * armored surface, without a cushion of light around each.
  */
-const LINE_PROFILE = [1, 0.35, 0.08];
+const LINE_DEPTH = 6;
+/**
+ * How much of a line's depth each pixel in from a panel's edge is cut. Flush: the pixel at the
+ * edge, hardly a bevel. A plate stepping out (or sunk in): the pixel at the edge fully, the next
+ * two in a soft bevel, so its edge towards the sun catches the light; a step of a single pixel
+ * would catch it as a hairline that breaks into dashes wherever the hull lies at a slant.
+ */
+const FLUSH_PROFILE = [1, 0.15];
+const STEP_PROFILE = [1, 0.35, 0.08];
+/** From how high a step (steps of gray) a panel's edge is beveled. */
+const STEP = 8;
 
 /** The battleship's armor: its color, its finish (roughness and metalness, see ormColor) and its relief as a normal map. */
 export type ArmorSurface = { map: THREE.Texture; orm: THREE.Texture; normal: THREE.Texture };
@@ -682,9 +690,9 @@ export type ArmorLayout = { plates: ArmorPanel[]; insets: ArmorPanel[]; welds: {
 
 /**
  * The armor's plates: strakes along the hull in bands of different heights (3.5 to 16 m), each
- * band a strake or a row of big panels of its own lengths (the low bands long strakes of 20 to 55
- * m, the high ones panels of 10 to 28 m, a few split in two), their butts welded or set apart
- * by a panel line, now and then a band standing out as a heavier belt; into the plates, armor
+ * band a row of plates of its own lengths (most long, 30 to 55 m, a quarter shorter, 12 to 24 m;
+ * a few short ones in the high bands split in two), their butts welded or set apart by a thin
+ * panel line flush with them, now and then a band standing out as a heavier belt; into the plates, armor
  * plates laid over them, access panels, hatches, hardpoints and sensor ports, none touching an
  * edge or each other.
  */
@@ -714,11 +722,11 @@ export function armorLayout(seed: number): ArmorLayout {
     const lift = r.nextFloat() < 0.15 ? 12 : 0;
     const high = h >= px(10);
     let x = Math.floor(r.range(0, S));
-    for (const w of split(S, () => (high ? r.range(10, 28) : r.range(20, 55)), px(8))) {
-      if (high && r.nextFloat() < 0.3) {
+    for (const w of split(S, () => (r.nextFloat() < 0.75 ? r.range(30, 55) : r.range(12, 24)), px(8))) {
+      if (high && w < px(25) && r.nextFloat() < 0.3) {
         const top = Math.round(h * r.range(0.35, 0.65));
-        plates.push(plate(x, y, w, top, lift), plate(x, y + top, w, h - top, lift, r.nextFloat() < 0.5));
-      } else plates.push(plate(x, y, w, h, lift, high && r.nextFloat() < 0.3));
+        plates.push(plate(x, y, w, top, lift), plate(x, y + top, w, h - top, lift));
+      } else plates.push(plate(x, y, w, h, lift, high && w < px(25) && r.nextFloat() < 0.3));
       x += w;
       // a butt welded through instead of set apart by a line (the plates beside it run on as one)
       if (!high && r.nextFloat() < 0.6) welds.push({ x: x % S, y, h });
@@ -750,11 +758,11 @@ export function armorLayout(seed: number): ArmorLayout {
     };
     // an armor plate laid over a big plate, stepping out of it
     if (p.w >= px(14) && p.h >= px(5) && r.nextFloat() < 0.3) inset('doubler', Math.round(p.w * r.range(0.4, 0.75)), Math.round((p.h - 2 * margin) * r.range(0.55, 1)), 16, 20, p.shade + r.range(-0.4, 0.4), p.rough + r.range(-0.03, 0.03));
-    for (let k = r.nextInt() % 3; k > 0; k--) if (r.nextFloat() < 0.45) inset('access', px(r.range(1.5, 3.5)), px(r.range(1, 2.4)), -3, 24, p.shade + r.range(-0.6, 0.6), p.rough + 0.04);
+    for (let k = r.nextInt() % 3; k > 0; k--) if (r.nextFloat() < 0.45) inset('access', px(r.range(1.5, 3.5)), px(r.range(1, 2.4)), -3, 10, p.shade + r.range(-0.6, 0.6), p.rough + 0.04);
     if (p.h >= px(6) && r.nextFloat() < 0.1) {
-      const hatch = inset('hatch', px(3), px(3), 0, 28, p.shade - 0.3, p.rough);
+      const hatch = inset('hatch', px(3), px(3), 0, 14, p.shade - 0.3, p.rough);
       if (hatch) bolts.push(...[0, 1].flatMap((a) => [0, 1].map((b) => ({ x: hatch.x + px(0.2) + a * (hatch.w - 2 * px(0.2)), y: hatch.y + px(0.2) + b * (hatch.h - 2 * px(0.2)), radius: 1.3 }))));
-      if (hatch) insets.push({ x: hatch.x + px(0.4), y: hatch.y + px(0.4), w: hatch.w - 2 * px(0.4), h: hatch.h - 2 * px(0.4), lift: 2, line: 14, shade: p.shade - 0.3, rough: p.rough, across: p.across, kind: 'hatch' });
+      if (hatch) insets.push({ x: hatch.x + px(0.4), y: hatch.y + px(0.4), w: hatch.w - 2 * px(0.4), h: hatch.h - 2 * px(0.4), lift: 2, line: 8, shade: p.shade - 0.3, rough: p.rough, across: p.across, kind: 'hatch' });
     }
     if (r.nextFloat() < 0.12) {
       const side = px(r.range(1.4, 2.6));
@@ -818,7 +826,7 @@ export function armorRelief(seed: number) {
         const [along, across] = p.across ? [v, u] : [u, v];
         const brush = grain(along / 160, across / 1.6, seed) * 0.6 + grain(along / 320, across / 5, seed + 1) * 0.4 - 0.5;
         const under = base ? 128 : height[i];
-        const cut = LINE_PROFILE[edge] ?? 0;
+        const cut = (Math.abs(p.lift) >= STEP ? STEP_PROFILE : FLUSH_PROFILE)[edge] ?? 0;
         height[i] = under + p.lift - (p.lift + p.line) * cut;
         const shade = (1 - 0.45 * cut) * tone * (1 + brush * 0.02);
         for (let k = 0; k < 3; k++) color[i * 3 + k] = [238, 240, 244][k] * shade;
