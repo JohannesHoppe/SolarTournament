@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
-import { boxUv, lacquer, shine, surfaced, wornSurface, type Wear } from '../view/surfaces';
+import { boxUv, hullSurface, lacquer, shine, type Wear } from '../view/surfaces';
 import { hazeUniforms } from '../view/haze';
 import { NOZZLE_LENGTH, QUAD_SIZE, quadsOf, thrustersOf, type QuadLayout } from './thrusters';
 
@@ -26,10 +26,11 @@ const BLADE: Section = [[-1, 0], [0, -1], [1, 0], [0, 1]];
 
 /**
  * A hull part lofted from one cross section to another: the section scaled to each end and
- * moved to its center, the sides joined facet by facet, both ends capped. Its normals are the
- * facets' own (see hull for how the hull is shaded).
+ * moved to its center, the sides joined facet by facet, both ends capped unless `open` leaves
+ * one or both of them out (a bell's mouth). Its normals are the facets' own (see hull for how the
+ * hull is shaded).
  */
-function loft(section: Section, back: End, front: End): THREE.BufferGeometry {
+function loft(section: Section, back: End, front: End, open: 'back' | 'front' | 'both' | null = null): THREE.BufferGeometry {
   const ring = (end: End) => section.map(([x, y]) => new THREE.Vector3((end.x ?? 0) + x * end.w, (end.y ?? 0) + y * end.h, end.z));
   const a = ring(back);
   const b = ring(front);
@@ -39,19 +40,60 @@ function loft(section: Section, back: End, front: End): THREE.BufferGeometry {
     const j = (i + 1) % n;
     points.push(a[i], b[i], b[j], a[i], b[j], a[j]);
   }
-  for (let i = 1; i < n - 1; i++) points.push(a[0], a[i + 1], a[i], b[0], b[i], b[i + 1]);
+  for (let i = 1; i < n - 1; i++) {
+    if (open !== 'back' && open !== 'both') points.push(a[0], a[i + 1], a[i]);
+    if (open !== 'front' && open !== 'both') points.push(b[0], b[i], b[i + 1]);
+  }
   const geometry = new THREE.BufferGeometry().setFromPoints(points);
   geometry.computeVertexNormals();
   return geometry;
 }
 
-/** Paints a part in one color, so parts of several colors merge into one mesh. */
-function paint(geometry: THREE.BufferGeometry, color: number): THREE.BufferGeometry {
-  const c = new THREE.Color(color);
-  const colors = new Float32Array(geometry.attributes.position.count * 3);
-  for (let i = 0; i < colors.length; i += 3) colors.set([c.r, c.g, c.b], i);
-  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+/**
+ * Paints a part in one color, so parts of several colors merge into one mesh; `finish` says
+ * how much of the coat's lacquer, polish and metal it has (1 all of it, 0 none: dull soot),
+ * carried in the color's alpha (see hullShader).
+ */
+function paint(geometry: THREE.BufferGeometry, color: number, finish = 1): THREE.BufferGeometry {
+  return paintAlong(geometry, 0, color, 1, color, finish);
+}
+
+/** Paints a part from `fromColor` at depth `from` to `toColor` at depth `to`, blended between them (see paint). */
+function paintAlong(geometry: THREE.BufferGeometry, from: number, fromColor: number, to: number, toColor: number, finish = 1): THREE.BufferGeometry {
+  const a = new THREE.Color(fromColor);
+  const b = new THREE.Color(toColor);
+  const c = new THREE.Color();
+  const position = geometry.attributes.position;
+  const colors = new Float32Array(position.count * 4);
+  for (let i = 0; i < position.count; i++) {
+    c.lerpColors(a, b, THREE.MathUtils.clamp((position.getZ(i) - from) / (to - from), 0, 1));
+    colors.set([c.r, c.g, c.b, finish], i * 4);
+  }
+  geometry.setAttribute('color', new THREE.BufferAttribute(colors, 4));
   return geometry;
+}
+
+/** The inside of a bell, its liner, black with the soot of its burns, dull (see paint). */
+const SOOT = 0x0c0c0d;
+const sooty = (geometry: THREE.BufferGeometry) => paint(geometry, SOOT, 0);
+
+/**
+ * A bell, open at its mouth: lofted through `ends` from its throat to its mouth, the outside
+ * painted in `colors` at each end (a burn's heat tints it towards the rim), and inside it a
+ * sooty liner `wall` thinner all round, closed a wall's depth before the throat. The liner lies
+ * well clear of the outside (see SKIN), so looking into the mouth shows its dark hollow, never a
+ * flickering lid. The throat goes into what carries the bell, which hides the open outside there.
+ */
+function bell(section: Section, ends: End[], colors: number[], wall: number): THREE.BufferGeometry[] {
+  const parts: THREE.BufferGeometry[] = [];
+  const thin = (end: End): End => ({ ...end, w: end.w - wall, h: end.h - wall });
+  const first = ends[1].z - ends[0].z;
+  const lined = [at([ends[0], ends[1]], ends[0].z + Math.sign(first) * wall), ...ends.slice(1)];
+  for (let i = 1; i < ends.length; i++) {
+    parts.push(paintAlong(loft(section, ends[i - 1], ends[i], 'both'), ends[i - 1].z, colors[i - 1], ends[i].z, colors[i]));
+    parts.push(sooty(loft(section, thin(lined[i - 1]), thin(lined[i]), i === 1 ? 'front' : 'both')));
+  }
+  return parts;
 }
 
 /** Mirrors a part to the other side (x), keeping its faces turned outwards. */
@@ -76,20 +118,32 @@ const THROAT = 3.5;
 const MOUTH = 6;
 const AHEAD = new THREE.Vector3(0, 0, -1);
 
+/** How far a thruster's bell reaches back into its housing (units, 10 cm), and how thick its wall is (5 cm). */
+const NOZZLE_ROOT = 2;
+const NOZZLE_WALL = 1;
+/** A thruster housing's bevel: its edges are cut off at this share of its half size. */
+const HOUSING: Section = [[-1, -0.75], [-0.75, -1], [0.75, -1], [1, -0.75], [1, 0.75], [0.75, 1], [-0.75, 1], [-1, 0.75]];
+
 /**
  * The maneuvering thrusters of a hull (see ship/thrusters): at each of the layout's four corners
- * a housing in `housing` paint, its four nozzles flaring out of it in `nozzle` paint.
+ * a housing with beveled edges, two bands of `collar` around it clear of the nozzles' roots, its
+ * four nozzles flaring out of it (open bells, sooty inside); `housings` and `nozzles` in their paint.
  */
-function thrusterQuads(layout: QuadLayout, housing: number, nozzle: number): THREE.BufferGeometry[] {
-  const parts = quadsOf(layout).map((q) => paint(loft(RECTANGLE, { z: q.z + QUAD_SIZE, w: QUAD_SIZE, h: QUAD_SIZE, x: q.x, y: q.y }, { z: q.z - QUAD_SIZE, w: QUAD_SIZE, h: QUAD_SIZE, x: q.x, y: q.y }), housing));
+function thrusterQuads(layout: QuadLayout, housing: number, collar: number, nozzle: number): { housings: THREE.BufferGeometry[]; nozzles: THREE.BufferGeometry[] } {
+  const around = (q: THREE.Vector3, z: number, half: number, grow: number, color: number) =>
+    paint(loft(HOUSING, { z: z + half, w: QUAD_SIZE + grow, h: QUAD_SIZE + grow, x: q.x, y: q.y }, { z: z - half, w: QUAD_SIZE + grow, h: QUAD_SIZE + grow, x: q.x, y: q.y }), color);
+  const housings = quadsOf(layout).flatMap((q) => [around(q, q.z, QUAD_SIZE, 0, housing), around(q, q.z - 9, 2, 1.5, collar), around(q, q.z + 9, 2, 1.5, collar)]);
+  const nozzles: THREE.BufferGeometry[] = [];
   const turn = new THREE.Quaternion();
   for (const { mouth, exhaust } of thrustersOf(layout).nozzles) {
-    // a bell along -z from the housing's face, turned the way its gas leaves
-    const bell = loft(RECTANGLE, { z: 0, w: THROAT, h: THROAT }, { z: -NOZZLE_LENGTH, w: MOUTH, h: MOUTH });
+    // a bell along -z from inside the housing's face, turned the way its gas leaves
     const throat = mouth.clone().addScaledVector(exhaust, -NOZZLE_LENGTH);
-    parts.push(paint(bell.applyQuaternion(turn.setFromUnitVectors(AHEAD, exhaust)).translate(throat.x, throat.y, throat.z), nozzle));
+    turn.setFromUnitVectors(AHEAD, exhaust);
+    for (const part of bell(OCTAGON, [{ z: NOZZLE_ROOT, w: THROAT, h: THROAT }, { z: -NOZZLE_LENGTH, w: MOUTH, h: MOUTH }], [nozzle, nozzle], NOZZLE_WALL)) {
+      nozzles.push(part.applyQuaternion(turn).translate(throat.x, throat.y, throat.z));
+    }
   }
-  return parts;
+  return { housings, nozzles };
 }
 
 /**
@@ -125,8 +179,8 @@ function keepEngine(original: THREE.Object3D): THREE.Group {
 const SHEEN = 1.1;
 /** A hull's surface repeats every this many units (20 m), so a panel is a few meters wide. */
 const TILE = 400;
-/** How deep the seams and rivets look (see surfaced). */
-const RELIEF = 1.5;
+/** How deep the seams, rivets, scales and ribs look: the strength of the surface's normal map (see hullSurface). */
+const RELIEF = 1;
 /**
  * Facets meeting at less than this angle (radians, 60°) are shaded as one curved surface, so a
  * light's highlight slides across a body as it turns instead of flashing facet by facet; the
@@ -158,13 +212,57 @@ export function setGlint(sunIntensity: number) {
   glintPeak.value = GLINT_PER_SUN * sunIntensity;
 }
 
-/** Caps the lacquer's mirror image of the lights at the glint's peak, keeping its hue; the hull takes the haze as every material does (see view/haze). */
-function capGlint(this: THREE.Material, shader: THREE.WebGLProgramParametersWithUniforms) {
+/**
+ * The steel under the paint (linear), where it chipped off or was scratched through: the surface
+ * marks such spots as metal (see flakes in view/surfaces), and the hull shows them in this color
+ * instead of its paint's, a pale bare metal that catches the light, never a dark hole.
+ */
+const BARE_STEEL = new THREE.Color(0xb4b8be);
+
+/**
+ * The hull's shader: caps the lacquer's mirror image of the lights at the glint's peak, keeping
+ * its hue; shows bare steel wherever the surface's metalness rises well above its paint's
+ * (`userData.paint`, the wear's metalness), so that paint chipped down to the metal reads as
+ * metal; takes from each part's finish (see paint) how much lacquer, polish and metal it has;
+ * lets the skin glow faintly along its outline in `userData.rim` (black for none), brightest
+ * where the hull turns away from the eye; and takes the haze as every material does (see
+ * view/haze).
+ */
+function hullShader(this: THREE.Material, shader: THREE.WebGLProgramParametersWithUniforms) {
   hazeUniforms(shader, this);
   shader.uniforms.glintPeak = glintPeak;
+  shader.uniforms.paintMetal = { value: this.userData.paint };
+  shader.uniforms.rimGlow = { value: this.userData.rim ?? new THREE.Color(0) };
   const direct = 'clearcoatSpecularDirect';
   const capped = `${direct} * min( 1.0, glintPeak / max( max( ${direct}.r, ${direct}.g ), max( ${direct}.b, 1e-4 ) ) )`;
-  shader.fragmentShader = 'uniform float glintPeak;\n' + shader.fragmentShader.replace(`( ${direct} + clearcoatSpecularIndirect )`, `( ${capped} + clearcoatSpecularIndirect )`);
+  const steel = `vec3( ${BARE_STEEL.r.toFixed(4)}, ${BARE_STEEL.g.toFixed(4)}, ${BARE_STEEL.b.toFixed(4)} )`;
+  shader.fragmentShader =
+    'uniform float glintPeak;\nuniform float paintMetal;\nuniform vec3 rimGlow;\n' +
+    shader.fragmentShader
+      .replace(`( ${direct} + clearcoatSpecularIndirect )`, `( ${capped} + clearcoatSpecularIndirect )`)
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+	totalEmissiveRadiance += rimGlow * pow( 1.0 - saturate( abs( dot( normal, normalize( vViewPosition ) ) ) ), 3.0 );`,
+      )
+      .replace(
+        '#include <metalnessmap_fragment>',
+        `#include <metalnessmap_fragment>
+	diffuseColor.rgb = mix( diffuseColor.rgb, ${steel} * sampledDiffuseColor.rgb, smoothstep( paintMetal + 0.15, paintMetal + 0.4, metalnessFactor ) );
+	// the part's finish (see paint): soot is dull, neither polished nor metal
+	roughnessFactor = mix( 1.0, roughnessFactor, vColor.a );
+	metalnessFactor *= vColor.a;`,
+      )
+      .replace(
+        '#include <lights_physical_fragment>',
+        `#include <lights_physical_fragment>
+	#ifdef USE_CLEARCOAT
+		material.clearcoat *= vColor.a;
+	#endif
+	#ifdef USE_IRIDESCENCE
+		material.iridescence *= vColor.a;
+	#endif`,
+      );
 }
 
 /**
@@ -203,31 +301,54 @@ function radiator(section: Section, back: End, front: End, warmth: (p: THREE.Vec
 }
 
 /**
- * A hull on the model file's engine (see keepEngine): the painted `parts` as one mesh with its
- * `wear` (see wornSurface: the paint's color times the surface's, worn down to metal where it
- * chipped, mirroring the sky where it is smooth) under a clear lacquer, and the `glow` parts, if
- * any, lit in their color. Both meshes carry `name`. The `trim` comes along hidden (see
- * lightStrips), and so do the `radiators`, one mesh named `radiator` that glows over them as the
- * laser's heat rises (see Ship.radiate).
+ * A coat of a hull: its painted `parts`, their `wear` drawn from `seed` (see hullSurface), what
+ * of the material differs from the hull's lacquered paint (`look`), the color its surface's
+ * glowing map glows in, if any (`glow`), and the faint glow along its outline (`rim`, see hullShader).
  */
-function hull(original: THREE.Object3D, name: string, wear: Wear, seed: number, parts: THREE.BufferGeometry[], trim: THREE.Object3D, radiators: THREE.BufferGeometry[], glow?: { parts: THREE.BufferGeometry[]; color: THREE.Color }): THREE.Object3D {
-  const root = keepEngine(original);
-  const surface = wornSurface(seed, wear);
+type Coat = { parts: THREE.BufferGeometry[]; wear: Wear; seed: number; look?: THREE.MeshPhysicalMaterialParameters; glow?: THREE.Color; rim?: THREE.Color };
+
+/**
+ * A coat as one mesh: the paint's color times its surface's, worn down to bare steel where it
+ * chipped (see hullShader), its relief a normal map, mirroring the sky where it is smooth, under
+ * a clear lacquer. The texture coordinates follow the facets (see boxUv), the normals the creases.
+ */
+function coat({ parts, wear, seed, look, glow, rim }: Coat): THREE.Mesh {
+  const surface = hullSurface(seed, wear, !!glow);
   const material = lacquer(
     new THREE.MeshPhysicalMaterial({
       vertexColors: true,
-      ...surfaced(surface, RELIEF),
+      map: surface.map,
+      roughnessMap: surface.orm,
+      metalnessMap: surface.orm,
+      roughness: 1,
+      metalness: 1,
+      normalMap: surface.normal,
+      normalScale: new THREE.Vector2(RELIEF, RELIEF),
       side: THREE.DoubleSide,
       envMap: shine(),
       envMapIntensity: SHEEN,
       clearcoat: LACQUER,
       clearcoatMap: surface.orm,
       clearcoatRoughness: LACQUER_ROUGHNESS,
+      ...(glow && surface.glow ? { emissive: glow, emissiveMap: surface.glow } : {}),
+      ...look,
     }),
   );
-  material.onBeforeCompile = capGlint;
-  // the texture coordinates follow the facets (see boxUv), the normals the creases
-  const meshes: THREE.Mesh[] = [new THREE.Mesh(toCreasedNormals(boxUv(mergeGeometries(parts), TILE), CREASE), material)];
+  material.userData.paint = wear.metalness;
+  material.userData.rim = rim;
+  material.onBeforeCompile = hullShader;
+  return new THREE.Mesh(toCreasedNormals(boxUv(mergeGeometries(parts), TILE, true), CREASE), material);
+}
+
+/**
+ * A hull on the model file's engine (see keepEngine): its `coats`, each one mesh (see coat), and
+ * the `glow` parts, if any, lit in their color. Every mesh carries `name`. The `trim` comes along
+ * hidden (see lightStrips), and so do the `radiators`, one mesh named `radiator` that glows over
+ * them as the laser's heat rises (see Ship.radiate).
+ */
+function hull(original: THREE.Object3D, name: string, coats: Coat[], trim: THREE.Object3D, radiators: THREE.BufferGeometry[], glow?: { parts: THREE.BufferGeometry[]; color: THREE.Color }): THREE.Object3D {
+  const root = keepEngine(original);
+  const meshes = coats.map(coat);
   if (glow) meshes.push(new THREE.Mesh(mergeGeometries(glow.parts), new THREE.MeshBasicMaterial({ color: glow.color, toneMapped: false })));
   for (const mesh of meshes) {
     mesh.name = name;
@@ -356,8 +477,9 @@ const OLIVE = 0x56663f;
 const OLIVE_DARK = 0x3d4a2d;
 const STEEL = 0x8c9198;
 const GUNMETAL = 0x34383e;
-/** The rims of the drives' bells, blued and bronzed by the heat of the burns. */
-const HEAT_TINT = 0x6a5440;
+/** The drives' bells, tinted by the heat of the burns as steel goes: straw and bronze halfway out, blued at the rim. */
+const HEAT_TINT = 0x86663a;
+const HEAT_BLUE = 0x3e4c7c;
 const STRIPE = 0xff9d00;
 const GLASS = 0x0d1a2a;
 const TAIL_LIGHT = new THREE.Color(1, 0.12, 0.06).multiplyScalar(2.4);
@@ -366,7 +488,50 @@ const TAIL_LIGHT = new THREE.Color(1, 0.12, 0.06).multiplyScalar(2.4);
  * The human interceptor's wear: an old fighter of the depots, olive paint chipped down to the
  * metal, rust running from its rivets, grime, and the stencils of every depot it passed through.
  */
-const DEPOT: Wear = { rust: 0.8, chips: 0.7, grime: 0.6, scratches: 0.6, seams: 0.7, stencils: ['07', 'NO STEP', 'FUEL', 'DEPOT 41-C', 'RESCUE', '2511'], roughness: 0.62, metalness: 0.25 };
+const DEPOT: Wear = { rust: 0.8, chips: 0.7, grime: 0.6, scratches: 0.6, seams: 0.7, stencils: ['07', 'NO STEP', 'FUEL', 'DEPOT 41-C', 'RESCUE', '2511'], roughness: 0.62, metalness: 0.25, flakes: true };
+/** Its fins: the same paint and wear on ribbed plates in riveted frames. */
+const DEPOT_FINS: Wear = { ...DEPOT, stencils: ['07', 'NO STEP'], relief: 'ribs' };
+
+/**
+ * A hoop around a part lofted through `ends`: `half` deep on either side of depth `z`, standing
+ * `stand` off it, its two faces rings from the part out to the hoop (no lid across the part).
+ */
+function hoop(section: Section, ends: End[], z: number, half: number, stand: number): THREE.BufferGeometry {
+  const ring = (end: End, grow: number) => section.map(([x, y]) => new THREE.Vector3((end.x ?? 0) + x * (end.w + grow), (end.y ?? 0) + y * (end.h + grow), end.z));
+  const points: THREE.Vector3[] = [];
+  const n = section.length;
+  const rings = [z - half, z + half].map((d) => [ring(at(ends, d), 0), ring(at(ends, d), stand)]);
+  const [[, outerA], [, outerB]] = rings;
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n;
+    points.push(outerA[i], outerB[i], outerB[j], outerA[i], outerB[j], outerA[j]);
+    for (const [inner, outer] of rings) points.push(inner[i], outer[i], outer[j], inner[i], outer[j], inner[j]);
+  }
+  const geometry = new THREE.BufferGeometry().setFromPoints(points);
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/** The cap at the end of a drive's nacelle, from its rim at the stern forward; open at the rim, where the bell comes out of it. */
+const NACELLE_CAP: End = { z: 275, w: 26, h: 22, x: 87, y: 2 };
+const NACELLE_END: End = { z: 250, w: 30, h: 26, x: 87, y: 2 };
+/** A drive's bell, from its throat inside the nacelle's cap to its rim (units: 1.6 m across at the rim). */
+const DRIVE_BELL: End[] = [{ z: 268, w: 23, h: 19, x: 87, y: 2 }, { z: 281, w: 26, h: 22, x: 87, y: 2 }, { z: 294, w: 33, h: 29, x: 87, y: 2 }];
+/** The cooling rings around a bell: where they sit, half their depth and how far they stand off it (units: 25 cm deep, 9 cm proud). */
+const BELL_RINGS = [279, 288];
+const BELL_RING_HALF = 2.5;
+const BELL_RING_STAND = 1.8;
+
+/**
+ * The two drives' bells at the stern, both drives of the human interceptor's make (the
+ * Sovereign's too): open bells flaring from inside the nacelle's cap, painted `colors` from the
+ * throat to the rim, banded by cooling rings in `rings` paint.
+ */
+function driveBells(colors: number[], rings: number): THREE.BufferGeometry[] {
+  const parts = bell(OCTAGON, DRIVE_BELL, colors, 2.5);
+  for (const z of BELL_RINGS) parts.push(paint(hoop(OCTAGON, DRIVE_BELL, z, BELL_RING_HALF, BELL_RING_STAND), rings));
+  return parts.flatMap(pair);
+}
 
 /** The heights of the cooling ribs across the human interceptor's drive block, and where the vents sit on the bulkhead over it (units). */
 const RIBS = [-18, -6, 6, 18];
@@ -392,25 +557,24 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
     paint(loft(OCTAGON, { z: -120, w: 9, h: 9, y: -52 }, { z: -300, w: 6, h: 6, y: -52 }), GUNMETAL),
     // drive nacelles, with their nozzles where the flames burn
     ...pair(paint(loft(OCTAGON, { z: 250, w: 30, h: 26, x: 87, y: 2 }, { z: 60, w: 22, h: 20, x: 75, y: 4 }), STEEL)),
-    ...pair(paint(loft(OCTAGON, { z: 275, w: 26, h: 22, x: 87, y: 2 }, { z: 250, w: 30, h: 26, x: 87, y: 2 }), GUNMETAL)),
+    ...pair(paint(loft(OCTAGON, NACELLE_CAP, NACELLE_END, 'back'), GUNMETAL)),
     // struts out to the fins, swept back
     ...pair(paint(loft(BLADE, { z: 150, w: 60, h: 12, x: 120, y: 10 }, { z: 0, w: 40, h: 10, x: 190, y: 14 }), OLIVE_DARK)),
     ...pair(paint(loft(RECTANGLE, { z: 120, w: 110, h: 8, x: 170, y: 12 }, { z: 20, w: 90, h: 6, x: 170, y: 12 }), OLIVE)),
-    // the tall fins: slabs leaning out, the leading edge swept back
-    ...pair(paint(loft(RECTANGLE, HUMAN_FIN[1], HUMAN_FIN[0]), OLIVE)),
     // tournament stripes around the fins' tops, 80 cm tall
     ...pair(paint(band(HUMAN_FIN, 60, 150, 16), STRIPE)),
-    // the stern, what the pilot sees most of: flared bells around the nozzles, their rims tinted
-    // by the heat, a drive block between the nacelles with its cooling ribs, and a bulkhead with
+    // the stern, what the pilot sees most of: the drives' open bells, heat-tinted and banded by
+    // cooling rings, a drive block between the nacelles with its cooling ribs, and a bulkhead with
     // vents over it
-    ...pair(paint(loft(OCTAGON, { z: 292, w: 32, h: 28, x: 87, y: 2 }, { z: 272, w: 27, h: 23, x: 87, y: 2 }), HEAT_TINT)),
-    ...pair(paint(loft(OCTAGON, { z: 286, w: 22, h: 18, x: 87, y: 2 }, { z: 284, w: 30, h: 26, x: 87, y: 2 }), GUNMETAL)),
+    ...driveBells([GUNMETAL, HEAT_TINT, HEAT_BLUE], STEEL),
     paint(loft(RECTANGLE, { z: 262, w: 40, h: 28, y: -2 }, { z: 200, w: 44, h: 32, y: 0 }), GUNMETAL),
     ...RIBS.map((y) => paint(loft(RECTANGLE, { z: 266, w: 46, h: 2.5, y }, { z: 214, w: 46, h: 2.5, y }), STEEL)),
     paint(loft(RECTANGLE, { z: 244, w: 56, h: 6, y: 48 }, { z: 214, w: 50, h: 6, y: 46 }), OLIVE_DARK),
     ...VENTS.map((x) => paint(loft(RECTANGLE, { z: 246, w: 6, h: 2, x, y: 54 }, { z: 218, w: 6, h: 2, x, y: 52 }), GUNMETAL)),
-    ...thrusterQuads(THRUSTER_LAYOUTS.human, GUNMETAL, STEEL),
+    ...Object.values(thrusterQuads(THRUSTER_LAYOUTS.human, GUNMETAL, OLIVE_DARK, STEEL)).flat(),
   ];
+  // the tall fins: slabs leaning out, the leading edge swept back, ribbed
+  const fins = pair(paint(loft(RECTANGLE, HUMAN_FIN[1], HUMAN_FIN[0]), OLIVE));
   const lights: THREE.BufferGeometry[] = [
     // position lights at the fins' tops and on the stern
     ...pair(loft(RECTANGLE, { z: 262, w: 5, h: 5, x: 285, y: 88 }, { z: 250, w: 5, h: 5, x: 285, y: 88 })),
@@ -424,12 +588,18 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...RIBS.map((y) => radiator(RECTANGLE, { z: 266, w: 46, h: 2.5, y }, { z: 214, w: 46, h: 2.5, y }, (p) => 0.55 + 0.45 * THREE.MathUtils.smoothstep(p.z, 214, 266))),
     ...VENTS.map((x) => radiator(RECTANGLE, { z: 246, w: 6, h: 2, x, y: 54 }, { z: 218, w: 6, h: 2, x, y: 52 }, () => 0.8)),
   ];
-  return hull(original, 'humanHull', DEPOT, 41, parts, trim, radiators, { parts: lights, color: TAIL_LIGHT });
+  const coats: Coat[] = [
+    { parts, wear: DEPOT, seed: 41 },
+    { parts: fins, wear: DEPOT_FINS, seed: 42 },
+  ];
+  return hull(original, 'humanHull', coats, trim, radiators, { parts: lights, color: TAIL_LIGHT });
 }
 
 const IVORY = 0xd9d3c3;
 const GOLD = 0xc9a227;
 const GOLD_DARK = 0x7a5f14;
+/** A gold bell's rim, darkened by the soot of its burns. */
+const GOLD_SOOT = 0x4a3a1a;
 const AMBER_GLASS = 0x3a2608;
 
 /** The Sovereign's delta wing, from its trailing edge to its leading edge (the right one; the left one mirrors it). */
@@ -449,32 +619,64 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
     // the arrowhead: wide at the drives, a long, flat needle to the nose
     paint(loft(OCTAGON, SOVEREIGN_BODY[2], SOVEREIGN_BODY[1]), IVORY),
     paint(loft(OCTAGON, SOVEREIGN_BODY[1], SOVEREIGN_BODY[0]), IVORY),
-    // the canopy, amber glass in a gold frame
+    // the canopy, amber glass in a gold frame (see gold)
     paint(loft(OCTAGON, { z: 20, w: 24, h: 12, y: 30 }, { z: -150, w: 12, h: 5, y: 22 }), AMBER_GLASS),
-    paint(loft(RECTANGLE, { z: 240, w: 8, h: 8, y: 46 }, { z: 20, w: 6, h: 3, y: 38 }), GOLD),
     // delta wings swept back to gold tips
     ...pair(paint(loft(BLADE, ...SOVEREIGN_WING), IVORY)),
+  ];
+  // everything gold, engraved and brushed: the canopy's frame, the wing tips, the forward canards
+  // near the nose, the drive nacelles with their bells where the flames burn, the thrusters
+  const thrusters = thrusterQuads(THRUSTER_LAYOUTS.sovereign, GOLD, GOLD_DARK, GOLD_DARK);
+  const gold: THREE.BufferGeometry[] = [
+    paint(loft(RECTANGLE, { z: 240, w: 8, h: 8, y: 46 }, { z: 20, w: 6, h: 3, y: 38 }), GOLD),
     ...pair(paint(loft(RECTANGLE, { z: 250, w: 14, h: 30, x: 272, y: 8 }, { z: 140, w: 8, h: 14, x: 268, y: 10 }), GOLD)),
-    // forward canards near the nose
     ...pair(paint(loft(BLADE, { z: -170, w: 46, h: 5, x: 64, y: 4 }, { z: -250, w: 14, h: 3, x: 40, y: 4 }), GOLD_DARK)),
-    // the drive nacelles, gold, with their nozzles where the flames burn
     ...pair(paint(loft(OCTAGON, { z: 250, w: 28, h: 24, x: 87, y: 2 }, { z: 40, w: 18, h: 16, x: 70, y: 4 }), GOLD)),
-    ...pair(paint(loft(OCTAGON, { z: 275, w: 26, h: 22, x: 87, y: 2 }, { z: 250, w: 28, h: 24, x: 87, y: 2 }), GOLD_DARK)),
-    ...thrusterQuads(THRUSTER_LAYOUTS.sovereign, IVORY, GOLD_DARK),
+    ...pair(paint(loft(OCTAGON, NACELLE_CAP, { z: 250, w: 28, h: 24, x: 87, y: 2 }, 'back'), GOLD_DARK)),
+    ...driveBells([GOLD_DARK, GOLD, GOLD_SOOT], GOLD_DARK),
+    ...thrusters.housings,
+    ...thrusters.nozzles,
   ];
   // the trim high on the arrowhead's flanks, above the wings and the nacelles, and across its stern
   const trim = lightStrips(flankLine(SOVEREIGN_BODY, 0.5, -340, 250), { width: 100, y: 20, z: 250 });
   // the delta wings are its radiators, hottest at their roots towards the trailing edge
   const radiators = pair(radiator(BLADE, SOVEREIGN_WING[0], SOVEREIGN_WING[1], (p) => THREE.MathUtils.smoothstep(p.z, -40, 230) * (1 - 0.6 * THREE.MathUtils.smoothstep(Math.abs(p.x), 90, 270))));
-  return hull(original, 'sovereignHull', GIFT, 7, parts, trim, radiators);
+  const coats: Coat[] = [
+    { parts, wear: GIFT, seed: 7 },
+    { parts: gold, wear: GILDED, seed: 8, look: { clearcoat: GOLD_LACQUER } },
+  ];
+  return hull(original, 'sovereignHull', coats, trim, radiators);
 }
 
 /** The Sovereign's wear: a gift of the President, kept like new; a few scratches, its number in gold. */
 const GIFT: Wear = { rust: 0, chips: 0.05, grime: 0.1, scratches: 0.2, seams: 0.3, stencils: ['01'], roughness: 0.3, metalness: 0.6 };
+/**
+ * Its gold: polished metal, brushed along its length and engraved in bands of interlaced waves
+ * and the regime's stars (see engraving in view/surfaces), barely touched. Gold needs no paint and
+ * takes only a thin lacquer (GOLD_LACQUER), so its own shine shows.
+ */
+const GILDED: Wear = { rust: 0, chips: 0, grime: 0.06, scratches: 0.15, seams: 0.3, stencils: [], roughness: 0.36, metalness: 0.85, relief: 'engraved' };
+const GOLD_LACQUER = 0.2;
 
-const VOID = 0x15121c;
-const VOID_SHEEN = 0x2b2438;
+/**
+ * The alien skin: a deep violet-black, light enough that its scales still show where the sun
+ * does not reach, and a lighter sheen on its blades and needle.
+ */
+const VOID = 0x262030;
+const VOID_SHEEN = 0x3c3452;
 const VEIN = new THREE.Color(0.1, 1, 0.75).multiplyScalar(1.5);
+/** The faint glow along a few scales' rims, the life support's finest vessels (linear; its map says where, see scales in view/surfaces). */
+const CAPILLARY = new THREE.Color(0.1, 1, 0.75).multiplyScalar(0.25);
+/**
+ * The film over the alien skin: a thin layer that plays in colors as the angle changes, as oil on
+ * water or a beetle's shell, between violet, green and gold (thicknesses in nanometers); the
+ * picture's quality takes it off with the lacquer (see setLacquer). The skin mirrors the sky
+ * twice as strongly as painted plates, so the film and the scales show on the side away from
+ * the sun too.
+ */
+const FILM: THREE.MeshPhysicalMaterialParameters = { iridescence: 0.8, iridescenceIOR: 1.5, iridescenceThicknessRange: [280, 620], envMapIntensity: 2 * SHEEN };
+/** The skin's faint glow along its outline, violet (linear; see hullShader): a dark hull keeps its shape against the black of space. */
+const SKIN_GLOW = new THREE.Color(0.16, 0.08, 0.3);
 
 /** The alien interceptor's inner side blade, from its trailing edge to its leading edge (the right one). */
 const ALIEN_FIN: [End, End] = [{ z: 200, w: 70, h: 10, x: 60, y: -30 }, { z: 0, w: 40, h: 6, x: 60, y: -20 }];
@@ -498,8 +700,10 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
     // side blades, swept, carrying the drives
     ...pair(paint(loft(BLADE, { z: 380, w: 14, h: 26, x: 104, y: -44 }, { z: 40, w: 8, h: 10, x: 150, y: -60 }), VOID_SHEEN)),
     ...pair(paint(loft(BLADE, ...ALIEN_FIN), VOID)),
-    ...pair(paint(loft(OCTAGON, { z: 410, w: 18, h: 18, x: 104, y: -44 }, { z: 280, w: 16, h: 16, x: 104, y: -44 }), VOID)),
-    ...thrusterQuads(THRUSTER_LAYOUTS.alien, VOID_SHEEN, VOID),
+    // the drive pods, open at the stern, black with soot inside
+    ...pair(paint(loft(OCTAGON, { z: 410, w: 18, h: 18, x: 104, y: -44 }, { z: 280, w: 16, h: 16, x: 104, y: -44 }, 'back'), VOID)),
+    ...pair(sooty(loft(OCTAGON, { z: 410, w: 16, h: 16, x: 104, y: -44 }, { z: 385, w: 13, h: 13, x: 104, y: -44 }, 'back'))),
+    ...Object.values(thrusterQuads(THRUSTER_LAYOUTS.alien, VOID_SHEEN, VOID, VOID)).flat(),
   ];
   const veins: THREE.BufferGeometry[] = [
     // along the body and up the blade: the life support's glow
@@ -512,8 +716,8 @@ export function alienInterceptor(original: THREE.Object3D): THREE.Object3D {
   const trim = lightStrips(flankLine(ALIEN_BODY, 0.1, -290, 400), { width: 56, y: 4, z: 400 });
   // the inner side blades are its radiators, hottest at the body
   const radiators = pair(radiator(BLADE, ALIEN_FIN[0], ALIEN_FIN[1], (p) => 1 - 0.7 * THREE.MathUtils.smoothstep(Math.abs(p.x), 60, 130)));
-  return hull(original, 'alienHull', SCARRED, 23, parts, trim, radiators, { parts: veins, color: VEIN });
+  return hull(original, 'alienHull', [{ parts, wear: SCARRED, seed: 23, look: FILM, glow: CAPILLARY, rim: SKIN_GLOW }], trim, radiators, { parts: veins, color: VEIN });
 }
 
 /** The alien interceptor's wear: a grown skin of fine scales, scored by countless fights, never rusting. */
-const SCARRED: Wear = { rust: 0, chips: 0.25, grime: 0.35, scratches: 0.9, seams: 0.6, stencils: [], roughness: 0.35, metalness: 0.55, scales: true };
+const SCARRED: Wear = { rust: 0, chips: 0.25, grime: 0.35, scratches: 0.9, seams: 0.6, stencils: [], roughness: 0.35, metalness: 0.55, relief: 'scales' };

@@ -45,17 +45,27 @@ export interface Wear {
   /** Roughness and metalness of the paint itself (0..1). */
   roughness: number;
   metalness: number;
-  /** A fine pattern of scales instead of riveted panels (the alien hull). */
-  scales?: boolean;
+  /**
+   * What the relief is instead of riveted panels: a fine pattern of scales (the alien hull),
+   * ribs in riveted frames (the human interceptor's fins), polished metal engraved in bands
+   * (the Sovereign's gold).
+   */
+  relief?: 'scales' | 'ribs' | 'engraved';
   /** Dents beaten into the plating (0..1; none when left out). */
   dents?: number;
+  /** The chips as small flakes, a rim of primer around bare metal (see flakes), instead of plain scars. */
+  flakes?: boolean;
 }
 
-/** The three canvases of a surface, filled: color white, paint's roughness and metalness, flat bump. */
-function blank(wear: Pick<Wear, 'roughness' | 'metalness'>) {
-  const color = canvas(SIZE);
-  const orm = canvas(SIZE);
-  const bump = canvas(SIZE);
+/**
+ * The three canvases of a surface, filled: color white, paint's roughness and metalness, flat
+ * bump; `detail` pixels for every pixel of SIZE, everything drawn in SIZE's coordinates.
+ */
+function blank(wear: Pick<Wear, 'roughness' | 'metalness'>, detail = 1) {
+  const color = canvas(SIZE * detail);
+  const orm = canvas(SIZE * detail);
+  const bump = canvas(SIZE * detail);
+  for (const [, g] of [color, orm, bump]) g.setTransform(detail, 0, 0, detail, 0, 0);
   color[1].fillStyle = '#fff';
   color[1].fillRect(0, 0, SIZE, SIZE);
   orm[1].fillStyle = ormColor(wear.roughness, wear.metalness);
@@ -130,18 +140,165 @@ function panels(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRend
   }
 }
 
-/** A fine pattern of scales: overlapping arcs, as grown rather than riveted. */
-function scales(color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, seams: number) {
-  color.strokeStyle = `rgba(0, 0, 0, ${0.2 + 0.4 * seams})`;
-  bump.strokeStyle = '#404040';
-  color.lineWidth = bump.lineWidth = 1.5;
-  for (let y = 0; y <= SIZE; y += 16) {
-    for (let x = (y / 16) % 2 ? 0 : 8; x <= SIZE; x += 16) {
-      for (const g of [color, bump]) {
-        g.beginPath();
-        g.arc(x, y, 9, 0, Math.PI);
-        g.stroke();
+/** The pitch of the scales across and down (px of SIZE) and their radius: rows half a scale apart, every other row shifted by half a scale. */
+const SCALE_PITCH = 16;
+const SCALE_ROW = 8;
+const SCALE_RADIUS = 11;
+
+/**
+ * A fine pattern of scales, as grown rather than riveted: each row overlaps the one above, so
+ * only a crescent of every scale shows, rising from where it tucks under its neighbors to its
+ * free rim, which stands out as a step (the relief catches the light on every scale). Each
+ * scale is a shade of its own, and every few a rim glows faintly in `glow`, if given.
+ */
+function scales(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, seams: number, glow?: CanvasRenderingContext2D) {
+  for (let row = 0; row < SIZE / SCALE_ROW; row++) {
+    const y = row * SCALE_ROW;
+    for (let x = row % 2 ? SCALE_PITCH / 2 : 0; x < SIZE; x += SCALE_PITCH) {
+      const shade = r.range(-0.08, 0.08);
+      const lit = r.nextFloat() < 0.06;
+      // drawn again across the tile's edges, so the pattern wraps
+      for (const dx of [-SIZE, 0, SIZE]) {
+        for (const dy of [-SIZE, 0, SIZE]) {
+          const cx = x + dx;
+          const cy = y + dy;
+          if (cx < -SCALE_RADIUS || cx > SIZE + SCALE_RADIUS || cy < -SCALE_RADIUS || cy > SIZE + SCALE_RADIUS) continue;
+          const height = bump.createRadialGradient(cx, cy - SCALE_RADIUS * 0.6, 0, cx, cy - SCALE_RADIUS * 0.6, SCALE_RADIUS * 1.6);
+          height.addColorStop(0, '#585858');
+          height.addColorStop(1, '#b8b8b8');
+          bump.fillStyle = height;
+          bump.beginPath();
+          bump.arc(cx, cy, SCALE_RADIUS, 0, Math.PI * 2);
+          bump.fill();
+          bump.strokeStyle = '#383838';
+          bump.lineWidth = 1.2;
+          bump.beginPath();
+          bump.arc(cx, cy, SCALE_RADIUS, 0.15 * Math.PI, 0.85 * Math.PI);
+          bump.stroke();
+          color.fillStyle = shade > 0 ? `rgba(255, 255, 255, ${shade})` : `rgba(0, 0, 0, ${-shade})`;
+          color.beginPath();
+          color.arc(cx, cy, SCALE_RADIUS, 0, Math.PI * 2);
+          color.fill();
+          color.strokeStyle = `rgba(0, 0, 0, ${0.2 + 0.4 * seams})`;
+          color.lineWidth = 1.2;
+          color.beginPath();
+          color.arc(cx, cy, SCALE_RADIUS, 0.15 * Math.PI, 0.85 * Math.PI);
+          color.stroke();
+          if (glow && lit) {
+            glow.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+            glow.lineWidth = 1;
+            glow.beginPath();
+            glow.arc(cx, cy, SCALE_RADIUS - 0.6, 0.25 * Math.PI, 0.75 * Math.PI);
+            glow.stroke();
+          }
+        }
       }
+    }
+  }
+}
+
+/** The pitch of the ribs (px of SIZE, 60 cm) and the height of the frames that hold them, every quarter of the tile. */
+const RIB_PITCH = 8;
+const RIB_FRAME = 7;
+
+/**
+ * Ribbed plating, as stiffened plates go: ribs running across u (rounded crests, grooves between
+ * them), held every quarter of the tile by a flat riveted frame.
+ */
+function ribs(color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, seams: number) {
+  for (let x = 0; x < SIZE; x += RIB_PITCH) {
+    const crest = bump.createLinearGradient(x, 0, x + RIB_PITCH, 0);
+    crest.addColorStop(0, '#505050');
+    crest.addColorStop(0.3, '#b4b4b4');
+    crest.addColorStop(0.5, '#c4c4c4');
+    crest.addColorStop(0.7, '#b4b4b4');
+    crest.addColorStop(1, '#505050');
+    bump.fillStyle = crest;
+    bump.fillRect(x, 0, RIB_PITCH, SIZE);
+    color.fillStyle = `rgba(0, 0, 0, ${0.1 + 0.2 * seams})`;
+    color.fillRect(x - 0.75, 0, 1.5, SIZE);
+  }
+  for (let y = 0; y < SIZE; y += SIZE / 4) {
+    bump.fillStyle = '#9a9a9a';
+    bump.fillRect(0, y, SIZE, RIB_FRAME);
+    bump.fillStyle = '#404040';
+    bump.fillRect(0, y - 0.75, SIZE, 1.5);
+    bump.fillRect(0, y + RIB_FRAME - 0.75, SIZE, 1.5);
+    color.fillStyle = `rgba(0, 0, 0, ${0.15 + 0.3 * seams})`;
+    color.fillRect(0, y - 0.75, SIZE, 1.5);
+    color.fillRect(0, y + RIB_FRAME - 0.75, SIZE, 1.5);
+    for (let x = RIB_PITCH / 2; x < SIZE; x += RIB_PITCH) {
+      bump.fillStyle = '#d0d0d0';
+      bump.fillRect(x - 1, y + RIB_FRAME / 2 - 1, 2, 2);
+      color.fillStyle = 'rgba(0, 0, 0, 0.18)';
+      color.fillRect(x - 0.5, y + RIB_FRAME / 2, 1.5, 1.5);
+    }
+  }
+}
+
+/** The engraving's bands: their pitch down the tile (px of SIZE), their half height, the waves in each and a wave's length along it. */
+const BAND_PITCH = 64;
+const BAND_HALF = 12;
+const BAND_WAVES = 5;
+const WAVE_LENGTH = 32;
+
+/**
+ * Polished metal, brushed along u and engraved in bands: between two border lines, waves
+ * interlaced as on a banknote's guilloche, and between the bands a row of small stars, the
+ * regime's. The cuts are fine grooves, duller and a little darker than the polish.
+ */
+function engraving(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, wear: Wear) {
+  orm.lineWidth = 0.6;
+  for (let i = 0; i < 500; i++) {
+    const x = r.range(0, SIZE);
+    const y = r.range(0, SIZE);
+    const length = r.range(20, 140);
+    orm.strokeStyle = ormColor(wear.roughness + r.range(-0.1, 0.14), wear.metalness, 0.35);
+    for (const dx of [0, -SIZE]) {
+      orm.beginPath();
+      orm.moveTo(x + dx, y);
+      orm.lineTo(x + dx + length, y);
+      orm.stroke();
+    }
+  }
+  const cut = (path: (g: CanvasRenderingContext2D) => void, width: number) => {
+    bump.strokeStyle = '#505050';
+    color.strokeStyle = 'rgba(60, 36, 0, 0.35)';
+    orm.strokeStyle = ormColor(0.6, wear.metalness, 1, 0.4);
+    for (const g of [bump, color, orm]) {
+      g.lineWidth = width;
+      g.beginPath();
+      path(g);
+      g.stroke();
+    }
+  };
+  for (let y0 = BAND_PITCH / 2; y0 < SIZE; y0 += BAND_PITCH) {
+    for (const edge of [-BAND_HALF, BAND_HALF]) {
+      cut((g) => {
+        g.moveTo(0, y0 + edge);
+        g.lineTo(SIZE, y0 + edge);
+      }, 1.2);
+    }
+    for (let k = 0; k < BAND_WAVES; k++) {
+      cut((g) => {
+        for (let x = 0; x <= SIZE; x += 1) {
+          const y = y0 + (BAND_HALF - 3) * Math.sin(((x / WAVE_LENGTH) + k / BAND_WAVES) * Math.PI * 2);
+          if (x === 0) g.moveTo(x, y);
+          else g.lineTo(x, y);
+        }
+      }, 0.7);
+    }
+    // the last row of stars lies on the tile's edge: drawn on both sides of it
+    for (let x = WAVE_LENGTH / 2; x < SIZE; x += WAVE_LENGTH) for (const cy of [y0 + BAND_PITCH / 2, y0 + BAND_PITCH / 2 - SIZE]) {
+      cut((g) => {
+        for (let p = 0; p <= 5; p++) {
+          const angle = -Math.PI / 2 + (p * 4 * Math.PI) / 5;
+          const px = x + Math.cos(angle) * 5;
+          const py = cy + Math.sin(angle) * 5;
+          if (p === 0) g.moveTo(px, py);
+          else g.lineTo(px, py);
+        }
+      }, 0.8);
     }
   }
 }
@@ -199,6 +356,46 @@ function chips(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRender
   }
 }
 
+/**
+ * Chips as an old fighter's paint flakes: mostly small, a few larger, half of them along the
+ * seams where the plates flex; each an irregular flake with a rim of dull primer around the bare
+ * metal (rougher, no lacquer), the metal smooth and nearly a mirror. The hull shows the metal as
+ * steel (see BARE_STEEL in ship/models); here it is white in color, so grime and soot still tint it.
+ */
+function flakes(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRenderingContext2D, amount: number) {
+  const flake = (g: CanvasRenderingContext2D, x: number, y: number, size: number, reach: number[], scale: number) => {
+    g.beginPath();
+    reach.forEach((k, i) => {
+      const angle = (i / reach.length) * Math.PI * 2;
+      const px = x + Math.cos(angle) * size * k * scale;
+      const py = y + Math.sin(angle) * size * k * scale * 0.8;
+      if (i === 0) g.moveTo(px, py);
+      else g.lineTo(px, py);
+    });
+    g.fill();
+  };
+  for (let i = 0; i < 170 * amount; i++) {
+    const onSeam = r.nextFloat() < 0.5;
+    const x = r.range(0, SIZE);
+    const y = onSeam ? Math.floor(r.range(0, 4)) * 64 + r.range(-3, 3) : r.range(0, SIZE);
+    // small ones far more often than large ones: bare metal from a few centimeters to half a meter across
+    const size = 0.4 + 2.4 * r.nextFloat() ** 2.2;
+    const reach = Array.from({ length: 6 + (r.nextInt() % 4) }, () => r.range(0.45, 1.25));
+    // one near the tile's edge is drawn on its far side too, so it wraps
+    for (const dx of [0, -SIZE, SIZE]) {
+      for (const dy of [0, -SIZE, SIZE]) {
+        if (Math.abs(x + dx - SIZE / 2) > SIZE / 2 + 5 || Math.abs(y + dy - SIZE / 2) > SIZE / 2 + 5) continue;
+        color.fillStyle = 'rgba(150, 140, 120, 0.9)';
+        orm.fillStyle = ormColor(0.75, 0.1, 1, 0);
+        for (const g of [color, orm]) flake(g, x + dx, y + dy, size, reach, 1.5);
+        color.fillStyle = 'rgba(235, 235, 235, 1)';
+        orm.fillStyle = ormColor(0.3, 0.9, 1, 0);
+        for (const g of [color, orm]) flake(g, x + dx, y + dy, size, reach, 1);
+      }
+    }
+  }
+}
+
 /** Fine scratches, bright in roughness (scuffed) and a little darker in color. */
 function scratches(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRenderingContext2D, amount: number) {
   color.strokeStyle = 'rgba(0, 0, 0, 0.18)';
@@ -249,6 +446,25 @@ function stencils(r: Randomizer, color: CanvasRenderingContext2D, texts: readonl
   }
 }
 
+/** The canvases of a worn surface, drawn from a seed: `detail` pixels for every pixel of SIZE, and what of it glows, if `glowing`. */
+function drawWorn(seed: number, wear: Wear, detail = 1, glowing = false) {
+  const r = new Randomizer(seed);
+  const { color, orm, bump } = blank(wear, detail);
+  const glow = glowing ? glowLayer(SIZE * detail) : null;
+  glow?.[1].setTransform(detail, 0, 0, detail, 0, 0);
+  if (wear.relief === 'scales') scales(r, color[1], bump[1], wear.seams, glow?.[1]);
+  else if (wear.relief === 'ribs') ribs(color[1], bump[1], wear.seams);
+  else if (wear.relief === 'engraved') engraving(r, color[1], orm[1], bump[1], wear);
+  else panels(r, color[1], bump[1], wear.seams);
+  if (wear.dents) dents(r, color[1], bump[1], wear.dents);
+  grime(r, color[1], wear.grime);
+  rust(r, color[1], orm[1], wear.rust);
+  (wear.flakes ? flakes : chips)(r, color[1], orm[1], wear.chips);
+  scratches(r, color[1], orm[1], wear.scratches);
+  stencils(r, color[1], wear.stencils);
+  return { color, orm, bump, glow };
+}
+
 const worn = new Map<string, Surface>();
 
 /** A worn surface of a seed and a wear (built once per pair, shared by every part that carries it). */
@@ -257,19 +473,45 @@ export function wornSurface(seed: number, wear: Wear): Surface {
   const kept = worn.get(key);
   if (kept) return kept;
   if (!drawable) return blankSurface();
-  const r = new Randomizer(seed);
-  const { color, orm, bump } = blank(wear);
-  if (wear.scales) scales(color[1], bump[1], wear.seams);
-  else panels(r, color[1], bump[1], wear.seams);
-  if (wear.dents) dents(r, color[1], bump[1], wear.dents);
-  grime(r, color[1], wear.grime);
-  rust(r, color[1], orm[1], wear.rust);
-  chips(r, color[1], orm[1], wear.chips);
-  scratches(r, color[1], orm[1], wear.scratches);
-  stencils(r, color[1], wear.stencils);
+  const { color, orm, bump } = drawWorn(seed, wear);
   const surface = textures(color[0], orm[0], bump[0]);
   worn.set(key, surface);
   return surface;
+}
+
+/**
+ * A fighter's hull: its worn surface (see wornSurface) twice as fine, 512 pixels a tile, as a
+ * pilot sees the ships of the Games up close and the stencils have to stay sharp; its relief as
+ * a normal map (`normal`), whose mipmaps flatten the seams and rivets evenly with distance
+ * instead of shimmering as a bump map does on a phone; and, with `glowing`, a map of what glows
+ * of its own (`glow`: the alien hull's scale rims).
+ */
+export type HullSurface = { map: THREE.Texture; orm: THREE.Texture; normal: THREE.Texture; glow: THREE.Texture | null };
+
+/** A hull's surface is this many times as fine as SIZE. */
+const HULL_DETAIL = 2;
+/** How steep a hull's relief tilts its normals per step of the bump's gray (see normalPixels), at SIZE's pixels. */
+const HULL_SLOPE = 2.2;
+
+const hulls = new Map<string, HullSurface>();
+
+/** A hull's surface of a seed and a wear (see HullSurface; built once per pair). */
+export function hullSurface(seed: number, wear: Wear, glowing = false): HullSurface {
+  const key = `${seed}:${JSON.stringify(wear)}:${glowing}`;
+  const kept = hulls.get(key);
+  if (kept) return kept;
+  if (!drawable) return { map: new THREE.Texture(), orm: new THREE.Texture(), normal: new THREE.Texture(), glow: null };
+  const { color, orm, bump, glow } = drawWorn(seed, wear, HULL_DETAIL, glowing);
+  const size = SIZE * HULL_DETAIL;
+  const [element, g] = canvas(size);
+  const image = g.createImageData(size, size);
+  image.data.set(normalPixels(bump[1].getImageData(0, 0, size, size).data, size, HULL_SLOPE * HULL_DETAIL));
+  g.putImageData(image, 0, 0);
+  // the normal map takes the bump's place among the textures (linear, repeating)
+  const surface = textures(color[0], orm[0], element);
+  const made = { map: surface.map, orm: surface.orm, normal: surface.bump, glow: glow && glowTexture(glow[0]) };
+  hulls.set(key, made);
+  return made;
 }
 
 /**
@@ -924,9 +1166,11 @@ export function surfaced(surface: Surface, bumpScale: number) {
 /**
  * Texture coordinates for flat-faced parts: each face takes the surface at the same density
  * (one tile per `tile` units), projected along its dominant axis, so long and short parts look
- * alike.
+ * alike. With `readable`, every face takes it the right way round as seen from outside, upright
+ * on the flanks and the stern and the nose ahead on top and below, so a stencil reads on either
+ * flank (the hulls' paint).
  */
-export function boxUv(geometry: THREE.BufferGeometry, tile: number): THREE.BufferGeometry {
+export function boxUv(geometry: THREE.BufferGeometry, tile: number, readable = false): THREE.BufferGeometry {
   const position = geometry.attributes.position;
   const normal = geometry.attributes.normal;
   const uv = new Float32Array(position.count * 2);
@@ -934,7 +1178,16 @@ export function boxUv(geometry: THREE.BufferGeometry, tile: number): THREE.Buffe
     const nx = Math.abs(normal.getX(i));
     const ny = Math.abs(normal.getY(i));
     const nz = Math.abs(normal.getZ(i));
-    const [u, v] = nx >= ny && nx >= nz ? [position.getZ(i), position.getY(i)] : ny >= nz ? [position.getX(i), position.getZ(i)] : [position.getX(i), position.getY(i)];
+    const x = position.getX(i);
+    const z = position.getZ(i);
+    // which way a face looks along its axis, if it is to read the right way round
+    const side = (axis: number) => (readable ? Math.sign(axis) : 1);
+    const [u, v] =
+      nx >= ny && nx >= nz
+        ? [readable ? -Math.sign(normal.getX(i)) * z : z, position.getY(i)]
+        : ny >= nz
+          ? [side(normal.getY(i)) * x, readable ? -z : z]
+          : [side(normal.getZ(i)) * x, position.getY(i)];
     uv[i * 2] = u / tile;
     uv[i * 2 + 1] = v / tile;
   }
