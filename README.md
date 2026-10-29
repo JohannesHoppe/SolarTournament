@@ -210,35 +210,36 @@ The flight school has five courses, each played on its own from the school's pla
 
 **Racer** (8 drills):
 
-1. What the racer learns: rings, coils, the racing line and a clean start.
-2. The X: a course of four rings (each counts from either side), as wide as a race's gates and laid out like one: a gentle slalom, the rings about 830 m apart, with the racing line through them and the X where the flight crosses the next ring's plane, as in a race; steered into the ring, it glows azure. A ring missed (its plane crossed beside it) starts the attempt over ("Missed").
-3. The coils: three rings in a long line 1.1 km apart, each through its inner third (as a race's gates, see Modes), so each throws the ship on by 40 m/s; a ring passed off-center or missed starts the attempt over ("Off center").
-4. Brake zones: the ship drifts at the speed limit (250 m/s) at three rings, the first 1.5 km ahead, the second 475 m to its right and 425 m on, so the racing line bends with about 470 m radius between them, tighter than the autopilot turns at that speed (about 585 m), and glows orange before the bend; at about 225 m/s the ship takes it. A short brake before the orange (the flip, a burn, the nose back onto the line) makes the ring; a ring missed starts the attempt over ("Too fast for that bend").
-5. The line at full speed: five rings weaving over 2.7 km, the line bending no tighter than about 1.2 km (never orange, even at a coil's 290 m/s), each ring a coil. The course has to be flown at 200 m/s on average along its racing line, plus 4 seconds for the burn up to speed (the pilot starts at rest, turned to the first ring; the marker counts the seconds left): only a drive held all the way gets there ("Too slow"), the nose on the line and the flight following it. A ring missed starts the attempt over.
-6. The start: 3, 2, 1, BURN! in big neon while the clamps hold the ship; the drive has to light within 0.3 s before BURN! or 0.2 s after it, as in a race. Lit earlier, the drive stalls ("Too early"); not lit in time, the attempt starts over ("Too late").
+1. What the racer learns: a clean start, the rings, their coils and the racing line, in the order a race runs.
+2. The start: 3, 2, 1, BURN! in big neon while the clamps hold the ship; the drive has to light within 0.3 s before BURN! or 0.2 s after it, as in a race. Lit earlier, the drive stalls ("Too early"); not lit in time, the attempt starts over ("Too late").
+3. The X: a course of four rings (each counts from either side), as wide as a race's gates and laid out like one: a gentle slalom, the rings about 830 m apart, with the racing line through them and the X where the flight crosses the next ring's plane, as in a race; steered into the ring, it glows azure. A ring missed (its plane crossed beside it) starts the attempt over ("Missed").
+4. The coils: three rings in a long line 1.1 km apart, each through its inner third (as a race's gates, see Modes), so each throws the ship on by 40 m/s; a ring passed off-center or missed starts the attempt over ("Off center").
+5. Brake zones: the ship drifts at the speed limit (250 m/s) at three rings, the first 1.5 km ahead, the second 475 m to its right and 425 m on, so the racing line bends with about 470 m radius between them, tighter than the autopilot turns at that speed (about 585 m), and glows orange before the bend; at about 225 m/s the ship takes it. A short brake before the orange (the flip, a burn, the nose back onto the line) makes the ring; a ring missed starts the attempt over ("Too fast for that bend").
+6. The line at full speed: five rings weaving over 2.7 km, the line bending no tighter than about 1.2 km (never orange, even at a coil's 290 m/s), each ring a coil. The course has to be flown at 200 m/s on average along its racing line, plus 4 seconds for the burn up to speed (the pilot starts at rest, turned to the first ring; the marker counts the seconds left): only a drive held all the way gets there ("Too slow"), the nose on the line and the flight following it. A ring missed starts the attempt over.
 7. The hook: 500 m off a rock, facing it and drifting past it at 50 m/s; hook it, reel in, swing around it and let go faster than 65 m/s (a few seconds of reeling). Letting go slower starts the attempt over.
 8. A racer now.
 
 The ring courses and the curve lie ahead of the pilot, or, where they would reach out beyond 85 % of the arena's edge, run towards the arena's center instead (the pilot turns to the first ring; the curve, the brake and the full-speed drills turn it there). Where their way would run through rock (within 180 m of it), they tilt up or down, by 15°, 30° or 45°, the first way clear (and start 800 m farther on where the arena has room, so the pilot can climb or dive into them): above or below the Rings of Saturn's sheet of ice, say. A ring or marker still in rock moves straight out of it. A pilot more than 2.5 km from the next ring has lost the course and starts the attempt over. Every other drill with a marker more than 100 m off shows the racing line to it too: from where the pilot was when the marker came up (or last moved 10 m, so it keeps pointing at a sparring partner, drone or torpedo on the move) to the marker, ending there, bowing around rock like a race's. The flight school loses no pilot to deep space: beyond the arena's edge the HUD says "Return to the field" without a count; only 9.4 km out, where the Belt's belt of rock begins, is a ship lost. A drill done counts even in the moment it also ends what a failure would be: the hit with the last torpedo is a hit, a kill with the shot that overheats the laser a kill.
 
-**Gladiator** (16 drills):
+**Gladiator** (17 drills):
 
 1. What the gladiator learns: the laser, the heat, and the dogfight.
 2. Shooting a resting drone: armor shrugs the laser off, five hits into the drive blow it up. A target drone keeps its drive turned to the pilot, wherever the pilot flies.
 3. Shooting a drifting drone, again into the drive (the laser hits instantly, no lead needed).
 4. Firing until the laser overheats.
 5. Cooling down in the shadow of an asteroid.
-6. Free drift: T switches the autopilot off; the drift lessons that follow need it.
-7. Drifting: let go, nothing slows the ship down.
-8. Looking back while drifting: in free drift steering only turns the nose and the ship slides on, the flight stays (the prograde marker shows it); the praise sets it against the autopilot, where the Host points where to fly.
-9. Flip and burn by hand, twice: hold X and W together; the drive fires once the nose points back; the S brake does not count here. The drill counts once the drift along the course is gone; a little sideways drift may remain.
-10. Jinking: a gunner on the tail fires red shots at where the ship was a moment ago; pushing left and right with the thrusters (A/D) makes them go past. It counts after four changes of side; turning and drift do not matter, a hit only sparks.
-11. Dodging debris that drifts straight at the ship, twice, without turning (more than 45°).
-12. Autopilot back on (T).
-13. Chasing a bot that flies but does not shoot: it runs, staying on its tail opens its drive.
-14. Fighting a weak bot that shoots back: keep the armored nose on it, slide, and work onto its tail.
-15. Final exam: a real bot that knows the trick too. Win the dogfight.
-16. Cleared for the tournament.
+6. Bursts: an armed bot (skill 0.25) 400 m ahead, shot down without the laser ever overheating ("Too hot" starts the attempt over).
+7. Free drift: T switches the autopilot off; the drift lessons that follow need it.
+8. Drifting: let go, nothing slows the ship down.
+9. Looking back while drifting: in free drift steering only turns the nose and the ship slides on, the flight stays (the prograde marker shows it); the praise sets it against the autopilot, where the Host points where to fly.
+10. Flip and burn by hand, twice: hold X and W together; the drive fires once the nose points back; the S brake does not count here. The drill counts once the drift along the course is gone; a little sideways drift may remain.
+11. Jinking: a gunner on the tail fires red shots at where the ship was a moment ago; pushing left and right with the thrusters (A/D) makes them go past. It counts after four changes of side; turning and drift do not matter, a hit only sparks.
+12. Dodging debris that drifts straight at the ship, twice, without turning (more than 45°).
+13. Autopilot back on (T).
+14. Chasing a bot that flies but does not shoot: it runs, staying on its tail opens its drive.
+15. Fighting a weak bot that shoots back: keep the armored nose on it, slide, and work onto its tail.
+16. Final exam: a real bot that knows the trick too. Win the dogfight.
+17. Cleared for the tournament.
 
 **Arsenal** (8 drills):
 
@@ -246,23 +247,22 @@ The ring courses and the curve lie ahead of the pilot, or, where they would reac
 2. Torpedo: two in the tubes, a target drone 1.2 km ahead; keep it near the crosshair until the lock holds, launch, and hit it with a torpedo (the laser's hits do not count). Both launched without a hit starts the attempt over.
 3. Shooting one down: the drone, 1.5 km off, launches a torpedo at the pilot; the HUD marks it ("Torpedo"); the laser has to hit it before it arrives. Hit by it ("It got you"), or it gone past, starts the attempt over.
 4. The overdrive: from rest, one press and the ship is past 140 m/s.
-5. A probe 400 m ahead carries two torpedoes and waits there: fly through it.
-6. The hook on a ship: an unarmed bot 600 m ahead runs; hook it and reel it in within 300 m.
+5. The hook on a ship: an unarmed bot 600 m ahead runs; hook it and reel it in within 300 m.
+6. A probe 400 m ahead carries two torpedoes and waits there: fly through it (the praise names the probes' colors, white the nova core, which the next drill hands over).
 7. The nova core: the clone holds one, a drone 500 m ahead; fire, and both go up (the next clone is on the sponsors).
 8. The arsenal is ready.
 
-**Tactician** (10 drills; every sparring bot of the flight school fights from a cool laser):
+**Tactician** (9 drills; every sparring bot of the flight school fights from a cool laser):
 
 1. What the tactician learns: most clones die flying a straight line.
-2. The dodge, twice: debris drifts straight at the ship at 150 m/s from 600 m, too fast to slide out of its way; a thruster tapped twice kicks the ship aside. It counts once the debris is past and a dodge was fired, without turning (more than 45°).
-3. The shove ("dirty is the point"): the ship and a drone drift side by side at 20 m/s towards a rock 200 m ahead, the drone 45 m off the ship's left, its way passing 20 m off the stone. A dodge into the drone as the rock comes up throws it at the stone at about 26 m/s; the drone starts with 15 hull points, a wreck already, so the stone finishes it, a knockout. It counts once the shoved drone touches rock or goes down; the rock left behind starts the attempt over.
-4. On the tail: an armed bot (skill 0.15) starts 300 m behind the ship, its nose on the drive; turn the armored nose to it and shoot it down.
-5. Bursts: an armed bot (skill 0.25) 400 m ahead, shot down without the laser ever overheating ("Too hot" starts the attempt over).
-6. Shooting in free drift: the ship drifts at 100 m/s, the autopilot on, past an armed bot (skill 0.15) that starts 250 m to its right and 600 m ahead. Switch to free drift (T), turn the nose onto the bot while the ship slides on, and hit it three times with the nose more than 60° off the flight; then the autopilot back on. A bot shot down with fewer such hits starts the attempt over ("Sideways"). The same tip comes in a deathmatch (see Nicole coaches).
-7. Cover from a hunter: the ship 150 m off a rock, facing it, an armed bot (skill 0.5) 1.2 km off to its right; three seconds in a row with the rock between them (the HUD marks the spot in the rock's lee, ahead and to the left).
-8. Cover from a torpedo: the same, with a drone 2 km off to the right that launches a torpedo at the pilot (it would arrive in about 6 s; a middling bot's dash into the lee breaks its lock within 3 to 4 s); the rock has to break its lock. Hit by it, or shooting it down instead, starts the attempt over.
-9. Final exam: a bot as good as the field's middling one (skill 0.5). Win the dogfight.
-10. A tactician now.
+2. On the tail: an armed bot (skill 0.15) starts 300 m behind the ship, its nose on the drive; turn the armored nose to it and shoot it down.
+3. The dodge, twice: debris drifts straight at the ship at 150 m/s from 600 m, too fast to slide out of its way; a thruster tapped twice kicks the ship aside. It counts once the debris is past and a dodge was fired, without turning (more than 45°).
+4. Shooting in free drift: the ship drifts at 100 m/s, the autopilot on, past an armed bot (skill 0.15) that starts 250 m to its right and 600 m ahead. Switch to free drift (T), turn the nose onto the bot while the ship slides on, and hit it three times with the nose more than 60° off the flight; then the autopilot back on. A bot shot down with fewer such hits starts the attempt over ("Sideways"). The same tip comes in a deathmatch (see Nicole coaches).
+5. The shove ("dirty is the point"): the ship and a drone drift side by side at 20 m/s towards a rock 200 m ahead, the drone 45 m off the ship's left, its way passing 20 m off the stone. A dodge into the drone as the rock comes up throws it at the stone at about 26 m/s; the drone starts with 15 hull points, a wreck already, so the stone finishes it, a knockout. It counts once the shoved drone touches rock or goes down; the rock left behind starts the attempt over.
+6. Cover from a hunter: the ship 150 m off a rock, facing it, an armed bot (skill 0.5) 1.2 km off to its right; three seconds in a row with the rock between them (the HUD marks the spot in the rock's lee, ahead and to the left).
+7. Cover from a torpedo: the same, with a drone 2 km off to the right that launches a torpedo at the pilot (it would arrive in about 6 s; a middling bot's dash into the lee breaks its lock within 3 to 4 s); the rock has to break its lock. Hit by it, or shooting it down instead, starts the attempt over.
+8. Final exam: a bot as good as the field's middling one (skill 0.5). Win the dogfight.
+9. A tactician now.
 
 ## The Pilot's Handbook
 

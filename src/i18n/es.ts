@@ -709,7 +709,7 @@ export const ES: Catalog = {
   'Well done, pilot. Remember: firing at armor only heats your laser. Win the dogfight, get on their tail, and hit the drive. You are cleared for the tournament. Go and die for the President.':
     'Bien hecho, piloto. Recuerda: disparar a la coraza solo calienta tu láser. Gana el duelo, ponte en su cola y dale al motor. Quedas autorizado para el torneo. Ahora ve y muere por el Presidente.',
   'Basic training complete. You can fly, darling. Now choose your trade: racer or gladiator.': 'Entrenamiento básico completado. Ya sabes volar, cariño. Ahora elige tu oficio: piloto de carreras o gladiador.',
-  'Racer training. Rings, coils, the racing line and a clean start. Out here, speed is everything.': 'Entrenamiento de piloto de carreras. Anillos, bobinas, la trazada y una salida limpia. Aquí fuera, la velocidad lo es todo.',
+  'Racer training. A clean start, the rings, their coils and the racing line. Out here, speed is everything.': 'Entrenamiento de piloto de carreras. Una salida limpia, los anillos, sus bobinas y la trazada. Aquí fuera, la velocidad lo es todo.',
   'The rings of a race are coils. Fly through the very center, and the coil throws you on. Put the X on the center of all three.': 'Los anillos de una carrera son bobinas. Pasa justo por el centro y la bobina te lanzará hacia delante. Pon la X en el centro de los tres.',
   'Orange on the line means: too fast for that bend. Brake before the orange, then steer through.': 'Naranja en la trazada significa: demasiado rápido para esa curva. Frena antes del naranja, y después atraviesa.',
   'Too fast for that bend, darling. Brake before the orange. Again.': 'Demasiado rápido para esa curva, cariño. Frena antes del naranja. Otra vez.',

@@ -1158,23 +1158,25 @@ export function coursesFrom(text: string | null): Set<SchoolCourse> | null {
 /**
  * The drills of each course, in the order a Host needs them. Basic training: turning, aiming,
  * the drive and the brake, a curve with the autopilot, stopping at a point and the rocks, all
- * with the autopilot on. The racer: the rings and the X where the flight crosses them, their
- * coils, the racing line's brake zones, the line at full speed, the start and the hook. The
- * gladiator: the laser and its heat, free drift like a real spaceship, dodging, and the dogfight
- * last. The arsenal: torpedoes (launching one, shooting one down), the overdrive, a probe, the
- * hook on a ship, the nova core. The tactician: the dodge, a bot on the tail, bursts, shooting
- * sideways in free drift, cover from a hunter and from a torpedo, and an exam against a bot as
- * good as the field's middling one.
+ * with the autopilot on. The racer, in the order a race runs: the start, the rings and the X
+ * where the flight crosses them, their coils, the racing line's brake zones, the line at full
+ * speed, and the hook. The gladiator: the laser, its heat and firing in bursts, free drift like a
+ * real spaceship, dodging, and the dogfight last. The arsenal: torpedoes (launching one, shooting
+ * one down), the overdrive, the hook on a ship, then a probe, whose colors name the nova core
+ * that follows it. The tactician: defending first (a bot on the tail, the kick), then attacking
+ * (shooting sideways in free drift, the shove into rock), then cover from a hunter and from a
+ * torpedo, and an exam against a bot as good as the field's middling one.
  */
 const COURSES: Record<SchoolCourse, Drill[]> = {
   basic: [DRILL.briefing, DRILL.turn, DRILL.fineAim, DRILL.cockpit, DRILL.drive, DRILL.brake, DRILL.curve, DRILL.stopAt, DRILL.impact, saying(SCHOOL.basicDone)],
-  racer: [saying(SCHOOL.racer), DRILL.rings, DRILL.coil, DRILL.brakeZone, DRILL.fullSpeed, DRILL.start, DRILL.hook, saying(SCHOOL.racerDone)],
+  racer: [saying(SCHOOL.racer), DRILL.start, DRILL.rings, DRILL.coil, DRILL.brakeZone, DRILL.fullSpeed, DRILL.hook, saying(SCHOOL.racerDone)],
   gladiator: [
     saying(SCHOOL.gladiator),
     DRILL.shoot,
     DRILL.shootMoving,
     DRILL.overheat,
     DRILL.shadow,
+    DRILL.bursts,
     DRILL.freeDrift,
     DRILL.drift,
     DRILL.lookBack,
@@ -1187,8 +1189,8 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
     DRILL.duel,
     saying(SCHOOL.done),
   ],
-  arsenal: [saying(SCHOOL.arsenal), DRILL.torpedo, DRILL.torpedoDown, DRILL.overdrive, DRILL.probe, DRILL.hookShip, DRILL.nova, saying(SCHOOL.arsenalDone)],
-  tactician: [saying(SCHOOL.tactician), DRILL.kick, DRILL.shove, DRILL.onTail, DRILL.bursts, DRILL.slideShot, DRILL.cover, DRILL.torpedoCover, DRILL.exam, saying(SCHOOL.tacticianDone)],
+  arsenal: [saying(SCHOOL.arsenal), DRILL.torpedo, DRILL.torpedoDown, DRILL.overdrive, DRILL.hookShip, DRILL.probe, DRILL.nova, saying(SCHOOL.arsenalDone)],
+  tactician: [saying(SCHOOL.tactician), DRILL.onTail, DRILL.kick, DRILL.slideShot, DRILL.shove, DRILL.cover, DRILL.torpedoCover, DRILL.exam, saying(SCHOOL.tacticianDone)],
 };
 
 /** Each drill's name, its key in DRILL; a course's opening and closing words are "opening" and "closing". */
@@ -1209,10 +1211,11 @@ const drillName = (course: SchoolCourse, index: number) => DRILL_NAMES.get(COURS
 /**
  * Progress a browser keeps as a drill's number instead of its name counts the drills of this
  * order: the tactician's without the shove drill and with one more number before the exam that
- * leads to the exam too, the other courses as they are.
+ * leads to the exam too, its bursts (which the gladiator teaches) going on at the slide shot; the
+ * other courses as they are.
  */
 const NUMBERED: Partial<Record<SchoolCourse, string[]>> = {
-  tactician: ['opening', 'kick', 'onTail', 'bursts', 'slideShot', 'cover', 'torpedoCover', 'exam', 'exam', 'closing'],
+  tactician: ['opening', 'kick', 'onTail', 'slideShot', 'slideShot', 'cover', 'torpedoCover', 'exam', 'exam', 'closing'],
 };
 
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
