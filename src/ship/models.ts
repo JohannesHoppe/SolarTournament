@@ -167,17 +167,33 @@ function capGlint(this: THREE.Material, shader: THREE.WebGLProgramParametersWith
   shader.fragmentShader = 'uniform float glintPeak;\n' + shader.fragmentShader.replace(`( ${direct} + clearcoatSpecularIndirect )`, `( ${capped} + clearcoatSpecularIndirect )`);
 }
 
-/** A radiator's skin stands this far off the part it covers (units, 3 cm), so it never fights the hull for a pixel. */
-const RADIATOR_SKIN = 0.6;
+/**
+ * A skin over a part (a radiator's glow, a band of paint) stands this far off it (units, 3 cm):
+ * a hundred times what the depth buffer tells apart at the chase camera's distance, so the two
+ * never fight for a pixel; faces closer than that, or crossing, flicker as the ship turns.
+ */
+const SKIN = 0.6;
+
+/**
+ * A band of paint around the top of a slab lofted (RECTANGLE) through `ends` (from the nose
+ * back), `height` tall, from depth `from` to `to`: a skin over the slab's sides and top (see SKIN).
+ */
+function band(ends: End[], from: number, to: number, height: number): THREE.BufferGeometry {
+  const end = (z: number): End => {
+    const slab = at(ends, z);
+    return { z, w: slab.w + SKIN, h: height / 2, x: slab.x, y: (slab.y ?? 0) + slab.h + SKIN - height / 2 };
+  };
+  return loft(RECTANGLE, end(to), end(from));
+}
 
 /**
  * The glowing skin of a radiator: the part lofted from `back` to `front`, a little larger all
- * round (see RADIATOR_SKIN), its vertices as hot as `warmth` says at their place (0..1, the
+ * round (see SKIN), its vertices as hot as `warmth` says at their place (0..1, the
  * glow's share there: hottest where the coolant comes in).
  */
 function radiator(section: Section, back: End, front: End, warmth: (p: THREE.Vector3) => number): THREE.BufferGeometry {
-  const grow = (end: End, dz: number): End => ({ ...end, z: end.z + dz, w: end.w + RADIATOR_SKIN, h: end.h + RADIATOR_SKIN });
-  const geometry = loft(section, grow(back, RADIATOR_SKIN), grow(front, -RADIATOR_SKIN));
+  const grow = (end: End, dz: number): End => ({ ...end, z: end.z + dz, w: end.w + SKIN, h: end.h + SKIN });
+  const geometry = loft(section, grow(back, SKIN), grow(front, -SKIN));
   const position = geometry.attributes.position;
   const colors = new Float32Array(position.count * 3);
   const p = new THREE.Vector3();
@@ -358,6 +374,8 @@ const VENTS = [-36, -12, 12, 36];
 
 /** The human interceptor's fuselage, from the nose back. */
 const HUMAN_BODY: End[] = [{ z: -290, w: 12, h: 10, y: -8 }, { z: -170, w: 45, h: 40, y: 0 }, { z: 240, w: 70, h: 55, y: 5 }];
+/** The human interceptor's right fin, from its leading edge back. */
+const HUMAN_FIN: End[] = [{ z: -110, w: 8, h: 30, x: 300, y: 30 }, { z: 260, w: 16, h: 78, x: 285, y: 8 }];
 
 /** The human interceptor, after the original: about 32 m across and 29 m long. */
 export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
@@ -379,9 +397,9 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
     ...pair(paint(loft(BLADE, { z: 150, w: 60, h: 12, x: 120, y: 10 }, { z: 0, w: 40, h: 10, x: 190, y: 14 }), OLIVE_DARK)),
     ...pair(paint(loft(RECTANGLE, { z: 120, w: 110, h: 8, x: 170, y: 12 }, { z: 20, w: 90, h: 6, x: 170, y: 12 }), OLIVE)),
     // the tall fins: slabs leaning out, the leading edge swept back
-    ...pair(paint(loft(RECTANGLE, { z: 260, w: 16, h: 78, x: 285, y: 8 }, { z: -110, w: 8, h: 30, x: 300, y: 30 }), OLIVE)),
-    // tournament stripes on the fins
-    ...pair(paint(loft(RECTANGLE, { z: 150, w: 17, h: 8, x: 285, y: 70 }, { z: 60, w: 15, h: 8, x: 289, y: 64 }), STRIPE)),
+    ...pair(paint(loft(RECTANGLE, HUMAN_FIN[1], HUMAN_FIN[0]), OLIVE)),
+    // tournament stripes around the fins' tops, 80 cm tall
+    ...pair(paint(band(HUMAN_FIN, 60, 150, 16), STRIPE)),
     // the stern, what the pilot sees most of: flared bells around the nozzles, their rims tinted
     // by the heat, a drive block between the nacelles with its cooling ribs, and a bulkhead with
     // vents over it
