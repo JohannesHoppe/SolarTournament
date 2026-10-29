@@ -349,8 +349,8 @@ function reliefSample(noise: Noise, recipe: RockRecipe, relief: Relief, d: THREE
 
 const spheres = new Map<number, THREE.BufferGeometry>();
 
-/** The unit sphere every rock of a detail starts from, with shared vertices; built once per detail, as it takes most of a rock's time. */
-function sphere(detail: number): THREE.BufferGeometry {
+/** The unit sphere every rock (and the comet's nucleus, see world/nucleus) of a detail starts from, with shared vertices; built once per detail, as it takes most of a rock's time. */
+export function sphere(detail: number): THREE.BufferGeometry {
   let geometry = spheres.get(detail);
   if (!geometry) {
     geometry = new THREE.IcosahedronGeometry(1, detail);
@@ -419,8 +419,8 @@ export interface ReliefTexel {
 }
 /** A shape's surface as a relief map shows it: what it holds at a direction (unit vector), written into `out`. */
 export type ReliefSampler = (direction: THREE.Vector3, out: ReliefTexel) => ReliefTexel;
-/** The materials with a relief map of their own per shape: rock, and ice (see world/ice). */
-export type ReliefKind = 'rock' | 'ice';
+/** The materials with a relief map of their own per shape: rock, ice (see world/ice) and the comet's nucleus (see world/nucleus). */
+export type ReliefKind = 'rock' | 'ice' | 'nucleus';
 
 /** The surface point a sampler gives at a direction, on the ellipsoid of `axes`, written into `target`. */
 function reliefPoint(axes: THREE.Vector3, sample: ReliefSampler, direction: THREE.Vector3, target: THREE.Vector3, sampled: ReliefTexel): THREE.Vector3 {
@@ -535,15 +535,16 @@ function cubeMap(faces: Uint8Array[]): THREE.CubeTexture {
 export type ReliefJob = [ReliefKind, number];
 
 /**
- * Bakes the relief maps of every rock shape and of every ice shape (see bakeRelief, world/ice)
- * in background workers, a few shapes each, side by side: the startup waits for the slowest
- * worker instead of all 32 maps in a row, and the page keeps loading meanwhile. Where workers
- * are missing or fail, a map is baked here when it is first asked for (see cachedRelief).
+ * Bakes the relief maps of every rock shape, of every ice shape (see bakeRelief, world/ice) and
+ * of the comet's nucleus (see world/nucleus) in background workers, a few shapes each, side by
+ * side: the startup waits for the slowest worker instead of all 33 maps in a row, and the page
+ * keeps loading meanwhile. Where workers are missing or fail, a map is baked here when it is
+ * first asked for (see cachedRelief).
  */
 export async function bakeReliefMaps(): Promise<void> {
   if (typeof Worker === 'undefined') return;
   const count = Math.max(1, Math.min(4, (navigator.hardwareConcurrency || 2) - 1));
-  const jobs = Array.from({ length: ROCK_COUNT }, (_, i): ReliefJob[] => [['rock', i], ['ice', i]]).flat();
+  const jobs: ReliefJob[] = [...Array.from({ length: ROCK_COUNT }, (_, i): ReliefJob[] => [['rock', i], ['ice', i]]).flat(), ['nucleus', 0]];
   const shapes = (w: number) => jobs.filter((_, k) => k % count === w);
   const bake = (indices: ReliefJob[]) =>
     new Promise<void>((resolve) => {

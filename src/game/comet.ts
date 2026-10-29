@@ -4,6 +4,7 @@ import { hash } from '../music/songs';
 import { radialTexture } from '../view/textures';
 import { ARENA_LIMIT } from '../world/arena';
 import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
+import { nucleusGeometry, nucleusMaterial, nucleusVents, type Vent } from '../world/nucleus';
 import { dustStreaks, SUN_DIRECTION } from '../world/space';
 
 /**
@@ -117,6 +118,53 @@ const MOTE_BOX = 12000;
 const MOTE_SECONDS = 0.08;
 /** The dust and gas stream away from the sun this fast besides the head's motion (units/s, 50 m/s). */
 const OUTFLOW = 1000;
+
+/**
+ * The nucleus (see world/nucleus) is drawn in NEAR_SUBDIVISIONS (20 · 21² ≈ 8800 triangles)
+ * with the rocks' detail tile within NEAR_RANGE (units, 2 km) of the camera, times the share
+ * of the rocks' relief the picture's quality keeps (see setDetail), else in FAR_SUBDIVISIONS
+ * (20 · 10² = 2000 triangles, as a rock up close): its fine relief lies in its relief map, not
+ * in triangles.
+ */
+const NEAR_SUBDIVISIONS = 20;
+const FAR_SUBDIVISIONS = 9;
+const NEAR_RANGE = 40000;
+/** The nucleus tumbles slowly (rad/s about its own axes, x, y and z in turn): mostly about its shortest axis, as a body of its shape spins, and wobbling, a turn in a little over a minute. */
+const TUMBLE: readonly [number, number, number] = [0.021, 0.033, 0.087];
+/**
+ * The jets: from each vent the sun shines into (see world/nucleus, nucleusVents) a narrow
+ * stream of gas and dust, up to JET_LENGTH long (units, 1 km; each vent's own share of it, from
+ * JET_REACH[0] to 1), its half width from JET_WIDTH[0] (3 m) at the vent to JET_WIDTH[1] (70 m),
+ * fanning out; it leaves the vent along the ground's normal
+ * turned JET_SUNWARD towards the sun, and the sun's light pushes it back by JET_BEND of its length
+ * (growing with the square of the way out), so it rises towards the sun, turns and streams back
+ * into the coma. A vent wakes as the sun climbs over it (JET_WAKE, the sine of the sun's height
+ * there) and each breathes slowly (JET_BREATH rad/s); the jets are pure looks.
+ */
+const JET_LENGTH = 20000;
+const JET_REACH = 0.45;
+const JET_WIDTH: readonly [number, number] = [60, 1400];
+const JET_SUNWARD = 0.6;
+const JET_BEND = 0.9;
+const JET_WAKE: readonly [number, number] = [0, 0.45];
+const JET_BREATH = 0.6;
+const JET_SEGMENTS = 16;
+/** How bright a jet is at its vent, and its color: sunlight on dust, white with a little warmth. */
+const JET_BRIGHT = 0.3;
+const JET_TINT = new THREE.Color(1, 0.94, 0.84);
+/** A jet fades out within this distance of the camera (units, 40 m to 250 m), as a tail does (see TAIL_NEAR). */
+const JET_NEAR: readonly [number, number] = [800, 5000];
+/** A jet is never drawn narrower than this share of its distance (rad, about 2 pixels across on a phone): thinner, it would break into flickering pixels; its light is spread over the width it gains, so it only grows fainter. */
+const JET_LEAST = 0.002;
+/**
+ * The coma around the head dims as the camera comes close (units, from 6 km in to 1 km), to
+ * COMA_FLOOR of its light: its gas is far too thin to see from within, and its glow would
+ * otherwise wash the dark nucleus out.
+ */
+const COMA_NEAR: readonly [number, number] = [20000, 120000];
+const COMA_FLOOR = 0.08;
+/** The coma's sprite stands this far behind the head's center (units, 120 m), beyond the nucleus's far side (it reaches at most 1.6 head radii out, see world/nucleus). */
+const COMA_BEHIND = 2400;
 
 /** One comet of a round: when and where it passes nearest the field's center, its route as gravity bends it, and the seed of its shower. */
 export interface Comet {
@@ -445,10 +493,12 @@ function touches(comet: Comet, field: AsteroidField, rock: Asteroid, time: numbe
  * A tail as a ribbon that faces the camera, turned about the tail's axis: each vertex sits on
  * the axis (`position`) and is pushed out `edge` (-1 or 1) half widths to the side, square to
  * the axis and to the line of sight. Across, it is brightest on the axis, as a glowing column
- * is; it fades out close to the camera (TAIL_NEAR), where it is seen along its axis and where
- * the camera comes within a few of its widths of the axis.
+ * is; it fades out close to the camera (`near`, see TAIL_NEAR), where it is seen along its axis
+ * and where the camera comes within a few of its widths of the axis. It is never narrower than
+ * `least` of its distance (see JET_LEAST), its light spread over what it gains.
  */
 const ribbonVertex = /* glsl */ `
+  uniform float least;
   attribute vec3 axis;
   attribute float edge;
   attribute float width;
@@ -461,12 +511,14 @@ const ribbonVertex = /* glsl */ `
     vec3 side = cross(axis, cameraPosition - position);
     float l = length(side);
     side = l > 1.0 ? side / l : normalize(cross(axis, vec3(0.0, 1.0, 0.1)));
-    vWorld = position + side * edge * width;
+    float seen = max(length(cameraPosition - position), 1.0);
+    float drawn = max(width, seen * least);
+    vWorld = position + side * edge * drawn;
     // seen along its axis, or from within a few widths of it, a flat ribbon turns edge-on, twists
     // or fills the view with its edges: it fades out there
-    float edgeOn = smoothstep(0.1, 0.35, l / max(length(cameraPosition - position), 1.0));
-    float within = smoothstep(width * 1.2, width * 3.0, l);
-    vColor = tint * bright * edgeOn * within;
+    float edgeOn = smoothstep(0.1, 0.35, l / seen);
+    float within = smoothstep(drawn * 1.2, drawn * 3.0, l);
+    vColor = tint * bright * edgeOn * within * width / drawn;
     vEdge = edge;
     gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
   }
@@ -515,8 +567,74 @@ const TAILS: readonly { length: number; width: readonly [number, number]; lag: n
   { length: ION_TAIL, width: ION_WIDTH, lag: 0, bright: 0.9, tint: new THREE.Color(0.35, 0.62, 1) },
   { length: DUST_TAIL, width: DUST_WIDTH, lag: DUST_LAG, bright: 0.32, tint: new THREE.Color(1, 0.9, 0.7) },
 ];
-/** Vertices of one tail's ribbon. */
+/** Vertices of one tail's ribbon, and of one jet's. */
 const TAIL_VERTICES = (TAIL_SEGMENTS + 1) * 2;
+const JET_VERTICES = (JET_SEGMENTS + 1) * 2;
+
+/**
+ * Ribbons facing the camera (see ribbonVertex), one draw call: `tints.length` of them, each of
+ * `segments` segments in its tint, laid out anew every frame (see setRibbon); faded out within
+ * `near` of the camera, never narrower than `least` of their distance.
+ */
+function ribbons(tints: readonly THREE.Color[], segments: number, near: readonly [number, number], least: number): THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial> {
+  const geometry = new THREE.BufferGeometry();
+  const each = (segments + 1) * 2;
+  const count = each * tints.length;
+  const dynamic = (size: number) => new THREE.BufferAttribute(new Float32Array(count * size), size).setUsage(THREE.DynamicDrawUsage);
+  geometry.setAttribute('position', dynamic(3));
+  geometry.setAttribute('axis', dynamic(3));
+  geometry.setAttribute('width', dynamic(1));
+  geometry.setAttribute('bright', dynamic(1));
+  const edges = new Float32Array(count);
+  const colors = new Float32Array(count * 3);
+  const index: number[] = [];
+  tints.forEach((tint, t) => {
+    for (let v = 0; v < each; v++) {
+      edges[t * each + v] = v % 2 ? 1 : -1;
+      tint.toArray(colors, (t * each + v) * 3);
+    }
+    for (let k = 0; k < segments; k++) {
+      const a = t * each + k * 2;
+      index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+  });
+  geometry.setAttribute('edge', new THREE.BufferAttribute(edges, 1));
+  geometry.setAttribute('tint', new THREE.BufferAttribute(colors, 3));
+  geometry.setIndex(index);
+  const mesh = new THREE.Mesh(
+    geometry,
+    new THREE.ShaderMaterial({
+      uniforms: { near: { value: new THREE.Vector2(near[0], near[1]) }, least: { value: least } },
+      vertexShader: ribbonVertex,
+      fragmentShader: ribbonFragment,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    }),
+  );
+  mesh.frustumCulled = false;
+  return mesh;
+}
+
+/** Sets the pair of vertices of a ribbon's point `v` (the first of the pair): on its axis at `point`, the axis running along `axis` there, `half` its half width, `light` its brightness. */
+function setRibbon(geometry: THREE.BufferGeometry, v: number, point: THREE.Vector3, axis: THREE.Vector3, half: number, light: number) {
+  const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
+  const axes = geometry.getAttribute('axis') as THREE.BufferAttribute;
+  const widths = geometry.getAttribute('width') as THREE.BufferAttribute;
+  const lights = geometry.getAttribute('bright') as THREE.BufferAttribute;
+  for (let e = v; e < v + 2; e++) {
+    positions.setXYZ(e, point.x, point.y, point.z);
+    axes.setXYZ(e, axis.x, axis.y, axis.z);
+    widths.setX(e, half);
+    lights.setX(e, light);
+  }
+}
+
+/** Marks a ribbon's laid out attributes for the GPU. */
+function ribbonsChanged(geometry: THREE.BufferGeometry) {
+  for (const name of ['position', 'axis', 'width', 'bright']) geometry.getAttribute(name).needsUpdate = true;
+}
 
 /** Away from the sun: where the tails stream. */
 const AWAY = SUN_DIRECTION.clone().negate();
@@ -581,7 +699,15 @@ export class CometView {
   readonly root = new THREE.Group();
   /** The head's frame along its course, which draws it out near a well. */
   private readonly body = new THREE.Group();
-  private readonly headMesh: THREE.Mesh;
+  /** The nucleus, tumbling in the head's frame, drawn near or far (see NEAR_RANGE); its vents (see world/nucleus). */
+  private readonly nucleus = new THREE.Group();
+  private readonly near: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+  private readonly far: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
+  private readonly vents: readonly Vent[];
+  /** The jets of the vents in one draw call. */
+  private readonly jets: THREE.Mesh<THREE.BufferGeometry, THREE.ShaderMaterial>;
+  /** How far the near nucleus is drawn (units), by the picture's quality (see setDetail). */
+  private nearRange = NEAR_RANGE;
   private readonly coma: THREE.Sprite;
   private readonly flash: THREE.Sprite;
   /** Both tails in one draw call. */
@@ -600,20 +726,18 @@ export class CometView {
   private shower: Shower | null = null;
 
   constructor() {
-    // the head: dark ice and rock, lumpy, its sunlit faces glinting
-    const rock = new THREE.IcosahedronGeometry(HEAD_RADIUS, 2);
-    const vertices = rock.attributes.position;
     const r = new Randomizer(7919);
-    for (let i = 0; i < vertices.count; i++) {
-      piece.fromBufferAttribute(vertices, i);
-      piece.multiplyScalar(0.8 + r.nextFloat() * 0.35);
-      vertices.setXYZ(i, piece.x, piece.y, piece.z);
+    // the head: the nucleus, a dark body of two lobes, its fine relief in its relief map
+    this.near = new THREE.Mesh(nucleusGeometry(NEAR_SUBDIVISIONS, HEAD_RADIUS), nucleusMaterial(true));
+    this.far = new THREE.Mesh(nucleusGeometry(FAR_SUBDIVISIONS, HEAD_RADIUS), nucleusMaterial(false));
+    for (const mesh of [this.near, this.far]) {
+      // it throws a shadow as it crosses the field, and onto itself between its lobes
+      mesh.castShadow = mesh.receiveShadow = true;
+      this.nucleus.add(mesh);
     }
-    rock.computeVertexNormals();
-    this.headMesh = new THREE.Mesh(rock, new THREE.MeshStandardMaterial({ color: 0x8fa3b8, roughness: 0.7, metalness: 0.1, flatShading: true, emissive: 0x2a5a88, emissiveIntensity: 0.6 }));
-    // the head's rock throws a shadow as it crosses the field
-    this.headMesh.castShadow = this.headMesh.receiveShadow = true;
-    this.body.add(this.headMesh);
+    this.vents = nucleusVents(HEAD_RADIUS);
+    this.body.add(this.nucleus);
+    this.jets = ribbons(this.vents.map(() => JET_TINT), JET_SEGMENTS, JET_NEAR, JET_LEAST);
     // the coma: a cold blue-white glow around the head, seen from far off; the same light flares where a well swallows it
     const glow = new THREE.SpriteMaterial({
       map: radialTexture([
@@ -629,42 +753,7 @@ export class CometView {
     this.coma = new THREE.Sprite(glow);
     this.flash = new THREE.Sprite(glow.clone());
     // the tails: two ribbons, laid out anew every frame (see layTail), in one geometry
-    const tails = new THREE.BufferGeometry();
-    const count = TAIL_VERTICES * TAILS.length;
-    const dynamic = (size: number) => new THREE.BufferAttribute(new Float32Array(count * size), size).setUsage(THREE.DynamicDrawUsage);
-    tails.setAttribute('position', dynamic(3));
-    tails.setAttribute('axis', dynamic(3));
-    tails.setAttribute('width', dynamic(1));
-    tails.setAttribute('bright', dynamic(1));
-    const edges = new Float32Array(count);
-    const tints = new Float32Array(count * 3);
-    const index: number[] = [];
-    TAILS.forEach((tail, t) => {
-      for (let v = 0; v < TAIL_VERTICES; v++) {
-        edges[t * TAIL_VERTICES + v] = v % 2 ? 1 : -1;
-        tail.tint.toArray(tints, (t * TAIL_VERTICES + v) * 3);
-      }
-      for (let k = 0; k < TAIL_SEGMENTS; k++) {
-        const a = t * TAIL_VERTICES + k * 2;
-        index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
-      }
-    });
-    tails.setAttribute('edge', new THREE.BufferAttribute(edges, 1));
-    tails.setAttribute('tint', new THREE.BufferAttribute(tints, 3));
-    tails.setIndex(index);
-    this.tails = new THREE.Mesh(
-      tails,
-      new THREE.ShaderMaterial({
-        uniforms: { near: { value: new THREE.Vector2(TAIL_NEAR[0], TAIL_NEAR[1]) } },
-        vertexShader: ribbonVertex,
-        fragmentShader: ribbonFragment,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-        side: THREE.DoubleSide,
-      }),
-    );
-    this.tails.frustumCulled = false;
+    this.tails = ribbons(TAILS.map((tail) => tail.tint), TAIL_SEGMENTS, TAIL_NEAR, 0);
     // the shower: small bright pieces of ice and rock, each glinting in a halo of the orange of what hits, so the danger does not read as the tails' harmless blue and white
     this.pieces = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(PIECE_RADIUS * 1.3, 0), new THREE.MeshBasicMaterial({ color: new THREE.Color(1, 0.75, 0.45).multiplyScalar(1.2), toneMapped: false }), SHOWER_PIECES);
     this.pieces.frustumCulled = false;
@@ -688,8 +777,13 @@ export class CometView {
     const motes = new Float32Array(MOTES * 3);
     for (let i = 0; i < motes.length; i++) motes[i] = r.nextFloat() * MOTE_BOX;
     this.motes = dustStreaks(motes, MOTE_BOX, new THREE.Color(0.85, 0.85, 0.8));
-    this.root.add(this.body, this.coma, this.flash, this.tails, this.pieces, this.glints, this.motes);
+    this.root.add(this.body, this.coma, this.flash, this.tails, this.jets, this.pieces, this.glints, this.motes);
     this.root.visible = false;
+  }
+
+  /** The picture's quality: the share of the rocks' relief it keeps (see view/quality, Look.rocks) sets how far the near nucleus is drawn, none at 0. */
+  setDetail(share: number) {
+    this.nearRange = NEAR_RANGE * share;
   }
 
   /** The glints keep their size in the world on a picture `heightPx` device pixels high. */
@@ -697,8 +791,8 @@ export class CometView {
     this.glints.material.uniforms.pixels.value = heightPx / 2;
   }
 
-  /** Shows a comet's shower at a field time, or nothing. */
-  update(shower: Shower | null, time: number) {
+  /** Shows a comet's shower at a field time, or nothing, for a camera at `camera`. */
+  update(shower: Shower | null, time: number, camera: THREE.Vector3) {
     this.shower = shower;
     if (!shower) {
       this.root.visible = false;
@@ -716,9 +810,17 @@ export class CometView {
     this.body.quaternion.setFromUnitVectors(UP, course);
     const drawn = Math.max(0, 1 - left / STRETCH);
     this.body.scale.set(1 / (1 + drawn), 1 + 3 * drawn, 1 / (1 + drawn));
-    this.headMesh.rotation.set(time * 0.11, time * 0.07, 0);
-    this.coma.position.copy(head);
-    this.coma.scale.setScalar(HEAD_RADIUS * (14 + 6 * drawn));
+    this.nucleus.rotation.set(time * TUMBLE[0], time * TUMBLE[1], time * TUMBLE[2]);
+    const seen = camera.distanceTo(head);
+    this.near.visible = seen < this.nearRange;
+    this.far.visible = !this.near.visible;
+    // the coma's sprite stands behind the nucleus as the camera sees it, so the body hides it
+    // whole instead of cutting it off along its limb, and larger by as much, so it looks as large
+    this.coma.position.subVectors(head, camera).setLength(COMA_BEHIND).add(head);
+    this.coma.scale.setScalar(HEAD_RADIUS * (14 + 6 * drawn) * (1 + COMA_BEHIND / Math.max(seen, 1)));
+    this.coma.material.opacity = COMA_FLOOR + (1 - COMA_FLOOR) * THREE.MathUtils.smoothstep(seen, COMA_NEAR[0], COMA_NEAR[1]);
+    this.jets.visible = flying;
+    if (flying) this.layJets(time);
     this.flash.visible = !flying && -left < FLASH;
     if (this.flash.visible) {
       const fade = -left / FLASH;
@@ -734,8 +836,7 @@ export class CometView {
     this.head.copy(head);
     this.course.copy(course);
     for (let t = 0; t < TAILS.length; t++) this.layTail(t);
-    const tailGeometry = this.tails.geometry;
-    for (const name of ['position', 'axis', 'width', 'bright']) tailGeometry.getAttribute(name).needsUpdate = true;
+    ribbonsChanged(this.tails.geometry);
     // the dust in the tails flies on with the head, pushed away from the sun
     this.dustVelocity.subVectors(headAt(comet, time + 0.5, piece), headAt(comet, time - 0.5, stone)).addScaledVector(AWAY, OUTFLOW);
     const glints = this.glints.geometry.getAttribute('position') as THREE.BufferAttribute;
@@ -760,26 +861,43 @@ export class CometView {
 
   /** Lays out the ribbon of tail `t` for the head as update left it: its points (see tailAt), the way it runs there, its half width, and its light, rising out of the coma and fading towards the end. */
   private layTail(t: number) {
-    const geometry = this.tails.geometry;
-    const positions = geometry.getAttribute('position') as THREE.BufferAttribute;
-    const axes = geometry.getAttribute('axis') as THREE.BufferAttribute;
-    const widths = geometry.getAttribute('width') as THREE.BufferAttribute;
-    const lights = geometry.getAttribute('bright') as THREE.BufferAttribute;
     lagOf(this.course, behind);
     for (let k = 0; k <= TAIL_SEGMENTS; k++) {
       const s = shareOf(k);
       tailAt(t, s, this.head, behind, this.scale, lane);
       along.copy(AWAY).addScaledVector(behind, 2 * TAILS[t].lag * s).normalize();
-      const half = halfWidth(t, s, this.scale);
       const light = TAILS[t].bright * this.strength * Math.min(1, s / TAIL_RISE) * (1 - s) ** 1.5;
-      for (let e = 0; e < 2; e++) {
-        const v = t * TAIL_VERTICES + k * 2 + e;
-        positions.setXYZ(v, lane.x, lane.y, lane.z);
-        axes.setXYZ(v, along.x, along.y, along.z);
-        widths.setX(v, half);
-        lights.setX(v, light);
-      }
+      setRibbon(this.tails.geometry, t * TAIL_VERTICES + k * 2, lane, along, halfWidth(t, s, this.scale), light);
     }
+  }
+
+  /**
+   * Lays out the jets for the nucleus as update turned it at field time `time`: from each vent
+   * the sun shines into, out along the ground turned towards the sun, bent back by its light
+   * (see JET_LENGTH), widening and fading out; a vent in the dark lies dormant.
+   */
+  private layJets(time: number) {
+    const geometry = this.jets.geometry;
+    this.nucleus.updateWorldMatrix(true, false);
+    const frame = this.nucleus.matrixWorld;
+    this.vents.forEach((vent, j) => {
+      start.copy(vent.point).applyMatrix4(frame);
+      flow.copy(vent.normal).transformDirection(frame);
+      const wake = THREE.MathUtils.smoothstep(flow.dot(SUN_DIRECTION), JET_WAKE[0], JET_WAKE[1]);
+      const strength = wake * (0.75 + 0.25 * Math.sin(time * JET_BREATH + j * 2.1));
+      flow.addScaledVector(SUN_DIRECTION, JET_SUNWARD).normalize();
+      // each vent's own reach, spread evenly by the golden ratio
+      const length = JET_LENGTH * (JET_REACH + (1 - JET_REACH) * ((j * 0.618034) % 1));
+      for (let k = 0; k <= JET_SEGMENTS; k++) {
+        const s = k / JET_SEGMENTS;
+        lane.copy(start).addScaledVector(flow, length * s).addScaledVector(AWAY, length * JET_BEND * s * s);
+        along.copy(flow).addScaledVector(AWAY, 2 * JET_BEND * s).normalize();
+        const half = JET_WIDTH[0] + (JET_WIDTH[1] - JET_WIDTH[0]) * s ** 0.7;
+        const light = JET_BRIGHT * strength * Math.min(1, s * 12) * (1 - s) * (1 - s);
+        setRibbon(geometry, j * JET_VERTICES + k * 2, lane, along, half, light);
+      }
+    });
+    ribbonsChanged(geometry);
   }
 
   /**
@@ -807,7 +925,7 @@ export class CometView {
   }
 
   dispose() {
-    for (const mesh of [this.headMesh, this.tails, this.pieces, this.glints, this.motes]) {
+    for (const mesh of [this.near, this.far, this.tails, this.jets, this.pieces, this.glints, this.motes]) {
       mesh.geometry.dispose();
       (mesh.material as THREE.Material).dispose();
     }
