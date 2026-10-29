@@ -4,7 +4,7 @@ import { Randomizer } from '../random';
 import { FIELD_RADIUS, raySphere, type AsteroidField, type Obstacle } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
-import { armorSurface, boxUv, lacquer, shine, surfaced } from '../view/surfaces';
+import { ARMOR_TILE, armorSurface, boxUv, lacquer, shine } from '../view/surfaces';
 import type { Homing } from './torpedoes';
 import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS, routeNearest, SHOWER_LENGTH, SHOWER_WIDE, type Comet } from './comet';
 import { msg, t } from '../i18n/i18n';
@@ -48,9 +48,6 @@ const SIEGE_FACE = 2;
 export const ZONE_HITS: Record<ZoneKind, number> = { battery: 64, drive: 94, reactor: 188 };
 /** A torpedo counts this many hits on every part it goes off within TORPEDO_REACH of (units, 20 m beyond the part): about a sixth of a battery. */
 export const TORPEDO_HITS = 10;
-/** The battleship's armor plating repeats every ARMOR_TILE units (20 m); its seams lie this deep (see surfaced). */
-const ARMOR_TILE = 400;
-const ARMOR_RELIEF = 0.8;
 const TORPEDO_REACH = 400;
 /** Points for a hit on a part, for the hit that breaks one, and for every ship of the side when the battleship goes down. */
 export const FLEET_HIT_POINTS = 10;
@@ -382,9 +379,30 @@ export class Fleet implements Obstacle {
     // armor, polished, gilded on its edges, its turrets and its bridge; the runway in the
     // regime's deep red, warm light in its hangars and in rows of windows, the regime's orange
     // neon running along the deck's edges in a procession
-    const polished = { ...surfaced(armorSurface(seed), ARMOR_RELIEF), envMap: shine(), clearcoat: 1, clearcoatRoughness: 0.15 };
-    const armor = this.material(lacquer(new THREE.MeshPhysicalMaterial({ ...polished, color: 0x2c3039, envMapIntensity: 1.2 })));
-    const gold = this.material(lacquer(new THREE.MeshPhysicalMaterial({ ...polished, color: 0xe2aa3e, envMapIntensity: 2.4 })));
+    // The armor is dark gunmetal, not a black mirror: metal enough to glint and mirror the sky
+    // (its metalness 0.6 in the plates' finish, see armorSurface), dielectric enough that the sun
+    // and the sky's light show its form on every face; the plates' seams, rivets and belt straps
+    // are a normal map at the plates' real size, the lacquer over them smooth. The gold is plain
+    // polished metal without the plates, rough enough that the sun spreads along its edges.
+    const plating = armorSurface(seed);
+    const armor = this.material(
+      lacquer(
+        new THREE.MeshPhysicalMaterial({
+          color: 0x5a606b,
+          map: plating.map,
+          roughnessMap: plating.orm,
+          metalnessMap: plating.orm,
+          roughness: 1,
+          metalness: 1,
+          normalMap: plating.normal,
+          envMap: shine(),
+          envMapIntensity: 1.2,
+          clearcoat: 0.6,
+          clearcoatRoughness: 0.12,
+        }),
+      ),
+    );
+    const gold = this.material(lacquer(new THREE.MeshPhysicalMaterial({ color: 0xe2aa3e, metalness: 1, roughness: 0.34, envMap: shine(), envMapIntensity: 2.6, clearcoat: 0.5, clearcoatRoughness: 0.2 })));
     const runway = this.material(new THREE.MeshStandardMaterial({ color: 0x4a0b10, metalness: 0.3, roughness: 0.6 }));
     const recess = this.material(new THREE.MeshStandardMaterial({ color: 0x07080a, roughness: 0.9 }));
     const gunmetal = this.material(new THREE.MeshStandardMaterial({ color: 0x3c414c, metalness: 0.6, roughness: 0.45, flatShading: true }));
@@ -576,6 +594,7 @@ export class Fleet implements Obstacle {
     // the bridge tower at the stern: its command deck spread wide above everything, a band of
     // windows all around it, the sensor house on its roof, two masts above
     block([0, 3200, 4000], [900, 1400, 1000], armor);
+    for (const side of [-1, 1]) for (const y of [2750, 3050, 3350, 3650]) for (let z = 3580; z <= 4420; z += 70) put(new THREE.BoxGeometry(24, 60, 40).translate(side * 455, y, z), lit);
     block([0, 4125, 3900], [2600, 450, 1200], armor);
     for (let x = -1240; x <= 1240; x += 80) put(new THREE.BoxGeometry(50, 100, 24).translate(x, 4150, 3300), lit);
     for (const side of [-1, 1]) for (let z = 3360; z <= 4440; z += 80) put(new THREE.BoxGeometry(24, 100, 50).translate(side * 1300, 4150, z), lit);
@@ -644,16 +663,30 @@ export class Fleet implements Obstacle {
     this.dome.position.set(0, DECK_TOP + 250, -1200);
     this.root.add(this.dome);
 
-    // a battery: an armored turret sloping up from its front, a gilded collar, three barrels
+    // a battery: an armored turret sloping up from its front on the ring it turns on, a gilded
+    // collar, three barrels in armored sleeves with muzzle rings, a rangefinder across its roof,
+    // cooling vents in its back
     const housing = this.geometry(boxUv(taper(-280, 280, 420, 200, 560, 300, -50, 0), ARMOR_TILE));
     const collar = this.geometry(boxUv(new THREE.BoxGeometry(640, 60, 640).translate(0, -130, 0), ARMOR_TILE));
-    const barrels = this.geometry(mergeGeometries([-130, 0, 130].map((x) => new THREE.CylinderGeometry(40, 48, 1000, 8).rotateX(Math.PI / 2).translate(x, 0, -720))));
+    const barrels = this.geometry(
+      mergeGeometries([
+        ...[-130, 0, 130].flatMap((x) => [
+          new THREE.CylinderGeometry(40, 48, 1000, 8).rotateX(Math.PI / 2).translate(x, 0, -720),
+          new THREE.CylinderGeometry(64, 64, 240, 8).rotateX(Math.PI / 2).translate(x, 0, -380),
+          new THREE.CylinderGeometry(56, 56, 80, 8).rotateX(Math.PI / 2).translate(x, 0, -1180),
+        ]),
+        new THREE.CylinderGeometry(300, 320, 60, 16).translate(0, -190, 0),
+        new THREE.BoxGeometry(380, 50, 70).translate(0, 145, 120),
+        ...[-1, 1].map((s) => new THREE.CylinderGeometry(40, 40, 90, 8).rotateX(Math.PI / 2).translate(s * 210, 145, 120)),
+      ]),
+    );
+    const vents = this.geometry(mergeGeometries([-195, -65, 65, 195].map((x) => new THREE.BoxGeometry(90, 170, 12).translate(x, 0, 282))));
     for (const at of BATTERY_MOUNTS) {
       const turret = new THREE.Group();
       turret.position.set(...at);
       // under the keel it hangs upside down
       if (at[1] < 0) turret.rotation.z = Math.PI;
-      turret.add(new THREE.Mesh(housing, armor), new THREE.Mesh(collar, gold), new THREE.Mesh(barrels, gunmetal));
+      turret.add(new THREE.Mesh(housing, armor), new THREE.Mesh(collar, gold), new THREE.Mesh(barrels, gunmetal), new THREE.Mesh(vents, recess));
       this.root.add(turret);
       // on deck it shows itself above the deck and over its edge, under the keel below it
       const face = at[1] < 0 ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(Math.sign(at[0]) * 0.5, 1, 0).normalize();
