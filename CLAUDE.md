@@ -54,7 +54,7 @@ npm install
 npm run dev         # dev server on http://127.0.0.1:5173/
 npm run typecheck
 npm run dupes       # duplicated code (jscpd) and duplicated style rules (tools/dupes/css.ts)
-npm test            # unit tests of the deterministic core (Vitest, in Node, under a second)
+npm test            # unit tests of the deterministic core (Vitest, in Node, about half a minute)
 npm run e2e         # browser tests (Playwright: solo start, two tabs online); first once: npm run e2e:install
                     # DEV_PORT=5174 moves the dev server and the browser tests, so a second checkout (a worktree) tests beside the first
                     # the tests start their own dev server and stop if the port is taken; E2E_REUSE=1 tests against this checkout's server already running
@@ -102,6 +102,8 @@ The same loop for every change, small or large. Follow it step by step; it holds
    - The balance runs leave the dev log of every round in `test-results/`, and a failure names the deaths by cause. `BALANCE_SLOW` gives them more time on a busy machine, `BALANCE_PAGES` plays fewer rounds side by side (see `e2e/README.md`).
    - A red gate is fixed before the next push, never ignored.
 8. **Push.** `git push origin main main:stage_prod` (see Hosting below for when `stage_prod` stays behind).
+   - Before it, `npm run build` must pass: the gates run the dev server, never the site's build, and a worker graph Vite cannot bundle (a worker that, through its imports, starts the one it is started from) passes every gate and fails only there.
+   - After it, the push counts as live only once the commit's check run "Cloudflare Pages" says success (`gh api repos/JohannesHoppe/SolarTournament/commits/<sha>/check-runs`); a failed build leaves the site on the last good one.
 9. **Parallel work in worktrees.**
    - Every checkout runs its own dev server on its own port (`DEV_PORT=5174 npm run e2e`).
    - jscpd skips `.claude/worktrees` (ignored by git), so a worktree checks its duplicates on a copy outside it.
