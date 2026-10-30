@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { allyInLine, Bot, BOT_NAMES, evenSkills, meanSkill, missOf, novaWorth, reactionOf, skillsOf, startTiming, TORPEDO_CLEARANCE } from './bots';
+import { allyInLine, Bot, BOT_NAMES, evenSkills, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, reactionOf, skillsOf, startTiming, TORPEDO_CLEARANCE } from './bots';
 import { FlightModel, MAIN_THRUST, MAX_SPEED } from './flight';
 import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, strainAfter } from './ship';
 import { testField } from '../test/field';
@@ -450,5 +450,24 @@ describe('friendly fire: the own side is hit as any other, and bots hold their f
     expect(novaWorth(me, [me, ...rivals, ally], radius)).toBe(false);
     ally.flight.position.set(0, radius * 1.1, 0);
     expect(novaWorth(me, [me, ...rivals, ally], radius)).toBe(true);
+  });
+
+  it("sets off a nova core at the battleship's parts, on less the longer it holds it, and never stays silent for good, but never with one of its own side inside", () => {
+    const radius = 16000;
+    const me = ship('Kessler', at(0), at(1));
+    const ally = ship('Halley', at(0, radius * 0.9), at(1));
+    side(me, ally);
+    const rival = ship('Laika', at(radius * 0.9), at(1));
+    // the battleship's parts within the blast, three torpedoes' worth and more: worth it, with nobody else around
+    expect(novaWorth(me, [me], radius, 0, NOVA_SIEGE)).toBe(true);
+    expect(novaWorth(me, [me], radius, 0, NOVA_SIEGE - 1)).toBe(false);
+    // a single rival at the blast's edge: only once it has waited for a crowd
+    expect(novaWorth(me, [me, rival], radius, NOVA_PATIENCE - 1)).toBe(false);
+    expect(novaWorth(me, [me, rival], radius, NOVA_PATIENCE)).toBe(true);
+    // nobody at all: only once it has held the core long enough to want its laser back
+    expect(novaWorth(me, [me], radius, NOVA_SHED - 1)).toBe(false);
+    expect(novaWorth(me, [me], radius, NOVA_SHED)).toBe(true);
+    // one of its own side inside the blast: never, whatever it would take
+    for (const held of [0, NOVA_PATIENCE, NOVA_SHED * 10]) expect(novaWorth(me, [me, rival, ally], radius, held, NOVA_SIEGE * 10)).toBe(false);
   });
 });

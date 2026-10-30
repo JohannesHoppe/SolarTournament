@@ -10,6 +10,7 @@ import { msg, t } from '../i18n/i18n';
 import { Attitude } from './attitude';
 import { Streaks } from './streaks';
 import { WELL_GAUGE, WELL_LOST, wellLevel, type Alarm, type AlarmLevel } from '../game/alarms';
+import type { Orbit, OrbitState } from '../game/orbit';
 import type { Reference } from '../world/arenas';
 import { climbOf, closure, heightOf } from '../world/reference';
 
@@ -83,6 +84,10 @@ export class Hud {
   private readonly escapeFill = this.escape.querySelector('b') as HTMLElement;
   private readonly escapeValue = $('hud-escape-value');
   private escapeShown = -1;
+  private escapeLevel: AlarmLevel | null = null;
+  private readonly orbit = $('hud-orbit');
+  private readonly orbitLabel = $('hud-orbit-state');
+  private readonly orbitDetail = $('hud-orbit-detail');
   private readonly lock = $('hud-lock');
   private readonly vignette = $('g-vignette');
   /** The strain the vignette shows (see setStrain). */
@@ -582,17 +587,41 @@ export class Hud {
    * The escape gauge in a gravity well: how much of the drive's thrust the well's hold takes
    * (see escapeLoad), from WELL_GAUGE on, in its alarm level's color; at 100 % there is no return.
    */
-  setEscape(load: number | null) {
+  setEscape(load: number | null, calm = false) {
     // whole percents below 100, and 100 only past the point of no return
     const percent = load === null || load < WELL_GAUGE ? -1 : load >= WELL_LOST ? 100 : Math.min(99, Math.floor(load * 100));
-    if (percent === this.escapeShown) return;
+    const level = percent < 0 || calm ? null : wellLevel(load!);
+    if (percent === this.escapeShown && level === this.escapeLevel) return;
     this.escapeShown = percent;
+    this.escapeLevel = level;
     setHidden(this.escape, percent < 0);
     if (percent < 0) return;
     this.escapeFill.style.width = `${percent}%`;
     this.escapeValue.textContent = `${percent} %`;
-    const level = wellLevel(load!);
+    // in a stable orbit the gauge stays in the azure of information: nothing to act on
     for (const each of LEVELS) setClass(this.escape, each, each === level);
+  }
+
+  /**
+   * The orbit readout under the escape gauge (see game/orbit): ORBIT READY or STABLE ORBIT
+   * with the conic's nearest and farthest point over the horizon, or why the path is none
+   * with the speed of a circular orbit where the ship is; hidden for null. Written only when
+   * what it shows changes.
+   */
+  setOrbit(state: OrbitState | null, orbit: Orbit, horizon: number) {
+    let label = '';
+    let detail = '';
+    if (state === 'ready' || state === 'stable') {
+      label = state === 'ready' ? t('ORBIT READY') : t('STABLE ORBIT');
+      detail = t('Pe {pe} · Ap {ap}', { pe: meters(orbit.periapsis - horizon), ap: meters(orbit.apoapsis - horizon) });
+    } else if (state) {
+      label = state === 'falls' ? t('NO ORBIT · FALLS IN') : t('NO ORBIT · LEAVES ARENA');
+      detail = t('Orbit speed {speed} m/s', { speed: Math.round(orbit.circular * METERS_PER_UNIT) });
+    }
+    setHidden(this.orbit, !state);
+    setClass(this.orbit, 'held', state === 'ready' || state === 'stable');
+    if (label !== this.orbitLabel.textContent) this.orbitLabel.textContent = label;
+    if (detail !== this.orbitDetail.textContent) this.orbitDetail.textContent = detail;
   }
 
   /** Tunnel vision under sustained acceleration, 0..1: only hinted, the edges darken a little and close in a little, so the picture stays readable. */
@@ -675,12 +704,19 @@ export class Hud {
   /**
    * A big moment's banner (see game/moments.ts), above the crosshair: it pops in and fades out by
    * itself after BANNER_SECONDS; meanwhile only a moment of the same `rank` or higher replaces it.
+   * A `note` (a streak's bonus) stands smaller beneath it.
    */
-  banner(now: number, text: string, rank: number) {
+  banner(now: number, text: string, rank: number, note = '') {
     if (now < this.bannerUntil && rank < this.bannerRank) return;
     this.bannerUntil = now + BANNER_SECONDS;
     this.bannerRank = rank;
     pop(this.bannerText, text);
+    if (note) {
+      const line = document.createElement('div');
+      line.className = 'banner-note';
+      line.textContent = note;
+      this.bannerText.append(line);
+    }
   }
 
   private readonly bannerText = $('hud-banner');

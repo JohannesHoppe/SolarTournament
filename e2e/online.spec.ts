@@ -253,10 +253,10 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
   const [atA, atB] = [await where(a), await where(b)];
   expect(Math.hypot(atA[0] - atB[0], atA[1] - atB[1], atA[2] - atB[2])).toBeLessThan(2000);
   // the clone 150 m above a part of the battleship, its nose on it, fires its laser or a
-  // torpedo; returns what the torpedo locked on. Coming from afar (`arrive`) it is put there
+  // torpedo (null: neither, it is only put there); returns what the torpedo locked on. Coming from afar (`arrive`) it is put there
   // first and fires once the other tab has its states from there: a shot from where the others
   // do not see the ship yet is no shot of its (see Online.onFire)
-  const fireAt = async (page: Page, zone: number, torpedo: boolean, arrive = false) => {
+  const fireAt = async (page: Page, zone: number, torpedo: boolean | null, arrive = false) => {
     const aim = (fire: boolean | null) =>
       page.evaluate(
         ([zone, fire]) => {
@@ -300,6 +300,26 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
   ).toBe(true);
   await play(b, 3);
   for (const page of [a, b]) expect(await page.evaluate(() => window.game.fleet.hits[1])).toBe(10);
+  // the dead clone of the second tab dropped a nova core 150 m above the third battery, on both
+  // tabs alike; the first tab's clone flies through it, fires there, and both count the core's
+  // hits on every part it reached: the battery under it broken outright
+  await a.evaluate(() => (window.game.fireBattery = () => {}));
+  const dropper = await b.evaluate(() => ({ id: window.game.me.id, deaths: window.game.me.deaths }));
+  for (const page of [a, b]) {
+    await page.evaluate(({ id, deaths }) => {
+      const game = window.game;
+      const part = game.fleet.zoneAt(2);
+      const above = part.clone().set(0, 1, 0).applyQuaternion(game.fleet.quaternion).multiplyScalar(3000).add(part);
+      game.probes.drop(id, deaths, ['nova'], above, game.fleet.velocity.clone(), game.time);
+    }, dropper);
+  }
+  await fireAt(a, 2, null, true);
+  expect(await a.evaluate(() => window.game.me.nova)).toBe(true);
+  await fireAt(a, 2, false);
+  await play(a, 3);
+  const counted = await a.evaluate(() => [...window.game.fleet.hits]);
+  expect(counted[2]).toBe(await a.evaluate(() => window.game.fleet.hitsOf(2)));
+  expect(await b.evaluate(() => [...window.game.fleet.hits])).toEqual(counted);
   expect(errors).toEqual([]);
 });
 

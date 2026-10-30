@@ -550,6 +550,12 @@ export function knockShare(before: THREE.Vector3, after: THREE.Vector3, speed: n
 /** What a ship's beams and torpedoes did counts as evidence this long (s), its torpedo launches as long as a torpedo flies and a little more. */
 const EVIDENCE_SECONDS = 5;
 const LAUNCH_EVIDENCE = TORPEDO_LIFETIME + 3;
+/**
+ * A nova core's hits on a part of the battleship are judged as if it had gone off this much
+ * closer to the part (units, 200 m): the battleship as two browsers see it lies apart by its lag,
+ * a second of its 30 m/s and the corrections of its course, far less than that.
+ */
+const NOVA_SLACK = 4000;
 /** Beams and blasts kept per ship: far more than fit into EVIDENCE_SECONDS of a twin laser's bursts. */
 const EVIDENCE_KEPT = 32;
 const closest = new THREE.Vector3();
@@ -571,6 +577,7 @@ function offSegment(point: THREE.Vector3, from: THREE.Vector3, to: THREE.Vector3
 export class Evidence {
   private readonly beams = new Map<string, { at: number; from: THREE.Vector3; to: THREE.Vector3 }[]>();
   private readonly blasts = new Map<string, { at: number; position: THREE.Vector3 }[]>();
+  private readonly novas = new Map<string, { at: number; position: THREE.Vector3 }[]>();
   private readonly launches = new Map<string, number>();
 
   beam(ship: string, from: THREE.Vector3, to: THREE.Vector3, now: number) {
@@ -604,13 +611,32 @@ export class Evidence {
    * A report of a hit on a part of the battleship stands: a laser's (one hit) needs a living
    * shooter whose beam ended on the part; a torpedo's (`count` > 1) one of its torpedoes that went
    * off there, its shooter alive or not, for a torpedo launched by a living clone flies on after
-   * that clone died and counts where it lands. `part` is null for a part this browser does not
-   * know (another round), and a browser that has only just come takes the hit on trust.
+   * that clone died and counts where it lands; a nova core's (`nova`: the hits it deals a part
+   * by distance) one the ship set off near enough (see novaReached), its clone reprinted since.
+   * `part` is null for a part this browser does not know (another round), and a browser that has
+   * only just come takes the hit on trust.
    */
-  fleetHit(ship: string, alive: boolean, part: THREE.Vector3 | null, count: number, reach: number, trusting: boolean, now: number): boolean {
-    if (count <= 1 && !alive) return false;
+  fleetHit(ship: string, alive: boolean, part: THREE.Vector3 | null, count: number, reach: number, trusting: boolean, now: number, nova: ((distance: number) => number) | null = null): boolean {
+    if (count <= 1 && !alive && !nova) return false;
     if (!part || trusting) return true;
+    if (nova) return this.novaReached(ship, part, count, nova, now);
     return count > 1 ? this.blasted(ship, part, reach, now) : this.beamEnded(ship, part, reach, now);
+  }
+
+  /** The ship set off a nova core there. */
+  nova(ship: string, position: THREE.Vector3, now: number) {
+    keep(this.novas, ship, { at: now, position: position.clone() }, now);
+  }
+
+  /**
+   * A nova core's hits on a part of the battleship stand: a nova core of the ship went off
+   * lately, near enough to the part to deal `count` hits (`dealt`, by the distance from it to the
+   * part's center), that distance shortened by NOVA_SLACK. Where the core went off is the
+   * holder's own word, checked against where its ship flies (see Plausibility.nova); only the
+   * battleship lies a little elsewhere on each browser.
+   */
+  private novaReached(ship: string, part: THREE.Vector3, count: number, dealt: (distance: number) => number, now: number): boolean {
+    return (this.novas.get(ship) ?? []).some((nova) => now - nova.at < EVIDENCE_SECONDS && count <= dealt(Math.max(0, nova.position.distanceTo(part) - NOVA_SLACK)));
   }
 
   /** The ship launched a torpedo that may still fly. */
@@ -620,7 +646,7 @@ export class Evidence {
 
   /** What the ships `gone` names did goes: their browser left. */
   forget(gone: (ship: string) => boolean) {
-    for (const map of [this.beams, this.blasts, this.launches]) for (const ship of map.keys()) if (gone(ship)) map.delete(ship);
+    for (const map of [this.beams, this.blasts, this.novas, this.launches]) for (const ship of map.keys()) if (gone(ship)) map.delete(ship);
   }
 }
 
@@ -635,8 +661,9 @@ function keep<T extends { at: number }>(map: Map<string, T[]>, ship: string, ent
 /**
  * A ship's score as other browsers take it rises by at most SCORE_RATE points a second, in
  * bursts of up to SCORE_BURST: far beyond honest play (a nova core that takes seven ships at once
- * is 7,000 points, the battleship's reactor and its sinking 1,500, a race's win 1,000), and a
- * score said to be higher shows as high as that allows. It falls as it likes (deaths cost points).
+ * is 7,000 points, a streak of seven kills with its bonus 6,250, the battleship's reactor and its
+ * sinking 1,500, a race's win 1,000), and a score said to be higher shows as high as that
+ * allows. It falls as it likes (deaths cost points).
  */
 const SCORE_RATE = 200;
 const SCORE_BURST = 10000;

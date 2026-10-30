@@ -11,6 +11,7 @@ import type { Homing } from './torpedoes';
 import { Elevation, EMPHASES, machinery } from './machinery';
 import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS, routeNearest, SHOWER_LENGTH, SHOWER_WIDE, type Comet } from './comet';
 import { msg, t } from '../i18n/i18n';
+import { NOVA_RADIUS } from './items';
 
 /**
  * The President's Fleet: every Host on one side against a battleship of the President, one in
@@ -34,7 +35,9 @@ import { msg, t } from '../i18n/i18n';
  * Its hull blocks the line of sight like a rock: a battery does not fire through it, and a pilot
  * on the far side is hidden from the others. Its hangar deck runs open through it from flank to
  * flank (see HANGARS): ships fly through, beams and sight pass along it. A torpedo locks on a part as on a ship and goes off
- * on it, or on the hull; it counts TORPEDO_HITS hits on every part it goes off near.
+ * on it, or on the hull; it counts TORPEDO_HITS hits on every part it goes off near. A nova
+ * core breaks the parts close to it outright and takes a share of the rest it reaches (see
+ * novaShare).
  *
  * Everything collides with it, its turrets, bells and bared reactor included: it keeps clear of
  * the pieces of the field too heavy to ram aside (see DODGE_MASS) and rams the lighter ones aside
@@ -47,6 +50,8 @@ import { msg, t } from '../i18n/i18n';
  * Each browser fires the batteries at the ships it runs, and burns them in the plume.
  */
 export type ZoneKind = 'battery' | 'drive' | 'reactor';
+/** What hits a part: a ship's laser, a torpedo, a nova core. */
+export type FleetWeapon = 'laser' | 'torpedo' | 'nova';
 /**
  * The battleship's size (a factor). Its hull, superstructure and parts are laid out in design
  * units and grown by FLEET_SCALE into the world, while its hangar deck keeps its size in world
@@ -72,6 +77,22 @@ export const ZONE_HITS: Record<ZoneKind, number> = { battery: 64, drive: 94, rea
 /** A torpedo counts this many hits on every part it goes off within TORPEDO_REACH of (units, 20 m beyond the part): about a sixth of a battery. */
 export const TORPEDO_HITS = 10;
 const TORPEDO_REACH = 400;
+/**
+ * A nova core going off is the end of whatever lies close: a part whose surface lies within
+ * NOVA_SHATTER of it (units, 200 m) breaks outright. Farther out it takes a share of the hits
+ * the part takes in all, falling evenly to NOVA_EDGE at the core's reach (NOVA_RADIUS, 800 m):
+ * a third of a battery at the edge is two torpedoes' worth, at 500 m about four. Everything
+ * within 800 m of it is gone, so the battleship's parts there take more than any torpedo, and
+ * a core set off on its deck can take out several batteries at once; the reactor stays sealed
+ * under its dome until the batteries are gone, as against every weapon.
+ */
+export const NOVA_SHATTER = 4000;
+export const NOVA_EDGE = 1 / 3;
+/** The share of a part's hits a nova core takes whose surface lies `distance` from it (units): 1 within NOVA_SHATTER, NOVA_EDGE at NOVA_RADIUS, nothing beyond. */
+export function novaShare(distance: number): number {
+  if (distance > NOVA_RADIUS) return 0;
+  return 1 - (1 - NOVA_EDGE) * THREE.MathUtils.clamp((distance - NOVA_SHATTER) / (NOVA_RADIUS - NOVA_SHATTER), 0, 1);
+}
 /** Points for a hit on a part, for the hit that breaks one, and for every ship of the side when the battleship goes down. */
 export const FLEET_HIT_POINTS = 10;
 export const ZONE_POINTS: Record<ZoneKind, number> = { battery: 150, drive: 200, reactor: 1000 };
@@ -1626,7 +1647,7 @@ export class Fleet implements Obstacle {
   }
 
   /**
-   * Hits on a part (one for a laser, TORPEDO_HITS for a torpedo), from here or another browser;
+   * Hits on a part (one for a laser, TORPEDO_HITS for a torpedo, a nova core's by its distance), from here or another browser;
    * returns the events they set off: the part broken, the ship gone down. A hit on a part
    * already broken or still sealed, or on a battleship that went down, counts nothing.
    */
@@ -1670,6 +1691,30 @@ export class Fleet implements Obstacle {
     this.toLocal(point, sighted);
     const near = (box: Box, i: number) => box.part === i && boxContact(local.subVectors(sighted, box.center), box.half, TORPEDO_REACH, step, closest) !== null;
     return this.zones.flatMap((zone, i) => (this.targetable(i) && (zone.at.distanceTo(sighted) < zone.radius + TORPEDO_REACH || this.colliders.some((box) => near(box, i))) ? [i] : []));
+  }
+
+  /** The hits a nova core going off `distance` from a part's center (units) deals it (see novaShare); none beyond its reach. */
+  novaHit(zone: number, distance: number): number {
+    return Math.ceil(novaShare(Math.max(0, distance - this.zones[zone].radius)) * this.hitsOf(zone));
+  }
+
+  /**
+   * The parts a nova core going off at `point` hits, and how many hits each takes (see
+   * novaShare), up to what the part has left: those it can hit now, the reactor only once the
+   * dome is open.
+   */
+  novaHits(point: THREE.Vector3): { zone: number; count: number }[] {
+    return this.zones.flatMap((_, i) => {
+      const count = this.targetable(i) ? Math.min(this.novaHit(i, this.zoneAt(i, sighted).distanceTo(point)), this.hitsOf(i) - this.hits[i]) : 0;
+      return count > 0 ? [{ zone: i, count }] : [];
+    });
+  }
+
+  /** What a nova core going off at `point` would take of the battleship, in hits on its parts. A bot weighs a nova by it (see novaWorth). */
+  novaDamage(point: THREE.Vector3): number {
+    let sum = 0;
+    for (const { count } of this.novaHits(point)) sum += count;
+    return sum;
   }
 
   /**

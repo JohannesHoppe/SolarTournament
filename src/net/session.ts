@@ -7,7 +7,7 @@ import { roomMode } from './room';
 import type { RoomMode } from '../game/race';
 import type { ProbeState } from '../game/items';
 import type { FlagsState } from '../game/flags';
-import { TORPEDO_HITS, type FleetState } from '../game/fleet';
+import { TORPEDO_HITS, ZONE_HITS, type FleetState } from '../game/fleet';
 import { fieldState, flagsState, fleetState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, shovedState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
 /** Ship states go out this often (Hz); the receivers predict the motion in between, and take at most three times as many. */
@@ -80,8 +80,10 @@ const MAX_RAMS_PER_SECOND = 60;
  * contact every few seconds, a rock's fragments meeting its neighbours at once.
  */
 const MAX_KNOCKS_PER_SECOND = 40;
-/** The parts of a battleship are numbered from zero, far fewer than this (see game/fleet); one message counts a laser's hit or a torpedo's. */
+/** The parts of a battleship are numbered from zero, far fewer than this (see game/fleet); one message counts a laser's hit, a torpedo's or a nova core's. */
 const MAX_FLEET_ZONE = 31;
+/** The most hits a part takes (the reactor's): a nova core breaks a part close by outright. */
+const MAX_PART_HITS = Math.max(...Object.values(ZONE_HITS));
 /**
  * The field time of a peer's rock hits in a round only moves on (s): one earlier than it reported
  * before is a lie, beyond ROCK_ORDER_SLACK. That slack is a second: a browser's field clock
@@ -163,7 +165,7 @@ export class Session {
   /** A piece of wreckage was shot or rammed on another browser. */
   onWreck: (id: string) => void = () => {};
   /** A ship of another browser hit a part of the President's battleship in a round (see game/fleet). */
-  onFleetHit: (zone: number, round: number, shooter: string, count: number) => void = () => {};
+  onFleetHit: (zone: number, round: number, shooter: string, count: number, nova: boolean) => void = () => {};
   /** The lead browser's battleship rammed a piece of the field in a round: the piece's motion since (see game/fleet). */
   onRam: (state: ShovedState, round: number) => void = () => {};
   /** A piece of the field struck another or a ring in a round, as the lead browser decided: its motion since (see world/contacts). */
@@ -294,11 +296,13 @@ export class Session {
       const shooter = id(d?.i);
       const zone = int(d?.z, 0, MAX_FLEET_ZONE);
       const round = int(d?.n, 0, MAX_COUNT);
-      const count = int(d?.c, 1, TORPEDO_HITS);
+      // a nova core's hits on a part are at most all the part takes, a torpedo's TORPEDO_HITS
+      const nova = d?.v === 1;
+      const count = int(d?.c, 1, nova ? MAX_PART_HITS : TORPEDO_HITS);
       if (!shooter || zone === null || round === null || count === null || ownerOf(shooter) !== from || !this.hitBudget.spend(from)) return;
-      // a laser hits one part a shot, as often as it fires; a torpedo's blast each part once
-      if (!this.spaced(count > 1 ? `${shooter}>@${zone}` : `${shooter}>@`)) return;
-      this.guard(() => this.onFleetHit(zone, round, shooter, count));
+      // a laser hits one part a shot, as often as it fires; a torpedo's blast and a nova each part once
+      if (!this.spaced(nova ? `${shooter}>*${zone}` : count > 1 ? `${shooter}>@${zone}` : `${shooter}>@`)) return;
+      this.guard(() => this.onFleetHit(zone, round, shooter, count, nova));
     });
     transport.on('br', (d, from) => {
       // only the lead flies the battleship, so only the lead rams with it
@@ -605,8 +609,9 @@ export class Session {
     this.transport.send('w', { i: wreck });
   }
 
-  sendFleetHit(zone: number, round: number, shooter: string, count: number) {
-    this.transport.send('bh', { z: zone, n: round, i: shooter, c: count });
+  /** A ship of this browser hit a part of the battleship `count` times; `v: 1` when its nova core did it. */
+  sendFleetHit(zone: number, round: number, shooter: string, count: number, nova: boolean) {
+    this.transport.send('bh', { z: zone, n: round, i: shooter, c: count, ...(nova ? { v: 1 } : {}) });
   }
 
   sendTorpedo(torpedo: string, shooter: string, target: string | null, position: Vec, velocity: Vec) {

@@ -23,9 +23,11 @@ const PROBE_WEAR: Wear = { rust: 0.3, chips: 0.15, grime: 0.75, scratches: 0.6, 
  * - nova: an overcharged reactor core, the rarest of all. The ship that holds it pulses for
  *   everyone to see, and its next shot is no laser: the core goes off, and every other ship
  *   around it is gone, and so is its own clone, printed again at once without counting as a
- *   death (see Game.novaBlast). It stays with the clone until then, and flies
- *   out when it dies.
+ *   death (see Game.novaBlast). The President's battleship takes it on every part it reaches
+ *   (see Fleet.novaHits). It stays with the clone until then, and flies out when it dies.
  */
+/** A nova core destroys every other ship within this reach of where it goes off (units, 800 m). */
+export const NOVA_RADIUS = 16000;
 export type ItemKind = 'twin' | 'plating' | 'torpedoes' | 'overdrive' | 'repair' | 'nova';
 export const KINDS: readonly ItemKind[] = ['twin', 'plating', 'torpedoes', 'overdrive', 'repair', 'nova'];
 

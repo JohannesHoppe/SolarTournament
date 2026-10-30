@@ -1122,6 +1122,13 @@ body.cinema #touch {
   animation: banner-pop 2.4s ease-out forwards;
 }
 
+/* a streak's bonus beneath its banner: the points the crowd's show pays */
+#hud-banner .banner-note {
+  margin-top: 0.3em;
+  font-size: 0.45em;
+  letter-spacing: 0.2em;
+}
+
 /* it slams in, wide and bright, flickers once like a tube that catches, holds, and fades */
 @keyframes banner-pop {
   from {
@@ -1321,8 +1328,9 @@ body.touch #hud-message {
   content: "\2191";
 }
 
-/* the escape gauge in a gravity well: how much of the drive the well's hold takes */
-#hud-escape {
+/* the escape gauge in a gravity well: how much of the drive the well's hold takes; under it the orbit readout */
+#hud-escape,
+#hud-orbit {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1334,8 +1342,24 @@ body.touch #hud-message {
   font-size: 0.9rem;
 }
 
-#hud-escape[hidden] {
+#hud-escape[hidden],
+#hud-orbit[hidden] {
   display: none;
+}
+
+/* no orbit yet: what is missing, in the plain azure; an orbit ready or flown in the bright one */
+#hud-orbit {
+  color: var(--hud);
+}
+
+#hud-orbit.held {
+  color: var(--hud-bright);
+}
+
+#hud-orbit b {
+  font-family: var(--font-display);
+  font-weight: normal;
+  letter-spacing: 0.1em;
 }
 
 #hud-escape > i {
@@ -3051,7 +3075,8 @@ body.touch #transmission {
   }
 
   body.touch #hud-master,
-  body.touch #hud-escape {
+  body.touch #hud-escape,
+  body.touch #hud-orbit {
     margin: 2px 0;
     font-size: 0.7rem;
   }
@@ -3150,7 +3175,8 @@ body.touch #transmission {
   }
 
   body.touch #hud-master,
-  body.touch #hud-escape {
+  body.touch #hud-escape,
+  body.touch #hud-orbit {
     font-size: 0.6rem;
   }
 
@@ -3219,7 +3245,8 @@ body.touch #transmission {
   }
 
   body:not(.touch) #hud-master,
-  body:not(.touch) #hud-escape {
+  body:not(.touch) #hud-escape,
+  body:not(.touch) #hud-orbit {
     margin: 2px 0;
     font-size: 0.65rem;
   }

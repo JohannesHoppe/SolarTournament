@@ -12,6 +12,8 @@ import { MAX_SPEED } from '../ship/flight';
 import type { ItemKind } from './items';
 import { HOOK_RANGE } from './hook';
 import { msg, t } from '../i18n/i18n';
+import type { ArenaId } from '../world/arenas';
+import type { OrbitState } from './orbit';
 
 /** What a flight school drill can see and do. */
 export interface SchoolContext {
@@ -23,6 +25,8 @@ export interface SchoolContext {
   hooked: boolean;
   /** The impact warning is on. */
   impactAhead: boolean;
+  /** The orbit readout as the HUD shows it near the black hole (see game/orbit); null elsewhere. */
+  orbit: OrbitState | null;
   /** The autopilot takes out the drift across the nose; off, the ship drifts freely. */
   autopilot: boolean;
   /** Switches the autopilot on or off, as the Host's key does. */
@@ -120,6 +124,8 @@ interface Attempt {
   early: boolean;
   /** When the drill was done in this attempt (attempt seconds; NaN: not yet), see SURVIVE. */
   doneAt: number;
+  /** The angle flown about the black hole in a stable orbit so far (rad), see the orbit drill. */
+  swept: number;
 }
 
 interface Drill {
@@ -149,6 +155,8 @@ interface Drill {
   keepsDrift?(ctx: SchoolContext, attempt: Attempt): boolean;
   /** The drill does not apply to the Host's device: it is passed over without a word. */
   skip?(ctx: SchoolContext): boolean;
+  /** The arena the drill is flown in; without one, the school's home (the default arena). */
+  arena?: ArenaId;
 }
 
 
@@ -309,6 +317,19 @@ const TAIL_SKILL = 0.15;
 const BURST_SKILL = 0.25;
 const HUNTER_SKILL = 0.5;
 const EXAM_SKILL = 0.5;
+/**
+ * The orbit drill, at the Event Horizon: the pilot starts ORBIT_START from the hole's center
+ * (units, 1.2 km straight above it, out of the plane its rocks circle in, inside their ring),
+ * its nose along ORBIT_NOSE, across the line to the hole, drifting that way at ORBIT_DRIFT
+ * (units/s, 100 m/s; a circular orbit there flies 181 m/s, ORBIT READY comes from about 156
+ * m/s), and has to fly ORBIT_SWEEP (rad, half a turn) about the hole in a stable orbit.
+ */
+export const ORBIT_START = new THREE.Vector3(0, 24000, 0);
+export const ORBIT_NOSE = new THREE.Vector3(1, 0, 0);
+export const ORBIT_DRIFT = 2000;
+export const ORBIT_SWEEP = Math.PI;
+const ORIGIN = new THREE.Vector3();
+const UP = new THREE.Vector3(0, 1, 0);
 
 
 const scratch = new THREE.Vector3();
@@ -1116,6 +1137,35 @@ export const DRILL = {
     waypoint: (_, a) => a.points[1] ?? null,
     mark: () => t('Cover'),
   },
+  // an orbit about the black hole: the readout says when the path is one, free drift flies it
+  orbit: {
+    line: SCHOOL.orbit,
+    praise: SCHOOL_PRAISE.orbit,
+    keys: ['drive', 'turn', 'autopilot'],
+    arena: 'hole',
+    autopilot: true,
+    autopilotAfter: true,
+    enter(ctx, a) {
+      const flight = ctx.me.flight;
+      const center = ctx.field.well?.position ?? ORIGIN;
+      flight.position.copy(center).add(ORBIT_START);
+      flight.orientation.setFromRotationMatrix(new THREE.Matrix4().lookAt(flight.position, scratch.copy(flight.position).add(ORBIT_NOSE), UP));
+      drift(ctx, ORBIT_DRIFT);
+      a.points = [flight.position.clone()];
+      a.swept = 0;
+    },
+    // half a turn about the hole in a stable orbit; whatever breaks the orbit starts the count again
+    done(ctx, a) {
+      const center = ctx.field.well?.position ?? ORIGIN;
+      const now = scratch.subVectors(ctx.me.flight.position, center);
+      const before = toTarget.subVectors(a.points[0], center);
+      a.swept = ctx.orbit === 'stable' ? a.swept + before.angleTo(now) : 0;
+      a.points[0].copy(ctx.me.flight.position);
+      return a.swept >= ORBIT_SWEEP;
+    },
+    fail: (ctx) => (ctx.me.flight.position.length() > ARENA_LIMIT ? SCHOOL.again : null),
+    leave: (ctx) => ctx.setAutopilot(true),
+  },
   exam: sparring(SCHOOL.exam, SCHOOL_PRAISE.exam, ['turn', 'drive', 'brake', 'slide', 'dodge', 'fire'], true, EXAM_SKILL),
 } satisfies Record<string, Drill>;
 
@@ -1261,7 +1311,8 @@ export function coursesFrom(text: string | null): Set<SchoolCourse> | null {
  * one down), the overdrive, the hook on a ship, then a probe, whose colors name the nova core
  * that follows it. The tactician: defending first (a bot on the tail, the kick), then attacking
  * (shooting sideways in free drift, the shove into rock), then cover from a hunter and from a
- * torpedo, and an exam against a bot as good as the field's middling one.
+ * torpedo, an orbit about the black hole of the Event Horizon (a place the alarms leave a ship
+ * alone), and an exam against a bot as good as the field's middling one.
  */
 const COURSES: Record<SchoolCourse, Drill[]> = {
   basic: [DRILL.briefing, DRILL.turn, DRILL.drive, DRILL.brake, DRILL.fineAim, DRILL.cockpit, DRILL.curve, DRILL.stopAt, DRILL.impact, saying(SCHOOL.basicDone)],
@@ -1286,7 +1337,7 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
     saying(SCHOOL.done),
   ],
   arsenal: [saying(SCHOOL.arsenal), DRILL.torpedo, DRILL.torpedoDown, DRILL.overdrive, DRILL.hookShip, DRILL.probe, DRILL.nova, saying(SCHOOL.arsenalDone)],
-  tactician: [saying(SCHOOL.tactician), DRILL.onTail, DRILL.kick, DRILL.slideShot, DRILL.shove, DRILL.cover, DRILL.torpedoCover, DRILL.exam, saying(SCHOOL.tacticianDone)],
+  tactician: [saying(SCHOOL.tactician), DRILL.onTail, DRILL.kick, DRILL.slideShot, DRILL.shove, DRILL.cover, DRILL.torpedoCover, DRILL.orbit, DRILL.exam, saying(SCHOOL.tacticianDone)],
 };
 
 /** Each drill's name, its key in DRILL; a course's opening and closing words are "opening" and "closing". */
@@ -1465,6 +1516,11 @@ export class FlightSchool {
     return on;
   }
 
+  /** The arena the current drill is flown in (see Drill.arena); null for the school's home. */
+  get arena(): ArenaId | null {
+    return this.drills[Math.min(this.index, this.drills.length - 1)].arena ?? null;
+  }
+
   /** Group of the drills' props; the game adds it to the scene. */
   get root(): THREE.Object3D {
     return this.markers.root;
@@ -1591,7 +1647,7 @@ export class FlightSchool {
     const drill = this.drills[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN };
+    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0 };
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
     const instruction = rep > 0 && drill.repLine ? drill.repLine : drill.line;

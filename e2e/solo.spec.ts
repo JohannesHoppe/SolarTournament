@@ -87,6 +87,33 @@ for (const course of ['basic', 'racer', 'gladiator', 'arsenal', 'tactician']) {
   });
 }
 
+test('the flight school’s orbit drill flies at the Event Horizon: the readout says ORBIT READY, and free drift flies a STABLE ORBIT without the well’s alarm', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('solartournament.school-step', JSON.stringify({ tactician: 'orbit' })));
+  const errors = await openGame(page);
+  await page.click('#school');
+  await page.click('#school-tactician');
+  await play(page, 2);
+  expect(await page.evaluate(() => window.game.venue.id)).toBe('hole');
+  // the drill puts the pilot 1.2 km above the hole, drifting too slowly for an orbit
+  await expect(page.locator('#hud-orbit')).toBeVisible({ timeout: 60_000 });
+  await expect(page.locator('#hud-orbit-state')).toHaveText('NO ORBIT · FALLS IN');
+  // a burn along the nose (still across the line to the hole) up to the speed of a circular orbit there
+  await page.evaluate(() => {
+    const flight = window.game.me.flight;
+    const well = window.game.field.well;
+    const arm = flight.position.clone().sub(well.position);
+    const across = arm.clone().cross(flight.velocity).cross(arm).normalize();
+    flight.velocity.copy(across).multiplyScalar(Math.sqrt((well.surfaceGravity * well.radius * well.radius) / arm.length()));
+  });
+  await expect(page.locator('#hud-orbit-state')).toHaveText('ORBIT READY');
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT' })));
+  await expect(page.locator('#hud-orbit-state')).toHaveText('STABLE ORBIT');
+  await play(page, 1);
+  expect(await page.evaluate(() => window.game.alarms.list.some((alarm: { id: string }) => alarm.id === 'well'))).toBe(false);
+  await expect(page.locator('#hud-escape')).not.toHaveClass(/caution|warning|critical/);
+  expect(errors).toEqual([]);
+});
+
 for (const kick of [true, false]) {
   test(`two ships side by side through a gate at 100 m/s: ${kick ? 'a kick puts the one at the band into it, a knockout for the kicker' : 'without a kick both pass'}`, async ({ page }) => {
     const errors = await openGame(page);

@@ -1,11 +1,11 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ARRIVAL, BATTERY_PERIOD, DODGE_MASS, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
+import { ARRIVAL, BATTERY_PERIOD, DODGE_MASS, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, NOVA_EDGE, NOVA_SHATTER, novaShare, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
 import { Randomizer } from '../random';
 import { MASS, massOf } from '../world/bodies';
 import { Wrecks } from '../world/wrecks';
-import { PROBE_RADIUS, Probes } from './items';
-import { Bot, evenSkills, SIEGE_DISTANCE } from '../ship/bots';
+import { NOVA_RADIUS, PROBE_RADIUS, Probes } from './items';
+import { Bot, evenSkills, NOVA_SIEGE, SIEGE_DISTANCE } from '../ship/bots';
 import type { Ship } from '../ship/ship';
 import { testField } from '../test/field';
 import { arenaById, ARENAS, RING_SHEET, type ArenaProfile } from '../world/arenas';
@@ -109,6 +109,53 @@ describe("the President's fleet", () => {
     fleet.hit(battery, fleet.hitsOf(battery));
     expect(fleet.hits[battery]).toBe(fleet.hitsOf(battery));
     expect(fleet.beacons[battery].alive).toBe(false);
+  });
+
+  it('takes a nova core on every open part it reaches: those close by broken outright, the farther the fewer hits, more than a torpedo within its reach', () => {
+    const fleet = battleship();
+    const batteries = zonesOf(fleet, 'battery');
+    const reactor = zonesOf(fleet, 'reactor')[0];
+    const battery = batteries[0];
+    // the share by the distance from a part's surface: whole within 200 m, a third at 800 m, none beyond
+    expect(novaShare(0)).toBe(1);
+    expect(novaShare(NOVA_SHATTER)).toBe(1);
+    expect(novaShare(NOVA_RADIUS)).toBeCloseTo(NOVA_EDGE);
+    expect(novaShare(NOVA_RADIUS + 1)).toBe(0);
+    expect(novaShare((NOVA_SHATTER + NOVA_RADIUS) / 2)).toBeGreaterThan(NOVA_EDGE);
+    // anywhere within its reach a nova takes more of a part than a torpedo, and of a battery at
+    // its edge two torpedoes' worth
+    for (const zone of [battery, zonesOf(fleet, 'drive')[0], reactor]) expect(fleet.novaHit(zone, fleet.zones[zone].radius + NOVA_RADIUS)).toBeGreaterThan(TORPEDO_HITS);
+    expect(fleet.novaHit(battery, fleet.zones[battery].radius + NOVA_RADIUS)).toBeGreaterThanOrEqual(2 * TORPEDO_HITS);
+    // set off 100 m above a battery: that battery breaks outright, the sealed reactor takes nothing
+    const above = fleet.zoneAt(battery).add(new THREE.Vector3(0, 2000, 0));
+    const hits = fleet.novaHits(above);
+    expect(hits.find((h) => h.zone === battery)?.count).toBe(fleet.hitsOf(battery));
+    expect(hits.some((h) => h.zone === reactor)).toBe(false);
+    // the parts farther away take fewer hits, and none beyond its reach
+    for (const { zone, count } of hits) {
+      const distance = fleet.zoneAt(zone).distanceTo(above);
+      expect(distance).toBeLessThan(NOVA_RADIUS + fleet.zones[zone].radius);
+      expect(count).toBe(Math.min(fleet.novaHit(zone, distance), fleet.hitsOf(zone)));
+    }
+    expect(fleet.novaHits(fleet.zoneAt(battery).add(new THREE.Vector3(0, NOVA_RADIUS * 2, 0)))).toEqual([]);
+    expect(fleet.novaDamage(above)).toBe(hits.reduce((sum, h) => sum + h.count, 0));
+    // where a bot attacking a battery holds, from wherever it came, a core is worth setting off
+    for (const zone of batteries) {
+      for (const from of [new THREE.Vector3(60000, 0, 0), new THREE.Vector3(-60000, 20000, 0), new THREE.Vector3(0, -60000, 30000), new THREE.Vector3(0, 0, -60000)]) {
+        expect(fleet.novaDamage(fleet.siegeFrom(zone, from, SIEGE_DISTANCE, new THREE.Vector3()))).toBeGreaterThanOrEqual(NOVA_SIEGE);
+      }
+    }
+    for (const { zone, count } of hits) fleet.hit(zone, count);
+    expect(fleet.broken(battery)).toBe(true);
+    // a part half broken takes only what it has left, and the same core again counts nothing on it
+    expect(fleet.novaHits(above).some((h) => h.zone === battery)).toBe(false);
+    for (const { zone, count } of fleet.novaHits(above)) expect(count).toBeLessThanOrEqual(fleet.hitsOf(zone) - fleet.hits[zone]);
+    // once the dome is open, a core over the reactor breaks it and sends the battleship down
+    breakAll(fleet, batteries);
+    const overReactor = fleet.zoneAt(reactor).add(new THREE.Vector3(0, 3000, 0));
+    const onReactor = fleet.novaHits(overReactor).find((h) => h.zone === reactor);
+    expect(onReactor?.count).toBe(fleet.hitsOf(reactor));
+    expect(fleet.hit(reactor, onReactor!.count).some((e) => e.kind === 'sunk')).toBe(true);
   });
 
   it('shows each part on the side it faces, where a ship attacking it holds, from wherever it comes', () => {
@@ -378,6 +425,8 @@ describe("the battleship and the field's rock", () => {
   });
 
   const rings = arenaById('rings')!;
+  /** The Rings' ice weighs at most some 1.7 times the battleship; the Corona's rock holds a piece of about three times. */
+  const corona = arenaById('corona')!;
   /** The world velocity of a piece's center. */
   const drift = (piece: Asteroid) => field.surfaceVelocity(piece, piece.object.position, new THREE.Vector3());
   const momentum = (piece: Asteroid, fleet: Fleet) => drift(piece).multiplyScalar(massOf(piece)).addScaledVector(fleet.velocity, MASS.battleship);
@@ -394,8 +443,9 @@ describe("the battleship and the field's rock", () => {
     expect(fleet.depthOf(piece, 1, normal, point)).toBe(0);
   });
 
-  it('is slowed hard by a chunk three times its mass, and shoves it a little', () => {
-    const { fleet, piece } = bowOn(field, rings, 3);
+  it('is slowed hard by a rock three times its mass, and shoves it a little', () => {
+    const { fleet, piece } = bowOn(field, corona, 3);
+    expect(massOf(piece) / MASS.battleship).toBeGreaterThan(2.5);
     fleet.ram(1);
     expect(-fleet.velocity.z).toBeLessThan(FLEET_SPEED * 0.3);
     expect(-drift(piece).z).toBeGreaterThan(FLEET_SPEED * 0.2);
@@ -411,7 +461,7 @@ describe("the battleship and the field's rock", () => {
     expect(-drift(light.piece).z + light.fleet.velocity.z).toBeGreaterThan(19.9);
     expect(momentum(light.piece, light.fleet).distanceTo(before)).toBeLessThan(before.length() * 1e-4);
     expect(light.fleet.depthOf(light.piece, 1, normal, point)).toBe(0);
-    const heavy = bowOn(field, rings, 3);
+    const heavy = bowOn(field, corona, 3);
     heavy.fleet.velocity.set(0, 0, -10);
     heavy.fleet.ram(1);
     expect(heavy.fleet.rams).toEqual([]);
