@@ -99,6 +99,14 @@ export const EARTH_DOWN = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z)
 export const EARTH_CENTER = EARTH_DOWN.clone().multiplyScalar(EARTH_RADIUS + EARTH_ALTITUDE);
 /** Half the thickness of the ring's layer of ice grains through the arena's middle (units, 125 m: a layer 250 m thick). */
 export const RING_LAYER = 2500;
+/**
+ * Saturn's ring is drawn as the two faces of a slab RING_SHEET above and below its plane (units,
+ * 200 m): beyond the reach of every chunk of the layer (up to some 185 m) and short of the open
+ * space's chunks (from some 255 m), so the sheet never cuts through the ice. The face across the
+ * ring's plane from the pilot shows the ring, the near face nothing, so the open space on the
+ * pilot's side stays open (see world/landmarks, RING_CROSSING).
+ */
+export const RING_SHEET = 4000;
 
 /** The camera of an arena's preview picture: far out and above, onto the center, so the landmark shows (see ArenaProfile.preview). */
 export const PREVIEW_FROM: [number, number, number] = [70000, 30000, 70000];

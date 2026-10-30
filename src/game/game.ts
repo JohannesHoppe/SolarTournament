@@ -654,6 +654,12 @@ const BOOST_COLOR = new THREE.Color(1, 0.9, 0.75);
 const PREVIEW_DRIFT = 0.03;
 /** It shows the landmark this share of the screen's width left of the middle, beside the plate. */
 const PREVIEW_SHIFT = 0.3;
+/**
+ * The menu's camera turns slowly this high above the field's center (units, 40 m): among the
+ * Rings' chunks in the ring's layer, above its plane, so the ring lies below it as a floor and
+ * the sky above stays open (see RING_CROSSING in world/landmarks).
+ */
+const MENU_HEIGHT = 800;
 const UP = new THREE.Vector3(0, 1, 0);
 /** A bot's skills as small scales of five pips each, for the solo plate: what it can, at a glance. */
 const SKILL_NAMES: [keyof Skills, string][] = [
@@ -6641,7 +6647,7 @@ export class Game implements OnlineGame {
     }
     this.endPreview();
     const t = this.time * 0.08;
-    this.camera.position.set(0, 0, 0);
-    this.camera.lookAt(Math.cos(t), Math.sin(t * 0.7) * 0.2, Math.sin(t));
+    this.camera.position.set(0, MENU_HEIGHT, 0);
+    this.camera.lookAt(Math.cos(t), MENU_HEIGHT + Math.sin(t * 0.7) * 0.2, Math.sin(t));
   }
 }
