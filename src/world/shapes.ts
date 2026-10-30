@@ -42,6 +42,18 @@ const DEBRIS_COUNT = 8;
 const DEBRIS_SIZE = 900;
 /** Hull templates are as long as this (units, 100 m) before an arena scales them up. */
 const HULL_LENGTH = 2000;
+/** The half extents of each hull template's collider box (units, before an arena scales it), in the order of hullSet: a section, a torn section, an engine block, a bridge tower, a truss, and the three painted sections. */
+const SECTION_HALF = new THREE.Vector3(HULL_LENGTH * 0.5, HULL_LENGTH * 0.16, HULL_LENGTH * 0.14);
+export const HULL_BOXES: readonly THREE.Vector3[] = [
+  SECTION_HALF,
+  SECTION_HALF,
+  new THREE.Vector3(HULL_LENGTH * 0.22, HULL_LENGTH * 0.2, HULL_LENGTH * 0.2),
+  new THREE.Vector3(HULL_LENGTH * 0.12, HULL_LENGTH * 0.3, HULL_LENGTH * 0.1),
+  new THREE.Vector3(HULL_LENGTH * 0.5, HULL_LENGTH * 0.04, HULL_LENGTH * 0.04),
+  SECTION_HALF,
+  SECTION_HALF,
+  SECTION_HALF,
+];
 
 /** An invisible box whose `fill` (90 % for rock-like pieces, all of it for a box piece) is the collision shape with these semi-axes. */
 function collider(semiAxes: THREE.Vector3, fill = SHAPE_FILL): THREE.Mesh {
@@ -481,54 +493,42 @@ export function hullSet(): TemplateSet {
     into.decals.push(paint(HULL_PAINT[type], DEBRIS_SEED + 10 + type, 0, half.y * 0.45, half.z, half.x * 1.8));
   };
 
-  const SECTION = new THREE.Vector3(L * 0.5, L * 0.16, L * 0.14);
-  const shapes: [THREE.Vector3, (half: THREE.Vector3, into: HullParts) => void][] = [
-    [SECTION, (half, into) => section(half, half.x, into, true)],
-    [
-      SECTION,
-      (half, into) => {
-        // the hull ends at 40 % of the length, torn plates reach on to the end of the box
-        section(half, half.x * 0.4, into, false);
-        for (let k = 0; k < 9; k++) {
-          const length = r.range(0.2, 0.6) * half.x;
-          into.parts.push(block(length, r.range(10, 30), half.z * r.range(0.4, 1.4), half.x * 0.4 + length / 2, r.range(-0.75, 0.75) * half.y, r.range(-0.3, 0.3) * half.z));
-        }
-      },
-    ],
-    [
-      new THREE.Vector3(L * 0.22, L * 0.2, L * 0.2),
-      (half, { parts }) => {
-        parts.push(block(half.x * 1.2, half.y * 2, half.z * 2, -half.x * 0.4));
-        // three nozzles out of the back, cold
-        for (const [y, z] of [[0.45, 0], [-0.3, 0.45], [-0.3, -0.45]]) {
-          parts.push(new THREE.CylinderGeometry(half.y * 0.32, half.y * 0.48, half.x * 0.8, 8, 1, true).rotateZ(Math.PI / 2).translate(half.x * 0.6, y * half.y, z * half.z).toNonIndexed());
-        }
-      },
-    ],
-    [
-      new THREE.Vector3(L * 0.12, L * 0.3, L * 0.1),
-      (half, { parts, lights, beacons }) => {
-        // stepped levels, a bridge on top, and a mast with a beacon
-        for (let level = 0; level < 4; level++) {
-          const shrink = 1 - level * 0.18;
-          parts.push(block(half.x * 2 * shrink, half.y * 0.4, half.z * 2 * shrink, 0, -half.y + half.y * 0.2 + level * half.y * 0.4));
-          lights.push(block(half.x * 2 * shrink + 2, 8, half.z * 1.2 * shrink, 0, -half.y + half.y * 0.32 + level * half.y * 0.4));
-        }
-        parts.push(block(16, half.y * 0.4, 16, 0, half.y * 0.8));
-        beacons.push(0, half.y - 4, 0);
-      },
-    ],
-    [
-      new THREE.Vector3(L * 0.5, L * 0.04, L * 0.04),
-      (half, { parts }) => {
-        // a truss: four rails and their struts
-        for (const [y, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) parts.push(block(half.x * 2, 14, 14, 0, y * (half.y - 7), z * (half.z - 7)));
-        for (let x = -half.x; x <= half.x; x += half.x / 10) parts.push(block(10, half.y * 2, 10, x), block(10, 10, half.z * 2, x));
-      },
-    ],
-    [SECTION, painted(5)],
-    [SECTION, painted(6)],
-    [SECTION, painted(7)],
+  // each built within its collider box (see HULL_BOXES)
+  const builds: ((half: THREE.Vector3, into: HullParts) => void)[] = [
+    (half, into) => section(half, half.x, into, true),
+    (half, into) => {
+      // the hull ends at 40 % of the length, torn plates reach on to the end of the box
+      section(half, half.x * 0.4, into, false);
+      for (let k = 0; k < 9; k++) {
+        const length = r.range(0.2, 0.6) * half.x;
+        into.parts.push(block(length, r.range(10, 30), half.z * r.range(0.4, 1.4), half.x * 0.4 + length / 2, r.range(-0.75, 0.75) * half.y, r.range(-0.3, 0.3) * half.z));
+      }
+    },
+    (half, { parts }) => {
+      parts.push(block(half.x * 1.2, half.y * 2, half.z * 2, -half.x * 0.4));
+      // three nozzles out of the back, cold
+      for (const [y, z] of [[0.45, 0], [-0.3, 0.45], [-0.3, -0.45]]) {
+        parts.push(new THREE.CylinderGeometry(half.y * 0.32, half.y * 0.48, half.x * 0.8, 8, 1, true).rotateZ(Math.PI / 2).translate(half.x * 0.6, y * half.y, z * half.z).toNonIndexed());
+      }
+    },
+    (half, { parts, lights, beacons }) => {
+      // stepped levels, a bridge on top, and a mast with a beacon
+      for (let level = 0; level < 4; level++) {
+        const shrink = 1 - level * 0.18;
+        parts.push(block(half.x * 2 * shrink, half.y * 0.4, half.z * 2 * shrink, 0, -half.y + half.y * 0.2 + level * half.y * 0.4));
+        lights.push(block(half.x * 2 * shrink + 2, 8, half.z * 1.2 * shrink, 0, -half.y + half.y * 0.32 + level * half.y * 0.4));
+      }
+      parts.push(block(16, half.y * 0.4, 16, 0, half.y * 0.8));
+      beacons.push(0, half.y - 4, 0);
+    },
+    (half, { parts }) => {
+      // a truss: four rails and their struts
+      for (const [y, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) parts.push(block(half.x * 2, 14, 14, 0, y * (half.y - 7), z * (half.z - 7)));
+      for (let x = -half.x; x <= half.x; x += half.x / 10) parts.push(block(10, half.y * 2, 10, x), block(10, 10, half.z * 2, x));
+    },
+    painted(5),
+    painted(6),
+    painted(7),
   ];
   const flat = (geometries: THREE.BufferGeometry[]) => mergeGeometries(geometries.map((p) => (p.hasAttribute('uv') ? p.deleteAttribute('uv') : p)));
   // each part takes the plating at its own place, mirrored or not, so neighbors never show the same stretch of it
@@ -541,9 +541,9 @@ export function hullSet(): TemplateSet {
         return p;
       }),
     );
-  const near = shapes.map(([half, build]) => {
+  const near = HULL_BOXES.map((half, i) => {
     const into: HullParts = { parts: [], livery: [], lights: [], failing: [[], []], glass: [], garden: [], beacons: [], decals: [] };
-    build(half, into);
+    builds[i](half, into);
     const group = new THREE.Group();
     group.add(new THREE.Mesh(plated(into.parts), half.y < L * 0.05 ? dark : metal));
     if (into.livery.length) group.add(new THREE.Mesh(boxUv(flat(into.livery), TILE), livery));

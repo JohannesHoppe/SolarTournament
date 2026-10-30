@@ -2103,7 +2103,8 @@ export class Game implements OnlineGame {
       this.scene.remove(this.fleet.root);
       this.fleet.dispose();
     }
-    this.fleet = this.roundMode === 'fleet' ? new Fleet(arena.layout.seed) : null;
+    // flying clear of the field's pieces, its lane laid out from the field as generated, before a snapshot breaks any
+    this.fleet = this.roundMode === 'fleet' ? new Fleet(arena.layout.seed, this.field) : null;
     if (this.fleet) this.scene.add(this.fleet.root);
     // its hull hides what is behind it and stops torpedoes
     this.field.obstacle = this.fleet;

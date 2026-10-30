@@ -101,6 +101,8 @@ export const SINK_BLAST = 20000;
 const REACH = sized(8500);
 /** It comes in from this far out (units, 2.7 km), its whole hull inside the arena's edge. */
 const ENTRY = ARENA_LIMIT - REACH;
+/** How far out from the center's axis it comes in at a height (units): as far as its whole hull stays inside the arena's edge. */
+const entryRadius = (height: number) => Math.sqrt(ENTRY * ENTRY - height * height);
 /** The nozzles' plane behind the center (units, 580 m along the hull), and how far the plume reaches out from its axis there, around both drive bells (units, 105 m). */
 const NOZZLES = sized(7700);
 const PLUME_BASE = sized(1400);
@@ -121,6 +123,31 @@ const EVADE_SPEED = 1000;
 const EVADE_BURN = 2;
 /** How fast the battleship takes up its orbit's course (per s). */
 const STEER = 0.3;
+/**
+ * Its orbit runs at a height of its own above or below the field's plane, its lane: of the
+ * heights within LANE_MAX (units, 600 m) in steps of LANE_STEP (25 m), the one nearest the
+ * plane whose band around the center (where its level hull reaches on the orbit, from its entry
+ * in to the orbit) the fewest pieces of the field cross on their way, each with ROCK_CLEAR to
+ * spare. It follows from the field as laid out, the same on every browser: over the Rings' sheet
+ * of ice, say. It comes in at that height and holds it.
+ */
+const LANE_MAX = 12000;
+const LANE_STEP = 500;
+/** Its hull keeps this far from every piece of the field (units, 50 m), the piece's whole reach counted. */
+const ROCK_CLEAR = 1000;
+/**
+ * Its sensors follow each piece of the field ROCK_LOOKOUT seconds ahead (in steps of
+ * ROCK_STEP), where the field time puts it, against its own course straight on: a piece that
+ * would come within ROCK_CLEAR of the hull pushes it aside, square to their closing, at up to
+ * ROCK_EVADE (units/s, 50 m/s) on top of its course, the harder the sooner the contact, turning
+ * onto that course EVADE_BURN times as hard as onto its orbit. Its thrusters do this, so it
+ * works with the drives shot out too. It turns its hull only where the turn stays clear of rock.
+ */
+const ROCK_LOOKOUT = 20;
+const ROCK_STEP = 0.5;
+const ROCK_EVADE = 1000;
+/** How many points along a piece's orbit the lane is checked at. */
+const LANE_SAMPLES = 120;
 /**
  * A cross section of the hull at `z` (in its frame; the bow points along -z): the flight
  * deck on top at DECK_TOP, `half` wide to each side; the armored belt drops straight from the
@@ -240,6 +267,17 @@ const turn = new THREE.Quaternion();
 const UP = new THREE.Vector3(0, 1, 0);
 const EYE = new THREE.Vector3();
 const UNDO = new THREE.Matrix4();
+const bulkPoint = new THREE.Vector3();
+const bulkLocal = new THREE.Vector3();
+const bulkNormal = new THREE.Vector3();
+const bulkClosest = new THREE.Vector3();
+const bulkTurn = new THREE.Quaternion();
+const there = new THREE.Vector3();
+const course = new THREE.Vector3();
+const closing = new THREE.Vector3();
+const away = new THREE.Vector3();
+const clear = new THREE.Vector3();
+const turned = new THREE.Quaternion();
 
 /**
  * A block tapering along z, flat-faced: its cross section `w0` wide and `h0` high around height
@@ -510,8 +548,16 @@ export class Fleet implements Obstacle {
   private sunkAt = -Infinity;
   /** This browser has heard the lead's battleship still in the fight (see follow). */
   private afloat = false;
+  /** Everything of it a piece of the field must keep out of: the hull's boxes, the dome's whatever its phase, and the hangar tunnels. */
+  private readonly bulk: Box[] = [];
+  /** The height its orbit runs at (units, see LANE_MAX). */
+  readonly lane: number;
 
-  constructor(private readonly seed: number) {
+  /** A battleship from `seed`, flying clear of the pieces of `field` (none in a test without it), its lane laid out from the field as it stands now. */
+  constructor(
+    private readonly seed: number,
+    private readonly field: AsteroidField | null = null,
+  ) {
     // A carrier refitted for the President, fresh from the newest dock: a heavy hull of dark
     // armor, polished, gilded on its edges, its turrets and its bridge; the runway in the
     // regime's deep red, warm light in its hangars and in rows of windows, the regime's orange
@@ -1071,7 +1117,108 @@ export class Fleet implements Obstacle {
     for (const mesh of this.machinery) mesh.castShadow = false;
     this.hits = this.zones.map(() => 0);
     this.beacons = this.zones.map((_, i) => new Beacon(this, i));
+    this.bulk.push(...this.colliders);
+    for (const z of HANGARS) {
+      this.bulk.push({ center: new THREE.Vector3(0, (HANGAR_FLOOR + HANGAR_CEILING) / 2, z), half: new THREE.Vector3(hullAt(z).half, (HANGAR_CEILING - HANGAR_FLOOR) / 2, HANGAR_WIDTH / 2) });
+    }
+    this.lane = field ? this.laneOf(field) : 0;
     this.enter();
+  }
+
+  /**
+   * Whether a sphere reaches into the battleship's bulk (see bulk), with the battleship at
+   * `position` turned by `quaternion` (by default where it is now), whether it is in the field or not.
+   */
+  reaches(center: THREE.Vector3, radius: number, position = this.position, quaternion = this.quaternion): boolean {
+    if (center.distanceTo(position) > REACH + radius) return false;
+    bulkPoint.copy(center).sub(position).applyQuaternion(bulkTurn.copy(quaternion).invert());
+    for (const box of this.bulk) if (boxContact(bulkLocal.subVectors(bulkPoint, box.center), box.half, radius, bulkNormal, bulkClosest)) return true;
+    return false;
+  }
+
+  /** The lane its orbit runs at in `field` (see LANE_MAX). */
+  private laneOf(field: AsteroidField): number {
+    // a level hull on its orbit reaches out to its flanks across it, along it to bow and stern,
+    // and from the keel up to the masts
+    let flank = 0;
+    let length = 0;
+    let low = 0;
+    let high = 0;
+    for (const box of this.bulk) {
+      flank = Math.max(flank, Math.abs(box.center.x) + box.half.x);
+      length = Math.max(length, Math.abs(box.center.z) + box.half.z);
+      low = Math.min(low, box.center.y - box.half.y);
+      high = Math.max(high, box.center.y + box.half.y);
+    }
+    // every piece where it goes: around its whole orbit, or where it stands
+    const paths = [...field.asteroids.values()].map((piece) => {
+      const turns = piece.orbitRate !== 0;
+      const period = turns ? (Math.PI * 2) / Math.abs(piece.orbitRate) : 0;
+      const at = Array.from({ length: turns ? LANE_SAMPLES : 1 }, (_, k) => field.positionOf(piece, piece.born + (k / LANE_SAMPLES) * period, new THREE.Vector3()));
+      return { at, reach: piece.radius + ROCK_CLEAR };
+    });
+    let lane = 0;
+    let fewest = Infinity;
+    for (let k = 0; k <= (LANE_MAX / LANE_STEP) * 2; k++) {
+      // the plane first, then up and down in turn
+      const height = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * LANE_STEP || 0;
+      const inner = ORBIT - flank;
+      const outer = Math.hypot(entryRadius(height) + flank, length);
+      const crossing = paths.filter(({ at, reach }) =>
+        at.some((point) => Math.hypot(Math.max(0, inner - Math.hypot(point.x, point.z), Math.hypot(point.x, point.z) - outer), Math.max(0, height + low - point.y, point.y - height - high)) < reach),
+      ).length;
+      if (crossing < fewest) {
+        fewest = crossing;
+        lane = height;
+      }
+    }
+    return lane;
+  }
+
+  /**
+   * Which way its thrusters push it aside from the pieces of the field it would come within
+   * ROCK_CLEAR of within ROCK_LOOKOUT on its course straight on (into `target`, up to unit
+   * length, longer the sooner the first contact), or null when none would.
+   */
+  private aside(clock: number, target: THREE.Vector3): THREE.Vector3 | null {
+    const field = this.field;
+    if (!field) return null;
+    target.set(0, 0, 0);
+    let pushed = false;
+    const speed = this.velocity.length();
+    for (const piece of field.asteroids.values()) {
+      const reach = piece.radius + ROCK_CLEAR;
+      const pace = piece.velocity.length() + Math.abs(piece.orbitRate) * piece.object.position.length();
+      if (piece.object.position.distanceTo(this.position) > REACH + reach + (speed + pace) * ROCK_LOOKOUT) continue;
+      for (let ahead = 0; ahead <= ROCK_LOOKOUT; ahead += ROCK_STEP) {
+        field.positionOf(piece, clock + ahead, there);
+        course.copy(this.position).addScaledVector(this.velocity, ahead);
+        if (!this.reaches(there, reach, course)) continue;
+        // away from the piece: square to how the two close while there is time to pass it, straight away when it is close
+        const soon = 1 - ahead / ROCK_LOOKOUT;
+        field.positionOf(piece, clock + ahead + ROCK_STEP, closing).sub(there).divideScalar(ROCK_STEP).sub(this.velocity);
+        away.subVectors(course, there);
+        if (closing.lengthSq() > 1) away.addScaledVector(closing.normalize(), -away.dot(closing));
+        // head on: across, or up
+        if (away.lengthSq() < 1) away.crossVectors(closing, UP);
+        if (away.lengthSq() < 1) away.copy(UP);
+        away.normalize().multiplyScalar(1 - soon).add(closing.subVectors(course, there).normalize().multiplyScalar(soon));
+        target.addScaledVector(away.normalize(), 0.5 + soon / 2);
+        pushed = true;
+        break;
+      }
+    }
+    return pushed ? target.clampLength(0, 1) : null;
+  }
+
+  /** Whether its hull turned by `turned` would come within ROCK_CLEAR of a piece of the field it keeps clear of as it is turned now. */
+  private crowded(turned: THREE.Quaternion): boolean {
+    if (!this.field) return false;
+    for (const piece of this.field.asteroids.values()) {
+      const reach = piece.radius + ROCK_CLEAR / 2;
+      if (this.reaches(piece.object.position, reach, this.position, turned) && !this.reaches(piece.object.position, reach)) return true;
+    }
+    return false;
   }
 
   get position() {
@@ -1307,16 +1454,20 @@ export class Fleet implements Obstacle {
   lead(dt: number, clock: number, ships: readonly Target[], comets: readonly Comet[] = []) {
     if (!this.present(clock)) return;
     const position = this.position;
-    const away = this.drives > 0 ? this.evasion(clock, comets, dodge) : null;
-    if (away) this.velocity.lerp(want.copy(away).multiplyScalar(EVADE_SPEED), Math.min(1, dt * STEER * EVADE_BURN));
+    const fleeing = this.drives > 0 ? this.evasion(clock, comets, dodge) : null;
+    const aside = this.aside(clock, clear);
+    if (fleeing) want.copy(fleeing).multiplyScalar(EVADE_SPEED);
     else if (this.drives > 0) {
-      // the orbit: along its circle around the center, back towards it when off
+      // the orbit: along its circle around the center at its lane's height, back towards it when off
       const radial = local.copy(position).setY(0);
       const r = radial.length() || 1;
       want.crossVectors(UP, radial).divideScalar(r).multiplyScalar(FLEET_SPEED).addScaledVector(radial, ((ORBIT - r) / r) * 0.05);
-      want.y = -position.y * 0.05;
-      this.velocity.lerp(want, Math.min(1, dt * STEER));
-    } else this.velocity.multiplyScalar(Math.max(0, 1 - dt * 0.2));
+      want.y = (this.lane - position.y) * 0.05;
+    } else want.copy(this.velocity).multiplyScalar(Math.max(0, 1 - dt * 0.2));
+    if (aside) want.addScaledVector(aside, ROCK_EVADE);
+    if (fleeing || aside) this.velocity.lerp(want, Math.min(1, dt * STEER * EVADE_BURN));
+    else if (this.drives > 0) this.velocity.lerp(want, Math.min(1, dt * STEER));
+    else this.velocity.copy(want);
     position.addScaledVector(this.velocity, dt);
     // its bow along its course, or in its second phase its stern on the nearest pilot
     let prey: Target | null = null;
@@ -1334,7 +1485,8 @@ export class Fleet implements Obstacle {
     const bow = prey ? want.subVectors(position, prey.flight.position) : want.copy(this.velocity);
     if (bow.lengthSq() > 1) {
       turn.setFromRotationMatrix(look.lookAt(local.set(0, 0, 0), bow.normalize(), UP));
-      this.quaternion.rotateTowards(turn, FLEET_TURN * dt);
+      turned.copy(this.quaternion).rotateTowards(turn, FLEET_TURN * dt);
+      if (!this.crowded(turned)) this.quaternion.copy(turned);
     }
     this.burning = !!prey && this.quaternion.angleTo(turn) < PLUME_AIM;
     this.root.updateMatrixWorld();
@@ -1475,11 +1627,12 @@ export class Fleet implements Obstacle {
     return [{ kind: 'sunk', zone: -1, position: this.position.clone() }];
   }
 
-  /** Where the battleship comes in: on the arena's edge, from a side that follows from the arena, heading along its orbit. */
+  /** Where the battleship comes in: near the arena's edge at its lane's height, from a side that follows from the arena, heading along its orbit. */
   private enter() {
     const r = new Randomizer(this.seed * 13 + 101);
     const angle = r.range(0, Math.PI * 2);
-    this.position.set(Math.cos(angle) * ENTRY, r.range(-4000, 4000), Math.sin(angle) * ENTRY);
+    const out = entryRadius(this.lane);
+    this.position.set(Math.cos(angle) * out, this.lane, Math.sin(angle) * out);
     this.velocity.crossVectors(UP, this.position).setLength(FLEET_SPEED);
     this.quaternion.setFromRotationMatrix(look.lookAt(local.set(0, 0, 0), want.copy(this.velocity).normalize(), UP));
     this.target = null;

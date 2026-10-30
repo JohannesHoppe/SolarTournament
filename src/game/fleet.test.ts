@@ -4,6 +4,11 @@ import { ARRIVAL, BATTERY_PERIOD, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLO
 import { Bot, evenSkills, SIEGE_DISTANCE } from '../ship/bots';
 import type { Ship } from '../ship/ship';
 import { testField } from '../test/field';
+import { arenaById, ARENAS, type ArenaProfile } from '../world/arenas';
+import { DISTANT_DETAIL } from '../world/rocks';
+import { HULL_BOXES } from '../world/shapes';
+import { ROUND_SECONDS } from '../music/songs';
+import { cometAt, cometEnd, cometStart, roundComets, runDown } from './comet';
 import { Human, SEEDS, SPREAD } from '../test/human';
 import { SHIP_RADIUS, startFlight, STEP } from '../test/pilot';
 
@@ -192,6 +197,59 @@ describe("the President's fleet", () => {
     const late = new Fleet(7);
     expect(late.follow(JSON.parse(JSON.stringify(lead.toState())))).toEqual([]);
     expect(late.down).toBe(true);
+  });
+});
+
+describe("the battleship and the field's rock", () => {
+  const field = testField(DISTANT_DETAIL, HULL_BOXES);
+  const STEP_SECONDS = 0.1;
+  /**
+   * Flies the battleship of `arena` through a whole round, the field moving on its orbits, the
+   * round's comets running down rock as they come; `hunted`, half its batteries are broken
+   * from the start and a pilot circles it above and below, so its stern swings after him, and
+   * its drives are shot out half way. Returns the pieces its hull (hangars and dome included)
+   * ever reached into, with the field time, and the heights it flew at.
+   */
+  const sail = (arena: ArenaProfile, hunted: boolean) => {
+    field.generate(arena.layout);
+    const fleet = new Fleet(arena.layout.seed, field);
+    // the first round of the arena's seed that has comets
+    const comets = hunted ? [] : (Array.from({ length: 20 }, (_, round) => roundComets(arena.layout.seed, round, field.well, false)).find((list) => list.length) ?? []);
+    const pilot = { id: 'p:a', alive: true, flight: { position: new THREE.Vector3() } };
+    if (hunted) breakAll(fleet, zonesOf(fleet, 'battery').slice(0, 3));
+    const touched: string[] = [];
+    let hunts = false;
+    for (let time = 0; time < ARRIVAL + ROUND_SECONDS && !fleet.down; time += STEP_SECONDS) {
+      field.setClock(time);
+      const comet = cometAt(comets, time);
+      if (comet && time >= cometStart(comet) && time <= cometEnd(comet)) runDown(comet, field, time, () => {});
+      if (hunted && time > ARRIVAL + ROUND_SECONDS / 2 && fleet.drives > 0) breakAll(fleet, zonesOf(fleet, 'drive'));
+      pilot.flight.position.set(Math.cos(time * 0.2) * 15000, Math.sin(time * 0.13) * 12000, Math.sin(time * 0.2) * 15000).add(fleet.position);
+      fleet.lead(STEP_SECONDS, time, hunted ? [pilot] : [], comets);
+      fleet.update(time, time);
+      if (!fleet.present(time)) continue;
+      hunts ||= fleet.target === pilot.id;
+      for (const piece of field.asteroids.values()) if (fleet.reaches(piece.object.position, piece.radius)) touched.push(`${piece.id} at ${time.toFixed(1)} s`);
+    }
+    return { touched, hunts, comets: comets.length };
+  };
+
+  for (const arena of ARENAS) {
+    it(`never reaches into a piece of ${arena.id}'s field over a whole round, past the round's comets, its stern hunting a pilot, adrift`, () => {
+      const passing = sail(arena, false);
+      expect(passing.comets).toBeGreaterThan(0);
+      expect(passing.touched).toEqual([]);
+      const hunting = sail(arena, true);
+      expect(hunting.hunts).toBe(true);
+      expect(hunting.touched).toEqual([]);
+    });
+  }
+
+  it("flies its orbit over the Rings of Saturn's sheet of ice, clear of it, and in the plane where nothing is in its way", () => {
+    field.generate(arenaById('rings')!.layout);
+    expect(new Fleet(23, field).lane).toBeGreaterThan(1600);
+    field.generate(arenaById('giant')!.layout);
+    expect(new Fleet(47, field).lane).toBe(0);
   });
 });
 
