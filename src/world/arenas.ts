@@ -104,9 +104,9 @@ export const RING_LAYER = 2500;
 /**
  * Saturn's ring is drawn as the two faces of a slab RING_SHEET above and below its plane (units,
  * 200 m): beyond the reach of every chunk of the layer (up to some 185 m) and short of the open
- * space's chunks (from some 255 m), so the sheet never cuts through the ice. The face across the
- * ring's plane from the pilot shows the ring, the near face nothing, so the open space on the
- * pilot's side stays open (see world/landmarks, RING_CROSSING).
+ * space's chunks (from some 255 m), so the sheet never cuts through the ice. Each face shows the
+ * part of the slab beyond it as seen from the pilot, so the open space on the pilot's side stays
+ * open (see world/landmarks, RING_THIN).
  */
 export const RING_SHEET = 4000;
 

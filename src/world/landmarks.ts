@@ -38,16 +38,50 @@ const RING_WAKE_SPACING = 1500;
 const RING_WAKE_TURNS = 392;
 const RING_WAKING = 0.1;
 /**
- * The ring's sheet passes from the lower face of its slab (see RING_SHEET) to the upper one
- * while the camera crosses the ring's plane, within RING_CROSSING of it (units, 10 m): beyond
- * that the whole ring shows on the face across the plane and none on the near face, so the
- * open space on the camera's side stays open; at the plane each face shows half of it. Short,
- * as passing through a sheet would be, yet never a jump from one frame to the next.
+ * How much of the ring's optical depth its sheet shows, by the camera's height over the ring's
+ * plane alone, never by a point's distance from the camera (which would open a hole in the ring
+ * around the pilot): RING_THIN of it within the ring's layer (RING_LAYER), rising smoothly to
+ * all of it RING_CLEAR above or below the plane (units, 3 km). So the ring is a disk seen from
+ * afar and grows see-through the nearer the pilot comes, until in the layer it is a faint veil
+ * and its chunks, specks and grains are the ring. Seen along a flatter line the sheet shows more
+ * (see ringFragment), so the ring still closes to a band towards the horizon. The two faces of
+ * the slab (see RING_SHEET) share it as a slab would: each the part of the slab beyond it as
+ * seen from the camera, all of it on the face across the slab from a camera outside it, nothing
+ * on the near face, the camera's own side open; smoothly while the camera crosses the slab.
  */
-const RING_CROSSING = 200;
+const RING_THIN = 0.08;
+const RING_CLEAR = 60000;
+
+/** How far a camera `height` (units) over the ring's plane is out of its layer: 0 in it, 1 from RING_CLEAR on, smoothly between. */
+export function ringClear(height: number): number {
+  return THREE.MathUtils.smoothstep(Math.abs(height), RING_LAYER, RING_CLEAR);
+}
+
+/** The share of the ring's optical depth the lower (`side` −1) or upper (1) face of its slab shows to a camera `height` (units) over the plane (see RING_THIN). */
+export function ringShare(height: number, side: -1 | 1): number {
+  const beyond = THREE.MathUtils.clamp(0.5 - (side * height) / (2 * RING_SHEET), 0, 1);
+  return THREE.MathUtils.lerp(RING_THIN, 1, ringClear(height)) * beyond;
+}
 /**
- * The share of the sunlight the ring's sheet keeps in a shadow: whatever casts it lies in the
- * slab or beyond it, mostly far from the face, and the slab's ice between scatters light into it.
+ * The light from behind the ring that even its densest part lets through is 1 − RING_OPACITY: a
+ * sheet of ice grains with gaps between them, never a solid floor, so stars and the planet show
+ * faintly through it from anywhere.
+ */
+const RING_OPACITY = 0.88;
+/**
+ * Up close the sheet reads the ring's strip up to RING_BLUR mip levels softer (64 of its texels,
+ * some 280 m, averaged), fading quickly the farther the camera is from the layer (by the cube of
+ * what RING_THIN's rise leaves: about three levels 1 km above the plane, hardly any from 2 km): a texel is
+ * some 4 m of the ring, and its ringlets, sharp lines in a sheet this faint, would run as
+ * stripes to the vanishing point of every view along the orbit.
+ */
+const RING_BLUR = 6;
+/**
+ * The share of the sunlight the ring's sheet keeps in a shadow seen from afar: whatever casts it
+ * lies in the slab or beyond it, mostly far from the face, and the slab's ice between scatters
+ * light into it. The nearer the camera comes to the layer, the less a shadow darkens the sheet,
+ * none in the layer (as RING_THIN): on a faint veil a shadow would read as a hole in it; there
+ * the specks carry the shadows.
  */
 const RING_SHADOW = 0.5;
 /**
@@ -496,9 +530,9 @@ const ringVertex = /* glsl */ `
  * where the ring is half opaque, almost none through the dense ring). The planet's shadow: where
  * the way to the sun runs through its sphere, with a soft edge for the sun's disk. The sheet is
  * one face of the ring's slab (see RING_SHEET) and shows the `share` of the ring's optical depth
- * it is given (see RING_CROSSING): seen along a slanted line the share grows by the line's
- * length through the slab, never beyond the ring's whole depth, so the ring stays closed at the
- * horizon however little of it a face shows. Within the sun's shadow map it takes the shadows of
+ * it is given (see RING_THIN): seen along a slanted line the share grows by the line's length
+ * through the slab, never beyond the ring's whole depth, so the ring stays closed at the horizon
+ * however little of it a face shows; never more opaque than RING_OPACITY. Within the sun's shadow map it takes the shadows of
  * everything there (the field's ice, ships, gates, the battleship, a comet), softened (see
  * RING_SHADOW). Here and there an ice crystal glints in the sun (see glint, GLINT_CELL).
  */
@@ -506,6 +540,7 @@ const ringFragment = /* glsl */ `
   ${shadowFragmentPars}
   uniform sampler2D map;
   uniform float share;
+  uniform float clear;
   uniform vec3 sun;
   uniform vec3 light;
   uniform vec3 center;
@@ -515,7 +550,8 @@ const ringFragment = /* glsl */ `
   ${noise3}
   ${glint}
   void main() {
-    vec4 color = texture2D(map, vUv);
+    float near = 1.0 - clear;
+    vec4 color = texture2D(map, vUv, ${RING_BLUR.toFixed(1)} * near * near * near);
     // clumps along the orbit and wakes across it (see RING_CLUMP_TURNS): the ring's optical depth
     // thicker or thinner there, so the dense ring stays opaque and only the thin parts show them
     vec2 plane = vWorld.xz - center.xz;
@@ -532,7 +568,7 @@ const ringFragment = /* glsl */ `
     // the line of sight runs share / sin(elevation) of the slab's thickness through the ring
     float slant = min(1.0, share / max(abs(view.y), 1e-3));
     float depth = -log(1.0 - min(color.a, 0.995)) * (1.0 + ${RING_CLUMPING.toFixed(2)} * (2.0 * clumps - 1.0) + ${RING_WAKING.toFixed(2)} * wakes) * slant;
-    color.a = 1.0 - exp(-max(depth, 0.0));
+    color.a = ${RING_OPACITY.toFixed(2)} * (1.0 - exp(-max(depth, 0.0)));
     color.rgb *= 1.0 + ${RING_CLUMP_SHADE.toFixed(2)} * (2.0 * clumps - 1.0);
     vec3 toSun = normalize(sun);
     vec3 toCenter = center - vWorld;
@@ -540,7 +576,7 @@ const ringFragment = /* glsl */ `
     float miss = dot(toCenter, toCenter) - along * along;
     float sunny = 1.0 - step(0.0, along) * smoothstep(radius * radius * 1.03, radius * radius * 0.97, miss);
     // the grains of the slab between the shadow's caster and the face scatter sunlight into it
-    sunny *= mix(${RING_SHADOW.toFixed(2)}, 1.0, getShadowMask());
+    sunny *= mix(mix(1.0, ${RING_SHADOW.toFixed(2)}, clear), 1.0, getShadowMask());
     float front = step(0.0, (cameraPosition.y - vWorld.y) * toSun.y);
     float through = 2.0 * color.a * (1.0 - color.a) + 0.04;
     vec3 lit = color.rgb * light * (mix(through, 1.0, front) * sunny + ${PLANET_AMBIENT});
@@ -722,6 +758,8 @@ export class Landmarks {
   private streaks!: THREE.LineSegments<THREE.BufferGeometry, THREE.ShaderMaterial>;
   /** The ring's sheet as the lower and the upper face of its slab (see RING_SHEET). */
   private ringFaces!: THREE.Mesh<THREE.RingGeometry, THREE.ShaderMaterial>[];
+  /** How far the camera is out of the ring's layer, 0 in it to 1 RING_CLEAR from the plane: the sheet's blur and shadows by it (see RING_BLUR, RING_SHADOW). */
+  private readonly ringClear = { value: 1 };
 
   constructor(private readonly maps: PlanetMaps) {
     this.scenes.set('rings', this.rings());
@@ -760,14 +798,14 @@ export class Landmarks {
   /**
    * The ring's grains around `camera`, drawn only while their cube reaches into the layer, and
    * streaking along `velocity`, the motion of whoever the camera rides with (none without), as
-   * fast as it goes (see GRAIN_STREAK). The ring lies beyond its plane as seen from the camera:
-   * the lower face of its slab shows all of it above the plane, the upper face below it, and
-   * within RING_CROSSING of the plane the two share it.
+   * fast as it goes (see GRAIN_STREAK). The ring's sheet shows as much of the ring as the
+   * camera's height gives it, each face of the slab the part of the slab beyond it (see RING_THIN).
    */
   follow(camera: THREE.Camera, velocity: THREE.Vector3 | null) {
+    const height = camera.position.y - SATURN_CENTER.y;
+    this.ringClear.value = ringClear(height);
     for (const [i, face] of this.ringFaces.entries()) {
-      const side = i === 0 ? -1 : 1;
-      const share = THREE.MathUtils.clamp(0.5 - (side * (camera.position.y - SATURN_CENTER.y)) / (2 * RING_CROSSING), 0, 1);
+      const share = ringShare(height, i === 0 ? -1 : 1);
       face.material.uniforms.share.value = share;
       face.visible = share > 0;
     }
@@ -882,6 +920,7 @@ export class Landmarks {
     // never cuts through the ice around the pilot; the face across the ring's plane shows it (see follow)
     const own = {
       map: { value: this.maps.ring },
+      clear: this.ringClear,
       sun: { value: SUN_DIRECTION.clone() },
       light: { value: this.light },
       center: { value: center },
