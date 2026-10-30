@@ -398,10 +398,11 @@ describe('friendly fire: the own side is hit as any other, and bots hold their f
     // well clear of the line, it is no reason to hold fire
     ally.flight.position.set(0, RADIUS * 4, 0);
     expect(fires([me, ally, rival])).toBe(true);
-    // a ship of the other side in the way is fair game: the beam ends on it
+    // a ship of the other side in the way is fair game: the beam ends on it, and nothing holds the
+    // trigger (whether the bot then fires at it, the nearer rival now, is its own choice)
     ally.flight.position.set(0, RADIUS, 0);
     ally.team = 1;
-    expect(fires([me, ally, rival])).toBe(true);
+    expect(allyInLine(me, [me, ally, rival], f, me.flight.position, at(1), 24000, RADIUS)).toBe(false);
   });
 
   it('holds its laser at the battleship while one of its own side flies between', () => {

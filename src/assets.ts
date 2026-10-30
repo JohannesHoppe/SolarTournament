@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { bakeImpostors, bakeReliefMaps, createImpostors, createRocks, createRockShapes, DETAIL, FAR_DETAIL, NEAR_DETAIL, rockPieceMaterial } from './world/rocks';
 import { fractureSet } from './world/fracture';
 import { debrisSet, hullSet } from './world/shapes';
-import { iceSet } from './world/ice';
+import { iceSet } from './world/iceset';
 import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
 import type { TemplateKind, TemplateSet } from './world/asteroids';
 import { synthesizeSounds } from './sound/sounds';

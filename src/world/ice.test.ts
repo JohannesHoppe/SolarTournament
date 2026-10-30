@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { bakeIceRelief, ICE_KIND, iceDetailMap, iceFacets, iceNormal, iceReliefMap, iceSet, iceTexel } from './ice';
+import { bakeIceRelief, ICE_KIND, iceDetailMap, iceFacets, iceNormal, iceReliefMap, iceTexel } from './ice';
+import { iceSet } from './iceset';
 import { createImpostors, createRocks, createRockShapes, DETAIL_RES, DISTANT_DETAIL, FAR_DETAIL, RELIEF_RES, reliefMap, rockRecipe } from './rocks';
 import { cubeTexel, decode, directions, expectOwnCubeMap, expectSameBake, median, normalFit, texel, texelAt, texelCenter, tileStats } from '../test/cube';
 

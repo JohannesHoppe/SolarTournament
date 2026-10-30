@@ -1,8 +1,6 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
-import type { TemplateSet } from './asteroids';
 import type { ImpostorGlow } from '../view/impostor';
-import { fractureSet } from './fracture';
 import {
   bakeCube,
   cachedRelief,
@@ -13,7 +11,6 @@ import {
   pitDistance,
   pitGrid,
   rockRecipe,
-  ROCK_COUNT,
   samplerNormal,
   shapeImpostor,
   stampTile,
@@ -463,26 +460,8 @@ const iceSurface = () => ({ color: new THREE.Color(ICE_COLOR), roughness: 1, met
 const ICE_GLOW: ImpostorGlow = { emissive: ICE_EMISSIVE, translucent: new THREE.Color(0.03, 0.09, 0.2) };
 
 /** A billboard of an ice shape (see world/rocks, shapeImpostor): the rock's silhouette, painted from the ice's own relief map as its meshes paint it (ICE_TINT_CHUNK). */
-function iceImpostor(index: number): THREE.Mesh {
+export function iceImpostor(index: number): THREE.Mesh {
   const impostor = shapeImpostor(index, { ...iceSurface(), relief: iceReliefMap(index), pars: ICE_PARS, chunk: WHOLE_SHAPE + ICE_TINT_CHUNK, glow: ICE_GLOW });
   impostor.name = `ice-impostor-${index}`;
   return impostor;
-}
-
-/**
- * Ice: the rock shapes, frozen (see the top of this file). Each shape's meshes are the rock's
- * own geometry with an ice material (see iceMaterial); the collisions measure the rock's very
- * shapes, and the billboards show the rock's silhouette in the ice's colors.
- */
-export function iceSet(rocks: TemplateSet): TemplateSet {
-  const freeze = (closeUp: boolean) => (object: THREE.Object3D, index: number) => new THREE.Mesh((object as THREE.Mesh).geometry, iceMaterial(index, closeUp));
-  const impostor = rocks.impostor ? Array.from({ length: ROCK_COUNT }, (_, i) => iceImpostor(i)) : undefined;
-  // a broken chunk splits as the rock of its shape does, its pieces in ice
-  const pieceMaterials = new Map<string, THREE.Material>();
-  const pieceMaterial = (index: number, closeUp: boolean) => {
-    const key = `${index}:${closeUp}`;
-    return pieceMaterials.get(key) ?? pieceMaterials.set(key, iceMaterial(index, closeUp, true)).get(key)!;
-  };
-  const fracture = rocks.fracture && fractureSet(rocks.fracture.details, pieceMaterial);
-  return { near: rocks.near.map(freeze(true)), far: rocks.far.map(freeze(false)), impostor, collision: rocks.collision, fracture };
 }
