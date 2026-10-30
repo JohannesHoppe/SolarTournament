@@ -13,6 +13,7 @@ import { MASS } from '../world/bodies';
 import { ARRIVAL, BATTERY_PERIOD, BATTERY_RANGE, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, SINK_BLAST, SINK_POINTS, TORPEDO_HITS, ZONE_HITS } from '../game/fleet';
 import { COMET_WARNING } from '../game/comet';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
+import { orbitRoom, safePeriapsis, wellMu } from '../game/orbit';
 import { ASTEROID_POINTS } from '../world/asteroids';
 import { ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { arenaById, RING_LAYER } from '../world/arenas';
@@ -106,6 +107,12 @@ export const FROM_CODE: Record<string, number> = {
   wellCritical: percent(WELL_CRITICAL),
   // where the black hole's pull beats the main drive (rounded to 5 m as the README gives it)
   noReturn: Math.round(meters(noReturn()) / 5) * 5,
+  // the black hole's orbits (see game/orbit): the nearest a stable one comes to its center (to
+  // 5 m), a circle a kilometer out (m/s, and seconds once around), a circle at the arena's edge
+  orbitSafe: Math.round(meters(safePeriapsis(hole(), MAIN_THRUST)) / 5) * 5,
+  orbitKm: Math.round(meters(circularAt(20000))),
+  orbitKmTime: Math.round((2 * Math.PI * 20000) / circularAt(20000)),
+  orbitEdge: Math.round(meters(circularAt(orbitRoom(hole())))),
   edge: Math.round(km(ARENA_LIMIT) * 10) / 10,
   grace: ARENA_GRACE,
   hullCritical: HULL_CRITICAL,
@@ -126,10 +133,20 @@ export const FROM_CODE: Record<string, number> = {
   ringLayer: meters(2 * RING_LAYER),
 };
 
+/** The black hole's well. */
+function hole() {
+  return arenaById('hole')!.layout.well!;
+}
+
 /** How far from the black hole's center its pull equals the main drive's thrust (units). */
 function noReturn(): number {
-  const well = arenaById('hole')!.layout.well!;
+  const well = hole();
   return well.radius * Math.sqrt(well.surfaceGravity / MAIN_THRUST);
+}
+
+/** The speed of a circular orbit about the black hole at a distance from its center (units/s). */
+function circularAt(distance: number): number {
+  return Math.sqrt(wellMu(hole()) / distance);
 }
 
 /** How deep under Jupiter's deck the speed limit starts to heat a hull in the air's shade (m). */

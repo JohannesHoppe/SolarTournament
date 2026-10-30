@@ -57,7 +57,8 @@ import { storageGet, storageSet } from '../storage';
 import { buy, emptyHangar, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, sovereignEarned, UPGRADES, WALLET } from './hangar';
 import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
-import type { Asteroid, FieldState, RayHit } from '../world/asteroids';
+import type { Asteroid, FieldState, RayHit, Well } from '../world/asteroids';
+import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
@@ -89,8 +90,8 @@ import {
   WELL_CAUTION,
   WELL_CRITICAL,
   WELL_LOST,
+  WELL_GAUGE,
   WELL_RELEASE,
-  wellLevel,
 } from './alarms';
 import { MOMENTS, Moments, type Moment } from './moments';
 import { devlog } from '../devlog';
@@ -950,6 +951,11 @@ export class Game implements OnlineGame {
   private readonly alarmTones = new AlarmTones();
   /** How far Nicole has warned of a gravity well (an alarm rank, 4: past return), reset once the pull lets go. */
   private wellSaid = 0;
+  /** The orbit readout of the frame before (null: no orbit about the arena's well possible, or no clone) and its conic (see game/orbit). */
+  private orbitState: OrbitState | null = null;
+  private readonly orbit: Orbit = { periapsis: 0, apoapsis: 0, circular: 0, radial: 0 };
+  /** When Nicole speaks of the orbit. */
+  private readonly orbitCalls = new OrbitCalls();
   /** How far Nicole has warned of the air's heat (1 heating, 2 burning), reset once the hull has cooled (see airAlarm). */
   private airSaid = 0;
   /** How much the screen glows with a solar flare's heat and with the air's (0..1), the larger shown (see showFlare, airAlarm). */
@@ -4425,6 +4431,14 @@ export class Game implements OnlineGame {
     context.device = this.input.device;
     context.now = this.time;
     context.dt = dt;
+    context.orbit = this.orbitState;
+    // a drill flown in another arena (the orbit's at the Event Horizon): the Host's link goes to a
+    // clone printed there, out of the well's grip, and back home after it
+    const arena = school.arena ? arenaById(school.arena)! : DEFAULT_ARENA;
+    if (arena !== this.venue) {
+      this.enterArena(arena);
+      if (this.me!.alive) this.respawn(this.me!);
+    }
     const step = school.stepIndex;
     const waypoint = school.update(context);
     if (school.stepIndex !== step) {
@@ -4471,6 +4485,7 @@ export class Game implements OnlineGame {
       braking: false,
       hooked: false,
       impactAhead: false,
+      orbit: null,
       autopilot: true,
       setAutopilot: (on) => {
         if (this.autopilot !== on) this.toggleAutopilot();
@@ -6151,14 +6166,20 @@ export class Game implements OnlineGame {
     const well = this.field.well;
     if (!me.alive || !well) {
       this.hud.setEscape(null);
+      this.showOrbit(null, null, 0);
       return 0;
     }
-    const load = escapeLoad(well, me.flight.position, me.flight.velocity, MAIN_THRUST * Math.max(me.drive, 0.01));
-    this.hud.setEscape(load);
+    const thrust = MAIN_THRUST * Math.max(me.drive, 0.01);
+    const load = escapeLoad(well, me.flight.position, me.flight.velocity, thrust);
+    // the orbit readout, recomputed every frame: whatever changed the path (a burn, a ram, a hit) shows at once
+    const orbit = orbitable(well) ? readOrbit(well, me.flight.position, me.flight.velocity, thrust, !this.autopilot, this.orbitState === 'ready' || this.orbitState === 'stable', this.orbit) : null;
+    this.showOrbit(orbit, well, load);
+    this.hud.setEscape(load, orbit === 'stable');
     // the warnings come again once the well has let go of the ship for good
     if (load < WELL_RELEASE) this.wellSaid = 0;
-    const level = wellLevel(load);
-    if (!level) return load;
+    const level = wellAlarmLevel(load, orbit);
+    // in a stable orbit the ship falls around the body, never into it: the alarms are quiet
+    if (!level) return orbit === 'stable' ? 0 : load;
     const hole = this.venue.id === 'hole';
     const lost = load >= WELL_LOST;
     this.alarms.raise({ id: 'well', level, text: lost ? t('NO RETURN') : hole ? t('BLACK HOLE · BURN AWAY') : t('GRAVITY WELL · BURN AWAY'), direction: relative.subVectors(well.position, me.flight.position) });
@@ -6169,6 +6190,18 @@ export class Game implements OnlineGame {
       this.speaker.say(line, 'urgent');
     }
     return load;
+  }
+
+  /**
+   * The orbit readout (see game/orbit): shown where the escape gauge shows, or wherever the
+   * path is an orbit, and Nicole's word when it becomes one (see OrbitCalls).
+   */
+  private showOrbit(state: OrbitState | null, well: Well | null, load: number) {
+    this.orbitState = state;
+    const shown = state === 'ready' || state === 'stable' || load >= WELL_GAUGE ? state : null;
+    this.hud.setOrbit(shown, this.orbit, well?.radius ?? 0);
+    const call = this.orbitCalls.update(shown, this.time);
+    if (call) this.speaker.say(call === 'ready' ? COMPUTER.orbitReady : COMPUTER.orbitStable);
   }
 
   /**

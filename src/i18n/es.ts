@@ -343,6 +343,12 @@ export const ES: Catalog = {
   'HULL FAILING': 'CASCO FALLANDO',
   'NO RETURN': 'SIN RETORNO',
   'BLACK HOLE · BURN AWAY': 'AGUJERO NEGRO · ALÉJATE A FONDO',
+  'ORBIT READY': 'ÓRBITA LISTA',
+  'STABLE ORBIT': 'ÓRBITA ESTABLE',
+  'Pe {pe} · Ap {ap}': 'Pe {pe} · Ap {ap}',
+  'NO ORBIT · FALLS IN': 'SIN ÓRBITA · CAE DENTRO',
+  'NO ORBIT · LEAVES ARENA': 'SIN ÓRBITA · SALE DE LA ARENA',
+  'Orbit speed {speed} m/s': 'Velocidad orbital {speed} m/s',
   'GRAVITY WELL · BURN AWAY': 'POZO GRAVITATORIO · ALÉJATE A FONDO',
   'HULL HEAT · SAFE {speed} m/s': 'CALOR DEL CASCO · SEGURO {speed} m/s',
   'CAUTION': 'PRECAUCIÓN',
@@ -745,6 +751,7 @@ export const ES: Catalog = {
   'This one is good, and it is hunting you. Get the rock between you and it, and stay there.': 'Este es bueno, y te está cazando. Pon la roca entre tú y él y quédate ahí.',
   'A torpedo is coming. Do not shoot it this time. Get behind the rock.': 'Viene un torpedo. Esta vez no lo derribes. Ponte detrás de la roca.',
   'It got you. Put the rock between you and it. Again.': 'Te ha dado. Pon la roca entre tú y él. Otra vez.',
+  'The Event Horizon, darling. Your nose points around the black hole. Burn until I say orbit ready. Then free drift, and fall around it for half a turn.': 'El Horizonte de sucesos, cariño. Tu morro apunta alrededor del agujero negro. Dale empuje hasta que te diga órbita lista. Luego, deriva libre, y cae a su alrededor media vuelta.',
   'Shot down. Nice, but this time hide. Again.': 'Derribado. Muy bonito, pero esta vez tenías que esconderte. Otra vez.',
   'Final exam, tactician. This bot flies as well as the field. Use everything.': 'Examen final, táctico. Este bot vuela tan bien como cualquiera del torneo. Usa todo lo que tienes.',
   'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.': 'Ya peleas como un táctico. Sal de la línea de fuego de un golpe, nunca les enseñes tu motor, dispara en ráfagas y deja que las rocas se lleven los impactos. Ahora ve y tráele la victoria al Presidente.',
@@ -791,6 +798,7 @@ export const ES: Catalog = {
   'A nose on your drive is the deadliest thing out here. Show them armor, and they only scratch paint.': 'Un enemigo apuntando a tu motor es lo más letal que hay aquí fuera. Enséñale coraza y solo te rascará la pintura.',
   'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.': 'Sangre fría y letal. Cada disparo a la coraza te calienta, y luego te falta margen cuando asoma el motor.',
   'Your nose on them, your flight somewhere else. They cannot dodge what they do not see coming, darling.': 'El morro sobre ellos, tu vuelo en otra parte. No pueden esquivar lo que no ven venir, cariño.',
+  'Half a turn without a single burn. In orbit you fall all the time, and keep missing. That is why my alarms stay quiet up there.': 'Media vuelta sin un solo empuje. En órbita caes todo el rato, y fallas una y otra vez. Por eso mis alarmas se callan ahí arriba.',
   'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.': 'Los láseres no se doblan, y los sensores no ven a través de la roca. Detrás de ella, no existes.',
   'Lost you. A seeker that loses its line never finds it again.': 'Te ha perdido. Un torpedo que pierde la línea de visión ya no la recupera.',
   'A real fight, and you won it. I am so proud of you, darling.': 'Un combate de verdad, y lo has ganado. Estoy muy orgullosa de ti, cariño.',
@@ -853,6 +861,8 @@ export const ES: Catalog = {
   'We are burning up! Climb, darling!': '¡Nos quemamos! ¡Sube, cariño!',
   'Now it gets really tight! Full burn, now!': '¡Ahora sí que se pone feo! ¡A fondo, ya!',
   'I am sorry, darling.': 'Lo siento, cariño.',
+  'Orbit ready, darling.': 'Órbita lista, cariño.',
+  'Entering stable orbit.': 'Entrando en órbita estable.',
   'Comet inbound, darling! Its shower is a storm of rock. Hide behind an asteroid, or turn your armored nose into it.': '¡Cometa entrante, cariño! Su lluvia es una tormenta de roca. Escóndete tras un asteroide, o gírale tu morro acorazado.',
   'Your laser is cooking. Short bursts, and only when the crosshair glows.': 'Tu láser está ardiendo. Ráfagas cortas, y solo cuando brille la mira.',
   'Torpedo! Shoot it down, or put a rock between you and it.': '¡Torpedo! Derríbalo o pon una roca entre tú y él.',
@@ -1155,8 +1165,8 @@ export const ES: Catalog = {
     '<strong>Júpiter.</strong> Su capa de nubes atraviesa el centro de la arena: encima, espacio abierto; debajo, el aire, más denso cuanto más bajas, y su atracción, casi una g, lo arrastra todo hacia él. Media pelea se libra en las nubes (ver En las nubes de Júpiter).',
   "<strong>Corona.</strong> In the sun's glare the radiators shed only about half their heat: fight from the shadows. Every {stormEvery} s a solar storm blinds the sensors for {stormLength} s.":
     '<strong>Corona.</strong> Bajo el resplandor del sol, los radiadores solo disipan más o menos la mitad de su calor: lucha desde las sombras. Cada {stormEvery} s una tormenta solar ciega los sensores durante {stormLength} s.',
-  '<strong>Event Horizon.</strong> A black hole in the middle. Within about {noReturn} m no drive gets out; watch the PULL gauge and burn away early.':
-    '<strong>Horizonte de sucesos.</strong> Un agujero negro en el centro. A menos de unos {noReturn} m ningún motor consigue salir; vigila el indicador TIRÓN y aléjate a fondo a tiempo.',
+  '<strong>Event Horizon.</strong> A black hole in the middle. Within about {noReturn} m no drive gets out; watch the PULL gauge and burn away early, or fall around it in an orbit (see Orbits).':
+    '<strong>Horizonte de sucesos.</strong> Un agujero negro en el centro. A menos de unos {noReturn} m ningún motor consigue salir; vigila el indicador TIRÓN y aléjate a fondo a tiempo, o cae a su alrededor en una órbita (ver Órbitas).',
   '<strong>The Derelict.</strong> A broken world ship and nothing else: no rocks, only its hull to hide behind, and lasers only scorch it. The mist of ice crystals still escaping at the break does no harm, it only patters on the hull. Its dead drift there, frozen; nothing you fire touches them.*':
     '<strong>El Pecio.</strong> Una nave mundo rota y nada más: sin rocas, solo su casco para esconderte, y los láseres solo lo chamuscan. La niebla de cristales de hielo que aún escapa por la rotura no hace daño, solo repiquetea sobre el casco. Allí flotan sus muertos, congelados; nada de lo que disparas los toca.*',
   '*They set out together for the stars. Now they watch you die over their grave, darling. Mind them as you pass.': '*Partieron juntos hacia las estrellas. Ahora te ven morir sobre su tumba, cariño. Ten cuidado con ellos al pasar.',
@@ -1170,6 +1180,11 @@ export const ES: Catalog = {
   'COMET INBOUND comes {cometWarning} s before a comet reaches the arena. Its head destroys whatever it meets. Its two tails, pointing away from the sun, are only dust and gas and harm nobody. The danger is the shower that glints orange along its route behind the head: every piece strikes half again as hard as a laser beam. Get into the lee of a rock, or turn your armored nose into the shower.':
     'COMETA ENTRANTE aparece {cometWarning} s antes de que un cometa llegue a la arena. Su cabeza destruye lo que encuentra. Sus dos colas, que apuntan lejos del sol, son solo polvo y gas y no dañan a nadie. El peligro es la lluvia que brilla en naranja a lo largo de su ruta, tras la cabeza: cada fragmento golpea con una vez y media la fuerza de un rayo láser. Ponte al abrigo de una roca, o gira tu morro acorazado hacia la lluvia.',
   'Gravity wells': 'Pozos gravitatorios',
+  Orbits: 'Órbitas',
+  'Near the black hole the flight computer keeps asking where free drift would take you, and shows it under the PULL gauge. ORBIT READY: let go now, and you fall around the hole, never closer than {orbitSafe} m to its center, where its pull alone takes {wellCritical} % of your drive, and never beyond the arena\'s edge. Pe and Ap give the path\'s nearest and farthest point over the horizon. Switch to free drift, and you fly it: STABLE ORBIT, and the alarms fall silent, for you keep falling and keep missing. A burn, a ram or a hit that takes that margin away brings them back at once.':
+    'Cerca del agujero negro, el ordenador de vuelo no deja de calcular adónde te llevaría la deriva libre, y lo muestra bajo el indicador TIRÓN. ÓRBITA LISTA: suelta ahora y caerás alrededor del agujero, nunca a menos de {orbitSafe} m de su centro, donde su tirón por sí solo se lleva el {wellCritical} % de tu motor, y nunca más allá del borde de la arena. Pe y Ap dan el punto más cercano y el más lejano de la trayectoria sobre el horizonte. Pasa a deriva libre y la vuelas: ÓRBITA ESTABLE, y las alarmas se callan, porque no dejas de caer y no dejas de fallar. Un empuje, un embiste o un impacto que te quite ese margen las trae de vuelta al instante.',
+  'NO ORBIT · FALLS IN: too slow, the path ends in the hole. NO ORBIT · LEAVES ARENA: too fast, it carries you out. Both give the orbit speed where you are: point your nose across the line to the hole, and burn up to it. A circle a kilometer out takes {orbitKm} m/s, once around in {orbitKmTime} s; at the arena\'s edge {orbitEdge} m/s. Over Jupiter no orbit fits: its center lies far below the arena, and its air would brake you out of any.':
+    'SIN ÓRBITA · CAE DENTRO: demasiado lento, la trayectoria acaba en el agujero. SIN ÓRBITA · SALE DE LA ARENA: demasiado rápido, te saca fuera. Ambos dan la velocidad orbital donde estás: apunta el morro de través a la línea hacia el agujero y dale empuje hasta alcanzarla. Un círculo a un kilómetro pide {orbitKm} m/s, una vuelta en {orbitKmTime} s; en el borde de la arena, {orbitEdge} m/s. Sobre Júpiter no cabe ninguna órbita: su centro queda muy por debajo de la arena, y su aire te frenaría hasta sacarte de cualquiera.',
   "In Jupiter's clouds": 'En las nubes de Júpiter',
   "The haze hides whatever is in it: just under the deck you see about {seeDeck} km, a kilometer down {seeKm} m, two kilometers down {seeTwoKm} m. Ships turn into shadows, then into nothing. Your laser reaches as far as you see, the radar twice as far, a torpedo's lock two thirds as far. The deck itself is a veil: dive through it, and a chaser above loses sight of you, unless it looks almost straight down.":
     'La neblina oculta lo que hay en ella: justo bajo la capa de nubes ves unos {seeDeck} km; un kilómetro más abajo, {seeKm} m; dos kilómetros más abajo, {seeTwoKm} m. Las naves se vuelven sombras y luego nada. Tu láser llega hasta donde ves, el radar el doble, el fijado de un torpedo dos tercios. La capa de nubes es un velo: atraviésala en picado y quien te persigue desde arriba te pierde de vista, salvo que mire casi en vertical hacia abajo.',
