@@ -2,7 +2,11 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { TORPEDO_LIFETIME } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
-import { Accusations, accusersNeeded, beamShare, Evidence, hookShare, Plausibility, SenderClock, Standings, Strikes, type Margins, type Seen, type Standing } from './plausible';
+import { Accusations, accusersNeeded, beamShare, Evidence, hookShare, Plausibility, ramShare, SenderClock, Standings, Strikes, type Margins, type Seen, type Standing } from './plausible';
+import { Fleet, FLEET_SPEED, type FleetState } from '../game/fleet';
+import { arenaById } from '../world/arenas';
+import type { ShovedState } from '../world/asteroids';
+import { testField } from '../test/field';
 import { honestFlight, type Roughness } from '../test/honest';
 
 const alive = (x: number, more = {}) => ({ p: [x, 0, 0], alive: true, ...more });
@@ -422,6 +426,49 @@ describe('honest flights', () => {
       // with room to spare
       for (const share of Object.values(margins)) expect(share).toBeLessThan(0.8);
     }
+  });
+});
+
+describe("the lead's battleship ramming the field", () => {
+  it('never looks like a lie to a browser that glides after it, its states and rams arriving late, and leaves both fields alike', () => {
+    const rings = arenaById('rings')!;
+    const lead = testField();
+    const seen = testField();
+    for (const field of [lead, seen]) field.generate(rings.layout);
+    const fleet = new Fleet(rings.layout.seed, lead, rings.sheet);
+    const follower = new Fleet(rings.layout.seed);
+    fleet.arrivesAt = follower.arrivesAt = 0;
+    // through the thick of the ring's ice, which it climbs out of only slowly
+    fleet.position.set(25000, 0, 0);
+    fleet.velocity.set(0, 0, -FLEET_SPEED);
+    fleet.root.updateMatrixWorld();
+    const STEP = 1 / 60;
+    /** What the lead sends, and when it arrives here (s): its state 15 times a second, its rams as they happen, all of it 0.3 s late. */
+    const late: { at: number; state: FleetState | null; rams: ShovedState[] }[] = [];
+    let rams = 0;
+    let worst = 0;
+    for (let k = 0, time = 1; time < 60; k++, time += STEP) {
+      for (const field of [lead, seen]) field.setClock(time);
+      fleet.lead(STEP, time, []);
+      fleet.update(time, time);
+      late.push({ at: time + 0.3, state: k % 4 === 0 ? JSON.parse(JSON.stringify(fleet.toState())) : null, rams: JSON.parse(JSON.stringify(fleet.rams)) });
+      fleet.rams.length = 0;
+      while (late.length && late[0].at <= time) {
+        const { state, rams: told } = late.shift()!;
+        if (state) follower.follow(state);
+        for (const ram of told) {
+          const piece = seen.asteroids.get(ram.id)!;
+          worst = Math.max(worst, ramShare(seen.positionOf(piece, ram.b, new THREE.Vector3()), new THREE.Vector3().fromArray(ram.p), Math.hypot(...ram.v), follower.position, follower.reach + piece.radius));
+          seen.move(ram);
+          rams++;
+        }
+      }
+      follower.glide(STEP);
+      follower.update(time, time);
+    }
+    expect(rams).toBeGreaterThan(0);
+    expect(worst).toBeLessThan(0.8);
+    for (const [id, piece] of lead.asteroids) expect(seen.asteroids.get(id)!.object.position.distanceTo(piece.object.position), id).toBeLessThan(1e-6);
   });
 });
 

@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { hash } from '../music/songs';
 import { textSeed } from '../random';
-import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
-import { MASS } from '../world/bodies';
+import { FIELD_RADIUS, type AsteroidField, type Obstacle } from '../world/asteroids';
+import { contact, IMMOVABLE, MASS } from '../world/bodies';
 import type { Ship } from '../ship/ship';
 import { msg } from '../i18n/i18n';
 import { inGrip, WELL_WARNING } from './alarms';
@@ -106,6 +106,13 @@ const DROP_SPREAD = 400;
 export const PROBE_THRUST = 785;
 const PROBE_RETURN = 2000;
 const PROBE_SETTLE = 100;
+/**
+ * A probe meeting the armor of what else stands in the field (the President's battleship, 2.7
+ * million times its mass, which does not notice it) bounces off as far out as its wings reach
+ * (PROBE_RADIUS), keeping PROBE_BOUNCE of the speed it met the hull at; so does the slot it
+ * drifts on, which it flies back to.
+ */
+const PROBE_BOUNCE = 0.4;
 
 export interface Probe {
   /** "r<round>.<n>" for the arena's probes, "<ship id>.<deaths>.<n>" for a dead clone's: the same probe on every browser. */
@@ -330,6 +337,10 @@ export class Probes {
       const returning = probe.astray && !probe.holder;
       if (returning) homeIn(probe, dt);
       probe.position.addScaledVector(probe.velocity, dt);
+      if (field.obstacle) {
+        bounce(field.obstacle, probe.slot, probe.slotVelocity);
+        bounce(field.obstacle, probe.position, probe.velocity);
+      }
       if (returning && probe.position.distanceTo(probe.slot) < PROBE_SETTLE && probe.velocity.distanceTo(probe.slotVelocity) < PROBE_SETTLE) {
         probe.position.copy(probe.slot);
         probe.velocity.copy(probe.slotVelocity);
@@ -393,6 +404,24 @@ export class Probes {
 
 const toSlot = new THREE.Vector3();
 const change = new THREE.Vector3();
+const hullNormal = new THREE.Vector3();
+const bouncing = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: MASS.probe };
+const hull = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: IMMOVABLE };
+
+/** A push out of one part of an obstacle may leave a probe in the next (two boxes of a hull meeting, a gap narrower than the probe between the keel and a battery's barrels below it): it is pushed out this many times at most. */
+const BOUNCE_PASSES = 8;
+
+/** A probe (or its slot) at `position` moving at `velocity` bounces off an obstacle it touches (see PROBE_BOUNCE). */
+function bounce(obstacle: Obstacle, position: THREE.Vector3, velocity: THREE.Vector3) {
+  for (let pass = 0; pass < BOUNCE_PASSES && obstacle.push(position, PROBE_RADIUS, hullNormal); pass++) {
+    bouncing.position.copy(position);
+    bouncing.velocity.copy(velocity);
+    hull.position.copy(obstacle.position);
+    hull.velocity.copy(obstacle.velocity);
+    contact(bouncing, hull, hullNormal, PROBE_BOUNCE, 0, true, false);
+    velocity.copy(bouncing.velocity);
+  }
+}
 
 /** A probe off its slot burns towards the speed that brings it back there (see PROBE_THRUST). */
 function homeIn(probe: Probe, dt: number) {

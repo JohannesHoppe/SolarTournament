@@ -57,7 +57,8 @@ import { storageGet, storageSet } from '../storage';
 import { buy, emptyHangar, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, sovereignEarned, UPGRADES, WALLET } from './hangar';
 import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
-import type { Asteroid, FieldState, RayHit } from '../world/asteroids';
+import type { Asteroid, FieldState, RayHit, ShovedState } from '../world/asteroids';
+import { ramShare } from '../net/plausible';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
@@ -65,7 +66,7 @@ import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES,
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
 import { touchRing } from '../world/gates';
 import { IMMOVABLE, massOf, type Body } from '../world/bodies';
-import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, HEAD_RADIUS, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
+import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, headEnd, HEAD_RADIUS, meetObstacle, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
 import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
 import { FlareView } from '../world/flare';
@@ -560,6 +561,8 @@ const COMET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
  */
 const SHOWER_COVER = 6000;
 const SHOWER_WEIGHT = 1.5;
+/** The share of a shower's pieces bursting on the battleship's hull that throws sparks (the rest go to dust unseen, so a swarm's worth does not fill the screen). */
+const SHOWER_SPARKS = 0.25;
 /** A bot this close to a comet's route (units, 500 m beyond the swarm's width) as the head nears or the swarm passes flies away from it, sideways. */
 const COMET_DANGER = 10000;
 /**
@@ -634,6 +637,8 @@ const cometCover = new THREE.Vector3();
 const cometRelative = new THREE.Vector3();
 const cometAway = new THREE.Vector3();
 const cometCourse = new THREE.Vector3();
+/** Where the lead's battleship pushed a piece it rammed (see remoteRam). */
+const rammedTo = new THREE.Vector3();
 /** The velocity of what does not move: a ring of the tournament holds its place. */
 const STILL = new THREE.Vector3();
 /** Two ships in contact: the way from the first to the second, and where they touch. */
@@ -3757,6 +3762,12 @@ export class Game implements OnlineGame {
     for (const ship of this.ships) ship.team = 0;
     if (!this.online || this.online.isLead) fleet.lead(dt, clock, this.ships, this.comets);
     else fleet.glide(dt);
+    // what its hull rammed aside, for the other browsers
+    for (const state of fleet.rams) {
+      this.online?.sendRam(state, this.roundId);
+      this.scrape(fleet, state.id);
+    }
+    fleet.rams.length = 0;
     fleet.update(clock, now);
     fleet.view(this.camera.position);
     for (const { zone, shot } of fleet.firing(clock)) this.fireBattery(fleet, zone, shot);
@@ -3830,6 +3841,35 @@ export class Game implements OnlineGame {
   remoteFleetHit(zone: number, round: number, shooter: Ship, count: number) {
     // a hit of another round was on another battleship
     if (this.fleet && round === this.roundId && !this.roundOver) this.fleetEvents(this.fleet.hit(zone, count), shooter);
+  }
+
+  /** The lead's battleship rammed a piece of the field: it takes the motion the lead gave it, if it lay at the hull as this browser sees them (see ramShare). */
+  remoteRam(state: ShovedState, round: number) {
+    const fleet = this.fleet;
+    const piece = this.field.asteroids.get(state.id);
+    if (!fleet || !piece || round !== this.roundId) return;
+    const before = this.field.positionOf(piece, state.b, scratch);
+    if (ramShare(before, rammedTo.fromArray(state.p), Math.hypot(...state.v), fleet.position, fleet.reach + piece.radius) > 1) return;
+    this.field.move(state);
+    this.scrape(fleet, state.id);
+  }
+
+  /** The battleship's armor grinds against a piece it rams: sparks and grit where the hull meets it on the way from the piece to its center, heard as debris is. */
+  private scrape(fleet: Fleet, id: string) {
+    const piece = this.field.asteroids.get(id);
+    if (!piece) return;
+    const center = piece.object.position;
+    rammedTo.subVectors(fleet.position, center);
+    const way = rammedTo.length();
+    if (way < 1) return;
+    rammedTo.divideScalar(way);
+    const hull = fleet.ray(center, rammedTo, way) ?? piece.meanRadius;
+    scratch.copy(center).addScaledVector(rammedTo, hull);
+    // as large as the piece, up to a big chunk's (100 m)
+    const size = Math.min(piece.meanRadius, 2000);
+    this.effects.sparks(scratch, SCRAPE_COLOR, size * 0.5);
+    this.effects.debris(scratch, rammedTo.negate(), size * 0.4);
+    this.hearDebris(scratch, size);
   }
 
   /** A part of the battleship as a torpedo of another browser homes on it. */
@@ -3970,7 +4010,7 @@ export class Game implements OnlineGame {
       list.push(front, pocket);
     }
     if (this.shower) {
-      headAt(this.shower.comet, this.field.clock, this.cometMark.position);
+      headAt(this.shower.comet, Math.min(this.field.clock, headEnd(this.shower.comet)), this.cometMark.position);
       list.push(this.cometMark);
     }
     // torpedoes in flight, in red
@@ -6211,12 +6251,41 @@ export class Game implements OnlineGame {
     this.cometTail(me, dt);
     if (!flying) return;
     runDown(flying, this.field, clock, (rock) => this.burstRock(rock), (piece, point) => this.cometShove(piece, point));
-    // the battleship that did not get out of its way goes down: the lead browser decides
     const fleet = this.fleet;
-    if (fleet?.present(clock) && (!this.online || this.online.isLead) && clock < flying.swallowed && fleet.touches(headAt(flying, clock, cometHead), HEAD_RADIUS)) {
-      this.hud.flashMessage(this.time, t('The comet rams the battleship'), 3);
-      this.fleetEvents(fleet.sink(), null);
+    if (fleet) this.cometMeetsFleet(flying, fleet, clock, dt);
+  }
+
+  /**
+   * A comet meets the President's battleship: its head breaks up on the hull (see Comet.broken),
+   * where this browser's battleship meets it or where the lead browser said it did, and the
+   * battleship that did not get out of its way goes down (the lead browser decides); each piece
+   * of its shower bursts where it meets the hull, so the hull is cover from it.
+   */
+  private cometMeetsFleet(comet: Comet, fleet: Fleet, clock: number, dt: number) {
+    const whole = comet.broken === Infinity;
+    const told = fleet.rammedAt;
+    if (told !== null && told >= cometStart(comet) && told <= cometEnd(comet)) comet.broken = told;
+    const struck = meetObstacle(comet, this.shower, fleet, clock, dt, (point) => {
+      if (Math.random() < SHOWER_SPARKS) this.effects.sparks(point, SCRAPE_COLOR, PIECE_RADIUS * 4);
+    });
+    if (struck && (!this.online || this.online.isLead)) {
+      fleet.rammedAt = clock;
+      if (fleet.present(clock)) {
+        this.hud.flashMessage(this.time, t('The comet rams the battleship'), 3);
+        this.fleetEvents(fleet.sink(), null);
+      }
     }
+    if (whole && comet.broken !== Infinity) this.headBroke(comet);
+  }
+
+  /** A comet's head broke up on the battleship: a flash and its shards where it struck. */
+  private headBroke(comet: Comet) {
+    const at = comet.broken;
+    headAt(comet, at, cometHead);
+    this.effects.explosion(cometHead, HEAD_RADIUS * 3, STILL);
+    this.effects.debris(cometHead, normal.copy(courseAt(comet, at, cometCourse)).negate(), HEAD_RADIUS * 2);
+    this.hearDebris(cometHead, HEAD_RADIUS * 4);
+    this.witnessBlast(cometHead, HEAD_RADIUS * 30, 1);
   }
 
   /**
@@ -6289,7 +6358,7 @@ export class Game implements OnlineGame {
     const comet = shower.comet;
     const clock = this.field.clock;
     const position = ship.flight.position;
-    if (clock < comet.swallowed && position.distanceTo(headAt(comet, clock, cometHead)) < HEAD_RADIUS + ship.radius) {
+    if (clock < headEnd(comet) && position.distanceTo(headAt(comet, clock, cometHead)) < HEAD_RADIUS + ship.radius) {
       ship.protectedUntil = Math.min(ship.protectedUntil, now);
       if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, null, 'comet');
       return;
@@ -6328,7 +6397,7 @@ export class Game implements OnlineGame {
     const comet = this.cometCalled;
     const clock = this.field.clock;
     if (!comet || !me.alive || clock > cometEnd(comet)) return;
-    const direction = relative.subVectors(headAt(comet, Math.min(clock, comet.swallowed), cometHead), me.flight.position);
+    const direction = relative.subVectors(headAt(comet, Math.min(clock, headEnd(comet)), cometHead), me.flight.position);
     if (this.shower?.comet === comet && this.cometDanger(me)) this.alarms.raise({ id: 'comet', level: 'critical', text: t('COMET SHOWER · NOSE INTO IT OR TAKE COVER'), direction });
     else if (clock < comet.at) this.alarms.raise({ id: 'comet', level: 'warning', text: t('COMET INBOUND'), direction, seconds: clock < comet.edge ? comet.edge - clock : null });
   }
