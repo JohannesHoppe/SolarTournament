@@ -6,13 +6,15 @@ import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS } from '../game/race';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES } from '../game/torpedoes';
 import { HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
-import { PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
+import { NOVA_RADIUS, PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
 import { CLONES, FLARE_BURN, FLARE_HEAT } from '../game/survival';
 import { ADRIFT_SECONDS, CAPTURE_POINTS, CAPTURES_TO_WIN, CORE_BRAKE, GRAB_POINTS, GRAB_REACH, RETURN_POINTS } from '../game/flags';
 import { MASS } from '../world/bodies';
-import { ARRIVAL, BATTERY_PERIOD, BATTERY_RANGE, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, SINK_BLAST, SINK_POINTS, TORPEDO_HITS, ZONE_HITS } from '../game/fleet';
+import { ARRIVAL, BATTERY_PERIOD, BATTERY_RANGE, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, NOVA_EDGE, NOVA_SHATTER, SINK_BLAST, SINK_POINTS, TORPEDO_HITS, ZONE_HITS } from '../game/fleet';
 import { COMET_WARNING } from '../game/comet';
+import { STREAK_SECONDS, streakBonus } from '../game/streaks';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
+import { orbitRoom, safePeriapsis, wellMu } from '../game/orbit';
 import { ASTEROID_POINTS } from '../world/asteroids';
 import { ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { arenaById, RING_LAYER } from '../world/arenas';
@@ -54,6 +56,7 @@ export const FROM_CODE: Record<string, number> = {
   boost: meters(BOOST_PUSH),
   gatePoints: GATE_POINTS,
   firstPlace: PLACE_POINTS[0],
+  streak: STREAK_SECONDS,
   hull: MAX_HULL,
   torpedoes: TORPEDOES,
   lockAngle: Math.round((LOCK_ANGLE * 180) / Math.PI),
@@ -92,6 +95,9 @@ export const FROM_CODE: Record<string, number> = {
   driveHits: ZONE_HITS.drive,
   reactor: ZONE_HITS.reactor,
   torpedoHits: TORPEDO_HITS,
+  nova: meters(NOVA_RADIUS),
+  novaShatter: meters(NOVA_SHATTER),
+  novaEdge: percent(NOVA_EDGE),
   batteryPeriod: BATTERY_PERIOD,
   batteryRange: km(BATTERY_RANGE),
   blast: km(SINK_BLAST),
@@ -106,6 +112,12 @@ export const FROM_CODE: Record<string, number> = {
   wellCritical: percent(WELL_CRITICAL),
   // where the black hole's pull beats the main drive (rounded to 5 m as the README gives it)
   noReturn: Math.round(meters(noReturn()) / 5) * 5,
+  // the black hole's orbits (see game/orbit): the nearest a stable one comes to its center (to
+  // 5 m), a circle a kilometer out (m/s, and seconds once around), a circle at the arena's edge
+  orbitSafe: Math.round(meters(safePeriapsis(hole(), MAIN_THRUST)) / 5) * 5,
+  orbitKm: Math.round(meters(circularAt(20000))),
+  orbitKmTime: Math.round((2 * Math.PI * 20000) / circularAt(20000)),
+  orbitEdge: Math.round(meters(circularAt(orbitRoom(hole())))),
   edge: Math.round(km(ARENA_LIMIT) * 10) / 10,
   grace: ARENA_GRACE,
   hullCritical: HULL_CRITICAL,
@@ -126,10 +138,20 @@ export const FROM_CODE: Record<string, number> = {
   ringLayer: meters(2 * RING_LAYER),
 };
 
+/** The black hole's well. */
+function hole() {
+  return arenaById('hole')!.layout.well!;
+}
+
 /** How far from the black hole's center its pull equals the main drive's thrust (units). */
 function noReturn(): number {
-  const well = arenaById('hole')!.layout.well!;
+  const well = hole();
   return well.radius * Math.sqrt(well.surfaceGravity / MAIN_THRUST);
+}
+
+/** The speed of a circular orbit about the black hole at a distance from its center (units/s). */
+function circularAt(distance: number): number {
+  return Math.sqrt(wellMu(hole()) / distance);
 }
 
 /** How deep under Jupiter's deck the speed limit starts to heat a hull in the air's shade (m). */
@@ -162,7 +184,6 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   burstShade: { value: 9, readme: 'and # in shadow' },
   cooled: { value: 30, readme: 'cooled down to # %' },
   torpedoShot: { value: 50, readme: 'a 6 m target; # points' },
-  nova: { value: 800, readme: 'Every other ship within # m is destroyed' },
   novaPanic: { value: 1.2, readme: 'Everyone within # km of a holder' },
   shove: { value: 5, readme: 'struck by another at # m/s or more is shoved' },
   knockout: { value: 3, readme: 'crashes within # seconds' },
@@ -182,8 +203,10 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   pingCritical: { value: 300, readme: 'red from # ms' },
 };
 
-/** Every number of the handbook by its placeholder. */
+/** Every number of the handbook by its placeholder; a streak's bonus is the game's share of a kill's points. */
 export const HANDBOOK_NUMBERS: Record<string, number> = {
   ...FROM_CODE,
   ...Object.fromEntries(Object.entries(FROM_README).map(([name, { value }]) => [name, value])),
+  streakDouble: streakBonus(2, FROM_README.kill.value, false),
+  streakMore: streakBonus(3, FROM_README.kill.value, false),
 };

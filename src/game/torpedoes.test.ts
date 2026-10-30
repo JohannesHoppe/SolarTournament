@@ -274,6 +274,14 @@ describe('a torpedo on the hook', () => {
     expect(fused(held, held.position, [holder], 0, ROPE_DT)).toBe(holder);
   });
 
+  it('goes off at the hull of a ship of its shooter\'s own side as at any other (friendly fire)', () => {
+    const shooter = ship('s', -5000);
+    const ally = { ...ship('a', 200), allyOf: (other: GameShip) => other === shooter } as unknown as GameShip;
+    shooter.allyOf = (other: GameShip) => other === ally;
+    const { torpedo: free } = torpedo(shooter);
+    expect(fused(free, free.position, [shooter, ally], 0, ROPE_DT)).toBe(ally);
+  });
+
   it("gives the kill to whoever holds it, or flung it within the last seconds, else to its shooter", () => {
     const shooter = ship('s', 300);
     const holder = ship('h', -1400);

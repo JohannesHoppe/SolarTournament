@@ -1,4 +1,4 @@
-import type { FieldState } from '../world/asteroids';
+import type { FieldState, ShovedState } from '../world/asteroids';
 import type { ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
 import { CHEATS, type Cheat } from './plausible';
@@ -7,8 +7,8 @@ import { roomMode } from './room';
 import type { RoomMode } from '../game/race';
 import type { ProbeState } from '../game/items';
 import type { FlagsState } from '../game/flags';
-import { TORPEDO_HITS, type FleetState } from '../game/fleet';
-import { fieldState, flagsState, fleetState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, UNIT_LENGTH, vec, wreckStates } from './validate';
+import { TORPEDO_HITS, ZONE_HITS, type FleetState } from '../game/fleet';
+import { fieldState, flagsState, fleetState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, shovedState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
 /** Ship states go out this often (Hz); the receivers predict the motion in between, and take at most three times as many. */
 const STATE_RATE = 15;
@@ -68,8 +68,16 @@ const MAX_CHEAT_REPORTS_PER_SECOND = 2;
 const MAX_WRECK_HITS_PER_SECOND = 20;
 /** Torpedo launches, hits, torpedoes gone and probes taken, per peer and second: a few of each per clone, eight ships at most. */
 const MAX_TORPEDO_EVENTS_PER_SECOND = 12;
-/** The parts of a battleship are numbered from zero, far fewer than this (see game/fleet); one message counts a laser's hit or a torpedo's. */
+/**
+ * Pieces of the field the lead's battleship rams aside per second: each contact one message, a
+ * piece pushed again for every frame its hull plows on into it, and a shower of fragments
+ * meeting it at once.
+ */
+const MAX_RAMS_PER_SECOND = 60;
+/** The parts of a battleship are numbered from zero, far fewer than this (see game/fleet); one message counts a laser's hit, a torpedo's or a nova core's. */
 const MAX_FLEET_ZONE = 31;
+/** The most hits a part takes (the reactor's): a nova core breaks a part close by outright. */
+const MAX_PART_HITS = Math.max(...Object.values(ZONE_HITS));
 /**
  * The field time of a peer's rock hits in a round only moves on (s): one earlier than it reported
  * before is a lie, beyond ROCK_ORDER_SLACK. That slack is a second: a browser's field clock
@@ -151,7 +159,9 @@ export class Session {
   /** A piece of wreckage was shot or rammed on another browser. */
   onWreck: (id: string) => void = () => {};
   /** A ship of another browser hit a part of the President's battleship in a round (see game/fleet). */
-  onFleetHit: (zone: number, round: number, shooter: string, count: number) => void = () => {};
+  onFleetHit: (zone: number, round: number, shooter: string, count: number, nova: boolean) => void = () => {};
+  /** The lead browser's battleship rammed a piece of the field in a round: the piece's motion since (see game/fleet). */
+  onRam: (state: ShovedState, round: number) => void = () => {};
   /** A ship of another browser launched a torpedo, at a target or none. */
   onTorpedo: (id: string, shooter: string, target: string | null, position: Vec, velocity: Vec) => void = () => {};
   /**
@@ -227,6 +237,7 @@ export class Session {
   private readonly wreckBudget = new Budget(MAX_WRECK_HITS_PER_SECOND);
   private readonly torpedoBudget = new Budget(MAX_TORPEDO_EVENTS_PER_SECOND);
   private readonly cheatBudget = new Budget(MAX_CHEAT_REPORTS_PER_SECOND);
+  private readonly ramBudget = new Budget(MAX_RAMS_PER_SECOND);
   private readonly stateBudget = new Budget(STATE_RATE * 3);
   private readonly beamBudget = new Budget(MAX_HITS_PER_SECOND);
   private readonly pingBudget = new Budget(MAX_PING_RATE);
@@ -276,11 +287,20 @@ export class Session {
       const shooter = id(d?.i);
       const zone = int(d?.z, 0, MAX_FLEET_ZONE);
       const round = int(d?.n, 0, MAX_COUNT);
-      const count = int(d?.c, 1, TORPEDO_HITS);
+      // a nova core's hits on a part are at most all the part takes, a torpedo's TORPEDO_HITS
+      const nova = d?.v === 1;
+      const count = int(d?.c, 1, nova ? MAX_PART_HITS : TORPEDO_HITS);
       if (!shooter || zone === null || round === null || count === null || ownerOf(shooter) !== from || !this.hitBudget.spend(from)) return;
-      // a laser hits one part a shot, as often as it fires; a torpedo's blast each part once
-      if (!this.spaced(count > 1 ? `${shooter}>@${zone}` : `${shooter}>@`)) return;
-      this.guard(() => this.onFleetHit(zone, round, shooter, count));
+      // a laser hits one part a shot, as often as it fires; a torpedo's blast and a nova each part once
+      if (!this.spaced(nova ? `${shooter}>*${zone}` : count > 1 ? `${shooter}>@${zone}` : `${shooter}>@`)) return;
+      this.guard(() => this.onFleetHit(zone, round, shooter, count, nova));
+    });
+    transport.on('br', (d, from) => {
+      // only the lead flies the battleship, so only the lead rams with it
+      const state = shovedState(d?.m);
+      const round = int(d?.n, 0, MAX_COUNT);
+      if (!state || round === null || from !== this.leadId || !this.ramBudget.spend(from)) return;
+      this.guard(() => this.onRam(state, round));
     });
     transport.on('tl', (d, from) => {
       const torpedo = id(d?.i);
@@ -398,7 +418,7 @@ export class Session {
     transport.onPeerLeave((peer) => {
       // join time and last word stay: a link that comes back belongs to the same peer
       this.backAt.delete(peer);
-      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.stateBudget, this.beamBudget, this.pingBudget, this.pongBudget]) budget.forget(peer);
+      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.ramBudget, this.stateBudget, this.beamBudget, this.pingBudget, this.pongBudget]) budget.forget(peer);
       for (const key of this.lastHit.keys()) if (ownerOf(key.slice(0, key.indexOf('>'))) === peer) this.lastHit.delete(key);
       this.pingSeq.delete(peer);
       this.pingSentAt.delete(peer);
@@ -573,8 +593,9 @@ export class Session {
     this.transport.send('w', { i: wreck });
   }
 
-  sendFleetHit(zone: number, round: number, shooter: string, count: number) {
-    this.transport.send('bh', { z: zone, n: round, i: shooter, c: count });
+  /** A ship of this browser hit a part of the battleship `count` times; `v: 1` when its nova core did it. */
+  sendFleetHit(zone: number, round: number, shooter: string, count: number, nova: boolean) {
+    this.transport.send('bh', { z: zone, n: round, i: shooter, c: count, ...(nova ? { v: 1 } : {}) });
   }
 
   sendTorpedo(torpedo: string, shooter: string, target: string | null, position: Vec, velocity: Vec) {
@@ -626,6 +647,11 @@ export class Session {
   /** `at` is the field time of the hit and `round` the round it fell in, so a rock breaks into the same fragments everywhere; `shooter` fired the beam. */
   sendRock(rock: string, at: number, round: number, shooter: string) {
     this.transport.send('r', { i: rock, t: +at.toFixed(3), n: round, s: shooter });
+  }
+
+  /** The lead's battleship rammed a piece of the field in `round`: its motion since (see game/fleet, Fleet.ram). */
+  sendRam(state: ShovedState, round: number) {
+    this.transport.send('br', { m: state, n: round });
   }
 
   sendSync(to: string, field: FieldState, wrecks: WreckState[], probesTaken: string[], probes: ProbeState[]) {

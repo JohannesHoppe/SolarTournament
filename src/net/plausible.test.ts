@@ -2,7 +2,16 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { TORPEDO_LIFETIME } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
-import { Accusations, accusersNeeded, beamShare, Evidence, hookShare, Plausibility, SenderClock, Standings, Strikes, type Margins, type Seen, type Standing } from './plausible';
+import { NOVA_RADIUS } from '../game/items';
+import { killScore } from '../game/friendly';
+import { BOT_RESPAWN_SECONDS } from '../game/sponsors';
+import { streakBonus, Streaks } from '../game/streaks';
+import { TOURNAMENT_SIZE } from './session';
+import { Accusations, accusersNeeded, AIM_SLACK, beamShare, Evidence, hookShare, Plausibility, ramShare, SenderClock, Standings, Strikes, type Margins, type Seen, type Standing } from './plausible';
+import { Fleet, FLEET_SPEED, type FleetState } from '../game/fleet';
+import { arenaById } from '../world/arenas';
+import type { ShovedState } from '../world/asteroids';
+import { testField } from '../test/field';
 import { honestFlight, type Roughness } from '../test/honest';
 
 const alive = (x: number, more = {}) => ({ p: [x, 0, 0], alive: true, ...more });
@@ -308,6 +317,38 @@ describe('the standing of another browser\'s ship', () => {
     expect(s).toBeLessThan(6500 + 10000 + 200 * 12);
   });
 
+  it('takes in full the streaks of a Host who kills everyone, again and again', () => {
+    // the game's scoring of a ship's kills (see Game.shipDestroyed)
+    const streaks = new Streaks();
+    let score = 0;
+    const kill = (at: number, nova = false) => {
+      score += killScore(false, 500, nova ? 2 : 1) + streakBonus(streaks.kill('s', at), 500, nova);
+    };
+    const standings = new Standings();
+    standings.take('s', at(0), 0, 0, 0);
+    // a nova core takes every other ship of a full tournament at once
+    for (let i = 1; i < TOURNAMENT_SIZE; i++) kill(1, true);
+    expect(standings.take('s', at(score), 1, 1, 1).s).toBe(score);
+    // as soon as their next clones are printed, it shoots them down one after another, a kill
+    // every second and a half, each one of the streak
+    for (let i = 1; i < TOURNAMENT_SIZE; i++) {
+      const t = 1 + BOT_RESPAWN_SECONDS + 1.5 * (i - 1);
+      kill(t);
+      expect(standings.take('s', at(score), t, t, t).s).toBe(score);
+    }
+    // the nova's kills earn no bonus; the streak after it pays 250 for the second, 500 for each after
+    expect(score).toBe(7 * 1000 + 7 * 500 + 250 + 5 * 500);
+  });
+
+  it('takes a score that falls below zero by friendly fire, a nova among its own side at once', () => {
+    const standings = new Standings();
+    standings.take('s', at(300), 0, 0, 0);
+    // a nova that took three ships of its own side: three double kills taken away
+    const fallen = 300 + killScore(true, 500, 2) * 3;
+    expect(standings.take('s', at(fallen), 1, 1, 1).s).toBe(fallen);
+    expect(fallen).toBeLessThan(0);
+  });
+
   it('takes what a ship first seen could have made since the round started', () => {
     const standings = new Standings();
     expect(standings.take('s', at(25000), 100, 100, 85).s).toBe(25000);
@@ -425,6 +466,50 @@ describe('honest flights', () => {
   });
 });
 
+describe("the lead's battleship ramming the field", () => {
+  it('never looks like a lie to a browser that glides after it, its states and rams arriving late, and leaves both fields alike', () => {
+    const rings = arenaById('rings')!;
+    const lead = testField();
+    const seen = testField();
+    for (const field of [lead, seen]) field.generate(rings.layout);
+    const fleet = new Fleet(rings.layout.seed, lead, rings.sheet);
+    const follower = new Fleet(rings.layout.seed);
+    fleet.arrivesAt = follower.arrivesAt = 0;
+    // through the thick of the ring's ice, which it climbs out of only slowly
+    fleet.position.set(25000, 0, 0);
+    fleet.velocity.set(0, 0, -FLEET_SPEED);
+    fleet.root.updateMatrixWorld();
+    const STEP = 1 / 60;
+    /** What the lead sends, and when it arrives here (s): its state 15 times a second, its rams as they happen, all of it 0.3 s late. */
+    const late: { at: number; state: FleetState | null; rams: ShovedState[] }[] = [];
+    let rams = 0;
+    let worst = 0;
+    for (let k = 0, time = 1; time < 60; k++, time += STEP) {
+      for (const field of [lead, seen]) field.setClock(time);
+      fleet.lead(STEP, time, []);
+      fleet.update(time, time);
+      late.push({ at: time + 0.3, state: k % 4 === 0 ? JSON.parse(JSON.stringify(fleet.toState())) : null, rams: JSON.parse(JSON.stringify(fleet.rams)) });
+      fleet.rams.length = 0;
+      while (late.length && late[0].at <= time) {
+        const { state, rams: told } = late.shift()!;
+        if (state) follower.follow(state);
+        for (const ram of told) {
+          const piece = seen.asteroids.get(ram.id)!;
+          worst = Math.max(worst, ramShare(seen.positionOf(piece, ram.b, new THREE.Vector3()), new THREE.Vector3().fromArray(ram.p), Math.hypot(...ram.v), follower.position, follower.reach + piece.radius));
+          seen.move(ram);
+          rams++;
+        }
+      }
+      follower.glide(STEP);
+      follower.update(time, time);
+    }
+    expect(rams).toBeGreaterThan(0);
+    expect(worst).toBeLessThan(0.8);
+    for (const [id, piece] of lead.asteroids) expect(seen.asteroids.get(id)!.object.position.distanceTo(piece.object.position), id).toBeLessThan(1e-6);
+    // two fields and a battleship flown for a while: a few seconds on a busy machine
+  }, 30_000);
+});
+
 describe('strikes', () => {
   it('report a ship only for what it does again and again, not for a burst of one moment', () => {
     const strikes = new Strikes();
@@ -511,6 +596,31 @@ describe('evidence of what a ship did', () => {
     expect(evidence.fleetHit('t', false, part, 10, 20000, false, 11)).toBe(false);
   });
 
+  it("counts an honest nova core's hits on the battleship's parts, as its holder's browser counted them, with the battleship a moment elsewhere here", () => {
+    // the holder's browser and this one, the battleship half a second further along here
+    const there = new Fleet(7);
+    const here = new Fleet(7);
+    for (const [fleet, z] of [[there, 0], [here, -FLEET_SPEED * 0.5]] as const) {
+      fleet.arrivesAt = 0;
+      fleet.position.set(0, 0, z);
+      fleet.root.updateMatrixWorld();
+    }
+    const battery = there.zones.findIndex((zone) => zone.kind === 'battery');
+    const drive = there.zones.findIndex((zone) => zone.kind === 'drive');
+    const evidence = new Evidence();
+    // set off 300 m above the first battery
+    const core = there.zoneAt(battery).add(v(0, 6000, 0));
+    evidence.nova('s', core, 10);
+    const hits = there.novaHits(core);
+    expect(hits.length).toBeGreaterThan(0);
+    for (const { zone, count } of hits) expect(evidence.fleetHit('s', true, here.zoneAt(zone), count, AIM_SLACK, false, 11, (d) => here.novaHit(zone, d))).toBe(true);
+    // all the hits a part takes from afar, another ship's word, an old core: no
+    expect(there.zoneAt(drive).distanceTo(core)).toBeGreaterThan(NOVA_RADIUS);
+    expect(evidence.fleetHit('s', true, here.zoneAt(drive), here.hitsOf(drive), AIM_SLACK, false, 11, (d) => here.novaHit(drive, d))).toBe(false);
+    expect(evidence.fleetHit('t', true, here.zoneAt(battery), hits[0].count, AIM_SLACK, false, 11, (d) => here.novaHit(battery, d))).toBe(false);
+    expect(evidence.fleetHit('s', true, here.zoneAt(battery), 10, AIM_SLACK, false, 30, (d) => here.novaHit(battery, d))).toBe(false);
+  });
+
   it('takes a hit on the own ship from a beam that starts near its shooter and passes near the ship', () => {
     const ahead = v(1, 0, 0);
     expect(beamShare(v(0), ahead, v(10000), v(50000, 5000))).toBeLessThan(1);
@@ -518,6 +628,19 @@ describe('evidence of what a ship did', () => {
     expect(beamShare(v(0, 40000), ahead, v(0), v(50000, 40000))).toBeGreaterThan(1);
     expect(beamShare(v(0), ahead, v(0), v(50000, 40000))).toBeGreaterThan(1);
     expect(beamShare(v(0), ahead, v(0), v(-50000))).toBeGreaterThan(1);
+  });
+
+  it('takes a beam that ended on the hull it hit, whichever side that ship is on, as the hit and the kill it made', () => {
+    // the beam ends at the first hull on its line (friendly fire): 17 m short of the ship's center
+    const ship = v(50000, 300);
+    const end = v(50000 - 340);
+    const ahead = v(1, 0, 0);
+    expect(beamShare(v(0), ahead, v(0), ship)).toBeLessThan(1);
+    const evidence = new Evidence();
+    evidence.beam('s', v(0), end, 10);
+    expect(evidence.beamPassed('s', ship, 11)).toBe(true);
+    // a ship beyond the beam's end and its slack for lag it did not hit
+    expect(evidence.beamPassed('s', v(50000 + AIM_SLACK + 6000), 11)).toBe(false);
   });
 
   it("takes a torpedo or probe on a ship's hook only within the hook's reach, give or take lag", () => {

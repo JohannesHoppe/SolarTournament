@@ -107,6 +107,41 @@ describe('judging a drill', () => {
     for (const drill of [DRILL.hook, DRILL.hookShip, DRILL.nova, DRILL.bursts, DRILL.evade]) expect(drill.keys).toContain('drive');
     expect(DRILL.stopAt.keys).not.toContain('flip');
   });
+
+  describe('the orbit drill', () => {
+    // the pilot on a circle about the hole, a little more than a degree a frame, the readout as given
+    const well = { position: new THREE.Vector3(), radius: 7000, surfaceGravity: 1 };
+    const fly = (states: string[]) => {
+      const attempt = { points: [new THREE.Vector3(0, 24000, 0)], swept: 0 };
+      return states.map((orbit, i) => {
+        const angle = ((i + 1) * 1.01 * Math.PI) / 180;
+        const position = new THREE.Vector3(24000 * Math.sin(angle), 24000 * Math.cos(angle), 0);
+        return judged(DRILL.orbit, { orbit, field: { well }, me: { flight: { position } } }, attempt);
+      });
+    };
+
+    it('is flown at the Event Horizon, from the autopilot to free drift and back', () => {
+      expect(DRILL.orbit.arena).toBe('hole');
+      expect(DRILL.orbit.autopilot).toBe(true);
+      expect(DRILL.orbit.keys).toEqual(expect.arrayContaining(['drive', 'turn', 'autopilot']));
+    });
+
+    it('counts half a turn about the hole in a stable orbit', () => {
+      const verdicts = fly(Array(181).fill('stable'));
+      expect(verdicts.indexOf(true)).toBe(178);
+    });
+
+    it('counts only while the orbit is flown: the autopilot on, or a path that falls, starts the count again', () => {
+      const states = [...Array(120).fill('stable'), 'ready', ...Array(180).fill('stable')];
+      expect(fly(states).indexOf(true)).toBe(120 + 1 + 178);
+      expect(fly([...Array(120).fill('stable'), 'falls', ...Array(60).fill('stable')])).not.toContain(true);
+    });
+
+    it('starts over when the pilot leaves the arena', () => {
+      const out = { orbit: 'leaves', field: { well }, me: { flight: { position: new THREE.Vector3(0, 70000, 0) } } };
+      expect(judged(DRILL.orbit, out, { points: [new THREE.Vector3(0, 69000, 0)], swept: 0 })).toBe(SCHOOL.again);
+    });
+  });
 });
 
 describe('the completed courses as the browser keeps them', () => {

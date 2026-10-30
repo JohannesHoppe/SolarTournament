@@ -85,6 +85,10 @@ export interface Obstacle {
   touches(center: THREE.Vector3, radius: number): boolean;
   /** Whether a point lies in a space open through it (a hangar of the battleship). */
   within(point: THREE.Vector3): boolean;
+  /** Pushes a sphere out of it, if it touches: the outward normal (and `center` moved onto it), otherwise null. */
+  push(center: THREE.Vector3, radius: number, normal: THREE.Vector3): THREE.Vector3 | null;
+  /** How fast it moves (units/s), for what bounces off it. */
+  readonly velocity: THREE.Vector3;
 }
 
 /** A piece placed by hand: a template of a kind at a position and turn, with the template's own size times `scale`. */
@@ -169,7 +173,11 @@ export interface Asteroid {
   surface: Surface | null;
   /** World matrix inverse, refreshed every update. */
   inverse: THREE.Matrix4;
-  /** The seed of the comet that last shoved this solid piece (see shove), or null. */
+  /**
+   * What last changed this piece's motion: the seed of the comet that shoved it (see shove),
+   * RAMMED for the President's battleship (or a piece broken off one it rammed), or null for a
+   * piece that moves as the field was laid out.
+   */
   shovedBy: number | null;
 }
 
@@ -193,12 +201,46 @@ export type FieldState = {
   a: AsteroidState[];
   /** every rock broken so far and the field time it broke, so its fragments start where they did */
   x: { id: string; b: number }[];
-  /** the solid pieces a comet shoved (see AsteroidField.shove), with their motion since */
+  /** the pieces a comet or the battleship shoved and the pieces broken off them (see Asteroid.shovedBy), with their motion since */
   m?: ShovedState[];
 };
 
-/** A solid piece's motion since a comet shoved it: the field time of the blow, its position, drift, orientation and spin then (axis and rate), and the comet's seed. */
+/** A piece's motion since a comet or the battleship shoved it: the field time of the blow, its position, drift, orientation and spin then (axis and rate), and who shoved it (the comet's seed, or RAMMED). */
 export type ShovedState = { id: string; b: number; p: number[]; v: number[]; q: number[]; s: number[]; c: number };
+
+/** The shover of a piece the President's battleship rammed (see Asteroid.shovedBy): never a comet's seed, which is a whole number from 0 up. */
+export const RAMMED = -1;
+
+/** Directions a rock's or an ellipsoid's outline is laid out in (see outline): evenly over the sphere, about 13° apart. */
+const OUTLINE_POINTS = 256;
+/** Each shape's outline, by its measured surface or its semi-axes. */
+const outlines = new WeakMap<object, Float32Array>();
+
+/**
+ * A piece's outline: points on its surface in its object's own coordinates (xyz, a flat list),
+ * OUTLINE_POINTS of them in directions spread evenly around its center for a measured surface or
+ * an ellipsoid, the eight corners of a box. What a body far larger than the piece is held
+ * against (the President's battleship, see game/fleet); kept for each shape.
+ */
+export function outline(piece: Pick<Asteroid, 'surface' | 'semiAxes' | 'center' | 'box'>): Float32Array {
+  const key = piece.surface ?? piece.semiAxes;
+  let points = outlines.get(key);
+  if (points) return points;
+  const directions: THREE.Vector3[] = [];
+  if (piece.box) for (let k = 0; k < 8; k++) directions.push(new THREE.Vector3(k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1).multiply(piece.semiAxes));
+  else {
+    for (let k = 0; k < OUTLINE_POINTS; k++) {
+      // a spiral down the sphere, each turn by the golden angle
+      const y = 1 - (2 * k + 1) / OUTLINE_POINTS;
+      const around = k * Math.PI * (3 - Math.sqrt(5));
+      const direction = new THREE.Vector3(Math.cos(around) * Math.sqrt(1 - y * y), y, Math.sin(around) * Math.sqrt(1 - y * y));
+      directions.push(piece.surface ? direction.multiplyScalar(piece.surface.radius(direction)) : direction.multiply(piece.semiAxes));
+    }
+  }
+  points = new Float32Array(directions.flatMap((d) => d.add(piece.center).toArray()));
+  outlines.set(key, points);
+  return points;
+}
 
 interface Template {
   object: THREE.Object3D;
@@ -569,6 +611,25 @@ export class AsteroidField {
     return a;
   }
 
+  /**
+   * A piece takes a motion another browser (or the lead's battleship here) decided: from where
+   * `state` puts it at its field time, it drifts on, keeps circling with its orbit, and turns as
+   * the state says (see ShovedState). Returns the piece when this field has it.
+   */
+  move(state: ShovedState): Asteroid | undefined {
+    const a = this.asteroids.get(state.id);
+    if (!a) return undefined;
+    a.born = state.b;
+    a.basePosition.fromArray(state.p);
+    a.velocity.fromArray(state.v);
+    a.baseOrientation.fromArray(state.q).normalize();
+    a.spinAxis = new THREE.Vector3().fromArray(state.s).normalize();
+    a.spinRate = state.s[3];
+    a.shovedBy = state.c;
+    this.place(a);
+    return a;
+  }
+
   /** Breaks a rock at a field time: the fragments start from where it stood then. */
   private destroy(id: string, at: number): Asteroid | undefined {
     const asteroid = this.asteroids.get(id);
@@ -600,7 +661,8 @@ export class AsteroidField {
       const out = Math.min(asteroid.meanRadius * 0.6, Math.max(0, asteroid.radius - this.boundingRadius(templates[type], scale)));
       const position = origin.clone().addScaledVector(direction, out);
       const velocity = direction.multiplyScalar(speed).add(drift);
-      this.add(`${id}.${i}`, asteroid.kind, type, templates[type], scale, asteroid.generation + 1, at, position, spinAxis, velocity, asteroid.orbitAxis, asteroid.orbitRate);
+      // a piece broken off one that was shoved travels with its own motion in snapshots
+      this.add(`${id}.${i}`, asteroid.kind, type, templates[type], scale, asteroid.generation + 1, at, position, spinAxis, velocity, asteroid.orbitAxis, asteroid.orbitRate).shovedBy = asteroid.shovedBy;
     }
     return asteroid;
   }
@@ -638,6 +700,7 @@ export class AsteroidField {
       const axis = rate > 1e-9 ? turning.divideScalar(rate) : new THREE.Vector3(0, 1, 0);
       const piece = this.add(`${rock.id}.${i}`, rock.kind, type, template, scale, rock.generation + 1, at, origin.clone().add(arm), axis, velocity, rock.orbitAxis, rock.orbitRate, false, rate);
       piece.baseOrientation.copy(turn);
+      piece.shovedBy = rock.shovedBy;
       this.place(piece);
       if (piece.generation < MAX_GENERATION) fracture.prefetch(type, own);
     }
@@ -660,7 +723,8 @@ export class AsteroidField {
    * Rebuilds the field from a snapshot, starting over from the generated field (this browser
    * may have broken rocks the snapshot still holds): breaks every broken rock at the field time
    * it broke, parents first (the fragments are deterministic), removes rocks that are gone,
-   * takes over the hits, the motion of the solid pieces a comet shoved, and the field time. A
+   * takes over the hits, the motion of the pieces a comet or the battleship shoved (and of those
+   * broken off them, which did not start where the generated field puts them), and the field time. A
    * fragment's birth is its parent's break time as well.
    */
   restore(state: FieldState, layout: FieldLayout) {
@@ -691,17 +755,7 @@ export class AsteroidField {
       const asteroid = this.asteroids.get(rock.id);
       if (asteroid) asteroid.hitPoints = rock.hp;
     }
-    for (const moved of state.m ?? []) {
-      const a = this.asteroids.get(moved.id);
-      if (!a?.solid) continue;
-      a.born = moved.b;
-      a.basePosition.fromArray(moved.p);
-      a.velocity.fromArray(moved.v);
-      a.baseOrientation.fromArray(moved.q).normalize();
-      a.spinAxis = new THREE.Vector3().fromArray(moved.s).normalize();
-      a.spinRate = moved.s[3];
-      a.shovedBy = moved.c;
-    }
+    for (const moved of state.m ?? []) this.move(moved);
     this.setClock(state.t);
   }
 
@@ -735,11 +789,24 @@ export class AsteroidField {
   }
 
   /**
+   * True when something solid lies between two points: a rock, ice, junk or a hull section, the
+   * well's body or an obstacle's hull, `except` left out (the rock a cable is made fast to). A
+   * cable stretched between them is cut (see game/hook); haze cuts nothing.
+   */
+  blocked(from: THREE.Vector3, to: THREE.Vector3, except: Asteroid | null = null): boolean {
+    const distance = from.distanceTo(to);
+    if (distance < 1) return false;
+    sight.subVectors(to, from).divideScalar(distance);
+    return this.cast(from, sight, distance, true, true, except) !== null;
+  }
+
+  /**
    * The distance of the nearest hit along a ray within `max` (the rock hit, if any, in castRock),
    * or with `any` of the first hit found, which is all a line of sight needs; null for none.
-   * Rocks whose bounding sphere the ray enters beyond the best hit so far are skipped.
+   * Rocks whose bounding sphere the ray enters beyond the best hit so far are skipped, and so is
+   * `skip`.
    */
-  private cast(origin: THREE.Vector3, direction: THREE.Vector3, max: number, any: boolean, obstacles: boolean): number | null {
+  private cast(origin: THREE.Vector3, direction: THREE.Vector3, max: number, any: boolean, obstacles: boolean, skip: Asteroid | null = null): number | null {
     let best: number | null = null;
     castRock = null;
     castCenter = null;
@@ -760,6 +827,7 @@ export class AsteroidField {
       }
     }
     for (const asteroid of this.asteroids.values()) {
+      if (asteroid === skip) continue;
       const enter = raySphere(origin, direction, asteroid.object.position, asteroid.radius);
       if (enter === null || enter > (best ?? max)) continue;
       const distance = asteroid.box ? rayPiece(asteroid, origin, direction) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);

@@ -1,5 +1,5 @@
 import type { ShipState } from '../ship/ship';
-import type { AsteroidState, FieldState, ShovedState } from '../world/asteroids';
+import { RAMMED, type AsteroidState, type FieldState, type ShovedState } from '../world/asteroids';
 import type { WreckState } from '../world/wrecks';
 import { KINDS, type ProbeState } from '../game/items';
 import { TINTS } from '../ship/tints';
@@ -165,10 +165,10 @@ export function wreckStates(x: unknown): WreckState[] | null {
   );
 }
 
-/** A solid piece a comet shoved: its motion since, with a quaternion that can be normalized. */
-function shovedState(x: unknown): ShovedState | null {
+/** A piece a comet or the battleship shoved (see world/asteroids, ShovedState): its motion since, with a quaternion that can be normalized, shoved by a comet's seed or RAMMED. */
+export function shovedState(x: unknown): ShovedState | null {
   if (!isRecord(x)) return null;
-  const state = complete<ShovedState>({ id: id(x.id), b: num(x.b, 0, MAX_FIELD_TIME), p: vec(x.p, 3, MAX_COORDINATE), v: vec(x.v, 3, MAX_SPEED), q: vec(x.q, 4, UNIT_LENGTH), s: vec(x.s, 4, MAX_SPIN), c: int(x.c, 0, 0xffffffff) });
+  const state = complete<ShovedState>({ id: id(x.id), b: num(x.b, 0, MAX_FIELD_TIME), p: vec(x.p, 3, MAX_COORDINATE), v: vec(x.v, 3, MAX_SPEED), q: vec(x.q, 4, UNIT_LENGTH), s: vec(x.s, 4, MAX_SPIN), c: int(x.c, RAMMED, 0xffffffff) });
   return state && Math.hypot(...state.q) >= 0.5 ? state : null;
 }
 
@@ -219,6 +219,8 @@ export function fleetState(x: unknown): FleetState | null {
     h: listOf(x.h, MAX_FLEET_ZONES, (h) => int(h, 0, MAX_COUNT)),
   });
   const target = x.t === null ? null : id(x.t);
-  if (!state || (x.t !== null && target === null) || Math.hypot(...state.q) < 0.5) return null;
-  return { ...state, t: target };
+  // the field time a comet broke up on its hull, once one did
+  const rammed = x.c === undefined ? undefined : num(x.c, 0, MAX_FIELD_TIME);
+  if (!state || (x.t !== null && target === null) || rammed === null || Math.hypot(...state.q) < 0.5) return null;
+  return { ...state, t: target, ...(rammed === undefined ? {} : { c: rammed }) };
 }

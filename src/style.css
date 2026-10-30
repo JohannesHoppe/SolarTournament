@@ -1122,6 +1122,13 @@ body.cinema #touch {
   animation: banner-pop 2.4s ease-out forwards;
 }
 
+/* a streak's bonus beneath its banner: the points the crowd's show pays */
+#hud-banner .banner-note {
+  margin-top: 0.3em;
+  font-size: 0.45em;
+  letter-spacing: 0.2em;
+}
+
 /* it slams in, wide and bright, flickers once like a tube that catches, holds, and fades */
 @keyframes banner-pop {
   from {
@@ -1321,8 +1328,9 @@ body.touch #hud-message {
   content: "\2191";
 }
 
-/* the escape gauge in a gravity well: how much of the drive the well's hold takes */
-#hud-escape {
+/* the escape gauge in a gravity well: how much of the drive the well's hold takes; under it the orbit readout */
+#hud-escape,
+#hud-orbit {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1334,8 +1342,24 @@ body.touch #hud-message {
   font-size: 0.9rem;
 }
 
-#hud-escape[hidden] {
+#hud-escape[hidden],
+#hud-orbit[hidden] {
   display: none;
+}
+
+/* no orbit yet: what is missing, in the plain azure; an orbit ready or flown in the bright one */
+#hud-orbit {
+  color: var(--hud);
+}
+
+#hud-orbit.held {
+  color: var(--hud-bright);
+}
+
+#hud-orbit b {
+  font-family: var(--font-display);
+  font-weight: normal;
+  letter-spacing: 0.1em;
 }
 
 #hud-escape > i {
@@ -3051,7 +3075,8 @@ body.touch #transmission {
   }
 
   body.touch #hud-master,
-  body.touch #hud-escape {
+  body.touch #hud-escape,
+  body.touch #hud-orbit {
     margin: 2px 0;
     font-size: 0.7rem;
   }
@@ -3150,7 +3175,8 @@ body.touch #transmission {
   }
 
   body.touch #hud-master,
-  body.touch #hud-escape {
+  body.touch #hud-escape,
+  body.touch #hud-orbit {
     font-size: 0.6rem;
   }
 
@@ -3219,7 +3245,8 @@ body.touch #transmission {
   }
 
   body:not(.touch) #hud-master,
-  body:not(.touch) #hud-escape {
+  body:not(.touch) #hud-escape,
+  body:not(.touch) #hud-orbit {
     margin: 2px 0;
     font-size: 0.65rem;
   }
@@ -3805,6 +3832,40 @@ button.quiet:focus-visible {
 /* the laser would only scorch armor: the crosshair dims */
 #crosshair.on-armor {
   border-color: var(--accent);
+}
+
+/*
+ * the nose is on a ship of the own side: no orange (nothing to act on), the ring crossed out in
+ * bright azure and FRIEND beneath it; a shot would hit it all the same (friendly fire)
+ */
+#crosshair.on-friend {
+  border-color: var(--hud-bright);
+  background:
+    linear-gradient(45deg, transparent calc(50% - 1px), var(--hud-bright) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px)),
+    linear-gradient(-45deg, transparent calc(50% - 1px), var(--hud-bright) calc(50% - 1px) calc(50% + 1px), transparent calc(50% + 1px));
+}
+
+#crosshair .friend-tag {
+  display: none;
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 50%;
+  translate: -50% 0;
+  font-family: 'Michroma', sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.12em;
+  white-space: nowrap;
+  color: var(--hud-bright);
+  text-shadow: var(--hud-text-glow);
+}
+
+#crosshair.on-friend .friend-tag {
+  display: block;
+}
+
+/* a ship of the own side: a ring for a mark, where a rival has a square */
+.marker.ally:not(.offscreen)::before {
+  border-radius: 50%;
 }
 
 /* the overdrive, the hook and the torpedoes: dim while they recharge, bright once they are ready */

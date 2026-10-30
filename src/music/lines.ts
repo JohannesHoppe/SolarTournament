@@ -166,6 +166,12 @@ export const ANNOUNCER_KILL = [
   'that one was sponsored. {name} dies for victory cola',
   'beautiful. {name} breathes vacuum now',
 ];
+/** A ship killed by its own side: the announcer scolds the killer ({name}), and the regime loves the waste. */
+export const ANNOUNCER_TEAM_KILL = [
+  '{name} shoots its own side. what an idiot. the printer thanks you',
+  'friendly fire from {name}. a clone wasted for nothing. the president loves waste',
+  'look at {name}, killing its friends. minus points, plus ratings',
+];
 export const ANNOUNCER_ALIEN = [
   'the alien is dead. now our nation can grow again',
   'one less alien. the president thanks you',
@@ -312,6 +318,7 @@ export const SCHOOL = {
   torpedoCover: 'A torpedo is coming. Do not shoot it this time. Get behind the rock.',
   torpedoCoverHit: 'It got you. Put the rock between you and it. Again.',
   hideInstead: 'Shot down. Nice, but this time hide. Again.',
+  orbit: 'The Event Horizon, darling. Your nose points around the black hole. Burn until I say orbit ready. Then free drift, and fall around it for half a turn.',
   exam: 'Final exam, tactician. This bot flies as well as the field. Use everything.',
   tacticianDone: 'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.',
   again: 'Again.',
@@ -362,6 +369,7 @@ export const SCHOOL_PRAISE = {
   slideShot: 'Your nose on them, your flight somewhere else. They cannot dodge what they do not see coming, darling.',
   bursts: 'Cool and deadly. Every shot at armor is heat you do not have when the drive shows.',
   cover: 'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.',
+  orbit: 'Half a turn without a single burn. In orbit you fall all the time, and keep missing. That is why my alarms stay quiet up there.',
   torpedoCover: 'Lost you. A seeker that loses its line never finds it again.',
   exam: 'A real fight, and you won it. I am so proud of you, darling.',
 } as const;
@@ -410,6 +418,8 @@ export const COMPUTER = {
   airBurn: 'We are burning up! Climb, darling!',
   wellTight: 'Now it gets really tight! Full burn, now!',
   wellLost: 'I am sorry, darling.',
+  orbitReady: 'Orbit ready, darling.',
+  orbitStable: 'Entering stable orbit.',
   comet: 'Comet inbound, darling! Its shower is a storm of rock. Hide behind an asteroid, or turn your armored nose into it.',
   torpedo: 'Torpedo!',
   torpedo1000: 'One thousand.',
@@ -418,6 +428,8 @@ export const COMPUTER = {
   torpedo200: 'Two hundred.',
   torpedo100: 'One hundred.',
   torpedoBreak: 'Break!',
+  friend: 'Darling, that is a friend! Hold your fire.',
+  friendHit: 'You hit one of ours, darling. Watch your aim.',
 } as const;
 
 /**
@@ -472,7 +484,7 @@ export function allLines(language: Language): string[] {
       return [STATION_DE, NOW_PLAYING_DE, ...TITLE_FIRST_DE, ...TITLE_SECOND_DE, ...PHRASES_DE];
     case 'mod':
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
-      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
+      return [...ANNOUNCER_KILL, ...ANNOUNCER_TEAM_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
       return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY];
   }

@@ -4,6 +4,7 @@ import { FlightModel, MAIN_THRUST, METERS_PER_UNIT, RCS_THRUST, TURN_ACCELERATIO
 import { firing, NOZZLES, thrustersOf, type Thrusters } from './thrusters';
 import { THRUSTER_LAYOUTS } from './models';
 import { MASS, type Body } from '../world/bodies';
+import { raySphere } from '../world/asteroids';
 import { ramDamage, type RamZone } from './impact';
 import type { Controls } from '../input/input';
 import { TORPEDOES } from '../game/torpedoes';
@@ -107,6 +108,30 @@ export function noseOn(shooter: FlightModel, at: THREE.Vector3, radius: number):
   const angle = shooter.angleTo(line);
   const size = radius / Math.max(distance, 1);
   return angle < size ? 2 : angle < size * LOCK_TRACKING ? 1 : 0;
+}
+
+/** Reach of the laser (units, 10 km), far beyond the arena; also the length of the rays that find the shadow of the rocks. */
+export const LASER_RANGE = 200000;
+
+/** The first hull on a line (see firstHull), kept: the laser asks once a shot. */
+const lineHit = { ship: null as Ship | null, distance: 0 };
+
+/**
+ * The first hull a line from `origin` along `direction` (unit length) strikes within `reach`:
+ * the living ship whose hit sphere, widened by `widen`, it enters first, `from` left out, and how
+ * far along; null for none. A laser's beam ends there, whichever side the ship is on.
+ */
+export function firstHull(ships: readonly Ship[], from: Ship, origin: THREE.Vector3, direction: THREE.Vector3, reach: number, widen = 0): Readonly<typeof lineHit> | null {
+  lineHit.ship = null;
+  lineHit.distance = reach;
+  for (const ship of ships) {
+    if (ship === from || !ship.alive) continue;
+    const distance = raySphere(origin, direction, ship.flight.position, ship.radius + widen);
+    if (distance === null || distance > lineHit.distance) continue;
+    lineHit.ship = ship;
+    lineHit.distance = distance;
+  }
+  return lineHit.ship ? lineHit : null;
 }
 
 /** The engine flame slides this far (model units) into the hull at zero thrust. */
@@ -249,7 +274,10 @@ export class Ship {
     return /^(?:bot\d+|b:|sparring$)/.test(this.id) ? 'bot' : 'host';
   }
 
-  /** Another ship on the same side: lasers pass through it, torpedoes and novas spare it, bots never hunt it. */
+  /**
+   * Another ship on the same side: bots never hunt it, the seeker never locks on it, a kill of it
+   * costs points (see game/friendly). Lasers, torpedoes and novas hurt it as any other.
+   */
   allyOf(other: Ship) {
     return other !== this && this.team >= 0 && other.team === this.team;
   }

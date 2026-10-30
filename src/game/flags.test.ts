@@ -268,6 +268,24 @@ describe('capture the flag', () => {
     expect(deepest).toBeLessThan(rock.radius + 2000);
   });
 
+  it('loses a core whose tow cable a rock came across: the cable snaps, the core flies on', () => {
+    const { field, f, orange, ships, now: taken } = stolen();
+    f.takeEvents();
+    // the carrier on one side of the nearest rock, its core on the other
+    const rock = [...field.asteroids.values()].sort((a, b) => a.object.position.distanceTo(f.bases[1]) - b.object.position.distanceTo(f.bases[1]))[0];
+    const across = new THREE.Vector3(1, 0, 0);
+    orange.flight.position.copy(rock.object.position).addScaledVector(across, rock.radius + 2000);
+    f.cores[1].position.copy(rock.object.position).addScaledVector(across, -rock.radius - 2000);
+    f.cores[1].velocity.set(0, 1000, 0);
+    f.lead(ships, taken + DT);
+    expect(orange.alive).toBe(true);
+    expect(f.cores[1].carrier).toBeNull();
+    expect(f.cores[1].home).toBe(false);
+    expect(f.takeEvents().map((e) => [e.kind, e.ship])).toEqual([['drop', 'o']]);
+    f.update(DT, ships, taken + DT);
+    expect(f.cores[1].velocity.y).toBeGreaterThan(0);
+  });
+
   it('sends a core adrift home after a while', () => {
     const { f, orange, ships } = stolen();
     orange.alive = false;

@@ -306,9 +306,11 @@ export class Wrecks {
         material.emissive.lerpColors(DULL, HOT, glow);
         material.emissiveIntensity = GLOW * glow;
       }
-      // debris that hits a rock grinds to dust, debris that falls into the arena's massive body
+      // debris that hits a rock grinds to dust, and so does debris that hits the armor of what
+      // else stands in the field (the President's battleship, 270,000 times its mass: a
+      // torn plate crumples on it as on rock); debris that falls into the arena's massive body
       // is gone, and so is debris that drifts off into the belt
-      if (field.overlap(mesh.position, wreck.radius) || field.insideWell(mesh.position, wreck.radius) || mesh.position.lengthSq() > BELT_INNER * BELT_INNER) this.remove(wreck);
+      if (field.overlap(mesh.position, wreck.radius) || field.obstacle?.touches(mesh.position, wreck.radius) || field.insideWell(mesh.position, wreck.radius) || mesh.position.lengthSq() > BELT_INNER * BELT_INNER) this.remove(wreck);
     }
   }
 

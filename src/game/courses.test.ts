@@ -1,19 +1,23 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { BOOST_PUSH, BOOST_RADIUS, Course, GATE_RADIUS, GATES } from './race';
-import { RACE_SPEED } from '../ship/bots';
-import { cornerSpeed, MAX_SPEED, turnRadius } from '../ship/flight';
-import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, COURSE_ROOM, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, COVER_DRONE, COVER_STANDOFF, coverSpots, facingRock, LINE_SPARE, RING_COURSE, RING_RADIUS, ringCourse, SLIDE_ANGLE, SLIDE_BOT, SLIDE_HITS, SLIDE_SPEED, clearOfRock } from './school';
+import { Bot, evenSkills, RACE_SPEED } from '../ship/bots';
+import { cornerSpeed, MAIN_THRUST, MAX_SPEED, turnRadius } from '../ship/flight';
+import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, COURSE_ROOM, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, COVER_DRONE, COVER_STANDOFF, coverSpots, facingRock, LINE_SPARE, ORBIT_DRIFT, ORBIT_NOSE, ORBIT_START, ORBIT_SWEEP, RING_COURSE, RING_RADIUS, ringCourse, SLIDE_ANGLE, SLIDE_BOT, SLIDE_HITS, SLIDE_SPEED, clearOfRock } from './school';
 import { ARENA_LIMIT } from '../world/arena';
-import { ARENAS, DEFAULT_ARENA } from '../world/arenas';
+import { arenaById, ARENAS, DEFAULT_ARENA } from '../world/arenas';
 import { testField } from '../test/field';
-import { flyRings, SHIP_RADIUS } from '../test/pilot';
+import { flyCourse, flyRings, SHIP_RADIUS, startFlight } from '../test/pilot';
+import { type Orbit, type OrbitState, readOrbit, wellMu } from './orbit';
+import { IDLE } from '../input/input';
+import type { Ship } from '../ship/ship';
 import { bendRadius, RacingLine } from './racingline';
 import { DETAIL } from '../world/rocks';
 import { flyTorpedo, strikes, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS } from './torpedoes';
 
 /** The rocks as the game collides with them: their reach decides where gates lie and how the line bows. */
 const gameField = () => testField(DETAIL);
+const scratch = new THREE.Vector3();
 
 /**
  * Plausibility: every course has to be flyable by a bot of middling skill (0.5) at the pace of
@@ -180,5 +184,62 @@ describe("the flight school's courses", () => {
     }
     expect(tried).toBe(8);
     expect(outcomes.filter((outcome) => !outcome.startsWith('covered')), outcomes.join('; ')).toEqual([]);
+  });
+
+  it('lets a middling bot fly the orbit drill at the Event Horizon: from the drill’s start to ORBIT READY, then half a turn about the hole in free drift, stable all the way', () => {
+    const field = gameField();
+    field.generate(arenaById('hole')!.layout);
+    const well = field.well!;
+    const start = well.position.clone().add(ORBIT_START);
+    const flight = startFlight(start, ORBIT_NOSE, ORBIT_DRIFT);
+    // the ship as the bot reads it, its drive whole
+    const ship = { id: 'pilot', flight, radius: SHIP_RADIUS, alive: true, protectedUntil: 0, strain: 0, heat: 0, drive: 1, cooling: 1, allyOf: () => false } as unknown as Ship;
+    const bot = new Bot(ship, evenSkills(SKILL));
+    // it flies the circle it starts on at the speed of a circular orbit there, for a point 30° ahead on it
+    const radius = ORBIT_START.length();
+    bot.raceSpeed = Math.sqrt(wellMu(well) / radius);
+    const ahead = new THREE.Vector3();
+    const arm = new THREE.Vector3();
+    const before = start.clone();
+    const reading: Orbit = { periapsis: 0, apoapsis: 0, circular: 0, radial: 0 };
+    let state: OrbitState = 'falls';
+    let readyAt = -1;
+    let seconds = 0;
+    let swept = 0;
+    const broken: string[] = [];
+    // no ring to fly: one far beyond the arena that the flight never reaches
+    const nowhere = new THREE.Vector3(0, 0, ARENA_LIMIT * 3);
+    const rings = { points: [nowhere], normals: [new THREE.Vector3(0, 0, 1)], radius: 1, core: 0, line: new RacingLine([nowhere], false, start) };
+    const result = flyCourse(
+      field,
+      rings,
+      flight,
+      (flight, _, time) => {
+        // free drift once the readout says ready: the hand off every control
+        if (readyAt >= 0) return IDLE;
+        arm.subVectors(flight.position, well.position);
+        const angle = Math.atan2(arm.x, arm.y) + Math.PI / 6;
+        bot.waypoint = ahead.set(Math.sin(angle) * radius, Math.cos(angle) * radius, 0).add(well.position);
+        return bot.think(time, [ship], field);
+      },
+      120,
+      undefined,
+      (flight, step) => {
+        seconds += step;
+        state = readOrbit(well, flight.position, flight.velocity, MAIN_THRUST, readyAt >= 0, state === 'ready' || state === 'stable', reading);
+        if (readyAt < 0 && state === 'ready') readyAt = seconds;
+        if (readyAt >= 0 && seconds > readyAt) {
+          if (state !== 'stable') broken.push(`${state} after ${(seconds - readyAt).toFixed(1)} s`);
+          swept += arm.subVectors(before, well.position).angleTo(scratch.subVectors(flight.position, well.position));
+        }
+        before.copy(flight.position);
+        return swept >= ORBIT_SWEEP;
+      },
+    );
+    expect(result.crashed, `crashed after ${seconds.toFixed(1)} s`).toBe(false);
+    expect(readyAt, 'seconds to ORBIT READY').toBeGreaterThanOrEqual(0);
+    expect(readyAt).toBeLessThan(20);
+    expect(broken).toEqual([]);
+    expect(swept, `swept ${((swept * 180) / Math.PI).toFixed(0)}° in ${seconds.toFixed(0)} s`).toBeGreaterThanOrEqual(ORBIT_SWEEP);
   });
 });
