@@ -133,21 +133,22 @@ const STEER = 0.3;
  */
 const LANE_MAX = 12000;
 const LANE_STEP = 500;
+/** How many points along a piece's orbit the lane is checked at. */
+const LANE_SAMPLES = 120;
 /** Its hull keeps this far from every piece of the field (units, 50 m), the piece's whole reach counted. */
 const ROCK_CLEAR = 1000;
 /**
  * Its sensors follow each piece of the field ROCK_LOOKOUT seconds ahead (in steps of
  * ROCK_STEP), where the field time puts it, against its own course straight on: a piece that
- * would come within ROCK_CLEAR of the hull pushes it aside, square to their closing, at up to
- * ROCK_EVADE (units/s, 50 m/s) on top of its course, the harder the sooner the contact, turning
- * onto that course EVADE_BURN times as hard as onto its orbit. Its thrusters do this, so it
- * works with the drives shot out too. It turns its hull only where the turn stays clear of rock.
+ * would come within ROCK_CLEAR of the hull pushes it aside, square to their closing while there
+ * is time to pass it and straight away once it is close, at up to ROCK_EVADE (units/s, 50 m/s)
+ * on top of its course, the harder the sooner the contact, turning onto that course EVADE_BURN
+ * times as hard as onto its orbit. Its thrusters do this, so it works with the drives shot out
+ * too. It turns its hull only where the turn stays half ROCK_CLEAR clear of rock.
  */
 const ROCK_LOOKOUT = 20;
 const ROCK_STEP = 0.5;
 const ROCK_EVADE = 1000;
-/** How many points along a piece's orbit the lane is checked at. */
-const LANE_SAMPLES = 120;
 /**
  * A cross section of the hull at `z` (in its frame; the bow points along -z): the flight
  * deck on top at DECK_TOP, `half` wide to each side; the armored belt drops straight from the
@@ -1217,7 +1218,7 @@ export class Fleet implements Obstacle {
     return pushed ? target.clampLength(0, 1) : null;
   }
 
-  /** Whether its hull turned by `turned` would come within ROCK_CLEAR of a piece of the field it keeps clear of as it is turned now. */
+  /** Whether its hull turned by `turned` would come within half ROCK_CLEAR of a piece of the field it keeps clear of as it is turned now. */
   private crowded(turned: THREE.Quaternion): boolean {
     if (!this.field) return false;
     for (const piece of this.field.asteroids.values()) {
