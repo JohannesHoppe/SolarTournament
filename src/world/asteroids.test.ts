@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ARENAS } from './arenas';
+import { ARENAS, RING_SHEET } from './arenas';
 import { ARENA_LIMIT } from './arena';
 import { impostorDistance, IMPOSTOR_MIN, SPIN_RATE, type AsteroidField, type FieldLayout } from './asteroids';
 import { testField } from '../test/field';
@@ -39,7 +39,7 @@ describe('the field of an arena', () => {
     expect(newcomer.asteroids.get(second)!.hitPoints).toBe(lead.asteroids.get(second)!.hitPoints);
   });
 
-  it("lays the Rings' small chunks within the layer of grains, its large ones in the open space above and below", () => {
+  it("lays the Rings' small chunks within the layer of grains and the ring's sheet, its large ones in the open space above and below", () => {
     const rings = ARENAS.find((a) => a.id === 'rings')!;
     const { layout } = rings;
     const field = testField();
@@ -48,12 +48,16 @@ describe('the field of an arena', () => {
     expect(pieces).toHaveLength(layout.count + layout.open!.count);
     for (const piece of pieces) {
       const height = Math.abs(piece.object.position.y);
-      if (Number(piece.id) < layout.count) expect(height).toBeLessThanOrEqual(rings.grains!);
-      else {
+      if (Number(piece.id) < layout.count) {
+        expect(height).toBeLessThanOrEqual(rings.grains!);
+        // between the faces of the ring's sheet, however it is turned, so the sheet never cuts it
+        expect(height + piece.radius).toBeLessThan(RING_SHEET);
+      } else {
         expect(height).toBeGreaterThanOrEqual(layout.open!.from);
         expect(height).toBeLessThanOrEqual(layout.open!.to);
-        // clear of the layer, however it is turned
+        // clear of the layer and beyond the sheet, however it is turned
         expect(height - piece.radius).toBeGreaterThan(rings.grains!);
+        expect(height - piece.radius).toBeGreaterThan(RING_SHEET);
       }
     }
     // either side of it

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { coursesFrom, DRILL, judge, SCHOOL_COURSES } from './school';
+import { SCHOOL } from '../music/lines';
 
 describe('judging a drill', () => {
   // what the judge reads of the flight school's context and the attempt, nothing more
@@ -14,8 +15,8 @@ describe('judging a drill', () => {
   });
 
   it('counts the kill whose shot overheats the laser as done', () => {
-    const kill = { bot: { alive: false }, me: { overheated: true } };
-    expect(judged(DRILL.bursts, kill, {})).toBe(true);
+    const kill = { bot: { alive: false }, me: { overheated: true, kills: 1 } };
+    expect(judged(DRILL.bursts, kill, { count: 0 })).toBe(true);
     // overheated with the bot still alive: too hot
     expect(judged(DRILL.bursts, { ...kill, bot: { alive: true } }, {})).toBeTypeOf('string');
   });
@@ -26,6 +27,85 @@ describe('judging a drill', () => {
     expect(judged(DRILL.turn, at(new THREE.Vector3(0, 0, -2600)), { points: [marker], held: 0 })).toBe(true);
     // short of it, with the nose off it: not yet
     expect(judged(DRILL.turn, at(new THREE.Vector3(0, 0, -1000)), { points: [marker], held: 0 })).toBeNull();
+  });
+
+  it('counts the fine aim drill done for a pilot who burns to its marker too', () => {
+    const marker = new THREE.Vector3(0, 0, -8000);
+    const at = (z: number) => ({ dt: 0.016, device: 'keyboard', me: { flight: { position: new THREE.Vector3(0, 0, z), angleTo: () => Math.PI / 2 } } });
+    expect(judged(DRILL.fineAim, at(-7500), { points: [marker], held: 0 })).toBe(true);
+    expect(judged(DRILL.fineAim, at(-3000), { points: [marker], held: 0 })).toBeNull();
+  });
+
+  describe('hiding from a torpedo behind a rock', () => {
+    // the drone's torpedo already flies (lit); the Host started with full hull, nothing shot down yet
+    const attempt = () => ({ points: [new THREE.Vector3(), new THREE.Vector3()], lit: true, reach: 100, count: 0 });
+    const at = (torpedoes: number, tracked: boolean, hull = 100, torpedoesDown = 0) => ({ torpedoes, tracked, torpedoesDown, me: { hull } });
+
+    it('passes once the torpedo loses its lock, or breaks on the rock', () => {
+      expect(judged(DRILL.torpedoCover, at(1, false), attempt())).toBe(true);
+      expect(judged(DRILL.torpedoCover, at(0, false), attempt())).toBe(true);
+      expect(judged(DRILL.torpedoCover, at(1, true), attempt())).toBeNull();
+    });
+
+    it('starts over when the torpedo hits the hull or is shot down', () => {
+      expect(judged(DRILL.torpedoCover, at(0, false, 40), attempt())).toBe(SCHOOL.torpedoCoverHit);
+      expect(judged(DRILL.torpedoCover, at(0, false, 100, 1), attempt())).toBe(SCHOOL.hideInstead);
+    });
+  });
+
+  it('says a torpedo got past when it is gone without a hit, and that it hit when it hit', () => {
+    const attempt = { lit: true, reach: 100, count: 0 };
+    expect(judged(DRILL.torpedoDown, { torpedoes: 0, torpedoesDown: 0, me: { hull: 100 } }, attempt)).toBe(SCHOOL.torpedoPast);
+    expect(judged(DRILL.torpedoDown, { torpedoes: 0, torpedoesDown: 0, me: { hull: 40 } }, attempt)).toBe(SCHOOL.torpedoHit);
+  });
+
+  it('starts the flip and burn over the moment the S brake is pressed, not once the ship is at rest', () => {
+    const moving = { braking: true, me: { flight: { velocity: new THREE.Vector3(0, 0, -1500) } } };
+    expect(judged(DRILL.flipBurn, moving, { forward: new THREE.Vector3(0, 0, -1), usedBrake: false, brakeLetGo: true })).toBe(SCHOOL.byHand);
+  });
+
+  it('counts a sparring bot only when the pilot downed it; one that crashed on its own means once more', () => {
+    const dead = (kills: number) => ({ bot: { alive: false }, me: { kills, overheated: false } });
+    for (const drill of [DRILL.chase, DRILL.duel, DRILL.exam, DRILL.bursts]) {
+      expect(judged(drill, dead(1), { count: 0 })).toBe(true);
+      expect(judged(drill, dead(0), { count: 0 })).toBe(SCHOOL.again);
+    }
+  });
+
+  it('starts the hook drill on a ship over once the runner is out of the hook’s reach', () => {
+    const me = { flight: { position: new THREE.Vector3() } };
+    const runner = (distance: number) => ({ hooked: false, me, bot: { alive: true, flight: { position: new THREE.Vector3(0, 0, -distance) } } });
+    expect(judged(DRILL.hookShip, runner(20000), {})).toBeNull();
+    expect(judged(DRILL.hookShip, runner(40000), {})).toBe(SCHOOL.again);
+  });
+
+  it('counts the impact drill done for a pilot who steered past the rock before any warning', () => {
+    const rock = new THREE.Vector3(0, 0, -5000);
+    const past = { dt: 1, impactAhead: false, me: { flight: { position: new THREE.Vector3(3000, 0, -6000), velocity: new THREE.Vector3(0, 0, -2000) } } };
+    expect(judged(DRILL.impact, past, { points: [rock], held: 0, warned: false })).toBe(true);
+  });
+
+  it('judges the shove drill along the drift, however the nose is turned', () => {
+    const rock = new THREE.Vector3(0, 0, -4000);
+    const along = new THREE.Vector3(0, 0, -1);
+    const at = (z: number) => ({ drone: null, me: { flight: { position: new THREE.Vector3(1500, 0, z) } } });
+    expect(judged(DRILL.shove, at(-3000), { points: [rock, along], reach: 1000 })).toBeNull();
+    expect(judged(DRILL.shove, at(-8000), { points: [rock, along], reach: 1000 })).toBe(SCHOOL.again);
+  });
+
+  it('sets the autopilot each drill needs, and leaves the hook’s drift alone until it bites', () => {
+    for (const drill of [DRILL.turn, DRILL.drive, DRILL.brake, DRILL.fineAim, DRILL.curve, DRILL.stopAt, DRILL.impact, DRILL.freeDrift, DRILL.hook]) expect(drill.autopilot).toBe(true);
+    for (const drill of [DRILL.drift, DRILL.lookBack, DRILL.flipBurn, DRILL.autopilotOn]) expect(drill.autopilot).toBe(false);
+    expect(DRILL.hook.keepsDrift(null as never, { warned: false } as never)).toBe(true);
+    expect(DRILL.hook.keepsDrift(null as never, { warned: true } as never)).toBe(false);
+  });
+
+  it('shows the stick wherever a drill wants the nose turned, and the drive wherever it wants the ship flown', () => {
+    for (const drill of [DRILL.fineAim, DRILL.impact, DRILL.shootMoving, DRILL.shadow, DRILL.bursts, DRILL.chase, DRILL.evade, DRILL.duel, DRILL.hookShip, DRILL.nova, DRILL.cover, DRILL.torpedoCover, DRILL.exam]) {
+      expect(drill.keys).toContain('turn');
+    }
+    for (const drill of [DRILL.hook, DRILL.hookShip, DRILL.nova, DRILL.bursts, DRILL.evade]) expect(drill.keys).toContain('drive');
+    expect(DRILL.stopAt.keys).not.toContain('flip');
   });
 });
 
