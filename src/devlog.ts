@@ -6,6 +6,8 @@
  * every round; read it from the console as `game.log` (see the README of e2e/ and CLAUDE.md).
  */
 
+import type { FleetWeapon } from './game/fleet';
+
 /** A bot's decision (see Bot.think): what it does now and why. */
 export interface DecisionEvent {
   kind: 'decision';
@@ -89,7 +91,7 @@ export interface SuspicionEvent {
   reported: boolean;
 }
 
-/** The President's battleship (see game/fleet): a hit on a part by a laser or a torpedo, a part broken, the reactor gone critical. */
+/** The President's battleship (see game/fleet): a hit on a part by a laser, a torpedo or a nova core, a part broken, the reactor gone critical. */
 export interface FleetEvent {
   kind: 'fleet';
   t: number;
@@ -98,7 +100,7 @@ export interface FleetEvent {
   ship: string | null;
   part: string;
   zone: number;
-  weapon: 'laser' | 'torpedo' | null;
+  weapon: FleetWeapon | null;
   count: number;
 }
 

@@ -6,11 +6,11 @@ import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS } from '../game/race';
 import { FLING_CREDIT, LOCK_ANGLE, LOCK_DISTANCE, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, TORPEDOES } from '../game/torpedoes';
 import { HOOK_PULL, HOOK_RANGE, HOOK_RECHARGE } from '../game/hook';
-import { PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
+import { NOVA_RADIUS, PROBE_EVERY, PROBE_FIRST, PROBE_RADIUS } from '../game/items';
 import { CLONES, FLARE_BURN, FLARE_HEAT } from '../game/survival';
 import { ADRIFT_SECONDS, CAPTURE_POINTS, CAPTURES_TO_WIN, CORE_BRAKE, GRAB_POINTS, GRAB_REACH, RETURN_POINTS } from '../game/flags';
 import { MASS } from '../world/bodies';
-import { ARRIVAL, BATTERY_PERIOD, BATTERY_RANGE, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, SINK_BLAST, SINK_POINTS, TORPEDO_HITS, ZONE_HITS } from '../game/fleet';
+import { ARRIVAL, BATTERY_PERIOD, BATTERY_RANGE, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, NOVA_EDGE, NOVA_SHATTER, SINK_BLAST, SINK_POINTS, TORPEDO_HITS, ZONE_HITS } from '../game/fleet';
 import { COMET_WARNING } from '../game/comet';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
 import { ASTEROID_POINTS } from '../world/asteroids';
@@ -92,6 +92,9 @@ export const FROM_CODE: Record<string, number> = {
   driveHits: ZONE_HITS.drive,
   reactor: ZONE_HITS.reactor,
   torpedoHits: TORPEDO_HITS,
+  nova: meters(NOVA_RADIUS),
+  novaShatter: meters(NOVA_SHATTER),
+  novaEdge: percent(NOVA_EDGE),
   batteryPeriod: BATTERY_PERIOD,
   batteryRange: km(BATTERY_RANGE),
   blast: km(SINK_BLAST),
@@ -162,7 +165,6 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   burstShade: { value: 9, readme: 'and # in shadow' },
   cooled: { value: 30, readme: 'cooled down to # %' },
   torpedoShot: { value: 50, readme: 'a 6 m target; # points' },
-  nova: { value: 800, readme: 'Every other ship within # m is destroyed' },
   novaPanic: { value: 1.2, readme: 'Everyone within # km of a holder' },
   shove: { value: 5, readme: 'struck by another at # m/s or more is shoved' },
   knockout: { value: 3, readme: 'crashes within # seconds' },

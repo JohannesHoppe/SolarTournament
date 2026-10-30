@@ -254,22 +254,40 @@ export function allyInLine(shooter: Ship, ships: readonly Ship[], field: Asteroi
 
 /** A bot sets off a nova core (see novaWorth) among at least this many rivals. */
 const NOVA_CROWD = 2;
+/**
+ * A nova core is worth setting off at the President's battleship once it takes this many hits
+ * of its parts (three torpedoes' worth): a battery within about 700 m, the distance a bot
+ * attacking one holds (see SIEGE_DISTANCE) and some more.
+ */
+export const NOVA_SIEGE = 30;
+/**
+ * A bot that has held its core NOVA_PATIENCE seconds sets it off on a single rival inside the
+ * blast (a double kill all the same): rivals flee a holder, and a crowd may never come. One that
+ * has held it NOVA_SHED seconds sets it off anywhere, for the next shot is the core and its
+ * laser stays silent until then; the reprint it earns costs nothing.
+ */
+export const NOVA_PATIENCE = 20;
+export const NOVA_SHED = 60;
 
 /**
- * Whether a bot's nova core is worth setting off where it is: NOVA_CROWD rivals or more within
- * four fifths of the blast's `radius` (units), and no ship of its own side within the whole of
- * it, for a nova spares nobody. The target drone, which nobody flies, does not count.
+ * Whether a bot's nova core is worth setting off where it is, never with a ship of its own side
+ * within the blast's `radius` (units), for a nova spares nobody: NOVA_CROWD rivals or more within
+ * four fifths of it, or `siege` hits on the battleship's parts of NOVA_SIEGE or more (see
+ * Fleet.novaDamage); having held it `held` seconds, one rival within it after NOVA_PATIENCE,
+ * anything after NOVA_SHED. The target drone, which nobody flies, does not count.
  */
-export function novaWorth(holder: Ship, ships: readonly Ship[], radius: number): boolean {
-  let rivals = 0;
+export function novaWorth(holder: Ship, ships: readonly Ship[], radius: number, held = 0, siege = 0): boolean {
+  let crowd = 0;
+  let inside = 0;
   for (const other of ships) {
     if (other === holder || !other.alive || other.kind === null) continue;
     const distance = other.flight.position.distanceTo(holder.flight.position);
-    if (other.allyOf(holder)) {
-      if (distance < radius) return false;
-    } else if (distance < radius * 0.8) rivals++;
+    if (distance >= radius) continue;
+    if (other.allyOf(holder)) return false;
+    inside++;
+    if (distance < radius * 0.8) crowd++;
   }
-  return rivals >= NOVA_CROWD;
+  return crowd >= NOVA_CROWD || siege >= NOVA_SIEGE || (held >= NOVA_PATIENCE && inside > 0) || held >= NOVA_SHED;
 }
 
 /**
@@ -333,6 +351,8 @@ export class Bot {
   flee: THREE.Vector3 | null = null;
   /** What the bot flees, for the development log: a nova, the battleship, a comet. */
   fleeFrom = '';
+  /** Kept by the game: since when (s) its clone holds a nova core, Infinity while it holds none (see novaWorth). */
+  novaSince = Infinity;
   /** Set by the game: the bot turns back beyond this distance (units) from `homeAt`, the field's center or a solar flare's safe pocket. */
   home = HOME_RADIUS;
   homeAt: THREE.Vector3 | null = null;

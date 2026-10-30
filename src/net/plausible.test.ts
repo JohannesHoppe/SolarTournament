@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { TORPEDO_LIFETIME } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
+import { NOVA_RADIUS } from '../game/items';
 import { killScore } from '../game/friendly';
 import { Accusations, accusersNeeded, AIM_SLACK, beamShare, Evidence, hookShare, Plausibility, ramShare, SenderClock, Standings, Strikes, type Margins, type Seen, type Standing } from './plausible';
 import { Fleet, FLEET_SPEED, type FleetState } from '../game/fleet';
@@ -567,6 +568,31 @@ describe('evidence of what a ship did', () => {
     // no blast there, no hits, alive or dead
     expect(evidence.fleetHit('s', false, v(0, 0, -80000), 10, 20000, false, 11)).toBe(false);
     expect(evidence.fleetHit('t', false, part, 10, 20000, false, 11)).toBe(false);
+  });
+
+  it("counts an honest nova core's hits on the battleship's parts, as its holder's browser counted them, with the battleship a moment elsewhere here", () => {
+    // the holder's browser and this one, the battleship half a second further along here
+    const there = new Fleet(7);
+    const here = new Fleet(7);
+    for (const [fleet, z] of [[there, 0], [here, -FLEET_SPEED * 0.5]] as const) {
+      fleet.arrivesAt = 0;
+      fleet.position.set(0, 0, z);
+      fleet.root.updateMatrixWorld();
+    }
+    const battery = there.zones.findIndex((zone) => zone.kind === 'battery');
+    const drive = there.zones.findIndex((zone) => zone.kind === 'drive');
+    const evidence = new Evidence();
+    // set off 300 m above the first battery
+    const core = there.zoneAt(battery).add(v(0, 6000, 0));
+    evidence.nova('s', core, 10);
+    const hits = there.novaHits(core);
+    expect(hits.length).toBeGreaterThan(0);
+    for (const { zone, count } of hits) expect(evidence.fleetHit('s', true, here.zoneAt(zone), count, AIM_SLACK, false, 11, (d) => here.novaHit(zone, d))).toBe(true);
+    // all the hits a part takes from afar, another ship's word, an old core: no
+    expect(there.zoneAt(drive).distanceTo(core)).toBeGreaterThan(NOVA_RADIUS);
+    expect(evidence.fleetHit('s', true, here.zoneAt(drive), here.hitsOf(drive), AIM_SLACK, false, 11, (d) => here.novaHit(drive, d))).toBe(false);
+    expect(evidence.fleetHit('t', true, here.zoneAt(battery), hits[0].count, AIM_SLACK, false, 11, (d) => here.novaHit(battery, d))).toBe(false);
+    expect(evidence.fleetHit('s', true, here.zoneAt(battery), 10, AIM_SLACK, false, 30, (d) => here.novaHit(battery, d))).toBe(false);
   });
 
   it('takes a hit on the own ship from a beam that starts near its shooter and passes near the ship', () => {
