@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cleanName, fieldState, flagsState, fleetState, ids, shipState, wreckStates } from './validate';
+import { cleanName, fieldState, flagsState, fleetState, ids, shipState, shovedState, wreckStates } from './validate';
+import { RAMMED } from '../world/asteroids';
 import { TINTS } from '../ship/tints';
 
 const ship = {
@@ -77,6 +78,17 @@ describe('messages from other browsers', () => {
     expect(fleetState({ ...fleet, d: 2 })).toBeNull();
     expect(fleetState({ ...fleet, h: [1.5] })).toBeNull();
     expect(fleetState({ ...fleet, q: [0, 0, 0, 0] })).toBeNull();
+    // the field time a comet broke up on its hull, once one did
+    expect(fleetState({ ...fleet, c: 98.4 })?.c).toBe(98.4);
+    for (const c of [-1, 'soon', null, Infinity]) expect(fleetState({ ...fleet, c })).toBeNull();
+  });
+
+  it('take a piece of the field shoved by a comet or rammed by the battleship, and drop it broken', () => {
+    const shoved = { id: '12.0', b: 40.5, p: [1, 2, 3], v: [100, 0, -50], q: [0, 0, 0, 1], s: [0, 1, 0, 0.1], c: RAMMED };
+    expect(shovedState(shoved)).toEqual(shoved);
+    expect(shovedState({ ...shoved, c: 4049 })?.c).toBe(4049);
+    expect(fieldState({ k: 'rings', t: 41, a: [{ id: '12.0', hp: 5, b: 0 }], x: [], m: [shoved] })?.m).toEqual([shoved]);
+    for (const broken of [{ c: -2 }, { c: 0.5 }, { id: 'a b' }, { q: [0, 0, 0, 0] }, { v: [1, 2] }, { s: [0, 1, 0, 1e9] }, { b: -1 }]) expect(shovedState({ ...shoved, ...broken })).toBeNull();
   });
 
   it('clean callsigns of control and invisible format characters', () => {

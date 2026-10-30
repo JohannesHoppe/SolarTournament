@@ -512,6 +512,26 @@ export function hookShare(ship: THREE.Vector3, held: THREE.Vector3): number {
   return ship.distanceTo(held) / (HOOK_RANGE + AIM_SLACK);
 }
 
+/**
+ * A piece the lead's battleship rams aside is pushed out of its hull by no more than RAM_PUSH
+ * (units, 100 m: its hull plows a few meters into a piece in a frame), and leaves it no faster
+ * than RAM_SPEED (units/s, 500 m/s): a blow of the hull at its fastest, 100 m/s, sends a piece
+ * off at about twice that and its own drift.
+ */
+const RAM_PUSH = 2000;
+const RAM_SPEED = 10000;
+
+/**
+ * How close a ram the lead browser reports comes to a lie (above 1: one this browser does not
+ * take): the piece lay at the battleship's hull as this browser sees them, no farther from its
+ * center than the hull reaches (`reach`, the piece's own reach in it) and AIM_SLACK (this browser
+ * glides after the lead's battleship), it was pushed out from `before` to `after` no farther than
+ * RAM_PUSH, and it drifts away no faster than RAM_SPEED.
+ */
+export function ramShare(before: THREE.Vector3, after: THREE.Vector3, speed: number, hull: THREE.Vector3, reach: number): number {
+  return Math.max(before.distanceTo(hull) / (reach + AIM_SLACK), before.distanceTo(after) / RAM_PUSH, speed / RAM_SPEED);
+}
+
 /** What a ship's beams and torpedoes did counts as evidence this long (s), its torpedo launches as long as a torpedo flies and a little more. */
 const EVIDENCE_SECONDS = 5;
 const LAUNCH_EVIDENCE = TORPEDO_LIFETIME + 3;

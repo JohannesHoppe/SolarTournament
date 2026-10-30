@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { AsteroidField, FieldState } from '../world/asteroids';
+import type { AsteroidField, FieldState, ShovedState } from '../world/asteroids';
 import { ownerOf, TOURNAMENT_SIZE, type Session, type RoundState, type Vec } from './session';
 import type { Ship, ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
@@ -39,6 +39,8 @@ export interface OnlineGame {
   remoteWreck(id: string): void;
   /** A ship of another peer hit a part of the President's battleship in a round, this many times (a torpedo counts several). */
   remoteFleetHit(zone: number, round: number, shooter: Ship, count: number): void;
+  /** The lead browser's battleship rammed a piece of the field in a round: the piece's motion since. */
+  remoteRam(state: ShovedState, round: number): void;
   /** A part of the President's battleship as a torpedo homes on it, by its id. */
   beacon(id: string): Homing | null;
   /** The pieces of wreckage in flight, for a browser that joins. */
@@ -230,6 +232,7 @@ export class Online {
       if (!this.evidence.fleetHit(shooter, ship.alive, part, count, EVIDENCE_REACH, this.session.justJoined, wall())) return;
       game.remoteFleetHit(zone, round, ship, count);
     };
+    session.onRam = (state, round) => game.remoteRam(state, round);
     session.onTorpedo = (id, shooter, target, p, v) => {
       const ship = this.find(shooter);
       // launched from near where the ship flies here, and no more than its clone carries
@@ -439,6 +442,10 @@ export class Online {
 
   sendFleetHit(zone: number, round: number, shooter: Ship, count: number) {
     this.session.sendFleetHit(zone, round, shooter.id, count);
+  }
+
+  sendRam(state: ShovedState, round: number) {
+    this.session.sendRam(state, round);
   }
 
   sendTorpedo(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3) {
