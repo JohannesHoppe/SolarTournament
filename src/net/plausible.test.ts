@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { TORPEDO_LIFETIME } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
 import { killScore } from '../game/friendly';
+import { BOT_RESPAWN_SECONDS } from '../game/sponsors';
+import { streakBonus, Streaks } from '../game/streaks';
+import { TOURNAMENT_SIZE } from './session';
 import { Accusations, accusersNeeded, AIM_SLACK, beamShare, Evidence, hookShare, Plausibility, ramShare, SenderClock, Standings, Strikes, type Margins, type Seen, type Standing } from './plausible';
 import { Fleet, FLEET_SPEED, type FleetState } from '../game/fleet';
 import { arenaById } from '../world/arenas';
@@ -311,6 +314,29 @@ describe('the standing of another browser\'s ship', () => {
     let s = 0;
     for (let t = 4; t <= 14; t++) s = standings.take('s', at(1000000), t, t, t).s;
     expect(s).toBeLessThan(6500 + 10000 + 200 * 12);
+  });
+
+  it('takes in full the streaks of a Host who kills everyone, again and again', () => {
+    // the game's scoring of a ship's kills (see Game.shipDestroyed)
+    const streaks = new Streaks();
+    let score = 0;
+    const kill = (at: number, nova = false) => {
+      score += killScore(false, 500, nova ? 2 : 1) + streakBonus(streaks.kill('s', at), 500, nova);
+    };
+    const standings = new Standings();
+    standings.take('s', at(0), 0, 0, 0);
+    // a nova core takes every other ship of a full tournament at once
+    for (let i = 1; i < TOURNAMENT_SIZE; i++) kill(1, true);
+    expect(standings.take('s', at(score), 1, 1, 1).s).toBe(score);
+    // as soon as their next clones are printed, it shoots them down one after another, a kill
+    // every second and a half, each one of the streak
+    for (let i = 1; i < TOURNAMENT_SIZE; i++) {
+      const t = 1 + BOT_RESPAWN_SECONDS + 1.5 * (i - 1);
+      kill(t);
+      expect(standings.take('s', at(score), t, t, t).s).toBe(score);
+    }
+    // the nova's kills earn no bonus; the streak after it pays 250 for the second, 500 for each after
+    expect(score).toBe(7 * 1000 + 7 * 500 + 250 + 5 * 500);
   });
 
   it('takes a score that falls below zero by friendly fire, a nova among its own side at once', () => {

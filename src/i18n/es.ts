@@ -336,7 +336,8 @@ export const ES: Catalog = {
   Crashed: 'Estrellado',
   'Burned up in the solar flare': 'Calcinado en la erupción solar',
   'Lost in deep space': 'Perdido en el espacio profundo',
-  'Double kill +{points}': 'Doble baja +{points}',
+  'Nova kill +{points}': 'Baja por nova +{points}',
+  'Streak bonus +{points}': 'Bonus de racha +{points}',
   'Solar flare': 'Erupción solar',
   'Deep space': 'Espacio profundo',
   Crash: 'Choque',
@@ -1201,6 +1202,8 @@ export const ES: Catalog = {
   'Points, Coins and the Hangar': 'Puntos, monedas y el hangar',
   "A kill {kill} (in a race {raceKill}), rocks {rock1}, {rock2} and {rock3}, a close call {closeCall}, a gate {gatePoints}, first place in a race {firstPlace}. Every point is paid out as one Solar Coin at the round's end; training is free and pays nothing.":
     'Una baja {kill} (en carrera {raceKill}), rocas {rock1}, {rock2} y {rock3}, pasar por los pelos {closeCall}, una puerta {gatePoints}, primer puesto en carrera {firstPlace}. Cada punto se paga como una Solar Coin al final de la ronda; el entrenamiento es gratis y no paga nada.',
+  "Kills close together are a show, and the crowd pays for it: a kill within {streak} s of your last one makes a streak. The second earns half a kill more ({streakDouble}), the third and every one after a whole kill more ({streakMore}); the bots' streaks pay alike. A nova's kills already count double and earn no bonus, but they count in the streak; a kill of your own side counts in none, and your clone's death ends it.":
+    'Las bajas seguidas son un espectáculo, y el público lo paga: una baja a menos de {streak} s de tu última hace una racha. La segunda vale media baja más ({streakDouble}), la tercera y cada una de las siguientes una baja entera más ({streakMore}); las rachas de los bots pagan igual. Las bajas de una nova ya cuentan doble y no dan bonus, pero cuentan en la racha; una baja de tu propio bando no cuenta en ninguna, y la muerte de tu clon la termina.',
   'In the hangar the coins buy upgrades for both interceptors, three steps each: radiators, thrusters, main drive, torpedo tubes, plating, and the looks (neon trim, drive flame). Online every upgrade counts for one step at most, so newcomers meet veterans almost as equals; the looks count in full. Complete both interceptors, and the President gives you the Sovereign: a trophy, not a better ship.':
     'En el hangar, las monedas compran mejoras para ambos interceptores, tres niveles cada una: radiadores, propulsores, motor principal, tubos lanzatorpedos, blindaje y la estética (franjas de neón, llama del motor). Online cada mejora cuenta como mucho un nivel, así que los novatos se enfrentan a los veteranos casi de igual a igual; la estética cuenta entera. Completa ambos interceptores y el Presidente te regala el Soberano: un trofeo, no una nave mejor.',
   "The Games run without a central server. The Hosts' browsers build the tournament's network among themselves and agree on what happens by consensus.":

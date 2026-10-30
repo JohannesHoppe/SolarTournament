@@ -1122,6 +1122,13 @@ body.cinema #touch {
   animation: banner-pop 2.4s ease-out forwards;
 }
 
+/* a streak's bonus beneath its banner: the points the crowd's show pays */
+#hud-banner .banner-note {
+  margin-top: 0.3em;
+  font-size: 0.45em;
+  letter-spacing: 0.2em;
+}
+
 /* it slams in, wide and bright, flickers once like a tube that catches, holds, and fades */
 @keyframes banner-pop {
   from {

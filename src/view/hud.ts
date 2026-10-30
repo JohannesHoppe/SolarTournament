@@ -675,12 +675,19 @@ export class Hud {
   /**
    * A big moment's banner (see game/moments.ts), above the crosshair: it pops in and fades out by
    * itself after BANNER_SECONDS; meanwhile only a moment of the same `rank` or higher replaces it.
+   * A `note` (a streak's bonus) stands smaller beneath it.
    */
-  banner(now: number, text: string, rank: number) {
+  banner(now: number, text: string, rank: number, note = '') {
     if (now < this.bannerUntil && rank < this.bannerRank) return;
     this.bannerUntil = now + BANNER_SECONDS;
     this.bannerRank = rank;
     pop(this.bannerText, text);
+    if (note) {
+      const line = document.createElement('div');
+      line.className = 'banner-note';
+      line.textContent = note;
+      this.bannerText.append(line);
+    }
   }
 
   private readonly bannerText = $('hud-banner');
