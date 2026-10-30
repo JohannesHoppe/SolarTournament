@@ -35,6 +35,8 @@ export interface OnlineGame {
   rockAt(id: string): { position: THREE.Vector3; radius: number } | null;
   /** Where a part of the President's battleship is, while it is in the arena. */
   fleetZoneAt(zone: number): THREE.Vector3 | null;
+  /** The hits a nova core going off this far from a part's center (units) deals it (see Fleet.novaHit). */
+  fleetNovaHit(zone: number, distance: number): number;
   /** Another peer shot or rammed a piece of wreckage. */
   remoteWreck(id: string): void;
   /** A ship of another peer hit a part of the President's battleship in a round, this many times (a torpedo counts several). */
@@ -223,13 +225,14 @@ export class Online {
       game.remoteRock(id, at, round);
     };
     session.onWreck = (id) => game.remoteWreck(id);
-    session.onFleetHit = (zone, round, shooter, count) => {
-      // a living shooter's beam that ended on the part, or a torpedo that went off there (also
-      // one whose shooter died while it flew)
+    session.onFleetHit = (zone, round, shooter, count, nova) => {
+      // a living shooter's beam that ended on the part, a torpedo that went off there (also
+      // one whose shooter died while it flew), or its nova core that went off near enough
       const ship = this.find(shooter);
       if (!ship) return;
       const part = round === game.roundId ? game.fleetZoneAt(zone) : null;
-      if (!this.evidence.fleetHit(shooter, ship.alive, part, count, EVIDENCE_REACH, this.session.justJoined, wall())) return;
+      const dealt = nova ? (distance: number) => game.fleetNovaHit(zone, distance) : null;
+      if (!this.evidence.fleetHit(shooter, ship.alive, part, count, EVIDENCE_REACH, this.session.justJoined, wall(), dealt)) return;
       game.remoteFleetHit(zone, round, ship, count);
     };
     session.onRam = (state, round) => game.remoteRam(state, round);
@@ -312,7 +315,9 @@ export class Online {
       const holder = this.find(ship);
       if (!holder?.alive || this.caught(holder, this.plausible.nova(holder.id, p, wall(), this.clock.now(holder.owner ?? '', wall())))) return;
       this.novas.set(ship, wall());
-      game.novaBlast(holder, from.fromArray(p));
+      // the evidence for the hits it counts on the battleship's parts
+      this.evidence.nova(ship, from.fromArray(p), wall());
+      game.novaBlast(holder, from);
     };
     session.onCheat = (ship, accuser) => {
       // only a browser in the room (or this one) can be accused: made-up peers are not kept
@@ -440,8 +445,8 @@ export class Online {
     this.session.sendWreck(id);
   }
 
-  sendFleetHit(zone: number, round: number, shooter: Ship, count: number) {
-    this.session.sendFleetHit(zone, round, shooter.id, count);
+  sendFleetHit(zone: number, round: number, shooter: Ship, count: number, nova: boolean) {
+    this.session.sendFleetHit(zone, round, shooter.id, count, nova);
   }
 
   sendRam(state: ShovedState, round: number) {
