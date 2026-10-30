@@ -22,7 +22,8 @@ Worked through from top to bottom. Every finished item is also documented in the
 - [x] Spectator mode: broadcast with an automatic director camera
 - [x] Slow-motion replay of kills (kill cam)
 - [x] Radio 2584: generative music with Tone.js, in sync for all pilots
-- [ ] Radio 2584: commentator, jingles, samples as in Johannes' inscription experiments (`haushoppe/deconstructed-inscriptions`)
+- [x] Radio 2584: an announcer cutting in after kills, crashes and the round's big moments, a crowd on the broadcast
+- [ ] Radio 2584: jingles and samples as in Johannes' inscription experiments (`haushoppe/deconstructed-inscriptions`)
 - [ ] Radio 2584: now and then something cheerful in between (indie dance-pop after The Ting Tings). A first try (major key, claps, cowbell, choppy chords) did not sound right and is out again; revisit later
 - [x] Glitch of the link to the clone on hits, impacts and death
 - [ ] Audience favor (hype) for spectacular maneuvers
@@ -58,7 +59,8 @@ Each arena gets a look of its own, recognized at first glance, cheap on phones (
 
 - [x] Race: three laps through eight gates, lasers on; rooms play deathmatch, race, or both in turn
 - [ ] Slingshot race with checkpoints around gravity wells
-- [ ] Last Clone Standing: three clones, after that only with longer ads
+- [x] Last Clone Standing: three clones a round, a ship whose last clone dies is out until the next round (with a solar flare driving everyone into a corner)
+- [x] Capture the Flag (two sides, Orange and Blue, with sponsor cores) and the President's Fleet (everyone on one side against his battleship)
 - [ ] Teams: humans against aliens
 
 ### 6. Tactics
@@ -72,6 +74,18 @@ Each arena gets a look of its own, recognized at first glance, cheap on phones (
 - [ ] Kill clip as a short video to share
 - [ ] Leaderboard without a server of our own
 
+## Ideas
+
+Ideas Johannes has named that are not built yet, with the day they came up. One goes in the moment it is named and not built at once, and out once it is built (then the README has it) or dropped.
+
+- 2026-10-29 · Extra points for a double, triple and multi kill (the banners exist, the points do not); talk it through before building.
+- 2026-10-29 · An orbit feature at the black hole.
+- 2026-10-29 · A sky box from NASA's imagery.
+- 2026-10-29 · The hint "The ship turns towards the mouse pointer" shows in every real round too: a coach tip, given only a few times.
+- 2026-10-29 · The Sovereign's hull number "01".
+- 2026-10-29 · The battleship's flank in shadow is too dark in the Belt.
+- 2026-10-30 · Everything solid collides with everything solid (an audit found what passes through what): field bodies with each other (orbits crossing, fragments, shoved pieces), field bodies with race gates, Capture the Flag's bases, a core at home and a parked probe; wrecks, probes, cores and torpedoes with everything solid; a comet's head and its shower stopped by what they hit; the Belt's mining rigs solid; the junk's solar wing tips inside its collider.
+- 2026-10-30 · A cable that wraps around the edges of rock instead of snapping.
 ## Domains
 
 - `solartournament.games` (main address) and `solar-tournament.games` (redirects to it) are registered at GoDaddy, DNS at Cloudflare.

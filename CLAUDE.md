@@ -90,6 +90,7 @@ The same loop for every change, small or large. Follow it step by step; it holds
    - The folder's README: every file and what it does.
    - The structure table below.
    - `datenschutz.html`: every new data flow or storage key.
+   - `TODO.md`: an idea Johannes names that is not built at once goes under "Ideas" the moment it is named, with the day; a roadmap item built gets its tick.
 6. **Before every commit.**
    - `npm run check`: types, duplicates, unit tests, summed up in a table.
    - A change to the flight model, the flight computer, the input or the HUD's steering cues (the course marker, the crosshair, the racing line) has to pass the simulated Host's tests (`src/game/playability.test.ts`, `hostrace.test.ts`, `hostrace2.test.ts`, part of `npm test`): a human with ordinary hands must be able to fly the race and the flight school. Never loosen them to make a change pass; fix the change.
