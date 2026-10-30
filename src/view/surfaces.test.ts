@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { DEPOT, GIFT } from '../ship/models';
+import { DEPOT, GIFT, sovereignNumberSpan, THRUSTER_LAYOUTS, TILE } from '../ship/models';
+import { QUAD_SIZE } from '../ship/thrusters';
 import { Randomizer } from '../random';
-import { ARMOR_RELIEF_SIZE, ARMOR_SLOPE, ARMOR_TILE, armorLayout, armorRelief, normalPixels, panelLayout, windingHeights } from './surfaces';
+import { ARMOR_RELIEF_SIZE, ARMOR_SLOPE, ARMOR_TILE, armorLayout, armorRelief, normalPixels, panelLayout, SIZE, windingHeights } from './surfaces';
 
 /** A gray canvas of `size` pixels, its height at each pixel from `height(column, row)` (0..255). */
 function heights(size: number, height: (x: number, y: number) => number) {
@@ -157,6 +158,26 @@ describe('the fighters\' plating', () => {
     expect(hatches.length).toBeLessThanOrEqual(3);
     expect(bolts).toHaveLength(hatches.length * 4);
     expect(hatch(bolts, hatches)).toBe(true);
+  });
+
+  it("carries the Sovereign's number at one place on the nose's flanks, never on a hatch", () => {
+    // no stencil in the repeating surface: the number is a decal of its own
+    expect(GIFT.stencils).toHaveLength(0);
+    const { hatches } = panelLayout(new Randomizer(7), GIFT.relief);
+    const { fore, aft, bottom, top } = sovereignNumberSpan();
+    // behind the fore thruster clusters' housings
+    expect(fore).toBeGreaterThan(THRUSTER_LAYOUTS.sovereign.fore.z + QUAD_SIZE);
+    const px = (units: number) => (units / TILE) * SIZE;
+    // does [a0, a1] meet [b0, b1] on a tile that wraps every SIZE pixels?
+    const meets = (a0: number, a1: number, b0: number, b1: number) => {
+      const shift = Math.floor(a0 / SIZE) * SIZE;
+      return [-SIZE, 0, SIZE].some((k) => a0 - shift < b1 + k && a1 - shift > b0 + k);
+    };
+    // the flanks' surface (see boxUv, 'readable'): along -z on the right flank and +z on the left,
+    // its rows running down the canvas as the height rises
+    for (const [u0, u1] of [[-aft, -fore], [fore, aft]]) {
+      for (const [hx, hy] of hatches) expect(meets(px(u0), px(u1), hx, hx + 16) && meets(px(-top), px(-bottom), hy, hy + 12)).toBe(false);
+    }
   });
 
   it('keeps its rivets on the human interceptor, an old depot fighter, in the same panels', () => {

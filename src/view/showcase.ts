@@ -125,8 +125,8 @@ export class Showcase {
     this.silhouette.traverse((o) => {
       if (!(o instanceof THREE.Mesh)) return;
       const name = o.name.toLowerCase();
-      // no flame and no glow: nothing of it burns yet
-      if (name.startsWith('drive') || name.includes('glow')) o.visible = false;
+      // no flame and no glow: nothing of it burns yet; and no paint (a decal), only the shape
+      if (name.startsWith('drive') || name.includes('glow') || o.userData.decal) o.visible = false;
       else o.material = black;
     });
     castsShadow(this.silhouette);

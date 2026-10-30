@@ -384,7 +384,6 @@ export const COMPUTER = {
   debris: 'Debris impact.',
   asteroid: 'Asteroid cracked.',
   arena: 'Come back to the field, darling.',
-  mouse: 'Your mouse pointer turns your nose. Center it to fly straight on.',
   noLink: 'Could not connect.',
   roundOver: 'Round over. You were wonderful.',
   launch: 'Live link established. Go get them, pilot.',
@@ -434,10 +433,12 @@ export const COMPUTER = {
 } as const;
 
 /**
- * Nicole as a coach in real rounds (see game/coach.ts): the briefing of each mode the first
- * time a Host plays it, and the tips of the fight, the moment they matter.
+ * Nicole as a coach in real rounds (see game/coach.ts): how the mouse steers, as a Host's first
+ * rounds with it begin; the briefing of each mode the first time a Host plays it, and the tips
+ * of the fight, the moment they matter.
  */
 export const TIPS = {
+  mouse: 'Your mouse pointer turns your nose. Center it to fly straight on.',
   race: 'A race, darling. Three laps through the rings. Follow the line, and steer the X into their very centers: the coils throw you on. Brake where the line glows orange, and shoot whoever is ahead of you.',
   deathmatch: 'A deathmatch. Every kill counts. Hit their drives from behind, turn your armored nose to anyone behind you, and never fly a straight line.',
   survival: 'Last clone standing. Three clones, no more. After a minute a solar flare sweeps in from the sun and burns the arena down to a pocket on the far side. Stay ahead of it, hide behind rock, and stay alive.',

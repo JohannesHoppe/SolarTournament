@@ -11,9 +11,10 @@ const TIP_TIMES = 3;
 const TIPS_KEY = 'solartournament.tips';
 
 /**
- * Nicole as a coach in real rounds: the briefing of a mode the first time a Host plays it, and
- * a tip the moment it matters (a ship on the tail, a hot laser, a torpedo coming). Each tip is
- * given only a few times, then the Host is trusted with it.
+ * Nicole as a coach in real rounds: how the mouse steers as a round begins (with its line on
+ * screen), the briefing of a mode the first time a Host plays it, and a tip the moment it matters
+ * (a ship on the tail, a hot laser, a torpedo coming). Each tip is given only a few times, then
+ * the Host is trusted with it.
  */
 export class Coach {
   private readonly heard: Partial<Record<Tip, number>> = {};

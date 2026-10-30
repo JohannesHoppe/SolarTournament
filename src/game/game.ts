@@ -2377,20 +2377,31 @@ export class Game implements OnlineGame {
     if (this.school) this.autopilot = this.school.startsWithAutopilot;
     this.me!.strain = 0;
     this.setScreen('playing');
-    // the link to the clone comes first, then the hint for the mouse (not for touch or gamepad)
+    // the link to the clone comes first, then the hint for the mouse (not for touch or gamepad):
+    // every time in the flight school's basic training, where steering is taught; in real rounds
+    // it is one of Nicole's tips (see Coach), given only in a Host's first rounds with the mouse
     const mouse = !this.input.touchActive && !this.input.gamepadActive;
-    // cues of this round run on its own clock: a pause holds them, clearShips drops them
-    if (mouse) this.cue(2.2, () => this.hud.flashMessage(this.time, t('The ship turns towards the mouse pointer'), 4));
+    let hint = mouse && this.school?.course === 'basic';
     // the flight school starts with its briefing; a tournament clone just reports in, and
     // once Nicole is through, the announcer opens the broadcast
     if (mode !== 'school') {
-      this.speaker.say(mouse ? [COMPUTER.launch, COMPUTER.mouse] : COMPUTER.launch, 'urgent');
+      this.coach.newRound();
+      // the hint counts as given once it is on screen, whether the voice could say it or not
+      hint =
+        mouse &&
+        this.coach.give('mouse', (line) => {
+          this.speaker.say([COMPUTER.launch, line], 'urgent');
+          return true;
+        });
+      if (!hint) this.speaker.say(COMPUTER.launch, 'urgent');
       // online the round's mode is known once the lead tells it (see arriveInRound)
       if (mode === 'solo') this.briefRound();
       this.broadcastOpened = false;
       this.cue(ARENA_TITLE_DELAY, () => this.announceArena());
       this.cue(ANNOUNCER_OPEN_DELAY, () => !this.broadcastOpened && this.openBroadcast());
     }
+    // cues of this round run on its own clock: a pause holds them, clearShips drops them
+    if (hint) this.cue(2.2, () => this.hud.flashMessage(this.time, t('The ship turns towards the mouse pointer'), 4));
   }
 
   /** A round of a known mode begins: every tip may come once more, and the first round of a mode opens with its briefing, after whatever Nicole is saying. */

@@ -32,6 +32,11 @@ describe("Nicole's coaching", () => {
     expect(rounds(coach, 'race', 1)).toBe(1);
   });
 
+  it("tells how the mouse steers only in a Host's first three rounds", () => {
+    expect(rounds(new Coach(), 'mouse', 6)).toBe(3);
+    expect(rounds(new Coach(), 'mouse', 2)).toBe(0);
+  });
+
   it('remembers what the browser has heard', () => {
     rounds(new Coach(), 'torpedo', 2);
     expect(rounds(new Coach(), 'torpedo', 5)).toBe(1);
