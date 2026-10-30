@@ -20,6 +20,7 @@
     "check:full": "node tools/check/check.ts --full",
     "voice": "node tools/voice/render.ts",
     "crest": "node tools/crest/render.ts",
+    "sky": "node tools/sky/stars.ts",
     "relays": "node tools/relays/check.ts"
   },
   "license": "AGPL-3.0-or-later",

@@ -165,20 +165,24 @@ function derelict(): Placement[] {
  * The light and color mood of every arena (see Mood), set around its landmark, so each is
  * known at first glance. Every grade stays gentle: the HUD's azure and the orange of what to
  * act on keep their hue in the world (world/mood.test.ts), and a ship's tint stays its own.
+ * Under the real sky (see world/starmap) the nebulae are veils of the arena's own light (dust,
+ * the ring's glow, the sun's streamers), kept faint where they would cover the Milky Way as a
+ * second, made-up one.
  */
 const MOODS: Record<ArenaId, Mood> = {
-  // dusty and warm: clouds of amber and rust dust, a warm sky, ochre dust, a golden grade
+  // dusty and warm: veils of amber and rust dust, a warm sky, ochre dust, a golden grade
   belt: {
     space: 0x040201,
     sky: 0xa08a70,
     ground: 0x30200f,
     ambient: 1.6,
     nebulae: [
-      { at: [-1, 0.25, 0.3], color: [0.26, 0.12, 0.033], size: 576000, shape: 0, turn: 0.4 },
-      { at: [0.75, -0.45, 0.55], color: [0.18, 0.065, 0.023], size: 504000, shape: 1, turn: 2.1 },
-      { at: [0.15, 0.85, 0.6], color: [0.12, 0.078, 0.039], size: 432000, shape: 2, turn: 4 },
+      { at: [-1, 0.25, 0.3], color: [0.13, 0.06, 0.017], size: 576000, shape: 0, turn: 0.4 },
+      { at: [0.75, -0.45, 0.55], color: [0.09, 0.033, 0.012], size: 504000, shape: 1, turn: 2.1 },
+      { at: [0.15, 0.85, 0.6], color: [0.06, 0.039, 0.02], size: 432000, shape: 2, turn: 4 },
     ],
     stars: 0.75,
+    starmap: true,
     dust: [0.75, 0.6, 0.42],
     grade: { gain: [1.05, 1, 0.9], lift: [0.0028, 0.0016, 0.0005], saturation: 1 },
   },
@@ -190,11 +194,12 @@ const MOODS: Record<ArenaId, Mood> = {
     ground: 0x3c3020,
     ambient: 1.6,
     nebulae: [
-      { at: [0.7, 0.12, -0.7], color: [0.12, 0.14, 0.22], size: 648000, shape: 2, turn: 1.5 },
-      { at: [-0.4, 0.55, 0.75], color: [0.19, 0.14, 0.065], size: 468000, shape: 0, turn: 3.3 },
-      { at: [0.3, -0.7, 0.6], color: [0.085, 0.1, 0.17], size: 432000, shape: 1, turn: 0.7 },
+      { at: [0.7, 0.12, -0.7], color: [0.072, 0.084, 0.13], size: 648000, shape: 2, turn: 1.5 },
+      { at: [-0.4, 0.55, 0.75], color: [0.095, 0.07, 0.033], size: 468000, shape: 0, turn: 3.3 },
+      { at: [0.3, -0.7, 0.6], color: [0.043, 0.05, 0.085], size: 432000, shape: 1, turn: 0.7 },
     ],
     stars: 1,
+    starmap: true,
     dust: [0.62, 0.68, 0.8],
     grade: { gain: [0.98, 1, 1.03], lift: [0.001, 0.0013, 0.0022], saturation: 0.95 },
   },
@@ -205,10 +210,11 @@ const MOODS: Record<ArenaId, Mood> = {
     ground: 0x5a3a1e,
     ambient: 1.5,
     nebulae: [
-      { at: [-0.6, 0.6, 0.5], color: [0.033, 0.052, 0.16], size: 612000, shape: 1, turn: 2.6 },
-      { at: [0.5, 0.75, -0.4], color: [0.026, 0.065, 0.12], size: 504000, shape: 2, turn: 0.2 },
+      { at: [-0.6, 0.6, 0.5], color: [0.017, 0.026, 0.08], size: 612000, shape: 1, turn: 2.6 },
+      { at: [0.5, 0.75, -0.4], color: [0.013, 0.033, 0.06], size: 504000, shape: 2, turn: 0.2 },
     ],
     stars: 1,
+    starmap: true,
     dust: [0.5, 0.6, 0.78],
     grade: { gain: [0.96, 0.99, 1.05], lift: [0.0006, 0.001, 0.003], saturation: 0.95 },
   },
@@ -223,6 +229,7 @@ const MOODS: Record<ArenaId, Mood> = {
       { at: [0.6, 0.6, 0.5], color: [0.1, 0.052, 0.033], size: 468000, shape: 2, turn: 1.2 },
     ],
     stars: 0.85,
+    starmap: true,
     dust: [0.72, 0.6, 0.45],
     grade: { gain: [1.04, 1, 0.92], lift: [0.0024, 0.0014, 0.0005], saturation: 1 },
   },
@@ -242,6 +249,7 @@ const MOODS: Record<ArenaId, Mood> = {
       { at: [-0.6, -0.4, 0.7], color: [0.091, 0.039, 0.013], size: 540000, shape: 1, turn: 4.2 },
     ],
     stars: 0.15,
+    starmap: true,
     dust: [0.9, 0.7, 0.5],
     grade: { gain: [1.06, 1, 0.9], lift: [0.006, 0.0032, 0.0011], saturation: 1 },
   },
@@ -258,6 +266,7 @@ const MOODS: Record<ArenaId, Mood> = {
       { at: [0.8, 0.1, -0.6], color: [0.052, 0.019, 0.12], size: 432000, shape: 1, turn: 0.3 },
     ],
     stars: 1,
+    starmap: false,
     dust: [0.62, 0.55, 0.85],
     grade: { gain: [1, 0.94, 1.06], lift: [0.0025, 0.0008, 0.0045], saturation: 1.05 },
   },
@@ -269,10 +278,11 @@ const MOODS: Record<ArenaId, Mood> = {
     ground: 0x15191f,
     ambient: 1.3,
     nebulae: [
-      { at: [-0.3, 0.8, 0.4], color: [0.12, 0.14, 0.17], size: 612000, shape: 2, turn: 2 },
-      { at: [0.7, -0.3, 0.6], color: [0.05, 0.06, 0.08], size: 504000, shape: 0, turn: 4.4 },
+      { at: [-0.3, 0.8, 0.4], color: [0.06, 0.07, 0.085], size: 612000, shape: 2, turn: 2 },
+      { at: [0.7, -0.3, 0.6], color: [0.025, 0.03, 0.04], size: 504000, shape: 0, turn: 4.4 },
     ],
     stars: 0.9,
+    starmap: true,
     dust: [0.55, 0.6, 0.66],
     grade: { gain: [0.97, 0.99, 1.02], lift: [0.001, 0.0015, 0.0022], saturation: 0.78 },
   },

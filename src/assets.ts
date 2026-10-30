@@ -8,6 +8,8 @@ import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
 import type { TemplateKind, TemplateSet } from './world/asteroids';
 import { synthesizeSounds } from './sound/sounds';
 import { gasTexture, radialTexture, smokeTexture, sparkTexture } from './view/textures';
+import { bakeMilkyWayTexture, faintStars, joinStars, MILKY_WAY_SIZES } from './world/milkyway';
+import { decodeStars, type StarList } from './world/starfile';
 
 /** The ships a Host can fly: the two interceptors, and the Sovereign once earned (see game/hangar). */
 export type ShipType = 'human' | 'alien' | 'sovereign';
@@ -28,6 +30,14 @@ export interface Assets {
   sounds: Record<'laser' | 'explosion', AudioBuffer | null>;
   /** The planets' maps at the size every rung can afford (see PLANET_MAPS), and Saturn's ring as a strip from its inner to its outer edge. */
   planets: PlanetMaps;
+  /** The real sky (see world/starmap): its stars, the Milky Way baked at the size every rung can afford, and how to bake it sharp. */
+  sky: SkyFiles;
+}
+
+export interface SkyFiles {
+  stars: StarList;
+  glow: THREE.CubeTexture;
+  sharp: () => Promise<THREE.CubeTexture>;
 }
 
 /** The planets drawn from real maps (see world/landmarks): Saturn, Jupiter (its key `giant`, as its map files are named), and Earth below the Satellite Junkyard (see world/junkyard), its night and its day side each from a map of its own. */
@@ -64,6 +74,13 @@ async function planetTexture(file: string): Promise<THREE.Texture> {
 /** A planet's sharp map (twice as wide as the page's), loaded when first asked for. */
 export function loadPlanetMap(planet: Planet): Promise<THREE.Texture> {
   return planetTexture(`${planet}-2k.jpg`);
+}
+
+/** The real sky's stars (`public/assets/sky/stars.bin`, see world/starfile), from the Yale Bright Star Catalogue. */
+async function loadStars(): Promise<StarList> {
+  const answer = await fetch(base + 'sky/stars.bin');
+  if (!answer.ok) throw new Error(`The stars did not load: HTTP ${answer.status}`);
+  return decodeStars(await answer.arrayBuffer());
 }
 
 /** Share of the sprite's width over which the flame fades out towards each edge. */
@@ -133,6 +150,8 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   const ships = Promise.all(['human-interceptor.glb', 'alien-interceptor.glb'].map(model));
   const flames = Promise.all(['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture));
   const planetMaps = Promise.all([planetTexture('saturn-1k.jpg'), planetTexture('giant-1k.jpg'), planetTexture('saturn-ring.png'), planetTexture('earth-1k.jpg'), planetTexture('earth-day-1k.jpg')]);
+  // the Milky Way bakes in background workers too (see world/milkyway)
+  const sky = Promise.all([loadStars(), bakeMilkyWayTexture(MILKY_WAY_SIZES[0])]);
   // the rocks' relief maps bake in background workers while the rest is built here
   const reliefs = bakeReliefMaps();
   // full detail only to measure collisions from (see world/surface); drawn meshes stay light, their
@@ -169,7 +188,10 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   // a broken rock splits into pieces of itself, cut from the same shapes (see world/fracture)
   const fracture = fractureSet({ collision: DETAIL, near: NEAR_DETAIL, far: FAR_DETAIL }, rockPieceMaterial);
   const rock = { near: asteroidsNear, far: asteroidsFar, impostor: asteroidImpostors, collision: asteroidsCollision, fracture };
+  const [catalogue, milkyWay] = await sky;
+  const stars = joinStars(catalogue, faintStars());
   return {
+    sky: { stars, glow: milkyWay, sharp: () => bakeMilkyWayTexture(MILKY_WAY_SIZES.at(-1)!) },
     // the hulls are built in code; the model files give collider, drive flame and glows
     ships: { human: humanInterceptor(human), alien: alienInterceptor(alien), sovereign: sovereign(human) },
     belt: { near: asteroidsNear, impostor: asteroidImpostors },

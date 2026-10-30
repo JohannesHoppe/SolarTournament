@@ -133,6 +133,7 @@ export class Graphics {
     this.showcase?.setLook(next.showcase);
     this.plane.setDetail(next.spokes);
     this.landmarks.setDetail(next.landmark);
+    this.space.setDetail(next.landmark);
     this.landmarks.setGrains(next.particles);
     this.mining.setShare(next.particles);
     this.lensing.setSamples(next.lens);

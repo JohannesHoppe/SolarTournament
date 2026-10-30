@@ -20,7 +20,9 @@ export interface Nebula {
  * An arena's light and color mood, set around its landmark: the color of space where nothing is
  * drawn, the sky's faint light from all around (from above `sky`, from below `ground`, this
  * `ambient` strong; with `sunward`, from the sun's side `sky` and from the far side `ground`), its nebulae, how bright its stars show (1 in the dark; a near sun's glare
- * drowns them), the tint of the dust that streaks past, and the picture's color grade.
+ * drowns them), the tint of the dust that streaks past, and the picture's color grade. With
+ * `starmap` its sky is the real one (see world/starmap): an arena in the solar system sees the
+ * stars and the Milky Way that Earth sees; without, its stars are generated in code.
  */
 export interface Mood {
   space: number;
@@ -30,6 +32,7 @@ export interface Mood {
   sunward?: boolean;
   nebulae: readonly Nebula[];
   stars: number;
+  starmap: boolean;
   dust: readonly [number, number, number];
   grade: Grade;
 }

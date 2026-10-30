@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { radialTexture } from '../view/textures';
 import { IMPOSTOR_SUN } from '../view/impostor';
 import { CLOUD_SHAPES, MAX_NEBULAE, cloudTexture, type Mood } from './nebula';
+import { skyTurn, Starmap } from './starmap';
+import type { SkyFiles } from '../assets';
 
 const STAR_COUNT = 6000;
 const SKY_RADIUS = 300000;
@@ -152,7 +154,17 @@ export class Space {
   private skyIntensity = 1;
   /** What the screen shows where nothing is drawn, in the arena's space (see setMood). */
   readonly background = new THREE.Color();
+  /** The stars generated in code, for the arenas beyond the solar system (see Mood.starmap). */
   private readonly stars: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
+  /** The real sky of the arenas in the solar system and its parts (see setStarmap), its sharp Milky Way once asked for and baked, and the share of detail the rung asks for (see setDetail). */
+  private starmap: Starmap | null = null;
+  private files: SkyFiles | null = null;
+  private sharpGlow: THREE.CubeTexture | null = null;
+  private sharpAsked = false;
+  private detail = 0;
+  /** Whether the arena's mood shows the real sky, and how bright its stars show (see setMood). */
+  private realSky = false;
+  private starShare = 1;
   /** The sky's nebulae, MAX_NEBULAE sprites: an arena shows as many as it has, the rest are hidden (see setMood). */
   private readonly nebulae: THREE.Sprite[] = [];
   /** The clouds' shapes, made once; each arena tints, places and turns them (see setMood). */
@@ -260,6 +272,50 @@ export class Space {
     this.streaks.geometry.setDrawRange(0, Math.round(DUST_COUNT * dust) * 2);
   }
 
+  /**
+   * The real sky (see world/starmap), once its stars are loaded and its Milky Way baked at the
+   * smallest of MILKY_WAY_SIZES. Until then, and in the arenas beyond the solar system, the
+   * stars generated in code show.
+   */
+  setStarmap(sky: SkyFiles) {
+    this.files = sky;
+    this.starmap = new Starmap(sky.stars, sky.glow, skyTurn(SUN_DIRECTION), SKY_RADIUS);
+    this.sky.add(this.starmap.group);
+    this.setDetail(this.detail);
+  }
+
+  /**
+   * The share of the landmarks' detail (see view/quality, Look.landmark): from half the share on
+   * the real sky's Milky Way shows from its sharp cube map (see MILKY_WAY_SIZES), baked the
+   * first time it is asked for, so a phone on the cheaper rungs never spends the time and memory
+   * on it.
+   */
+  setDetail(share: number) {
+    this.detail = share;
+    if (share >= 0.5 && this.files && !this.sharpAsked) {
+      this.sharpAsked = true;
+      this.files.sharp().then(
+        (glow) => {
+          this.sharpGlow = glow;
+          this.showSky();
+        },
+        (error: unknown) => console.warn('The sharp Milky Way was not baked', error),
+      );
+    }
+    this.showSky();
+  }
+
+  /** Shows the real sky or the generated stars as the mood asks, the glow as sharp as wanted and loaded. */
+  private showSky() {
+    const real = this.realSky && !!this.starmap;
+    this.stars.visible = !real;
+    this.stars.material.color.setScalar(this.starShare);
+    if (!this.starmap || !this.files) return;
+    this.starmap.group.visible = real;
+    this.starmap.setBrightness(this.starShare);
+    this.starmap.setGlow((this.detail >= 0.5 && this.sharpGlow) || this.files.glow);
+  }
+
   /** The sun of an arena: its size in the sky, and how bright and in which color it lights the field. */
   setSun(sun: { size: number; intensity: number; color: number }) {
     this.sunBase.size = sun.size;
@@ -279,7 +335,9 @@ export class Space {
     this.groundColor.set(mood.ground);
     this.skyIntensity = mood.ambient;
     this.skyLight.position.copy(mood.sunward ? SUN_DIRECTION : THREE.Object3D.DEFAULT_UP);
-    this.stars.material.color.setScalar(mood.stars);
+    this.realSky = mood.starmap;
+    this.starShare = mood.stars;
+    this.showSky();
     this.nebulae.forEach((sprite, i) => {
       const nebula = mood.nebulae[i];
       sprite.visible = !!nebula;

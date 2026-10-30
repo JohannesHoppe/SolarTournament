@@ -1205,6 +1205,7 @@ export class Game implements OnlineGame {
     this.field = new AsteroidField(assets.fieldSets);
     this.belt = new Belt(assets.belt.near, assets.belt.impostor);
     this.landmarks = new Landmarks(assets.planets);
+    this.space.setStarmap(assets.sky);
     this.graphics = new Graphics(this.renderer, this.bloom, this.space, this.field, this.belt, this.plane, this.landmarks, this.mining, this.lensing, () => this.resize());
     this.effects = new Effects(assets.textures);
     this.reentry = new Reentry(this.effects);
