@@ -127,13 +127,14 @@ export function creditOf(torpedo: Torpedo, now: number): Ship {
 
 /**
  * The ship a torpedo's fuse goes off on, or null: the hull of any ship its step from `before`
- * passed (see strikes) but its shooter and the shooter's side, or on a string any ship at all.
+ * passed (see strikes) but its shooter's, or on a string any ship at all. A hull of the
+ * shooter's own side sets it off as any other (friendly fire).
  */
 export function fused(torpedo: Torpedo, before: THREE.Vector3, ships: readonly Ship[], now: number, dt: number): Ship | null {
   const string = onString(torpedo, now);
   let hit: Ship | null = null;
   for (const ship of ships) {
-    if (!ship.alive || (!string && (ship === torpedo.shooter || ship.allyOf(torpedo.shooter)))) continue;
+    if (!ship.alive || (!string && ship === torpedo.shooter)) continue;
     if (strikes(before, torpedo.position, ship.flight, ship.radius, dt)) hit = ship;
   }
   return hit;

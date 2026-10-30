@@ -171,6 +171,22 @@ describe('the lead browser', () => {
     expect(taken).toEqual([100, 99.4, 5]);
   });
 
+  it("takes a ram of the battleship only from the lead that flies it, checked, and no faster than its budget", () => {
+    const { transport, session } = joined('n');
+    const rammed: string[] = [];
+    session.onRam = (state) => rammed.push(state.id);
+    at(1);
+    transport.states('old', 100, 'old', true);
+    transport.states('h2', 50, 'old');
+    const ram = (id: string, from: string, extra = {}) => transport.handlers.get('br')!({ m: { id, b: 40, p: [0, 0, 0], v: [10, 0, 0], q: [0, 0, 0, 1], s: [0, 1, 0, 0], c: -1, ...extra }, n: 2 }, from);
+    ram('7', 'h2');
+    ram('8', 'old', { q: [0, 0, 0, 0] });
+    ram('9', 'old');
+    expect(rammed).toEqual(['9']);
+    for (let i = 0; i < 200; i++) ram(`9.${i}`, 'old');
+    expect(rammed.length).toBeLessThan(100);
+  });
+
   it('hands the field again to a peer that starts over twice within seconds', () => {
     const { session, transport } = joined('n');
     let restarts = 0;

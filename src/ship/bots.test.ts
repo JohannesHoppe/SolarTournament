@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { Bot, BOT_NAMES, evenSkills, meanSkill, missOf, reactionOf, skillsOf, startTiming } from './bots';
+import { allyInLine, Bot, BOT_NAMES, evenSkills, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, reactionOf, skillsOf, startTiming, TORPEDO_CLEARANCE } from './bots';
 import { FlightModel, MAIN_THRUST, MAX_SPEED } from './flight';
-import { LOCK_RANGE, MAX_HEAT, noseOn, Ship, strainAfter } from './ship';
+import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, strainAfter } from './ship';
 import { testField } from '../test/field';
 import type { AsteroidField } from '../world/asteroids';
 import { arenaById } from '../world/arenas';
@@ -359,5 +359,115 @@ describe('the clone\'s body and sensors, the same for every ship', () => {
     expect(noseOn(shooter, at(RADIUS * 2, 0, -20000), RADIUS)).toBe(1);
     expect(noseOn(shooter, at(6000, 0, -20000), RADIUS)).toBe(0);
     expect(noseOn(shooter, at(0, 0, -LOCK_RANGE - 1), RADIUS)).toBe(0);
+  });
+});
+
+describe('friendly fire: the own side is hit as any other, and bots hold their fire for it', () => {
+  /** Ships of one side (Capture the Flag's, or every ship against the President's battleship). */
+  const side = (...ships: Ship[]) => {
+    for (const s of ships) s.team = 0;
+  };
+
+  it('ends a beam at the first hull on its line, a ship of the own side as any other', () => {
+    const shooter = ship('Kessler', at(-8000), at(1));
+    const ally = ship('Halley', at(0), at(1));
+    const rival = ship('Laika', at(8000), at(1));
+    side(shooter, ally);
+    const hull = firstHull([shooter, ally, rival], shooter, at(-8000), at(1), LASER_RANGE);
+    expect(hull?.ship).toBe(ally);
+    expect(hull?.distance).toBeCloseTo(8000 - RADIUS, 0);
+    // a dead ship takes no beam: it ends on the rival behind
+    ally.alive = false;
+    expect(firstHull([shooter, ally, rival], shooter, at(-8000), at(1), LASER_RANGE)?.ship).toBe(rival);
+  });
+
+  it('holds its laser while a ship of its own side is in its line of fire, and fires once the line is clear', () => {
+    const f = field(false);
+    // the rival flies away from the bot: its drive is open, the bot's nose on it
+    const me = ship('Kessler', at(-8000), at(1));
+    const ally = ship('Halley', at(0, RADIUS), at(0, 0, 1));
+    const rival = ship('Laika', at(8000), at(1));
+    side(me, ally);
+    const fires = (ships: Ship[]) => {
+      const bot = new Bot(me, evenSkills(1));
+      let fired = false;
+      for (let t = 0; t < 3; t += STEP) fired ||= bot.think(t, ships, f).fire;
+      return fired;
+    };
+    expect(fires([me, ally, rival])).toBe(false);
+    // well clear of the line, it is no reason to hold fire
+    ally.flight.position.set(0, RADIUS * 4, 0);
+    expect(fires([me, ally, rival])).toBe(true);
+    // a ship of the other side in the way is fair game: the beam ends on it
+    ally.flight.position.set(0, RADIUS, 0);
+    ally.team = 1;
+    expect(fires([me, ally, rival])).toBe(true);
+  });
+
+  it('holds its laser at the battleship while one of its own side flies between', () => {
+    const f = field(false);
+    const me = ship('Kessler', at(0, -12000), at(0, 1));
+    const ally = ship('Halley', at(0, -6000), at(1));
+    side(me, ally);
+    const bot = new Bot(me, evenSkills(0.5));
+    bot.siege = at(0);
+    bot.siegeHold.set(0, -12000, 0);
+    bot.siegeClear = true;
+    let fired = false;
+    for (let t = 0; t < 3; t += STEP) fired ||= bot.think(t, [me, ally], f).fire;
+    expect(fired).toBe(false);
+    ally.alive = false;
+    for (let t = 3; t < 6; t += STEP) fired ||= bot.think(t, [me, ally], f).fire;
+    expect(fired).toBe(true);
+  });
+
+  it('sends no torpedo while one of its own side lies near the line to the lock, unless rock covers it', () => {
+    const me = ship('Kessler', at(-12000), at(1));
+    const lock = ship('Laika', at(12000), at(1));
+    const ally = ship('Halley', at(-2000, RADIUS + TORPEDO_CLEARANCE / 2), at(1));
+    side(me, ally);
+    const clear = (f: AsteroidField) => !allyInLine(me, [me, ally, lock], f, me.flight.position, at(1), 24000, TORPEDO_CLEARANCE);
+    expect(clear(field(false))).toBe(false);
+    ally.flight.position.set(-2000, RADIUS + TORPEDO_CLEARANCE * 2, 0);
+    expect(clear(field(false))).toBe(true);
+    // beyond the lock, the torpedo goes off before it gets there
+    ally.flight.position.set(16000, 0, 0);
+    expect(clear(field(false))).toBe(true);
+    // behind the rock at the origin, out of sight and out of reach of the blast
+    ally.flight.position.set(1000, 0, 0);
+    lock.flight.position.set(20000, 0, 0);
+    expect(clear(field(true))).toBe(true);
+  });
+
+  it('sets off a nova core only among rivals, never with one of its own side inside the blast', () => {
+    const radius = 16000;
+    const me = ship('Kessler', at(0), at(1));
+    const rivals = [ship('Laika', at(4000), at(1)), ship('Juno', at(-4000), at(1))];
+    const ally = ship('Halley', at(0, radius * 0.9), at(1));
+    side(me, ally);
+    expect(novaWorth(me, [me, ...rivals], radius)).toBe(true);
+    expect(novaWorth(me, [me, rivals[0]], radius)).toBe(false);
+    expect(novaWorth(me, [me, ...rivals, ally], radius)).toBe(false);
+    ally.flight.position.set(0, radius * 1.1, 0);
+    expect(novaWorth(me, [me, ...rivals, ally], radius)).toBe(true);
+  });
+
+  it("sets off a nova core at the battleship's parts, on less the longer it holds it, and never stays silent for good, but never with one of its own side inside", () => {
+    const radius = 16000;
+    const me = ship('Kessler', at(0), at(1));
+    const ally = ship('Halley', at(0, radius * 0.9), at(1));
+    side(me, ally);
+    const rival = ship('Laika', at(radius * 0.9), at(1));
+    // the battleship's parts within the blast, three torpedoes' worth and more: worth it, with nobody else around
+    expect(novaWorth(me, [me], radius, 0, NOVA_SIEGE)).toBe(true);
+    expect(novaWorth(me, [me], radius, 0, NOVA_SIEGE - 1)).toBe(false);
+    // a single rival at the blast's edge: only once it has waited for a crowd
+    expect(novaWorth(me, [me, rival], radius, NOVA_PATIENCE - 1)).toBe(false);
+    expect(novaWorth(me, [me, rival], radius, NOVA_PATIENCE)).toBe(true);
+    // nobody at all: only once it has held the core long enough to want its laser back
+    expect(novaWorth(me, [me], radius, NOVA_SHED - 1)).toBe(false);
+    expect(novaWorth(me, [me], radius, NOVA_SHED)).toBe(true);
+    // one of its own side inside the blast: never, whatever it would take
+    for (const held of [0, NOVA_PATIENCE, NOVA_SHED * 10]) expect(novaWorth(me, [me, rival, ally], radius, held, NOVA_SIEGE * 10)).toBe(false);
   });
 });

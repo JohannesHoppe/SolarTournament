@@ -3,7 +3,7 @@ import { Randomizer } from '../random';
 import { hash } from '../music/songs';
 import { radialTexture } from '../view/textures';
 import { ARENA_LIMIT } from '../world/arena';
-import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
+import type { Asteroid, AsteroidField, Obstacle, Well } from '../world/asteroids';
 import { nucleusGeometry, nucleusMaterial, nucleusVents, type Vent } from '../world/nucleus';
 import { dustStreaks, SUN_DIRECTION } from '../world/space';
 
@@ -184,7 +184,18 @@ export interface Comet {
   readonly edge: number;
   /** Field time at which a well swallows the head; Infinity when it meets none. */
   readonly swallowed: number;
+  /**
+   * Field time at which the head broke up on the President's battleship, Infinity while it has
+   * not: a body of ice and dust some 140 m across meeting a hull of over a million tonnes at
+   * 600 m/s bursts (each kilogram of it brings 180 kJ, far more than holds a loose body together);
+   * its shards spray off the armor and are gone in the flash, and the battleship goes down (see
+   * Game.playComet). Its shower flies on, each piece stopped by the hull where it meets it.
+   */
+  broken: number;
 }
+
+/** Field time at which a comet's head is gone: swallowed by a well or broken up on the battleship. */
+export const headEnd = (comet: Comet) => Math.min(comet.swallowed, comet.broken);
 
 /** Field time at which a comet's head starts out. */
 export const cometStart = (comet: Comet) => comet.start;
@@ -279,6 +290,7 @@ export function makeComet(at: number, direction: THREE.Vector3, nearest: THREE.V
     start: Math.max(from + start * PATH_STEP, from + SHOWER_LENGTH / COMET_SPEED),
     edge: from + edge * PATH_STEP,
     swallowed: inside >= 0 ? from + inside * PATH_STEP : Infinity,
+    broken: Infinity,
   };
 }
 
@@ -424,9 +436,17 @@ export class Shower {
       .addScaledVector(this.up, this.offsets[i * 2 + 1] * squeeze);
   }
 
-  /** Piece `i` has followed the head into the well. */
+  /** Piece `i` has followed the head into the well, or burst on the battleship's hull (see stop). */
   gone(i: number, time: number): boolean {
-    return time - this.behind[i] / COMET_SPEED >= this.comet.swallowed;
+    return this.stopped[i] === 1 || time - this.behind[i] / COMET_SPEED >= this.comet.swallowed;
+  }
+
+  /** The pieces that burst on the battleship's hull, as this browser saw it (see Game.playComet): a piece of rock and ice at 600 m/s goes to dust on armor. */
+  readonly stopped = new Uint8Array(SHOWER_PIECES);
+
+  /** Piece `i` burst on the battleship's hull. */
+  stop(i: number) {
+    this.stopped[i] = 1;
   }
 }
 
@@ -452,10 +472,10 @@ const LOOK_BACK = 3;
  * piece stands but is shoved, once by each comet: SHOVE faster along the comet's course and
  * away from its center line, turning about the axis the off-center blow gives it, the faster
  * the farther off center; `shoved` hears of it with the point struck. Once the well swallowed
- * the head, it strikes nothing.
+ * the head, or it broke up on the battleship, it strikes nothing.
  */
 export function runDown(comet: Comet, field: AsteroidField, time: number, broke: (rock: Asteroid) => void, shoved: (piece: Asteroid, point: THREE.Vector3) => void = () => {}) {
-  if (time >= comet.swallowed) return;
+  if (time >= headEnd(comet)) return;
   headAt(comet, time, head);
   for (const rock of field.asteroids.values()) {
     if (rock.shovedBy === comet.seed || rock.object.position.distanceTo(head) > HEAD_RADIUS + rock.radius + COMET_SPEED * LOOK_BACK) continue;
@@ -484,6 +504,40 @@ export function runDown(comet: Comet, field: AsteroidField, time: number, broke:
     shoved(rock, piece.lerp(stone, HEAD_RADIUS / (HEAD_RADIUS + rock.radius)));
   }
 }
+
+/**
+ * The comet meets what else stands in the field (the President's battleship, see Comet.broken)
+ * at field time `time`, `since` seconds after it last did: its head breaks up where it touches it
+ * (true then, the head's end set to `time`), and each piece of its `shower` that touches it, or
+ * met it on its way since (a piece flies 10 m in a frame at 60 frames a second, as far as a
+ * battery's barrels are thick), bursts there (`burst` hears of each, with where), so the hull is
+ * cover from the swarm.
+ */
+export function meetObstacle(comet: Comet, shower: Shower | null, obstacle: Obstacle, time: number, since: number, burst: (point: THREE.Vector3) => void = () => {}): boolean {
+  const broke = time < headEnd(comet) && obstacle.touches(headAt(comet, time, head), HEAD_RADIUS);
+  if (broke) comet.broken = time;
+  // the swarm trails the head by up to its length, as wide as it spreads
+  if (!shower || headAt(comet, time, head).distanceTo(obstacle.position) > SHOWER_LENGTH + SHOWER_WIDE + OBSTACLE_REACH) return broke;
+  for (let i = 0; i < SHOWER_PIECES; i++) {
+    if (shower.gone(i, time)) continue;
+    shower.pieceAt(i, time, piece);
+    if (piece.distanceTo(obstacle.position) > OBSTACLE_REACH + COMET_SPEED * since * 2) continue;
+    if (!obstacle.touches(piece, PIECE_RADIUS)) {
+      // its way since: from where it was, as far as it came
+      const way = shower.pieceAt(i, time - since, stone).distanceTo(piece);
+      if (way < 1) continue;
+      const hit = obstacle.ray(stone, course.subVectors(piece, stone).divideScalar(way), way);
+      if (hit === null) continue;
+      piece.copy(stone).addScaledVector(course, hit);
+    }
+    shower.stop(i);
+    burst(piece);
+  }
+  return broke;
+}
+
+/** Nothing standing in the field reaches farther from its center than this (units, 1 km): the battleship's 640 m with room. */
+const OBSTACLE_REACH = 20000;
 
 function touches(comet: Comet, field: AsteroidField, rock: Asteroid, time: number): boolean {
   return field.positionOf(rock, time, stone).distanceTo(headAt(comet, time, piece)) < HEAD_RADIUS + rock.radius;
@@ -801,14 +855,17 @@ export class CometView {
     }
     const comet = shower.comet;
     this.root.visible = true;
-    const left = comet.swallowed - time;
+    // the head flies until a well swallows it or it breaks up on the battleship, and flashes there
+    const end = headEnd(comet);
+    const left = end - time;
     const flying = left > 0;
-    headAt(comet, time, head);
-    courseAt(comet, time, course);
+    headAt(comet, Math.min(time, end), head);
+    courseAt(comet, Math.min(time, end), course);
     this.body.visible = this.coma.visible = flying;
     this.body.position.copy(head);
     this.body.quaternion.setFromUnitVectors(UP, course);
-    const drawn = Math.max(0, 1 - left / STRETCH);
+    // only a well draws it out
+    const drawn = Math.max(0, 1 - (comet.swallowed - time) / STRETCH);
     this.body.scale.set(1 / (1 + drawn), 1 + 3 * drawn, 1 / (1 + drawn));
     this.nucleus.rotation.set(time * TUMBLE[0], time * TUMBLE[1], time * TUMBLE[2]);
     const seen = camera.distanceTo(head);

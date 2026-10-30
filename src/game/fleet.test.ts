@@ -1,14 +1,19 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ARRIVAL, BATTERY_PERIOD, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
-import { Bot, evenSkills, SIEGE_DISTANCE } from '../ship/bots';
+import { ARRIVAL, BATTERY_PERIOD, DODGE_MASS, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, NOVA_EDGE, NOVA_SHATTER, novaShare, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
+import { Randomizer } from '../random';
+import { MASS, massOf } from '../world/bodies';
+import { Wrecks } from '../world/wrecks';
+import { NOVA_RADIUS, PROBE_RADIUS, Probes } from './items';
+import { Bot, evenSkills, NOVA_SIEGE, SIEGE_DISTANCE } from '../ship/bots';
 import type { Ship } from '../ship/ship';
 import { testField } from '../test/field';
 import { arenaById, ARENAS, RING_SHEET, type ArenaProfile } from '../world/arenas';
 import { DISTANT_DETAIL } from '../world/rocks';
 import { HULL_BOXES } from '../world/shapes';
 import { ROUND_SECONDS } from '../music/songs';
-import { cometAt, cometEnd, cometStart, roundComets, runDown } from './comet';
+import { COMET_SPEED, cometAt, cometEnd, cometStart, headAt, headEnd, HEAD_RADIUS, makeComet, meetObstacle, PIECE_RADIUS, roundComets, runDown, Shower, SHOWER_PIECES } from './comet';
+import { RAMMED, type Asteroid, type AsteroidField, type ShovedState } from '../world/asteroids';
 import { Human, SEEDS, SPREAD } from '../test/human';
 import { SHIP_RADIUS, startFlight, STEP } from '../test/pilot';
 
@@ -106,6 +111,53 @@ describe("the President's fleet", () => {
     expect(fleet.beacons[battery].alive).toBe(false);
   });
 
+  it('takes a nova core on every open part it reaches: those close by broken outright, the farther the fewer hits, more than a torpedo within its reach', () => {
+    const fleet = battleship();
+    const batteries = zonesOf(fleet, 'battery');
+    const reactor = zonesOf(fleet, 'reactor')[0];
+    const battery = batteries[0];
+    // the share by the distance from a part's surface: whole within 200 m, a third at 800 m, none beyond
+    expect(novaShare(0)).toBe(1);
+    expect(novaShare(NOVA_SHATTER)).toBe(1);
+    expect(novaShare(NOVA_RADIUS)).toBeCloseTo(NOVA_EDGE);
+    expect(novaShare(NOVA_RADIUS + 1)).toBe(0);
+    expect(novaShare((NOVA_SHATTER + NOVA_RADIUS) / 2)).toBeGreaterThan(NOVA_EDGE);
+    // anywhere within its reach a nova takes more of a part than a torpedo, and of a battery at
+    // its edge two torpedoes' worth
+    for (const zone of [battery, zonesOf(fleet, 'drive')[0], reactor]) expect(fleet.novaHit(zone, fleet.zones[zone].radius + NOVA_RADIUS)).toBeGreaterThan(TORPEDO_HITS);
+    expect(fleet.novaHit(battery, fleet.zones[battery].radius + NOVA_RADIUS)).toBeGreaterThanOrEqual(2 * TORPEDO_HITS);
+    // set off 100 m above a battery: that battery breaks outright, the sealed reactor takes nothing
+    const above = fleet.zoneAt(battery).add(new THREE.Vector3(0, 2000, 0));
+    const hits = fleet.novaHits(above);
+    expect(hits.find((h) => h.zone === battery)?.count).toBe(fleet.hitsOf(battery));
+    expect(hits.some((h) => h.zone === reactor)).toBe(false);
+    // the parts farther away take fewer hits, and none beyond its reach
+    for (const { zone, count } of hits) {
+      const distance = fleet.zoneAt(zone).distanceTo(above);
+      expect(distance).toBeLessThan(NOVA_RADIUS + fleet.zones[zone].radius);
+      expect(count).toBe(Math.min(fleet.novaHit(zone, distance), fleet.hitsOf(zone)));
+    }
+    expect(fleet.novaHits(fleet.zoneAt(battery).add(new THREE.Vector3(0, NOVA_RADIUS * 2, 0)))).toEqual([]);
+    expect(fleet.novaDamage(above)).toBe(hits.reduce((sum, h) => sum + h.count, 0));
+    // where a bot attacking a battery holds, from wherever it came, a core is worth setting off
+    for (const zone of batteries) {
+      for (const from of [new THREE.Vector3(60000, 0, 0), new THREE.Vector3(-60000, 20000, 0), new THREE.Vector3(0, -60000, 30000), new THREE.Vector3(0, 0, -60000)]) {
+        expect(fleet.novaDamage(fleet.siegeFrom(zone, from, SIEGE_DISTANCE, new THREE.Vector3()))).toBeGreaterThanOrEqual(NOVA_SIEGE);
+      }
+    }
+    for (const { zone, count } of hits) fleet.hit(zone, count);
+    expect(fleet.broken(battery)).toBe(true);
+    // a part half broken takes only what it has left, and the same core again counts nothing on it
+    expect(fleet.novaHits(above).some((h) => h.zone === battery)).toBe(false);
+    for (const { zone, count } of fleet.novaHits(above)) expect(count).toBeLessThanOrEqual(fleet.hitsOf(zone) - fleet.hits[zone]);
+    // once the dome is open, a core over the reactor breaks it and sends the battleship down
+    breakAll(fleet, batteries);
+    const overReactor = fleet.zoneAt(reactor).add(new THREE.Vector3(0, 3000, 0));
+    const onReactor = fleet.novaHits(overReactor).find((h) => h.zone === reactor);
+    expect(onReactor?.count).toBe(fleet.hitsOf(reactor));
+    expect(fleet.hit(reactor, onReactor!.count).some((e) => e.kind === 'sunk')).toBe(true);
+  });
+
   it('shows each part on the side it faces, where a ship attacking it holds, from wherever it comes', () => {
     const fleet = battleship();
     const field = testField();
@@ -145,6 +197,66 @@ describe("the President's fleet", () => {
     expect(normal.y).toBeCloseTo(1);
     expect(center.y).toBeGreaterThan(800 + 300);
   });
+
+  it("collides at its batteries' turrets and barrels, its drives' bells and its bared reactor, and takes a beam or a torpedo there as on the part", () => {
+    const fleet = battleship();
+    const battery = zonesOf(fleet, 'battery')[0];
+    // the muzzles, 85 m before the battery's mount, beyond its sphere
+    const muzzle = fleet.zones[battery].at.clone().add(new THREE.Vector3(0, 0, -1750));
+    expect(muzzle.distanceTo(fleet.zones[battery].at)).toBeGreaterThan(fleet.zones[battery].radius);
+    expect(fleet.touches(muzzle, 50)).toBe(true);
+    const ship = muzzle.clone().add(new THREE.Vector3(0, 200, 0));
+    expect(fleet.resolve(ship, SHIP_RADIUS, 1)!.y).toBeCloseTo(1);
+    expect(fleet.raycast(muzzle.clone().setY(20000), down, 40000, 1)?.zone).toBe(battery);
+    expect(fleet.blast(muzzle.clone().add(new THREE.Vector3(0, 300, 0)))).toContain(battery);
+    // broken, it is gone, and a beam goes through to whatever lies below
+    breakAll(fleet, [battery]);
+    expect(fleet.touches(muzzle, 50)).toBe(false);
+    expect(fleet.raycast(muzzle.clone().setY(20000), down, 40000, 1)?.zone ?? -1).not.toBe(battery);
+    // the drive's bell astern of the hull, burnt out or not
+    const drive = zonesOf(fleet, 'drive')[0];
+    const bell = fleet.zones[drive].at.clone().setZ(11600);
+    expect(fleet.touches(bell, 10)).toBe(true);
+    const behind = bell.clone().setZ(12000);
+    expect(fleet.resolve(behind, SHIP_RADIUS, 1)!.z).toBeCloseTo(1);
+    const astern = new THREE.Vector3(0, 0, -1);
+    expect(fleet.raycast(bell.clone().setZ(30000), astern, 40000, 1)?.zone).toBe(drive);
+    breakAll(fleet, [drive]);
+    expect(fleet.touches(bell, 10)).toBe(true);
+    expect(fleet.raycast(bell.clone().setZ(30000), astern, 40000, 1)?.zone).toBe(-1);
+    // the reactor's core where it bulges out of the deck, once the dome is open
+    const reactor = zonesOf(fleet, 'reactor')[0];
+    const core = fleet.zones[reactor].at.clone().add(new THREE.Vector3(0, 500, 0));
+    breakAll(fleet, zonesOf(fleet, 'battery'));
+    expect(fleet.phase).toBe(3);
+    expect(fleet.touches(core, 10)).toBe(true);
+    expect(fleet.touches(core.clone().setY(core.y + 300), 10)).toBe(false);
+  });
+
+  it("breaks a comet's head that runs into it, and stops each piece of its shower where it meets the hull", () => {
+    const fleet = battleship();
+    // a comet along x through the center at field time 100: into the battleship's flank
+    const comet = makeComet(100, new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 5);
+    const shower = new Shower(comet);
+    const head = new THREE.Vector3();
+    const piece = new THREE.Vector3();
+    const step = 1 / 60;
+    let stopped = 0;
+    for (let time = cometStart(comet); time < cometEnd(comet); time += step) {
+      fleet.update(time, 0);
+      meetObstacle(comet, shower, fleet, time, step, () => stopped++);
+      if (time < headEnd(comet)) expect(fleet.touches(headAt(comet, time, head), HEAD_RADIUS), `${time}`).toBe(false);
+      for (let i = 0; i < SHOWER_PIECES; i++) if (!shower.gone(i, time)) expect(fleet.touches(shower.pieceAt(i, time, piece), PIECE_RADIUS), `piece ${i} at ${time}`).toBe(false);
+    }
+    // it broke on the flank, coming from -x
+    expect(comet.broken).toBeLessThan(100);
+    expect(headAt(comet, comet.broken, head).x).toBeLessThan(0);
+    expect(headAt(comet, comet.broken, head).x).toBeGreaterThan(-6000 - HEAD_RADIUS - COMET_SPEED * step * 2);
+    // the swarm behind the hull is stopped where the hull stands in its way, and flies on around it
+    expect(stopped).toBeGreaterThan(SHOWER_PIECES / 10);
+    expect(stopped).toBeLessThan(SHOWER_PIECES);
+    // a whole comet's flight past the hull: a few seconds on a busy machine
+  }, 30_000);
 
   it('stays solid while it sinks, for ships as for rays and torpedoes, and is gone once it went up', () => {
     const fleet = battleship();
@@ -203,46 +315,100 @@ describe("the President's fleet", () => {
 describe("the battleship and the field's rock", () => {
   const field = testField(DISTANT_DETAIL, HULL_BOXES);
   const STEP_SECONDS = 0.1;
+  /** How deep anything may lie in the hull once a step is resolved (units, 10 cm). */
+  const DEPTH = 2;
+  const normal = new THREE.Vector3();
+  const point = new THREE.Vector3();
   /**
    * Flies the battleship of `arena` through a whole round, the field moving on its orbits, the
-   * round's comets running down rock as they come; `hunted`, half its batteries are broken
-   * from the start and a pilot circles it above and below, so its stern swings after him, and
-   * its drives are shot out half way. Returns the pieces its hull (hangars and dome included)
-   * ever reached into, with the field time, and the heights it flew at.
+   * round's comets running down rock as they come and meeting the hull; every two seconds a
+   * piece of wreckage and a dropped probe come at it from 1.5 km, 100 m/s faster than it;
+   * `hunted`, half its batteries are broken from the start and a pilot circles it above and
+   * below, so its stern swings after him, and its drives are shot out half way. Returns the
+   * pieces it dodges (see DODGE_MASS) its hull (hangars and dome included) ever reached into,
+   * whatever of the field, the shower, the wreckage and the probes lay in its hull (turrets and
+   * bells included) once a step was resolved, each with the field time, the pieces it rammed
+   * aside, and how many of the wreckage and probes met it.
    */
   const sail = (arena: ArenaProfile, hunted: boolean) => {
     field.generate(arena.layout);
     const fleet = new Fleet(arena.layout.seed, field, arena.sheet);
+    field.obstacle = fleet;
+    const wrecks = new Wrecks();
+    const probes = new Probes();
     // the first round of the arena's seed that has comets
     const comets = hunted ? [] : (Array.from({ length: 20 }, (_, round) => roundComets(arena.layout.seed, round, field.well, false)).find((list) => list.length) ?? []);
+    let shower = null as Shower | null;
     const pilot = { id: 'p:a', alive: true, flight: { position: new THREE.Vector3() } };
     if (hunted) breakAll(fleet, zonesOf(fleet, 'battery').slice(0, 3));
     const touched: string[] = [];
+    const inside: string[] = [];
+    const rammed = new Set<string>();
+    let met = 0;
+    let sent = 0;
+    const random = new Randomizer(arena.layout.seed);
     let hunts = false;
     for (let time = 0; time < ARRIVAL + ROUND_SECONDS && !fleet.down; time += STEP_SECONDS) {
       field.setClock(time);
       const comet = cometAt(comets, time);
-      if (comet && time >= cometStart(comet) && time <= cometEnd(comet)) runDown(comet, field, time, () => {});
+      const flying = comet && time >= cometStart(comet) && time <= cometEnd(comet) ? comet : null;
+      if (shower?.comet !== flying) shower = flying ? new Shower(flying) : null;
+      if (flying) runDown(flying, field, time, () => {});
       if (hunted && time > ARRIVAL + ROUND_SECONDS / 2 && fleet.drives > 0) breakAll(fleet, zonesOf(fleet, 'drive'));
       pilot.flight.position.set(Math.cos(time * 0.2) * 15000, Math.sin(time * 0.13) * 12000, Math.sin(time * 0.2) * 15000).add(fleet.position);
       fleet.lead(STEP_SECONDS, time, hunted ? [pilot] : [], comets);
       fleet.update(time, time);
+      for (const state of fleet.rams) rammed.add(state.id);
+      fleet.rams.length = 0;
+      if (flying) meetObstacle(flying, shower, fleet, time, STEP_SECONDS);
       if (!fleet.present(time)) continue;
+      // wreckage and a probe thrown at it
+      if (Math.round(time / STEP_SECONDS) % 20 === 0) {
+        const from = new THREE.Vector3(random.range(-1, 1), random.range(-1, 1), random.range(-1, 1)).normalize();
+        const at = from.clone().multiplyScalar(30000).add(fleet.position);
+        const velocity = from.clone().multiplyScalar(-2000).add(fleet.velocity);
+        wrecks.spawn(`b:x:${sent}`, 0, at, velocity, 350, time);
+        probes.drop(`b:x:${sent}`, 0, ['repair'], at, velocity, time);
+        sent++;
+      }
+      const before = wrecks.list.length;
+      wrecks.update(STEP_SECONDS, time, field);
+      met += before - wrecks.list.length;
+      probes.update(STEP_SECONDS, time, field);
       hunts ||= fleet.target === pilot.id;
-      for (const piece of field.asteroids.values()) if (fleet.reaches(piece.object.position, piece.radius)) touched.push(`${piece.id} at ${time.toFixed(1)} s`);
+      const when = `at ${time.toFixed(1)} s`;
+      for (const piece of field.asteroids.values()) {
+        if (massOf(piece) >= DODGE_MASS && fleet.reaches(piece.object.position, piece.radius)) touched.push(`${piece.id} ${when}`);
+        if (fleet.depthOf(piece, time, normal, point) > DEPTH) inside.push(`${piece.id} ${when}`);
+      }
+      for (const wreck of wrecks.list) if (fleet.touches(wreck.mesh.position, wreck.radius)) inside.push(`wreck ${wreck.id} ${when}`);
+      for (const probe of probes.list) {
+        if (fleet.touches(probe.position, PROBE_RADIUS)) inside.push(`probe ${probe.id} ${when}`);
+        if (fleet.touches(probe.position, PROBE_RADIUS + 200)) met++;
+      }
+      if (shower && time < headEnd(shower.comet) && fleet.touches(headAt(shower.comet, time, point), HEAD_RADIUS)) inside.push(`comet ${when}`);
+      for (let i = 0; shower && i < SHOWER_PIECES; i++) if (!shower.gone(i, time) && fleet.touches(shower.pieceAt(i, time, point), PIECE_RADIUS)) inside.push(`shower piece ${i} ${when}`);
     }
-    return { touched, hunts, comets: comets.length };
+    field.obstacle = null;
+    return { touched, inside, rammed: rammed.size, met, hunts, comets: comets.length };
   };
 
+  /** A whole round flown step by step takes a few seconds, more on a busy machine. */
+  const ROUND_TEST = 30000;
   for (const arena of ARENAS) {
-    it(`never reaches into a piece of ${arena.id}'s field over a whole round, past the round's comets, its stern hunting a pilot, adrift`, () => {
+    it(`keeps clear of the heavy pieces of ${arena.id}'s field over a whole round past the round's comets, rams the light ones aside, and nothing ever lies in its hull, wreckage and probes neither`, () => {
       const passing = sail(arena, false);
       expect(passing.comets).toBeGreaterThan(0);
       expect(passing.touched).toEqual([]);
+      expect(passing.inside).toEqual([]);
+      expect(passing.met).toBeGreaterThan(0);
+    }, ROUND_TEST);
+    it(`does so in ${arena.id} with its stern hunting a pilot, and adrift`, () => {
       const hunting = sail(arena, true);
       expect(hunting.hunts).toBe(true);
       expect(hunting.touched).toEqual([]);
-    });
+      expect(hunting.inside).toEqual([]);
+    }, ROUND_TEST);
   }
 
   it("flies its orbit over the Rings of Saturn's sheet of ice, clear of it, and in the plane where nothing is in its way", () => {
@@ -257,7 +423,119 @@ describe("the battleship and the field's rock", () => {
     field.generate(arenaById('giant')!.layout);
     expect(new Fleet(47, field).lane).toBe(0);
   });
+
+  const rings = arenaById('rings')!;
+  /** The Rings' ice weighs at most some 1.7 times the battleship; the Corona's rock holds a piece of about three times. */
+  const corona = arenaById('corona')!;
+  /** The world velocity of a piece's center. */
+  const drift = (piece: Asteroid) => field.surfaceVelocity(piece, piece.object.position, new THREE.Vector3());
+  const momentum = (piece: Asteroid, fleet: Fleet) => drift(piece).multiplyScalar(massOf(piece)).addScaledVector(fleet.velocity, MASS.battleship);
+
+  it('rams a chunk of ice a tenth of its mass aside, barely slowed, the two trading momentum, nothing left in its hull', () => {
+    const { fleet, piece } = bowOn(field, rings, 0.1);
+    const before = momentum(piece, fleet);
+    fleet.ram(1);
+    expect(fleet.rams.map((state) => state.id)).toEqual([piece.id]);
+    expect(momentum(piece, fleet).distanceTo(before)).toBeLessThan(before.length() * 1e-4);
+    // it keeps nine tenths of its speed, the chunk flies off ahead of it
+    expect(-fleet.velocity.z).toBeGreaterThan(FLEET_SPEED * 0.88);
+    expect(-drift(piece).z).toBeGreaterThan(-fleet.velocity.z);
+    expect(fleet.depthOf(piece, 1, normal, point)).toBe(0);
+  });
+
+  it('is slowed hard by a rock three times its mass, and shoves it a little', () => {
+    const { fleet, piece } = bowOn(field, corona, 3);
+    expect(massOf(piece) / MASS.battleship).toBeGreaterThan(2.5);
+    fleet.ram(1);
+    expect(-fleet.velocity.z).toBeLessThan(FLEET_SPEED * 0.3);
+    expect(-drift(piece).z).toBeGreaterThan(FLEET_SPEED * 0.2);
+    expect(fleet.depthOf(piece, 1, normal, point)).toBe(0);
+  });
+
+  it('drifting slowly into a light piece, sends it off at a meter a second; into a heavy one, bounces off it alone, telling no other browser', () => {
+    const light = bowOn(field, rings, 0.1);
+    light.fleet.velocity.set(0, 0, -10);
+    const before = momentum(light.piece, light.fleet);
+    light.fleet.ram(1);
+    expect(light.fleet.rams).toHaveLength(1);
+    expect(-drift(light.piece).z + light.fleet.velocity.z).toBeGreaterThan(19.9);
+    expect(momentum(light.piece, light.fleet).distanceTo(before)).toBeLessThan(before.length() * 1e-4);
+    expect(light.fleet.depthOf(light.piece, 1, normal, point)).toBe(0);
+    const heavy = bowOn(field, corona, 3);
+    heavy.fleet.velocity.set(0, 0, -10);
+    heavy.fleet.ram(1);
+    expect(heavy.fleet.rams).toEqual([]);
+    expect(drift(heavy.piece).length()).toBeLessThan(1e-6);
+    expect(heavy.fleet.velocity.z).toBeGreaterThan(0);
+    expect(heavy.fleet.depthOf(heavy.piece, 1, normal, point)).toBe(0);
+  });
+
+  it('tells every browser where it shoved a piece, and one that joins later has it there too, and the pieces it breaks into', () => {
+    const { fleet, piece, placed } = bowOn(field, rings, 0.1);
+    fleet.ram(1);
+    const told = JSON.parse(JSON.stringify(fleet.rams[0]));
+    const other = testField(DISTANT_DETAIL, HULL_BOXES);
+    other.generate(rings.layout);
+    other.move(placed);
+    other.move(told);
+    const same = (a: AsteroidField, b: AsteroidField) => {
+      for (const [id, rock] of a.asteroids) {
+        expect(b.asteroids.get(id)!.object.position.distanceTo(rock.object.position), id).toBeLessThan(1e-6);
+        expect(b.asteroids.get(id)!.object.quaternion.angleTo(rock.object.quaternion), id).toBeLessThan(1e-6);
+      }
+    };
+    for (const f of [field, other]) f.setClock(30);
+    same(field, other);
+    // it breaks: its pieces fly off alike, and a browser that joins after has them where they are
+    for (const f of [field, other]) {
+      f.shatter(piece.id, 31);
+      f.setClock(40);
+    }
+    same(field, other);
+    const late = testField(DISTANT_DETAIL, HULL_BOXES);
+    late.restore(JSON.parse(JSON.stringify(field.snapshot())), rings.layout);
+    expect([...late.asteroids.keys()].filter((id) => id.startsWith(`${piece.id}.`)).length).toBeGreaterThan(1);
+    same(field, late);
+  });
 });
+
+/** The height of the armored casemate at the tip of the bow (units): the bow's keel rises well above the hull's middle. */
+const BOW_DOOR = 1650;
+
+/**
+ * The battleship in `arena`'s field, its bow along -z at the center, flying bow first at
+ * FLEET_SPEED, and the piece of its field nearest `share` of its mass at rest before its bow at
+ * the casemate's height, moved in until its outline reaches `into` units into the casemate's
+ * armor (field time 1), the only piece left in the field. Returns the piece's motion so placed,
+ * for another field to take.
+ */
+function bowOn(field: AsteroidField, arena: ArenaProfile, share: number, into = 50) {
+  field.generate(arena.layout);
+  field.setClock(1);
+  const fleet = new Fleet(arena.layout.seed, field, arena.sheet);
+  fleet.arrivesAt = 0;
+  fleet.position.set(0, 0, 0);
+  fleet.quaternion.identity();
+  fleet.velocity.set(0, 0, -FLEET_SPEED);
+  fleet.root.updateMatrixWorld();
+  fleet.update(1, 0);
+  const off = (rock: Asteroid) => Math.abs(Math.log(massOf(rock) / MASS.battleship / share));
+  const piece = [...field.asteroids.values()].sort((a, b) => off(a) - off(b))[0];
+  // alone in the field: nothing else meets the hull
+  for (const id of [...field.asteroids.keys()]) if (id !== piece.id) field.asteroids.delete(id);
+  const n = new THREE.Vector3();
+  const p = new THREE.Vector3();
+  let placed: ShovedState | null = null;
+  for (let z = -fleet.reach - piece.radius; ; z += 10) {
+    // at rest: its drift takes out what its orbit would carry it
+    const at = new THREE.Vector3(0, BOW_DOOR, z);
+    const still = piece.orbitAxis.clone().multiplyScalar(-piece.orbitRate).cross(at);
+    placed = { id: piece.id, b: 1, p: at.toArray(), v: still.toArray(), q: [0, 0, 0, 1], s: [0, 1, 0, 0], c: RAMMED };
+    field.move(placed);
+    if (fleet.depthOf(piece, 1, n, p) >= into) break;
+  }
+  return { fleet, piece, placed };
+}
 
 describe("the battleship's hangars", () => {
   const middle = (HANGAR_FLOOR + HANGAR_CEILING) / 2;

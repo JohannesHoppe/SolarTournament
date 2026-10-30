@@ -1,7 +1,9 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { FlightModel, MAIN_THRUST, MAX_SPEED, OVERDRIVE_PUSH } from '../ship/flight';
-import { HOOK_PULL, HOOK_RANGE, keepsHold, pullOn } from './hook';
+import { cableCut, HOOK_PULL, HOOK_RANGE, keepsHold, pullOn } from './hook';
+import { testField } from '../test/field';
+import type { Asteroid, AsteroidField } from '../world/asteroids';
 import { HOOK_FLING, HOOK_STANDOFF } from './school';
 import { SAFE_IMPACT } from '../ship/impact';
 import { IMMOVABLE, MASS, type Body } from '../world/bodies';
@@ -182,6 +184,56 @@ describe('the hook', () => {
       expect(flight.velocity.length()).toBeGreaterThan(HOOK_FLING);
     });
   }
+});
+
+describe('a cable across something solid', () => {
+  /** A field of rocks of scale 8 at `spots` (units along x), and the rocks in that order. */
+  function rocks(...spots: number[]) {
+    const field = testField();
+    const placements = spots.map((x) => ({ kind: 'rock' as const, type: 0, scale: 8, position: new THREE.Vector3(x, 0, 0), orientation: new THREE.Quaternion(), solid: false }));
+    field.generate({ key: 'cut', seed: 1, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: 1, inner: 0, spin: 0, toughness: 800, placements });
+    return { field, list: [...field.asteroids.values()] };
+  }
+  /** Where a ray from far above a rock first meets its surface: a hook's bite. */
+  const bite = (field: AsteroidField, rock: Asteroid) => {
+    const from = rock.object.position.clone().add(new THREE.Vector3(0, 100000, 0));
+    return from.addScaledVector(new THREE.Vector3(0, -1, 0), field.raycast(from, new THREE.Vector3(0, -1, 0), 200000)!.distance);
+  };
+
+  it('runs along the surface of its own rock as the ship swings around it, and never snaps on it', () => {
+    const { field, list } = rocks(0);
+    const rock = list[0];
+    const anchor = bite(field, rock);
+    const floor = rock.radius + 1400;
+    const flight = new FlightModel();
+    // it circles in the plane through the bite on top, so the far side of the rock lies between
+    flight.position.set(floor + 2000, 0, 0);
+    flight.velocity.set(0, 3000, 0);
+    let length: number | null = flight.position.length();
+    let through = false;
+    for (let t = 0; t < 6 && length !== null; t += DT) {
+      length = pullOn(body(flight), ROCK, length, true, floor, MAX_SPEED, DT);
+      flight.position.addScaledVector(flight.velocity, DT);
+      expect(cableCut(field, flight.position, anchor, rock)).toBe(false);
+      through ||= cableCut(field, flight.position, anchor);
+    }
+    // it went round: on the far side the straight line from the bite runs through the rock
+    expect(length).not.toBeNull();
+    expect(through).toBe(true);
+  });
+
+  it('snaps when another rock comes between the ship and the rock it bit, or between two ships', () => {
+    const { field, list } = rocks(0, 30000);
+    const [bitten, between] = list;
+    const ship = new THREE.Vector3(30000 + between.radius + 6000, 0, 0);
+    expect(cableCut(field, ship, bite(field, bitten), bitten)).toBe(true);
+    // the same rock, seen past the other: clear
+    ship.set(30000, between.radius + 8000, 0);
+    expect(cableCut(field, ship, bite(field, bitten).setY(between.radius + 8000), bitten)).toBe(false);
+    // a ship hooked to a ship (or a core in tow) across the rock
+    expect(cableCut(field, new THREE.Vector3(30000, 0, -between.radius - 4000), new THREE.Vector3(30000, 0, between.radius + 4000))).toBe(true);
+    expect(cableCut(field, new THREE.Vector3(30000 + between.radius + 4000, 0, -2000), new THREE.Vector3(30000 + between.radius + 4000, 0, 2000))).toBe(false);
+  });
 });
 
 describe('two hooks on one probe or torpedo', () => {

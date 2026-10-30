@@ -3,7 +3,8 @@ import { ANNOUNCER_MOMENT } from '../music/lines';
 
 /**
  * The big moments of the own pilot, made for the broadcast: a neon banner, the crowd, and for
- * the biggest the announcer. Only the show: no moment changes a score.
+ * the biggest the announcer. A moment itself changes no score; a streak's kills earn their
+ * bonus by game/streaks, every ship's alike.
  */
 export type Moment = 'double' | 'triple' | 'multi' | 'supernova' | 'revenge' | 'torpedo' | 'interception' | 'pass' | 'lead' | 'capture' | 'sunk' | 'knockout';
 
@@ -26,44 +27,34 @@ export const MOMENTS: Record<Moment, { banner: string; crowd: number; lines?: re
   pass: { banner: msg('OVERTAKEN'), crowd: 0.55, rank: 2 },
 };
 
-/** Kills of the own pilot this close after each other (s) make a streak: two a double kill, three a triple, more a multi kill. */
-export const STREAK_SECONDS = 4;
-
-/** What the own pilot's kills and deaths add up to (see ownKill). */
+/** What the own pilot's kills and deaths add up to (see ownKill); its streak is counted with every ship's (see game/streaks). */
 export class Moments {
-  private streak = 0;
-  private lastKill = -Infinity;
   /** The ship that killed the own clone last, until the pilot pays it back. */
   private avenge: string | null = null;
 
-  /** A new round: no streak, nobody to avenge. */
+  /** A new round: nobody to avenge. */
   reset() {
-    this.streak = 0;
-    this.lastKill = -Infinity;
     this.avenge = null;
   }
 
   /** The own clone died, by `killer` (its ship id) or by nothing. */
   died(killer: string | null) {
-    this.streak = 0;
-    this.lastKill = -Infinity;
     this.avenge = killer;
   }
 
   /**
-   * The own pilot killed ship `victim` at `now` (s), by a nova or otherwise: the moment that makes,
-   * or null for a plain kill. A nova's victims fall at once and count as one blast.
+   * The own pilot killed ship `victim`, the `streak`th kill of its streak (see Streaks), by a nova
+   * or otherwise: the moment that makes, or null for a plain kill. A nova's victims fall at once
+   * and count as one blast.
    */
-  ownKill(victim: string, now: number, nova: boolean): Moment | null {
-    this.streak = now - this.lastKill <= STREAK_SECONDS ? this.streak + 1 : 1;
-    this.lastKill = now;
+  ownKill(victim: string, streak: number, nova: boolean): Moment | null {
     const revenge = victim === this.avenge;
     if (revenge) this.avenge = null;
-    if (nova && this.streak >= 2) return 'supernova';
-    if (this.streak >= 4) return 'multi';
-    if (this.streak === 3) return 'triple';
+    if (nova && streak >= 2) return 'supernova';
+    if (streak >= 4) return 'multi';
+    if (streak === 3) return 'triple';
     if (revenge) return 'revenge';
-    if (this.streak === 2) return 'double';
+    if (streak === 2) return 'double';
     return null;
   }
 }

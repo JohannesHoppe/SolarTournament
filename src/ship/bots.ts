@@ -1,7 +1,7 @@
 import * as THREE from 'three';
-import type { AsteroidField, RayHit } from '../world/asteroids';
+import { raySphere, type AsteroidField, type RayHit } from '../world/asteroids';
 import { IDLE, type Controls } from '../input/input';
-import { noseOn, type Ship } from './ship';
+import { LASER_RANGE, noseOn, type Ship } from './ship';
 import { MAIN_THRUST, RCS_THRUST } from './flight';
 import { BOOST_PUSH } from '../game/race';
 import { escapeLoad } from '../game/alarms';
@@ -44,6 +44,14 @@ const STRAIN_AIM = 0.5;
 const STRAIN_REACTION = 0.15;
 /** A bot sees another ship hunting a third (see huntersOf) when its nose lies within HUNT_ANGLE (rad, about 17°) of it, within FIRE_RANGE. */
 const HUNT_ANGLE = 0.3;
+/**
+ * Friendly fire (see allyInLine): a bot keeps its finger off the trigger while a ship of its own
+ * side passes within ALLY_CLEARANCE of its line of fire (units, 17 m, a hull's radius more: its
+ * aim scatters), and launches no torpedo while one lies within TORPEDO_CLEARANCE (units, 50 m)
+ * of the line to the lock (the torpedo flies a curve onto it).
+ */
+const ALLY_CLEARANCE = 340;
+export const TORPEDO_CLEARANCE = 1000;
 /** A ship that hit a bot's drive makes it defend for this long (s), from however far it fired. */
 const STRUCK_MEMORY = 3;
 /** A bot fires at armor only while its laser is cooler than this (one shot heats it by 20), and only in some of its thinking spells (SNIPE_CHANCE): sparingly. */
@@ -224,6 +232,65 @@ export const evenSkills = (skill: number): Skills => ({ aim: skill, reflexes: sk
 export const skillsOf = (name: string) => (Object.hasOwn(BOT_SKILLS, name) ? BOT_SKILLS[name] : evenSkills(0.4));
 
 /**
+ * Whether a ship of the shooter's own side is in its line of fire, as a Host sees it: alive, in
+ * sight, its hull widened by `clearance` on the line from `origin` along `direction` (unit
+ * length) before the first rival hull the line strikes, or within `reach` when it strikes none.
+ * A beam ends at the first hull and hurts whoever's it is (friendly fire), so a bot holds fire.
+ */
+export function allyInLine(shooter: Ship, ships: readonly Ship[], field: AsteroidField, origin: THREE.Vector3, direction: THREE.Vector3, reach: number, clearance: number): boolean {
+  let open = reach;
+  for (const ship of ships) {
+    if (ship === shooter || !ship.alive || ship.allyOf(shooter)) continue;
+    const distance = raySphere(origin, direction, ship.flight.position, ship.radius);
+    if (distance !== null && distance < open) open = distance;
+  }
+  for (const ship of ships) {
+    if (!ship.alive || !ship.allyOf(shooter)) continue;
+    const distance = raySphere(origin, direction, ship.flight.position, ship.radius + clearance);
+    if (distance !== null && distance < open && field.lineOfSight(origin, ship.flight.position)) return true;
+  }
+  return false;
+}
+
+/** A bot sets off a nova core (see novaWorth) among at least this many rivals. */
+const NOVA_CROWD = 2;
+/**
+ * A nova core is worth setting off at the President's battleship once it takes this many hits
+ * of its parts (three torpedoes' worth): a battery within about 700 m, the distance a bot
+ * attacking one holds (see SIEGE_DISTANCE) and some more.
+ */
+export const NOVA_SIEGE = 30;
+/**
+ * A bot that has held its core NOVA_PATIENCE seconds sets it off on a single rival inside the
+ * blast (a double kill all the same): rivals flee a holder, and a crowd may never come. One that
+ * has held it NOVA_SHED seconds sets it off anywhere, for the next shot is the core and its
+ * laser stays silent until then; the reprint it earns costs nothing.
+ */
+export const NOVA_PATIENCE = 20;
+export const NOVA_SHED = 60;
+
+/**
+ * Whether a bot's nova core is worth setting off where it is, never with a ship of its own side
+ * within the blast's `radius` (units), for a nova spares nobody: NOVA_CROWD rivals or more within
+ * four fifths of it, or `siege` hits on the battleship's parts of NOVA_SIEGE or more (see
+ * Fleet.novaDamage); having held it `held` seconds, one rival within it after NOVA_PATIENCE,
+ * anything after NOVA_SHED. The target drone, which nobody flies, does not count.
+ */
+export function novaWorth(holder: Ship, ships: readonly Ship[], radius: number, held = 0, siege = 0): boolean {
+  let crowd = 0;
+  let inside = 0;
+  for (const other of ships) {
+    if (other === holder || !other.alive || other.kind === null) continue;
+    const distance = other.flight.position.distanceTo(holder.flight.position);
+    if (distance >= radius) continue;
+    if (other.allyOf(holder)) return false;
+    inside++;
+    if (distance < radius * 0.8) crowd++;
+  }
+  return crowd >= NOVA_CROWD || siege >= NOVA_SIEGE || (held >= NOVA_PATIENCE && inside > 0) || held >= NOVA_SHED;
+}
+
+/**
  * Newtonian pursuit AI. Bots only see ships they have a line of sight to. It works out the velocity it wants (close in on its target,
  * hold distance, avoid rocks, stay in the arena) and corrects large differences by turning
  * the main drive into the error and burning. Small differences are trimmed with the
@@ -284,6 +351,8 @@ export class Bot {
   flee: THREE.Vector3 | null = null;
   /** What the bot flees, for the development log: a nova, the battleship, a comet. */
   fleeFrom = '';
+  /** Kept by the game: since when (s) its clone holds a nova core, Infinity while it holds none (see novaWorth). */
+  novaSince = Infinity;
   /** Set by the game: the bot turns back beyond this distance (units) from `homeAt`, the field's center or a solar flare's safe pocket. */
   home = HOME_RADIUS;
   homeAt: THREE.Vector3 | null = null;
@@ -559,6 +628,8 @@ export class Bot {
       const extra = `${danger && !falling ? ' +avoid rock' : ''}${homeDistance > this.home ? ' +home' : ''}${givingWay ? ` +give way to ${givingWay.name}` : ''}`;
       devlog.decide(now, this.ship.name, meanSkill(this.skills), doing + extra, about);
     }
+    // the beam would end on a ship of the own side: no shot (friendly fire hurts)
+    if (controls.fire && allyInLine(this.ship, ships, field, me.position, me.forward(heading), LASER_RANGE, ALLY_CLEARANCE)) controls.fire = false;
     return this.byHand(controls, dt);
   }
 

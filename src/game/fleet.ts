@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
-import { FIELD_RADIUS, raySphere, type AsteroidField, type Obstacle } from '../world/asteroids';
+import { FIELD_RADIUS, outline, RAMMED, raySphere, type Asteroid, type AsteroidField, type Obstacle, type ShovedState } from '../world/asteroids';
+import { contact, MASS, massOf, share } from '../world/bodies';
 import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
 import { shelter, unshelter } from '../world/space';
@@ -10,6 +11,7 @@ import type { Homing } from './torpedoes';
 import { Elevation, EMPHASES, machinery } from './machinery';
 import { COMET_REACH, COMET_SPEED, cometEnd, cometStart, courseAt, PIECE_RADIUS, routeNearest, SHOWER_LENGTH, SHOWER_WIDE, type Comet } from './comet';
 import { msg, t } from '../i18n/i18n';
+import { NOVA_RADIUS } from './items';
 
 /**
  * The President's Fleet: every Host on one side against a battleship of the President, one in
@@ -33,13 +35,23 @@ import { msg, t } from '../i18n/i18n';
  * Its hull blocks the line of sight like a rock: a battery does not fire through it, and a pilot
  * on the far side is hidden from the others. Its hangar deck runs open through it from flank to
  * flank (see HANGARS): ships fly through, beams and sight pass along it. A torpedo locks on a part as on a ship and goes off
- * on it, or on the hull; it counts TORPEDO_HITS hits on every part it goes off near.
+ * on it, or on the hull; it counts TORPEDO_HITS hits on every part it goes off near. A nova
+ * core breaks the parts close to it outright and takes a share of the rest it reaches (see
+ * novaShare).
+ *
+ * Everything collides with it, its turrets, bells and bared reactor included: it keeps clear of
+ * the pieces of the field too heavy to ram aside (see DODGE_MASS) and rams the lighter ones aside
+ * (see Fleet.ram); wreckage grinds to dust on it, probes bounce off it, a comet's head breaks up
+ * on it and its shower bursts there.
  *
  * Online the lead browser flies the battleship and sends where it is with the round clock (see
- * Fleet.toState); every laser hit on a part goes to every browser, so all count the same hits.
+ * Fleet.toState), and tells every browser how its hull shoved a piece of the field (see rams);
+ * every laser hit on a part goes to every browser, so all count the same hits.
  * Each browser fires the batteries at the ships it runs, and burns them in the plume.
  */
 export type ZoneKind = 'battery' | 'drive' | 'reactor';
+/** What hits a part: a ship's laser, a torpedo, a nova core. */
+export type FleetWeapon = 'laser' | 'torpedo' | 'nova';
 /**
  * The battleship's size (a factor). Its hull, superstructure and parts are laid out in design
  * units and grown by FLEET_SCALE into the world, while its hangar deck keeps its size in world
@@ -65,6 +77,22 @@ export const ZONE_HITS: Record<ZoneKind, number> = { battery: 64, drive: 94, rea
 /** A torpedo counts this many hits on every part it goes off within TORPEDO_REACH of (units, 20 m beyond the part): about a sixth of a battery. */
 export const TORPEDO_HITS = 10;
 const TORPEDO_REACH = 400;
+/**
+ * A nova core going off is the end of whatever lies close: a part whose surface lies within
+ * NOVA_SHATTER of it (units, 200 m) breaks outright. Farther out it takes a share of the hits
+ * the part takes in all, falling evenly to NOVA_EDGE at the core's reach (NOVA_RADIUS, 800 m):
+ * a third of a battery at the edge is two torpedoes' worth, at 500 m about four. Everything
+ * within 800 m of it is gone, so the battleship's parts there take more than any torpedo, and
+ * a core set off on its deck can take out several batteries at once; the reactor stays sealed
+ * under its dome until the batteries are gone, as against every weapon.
+ */
+export const NOVA_SHATTER = 4000;
+export const NOVA_EDGE = 1 / 3;
+/** The share of a part's hits a nova core takes whose surface lies `distance` from it (units): 1 within NOVA_SHATTER, NOVA_EDGE at NOVA_RADIUS, nothing beyond. */
+export function novaShare(distance: number): number {
+  if (distance > NOVA_RADIUS) return 0;
+  return 1 - (1 - NOVA_EDGE) * THREE.MathUtils.clamp((distance - NOVA_SHATTER) / (NOVA_RADIUS - NOVA_SHATTER), 0, 1);
+}
 /** Points for a hit on a part, for the hit that breaks one, and for every ship of the side when the battleship goes down. */
 export const FLEET_HIT_POINTS = 10;
 export const ZONE_POINTS: Record<ZoneKind, number> = { battery: 150, drive: 200, reactor: 1000 };
@@ -135,20 +163,51 @@ const LANE_MAX = 12000;
 const LANE_STEP = 500;
 /** How many points along a piece's orbit the lane is checked at. */
 const LANE_SAMPLES = 120;
-/** Its hull keeps this far from every piece of the field (units, 50 m), the piece's whole reach counted. */
-const ROCK_CLEAR = 1000;
+/** Its hull keeps this far from every piece of the field it dodges (units, 60 m, see DODGE_MASS), the piece's whole reach counted. */
+const ROCK_CLEAR = 1200;
 /**
- * Its sensors follow each piece of the field ROCK_LOOKOUT seconds ahead (in steps of
+ * Its sensors follow each piece of the field it dodges ROCK_LOOKOUT seconds ahead (in steps of
  * ROCK_STEP), where the field time puts it, against its own course straight on: a piece that
  * would come within ROCK_CLEAR of the hull pushes it aside, square to their closing while there
- * is time to pass it and straight away once it is close, at up to ROCK_EVADE (units/s, 50 m/s)
- * on top of its course, the harder the sooner the contact, turning onto that course EVADE_BURN
- * times as hard as onto its orbit. Its thrusters do this, so it works with the drives shot out
- * too. It turns its hull only where the turn stays half ROCK_CLEAR clear of rock.
+ * is time to pass it and, once it is close, straight away from it where the hull comes nearest
+ * it, at up to ROCK_EVADE (units/s, 50 m/s) on top of its course, the harder the sooner the
+ * contact, turning onto that course EVADE_BURN times as hard as onto its orbit. Its thrusters do
+ * this, so it works with the drives shot out too. It turns its hull only where the turn stays
+ * half ROCK_CLEAR clear of such a piece, and nearer already, never on towards it.
  */
 const ROCK_LOOKOUT = 20;
 const ROCK_STEP = 0.5;
 const ROCK_EVADE = 1000;
+/**
+ * It keeps clear (see ROCK_LOOKOUT) only of pieces of at least a quarter of its own mass (MASS in
+ * world/bodies): a piece that heavy would slow it hard or throw it about. A lighter one it does
+ * not dodge: its hull rams it aside (see Fleet.ram), the two trading momentum by their masses, so
+ * a chunk of ice a tenth of its mass costs it a tenth of its speed into the chunk, one of a
+ * quarter of its mass at most a quarter, which its drives win back within seconds.
+ */
+export const DODGE_MASS = MASS.battleship / 4;
+/**
+ * Rock, ice and junk meeting its armor at the speeds of the arena crush rather than bounce: they
+ * part with RAM_RESTITUTION of the speed they met at, and sliding along the hull loses RAM_FRICTION
+ * times the blow. A piece takes a tumble from where it was struck, at most RAM_SPIN (rad/s) more.
+ */
+const RAM_RESTITUTION = 0.2;
+const RAM_FRICTION = 0.3;
+const RAM_SPIN = 0.3;
+/**
+ * A contact that would change the speed of a piece heavier than the hull by less than
+ * RAM_RESTING (units/s, 1 m/s) bounces the hull off it as off something that does not move, and
+ * the piece keeps its course (a share that small is not worth a word to every browser). A lighter
+ * piece leaves the hull at RAM_RESTING at least however gently it was touched, so a hull pressing
+ * on it does not shove it again frame after frame. A piece shoved out of the hull is left
+ * RAM_GAP clear of it (units, 5 cm).
+ */
+const RAM_RESTING = 20;
+const RAM_GAP = 1;
+/** A piece that reaches into the hull is pushed out again at most this many times a frame, for the colliders a push moves it into. */
+const RAM_PASSES = 3;
+/** Two crossed boxes hold a round body (see Fleet's `round`): each its full width one way and this share of it the other. */
+const CROSS = 0.55;
 /**
  * A cross section of the hull at `z` (in its frame; the bow points along -z): the flight
  * deck on top at DECK_TOP, `half` wide to each side; the armored belt drops straight from the
@@ -237,12 +296,15 @@ const BATTERIES = BATTERY_MOUNTS.length;
 
 /** A part: its kind, where it sits and how big it is (in the battleship's frame), the way it faces (from that side it shows itself) and its mesh. */
 type Zone = { kind: ZoneKind; at: THREE.Vector3; radius: number; face: THREE.Vector3; mesh: THREE.Object3D };
-type Box = { center: THREE.Vector3; half: THREE.Vector3 };
+/** A collider box in the battleship's frame, and the part it belongs to (-1: the hull's armor), which a beam or a torpedo striking it hits. */
+type Box = { center: THREE.Vector3; half: THREE.Vector3; part: number };
+/** A collider ball in the battleship's frame (the reactor's glowing core), and the part it belongs to. */
+type Ball = { center: THREE.Vector3; radius: number; part: number };
 /** A battery's shot (see Fleet.firing): the part that fires and the number of its shot. */
 type Shot = { zone: number; shot: number };
 
-/** What the lead browser sends: whether the battleship went down, the hits on each part, where it is, its motion and turn, whom its stern hunts and whether its drives burn. */
-export type FleetState = { d: number; h: number[]; p: number[]; v: number[]; q: number[]; t: string | null; u: number };
+/** What the lead browser sends: whether the battleship went down, the hits on each part, where it is, its motion and turn, whom its stern hunts and whether its drives burn; and the field time a comet's head broke up on its hull, once one did (see rammedAt). */
+export type FleetState = { d: number; h: number[]; p: number[]; v: number[]; q: number[]; t: string | null; u: number; c?: number };
 
 /** What the fleet needs to know of a ship. */
 export interface Target {
@@ -279,6 +341,53 @@ const closing = new THREE.Vector3();
 const away = new THREE.Vector3();
 const clear = new THREE.Vector3();
 const turned = new THREE.Quaternion();
+
+/** A piece of the field the battleship keeps clear of rather than ramming it aside (see DODGE_MASS). */
+const dodged = (piece: Asteroid) => massOf(piece) >= DODGE_MASS;
+
+/** A piece's outline in the battleship's frame (see Fleet.depthOf), its extent along the frame's axes, and the axes a push out of the hull is tried along. */
+let hullPoints = new Float32Array(0);
+const hullLow = new THREE.Vector3();
+const hullHigh = new THREE.Vector3();
+const AXES = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, -1, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1)];
+/** The colliders a piece reaches into (see Fleet.depthOf), with the way out from each one's nearest point to the piece's center (zero for a center inside it). */
+const touching: { center: THREE.Vector3; half: THREE.Vector3 | null; radius: number; out: THREE.Vector3 }[] = [];
+const outs = Array.from({ length: 64 }, () => new THREE.Vector3());
+const toHull = new THREE.Matrix4();
+const pieceCenter = new THREE.Vector3();
+const offCenter = new THREE.Vector3();
+const nearest = new THREE.Vector3();
+const across = new THREE.Vector3();
+const ramNormal = new THREE.Vector3();
+const ramPoint = new THREE.Vector3();
+const ramVelocity = new THREE.Vector3();
+const ramBefore = new THREE.Vector3();
+const ramSpin = new THREE.Vector3();
+const ramOrbit = new THREE.Vector3();
+const ramPiece = { position: new THREE.Vector3(), velocity: ramVelocity, mass: 0 };
+/** The hull where it meets a piece: its velocity there, its turn included (see Fleet.shove). */
+const ramHull = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: MASS.battleship };
+const sweep = new THREE.Vector3();
+const before = new THREE.Quaternion();
+const outward = new THREE.Vector3();
+/** The smallest of `points` (xyz, a flat list) along `axis`, and in `low` the point it is. */
+function lowest(points: Float32Array, axis: THREE.Vector3, low: THREE.Vector3 | null = null): number {
+  let least = Infinity;
+  let at = 0;
+  for (let k = 0; k < points.length; k += 3) {
+    const along = points[k] * axis.x + points[k + 1] * axis.y + points[k + 2] * axis.z;
+    if (along < least) {
+      least = along;
+      at = k;
+    }
+  }
+  low?.set(points[at], points[at + 1], points[at + 2]);
+  return least;
+}
+/** How far a box (`half` its extents) or a ball (`half` null, `radius`) around `center` reaches along a unit `axis`. */
+function farthest(center: THREE.Vector3, half: THREE.Vector3 | null, radius: number, axis: THREE.Vector3): number {
+  return center.dot(axis) + (half ? Math.abs(axis.x) * half.x + Math.abs(axis.y) * half.y + Math.abs(axis.z) * half.z : radius);
+}
 
 /**
  * A block tapering along z, flat-faced: its cross section `w0` wide and `h0` high around height
@@ -522,6 +631,16 @@ export class Fleet implements Obstacle {
   /** Each part, as a torpedo locks on it. */
   readonly beacons: Beacon[];
   readonly velocity = new THREE.Vector3();
+  /** Its mass (kg), for what it rams (see ram) and what bounces off it. */
+  readonly mass = MASS.battleship;
+  /** How fast it turns (rad/s, about this axis), as the lead browser flies it (see lead). */
+  private readonly spin = new THREE.Vector3();
+  /**
+   * The field time a comet's head broke up on its hull, as the lead browser decided it (see
+   * Game.playComet), or null: every browser breaks the head there, also one whose battleship,
+   * gliding after the lead's, it only grazed or missed.
+   */
+  rammedAt: number | null = null;
   /** The ship its stern hunts in its second phase, and whether its drives burn. */
   target: string | null = null;
   burning = false;
@@ -530,6 +649,10 @@ export class Fleet implements Obstacle {
   private readonly heardTurn = new THREE.Quaternion();
   private heardFresh = false;
   private readonly colliders: Box[] = [];
+  /** The reactor's core above the deck, solid while it stands and its dome is open (see solidBall). */
+  private readonly balls: Ball[] = [];
+  /** The dome's collider: solid while it is closed. */
+  private readonly domeBox: Box;
   private readonly dome: THREE.Mesh;
   /** The hangar walls' machinery in full, a mesh for each tunnel from the bow aft, each drawn only while the camera is in it or close to it (see view). */
   readonly machinery: THREE.Mesh[];
@@ -549,7 +672,7 @@ export class Fleet implements Obstacle {
   private sunkAt = -Infinity;
   /** This browser has heard the lead's battleship still in the fight (see follow). */
   private afloat = false;
-  /** Everything of it a piece of the field must keep out of: the hull's boxes, the dome's whatever its phase, and the hangar tunnels. */
+  /** Everything of it a piece of the field it dodges keeps out of (see aside): its colliders whatever its phase and its broken parts, and the hangar tunnels. */
   private readonly bulk: Box[] = [];
   /** The height its orbit runs at (units, see LANE_MAX). */
   readonly lane: number;
@@ -647,7 +770,7 @@ export class Fleet implements Obstacle {
       parts.set(material, list);
     };
     const layShaped = (geometry: THREE.BufferGeometry, material: THREE.Material) => lay(boxUv(geometry, ARMOR_TILE, 'lengthwise'), material);
-    const collide = (center: readonly number[], size: readonly number[]) => this.colliders.push({ center: new THREE.Vector3(center[0], center[1], center[2]), half: new THREE.Vector3(size[0], size[1], size[2]).multiplyScalar(0.5) });
+    const collide = (center: readonly number[], size: readonly number[], part = -1) => this.colliders.push({ center: new THREE.Vector3(center[0], center[1], center[2]), half: new THREE.Vector3(size[0], size[1], size[2]).multiplyScalar(0.5), part });
     const along = new THREE.Vector3(0, 0, 1);
     /** A bar `wide` by `high` from one point to another (trim, rails, recesses), not colliding, in the world. */
     const rail = (from: THREE.Vector3, to: THREE.Vector3, wide: number, high: number, material: THREE.Material) => {
@@ -658,7 +781,20 @@ export class Fleet implements Obstacle {
     };
     const put = (geometry: THREE.BufferGeometry, material: THREE.Material) => lay(grow(geometry), material);
     const shaped = (geometry: THREE.BufferGeometry, material: THREE.Material) => layShaped(grow(geometry), material);
-    const solid = (center: readonly number[], size: readonly number[]) => collide(center.map(sized), size.map(sized));
+    const solid = (center: readonly number[], size: readonly number[], part = -1) => collide(center.map(sized), size.map(sized), part);
+    /**
+     * A round body of `radius` about the axis `axis` (0: x, 1: y, 2: z) from `from` to `to`
+     * along it, around `center` (design units): a drive bell. It collides as two boxes crossed,
+     * each its full width one way and CROSS of it the other: their outline lies at most 14 % of
+     * the radius outside the round one, at most 22 % inside it where the two boxes meet (7 m and
+     * 11 m on a great bell), so a ship's hit sphere (17 m) meets it about where it meets the bell.
+     */
+    const round = (center: readonly number[], radius: number, axis: number, from: number, to: number, part = -1) => {
+      for (const wide of [0, 1]) {
+        const size = [0, 1, 2].map((k) => (k === axis ? to - from : 2 * radius * (k === (axis + 1 + wide) % 3 ? 1 : CROSS)));
+        solid(center.map((c, k) => (k === axis ? (from + to) / 2 : c)), size, part);
+      }
+    };
     const block = (center: [number, number, number], size: [number, number, number], material: THREE.Material, collides = true) => {
       shaped(new THREE.BoxGeometry(...size).translate(...center), material);
       if (collides) solid(center, size);
@@ -1012,10 +1148,14 @@ export class Fleet implements Obstacle {
       for (const y of [4900, 5300]) block([side * 600, y, 4200], [40, 40, 500], gunmetal, false);
     }
 
-    // parked on the deck: two fighters on the catapults, four beside the reactor's dome
+    // parked on the deck: two fighters on the catapults, four beside the reactor's dome; each
+    // collides as its body's rear half, its nose's taper and its wings
     const fighter = (x: number, z: number) => {
       shaped(new THREE.ConeGeometry(160, 700, 3).rotateX(-Math.PI / 2).translate(x, DECK_TOP + 90, z), gunmetal);
       shaped(new THREE.BoxGeometry(620, 30, 220).translate(x, DECK_TOP + 70, z + 150), gunmetal);
+      solid([x, DECK_TOP + 90, z + 175], [320, 320, 350]);
+      solid([x, DECK_TOP + 90, z - 175], [160, 160, 350]);
+      solid([x, DECK_TOP + 70, z + 150], [620, 30, 220]);
     };
     for (const x of [-330, 330]) fighter(x, -6600);
     for (const x of [-1300, 1300]) for (const z of [-2200, -200]) fighter(x, z);
@@ -1033,12 +1173,14 @@ export class Fleet implements Obstacle {
         block([side * outer, DECK_TOP - 160, at[2]], [60, 340, 1020], gold, false);
       }
     }
-    // the stern: two great drive bells and four small ones around them
+    // the stern: two great drive bells (they collide as their drives, see below) and four small
+    // ones around them, the maneuvering thrusters, part of the hull
     for (const side of [-1, 1]) {
       shaped(new THREE.CylinderGeometry(680, 520, 800, 16, 1, true).rotateX(Math.PI / 2).translate(side * 700, 0, 7450), bell);
       for (const y of [800, -350]) {
         shaped(new THREE.CylinderGeometry(260, 200, 350, 12, 1, true).rotateX(Math.PI / 2).translate(side * 1450, y, 7175), bell);
         shaped(new THREE.CylinderGeometry(170, 190, 60, 12).rotateX(Math.PI / 2).translate(side * 1450, y, 7060), thruster);
+        round([side * 1450, y, 0], 260, 2, 7000, 7350);
       }
     }
 
@@ -1064,7 +1206,7 @@ export class Fleet implements Obstacle {
     sign(signTexture(t(SLOGANS[0]), '#ffcf5a', 4096, 800, true), new THREE.PlaneGeometry(3600, 760).rotateX(-Math.PI / 2).rotateY(Math.PI / 2).translate(0, DECK_TOP + 10, -4200), new THREE.Color(1.2, 1, 0.7));
 
     // the dome over the reactor, an armored hatch on the deck: armor while it is closed (see
-    // open); always the last collider
+    // open, domeBox)
     this.dome = new THREE.Mesh(this.geometry(boxUv(grow(new THREE.CylinderGeometry(450 * Math.SQRT2, 650 * Math.SQRT2, 500, 4).rotateY(Math.PI / 4)), ARMOR_TILE, 'lengthwise')), armor);
     this.dome.position.set(0, sized(DECK_TOP + 250), sized(-1200));
     this.root.add(this.dome);
@@ -1096,6 +1238,12 @@ export class Fleet implements Obstacle {
       this.root.add(turret);
       // on deck it shows itself above the deck and over its edge, under the keel below it
       const face = at[1] < 0 ? new THREE.Vector3(0, -1, 0) : new THREE.Vector3(Math.sign(at[0]) * 0.5, 1, 0).normalize();
+      // it collides as the battery while it stands: its ring, collar, housing and rangefinder in
+      // one box, its barrels in another (upside down under the keel)
+      const part = this.zones.length;
+      const up = Math.sign(at[1]);
+      solid([at[0], at[1] - up * 15, at[2]], [640, 410, 640], part);
+      solid([at[0], at[1], at[2] - 740], [390, 130, 960], part);
       this.zones.push({ kind: 'battery', at: turret.position.clone(), radius: sized(300), face, mesh: turret });
     }
     const nozzle = this.geometry(grow(new THREE.CylinderGeometry(420, 520, 600, 16).rotateX(Math.PI / 2)));
@@ -1103,14 +1251,19 @@ export class Fleet implements Obstacle {
       const drive = new THREE.Mesh(nozzle, this.driveGlow);
       drive.position.set(sized(side * 700), 0, sized(7400));
       this.root.add(drive);
+      // the great bell around it collides as the drive, burnt out or not
+      round([side * 700, 0, 0], 680, 2, 7050, 7850, this.zones.length);
       // astern and out to its side, clear of the plume
       this.zones.push({ kind: 'drive', at: drive.position.clone(), radius: sized(480), face: new THREE.Vector3(side * 0.6, 0, 1).normalize(), mesh: drive });
     }
     const reactor = new THREE.Mesh(this.geometry(grow(new THREE.IcosahedronGeometry(420, 1))), this.reactorGlow);
     reactor.position.set(0, sized(DECK_TOP), sized(-1200));
     this.root.add(reactor);
+    // its core collides as a ball where it bulges out of the deck once the dome is open
+    this.balls.push({ center: reactor.position.clone(), radius: sized(420), part: this.zones.length });
     this.zones.push({ kind: 'reactor', at: reactor.position.clone(), radius: sized(450), face: new THREE.Vector3(0, 1, 0), mesh: reactor });
     solid([0, DECK_TOP + 250, -1200], [1300, 500, 1300]);
+    this.domeBox = this.colliders[this.colliders.length - 1];
     // the plume behind the drives, while they burn
     this.flame = new THREE.Mesh(this.geometry(new THREE.ConeGeometry(PLUME_REACH * PLUME_SPREAD, PLUME_REACH, 24, 1, true).rotateX(-Math.PI / 2).translate(0, 0, NOZZLES + PLUME_REACH / 2)), flame);
     this.flame.visible = false;
@@ -1125,7 +1278,7 @@ export class Fleet implements Obstacle {
     this.beacons = this.zones.map((_, i) => new Beacon(this, i));
     this.bulk.push(...this.colliders);
     for (const z of HANGARS) {
-      this.bulk.push({ center: new THREE.Vector3(0, (HANGAR_FLOOR + HANGAR_CEILING) / 2, z), half: new THREE.Vector3(hullAt(z).half, (HANGAR_CEILING - HANGAR_FLOOR) / 2, HANGAR_WIDTH / 2) });
+      this.bulk.push({ center: new THREE.Vector3(0, (HANGAR_FLOOR + HANGAR_CEILING) / 2, z), half: new THREE.Vector3(hullAt(z).half, (HANGAR_CEILING - HANGAR_FLOOR) / 2, HANGAR_WIDTH / 2), part: -1 });
     }
     this.lane = field ? this.laneOf(field, sheet) : 0;
     this.enter();
@@ -1138,7 +1291,12 @@ export class Fleet implements Obstacle {
   reaches(center: THREE.Vector3, radius: number, position = this.position, quaternion = this.quaternion): boolean {
     if (center.distanceTo(position) > REACH + radius) return false;
     bulkPoint.copy(center).sub(position).applyQuaternion(bulkTurn.copy(quaternion).invert());
-    for (const box of this.bulk) if (boxContact(bulkLocal.subVectors(bulkPoint, box.center), box.half, radius, bulkNormal, bulkClosest)) return true;
+    for (const box of this.bulk) {
+      if (!boxContact(bulkLocal.subVectors(bulkPoint, box.center), box.half, radius, bulkNormal, bulkClosest)) continue;
+      // where it reaches the sphere, in its frame (the normal out towards the sphere in bulkNormal)
+      bulkClosest.add(box.center);
+      return true;
+    }
     return false;
   }
 
@@ -1183,9 +1341,10 @@ export class Fleet implements Obstacle {
   }
 
   /**
-   * Which way its thrusters push it aside from the pieces of the field it would come within
-   * ROCK_CLEAR of within ROCK_LOOKOUT on its course straight on (into `target`, up to unit
-   * length, longer the sooner the first contact), or null when none would.
+   * Which way its thrusters push it aside from the pieces of the field it keeps clear of (see
+   * DODGE_MASS) it would come within ROCK_CLEAR of within ROCK_LOOKOUT on its course straight on
+   * (into `target`, up to unit length, longer the sooner the first contact), or null when none
+   * would.
    */
   private aside(clock: number, target: THREE.Vector3): THREE.Vector3 | null {
     const field = this.field;
@@ -1194,6 +1353,7 @@ export class Fleet implements Obstacle {
     let pushed = false;
     const speed = this.velocity.length();
     for (const piece of field.asteroids.values()) {
+      if (!dodged(piece)) continue;
       const reach = piece.radius + ROCK_CLEAR;
       const pace = piece.velocity.length() + Math.abs(piece.orbitRate) * piece.object.position.length();
       if (piece.object.position.distanceTo(this.position) > REACH + reach + (speed + pace) * ROCK_LOOKOUT) continue;
@@ -1201,7 +1361,9 @@ export class Fleet implements Obstacle {
         field.positionOf(piece, clock + ahead, there);
         course.copy(this.position).addScaledVector(this.velocity, ahead);
         if (!this.reaches(there, reach, course)) continue;
-        // away from the piece: square to how the two close while there is time to pass it, straight away when it is close
+        // the way out of its bulk from the part of it nearest the piece (the bulk's normal there, towards the hull)
+        outward.copy(bulkNormal).applyQuaternion(this.quaternion).negate();
+        // away from the piece: square to how the two close while there is time to pass it, straight away from it when it is close
         const soon = 1 - ahead / ROCK_LOOKOUT;
         field.positionOf(piece, clock + ahead + ROCK_STEP, closing).sub(there).divideScalar(ROCK_STEP).sub(this.velocity);
         away.subVectors(course, there);
@@ -1209,7 +1371,7 @@ export class Fleet implements Obstacle {
         // head on: across, or up
         if (away.lengthSq() < 1) away.crossVectors(closing, UP);
         if (away.lengthSq() < 1) away.copy(UP);
-        away.normalize().multiplyScalar(1 - soon).add(closing.subVectors(course, there).normalize().multiplyScalar(soon));
+        away.normalize().multiplyScalar(1 - soon).addScaledVector(outward, soon);
         target.addScaledVector(away.normalize(), 0.5 + soon / 2);
         pushed = true;
         break;
@@ -1218,18 +1380,190 @@ export class Fleet implements Obstacle {
     return pushed ? target.clampLength(0, 1) : null;
   }
 
-  /** Whether its hull turned by `turned` would come within half ROCK_CLEAR of a piece of the field it keeps clear of as it is turned now. */
+  /** Whether its hull turned by `turned` would come within half ROCK_CLEAR of a piece of the field it dodges that it keeps clear of as it is turned now, or, within that already, swing on towards it. */
   private crowded(turned: THREE.Quaternion): boolean {
     if (!this.field) return false;
     for (const piece of this.field.asteroids.values()) {
+      if (!dodged(piece)) continue;
       const reach = piece.radius + ROCK_CLEAR / 2;
-      if (this.reaches(piece.object.position, reach, this.position, turned) && !this.reaches(piece.object.position, reach)) return true;
+      if (!this.reaches(piece.object.position, reach, this.position, turned)) continue;
+      if (!this.reaches(piece.object.position, reach)) return true;
+      // within half its clearance already: no part of its bulk swings on towards the piece
+      outward.copy(bulkNormal).applyQuaternion(this.quaternion);
+      sweep.copy(bulkClosest).applyQuaternion(turned).sub(bulkClosest.applyQuaternion(this.quaternion));
+      if (sweep.dot(outward) > 0) return true;
     }
     return false;
   }
 
+  /**
+   * How deep a piece of the field reaches into its solid colliders at field time `clock` (units,
+   * 0 when it is clear), the piece taken as its outline (see world/asteroids, outline): the
+   * shortest push that clears the piece of every collider it reaches into, tried along the hull's
+   * axes and out from each collider's point nearest the piece's center. The push's direction (in
+   * the world, from the hull to the piece) goes into `normal`, and the piece's point deepest in
+   * the hull that way into `point`.
+   */
+  depthOf(piece: Asteroid, clock: number, normal: THREE.Vector3, point: THREE.Vector3): number {
+    if (!this.inField(clock) || piece.object.position.distanceTo(this.position) > REACH + piece.radius) return 0;
+    this.toLocal(piece.object.position, pieceCenter);
+    // the colliders its bounding sphere reaches, with the way out from each one's nearest point
+    let near = 0;
+    const enter = (center: THREE.Vector3, half: THREE.Vector3 | null, radius: number) => {
+      const out = (outs[near] ??= new THREE.Vector3());
+      if (half) {
+        if (!boxContact(offCenter.subVectors(pieceCenter, center), half, piece.radius, out, nearest)) return;
+        if (Math.abs(offCenter.x) <= half.x && Math.abs(offCenter.y) <= half.y && Math.abs(offCenter.z) <= half.z) out.set(0, 0, 0);
+      } else {
+        out.subVectors(pieceCenter, center);
+        if (out.length() >= radius + piece.radius) return;
+        out.normalize();
+      }
+      const entry = (touching[near] ??= { center, half, radius, out });
+      entry.center = center;
+      entry.half = half;
+      entry.radius = radius;
+      entry.out = out;
+      near++;
+    };
+    for (const box of this.colliders) if (this.solid(box)) enter(box.center, box.half, 0);
+    for (const ball of this.balls) if (this.solidBall(ball)) enter(ball.center, null, ball.radius);
+    if (!near) return 0;
+    // of those, the ones its outline reaches into: within a box's extent along the hull's axes,
+    // and towards the collider from the piece's center
+    const points = this.outlineInFrame(piece);
+    let count = 0;
+    for (let i = 0; i < near; i++) {
+      const { center, half, radius, out } = touching[i];
+      if (half && [0, 1, 2].some((axis) => hullLow.getComponent(axis) >= center.getComponent(axis) + half.getComponent(axis) || hullHigh.getComponent(axis) <= center.getComponent(axis) - half.getComponent(axis))) continue;
+      if (out.lengthSq() > 0 && lowest(points, out) >= farthest(center, half, radius, out)) continue;
+      // kept in the first places of the list, in order
+      [touching[count], touching[i]] = [touching[i], touching[count]];
+      count++;
+    }
+    if (!count) return 0;
+    // the push along each way out: as far as it takes to clear the collider reaching farthest that way
+    let depth = Infinity;
+    for (let k = 0; k < AXES.length + count; k++) {
+      const axis = k < AXES.length ? AXES[k] : touching[k - AXES.length].out;
+      if (axis.lengthSq() === 0) continue;
+      const low = lowest(points, axis);
+      let push = 0;
+      for (let i = 0; i < count; i++) push = Math.max(push, farthest(touching[i].center, touching[i].half, touching[i].radius, axis) - low);
+      if (push < depth) {
+        depth = push;
+        normal.copy(axis);
+      }
+    }
+    if (depth <= 0) return 0;
+    lowest(points, normal, point);
+    point.applyMatrix4(this.root.matrixWorld);
+    normal.applyQuaternion(this.quaternion);
+    return depth;
+  }
+
+  /** A piece's outline in the battleship's frame (into hullPoints), with its extent along the frame's axes (hullLow, hullHigh). */
+  private outlineInFrame(piece: Asteroid): Float32Array {
+    const shape = outline(piece);
+    if (hullPoints.length < shape.length) hullPoints = new Float32Array(shape.length);
+    const points = hullPoints.subarray(0, shape.length);
+    toHull.copy(this.root.matrixWorld).invert().multiply(piece.object.matrixWorld);
+    hullLow.setScalar(Infinity);
+    hullHigh.setScalar(-Infinity);
+    for (let k = 0; k < shape.length; k += 3) {
+      across.fromArray(shape, k).applyMatrix4(toHull).toArray(points, k);
+      hullLow.min(across);
+      hullHigh.max(across);
+    }
+    return points;
+  }
+
+  /**
+   * Its hull meets the pieces of the field at field time `clock` (the lead browser decides, see
+   * lead): a piece it reaches into is pushed out, and the two trade momentum by their masses
+   * (see world/bodies, contact), the piece taking a tumble from where it was struck. A piece far
+   * lighter than the hull flies off ahead of it while the hull barely slows; one as heavy slows
+   * it hard; against one far heavier the hull bounces off (see RAM_RESTING). Each shove is kept
+   * in `rams` for the other browsers.
+   */
+  ram(clock: number) {
+    const field = this.field;
+    if (!field) return;
+    for (const piece of field.asteroids.values()) {
+      for (let pass = 0; pass < RAM_PASSES; pass++) {
+        const depth = this.depthOf(piece, clock, ramNormal, ramPoint);
+        if (depth <= 0) break;
+        this.shove(field, piece, clock, depth, ramNormal, ramPoint);
+      }
+    }
+  }
+
+  /** The shoves of the field's pieces its hull made (see ram), for the lead browser to send; it empties the list. */
+  readonly rams: ShovedState[] = [];
+
+  /** One contact of the hull with a piece, `depth` deep along `normal` (from the hull to the piece) at `point` (see ram). */
+  private shove(field: AsteroidField, piece: Asteroid, clock: number, depth: number, normal: THREE.Vector3, point: THREE.Vector3) {
+    const center = piece.object.position;
+    field.surfaceVelocity(piece, center, ramVelocity);
+    ramBefore.copy(ramVelocity);
+    ramPiece.position.copy(center);
+    ramPiece.mass = massOf(piece);
+    const toPiece = share(ramPiece.mass, MASS.battleship);
+    // the hull there: its drift, and the sweep of its turn
+    ramHull.position.copy(point);
+    ramHull.velocity.crossVectors(this.spin, sweep.subVectors(point, this.position)).add(this.velocity);
+    sweep.copy(ramHull.velocity);
+    const approach = ramHull.velocity.dot(normal) - ramVelocity.dot(normal);
+    if (approach <= 0 || (toPiece < 0.5 && approach * (1 + RAM_RESTITUTION) * toPiece < RAM_RESTING)) {
+      // parting already, or bouncing gently off a piece heavier than itself: the hull alone gives way
+      if (approach > 0) this.velocity.addScaledVector(normal, -approach * (1 + RAM_RESTITUTION));
+      this.position.addScaledVector(normal, -(depth + RAM_GAP));
+      this.root.updateMatrixWorld();
+      return;
+    }
+    // both take their share; the hull's turn is held by its gyros, so its share goes into its drift
+    contact(ramPiece, ramHull, normal, RAM_RESTITUTION, RAM_FRICTION);
+    this.velocity.add(sweep.subVectors(ramHull.velocity, sweep));
+    // a lighter piece leaves at RAM_RESTING at least, each taking its share of the push
+    const short = RAM_RESTING - (ramVelocity.dot(normal) - ramHull.velocity.dot(normal));
+    if (short > 0) {
+      ramVelocity.addScaledVector(normal, short * toPiece);
+      this.velocity.addScaledVector(normal, -short * (1 - toPiece));
+    }
+    this.position.addScaledVector(normal, -depth * (1 - toPiece));
+    this.root.updateMatrixWorld();
+    // the tumble the blow gives it about its center: the change of momentum's moment over the
+    // moment of inertia of a ball as large (2/5 m r²), on top of its spin
+    const radius = piece.meanRadius;
+    ramSpin.subVectors(point, center).cross(ramBefore.subVectors(ramVelocity, ramBefore)).divideScalar(0.4 * radius * radius).clampLength(0, RAM_SPIN);
+    ramSpin.addScaledVector(piece.spinAxis, piece.spinRate);
+    const rate = ramSpin.length();
+    if (rate > 1e-9) ramSpin.divideScalar(rate);
+    else ramSpin.copy(piece.spinAxis);
+    // from where it stands, pushed out; its drift such that, carried on its orbit, it flies as the blow sent it
+    const at = ramPiece.position.addScaledVector(normal, depth * toPiece + RAM_GAP);
+    ramVelocity.sub(ramOrbit.copy(piece.orbitAxis).multiplyScalar(piece.orbitRate).cross(at));
+    const fixed = (values: number[], digits: number) => values.map((v) => +v.toFixed(digits));
+    const state: ShovedState = {
+      id: piece.id,
+      b: clock,
+      p: fixed(at.toArray(), 2),
+      v: fixed(ramVelocity.toArray(), 3),
+      q: fixed(piece.object.quaternion.toArray(), 6),
+      s: fixed([...ramSpin.toArray(), rate], 6),
+      c: piece.shovedBy ?? RAMMED,
+    };
+    field.move(state);
+    this.rams.push(state);
+  }
+
   get position() {
     return this.root.position;
+  }
+
+  /** How far anything of it reaches from its center (units). */
+  get reach() {
+    return REACH;
   }
 
   get quaternion() {
@@ -1313,7 +1647,7 @@ export class Fleet implements Obstacle {
   }
 
   /**
-   * Hits on a part (one for a laser, TORPEDO_HITS for a torpedo), from here or another browser;
+   * Hits on a part (one for a laser, TORPEDO_HITS for a torpedo, a nova core's by its distance), from here or another browser;
    * returns the events they set off: the part broken, the ship gone down. A hit on a part
    * already broken or still sealed, or on a battleship that went down, counts nothing.
    */
@@ -1352,19 +1686,46 @@ export class Fleet implements Obstacle {
     return target.multiplyScalar(distance).add(at);
   }
 
-  /** The parts a torpedo going off at `point` hits (see TORPEDO_HITS). */
+  /** The parts a torpedo going off at `point` hits (see TORPEDO_HITS): within TORPEDO_REACH of the part, or of its colliders (a battery's barrels, a drive's bell). */
   blast(point: THREE.Vector3): number[] {
-    return this.zones.flatMap((zone, i) => (this.targetable(i) && this.zoneAt(i, local).distanceTo(point) < zone.radius + TORPEDO_REACH ? [i] : []));
+    this.toLocal(point, sighted);
+    const near = (box: Box, i: number) => box.part === i && boxContact(local.subVectors(sighted, box.center), box.half, TORPEDO_REACH, step, closest) !== null;
+    return this.zones.flatMap((zone, i) => (this.targetable(i) && (zone.at.distanceTo(sighted) < zone.radius + TORPEDO_REACH || this.colliders.some((box) => near(box, i))) ? [i] : []));
+  }
+
+  /** The hits a nova core going off `distance` from a part's center (units) deals it (see novaShare); none beyond its reach. */
+  novaHit(zone: number, distance: number): number {
+    return Math.ceil(novaShare(Math.max(0, distance - this.zones[zone].radius)) * this.hitsOf(zone));
+  }
+
+  /**
+   * The parts a nova core going off at `point` hits, and how many hits each takes (see
+   * novaShare), up to what the part has left: those it can hit now, the reactor only once the
+   * dome is open.
+   */
+  novaHits(point: THREE.Vector3): { zone: number; count: number }[] {
+    return this.zones.flatMap((_, i) => {
+      const count = this.targetable(i) ? Math.min(this.novaHit(i, this.zoneAt(i, sighted).distanceTo(point)), this.hitsOf(i) - this.hits[i]) : 0;
+      return count > 0 ? [{ zone: i, count }] : [];
+    });
+  }
+
+  /** What a nova core going off at `point` would take of the battleship, in hits on its parts. A bot weighs a nova by it (see novaWorth). */
+  novaDamage(point: THREE.Vector3): number {
+    let sum = 0;
+    for (const { count } of this.novaHits(point)) sum += count;
+    return sum;
   }
 
   /**
    * Where a ray (from `origin` along the normalized `direction`, up to `max`) meets the
-   * battleship: the distance and the part it hits (-1: the armor); null when it misses.
+   * battleship: the distance and the part it hits (-1: the armor; a part's colliders count as
+   * the part while it can be hit); null when it misses.
    */
   raycast(origin: THREE.Vector3, direction: THREE.Vector3, max: number, clock: number): { distance: number; zone: number } | null {
     if (!this.present(clock) || raySphere(origin, direction, this.position, REACH) === null) return null;
     const armor = this.rayHull(origin, direction, max);
-    let best = armor === null ? null : { distance: armor, zone: -1 };
+    let best = armor === null ? null : { distance: armor, zone: this.rayPart >= 0 && this.open(this.rayPart) ? this.rayPart : -1 };
     this.zones.forEach((zone, i) => {
       if (!this.open(i)) return;
       const d = raySphere(local, step, zone.at, zone.radius);
@@ -1381,7 +1742,8 @@ export class Fleet implements Obstacle {
   /** A sphere touches its hull, while it is in the field (see Obstacle). */
   touches(center: THREE.Vector3, radius: number): boolean {
     if (!this.standing || center.distanceTo(this.position) > REACH + radius) return false;
-    return this.colliders.some((box) => this.solid(box) && boxContact(this.toLocal(center, local).sub(box.center), box.half, radius, step, closest) !== null);
+    this.toLocal(center, sighted);
+    return this.colliders.some((box) => this.solid(box) && boxContact(local.subVectors(sighted, box.center), box.half, radius, step, closest) !== null) || this.balls.some((ball) => this.solidBall(ball) && ball.center.distanceTo(sighted) < ball.radius + radius);
   }
 
   /** A point lies in one of its hangars, between its flanks, while it is in the field (see Obstacle). */
@@ -1405,7 +1767,21 @@ export class Fleet implements Obstacle {
       center.copy(closest).addScaledVector(normal, radius + 1);
       return normal;
     }
+    for (const ball of this.balls) {
+      if (!this.solidBall(ball)) continue;
+      normal.subVectors(this.toLocal(center, local), ball.center);
+      if (normal.length() >= ball.radius + radius) continue;
+      if (normal.lengthSq() < 1e-6) normal.copy(UP);
+      normal.normalize().applyQuaternion(this.quaternion);
+      center.copy(ball.center).applyMatrix4(this.root.matrixWorld).addScaledVector(normal, ball.radius + radius + 1);
+      return normal;
+    }
     return null;
+  }
+
+  /** Pushes a sphere out of the hull as of the last frame shown (see resolve, Obstacle). */
+  push(center: THREE.Vector3, radius: number, normal: THREE.Vector3): THREE.Vector3 | null {
+    return this.resolve(center, radius, this.clock, normal);
   }
 
   /** How strongly a point lies in the drive plume, 0..1 (1 at the nozzles), while the drives burn. */
@@ -1455,12 +1831,21 @@ export class Fleet implements Obstacle {
 
   /**
    * The lead browser flies the battleship: in on its orbit around the field, its stern turned on
-   * the nearest pilot in its second phase, out of the way of the round's `comets`, adrift
-   * without drives.
+   * the nearest pilot in its second phase, out of the way of the round's `comets` and of the
+   * pieces of the field too heavy to ram aside, adrift without drives and while it goes down;
+   * its hull rams aside whatever it meets (see ram).
    */
   lead(dt: number, clock: number, ships: readonly Target[], comets: readonly Comet[] = []) {
-    if (!this.present(clock)) return;
+    if (!this.present(clock)) {
+      if (!this.dying(clock)) return;
+      this.position.addScaledVector(this.velocity, dt);
+      this.spin.set(0, 0, 0);
+      this.root.updateMatrixWorld();
+      this.ram(clock);
+      return;
+    }
     const position = this.position;
+    before.copy(this.quaternion);
     const fleeing = this.drives > 0 ? this.evasion(clock, comets, dodge) : null;
     const aside = this.aside(clock, clear);
     if (fleeing) want.copy(fleeing).multiplyScalar(EVADE_SPEED);
@@ -1496,7 +1881,14 @@ export class Fleet implements Obstacle {
       if (!this.crowded(turned)) this.quaternion.copy(turned);
     }
     this.burning = !!prey && this.quaternion.angleTo(turn) < PLUME_AIM;
+    // how fast it turned this frame (rad/s), for the speed its hull sweeps what it meets at
+    before.invert().premultiply(this.quaternion);
+    const angle = 2 * Math.acos(Math.min(1, Math.abs(before.w)));
+    this.spin.set(before.x, before.y, before.z);
+    if (this.spin.lengthSq() > 1e-18 && dt > 0) this.spin.setLength((angle / dt) * Math.sign(before.w || 1));
+    else this.spin.set(0, 0, 0);
     this.root.updateMatrixWorld();
+    this.ram(clock);
   }
 
   /** The way out of a comet's route the battleship sees coming within FLEET_CLEAR (unit length, into `target`), or null when none does. */
@@ -1525,11 +1917,13 @@ export class Fleet implements Obstacle {
       q: this.quaternion.toArray().map(round),
       t: this.target,
       u: this.burning ? 1 : 0,
+      ...(this.rammedAt === null ? {} : { c: this.rammedAt }),
     };
   }
 
-  /** Takes the lead's state: the battleship went down there first, the hits it counts, where it is. */
+  /** Takes the lead's state: the battleship went down there first, the hits it counts, where it is, when a comet broke up on it. */
   follow(state: FleetState): FleetEvent[] {
+    if (state.c !== undefined) this.rammedAt = state.c;
     if (this.down) return [];
     // a browser that came after it went down saw no fight: it is gone, without a blast or points
     if (state.d && !this.afloat) {
@@ -1661,20 +2055,39 @@ export class Fleet implements Obstacle {
     return this.present(clock) || this.dying(clock);
   }
 
-  /** A collider is there: every box of the hull, the dome's only while it is closed. */
+  /** A collider is there: every box of the hull, a battery's while it stands (a broken one is gone), the dome's only while it is closed. */
   private solid(box: Box) {
-    return box !== this.colliders[this.colliders.length - 1] || this.phase < 3;
+    if (box === this.domeBox) return this.phase < 3;
+    return box.part < 0 || this.zones[box.part].kind !== 'battery' || !this.broken(box.part);
   }
 
-  /** Where a ray (up to `max`) meets the hull, or null; leaves the ray in the battleship's frame in `local` and `step`. */
+  /** The reactor's core collides while the dome over it is open and it stands. */
+  private solidBall(ball: Ball) {
+    return this.phase === 3 && !this.broken(ball.part);
+  }
+
+  /** The part whose collider the last ray met in rayHull (-1: the armor). */
+  private rayPart = -1;
+
+  /** Where a ray (up to `max`) meets the hull, or null, and whose collider it met (rayPart); leaves the ray in the battleship's frame in `local` and `step`. */
   private rayHull(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
     this.toLocal(origin, local);
     step.copy(direction).applyQuaternion(turn.copy(this.quaternion).invert());
     let best: number | null = null;
+    this.rayPart = -1;
     for (const box of this.colliders) {
       if (!this.solid(box)) continue;
       const d = rayBox(closest.subVectors(local, box.center), step, box.half);
-      if (d !== null && d <= max && (best === null || d < best)) best = d;
+      if (d === null || d > max || (best !== null && d >= best)) continue;
+      best = d;
+      this.rayPart = box.part;
+    }
+    for (const ball of this.balls) {
+      if (!this.solidBall(ball)) continue;
+      const d = raySphere(local, step, ball.center, ball.radius);
+      if (d === null || d > max || (best !== null && d >= best)) continue;
+      best = d;
+      this.rayPart = ball.part;
     }
     return best;
   }

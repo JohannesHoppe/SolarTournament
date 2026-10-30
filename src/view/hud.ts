@@ -344,11 +344,13 @@ export class Hud {
 
   /**
    * The crosshair turns orange while the laser would hit a hull: bright and glowing over a drive,
-   * a plain orange ring over armor, where a shot only heats the laser.
+   * a plain orange ring over armor, where a shot only heats the laser. Over a ship of the own
+   * side it stays azure, crossed out, with FRIEND beneath: a shot would hit it all the same.
    */
-  setOnTarget(hit: 'drive' | 'armor' | null) {
+  setOnTarget(hit: 'drive' | 'armor' | 'friend' | null) {
     setClass(this.crosshair, 'on-target', hit === 'drive');
     setClass(this.crosshair, 'on-armor', hit === 'armor');
+    setClass(this.crosshair, 'on-friend', hit === 'friend');
   }
 
   /** The crosshair and the hit marker sit where the nose points (see Game.aimCrosshair). */
@@ -702,12 +704,19 @@ export class Hud {
   /**
    * A big moment's banner (see game/moments.ts), above the crosshair: it pops in and fades out by
    * itself after BANNER_SECONDS; meanwhile only a moment of the same `rank` or higher replaces it.
+   * A `note` (a streak's bonus) stands smaller beneath it.
    */
-  banner(now: number, text: string, rank: number) {
+  banner(now: number, text: string, rank: number, note = '') {
     if (now < this.bannerUntil && rank < this.bannerRank) return;
     this.bannerUntil = now + BANNER_SECONDS;
     this.bannerRank = rank;
     pop(this.bannerText, text);
+    if (note) {
+      const line = document.createElement('div');
+      line.className = 'banner-note';
+      line.textContent = note;
+      this.bannerText.append(line);
+    }
   }
 
   private readonly bannerText = $('hud-banner');
@@ -870,6 +879,8 @@ export class Hud {
         element.style.setProperty('--tint', tint);
         setClass(element, 'sovereign', ship.sovereign);
       }
+      // a ship of the own side is marked by a ring, a rival by a square, whatever their colors
+      setClass(element, 'ally', ship.allyOf(me));
       const { x: left, y: top, offscreen, angle } = toScreen(camera, ship.flight.position, EDGE_X, EDGE_Y);
       marked.push(left, top);
       const side = sideOf(left, top, EDGE_X, EDGE_Y, width, height);
