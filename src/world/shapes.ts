@@ -212,7 +212,9 @@ const FOIL_TONES = ['gold', 'gold', 'gold', 'silver', 'gold', 'gold', 'silver', 
  * turns, they flash in the sun.
  *
  * Each collides as an ellipsoid hugging its bulk (see SHAPE_FILL), measured from its outline: the
- * boxes and cylinders listed in `outline`, the details around them left out.
+ * boxes and cylinders listed in `outline`, the details around them left out; and as the box around
+ * each part of it drawn in foil, solar cells or paint besides (`userData.parts`, see
+ * AsteroidField.attach), which an ellipsoid alone would cut short at a wing's tip or a stage's end.
  */
 export function debrisSet(): TemplateSet {
   const r = new Randomizer(DEBRIS_SEED);
@@ -379,6 +381,14 @@ export function debrisSet(): TemplateSet {
     const size = box.getSize(new THREE.Vector3());
     // the collision ellipsoid hugs the bulk of the piece, never thinner than a few percent of it
     group.add(collider(new THREE.Vector3(size.x * 0.48, Math.max(size.y * 0.42, L * 0.06), Math.max(size.z * 0.42, L * 0.06)).round()));
+    // and every part of it drawn in foil, cells or paint as the box around it (a wing's panels, a
+    // stage's barrel and its ends: an ellipsoid cuts off the corners of a long shape), rounded to
+    // whole units, so the shape collides as far as it is seen, the same on every browser
+    group.userData.parts = [...new Set([...outline, ...foiled, ...wings, ...painted])].map((part) => {
+      part.computeBoundingBox();
+      const bounds = part.boundingBox!;
+      return { center: bounds.getCenter(new THREE.Vector3()).sub(middle).round(), half: bounds.getSize(new THREE.Vector3()).multiplyScalar(0.5).ceil() };
+    });
     near.push(group);
   }
   return { near, far: [] };

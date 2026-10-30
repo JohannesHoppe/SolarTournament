@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
-import type { Asteroid, AsteroidField } from './asteroids';
+import { attachment, type Asteroid, type AsteroidField, type Attachment } from './asteroids';
 import { SUN_DIRECTION } from './space';
 import { hazeUniforms } from '../view/haze';
 import { rockTone } from './rocks';
@@ -392,6 +392,23 @@ export interface Plan {
   paint: Hole[];
   /** Dust clouds in the world: center and radius (units), then the atlas tile, a turn and a strength. */
   clouds: number[];
+  /** The solid boxes of the rigs and buoys, by slot, in their rocks' own frames (see AsteroidField.attach). */
+  solids: Attachment[][];
+}
+
+/**
+ * A solid box of a rig or buoy, in the part's frame (world units, placed on the rock by
+ * `frame`): `half` its half extents, at `center`, turned by `turn` (none by default).
+ */
+function solid(plan: Plan, site: Site, frame: THREE.Matrix4, center: THREE.Vector3, half: THREE.Vector3, turn = new THREE.Quaternion()) {
+  (plan.solids[site.slot] ??= []).push(attachment(frame.clone().multiply(new THREE.Matrix4().compose(center, turn, new THREE.Vector3(1, 1, 1))), half));
+}
+
+/** A beam from `from` to `to` of `thickness` (see strut) as a solid box along it. */
+function solidBeam(plan: Plan, site: Site, frame: THREE.Matrix4, from: THREE.Vector3, to: THREE.Vector3, thickness: number) {
+  const along = to.clone().sub(from);
+  const turn = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), along.clone().normalize());
+  solid(plan, site, frame, from.clone().lerp(to, 0.5), v3(thickness / 2, along.length() / 2, thickness / 2), turn);
 }
 
 const scratch = new THREE.Vector3();
@@ -682,7 +699,20 @@ function rig(plan: Plan, site: Site, r: Randomizer, cutter: boolean) {
   const hole = surfaceAt(site, v3(-20 * M, 0, -18 * M).applyMatrix4(frame).sub(site.asteroid.center), new THREE.Vector3());
   plan.holes.push({ slot: site.slot, at: hole, up: foot.normal.clone() });
   for (let i = 0; i < MOTES; i++) mote(plan, site.slot, hole, hole, [0, 0], foot.normal, r, 1);
+  // what of it is solid: the deck, its legs and lamp posts, the derrick (a lattice too tight for
+  // a ship, so a box tapering in two steps), the drill string below the deck, the hut and the cab
+  solid(plan, site, frame, v3(0, level, 0), v3(16 * M, 1.25 * M, 16 * M));
+  for (const [x, z] of [[-14, -14], [14, -14], [14, 14], [-14, 14]]) solidBeam(plan, site, frame, v3(x * M, level, z * M), v3(x * M * 1.15, legDepth, z * M * 1.15), 2.2 * M);
+  for (const [x, z] of [[-15, -15], [15, -15], [15, 15], [-15, 15]]) solidBeam(plan, site, frame, v3(x * M, level, z * M), v3(x * M, level + 5.3 * M, z * M), 2.4 * M);
+  solid(plan, site, frame, v3(0, level + tall * 0.25, 0), v3(7 * M, tall * 0.25, 7 * M));
+  solid(plan, site, frame, v3(0, level + tall * 0.75 + 0.5 * M, 0), v3(4.5 * M, tall * 0.25 + 0.5 * M, 4.5 * M));
+  solidBeam(plan, site, frame, v3(0, legDepth, 0), v3(0, level, 0), 2.4 * M);
+  solid(plan, site, frame, v3(-6 * M, level + 6 * M, 10 * M), v3(8 * M, 5 * M, 5.2 * M));
+  solid(plan, site, frame, v3(12.5 * M, level + 4.2 * M, -10 * M), v3(3.2 * M, 3 * M, 3 * M));
   if (!cutter) return;
+  solidBeam(plan, site, frame, v3(0, level + tall * 0.75, 0), v3(46 * M, level + 30 * M, 0), 1.8 * M);
+  solidBeam(plan, site, frame, v3(0, level, 0), v3(40 * M, level + 28 * M, 0), 1.4 * M);
+  solid(plan, site, frame, v3(46 * M, level + 30 * M, 0), v3(2.5 * M, 2.5 * M, 2.5 * M));
   // the boom and its cutting head, reaching out over the rock
   const head = v3(46 * M, level + 30 * M, 0);
   add(strut(v3(0, level + tall * 0.75, 0), head, 1.8 * M), hazard, 0.04, 1);
@@ -865,6 +895,9 @@ function buoy(plan: Plan, site: Site, r: Randomizer) {
   const soil: Soil = { tone: rockColor(site, foot.normal), ground: foot.top * site.scale };
   addShape(plan.steel, site.slot, strut(v3(0, deep, 0), v3(0, tall, 0), 1.5 * M), frame, new THREE.Color(0.42, 0.41, 0.4), 0.04, 0, soil);
   addShape(plan.steel, site.slot, new THREE.CylinderGeometry(2.2 * M, 2.2 * M, 5 * M, 10).translate(0, tall, 0), frame, new THREE.Color(0.9, 0.4, 0.06), 0.1, 1);
+  // its mast and its can, solid
+  solidBeam(plan, site, frame, v3(0, deep, 0), v3(0, tall, 0), 1.5 * M);
+  solid(plan, site, frame, v3(0, tall, 0), v3(2.2 * M, 2.5 * M, 2.2 * M));
   addLight(plan.lights, site.slot, v3(0, tall + 3.5 * M, 0).applyMatrix4(frame), AMBER, 2.2 * M, [r.range(3, 4.5), r.nextFloat(), 0.3]);
 }
 
@@ -892,6 +925,7 @@ export function planMining(field: AsteroidField): Plan {
     holes: [],
     paint: [],
     clouds: [],
+    solids: [],
   };
   // each claim draws from its own sequence, so one claim's dressing never shifts another's
   claimed.forEach((asteroid, slot) => {
@@ -913,6 +947,11 @@ export function planMining(field: AsteroidField): Plan {
     i++;
   }
   return plan;
+}
+
+/** The rigs and buoys of a plan stand solid on their rocks in `field` (see AsteroidField.attach); the plan made for its layout when none is given. */
+export function standClaims(field: AsteroidField, plan: Plan = planMining(field)) {
+  plan.ids.forEach((id, slot) => field.attach(id, plan.solids[slot] ?? []));
 }
 
 /** The atlas of paint and glows (see SLOGAN_CELL and the cells after it): white on black, its red channel read. */
@@ -1129,7 +1168,13 @@ export class Mining {
   /** Builds the dressing of `field` (once per layout), or hides it for an arena without one. */
   dress(field: AsteroidField | null) {
     this.group.visible = !!field;
-    if (!field || field.layout?.key === this.layoutKey) return;
+    if (!field) return;
+    if (field.layout?.key === this.layoutKey && this.plan) {
+      // a field generated anew in the same layout: its rigs and buoys stand again
+      const plan = this.plan;
+      standClaims(field, plan);
+      return;
+    }
     for (const child of [...this.group.children]) {
       this.group.remove(child);
       const mesh = child as THREE.Mesh;
@@ -1138,6 +1183,8 @@ export class Mining {
     this.layoutKey = field.layout!.key;
     const plan = planMining(field);
     this.plan = plan;
+    // the rigs and buoys are solid, standing on their rocks
+    standClaims(field, plan);
     this.holes.length = 0;
     for (let i = 0; i < plan.holes.length; i++) this.holes.push({ at: new THREE.Vector3(), up: new THREE.Vector3(), live: false });
     const rocks = this.rocks;

@@ -105,6 +105,52 @@ function solidParts(radius: number) {
   return kit;
 }
 
+/** The points a ring's solid parts are sampled by (see ringSamples), at most this far apart (units, 5 m), and the band's around its circle. */
+const SAMPLE_SPACING = 100;
+const BAND_SAMPLES = 96;
+
+/**
+ * Points on the surface of a ring's solid parts in the world, as a flat list (xyz): around its
+ * band, inside and outside, front and back, and over the faces of its housings' module, plates
+ * and struts, none farther apart than SAMPLE_SPACING. What a piece of the field is held against:
+ * a strut is thinner than the gaps between the points of a rock's outline.
+ */
+export function ringSamples(center: THREE.Vector3, facing: THREE.Vector3, radius: number): Float32Array {
+  const list: number[] = [];
+  const inner = radius + CLEARANCE;
+  const turn = new THREE.Quaternion().setFromUnitVectors(axis, facing);
+  const point = new THREE.Vector3();
+  const add = () => {
+    point.applyQuaternion(turn).add(center);
+    list.push(point.x, point.y, point.z);
+  };
+  for (let k = 0; k < BAND_SAMPLES; k++) {
+    const angle = (k / BAND_SAMPLES) * Math.PI * 2;
+    for (const out of [inner, inner + THICKNESS / 2, inner + THICKNESS]) {
+      for (const along of [-DEPTH / 2, 0, DEPTH / 2]) {
+        point.set(Math.cos(angle) * out, Math.sin(angle) * out, along);
+        add();
+      }
+    }
+  }
+  const corner = new THREE.Vector3();
+  for (const part of solidParts(radius).parts) {
+    const counts = [part.half.x, part.half.y, part.half.z].map((half) => Math.ceil((half * 2) / SAMPLE_SPACING) + 1);
+    for (let i = 0; i < counts[0]; i++) {
+      for (let j = 0; j < counts[1]; j++) {
+        for (let k = 0; k < counts[2]; k++) {
+          // the faces only: one coordinate at its end
+          if (i % (counts[0] - 1) && j % (counts[1] - 1) && k % (counts[2] - 1)) continue;
+          corner.set(-1 + (2 * i) / (counts[0] - 1), -1 + (2 * j) / (counts[1] - 1), -1 + (2 * k) / (counts[2] - 1)).multiply(part.half);
+          point.copy(corner).applyQuaternion(part.turn).add(part.center);
+          add();
+        }
+      }
+    }
+  }
+  return new Float32Array(list);
+}
+
 /** How far from a ring's axis its housings begin and its struts end (units), for a ring of opening `radius`: what a ship steers clear of. */
 export function ringRim(radius: number): { inner: number; outer: number } {
   return { inner: radius + CLEARANCE, outer: solidParts(radius).reach };

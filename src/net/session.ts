@@ -74,6 +74,12 @@ const MAX_TORPEDO_EVENTS_PER_SECOND = 12;
  * meeting it at once.
  */
 const MAX_RAMS_PER_SECOND = 60;
+/**
+ * Motions of the field's pieces after a contact per second (see world/contacts): two for each
+ * contact, a few contacts in a round in most arenas, the Satellite Junkyard's crossing junk a
+ * contact every few seconds, a rock's fragments meeting its neighbours at once.
+ */
+const MAX_KNOCKS_PER_SECOND = 40;
 /** The parts of a battleship are numbered from zero, far fewer than this (see game/fleet); one message counts a laser's hit or a torpedo's. */
 const MAX_FLEET_ZONE = 31;
 /**
@@ -160,6 +166,8 @@ export class Session {
   onFleetHit: (zone: number, round: number, shooter: string, count: number) => void = () => {};
   /** The lead browser's battleship rammed a piece of the field in a round: the piece's motion since (see game/fleet). */
   onRam: (state: ShovedState, round: number) => void = () => {};
+  /** A piece of the field struck another or a ring in a round, as the lead browser decided: its motion since (see world/contacts). */
+  onKnock: (state: ShovedState, round: number) => void = () => {};
   /** A ship of another browser launched a torpedo, at a target or none. */
   onTorpedo: (id: string, shooter: string, target: string | null, position: Vec, velocity: Vec) => void = () => {};
   /**
@@ -236,6 +244,7 @@ export class Session {
   private readonly torpedoBudget = new Budget(MAX_TORPEDO_EVENTS_PER_SECOND);
   private readonly cheatBudget = new Budget(MAX_CHEAT_REPORTS_PER_SECOND);
   private readonly ramBudget = new Budget(MAX_RAMS_PER_SECOND);
+  private readonly knockBudget = new Budget(MAX_KNOCKS_PER_SECOND);
   private readonly stateBudget = new Budget(STATE_RATE * 3);
   private readonly beamBudget = new Budget(MAX_HITS_PER_SECOND);
   private readonly pingBudget = new Budget(MAX_PING_RATE);
@@ -297,6 +306,13 @@ export class Session {
       const round = int(d?.n, 0, MAX_COUNT);
       if (!state || round === null || from !== this.leadId || !this.ramBudget.spend(from)) return;
       this.guard(() => this.onRam(state, round));
+    });
+    transport.on('fk', (d, from) => {
+      // the lead decides the contacts of the field's pieces, so only the lead sends them
+      const state = shovedState(d?.m);
+      const round = int(d?.n, 0, MAX_COUNT);
+      if (!state || round === null || from !== this.leadId || !this.knockBudget.spend(from)) return;
+      this.guard(() => this.onKnock(state, round));
     });
     transport.on('tl', (d, from) => {
       const torpedo = id(d?.i);
@@ -414,7 +430,7 @@ export class Session {
     transport.onPeerLeave((peer) => {
       // join time and last word stay: a link that comes back belongs to the same peer
       this.backAt.delete(peer);
-      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.ramBudget, this.stateBudget, this.beamBudget, this.pingBudget, this.pongBudget]) budget.forget(peer);
+      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.ramBudget, this.knockBudget, this.stateBudget, this.beamBudget, this.pingBudget, this.pongBudget]) budget.forget(peer);
       for (const key of this.lastHit.keys()) if (ownerOf(key.slice(0, key.indexOf('>'))) === peer) this.lastHit.delete(key);
       this.pingSeq.delete(peer);
       this.pingSentAt.delete(peer);
@@ -647,6 +663,11 @@ export class Session {
   /** The lead's battleship rammed a piece of the field in `round`: its motion since (see game/fleet, Fleet.ram). */
   sendRam(state: ShovedState, round: number) {
     this.transport.send('br', { m: state, n: round });
+  }
+
+  /** A piece of the field struck another or a ring in `round`, as the lead decided: its motion since (see world/contacts). */
+  sendKnock(state: ShovedState, round: number) {
+    this.transport.send('fk', { m: state, n: round });
   }
 
   sendSync(to: string, field: FieldState, wrecks: WreckState[], probesTaken: string[], probes: ProbeState[]) {

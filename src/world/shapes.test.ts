@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { debrisSet } from './shapes';
+import { AsteroidField } from './asteroids';
 import { networkLivery } from '../view/surfaces';
 
 /**
@@ -52,5 +53,32 @@ describe('the junk of the Orbital Freedom Network', () => {
     expect([...pieces].sort()).toEqual([1, 2, 5]);
     expect(checked).toBeGreaterThan(500);
     expect(mirrored).toBe(0);
+  });
+
+  it('collides as far as its foil, wings and painted shells are seen, out to their tips and ends', () => {
+    const set = debrisSet();
+    const empty = { near: [], far: [] };
+    const field = new AsteroidField({ rock: empty, ice: empty, debris: set, hull: { ...empty, box: true } });
+    const placements = set.near.map((_, type) => ({ kind: 'debris' as const, type, scale: 2, position: new THREE.Vector3(type * 20000, 0, 0), orientation: new THREE.Quaternion().setFromEuler(new THREE.Euler(type, type * 2, 0)), solid: false }));
+    field.generate({ key: 'wings', seed: 1, kind: 'debris', count: 0, minScale: 1, maxScale: 1, radius: 1, inner: 0, spin: 0, toughness: 500, placements });
+    const vertex = new THREE.Vector3();
+    let checked = 0;
+    let outside = 0;
+    for (const piece of field.asteroids.values()) {
+      piece.object.traverse((o) => {
+        // the bulk: foil, wings, livery; the small details (vertex-colored hardware) and the sign's neon are left out
+        if (!(o instanceof THREE.Mesh)) return;
+        const material = o.material as THREE.MeshStandardMaterial;
+        if (o.userData.collider || material.vertexColors || !(material instanceof THREE.MeshStandardMaterial)) return;
+        const position = o.geometry.attributes.position;
+        for (let i = 0; i < position.count; i++) {
+          vertex.fromBufferAttribute(position, i).applyMatrix4(o.matrixWorld);
+          checked++;
+          if (field.overlap(vertex, 4) !== piece) outside++;
+        }
+      });
+    }
+    expect(checked).toBeGreaterThan(100);
+    expect(outside).toBe(0);
   });
 });

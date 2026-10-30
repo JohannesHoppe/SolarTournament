@@ -532,6 +532,21 @@ export function ramShare(before: THREE.Vector3, after: THREE.Vector3, speed: num
   return Math.max(before.distanceTo(hull) / (reach + AIM_SLACK), before.distanceTo(after) / RAM_PUSH, speed / RAM_SPEED);
 }
 
+/**
+ * A piece of the field the lead browser reports struck by another or by a ring (see
+ * world/contacts) is pushed apart by no more than KNOCK_PUSH (units, 50 m: the most two pieces
+ * close in a step of the contacts' grid, the tips of spinning junk crossing at full speed, with
+ * room), and drifts on no faster than KNOCK_SPEED (units/s, 250 m/s: twice the fastest a piece of
+ * the field moves, its orbit, a fragment's push and a spinning tip together).
+ */
+const KNOCK_PUSH = 1000;
+const KNOCK_SPEED = 5000;
+
+/** How close a contact the lead browser reports comes to a lie (above 1: one this browser does not take): the piece, where this browser has it at the contact's field time (`before`), was pushed to `after` no farther than KNOCK_PUSH, and drifts on no faster than KNOCK_SPEED. */
+export function knockShare(before: THREE.Vector3, after: THREE.Vector3, speed: number): number {
+  return Math.max(before.distanceTo(after) / KNOCK_PUSH, speed / KNOCK_SPEED);
+}
+
 /** What a ship's beams and torpedoes did counts as evidence this long (s), its torpedo launches as long as a torpedo flies and a little more. */
 const EVIDENCE_SECONDS = 5;
 const LAUNCH_EVIDENCE = TORPEDO_LIFETIME + 3;

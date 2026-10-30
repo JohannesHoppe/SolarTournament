@@ -56,18 +56,19 @@ import { Showcase } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { buy, emptyHangar, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, sovereignEarned, UPGRADES, WALLET } from './hangar';
 import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
-import { contents, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState } from './items';
+import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState } from '../world/asteroids';
-import { ramShare } from '../net/plausible';
+import { knockShare, ramShare } from '../net/plausible';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
 import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent } from './fleet';
-import { touchRing } from '../world/gates';
+import { ringRim, touchRing } from '../world/gates';
+import { FieldContacts, ringFixture } from '../world/contacts';
 import { IMMOVABLE, massOf, type Body } from '../world/bodies';
-import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, headEnd, HEAD_RADIUS, meetObstacle, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
-import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
+import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, headEnd, HEAD_RADIUS, meetObstacle, meetSolids, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
+import { BASE_RADIUS, CAPTURE_POINTS, CORE_REACH, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
 import { FlareView } from '../world/flare';
 import { markedName, markLead, swatch } from '../view/marks';
@@ -562,8 +563,10 @@ const COMET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
  */
 const SHOWER_COVER = 6000;
 const SHOWER_WEIGHT = 1.5;
-/** The share of a shower's pieces bursting on the battleship's hull that throws sparks (the rest go to dust unseen, so a swarm's worth does not fill the screen). */
+/** The share of a shower's pieces bursting on armor, rock or anything else solid that throws sparks (the rest go to dust unseen, so a swarm's worth does not fill the screen). */
 const SHOWER_SPARKS = 0.25;
+/** How far a well bends a comet's route off its course over the swarm's length, at most (units, 300 m: the black hole's pull, see Comets in the README): what may stand in its way is looked for this much wider. */
+const SHOWER_BEND = 6000;
 /** A bot this close to a comet's route (units, 500 m beyond the swarm's width) as the head nears or the swarm passes flies away from it, sideways. */
 const COMET_DANGER = 10000;
 /**
@@ -630,6 +633,9 @@ const beamEnd = new THREE.Vector3();
 const beamStart = new THREE.Vector3();
 const surface = new THREE.Vector3();
 const ringFacing = new THREE.Vector3();
+const ringNormal = new THREE.Vector3();
+/** A beam is felt along for a ring's solid parts in steps this long (units, 2 m): thinner than its struts (3 m). */
+const RAY_STEP = 40;
 const cometHead = new THREE.Vector3();
 const cometVelocity = new THREE.Vector3();
 const cometOffset = new THREE.Vector3();
@@ -638,6 +644,27 @@ const cometCover = new THREE.Vector3();
 const cometRelative = new THREE.Vector3();
 const cometAway = new THREE.Vector3();
 const cometCourse = new THREE.Vector3();
+const showerOffset = new THREE.Vector3();
+const showerWay = new THREE.Vector3();
+const showerRay: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
+/** A point asked about in turn (see Game.touchesSolid). */
+const solidProbe = new THREE.Vector3();
+
+/**
+ * A sphere at `position` of `radius` touching a ball at `center` of `reach` moving at `velocity`
+ * (wreckage, a core) is pushed out onto it: `out` the ball's outward normal there, `moving` its
+ * velocity; true then (see game/items, Solid).
+ */
+function pushOffBall(center: THREE.Vector3, reach: number, velocity: THREE.Vector3, position: THREE.Vector3, radius: number, out: THREE.Vector3, moving: THREE.Vector3): boolean {
+  out.subVectors(position, center);
+  const distance = out.length();
+  if (distance >= reach + radius) return false;
+  if (distance > 1e-6) out.divideScalar(distance);
+  else out.set(0, 1, 0);
+  position.copy(center).addScaledVector(out, reach + radius);
+  moving.copy(velocity);
+  return true;
+}
 /** Where the lead's battleship pushed a piece it rammed (see remoteRam). */
 const rammedTo = new THREE.Vector3();
 /** The velocity of what does not move: a ring of the tournament holds its place. */
@@ -743,6 +770,8 @@ export class Game implements OnlineGame {
   private readonly arena = new Arena();
   private readonly belt: Belt;
   readonly field: AsteroidField;
+  /** The field's pieces meeting each other and the rings, decided by the lead browser or a solo round (see world/contacts). */
+  private readonly contacts = new FieldContacts();
   private readonly effects: Effects;
   /** Ships flying hot through a planet's air: their plasma, glowing hulls and fireballs (see view/reentry). */
   private readonly reentry: Reentry;
@@ -2094,6 +2123,8 @@ export class Game implements OnlineGame {
     devlog?.begin(this.roundMode, arena.id);
     recorder?.clear();
     this.field.generate(arena.layout);
+    // the Belt's rigs and buoys stand on their rocks before a course or a lane is laid out around them
+    this.mining.dress(arena.id === 'belt' ? this.field : null);
     // a race's course is laid out in the field as generated, the same on every browser
     if (this.course) {
       this.scene.remove(this.course.root);
@@ -2136,6 +2167,9 @@ export class Game implements OnlineGame {
     this.pocketRadius = ARENA_LIMIT;
     this.place = -1;
     if (state) this.field.restore(state, arena.layout);
+    // the field's pieces bounce off the rings as they do off each other
+    this.contacts.fixtures = this.rings.map((ring) => ringFixture(ring.center, ring.facing, ring.radius));
+    this.contacts.reset();
     this.space.setSun(arena.sun);
     this.space.setMood(arena.mood);
     this.output.set(arena.mood.grade);
@@ -2147,7 +2181,6 @@ export class Game implements OnlineGame {
     this.scene.fog = air ? this.haze.fog : null;
     this.haze.setAir(air, this.landmarks.jupiter.deckLight, this.landmarks.jupiter.deepLight);
     this.belt.group.visible = arena.id === 'belt';
-    this.mining.dress(arena.id === 'belt' ? this.field : null);
     this.mining.setSun(arena.sun.color, arena.sun.intensity);
     if (!keepWreckage) {
       this.wrecks.clear();
@@ -3170,6 +3203,7 @@ export class Game implements OnlineGame {
       if (running) this.updateRound(dt / steps);
       stepped ||= running;
       this.field.update(dt / steps);
+      if (running) this.knock();
     }
     // the screen shows the round as the last step left it, once a frame
     if (stepped && this.me && (this.state === 'playing' || (this.state === 'paused' && !!this.online))) this.presentRound();
@@ -3400,10 +3434,10 @@ export class Game implements OnlineGame {
     if (this.fleet) this.playFleet(this.fleet, dt, now);
     this.hookOwn(now);
     this.updateHooks(dt);
-    this.wrecks.update(dt, now, this.field);
+    this.wrecks.update(dt, now, this.field, this.grinds);
     this.killcam.record(now, this.ships);
     this.replayEffects.update(dt);
-    this.torpedoes.update(dt, now, this.field, this.ships, (torpedo, hit) => this.detonate(torpedo, hit));
+    this.torpedoes.update(dt, now, this.field, this.ships, (torpedo, hit) => this.detonate(torpedo, hit), this.touchesSolid);
     this.items(dt, now);
     this.closeCall(now);
     this.pilot(dt, now);
@@ -3850,6 +3884,28 @@ export class Game implements OnlineGame {
   remoteFleetHit(zone: number, round: number, shooter: Ship, count: number) {
     // a hit of another round was on another battleship
     if (this.fleet && round === this.roundId && !this.roundOver) this.fleetEvents(this.fleet.hit(zone, count), shooter);
+  }
+
+  /**
+   * The field's pieces meet each other and the rings (see world/contacts): the lead browser, or
+   * a solo round, decides on the grid of field time and sends each motion it gave; the others
+   * take the lead's (see remoteKnock) and start afresh should they become the lead.
+   */
+  private knock() {
+    if (this.online && !this.online.isLead) {
+      this.contacts.reset();
+      return;
+    }
+    for (const state of this.contacts.run(this.field)) this.online?.sendKnock(state, this.roundId);
+  }
+
+  /** A piece of the field struck another or a ring as the lead decided: it takes the motion the lead gave it, if that lies close to where this browser has it (see knockShare). */
+  remoteKnock(state: ShovedState, round: number) {
+    const piece = this.field.asteroids.get(state.id);
+    if (!piece || round !== this.roundId) return;
+    const before = this.field.positionOf(piece, state.b, scratch);
+    if (knockShare(before, rammedTo.fromArray(state.p), Math.hypot(...state.v)) > 1) return;
+    this.field.move(state);
   }
 
   /** The lead's battleship rammed a piece of the field: it takes the motion the lead gave it, if it lay at the hull as this browser sees them (see ramShare). */
@@ -5154,7 +5210,7 @@ export class Game implements OnlineGame {
     // the flight school shows only the probes its drills put out
     const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
     if (!this.school && this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.raceTime(), now, this.field, this.course?.points);
-    this.probes.update(dt, now, this.field);
+    this.probes.update(dt, now, this.field, (this.probeSolids ??= [fieldSolid(this.field), obstacleSolid(this.field), this.ringSolid, this.wreckSolid, this.coreSolid]));
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive || ship === this.drone || (this.spectating && ship === this.me)) continue;
       const probe = this.probes.touching(ship.flight.position, ship.radius);
@@ -5717,6 +5773,13 @@ export class Game implements OnlineGame {
       asteroidHit = wreckHit = struck = null;
       beamLength = fleetHit.distance;
     }
+    // and so does whatever else is solid: a ring's housing, a core, a probe, the comet's head
+    const blocked = torpedoHit || fleetHit ? null : this.solidRay(origin, direction, beamLength);
+    if (blocked !== null) {
+      asteroidHit = wreckHit = struck = null;
+      beamLength = blocked;
+      this.effects.sparks(beamEnd.copy(origin).addScaledVector(direction, beamLength), shooter.color, 30);
+    }
 
     // the beam's ends are copied wherever they are kept (the effects, the kill cam, the message)
     const end = beamEnd.copy(origin).addScaledVector(direction, beamLength);
@@ -6018,6 +6081,86 @@ export class Game implements OnlineGame {
    * Capture the Flag, the flight school's rings still standing. Flying through is the point;
    * flying into the coil is a crash. Moves the ship out and sets `normal` when it does.
    */
+  /** The housings of the rings as a Solid (see game/items): a probe bounces off them, held in place by their stations. */
+  private readonly ringSolid: Solid = (position, radius, out, moving) => {
+    if (!this.touchesRing(position, radius)) return false;
+    out.copy(normal);
+    moving.set(0, 0, 0);
+    return true;
+  };
+
+  /** Wreckage as a Solid: a plate ten times a probe's mass. */
+  private readonly wreckSolid: Solid = (position, radius, out, moving) => {
+    const wreck = this.wrecks.overlap(position, radius);
+    return !!wreck && pushOffBall(wreck.mesh.position, wreck.radius, wreck.velocity, position, radius, out, moving);
+  };
+
+  /** The sponsor cores as a Solid: thirty times a probe's mass. */
+  private readonly coreSolid: Solid = (position, radius, out, moving) => {
+    for (const core of this.flags?.cores ?? []) if (pushOffBall(core.position, CORE_REACH, core.velocity, position, radius, out, moving)) return true;
+    return false;
+  };
+
+  /** What a probe bounces off: the field, the battleship, the rings, wreckage and the cores (see game/items, bounce). */
+  private probeSolids: readonly Solid[] | null = null;
+
+  /**
+   * How far along a beam from `origin` along `direction` (within `max`) the first solid thing
+   * lies that is no part of the field, the battleship, wreckage, a torpedo or a ship: a ring's
+   * housing (its band, housings and struts, felt for along the beam in steps of RAY_STEP where it
+   * passes the ring), a sponsor core, a probe, the comet's head; null when none does.
+   */
+  private solidRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
+    let best = max;
+    let found = false;
+    const take = (distance: number | null) => {
+      if (distance !== null && distance < best) {
+        best = distance;
+        found = true;
+      }
+    };
+    for (const ring of this.rings) take(this.ringRay(ring.center, ring.facing, ring.radius, origin, direction, best));
+    this.school?.eachRing((center, facing, radius) => take(this.ringRay(center, facing, radius, origin, direction, best)));
+    for (const core of this.flags?.cores ?? []) take(raySphere(origin, direction, core.position, CORE_REACH));
+    for (const probe of this.probes.list) take(raySphere(origin, direction, probe.position, PROBE_RADIUS));
+    const comet = this.shower?.comet;
+    const clock = this.field.clock;
+    if (comet && clock < headEnd(comet)) take(raySphere(origin, direction, headAt(comet, clock, solidProbe), HEAD_RADIUS));
+    return found ? best : null;
+  }
+
+  /** Where a beam first meets a ring's solid parts (see touchRing), felt for in steps of RAY_STEP through the ring's reach; null when it passes. */
+  private ringRay(center: THREE.Vector3, facing: THREE.Vector3, radius: number, origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
+    const reach = ringRim(radius).outer;
+    const enter = raySphere(origin, direction, center, reach);
+    if (enter === null || enter > max) return null;
+    const leave = Math.min(max, origin.distanceTo(center) + reach);
+    for (let along = enter; along <= leave; along += RAY_STEP) {
+      if (touchRing(center, facing, radius, solidProbe.copy(origin).addScaledVector(direction, along), RAY_STEP / 2, ringNormal)) return along;
+    }
+    return null;
+  }
+
+  /** Whether a sphere touches a ring's housing, a sponsor core or the comet's head: what wreckage grinds to dust on besides rock and hull. */
+  private readonly grinds = (position: THREE.Vector3, radius: number): boolean => {
+    if (this.touchesRing(solidProbe.copy(position), radius)) return true;
+    for (const core of this.flags?.cores ?? []) if (core.position.distanceTo(position) < CORE_REACH + radius) return true;
+    const comet = this.shower?.comet;
+    const clock = this.field.clock;
+    return !!comet && clock < headEnd(comet) && headAt(comet, clock, solidProbe).distanceTo(position) < HEAD_RADIUS + radius;
+  };
+
+  /**
+   * Whether a sphere touches something solid that is no part of the field or the battleship
+   * (see grinds), wreckage, a probe, or a torpedo in flight (none of `skip`'s shooter, whose
+   * salvo flies together): what sets off a torpedo where it flies, besides rock and hull.
+   */
+  private readonly touchesSolid = (position: THREE.Vector3, radius: number, skip: Torpedo | null = null): boolean => {
+    if (this.grinds(position, radius) || this.wrecks.overlap(position, radius) || this.probes.touching(position, radius)) return true;
+    for (const torpedo of this.torpedoes.list) if (torpedo.shooter !== skip?.shooter && torpedo.position.distanceTo(position) < TORPEDO_RADIUS + radius) return true;
+    return false;
+  };
+
   private touchesRing(position: THREE.Vector3, radius: number): boolean {
     this.gateStruck = -1;
     const course = this.course;
@@ -6297,10 +6440,71 @@ export class Game implements OnlineGame {
     this.cometView.update(this.shower, clock, this.camera.position);
     this.cometTail(me, dt);
     if (!flying) return;
+    const whole = flying.broken === Infinity;
     runDown(flying, this.field, clock, (rock) => this.burstRock(rock), (piece, point) => this.cometShove(piece, point));
+    if (whole && flying.broken !== Infinity) this.headBroke(flying);
+    // a core adrift in the head's way is lost to it (the lead browser decides, as for every core)
+    if (this.flags && clock < headEnd(flying) && (!this.online || this.online.isLead)) this.flags.runDown(headAt(flying, clock, cometHead), HEAD_RADIUS);
+    if (this.shower) this.showerMeetsSolids(flying, this.shower, clock, dt);
     const fleet = this.fleet;
     if (fleet) this.cometMeetsFleet(flying, fleet, clock, dt);
   }
+
+  /**
+   * The shower bursts on what stands in its way (see meetSolids): the field's pieces near the
+   * swarm (swept along each piece's way since the last step, so none slips through a thin piece
+   * of junk), the rings, wreckage and the sponsor cores, sparks flying as on the battleship's
+   * armor. Each browser sees it for the ships it runs; rock is cover from the swarm.
+   */
+  private showerMeetsSolids(comet: Comet, shower: Shower, clock: number, dt: number) {
+    const rocks = this.showerRocks;
+    rocks.length = 0;
+    headAt(comet, clock, cometHead);
+    courseAt(comet, clock, cometCourse);
+    // the swarm trails the head along its course; a well bends the route by a few hundred meters
+    const margin = COMET_SPEED * dt * 2 + SHOWER_BEND;
+    for (const rock of this.field.asteroids.values()) {
+      showerOffset.subVectors(rock.object.position, cometHead);
+      const along = showerOffset.dot(cometCourse);
+      if (along > rock.radius + margin || along < -(SHOWER_LENGTH + rock.radius + margin)) continue;
+      if (showerOffset.addScaledVector(cometCourse, -along).length() > SHOWER_WIDE + PIECE_RADIUS + rock.radius + margin) continue;
+      rocks.push(rock);
+    }
+    meetSolids(shower, clock, dt, this.showerHit, (point) => {
+      if (Math.random() < SHOWER_SPARKS) this.effects.sparks(point, SCRAPE_COLOR, PIECE_RADIUS * 4);
+    });
+  }
+
+  /** The field's pieces near the comet's swarm this step (see showerMeetsSolids). */
+  private readonly showerRocks: Asteroid[] = [];
+
+  /** Whether a piece of the shower meets something solid on its way from `from` to `to`, and where (into `at`). */
+  private readonly showerHit = (from: THREE.Vector3, to: THREE.Vector3, at: THREE.Vector3): boolean => {
+    const way = from.distanceTo(to);
+    showerWay.subVectors(to, from).divideScalar(Math.max(way, 1e-6));
+    for (const rock of this.showerRocks) {
+      // the point of its way nearest the rock's center, against the rock's reach
+      const along = THREE.MathUtils.clamp(showerOffset.subVectors(rock.object.position, from).dot(showerWay), 0, way);
+      if (showerOffset.addScaledVector(showerWay, -along).length() > rock.radius + PIECE_RADIUS) continue;
+      const hit = way > 1 ? this.field.raycast(from, showerWay, way, false, showerRay) : null;
+      if (hit) {
+        at.copy(from).addScaledVector(showerWay, hit.distance);
+        return true;
+      }
+      if (this.field.overlap(to, PIECE_RADIUS)) {
+        at.copy(to);
+        return true;
+      }
+      break;
+    }
+    if (this.touchesRing(at.copy(to), PIECE_RADIUS) || this.wrecks.overlap(to, PIECE_RADIUS)) return true;
+    for (const core of this.flags?.cores ?? []) {
+      if (core.position.distanceTo(to) >= CORE_REACH + PIECE_RADIUS) continue;
+      at.copy(to);
+      return true;
+    }
+    return false;
+  };
 
   /**
    * A comet meets the President's battleship: its head breaks up on the hull (see Comet.broken),

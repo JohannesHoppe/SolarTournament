@@ -4,6 +4,7 @@ import { Randomizer, textSeed } from '../random';
 import { BELT_INNER } from './belt';
 import { surfaced, wornSurface, wreckInnards, type Wear } from '../view/surfaces';
 import { hazeUniforms } from '../view/haze';
+import { contact, MASS } from './bodies';
 
 /** A wreck's plating: the old paint of a fighter torn off, blackened, scored and rusting (see wornSurface). */
 const TORN: Wear = { rust: 0.7, chips: 0.9, grime: 1, scratches: 0.8, seams: 0.7, stencils: ['07', 'NO STEP'], roughness: 0.7, metalness: 0.3 };
@@ -226,6 +227,13 @@ function heated<M extends THREE.MeshStandardMaterial>(material: M): M {
 }
 
 const gravity = new THREE.Vector3();
+const apart = new THREE.Vector3();
+const plateA = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: MASS.wreck };
+const plateB = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: MASS.wreck };
+/** Two torn plates meeting keep this share of the speed they met at: bent steel, not rubber. */
+const WRECK_RESTITUTION = 0.3;
+/** The pieces of one ship pass each other this long after it broke (s), flying apart from the same spot. */
+const SIBLING_SECONDS = 2;
 const position = new THREE.Vector3();
 const velocity = new THREE.Vector3();
 const spin = new THREE.Quaternion();
@@ -287,7 +295,7 @@ export class Wrecks {
     while (this.list.length > MAX_WRECKS) this.remove(this.list[0]);
   }
 
-  update(dt: number, now: number, field: AsteroidField) {
+  update(dt: number, now: number, field: AsteroidField, solid: (position: THREE.Vector3, radius: number) => boolean = () => false) {
     // backwards, so removing a piece does not skip the next
     for (let i = this.list.length - 1; i >= 0; i--) {
       const wreck = this.list[i];
@@ -310,7 +318,41 @@ export class Wrecks {
       // else stands in the field (the President's battleship, 270,000 times its mass: a
       // torn plate crumples on it as on rock); debris that falls into the arena's massive body
       // is gone, and so is debris that drifts off into the belt
-      if (field.overlap(mesh.position, wreck.radius) || field.obstacle?.touches(mesh.position, wreck.radius) || field.insideWell(mesh.position, wreck.radius) || mesh.position.lengthSq() > BELT_INNER * BELT_INNER) this.remove(wreck);
+      // and so does debris that hits what `solid` says (a ring's housing, a sponsor core, a comet's head)
+      if (field.overlap(mesh.position, wreck.radius) || field.obstacle?.touches(mesh.position, wreck.radius) || field.insideWell(mesh.position, wreck.radius) || mesh.position.lengthSq() > BELT_INNER * BELT_INNER || solid(mesh.position, wreck.radius)) this.remove(wreck);
+    }
+    this.meet(now);
+  }
+
+  /**
+   * Two pieces of wreckage that touch bounce off each other as two bodies of the same mass
+   * (see world/bodies, contact), keeping WRECK_RESTITUTION of the speed they met at: torn plates
+   * clang and tumble on. The pieces of one ship fly apart from where it broke and pass each
+   * other for SIBLING_SECONDS.
+   */
+  private meet(now: number) {
+    const list = this.list;
+    for (let i = 0; i < list.length; i++) {
+      const a = list[i];
+      for (let j = i + 1; j < list.length; j++) {
+        const b = list[j];
+        const reach = a.radius + b.radius;
+        apart.subVectors(a.mesh.position, b.mesh.position);
+        const distance = apart.length();
+        if (distance >= reach || distance < 1e-6) continue;
+        if (now - Math.max(a.bornAt, b.bornAt) < SIBLING_SECONDS && a.id.slice(0, a.id.lastIndexOf('.')) === b.id.slice(0, b.id.lastIndexOf('.'))) continue;
+        apart.divideScalar(distance);
+        plateA.position.copy(a.mesh.position);
+        plateA.velocity.copy(a.velocity);
+        plateB.position.copy(b.mesh.position);
+        plateB.velocity.copy(b.velocity);
+        if (contact(plateA, plateB, apart, WRECK_RESTITUTION, 0) <= 0) continue;
+        a.velocity.copy(plateA.velocity);
+        b.velocity.copy(plateB.velocity);
+        // apart by half the overlap each, along their flights' fixed steps
+        a.at.addScaledVector(apart, (reach - distance) / 2);
+        b.at.addScaledVector(apart, -(reach - distance) / 2);
+      }
     }
   }
 

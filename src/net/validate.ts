@@ -1,5 +1,5 @@
 import type { ShipState } from '../ship/ship';
-import { RAMMED, type AsteroidState, type FieldState, type ShovedState } from '../world/asteroids';
+import { KNOCKED, type AsteroidState, type FieldState, type ShovedState } from '../world/asteroids';
 import type { WreckState } from '../world/wrecks';
 import { KINDS, type ProbeState } from '../game/items';
 import { TINTS } from '../ship/tints';
@@ -165,10 +165,10 @@ export function wreckStates(x: unknown): WreckState[] | null {
   );
 }
 
-/** A piece a comet or the battleship shoved (see world/asteroids, ShovedState): its motion since, with a quaternion that can be normalized, shoved by a comet's seed or RAMMED. */
+/** A piece a comet, the battleship or a contact shoved (see world/asteroids, ShovedState): its motion since, with a quaternion that can be normalized, shoved by a comet's seed, RAMMED or KNOCKED (the lowest of them). */
 export function shovedState(x: unknown): ShovedState | null {
   if (!isRecord(x)) return null;
-  const state = complete<ShovedState>({ id: id(x.id), b: num(x.b, 0, MAX_FIELD_TIME), p: vec(x.p, 3, MAX_COORDINATE), v: vec(x.v, 3, MAX_SPEED), q: vec(x.q, 4, UNIT_LENGTH), s: vec(x.s, 4, MAX_SPIN), c: int(x.c, RAMMED, 0xffffffff) });
+  const state = complete<ShovedState>({ id: id(x.id), b: num(x.b, 0, MAX_FIELD_TIME), p: vec(x.p, 3, MAX_COORDINATE), v: vec(x.v, 3, MAX_SPEED), q: vec(x.q, 4, UNIT_LENGTH), s: vec(x.s, 4, MAX_SPIN), c: int(x.c, KNOCKED, 0xffffffff) });
   return state && Math.hypot(...state.q) >= 0.5 ? state : null;
 }
 

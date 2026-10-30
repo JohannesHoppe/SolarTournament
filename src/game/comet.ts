@@ -4,6 +4,7 @@ import { hash } from '../music/songs';
 import { radialTexture } from '../view/textures';
 import { ARENA_LIMIT } from '../world/arena';
 import type { Asteroid, AsteroidField, Obstacle, Well } from '../world/asteroids';
+import { share } from '../world/bodies';
 import { nucleusGeometry, nucleusMaterial, nucleusVents, type Vent } from '../world/nucleus';
 import { dustStreaks, SUN_DIRECTION } from '../world/space';
 
@@ -79,8 +80,12 @@ const SQUEEZE = 3;
 /** Over the last STRETCH seconds before the well swallows it, the head is drawn out along its course; FLASH seconds of light mark where it went. */
 const STRETCH = 2;
 const FLASH = 1.5;
-/** A solid piece the head strikes (the wreck's hull) drifts on SHOVE (units/s, 5 m/s) faster along the comet's course and turns at up to SHOVE_SPIN (rad/s). */
-const SHOVE = 100;
+/**
+ * The head's mass (kg): a ball of HEAD_RADIUS of dust and ice as loosely packed as real comets'
+ * nuclei (500 kg/m³), some 0.7 million tonnes. A solid piece it breaks up on takes its momentum
+ * (see strikeWall) and turns at up to SHOVE_SPIN (rad/s) more.
+ */
+export const HEAD_MASS = (4 / 3) * Math.PI * (HEAD_RADIUS / 20) ** 3 * 500;
 const SHOVE_SPIN = 0.12;
 
 /**
@@ -468,41 +473,100 @@ const LOOK_BACK = 3;
  * first moment of a grid of BREAK_STEP (s) of field time at which it touched it (looked for up
  * to LOOK_BACK back), so every browser strikes it at the same field time, however its frames
  * fell. A rock breaks (its fragments, deterministic from the rock and that time, fly alike
- * everywhere; those born in the head's way go the same way) and `broke` hears of it. A solid
- * piece stands but is shoved, once by each comet: SHOVE faster along the comet's course and
- * away from its center line, turning about the axis the off-center blow gives it, the faster
- * the farther off center; `shoved` hears of it with the point struck. Once the well swallowed
- * the head, or it broke up on the battleship, it strikes nothing.
+ * everywhere; those born in the head's way go the same way) and `broke` hears of it. On the
+ * first solid piece its own shape meets (a hull section, the junkyard's hub) the head breaks up,
+ * as on the battleship's hull, and the piece takes its momentum (see strikeWall); what lies
+ * beyond it is never reached. Once the well swallowed the head, or it broke up, it strikes
+ * nothing.
  */
 export function runDown(comet: Comet, field: AsteroidField, time: number, broke: (rock: Asteroid) => void, shoved: (piece: Asteroid, point: THREE.Vector3) => void = () => {}) {
   if (time >= headEnd(comet)) return;
   headAt(comet, time, head);
+  // the solid piece the head meets first, if it meets one: there it breaks up
+  let wall: Asteroid | null = null;
+  let wallAt = Infinity;
   for (const rock of field.asteroids.values()) {
-    if (rock.shovedBy === comet.seed || rock.object.position.distanceTo(head) > HEAD_RADIUS + rock.radius + COMET_SPEED * LOOK_BACK) continue;
-    let step = Math.floor(time / BREAK_STEP);
-    if (!touches(comet, field, rock, step * BREAK_STEP)) continue;
-    const first = Math.max(rock.born - 1e-6, time - LOOK_BACK);
-    while ((step - 1) * BREAK_STEP >= first && touches(comet, field, rock, (step - 1) * BREAK_STEP)) step--;
-    const at = step * BREAK_STEP;
-    if (!rock.solid) {
-      const broken = field.shatter(rock.id, at);
-      if (broken) broke(broken);
-      continue;
+    if (!rock.solid || rock.object.position.distanceTo(head) > HEAD_RADIUS + rock.radius + COMET_SPEED * LOOK_BACK) continue;
+    const at = firstTouch(comet, field, rock, time, meets);
+    if (at !== null && (at < wallAt || (at === wallAt && wall !== null && rock.id < wall.id))) {
+      wall = rock;
+      wallAt = at;
     }
-    // the blow: along the course, and out from the course through the piece's center
-    courseAt(comet, at, course);
-    field.positionOf(rock, at, stone);
-    headAt(comet, at, piece);
-    const off = kick.subVectors(stone, piece).addScaledVector(course, -kick.dot(course));
-    const center = Math.min(1, off.length() / (HEAD_RADIUS + rock.radius));
-    axis.crossVectors(course, off);
-    if (axis.lengthSq() < 1e-6) axis.set(0, 1, 0).cross(course);
-    if (axis.lengthSq() < 1e-6) axis.set(1, 0, 0);
-    axis.normalize();
-    off.setLength(SHOVE * center).addScaledVector(course, SHOVE);
-    field.shove(rock.id, at, off, axis, SHOVE_SPIN * (0.25 + 0.75 * center), comet.seed);
-    shoved(rock, piece.lerp(stone, HEAD_RADIUS / (HEAD_RADIUS + rock.radius)));
   }
+  for (const rock of field.asteroids.values()) {
+    if (rock.solid || rock.object.position.distanceTo(head) > HEAD_RADIUS + rock.radius + COMET_SPEED * LOOK_BACK) continue;
+    const at = firstTouch(comet, field, rock, time, touches);
+    // what lies beyond where it broke up, it never reaches
+    if (at === null || at >= wallAt) continue;
+    const broken = field.shatter(rock.id, at);
+    if (broken) broke(broken);
+  }
+  if (wall) strikeWall(comet, field, wall, wallAt, shoved);
+}
+
+/** The first moment of the grid of BREAK_STEP the head touched a piece (`touching` says how), looked for up to LOOK_BACK back from `time` while it touches now; null when it does not. */
+function firstTouch(comet: Comet, field: AsteroidField, rock: Asteroid, time: number, touching: typeof touches): number | null {
+  let step = Math.floor(time / BREAK_STEP);
+  if (!touching(comet, field, rock, step * BREAK_STEP)) return null;
+  const first = Math.max(rock.born - 1e-6, time - LOOK_BACK);
+  while ((step - 1) * BREAK_STEP >= first && touching(comet, field, rock, (step - 1) * BREAK_STEP)) step--;
+  return step * BREAK_STEP;
+}
+
+/**
+ * The head breaks up on a solid piece at field time `at` (see Comet.broken): its rubble stays
+ * with the hull, so the piece takes the head's momentum, the two moving on together at the speed
+ * that keeps it (see world/bodies, share: HEAD_MASS against the piece's, or its whole structure's when welded), and the
+ * off-center blow sets it tumbling about its center (2/5 m r², as a ball), at most SHOVE_SPIN
+ * more. `shoved` hears of it with the point struck.
+ */
+function strikeWall(comet: Comet, field: AsteroidField, wall: Asteroid, at: number, shoved: (piece: Asteroid, point: THREE.Vector3) => void) {
+  comet.broken = at;
+  courseAt(comet, at, course);
+  field.positionOf(wall, at, stone);
+  // where it struck: the head moved out onto the hull, then its radius back in
+  meets(comet, field, wall, at);
+  piece.copy(struck).addScaledVector(struckNormal, -HEAD_RADIUS);
+  kick.copy(course).multiplyScalar(COMET_SPEED * share(field.bodyMass(wall), HEAD_MASS));
+  const radius = wall.meanRadius;
+  axis.subVectors(piece, stone).cross(kick).divideScalar(0.4 * radius * radius).clampLength(0, SHOVE_SPIN).addScaledVector(wall.spinAxis, wall.spinRate);
+  const rate = axis.length();
+  if (rate > 1e-9) axis.divideScalar(rate);
+  else axis.copy(wall.spinAxis);
+  field.shove(wall.id, at, kick, axis, rate, comet.seed);
+  field.pose(wall, field.clock);
+  shoved(wall, piece);
+}
+
+const struck = new THREE.Vector3();
+const struckNormal = new THREE.Vector3();
+const burstAt = new THREE.Vector3();
+
+/**
+ * The shower meets what stands in the field besides the battleship (rock, ice, junk, hull,
+ * wreckage, the rings, the sponsor cores) at field time `time`, `since` seconds after it last
+ * did: each piece that met something on its way since bursts there, as on the battleship's armor
+ * (see meetObstacle). `hit` says whether the way from `from` to `to` meets something, writing
+ * where into `at`; `burst` hears of each piece with where it burst.
+ */
+export function meetSolids(shower: Shower, time: number, since: number, hit: (from: THREE.Vector3, to: THREE.Vector3, at: THREE.Vector3) => boolean, burst: (point: THREE.Vector3) => void) {
+  for (let i = 0; i < SHOWER_PIECES; i++) {
+    if (shower.gone(i, time)) continue;
+    shower.pieceAt(i, time, piece);
+    shower.pieceAt(i, time - since, stone);
+    if (!hit(stone, piece, burstAt)) continue;
+    shower.stop(i);
+    burst(burstAt);
+  }
+}
+
+/** Whether the head touches a solid piece's own shape (its box, its measured surface) at a field time; where it touched in `struck` (the head moved out onto it) and `struckNormal`. */
+function meets(comet: Comet, field: AsteroidField, rock: Asteroid, time: number): boolean {
+  if (field.positionOf(rock, time, stone).distanceTo(headAt(comet, time, struck)) >= HEAD_RADIUS + rock.radius) return false;
+  field.pose(rock, time);
+  const touching = field.resolve(rock, struck, HEAD_RADIUS, struckNormal) !== null;
+  field.pose(rock, field.clock);
+  return touching;
 }
 
 /**

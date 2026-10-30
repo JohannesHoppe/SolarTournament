@@ -187,6 +187,22 @@ describe('the lead browser', () => {
     expect(rammed.length).toBeLessThan(100);
   });
 
+  it("takes a contact of the field's pieces only from the lead, checked, and no faster than its budget", () => {
+    const { transport, session } = joined('n');
+    const knocked: string[] = [];
+    session.onKnock = (state) => knocked.push(state.id);
+    at(1);
+    transport.states('old', 100, 'old', true);
+    transport.states('h2', 50, 'old');
+    const knock = (id: string, from: string, extra = {}) => transport.handlers.get('fk')!({ m: { id, b: 40, p: [0, 0, 0], v: [10, 0, 0], q: [0, 0, 0, 1], s: [0, 1, 0, 0], c: -2, ...extra }, n: 2 }, from);
+    knock('7', 'h2');
+    knock('8', 'old', { c: -3 });
+    knock('9', 'old');
+    expect(knocked).toEqual(['9']);
+    for (let i = 0; i < 200; i++) knock(`9.${i}`, 'old');
+    expect(knocked.length).toBeLessThan(80);
+  });
+
   it('hands the field again to a peer that starts over twice within seconds', () => {
     const { session, transport } = joined('n');
     let restarts = 0;

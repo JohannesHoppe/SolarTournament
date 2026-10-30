@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { COMET_REACH, COMET_SPEED, COMET_WARNING, COMET_WINDOWS, cometAt, cometEnd, cometsOf, cometStart, roundComets, headAt, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, tailDepth, type Comet } from './comet';
+import { COMET_REACH, COMET_SPEED, COMET_WARNING, COMET_WINDOWS, cometAt, cometEnd, cometsOf, cometStart, roundComets, headAt, HEAD_MASS, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, tailDepth, type Comet } from './comet';
 import { SUN_DIRECTION } from '../world/space';
 import { Fleet } from './fleet';
 import { ARENAS } from '../world/arenas';
@@ -154,26 +154,37 @@ describe("a comet's head", () => {
     expect(b.snapshot().x).toEqual(a.snapshot().x);
   });
 
-  it("shoves the wreck's hull aside the same way on every browser, and a newcomer's snapshot carries it", () => {
+  it("breaks up on the wreck's hull, which takes its momentum the same way on every browser, and a newcomer's snapshot carries it", () => {
     const derelict = layoutOf('derelict');
     const [a, b, c] = [testField(), testField(), testField()];
     for (const field of [a, b]) field.generate(derelict);
     const hull = [...a.asteroids.values()].find((rock) => rock.solid)!;
     const at = 40;
     const before = a.positionOf(hull, 60, new THREE.Vector3());
-    // a comet grazing the piece, off its center, so it turns as well
-    const through = a.positionOf(hull, at, new THREE.Vector3()).add(new THREE.Vector3(0, hull.radius * 0.5, 0));
-    const comet = makeComet(at, new THREE.Vector3(0, 0, 1), through, 9);
-    fly(a, comet, 1 / 60, 30, 60);
-    fly(b, comet, 1 / 23, 30, 60);
+    // a comet grazing the piece, off its center
+    const height = hull.semiAxes.y * hull.object.matrixWorld.getMaxScaleOnAxis();
+    const through = a.positionOf(hull, at, new THREE.Vector3()).add(new THREE.Vector3(0, height * 0.5, 0));
+    // each browser follows a comet of its own
+    const [one, other] = [makeComet(at, new THREE.Vector3(0, 0, 1), through, 9), makeComet(at, new THREE.Vector3(0, 0, 1), through, 9)];
+    fly(a, one, 1 / 60, 30, 60);
+    fly(b, other, 1 / 23, 30, 60);
     const moved = a.asteroids.get(hull.id)!;
     expect(moved.shovedBy).toBe(9);
-    expect(moved.object.position.distanceTo(before)).toBeGreaterThan(1000);
-    expect(moved.spinRate).toBeGreaterThan(0);
+    // it broke up where it struck, before it reached the line through the piece's center
+    expect(one.broken).toBeLessThan(at);
+    expect(other.broken).toBe(one.broken);
+    // the piece moves on with the head's momentum: both masses at the speed that keeps it
+    const speed = COMET_SPEED * (HEAD_MASS / (HEAD_MASS + a.bodyMass(moved)));
+    expect(moved.velocity.length()).toBeCloseTo(speed, 3);
+    expect(moved.object.position.distanceTo(before)).toBeGreaterThan(speed * 10);
+    // its half of the world ship goes along as one body, every section alike, none turning
+    for (const section of a.welded(moved)) {
+      expect(section.velocity.distanceTo(moved.velocity)).toBeLessThan(1e-9);
+      expect(section.spinRate).toBe(0);
+    }
+    expect(a.welded(moved).length).toBeGreaterThan(1);
     expect(b.asteroids.get(hull.id)!.object.position.distanceTo(moved.object.position)).toBeLessThan(1e-6);
-    expect(b.asteroids.get(hull.id)!.object.quaternion.angleTo(moved.object.quaternion)).toBeLessThan(1e-9);
-    // shoved once by a comet, however long it overlaps
-    expect(moved.born).toBeLessThan(at);
+    expect(b.asteroids.get(hull.id)!.object.quaternion.angleTo(moved.object.quaternion)).toBeLessThan(1e-6);
     // a newcomer at field time 60 takes the motion from the snapshot
     c.restore(JSON.parse(JSON.stringify(a.snapshot())), derelict);
     c.setClock(80);

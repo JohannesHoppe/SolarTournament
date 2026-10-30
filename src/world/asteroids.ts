@@ -6,6 +6,7 @@ import { boxContact, rayBox } from './boxes';
 import { SHAPE_FILL } from './shapes';
 import { opticalDepth, SIGHT_DEPTH, type Air } from './air';
 import type { FractureSet } from './fracture';
+import { massOf } from './bodies';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
@@ -100,6 +101,8 @@ export interface Placement {
   orientation: THREE.Quaternion;
   /** Solid pieces never break and give no points. */
   solid: boolean;
+  /** Pieces of one structure (a half of the world ship, the junkyard's hub) share a weld: they move as one body, never against each other (see AsteroidField.welded). */
+  weld?: number;
 }
 
 /**
@@ -176,9 +179,12 @@ export interface Asteroid {
   /**
    * What last changed this piece's motion: the seed of the comet that shoved it (see shove),
    * RAMMED for the President's battleship (or a piece broken off one it rammed), or null for a
-   * piece that moves as the field was laid out.
+   * piece that moves as the field was laid out; KNOCKED for one another piece or a ring struck
+   * (see world/contacts).
    */
   shovedBy: number | null;
+  /** The structure it is welded into (see Placement.weld), or null for a piece on its own. */
+  weld: number | null;
 }
 
 /**
@@ -210,6 +216,9 @@ export type ShovedState = { id: string; b: number; p: number[]; v: number[]; q: 
 
 /** The shover of a piece the President's battleship rammed (see Asteroid.shovedBy): never a comet's seed, which is a whole number from 0 up. */
 export const RAMMED = -1;
+
+/** The shover of a piece another piece of the field struck, or a ring (see world/contacts): never a comet's seed either. */
+export const KNOCKED = -2;
 
 /** Directions a rock's or an ellipsoid's outline is laid out in (see outline): evenly over the sphere, about 13° apart. */
 const OUTLINE_POINTS = 256;
@@ -260,6 +269,8 @@ interface Template {
   mean: number;
   /** Where the object's origin lies in its whole shape's frame (template units): the shape's own origin for a whole shape, a piece's centroid for a piece (see world/fracture). */
   centroid: THREE.Vector3;
+  /** Boxes of the shape that reach beyond its ellipsoid (a satellite's wing, see world/shapes), in its object's own frame; collide as what stands on a piece does (see AsteroidField.attach). */
+  parts: Attachment[];
 }
 
 /** The path of a piece in its shape's fracture tree from its id (`12.2.0`: piece 0 of piece 2 of rock 12), [] for a whole rock. */
@@ -336,6 +347,7 @@ export class AsteroidField {
           surface: set.box || collider ? null : new Surface(reference, center),
           mean: 0,
           centroid: new THREE.Vector3(),
+          parts: ((object.userData.parts ?? []) as { center: THREE.Vector3; half: THREE.Vector3 }[]).map((part) => attachment(new THREE.Matrix4().makeTranslation(part.center), part.half)),
         };
       });
     this.templates = { rock: templates(sets.rock), ice: templates(sets.ice), debris: templates(sets.debris), hull: templates(sets.hull) };
@@ -366,12 +378,15 @@ export class AsteroidField {
       surface: piece.surface,
       mean: whole.mean * Math.cbrt(piece.share),
       centroid: piece.centroid,
+      parts: [],
     };
     this.pieces.set(key, template);
     return template;
   }
 
   generate(layout: FieldLayout) {
+    // what stands on the pieces belongs to a layout (see attach)
+    if (this.layout?.key !== layout.key) this.attachments.clear();
     this.layout = layout;
     this.well = layout.well ?? null;
     this.air = layout.air ?? null;
@@ -409,6 +424,7 @@ export class AsteroidField {
       this.add(id, piece.kind, piece.type, this.templates[piece.kind][piece.type], piece.scale, 0, 0, piece.position, new THREE.Vector3(0, 1, 0), new THREE.Vector3(), new THREE.Vector3(0, 1, 0), 0, piece.solid);
       const asteroid = this.asteroids.get(id)!;
       asteroid.baseOrientation.copy(piece.orientation).multiply(asteroid.object.quaternion);
+      asteroid.weld = piece.weld ?? null;
       this.place(asteroid);
     }
   }
@@ -529,22 +545,34 @@ export class AsteroidField {
       box: template.box,
       inverse: new THREE.Matrix4(),
       shovedBy: null,
+      weld: null,
     };
     this.asteroids.set(id, asteroid);
     object.userData.type = type;
     object.userData.scale = scale;
     object.userData.template = template;
+    if (template.parts.length) this.attachments.set(id, template.parts);
     this.place(asteroid);
+    asteroid.radius = this.reachOf(asteroid, asteroid.radius);
     return asteroid;
   }
 
-  /** Puts a rock where the field time says: drifted along its velocity, carried along its orbit, turned about its axis. */
-  private place(a: Asteroid) {
-    const age = this.clock - a.born;
-    positionAt(a, this.clock, a.object.position);
+  /** Puts a rock where the field time says (now, or `time`): drifted along its velocity, carried along its orbit, turned about its axis. */
+  private place(a: Asteroid, time = this.clock) {
+    const age = time - a.born;
+    positionAt(a, time, a.object.position);
     a.object.quaternion.setFromAxisAngle(a.spinAxis, a.spinRate * age).multiply(a.baseOrientation);
     a.object.updateMatrixWorld(true);
     a.inverse.copy(a.object.matrixWorld).invert();
+  }
+
+  /**
+   * Puts a piece where it is at another field time than the field's (see world/contacts, which
+   * meets pieces on a grid of field time): its collisions and rays then answer for that time,
+   * until it is posed again or the field's clock moves.
+   */
+  pose(a: Asteroid, time: number) {
+    this.place(a, time);
   }
 
   /** Draws the full relief only within `share` of FAR_LEVEL (see detail); 0 draws every rock in less detail. */
@@ -577,6 +605,11 @@ export class AsteroidField {
     return asteroid.hitPoints <= 0 ? this.destroy(id, at) : undefined;
   }
 
+  /** The field time a rock broke, or undefined while it stands. */
+  brokeAt(id: string): number | undefined {
+    return this.broken.get(id);
+  }
+
   /** Where a rock is at a field time (see positionAt), for whatever must know it then, not now. */
   positionOf(asteroid: Asteroid, time: number, target: THREE.Vector3): THREE.Vector3 {
     return positionAt(asteroid, time, target);
@@ -590,14 +623,36 @@ export class AsteroidField {
     return this.asteroids.get(id)?.solid ? undefined : this.destroy(id, at);
   }
 
+  /** The pieces welded into one structure with `piece` (see Placement.weld), itself among them; just itself when it stands on its own. */
+  welded(piece: Asteroid): Asteroid[] {
+    if (piece.weld === null) return [piece];
+    return [...this.asteroids.values()].filter((a) => a.weld === piece.weld);
+  }
+
+  /** The mass of the body a piece belongs to (kg): its own, or its whole structure's when welded (see world/bodies, massOf). */
+  bodyMass(piece: Asteroid): number {
+    if (piece.weld === null) return massOf(piece);
+    let mass = 0;
+    for (const a of this.asteroids.values()) if (a.weld === piece.weld) mass += massOf(a);
+    return mass;
+  }
+
   /**
    * A comet (seeded `by`) shoves a solid piece at a field time: from where it stands then, it
    * drifts on with `kick` (units/s) added to its drift, keeps circling with its orbit, and turns
-   * about `axis` at `rate` (rad/s) from its orientation then. Returns the piece when it moved.
+   * about `axis` at `rate` (rad/s) from its orientation then. A welded piece takes its whole
+   * structure along with the same kick, without a turn: the pieces of a body turning about its
+   * center would each need an orbit of their own. Returns the piece when it moved.
    */
   shove(id: string, at: number, kick: THREE.Vector3, axis: THREE.Vector3, rate: number, by: number): Asteroid | undefined {
-    const a = this.asteroids.get(id);
-    if (!a?.solid) return undefined;
+    const struck = this.asteroids.get(id);
+    if (!struck?.solid) return undefined;
+    for (const a of this.welded(struck)) this.push(a, at, kick, struck.weld === null ? axis : a.spinAxis, struck.weld === null ? rate : a.spinRate, by);
+    return struck;
+  }
+
+  /** One piece of a shove (see shove). */
+  private push(a: Asteroid, at: number, kick: THREE.Vector3, axis: THREE.Vector3, rate: number, by: number) {
     const age = at - a.born;
     positionAt(a, at, a.basePosition);
     a.baseOrientation.premultiply(new THREE.Quaternion().setFromAxisAngle(a.spinAxis, a.spinRate * age));
@@ -608,7 +663,6 @@ export class AsteroidField {
     a.born = at;
     a.shovedBy = by;
     this.place(a);
-    return a;
   }
 
   /**
@@ -830,7 +884,11 @@ export class AsteroidField {
       if (asteroid === skip) continue;
       const enter = raySphere(origin, direction, asteroid.object.position, asteroid.radius);
       if (enter === null || enter > (best ?? max)) continue;
-      const distance = asteroid.box ? rayPiece(asteroid, origin, direction) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);
+      let distance = asteroid.box ? rayPiece(asteroid, origin, direction) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);
+      for (const part of this.attachments.get(asteroid.id) ?? NONE) {
+        const along = rayAttachment(asteroid, part, origin, direction);
+        if (along !== null && (distance === null || along < distance)) distance = along;
+      }
       if (distance !== null && distance <= max && (best === null || distance < best)) {
         best = distance;
         castRock = asteroid;
@@ -853,15 +911,65 @@ export class AsteroidField {
       const reach = asteroid.radius + radius;
       if (asteroid.object.position.distanceToSquared(center) > reach * reach) continue;
       if (asteroid.box ? pieceContact(asteroid, center, radius, pull) : asteroid.surface ? surfaceContact(asteroid, asteroid.surface, center, radius) : ellipsoidContact(asteroid, center, radius)) return asteroid;
+      for (const part of this.attachments.get(asteroid.id) ?? NONE) if (attachmentContact(asteroid, part, center, radius, pull)) return asteroid;
     }
     return null;
   }
 
   /**
-   * Pushes a sphere out of an asteroid. Returns the outward surface normal when they
-   * touched (and moves center onto the surface), otherwise null.
+   * Pushes a sphere out of an asteroid, or out of what stands on it (see attach). Returns the
+   * outward surface normal when they touched (and moves center onto the surface), otherwise null.
    */
   resolve(asteroid: Asteroid, center: THREE.Vector3, radius: number, normal = new THREE.Vector3()): THREE.Vector3 | null {
+    const shape = this.resolveShape(asteroid, center, radius, normal);
+    if (shape) return shape;
+    for (const part of this.attachments.get(asteroid.id) ?? NONE) {
+      const surface = attachmentContact(asteroid, part, center, radius, normal);
+      if (!surface) continue;
+      // out of the box, into the piece's frame, into the world
+      normal.transformDirection(part.matrix).transformDirection(asteroid.object.matrixWorld);
+      point.copy(surface).applyMatrix4(part.matrix).applyMatrix4(asteroid.object.matrixWorld);
+      center.copy(point).addScaledVector(normal, radius + 1);
+      return normal;
+    }
+    return null;
+  }
+
+  /**
+   * Things standing on pieces of the field that collide as they do (a mining rig's platform,
+   * derrick, hut and boom, a buoy's mast), by the piece's id: solid boxes in the piece's own
+   * frame, turning with it and gone with it when it breaks. Ships, beams, the hook, torpedoes,
+   * wreckage, probes and the field's other pieces meet them as they meet the piece itself.
+   */
+  private readonly attachments = new Map<string, Attachment[]>();
+
+  /** What stands on the piece `id` (see attach): nothing for most. */
+  attachmentsOf(id: string): readonly Attachment[] {
+    return this.attachments.get(id) ?? NONE;
+  }
+
+  /** Sets what stands on the piece `id` (see attachments), and widens its reach to take it in; kept for the pieces of this layout until another is generated. */
+  attach(id: string, parts: Attachment[]) {
+    this.attachments.set(id, parts);
+    const asteroid = this.asteroids.get(id);
+    if (asteroid) asteroid.radius = this.reachOf(asteroid, asteroid.radius);
+  }
+
+  /** How far a piece reaches from its center with what stands on it (world units), at least `radius`. */
+  private reachOf(asteroid: Asteroid, radius: number): number {
+    const scale = asteroid.object.matrixWorld.getMaxScaleOnAxis();
+    let reach = radius;
+    for (const part of this.attachments.get(asteroid.id) ?? NONE) {
+      for (let k = 0; k < 8; k++) {
+        corner.set(k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1).multiply(part.half).applyMatrix4(part.matrix).sub(asteroid.center);
+        reach = Math.max(reach, corner.length() * scale);
+      }
+    }
+    return reach;
+  }
+
+  /** The piece's own shape only (see resolve). */
+  private resolveShape(asteroid: Asteroid, center: THREE.Vector3, radius: number, normal: THREE.Vector3): THREE.Vector3 | null {
     if (asteroid.box) {
       const surface = pieceContact(asteroid, center, radius, normal);
       if (!surface) return null;
@@ -888,13 +996,13 @@ export class AsteroidField {
     return normal;
   }
 
-  /** Velocity of a rock's surface at a point (units/s): its drift and orbit plus its spin. */
-  surfaceVelocity(asteroid: Asteroid, point: THREE.Vector3, target = new THREE.Vector3()): THREE.Vector3 {
+  /** Velocity of a rock's surface at a point (units/s): its drift and orbit plus its spin, now or at the field time `time` it is posed at (see pose). */
+  surfaceVelocity(asteroid: Asteroid, point: THREE.Vector3, target = new THREE.Vector3(), time = this.clock): THREE.Vector3 {
     const arm = pull.subVectors(point, asteroid.object.position);
     target.copy(asteroid.spinAxis).multiplyScalar(asteroid.spinRate).cross(arm);
     if (!asteroid.orbitRate) return target.add(asteroid.velocity);
     // the orbit carries the rock (and turns its drift) about the field's center
-    target.add(v.copy(asteroid.velocity).applyAxisAngle(asteroid.orbitAxis, asteroid.orbitRate * (this.clock - asteroid.born)));
+    target.add(v.copy(asteroid.velocity).applyAxisAngle(asteroid.orbitAxis, asteroid.orbitRate * (time - asteroid.born)));
     return target.add(u.copy(asteroid.orbitAxis).multiplyScalar(asteroid.orbitRate).cross(asteroid.object.position));
   }
 
@@ -916,6 +1024,39 @@ export class AsteroidField {
     }
     return target;
   }
+}
+
+/** A solid box standing on a piece (see AsteroidField.attach): `matrix` takes the box's own frame into the piece's object frame, `inverse` back; `half` its half extents in its own frame. */
+export interface Attachment {
+  matrix: THREE.Matrix4;
+  inverse: THREE.Matrix4;
+  half: THREE.Vector3;
+}
+
+/** A box of `half` extents in a frame of its own, placed in a piece's object frame by `matrix` (see Attachment). */
+export function attachment(matrix: THREE.Matrix4, half: THREE.Vector3): Attachment {
+  return { matrix, inverse: matrix.clone().invert(), half };
+}
+
+const NONE: readonly Attachment[] = [];
+const corner = new THREE.Vector3();
+
+/**
+ * A sphere against a box standing on a piece, in the box's own frame: the point of the box
+ * closest to the sphere's center and the box's outward normal there (both in its frame), when the
+ * sphere touches it; else null.
+ */
+function attachmentContact(asteroid: Asteroid, part: Attachment, center: THREE.Vector3, radius: number, normal: THREE.Vector3) {
+  const scale = asteroid.object.matrixWorld.getMaxScaleOnAxis() * part.matrix.getMaxScaleOnAxis();
+  const local = u.copy(center).applyMatrix4(asteroid.inverse).applyMatrix4(part.inverse);
+  return boxContact(local, part.half, radius / scale, normal, closest);
+}
+
+/** Distance along a normalized ray to a box standing on a piece, or null. */
+function rayAttachment(asteroid: Asteroid, part: Attachment, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
+  localOrigin.copy(origin).applyMatrix4(asteroid.inverse).applyMatrix4(part.inverse);
+  localStep.copy(origin).add(direction).applyMatrix4(asteroid.inverse).applyMatrix4(part.inverse).sub(localOrigin);
+  return rayBox(localOrigin, localStep, part.half);
 }
 
 /** Where a rock is at a field time: drifted from where it was born, carried along its orbit about the center. */

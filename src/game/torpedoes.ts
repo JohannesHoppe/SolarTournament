@@ -341,9 +341,11 @@ export class Torpedoes {
 
   /**
    * Flies every torpedo (see flyTorpedo). For the own ones, `detonate` is called where they go
-   * off (with the ship they hit, or null).
+   * off (with the ship they hit, or null): at a ship, at rock, hull or the arena's massive body,
+   * and at whatever else `solid` says a torpedo touches there (a ring, wreckage, a core, a probe,
+   * another's torpedo, a comet's head).
    */
-  update(dt: number, now: number, field: AsteroidField, ships: readonly Ship[], detonate: (torpedo: Torpedo, hit: Ship | null) => void) {
+  update(dt: number, now: number, field: AsteroidField, ships: readonly Ship[], detonate: (torpedo: Torpedo, hit: Ship | null) => void, solid: (position: THREE.Vector3, radius: number, torpedo: Torpedo) => boolean = () => false) {
     for (let i = this.list.length - 1; i >= 0; i--) {
       const torpedo = this.list[i];
       // its seeker needs a clear line: a ship that slips behind a rock loses it for good
@@ -367,7 +369,7 @@ export class Torpedoes {
       const hit = fused(torpedo, previous, ships, now, dt);
       // a part of the battleship it homes on sets it off as a ship does, its hull as a rock does
       const reached = !!target && strikes(previous, torpedo.position, target.flight, target.radius, dt);
-      const struck = reached || !!field.obstacle?.touches(torpedo.position, TORPEDO_RADIUS) || field.overlap(torpedo.position, TORPEDO_RADIUS) || field.insideWell(torpedo.position, TORPEDO_RADIUS);
+      const struck = reached || !!field.obstacle?.touches(torpedo.position, TORPEDO_RADIUS) || field.overlap(torpedo.position, TORPEDO_RADIUS) || field.insideWell(torpedo.position, TORPEDO_RADIUS) || solid(torpedo.position, TORPEDO_RADIUS, torpedo);
       if (hit || struck || spent) detonate(torpedo, hit);
     }
   }

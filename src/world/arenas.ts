@@ -127,6 +127,8 @@ function derelict(): Placement[] {
   const turn = new THREE.Euler();
   // turned by roll, yaw and pitch in that order; 'ZYX' pitches last, about the world's z, as the
   // stern's hull is tilted, whatever the yaw
+  // each half one body, welded (see Placement.weld): the bow 0, the stern 1
+  let weld = 0;
   const add = (type: number, scale: number, x: number, y: number, z: number, yaw = 0, pitch = 0, roll = 0, order: THREE.EulerOrder = 'XYZ') =>
     pieces.push({
       kind: 'hull',
@@ -135,6 +137,7 @@ function derelict(): Placement[] {
       position: new THREE.Vector3(x, y, z),
       orientation: new THREE.Quaternion().setFromEuler(turn.set(roll, yaw, pitch, order)),
       solid: true,
+      weld,
     });
   // the bow half: two sections of 700 m (the emblem and registry by the bridge, PER ASPERA aft
   // of it), the bridge tower on top, a spar across, the torn end
@@ -145,6 +148,7 @@ function derelict(): Placement[] {
   add(1, 7, -17000, 0, 0);
   add(4, 7, -30000, 0, 0, Math.PI / 2);
   // the stern half drifted off, tilted: its torn end faces back towards the bow
+  weld = 1;
   const [x1, y1] = sternAt(12000);
   add(1, 7, x1, y1, STERN_SHIFT, Math.PI, -STERN_TILT);
   const [x2, y2] = sternAt(25000);
@@ -332,11 +336,11 @@ export const ARENAS: readonly ArenaProfile[] = [
       orbit: { axis: 'random', speed: 500 },
       spin: 0.15,
       toughness: 500,
-      // the network's dead relay hub in the middle: an engine block and two spars across
+      // the network's dead relay hub in the middle: an engine block and two spars across, one body
       placements: [
-        { kind: 'hull', type: 2, scale: 6, position: new THREE.Vector3(0, 0, 0), orientation: new THREE.Quaternion(), solid: true },
-        { kind: 'hull', type: 4, scale: 8, position: new THREE.Vector3(0, 0, 0), orientation: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), solid: true },
-        { kind: 'hull', type: 4, scale: 8, position: new THREE.Vector3(0, 0, 0), orientation: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2), solid: true },
+        { kind: 'hull', type: 2, scale: 6, position: new THREE.Vector3(0, 0, 0), orientation: new THREE.Quaternion(), solid: true, weld: 0 },
+        { kind: 'hull', type: 4, scale: 8, position: new THREE.Vector3(0, 0, 0), orientation: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), solid: true, weld: 0 },
+        { kind: 'hull', type: 4, scale: 8, position: new THREE.Vector3(0, 0, 0), orientation: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2), solid: true, weld: 0 },
       ],
     },
     cooling: 1,

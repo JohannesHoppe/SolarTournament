@@ -91,7 +91,7 @@ const FADE_NEAR = 6000;
 const AIM_REACH = 40000;
 const FADE_MARGIN = 0.1;
 /** How far a core reaches from its center (units at its tow size, 8.5 m): its size on screen, and the sphere it collides as. */
-const CORE_REACH = 170;
+export const CORE_REACH = 170;
 /** Recent events the lead keeps in its state, so a follower that missed a state still hears of them. */
 const EVENT_KEEP = 6;
 
@@ -272,7 +272,8 @@ export class Flags {
           core.droppedAt = now;
         }
       }
-      if (!core.home && !core.carrier && (now - core.droppedAt > ADRIFT_SECONDS || core.position.length() > ARENA_LIMIT)) {
+      // a core that falls into the arena's massive body is lost, and its sponsor's spare waits at home
+      if (!core.home && !core.carrier && (now - core.droppedAt > ADRIFT_SECONDS || core.position.length() > ARENA_LIMIT || this.field.insideWell(core.position, CORE_REACH))) {
         this.goHome(team);
         this.event('return', null, team);
       }
@@ -481,6 +482,27 @@ export class Flags {
     core.position.addScaledVector(core.velocity, dt);
     this.collide(core.position, core.velocity);
     this.bump(core, ships);
+    this.meetCore(core);
+  }
+
+  /**
+   * A core adrift touching the other core bounces off it, both taking their shares by their
+   * masses (CORE_RESTITUTION); the other moves only while adrift too (one in tow or at home is
+   * held by its own rules), else this one takes all of it.
+   */
+  private meetCore(core: Core) {
+    const other = this.cores[1 - core.team];
+    if (!other) return;
+    const apart = normal.subVectors(core.position, other.position);
+    const distance = apart.length();
+    const reach = CORE_REACH * 2;
+    if (distance >= reach || distance < 1e-6) return;
+    apart.divideScalar(distance);
+    const free = !other.home && !other.carrier;
+    const toCore = free ? share(core.mass, other.mass) : 1;
+    core.position.addScaledVector(apart, (reach - distance) * toCore);
+    if (free) other.position.addScaledVector(apart, -(reach - distance) * (1 - toCore));
+    bump(core, other, apart, CORE_RESTITUTION, true, free);
   }
 
   /**
@@ -615,6 +637,15 @@ export class Flags {
       if (team !== undefined && (kind === null || ship.kind === kind)) counts[team]++;
     }
     return counts;
+  }
+
+  /** A comet's head ran down a core adrift (the lead browser decides): it is lost as in a well, and its sponsor's spare waits at home. */
+  runDown(head: THREE.Vector3, radius: number) {
+    for (const core of this.cores) {
+      if (core.home || core.carrier || core.position.distanceTo(head) >= radius + CORE_REACH) continue;
+      this.goHome(core.team);
+      this.event('return', null, core.team);
+    }
   }
 
   private goHome(team: number) {

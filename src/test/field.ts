@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { AsteroidField, type TemplateSet } from '../world/asteroids';
 import { fractureSet } from '../world/fracture';
 import { createRocks, DISTANT_DETAIL, FAR_DETAIL } from '../world/rocks';
+import { planMining, standClaims, type Plan } from '../world/mining';
 
 /** The rock shapes of each detail, built once for all tests (a field only clones them). */
 const built = new Map<number, THREE.Mesh[]>();
@@ -28,5 +29,17 @@ export function testField(detail = DISTANT_DETAIL, hulls: readonly THREE.Vector3
     group.add(collider);
     return group;
   };
-  return new AsteroidField({ rock: rocks, ice: rocks, debris: { near: shapes(detail), far: [] }, hull: { near: hulls.map(box), far: [], box: true } });
+  const field = new AsteroidField({ rock: rocks, ice: rocks, debris: { near: shapes(detail), far: [] }, hull: { near: hulls.map(box), far: [], box: true } });
+  // the Belt's rigs and buoys stand solid on their rocks, as the game dresses them (see world/mining)
+  const generate = field.generate.bind(field);
+  field.generate = (layout) => {
+    generate(layout);
+    if (layout.key !== 'belt') return;
+    const plan = claims.get(detail) ?? claims.set(detail, planMining(field)).get(detail)!;
+    standClaims(field, plan);
+  };
+  return field;
 }
+
+/** The Belt's mining plan by the rocks' detail, made once for all tests (it follows from the layout and the shapes). */
+const claims = new Map<number, Plan>();

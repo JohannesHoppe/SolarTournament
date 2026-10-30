@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { hash } from '../music/songs';
 import { textSeed } from '../random';
-import { FIELD_RADIUS, type AsteroidField, type Obstacle } from '../world/asteroids';
+import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
 import { contact, IMMOVABLE, MASS } from '../world/bodies';
 import type { Ship } from '../ship/ship';
 import { msg } from '../i18n/i18n';
@@ -107,10 +107,10 @@ export const PROBE_THRUST = 785;
 const PROBE_RETURN = 2000;
 const PROBE_SETTLE = 100;
 /**
- * A probe meeting the armor of what else stands in the field (the President's battleship, 2.7
- * million times its mass, which does not notice it) bounces off as far out as its wings reach
- * (PROBE_RADIUS), keeping PROBE_BOUNCE of the speed it met the hull at; so does the slot it
- * drifts on, which it flies back to.
+ * A probe meeting something solid (rock, ice, junk and hull, the President's battleship, a
+ * ring, wreckage, a sponsor core: all at least ten times its mass, which hardly notice it)
+ * bounces off as far out as its wings reach (PROBE_RADIUS), keeping PROBE_BOUNCE of the speed it
+ * met it at; so does the slot it drifts on, which it flies back to.
  */
 const PROBE_BOUNCE = 0.4;
 
@@ -329,7 +329,7 @@ export class Probes {
    * Probes drift, turn slowly and blink; one a hook let go flies back to its slot; a dropped
    * one is gone after its time, or in the arena's massive body.
    */
-  update(dt: number, now: number, field: AsteroidField) {
+  update(dt: number, now: number, field: AsteroidField, solids: readonly Solid[] = this.solidsOf(field)) {
     this.sealed.color.setHSL((now * SEALED_CYCLE) % 1, 1, 0.6).multiplyScalar(2.5);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const probe = this.list[i];
@@ -337,9 +337,9 @@ export class Probes {
       const returning = probe.astray && !probe.holder;
       if (returning) homeIn(probe, dt);
       probe.position.addScaledVector(probe.velocity, dt);
-      if (field.obstacle) {
-        bounce(field.obstacle, probe.slot, probe.slotVelocity);
-        bounce(field.obstacle, probe.position, probe.velocity);
+      for (const solid of solids) {
+        bounce(solid, probe.slot, probe.slotVelocity);
+        bounce(solid, probe.position, probe.velocity);
       }
       if (returning && probe.position.distanceTo(probe.slot) < PROBE_SETTLE && probe.velocity.distanceTo(probe.slotVelocity) < PROBE_SETTLE) {
         probe.position.copy(probe.slot);
@@ -351,6 +351,18 @@ export class Probes {
       if (now >= probe.until || field.insideWell(probe.position, PROBE_RADIUS)) this.remove(probe);
     }
   }
+
+  /** The field's pieces and its obstacle as the Solids a probe bounces off by default (see update), made once a field. */
+  private solidsOf(field: AsteroidField): readonly Solid[] {
+    if (this.solidField !== field) {
+      this.solidField = field;
+      this.solids = [fieldSolid(field), obstacleSolid(field)];
+    }
+    return this.solids;
+  }
+
+  private solidField: AsteroidField | null = null;
+  private solids: readonly Solid[] = [];
 
   /** The probe a ship of `radius` at `position` flies through, if any. */
   touching(position: THREE.Vector3, radius: number): Probe | null {
@@ -411,16 +423,44 @@ const hull = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mas
 /** A push out of one part of an obstacle may leave a probe in the next (two boxes of a hull meeting, a gap narrower than the probe between the keel and a battery's barrels below it): it is pushed out this many times at most. */
 const BOUNCE_PASSES = 8;
 
-/** A probe (or its slot) at `position` moving at `velocity` bounces off an obstacle it touches (see PROBE_BOUNCE). */
-function bounce(obstacle: Obstacle, position: THREE.Vector3, velocity: THREE.Vector3) {
-  for (let pass = 0; pass < BOUNCE_PASSES && obstacle.push(position, PROBE_RADIUS, hullNormal); pass++) {
+/**
+ * Whether a sphere at `position` of `radius` touches something solid: if it does, `position` is
+ * pushed out onto it, `normal` is its outward normal there and `moving` how fast its surface
+ * moves; true then.
+ */
+export type Solid = (position: THREE.Vector3, radius: number, normal: THREE.Vector3, moving: THREE.Vector3) => boolean;
+
+/** A probe (or its slot) at `position` moving at `velocity` bounces off what it touches (see PROBE_BOUNCE): what it touches does not notice it. */
+function bounce(touch: Solid, position: THREE.Vector3, velocity: THREE.Vector3) {
+  for (let pass = 0; pass < BOUNCE_PASSES && touch(position, PROBE_RADIUS, hullNormal, hull.velocity); pass++) {
     bouncing.position.copy(position);
     bouncing.velocity.copy(velocity);
-    hull.position.copy(obstacle.position);
-    hull.velocity.copy(obstacle.velocity);
+    hull.position.copy(position);
     contact(bouncing, hull, hullNormal, PROBE_BOUNCE, 0, true, false);
     velocity.copy(bouncing.velocity);
   }
+}
+
+const surfacePoint = new THREE.Vector3();
+
+/** The field's rock, ice, junk and hull as a Solid (see bounce): a piece at least thousands of times a probe's mass. */
+export function fieldSolid(field: AsteroidField): Solid {
+  return (position, radius, normal, moving) => {
+    const rock = field.overlap(position, radius);
+    if (!rock || !field.resolve(rock, position, radius, normal)) return false;
+    field.surfaceVelocity(rock, surfacePoint.copy(position).addScaledVector(normal, -radius), moving);
+    return true;
+  };
+}
+
+/** What else stands in the field (the President's battleship) as a Solid (see bounce). */
+export function obstacleSolid(field: AsteroidField): Solid {
+  return (position, radius, normal, moving) => {
+    const obstacle = field.obstacle;
+    if (!obstacle?.push(position, radius, normal)) return false;
+    moving.copy(obstacle.velocity);
+    return true;
+  };
 }
 
 /** A probe off its slot burns towards the speed that brings it back there (see PROBE_THRUST). */

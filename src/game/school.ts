@@ -165,6 +165,10 @@ const REACHED = 800;
 const STOP_SPEED = 200;
 /** Radius of the debris of the dodge drill: 15 m. */
 const DEBRIS_RADIUS = 300;
+/** The debris is an icosahedron as large as DEBRIS_RADIUS: its faces lie this share of it out from its center, as far as it meets rock. */
+const DEBRIS_FILL = 0.8;
+/** The debris that burst on rock (see Markers.update), by its live position: it threatens nobody any more. */
+const burst = new WeakSet<THREE.Vector3>();
 /** Speed of the debris: 60 m/s. */
 const DEBRIS_SPEED = 1200;
 /** Turning more than this (rad, about 45°) breaks a drill that forbids turning; a mouse pointer slightly off-center does not get there. */
@@ -1217,7 +1221,8 @@ function debris(line: string, praise: string, distance: number, speed: number, k
       a.points = [markers.debris(start, velocity, DEBRIS_RADIUS)];
       a.count = ctx.dodges;
     },
-    done: (ctx, a) => local(ctx, a.points[0]).z > 1500 && (!kick || ctx.dodges > a.count),
+    // debris that burst on rock on its way is past as well: the rock took it
+    done: (ctx, a) => burst.has(a.points[0]) || (local(ctx, a.points[0]).z > 1500 && (!kick || ctx.dodges > a.count)),
     fail(ctx, a) {
       if (ctx.me.flight.position.distanceTo(a.points[0]) < DEBRIS_RADIUS + ctx.me.radius) return SCHOOL.dodgeHit;
       return turned(ctx, a) ? SCHOOL.noTurn : null;
@@ -1370,10 +1375,20 @@ class Markers {
     return mesh.position;
   }
 
-  update(dt: number) {
+  /** Moves the drifting props; a chunk of debris that meets rock in `field` bursts there (see burst). */
+  update(dt: number, field: AsteroidField | null = null) {
     this.clock += dt;
     this.kit.blink(this.clock);
-    for (const { position, velocity } of this.moving) position.addScaledVector(velocity, dt);
+    for (const item of this.moving) {
+      const { mesh, position, velocity } = item;
+      if (burst.has(position)) continue;
+      position.addScaledVector(velocity, dt);
+      // a chunk of 15 m meeting a rock at 60 m/s or more goes to dust, as wreckage does
+      if (field && mesh.userData.spin && field.overlap(position, mesh.scale.x * DEBRIS_FILL)) {
+        burst.add(position);
+        mesh.visible = false;
+      }
+    }
     for (const child of this.root.children) {
       if (child.userData.spin) child.rotation.y += dt * 1.5;
     }
@@ -1486,6 +1501,13 @@ export class FlightSchool {
    * Whether a ship touches the housings of a ring still standing in a ring course (see
    * touchRing; the rings passed are gone); moves it out and sets `normal` when it does.
    */
+  /** Each ring still standing (see touchesRing) handed to `visit`: its center, facing and opening's radius. */
+  eachRing(visit: (center: THREE.Vector3, facing: THREE.Vector3, radius: number) => void) {
+    const a = this.attempt;
+    if (!a?.live || !a.normals.length) return;
+    for (let i = a.next; i < a.points.length; i++) visit(a.points[i], a.normals[i], RING_RADIUS);
+  }
+
   touchesRing(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
     const a = this.attempt;
     if (!a?.live || !a.normals.length) return false;
@@ -1533,7 +1555,7 @@ export class FlightSchool {
     }
     ctx.keepDrift = drill.keepsDrift?.(ctx, attempt) ?? false;
     attempt.seconds += ctx.dt;
-    this.markers.update(ctx.dt);
+    this.markers.update(ctx.dt, ctx.field);
 
     // a drill done counts once the clone has lived through it for SURVIVE seconds: a clone that
     // dies right after (flung into a rock off the hook, say) does the drill again

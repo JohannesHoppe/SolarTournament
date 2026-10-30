@@ -24,6 +24,36 @@ describe("the Rockborn's mining in the Belt", () => {
     expect(a.clouds).toEqual(b.clouds);
   });
 
+  it('stands solid: a ship on a deck is pushed off it, a beam down a derrick ends on it, a rock reaches as far as its rig', () => {
+    const { field, plan: p } = plan();
+    const rigs = p.solids.filter((list) => list?.length);
+    expect(rigs.length).toBeGreaterThan(5);
+    const rock = field.asteroids.get(p.ids[0])!;
+    // the deck: its middle in the world, and the way up out of it
+    const deck = p.solids[0][0];
+    const middle = new THREE.Vector3().applyMatrix4(deck.matrix).applyMatrix4(rock.object.matrixWorld);
+    const up = new THREE.Vector3(0, 1, 0).transformDirection(deck.matrix).transformDirection(rock.object.matrixWorld);
+    expect(field.overlap(middle, 340)).toBe(rock);
+    const ship = middle.clone();
+    // pushed out of the deck, and of the rock beneath it, over a few frames as a ship is
+    expect(field.resolve(rock, ship, 340)).not.toBeNull();
+    for (let frame = 0; frame < 4 && field.overlap(ship, 340); frame++) field.resolve(rock, ship, 340);
+    expect(field.overlap(ship, 330)).toBeNull();
+    expect(ship.distanceTo(middle)).toBeLessThan(2000);
+    // from 500 m above the deck straight down: the derrick (46 m tall) stops the beam first
+    const from = middle.clone().addScaledVector(up, 10000);
+    const hit = field.raycast(from, up.clone().negate(), 20000)!;
+    expect(hit.asteroid).toBe(rock);
+    expect(hit.distance).toBeLessThan(10000 - 40 * 20);
+    // nothing of the rig lies beyond the rock's reach
+    for (const part of p.solids[0]) {
+      for (let k = 0; k < 8; k++) {
+        const corner = new THREE.Vector3(k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1).multiply(part.half).applyMatrix4(part.matrix).applyMatrix4(rock.object.matrixWorld);
+        expect(corner.distanceTo(rock.object.position)).toBeLessThanOrEqual(rock.radius + 1);
+      }
+    }
+  });
+
   it('claims whole rocks only, and every slot of the shaders at most once', () => {
     const { field, plan: p } = plan();
     expect(new Set(p.ids).size).toBe(p.ids.length);
