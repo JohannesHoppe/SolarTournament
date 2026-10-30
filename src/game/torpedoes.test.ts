@@ -6,7 +6,7 @@ import type { Effects } from '../view/effects';
 import type { AsteroidField } from '../world/asteroids';
 import { MASS, type Body } from '../world/bodies';
 import { pullOn } from './hook';
-import { creditOf, FLING_CREDIT, flyTorpedo, fused, strikes, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, Torpedoes, type Homing, type Torpedo, type TorpedoFlight } from './torpedoes';
+import { creditOf, FLING_CREDIT, flyTorpedo, fused, strikes, TORPEDO_ARMING, TORPEDO_LATERAL, TORPEDO_LIFETIME, TORPEDO_THRUST, TORPEDO_TOP_SPEED, Torpedoes, type Homing, type Torpedo, type TorpedoFlight } from './torpedoes';
 
 /** The game's frames, at a fast browser's rate. */
 const DT = 1 / 60;
@@ -295,5 +295,17 @@ describe('a torpedo on the hook', () => {
     held.releasedAt = 2;
     expect(creditOf(held, 2 + FLING_CREDIT - 0.1)).toBe(holder);
     expect(creditOf(held, 2 + FLING_CREDIT + 0.1)).toBe(shooter);
+  });
+});
+
+describe("a torpedo's warhead", () => {
+  it('arms only clear of the tube: the wreckage of its own ship dying as it fires does not set it off, wreckage farther on does', () => {
+    const { torpedoes } = torpedo(ship('s', -1e6));
+    let gone = false;
+    // something loose touches it all the way (the solid the game asks about: wreckage, a probe, a torpedo)
+    for (let t = 0; t < TORPEDO_ARMING - 0.05; t += DT) torpedoes.update(DT, t, SPACE, [], () => (gone = true), () => true);
+    expect(gone).toBe(false);
+    torpedoes.update(DT, TORPEDO_ARMING, SPACE, [], () => (gone = true), () => true);
+    expect(gone).toBe(true);
   });
 });

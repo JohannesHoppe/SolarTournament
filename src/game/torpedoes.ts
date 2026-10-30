@@ -12,6 +12,12 @@ export const TORPEDOES = 2;
 /** A torpedo leaves the tube this much faster than its ship (units/s, 40 m/s). */
 export const TORPEDO_LAUNCH = 800;
 /**
+ * Its warhead arms this long after the launch (s), some 45 m clear of the tube: until then the
+ * ship's own laser does not shoot it down, and loose wreckage, probes and other torpedoes (the
+ * debris of its own ship dying as it fires, say) do not set it off; rock and hull still stop it.
+ */
+export const TORPEDO_ARMING = 0.5;
+/**
  * Its top speed (units/s, 360 m/s): a notch above a ship's 250 m/s, so a ship flying straight
  * is caught at 110 m/s, and below an overdrive's 400 m/s. As for a ship, a push beyond it adds
  * no speed.
@@ -369,7 +375,8 @@ export class Torpedoes {
       const hit = fused(torpedo, previous, ships, now, dt);
       // a part of the battleship it homes on sets it off as a ship does, its hull as a rock does
       const reached = !!target && strikes(previous, torpedo.position, target.flight, target.radius, dt);
-      const struck = reached || !!field.obstacle?.touches(torpedo.position, TORPEDO_RADIUS) || field.overlap(torpedo.position, TORPEDO_RADIUS) || field.insideWell(torpedo.position, TORPEDO_RADIUS) || solid(torpedo.position, TORPEDO_RADIUS, torpedo);
+      const armed = now - torpedo.bornAt >= TORPEDO_ARMING;
+      const struck = reached || !!field.obstacle?.touches(torpedo.position, TORPEDO_RADIUS) || field.overlap(torpedo.position, TORPEDO_RADIUS) || field.insideWell(torpedo.position, TORPEDO_RADIUS) || (armed && solid(torpedo.position, TORPEDO_RADIUS, torpedo));
       if (hit || struck || spent) detonate(torpedo, hit);
     }
   }
@@ -379,7 +386,7 @@ export class Torpedoes {
     let best: { torpedo: Torpedo; distance: number } | null = null;
     for (const torpedo of this.list) {
       // a ship does not shoot down its own torpedo leaving the tube
-      if (torpedo.shooter === shooter && now - torpedo.bornAt < 0.5) continue;
+      if (torpedo.shooter === shooter && now - torpedo.bornAt < TORPEDO_ARMING) continue;
       const distance = raySphere(origin, direction, torpedo.position, TORPEDO_RADIUS);
       if (distance !== null && distance <= maxDistance && (!best || distance < best.distance)) best = { torpedo, distance };
     }
