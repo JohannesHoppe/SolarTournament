@@ -4471,6 +4471,13 @@ export class Game implements OnlineGame {
       hooked: false,
       impactAhead: false,
       autopilot: true,
+      setAutopilot: (on) => {
+        if (this.autopilot !== on) this.toggleAutopilot();
+      },
+      keepDrift: false,
+      readyOverdrive: () => {
+        this.overdriveReadyAt = 0;
+      },
       cockpit: false,
       device: 'keyboard',
       field: this.field,
@@ -4480,6 +4487,10 @@ export class Game implements OnlineGame {
         return game.drone;
       },
       spawnDrone: (position, velocity) => this.spawnDrone(position, velocity),
+      removeDrone: () => {
+        if (this.drone) this.removeShip(this.drone);
+        this.drone = null;
+      },
       get bot() {
         return game.sparring?.bot.ship ?? null;
       },
@@ -5477,12 +5488,13 @@ export class Game implements OnlineGame {
 
   /**
    * The autopilot: the ship flies where its nose points (see flyByNose). Right after a dodge and
-   * on a swing the drift is the point: the input turns the nose as in free drift.
+   * on a swing the drift is the point: the input turns the nose as in free drift; so it is in a
+   * flight school drill that asks for it (the hook's drift past its rock, see Drill.keepsDrift).
    */
   private trimDrift(controls: Readonly<Controls>): Controls {
     const out = Object.assign(this.computed, controls);
     const me = this.me!;
-    if (this.time < this.dodgeReadyAt - DODGE_RECHARGE + DODGE_DRIFT || this.tethers.has(me)) {
+    if (this.time < this.dodgeReadyAt - DODGE_RECHARGE + DODGE_DRIFT || this.tethers.has(me) || (this.school && this.schoolContext?.keepDrift)) {
       this.flightMode = 'swing';
       return out;
     }
