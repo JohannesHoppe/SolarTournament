@@ -699,10 +699,10 @@ export const DE: Catalog = {
   // Nicole, the flight computer: the flight school
   'Hi, I am Nicole. Your personal flight computer.': 'Hi, ich bin Nicole. Dein persönlicher Bordcomputer.',
   'The year is 2584. The Orange President wants his games, and you are one of his chosen Hosts. Your printed clones fly for you, and every death they die streams straight into your mind. Training clones are free. Shall we?': 'Wir schreiben das Jahr zweitausendfünfhundertvierundachtzig. Der Orange Präsident will seine Spiele, und du bist einer seiner auserwählten Hosts. Deine gedruckten Klone fliegen für dich, und jeder Tod, den sie sterben, strömt direkt in deinen Kopf. Übungsklone sind gratis. Wollen wir?',
-  'Turn the ship. Put the marker in your crosshair.': 'Dreh das Schiff. Bring die Markierung in dein Fadenkreuz.',
+  'Turn the ship. Put the marker in your crosshair. Turning alone takes you nowhere.': 'Dreh das Schiff. Bring die Markierung in dein Fadenkreuz. Vom Drehen allein kommst du nicht von der Stelle.',
   'Hold fine aim, and you turn slowly. Center the marker. Exactly.': 'Halt Feinzielen gedrückt, dann drehst du dich langsam. Bring die Markierung in die Mitte. Ganz genau.',
   'Now look through your clone’s eyes. Switch to the cockpit, have a look around, and switch back.': 'Jetzt schau durch die Augen deines Klons. Schalt ins Cockpit, sieh dich um und schalt wieder zurück.',
-  'This is your main drive. Push it to fifty meters per second.': 'Das ist dein Hauptantrieb. Bring dich auf fünfzig Meter pro Sekunde.',
+  'To get anywhere, you burn. This is your main drive. Push it to fifty meters per second.': 'Vorwärts kommst du nur mit Schub. Das ist dein Hauptantrieb. Bring dich auf fünfzig Meter pro Sekunde.',
   'With the autopilot, you fly where you point. Switch it off, and you drift like a real spaceship.': 'Mit dem Autopiloten fliegst du, wohin du zeigst. Schalt ihn aus, dann treibst du wie ein echtes Raumschiff.',
   'Now let go. Nothing out here slows you down.': 'Jetzt lass los. Hier draußen bremst dich nichts.',
   'In free drift, you turn your nose and nothing else. The ship slides on the way it was going. Turn around, and watch the course marker: that is where you fly.': 'Im freien Drift drehst du deine Nase und sonst nichts. Das Schiff gleitet weiter, wohin es unterwegs war. Dreh dich um und achte auf die Kursmarke: Dorthin fliegst du.',
@@ -770,7 +770,7 @@ export const DE: Catalog = {
   'Again.': 'Nochmal.',
 
   // Nicole's praise after a drill
-  'Nice. At rest, turning only spins you around. It never moves you anywhere.': 'Schön. Im Stand dreht dich der Stick nur um dich selbst. Von der Stelle kommst du damit nicht.',
+  'Nice. Out here a ship spins on the spot, like a top.': 'Schön. Hier draußen dreht sich ein Schiff auf der Stelle, wie ein Kreisel.',
   'Precise. I like that.': 'Präzise. Das mag ich.',
   'Inside you aim like your clone. Outside you see your ship and its drift. Your choice.': 'Drinnen zielst du wie dein Klon. Draußen siehst du dein Schiff und seinen Drift. Deine Wahl.',
   'Feel that? Thirteen g. Your clone gets heavier with every burn. Burn too long, and the world shrinks to a tunnel.': 'Spürst du das? Dreizehn g. Dein Klon wird mit jedem Schub schwerer. Gibst du zu lange Schub, schrumpft die Welt zu einem Tunnel.',

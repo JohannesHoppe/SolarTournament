@@ -245,10 +245,10 @@ export const SCHOOL = {
   hello: 'Hi, I am Nicole. Your personal flight computer.',
   briefing:
     'The year is 2584. The Orange President wants his games, and you are one of his chosen Hosts. Your printed clones fly for you, and every death they die streams straight into your mind. Training clones are free. Shall we?',
-  turn: 'Turn the ship. Put the marker in your crosshair.',
+  turn: 'Turn the ship. Put the marker in your crosshair. Turning alone takes you nowhere.',
   fineAim: 'Hold fine aim, and you turn slowly. Center the marker. Exactly.',
   cockpit: 'Now look through your clone’s eyes. Switch to the cockpit, have a look around, and switch back.',
-  drive: 'This is your main drive. Push it to fifty meters per second.',
+  drive: 'To get anywhere, you burn. This is your main drive. Push it to fifty meters per second.',
   freeDrift: 'With the autopilot, you fly where you point. Switch it off, and you drift like a real spaceship.',
   drift: 'Now let go. Nothing out here slows you down.',
   lookBack: 'In free drift, you turn your nose and nothing else. The ship slides on the way it was going. Turn around, and watch the course marker: that is where you fly.',
@@ -321,7 +321,7 @@ export const SCHOOL = {
  * maneuver.
  */
 export const SCHOOL_PRAISE = {
-  turn: 'Nice. At rest, turning only spins you around. It never moves you anywhere.',
+  turn: 'Nice. Out here a ship spins on the spot, like a top.',
   fineAim: 'Precise. I like that.',
   cockpit: 'Inside you aim like your clone. Outside you see your ship and its drift. Your choice.',
   drive: 'Feel that? Thirteen g. Your clone gets heavier with every burn. Burn too long, and the world shrinks to a tunnel.',

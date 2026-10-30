@@ -677,10 +677,10 @@ export const ES: Catalog = {
   'Hi, I am Nicole. Your personal flight computer.': 'Hola, soy Nicole. Tu ordenador de vuelo personal.',
   'The year is 2584. The Orange President wants his games, and you are one of his chosen Hosts. Your printed clones fly for you, and every death they die streams straight into your mind. Training clones are free. Shall we?':
     'Estamos en el año 2584. El Presidente Naranja quiere sus juegos, y tú eres uno de sus Hosts elegidos. Tus clones impresos vuelan por ti, y cada muerte que sufren llega directa a tu mente. Los clones de entrenamiento son gratis. ¿Empezamos?',
-  'Turn the ship. Put the marker in your crosshair.': 'Gira la nave. Pon el marcador en tu punto de mira.',
+  'Turn the ship. Put the marker in your crosshair. Turning alone takes you nowhere.': 'Gira la nave. Pon el marcador en tu punto de mira. Girar no te lleva a ninguna parte.',
   'Hold fine aim, and you turn slowly. Center the marker. Exactly.': 'Mantén pulsada la puntería fina y girarás despacio. Centra el marcador. Justo en medio.',
   'Now look through your clone’s eyes. Switch to the cockpit, have a look around, and switch back.': 'Ahora mira a través de los ojos de tu clon. Cambia a la cabina, echa un vistazo y vuelve.',
-  'This is your main drive. Push it to fifty meters per second.': 'Este es tu motor principal. Llévalo a cincuenta metros por segundo.',
+  'To get anywhere, you burn. This is your main drive. Push it to fifty meters per second.': 'Para llegar a algún sitio, necesitas empuje. Este es tu motor principal. Llévalo a cincuenta metros por segundo.',
   'With the autopilot, you fly where you point. Switch it off, and you drift like a real spaceship.': 'Con el piloto automático, vuelas adonde apuntas. Apágalo e irás a la deriva como una nave espacial de verdad.',
   'Now let go. Nothing out here slows you down.': 'Ahora suelta. Aquí fuera, nada te frena.',
   'In free drift, you turn your nose and nothing else. The ship slides on the way it was going. Turn around, and watch the course marker: that is where you fly.': 'En deriva libre, giras el morro y nada más. La nave sigue deslizándose hacia donde iba. Date la vuelta y mira la marca de rumbo: ahí es adonde vuelas.',
@@ -750,7 +750,7 @@ export const ES: Catalog = {
   'Again.': 'Otra vez.',
 
   // Nicole: praise after a drill
-  'Nice. At rest, turning only spins you around. It never moves you anywhere.': 'Bien. En reposo, girar solo te hace dar vueltas sobre ti. No te mueve de sitio.',
+  'Nice. Out here a ship spins on the spot, like a top.': 'Bien. Aquí fuera una nave gira sobre sí misma, como una peonza.',
   'Precise. I like that.': 'Qué precisión. Me gusta.',
   'Inside you aim like your clone. Outside you see your ship and its drift. Your choice.': 'Desde dentro, apuntas como tu clon. Desde fuera, ves tu nave y su deriva. Tú eliges.',
   'Feel that? Thirteen g. Your clone gets heavier with every burn. Burn too long, and the world shrinks to a tunnel.': '¿Lo notas? Trece g. Tu clon pesa más con cada acelerón. Si aceleras demasiado tiempo, el mundo se reduce a un túnel.',
