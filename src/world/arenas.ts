@@ -57,6 +57,8 @@ export interface ArenaProfile {
   references: Reference[];
   /** Half the thickness (units) of a layer of ice grains in the horizon plane, a ring's: harmless, but felt on the hull flying through (see Game.ringGrains). */
   grains?: number;
+  /** Half the thickness (units) of a sheet drawn through the horizon plane, a ring's (see RING_SHEET): the President's battleship flies its lane clear of it. */
+  sheet?: number;
 }
 
 /** How the HUD draws a fixed reference: each kind has a glyph of its own in style.css (.reference[data-glyph]). */
@@ -307,6 +309,7 @@ export const ARENAS: readonly ArenaProfile[] = [
       toughness: 500,
     },
     grains: RING_LAYER,
+    sheet: RING_SHEET,
     cooling: 1.2,
     storms: false,
     sun: { size: 26000, intensity: 3, color: 0xf2f4ff },

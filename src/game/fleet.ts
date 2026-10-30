@@ -553,10 +553,15 @@ export class Fleet implements Obstacle {
   /** The height its orbit runs at (units, see LANE_MAX). */
   readonly lane: number;
 
-  /** A battleship from `seed`, flying clear of the pieces of `field` (none in a test without it), its lane laid out from the field as it stands now. */
+  /**
+   * A battleship from `seed`, flying clear of the pieces of `field` (none in a test without it),
+   * its lane laid out from the field as it stands now, its hull ROCK_CLEAR clear of a `sheet`
+   * that half thick drawn through the field's plane (the Rings of Saturn's, see RING_SHEET).
+   */
   constructor(
     private readonly seed: number,
     private readonly field: AsteroidField | null = null,
+    sheet = 0,
   ) {
     // A carrier refitted for the President, fresh from the newest dock: a heavy hull of dark
     // armor, polished, gilded on its edges, its turrets and its bridge; the runway in the
@@ -1121,7 +1126,7 @@ export class Fleet implements Obstacle {
     for (const z of HANGARS) {
       this.bulk.push({ center: new THREE.Vector3(0, (HANGAR_FLOOR + HANGAR_CEILING) / 2, z), half: new THREE.Vector3(hullAt(z).half, (HANGAR_CEILING - HANGAR_FLOOR) / 2, HANGAR_WIDTH / 2) });
     }
-    this.lane = field ? this.laneOf(field) : 0;
+    this.lane = field ? this.laneOf(field, sheet) : 0;
     this.enter();
   }
 
@@ -1136,8 +1141,8 @@ export class Fleet implements Obstacle {
     return false;
   }
 
-  /** The lane its orbit runs at in `field` (see LANE_MAX). */
-  private laneOf(field: AsteroidField): number {
+  /** The lane its orbit runs at in `field` (see LANE_MAX), clear of a `sheet` that half thick through the field's plane. */
+  private laneOf(field: AsteroidField, sheet: number): number {
     // a level hull on its orbit reaches out to its flanks across it, along it to bow and stern,
     // and from the keel up to the masts
     let flank = 0;
@@ -1162,6 +1167,7 @@ export class Fleet implements Obstacle {
     for (let k = 0; k <= (LANE_MAX / LANE_STEP) * 2; k++) {
       // the plane first, then up and down in turn
       const height = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * LANE_STEP || 0;
+      if (sheet > 0 && height + low < sheet + ROCK_CLEAR && height + high > -sheet - ROCK_CLEAR) continue;
       const inner = ORBIT - flank;
       const outer = Math.hypot(entryRadius(height) + flank, length);
       const crossing = paths.filter(({ at, reach }) =>

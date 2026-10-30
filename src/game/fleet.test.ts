@@ -4,7 +4,7 @@ import { ARRIVAL, BATTERY_PERIOD, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLO
 import { Bot, evenSkills, SIEGE_DISTANCE } from '../ship/bots';
 import type { Ship } from '../ship/ship';
 import { testField } from '../test/field';
-import { arenaById, ARENAS, type ArenaProfile } from '../world/arenas';
+import { arenaById, ARENAS, RING_SHEET, type ArenaProfile } from '../world/arenas';
 import { DISTANT_DETAIL } from '../world/rocks';
 import { HULL_BOXES } from '../world/shapes';
 import { ROUND_SECONDS } from '../music/songs';
@@ -212,7 +212,7 @@ describe("the battleship and the field's rock", () => {
    */
   const sail = (arena: ArenaProfile, hunted: boolean) => {
     field.generate(arena.layout);
-    const fleet = new Fleet(arena.layout.seed, field);
+    const fleet = new Fleet(arena.layout.seed, field, arena.sheet);
     // the first round of the arena's seed that has comets
     const comets = hunted ? [] : (Array.from({ length: 20 }, (_, round) => roundComets(arena.layout.seed, round, field.well, false)).find((list) => list.length) ?? []);
     const pilot = { id: 'p:a', alive: true, flight: { position: new THREE.Vector3() } };
@@ -246,7 +246,13 @@ describe("the battleship and the field's rock", () => {
   }
 
   it("flies its orbit over the Rings of Saturn's sheet of ice, clear of it, and in the plane where nothing is in its way", () => {
-    field.generate(arenaById('rings')!.layout);
+    const rings = arenaById('rings')!;
+    field.generate(rings.layout);
+    // its keel over the drawn sheet, and over the layer's chunks without it
+    const fleet = new Fleet(23, field, rings.sheet);
+    expect(fleet.lane).toBeGreaterThan(RING_SHEET);
+    expect(fleet.reaches(fleet.position.clone().setY(RING_SHEET), 1)).toBe(false);
+    expect(fleet.reaches(fleet.position.clone().setY(fleet.lane - 1000), 1)).toBe(true);
     expect(new Fleet(23, field).lane).toBeGreaterThan(1600);
     field.generate(arenaById('giant')!.layout);
     expect(new Fleet(47, field).lane).toBe(0);
