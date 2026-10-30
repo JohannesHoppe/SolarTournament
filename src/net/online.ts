@@ -206,8 +206,9 @@ export class Online {
       const credited = killer !== null && gun !== null && this.witnessed(killer, victim, where, nova) ? killer : null;
       // the kills its states may show: every death another browser than the killer's names it
       // for counts (that browser saw it die by it); one of its own browser's ships only with
-      // that evidence (a lead browser's Host or bot killing one of its bots)
-      const counted = killer !== null && gun !== null && (credited !== null || ownerOf(killer) !== ownerOf(victim)) ? killer : null;
+      // that evidence (a lead browser's Host or bot killing one of its bots); a kill of the own
+      // side adds no kill (it costs points, see game/friendly), so its states show none
+      const counted = killer !== null && gun !== null && !gun.allyOf(ship) && (credited !== null || ownerOf(killer) !== ownerOf(victim)) ? killer : null;
       this.credit(victim, counted, nova && counted !== null);
       this.plausible.died(victim, wall());
       game.remoteDestroyed(ship, credited ? gun : null, deaths, p && from.fromArray(p), u && to.fromArray(u), nova && credited !== null);

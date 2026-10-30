@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { TORPEDO_LIFETIME } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
-import { Accusations, accusersNeeded, beamShare, Evidence, hookShare, Plausibility, SenderClock, Standings, Strikes, type Margins, type Seen, type Standing } from './plausible';
+import { killScore } from '../game/friendly';
+import { Accusations, accusersNeeded, AIM_SLACK, beamShare, Evidence, hookShare, Plausibility, SenderClock, Standings, Strikes, type Margins, type Seen, type Standing } from './plausible';
 import { honestFlight, type Roughness } from '../test/honest';
 
 const alive = (x: number, more = {}) => ({ p: [x, 0, 0], alive: true, ...more });
@@ -308,6 +309,15 @@ describe('the standing of another browser\'s ship', () => {
     expect(s).toBeLessThan(6500 + 10000 + 200 * 12);
   });
 
+  it('takes a score that falls below zero by friendly fire, a nova among its own side at once', () => {
+    const standings = new Standings();
+    standings.take('s', at(300), 0, 0, 0);
+    // a nova that took three ships of its own side: three double kills taken away
+    const fallen = 300 + killScore(true, 500, 2) * 3;
+    expect(standings.take('s', at(fallen), 1, 1, 1).s).toBe(fallen);
+    expect(fallen).toBeLessThan(0);
+  });
+
   it('takes what a ship first seen could have made since the round started', () => {
     const standings = new Standings();
     expect(standings.take('s', at(25000), 100, 100, 85).s).toBe(25000);
@@ -518,6 +528,19 @@ describe('evidence of what a ship did', () => {
     expect(beamShare(v(0, 40000), ahead, v(0), v(50000, 40000))).toBeGreaterThan(1);
     expect(beamShare(v(0), ahead, v(0), v(50000, 40000))).toBeGreaterThan(1);
     expect(beamShare(v(0), ahead, v(0), v(-50000))).toBeGreaterThan(1);
+  });
+
+  it('takes a beam that ended on the hull it hit, whichever side that ship is on, as the hit and the kill it made', () => {
+    // the beam ends at the first hull on its line (friendly fire): 17 m short of the ship's center
+    const ship = v(50000, 300);
+    const end = v(50000 - 340);
+    const ahead = v(1, 0, 0);
+    expect(beamShare(v(0), ahead, v(0), ship)).toBeLessThan(1);
+    const evidence = new Evidence();
+    evidence.beam('s', v(0), end, 10);
+    expect(evidence.beamPassed('s', ship, 11)).toBe(true);
+    // a ship beyond the beam's end and its slack for lag it did not hit
+    expect(evidence.beamPassed('s', v(50000 + AIM_SLACK + 6000), 11)).toBe(false);
   });
 
   it("takes a torpedo or probe on a ship's hook only within the hook's reach, give or take lag", () => {

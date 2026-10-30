@@ -14,7 +14,8 @@ import { MASS, rope, ropeFrom, share, type Body } from '../world/bodies';
  * it, faster the shorter the cable gets (its angular momentum stays), and flies off along its
  * swing when the pilot lets go: a jump, flung across the field. Hooked to a ship, the winch
  * pulls both alike, both being of the same mass; each one's own drive pulls against it. The
- * cable snaps beyond HOOK_SNAP of the range; the winch stops HOOK_SLACK ship radii (about 70 m)
+ * cable snaps beyond HOOK_SNAP of the range, and wherever something solid comes across it (see
+ * cableCut); the winch stops HOOK_SLACK ship radii (about 70 m)
  * from where the hook bit (see pivotOf, floorOf), pulls nothing beyond the limit it is given
  * (the game gives the coils' limit); while the hook is held, the flight computer burns against
  * any speed towards the anchor it could no longer stop before that distance (with up to
@@ -131,6 +132,28 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
     best = { anchor: { rock: null, local: null, ship: null, mark }, distance, at: mark.position.clone() };
   }
   return best;
+}
+
+/**
+ * A cable is cut by something solid lying across it more than this far in from either end
+ * (units, 15 m, less than a hull's radius): an end that scrapes along a surface does not cut it.
+ */
+const CUT_MARGIN = 300;
+const cutFrom = new THREE.Vector3();
+const cutTo = new THREE.Vector3();
+
+/**
+ * Whether a cable stretched from `from` to `to` is cut: rock, ice, junk, a hull section, the
+ * well's body or the battleship's hull lies across it (see AsteroidField.blocked). A cable never
+ * passes through a solid body; it snaps. The rock it is made fast to (`fastTo`) is left out:
+ * swinging around that rock, the cable runs along its surface.
+ */
+export function cableCut(field: AsteroidField, from: THREE.Vector3, to: THREE.Vector3, fastTo: Asteroid | null = null): boolean {
+  const length = from.distanceTo(to);
+  if (length <= CUT_MARGIN * 2) return false;
+  cutFrom.lerpVectors(from, to, CUT_MARGIN / length);
+  cutTo.lerpVectors(from, to, 1 - CUT_MARGIN / length);
+  return field.blocked(cutFrom, cutTo, fastTo);
 }
 
 /** The seconds a harpoon flies to bite at `distance`. */

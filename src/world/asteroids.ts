@@ -735,11 +735,24 @@ export class AsteroidField {
   }
 
   /**
+   * True when something solid lies between two points: a rock, ice, junk or a hull section, the
+   * well's body or an obstacle's hull, `except` left out (the rock a cable is made fast to). A
+   * cable stretched between them is cut (see game/hook); haze cuts nothing.
+   */
+  blocked(from: THREE.Vector3, to: THREE.Vector3, except: Asteroid | null = null): boolean {
+    const distance = from.distanceTo(to);
+    if (distance < 1) return false;
+    sight.subVectors(to, from).divideScalar(distance);
+    return this.cast(from, sight, distance, true, true, except) !== null;
+  }
+
+  /**
    * The distance of the nearest hit along a ray within `max` (the rock hit, if any, in castRock),
    * or with `any` of the first hit found, which is all a line of sight needs; null for none.
-   * Rocks whose bounding sphere the ray enters beyond the best hit so far are skipped.
+   * Rocks whose bounding sphere the ray enters beyond the best hit so far are skipped, and so is
+   * `skip`.
    */
-  private cast(origin: THREE.Vector3, direction: THREE.Vector3, max: number, any: boolean, obstacles: boolean): number | null {
+  private cast(origin: THREE.Vector3, direction: THREE.Vector3, max: number, any: boolean, obstacles: boolean, skip: Asteroid | null = null): number | null {
     let best: number | null = null;
     castRock = null;
     castCenter = null;
@@ -760,6 +773,7 @@ export class AsteroidField {
       }
     }
     for (const asteroid of this.asteroids.values()) {
+      if (asteroid === skip) continue;
       const enter = raySphere(origin, direction, asteroid.object.position, asteroid.radius);
       if (enter === null || enter > (best ?? max)) continue;
       const distance = asteroid.box ? rayPiece(asteroid, origin, direction) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);

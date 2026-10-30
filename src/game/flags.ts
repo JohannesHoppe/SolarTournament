@@ -7,7 +7,7 @@ import { CoreKit, GRIP, type CoreLook } from '../world/powercore';
 import { touchRing } from '../world/gates';
 import { bounceOff, bump } from '../ship/impact';
 import { MASS, share, type Body } from '../world/bodies';
-import { Cables, HOOK_RANGE, pullOn, type Mark } from './hook';
+import { cableCut, Cables, HOOK_RANGE, pullOn, type Mark } from './hook';
 import { ringCrossing } from './race';
 import { sponsorSigns } from './satire-ads';
 import { msg } from '../i18n/i18n';
@@ -19,7 +19,8 @@ import { inGrip, WELL_CAUTION } from './alarms';
  * its hook: touching it, the hook on the hull grabs it; or the harpoon, fired at it, bites it
  * from afar (see claim). The core then hangs on the cable from the ship's stern (see tow), and
  * when the core itself passes through the ring of the carrier's base while the carrier's own
- * core is at home, it captures. A carrier that dies loses the core: it flies on from the
+ * core is at home, it captures. A carrier that dies, or whose tow cable snaps on something solid
+ * that came across it (rock, ice, junk, a hull), loses the core: it flies on from the
  * cable's end until someone takes it, its own side takes it (and it goes home), or
  * ADRIFT_SECONDS have passed. The first side with CAPTURES_TO_WIN captures wins at once;
  * otherwise the one with more when the time is up.
@@ -263,8 +264,9 @@ export class Flags {
       if (core.carrier) {
         const carrier = byId(ships, core.carrier);
         // a carrier that died, left, or changed sides lets the core go where it hangs, flying
-        // on with its cable end's velocity
-        if (!carrier?.alive || this.teamOf(carrier.id) === team) {
+        // on with its cable end's velocity; so does a tow cable that something solid came
+        // across, which snaps (see cableCut)
+        if (!carrier?.alive || this.teamOf(carrier.id) === team || cableCut(this.field, sternOf(carrier, stern), core.position)) {
           this.event('drop', core.carrier, team);
           core.carrier = null;
           core.droppedAt = now;

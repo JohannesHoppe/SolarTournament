@@ -166,6 +166,12 @@ export const ANNOUNCER_KILL = [
   'that one was sponsored. {name} dies for victory cola',
   'beautiful. {name} breathes vacuum now',
 ];
+/** A ship killed by its own side: the announcer scolds the killer ({name}), and the regime loves the waste. */
+export const ANNOUNCER_TEAM_KILL = [
+  '{name} shoots its own side. what an idiot. the printer thanks you',
+  'friendly fire from {name}. a clone wasted for nothing. the president loves waste',
+  'look at {name}, killing its friends. minus points, plus ratings',
+];
 export const ANNOUNCER_ALIEN = [
   'the alien is dead. now our nation can grow again',
   'one less alien. the president thanks you',
@@ -419,6 +425,8 @@ export const COMPUTER = {
   torpedo200: 'Two hundred.',
   torpedo100: 'One hundred.',
   torpedoBreak: 'Break!',
+  friend: 'Darling, that is a friend! Hold your fire.',
+  friendHit: 'You hit one of ours, darling. Watch your aim.',
 } as const;
 
 /**
@@ -471,7 +479,7 @@ export function allLines(language: Language): string[] {
       return [STATION_DE, NOW_PLAYING_DE, ...TITLE_FIRST_DE, ...TITLE_SECOND_DE, ...PHRASES_DE];
     case 'mod':
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
-      return [...ANNOUNCER_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
+      return [...ANNOUNCER_KILL, ...ANNOUNCER_TEAM_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
       return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY];
   }
