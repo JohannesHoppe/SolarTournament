@@ -146,6 +146,8 @@ const STOPPED = 100;
 export const RING_RADIUS = GATE_RADIUS;
 /** Radius of the zone the stop drill wants the ship to rest in: 200 m, shown as a sphere around the marker. */
 const STOP_RADIUS = 4000;
+/** A marker of the turn drill counts as reached within this of it: 40 m, a ship's length past the diamond. */
+const REACHED = 800;
 /** At rest in the stop drill means slower than this: 10 m/s. */
 const STOP_SPEED = 200;
 /** Radius of the debris of the dodge drill: 15 m. */
@@ -543,14 +545,16 @@ export const DRILL = {
   turn: {
     line: SCHOOL.turn,
     praise: SCHOOL_PRAISE.turn,
-    keys: ['turn'],
+    // the drive's keys show beside the stick's, since the line says turning alone moves nothing
+    keys: ['turn', 'drive'],
     reps: TURN_MARKERS.length,
     enter(ctx, a, markers) {
       stop(ctx);
       const [x, y, z] = TURN_MARKERS[a.rep];
       a.points = [markers.buoy(ahead(ctx, x, y, z).sub(ctx.me.flight.position).setLength(3000).add(ctx.me.flight.position))];
     },
-    done: (ctx, a) => holdFor(ctx, a, aimError(ctx, a.points[0]) < 0.05, 0.4),
+    // a pilot who burns to the marker has had it in the crosshair on the way
+    done: (ctx, a) => holdFor(ctx, a, aimError(ctx, a.points[0]) < 0.05, 0.4) || ctx.me.flight.position.distanceTo(a.points[0]) < REACHED,
     waypoint: (_, a) => a.points[0],
     mark: () => t('Target'),
   },

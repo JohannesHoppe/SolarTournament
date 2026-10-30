@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { coursesFrom, DRILL, judge, SCHOOL_COURSES } from './school';
 
@@ -17,6 +18,14 @@ describe('judging a drill', () => {
     expect(judged(DRILL.bursts, kill, {})).toBe(true);
     // overheated with the bot still alive: too hot
     expect(judged(DRILL.bursts, { ...kill, bot: { alive: true } }, {})).toBeTypeOf('string');
+  });
+
+  it('counts a turn drill done for a pilot who burns to the marker, however the nose points there', () => {
+    const marker = new THREE.Vector3(0, 0, -3000);
+    const at = (position: THREE.Vector3) => ({ dt: 0.016, me: { flight: { position, angleTo: () => Math.PI / 2 } } });
+    expect(judged(DRILL.turn, at(new THREE.Vector3(0, 0, -2600)), { points: [marker], held: 0 })).toBe(true);
+    // short of it, with the nose off it: not yet
+    expect(judged(DRILL.turn, at(new THREE.Vector3(0, 0, -1000)), { points: [marker], held: 0 })).toBeNull();
   });
 });
 

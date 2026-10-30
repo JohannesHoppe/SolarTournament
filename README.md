@@ -198,7 +198,7 @@ The flight school has five courses, each played on its own from the school's pla
 **Basic training** (10 drills, the autopilot on throughout):
 
 1. Briefing: Nicole introduces herself ("Hi, I am Nicole. Your personal flight computer."), then the world of the games in four sentences.
-2. Turning: three markers into the crosshair (arrows or mouse), at rest, where steering turns the nose and the ship stays where it is.
+2. Turning: three markers 150 m off into the crosshair (arrows or mouse), at rest, where steering turns the nose and the ship stays where it is; Nicole says turning alone takes the ship nowhere, and the drive's keys show beside the stick's. A pilot who burns to a marker instead (within 40 m of it) has done it too.
 3. Fine aim: Shift steers slowly; center a far marker exactly.
 4. Cockpit view: C switches into the cockpit and back (not given on touch screens, which have no camera switch: Nicole goes straight on to the next drill).
 5. Main drive: W up to 50 m/s.
