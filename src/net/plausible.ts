@@ -646,8 +646,9 @@ function keep<T extends { at: number }>(map: Map<string, T[]>, ship: string, ent
 /**
  * A ship's score as other browsers take it rises by at most SCORE_RATE points a second, in
  * bursts of up to SCORE_BURST: far beyond honest play (a nova core that takes seven ships at once
- * is 7,000 points, the battleship's reactor and its sinking 1,500, a race's win 1,000), and a
- * score said to be higher shows as high as that allows. It falls as it likes (deaths cost points).
+ * is 7,000 points, a streak of seven kills with its bonus 6,250, the battleship's reactor and its
+ * sinking 1,500, a race's win 1,000), and a score said to be higher shows as high as that
+ * allows. It falls as it likes (deaths cost points).
  */
 const SCORE_RATE = 200;
 const SCORE_BURST = 10000;

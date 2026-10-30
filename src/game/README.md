@@ -21,6 +21,7 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | `school.ts` | The flight school: five courses, their drills and markers (ring courses tilted clear of rock); the completed courses as the browser keeps them |
 | `coach.ts` | Nicole's briefings and tips in real rounds |
 | `friendly.ts` | Friendly fire: what a kill changes the killer's score by, a kill of the own side taking as much as one of the other side gives |
+| `streaks.ts` | Kill streaks: every ship's run of kills close after each other and the bonus its kills earn, a share of a kill's points |
 | `moments.ts` | The own pilot's big moments (streaks, revenge, a knockout, …): banner, crowd and announcer |
 | `sponsors.ts`, `satire-ads.ts` | The sponsor break before a respawn, how long a Host's and a bot's next clone takes, and the invented sponsors; `sponsors.test.ts` holds a bot to a Host's soonest wait |
 

@@ -95,6 +95,7 @@ import {
 } from './alarms';
 import { MOMENTS, Moments, type Moment } from './moments';
 import { killScore } from './friendly';
+import { streakBonus, Streaks } from './streaks';
 import { devlog } from '../devlog';
 import { recorder, type FlightMode, type InputFrame } from '../recorder';
 import { CAMERA_FOLLOW, CAMERA_FOV, CAMERA_TURN, CHASE_DISTANCE, CHASE_HEIGHT } from '../view/chase';
@@ -1101,8 +1102,10 @@ export class Game implements OnlineGame {
   private readonly speaker: Speaker;
   /** Nicole's briefings and tips in real rounds. */
   private readonly coach = new Coach();
-  /** The own pilot's streaks and grudges, for its big moments. */
+  /** The own pilot's grudges, for its big moments. */
   private readonly moments = new Moments();
+  /** The kill streaks of the ships this browser runs, for their bonus and the own pilot's moments. */
+  private readonly streaks = new Streaks();
   /** The development log (see devlog.ts): `game.log` in the console; null in production. */
   readonly log = devlog;
   /** The input recorder (see recorder.ts): `game.recorder` in the console; null in production. */
@@ -2360,12 +2363,13 @@ export class Game implements OnlineGame {
   /**
    * A big moment of the own pilot (see game/moments.ts): its banner above the crosshair, the
    * crowd (on its feet for the biggest, a cheer that settles again for the rest) and, for the
-   * biggest, the announcer. Not in the flight school, which is on no broadcast.
+   * biggest, the announcer; a streak's `bonus` (points, see game/streaks) beneath the banner.
+   * Not in the flight school, which is on no broadcast.
    */
-  private moment(moment: Moment) {
+  private moment(moment: Moment, bonus = 0) {
     if (this.school || !this.me) return;
     const { banner, crowd, lines, rank } = MOMENTS[moment];
-    this.hud.banner(this.time, t(banner), rank);
+    this.hud.banner(this.time, t(banner), rank, bonus > 0 ? t('Streak bonus +{points}', { points: bonus }) : '');
     if (crowd >= 1) this.crowd.erupt();
     else {
       this.crowd.swell(crowd, 0.2, CHEER_SECONDS);
@@ -2753,6 +2757,7 @@ export class Game implements OnlineGame {
     this.brokenHere.clear();
     this.lastRockHit.clear();
     this.moments.reset();
+    this.streaks.reset();
     this.wrecks.clear();
     this.probes.reset();
     $('results').hidden = true;
@@ -5921,9 +5926,14 @@ export class Game implements OnlineGame {
     const scored = counts && !teamKill;
     const ownKill = scored && killer?.isLocal === true && killer === this.me;
     const credit = cause === 'nova' ? NOVA_KILL_CREDIT : 1;
+    // a kill of the other side by a ship this browser runs counts in its streak and earns its
+    // bonus (see game/streaks); a dead clone's streak is over
+    const streak = scored && killer!.owner === null ? this.streaks.kill(killer!.id, this.time) : 0;
+    const bonus = streakBonus(streak, this.killPoints(), cause === 'nova');
+    this.streaks.end(victim.id);
     this.effects.explosion(victim.flight.position, victim.radius * (ownKill ? 3 : 2), victim.flight.velocity.clone().multiplyScalar(0.3));
     if (ownKill) {
-      this.hud.popup(this.camera, victim.flight.position, credit > 1 ? t('Double kill +{points}', { points: this.killPoints() * credit }) : `+${this.killPoints()}`, 'kill');
+      this.hud.popup(this.camera, victim.flight.position, credit > 1 ? t('Nova kill +{points}', { points: this.killPoints() * credit }) : `+${this.killPoints() + bonus}`, 'kill');
       this.kick = 2;
     }
     this.wrecks.spawn(victim.id, victim.deaths, victim.flight.position, victim.flight.velocity, victim.radius, this.time);
@@ -5955,7 +5965,7 @@ export class Game implements OnlineGame {
     }
     if (counts && killer && killer.owner === null) {
       const points = killScore(teamKill, this.killPoints(), credit);
-      killer.score += points;
+      killer.score += points + bonus;
       if (scored) killer.kills += credit;
       if (scored && killer.isLocal) {
         this.sound.beep(1320, 0.07, 0.15);
@@ -5971,8 +5981,8 @@ export class Game implements OnlineGame {
     // an own side's killer is no one to take revenge on
     if (victim === this.me) this.moments.died(killer && killer !== victim && !killer.allyOf(victim) ? killer.id : null);
     if (ownKill) {
-      const moment = this.moments.ownKill(victim.id, this.time, cause === 'nova') ?? (cause === 'knockout' ? 'knockout' : null);
-      if (moment) this.moment(moment);
+      const moment = this.moments.ownKill(victim.id, streak, cause === 'nova') ?? (cause === 'knockout' ? 'knockout' : null);
+      if (moment) this.moment(moment, bonus);
     }
     // remote ships do not report how they crashed: "Crash" covers rocks and wreckage alike
     const killedBy =

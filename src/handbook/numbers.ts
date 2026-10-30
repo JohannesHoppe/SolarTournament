@@ -12,6 +12,7 @@ import { ADRIFT_SECONDS, CAPTURE_POINTS, CAPTURES_TO_WIN, CORE_BRAKE, GRAB_POINT
 import { MASS } from '../world/bodies';
 import { ARRIVAL, BATTERY_PERIOD, BATTERY_RANGE, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, NOVA_EDGE, NOVA_SHATTER, SINK_BLAST, SINK_POINTS, TORPEDO_HITS, ZONE_HITS } from '../game/fleet';
 import { COMET_WARNING } from '../game/comet';
+import { STREAK_SECONDS, streakBonus } from '../game/streaks';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
 import { ASTEROID_POINTS } from '../world/asteroids';
 import { ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
@@ -54,6 +55,7 @@ export const FROM_CODE: Record<string, number> = {
   boost: meters(BOOST_PUSH),
   gatePoints: GATE_POINTS,
   firstPlace: PLACE_POINTS[0],
+  streak: STREAK_SECONDS,
   hull: MAX_HULL,
   torpedoes: TORPEDOES,
   lockAngle: Math.round((LOCK_ANGLE * 180) / Math.PI),
@@ -184,8 +186,10 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   pingCritical: { value: 300, readme: 'red from # ms' },
 };
 
-/** Every number of the handbook by its placeholder. */
+/** Every number of the handbook by its placeholder; a streak's bonus is the game's share of a kill's points. */
 export const HANDBOOK_NUMBERS: Record<string, number> = {
   ...FROM_CODE,
   ...Object.fromEntries(Object.entries(FROM_README).map(([name, { value }]) => [name, value])),
+  streakDouble: streakBonus(2, FROM_README.kill.value, false),
+  streakMore: streakBonus(3, FROM_README.kill.value, false),
 };
