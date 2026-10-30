@@ -78,9 +78,8 @@ Each arena gets a look of its own, recognized at first glance, cheap on phones (
 
 Ideas Johannes has named that are not built yet, with the day they came up. One goes in the moment it is named and not built at once, and out once it is built (then the README has it) or dropped.
 
-- 2026-10-29 · A sky of real stars for the arenas in the solar system. NASA's Deep Star Maps 2020 are built from ESA catalogues (Gaia, Hipparcos, Tycho-2) under CC BY-NC 3.0 IGO, which asks ESA's leave before commercial use: undecided between asking ESA and a public-domain catalogue with the Milky Way drawn in code.
-- 2026-10-30 · Everything solid collides with everything solid (an audit found what passes through what): field bodies with each other (orbits crossing, fragments, shoved pieces), field bodies with race gates, Capture the Flag's bases, a core at home and a parked probe; wrecks, probes, cores and torpedoes with everything solid; a comet's head and its shower stopped by what they hit; the Belt's mining rigs solid; the junk's solar wing tips inside its collider.
-- 2026-10-30 · A cable that wraps around the edges of rock instead of snapping.
+- 2026-10-29 · A sky of real stars for the arenas in the solar system. NASA's Deep Star Maps 2020 are built from ESA catalogues (Gaia, Hipparcos, Tycho-2) under CC BY-NC 3.0 IGO, which asks ESA's leave before commercial use: Johannes chose a public-domain catalogue with the Milky Way drawn in code.
+- 2026-10-30 · The battleship's sunlit flank lies in the Belt's rock shadow (measured: real shadow of rock between it and the sun, its orbit starting on the field's far side from the sun): leave it, let it come out of the sun, or more sky light in the Belt; undecided.
 
 ## Domains
 
