@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { boxUv, hullSurface, lacquer, shine, type Wear } from '../view/surfaces';
 import { hazeUniforms } from '../view/haze';
+import { numberAspect, numberTexture } from '../view/lettering';
 import { NOZZLE_LENGTH, QUAD_SIZE, quadsOf, thrustersOf, type QuadLayout } from './thrusters';
 
 /**
@@ -178,7 +179,7 @@ function keepEngine(original: THREE.Object3D): THREE.Group {
 /** The sheen of every hull: what its plates mirror (see shine), and how strongly. */
 const SHEEN = 1.1;
 /** A hull's surface repeats every this many units (20 m), so a panel is a few meters wide. */
-const TILE = 400;
+export const TILE = 400;
 /** How deep the seams, rivets, scales and ribs look: the strength of the surface's normal map (see hullSurface). */
 const RELIEF = 1;
 /**
@@ -645,15 +646,86 @@ export function sovereign(original: THREE.Object3D): THREE.Object3D {
     { parts, wear: GIFT, seed: 7 },
     { parts: gold, wear: GILDED, seed: 8, look: { clearcoat: GOLD_LACQUER } },
   ];
-  return hull(original, 'sovereignHull', coats, trim, radiators);
+  const root = hull(original, 'sovereignHull', coats, trim, radiators);
+  root.add(hullNumber());
+  return root;
 }
 
 /**
- * The Sovereign's wear: a gift of the President, kept like new; a few scratches, its number in
- * gold. Its plates are flush, welded and bonded with thin, crisp panel lines, and not a rivet
- * (a technique of the age of steam): its only fasteners are flush bolts on a few hatches.
+ * The Sovereign's hull number, where a fighter carries it: on both flanks of the arrowhead's
+ * nose, between the fore clusters of the maneuvering thrusters (to z -86) and the wing roots
+ * (from z -40), below the trim, upright and reading the right way round from either side. It is
+ * a decal of its own, not a stencil in the plates' repeating surface, so it sits at this one place
+ * on every Sovereign, whatever the plates' layout; the flank there carries no hatch (the hatches
+ * of a tile lie well inside its rows of panels, the number on the seam between two rows, see
+ * the plating's test). Its aft end and middle height (units), and its height: 1 m, as tall as
+ * the flank leaves room for under the trim.
  */
-export const GIFT: Wear = { rust: 0, chips: 0.05, grime: 0.1, scratches: 0.2, seams: 0.3, stencils: ['01'], roughness: 0.3, metalness: 0.6, relief: 'flush' };
+export const SOVEREIGN_NUMBER = { text: '01', aft: -46, y: -3, height: 20 };
+/** How far the number's paint stands off the plates (units, 1.5 cm), so the two never fight over a pixel. */
+const NUMBER_LIFT = 0.3;
+
+/** Where the hull number lies on the Sovereign's flanks (units): from its fore end to its aft end along z, and from its foot to its top. */
+export function sovereignNumberSpan() {
+  const { text, aft, y, height } = SOVEREIGN_NUMBER;
+  return { fore: aft - height * numberAspect(text), aft, bottom: y - height / 2, top: y + height / 2 };
+}
+
+/**
+ * The hull number on both flanks (see SOVEREIGN_NUMBER): a quad lying on each flat flank of the
+ * arrowhead, in gold outlined dark, polished like the gold; paint, so it casts and takes shadows
+ * with the plates but has no shape of its own (`decal`: the ghost and the silhouette leave it out).
+ */
+function hullNumber(): THREE.Mesh {
+  const { fore, aft, bottom, top } = sovereignNumberSpan();
+  const points: number[] = [];
+  const uv: number[] = [];
+  for (const side of [1, -1]) {
+    // seen from outside, the number reads towards the nose on the right flank and towards the stern on the left
+    const [left, right] = side > 0 ? [aft, fore] : [fore, aft];
+    const corner = (z: number, y: number) => {
+      const end = at(SOVEREIGN_BODY, z);
+      return [side * ((end.x ?? 0) + end.w + NUMBER_LIFT), y, z];
+    };
+    const quad = [corner(left, bottom), corner(right, bottom), corner(right, top), corner(left, top)];
+    const corners = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    for (const i of [0, 1, 2, 0, 2, 3]) {
+      points.push(...quad[i]);
+      uv.push(...corners[i]);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
+  geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  geometry.computeVertexNormals();
+  const material = new THREE.MeshStandardMaterial({
+    map: numberTexture(SOVEREIGN_NUMBER.text, `#${new THREE.Color(GOLD).getHexString()}`, NUMBER_EDGE),
+    // cut out along the digits' outline, drawn and shadowed with the opaque hull
+    alphaTest: 0.5,
+    metalness: 0.85,
+    roughness: 0.36,
+    envMap: shine(),
+    envMapIntensity: SHEEN,
+    polygonOffset: true,
+    polygonOffsetFactor: -1,
+    polygonOffsetUnits: -1,
+  });
+  const number = new THREE.Mesh(geometry, material);
+  number.name = 'hullNumber';
+  number.userData.decal = true;
+  return number;
+}
+
+/** The dark line around the Sovereign's gold number, so it reads on the light ivory. */
+const NUMBER_EDGE = '#2e2208';
+
+/**
+ * The Sovereign's wear: a gift of the President, kept like new; a few scratches. Its plates are
+ * flush, welded and bonded with thin, crisp panel lines, and not a rivet (a technique of the
+ * age of steam): its only fasteners are flush bolts on a few hatches. Its number is painted on
+ * apart (see SOVEREIGN_NUMBER).
+ */
+export const GIFT: Wear = { rust: 0, chips: 0.05, grime: 0.1, scratches: 0.2, seams: 0.3, stencils: [], roughness: 0.3, metalness: 0.6, relief: 'flush' };
 /**
  * Its gold: polished metal, brushed along its length and engraved in bands of interlaced waves
  * and the regime's stars (see engraving in view/surfaces), barely touched. Gold needs no paint and

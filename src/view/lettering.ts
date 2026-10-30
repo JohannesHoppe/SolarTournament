@@ -6,8 +6,9 @@ import { canvas } from './textures';
  * Paint on a hull: a ship's name, its registry and an emblem, in large stenciled block letters
  * drawn from rectangles (the same on every device, whatever fonts it has), weathered by
  * centuries out there: faded, chipped down to the plating, scratched and pitted by
- * micrometeorites. Drawn once on a canvas with transparency, laid over the plating as a decal
- * and lit like the hull. Look only.
+ * micrometeorites; and a fighter's hull number, fresh and outlined (see numberTexture). Drawn
+ * once on a canvas with transparency, laid over the plating as a decal and lit like the hull.
+ * Look only.
  */
 
 /** The width of a glyph and the gap after it, and a glyph's height, in strokes (a stroke is one unit thick). */
@@ -43,14 +44,14 @@ export function textWidth(text: string): number {
   return width - (text.endsWith(' ') ? 0 : GLYPH_GAP);
 }
 
-/** Paints `text` in stencil glyphs, its top left at (x, y), `unit` pixels a unit. */
-function stencil(g: CanvasRenderingContext2D, text: string, x: number, y: number, unit: number) {
+/** Paints `text` in stencil glyphs, its top left at (x, y), `unit` pixels a unit, each bar grown by `grow` pixels all around (an outline). */
+function stencil(g: CanvasRenderingContext2D, text: string, x: number, y: number, unit: number, grow = 0) {
   for (const char of text) {
     if (char === ' ') {
       x += SPACE_WIDTH * unit;
       continue;
     }
-    for (const [gx, gy, w, h] of GLYPHS[char] ?? []) g.fillRect(x + gx * unit, y + gy * unit, w * unit, h * unit);
+    for (const [gx, gy, w, h] of GLYPHS[char] ?? []) g.fillRect(x + gx * unit - grow, y + gy * unit - grow, w * unit + 2 * grow, h * unit + 2 * grow);
     x += (GLYPH_WIDTH + GLYPH_GAP) * unit;
   }
 }
@@ -206,6 +207,47 @@ export function letteringTexture(lettering: Lettering, seed: number): THREE.Text
   lay(color, lettering, width, height, false);
   lay(coverage, lettering, width, height, true);
   weather(new Randomizer(seed), coverage, width, height);
+  return decal(color, coverage, width, height);
+}
+
+/**
+ * A hull number painted on fresh: stenciled block digits (see stencil) in `paint`, outlined in
+ * `edge` a fifth of a stroke wide all around, so it reads on a light hull and a dark one alike;
+ * unweathered, the paint of a ship kept like new. The digits fill the texture but for the
+ * outline, so a quad `numberAspect(text)` times as wide as high shows them undistorted.
+ */
+export function numberTexture(text: string, paint: string, edge: string): THREE.Texture {
+  if (typeof document === 'undefined') return new THREE.Texture();
+  const { unit, outline, width, height } = numberLayout(text);
+  const [, color] = canvas(width, height);
+  const [, coverage] = canvas(width, height);
+  color.fillStyle = edge;
+  color.fillRect(0, 0, width, height);
+  for (const [g, ink, grow] of [[color, edge, outline], [color, paint, 0], [coverage, '#fff', outline]] as const) {
+    g.fillStyle = ink;
+    stencil(g, text, outline, outline, unit, grow);
+  }
+  return decal(color, coverage, width, height);
+}
+
+/** A hull number's texture in pixels: a stroke `unit` wide, the `outline` around the digits, and the whole width and height. */
+function numberLayout(text: string) {
+  const unit = 32;
+  const outline = Math.round(unit / 5);
+  return { unit, outline, width: textWidth(text) * unit + 2 * outline, height: GLYPH_HEIGHT * unit + 2 * outline };
+}
+
+/** How much wider a hull number is than high, its outline included (see numberTexture). */
+export const numberAspect = (text: string) => {
+  const { width, height } = numberLayout(text);
+  return width / height;
+};
+
+/**
+ * A decal's texture from its color and its coverage, joined pixel by pixel (see letteringTexture
+ * for why apart), with mipmaps so it calms from afar.
+ */
+function decal(color: CanvasRenderingContext2D, coverage: CanvasRenderingContext2D, width: number, height: number): THREE.Texture {
   const rgb = color.getImageData(0, 0, width, height).data;
   const alpha = coverage.getImageData(0, 0, width, height).data;
   const data = new Uint8Array(width * height * 4);

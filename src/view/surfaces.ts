@@ -17,7 +17,7 @@ import { canvas, toTexture } from './textures';
  */
 
 /** Texture size of a surface (px): small, for phones; a surface repeats across a part (see boxUv). */
-const SIZE = 256;
+export const SIZE = 256;
 
 export type Surface = { map: THREE.Texture; orm: THREE.Texture; bump: THREE.Texture };
 

@@ -24,8 +24,8 @@ export class Ghost {
     const model = source.clone(true);
     model.traverse((part) => {
       if (part instanceof THREE.Mesh) {
-        // the drive's flame and glows have no hull to show
-        part.visible = !part.name.toLowerCase().startsWith('drive') && !(part.material as THREE.Material).transparent;
+        // the drive's flame and glows have no hull to show, paint on the hull (a decal) no shape of its own
+        part.visible = !part.name.toLowerCase().startsWith('drive') && !(part.material as THREE.Material).transparent && !part.userData.decal;
         part.material = this.material;
         part.castShadow = part.receiveShadow = false;
       } else if (part instanceof THREE.Sprite) {
