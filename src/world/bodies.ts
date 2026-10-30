@@ -88,6 +88,40 @@ export function rope(a: Body, b: Body, length: number, moveA = true, moveB = tru
   return true;
 }
 
+const other = new THREE.Vector3();
+const otherRelative = new THREE.Vector3();
+
+/**
+ * A rope wrapped around the field's pieces (see game/cable): `a`'s stretch of it runs to the
+ * point `aTo`, `b`'s to `bTo`, and `length` is what is left of it for those two stretches.
+ * Frictionless where it lies on a piece, it pulls both ends with the same tension, each along
+ * its own stretch: beyond its length, the speed at which the two stretches grow together is
+ * taken from both ends by their shares (see share), and they are drawn back to it; the pieces
+ * it lies on, millions of times a ship's mass, take the rest of the jerk and do not move. True
+ * when it was taut.
+ */
+export function ropeOver(a: Body, b: Body, aTo: Body, bTo: Body, length: number, moveA = true, moveB = true): boolean {
+  line.subVectors(aTo.position, a.position);
+  const toward = line.length();
+  other.subVectors(bTo.position, b.position);
+  const away = other.length();
+  const over = toward + away - length;
+  if (over <= 0 || toward < 1e-6 || away < 1e-6) return false;
+  line.divideScalar(toward);
+  other.divideScalar(away);
+  const toA = share(a.mass, b.mass);
+  const growing = -relative.subVectors(a.velocity, aTo.velocity).dot(line) - otherRelative.subVectors(b.velocity, bTo.velocity).dot(other);
+  if (moveA) {
+    if (growing > 0) a.velocity.addScaledVector(line, growing * toA);
+    a.position.addScaledVector(line, over * toA);
+  }
+  if (moveB) {
+    if (growing > 0) b.velocity.addScaledVector(other, growing * (1 - toA));
+    b.position.addScaledVector(other, over * (1 - toA));
+  }
+  return true;
+}
+
 /**
  * A rope's pull on `a` alone, whose other end `b` another browser runs (as it last told of it):
  * the same rope, as a stiff, critically damped spring (ROPE_RATE), so that each end, pulled on
@@ -95,18 +129,20 @@ export function rope(a: Body, b: Body, length: number, moveA = true, moveB = tru
  * there would let the end with more frames give in. Its damping goes by how fast the stretch
  * changed since the last frame (see stretched), not by this frame's velocities, which already
  * hold the frame's thrust. Only pulls; never more in a frame than the rigid rope would. True
- * when it was taut.
+ * when it was taut. A rope wrapped around the field's pieces (see game/cable) pulls `a`
+ * towards `toward`, the point its stretch runs to, the rest of the rope (`beyond`) as long as
+ * the other browser last had it.
  */
-export function ropeFrom(a: Body, b: Body, length: number, dt: number): boolean {
-  line.subVectors(b.position, a.position);
+export function ropeFrom(a: Body, b: Body, length: number, dt: number, toward: Body = b, beyond = 0): boolean {
+  line.subVectors(toward.position, a.position);
   const distance = line.length();
-  const over = distance - length;
+  const over = distance + beyond - length;
   const before = stretched.get(a);
   stretched.set(a, Math.max(0, over));
   if (over <= 0 || distance < 1e-6 || dt <= 0) return false;
   line.divideScalar(distance);
   const growing = before === undefined ? 0 : (over - before) / dt;
-  const apart = -relative.subVectors(a.velocity, b.velocity).dot(line);
+  const apart = -relative.subVectors(a.velocity, toward.velocity).dot(line);
   const pull = Math.min(ROPE_RATE * ROPE_RATE * over + 2 * ROPE_RATE * growing, Math.max(0, apart) / dt + over / (dt * dt));
   if (pull > 0) a.velocity.addScaledVector(line, pull * dt * share(a.mass, b.mass));
   return true;

@@ -268,7 +268,30 @@ describe('capture the flag', () => {
     expect(deepest).toBeLessThan(rock.radius + 2000);
   });
 
-  it('loses a core whose tow cable a rock came across: the cable snaps, the core flies on', () => {
+  it('keeps a core in tow whose cable a rock comes across: the cable lies on the rock', () => {
+    const { field, f, orange, ships, now: taken } = stolen();
+    f.takeEvents();
+    const rock = [...field.asteroids.values()].sort((a, b) => a.object.position.distanceTo(f.bases[1]) - b.object.position.distanceTo(f.bases[1]))[0];
+    const center = rock.object.position;
+    const off = rock.radius + 2000;
+    // the core held still beyond the rock, the carrier coming down past its other side
+    const core = center.clone().add(new THREE.Vector3(-off, off, 0));
+    let now = taken;
+    let wrapped = 0;
+    for (let y = off; y > -off; y -= 50) {
+      now += DT;
+      f.cores[1].position.copy(core);
+      f.cores[1].velocity.set(0, 0, 0);
+      orange.flight.position.copy(center).add(new THREE.Vector3(off, y, 0));
+      f.lead(ships, now);
+      expect(f.cores[1].carrier).toBe('o');
+      wrapped = Math.max(wrapped, f.cores[1].lies.count);
+    }
+    expect(wrapped).toBeGreaterThan(0);
+    expect(f.takeEvents()).toEqual([]);
+  });
+
+  it('loses a core whose tow cable a rock swept through: the cable snaps, the core flies on', () => {
     const { field, f, orange, ships, now: taken } = stolen();
     f.takeEvents();
     // the carrier on one side of the nearest rock, its core on the other

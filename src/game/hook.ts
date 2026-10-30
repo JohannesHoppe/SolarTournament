@@ -3,7 +3,8 @@ import { raySphere, type Asteroid, type AsteroidField } from '../world/asteroids
 import type { Ship } from '../ship/ship';
 import type { Torpedo } from './torpedoes';
 import type { Probe } from './items';
-import { MASS, rope, ropeFrom, share, type Body } from '../world/bodies';
+import { MASS, rope, ropeFrom, ropeOver, share, type Body } from '../world/bodies';
+import { Cable, WRAP_MAX, type CablePath } from './cable';
 
 /**
  * The hook: a harpoon on a cable, fired along the nose. It bites into a rock or a ship within
@@ -14,12 +15,15 @@ import { MASS, rope, ropeFrom, share, type Body } from '../world/bodies';
  * it, faster the shorter the cable gets (its angular momentum stays), and flies off along its
  * swing when the pilot lets go: a jump, flung across the field. Hooked to a ship, the winch
  * pulls both alike, both being of the same mass; each one's own drive pulls against it. The
- * cable snaps beyond HOOK_SNAP of the range, and wherever something solid comes across it (see
- * cableCut); the winch stops HOOK_SLACK ship radii (about 70 m)
- * from where the hook bit (see pivotOf, floorOf), pulls nothing beyond the limit it is given
- * (the game gives the coils' limit); while the hook is held, the flight computer burns against
- * any speed towards the anchor it could no longer stop before that distance (with up to
- * HOOK_BRAKE, as late as it can): holding on never slams a ship into its rock. Letting go
+ * cable wraps around the rock it bit and any other piece that comes across it, the ship then
+ * swinging around the last place the cable touches (see game/cable); it snaps beyond HOOK_SNAP
+ * of the range, and where wrapping is no answer (the well's body, the battleship's hull, a
+ * piece sweeping through it, too many wraps). The winch stops HOOK_SLACK ship radii (about
+ * 70 m) from a ship it holds, and off a rock where a ship on a cable leaving the rock's surface
+ * keeps that much off its farthest reach (see floorOf); it pulls nothing beyond the limit it is
+ * given (the game gives the coils' limit); while the hook is held, the flight computer burns
+ * against any speed towards the cable's next hold it could no longer stop before that distance
+ * (with up to HOOK_BRAKE, as late as it can): holding on never slams a ship into its rock. Letting go
  * before, the ship keeps all its speed; what it flies into is its pilot's business. In Capture
  * the Flag it also bites a core the ship may take (see Mark): the game hands the core to the
  * rules, which take it in tow on that cable (see game/flags). A sponsor probe or a torpedo it
@@ -60,10 +64,16 @@ export interface Tether {
   readonly end: THREE.Vector3;
   length: number;
   line: THREE.Line;
+  /** Where the cable lies on the field's pieces, from the anchor to the owner. */
+  readonly cable: Cable;
 }
+
+/** A tether for `owner` (see Tether), with a cable that lies on nothing yet. */
+export const newTether = (owner: Ship, anchor: Anchor | null, flying: number, end: THREE.Vector3, length: number, line: THREE.Line): Tether => ({ owner, anchor, flying, end, length, line, cable: new Cable() });
 
 const point = new THREE.Vector3();
 const toAnchor = new THREE.Vector3();
+const fromAnchor = new THREE.Vector3();
 const spin = new THREE.Quaternion();
 const nose = new THREE.Vector3();
 const toward = new THREE.Vector3();
@@ -134,28 +144,6 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
   return best;
 }
 
-/**
- * A cable is cut by something solid lying across it more than this far in from either end
- * (units, 15 m, less than a hull's radius): an end that scrapes along a surface does not cut it.
- */
-const CUT_MARGIN = 300;
-const cutFrom = new THREE.Vector3();
-const cutTo = new THREE.Vector3();
-
-/**
- * Whether a cable stretched from `from` to `to` is cut: rock, ice, junk, a hull section, the
- * well's body or the battleship's hull lies across it (see AsteroidField.blocked). A cable never
- * passes through a solid body; it snaps. The rock it is made fast to (`fastTo`) is left out:
- * swinging around that rock, the cable runs along its surface.
- */
-export function cableCut(field: AsteroidField, from: THREE.Vector3, to: THREE.Vector3, fastTo: Asteroid | null = null): boolean {
-  const length = from.distanceTo(to);
-  if (length <= CUT_MARGIN * 2) return false;
-  cutFrom.lerpVectors(from, to, CUT_MARGIN / length);
-  cutTo.lerpVectors(from, to, 1 - CUT_MARGIN / length);
-  return field.blocked(cutFrom, cutTo, fastTo);
-}
-
 /** The seconds a harpoon flies to bite at `distance`. */
 export const flightTime = (distance: number) => distance / HOOK_SPEED;
 
@@ -186,55 +174,81 @@ const winchOn = (body: Body, other: Body) => (HOOK_PULL * Math.min(MASS.ship, WI
  * hooked to one, the ship takes all of it); 'elsewhere', a body another browser runs, which
  * takes its share there from the same cable, each end pulled as by a spring (see ropeFrom).
  * Returns the length the cable has now, or null when it snapped.
+ *
+ * A cable wrapped around the field's pieces (`path`, see game/cable) is the same rope bent
+ * over its wrap points: `length` is all of it, the body's stretch runs to the wrap point next to
+ * it and the anchor's to the one next to the anchor, and the winch and the brake work along each
+ * end's own stretch, `floor` the body's and the path's floor the anchor's. The winch keeps each
+ * stretch at least at its floor, paying out what the cable wraps onto a piece: a ship winding
+ * its cable round a rock never comes nearer to it, and spends its swing on the winch's brake.
  */
-export function pullOn(body: Body, anchor: Body, length: number, reeling: boolean, floor: number, speedLimit: number, dt: number, anchorEnd: 'moved' | 'fixed' | 'elsewhere' = 'fixed'): number | null {
+export function pullOn(body: Body, anchor: Body, length: number, reeling: boolean, floor: number, speedLimit: number, dt: number, anchorEnd: 'moved' | 'fixed' | 'elsewhere' = 'fixed', path: CablePath | null = null): number | null {
   const moveAnchor = anchorEnd === 'moved';
-  toAnchor.subVectors(anchor.position, body.position);
+  const near = path ? path.near : anchor;
+  toAnchor.subVectors(near.position, body.position);
   const distance = toAnchor.length();
   if (distance < 1) return length;
-  if (distance > floor + HOOK_RANGE * HOOK_SNAP) return null;
+  // the anchor's own stretch, and the cable between the two
+  fromAnchor.subVectors(path ? path.far.position : body.position, anchor.position);
+  const reach = path ? fromAnchor.length() : 0;
+  const between = path ? path.between + reach : 0;
+  if (distance + between > floor + HOOK_RANGE * HOOK_SNAP) return null;
   toAnchor.divideScalar(distance);
-  relative.subVectors(body.velocity, anchor.velocity);
+  if (path) fromAnchor.divideScalar(Math.max(reach, 1));
+  else fromAnchor.copy(toAnchor).negate();
+  relative.subVectors(body.velocity, near.velocity);
   // the winch takes in the slack, and while held pulls, never past the limit; and the flight
   // computer burns against the closing speed it could no longer stop before the floor (two
   // bodies each their share of it)
-  let cable = Math.min(length, distance);
+  let cable = Math.min(length, distance + between);
   const closing = relative.dot(toAnchor);
   const stoppable = Math.sqrt(2 * HOOK_BRAKE * Math.max(0, distance - floor));
-  // (the anchor, moved here, the other way)
+  // (the anchor, moved here, along its own stretch)
   if (reeling && closing > stoppable) {
     const brake = Math.min(closing - stoppable, HOOK_BRAKE * dt);
     body.velocity.addScaledVector(toAnchor, -brake * share(body.mass, anchor.mass));
-    if (moveAnchor) anchor.velocity.addScaledVector(toAnchor, brake * share(anchor.mass, body.mass));
-  } else if (reeling && cable > floor && relative.length() < speedLimit) {
+    if (moveAnchor) anchor.velocity.addScaledVector(fromAnchor, -brake * share(anchor.mass, body.mass));
+  } else if (reeling && cable > floor + between && relative.length() < speedLimit) {
     // the winch's force gives a ship HOOK_PULL, a lighter body more (see WINCH_LIGHT); with the
     // cable in to the floor it holds, and the rope alone pulls
     const room = stoppable - closing;
     body.velocity.addScaledVector(toAnchor, Math.min(winchOn(body, anchor) * dt, room));
-    if (moveAnchor) anchor.velocity.addScaledVector(toAnchor, -Math.min(winchOn(anchor, body) * dt, room));
+    if (moveAnchor && (!path || reach > path.floor)) anchor.velocity.addScaledVector(fromAnchor, Math.min(winchOn(anchor, body) * dt, room));
   }
-  cable = Math.max(floor, cable);
-  if (anchorEnd === 'elsewhere') ropeFrom(body, anchor, cable, dt);
-  else rope(body, anchor, cable, true, moveAnchor);
+  if (!path) {
+    cable = Math.max(floor, cable);
+    if (anchorEnd === 'elsewhere') ropeFrom(body, anchor, cable, dt);
+    else rope(body, anchor, cable, true, moveAnchor);
+    return cable;
+  }
+  // a rock's end lies on it for good; a moving end keeps its own floor too
+  cable = Math.max(floor + path.between + (anchorEnd === 'fixed' ? reach : path.floor), cable);
+  if (anchorEnd === 'elsewhere') ropeFrom(body, anchor, cable, dt, near, between);
+  else ropeOver(body, anchor, near, path.far, cable - path.between, true, moveAnchor);
   return cable;
 }
 
-/**
- * Where the cable pulls from: for a hooked ship that ship; for a rock its center, the cable
- * wrapped around the rock, so a ship swings around the rock and never through it. Null when
- * what it held is gone.
- */
-export function pivotOf(anchor: Anchor, out: THREE.Vector3): THREE.Vector3 | null {
-  if (anchor.ship || anchor.mark) return anchorPoint(anchor, out);
-  return anchor.rock.object.parent ? out.copy(anchor.rock.object.position) : null;
-}
+/** Where the cable is made fast (the bite on a rock, the ship, the core, probe or torpedo), or null when what it held is gone. */
+export const pivotOf = (anchor: Anchor, out: THREE.Vector3): THREE.Vector3 | null => anchorPoint(anchor, out);
 
 /**
- * How close the winch reels a ship to the pivot (see pivotOf): HOOK_SLACK ship radii off a
- * ship, or that far beyond a rock's farthest reach; a probe all the way in, to one ship radius,
- * well within the reach that takes it.
+ * How close the winch reels a ship along a cable that leaves a piece's surface (from the bite,
+ * or a wrap point, see game/cable): so far that the ship, even on a cable leaving the surface
+ * flat at the piece's farthest reach R, keeps HOOK_SLACK ship radii (h) off that reach:
+ * √((R + h)² − R²). A ship winding its cable round the rock thus circles it at h, as far as
+ * the winch ever reels it in.
  */
-export const floorOf = (ship: Pick<Ship, 'radius'>, anchor: Anchor) => (anchor.mark?.probe ? ship.radius : ship.radius * HOOK_SLACK + (anchor.rock ? anchor.rock.radius : 0));
+export const clearOf = (ship: Pick<Ship, 'radius'>, rock: Pick<Asteroid, 'radius'>) => Math.sqrt((rock.radius + ship.radius * HOOK_SLACK) ** 2 - rock.radius ** 2);
+
+/**
+ * How close the winch reels a ship to where its cable is made fast: HOOK_SLACK ship radii off
+ * a ship (or a torpedo), clear of a rock (see clearOf); a probe all the way in, to one ship
+ * radius, well within the reach that takes it.
+ */
+export const floorOf = (ship: Pick<Ship, 'radius'>, anchor: Anchor) => (anchor.mark?.probe ? ship.radius : anchor.rock ? clearOf(ship, anchor.rock) : ship.radius * HOOK_SLACK);
+
+/** Points of a cable's line: its two ends and a wrap point each (see game/cable). */
+const LINE_POINTS = WRAP_MAX + 2;
 
 /** The cables of all hooks out, as lines from each owner's nose; reused from hook to hook. */
 export class Cables {
@@ -244,7 +258,7 @@ export class Cables {
 
   /** A line for a new hook. */
   take(): THREE.Line {
-    const line = this.spare.pop() ?? new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3()]), this.material);
+    const line = this.spare.pop() ?? new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: LINE_POINTS }, () => new THREE.Vector3())), this.material);
     line.frustumCulled = false;
     this.group.add(line);
     return line;
@@ -261,12 +275,18 @@ export class Cables {
     this.material.dispose();
   }
 
-  /** Draws a cable from a nose (or a stern) to a point. */
-  static draw(line: THREE.Line, from: THREE.Vector3, to: THREE.Vector3) {
+  /** Draws a cable from a nose (or a stern) to a point, over the wrap points of `cable` (from its end to its start). */
+  static draw(line: THREE.Line, from: THREE.Vector3, to: THREE.Vector3, cable: Cable | null = null) {
     const position = line.geometry.getAttribute('position') as THREE.BufferAttribute;
+    const wraps = cable ? cable.count : 0;
     position.setXYZ(0, from.x, from.y, from.z);
-    position.setXYZ(1, to.x, to.y, to.z);
+    for (let i = 0; i < wraps; i++) {
+      const at = cable!.at(wraps - 1 - i);
+      position.setXYZ(i + 1, at.x, at.y, at.z);
+    }
+    position.setXYZ(wraps + 1, to.x, to.y, to.z);
     position.needsUpdate = true;
+    line.geometry.setDrawRange(0, wraps + 2);
   }
 }
 

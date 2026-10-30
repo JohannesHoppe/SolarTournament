@@ -7,7 +7,8 @@ import { CoreKit, GRIP, type CoreLook } from '../world/powercore';
 import { touchRing } from '../world/gates';
 import { bounceOff, bump } from '../ship/impact';
 import { MASS, share, type Body } from '../world/bodies';
-import { cableCut, Cables, HOOK_RANGE, pullOn, type Mark } from './hook';
+import { Cables, HOOK_RANGE, pullOn, type Mark } from './hook';
+import { Cable } from './cable';
 import { ringCrossing } from './race';
 import { sponsorSigns } from './satire-ads';
 import { msg } from '../i18n/i18n';
@@ -110,6 +111,8 @@ type Core = {
   readonly velocity: THREE.Vector3;
   droppedAt: number;
   cable: number;
+  /** Where the tow cable lies on the field's pieces, from the core to the stern (see game/cable). */
+  readonly lies: Cable;
   /** Where the lead has it in tow, from its last state (see TOW_CORRECTION). */
   told: { readonly position: THREE.Vector3; readonly velocity: THREE.Vector3 } | null;
 };
@@ -219,7 +222,7 @@ export class Flags {
       const base = axis.clone().multiplyScalar(team === 0 ? 1 : -1);
       this.bases.push(base);
       this.facings.push(base.clone().normalize());
-      this.cores.push({ carrier: null, home: true, team, mass: MASS.core, position: base.clone(), previous: base.clone(), velocity: new THREE.Vector3(), droppedAt: 0, cable: 0, told: null });
+      this.cores.push({ carrier: null, home: true, team, mass: MASS.core, position: base.clone(), previous: base.clone(), velocity: new THREE.Vector3(), droppedAt: 0, cable: 0, lies: new Cable(), told: null });
       this.told.push({ position: new THREE.Vector3(), velocity: new THREE.Vector3() });
       // the ring faces the center, so a carrier flying home flies through it
       const ring = this.kit.build(base, base.clone().normalize(), this.kit.coilMaterial(tint, 2));
@@ -264,9 +267,9 @@ export class Flags {
       if (core.carrier) {
         const carrier = byId(ships, core.carrier);
         // a carrier that died, left, or changed sides lets the core go where it hangs, flying
-        // on with its cable end's velocity; so does a tow cable that something solid came
-        // across, which snaps (see cableCut)
-        if (!carrier?.alive || this.teamOf(carrier.id) === team || cableCut(this.field, sternOf(carrier, stern), core.position)) {
+        // on with its cable end's velocity; so does a tow cable that snaps where lying on what
+        // came across it is no answer (see game/cable), never in the step it is laid out
+        if (!carrier?.alive || this.teamOf(carrier.id) === team || !core.lies.follow(this.field, core.position, sternOf(carrier, stern), core.cable > 0)) {
           this.event('drop', core.carrier, team);
           core.carrier = null;
           core.droppedAt = now;
@@ -443,6 +446,7 @@ export class Flags {
         this.tow(core, carrier, ships, dt);
       } else {
         core.cable = 0;
+        core.lies.clear();
         if (!core.home) this.drift(core, ships, dt);
       }
       core.told = null;
@@ -457,6 +461,7 @@ export class Flags {
    * is on a cable as long as the way to it (no longer than the hook reaches), which the winch
    * reels in to TOW_CABLE. Taut, the cable pulls both ends by their masses; the carrier only
    * on the browser that runs it (elsewhere the core alone follows the carrier as it is told).
+   * It lies on the field's pieces as the hook's cable does (see game/cable).
    */
   private tow(core: Core, carrier: Flier, ships: readonly Flier[], dt: number) {
     const flight = carrier.flight;
@@ -466,11 +471,18 @@ export class Flags {
     core.position.addScaledVector(core.velocity, dt);
     this.collide(core.position, core.velocity);
     this.bump(core, ships);
-    // the rope between the core and the stern, which moves the ship with it
+    // the rope between the core and the stern, which moves the ship with it; it lies on what
+    // comes across it (see game/cable), every browser following it for itself; whether it
+    // snaps, the lead's rules decide (see lead)
     sternOf(carrier, stern);
+    core.lies.follow(this.field, core.position, stern, false);
     sternAt.copy(stern);
     sternBody.velocity = flight.velocity;
-    const cable = pullOn(core, sternBody, core.cable, core.cable > length, length, Infinity, dt, local ? 'moved' : 'elsewhere');
+    // wrapped, the winch holds the cable as it is: reeling in over a rock would drag the
+    // carrier back to it
+    const path = core.lies.path(false);
+    if (path) path.floor = length;
+    const cable = pullOn(core, sternBody, core.cable, core.cable > length && !path, length, Infinity, dt, local ? 'moved' : 'elsewhere', path);
     flight.position.add(stern.sub(sternAt));
     if (cable !== null) core.cable = cable;
   }
@@ -562,11 +574,12 @@ export class Flags {
     line ??= this.towLines[team] = this.cables.take();
     shown.copy(core.position);
     root.position.copy(shown);
-    // its cage towards the stern, turning slowly about its axis
+    // its cage towards its cable (to the stern, or where the cable lies on a piece), turning
+    // slowly about its axis
     sternOf(carrier, stern);
-    cableAxis.subVectors(stern, shown).normalize();
+    cableAxis.subVectors(core.lies.count ? core.lies.at(0) : stern, shown).normalize();
     root.quaternion.setFromUnitVectors(UP, cableAxis).multiply(spin.setFromAxisAngle(UP, now * 0.4));
-    Cables.draw(line, stern, grip.copy(shown).addScaledVector(cableAxis, GRIP * root.scale.x));
+    Cables.draw(line, stern, grip.copy(shown).addScaledVector(cableAxis, GRIP * root.scale.x), core.lies);
   }
 
   /**

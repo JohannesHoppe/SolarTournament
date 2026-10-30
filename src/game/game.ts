@@ -17,7 +17,7 @@ import { ReferencePlane } from '../view/plane';
 import { referencesOf } from '../world/reference';
 import { Ghost } from '../view/ghost';
 import { lapClock, LapTimer, parseLaps } from './laps';
-import { aimHook, cableCut, cableEnd, Cables, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, pivotOf, pullOn, type Anchor, type Mark, type Tether } from './hook';
+import { aimHook, cableEnd, Cables, clearOf, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, pivotOf, pullOn, type Anchor, type Mark, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { STREAKS } from '../view/streaks';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
@@ -4916,7 +4916,7 @@ export class Game implements OnlineGame {
       marks,
     );
     const end = aim ? aim.at : ship.nose(new THREE.Vector3()).addScaledVector(ship.flight.forward(forward), HOOK_RANGE);
-    this.tethers.set(ship, { owner: ship, anchor: aim?.anchor ?? null, flying: flightTime(aim?.distance ?? HOOK_RANGE), end, length: 0, line: this.cables.take() });
+    this.tethers.set(ship, newTether(ship, aim?.anchor ?? null, flightTime(aim?.distance ?? HOOK_RANGE), end, 0, this.cables.take()));
     if (ship === this.me) this.sound.play('laser', { volume: 0.7, rate: 0.3 });
   }
 
@@ -4961,9 +4961,11 @@ export class Game implements OnlineGame {
         this.unhook(owner);
         continue;
       }
+      let bit = false;
       if (tether.flying > 0) {
         tether.flying -= dt;
         if (tether.flying <= 0) {
+          bit = true;
           // a miss is reeled back; so is a harpoon whose rock broke or whose ship died on the way
           const at = tether.anchor ? pivotOf(tether.anchor, hookPoint) : null;
           if (!at || !tether.anchor) {
@@ -4987,8 +4989,10 @@ export class Game implements OnlineGame {
         }
       }
       const nose = owner.nose(hookNose);
-      Cables.draw(tether.line, nose, cableEnd(tether, nose, hookEnd));
-      if (tether.flying > 0 || !tether.anchor) continue;
+      if (tether.flying > 0 || !tether.anchor) {
+        Cables.draw(tether.line, nose, cableEnd(tether, nose, hookEnd));
+        continue;
+      }
       const at = pivotOf(tether.anchor, hookPoint);
       // a torpedo gone off, or a probe taken (by the hooker on arrival, or by a ship that
       // touched it first on the way): nothing left on the line
@@ -4999,26 +5003,33 @@ export class Game implements OnlineGame {
         this.unhook(owner);
         continue;
       }
-      // something solid across the cable cuts it, on the browser that runs the hook (the others
-      // are told it let go); around its own rock it runs along the surface
-      if (owner.owner === null && cableCut(this.field, owner.flight.position, hookEnd, tether.anchor.rock)) {
+      // the cable lies on whatever comes across it, every browser following it for itself (see
+      // game/cable); it snaps where wrapping is no answer on the browser that runs the hook (the
+      // others are told it let go), never in the step it bit, which lays it as the ship moved
+      // while the harpoon flew
+      const owns = owner.owner === null;
+      if (!tether.cable.follow(this.field, at, owner.flight.position, owns && !bit)) {
         this.cableSnapped(owner);
         continue;
       }
+      Cables.draw(tether.line, nose, at, tether.cable);
       // a ship hooked to a ship: one rope between two bodies of the same mass, each end pulled
       // on the browser that runs it (both at once where one browser runs both); a torpedo or a
       // probe, which every browser has, pulled everywhere (another browser's ship as it last
-      // told of it); hooked to a rock, the rock is the anchor, far too heavy to move
+      // told of it); hooked to a rock, the rock is the anchor, far too heavy to move. Each end
+      // pulls along its own stretch, the winch keeping it clear of the piece it lies on.
       const target = tether.anchor.ship;
-      const floor = floorOf(owner, tether.anchor);
       let length: number | null = tether.length;
       const rock = tether.anchor.rock;
       const anchor = target ? target.body : held ? held : rockBody(rock ? massOf(rock) : IMMOVABLE, at, rock ? this.field.surfaceVelocity(rock, at, hookVelocity) : hookVelocity.set(0, 0, 0));
       const runsAnchor = held ? true : target?.owner === null;
+      const path = owns || runsAnchor ? tether.cable.path(owns) : null;
+      if (path) path.floor = clearOf(owner, path.farRock);
+      const floor = path ? clearOf(owner, path.nearRock) : floorOf(owner, tether.anchor);
       // the winch yanks as hard as a coil throws: up to the limit plus a coil's push
       const limit = MAX_SPEED + BOOST_PUSH;
-      if (owner.owner === null) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor ? 'moved' : target ? 'elsewhere' : 'fixed');
-      else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt, 'elsewhere');
+      if (owns) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor ? 'moved' : target ? 'elsewhere' : 'fixed', path);
+      else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt, 'elsewhere', path);
       if (length === null) {
         this.cableSnapped(owner);
         continue;
@@ -5087,7 +5098,7 @@ export class Game implements OnlineGame {
     if (probe.holder && probe.holder !== owner) this.unhook(probe.holder);
     this.unhook(owner);
     this.probes.hook(probe, owner);
-    this.tethers.set(owner, { owner, anchor: { rock: null, local: null, ship: null, mark: { team: -1, probe, position: probe.position } }, flying: 0, end: new THREE.Vector3(), length, line: this.cables.take() });
+    this.tethers.set(owner, newTether(owner, { rock: null, local: null, ship: null, mark: { team: -1, probe, position: probe.position } }, 0, new THREE.Vector3(), length, this.cables.take()));
   }
 
   /** Where a probe is now, as this browser has it, or null. */
@@ -5126,7 +5137,7 @@ export class Game implements OnlineGame {
     this.unhook(owner);
     torpedo.holder = owner;
     torpedo.own = false;
-    this.tethers.set(owner, { owner, anchor: { rock: null, local: null, ship: null, mark: { team: -1, torpedo, position: torpedo.position } }, flying: 0, end: new THREE.Vector3(), length, line: this.cables.take() });
+    this.tethers.set(owner, newTether(owner, { rock: null, local: null, ship: null, mark: { team: -1, torpedo, position: torpedo.position } }, 0, new THREE.Vector3(), length, this.cables.take()));
   }
 
   /** A ship of another browser says its harpoon bit a core: the lead's rules decide (see Flags.claim). */
@@ -5151,7 +5162,7 @@ export class Game implements OnlineGame {
     const asteroid = rock ? this.field.asteroids.get(rock) : undefined;
     const anchor: Anchor | null = asteroid && local ? { rock: asteroid, local: local.clone(), ship: null, mark: null } : target ? { rock: null, local: null, ship: target, mark: null } : null;
     if (!anchor) return;
-    this.tethers.set(owner, { owner, anchor, flying: 0, end: new THREE.Vector3(), length, line: this.cables.take() });
+    this.tethers.set(owner, newTether(owner, anchor, 0, new THREE.Vector3(), length, this.cables.take()));
     if (target === this.me) {
       this.hud.flashMessage(this.time, t('Hooked by {name}', { name: owner.name }), 2);
       this.linkHit(0.3, 0.2);
