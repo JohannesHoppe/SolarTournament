@@ -55,7 +55,7 @@ import { KillCam } from '../view/killcam';
 import { Showcase } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { buy, emptyHangar, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, sovereignEarned, UPGRADES, WALLET } from './hangar';
-import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
+import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
@@ -216,8 +216,6 @@ const FLAG_POINTS: Record<FlagEvent['kind'], number> = { grab: GRAB_POINTS, retu
 const RACE_KILL_POINTS = 200;
 /** Points for shooting down a torpedo, and how often a bot with a lock fires one (per second). */
 const TORPEDO_DOWN_POINTS = 50;
-/** A torpedo another browser says went off is this close (units, 1.5 km) to where it flies here, or the report is ignored: torpedoes fly alike everywhere, up to the lag. */
-const TORPEDO_GONE_SLACK = 30000;
 const BOT_TORPEDO_RATE = 0.08;
 /**
  * A bot hooks the ship it hunts when it lies dead ahead between BOT_HOOK_MIN (units, 150 m) and
@@ -3933,7 +3931,10 @@ export class Game implements OnlineGame {
     const piece = this.field.asteroids.get(state.id);
     if (!piece || round !== this.roundId) return;
     const before = this.field.positionOf(piece, state.b, scratch);
-    if (knockShare(before, rammedTo.fromArray(state.p), Math.hypot(...state.v)) > 1) return;
+    const age = state.b - this.field.clock;
+    // the cheap bounds first, the search for what it struck only for a blow they pass
+    if (knockShare(before, rammedTo.fromArray(state.p), Math.hypot(...state.v), age, 0) > 1) return;
+    if (knockShare(before, rammedTo, 0, age, this.contacts.gap(this.field, piece, state.b)) > 1) return;
     this.field.move(state);
   }
 
@@ -3943,7 +3944,7 @@ export class Game implements OnlineGame {
     const piece = this.field.asteroids.get(state.id);
     if (!fleet || !piece || round !== this.roundId) return;
     const before = this.field.positionOf(piece, state.b, scratch);
-    if (ramShare(before, rammedTo.fromArray(state.p), Math.hypot(...state.v), fleet.position, fleet.reach + piece.radius) > 1) return;
+    if (ramShare(before, rammedTo.fromArray(state.p), Math.hypot(...state.v), fleet.position, fleet.reach + piece.radius, state.b - this.field.clock) > 1) return;
     this.field.move(state);
     this.scrape(fleet, state.id);
   }
@@ -5320,10 +5321,10 @@ export class Game implements OnlineGame {
    * lies two thirds from where this browser sees the taker (standings differ by a little lag,
    * not from first to last), then the third seen here.
    */
-  remoteProbe(id: string, ship: Ship | null, bucket: number): ItemKind | null | undefined {
+  remoteProbe(id: string, ship: Ship | null, bucket: number, take = true): ItemKind | null | undefined {
     const deathsOf = (s: string) => this.ships.find((other) => other.id === s)?.deaths ?? null;
     if (!this.probes.plausible(id, this.roundId, deathsOf)) return undefined;
-    const probe = this.probes.takeId(id);
+    const probe = take ? this.probes.takeId(id) : this.probes.find(id);
     if (!probe) return null;
     const seen = ship ? this.bucketOf(ship) : 1;
     return contents(probe, Math.abs(bucket - seen) <= 1 ? bucket : seen);
@@ -5344,7 +5345,7 @@ export class Game implements OnlineGame {
   }
 
   fleetZoneAt(zone: number): THREE.Vector3 | null {
-    return this.fleet?.present(this.field.clock) ? this.fleet.zoneAt(zone, new THREE.Vector3()) : null;
+    return this.fleet?.present(this.field.clock) && zone < this.fleet.zones.length ? this.fleet.zoneAt(zone, new THREE.Vector3()) : null;
   }
 
   fleetNovaHit(zone: number, distance: number): number {

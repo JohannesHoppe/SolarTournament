@@ -6,9 +6,14 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CASING_PLAIN, shine, torpedoCasing } from '../view/surfaces';
 import { MASS } from '../world/bodies';
 import { LOCK_DEPTH } from '../world/air';
+import { ONLINE_LEVEL, tubeTorpedoes } from './hangar';
 
 /** Torpedoes a fresh clone carries. */
 export const TORPEDOES = 2;
+/** The most a fresh clone carries online: the standard load and its tubes up to the online cap (see game/hangar). */
+export const ONLINE_LOAD = TORPEDOES + tubeTorpedoes(ONLINE_LEVEL);
+/** A torpedo another browser says went off is this close (units, 1.5 km) to where it flies here, or the report is ignored: torpedoes fly alike everywhere, up to the lag. */
+export const TORPEDO_GONE_SLACK = 30000;
 /** A torpedo leaves the tube this much faster than its ship (units/s, 40 m/s). */
 export const TORPEDO_LAUNCH = 800;
 /**

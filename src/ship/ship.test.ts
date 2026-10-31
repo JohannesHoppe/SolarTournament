@@ -4,6 +4,8 @@ import { FlightModel } from './flight';
 import { Ship } from './ship';
 import { STOCK } from '../game/hangar';
 import { shipState } from '../net/validate';
+import { Plausibility } from '../net/plausible';
+import { ONLINE_LOAD } from '../game/torpedoes';
 
 /** A ship with the state it sends and takes, but no model: what travels over the network and what an adopted bot keeps. */
 function ship(id: string): Ship {
@@ -49,6 +51,17 @@ describe('a bot adopted by a new lead browser', () => {
     const heir = ship('b:new:0');
     heir.adopt(seen, 0);
     expect(heir.torpedoes).toBe(1);
+  });
+
+  it('keeps no more than a fresh load, which the other browsers allow a ship they never saw', () => {
+    const seen = ship('b:old:0');
+    // three probes of torpedoes taken by its clone
+    seen.torpedoes = ONLINE_LOAD + 6;
+    const heir = ship('b:new:0');
+    heir.adopt(seen, 0);
+    expect(heir.torpedoes).toBe(ONLINE_LOAD);
+    const check = new Plausibility();
+    for (let i = 0; i < heir.torpedoes; i++) expect(check.torpedo(heir.id, 1 + i)).toBeNull();
   });
 
   it('sends its torpedoes along when their count changes, not only every second', () => {

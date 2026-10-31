@@ -7,7 +7,7 @@ import { MASS, type Body } from '../world/bodies';
 import { raySphere } from '../world/asteroids';
 import { ramDamage, type RamZone } from './impact';
 import type { Controls } from '../input/input';
-import { TORPEDOES } from '../game/torpedoes';
+import { ONLINE_LOAD, TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
 import { STOCK, type Perks } from '../game/hangar';
 import { runningLight } from '../view/textures';
@@ -518,7 +518,7 @@ export class Ship {
 
   /**
    * Takes over a ship another peer ran, as its last state left it (moved on by its velocity):
-   * score, kills, deaths, damage, the torpedoes its clone has left and whether its clone lives.
+   * score, kills, deaths, damage, the torpedoes its clone has left (up to a fresh load) and whether its clone lives.
    * A new lead browser adopts the bots of the one before it this way.
    */
   adopt(from: Ship, now: number) {
@@ -536,7 +536,9 @@ export class Ship {
     this.twin = from.twin;
     this.plating = from.plating;
     this.nova = from.nova;
-    this.torpedoes = from.torpedoes;
+    // no more than a fresh clone's load: to the other browsers it is a ship never seen, and
+    // they count its launches against that load (see Plausibility.torpedo)
+    this.torpedoes = Math.min(from.torpedoes, ONLINE_LOAD);
     this.gates = from.gates;
     this.finish = from.finish;
     this.alive = r.alive;

@@ -110,6 +110,26 @@ describe('plausibility of what other browsers report', () => {
     expect(check.nova('s', [0, 0, 0], 42.1)).toBeNull();
   });
 
+  it('count a take refused for distance only for what the probe held, and a probe taken here only for its taker', () => {
+    const check = flying(flying(new Plausibility(), 't'));
+    // refused here, the taker too far: a probe of twin lasers holds no core, nor torpedoes
+    check.probe('s', '5.0', 'twin', 21, false);
+    check.state('s', alive(0, { nova: true }), 21.5);
+    expect(check.nova('s', [0, 0, 0], 21.6)).toBe('nova');
+    for (let i = 0; i < 5; i++) expect(check.torpedo('s', 22)).toBeNull();
+    expect(check.torpedo('s', 22)).toBe('torpedoes');
+    // a probe 't' took here holds nothing for another ship that names it later
+    check.probe('t', '6.0', 'nova', 23);
+    check.probe('s', '6.0', null, 23.5);
+    check.probe('s', '6.0', 'nova', 23.6, false);
+    check.state('s', alive(0, { nova: true }), 24);
+    expect(check.nova('s', [0, 0, 0], 24.1)).toBe('nova');
+    expect(check.nova('t', [0, 0, 0], 24.1)).toBeNull();
+    // an honest taker refused for lag, the first to name the probe, keeps its core
+    check.probe('t', '7.0', 'nova', 25, false);
+    expect(check.nova('t', [0, 0, 0], 25.1)).toBeNull();
+  });
+
   it('take no nova from a clone that died with it', () => {
     const check = flying(new Plausibility());
     check.probe('s', '1.0', 'nova', 21);
@@ -495,7 +515,7 @@ describe("the lead's battleship ramming the field", () => {
         if (state) follower.follow(state);
         for (const ram of told) {
           const piece = seen.asteroids.get(ram.id)!;
-          worst = Math.max(worst, ramShare(seen.positionOf(piece, ram.b, new THREE.Vector3()), new THREE.Vector3().fromArray(ram.p), Math.hypot(...ram.v), follower.position, follower.reach + piece.radius));
+          worst = Math.max(worst, ramShare(seen.positionOf(piece, ram.b, new THREE.Vector3()), new THREE.Vector3().fromArray(ram.p), Math.hypot(...ram.v), follower.position, follower.reach + piece.radius, ram.b - seen.clock));
           seen.move(ram);
           rams++;
         }
@@ -547,7 +567,7 @@ describe('evidence of what a ship did', () => {
 
   it('counts where a torpedo went off, and a launch while the torpedo may fly', () => {
     const evidence = new Evidence();
-    evidence.blast('s', v(0), 10);
+    evidence.blast('s', 's.1', v(0), 10);
     evidence.launch('s', 10);
     expect(evidence.blasted('s', v(500), 20000, 11)).toBe(true);
     expect(evidence.launched('s', 10 + TORPEDO_LIFETIME + 2)).toBe(true);
@@ -583,17 +603,31 @@ describe('evidence of what a ship did', () => {
   it("counts a torpedo's hit on the battleship after its shooter died, a laser's only from a living one", () => {
     const evidence = new Evidence();
     const part = v(0, 0, 80000);
-    evidence.blast('s', v(0, 0, 81000), 10);
+    evidence.blast('s', 's.1', v(0, 0, 81000), 10);
+    evidence.blast('s', 's.2', v(0, 0, 81000), 10);
     evidence.beam('s', v(0), v(0, 0, 80500), 10);
-    // the torpedo went off on the part: its hits count, its clone alive or dead
-    expect(evidence.fleetHit('s', true, part, 10, 20000, false, 11)).toBe(true);
-    expect(evidence.fleetHit('s', false, part, 10, 20000, false, 11)).toBe(true);
+    // each torpedo went off on the part: its hits count, its clone alive or dead
+    expect(evidence.fleetHit('s', true, 0, part, 10, 20000, false, 11)).toBe(true);
+    expect(evidence.fleetHit('s', false, 0, part, 10, 20000, false, 11)).toBe(true);
     // a beam is fired by a living clone and hits at once
-    expect(evidence.fleetHit('s', true, part, 1, 20000, false, 11)).toBe(true);
-    expect(evidence.fleetHit('s', false, part, 1, 20000, false, 11)).toBe(false);
+    expect(evidence.fleetHit('s', true, 0, part, 1, 20000, false, 11)).toBe(true);
+    expect(evidence.fleetHit('s', false, 0, part, 1, 20000, false, 11)).toBe(false);
     // no blast there, no hits, alive or dead
-    expect(evidence.fleetHit('s', false, v(0, 0, -80000), 10, 20000, false, 11)).toBe(false);
-    expect(evidence.fleetHit('t', false, part, 10, 20000, false, 11)).toBe(false);
+    expect(evidence.fleetHit('s', false, 1, v(0, 0, -80000), 10, 20000, false, 11)).toBe(false);
+    expect(evidence.fleetHit('t', false, 0, part, 10, 20000, false, 11)).toBe(false);
+  });
+
+  it("counts a torpedo's blast once on each part it reached, however often its hits are told, and a torpedo's word of where it went off once", () => {
+    const evidence = new Evidence();
+    evidence.blast('s', 's.1', v(0, 0, 81000), 10);
+    // the same torpedo said to have gone off again, elsewhere: nothing new
+    evidence.blast('s', 's.1', v(0, 0, -80000), 10.5);
+    expect(evidence.fleetHit('s', true, 0, v(0, 0, 80000), 10, 20000, false, 11)).toBe(true);
+    expect(evidence.fleetHit('s', true, 1, v(0, 0, 82000), 10, 20000, false, 11)).toBe(true);
+    for (let t = 11.1; t < 15; t += 0.1) {
+      expect(evidence.fleetHit('s', true, 0, v(0, 0, 80000), 10, 20000, false, t)).toBe(false);
+      expect(evidence.fleetHit('s', true, 2, v(0, 0, -80000), 10, 20000, false, t)).toBe(false);
+    }
   });
 
   it("counts an honest nova core's hits on the battleship's parts, as its holder's browser counted them, with the battleship a moment elsewhere here", () => {
@@ -613,12 +647,15 @@ describe('evidence of what a ship did', () => {
     evidence.nova('s', core, 10);
     const hits = there.novaHits(core);
     expect(hits.length).toBeGreaterThan(0);
-    for (const { zone, count } of hits) expect(evidence.fleetHit('s', true, here.zoneAt(zone), count, AIM_SLACK, false, 11, (d) => here.novaHit(zone, d))).toBe(true);
+    for (const { zone, count } of hits) expect(evidence.fleetHit('s', true, zone, here.zoneAt(zone), count, AIM_SLACK, false, 11, (d) => here.novaHit(zone, d))).toBe(true);
+    // each part once: the same hits told again find the core used up
+    for (const { zone, count } of hits) expect(evidence.fleetHit('s', true, zone, here.zoneAt(zone), count, AIM_SLACK, false, 11.5, (d) => here.novaHit(zone, d))).toBe(false);
     // all the hits a part takes from afar, another ship's word, an old core: no
     expect(there.zoneAt(drive).distanceTo(core)).toBeGreaterThan(NOVA_RADIUS);
-    expect(evidence.fleetHit('s', true, here.zoneAt(drive), here.hitsOf(drive), AIM_SLACK, false, 11, (d) => here.novaHit(drive, d))).toBe(false);
-    expect(evidence.fleetHit('t', true, here.zoneAt(battery), hits[0].count, AIM_SLACK, false, 11, (d) => here.novaHit(battery, d))).toBe(false);
-    expect(evidence.fleetHit('s', true, here.zoneAt(battery), 10, AIM_SLACK, false, 30, (d) => here.novaHit(battery, d))).toBe(false);
+    expect(evidence.fleetHit('s', true, drive, here.zoneAt(drive), here.hitsOf(drive), AIM_SLACK, false, 11, (d) => here.novaHit(drive, d))).toBe(false);
+    evidence.nova('s', core, 12);
+    expect(evidence.fleetHit('t', true, battery, here.zoneAt(battery), hits[0].count, AIM_SLACK, false, 11, (d) => here.novaHit(battery, d))).toBe(false);
+    expect(evidence.fleetHit('s', true, battery, here.zoneAt(battery), 10, AIM_SLACK, false, 30, (d) => here.novaHit(battery, d))).toBe(false);
   });
 
   it('takes a hit on the own ship from a beam that starts near its shooter and passes near the ship', () => {
