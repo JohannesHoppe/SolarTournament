@@ -484,6 +484,9 @@ function cubeMap(faces: Uint8Array[]): THREE.CubeTexture {
   return map;
 }
 
+/** A relief worker that has not finished within this long (ms) is given up. */
+const RELIEF_TIMEOUT = 60000;
+
 /** A relief map a worker bakes: its kind and its shape. */
 export type ReliefJob = [ReliefKind, number];
 
@@ -509,16 +512,24 @@ export async function bakeReliefMaps(): Promise<void> {
         return;
       }
       let left = indices.length;
+      let finished = false;
+      // a worker that goes silent (torn down without an error, a message that cannot be read)
+      // is given up after RELIEF_TIMEOUT; what it did not bake is baked when first asked for
       const done = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
         worker.terminate();
         resolve();
       };
+      const timer = setTimeout(done, RELIEF_TIMEOUT);
       worker.onmessage = (event: MessageEvent<{ kind: ReliefKind; index: number; faces: Uint8Array[] }>) => {
         const { kind, index, faces } = event.data;
         if (!reliefMaps.has(kind + index)) reliefMaps.set(kind + index, cubeMap(faces));
         if (--left === 0) done();
       };
       worker.onerror = done;
+      worker.onmessageerror = done;
       worker.postMessage(indices);
     });
   await Promise.all(Array.from({ length: count }, (_, w) => bake(shapes(w))));
