@@ -80,9 +80,12 @@ describe('the race course', () => {
     const tightest = turnRadius(MAX_SPEED) * 1.25;
     const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
     for (const arena of ARENAS) {
-      const { line } = course(arena);
+      // the line bots fly and the HUD shows: the loop bowed around the field's rock
+      const field = testField();
+      field.generate(arena.layout);
+      const { line } = new Course(field, arena.layout.seed);
       let least = Infinity;
-      for (let s = 0; s < line.length; s += 400) least = Math.min(least, bendRadius(line.point(s - 1000, a), line.point(s, b), line.point(s + 1000, c)));
+      for (let s = 0; s < line.length; s += 400) least = Math.min(least, bendRadius(line.clear(s - 1000, field, a), line.clear(s, field, b), line.clear(s + 1000, field, c)));
       expect(least, arena.id).toBeGreaterThan(tightest);
     }
   });

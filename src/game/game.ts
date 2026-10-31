@@ -17,7 +17,7 @@ import { ReferencePlane } from '../view/plane';
 import { referencesOf } from '../world/reference';
 import { Ghost } from '../view/ghost';
 import { lapClock, LapTimer, parseLaps } from './laps';
-import { aimHook, cableEnd, Cables, clearOf, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, pivotOf, pullOn, type Anchor, type Mark, type Tether } from './hook';
+import { aimHook, cableEnd, Cables, clearOf, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, anchorPoint, pullOn, type Anchor, type Mark, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { STREAKS } from '../view/streaks';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
@@ -2210,7 +2210,7 @@ export class Game implements OnlineGame {
 
   /** Shows where the round is played and what it is: the arena's name, a race's laps, what makes the arena special; the opening's intro card says it while it runs. */
   private announceArena() {
-    if (this.introOpen || (!this.school && Number.isFinite(this.roundEndsAt) && this.raceTime() < START_AT)) return;
+    if (this.introOpen || (!this.school && Number.isFinite(this.roundEndsAt) && this.roundSeconds() < START_AT)) return;
     const venue = { arena: t(this.venue.name), tagline: t(this.venue.tagline), laps: LAPS, gates: GATES };
     this.hud.flashMessage(this.time, this.roundMode === 'race' ? t('{arena} · Race: {laps} laps through {gates} gates · {tagline}', venue) : `${venue.arena} · ${venue.tagline}`, 5);
   }
@@ -4144,7 +4144,7 @@ export class Game implements OnlineGame {
     ship.score += GATE_POINTS;
     if (ship === this.me) this.timeLap(gate);
     if (ship.gates >= FINISH_GATES) {
-      ship.finish = +this.raceClock().toFixed(2);
+      ship.finish = +this.raceSeconds().toFixed(2);
       // the standings with this finish in them
       this.rankedAt = -1;
       const place = this.standings().indexOf(ship);
@@ -4179,7 +4179,7 @@ export class Game implements OnlineGame {
       return false;
     }
     if (!Number.isFinite(this.roundEndsAt)) return true;
-    const t = this.raceTime();
+    const t = this.roundSeconds();
     const count = t < INTRO_SECONDS ? INTRO_COUNT : Math.max(0, Math.ceil(START_AT - t));
     const lit = controls.thrust > 0;
     if (lit && !this.driveLit) this.driveLitAt = t;
@@ -4245,7 +4245,7 @@ export class Game implements OnlineGame {
     this.endIntro();
     if (this.online) return;
     // a solo round moves its start back, so the countdown runs at once
-    const left = INTRO_SECONDS - this.raceTime();
+    const left = INTRO_SECONDS - this.roundSeconds();
     if (left > 0) this.setRoundEnd(this.roundEndsAt - this.time - left);
   }
 
@@ -4343,7 +4343,7 @@ export class Game implements OnlineGame {
   }
 
   /** Seconds since the round started; 0 while an online round is not known yet. */
-  private raceTime() {
+  roundSeconds() {
     return Number.isFinite(this.roundEndsAt) ? Math.max(0, this.time - this.roundStartedAt) : 0;
   }
 
@@ -4413,7 +4413,7 @@ export class Game implements OnlineGame {
     if (me.alive) this.showGuide(me, course.line, next, missed);
     else this.guide.hide();
     // the running lap's clock, and the best lap of this arena to beat
-    const lapTime = this.laps?.lapTime(this.raceClock());
+    const lapTime = this.laps?.lapTime(this.raceSeconds());
     const best = this.laps?.best ? ` · ${t('best {time}', { time: lapClock(this.laps.best.time) })}` : '';
     const timing = lapTime != null ? ` · ${lapClock(lapTime)}${best}` : '';
     const text = missed ? t('Missed gate {n}: turn back and fly through it', gate) : `${t('Gate {n} of {gates}', gate)}${timing}`;
@@ -4422,16 +4422,8 @@ export class Game implements OnlineGame {
   }
 
   /** Seconds since BURN!: the race time every finish and lap is measured in. */
-  private raceClock() {
-    return this.raceTime() - START_AT;
-  }
-
-  roundSeconds() {
-    return this.raceTime();
-  }
-
   raceSeconds() {
-    return this.raceClock();
+    return this.roundSeconds() - START_AT;
   }
 
   /**
@@ -4439,7 +4431,7 @@ export class Game implements OnlineGame {
    * lap's time; a new best lap is kept in this browser, with its ghost.
    */
   private timeLap(gate: number) {
-    const event = this.laps?.pass(gate, this.raceClock());
+    const event = this.laps?.pass(gate, this.raceSeconds());
     if (!event || event.kind === 'start') return;
     const delta = event.delta === null ? '' : ` · ${event.delta < 0 ? '−' : '+'}${Math.abs(event.delta).toFixed(2)}`;
     if (event.kind === 'split') {
@@ -4461,7 +4453,7 @@ export class Game implements OnlineGame {
       this.ghost.show(null);
       return;
     }
-    const t = this.raceClock();
+    const t = this.raceSeconds();
     if (me.alive) laps.record(t, me.flight.position, me.flight.orientation);
     this.ghost.show(laps.ghostAt(t, ghostPosition, ghostTurn) ? ghostPosition : null, ghostTurn);
   }
@@ -4795,7 +4787,9 @@ export class Game implements OnlineGame {
     const target = this.aimTarget();
     if (!target) return out;
     const flight = this.me!.flight;
-    return assistAim(flight, toAim.subVectors(target.flight.position, flight.position), out);
+    toAim.subVectors(target.flight.position, flight.position);
+    if (this.recording) this.recording.aim = toAim.toArray();
+    return assistAim(flight, toAim, out);
   }
 
   /**
@@ -4980,7 +4974,7 @@ export class Game implements OnlineGame {
         if (tether.flying <= 0) {
           bit = true;
           // a miss is reeled back; so is a harpoon whose rock broke or whose ship died on the way
-          const at = tether.anchor ? pivotOf(tether.anchor, hookPoint) : null;
+          const at = tether.anchor ? anchorPoint(tether.anchor, hookPoint) : null;
           if (!at || !tether.anchor) {
             this.unhook(owner);
             continue;
@@ -5006,7 +5000,7 @@ export class Game implements OnlineGame {
         Cables.draw(tether.line, nose, cableEnd(tether, nose, hookEnd));
         continue;
       }
-      const at = pivotOf(tether.anchor, hookPoint);
+      const at = anchorPoint(tether.anchor, hookPoint);
       // a torpedo gone off, or a probe taken (by the hooker on arrival, or by a ship that
       // touched it first on the way): nothing left on the line
       const torpedo = tether.anchor.mark?.torpedo;
@@ -5259,7 +5253,7 @@ export class Game implements OnlineGame {
     if (document.body.classList.contains('nova-held') !== holding) document.body.classList.toggle('nova-held', holding);
     // the flight school shows only the probes its drills put out
     const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
-    if (!this.school && this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.raceTime(), now, this.field, this.course?.points);
+    if (!this.school && this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.roundSeconds(), now, this.field, this.course?.points);
     this.probes.update(dt, now, this.field, (this.probeSolids ??= [fieldSolid(this.field), obstacleSolid(this.field), this.ringSolid, this.wreckSolid, this.coreSolid]));
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive || ship === this.drone || (this.spectating && ship === this.me)) continue;
@@ -7023,7 +7017,7 @@ export class Game implements OnlineGame {
    * sits, so the round takes over without a cut.
    */
   private introCamera(me: Ship) {
-    const progress = THREE.MathUtils.clamp(this.raceTime() / INTRO_SECONDS, 0, 1);
+    const progress = THREE.MathUtils.clamp(this.roundSeconds() / INTRO_SECONDS, 0, 1);
     const at = introTarget.fromArray(this.venue.preview?.at ?? [0, 0, 0]);
     const from = introFrom.fromArray(this.venue.preview?.from ?? PREVIEW_FROM).sub(at).applyAxisAngle(UP, (progress - 0.5) * INTRO_SWING).add(at);
     const flight = me.flight;

@@ -11,7 +11,7 @@ export const CLEARANCE = 2000;
 /** Within this distance along the line of a gate (units, 80 m, two thirds of a gate's 120 m radius) the line runs through the gate's center, whatever lies beside it. */
 const GATE_FADE = 1600;
 /**
- * Around rock the line bends no tighter than this (units, about 770 m): a quarter more than the
+ * Around rock the line bends no tighter than this (units, about 730 m): a quarter more than the
  * autopilot's tightest turn at the speed limit (see turnRadius), so a Host holding the drive on
  * the line never meets a bend the flight cannot follow.
  */
