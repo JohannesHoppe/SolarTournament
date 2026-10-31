@@ -359,6 +359,12 @@ export class Ship {
   owner: string | null = null;
   /** The drive's light on nearby rocks, lent by the game from a fixed pool (see Game.lendLight). */
   engineLight: THREE.PointLight | null = null;
+  /**
+   * How far the last step set this browser's prediction of a ship another peer simulates right
+   * (units), beyond its flight: a cable to it takes that jump as no cut (see Cable.follow). 0 for
+   * a ship this browser runs.
+   */
+  corrected = 0;
 
   /**
    * What pulls and brakes a ship another peer simulates from outside where it is (units/s²: the
@@ -707,8 +713,10 @@ export class Ship {
     // correction; so it is drawn where the prediction says, not a stretch of travel behind
     this.flight.position.addScaledVector(r.velocity, dt);
     if (spin > 1e-6) this.flight.orientation.multiply(spinStep.setFromAxisAngle(offset.copy(r.spin).divideScalar(spin), spin * dt));
-    if (this.flight.position.distanceToSquared(local) > 4000 * 4000) this.flight.position.copy(local);
+    const gap = this.flight.position.distanceTo(local);
+    if (gap > 4000) this.flight.position.copy(local);
     else this.flight.position.lerp(local, blend);
+    this.corrected = gap > 4000 ? gap : gap * blend;
     inverse.copy(r.orientation);
     if (spin > 1e-6) inverse.multiply(spinStep.setFromAxisAngle(offset.copy(r.spin).divideScalar(spin), spin * age));
     this.flight.orientation.slerp(inverse, blend);

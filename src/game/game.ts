@@ -578,7 +578,7 @@ const TAIL_PATTER = 25;
 const TAIL_STATIC = 1.5;
 const TAIL_GLITCH = 0.15;
 /**
- * Flying through a ring's layer of ice grains (see ArenaProfile.grains, Game.ringGrains): grains
+ * Flying through a ring's layer of ice grains (see ArenaProfile.grains, Game.hullPatter): grains
  * patter on the hull about GRAIN_PATTER times a second at GRAIN_PATTER_SPEED (units/s, 100 m/s)
  * and faster, the fewer the slower the ship flies and the nearer the layer's faces.
  */
@@ -587,7 +587,7 @@ const GRAIN_PATTER_SPEED = 2000;
 /** The mist of ice crystals at the derelict's break (see world/derelict) patters on the hull about MIST_PATTER times a second where it is thickest, at GRAIN_PATTER_SPEED and faster. */
 const MIST_PATTER = 15;
 /**
- * Flying through the dust a drill hole blows on the Belt's rocks (see Mining.dustAt, Game.drillDust):
+ * Flying through the dust a drill hole blows on the Belt's rocks (see Mining.dustAt, Game.hullPatter):
  * it patters on the hull about DUST_PATTER times a second in the heart of a plume at
  * DUST_PATTER_SPEED (units/s, 50 m/s) and faster, the fewer the thinner the dust and the slower the ship.
  */
@@ -632,7 +632,6 @@ const laserHit = rayHit();
 const beamEnd = new THREE.Vector3();
 const beamStart = new THREE.Vector3();
 const surface = new THREE.Vector3();
-const ringFacing = new THREE.Vector3();
 const ringNormal = new THREE.Vector3();
 /** A beam is felt along for a ring's solid parts in steps this long (units, 2 m): thinner than its struts (3 m). */
 const RAY_STEP = 40;
@@ -920,6 +919,8 @@ export class Game implements OnlineGame {
   private onTarget: 'drive' | 'armor' | 'friend' | null = null;
   /** When the on-target tick last sounded (see ON_TARGET_TICK). */
   private onTargetTickAt = -Infinity;
+  /** The point the HUD marks to fly for, as the frame's last step left it (a ring, a gate, a core), or null; the screen shows it once a frame (see presentRound). */
+  private waypoint: THREE.Vector3 | null = null;
   /** When Nicole last warned of friendly fire (see FRIEND_WARNING). */
   private friendWarnedAt = -Infinity;
   /** Strength of the camera jolt after the own laser hit something, 0..2. */
@@ -2301,6 +2302,10 @@ export class Game implements OnlineGame {
     this.ships = [];
     this.bots = [];
     this.botPoints.clear();
+    // the ships' ids come again in the next round (a solo round's 'me' and bots): nothing they
+    // did is avenged or carries a streak there
+    this.moments.reset();
+    this.streaks.reset();
     this.me = null;
     this.drone = null;
     this.watchedShip = null;
@@ -2817,8 +2822,9 @@ export class Game implements OnlineGame {
     $('results').hidden = true;
   }
 
-  /** Spawns a ship on the edge of the field, facing the center, away from asteroids. */
+  /** Spawns a ship on the edge of the field, facing the center, away from asteroids; no cable comes along. */
   private respawn(ship: Ship) {
+    this.dropCables(ship);
     const position = new THREE.Vector3();
     const candidate = new THREE.Vector3();
     let best = -Infinity;
@@ -3368,9 +3374,7 @@ export class Game implements OnlineGame {
     // Last Clone Standing: the solar flare, the same on every browser by the field time
     this.showFlare(dt);
     this.playComet(dt, me);
-    this.ringGrains(me, dt);
-    this.breakMist(me, dt);
-    this.drillDust(me, dt);
+    this.hullPatter(me, dt);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -3498,9 +3502,7 @@ export class Game implements OnlineGame {
     const racing = !!this.course && !this.school && !this.clamped;
     if (racing) this.callRace(subject);
     this.pushRadio(racing && !this.spectating && me.finish < 0 && lapOf(me.gates) === LAPS);
-    if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
-    this.orient(subject, waypoint);
-    this.hud.showCrosshair(me.alive);
+    this.waypoint = waypoint;
     const onTarget = me.alive ? this.onTarget : null;
     // the nose comes onto a hull: a short tick, as the crosshair turns orange; onto a ship of
     // the own side no tick, the crosshair crossed out (see Hud.setOnTarget)
@@ -3547,7 +3549,8 @@ export class Game implements OnlineGame {
 
   /**
    * What the screen shows of the round, once a frame after its steps (see draw): the ships'
-   * tints, the HUD's gauges and markers, the radar, the attitude and the g-force strain. A slow
+   * tints, the crosshair, the HUD's gauges and markers, the reference plane and the fixed
+   * references, the radar, the attitude and the g-force strain. A slow
    * frame runs several steps, but the DOM and the canvases are written only for the last.
    */
   private presentRound() {
@@ -3556,6 +3559,8 @@ export class Game implements OnlineGame {
     const subject = this.subject();
     // its gauges too: the own clone is not printed while the Host watches
     if (wallClock() >= this.tintedAt) this.tintShips(wallClock());
+    if (me.alive && this.state === 'playing') this.aimCrosshair(this.waypoint);
+    this.hud.showCrosshair(me.alive);
     // (the benchmark leaves out the HUD, the radar or the attitude to see what each costs)
     if (!this.bench.has('hud')) {
       this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
@@ -3564,6 +3569,8 @@ export class Game implements OnlineGame {
       // a solar storm blinds the sensors: no ship shows a marker
       this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject));
     }
+    // the fixed references' labels after the ships' names, keeping clear of them
+    this.orient(subject, this.waypoint);
     if (!this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
     if (!this.bench.has('attitude')) this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
     // the motion streaks, fewer on a cheaper picture (see view/streaks)
@@ -3698,7 +3705,10 @@ export class Game implements OnlineGame {
       if (team === ship.team) continue;
       const fresh = ship.team < 0;
       ship.team = team;
-      if (fresh && team >= 0 && ship.owner === null && ship.alive) this.respawn(ship);
+      if (!fresh || team < 0 || !ship.alive) continue;
+      // every browser sees the side given, and lets go of the cables on the clone printed anew
+      this.dropCables(ship);
+      if (ship.owner === null) this.respawn(ship);
     }
     for (const event of flags.takeEvents()) this.flagEvent(event);
   }
@@ -4983,6 +4993,17 @@ export class Game implements OnlineGame {
   }
 
   /**
+   * A ship's clone is printed afresh where it was not: no cable survives it, its own nor one
+   * hooked on its hull. Each browser lets go of what it has; one that runs a hook tells the
+   * others (see unhook), so every browser that learns of the reprint (the holder's own, or all
+   * of them for a nova or a side given) is enough.
+   */
+  private dropCables(ship: Ship) {
+    this.unhook(ship);
+    for (const tether of [...this.tethers.values()]) if (tether.anchor?.ship === ship) this.unhook(tether.owner);
+  }
+
+  /**
    * Every hook out: a harpoon on its way bites when it arrives, a cable pulls the ships this
    * browser runs (the owner, and a hooked ship), and every cable is drawn from its owner's
    * nose. A hook whose owner, rock or ship is gone lets go, and so does a cable that snaps.
@@ -5005,7 +5026,11 @@ export class Game implements OnlineGame {
             this.unhook(owner);
             continue;
           }
-          tether.length = owner.flight.position.distanceTo(at);
+          // as much cable out as the way to the bite over what the cable lies on already (a rock
+          // come across it while the harpoon flew): the rope starts slack, never with a jerk by
+          // the way round the rock
+          tether.cable.follow(this.field, at, owner.flight.position, false);
+          tether.length = tether.cable.length(at, owner.flight.position);
           // a core bitten goes to the rules, its cable the tow cable from then on; a torpedo or
           // a probe hangs on the rope (see hookedTorpedo, hookedProbe)
           const mark = tether.anchor.mark;
@@ -5041,7 +5066,8 @@ export class Game implements OnlineGame {
       // others are told it let go), never in the step it bit, which lays it as the ship moved
       // while the harpoon flew
       const owns = owner.owner === null;
-      if (!tether.cable.follow(this.field, at, owner.flight.position, owns && !bit)) {
+      // (nor for the jump of another browser's ship on it, set right as this browser predicts it)
+      if (!tether.cable.follow(this.field, at, owner.flight.position, owns && !bit, tether.anchor.ship?.corrected ?? 0)) {
         this.cableSnapped(owner);
         continue;
       }
@@ -5057,12 +5083,12 @@ export class Game implements OnlineGame {
       const anchor = target ? target.body : held ? held : rockBody(rock ? massOf(rock) : IMMOVABLE, at, rock ? this.field.surfaceVelocity(rock, at, hookVelocity) : hookVelocity.set(0, 0, 0));
       const runsAnchor = held ? true : target?.owner === null;
       const path = owns || runsAnchor ? tether.cable.path(owns) : null;
-      if (path) path.floor = clearOf(owner, path.farRock);
+      const farFloor = path ? clearOf(owner, path.farRock) : 0;
       const floor = path ? clearOf(owner, path.nearRock) : floorOf(owner, tether.anchor);
       // the winch yanks as hard as a coil throws: up to the limit plus a coil's push
       const limit = MAX_SPEED + BOOST_PUSH;
-      if (owns) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor ? 'moved' : target ? 'elsewhere' : 'fixed', path);
-      else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt, 'elsewhere', path);
+      if (owns) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor ? 'moved' : target ? 'elsewhere' : 'fixed', path, farFloor);
+      else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt, 'elsewhere', path, farFloor);
       if (length === null) {
         this.cableSnapped(owner);
         continue;
@@ -5409,11 +5435,11 @@ export class Game implements OnlineGame {
     }
     if (this.fleet?.present(this.field.clock)) this.novaOnFleet(this.fleet, holder, position);
     // the holder's clone burns up in its own core, leaving nothing behind; no one is blamed for
-    // it, and the sponsors are so thrilled by the show that the next clone comes without an ad
+    // it, and the sponsors are so thrilled by the show that the next clone comes without an ad.
+    // Every browser hears of the nova and lets go of the cables on it, the hooks it runs
+    // telling the others
+    this.dropCables(holder);
     if (holder.owner === null && holder.alive) {
-      // no cable survives the reprint: the clone's own, nor one hooked on its hull
-      this.unhook(holder);
-      for (const tether of [...this.tethers.values()]) if (tether.anchor?.ship === holder) this.unhook(tether.owner);
       this.respawn(holder);
       if (holder === this.me) {
         this.speaker.say(COMPUTER.novaReprint, 'urgent');
@@ -6172,11 +6198,6 @@ export class Game implements OnlineGame {
     else if (this.touchesRing(flight.position, ship.radius)) this.bounce(ship, STILL, now, 'gate');
   }
 
-  /**
-   * Whether a ship touches the housings of a ring (see touchRing): a race's gates, the bases of
-   * Capture the Flag, the flight school's rings still standing. Flying through is the point;
-   * flying into the coil is a crash. Moves the ship out and sets `normal` when it does.
-   */
   /** The housings of the rings as a Solid (see game/items): a probe bounces off them, held in place by their stations. */
   private readonly ringSolid: Solid = (position, radius, out, moving) => {
     if (!this.touchesRing(position, radius)) return false;
@@ -6219,10 +6240,22 @@ export class Game implements OnlineGame {
     this.school?.eachRing((center, facing, radius) => take(this.ringRay(center, facing, radius, origin, direction, best)));
     for (const core of this.flags?.cores ?? []) take(raySphere(origin, direction, core.position, CORE_REACH));
     for (const probe of this.probes.list) take(raySphere(origin, direction, probe.position, PROBE_RADIUS));
+    const head = this.headNow(solidProbe);
+    if (head) take(raySphere(origin, direction, head, HEAD_RADIUS));
+    return found ? best : null;
+  }
+
+  /** Where the comet's head is now (into `out`) while it flies whole, or null: solid as long as it lasts. */
+  private headNow(out: THREE.Vector3): THREE.Vector3 | null {
     const comet = this.shower?.comet;
     const clock = this.field.clock;
-    if (comet && clock < headEnd(comet)) take(raySphere(origin, direction, headAt(comet, clock, solidProbe), HEAD_RADIUS));
-    return found ? best : null;
+    return comet && clock < headEnd(comet) ? headAt(comet, clock, out) : null;
+  }
+
+  /** Whether a sphere touches a sponsor core. */
+  private touchesCore(position: THREE.Vector3, radius: number): boolean {
+    for (const core of this.flags?.cores ?? []) if (core.position.distanceTo(position) < CORE_REACH + radius) return true;
+    return false;
   }
 
   /** Where a beam first meets a ring's solid parts (see touchRing), felt for in steps of RAY_STEP through the ring's reach; null when it passes. */
@@ -6239,11 +6272,9 @@ export class Game implements OnlineGame {
 
   /** Whether a sphere touches a ring's housing, a sponsor core or the comet's head: what wreckage grinds to dust on besides rock and hull. */
   private readonly grinds = (position: THREE.Vector3, radius: number): boolean => {
-    if (this.touchesRing(solidProbe.copy(position), radius)) return true;
-    for (const core of this.flags?.cores ?? []) if (core.position.distanceTo(position) < CORE_REACH + radius) return true;
-    const comet = this.shower?.comet;
-    const clock = this.field.clock;
-    return !!comet && clock < headEnd(comet) && headAt(comet, clock, solidProbe).distanceTo(position) < HEAD_RADIUS + radius;
+    if (this.touchesRing(solidProbe.copy(position), radius) || this.touchesCore(position, radius)) return true;
+    const head = this.headNow(solidProbe);
+    return !!head && head.distanceTo(position) < HEAD_RADIUS + radius;
   };
 
   /**
@@ -6257,19 +6288,19 @@ export class Game implements OnlineGame {
     return false;
   };
 
+  /**
+   * Whether a ship touches the housings of a ring (see touchRing): a race's gates, the bases of
+   * Capture the Flag (both in `rings`), the flight school's rings still standing. Flying through
+   * is the point; flying into the coil is a crash. Moves the ship out and sets `normal` when it
+   * does, and `gateStruck` to the race's gate.
+   */
   private touchesRing(position: THREE.Vector3, radius: number): boolean {
     this.gateStruck = -1;
-    const course = this.course;
-    if (course) {
-      for (let i = 0; i < course.points.length; i++) {
-        if (!touchRing(course.points[i], course.normals[i], GATE_RADIUS, position, radius, normal)) continue;
-        this.gateStruck = i;
-        return true;
-      }
-    }
-    const flags = this.flags;
-    if (flags) {
-      for (const base of flags.bases) if (touchRing(base, ringFacing.copy(base).normalize(), BASE_RADIUS, position, radius, normal)) return true;
+    for (let i = 0; i < this.rings.length; i++) {
+      const ring = this.rings[i];
+      if (!touchRing(ring.center, ring.facing, ring.radius, position, radius, normal)) continue;
+      if (this.course) this.gateStruck = i;
+      return true;
     }
     return !!this.school?.touchesRing(position, radius, normal);
   }
@@ -6614,12 +6645,9 @@ export class Game implements OnlineGame {
       break;
     }
     if (this.touchesRing(at.copy(to), PIECE_RADIUS) || this.wrecks.overlap(to, PIECE_RADIUS)) return true;
-    for (const core of this.flags?.cores ?? []) {
-      if (core.position.distanceTo(to) >= CORE_REACH + PIECE_RADIUS) continue;
-      at.copy(to);
-      return true;
-    }
-    return false;
+    if (!this.touchesCore(to, PIECE_RADIUS)) return false;
+    at.copy(to);
+    return true;
   };
 
   /**
@@ -6678,31 +6706,25 @@ export class Game implements OnlineGame {
     if (Math.random() < dt * TAIL_STATIC * depth) this.glitch.trigger(TAIL_GLITCH * (0.5 + Math.random() * 0.5), 0.05 + Math.random() * 0.1);
   }
 
-  /** The own clone flying through a ring's layer of ice grains: harmless, but they patter on the hull, the more the faster it flies. */
-  private ringGrains(me: Ship, dt: number) {
+  /**
+   * The own clone flying through something thin and harmless that patters on the hull: a ring's
+   * layer of ice grains, the ice crystals escaping at the derelict's break, the dust a drill hole
+   * blows (see Mining.dustAt). The thicker it is and the faster the ship flies, the more.
+   */
+  private hullPatter(me: Ship, dt: number) {
+    if (!me.alive || this.spectating) return;
+    const position = me.flight.position;
     const layer = this.venue.grains;
-    if (!layer || !me.alive || this.spectating) return;
-    const depth = 1 - THREE.MathUtils.smoothstep(Math.abs(me.flight.position.y), 0.8 * layer, layer);
-    const pace = Math.min(1, me.flight.velocity.length() / GRAIN_PATTER_SPEED);
-    if (Math.random() < dt * GRAIN_PATTER * depth * pace) this.sound.patter(0.5 * depth * pace);
+    if (layer) this.patter(me, dt, 1 - THREE.MathUtils.smoothstep(Math.abs(position.y), 0.8 * layer, layer), GRAIN_PATTER, GRAIN_PATTER_SPEED, 0.5);
+    this.patter(me, dt, this.landmarks.mistAt(position), MIST_PATTER, GRAIN_PATTER_SPEED, 0.4);
+    this.patter(me, dt, this.mining.dustAt(position), DUST_PATTER, DUST_PATTER_SPEED, 0.6);
   }
 
-  /** The own clone flying through the ice crystals escaping at the derelict's break: harmless, but they patter on the hull, the more the thicker the mist and the faster the ship. */
-  private breakMist(me: Ship, dt: number) {
-    if (!me.alive || this.spectating) return;
-    const density = this.landmarks.mistAt(me.flight.position);
-    if (density <= 0) return;
-    const pace = Math.min(1, me.flight.velocity.length() / GRAIN_PATTER_SPEED);
-    if (Math.random() < dt * MIST_PATTER * density * pace) this.sound.patter(0.4 * density * pace);
-  }
-
-  /** The own clone flying through the dust a drill hole blows (see Mining.dustAt): harmless, but it patters on the hull, the more the thicker and the faster. */
-  private drillDust(me: Ship, dt: number) {
-    if (!me.alive || this.spectating) return;
-    const thick = this.mining.dustAt(me.flight.position);
+  /** Patter on the hull out of a cloud `thick` (0..1): `rate` bursts a second at `fullSpeed` and faster, as loud as `loudness` there. */
+  private patter(me: Ship, dt: number, thick: number, rate: number, fullSpeed: number, loudness: number) {
     if (thick <= 0) return;
-    const pace = Math.min(1, me.flight.velocity.length() / DUST_PATTER_SPEED);
-    if (Math.random() < dt * DUST_PATTER * thick * pace) this.sound.patter(0.6 * thick * pace);
+    const pace = Math.min(1, me.flight.velocity.length() / fullSpeed);
+    if (Math.random() < dt * rate * thick * pace) this.sound.patter(loudness * thick * pace);
   }
 
   /** The comet's head strikes a piece of the wreck's hull and shoves it: a flash, sparks and debris where it struck, heard as far as debris is. */

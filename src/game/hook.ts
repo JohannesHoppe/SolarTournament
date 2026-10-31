@@ -184,11 +184,11 @@ const winchOn = (body: Body, other: Body) => (HOOK_PULL * Math.min(MASS.ship, WI
  * A cable wrapped around the field's pieces (`path`, see game/cable) is the same rope bent
  * over its wrap points: `length` is all of it, the body's stretch runs to the wrap point next to
  * it and the anchor's to the one next to the anchor, and the winch and the brake work along each
- * end's own stretch, `floor` the body's and the path's floor the anchor's. The winch keeps each
+ * end's own stretch, `floor` the body's and `farFloor` the anchor's. The winch keeps each
  * stretch at least at its floor, paying out what the cable wraps onto a piece: a ship winding
  * its cable round a rock never comes nearer to it, and spends its swing on the winch's brake.
  */
-export function pullOn(body: Body, anchor: Body, length: number, reeling: boolean, floor: number, speedLimit: number, dt: number, anchorEnd: 'moved' | 'fixed' | 'elsewhere' = 'fixed', path: CablePath | null = null): number | null {
+export function pullOn(body: Body, anchor: Body, length: number, reeling: boolean, floor: number, speedLimit: number, dt: number, anchorEnd: 'moved' | 'fixed' | 'elsewhere' = 'fixed', path: CablePath | null = null, farFloor = 0): number | null {
   const moveAnchor = anchorEnd === 'moved';
   const near = path ? path.near : anchor;
   toAnchor.subVectors(near.position, body.position);
@@ -219,7 +219,7 @@ export function pullOn(body: Body, anchor: Body, length: number, reeling: boolea
     // cable in to the floor it holds, and the rope alone pulls
     const room = stoppable - closing;
     body.velocity.addScaledVector(toAnchor, Math.min(winchOn(body, anchor) * dt, room));
-    if (moveAnchor && (!path || reach > path.floor)) anchor.velocity.addScaledVector(fromAnchor, Math.min(winchOn(anchor, body) * dt, room));
+    if (moveAnchor && (!path || reach > farFloor)) anchor.velocity.addScaledVector(fromAnchor, Math.min(winchOn(anchor, body) * dt, room));
   }
   if (!path) {
     cable = Math.max(floor, cable);
@@ -228,7 +228,7 @@ export function pullOn(body: Body, anchor: Body, length: number, reeling: boolea
     return cable;
   }
   // a rock's end lies on it for good; a moving end keeps its own floor too
-  cable = Math.max(floor + path.between + (anchorEnd === 'fixed' ? reach : path.floor), cable);
+  cable = Math.max(floor + path.between + (anchorEnd === 'fixed' ? reach : farFloor), cable);
   if (anchorEnd === 'elsewhere') ropeFrom(body, anchor, cable, dt, near, between);
   else ropeOver(body, anchor, near, path.far, cable - path.between, true, moveAnchor);
   return cable;
