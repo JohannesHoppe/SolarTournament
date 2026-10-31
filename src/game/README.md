@@ -19,7 +19,7 @@ The round and its rules. `game.ts` holds the `Game` class: states (menu, playing
 | `cable.ts` | A cable lying on the field's pieces (the hook's, a core's tow cable): wrap points where a stretch would cut into rock, ice, junk or a hull section, kept in the piece's frame, let go when the cable lifts off; where it snaps instead (the well, the battleship's hull, a piece sweeping through it, too many wraps); the path each end pulls along |
 | `racingline.ts` | The ideal line through gates or rings, bowing around rock as an elastic band that bends no tighter than the autopilot turns at the speed limit, with a quarter to spare; where a racer flies for (back on a wide loop to a gate it missed); how tight a line bends |
 | `laps.ts` | Lap clock, splits, the best lap and its ghost |
-| `hangar.ts` | Solar Coins, the wallet's cap, upgrades and their prices; the hangar as the browser keeps it, and what in it only an edit puts there |
+| `hangar.ts` | Solar Coins, the wallet's cap, upgrades and their prices; what other browsers are told of a ship's upgrades (its looks and radiators); the hangar as the browser keeps it, and what in it only an edit puts there |
 | `school.ts` | The flight school: five courses, their drills and markers (the orbit drill flown at the Event Horizon, the others in the default arena; ring courses tilted clear of rock; debris that bursts on rock); the completed courses as the browser keeps them |
 | `coach.ts` | Nicole's briefings and tips in real rounds, the mouse hint of a Host's first rounds among them |
 | `friendly.ts` | Friendly fire: what a kill changes the killer's score by, a kill of the own side taking as much as one of the other side gives |
