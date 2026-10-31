@@ -1168,7 +1168,7 @@ function placeVelocityMarker(element: HTMLElement, camera: THREE.Camera, velocit
   if (!visible) return;
   at.x = ((ahead.x + 1) / 2) * viewport.width;
   at.y = ((1 - ahead.y) / 2) * viewport.height;
-  element.style.transform = `translate(${at.x}px, ${at.y}px)`;
+  element.style.translate = `${at.x}px ${at.y}px`; // the `translate` property, not `transform`: the flash's `scale` would scale a transform's translation too
 }
 
 const velocityScratch = { x: 0, y: 0 };
