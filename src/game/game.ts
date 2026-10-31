@@ -4786,7 +4786,9 @@ export class Game implements OnlineGame {
     const target = this.aimTarget();
     if (!target) return out;
     const flight = this.me!.flight;
-    return assistAim(flight, toAim.subVectors(target.flight.position, flight.position), out);
+    toAim.subVectors(target.flight.position, flight.position);
+    if (this.recording) this.recording.aim = toAim.toArray();
+    return assistAim(flight, toAim, out);
   }
 
   /**

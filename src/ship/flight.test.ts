@@ -4,8 +4,9 @@ import { InputRecorder } from '../recorder';
 import { Cockpit, Hand, STEP, convergence, flyLine, replay, slip } from '../test/cockpit';
 import { RacingLine } from '../game/racingline';
 import { CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, LINE_SPARE, RING_RADIUS } from '../game/school';
-import { FlightModel, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, turnRadius } from './flight';
+import { flyByNose, FlightModel, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, turnRadius } from './flight';
 import { IDLE } from '../input/input';
+import { assistAim } from './computer';
 import { arenaById } from '../world/arenas';
 import { ARENA_LIMIT } from '../world/arena';
 import { PLAUSIBLE_SPEED } from '../net/plausible';
@@ -256,6 +257,43 @@ describe('the input recorder', () => {
     expect(replayed.flown).toBe(300);
     expect(replayed.position).toBeLessThan(1e-6);
     expect(replayed.cockpit.flight.position.distanceTo(flight.position)).toBeLessThan(1e-6);
+  });
+
+  it('replays the aim assist toward the ship it pulled the nose onto', () => {
+    const ship = new Cockpit(80 * MS);
+    const flight = ship.flight;
+    // a rival 3° off the nose, inside the assist's cone (AIM_ASSIST_ANGLE)
+    const rival = direction(3 * DEGREE).multiplyScalar(2000 * MS);
+    const recorder = new InputRecorder();
+    for (let i = 0; i < 120; i++) {
+      const aim = rival.clone().sub(flight.position);
+      flyByNose(flight, IDLE, ship.gravity, ship.out);
+      assistAim(flight, aim, ship.out);
+      recorder.add({
+        t: ship.t,
+        dt: STEP,
+        mode: 'autopilot',
+        controls: { ...IDLE },
+        pointer: null,
+        aim: aim.toArray(),
+        out: { ...ship.out },
+        gravity: [0, 0, 0],
+        position: flight.position.toArray(),
+        velocity: flight.velocity.toArray(),
+        orientation: flight.orientation.toArray() as [number, number, number, number],
+        drive: 1,
+        thrusters: 1,
+      });
+      flight.update(STEP, ship.out, ship.gravity);
+      ship.t += STEP;
+    }
+    const recording = JSON.parse(recorder.json());
+    const replayed = replay(recording);
+    expect(flight.angleTo(rival.clone().sub(flight.position))).toBeLessThan(1 * DEGREE);
+    expect(replayed.cockpit.flight.position.distanceTo(flight.position)).toBeLessThan(1e-6);
+    // without the pull the replay flies another way: the recording needs its aim
+    for (const frame of recording.frames) delete frame.aim;
+    expect(replay(recording).cockpit.flight.position.distanceTo(flight.position)).toBeGreaterThan(1);
   });
 });
 
