@@ -2814,8 +2814,9 @@ export class Game implements OnlineGame {
     $('results').hidden = true;
   }
 
-  /** Spawns a ship on the edge of the field, facing the center, away from asteroids. */
+  /** Spawns a ship on the edge of the field, facing the center, away from asteroids; no cable comes along. */
   private respawn(ship: Ship) {
+    this.dropCables(ship);
     const position = new THREE.Vector3();
     const candidate = new THREE.Vector3();
     let best = -Infinity;
@@ -3692,7 +3693,10 @@ export class Game implements OnlineGame {
       if (team === ship.team) continue;
       const fresh = ship.team < 0;
       ship.team = team;
-      if (fresh && team >= 0 && ship.owner === null && ship.alive) this.respawn(ship);
+      if (!fresh || team < 0 || !ship.alive) continue;
+      // every browser sees the side given, and lets go of the cables on the clone printed anew
+      this.dropCables(ship);
+      if (ship.owner === null) this.respawn(ship);
     }
     for (const event of flags.takeEvents()) this.flagEvent(event);
   }
@@ -4962,6 +4966,17 @@ export class Game implements OnlineGame {
   }
 
   /**
+   * A ship's clone is printed afresh where it was not: no cable survives it, its own nor one
+   * hooked on its hull. Each browser lets go of what it has; one that runs a hook tells the
+   * others (see unhook), so every browser that learns of the reprint (the holder's own, or all
+   * of them for a nova or a side given) is enough.
+   */
+  private dropCables(ship: Ship) {
+    this.unhook(ship);
+    for (const tether of [...this.tethers.values()]) if (tether.anchor?.ship === ship) this.unhook(tether.owner);
+  }
+
+  /**
    * Every hook out: a harpoon on its way bites when it arrives, a cable pulls the ships this
    * browser runs (the owner, and a hooked ship), and every cable is drawn from its owner's
    * nose. A hook whose owner, rock or ship is gone lets go, and so does a cable that snaps.
@@ -4984,7 +4999,11 @@ export class Game implements OnlineGame {
             this.unhook(owner);
             continue;
           }
-          tether.length = owner.flight.position.distanceTo(at);
+          // as much cable out as the way to the bite over what the cable lies on already (a rock
+          // come across it while the harpoon flew): the rope starts slack, never with a jerk by
+          // the way round the rock
+          tether.cable.follow(this.field, at, owner.flight.position, false);
+          tether.length = tether.cable.length(at, owner.flight.position);
           // a core bitten goes to the rules, its cable the tow cable from then on; a torpedo or
           // a probe hangs on the rope (see hookedTorpedo, hookedProbe)
           const mark = tether.anchor.mark;
@@ -5020,7 +5039,8 @@ export class Game implements OnlineGame {
       // others are told it let go), never in the step it bit, which lays it as the ship moved
       // while the harpoon flew
       const owns = owner.owner === null;
-      if (!tether.cable.follow(this.field, at, owner.flight.position, owns && !bit)) {
+      // (nor for the jump of another browser's ship on it, set right as this browser predicts it)
+      if (!tether.cable.follow(this.field, at, owner.flight.position, owns && !bit, tether.anchor.ship?.corrected ?? 0)) {
         this.cableSnapped(owner);
         continue;
       }
@@ -5036,12 +5056,12 @@ export class Game implements OnlineGame {
       const anchor = target ? target.body : held ? held : rockBody(rock ? massOf(rock) : IMMOVABLE, at, rock ? this.field.surfaceVelocity(rock, at, hookVelocity) : hookVelocity.set(0, 0, 0));
       const runsAnchor = held ? true : target?.owner === null;
       const path = owns || runsAnchor ? tether.cable.path(owns) : null;
-      if (path) path.floor = clearOf(owner, path.farRock);
+      const farFloor = path ? clearOf(owner, path.farRock) : 0;
       const floor = path ? clearOf(owner, path.nearRock) : floorOf(owner, tether.anchor);
       // the winch yanks as hard as a coil throws: up to the limit plus a coil's push
       const limit = MAX_SPEED + BOOST_PUSH;
-      if (owns) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor ? 'moved' : target ? 'elsewhere' : 'fixed', path);
-      else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt, 'elsewhere', path);
+      if (owns) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor ? 'moved' : target ? 'elsewhere' : 'fixed', path, farFloor);
+      else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt, 'elsewhere', path, farFloor);
       if (length === null) {
         this.cableSnapped(owner);
         continue;
@@ -5388,11 +5408,11 @@ export class Game implements OnlineGame {
     }
     if (this.fleet?.present(this.field.clock)) this.novaOnFleet(this.fleet, holder, position);
     // the holder's clone burns up in its own core, leaving nothing behind; no one is blamed for
-    // it, and the sponsors are so thrilled by the show that the next clone comes without an ad
+    // it, and the sponsors are so thrilled by the show that the next clone comes without an ad.
+    // Every browser hears of the nova and lets go of the cables on it, the hooks it runs
+    // telling the others
+    this.dropCables(holder);
     if (holder.owner === null && holder.alive) {
-      // no cable survives the reprint: the clone's own, nor one hooked on its hull
-      this.unhook(holder);
-      for (const tether of [...this.tethers.values()]) if (tether.anchor?.ship === holder) this.unhook(tether.owner);
       this.respawn(holder);
       if (holder === this.me) {
         this.speaker.say(COMPUTER.novaReprint, 'urgent');
