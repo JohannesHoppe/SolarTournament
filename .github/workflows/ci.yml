@@ -1,0 +1,129 @@
+# Every push to main is checked here before anything of it goes live: the voice sprites are
+# rendered, then types, duplicates, the unit tests and the site's build. Only a commit that passes
+# them all is moved on to the branches Cloudflare Pages builds the site from: stage_test (the test
+# stage) and, as long as the game has no players yet, stage_prod (production). Cloudflare builds
+# only those two and takes this run's sprites from the release "voice-sprites" instead of
+# rendering them (see tools/voice/prebuilt.ts), so its build stays far inside its time limit.
+#
+# Two kinds of jobs, as in the workflow Voice: the check job runs our code and its packages and may
+# only read; it hands the sprites on as an artifact. The publish job may write (the release and the
+# two branches) and runs nothing but the shell, jq, git and gh.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+# a newer push makes an older run pointless: only the newest commit goes live
+concurrency:
+  group: ci
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      # no install scripts, as in the workflow Voice: nothing run here needs one
+      - run: npm ci --ignore-scripts
+      # the voice tool's cache (the Kokoro model, ffmpeg, Nicole's clones, earlier renders)
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.npm/_solartournament
+          key: voice-${{ hashFiles('src/music/lines.ts', 'src/i18n/de.ts', 'src/i18n/es.ts', 'src/i18n/fr.ts', 'tools/voice/**', 'package-lock.json') }}
+          restore-keys: voice-
+      - name: Voices
+        run: npm run voice
+      - name: Types
+        run: npm run typecheck
+      - name: Duplicates
+        run: npm run dupes
+      - name: Unit tests
+        run: npm test
+      # the site's build, which alone finds a worker graph Vite cannot bundle
+      - name: Build
+        run: node_modules/.bin/vite build
+      - name: Hand the sprites on
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sprites
+          path: public/assets/voice/voice-*
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+  publish:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sprites
+          path: ${{ runner.temp }}/sprites
+      # A render goes up under its inputs' key once (the files first), then the commit's pointer,
+      # which names the key and each file's SHA-256 (see tools/voice/prebuilt.ts); the newest 30
+      # pointers are kept, and the renders none of them names go.
+      - name: Upload the sprites
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SPRITES: ${{ runner.temp }}/sprites
+        run: |
+          tag=voice-sprites
+          gh release view "$tag" > /dev/null 2>&1 || gh release create "$tag" --title "Voice sprites" --notes "The voice sprites the workflow CI rendered, for the site's build (see tools/voice/prebuilt.ts). Not a release of the game." --prerelease
+          inputs=$(jq -r '.inputs // empty' "$SPRITES/voice-en.json")
+          if ! [[ "$inputs" =~ ^[0-9a-f]{12}$ ]]; then echo "::error::The sprites carry no inputs' key"; exit 1; fi
+          for sprite in radio en de es fr; do
+            for ext in mp3 json; do [ -f "$SPRITES/voice-$sprite.$ext" ] || { echo "::error::voice-$sprite.$ext missing"; exit 1; }; done
+            [ "$(jq -r '.inputs' "$SPRITES/voice-$sprite.json")" = "$inputs" ] || { echo "::error::voice-$sprite.json is of another render"; exit 1; }
+          done
+          assets=$(gh release view "$tag" --json assets --jq '.assets[].name')
+          pointer="$RUNNER_TEMP/sprites-${GITHUB_SHA:0:12}.json"
+          echo '{}' > "$pointer.hashes"
+          for file in "$SPRITES"/voice-*; do
+            name=$(basename "$file")
+            jq --arg name "$name" --arg hash "$(sha256sum "$file" | cut -d' ' -f1)" '. + {($name): $hash}' "$pointer.hashes" > "$pointer.next" && mv "$pointer.next" "$pointer.hashes"
+            if ! grep -qx "$inputs-$name" <<< "$assets"; then
+              cp "$file" "$RUNNER_TEMP/$inputs-$name"
+              gh release upload "$tag" "$RUNNER_TEMP/$inputs-$name" --clobber
+            fi
+          done
+          jq --arg inputs "$inputs" '{inputs: $inputs, sha256: .}' "$pointer.hashes" > "$pointer"
+          gh release upload "$tag" "$pointer" --clobber
+          # the newest 30 pointers stay, and the renders they name
+          pointers=$(gh api "repos/$GH_REPO/releases/tags/$tag" --jq '.assets | map(select(.name | test("^sprites-[0-9a-f]{12}\\.json$"))) | sort_by(.created_at) | reverse | .[].name')
+          keep=$(head -n 30 <<< "$pointers")
+          for old in $(tail -n +31 <<< "$pointers"); do gh release delete-asset "$tag" "$old" --yes; done
+          named=""
+          for kept in $keep; do
+            gh release download "$tag" --pattern "$kept" --output "$RUNNER_TEMP/kept.json" --clobber
+            named="$named $(jq -r '.inputs' "$RUNNER_TEMP/kept.json")"
+          done
+          for asset in $(gh release view "$tag" --json assets --jq '.assets[].name' | grep -E '^[0-9a-f]{12}-voice-'); do
+            grep -qw "${asset:0:12}" <<< "$named" || gh release delete-asset "$tag" "$asset" --yes
+          done
+      # the checked commit goes live: the test stage always; production while PROMOTE_PROD is on
+      # (as long as the game has no players; once it has, production moves only when Johannes asks)
+      - name: Move the stages
+        env:
+          PROMOTE_PROD: 'true'
+        run: |
+          targets="$GITHUB_SHA:refs/heads/stage_test"
+          [ "$PROMOTE_PROD" = true ] && targets="$targets $GITHUB_SHA:refs/heads/stage_prod"
+          git push origin $targets

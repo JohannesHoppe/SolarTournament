@@ -5,9 +5,9 @@ import { basename, join, resolve } from 'node:path';
 import { defaultRelayUrls } from 'trystero';
 import relayList from './src/net/relays.json' with { type: 'json' };
 
-/** Sends visitors of the Cloudflare Pages addresses of production and test on to our own domains, keeping path and room code. */
+/** Sends visitors of the Cloudflare Pages addresses of production and test (the test stage's branch, and main, which Cloudflare built earlier and still serves) on to our own domains, keeping path and room code. */
 const HOME_SCRIPT =
-  "{ const home = { 'solartournament.pages.dev': 'solartournament.games', 'main.solartournament.pages.dev': 'test.solartournament.games' }[location.hostname]; if (home) location.replace('https://' + home + location.pathname + location.search + location.hash); }";
+  "{ const home = { 'solartournament.pages.dev': 'solartournament.games', 'stage-test.solartournament.pages.dev': 'test.solartournament.games', 'main.solartournament.pages.dev': 'test.solartournament.games' }[location.hostname]; if (home) location.replace('https://' + home + location.pathname + location.search + location.hash); }";
 const HOME_REDIRECT = `<script>${HOME_SCRIPT}</script>`;
 
 /**

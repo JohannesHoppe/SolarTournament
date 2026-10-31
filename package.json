@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "npm run voice && vite",
-    "build": "npm run voice && tsc --noEmit && npm run dupes && npm test && vite build",
+    "build": "npm run voice && tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

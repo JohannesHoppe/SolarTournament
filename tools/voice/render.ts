@@ -25,6 +25,7 @@ import { allLines, clipKey, phraseKey, phrases, words, type Language } from '../
 import { ffmpegBinary, ffmpegHash } from './ffmpeg.ts';
 import { sha256, toolCache, writeWhole } from '../pinned.ts';
 import { cachedStore, keepStore, pruneStores } from './clonestore.ts';
+import { fetchPrebuilt } from './prebuilt.ts';
 import { CATALOGS, cloneAudioName, CLONED, cloneKey, COMPUTER_VOICE, nicoleLines, releaseUrl, type Cloned } from './nicole.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -68,6 +69,16 @@ const files = SPRITES.flatMap((sprite) => [`voice-${sprite}.mp3`, `voice-${sprit
 // npm ignores the folder. VOICE_CACHE moves it elsewhere. The cache is a help, never a need:
 // where it cannot be written, the voices are rendered all the same.
 const cacheRoot = process.env.VOICE_CACHE ?? toolCache();
+
+// the site's build takes the sprites the workflow CI rendered for its commit (see prebuilt.ts)
+const commit = process.env.CF_PAGES_COMMIT_SHA;
+if (commit) {
+  mkdirSync(out, { recursive: true });
+  if (await fetchPrebuilt(commit, files, out)) {
+    console.log('Voice sprites from the workflow CI');
+    process.exit(0);
+  }
+}
 const tryCache = (action: () => void) => {
   try {
     action();

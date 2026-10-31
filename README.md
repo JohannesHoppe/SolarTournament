@@ -14,7 +14,7 @@ npm run dev        # http://127.0.0.1:5173/
 npm test           # unit tests (Vitest)
 npm run e2e        # browser tests (Playwright; first once: npm run e2e:install)
 npm run bench      # benchmark in the test browser (see Performance); PROFILE=pixel8 as the reference phone
-npm run build      # static site in dist/ (runs the unit tests first)
+npm run build      # static site in dist/ (the voices and the types first; the workflow CI runs the tests before it goes live)
 ```
 
 ## Performance
@@ -109,9 +109,9 @@ The game is a static site on [Cloudflare Pages](https://pages.cloudflare.com/), 
 | Branch | Stage | Address |
 |---|---|---|
 | `stage_prod` | production | https://solartournament.games |
-| `main` | test | https://test.solartournament.games |
+| `stage_test` | test | https://test.solartournament.games |
 
-Cloudflare builds every push to one of the two branches itself (Git integration: build command `npm run build`, output directory `dist`, Node from `.node-version`); no Cloudflare token lives in GitHub. Development happens on `main`; a release merges `main` into `stage_prod`. `test.solartournament.games` points to the branch alias `main.solartournament.pages.dev`; `www.solartournament.games` and `solar-tournament.games` (with `www.`) redirect permanently to `solartournament.games`, path and query included.
+Development happens on `main`, and nothing is pushed to the two stages by hand: every push to `main` runs the workflow CI (`.github/workflows/ci.yml`), which renders the voice sprites, checks types and duplicates, runs the unit tests and the site's build, and only then moves the commit on to `stage_test` and, as long as the game has no players, to `stage_prod`; once it has, `stage_prod` moves only when Johannes asks. Cloudflare builds only those two branches (Git integration: build command `npm run build`, output directory `dist`, Node from `.node-version`), and its build takes the sprites the workflow rendered for the commit from the release `voice-sprites` (`tools/voice/prebuilt.ts`, each file checked against the SHA-256 the commit's pointer names) instead of rendering them: rendering every language anew, after the spoken lines changed, takes longer than a Cloudflare build may run. Its build is the voices, the types and Vite; no Cloudflare token lives in GitHub. `test.solartournament.games` points to the branch alias `stage-test.solartournament.pages.dev`; `www.solartournament.games` and `solar-tournament.games` (with `www.`) redirect permanently to `solartournament.games`, path and query included.
 
 The project is a classic Pages project, not a Worker: the game is a static site, and its only server code is a Pages Function of the same project, `functions/turn.ts` (`GET /turn`), which hands out short-lived TURN credentials (see below), never to a request the browser marks as coming from another site (`Sec-Fetch-Site` other than `same-origin`; older browsers that send no such mark are answered, and a zone rate limit keeps scripts from collecting credentials in bulk).
 

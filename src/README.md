@@ -33,4 +33,4 @@ The files at this level:
 - `devlog.ts`: the development log, a ring buffer of the round's deaths, ship contacts, shoves, bot decisions, where torpedoes went off, the hits on the President's battleship, the cheat checks other browsers' ships failed and what the lead's sync of the field set right, read in the console as `game.log`; only in development, null and free in production.
 - `style.css`: the styles of all pages.
 
-Unit tests sit next to the code they test (`*.test.ts`) and run with `npm test`.
+Unit tests sit next to the code they test (`*.test.ts`) and run with `npm test`; those of the voice tool sit here, since the tests run from `src/` only: `clonestore.test.ts` (the build cache's clone stores) and `prebuilt.test.ts` (the sprites the workflow CI rendered, taken by the site's build only whole and as their pointer names them).
