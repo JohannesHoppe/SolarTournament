@@ -152,30 +152,20 @@ export function ulpError(got: number, truth: Big): number {
 // ---------------------------------------------------------------------------------------------
 // Constants, from their own series in fixed point
 
-/** atan(1/n) · 2^bits. */
-function atanInverse(n: bigint, bitCount: number): bigint {
+/** atan(1/n) · 2^bits, or atanh(1/n) · 2^bits (the same series without the alternating signs). */
+function inverseSeries(n: bigint, bitCount: number, hyperbolic: boolean): bigint {
   const one = 1n << BigInt(bitCount);
   const n2 = n * n;
   let term = one / n;
   let sum = term;
   for (let k = 1n; term !== 0n; k++) {
     term /= n2;
-    sum += (k % 2n === 1n ? -1n : 1n) * (term / (2n * k + 1n));
+    sum += (hyperbolic || k % 2n === 0n ? 1n : -1n) * (term / (2n * k + 1n));
   }
   return sum;
 }
-/** atanh(1/n) · 2^bits. */
-function atanhInverse(n: bigint, bitCount: number): bigint {
-  const one = 1n << BigInt(bitCount);
-  const n2 = n * n;
-  let term = one / n;
-  let sum = term;
-  for (let k = 1n; term !== 0n; k++) {
-    term /= n2;
-    sum += term / (2n * k + 1n);
-  }
-  return sum;
-}
+const atanInverse = (n: bigint, bitCount: number) => inverseSeries(n, bitCount, false);
+const atanhInverse = (n: bigint, bitCount: number) => inverseSeries(n, bitCount, true);
 
 const GUARD = 32; // bits of the fixed-point constants beyond what is kept
 /** π · 2^PI_BITS (Machin: π = 16 atan(1/5) - 4 atan(1/239)). */

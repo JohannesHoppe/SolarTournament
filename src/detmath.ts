@@ -828,13 +828,15 @@ function logTail(f: number, hfsq: number): number {
   return s * (hfsq + t2 + t1);
 }
 
-/** Special values of the logarithms: -Infinity at ±0, NaN below 0 and at NaN, Infinity at Infinity; else undefined. */
+/** Special values of the logarithms: -Infinity at ±0, NaN below 0 and at NaN, Infinity at Infinity, 0 at 1; else undefined. */
 function logSpecial(x: number, hx: number): number | undefined {
   if (hx < 0x00100000 || hx < 0) {
     if (x === 0) return -Infinity;
     if (hx < 0) return NaN; // log of a negative number, or of a NaN with its sign bit set
   } else if (hx >= 0x7ff00000) {
     return x; // Infinity or NaN
+  } else if (x === 1) {
+    return 0;
   }
   return undefined;
 }
@@ -844,7 +846,6 @@ export function log(x: number): number {
   const hx = highWord(x);
   const special = logSpecial(x, hx);
   if (special !== undefined) return special;
-  if (hx === 0x3ff00000 && lowWord(x) === 0) return 0;
   const k = logSplit(x, hx);
   const f = logParts[0];
   const hfsq = 0.5 * f * f;
@@ -866,40 +867,30 @@ function logHiLo(f: number): number {
   return hi;
 }
 
-/** The logarithm of x to base 2. */
-export function log2(x: number): number {
+/**
+ * The logarithm of x to a base b: log(1 + f) · (1/ln b) in two parts (ivHi + ivLo) plus k times
+ * log_b(2) in two parts (kHi + kLo), the sum rounded once.
+ */
+function logToBase(x: number, ivHi: number, ivLo: number, kHi: number, kLo: number): number {
   const hx = highWord(x);
   const special = logSpecial(x, hx);
   if (special !== undefined) return special;
-  if (hx === 0x3ff00000 && lowWord(x) === 0) return 0;
   const k = logSplit(x, hx);
   const hi = logHiLo(logParts[0]);
   const lo = logParts[0];
-  let valHi = hi * IVLN2_HI;
-  let valLo = (lo + hi) * IVLN2_LO + lo * IVLN2_HI;
-  const w = k + valHi;
-  valLo += k - w + valHi;
-  valHi = w;
-  return valLo + valHi;
-}
-
-/** The logarithm of x to base 10. */
-export function log10(x: number): number {
-  const hx = highWord(x);
-  const special = logSpecial(x, hx);
-  if (special !== undefined) return special;
-  if (hx === 0x3ff00000 && lowWord(x) === 0) return 0;
-  const k = logSplit(x, hx);
-  const hi = logHiLo(logParts[0]);
-  const lo = logParts[0];
-  let valHi = hi * IVLN10_HI;
-  const y = k * LOG10_2_HI;
-  let valLo = k * LOG10_2_LO + (lo + hi) * IVLN10_LO + lo * IVLN10_HI;
+  const valHi = hi * ivHi;
+  const y = k * kHi;
+  let valLo = k * kLo + (lo + hi) * ivLo + lo * ivHi;
   const w = y + valHi;
   valLo += y - w + valHi;
-  valHi = w;
-  return valLo + valHi;
+  return valLo + w;
 }
+
+/** The logarithm of x to base 2. */
+export const log2 = (x: number) => logToBase(x, IVLN2_HI, IVLN2_LO, 1, 0);
+
+/** The logarithm of x to base 10. */
+export const log10 = (x: number) => logToBase(x, IVLN10_HI, IVLN10_LO, LOG10_2_HI, LOG10_2_LO);
 
 /** log(1 + x), accurate where x is near 0. */
 export function log1p(x: number): number {
