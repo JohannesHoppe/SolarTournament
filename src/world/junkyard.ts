@@ -76,21 +76,22 @@ const BELOW_LONGITUDE = THREE.MathUtils.degToRad(20);
 export const MAP_LAND = 0.12;
 /**
  * Land without light as the shader reads it: the map is decoded from sRGB, so MAP_LAND arrives
- * as 0.0134. Day and night tell sea from land by it (the day's glint and darker seas, the
- * night's faint moonlit land and its lit coasts); the night's lights read the map as they were
- * tuned to.
+ * as 0.0134. The day side tells sea from land by it (its glint, its darker seas); the night
+ * reads only the map's light (see LIGHT_EDGES).
  */
 export const LAND_SEEN = ((MAP_LAND + 0.055) / 1.055) ** 2.4;
 /**
- * Where the shader's land mask rises, in the units it reads: from the sea (0) at the first edge
- * to land at the second, below unlit land with room for the map's compression noise around it.
+ * Where the day side's land mask rises, in the units the shader reads: from the sea (0) at the
+ * first edge to land at the second, below unlit land with room for the map's compression noise.
  */
 export const LAND_EDGES = [LAND_SEEN * 0.3, LAND_SEEN * 0.7] as const;
 /**
- * The coast: land where the map seen eight texels wide (its third mip level) reads less than
- * land all around, the sea within that reach; in full below the first edge, none above the second.
+ * Where the night side finds people, in the units the shader reads: the map's light rising from
+ * its first edge to its second (stored grey 0.22 to 0.35, the dim lights of small towns and
+ * up), far above unlit land. Around such light the land glows faintly, a light with little lit
+ * around it glows out into the dark, and new towns sprout beside it; dark land stays dark.
  */
-export const COAST_EDGES = [LAND_SEEN * 0.5, LAND_SEEN * 0.75] as const;
+export const LIGHT_EDGES = [0.04, 0.1] as const;
 /** The cap of Earth that is built (rad, 57.6° around the point beneath the arena): to its horizon, which lies 55.9° around it, and a little beyond. */
 export const EARTH_CAP = Math.acos(EARTH_RADIUS / (EARTH_RADIUS + EARTH_ALTITUDE)) + 0.03;
 /**
@@ -200,8 +201,9 @@ const twilight = /* glsl */ `
  * dimmer and redder towards the terminator, the sun's glint on the water; the clouds catching the
  * last red light after the ground lies in the dusk; the twilight's blue fading into the night,
  * where the lights come on as the sky darkens: the lights of the 26th century, today's grown into
- * megacities (their glow spread wide, white and neon in the hearts of the biggest), the coasts
- * lit end to end, new cities in what is empty land today; the air's haze towards the limb.
+ * megacities (their glow spread wide, white and neon in the hearts of the biggest), small towns
+ * glowing out into the dark, new towns sprouting around today's lights; the air's haze towards
+ * the limb.
  * Clouds drift and dim the lights below. Detail finer than the map shows only while it is a few
  * pixels large, so nothing crawls in the distance. Now and then a satellite burns up in the air
  * as a streak with a fiery head (see BURN_EVERY).
@@ -223,6 +225,8 @@ const earthFragment = () => /* glsl */ `
   ${twilight}
   // land on the map as the shader reads it (see LAND_EDGES): unlit land is land
   float land(float v) { return smoothstep(${f(LAND_EDGES[0])}, ${f(LAND_EDGES[1])}, v); }
+  // people on the map: some light there (see LIGHT_EDGES)
+  float peopled(float v) { return smoothstep(${f(LIGHT_EDGES[0])}, ${f(LIGHT_EDGES[1])}, v); }
   float lit(float v) { return max(v - ${f(MAP_LAND)}, 0.0) / ${f(1 - MAP_LAND)}; }
   // how far noise of this grain shows: in full while it is a few pixels large, faded out before it crawls
   float seen(vec3 p) { return smoothstep(0.6, 0.25, length(fwidth(p))); }
@@ -265,10 +269,9 @@ const earthFragment = () => /* glsl */ `
     // the map seen blurred, eight texels wide: how much land is around, how much light
     float wide = texture2D(map, uv, 3.0).r * inside;
     float ground = land(v);
-    // the coast: land with sea within the blurred map's reach (see COAST_EDGES)
-    float coast = ground * (1.0 - smoothstep(${f(COAST_EDGES[0])}, ${f(COAST_EDGES[1])}, wide));
+    float people = peopled(v);
     // a town's light with little else lit around it, glowing out into the dark
-    float lone = smoothstep(0.04, 0.1, v) * (1.0 - smoothstep(0.06, 0.12, wide));
+    float lone = people * (1.0 - smoothstep(0.06, 0.12, wide));
     vec3 view = normalize(cameraPosition - vWorld);
     vec3 toSun = normalize(sun);
     float facing = dot(n, toSun);
@@ -289,14 +292,14 @@ const earthFragment = () => /* glsl */ `
     vec3 onClouds = sunThrough(e + ${f(CLOUD_DIP)}) * (0.15 + max(facing + 0.05, 0.0)) + skyColor * sky;
     vec3 shade = mix(surface * onGround, vec3(0.8) * onClouds, clouds * 0.85) * light * ${f(DAY_EXPOSURE)};
     shade += vec3(1.0, 0.92, 0.8) * light * sunlight * pow(max(dot(reflect(-toSun, n), view), 0.0), 90.0) * (1.0 - ground) * (1.0 - clouds) * smoothstep(-0.5, 3.0, e);
-    // the night: land faintly lit by the moon and the glow of the cities, and the lights coming
+    // the night: dark, the land faintly aglow around its people's lights, and the lights coming
     // on as the sky darkens
     float night = smoothstep(${f(LIGHTS_ON)}, ${f(LIGHTS_FULL)}, e);
-    shade += mix(vec3(0.002, 0.004, 0.012), vec3(0.006, 0.008, 0.018), ground) * night;
-    // the lights of the 26th century: today's, boosted and grown together, the coasts lit, new
-    // cities in the empty land; the fine grain of streets only while it is large enough on screen
-    // (districts 3.5 km across, blocks 900 m, the coasts' and the new cities' patches and the neon
-    // hearts' colors, each faded to its mean before it is smaller than a few pixels)
+    shade += mix(vec3(0.002, 0.004, 0.012), vec3(0.016, 0.02, 0.036), people) * night;
+    // the lights of the 26th century: today's, boosted and grown together, small towns glowing
+    // out, new towns sprouting around today's lights; the fine grain of streets only while it is
+    // large enough on screen (districts 3.5 km across, blocks 900 m, the towns' patches and the
+    // neon hearts' colors, each faded to its mean before it is smaller than a few pixels)
     vec3 district = q * 1800.0;
     vec3 block = q * 7000.0;
     vec3 shore = q * 400.0;
@@ -306,9 +309,8 @@ const earthFragment = () => /* glsl */ `
     grain *= mix(1.0, 0.5 + 1.0 * noise(block), seen(block));
     float today = lit(v);
     float sprawl = lit(wide);
-    float settled = ground * mix(0.02, smoothstep(0.84, 0.9, noise(towns)), seen(towns)) * smoothstep(0.4, 0.6, noise(q * 11.0));
-    float strung = (lone * 0.4 + coast * 0.6) * (0.6 + 0.8 * mix(0.5, noise(shore), seen(shore)));
-    float glow = pow(today, 0.85) * 1.5 * grain + sprawl * 0.9 + strung * grain + settled * 1.2 * grain;
+    float sprouting = people * mix(0.12, smoothstep(0.66, 0.8, noise(towns)), seen(towns)) * smoothstep(0.4, 0.6, noise(q * 11.0));
+    float glow = pow(today, 0.85) * 1.5 * grain + sprawl * 0.9 + lone * 0.4 * (0.6 + 0.8 * mix(0.5, noise(shore), seen(shore))) * grain + sprouting * 0.15 * grain;
     vec3 warm = vec3(1.0, 0.6, 0.27);
     vec3 white = vec3(1.0, 0.9, 0.78);
     vec3 neon = mix(vec3(0.35, 0.8, 1.0), vec3(1.0, 0.35, 0.85), mix(0.5, step(0.5, noise(hearts)), seen(hearts)));

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { EARTH_ALTITUDE, EARTH_CENTER, EARTH_DOWN, EARTH_RADIUS } from './arenas';
 import { BELT_INNER } from './belt';
-import { COAST_EDGES, DAY_FROM, DAY_SHARE, EARTH_CAP, LAND_EDGES, LAND_SEEN, MAP_LAND, MAP_REACH, junkData, mapAxes } from './junkyard';
+import { DAY_FROM, DAY_SHARE, EARTH_CAP, LAND_EDGES, LIGHT_EDGES, LAND_SEEN, MAP_LAND, MAP_REACH, junkData, mapAxes } from './junkyard';
 import { SUN_DIRECTION } from './space';
 import { CAMERA_FOV } from '../view/chase';
 
@@ -78,15 +78,16 @@ describe('the Satellite Junkyard', () => {
     }
   });
 
-  it("tells land from sea on the night map in the units the shader reads it, unlit land and its compression noise as land", () => {
+  it("reads the night map in the units the shader samples it in: unlit land as land by day, only its lights as people by night", () => {
     // the map's grey values (stored, sRGB) as the GPU hands them to the shader
     const decoded = (stored: number) => (stored <= 0.04045 ? stored / 12.92 : ((stored + 0.055) / 1.055) ** 2.4);
     expect(LAND_SEEN).toBeCloseTo(decoded(MAP_LAND), 9);
     // unlit land, a few steps of 255 either side of it, lies above the mask's upper edge; the sea (black, a step or two of noise) below its lower
     for (const step of [-5, 0, 5]) expect(decoded(MAP_LAND + step / 255)).toBeGreaterThan(LAND_EDGES[1]);
     expect(decoded(3 / 255)).toBeLessThan(LAND_EDGES[0]);
-    // the coast lies where the blurred map reads between sea and land, short of land all around
-    expect(COAST_EDGES[0]).toBeGreaterThan(0);
-    expect(COAST_EDGES[1]).toBeLessThan(LAND_SEEN);
+    // by night, unlit land (with its noise) stays dark: people only where the map shows light, from the dim towns (stored grey 0.22) up
+    expect(decoded(MAP_LAND + 5 / 255)).toBeLessThan(LIGHT_EDGES[0]);
+    expect(decoded(0.22)).toBeGreaterThan(LIGHT_EDGES[0] - 0.001);
+    expect(decoded(0.35)).toBeGreaterThan(LIGHT_EDGES[1] - 0.001);
   });
 });
