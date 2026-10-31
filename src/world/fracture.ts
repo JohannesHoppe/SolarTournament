@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { Noise, rockGeometry, rockRecipe } from './rocks';
-import { measureRadii, Surface } from './surface';
+import { measureRadii, Surface, tangentDirections } from './surface';
 
 /**
  * How a rock shape breaks: every shape (rock and ice share them) has a fixed tree of pieces, cut
@@ -513,8 +513,7 @@ function voronoi(sites: THREE.Vector3[], amplitude: number, frequency: number, r
     for (let j = i + 1; j < sites.length; j++) {
       const normal = sites[j].clone().sub(sites[i]).normalize();
       const u = new THREE.Vector3(), w = new THREE.Vector3();
-      u.set(Math.abs(normal.x) < 0.9 ? 1 : 0, Math.abs(normal.x) < 0.9 ? 0 : 1, 0).cross(normal).normalize();
-      w.crossVectors(normal, u);
+      tangentDirections(normal, u, w);
       const offset = normal.dot(sites[i].clone().add(sites[j]).multiplyScalar(0.5));
       const cut: Cut = { normal, u, w, offset, noise: new Noise(r.nextInt()), amplitude, frequency };
       cells[i].push({ cut, keep: 1 });

@@ -15,9 +15,6 @@ export interface Grade {
   saturation: number;
 }
 
-/** The grade that changes nothing. */
-export const NO_GRADE: Grade = { gain: [1, 1, 1], lift: [0, 0, 0], saturation: 1 };
-
 /** The grade in GLSL, on the tone-mapped color, right before the screen's encoding. */
 const GRADE_GLSL = /* glsl */ `
   {

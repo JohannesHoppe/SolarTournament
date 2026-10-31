@@ -65,8 +65,8 @@ const COURSE_DIVE = 6000;
 /**
  * A gate keeps GATE_ROOM (units, 200 m) clear of rock, and four times as much of an arena's
  * massive body and out of its grip (see crowded), and stays off the stretches where the racing line bows around
- * rock: the bow, the bends into it and out, and GATE_RUN (units, 100 m) more; a rock counts once
- * its reach plus clearance comes within RUN_ROOM (units, 100 m) of the loop. To find such a place
+ * rock: the bow, the bends into it and out, and GATE_RUN (units, 300 m) more; a rock counts as
+ * soon as its reach plus clearance reaches into the loop. To find such a place
  * a gate moves along the loop, back and forth by GATE_STEP (units, 80 m) more each try, up to
  * GATE_TRIES tries (about 720 m either way).
  */

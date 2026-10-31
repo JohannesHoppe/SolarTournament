@@ -1427,7 +1427,7 @@ class Markers {
   }
 
   /** Moves the drifting props; a chunk of debris that meets rock in `field` bursts there (see burst). */
-  update(dt: number, field: AsteroidField | null = null) {
+  update(dt: number, field: AsteroidField) {
     this.clock += dt;
     this.kit.blink(this.clock);
     for (const item of this.moving) {
@@ -1435,7 +1435,7 @@ class Markers {
       if (burst.has(position)) continue;
       position.addScaledVector(velocity, dt);
       // a chunk of 15 m meeting a rock at 60 m/s or more goes to dust, as wreckage does
-      if (field && mesh.userData.spin && field.overlap(position, mesh.scale.x * DEBRIS_FILL)) {
+      if (mesh.userData.spin && field.overlap(position, mesh.scale.x * DEBRIS_FILL)) {
         burst.add(position);
         mesh.visible = false;
       }

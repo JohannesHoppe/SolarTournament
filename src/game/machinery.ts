@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { Randomizer } from '../random';
+import { srgbByte } from '../srgb';
 
 /**
  * The machinery along the walls of the battleship's hangar tunnels (see game/fleet): bulkhead
@@ -611,11 +612,8 @@ export function machinery(random: Randomizer, wall: Wall, emphasis: Emphasis, pa
 }
 
 /** Linear light (0 to 1, in 4096 steps) as an sRGB byte; past 1 a light's glow shows as its color at full. */
-const SRGB = Uint8Array.from({ length: 4097 }, (_, i) => {
-  const c = i / 4096;
-  return Math.round(255 * (c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055));
-});
-const srgbByte = (c: number) => SRGB[Math.round(Math.min(1, Math.max(0, c)) * 4096)];
+const SRGB = Uint8Array.from({ length: 4097 }, (_, i) => srgbByte(i / 4096));
+const srgbOf = (c: number) => SRGB[Math.round(Math.min(1, Math.max(0, c)) * 4096)];
 
 /**
  * A wall's machinery drawn flat, as seen straight on from the tunnel: each texel takes the
@@ -642,7 +640,7 @@ export class Elevation {
   ) {
     this.nearest = new Float32Array(width * height).fill(-Infinity);
     this.inverse = wall.frame.clone().invert();
-    const [r, g, b] = [srgbByte(background.r), srgbByte(background.g), srgbByte(background.b)];
+    const [r, g, b] = [srgbOf(background.r), srgbOf(background.g), srgbOf(background.b)];
     for (let o = row * width * 4; o < (row + height) * width * 4; o += 4) [pixels[o], pixels[o + 1], pixels[o + 2], pixels[o + 3]] = [r, g, b, 255];
   }
 
@@ -685,9 +683,9 @@ export class Elevation {
           if (z <= nearest[i]) continue;
           nearest[i] = z;
           const o = ((this.row + y) * width + x) * 4;
-          pixels[o] = srgbByte(wa * tint[0] + wb * tint[3] + wc * tint[6]);
-          pixels[o + 1] = srgbByte(wa * tint[1] + wb * tint[4] + wc * tint[7]);
-          pixels[o + 2] = srgbByte(wa * tint[2] + wb * tint[5] + wc * tint[8]);
+          pixels[o] = srgbOf(wa * tint[0] + wb * tint[3] + wc * tint[6]);
+          pixels[o + 1] = srgbOf(wa * tint[1] + wb * tint[4] + wc * tint[7]);
+          pixels[o + 2] = srgbOf(wa * tint[2] + wb * tint[5] + wc * tint[8]);
         }
       }
     }

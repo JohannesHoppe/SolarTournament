@@ -139,6 +139,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `style.css` | Styles of both pages |
 | `assets.ts` | Loads the ship models, drive sprites and the planets' maps (the sharp ones only when the picture's quality asks for them), collects the assets generated in code |
 | `random.ts` | Deterministic random generator |
+| `srgb.ts` | Linear light as an sRGB byte, shared by the pictures baked in code (the Milky Way, the battleship's walls) |
 | `storage.ts` | The browser's localStorage, where it is available |
 | `recorder.ts` | The input recorder: the own ship's last minute step by step (controls, pointer, commands, ship), read as `game.recorder`, saved with `game.recorder.download()`, replayed by `src/test/cockpit.ts`; null in production |
 | `share.ts` | The share button of every screen and page: the link and text by where the Host is (the game, or a running tournament's own link), the device's share sheet on touch, else its own menu (copy, e-mail, plain share links of the networks) |
