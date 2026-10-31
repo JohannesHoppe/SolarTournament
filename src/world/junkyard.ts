@@ -73,13 +73,24 @@ const SEA_SHADE = 0.6;
 const BELOW_LATITUDE = THREE.MathUtils.degToRad(35);
 const BELOW_LONGITUDE = THREE.MathUtils.degToRad(20);
 /** How the map packs land and light into one grey value: 0 ocean, MAP_LAND land without light, up to 1 the brightest light. */
-const MAP_LAND = 0.12;
+export const MAP_LAND = 0.12;
 /**
  * Land without light as the shader reads it: the map is decoded from sRGB, so MAP_LAND arrives
- * as 0.0134. The day side tells sea from land by it (its glint, its darker seas); the night's
- * lights read the map as they were tuned to.
+ * as 0.0134. Day and night tell sea from land by it (the day's glint and darker seas, the
+ * night's faint moonlit land and its lit coasts); the night's lights read the map as they were
+ * tuned to.
  */
-const LAND_SEEN = ((MAP_LAND + 0.055) / 1.055) ** 2.4;
+export const LAND_SEEN = ((MAP_LAND + 0.055) / 1.055) ** 2.4;
+/**
+ * Where the shader's land mask rises, in the units it reads: from the sea (0) at the first edge
+ * to land at the second, below unlit land with room for the map's compression noise around it.
+ */
+export const LAND_EDGES = [LAND_SEEN * 0.3, LAND_SEEN * 0.7] as const;
+/**
+ * The coast: land where the map seen eight texels wide (its third mip level) reads less than
+ * land all around, the sea within that reach; in full below the first edge, none above the second.
+ */
+export const COAST_EDGES = [LAND_SEEN * 0.5, LAND_SEEN * 0.75] as const;
 /** The cap of Earth that is built (rad, 57.6° around the point beneath the arena): to its horizon, which lies 55.9° around it, and a little beyond. */
 export const EARTH_CAP = Math.acos(EARTH_RADIUS / (EARTH_RADIUS + EARTH_ALTITUDE)) + 0.03;
 /**
@@ -210,7 +221,8 @@ const earthFragment = () => /* glsl */ `
   ${noise3}
   ${fbm}
   ${twilight}
-  float land(float v) { return smoothstep(0.04, 0.1, v); }
+  // land on the map as the shader reads it (see LAND_EDGES): unlit land is land
+  float land(float v) { return smoothstep(${f(LAND_EDGES[0])}, ${f(LAND_EDGES[1])}, v); }
   float lit(float v) { return max(v - ${f(MAP_LAND)}, 0.0) / ${f(1 - MAP_LAND)}; }
   // how far noise of this grain shows: in full while it is a few pixels large, faded out before it crawls
   float seen(vec3 p) { return smoothstep(0.6, 0.25, length(fwidth(p))); }
@@ -253,7 +265,10 @@ const earthFragment = () => /* glsl */ `
     // the map seen blurred, eight texels wide: how much land is around, how much light
     float wide = texture2D(map, uv, 3.0).r * inside;
     float ground = land(v);
-    float coast = ground * (1.0 - smoothstep(0.06, 0.12, wide));
+    // the coast: land with sea within the blurred map's reach (see COAST_EDGES)
+    float coast = ground * (1.0 - smoothstep(${f(COAST_EDGES[0])}, ${f(COAST_EDGES[1])}, wide));
+    // a town's light with little else lit around it, glowing out into the dark
+    float lone = smoothstep(0.04, 0.1, v) * (1.0 - smoothstep(0.06, 0.12, wide));
     vec3 view = normalize(cameraPosition - vWorld);
     vec3 toSun = normalize(sun);
     float facing = dot(n, toSun);
@@ -263,9 +278,8 @@ const earthFragment = () => /* glsl */ `
     // ground as it falls, the sun's disk a little over the horizon after it has set, bent by the
     // air) and the sky's: its light fades and reddens towards the terminator, the twilight's blue
     // holds on after it
-    float solid = smoothstep(${f(LAND_SEEN * 0.3)}, ${f(LAND_SEEN * 0.7)}, v);
     vec3 surface = texture2D(dayMap, vec2(uv.x / ${f(DAY_SHARE)}, uv.y)).rgb;
-    surface *= mix(${f(SEA_SHADE)}, 1.0, solid);
+    surface *= mix(${f(SEA_SHADE)}, 1.0, ground);
     vec3 sunlight = sunThrough(e);
     float sky = twilight(e);
     vec3 skyColor = mix(vec3(0.4, 0.5, 1.0), vec3(0.6, 0.72, 1.0), smoothstep(-4.0, 10.0, e));
@@ -274,11 +288,11 @@ const earthFragment = () => /* glsl */ `
     // dusk, the deepest red of all, and their flanks catch the low sun
     vec3 onClouds = sunThrough(e + ${f(CLOUD_DIP)}) * (0.15 + max(facing + 0.05, 0.0)) + skyColor * sky;
     vec3 shade = mix(surface * onGround, vec3(0.8) * onClouds, clouds * 0.85) * light * ${f(DAY_EXPOSURE)};
-    shade += vec3(1.0, 0.92, 0.8) * light * sunlight * pow(max(dot(reflect(-toSun, n), view), 0.0), 90.0) * (1.0 - solid) * (1.0 - clouds) * smoothstep(-0.5, 3.0, e);
+    shade += vec3(1.0, 0.92, 0.8) * light * sunlight * pow(max(dot(reflect(-toSun, n), view), 0.0), 90.0) * (1.0 - ground) * (1.0 - clouds) * smoothstep(-0.5, 3.0, e);
     // the night: land faintly lit by the moon and the glow of the cities, and the lights coming
     // on as the sky darkens
     float night = smoothstep(${f(LIGHTS_ON)}, ${f(LIGHTS_FULL)}, e);
-    shade += mix(vec3(0.002, 0.004, 0.012), vec3(0.016, 0.02, 0.036), ground) * night;
+    shade += mix(vec3(0.002, 0.004, 0.012), vec3(0.006, 0.008, 0.018), ground) * night;
     // the lights of the 26th century: today's, boosted and grown together, the coasts lit, new
     // cities in the empty land; the fine grain of streets only while it is large enough on screen
     // (districts 3.5 km across, blocks 900 m, the coasts' and the new cities' patches and the neon
@@ -292,8 +306,9 @@ const earthFragment = () => /* glsl */ `
     grain *= mix(1.0, 0.5 + 1.0 * noise(block), seen(block));
     float today = lit(v);
     float sprawl = lit(wide);
-    float settled = ground * mix(0.12, smoothstep(0.66, 0.8, noise(towns)), seen(towns)) * smoothstep(0.4, 0.6, noise(q * 11.0));
-    float glow = pow(today, 0.85) * 1.5 * grain + sprawl * 0.9 + coast * 0.4 * (0.6 + 0.8 * mix(0.5, noise(shore), seen(shore))) * grain + settled * 0.15 * grain;
+    float settled = ground * mix(0.02, smoothstep(0.84, 0.9, noise(towns)), seen(towns)) * smoothstep(0.4, 0.6, noise(q * 11.0));
+    float strung = (lone * 0.4 + coast * 0.6) * (0.6 + 0.8 * mix(0.5, noise(shore), seen(shore)));
+    float glow = pow(today, 0.85) * 1.5 * grain + sprawl * 0.9 + strung * grain + settled * 1.2 * grain;
     vec3 warm = vec3(1.0, 0.6, 0.27);
     vec3 white = vec3(1.0, 0.9, 0.78);
     vec3 neon = mix(vec3(0.35, 0.8, 1.0), vec3(1.0, 0.35, 0.85), mix(0.5, step(0.5, noise(hearts)), seen(hearts)));
@@ -390,6 +405,7 @@ const junkVertex = /* glsl */ `
   varying float vWidth;
   varying float vKind;
   varying float vSeed;
+  varying float vFade;
   vec3 turn(vec3 v, vec3 axis, float angle) {
     return v * cos(angle) + cross(axis, v) * sin(angle) + axis * dot(axis, v) * (1.0 - cos(angle));
   }
@@ -431,6 +447,7 @@ const junkVertex = /* glsl */ `
     vWidth = max(body.w * (kind > 2.5 ? 0.6 : kind > 1.5 ? 0.22 : 0.16) * projectionMatrix[1][1] * viewport * 0.5 / -view.z, 1.0);
     vKind = kind;
     vSeed = fract(orbit.w * 13.7 + body.x * 0.001);
+    vFade = fade;
     // light: the face the eye sees, sunlit or not, and the sun mirrored in it
     vec3 toEye = normalize(cameraPosition - world);
     vec3 toSun = normalize(sun);
@@ -444,9 +461,9 @@ const junkVertex = /* glsl */ `
     vec3 face = dot(normal, toEye) > 0.0 ? vec3(0.13, 0.18, 0.37) : vec3(0.66, 0.65, 0.61);
     vec3 gold = vec3(0.66, 0.5, 0.26);
     vec3 paint = kind > 2.5 ? (vSeed < 0.3 ? gold : vec3(0.72, 0.7, 0.66)) : kind > 1.5 ? vec3(0.74, 0.72, 0.68) : face;
-    vWing = (paint * (0.08 + 0.92 * sunny) + vec3(1.0, 0.96, 0.9) * mirror * (kind > 2.5 ? 1.2 : 2.6)) * light * fade;
+    vWing = (paint * (0.08 + 0.92 * sunny) + vec3(1.0, 0.96, 0.9) * mirror * (kind > 2.5 ? 1.2 : 2.6)) * light;
     // the bus in its foil: gold mostly, silver now and then
-    vBus = (vSeed > 0.75 ? vec3(0.6, 0.62, 0.65) : gold) * (0.35 + 0.65 * max(dot(radial, toSun), 0.0)) * light * fade;
+    vBus = (vSeed > 0.75 ? vec3(0.6, 0.62, 0.65) : gold) * (0.35 + 0.65 * max(dot(radial, toSun), 0.0)) * light;
   }
 `;
 
@@ -458,6 +475,7 @@ const junkFragment = /* glsl */ `
   varying float vWidth;
   varying float vKind;
   varying float vSeed;
+  varying float vFade;
   void main() {
     vec2 at = (gl_PointCoord - 0.5) * vSize * vec2(1.0, -1.0);
     vec2 from = vKind < 1.5 ? vec2(0.0) : -0.5 * vAxis;
@@ -477,6 +495,8 @@ const junkFragment = /* glsl */ `
       color = mix(color, vBus, bus);
       cover = max(cover, bus);
     }
+    // fading out at its window's edge (see JUNK_WINDOW) a piece grows see-through, never a dark speck
+    cover *= vFade;
     if (cover < 0.01) discard;
     gl_FragColor = vec4(color, cover);
   }
