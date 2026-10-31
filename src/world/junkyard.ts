@@ -210,8 +210,7 @@ const earthFragment = () => /* glsl */ `
   ${noise3}
   ${fbm}
   ${twilight}
-  // (the thresholds in the units the shader reads, see LAND_SEEN: unlit land is land)
-  float land(float v) { return smoothstep(${f(LAND_SEEN * 0.33)}, ${f(LAND_SEEN * 0.83)}, v); }
+  float land(float v) { return smoothstep(0.04, 0.1, v); }
   float lit(float v) { return max(v - ${f(MAP_LAND)}, 0.0) / ${f(1 - MAP_LAND)}; }
   // how far noise of this grain shows: in full while it is a few pixels large, faded out before it crawls
   float seen(vec3 p) { return smoothstep(0.6, 0.25, length(fwidth(p))); }
@@ -254,7 +253,7 @@ const earthFragment = () => /* glsl */ `
     // the map seen blurred, eight texels wide: how much land is around, how much light
     float wide = texture2D(map, uv, 3.0).r * inside;
     float ground = land(v);
-    float coast = ground * (1.0 - smoothstep(${f(LAND_SEEN * 0.5)}, ${f(LAND_SEEN)}, wide));
+    float coast = ground * (1.0 - smoothstep(0.06, 0.12, wide));
     vec3 view = normalize(cameraPosition - vWorld);
     vec3 toSun = normalize(sun);
     float facing = dot(n, toSun);
@@ -386,7 +385,6 @@ const junkVertex = /* glsl */ `
   attribute vec4 tumble;
   varying vec3 vWing;
   varying vec3 vBus;
-  varying float vFade;
   varying vec2 vAxis;
   varying float vSize;
   varying float vWidth;
@@ -432,7 +430,6 @@ const junkVertex = /* glsl */ `
     gl_PointSize = vSize;
     vWidth = max(body.w * (kind > 2.5 ? 0.6 : kind > 1.5 ? 0.22 : 0.16) * projectionMatrix[1][1] * viewport * 0.5 / -view.z, 1.0);
     vKind = kind;
-    vFade = fade;
     vSeed = fract(orbit.w * 13.7 + body.x * 0.001);
     // light: the face the eye sees, sunlit or not, and the sun mirrored in it
     vec3 toEye = normalize(cameraPosition - world);
@@ -447,16 +444,15 @@ const junkVertex = /* glsl */ `
     vec3 face = dot(normal, toEye) > 0.0 ? vec3(0.13, 0.18, 0.37) : vec3(0.66, 0.65, 0.61);
     vec3 gold = vec3(0.66, 0.5, 0.26);
     vec3 paint = kind > 2.5 ? (vSeed < 0.3 ? gold : vec3(0.72, 0.7, 0.66)) : kind > 1.5 ? vec3(0.74, 0.72, 0.68) : face;
-    vWing = (paint * (0.08 + 0.92 * sunny) + vec3(1.0, 0.96, 0.9) * mirror * (kind > 2.5 ? 1.2 : 2.6)) * light;
+    vWing = (paint * (0.08 + 0.92 * sunny) + vec3(1.0, 0.96, 0.9) * mirror * (kind > 2.5 ? 1.2 : 2.6)) * light * fade;
     // the bus in its foil: gold mostly, silver now and then
-    vBus = (vSeed > 0.75 ? vec3(0.6, 0.62, 0.65) : gold) * (0.35 + 0.65 * max(dot(radial, toSun), 0.0)) * light;
+    vBus = (vSeed > 0.75 ? vec3(0.6, 0.62, 0.65) : gold) * (0.35 + 0.65 * max(dot(radial, toSun), 0.0)) * light * fade;
   }
 `;
 
 const junkFragment = /* glsl */ `
   varying vec3 vWing;
   varying vec3 vBus;
-  varying float vFade;
   varying vec2 vAxis;
   varying float vSize;
   varying float vWidth;
@@ -481,8 +477,6 @@ const junkFragment = /* glsl */ `
       color = mix(color, vBus, bus);
       cover = max(cover, bus);
     }
-    // fading out at the window's edge thins the piece's coverage, not only its color: a dark silhouette would remain
-    cover *= vFade;
     if (cover < 0.01) discard;
     gl_FragColor = vec4(color, cover);
   }
