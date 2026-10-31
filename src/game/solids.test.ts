@@ -32,7 +32,11 @@ function world(place: Partial<Record<SolidKindName, THREE.Vector3>>) {
     wreck: (position, radius) => (place.wreck && place.wreck.distanceTo(position) < 50 + radius ? { mesh: { position: place.wreck }, radius: 50, velocity: v(0, 0, 7) } : null),
     probes: () => (place.probe ? [{ position: place.probe }] : []),
     torpedoes: () => (place.torpedo ? [{ position: place.torpedo, shooter }] : []),
-    head: (out) => (place.head ? out.copy(place.head) : null),
+    head: (out, velocity) => {
+      if (!place.head) return null;
+      velocity?.set(-9, 0, 0);
+      return out.copy(place.head);
+    },
   };
   return { table: solidTable(sources), shooter };
 }
@@ -51,7 +55,7 @@ describe('solids besides the field', () => {
       expect(touchOf(table, SHOWER_BURSTS)(v(0), 5, at), kind).toBe(SHOWER_BURSTS.includes(kind));
     }
     // what the README lists for each
-    expect([...PROBE_BOUNCES].sort()).toEqual(['core', 'ring', 'wreck']);
+    expect([...PROBE_BOUNCES].sort()).toEqual(['core', 'head', 'ring', 'wreck']);
     expect([...BEAM_STOPS].sort()).toEqual(['core', 'head', 'probe', 'ring']);
     expect([...WRECK_GRINDS].sort()).toEqual(['core', 'head', 'ring']);
     expect([...TORPEDO_FUSE].sort()).toEqual([...KINDS].sort());
@@ -129,8 +133,10 @@ describe('solids besides the field', () => {
     expect(pushes('wreck', position)).toBe(true);
     expect(position.x).toBeCloseTo(50 + PROBE_RADIUS);
     expect(moving.z).toBe(7);
-    // a probe passes the comet's head (see PROBE_BOUNCES)
+    // the comet's head throws a probe off its surface with its own speed
     position.set(1, 0, 0);
-    expect(pushes('head', position)).toBe(false);
+    expect(pushes('head', position)).toBe(true);
+    expect(position.x).toBeCloseTo(HEAD_RADIUS + PROBE_RADIUS);
+    expect(moving.x).toBe(-9);
   });
 });

@@ -652,6 +652,9 @@ const showerRay: RayHit = { asteroid: null, distance: 0, center: new THREE.Vecto
 const solidProbe = new THREE.Vector3();
 /** No sponsor cores, outside Capture the Flag (see Game.solids). */
 const NO_BALLS: readonly { position: THREE.Vector3; velocity: THREE.Vector3 }[] = [];
+/** The comet's head's velocity is taken from where it is this much field time before and after (s): its route bends slowly, even near a well. */
+const HEAD_PACE = 0.05;
+const headBefore = new THREE.Vector3();
 /** Where the lead's battleship pushed a piece it rammed (see remoteRam). */
 const rammedTo = new THREE.Vector3();
 /** The velocity of what does not move: a ring of the tournament holds its place. */
@@ -6231,7 +6234,7 @@ export class Game implements OnlineGame {
     wreck: (position, radius) => this.wrecks.overlap(position, radius),
     probes: () => this.probes.list,
     torpedoes: () => this.torpedoes.list,
-    head: (out) => this.headNow(out),
+    head: (out, velocity) => this.headNow(out, velocity),
   });
 
   /** What a probe bounces off: the field, the battleship, and the solids of PROBE_BOUNCES (see game/items, bounce). */
@@ -6259,11 +6262,16 @@ export class Game implements OnlineGame {
     return found ? best : null;
   }
 
-  /** Where the comet's head is now (into `out`) while it flies whole, or null: solid as long as it lasts. */
-  private headNow(out: THREE.Vector3): THREE.Vector3 | null {
+  /**
+   * Where the comet's head is now (into `out`) while it flies whole, or null: solid as long as it
+   * lasts; its velocity into `velocity` when given, over HEAD_PACE of field time either side.
+   */
+  private headNow(out: THREE.Vector3, velocity?: THREE.Vector3): THREE.Vector3 | null {
     const comet = this.shower?.comet;
     const clock = this.field.clock;
-    return comet && clock < headEnd(comet) ? headAt(comet, clock, out) : null;
+    if (!comet || clock >= headEnd(comet)) return null;
+    if (velocity) velocity.subVectors(headAt(comet, clock + HEAD_PACE, out), headAt(comet, clock - HEAD_PACE, headBefore)).divideScalar(2 * HEAD_PACE);
+    return headAt(comet, clock, out);
   }
 
   /** Where a beam first meets a ring's solid parts (see touchRing), felt for in steps of RAY_STEP through the ring's reach; null when it passes. */

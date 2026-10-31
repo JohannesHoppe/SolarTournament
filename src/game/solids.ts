@@ -32,12 +32,11 @@ export interface SolidKind {
 export type SolidTable = Readonly<Record<SolidKindName, SolidKind>>;
 
 /**
- * What a probe and its slot bounce off besides the field and the battleship. Not the comet's
- * head: the README's list of what a probe bounces off leaves it out. Not another
+ * What a probe and its slot bounce off besides the field and the battleship. Not another
  * probe: probes drift apart on their slots. Not a torpedo: a torpedo that meets a probe goes off
  * (see TORPEDO_FUSE).
  */
-export const PROBE_BOUNCES: readonly SolidKindName[] = ['ring', 'wreck', 'core'];
+export const PROBE_BOUNCES: readonly SolidKindName[] = ['ring', 'wreck', 'core', 'head'];
 
 /**
  * Where a laser's beam stops besides the field, the battleship and the ships. Wreckage and
@@ -81,12 +80,13 @@ export interface SolidSources {
   wreck(position: THREE.Vector3, radius: number): { mesh: { position: THREE.Vector3 }; radius: number; velocity: THREE.Vector3 } | null;
   probes(): readonly { position: THREE.Vector3 }[];
   torpedoes(): readonly { position: THREE.Vector3; shooter: unknown }[];
-  /** Where the comet's head is now (into `out`) while it flies whole, or null. */
-  head(out: THREE.Vector3): THREE.Vector3 | null;
+  /** Where the comet's head is now (into `out`) while it flies whole, or null; its velocity into `velocity` when given. */
+  head(out: THREE.Vector3, velocity?: THREE.Vector3): THREE.Vector3 | null;
 }
 
 const ringNormal = new THREE.Vector3();
 const headPoint = new THREE.Vector3();
+const headVelocity = new THREE.Vector3();
 
 /**
  * A sphere at `position` of `radius` touching a ball at `center` of `reach` moving at `velocity`
@@ -168,6 +168,11 @@ export function solidTable(s: SolidSources): SolidTable {
       touch: (position, radius, at) => {
         const head = s.head(headPoint);
         return !!head && head.distanceTo(position) < HEAD_RADIUS + radius && !!at.copy(position);
+      },
+      // a mountain of ice against a probe's few tonnes
+      push: (position, radius, out, moving) => {
+        const head = s.head(headPoint, headVelocity);
+        return !!head && pushOffBall(head, HEAD_RADIUS, headVelocity, position, radius, out, moving);
       },
       ray: (origin, direction, max) => {
         const head = s.head(headPoint);
