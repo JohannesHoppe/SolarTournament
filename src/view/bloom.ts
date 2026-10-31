@@ -6,6 +6,9 @@ import * as THREE from 'three';
  * glow is soft anyway: at half the resolution its passes fill a quarter of the pixels and the
  * glow looks nearly the same. It blends onto the picture at full resolution.
  */
+/** What glows: the luminance (linear, before the tone mapping) above which a pixel spills its light into the bloom. */
+export const BLOOM_THRESHOLD = 0.88;
+
 export class Bloom extends UnrealBloomPass {
   private scale = 1;
   private readonly full = new THREE.Vector2(1, 1);

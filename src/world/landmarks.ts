@@ -8,6 +8,7 @@ import { loadPlanetMap, type Planet, type PlanetMaps } from '../assets';
 import { junkyard } from './junkyard';
 import { Jupiter } from './jupiter';
 import { Corona } from './corona';
+import { BLOOM_THRESHOLD } from '../view/bloom';
 
 /**
  * What an arena shows beyond its field: Saturn, whose ring the arena lies in, Earth and the
@@ -168,6 +169,15 @@ const DISK_FLARE = 0.012;
 const DISK_PUFF = 9000;
 const DISK_PUFF_FROM = 16000;
 const DISK_PUFF_REACH = 40000;
+/** The gas's light per column (see diskGas): bright enough that the inner edge burns white-hot, dim enough that the outer disk keeps its peach and orange. */
+const DISK_GAIN = 0.25;
+/**
+ * The gas's brightest light, its luminance held softly below this (linear, before the tone
+ * mapping): under the bloom's threshold, so the edge-on band and the halo glow in their colors
+ * instead of washing the picture out to white and spilling a glow across the screen; the stars,
+ * the photon ring and the black shadow keep their contrast.
+ */
+const DISK_CEILING = 0.9 * BLOOM_THRESHOLD;
 /** How far above and below the middle plane the gas is drawn (units): where hardly any of the swollen far side is left. */
 const DISK_TOP = 2.6 * (DISK_THICK + DISK_FLARE * DISK_PUFF_REACH * 0.5 + DISK_PUFF);
 /** The hole's shadow as the lens draws it, a share more than its horizon (see view/lensing): the disk's near side shows in front of it. */
@@ -443,9 +453,9 @@ export const diskGas = /* glsl */ `
     if (weight <= 0.0) return vec3(0.0);
     // the clumps once, where the gas along the ray lies; where it is thin it glows redder, in faint wisps
     float clumps = diskClumps(middle / weight);
-    light *= (0.35 + 1.3 * clumps) * 0.4 * mix(vec3(1.0, 0.55, 0.5), vec3(1.0), 0.4 + 0.6 * smoothstep(0.25, 0.5, clumps));
+    light *= (0.35 + 1.3 * clumps) * ${DISK_GAIN.toFixed(2)} * mix(vec3(1.0, 0.55, 0.5), vec3(1.0), 0.4 + 0.6 * smoothstep(0.25, 0.5, clumps));
     // the brightest gas held below a ceiling, so the edge-on band glows instead of burning out
-    return light / (1.0 + dot(light, vec3(0.3, 0.5, 0.2)) / 1.6);
+    return light / (1.0 + dot(light, vec3(0.3, 0.5, 0.2)) / ${DISK_CEILING.toFixed(3)});
   }
 `;
 
