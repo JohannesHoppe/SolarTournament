@@ -30,7 +30,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `ink.ts` | What an element shows on screen (its plate, or the text and children inside it; a fixed reference's glyph and label): the HUD keeps the names at the edge clear of it, the layout test measures by it |
 | `quality.ts` | The picture's quality: the ladder of looks from the full picture to the cheapest (resolution, bloom, shadows, lacquer, particles, rock detail, the belt, Jupiter's cap and sheets of cloud, the black hole's lens, the title screen's pad), the tiers low, medium and high as presets on it, the guess of a device's tier, the Host's choice as the browser keeps it, the governor that moves along the ladder with the frame rate (telling a screen capped below the target frame rate from a slow device; one each for the menu and a running round), the benchmark's features (tested in `quality.test.ts`) |
 | `graphics.ts` | Applies the rung of the ladder to the renderer, the bloom, the sun's shadows, the hulls' lacquer, the particles, the ring's grains, the rocks, the belt, the Jupiter landmark, the black hole's lens, the title screen's pad and the reference plane's grid; feeds the governor the frame times and holds back a knob that compiles shaders until a hitch goes unseen |
-| `bloom.ts` | The bloom at a share of the picture's resolution |
+| `bloom.ts` | The bloom at a share of the picture's resolution, and its threshold (what glows; the black hole's disk stays below it) |
 | `grade.ts` | The output pass (tone mapping, the screen's encoding) with the arena's color grade in the same shader: a tint, a color in the shadows, the saturation |
 
 The styles of all of it live in `src/style.css`.
