@@ -58,7 +58,7 @@ describe("Jupiter's cloud tops", () => {
     expect(topsTexture().image.data).toEqual(data);
   });
 
-  it('are the very same texels on every machine (the noise is shared by every browser of a tournament)', () => {
+  it('are the very same texels on every machine', () => {
     expect(createHash('sha256').update(data).digest('hex')).toBe('eb67f76b30e6a9a2d8b4eda941b0264b64fa0866d3f3e554f56b4630697a1f83');
   });
 });
