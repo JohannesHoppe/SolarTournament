@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { boxUv, industrialSurface, shine, signTexture, surfaced, windingSurface, WIRE_GLOW } from '../view/surfaces';
+import { cos, sin } from '../detmath';
+import { rotateX, rotateY, rotateZ, setFromAxisAngle } from '../detthree';
 
 /**
  * A sponsor's power core, the flag of Capture the Flag, as a thing of the tournament: a
@@ -56,8 +58,8 @@ function wound(radius: number, height: number): THREE.BufferGeometry {
 
 /** A box standing along the axis, `out` from it at `angle` around it, facing outwards. */
 function stave(width: number, height: number, depth: number, angle: number, out: number, y = 0) {
-  turn.setFromAxisAngle(Y, -angle);
-  place.set(Math.cos(angle) * out, y, Math.sin(angle) * out);
+  setFromAxisAngle(turn, Y, -angle);
+  place.set(cos(angle) * out, y, sin(angle) * out);
   return new THREE.BoxGeometry(depth, height, width).applyMatrix4(matrix.compose(place, turn, unit));
 }
 
@@ -89,11 +91,11 @@ export class CoreKit {
     for (const side of [1, -1]) {
       hull.push(new THREE.CylinderGeometry(CAP_RADIUS + 4, CAP_RADIUS + 4, 14, 8).translate(0, side * (HALF - 7), 0));
       const cap = new THREE.CylinderGeometry(CAP_RADIUS * 0.6, CAP_RADIUS, CAP, 8);
-      if (side < 0) cap.rotateX(Math.PI);
+      if (side < 0) rotateX(cap, Math.PI);
       hull.push(cap.translate(0, side * (HALF + CAP / 2), 0));
     }
     // the cage on top: two crossed bails, a hub where they meet the cap
-    for (const angle of [0, Math.PI / 2]) hull.push(new THREE.TorusGeometry(BAIL, 6, 4, 8, Math.PI).rotateY(angle).translate(0, HALF + CAP, 0));
+    for (const angle of [0, Math.PI / 2]) hull.push(rotateY(new THREE.TorusGeometry(BAIL, 6, 4, 8, Math.PI), angle).translate(0, HALF + CAP, 0));
     hull.push(new THREE.CylinderGeometry(10, 10, 14, 6).translate(0, GRIP, 0));
     // the heart, its windings, and the vent at the bottom
     const heart = wound(RADIUS - 14, HALF * 1.8);
@@ -103,7 +105,7 @@ export class CoreKit {
     this.heart = heart;
     this.windings = mergeGeometries(windings);
     // the sign reads along the axis, on both plates
-    this.plate = mergeGeometries([0, Math.PI].map((angle) => new THREE.PlaneGeometry(HALF * 1.4, HALF * 0.35).rotateZ(Math.PI / 2).rotateY(Math.PI / 2 - angle).translate(Math.cos(angle) * (RADIUS + 4), 0, Math.sin(angle) * (RADIUS + 4))));
+    this.plate = mergeGeometries([0, Math.PI].map((angle) => rotateY(rotateZ(new THREE.PlaneGeometry(HALF * 1.4, HALF * 0.35), Math.PI / 2), Math.PI / 2 - angle).translate(cos(angle) * (RADIUS + 4), 0, sin(angle) * (RADIUS + 4))));
     this.outline = new THREE.EdgesGeometry(new THREE.CylinderGeometry(CAP_RADIUS, CAP_RADIUS, (HALF + CAP) * 2, 8));
     for (const parts of [hull, windings]) for (const part of parts) part.dispose();
   }

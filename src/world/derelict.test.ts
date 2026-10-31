@@ -5,6 +5,7 @@ import { Derelict, JET_WELDS, mistDensity } from './derelict';
 import { testField } from '../test/field';
 import { HULL_PAINT } from './shapes';
 import { stencilable } from '../view/lettering';
+import { quaternionAngleTo } from '../detthree';
 
 /** The middle of the gap between the world ship's torn ends. */
 const GAP = new THREE.Vector3(-14200, 0, 0).add(new THREE.Vector3(...sternAt(9200), 3000)).multiplyScalar(0.5);
@@ -76,7 +77,7 @@ describe('the derelict', () => {
           expect(now.distanceTo(GAP)).toBeLessThan(16000);
           // drifting at no more than 2 m/s, turning at no more than 0.12 rad/s
           expect(now.distanceTo(before[k].at)).toBeLessThan(40);
-          expect(turn(mesh, i).angleTo(before[k].turn)).toBeLessThan(0.121);
+          expect(quaternionAngleTo(turn(mesh, i), before[k].turn)).toBeLessThan(0.121);
         }
       }
     }

@@ -5,50 +5,51 @@ import { BELT_INNER } from './belt';
 import { DAY_FROM, DAY_SHARE, EARTH_CAP, LAND_EDGES, LIGHT_EDGES, LAND_SEEN, MAP_LAND, MAP_REACH, junkData, mapAxes } from './junkyard';
 import { SUN_DIRECTION } from './space';
 import { CAMERA_FOV } from '../view/chase';
+import { acos, asin, cos, hypot, pow, sin } from '../detmath';
 
 describe('the Satellite Junkyard', () => {
   it('lies in sunlight above Earth\'s terminator: the point beneath it at dusk, the arena itself lit', () => {
     const up = EARTH_DOWN.clone().negate();
-    const elevation = THREE.MathUtils.radToDeg(Math.asin(up.dot(SUN_DIRECTION)));
+    const elevation = THREE.MathUtils.radToDeg(asin(up.dot(SUN_DIRECTION)));
     // the sun 3.2° below the horizon of the point beneath the arena: dusk there
     expect(elevation).toBeCloseTo(-3.2, 1);
     // the way from the field's center to the sun passes Earth by
     const toCenter = EARTH_CENTER.clone();
     const along = toCenter.dot(SUN_DIRECTION);
-    const miss = Math.sqrt(toCenter.lengthSq() - Math.max(along, 0) ** 2);
+    const miss = Math.sqrt(toCenter.lengthSq() - pow(Math.max(along, 0), 2));
     expect(miss).toBeGreaterThan(EARTH_RADIUS);
     expect(EARTH_CENTER.length()).toBeCloseTo(EARTH_RADIUS + EARTH_ALTITUDE);
   });
 
   it('shows Earth as a whole ball, its disk within the camera\'s view looking straight down', () => {
-    const across = 2 * THREE.MathUtils.radToDeg(Math.asin(EARTH_RADIUS / (EARTH_RADIUS + EARTH_ALTITUDE)));
+    const across = 2 * THREE.MathUtils.radToDeg(asin(EARTH_RADIUS / (EARTH_RADIUS + EARTH_ALTITUDE)));
     expect(across).toBeGreaterThan(60);
     expect(across).toBeLessThan(CAMERA_FOV);
     // the built cap reaches past the horizon
-    expect(EARTH_CAP).toBeGreaterThan(Math.acos(EARTH_RADIUS / (EARTH_RADIUS + EARTH_ALTITUDE)));
+    expect(EARTH_CAP).toBeGreaterThan(acos(EARTH_RADIUS / (EARTH_RADIUS + EARTH_ALTITUDE)));
   });
 
   it('shows day and night below it alike, and has its maps cover all of the cap that is built, the day map all the sun or the twilight reaches', () => {
     const { up, east, north } = mapAxes();
     const side = new THREE.Vector3().crossVectors(up, new THREE.Vector3(0, 0, 1)).normalize();
     const other = new THREE.Vector3().crossVectors(up, side);
-    const horizon = Math.acos(EARTH_RADIUS / (EARTH_RADIUS + EARTH_ALTITUDE));
+    const horizon = acos(EARTH_RADIUS / (EARTH_RADIUS + EARTH_ALTITUDE));
     const n = new THREE.Vector3();
     let lit = 0;
     let day = 0;
     let night = 0;
     for (let a = 0; a <= EARTH_CAP; a += EARTH_CAP / 60) {
       for (let b = 0; b < Math.PI * 2; b += Math.PI / 90) {
-        n.copy(up).multiplyScalar(Math.cos(a)).addScaledVector(side, Math.sin(a) * Math.cos(b)).addScaledVector(other, Math.sin(a) * Math.sin(b));
+        n.copy(up).multiplyScalar(cos(a)).addScaledVector(side, sin(a) * cos(b)).addScaledVector(other, sin(a) * sin(b));
         // as the shader reads the maps: the orthographic projection about the point beneath
         const x = 0.5 + (0.5 * n.dot(east)) / MAP_REACH;
         const y = 0.5 + (0.5 * n.dot(north)) / MAP_REACH;
         // within the map's circle, short of where its edge fades out
-        expect(Math.hypot(2 * x - 1, 2 * y - 1)).toBeLessThan(0.97);
+        expect(hypot(2 * x - 1, 2 * y - 1)).toBeLessThan(0.97);
         if (a > horizon) continue;
         // the sun up, or more than 8° down, where the cities' lights are full
         if (n.dot(SUN_DIRECTION) > 0) day++;
-        if (n.dot(SUN_DIRECTION) < Math.sin(THREE.MathUtils.degToRad(-8))) night++;
+        if (n.dot(SUN_DIRECTION) < sin(THREE.MathUtils.degToRad(-8))) night++;
         // a little short of where daylight sets in, for the texture's filtering
         if (n.dot(SUN_DIRECTION) < DAY_FROM - 0.02) continue;
         lit++;
@@ -71,8 +72,8 @@ describe('the Satellite Junkyard', () => {
       axis.fromArray(orbit, i * 4);
       const radius = body[i * 4];
       // the nearest its circle comes to the field's center
-      const tilt = Math.asin(Math.min(1, Math.abs(axis.dot(up))));
-      const nearest = Math.sqrt((radius - height) ** 2 + 2 * radius * height * (1 - Math.cos(tilt)));
+      const tilt = asin(Math.min(1, Math.abs(axis.dot(up))));
+      const nearest = Math.sqrt(pow(radius - height, 2) + 2 * radius * height * (1 - cos(tilt)));
       expect(nearest).toBeGreaterThan(BELT_INNER);
       expect(nearest).toBeLessThan(400000);
     }
@@ -80,7 +81,7 @@ describe('the Satellite Junkyard', () => {
 
   it("reads the night map in the units the shader samples it in: unlit land as land by day, only its lights as people by night", () => {
     // the map's grey values (stored, sRGB) as the GPU hands them to the shader
-    const decoded = (stored: number) => (stored <= 0.04045 ? stored / 12.92 : ((stored + 0.055) / 1.055) ** 2.4);
+    const decoded = (stored: number) => (stored <= 0.04045 ? stored / 12.92 : pow((stored + 0.055) / 1.055, 2.4));
     expect(LAND_SEEN).toBeCloseTo(decoded(MAP_LAND), 9);
     // unlit land, a few steps of 255 either side of it, lies above the mask's upper edge; the sea (black, a step or two of noise) below its lower
     for (const step of [-5, 0, 5]) expect(decoded(MAP_LAND + step / 255)).toBeGreaterThan(LAND_EDGES[1]);

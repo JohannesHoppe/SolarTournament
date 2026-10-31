@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { msg } from '../i18n/i18n';
 import type { ArenaProfile, Reference } from './arenas';
+import { atan2, hypot } from '../detmath';
 
 /**
  * The reference plane: the horizontal plane through the field's center, square to the arena's
@@ -36,7 +37,7 @@ const inverse = new THREE.Quaternion();
  */
 export function skyPointer(orientation: THREE.Quaternion): number {
   up.copy(PLANE_UP).applyQuaternion(inverse.copy(orientation).invert());
-  return Math.hypot(up.x, up.y) < BANK_STEEP ? NaN : Math.atan2(up.x, up.y);
+  return hypot(up.x, up.y) < BANK_STEEP ? NaN : atan2(up.x, up.y);
 }
 
 /**
@@ -47,7 +48,7 @@ export function closure(position: THREE.Vector3, velocity: THREE.Vector3, target
   const dx = targetPosition.x - position.x;
   const dy = targetPosition.y - position.y;
   const dz = targetPosition.z - position.z;
-  const range = Math.hypot(dx, dy, dz);
+  const range = hypot(dx, dy, dz);
   if (range < 1e-6) return 0;
   return -((targetVelocity.x - velocity.x) * dx + (targetVelocity.y - velocity.y) * dy + (targetVelocity.z - velocity.z) * dz) / range;
 }

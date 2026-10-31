@@ -5,6 +5,8 @@ import { ARENA_LIMIT } from './arena';
 import { CRUMBLE_AFTER, CRUMBLE_SECONDS, impostorDistance, IMPOSTOR_MIN, KNOCKED, SPIN_RATE, type AsteroidField, type FieldLayout } from './asteroids';
 import { testField } from '../test/field';
 import { DETAIL } from './rocks';
+import { cbrt, cos, sin } from '../detmath';
+import { setFromEuler } from '../detthree';
 
 const positions = (field: ReturnType<typeof testField>) => [...field.asteroids.values()].map((a) => `${a.id}:${a.object.position.toArray().map((v) => v.toFixed(3)).join(',')}`);
 
@@ -132,7 +134,7 @@ describe('a rock that breaks', () => {
   /** A spinning rock alone, turned, as a field of its own in the detail the game measures collisions at; the points of its surface a sample of rays from all around finds. */
   const lone = (type: number) => {
     const field = testField(DETAIL);
-    const orientation = new THREE.Quaternion().setFromEuler(new THREE.Euler(0.7, -1.3, 0.4));
+    const orientation = setFromEuler(new THREE.Quaternion(), 0.7, -1.3, 0.4);
     field.generate({ key: `lone${type}`, seed: 1, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: 1, inner: 0, spin: SPIN_RATE, toughness: 800, placements: [{ kind: 'rock', type, scale: 4, position: new THREE.Vector3(1000, -2000, 500), orientation, solid: false }] });
     field.setClock(20);
     const rock = field.asteroids.get('h0')!;
@@ -141,7 +143,7 @@ describe('a rock that breaks', () => {
     for (let k = 0; k < 300; k++) {
       // a spiral of directions over the sphere
       const y = 1 - (2 * (k + 0.5)) / 300, r = Math.sqrt(1 - y * y), a = k * 2.399963;
-      const direction = new THREE.Vector3(Math.cos(a) * r, y, Math.sin(a) * r);
+      const direction = new THREE.Vector3(cos(a) * r, y, sin(a) * r);
       const origin = center.clone().addScaledVector(direction, rock.radius * 2);
       const hit = field.raycast(origin, direction.clone().negate(), rock.radius * 2);
       if (hit) points.push(origin.addScaledVector(direction, -hit.distance));
@@ -167,7 +169,7 @@ describe('a rock that breaks', () => {
     for (const type of [1, 8, 14]) {
       const { field, rock, center, points } = lone(type);
       expect(points.length).toBeGreaterThan(280);
-      const mass = rock.meanRadius ** 3;
+      const mass = rock.meanRadius * rock.meanRadius * rock.meanRadius;
       field.shatter('h0', 20);
       const pieces = [...field.asteroids.values()];
       expect(pieces.map((p) => p.id)).toEqual(['h0.0', 'h0.1', 'h0.2']);
@@ -175,7 +177,7 @@ describe('a rock that breaks', () => {
       expect(touched(field, center, points, 0.96), `${type}`).toBeGreaterThan(0.95);
       expect(touched(field, center, points, 1.08), `${type}`).toBeLessThan(0.05);
       // a piece's mass from its share of the rock's volume: the pieces weigh what the rock did
-      expect(pieces.reduce((sum, p) => sum + p.meanRadius ** 3, 0) / mass).toBeCloseTo(1, 2);
+      expect(pieces.reduce((sum, p) => sum + p.meanRadius * p.meanRadius * p.meanRadius, 0) / mass).toBeCloseTo(1, 2);
       // they fly apart from the rock's center, at a few meters a second over what its drift and spin gave them
       for (const piece of pieces) {
         const own = field.surfaceVelocity(rock, piece.object.position);
@@ -368,7 +370,7 @@ describe('the billboards of the field', () => {
       field.generate(arena.layout);
       for (const piece of field.asteroids.values()) {
         // the piece, a piece of it and a piece of that (each at least a ninth of its parent's volume, see fracture.test)
-        for (const share of [1, Math.cbrt(1 / 9), Math.cbrt(1 / 81)]) expect(impostorDistance(piece.meanRadius * share)).toBeGreaterThan(across);
+        for (const share of [1, cbrt(1 / 9), cbrt(1 / 81)]) expect(impostorDistance(piece.meanRadius * share)).toBeGreaterThan(across);
       }
     }
     // a large rock keeps its billboard farther out yet, in proportion to its size

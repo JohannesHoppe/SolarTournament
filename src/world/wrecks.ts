@@ -5,6 +5,8 @@ import { BELT_INNER } from './belt';
 import { surfaced, wornSurface, wreckInnards, type Wear } from '../view/surfaces';
 import { hazeUniforms } from '../view/haze';
 import { contact, MASS } from './bodies';
+import { cos, exp, hypot, sin } from '../detmath';
+import { setFromAxisAngle, setFromEuler } from '../detthree';
 
 /** A wreck's plating: the old paint of a fighter torn off, blackened, scored and rusting (see wornSurface). */
 const TORN: Wear = { rust: 0.7, chips: 0.9, grime: 1, scratches: 0.8, seams: 0.7, stencils: ['07', 'NO STEP'], roughness: 0.7, metalness: 0.3 };
@@ -126,12 +128,12 @@ function pieceGeometry(r: Randomizer): THREE.BufferGeometry {
     const angle = ((i + r.range(-0.3, 0.3)) / corners) * Math.PI * 2;
     // every other corner a tooth's root, now and then a notch torn deep
     const reach = r.range(0.75, 1.15) * (i % 2 ? r.range(0.7, 0.88) : 1) * (r.nextFloat() < 0.15 ? 0.65 : 1);
-    return { x: Math.cos(angle) * reach * stretch, z: Math.sin(angle) * reach, bend: r.range(-0.07, 0.07) };
+    return { x: cos(angle) * reach * stretch, z: sin(angle) * reach, bend: r.range(-0.07, 0.07) };
   });
   // the plate's surface: bowed as a hull is, its normal from that bow
   const surface = (x: number, z: number) => -bow * (x * x + z * z);
   const corner = (x: number, z: number, side: number, ring: (typeof RINGS)[number], bend: number): Corner => ({
-    p: new THREE.Vector3(x, surface(x, z) + (side * thick) / 2 + bend * ring.at ** 3, z),
+    p: new THREE.Vector3(x, surface(x, z) + (side * thick) / 2 + bend * ring.at * ring.at * ring.at, z),
     n: new THREE.Vector3(2 * bow * x * side, side, 2 * bow * z * side).normalize(),
     u: x / (side > 0 ? WRECK_TILE : INNARDS_TILE),
     v: z / (side > 0 ? WRECK_TILE : INNARDS_TILE),
@@ -157,7 +159,7 @@ function pieceGeometry(r: Randomizer): THREE.BufferGeometry {
     const quad = [corner(o.x, o.z, 1, edgeRing, o.bend), corner(q.x, q.z, 1, edgeRing, q.bend), corner(q.x, q.z, -1, edgeRing, q.bend), corner(o.x, o.z, -1, edgeRing, o.bend)];
     const normal = new THREE.Vector3().subVectors(quad[1].p, quad[0].p).cross(new THREE.Vector3().subVectors(quad[3].p, quad[0].p)).normalize();
     if (normal.x * (o.x + q.x) + normal.z * (o.z + q.z) < 0) normal.negate();
-    const length = Math.hypot(q.x - o.x, q.z - o.z);
+    const length = hypot(q.x - o.x, q.z - o.z);
     quad.forEach((c, k) => {
       c.n.copy(normal);
       c.u = (around + (k === 1 || k === 2 ? length : 0)) / WRECK_TILE;
@@ -170,7 +172,7 @@ function pieceGeometry(r: Randomizer): THREE.BufferGeometry {
     around += length;
   }
   // two stringers along the plate and a frame across it, under the inner face, their torn ends glowing
-  const reach = Math.min(...outline.map((o) => Math.hypot(o.x, o.z))) * 0.9;
+  const reach = Math.min(...outline.map((o) => hypot(o.x, o.z))) * 0.9;
   const ribs = [
     { along: 'x' as const, at: r.range(0.22, 0.4), half: reach * r.range(0.7, 1) },
     { along: 'x' as const, at: -r.range(0.22, 0.4), half: reach * r.range(0.7, 1) },
@@ -254,7 +256,6 @@ function at(wreck: Wreck, time: number, target: THREE.Vector3): THREE.Vector3 {
 const position = new THREE.Vector3();
 const velocity = new THREE.Vector3();
 const spin = new THREE.Quaternion();
-const turn = new THREE.Euler();
 /** The glow of a break as it cools (linear colors): orange the moment it tore, a dull red as it fades, never white. */
 const HOT = new THREE.Color(1, 0.26, 0.03);
 const DULL = new THREE.Color(0.6, 0.04, 0.01);
@@ -292,7 +293,7 @@ export class Wrecks {
       // its shape and how it is turned from a stream of its own: how a piece looks never moves where it flies
       const look = new Randomizer(textSeed(`${id}#${deaths}.${i}`));
       const mesh = new THREE.Mesh(pieceGeometry(look), materials);
-      mesh.quaternion.setFromEuler(turn.set(look.range(0, Math.PI * 2), look.range(0, Math.PI * 2), look.range(0, Math.PI * 2)));
+      setFromEuler(mesh.quaternion, look.range(0, Math.PI * 2), look.range(0, Math.PI * 2), look.range(0, Math.PI * 2));
       mesh.scale.setScalar(radius);
       const direction = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
       mesh.position.copy(position).addScaledVector(direction, shipRadius * 0.4);
@@ -332,9 +333,9 @@ export class Wrecks {
       const age = now - wreck.bornAt;
       fly(wreck, now, field);
       at(wreck, now, mesh.position);
-      mesh.quaternion.premultiply(spin.setFromAxisAngle(wreck.spinAxis, wreck.spinRate * dt));
+      mesh.quaternion.premultiply(setFromAxisAngle(spin, wreck.spinAxis, wreck.spinRate * dt));
       // the break cools: its glow fades and reddens
-      const glow = Math.exp(-age / GLOW_TIME);
+      const glow = exp(-age / GLOW_TIME);
       for (const material of mesh.material) {
         material.emissive.lerpColors(DULL, HOT, glow);
         material.emissiveIntensity = GLOW * glow;

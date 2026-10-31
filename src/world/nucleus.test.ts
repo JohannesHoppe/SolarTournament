@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { bakeNucleusRelief, LIGHT_RANGE, NUCLEUS_COLOR, nucleusGeometry, nucleusMaterial, nucleusNormal, nucleusReliefMap, nucleusTexel, nucleusVents } from './nucleus';
 import { RELIEF_RES, reliefMap } from './rocks';
 import { directions, expectOwnCubeMap, expectSameBake, median, normalFit, texelAt } from '../test/cube';
+import { hypot } from '../detmath';
 
 /** The brightness multipliers a map's alpha holds, texel by texel. */
 function lights(map: THREE.CubeTexture): number[] {
@@ -94,7 +95,7 @@ describe("the comet nucleus's mesh", () => {
       shortest = Math.min(shortest, r);
       sum += r;
       const slice = Math.min(11, Math.floor(((point.x - box.min.x) / (box.max.x - box.min.x)) * 12));
-      slices[slice] = Math.max(slices[slice], Math.hypot(point.y, point.z));
+      slices[slice] = Math.max(slices[slice], hypot(point.y, point.z));
     }
     const mean = sum / position.count;
     expect(mean / radius).toBeGreaterThan(0.85);

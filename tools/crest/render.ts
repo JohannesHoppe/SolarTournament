@@ -8,6 +8,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import opentype from 'opentype.js';
+import { atan2, cos, hypot, sin } from '../../src/detmath.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const fontFile = readFileSync(join(root, 'public/assets/fonts/Michroma-Regular.ttf'));
@@ -17,7 +18,7 @@ const ORANGE = '#ff9d00';
 const DARK = '#0b0703';
 const deg = (d: number) => (d * Math.PI) / 180;
 const f = (n: number) => +n.toFixed(2);
-const point = (r: number, angle: number, cx = 0, cy = 0): [number, number] => [f(cx + r * Math.cos(deg(angle))), f(cy + r * Math.sin(deg(angle)))];
+const point = (r: number, angle: number, cx = 0, cy = 0): [number, number] => [f(cx + r * cos(deg(angle))), f(cy + r * sin(deg(angle)))];
 const poly = (points: [number, number][]) => 'M ' + points.map(([x, y]) => `${x} ${y}`).join(' L ') + ' Z';
 
 /** A five-pointed star; angle 0 points up. */
@@ -69,8 +70,8 @@ const BOLD = 2.6;
  */
 function curveText(content: string, p0: [number, number], c: [number, number], p1: [number, number], size: number, spacing: number, color = ORANGE, weight = 0) {
   const at = (t: number): [number, number] => [
-    (1 - t) ** 2 * p0[0] + 2 * (1 - t) * t * c[0] + t * t * p1[0],
-    (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * c[1] + t * t * p1[1],
+    (1 - t) * (1 - t) * p0[0] + 2 * (1 - t) * t * c[0] + t * t * p1[0],
+    (1 - t) * (1 - t) * p0[1] + 2 * (1 - t) * t * c[1] + t * t * p1[1],
   ];
   // arc length table of the curve
   const samples = 400;
@@ -78,7 +79,7 @@ function curveText(content: string, p0: [number, number], c: [number, number], p
   for (let i = 1; i <= samples; i++) {
     const [ax, ay] = at((i - 1) / samples);
     const [bx, by] = at(i / samples);
-    table.push({ t: i / samples, length: table[i - 1].length + Math.hypot(bx - ax, by - ay) });
+    table.push({ t: i / samples, length: table[i - 1].length + hypot(bx - ax, by - ay) });
   }
   const curveLength = table[samples].length;
   const tAt = (length: number) => table.find((entry) => entry.length >= length)?.t ?? 1;
@@ -90,7 +91,7 @@ function curveText(content: string, p0: [number, number], c: [number, number], p
     const [x, y] = at(t);
     const [nx, ny] = at(Math.min(1, t + 0.001));
     const [px, py] = at(Math.max(0, t - 0.001));
-    const angle = (Math.atan2(ny - py, nx - px) * 180) / Math.PI;
+    const angle = (atan2(ny - py, nx - px) * 180) / Math.PI;
     position += widths[i];
     const d = font.getPath(ch, -(widths[i] - spacing) / 2, cap / 2, size).toPathData(2);
     return d ? `<path transform="translate(${f(x)} ${f(y)}) rotate(${f(angle)})" d="${d}"/>` : '';
@@ -226,7 +227,7 @@ function simplify(points: [number, number][], epsilon: number): [number, number]
   if (points.length < 3) return points;
   const [ax, ay] = points[0];
   const [bx, by] = points[points.length - 1];
-  const length = Math.hypot(bx - ax, by - ay) || 1;
+  const length = hypot(bx - ax, by - ay) || 1;
   let worst = 0, index = 0;
   for (let i = 1; i < points.length - 1; i++) {
     const [px, py] = points[i];
@@ -248,7 +249,7 @@ function facet(d: string, epsilon: number): string {
       const [sx, sy] = shape[0];
       let far = 0;
       shape.forEach(([x, y], i) => {
-        if (Math.hypot(x - sx, y - sy) > Math.hypot(shape[far][0] - sx, shape[far][1] - sy)) far = i;
+        if (hypot(x - sx, y - sy) > hypot(shape[far][0] - sx, shape[far][1] - sy)) far = i;
       });
       const closed = [...simplify(shape.slice(0, far + 1), epsilon).slice(0, -1), ...simplify([...shape.slice(far), shape[0]], epsilon).slice(0, -1)];
       return closed.length > 2 ? poly(closed.map(([x, y]) => [f(x), f(y)])) : '';

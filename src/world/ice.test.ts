@@ -4,6 +4,7 @@ import { bakeIceRelief, ICE_KIND, iceDetailMap, iceFacets, iceNormal, iceReliefM
 import { iceSet } from './iceset';
 import { createImpostors, createRocks, createRockShapes, DETAIL_RES, DISTANT_DETAIL, FAR_DETAIL, RELIEF_RES, reliefMap, rockRecipe } from './rocks';
 import { cubeTexel, decode, directions, expectOwnCubeMap, expectSameBake, median, normalFit, texel, texelAt, texelCenter, tileStats } from '../test/cube';
+import { acos } from '../detmath';
 
 /** The share of a map's texels of each kind of ice, rounded to the ramp's steps (fracture, glass, frost, dusty, dust). */
 function kinds(map: THREE.CubeTexture): number[] {
@@ -66,7 +67,7 @@ describe("an ice chunk's relief map", () => {
         const point = center.clone().multiply(axes).multiplyScalar(1 + bump);
         const facet = facets.find((f) => Math.abs(point.dot(f.normal) - f.cut) < 0.5);
         if (!facet) continue;
-        angles.push(Math.acos(Math.min(1, decode(texel(map, face, i, j)).dot(facet.normal))));
+        angles.push(acos(Math.min(1, decode(texel(map, face, i, j)).dot(facet.normal))));
       }
       expect(angles.length).toBeGreaterThan(20);
       // flat to a couple of degrees, its edges and fine cracks aside

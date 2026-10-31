@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
 import { sternAt } from './arenas';
+import { sin } from '../detmath';
+import { setFromAxisAngle, setFromEuler } from '../detthree';
 
 /**
  * The break of the world ship PAAA 01 (see README, "The universe"): ice crystals still escaping
@@ -208,7 +210,7 @@ export class Derelict {
         const at = JETS[0].from.clone().lerp(JETS[1].from, u).add(v(r.range(-2500, 2500), r.range(-2200, 2200), r.range(-2800, 2800)));
         const drift = v(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize().multiplyScalar(r.range(0.3, 1) * DEAD_DRIFT);
         const axis = v(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-        const turn = new THREE.Quaternion().setFromEuler(new THREE.Euler(r.range(0, 6.3), r.range(0, 6.3), r.range(0, 6.3)));
+        const turn = setFromEuler(new THREE.Quaternion(), r.range(0, 6.3), r.range(0, 6.3), r.range(0, 6.3));
         this.drifts.push({ at, drift, rate: r.range(0.008, 0.02), phase: r.range(0, 6.3), turn, axis, spin: r.range(0.25, 1) * DEAD_SPIN * (r.nextFloat() < 0.5 ? -1 : 1) });
         mesh.setColorAt(i, color.set(CLOTHES[r.nextInt() % CLOTHES.length]).lerp(RIME, r.range(0.25, 0.4)));
       }
@@ -281,8 +283,8 @@ export class Derelict {
     this.dead.forEach((mesh, m) => {
       for (let i = 0; i < DEAD_PER_POSE; i++) {
         const d = this.drifts[m * DEAD_PER_POSE + i];
-        at.copy(d.at).addScaledVector(d.drift, Math.sin(time * d.rate + d.phase));
-        spun.setFromAxisAngle(d.axis, time * d.spin).multiply(d.turn);
+        at.copy(d.at).addScaledVector(d.drift, sin(time * d.rate + d.phase));
+        setFromAxisAngle(spun, d.axis, time * d.spin).multiply(d.turn);
         mesh.setMatrixAt(i, matrix.compose(at, spun, one));
       }
       mesh.instanceMatrix.needsUpdate = true;

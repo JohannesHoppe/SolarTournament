@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ringReach, ringSamples, touchRing } from './gates';
+import { atan2, cos, hypot, sin } from '../detmath';
 
 /** A ring at the origin facing +Z with the opening of a race's gate (80 m), and a ship of 17 m (the interceptors' hit radius). */
 const RADIUS = 1600;
@@ -48,9 +49,9 @@ describe("a ring's housings", () => {
   it('include the struts out to the position lights', () => {
     const angle = Math.PI / 4 + Math.PI / 10;
     const out = 1620 + 200 + 250;
-    const hit = touch(Math.cos(angle) * out, Math.sin(angle) * out, -300);
+    const hit = touch(cos(angle) * out, sin(angle) * out, -300);
     expect(hit.touched).toBe(true);
-    expect(touch(Math.cos(angle) * out, Math.sin(angle) * out, -600).touched).toBe(false);
+    expect(touch(cos(angle) * out, sin(angle) * out, -600).touched).toBe(false);
   });
 
   it('push a ship whose center is inside a housing out through the nearest face', () => {
@@ -72,16 +73,16 @@ describe("the points a ring's solid parts are sampled by", () => {
     const outer: THREE.Vector3[] = [];
     for (let k = 0; k < points.length; k += 3) {
       const p = new THREE.Vector3(points[k], points[k + 1], points[k + 2]);
-      if (Math.abs(Math.hypot(p.x, p.y) - OUTER) < 1e-2 && Math.abs(p.z) <= 180.01) outer.push(p);
+      if (Math.abs(hypot(p.x, p.y) - OUTER) < 1e-2 && Math.abs(p.z) <= 180.01) outer.push(p);
     }
     // along the band: at one place around, the points on its outer face
-    const along = outer.filter((p) => Math.abs(Math.atan2(p.y, p.x)) < 1e-3).map((p) => p.z).sort((a, b) => a - b);
+    const along = outer.filter((p) => Math.abs(atan2(p.y, p.x)) < 1e-3).map((p) => p.z).sort((a, b) => a - b);
     expect(along.length).toBeGreaterThan(2);
     expect(along[0]).toBeCloseTo(-180, 1);
     expect(along.at(-1)).toBeCloseTo(180, 1);
     for (let i = 1; i < along.length; i++) expect(along[i] - along[i - 1]).toBeLessThanOrEqual(SPACING);
     // around the band: the points of one end of its outer face, by angle
-    const angles = outer.filter((p) => Math.abs(p.z + 180) < 1e-2).map((p) => Math.atan2(p.y, p.x)).sort((a, b) => a - b);
+    const angles = outer.filter((p) => Math.abs(p.z + 180) < 1e-2).map((p) => atan2(p.y, p.x)).sort((a, b) => a - b);
     angles.push(angles[0] + Math.PI * 2);
     for (let i = 1; i < angles.length; i++) expect((angles[i] - angles[i - 1]) * OUTER).toBeLessThanOrEqual(SPACING);
   });
@@ -92,7 +93,7 @@ describe("a ring's reach", () => {
     const reach = ringReach(RADIUS);
     const direction = new THREE.Vector3();
     for (let i = 0; i < 4000; i++) {
-      direction.set(Math.sin(i * 12.9898), Math.cos(i * 78.233), Math.sin(i * 37.719)).normalize();
+      direction.set(sin(i * 12.9898), cos(i * 78.233), sin(i * 37.719)).normalize();
       // beyond the reach and the ship's radius
       expect(touchRing(center, facing, RADIUS, direction.clone().multiplyScalar(reach + SHIP * 1.01), SHIP, new THREE.Vector3())).toBe(false);
     }

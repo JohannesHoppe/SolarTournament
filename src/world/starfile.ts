@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { exp, log2, pow } from '../detmath.ts';
 import { celestial } from './celestial.ts';
 
 /**
@@ -23,7 +24,7 @@ export const STAR_BYTES = 8;
  * a screen: Sirius 59, a star of the first magnitude 15, the faintest 0.33.
  */
 export function magnitudeFlux(v: number): number {
-  return 2 ** (0.79 * (6 - v));
+  return pow(2, 0.79 * (6 - v));
 }
 
 /** How much of a star's color the eye sees: the rest is white, since the eye takes the colors of stars paler than a camera does. */
@@ -38,12 +39,12 @@ export function starColor(bv: number): [number, number, number] {
 
 /** A star's brightness kept on a logarithmic scale in a byte, 16 steps to a doubling, from 1/64. */
 export function starBrightnessCode(flux: number): number {
-  return THREE.MathUtils.clamp(Math.round(16 * Math.log2(flux * 64)), 0, 255);
+  return THREE.MathUtils.clamp(Math.round(16 * log2(flux * 64)), 0, 255);
 }
 
 /** The brightness a byte of starBrightnessCode stands for. */
 export function starFlux(code: number): number {
-  return 2 ** (code / 16) / 64;
+  return pow(2, code / 16) / 64;
 }
 
 /**
@@ -70,7 +71,7 @@ export function bvTemperature(bv: number): number {
 function matching(nm: number): [number, number, number] {
   const lobe = (center: number, below: number, above: number) => {
     const t = (nm - center) * (nm < center ? below : above);
-    return Math.exp(-0.5 * t * t);
+    return exp(-0.5 * t * t);
   };
   return [
     1.056 * lobe(599.8, 0.0264, 0.0323) + 0.362 * lobe(442.0, 0.0624, 0.0374) - 0.065 * lobe(501.1, 0.049, 0.0382),
@@ -89,7 +90,7 @@ export function blackBodyColor(kelvin: number): [number, number, number] {
   for (let nm = 380; nm <= 780; nm += 5) {
     const m = nm * 1e-9;
     // Planck's law, its constant factors dropped (the color is normalized)
-    const radiance = 1 / (m ** 5 * (Math.exp(0.014388 / (m * kelvin)) - 1));
+    const radiance = 1 / (pow(m, 5) * (exp(0.014388 / (m * kelvin)) - 1));
     const [x, y, z] = matching(nm);
     xyz[0] += x * radiance;
     xyz[1] += y * radiance;

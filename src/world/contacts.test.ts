@@ -11,6 +11,7 @@ import { massOf } from './bodies';
 import { Randomizer } from '../random';
 import { knockShare } from '../net/plausible';
 import { makeComet, roundComets, runDown, cometStart, cometEnd } from '../game/comet';
+import { hypot } from '../detmath';
 
 /** A round's length (s). */
 const ROUND = 300;
@@ -250,7 +251,7 @@ describe("the lead's word", () => {
       for (const state of contacts.run(lead)) {
         const piece = follower.asteroids.get(state.id)!;
         const gap = contacts.gap(follower, piece, state.b);
-        worst = Math.max(worst, knockShare(follower.positionOf(piece, state.b, at), told.fromArray(state.p), Math.hypot(...state.v), state.b - follower.clock, gap));
+        worst = Math.max(worst, knockShare(follower.positionOf(piece, state.b, at), told.fromArray(state.p), hypot(state.v[0], state.v[1], state.v[2]), state.b - follower.clock, gap));
         checked++;
         follower.move(state);
       }
@@ -316,7 +317,7 @@ describe('a contact', () => {
       pieces.reduce((sum, piece) => {
         const mass = massOf(piece);
         const speed = field.surfaceVelocity(piece, piece.object.position).length();
-        return sum + 0.5 * mass * speed ** 2 + 0.5 * 0.4 * mass * piece.meanRadius ** 2 * piece.spinRate ** 2;
+        return sum + 0.5 * mass * speed * speed + 0.5 * 0.4 * mass * piece.meanRadius * piece.meanRadius * piece.spinRate * piece.spinRate;
       }, 0);
     const random = new Randomizer(11);
     let trials = 0;

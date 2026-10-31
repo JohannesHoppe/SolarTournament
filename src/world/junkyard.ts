@@ -5,6 +5,8 @@ import { EARTH_ALTITUDE, EARTH_CENTER, EARTH_DOWN, EARTH_RADIUS } from './arenas
 import { BELT_INNER } from './belt';
 import { fbm, noise3 } from './landmarks';
 import { signTexture } from '../view/surfaces';
+import { acos, asin, cos, pow, sin } from '../detmath';
+import { applyAxisAngle, rotateZ, setRotation } from '../detthree';
 
 /**
  * The scenery of the Satellite Junkyard: Earth below, the terminator running through it, the
@@ -25,7 +27,7 @@ import { signTexture } from '../view/surfaces';
  * limb included.
  */
 const MAP_CAP = THREE.MathUtils.degToRad(62);
-export const MAP_REACH = Math.sin(MAP_CAP);
+export const MAP_REACH = sin(MAP_CAP);
 /**
  * The day map (`public/assets/planets/earth-day-*.jpg`, from NASA's Blue Marble: Next Generation,
  * July) is the same projection cut off at DAY_SHARE of its width from the west: the part the sun
@@ -45,7 +47,7 @@ export const DAY_SHARE = 0.62;
 const SUN_SET = -0.85;
 const TWILIGHT_FALL = 3;
 const TWILIGHT_END = -9;
-export const DAY_FROM = Math.sin(THREE.MathUtils.degToRad(TWILIGHT_END));
+export const DAY_FROM = sin(THREE.MathUtils.degToRad(TWILIGHT_END));
 const CLOUD_DIP = 2.5;
 const LIMB_DIP = 5;
 const LIGHTS_ON = -1.5;
@@ -79,7 +81,7 @@ export const MAP_LAND = 0.12;
  * as 0.0134. The day side tells sea from land by it (its glint, its darker seas); the night
  * reads only the map's light (see LIGHT_EDGES).
  */
-export const LAND_SEEN = ((MAP_LAND + 0.055) / 1.055) ** 2.4;
+export const LAND_SEEN = pow((MAP_LAND + 0.055) / 1.055, 2.4);
 /**
  * Where the day side's land mask rises, in the units the shader reads: from the sea (0) at the
  * first edge to land at the second, below unlit land with room for the map's compression noise.
@@ -93,7 +95,7 @@ export const LAND_EDGES = [LAND_SEEN * 0.3, LAND_SEEN * 0.7] as const;
  */
 export const LIGHT_EDGES = [0.04, 0.1] as const;
 /** The cap of Earth that is built (rad, 57.6° around the point beneath the arena): to its horizon, which lies 55.9° around it, and a little beyond. */
-export const EARTH_CAP = Math.acos(EARTH_RADIUS / (EARTH_RADIUS + EARTH_ALTITUDE)) + 0.03;
+export const EARTH_CAP = acos(EARTH_RADIUS / (EARTH_RADIUS + EARTH_ALTITUDE)) + 0.03;
 /**
  * Earth lies far beyond the camera's far plane: it is drawn behind everything else, at this
  * depth (clip space, a share of the way to the far plane), in front of the stars, which it hides.
@@ -524,8 +526,8 @@ export function mapAxes(): { up: THREE.Vector3; east: THREE.Vector3; north: THRE
 export function earthFrame(): THREE.Matrix3 {
   const { up, east, north } = mapAxes();
   const [lat, lon] = [BELOW_LATITUDE, BELOW_LONGITUDE];
-  const ownUp = new THREE.Vector3(Math.cos(lat) * Math.cos(lon), Math.sin(lat), -Math.cos(lat) * Math.sin(lon));
-  const ownEast = new THREE.Vector3(-Math.sin(lon), 0, -Math.cos(lon));
+  const ownUp = new THREE.Vector3(cos(lat) * cos(lon), sin(lat), -cos(lat) * sin(lon));
+  const ownEast = new THREE.Vector3(-sin(lon), 0, -cos(lon));
   const ownNorth = new THREE.Vector3().crossVectors(ownUp, ownEast);
   const world = new THREE.Matrix4().makeBasis(up, east, north);
   const own = new THREE.Matrix4().makeBasis(ownUp, ownEast, ownNorth);
@@ -594,11 +596,11 @@ function junkOrbit(r: Randomizer): { axis: THREE.Vector3; radius: number } {
   for (;;) {
     // an axis square to the way up, turned about it at random, then tilted off the arena a little
     const turn = r.range(0, Math.PI * 2);
-    const axis = across.clone().applyAxisAngle(up, turn).addScaledVector(up, r.range(-1, 1) * (JUNK_REACH / height)).normalize();
+    const axis = applyAxisAngle(across.clone(), up, turn).addScaledVector(up, r.range(-1, 1) * (JUNK_REACH / height)).normalize();
     const radius = height + r.range(-JUNK_BELOW, JUNK_ABOVE);
     // the circle's nearest pass: its plane tilted by asin(|axis·up|) from the arena
-    const tilt = Math.asin(Math.min(1, Math.abs(axis.dot(up))));
-    const nearest = Math.sqrt((radius - height) ** 2 + 2 * radius * height * (1 - Math.cos(tilt)));
+    const tilt = asin(Math.min(1, Math.abs(axis.dot(up))));
+    const nearest = Math.sqrt(pow(radius - height, 2) + 2 * radius * height * (1 - cos(tilt)));
     if (nearest > BELT_INNER * 1.1 && nearest < JUNK_REACH) return { axis, radius };
   }
 }
@@ -689,11 +691,11 @@ function billboard(): { group: THREE.Group; sign: THREE.Mesh } {
   );
   const wing = new THREE.Mesh(new THREE.BoxGeometry(30000, 5000, 120), new THREE.MeshStandardMaterial({ color: 0x1d2a55, roughness: 0.35, metalness: 0.3 }));
   wing.position.set(0, -11000, -400);
-  wing.rotation.x = 0.5;
+  setRotation(wing, 0.5, 0, 0);
   group.add(frame, sign, wing);
   group.position.copy(BILLBOARD_AT);
   group.lookAt(0, 0, 0);
-  group.rotateZ(-0.12);
+  rotateZ(group, -0.12);
   return { group, sign };
 }
 

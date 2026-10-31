@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+import { pow } from '../detmath';
 import { topsTexture } from './jupiter';
 
 /**
@@ -42,7 +43,7 @@ describe("Jupiter's cloud tops", () => {
       let mean = 0;
       for (let i = 0; i < size * size; i++) mean += data[i * 4 + channel] / 255 / (size * size);
       let spread = 0;
-      for (let i = 0; i < size * size; i++) spread += (data[i * 4 + channel] / 255 - mean) ** 2 / (size * size);
+      for (let i = 0; i < size * size; i++) spread += pow(data[i * 4 + channel] / 255 - mean, 2) / (size * size);
       expect(mean).toBeCloseTo(0.5, 1);
       expect(Math.sqrt(spread)).toBeGreaterThan(0.1);
       expect(Math.sqrt(spread)).toBeLessThan(0.15);

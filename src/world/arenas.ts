@@ -5,6 +5,8 @@ import { textSeed } from '../random';
 import { msg } from '../i18n/i18n';
 import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
+import { cos, pow, sin } from '../detmath';
+import { setFromAxisAngle, setFromEuler } from '../detthree';
 
 /** One standard gravity (units/s², 1 unit = 5 cm). */
 const G = 196.2;
@@ -97,7 +99,7 @@ export const EARTH_RADIUS = 127420000;
 export const EARTH_ALTITUDE = 100000000;
 const EARTH_TILT = 0.2;
 /** Straight down to the point beneath the arena, from the field's center. */
-export const EARTH_DOWN = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z).normalize().multiplyScalar(Math.sin(EARTH_TILT)).add(new THREE.Vector3(0, -Math.cos(EARTH_TILT), 0));
+export const EARTH_DOWN = new THREE.Vector3(SUN_DIRECTION.x, 0, SUN_DIRECTION.z).normalize().multiplyScalar(sin(EARTH_TILT)).add(new THREE.Vector3(0, -cos(EARTH_TILT), 0));
 export const EARTH_CENTER = EARTH_DOWN.clone().multiplyScalar(EARTH_RADIUS + EARTH_ALTITUDE);
 /** Half the thickness of the ring's layer of ice grains through the arena's middle (units, 125 m: a layer 250 m thick). */
 export const RING_LAYER = 2500;
@@ -119,12 +121,11 @@ const STERN_DROP = 4000;
 const STERN_SHIFT = 3000;
 
 /** Where a point along the stern's axis lies, `offset` units from where it broke. */
-export const sternAt = (offset: number) => [offset * Math.cos(STERN_TILT), -STERN_DROP + offset * Math.sin(STERN_TILT)] as const;
+export const sternAt = (offset: number) => [offset * cos(STERN_TILT), -STERN_DROP + offset * sin(STERN_TILT)] as const;
 
 /** The hull of the wrecked world ship: two halves broken apart, hull sections of `hullSet` (1 torn, 2 engine, 3 tower, 4 spar; 5, 6, 7 sections with its paint: PER ASPERA, emblem and registry, AD ASTRA). */
 function derelict(): Placement[] {
   const pieces: Placement[] = [];
-  const turn = new THREE.Euler();
   // turned by roll, yaw and pitch in that order; 'ZYX' pitches last, about the world's z, as the
   // stern's hull is tilted, whatever the yaw
   // each half one body, welded (see Placement.weld): the bow 0, the stern 1
@@ -135,7 +136,7 @@ function derelict(): Placement[] {
       type,
       scale,
       position: new THREE.Vector3(x, y, z),
-      orientation: new THREE.Quaternion().setFromEuler(turn.set(roll, yaw, pitch, order)),
+      orientation: setFromEuler(new THREE.Quaternion(), roll, yaw, pitch, order),
       solid: true,
       weld,
     });
@@ -348,8 +349,8 @@ export const ARENAS: readonly ArenaProfile[] = [
       // the network's dead relay hub in the middle: an engine block and two spars across, one body
       placements: [
         { kind: 'hull', type: 2, scale: 6, position: new THREE.Vector3(0, 0, 0), orientation: new THREE.Quaternion(), solid: true, weld: 0 },
-        { kind: 'hull', type: 4, scale: 8, position: new THREE.Vector3(0, 0, 0), orientation: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), solid: true, weld: 0 },
-        { kind: 'hull', type: 4, scale: 8, position: new THREE.Vector3(0, 0, 0), orientation: new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), Math.PI / 2), solid: true, weld: 0 },
+        { kind: 'hull', type: 4, scale: 8, position: new THREE.Vector3(0, 0, 0), orientation: setFromAxisAngle(new THREE.Quaternion(), new THREE.Vector3(0, 1, 0), Math.PI / 2), solid: true, weld: 0 },
+        { kind: 'hull', type: 4, scale: 8, position: new THREE.Vector3(0, 0, 0), orientation: setFromAxisAngle(new THREE.Quaternion(), new THREE.Vector3(0, 0, 1), Math.PI / 2), solid: true, weld: 0 },
       ],
     },
     cooling: 1,
@@ -374,7 +375,7 @@ export const ARENAS: readonly ArenaProfile[] = [
       inner: 0,
       spin: SPIN_RATE,
       toughness: 800,
-      well: { position: JUPITER_CENTER, radius: JUPITER_RADIUS - JUPITER_FLOOR, surfaceGravity: JUPITER_GRAVITY * (JUPITER_RADIUS / (JUPITER_RADIUS - JUPITER_FLOOR)) ** 2 },
+      well: { position: JUPITER_CENTER, radius: JUPITER_RADIUS - JUPITER_FLOOR, surfaceGravity: JUPITER_GRAVITY * pow(JUPITER_RADIUS / (JUPITER_RADIUS - JUPITER_FLOOR), 2) },
       air: { center: JUPITER_CENTER, radius: JUPITER_RADIUS },
     },
     cooling: 1,

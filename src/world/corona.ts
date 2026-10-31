@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { cos, sin } from '../detmath';
+import { applyAxisAngle, makeRotationAxis } from '../detthree';
 import { Randomizer } from '../random';
 import { SUN_DIRECTION } from './space';
 import { bandsVertex, noise3 } from './landmarks';
@@ -44,7 +46,7 @@ const GLOW_REACH = 2.1;
 
 /** Turns a direction about AXIS by `angle`. */
 function turned(direction: THREE.Vector3, angle: number): THREE.Vector3 {
-  return direction.clone().applyAxisAngle(AXIS, angle);
+  return applyAxisAngle(direction.clone(), AXIS, angle);
 }
 
 /**
@@ -62,7 +64,7 @@ function sunspots(): THREE.Vector4[] {
     const latitude = (g % 2 === 0 ? 1 : -1) * r.range(0.14, 0.5);
     const longitude = -1.3 + (g / SPOT_GROUPS) * 1.7 + r.range(-0.15, 0.15);
     const size = r.range(SPOT_SIZE[0], SPOT_SIZE[1]);
-    const at = (lat: number, lon: number) => turned(front, lon).multiplyScalar(Math.cos(lat)).addScaledVector(AXIS, Math.sin(lat));
+    const at = (lat: number, lon: number) => turned(front, lon).multiplyScalar(cos(lat)).addScaledVector(AXIS, sin(lat));
     const leader = at(latitude, longitude);
     spots.push(new THREE.Vector4(leader.x, leader.y, leader.z, size));
     // the follower trails the leader along its belt, a little nearer the pole, a little smaller
@@ -303,25 +305,25 @@ function prominences(): THREE.BufferGeometry {
   const lift = new THREE.Vector3();
   for (let l = 0; l < LOOPS; l++) {
     const { height, half, width, around, lean, tilt, skew } = specs[l];
-    const ring = reference.clone().applyAxisAngle(toSun, around);
+    const ring = applyAxisAngle(reference.clone(), toSun, around);
     normal.copy(toSun).multiplyScalar(lean).addScaledVector(ring, Math.sqrt(1 - lean * lean)).normalize();
     // the arc's feet stand along the limb, turned out of the face-on view by `tilt`
-    tangent.crossVectors(normal, toSun).normalize().applyAxisAngle(normal, tilt);
+    applyAxisAngle(tangent.crossVectors(normal, toSun).normalize(), normal, tilt);
     // it leans to one side by `skew`: its top stands off the middle between its feet
     lift.copy(normal).addScaledVector(tangent, skew);
     // the feet sink into the surface as it curves away below the arc's middle
-    base.copy(CENTER).addScaledVector(normal, CORONA_RADIUS * Math.cos(half / CORONA_RADIUS));
+    base.copy(CENTER).addScaledVector(normal, CORONA_RADIUS * cos(half / CORONA_RADIUS));
     const life = r.range(150, 420);
     const phase = r.nextFloat();
     const seed = r.nextFloat();
     const length = Math.PI * Math.sqrt((half * half + height * height) / 2);
     for (let i = 0; i < columns; i++) {
       const s = i / LOOP_SEGMENTS;
-      const x = -Math.cos(Math.PI * s) * half;
-      const y = Math.sin(Math.PI * s) * height;
+      const x = -cos(Math.PI * s) * half;
+      const y = sin(Math.PI * s) * height;
       // across the ribbon: the arc's outward normal in its plane, thicker at the top
-      across.copy(tangent).multiplyScalar(-Math.cos(Math.PI * s) / half).addScaledVector(normal, Math.sin(Math.PI * s) / height).normalize();
-      const thick = width * (0.55 + 0.45 * Math.sin(Math.PI * s));
+      across.copy(tangent).multiplyScalar(-cos(Math.PI * s) / half).addScaledVector(normal, sin(Math.PI * s) / height).normalize();
+      const thick = width * (0.55 + 0.45 * sin(Math.PI * s));
       for (let j = 0; j < 2; j++) {
         const v = (l * columns + i) * 2 + j;
         const sign = j === 0 ? -1 : 1;
@@ -514,7 +516,7 @@ export class Corona {
   /** The sun at field time `time`: its face turned by SPIN, the glow's streamers and the prominences' lives. */
   update(time: number) {
     // into the face's own frame: back by the angle it has turned since field time 0
-    this.turn.setFromMatrix4(this.spin.makeRotationAxis(AXIS, -SPIN * time));
+    this.turn.setFromMatrix4(makeRotationAxis(this.spin, AXIS, -SPIN * time));
     this.face.uniforms.time.value = time;
     this.glow.uniforms.time.value = time;
     this.loops.material.uniforms.time.value = time;

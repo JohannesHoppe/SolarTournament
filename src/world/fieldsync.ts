@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { motionOf, type Asteroid, type AsteroidField, type ShovedState } from './asteroids';
+import { quaternionAngleTo, setFromAxisAngle } from '../detthree';
 
 /**
  * The lead browser's sync of the field. Every browser computes the field alike from the field
@@ -140,7 +141,7 @@ function sameMotion(field: AsteroidField, a: Asteroid, state: ShovedState): bool
   const there = { ...a, born: state.b, basePosition: new THREE.Vector3().fromArray(state.p), velocity: new THREE.Vector3().fromArray(state.v), spinAxis: new THREE.Vector3().fromArray(state.s).normalize(), spinRate: state.s[3], baseOrientation: new THREE.Quaternion().fromArray(state.q).normalize() };
   for (const time of [field.clock, field.clock + LOOK_AHEAD]) {
     if (field.positionOf(a, time, ahead).distanceTo(field.positionOf(there, time, aheadThere)) > SAME_PLACE) return false;
-    if (turnAt(a, time, turnBefore).angleTo(turnAt(there, time, turnThere)) > SAME_TURN) return false;
+    if (quaternionAngleTo(turnAt(a, time, turnBefore), turnAt(there, time, turnThere)) > SAME_TURN) return false;
   }
   return true;
 }
@@ -149,7 +150,7 @@ const turnThere = new THREE.Quaternion();
 
 /** How a piece is turned at a field time by its motion (see AsteroidField's place). */
 function turnAt(a: Pick<Asteroid, 'spinAxis' | 'spinRate' | 'born' | 'baseOrientation'>, time: number, target: THREE.Quaternion): THREE.Quaternion {
-  return target.setFromAxisAngle(a.spinAxis, a.spinRate * (time - a.born)).multiply(a.baseOrientation);
+  return setFromAxisAngle(target, a.spinAxis, a.spinRate * (time - a.born)).multiply(a.baseOrientation);
 }
 
 /**
@@ -161,7 +162,7 @@ function glideFrom(field: AsteroidField, a: Asteroid, position: THREE.Vector3, t
   a.ease = null;
   field.pose(a, field.clock);
   const offset = before.subVectors(position, a.object.position);
-  const angle = turn.angleTo(a.object.quaternion);
+  const angle = quaternionAngleTo(turn, a.object.quaternion);
   if (offset.length() < SAME_PLACE && angle < SAME_TURN) return null;
   if (offset.length() > EASE_REACH || angle > EASE_TURN) {
     a.appeared = ++field.revision;

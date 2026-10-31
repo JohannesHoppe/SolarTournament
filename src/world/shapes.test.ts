@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { debrisSet } from './shapes';
 import { AsteroidField } from './asteroids';
 import { networkLivery } from '../view/surfaces';
+import { setFromEuler } from '../detthree';
 
 /**
  * The livery's lettering is drawn on its canvas turned, never mirrored, so it reads the right
@@ -59,7 +60,7 @@ describe('the junk of the Orbital Freedom Network', () => {
     const set = debrisSet();
     const empty = { near: [], far: [] };
     const field = new AsteroidField({ rock: empty, ice: empty, debris: set, hull: { ...empty, box: true } });
-    const placements = set.near.map((_, type) => ({ kind: 'debris' as const, type, scale: 2, position: new THREE.Vector3(type * 20000, 0, 0), orientation: new THREE.Quaternion().setFromEuler(new THREE.Euler(type, type * 2, 0)), solid: false }));
+    const placements = set.near.map((_, type) => ({ kind: 'debris' as const, type, scale: 2, position: new THREE.Vector3(type * 20000, 0, 0), orientation: setFromEuler(new THREE.Quaternion(), type, type * 2, 0), solid: false }));
     field.generate({ key: 'wings', seed: 1, kind: 'debris', count: 0, minScale: 1, maxScale: 1, radius: 1, inner: 0, spin: 0, toughness: 500, placements });
     const vertex = new THREE.Vector3();
     let checked = 0;

@@ -6,6 +6,7 @@ import { cubeDirection, cubeTexel } from './celestial';
 import { tangentDirections } from './surface';
 import { impostorGeometry, impostorMaterial, impostorViews, IMPOSTOR_VIEWS, type ImpostorLook } from '../view/impostor';
 import { hazeUniforms } from '../view/haze';
+import { hypot, pow } from '../detmath';
 
 /** Fixed seed: every client builds the same rock shapes, so their measured surfaces match (see world/surface). */
 const ROCK_SEED = 2584;
@@ -614,7 +615,7 @@ export function stampTile(cx: number, cy: number, radius: number, reach: number,
   const span = Math.ceil(radius * reach);
   for (let y = Math.floor(cy) - span; y <= Math.floor(cy) + span; y++) {
     for (let x = Math.floor(cx) - span; x <= Math.floor(cx) + span; x++) {
-      const t = Math.hypot(x + 0.5 - cx, y + 0.5 - cy) / radius;
+      const t = hypot(x + 0.5 - cx, y + 0.5 - cy) / radius;
       if (t < reach) stamp(wrapTile(y) * DETAIL_RES + wrapTile(x), t);
     }
   }
@@ -703,7 +704,7 @@ export function breakMap(): THREE.DataTexture {
         for (let dx = -1; dx <= 1; dx++) {
           const cx = gx + dx, cy = gy + dy;
           const px = (cx + grainHash(cx, cy, 79)) * size, py = (cy + grainHash(cx, cy, 83)) * size;
-          const d = (px - x - 0.5) ** 2 + (py - y - 0.5) ** 2;
+          const d = pow(px - x - 0.5, 2) + pow(py - y - 0.5, 2);
           if (d < best) {
             best = d;
             tone = grainHash(cx, cy, 89);
@@ -1023,7 +1024,7 @@ function bumpTable(recipe: RockRecipe): { bump: (x: number, y: number, z: number
         cubeDirection(face, (i + 0.5) / N, (j + 0.5) / N, d).normalize();
         const bump = surfaceSample(noise, recipe, d).bump;
         table[(face * N + j) * N + i] = bump;
-        reach = Math.max(reach, Math.hypot(d.x * recipe.axes.x, d.y * recipe.axes.y, d.z * recipe.axes.z) * (1 + bump));
+        reach = Math.max(reach, hypot(d.x * recipe.axes.x, d.y * recipe.axes.y, d.z * recipe.axes.z) * (1 + bump));
         highest = Math.max(highest, bump);
       }
     }

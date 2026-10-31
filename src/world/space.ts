@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { pow } from '../detmath';
 import { radialTexture } from '../view/textures';
 import { IMPOSTOR_SUN } from '../view/impostor';
 import { CLOUD_SHAPES, MAX_NEBULAE, cloudTexture, type Mood } from './nebula';
@@ -189,7 +190,7 @@ export class Space {
     for (let i = 0; i < STAR_COUNT; i++) {
       v.randomDirection().multiplyScalar(SKY_RADIUS);
       positions.set([v.x, v.y, v.z], i * 3);
-      const brightness = Math.pow(Math.random(), 3) * 0.9 + 0.1;
+      const brightness = pow(Math.random(), 3) * 0.9 + 0.1;
       color.setHSL(0.55 + Math.random() * 0.15 - (Math.random() < 0.2 ? 0.5 : 0), 0.4, brightness);
       colors.set([color.r, color.g, color.b], i * 3);
     }
@@ -306,7 +307,7 @@ export class Space {
         (error: unknown) => {
           console.warn('The sharp Milky Way was not baked', error);
           // asked again after a pause, doubling with each failure
-          if (this.sharpAsked) setTimeout(() => this.setDetail(this.detail), SHARP_RETRY_MS * 2 ** this.sharpFailures++);
+          if (this.sharpAsked) setTimeout(() => this.setDetail(this.detail), SHARP_RETRY_MS * pow(2, this.sharpFailures++));
           this.sharpAsked = false;
         },
       );

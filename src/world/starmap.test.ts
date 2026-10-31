@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { cos, sin } from '../detmath';
+import { angleTo } from '../detthree';
 import { celestial, cubeDirection, cubeTexel, ecliptic, fromGalactic, galactic, raDec } from './celestial';
 import { blackBodyColor, decodeStars, magnitudeFlux, spectralBV, starBrightnessCode, starColor, starFlux } from './starfile';
 import { bakeMilkyWay, faintStars, milkyWayLight } from './milkyway';
@@ -10,7 +12,7 @@ import { SUN_DIRECTION } from './space';
 import { ARENAS } from './arenas';
 
 const DEG = Math.PI / 180;
-const angle = (a: THREE.Vector3, b: THREE.Vector3) => a.angleTo(b) / DEG;
+const angle = (a: THREE.Vector3, b: THREE.Vector3) => angleTo(a, b) / DEG;
 
 /** The shipped stars (public/assets/sky/stars.bin, packed by tools/sky from the Yale Bright Star Catalogue). */
 const file = readFileSync(join(import.meta.dirname, '../../public/assets/sky/stars.bin'));
@@ -48,7 +50,7 @@ describe('the cube map of the real sky', () => {
     // the bake fills a texel from cubeDirection; the GPU, sampling that direction, lands on that texel
     const direction = new THREE.Vector3();
     for (let n = 0; n < 2000; n++) {
-      direction.set(Math.sin(n * 12.9898) * 2 - 1, Math.sin(n * 78.233) * 2 - 1, Math.sin(n * 37.719) * 2 - 1).normalize();
+      direction.set(sin(n * 12.9898) * 2 - 1, sin(n * 78.233) * 2 - 1, sin(n * 37.719) * 2 - 1).normalize();
       const { face, s, t } = cubeTexel(direction);
       expect(s).toBeGreaterThanOrEqual(0);
       expect(t).toBeLessThanOrEqual(1);
@@ -161,7 +163,7 @@ describe('the Milky Way', () => {
     let moment = 0;
     for (let l = 0; l < 360; l += 2) {
       for (let b = -40; b <= 40; b += 0.5) {
-        const value = light(fromGalactic(l, b)) * Math.cos(b * DEG);
+        const value = light(fromGalactic(l, b)) * cos(b * DEG);
         sum += value;
         moment += value * b;
       }
