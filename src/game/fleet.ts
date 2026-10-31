@@ -1941,16 +1941,16 @@ export class Fleet implements Obstacle {
       this.down = true;
       return [];
     }
-    if (state.d) return this.sink();
     this.afloat = true;
     const events: FleetEvent[] = [];
-    // hits only add up: the lead's count fills in hits not heard here
+    // hits only add up: the lead's count fills in hits not heard here, those that sank it too
     state.h.forEach((hits, zone) => {
       if (hits <= this.hits[zone] || zone >= this.hits.length) return;
       const was = this.broken(zone);
       this.hits[zone] = Math.min(hits, this.hitsOf(zone));
       if (!was && this.broken(zone)) events.push({ kind: 'broken', zone, position: this.zoneAt(zone) });
     });
+    if (state.d) return [...events, ...this.sink()];
     this.heard.fromArray(state.p);
     this.heardTurn.fromArray(state.q).normalize();
     this.velocity.fromArray(state.v);

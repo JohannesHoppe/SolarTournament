@@ -329,6 +329,9 @@ describe("the President's fleet", () => {
     events = other.follow(JSON.parse(JSON.stringify(lead.toState())));
     expect(events.map((e) => e.kind)).toContain('sunk');
     expect(other.down).toBe(true);
+    // the hits that sank it, heard first in the lead's state, break the parts there too
+    for (const zone of [...zonesOf(lead, 'battery'), ...zonesOf(lead, 'reactor')]) expect(other.broken(zone)).toBe(true);
+    expect(events.filter((e) => e.kind === 'broken')).toHaveLength(zonesOf(lead, 'battery').length - 1 + zonesOf(lead, 'reactor').length);
     // a browser that comes after it went down sees it gone, with no blast to set off
     const late = new Fleet(7);
     expect(late.follow(JSON.parse(JSON.stringify(lead.toState())))).toEqual([]);
