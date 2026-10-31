@@ -166,8 +166,9 @@ const JET_FALL = 14;
 const JET_KICK = 0.15;
 /**
  * Another browser's ship: the push and turn of its thrusters read from how its velocity and spin
- * changed between two states (see applyState), shown only above these shares of their full push
- * and turn, so the pull of a rock or the network's rounding does not fire them. Ignored after
+ * changed between two states (see applyState), what pulls and brakes it from outside taken out
+ * (see `pull`), shown only above these shares of their full push and turn, so the pull of a rock
+ * or the network's rounding does not fire them. Ignored after
  * this long without a state (s).
  */
 const REMOTE_PUSH_FLOOR = 0.3;
@@ -359,6 +360,12 @@ export class Ship {
   /** The drive's light on nearby rocks, lent by the game from a fixed pool (see Game.lendLight). */
   engineLight: THREE.PointLight | null = null;
 
+  /**
+   * What pulls and brakes a ship another peer simulates from outside where it is (units/s²: the
+   * field's gravity, an air's drag), set by the game every frame, so the push its thrusters are
+   * read with leaves it out (see readThrusters).
+   */
+  readonly pull = new THREE.Vector3();
   /** Last state received for a ship another peer simulates, and when it arrived. */
   private readonly remote = {
     position: new THREE.Vector3(),
@@ -624,7 +631,7 @@ export class Ship {
 
   /**
    * Another browser's ship, as far as its states show it: its thrusters' push (what changed its
-   * velocity besides the drive along the nose) and turn (what changed its spin) over the `dt`
+   * velocity besides the drive along the nose and the pull from outside) and turn (what changed its spin) over the `dt`
    * since the last state, as shares of their full push and turn, into its flight's rcs and
    * turnThrust for the puffs (see fireJets). A fresh clone or a long gap shows nothing.
    */
@@ -634,7 +641,7 @@ export class Ship {
     f.turnThrust.set(0, 0, 0);
     if (!this.alive || !state.a || dt < 0.01 || dt > REMOTE_JETS_HOLD) return;
     const r = this.remote;
-    f.toLocalDirection(jetPush.fromArray(state.v).sub(r.velocity).divideScalar(dt), f.rcs);
+    f.toLocalDirection(jetPush.fromArray(state.v).sub(r.velocity).divideScalar(dt).sub(this.pull), f.rcs);
     f.rcs.z += MAIN_THRUST * state.th;
     f.rcs.divideScalar(RCS_THRUST);
     if (f.rcs.length() < REMOTE_PUSH_FLOOR) f.rcs.set(0, 0, 0);

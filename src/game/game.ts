@@ -3374,6 +3374,7 @@ export class Game implements OnlineGame {
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
+        if (ship.alive) this.outside(ship.flight, dt, ship.pull);
         ship.updateRemote(dt, now);
         // the synced throttle is all the drive's trail needs
         if (ship.alive) this.exhaust(ship, dt);
