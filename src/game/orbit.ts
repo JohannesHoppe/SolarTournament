@@ -125,25 +125,38 @@ export const ORBIT_CALL_GAP = 20;
 /**
  * When Nicole speaks of the orbit: "Orbit ready" when the path becomes one with the autopilot
  * on (coming from no orbit, not from the orbit flown), "Entering stable orbit" when the ship
- * flies one in free drift; each at most once in ORBIT_CALL_GAP seconds.
+ * flies one in free drift; each at most once in ORBIT_CALL_GAP seconds. A line Nicole could not
+ * say yet (she was speaking) is tried again every frame while the path stays what it names.
  */
 export class OrbitCalls {
   private state: OrbitState | null = null;
-  private readonly saidAt: Record<'ready' | 'stable', number> = { ready: -Infinity, stable: -Infinity };
+  /** The line due and not said yet. */
+  private due: OrbitLine | null = null;
+  private readonly saidAt: Record<OrbitLine, number> = { ready: -Infinity, stable: -Infinity };
 
-  /** The state of this frame (null: no readout); returns which line to say now, if any. */
-  update(state: OrbitState | null, now: number): 'ready' | 'stable' | null {
+  /**
+   * The state of this frame (null: no readout) and `say`, which speaks a line and tells whether
+   * it was spoken; returns the line said now, if any.
+   */
+  update(state: OrbitState | null, now: number, say: (line: OrbitLine) => boolean = SPOKEN): OrbitLine | null {
     const was = this.state;
     this.state = state;
-    if (state === was) return null;
-    if (state === 'ready' && was === 'stable') return null;
-    if (state !== 'ready' && state !== 'stable') return null;
-    if (now - this.saidAt[state] < ORBIT_CALL_GAP) return null;
-    this.saidAt[state] = now;
-    return state;
+    if (state !== was) {
+      const fresh = state === 'stable' || (state === 'ready' && was !== 'stable') ? state : null;
+      this.due = fresh && now - this.saidAt[fresh] >= ORBIT_CALL_GAP ? fresh : null;
+    }
+    const line = this.due;
+    if (!line || !say(line)) return null;
+    this.saidAt[line] = now;
+    this.due = null;
+    return line;
   }
 
   reset() {
     this.state = null;
+    this.due = null;
   }
 }
+
+type OrbitLine = 'ready' | 'stable';
+const SPOKEN = () => true;

@@ -997,6 +997,8 @@ export class Game implements OnlineGame {
   /** How much the screen glows with a solar flare's heat and with the air's (0..1), the larger shown (see showFlare, airAlarm). */
   private flareGlow = 0;
   private airGlow = 0;
+  /** Whether the air's wind and plasma may be sounding (see airWeather, quietAir): only then are they turned down. */
+  private airHeard = false;
   private hullWarned = false;
   /** The torpedo Nicole counts down (see torpedoAlarm): the next of TORPEDO_MARKS, and whether she called the break. */
   private torpedoCall: { torpedo: Torpedo; mark: number; broke: boolean } | null = null;
@@ -1239,9 +1241,12 @@ export class Game implements OnlineGame {
     // a hidden tab runs no frames: a solo round pauses instead of running out unseen
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) return;
-      // a hidden tab draws no frames, so nothing would turn the drive's roar down: an online
-      // round runs on without the picture, and the drive falls silent until the tab is back
+      // a hidden tab draws no frames, so nothing would turn the drive's roar, the air's wind and
+      // plasma or the stadium down: an online round runs on without the picture, and they fall
+      // silent until the tab is back (the next frame sounds them again)
       this.sound.setEngine(0, 0);
+      this.quietAir();
+      this.crowd.air(false);
       if (this.state === 'playing' && !this.online) this.pause();
     });
     this.resize();
@@ -3274,6 +3279,8 @@ export class Game implements OnlineGame {
       this.replayEffects.group.visible = replaying;
       this.hud.show(!replaying && this.state === 'playing' && !this.sponsors.visible);
     }
+    // the air's scenery follows the kill cam's eye (the next frame lays it out for the cockpit's again)
+    if (replaying) this.airScene();
     this.paint();
     if (replaying) this.killcam.restore();
     return true;
@@ -3367,6 +3374,7 @@ export class Game implements OnlineGame {
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
+        if (ship.alive) this.outside(ship.flight, dt, ship.pull);
         ship.updateRemote(dt, now);
         // the synced throttle is all the drive's trail needs
         if (ship.alive) this.exhaust(ship, dt);
@@ -4474,21 +4482,48 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * A planet's air around the camera, once a frame (see world/jupiter, view/haze): the sheets of
-   * cloud, the sky and the lightning; the sun's and the sky's light as the haze lets them through;
-   * where nothing is drawn, the deep haze's color under the deck; and what the own pilot hears of
-   * the air outside: the wind by its push on the hull, thunder after lightning, coming as fast as
-   * sound runs through hydrogen (SOUND_SPEED), only while the own ship is in the air.
+   * A planet's air around the camera, once a frame (see airScene), and what the own pilot hears
+   * of the air outside: the wind by its push on the hull, thunder after lightning, coming as fast
+   * as sound runs through hydrogen (SOUND_SPEED), only while the own ship is in the air.
    */
   private airWeather(dt: number) {
+    const struck = this.airScene();
+    const air = this.field.air;
+    const jupiter = this.landmarks.jupiter;
+    if (!air) {
+      this.quietAir();
+      return;
+    }
+    // the own ship in the air hears it: none in the menu, none for a dead clone
+    const me = this.state === 'playing' ? this.me : null;
+    const inAir = !!me?.alive && altitudeIn(air, me.flight.position) < 0;
+    if (!me || !inAir) {
+      this.quietAir();
+      return;
+    }
+    this.airHeard = true;
+    const speed = me.flight.velocity.length() / MAX_SPEED;
+    this.sound.setPlasma(this.reentry.plasmaOf(me), this.reentry.burning(me), dt);
+    this.sound.setWind(Math.min(1, (density(altitudeIn(air, me.flight.position)) * speed * speed) / WIND_FULL), Math.min(1, speed));
+    if (struck) {
+      const distance = jupiter.strikePoint.distanceTo(me.flight.position);
+      this.sound.thunder(Math.min(1, THUNDER_LOUD / (1 + distance / THUNDER_REACH) ** 2), distance / SOUND_SPEED, Math.exp(-distance / THUNDER_REACH));
+    }
+  }
+
+  /**
+   * A planet's air as the camera sees it where it is now (see world/jupiter, view/haze): the
+   * sheets of cloud, the sky and the lightning; the sun's and the sky's light as the haze lets
+   * them through; where nothing is drawn, the deep haze's color under the deck. Laid out again
+   * for the kill cam's eye while it replays. Returns whether a strike of lightning began.
+   */
+  private airScene(): boolean {
     const air = this.field.air;
     const jupiter = this.landmarks.jupiter;
     if (!air) {
       this.space.shade(1, 1, null, null);
       this.background.copy(this.space.background);
-      this.sound.setWind(0, 0);
-      this.sound.setPlasma(0, false, dt);
-      return;
+      return false;
     }
     const eye = this.camera.position;
     const shade = this.haze.shadeAt(eye, SUN_DIRECTION.dot(up.subVectors(eye, air.center).normalize()));
@@ -4496,22 +4531,15 @@ export class Game implements OnlineGame {
     const depth = altitudeIn(air, eye);
     if (depth < 0) this.background.copy(jupiter.deepLight).lerp(jupiter.deckLight, Math.exp(depth / BACKGROUND_DEPTH));
     else this.background.copy(this.space.background);
-    const struck = jupiter.update(this.field.clock, dt, eye, this.sheetLight);
-    // the own ship in the air hears it: none in the menu, none for a dead clone
-    const me = this.state === 'playing' ? this.me : null;
-    const inAir = !!me?.alive && altitudeIn(air, me.flight.position) < 0;
-    if (!me || !inAir) {
-      this.sound.setWind(0, 0);
-      this.sound.setPlasma(0, false, dt);
-      return;
-    }
-    const speed = me.flight.velocity.length() / MAX_SPEED;
-    this.sound.setPlasma(this.reentry.plasmaOf(me), this.reentry.burning(me), dt);
-    this.sound.setWind(Math.min(1, density(altitudeIn(air, me.flight.position)) * speed * speed * WIND_FULL), Math.min(1, speed));
-    if (struck) {
-      const distance = jupiter.strikePoint.distanceTo(me.flight.position);
-      this.sound.thunder(Math.min(1, THUNDER_LOUD / (1 + (distance / THUNDER_REACH) ** 2)), distance / SOUND_SPEED, Math.exp(-distance / THUNDER_REACH));
-    }
+    return jupiter.update(this.field.clock, eye, this.sheetLight);
+  }
+
+  /** Turns the air's wind and plasma down, once: not again every frame while nothing sounds. */
+  private quietAir() {
+    if (!this.airHeard) return;
+    this.airHeard = false;
+    this.sound.setWind(0, 0);
+    this.sound.setPlasma(0, false, 0);
   }
 
   /**
@@ -4538,10 +4566,8 @@ export class Game implements OnlineGame {
     this.alarms.raise({ id: 'air', level, text: t('HULL HEAT · SAFE {speed} m/s', { speed: safe }), direction: up.subVectors(me.flight.position, air.center) });
     this.airGlow = AIR_GLOW[level];
     const said = level === 'critical' ? 2 : 1;
-    if (said > this.airSaid && level !== 'warning') {
-      this.airSaid = said;
-      this.speaker.say(said === 2 ? COMPUTER.airBurn : COMPUTER.airHot, said === 2 ? 'urgent' : undefined);
-    }
+    // a line Nicole could not say yet (she was speaking) is tried again the next frame
+    if (said > this.airSaid && level !== 'warning' && this.speaker.say(said === 2 ? COMPUTER.airBurn : COMPUTER.airHot, said === 2 ? 'urgent' : undefined)) this.airSaid = said;
   }
 
   /** Runs the flight school for this frame; returns the point its HUD marker sits on. */
@@ -6491,9 +6517,11 @@ export class Game implements OnlineGame {
     this.orbitState = state;
     const shown = state === 'ready' || state === 'stable' || load >= WELL_GAUGE ? state : null;
     this.hud.setOrbit(shown, this.orbit, well?.radius ?? 0);
-    const call = this.orbitCalls.update(shown, this.time);
-    if (call) this.speaker.say(call === 'ready' ? COMPUTER.orbitReady : COMPUTER.orbitStable);
+    this.orbitCalls.update(shown, this.time, this.sayOrbit);
   }
+
+  /** Nicole's orbit line (see OrbitCalls); whether she said it. */
+  private readonly sayOrbit = (line: 'ready' | 'stable') => this.speaker.say(line === 'ready' ? COMPUTER.orbitReady : COMPUTER.orbitStable);
 
   /**
    * The comet of the round (see comet.ts): its route, the warning before it comes, its shower

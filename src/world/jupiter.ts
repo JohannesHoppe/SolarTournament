@@ -762,6 +762,8 @@ export class Jupiter {
   private readonly backdrop: THREE.Mesh;
   private strike: Strike | null = null;
   private nextStrike = STRIKE_EVERY;
+  /** The field time of the last frame (see update). */
+  private clockAt = 0;
   /** The map's mean color around the point below the arena (linear). */
   private readonly cloudColor = new THREE.Color(0.55, 0.42, 0.3);
   /** How many samples a ray in the haze takes of its clouds (see CLOUD_SAMPLES). */
@@ -938,10 +940,11 @@ export class Jupiter {
   /**
    * One frame at field time `time`: the sheets drawn from the farthest to the nearest as seen
    * from `eye`, each in the light `shade` says reaches its depth (units); the sky kept around the
-   * eye, the auroras on its horizon; lightning. Returns whether a strike began (its place in
-   * strikePoint), for its thunder.
+   * eye, the auroras on its horizon; lightning, on the field time as its flash is, so a paused
+   * round begins no strike that would stand lit through the pause. Returns whether a strike
+   * began (its place in strikePoint), for its thunder.
    */
-  update(time: number, dt: number, eye: THREE.Vector3, shade: (depth: number) => number): boolean {
+  update(time: number, eye: THREE.Vector3, shade: (depth: number) => number): boolean {
     for (const material of this.timed) material.uniforms.time.value = time;
     const altitude = eye.distanceTo(this.air.center) - this.air.radius;
     for (const { mesh, depth } of this.sheets) {
@@ -961,7 +964,9 @@ export class Jupiter {
     wisps.eye.value.copy(eye);
     wisps.drift.value.set(clouds.x, clouds.y, clouds.z);
     this.auroraHeights(altitude);
-    this.nextStrike -= dt;
+    // a new round starts its clock again: nothing passes for the strikes
+    this.nextStrike -= Math.max(0, time - this.clockAt);
+    this.clockAt = time;
     let begun = false;
     if (this.nextStrike <= 0) {
       this.nextStrike = STRIKE_EVERY * (0.3 + 1.4 * Math.random());

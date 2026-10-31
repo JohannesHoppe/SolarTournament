@@ -161,6 +161,21 @@ describe("Nicole's orbit calls", () => {
     expect(said.length).toBe(Math.ceil(60 / ORBIT_CALL_GAP));
   });
 
+  it('says a line Nicole could not say yet once she can, while the path stays an orbit', () => {
+    const calls = new OrbitCalls();
+    const busy = () => false;
+    expect(calls.update('falls', 0, busy)).toBeNull();
+    // she is speaking her warning of the hole as the orbit becomes ready
+    expect(calls.update('ready', 1, busy)).toBeNull();
+    expect(calls.update('ready', 2, busy)).toBeNull();
+    expect(calls.update('ready', 3)).toBe('ready');
+    expect(calls.update('ready', 4)).toBeNull();
+    // a line not said by the time the path is none any more is dropped
+    expect(calls.update('stable', 5, busy)).toBeNull();
+    expect(calls.update('falls', 6)).toBeNull();
+    expect(calls.update('falls', 7)).toBeNull();
+  });
+
   it('starts afresh where the readout went away (another arena, a dead clone)', () => {
     const calls = new OrbitCalls();
     expect(calls.update('stable', 0)).toBe('stable');

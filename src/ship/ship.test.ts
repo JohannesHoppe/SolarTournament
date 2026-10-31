@@ -35,6 +35,7 @@ function ship(id: string): Ship {
     slowSentAt: -Infinity,
     root: { visible: true },
     flight: new FlightModel(),
+    pull: new THREE.Vector3(),
     remote: { position: new THREE.Vector3(), velocity: new THREE.Vector3(), orientation: new THREE.Quaternion(), spin: new THREE.Vector3(), at: 0, alive: true },
     syncTransform: () => {},
   });
@@ -85,5 +86,40 @@ describe('a fresh clone', () => {
     seen.applyState(shipState(owner.toState(1, true))!, 1);
     expect(seen.alive).toBe(true);
     expect(hot.glow).toBe(0);
+  });
+});
+
+describe("another browser's ship", () => {
+  it('has died only once its owner says so, not while its owner is silent', () => {
+    const owner = ship('p:a');
+    const seen = ship('p:a');
+    seen.owner = 'a';
+    seen.applyState(shipState(owner.toState(0, true))!, 0);
+    expect(seen.died).toBe(false);
+    // its owner goes quiet: the ship leaves the screen (see online.ts)
+    seen.alive = false;
+    expect(seen.died).toBe(false);
+    owner.alive = false;
+    seen.applyState(shipState(owner.toState(1))!, 1);
+    expect(seen.died).toBe(true);
+    // a ship this browser runs died when it is not alive
+    owner.owner = null;
+    expect(owner.died).toBe(true);
+  });
+
+  it('fires no thrusters for what pulls and brakes it from outside, only for its own push', () => {
+    const owner = ship('p:a');
+    const seen = ship('p:a');
+    seen.applyState(shipState(owner.toState(0, true))!, 0);
+    // falling at 400 units/s² towards a black hole, its thrusters idle, over a tenth of a second
+    seen.pull.set(0, -400, 0);
+    owner.flight.velocity.set(0, -40, 0);
+    seen.applyState(shipState(owner.toState(0.1))!, 0.1);
+    expect(seen.flight.rcs.length()).toBe(0);
+    // the same change of velocity with nothing pulling is its thrusters' push
+    seen.pull.set(0, 0, 0);
+    owner.flight.velocity.set(0, -80, 0);
+    seen.applyState(shipState(owner.toState(0.2))!, 0.2);
+    expect(seen.flight.rcs.length()).toBeGreaterThan(0.3);
   });
 });
