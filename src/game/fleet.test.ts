@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ARRIVAL, BATTERY_PERIOD, DODGE_MASS, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, NOVA_EDGE, NOVA_SHATTER, novaShare, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
+import { ARRIVAL, BATTERY_PERIOD, DODGE_MASS, ELEVATION_GUTTER, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, NOVA_EDGE, NOVA_SHATTER, novaShare, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
 import { Randomizer } from '../random';
 import { MASS, massOf } from '../world/bodies';
 import { Wrecks } from '../world/wrecks';
@@ -16,6 +16,7 @@ import { COMET_SPEED, cometAt, cometEnd, cometStart, headAt, headEnd, HEAD_RADIU
 import { RAMMED, type Asteroid, type AsteroidField, type ShovedState } from '../world/asteroids';
 import { Human, SEEDS, SPREAD } from '../test/human';
 import { SHIP_RADIUS, startFlight, STEP } from '../test/pilot';
+import { ramShare } from '../net/plausible';
 
 /** A battleship in the arena, its bow along -z at the center, unturned. */
 function battleship() {
@@ -75,6 +76,24 @@ describe("the President's fleet", () => {
     for (let clock = 0; clock <= BATTERY_PERIOD * 10; clock += 1 / 60) shots += fleet.firing(clock).length;
     expect(shots).toBeGreaterThanOrEqual(zonesOf(fleet, 'battery').length * 9);
     expect(shots).toBeLessThanOrEqual(zonesOf(fleet, 'battery').length * 11);
+  });
+
+  it('lets every battery find a ship in the open on the side it faces, its own turret and barrels in the way of nothing, and none behind the hull', () => {
+    const fleet = battleship();
+    const field = testField();
+    field.obstacle = fleet;
+    const batteries = zonesOf(fleet, 'battery');
+    expect(batteries.length).toBeGreaterThan(0);
+    for (const zone of batteries) {
+      const at = fleet.zoneAt(zone);
+      const face = fleet.zones[zone].face;
+      // 250 m out where it faces, and 250 m before its barrels, low over its mount
+      expect(fleet.sees(zone, at.clone().addScaledVector(face, 5000), field)).toBe(true);
+      expect(fleet.sees(zone, at.clone().add(new THREE.Vector3(0, Math.sign(at.y) * 600, -5000)), field)).toBe(true);
+      // across the hull from where it stands, the armor hides the ship
+      expect(fleet.sees(zone, new THREE.Vector3(0, -Math.sign(at.y) * 30000, at.z), field)).toBe(false);
+    }
+    field.obstacle = null;
   });
 
   it('hides what is behind its hull and sets off a torpedo that touches it', () => {
@@ -267,10 +286,16 @@ describe("the President's fleet", () => {
     expect(fleet.present(sinking)).toBe(false);
     expect(fleet.touches(new THREE.Vector3(0, 900, 0), 120)).toBe(true);
     expect(fleet.resolve(new THREE.Vector3(0, 700, 0), 300, sinking)).not.toBeNull();
+    // a beam stops on its armor, and no part takes it any more
+    const across = new THREE.Vector3(1, 0, 0);
+    expect(fleet.raycast(new THREE.Vector3(-20000, 0, 0), across, 40000, sinking)?.zone).toBe(-1);
+    const battery = fleet.zones[zonesOf(fleet, 'battery')[0]].at;
+    expect(fleet.raycast(battery.clone().setY(20000), down, 40000, sinking)?.zone).toBe(-1);
     const gone = SINK_SECONDS + 100;
     fleet.update(gone, 0);
     expect(fleet.touches(new THREE.Vector3(0, 900, 0), 120)).toBe(false);
     expect(fleet.resolve(new THREE.Vector3(0, 700, 0), 300, gone)).toBeNull();
+    expect(fleet.raycast(new THREE.Vector3(-20000, 0, 0), across, 40000, gone)).toBeNull();
   });
 
   it('turns its stern on the nearest pilot in its second phase and burns it', () => {
@@ -305,6 +330,9 @@ describe("the President's fleet", () => {
     events = other.follow(JSON.parse(JSON.stringify(lead.toState())));
     expect(events.map((e) => e.kind)).toContain('sunk');
     expect(other.down).toBe(true);
+    // the hits that sank it, heard first in the lead's state, break the parts there too
+    for (const zone of [...zonesOf(lead, 'battery'), ...zonesOf(lead, 'reactor')]) expect(other.broken(zone)).toBe(true);
+    expect(events.filter((e) => e.kind === 'broken')).toHaveLength(zonesOf(lead, 'battery').length - 1 + zonesOf(lead, 'reactor').length);
     // a browser that comes after it went down sees it gone, with no blast to set off
     const late = new Fleet(7);
     expect(late.follow(JSON.parse(JSON.stringify(lead.toState())))).toEqual([]);
@@ -470,6 +498,51 @@ describe("the battleship and the field's rock", () => {
     expect(heavy.fleet.depthOf(heavy.piece, 1, normal, point)).toBe(0);
   });
 
+  it("rams a piece welded into a structure as the whole structure: every piece of it takes the same push, the two trading momentum by the structure's mass", () => {
+    const derelict = arenaById('derelict')!;
+    field.generate(derelict.layout);
+    field.setClock(1);
+    const fleet = new Fleet(derelict.layout.seed, field, derelict.sheet);
+    const piece = [...field.asteroids.values()].find((a) => a.weld !== null)!;
+    const members = field.welded(piece);
+    expect(members.length).toBeGreaterThan(1);
+    expect(field.bodyMass(piece)).toBeGreaterThan(MASS.battleship);
+    // alone in the field with its structure, the bow driven into it
+    for (const id of [...field.asteroids.keys()]) if (!members.some((member) => member.id === id)) field.asteroids.delete(id);
+    fleet.arrivesAt = 0;
+    fleet.quaternion.identity();
+    fleet.velocity.set(0, 0, -FLEET_SPEED);
+    const center = piece.object.position;
+    for (let z = fleet.reach + piece.radius; ; z -= 10) {
+      fleet.position.set(center.x, center.y - BOW_DOOR, center.z + z);
+      fleet.root.updateMatrixWorld();
+      fleet.update(1, 0);
+      if (fleet.depthOf(piece, 1, normal, point) >= 50) break;
+    }
+    const before = members.map((member) => drift(member));
+    const spins = members.map((member) => member.spinRate);
+    const hull = fleet.velocity.clone();
+    fleet.ram(1);
+    expect(new Set(fleet.rams.map((state) => state.id))).toEqual(new Set(members.map((member) => member.id)));
+    // the same change for every piece of it, no tumble, and its momentum the hull's loss
+    const change = drift(piece).sub(before[members.indexOf(piece)]);
+    expect(change.length()).toBeGreaterThan(1);
+    members.forEach((member, i) => {
+      expect(drift(member).sub(before[i]).distanceTo(change)).toBeLessThan(0.01);
+      expect(member.spinRate).toBeCloseTo(spins[i], 5);
+    });
+    const lost = hull.sub(fleet.velocity).multiplyScalar(MASS.battleship);
+    expect(change.clone().multiplyScalar(field.bodyMass(piece)).distanceTo(lost)).toBeLessThan(lost.length() * 1e-3);
+    // another browser takes the push of every piece of it, those farthest from the hull too
+    const seen = testField(DISTANT_DETAIL, HULL_BOXES);
+    seen.generate(derelict.layout);
+    seen.setClock(1);
+    for (const ram of fleet.rams) {
+      const at = seen.positionOf(seen.asteroids.get(ram.id)!, ram.b, new THREE.Vector3());
+      expect(ramShare(at, new THREE.Vector3().fromArray(ram.p), Math.hypot(...ram.v), fleet.position, fleet.reach + seen.asteroids.get(ram.id)!.radius, ram.b - seen.clock), ram.id).toBeLessThan(1);
+    }
+  });
+
   it('tells every browser where it shoved a piece, and one that joins later has it there too, and the pieces it breaks into', () => {
     const { fleet, piece, placed } = bowOn(field, rings, 0.1);
     fleet.ram(1);
@@ -541,6 +614,50 @@ describe("the battleship's hangars", () => {
   const middle = (HANGAR_FLOOR + HANGAR_CEILING) / 2;
   /** How far a ship's center may stray from a hangar's middle without touching (units): along the hull, and up and down. */
   const room = { z: HANGAR_WIDTH / 2 - SHIP_RADIUS - 5, y: (HANGAR_CEILING - HANGAR_FLOOR) / 2 - SHIP_RADIUS - 5 };
+
+  it("show each wall's picture from afar without a neighbour's or the white block bleeding into its edges, down to the mipmap 16 times coarser", () => {
+    const fleet = battleship();
+    // the texture of the walls' pictures, and where the plates showing them sample it
+    let map: THREE.DataTexture | null = null;
+    const heights = new Set<number>();
+    fleet.root.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      const texture = (mesh.material as THREE.MeshBasicMaterial | undefined)?.map;
+      if (!mesh.isMesh || !(texture instanceof THREE.DataTexture)) return;
+      map = texture;
+      const uv = mesh.geometry.getAttribute('uv');
+      for (let i = 0; i < uv.count; i++) heights.add(uv.getY(i));
+    });
+    const texture = map! as THREE.DataTexture;
+    const { data, width, height } = texture.image as { data: Uint8Array; width: number; height: number };
+    // every other piece samples the white block at one height, the highest
+    const plates = [...heights].sort((a, b) => a - b).slice(0, -1);
+    expect(plates).toHaveLength(HANGARS.length * 4);
+    const line = width * 4;
+    const rowOf = (row: number) => data.subarray(row * line, (row + 1) * line);
+    for (let wall = 0; wall < plates.length; wall += 2) {
+      const [first, last] = [plates[wall] * height, plates[wall + 1] * height - 1];
+      // the picture's own rows and its gutters, copies of its edge rows
+      const own = [first - ELEVATION_GUTTER, last + ELEVATION_GUTTER];
+      for (let k = 1; k <= ELEVATION_GUTTER; k++) {
+        expect(rowOf(first - k)).toEqual(rowOf(first));
+        expect(rowOf(last + k)).toEqual(rowOf(last));
+      }
+      // a mipmap's texel averages the rows under it (the GPU's box filter on a texture of powers
+      // of two); bilinear filtering at the plate's edges weighs the two nearest
+      for (let level = 0; level <= 4; level++) {
+        const size = 2 ** level;
+        for (const v of [plates[wall], plates[wall + 1]]) {
+          const at = (v * height) / size - 0.5;
+          const below = Math.floor(at);
+          for (const texel of at > below ? [below, below + 1] : [below]) {
+            expect(texel * size, `wall ${wall / 2} at mipmap ${level}`).toBeGreaterThanOrEqual(own[0]);
+            expect((texel + 1) * size - 1, `wall ${wall / 2} at mipmap ${level}`).toBeLessThanOrEqual(own[1]);
+          }
+        }
+      }
+    }
+  });
 
   it('leave nothing solid in a tunnel from flank to flank, and the hull around it solid', () => {
     const fleet = battleship();

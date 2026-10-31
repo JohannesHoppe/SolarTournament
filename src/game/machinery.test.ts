@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { Randomizer } from '../random';
 import { ARENAS } from '../world/arenas';
-import { Fleet, HANGARS } from './fleet';
+import { ELEVATION_GUTTER, ELEVATION_SLOT, Fleet, HANGAR_CEILING, HANGAR_FLOOR, HANGARS } from './fleet';
 import { EMPHASES, machinery, type Emphasis, type Wall } from './machinery';
 
 /** A wall in the frame the machinery is laid out in: 215 m across, 53 m high, 6 m deep. */
@@ -68,7 +68,7 @@ describe("the machinery on the hangars' walls", () => {
     // each wall's picture shows the machinery: many shades, none of it blank
     for (let wall = 0; wall < 6; wall++) {
       const shades = new Set<number>();
-      for (let y = wall * 168; y < (wall + 1) * 168; y += 3) for (let x = 0; x < width; x += 3) shades.add(data[(y * width + x) * 4 + 1]);
+      for (let y = wall * ELEVATION_SLOT + ELEVATION_GUTTER; y < (wall + 1) * ELEVATION_SLOT - ELEVATION_GUTTER; y += 3) for (let x = 0; x < width; x += 3) shades.add(data[(y * width + x) * 4 + 1]);
       expect(shades.size, `wall ${wall}`).toBeGreaterThan(40);
     }
   });
@@ -89,6 +89,14 @@ describe("the machinery on the hangars' walls", () => {
     });
     expect(seen(0, 8000, HANGARS[1])).toEqual([]);
     expect(seen(0, 450, -6000)).toEqual([]);
+    // just over the flight deck, or just under the hull, the hull hides them; out beyond a flank
+    // at that height a mouth shows
+    HANGARS.forEach((z, i) => {
+      expect(seen(1000, HANGAR_CEILING + 1500, z)).toEqual([]);
+      expect(seen(1000, HANGAR_FLOOR - 1500, z)).toEqual([]);
+      expect(seen(4500, HANGAR_CEILING + 1500, z)).toEqual([i]);
+      expect(seen(-4500, HANGAR_FLOOR - 1500, z)).toEqual([i]);
+    });
   });
 
 });
