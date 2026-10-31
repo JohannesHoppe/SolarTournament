@@ -3281,6 +3281,8 @@ export class Game implements OnlineGame {
       this.replayEffects.group.visible = replaying;
       this.hud.show(!replaying && this.state === 'playing' && !this.sponsors.visible);
     }
+    // the air's scenery follows the kill cam's eye (the next frame lays it out for the cockpit's again)
+    if (replaying) this.airScene();
     this.paint();
     if (replaying) this.killcam.restore();
     return true;
@@ -4479,28 +4481,18 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * A planet's air around the camera, once a frame (see world/jupiter, view/haze): the sheets of
-   * cloud, the sky and the lightning; the sun's and the sky's light as the haze lets them through;
-   * where nothing is drawn, the deep haze's color under the deck; and what the own pilot hears of
-   * the air outside: the wind by its push on the hull, thunder after lightning, coming as fast as
-   * sound runs through hydrogen (SOUND_SPEED), only while the own ship is in the air.
+   * A planet's air around the camera, once a frame (see airScene), and what the own pilot hears
+   * of the air outside: the wind by its push on the hull, thunder after lightning, coming as fast
+   * as sound runs through hydrogen (SOUND_SPEED), only while the own ship is in the air.
    */
   private airWeather(dt: number) {
+    const struck = this.airScene();
     const air = this.field.air;
     const jupiter = this.landmarks.jupiter;
     if (!air) {
-      this.space.shade(1, 1, null, null);
-      this.background.copy(this.space.background);
       this.quietAir();
       return;
     }
-    const eye = this.camera.position;
-    const shade = this.haze.shadeAt(eye, SUN_DIRECTION.dot(up.subVectors(eye, air.center).normalize()));
-    this.space.shade(shade.sun, shade.sky, jupiter.deckLight, jupiter.deepLight);
-    const depth = altitudeIn(air, eye);
-    if (depth < 0) this.background.copy(jupiter.deepLight).lerp(jupiter.deckLight, Math.exp(depth / BACKGROUND_DEPTH));
-    else this.background.copy(this.space.background);
-    const struck = jupiter.update(this.field.clock, eye, this.sheetLight);
     // the own ship in the air hears it: none in the menu, none for a dead clone
     const me = this.state === 'playing' ? this.me : null;
     const inAir = !!me?.alive && altitudeIn(air, me.flight.position) < 0;
@@ -4516,6 +4508,29 @@ export class Game implements OnlineGame {
       const distance = jupiter.strikePoint.distanceTo(me.flight.position);
       this.sound.thunder(Math.min(1, THUNDER_LOUD / (1 + distance / THUNDER_REACH) ** 2), distance / SOUND_SPEED, Math.exp(-distance / THUNDER_REACH));
     }
+  }
+
+  /**
+   * A planet's air as the camera sees it where it is now (see world/jupiter, view/haze): the
+   * sheets of cloud, the sky and the lightning; the sun's and the sky's light as the haze lets
+   * them through; where nothing is drawn, the deep haze's color under the deck. Laid out again
+   * for the kill cam's eye while it replays. Returns whether a strike of lightning began.
+   */
+  private airScene(): boolean {
+    const air = this.field.air;
+    const jupiter = this.landmarks.jupiter;
+    if (!air) {
+      this.space.shade(1, 1, null, null);
+      this.background.copy(this.space.background);
+      return false;
+    }
+    const eye = this.camera.position;
+    const shade = this.haze.shadeAt(eye, SUN_DIRECTION.dot(up.subVectors(eye, air.center).normalize()));
+    this.space.shade(shade.sun, shade.sky, jupiter.deckLight, jupiter.deepLight);
+    const depth = altitudeIn(air, eye);
+    if (depth < 0) this.background.copy(jupiter.deepLight).lerp(jupiter.deckLight, Math.exp(depth / BACKGROUND_DEPTH));
+    else this.background.copy(this.space.background);
+    return jupiter.update(this.field.clock, eye, this.sheetLight);
   }
 
   /** Turns the air's wind and plasma down, once: not again every frame while nothing sounds. */
