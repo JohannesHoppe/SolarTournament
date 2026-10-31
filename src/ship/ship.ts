@@ -9,7 +9,7 @@ import { ramDamage, type RamZone } from './impact';
 import type { Controls } from '../input/input';
 import { TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
-import { STOCK, type Perks } from '../game/hangar';
+import { packLooks, STOCK, unpackLooks, type Perks } from '../game/hangar';
 import { runningLight } from '../view/textures';
 import { botTint, SOVEREIGN_TINT, TINTS } from './tints';
 
@@ -229,7 +229,7 @@ export type ShipState = {
   fi?: number;
   /** items held (see packItems) */
   it?: number;
-  /** the looks of its upgrades: 4 × the neon trim's step + the drive flame's (see Perks) */
+  /** the looks of its upgrades and its radiators' step (see packLooks) */
   lo?: number;
   /** the tint its Host chose, an index into TINTS (see Ship.wish) */
   co?: number;
@@ -376,6 +376,11 @@ export class Ship {
     /** whether the owner reported a living clone; `alive` also goes false while the owner is silent */
     alive: false,
   };
+
+  /** Whether the clone died: for a ship another peer simulates only once its owner said so, not while the owner is silent. */
+  get died(): boolean {
+    return !this.alive && (this.owner === null || !this.remote.alive);
+  }
   private lastShotAt = -Infinity;
   /**
    * Fire held from before is ignored until it is let go: a fresh clone does not shoot (and end
@@ -568,7 +573,7 @@ export class Ship {
     }
     return {
       id: this.id,
-      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items, lo: this.perks.neon * 4 + this.perks.flame, co: this.wish, to: this.torpedoes } : {}),
+      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items, lo: packLooks(this.perks), co: this.wish, to: this.torpedoes } : {}),
       p: round(f.position),
       v: round(f.velocity, 1),
       q: round(f.orientation, 4),
@@ -606,10 +611,9 @@ export class Ship {
       this.gates = state.g!;
       this.finish = state.fi!;
       ({ twin: this.twin, plating: this.plating, nova: this.nova } = unpackItems(state.it!));
-      // another browser's ship shows the looks of its upgrades; how it flies is that browser's
-      const neon = state.lo! >> 2;
-      const flame = state.lo! & 3;
-      if (neon !== this.perks.neon || flame !== this.perks.flame) this.outfit({ ...STOCK, neon, flame });
+      // another browser's ship shows the looks of its upgrades and heats in the air with its
+      // radiators; how it flies is that browser's
+      if (state.lo !== packLooks(this.perks)) this.outfit(unpackLooks(state.lo!));
       // the tint it chose; which one it flies in, the round decides (see Game.tintShips)
       this.wish = state.co!;
       this.torpedoes = state.to!;

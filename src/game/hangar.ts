@@ -78,6 +78,20 @@ export interface Perks {
 
 export const STOCK: Readonly<Perks> = { cooling: 1, thrusters: 1, drive: 1, torpedoes: 0, damage: 1, neon: 0, flame: 0 };
 
+/** What each step of the radiators adds to their cooling (a share of the stock's). */
+const RADIATOR_STEP = 0.15;
+
+/**
+ * What other browsers are told of a ship's upgrades (a ship state's `lo`): the looks, and the
+ * radiators' step (online at most ONLINE_LEVEL), so they heat it in a planet's air as its own
+ * browser does (see view/reentry); 16 × the radiators' step + 4 × the neon trim's + the drive
+ * flame's, at most MAX_LOOKS.
+ */
+export const packLooks = (perks: Perks) => Math.min(ONLINE_LEVEL, Math.round((perks.cooling - 1) / RADIATOR_STEP)) * 16 + perks.neon * 4 + perks.flame;
+export const MAX_LOOKS = (ONLINE_LEVEL + 1) * 16 - 1;
+/** Another browser's ship as `lo` tells it (see packLooks): stock but for its looks and radiators. */
+export const unpackLooks = (looks: number): Perks => ({ ...STOCK, cooling: 1 + RADIATOR_STEP * (looks >> 4), neon: (looks >> 2) & 3, flame: looks & 3 });
+
 const noLevels = (): Record<UpgradeId, number> => Object.fromEntries(UPGRADES.map((upgrade) => [upgrade.id, 0])) as Record<UpgradeId, number>;
 
 export const emptyHangar = (): Hangar => ({ coins: 0, levels: { human: noLevels(), alien: noLevels() }, ship: 'human' });
@@ -197,7 +211,7 @@ export function perksOf(hangar: Hangar, ship: ShipType, online: boolean): Perks 
   };
   const look = (id: UpgradeId) => (ship === 'sovereign' ? LEVELS : hangar.levels[ship][id]);
   return {
-    cooling: 1 + 0.15 * step('radiators'),
+    cooling: 1 + RADIATOR_STEP * step('radiators'),
     thrusters: 1 + 0.08 * step('thrusters'),
     drive: 1 + 0.05 * step('drive'),
     torpedoes: tubeTorpedoes(step('tubes')),

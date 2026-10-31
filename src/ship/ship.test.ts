@@ -77,6 +77,23 @@ describe('a fresh clone', () => {
 });
 
 describe("another browser's ship", () => {
+  it('has died only once its owner says so, not while its owner is silent', () => {
+    const owner = ship('p:a');
+    const seen = ship('p:a');
+    seen.owner = 'a';
+    seen.applyState(shipState(owner.toState(0, true))!, 0);
+    expect(seen.died).toBe(false);
+    // its owner goes quiet: the ship leaves the screen (see online.ts)
+    seen.alive = false;
+    expect(seen.died).toBe(false);
+    owner.alive = false;
+    seen.applyState(shipState(owner.toState(1))!, 1);
+    expect(seen.died).toBe(true);
+    // a ship this browser runs died when it is not alive
+    owner.owner = null;
+    expect(owner.died).toBe(true);
+  });
+
   it('fires no thrusters for what pulls and brakes it from outside, only for its own push', () => {
     const owner = ship('p:a');
     const seen = ship('p:a');
