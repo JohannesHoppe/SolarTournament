@@ -290,6 +290,8 @@ const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: msg('Crushed in t
 const ROUND_SNAP = 0.25;
 /** A rock hit from another browser counts only within this much field time (s) of the own clock; the clocks agree to a fraction of a second. */
 const ROCK_TIME_SLACK = 5;
+/** A motion the lead gave a piece counts as older than the piece's own beyond this much field time (s): the field times travel to the millisecond. */
+const STALE_MOTION = 0.002;
 /** A lead browser's next round is taken this long (s) before the own clock ends the running one at the earliest: clocks drift a little, not by minutes. */
 const ROUND_END_SLACK = 30;
 /** Online, the asteroids jump to the lead browser's field time when they are this far off (s), and otherwise glide towards it. */
@@ -3931,17 +3933,28 @@ export class Game implements OnlineGame {
   /** A piece of the field struck another or a ring as the lead decided: it takes the motion the lead gave it, if that lies close to where this browser has it (see knockShare). */
   remoteKnock(state: ShovedState, round: number) {
     const piece = this.field.asteroids.get(state.id);
-    if (!piece || round !== this.roundId) return;
+    if (!piece || !this.fieldMotion(piece, state, round)) return;
     const before = this.field.positionOf(piece, state.b, scratch);
     if (knockShare(before, rammedTo.fromArray(state.p), Math.hypot(...state.v)) > 1) return;
     this.field.move(state);
+  }
+
+  /**
+   * Whether a motion the lead gave a piece belongs to this browser's field: of its round (a
+   * newcomer that does not know the round yet takes it for the field it has, as a rock's break),
+   * and no older than the motion the piece has (a knock and a ram arriving out of order, or
+   * after a comet's shove here). What the order loses, the lead's sync of the field sets right
+   * (see syncField).
+   */
+  private fieldMotion(piece: Asteroid, state: ShovedState, round: number): boolean {
+    return (this.roundId < 0 || round === this.roundId) && state.b >= piece.born - STALE_MOTION;
   }
 
   /** The lead's battleship rammed a piece of the field: it takes the motion the lead gave it, if it lay at the hull as this browser sees them (see ramShare). */
   remoteRam(state: ShovedState, round: number) {
     const fleet = this.fleet;
     const piece = this.field.asteroids.get(state.id);
-    if (!fleet || !piece || round !== this.roundId) return;
+    if (!fleet || !piece || !this.fieldMotion(piece, state, round)) return;
     const before = this.field.positionOf(piece, state.b, scratch);
     if (ramShare(before, rammedTo.fromArray(state.p), Math.hypot(...state.v), fleet.position, fleet.reach + piece.radius) > 1) return;
     this.field.move(state);

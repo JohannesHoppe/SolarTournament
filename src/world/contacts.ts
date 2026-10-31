@@ -314,7 +314,7 @@ export class FieldContacts {
     const seen = this.siblings.get(key);
     // the first step after a fresh start cannot know: siblings found in each other then are
     // taken as parting, as they are unless they met again right then
-    const age = time - (field.brokeAt(a.id.slice(0, dot)) ?? -Infinity);
+    const age = time - (field.splitSince(a.id.slice(0, dot)) ?? -Infinity);
     if (age > CONTACT_STEP + 1e-9 && seen !== step - 1 && !this.fresh) return false;
     this.siblings.set(key, step);
     return true;

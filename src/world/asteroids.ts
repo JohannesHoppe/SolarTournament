@@ -509,6 +509,7 @@ export class AsteroidField {
     for (const asteroid of this.asteroids.values()) this.group.remove(asteroid.object);
     this.asteroids.clear();
     this.broken.clear();
+    this.heard.clear();
   }
 
   private boundingRadius(t: Template, scale: number) {
@@ -651,6 +652,19 @@ export class AsteroidField {
     return this.broken.get(id);
   }
 
+  /**
+   * The field time from which this field has a rock's pieces (undefined while it stands): when
+   * it broke, or later when it heard of the break later (another Host's, dated a round trip
+   * back). Its pieces lie in each other from then on, as the rock a moment before.
+   */
+  splitSince(id: string): number | undefined {
+    const at = this.broken.get(id);
+    return at === undefined ? undefined : Math.max(at, this.heard.get(id) ?? at);
+  }
+
+  /** The field's clock when each rock broke here (see splitSince). */
+  private readonly heard = new Map<string, number>();
+
   /** Where a rock is at a field time (see positionAt), for whatever must know it then, not now. */
   positionOf(asteroid: Asteroid, time: number, target: THREE.Vector3): THREE.Vector3 {
     return positionAt(asteroid, time, target);
@@ -725,13 +739,19 @@ export class AsteroidField {
     return a;
   }
 
-  /** Breaks a rock at a field time: the fragments start from where it stood then. */
-  private destroy(id: string, at: number): Asteroid | undefined {
+  /**
+   * Breaks a rock at a field time: the fragments start from where it stood then. A break dated
+   * before the rock took its motion (a shooter's, heard after a knock or a ram) breaks it where
+   * that motion starts: before it, the rock was elsewhere.
+   */
+  private destroy(id: string, time: number): Asteroid | undefined {
     const asteroid = this.asteroids.get(id);
     if (!asteroid) return undefined;
+    const at = Math.max(time, asteroid.born);
     this.group.remove(asteroid.object);
     this.asteroids.delete(id);
     this.broken.set(id, at);
+    this.heard.set(id, this.clock);
 
     if (asteroid.generation >= MAX_GENERATION) return asteroid;
     if (this.fractures[asteroid.kind]) {

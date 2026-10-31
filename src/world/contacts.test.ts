@@ -65,6 +65,32 @@ function stateOf(field: AsteroidField) {
   return [...field.asteroids.values()].map((a) => [a.id, ...[...a.object.position.toArray(), ...a.velocity.toArray()].map((x) => (x / 50).toFixed(3))].join(' ')).sort();
 }
 
+describe('a break heard late', () => {
+  it("lets the pieces of a rock another Host broke a round trip ago part as they would have, never knocking them apart", () => {
+    /** The knocks the pieces of 20 rocks give each other within 2 s of their breaks, each break dated `late` seconds before the lead hears of it. */
+    const knocks = (late: number) => {
+      const field = fieldOf(arenaById('junkyard')!);
+      const contacts = new FieldContacts();
+      const r = new Randomizer(8);
+      let count = 0;
+      for (let k = 0; k < 20; k++) {
+        field.update(1);
+        contacts.run(field);
+        const ids = [...field.asteroids.values()].filter((a) => !a.solid && a.generation === 0).map((a) => a.id);
+        const id = ids[r.nextInt() % ids.length];
+        field.shatter(id, field.clock - late);
+        for (let frame = 0; frame < 120; frame++) {
+          field.update(1 / 60);
+          for (const state of contacts.run(field)) if (state.id.startsWith(`${id}.`)) count++;
+        }
+      }
+      return count;
+    };
+    const onTime = knocks(0);
+    expect(knocks(0.25)).toBeLessThanOrEqual(onTime + 4);
+  }, 60000);
+});
+
 describe('the field meets itself', () => {
   for (const arena of ARENAS) {
     it(`lets no two pieces of ${arena.id} lie in each other over a round, with its fragments and comets`, () => {

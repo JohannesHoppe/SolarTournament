@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ARENAS, RING_SHEET } from './arenas';
 import { ARENA_LIMIT } from './arena';
-import { impostorDistance, IMPOSTOR_MIN, SPIN_RATE, type AsteroidField, type FieldLayout } from './asteroids';
+import { impostorDistance, IMPOSTOR_MIN, KNOCKED, SPIN_RATE, type AsteroidField, type FieldLayout } from './asteroids';
 import { testField } from '../test/field';
 import { DETAIL } from './rocks';
 
@@ -150,6 +150,18 @@ describe('a rock that breaks', () => {
   };
   /** The share of points, moved towards or away from the center by `scale`, that some piece of the field touches. */
   const touched = (field: AsteroidField, center: THREE.Vector3, points: THREE.Vector3[], scale: number) => points.filter((p) => field.overlap(p.clone().sub(center).multiplyScalar(scale).add(center), 1)).length / points.length;
+
+  it('breaks where its motion starts when the break is dated before a knock it took, never where it would have been before it', () => {
+    const field = testField();
+    field.generate({ key: 'knocked', seed: 1, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: 1, inner: 0, spin: 0, toughness: 800, placements: [{ kind: 'rock', type: 3, scale: 2, position: new THREE.Vector3(), orientation: new THREE.Quaternion(), solid: false }] });
+    const rock = field.asteroids.get('h0')!;
+    // knocked at field time 10 from 5 km away, drifting at 150 m/s
+    field.move({ id: 'h0', b: 10, p: [100000, 0, 0], v: [3000, 0, 0], q: [0, 0, 0, 1], s: [0, 1, 0, 0], c: KNOCKED });
+    field.setClock(10.5);
+    field.shatter('h0', 8);
+    expect(field.brokeAt('h0')).toBe(10);
+    for (const piece of field.asteroids.values()) expect(piece.basePosition.distanceTo(new THREE.Vector3(100000, 0, 0))).toBeLessThan(rock.radius);
+  });
 
   it('splits into pieces of itself that start where they lay: together they fill the rock, and nothing more', () => {
     for (const type of [1, 8, 14]) {
