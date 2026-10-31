@@ -93,6 +93,8 @@ function pointsOf(field: AsteroidField, piece: Asteroid): Float32Array {
 
 const ORIGIN = new THREE.Vector3();
 const corner = new THREE.Vector3();
+const gapAt = new THREE.Vector3();
+const gapOther = new THREE.Vector3();
 
 /** A grid of `n` × `n` points over each face of a box of `half` extents about `center`, as a flat list (xyz). */
 function boxGrid(h: THREE.Vector3, center: THREE.Vector3, n: number): number[] {
@@ -235,6 +237,22 @@ export class FieldContacts {
     if (now >= first) for (const entry of this.entries) field.pose(entry.piece, field.clock);
     this.last = now;
     return this.moved;
+  }
+
+  /**
+   * How far a piece's bounding sphere stood off the nearest other piece's or ring's at field
+   * time `time` (units, 0 where they meet): a contact the lead reports needs something there for
+   * the piece to have struck (see net/plausible, knockShare).
+   */
+  gap(field: AsteroidField, piece: Asteroid, time: number): number {
+    const at = field.positionOf(piece, time, gapAt);
+    let gap = Infinity;
+    for (const other of field.asteroids.values()) {
+      if (other === piece) continue;
+      gap = Math.min(gap, at.distanceTo(field.positionOf(other, time, gapOther)) - piece.radius - other.radius);
+    }
+    for (const fixture of this.fixtures) gap = Math.min(gap, at.distanceTo(fixture.position) - piece.radius - fixture.reach);
+    return Math.max(0, gap);
   }
 
   /** The pieces at field time `time`, sorted along x by where their bounding spheres begin (ties by id), each posed then. */
