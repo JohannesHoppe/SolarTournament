@@ -139,6 +139,24 @@ describe('the autopilot: the ship flies where its nose points', () => {
     }
   });
 
+  it('pushes with the whole drive while W is held on a straight flight: the thrusters never fight it', () => {
+    for (const speed of [0, 100, 150].map((v) => v * MS)) {
+      const ship = new Cockpit(speed);
+      ship.fly(0.5, () => ({ thrust: 1 }));
+      const gained = ship.flight.velocity.length() - speed;
+      expect(gained / 0.5, `from ${speed / MS} m/s`).toBeGreaterThan(MAIN_THRUST * 0.99);
+      expect(ship.out.strafeZ, `from ${speed / MS} m/s`).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('keeps a slow coast along the nose as it is: only a ship at rest is held still', () => {
+    for (const speed of [3, 6, 9].map((v) => v * MS)) {
+      const ship = new Cockpit(speed);
+      ship.fly(2);
+      expect(ship.flight.velocity.length(), `${speed / MS} m/s`).toBeGreaterThan(speed * 0.99);
+    }
+  });
+
   it('holds the flight on the nose against gravity across it', () => {
     const ship = new Cockpit(100 * MS);
     ship.gravity.set(0, -196.2, 0);
