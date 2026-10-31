@@ -30,6 +30,18 @@ const EINSTEIN = 2.4;
  * photon ring stay, unbent.
  */
 const BEND_FADE = 0.3;
+/** A bent ray's source beyond the picture's edge by this share of it or more shows the pixel's own unbent light; the fade begins half as far inside the edge (see the shader's outside). */
+const EDGE_FADE = 0.04;
+/**
+ * The disk's gas in front of a rock or ship inside its slab, softly held below this luminance
+ * (linear, before the tone mapping): a rock's dark side reads about this bright, its lit side
+ * several times more, so the veil tints a rock and shows it lies in the glowing gas while its
+ * shading and silhouette still read as a solid body; summed in full, kilometers of gas along
+ * the plane would wash it out into a flat cut-out.
+ */
+const VEIL_MAX = 0.03;
+/** ...and that fade spans no fewer pixels on screen than this. */
+const EDGE_PIXELS = 60;
 
 const shader = {
   uniforms: {
@@ -91,13 +103,17 @@ const shader = {
     }
     // what is drawn at uv, seen along r and lying depth ahead of the camera, with the disk's gas in
     // front of it where it lies inside the gas's slab: the disk's own mesh is depth-tested at the
-    // slab's far side, so a surface inside hides all of the gas along that pixel (see world/landmarks)
+    // slab's far side, so a surface inside hides all of the gas along that pixel (see world/landmarks);
+    // held faint (see VEIL_MAX)
     vec4 seen(vec2 uv, float depth, vec3 r) {
       vec4 color = texture2D(tDiffuse, uv);
       float at = depth / dot(r, axis);
       if (at < diskExit(eye, r)) {
         float near = diskEntry(eye, r);
-        if (at > near) color.rgb += diskGas(eye, r, near, at);
+        if (at > near) {
+          vec3 veil = diskGas(eye, r, near, at);
+          color.rgb += veil * ${VEIL_MAX} / (${VEIL_MAX} + dot(veil, vec3(0.2126, 0.7152, 0.0722)));
+        }
       }
       return color;
     }
@@ -129,6 +145,11 @@ const shader = {
       vec2 shown = vUv;
       vec3 ray = rd;
       float shownDepth = depth;
+      // how far beyond the picture's edge the source lies (a share of the picture, less than 0
+      // inside it): nothing is known beyond, so the bent light fades back to the pixel's own
+      // unbent light about the edge (see EDGE_FADE) instead of smearing the edge's pixels across
+      // the picture, and a thing the edge cuts off fades out instead of showing the cut
+      float outside = -1.0;
       if (bend > 0.0) {
         float beta = theta - bend * ringAngle * ringAngle / theta;
         vec3 across = normalize(rd - toHole * c);
@@ -137,18 +158,28 @@ const shader = {
           float angle = beta * (1.0 + 0.2 * float(i));
           vec3 r = toHole * cos(angle) + across * sin(angle);
           vec4 clip = viewProjection * vec4(r, 0.0);
-          if (clip.w <= 0.0) continue;
-          vec2 source = clamp(clip.xy / clip.w * 0.5 + 0.5, 0.0, 1.0);
+          // behind the camera: as far beyond the edge as it gets
+          if (clip.w <= 0.0) {
+            outside = 1.0;
+            break;
+          }
+          vec2 raw = clip.xy / clip.w * 0.5 + 0.5;
+          vec2 source = clamp(raw, 0.0, 1.0);
           float there = ahead(source);
           if (beyond(there, r)) {
             shown = source;
             ray = r;
             shownDepth = there;
+            outside = max(max(-raw.x, raw.x - 1.0), max(-raw.y, raw.y - 1.0));
             break;
           }
         }
       }
       vec4 color = seen(shown, shownDepth, ray);
+      // (over at least EDGE_PIXELS on screen: near the Einstein ring the source races across the
+      // picture as the pixel moves, and a fade over its own distance alone would be a hard seam)
+      float span = max(${EDGE_FADE}, fwidth(outside) * ${EDGE_PIXELS.toFixed(1)});
+      if (outside > -0.5 * span) color = mix(color, seen(vUv, depth, rd), smoothstep(-0.5 * span, span, outside));
       // the light that grazes the shadow piles up into a thin bright ring
       // squared by hand: GLSL ES leaves pow() of a negative base undefined (NaN on some GPUs)
       float ring = (theta - shadowAngle * 1.05) / (shadowAngle * 0.08 + 0.0007);
