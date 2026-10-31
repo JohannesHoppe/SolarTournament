@@ -836,11 +836,16 @@ export function prefetch(shape: number, path: readonly number[], details: Fractu
   active.postMessage(job);
 }
 
-/** Cuts every piece of a job (see prefetch) and sends each with its key, its arrays handed over, not copied. */
+/**
+ * Cuts every piece of a job (see prefetch) and sends each with its key, its meshes handed over,
+ * not copied; its surface goes as a copy, since the worker keeps measuring the piece's own pieces
+ * against it (see parentSurface).
+ */
 export function runJob(job: FractureJob, send: (message: { key: string; data: PieceData }, transfer: ArrayBuffer[]) => void) {
   for (let i = 0; i < pieceCount(job.shape, job.path); i++) {
     const path = [...job.path, i];
-    const data = pieceData(job.shape, path, job.details);
+    const kept = pieceData(job.shape, path, job.details);
+    const data = { ...kept, radii: kept.radii.slice() };
     const arrays = [data.near, data.far].flatMap((m) => [m.position, m.normal, m.fracture, m.index]);
     send({ key: pieceKey(job.shape, path, job.details), data }, [...arrays, data.radii].map((a) => a.buffer as ArrayBuffer));
   }

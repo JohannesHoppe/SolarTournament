@@ -220,4 +220,14 @@ describe('the fracture worker', () => {
     expect(fracture.pieceData(1, [0], details)).toBe(made[fracture.pieceKey(1, [0], details)]);
     expect(fracture.pieceData(2, [1], details)).toBe(made[fracture.pieceKey(2, [1], details)]);
   });
+
+  it("hands its pieces over as a worker does and still cuts their pieces against them: a piece's surface it sent stays its own", async () => {
+    vi.resetModules();
+    const fracture = await import('./fracture');
+    const details = { collision: DISTANT_DETAIL, near: DISTANT_DETAIL, far: FAR_DETAIL };
+    // a worker's postMessage with a transfer list: the buffers handed over are detached here
+    const send = (message: unknown, transfer: ArrayBuffer[]) => void structuredClone(message, { transfer });
+    fracture.runJob({ shape: 3, path: [], details }, send);
+    expect(() => fracture.runJob({ shape: 3, path: [0], details }, send)).not.toThrow();
+  });
 });
