@@ -8,7 +8,7 @@ import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
 import type { TemplateKind, TemplateSet } from './world/asteroids';
 import { synthesizeSounds } from './sound/sounds';
 import { gasTexture, radialTexture, smokeTexture, sparkTexture } from './view/textures';
-import { bakeMilkyWayTexture, faintStars, joinStars, MILKY_WAY_SIZES } from './world/milkyway';
+import { bakeMilkyWayTexture, bakeSky, faintStars, joinStars, MILKY_WAY_SIZES } from './world/milkyway';
 import { decodeStars, type StarList } from './world/starfile';
 
 /** The ships a Host can fly: the two interceptors, and the Sovereign once earned (see game/hangar). */
@@ -151,7 +151,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   const flames = Promise.all(['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture));
   const planetMaps = Promise.all([planetTexture('saturn-1k.jpg'), planetTexture('giant-1k.jpg'), planetTexture('saturn-ring.png'), planetTexture('earth-1k.jpg'), planetTexture('earth-day-1k.jpg')]);
   // the Milky Way bakes in background workers too (see world/milkyway)
-  const sky = Promise.all([loadStars(), bakeMilkyWayTexture(MILKY_WAY_SIZES[0])]);
+  const sky = Promise.all([loadStars(), bakeSky(MILKY_WAY_SIZES[0], true)]);
   // the rocks' relief maps bake in background workers while the rest is built here
   const reliefs = bakeReliefMaps();
   // full detail only to measure collisions from (see world/surface); drawn meshes stay light, their
@@ -189,9 +189,9 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   const fracture = fractureSet({ collision: DETAIL, near: NEAR_DETAIL, far: FAR_DETAIL }, rockPieceMaterial);
   const rock = { near: asteroidsNear, far: asteroidsFar, impostor: asteroidImpostors, collision: asteroidsCollision, fracture };
   const [catalogue, milkyWay] = await sky;
-  const stars = joinStars(catalogue, faintStars());
+  const stars = joinStars(catalogue, milkyWay.faint ?? faintStars());
   return {
-    sky: { stars, glow: milkyWay, sharp: () => bakeMilkyWayTexture(MILKY_WAY_SIZES.at(-1)!) },
+    sky: { stars, glow: milkyWay.texture, sharp: () => bakeMilkyWayTexture(MILKY_WAY_SIZES.at(-1)!) },
     // the hulls are built in code; the model files give collider, drive flame and glows
     ships: { human: humanInterceptor(human), alien: alienInterceptor(alien), sovereign: sovereign(human) },
     belt: { near: asteroidsNear, impostor: asteroidImpostors },

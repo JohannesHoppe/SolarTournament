@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { BOOST_RADIUS, Course, GATE_RADIUS, GATES, modeOfRound, ROUND_MODES, takesStart } from './race';
@@ -19,6 +20,53 @@ describe('the race course', () => {
     const b = course();
     expect(a.points.map((p) => p.toArray())).toEqual(b.points.map((p) => p.toArray()));
     expect(a.points).toHaveLength(GATES);
+  });
+
+  it('lays out the very same course in every arena, gates and racing line to the last bit', () => {
+    const hashes: Record<string, string> = {};
+    const v = new THREE.Vector3();
+    for (const arena of ARENAS) {
+      const field = testField();
+      field.generate(arena.layout);
+      const { points, line } = new Course(field, arena.layout.seed);
+      const values: number[] = points.flatMap((p) => p.toArray());
+      for (let s = 0; s < line.length; s += 400) values.push(...line.clear(s, field, v).toArray());
+      hashes[arena.id] = createHash('sha256').update(Float64Array.from(values)).digest('hex').slice(0, 16);
+    }
+    expect(hashes).toEqual({
+      belt: '1b531be159416866',
+      rings: '7160a9f7852ce8db',
+      junkyard: 'b70c039feeea2542',
+      giant: '3260211c46f75ffc',
+      corona: 'dc109b6679667dad',
+      hole: 'e73dbe9cdf579135',
+      derelict: '7b81d699994edab3',
+    });
+  });
+
+  it('bows its racing line around the rock the same way as the field moves on, to the last bit', () => {
+    const hashes: Record<string, string> = {};
+    const v = new THREE.Vector3();
+    for (const arena of ARENAS) {
+      const field = testField();
+      field.generate(arena.layout);
+      const { line } = new Course(field, arena.layout.seed);
+      const values: number[] = [];
+      for (const time of [0, 0.5, 40, 41, 120, 300]) {
+        field.setClock(time);
+        for (let s = 0; s < line.length; s += 500) values.push(...line.clear(s, field, v).toArray());
+      }
+      hashes[arena.id] = createHash('sha256').update(Float64Array.from(values)).digest('hex').slice(0, 16);
+    }
+    expect(hashes).toEqual({
+      belt: '2c84d4c60aae4bc6',
+      rings: '9c8417d8688045ff',
+      junkyard: '98373a258050406f',
+      giant: '75443ab93f440af8',
+      corona: '0ce7a263359bdd3e',
+      hole: 'a992339c86d11a00',
+      derelict: '4bac691141c9c8f1',
+    });
   });
 
   it("dives through the Rings of Saturn's layer of grains, its gates above, within and below it", () => {

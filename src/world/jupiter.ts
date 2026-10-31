@@ -190,10 +190,10 @@ export function topsTexture(): THREE.DataTexture {
     let amplitude = 1;
     for (let octave = 0, cells = 4; octave < octaves; octave++, cells *= 2, amplitude *= 0.55) {
       const angles = Float32Array.from({ length: cells * cells }, () => random.nextFloat() * Math.PI * 2);
-      const dot = (i: number, j: number, x: number, y: number) => {
-        const angle = angles[((j + cells) % cells) * cells + ((i + cells) % cells)];
-        return Math.cos(angle) * x + Math.sin(angle) * y;
-      };
+      // the lattice's gradients, their cosines and sines taken once per cell
+      const gradientX = Float64Array.from(angles, Math.cos);
+      const gradientY = Float64Array.from(angles, Math.sin);
+      const at = (i: number, j: number) => ((j + cells) % cells) * cells + ((i + cells) % cells);
       for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
           const u = (x / size) * cells;
@@ -204,8 +204,11 @@ export function topsTexture(): THREE.DataTexture {
           const fv = v - j;
           const su = fu * fu * fu * (fu * (fu * 6 - 15) + 10);
           const sv = fv * fv * fv * (fv * (fv * 6 - 15) + 10);
-          const top = dot(i, j, fu, fv) + (dot(i + 1, j, fu - 1, fv) - dot(i, j, fu, fv)) * su;
-          const bottom = dot(i, j + 1, fu, fv - 1) + (dot(i + 1, j + 1, fu - 1, fv - 1) - dot(i, j + 1, fu, fv - 1)) * su;
+          const c00 = at(i, j), c10 = at(i + 1, j), c01 = at(i, j + 1), c11 = at(i + 1, j + 1);
+          const d00 = gradientX[c00] * fu + gradientY[c00] * fv;
+          const d01 = gradientX[c01] * fu + gradientY[c01] * (fv - 1);
+          const top = d00 + (gradientX[c10] * (fu - 1) + gradientY[c10] * fv - d00) * su;
+          const bottom = d01 + (gradientX[c11] * (fu - 1) + gradientY[c11] * (fv - 1) - d01) * su;
           sums[y * size + x] += amplitude * (top + (bottom - top) * sv);
         }
       }

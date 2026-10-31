@@ -30,7 +30,7 @@ function fakeContext() {
 }
 
 /** The last target a gain was told, as of `at`. */
-const last = (targets: Targets, at = Infinity) => targets.filter(([, start]) => start <= at).at(-1)?.[0] ?? 0;
+const last = (targets: Targets, at = Infinity) => [...targets].sort((x, y) => x[1] - y[1]).filter(([, start]) => start <= at).at(-1)?.[0] ?? 0;
 
 describe('the crowd on the broadcast', () => {
   beforeEach(() => {
@@ -79,6 +79,34 @@ describe('the crowd on the broadcast', () => {
     crowd.hush();
     expect(last(gains[0])).toBe(0);
     expect(gains[0].filter(([value, at]) => at >= 11 && value > 0)).toEqual([]);
+  });
+
+  it('fades out under the results even when a cheer just before the end settles later', () => {
+    const { context, gains, clock } = fakeContext();
+    const crowd = new Crowd(context, {} as AudioNode);
+    crowd.air(true);
+    crowd.erupt();
+    clock.currentTime = 0.5;
+    crowd.finale();
+    expect(last(gains[0])).toBe(0);
+    expect(last(gains[1])).toBe(0);
+  });
+
+  it('gives up a recording that never answers and tries again later', async () => {
+    const fetch = vi.fn((_url: unknown, init?: RequestInit) => new Promise((_, reject) => init?.signal?.aborted && reject(new Error('timeout'))));
+    vi.stubGlobal('fetch', fetch);
+    // the timeout fires at once
+    vi.spyOn(AbortSignal, 'timeout').mockImplementation(() => AbortSignal.abort());
+    let now = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    const { context } = fakeContext();
+    const crowd = new Crowd(context, {} as AudioNode);
+    crowd.air(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    now = 40000;
+    crowd.swell(1, 0.2);
+    expect(fetch).toHaveBeenCalledTimes(2);
+    vi.restoreAllMocks();
   });
 
   it('takes a failed answer for no recording, and tries again only after a pause', async () => {

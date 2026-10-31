@@ -31,6 +31,8 @@ const FINALE = 3;
 const FINALE_FADE = 4;
 /** After a failed load of the recording, the first new try waits this long (s), each further one twice as long as the last. */
 const RETRY = 10;
+/** A load that neither completes nor fails is given up after this long (ms), as a failed one. */
+const LOAD_TIMEOUT = 30000;
 
 export class Crowd {
   private readonly bed: GainNode;
@@ -74,7 +76,7 @@ export class Crowd {
   private start() {
     if (this.started || this.loading || performance.now() < this.retryAt) return;
     this.loading = true;
-    fetch(new URL(RECORDING, document.baseURI))
+    fetch(new URL(RECORDING, document.baseURI), { signal: AbortSignal.timeout(LOAD_TIMEOUT) })
       .then((answer) => {
         if (!answer.ok) throw new Error(`crowd: ${answer.status}`);
         return answer.arrayBuffer();
@@ -125,6 +127,8 @@ export class Crowd {
     if (!this.live) return;
     this.live = false;
     const now = this.context.currentTime;
+    // an eruption's settling to the murmur, still scheduled, would come after the fade-out
+    for (const gain of [this.bed, this.layer]) gain.gain.cancelScheduledValues(now);
     this.bed.gain.setTargetAtTime(LEVEL, now, 0.05);
     this.layer.gain.setTargetAtTime(LAYER_LEVEL, now, 0.05);
     for (const gain of [this.bed, this.layer]) gain.gain.setTargetAtTime(0, now + FINALE, FINALE_FADE / 3);

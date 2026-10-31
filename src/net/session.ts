@@ -432,7 +432,11 @@ export class Session {
       if (this.synced || seconds() - this.startedAt >= SETTLE_MS / 1000) return;
       if (from !== this.leadId || (this.peerJoinedAt.get(from) ?? Infinity) >= this.startedAt) return;
       this.synced = true;
+      // building the field cuts the pieces of its broken rocks (seconds on a slow device): that
+      // work is no gap in the frames, only the time before the next one
+      const began = seconds();
       this.guard(() => this.onSync(field, wrecks, taken, probes));
+      if (this.lastFrameAt) this.lastFrameAt += seconds() - began;
     });
     transport.onPeerJoin((peer) => {
       if (!this.left) this.guard(() => this.onPeerJoin(peer));

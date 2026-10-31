@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ringSamples, touchRing } from './gates';
+import { ringReach, ringSamples, touchRing } from './gates';
 
 /** A ring at the origin facing +Z with the opening of a race's gate (80 m), and a ship of 17 m (the interceptors' hit radius). */
 const RADIUS = 1600;
@@ -84,5 +84,17 @@ describe("the points a ring's solid parts are sampled by", () => {
     const angles = outer.filter((p) => Math.abs(p.z + 180) < 1e-2).map((p) => Math.atan2(p.y, p.x)).sort((a, b) => a - b);
     angles.push(angles[0] + Math.PI * 2);
     for (let i = 1; i < angles.length; i++) expect((angles[i] - angles[i - 1]) * OUTER).toBeLessThanOrEqual(SPACING);
+  });
+});
+
+describe("a ring's reach", () => {
+  it('holds everything a ship can touch: nothing farther from the center touches, in any direction', () => {
+    const reach = ringReach(RADIUS);
+    const direction = new THREE.Vector3();
+    for (let i = 0; i < 4000; i++) {
+      direction.set(Math.sin(i * 12.9898), Math.cos(i * 78.233), Math.sin(i * 37.719)).normalize();
+      // beyond the reach and the ship's radius
+      expect(touchRing(center, facing, RADIUS, direction.clone().multiplyScalar(reach + SHIP * 1.01), SHIP, new THREE.Vector3())).toBe(false);
+    }
   });
 });

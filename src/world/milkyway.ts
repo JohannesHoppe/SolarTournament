@@ -177,7 +177,9 @@ export function faintStars(): StarList {
     d.set(r * Math.cos(phi), r * Math.sin(phi), z);
     milkyWayLight(d, rgb);
     if (hash(k, 3, 0, 61) > 0.05 + 4 * rgb[1]) continue;
-    directions.set([d.x, d.y, d.z], n * 3);
+    directions[n * 3] = d.x;
+    directions[n * 3 + 1] = d.y;
+    directions[n * 3 + 2] = d.z;
     // ever more stars the fainter: their count grows about 2.5 times a magnitude, so the
     // magnitude's share below m grows as 10^(0.4 m)
     const u = hash(k, 4, 0, 61);
@@ -233,32 +235,66 @@ export function milkyWayTexture(faces: Uint8Array[], size: number): THREE.CubeTe
   return texture;
 }
 
-/** The faces each background worker bakes: three workers of two faces each. */
-const WORKER_FACES = [
-  [0, 1],
-  [2, 3],
-  [4, 5],
-];
 
-/** Bakes the Milky Way at `size` in background workers (see milkyway.worker), here and now where there are none. */
+/** A worker that does not answer within this long (ms) is given up, and its share is baked here. */
+const WORKER_TIMEOUT = 30000;
+
+/** What a Milky Way worker is sent (see milkyway.worker): faces to bake at `size`, and the faint stars when `faint`. */
+export type SkyJob = { size: number; faces: number[]; faint: boolean };
+/** What it sends back: its faces, in the order it was sent them, and the faint stars if it was asked for them. */
+export type SkyPart = { faces: Uint8Array[]; faint: StarList | null };
+
+/** One job done here and now, as a worker does it. */
+export function bakeSkyPart({ size, faces, faint }: SkyJob): SkyPart {
+  return { faces: bakeMilkyWay(size, faces), faint: faint ? faintStars() : null };
+}
+
+/** One job in a background worker; where the worker cannot start, fails or stays silent, here (a startup must neither hang nor fail on a worker). */
+function bakeInWorker(job: SkyJob): Promise<SkyPart> {
+  return new Promise<SkyPart>((resolve) => {
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL('./milkyway.worker.ts', import.meta.url), { type: 'module' });
+    } catch {
+      resolve(bakeSkyPart(job));
+      return;
+    }
+    let settled = false;
+    const finish = (part?: SkyPart) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      worker.terminate();
+      resolve(part ?? bakeSkyPart(job));
+    };
+    const timer = setTimeout(() => finish(), WORKER_TIMEOUT);
+    worker.onmessage = (event: MessageEvent<SkyPart>) => finish(event.data);
+    worker.onerror = () => finish();
+    worker.onmessageerror = () => finish();
+    worker.postMessage(job);
+  });
+}
+
+/**
+ * The Milky Way's cube map at `size`, and with `faint` the faint stars (see faintStars), baked in
+ * background workers (one per spare core, up to three; the faces dealt out round the workers, the
+ * faint stars to the first), here and now where there are none.
+ */
+export async function bakeSky(size: number, faint = false): Promise<{ texture: THREE.CubeTexture; faint: StarList | null }> {
+  const faces = [0, 1, 2, 3, 4, 5];
+  if (typeof Worker === 'undefined') {
+    const part = bakeSkyPart({ size, faces, faint });
+    return { texture: milkyWayTexture(part.faces, size), faint: part.faint };
+  }
+  const count = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
+  const jobs = Array.from({ length: count }, (_, w): SkyJob => ({ size, faces: faces.filter((face) => face % count === w), faint: faint && w === 0 }));
+  const parts = await Promise.all(jobs.map(bakeInWorker));
+  const baked: Uint8Array[] = [];
+  jobs.forEach((job, w) => job.faces.forEach((face, k) => (baked[face] = parts[w].faces[k])));
+  return { texture: milkyWayTexture(baked, size), faint: parts[0].faint };
+}
+
+/** Bakes the Milky Way at `size` (see bakeSky). */
 export async function bakeMilkyWayTexture(size: number): Promise<THREE.CubeTexture> {
-  if (typeof Worker === 'undefined') return milkyWayTexture(bakeMilkyWay(size), size);
-  const parts = await Promise.all(
-    WORKER_FACES.map(
-      (faces) =>
-        new Promise<Uint8Array[]>((resolve, reject) => {
-          const worker = new Worker(new URL('./milkyway.worker.ts', import.meta.url), { type: 'module' });
-          worker.onmessage = (event: MessageEvent<Uint8Array[]>) => {
-            worker.terminate();
-            resolve(event.data);
-          };
-          worker.onerror = (error) => {
-            worker.terminate();
-            reject(new Error(`The Milky Way was not baked: ${error.message}`));
-          };
-          worker.postMessage({ size, faces });
-        }),
-    ),
-  );
-  return milkyWayTexture(parts.flat(), size);
+  return (await bakeSky(size)).texture;
 }
