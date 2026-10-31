@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { allyInLine, Bot, BOT_NAMES, evenSkills, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, reactionOf, skillsOf, startTiming, TORPEDO_CLEARANCE } from './bots';
 import { FlightModel, MAIN_THRUST, MAX_SPEED } from './flight';
 import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, strainAfter } from './ship';
@@ -220,6 +220,16 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
     const radius = jupiter.air!.radius;
     return at(x * 20, Math.sqrt((radius - depth * 20) ** 2 - (x * 20) ** 2) - radius);
   };
+  /** The bot flies its ship `seconds` under the field's gravity and its air's drag (see Game.outside), `each` called after every step. */
+  const fly = (f: AsteroidField, me: Ship, bot: Bot, seconds: number, each = () => {}) => {
+    const outside = new THREE.Vector3();
+    for (let t = 0; t < seconds; t += STEP) {
+      f.gravity(me.flight.position, outside);
+      dragOn(f.air!, me.flight.position, me.flight.velocity, STEP, outside);
+      me.flight.update(STEP, bot.think(t, [me], f), outside);
+      each();
+    }
+  };
 
   it('keep under the safe speed deep down and never let the air burn the hull', () => {
     const f = air();
@@ -257,13 +267,8 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
     me.flight.velocity.set(4500, 0, 0);
     const bot = new Bot(me, evenSkills(0.5));
     bot.lure = deep(2000, 3000);
-    const outside = new THREE.Vector3();
     const start = altitudeIn(f.air!, me.flight.position);
-    for (let t = 0; t < 4; t += STEP) {
-      f.gravity(me.flight.position, outside);
-      dragOn(f.air!, me.flight.position, me.flight.velocity, STEP, outside);
-      me.flight.update(STEP, bot.think(t, [me], f), outside);
-    }
+    fly(f, me, bot, 4);
     expect(altitudeIn(f.air!, me.flight.position)).toBeGreaterThan(start);
   });
 
@@ -281,6 +286,45 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
     rival.flight.position.copy(deep(1000, 2000));
     bot.think(3, [me, rival], f);
     expect(bot.target).toBeNull();
+  });
+
+  it('turn to a ship that hit the drive from as far as its beam shows, beyond the lock warning', () => {
+    const f = air();
+    // a kilometer down: the eye sees 790 m, the lock warning reaches 527 m
+    const me = ship('Kessler', deep(1000), at(1));
+    const bot = new Bot(me, evenSkills(0.5));
+    const ahead = ship('Laika', deep(1000, 300), at(1));
+    const shooter = ship('Halley', deep(1000, -650), at(1));
+    bot.struck(shooter, 0);
+    bot.think(0, [me, ahead, shooter], f);
+    expect(bot.target).toBe(shooter);
+  });
+
+  it('keep the speed of a coil above the deck, where the air never heats a hull at the limit', () => {
+    const f = air();
+    const me = ship('Halley', deep(-400), at(1));
+    me.flight.velocity.set(4960, 0, 0);
+    const bot = new Bot(me, skillsOf('Halley'));
+    bot.raceSpeed = MAX_SPEED;
+    bot.waypoint = deep(-400, 6000);
+    fly(f, me, bot, 1);
+    expect(me.flight.velocity.length()).toBeGreaterThan(4800);
+  });
+
+  it('keep under the safe speed deep down while they dodge a rock', () => {
+    const f = testField();
+    const depth = 1800;
+    // a rock just ahead, off the line of flight by about a ship's avoidance tube
+    f.generate({ ...jupiter, count: 0, placements: [{ kind: 'rock', type: 0, scale: 8, position: deep(depth, 300).add(at(0, 0, 1500)), orientation: new THREE.Quaternion(), solid: false }] });
+    const me = ship('Kessler', deep(depth), at(1));
+    me.inShadow = true;
+    const bot = new Bot(me, evenSkills(0.5));
+    bot.raceSpeed = MAX_SPEED;
+    bot.waypoint = deep(depth, 3000);
+    me.flight.velocity.set(0.85 * safeSpeed(altitudeIn(f.air!, me.flight.position), me.cooling), 0, 0);
+    let fastest = 0;
+    fly(f, me, bot, 5, () => (fastest = Math.max(fastest, me.flight.velocity.length() / safeSpeed(altitudeIn(f.air!, me.flight.position), me.cooling))));
+    expect(fastest).toBeLessThan(1);
   });
 
   it('lose a ship that dived under the deck, seen at a slant from above it', () => {
@@ -403,6 +447,45 @@ describe('friendly fire: the own side is hit as any other, and bots hold their f
     ally.flight.position.set(0, RADIUS, 0);
     ally.team = 1;
     expect(allyInLine(me, [me, ally, rival], f, me.flight.position, at(1), 24000, RADIUS)).toBe(false);
+  });
+
+  it('never holds fire or a torpedo for one of its own side close behind it', () => {
+    const f = field(false);
+    const me = ship('Kessler', at(-8000), at(1));
+    const ally = ship('Halley', at(-8600), at(1));
+    const rival = ship('Laika', at(8000), at(1));
+    side(me, ally);
+    expect(allyInLine(me, [me, ally, rival], f, me.flight.position, at(1), 24000, RADIUS)).toBe(false);
+    ally.flight.position.set(-9000, 0, 0);
+    expect(allyInLine(me, [me, ally, rival], f, me.flight.position, at(1), 16000, TORPEDO_CLEARANCE)).toBe(false);
+    // close beside the line ahead it still counts
+    ally.flight.position.set(-7800, RADIUS, 0);
+    expect(allyInLine(me, [me, ally, rival], f, me.flight.position, at(1), 16000, TORPEDO_CLEARANCE)).toBe(true);
+  });
+
+  it('fires back at a ship that keeps hitting its drive though the prey it chases is out of sight', () => {
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.1);
+    try {
+      const f = field(false);
+      const me = ship('Kessler', at(-8000), at(1));
+      const thief = ship('Halley', at(100000), at(1));
+      const attacker = ship('Laika', at(-12000), at(1));
+      side(me);
+      thief.team = attacker.team = 1;
+      const bot = new Bot(me, evenSkills(1));
+      bot.prey = thief;
+      let fired = false;
+      for (let t = 0; t < 6; t += STEP) {
+        // the attacker's beam hits the drive once a second
+        if (t % 1 < STEP) bot.struck(attacker, t);
+        const controls = bot.think(t, [me, thief, attacker], f);
+        fired ||= controls.fire && bot.target === attacker;
+        me.flight.update(STEP, controls, new THREE.Vector3());
+      }
+      expect(fired).toBe(true);
+    } finally {
+      random.mockRestore();
+    }
   });
 
   it('holds its laser at the battleship while one of its own side flies between', () => {

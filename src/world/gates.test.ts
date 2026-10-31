@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { touchRing } from './gates';
+import { ringSamples, touchRing } from './gates';
 
 /** A ring at the origin facing +Z with the opening of a race's gate (80 m), and a ship of 17 m (the interceptors' hit radius). */
 const RADIUS = 1600;
@@ -58,5 +58,31 @@ describe("a ring's housings", () => {
     expect(hit.touched).toBe(true);
     expect(hit.normal.z).toBeCloseTo(1);
     expect(hit.position.z).toBeCloseTo(180 + SHIP);
+  });
+});
+
+describe("the points a ring's solid parts are sampled by", () => {
+  const points = ringSamples(center, facing, RADIUS);
+  /** The 5 m the samples promise (SAMPLE_SPACING), with a hair for rounding. */
+  const SPACING = 100.01;
+  /** The band's outer face: its housings begin 20 units outside the opening, 200 thick. */
+  const OUTER = RADIUS + 20 + 200;
+
+  it('lie no farther apart than 5 m around the band and along it', () => {
+    const outer: THREE.Vector3[] = [];
+    for (let k = 0; k < points.length; k += 3) {
+      const p = new THREE.Vector3(points[k], points[k + 1], points[k + 2]);
+      if (Math.abs(Math.hypot(p.x, p.y) - OUTER) < 1e-2 && Math.abs(p.z) <= 180.01) outer.push(p);
+    }
+    // along the band: at one place around, the points on its outer face
+    const along = outer.filter((p) => Math.abs(Math.atan2(p.y, p.x)) < 1e-3).map((p) => p.z).sort((a, b) => a - b);
+    expect(along.length).toBeGreaterThan(2);
+    expect(along[0]).toBeCloseTo(-180, 1);
+    expect(along.at(-1)).toBeCloseTo(180, 1);
+    for (let i = 1; i < along.length; i++) expect(along[i] - along[i - 1]).toBeLessThanOrEqual(SPACING);
+    // around the band: the points of one end of its outer face, by angle
+    const angles = outer.filter((p) => Math.abs(p.z + 180) < 1e-2).map((p) => Math.atan2(p.y, p.x)).sort((a, b) => a - b);
+    angles.push(angles[0] + Math.PI * 2);
+    for (let i = 1; i < angles.length; i++) expect((angles[i] - angles[i - 1]) * OUTER).toBeLessThanOrEqual(SPACING);
   });
 });

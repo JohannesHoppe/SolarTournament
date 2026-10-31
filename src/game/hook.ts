@@ -81,8 +81,8 @@ const heading = new THREE.Vector3();
 const chosen = new THREE.Vector3();
 const relative = new THREE.Vector3();
 
-/** Where an anchor is now (world), or null when what it held is gone. */
-function anchorPoint(anchor: Anchor, out: THREE.Vector3): THREE.Vector3 | null {
+/** Where the cable is made fast (the bite on a rock, the ship, the core, probe or torpedo) now (world), or null when what it held is gone. */
+export function anchorPoint(anchor: Anchor, out: THREE.Vector3): THREE.Vector3 | null {
   if (anchor.mark) return out.copy(anchor.mark.position);
   if (anchor.ship) return anchor.ship.alive ? out.copy(anchor.ship.flight.position) : null;
   const object = anchor.rock.object;
@@ -233,9 +233,6 @@ export function pullOn(body: Body, anchor: Body, length: number, reeling: boolea
   else ropeOver(body, anchor, near, path.far, cable - path.between, true, moveAnchor);
   return cable;
 }
-
-/** Where the cable is made fast (the bite on a rock, the ship, the core, probe or torpedo), or null when what it held is gone. */
-export const pivotOf = (anchor: Anchor, out: THREE.Vector3): THREE.Vector3 | null => anchorPoint(anchor, out);
 
 /**
  * How close the winch reels a ship along a cable that leaves a piece's surface (from the bite,

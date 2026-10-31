@@ -173,7 +173,7 @@ const POP_CELL = POP_TILE / 16;
 const POP_SHADOW = 0.16;
 const RELIEF = 1000;
 const SHEAR = 40;
-/** The great red storm where the map shows it: its latitude (rad, 22° south), its longitude east of the map's 0 (rad, see landmarks' JUPITER_LONGITUDE), half its height (units, 2.8 km; as an oval 9 km wide). */
+/** The great red storm where the map shows it: its latitude (rad, 22° south), its longitude west of the point below the arena (rad, see landmarks' JUPITER_LONGITUDE), half its height (units, 2.8 km; as an oval 9 km wide). */
 const GREAT_STORM = { latitude: -0.38, longitude: 0.1, height: 56000 };
 
 /**

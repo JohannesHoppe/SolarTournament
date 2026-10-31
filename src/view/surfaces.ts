@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { canvas, toTexture } from './textures';
+import { noise } from '../world/nebula';
 
 /**
  * The surfaces of everything built in code, drawn on canvases from fixed seeds, so every
@@ -157,8 +158,7 @@ export function panelLayout(r: Randomizer, relief?: Wear['relief']) {
  * plating (`relief` 'flush', the Sovereign's) has thin, crisp panel lines, a few hatches outlined the same
  * way and flush bolts sunk into their corners (see panelLayout).
  */
-function panels(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, seams: number, relief?: Wear['relief']) {
-  const layout = panelLayout(r, relief);
+function panels(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, seams: number, relief?: Wear['relief'], layout = panelLayout(r, relief)) {
   const flush = relief === 'flush';
   color.strokeStyle = flush ? `rgba(0, 0, 0, ${0.1 + 0.3 * seams})` : `rgba(0, 0, 0, ${0.12 + 0.28 * seams})`;
   bump.strokeStyle = flush ? '#5c5c5c' : '#404040';
@@ -203,45 +203,48 @@ const SCALE_RADIUS = 11;
  * scale is a shade of its own, and every few a rim glows faintly in `glow`, if given.
  */
 function scales(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRenderingContext2D, seams: number, glow?: CanvasRenderingContext2D) {
+  const all: { x: number; y: number; shade: number; lit: boolean }[] = [];
   for (let row = 0; row < SIZE / SCALE_ROW; row++) {
-    const y = row * SCALE_ROW;
     for (let x = row % 2 ? SCALE_PITCH / 2 : 0; x < SIZE; x += SCALE_PITCH) {
-      const shade = r.range(-0.08, 0.08);
-      const lit = r.nextFloat() < 0.06;
-      // drawn again across the tile's edges, so the pattern wraps
+      all.push({ x, y: row * SCALE_ROW, shade: r.range(-0.08, 0.08), lit: r.nextFloat() < 0.06 });
+    }
+  }
+  // drawn again across the tile's edges, so the pattern wraps; the copies above the tile come
+  // first and those below it last, so that at the seam too every row lies over the one above it
+  for (const dy of [-SIZE, 0, SIZE]) {
+    for (const { x, y, shade, lit } of all) {
       for (const dx of [-SIZE, 0, SIZE]) {
-        for (const dy of [-SIZE, 0, SIZE]) {
-          const cx = x + dx;
-          const cy = y + dy;
-          if (cx < -SCALE_RADIUS || cx > SIZE + SCALE_RADIUS || cy < -SCALE_RADIUS || cy > SIZE + SCALE_RADIUS) continue;
-          const height = bump.createRadialGradient(cx, cy - SCALE_RADIUS * 0.6, 0, cx, cy - SCALE_RADIUS * 0.6, SCALE_RADIUS * 1.6);
-          height.addColorStop(0, '#585858');
-          height.addColorStop(1, '#b8b8b8');
-          bump.fillStyle = height;
-          bump.beginPath();
-          bump.arc(cx, cy, SCALE_RADIUS, 0, Math.PI * 2);
-          bump.fill();
-          bump.strokeStyle = '#383838';
-          bump.lineWidth = 1.2;
-          bump.beginPath();
-          bump.arc(cx, cy, SCALE_RADIUS, 0.15 * Math.PI, 0.85 * Math.PI);
-          bump.stroke();
-          color.fillStyle = shade > 0 ? `rgba(255, 255, 255, ${shade})` : `rgba(0, 0, 0, ${-shade})`;
-          color.beginPath();
-          color.arc(cx, cy, SCALE_RADIUS, 0, Math.PI * 2);
-          color.fill();
-          color.strokeStyle = `rgba(0, 0, 0, ${0.2 + 0.4 * seams})`;
-          color.lineWidth = 1.2;
-          color.beginPath();
-          color.arc(cx, cy, SCALE_RADIUS, 0.15 * Math.PI, 0.85 * Math.PI);
-          color.stroke();
-          if (glow && lit) {
-            glow.strokeStyle = 'rgba(255, 255, 255, 0.85)';
-            glow.lineWidth = 1;
-            glow.beginPath();
-            glow.arc(cx, cy, SCALE_RADIUS - 0.6, 0.25 * Math.PI, 0.75 * Math.PI);
-            glow.stroke();
-          }
+        const cx = x + dx;
+        const cy = y + dy;
+        if (cx < -SCALE_RADIUS || cx > SIZE + SCALE_RADIUS || cy < -SCALE_RADIUS || cy > SIZE + SCALE_RADIUS) continue;
+        const height = bump.createRadialGradient(cx, cy - SCALE_RADIUS * 0.6, 0, cx, cy - SCALE_RADIUS * 0.6, SCALE_RADIUS * 1.6);
+        height.addColorStop(0, '#585858');
+        height.addColorStop(1, '#b8b8b8');
+        bump.fillStyle = height;
+        bump.beginPath();
+        bump.arc(cx, cy, SCALE_RADIUS, 0, Math.PI * 2);
+        bump.fill();
+        // the free rim is the arc over the row above: the next row covers a scale's lower arc
+        bump.strokeStyle = '#383838';
+        bump.lineWidth = 1.2;
+        bump.beginPath();
+        bump.arc(cx, cy, SCALE_RADIUS, 1.15 * Math.PI, 1.85 * Math.PI);
+        bump.stroke();
+        color.fillStyle = shade > 0 ? `rgba(255, 255, 255, ${shade})` : `rgba(0, 0, 0, ${-shade})`;
+        color.beginPath();
+        color.arc(cx, cy, SCALE_RADIUS, 0, Math.PI * 2);
+        color.fill();
+        color.strokeStyle = `rgba(0, 0, 0, ${0.2 + 0.4 * seams})`;
+        color.lineWidth = 1.2;
+        color.beginPath();
+        color.arc(cx, cy, SCALE_RADIUS, 1.15 * Math.PI, 1.85 * Math.PI);
+        color.stroke();
+        if (glow && lit) {
+          glow.strokeStyle = 'rgba(255, 255, 255, 0.85)';
+          glow.lineWidth = 1;
+          glow.beginPath();
+          glow.arc(cx, cy, SCALE_RADIUS - 0.6, 1.25 * Math.PI, 1.75 * Math.PI);
+          glow.stroke();
         }
       }
     }
@@ -354,17 +357,32 @@ function engraving(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRe
   }
 }
 
+/**
+ * Draws a mark at (x, y) that reaches `reach` pixels about it, again on the far side of every
+ * tile edge it crosses, so the surface wraps without a cut at the seam.
+ */
+function wrapped(x: number, y: number, reach: number, draw: (x: number, y: number) => void) {
+  for (const dx of [0, -SIZE, SIZE]) {
+    for (const dy of [0, -SIZE, SIZE]) {
+      if (x + dx < -reach || x + dx > SIZE + reach || y + dy < -reach || y + dy > SIZE + reach) continue;
+      draw(x + dx, y + dy);
+    }
+  }
+}
+
 /** Soft patches of grime and soot. */
 function grime(r: Randomizer, color: CanvasRenderingContext2D, amount: number) {
   for (let i = 0; i < 18 * amount; i++) {
     const x = r.range(0, SIZE);
     const y = r.range(0, SIZE);
     const radius = r.range(12, 60);
-    const gradient = color.createRadialGradient(x, y, 0, x, y, radius);
-    gradient.addColorStop(0, `rgba(20, 16, 12, ${0.35 * amount})`);
-    gradient.addColorStop(1, 'rgba(20, 16, 12, 0)');
-    color.fillStyle = gradient;
-    color.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    wrapped(x, y, radius, (px, py) => {
+      const gradient = color.createRadialGradient(px, py, 0, px, py, radius);
+      gradient.addColorStop(0, `rgba(20, 16, 12, ${0.35 * amount})`);
+      gradient.addColorStop(1, 'rgba(20, 16, 12, 0)');
+      color.fillStyle = gradient;
+      color.fillRect(px - radius, py - radius, radius * 2, radius * 2);
+    });
   }
 }
 
@@ -375,13 +393,15 @@ function rust(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRenderi
     const y = Math.floor(r.range(0, 4)) * 64 + 6;
     const length = r.range(10, 48);
     const width = r.range(1.5, 5);
-    const gradient = color.createLinearGradient(0, y, 0, y + length);
-    gradient.addColorStop(0, 'rgba(140, 62, 22, 0.75)');
-    gradient.addColorStop(1, 'rgba(140, 62, 22, 0)');
-    color.fillStyle = gradient;
-    color.fillRect(x, y, width, length);
-    orm.fillStyle = ormColor(0.95, 0.05, 0.8, 0);
-    orm.fillRect(x, y, width, length * 0.6);
+    wrapped(x, y, length + width, (px, py) => {
+      const gradient = color.createLinearGradient(0, py, 0, py + length);
+      gradient.addColorStop(0, 'rgba(140, 62, 22, 0.75)');
+      gradient.addColorStop(1, 'rgba(140, 62, 22, 0)');
+      color.fillStyle = gradient;
+      color.fillRect(px, py, width, length);
+      orm.fillStyle = ormColor(0.95, 0.05, 0.8, 0);
+      orm.fillRect(px, py, width, length * 0.6);
+    });
   }
 }
 
@@ -391,19 +411,21 @@ function chips(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRender
     const x = r.range(0, SIZE);
     const y = r.range(0, SIZE);
     const size = r.range(1.5, 7);
+    // an irregular flake: a few points around the spot, the same outline in color and finish
+    const reaches = Array.from({ length: 5 }, () => size * r.range(0.5, 1.2));
     color.fillStyle = 'rgba(200, 200, 205, 0.9)';
     orm.fillStyle = ormColor(0.25, 1, 1, 0);
-    for (const g of [color, orm]) {
-      g.beginPath();
-      // an irregular flake: a few points around the spot
-      for (let k = 0; k < 5; k++) {
-        const angle = (k / 5) * Math.PI * 2;
-        const reach = size * r.range(0.5, 1.2);
-        if (k === 0) g.moveTo(x + Math.cos(angle) * reach, y + Math.sin(angle) * reach);
-        else g.lineTo(x + Math.cos(angle) * reach, y + Math.sin(angle) * reach);
+    wrapped(x, y, size * 1.2, (px, py) => {
+      for (const g of [color, orm]) {
+        g.beginPath();
+        reaches.forEach((reach, k) => {
+          const angle = (k / 5) * Math.PI * 2;
+          if (k === 0) g.moveTo(px + Math.cos(angle) * reach, py + Math.sin(angle) * reach);
+          else g.lineTo(px + Math.cos(angle) * reach, py + Math.sin(angle) * reach);
+        });
+        g.fill();
       }
-      g.fill();
-    }
+    });
   }
 }
 
@@ -457,12 +479,14 @@ function scratches(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRe
     const y = r.range(0, SIZE);
     const angle = r.range(-0.6, 0.6);
     const length = r.range(8, 40);
-    for (const g of [color, orm]) {
-      g.beginPath();
-      g.moveTo(x, y);
-      g.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
-      g.stroke();
-    }
+    wrapped(x, y, length + 1, (px, py) => {
+      for (const g of [color, orm]) {
+        g.beginPath();
+        g.moveTo(px, py);
+        g.lineTo(px + Math.cos(angle) * length, py + Math.sin(angle) * length);
+        g.stroke();
+      }
+    });
   }
 }
 
@@ -472,18 +496,20 @@ function dents(r: Randomizer, color: CanvasRenderingContext2D, bump: CanvasRende
     const x = r.range(0, SIZE);
     const y = r.range(0, SIZE);
     const radius = r.range(6, 22);
-    const dip = bump.createRadialGradient(x, y, 0, x, y, radius);
-    dip.addColorStop(0, 'rgba(40, 40, 40, 0.8)');
-    dip.addColorStop(0.75, 'rgba(110, 110, 110, 0.4)');
-    dip.addColorStop(0.9, 'rgba(170, 170, 170, 0.35)');
-    dip.addColorStop(1, 'rgba(128, 128, 128, 0)');
-    bump.fillStyle = dip;
-    bump.fillRect(x - radius, y - radius, radius * 2, radius * 2);
-    const shade = color.createRadialGradient(x, y, 0, x, y, radius);
-    shade.addColorStop(0, 'rgba(0, 0, 0, 0.18)');
-    shade.addColorStop(1, 'rgba(0, 0, 0, 0)');
-    color.fillStyle = shade;
-    color.fillRect(x - radius, y - radius, radius * 2, radius * 2);
+    wrapped(x, y, radius, (px, py) => {
+      const dip = bump.createRadialGradient(px, py, 0, px, py, radius);
+      dip.addColorStop(0, 'rgba(40, 40, 40, 0.8)');
+      dip.addColorStop(0.75, 'rgba(110, 110, 110, 0.4)');
+      dip.addColorStop(0.9, 'rgba(170, 170, 170, 0.35)');
+      dip.addColorStop(1, 'rgba(128, 128, 128, 0)');
+      bump.fillStyle = dip;
+      bump.fillRect(px - radius, py - radius, radius * 2, radius * 2);
+      const shade = color.createRadialGradient(px, py, 0, px, py, radius);
+      shade.addColorStop(0, 'rgba(0, 0, 0, 0.18)');
+      shade.addColorStop(1, 'rgba(0, 0, 0, 0)');
+      color.fillStyle = shade;
+      color.fillRect(px - radius, py - radius, radius * 2, radius * 2);
+    });
   }
 }
 
@@ -718,7 +744,7 @@ function hatches(r: Randomizer, m: PlatingMaps) {
 }
 
 /** A smooth noise wrapping across the tile: random values on a grid of `cells`, interpolated. */
-function tileNoise(r: Randomizer, cells: number): (x: number, y: number) => number {
+function plateNoise(r: Randomizer, cells: number): (x: number, y: number) => number {
   const grid = Array.from({ length: cells * cells }, () => r.nextFloat());
   const cell = PLATING / cells;
   const at = (gx: number, gy: number) => grid[(((gy % cells) + cells) % cells) * cells + (((gx % cells) + cells) % cells)];
@@ -734,8 +760,8 @@ function tileNoise(r: Randomizer, cells: number): (x: number, y: number) => numb
 
 /** Weathering over the whole tile: patches where the plating darkened or bleached, and the pits of centuries of micrometeorites. */
 function weathering(r: Randomizer, m: PlatingMaps) {
-  const patches = tileNoise(r, 8);
-  const fine = tileNoise(r, 32);
+  const patches = plateNoise(r, 8);
+  const fine = plateNoise(r, 32);
   for (let y = 0; y < PLATING; y++) {
     for (let x = 0; x < PLATING; x++) {
       const i = y * PLATING + x;
@@ -913,16 +939,19 @@ export function ravagedSurface(seed: number): PlatingSurface {
   const o = orm.createImageData(S, S);
   const n = normal.createImageData(S, S);
   const b = bump.createImageData(S, S);
+  // the normal map reads the heights themselves: the bump canvas clamps the deepest craters at its floor
+  const grays = new Float32Array(S * S);
   for (let i = 0; i < S * S; i++) {
+    grays[i] = 128 + m.height[i] * PLATING_GRAY;
     const dust = recess[i] * 0.4;
     for (let k = 0; k < 3; k++) c.data[i * 4 + k] = m.color[i * 3 + k] + ([150, 145, 136][k] - m.color[i * 3 + k]) * dust;
     o.data[i * 4] = recess[i] * 255;
     o.data[i * 4 + 1] = Math.min(1, Math.max(0, m.rough[i])) * 255;
     o.data[i * 4 + 2] = Math.min(1, Math.max(0, m.metal[i])) * 255;
-    b.data[i * 4] = b.data[i * 4 + 1] = b.data[i * 4 + 2] = 128 + m.height[i] * PLATING_GRAY;
+    b.data[i * 4] = b.data[i * 4 + 1] = b.data[i * 4 + 2] = grays[i];
     c.data[i * 4 + 3] = o.data[i * 4 + 3] = b.data[i * 4 + 3] = 255;
   }
-  n.data.set(normalPixels(b.data, S, PLATING_SLOPE));
+  n.data.set(normalPixels(grays, S, PLATING_SLOPE, 1));
   color.putImageData(c, 0, 0);
   orm.putImageData(o, 0, 0);
   normal.putImageData(n, 0, 0);
@@ -968,7 +997,7 @@ const STEP = 8;
 
 /** The battleship's armor: its color, its finish (roughness and metalness, see ormColor) and its relief as a normal map. */
 export type ArmorSurface = { map: THREE.Texture; orm: THREE.Texture; normal: THREE.Texture };
-let armored: ArmorSurface | null = null;
+const armored = new Map<number, ArmorSurface>();
 
 /**
  * A rectangle of the armor in relief pixels (it may run over the tile's edge and wraps): a
@@ -1070,24 +1099,6 @@ export function armorLayout(seed: number): ArmorLayout {
   return { plates, insets, welds, ports, bolts };
 }
 
-/** A smooth value noise of the plane (0..1), from integer hashing only: the grain of brushed metal. */
-function grain(x: number, y: number, seed: number) {
-  const hash = (i: number, j: number) => {
-    let h = Math.imul(i, 374761393) ^ Math.imul(j, 668265263) ^ Math.imul(seed, 2147483647);
-    h = Math.imul(h ^ (h >>> 13), 1274126177);
-    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-  };
-  const i = Math.floor(x);
-  const j = Math.floor(y);
-  const fx = x - i;
-  const fy = y - j;
-  const sx = fx * fx * (3 - 2 * fx);
-  const sy = fy * fy * (3 - 2 * fy);
-  const top = hash(i, j) + (hash(i + 1, j) - hash(i, j)) * sx;
-  const bottom = hash(i, j + 1) + (hash(i + 1, j + 1) - hash(i, j + 1)) * sx;
-  return top + (bottom - top) * sy;
-}
-
 /**
  * The armor drawn into plain arrays at the relief's size, wrapping at the tile's edges: heights
  * (steps of gray around 128, see normalPixels), color (sRGB, 0..255, three a pixel) and
@@ -1117,7 +1128,8 @@ export function armorRelief(seed: number) {
         const u = p.x + dx;
         const v = p.y + dy;
         const [along, across] = p.across ? [v, u] : [u, v];
-        const brush = grain(along / 160, across / 1.6, seed) * 0.6 + grain(along / 320, across / 5, seed + 1) * 0.4 - 0.5;
+        // the grain of brushed metal: smooth value noise stretched along the brushing
+        const brush = noise(along / 160, across / 1.6, seed) * 0.6 + noise(along / 320, across / 5, seed + 1) * 0.4 - 0.5;
         const under = base ? 128 : height[i];
         const cut = (Math.abs(p.lift) >= STEP ? STEP_PROFILE : FLUSH_PROFILE)[edge] ?? 0;
         height[i] = under + p.lift - (p.lift + p.line) * cut;
@@ -1186,7 +1198,8 @@ export function armorRelief(seed: number) {
  * the color, it fades evenly with distance instead of shimmering on a phone's small screen.
  */
 export function armorSurface(seed: number): ArmorSurface {
-  if (armored) return armored;
+  const kept = armored.get(seed);
+  if (kept) return kept;
   if (!drawable) return { map: new THREE.Texture(), orm: new THREE.Texture(), normal: new THREE.Texture() };
   const { height, color, rough, metal } = armorRelief(seed);
   const S = ARMOR_RELIEF_SIZE;
@@ -1213,8 +1226,9 @@ export function armorSurface(seed: number): ArmorSurface {
   const n = normalContext.createImageData(S, S);
   n.data.set(normalPixels(height, S, ARMOR_SLOPE, 1));
   normalContext.putImageData(n, 0, 0);
-  armored = { map: armorTexture(toTexture(colorCanvas)), orm: armorTexture(new THREE.CanvasTexture(ormCanvas)), normal: armorTexture(new THREE.CanvasTexture(normalCanvas)) };
-  return armored;
+  const made = { map: armorTexture(toTexture(colorCanvas)), orm: armorTexture(new THREE.CanvasTexture(ormCanvas)), normal: armorTexture(new THREE.CanvasTexture(normalCanvas)) };
+  armored.set(seed, made);
+  return made;
 }
 
 function armorTexture<T extends THREE.Texture>(texture: T): T {
@@ -1264,19 +1278,21 @@ export function industrialSurface(seed: number): Surface {
   const r = new Randomizer(seed);
   const { color, orm, bump } = blank({ roughness: 0.6, metalness: 0.45 });
   const g = color[1];
-  // patched plates: some rows' plates a shade lighter (fresh steel) or darker (old, oily), rougher or smoother
-  for (let y = 0; y < SIZE; y += 64) {
-    for (let x = 0; x < SIZE; ) {
-      const width = [32, 64, 96][r.nextInt() % 3];
-      const shade = r.range(-1, 1);
-      g.fillStyle = shade > 0 ? `rgba(255, 250, 240, ${0.18 * shade})` : `rgba(12, 14, 18, ${-0.3 * shade})`;
-      g.fillRect(x, y, width, 64);
-      orm[1].fillStyle = ormColor(0.45 + 0.3 * r.nextFloat(), 0.45, 0.6);
-      orm[1].fillRect(x, y, width, 64);
-      x += width;
-    }
-  }
-  panels(r, g, bump[1], 0.9);
+  // patched plates: some plates a shade lighter (fresh steel) or darker (old, oily), rougher or
+  // smoother, each exactly between the seams of the panels that are drawn over them
+  const layout = panelLayout(r);
+  const verticals = layout.seams.filter(([x0, , x1]) => x0 === x1);
+  verticals.forEach(([x, y], i) => {
+    const next = verticals[i + 1];
+    const width = (next && next[1] === y ? next[0] : SIZE) - x;
+    if (y >= SIZE) return;
+    const shade = r.range(-1, 1);
+    g.fillStyle = shade > 0 ? `rgba(255, 250, 240, ${0.18 * shade})` : `rgba(12, 14, 18, ${-0.3 * shade})`;
+    g.fillRect(x, y, width, PANEL_ROW);
+    orm[1].fillStyle = ormColor(0.45 + 0.3 * r.nextFloat(), 0.45, 0.6);
+    orm[1].fillRect(x, y, width, PANEL_ROW);
+  });
+  panels(r, g, bump[1], 0.9, undefined, layout);
   grime(r, g, 0.9);
   rust(r, g, orm[1], 0.45);
   chips(r, g, orm[1], 0.12);
@@ -1343,13 +1359,14 @@ export function hazardSurface(): Surface {
     c.fillStyle = `rgba(${Math.round(r.range(64, 88))}, ${Math.round(r.range(66, 90))}, 96, 0.95)`;
     o.fillStyle = ormColor(0.5, 0.9);
     b.fillStyle = '#5a5a5a';
+    // one outline for the color, the finish and the relief
+    const reaches = Array.from({ length: 6 }, () => size * r.range(0.5, 1.3));
     for (const g of [c, o, b]) {
       g.beginPath();
-      for (let k = 0; k < 6; k++) {
+      reaches.forEach((reach, k) => {
         const angle = (k / 6) * Math.PI * 2;
-        const reach = size * r.range(0.5, 1.3);
         g[k ? 'lineTo' : 'moveTo'](x + Math.cos(angle) * reach * 1.6, y + Math.sin(angle) * reach);
-      }
+      });
       g.fill();
     }
   }
@@ -2048,7 +2065,8 @@ export function networkLivery(): Surface {
   for (const u of [0.33, 0.67]) seam(u * W, fairing.top + 0.4 * fairing.height, 1.5, fairing.height * 0.6);
   color.fillStyle = '#b8389e';
   color.fillRect(0, fairing.top + 0.89 * fairing.height, W, 0.04 * fairing.height);
-  stencil('ORBITAL FREEDOM', 0.5 * W, fairing.top + 0.67 * fairing.height, 40);
+  // 30 px of monospace is about 270 px of text: it ends above the band, well before the fairing's base
+  stencil('ORBITAL FREEDOM', 0.5 * W, fairing.top + 0.5 * fairing.height, 30);
   stencil('INTERNET FOR ALL', 0.26 * W, fairing.top + 0.6 * fairing.height, 18);
   scuff(0.75 * W, fairing.top + 0.8 * fairing.height, 80);
   scuff(0.4 * W, fairing.top + 0.48 * fairing.height, 60);
