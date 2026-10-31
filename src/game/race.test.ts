@@ -44,6 +44,31 @@ describe('the race course', () => {
     });
   });
 
+  it('bows its racing line around the rock the same way as the field moves on, to the last bit', () => {
+    const hashes: Record<string, string> = {};
+    const v = new THREE.Vector3();
+    for (const arena of ARENAS) {
+      const field = testField();
+      field.generate(arena.layout);
+      const { line } = new Course(field, arena.layout.seed);
+      const values: number[] = [];
+      for (const time of [0, 0.5, 40, 41, 120, 300]) {
+        field.setClock(time);
+        for (let s = 0; s < line.length; s += 500) values.push(...line.clear(s, field, v).toArray());
+      }
+      hashes[arena.id] = createHash('sha256').update(Float64Array.from(values)).digest('hex').slice(0, 16);
+    }
+    expect(hashes).toEqual({
+      belt: '2c84d4c60aae4bc6',
+      rings: '9c8417d8688045ff',
+      junkyard: '98373a258050406f',
+      giant: '75443ab93f440af8',
+      corona: '0ce7a263359bdd3e',
+      hole: 'a992339c86d11a00',
+      derelict: '4bac691141c9c8f1',
+    });
+  });
+
   it("dives through the Rings of Saturn's layer of grains, its gates above, within and below it", () => {
     const rings = ARENAS.find((arena) => arena.id === 'rings')!;
     const layer = rings.grains!;
