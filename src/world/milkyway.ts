@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Noise } from './noise';
 import { celestial, cubeDirection, galactic, galacticVector } from './celestial';
 import { magnitudeFlux, starColor, type StarList } from './starfile';
 
@@ -31,43 +32,13 @@ function hash(x: number, y: number, z: number, seed: number): number {
   return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
 }
 
-/** The lattice of the noise: a shuffle of LATTICE places and a value (0 to 1) at each, from the hash, the same on every machine. */
-const LATTICE = 512;
-const shuffle = (() => {
-  const order = Array.from({ length: LATTICE }, (_, i) => i);
-  for (let i = LATTICE - 1; i > 0; i--) {
-    const j = Math.floor(hash(i, 7, 3, 1) * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
-  }
-  return Int32Array.from([...order, ...order]);
-})();
-const lattice = Float32Array.from({ length: LATTICE }, (_, i) => hash(i, 11, 5, 2));
-const wrap = (i: number) => i & (LATTICE - 1);
-const corner = (x: number, y: number, z: number) => lattice[shuffle[shuffle[shuffle[wrap(x)] + wrap(y)] + wrap(z)]];
-
-/** Smooth value noise in space (0 to 1): the lattice's values, blended by a quintic; `seed` shifts it to another place of the lattice. */
+/** One value noise per seed (see world/noise): `seed` shifts the pattern to another place. */
+const noises = new Map<number, Noise>();
+/** Smooth value noise in space (0 to 1). */
 function noise(x: number, y: number, z: number, seed: number): number {
-  const ix = Math.floor(x);
-  const iy = Math.floor(y);
-  const iz = Math.floor(z);
-  const fx = x - ix;
-  const fy = y - iy;
-  const fz = z - iz;
-  const u = fx * fx * fx * (fx * (fx * 6 - 15) + 10);
-  const v = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
-  const w = fz * fz * fz * (fz * (fz * 6 - 15) + 10);
-  const x0 = ix + seed * 101;
-  const a = corner(x0, iy, iz);
-  const b = corner(x0 + 1, iy, iz);
-  const c = corner(x0, iy + 1, iz);
-  const d = corner(x0 + 1, iy + 1, iz);
-  const e = corner(x0, iy, iz + 1);
-  const f = corner(x0 + 1, iy, iz + 1);
-  const g = corner(x0, iy + 1, iz + 1);
-  const h = corner(x0 + 1, iy + 1, iz + 1);
-  const near = a + (b - a) * u + (c + (d - c) * u - a - (b - a) * u) * v;
-  const far = e + (f - e) * u + (g + (h - g) * u - e - (f - e) * u) * v;
-  return near + (far - near) * w;
+  let source = noises.get(seed);
+  if (!source) noises.set(seed, (source = new Noise(seed)));
+  return 0.5 + 0.5 * source.sample(x, y, z);
 }
 
 /** Noise of `octaves` octaves on the unit sphere at `frequency` (cycles across a radian, about), each half as strong as the last (0 to 1). */
