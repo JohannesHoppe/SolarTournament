@@ -5,7 +5,7 @@ describe('srgbByte', () => {
   it('maps black, white and the standard mid-points', () => {
     expect(srgbByte(0)).toBe(0);
     expect(srgbByte(1)).toBe(255);
-    expect(srgbByte(0.2140411)).toBe(128); // sRGB 0.5
+    expect(srgbByte(0.5)).toBe(188); // sRGB 0.7354 of 255
     expect(srgbByte(0.001)).toBe(3); // the linear toe: 12.92 per unit
   });
 
