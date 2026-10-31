@@ -11,7 +11,8 @@ import { motionOf, type Asteroid, type AsteroidField, type ShovedState } from '.
  *
  * The field is cut into families: a piece the layout placed (a root, see AsteroidField.roots)
  * and every piece it breaks into. A family's state is all that can drift: which of its pieces
- * broke and when (their pieces follow from that), their hits, and the motion of each piece
+ * broke and when (their pieces follow from that, unless one went to dust: crumbled or ground by
+ * a comet's head, see AsteroidField.crumble), their hits, and the motion of each piece
  * something moved (a knock, a ram, a comet's shove, see ShovedState). A piece that moves as the
  * layout or its break gave it follows from the field time and is not sent.
  *
@@ -44,8 +45,8 @@ const LOOK_AHEAD = 30;
 export const EASE_REACH = 1000;
 const EASE_TURN = 0.35;
 
-/** A family of pieces as the lead sends it: its root, its breaks (id, field time), its pieces standing (id, hits) and the motion of each of them something moved. */
-export type FamilyState = { r: string; x: [string, number][]; a: [string, number][]; m: ShovedState[] };
+/** A family of pieces as the lead sends it: its root, its breaks (id, field time), which of them went to dust without pieces (crumbled, or ground by a comet), its pieces standing (id, hits) and the motion of each of them something moved. */
+export type FamilyState = { r: string; x: [string, number][]; d: string[]; a: [string, number][]; m: ShovedState[] };
 /** A slice of the field: the lead's field time, which slice, and its families. */
 export type FieldSlice = { t: number; i: number; f: FamilyState[] };
 
@@ -60,8 +61,8 @@ export function fieldSlice(field: AsteroidField, index: number): FieldSlice {
     t: field.clock,
     i: index,
     f: sliceRoots(field, index).map((root) => {
-      const { alive, broken } = field.familyOf(root);
-      return { r: root, x: broken.map(([id, at]) => [id, at]), a: alive.map((a) => [a.id, a.hitPoints]), m: alive.flatMap((a) => (a.shovedBy === null ? [] : [motionOf(a)])) };
+      const { alive, broken, dust } = field.familyOf(root);
+      return { r: root, x: broken.map(([id, at]) => [id, at]), d: dust, a: alive.map((a) => [a.id, a.hitPoints]), m: alive.flatMap((a) => (a.shovedBy === null ? [] : [motionOf(a)])) };
     }),
   };
 }
@@ -86,12 +87,13 @@ export function syncField(field: AsteroidField, slice: FieldSlice, take: (state:
   for (const family of slice.f) {
     if (!roots.has(family.r) || family.m.some((state) => !take(state))) continue;
     const mine = field.familyOf(family.r);
-    if (inFlight(mine.broken, family.x, slice.t) || !field.familyReady(family.r, family.x)) continue;
+    if (inFlight(mine.broken, family.x, slice.t) || !field.familyReady(family.r, family.x, family.d)) continue;
     // what each piece standing looks like now, to glide from there
     const was = new Map(mine.alive.map((a) => [a.id, { position: a.object.position.clone(), turn: a.object.quaternion.clone() }]));
     const moved = new Map(family.m.map((state) => [state.id, state]));
-    if (!sameBreaks(mine.broken, family.x) || !sameStanding(mine.alive, family.a) || mine.alive.some((a) => a.shovedBy !== null && !moved.has(a.id) && a.generation > 0)) {
-      field.rebuildFamily(family.r, family.x);
+    const sameDust = mine.dust.length === family.d.length && family.d.every((id) => mine.dust.includes(id));
+    if (!sameBreaks(mine.broken, family.x) || !sameDust || !sameStanding(mine.alive, family.a) || mine.alive.some((a) => a.shovedBy !== null && !moved.has(a.id) && a.generation > 0)) {
+      field.rebuildFamily(family.r, family.x, family.d);
       result.rebuilt++;
     }
     const hits = new Map(family.a);

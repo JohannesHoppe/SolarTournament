@@ -156,6 +156,42 @@ describe("a comet's head", () => {
     // two Belt fields generated and flown for 20 seconds: a few seconds on a busy machine
   });
 
+  it('grinds a fragment in its way to dust, and the fragments of a rock it breaks with it: no piece of a piece is ever born', () => {
+    const belt = layoutOf('belt');
+    const field = testField();
+    field.generate(belt);
+    const [first, second] = [...field.asteroids.values()].filter((a) => !a.solid);
+    // a fragment of a rock broken before the comet comes
+    field.setClock(10);
+    field.shatter(second.id, 10);
+    const fragment = field.asteroids.get(`${second.id}.0`)!;
+    const ground: string[] = [];
+    for (const [target, at] of [
+      [first, 40],
+      [fragment, 70],
+    ] as const) {
+      const comet = makeComet(at, new THREE.Vector3(1, 0.1, 0.3).normalize(), field.positionOf(target, at, new THREE.Vector3()), 5);
+      const struck: string[] = [];
+      for (let time = at - 10; time < at + 10; time += 1 / 60) {
+        field.setClock(time);
+        runDown(comet, field, time, (rock) => struck.push(rock.id));
+      }
+      expect(struck).toContain(target.id);
+      ground.push(...struck.filter((id) => id.includes('.')));
+    }
+    expect(field.asteroids.has(first.id) || field.asteroids.has(fragment.id)).toBe(false);
+    // what the head met of a broken rock went to dust: nothing of the second generation, the rock's pieces in its way gone too
+    expect([...field.asteroids.values()].some((a) => a.generation === 2)).toBe(false);
+    expect(ground).toContain(fragment.id);
+    expect(ground.some((id) => id.startsWith(`${first.id}.`))).toBe(true);
+    const state = field.snapshot();
+    for (const id of ground) expect(state.d).toContain(id);
+    // a newcomer's field from the snapshot holds the same pieces
+    const newcomer = testField();
+    newcomer.restore(JSON.parse(JSON.stringify(state)), belt);
+    expect([...newcomer.asteroids.keys()].sort()).toEqual([...field.asteroids.keys()].sort());
+  });
+
   it("breaks up on the wreck's hull, which takes its momentum the same way on every browser, and a newcomer's snapshot carries it", () => {
     const derelict = layoutOf('derelict');
     const [a, b, c] = [testField(), testField(), testField()];

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { testField } from '../test/field';
 import { arenaById } from './arenas';
-import { EASE_SECONDS, KNOCKED, type AsteroidField } from './asteroids';
+import { CRUMBLE_AFTER, EASE_SECONDS, KNOCKED, type AsteroidField } from './asteroids';
 import { FieldContacts } from './contacts';
 import { EASE_REACH, fieldSlice, SYNC_EVERY, SYNC_SLICES, syncField } from './fieldsync';
 import { Randomizer } from '../random';
@@ -101,6 +101,50 @@ describe("the lead's sync of the field", () => {
     cycle(lead, newcomer, new FieldContacts());
     expect(stateOf(newcomer)).toEqual(stateOf(lead));
   }, 60000);
+
+  it('never holds a piece gone to dust: one crumbled, or ground by a comet, is gone from a family built again from the lead', () => {
+    const layout = arenaById('belt')!.layout;
+    const [lead, follower] = [testField(), testField()];
+    for (const field of [lead, follower]) field.generate(layout);
+    const [rock, other] = [...lead.asteroids.values()].filter((a) => !a.solid).map((a) => a.id);
+    for (const field of [lead, follower]) {
+      field.setClock(10);
+      field.shatter(rock, 10);
+      field.shatter(other, 10);
+    }
+    // only the lead heard of the second break, whose pieces crumble; and only the lead's comet ground a fragment of the other rock
+    lead.setClock(12);
+    follower.setClock(12);
+    lead.shatter(`${rock}.1`, 12);
+    lead.pulverize(`${other}.0`, 12);
+    const step = (to: number) => {
+      while (lead.clock < to) {
+        lead.update(1 / 60);
+        follower.update(1 / 60);
+        lead.crumble();
+        follower.crumble();
+      }
+    };
+    step(12 + CRUMBLE_AFTER + 5);
+    expect(lead.familyOf(rock).alive.some((a) => a.generation === 2)).toBe(false);
+    expect(lead.familyOf(rock).dust.length).toBeGreaterThanOrEqual(2);
+    const index = (id: string) => lead.roots.indexOf(id) % SYNC_SLICES;
+    for (const id of [rock, other]) {
+      expect(syncField(follower, JSON.parse(JSON.stringify(fieldSlice(lead, index(id))))).rebuilt).toBe(1);
+      expect(follower.familyOf(id).alive.map((a) => a.id).sort()).toEqual(lead.familyOf(id).alive.map((a) => a.id).sort());
+      // a second sync finds nothing to set right
+      expect(syncField(follower, JSON.parse(JSON.stringify(fieldSlice(lead, index(id))))).rebuilt).toBe(0);
+    }
+    expect(follower.asteroids.has(`${other}.0`)).toBe(false);
+    expect([...follower.asteroids.keys()].some((id) => id.startsWith(`${other}.0.`))).toBe(false);
+    step(lead.clock + 1);
+    expect(stateOf(follower)).toEqual(stateOf(lead));
+    // and the check takes the dust a slice names, never a piece of another family
+    const slice = JSON.parse(JSON.stringify(fieldSlice(lead, index(rock))));
+    expect(fieldSync(slice)).not.toBeNull();
+    slice.f.find((f: { r: string }) => f.r === rock).d.push(`${other}.0`);
+    expect(fieldSync(slice)).toBeNull();
+  });
 
   it('eases a small correction in, and sets a large one at once', () => {
     const layout = arenaById('belt')!.layout;

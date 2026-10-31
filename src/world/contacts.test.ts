@@ -46,6 +46,8 @@ function play(arena: ArenaProfile, frames: () => number, until = ROUND, check?: 
     }
     for (const comet of comets) if (field.clock >= cometStart(comet) && field.clock <= cometEnd(comet)) runDown(comet, field, field.clock, () => {});
     contacts.run(field);
+    // the smallest pieces crumble after the contacts of the frame, as in the game
+    field.crumble();
     if (check && Math.floor(field.clock) > second) {
       second = Math.floor(field.clock);
       check(field, contacts);
@@ -139,11 +141,52 @@ describe('the field meets itself', () => {
     const ragged = play(arena, () => 1 / 144 + random.nextFloat() * (1 / 20 - 1 / 144));
     expect(steady.contacts.contacts).toBeGreaterThan(10);
     expect(ragged.contacts.contacts).toBe(steady.contacts.contacts);
+    // pieces crumbled in the round, at the same field times
+    const dust = (field: AsteroidField) => {
+      const state = field.snapshot();
+      return state.x.filter((x) => state.d?.includes(x.id)).map((x) => `${x.id} ${x.b}`).sort();
+    };
+    expect(dust(steady.field).length).toBeGreaterThan(0);
+    expect(dust(ragged.field)).toEqual(dust(steady.field));
     // both at the round's end
     steady.field.setClock(ROUND);
     ragged.field.setClock(ROUND);
     expect(stateOf(ragged.field)).toEqual(stateOf(steady.field));
   }, 120000);
+
+  it('never meets a piece once it crumbled, though the frame it crumbles in falls after that step', () => {
+    /** The knocks a piece of a piece takes flying into a hull section just as it crumbles, the field run in frames of `frame` seconds. */
+    const knocks = (frame: number) => {
+      const field = testField();
+      field.generate({ key: 'crumble', seed: 1, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: 1, inner: 0, spin: 0, toughness: 800, placements: [
+        { kind: 'rock', type: 0, scale: 4, position: new THREE.Vector3(), orientation: new THREE.Quaternion(), solid: false },
+        { kind: 'hull', type: 0, scale: 1, position: new THREE.Vector3(30000, 0, 0), orientation: new THREE.Quaternion(), solid: true },
+      ] });
+      field.shatter('h0', 10.05);
+      field.shatter('h0.0', 10.05);
+      const piece = field.asteroids.get('h0.0.0')!;
+      for (const a of [...field.asteroids.values()]) if (a !== piece) field.pulverize(a.id, 10.05);
+      // at 3 km/s, its center 30 m inside the hull's face (at 1,450 m) a tenth of a second after it crumbles, far off it a step before
+      const crumbles = piece.crumbles;
+      const face = 30000 - 1000;
+      const speed = 60000;
+      expect(piece.radius).toBeLessThan(speed * 0.1);
+      field.move({ id: piece.id, b: crumbles - 1, p: [face + 600 - speed * 1.1, 0, 0], v: [speed, 0, 0], q: [0, 0, 0, 1], s: [0, 1, 0, 0], c: KNOCKED });
+      const contacts = new FieldContacts();
+      const states: number[] = [];
+      for (let t = crumbles - 2; t < crumbles + 1; ) {
+        t = Math.min(crumbles + 1, t + frame);
+        field.setClock(t);
+        for (const state of contacts.run(field)) if (state.id === piece.id) states.push(state.b);
+        field.crumble();
+      }
+      expect(field.asteroids.has(piece.id)).toBe(false);
+      return states;
+    };
+    expect(knocks(1 / 60)).toEqual([]);
+    // a long frame that holds the steps on both sides of it
+    expect(knocks(0.45)).toEqual([]);
+  });
 
   it('plays on alike after a snapshot taken halfway', () => {
     const arena = arenaById('belt')!;

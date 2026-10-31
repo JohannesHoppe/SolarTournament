@@ -250,19 +250,21 @@ export class FieldContacts {
     const at = field.positionOf(piece, time, gapAt);
     let gap = Infinity;
     for (const other of field.asteroids.values()) {
-      if (other === piece) continue;
+      if (other === piece || other.crumbles <= time) continue;
       gap = Math.min(gap, at.distanceTo(field.positionOf(other, time, gapOther)) - piece.radius - other.radius);
     }
     for (const fixture of this.fixtures) gap = Math.min(gap, at.distanceTo(fixture.position) - piece.radius - fixture.reach);
     return Math.max(0, gap);
   }
 
-  /** The pieces at field time `time`, sorted along x by where their bounding spheres begin (ties by id), each posed then. */
+  /** The pieces at field time `time` (none crumbled by then, see AsteroidField.crumble), sorted along x by where their bounding spheres begin (ties by id), each posed then. */
   private gather(field: AsteroidField, time: number) {
     const entries = this.entries;
     entries.length = 0;
     let i = 0;
     for (const piece of field.asteroids.values()) {
+      // a piece crumbled by then is gone, though the field takes it only after the frame's steps
+      if (piece.crumbles <= time) continue;
       const entry = (this.pool[i] ??= { piece, at: new THREE.Vector3(), low: 0, mass: 0, moving: false });
       entry.piece = piece;
       field.positionOf(piece, time, entry.at);

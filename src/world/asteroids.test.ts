@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { ARENAS, RING_SHEET } from './arenas';
 import { ARENA_LIMIT } from './arena';
-import { impostorDistance, IMPOSTOR_MIN, KNOCKED, SPIN_RATE, type AsteroidField, type FieldLayout } from './asteroids';
+import { CRUMBLE_AFTER, CRUMBLE_SECONDS, impostorDistance, IMPOSTOR_MIN, KNOCKED, SPIN_RATE, type AsteroidField, type FieldLayout } from './asteroids';
 import { testField } from '../test/field';
 import { DETAIL } from './rocks';
 
@@ -220,6 +220,69 @@ describe('a rock that breaks', () => {
     expect(positions(newcomer)).toEqual(positions(lead));
     const quaternions = (f: AsteroidField) => [...f.asteroids.values()].map((a) => a.object.quaternion.toArray().map((v) => v.toFixed(5)).join(','));
     expect(quaternions(newcomer)).toEqual(quaternions(lead));
+  });
+});
+
+describe('the smallest pieces', () => {
+  const belt = ARENAS.find((a) => a.id === 'belt')!.layout;
+  /** A Belt field run from `from` to `to` in frames of `frame` seconds, crumbling after every frame as the game does; rock 3 breaks at 12 s and its piece 3.2 at 15 s, when the frames pass them. */
+  const run = (field: AsteroidField, from: number, to: number, frame: number) => {
+    for (let t = from; t < to; ) {
+      t = Math.min(to, t + frame);
+      field.setClock(t);
+      if (field.asteroids.has('3') && t >= 12) field.shatter('3', 12);
+      if (field.asteroids.has('3.2') && t >= 15) field.shatter('3.2', 15);
+      field.crumble();
+    }
+  };
+  const smallest = (field: AsteroidField) => [...field.asteroids.values()].filter((a) => a.generation === 2).map((a) => a.id).sort();
+
+  it(`crumble ${CRUMBLE_AFTER} s after they broke off, at the same field time on every browser however the frames fall, and after a snapshot taken halfway`, () => {
+    const [steady, ragged, newcomer] = [testField(), testField(), testField()];
+    for (const field of [steady, ragged, newcomer]) field.generate(belt);
+    const crumbles = 15 + CRUMBLE_AFTER;
+    run(steady, 0, crumbles - 0.01, 1 / 60);
+    run(ragged, 0, crumbles - 0.01, 1 / 7);
+    expect(smallest(steady).length).toBeGreaterThanOrEqual(2);
+    expect(smallest(ragged)).toEqual(smallest(steady));
+    // a newcomer from a snapshot taken halfway
+    const half = testField();
+    half.generate(belt);
+    run(half, 0, 60, 1 / 60);
+    newcomer.restore(JSON.parse(JSON.stringify(half.snapshot())), belt);
+    run(newcomer, 60, crumbles - 0.01, 1 / 23);
+    expect(smallest(newcomer)).toEqual(smallest(steady));
+    const pieces = smallest(steady);
+    for (const field of [steady, ragged, newcomer]) {
+      run(field, field.clock, crumbles + 0.2, 1 / 13);
+      expect(smallest(field)).toEqual([]);
+      // gone at its own field time, never at the frame's: the snapshot lists each as dust then
+      const state = field.snapshot();
+      for (const id of pieces) {
+        expect(state.x.find((x) => x.id === id)?.b).toBeCloseTo(crumbles, 3);
+        expect(state.d).toContain(id);
+      }
+      // the fragments of the rock stand on as cover
+      expect(field.asteroids.has('3.0') && field.asteroids.has('3.1')).toBe(true);
+    }
+    // the dust is drawn for CRUMBLE_SECONDS, shrinking, and then gone from the picture too
+    const drawn = steady.group.children.length;
+    run(steady, steady.clock, crumbles + CRUMBLE_SECONDS + 0.1, 1 / 60);
+    expect(steady.group.children.length).toBe(drawn - pieces.length);
+    expect(steady.group.children.length).toBe(steady.asteroids.size);
+  });
+
+  it('are gone for whatever looks at the field at a field time past their crumbling (where a probe shows up)', () => {
+    const field = testField();
+    field.generate(belt);
+    run(field, 0, 20, 1 / 60);
+    const piece = field.asteroids.get(smallest(field)[0])!;
+    const later = piece.crumbles + 1;
+    const there = field.positionOf(piece, later, new THREE.Vector3());
+    const others = [...field.asteroids.values()].filter((a) => a !== piece && field.positionOf(a, later, new THREE.Vector3()).distanceTo(there) < a.radius + piece.radius + 200);
+    for (const a of others) field.asteroids.delete(a.id);
+    expect(field.overlapAt(there, 100, piece.crumbles - 1)).toBe(true);
+    expect(field.overlapAt(there, 100, later)).toBe(false);
   });
 });
 

@@ -472,8 +472,9 @@ const LOOK_BACK = 3;
  * The head runs down what stands in its way: a rock or hull piece it touches is struck at the
  * first moment of a grid of BREAK_STEP (s) of field time at which it touched it (looked for up
  * to LOOK_BACK back), so every browser strikes it at the same field time, however its frames
- * fell. A rock breaks (its fragments, deterministic from the rock and that time, fly alike
- * everywhere; those born in the head's way go the same way) and `broke` hears of it. On the
+ * fell. A whole rock breaks (its fragments, deterministic from the rock and that time, fly alike
+ * everywhere); a piece of one (a fragment, broken junk) goes to dust without pieces, and so do
+ * the fragments born in the head's way. `broke` hears of each. On the
  * first solid piece its own shape meets (a hull section, the junkyard's hub) the head breaks up,
  * as on the battleship's hull, and the piece takes its momentum (see strikeWall); what lies
  * beyond it is never reached. Once the well swallowed the head, or it broke up, it strikes
@@ -502,7 +503,8 @@ export function runDown(comet: Comet, field: AsteroidField, time: number, broke:
     const at = firstTouch(comet, field, rock, time, touches);
     // what lies beyond where it broke up, it never reaches
     if (at === null || at >= wallAt) continue;
-    const broken = field.shatter(rock.id, at);
+    // a whole rock breaks into its fragments, a piece of one goes to dust
+    const broken = rock.generation === 0 ? field.shatter(rock.id, at) : field.pulverize(rock.id, at);
     if (broken) broke(broken);
   }
   if (wall) strikeWall(comet, field, wall, wallAt, shoved);

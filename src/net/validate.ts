@@ -177,9 +177,19 @@ export function shovedState(x: unknown): ShovedState | null {
 export function fieldState(x: unknown): FieldState | null {
   if (!isRecord(x)) return null;
   const state = complete<FieldState>({ k: id(x.k), t: num(x.t, 0, MAX_FIELD_TIME), a: listOf(x.a, MAX_ROCKS, asteroidState), x: listOf(x.x, MAX_ROCKS, breakState) });
-  if (!state || x.m === undefined) return state;
-  const moved = listOf(x.m, MAX_ROCKS, shovedState);
-  return moved ? { ...state, m: moved } : null;
+  if (!state) return null;
+  const moved = x.m === undefined ? undefined : listOf(x.m, MAX_ROCKS, shovedState);
+  const dust = x.d === undefined ? undefined : dustOf(x.d, MAX_ROCKS, state.x.map((b) => b.id));
+  if (moved === null || dust === null) return null;
+  return { ...state, ...(moved && { m: moved }), ...(dust && { d: dust }) };
+}
+
+/** The ids of breaks gone to dust (see world/asteroids, FieldState), each one of `broken`, or null. */
+function dustOf(x: unknown, max: number, broken: readonly string[]): string[] | null {
+  return listOf(x, max, (entry) => {
+    const piece = id(entry);
+    return piece && broken.includes(piece) ? piece : null;
+  });
 }
 
 /** A family of the field (see world/fieldsync) never holds more pieces than this: a root, its 3 pieces and their 9 (1 + 3 + 9). */
@@ -207,7 +217,8 @@ export function fieldSync(x: unknown): FieldSlice | null {
     const root = id(family.r);
     if (!root || rootOf(root) !== root) return null;
     const moved = listOf(family.m, MAX_FAMILY, shovedState);
-    const state = complete<FamilyState>({ r: root, x: familyList(family.x, root, MAX_FIELD_TIME), a: familyList(family.a, root, 1000), m: moved });
+    const breaks = familyList(family.x, root, MAX_FIELD_TIME);
+    const state = complete<FamilyState>({ r: root, x: breaks, d: breaks && dustOf(family.d, MAX_FAMILY, breaks.map(([piece]) => piece)), a: familyList(family.a, root, 1000), m: moved });
     return state && state.m.every((m) => rootOf(m.id) === root) ? state : null;
   });
   return t === null || i === null || !families ? null : { t, i, f: families };

@@ -5,7 +5,7 @@ import { testField } from '../test/field';
 import type { Asteroid, AsteroidField } from '../world/asteroids';
 import { IMMOVABLE, MASS, type Body } from '../world/bodies';
 import { Cable, CUT_MARGIN, WRAP_MAX } from './cable';
-import { clearOf, pullOn } from './hook';
+import { anchorPoint, clearOf, pullOn, type Anchor } from './hook';
 import { HOOK_FLING, HOOK_STANDOFF } from './school';
 
 const DT = 1 / 120;
@@ -115,6 +115,34 @@ describe('a cable lying on the field', () => {
     field.shatter(rock.id, field.clock);
     expect(cable.follow(field, start, end, true)).toBe(true);
     for (const [from, to] of stretches(cable, start, end)) expect(through(field, from, to)).toBe(false);
+  });
+
+  it('lets go of a wrap on a piece that crumbles to dust, never snapping for it, and so does a hook bitten into it', () => {
+    const { field, rock, start, end, cable } = acrossRock();
+    field.shatter(rock.id, 0);
+    // a piece of a piece: the smallest, which crumbles
+    const parent = [...field.asteroids.values()].sort((a, b) => b.meanRadius - a.meanRadius)[0];
+    field.shatter(parent.id, 0);
+    const piece = [...field.asteroids.values()].filter((a) => a.generation === 2).sort((a, b) => b.meanRadius - a.meanRadius)[0];
+    for (const a of [...field.asteroids.values()]) if (a !== piece) field.pulverize(a.id, 0);
+    expect([...field.asteroids.values()]).toEqual([piece]);
+    // a cable across it, wrapped on it
+    const across = { start: piece.object.position.clone().add(new THREE.Vector3(piece.radius + 3000, 0, -piece.radius - 3000)), end: piece.object.position.clone().add(new THREE.Vector3(piece.radius + 3000, 0, piece.radius + 3000)) };
+    start.copy(across.start);
+    end.copy(across.end);
+    for (let x = end.x; cable.count === 0 && x > piece.object.position.x - piece.radius - 3000; x -= 50) {
+      end.x = x;
+      expect(cable.follow(field, start, end, true)).toBe(true);
+    }
+    expect(cable.count).toBeGreaterThan(0);
+    const hook: Anchor = { rock: piece, local: new THREE.Vector3(), ship: null, mark: null };
+    expect(anchorPoint(hook, new THREE.Vector3())).not.toBeNull();
+    field.setClock(piece.crumbles);
+    field.crumble();
+    expect(field.asteroids.size).toBe(0);
+    expect(cable.follow(field, start, end, true)).toBe(true);
+    expect(cable.count).toBe(0);
+    expect(anchorPoint(hook, new THREE.Vector3())).toBeNull();
   });
 
   it('keeps its length through wrap and unwrap: no jump where it starts or stops lying on the rock', () => {

@@ -3240,6 +3240,8 @@ export class Game implements OnlineGame {
       stepped ||= running;
       this.field.update(dt / steps);
       if (running) this.knock();
+      // after the contacts of the step, which still meet a piece up to the field time it crumbles
+      for (const piece of this.field.crumble()) this.effects.crumble(piece.object.position, piece.meanRadius, piece.velocity);
     }
     // the screen shows the round as the last step left it, once a frame
     if (stepped && this.me && (this.state === 'playing' || (this.state === 'paused' && !!this.online))) this.presentRound();

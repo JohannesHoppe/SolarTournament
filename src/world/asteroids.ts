@@ -16,6 +16,15 @@ export const SPIN_RATE = 0.04;
 const FRAGMENT_SCALE = 0.55;
 /** A rock breaks twice at most: rock, fragments, and their fragments, which are gone when they break. */
 const MAX_GENERATION = 2;
+/**
+ * The smallest pieces (MAX_GENERATION) crumble to dust this long after they broke off (s of
+ * field time): rubble does not pile up over a round, so the field keeps track of few pieces,
+ * while the fragments of a rock, the cover the field offers, stay. Decided by the field time
+ * alone, so every browser loses the same piece at the same field time without a message.
+ */
+export const CRUMBLE_AFTER = 90;
+/** How long a crumbled piece is still seen, shrinking into its dust (s): it collides with nothing any more. */
+export const CRUMBLE_SECONDS = 2;
 /** Speed fragments fly apart with (units/s, 7.5 m/s, 60 % to 140 % of it), on top of the parent's drift and its spin. */
 const FRAGMENT_SPEED = 150;
 /** How fast a piece of a broken rock tumbles besides its parent's spin: up to this share of the layout's spin, about an axis of its own. */
@@ -167,6 +176,8 @@ export interface Asteroid {
   orbitRate: number;
   /** Field time (s) the rock came into being, and its position and orientation then. */
   born: number;
+  /** Field time (s) it crumbles to dust (see CRUMBLE_AFTER), from when it broke off, whatever moved it since; Infinity for a piece that lasts. */
+  crumbles: number;
   basePosition: THREE.Vector3;
   baseOrientation: THREE.Quaternion;
   /** Ellipsoid in the object's own coordinates. */
@@ -240,6 +251,8 @@ export type FieldState = {
   a: AsteroidState[];
   /** every rock broken so far and the field time it broke, so its fragments start where they did */
   x: { id: string; b: number }[];
+  /** those of them gone to dust without pieces of their own (crumbled, or ground by a comet's head) */
+  d?: string[];
   /** the pieces a comet or the battleship shoved and the pieces broken off them (see Asteroid.shovedBy), with their motion since */
   m?: ShovedState[];
 };
@@ -394,6 +407,12 @@ export class AsteroidField {
   private detail = 1;
   /** Rocks broken so far, with the field time each broke (for snapshot). */
   private readonly broken = new Map<string, number>();
+  /** Those of them gone to dust without pieces of their own (see crumble, pulverize). */
+  private readonly dust = new Set<string>();
+  /** Crumbled pieces still seen, shrinking into their dust (see CRUMBLE_SECONDS): a copy of each piece's picture, the piece gone from the field. */
+  private readonly crumbling: { piece: Asteroid; shell: THREE.Object3D; scale: THREE.Vector3 }[] = [];
+  /** The pieces the last crumble took (see crumble), reused. */
+  private readonly crumbled: Asteroid[] = [];
   private readonly templates: Record<TemplateKind, Template[]>;
   /** The layout of the field as generated, from which restore rebuilds it. */
   layout: FieldLayout | null = null;
@@ -534,19 +553,19 @@ export class AsteroidField {
    */
   revision = 0;
 
-  /** A family of pieces (see roots) as this field has it: those standing, and those broken with the field time each broke. */
-  familyOf(root: string): { alive: Asteroid[]; broken: [string, number][] } {
+  /** A family of pieces (see roots) as this field has it: those standing, those broken with the field time each broke, and which of these went to dust (see crumble, pulverize). */
+  familyOf(root: string): { alive: Asteroid[]; broken: [string, number][]; dust: string[] } {
     const alive = [...this.asteroids.values()].filter((a) => rootOf(a.id) === root);
     const broken = [...this.broken].filter(([id]) => rootOf(id) === root);
-    return { alive, broken };
+    return { alive, broken, dust: broken.flatMap(([id]) => (this.dust.has(id) ? [id] : [])) };
   }
 
   /**
    * Builds a family again from its root as the layout placed it, broken where `breaks` say (each
-   * id and the field time it broke, parents first): what another browser has of it. Its pieces
-   * are new, with the motion their breaks give them.
+   * id and the field time it broke, parents first), those in `dust` gone to dust without pieces:
+   * what another browser has of it. Its pieces are new, with the motion their breaks give them.
    */
-  rebuildFamily(root: string, breaks: readonly (readonly [string, number])[]) {
+  rebuildFamily(root: string, breaks: readonly (readonly [string, number])[], dust: readonly string[] = []) {
     const origin = this.origins.get(root);
     if (!origin) return;
     for (const a of this.familyOf(root).alive) {
@@ -556,13 +575,14 @@ export class AsteroidField {
     for (const [id] of this.familyOf(root).broken) {
       this.broken.delete(id);
       this.heard.delete(id);
+      this.dust.delete(id);
     }
     const a = this.add(root, origin.kind, origin.type, origin.template, origin.scale, 0, 0, origin.position, origin.spinAxis.clone(), new THREE.Vector3(), origin.orbitAxis.clone(), origin.orbitRate, origin.solid, origin.spinRate);
     a.baseOrientation.copy(origin.baseOrientation);
     a.weld = origin.weld;
     this.place(a);
     const ordered = [...breaks].sort((x, y) => x[0].split('.').length - y[0].split('.').length);
-    for (const [id, at] of ordered) this.destroy(id, at);
+    for (const [id, at] of ordered) this.destroy(id, at, !dust.includes(id));
   }
 
   /** The motion the layout gave a root, as a piece's motion travels (who shoved it aside: a root taking it is shoved by nobody again). */
@@ -613,6 +633,9 @@ export class AsteroidField {
     this.weldHomes.clear();
     this.broken.clear();
     this.heard.clear();
+    this.dust.clear();
+    for (const { shell } of this.crumbling) this.group.remove(shell);
+    this.crumbling.length = 0;
   }
 
   private boundingRadius(t: Template, scale: number) {
@@ -682,6 +705,7 @@ export class AsteroidField {
       orbitAxis,
       orbitRate,
       born,
+      crumbles: generation >= MAX_GENERATION ? born + CRUMBLE_AFTER : Infinity,
       basePosition: position.clone(),
       baseOrientation: object.quaternion.clone(),
       center: template.center,
@@ -747,6 +771,49 @@ export class AsteroidField {
   setClock(time: number) {
     this.clock = time;
     for (const asteroid of this.asteroids.values()) this.place(asteroid);
+    // the crumbled pieces' pictures shrink into their dust, drifting on as the piece would
+    for (let i = this.crumbling.length - 1; i >= 0; i--) {
+      const { piece, shell, scale } = this.crumbling[i];
+      const left = 1 - (time - piece.crumbles) / CRUMBLE_SECONDS;
+      if (left <= 0 || left > 1) {
+        this.group.remove(shell);
+        this.crumbling.splice(i, 1);
+        continue;
+      }
+      positionAt(piece, time, shell.position);
+      shell.quaternion.setFromAxisAngle(piece.spinAxis, piece.spinRate * (time - piece.born)).multiply(piece.baseOrientation);
+      shell.scale.copy(scale).multiplyScalar(left);
+    }
+  }
+
+  /**
+   * The smallest pieces whose time has come crumble to dust (see CRUMBLE_AFTER): gone from the
+   * field at the field time they crumble, listed as broken then, without pieces. Called once the
+   * frame's contacts were met (see world/contacts), which leave a piece out from that field time
+   * on, so the steps of the grid before it still meet it, however the frames fall. Returns the
+   * pieces it took (for their dust on screen; the list is reused).
+   */
+  crumble(): readonly Asteroid[] {
+    const crumbled = this.crumbled;
+    crumbled.length = 0;
+    for (const a of this.asteroids.values()) if (a.crumbles <= this.clock) crumbled.push(a);
+    for (const a of crumbled) {
+      // its picture stays a moment, shrinking (see setClock); the piece itself is gone, so a
+      // hook bitten into it and a cable lying on it let go
+      const shell = a.object.clone();
+      this.group.add(shell);
+      this.crumbling.push({ piece: a, shell, scale: a.object.scale.clone() });
+      this.destroy(a.id, a.crumbles, false);
+    }
+    return crumbled;
+  }
+
+  /**
+   * A comet's head grinds a piece to dust at a field time, without pieces of its own (a fragment,
+   * broken junk); solid pieces stand. Returns the piece when it went.
+   */
+  pulverize(id: string, at: number): Asteroid | undefined {
+    return this.asteroids.get(id)?.solid ? undefined : this.destroy(id, at, false);
   }
 
   /**
@@ -873,9 +940,10 @@ export class AsteroidField {
   /**
    * Breaks a rock at a field time: the fragments start from where it stood then. A break dated
    * before the rock took its motion (a shooter's, heard after a knock or a ram) breaks it where
-   * that motion starts: before it, the rock was elsewhere.
+   * that motion starts: before it, the rock was elsewhere. Without `pieces` it goes to dust
+   * instead (see crumble, pulverize).
    */
-  private destroy(id: string, time: number): Asteroid | undefined {
+  private destroy(id: string, time: number, pieces = true): Asteroid | undefined {
     const asteroid = this.asteroids.get(id);
     if (!asteroid) return undefined;
     const at = Math.max(time, asteroid.born);
@@ -883,8 +951,9 @@ export class AsteroidField {
     this.asteroids.delete(id);
     this.broken.set(id, at);
     this.heard.set(id, this.clock);
+    if (!pieces) this.dust.add(id);
 
-    if (asteroid.generation >= MAX_GENERATION) return asteroid;
+    if (!pieces || asteroid.generation >= MAX_GENERATION) return asteroid;
     if (this.fractures[asteroid.kind]) {
       this.split(asteroid, at);
       return asteroid;
@@ -959,6 +1028,7 @@ export class AsteroidField {
       t: +this.clock.toFixed(3),
       a: [...this.asteroids.values()].map((a) => ({ id: a.id, hp: a.hitPoints, b: +a.born.toFixed(3) })),
       x: [...this.broken].map(([id, at]) => ({ id, b: +at.toFixed(3) })),
+      d: [...this.dust],
       m: [...this.asteroids.values()].flatMap((a) => (a.shovedBy === null ? [] : [motionOf(a)])),
     };
   }
@@ -996,11 +1066,13 @@ export class AsteroidField {
       else later.add(rootOf(parent));
     };
     for (const rock of state.a) ensure(rock.id);
+    const dust = new Set(state.d ?? []);
     for (const id of [...this.asteroids.keys()]) {
       if (listed.has(id) || later.has(rootOf(id))) continue;
       this.group.remove(this.asteroids.get(id)!.object);
       this.asteroids.delete(id);
       this.broken.set(id, breaks.get(id) ?? state.t);
+      if (dust.has(id)) this.dust.add(id);
     }
     for (const rock of state.a) {
       const asteroid = this.asteroids.get(rock.id);
@@ -1018,13 +1090,13 @@ export class AsteroidField {
   }
 
   /** Whether a family can be built again broken where `breaks` say without cutting a piece here and now (see breaksAtOnce). */
-  familyReady(root: string, breaks: readonly (readonly [string, number])[]): boolean {
+  familyReady(root: string, breaks: readonly (readonly [string, number])[], dust: readonly string[] = []): boolean {
     const origin = this.origins.get(root);
     const fracture = origin && this.fractures[origin.kind];
     if (!fracture) return true;
     return breaks.every(([id]) => {
       const path = piecePath(id);
-      return path.length >= MAX_GENERATION || fracture.ready(origin.type, path);
+      return path.length >= MAX_GENERATION || dust.includes(id) || fracture.ready(origin.type, path);
     });
   }
 
@@ -1133,10 +1205,12 @@ export class AsteroidField {
   /**
    * Whether any piece's surface is closer than radius to a point at another field time than the
    * field's (each posed then, and back): what every browser decides alike however its own clock
-   * runs (where a sponsor probe shows up, see game/items).
+   * runs (where a sponsor probe shows up, see game/items); a piece crumbled by then is gone,
+   * whether or not this browser's clock has passed it yet.
    */
   overlapAt(center: THREE.Vector3, radius: number, time: number): boolean {
     for (const asteroid of this.asteroids.values()) {
+      if (asteroid.crumbles <= time) continue;
       const reach = asteroid.radius + radius;
       if (positionAt(asteroid, time, point).distanceToSquared(center) > reach * reach) continue;
       this.place(asteroid, time);
