@@ -236,7 +236,7 @@ The ring courses and the curve lie ahead of the pilot, or, where they would reac
 9. Looking back while drifting: in free drift steering only turns the nose and the ship slides on, the flight stays (the prograde marker shows it); the praise sets it against the autopilot, where the Host points where to fly.
 10. Flip and burn by hand, twice: hold X and W together; the drive fires once the nose points back; the S brake does not count here, and pressing it starts the attempt over at once ("By hand"). The drill counts once the drift along the course is gone; a little sideways drift may remain.
 11. Jinking: a gunner on the tail fires red shots at where the ship was a moment ago; pushing left and right with the thrusters (A/D) makes them go past. It counts after four changes of side; turning and drift do not matter, a hit only sparks.
-12. Dodging debris that drifts straight at the ship, twice, without turning (more than 45°).
+12. Dodging debris that drifts straight at the ship, twice, without turning (more than 45°). The debris starts where its way to the ship is free of rock; one that bursts on rock anyway starts the attempt over.
 13. Autopilot back on (T).
 14. Chasing a bot that flies but does not shoot: it runs, staying on its tail opens its drive.
 15. Fighting a weak bot that shoots back: keep the armored nose on it, slide, and work onto its tail.
@@ -251,14 +251,14 @@ The ring courses and the curve lie ahead of the pilot, or, where they would reac
 4. The overdrive: from rest, one press and the ship is past 140 m/s (the shove adds 150 m/s). The overdrive is ready at every attempt, however recently it was fired, and the pilot turns to open space 1.5 km deep first.
 5. The hook on a ship: an unarmed bot 600 m ahead runs; hook it and reel it in within 300 m. A runner 1.5 km off and not hooked (half again the hook's reach), or crashed, starts the attempt over.
 6. A probe 400 m ahead carries two torpedoes and waits there: fly through it (the praise names the probes' colors, white the nova core, which the next drill hands over).
-7. The nova core: the clone holds one, a drone 1.2 km ahead, beyond the blast's 800 m; fly close, fire, and both go up (the next clone is on the sponsors).
+7. The nova core: the clone holds one, a drone 1.2 km ahead, beyond the blast's 800 m; fly close, fire, and both go up (the next clone is on the sponsors). A nova set off out of reach leaves the drone alive and starts the drill over.
 8. The arsenal is ready.
 
 **Tactician** (10 drills; every sparring bot of the flight school fights from a cool laser):
 
 1. What the tactician learns: most clones die flying a straight line.
 2. On the tail: an armed bot (skill 0.15) starts 300 m behind the ship, its nose on the drive; turn the armored nose to it and shoot it down.
-3. The dodge, twice: debris drifts straight at the ship at 150 m/s from 600 m, too fast to slide out of its way; a thruster tapped twice kicks the ship aside. It counts once the debris is past and a dodge was fired, without turning (more than 45°).
+3. The dodge, twice: debris drifts straight at the ship at 150 m/s from 600 m, too fast to slide out of its way; a thruster tapped twice kicks the ship aside. It counts once the debris is past and a dodge was fired, without turning (more than 45°). Debris that bursts on rock on its way starts the attempt over.
 4. Shooting in free drift: the ship drifts at 100 m/s, the autopilot on, past an armed bot (skill 0.15) that starts 250 m to its right and 600 m ahead. Switch to free drift (T), turn the nose onto the bot while the ship slides on, and hit it three times with the nose more than 60° off the flight; then the autopilot back on. A bot shot down with fewer such hits starts the attempt over ("Sideways"). The same tip comes in a deathmatch (see Nicole coaches).
 5. The shove ("dirty is the point"): the ship and a drone drift side by side at 20 m/s towards a rock 200 m ahead, the drone 45 m off the ship's left, its way passing 20 m off the stone. A dodge into the drone as the rock comes up throws it at the stone at about 26 m/s; the drone starts with 15 hull points, a wreck already, so the stone finishes it, a knockout. It counts once the shoved drone touches rock or goes down; the rock left behind along the drift (however the nose is turned) starts the attempt over.
 6. Cover from a hunter: the ship 150 m off a rock, facing it, an armed bot (skill 0.5) 1.2 km off to its right, with nothing between them at the start (the drill takes the nearest rock where that holds); three seconds in a row with the rock between them (the HUD marks the spot in the rock's lee, ahead and to the left).
