@@ -906,8 +906,10 @@ export class Game implements OnlineGame {
   private onTarget: 'drive' | 'armor' | 'friend' | null = null;
   /** When the on-target tick last sounded (see ON_TARGET_TICK). */
   private onTargetTickAt = -Infinity;
-  /** The point the HUD marks to fly for, as the frame's last step left it (a ring, a gate, a core), or null; the screen shows it once a frame (see presentRound). */
-  private waypoint: THREE.Vector3 | null = null;
+  /** The flight school's marker as the frame's last step left it (see teach), or null; the screen shows it once a frame (see showSchoolHud). */
+  private schoolMark: THREE.Vector3 | null = null;
+  /** The racing line the flight school's HUD draws to its marker or through its rings, as the frame's last step left it (see teach), or null. */
+  private schoolTrack: { line: RacingLine; next: number } | null = null;
   /** When Nicole last warned of friendly fire (see FRIEND_WARNING). */
   private friendWarnedAt = -Infinity;
   /** Strength of the camera jolt after the own laser hit something, 0..2. */
@@ -3480,26 +3482,15 @@ export class Game implements OnlineGame {
     const subject = this.subject();
     // a core keeps clear of the view on the pilot and its crosshair
     this.flags?.view(this.camera, subject, this.cockpit, dt);
-    // a watching Host sees the race of the pilot on screen
-    // only a course of rings has its rings bracketed (see showRace, teach)
-    this.hud.setGates(this.camera, null, null, 0);
-    const waypoint = this.school ? this.teach(dt, myControls) : this.course ? this.showRace(this.course, subject) : this.flags ? this.showFlags(this.flags, subject) : this.fleet ? this.showFleet(this.fleet, subject) : this.survival ? this.callSurvival(me, subject) : null;
-    if (!this.course && !this.school) this.guide.hide();
+    // the drill judged and the calls of the mode, every step; what the HUD shows of them, once a frame (see presentRound)
+    if (this.school) this.teach(dt, myControls);
+    else if (this.survival) this.callSurvival(me);
     this.flyGhost(me);
     const racing = !!this.course && !this.school && !this.clamped;
     if (racing) this.callRace(subject);
     this.pushRadio(racing && !this.spectating && me.finish < 0 && lapOf(me.gates) === LAPS);
-    this.waypoint = waypoint;
-    const onTarget = me.alive ? this.onTarget : null;
-    // the nose comes onto a hull: a short tick, as the crosshair turns orange; onto a ship of
-    // the own side no tick, the crosshair crossed out (see Hud.setOnTarget)
-    if (onTarget && onTarget !== 'friend' && !this.hud.onTarget && now - this.onTargetTickAt > ON_TARGET_TICK) {
-      this.onTargetTickAt = now;
-      this.sound.beep(1760, 0.03, 0.07);
-    }
-    this.hud.setOnTarget(onTarget);
     // the trigger pulled with the nose on a ship of the own side: Nicole warns
-    if (onTarget === 'friend' && myControls.fire) this.warnFriend(COMPUTER.friend);
+    if (me.alive && this.onTarget === 'friend' && myControls.fire) this.warnFriend(COMPUTER.friend);
 
     const outside = me.alive && me.outsideSince !== null;
     if (!outside) this.toldToReturn = false;
@@ -3536,9 +3527,10 @@ export class Game implements OnlineGame {
 
   /**
    * What the screen shows of the round, once a frame after its steps (see draw): the ships'
-   * tints, the crosshair, the HUD's gauges and markers, the reference plane and the fixed
-   * references, the radar, the attitude and the g-force strain. A slow
-   * frame runs several steps, but the DOM and the canvases are written only for the last.
+   * tints, the mode's plate and waypoint, a course's rings and racing line, the crosshair, the
+   * HUD's gauges and markers, the reference plane and the fixed references, the radar, the
+   * attitude and the g-force strain. A slow frame runs several steps, but the DOM, the canvases
+   * and the racing line are written only for the last.
    */
   private presentRound() {
     const me = this.me!;
@@ -3546,8 +3538,21 @@ export class Game implements OnlineGame {
     const subject = this.subject();
     // its gauges too: the own clone is not printed while the Host watches
     if (wallClock() >= this.tintedAt) this.tintShips(wallClock());
-    if (me.alive && this.state === 'playing') this.aimCrosshair(this.waypoint);
+    // the mode's plate and where to fly, of the pilot on screen (a watching Host's too); only a
+    // course of rings has its rings bracketed and its racing line (see showRace, showSchoolHud)
+    this.hud.setGates(this.camera, null, null, 0);
+    const waypoint = this.school ? this.showSchoolHud(me) : this.course ? this.showRace(this.course, subject) : this.flags ? this.showFlags(this.flags, subject) : this.fleet ? this.showFleet(this.fleet, subject) : this.survival ? this.showSurvival(me, subject) : null;
+    if (!this.course && !this.school) this.guide.hide();
+    if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
     this.hud.showCrosshair(me.alive);
+    const onTarget = me.alive ? this.onTarget : null;
+    // the nose comes onto a hull: a short tick, as the crosshair turns orange; onto a ship of
+    // the own side no tick, the crosshair crossed out (see Hud.setOnTarget)
+    if (onTarget && onTarget !== 'friend' && !this.hud.onTarget && now - this.onTargetTickAt > ON_TARGET_TICK) {
+      this.onTargetTickAt = now;
+      this.sound.beep(1760, 0.03, 0.07);
+    }
+    this.hud.setOnTarget(onTarget);
     // (the benchmark leaves out the HUD, the radar or the attitude to see what each costs)
     if (!this.bench.has('hud')) {
       this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
@@ -3557,7 +3562,7 @@ export class Game implements OnlineGame {
       this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject));
     }
     // the fixed references' labels after the ships' names, keeping clear of them
-    this.orient(subject, this.waypoint);
+    this.orient(subject, waypoint);
     if (!this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
     if (!this.bench.has('attitude')) this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
     // the motion streaks, fewer on a cheaper picture (see view/streaks)
@@ -3596,13 +3601,8 @@ export class Game implements OnlineGame {
     return hosts > 0;
   }
 
-  /**
-   * Last Clone Standing as it runs: the clones left, who still stands and the flare in the HUD
-   * (how far the front is from the pilot on screen, or how deep it is in the plasma), the safe
-   * pocket marked once the flare comes; the announcer and Nicole call the flare and the last one
-   * standing. Returns the pocket's middle for the crosshair, or null before the flare.
-   */
-  private callSurvival(me: Ship, subject: Ship): THREE.Vector3 | null {
+  /** Last Clone Standing as it runs: the announcer and Nicole call the flare and the last one standing. */
+  private callSurvival(me: Ship) {
     const clock = this.field.clock;
     if (!this.flareCalled && clock >= FLARE_START) {
       this.flareCalled = true;
@@ -3619,6 +3619,16 @@ export class Game implements OnlineGame {
       if (last) this.announce(pick(ANNOUNCER_SURVIVOR), last, true);
       if (last === me) this.speaker.say(COMPUTER.survivor, 'urgent');
     }
+  }
+
+  /**
+   * Last Clone Standing in the HUD: the clones left, who still stands and the flare (how far the
+   * front is from the pilot on screen, or how deep it is in the plasma), the safe pocket marked
+   * once the flare comes. Returns the pocket's middle for the crosshair, or null before the flare.
+   */
+  private showSurvival(me: Ship, subject: Ship): THREE.Vector3 | null {
+    const clock = this.field.clock;
+    const ships = this.standings();
     const step = isOut(me) ? t('Out · {place}', { place: ordinal(ships.indexOf(me) + 1) }) : t('Last Clone Standing · {left}', { left: clonesLeftText(clonesLeft(me)) });
     const clearance = flareClearance(subject.flight.position, clock);
     const reach = { meters: Math.round(Math.abs(clearance) * METERS_PER_UNIT) };
@@ -4567,8 +4577,8 @@ export class Game implements OnlineGame {
     if (said > this.airSaid && level !== 'warning' && this.speaker.say(said === 2 ? COMPUTER.airBurn : COMPUTER.airHot, said === 2 ? 'urgent' : undefined)) this.airSaid = said;
   }
 
-  /** Runs the flight school for this frame; returns the point its HUD marker sits on. */
-  private teach(dt: number, controls: Controls): THREE.Vector3 | null {
+  /** Runs the flight school for this step: judges the drill, and leaves its marker and racing line for the HUD (see showSchoolHud). */
+  private teach(dt: number, controls: Controls) {
     const school = this.school!;
     const context = (this.schoolContext ??= this.createSchoolContext());
     context.controls = controls;
@@ -4602,18 +4612,28 @@ export class Game implements OnlineGame {
       // back on the school's plate: the next course is a key away
       this.showMenu();
       this.showSchool(true);
-      return null;
+      this.schoolMark = this.schoolTrack = null;
+      return;
     }
-    this.hud.setSchool(school.status(context.device), context.device === 'keyboard');
-    this.hud.setWaypoint(this.camera, waypoint, school.mark);
     const me = this.me!;
-    this.markRings(me, school.nextRing, school.nextNormal, school.ringAfter, RING_RADIUS);
-    // a ring course has its racing line, as a race does; any other marker a line to it
+    this.schoolMark = waypoint;
+    // a ring course has its racing line, as a race does; any other marker a line to it, from
+    // where the pilot was in the step the marker came up
     if (!waypoint) this.schoolLine = null;
-    const track = school.track ?? (waypoint && me.flight.position.distanceTo(waypoint) > SCHOOL_LINE_MIN ? this.lineTo(me, waypoint) : null);
+    this.schoolTrack = school.track ?? (waypoint && me.flight.position.distanceTo(waypoint) > SCHOOL_LINE_MIN ? this.lineTo(me, waypoint) : null);
+  }
+
+  /** The flight school in the HUD, as the frame's last step left it (see teach): its plate, marker, rings and racing line; returns the marker for the crosshair. */
+  private showSchoolHud(me: Ship): THREE.Vector3 | null {
+    const school = this.school!;
+    const device = this.schoolContext!.device;
+    this.hud.setSchool(school.status(device), device === 'keyboard');
+    this.hud.setWaypoint(this.camera, this.schoolMark, school.mark);
+    this.markRings(me, school.nextRing, school.nextNormal, school.ringAfter, RING_RADIUS);
+    const track = this.schoolTrack;
     if (track && me.alive) this.showGuide(me, track.line, track.next, false);
     else this.guide.hide();
-    return waypoint;
+    return this.schoolMark;
   }
 
   /** The flight school's line to a marker: from where the pilot was when the marker came up (or last moved by SCHOOL_LINE_MOVE), ending at it. */
@@ -4624,7 +4644,7 @@ export class Game implements OnlineGame {
     return this.schoolLine;
   }
 
-  /** What the flight school sees of the game; created once, the per-frame values are filled in by teach(). */
+  /** What the flight school sees of the game; created once, the values of each step are filled in by teach(). */
   private createSchoolContext(): SchoolContext {
     const game = this;
     return {
