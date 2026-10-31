@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { ARRIVAL, BATTERY_PERIOD, DODGE_MASS, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, NOVA_EDGE, NOVA_SHATTER, novaShare, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
+import { ARRIVAL, BATTERY_PERIOD, DODGE_MASS, ELEVATION_GUTTER, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, NOVA_EDGE, NOVA_SHATTER, novaShare, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
 import { Randomizer } from '../random';
 import { MASS, massOf } from '../world/bodies';
 import { Wrecks } from '../world/wrecks';
@@ -614,6 +614,50 @@ describe("the battleship's hangars", () => {
   const middle = (HANGAR_FLOOR + HANGAR_CEILING) / 2;
   /** How far a ship's center may stray from a hangar's middle without touching (units): along the hull, and up and down. */
   const room = { z: HANGAR_WIDTH / 2 - SHIP_RADIUS - 5, y: (HANGAR_CEILING - HANGAR_FLOOR) / 2 - SHIP_RADIUS - 5 };
+
+  it("show each wall's picture from afar without a neighbour's or the white block bleeding into its edges, down to the mipmap 16 times coarser", () => {
+    const fleet = battleship();
+    // the texture of the walls' pictures, and where the plates showing them sample it
+    let map: THREE.DataTexture | null = null;
+    const heights = new Set<number>();
+    fleet.root.traverse((object) => {
+      const mesh = object as THREE.Mesh;
+      const texture = (mesh.material as THREE.MeshBasicMaterial | undefined)?.map;
+      if (!mesh.isMesh || !(texture instanceof THREE.DataTexture)) return;
+      map = texture;
+      const uv = mesh.geometry.getAttribute('uv');
+      for (let i = 0; i < uv.count; i++) heights.add(uv.getY(i));
+    });
+    const texture = map! as THREE.DataTexture;
+    const { data, width, height } = texture.image as { data: Uint8Array; width: number; height: number };
+    // every other piece samples the white block at one height, the highest
+    const plates = [...heights].sort((a, b) => a - b).slice(0, -1);
+    expect(plates).toHaveLength(HANGARS.length * 4);
+    const line = width * 4;
+    const rowOf = (row: number) => data.subarray(row * line, (row + 1) * line);
+    for (let wall = 0; wall < plates.length; wall += 2) {
+      const [first, last] = [plates[wall] * height, plates[wall + 1] * height - 1];
+      // the picture's own rows and its gutters, copies of its edge rows
+      const own = [first - ELEVATION_GUTTER, last + ELEVATION_GUTTER];
+      for (let k = 1; k <= ELEVATION_GUTTER; k++) {
+        expect(rowOf(first - k)).toEqual(rowOf(first));
+        expect(rowOf(last + k)).toEqual(rowOf(last));
+      }
+      // a mipmap's texel averages the rows under it (the GPU's box filter on a texture of powers
+      // of two); bilinear filtering at the plate's edges weighs the two nearest
+      for (let level = 0; level <= 4; level++) {
+        const size = 2 ** level;
+        for (const v of [plates[wall], plates[wall + 1]]) {
+          const at = (v * height) / size - 0.5;
+          const below = Math.floor(at);
+          for (const texel of at > below ? [below, below + 1] : [below]) {
+            expect(texel * size, `wall ${wall / 2} at mipmap ${level}`).toBeGreaterThanOrEqual(own[0]);
+            expect((texel + 1) * size - 1, `wall ${wall / 2} at mipmap ${level}`).toBeLessThanOrEqual(own[1]);
+          }
+        }
+      }
+    }
+  });
 
   it('leave nothing solid in a tunnel from flank to flank, and the hull around it solid', () => {
     const fleet = battleship();

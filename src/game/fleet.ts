@@ -277,15 +277,21 @@ const HANGAR_MACHINERY = 120;
 const HANGAR_APPROACH = 2000;
 /**
  * The walls' pictures share one texture with the hangar deck's baked colors: six walls one above
- * another, ELEVATION_ROWS each, ELEVATION_WIDTH across (a texel about 33 cm across the hull at the
- * widest wall and 32 cm up), and a white block above them that every other piece of the deck
- * samples, so its vertex colors show as they are and all of it stays one mesh.
+ * another, each in a slot of ELEVATION_SLOT rows, ELEVATION_WIDTH across (a picture of
+ * ELEVATION_ROWS, a texel about 33 cm across the hull at the widest wall and 37 cm up), and a
+ * white block above them that every other piece of the deck samples, so its vertex colors show as
+ * they are and all of it stays one mesh. A slot is a multiple of 32 rows, so down to the mipmap
+ * 32 times coarser no texel mixes two slots, and the picture's edge rows are repeated
+ * ELEVATION_GUTTER times above and below it, so filtering at its edge, down to the mipmap 16 times
+ * coarser, reads only its own wall: no neighbour's picture and no white bleeds into it.
  */
 const ELEVATION_WIDTH = 1024;
-const ELEVATION_ROWS = 168;
+export const ELEVATION_SLOT = 160;
+export const ELEVATION_GUTTER = 8;
+const ELEVATION_ROWS = ELEVATION_SLOT - 2 * ELEVATION_GUTTER;
 const ELEVATION_HEIGHT = 1024;
-/** Where the white block lies in the texture (its middle), for every piece that is not a wall's picture. */
-const WHITE_UV = [0.5, (ELEVATION_HEIGHT - 8) / ELEVATION_HEIGHT] as const;
+/** Where the white block lies in the texture (its middle, above the slots of both walls of every tunnel), for every piece that is not a wall's picture. */
+const WHITE_UV = [0.5, (ELEVATION_HEIGHT + HANGARS.length * 2 * ELEVATION_SLOT) / 2 / ELEVATION_HEIGHT] as const;
 /** The hull's faces are laid in strips no longer than this along it (units, 50 m; see hullBetween). */
 const HULL_STRIP = 1000;
 /** Where the Ministry's seal sits on both flanks (design units along the hull). */
@@ -1054,12 +1060,19 @@ export class Fleet implements Obstacle {
           const edge = Math.min(hullAt(face).half, hullAt(face - facing * HANGAR_MACHINERY).half);
           const frame = new THREE.Matrix4().makeBasis(new THREE.Vector3(facing, 0, 0), UP, new THREE.Vector3(0, 0, facing)).setPosition(0, 0, face);
           const wall = { reach: edge - 30, edge, floor: HANGAR_FLOOR, ceiling: HANGAR_CEILING, depth: HANGAR_MACHINERY, frame };
-          const row = ELEVATION_ROWS * walls++;
+          const row = ELEVATION_SLOT * walls++ + ELEVATION_GUTTER;
           const picture = new Elevation(wall, pictures, ELEVATION_WIDTH, row, ELEVATION_ROWS, behind);
           machinery(random, wall, EMPHASES[tunnel], (geometry, color, glowing) => {
             picture.draw(baked(geometry, color, glowing, face, facing));
             detail[tunnel].push(geometry);
           });
+          // its edge rows repeated into the gutters above and below it
+          const line = ELEVATION_WIDTH * 4;
+          const top = row + ELEVATION_ROWS - 1;
+          for (let k = 1; k <= ELEVATION_GUTTER; k++) {
+            pictures.copyWithin((row - k) * line, row * line, (row + 1) * line);
+            pictures.copyWithin((top + k) * line, top * line, (top + 1) * line);
+          }
           // the picture on a plate just behind the machinery's back, facing the tunnel: hidden
           // behind the machinery up close, the wall itself from farther
           const plate = new THREE.BufferGeometry().setFromPoints([v3(-edge, HANGAR_FLOOR), v3(edge, HANGAR_FLOOR), v3(edge, HANGAR_CEILING), v3(-edge, HANGAR_CEILING)].map((p) => p.setZ(-HANGAR_MACHINERY - 2).applyMatrix4(frame)));
