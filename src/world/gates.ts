@@ -155,6 +155,11 @@ export function ringSamples(center: THREE.Vector3, facing: THREE.Vector3, radius
   return new Float32Array(list);
 }
 
+/** How far from a ring's center anything of it lies (units), for a ring of opening `radius`: its band and its solid parts, whichever reaches farther. */
+export function ringReach(radius: number): number {
+  return Math.max(solidParts(radius).reach, Math.hypot(radius + CLEARANCE + THICKNESS, DEPTH / 2));
+}
+
 /** How far from a ring's axis its housings begin and its struts end (units), for a ring of opening `radius`: what a ship steers clear of. */
 export function ringRim(radius: number): { inner: number; outer: number } {
   return { inner: radius + CLEARANCE, outer: solidParts(radius).reach };

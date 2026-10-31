@@ -65,7 +65,7 @@ import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from 
 import { setGlint } from '../ship/models';
 import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
-import { ringRim, touchRing } from '../world/gates';
+import { ringReach, ringRim, touchRing } from '../world/gates';
 import { FieldContacts, ringFixture } from '../world/contacts';
 import { IMMOVABLE, massOf, type Body } from '../world/bodies';
 import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, headEnd, HEAD_RADIUS, meetObstacle, meetSolids, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
@@ -6586,13 +6586,39 @@ export class Game implements OnlineGame {
       if (showerOffset.addScaledVector(cometCourse, -along).length() > SHOWER_WIDE + PIECE_RADIUS + rock.radius + margin) continue;
       rocks.push(rock);
     }
+    // the solids a piece is held against besides the field's: only those near the swarm are looked at, for each of its 800 pieces
+    this.showerMargin = margin;
+    this.showerRingsNear = false;
+    for (const ring of this.rings) if (this.nearShower(ring.center, ringReach(ring.radius))) this.showerRingsNear = true;
+    this.school?.eachRing(this.markRingNear);
+    this.showerWrecksNear = false;
+    for (const wreck of this.wrecks.list) if (this.nearShower(wreck.mesh.position, wreck.radius + PIECE_RADIUS)) this.showerWrecksNear = true;
+    this.showerCoresNear = false;
+    if (this.flags) for (const core of this.flags.cores) if (this.nearShower(core.position, CORE_REACH + PIECE_RADIUS)) this.showerCoresNear = true;
     meetSolids(shower, clock, dt, this.showerHit, (point) => {
       if (Math.random() < SHOWER_SPARKS) this.effects.sparks(point, SCRAPE_COLOR, PIECE_RADIUS * 4);
     });
   }
 
+  /** Whether something of `reach` around `center` may touch the swarm this step (the swarm as showerMeetsSolids lays it out). */
+  private nearShower(center: THREE.Vector3, reach: number): boolean {
+    showerOffset.subVectors(center, cometHead);
+    const along = showerOffset.dot(cometCourse);
+    if (along > reach + this.showerMargin || along < -(SHOWER_LENGTH + reach + this.showerMargin)) return false;
+    return showerOffset.addScaledVector(cometCourse, -along).length() <= SHOWER_WIDE + PIECE_RADIUS + reach + this.showerMargin;
+  }
+
+  private readonly markRingNear = (center: THREE.Vector3, _facing: THREE.Vector3, radius: number) => {
+    if (this.nearShower(center, ringReach(radius))) this.showerRingsNear = true;
+  };
+
   /** The field's pieces near the comet's swarm this step (see showerMeetsSolids). */
   private readonly showerRocks: Asteroid[] = [];
+  /** Whether any ring, wreck or core lies near the swarm this step (see showerMeetsSolids): else none is looked at. */
+  private showerMargin = 0;
+  private showerRingsNear = false;
+  private showerWrecksNear = false;
+  private showerCoresNear = false;
 
   /** Whether a piece of the shower meets something solid on its way from `from` to `to`, and where (into `at`). */
   private readonly showerHit = (from: THREE.Vector3, to: THREE.Vector3, at: THREE.Vector3): boolean => {
@@ -6613,11 +6639,14 @@ export class Game implements OnlineGame {
       }
       break;
     }
-    if (this.touchesRing(at.copy(to), PIECE_RADIUS) || this.wrecks.overlap(to, PIECE_RADIUS)) return true;
-    for (const core of this.flags?.cores ?? []) {
-      if (core.position.distanceTo(to) >= CORE_REACH + PIECE_RADIUS) continue;
-      at.copy(to);
-      return true;
+    if ((this.showerRingsNear && this.touchesRing(at.copy(to), PIECE_RADIUS)) || (this.showerWrecksNear && this.wrecks.overlap(to, PIECE_RADIUS))) return true;
+    const cores = this.showerCoresNear ? this.flags?.cores : undefined;
+    if (cores) {
+      for (const core of cores) {
+        if (core.position.distanceTo(to) >= CORE_REACH + PIECE_RADIUS) continue;
+        at.copy(to);
+        return true;
+      }
     }
     return false;
   };
