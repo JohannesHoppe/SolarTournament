@@ -123,7 +123,7 @@ Never use `npx`, always the scripts from `package.json`.
 
 The repository root is the Vite project: `index.html` (the game), `radio.html` (Radio 2584), `handbook.html` (the Pilot's Handbook, linked from the menu, the flight school's plate and the pause menu, which opens it at the section of the mode flown), `impressum.html` and `datenschutz.html` (German legal pages, linked from the menu and the radio page) are its pages, `public/` holds the static files, `tools/` the generators that write into `public/`.
 
-**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the thirteen localStorage entries, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server and TURN relay, public tournament names, the cheat reports between the browsers), the share menu (nothing sent until the Host picks a target; the networks it links to), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, another TURN or STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
+**The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the thirteen localStorage entries, the radio page's last pressing in IndexedDB, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server and TURN relay, public tournament names, the cheat reports between the browsers), the share menu (nothing sent until the Host picks a target; the networks it links to), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, another TURN or STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
 
 **Every folder has a README** that says what the folder is for, what each file in it does and how it is used or run, short and for a human finding their way around. A new folder gets one, and a file added, removed or changed in what it does updates its folder's README in the same commit. The build leaves the READMEs in `public/` out of the site.
 
@@ -132,7 +132,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | File | Content |
 |---|---|
 | `main.ts` | Startup of the game: WebGL check, load assets, create `Game` |
-| `radio-page.ts` | Startup of the radio page: tune in a title, play it, jump in it, download it as WAV |
+| `radio-page.ts` | Startup of the radio page: tune in a title, play it, jump in it, download it as WAV, and save the last pressing again |
 | `handbook-page.ts` | Startup of the Pilot's Handbook: its texts in the Host's language, the game's numbers filled in |
 | `handbook/` | The handbook's numbers (`numbers.ts`), taken from the game's constants or checked against the README |
 | `bench.ts` | The benchmark (`?bench`): a fixed scene, the cost per frame of every feature, quality rung, arena and mode, as a table on screen, in the console and as JSON; the frame meter (`?fps`) |
@@ -251,7 +251,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `music/songs.ts` | Hard techno tracks from a seed (flavor, form, energy curve, weighted step patterns, fills); every decision is an integer hash of seed, bar and step |
 | `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser), the voices, and how one sixteenth is played |
 | `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts |
-| `music/preview.ts` | Renders a track (or a stretch) offline as WAV: downloads on the radio page, previews in development |
+| `music/preview.ts` | Renders a track (or a stretch) offline as WAV in one pass, the band playing a stretch ahead of the render: downloads on the radio page, previews in development |
+| `music/kept.ts` | The radio page's last pressing (title and WAV file), kept in the browser's IndexedDB to be saved again; nothing kept where IndexedDB is blocked |
 | `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the announcer's lines, the flight computer's lines |
 | `music/transmission.ts` | The on-screen transmission: whatever the radio says, in neon, while it is spoken (game and radio page) |
 | `music/crowd.ts` | The stadium's crowd on the broadcast: a recorded roar (CC0), looped, through overdriven loudspeakers; it swells, erupts and hushes with the show |

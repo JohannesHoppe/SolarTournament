@@ -519,6 +519,7 @@ export const DE: Catalog = {
   'Pressing {title}… {percent} %': '{title} wird gepresst… {percent} %',
   '{size} MB. Make the sponsor happy.': '{size} MB. Mach den Sponsor glücklich.',
   'Pressing failed. Try again in Chrome or Edge.': 'Pressen fehlgeschlagen. Versuch es in Chrome oder Edge.',
+  'Download again: {title}': 'Noch einmal herunterladen: {title}',
 
   // HUD readouts
   '{n} pts': '{n} Pkt.',

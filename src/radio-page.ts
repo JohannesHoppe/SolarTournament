@@ -1,4 +1,5 @@
 import type { Spoken } from './music/band';
+import { keepPressing, keptPressing, type Pressing } from './music/kept';
 import { renderTrack, trackSeconds } from './music/preview';
 import { bindVolume, Radio } from './music/radio';
 import { createSong, ROUND_SECONDS, titleFor, type SectionKind, type Song, type Strategy } from './music/songs';
@@ -144,23 +145,52 @@ function checkEnd() {
   if (song && playingSince !== null && elapsed() > trackSeconds(song)) stop();
 }
 
+/** The last pressing, with the link its file is saved from as often as the Host likes. */
+let kept: { title: string; url: string } | null = null;
+
+const fileName = (title: string) => `SolarTournament - ${title}.wav`;
+
+/** Offers the pressing to be saved again, in place of the one offered before. */
+function offer(pressing: Pressing) {
+  if (kept) URL.revokeObjectURL(kept.url);
+  kept = { title: pressing.title, url: URL.createObjectURL(pressing.wav) };
+  const link = $<HTMLAnchorElement>('download-again');
+  link.href = kept.url;
+  link.download = fileName(pressing.title);
+  link.textContent = t('Download again: {title}', { title: pressing.title });
+  link.parentElement!.hidden = false;
+}
+
+/** Hands the kept file to the browser to save. */
+function save(pressing: { title: string; url: string }) {
+  const link = document.createElement('a');
+  link.href = pressing.url;
+  link.download = fileName(pressing.title);
+  link.click();
+}
+
 async function download() {
   if (!song) return;
+  const status = $('download-status');
+  // the track tuned is pressed already: its file is saved again at once
+  if (kept?.title === song.title) {
+    save(kept);
+    status.textContent = '';
+    return;
+  }
   // the track as it was tuned when the pressing began, even if the Host tunes another meanwhile
   const pressing = song;
   const button = $<HTMLButtonElement>('download');
-  const status = $('download-status');
   button.disabled = true;
   status.textContent = t('Pressing {title}…', { title: pressing.title });
   try {
     const wav = await renderTrack(pressing, 0, trackSeconds(pressing), 44100, (done) => {
       status.textContent = t('Pressing {title}… {percent} %', { title: pressing.title, percent: Math.round(done * 100) });
     });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([wav], { type: 'audio/wav' }));
-    link.download = `SolarTournament - ${pressing.title}.wav`;
-    link.click();
-    setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+    const file = { title: pressing.title, wav: new Blob([wav], { type: 'audio/wav' }) };
+    offer(file);
+    save(kept!);
+    void keepPressing(file);
     status.textContent = t('{size} MB. Make the sponsor happy.', { size: (wav.byteLength / 1048576).toFixed(0) });
   } catch (error) {
     console.error(error);
@@ -185,5 +215,9 @@ window.addEventListener('pointerup', () => (dragging = false));
 bindVolume($<HTMLInputElement>('radio-volume'));
 
 tune(new URLSearchParams(location.search).get('title') ?? randomTitle());
+// the pressing kept from an earlier visit, unless a new one is done first
+void keptPressing().then((pressing) => {
+  if (pressing && !kept) offer(pressing);
+});
 requestAnimationFrame(frame);
 setInterval(checkEnd, 500);

@@ -493,6 +493,7 @@ export const ES: Catalog = {
   'Pressing {title}… {percent} %': 'Prensando {title}… {percent} %',
   '{size} MB. Make the sponsor happy.': '{size} MB. Haz feliz al patrocinador.',
   'Pressing failed. Try again in Chrome or Edge.': 'No se ha podido prensar. Inténtalo de nuevo en Chrome o Edge.',
+  'Download again: {title}': 'Descargar de nuevo: {title}',
 
   // HUD and radar
   '{n} pts': '{n} pts',
