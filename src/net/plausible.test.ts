@@ -507,7 +507,7 @@ describe("the lead's battleship ramming the field", () => {
     expect(worst).toBeLessThan(0.8);
     for (const [id, piece] of lead.asteroids) expect(seen.asteroids.get(id)!.object.position.distanceTo(piece.object.position), id).toBeLessThan(1e-6);
     // two fields and a battleship flown for a while: a few seconds on a busy machine
-  }, 30_000);
+  });
 });
 
 describe('strikes', () => {

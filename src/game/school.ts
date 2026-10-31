@@ -321,7 +321,7 @@ const EXAM_SKILL = 0.5;
  * The orbit drill, at the Event Horizon: the pilot starts ORBIT_START from the hole's center
  * (units, 1.2 km straight above it, out of the plane its rocks circle in, inside their ring),
  * its nose along ORBIT_NOSE, across the line to the hole, drifting that way at ORBIT_DRIFT
- * (units/s, 100 m/s; a circular orbit there flies 181 m/s, ORBIT READY comes from about 156
+ * (units/s, 100 m/s; a circular orbit there flies 181 m/s, ORBIT READY comes from about 157
  * m/s), and has to fly ORBIT_SWEEP (rad, half a turn) about the hole in a stable orbit.
  */
 export const ORBIT_START = new THREE.Vector3(0, 24000, 0);
