@@ -1,10 +1,12 @@
 import * as THREE from 'three';
 import { expect } from 'vitest';
 import { Randomizer } from '../random';
+import { cubeDirection, cubeTexel as glTexel } from '../world/celestial';
 
 /**
  * Reading a baked cube map back the way the GPU does, for the tests of the relief maps of rock
- * and ice (see world/rocks, world/ice).
+ * and ice (see world/rocks, world/ice). The table of faces is world/celestial's, which the sky's
+ * test pins to the values OpenGL specifies.
  */
 
 /**
@@ -14,21 +16,14 @@ import { Randomizer } from '../random';
  * round would read.
  */
 export function cubeTexel(d: THREE.Vector3, res: number, mirror = false): { face: number; i: number; j: number } {
-  const ax = Math.abs(d.x), ay = Math.abs(d.y), az = Math.abs(d.z);
-  let face: number, sc: number, tc: number, ma: number;
-  if (ax >= ay && ax >= az) [face, sc, tc, ma] = d.x > 0 ? [0, -d.z, -d.y, ax] : [1, d.z, -d.y, ax];
-  else if (ay >= az) [face, sc, tc, ma] = d.y > 0 ? [2, d.x, d.z, ay] : [3, d.x, -d.z, ay];
-  else [face, sc, tc, ma] = d.z > 0 ? [4, d.x, -d.y, az] : [5, -d.x, -d.y, az];
-  if (mirror) sc = -sc;
-  const cell = (c: number) => Math.min(res - 1, Math.floor(((c / ma + 1) / 2) * res));
-  return { face, i: cell(sc), j: cell(tc) };
+  const { face, s, t } = glTexel(d);
+  const cell = (c: number) => Math.min(res - 1, Math.floor(c * res));
+  return { face, i: cell(mirror ? 1 - s : s), j: cell(t) };
 }
 
 /** The direction at the center of a texel, the same table read backwards. */
 export function texelCenter(face: number, i: number, j: number, res: number): THREE.Vector3 {
-  const sc = ((i + 0.5) / res) * 2 - 1, tc = ((j + 0.5) / res) * 2 - 1;
-  const axis = [[1, -tc, -sc], [-1, -tc, sc], [sc, 1, tc], [sc, -1, -tc], [sc, -tc, 1], [-sc, -tc, -1]][face];
-  return new THREE.Vector3(...axis).normalize();
+  return cubeDirection(face, (i + 0.5) / res, (j + 0.5) / res).normalize();
 }
 
 /** A texel of a face of a cube map, as its data lies row by row. */
