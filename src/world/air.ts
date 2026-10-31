@@ -122,16 +122,19 @@ function meanDensity(from: number, to: number): number {
 /**
  * The optical depth between two points (see SIGHT_DEPTH): the haze's, which the shaders' fog
  * computes alike (see view/haze), and the deck's where the line crosses it (see DECK_DEPTH),
- * which the deck's sheet draws.
+ * which the deck's sheet draws. A line between two points over the deck crosses it twice where
+ * it dips under the curved deck between them (a shallow look down from just over it), at the
+ * same slant going in and coming out.
  */
 export function opticalDepth(air: Air, from: THREE.Vector3, to: THREE.Vector3): number {
   const length = from.distanceTo(to);
   const a = altitudeIn(air, from);
   const b = altitudeIn(air, to);
   const haze = HAZE * length * meanDensity(a, b);
-  if (a > 0 === b > 0 || length < 1e-6) return haze;
-  deckCrossing(air, from, line.subVectors(to, from).divideScalar(length));
-  return haze + DECK_DEPTH * slant;
+  if (length < 1e-6 || (a <= 0 && b <= 0)) return haze;
+  const crossing = deckCrossing(air, from, line.subVectors(to, from).divideScalar(length));
+  if (a > 0 !== b > 0) return haze + DECK_DEPTH * slant;
+  return crossing < length ? haze + 2 * DECK_DEPTH * slant : haze;
 }
 
 const line = new THREE.Vector3();
