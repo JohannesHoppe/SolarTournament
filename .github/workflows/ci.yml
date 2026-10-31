@@ -1,13 +1,16 @@
 # Every push to main is checked here before anything of it goes live: the voice sprites are
-# rendered, then types, duplicates, the unit tests and the site's build. Only a commit that passes
-# them all is moved on to the branches Cloudflare Pages builds the site from: stage_test (the test
-# stage) and, as long as the game has no players yet, stage_prod (production). Cloudflare builds
-# only those two and takes this run's sprites from the release "voice-sprites" instead of
-# rendering them (see tools/voice/prebuilt.ts), so its build stays far inside its time limit.
+# rendered, then types, duplicates, the unit tests and the site's build; the unit tests run again
+# on ARM and on macOS, since the shared world must come out bit for bit alike on every machine
+# (src/detmath.ts). Only a commit that passes them all is moved on to the branches Cloudflare
+# Pages builds the site from: stage_test (the test stage) and, as long as the game has no players
+# yet, stage_prod (production). Cloudflare builds only those two and takes this run's sprites from
+# the release "voice-sprites" instead of rendering them (see tools/voice/prebuilt.ts), so its
+# build stays far inside its time limit.
 #
-# Two kinds of jobs, as in the workflow Voice: the check job runs our code and its packages and may
-# only read; it hands the sprites on as an artifact. The publish job may write (the release and the
-# two branches) and runs nothing but the shell, jq, git and gh.
+# Two kinds of jobs, as in the workflow Voice: the check job and the platforms jobs run our code
+# and its packages and may only read; the check job hands the sprites on as an artifact. The
+# publish job may write (the release and the two branches) and runs nothing but the shell, jq, git
+# and gh.
 name: CI
 
 on:
@@ -64,8 +67,33 @@ jobs:
           retention-days: 1
           compression-level: 0
 
+  # The unit tests once more on ARM (Linux) and on macOS, beside the check job's x64 Linux: every
+  # browser computes the shared world itself, so it has to come out bit for bit the same on every
+  # processor and system (src/detmath.ts), and the tests pin its bits. Like the check job, these
+  # run our code and may only read.
+  platforms:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - name: Unit tests
+        run: npm test
+
   publish:
-    needs: check
+    needs: [check, platforms]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:

@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import type { Controls } from '../input/input';
+import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
+import { angleTo, setFromAxisAngle } from '../detthree';
 
 /** Display scale: one world unit is 5 cm, a ship is about 35 m long. */
 export const METERS_PER_UNIT = 0.05;
@@ -86,7 +88,7 @@ export class FlightModel {
     if (spin) this.angularVelocity.addScaledVector(spin, dt);
     const rate = this.angularVelocity.length();
     if (rate > 1e-6) {
-      this.orientation.multiply(rotation.setFromAxisAngle(axis.copy(this.angularVelocity).divideScalar(rate), rate * dt));
+      this.orientation.multiply(setFromAxisAngle(rotation, axis.copy(this.angularVelocity).divideScalar(rate), rate * dt));
       this.orientation.normalize();
     }
 
@@ -131,7 +133,7 @@ export class FlightModel {
     // a ship past it, and the flight computer never brakes the speed it gained
     this.velocity.addScaledVector(gravity, dt);
     this.position.addScaledVector(this.velocity, dt);
-    this.throttle += (drive - this.throttle) * (1 - Math.exp(-(drive > this.throttle ? THROTTLE_RISE : THROTTLE_FALL) * dt));
+    this.throttle += (drive - this.throttle) * (1 - exp(-(drive > this.throttle ? THROTTLE_RISE : THROTTLE_FALL) * dt));
   }
 
   /** A world direction in ship space (-Z ahead, +X right, +Y up). */
@@ -158,8 +160,8 @@ export class FlightModel {
   }
 
   /** Angle between the nose and a world direction (rad). */
-  angleTo(direction: THREE.Vector3) {
-    return this.forward(local).angleTo(direction);
+  noseAngleTo(direction: THREE.Vector3) {
+    return angleTo(this.forward(local), direction);
   }
 
   /**
@@ -169,8 +171,8 @@ export class FlightModel {
   steer<T extends { yaw: number; pitch: number }>(direction: THREE.Vector3, gain = 2.5, target: T = { yaw: 0, pitch: 0 } as T): T {
     this.toLocalDirection(direction, local).normalize();
     // local: -Z is ahead, +X right, +Y up
-    let yaw = Math.atan2(local.x, -local.z);
-    const pitch = Math.atan2(local.y, Math.hypot(local.x, local.z));
+    let yaw = atan2(local.x, -local.z);
+    const pitch = atan2(local.y, hypot(local.x, local.z));
     if (local.z > 0 && Math.abs(local.x) < 1e-3) yaw = Math.PI; // straight behind: pick a side
     target.yaw = THREE.MathUtils.clamp(yaw * gain, -1, 1);
     target.pitch = THREE.MathUtils.clamp(pitch * gain, -1, 1);
@@ -185,7 +187,7 @@ export class FlightModel {
    */
   flip<T extends { yaw: number; pitch: number; roll: number }>(direction: THREE.Vector3, gain = 2.5, target: T = { yaw: 0, pitch: 0, roll: 0 } as T): T {
     this.toLocalDirection(direction, local).normalize();
-    const off = Math.acos(THREE.MathUtils.clamp(-local.z, -1, 1));
+    const off = acos(THREE.MathUtils.clamp(-local.z, -1, 1));
     if (off < FLIP_STEER_ANGLE) {
       this.steer(direction, gain, target);
       target.roll = 0;
@@ -194,7 +196,7 @@ export class FlightModel {
     // a goal behind and below is reached faster by pulling straight up and over than by
     // rolling half around first; the steering at the end takes out what is left
     const behind = Math.PI - off;
-    const rollError = local.y < 0 && behind < FLIP_PULL_THROUGH ? 0 : Math.atan2(local.x, local.y);
+    const rollError = local.y < 0 && behind < FLIP_PULL_THROUGH ? 0 : atan2(local.x, local.y);
     const aligned = Math.max(0, 1 - Math.abs(rollError) / FLIP_ROLL_TOLERANCE);
     target.yaw = 0;
     target.pitch = THREE.MathUtils.clamp(off * gain, 0, 1) * aligned;
@@ -282,13 +284,13 @@ export function flyByNose(flight: FlightModel, controls: Readonly<Controls>, gra
 export function recovery(speed: number, lead: number, limit: number, driving: boolean): number {
   const flight = new FlightModel();
   flight.reset(new THREE.Vector3(), new THREE.Quaternion());
-  flight.velocity.set(Math.sin(lead), 0, -Math.cos(lead)).multiplyScalar(speed);
+  flight.velocity.set(sin(lead), 0, -cos(lead)).multiplyScalar(speed);
   const idle: Controls = { yaw: 0, pitch: 0, roll: 0, thrust: driving ? 1 : 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
   const out: Controls = { ...idle };
   const none = new THREE.Vector3();
   for (let t = 0; t < limit; t += LEAD_DT) {
     const now = sense(flight);
-    if (path.dot(nose) > Math.cos(ON_NOSE)) return t;
+    if (path.dot(nose) > cos(ON_NOSE)) return t;
     Object.assign(out, idle);
     bend(flight, now, THREE.MathUtils.smoothstep(now, AUTO_REST, AUTO_MOVING), idle.thrust, none, idle, out);
     // the nose stays where it is: no turn
@@ -317,13 +319,13 @@ function hold(flight: FlightModel, lead: number, moving: number, out: Controls) 
   if (moving <= 0 || lead >= Math.PI) return;
   // the flight in ship space: the turn towards it in yaw and pitch (+X right, +Y up)
   flight.toLocalDirection(path, across);
-  const side = Math.hypot(across.x, across.y);
+  const side = hypot(across.x, across.y);
   if (side < 1e-6) return;
   const x = across.x / side;
   const y = across.y / side;
   const away = -(out.yaw * x + out.pitch * y);
   if (away <= 0) return;
-  const slip = Math.acos(THREE.MathUtils.clamp(path.dot(nose), -1, 1));
+  const slip = acos(THREE.MathUtils.clamp(path.dot(nose), -1, 1));
   const thrusters = flight.thrusterFactor;
   const allowed = Math.sqrt(2 * TURN_ACCELERATION * thrusters * Math.max(0, lead - slip)) / (MAX_TURN_RATE * (0.3 + 0.7 * thrusters));
   if (away <= allowed) return;
@@ -392,7 +394,7 @@ function bend(flight: FlightModel, speed: number, moving: number, pilot: number,
   const wanted = Math.max(pilot, out.thrust * free) * thrust * nose.dot(path);
   demand.addScaledVector(nose, -out.thrust * thrust).addScaledVector(path, wanted);
   flight.toLocalDirection(demand, across).divideScalar(Math.max(thrusters, 1e-6));
-  const side = Math.hypot(across.x, across.y);
+  const side = hypot(across.x, across.y);
   if (side > 1) across.multiplyScalar(1 / side);
   const room = Math.sqrt(Math.max(0, 1 - Math.min(1, side * side)));
   if (!controls.strafeX) out.strafeX = across.x;
@@ -450,7 +452,7 @@ export function leadLimit(speed: number, driving = true): number {
  * thrusters.
  */
 export function gripAt(speed: number, health: Health = HEALTHY): number {
-  return MAIN_THRUST * health.driveFactor * Math.sin(Math.min(leadLimit(speed), Math.PI / 2)) + RCS_THRUST * health.thrusterFactor;
+  return MAIN_THRUST * health.driveFactor * sin(Math.min(leadLimit(speed), Math.PI / 2)) + RCS_THRUST * health.thrusterFactor;
 }
 
 /** The tightest turn the autopilot flies at a speed (units, radius). */

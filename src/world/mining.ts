@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { cos, pow, sin } from '../detmath';
+import { rotateZ } from '../detthree';
 import { Randomizer } from '../random';
 import { attachment, type Asteroid, type AsteroidField, type Attachment } from './asteroids';
 import { noise } from './nebula';
@@ -109,7 +111,7 @@ const SWEEP_GLSL = /* glsl */ `
 
 /** Henyey and Greenstein's phase of dust with DUST_G, for the cosine between the view and the sun, scaled to 1 looking straight at the sun. */
 const PHASE_GLSL = /* glsl */ `
-  float phase(float c) { return ${Math.pow(1 - DUST_G, 3).toFixed(4)} / pow(${(1 + DUST_G * DUST_G).toFixed(4)} - ${(2 * DUST_G).toFixed(4)} * c, 1.5); }
+  float phase(float c) { return ${pow(1 - DUST_G, 3).toFixed(4)} / pow(${(1 + DUST_G * DUST_G).toFixed(4)} - ${(2 * DUST_G).toFixed(4)} * c, 1.5); }
 `;
 
 const lightVertex = /* glsl */ `
@@ -457,7 +459,7 @@ function footing(site: Site, direction: THREE.Vector3, reach: number) {
   let bottom = Infinity;
   for (let k = 0; k < 9; k++) {
     const angle = (k / 8) * Math.PI * 2;
-    const p = k === 8 ? center.clone() : at(Math.cos(angle), Math.sin(angle));
+    const p = k === 8 ? center.clone() : at(cos(angle), sin(angle));
     const h = p.sub(center).dot(normal);
     top = Math.max(top, h);
     bottom = Math.min(bottom, h);
@@ -470,7 +472,7 @@ function frameOf(site: Site, origin: THREE.Vector3, up: THREE.Vector3, turn: num
   const side = new THREE.Vector3();
   const other = new THREE.Vector3();
   tangentDirections(up, side, other);
-  const x = side.clone().multiplyScalar(Math.cos(turn)).addScaledVector(other, Math.sin(turn));
+  const x = side.clone().multiplyScalar(cos(turn)).addScaledVector(other, sin(turn));
   const z = new THREE.Vector3().crossVectors(x, up);
   return new THREE.Matrix4().makeBasis(x, up, z).setPosition(origin).multiply(new THREE.Matrix4().makeScale(1 / site.scale, 1 / site.scale, 1 / site.scale));
 }
@@ -671,7 +673,7 @@ function rig(plan: Plan, site: Site, r: Randomizer, cutter: boolean) {
   add(new THREE.CylinderGeometry(1.2 * M, 1.2 * M, level - legDepth + tall * 0.9, 8).translate(0, (legDepth + level + tall * 0.9) / 2, 0), steel);
   add(block(5 * M, 4 * M, 5 * M, 0, level + tall * 0.9, 0), hazard, 0.04, 'sides');
   // the crew hut: a pressurized can lying on the deck, a row of lit windows along it, the control panels' screens beside them
-  add(new THREE.CylinderGeometry(5 * M, 5 * M, 16 * M, 12).rotateZ(Math.PI / 2).translate(-6 * M, level + 6 * M, 10 * M), rust);
+  add(rotateZ(new THREE.CylinderGeometry(5 * M, 5 * M, 16 * M, 12), Math.PI / 2).translate(-6 * M, level + 6 * M, 10 * M), rust);
   for (const x of [-11, -7.5, -4]) add(block(2.8 * M, 1.4 * M, 0.4 * M, x * M, level + 7 * M, 15 * M), new THREE.Color(1.0, 0.72, 0.35), 1.6);
   add(block(1.6 * M, 1 * M, 0.4 * M, -0.6 * M, level + 6.6 * M, 15.1 * M), new THREE.Color(0.2, 1.0, 0.75), 1.2);
   add(block(1 * M, 0.6 * M, 0.4 * M, -0.6 * M, level + 5.3 * M, 15.1 * M), new THREE.Color(1.0, 0.35, 0.2), 1.2);
@@ -787,7 +789,7 @@ function cutFace(plan: Plan, site: Site, r: Randomizer) {
       let rho = 0;
       for (let step = 1; step <= 24; step++) {
         const at = (step / 24) * cone;
-        const h = height(normal, Math.cos(angle) * at, Math.sin(angle) * at, reach);
+        const h = height(normal, cos(angle) * at, sin(angle) * at, reach);
         if (h < top - tolerance) break;
         rho = at;
       }
@@ -804,7 +806,7 @@ function cutFace(plan: Plan, site: Site, r: Randomizer) {
       height: top,
       outline: smooth.map((rho, k) => {
         const angle = (k / ANGLES) * Math.PI * 2;
-        return center.clone().addScaledVector(normal, top).addScaledVector(side, Math.cos(angle) * rho).addScaledVector(other, Math.sin(angle) * rho);
+        return center.clone().addScaledVector(normal, top).addScaledVector(side, cos(angle) * rho).addScaledVector(other, sin(angle) * rho);
       }),
     };
   }
@@ -863,8 +865,8 @@ function cutFace(plan: Plan, site: Site, r: Randomizer) {
       const a0 = (k / 12) * Math.PI * 2;
       const a1 = ((k + 1) / 12) * Math.PI * 2;
       push(mouth, normal, [0, 0], dark, 0);
-      push(mouth.clone().addScaledVector(side, Math.cos(a0) * local).addScaledVector(other, Math.sin(a0) * local), normal, [0, 0], dark, 0);
-      push(mouth.clone().addScaledVector(side, Math.cos(a1) * local).addScaledVector(other, Math.sin(a1) * local), normal, [0, 0], dark, 0);
+      push(mouth.clone().addScaledVector(side, cos(a0) * local).addScaledVector(other, sin(a0) * local), normal, [0, 0], dark, 0);
+      push(mouth.clone().addScaledVector(side, cos(a1) * local).addScaledVector(other, sin(a1) * local), normal, [0, 0], dark, 0);
     }
     disc(plan.glow, site, at.clone().addScaledVector(normal, (1.6 * M) / site.scale), normal, radius * 0.9, TUNNEL_CELL, new THREE.Color(1.0, 0.6, 0.25));
     addLight(plan.lights, site.slot, at.clone().addScaledVector(normal, (2.5 * M) / site.scale), SODIUM, 2.5 * M);
@@ -879,7 +881,7 @@ function graffiti(plan: Plan, site: Site, r: Randomizer, slogan: number) {
   const other = new THREE.Vector3();
   tangentDirections(foot.normal, side, other);
   const turn = r.range(-0.3, 0.3);
-  side.multiplyScalar(Math.cos(turn)).addScaledVector(other, Math.sin(turn)).normalize();
+  side.multiplyScalar(cos(turn)).addScaledVector(other, sin(turn)).normalize();
   const width = Math.min(1.1 * site.mean * site.scale, 130 * M);
   decal(plan.glow, site, foot.center, foot.normal, side, width, width / 2, SLOGAN_CELL(slogan), new THREE.Color(PAINTS[slogan % PAINTS.length]).multiplyScalar(0.55));
   plan.paint.push({ slot: site.slot, at: foot.center, up: foot.normal });
@@ -1064,7 +1066,7 @@ function cloudTexture(): THREE.CanvasTexture {
         let value = 0;
         let weight = 0.55;
         for (let o = 0; o < 3; o++) {
-          const n = grid * 2 ** o;
+          const n = grid * pow(2, o);
           value += weight * noise((x / tile) * n, (y / tile) * n, 1977 + t * 3 + o);
           weight *= 0.5;
         }
@@ -1091,7 +1093,7 @@ function sawTexture(): THREE.CanvasTexture {
   const ctx = canvas.getContext('2d')!;
   const r = new Randomizer(311);
   for (let y = 0; y < 128; y++) {
-    const shade = Math.round(205 + r.range(-25, 25) + 20 * Math.sin(y * 0.4));
+    const shade = Math.round(205 + r.range(-25, 25) + 20 * sin(y * 0.4));
     ctx.fillStyle = `rgb(${shade},${shade},${shade})`;
     ctx.fillRect(0, y, 128, 1);
   }

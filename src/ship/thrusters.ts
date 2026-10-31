@@ -95,7 +95,7 @@ export function thrustersOf(layout: QuadLayout): Thrusters {
           const set = new Set([a, b]);
           if (turnOf([mirrored(a), mirrored(b)])[axis] * sign > 0) set.add(mirrored(a)).add(mirrored(b));
           const together = turnOf(set);
-          if (Math.sqrt(together.lengthSq() - together[axis] ** 2) > CROSS_SHARE * Math.abs(together[axis])) continue;
+          if (Math.sqrt(together.lengthSq() - together[axis] * together[axis]) > CROSS_SHARE * Math.abs(together[axis])) continue;
           found.push({ set, turn });
         }
       }

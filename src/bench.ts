@@ -5,6 +5,7 @@ import { t } from './i18n/i18n';
 import { BENCH_FEATURES, BENCH_ON, LADDER, tierOf, TIER_NAMES, type BenchFeature, type Tier } from './view/quality';
 import { FIELD_RADIUS } from './world/asteroids';
 import { ARENAS, type ArenaId } from './world/arenas';
+import { cos, sin } from './detmath';
 
 /**
  * The benchmark (`?bench`, `?bench=<seconds per measurement>`, `&only=<sections>`): it plays a fixed scene (a solo
@@ -126,7 +127,7 @@ export async function runBench(game: Game, seconds: number, only: BenchSection[]
   let pathStart = 0;
   const fly = (camera: THREE.PerspectiveCamera) => {
     const angle = ((performance.now() - pathStart) / 1000 / (seconds + WARMUP)) * Math.PI * 0.5;
-    camera.position.set(Math.cos(angle) * PATH_RADIUS, PATH_HEIGHT, Math.sin(angle) * PATH_RADIUS);
+    camera.position.set(cos(angle) * PATH_RADIUS, PATH_HEIGHT, sin(angle) * PATH_RADIUS);
     camera.lookAt(0, 0, 0);
     camera.updateMatrixWorld();
   };

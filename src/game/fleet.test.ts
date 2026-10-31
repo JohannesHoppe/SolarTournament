@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { cos, hypot, log, pow, sin } from '../detmath';
+import { quaternionAngleTo } from '../detthree';
 import { describe, expect, it } from 'vitest';
 import { ARRIVAL, BATTERY_PERIOD, DODGE_MASS, ELEVATION_GUTTER, Fleet, FLEET_SPEED, HANGAR_CEILING, HANGAR_FLOOR, HANGAR_WIDTH, HANGARS, NOVA_EDGE, NOVA_SHATTER, novaShare, PLUME_REACH, SINK_SECONDS, TORPEDO_HITS, type Target } from './fleet';
 import { Randomizer } from '../random';
@@ -397,7 +399,7 @@ describe("the battleship and the field's rock", () => {
       if (shower?.comet !== flying) shower = flying ? new Shower(flying) : null;
       if (flying) runDown(flying, field, time, () => {});
       if (hunted && time > ARRIVAL + ROUND_SECONDS / 2 && fleet.drives > 0) breakAll(fleet, zonesOf(fleet, 'drive'));
-      pilot.flight.position.set(Math.cos(time * 0.2) * 15000, Math.sin(time * 0.13) * 12000, Math.sin(time * 0.2) * 15000).add(fleet.position);
+      pilot.flight.position.set(cos(time * 0.2) * 15000, sin(time * 0.13) * 12000, sin(time * 0.2) * 15000).add(fleet.position);
       fleet.lead(STEP_SECONDS, time, hunted ? [pilot] : [], comets);
       fleet.update(time, time);
       for (const state of fleet.rams) rammed.add(state.id);
@@ -553,7 +555,7 @@ describe("the battleship and the field's rock", () => {
     seen.setClock(1);
     for (const ram of fleet.rams) {
       const at = seen.positionOf(seen.asteroids.get(ram.id)!, ram.b, new THREE.Vector3());
-      expect(ramShare(at, new THREE.Vector3().fromArray(ram.p), Math.hypot(...ram.v), fleet.position, fleet.reach + seen.asteroids.get(ram.id)!.radius, ram.b - seen.clock), ram.id).toBeLessThan(1);
+      expect(ramShare(at, new THREE.Vector3().fromArray(ram.p), hypot(ram.v[0], ram.v[1], ram.v[2]), fleet.position, fleet.reach + seen.asteroids.get(ram.id)!.radius, ram.b - seen.clock), ram.id).toBeLessThan(1);
     }
   });
 
@@ -568,7 +570,7 @@ describe("the battleship and the field's rock", () => {
     const same = (a: AsteroidField, b: AsteroidField) => {
       for (const [id, rock] of a.asteroids) {
         expect(b.asteroids.get(id)!.object.position.distanceTo(rock.object.position), id).toBeLessThan(1e-6);
-        expect(b.asteroids.get(id)!.object.quaternion.angleTo(rock.object.quaternion), id).toBeLessThan(1e-6);
+        expect(quaternionAngleTo(b.asteroids.get(id)!.object.quaternion, rock.object.quaternion), id).toBeLessThan(1e-6);
       }
     };
     for (const f of [field, other]) f.setClock(30);
@@ -606,7 +608,7 @@ function bowOn(field: AsteroidField, arena: ArenaProfile, share: number, into = 
   fleet.velocity.set(0, 0, -FLEET_SPEED);
   fleet.root.updateMatrixWorld();
   fleet.update(1, 0);
-  const off = (rock: Asteroid) => Math.abs(Math.log(massOf(rock) / MASS.battleship / share));
+  const off = (rock: Asteroid) => Math.abs(log(massOf(rock) / MASS.battleship / share));
   const piece = [...field.asteroids.values()].sort((a, b) => off(a) - off(b))[0];
   // alone in the field: nothing else meets the hull
   for (const id of [...field.asteroids.keys()]) if (id !== piece.id) field.asteroids.delete(id);
@@ -660,7 +662,7 @@ describe("the battleship's hangars", () => {
       // a mipmap's texel averages the rows under it (the GPU's box filter on a texture of powers
       // of two); bilinear filtering at the plate's edges weighs the two nearest
       for (let level = 0; level <= 4; level++) {
-        const size = 2 ** level;
+        const size = pow(2, level);
         for (const v of [plates[wall], plates[wall + 1]]) {
           const at = (v * height) / size - 0.5;
           const below = Math.floor(at);

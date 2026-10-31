@@ -24,6 +24,8 @@ import {
 } from '../view/surfaces';
 import type { Lettering } from '../view/lettering';
 import { beacons, biodome, domeGlass, FAILING_SHARE, frosted, paint, rimed, windowMaterials } from './worldship';
+import { cos, hypot, pow, sin } from '../detmath';
+import { rotateX, rotateY, rotateZ } from '../detthree';
 
 /**
  * The shapes the arenas are built from besides rock and ice (see world/ice): the junk of a
@@ -136,16 +138,16 @@ function revolve(profile: readonly (readonly [number, number])[], segments: numb
       if (a < 0 || b >= profile.length) continue;
       const dx = profile[b][0] - profile[a][0];
       const dr = profile[b][1] - profile[a][1];
-      const length = Math.hypot(dx, dr);
+      const length = hypot(dx, dr);
       if (length === 0) continue;
       nx -= dr / length;
       nr += dx / length;
     }
-    const length = (Math.hypot(nx, nr) || 1) * (inward ? -1 : 1);
+    const length = (hypot(nx, nr) || 1) * (inward ? -1 : 1);
     for (let j = 0; j <= segments; j++) {
       const angle = start + (sweep * j) / segments;
-      positions.push(x, radius * Math.sin(angle), radius * Math.cos(angle));
-      normals.push(nx / length, (nr / length) * Math.sin(angle), (nr / length) * Math.cos(angle));
+      positions.push(x, radius * sin(angle), radius * cos(angle));
+      normals.push(nx / length, (nr / length) * sin(angle), (nr / length) * cos(angle));
       uvs.push(u[0] + ((u[1] - u[0]) * j) / segments, v[0] + (v[1] - v[0]) * (last === first ? i / (profile.length - 1) : (x - first) / (last - first)));
     }
   });
@@ -186,7 +188,7 @@ function wingUv(box: THREE.BoxGeometry, width: number): THREE.BoxGeometry {
 
 /** A small parabolic dish `radius` across its rim and `depth` deep, opening along +y. */
 const dish = (radius: number, depth: number) =>
-  revolve(Array.from({ length: 6 }, (_, i) => [depth * (i / 5) ** 2, radius * (i / 5)] as const), 12).rotateZ(Math.PI / 2);
+  rotateZ(revolve(Array.from({ length: 6 }, (_, i) => [depth * pow(i / 5, 2), radius * (i / 5)] as const), 12), Math.PI / 2);
 
 /** Merges parts into one geometry (all without an index). */
 const merged = (parts: THREE.BufferGeometry[]) => mergeGeometries(parts.map((p) => (p.index ? p.toNonIndexed() : p)));
@@ -256,7 +258,7 @@ export function debrisSet(): TemplateSet {
       for (let k = 0; k < pieces; k++) {
         if (shredded && k > 0 && r.nextFloat() < 0.35) continue;
         const wing = wingUv(new THREE.BoxGeometry(piece * 0.96, L * 0.006, L * 0.14), L * 0.14);
-        if (shredded) wing.rotateX(r.range(-0.6, 0.6)).rotateZ(r.range(-0.25, 0.25));
+        if (shredded) rotateZ(rotateX(wing, r.range(-0.6, 0.6)), r.range(-0.25, 0.25));
         wings.push(wing.translate(start + piece * (k + 0.5), shredded ? r.range(-0.03, 0.03) * L : 0, 0));
       }
       outline.push(...wings);
@@ -269,30 +271,30 @@ export function debrisSet(): TemplateSet {
       for (const side of [1, -1]) {
         const at = new THREE.Vector3(x0 + busLength * (side > 0 ? 0.22 : 0.45), L * 0.015, side * L * 0.04);
         parts.push(tint(new THREE.CylinderGeometry(L * 0.0018, L * 0.0018, L * 0.012, 6).translate(at.x, at.y + L * 0.006, at.z), METAL));
-        parts.push(tint(dish(L * 0.022, L * 0.007).rotateX(d.range(-0.5, 0.5)).rotateZ(d.range(-0.5, 0.5)).translate(at.x, at.y + L * 0.012, at.z), WHITE));
+        parts.push(tint(rotateZ(rotateX(dish(L * 0.022, L * 0.007), d.range(-0.5, 0.5)), d.range(-0.5, 0.5)).translate(at.x, at.y + L * 0.012, at.z), WHITE));
       }
       parts.push(tint(new THREE.BoxGeometry(L * 0.014, L * 0.01, L * 0.014).translate(x0 + busLength * 0.8, L * 0.02, -L * 0.045), DARK));
-      parts.push(tint(new THREE.CylinderGeometry(L * 0.006, L * 0.0045, L * 0.014, 10, 1, true).rotateX(0.5).translate(x0 + busLength * 0.8, L * 0.029, -L * 0.04), BLACK));
+      parts.push(tint(rotateX(new THREE.CylinderGeometry(L * 0.006, L * 0.0045, L * 0.014, 10, 1, true), 0.5).translate(x0 + busLength * 0.8, L * 0.029, -L * 0.04), BLACK));
       // the white radiator standing off the bus's flank
       parts.push(tint(new THREE.BoxGeometry(busLength * 0.8, L * 0.024, L * 0.002).translate(middle, 0, L * 0.0765), WHITE));
       // thrusters at the bus's front corners
       for (const [y, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
-        parts.push(tint(new THREE.CylinderGeometry(L * 0.0015, L * 0.004, L * 0.008, 8, 1, true).rotateZ(Math.PI / 2).translate(x0 - L * 0.003, y * L * 0.01, z * L * 0.06), BLACK));
+        parts.push(tint(rotateZ(new THREE.CylinderGeometry(L * 0.0015, L * 0.004, L * 0.008, 8, 1, true), Math.PI / 2).translate(x0 - L * 0.003, y * L * 0.01, z * L * 0.06), BLACK));
       }
       if (shredded) {
         // the foil torn open, its flaps sticking out from the bus
         for (let k = 0; k < 4; k++) {
           const flap = new THREE.BoxGeometry(L * d.range(0.03, 0.06), L * 0.0008, L * d.range(0.02, 0.04));
-          flap.translate(flap.parameters.width / 2, 0, 0).rotateY(d.range(0, Math.PI * 2)).rotateZ(d.range(-0.8, 0.8));
+          rotateZ(rotateY(flap.translate(flap.parameters.width / 2, 0, 0), d.range(0, Math.PI * 2)), d.range(-0.8, 0.8));
           foiled.push(flap.translate(x0 + busLength * d.range(0.1, 0.9), (d.nextFloat() < 0.5 ? 1 : -1) * L * 0.015, d.range(-0.06, 0.06) * L));
         }
       }
     } else if (kind === 'stage') {
       // a spent upper stage: its tank, the payload adapter's ring at the front, the engine at the back
       const R = L * 0.13;
-      outline.push(new THREE.CylinderGeometry(R, R, L * 0.72, 16).rotateZ(Math.PI / 2).translate(-L * 0.1, 0, 0));
-      outline.push(new THREE.CylinderGeometry(R * 1.04, R * 1.04, L * 0.08, 16, 1, true).rotateZ(Math.PI / 2).translate(-L * 0.44, 0, 0));
-      outline.push(new THREE.CylinderGeometry(R * 0.35, R * 0.95, L * 0.22, 16, 1, true).rotateZ(Math.PI / 2).translate(L * 0.37, 0, 0));
+      outline.push(rotateZ(new THREE.CylinderGeometry(R, R, L * 0.72, 16), Math.PI / 2).translate(-L * 0.1, 0, 0));
+      outline.push(rotateZ(new THREE.CylinderGeometry(R * 1.04, R * 1.04, L * 0.08, 16, 1, true), Math.PI / 2).translate(-L * 0.44, 0, 0));
+      outline.push(rotateZ(new THREE.CylinderGeometry(R * 0.35, R * 0.95, L * 0.22, 16, 1, true), Math.PI / 2).translate(L * 0.37, 0, 0));
       painted.push(revolve([[-L * 0.46, R], [L * 0.26, R]], 32, { v: [LIVERY_STAGE[1], LIVERY_STAGE[0]] }));
       parts.push(tint(revolve([[-L * 0.474, 0], [-L * 0.47, R * 0.55], [-L * 0.465, R * 0.85], [-L * 0.46, R]], 32), 0xc9c5ba));
       parts.push(tint(revolve([[-L * 0.48, R * 0.3], [-L * 0.48, R * 0.47], [-L * 0.472, R * 0.62]], 24), METAL));
@@ -322,8 +324,8 @@ export function debrisSet(): TemplateSet {
     } else if (kind === 'fairing') {
       // half of a payload fairing: a shell open on one side, its ogive nose, lined inside
       const R = L * 0.2;
-      outline.push(new THREE.CylinderGeometry(R, R, L * 0.6, 16, 1, true, 0, Math.PI).rotateZ(Math.PI / 2).translate(-L * 0.2, 0, 0));
-      outline.push(new THREE.CylinderGeometry(R * 0.15, R, L * 0.4, 16, 1, true, Math.PI, Math.PI).rotateZ(-Math.PI / 2).translate(L * 0.3, 0, 0));
+      outline.push(rotateZ(new THREE.CylinderGeometry(R, R, L * 0.6, 16, 1, true, 0, Math.PI), Math.PI / 2).translate(-L * 0.2, 0, 0));
+      outline.push(rotateZ(new THREE.CylinderGeometry(R * 0.15, R, L * 0.4, 16, 1, true, Math.PI, Math.PI), -Math.PI / 2).translate(L * 0.3, 0, 0));
       const shell = (scale: number): [number, number][] => [
         [-L * 0.5, R * scale],
         [L * 0.1, R * scale],
@@ -344,10 +346,10 @@ export function debrisSet(): TemplateSet {
       for (let k = 0; k < layers; k++) {
         const y = (k - (layers - 1) / 2) * L * 0.04;
         const loose = k === layers - 1 ? 0.35 : r.range(-0.04, 0.04);
-        outline.push(new THREE.BoxGeometry(L * 0.7, L * 0.025, L * 0.3).rotateY(loose).translate(0, y, 0));
-        foiled.push(new THREE.BoxGeometry(L * 0.7, L * 0.028, L * 0.29).translate(0, -L * 0.003, 0).rotateY(loose).translate(0, y, 0));
-        wings.push(wingUv(new THREE.BoxGeometry(L * 0.64, L * 0.005, L * 0.26), L * 0.26).translate(L * 0.02, L * 0.0135, 0).rotateY(loose).translate(0, y, 0));
-        for (const side of [1, -1]) parts.push(tint(new THREE.BoxGeometry(L * 0.012, L * 0.02, L * 0.03).translate(side * L * 0.352, -L * 0.002, 0).rotateY(loose).translate(0, y, 0), DARK));
+        outline.push(rotateY(new THREE.BoxGeometry(L * 0.7, L * 0.025, L * 0.3), loose).translate(0, y, 0));
+        foiled.push(rotateY(new THREE.BoxGeometry(L * 0.7, L * 0.028, L * 0.29).translate(0, -L * 0.003, 0), loose).translate(0, y, 0));
+        wings.push(rotateY(wingUv(new THREE.BoxGeometry(L * 0.64, L * 0.005, L * 0.26), L * 0.26).translate(L * 0.02, L * 0.0135, 0), loose).translate(0, y, 0));
+        for (const side of [1, -1]) parts.push(tint(rotateY(new THREE.BoxGeometry(L * 0.012, L * 0.02, L * 0.03).translate(side * L * 0.352, -L * 0.002, 0), loose).translate(0, y, 0), DARK));
       }
       for (const [x, z] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) {
         const post = new THREE.BoxGeometry(L * 0.02, L * 0.4, L * 0.02).translate(x * L * 0.33, 0, z * L * 0.14);
@@ -518,7 +520,7 @@ export function hullSet(): TemplateSet {
       parts.push(block(half.x * 1.2, half.y * 2, half.z * 2, -half.x * 0.4));
       // three nozzles out of the back, cold
       for (const [y, z] of [[0.45, 0], [-0.3, 0.45], [-0.3, -0.45]]) {
-        parts.push(new THREE.CylinderGeometry(half.y * 0.32, half.y * 0.48, half.x * 0.8, 8, 1, true).rotateZ(Math.PI / 2).translate(half.x * 0.6, y * half.y, z * half.z).toNonIndexed());
+        parts.push(rotateZ(new THREE.CylinderGeometry(half.y * 0.32, half.y * 0.48, half.x * 0.8, 8, 1, true), Math.PI / 2).translate(half.x * 0.6, y * half.y, z * half.z).toNonIndexed());
       }
     },
     (half, { parts, lights, beacons }) => {

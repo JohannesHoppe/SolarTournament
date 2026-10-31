@@ -49,7 +49,7 @@ const METERS = 0.05;
 /** The mass of a piece of the field (kg), from its mean radius and its kind's density. */
 export function massOf(piece: Pick<Asteroid, 'meanRadius' | 'kind'>): number {
   const radius = piece.meanRadius * METERS;
-  return ((4 / 3) * Math.PI * radius ** 3) * DENSITY[piece.kind];
+  return ((4 / 3) * Math.PI * radius * radius * radius) * DENSITY[piece.kind];
 }
 
 /** The share of an impulse between two bodies that the one of mass `mass` takes against one of mass `other`: its inverse mass over both. */

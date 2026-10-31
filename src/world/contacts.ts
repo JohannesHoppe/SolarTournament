@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { blowState, KNOCKED, outline, type Asteroid, type AsteroidField, type ShovedState } from './asteroids';
 import { IMMOVABLE, share } from './bodies';
 import { ringRim, ringSamples, touchRing } from './gates';
+import { hypot } from '../detmath';
 
 /**
  * The field's pieces meet each other and the rings of the tournament: rock on rock, a fragment
@@ -173,7 +174,7 @@ function pointsInto(field: AsteroidField, points: Float32Array, matrix: THREE.Ma
     let depth: number;
     if (b.box) depth = Math.min(h.x - Math.abs(local.x), h.y - Math.abs(local.y), h.z - Math.abs(local.z));
     else if (b.surface) depth = b.surface.radius(local) - local.length();
-    else depth = (1 - Math.hypot(local.x / h.x, local.y / h.y, local.z / h.z)) * Math.min(h.x, h.y, h.z);
+    else depth = (1 - hypot(local.x / h.x, local.y / h.y, local.z / h.z)) * Math.min(h.x, h.y, h.z);
     // or in what stands on it (a rig, a buoy), in its piece's units
     for (const part of parts) {
       inPart.copy(local).add(b.center).applyMatrix4(part.inverse);
@@ -458,7 +459,7 @@ const slide = new THREE.Vector3();
 /** The inverse of a piece's moment of inertia (1/(kg·units²)): a ball of its mean radius, 2/5 m r²; 0 for a welded one, which never tumbles. */
 function turning(entry: Entry): number {
   if (entry.piece.weld !== null) return 0;
-  return 1 / (0.4 * entry.mass * entry.piece.meanRadius ** 2);
+  return 1 / (0.4 * entry.mass * entry.piece.meanRadius * entry.piece.meanRadius);
 }
 
 /**

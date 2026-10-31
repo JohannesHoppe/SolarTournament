@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { hypot, pow } from '../detmath';
 import { canvas, toTexture } from '../view/textures';
 import type { Grade } from '../view/grade';
 
@@ -92,10 +93,10 @@ export function cloudTexture(seed: number): THREE.CanvasTexture {
       }
       const billow = sum / weight;
       // round, thinning towards the edge, the noise pushing its rim in and out
-      const r = Math.hypot(u - 0.5, v - 0.5) * 2;
+      const r = hypot(u - 0.5, v - 0.5) * 2;
       // (and gone before the texture's edge, so no sprite shows its square)
       const falloff = THREE.MathUtils.smoothstep(1 - r + (billow - 0.5) * 0.9, 0, 0.75) * (1 - THREE.MathUtils.smoothstep(r, 0.75, 0.98));
-      const density = falloff * THREE.MathUtils.smoothstep(billow, 0.32, 0.78) ** 1.5;
+      const density = falloff * pow(THREE.MathUtils.smoothstep(billow, 0.32, 0.78), 1.5);
       const value = Math.round(255 * density);
       const i = (y * CLOUD_SIZE + x) * 4;
       image.data[i] = image.data[i + 1] = image.data[i + 2] = value;

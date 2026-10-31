@@ -4,6 +4,7 @@ import { boxUv, hullSurface, lacquer, shine, type Wear } from '../view/surfaces'
 import { hazeUniforms } from '../view/haze';
 import { numberAspect, numberTexture } from '../view/lettering';
 import { NOZZLE_LENGTH, QUAD_SIZE, quadsOf, thrustersOf, type QuadLayout } from './thrusters';
+import { hypot } from '../detmath';
 
 /**
  * The two interceptors, built in code as low-poly hulls (a few hundred triangles each), shaded
@@ -302,7 +303,7 @@ function band(ends: End[], from: number, to: number, height: number): THREE.Buff
 function radiator(section: Section, back: End, front: End, warmth: (p: THREE.Vector3) => number): THREE.BufferGeometry {
   const grow = (end: End, dz: number): End => {
     if (section !== BLADE) return { ...end, z: end.z + dz, w: end.w + SKIN, h: end.h + SKIN };
-    const scale = 1 + SKIN * Math.hypot(1 / end.w, 1 / end.h);
+    const scale = 1 + SKIN * hypot(1 / end.w, 1 / end.h);
     return { ...end, z: end.z + dz, w: end.w * scale, h: end.h * scale };
   };
   const geometry = loft(section, grow(back, SKIN), grow(front, -SKIN));

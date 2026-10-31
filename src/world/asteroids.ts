@@ -8,6 +8,8 @@ import { weldFrost } from './worldship';
 import { opticalDepth, SIGHT_DEPTH, type Air } from './air';
 import type { FractureSet } from './fracture';
 import { massOf } from './bodies';
+import { cbrt, cos, hypot, sin } from '../detmath';
+import { applyAxisAngle, setFromAxisAngle, slerp } from '../detthree';
 
 /** Radius of the asteroid field (units, 2.25 km): ships spawn on its edge, the arena ends at 1.5 times it. */
 export const FIELD_RADIUS = 45000;
@@ -340,7 +342,7 @@ export function outline(piece: Pick<Asteroid, 'surface' | 'semiAxes' | 'center' 
       // a spiral down the sphere, each turn by the golden angle
       const y = 1 - (2 * k + 1) / OUTLINE_POINTS;
       const around = k * Math.PI * (3 - Math.sqrt(5));
-      const direction = new THREE.Vector3(Math.cos(around) * Math.sqrt(1 - y * y), y, Math.sin(around) * Math.sqrt(1 - y * y));
+      const direction = new THREE.Vector3(cos(around) * Math.sqrt(1 - y * y), y, sin(around) * Math.sqrt(1 - y * y));
       directions.push(piece.surface ? direction.multiplyScalar(piece.surface.radius(direction)) : direction.multiply(piece.semiAxes));
     }
   }
@@ -484,7 +486,7 @@ export class AsteroidField {
       impostor: null,
       box: false,
       surface: piece.surface,
-      mean: whole.mean * Math.cbrt(piece.share),
+      mean: whole.mean * cbrt(piece.share),
       centroid: piece.centroid,
       parts: [],
     };
@@ -506,12 +508,12 @@ export class AsteroidField {
       if (layout.flat === undefined) {
         direction.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
         const inner = layout.inner / layout.radius;
-        position.copy(direction).multiplyScalar(layout.radius * Math.cbrt(inner ** 3 + (1 - inner ** 3) * r.nextFloat()));
+        position.copy(direction).multiplyScalar(layout.radius * cbrt(inner * inner * inner + (1 - inner * inner * inner) * r.nextFloat()));
       } else {
         // evenly over the disk's area
         const angle = r.range(0, Math.PI * 2);
-        const distance = Math.sqrt(r.range(layout.inner ** 2, layout.radius ** 2));
-        position.set(Math.cos(angle) * distance, r.range(-layout.flat, layout.flat), Math.sin(angle) * distance);
+        const distance = Math.sqrt(r.range(layout.inner * layout.inner, layout.radius * layout.radius));
+        position.set(cos(angle) * distance, r.range(-layout.flat, layout.flat), sin(angle) * distance);
       }
     });
     const open = layout.open;
@@ -521,7 +523,7 @@ export class AsteroidField {
         const angle = r.range(0, Math.PI * 2);
         const distance = Math.sqrt(r.nextFloat()) * open.radius;
         const height = r.range(open.from, open.to) * (r.nextFloat() < 0.5 ? -1 : 1);
-        position.set(Math.cos(angle) * distance, height, Math.sin(angle) * distance);
+        position.set(cos(angle) * distance, height, sin(angle) * distance);
       });
     }
     // the pieces of the shapes in the field are cut in the background, before any of them breaks
@@ -629,7 +631,7 @@ export class AsteroidField {
     const distance = Math.max(position.length(), 1);
     if (speed !== undefined) return speed / distance;
     const well = this.well;
-    return well ? Math.sqrt((well.surfaceGravity * well.radius * well.radius) / distance ** 3) : 0;
+    return well ? Math.sqrt((well.surfaceGravity * well.radius * well.radius) / (distance * distance * distance)) : 0;
   }
 
   clear() {
@@ -738,13 +740,13 @@ export class AsteroidField {
   private place(a: Asteroid, time = this.clock) {
     const age = time - a.born;
     positionAt(a, time, a.object.position);
-    a.object.quaternion.setFromAxisAngle(a.spinAxis, a.spinRate * age).multiply(a.baseOrientation);
+    setFromAxisAngle(a.object.quaternion, a.spinAxis, a.spinRate * age).multiply(a.baseOrientation);
     const ease = a.ease;
     if (ease) {
       const left = Math.min(1, 1 - (time - ease.from) / EASE_SECONDS);
       if (left > 0) {
         a.object.position.addScaledVector(ease.offset, left);
-        a.object.quaternion.premultiply(easing.identity().slerp(ease.turn, left));
+        a.object.quaternion.premultiply(slerp(easing.identity(), ease.turn, left));
       } else a.ease = null;
     }
     a.object.updateMatrixWorld(true);
@@ -789,7 +791,7 @@ export class AsteroidField {
         continue;
       }
       positionAt(piece, time, shell.position);
-      shell.quaternion.setFromAxisAngle(piece.spinAxis, piece.spinRate * (time - piece.born)).multiply(piece.baseOrientation);
+      setFromAxisAngle(shell.quaternion, piece.spinAxis, piece.spinRate * (time - piece.born)).multiply(piece.baseOrientation);
       shell.scale.copy(scale).multiplyScalar(left);
     }
   }
@@ -916,8 +918,8 @@ export class AsteroidField {
   private push(a: Asteroid, at: number, kick: THREE.Vector3, axis: THREE.Vector3, rate: number, by: number) {
     const age = at - a.born;
     positionAt(a, at, a.basePosition);
-    a.baseOrientation.premultiply(new THREE.Quaternion().setFromAxisAngle(a.spinAxis, a.spinRate * age));
-    if (a.orbitRate) a.velocity.applyAxisAngle(a.orbitAxis, a.orbitRate * age);
+    a.baseOrientation.premultiply(setFromAxisAngle(new THREE.Quaternion(), a.spinAxis, a.spinRate * age));
+    if (a.orbitRate) applyAxisAngle(a.velocity, a.orbitAxis, a.orbitRate * age);
     a.velocity.add(kick);
     a.spinAxis = axis.clone();
     a.spinRate = rate;
@@ -972,7 +974,7 @@ export class AsteroidField {
     // the fragments fly apart from where the piece stood, and keep circling with its orbit
     const origin = positionAt(asteroid, at, new THREE.Vector3());
     const drift = asteroid.velocity.clone();
-    if (asteroid.orbitRate) drift.applyAxisAngle(asteroid.orbitAxis, asteroid.orbitRate * (at - asteroid.born));
+    if (asteroid.orbitRate) applyAxisAngle(drift, asteroid.orbitAxis, asteroid.orbitRate * (at - asteroid.born));
     const templates = this.templates[asteroid.kind];
     for (let i = 0; i < count; i++) {
       const direction = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
@@ -1007,8 +1009,8 @@ export class AsteroidField {
     const age = at - rock.born;
     const origin = positionAt(rock, at, new THREE.Vector3());
     const drift = rock.velocity.clone();
-    if (rock.orbitRate) drift.applyAxisAngle(rock.orbitAxis, rock.orbitRate * age);
-    const turn = new THREE.Quaternion().setFromAxisAngle(rock.spinAxis, rock.spinRate * age).multiply(rock.baseOrientation);
+    if (rock.orbitRate) applyAxisAngle(drift, rock.orbitAxis, rock.orbitRate * age);
+    const turn = setFromAxisAngle(new THREE.Quaternion(), rock.spinAxis, rock.spinRate * age).multiply(rock.baseOrientation);
     const spin = rock.spinAxis.clone().multiplyScalar(rock.spinRate);
     const tumble = (this.layout?.spin ?? SPIN_RATE) * FRAGMENT_TUMBLE;
     const s = parent.scale * scale;
@@ -1322,7 +1324,7 @@ export class AsteroidField {
     target.copy(asteroid.spinAxis).multiplyScalar(asteroid.spinRate).cross(arm);
     if (!asteroid.orbitRate) return target.add(asteroid.velocity);
     // the orbit carries the rock (and turns its drift) about the field's center
-    target.add(v.copy(asteroid.velocity).applyAxisAngle(asteroid.orbitAxis, asteroid.orbitRate * (time - asteroid.born)));
+    target.add(applyAxisAngle(v.copy(asteroid.velocity), asteroid.orbitAxis, asteroid.orbitRate * (time - asteroid.born)));
     return target.add(u.copy(asteroid.orbitAxis).multiplyScalar(asteroid.orbitRate).cross(asteroid.object.position));
   }
 
@@ -1383,7 +1385,7 @@ function rayAttachment(asteroid: Asteroid, part: Attachment, origin: THREE.Vecto
 function positionAt(a: Asteroid, time: number, target: THREE.Vector3): THREE.Vector3 {
   const age = time - a.born;
   target.copy(a.basePosition).addScaledVector(a.velocity, age);
-  return a.orbitRate ? target.applyAxisAngle(a.orbitAxis, a.orbitRate * age) : target;
+  return a.orbitRate ? applyAxisAngle(target, a.orbitAxis, a.orbitRate * age) : target;
 }
 
 /**
@@ -1395,7 +1397,7 @@ function ellipsoidContact(asteroid: Asteroid, center: THREE.Vector3, radius: num
   const scale = asteroid.object.matrixWorld.getMaxScaleOnAxis();
   const axes = v.copy(asteroid.semiAxes).addScalar(radius / scale);
   const local = u.copy(center).applyMatrix4(asteroid.inverse).sub(asteroid.center);
-  const length = Math.hypot(local.x / axes.x, local.y / axes.y, local.z / axes.z);
+  const length = hypot(local.x / axes.x, local.y / axes.y, local.z / axes.z);
   if (length >= 1) return null;
   ellipsoidTouch.length = length;
   return ellipsoidTouch;

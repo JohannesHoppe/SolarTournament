@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
+import { cos, sin } from '../detmath';
+import { rotateY, rotateZ } from '../detthree';
 import { Randomizer } from '../random';
 import { SUN_DIRECTION } from './space';
 import { letteringTexture, PAINT_ASPECT, type Lettering } from '../view/lettering';
@@ -37,7 +39,7 @@ export function windowMaterials(map: THREE.Texture): { steady: THREE.MeshBasicMa
 
 /** A hash of a whole number to 0..1, for the stutter of a failing circuit (look only). */
 const flip = (n: number) => {
-  const s = Math.sin(n * 12.9898) * 43758.5453;
+  const s = sin(n * 12.9898) * 43758.5453;
   return s - Math.floor(s);
 };
 
@@ -52,7 +54,7 @@ const beaconUniforms = { time: { value: 0 }, viewport: { value: 1000 } };
 export function animateHull(time: number) {
   failing.forEach((material, i) => {
     const t = time + i * 47;
-    const burst = Math.sin(t * 0.21) + Math.sin(t * 0.53 + 1.3) + Math.sin(t * 1.37 + 0.7) > FAILING_THRESHOLD;
+    const burst = sin(t * 0.21) + sin(t * 0.53 + 1.3) + sin(t * 1.37 + 0.7) > FAILING_THRESHOLD;
     material.color.setScalar(WINDOW_LIGHT * (burst && flip(Math.floor(t * FAILING_RATE)) < 0.5 ? FAILING_DIP : 1));
   });
   beaconUniforms.time.value = time;
@@ -249,7 +251,7 @@ export function paint(lettering: Lettering, seed: number, x: number, y: number, 
   // both flanks in one draw call
   const flanks = [1, -1].map((side) => {
     const plane = new THREE.PlaneGeometry(length, length / PAINT_ASPECT);
-    if (side < 0) plane.rotateY(Math.PI);
+    if (side < 0) rotateY(plane, Math.PI);
     return plane.translate(x, y, side * (z + PAINT_LIFT));
   });
   const decal = new THREE.Mesh(mergeGeometries(flanks), material);
@@ -287,14 +289,11 @@ export function biodome(r: Randomizer, x: number, y: number, z: number, radius: 
     for (let b = 0; b < 4; b++) {
       const length = height * r.range(0.3, 0.5);
       tree.push(
-        new THREE.CylinderGeometry(radius * 0.006, radius * 0.012, length, 4)
-          .translate(0, length / 2, 0)
-          .rotateZ(r.range(0.5, 1.1))
-          .rotateY(r.range(0, Math.PI * 2))
+        rotateY(rotateZ(new THREE.CylinderGeometry(radius * 0.006, radius * 0.012, length, 4).translate(0, length / 2, 0), r.range(0.5, 1.1)), r.range(0, Math.PI * 2))
           .translate(0, height * r.range(0.5, 0.95), 0),
       );
     }
-    const trunk = mergeGeometries(tree.map((p) => p.toNonIndexed().deleteAttribute('uv'))).rotateZ(r.range(-0.15, 0.15)).translate(x + Math.cos(angle) * out, y + radius * 0.06, z + Math.sin(angle) * out);
+    const trunk = rotateZ(mergeGeometries(tree.map((p) => p.toNonIndexed().deleteAttribute('uv'))), r.range(-0.15, 0.15)).translate(x + cos(angle) * out, y + radius * 0.06, z + sin(angle) * out);
     garden.push(trunk);
   }
   // shrubs, rimed lumps
@@ -302,7 +301,7 @@ export function biodome(r: Randomizer, x: number, y: number, z: number, radius: 
     const angle = r.range(0, Math.PI * 2);
     const out = r.range(0.2, 0.85) * radius;
     const size = r.range(0.04, 0.09) * radius;
-    garden.push(new THREE.IcosahedronGeometry(size, 0).scale(1, 0.6, 1).translate(x + Math.cos(angle) * out, y + radius * 0.06 + size * 0.4, z + Math.sin(angle) * out));
+    garden.push(new THREE.IcosahedronGeometry(size, 0).scale(1, 0.6, 1).translate(x + cos(angle) * out, y + radius * 0.06 + size * 0.4, z + sin(angle) * out));
   }
 }
 

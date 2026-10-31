@@ -2,6 +2,7 @@
 
 Helpers for the unit tests (`npm test`, Vitest in Node), not part of the game.
 
+- `bigfloat.ts`: binary floating point of any precision in integers (`BigInt`): π by Machin's formula, ln 2 by its series, and every function of `src/detmath.ts` from its defining series to 192 bits, the reference `src/detmath.test.ts` measures the errors in ulps against.
 - `cube.ts`: reads a baked cube map back the way the GPU does (the face and texel a direction picks, the direction a texel stands for, a texel's normal) and a detail tile's seams and means, and checks that a shape's map is its own, square and mipmapped, and baked alike every time; the tests of the relief maps of rock, ice and the comet's nucleus use it.
 - `field.ts`: `driftProbes` moves the probes a step bouncing off a field and its battleship, as the game does; an asteroid field with the real rock shapes (in the detail a test asks for), rock and ice breaking into pieces of themselves cut at that detail, and plain boxes for hull pieces, or the world ship's own collider boxes (`HULL_BOXES`); in the Belt's layout its rigs and buoys stand solid on their rocks, as the game dresses them (see world/mining, `standClaims`).
 - `honest.ts`: an honest ship flown wildly with the game's flight model (slammed sticks, flips, the autopilot, beams), blown about by shoves, hits and venting air, on a browser that stutters and a link that stalls; returns its states and beams as another browser receives them, for the cheat checks (`src/net/plausible.test.ts`) to prove they never take it for a cheat.

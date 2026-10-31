@@ -3,6 +3,7 @@ import type { AsteroidField } from '../world/asteroids';
 import type { Ship } from '../ship/ship';
 import { t } from '../i18n/i18n';
 import { shownTint, SOVEREIGN_GOLD } from '../ship/tints';
+import { cos, pow, sin } from '../detmath';
 
 /** How fast the Sovereign's ring on the radar pulses (rad/s, a beat in about two seconds). */
 const SOVEREIGN_PULSE = 3;
@@ -90,12 +91,12 @@ export class Radar {
     const project = (world: THREE.Vector3) => {
       local.copy(world).sub(me.flight.position).applyQuaternion(inverse);
       const distance = local.length();
-      const shown = (Math.min(distance, RANGE) / RANGE) ** COMPRESSION * radius;
+      const shown = pow(Math.min(distance, RANGE) / RANGE, COMPRESSION) * radius;
       if (distance > 1) local.multiplyScalar(shown / distance);
       // ahead (-z) goes up the screen, foreshortened by the tilt; height lifts the mark off the plane
       const x = center + local.x;
-      const plane = center + local.z * Math.sin(TILT);
-      return { x, plane, y: plane - local.y * Math.cos(TILT), distance, scale: shown / Math.max(distance, 1) };
+      const plane = center + local.z * sin(TILT);
+      return { x, plane, y: plane - local.y * cos(TILT), distance, scale: shown / Math.max(distance, 1) };
     };
 
     // the big things first: the arena's massive body, rocks and hulls, as shapes of their size
@@ -140,7 +141,7 @@ export class Radar {
       if (ship.sovereign) {
         // the Sovereign's dot wears a slowly pulsing gold ring, its side's color or not
         ctx.strokeStyle = SOVEREIGN_GOLD;
-        ctx.globalAlpha = 0.6 + 0.4 * Math.sin(now * SOVEREIGN_PULSE);
+        ctx.globalAlpha = 0.6 + 0.4 * sin(now * SOVEREIGN_PULSE);
         ctx.lineWidth = 1.5;
         ctx.strokeRect(p.x - 4.5, p.y - 4.5, 9, 9);
         ctx.globalAlpha = 1;
@@ -169,16 +170,16 @@ export class Radar {
     ctx.strokeStyle = 'rgba(77, 145, 255, 0.3)';
     for (const share of [1, 0.5]) {
       ctx.beginPath();
-      ctx.ellipse(center, center, radius * share, radius * share * Math.sin(TILT), 0, 0, Math.PI * 2);
+      ctx.ellipse(center, center, radius * share, radius * share * sin(TILT), 0, 0, Math.PI * 2);
       ctx.stroke();
     }
     ctx.beginPath();
-    ctx.moveTo(center, center - radius * Math.sin(TILT));
-    ctx.lineTo(center, center + radius * Math.sin(TILT));
+    ctx.moveTo(center, center - radius * sin(TILT));
+    ctx.lineTo(center, center + radius * sin(TILT));
     ctx.moveTo(center - radius, center);
     ctx.lineTo(center + radius, center);
     ctx.stroke();
-    this.text(t('AHEAD'),center, center - radius * Math.sin(TILT) - 4, 'rgba(77, 145, 255, 0.7)', 'center');
+    this.text(t('AHEAD'),center, center - radius * sin(TILT) - 4, 'rgba(77, 145, 255, 0.7)', 'center');
   }
 
   /** A line from the ship's horizontal plane up or down to a mark. */

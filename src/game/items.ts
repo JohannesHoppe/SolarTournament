@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rotateX, setRotation } from '../detthree';
 import { hash } from '../music/songs';
 import { textSeed } from '../random';
 import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
@@ -141,8 +142,6 @@ export interface Probe {
   beacon: THREE.Mesh;
 }
 
-const spin = new THREE.Euler();
-
 /**
  * A probe's neon dims as the camera comes close, to NEON_NEAR of its brightness within
  * NEON_CLOSE (units, 15 m) and in full from NEON_FULL on (100 m): from afar it blooms so a
@@ -187,9 +186,9 @@ function cells(box: THREE.BoxGeometry): THREE.BoxGeometry {
  * around it in the color of what it carries, so it shows from afar (about 30 m wide).
  */
 function probeParts() {
-  const body = new THREE.CylinderGeometry(70, 90, 160, 6).rotateX(Math.PI / 2);
+  const body = rotateX(new THREE.CylinderGeometry(70, 90, 160, 6), Math.PI / 2);
   const wing = cells(new THREE.BoxGeometry(WING[0], WING[1], WING[2]));
-  const dish = new THREE.ConeGeometry(70, 40, 10, 1, true).rotateX(-Math.PI / 2).translate(0, 0, -110);
+  const dish = rotateX(new THREE.ConeGeometry(70, 40, 10, 1, true), -Math.PI / 2).translate(0, 0, -110);
   const mast = new THREE.CylinderGeometry(6, 6, 90, 4).translate(0, 90, 0);
   const beacon = new THREE.SphereGeometry(34, 10, 6).translate(0, 140, 0);
   const ring = new THREE.TorusGeometry(200, 10, 6, 32);
@@ -358,7 +357,7 @@ export class Probes {
         probe.velocity.copy(probe.slotVelocity);
         probe.astray = false;
       }
-      probe.mesh.rotation.copy(spin.set(0.3, now * 0.4, 0.15));
+      setRotation(probe.mesh, 0.3, now * 0.4, 0.15);
       probe.beacon.visible = now % 1 < 0.6;
       if (now >= probe.until || field.insideWell(probe.position, PROBE_RADIUS)) this.remove(probe);
     }

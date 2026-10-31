@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { acos, cos, exp, log10, pow, sin } from '../detmath';
 import { Noise } from './noise';
 import { srgbByte } from '../srgb';
 import { celestial, cubeDirection, galactic, galacticVector } from './celestial';
@@ -58,7 +59,7 @@ function fbm(d: THREE.Vector3, frequency: number, octaves: number, seed: number)
 }
 
 /** A bell over `x` (degrees) of width `width` (its standard deviation). */
-const bell = (x: number, width: number) => Math.exp((-0.5 * x * x) / (width * width));
+const bell = (x: number, width: number) => exp((-0.5 * x * x) / (width * width));
 /** A galactic longitude's distance (degrees, -180 to 180) from `l0`. */
 const along = (l: number, l0: number) => ((l - l0 + 540) % 360) - 180;
 /** A round patch at galactic longitude `l0`, latitude `b0`, `width` degrees wide (its standard deviation). */
@@ -89,7 +90,7 @@ const warped = new THREE.Vector3();
 export function milkyWayLight(d: THREE.Vector3, out: Float32Array | Uint8Array | number[]) {
   const { l, b } = galactic(d);
   // towards the center (1) or the anticenter (0)
-  const center = 0.5 + 0.5 * Math.cos(l * DEG);
+  const center = 0.5 + 0.5 * cos(l * DEG);
   let light = 0;
   let warm = 0;
   let dust = 0;
@@ -100,9 +101,9 @@ export function milkyWayLight(d: THREE.Vector3, out: Float32Array | Uint8Array |
     galacticVector(d, flat).z *= STRETCH;
     // the disk: its scale height swells towards the center, its light falls towards the anticenter
     const height = 3 + 4 * center;
-    const disk = (0.1 + 0.9 * center ** 3) * Math.exp(-((off / height) ** 1.3));
+    const disk = (0.1 + 0.9 * center * center * center) * exp(-pow(off / height, 1.3));
     // the bulge around the center, flattened along the plane
-    const bulge = 1.6 * Math.exp(-0.5 * ((along(l, 0) / 10) ** 2 + (b / 7) ** 2));
+    const bulge = 1.6 * exp(-0.5 * (pow(along(l, 0) / 10, 2) + pow(b / 7, 2)));
     // the great star clouds: Sagittarius (large and small), Scutum, Cygnus, Carina, Norma
     const clouds =
       1.3 * patch(l, b, 2.5, -4.5, 3) +
@@ -119,7 +120,7 @@ export function milkyWayLight(d: THREE.Vector3, out: Float32Array | Uint8Array |
     // the dust, where it lies: a thin dark lane along the plane, deep towards the center and
     // patchy elsewhere; the Great Rift from Cygnus to Sagittarius north of the plane,
     // wandering; the Coalsack; Ophiuchus's dark clouds reaching north from the center
-    const lane = (0.25 + 1.5 * center ** 2) * bell(b - 0.3, 0.8 + 1.2 * center);
+    const lane = (0.25 + 1.5 * center * center) * bell(b - 0.3, 0.8 + 1.2 * center);
     const riftAt = 2.5 + 3 * (noise(l * 0.05, 3.1, 0.7, 41) - 0.5);
     const rift = 2.6 * THREE.MathUtils.smoothstep(along(l, 0), 3, 16) * (1 - THREE.MathUtils.smoothstep(along(l, 0), 72, 88)) * bell(b - riftAt, 2.2);
     const coalsack = 2 * patch(l, b, 301, -1, 1.9);
@@ -135,18 +136,18 @@ export function milkyWayLight(d: THREE.Vector3, out: Float32Array | Uint8Array |
       const torn = THREE.MathUtils.smoothstep(fbm(warped, 16, 5, 37), 0.45, 0.72);
       dust += envelope * (0.15 + 1.6 * torn);
     }
-    light = (stars * Math.exp(-dust) * (1 - THREE.MathUtils.smoothstep(off, BAND * 0.7, BAND))) / PEAK;
-    warm = Math.min(1, 0.15 + 0.55 * (bulge / Math.max(disk + clouds + bulge, 1e-6)) + 0.3 * center ** 2);
+    light = (stars * exp(-dust) * (1 - THREE.MathUtils.smoothstep(off, BAND * 0.7, BAND))) / PEAK;
+    warm = Math.min(1, 0.15 + 0.55 * (bulge / Math.max(disk + clouds + bulge, 1e-6)) + 0.3 * center * center);
   }
   // the Magellanic Clouds, far below the plane
   for (const cloud of CLOUDS) {
-    const from = Math.acos(THREE.MathUtils.clamp(d.dot(cloud.at), -1, 1)) / DEG;
+    const from = acos(THREE.MathUtils.clamp(d.dot(cloud.at), -1, 1)) / DEG;
     if (from < cloud.size * 4) light += (cloud.light * bell(from, cloud.size) * (0.4 + 1.2 * fbm(d, 45, 3, 51))) / PEAK;
   }
   // a band of many old stars glows warmer towards the bulge, a cool white elsewhere; dust
   // reddens what shines through it
   const tint = [0.86 + 0.14 * warm, 0.88 + 0.04 * warm, 1 - 0.25 * warm];
-  for (let c = 0; c < 3; c++) out[c] = light * tint[c] * Math.exp(-REDDENING[c] * dust);
+  for (let c = 0; c < 3; c++) out[c] = light * tint[c] * exp(-REDDENING[c] * dust);
 }
 
 
@@ -174,7 +175,7 @@ export function faintStars(): StarList {
     const z = 2 * hash(k, 1, 0, 61) - 1;
     const phi = 2 * Math.PI * hash(k, 2, 0, 61);
     const r = Math.sqrt(1 - z * z);
-    d.set(r * Math.cos(phi), r * Math.sin(phi), z);
+    d.set(r * cos(phi), r * sin(phi), z);
     milkyWayLight(d, rgb);
     if (hash(k, 3, 0, 61) > 0.05 + 4 * rgb[1]) continue;
     directions[n * 3] = d.x;
@@ -183,9 +184,9 @@ export function faintStars(): StarList {
     // ever more stars the fainter: their count grows about 2.5 times a magnitude, so the
     // magnitude's share below m grows as 10^(0.4 m)
     const u = hash(k, 4, 0, 61);
-    const m = Math.log10(10 ** (0.4 * bright) + u * (10 ** (0.4 * faint) - 10 ** (0.4 * bright))) / 0.4;
+    const m = log10(pow(10, 0.4 * bright) + u * (pow(10, 0.4 * faint) - pow(10, 0.4 * bright))) / 0.4;
     fluxes[n] = magnitudeFlux(m);
-    colors.set(starColor(-0.1 + 1.6 * hash(k, 5, 0, 61) ** 1.5), n * 3);
+    colors.set(starColor(-0.1 + 1.6 * pow(hash(k, 5, 0, 61), 1.5)), n * 3);
     n++;
   }
   return { count: FAINT_COUNT, directions, colors, fluxes };

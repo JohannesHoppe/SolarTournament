@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { cos, pow } from '../detmath';
+import { makeRotationZ, setRotation } from '../detthree';
 import { Randomizer } from '../random';
 import { shelter, shelterPars, SUN_DIRECTION } from './space';
 import { ARENAS, RING_LAYER, RING_SHEET, SATURN_CENTER, type ArenaId, type ArenaProfile } from './arenas';
@@ -914,7 +916,7 @@ export class Landmarks {
           (error: unknown) => {
             console.warn(`The sharp map of ${planet} did not load`, error);
             // asked again after a pause, doubling with each failure, so a dropped connection does not keep the planet on its small map for good
-            if (this.sharpAsked) setTimeout(() => this.setDetail(this.detailShare), SHARP_RETRY_MS * 2 ** this.sharpFailures++);
+            if (this.sharpAsked) setTimeout(() => this.setDetail(this.detailShare), SHARP_RETRY_MS * pow(2, this.sharpFailures++));
             this.sharpAsked = false;
           },
         );
@@ -1000,7 +1002,7 @@ export class Landmarks {
           side: THREE.DoubleSide,
         }),
       );
-      face.rotation.x = -Math.PI / 2;
+      setRotation(face, -Math.PI / 2, 0, 0);
       face.position.copy(center).setY(center.y + side * RING_SHEET);
       face.receiveShadow = true;
       return face;
@@ -1071,7 +1073,7 @@ export class Landmarks {
     const air = ARENAS.find((arena) => arena.id === 'giant')!.layout.air!;
     this.jupiterCaps.push(...JUPITER_SEGMENTS.map(([width, height]) => new THREE.SphereGeometry(air.radius, width, height, 0, Math.PI * 2, 0, JUPITER_CAP)));
     // turns the cap's top (straight below the arena) to the latitude JUPITER_LATITUDE
-    const frame = new THREE.Matrix3().setFromMatrix4(new THREE.Matrix4().makeRotationZ(JUPITER_LATITUDE - Math.PI / 2));
+    const frame = new THREE.Matrix3().setFromMatrix4(makeRotationZ(new THREE.Matrix4(), JUPITER_LATITUDE - Math.PI / 2));
     const planet = new THREE.Mesh(this.jupiterCaps[0], this.gas('giant', { frame, longitude: JUPITER_LONGITUDE, haze: 0xffd2a8, storms: true }));
     this.jupiterMesh = planet;
     planet.position.copy(air.center);
@@ -1105,7 +1107,7 @@ export class Landmarks {
     });
     // its rim just outside the round slab, so the slab's every point lies within the shell
     const sides = 64;
-    const shell = new THREE.CylinderGeometry(DISK_OUTER / Math.cos(Math.PI / sides), DISK_OUTER / Math.cos(Math.PI / sides), 2 * DISK_TOP, sides, 1);
+    const shell = new THREE.CylinderGeometry(DISK_OUTER / cos(Math.PI / sides), DISK_OUTER / cos(Math.PI / sides), 2 * DISK_TOP, sides, 1);
     group.add(new THREE.Mesh(shell, material));
     return group;
   }

@@ -6,13 +6,14 @@ import { ARENA_LIMIT } from './arena';
 import { FlightModel, MAIN_THRUST, MAX_SPEED } from '../ship/flight';
 import { IDLE } from '../input/input';
 import { testField } from '../test/field';
+import { cos, pow, sin } from '../detmath';
 
 const air = arenaById('giant')!.layout.air!;
 const G = 196.2;
 /** Meters to units (1 unit = 5 cm). */
 const m = (meters: number) => meters * 20;
 /** A point at an altitude (units) over the deck, `x` (units) off the field's center. */
-const at = (altitude: number, x = 0) => new THREE.Vector3(x, Math.sqrt((air.radius + altitude) ** 2 - x * x) - air.radius, 0);
+const at = (altitude: number, x = 0) => new THREE.Vector3(x, Math.sqrt(pow(air.radius + altitude, 2) - x * x) - air.radius, 0);
 const SIDEWAYS = new THREE.Vector3(1, 0, 0);
 /** The radiators' cooling in the air (heat units/s; see ship/ship, in the shade). */
 const COOLING = 50;
@@ -85,7 +86,7 @@ describe("Jupiter's air", () => {
     // a look a few degrees down from just over the deck ends where it goes in, though it comes out again within 10 km
     for (const degrees of [3, 5, 7]) {
       const angle = THREE.MathUtils.degToRad(degrees);
-      const direction = new THREE.Vector3(Math.cos(angle), -Math.sin(angle), 0);
+      const direction = new THREE.Vector3(cos(angle), -sin(angle), 0);
       const origin = at(m(5));
       const reach = reachIn(air, origin, direction, SIGHT_DEPTH, m(10000));
       expect(reach / 20, `${degrees}°`).toBeLessThan(200);

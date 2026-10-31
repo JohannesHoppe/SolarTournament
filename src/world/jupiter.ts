@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { acos, asin, atan2, cos, exp, hypot, pow, sin, tan } from '../detmath';
 import { fbm, noise3 } from './landmarks';
 import { SUN_DIRECTION } from './space';
 import type { Air } from './air';
@@ -191,8 +192,8 @@ export function topsTexture(): THREE.DataTexture {
     for (let octave = 0, cells = 4; octave < octaves; octave++, cells *= 2, amplitude *= 0.55) {
       const angles = Float32Array.from({ length: cells * cells }, () => random.nextFloat() * Math.PI * 2);
       // the lattice's gradients, their cosines and sines taken once per cell
-      const gradientX = Float64Array.from(angles, Math.cos);
-      const gradientY = Float64Array.from(angles, Math.sin);
+      const gradientX = Float64Array.from(angles, cos);
+      const gradientY = Float64Array.from(angles, sin);
       const at = (i: number, j: number) => ((j + cells) % cells) * cells + ((i + cells) % cells);
       for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
@@ -217,7 +218,7 @@ export function topsTexture(): THREE.DataTexture {
     let mean = 0;
     for (const value of sums) mean += value / sums.length;
     let spread = 0;
-    for (const value of sums) spread += (value - mean) ** 2 / sums.length;
+    for (const value of sums) spread += pow(value - mean, 2) / sums.length;
     const scale = 0.125 / Math.sqrt(spread);
     return sums.map((value) => THREE.MathUtils.clamp(0.5 + (value - mean) * scale, 0, 1));
   });
@@ -242,8 +243,8 @@ export function topsTexture(): THREE.DataTexture {
           // the bump's center inside its cell, kept clear of the cell's edges by its radius
           const bx = (ci + di + bump.radius + bump.x * (1 - 2 * bump.radius)) * cell;
           const by = (cj + dj + bump.radius + bump.y * (1 - 2 * bump.radius)) * cell;
-          const d = Math.hypot(x + 0.5 - bx, y + 0.5 - by) / (bump.radius * cell);
-          if (d < 1) pop = Math.max(pop, bump.height * (1 - d * d) ** 2);
+          const d = hypot(x + 0.5 - bx, y + 0.5 - by) / (bump.radius * cell);
+          if (d < 1) pop = Math.max(pop, bump.height * pow(1 - d * d, 2));
         }
       }
       data[o + 3] = Math.round(pop * 255);
@@ -791,7 +792,7 @@ export class Jupiter {
       sheet: { value: new THREE.Vector4(air.center.x, air.center.y, air.center.z, air.radius) },
       tops: { value: topsTexture() },
       level: { value: 0 },
-      meridian: { value: Math.atan2(middle.z, middle.x) },
+      meridian: { value: atan2(middle.z, middle.x) },
       zones: { value: 0.3 },
     });
     for (const sheet of SHEETS) {
@@ -828,7 +829,7 @@ export class Jupiter {
     // planet's axis), laid flat; its height is set in the vertex shader
     const frame = material.uniforms.frame.value as THREE.Matrix3;
     const pole = new THREE.Vector3(0, -1, 0).applyMatrix3(frame.clone().transpose());
-    const band = new THREE.CylinderGeometry(AURORA_DISTANCE, AURORA_DISTANCE, 1, 48, 1, true, Math.atan2(pole.x, pole.z) - AURORA_SPAN, AURORA_SPAN * 2);
+    const band = new THREE.CylinderGeometry(AURORA_DISTANCE, AURORA_DISTANCE, 1, 48, 1, true, atan2(pole.x, pole.z) - AURORA_SPAN, AURORA_SPAN * 2);
     const aurora = new THREE.Mesh(band, this.aurora);
     aurora.frustumCulled = false;
     // drawn before the sheets of cloud (see update), which hide what of it lies behind the planet's limb
@@ -842,7 +843,7 @@ export class Jupiter {
         fragmentShader: moonShader,
         fog: true,
       });
-      const body = new THREE.Mesh(new THREE.SphereGeometry(MOON_DISTANCE * Math.tan(moon.size / 2), 32, 16), surface);
+      const body = new THREE.Mesh(new THREE.SphereGeometry(MOON_DISTANCE * tan(moon.size / 2), 32, 16), surface);
       body.position.copy(moon.direction).normalize().multiplyScalar(MOON_DISTANCE);
       this.sky.add(body);
     }
@@ -900,8 +901,8 @@ export class Jupiter {
     const map = material.uniforms.map.value as THREE.Texture;
     const image = map.image as CanvasImageSource & { width: number; height: number };
     const below = across.copy(this.air.center).negate().normalize().applyMatrix3(material.uniforms.frame.value as THREE.Matrix3);
-    const u = (material.uniforms.longitude.value as number) - Math.atan2(below.z, below.x) / (Math.PI * 2);
-    const v = 0.5 + Math.asin(THREE.MathUtils.clamp(below.y, -1, 1)) / Math.PI;
+    const u = (material.uniforms.longitude.value as number) - atan2(below.z, below.x) / (Math.PI * 2);
+    const v = 0.5 + asin(THREE.MathUtils.clamp(below.y, -1, 1)) / Math.PI;
     try {
       const canvas = document.createElement('canvas');
       canvas.width = 32;
@@ -987,9 +988,9 @@ export class Jupiter {
    */
   private auroraHeights(altitude: number) {
     const radius = this.air.radius;
-    const limb = altitude > 0 ? -Math.acos(radius / (radius + altitude)) : 0;
+    const limb = altitude > 0 ? -acos(radius / (radius + altitude)) : 0;
     const eye = radius + Math.max(altitude, AURORA_LOWEST);
-    const over = (height: number) => Math.acos(radius / eye) - Math.acos((radius + height) / eye);
+    const over = (height: number) => acos(radius / eye) - acos((radius + height) / eye);
     const uniforms = this.aurora.uniforms;
     uniforms.limb.value = limb;
     uniforms.foot.value = limb + over(AURORA_FOOT);
@@ -1005,7 +1006,7 @@ export class Jupiter {
       const angle = Math.random() * Math.PI * 2;
       const reach = Math.sqrt(Math.random()) * STRIKE_REACH;
       // beside the eye, then down to its depth along the planet's radius
-      across.set(Math.cos(angle) * reach, 0, Math.sin(angle) * reach).add(eye).sub(this.air.center);
+      across.set(cos(angle) * reach, 0, sin(angle) * reach).add(eye).sub(this.air.center);
       strike.position.copy(across).setLength(this.air.radius - STRIKE_TOP - (STRIKE_BOTTOM - STRIKE_TOP) * Math.random()).add(this.air.center);
     }
     strike.at = time;
@@ -1023,7 +1024,7 @@ export class Jupiter {
     }
     const since = time - strike.at;
     let strength = 0;
-    for (const stroke of strike.strokes) if (since >= stroke) strength = Math.max(strength, Math.exp(-(since - stroke) / 0.06));
+    for (const stroke of strike.strokes) if (since >= stroke) strength = Math.max(strength, exp(-(since - stroke) / 0.06));
     flash.set(strike.position.x, strike.position.y, strike.position.z, strength * FLASH_STRENGTH);
     if (since > STRIKE_SECONDS + 0.5) this.strike = null;
   }

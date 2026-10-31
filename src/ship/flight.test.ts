@@ -10,6 +10,8 @@ import { assistAim } from './computer';
 import { arenaById } from '../world/arenas';
 import { ARENA_LIMIT } from '../world/arena';
 import { PLAUSIBLE_SPEED } from '../net/plausible';
+import { cos, sin } from '../detmath';
+import { angleTo, quaternionAngleTo } from '../detthree';
 
 /** A degree (rad). */
 const DEGREE = Math.PI / 180;
@@ -17,7 +19,7 @@ const DEGREE = Math.PI / 180;
 const MS = 20;
 
 /** A direction `yaw` right of ahead (-Z) and `pitch` up (rad). */
-const direction = (yaw: number, pitch = 0) => new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+const direction = (yaw: number, pitch = 0) => new THREE.Vector3(sin(yaw) * cos(pitch), sin(pitch), -cos(yaw) * cos(pitch));
 
 /** What a recorded frame keeps of a ship before its step, flown without gravity at full drive and thrusters. */
 const kept = (flight: FlightModel) => ({
@@ -41,7 +43,7 @@ function backOnNose(cockpit: Cockpit, from: number) {
 function turnBy(cockpit: Cockpit, angle: number, thrust = 0) {
   const start = cockpit.flight.forward();
   const from = cockpit.t;
-  while (cockpit.flight.forward().angleTo(start) < angle && cockpit.t - from < 20) cockpit.step({ ...IDLE, yaw: 1, thrust });
+  while (angleTo(cockpit.flight.forward(), start) < angle && cockpit.t - from < 20) cockpit.step({ ...IDLE, yaw: 1, thrust });
   return cockpit.t - from;
 }
 
@@ -49,12 +51,12 @@ describe('the autopilot: the ship flies where its nose points', () => {
   it('at rest turns the nose as the stick says, and keeps the ship where it is', () => {
     const ship = new Cockpit(0);
     ship.fly(0.5, () => ({ yaw: 0.5 }));
-    const turned = ship.flight.forward().angleTo(new THREE.Vector3(0, 0, -1));
+    const turned = angleTo(ship.flight.forward(), new THREE.Vector3(0, 0, -1));
     expect(turned).toBeGreaterThan(0.5 * MAX_TURN_RATE * 0.5 * 0.8);
     const nose = ship.flight.forward();
     ship.fly(1);
     // let go, the nose stops where it is
-    expect(ship.flight.forward().angleTo(nose)).toBeLessThan(0.1);
+    expect(angleTo(ship.flight.forward(), nose)).toBeLessThan(0.1);
     expect(ship.flight.velocity.length()).toBeLessThan(0.5 * MS);
   });
 
@@ -122,7 +124,7 @@ describe('the autopilot: the ship flies where its nose points', () => {
     ship.autopilot = true;
     const from = ship.t;
     ship.fly(4);
-    expect(ship.flight.forward().angleTo(nose)).toBeLessThan(DEGREE);
+    expect(angleTo(ship.flight.forward(), nose)).toBeLessThan(DEGREE);
     const flight = convergence(ship.samples, nose, from);
     expect(flight.seconds).toBeLessThan(2.5);
     expect(flight.overshoot).toBeLessThan(2 * DEGREE);
@@ -145,7 +147,7 @@ describe('the autopilot: the ship flies where its nose points', () => {
       const controls = { ...IDLE, ...hand.steer(ship, goal) };
       ship.step(controls);
       expect(ship.flight.velocity.distanceTo(velocity)).toBeLessThan(push);
-      expect(ship.flight.orientation.angleTo(orientation)).toBeLessThan(turn);
+      expect(quaternionAngleTo(ship.flight.orientation, orientation)).toBeLessThan(turn);
       for (const command of [ship.out.yaw, ship.out.pitch, ship.out.thrust, ship.out.strafeX, ship.out.strafeY, ship.out.strafeZ]) expect(Math.abs(command)).toBeLessThanOrEqual(1);
     }
   });
@@ -172,7 +174,7 @@ describe('the autopilot: the ship flies where its nose points', () => {
     const ship = new Cockpit(100 * MS);
     ship.gravity.set(0, -196.2, 0);
     ship.fly(4);
-    expect(ship.samples.at(-1)!.path.angleTo(new THREE.Vector3(0, 0, -1))).toBeLessThan(DEGREE);
+    expect(angleTo(ship.samples.at(-1)!.path, new THREE.Vector3(0, 0, -1))).toBeLessThan(DEGREE);
   });
 
   it(`at any speed, after a hard turn, has the flight back within ${Math.round(ON_NOSE / DEGREE)}° of the nose within ${LEAD_TIME} s, and never lets the nose lead it farther than its limit`, () => {
@@ -194,7 +196,7 @@ describe('the autopilot at full speed', () => {
     const seconds = turnBy(ship, Math.PI / 2);
     // a steady turn: the radius from how fast the flight turns
     const v0 = ship.samples.at(-31)!.path;
-    const radius = MAX_SPEED / (v0.angleTo(ship.samples.at(-1)!.path) / (30 * STEP));
+    const radius = MAX_SPEED / (angleTo(v0, ship.samples.at(-1)!.path) / (30 * STEP));
     const released = ship.t;
     ship.fly(3);
     const back = backOnNose(ship, released);
@@ -227,7 +229,7 @@ describe('free drift', () => {
     turnBy(ship, Math.PI / 2);
     ship.fly(2);
     const last = ship.samples.at(-1)!;
-    expect(last.path.angleTo(new THREE.Vector3(0, 0, -1))).toBeLessThan(1e-6);
+    expect(angleTo(last.path, new THREE.Vector3(0, 0, -1))).toBeLessThan(1e-6);
     expect(Math.abs(last.speed - MAX_SPEED)).toBeLessThan(1e-6);
     expect(slip(last)).toBeGreaterThan(Math.PI / 2 - 0.1);
   });
@@ -307,7 +309,7 @@ describe('the input recorder', () => {
     }
     const recording = JSON.parse(recorder.json());
     const replayed = replay(recording);
-    expect(flight.angleTo(rival.clone().sub(flight.position))).toBeLessThan(1 * DEGREE);
+    expect(flight.noseAngleTo(rival.clone().sub(flight.position))).toBeLessThan(1 * DEGREE);
     expect(replayed.cockpit.flight.position.distanceTo(flight.position)).toBeLessThan(1e-6);
     // without the pull the replay flies another way: the recording needs its aim
     for (const frame of recording.frames) delete frame.aim;

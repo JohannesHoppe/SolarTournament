@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { createImpostors, createRocks, createRockShapes, DETAIL_RES, detailMap, DISTANT_DETAIL, EDGE_SLOPE, FAR_DETAIL, IMPOSTOR_RES, NEAR_DETAIL, RELIEF_RES, reliefMap, reliefNormal, reliefShade, rockRecipe } from './rocks';
 import { impostorViews, IMPOSTOR_VIEWS } from '../view/impostor';
 import { directions, median, normalFit, texelAt, tileStats } from '../test/cube';
+import { log2 } from '../detmath';
+import { angleTo } from '../detthree';
 
 describe("a rock's relief map", () => {
   // the step to either side for the reference normal: one texel
@@ -13,7 +15,7 @@ describe("a rock's relief map", () => {
     const faces = map.image as THREE.DataTexture[];
     expect(faces).toHaveLength(6);
     for (const face of faces) expect([face.image.width, face.image.height]).toEqual([RELIEF_RES, RELIEF_RES]);
-    expect(Math.log2(RELIEF_RES) % 1).toBe(0);
+    expect(log2(RELIEF_RES) % 1).toBe(0);
     expect(map.generateMipmaps).toBe(true);
   });
 
@@ -40,7 +42,7 @@ describe('the detail map every rock shares up close', () => {
 
   it('is a square tile, repeated and mipmapped', () => {
     expect([tile.image.width, tile.image.height]).toEqual([DETAIL_RES, DETAIL_RES]);
-    expect(Math.log2(DETAIL_RES) % 1).toBe(0);
+    expect(log2(DETAIL_RES) % 1).toBe(0);
     expect(tile.wrapS).toBe(THREE.RepeatWrapping);
     expect(tile.wrapT).toBe(THREE.RepeatWrapping);
     expect(tile.generateMipmaps).toBe(true);
@@ -117,7 +119,7 @@ describe("a rock's billboard", () => {
             if (alpha < 160 || !point) continue;
             // a direction, unit length to 8 bits; the relief map is read at the point over the shape's axes
             expect(Math.abs(direction.length() - 1)).toBeLessThan(0.02);
-            angles.push(direction.angleTo(point.divide(axes).normalize()));
+            angles.push(angleTo(direction, point.divide(axes).normalize()));
           }
         }
       }
@@ -136,7 +138,7 @@ describe("a rock's billboard", () => {
         for (let j = 0; j < R; j++) {
           for (let i = 0; i + 1 < R; i++) {
             const a = cellOf(index, layer, i, j), b = cellOf(index, layer, i + 1, j);
-            if (a.alpha >= 128 !== b.alpha >= 128) across.push(a.direction.angleTo(b.direction));
+            if (a.alpha >= 128 !== b.alpha >= 128) across.push(angleTo(a.direction, b.direction));
           }
         }
       }

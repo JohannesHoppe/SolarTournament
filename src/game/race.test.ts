@@ -41,13 +41,13 @@ describe('the race course', () => {
       return values;
     });
     expect(hashes).toEqual({
-      belt: '1b531be159416866',
-      rings: '7160a9f7852ce8db',
-      junkyard: 'b70c039feeea2542',
-      giant: '3260211c46f75ffc',
-      corona: 'dc109b6679667dad',
-      hole: 'e73dbe9cdf579135',
-      derelict: '7b81d699994edab3',
+      belt: '0ceda73abe2294cb',
+      rings: '9e4a4742ce271414',
+      junkyard: 'c31d0d35ba15097d',
+      giant: 'b5ba09ef3ebf8f3a',
+      corona: 'c25d713344428668',
+      hole: '4470cb4655ed5bf7',
+      derelict: 'df67356ff8f51e8d',
     });
   });
 
@@ -61,13 +61,13 @@ describe('the race course', () => {
       return values;
     });
     expect(hashes).toEqual({
-      belt: '2c84d4c60aae4bc6',
-      rings: '9c8417d8688045ff',
-      junkyard: '98373a258050406f',
-      giant: '75443ab93f440af8',
-      corona: '0ce7a263359bdd3e',
-      hole: 'a992339c86d11a00',
-      derelict: '4bac691141c9c8f1',
+      belt: '1398a990f06899aa',
+      rings: 'ffb177c8f001dbcf',
+      junkyard: '054835967862aef9',
+      giant: '115720943cb3cf1f',
+      corona: '27b1b21441523995',
+      hole: 'c069f3b46af497e6',
+      derelict: '615085b285dd8bfe',
     });
   });
 

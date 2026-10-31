@@ -2,6 +2,7 @@ import type { Voice } from '../music/band';
 import { clipKey } from '../music/lines';
 import { loadVoice } from '../music/voice';
 import { t } from '../i18n/i18n';
+import { tanh } from '../detmath';
 
 /** A voice that failed to load is tried again after this long (ms), as the radio's. */
 const VOICE_RETRY_MS = 5000;
@@ -32,7 +33,7 @@ export class Speaker {
     highpass.type = 'highpass';
     highpass.frequency.value = 160;
     const grit = context.createWaveShaper();
-    grit.curve = Float32Array.from({ length: 1024 }, (_, i) => Math.tanh(1.2 * ((i / 1023) * 2 - 1)) / Math.tanh(1.2));
+    grit.curve = Float32Array.from({ length: 1024 }, (_, i) => tanh(1.2 * ((i / 1023) * 2 - 1)) / tanh(1.2));
     const level = context.createGain();
     level.gain.value = 1.1;
     this.input = context.createGain();

@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { cos, exp, hypot, sin, tan } from '../detmath';
+import { setFromAxisAngle, setRotation } from '../detthree';
 import { Randomizer } from '../random';
 import { FIELD_RADIUS, type AsteroidField } from '../world/asteroids';
 import { ARENA_LIMIT } from '../world/arena';
@@ -215,7 +217,7 @@ export class Flags {
     // the line through the center turns until both ends keep clear of rock and of a massive body
     for (let attempt = 0; attempt < 24; attempt++) {
       const turn = angle + attempt * 0.4;
-      axis.set(Math.cos(turn), r.range(-0.2, 0.2), Math.sin(turn)).normalize().multiplyScalar(BASE_DISTANCE);
+      axis.set(cos(turn), r.range(-0.2, 0.2), sin(turn)).normalize().multiplyScalar(BASE_DISTANCE);
       if (![1, -1].some((side) => blocked(field, tow.copy(axis).multiplyScalar(side)))) break;
     }
     // each side's core carries the sign of the sponsor in its color
@@ -583,16 +585,16 @@ export class Flags {
     const root = this.looks[team].root;
     const shown = this.shown[team];
     const scale = carrier ? CORE_SCALE.tow : core.home ? CORE_SCALE.home : CORE_SCALE.adrift;
-    root.scale.setScalar(root.scale.x + (scale - root.scale.x) * (1 - Math.exp(-3 * dt)));
+    root.scale.setScalar(root.scale.x + (scale - root.scale.x) * (1 - exp(-3 * dt)));
     let line = this.towLines[team];
     if (!carrier) {
       if (line) this.cables.give(line);
       this.towLines[team] = null;
       // a core adrift glides to where the lead has it; one sent home is there at once
       if (core.home || shown.distanceTo(core.position) > GLIDE_REACH) shown.copy(core.position);
-      else shown.lerp(core.position, 1 - Math.exp(-4 * dt));
+      else shown.lerp(core.position, 1 - exp(-4 * dt));
       root.position.copy(shown);
-      root.rotation.set(core.home ? 0.35 : now * 0.35, now * (core.home ? 0.4 : 0.55), core.home ? 0.2 : 0);
+      setRotation(root, core.home ? 0.35 : now * 0.35, now * (core.home ? 0.4 : 0.55), core.home ? 0.2 : 0);
       return;
     }
     line ??= this.towLines[team] = this.cables.take();
@@ -602,7 +604,7 @@ export class Flags {
     // slowly about its axis
     sternOf(carrier, stern);
     cableAxis.subVectors(core.lies.count ? core.lies.at(0) : stern, shown).normalize();
-    root.quaternion.setFromUnitVectors(UP, cableAxis).multiply(spin.setFromAxisAngle(UP, now * 0.4));
+    root.quaternion.setFromUnitVectors(UP, cableAxis).multiply(setFromAxisAngle(spin, UP, now * 0.4));
     Cables.draw(line, stern, grip.copy(shown).addScaledVector(cableAxis, GRIP * root.scale.x), core.lies);
   }
 
@@ -613,7 +615,7 @@ export class Flags {
    * at home or adrift is a mark to fly for and stays whole.
    */
   view(camera: THREE.PerspectiveCamera, subject: Flier, cockpit: boolean, dt: number) {
-    const halfHeight = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const halfHeight = tan(THREE.MathUtils.degToRad(camera.fov / 2));
     camera.getWorldDirection(ahead);
     toScreen(shipOnScreen.copy(subject.flight.position), camera, ahead);
     toScreen(aimOnScreen.set(0, 0, -AIM_REACH).applyQuaternion(subject.flight.orientation).add(subject.flight.position), camera, ahead);
@@ -634,7 +636,7 @@ export class Flags {
         toScreen(onScreen.copy(shown), camera, ahead);
         clear = toSegment(onScreen, shipOnScreen, subject.alive ? aimOnScreen : shipOnScreen, camera.aspect) > size + Math.max(ship, FADE_MARGIN);
       }
-      const faded = this.faded[team] + ((clear ? 1 : 0) - this.faded[team]) * (1 - Math.exp(-CORE_FADE * dt));
+      const faded = this.faded[team] + ((clear ? 1 : 0) - this.faded[team]) * (1 - exp(-CORE_FADE * dt));
       this.faded[team] = faded;
       look.fade(faded > 0.99 ? 1 : faded < 0.01 ? 0 : faded);
     }
@@ -730,7 +732,7 @@ function toSegment(point: THREE.Vector3, from: THREE.Vector3, to: THREE.Vector3,
   const py = point.y - from.y;
   const span = dx * dx + dy * dy;
   const along = span > 0 ? Math.max(0, Math.min(1, (px * dx + py * dy) / span)) : 0;
-  return Math.hypot(px - along * dx, py - along * dy);
+  return hypot(px - along * dx, py - along * dy);
 }
 
 /** A base's place is in rock, in a massive body or in its grip (where its pull alone sounds the CAUTION of the escape gauge, see inGrip). */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { BACKOFF_SECONDS, CAP_STEPS, COOLDOWN_SECONDS, DOWN_SECONDS, Governor, Governors, guessTier, LADDER, STABLE_SECONDS, tierOf, TIER_RUNGS, UP_SECONDS, type DeviceHints, type Scene } from './quality';
+import { log2, pow } from '../detmath';
 
 /** Feeds the governor `seconds` of frames at `fps`, each with `busy` (share of the frame) of own work; returns the rungs it switched to. */
 function run(governor: Governor, seconds: number, fps: number | ((rung: number) => number), busy = 0.2) {
@@ -80,7 +81,7 @@ describe('the governor', () => {
     expect(busy.rung).toBe(LADDER.length - 1);
     // the GPU is the bottleneck: little work of its own, but every rung down draws a little faster
     const gpu = new Governor(0);
-    run(gpu, 600, (rung) => 20 * 1.07 ** rung, 0.2);
+    run(gpu, 600, (rung) => 20 * pow(1.07, rung), 0.2);
     expect(gpu.rung).toBe(LADDER.length - 1);
     expect(gpu.cap).toBe(0);
   });
@@ -140,7 +141,7 @@ describe('the governor', () => {
     const governor = new Governor(3);
     const switched = run(governor, 600, fps);
     // each try of rung 3 is barred twice as long as the one before: a handful of tries in ten minutes
-    expect(switched.filter((rung) => rung === 3).length).toBeLessThanOrEqual(Math.ceil(Math.log2(600 / BACKOFF_SECONDS)));
+    expect(switched.filter((rung) => rung === 3).length).toBeLessThanOrEqual(Math.ceil(log2(600 / BACKOFF_SECONDS)));
     expect(governor.rung).toBeGreaterThanOrEqual(3);
     // never back up within the bar after leaving the slow rung
     const again = new Governor(3);

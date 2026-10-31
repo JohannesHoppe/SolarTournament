@@ -4,6 +4,8 @@ import { boxContact } from './boxes';
 import { hazardSurface, industrialSurface, shine, signTexture, surfaced, windingSurface, WIRE_GLOW } from '../view/surfaces';
 import { Randomizer } from '../random';
 import { sponsorSigns } from '../game/satire-ads';
+import { cos, hypot, sin } from '../detmath';
+import { rotateX, rotateY, setFromAxisAngle } from '../detthree';
 
 /**
  * A ring of the tournament as a structure in space: an electromagnetic coil built like the
@@ -89,9 +91,9 @@ function solidParts(radius: number) {
   if (!kit) {
     const inner = radius + CLEARANCE;
     const parts = [...moduleParts(inner), ...plateParts(inner), ...strutParts(inner)].map((part) => {
-      const turn = new THREE.Quaternion().setFromAxisAngle(axis, part.angle - Math.PI / 2);
+      const turn = setFromAxisAngle(new THREE.Quaternion(), axis, part.angle - Math.PI / 2);
       return {
-        center: new THREE.Vector3(Math.cos(part.angle) * part.out, Math.sin(part.angle) * part.out, part.along),
+        center: new THREE.Vector3(cos(part.angle) * part.out, sin(part.angle) * part.out, part.along),
         half: new THREE.Vector3(part.width / 2, part.height / 2, part.depth / 2),
         turn,
         back: turn.clone().invert(),
@@ -132,7 +134,7 @@ export function ringSamples(center: THREE.Vector3, facing: THREE.Vector3, radius
     for (let i = 0; i <= across; i++) {
       const out = inner + (THICKNESS * i) / across;
       for (let j = 0; j <= lengthwise; j++) {
-        point.set(Math.cos(angle) * out, Math.sin(angle) * out, -DEPTH / 2 + (DEPTH * j) / lengthwise);
+        point.set(cos(angle) * out, sin(angle) * out, -DEPTH / 2 + (DEPTH * j) / lengthwise);
         add();
       }
     }
@@ -157,7 +159,7 @@ export function ringSamples(center: THREE.Vector3, facing: THREE.Vector3, radius
 
 /** How far from a ring's center anything of it lies (units), for a ring of opening `radius`: its band and its solid parts, whichever reaches farther. */
 export function ringReach(radius: number): number {
-  return Math.max(solidParts(radius).reach, Math.hypot(radius + CLEARANCE + THICKNESS, DEPTH / 2));
+  return Math.max(solidParts(radius).reach, hypot(radius + CLEARANCE + THICKNESS, DEPTH / 2));
 }
 
 /** How far from a ring's axis its housings begin and its struts end (units), for a ring of opening `radius`: what a ship steers clear of. */
@@ -218,7 +220,7 @@ function touchBand(center: THREE.Vector3, facing: THREE.Vector3, radius: number,
   let nearAlong = THREE.MathUtils.clamp(along, -DEPTH / 2, DEPTH / 2);
   let dOut = out - nearOut;
   let dAlong = along - nearAlong;
-  const distance = Math.hypot(dOut, dAlong);
+  const distance = hypot(dOut, dAlong);
   if (distance >= shipRadius) return false;
   if (distance < 1e-6) {
     // the ship's center inside the band: out through the nearest face
@@ -274,8 +276,8 @@ function block(width: number, height: number, depth: number, angle: number, out:
 
 /** A part built along its own y axis (outward), moved to `out` from the ring's center at `angle` and `along` its axis. */
 function placed(geometry: THREE.BufferGeometry, angle: number, out: number, along = 0): THREE.BufferGeometry {
-  rotation.setFromAxisAngle(axis, angle - Math.PI / 2);
-  place.set(Math.cos(angle) * out, Math.sin(angle) * out, along);
+  setFromAxisAngle(rotation, axis, angle - Math.PI / 2);
+  place.set(cos(angle) * out, sin(angle) * out, along);
   return geometry.applyMatrix4(matrix.compose(place, rotation, size.set(1, 1, 1)));
 }
 
@@ -332,9 +334,9 @@ function lamp(frame: THREE.BufferGeometry[], lens: THREE.BufferGeometry[], angle
   const [housing, base, glass] = [LAMP_HOUSING * scale, LAMP_BASE * scale, LENS_RADIUS * scale];
   const dark = PAINTS[1].clone().multiplyScalar(0.6);
   frame.push(placed(tinted(new THREE.CylinderGeometry(housing * 0.9, housing, base, 10).translate(0, base / 2, 0), dark), angle, out));
-  frame.push(placed(tinted(new THREE.TorusGeometry(glass + 4 * scale, 5 * scale, 4, 12).rotateX(Math.PI / 2).translate(0, base, 0), dark), angle, out));
+  frame.push(placed(tinted(rotateX(new THREE.TorusGeometry(glass + 4 * scale, 5 * scale, 4, 12), Math.PI / 2).translate(0, base, 0), dark), angle, out));
   for (const turn of [0, Math.PI / 2]) {
-    const bar = new THREE.BoxGeometry(2 * glass + 14 * scale, 6 * scale, 6 * scale).translate(0, base + glass + 3 * scale, 0).rotateY(turn);
+    const bar = rotateY(new THREE.BoxGeometry(2 * glass + 14 * scale, 6 * scale, 6 * scale).translate(0, base + glass + 3 * scale, 0), turn);
     frame.push(placed(tinted(bar, dark), angle, out));
   }
   lens.push(placed(new THREE.SphereGeometry(glass, 12, 5, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, base, 0), angle, out));
@@ -377,7 +379,7 @@ export class GateKit {
     const inner = radius + CLEARANCE;
     const step = (Math.PI * 2) / SEGMENTS;
     const span = step * HOUSING;
-    const width = 2 * inner * Math.sin(span / 2);
+    const width = 2 * inner * sin(span / 2);
     for (let i = 0; i < SEGMENTS; i++) {
       const angle = i * step;
       // the housing and a narrower armor plate on its outside, each in a paint of its own, and the windings on its inner face
@@ -396,7 +398,7 @@ export class GateKit {
       }
       // two conduits across the gap to the next housing
       const gap = angle + step / 2;
-      for (const along of [-DEPTH * 0.3, DEPTH * 0.3]) frame.push(block(2 * (inner + THICKNESS * 0.6) * Math.sin(step / 2), 50, 50, gap, inner + THICKNESS * 0.6, along, skin(PAINTS[1])));
+      for (const along of [-DEPTH * 0.3, DEPTH * 0.3]) frame.push(block(2 * (inner + THICKNESS * 0.6) * sin(step / 2), 50, 50, gap, inner + THICKNESS * 0.6, along, skin(PAINTS[1])));
     }
     // four struts out to the position lights, and the station module on top with its sponsor's plates
     const solid = (part: Part, look: Skin) => block(part.width, part.height, part.depth, part.angle, part.out, part.along, look);

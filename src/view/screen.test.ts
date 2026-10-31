@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { between, DRIFT_AID_SPEED, DriftAids, driftAidsDrawn, driftAidsShown, findTag, hits, inPicture, Side, sideOf, toFrame, type FramePoint, type Segment } from './screen';
 import { METERS_PER_UNIT } from '../ship/flight';
+import { atan2 } from '../detmath';
 
 const W = 1280;
 const H = 720;
@@ -19,7 +20,7 @@ describe('toFrame', () => {
     const at = toFrame(3, 0.3, false, 0.95, 0.8, W, H, point());
     expect(at.offscreen).toBe(true);
     expect(at.x).toBeCloseTo(((0.95 + 1) / 2) * W);
-    expect(at.angle).toBeCloseTo(Math.atan2(-0.095, 0.95));
+    expect(at.angle).toBeCloseTo(atan2(-0.095, 0.95));
     expect(sideOf(at.x, at.y, 0.95, 0.8, W, H)).toBe(Side.Right);
   });
 
@@ -71,7 +72,7 @@ describe('between', () => {
     expect(line.length).toBeCloseTo(500 - 56);
     expect(line.x).toBeCloseTo(100 + 0.6 * 30);
     expect(line.y).toBeCloseTo(100 + 0.8 * 30);
-    expect(line.angle).toBeCloseTo(Math.atan2(400, 300));
+    expect(line.angle).toBeCloseTo(atan2(400, 300));
   });
 
   it('is left out where the marks all but touch', () => {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { flowAt, flowRate, stillStale } from './streaks';
 import { METERS_PER_UNIT } from '../ship/flight';
+import { cos, hypot, sin, tan } from '../detmath';
 
 const FOCAL = 500;
 const RATE = 1;
@@ -18,18 +19,18 @@ describe('motion streaks', () => {
     expect(out.y).toBeLessThan(0);
     // the focus itself stands still
     flowAt(0, 0, 0, 0, -1, RATE, FOCAL, out);
-    expect(Math.hypot(out.x, out.y)).toBeCloseTo(0);
+    expect(hypot(out.x, out.y)).toBeCloseTo(0);
   });
 
   it('stream out of the Course point wherever it lies on screen', () => {
     // flying 20° right of the view: the focus is right of the middle, at focal × tan 20°
     const a = (20 * Math.PI) / 180;
-    const focus = FOCAL * Math.tan(a);
-    flowAt(focus, 0, Math.sin(a), 0, -Math.cos(a), RATE, FOCAL, out);
-    expect(Math.hypot(out.x, out.y)).toBeCloseTo(0);
-    flowAt(focus + 100, 0, Math.sin(a), 0, -Math.cos(a), RATE, FOCAL, out);
+    const focus = FOCAL * tan(a);
+    flowAt(focus, 0, sin(a), 0, -cos(a), RATE, FOCAL, out);
+    expect(hypot(out.x, out.y)).toBeCloseTo(0);
+    flowAt(focus + 100, 0, sin(a), 0, -cos(a), RATE, FOCAL, out);
     expect(out.x).toBeGreaterThan(0);
-    flowAt(focus - 100, 0, Math.sin(a), 0, -Math.cos(a), RATE, FOCAL, out);
+    flowAt(focus - 100, 0, sin(a), 0, -cos(a), RATE, FOCAL, out);
     expect(out.x).toBeLessThan(0);
   });
 

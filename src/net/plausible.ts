@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { atan2, hypot } from '../detmath';
+import { angleTo, setFromAxisAngle } from '../detthree';
 import { MAX_SPEED } from '../ship/flight';
 import { ONLINE_LOAD as LOAD, TORPEDO_LIFETIME } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
@@ -102,7 +104,7 @@ interface Track {
 
 /** Whether a ship is farther from where it was last seen alive than it could have flown since. */
 function tooFar(track: Track, [x, y, z]: number[], now: number): number {
-  return Math.hypot(x - track.x, y - track.y, z - track.z) / (PLAUSIBLE_SPEED * Math.max(0, now - track.at) + PLAUSIBLE_SLACK);
+  return hypot(x - track.x, y - track.y, z - track.z) / (PLAUSIBLE_SPEED * Math.max(0, now - track.at) + PLAUSIBLE_SLACK);
 }
 
 /** What a browser knows about a ship from its state: where, alive, kills, a nova core held, orientation and spin. */
@@ -133,7 +135,7 @@ const TURN_SAMPLES = 8;
 function turned(q: THREE.Quaternion, w: THREE.Vector3, seconds: number, target: THREE.Quaternion) {
   target.copy(q);
   const rate = w.length();
-  if (rate > 1e-9) target.multiply(turnStep.setFromAxisAngle(turnAxis.copy(w).divideScalar(rate), rate * seconds));
+  if (rate > 1e-9) target.multiply(setFromAxisAngle(turnStep, turnAxis.copy(w).divideScalar(rate), rate * seconds));
   return target;
 }
 
@@ -313,7 +315,7 @@ export class Plausibility {
     mean.addVectors(track.w, nextW).multiplyScalar(0.5);
     noseA.copy(AHEAD).applyQuaternion(turned(track.q, mean, elapsed, predicted));
     noseB.copy(AHEAD).applyQuaternion(nextQ);
-    const off = noseA.angleTo(noseB);
+    const off = angleTo(noseA, noseB);
     return this.measure('spin', off / (NOSE_SLACK + (change + SPIN_KICK) * elapsed)) || grew;
   }
 
@@ -330,17 +332,17 @@ export class Plausibility {
     const reach = PLAUSIBLE_SPEED * elapsed + MUZZLE_SLACK;
     for (const { from, to } of track.beams) {
       // where it started: near the ship at both states
-      const start = Math.max(Math.hypot(from.x - track.x, from.y - track.y, from.z - track.z), after ? flown.fromArray(seen.p).distanceTo(from) : 0) / reach;
+      const start = Math.max(hypot(from.x - track.x, from.y - track.y, from.z - track.z), after ? flown.fromArray(seen.p).distanceTo(from) : 0) / reach;
       // which way it went: along the turn between them
       const length = beamDirection.subVectors(to, from).length();
       beamDirection.divideScalar(Math.max(length, 1e-6));
       let nearest = Infinity;
       for (let i = 0; i <= TURN_SAMPLES; i++) {
         noseA.copy(AHEAD).applyQuaternion(turned(track.q, mean, (elapsed * i) / TURN_SAMPLES, predicted));
-        nearest = Math.min(nearest, noseA.angleTo(beamDirection));
+        nearest = Math.min(nearest, angleTo(noseA, beamDirection));
       }
-      if (after) nearest = Math.min(nearest, noseB.copy(AHEAD).applyQuaternion(nextQ).angleTo(beamDirection));
-      const bound = NOSE_SLACK + Math.atan2(MUZZLE_REACH, length) + (change + SPIN_KICK) * elapsed;
+      if (after) nearest = Math.min(nearest, angleTo(noseB.copy(AHEAD).applyQuaternion(nextQ), beamDirection));
+      const bound = NOSE_SLACK + atan2(MUZZLE_REACH, length) + (change + SPIN_KICK) * elapsed;
       if (this.measure('aim', start) || this.measure('aim', nearest / bound)) off = true;
     }
     return off;

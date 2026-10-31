@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { ARENAS, arenaById, SATURN_CENTER } from './arenas';
 import { climbOf, closure, footOf, heightOf, referencesOf, skyPointer } from './reference';
+import { hypot } from '../detmath';
+import { setFromEuler } from '../detthree';
 
-const view = (pitch: number, yaw: number, roll: number) => new THREE.Quaternion().setFromEuler(new THREE.Euler(pitch, yaw, roll, 'YXZ'));
+const view = (pitch: number, yaw: number, roll: number) => setFromEuler(new THREE.Quaternion(), pitch, yaw, roll, 'YXZ');
 const degrees = (radians: number) => THREE.MathUtils.radToDeg(radians);
 
 describe('the reference plane', () => {
@@ -20,7 +22,7 @@ describe('the reference plane', () => {
       if (arena.layout.flat !== undefined) expect(arena.layout.flat).toBeLessThan(arena.layout.radius / 5);
       // a massive body lies in the middle of the plane or straight below the center
       const well = arena.layout.well;
-      if (well) expect(Math.hypot(well.position.x, well.position.z)).toBe(0);
+      if (well) expect(hypot(well.position.x, well.position.z)).toBe(0);
     }
     expect(heightOf(SATURN_CENTER)).toBe(0);
     expect(heightOf(arenaById('giant')!.layout.well!.position)).toBeLessThan(0);

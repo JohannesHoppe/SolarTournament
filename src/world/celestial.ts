@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { asin, atan2, cos, sin } from '../detmath.ts';
 
 /**
  * The sky as astronomers map it (the celestial, ecliptic and galactic frames), and how a cube
@@ -16,15 +17,15 @@ const DEG = Math.PI / 180;
  * the real sky.
  */
 export function celestial(ra: number, dec: number, out = new THREE.Vector3()): THREE.Vector3 {
-  const cos = Math.cos(dec * DEG);
-  return out.set(cos * Math.cos(ra * DEG), cos * Math.sin(ra * DEG), Math.sin(dec * DEG));
+  const cosDec = cos(dec * DEG);
+  return out.set(cosDec * cos(ra * DEG), cosDec * sin(ra * DEG), sin(dec * DEG));
 }
 
 /** Right ascension (degrees, 0 to 360) and declination (degrees) of a direction in the celestial frame. */
 export function raDec(direction: THREE.Vector3): { ra: number; dec: number } {
   const length = direction.length();
-  const ra = Math.atan2(direction.y, direction.x) / DEG;
-  return { ra: ra < 0 ? ra + 360 : ra, dec: Math.asin(THREE.MathUtils.clamp(direction.z / length, -1, 1)) / DEG };
+  const ra = atan2(direction.y, direction.x) / DEG;
+  return { ra: ra < 0 ? ra + 360 : ra, dec: asin(THREE.MathUtils.clamp(direction.z / length, -1, 1)) / DEG };
 }
 
 /**
@@ -37,7 +38,7 @@ export const OBLIQUITY = 23.4393;
 export function ecliptic(longitude: number, out = new THREE.Vector3()): THREE.Vector3 {
   const l = longitude * DEG;
   const e = OBLIQUITY * DEG;
-  return out.set(Math.cos(l), Math.sin(l) * Math.cos(e), Math.sin(l) * Math.sin(e));
+  return out.set(cos(l), sin(l) * cos(e), sin(l) * sin(e));
 }
 
 /**
@@ -117,12 +118,12 @@ const galacticY = galacticZ.clone().cross(galacticX);
 
 /** The unit direction in the celestial frame at galactic longitude `l` and latitude `b` (degrees): the inverse of galactic. */
 export function fromGalactic(l: number, b: number, out = new THREE.Vector3()): THREE.Vector3 {
-  const cos = Math.cos(b * DEG);
+  const cosB = cos(b * DEG);
   return out
     .copy(galacticX)
-    .multiplyScalar(cos * Math.cos(l * DEG))
-    .addScaledVector(galacticY, cos * Math.sin(l * DEG))
-    .addScaledVector(galacticZ, Math.sin(b * DEG));
+    .multiplyScalar(cosB * cos(l * DEG))
+    .addScaledVector(galacticY, cosB * sin(l * DEG))
+    .addScaledVector(galacticZ, sin(b * DEG));
 }
 
 /** A direction of the celestial frame in the galactic frame's axes (x towards the center, y towards longitude 90°, z towards the north galactic pole). */
@@ -132,6 +133,6 @@ export function galacticVector(direction: THREE.Vector3, out = new THREE.Vector3
 
 /** Galactic longitude `l` (degrees, 0 to 360) and latitude `b` (degrees) of a unit direction in the celestial frame. */
 export function galactic(direction: THREE.Vector3): { l: number; b: number } {
-  const l = Math.atan2(direction.dot(galacticY), direction.dot(galacticX)) / DEG;
-  return { l: l < 0 ? l + 360 : l, b: Math.asin(THREE.MathUtils.clamp(direction.dot(galacticZ), -1, 1)) / DEG };
+  const l = atan2(direction.dot(galacticY), direction.dot(galacticX)) / DEG;
+  return { l: l < 0 ? l + 360 : l, b: asin(THREE.MathUtils.clamp(direction.dot(galacticZ), -1, 1)) / DEG };
 }

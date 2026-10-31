@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { Noise, rockGeometry, rockRecipe } from './rocks';
 import { clampRadii, measureRadii, Surface, tangentDirections } from './surface';
+import { pow } from '../detmath';
 
 /**
  * How a rock shape breaks: every shape (rock and ice share them) has a fixed tree of pieces, cut
@@ -388,7 +389,7 @@ const orient = (a: THREE.Vector2, b: THREE.Vector2, c: THREE.Vector2) => (b.x - 
 function inCircle(a: THREE.Vector2, b: THREE.Vector2, c: THREE.Vector2, d: THREE.Vector2): boolean {
   const ax = a.x - d.x, ay = a.y - d.y, bx = b.x - d.x, by = b.y - d.y, cx = c.x - d.x, cy = c.y - d.y;
   const det = (ax * ax + ay * ay) * (bx * cy - cx * by) - (bx * bx + by * by) * (ax * cy - cx * ay) + (cx * cx + cy * cy) * (ax * by - bx * ay);
-  return det > 1e-9 * (ax * ax + ay * ay + bx * bx + by * by + cx * cx + cy * cy) ** 2;
+  return det > 1e-9 * pow(ax * ax + ay * ay + bx * bx + by * by + cx * cx + cy * cy, 2);
 }
 
 /** How often the refinement splits every edge that is still too long, at most. */

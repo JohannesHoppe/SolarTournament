@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it, vi } from 'vitest';
 import { allyInLine, Bot, BOT_NAMES, evenSkills, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, reactionOf, skillsOf, startTiming, TORPEDO_CLEARANCE } from './bots';
+import { pow } from '../detmath';
 import { FlightModel, MAIN_THRUST, MAX_SPEED } from './flight';
 import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, strainAfter } from './ship';
 import { testField } from '../test/field';
@@ -218,7 +219,7 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
   /** A point `depth` (m) under the deck, `x` (m) off the field's center. */
   const deep = (depth: number, x = 0) => {
     const radius = jupiter.air!.radius;
-    return at(x * 20, Math.sqrt((radius - depth * 20) ** 2 - (x * 20) ** 2) - radius);
+    return at(x * 20, Math.sqrt(pow(radius - depth * 20, 2) - pow(x * 20, 2)) - radius);
   };
   /** The bot flies its ship `seconds` under the field's gravity and its air's drag (see Game.outside), `each` called after every step. */
   const fly = (f: AsteroidField, me: Ship, bot: Bot, seconds: number, each = () => {}) => {

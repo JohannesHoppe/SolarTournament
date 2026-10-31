@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ARENA_LIMIT } from '../world/arena';
 import { footOf, heightOf } from '../world/reference';
+import { cos, sin } from '../detmath';
 
 /** The grid on the reference plane: a ring every RING (units, 500 m) out to the arena's edge, a spoke every SPOKES-th of a turn (30°). */
 const RING = 10000;
@@ -89,14 +90,14 @@ export class ReferencePlane {
       for (let i = 0; i < RING_SEGMENTS; i++) {
         const a = (i / RING_SEGMENTS) * Math.PI * 2;
         const b = ((i + 1) / RING_SEGMENTS) * Math.PI * 2;
-        points.push(Math.cos(a) * radius, 0, Math.sin(a) * radius, Math.cos(b) * radius, 0, Math.sin(b) * radius);
+        points.push(cos(a) * radius, 0, sin(a) * radius, cos(b) * radius, 0, sin(b) * radius);
       }
     }
     this.ringVertices = points.length / 3;
     const outer = Math.floor((ARENA_LIMIT - 1) / RING) * RING;
     for (let i = 0; i < SPOKES; i++) {
       const a = (i / SPOKES) * Math.PI * 2;
-      points.push(Math.cos(a) * RING, 0, Math.sin(a) * RING, Math.cos(a) * outer, 0, Math.sin(a) * outer);
+      points.push(cos(a) * RING, 0, sin(a) * RING, cos(a) * outer, 0, sin(a) * outer);
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));

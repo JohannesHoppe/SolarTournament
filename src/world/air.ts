@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { MAX_SPEED } from '../ship/flight';
+import { cbrt, exp, pow } from '../detmath';
 
 /**
  * The air of a planet the arena dips into (Jupiter): a shell whose top, the cloud deck, is a
@@ -100,13 +101,13 @@ const layer = (altitude: number) => (altitude > 0 ? TOP : BELOW);
 /** The air's density at an altitude (units), relative to the density right under the deck. */
 export function density(altitude: number): number {
   const { height, share } = layer(altitude);
-  return share * Math.exp(-Math.max(altitude, -DEEPEST * SCALE_HEIGHT) / height);
+  return share * exp(-Math.max(altitude, -DEEPEST * SCALE_HEIGHT) / height);
 }
 
 /** The density summed from the deck to an altitude (units of length times the density under the deck; negative below the deck). */
 function column(altitude: number): number {
   const { height, share } = layer(altitude);
-  return share * height * (1 - Math.exp(-Math.max(altitude, -DEEPEST * SCALE_HEIGHT) / height));
+  return share * height * (1 - exp(-Math.max(altitude, -DEEPEST * SCALE_HEIGHT) / height));
 }
 
 /**
@@ -201,14 +202,14 @@ export const reachAt = (altitude: number, depth: number) => depth / (HAZE * dens
 export const dragAt = (altitude: number, speed: number) => DRAG * density(altitude) * speed * speed;
 
 /** Heat the air puts into a hull per second at an altitude (units) and speed (units/s). */
-export const airHeat = (altitude: number, speed: number) => DECK_HEAT * density(altitude) * (speed / MAX_SPEED) ** 3;
+export const airHeat = (altitude: number, speed: number) => DECK_HEAT * density(altitude) * pow(speed / MAX_SPEED, 3);
 
 /**
  * The speed at which the air heats a hull at an altitude (units) exactly as fast as its radiators
  * shed (`cooling`, heat units per second; units/s), past the tournament's limit too: how far a
  * coil's boost may go before the air heats the hull.
  */
-export const heatSpeed = (altitude: number, cooling: number) => MAX_SPEED * Math.cbrt(cooling / (DECK_HEAT * density(altitude)));
+export const heatSpeed = (altitude: number, cooling: number) => MAX_SPEED * cbrt(cooling / (DECK_HEAT * density(altitude)));
 
 /**
  * The fastest a ship flies at an altitude without the air heating its hull beyond what its

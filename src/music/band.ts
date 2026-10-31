@@ -2,15 +2,16 @@ import type * as ToneLib from 'tone';
 import { clipKey, phraseKey, phrases, words, type Language } from './lines';
 import * as i18n from '../i18n/i18n';
 import { barSeconds, stepEvents, STEPS_PER_BAR, type BarInfo, type KickDesign, type Song, type VoiceLine } from './songs';
+import { atan, cos, pow, sin, tanh } from '../detmath';
 
 type Tone = typeof ToneLib;
 
-const midiToHz = (note: number) => 440 * Math.pow(2, (note - 69) / 12);
+const midiToHz = (note: number) => 440 * pow(2, (note - 69) / 12);
 
 /** A waveshaper curve normalised to ±1, so distortion adds grit without losing level. */
-const saturate = (k: number) => (x: number) => Math.tanh(k * x) / Math.tanh(k);
+const saturate = (k: number) => (x: number) => tanh(k * x) / tanh(k);
 /** The gabber kick's double saturation (Sonic Pi "gabberkick": tanh, then atan). */
-const gabber = (x: number) => Math.atan(5.1 * Math.tanh(10 * x)) / Math.atan(5.1);
+const gabber = (x: number) => atan(5.1 * tanh(10 * x)) / atan(5.1);
 
 /** Sampled waveshaper curve of a function on -1..1. */
 function curve(shape: (x: number) => number, size = 4096): Float32Array {
@@ -22,13 +23,13 @@ const KICK_CURVES: Record<KickDesign['shape'], Float32Array> = {
   gabber: curve(gabber),
   hard: curve((x) => Math.max(-1, Math.min(1, 4 * x))),
   soft: curve(saturate(2.5)),
-  fold: curve((x) => Math.sin(Math.PI * 1.6 * x)),
+  fold: curve((x) => sin(Math.PI * 1.6 * x)),
 };
 
 /** How far the french filter is open at a point of its eight-bar sweep (0..1): up over the first half, down over the second. */
 const opening = (sweep: number) => (sweep < 0.5 ? sweep * 2 : 2 - sweep * 2);
 /** Master filter cutoff for a brightness of 0..1: 200 Hz to 18 kHz. */
-const cutoff = (brightness: number) => 200 * Math.pow(90, Math.max(0, Math.min(1, brightness)));
+const cutoff = (brightness: number) => 200 * pow(90, Math.max(0, Math.min(1, brightness)));
 /** The music ducks under a voice line and comes back over this long (s), without a click. */
 const DUCK_RAMP = 0.02;
 /** Level of the shared echo and reverb sends, and how much of the echo comes back each time. */
@@ -540,7 +541,7 @@ export class Band {
 
   /** Two-stage pitch drop: a fast click of pitch, then the body falls to the fundamental. */
   private kick(song: Song, t: number, velocity: number, drive: number, detune: number) {
-    const fundamental = midiToHz(song.root) * Math.pow(2, detune / 1200);
+    const fundamental = midiToHz(song.root) * pow(2, detune / 1200);
     const frequency = this.kickOsc.frequency;
     frequency.cancelAndHoldAtTime(t);
     const design = song.kick;
@@ -571,7 +572,7 @@ export class Band {
       this.acid.triggerAttackRelease(frequency, sixteenth * (length - 0.45), t, accent ? 1 : 0.75);
     }
     // the cutoff wanders over 16 bars and opens with the energy
-    const wander = 0.5 - 0.5 * Math.cos((2 * Math.PI * (info.bar + (step % STEPS_PER_BAR) / STEPS_PER_BAR)) / 16);
+    const wander = 0.5 - 0.5 * cos((2 * Math.PI * (info.bar + (step % STEPS_PER_BAR) / STEPS_PER_BAR)) / 16);
     const rest = 220 + 1400 * wander * info.energy;
     const peak = rest * (accent ? 6 : 3);
     const filter = this.acidFilter.frequency;

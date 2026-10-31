@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cutPiece, measure, parentSurface, PIECES, pieceCount, pieceSolid, solidMesh, type Solid } from './fracture';
 import { Surface } from './surface';
 import { DETAIL, DISTANT_DETAIL, FAR_DETAIL, ROCK_COUNT, rockRecipe } from './rocks';
+import { acos, cos, hypot, sin } from '../detmath';
 
 /** Every piece of a shape's tree: the first break's and the second's, with their paths. */
 const paths = (shape: number) => {
@@ -124,7 +125,7 @@ describe('a broken rock', () => {
       });
       // the faces tilt this way and that: their normals spread over many degrees
       const mean = normals.reduce((sum, n) => sum.add(n), new THREE.Vector3()).normalize();
-      const spread = normals.reduce((sum, n) => sum + Math.acos(Math.min(1, n.dot(mean))), 0) / normals.length;
+      const spread = normals.reduce((sum, n) => sum + acos(Math.min(1, n.dot(mean))), 0) / normals.length;
       expect(spread).toBeGreaterThan(0.12);
       expect(center.length()).toBeLessThan(meanAxis(shape) * 2);
     }
@@ -135,7 +136,7 @@ describe('a broken rock', () => {
     const broken = mesh.fracture.filter((f) => f === 1).length;
     expect(broken).toBeGreaterThan(0);
     expect(broken).toBeLessThan(mesh.fracture.length);
-    for (let i = 0; i < mesh.normal.length; i += 3) expect(Math.hypot(mesh.normal[i], mesh.normal[i + 1], mesh.normal[i + 2])).toBeCloseTo(1, 3);
+    for (let i = 0; i < mesh.normal.length; i += 3) expect(hypot(mesh.normal[i], mesh.normal[i + 1], mesh.normal[i + 2])).toBeCloseTo(1, 3);
   });
 
   it('measures no piece reaching beyond what it broke off from, in any direction: a ship outside the rock is outside every piece', () => {
@@ -155,7 +156,7 @@ describe('a broken rock', () => {
           // a spiral of directions over the sphere
           const y = 1 - (2 * (k + 0.5)) / 2000;
           const r = Math.sqrt(1 - y * y);
-          direction.set(Math.cos(k * 2.399963) * r, y, Math.sin(k * 2.399963) * r);
+          direction.set(cos(k * 2.399963) * r, y, sin(k * 2.399963) * r);
           point.copy(direction).multiplyScalar(surface.radius(direction)).add(centroid).sub(parent.center);
           worst = Math.max(worst, (point.length() - parent.surface.radius(point)) / mean);
         }

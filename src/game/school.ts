@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { cos, exp, sin } from '../detmath';
+import { angleTo, rotateY, setFromAxisAngle } from '../detthree';
 import type { Asteroid, AsteroidField } from '../world/asteroids';
 import { CONTROLS, type Command, type Controls, type Device } from '../input/input';
 import type { Ship } from '../ship/ship';
@@ -347,7 +349,7 @@ function local(ctx: SchoolContext, point: THREE.Vector3, target = scratch) {
 
 /** Angle between the pilot's nose and a point (rad). */
 function aimError(ctx: SchoolContext, point: THREE.Vector3) {
-  return ctx.me.flight.angleTo(toTarget.copy(point).sub(ctx.me.flight.position));
+  return ctx.me.flight.noseAngleTo(toTarget.copy(point).sub(ctx.me.flight.position));
 }
 
 /** Moves a point out of any asteroid, so markers never sit inside rock. */
@@ -391,7 +393,7 @@ function drift(ctx: SchoolContext, speed: number, direction?: THREE.Vector3) {
 
 /** The pilot has lost a ring course: too far from its next ring (see COURSE_LOST). */
 const lost = (ctx: SchoolContext, attempt: Attempt) => ctx.me.flight.position.distanceTo(attempt.points[Math.min(attempt.next, attempt.points.length - 1)]) > COURSE_LOST;
-const turned = (ctx: SchoolContext, attempt: Attempt) => ctx.me.flight.angleTo(attempt.forward) > NO_TURN;
+const turned = (ctx: SchoolContext, attempt: Attempt) => ctx.me.flight.noseAngleTo(attempt.forward) > NO_TURN;
 const speed = (ctx: SchoolContext) => ctx.me.flight.velocity.length();
 
 /** A point in the shadow of a rock (its center and farthest reach), 75 m off its far side from the sun. */
@@ -450,7 +452,7 @@ function faceRock(ctx: SchoolContext, standoff: number, accept?: (rock: Asteroid
 function faceOpenSpace(ctx: SchoolContext, room: number) {
   const flight = ctx.me.flight;
   const up = flight.up(new THREE.Vector3());
-  const turn = new THREE.Quaternion().setFromAxisAngle(up, Math.PI / 4);
+  const turn = setFromAxisAngle(new THREE.Quaternion(), up, Math.PI / 4);
   for (let i = 0; i < 8; i++) {
     if (!ctx.field.raycast(flight.position, flight.forward(toTarget), room)) return;
     flight.orientation.premultiply(turn);
@@ -562,7 +564,7 @@ export function ringCourse(position: THREE.Vector3, orientation: THREE.Quaternio
   // a tilted course starts COURSE_RUN farther on where the arena has room for it, so the pilot
   // has room to climb or dive into it
   for (const [tilt, run] of COURSE_TILTS.flatMap((tilt) => (tilt ? [[tilt, COURSE_RUN], [tilt, 0]] : [[0, 0]]))) {
-    frame.copy(straight).multiply(tilted.setFromAxisAngle(sideways, tilt));
+    frame.copy(straight).multiply(setFromAxisAngle(tilted, sideways, tilt));
     const points = course.map(([x, y, z]) => place([x, y, z - run]));
     if (points.some((point) => point.length() > ARENA_LIMIT * COURSE_ROOM)) continue;
     // the way from the pilot through the rings, looked at every COURSE_CLEAR
@@ -875,7 +877,7 @@ export const DRILL = {
     enter(ctx) {
       if (speed(ctx) < FAST * 0.8) drift(ctx, FAST);
     },
-    done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.angleTo(ctx.me.flight.velocity) > 2.4, 1),
+    done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.noseAngleTo(ctx.me.flight.velocity) > 2.4, 1),
     // without drift there is no course to look away from
     fail: (ctx) => (speed(ctx) < FAST * 0.3 ? SCHOOL.again : null),
   },
@@ -932,7 +934,7 @@ export const DRILL = {
         if (a.jinkSide) a.jinks++;
         a.jinkSide = side;
       }
-      a.points[0].lerp(ctx.me.flight.position, 1 - Math.exp(-ctx.dt / GUNNER_LAG));
+      a.points[0].lerp(ctx.me.flight.position, 1 - exp(-ctx.dt / GUNNER_LAG));
       if (a.seconds - a.lastShot > GUNNER_INTERVAL) {
         a.lastShot = a.seconds;
         ctx.fireAt(ahead(ctx, (Math.random() - 0.5) * 3000, 800, 12000), a.points[0]);
@@ -1094,7 +1096,7 @@ export const DRILL = {
       if (!bot) return true;
       // a hit is the bot's hull going down; it counts with the nose well off the flight, in free drift
       const flight = ctx.me.flight;
-      const sideways = !ctx.autopilot && speed(ctx) > SLIDE_MOVING && flight.angleTo(flight.velocity) > SLIDE_ANGLE;
+      const sideways = !ctx.autopilot && speed(ctx) > SLIDE_MOVING && flight.noseAngleTo(flight.velocity) > SLIDE_ANGLE;
       if (bot.hull < a.reach && sideways) a.count++;
       a.reach = bot.hull;
       return a.count >= SLIDE_HITS && ctx.autopilot;
@@ -1164,7 +1166,7 @@ export const DRILL = {
       const center = ctx.field.well?.position ?? ORIGIN;
       const now = scratch.subVectors(ctx.me.flight.position, center);
       const before = toTarget.subVectors(a.points[0], center);
-      a.swept = ctx.orbit === 'stable' ? a.swept + before.angleTo(now) : 0;
+      a.swept = ctx.orbit === 'stable' ? a.swept + angleTo(before, now) : 0;
       a.points[0].copy(ctx.me.flight.position);
       return a.swept >= ORBIT_SWEEP;
     },
@@ -1275,7 +1277,7 @@ function debrisStart(ctx: SchoolContext, distance: number) {
   for (let attempt = 0; attempt < 12; attempt++) {
     const angle = attempt ? Math.random() * Math.PI * 2 : 0;
     const side = attempt ? distance / 9 : 0;
-    const start = ahead(ctx, Math.cos(angle) * side, Math.sin(angle) * side, -distance);
+    const start = ahead(ctx, cos(angle) * side, sin(angle) * side, -distance);
     let free = true;
     for (let i = 0; i <= steps && free; i++) free = !ctx.field.overlap(scratch.lerpVectors(start, pilot, i / steps), DEBRIS_RADIUS * DEBRIS_FILL + DEBRIS_CLEAR);
     if (free) return start;
@@ -1480,7 +1482,7 @@ class Markers {
       }
     }
     for (const child of this.root.children) {
-      if (child.userData.spin) child.rotation.y += dt * 1.5;
+      if (child.userData.spin) rotateY(child, dt * 1.5);
     }
   }
 

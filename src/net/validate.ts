@@ -1,3 +1,4 @@
+import { hypot } from '../detmath';
 import type { ShipState } from '../ship/ship';
 import { KNOCKED, rootOf, type AsteroidState, type FieldState, type ShovedState } from '../world/asteroids';
 import { SYNC_SLICES, type FamilyState, type FieldSlice } from '../world/fieldsync';
@@ -130,7 +131,7 @@ export function shipState(x: unknown): ShipState | null {
     pr: num(x.pr, 0, 10),
   });
   // a quaternion of length zero cannot be normalized
-  return state && Math.hypot(...state.q) >= 0.5 ? state : null;
+  return state && hypot(state.q[0], state.q[1], state.q[2], state.q[3]) >= 0.5 ? state : null;
 }
 
 function asteroidState(x: unknown): AsteroidState | null {
@@ -171,7 +172,7 @@ export function wreckStates(x: unknown): WreckState[] | null {
 export function shovedState(x: unknown): ShovedState | null {
   if (!isRecord(x)) return null;
   const state = complete<ShovedState>({ id: id(x.id), b: num(x.b, 0, MAX_FIELD_TIME), p: vec(x.p, 3, MAX_COORDINATE), v: vec(x.v, 3, MAX_SPEED), q: vec(x.q, 4, UNIT_LENGTH), s: vec(x.s, 4, MAX_SPIN), c: int(x.c, KNOCKED, 0xffffffff) });
-  return state && Math.hypot(...state.q) >= 0.5 ? state : null;
+  return state && hypot(state.q[0], state.q[1], state.q[2], state.q[3]) >= 0.5 ? state : null;
 }
 
 export function fieldState(x: unknown): FieldState | null {
@@ -275,6 +276,6 @@ export function fleetState(x: unknown): FleetState | null {
   const target = x.t === null ? null : id(x.t);
   // the field time a comet broke up on its hull, once one did
   const rammed = x.c === undefined ? undefined : num(x.c, 0, MAX_FIELD_TIME);
-  if (!state || (x.t !== null && target === null) || rammed === null || Math.hypot(...state.q) < 0.5) return null;
+  if (!state || (x.t !== null && target === null) || rammed === null || hypot(state.q[0], state.q[1], state.q[2], state.q[3]) < 0.5) return null;
   return { ...state, t: target, ...(rammed === undefined ? {} : { c: rammed }) };
 }

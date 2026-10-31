@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { canvas } from './textures';
+import { cos, sin } from '../detmath';
 
 /**
  * Paint on a hull: a ship's name, its registry and an emblem, in large stenciled block letters
@@ -102,7 +103,7 @@ function emblem(g: CanvasRenderingContext2D, x: number, y: number, radius: numbe
   // five stars in an arc above it
   for (let i = 0; i < 5; i++) {
     const angle = -Math.PI / 2 + (i - 2) * 0.42;
-    star(g, Math.cos(angle) * globe * 1.45, Math.sin(angle) * globe * 1.45 - radius * 0.02, radius * (i === 2 ? 0.1 : 0.075));
+    star(g, cos(angle) * globe * 1.45, sin(angle) * globe * 1.45 - radius * 0.02, radius * (i === 2 ? 0.1 : 0.075));
   }
   g.restore();
 }
@@ -113,7 +114,7 @@ function star(g: CanvasRenderingContext2D, x: number, y: number, size: number) {
   for (let k = 0; k < 10; k++) {
     const angle = -Math.PI / 2 + (k * Math.PI) / 5;
     const reach = k % 2 ? size * 0.42 : size;
-    g.lineTo(x + Math.cos(angle) * reach, y + Math.sin(angle) * reach);
+    g.lineTo(x + cos(angle) * reach, y + sin(angle) * reach);
   }
   g.fill();
 }
@@ -147,7 +148,7 @@ function weather(r: Randomizer, g: CanvasRenderingContext2D, width: number, heig
     for (let k = 0; k < 5; k++) {
       const angle = (k / 5) * Math.PI * 2;
       const reach = size * r.range(0.4, 1.2);
-      g.lineTo(x + Math.cos(angle) * reach, y + Math.sin(angle) * reach);
+      g.lineTo(x + cos(angle) * reach, y + sin(angle) * reach);
     }
     g.fill();
   }
@@ -164,7 +165,7 @@ function weather(r: Randomizer, g: CanvasRenderingContext2D, width: number, heig
     g.lineWidth = r.range(0.6, 1.8);
     g.beginPath();
     g.moveTo(x, y);
-    g.lineTo(x + Math.cos(angle) * length, y + Math.sin(angle) * length);
+    g.lineTo(x + cos(angle) * length, y + sin(angle) * length);
     g.stroke();
   }
   g.restore();

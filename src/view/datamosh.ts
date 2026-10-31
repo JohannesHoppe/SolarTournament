@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { FullScreenQuad, Pass } from 'three/addons/postprocessing/Pass.js';
 import { CopyShader } from 'three/addons/shaders/CopyShader.js';
+import { acos, tan } from '../detmath';
 
 /**
  * The clone dies and its video stream loses every key frame: the last picture from the
@@ -170,13 +171,13 @@ export class Datamosh extends Pass {
     const frames = Math.min(4, deltaTime * 60);
     relative.copy(this.lastQuaternion).invert().multiply(camera.quaternion);
     uniforms.turn.value.setFromMatrix4(rotation.makeRotationFromQuaternion(relative));
-    const cut = 2 * Math.acos(Math.min(1, Math.abs(relative.w))) > CUT_ANGLE || camera.position.distanceTo(this.lastPosition) > CUT_DISTANCE;
+    const cut = 2 * acos(Math.min(1, Math.abs(relative.w))) > CUT_ANGLE || camera.position.distanceTo(this.lastPosition) > CUT_DISTANCE;
     uniforms.cut.value = cut ? 1 : 0;
-    const height = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+    const height = tan(THREE.MathUtils.degToRad(camera.fov / 2));
     uniforms.lens.value.set(height * camera.aspect, height);
     uniforms.drift.value = DRIFT * frames * (1 - progress);
     // keys come back slowly at first, then the picture heals within the last moments
-    uniforms.refresh.value = Math.min(1, (0.003 + 0.25 * progress ** 3) * frames);
+    uniforms.refresh.value = Math.min(1, (0.003 + 0.25 * progress * progress * progress) * frames);
     uniforms.seed.value = Math.random() * 1000;
     uniforms.tDiffuse.value = readBuffer.texture;
     uniforms.tPrevious.value = this.previous.texture;

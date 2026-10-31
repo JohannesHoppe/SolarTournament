@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { cos, sin } from '../detmath';
+import { setFromAxisAngle } from '../detthree';
 import { Randomizer } from '../random';
 import { MAX_SPEED } from '../ship/flight';
 import { ARENA_GRACE, ARENA_LIMIT } from './arena';
@@ -54,8 +56,8 @@ export class Belt {
         // evenly over the ring's area, thickest in the middle of the plane
         const radius = Math.sqrt(r.range(BELT_INNER * BELT_INNER, BELT_OUTER * BELT_OUTER));
         const height = (r.nextFloat() + r.nextFloat() + r.nextFloat() - 1.5) * BELT_THICKNESS;
-        position.set(Math.cos(angle) * radius, height, Math.sin(angle) * radius);
-        rotation.setFromAxisAngle(axis.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize(), r.range(0, Math.PI * 2));
+        position.set(cos(angle) * radius, height, sin(angle) * radius);
+        setFromAxisAngle(rotation, axis.set(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize(), r.range(0, Math.PI * 2));
         size.setScalar(r.range(MIN_SCALE, MAX_SCALE));
         (radius < BELT_NEAR ? nearMatrices : farMatrices).push(matrix.compose(position, rotation, size).clone());
       }
