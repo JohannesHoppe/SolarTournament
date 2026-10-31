@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { arenaById } from './arenas';
 import { FACE_TOLERANCE, planMining } from './mining';
 import { testField } from '../test/field';
+import { DETAIL } from './rocks';
 
 const belt = arenaById('belt')!.layout;
 
@@ -52,6 +53,21 @@ describe("the Rockborn's mining in the Belt", () => {
         expect(corner.distanceTo(rock.object.position)).toBeLessThanOrEqual(rock.radius + 1);
       }
     }
+  });
+
+  it("keeps every rig and buoy within its rock's reach from where the broad phases center it, at the collisions' detail", () => {
+    const field = testField(DETAIL);
+    field.generate(belt);
+    const p = planMining(field);
+    p.solids.forEach((parts, slot) => {
+      const rock = field.asteroids.get(p.ids[slot])!;
+      for (const part of parts ?? []) {
+        for (let k = 0; k < 8; k++) {
+          const corner = new THREE.Vector3(k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1).multiply(part.half).applyMatrix4(part.matrix).applyMatrix4(rock.object.matrixWorld);
+          expect(corner.distanceTo(rock.object.position)).toBeLessThanOrEqual(rock.radius + 1);
+        }
+      }
+    });
   });
 
   it('claims whole rocks only, and every slot of the shaders at most once', () => {

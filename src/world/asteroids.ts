@@ -950,13 +950,13 @@ export class AsteroidField {
     if (asteroid) asteroid.radius = this.reachOf(asteroid, asteroid.radius);
   }
 
-  /** How far a piece reaches from its center with what stands on it (world units), at least `radius`. */
+  /** How far a piece reaches with what stands on it (world units), at least `radius`: from its object's origin, where every broad phase centers its sphere (see boundingRadius). */
   private reachOf(asteroid: Asteroid, radius: number): number {
     const scale = asteroid.object.matrixWorld.getMaxScaleOnAxis();
     let reach = radius;
     for (const part of this.attachments.get(asteroid.id) ?? NONE) {
       for (let k = 0; k < 8; k++) {
-        corner.set(k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1).multiply(part.half).applyMatrix4(part.matrix).sub(asteroid.center);
+        corner.set(k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1).multiply(part.half).applyMatrix4(part.matrix);
         reach = Math.max(reach, corner.length() * scale);
       }
     }
