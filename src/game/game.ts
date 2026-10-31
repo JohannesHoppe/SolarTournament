@@ -4500,7 +4500,7 @@ export class Game implements OnlineGame {
     const depth = altitudeIn(air, eye);
     if (depth < 0) this.background.copy(jupiter.deepLight).lerp(jupiter.deckLight, Math.exp(depth / BACKGROUND_DEPTH));
     else this.background.copy(this.space.background);
-    const struck = jupiter.update(this.field.clock, dt, eye, this.sheetLight);
+    const struck = jupiter.update(this.field.clock, eye, this.sheetLight);
     // the own ship in the air hears it: none in the menu, none for a dead clone
     const me = this.state === 'playing' ? this.me : null;
     const inAir = !!me?.alive && altitudeIn(air, me.flight.position) < 0;
