@@ -32,11 +32,13 @@ export interface SolidKind {
 export type SolidTable = Readonly<Record<SolidKindName, SolidKind>>;
 
 /**
- * What a probe and its slot bounce off besides the field and the battleship. Not another
- * probe: probes drift apart on their slots. Not a torpedo: a torpedo that meets a probe goes off
- * (see TORPEDO_FUSE).
+ * What a probe bounces off besides the field and the battleship. Not another probe: probes
+ * drift apart on their slots. Not a torpedo: a torpedo that meets a probe goes off (see
+ * TORPEDO_FUSE).
  */
 export const PROBE_BOUNCES: readonly SolidKindName[] = ['ring', 'wreck', 'core', 'head'];
+/** Of them, what a probe's slot bounces off as well: what every browser has alike, unlike wreckage and cores, each where its own browser has it, and a head one browser may have broken up already (see game/items, Probes.update). */
+export const SLOT_BOUNCES: readonly SolidKindName[] = ['ring'];
 
 /**
  * Where a laser's beam stops besides the field, the battleship and the ships. Wreckage and

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { KNOCKED, outline, type Asteroid, type AsteroidField, type ShovedState } from './asteroids';
-import { contact, IMMOVABLE, share, type Body } from './bodies';
+import { blowState, KNOCKED, outline, type Asteroid, type AsteroidField, type ShovedState } from './asteroids';
+import { IMMOVABLE, share } from './bodies';
 import { ringRim, ringSamples, touchRing } from './gates';
 
 /**
@@ -13,9 +13,10 @@ import { ringRim, ringSamples, touchRing } from './gates';
  * and sends each piece's motion since (see ShovedState), which every other browser takes; a
  * snapshot carries every piece a contact moved.
  *
- * Two pieces touching trade momentum by their masses (see world/bodies, contact): rock on rock
- * keeps RESTITUTION of the speed they met at, sliding along each other loses FRICTION times the
- * blow, and each takes a tumble from where it was struck. A ring is held in place by its
+ * Two pieces touching trade an impulse as two rigid bodies (see impulse): where they touch,
+ * rock on rock keeps RESTITUTION of the speed it met at, sliding along each other loses FRICTION
+ * times the blow, and each takes a tumble from where it was struck, the blow itself the softer
+ * for the turn it gives; so no contact leaves them with more energy than they had. A ring is held in place by its
  * station (IMMOVABLE): a piece bounces off it. A piece keeps circling with its orbit, carried
  * by it as the battleship's rams and a comet's shoves leave it.
  */
@@ -23,8 +24,13 @@ export const CONTACT_STEP = 0.1;
 /** Rock on rock keeps a fifth of the speed it met at: rubble and ice are no rubber. */
 const RESTITUTION = 0.2;
 const FRICTION = 0.3;
-/** A blow sets a piece tumbling by at most this much more (rad/s), as the battleship's ram does. */
-const TUMBLE = 0.3;
+/**
+ * Two pieces found deeper than SETTLE_DEPTH in each other while they part (units, 2 m: a tip
+ * that slipped between the points of an outline, 13° apart, or a third piece's push) are pushed
+ * apart at SETTLE (units/s, 15 m/s) without a blow: moved, never sped up, so no energy comes in.
+ */
+const SETTLE_DEPTH = 40;
+const SETTLE = 300;
 /** Pieces pushed apart are left this far clear of each other (units, 5 cm). */
 const GAP = 1;
 /**
@@ -53,7 +59,8 @@ export interface Fixture {
 
 /** A ring of opening `radius` at `center`, facing `facing`, as a Fixture: its band, housings, struts and station (see world/gates, touchRing). */
 export function ringFixture(center: THREE.Vector3, facing: THREE.Vector3, radius: number): Fixture {
-  return { position: center, reach: ringRim(radius).outer, touch: (point, normal) => touchRing(center, facing, radius, point, 0, normal), points: ringSamples(center, facing, radius) };
+  // a point as a sphere the least bit thick: one of no size touches nothing it lies in
+  return { position: center, reach: ringRim(radius).outer, touch: (point, normal) => touchRing(center, facing, radius, point, 1e-3, normal), points: ringSamples(center, facing, radius) };
 }
 
 /** The world itself, for points already in it (see pointsInto). */
@@ -130,13 +137,9 @@ const touchPoint = new THREE.Vector3();
 const bestNormal = new THREE.Vector3();
 const bestPoint = new THREE.Vector3();
 const spinA = new THREE.Vector3();
-const before = new THREE.Vector3();
 const delta = new THREE.Vector3();
 const center = new THREE.Vector3();
 const orbit = new THREE.Vector3();
-const arm = new THREE.Vector3();
-const bodyA: Body & { mass: number } = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: 1 };
-const bodyB: Body & { mass: number } = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: 1 };
 const beforeA = new THREE.Vector3();
 const beforeB = new THREE.Vector3();
 
@@ -209,9 +212,8 @@ export class FieldContacts {
   fixtures: readonly Fixture[] = [];
   /** The motions given since the last run, for the other browsers. */
   readonly moved: ShovedState[] = [];
-  /** How many contacts were met, and how many pairs the narrow phase looked at (for tests and the benchmark). */
+  /** How many contacts were met (for tests). */
   contacts = 0;
-  checked = 0;
 
   /** Starts over on a new field or a field restored from a snapshot: the next run starts at its clock. */
   reset() {
@@ -301,7 +303,6 @@ export class FieldContacts {
 
   /** Two pieces whose bounding spheres meet: if one reaches into the other while they close, they trade momentum. */
   private meet(field: AsteroidField, a: Entry, b: Entry, time: number) {
-    this.checked++;
     let depth = reachInto(field, a.piece, b.piece, touchPoint, touchNormal);
     bestPoint.copy(touchPoint);
     bestNormal.copy(touchNormal);
@@ -331,7 +332,7 @@ export class FieldContacts {
     const seen = this.siblings.get(key);
     // the first step after a fresh start cannot know: siblings found in each other then are
     // taken as parting, as they are unless they met again right then
-    const age = time - (field.brokeAt(a.id.slice(0, dot)) ?? -Infinity);
+    const age = time - (field.splitSince(a.id.slice(0, dot)) ?? -Infinity);
     if (age > CONTACT_STEP + 1e-9 && seen !== step - 1 && !this.fresh) return false;
     this.siblings.set(key, step);
     return true;
@@ -344,7 +345,6 @@ export class FieldContacts {
 
   /** A piece near a ring: if it reaches into the ring while closing, it bounces off. */
   private bounce(field: AsteroidField, entry: Entry, fixture: Fixture, time: number) {
-    this.checked++;
     const points = pointsOf(field, entry.piece);
     const matrix = entry.piece.object.matrixWorld;
     let depth = 0;
@@ -373,81 +373,124 @@ export class FieldContacts {
 
   /**
    * Piece `a` and piece `b` (or a ring, null) touch at `point`, `depth` deep along `normal`
-   * (from b to a): when they close, they trade momentum (see world/bodies, contact), are pushed
-   * apart by their shares and take a tumble; each moved piece's motion since goes into the field
-   * and into `moved`.
+   * (from b to a): when they close, they trade an impulse (see impulse), are pushed apart by
+   * their shares and take its tumble; each moved piece's motion since goes into the field and
+   * into `moved`.
    */
   private strike(field: AsteroidField, a: Entry, b: Entry | null, point: THREE.Vector3, normal: THREE.Vector3, depth: number, time: number) {
     // the blow goes by how they close: the surfaces where they touch (a spinning tip sweeping
     // into a piece) or their centers (drift and orbit), whichever closes faster, so the deepest
     // point sampled sweeping away never lets two closing pieces sink into each other
-    bodyA.position.copy(point);
-    bodyA.mass = a.mass;
-    bodyB.position.copy(point);
-    bodyB.mass = b ? b.mass : IMMOVABLE;
-    bodyB.velocity.set(0, 0, 0);
-    field.surfaceVelocity(a.piece, point, bodyA.velocity, time);
-    if (b) field.surfaceVelocity(b.piece, point, bodyB.velocity, time);
-    const surfaces = -before.subVectors(bodyA.velocity, bodyB.velocity).dot(normal);
-    field.surfaceVelocity(a.piece, a.piece.object.position, beforeA, time);
-    if (b) field.surfaceVelocity(b.piece, b.piece.object.position, beforeB, time);
+    field.surfaceVelocity(a.piece, point, beforeA, time);
+    if (b) field.surfaceVelocity(b.piece, point, beforeB, time);
     else beforeB.set(0, 0, 0);
-    if (-before.subVectors(beforeA, beforeB).dot(normal) >= surfaces) {
-      bodyA.velocity.copy(beforeA);
-      bodyB.velocity.copy(beforeB);
-    }
-    beforeA.copy(bodyA.velocity);
-    beforeB.copy(bodyB.velocity);
-    const approach = contact(bodyA, bodyB, normal, RESTITUTION, FRICTION);
-    if (approach <= 0) return;
+    const surfaces = -relative.subVectors(beforeA, beforeB).dot(normal);
+    field.surfaceVelocity(a.piece, a.piece.object.position, centerA, time);
+    if (b) field.surfaceVelocity(b.piece, b.piece.object.position, centerB, time);
+    else centerB.set(0, 0, 0);
+    const centers = -relative.subVectors(centerA, centerB).dot(normal);
+    const atSurface = surfaces >= centers;
+    if (!atSurface) relative.subVectors(centerA, centerB);
+    else relative.subVectors(beforeA, beforeB);
+    const approach = Math.max(surfaces, centers);
+    // parting, but found deep in each other (the gaps of an outline let a piece in unseen): only
+    // pushed apart, at the most a step of SETTLE takes
+    const settling = approach <= 0 && depth > SETTLE_DEPTH;
+    if (approach <= 0 && !settling) return;
+    // struck where they touch, each piece turns as well as drifts; struck along the centers'
+    // closing, only drifts (a tip sampled sweeping away is no lever)
+    armA.subVectors(point, a.piece.object.position);
+    if (b) armB.subVectors(point, b.piece.object.position);
+    const turnA = atSurface ? turning(a) : 0;
+    const turnB = atSurface && b ? turning(b) : 0;
+    if (settling) blow.set(0, 0, 0);
+    else impulse(relative, normal, approach, centers, 1 / a.mass, b ? 1 / b.mass : 0, turnA, turnB, blow);
     this.contacts++;
-    const toA = share(bodyA.mass, bodyB.mass);
-    const push = Math.min(depth, approach * CONTACT_STEP * PUSH_STEPS) + GAP;
-    this.give(field, a.piece, point, beforeA, bodyA.velocity, normal, push * toA, time);
-    if (b) this.give(field, b.piece, point, beforeB, bodyB.velocity, normal, -push * (1 - toA), time);
+    const toA = share(a.mass, b ? b.mass : IMMOVABLE);
+    const push = Math.min(depth, Math.max(approach, SETTLE) * CONTACT_STEP * PUSH_STEPS) + GAP;
+    this.give(field, a.piece, a.mass, armA, blow, turnA, normal, push * toA, time);
+    if (b) this.give(field, b.piece, b.mass, armB, blow.negate(), turnB, normal, -push * (1 - toA), time);
   }
 
   /**
-   * A piece struck at `point` changes its surface's velocity there from `from` to `to`: its
-   * drift takes the change, its spin the tumble of the blow (the change of momentum's moment
-   * over the moment of inertia of a ball as large, 2/5 m r²), and it is pushed `push` along
-   * `normal`; its motion since `time` goes into the field and into `moved`. A welded piece moves
-   * its whole structure alike, without a tumble (see AsteroidField.shove).
+   * A piece of `mass` (its whole structure's when welded) takes the impulse `blow` (kg·units/s)
+   * at `arm` from its center: its drift changes by the blow over its mass, its spin by the blow's
+   * moment over its moment of inertia (`turn` its inverse, 0 for none), and
+   * it is pushed `push` along `normal`; its motion since `time` goes into the field and into
+   * `moved`. A welded piece moves its whole structure alike, without a tumble.
    */
-  private give(field: AsteroidField, piece: Asteroid, point: THREE.Vector3, from: THREE.Vector3, to: THREE.Vector3, normal: THREE.Vector3, push: number, time: number) {
-    const change = delta.subVectors(to, from);
-    if (change.lengthSq() === 0 && push === 0) return;
-    if (piece.weld === null) this.shift(field, piece, point, change, normal, push, time, true);
-    else for (const member of field.welded(piece)) this.shift(field, member, point, change, normal, push, time, false);
+  private give(field: AsteroidField, piece: Asteroid, mass: number, arm: THREE.Vector3, blow: THREE.Vector3, turn: number, normal: THREE.Vector3, push: number, time: number) {
+    delta.copy(blow).divideScalar(mass);
+    spinChange.crossVectors(arm, blow).multiplyScalar(turn);
+    if (delta.lengthSq() === 0 && push === 0) return;
+    if (piece.weld === null) this.shift(field, piece, delta, spinChange, normal, push, time);
+    else for (const member of field.welded(piece)) this.shift(field, member, delta, ZERO, normal, push, time);
   }
 
-  /** One piece of a blow (see give), tumbling from it or not. */
-  private shift(field: AsteroidField, piece: Asteroid, point: THREE.Vector3, change: THREE.Vector3, normal: THREE.Vector3, push: number, time: number, tumble: boolean) {
+  /** One piece of a blow (see give): its center's velocity changes by `change`, its spin by `spin`. */
+  private shift(field: AsteroidField, piece: Asteroid, change: THREE.Vector3, spin: THREE.Vector3, normal: THREE.Vector3, push: number, time: number) {
     field.positionOf(piece, time, center);
     // its center's velocity before: the surface's at its center (drift and orbit, no spin)
     field.surfaceVelocity(piece, center, orbit, time);
     orbit.add(change);
-    const radius = piece.meanRadius;
-    spinA.subVectors(point, center).cross(change).divideScalar(0.4 * radius * radius).clampLength(0, tumble ? TUMBLE : 0);
-    spinA.addScaledVector(piece.spinAxis, piece.spinRate);
-    const rate = spinA.length();
-    if (rate > 1e-9) spinA.divideScalar(rate);
-    else spinA.copy(piece.spinAxis);
+    spinA.copy(piece.spinAxis).multiplyScalar(piece.spinRate).add(spin);
     center.addScaledVector(normal, push);
-    // its drift such that, carried on its orbit, it flies as the blow sent it
-    orbit.sub(arm.copy(piece.orbitAxis).multiplyScalar(piece.orbitRate).cross(center));
-    const fixed = (values: number[], digits: number) => values.map((v) => +v.toFixed(digits));
-    const state: ShovedState = {
-      id: piece.id,
-      b: +time.toFixed(3),
-      p: fixed(center.toArray(), 2),
-      v: fixed(orbit.toArray(), 3),
-      q: fixed(piece.object.quaternion.toArray(), 6),
-      s: fixed([...spinA.toArray(), rate], 6),
-      c: piece.shovedBy ?? KNOCKED,
-    };
+    const state = blowState(piece, time, center, orbit, spinA, piece.shovedBy ?? KNOCKED);
     field.move(state);
     field.pose(piece, time);
     this.moved.push(state);
   }
 }
+
+const ZERO = new THREE.Vector3();
+const relative = new THREE.Vector3();
+const centerA = new THREE.Vector3();
+const centerB = new THREE.Vector3();
+const armA = new THREE.Vector3();
+const armB = new THREE.Vector3();
+const blow = new THREE.Vector3();
+const spinChange = new THREE.Vector3();
+const lever = new THREE.Vector3();
+const slide = new THREE.Vector3();
+
+/** The inverse of a piece's moment of inertia (1/(kg·units²)): a ball of its mean radius, 2/5 m r²; 0 for a welded one, which never tumbles. */
+function turning(entry: Entry): number {
+  if (entry.piece.weld !== null) return 0;
+  return 1 / (0.4 * entry.mass * entry.piece.meanRadius ** 2);
+}
+
+/**
+ * The impulse on `a` (into `target`, kg·units/s) of two rigid bodies meeting at a point: `velocity`
+ * how fast a's point moves against b's, `approach` how fast they close along `normal` (from b to
+ * a), `centers` how fast their centers close along it, `inverseA` and `inverseB` their inverse
+ * masses, `turnA` and `turnB` the inverses of their moments of inertia about their centers,
+ * struck at armA and armB from them (see response). Along the normal it turns the closing of the
+ * points around with RESTITUTION, and at least that of the centers: a blow that only set them
+ * turning would let them sink into each other step by step. It never goes beyond turning the
+ * closing around in full, and across the normal friction takes at most FRICTION times it and
+ * never more than stops the sliding left after it: each part leaves the two with no more
+ * energy than they had.
+ */
+function impulse(velocity: THREE.Vector3, normal: THREE.Vector3, approach: number, centers: number, inverseA: number, inverseB: number, turnA: number, turnB: number, target: THREE.Vector3): THREE.Vector3 {
+  const stiff = response(normal, inverseA, inverseB, turnA, turnB, spinChange).dot(normal);
+  const centered = ((1 + RESTITUTION) * Math.max(centers, 0)) / (inverseA + inverseB);
+  const along = Math.min(Math.max(((1 + RESTITUTION) * approach) / stiff, centered), (2 * approach) / stiff);
+  target.copy(normal).multiplyScalar(along);
+  // the sliding left once the push along the normal is in
+  slide.copy(velocity).addScaledVector(spinChange, along);
+  slide.addScaledVector(normal, -slide.dot(normal));
+  const sliding = slide.length();
+  if (sliding < 1e-6) return target;
+  slide.divideScalar(sliding);
+  const across = Math.min(FRICTION * along, sliding / response(slide, inverseA, inverseB, turnA, turnB, lever).dot(slide));
+  return target.addScaledVector(slide, -across);
+}
+
+/** How fast the struck point of a moves against b's (into `target`) per impulse of one on a along `direction`: by both drifts, and by each turn about its center (`turnA`, `turnB`, the inverses of the moments of inertia, struck at armA and armB). */
+function response(direction: THREE.Vector3, inverseA: number, inverseB: number, turnA: number, turnB: number, target: THREE.Vector3): THREE.Vector3 {
+  target.copy(direction).multiplyScalar(inverseA + inverseB);
+  target.addScaledVector(turned.crossVectors(armA, direction).cross(armA), turnA);
+  return target.addScaledVector(turned.crossVectors(armB, direction).cross(armB), turnB);
+}
+
+const turned = new THREE.Vector3();

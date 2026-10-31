@@ -69,4 +69,30 @@ describe('wreckage', () => {
     // and gravity did pull them
     expect(field.gravity(new THREE.Vector3(30000, 0, 0)).length()).toBeGreaterThan(0);
   });
+
+  it('clangs two ships\' plates off each other at the same moment and place at any frame rate', () => {
+    const field = testField();
+    field.generate(ARENAS[0].layout);
+    const fly = (frames: (i: number) => number, both = true) => {
+      const wrecks = new Wrecks();
+      // two large ships broken up head-on, their debris clouds flying into each other at 40 m/s
+      wrecks.spawn('p:abc', 1, new THREE.Vector3(30000, 0, 0), new THREE.Vector3(400, 0, 0), 3500, 0.013);
+      if (both) wrecks.spawn('p:xyz', 1, new THREE.Vector3(33000, 0, 0), new THREE.Vector3(-400, 0, 0), 3500, 0.04);
+      let now = 0.04;
+      for (let i = 0; now < 6; i++) {
+        const dt = frames(i);
+        now += dt;
+        wrecks.update(dt, now, field);
+      }
+      wrecks.update(6.5 - now, 6.5, field);
+      return wrecks.list.filter((piece) => piece.id.startsWith('p:abc')).map((piece) => piece.velocity.clone());
+    };
+    const smooth = fly(() => 1 / 60);
+    const slow = fly((i) => [0.05, 0.045, 0.06][i % 3]);
+    // they did meet: some of the one ship's plates fly otherwise than alone
+    const alone = fly(() => 1 / 60, false);
+    expect(smooth.some((velocity, i) => velocity.distanceTo(alone[i]) > 10)).toBe(true);
+    expect(slow).toHaveLength(smooth.length);
+    smooth.forEach((velocity, i) => expect(velocity.distanceTo(slow[i])).toBeLessThan(1e-6));
+  });
 });

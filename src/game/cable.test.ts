@@ -103,6 +103,20 @@ describe('a cable lying on the field', () => {
     expect(cable.count).toBe(0);
   });
 
+  it('lies on the pieces of the rock it was wrapped round when the rock breaks, never snapping for it', () => {
+    const { field, rock, start, end, cable } = acrossRock();
+    for (let x = end.x; cable.count === 0 && x > -rock.radius; x -= 50) {
+      end.x = x;
+      cable.follow(field, start, end, true);
+    }
+    end.x -= 2000;
+    expect(cable.follow(field, start, end, true)).toBe(true);
+    expect(cable.count).toBeGreaterThan(0);
+    field.shatter(rock.id, field.clock);
+    expect(cable.follow(field, start, end, true)).toBe(true);
+    for (const [from, to] of stretches(cable, start, end)) expect(through(field, from, to)).toBe(false);
+  });
+
   it('keeps its length through wrap and unwrap: no jump where it starts or stops lying on the rock', () => {
     const { field, rock, start, end, cable } = acrossRock();
     let last = cable.length(start, end);

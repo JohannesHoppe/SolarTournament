@@ -20,7 +20,9 @@ import { IMMOVABLE, type Body } from '../world/bodies';
  * on it with millions of tonnes, and its boxes only roughly follow its plating, so wrap points
  * on them would hang in the air beside the hull: it cuts the cable), on a piece that swept
  * deeper than WRAP_DEPTH into a stretch in one step (it struck through it faster than the
- * cable could slide around it), and beyond WRAP_MAX wrap points. Every browser follows the
+ * cable could slide around it; a piece that only appeared there, the pieces of a rock broken
+ * under it or one the lead's sync set at once, is wrapped instead), and beyond WRAP_MAX wrap
+ * points. Every browser follows the
  * wraps of every cable it draws; only the one that runs the cable lets it snap.
  */
 /** Most wrap points a cable holds: a cable round a rock needs twelve to fifteen for a whole turn, so it winds once round its rock before it snaps. */
@@ -74,9 +76,13 @@ export class Cable {
   /** The path as one end sees it (see path), kept. */
   private readonly seen: { near: Body; nearRock: Asteroid; far: Body; farRock: Asteroid; between: number } = { near: this.points[0].body, nearRock: null!, far: this.points[0].body, farRock: null!, between: 0 };
 
+  /** The field's revision when the cable last followed it (see AsteroidField.revision), null before it did. */
+  private revision: number | null = null;
+
   /** The cable lies on nothing (a new hook, a core taken). */
   clear() {
     this.count = 0;
+    this.revision = null;
   }
 
   /** Where wrap point `i` (from the start) is now. */
@@ -94,6 +100,10 @@ export class Cable {
    * deeper into a stretch is the jump's sweep, not a cut, and snaps nothing.
    */
   follow(field: AsteroidField, start: THREE.Vector3, end: THREE.Vector3, strict: boolean, give = 0): boolean {
+    // a piece that appeared or jumped since the last step (the pieces of a rock broken under the
+    // cable, a piece the lead's sync set at once) did not sweep through it: it lies on them
+    const since = this.revision ?? field.revision;
+    this.revision = field.revision;
     for (let i = 0; i < this.count; i++) {
       const point = this.points[i];
       const object = point.rock.object;
@@ -127,7 +137,7 @@ export class Cable {
         continue;
       }
       const deep = this.wrap(field, hit.asteroid, from, to, k);
-      if (deep > WRAP_DEPTH + give) whole = false;
+      if (deep > WRAP_DEPTH + give && hit.asteroid.appeared <= since) whole = false;
       // the two new stretches are looked at in turn
       k += 2;
     }

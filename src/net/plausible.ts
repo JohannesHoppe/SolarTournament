@@ -560,6 +560,19 @@ export function knockShare(before: THREE.Vector3, after: THREE.Vector3, speed: n
   return Math.max(Math.abs(age) / BLOW_AGE, gap / KNOCK_PUSH, before.distanceTo(after) / KNOCK_PUSH, speed / KNOCK_SPEED);
 }
 
+/**
+ * A piece's motion in the lead browser's sync of the field (see world/fieldsync) may lie far
+ * from where this browser has it (that is what the sync sets right: a ram this browser missed
+ * sends a piece kilometers off within a cycle), but it drifts no faster than RAM_SPEED (the
+ * fastest the battleship's ram sends a piece off, faster than any knock or comet's shove) and
+ * turns no faster than SYNC_SPIN (rad/s: a fragment's tumble and a blow's, far below): so a lead
+ * cannot fling rock at a Host. How close it comes to a lie (above 1: not taken).
+ */
+const SYNC_SPIN = 2;
+export function syncShare(speed: number, spin: number): number {
+  return Math.max(speed / RAM_SPEED, spin / SYNC_SPIN);
+}
+
 /** What a ship's beams and torpedoes did counts as evidence this long (s), its torpedo launches as long as a torpedo flies and a little more. */
 const EVIDENCE_SECONDS = 5;
 const LAUNCH_EVIDENCE = TORPEDO_LIFETIME + 3;

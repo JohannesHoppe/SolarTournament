@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cutPiece, measure, PIECES, pieceCount, pieceSolid, solidMesh, type Solid } from './fracture';
-import { DISTANT_DETAIL, FAR_DETAIL, ROCK_COUNT, rockRecipe } from './rocks';
+import { cutPiece, measure, parentSurface, PIECES, pieceCount, pieceSolid, solidMesh, type Solid } from './fracture';
+import { Surface } from './surface';
+import { DETAIL, DISTANT_DETAIL, FAR_DETAIL, ROCK_COUNT, rockRecipe } from './rocks';
 
 /** Every piece of a shape's tree: the first break's and the second's, with their paths. */
 const paths = (shape: number) => {
@@ -135,6 +136,33 @@ describe('a broken rock', () => {
     expect(broken).toBeGreaterThan(0);
     expect(broken).toBeLessThan(mesh.fracture.length);
     for (let i = 0; i < mesh.normal.length; i += 3) expect(Math.hypot(mesh.normal[i], mesh.normal[i + 1], mesh.normal[i + 2])).toBeCloseTo(1, 3);
+  });
+
+  it('measures no piece reaching beyond what it broke off from, in any direction: a ship outside the rock is outside every piece', () => {
+    // at the detail the game measures collisions at: a coarse mesh's cells blend too roughly to hold it
+    const details = { collision: DETAIL, near: DISTANT_DETAIL, far: FAR_DETAIL };
+    const direction = new THREE.Vector3();
+    const point = new THREE.Vector3();
+    let worst = 0;
+    for (const shape of [3, 10, 14]) {
+      for (const path of paths(shape)) {
+        const piece = cutPiece(shape, path, details);
+        const surface = new Surface(piece.radii);
+        const centroid = new THREE.Vector3().fromArray(piece.centroid);
+        const parent = parentSurface(shape, path, details);
+        const mean = parent.surface.reach;
+        for (let k = 0; k < 2000; k++) {
+          // a spiral of directions over the sphere
+          const y = 1 - (2 * (k + 0.5)) / 2000;
+          const r = Math.sqrt(1 - y * y);
+          direction.set(Math.cos(k * 2.399963) * r, y, Math.sin(k * 2.399963) * r);
+          point.copy(direction).multiplyScalar(surface.radius(direction)).add(centroid).sub(parent.center);
+          worst = Math.max(worst, (point.length() - parent.surface.radius(point)) / mean);
+        }
+      }
+    }
+    // to within the 2 % of a radius a measured surface keeps to its mesh (see world/surface)
+    expect(worst).toBeLessThan(0.02);
   });
 
   it('is cut the same every time: the same arrays, centroid, share and measured surface', () => {

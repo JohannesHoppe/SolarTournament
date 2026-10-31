@@ -104,7 +104,17 @@ export interface FleetEvent {
   count: number;
 }
 
-export type LogEvent = DecisionEvent | ContactEvent | DeathEvent | ShoveEvent | ActEvent | SuspicionEvent | FleetEvent;
+/** The lead browser's sync of the field set this browser's right (see world/fieldsync): the slice, the families built again, the pieces eased in and set at once. */
+export interface SyncEvent {
+  kind: 'sync';
+  t: number;
+  slice: number;
+  rebuilt: number;
+  eased: number;
+  set: number;
+}
+
+export type LogEvent = DecisionEvent | ContactEvent | DeathEvent | ShoveEvent | ActEvent | SuspicionEvent | FleetEvent | SyncEvent;
 
 /** Events kept (about a round's worth of eight bots changing their minds every second or so). */
 const LOG_CAPACITY = 20000;

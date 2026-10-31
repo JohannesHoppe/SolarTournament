@@ -1,5 +1,6 @@
 import type { ShipState } from '../ship/ship';
-import { KNOCKED, type AsteroidState, type FieldState, type ShovedState } from '../world/asteroids';
+import { KNOCKED, rootOf, type AsteroidState, type FieldState, type ShovedState } from '../world/asteroids';
+import { SYNC_SLICES, type FamilyState, type FieldSlice } from '../world/fieldsync';
 import type { WreckState } from '../world/wrecks';
 import { KINDS, type ProbeState } from '../game/items';
 import { MAX_LOOKS } from '../game/hangar';
@@ -179,6 +180,47 @@ export function fieldState(x: unknown): FieldState | null {
   if (!state || x.m === undefined) return state;
   const moved = listOf(x.m, MAX_ROCKS, shovedState);
   return moved ? { ...state, m: moved } : null;
+}
+
+/** A family of the field (see world/fieldsync) never holds more pieces than this: a root, its 3 pieces and their 9 (1 + 3 + 9). */
+const MAX_FAMILY = 13;
+/** A slice never holds more families than this: the largest field's 160 roots in SYNC_SLICES slices, with room. */
+const MAX_SLICE = 64;
+
+/** A family's list of ids with a number each (its breaks with their field times, its pieces with their hits), each id one of the family's. */
+function familyList(x: unknown, root: string, max: number): [string, number][] | null {
+  return listOf(x, MAX_FAMILY, (entry) => {
+    if (!Array.isArray(entry) || entry.length !== 2) return null;
+    const piece = id(entry[0]);
+    const value = num(entry[1], 0, max);
+    return piece && rootOf(piece) === root && value !== null ? ([piece, value] as [string, number]) : null;
+  });
+}
+
+/** A slice of the lead's field (see world/fieldsync), or null: a slice of the turn, families of their own pieces only, hits and times in range, motions as a ram's or a knock's. */
+export function fieldSync(x: unknown): FieldSlice | null {
+  if (!isRecord(x)) return null;
+  const t = num(x.t, 0, MAX_FIELD_TIME);
+  const i = int(x.i, 0, SYNC_SLICES - 1);
+  const families = listOf(x.f, MAX_SLICE, (family) => {
+    if (!isRecord(family)) return null;
+    const root = id(family.r);
+    if (!root || rootOf(root) !== root) return null;
+    const moved = listOf(family.m, MAX_FAMILY, shovedState);
+    const state = complete<FamilyState>({ r: root, x: familyList(family.x, root, MAX_FIELD_TIME), a: familyList(family.a, root, 1000), m: moved });
+    return state && state.m.every((m) => rootOf(m.id) === root) ? state : null;
+  });
+  return t === null || i === null || !families ? null : { t, i, f: families };
+}
+
+/** A round sees a few comets at most (see game/comet), far below this. */
+const MAX_HEADS = 8;
+
+/** The field times the round's comets' heads broke up, null for one still whole, or null for a list that is none. */
+export function headTimes(x: unknown): (number | null)[] | null {
+  if (!Array.isArray(x) || x.length > MAX_HEADS) return null;
+  const times = x.map((head) => (head === null ? null : (num(head, 0, MAX_FIELD_TIME) ?? undefined)));
+  return times.some((time) => time === undefined) ? null : (times as (number | null)[]);
 }
 
 /** Ships on one side of Capture the Flag: at most every place of a tournament, and those of a lead browser's bots with room. */

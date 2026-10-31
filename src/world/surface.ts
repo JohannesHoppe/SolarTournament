@@ -59,32 +59,43 @@ function keepFarthest(radii: Float32Array, x: number, y: number, z: number) {
   radii[index] = Math.max(radii[index], Math.ceil(length));
 }
 
+/** Calls `visit` for every cell of every face (face, row, column, its index in the cells) and its eight neighbours and itself (di, dj from -1 to 1), the cell first with `start`. */
+function eachCellAround(start: (f: number, j: number, i: number, index: number) => boolean, visit: (f: number, j: number, i: number, index: number, dj: number, di: number) => void) {
+  for (let f = 0; f < 6; f++) {
+    for (let j = 0; j < CELLS; j++) {
+      for (let i = 0; i < CELLS; i++) {
+        const index = f * CELLS * CELLS + j * CELLS + i;
+        if (!start(f, j, i, index)) continue;
+        for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) visit(f, j, i, index, dj, di);
+      }
+    }
+  }
+}
+
 /** A coarse mesh leaves cells without a vertex: they take the mean of their filled neighbours on the face. */
 function fillGaps(radii: Float32Array) {
   for (let pass = 0; pass < CELLS && radii.includes(0); pass++) {
     const before = radii.slice();
-    for (let f = 0; f < 6; f++) {
-      for (let j = 0; j < CELLS; j++) {
-        for (let i = 0; i < CELLS; i++) {
-          const index = f * CELLS * CELLS + j * CELLS + i;
-          if (before[index]) continue;
-          let sum = 0;
-          let filled = 0;
-          for (let dj = -1; dj <= 1; dj++) {
-            for (let di = -1; di <= 1; di++) {
-              const ni = i + di;
-              const nj = j + dj;
-              const r = ni >= 0 && ni < CELLS && nj >= 0 && nj < CELLS ? before[f * CELLS * CELLS + nj * CELLS + ni] : 0;
-              if (r) {
-                sum += r;
-                filled++;
-              }
-            }
-          }
-          if (filled) radii[index] = Math.ceil(sum / filled);
+    let sum = 0;
+    let filled = 0;
+    eachCellAround(
+      (_f, _j, _i, index) => {
+        // the cell's mean of the last one is taken before the next begins
+        sum = 0;
+        filled = 0;
+        return !before[index];
+      },
+      (f, j, i, index, dj, di) => {
+        const ni = i + di;
+        const nj = j + dj;
+        const r = ni >= 0 && ni < CELLS && nj >= 0 && nj < CELLS ? before[f * CELLS * CELLS + nj * CELLS + ni] : 0;
+        if (r) {
+          sum += r;
+          filled++;
         }
-      }
-    }
+        if (dj === 1 && di === 1 && filled) radii[index] = Math.ceil(sum / filled);
+      },
+    );
   }
 }
 
@@ -94,6 +105,46 @@ export function measureRadii(points: ArrayLike<number>, center: THREE.Vector3): 
   for (let k = 0; k < points.length; k += 3) keepFarthest(radii, points[k] - center.x, points[k + 1] - center.y, points[k + 2] - center.z);
   fillGaps(radii);
   return radii;
+}
+
+const inside = new THREE.Vector3();
+const along = new THREE.Vector3();
+
+/**
+ * Cuts a surface's cells measured around `center` (see measureRadii) back to where they leave
+ * `within`, another surface around `withinCenter` in the same frame: a piece of a broken rock
+ * reaches no farther than the rock did, in no direction, so a ship outside the rock is outside
+ * every piece of it, to the 2 % of a radius a measured surface keeps to its mesh. Each cell's
+ * point is held to it (to a unit, by halving) along its middle's direction and those a quarter
+ * of a cell around it, and a little more (`margin`, units).
+ */
+export function clampRadii(radii: Float32Array, center: THREE.Vector3, within: Surface, withinCenter: THREE.Vector3, margin = 0) {
+  const out = (r: number) => {
+    inside.copy(center).addScaledVector(along, r).sub(withinCenter);
+    return inside.length() > within.radius(inside) - margin;
+  };
+  // over the cell's middle and a quarter of a cell around it, where it weighs most in a lookup's blend
+  eachCellAround(
+    () => true,
+    (f, j, i, index, dj, di) => {
+      const s = Math.max(-1, Math.min(1, ((i + 0.5 + di / 4) / CELLS) * 2 - 1));
+      const t = Math.max(-1, Math.min(1, ((j + 0.5 + dj / 4) / CELLS) * 2 - 1));
+      const sign = f % 2 === 0 ? 1 : -1;
+      if (f < 2) along.set(sign, s, t);
+      else if (f < 4) along.set(s, sign, t);
+      else along.set(s, t, sign);
+      along.normalize();
+      if (!out(radii[index])) return;
+      let low = 0;
+      let high = radii[index];
+      while (high - low > 1) {
+        const middle = (low + high) / 2;
+        if (out(middle)) high = middle;
+        else low = middle;
+      }
+      radii[index] = Math.floor(low);
+    },
+  );
 }
 
 export class Surface {

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { arenaById } from './arenas';
 import { FACE_TOLERANCE, planMining } from './mining';
 import { testField } from '../test/field';
+import { DETAIL } from './rocks';
 
 const belt = arenaById('belt')!.layout;
 
@@ -10,6 +11,16 @@ function plan() {
   const field = testField();
   field.generate(belt);
   return { field, plan: planMining(field) };
+}
+
+/** Every corner of a rig's or buoy's boxes lies within its rock's reach, from where the broad phases center the rock. */
+function expectWithinReach(parts: readonly { half: THREE.Vector3; matrix: THREE.Matrix4 }[], rock: { object: THREE.Object3D; radius: number }) {
+  for (const part of parts) {
+    for (let k = 0; k < 8; k++) {
+      const corner = new THREE.Vector3(k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1).multiply(part.half).applyMatrix4(part.matrix).applyMatrix4(rock.object.matrixWorld);
+      expect(corner.distanceTo(rock.object.position)).toBeLessThanOrEqual(rock.radius + 1);
+    }
+  }
 }
 
 describe("the Rockborn's mining in the Belt", () => {
@@ -46,12 +57,16 @@ describe("the Rockborn's mining in the Belt", () => {
     expect(hit.asteroid).toBe(rock);
     expect(hit.distance).toBeLessThan(10000 - 40 * 20);
     // nothing of the rig lies beyond the rock's reach
-    for (const part of p.solids[0]) {
-      for (let k = 0; k < 8; k++) {
-        const corner = new THREE.Vector3(k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1).multiply(part.half).applyMatrix4(part.matrix).applyMatrix4(rock.object.matrixWorld);
-        expect(corner.distanceTo(rock.object.position)).toBeLessThanOrEqual(rock.radius + 1);
-      }
-    }
+    expectWithinReach(p.solids[0], rock);
+  });
+
+  it("keeps every rig and buoy within its rock's reach from where the broad phases center it, at the collisions' detail", () => {
+    const field = testField(DETAIL);
+    field.generate(belt);
+    const p = planMining(field);
+    p.solids.forEach((parts, slot) => {
+      expectWithinReach(parts ?? [], field.asteroids.get(p.ids[slot])!);
+    });
   });
 
   it('claims whole rocks only, and every slot of the shaders at most once', () => {

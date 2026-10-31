@@ -185,7 +185,40 @@ export interface Asteroid {
   shovedBy: number | null;
   /** The structure it is welded into (see Placement.weld), or null for a piece on its own. */
   weld: number | null;
+  /** The field's revision when it last appeared or jumped (see AsteroidField.revision). */
+  appeared: number;
+  /**
+   * A correction eased in (see world/fieldsync): from field time `from` on, the piece is drawn
+   * and collides `offset` away from where its motion puts it and turned by `turn`, both fading
+   * out over EASE_SECONDS; null for none. Where its motion puts it is what every browser shares.
+   */
+  ease: { offset: THREE.Vector3; turn: THREE.Quaternion; from: number } | null;
 }
+
+/** How long a correction of a piece's place by the lead's sync is eased in (s, see Asteroid.ease): a gentle glide, never a jump. */
+export const EASE_SECONDS = 1;
+
+/** How the layout placed a root of the field (see AsteroidField.rebuildFamily). */
+interface Origin {
+  kind: TemplateKind;
+  type: number;
+  template: Template;
+  scale: number;
+  position: THREE.Vector3;
+  spinAxis: THREE.Vector3;
+  spinRate: number;
+  orbitAxis: THREE.Vector3;
+  orbitRate: number;
+  solid: boolean;
+  baseOrientation: THREE.Quaternion;
+  weld: number | null;
+}
+
+/** The root a piece broke off from (its id up to the first dot: the layout's piece). */
+export const rootOf = (id: string): string => {
+  const dot = id.indexOf('.');
+  return dot < 0 ? id : id.slice(0, dot);
+};
 
 /**
  * A rock as it travels over the network: where it stands follows from the seed, the field
@@ -219,6 +252,57 @@ export const RAMMED = -1;
 
 /** The shover of a piece another piece of the field struck, or a ring (see world/contacts): never a comet's seed either. */
 export const KNOCKED = -2;
+
+/** Rounds each value to `digits` places, as a piece's motion travels (see blowState). */
+const rounded = (values: number[], digits: number) => values.map((v) => +v.toFixed(digits));
+const carried = new THREE.Vector3();
+const easing = new THREE.Quaternion();
+
+/**
+ * A piece's motion after a blow at field time `time` (the battleship's ram, a contact), as it
+ * goes into the field and to the other browsers: from `center` on, its center flying at
+ * `velocity` (in the world) and turning at `spin` (axis times rate, rad/s; it keeps its own axis
+ * when it stops), shoved by `by`. Its drift is what is left of that velocity once its orbit
+ * carries it (see positionAt). Field time to the millisecond, place to 0.5 mm, drift to 0.05
+ * mm/s, orientation and spin to a millionth: far finer than any browser tells pieces apart.
+ */
+export function blowState(piece: Asteroid, time: number, center: THREE.Vector3, velocity: THREE.Vector3, spin: THREE.Vector3, by: number): ShovedState {
+  carried.copy(piece.orbitAxis).multiplyScalar(piece.orbitRate).cross(center);
+  const rate = spin.length();
+  const axis = rate > 1e-9 ? [spin.x / rate, spin.y / rate, spin.z / rate] : piece.spinAxis.toArray();
+  return {
+    id: piece.id,
+    b: +time.toFixed(3),
+    p: rounded(center.toArray(), 2),
+    v: rounded([velocity.x - carried.x, velocity.y - carried.y, velocity.z - carried.z], 3),
+    q: rounded(piece.object.quaternion.toArray(), 6),
+    s: rounded([...axis, rate], 6),
+    c: by,
+  };
+}
+
+/**
+ * A piece's motion as it has it (see ShovedState), for a snapshot and the lead's sync of the
+ * field (see world/fieldsync): at full precision (some 340 bytes), so another browser's piece
+ * plays on exactly as this one's, contact for contact.
+ */
+export function motionOf(a: Asteroid): ShovedState {
+  return { id: a.id, b: a.born, p: a.basePosition.toArray(), v: a.velocity.toArray(), q: a.baseOrientation.toArray(), s: [...a.spinAxis.toArray(), a.spinRate], c: a.shovedBy ?? KNOCKED };
+}
+
+/**
+ * The tumble a blow adds to a piece's spin (into `target`, rad/s as axis times rate): the moment
+ * of the change `change` of its center's velocity, struck at `arm` from its center, over the
+ * moment of inertia of a ball as large (2/5 m r²), at most `limit` more.
+ */
+export function blowSpin(piece: Asteroid, arm: THREE.Vector3, change: THREE.Vector3, limit: number, target: THREE.Vector3): THREE.Vector3 {
+  const radius = piece.meanRadius;
+  return target
+    .crossVectors(arm, change)
+    .divideScalar(0.4 * radius * radius)
+    .clampLength(0, limit)
+    .addScaledVector(piece.spinAxis, piece.spinRate);
+}
 
 /** Directions a rock's or an ellipsoid's outline is laid out in (see outline): evenly over the sphere, about 13° apart. */
 const OUTLINE_POINTS = 256;
@@ -430,6 +514,62 @@ export class AsteroidField {
       this.place(asteroid);
       if (asteroid.weld !== null && !this.weldHomes.has(asteroid.weld)) this.weldHomes.set(asteroid.weld, { id, position: asteroid.object.position.clone(), quaternion: asteroid.object.quaternion.clone() });
     }
+    this.roots.length = 0;
+    this.origins.clear();
+    for (const a of this.asteroids.values()) {
+      this.roots.push(a.id);
+      this.origins.set(a.id, { ...a, position: a.basePosition.clone(), spinAxis: a.spinAxis.clone(), orbitAxis: a.orbitAxis.clone(), baseOrientation: a.baseOrientation.clone(), type: a.object.userData.type, scale: a.object.userData.scale, template: a.object.userData.template });
+    }
+  }
+
+  /** The pieces the layout placed, in order: each the root of the family of the pieces it breaks into (see world/fieldsync). */
+  readonly roots: string[] = [];
+  /** How each root was placed, to place it again (see revive). */
+  private readonly origins = new Map<string, Origin>();
+
+  /**
+   * Bumped whenever a piece appears or jumps (a break's pieces, a sync's correction set at once):
+   * each piece keeps the revision it last did so (Asteroid.appeared), so a cable it now lies
+   * across knows it did not sweep through it (see game/cable).
+   */
+  revision = 0;
+
+  /** A family of pieces (see roots) as this field has it: those standing, and those broken with the field time each broke. */
+  familyOf(root: string): { alive: Asteroid[]; broken: [string, number][] } {
+    const alive = [...this.asteroids.values()].filter((a) => rootOf(a.id) === root);
+    const broken = [...this.broken].filter(([id]) => rootOf(id) === root);
+    return { alive, broken };
+  }
+
+  /**
+   * Builds a family again from its root as the layout placed it, broken where `breaks` say (each
+   * id and the field time it broke, parents first): what another browser has of it. Its pieces
+   * are new, with the motion their breaks give them.
+   */
+  rebuildFamily(root: string, breaks: readonly (readonly [string, number])[]) {
+    const origin = this.origins.get(root);
+    if (!origin) return;
+    for (const a of this.familyOf(root).alive) {
+      this.group.remove(a.object);
+      this.asteroids.delete(a.id);
+    }
+    for (const [id] of this.familyOf(root).broken) {
+      this.broken.delete(id);
+      this.heard.delete(id);
+    }
+    const a = this.add(root, origin.kind, origin.type, origin.template, origin.scale, 0, 0, origin.position, origin.spinAxis.clone(), new THREE.Vector3(), origin.orbitAxis.clone(), origin.orbitRate, origin.solid, origin.spinRate);
+    a.baseOrientation.copy(origin.baseOrientation);
+    a.weld = origin.weld;
+    this.place(a);
+    const ordered = [...breaks].sort((x, y) => x[0].split('.').length - y[0].split('.').length);
+    for (const [id, at] of ordered) this.destroy(id, at);
+  }
+
+  /** The motion the layout gave a root, as a piece's motion travels (who shoved it aside: a root taking it is shoved by nobody again). */
+  originOf(root: string): ShovedState | null {
+    const origin = this.origins.get(root);
+    if (!origin) return null;
+    return { id: root, b: 0, p: origin.position.toArray(), v: [0, 0, 0], q: origin.baseOrientation.toArray(), s: [...origin.spinAxis.toArray(), origin.spinRate], c: KNOCKED };
   }
 
   /**
@@ -472,6 +612,7 @@ export class AsteroidField {
     this.asteroids.clear();
     this.weldHomes.clear();
     this.broken.clear();
+    this.heard.clear();
   }
 
   private boundingRadius(t: Template, scale: number) {
@@ -550,6 +691,8 @@ export class AsteroidField {
       inverse: new THREE.Matrix4(),
       shovedBy: null,
       weld: null,
+      appeared: ++this.revision,
+      ease: null,
     };
     this.asteroids.set(id, asteroid);
     object.userData.type = type;
@@ -561,11 +704,19 @@ export class AsteroidField {
     return asteroid;
   }
 
-  /** Puts a rock where the field time says (now, or `time`): drifted along its velocity, carried along its orbit, turned about its axis. */
+  /** Puts a rock where the field time says (now, or `time`): drifted along its velocity, carried along its orbit, turned about its axis; and a correction eased in on top (see Asteroid.ease). */
   private place(a: Asteroid, time = this.clock) {
     const age = time - a.born;
     positionAt(a, time, a.object.position);
     a.object.quaternion.setFromAxisAngle(a.spinAxis, a.spinRate * age).multiply(a.baseOrientation);
+    const ease = a.ease;
+    if (ease) {
+      const left = Math.min(1, 1 - (time - ease.from) / EASE_SECONDS);
+      if (left > 0) {
+        a.object.position.addScaledVector(ease.offset, left);
+        a.object.quaternion.premultiply(easing.identity().slerp(ease.turn, left));
+      } else a.ease = null;
+    }
     a.object.updateMatrixWorld(true);
     a.inverse.copy(a.object.matrixWorld).invert();
   }
@@ -613,6 +764,19 @@ export class AsteroidField {
   brokeAt(id: string): number | undefined {
     return this.broken.get(id);
   }
+
+  /**
+   * The field time from which this field has a rock's pieces (undefined while it stands): when
+   * it broke, or later when it heard of the break later (another Host's, dated a round trip
+   * back). Its pieces lie in each other from then on, as the rock a moment before.
+   */
+  splitSince(id: string): number | undefined {
+    const at = this.broken.get(id);
+    return at === undefined ? undefined : Math.max(at, this.heard.get(id) ?? at);
+  }
+
+  /** The field's clock when each rock broke here (see splitSince). */
+  private readonly heard = new Map<string, number>();
 
   /** Where a rock is at a field time (see positionAt), for whatever must know it then, not now. */
   positionOf(asteroid: Asteroid, time: number, target: THREE.Vector3): THREE.Vector3 {
@@ -706,13 +870,19 @@ export class AsteroidField {
     return a;
   }
 
-  /** Breaks a rock at a field time: the fragments start from where it stood then. */
-  private destroy(id: string, at: number): Asteroid | undefined {
+  /**
+   * Breaks a rock at a field time: the fragments start from where it stood then. A break dated
+   * before the rock took its motion (a shooter's, heard after a knock or a ram) breaks it where
+   * that motion starts: before it, the rock was elsewhere.
+   */
+  private destroy(id: string, time: number): Asteroid | undefined {
     const asteroid = this.asteroids.get(id);
     if (!asteroid) return undefined;
+    const at = Math.max(time, asteroid.born);
     this.group.remove(asteroid.object);
     this.asteroids.delete(id);
     this.broken.set(id, at);
+    this.heard.set(id, this.clock);
 
     if (asteroid.generation >= MAX_GENERATION) return asteroid;
     if (this.fractures[asteroid.kind]) {
@@ -789,9 +959,7 @@ export class AsteroidField {
       t: +this.clock.toFixed(3),
       a: [...this.asteroids.values()].map((a) => ({ id: a.id, hp: a.hitPoints, b: +a.born.toFixed(3) })),
       x: [...this.broken].map(([id, at]) => ({ id, b: +at.toFixed(3) })),
-      m: [...this.asteroids.values()].flatMap((a) =>
-        a.shovedBy === null ? [] : [{ id: a.id, b: a.born, p: a.basePosition.toArray(), v: a.velocity.toArray(), q: a.baseOrientation.toArray(), s: [...a.spinAxis.toArray(), a.spinRate], c: a.shovedBy }],
-      ),
+      m: [...this.asteroids.values()].flatMap((a) => (a.shovedBy === null ? [] : [motionOf(a)])),
     };
   }
 
@@ -801,9 +969,12 @@ export class AsteroidField {
    * it broke, parents first (the fragments are deterministic), removes rocks that are gone,
    * takes over the hits, the motion of the pieces a comet or the battleship shoved (and of those
    * broken off them, which did not start where the generated field puts them), and the field time. A
-   * fragment's birth is its parent's break time as well.
+   * fragment's birth is its parent's break time as well. A rock whose pieces are not cut yet (see
+   * breaksAtOnce) is not cut here, which would hold the page for a moment a piece: its family
+   * stays whole until the lead's sync of the field builds it (see world/fieldsync) once the
+   * worker has cut them. Returns the roots of the families left so.
    */
-  restore(state: FieldState, layout: FieldLayout) {
+  restore(state: FieldState, layout: FieldLayout): Set<string> {
     this.generate(layout);
     const listed = new Map(state.a.map((s) => [s.id, s]));
     const breaks = new Map(state.x.map((s) => [s.id, s.b]));
@@ -811,6 +982,7 @@ export class AsteroidField {
       const dot = rock.id.lastIndexOf('.');
       if (dot > 0 && !breaks.has(rock.id.slice(0, dot))) breaks.set(rock.id.slice(0, dot), rock.b);
     }
+    const later = new Set<string>();
     const ensure = (id: string) => {
       if (this.asteroids.has(id)) return;
       const dot = id.lastIndexOf('.');
@@ -818,11 +990,14 @@ export class AsteroidField {
       const parent = id.slice(0, dot);
       ensure(parent);
       const at = breaks.get(parent);
-      if (at !== undefined) this.destroy(parent, at);
+      const piece = this.asteroids.get(parent);
+      if (at === undefined || !piece) return;
+      if (this.breaksAtOnce(piece)) this.destroy(parent, at);
+      else later.add(rootOf(parent));
     };
     for (const rock of state.a) ensure(rock.id);
     for (const id of [...this.asteroids.keys()]) {
-      if (listed.has(id)) continue;
+      if (listed.has(id) || later.has(rootOf(id))) continue;
       this.group.remove(this.asteroids.get(id)!.object);
       this.asteroids.delete(id);
       this.broken.set(id, breaks.get(id) ?? state.t);
@@ -833,6 +1008,24 @@ export class AsteroidField {
     }
     for (const moved of state.m ?? []) this.move(moved);
     this.setClock(state.t);
+    return later;
+  }
+
+  /** Whether a piece breaks at once: into copies of whole shapes, into none, or into pieces cut already (see world/fracture, ready, which asks the worker for them when not). */
+  breaksAtOnce(piece: Asteroid): boolean {
+    const fracture = this.fractures[piece.kind];
+    return !fracture || piece.generation >= MAX_GENERATION || fracture.ready(piece.object.userData.type, piecePath(piece.id));
+  }
+
+  /** Whether a family can be built again broken where `breaks` say without cutting a piece here and now (see breaksAtOnce). */
+  familyReady(root: string, breaks: readonly (readonly [string, number])[]): boolean {
+    const origin = this.origins.get(root);
+    const fracture = origin && this.fractures[origin.kind];
+    if (!fracture) return true;
+    return breaks.every(([id]) => {
+      const path = piecePath(id);
+      return path.length >= MAX_GENERATION || fracture.ready(origin.type, path);
+    });
   }
 
   /**
@@ -932,10 +1125,33 @@ export class AsteroidField {
     for (const asteroid of this.asteroids.values()) {
       const reach = asteroid.radius + radius;
       if (asteroid.object.position.distanceToSquared(center) > reach * reach) continue;
-      if (asteroid.box ? pieceContact(asteroid, center, radius, pull) : asteroid.surface ? surfaceContact(asteroid, asteroid.surface, center, radius) : ellipsoidContact(asteroid, center, radius)) return asteroid;
-      for (const part of this.attachments.get(asteroid.id) ?? NONE) if (attachmentContact(asteroid, part, center, radius, pull)) return asteroid;
+      if (this.touches(asteroid, center, radius)) return asteroid;
     }
     return null;
+  }
+
+  /**
+   * Whether any piece's surface is closer than radius to a point at another field time than the
+   * field's (each posed then, and back): what every browser decides alike however its own clock
+   * runs (where a sponsor probe shows up, see game/items).
+   */
+  overlapAt(center: THREE.Vector3, radius: number, time: number): boolean {
+    for (const asteroid of this.asteroids.values()) {
+      const reach = asteroid.radius + radius;
+      if (positionAt(asteroid, time, point).distanceToSquared(center) > reach * reach) continue;
+      this.place(asteroid, time);
+      const touching = this.touches(asteroid, center, radius);
+      this.place(asteroid);
+      if (touching) return true;
+    }
+    return false;
+  }
+
+  /** Whether a sphere touches a piece's own shape or what stands on it, as the piece is posed. */
+  private touches(asteroid: Asteroid, center: THREE.Vector3, radius: number): boolean {
+    if (asteroid.box ? pieceContact(asteroid, center, radius, pull) : asteroid.surface ? surfaceContact(asteroid, asteroid.surface, center, radius) : ellipsoidContact(asteroid, center, radius)) return true;
+    for (const part of this.attachments.get(asteroid.id) ?? NONE) if (attachmentContact(asteroid, part, center, radius, pull)) return true;
+    return false;
   }
 
   /**
@@ -977,13 +1193,13 @@ export class AsteroidField {
     if (asteroid) asteroid.radius = this.reachOf(asteroid, asteroid.radius);
   }
 
-  /** How far a piece reaches from its center with what stands on it (world units), at least `radius`. */
+  /** How far a piece reaches with what stands on it (world units), at least `radius`: from its object's origin, where every broad phase centers its sphere (see boundingRadius). */
   private reachOf(asteroid: Asteroid, radius: number): number {
     const scale = asteroid.object.matrixWorld.getMaxScaleOnAxis();
     let reach = radius;
     for (const part of this.attachments.get(asteroid.id) ?? NONE) {
       for (let k = 0; k < 8; k++) {
-        corner.set(k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1).multiply(part.half).applyMatrix4(part.matrix).sub(asteroid.center);
+        corner.set(k & 1 ? 1 : -1, k & 2 ? 1 : -1, k & 4 ? 1 : -1).multiply(part.half).applyMatrix4(part.matrix);
         reach = Math.max(reach, corner.length() * scale);
       }
     }

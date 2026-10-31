@@ -7,7 +7,7 @@ import { Wrecks } from '../world/wrecks';
 import { NOVA_RADIUS, PROBE_RADIUS, Probes } from './items';
 import { Bot, evenSkills, NOVA_SIEGE, SIEGE_DISTANCE } from '../ship/bots';
 import type { Ship } from '../ship/ship';
-import { testField } from '../test/field';
+import { driftProbes, testField } from '../test/field';
 import { arenaById, ARENAS, RING_SHEET, type ArenaProfile } from '../world/arenas';
 import { DISTANT_DETAIL } from '../world/rocks';
 import { HULL_BOXES } from '../world/shapes';
@@ -277,6 +277,20 @@ describe("the President's fleet", () => {
     // a whole comet's flight past the hull: a few seconds on a busy machine
   });
 
+  it("leaves the head whole on a browser that follows the lead's battleship, its shower bursting all the same", () => {
+    const fleet = battleship();
+    const comet = makeComet(100, new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 5);
+    const shower = new Shower(comet);
+    const step = 1 / 60;
+    let stopped = 0;
+    for (let time = cometStart(comet); time < cometEnd(comet); time += step) {
+      fleet.update(time, 0);
+      expect(meetObstacle(comet, shower, fleet, time, step, () => stopped++, false)).toBe(false);
+    }
+    expect(comet.broken).toBe(Infinity);
+    expect(stopped).toBeGreaterThan(0);
+  }, 30_000);
+
   it('stays solid while it sinks, for ships as for rays and torpedoes, and is gone once it went up', () => {
     const fleet = battleship();
     breakAll(fleet, zonesOf(fleet, 'battery'));
@@ -402,7 +416,7 @@ describe("the battleship and the field's rock", () => {
       const before = wrecks.list.length;
       wrecks.update(STEP_SECONDS, time, field);
       met += before - wrecks.list.length;
-      probes.update(STEP_SECONDS, time, field);
+      driftProbes(probes, STEP_SECONDS, time, field);
       hunts ||= fleet.target === pilot.id;
       const when = `at ${time.toFixed(1)} s`;
       for (const piece of field.asteroids.values()) {

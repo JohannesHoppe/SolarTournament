@@ -193,6 +193,30 @@ describe("a comet's head", () => {
     a.setClock(80);
     expect(c.asteroids.get(hull.id)!.object.position.distanceTo(a.asteroids.get(hull.id)!.object.position)).toBeLessThan(1e-6);
   });
+
+  it('is gone for a newcomer who joins just after it broke up on the hull, which it never shoves twice', () => {
+    const derelict = layoutOf('derelict');
+    const [lead, newcomer] = [testField(), testField()];
+    lead.generate(derelict);
+    const hull = [...lead.asteroids.values()].find((rock) => rock.solid)!;
+    const at = 40;
+    const height = hull.semiAxes.y * hull.object.matrixWorld.getMaxScaleOnAxis();
+    const through = lead.positionOf(hull, at, new THREE.Vector3()).add(new THREE.Vector3(0, height * 0.5, 0));
+    const comet = makeComet(at, new THREE.Vector3(0, 0, 1), through, 9);
+    fly(lead, comet, 1 / 60, 30, 60);
+    // the newcomer joins a fifth of a second after the head broke up, its own comet whole as roundComets builds it
+    const joined = comet.broken + 0.2;
+    const early = testField();
+    early.generate(derelict);
+    fly(early, makeComet(at, new THREE.Vector3(0, 0, 1), through, 9), 1 / 60, 30, joined);
+    newcomer.restore(JSON.parse(JSON.stringify(early.snapshot())), derelict);
+    const late = makeComet(at, new THREE.Vector3(0, 0, 1), through, 9);
+    fly(newcomer, late, 1 / 60, joined, 60);
+    expect(late.broken).toBeCloseTo(comet.broken, 3);
+    lead.setClock(60);
+    expect(newcomer.asteroids.get(hull.id)!.velocity.distanceTo(lead.asteroids.get(hull.id)!.velocity)).toBeLessThan(1e-3);
+    expect(newcomer.snapshot().x).toEqual(lead.snapshot().x);
+  });
 });
 
 describe("the President's battleship and a comet", () => {

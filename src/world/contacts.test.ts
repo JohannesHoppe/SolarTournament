@@ -6,7 +6,7 @@ import { HULL_BOXES } from './shapes';
 import { ARENAS, arenaById, type ArenaProfile } from './arenas';
 import { depthBetween, FieldContacts, ringFixture } from './contacts';
 import { ringRim } from './gates';
-import { KNOCKED, type AsteroidField } from './asteroids';
+import { KNOCKED, type Asteroid, type AsteroidField } from './asteroids';
 import { massOf } from './bodies';
 import { Randomizer } from '../random';
 import { knockShare } from '../net/plausible';
@@ -64,6 +64,32 @@ function fieldOf(arena: ArenaProfile) {
 function stateOf(field: AsteroidField) {
   return [...field.asteroids.values()].map((a) => [a.id, ...[...a.object.position.toArray(), ...a.velocity.toArray()].map((x) => (x / 50).toFixed(3))].join(' ')).sort();
 }
+
+describe('a break heard late', () => {
+  it("lets the pieces of a rock another Host broke a round trip ago part as they would have, never knocking them apart", () => {
+    /** The knocks the pieces of 20 rocks give each other within 2 s of their breaks, each break dated `late` seconds before the lead hears of it. */
+    const knocks = (late: number) => {
+      const field = fieldOf(arenaById('junkyard')!);
+      const contacts = new FieldContacts();
+      const r = new Randomizer(8);
+      let count = 0;
+      for (let k = 0; k < 20; k++) {
+        field.update(1);
+        contacts.run(field);
+        const ids = [...field.asteroids.values()].filter((a) => !a.solid && a.generation === 0).map((a) => a.id);
+        const id = ids[r.nextInt() % ids.length];
+        field.shatter(id, field.clock - late);
+        for (let frame = 0; frame < 120; frame++) {
+          field.update(1 / 60);
+          for (const state of contacts.run(field)) if (state.id.startsWith(`${id}.`)) count++;
+        }
+      }
+      return count;
+    };
+    const onTime = knocks(0);
+    expect(knocks(0.25)).toBeLessThanOrEqual(onTime + 4);
+  }, 60000);
+});
 
 describe('the field meets itself', () => {
   for (const arena of ARENAS) {
@@ -219,22 +245,69 @@ describe('a contact', () => {
     const ma = massOf(a);
     const mb = massOf(b);
     const before = a.velocity.clone().multiplyScalar(ma);
+    // the whole meeting: an off-center blow sets them turning, and they may touch again a step
+    // or two later before they part
     let moved = 0;
-    while (field.clock < 60 && moved === 0) {
+    while (field.clock < 60) {
       field.update(1 / 60);
-      moved = contacts.run(field).length;
+      moved += contacts.run(field).length;
     }
-    expect(moved).toBe(2);
+    expect(moved).toBeGreaterThanOrEqual(2);
     const va = field.surfaceVelocity(a, a.object.position);
     const vb = field.surfaceVelocity(b, b.object.position);
     const after = va.clone().multiplyScalar(ma).addScaledVector(vb, mb);
     expect(after.distanceTo(before) / before.length()).toBeLessThan(1e-3);
-    // they part along the line they met on, more slowly than they met
-    const parting = vb.x - va.x;
-    expect(parting).toBeGreaterThan(0);
-    expect(parting).toBeLessThan(400 * 0.5);
+    // they part, more slowly than they met: apart now and moving apart, or glancing off each
+    // other (rock is irregular, the line they met on is rarely the line they flew on)
+    expect(depthBetween(field, a, b)).toBe(0);
+    const line = b.object.position.clone().sub(a.object.position).normalize();
+    expect(vb.clone().sub(va).dot(line)).toBeGreaterThan(0);
+    expect(vb.distanceTo(va)).toBeLessThan(400);
     expect(a.shovedBy).toBe(KNOCKED);
     expect(b.shovedBy).toBe(KNOCKED);
+  });
+
+  it('never adds energy: a spinning tip sweeping into a piece at rest leaves the two with less than they had', () => {
+    /** Motion and spin together (kg·units²/s²), a piece taken as a ball of its mean radius (2/5 m r²). */
+    const energy = (field: AsteroidField, pieces: Asteroid[]) =>
+      pieces.reduce((sum, piece) => {
+        const mass = massOf(piece);
+        const speed = field.surfaceVelocity(piece, piece.object.position).length();
+        return sum + 0.5 * mass * speed ** 2 + 0.5 * 0.4 * mass * piece.meanRadius ** 2 * piece.spinRate ** 2;
+      }, 0);
+    const random = new Randomizer(11);
+    let trials = 0;
+    for (let k = 0; k < 60 && trials < 8; k++) {
+      const { field, a, b } = pair(0, 1, 1);
+      a.spinAxis.set(random.range(-1, 1), random.range(-1, 1), random.range(-1, 1)).normalize();
+      a.spinRate = 0.15;
+      b.basePosition.set((a.radius + b.radius) * random.range(0.9, 0.98), 0, 0);
+      field.setClock(0);
+      if (depthBetween(field, a, b) > 0) continue;
+      const before = energy(field, [a, b]);
+      const contacts = new FieldContacts();
+      let met = 0;
+      // a turn and a half of the tip, and every touch on the way
+      while (field.clock < 60) {
+        field.update(1 / 60);
+        met += contacts.run(field).length;
+      }
+      if (!met) continue;
+      trials++;
+      expect(energy(field, [a, b])).toBeLessThanOrEqual(before * 1.001);
+    }
+    expect(trials).toBeGreaterThan(3);
+  });
+
+  it("finds a piece's point in the middle of a ring's band, as in its housings", () => {
+    const center = new THREE.Vector3(1000, 2000, -500);
+    const ring = ringFixture(center, new THREE.Vector3(0, 0, 1), 2000);
+    const rim = ringRim(2000);
+    // halfway through the band's thickness, on its middle plane
+    const point = center.clone().add(new THREE.Vector3(rim.inner + 100, 0, 0));
+    const normal = new THREE.Vector3();
+    expect(ring.touch(point, normal)).toBe(true);
+    expect(normal.length()).toBeCloseTo(1);
   });
 
   it('bounces a ring off a piece drifting into it, never through it', () => {
@@ -249,11 +322,14 @@ describe('a contact', () => {
     let bounced = false;
     while (field.clock < 120) {
       field.update(1 / 60);
-      bounced ||= contacts.run(field).length > 0;
+      // every frame's contacts, the first bounce's and those after it
+      const moved = contacts.run(field).length;
+      bounced ||= moved > 0;
     }
     expect(bounced).toBe(true);
-    // turned back, and short of the ring
-    expect(field.surfaceVelocity(a, a.object.position).x).toBeLessThan(0);
+    // short of the ring, closing on it at most a fifth of the speed it met it at: turned back,
+    // or glancing off its rim (a blow off its center turns it as well)
     expect(a.object.position.x).toBeLessThan(center.x - ringRim(2000).inner);
+    expect(field.surfaceVelocity(a, a.object.position).x).toBeLessThan(300 * 0.2);
   });
 });
