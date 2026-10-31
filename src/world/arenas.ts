@@ -257,9 +257,9 @@ const MOODS: Record<ArenaId, Mood> = {
   // but the hole's own gas glows around it; a dim warm sky, warm dust, a warm grade
   hole: {
     space: 0x030202,
-    sky: 0x8a7462,
-    ground: 0x140c08,
-    ambient: 1.4,
+    sky: 0x5c4a3e,
+    ground: 0x0e0806,
+    ambient: 1,
     nebulae: [
       { at: [-1, 0.3, 0.2], color: [0.026, 0.02, 0.017], size: 612000, shape: 0, turn: 1 },
       { at: [0.6, -0.5, 0.8], color: [0.03, 0.017, 0.011], size: 504000, shape: 1, turn: 3.6 },

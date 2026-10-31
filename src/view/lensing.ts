@@ -33,13 +33,29 @@ const BEND_FADE = 0.3;
 /** A bent ray's source beyond the picture's edge by this share of it or more shows the pixel's own unbent light; the fade begins half as far inside the edge (see the shader's outside). */
 const EDGE_FADE = 0.04;
 /**
- * The disk's gas in front of a rock or ship inside its slab, softly held below this luminance
- * (linear, before the tone mapping): a rock's dark side reads about this bright, its lit side
- * several times more, so the veil tints a rock and shows it lies in the glowing gas while its
- * shading and silhouette still read as a solid body; summed in full, kilometers of gas along
- * the plane would wash it out into a flat cut-out.
+ * A deliberate deviation for the look: the disk's near side in front of the shadow is drawn as
+ * from a camera brought to NEAR_FLAT of its height above the disk's plane, turned so the hole
+ * stays where it is. A pilot always flies a few tens or hundreds of meters off the plane, and
+ * seen truly from there the near disk spreads into a broad dim band down the shadow; brought
+ * nearly into the plane it crosses the shadow as the thin, bright, cream-white streak of the
+ * edge-on inner disk, just under the hole's middle.
  */
-const VEIL_MAX = 0.03;
+const NEAR_FLAT = 0.05;
+/**
+ * The warm glow hugging the photon ring outside it (linear, before the tone mapping): a real
+ * hole shows the disk's light bent round it again and again in thinner and thinner rings right
+ * outside the shadow, which the lens's single bend leaves dark; a glow stands in for them.
+ */
+const RING_GLOW = 0.3;
+/**
+ * The disk's gas in front of a rock or ship inside its slab, softly held below VEIL_SHARE of the
+ * surface's own luminance (linear, before the tone mapping) plus VEIL_FLOOR: the veil tints a
+ * rock's lit side and barely lifts its dark side, so it shows the rock lies in the glowing gas
+ * while its shading and silhouette read as a solid body; summed in full, kilometers of gas along
+ * the plane would wash it out into a flat pale cut-out.
+ */
+const VEIL_SHARE = 0.3;
+const VEIL_FLOOR = 0.003;
 /** ...and that fade spans no fewer pixels on screen than this. */
 const EDGE_PIXELS = 60;
 
@@ -104,7 +120,7 @@ const shader = {
     // what is drawn at uv, seen along r and lying depth ahead of the camera, with the disk's gas in
     // front of it where it lies inside the gas's slab: the disk's own mesh is depth-tested at the
     // slab's far side, so a surface inside hides all of the gas along that pixel (see world/landmarks);
-    // held faint (see VEIL_MAX)
+    // held faint against the surface's own light (see VEIL_SHARE)
     vec4 seen(vec2 uv, float depth, vec3 r) {
       vec4 color = texture2D(tDiffuse, uv);
       float at = depth / dot(r, axis);
@@ -112,7 +128,8 @@ const shader = {
         float near = diskEntry(eye, r);
         if (at > near) {
           vec3 veil = diskGas(eye, r, near, at);
-          color.rgb += veil * ${VEIL_MAX} / (${VEIL_MAX} + dot(veil, vec3(0.2126, 0.7152, 0.0722)));
+          float cap = ${VEIL_FLOOR} + ${VEIL_SHARE} * dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
+          color.rgb += veil * cap / (cap + dot(veil, vec3(0.2126, 0.7152, 0.0722)));
         }
       }
       return color;
@@ -130,12 +147,16 @@ const shader = {
       float c = dot(rd, toHole);
       float theta = acos(clamp(c, -1.0, 1.0));
       if (theta < shadowAngle) {
-        // black, but for the disk's gas in front of the hole: along the pixel's ray up to the shadow's sphere (or, past its edge, the hole's nearest point)
-        float b = dot(eye, rd);
-        float h = b * b - dot(eye, eye) + shadowRadius * shadowRadius;
+        // black, but for the disk's gas in front of the hole: along the pixel's ray up to the
+        // shadow's sphere (or, past its edge, the hole's nearest point), seen as from a camera
+        // brought towards the disk's plane (see NEAR_FLAT): a thin bright streak across the shadow
+        vec3 flatEye = vec3(eye.x, eye.y * ${NEAR_FLAT}, eye.z);
+        vec3 flatRay = normalize(rd - toHole - normalize(flatEye));
+        float b = dot(flatEye, flatRay);
+        float h = b * b - dot(flatEye, flatEye) + shadowRadius * shadowRadius;
         float far = h > 0.0 ? -b - sqrt(h) : -b;
-        float near = diskEntry(eye, rd);
-        gl_FragColor = vec4(far > near ? diskGas(eye, rd, near, far) : vec3(0.0), 1.0);
+        float near = diskEntry(flatEye, flatRay);
+        gl_FragColor = vec4(far > near ? diskGas(flatEye, flatRay, near, far) : vec3(0.0), 1.0);
         return;
       }
       // the lens bends only light from beyond the hole: where a ship or rock in front of it
@@ -184,7 +205,10 @@ const shader = {
       // squared by hand: GLSL ES leaves pow() of a negative base undefined (NaN on some GPUs)
       float ring = (theta - shadowAngle * 1.04) / (shadowAngle * 0.045 + 0.0007);
       float photon = exp(-ring * ring);
-      gl_FragColor = color + vec4(vec3(1.0, 0.88, 0.7) * photon * 0.75, 0.0);
+      // and, as the disk's light bent all the way round the hole, a warm glow hugging the ring
+      // outside it, fading out over a fifth of the shadow's angle (see RING_GLOW)
+      float skirt = exp(-max(theta - shadowAngle * 1.04, 0.0) / (shadowAngle * 0.2));
+      gl_FragColor = color + vec4(vec3(1.0, 0.88, 0.7) * photon * 0.75 + vec3(1.0, 0.68, 0.42) * skirt * ${RING_GLOW}, 0.0);
     }
   `,
 };

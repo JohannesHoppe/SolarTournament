@@ -166,15 +166,15 @@ const DISK_THICK = 300;
 const DISK_FLARE = 0.006;
 /**
  * A deliberate deviation for the look: the inner disk's far side, behind the hole as the pilot
- * sees it, swells by up to DISK_PUFF (units, 450 m) above and below, the more edge-on the disk is
+ * sees it, swells by up to DISK_PUFF (units, 275 m) above and below, the more edge-on the disk is
  * seen and the farther behind the hole (in full from DISK_PUFF_FROM, units, 800 m), out to
- * DISK_PUFF_REACH (units, 2 km). A real hole's gravity bends the light of its far side's face up
+ * DISK_PUFF_REACH (units, 1.4 km). A real hole's gravity bends the light of its far side's face up
  * over the shadow and under it; the lens over the picture only bends what it sees, a thin edge,
  * so the swollen far side gives it the broad bright halo instead.
  */
-const DISK_PUFF = 9000;
+const DISK_PUFF = 5500;
 const DISK_PUFF_FROM = 16000;
-const DISK_PUFF_REACH = 40000;
+const DISK_PUFF_REACH = 28000;
 /** The gas's light per column (see diskGas): bright enough that the inner edge burns white-hot, dim enough that the outer disk keeps its peach and orange. */
 const DISK_GAIN = 0.25;
 /**
