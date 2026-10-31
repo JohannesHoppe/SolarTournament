@@ -3873,7 +3873,7 @@ export class Game implements OnlineGame {
     for (const ship of this.ships) {
       if (!ship.alive || this.time < ship.protectedUntil) continue;
       const d = ship.flight.position.distanceTo(origin);
-      if (d < distance && this.field.lineOfSight(origin, ship.flight.position)) {
+      if (d < distance && fleet.sees(zone, ship.flight.position, this.field)) {
         target = ship;
         distance = d;
       }

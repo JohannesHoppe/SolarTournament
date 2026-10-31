@@ -77,6 +77,24 @@ describe("the President's fleet", () => {
     expect(shots).toBeLessThanOrEqual(zonesOf(fleet, 'battery').length * 11);
   });
 
+  it('lets every battery find a ship in the open on the side it faces, its own turret and barrels in the way of nothing, and none behind the hull', () => {
+    const fleet = battleship();
+    const field = testField();
+    field.obstacle = fleet;
+    const batteries = zonesOf(fleet, 'battery');
+    expect(batteries.length).toBeGreaterThan(0);
+    for (const zone of batteries) {
+      const at = fleet.zoneAt(zone);
+      const face = fleet.zones[zone].face;
+      // 250 m out where it faces, and 250 m before its barrels, low over its mount
+      expect(fleet.sees(zone, at.clone().addScaledVector(face, 5000), field)).toBe(true);
+      expect(fleet.sees(zone, at.clone().add(new THREE.Vector3(0, Math.sign(at.y) * 600, -5000)), field)).toBe(true);
+      // across the hull from where it stands, the armor hides the ship
+      expect(fleet.sees(zone, new THREE.Vector3(0, -Math.sign(at.y) * 30000, at.z), field)).toBe(false);
+    }
+    field.obstacle = null;
+  });
+
   it('hides what is behind its hull and sets off a torpedo that touches it', () => {
     const fleet = battleship();
     const across = new THREE.Vector3(1, 0, 0);

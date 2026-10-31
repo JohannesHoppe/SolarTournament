@@ -1674,6 +1674,15 @@ export class Fleet implements Obstacle {
   }
 
   /**
+   * A battery has a point in its sights: the battery is in sight of the point (see inSight), so
+   * its own turret and barrels, the gun itself, never hide what it fires at, while the rest of
+   * the hull and the field's rock do; and the arena's haze between them lets the eye through.
+   */
+  sees(zone: number, point: THREE.Vector3, field: AsteroidField): boolean {
+    return this.inSight(zone, point, field) && field.clearAir(this.zoneAt(zone, sighted), point);
+  }
+
+  /**
    * Where a ship attacking a part holds, `distance` from it (into `target`): on the side the
    * part faces, where it shows itself. The way from the part to the ship (`from`) is turned
    * towards that side (SIEGE_FACE), so ships coming from everywhere spread over it, and none
