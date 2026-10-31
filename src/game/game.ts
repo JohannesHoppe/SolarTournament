@@ -69,9 +69,10 @@ import { ringRim, touchRing } from '../world/gates';
 import { FieldContacts, ringFixture } from '../world/contacts';
 import { IMMOVABLE, massOf, type Body } from '../world/bodies';
 import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, headEnd, HEAD_RADIUS, meetObstacle, meetSolids, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
-import { BASE_RADIUS, CAPTURE_POINTS, CORE_REACH, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
+import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
 import { FlareView } from '../world/flare';
+import { BEAM_STOPS, PROBE_BOUNCES, pushesOf, rayOf, SHOWER_BURSTS, solidTable, TORPEDO_FUSE, touchOf, WRECK_GRINDS } from './solids';
 import { markedName, markLead, swatch } from '../view/marks';
 import { Coach, type Tip } from './coach';
 import {
@@ -646,24 +647,10 @@ const cometCourse = new THREE.Vector3();
 const showerOffset = new THREE.Vector3();
 const showerWay = new THREE.Vector3();
 const showerRay: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
-/** A point asked about in turn (see Game.touchesSolid). */
+/** A point a ring's housing is felt for at along a beam (see Game.ringRay). */
 const solidProbe = new THREE.Vector3();
-
-/**
- * A sphere at `position` of `radius` touching a ball at `center` of `reach` moving at `velocity`
- * (wreckage, a core) is pushed out onto it: `out` the ball's outward normal there, `moving` its
- * velocity; true then (see game/items, Solid).
- */
-function pushOffBall(center: THREE.Vector3, reach: number, velocity: THREE.Vector3, position: THREE.Vector3, radius: number, out: THREE.Vector3, moving: THREE.Vector3): boolean {
-  out.subVectors(position, center);
-  const distance = out.length();
-  if (distance >= reach + radius) return false;
-  if (distance > 1e-6) out.divideScalar(distance);
-  else out.set(0, 1, 0);
-  position.copy(center).addScaledVector(out, reach + radius);
-  moving.copy(velocity);
-  return true;
-}
+/** No sponsor cores, outside Capture the Flag (see Game.solids). */
+const NO_BALLS: readonly { position: THREE.Vector3; velocity: THREE.Vector3 }[] = [];
 /** Where the lead's battleship pushed a piece it rammed (see remoteRam). */
 const rammedTo = new THREE.Vector3();
 /** The velocity of what does not move: a ring of the tournament holds its place. */
@@ -5306,7 +5293,7 @@ export class Game implements OnlineGame {
     // the flight school shows only the probes its drills put out
     const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
     if (!this.school && this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.roundSeconds(), now, this.field, this.course?.points);
-    this.probes.update(dt, now, this.field, (this.probeSolids ??= [fieldSolid(this.field), obstacleSolid(this.field), this.ringSolid, this.wreckSolid, this.coreSolid]));
+    this.probes.update(dt, now, this.field, (this.probeSolids ??= [fieldSolid(this.field), obstacleSolid(this.field), ...pushesOf(this.solids, PROBE_BOUNCES)]));
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive || ship === this.drone || (this.spectating && ship === this.me)) continue;
       const probe = this.probes.touching(ship.flight.position, ship.radius);
@@ -6198,36 +6185,35 @@ export class Game implements OnlineGame {
     else if (this.touchesRing(flight.position, ship.radius)) this.bounce(ship, STILL, now, 'gate');
   }
 
-  /** The housings of the rings as a Solid (see game/items): a probe bounces off them, held in place by their stations. */
-  private readonly ringSolid: Solid = (position, radius, out, moving) => {
-    if (!this.touchesRing(position, radius)) return false;
-    out.copy(normal);
-    moving.set(0, 0, 0);
-    return true;
-  };
+  /** The solids besides the field and the battleship (see game/solids): every use below is taken from this one table. */
+  private readonly solids = solidTable({
+    rings: {
+      touch: (position, radius, out) => {
+        if (!this.touchesRing(position, radius)) return false;
+        out.copy(normal);
+        return true;
+      },
+      ray: (origin, direction, max) => this.ringsRay(origin, direction, max),
+    },
+    cores: () => this.flags?.cores ?? NO_BALLS,
+    wreck: (position, radius) => this.wrecks.overlap(position, radius),
+    probes: () => this.probes.list,
+    torpedoes: () => this.torpedoes.list,
+    head: (out) => this.headNow(out),
+  });
 
-  /** Wreckage as a Solid: a plate ten times a probe's mass. */
-  private readonly wreckSolid: Solid = (position, radius, out, moving) => {
-    const wreck = this.wrecks.overlap(position, radius);
-    return !!wreck && pushOffBall(wreck.mesh.position, wreck.radius, wreck.velocity, position, radius, out, moving);
-  };
-
-  /** The sponsor cores as a Solid: thirty times a probe's mass. */
-  private readonly coreSolid: Solid = (position, radius, out, moving) => {
-    for (const core of this.flags?.cores ?? []) if (pushOffBall(core.position, CORE_REACH, core.velocity, position, radius, out, moving)) return true;
-    return false;
-  };
-
-  /** What a probe bounces off: the field, the battleship, the rings, wreckage and the cores (see game/items, bounce). */
+  /** What a probe bounces off: the field, the battleship, and the solids of PROBE_BOUNCES (see game/items, bounce). */
   private probeSolids: readonly Solid[] | null = null;
 
+  /** How far along a beam (within `max`) the first of the solids of BEAM_STOPS lies; null when none does (see fireLaser). */
+  private readonly solidRay = rayOf(this.solids, BEAM_STOPS);
+
   /**
-   * How far along a beam from `origin` along `direction` (within `max`) the first solid thing
-   * lies that is no part of the field, the battleship, wreckage, a torpedo or a ship: a ring's
-   * housing (its band, housings and struts, felt for along the beam in steps of RAY_STEP where it
-   * passes the ring), a sponsor core, a probe, the comet's head; null when none does.
+   * How far along a beam from `origin` along `direction` (within `max`) the first ring's housing
+   * lies (its band, housings and struts, felt for along the beam in steps of RAY_STEP where it
+   * passes the ring): the race's gates, the bases, the flight school's rings still standing.
    */
-  private solidRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
+  private ringsRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
     let best = max;
     let found = false;
     const take = (distance: number | null) => {
@@ -6238,10 +6224,6 @@ export class Game implements OnlineGame {
     };
     for (const ring of this.rings) take(this.ringRay(ring.center, ring.facing, ring.radius, origin, direction, best));
     this.school?.eachRing((center, facing, radius) => take(this.ringRay(center, facing, radius, origin, direction, best)));
-    for (const core of this.flags?.cores ?? []) take(raySphere(origin, direction, core.position, CORE_REACH));
-    for (const probe of this.probes.list) take(raySphere(origin, direction, probe.position, PROBE_RADIUS));
-    const head = this.headNow(solidProbe);
-    if (head) take(raySphere(origin, direction, head, HEAD_RADIUS));
     return found ? best : null;
   }
 
@@ -6250,12 +6232,6 @@ export class Game implements OnlineGame {
     const comet = this.shower?.comet;
     const clock = this.field.clock;
     return comet && clock < headEnd(comet) ? headAt(comet, clock, out) : null;
-  }
-
-  /** Whether a sphere touches a sponsor core. */
-  private touchesCore(position: THREE.Vector3, radius: number): boolean {
-    for (const core of this.flags?.cores ?? []) if (core.position.distanceTo(position) < CORE_REACH + radius) return true;
-    return false;
   }
 
   /** Where a beam first meets a ring's solid parts (see touchRing), felt for in steps of RAY_STEP through the ring's reach; null when it passes. */
@@ -6270,23 +6246,20 @@ export class Game implements OnlineGame {
     return null;
   }
 
-  /** Whether a sphere touches a ring's housing, a sponsor core or the comet's head: what wreckage grinds to dust on besides rock and hull. */
-  private readonly grinds = (position: THREE.Vector3, radius: number): boolean => {
-    if (this.touchesRing(solidProbe.copy(position), radius) || this.touchesCore(position, radius)) return true;
-    const head = this.headNow(solidProbe);
-    return !!head && head.distanceTo(position) < HEAD_RADIUS + radius;
-  };
+  /** Whether a sphere touches one of the solids of WRECK_GRINDS: what wreckage grinds to dust on besides rock and hull. */
+  private readonly grinds: (position: THREE.Vector3, radius: number) => boolean = touchOf(this.solids, WRECK_GRINDS);
+
+  private readonly fuse = touchOf(this.solids, TORPEDO_FUSE);
 
   /**
-   * Whether a sphere touches something solid that is no part of the field or the battleship
-   * (see grinds), wreckage, a probe, or a torpedo in flight (none of `skip`'s shooter, whose
-   * salvo flies together): what sets off a torpedo where it flies, besides rock and hull.
+   * Whether a sphere touches one of the solids of TORPEDO_FUSE (a torpedo in flight only of
+   * another shooter than `skip`'s, whose salvo flies together): what sets off a torpedo where it
+   * flies, besides rock and hull.
    */
-  private readonly touchesSolid = (position: THREE.Vector3, radius: number, skip: Torpedo | null = null): boolean => {
-    if (this.grinds(position, radius) || this.wrecks.overlap(position, radius) || this.probes.touching(position, radius)) return true;
-    for (const torpedo of this.torpedoes.list) if (torpedo.shooter !== skip?.shooter && torpedo.position.distanceTo(position) < TORPEDO_RADIUS + radius) return true;
-    return false;
-  };
+  private readonly touchesSolid = (position: THREE.Vector3, radius: number, skip: Torpedo | null = null): boolean => this.fuse(position, radius, undefined, skip?.shooter);
+
+  /** Whether a piece of the shower touches one of the solids of SHOWER_BURSTS, and where it bursts (into `at`). */
+  private readonly showerBursts = touchOf(this.solids, SHOWER_BURSTS);
 
   /**
    * Whether a ship touches the housings of a ring (see touchRing): a race's gates, the bases of
@@ -6644,10 +6617,7 @@ export class Game implements OnlineGame {
       }
       break;
     }
-    if (this.touchesRing(at.copy(to), PIECE_RADIUS) || this.wrecks.overlap(to, PIECE_RADIUS)) return true;
-    if (!this.touchesCore(to, PIECE_RADIUS)) return false;
-    at.copy(to);
-    return true;
+    return this.showerBursts(to, PIECE_RADIUS, at);
   };
 
   /**
