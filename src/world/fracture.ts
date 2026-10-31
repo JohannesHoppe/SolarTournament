@@ -819,6 +819,8 @@ export interface FractureSet {
   count(shape: number, path: readonly number[]): number;
   piece(shape: number, path: readonly number[]): Piece;
   prefetch(shape: number, path: readonly number[]): void;
+  /** Whether the pieces the piece at `path` breaks into are cut, so it breaks at once (asks the worker for them when not, see prefetch): always where no worker runs, which cuts them when it breaks. */
+  ready(shape: number, path: readonly number[]): boolean;
 }
 
 /** A piece's geometries and surface, built once from its arrays and shared by rock and ice. */
@@ -841,6 +843,14 @@ export function fractureSet(details: FractureDetails, material: (shape: number, 
     details,
     count: pieceCount,
     prefetch: (shape, path) => prefetch(shape, path, details),
+    ready(shape, path) {
+      if (typeof Worker === 'undefined' || worker === null) return true;
+      for (let i = 0; i < pieceCount(shape, path); i++) if (!cutPieces.has(pieceKey(shape, [...path, i], details))) {
+        prefetch(shape, path, details);
+        return false;
+      }
+      return true;
+    },
     piece(shape, path) {
       const data = pieceData(shape, path, details);
       const key = pieceKey(shape, path, details);

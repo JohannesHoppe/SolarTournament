@@ -29,7 +29,7 @@ The files at this level:
 - `storage.ts`: the browser's localStorage, safe where it is unavailable.
 - `recorder.ts`: the input recorder, a ring buffer of the own ship's last minute step by step (the Host's controls, the mouse pointer, the commands flown, the ship before the step), read in the console as `game.recorder` and saved with `game.recorder.download()`; replayed in tests by `src/test/cockpit.ts`; only in development, null and free in production.
 - `share.ts`: the share button on every screen of the game (at the end of the radio box) and on the radio page and the handbook (alone in the corner): the link and text by where the Host is, the device's share sheet on touch, else a small menu to copy the link, e-mail it or post it through a network's plain share link. `share.test.ts` checks the links and texts.
-- `devlog.ts`: the development log, a ring buffer of the round's deaths, ship contacts, shoves, bot decisions, where torpedoes went off, the hits on the President's battleship and the cheat checks other browsers' ships failed, read in the console as `game.log`; only in development, null and free in production.
+- `devlog.ts`: the development log, a ring buffer of the round's deaths, ship contacts, shoves, bot decisions, where torpedoes went off, the hits on the President's battleship, the cheat checks other browsers' ships failed and what the lead's sync of the field set right, read in the console as `game.log`; only in development, null and free in production.
 - `style.css`: the styles of all pages.
 
 Unit tests sit next to the code they test (`*.test.ts`) and run with `npm test`.

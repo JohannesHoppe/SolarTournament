@@ -79,7 +79,7 @@ async function iceServers(): Promise<{ servers: RTCIceServer[]; off: string | nu
     return { servers: ICE_SERVERS, off: null };
   }
 }
-/** No message is bigger than this (bytes): the largest, a full asteroid field, is about 15 KB. */
+/** No message is bigger than this (bytes): a slice of the lead's field (see world/fieldsync) stays under some 30 KB; a newcomer's snapshot of a heavily broken field may come near it, and one refused is made good by the lead's sync within a cycle. */
 const MAX_MESSAGE_BYTES = 64 * 1024;
 /**
  * Trystero rooms open in this browser: a tournament and the lobby can be open at once, and the

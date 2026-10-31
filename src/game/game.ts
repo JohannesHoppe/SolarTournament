@@ -59,7 +59,7 @@ import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
-import { knockShare, ramShare } from '../net/plausible';
+import { knockShare, ramShare, syncShare } from '../net/plausible';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
@@ -67,6 +67,7 @@ import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES,
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
 import { ringRim, touchRing } from '../world/gates';
 import { FieldContacts, ringFixture } from '../world/contacts';
+import { fieldSlice, SYNC_EVERY, SYNC_GRACE, SYNC_SLICES, syncField, type FieldSlice } from '../world/fieldsync';
 import { IMMOVABLE, massOf, type Body } from '../world/bodies';
 import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, headEnd, HEAD_RADIUS, meetObstacle, meetSolids, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
 import { BASE_RADIUS, CAPTURE_POINTS, CORE_REACH, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
@@ -3928,6 +3929,46 @@ export class Game implements OnlineGame {
       return;
     }
     for (const state of this.contacts.run(this.field)) this.online?.sendKnock(state, this.roundId);
+    this.sendFieldSync();
+  }
+
+  /** The next slice of the lead's field it sends (see world/fieldsync), and the field time it is due. */
+  private syncSlice = 0;
+  private syncDue = 0;
+
+  /** The lead browser sends a slice of its field every SYNC_EVERY seconds of field time, the slices in turn, with when the round's comets' heads broke up. */
+  private sendFieldSync() {
+    const online = this.online;
+    const clock = this.field.clock;
+    if (!online || this.roundId < 0) return;
+    // a new round's field starts its clock over
+    if (this.syncDue - clock > SYNC_EVERY) this.syncDue = clock;
+    if (clock < this.syncDue) return;
+    this.syncDue = clock + SYNC_EVERY;
+    online.sendFieldSync(fieldSlice(this.field, this.syncSlice), this.roundId, this.comets.map((comet) => (comet.broken === Infinity ? null : comet.broken)));
+    this.syncSlice = (this.syncSlice + 1) % SYNC_SLICES;
+  }
+
+  /**
+   * A slice of the lead's field (see world/fieldsync): this browser sets its own to it, every
+   * motion within the bounds of syncShare, and its comets' heads to where the lead's broke up
+   * (one the lead has whole, broken here longer than SYNC_GRACE ago, flies on).
+   */
+  syncField(slice: FieldSlice, round: number, heads: (number | null)[]) {
+    if (this.online?.isLead || (this.roundId >= 0 && round !== this.roundId)) return;
+    const result = syncField(this.field, slice, (state) => syncShare(Math.hypot(state.v[0], state.v[1], state.v[2]), state.s[3]) <= 1);
+    if (result.rebuilt || result.eased || result.set) devlog?.add({ kind: 'sync', t: this.time, slice: slice.i, ...result });
+    heads.forEach((at, i) => {
+      const comet = this.comets[i];
+      if (!comet) return;
+      if (at === null) {
+        if (comet.broken < slice.t - SYNC_GRACE) comet.broken = Infinity;
+      } else if (Math.abs(comet.broken - at) > 1e-3) {
+        const whole = comet.broken === Infinity;
+        comet.broken = at;
+        if (whole && this.shower?.comet === comet) this.headBroke(comet);
+      }
+    });
   }
 
   /** A piece of the field struck another or a ring as the lead decided: it takes the motion the lead gave it, if that lies close to where this browser has it (see knockShare). */

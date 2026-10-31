@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { AsteroidField, FieldState, ShovedState } from '../world/asteroids';
+import type { FieldSlice } from '../world/fieldsync';
 import { ownerOf, TOURNAMENT_SIZE, type Session, type RoundState, type Vec } from './session';
 import type { Ship, ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
@@ -45,6 +46,8 @@ export interface OnlineGame {
   remoteRam(state: ShovedState, round: number): void;
   /** A piece of the field struck another or a ring in a round, as the lead browser decided: the piece's motion since. */
   remoteKnock(state: ShovedState, round: number): void;
+  /** A slice of the lead browser's field in a round, and when its comets' heads broke up (see world/fieldsync). */
+  syncField(slice: FieldSlice, round: number, heads: (number | null)[]): void;
   /** A part of the President's battleship as a torpedo homes on it, by its id. */
   beacon(id: string): Homing | null;
   /** The pieces of wreckage in flight, for a browser that joins. */
@@ -239,6 +242,7 @@ export class Online {
     };
     session.onRam = (state, round) => game.remoteRam(state, round);
     session.onKnock = (state, round) => game.remoteKnock(state, round);
+    session.onFieldSync = (slice, round, heads) => game.syncField(slice, round, heads);
     session.onTorpedo = (id, shooter, target, p, v) => {
       const ship = this.find(shooter);
       // launched from near where the ship flies here, and no more than its clone carries
@@ -458,6 +462,10 @@ export class Online {
 
   sendKnock(state: ShovedState, round: number) {
     this.session.sendKnock(state, round);
+  }
+
+  sendFieldSync(slice: FieldSlice, round: number, heads: (number | null)[]) {
+    this.session.sendFieldSync(slice, round, heads);
   }
 
   sendTorpedo(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3) {
