@@ -21,6 +21,17 @@ describe('the derelict', () => {
     expect(mistDensity(new THREE.Vector3(0, 20000, 0))).toBe(0);
   });
 
+  it('mixes the instance color into the dead\'s vertex color by their clothes: the skin stays bare', () => {
+    const wreck = new Derelict(new THREE.Color(1, 1, 1));
+    const mesh = wreck.group.children.find((child): child is THREE.InstancedMesh => child instanceof THREE.InstancedMesh)!;
+    const material = mesh.material as THREE.MeshStandardMaterial;
+    // the shader as three hands it over: the includes are not resolved yet
+    const shader = { vertexShader: '#include <common>\n#include <color_vertex>\nvoid main() {}' } as unknown as Parameters<typeof material.onBeforeCompile>[0];
+    material.onBeforeCompile(shader, {} as THREE.WebGLRenderer);
+    expect(shader.vertexShader).toContain('attribute float cloth;');
+    expect(shader.vertexShader).toContain('mix(vec3(1.0), instanceColor.rgb, cloth)');
+  });
+
   it('keeps its dead drifting slowly about the break, turning, never wandering off', () => {
     const wreck = new Derelict(new THREE.Color(1, 1, 1));
     const dead = wreck.group.children.filter((child): child is THREE.InstancedMesh => child instanceof THREE.InstancedMesh);

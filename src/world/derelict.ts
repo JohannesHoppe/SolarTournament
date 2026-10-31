@@ -160,6 +160,12 @@ function body(pose: 'crouch' | 'spread'): THREE.BufferGeometry {
 const CLOTHES = [0xd8763a, 0x8c929c, 0x3f5f8f, 0x6b4f3a, 0x7a2f3f, 0x4f6b4a, 0xb0a48a, 0x2f3238] as const;
 const RIME = new THREE.Color(0xe6eef6);
 
+/** The dead's vertex color: the chunk's own, with the instance's color mixed in by the vertex's share of clothes (the template holds the include, not the chunk's text). */
+const DEAD_COLOR = `#include <color_vertex>
+#ifdef USE_INSTANCING_COLOR
+  vColor.rgb = color * mix(vec3(1.0), instanceColor.rgb, cloth);
+#endif`;
+
 /** The scenery of the break: its mist and its dead. */
 export class Derelict {
   readonly group = new THREE.Group();
@@ -177,7 +183,7 @@ export class Derelict {
     material.onBeforeCompile = (shader) => {
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nattribute float cloth;')
-        .replace('vColor.rgb *= instanceColor.rgb;', 'vColor.rgb *= mix(vec3(1.0), instanceColor.rgb, cloth);');
+        .replace('#include <color_vertex>', DEAD_COLOR);
     };
     material.customProgramCacheKey = () => 'derelict-dead';
     const color = new THREE.Color();
