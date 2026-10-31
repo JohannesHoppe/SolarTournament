@@ -634,7 +634,6 @@ const laserHit = rayHit();
 const beamEnd = new THREE.Vector3();
 const beamStart = new THREE.Vector3();
 const surface = new THREE.Vector3();
-const ringFacing = new THREE.Vector3();
 const ringNormal = new THREE.Vector3();
 /** A beam is felt along for a ring's solid parts in steps this long (units, 2 m): thinner than its struts (3 m). */
 const RAY_STEP = 40;
@@ -6177,11 +6176,6 @@ export class Game implements OnlineGame {
     else if (this.touchesRing(flight.position, ship.radius)) this.bounce(ship, STILL, now, 'gate');
   }
 
-  /**
-   * Whether a ship touches the housings of a ring (see touchRing): a race's gates, the bases of
-   * Capture the Flag, the flight school's rings still standing. Flying through is the point;
-   * flying into the coil is a crash. Moves the ship out and sets `normal` when it does.
-   */
   /** The housings of the rings as a Solid (see game/items): a probe bounces off them, held in place by their stations. */
   private readonly ringSolid: Solid = (position, radius, out, moving) => {
     if (!this.touchesRing(position, radius)) return false;
@@ -6224,10 +6218,22 @@ export class Game implements OnlineGame {
     this.school?.eachRing((center, facing, radius) => take(this.ringRay(center, facing, radius, origin, direction, best)));
     for (const core of this.flags?.cores ?? []) take(raySphere(origin, direction, core.position, CORE_REACH));
     for (const probe of this.probes.list) take(raySphere(origin, direction, probe.position, PROBE_RADIUS));
+    const head = this.headNow(solidProbe);
+    if (head) take(raySphere(origin, direction, head, HEAD_RADIUS));
+    return found ? best : null;
+  }
+
+  /** Where the comet's head is now (into `out`) while it flies whole, or null: solid as long as it lasts. */
+  private headNow(out: THREE.Vector3): THREE.Vector3 | null {
     const comet = this.shower?.comet;
     const clock = this.field.clock;
-    if (comet && clock < headEnd(comet)) take(raySphere(origin, direction, headAt(comet, clock, solidProbe), HEAD_RADIUS));
-    return found ? best : null;
+    return comet && clock < headEnd(comet) ? headAt(comet, clock, out) : null;
+  }
+
+  /** Whether a sphere touches a sponsor core. */
+  private touchesCore(position: THREE.Vector3, radius: number): boolean {
+    for (const core of this.flags?.cores ?? []) if (core.position.distanceTo(position) < CORE_REACH + radius) return true;
+    return false;
   }
 
   /** Where a beam first meets a ring's solid parts (see touchRing), felt for in steps of RAY_STEP through the ring's reach; null when it passes. */
@@ -6244,11 +6250,9 @@ export class Game implements OnlineGame {
 
   /** Whether a sphere touches a ring's housing, a sponsor core or the comet's head: what wreckage grinds to dust on besides rock and hull. */
   private readonly grinds = (position: THREE.Vector3, radius: number): boolean => {
-    if (this.touchesRing(solidProbe.copy(position), radius)) return true;
-    for (const core of this.flags?.cores ?? []) if (core.position.distanceTo(position) < CORE_REACH + radius) return true;
-    const comet = this.shower?.comet;
-    const clock = this.field.clock;
-    return !!comet && clock < headEnd(comet) && headAt(comet, clock, solidProbe).distanceTo(position) < HEAD_RADIUS + radius;
+    if (this.touchesRing(solidProbe.copy(position), radius) || this.touchesCore(position, radius)) return true;
+    const head = this.headNow(solidProbe);
+    return !!head && head.distanceTo(position) < HEAD_RADIUS + radius;
   };
 
   /**
@@ -6262,19 +6266,19 @@ export class Game implements OnlineGame {
     return false;
   };
 
+  /**
+   * Whether a ship touches the housings of a ring (see touchRing): a race's gates, the bases of
+   * Capture the Flag (both in `rings`), the flight school's rings still standing. Flying through
+   * is the point; flying into the coil is a crash. Moves the ship out and sets `normal` when it
+   * does, and `gateStruck` to the race's gate.
+   */
   private touchesRing(position: THREE.Vector3, radius: number): boolean {
     this.gateStruck = -1;
-    const course = this.course;
-    if (course) {
-      for (let i = 0; i < course.points.length; i++) {
-        if (!touchRing(course.points[i], course.normals[i], GATE_RADIUS, position, radius, normal)) continue;
-        this.gateStruck = i;
-        return true;
-      }
-    }
-    const flags = this.flags;
-    if (flags) {
-      for (const base of flags.bases) if (touchRing(base, ringFacing.copy(base).normalize(), BASE_RADIUS, position, radius, normal)) return true;
+    for (let i = 0; i < this.rings.length; i++) {
+      const ring = this.rings[i];
+      if (!touchRing(ring.center, ring.facing, ring.radius, position, radius, normal)) continue;
+      if (this.course) this.gateStruck = i;
+      return true;
     }
     return !!this.school?.touchesRing(position, radius, normal);
   }
@@ -6617,12 +6621,9 @@ export class Game implements OnlineGame {
       break;
     }
     if (this.touchesRing(at.copy(to), PIECE_RADIUS) || this.wrecks.overlap(to, PIECE_RADIUS)) return true;
-    for (const core of this.flags?.cores ?? []) {
-      if (core.position.distanceTo(to) >= CORE_REACH + PIECE_RADIUS) continue;
-      at.copy(to);
-      return true;
-    }
-    return false;
+    if (!this.touchesCore(to, PIECE_RADIUS)) return false;
+    at.copy(to);
+    return true;
   };
 
   /**
