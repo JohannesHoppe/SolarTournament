@@ -220,6 +220,47 @@ export const RAMMED = -1;
 /** The shover of a piece another piece of the field struck, or a ring (see world/contacts): never a comet's seed either. */
 export const KNOCKED = -2;
 
+/** Rounds each value to `digits` places, as a piece's motion travels (see blowState). */
+const rounded = (values: number[], digits: number) => values.map((v) => +v.toFixed(digits));
+const carried = new THREE.Vector3();
+
+/**
+ * A piece's motion after a blow at field time `time` (the battleship's ram, a contact), as it
+ * goes into the field and to the other browsers: from `center` on, its center flying at
+ * `velocity` (in the world) and turning at `spin` (axis times rate, rad/s; it keeps its own axis
+ * when it stops), shoved by `by`. Its drift is what is left of that velocity once its orbit
+ * carries it (see positionAt). Field time to the millisecond, place to 0.5 mm, drift to 0.05
+ * mm/s, orientation and spin to a millionth: far finer than any browser tells pieces apart.
+ */
+export function blowState(piece: Asteroid, time: number, center: THREE.Vector3, velocity: THREE.Vector3, spin: THREE.Vector3, by: number): ShovedState {
+  carried.copy(piece.orbitAxis).multiplyScalar(piece.orbitRate).cross(center);
+  const rate = spin.length();
+  const axis = rate > 1e-9 ? [spin.x / rate, spin.y / rate, spin.z / rate] : piece.spinAxis.toArray();
+  return {
+    id: piece.id,
+    b: +time.toFixed(3),
+    p: rounded(center.toArray(), 2),
+    v: rounded([velocity.x - carried.x, velocity.y - carried.y, velocity.z - carried.z], 3),
+    q: rounded(piece.object.quaternion.toArray(), 6),
+    s: rounded([...axis, rate], 6),
+    c: by,
+  };
+}
+
+/**
+ * The tumble a blow adds to a piece's spin (into `target`, rad/s as axis times rate): the moment
+ * of the change `change` of its center's velocity, struck at `arm` from its center, over the
+ * moment of inertia of a ball as large (2/5 m r²), at most `limit` more.
+ */
+export function blowSpin(piece: Asteroid, arm: THREE.Vector3, change: THREE.Vector3, limit: number, target: THREE.Vector3): THREE.Vector3 {
+  const radius = piece.meanRadius;
+  return target
+    .crossVectors(arm, change)
+    .divideScalar(0.4 * radius * radius)
+    .clampLength(0, limit)
+    .addScaledVector(piece.spinAxis, piece.spinRate);
+}
+
 /** Directions a rock's or an ellipsoid's outline is laid out in (see outline): evenly over the sphere, about 13° apart. */
 const OUTLINE_POINTS = 256;
 /** Each shape's outline, by its measured surface or its semi-axes. */

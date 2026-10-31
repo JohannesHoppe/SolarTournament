@@ -3,7 +3,7 @@ import { Randomizer } from '../random';
 import { hash } from '../music/songs';
 import { radialTexture } from '../view/textures';
 import { ARENA_LIMIT } from '../world/arena';
-import type { Asteroid, AsteroidField, Obstacle, Well } from '../world/asteroids';
+import { blowSpin, type Asteroid, type AsteroidField, type Obstacle, type Well } from '../world/asteroids';
 import { share } from '../world/bodies';
 import { nucleusGeometry, nucleusMaterial, nucleusVents, type Vent } from '../world/nucleus';
 import { dustStreaks, SUN_DIRECTION } from '../world/space';
@@ -528,8 +528,7 @@ function strikeWall(comet: Comet, field: AsteroidField, wall: Asteroid, at: numb
   meets(comet, field, wall, at);
   piece.copy(struck).addScaledVector(struckNormal, -HEAD_RADIUS);
   kick.copy(course).multiplyScalar(COMET_SPEED * share(field.bodyMass(wall), HEAD_MASS));
-  const radius = wall.meanRadius;
-  axis.subVectors(piece, stone).cross(kick).divideScalar(0.4 * radius * radius).clampLength(0, SHOVE_SPIN).addScaledVector(wall.spinAxis, wall.spinRate);
+  blowSpin(wall, stone.subVectors(piece, stone), kick, SHOVE_SPIN, axis);
   const rate = axis.length();
   if (rate > 1e-9) axis.divideScalar(rate);
   else axis.copy(wall.spinAxis);
