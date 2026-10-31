@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { attachment, type Asteroid, type AsteroidField, type Attachment } from './asteroids';
+import { noise } from './nebula';
 import { SUN_DIRECTION } from './space';
 import { hazeUniforms } from '../view/haze';
 import { rockTone } from './rocks';
@@ -1052,7 +1053,7 @@ function atlasTexture(): THREE.CanvasTexture {
   return texture;
 }
 
-/** Soft clouds of dust, four variants in a 2 × 2 atlas, from seeded value noise. */
+/** Soft clouds of dust, four variants in a 2 × 2 atlas, from seeded value noise (see world/nebula, noise). */
 function cloudTexture(): THREE.CanvasTexture {
   const size = 256;
   const tile = size / 2;
@@ -1060,27 +1061,17 @@ function cloudTexture(): THREE.CanvasTexture {
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
   const image = ctx.createImageData(size, size);
-  const r = new Randomizer(1977);
   const grid = 8;
   for (let t = 0; t < 4; t++) {
-    const octaves = [grid, grid * 2, grid * 4].map((n) => Array.from({ length: (n + 1) * (n + 1) }, () => r.nextFloat()));
     for (let y = 0; y < tile; y++) {
       for (let x = 0; x < tile; x++) {
         let value = 0;
         let weight = 0.55;
-        [grid, grid * 2, grid * 4].forEach((n, o) => {
-          const gx = (x / tile) * n;
-          const gy = (y / tile) * n;
-          const ix = Math.floor(gx);
-          const iy = Math.floor(gy);
-          const fx = gx - ix;
-          const fy = gy - iy;
-          const at = (i: number, j: number) => octaves[o][Math.min(j, n) * (n + 1) + Math.min(i, n)];
-          const sx = fx * fx * (3 - 2 * fx);
-          const sy = fy * fy * (3 - 2 * fy);
-          value += weight * ((at(ix, iy) * (1 - sx) + at(ix + 1, iy) * sx) * (1 - sy) + (at(ix, iy + 1) * (1 - sx) + at(ix + 1, iy + 1) * sx) * sy);
+        for (let o = 0; o < 3; o++) {
+          const n = grid * 2 ** o;
+          value += weight * noise((x / tile) * n, (y / tile) * n, 1977 + t * 3 + o);
           weight *= 0.5;
-        });
+        }
         const dx = (x / tile) * 2 - 1;
         const dy = (y / tile) * 2 - 1;
         const falloff = Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy));
