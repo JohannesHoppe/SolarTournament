@@ -580,7 +580,7 @@ const TAIL_PATTER = 25;
 const TAIL_STATIC = 1.5;
 const TAIL_GLITCH = 0.15;
 /**
- * Flying through a ring's layer of ice grains (see ArenaProfile.grains, Game.ringGrains): grains
+ * Flying through a ring's layer of ice grains (see ArenaProfile.grains, Game.hullPatter): grains
  * patter on the hull about GRAIN_PATTER times a second at GRAIN_PATTER_SPEED (units/s, 100 m/s)
  * and faster, the fewer the slower the ship flies and the nearer the layer's faces.
  */
@@ -589,7 +589,7 @@ const GRAIN_PATTER_SPEED = 2000;
 /** The mist of ice crystals at the derelict's break (see world/derelict) patters on the hull about MIST_PATTER times a second where it is thickest, at GRAIN_PATTER_SPEED and faster. */
 const MIST_PATTER = 15;
 /**
- * Flying through the dust a drill hole blows on the Belt's rocks (see Mining.dustAt, Game.drillDust):
+ * Flying through the dust a drill hole blows on the Belt's rocks (see Mining.dustAt, Game.hullPatter):
  * it patters on the hull about DUST_PATTER times a second in the heart of a plume at
  * DUST_PATTER_SPEED (units/s, 50 m/s) and faster, the fewer the thinner the dust and the slower the ship.
  */
@@ -3370,9 +3370,7 @@ export class Game implements OnlineGame {
     // Last Clone Standing: the solar flare, the same on every browser by the field time
     this.showFlare(dt);
     this.playComet(dt, me);
-    this.ringGrains(me, dt);
-    this.breakMist(me, dt);
-    this.drillDust(me, dt);
+    this.hullPatter(me, dt);
     // removing a ship replaces the list, so the loop safely runs over the list it started with
     for (const ship of this.ships) {
       if (ship.owner !== null) {
@@ -6683,31 +6681,25 @@ export class Game implements OnlineGame {
     if (Math.random() < dt * TAIL_STATIC * depth) this.glitch.trigger(TAIL_GLITCH * (0.5 + Math.random() * 0.5), 0.05 + Math.random() * 0.1);
   }
 
-  /** The own clone flying through a ring's layer of ice grains: harmless, but they patter on the hull, the more the faster it flies. */
-  private ringGrains(me: Ship, dt: number) {
+  /**
+   * The own clone flying through something thin and harmless that patters on the hull: a ring's
+   * layer of ice grains, the ice crystals escaping at the derelict's break, the dust a drill hole
+   * blows (see Mining.dustAt). The thicker it is and the faster the ship flies, the more.
+   */
+  private hullPatter(me: Ship, dt: number) {
+    if (!me.alive || this.spectating) return;
+    const position = me.flight.position;
     const layer = this.venue.grains;
-    if (!layer || !me.alive || this.spectating) return;
-    const depth = 1 - THREE.MathUtils.smoothstep(Math.abs(me.flight.position.y), 0.8 * layer, layer);
-    const pace = Math.min(1, me.flight.velocity.length() / GRAIN_PATTER_SPEED);
-    if (Math.random() < dt * GRAIN_PATTER * depth * pace) this.sound.patter(0.5 * depth * pace);
+    if (layer) this.patter(me, dt, 1 - THREE.MathUtils.smoothstep(Math.abs(position.y), 0.8 * layer, layer), GRAIN_PATTER, GRAIN_PATTER_SPEED, 0.5);
+    this.patter(me, dt, this.landmarks.mistAt(position), MIST_PATTER, GRAIN_PATTER_SPEED, 0.4);
+    this.patter(me, dt, this.mining.dustAt(position), DUST_PATTER, DUST_PATTER_SPEED, 0.6);
   }
 
-  /** The own clone flying through the ice crystals escaping at the derelict's break: harmless, but they patter on the hull, the more the thicker the mist and the faster the ship. */
-  private breakMist(me: Ship, dt: number) {
-    if (!me.alive || this.spectating) return;
-    const density = this.landmarks.mistAt(me.flight.position);
-    if (density <= 0) return;
-    const pace = Math.min(1, me.flight.velocity.length() / GRAIN_PATTER_SPEED);
-    if (Math.random() < dt * MIST_PATTER * density * pace) this.sound.patter(0.4 * density * pace);
-  }
-
-  /** The own clone flying through the dust a drill hole blows (see Mining.dustAt): harmless, but it patters on the hull, the more the thicker and the faster. */
-  private drillDust(me: Ship, dt: number) {
-    if (!me.alive || this.spectating) return;
-    const thick = this.mining.dustAt(me.flight.position);
+  /** Patter on the hull out of a cloud `thick` (0..1): `rate` bursts a second at `fullSpeed` and faster, as loud as `loudness` there. */
+  private patter(me: Ship, dt: number, thick: number, rate: number, fullSpeed: number, loudness: number) {
     if (thick <= 0) return;
-    const pace = Math.min(1, me.flight.velocity.length() / DUST_PATTER_SPEED);
-    if (Math.random() < dt * DUST_PATTER * thick * pace) this.sound.patter(0.6 * thick * pace);
+    const pace = Math.min(1, me.flight.velocity.length() / fullSpeed);
+    if (Math.random() < dt * rate * thick * pace) this.sound.patter(loudness * thick * pace);
   }
 
   /** The comet's head strikes a piece of the wreck's hull and shoves it: a flash, sparks and debris where it struck, heard as far as debris is. */
