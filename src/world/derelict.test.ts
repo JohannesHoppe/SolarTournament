@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { sternAt } from './arenas';
-import { Derelict, mistDensity } from './derelict';
+import { ARENAS, sternAt } from './arenas';
+import { Derelict, JET_WELDS, mistDensity } from './derelict';
+import { testField } from '../test/field';
 import { HULL_PAINT } from './shapes';
 import { stencilable } from '../view/lettering';
 
@@ -19,6 +20,30 @@ describe('the derelict', () => {
     expect(mistDensity(new THREE.Vector3(-10000, 0, 8000))).toBe(0);
     expect(mistDensity(new THREE.Vector3(-30000, 0, 0))).toBe(0);
     expect(mistDensity(new THREE.Vector3(0, 20000, 0))).toBe(0);
+  });
+
+  it('lets the mist follow its half of the hull when a comet shoves it', () => {
+    const field = testField();
+    field.generate(ARENAS.find((arena) => arena.id === 'derelict')!.layout);
+    const wreck = new Derelict(new THREE.Color(1, 1, 1));
+    const motions = JET_WELDS.map(() => new THREE.Matrix4());
+    const settle = () => {
+      JET_WELDS.forEach((weld, i) => expect(field.weldMotion(weld, motions[i])).toBe(true));
+      wreck.moveJets(motions);
+    };
+    settle();
+    const start = wreck.jets.map((jet) => jet.from.clone());
+    expect(start[0].distanceTo(new THREE.Vector3(-14200, 0, 0))).toBeLessThan(1e-6);
+    // a comet strikes the bow: the whole half drifts on at 171 units/s for two minutes
+    const hull = [...field.asteroids.values()].find((rock) => rock.weld === 0)!;
+    field.shove(hull.id, 0, new THREE.Vector3(0, 0, 171), new THREE.Vector3(0, 1, 0), 0, 3);
+    field.setClock(120);
+    settle();
+    expect(wreck.jets[0].from.distanceTo(start[0].clone().add(new THREE.Vector3(0, 0, 171 * 120)))).toBeLessThan(1);
+    expect(wreck.jets[1].from.distanceTo(start[1])).toBeLessThan(1e-6);
+    // the mist thickens at the end where it is now and is gone from where it was
+    expect(wreck.mistAt(wreck.jets[0].from.clone().add(new THREE.Vector3(1200, 0, 0)))).toBeGreaterThan(0.5);
+    expect(wreck.mistAt(new THREE.Vector3(-13000, 0, 0))).toBe(0);
   });
 
   it('mixes the instance color into the dead\'s vertex color by their clothes: the skin stays bare', () => {

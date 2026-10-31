@@ -41,15 +41,25 @@ const VEIL_PIXELS = 160;
 /** How thick a jet's mist is at `s`, the share of its reach (0 at its torn end): swelling in, thinning out. */
 const along = (s: number) => THREE.MathUtils.smoothstep(s, 0, 0.08) * (1 - s);
 
+/** The welded structures the torn ends belong to (see world/arenas, derelict): the bow 0, the stern 1. The jets ride with them. */
+export const JET_WELDS = [0, 1] as const;
+
+/** A jet in the world: where it leaves its torn end and the way it drifts. */
+export interface Jet {
+  from: THREE.Vector3;
+  along: THREE.Vector3;
+}
+
 const offset = new THREE.Vector3();
 /**
  * How thick the mist is at `point` (0..1): what the crystals there would make of it, on the
  * jets' axes in full, fading out to their edges and their reach. The shader below spreads the
- * crystals by the same shape.
+ * crystals by the same shape. `jets` are the torn ends where the halves are now (as laid out
+ * by default).
  */
-export function mistDensity(point: THREE.Vector3): number {
+export function mistDensity(point: THREE.Vector3, jets: readonly Jet[] = JETS): number {
   let density = 0;
-  for (const jet of JETS) {
+  for (const jet of jets) {
     offset.subVectors(point, jet.from);
     const t = offset.dot(jet.along);
     if (t <= 0 || t >= MIST_REACH) continue;
@@ -169,6 +179,8 @@ const DEAD_COLOR = `#include <color_vertex>
 /** The scenery of the break: its mist and its dead. */
 export class Derelict {
   readonly group = new THREE.Group();
+  /** The jets where the torn ends are now (see moveJets). */
+  readonly jets: Jet[] = JETS.map((jet) => ({ from: jet.from.clone(), along: jet.along.clone() }));
   private readonly mist: THREE.Points<THREE.BufferGeometry, THREE.ShaderMaterial>;
   private readonly dead: THREE.InstancedMesh[] = [];
   /** Each of the dead: where it was blown out, how it drifts and how it turns. */
@@ -218,8 +230,8 @@ export class Derelict {
       uniforms: {
         time: { value: 0 },
         viewport: { value: 1000 },
-        from: { value: JETS.map((jet) => jet.from) },
-        along: { value: JETS.map((jet) => jet.along) },
+        from: { value: this.jets.map((jet) => jet.from) },
+        along: { value: this.jets.map((jet) => jet.along) },
         light: { value: light },
       },
       vertexShader: mistVertex,
@@ -232,6 +244,19 @@ export class Derelict {
     const points = new THREE.Points(geometry, material);
     points.frustumCulled = false;
     return points;
+  }
+
+  /** The jets follow their halves: `motions` are the bow's and the stern's motion since the layout (see AsteroidField.weldMotion). */
+  moveJets(motions: readonly THREE.Matrix4[]) {
+    this.jets.forEach((jet, i) => {
+      jet.from.copy(JETS[i].from).applyMatrix4(motions[i]);
+      jet.along.copy(JETS[i].along).transformDirection(motions[i]);
+    });
+  }
+
+  /** How thick the mist is at `point` where the torn ends are now. */
+  mistAt(point: THREE.Vector3): number {
+    return mistDensity(point, this.jets);
   }
 
   /** The picture's height in device pixels: the crystals keep their size in the world with it. */

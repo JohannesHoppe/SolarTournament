@@ -47,6 +47,7 @@ import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
 import { ARENAS, arenaById, DEFAULT_ARENA, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
+import { JET_WELDS } from '../world/derelict';
 import { animateHull, setHullFrost } from '../world/worldship';
 import { Mining } from '../world/mining';
 import { Lensing } from '../view/lensing';
@@ -3281,11 +3282,22 @@ export class Game implements OnlineGame {
     return true;
   }
 
+  private readonly halves = JET_WELDS.map(() => new THREE.Matrix4());
+
+  /** The derelict's mist leaves the torn ends where the halves of the hull have drifted to. */
+  private moveBreak() {
+    JET_WELDS.forEach((weld, i) => {
+      if (!this.field.weldMotion(weld, this.halves[i])) this.halves[i].identity();
+    });
+    this.landmarks.moveBreak(this.halves);
+  }
+
   /** Draws the scene as the camera sees it: the sky around it, the arena's edge, its landmarks, a black hole's lens. */
   private paint() {
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     this.landmarks.update(this.field.clock);
+    if (this.venue.id === 'derelict') this.moveBreak();
     this.mining.update(this.field, this.field.clock);
     this.landmarks.follow(this.camera, this.state === 'menu' ? null : this.riding);
     if (this.venue.id === 'derelict') animateHull(this.field.clock);

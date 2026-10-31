@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { shelter, shelterPars, SUN_DIRECTION } from './space';
 import { ARENAS, RING_LAYER, RING_SHEET, SATURN_CENTER, type ArenaId, type ArenaProfile } from './arenas';
-import { Derelict, mistDensity } from './derelict';
+import { Derelict } from './derelict';
 import { sizeBeacons } from './worldship';
 import { loadPlanetMap, type Planet, type PlanetMaps } from '../assets';
 import { junkyard } from './junkyard';
@@ -790,9 +790,14 @@ export class Landmarks {
     sizeBeacons(height);
   }
 
+  /** The derelict's mist leaves the torn ends where the halves are now (see Derelict.moveJets). */
+  moveBreak(motions: readonly THREE.Matrix4[]) {
+    if (this.shown === 'derelict') this.wreck.moveJets(motions);
+  }
+
   /** How thick the mist escaping at the derelict's break is at `point` (0..1; 0 in every other arena). */
   mistAt(point: THREE.Vector3): number {
-    return this.shown === 'derelict' ? mistDensity(point) : 0;
+    return this.shown === 'derelict' ? this.wreck.mistAt(point) : 0;
   }
 
   /**
