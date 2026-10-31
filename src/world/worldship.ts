@@ -114,6 +114,35 @@ const frostUniforms = { frost: { value: 0 }, frostSun: { value: SUN_DIRECTION.cl
 /** The rime's color, and the faint cold glow it keeps in the shadow (as ice does). */
 const RIME = 'vec3(0.86, 0.91, 0.98)';
 const RIME_GLOW = 'vec3(0.015, 0.025, 0.045)';
+/** No drift: the hull where it was laid out (see frosted). */
+const STILL = { value: new THREE.Vector3() };
+/** Every frosted material, and whether it is the plating's (see frosted). */
+const frostedPlating = new WeakMap<THREE.Material, boolean>();
+/** Each welded body's drift and its copies of the frosted materials (see weldFrost). */
+const welds = new Map<number, { drift: { value: THREE.Vector3 }; copies: Map<THREE.Material, THREE.Material> }>();
+
+/**
+ * Gives the pieces of welded body `weld` (a half of the world ship, the junkyard's hub; see
+ * Placement.weld) their own copies of the frosted materials, all of them sharing one drift,
+ * and returns that drift for the field to set: how far the body has drifted from where it was
+ * laid out (units). The copies share their shader with the originals; only the drift differs.
+ */
+export function weldFrost(object: THREE.Object3D, weld: number): THREE.Vector3 {
+  let body = welds.get(weld);
+  if (!body) welds.set(weld, (body = { drift: { value: new THREE.Vector3() }, copies: new Map() }));
+  const { drift, copies } = body;
+  const own = (material: THREE.Material) => {
+    const plating = frostedPlating.get(material);
+    if (plating === undefined || !(material instanceof THREE.MeshStandardMaterial)) return material;
+    let copy = copies.get(material);
+    if (!copy) copies.set(material, (copy = frosted(material.clone(), plating, drift)));
+    return copy;
+  };
+  object.traverse((o) => {
+    if (o instanceof THREE.Mesh) o.material = Array.isArray(o.material) ? o.material.map(own) : own(o.material);
+  });
+  return drift.value;
+}
 
 /**
  * With `plating` (the hull's plating, see ravagedSurface), the frost gathers in the plating's
@@ -121,14 +150,18 @@ const RIME_GLOW = 'vec3(0.015, 0.025, 0.045)';
  * and the plating's tone varies in patches about a hundred meters across: plates replaced over
  * the centuries, soot of the battle. So neighboring stretches never look alike, and nothing that
  * large can shimmer.
+ *
+ * The patches lie where the hull was laid out: `drift` is how far its body has drifted since
+ * (units, see weldFrost), so they ride on the hull a comet shoves.
  */
-export function frosted<M extends THREE.MeshStandardMaterial>(material: M, plating = false): M {
+export function frosted<M extends THREE.MeshStandardMaterial>(material: M, plating = false, drift = STILL): M {
   if (plating) material.defines = { ...material.defines, PLATING: '' };
+  frostedPlating.set(material, plating);
   material.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, frostUniforms);
+    Object.assign(shader.uniforms, frostUniforms, { frostDrift: drift });
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying vec3 vFrostNormal;\nvarying vec3 vFrostAt;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvFrostNormal = mat3(modelMatrix) * objectNormal;\nvFrostAt = (modelMatrix * vec4(transformed, 1.0)).xyz;');
+      .replace('#include <common>', '#include <common>\nuniform vec3 frostDrift;\nvarying vec3 vFrostNormal;\nvarying vec3 vFrostAt;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvFrostNormal = mat3(modelMatrix) * objectNormal;\nvFrostAt = (modelMatrix * vec4(transformed, 1.0)).xyz - frostDrift;');
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',

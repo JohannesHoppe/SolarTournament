@@ -4,6 +4,7 @@ import { Randomizer, textSeed } from '../random';
 import { Surface, tangentDirections } from './surface';
 import { boxContact, rayBox } from './boxes';
 import { SHAPE_FILL } from './shapes';
+import { weldFrost } from './worldship';
 import { opticalDepth, SIGHT_DEPTH, type Air } from './air';
 import type { FractureSet } from './fracture';
 import { massOf } from './bodies';
@@ -308,6 +309,8 @@ export class AsteroidField {
   private detail = 1;
   /** Rocks broken so far, with the field time each broke (for snapshot). */
   private readonly broken = new Map<string, number>();
+  /** Each welded piece's place as laid out, and its body's drift from it, which place keeps for the hull's frost (see world/worldship, weldFrost). */
+  private readonly drifts = new Map<string, { drift: THREE.Vector3; rest: THREE.Vector3 }>();
   private readonly templates: Record<TemplateKind, Template[]>;
   /** The layout of the field as generated, from which restore rebuilds it. */
   layout: FieldLayout | null = null;
@@ -425,6 +428,8 @@ export class AsteroidField {
       const asteroid = this.asteroids.get(id)!;
       asteroid.baseOrientation.copy(piece.orientation).multiply(asteroid.object.quaternion);
       asteroid.weld = piece.weld ?? null;
+      // a welded body's frost and plating ride on it as it drifts (see world/worldship)
+      if (asteroid.weld !== null) this.drifts.set(id, { drift: weldFrost(asteroid.object, asteroid.weld), rest: piece.position.clone() });
       this.place(asteroid);
     }
   }
@@ -468,6 +473,7 @@ export class AsteroidField {
     for (const asteroid of this.asteroids.values()) this.group.remove(asteroid.object);
     this.asteroids.clear();
     this.broken.clear();
+    this.drifts.clear();
   }
 
   private boundingRadius(t: Template, scale: number) {
@@ -564,6 +570,8 @@ export class AsteroidField {
     a.object.quaternion.setFromAxisAngle(a.spinAxis, a.spinRate * age).multiply(a.baseOrientation);
     a.object.updateMatrixWorld(true);
     a.inverse.copy(a.object.matrixWorld).invert();
+    const welded = this.drifts.get(a.id);
+    if (welded) welded.drift.subVectors(a.object.position, welded.rest);
   }
 
   /**
