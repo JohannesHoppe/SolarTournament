@@ -289,19 +289,24 @@ export class Course {
   private layout(field: AsteroidField, loop: (angle: number, out: THREE.Vector3) => THREE.Vector3, start: number, jitter: readonly number[]) {
     const bows: { angle: number; half: number }[] = [];
     let intrusion = 0;
+    // the loop's points where rock is looked for: they depend on the layout alone, so they are
+    // taken once for all the rocks
+    const samples = new Float64Array(LOOP_CHECKS * 3);
+    for (let k = 0; k < LOOP_CHECKS; k++) loop((k / LOOP_CHECKS) * Math.PI * 2, probe).toArray(samples, k * 3);
     const bowAround = (center: THREE.Vector3, reach: number) => {
       let deepest = -Infinity;
-      let angle = 0;
+      let deepestAt = 0;
       for (let k = 0; k < LOOP_CHECKS; k++) {
-        const depth = reach - loop((k / LOOP_CHECKS) * Math.PI * 2, probe).distanceTo(center);
+        const dx = samples[k * 3] - center.x, dy = samples[k * 3 + 1] - center.y, dz = samples[k * 3 + 2] - center.z;
+        const depth = reach - Math.sqrt(dx * dx + dy * dy + dz * dz);
         if (depth > 0) intrusion += depth;
         if (depth > deepest) {
           deepest = depth;
-          angle = (k / LOOP_CHECKS) * Math.PI * 2;
+          deepestAt = k;
         }
       }
-      const radius = loop(angle, probe).setY(0).length();
-      if (deepest > 0 && radius > 0) bows.push({ angle, half: (2 * Math.sqrt(BOW_RADIUS * deepest) + GATE_RUN) / radius });
+      const radius = Math.sqrt(samples[deepestAt * 3] ** 2 + samples[deepestAt * 3 + 2] ** 2);
+      if (deepest > 0 && radius > 0) bows.push({ angle: (deepestAt / LOOP_CHECKS) * Math.PI * 2, half: (2 * Math.sqrt(BOW_RADIUS * deepest) + GATE_RUN) / radius });
     };
     for (const rock of field.asteroids.values()) bowAround(rock.object.position, rock.radius + CLEARANCE);
     if (field.well) bowAround(field.well.position, field.well.radius + CLEARANCE * 2);
