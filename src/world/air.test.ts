@@ -131,7 +131,8 @@ describe("Jupiter's air", () => {
       burnt += airBurn(radiators, airHeat(m(-2000), MAX_SPEED) * step, step, 100);
     }
     expect(radiators.overheated).toBe(true);
-    expect(radiators.heat).toBeLessThanOrEqual(100);
+    // a burning hull has full radiators after the air's step: the alarm's CRITICAL, Nicole's line and the burning on screen read them
+    expect(radiators.heat).toBe(100);
     // full after half a second, then burning
     expect(burnt / 9.5).toBeCloseTo(15, 0);
     // radiators full of the laser's heat while the air heats less than they shed: nothing burns, they cool

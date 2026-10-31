@@ -71,15 +71,21 @@ export const AIR_BURN = 0.075;
 
 /**
  * Puts `heat` of the air (heat units, over a step of `dt` seconds) into a hull's radiators,
- * which shed `cooling` a second and are full at `full`: while they are full, what the air adds
- * beyond what they shed stays out of them and burns the hull instead, AIR_BURN per unit; a full
- * radiator overheats the laser. Returns the hull points burnt.
+ * which shed `cooling` a second and are full at `full`: the air fills them up to full, and what
+ * it adds beyond that and beyond what they shed over the step stays out of them and burns the
+ * hull instead, AIR_BURN per unit; so a hull that burns has full radiators (the alarm's CRITICAL,
+ * the burning on screen), and radiators the laser filled past full burn only what the air adds
+ * beyond what they shed. A full radiator overheats the laser. Returns the hull points burnt.
  */
 export function airBurn(hull: { heat: number; overheated: boolean; readonly cooling: number }, heat: number, dt: number, full: number): number {
-  const filled = hull.heat + heat >= full;
-  const beyond = filled ? Math.max(0, heat - hull.cooling * dt) : 0;
+  const room = Math.max(0, full - hull.heat);
+  const beyond = Math.max(0, heat - Math.max(room, hull.cooling * dt));
   hull.heat += heat - beyond;
-  if (filled) hull.overheated = true;
+  if (heat >= room) {
+    // what goes in is at least the room left, so the radiators are full (kept exact against rounding)
+    hull.heat = Math.max(hull.heat, full);
+    hull.overheated = true;
+  }
   return beyond * AIR_BURN;
 }
 
