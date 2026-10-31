@@ -101,6 +101,7 @@ The same loop for every change, small or large. Follow it step by step; it holds
    - Run it after every change to bots, weapons, damage, a mode's rules, the network or the round flow, and in any case every few merges. The game changes fast, and only the full run catches a rule that quietly breaks a mode, a race nobody finishes or two tabs that stop agreeing.
    - The balance runs leave the dev log of every round in `test-results/`, and a failure names the deaths by cause. `BALANCE_SLOW` gives them more time on a busy machine, `BALANCE_PAGES` plays fewer rounds side by side (see `e2e/README.md`).
    - A red gate is fixed before the next push, never ignored.
+   - A code review (`/code-review`) runs at the effort level `medium` unless Johannes names another level.
 8. **Push.** `git push origin main main:stage_prod` (see Hosting below for when `stage_prod` stays behind).
    - Before it, `npm run build` must pass: the gates run the dev server, never the site's build, and a worker graph Vite cannot bundle (a worker that, through its imports, starts the one it is started from) passes every gate and fails only there.
    - After it, the push counts as live only once the commit's check run "Cloudflare Pages" says success (`gh api repos/JohannesHoppe/SolarTournament/commits/<sha>/check-runs`); a failed build leaves the site on the last good one.
