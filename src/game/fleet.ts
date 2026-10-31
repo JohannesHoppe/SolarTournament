@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
 import { FIELD_RADIUS, outline, RAMMED, raySphere, type Asteroid, type AsteroidField, type Obstacle, type ShovedState } from '../world/asteroids';
-import { contact, MASS, massOf, share } from '../world/bodies';
+import { contact, MASS, share } from '../world/bodies';
 import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
 import { shelter, unshelter } from '../world/space';
@@ -180,7 +180,7 @@ const ROCK_STEP = 0.5;
 const ROCK_EVADE = 1000;
 /**
  * It keeps clear (see ROCK_LOOKOUT) only of pieces of at least a quarter of its own mass (MASS in
- * world/bodies): a piece that heavy would slow it hard or throw it about. A lighter one it does
+ * world/bodies), a piece welded into a structure weighed as the whole structure: a piece that heavy would slow it hard or throw it about. A lighter one it does
  * not dodge: its hull rams it aside (see Fleet.ram), the two trading momentum by their masses, so
  * a chunk of ice a tenth of its mass costs it a tenth of its speed into the chunk, one of a
  * quarter of its mass at most a quarter, which its drives win back within seconds.
@@ -342,8 +342,8 @@ const away = new THREE.Vector3();
 const clear = new THREE.Vector3();
 const turned = new THREE.Quaternion();
 
-/** A piece of the field the battleship keeps clear of rather than ramming it aside (see DODGE_MASS). */
-const dodged = (piece: Asteroid) => massOf(piece) >= DODGE_MASS;
+/** A piece of the field the battleship keeps clear of rather than ramming it aside (see DODGE_MASS): one that heavy, or welded into a structure that heavy. */
+const dodged = (field: AsteroidField, piece: Asteroid) => field.bodyMass(piece) >= DODGE_MASS;
 
 /** A piece's outline in the battleship's frame (see Fleet.depthOf), its extent along the frame's axes, and the axes a push out of the hull is tried along. */
 let hullPoints = new Float32Array(0);
@@ -1353,7 +1353,7 @@ export class Fleet implements Obstacle {
     let pushed = false;
     const speed = this.velocity.length();
     for (const piece of field.asteroids.values()) {
-      if (!dodged(piece)) continue;
+      if (!dodged(field, piece)) continue;
       const reach = piece.radius + ROCK_CLEAR;
       const pace = piece.velocity.length() + Math.abs(piece.orbitRate) * piece.object.position.length();
       if (piece.object.position.distanceTo(this.position) > REACH + reach + (speed + pace) * ROCK_LOOKOUT) continue;
@@ -1382,9 +1382,10 @@ export class Fleet implements Obstacle {
 
   /** Whether its hull turned by `turned` would come within half ROCK_CLEAR of a piece of the field it dodges that it keeps clear of as it is turned now, or, within that already, swing on towards it. */
   private crowded(turned: THREE.Quaternion): boolean {
-    if (!this.field) return false;
-    for (const piece of this.field.asteroids.values()) {
-      if (!dodged(piece)) continue;
+    const field = this.field;
+    if (!field) return false;
+    for (const piece of field.asteroids.values()) {
+      if (!dodged(field, piece)) continue;
       const reach = piece.radius + ROCK_CLEAR / 2;
       if (!this.reaches(piece.object.position, reach, this.position, turned)) continue;
       if (!this.reaches(piece.object.position, reach)) return true;
@@ -1507,7 +1508,8 @@ export class Fleet implements Obstacle {
     field.surfaceVelocity(piece, center, ramVelocity);
     ramBefore.copy(ramVelocity);
     ramPiece.position.copy(center);
-    ramPiece.mass = massOf(piece);
+    // a welded piece meets the hull as its whole structure
+    ramPiece.mass = field.bodyMass(piece);
     const toPiece = share(ramPiece.mass, MASS.battleship);
     // the hull there: its drift, and the sweep of its turn
     ramHull.position.copy(point);
@@ -1532,16 +1534,28 @@ export class Fleet implements Obstacle {
     }
     this.position.addScaledVector(normal, -depth * (1 - toPiece));
     this.root.updateMatrixWorld();
+    // the change of its center's velocity; a welded piece's whole structure takes it alike,
+    // without a tumble, as a comet's shove and the field's contacts move it (see world/contacts)
+    const change = ramBefore.subVectors(ramVelocity, ramBefore);
+    const push = depth * toPiece + RAM_GAP;
+    if (piece.weld === null) this.budge(field, piece, clock, change, push, normal, point, RAM_SPIN);
+    else for (const member of field.welded(piece)) this.budge(field, member, clock, change, push, normal, point, 0);
+  }
+
+  /** A piece takes a blow of the hull (see shove): its center's velocity changes by `change`, it is pushed `push` along `normal`, and it tumbles from `point` by at most `tumble` (rad/s); the lead tells the other browsers. */
+  private budge(field: AsteroidField, piece: Asteroid, clock: number, change: THREE.Vector3, push: number, normal: THREE.Vector3, point: THREE.Vector3, tumble: number) {
+    const center = piece.object.position;
+    field.surfaceVelocity(piece, center, ramVelocity).add(change);
     // the tumble the blow gives it about its center: the change of momentum's moment over the
     // moment of inertia of a ball as large (2/5 m r²), on top of its spin
     const radius = piece.meanRadius;
-    ramSpin.subVectors(point, center).cross(ramBefore.subVectors(ramVelocity, ramBefore)).divideScalar(0.4 * radius * radius).clampLength(0, RAM_SPIN);
+    ramSpin.subVectors(point, center).cross(change).divideScalar(0.4 * radius * radius).clampLength(0, tumble);
     ramSpin.addScaledVector(piece.spinAxis, piece.spinRate);
     const rate = ramSpin.length();
     if (rate > 1e-9) ramSpin.divideScalar(rate);
     else ramSpin.copy(piece.spinAxis);
     // from where it stands, pushed out; its drift such that, carried on its orbit, it flies as the blow sent it
-    const at = ramPiece.position.addScaledVector(normal, depth * toPiece + RAM_GAP);
+    const at = ramPiece.position.copy(center).addScaledVector(normal, push);
     ramVelocity.sub(ramOrbit.copy(piece.orbitAxis).multiplyScalar(piece.orbitRate).cross(at));
     const fixed = (values: number[], digits: number) => values.map((v) => +v.toFixed(digits));
     const state: ShovedState = {

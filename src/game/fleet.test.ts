@@ -16,6 +16,7 @@ import { COMET_SPEED, cometAt, cometEnd, cometStart, headAt, headEnd, HEAD_RADIU
 import { RAMMED, type Asteroid, type AsteroidField, type ShovedState } from '../world/asteroids';
 import { Human, SEEDS, SPREAD } from '../test/human';
 import { SHIP_RADIUS, startFlight, STEP } from '../test/pilot';
+import { ramShare } from '../net/plausible';
 
 /** A battleship in the arena, its bow along -z at the center, unturned. */
 function battleship() {
@@ -495,6 +496,51 @@ describe("the battleship and the field's rock", () => {
     expect(drift(heavy.piece).length()).toBeLessThan(1e-6);
     expect(heavy.fleet.velocity.z).toBeGreaterThan(0);
     expect(heavy.fleet.depthOf(heavy.piece, 1, normal, point)).toBe(0);
+  });
+
+  it("rams a piece welded into a structure as the whole structure: every piece of it takes the same push, the two trading momentum by the structure's mass", () => {
+    const derelict = arenaById('derelict')!;
+    field.generate(derelict.layout);
+    field.setClock(1);
+    const fleet = new Fleet(derelict.layout.seed, field, derelict.sheet);
+    const piece = [...field.asteroids.values()].find((a) => a.weld !== null)!;
+    const members = field.welded(piece);
+    expect(members.length).toBeGreaterThan(1);
+    expect(field.bodyMass(piece)).toBeGreaterThan(MASS.battleship);
+    // alone in the field with its structure, the bow driven into it
+    for (const id of [...field.asteroids.keys()]) if (!members.some((member) => member.id === id)) field.asteroids.delete(id);
+    fleet.arrivesAt = 0;
+    fleet.quaternion.identity();
+    fleet.velocity.set(0, 0, -FLEET_SPEED);
+    const center = piece.object.position;
+    for (let z = fleet.reach + piece.radius; ; z -= 10) {
+      fleet.position.set(center.x, center.y - BOW_DOOR, center.z + z);
+      fleet.root.updateMatrixWorld();
+      fleet.update(1, 0);
+      if (fleet.depthOf(piece, 1, normal, point) >= 50) break;
+    }
+    const before = members.map((member) => drift(member));
+    const spins = members.map((member) => member.spinRate);
+    const hull = fleet.velocity.clone();
+    fleet.ram(1);
+    expect(new Set(fleet.rams.map((state) => state.id))).toEqual(new Set(members.map((member) => member.id)));
+    // the same change for every piece of it, no tumble, and its momentum the hull's loss
+    const change = drift(piece).sub(before[members.indexOf(piece)]);
+    expect(change.length()).toBeGreaterThan(1);
+    members.forEach((member, i) => {
+      expect(drift(member).sub(before[i]).distanceTo(change)).toBeLessThan(0.01);
+      expect(member.spinRate).toBeCloseTo(spins[i], 5);
+    });
+    const lost = hull.sub(fleet.velocity).multiplyScalar(MASS.battleship);
+    expect(change.clone().multiplyScalar(field.bodyMass(piece)).distanceTo(lost)).toBeLessThan(lost.length() * 1e-3);
+    // another browser takes the push of every piece of it, those farthest from the hull too
+    const seen = testField(DISTANT_DETAIL, HULL_BOXES);
+    seen.generate(derelict.layout);
+    seen.setClock(1);
+    for (const ram of fleet.rams) {
+      const at = seen.positionOf(seen.asteroids.get(ram.id)!, ram.b, new THREE.Vector3());
+      expect(ramShare(at, new THREE.Vector3().fromArray(ram.p), Math.hypot(...ram.v), fleet.position, fleet.reach + seen.asteroids.get(ram.id)!.radius), ram.id).toBeLessThan(1);
+    }
   });
 
   it('tells every browser where it shoved a piece, and one that joins later has it there too, and the pieces it breaks into', () => {
