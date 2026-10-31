@@ -219,6 +219,12 @@ export class Session {
   private readonly late = new Set<string>();
   /** The lead each peer says it follows (its states carry it), checked against the own election (see reconcile). */
   private readonly follows = new Map<string, string>();
+  /** The peers each peer says came before it (its states carry them once a second), vouching for a late peer's join time (see vouch). */
+  private readonly elders = new Map<string, Set<string>>();
+  /** Late peers whose own join time is believed: the others follow it (reconcile) or vouch for it (vouch). */
+  private readonly believed = new Set<string>();
+  /** When the own elders next go out with the states (s). */
+  private nextEldersAt = 0;
   /** The join time each peer last claimed, on this browser's clock: believed for a peer most others follow (see reconcile). */
   private readonly claimed = new Map<string, number>();
   /** When the own election is next checked against whom the others follow (s). */
@@ -563,6 +569,8 @@ export class Session {
     if (!this.justJoined && now >= this.nextReconcile) {
       this.nextReconcile = now + RECONCILE_SECONDS;
       this.reconcile();
+      this.vouch();
+      this.resync(now);
     }
     if (now >= this.nextPingAt) {
       this.nextPingAt = now + PING_INTERVAL;
@@ -586,7 +594,10 @@ export class Session {
   /** Sends the states of the own ships (see statesDue), with the time they go out on this page's clock (see SenderClock). */
   sendStates(now: number, states: ShipState[], round: RoundState | null) {
     this.nextStateAt = now + 1 / STATE_RATE;
-    this.transport.send('s', { s: states, r: round, g: this.age(), l: this.leadId, c: +seconds().toFixed(3) });
+    // once a second the peers it knows came before it, as it heard them come (see vouch)
+    const elders = now >= this.nextEldersAt ? this.peers.filter((peer) => this.joinedTime(peer) < this.startedAt && (!this.late.has(peer) || this.believed.has(peer))) : null;
+    if (elders) this.nextEldersAt = now + RECONCILE_SECONDS;
+    this.transport.send('s', { s: states, r: round, g: this.age(), l: this.leadId, c: +seconds().toFixed(3), ...(elders ? { o: elders } : {}) });
   }
 
   sendFire(shooter: string, from: Vec, to: Vec) {
@@ -780,6 +791,7 @@ export class Session {
     const claim = Math.min(this.claimed.get(best) ?? Infinity, this.peerJoinedAt.get(best) ?? Infinity);
     if (!Number.isFinite(claim)) return;
     this.linedUp.delete(best);
+    this.believed.add(best);
     this.peerJoinedAt.set(best, claim);
     if (lead === this.selfId) {
       this.restart();
@@ -789,6 +801,50 @@ export class Session {
       this.peerJoinedAt.set(lead, claim + 2 * RESTART_SLACK);
       this.linedUp.add(lead);
     }
+  }
+
+  /**
+   * A peer first heard after this browser settled has its join time moved up to then (see
+   * plausibleJoin), though it may have been here long before: its link to this browser formed
+   * late. Its own claim is believed once most of the live peers this browser heard while it
+   * settled, and knows to have come after that claim, count it among those that came before them
+   * (their states say so once a second, from what they heard as it came), so this browser ranks
+   * it, seats it and orders the tints as they do. A liar claiming to be older finds none of them
+   * vouching; it lines up behind the lead all the same, as the lead is elected by reconcile alone.
+   */
+  private vouch() {
+    const lead = this.leadId;
+    for (const peer of this.late) {
+      const claim = this.claimed.get(peer);
+      const known = this.peerJoinedAt.get(peer);
+      if (peer === lead || claim === undefined || known === undefined || claim >= known) continue;
+      let asked = 0;
+      let vouched = 0;
+      for (const other of this.peers) {
+        const elders = this.elders.get(other);
+        if (other === peer || !elders || this.late.has(other) || !this.isLive(other) || this.joinedTime(other) <= claim) continue;
+        asked++;
+        if (elders.has(peer)) vouched++;
+      }
+      if (vouched * 2 <= asked) continue;
+      const joined = Math.max(claim, this.joinedTime(lead) + 2 * RESTART_SLACK);
+      if (joined >= known) continue;
+      this.peerJoinedAt.set(peer, joined);
+      this.believed.add(peer);
+    }
+  }
+
+  /**
+   * A browser that has not taken a field from the lead it follows now, a peer that was here
+   * before it, once the time to take one is over, starts over: the lead hands a browser that
+   * started over the field again (see Online), which a lead sends once otherwise. That field went
+   * out while this browser elected another (the others' votes moved it since, see reconcile), or
+   * it was lost.
+   */
+  private resync(now: number) {
+    const lead = this.leadId;
+    if (this.synced || lead === this.selfId || now - this.startedAt < SETTLE_MS / 1000 || this.joinedTime(lead) >= this.startedAt) return;
+    this.restart();
   }
 
   /** A peer spoke: notes when, and when it joined or started over. */
@@ -826,6 +882,8 @@ export class Session {
     this.hear(from, age);
     const followed = d.l === undefined ? null : id(d.l);
     if (followed) this.follows.set(from, followed);
+    const elders = d.o === undefined ? null : ids(d.o);
+    if (elders) this.elders.set(from, new Set(elders));
     const round = d.r === null ? null : this.roundState(d.r);
     if (round === undefined) return;
     // two browsers lead at once because their join times lie too close to tell apart over the

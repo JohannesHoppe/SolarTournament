@@ -4,8 +4,9 @@ import { InputRecorder } from '../recorder';
 import { Cockpit, Hand, STEP, convergence, flyLine, replay, slip } from '../test/cockpit';
 import { RacingLine } from '../game/racingline';
 import { CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, LINE_SPARE, RING_RADIUS } from '../game/school';
-import { FlightModel, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, turnRadius } from './flight';
+import { flyByNose, FlightModel, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, turnRadius } from './flight';
 import { IDLE } from '../input/input';
+import { assistAim } from './computer';
 import { arenaById } from '../world/arenas';
 import { ARENA_LIMIT } from '../world/arena';
 import { PLAUSIBLE_SPEED } from '../net/plausible';
@@ -17,6 +18,16 @@ const MS = 20;
 
 /** A direction `yaw` right of ahead (-Z) and `pitch` up (rad). */
 const direction = (yaw: number, pitch = 0) => new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+
+/** What a recorded frame keeps of a ship before its step, flown without gravity at full drive and thrusters. */
+const kept = (flight: FlightModel) => ({
+  gravity: [0, 0, 0] as [number, number, number],
+  position: flight.position.toArray(),
+  velocity: flight.velocity.toArray(),
+  orientation: flight.orientation.toArray() as [number, number, number, number],
+  drive: 1,
+  thrusters: 1,
+});
 
 /** Seconds from `from` until the flight stays within ON_NOSE of the nose for good. */
 function backOnNose(cockpit: Cockpit, from: number) {
@@ -139,6 +150,24 @@ describe('the autopilot: the ship flies where its nose points', () => {
     }
   });
 
+  it('pushes with the whole drive while W is held on a straight flight: the thrusters never fight it', () => {
+    for (const speed of [0, 100, 150].map((v) => v * MS)) {
+      const ship = new Cockpit(speed);
+      ship.fly(0.5, () => ({ thrust: 1 }));
+      const gained = ship.flight.velocity.length() - speed;
+      expect(gained / 0.5, `from ${speed / MS} m/s`).toBeGreaterThan(MAIN_THRUST * 0.99);
+      expect(ship.out.strafeZ, `from ${speed / MS} m/s`).toBeGreaterThanOrEqual(0);
+    }
+  });
+
+  it('keeps a slow coast along the nose as it is: only a ship at rest is held still', () => {
+    for (const speed of [3, 6, 9].map((v) => v * MS)) {
+      const ship = new Cockpit(speed);
+      ship.fly(2);
+      expect(ship.flight.velocity.length(), `${speed / MS} m/s`).toBeGreaterThan(speed * 0.99);
+    }
+  });
+
   it('holds the flight on the nose against gravity across it', () => {
     const ship = new Cockpit(100 * MS);
     ship.gravity.set(0, -196.2, 0);
@@ -242,12 +271,7 @@ describe('the input recorder', () => {
         mode: 'autopilot' as const,
         controls,
         pointer: [hand.pointer.x, hand.pointer.y] as [number, number],
-        gravity: [0, 0, 0] as [number, number, number],
-        position: flight.position.toArray(),
-        velocity: flight.velocity.toArray(),
-        orientation: flight.orientation.toArray() as [number, number, number, number],
-        drive: 1,
-        thrusters: 1,
+        ...kept(flight),
       };
       ship.step(controls);
       recorder.add({ ...frame, out: { ...ship.out } });
@@ -256,6 +280,38 @@ describe('the input recorder', () => {
     expect(replayed.flown).toBe(300);
     expect(replayed.position).toBeLessThan(1e-6);
     expect(replayed.cockpit.flight.position.distanceTo(flight.position)).toBeLessThan(1e-6);
+  });
+
+  it('replays the aim assist toward the ship it pulled the nose onto', () => {
+    const ship = new Cockpit(80 * MS);
+    const flight = ship.flight;
+    // a rival 3° off the nose, inside the assist's cone (AIM_ASSIST_ANGLE)
+    const rival = direction(3 * DEGREE).multiplyScalar(2000 * MS);
+    const recorder = new InputRecorder();
+    for (let i = 0; i < 120; i++) {
+      const aim = rival.clone().sub(flight.position);
+      flyByNose(flight, IDLE, ship.gravity, ship.out);
+      assistAim(flight, aim, ship.out);
+      recorder.add({
+        t: ship.t,
+        dt: STEP,
+        mode: 'autopilot',
+        controls: { ...IDLE },
+        pointer: null,
+        aim: aim.toArray(),
+        out: { ...ship.out },
+        ...kept(flight),
+      });
+      flight.update(STEP, ship.out, ship.gravity);
+      ship.t += STEP;
+    }
+    const recording = JSON.parse(recorder.json());
+    const replayed = replay(recording);
+    expect(flight.angleTo(rival.clone().sub(flight.position))).toBeLessThan(1 * DEGREE);
+    expect(replayed.cockpit.flight.position.distanceTo(flight.position)).toBeLessThan(1e-6);
+    // without the pull the replay flies another way: the recording needs its aim
+    for (const frame of recording.frames) delete frame.aim;
+    expect(replay(recording).cockpit.flight.position.distanceTo(flight.position)).toBeGreaterThan(1);
   });
 });
 
@@ -290,6 +346,22 @@ describe('the speed limit', () => {
     for (let t = 0; t < 5; t += STEP) flight.update(STEP, controls, new THREE.Vector3());
     expect(flight.velocity.length()).toBeLessThanOrEqual(MAX_SPEED + 1e-6);
     expect(flight.velocity.length()).toBeGreaterThan(MAX_SPEED * 0.999);
+  });
+
+  it("against a planet's drag holds the limit with only the push the drag takes: MAX shown, the flame low, the clone feeling the drag alone", () => {
+    const flight = new FlightModel();
+    flight.reset(new THREE.Vector3(), new THREE.Quaternion());
+    flight.velocity.set(0, 0, -MAX_SPEED);
+    // the air's drag at the deck at the limit, 1.5 g against the flight
+    const drag = new THREE.Vector3(0, 0, 1.5 * 196.2);
+    const controls = { ...IDLE, thrust: 1 };
+    for (let t = 0; t < 2; t += STEP) {
+      flight.update(STEP, controls, drag);
+      expect(flight.limited).toBe(true);
+    }
+    expect(flight.velocity.length()).toBeGreaterThan(MAX_SPEED * 0.99);
+    expect(flight.throttle).toBeLessThan(0.2);
+    expect(flight.properAcceleration).toBeLessThan(1.5 * 196.2 * 1.01);
   });
 
   it("holds only against the ship's own push: a well pulls it past, and the flight computer never brakes that back", () => {

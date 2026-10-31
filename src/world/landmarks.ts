@@ -132,10 +132,10 @@ const JUPITER_CAP = 0.62;
 /**
  * The arena hangs over this latitude of Jupiter (rad, 13° south), between its southern
  * belts, so they run across the view; its great red storm (on the map at 20° south) lies some
- * 6 km off to the south and east.
+ * 6 km off to the south and west.
  */
 const JUPITER_LATITUDE = -0.22;
-/** Where the map's longitude 0 lies (a share of a turn): the great storm, at 0.3625 on the map, 0.1 rad east of the point below the arena. */
+/** Where the map's longitude 0 lies (a share of a turn): the great storm, at 0.3625 on the map, 0.1 rad west of the point below the arena. */
 const JUPITER_LONGITUDE = 0.3625 + 0.1 / (2 * Math.PI);
 /** The light a planet's lit side gets on top of the arena's sun (the sky's faint glow), a share of the sun's. */
 const PLANET_AMBIENT = 0.02;
