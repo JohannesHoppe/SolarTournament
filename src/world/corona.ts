@@ -356,7 +356,7 @@ function prominences(): THREE.BufferGeometry {
  * behind everything; any for an overlay): each pixel gets its ray in the camera's frame and the
  * way to the sun's middle in it, and the sun's angular radius from where the camera is.
  */
-const screenVertex = (depth: number) => /* glsl */ `
+export const screenVertex = (depth: number) => /* glsl */ `
   uniform vec3 center;
   uniform float radius;
   uniform float behind;
@@ -368,7 +368,8 @@ const screenVertex = (depth: number) => /* glsl */ `
     vec3 toSun = center - cameraPosition;
     vSun = normalize(mat3(viewMatrix) * toSun);
     vSize = asin(radius / length(toSun));
-    vRay = vec3(position.x / projectionMatrix[0][0], position.y / projectionMatrix[1][1], -1.0);
+    // the frustum may be off-center (the solo plate's preview shifts the view): its offset is the matrix's third column
+    vRay = vec3((position.x + projectionMatrix[2][0]) / projectionMatrix[0][0], (position.y + projectionMatrix[2][1]) / projectionMatrix[1][1], -1.0);
     vScreen = position.xy;
     // an overlay that has nothing to add with the sun this far behind is never drawn
     gl_Position = vSun.z > behind ? vec4(2.0, 2.0, 2.0, 1.0) : vec4(position.xy, ${depth.toFixed(1)}, 1.0);

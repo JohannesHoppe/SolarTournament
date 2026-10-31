@@ -16,11 +16,11 @@ function flags() {
   return { field, flags: new Flags(field, belt.seed) };
 }
 
-type Pilot = Flier & { alive: boolean; kind: 'bot' | 'host' };
+type Pilot = Flier & { alive: boolean; kind: 'bot' | 'host'; corrected: number };
 /** A pilot of this browser, a ship's radius (17 m), high above the field, far from bases and cores until a test moves it. */
 function pilot(id: string, kind: 'bot' | 'host' = 'bot'): Pilot {
   const flight = { position: new THREE.Vector3(0, 30000, 0), velocity: new THREE.Vector3(), orientation: new THREE.Quaternion() };
-  return { id, alive: true, radius: 340, kind, owner: null, flight, body: { position: flight.position, velocity: flight.velocity, mass: MASS.ship } };
+  return { id, alive: true, radius: 340, kind, owner: null, corrected: 0, flight, body: { position: flight.position, velocity: flight.velocity, mass: MASS.ship } };
 }
 
 /** The ships fly on their velocities for `seconds` from `now`, the lead's rules and the cores running every frame; returns the time then. */
@@ -307,6 +307,88 @@ describe('capture the flag', () => {
     expect(f.takeEvents().map((e) => [e.kind, e.ship])).toEqual([['drop', 'o']]);
     f.update(DT, ships, taken + DT);
     expect(f.cores[1].velocity.y).toBeGreaterThan(0);
+  });
+
+  it('keeps the cable of another browser carrier whose prediction jumped across a rock', () => {
+    const { field, f, orange, ships, now: taken } = stolen();
+    f.takeEvents();
+    // as above, but the carrier came there in a jump of this browser's prediction of it
+    const rock = [...field.asteroids.values()].sort((a, b) => a.object.position.distanceTo(f.bases[1]) - b.object.position.distanceTo(f.bases[1]))[0];
+    const across = new THREE.Vector3(1, 0, 0);
+    orange.flight.position.copy(rock.object.position).addScaledVector(across, rock.radius + 2000);
+    orange.corrected = orange.flight.position.distanceTo(f.cores[1].position);
+    f.cores[1].position.copy(rock.object.position).addScaledVector(across, -rock.radius - 2000);
+    f.lead(ships, taken + DT);
+    expect(f.cores[1].carrier).toBe('o');
+    expect(f.cores[1].lies.count).toBeGreaterThan(0);
+    expect(f.takeEvents()).toEqual([]);
+  });
+
+  it('starts the tow of a core bitten from afar across a rock slack over it: neither core nor carrier jerks', () => {
+    const { field, f, orange, ships, now: taken } = stolen();
+    orange.alive = false;
+    let now = fly(f, ships, taken, DT);
+    orange.alive = true;
+    // a rock between the carrier and the core adrift, both 100 m off it
+    const rock = [...field.asteroids.values()].filter((a) => a.radius < 6000).sort((a, b) => a.object.position.distanceTo(f.bases[1]) - b.object.position.distanceTo(f.bases[1]))[0];
+    const across = new THREE.Vector3(1, 0, 0);
+    const core = f.cores[1];
+    core.position.copy(rock.object.position).addScaledVector(across, -rock.radius - 2000);
+    core.velocity.set(0, 0, 0);
+    orange.flight.position.copy(rock.object.position).addScaledVector(across, rock.radius + 2000);
+    orange.flight.velocity.set(0, 0, 0);
+    f.claim('o', 1);
+    const coreAt = core.position.clone();
+    const shipAt = orange.flight.position.clone();
+    now = fly(f, ships, now, DT);
+    expect(core.carrier).toBe('o');
+    expect(core.lies.count).toBeGreaterThan(0);
+    expect(core.position.distanceTo(coreAt)).toBeLessThan(20);
+    expect(orange.flight.position.distanceTo(shipAt)).toBeLessThan(20);
+  });
+
+  it('starts the tow of a core a carrier lost on a cable of its own, though it is taken in the same frame', () => {
+    const { flags: f } = flags();
+    const orange = pilot('o', 'host');
+    const blue = pilot('b');
+    const green = pilot('g');
+    const ships = [orange, blue, green];
+    f.lead(ships, 0);
+    expect(f.teamOf('g')).toBe(f.teamOf('o'));
+    orange.flight.position.copy(f.bases[1]);
+    let now = fly(f, ships, 0, 2);
+    const core = f.cores[1];
+    expect(core.carrier).toBe('o');
+    // orange dies with the core on its short cable; green's harpoon bites it from 800 m that frame
+    orange.alive = false;
+    green.flight.position.copy(core.position).add(new THREE.Vector3(0, 16000, 0));
+    f.claim('g', 1);
+    const coreAt = core.position.clone();
+    now = fly(f, ships, now, DT);
+    expect(core.carrier).toBe('g');
+    expect(core.position.distanceTo(coreAt)).toBeLessThan(core.velocity.length() * DT + 20);
+    expect(green.flight.position.distanceTo(coreAt)).toBeGreaterThan(15000);
+  });
+
+  it('bounces a core adrift off the other core at home, which stays put', () => {
+    const { f, orange, ships, now: taken } = stolen();
+    orange.alive = false;
+    let now = fly(f, ships, taken, DT);
+    // along the axis of orange's ring, 10 m off orange's core at home, at 100 m/s towards it
+    const facing = f.facings[0];
+    const core = f.cores[1];
+    core.position.copy(f.bases[0]).addScaledVector(facing, -(340 + 200));
+    core.previous.copy(core.position);
+    core.velocity.copy(facing).multiplyScalar(2000);
+    let away = -Infinity;
+    for (let t = 0; t < 1; t += DT) {
+      now = fly(f, ships, now, DT);
+      away = Math.max(away, -core.velocity.dot(facing));
+    }
+    expect(f.cores[0].home).toBe(true);
+    expect(f.cores[0].position.distanceTo(f.bases[0])).toBeLessThan(1);
+    // it rebounds at the cores' restitution, less what its thrusters brake
+    expect(away).toBeGreaterThan(2000 * 0.6 - CORE_BRAKE * 0.5);
   });
 
   it('sends a core adrift home after a while', () => {

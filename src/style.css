@@ -241,6 +241,10 @@ button:hover,
 button:focus-visible,
 a.button:hover {
   border-color: var(--accent);
+}
+
+button:hover,
+button:focus-visible {
   outline: none;
 }
 

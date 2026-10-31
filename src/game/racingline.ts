@@ -11,7 +11,7 @@ export const CLEARANCE = 2000;
 /** Within this distance along the line of a gate (units, 80 m, two thirds of a gate's 120 m radius) the line runs through the gate's center, whatever lies beside it. */
 const GATE_FADE = 1600;
 /**
- * Around rock the line bends no tighter than this (units, about 770 m): a quarter more than the
+ * Around rock the line bends no tighter than this (units, about 730 m): a quarter more than the
  * autopilot's tightest turn at the speed limit (see turnRadius), so a Host holding the drive on
  * the line never meets a bend the flight cannot follow.
  */
@@ -85,6 +85,8 @@ export class RacingLine {
   private readonly bows: Float64Array;
   private readonly held: Uint8Array;
   private readonly relaxed: Float64Array;
+  /** The spheres each point may meet (see bowAround), kept between passes of the refresh to be reused. */
+  private readonly near: Keep[][];
   private readonly step: number;
   /** The field and its clock the bows were laid for (see bowAround). */
   private bowField: AsteroidField | null = null;
@@ -130,6 +132,7 @@ export class RacingLine {
     this.bows = new Float64Array(count * 3);
     this.held = new Uint8Array(count);
     this.relaxed = new Float64Array(count * 3);
+    this.near = Array.from({ length: count }, () => []);
     for (let i = 0; i < count; i++) {
       this.point(i * this.step, sample).toArray(this.plain, i * 3);
       const s = i * this.step;
@@ -239,10 +242,12 @@ export class RacingLine {
     if (fresh || keeps.length === 0) bows.fill(0);
     if (keeps.length === 0) return;
     // the spheres each point may meet: those within reach of the plain line there, with room for the bows
-    const near: Keep[][] = [];
+    const near = this.near;
     for (let i = 0; i < count; i++) {
       sample.fromArray(this.plain, i * 3);
-      near.push(keeps.filter((keep) => Math.hypot(sample.x - keep.x, sample.y - keep.y, sample.z - keep.z) < keep.radius + BOW_REACH));
+      const mine = near[i];
+      mine.length = 0;
+      for (const keep of keeps) if (Math.hypot(sample.x - keep.x, sample.y - keep.y, sample.z - keep.z) < keep.radius + BOW_REACH) mine.push(keep);
     }
     const index = (i: number) => (this.closed ? ((i % count) + count) % count : THREE.MathUtils.clamp(i, 0, count - 1));
     const before = this.relaxed;
@@ -266,6 +271,8 @@ export class RacingLine {
         }
         point.sub(sample.fromArray(this.plain, i * 3)).toArray(bows, i * 3);
       }
+      // a pass that changes nothing is the last one: the next would start from the same bows
+      if (bows.every((value, k) => value === before[k])) break;
     }
   }
 

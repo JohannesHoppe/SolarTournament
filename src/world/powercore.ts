@@ -99,7 +99,7 @@ export class CoreKit {
     const heart = wound(RADIUS - 14, HALF * 1.8);
     for (let w = 0; w < 4; w++) windings.push(wound(RADIUS - 6, 16).translate(0, ((w + 0.5) / 4 - 0.5) * HALF * 1.5, 0));
     windings.push(wound(CAP_RADIUS * 0.4, 8).translate(0, -(HALF + CAP + 2), 0));
-    this.hull = boxUv(mergeGeometries(hull), 180);
+    this.hull = boxUv(mergeGeometries(hull), 180, 'readable');
     this.heart = heart;
     this.windings = mergeGeometries(windings);
     // the sign reads along the axis, on both plates

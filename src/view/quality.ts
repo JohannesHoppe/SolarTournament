@@ -181,8 +181,8 @@ export const STABLE_SECONDS = 20;
 const STALL = 0.25;
 /**
  * A screen capped below TARGET_FPS (a phone's battery saver holds it at 30 Hz) is slow on every
- * rung, with the frame's own work well under HEADROOM. After CAP_STEPS steps down in a row that
- * raised the frame rate by less than CAP_GAIN (a share) with that much headroom, the governor
+ * rung, with the frame's own work well under HEADROOM. After CAP_STEPS stretches on rungs of a
+ * lower resolution than the probe began on, all raising the frame rate by less than CAP_GAIN (a share) with that much headroom, the governor
  * takes the cap for the screen's, goes back to the rung before them and holds it (see Governor.cap).
  */
 export const CAP_STEPS = 2;
@@ -271,7 +271,8 @@ export class Governor {
     this.cap = 0;
     const probe = this.probe;
     if (spare && probe && fps < probe.fps * CAP_GAIN) {
-      probe.steps++;
+      // only a stretch on a rung that draws fewer pixels than the probe began on is evidence: a GPU bound by its fill rate gains nothing from rungs that only thin rocks
+      if (LADDER[this.rung].pixelRatio < LADDER[probe.from].pixelRatio) probe.steps++;
       if (probe.steps >= CAP_STEPS) {
         // the screen, not the picture, holds the frame rate: the rungs left were not too slow
         for (let rung = probe.from; rung < this.rung; rung++) this.barred.delete(rung);

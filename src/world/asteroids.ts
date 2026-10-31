@@ -299,6 +299,8 @@ export class AsteroidField {
   readonly asteroids = new Map<string, Asteroid>();
   /** Field time (s): runs with the game; online, the lead browser's field time is shared. */
   clock = 0;
+  /** Per welded structure: the first of its pieces and the pose it was laid out in, from which the structure's motion is read (see weldMotion). */
+  private readonly weldHomes = new Map<number, { id: string; position: THREE.Vector3; quaternion: THREE.Quaternion }>();
   /**
    * The share of FAR_LEVEL at which rocks switch to less detail (see view/quality): a cheaper
    * picture draws the full relief only closer up. The switch to a billboard (IMPOSTOR_LEVEL)
@@ -426,6 +428,7 @@ export class AsteroidField {
       asteroid.baseOrientation.copy(piece.orientation).multiply(asteroid.object.quaternion);
       asteroid.weld = piece.weld ?? null;
       this.place(asteroid);
+      if (asteroid.weld !== null && !this.weldHomes.has(asteroid.weld)) this.weldHomes.set(asteroid.weld, { id, position: asteroid.object.position.clone(), quaternion: asteroid.object.quaternion.clone() });
     }
   }
 
@@ -467,6 +470,7 @@ export class AsteroidField {
   clear() {
     for (const asteroid of this.asteroids.values()) this.group.remove(asteroid.object);
     this.asteroids.clear();
+    this.weldHomes.clear();
     this.broken.clear();
   }
 
@@ -627,6 +631,24 @@ export class AsteroidField {
   welded(piece: Asteroid): Asteroid[] {
     if (piece.weld === null) return [piece];
     return [...this.asteroids.values()].filter((a) => a.weld === piece.weld);
+  }
+
+  private static readonly homeMatrix = new THREE.Matrix4();
+  private static readonly unit = new THREE.Vector3(1, 1, 1);
+
+  /**
+   * Writes into `out` the motion of the structure welded as `weld` since the layout: the matrix
+   * that takes a point of the layout to where that point of the structure is now (its first
+   * piece's pose against its pose laid out). False when the field has no such structure.
+   */
+  weldMotion(weld: number, out: THREE.Matrix4): boolean {
+    const home = this.weldHomes.get(weld);
+    const piece = home && this.asteroids.get(home.id);
+    if (!home || !piece) return false;
+    const { homeMatrix, unit } = AsteroidField;
+    out.compose(piece.object.position, piece.object.quaternion, unit);
+    out.multiply(homeMatrix.compose(home.position, home.quaternion, unit).invert());
+    return true;
   }
 
   /** The mass of the body a piece belongs to (kg): its own, or its whole structure's when welded (see world/bodies, massOf). */
@@ -837,9 +859,14 @@ export class AsteroidField {
   lineOfSight(from: THREE.Vector3, to: THREE.Vector3, haze = SIGHT_DEPTH): boolean {
     const distance = from.distanceTo(to);
     if (distance < 1) return true;
-    if (this.air && opticalDepth(this.air, from, to) > haze) return false;
+    if (!this.clearAir(from, to, haze)) return false;
     sight.subVectors(to, from).divideScalar(distance);
     return this.cast(from, sight, distance, true, true) === null;
+  }
+
+  /** The haze of the arena's air between two points sums up to no more than `haze` (see lineOfSight); always so in vacuum. */
+  clearAir(from: THREE.Vector3, to: THREE.Vector3, haze = SIGHT_DEPTH): boolean {
+    return !this.air || opticalDepth(this.air, from, to) <= haze;
   }
 
   /**

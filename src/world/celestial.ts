@@ -50,7 +50,7 @@ export function ecliptic(longitude: number, out = new THREE.Vector3()): THREE.Ve
 export const CUBE_FACES = ['px', 'nx', 'py', 'ny', 'pz', 'nz'] as const;
 
 /** The face (index into CUBE_FACES) and the place on it (`s`, `t`, 0 to 1) the GPU reads for a direction. */
-export function cubeTexel(direction: THREE.Vector3): { face: number; s: number; t: number } {
+export function cubeTexel(direction: THREE.Vector3, out = { face: 0, s: 0, t: 0 }): { face: number; s: number; t: number } {
   const { x, y, z } = direction;
   const ax = Math.abs(x);
   const ay = Math.abs(y);
@@ -75,7 +75,10 @@ export function cubeTexel(direction: THREE.Vector3): { face: number; s: number; 
     tc = -y;
     ma = az;
   }
-  return { face, s: (sc / ma + 1) / 2, t: (tc / ma + 1) / 2 };
+  out.face = face;
+  out.s = (sc / ma + 1) / 2;
+  out.t = (tc / ma + 1) / 2;
+  return out;
 }
 
 /** The direction (not of unit length) the GPU reads at `s`, `t` (0 to 1, may reach past the edges) of a face: the inverse of cubeTexel. */

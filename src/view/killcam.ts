@@ -14,6 +14,8 @@ const MAX_BEAMS = 64;
 /** The replay shows the last WINDOW seconds before the kill at SPEED: slow motion, REPLAY_SECONDS long, no longer than the next clone takes to print (see RESPAWN_SECONDS), so a Host who watches it to its end waits no longer than a bot. */
 const WINDOW = 2;
 const SPEED = 2 / 3;
+/** Kept frames further apart than this (s) are not one flight: recording stops during a replay and the sponsor break, and the frames from before that gap belong to the previous clone's life. */
+const MAX_GAP = 1;
 export const REPLAY_SECONDS = WINDOW / SPEED;
 /** Floats per ship and frame: position, orientation, alive. */
 const STRIDE = 8;
@@ -24,6 +26,17 @@ const to = new THREE.Vector3();
 const offset = new THREE.Vector3();
 const between = new THREE.Vector3();
 const turned = new THREE.Quaternion();
+
+/** The time of the oldest frame of the unbroken run of frames that ends at the newest one: `times` in any order, -Infinity for an unused slot; Infinity when there is none. */
+export function runStartsAt(times: readonly number[], maxGap: number): number {
+  const kept = times.filter((t) => Number.isFinite(t)).sort((a, b) => b - a);
+  let start = Infinity;
+  for (const t of kept) {
+    if (start - t > maxGap && start !== Infinity) break;
+    start = t;
+  }
+  return start;
+}
 
 type Frame = { time: number; ships: (Ship | null)[]; data: Float32Array };
 type Beam = { time: number; from: THREE.Vector3; to: THREE.Vector3; color: THREE.Color };
@@ -92,8 +105,8 @@ export class KillCam {
 
   /** The own clone was shot down at game time `time`: replays the moments before. */
   start(killer: Ship, victim: Ship, time: number) {
-    let oldest = Infinity;
-    for (const frame of this.frames) oldest = Math.min(oldest, frame.time);
+    // only the frames since the last gap in the recording: before it, the ships stood elsewhere
+    const oldest = runStartsAt(this.frames.map((frame) => frame.time), MAX_GAP);
     // beams from before the window are not fired again at its start
     const start = Math.max(oldest, time - WINDOW);
     this.replay = { killer, victim, start, end: time, startedAt: performance.now() / 1000, lastBeam: start, loop: false };
