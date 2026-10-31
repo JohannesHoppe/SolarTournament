@@ -4,8 +4,9 @@ import { InputRecorder } from '../recorder';
 import { Cockpit, Hand, STEP, convergence, flyLine, replay, slip } from '../test/cockpit';
 import { RacingLine } from '../game/racingline';
 import { CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, LINE_SPARE, RING_RADIUS } from '../game/school';
-import { FlightModel, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, turnRadius } from './flight';
+import { flyByNose, FlightModel, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, turnRadius } from './flight';
 import { IDLE } from '../input/input';
+import { assistAim } from './computer';
 import { arenaById } from '../world/arenas';
 import { ARENA_LIMIT } from '../world/arena';
 import { PLAUSIBLE_SPEED } from '../net/plausible';
@@ -17,6 +18,16 @@ const MS = 20;
 
 /** A direction `yaw` right of ahead (-Z) and `pitch` up (rad). */
 const direction = (yaw: number, pitch = 0) => new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
+
+/** What a recorded frame keeps of a ship before its step, flown without gravity at full drive and thrusters. */
+const kept = (flight: FlightModel) => ({
+  gravity: [0, 0, 0] as [number, number, number],
+  position: flight.position.toArray(),
+  velocity: flight.velocity.toArray(),
+  orientation: flight.orientation.toArray() as [number, number, number, number],
+  drive: 1,
+  thrusters: 1,
+});
 
 /** Seconds from `from` until the flight stays within ON_NOSE of the nose for good. */
 function backOnNose(cockpit: Cockpit, from: number) {
@@ -260,12 +271,7 @@ describe('the input recorder', () => {
         mode: 'autopilot' as const,
         controls,
         pointer: [hand.pointer.x, hand.pointer.y] as [number, number],
-        gravity: [0, 0, 0] as [number, number, number],
-        position: flight.position.toArray(),
-        velocity: flight.velocity.toArray(),
-        orientation: flight.orientation.toArray() as [number, number, number, number],
-        drive: 1,
-        thrusters: 1,
+        ...kept(flight),
       };
       ship.step(controls);
       recorder.add({ ...frame, out: { ...ship.out } });
@@ -274,6 +280,38 @@ describe('the input recorder', () => {
     expect(replayed.flown).toBe(300);
     expect(replayed.position).toBeLessThan(1e-6);
     expect(replayed.cockpit.flight.position.distanceTo(flight.position)).toBeLessThan(1e-6);
+  });
+
+  it('replays the aim assist toward the ship it pulled the nose onto', () => {
+    const ship = new Cockpit(80 * MS);
+    const flight = ship.flight;
+    // a rival 3° off the nose, inside the assist's cone (AIM_ASSIST_ANGLE)
+    const rival = direction(3 * DEGREE).multiplyScalar(2000 * MS);
+    const recorder = new InputRecorder();
+    for (let i = 0; i < 120; i++) {
+      const aim = rival.clone().sub(flight.position);
+      flyByNose(flight, IDLE, ship.gravity, ship.out);
+      assistAim(flight, aim, ship.out);
+      recorder.add({
+        t: ship.t,
+        dt: STEP,
+        mode: 'autopilot',
+        controls: { ...IDLE },
+        pointer: null,
+        aim: aim.toArray(),
+        out: { ...ship.out },
+        ...kept(flight),
+      });
+      flight.update(STEP, ship.out, ship.gravity);
+      ship.t += STEP;
+    }
+    const recording = JSON.parse(recorder.json());
+    const replayed = replay(recording);
+    expect(flight.angleTo(rival.clone().sub(flight.position))).toBeLessThan(1 * DEGREE);
+    expect(replayed.cockpit.flight.position.distanceTo(flight.position)).toBeLessThan(1e-6);
+    // without the pull the replay flies another way: the recording needs its aim
+    for (const frame of recording.frames) delete frame.aim;
+    expect(replay(recording).cockpit.flight.position.distanceTo(flight.position)).toBeGreaterThan(1);
   });
 });
 

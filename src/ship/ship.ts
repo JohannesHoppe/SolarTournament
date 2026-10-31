@@ -118,15 +118,15 @@ const lineHit = { ship: null as Ship | null, distance: 0 };
 
 /**
  * The first hull a line from `origin` along `direction` (unit length) strikes within `reach`:
- * the living ship whose hit sphere, widened by `widen`, it enters first, `from` left out, and how
+ * the living ship whose hit sphere it enters first, `from` left out, and how
  * far along; null for none. A laser's beam ends there, whichever side the ship is on.
  */
-export function firstHull(ships: readonly Ship[], from: Ship, origin: THREE.Vector3, direction: THREE.Vector3, reach: number, widen = 0): Readonly<typeof lineHit> | null {
+export function firstHull(ships: readonly Ship[], from: Ship, origin: THREE.Vector3, direction: THREE.Vector3, reach: number): Readonly<typeof lineHit> | null {
   lineHit.ship = null;
   lineHit.distance = reach;
   for (const ship of ships) {
     if (ship === from || !ship.alive) continue;
-    const distance = raySphere(origin, direction, ship.flight.position, ship.radius + widen);
+    const distance = raySphere(origin, direction, ship.flight.position, ship.radius);
     if (distance === null || distance > lineHit.distance) continue;
     lineHit.ship = ship;
     lineHit.distance = distance;
@@ -501,6 +501,7 @@ export class Ship {
     this.plating = 0;
     this.nova = false;
     this.heat = 0;
+    this.glow = 0;
     this.overheated = false;
     this.strain = 0;
     this.driveOfflineUntil = 0;
@@ -610,6 +611,7 @@ export class Ship {
       // the owner booted a new clone
       this.alive = true;
       this.heat = 0;
+      this.glow = 0;
       this.holes.length = 0;
       this.root.visible = true;
       this.flight.position.copy(r.position);

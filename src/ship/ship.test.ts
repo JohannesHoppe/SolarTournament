@@ -59,3 +59,18 @@ describe('a bot adopted by a new lead browser', () => {
     expect(s.toState(0.2).to).toBe(2);
   });
 });
+
+describe('a fresh clone', () => {
+  it('starts with cold radiators, whatever glow the old clone died with', () => {
+    const owner = ship('p:a');
+    const seen = ship('p:a');
+    const hot = seen as unknown as { glow: number };
+    owner.alive = false;
+    seen.applyState(shipState(owner.toState(0, true))!, 0);
+    hot.glow = 0.9;
+    owner.alive = true;
+    seen.applyState(shipState(owner.toState(1, true))!, 1);
+    expect(seen.alive).toBe(true);
+    expect(hot.glow).toBe(0);
+  });
+});

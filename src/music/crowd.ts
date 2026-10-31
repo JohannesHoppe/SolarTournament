@@ -156,12 +156,12 @@ export class Crowd {
   }
 
   /** Quiet: the broadcast cuts away from the stadium (a cheer still fading out is cut short too). */
-  hush(seconds = HUSH) {
+  hush() {
     this.live = false;
     const now = this.context.currentTime;
     for (const gain of [this.bed, this.layer]) {
       gain.gain.cancelScheduledValues(now);
-      gain.gain.setTargetAtTime(0, now, seconds / 3);
+      gain.gain.setTargetAtTime(0, now, HUSH / 3);
     }
   }
 }

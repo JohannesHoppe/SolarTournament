@@ -6,7 +6,7 @@ import { arenaById, ARENAS } from '../world/arenas';
 import { FlightModel, MAIN_THRUST, MAX_SPEED, METERS_PER_UNIT } from '../ship/flight';
 import { ARENA_LIMIT } from '../world/arena';
 import { IDLE } from '../input/input';
-import type { Well } from '../world/asteroids';
+import { testField } from '../test/field';
 
 const hole = arenaById('hole')!.layout.well!;
 const mu = wellMu(hole);
@@ -19,11 +19,10 @@ const state = (distance: number, speed: number, drifting = false, outward = 0) =
   return readOrbit(hole, position, velocity, MAIN_THRUST, drifting, false, orbit());
 };
 
-const pullOf = (well: Well, position: THREE.Vector3, target: THREE.Vector3) => {
-  target.subVectors(well.position, position);
-  const distance = target.length();
-  return target.setLength(wellMu(well) / (distance * distance));
-};
+/** The pull the game flies by: the Event Horizon's field gravity, the hole's and every rock's. */
+const field = testField();
+field.generate(arenaById('hole')!.layout);
+const pullOf = (position: THREE.Vector3, target: THREE.Vector3) => field.gravity(position, target);
 
 describe('the orbit readout', () => {
   it('shows only where an orbit fits the arena: about the black hole, not about Jupiter', () => {
@@ -99,7 +98,7 @@ describe('the orbit readout', () => {
     const states = new Set<OrbitState>();
     // a revolution of this ellipse takes about a minute
     for (let step = 0; step < 90 * 60; step++) {
-      flight.update(1 / 60, IDLE, pullOf(hole, flight.position, gravity));
+      flight.update(1 / 60, IDLE, pullOf(flight.position, gravity));
       nearest = Math.min(nearest, flight.position.length());
       farthest = Math.max(farthest, flight.position.length());
       states.add(readOrbit(hole, flight.position, flight.velocity, MAIN_THRUST, true, true, reading));
@@ -127,7 +126,7 @@ describe('the orbit readout', () => {
     flight.orientation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
     let frames = 0;
     while (held === 'stable' && frames < 600) {
-      flight.update(1 / 60, { ...IDLE, thrust: 1 }, pullOf(hole, flight.position, gravity));
+      flight.update(1 / 60, { ...IDLE, thrust: 1 }, pullOf(flight.position, gravity));
       held = readOrbit(hole, flight.position, flight.velocity, MAIN_THRUST, true, true, reading);
       frames++;
     }

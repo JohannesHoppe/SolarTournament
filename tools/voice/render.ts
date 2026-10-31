@@ -19,11 +19,11 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { allLines, clipKey, phraseKey, phrases, words, type Language } from '../../src/music/lines.ts';
 import { ffmpegBinary, ffmpegHash } from './ffmpeg.ts';
+import { toolCache } from '../pinned.ts';
 import { CATALOGS, cloneAudioName, CLONED, cloneKey, COMPUTER_VOICE, nicoleLines, releaseUrl, type Cloned } from './nicole.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -66,7 +66,7 @@ const files = SPRITES.flatMap((sprite) => [`voice-${sprite}.mp3`, `voice-${sprit
 // because Cloudflare Pages keeps that one between builds (and lets no other directory be kept);
 // npm ignores the folder. VOICE_CACHE moves it elsewhere. The cache is a help, never a need:
 // where it cannot be written, the voices are rendered all the same.
-const cacheRoot = process.env.VOICE_CACHE ?? join(process.env.npm_config_cache ?? join(homedir(), '.npm'), '_solartournament');
+const cacheRoot = process.env.VOICE_CACHE ?? toolCache();
 const tryCache = (action: () => void) => {
   try {
     action();

@@ -4,11 +4,11 @@
  * the build cache lacks it and used only when its SHA-256 is the one pinned here for the
  * machine's platform. A download that does not match stops the build.
  */
-import { createHash } from 'node:crypto';
-import { chmodSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { arch, platform } from 'node:os';
 import { dirname, join } from 'node:path';
 import { gunzipSync } from 'node:zlib';
+import { fetchPinned, sha256, writeWhole } from '../pinned.ts';
 
 /** Where the builds are published: one gzipped binary per platform, `ffmpeg-<platform>-<arch>.gz`. */
 export const FFMPEG_RELEASE = 'https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1';
@@ -27,8 +27,6 @@ const target = `${platform()}-${arch()}`;
 /** The pinned SHA-256 of this machine's ffmpeg, or null where none is pinned. */
 export const ffmpegHash = (): string | null => FFMPEG_SHA256[target] ?? null;
 
-const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
-
 /**
  * The path of a checked ffmpeg in `folder` (one subfolder per binary, others are removed): the
  * copy kept there if its hash is the pinned one, else a fresh download, checked before it is
@@ -41,17 +39,10 @@ export async function ffmpegBinary(folder: string): Promise<string> {
   if (existsSync(file) && sha256(readFileSync(file)) === expected) return file;
   const url = `${FFMPEG_RELEASE}/ffmpeg-${target}.gz`;
   console.log(`Fetching ffmpeg for ${target}`);
-  const answer = await fetch(url, { signal: AbortSignal.timeout(300000) });
-  if (!answer.ok) throw new Error(`ffmpeg not fetched from ${url}: HTTP ${answer.status}`);
-  const binary = gunzipSync(Buffer.from(await answer.arrayBuffer()));
-  const actual = sha256(binary);
-  if (actual !== expected) throw new Error(`ffmpeg from ${url} has SHA-256 ${actual}, pinned is ${expected}: not used`);
+  const binary = await fetchPinned(url, 'ffmpeg', expected, gunzipSync);
   // other binaries are of no use any more
   if (existsSync(folder)) for (const entry of readdirSync(folder)) if (entry !== expected.slice(0, 16)) rmSync(join(folder, entry), { recursive: true, force: true });
   mkdirSync(dirname(file), { recursive: true });
-  const partial = `${file}.${process.pid}.part`;
-  writeFileSync(partial, binary);
-  chmodSync(partial, 0o755);
-  renameSync(partial, file);
+  writeWhole(file, binary, 0o755);
   return file;
 }
