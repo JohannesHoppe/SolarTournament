@@ -208,9 +208,8 @@ export class FieldContacts {
   fixtures: readonly Fixture[] = [];
   /** The motions given since the last run, for the other browsers. */
   readonly moved: ShovedState[] = [];
-  /** How many contacts were met, and how many pairs the narrow phase looked at (for tests and the benchmark). */
+  /** How many contacts were met (for tests). */
   contacts = 0;
-  checked = 0;
 
   /** Starts over on a new field or a field restored from a snapshot: the next run starts at its clock. */
   reset() {
@@ -284,7 +283,6 @@ export class FieldContacts {
 
   /** Two pieces whose bounding spheres meet: if one reaches into the other while they close, they trade momentum. */
   private meet(field: AsteroidField, a: Entry, b: Entry, time: number) {
-    this.checked++;
     let depth = reachInto(field, a.piece, b.piece, touchPoint, touchNormal);
     bestPoint.copy(touchPoint);
     bestNormal.copy(touchNormal);
@@ -327,7 +325,6 @@ export class FieldContacts {
 
   /** A piece near a ring: if it reaches into the ring while closing, it bounces off. */
   private bounce(field: AsteroidField, entry: Entry, fixture: Fixture, time: number) {
-    this.checked++;
     const points = pointsOf(field, entry.piece);
     const matrix = entry.piece.object.matrixWorld;
     let depth = 0;
