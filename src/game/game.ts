@@ -6602,8 +6602,8 @@ export class Game implements OnlineGame {
   };
 
   /**
-   * A comet meets the President's battleship: its head breaks up on the hull (see Comet.broken),
-   * where this browser's battleship meets it or where the lead browser said it did, and the
+   * A comet meets the President's battleship: its head breaks up on the hull (see Comet.broken)
+   * where the lead browser's battleship meets it (a solo round's own), as the lead says, and the
    * battleship that did not get out of its way goes down (the lead browser decides); each piece
    * of its shower bursts where it meets the hull, so the hull is cover from it.
    */
@@ -6611,10 +6611,11 @@ export class Game implements OnlineGame {
     const whole = comet.broken === Infinity;
     const told = fleet.rammedAt;
     if (told !== null && told >= cometStart(comet) && told <= cometEnd(comet)) comet.broken = told;
-    const struck = meetObstacle(comet, this.shower, fleet, clock, dt, (point) => {
+    const sparks = (point: THREE.Vector3) => {
       if (Math.random() < SHOWER_SPARKS) this.effects.sparks(point, SCRAPE_COLOR, PIECE_RADIUS * 4);
-    });
-    if (struck && (!this.online || this.online.isLead)) {
+    };
+    // only the lead's battleship ends the head: each browser glides its own a little apart
+    if (meetObstacle(comet, this.shower, fleet, clock, dt, sparks, !this.online || this.online.isLead)) {
       fleet.rammedAt = clock;
       if (fleet.present(clock)) {
         this.hud.flashMessage(this.time, t('The comet rams the battleship'), 3);

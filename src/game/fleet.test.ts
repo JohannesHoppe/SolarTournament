@@ -258,6 +258,20 @@ describe("the President's fleet", () => {
     // a whole comet's flight past the hull: a few seconds on a busy machine
   }, 30_000);
 
+  it("leaves the head whole on a browser that follows the lead's battleship, its shower bursting all the same", () => {
+    const fleet = battleship();
+    const comet = makeComet(100, new THREE.Vector3(1, 0, 0), new THREE.Vector3(), 5);
+    const shower = new Shower(comet);
+    const step = 1 / 60;
+    let stopped = 0;
+    for (let time = cometStart(comet); time < cometEnd(comet); time += step) {
+      fleet.update(time, 0);
+      expect(meetObstacle(comet, shower, fleet, time, step, () => stopped++, false)).toBe(false);
+    }
+    expect(comet.broken).toBe(Infinity);
+    expect(stopped).toBeGreaterThan(0);
+  }, 30_000);
+
   it('stays solid while it sinks, for ships as for rays and torpedoes, and is gone once it went up', () => {
     const fleet = battleship();
     breakAll(fleet, zonesOf(fleet, 'battery'));

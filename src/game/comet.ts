@@ -481,6 +481,10 @@ const LOOK_BACK = 3;
  */
 export function runDown(comet: Comet, field: AsteroidField, time: number, broke: (rock: Asteroid) => void, shoved: (piece: Asteroid, point: THREE.Vector3) => void = () => {}) {
   if (time >= headEnd(comet)) return;
+  // a piece it shoved already (a browser that took the field from a snapshot after the head
+  // broke up on it): the head broke up when that piece took its motion, and never strikes it twice
+  for (const rock of field.asteroids.values()) if (rock.solid && rock.shovedBy === comet.seed && rock.born < comet.broken) comet.broken = rock.born;
+  if (time >= headEnd(comet)) return;
   headAt(comet, time, head);
   // the solid piece the head meets first, if it meets one: there it breaks up
   let wall: Asteroid | null = null;
@@ -574,10 +578,11 @@ function meets(comet: Comet, field: AsteroidField, rock: Asteroid, time: number)
  * (true then, the head's end set to `time`), and each piece of its `shower` that touches it, or
  * met it on its way since (a piece flies 10 m in a frame at 60 frames a second, as far as a
  * battery's barrels are thick), bursts there (`burst` hears of each, with where), so the hull is
- * cover from the swarm.
+ * cover from the swarm. Only the browser that `decides` (the lead browser, or a solo round) ends
+ * the head on its own view of the obstacle; the others take its word (see Fleet.rammedAt).
  */
-export function meetObstacle(comet: Comet, shower: Shower | null, obstacle: Obstacle, time: number, since: number, burst: (point: THREE.Vector3) => void = () => {}): boolean {
-  const broke = time < headEnd(comet) && obstacle.touches(headAt(comet, time, head), HEAD_RADIUS);
+export function meetObstacle(comet: Comet, shower: Shower | null, obstacle: Obstacle, time: number, since: number, burst: (point: THREE.Vector3) => void = () => {}, decides = true): boolean {
+  const broke = decides && time < headEnd(comet) && obstacle.touches(headAt(comet, time, head), HEAD_RADIUS);
   if (broke) comet.broken = time;
   // the swarm trails the head by up to its length, as wide as it spreads
   if (!shower || headAt(comet, time, head).distanceTo(obstacle.position) > SHOWER_LENGTH + SHOWER_WIDE + OBSTACLE_REACH) return broke;
