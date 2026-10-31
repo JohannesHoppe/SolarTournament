@@ -386,7 +386,7 @@ export const diskGas = /* glsl */ `
   }
   // the gas's light per column by its place across the disk, t from the inner edge 0 to the outer 1
   float diskEmission(float t) {
-    return smoothstep(-0.05, 0.07, t) * exp(-3.0 * t) * (1.0 - smoothstep(0.65, 1.0, t));
+    return smoothstep(-0.05, 0.07, t) * exp(-4.5 * t) * (1.0 - smoothstep(0.65, 1.0, t));
   }
   // its color: white-hot inside, peach, orange, dark red at the outer edge; hotter where it streams towards the pilot
   vec3 diskColor(float t) {
@@ -453,7 +453,7 @@ export const diskGas = /* glsl */ `
     if (weight <= 0.0) return vec3(0.0);
     // the clumps once, where the gas along the ray lies; where it is thin it glows redder, in faint wisps
     float clumps = diskClumps(middle / weight);
-    light *= (0.35 + 1.3 * clumps) * ${DISK_GAIN.toFixed(2)} * mix(vec3(1.0, 0.55, 0.5), vec3(1.0), 0.4 + 0.6 * smoothstep(0.25, 0.5, clumps));
+    light *= (0.35 + 1.3 * clumps) * ${DISK_GAIN.toFixed(2)} * mix(vec3(1.0, 0.42, 0.22), vec3(1.0), 0.4 + 0.6 * smoothstep(0.25, 0.5, clumps));
     // the brightest gas held below a ceiling, so the edge-on band glows instead of burning out
     return light / (1.0 + dot(light, vec3(0.3, 0.5, 0.2)) / ${DISK_CEILING.toFixed(3)});
   }

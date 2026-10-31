@@ -253,22 +253,21 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.9, 0.7, 0.5],
     grade: { gain: [1.06, 1, 0.9], lift: [0.006, 0.0032, 0.0011], saturation: 1 },
   },
-  // deep violet: violet and magenta clouds around the hole, a violet sky, the shadows violet
+  // warm and dark: a dark starfield (its stars a little brighter) with two faint dusky veils, so nothing
+  // but the hole's own gas glows around it; a dim warm sky, warm dust, a warm grade
   hole: {
-    space: 0x04020c,
-    sky: 0x7a5cc8,
-    ground: 0x1e0c30,
+    space: 0x030202,
+    sky: 0x8a7462,
+    ground: 0x140c08,
     ambient: 1.4,
     nebulae: [
-      { at: [-1, 0.3, 0.2], color: [0.12, 0.039, 0.26], size: 612000, shape: 0, turn: 1 },
-      { at: [0.6, -0.5, 0.8], color: [0.16, 0.026, 0.13], size: 504000, shape: 1, turn: 3.6 },
-      { at: [0.2, 0.9, -0.4], color: [0.065, 0.026, 0.18], size: 540000, shape: 2, turn: 5.4 },
-      { at: [0.8, 0.1, -0.6], color: [0.052, 0.019, 0.12], size: 432000, shape: 1, turn: 0.3 },
+      { at: [-1, 0.3, 0.2], color: [0.026, 0.02, 0.017], size: 612000, shape: 0, turn: 1 },
+      { at: [0.6, -0.5, 0.8], color: [0.03, 0.017, 0.011], size: 504000, shape: 1, turn: 3.6 },
     ],
-    stars: 1,
+    stars: 1.15,
     starmap: false,
-    dust: [0.62, 0.55, 0.85],
-    grade: { gain: [1, 0.94, 1.06], lift: [0.0025, 0.0008, 0.0045], saturation: 1.05 },
+    dust: [0.85, 0.74, 0.62],
+    grade: { gain: [1.03, 0.99, 0.94], lift: [0.0012, 0.0007, 0.0004], saturation: 1.03 },
   },
   // cold, washed out and solemn: a graveyard; a dim pale sun, a cold grey sky, one pale veil
   // over the wreck like a shroud, the colors drained
