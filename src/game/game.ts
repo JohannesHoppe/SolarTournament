@@ -4549,10 +4549,8 @@ export class Game implements OnlineGame {
     this.alarms.raise({ id: 'air', level, text: t('HULL HEAT · SAFE {speed} m/s', { speed: safe }), direction: up.subVectors(me.flight.position, air.center) });
     this.airGlow = AIR_GLOW[level];
     const said = level === 'critical' ? 2 : 1;
-    if (said > this.airSaid && level !== 'warning') {
-      this.airSaid = said;
-      this.speaker.say(said === 2 ? COMPUTER.airBurn : COMPUTER.airHot, said === 2 ? 'urgent' : undefined);
-    }
+    // a line Nicole could not say yet (she was speaking) is tried again the next frame
+    if (said > this.airSaid && level !== 'warning' && this.speaker.say(said === 2 ? COMPUTER.airBurn : COMPUTER.airHot, said === 2 ? 'urgent' : undefined)) this.airSaid = said;
   }
 
   /** Runs the flight school for this frame; returns the point its HUD marker sits on. */
@@ -6501,9 +6499,11 @@ export class Game implements OnlineGame {
     this.orbitState = state;
     const shown = state === 'ready' || state === 'stable' || load >= WELL_GAUGE ? state : null;
     this.hud.setOrbit(shown, this.orbit, well?.radius ?? 0);
-    const call = this.orbitCalls.update(shown, this.time);
-    if (call) this.speaker.say(call === 'ready' ? COMPUTER.orbitReady : COMPUTER.orbitStable);
+    this.orbitCalls.update(shown, this.time, this.sayOrbit);
   }
+
+  /** Nicole's orbit line (see OrbitCalls); whether she said it. */
+  private readonly sayOrbit = (line: 'ready' | 'stable') => this.speaker.say(line === 'ready' ? COMPUTER.orbitReady : COMPUTER.orbitStable);
 
   /**
    * The comet of the round (see comet.ts): its route, the warning before it comes, its shower
