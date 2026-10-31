@@ -40,26 +40,24 @@ describe("the black hole's lens", () => {
     }
   });
 
-  it('is on wherever the shadow or its photon ring reaches into the picture, the hole beside or behind the camera too, and bends only the light of a hole ahead', () => {
+  it('is on wherever the hole lies, its shadow reaching into the picture with the hole behind the camera too, and bends only the light of a hole ahead', () => {
     const lens = new Lensing();
-    for (const distance of [12000, 14000, 20000, 40000]) {
+    let rimsBehind = 0;
+    for (const distance of [10000, 14000, 20000, 40000]) {
       for (let degrees = 0; degrees <= 180; degrees += 5) {
         const c = camera(distance, THREE.MathUtils.degToRad(degrees));
         lens.update(c, new THREE.Vector3(), HORIZON, null);
         const { shadow } = lensAngles(HORIZON, distance, THREE.MathUtils.degToRad(c.fov));
-        const reach = nearest(c);
-        // a pixel inside the shadow or on its ring: the lens draws it
-        if (reach < shadow * 1.2) expect(lens.pass.enabled, `${distance} units, ${degrees}°`).toBe(true);
-        if (lens.pass.enabled) {
-          expect(lens.pass.uniforms.shadowAngle.value).toBeCloseTo(shadow, 9);
-          // the bend fades out before the hole comes abeam
-          if (degrees <= 70) expect(lens.pass.uniforms.bend.value).toBe(1);
-          if (degrees >= 90) expect(lens.pass.uniforms.bend.value).toBeCloseTo(0, 9);
-        }
-        // far behind, with nothing of it in the picture: off
-        if (degrees >= 90 && reach > shadow * 1.6) expect(lens.pass.enabled, `${distance} units, ${degrees}°`).toBe(false);
+        expect(lens.pass.enabled, `${distance} units, ${degrees}°`).toBe(true);
+        expect(lens.pass.uniforms.shadowAngle.value).toBeCloseTo(shadow, 9);
+        // the bend fades out before the hole comes abeam
+        if (degrees <= 70) expect(lens.pass.uniforms.bend.value).toBe(1);
+        if (degrees >= 90) expect(lens.pass.uniforms.bend.value).toBeCloseTo(0, 9);
+        // the hole's middle beside or behind the camera, a pixel's ray in its shadow
+        if (degrees >= 90 && nearest(c) < shadow) rimsBehind++;
       }
     }
+    expect(rimsBehind).toBeGreaterThan(0);
     lens.update(camera(14000, 0), null, HORIZON, null);
     expect(lens.pass.enabled).toBe(false);
   });

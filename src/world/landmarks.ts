@@ -327,8 +327,9 @@ export const DISK_UNIFORMS = { diskTime: { value: 0 }, diskFine: { value: 1 } };
 
 /**
  * The black hole's disk as glowing gas, measured along a ray (in the hole's frame, the disk in
- * its xz plane): `diskEntry` says where a ray from `ro` enters the slab the gas fills, `diskGas`
- * how much light the gas between `near` and `far` sends back along it.
+ * its xz plane): `diskEntry` says where a ray from `ro` enters the slab the gas fills,
+ * `diskExit` where it leaves it, `diskGas` how much light the gas between `near` and `far` sends
+ * back along it.
  *
  * The gas shines white-hot at the inner edge, peach further out, orange and dark at the outer
  * edge, its inner edge soft. It thins out above and below the middle plane as a bell curve (see
@@ -361,6 +362,17 @@ export const diskGas = /* glsl */ `
     float h = b * b - a * c;
     if (a > 1e-8 && h > 0.0) near = max(near, (-b - sqrt(h)) / a);
     return near;
+  }
+  // where it leaves the slab again (before diskEntry where it misses it)
+  float diskExit(vec3 ro, vec3 rd) {
+    float far = 1e12;
+    if (abs(rd.y) > 1e-6) far = max((-${DISK_TOP.toFixed(1)} - ro.y) / rd.y, (${DISK_TOP.toFixed(1)} - ro.y) / rd.y);
+    float a = dot(rd.xz, rd.xz);
+    float b = dot(ro.xz, rd.xz);
+    float c = dot(ro.xz, ro.xz) - ${(DISK_OUTER * DISK_OUTER).toFixed(1)};
+    float h = b * b - a * c;
+    if (a > 1e-8) far = h > 0.0 ? min(far, (-b + sqrt(h)) / a) : -1.0;
+    return far;
   }
   // the gas's light per column by its place across the disk, t from the inner edge 0 to the outer 1
   float diskEmission(float t) {
@@ -450,8 +462,10 @@ const diskVertex = /* glsl */ `
 
 /**
  * The black hole's disk: the gas along the pilot's ray through its slab (see diskGas), up to
- * the slab's far side or the nearest surface in front of it. Behind the hole too: the lens
- * bends that light around the shadow, which it draws itself (see view/lensing).
+ * the slab's far side. Where a surface inside the slab hides that side, the depth test leaves
+ * the pixel out, and the lens, which reads the scene's depth, adds the gas in front of the
+ * surface instead. Behind the hole too: the lens bends that light around the shadow, which it
+ * draws itself (see view/lensing).
  */
 const diskFragment = /* glsl */ `
   varying vec3 vPoint;

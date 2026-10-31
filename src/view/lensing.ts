@@ -10,7 +10,9 @@ import { DISK_UNIFORMS, HOLE_SHADOW, diskGas } from '../world/landmarks';
  * mesh, so the disk's far side behind it is in the picture to be bent into the halo over and
  * under the shadow; the shadow is black but for the disk's near side crossing in front of it,
  * its gas summed along each pixel's ray up to the shadow (see world/landmarks, diskGas). What
- * lies in front of the hole (by the depth) is neither bent nor lent to the bent picture.
+ * lies in front of the hole (by the depth) is neither bent nor lent to the bent picture. It
+ * also draws the disk's gas in front of a rock or ship inside the disk's slab, which the disk's
+ * own mesh leaves out there, so the lens is on wherever the hole lies.
  *
  * Every angle is measured along each pixel's own ray, around the line to the hole: the shadow
  * and the photon ring are cones about it, so wherever the hole stands, in the middle of the
@@ -81,16 +83,31 @@ const shader = {
     ${diskGas}
     // whether what is drawn at uv, seen along the ray r, lies beyond the hole: farther ahead of
     // the camera than the point of r closest to the hole (the sky, never drawn, at the far plane)
-    bool beyond(vec2 uv, vec3 r) {
-      float ahead = nearPlane * farPlane / (farPlane - (farPlane - nearPlane) * texture2D(tDepth, uv).x);
-      return ahead > -dot(r, eye) * dot(r, axis);
+    float ahead(vec2 uv) {
+      return nearPlane * farPlane / (farPlane - (farPlane - nearPlane) * texture2D(tDepth, uv).x);
+    }
+    bool beyond(float depth, vec3 r) {
+      return depth > -dot(r, eye) * dot(r, axis);
+    }
+    // what is drawn at uv, seen along r and lying depth ahead of the camera, with the disk's gas in
+    // front of it where it lies inside the gas's slab: the disk's own mesh is depth-tested at the
+    // slab's far side, so a surface inside hides all of the gas along that pixel (see world/landmarks)
+    vec4 seen(vec2 uv, float depth, vec3 r) {
+      vec4 color = texture2D(tDiffuse, uv);
+      float at = depth / dot(r, axis);
+      if (at < diskExit(eye, r)) {
+        float near = diskEntry(eye, r);
+        if (at > near) color.rgb += diskGas(eye, r, near, at);
+      }
+      return color;
     }
     void main() {
       vec4 view = projectionInverse * vec4(vUv * 2.0 - 1.0, -1.0, 1.0);
       vec3 rd = normalize((cameraWorld * vec4(view.xyz / view.w, 0.0)).xyz);
+      float depth = ahead(vUv);
       // a ship or rock in front of the hole is seen as it is
-      if (!beyond(vUv, rd)) {
-        gl_FragColor = texture2D(tDiffuse, vUv);
+      if (!beyond(depth, rd)) {
+        gl_FragColor = seen(vUv, depth, rd);
         return;
       }
       vec3 toHole = -normalize(eye);
@@ -109,7 +126,9 @@ const shader = {
       // covers the source, the light is looked for a little farther out on the same ray, and
       // where none is found (or it lies behind the camera) the pixel shows unbent; so nothing
       // near is ever seen twice
-      vec4 color = texture2D(tDiffuse, vUv);
+      vec2 shown = vUv;
+      vec3 ray = rd;
+      float shownDepth = depth;
       if (bend > 0.0) {
         float beta = theta - bend * ringAngle * ringAngle / theta;
         vec3 across = normalize(rd - toHole * c);
@@ -120,12 +139,16 @@ const shader = {
           vec4 clip = viewProjection * vec4(r, 0.0);
           if (clip.w <= 0.0) continue;
           vec2 source = clamp(clip.xy / clip.w * 0.5 + 0.5, 0.0, 1.0);
-          if (beyond(source, r)) {
-            color = texture2D(tDiffuse, source);
+          float there = ahead(source);
+          if (beyond(there, r)) {
+            shown = source;
+            ray = r;
+            shownDepth = there;
             break;
           }
         }
       }
+      vec4 color = seen(shown, shownDepth, ray);
       // the light that grazes the shadow piles up into a thin bright ring
       // squared by hand: GLSL ES leaves pow() of a negative base undefined (NaN on some GPUs)
       float ring = (theta - shadowAngle * 1.05) / (shadowAngle * 0.08 + 0.0007);
@@ -164,9 +187,9 @@ export class Lensing {
 
   /**
    * Aims the lens at a hole of the given horizon radius (units), seen by the camera; null
-   * switches it off. The ring grows as the hole comes closer. Off too while the hole lies so far
-   * beside or behind the camera that neither its bend nor its shadow and photon ring reach into
-   * the picture.
+   * switches it off. The ring grows as the hole comes closer. On wherever the hole lies, beside
+   * and behind the camera too: the disk's gas in front of a rock or ship inside its slab is the
+   * lens's to draw (see seen in the shader).
    */
   update(camera: THREE.PerspectiveCamera, hole: THREE.Vector3 | null, horizon: number, depth: THREE.Texture | null) {
     if (!hole) {
@@ -176,23 +199,12 @@ export class Lensing {
     toHole.subVectors(hole, camera.position);
     const distance = toHole.length();
     camera.getWorldDirection(forward);
-    const facing = toHole.dot(forward) / distance;
-    const fov = THREE.MathUtils.degToRad(camera.fov);
-    const { shadow, ring } = lensAngles(horizon, distance, fov);
-    const bend = THREE.MathUtils.smoothstep(facing, 0, BEND_FADE);
-    // the angle from the picture's middle to its corners (a camera showing a cut of a wider view, the menu's preview, reaches no farther than the wider one)
-    const aspect = camera.view?.enabled ? camera.view.fullWidth / camera.view.fullHeight : camera.aspect;
-    const corner = Math.atan(Math.tan(fov / 2) * Math.hypot(1, aspect));
-    // the photon ring's outer flank lies within 1.3 times the shadow's angle
-    if (bend < 1e-3 && Math.acos(THREE.MathUtils.clamp(facing, -1, 1)) - corner > shadow * 1.3) {
-      this.pass.enabled = false;
-      return;
-    }
+    const { shadow, ring } = lensAngles(horizon, distance, THREE.MathUtils.degToRad(camera.fov));
     const uniforms = this.pass.uniforms;
     uniforms.tDepth.value = depth;
     uniforms.shadowAngle.value = shadow;
     uniforms.ringAngle.value = ring;
-    uniforms.bend.value = bend;
+    uniforms.bend.value = THREE.MathUtils.smoothstep(toHole.dot(forward) / distance, 0, BEND_FADE);
     uniforms.shadowRadius.value = horizon * HOLE_SHADOW;
     // the camera as this frame draws it, so the near side in the shadow sits on the disk around it
     camera.updateMatrixWorld();
