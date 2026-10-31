@@ -5259,7 +5259,8 @@ export class Game implements OnlineGame {
     // the flight school shows only the probes its drills put out
     const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
     if (!this.school && this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.raceTime(), now, this.field, this.course?.points);
-    this.probes.update(dt, now, this.field, (this.probeSolids ??= [fieldSolid(this.field), obstacleSolid(this.field), this.ringSolid, this.wreckSolid, this.coreSolid]));
+    const shared = (this.slotSolids ??= [fieldSolid(this.field), this.ringSolid, obstacleSolid(this.field)]);
+    this.probes.update(dt, now, this.field, (this.probeSolids ??= [...shared, this.wreckSolid, this.coreSolid]), shared);
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive || ship === this.drone || (this.spectating && ship === this.me)) continue;
       const probe = this.probes.touching(ship.flight.position, ship.radius);
@@ -6177,6 +6178,8 @@ export class Game implements OnlineGame {
 
   /** What a probe bounces off: the field, the battleship, the rings, wreckage and the cores (see game/items, bounce). */
   private probeSolids: readonly Solid[] | null = null;
+  /** What a probe's slot bounces off: the field, the rings and the battleship, which every browser has (nearly) alike (see Probes.update). */
+  private slotSolids: readonly Solid[] | null = null;
 
   /**
    * How far along a beam from `origin` along `direction` (within `max`) the first solid thing

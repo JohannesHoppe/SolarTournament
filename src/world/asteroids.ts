@@ -946,10 +946,33 @@ export class AsteroidField {
     for (const asteroid of this.asteroids.values()) {
       const reach = asteroid.radius + radius;
       if (asteroid.object.position.distanceToSquared(center) > reach * reach) continue;
-      if (asteroid.box ? pieceContact(asteroid, center, radius, pull) : asteroid.surface ? surfaceContact(asteroid, asteroid.surface, center, radius) : ellipsoidContact(asteroid, center, radius)) return asteroid;
-      for (const part of this.attachments.get(asteroid.id) ?? NONE) if (attachmentContact(asteroid, part, center, radius, pull)) return asteroid;
+      if (this.touches(asteroid, center, radius)) return asteroid;
     }
     return null;
+  }
+
+  /**
+   * Whether any piece's surface is closer than radius to a point at another field time than the
+   * field's (each posed then, and back): what every browser decides alike however its own clock
+   * runs (where a sponsor probe shows up, see game/items).
+   */
+  overlapAt(center: THREE.Vector3, radius: number, time: number): boolean {
+    for (const asteroid of this.asteroids.values()) {
+      const reach = asteroid.radius + radius;
+      if (positionAt(asteroid, time, point).distanceToSquared(center) > reach * reach) continue;
+      this.place(asteroid, time);
+      const touching = this.touches(asteroid, center, radius);
+      this.place(asteroid);
+      if (touching) return true;
+    }
+    return false;
+  }
+
+  /** Whether a sphere touches a piece's own shape or what stands on it, as the piece is posed. */
+  private touches(asteroid: Asteroid, center: THREE.Vector3, radius: number): boolean {
+    if (asteroid.box ? pieceContact(asteroid, center, radius, pull) : asteroid.surface ? surfaceContact(asteroid, asteroid.surface, center, radius) : ellipsoidContact(asteroid, center, radius)) return true;
+    for (const part of this.attachments.get(asteroid.id) ?? NONE) if (attachmentContact(asteroid, part, center, radius, pull)) return true;
+    return false;
   }
 
   /**

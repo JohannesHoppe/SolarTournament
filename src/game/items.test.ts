@@ -1,12 +1,12 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { contents, packItems, placeBucket, PROBE_THRUST, Probes, unpackItems } from './items';
+import { contents, fieldSolid, packItems, placeBucket, PROBE_THRUST, Probes, unpackItems, type Solid } from './items';
 import { floorOf, pullOn, type Anchor } from './hook';
 import { MASS, type Body } from '../world/bodies';
 import { MAX_SPEED } from '../ship/flight';
 import type { Ship } from '../ship/ship';
-import { ARENAS } from '../world/arenas';
-import { testField } from '../test/field';
+import { ARENAS, arenaById } from '../world/arenas';
+import { driftProbes, testField } from '../test/field';
 
 const scheduled = (elapsed: number) => {
   const field = testField();
@@ -68,7 +68,7 @@ describe('probes', () => {
     const running = new Probes();
     for (let t = 0; t <= 200; t += 5) {
       running.schedule(7, 1, t, t, field);
-      running.update(5, t, field);
+      driftProbes(running, 5, t, field);
       // at most four at once, however few are taken
       expect(running.list.length).toBeLessThanOrEqual(4);
       if (t === 130) running.take(running.list[0]);
@@ -78,6 +78,54 @@ describe('probes', () => {
     newcomer.schedule(7, 1, 200, 200, field);
     const ids = (probes: Probes) => probes.list.map((probe) => probe.id).sort();
     expect(ids(newcomer)).toEqual(ids(running));
+  });
+
+  it('lie at the same places on browsers whose field clocks differ by a jitter', () => {
+    const places = (offset: number) => {
+      const field = testField();
+      field.generate(arenaById('junkyard')!.layout);
+      const probes = new Probes();
+      const list: string[] = [];
+      for (let seed = 0; seed < 400; seed++) {
+        probes.reset();
+        field.setClock(95 + offset);
+        probes.schedule(seed, 1, 95, 95, field);
+        list.push(...probes.list.map((probe) => probe.position.toArray().join()));
+      }
+      return list;
+    };
+    expect(places(0.4)).toEqual(places(0));
+  });
+
+  it('keep their slots alike on every browser, whatever else this one sees them bounce off', () => {
+    const field = testField();
+    field.generate(arenaById('junkyard')!.layout);
+    const browsers = [new Probes(), new Probes()];
+    for (const probes of browsers) {
+      probes.drop('p:abc', 0, ['repair'], new THREE.Vector3(0, 60000, 0), new THREE.Vector3(0, 0, 0), 0);
+      probes.list[0].until = Infinity;
+      probes.list[0].velocity.set(400, 0, 0);
+      probes.list[0].slotVelocity.set(400, 0, 0);
+    }
+    // a core in tow only one of them has, grazing the probe's way 60 m along it
+    const core = new THREE.Vector3(1200, 60450, 0);
+    const towed: Solid = (position, radius, normal, moving) => {
+      if (position.distanceTo(core) >= radius + 300) return false;
+      normal.subVectors(position, core).normalize();
+      position.copy(core).addScaledVector(normal, radius + 300);
+      moving.set(0, 0, 0);
+      return true;
+    };
+    const shared = [fieldSolid(field)];
+    for (let t = 0; t < 10; t += DT) {
+      browsers[0].update(DT, t, field, [...shared, towed], shared);
+      browsers[1].update(DT, t, field, shared, shared);
+    }
+    const [here, there] = browsers.map((probes) => probes.list[0]);
+    expect(here.slot.toArray()).toEqual(there.slot.toArray());
+    // the one that bounced off flew back to its slot
+    expect(here.astray).toBe(false);
+    expect(here.position.distanceTo(there.position)).toBeLessThan(1);
   });
 
   it('pass to a newcomer as they are, and take no invented ids', () => {
@@ -160,7 +208,7 @@ function hooked(hooker: Ship) {
 function reel(state: ReturnType<typeof hooked>, ship: Body, length: number, t: number) {
   const next = pullOn(ship, state.probe, length, true, state.floor, LIMIT, DT, 'moved');
   ship.position.addScaledVector(ship.velocity, DT);
-  state.probes.update(DT, t, state.field);
+  driftProbes(state.probes, DT, t, state.field);
   return next;
 }
 
@@ -211,7 +259,7 @@ describe('a probe on the hook', () => {
       told.velocity.copy(body.velocity);
       length = reel(here, body, length!, t);
       lengthThere = pullOn(there.probe, told, lengthThere!, true, there.floor, LIMIT, DT, 'elsewhere');
-      there.probes.update(DT, t, there.field);
+      driftProbes(there.probes, DT, t, there.field);
       gap = Math.max(gap, here.probe.position.distanceTo(there.probe.position));
     }
     // within a few meters all the way in
@@ -229,11 +277,11 @@ describe('a probe on the hook', () => {
     expect(speed.length()).toBeGreaterThan(1000);
     // the hooker is shot: the cable is gone, the probe keeps its speed for the moment
     probes.letGo(probe, ship);
-    probes.update(DT, (t += DT), field);
+    driftProbes(probes, DT, (t += DT), field);
     expect(probe.velocity.distanceTo(speed)).toBeLessThan(PROBE_THRUST * DT * 1.01);
     expect(probe.astray).toBe(true);
     // then its thrusters bring it back to its slot, where every browser has it
-    for (const end = t + 20; t < end && probe.astray; t += DT) probes.update(DT, t, field);
+    for (const end = t + 20; t < end && probe.astray; t += DT) driftProbes(probes, DT, t, field);
     expect(probe.astray).toBe(false);
     expect(probe.position.toArray()).toEqual([8000, 0, 0]);
     expect(probe.velocity.length()).toBe(0);
