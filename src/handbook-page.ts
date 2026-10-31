@@ -38,15 +38,17 @@ for (const note of document.querySelectorAll<HTMLElement>('.handbook-small-print
 const margin = window.matchMedia('(min-width: 90rem)');
 const comments = [...document.querySelectorAll<HTMLElement>('.handbook-small-print')];
 function stackComments() {
+  // clear every push, read every place, write every push: one layout, not one per comment
+  for (const comment of comments) comment.style.removeProperty('--pushed');
+  if (!margin.matches) return;
+  const places = comments.map((comment) => [comment.getBoundingClientRect().top, comment.offsetHeight] as const);
   let free = -Infinity;
-  for (const comment of comments) {
-    comment.style.removeProperty('--pushed');
-    if (!margin.matches) continue;
-    const top = comment.getBoundingClientRect().top;
+  comments.forEach((comment, i) => {
+    const [top, height] = places[i];
     const pushed = Math.max(0, free - top);
     comment.style.setProperty('--pushed', `${pushed}px`);
-    free = top + pushed + comment.offsetHeight + 12;
-  }
+    free = top + pushed + height + 12;
+  });
 }
 stackComments();
 new ResizeObserver(stackComments).observe(document.body);

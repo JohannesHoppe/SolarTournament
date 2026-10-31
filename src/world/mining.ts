@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { attachment, type Asteroid, type AsteroidField, type Attachment } from './asteroids';
+import { noise } from './nebula';
 import { tangentDirections } from './surface';
 import { SUN_DIRECTION } from './space';
 import { hazeUniforms } from '../view/haze';
@@ -169,7 +170,8 @@ const beamVertex = /* glsl */ `
     vec3 side = normalize(cross(to - from, cameraPosition - p));
     vec4 mv = viewMatrix * vec4(p, 1.0);
     // half a meter wide, at least MIN_PIXELS, dimmer by what it gains
-    float px = pixels(${(0.5 * M).toFixed(1)}, -mv.z);
+    // (an end behind the camera plane takes the width of one a few meters ahead of it: never a negative one, which would taper the beam towards the camera)
+    float px = pixels(${(0.5 * M).toFixed(1)}, max(-mv.z, ${(2 * M).toFixed(1)}));
     float width = ${(0.5 * M).toFixed(1)} * max(px, ${MIN_PIXELS.toFixed(1)}) / px;
     vBright = dimmed(px);
     vAlong = corner.x;
@@ -197,6 +199,7 @@ const moteVertex = /* glsl */ `
   uniform float viewport;
   uniform vec3 sun;
   uniform vec3 sunColor;
+  uniform float share;
   attribute vec3 bite0;
   attribute vec3 bite1;
   attribute vec2 sweepAt;
@@ -210,7 +213,8 @@ const moteVertex = /* glsl */ `
   ${PHASE_GLSL}
   void main() {
     mat4 m = rockMatrix();
-    if (rockGone(m)) { gl_Position = OUT_OF_SIGHT; gl_PointSize = 0.0; return; }
+    // fewer on a cheaper rung: every rig and cutter thins alike, by a pick of its own motes (never the phase, which would bunch them)
+    if (rockGone(m) || fract(seed.w * 131.7) >= share) { gl_Position = OUT_OF_SIGHT; gl_PointSize = 0.0; return; }
     vec3 normal = normalize(mat3(m) * up);
     vec3 spread = mat3(m) * seed.xyz;
     spread = length(spread) > 0.0 ? normalize(spread) : normal;
@@ -486,7 +490,7 @@ interface Soil {
  */
 function addShape(kit: Kit, slot: number, shape: THREE.BufferGeometry, frame: THREE.Matrix4, color: THREE.Color, glow = 0.04, hazard: number | 'sides' = 0, soil: Soil | null = null) {
   const geometry = shape.index ? shape.toNonIndexed() : shape;
-  if (!shape.userData.mapped) boxUv(geometry, STEEL_TILE);
+  if (!shape.userData.mapped) boxUv(geometry, STEEL_TILE, 'readable');
   const position = geometry.getAttribute('position');
   const local = position.clone();
   const up = geometry.getAttribute('normal').clone();
@@ -529,7 +533,7 @@ function strut(from: THREE.Vector3, to: THREE.Vector3, thickness: number): THREE
     position.setXYZ(i, Math.sign(x) * (wide ? h : h - c), position.getY(i), Math.sign(z) * (wide ? h - c : h));
   }
   beam.computeVertexNormals();
-  boxUv(beam, STEEL_TILE * 2);
+  boxUv(beam, STEEL_TILE * 2, 'readable');
   const turn = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), scratch.subVectors(to, from).normalize());
   beam.applyMatrix4(new THREE.Matrix4().compose(from.clone().lerp(to, 0.5), turn, new THREE.Vector3(1, 1, 1)));
   beam.userData.mapped = true;
@@ -1045,7 +1049,7 @@ function atlasTexture(): THREE.CanvasTexture {
   return texture;
 }
 
-/** Soft clouds of dust, four variants in a 2 × 2 atlas, from seeded value noise. */
+/** Soft clouds of dust, four variants in a 2 × 2 atlas, from seeded value noise (see world/nebula, noise). */
 function cloudTexture(): THREE.CanvasTexture {
   const size = 256;
   const tile = size / 2;
@@ -1053,27 +1057,17 @@ function cloudTexture(): THREE.CanvasTexture {
   canvas.width = canvas.height = size;
   const ctx = canvas.getContext('2d')!;
   const image = ctx.createImageData(size, size);
-  const r = new Randomizer(1977);
   const grid = 8;
   for (let t = 0; t < 4; t++) {
-    const octaves = [grid, grid * 2, grid * 4].map((n) => Array.from({ length: (n + 1) * (n + 1) }, () => r.nextFloat()));
     for (let y = 0; y < tile; y++) {
       for (let x = 0; x < tile; x++) {
         let value = 0;
         let weight = 0.55;
-        [grid, grid * 2, grid * 4].forEach((n, o) => {
-          const gx = (x / tile) * n;
-          const gy = (y / tile) * n;
-          const ix = Math.floor(gx);
-          const iy = Math.floor(gy);
-          const fx = gx - ix;
-          const fy = gy - iy;
-          const at = (i: number, j: number) => octaves[o][Math.min(j, n) * (n + 1) + Math.min(i, n)];
-          const sx = fx * fx * (3 - 2 * fx);
-          const sy = fy * fy * (3 - 2 * fy);
-          value += weight * ((at(ix, iy) * (1 - sx) + at(ix + 1, iy) * sx) * (1 - sy) + (at(ix, iy + 1) * (1 - sx) + at(ix + 1, iy + 1) * sx) * sy);
+        for (let o = 0; o < 3; o++) {
+          const n = grid * 2 ** o;
+          value += weight * noise((x / tile) * n, (y / tile) * n, 1977 + t * 3 + o);
           weight *= 0.5;
-        });
+        }
         const dx = (x / tile) * 2 - 1;
         const dy = (y / tile) * 2 - 1;
         const falloff = Math.max(0, 1 - Math.sqrt(dx * dx + dy * dy));
@@ -1155,9 +1149,10 @@ export class Mining {
   private readonly sunColor = { value: new THREE.Color(1, 0.94, 0.87) };
   private plan: Plan | null = null;
   private layoutKey: string | null = null;
-  private motes: THREE.Points | null = null;
   private clouds: THREE.Mesh<THREE.InstancedBufferGeometry> | null = null;
   private share = 1;
+  /** The share of the motes drawn, as the motes' shader reads it. */
+  private readonly shareUniform = { value: 1 };
   /** The drill holes in the world this frame: position and up (see dustAt). */
   private readonly holes: { at: THREE.Vector3; up: THREE.Vector3; live: boolean }[] = [];
 
@@ -1201,12 +1196,11 @@ export class Mining {
     const lights = new THREE.Points(plan.lights.geometry(), new THREE.ShaderMaterial({ uniforms: common, vertexShader: lightVertex, fragmentShader: lightFragment, ...additive }));
     const beams = new THREE.Mesh(plan.beams.geometry(), new THREE.ShaderMaterial({ uniforms: common, vertexShader: beamVertex, fragmentShader: beamFragment, ...additive, side: THREE.DoubleSide }));
     const motes = new THREE.Points(plan.motes.geometry(), new THREE.ShaderMaterial({
-      uniforms: { ...common, sun: this.sun, sunColor: this.sunColor },
+      uniforms: { ...common, sun: this.sun, sunColor: this.sunColor, share: this.shareUniform },
       vertexShader: moteVertex,
       fragmentShader: moteFragment,
       ...additive,
     }));
-    this.motes = motes;
     // the clouds: one quad, instanced
     const quad = new THREE.InstancedBufferGeometry();
     quad.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
@@ -1261,7 +1255,7 @@ export class Mining {
   /** The share of the sparks, drill dust and dust clouds drawn (see view/quality, Look.particles). */
   setShare(share: number) {
     this.share = share;
-    if (this.motes) this.motes.geometry.setDrawRange(0, Math.round(this.motes.geometry.getAttribute('position').count * share));
+    this.shareUniform.value = share;
     if (this.clouds && this.plan) this.clouds.geometry.instanceCount = Math.round((this.plan.clouds.length / 8) * share);
   }
 

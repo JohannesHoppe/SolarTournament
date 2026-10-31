@@ -92,6 +92,10 @@ describe('solids besides the field', () => {
     expect(at.x).toBe(12);
     expect(touchOf(world({ core: v(0) }).table, SHOWER_BURSTS)(v(3), 2, at)).toBe(true);
     expect(at.x).toBe(3);
+    // only the kinds marked near are looked at
+    const bursts = touchOf(world({ core: v(0) }).table, SHOWER_BURSTS);
+    expect(bursts(v(3), 2, at, undefined, { ring: true, wreck: true, core: false })).toBe(false);
+    expect(bursts(v(3), 2, at, undefined, { core: true })).toBe(true);
     // the head leads its own shower
     expect(touchOf(world({ head: v(0) }).table, SHOWER_BURSTS)(v(3), 2, at)).toBe(false);
   });

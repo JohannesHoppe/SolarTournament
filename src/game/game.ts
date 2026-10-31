@@ -47,6 +47,7 @@ import { BOT_RESPAWN_SECONDS, RESPAWN_SECONDS, SponsorBreak } from './sponsors';
 import { Wrecks, type Wreck, type WreckState } from '../world/wrecks';
 import { ARENAS, arenaById, DEFAULT_ARENA, arenaByKey, arenaOfRound, PREVIEW_FROM, type ArenaId, type ArenaProfile, type Reference } from '../world/arenas';
 import { Landmarks } from '../world/landmarks';
+import { JET_WELDS } from '../world/derelict';
 import { animateHull, setHullFrost } from '../world/worldship';
 import { Mining } from '../world/mining';
 import { Lensing } from '../view/lensing';
@@ -65,11 +66,11 @@ import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from 
 import { setGlint } from '../ship/models';
 import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
-import { ringRim, touchRing } from '../world/gates';
+import { ringReach, ringRim, touchRing } from '../world/gates';
 import { FieldContacts, ringFixture } from '../world/contacts';
 import { IMMOVABLE, massOf, type Body } from '../world/bodies';
 import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, headEnd, HEAD_RADIUS, meetObstacle, meetSolids, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
-import { BASE_RADIUS, CAPTURE_POINTS, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
+import { BASE_RADIUS, CAPTURE_POINTS, CORE_REACH, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
 import { FlareView } from '../world/flare';
 import { BEAM_STOPS, PROBE_BOUNCES, pushesOf, rayOf, SHOWER_BURSTS, solidTable, TORPEDO_FUSE, touchOf, WRECK_GRINDS } from './solids';
@@ -3281,11 +3282,22 @@ export class Game implements OnlineGame {
     return true;
   }
 
+  private readonly halves = JET_WELDS.map(() => new THREE.Matrix4());
+
+  /** The derelict's mist leaves the torn ends where the halves of the hull have drifted to. */
+  private moveBreak() {
+    JET_WELDS.forEach((weld, i) => {
+      if (!this.field.weldMotion(weld, this.halves[i])) this.halves[i].identity();
+    });
+    this.landmarks.moveBreak(this.halves);
+  }
+
   /** Draws the scene as the camera sees it: the sky around it, the arena's edge, its landmarks, a black hole's lens. */
   private paint() {
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     this.landmarks.update(this.field.clock);
+    if (this.venue.id === 'derelict') this.moveBreak();
     this.mining.update(this.field, this.field.clock);
     this.landmarks.follow(this.camera, this.state === 'menu' ? null : this.riding);
     if (this.venue.id === 'derelict') animateHull(this.field.clock);
@@ -6610,13 +6622,36 @@ export class Game implements OnlineGame {
       if (showerOffset.addScaledVector(cometCourse, -along).length() > SHOWER_WIDE + PIECE_RADIUS + rock.radius + margin) continue;
       rocks.push(rock);
     }
+    // the solids a piece is held against besides the field's: only those near the swarm are looked at, for each of its 800 pieces
+    this.showerMargin = margin;
+    const near = this.showerNear;
+    near.ring = near.wreck = near.core = false;
+    for (const ring of this.rings) if (this.nearShower(ring.center, ringReach(ring.radius))) near.ring = true;
+    this.school?.eachRing(this.markRingNear);
+    for (const wreck of this.wrecks.list) if (this.nearShower(wreck.mesh.position, wreck.radius + PIECE_RADIUS)) near.wreck = true;
+    if (this.flags) for (const core of this.flags.cores) if (this.nearShower(core.position, CORE_REACH + PIECE_RADIUS)) near.core = true;
     meetSolids(shower, clock, dt, this.showerHit, (point) => {
       if (Math.random() < SHOWER_SPARKS) this.effects.sparks(point, SCRAPE_COLOR, PIECE_RADIUS * 4);
     });
   }
 
+  /** Whether something of `reach` around `center` may touch the swarm this step (the swarm as showerMeetsSolids lays it out). */
+  private nearShower(center: THREE.Vector3, reach: number): boolean {
+    showerOffset.subVectors(center, cometHead);
+    const along = showerOffset.dot(cometCourse);
+    if (along > reach + this.showerMargin || along < -(SHOWER_LENGTH + reach + this.showerMargin)) return false;
+    return showerOffset.addScaledVector(cometCourse, -along).length() <= SHOWER_WIDE + PIECE_RADIUS + reach + this.showerMargin;
+  }
+
+  private readonly markRingNear = (center: THREE.Vector3, _facing: THREE.Vector3, radius: number) => {
+    if (this.nearShower(center, ringReach(radius))) this.showerNear.ring = true;
+  };
+
   /** The field's pieces near the comet's swarm this step (see showerMeetsSolids). */
   private readonly showerRocks: Asteroid[] = [];
+  /** Whether any ring, wreck or core lies near the swarm this step (see showerMeetsSolids): else none is looked at. */
+  private showerMargin = 0;
+  private readonly showerNear: Record<'ring' | 'wreck' | 'core', boolean> = { ring: false, wreck: false, core: false };
 
   /** Whether a piece of the shower meets something solid on its way from `from` to `to`, and where (into `at`). */
   private readonly showerHit = (from: THREE.Vector3, to: THREE.Vector3, at: THREE.Vector3): boolean => {
@@ -6637,7 +6672,7 @@ export class Game implements OnlineGame {
       }
       break;
     }
-    return this.showerBursts(to, PIECE_RADIUS, at);
+    return this.showerBursts(to, PIECE_RADIUS, at, undefined, this.showerNear);
   };
 
   /**

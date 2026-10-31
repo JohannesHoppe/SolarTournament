@@ -15,12 +15,12 @@ export interface Grade {
   saturation: number;
 }
 
-/** The grade in GLSL, on the tone-mapped color, right before the screen's encoding. */
+/** The grade in GLSL, on the tone-mapped color, right before the screen's encoding. No channel leaves it below 0: the encoding raises to a power, undefined for a negative base. */
 const GRADE_GLSL = /* glsl */ `
   {
     vec3 graded = gl_FragColor.rgb;
-    graded = mix(vec3(dot(graded, vec3(0.2126, 0.7152, 0.0722))), graded, gradeSaturation);
-    gl_FragColor.rgb = graded * gradeGain + gradeLift * (1.0 - graded);
+    graded = max(mix(vec3(dot(graded, vec3(0.2126, 0.7152, 0.0722))), graded, gradeSaturation), 0.0);
+    gl_FragColor.rgb = max(graded * gradeGain + gradeLift * (1.0 - graded), 0.0);
   }
 `;
 
@@ -55,8 +55,8 @@ export class GradedOutputPass extends OutputPass {
 export function gradeColor(grade: Grade, color: THREE.Color): THREE.Color {
   const luma = 0.2126 * color.r + 0.7152 * color.g + 0.0722 * color.b;
   (['r', 'g', 'b'] as const).forEach((channel, i) => {
-    const c = luma + (color[channel] - luma) * grade.saturation;
-    color[channel] = c * grade.gain[i] + grade.lift[i] * (1 - c);
+    const c = Math.max(luma + (color[channel] - luma) * grade.saturation, 0);
+    color[channel] = Math.max(c * grade.gain[i] + grade.lift[i] * (1 - c), 0);
   });
   return color;
 }

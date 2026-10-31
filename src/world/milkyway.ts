@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { Noise } from './noise';
 import { srgbByte } from '../srgb';
 import { celestial, cubeDirection, galactic, galacticVector } from './celestial';
 import { magnitudeFlux, starColor, type StarList } from './starfile';
@@ -32,43 +33,13 @@ function hash(x: number, y: number, z: number, seed: number): number {
   return ((h ^ (h >>> 15)) >>> 0) / 4294967296;
 }
 
-/** The lattice of the noise: a shuffle of LATTICE places and a value (0 to 1) at each, from the hash, the same on every machine. */
-const LATTICE = 512;
-const shuffle = (() => {
-  const order = Array.from({ length: LATTICE }, (_, i) => i);
-  for (let i = LATTICE - 1; i > 0; i--) {
-    const j = Math.floor(hash(i, 7, 3, 1) * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
-  }
-  return Int32Array.from([...order, ...order]);
-})();
-const lattice = Float32Array.from({ length: LATTICE }, (_, i) => hash(i, 11, 5, 2));
-const wrap = (i: number) => i & (LATTICE - 1);
-const corner = (x: number, y: number, z: number) => lattice[shuffle[shuffle[shuffle[wrap(x)] + wrap(y)] + wrap(z)]];
-
-/** Smooth value noise in space (0 to 1): the lattice's values, blended by a quintic; `seed` shifts it to another place of the lattice. */
+/** One value noise per seed (see world/noise): `seed` shifts the pattern to another place. */
+const noises = new Map<number, Noise>();
+/** Smooth value noise in space (0 to 1). */
 function noise(x: number, y: number, z: number, seed: number): number {
-  const ix = Math.floor(x);
-  const iy = Math.floor(y);
-  const iz = Math.floor(z);
-  const fx = x - ix;
-  const fy = y - iy;
-  const fz = z - iz;
-  const u = fx * fx * fx * (fx * (fx * 6 - 15) + 10);
-  const v = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
-  const w = fz * fz * fz * (fz * (fz * 6 - 15) + 10);
-  const x0 = ix + seed * 101;
-  const a = corner(x0, iy, iz);
-  const b = corner(x0 + 1, iy, iz);
-  const c = corner(x0, iy + 1, iz);
-  const d = corner(x0 + 1, iy + 1, iz);
-  const e = corner(x0, iy, iz + 1);
-  const f = corner(x0 + 1, iy, iz + 1);
-  const g = corner(x0, iy + 1, iz + 1);
-  const h = corner(x0 + 1, iy + 1, iz + 1);
-  const near = a + (b - a) * u + (c + (d - c) * u - a - (b - a) * u) * v;
-  const far = e + (f - e) * u + (g + (h - g) * u - e - (f - e) * u) * v;
-  return near + (far - near) * w;
+  let source = noises.get(seed);
+  if (!source) noises.set(seed, (source = new Noise(seed)));
+  return 0.5 + 0.5 * source.sample(x, y, z);
 }
 
 /** Noise of `octaves` octaves on the unit sphere at `frequency` (cycles across a radian, about), each half as strong as the last (0 to 1). */
@@ -206,7 +177,9 @@ export function faintStars(): StarList {
     d.set(r * Math.cos(phi), r * Math.sin(phi), z);
     milkyWayLight(d, rgb);
     if (hash(k, 3, 0, 61) > 0.05 + 4 * rgb[1]) continue;
-    directions.set([d.x, d.y, d.z], n * 3);
+    directions[n * 3] = d.x;
+    directions[n * 3 + 1] = d.y;
+    directions[n * 3 + 2] = d.z;
     // ever more stars the fainter: their count grows about 2.5 times a magnitude, so the
     // magnitude's share below m grows as 10^(0.4 m)
     const u = hash(k, 4, 0, 61);
@@ -262,32 +235,66 @@ export function milkyWayTexture(faces: Uint8Array[], size: number): THREE.CubeTe
   return texture;
 }
 
-/** The faces each background worker bakes: three workers of two faces each. */
-const WORKER_FACES = [
-  [0, 1],
-  [2, 3],
-  [4, 5],
-];
 
-/** Bakes the Milky Way at `size` in background workers (see milkyway.worker), here and now where there are none. */
+/** A worker that does not answer within this long (ms) is given up, and its share is baked here. */
+const WORKER_TIMEOUT = 30000;
+
+/** What a Milky Way worker is sent (see milkyway.worker): faces to bake at `size`, and the faint stars when `faint`. */
+export type SkyJob = { size: number; faces: number[]; faint: boolean };
+/** What it sends back: its faces, in the order it was sent them, and the faint stars if it was asked for them. */
+export type SkyPart = { faces: Uint8Array[]; faint: StarList | null };
+
+/** One job done here and now, as a worker does it. */
+export function bakeSkyPart({ size, faces, faint }: SkyJob): SkyPart {
+  return { faces: bakeMilkyWay(size, faces), faint: faint ? faintStars() : null };
+}
+
+/** One job in a background worker; where the worker cannot start, fails or stays silent, here (a startup must neither hang nor fail on a worker). */
+function bakeInWorker(job: SkyJob): Promise<SkyPart> {
+  return new Promise<SkyPart>((resolve) => {
+    let worker: Worker;
+    try {
+      worker = new Worker(new URL('./milkyway.worker.ts', import.meta.url), { type: 'module' });
+    } catch {
+      resolve(bakeSkyPart(job));
+      return;
+    }
+    let settled = false;
+    const finish = (part?: SkyPart) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      worker.terminate();
+      resolve(part ?? bakeSkyPart(job));
+    };
+    const timer = setTimeout(() => finish(), WORKER_TIMEOUT);
+    worker.onmessage = (event: MessageEvent<SkyPart>) => finish(event.data);
+    worker.onerror = () => finish();
+    worker.onmessageerror = () => finish();
+    worker.postMessage(job);
+  });
+}
+
+/**
+ * The Milky Way's cube map at `size`, and with `faint` the faint stars (see faintStars), baked in
+ * background workers (one per spare core, up to three; the faces dealt out round the workers, the
+ * faint stars to the first), here and now where there are none.
+ */
+export async function bakeSky(size: number, faint = false): Promise<{ texture: THREE.CubeTexture; faint: StarList | null }> {
+  const faces = [0, 1, 2, 3, 4, 5];
+  if (typeof Worker === 'undefined') {
+    const part = bakeSkyPart({ size, faces, faint });
+    return { texture: milkyWayTexture(part.faces, size), faint: part.faint };
+  }
+  const count = Math.max(1, Math.min(3, (navigator.hardwareConcurrency || 2) - 1));
+  const jobs = Array.from({ length: count }, (_, w): SkyJob => ({ size, faces: faces.filter((face) => face % count === w), faint: faint && w === 0 }));
+  const parts = await Promise.all(jobs.map(bakeInWorker));
+  const baked: Uint8Array[] = [];
+  jobs.forEach((job, w) => job.faces.forEach((face, k) => (baked[face] = parts[w].faces[k])));
+  return { texture: milkyWayTexture(baked, size), faint: parts[0].faint };
+}
+
+/** Bakes the Milky Way at `size` (see bakeSky). */
 export async function bakeMilkyWayTexture(size: number): Promise<THREE.CubeTexture> {
-  if (typeof Worker === 'undefined') return milkyWayTexture(bakeMilkyWay(size), size);
-  const parts = await Promise.all(
-    WORKER_FACES.map(
-      (faces) =>
-        new Promise<Uint8Array[]>((resolve, reject) => {
-          const worker = new Worker(new URL('./milkyway.worker.ts', import.meta.url), { type: 'module' });
-          worker.onmessage = (event: MessageEvent<Uint8Array[]>) => {
-            worker.terminate();
-            resolve(event.data);
-          };
-          worker.onerror = (error) => {
-            worker.terminate();
-            reject(new Error(`The Milky Way was not baked: ${error.message}`));
-          };
-          worker.postMessage({ size, faces });
-        }),
-    ),
-  );
-  return milkyWayTexture(parts.flat(), size);
+  return (await bakeSky(size)).texture;
 }

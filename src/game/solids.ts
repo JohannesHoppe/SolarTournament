@@ -190,11 +190,18 @@ function opsOf<K extends keyof SolidKind>(table: SolidTable, kinds: readonly Sol
 
 const touchedAt = new THREE.Vector3();
 
-/** Whether a sphere touches any of `kinds` (see SolidKind.touch), the first of them in their order setting `at`. */
+/**
+ * Whether a sphere touches any of `kinds` (see SolidKind.touch), the first of them in their order
+ * setting `at`; with `only`, just the kinds it marks true are looked at (those a caller knows to
+ * lie near, see Game.showerMeetsSolids).
+ */
 export function touchOf(table: SolidTable, kinds: readonly SolidKindName[]) {
   const touches = opsOf(table, kinds, 'touch');
-  return (position: THREE.Vector3, radius: number, at: THREE.Vector3 = touchedAt, ignore: unknown = undefined): boolean => {
-    for (const touch of touches) if (touch(position, radius, at, ignore)) return true;
+  return (position: THREE.Vector3, radius: number, at: THREE.Vector3 = touchedAt, ignore: unknown = undefined, only: Readonly<Partial<Record<SolidKindName, boolean>>> | null = null): boolean => {
+    for (let i = 0; i < touches.length; i++) {
+      if (only && !only[kinds[i]]) continue;
+      if (touches[i](position, radius, at, ignore)) return true;
+    }
     return false;
   };
 }
