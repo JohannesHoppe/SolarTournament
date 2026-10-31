@@ -1347,6 +1347,14 @@ export class Game implements OnlineGame {
     $('again').addEventListener('click', () => this.showMenu());
     $('invite').addEventListener('click', () => void this.share.share());
     $('radio').addEventListener('click', () => this.toggleRadio());
+    // the radio page opens in this tab, so the game is left and only the radio page plays; a
+    // click on the title while a round is flown (a shot aimed into the corner) pauses the round
+    // instead, and from the pause menu the click leaves
+    $('now-playing-link').addEventListener('click', (event) => {
+      if (this.state !== 'playing' || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      event.preventDefault();
+      this.pause();
+    });
     bindVolume($<HTMLInputElement>('radio-volume'));
     // the slider hands the focus back once let go, so Enter and Space go to the game again
     $('radio-volume').addEventListener('change', () => $('radio-volume').blur());
