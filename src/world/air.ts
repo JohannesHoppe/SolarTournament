@@ -71,15 +71,21 @@ export const AIR_BURN = 0.075;
 
 /**
  * Puts `heat` of the air (heat units, over a step of `dt` seconds) into a hull's radiators,
- * which shed `cooling` a second and are full at `full`: while they are full, what the air adds
- * beyond what they shed stays out of them and burns the hull instead, AIR_BURN per unit; a full
- * radiator overheats the laser. Returns the hull points burnt.
+ * which shed `cooling` a second and are full at `full`: the air fills them up to full, and what
+ * it adds beyond that and beyond what they shed over the step stays out of them and burns the
+ * hull instead, AIR_BURN per unit; so a hull that burns has full radiators (the alarm's CRITICAL,
+ * the burning on screen), and radiators the laser filled past full burn only what the air adds
+ * beyond what they shed. A full radiator overheats the laser. Returns the hull points burnt.
  */
 export function airBurn(hull: { heat: number; overheated: boolean; readonly cooling: number }, heat: number, dt: number, full: number): number {
-  const filled = hull.heat + heat >= full;
-  const beyond = filled ? Math.max(0, heat - hull.cooling * dt) : 0;
+  const room = Math.max(0, full - hull.heat);
+  const beyond = Math.max(0, heat - Math.max(room, hull.cooling * dt));
   hull.heat += heat - beyond;
-  if (filled) hull.overheated = true;
+  if (heat >= room) {
+    // what goes in is at least the room left, so the radiators are full (kept exact against rounding)
+    hull.heat = Math.max(hull.heat, full);
+    hull.overheated = true;
+  }
   return beyond * AIR_BURN;
 }
 
@@ -116,16 +122,19 @@ function meanDensity(from: number, to: number): number {
 /**
  * The optical depth between two points (see SIGHT_DEPTH): the haze's, which the shaders' fog
  * computes alike (see view/haze), and the deck's where the line crosses it (see DECK_DEPTH),
- * which the deck's sheet draws.
+ * which the deck's sheet draws. A line between two points over the deck crosses it twice where
+ * it dips under the curved deck between them (a shallow look down from just over it), at the
+ * same slant going in and coming out.
  */
 export function opticalDepth(air: Air, from: THREE.Vector3, to: THREE.Vector3): number {
   const length = from.distanceTo(to);
   const a = altitudeIn(air, from);
   const b = altitudeIn(air, to);
   const haze = HAZE * length * meanDensity(a, b);
-  if (a > 0 === b > 0 || length < 1e-6) return haze;
-  deckCrossing(air, from, line.subVectors(to, from).divideScalar(length));
-  return haze + DECK_DEPTH * slant;
+  if (length < 1e-6 || (a <= 0 && b <= 0)) return haze;
+  const crossing = deckCrossing(air, from, line.subVectors(to, from).divideScalar(length));
+  if (a > 0 !== b > 0) return haze + DECK_DEPTH * slant;
+  return crossing < length ? haze + 2 * DECK_DEPTH * slant : haze;
 }
 
 const line = new THREE.Vector3();
@@ -195,11 +204,18 @@ export const dragAt = (altitude: number, speed: number) => DRAG * density(altitu
 export const airHeat = (altitude: number, speed: number) => DECK_HEAT * density(altitude) * (speed / MAX_SPEED) ** 3;
 
 /**
- * The fastest a ship flies at an altitude without the air heating its hull beyond what its
- * radiators shed (`cooling`, heat units per second; units/s): above 600 m below the deck the
- * tournament's limit; 214 m/s at 1 km, 146 m/s at 2 km, 87 m/s at the arena's bottom.
+ * The speed at which the air heats a hull at an altitude (units) exactly as fast as its radiators
+ * shed (`cooling`, heat units per second; units/s), past the tournament's limit too: how far a
+ * coil's boost may go before the air heats the hull.
  */
-export const safeSpeed = (altitude: number, cooling: number) => Math.min(MAX_SPEED, MAX_SPEED * Math.cbrt(cooling / (DECK_HEAT * density(altitude))));
+export const heatSpeed = (altitude: number, cooling: number) => MAX_SPEED * Math.cbrt(cooling / (DECK_HEAT * density(altitude)));
+
+/**
+ * The fastest a ship flies at an altitude without the air heating its hull beyond what its
+ * radiators shed (units/s, see heatSpeed): above 600 m below the deck the tournament's limit;
+ * 214 m/s at 1 km, 146 m/s at 2 km, 87 m/s at the arena's bottom.
+ */
+export const safeSpeed = (altitude: number, cooling: number) => Math.min(MAX_SPEED, heatSpeed(altitude, cooling));
 
 /** The haze's numbers for the shaders (see view/haze): extinction, scale heights, the clamp of the depth. */
 export const HAZE_SHAPE = { haze: HAZE, scale: SCALE_HEIGHT, top: TOP_HEIGHT, topDensity: TOP_DENSITY, deepest: DEEPEST, deck: DECK_DEPTH };

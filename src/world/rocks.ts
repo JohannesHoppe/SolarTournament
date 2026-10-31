@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
+import { cubeDirection, cubeTexel } from './celestial';
 import { tangentDirections } from './surface';
 import { impostorGeometry, impostorMaterial, impostorViews, IMPOSTOR_VIEWS, type ImpostorLook } from '../view/impostor';
 import { hazeUniforms } from '../view/haze';
@@ -362,40 +363,6 @@ export function sphere(detail: number): THREE.BufferGeometry {
   return geometry;
 }
 
-/**
- * The direction a texel of a cube map's face stands for, as WebGL picks face and texel for a
- * direction (the OpenGL ES 3.0 cube map table): `face` in the order +x, −x, +y, −y, +z, −z,
- * `s` across a row and `t` down the rows (both −1..1, row 0 at t = −1).
- */
-function cubeTexelDirection(face: number, s: number, t: number, out: THREE.Vector3): THREE.Vector3 {
-  if (face === 0) out.set(1, -t, -s);
-  else if (face === 1) out.set(-1, -t, s);
-  else if (face === 2) out.set(s, 1, t);
-  else if (face === 3) out.set(s, -1, -t);
-  else if (face === 4) out.set(s, -t, 1);
-  else out.set(-s, -t, -1);
-  return out.normalize();
-}
-
-/** The same table read backwards (see cubeTexelDirection): the face a direction (x, y, z) lies on and its `s`, `t` there, written into `out`. */
-function cubeCoordinates(x: number, y: number, z: number, out: { face: number; s: number; t: number }) {
-  const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z);
-  if (ax >= ay && ax >= az) {
-    out.face = x >= 0 ? 0 : 1;
-    out.s = (x >= 0 ? -z : z) / ax;
-    out.t = -y / ax;
-  } else if (ay >= az) {
-    out.face = y >= 0 ? 2 : 3;
-    out.s = x / ay;
-    out.t = (y >= 0 ? z : -z) / ay;
-  } else {
-    out.face = z >= 0 ? 4 : 5;
-    out.s = (z >= 0 ? x : -x) / az;
-    out.t = -y / az;
-  }
-  return out;
-}
-
 /** Edge length, in texels, of each of the 6 faces of a rock's relief map: about 0.7° a texel, 1.5 to 4 m on a rock of the field. */
 export const RELIEF_RES = 128;
 /** What a relief map holds at a direction: how far the surface reaches there (a share added to 1 on the shape's ellipsoid, see surfacePoint) and the value its alpha keeps (0..1). */
@@ -470,10 +437,10 @@ export function bakeCube(axes: THREE.Vector3, sample: ReliefSampler): Uint8Array
   const faces: Uint8Array[] = [];
   for (let face = 0; face < 6; face++) {
     for (let j = -1; j <= R; j++) {
-      const t = ((j + 0.5) / R) * 2 - 1;
+      const t = (j + 0.5) / R;
       for (let i = -1; i <= R; i++) {
-        const s = ((i + 0.5) / R) * 2 - 1;
-        cubeTexelDirection(face, s, t, direction);
+        const s = (i + 0.5) / R;
+        cubeDirection(face, s, t, direction).normalize();
         reliefPoint(axes, sample, direction, point, sampled);
         const k = (j + 1) * W + i + 1;
         points[k * 3] = point.x;
@@ -1084,7 +1051,7 @@ function bumpTable(recipe: RockRecipe): { bump: (x: number, y: number, z: number
   for (let face = 0; face < 6; face++) {
     for (let j = 0; j < N; j++) {
       for (let i = 0; i < N; i++) {
-        cubeTexelDirection(face, ((i + 0.5) / N) * 2 - 1, ((j + 0.5) / N) * 2 - 1, d);
+        cubeDirection(face, (i + 0.5) / N, (j + 0.5) / N, d).normalize();
         const bump = surfaceSample(noise, recipe, d).bump;
         table[(face * N + j) * N + i] = bump;
         reach = Math.max(reach, Math.hypot(d.x * recipe.axes.x, d.y * recipe.axes.y, d.z * recipe.axes.z) * (1 + bump));
@@ -1093,10 +1060,10 @@ function bumpTable(recipe: RockRecipe): { bump: (x: number, y: number, z: number
     }
   }
   const at = { face: 0, s: 0, t: 0 };
-  const half = N / 2;
+  const probe = new THREE.Vector3();
   const bump = (x: number, y: number, z: number) => {
-    cubeCoordinates(x, y, z, at);
-    let fx = (at.s + 1) * half - 0.5, fy = (at.t + 1) * half - 0.5;
+    cubeTexel(probe.set(x, y, z), at);
+    let fx = at.s * N - 0.5, fy = at.t * N - 0.5;
     fx = fx < 0 ? 0 : fx > N - 1 ? N - 1 : fx;
     fy = fy < 0 ? 0 : fy > N - 1 ? N - 1 : fy;
     const i = fx >= N - 1 ? N - 2 : fx | 0, j = fy >= N - 1 ? N - 2 : fy | 0;

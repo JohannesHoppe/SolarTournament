@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { coursesFrom, DRILL, judge, SCHOOL_COURSES } from './school';
+import { coursesFrom, DRILL, FlightSchool, judge, ringCourse, SCHOOL_COURSES } from './school';
+import { ARENA_LIMIT } from '../world/arena';
 import { SCHOOL } from '../music/lines';
 
 describe('judging a drill', () => {
@@ -62,6 +63,52 @@ describe('judging a drill', () => {
   it('starts the flip and burn over the moment the S brake is pressed, not once the ship is at rest', () => {
     const moving = { braking: true, me: { flight: { velocity: new THREE.Vector3(0, 0, -1500) } } };
     expect(judged(DRILL.flipBurn, moving, { forward: new THREE.Vector3(0, 0, -1), usedBrake: false, brakeLetGo: true })).toBe(SCHOOL.byHand);
+  });
+
+  it('does not count a flip and burn whose first frame of the S brake already took the speed down', () => {
+    const slow = { braking: true, me: { flight: { velocity: new THREE.Vector3(0, 0, -50) } } };
+    const attempt = () => ({ forward: new THREE.Vector3(0, 0, -1), usedBrake: false, brakeLetGo: true });
+    expect(judged(DRILL.flipBurn, slow, attempt())).toBe(SCHOOL.byHand);
+    // the same speed without the brake is the drill done
+    expect(judged(DRILL.flipBurn, { ...slow, braking: false }, attempt())).toBe(true);
+  });
+
+  it('fails the start drill for a drive first lit after the window, however soon the drill would count it', () => {
+    const lit = { controls: { thrust: 1 }, countdown: () => {}, stall: () => {}, perfectStart: () => {}, me: {} };
+    const late = { seconds: 3.5, lit: false, litAt: -Infinity, count: 0, early: false };
+    expect(judged(DRILL.start, lit, late)).toBe(SCHOOL.tooLate);
+    const inTime = { seconds: 3.1, lit: false, litAt: -Infinity, count: 0, early: false };
+    expect(judged(DRILL.start, lit, inTime)).toBe(true);
+  });
+
+  describe('the nova drill', () => {
+    const ctx = (nova: boolean, alive: boolean) => ({ me: { nova }, drone: { alive } });
+    it('starts over when the core is spent and the drone lives', () => {
+      expect(judged(DRILL.nova, ctx(false, true), {})).toBe(SCHOOL.again);
+      expect(judged(DRILL.nova, ctx(true, true), {})).toBeNull();
+    });
+    it('counts the drone gone with the core', () => {
+      expect(judged(DRILL.nova, ctx(false, false), {})).toBe(true);
+    });
+  });
+
+  it('lays a course straight ahead, not tilted, where every tilt leaves the arena', () => {
+    const position = new THREE.Vector3(0, 0, ARENA_LIMIT * 0.5);
+    const orientation = new THREE.Quaternion();
+    const course = [[0, 0, -ARENA_LIMIT * 3]] as const;
+    const field = { overlap: () => ({}) } as never;
+    const without = ringCourse(position, orientation, course);
+    const stuck = ringCourse(position, orientation, course, field);
+    expect(stuck[0].distanceTo(without[0])).toBeLessThan(1e-6);
+  });
+
+  describe('progress kept by the name of a drill the course no longer has', () => {
+    it('goes on where the drill went on', () => {
+      expect(FlightSchool.reached('tactician', 'bursts')).toBe(FlightSchool.reached('tactician', 'slideShot'));
+      expect(FlightSchool.reached('tactician', 'comet')).toBe(FlightSchool.reached('tactician', 'orbit'));
+      expect(FlightSchool.reached('tactician', 'orbit')).toBeTypeOf('number');
+      expect(FlightSchool.reached('tactician', 'nonsense')).toBeUndefined();
+    });
   });
 
   it('counts a sparring bot only when the pilot downed it; one that crashed on its own means once more', () => {

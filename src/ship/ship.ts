@@ -7,9 +7,9 @@ import { MASS, type Body } from '../world/bodies';
 import { raySphere } from '../world/asteroids';
 import { ramDamage, type RamZone } from './impact';
 import type { Controls } from '../input/input';
-import { TORPEDOES } from '../game/torpedoes';
+import { ONLINE_LOAD, TORPEDOES } from '../game/torpedoes';
 import { packItems, unpackItems } from '../game/items';
-import { STOCK, type Perks } from '../game/hangar';
+import { packLooks, STOCK, unpackLooks, type Perks } from '../game/hangar';
 import { runningLight } from '../view/textures';
 import { botTint, SOVEREIGN_TINT, TINTS } from './tints';
 
@@ -118,15 +118,15 @@ const lineHit = { ship: null as Ship | null, distance: 0 };
 
 /**
  * The first hull a line from `origin` along `direction` (unit length) strikes within `reach`:
- * the living ship whose hit sphere, widened by `widen`, it enters first, `from` left out, and how
+ * the living ship whose hit sphere it enters first, `from` left out, and how
  * far along; null for none. A laser's beam ends there, whichever side the ship is on.
  */
-export function firstHull(ships: readonly Ship[], from: Ship, origin: THREE.Vector3, direction: THREE.Vector3, reach: number, widen = 0): Readonly<typeof lineHit> | null {
+export function firstHull(ships: readonly Ship[], from: Ship, origin: THREE.Vector3, direction: THREE.Vector3, reach: number): Readonly<typeof lineHit> | null {
   lineHit.ship = null;
   lineHit.distance = reach;
   for (const ship of ships) {
     if (ship === from || !ship.alive) continue;
-    const distance = raySphere(origin, direction, ship.flight.position, ship.radius + widen);
+    const distance = raySphere(origin, direction, ship.flight.position, ship.radius);
     if (distance === null || distance > lineHit.distance) continue;
     lineHit.ship = ship;
     lineHit.distance = distance;
@@ -166,8 +166,9 @@ const JET_FALL = 14;
 const JET_KICK = 0.15;
 /**
  * Another browser's ship: the push and turn of its thrusters read from how its velocity and spin
- * changed between two states (see applyState), shown only above these shares of their full push
- * and turn, so the pull of a rock or the network's rounding does not fire them. Ignored after
+ * changed between two states (see applyState), what pulls and brakes it from outside taken out
+ * (see `pull`), shown only above these shares of their full push and turn, so the pull of a rock
+ * or the network's rounding does not fire them. Ignored after
  * this long without a state (s).
  */
 const REMOTE_PUSH_FLOOR = 0.3;
@@ -228,7 +229,7 @@ export type ShipState = {
   fi?: number;
   /** items held (see packItems) */
   it?: number;
-  /** the looks of its upgrades: 4 × the neon trim's step + the drive flame's (see Perks) */
+  /** the looks of its upgrades and its radiators' step (see packLooks) */
   lo?: number;
   /** the tint its Host chose, an index into TINTS (see Ship.wish) */
   co?: number;
@@ -359,6 +360,12 @@ export class Ship {
   /** The drive's light on nearby rocks, lent by the game from a fixed pool (see Game.lendLight). */
   engineLight: THREE.PointLight | null = null;
 
+  /**
+   * What pulls and brakes a ship another peer simulates from outside where it is (units/s²: the
+   * field's gravity, an air's drag), set by the game every frame, so the push its thrusters are
+   * read with leaves it out (see readThrusters).
+   */
+  readonly pull = new THREE.Vector3();
   /** Last state received for a ship another peer simulates, and when it arrived. */
   private readonly remote = {
     position: new THREE.Vector3(),
@@ -369,6 +376,11 @@ export class Ship {
     /** whether the owner reported a living clone; `alive` also goes false while the owner is silent */
     alive: false,
   };
+
+  /** Whether the clone died: for a ship another peer simulates only once its owner said so, not while the owner is silent. */
+  get died(): boolean {
+    return !this.alive && (this.owner === null || !this.remote.alive);
+  }
   private lastShotAt = -Infinity;
   /**
    * Fire held from before is ignored until it is let go: a fresh clone does not shoot (and end
@@ -501,6 +513,7 @@ export class Ship {
     this.plating = 0;
     this.nova = false;
     this.heat = 0;
+    this.glow = 0;
     this.overheated = false;
     this.strain = 0;
     this.driveOfflineUntil = 0;
@@ -518,7 +531,7 @@ export class Ship {
 
   /**
    * Takes over a ship another peer ran, as its last state left it (moved on by its velocity):
-   * score, kills, deaths, damage, the torpedoes its clone has left and whether its clone lives.
+   * score, kills, deaths, damage, the torpedoes its clone has left (up to a fresh load) and whether its clone lives.
    * A new lead browser adopts the bots of the one before it this way.
    */
   adopt(from: Ship, now: number) {
@@ -536,7 +549,9 @@ export class Ship {
     this.twin = from.twin;
     this.plating = from.plating;
     this.nova = from.nova;
-    this.torpedoes = from.torpedoes;
+    // no more than a fresh clone's load: to the other browsers it is a ship never seen, and
+    // they count its launches against that load (see Plausibility.torpedo)
+    this.torpedoes = Math.min(from.torpedoes, ONLINE_LOAD);
     this.gates = from.gates;
     this.finish = from.finish;
     this.alive = r.alive;
@@ -560,7 +575,7 @@ export class Ship {
     }
     return {
       id: this.id,
-      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items, lo: this.perks.neon * 4 + this.perks.flame, co: this.wish, to: this.torpedoes } : {}),
+      ...(withSlow ? { n: this.name, k: this.type, s: this.score, ki: this.kills, de: this.deaths, g: this.gates, fi: this.finish, it: items, lo: packLooks(this.perks), co: this.wish, to: this.torpedoes } : {}),
       p: round(f.position),
       v: round(f.velocity, 1),
       q: round(f.orientation, 4),
@@ -598,10 +613,9 @@ export class Ship {
       this.gates = state.g!;
       this.finish = state.fi!;
       ({ twin: this.twin, plating: this.plating, nova: this.nova } = unpackItems(state.it!));
-      // another browser's ship shows the looks of its upgrades; how it flies is that browser's
-      const neon = state.lo! >> 2;
-      const flame = state.lo! & 3;
-      if (neon !== this.perks.neon || flame !== this.perks.flame) this.outfit({ ...STOCK, neon, flame });
+      // another browser's ship shows the looks of its upgrades and heats in the air with its
+      // radiators; how it flies is that browser's
+      if (state.lo !== packLooks(this.perks)) this.outfit(unpackLooks(state.lo!));
       // the tint it chose; which one it flies in, the round decides (see Game.tintShips)
       this.wish = state.co!;
       this.torpedoes = state.to!;
@@ -610,6 +624,7 @@ export class Ship {
       // the owner booted a new clone
       this.alive = true;
       this.heat = 0;
+      this.glow = 0;
       this.holes.length = 0;
       this.root.visible = true;
       this.flight.position.copy(r.position);
@@ -622,7 +637,7 @@ export class Ship {
 
   /**
    * Another browser's ship, as far as its states show it: its thrusters' push (what changed its
-   * velocity besides the drive along the nose) and turn (what changed its spin) over the `dt`
+   * velocity besides the drive along the nose and the pull from outside) and turn (what changed its spin) over the `dt`
    * since the last state, as shares of their full push and turn, into its flight's rcs and
    * turnThrust for the puffs (see fireJets). A fresh clone or a long gap shows nothing.
    */
@@ -632,7 +647,7 @@ export class Ship {
     f.turnThrust.set(0, 0, 0);
     if (!this.alive || !state.a || dt < 0.01 || dt > REMOTE_JETS_HOLD) return;
     const r = this.remote;
-    f.toLocalDirection(jetPush.fromArray(state.v).sub(r.velocity).divideScalar(dt), f.rcs);
+    f.toLocalDirection(jetPush.fromArray(state.v).sub(r.velocity).divideScalar(dt).sub(this.pull), f.rcs);
     f.rcs.z += MAIN_THRUST * state.th;
     f.rcs.divideScalar(RCS_THRUST);
     if (f.rcs.length() < REMOTE_PUSH_FLOOR) f.rcs.set(0, 0, 0);
