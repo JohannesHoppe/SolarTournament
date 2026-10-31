@@ -999,6 +999,8 @@ export class Game implements OnlineGame {
   /** How much the screen glows with a solar flare's heat and with the air's (0..1), the larger shown (see showFlare, airAlarm). */
   private flareGlow = 0;
   private airGlow = 0;
+  /** Whether the air's wind and plasma may be sounding (see airWeather, quietAir): only then are they turned down. */
+  private airHeard = false;
   private hullWarned = false;
   /** The torpedo Nicole counts down (see torpedoAlarm): the next of TORPEDO_MARKS, and whether she called the break. */
   private torpedoCall: { torpedo: Torpedo; mark: number; broke: boolean } | null = null;
@@ -1241,9 +1243,12 @@ export class Game implements OnlineGame {
     // a hidden tab runs no frames: a solo round pauses instead of running out unseen
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) return;
-      // a hidden tab draws no frames, so nothing would turn the drive's roar down: an online
-      // round runs on without the picture, and the drive falls silent until the tab is back
+      // a hidden tab draws no frames, so nothing would turn the drive's roar, the air's wind and
+      // plasma or the stadium down: an online round runs on without the picture, and they fall
+      // silent until the tab is back (the next frame sounds them again)
       this.sound.setEngine(0, 0);
+      this.quietAir();
+      this.crowd.air(false);
       if (this.state === 'playing' && !this.online) this.pause();
     });
     this.resize();
@@ -4485,8 +4490,7 @@ export class Game implements OnlineGame {
     if (!air) {
       this.space.shade(1, 1, null, null);
       this.background.copy(this.space.background);
-      this.sound.setWind(0, 0);
-      this.sound.setPlasma(0, false, dt);
+      this.quietAir();
       return;
     }
     const eye = this.camera.position;
@@ -4500,17 +4504,25 @@ export class Game implements OnlineGame {
     const me = this.state === 'playing' ? this.me : null;
     const inAir = !!me?.alive && altitudeIn(air, me.flight.position) < 0;
     if (!me || !inAir) {
-      this.sound.setWind(0, 0);
-      this.sound.setPlasma(0, false, dt);
+      this.quietAir();
       return;
     }
+    this.airHeard = true;
     const speed = me.flight.velocity.length() / MAX_SPEED;
     this.sound.setPlasma(this.reentry.plasmaOf(me), this.reentry.burning(me), dt);
-    this.sound.setWind(Math.min(1, density(altitudeIn(air, me.flight.position)) * speed * speed * WIND_FULL), Math.min(1, speed));
+    this.sound.setWind(Math.min(1, (density(altitudeIn(air, me.flight.position)) * speed * speed) / WIND_FULL), Math.min(1, speed));
     if (struck) {
       const distance = jupiter.strikePoint.distanceTo(me.flight.position);
-      this.sound.thunder(Math.min(1, THUNDER_LOUD / (1 + (distance / THUNDER_REACH) ** 2)), distance / SOUND_SPEED, Math.exp(-distance / THUNDER_REACH));
+      this.sound.thunder(Math.min(1, THUNDER_LOUD / (1 + distance / THUNDER_REACH) ** 2), distance / SOUND_SPEED, Math.exp(-distance / THUNDER_REACH));
     }
+  }
+
+  /** Turns the air's wind and plasma down, once: not again every frame while nothing sounds. */
+  private quietAir() {
+    if (!this.airHeard) return;
+    this.airHeard = false;
+    this.sound.setWind(0, 0);
+    this.sound.setPlasma(0, false, 0);
   }
 
   /**
