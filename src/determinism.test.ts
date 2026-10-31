@@ -1,0 +1,106 @@
+import { createHash } from 'node:crypto';
+import * as THREE from 'three';
+import { describe, expect, it } from 'vitest';
+import { testField } from './test/field';
+import { DISTANT_DETAIL } from './world/rocks';
+import { HULL_BOXES } from './world/shapes';
+import { ARENAS } from './world/arenas';
+import { FieldContacts } from './world/contacts';
+import { Randomizer } from './random';
+import { cometEnd, cometStart, headAt, roundComets, runDown } from './game/comet';
+import { Course } from './game/race';
+import { Probes } from './game/items';
+import { FlightModel } from './ship/flight';
+import { IDLE } from './input/input';
+
+/**
+ * The shared world, bit for bit the same on every processor and system: every browser of a
+ * tournament computes it itself. A minute and a half of every arena's field (a rock broken every
+ * fifteen seconds, the round's comets running down what stands in their way, the pieces meeting
+ * each other), its race course and racing line, the round's probes, and a ship flown by the flight
+ * model, hashed to the last bit. The workflow CI runs it on x64 and ARM, Linux and macOS: a pinned
+ * hash that comes out differently on one of them means something computes with a function that
+ * differs between machines (see src/detmath.ts).
+ */
+const SECONDS = 90;
+const FRAME = 1 / 30;
+
+function digest(values: number[]): string {
+  return createHash('sha256').update(new Uint8Array(Float64Array.from(values).buffer)).digest('hex').slice(0, 16);
+}
+
+function arenaWorld(index: number): string {
+  const arena = ARENAS[index];
+  const field = testField(DISTANT_DETAIL, HULL_BOXES);
+  field.generate(arena.layout);
+  const values: number[] = [];
+
+  // the course and its racing line as the round starts
+  const course = new Course(field, arena.layout.seed);
+  const v = new THREE.Vector3();
+  for (const p of course.points) values.push(p.x, p.y, p.z);
+  for (let s = 0; s < course.line.length; s += 250) values.push(...course.line.clear(s, field, v).toArray());
+
+  // the field played on: breaks, comets, contacts
+  const contacts = new FieldContacts();
+  const comets = roundComets(arena.layout.seed, 1, field.well, false);
+  const r = new Randomizer(arena.layout.seed + 1);
+  let nextBreak = 7.5;
+  while (field.clock < SECONDS) {
+    field.update(Math.min(FRAME, SECONDS - field.clock));
+    while (nextBreak <= field.clock) {
+      const ids = [...field.asteroids.values()].filter((a) => !a.solid).map((a) => a.id).sort();
+      const pick = r.nextInt();
+      if (ids.length) field.shatter(ids[pick % ids.length], nextBreak);
+      nextBreak += 15;
+    }
+    for (const comet of comets) if (field.clock >= cometStart(comet) && field.clock <= cometEnd(comet)) runDown(comet, field, field.clock, () => {});
+    contacts.run(field);
+    field.crumble();
+  }
+  const pieces = [...field.asteroids.values()].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const a of pieces) values.push(...a.object.position.toArray(), ...a.velocity.toArray(), ...a.object.quaternion.toArray());
+  for (const comet of comets) for (let t = cometStart(comet); t < cometEnd(comet); t += 5) values.push(...headAt(comet, t, v).toArray());
+  // the racing line around the rock as it lies now
+  for (let s = 0; s < course.line.length; s += 500) values.push(...course.line.clear(s, field, v).toArray());
+
+  // the round's probes
+  const probes = new Probes();
+  probes.schedule(arena.layout.seed, 1, SECONDS, SECONDS, field, course.points);
+  for (const probe of probes.list) values.push(...probe.position.toArray(), ...probe.velocity.toArray());
+  return digest(values);
+}
+
+/** A ship flown for half a minute with every control, through turns, rolls and burns. */
+function flown(): string {
+  const flight = new FlightModel();
+  flight.reset(new THREE.Vector3(100, -50, 2000), new THREE.Quaternion(0.1, 0.7, -0.2, 0.6).normalize());
+  const gravity = new THREE.Vector3(0, -3, 1);
+  const values: number[] = [];
+  for (let i = 0; i < 30 * 60; i++) {
+    const t = i / 60;
+    flight.update(1 / 60, { ...IDLE, yaw: t % 7 < 3 ? 1 : -0.4, pitch: t % 5 < 2 ? -0.6 : 0.8, roll: t % 11 < 4 ? 1 : 0, thrust: t % 4 < 3 ? 1 : 0, strafeX: t % 3 < 1 ? 1 : 0 }, gravity);
+    if (i % 60 === 0) values.push(...flight.position.toArray(), ...flight.velocity.toArray(), ...flight.orientation.toArray(), ...flight.angularVelocity.toArray());
+  }
+  return digest(values);
+}
+
+describe('the shared world on every machine', () => {
+  it('plays every arena to the pinned bits', { timeout: 120_000 }, () => {
+    const hashes: Record<string, string> = {};
+    for (let i = 0; i < ARENAS.length; i++) hashes[ARENAS[i].id] = arenaWorld(i);
+    expect(hashes).toEqual({
+      belt: 'eeec54291489029f',
+      rings: '98fb103e44b55366',
+      junkyard: 'ae42d6349c59e187',
+      giant: '7891fc733aad425d',
+      corona: 'f2f45cfab254d002',
+      hole: 'c58610b7380343c2',
+      derelict: '6d989caa9abdf5b7',
+    });
+  });
+
+  it('flies a ship to the pinned bits', () => {
+    expect(flown()).toBe('e5f44f0ce9173867');
+  });
+});
