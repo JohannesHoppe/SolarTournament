@@ -152,12 +152,18 @@ const DISK_OUTER = 56000;
 const DISK_SPIN = 0.9;
 const DISK_BANDS = 6;
 /**
- * The disk's thickness (units): its gas thins out above and below the middle plane as a bell
- * curve whose width grows outward, DISK_THICK + DISK_FLARE · r (37 m at the inner edge, 64 m at
- * the outer), so its near side crosses the shadow as a thin bright band.
+ * On the full picture the gas also streams in streaks along its flow, DISK_STREAKS of them
+ * across the disk (about 80 m apart), long around it and turning with their band: the fine
+ * structure of a glowing ring of gas, never finer than a few pixels from inside the arena.
  */
-const DISK_THICK = 600;
-const DISK_FLARE = 0.012;
+const DISK_STREAKS = 28;
+/**
+ * The disk's thickness (units): its gas thins out above and below the middle plane as a bell
+ * curve whose width grows outward, DISK_THICK + DISK_FLARE · r (19 m at the inner edge, 32 m at
+ * the outer), so its near side crosses the shadow as a thin bright streak.
+ */
+const DISK_THICK = 300;
+const DISK_FLARE = 0.006;
 /**
  * A deliberate deviation for the look: the inner disk's far side, behind the hole as the pilot
  * sees it, swells by up to DISK_PUFF (units, 450 m) above and below, the more edge-on the disk is
@@ -173,11 +179,19 @@ const DISK_PUFF_REACH = 40000;
 const DISK_GAIN = 0.25;
 /**
  * The gas's brightest light, its luminance held softly below this (linear, before the tone
- * mapping): under the bloom's threshold, so the edge-on band and the halo glow in their colors
- * instead of washing the picture out to white and spilling a glow across the screen; the stars,
- * the photon ring and the black shadow keep their contrast.
+ * mapping): a little over the bloom's threshold, so only the hottest spots of the edge-on band
+ * and the halo glow out, while the disk keeps its colors instead of washing the picture out to
+ * white and spilling a glow across the screen; the stars, the photon ring and the black shadow
+ * keep their contrast.
  */
-const DISK_CEILING = 0.9 * BLOOM_THRESHOLD;
+const DISK_CEILING = 1.15 * BLOOM_THRESHOLD;
+/**
+ * A deliberate deviation for the look: the gas within DISK_CLEAR (units, 400 m) of the pilot is
+ * left out. A pilot flies inside the disk's thin outer gas, and summed along the plane from right
+ * there it would lay an orange wash over the lower half of the picture; the disk is to be seen,
+ * not to fog the cockpit.
+ */
+const DISK_CLEAR = 8000;
 /** How far above and below the middle plane the gas is drawn (units): where hardly any of the swollen far side is left. */
 const DISK_TOP = 2.6 * (DISK_THICK + DISK_FLARE * DISK_PUFF_REACH * 0.5 + DISK_PUFF);
 /** The hole's shadow as the lens draws it, a share more than its horizon (see view/lensing): the disk's near side shows in front of it. */
@@ -402,7 +416,11 @@ export const diskGas = /* glsl */ `
     vec2 around = vec2(cos(spin), sin(spin));
     float drift = diskTime * 0.02;
     float clumps = noise(vec3(around * 1.7, t * 3.5 + drift));
-    if (fine > 0.0) clumps = mix(clumps, clumps * 0.65 + 0.35 * noise(vec3(around * 3.6 + 7.0, t * 7.0 - drift)), fine);
+    if (fine > 0.0) {
+      clumps = mix(clumps, clumps * 0.65 + 0.35 * noise(vec3(around * 3.6 + 7.0, t * 7.0 - drift)), fine);
+      // streaks along the flow: fine across the disk, long around it (see DISK_STREAKS)
+      clumps = mix(clumps, clumps * (0.6 + 0.8 * noise(vec3(around * 2.2 + 3.0, t * ${DISK_STREAKS.toFixed(1)}))), fine);
+    }
     return clumps;
   }
   // the clumps at a point of the disk: two neighboring bands blended, so no band shows an edge
@@ -416,6 +434,8 @@ export const diskGas = /* glsl */ `
     return clumps;
   }
   vec3 diskGas(vec3 ro, vec3 rd, float near, float far) {
+    near = max(near, ${DISK_CLEAR.toFixed(1)});
+    if (far <= near) return vec3(0.0);
     float stretches = diskFine > 0.0 ? 8.0 : 5.0;
     float len = (far - near) / stretches;
     vec3 light = vec3(0.0);

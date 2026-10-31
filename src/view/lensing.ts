@@ -182,9 +182,9 @@ const shader = {
       if (outside > -0.5 * span) color = mix(color, seen(vUv, depth, rd), smoothstep(-0.5 * span, span, outside));
       // the light that grazes the shadow piles up into a thin bright ring
       // squared by hand: GLSL ES leaves pow() of a negative base undefined (NaN on some GPUs)
-      float ring = (theta - shadowAngle * 1.05) / (shadowAngle * 0.08 + 0.0007);
+      float ring = (theta - shadowAngle * 1.04) / (shadowAngle * 0.045 + 0.0007);
       float photon = exp(-ring * ring);
-      gl_FragColor = color + vec4(vec3(1.0, 0.75, 0.45) * photon * 0.8, 0.0);
+      gl_FragColor = color + vec4(vec3(1.0, 0.88, 0.7) * photon * 0.75, 0.0);
     }
   `,
 };
