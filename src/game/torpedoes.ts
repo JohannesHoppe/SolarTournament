@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { cos, exp, pow, sin } from '../detmath';
+import { rotateX } from '../detthree';
 import { raySphere, type AsteroidField } from '../world/asteroids';
 import type { Ship } from '../ship/ship';
 import type { Effects } from '../view/effects';
@@ -177,7 +179,7 @@ export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: num
   const { position, velocity, push, seen } = torpedo;
   const speed = velocity.length();
   if (target) {
-    seen.lerp(target.velocity, 1 - Math.exp(-dt / SEEKER_LAG));
+    seen.lerp(target.velocity, 1 - exp(-dt / SEEKER_LAG));
     aim.subVectors(target.position, position);
     const a = seen.lengthSq() - TORPEDO_TOP_SPEED * TORPEDO_TOP_SPEED;
     const b = aim.dot(seen);
@@ -189,7 +191,7 @@ export function flyTorpedo(torpedo: TorpedoFlight, target: Mover | null, dt: num
   // the direction of its flight; nearly at rest, where it wants to go
   if (speed > 1) course.copy(velocity).divideScalar(speed);
   else course.copy(command).normalize();
-  push.lerp(bound(command, speed, dt), 1 - Math.exp(-dt / STEER_LAG));
+  push.lerp(bound(command, speed, dt), 1 - exp(-dt / STEER_LAG));
   bound(push, speed, dt);
   velocity.addScaledVector(push, dt);
   const limit = Math.max(speed, TORPEDO_TOP_SPEED);
@@ -236,8 +238,8 @@ function turned(profile: readonly [number, number][]): THREE.BufferGeometry {
 function fin(angle: number, root: [number, number], tip: [number, number], base: number, reach: number, thickness: number): THREE.BufferGeometry {
   const shape = new THREE.Shape([new THREE.Vector2(base, root[0]), new THREE.Vector2(base, root[1]), new THREE.Vector2(reach, tip[1]), new THREE.Vector2(reach, tip[0])]);
   const geometry = new THREE.ExtrudeGeometry(shape, { depth: thickness, bevelEnabled: false }).translate(0, 0, -thickness / 2);
-  const out = new THREE.Vector3(Math.sin(angle), 0, Math.cos(angle));
-  const side = new THREE.Vector3(-Math.cos(angle), 0, Math.sin(angle));
+  const out = new THREE.Vector3(sin(angle), 0, cos(angle));
+  const side = new THREE.Vector3(-cos(angle), 0, sin(angle));
   geometry.applyMatrix4(new THREE.Matrix4().makeBasis(out, new THREE.Vector3(0, 1, 0), side));
   // its paint: the casing's plain strip at its place along the body
   const position = geometry.attributes.position;
@@ -272,7 +274,7 @@ function torpedoGeometry(): THREE.BufferGeometry {
   const nose: [number, number][] = [];
   for (let k = 0; k <= 8; k++) {
     const s = k / 8;
-    nose.push([9 + (BODY - 9) * Math.cos((s * Math.PI) / 2) ** 0.85, 58 + s * (half - 12 - 58)]);
+    nose.push([9 + (BODY - 9) * pow(cos((s * Math.PI) / 2), 0.85), 58 + s * (half - 12 - 58)]);
   }
   const body = [
     // the bell's outside, its lip and its inside down to the throat (inside out: faces inwards)
@@ -282,7 +284,7 @@ function torpedoGeometry(): THREE.BufferGeometry {
     turned([[BODY, -96], [BODY, 58]]),
     turned(nose),
     // the seeker's dome of dark glass
-    turned(Array.from({ length: 5 }, (_, k): [number, number] => [9 * Math.cos((k / 4) * (Math.PI / 2)), half - 12 + 9 * Math.sin((k / 4) * (Math.PI / 2))])),
+    turned(Array.from({ length: 5 }, (_, k): [number, number] => [9 * cos((k / 4) * (Math.PI / 2)), half - 12 + 9 * sin((k / 4) * (Math.PI / 2))])),
   ];
   for (let k = 0; k < 4; k++) {
     const angle = (k * Math.PI) / 2;
@@ -291,7 +293,7 @@ function torpedoGeometry(): THREE.BufferGeometry {
   }
   // the eye: a small cap of red light just through the dome's top
   const eye = new THREE.SphereGeometry(4.5, 12, 4, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, half - 7, 0);
-  const throat = new THREE.CircleGeometry(12, AROUND).rotateX(Math.PI / 2).translate(0, -half + 12, 0);
+  const throat = rotateX(new THREE.CircleGeometry(12, AROUND), Math.PI / 2).translate(0, -half + 12, 0);
   const casingPart = mergeGeometries(body)!;
   const glowPart = mergeGeometries([glowing(eye, SEEKER_GLOW), glowing(throat, NOZZLE_GLOW)])!;
   // the casing's parts and the glowing ones carry different attributes: put together as groups of one geometry
@@ -311,7 +313,7 @@ function torpedoGeometry(): THREE.BufferGeometry {
   join('color', 3, 1);
   geometry.addGroup(0, casingPart.attributes.position.count, 0);
   geometry.addGroup(casingPart.attributes.position.count, glowPart.attributes.position.count, 1);
-  geometry.rotateX(Math.PI / 2);
+  rotateX(geometry, Math.PI / 2);
   geometry.computeBoundingSphere();
   return geometry;
 }

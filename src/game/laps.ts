@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { slerp } from '../detthree';
 import { GATES } from './race';
 
 /** The ghost keeps the own ship's pose this often (s of race time): smooth enough to fly against. */
@@ -101,7 +102,7 @@ export class LapTimer {
     const b = a + POSE;
     const f = k - i;
     position.lerpVectors(from.fromArray(ghost, a), to.fromArray(ghost, b), f);
-    orientation.fromArray(ghost, a + 3).slerp(turn.fromArray(ghost, b + 3), f).normalize();
+    slerp(orientation.fromArray(ghost, a + 3), turn.fromArray(ghost, b + 3), f).normalize();
     return true;
   }
 }

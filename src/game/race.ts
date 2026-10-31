@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { atan2, cos, hypot, sin } from '../detmath';
 import { Randomizer } from '../random';
 import type { AsteroidField } from '../world/asteroids';
 import { GateKit } from '../world/gates';
@@ -227,8 +228,8 @@ export class Course {
     const dives = !!field.layout?.open;
     const rise = dives ? COURSE_DIVE : COURSE_RISE;
     const loop = (angle: number, out: THREE.Vector3) => {
-      const distance = shape.radius * (1 + shape.swell * Math.sin(angle * 2 + shape.phase));
-      return out.set(Math.cos(angle) * distance, shape.lift + Math.sin(angle * 2 + start) * rise, Math.sin(angle) * distance);
+      const distance = shape.radius * (1 + shape.swell * sin(angle * 2 + shape.phase));
+      return out.set(cos(angle) * distance, shape.lift + sin(angle * 2 + start) * rise, sin(angle) * distance);
     };
     // of LOOP_LIFTS heights (only the plane's through a ring's layer), LOOP_RADII distances, swells and turns of the swell, the loop whose
     // gates lie least deep in rock or in the racing line's bows around it, then the one that runs
@@ -305,7 +306,7 @@ export class Course {
           deepestAt = k;
         }
       }
-      const radius = Math.sqrt(samples[deepestAt * 3] ** 2 + samples[deepestAt * 3 + 2] ** 2);
+      const radius = hypot(samples[deepestAt * 3], samples[deepestAt * 3 + 2]);
       if (deepest > 0 && radius > 0) bows.push({ angle: (deepestAt / LOOP_CHECKS) * Math.PI * 2, half: (2 * Math.sqrt(BOW_RADIUS * deepest) + GATE_RUN) / radius });
     };
     for (const rock of field.asteroids.values()) bowAround(rock.object.position, rock.radius + CLEARANCE);
@@ -313,7 +314,7 @@ export class Course {
     // how far into a bow a gate at `angle` would lie (rad, 0 outside every bow)
     const inBow = (angle: number) => {
       let deepest = 0;
-      for (const bow of bows) deepest = Math.max(deepest, bow.half - Math.abs(Math.atan2(Math.sin(angle - bow.angle), Math.cos(angle - bow.angle))));
+      for (const bow of bows) deepest = Math.max(deepest, bow.half - Math.abs(atan2(sin(angle - bow.angle), cos(angle - bow.angle))));
       return deepest;
     };
     const spacing = (Math.PI * 2) / GATES;

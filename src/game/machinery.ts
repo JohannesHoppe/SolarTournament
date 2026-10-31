@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { cos, sin } from '../detmath';
+import { rotateX, rotateY, rotateZ } from '../detthree';
 import type { Randomizer } from '../random';
 import { srgbByte } from '../srgb';
 
@@ -78,7 +80,7 @@ function sweep(points: readonly THREE.Vector3[], radius: number, sides: number):
     binormal.crossVectors(tangent, normal);
     for (let k = 0; k < sides; k++) {
       const angle = (k / sides) * Math.PI * 2;
-      radial.copy(normal).multiplyScalar(Math.cos(angle)).addScaledVector(binormal, Math.sin(angle));
+      radial.copy(normal).multiplyScalar(cos(angle)).addScaledVector(binormal, sin(angle));
       radial.toArray(normals, (i * sides + k) * 3);
       radial.multiplyScalar(radius).add(points[i]).toArray(positions, (i * sides + k) * 3);
     }
@@ -149,12 +151,12 @@ export function machinery(random: Randomizer, wall: Wall, emphasis: Emphasis, pa
     emit(new THREE.PlaneGeometry(x1 - x0, y1 - y0).translate((x0 + x1) / 2, (y0 + y1) / 2, z), color, glowing);
   /** A thin fin across the wall at `x` (a heat exchanger's, a radiator's): its two sides only. */
   const fin = (x: number, y0: number, y1: number, z0: number, z1: number, color: THREE.Color) => {
-    for (const side of [-1, 1]) emit(new THREE.PlaneGeometry(z1 - z0, y1 - y0).rotateY((side * Math.PI) / 2).translate(x + side, (y0 + y1) / 2, (z0 + z1) / 2), color);
+    for (const side of [-1, 1]) emit(rotateY(new THREE.PlaneGeometry(z1 - z0, y1 - y0), (side * Math.PI) / 2).translate(x + side, (y0 + y1) / 2, (z0 + z1) / 2), color);
   };
   /** A slat of a grille: its face and its top. */
   const slat = (x0: number, x1: number, y: number, z: number, color: THREE.Color) => {
     flat(x0, x1, y - 2, y + 2, z, color);
-    emit(new THREE.PlaneGeometry(x1 - x0, 3).rotateX(-Math.PI / 2).translate((x0 + x1) / 2, y + 2, z - 1.5), color);
+    emit(rotateX(new THREE.PlaneGeometry(x1 - x0, 3), -Math.PI / 2).translate((x0 + x1) / 2, y + 2, z - 1.5), color);
   };
   const rod = (from: THREE.Vector3, to: THREE.Vector3, r: number, sides: number, color: THREE.Color, open = true) => {
     const span = to.clone().sub(from);
@@ -245,8 +247,8 @@ export function machinery(random: Randomizer, wall: Wall, emphasis: Emphasis, pa
     const length = x1 - x0 - 2 * r;
     const [y, z] = [s.y + 16 + r, s.back + r + 2];
     const color = shade(COLOR.tank);
-    emit(new THREE.CylinderGeometry(r, r, length, 8, 1, true).rotateZ(Math.PI / 2).translate((x0 + x1) / 2, y, z), color);
-    for (const side of [-1, 1]) emit(new THREE.SphereGeometry(r, 8, 2, 0, Math.PI * 2, 0, Math.PI / 2).rotateZ(-side * (Math.PI / 2)).translate((x0 + x1) / 2 + (side * length) / 2, y, z), color);
+    emit(rotateZ(new THREE.CylinderGeometry(r, r, length, 8, 1, true), Math.PI / 2).translate((x0 + x1) / 2, y, z), color);
+    for (const side of [-1, 1]) emit(rotateZ(new THREE.SphereGeometry(r, 8, 2, 0, Math.PI * 2, 0, Math.PI / 2), -side * (Math.PI / 2)).translate((x0 + x1) / 2 + (side * length) / 2, y, z), color);
     for (const at of [0.2, 0.8]) box(x0 + r + length * at - 8, x0 + r + length * at + 8, s.y, y - r * 0.5, z - r * 0.8, z + r * 0.8, COLOR.frame, true);
     ports.push(v(x0 + r + length * random.range(0.2, 0.8), y + r, z));
   };
@@ -258,11 +260,11 @@ export function machinery(random: Randomizer, wall: Wall, emphasis: Emphasis, pa
     box(x0, x1, s.y, s.y + 12, z - depth / 2, z + depth / 2, COLOR.frame, true);
     const y = s.y + 14 + r;
     const motor = x0 + w * 0.55;
-    emit(new THREE.CylinderGeometry(r, r, w * 0.45, 8).rotateZ(Math.PI / 2).translate(motor + w * 0.2, y, z), shade(COLOR.cabinet));
-    for (const at of [0.5]) emit(new THREE.CylinderGeometry(r + 3, r + 3, 4, 8, 1, true).rotateZ(Math.PI / 2).translate(motor + w * 0.45 * at - w * 0.025, y, z), COLOR.graphite);
+    emit(rotateZ(new THREE.CylinderGeometry(r, r, w * 0.45, 8), Math.PI / 2).translate(motor + w * 0.2, y, z), shade(COLOR.cabinet));
+    for (const at of [0.5]) emit(rotateZ(new THREE.CylinderGeometry(r + 3, r + 3, 4, 8, 1, true), Math.PI / 2).translate(motor + w * 0.45 * at - w * 0.025, y, z), COLOR.graphite);
     box(motor - w * 0.12, motor, y - r * 0.6, y + r * 0.6, z - r * 0.6, z + r * 0.6, COLOR.hazard);
     const volute = shade(COLOR.steel);
-    emit(new THREE.CylinderGeometry(r * 1.25, r * 1.25, r * 1.1, 8, 1, true).rotateX(Math.PI / 2).translate(x0 + w * 0.25, y + 4, z), volute);
+    emit(rotateX(new THREE.CylinderGeometry(r * 1.25, r * 1.25, r * 1.1, 8, 1, true), Math.PI / 2).translate(x0 + w * 0.25, y + 4, z), volute);
     emit(new THREE.CircleGeometry(r * 1.25, 8).translate(x0 + w * 0.25, y + 4, z + r * 0.55), volute);
     box(motor + w * 0.15, motor + w * 0.3, y + r - 2, y + r + 14, z - 10, z + 10, COLOR.graphite, true);
     lamp(motor + w * 0.22, y + r + 7, z + 10.5);
@@ -330,9 +332,9 @@ export function machinery(random: Randomizer, wall: Wall, emphasis: Emphasis, pa
     const [x, y] = [(x0 + x1) / 2, s.y + size / 2 + 4];
     box(x - size / 2, x + size / 2, y - size / 2, y + size / 2, s.back, face - 10, shade(COLOR.galvanized), true);
     const r = size * 0.42;
-    emit(new THREE.CylinderGeometry(r, r, 12, 10, 1, true).rotateX(Math.PI / 2).translate(x, y, face - 6), COLOR.graphite);
+    emit(rotateX(new THREE.CylinderGeometry(r, r, 12, 10, 1, true), Math.PI / 2).translate(x, y, face - 6), COLOR.graphite);
     emit(new THREE.CircleGeometry(r, 10).translate(x, y, face - 11), COLOR.black);
-    for (let k = 0; k < 3; k++) emit(new THREE.PlaneGeometry(r * 1.7, r * 0.3).rotateZ((k * Math.PI) / 3 + random.range(0, 1)).translate(x, y, face - 9), COLOR.frame);
+    for (let k = 0; k < 3; k++) emit(rotateZ(new THREE.PlaneGeometry(r * 1.7, r * 0.3), (k * Math.PI) / 3 + random.range(0, 1)).translate(x, y, face - 9), COLOR.frame);
     for (let k = -2; k <= 2; k++) flat(x - r * 0.95, x + r * 0.95, y + k * r * 0.38 - 1.5, y + k * r * 0.38 + 1.5, face, COLOR.steel);
   };
   const machine = (s: Spot, x0: number, x1: number) => {
@@ -341,7 +343,7 @@ export function machinery(random: Randomizer, wall: Wall, emphasis: Emphasis, pa
     box(x0, x1, s.y, s.y + h * 0.7, s.back, face, shade(COLOR.cabinet), true);
     box(x0 + 10, x1 - (x1 - x0) * 0.4, s.y + h * 0.7, s.y + h, s.back, face - 20, shade(COLOR.steel), true);
     const r = Math.min((x1 - x0) * 0.22, h * 0.25);
-    emit(new THREE.CylinderGeometry(r, r, 14, 10, 1, true).rotateX(Math.PI / 2).translate(x1 - r - 10, s.y + h * 0.4, face + 7), COLOR.graphite);
+    emit(rotateX(new THREE.CylinderGeometry(r, r, 14, 10, 1, true), Math.PI / 2).translate(x1 - r - 10, s.y + h * 0.4, face + 7), COLOR.graphite);
     emit(new THREE.CircleGeometry(r, 10).translate(x1 - r - 10, s.y + h * 0.4, face + 2), COLOR.black);
     for (let k = -1; k <= 1; k++) flat(x1 - 2 * r - 8, x1 - 12, s.y + h * 0.4 + k * r * 0.5 - 1.5, s.y + h * 0.4 + k * r * 0.5 + 1.5, face + 14, COLOR.steel);
     for (let k = 0; k < 4; k++) slat(x0 + 10, x0 + (x1 - x0) * 0.45, s.y + 18 + k * 10, face + 1, COLOR.black);
@@ -473,7 +475,7 @@ export function machinery(random: Randomizer, wall: Wall, emphasis: Emphasis, pa
           ] as const);
           emit(sweep(rounded([end(x0), v(x0, py, z), v(x1, py, z), end(x1)], 3 * r), r, sides), color);
         }
-        for (let x = x0 + random.range(80, 400); r >= 10 && x < x1 - 40; x += random.range(400, 800)) emit(new THREE.CylinderGeometry(r * 1.3, r * 1.3, 10, 6, 1, true).rotateZ(Math.PI / 2).translate(x, py, z), COLOR.graphite);
+        for (let x = x0 + random.range(80, 400); r >= 10 && x < x1 - 40; x += random.range(400, 800)) emit(rotateZ(new THREE.CylinderGeometry(r * 1.3, r * 1.3, 10, 6, 1, true), Math.PI / 2).translate(x, py, z), COLOR.graphite);
       }
     }
     const zFront = Math.max(...zs);
@@ -493,7 +495,7 @@ export function machinery(random: Randomizer, wall: Wall, emphasis: Emphasis, pa
         for (const side of [-1, 1]) {
           for (let ring = 0; ring < 2; ring++) {
             const at = x + side * (1.6 * r + ring * 0.8 * r + 0.4 * r);
-            emit(new THREE.CylinderGeometry(r * 1.08, r * 1.08, 0.8 * r, 6, 1, true).rotateZ(Math.PI / 2).translate(at, y, z), ring % 2 ? COLOR.black : COLOR.hazard);
+            emit(rotateZ(new THREE.CylinderGeometry(r * 1.08, r * 1.08, 0.8 * r, 6, 1, true), Math.PI / 2).translate(at, y, z), ring % 2 ? COLOR.black : COLOR.hazard);
           }
         }
         if (chance(0.3)) lamp(x + 2 * r, y + 1.6 * r, z + r, ORANGE);

@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { hypot } from '../detmath';
+import { applyAxisAngle, setFromAxisAngle } from '../detthree';
 import { describe, expect, it } from 'vitest';
 import { TORPEDO_LIFETIME } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
@@ -26,7 +28,7 @@ function flying(check: Plausibility, id = 's') {
 }
 
 /** An orientation as a state sends it: the nose turned `angle` (rad) to the left of straight ahead (-z). */
-const facing = (angle: number) => new THREE.Quaternion().setFromAxisAngle(v(0, 1, 0), angle).toArray();
+const facing = (angle: number) => setFromAxisAngle(new THREE.Quaternion(), v(0, 1, 0), angle).toArray();
 /** A state at rest at the origin, its nose turned `angle`, spinning `w` (ship space). */
 const posed = (angle: number, w = [0, 0, 0]): Seen => ({ p: [0, 0, 0], alive: true, q: facing(angle), w });
 /** The ship's states 15 times a second, past the grace of its first sight, ending at t = 20. */
@@ -304,7 +306,7 @@ describe("a ship's nose", () => {
       const before = angle;
       angle += 4.2 / 15;
       // fired halfway through the turn between two states
-      const nose = v(0, 0, -1).applyAxisAngle(v(0, 1, 0), (before + angle) / 2);
+      const nose = applyAxisAngle(v(0, 0, -1), v(0, 1, 0), (before + angle) / 2);
       check.beam('s', v(0, 0, 0), nose.multiplyScalar(30000));
       expect(check.state('s', posed(angle, [0, 4.2, 0]), t)).toEqual([]);
     }
@@ -515,7 +517,7 @@ describe("the lead's battleship ramming the field", () => {
         if (state) follower.follow(state);
         for (const ram of told) {
           const piece = seen.asteroids.get(ram.id)!;
-          worst = Math.max(worst, ramShare(seen.positionOf(piece, ram.b, new THREE.Vector3()), new THREE.Vector3().fromArray(ram.p), Math.hypot(...ram.v), follower.position, follower.reach + piece.radius, ram.b - seen.clock));
+          worst = Math.max(worst, ramShare(seen.positionOf(piece, ram.b, new THREE.Vector3()), new THREE.Vector3().fromArray(ram.p), hypot(ram.v[0], ram.v[1], ram.v[2]), follower.position, follower.reach + piece.radius, ram.b - seen.clock));
           seen.move(ram);
           rams++;
         }

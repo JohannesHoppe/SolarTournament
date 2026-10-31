@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { sin } from '../detmath';
+import { quaternionAngleTo } from '../detthree';
 import { describe, expect, it } from 'vitest';
 import { COMET_REACH, COMET_SPEED, COMET_WARNING, COMET_WINDOWS, cometAt, cometEnd, cometsOf, cometStart, roundComets, headAt, HEAD_MASS, HEAD_RADIUS, makeComet, PIECE_RADIUS, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, tailDepth, type Comet } from './comet';
 import { SUN_DIRECTION } from '../world/space';
@@ -24,7 +26,7 @@ describe('the comets of a round', () => {
         // a route off the center reaches the edge's sphere a little later
         expect(COMET_WINDOWS.some((w) => comet.edge >= w.from - 0.2 && comet.edge <= w.to + 1)).toBe(true);
         expect(comet.direction.length()).toBeCloseTo(1);
-        expect(Math.abs(comet.direction.y)).toBeLessThan(Math.sin(0.61));
+        expect(Math.abs(comet.direction.y)).toBeLessThan(sin(0.61));
         expect(comet.nearest.length()).toBeLessThanOrEqual(16000 + 1e-6);
         expect(comet.nearest.dot(comet.direction)).toBeCloseTo(0, 3);
         // without a well the route is straight
@@ -222,7 +224,7 @@ describe("a comet's head", () => {
     }
     expect(a.welded(moved).length).toBeGreaterThan(1);
     expect(b.asteroids.get(hull.id)!.object.position.distanceTo(moved.object.position)).toBeLessThan(1e-6);
-    expect(b.asteroids.get(hull.id)!.object.quaternion.angleTo(moved.object.quaternion)).toBeLessThan(1e-6);
+    expect(quaternionAngleTo(b.asteroids.get(hull.id)!.object.quaternion, moved.object.quaternion)).toBeLessThan(1e-6);
     // a newcomer at field time 60 takes the motion from the snapshot
     c.restore(JSON.parse(JSON.stringify(a.snapshot())), derelict);
     c.setClock(80);

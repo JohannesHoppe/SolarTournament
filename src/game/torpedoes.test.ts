@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { sin } from '../detmath';
 import { describe, expect, it } from 'vitest';
 import { gripAt, MAIN_THRUST, MAX_SPEED, RCS_THRUST } from '../ship/flight';
 import type { Ship as GameShip } from '../ship/ship';
@@ -16,7 +17,7 @@ const HULL = 340;
 const LAUNCH = 800;
 const DODGE = 800;
 /** A hard break across a torpedo's path (units/s², 15 g): in free drift, the nose turned 60° across the flight and the drive burning, the thrusters pushing the same way. */
-const BREAK = MAIN_THRUST * Math.sin(Math.PI / 3) + RCS_THRUST;
+const BREAK = MAIN_THRUST * sin(Math.PI / 3) + RCS_THRUST;
 
 /** How a ship flies against a torpedo: its acceleration this frame (units/s², at most BREAK), a dodge (a kick in units/s), or nothing. */
 type Evasion = (state: { t: number; seconds: number; ship: Ship; torpedo: TorpedoFlight }) => { push?: THREE.Vector3; kick?: THREE.Vector3 } | null;

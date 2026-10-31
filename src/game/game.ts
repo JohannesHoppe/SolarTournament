@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { cos, exp, hypot, pow, sin } from '../detmath';
+import { angleTo, applyAxisAngle, slerp } from '../detthree';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { Bloom, BLOOM_THRESHOLD } from '../view/bloom';
@@ -1867,8 +1869,8 @@ export class Game implements OnlineGame {
       const distance = line.length();
       nearest = Math.min(nearest, distance);
       // its nose on another ship, or another's nose on it from behind
-      if (distance < LOCK_RANGE && ship.flight.angleTo(line) < 0.2) threat += 1;
-      if (distance < LOCK_RANGE && other.flight.angleTo(line.negate()) < 0.2) threat += ship.tailToward(line) ? 2 : 1;
+      if (distance < LOCK_RANGE && ship.flight.noseAngleTo(line) < 0.2) threat += 1;
+      if (distance < LOCK_RANGE && other.flight.noseAngleTo(line.negate()) < 0.2) threat += ship.tailToward(line) ? 2 : 1;
     }
     return 20000 / (nearest + 2000) + threat + (1 - ship.hull / 100) + (this.course ? ship.gates / GATES : 0);
   }
@@ -3792,7 +3794,7 @@ export class Game implements OnlineGame {
     if (theirs.carrier === ship.id) {
       bot.waypoint = flags.homeRun(side, ship, this.botPoint(bot));
       // the core on its rope would whip around in a tight turn: it eases off until it is round
-      const turn = ship.flight.velocity.angleTo(toAim.subVectors(bot.waypoint, ship.flight.position));
+      const turn = angleTo(ship.flight.velocity, toAim.subVectors(bot.waypoint, ship.flight.position));
       bot.raceSpeed = turn > FLAG_TOW_TURN ? FLAG_RAID_SPEED : FLAG_HOME_SPEED;
       return;
     }
@@ -3994,7 +3996,7 @@ export class Game implements OnlineGame {
    */
   syncField(slice: FieldSlice, round: number, heads: (number | null)[]) {
     if (this.online?.isLead || (this.roundId >= 0 && round !== this.roundId)) return;
-    const result = syncField(this.field, slice, (state) => syncShare(Math.hypot(state.v[0], state.v[1], state.v[2]), state.s[3]) <= 1);
+    const result = syncField(this.field, slice, (state) => syncShare(hypot(state.v[0], state.v[1], state.v[2]), state.s[3]) <= 1);
     if (result.rebuilt || result.eased || result.set) devlog?.add({ kind: 'sync', t: this.time, slice: slice.i, ...result });
     heads.forEach((at, i) => {
       const comet = this.comets[i];
@@ -4016,7 +4018,7 @@ export class Game implements OnlineGame {
     const before = this.field.positionOf(piece, state.b, scratch);
     const age = state.b - this.field.clock;
     // the cheap bounds first, the search for what it struck only for a blow they pass
-    if (knockShare(before, rammedTo.fromArray(state.p), Math.hypot(...state.v), age, 0) > 1) return;
+    if (knockShare(before, rammedTo.fromArray(state.p), hypot(state.v[0], state.v[1], state.v[2]), age, 0) > 1) return;
     if (knockShare(before, rammedTo, 0, age, this.contacts.gap(this.field, piece, state.b)) > 1) return;
     this.field.move(state);
   }
@@ -4038,7 +4040,7 @@ export class Game implements OnlineGame {
     const piece = this.field.asteroids.get(state.id);
     if (!fleet || !piece || !this.fieldMotion(piece, state, round)) return;
     const before = this.field.positionOf(piece, state.b, scratch);
-    if (ramShare(before, rammedTo.fromArray(state.p), Math.hypot(...state.v), fleet.position, fleet.reach + piece.radius, state.b - this.field.clock) > 1) return;
+    if (ramShare(before, rammedTo.fromArray(state.p), hypot(state.v[0], state.v[1], state.v[2]), fleet.position, fleet.reach + piece.radius, state.b - this.field.clock) > 1) return;
     this.field.move(state);
     this.scrape(fleet, state.id);
   }
@@ -4593,7 +4595,7 @@ export class Game implements OnlineGame {
     this.sound.setWind(Math.min(1, (density(altitudeIn(air, me.flight.position)) * speed * speed) / WIND_FULL), Math.min(1, speed));
     if (struck) {
       const distance = jupiter.strikePoint.distanceTo(me.flight.position);
-      this.sound.thunder(Math.min(1, THUNDER_LOUD / (1 + distance / THUNDER_REACH) ** 2), distance / SOUND_SPEED, Math.exp(-distance / THUNDER_REACH));
+      this.sound.thunder(Math.min(1, THUNDER_LOUD / pow(1 + distance / THUNDER_REACH, 2)), distance / SOUND_SPEED, exp(-distance / THUNDER_REACH));
     }
   }
 
@@ -4615,7 +4617,7 @@ export class Game implements OnlineGame {
     const shade = this.haze.shadeAt(eye, SUN_DIRECTION.dot(up.subVectors(eye, air.center).normalize()));
     this.space.shade(shade.sun, shade.sky, jupiter.deckLight, jupiter.deepLight);
     const depth = altitudeIn(air, eye);
-    if (depth < 0) this.background.copy(jupiter.deepLight).lerp(jupiter.deckLight, Math.exp(depth / BACKGROUND_DEPTH));
+    if (depth < 0) this.background.copy(jupiter.deepLight).lerp(jupiter.deckLight, exp(depth / BACKGROUND_DEPTH));
     else this.background.copy(this.space.background);
     return jupiter.update(this.field.clock, eye, this.sheetLight);
   }
@@ -4890,7 +4892,7 @@ export class Game implements OnlineGame {
       else flight.forward(this.flipGoal).negate();
     }
     this.aimTarget();
-    const aligned = flight.angleTo(this.flipGoal) < BRAKE_BURN_ANGLE;
+    const aligned = flight.noseAngleTo(this.flipGoal) < BRAKE_BURN_ANGLE;
     if (aligned && !this.flipAligned) this.sound.beep(660, 0.08);
     this.flipAligned = aligned;
     const out = flight.flip(this.flipGoal, 3, Object.assign(this.computed, controls));
@@ -4937,7 +4939,7 @@ export class Game implements OnlineGame {
       const line = toAim.subVectors(ship.flight.position, flight.position);
       const range = line.length();
       if (range > LASER_RANGE) continue;
-      const off = nose.angleTo(line);
+      const off = angleTo(nose, line);
       const onHull = off < ship.radius / Math.max(range, 1) && range < hitRange;
       // the assist never pulls the nose onto the own side, though the laser hits it as any other
       const assist = off < angle && range <= AIM_ASSIST_RANGE && !ship.allyOf(me);
@@ -5022,7 +5024,7 @@ export class Game implements OnlineGame {
     for (const mark of marks) {
       const line = toAim.subVectors(mark.position, ship.flight.position);
       const distance = line.length();
-      if (distance < BOT_HOOK_MIN || distance > HOOK_RANGE * 0.9 || ship.flight.angleTo(line) > BOT_CORE_CONE) continue;
+      if (distance < BOT_HOOK_MIN || distance > HOOK_RANGE * 0.9 || ship.flight.noseAngleTo(line) > BOT_CORE_CONE) continue;
       if (aimHook(ship, this.field, this.ships, marks)?.anchor.mark?.team !== mark.team) return false;
       this.fireHook(ship);
       bot.hookUntil = now + flightTime(distance) + 0.1;
@@ -5343,7 +5345,7 @@ export class Game implements OnlineGame {
     const consider = (other: Homing) => {
       const line = toAim.subVectors(other.flight.position, ship.flight.position);
       if (line.length() > LOCK_DISTANCE) return;
-      const off = ship.flight.angleTo(line);
+      const off = ship.flight.noseAngleTo(line);
       if (off < angle && seesTarget(other, ship.flight.position, this.field)) {
         best = other;
         angle = off;
@@ -6240,7 +6242,7 @@ export class Game implements OnlineGame {
     const offset = scratch.subVectors(ship.flight.position, course.points[i]);
     const along = offset.dot(course.normals[i]);
     const out = Math.sqrt(Math.max(0, offset.lengthSq() - along * along));
-    const angle = THREE.MathUtils.radToDeg(ship.flight.velocity.angleTo(course.normals[i]));
+    const angle = THREE.MathUtils.radToDeg(angleTo(ship.flight.velocity, course.normals[i]));
     return `gate ${i} out ${Math.round(out * METERS_PER_UNIT)} m along ${Math.round(along * METERS_PER_UNIT)} m at ${Math.round(angle)}° next ${ship.gates % course.points.length}`;
   }
 
@@ -6523,7 +6525,7 @@ export class Game implements OnlineGame {
         const timeToImpact = Math.max(0, hit.distance - me.radius) / speed;
         const thrust = MAIN_THRUST * Math.max(me.drive, 0.01);
         // the head-over flip rolls first, and damaged thrusters turn the ship more slowly
-        const turning = flight.angleTo(retrograde.copy(heading).negate());
+        const turning = flight.noseAngleTo(retrograde.copy(heading).negate());
         const turnRate = 0.3 + 0.7 * (0.25 + 0.75 * me.thrusters);
         const flipTime = ((turning / Math.PI) * FLIP_SECONDS + (turning > 0.35 ? FLIP_ROLL_SECONDS : 0)) / turnRate;
         const brakeTime = flipTime + speed / thrust / 2;
@@ -6861,7 +6863,7 @@ export class Game implements OnlineGame {
     // the pieces come along the route, as fast as the head flew there
     courseAt(comet, when, cometCourse);
     cometVelocity.subVectors(headAt(comet, when + 0.5, cometPiece), headAt(comet, when - 0.5, cometCover));
-    const near = (ship.radius + PIECE_RADIUS) ** 2;
+    const near = (ship.radius + PIECE_RADIUS) * (ship.radius + PIECE_RADIUS);
     for (let i = 0; i < SHOWER_PIECES; i++) {
       if (struck[i] || shower.gone(i, clock) || shower.pieceAt(i, clock, cometPiece).distanceToSquared(position) > near) continue;
       struck[i] = 1;
@@ -6973,7 +6975,7 @@ export class Game implements OnlineGame {
       if (ship === me || !ship.alive || ship.allyOf(me)) continue;
       const line = relative.subVectors(ship.flight.position, me.flight.position);
       const distance = line.length();
-      if (distance > CROSSING_RANGE || distance < 1 || me.flight.angleTo(line) < CROSSING_ANGLE) continue;
+      if (distance > CROSSING_RANGE || distance < 1 || me.flight.noseAngleTo(line) < CROSSING_ANGLE) continue;
       const across = crossingAcross.subVectors(ship.flight.velocity, me.flight.velocity);
       across.addScaledVector(line, -across.dot(line) / (distance * distance));
       if (across.length() < CROSSING_SPEED) continue;
@@ -7121,33 +7123,33 @@ export class Game implements OnlineGame {
     } else if (this.watching() && this.wideShot && me !== this.me) {
       // the director's wide shot: off to the side and behind, the pilot in the frame
       flight.toWorld(cameraGoal.set(me.radius * 6, me.radius * 2.5, me.radius * 5), cameraGoal);
-      this.camera.position.lerp(cameraGoal, 1 - Math.exp(-CAMERA_FOLLOW * 0.4 * dt));
+      this.camera.position.lerp(cameraGoal, 1 - exp(-CAMERA_FOLLOW * 0.4 * dt));
       look.lookAt(this.camera.position, flight.position, flight.up(scratch));
-      this.camera.quaternion.slerp(aim.setFromRotationMatrix(look), 1 - Math.exp(-CAMERA_TURN * 0.5 * dt));
+      slerp(this.camera.quaternion, aim.setFromRotationMatrix(look), 1 - exp(-CAMERA_TURN * 0.5 * dt));
     } else {
       // a burn presses the ship ahead of the camera, which hangs back a little; in cinema mode
       // it hangs farther back, follows softer and drifts slowly around the ship
       const lag = me.alive ? flight.throttle * DRIVE_LAG : 0;
       const film = this.cinema ? 1 : 0;
       const drift = this.time * CINEMA_DRIFT;
-      flight.toWorld(cameraGoal.set(film * me.radius * Math.sin(drift), me.radius * (CHASE_HEIGHT + film * (0.35 + 0.25 * Math.cos(drift * 0.7))), me.radius * (CHASE_DISTANCE + film * CINEMA_DISTANCE + lag)), cameraGoal);
+      flight.toWorld(cameraGoal.set(film * me.radius * sin(drift), me.radius * (CHASE_HEIGHT + film * (0.35 + 0.25 * cos(drift * 0.7))), me.radius * (CHASE_DISTANCE + film * CINEMA_DISTANCE + lag)), cameraGoal);
       const soft = this.cinema ? CINEMA_SOFTNESS : 1;
-      this.camera.position.lerp(cameraGoal, 1 - Math.exp(-CAMERA_FOLLOW * soft * dt));
-      this.camera.quaternion.slerp(flight.orientation, 1 - Math.exp(-CAMERA_TURN * soft * dt));
+      this.camera.position.lerp(cameraGoal, 1 - exp(-CAMERA_FOLLOW * soft * dt));
+      slerp(this.camera.quaternion, flight.orientation, 1 - exp(-CAMERA_TURN * soft * dt));
     }
     this.riding = me.alive ? flight.velocity : null;
     // the drive kicks: the view widens while it burns and with speed, and the chase camera trembles
     const burn = me.alive ? flight.throttle : 0;
     const fast = me.alive ? Math.min(1, flight.velocity.length() / MAX_SPEED) : 0;
-    const fov = this.camera.fov + (CAMERA_FOV + DRIVE_FOV_KICK * burn + SPEED_FOV * fast + BOOST_FOV * this.boostKick - this.camera.fov) * (1 - Math.exp(-6 * dt));
-    this.boostKick *= Math.exp(-BOOST_FADE * dt);
+    const fov = this.camera.fov + (CAMERA_FOV + DRIVE_FOV_KICK * burn + SPEED_FOV * fast + BOOST_FOV * this.boostKick - this.camera.fov) * (1 - exp(-6 * dt));
+    this.boostKick *= exp(-BOOST_FADE * dt);
     if (Math.abs(fov - this.camera.fov) > 0.01) this.setFov(fov);
     if (!this.cockpit && !reducedMotion.matches) {
       if (burn > 0.05) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * DRIVE_SHAKE * burn));
       // a jolt for every hit the own laser lands, bigger for a kill; it fades in a fraction of a second
       if (this.kick > 0.01) this.camera.position.add(scratch.randomDirection().multiplyScalar(me.radius * KICK_SHAKE * this.kick));
     }
-    this.kick *= Math.exp(-KICK_FADE * dt);
+    this.kick *= exp(-KICK_FADE * dt);
     // the HUD projects with this frame's camera, not the one of the last rendered frame
     this.camera.updateMatrixWorld();
   }
@@ -7171,7 +7173,7 @@ export class Game implements OnlineGame {
   private introCamera(me: Ship) {
     const progress = THREE.MathUtils.clamp(this.roundSeconds() / INTRO_SECONDS, 0, 1);
     const at = introTarget.fromArray(this.venue.preview?.at ?? [0, 0, 0]);
-    const from = introFrom.fromArray(this.venue.preview?.from ?? PREVIEW_FROM).sub(at).applyAxisAngle(UP, (progress - 0.5) * INTRO_SWING).add(at);
+    const from = applyAxisAngle(introFrom.fromArray(this.venue.preview?.from ?? PREVIEW_FROM).sub(at), UP, (progress - 0.5) * INTRO_SWING).add(at);
     const flight = me.flight;
     flight.toWorld(cameraGoal.set(0, me.radius * 0.75, me.radius * 2.6), cameraGoal);
     // the first part on the landmark, then the sweep, slow at both ends
@@ -7209,7 +7211,8 @@ export class Game implements OnlineGame {
     if (chosen) {
       if (chosen !== this.venue) this.enterArena(chosen);
       const at = scratch.fromArray(chosen.preview?.at ?? [0, 0, 0]);
-      this.camera.position.fromArray(chosen.preview?.from ?? PREVIEW_FROM).sub(at).applyAxisAngle(UP, this.time * PREVIEW_DRIFT).add(at);
+      this.camera.position.fromArray(chosen.preview?.from ?? PREVIEW_FROM).sub(at);
+      applyAxisAngle(this.camera.position, UP, this.time * PREVIEW_DRIFT).add(at);
       this.camera.lookAt(at);
       // the landmark beside the plate, not behind it: the picture is cut from a wider one
       const { width, height } = this.renderer.domElement;
@@ -7220,6 +7223,6 @@ export class Game implements OnlineGame {
     this.endPreview();
     const t = this.time * 0.08;
     this.camera.position.set(0, 0, 0);
-    this.camera.lookAt(Math.cos(t), Math.sin(t * 0.7) * 0.2, Math.sin(t));
+    this.camera.lookAt(cos(t), sin(t * 0.7) * 0.2, sin(t));
   }
 }

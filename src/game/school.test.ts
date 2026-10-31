@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { cos, sin } from '../detmath';
 import { describe, expect, it } from 'vitest';
 import { coursesFrom, DRILL, FlightSchool, judge, ringCourse, SCHOOL_COURSES } from './school';
 import { ARENA_LIMIT } from '../world/arena';
@@ -24,7 +25,7 @@ describe('judging a drill', () => {
 
   it('counts a turn drill done for a pilot who burns to the marker, however the nose points there', () => {
     const marker = new THREE.Vector3(0, 0, -3000);
-    const at = (position: THREE.Vector3) => ({ dt: 0.016, me: { flight: { position, angleTo: () => Math.PI / 2 } } });
+    const at = (position: THREE.Vector3) => ({ dt: 0.016, me: { flight: { position, noseAngleTo: () => Math.PI / 2 } } });
     expect(judged(DRILL.turn, at(new THREE.Vector3(0, 0, -2600)), { points: [marker], held: 0 })).toBe(true);
     // short of it, with the nose off it: not yet
     expect(judged(DRILL.turn, at(new THREE.Vector3(0, 0, -1000)), { points: [marker], held: 0 })).toBeNull();
@@ -32,7 +33,7 @@ describe('judging a drill', () => {
 
   it('counts the fine aim drill done for a pilot who burns to its marker too', () => {
     const marker = new THREE.Vector3(0, 0, -8000);
-    const at = (z: number) => ({ dt: 0.016, device: 'keyboard', me: { flight: { position: new THREE.Vector3(0, 0, z), angleTo: () => Math.PI / 2 } } });
+    const at = (z: number) => ({ dt: 0.016, device: 'keyboard', me: { flight: { position: new THREE.Vector3(0, 0, z), noseAngleTo: () => Math.PI / 2 } } });
     expect(judged(DRILL.fineAim, at(-7500), { points: [marker], held: 0 })).toBe(true);
     expect(judged(DRILL.fineAim, at(-3000), { points: [marker], held: 0 })).toBeNull();
   });
@@ -162,7 +163,7 @@ describe('judging a drill', () => {
       const attempt = { points: [new THREE.Vector3(0, 24000, 0)], swept: 0 };
       return states.map((orbit, i) => {
         const angle = ((i + 1) * 1.01 * Math.PI) / 180;
-        const position = new THREE.Vector3(24000 * Math.sin(angle), 24000 * Math.cos(angle), 0);
+        const position = new THREE.Vector3(24000 * sin(angle), 24000 * cos(angle), 0);
         return judged(DRILL.orbit, { orbit, field: { well }, me: { flight: { position } } }, attempt);
       });
     };

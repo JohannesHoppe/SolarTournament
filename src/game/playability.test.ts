@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { asin } from '../detmath';
+import { angleTo, setFromEuler } from '../detthree';
 import { describe, expect, it } from 'vitest';
 import { BOOST_RADIUS } from './race';
 import { flyByNose, FlightModel, leadLimit, MAX_SPEED } from '../ship/flight';
@@ -78,9 +80,9 @@ describe('a simulated Host in open space', () => {
       const speed = flight.velocity.length();
       rested ||= speed < 100;
       if (!rested) return 'brake';
-      return speed < 3000 && flight.forward().angleTo(toTarget) < 0.5 ? 'drive' : 'coast';
+      return speed < 3000 && angleTo(flight.forward(), toTarget) < 0.5 ? 'drive' : 'coast';
     });
-    const off = flight.velocity.angleTo(target.clone().sub(flight.position));
+    const off = angleTo(flight.velocity, target.clone().sub(flight.position));
     console.info(`Host turning about: ${((off * 180) / Math.PI).toFixed(1)}° off the target after 8 s, at ${(flight.velocity.length() / 20).toFixed(0)} m/s`);
     expect(off).toBeLessThan(0.05);
     expect(flight.velocity.length()).toBeGreaterThan(2400);
@@ -93,7 +95,7 @@ describe('a simulated Host in open space', () => {
   for (const climb of [0, 10, -20]) {
     it(`turns about with the pointer held to the right at 150 m/s and the drive held, the nose ${climb ? `${Math.abs(climb)}° ${climb > 0 ? 'up' : 'down'}` : 'level'}, without climbing or diving`, () => {
       const flight = new FlightModel();
-      const start = new THREE.Quaternion().setFromEuler(new THREE.Euler(THREE.MathUtils.degToRad(climb), 0, 0, 'YXZ'));
+      const start = setFromEuler(new THREE.Quaternion(), THREE.MathUtils.degToRad(climb), 0, 0, 'YXZ');
       flight.reset(new THREE.Vector3(), start);
       flight.forward(flight.velocity).multiplyScalar(3000);
       // the pointer 0.22 of the shorter screen side to the right, as the browser test holds it
@@ -103,7 +105,7 @@ describe('a simulated Host in open space', () => {
       const heading = new THREE.Vector3(0, 0, -1);
       const nose = new THREE.Vector3();
       const level = new THREE.Vector3();
-      const elevation = (direction: THREE.Vector3) => THREE.MathUtils.radToDeg(Math.asin(THREE.MathUtils.clamp(direction.y / direction.length(), -1, 1)));
+      const elevation = (direction: THREE.Vector3) => THREE.MathUtils.radToDeg(asin(THREE.MathUtils.clamp(direction.y / direction.length(), -1, 1)));
       let back = Infinity;
       let steepest = 0;
       let slip = 0;
@@ -115,7 +117,7 @@ describe('a simulated Host in open space', () => {
         flight.update(STEP, out, gravity);
         flight.forward(nose);
         steepest = Math.max(steepest, Math.abs(elevation(nose)));
-        const off = flight.velocity.angleTo(nose);
+        const off = angleTo(flight.velocity, nose);
         slip = Math.max(slip, off);
         overLimit = Math.max(overLimit, off - leadLimit(flight.velocity.length()));
         level.set(flight.velocity.x, 0, flight.velocity.z).normalize();
@@ -148,7 +150,7 @@ describe('a simulated Host in open space', () => {
       bot,
       (flight, t) => {
         toBot.copy(bot(t)).sub(flight.position);
-        if (flight.forward().angleTo(toBot) < SHIP_RADIUS / toBot.length()) onHull += STEP;
+        if (angleTo(flight.forward(), toBot) < SHIP_RADIUS / toBot.length()) onHull += STEP;
       },
       false,
     );

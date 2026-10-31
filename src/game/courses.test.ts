@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { atan2, cos, sin } from '../detmath';
+import { angleTo } from '../detthree';
 import { describe, expect, it } from 'vitest';
 import { BOOST_PUSH, BOOST_RADIUS, Course, GATE_RADIUS, GATES } from './race';
 import { Bot, evenSkills, RACE_SPEED } from '../ship/bots';
@@ -133,7 +135,7 @@ describe("the flight school's courses", () => {
     for (let t = 0; t < 30; t += 0.1) {
       pilot.copy(flight).multiplyScalar(t);
       const toBot = bot.clone().sub(pilot);
-      if (toBot.length() < 20000 && toBot.angleTo(flight) > SLIDE_ANGLE) seconds += 0.1;
+      if (toBot.length() < 20000 && angleTo(toBot, flight) > SLIDE_ANGLE) seconds += 0.1;
     }
     expect(seconds).toBeGreaterThan(SLIDE_HITS);
   });
@@ -218,8 +220,8 @@ describe("the flight school's courses", () => {
         // free drift once the readout says ready: the hand off every control
         if (readyAt >= 0) return IDLE;
         arm.subVectors(flight.position, well.position);
-        const angle = Math.atan2(arm.x, arm.y) + Math.PI / 6;
-        bot.waypoint = ahead.set(Math.sin(angle) * radius, Math.cos(angle) * radius, 0).add(well.position);
+        const angle = atan2(arm.x, arm.y) + Math.PI / 6;
+        bot.waypoint = ahead.set(sin(angle) * radius, cos(angle) * radius, 0).add(well.position);
         return bot.think(time, [ship], field);
       },
       120,
@@ -230,7 +232,7 @@ describe("the flight school's courses", () => {
         if (readyAt < 0 && state === 'ready') readyAt = seconds;
         if (readyAt >= 0 && seconds > readyAt) {
           if (state !== 'stable') broken.push(`${state} after ${(seconds - readyAt).toFixed(1)} s`);
-          swept += arm.subVectors(before, well.position).angleTo(scratch.subVectors(flight.position, well.position));
+          swept += angleTo(arm.subVectors(before, well.position), scratch.subVectors(flight.position, well.position));
         }
         before.copy(flight.position);
         return swept >= ORBIT_SWEEP;

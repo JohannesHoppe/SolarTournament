@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { setFromAxisAngle } from '../detthree';
 import { describe, expect, it } from 'vitest';
 import { ORBIT_CALL_GAP, OrbitCalls, orbitable, orbitOf, orbitRoom, readOrbit, safePeriapsis, wellAlarmLevel, wellMu, type Orbit, type OrbitState } from './orbit';
 import { escapeLoad, WELL_CRITICAL, wellLevel } from './alarms';
@@ -123,7 +124,7 @@ describe('the orbit readout', () => {
     // with the autopilot on the same path is only ready: the alarm is there
     expect(wellAlarmLevel(load(), 'ready')).toBe('caution');
     // a burn against the flight (the nose turned back, the drive lit) until the path falls
-    flight.orientation.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+    setFromAxisAngle(flight.orientation, new THREE.Vector3(0, 1, 0), Math.PI / 2);
     let frames = 0;
     while (held === 'stable' && frames < 600) {
       flight.update(1 / 60, { ...IDLE, thrust: 1 }, pullOf(flight.position, gravity));

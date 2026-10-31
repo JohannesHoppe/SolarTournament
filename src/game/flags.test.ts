@@ -186,7 +186,7 @@ describe('capture the flag', () => {
     const speed = moving.length();
     now = fly(f, ships, now, speed / CORE_BRAKE + 0.5);
     expect(f.cores[1].velocity.length()).toBe(0);
-    expect(f.cores[1].position.distanceTo(hung) / (speed ** 2 / (2 * CORE_BRAKE))).toBeCloseTo(1, 1);
+    expect(f.cores[1].position.distanceTo(hung) / (speed * speed / (2 * CORE_BRAKE))).toBeCloseTo(1, 1);
   });
 
   describe('the tow rope', () => {

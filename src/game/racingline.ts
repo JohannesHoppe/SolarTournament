@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { hypot } from '../detmath';
+import { CentripetalCurve } from '../detthree';
 import type { AsteroidField } from '../world/asteroids';
 import { MAX_SPEED, turnRadius } from '../ship/flight';
 
@@ -76,7 +78,7 @@ interface Keep {
 export class RacingLine {
   /** Its whole length (units). */
   readonly length: number;
-  private readonly curve: THREE.CatmullRomCurve3;
+  private readonly curve: CentripetalCurve;
   /** Distance along the line at each sample, and where each gate lies on it. */
   private readonly arcs: number[] = [];
   private readonly gates: number[] = [];
@@ -112,7 +114,7 @@ export class RacingLine {
       const last = points[points.length - 1];
       if (runOut > 0) points.push(last.clone().sub(points[points.length - 2]).setLength(runOut).add(last));
     }
-    this.curve = new THREE.CatmullRomCurve3(points, closed, 'centripetal');
+    this.curve = new CentripetalCurve(points, closed);
     const segments = closed ? points.length : points.length - 1;
     const total = segments * SAMPLES;
     const previous = this.curve.getPoint(0, new THREE.Vector3());
@@ -247,7 +249,7 @@ export class RacingLine {
       sample.fromArray(this.plain, i * 3);
       const mine = near[i];
       mine.length = 0;
-      for (const keep of keeps) if (Math.hypot(sample.x - keep.x, sample.y - keep.y, sample.z - keep.z) < keep.radius + BOW_REACH) mine.push(keep);
+      for (const keep of keeps) if (hypot(sample.x - keep.x, sample.y - keep.y, sample.z - keep.z) < keep.radius + BOW_REACH) mine.push(keep);
     }
     const index = (i: number) => (this.closed ? ((i % count) + count) % count : THREE.MathUtils.clamp(i, 0, count - 1));
     const before = this.relaxed;

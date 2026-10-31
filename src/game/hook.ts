@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { asin, pow } from '../detmath';
+import { angleTo } from '../detthree';
 import { raySphere, type Asteroid, type AsteroidField } from '../world/asteroids';
 import type { Ship } from '../ship/ship';
 import type { Torpedo } from './torpedoes';
@@ -118,7 +120,7 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
       const line = toward.subVectors(asteroid.object.position, origin);
       const distance = line.length();
       if (distance - asteroid.radius > HOOK_RANGE) continue;
-      const off = line.angleTo(forward) - Math.asin(Math.min(1, asteroid.radius / distance));
+      const off = angleTo(line, forward) - asin(Math.min(1, asteroid.radius / distance));
       if (off >= nearest) continue;
       const hit = field.raycast(origin, line.divideScalar(distance), HOOK_RANGE, true);
       if (hit?.asteroid !== asteroid) continue;
@@ -241,7 +243,7 @@ export function pullOn(body: Body, anchor: Body, length: number, reeling: boolea
  * √((R + h)² − R²). A ship winding its cable round the rock thus circles it at h, as far as
  * the winch ever reels it in.
  */
-export const clearOf = (ship: Pick<Ship, 'radius'>, rock: Pick<Asteroid, 'radius'>) => Math.sqrt((rock.radius + ship.radius * HOOK_SLACK) ** 2 - rock.radius ** 2);
+export const clearOf = (ship: Pick<Ship, 'radius'>, rock: Pick<Asteroid, 'radius'>) => Math.sqrt(pow(rock.radius + ship.radius * HOOK_SLACK, 2) - rock.radius * rock.radius);
 
 /**
  * How close the winch reels a ship to where its cable is made fast: HOOK_SLACK ship radii off

@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { acos, atan, cos, hypot, sin } from '../detmath';
+import { quaternionAngleTo, rotateTowards, rotateX, rotateY, setRotation, slerp } from '../detthree';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
 import { blowSpin, blowState, FIELD_RADIUS, outline, RAMMED, raySphere, type Asteroid, type AsteroidField, type Obstacle, type ShovedState } from '../world/asteroids';
@@ -466,7 +468,7 @@ function slopePoint(side: number, z: number, down: number, lift: number, target 
   const s = sectionAt(z);
   const across = s.half - s.keelHalf;
   const fall = s.belt - s.keel;
-  const length = Math.hypot(across, fall);
+  const length = hypot(across, fall);
   return target.set(side * (THREE.MathUtils.lerp(s.half, s.keelHalf, down) + (lift * fall) / length), THREE.MathUtils.lerp(s.belt, s.keel, down) - (lift * across) / length, z);
 }
 
@@ -840,7 +842,7 @@ export class Fleet implements Obstacle {
       rail(from.clone().multiplyScalar(FLEET_SCALE), to.clone().multiplyScalar(FLEET_SCALE), sized(wide), sized(high), material);
     /** A flat panel `width` long and `height` high on a flank's belt at `z`, lying on its slant. */
     const onBelt = (side: number, z: number, y: number, width: number, height: number, lift = 4) =>
-      new THREE.PlaneGeometry(width, height).rotateY(side * (Math.PI / 2 + Math.atan(flare(z)))).translate(side * (sectionAt(z).half + lift), y, z);
+      rotateY(new THREE.PlaneGeometry(width, height), side * (Math.PI / 2 + atan(flare(z)))).translate(side * (sectionAt(z).half + lift), y, z);
     const flank = (side: number, z: number, y: number, lift: number) => new THREE.Vector3(side * (sectionAt(z).half + lift), y, z);
     /** The same in the world. */
     const hullFlank = (side: number, z: number, y: number, lift: number) => new THREE.Vector3(side * (hullAt(z).half + lift), y, z);
@@ -859,7 +861,7 @@ export class Fleet implements Obstacle {
         // left to right as seen from outside: towards the bow on the right flank
         const u = k / steps;
         const at = z + side * (0.5 - u) * width;
-        const length = Math.hypot(sectionAt(at).half - sectionAt(at).keelHalf, sectionAt(at).belt - sectionAt(at).keel);
+        const length = hypot(sectionAt(at).half - sectionAt(at).keelHalf, sectionAt(at).belt - sectionAt(at).keel);
         for (const v of [0, 1]) {
           positions.push(...slopePoint(side, at, down + (1 - v) * (height / length), 25, point).toArray());
           uvs.push(u, v);
@@ -1195,7 +1197,7 @@ export class Fleet implements Obstacle {
     // parked on the deck: two fighters on the catapults, four beside the reactor's dome; each
     // collides as its body's rear half, its nose's taper and its wings
     const fighter = (x: number, z: number) => {
-      shaped(new THREE.ConeGeometry(160, 700, 3).rotateX(-Math.PI / 2).translate(x, DECK_TOP + 90, z), gunmetal);
+      shaped(rotateX(new THREE.ConeGeometry(160, 700, 3), -Math.PI / 2).translate(x, DECK_TOP + 90, z), gunmetal);
       shaped(new THREE.BoxGeometry(620, 30, 220).translate(x, DECK_TOP + 70, z + 150), gunmetal);
       solid([x, DECK_TOP + 90, z + 175], [320, 320, 350]);
       solid([x, DECK_TOP + 90, z - 175], [160, 160, 350]);
@@ -1220,10 +1222,10 @@ export class Fleet implements Obstacle {
     // the stern: two great drive bells (they collide as their drives, see below) and four small
     // ones around them, the maneuvering thrusters, part of the hull
     for (const side of [-1, 1]) {
-      shaped(new THREE.CylinderGeometry(680, 520, 800, 16, 1, true).rotateX(Math.PI / 2).translate(side * 700, 0, 7450), bell);
+      shaped(rotateX(new THREE.CylinderGeometry(680, 520, 800, 16, 1, true), Math.PI / 2).translate(side * 700, 0, 7450), bell);
       for (const y of [800, -350]) {
-        shaped(new THREE.CylinderGeometry(260, 200, 350, 12, 1, true).rotateX(Math.PI / 2).translate(side * 1450, y, 7175), bell);
-        shaped(new THREE.CylinderGeometry(170, 190, 60, 12).rotateX(Math.PI / 2).translate(side * 1450, y, 7060), thruster);
+        shaped(rotateX(new THREE.CylinderGeometry(260, 200, 350, 12, 1, true), Math.PI / 2).translate(side * 1450, y, 7175), bell);
+        shaped(rotateX(new THREE.CylinderGeometry(170, 190, 60, 12), Math.PI / 2).translate(side * 1450, y, 7060), thruster);
         round([side * 1450, y, 0], 260, 2, 7000, 7350);
       }
     }
@@ -1246,12 +1248,12 @@ export class Fleet implements Obstacle {
       this.root.add(new THREE.Mesh(this.geometry(grow(onBelt(side, SEAL_Z, 480, 1100, 1100, 8))), sealed));
       sign(signTexture(t(SLOGANS[side < 0 ? 1 : 2])), onSlope(side, 2800, 4400, 400));
     }
-    this.root.add(new THREE.Mesh(this.geometry(grow(new THREE.PlaneGeometry(800, 800).rotateY(Math.PI).translate(0, 3250, 3496))), sealed));
-    sign(signTexture(t(SLOGANS[0]), '#ffcf5a', 4096, 800, true), new THREE.PlaneGeometry(3600, 760).rotateX(-Math.PI / 2).rotateY(Math.PI / 2).translate(0, DECK_TOP + 10, -4200), new THREE.Color(1.2, 1, 0.7));
+    this.root.add(new THREE.Mesh(this.geometry(grow(rotateY(new THREE.PlaneGeometry(800, 800), Math.PI).translate(0, 3250, 3496))), sealed));
+    sign(signTexture(t(SLOGANS[0]), '#ffcf5a', 4096, 800, true), rotateY(rotateX(new THREE.PlaneGeometry(3600, 760), -Math.PI / 2), Math.PI / 2).translate(0, DECK_TOP + 10, -4200), new THREE.Color(1.2, 1, 0.7));
 
     // the dome over the reactor, an armored hatch on the deck: armor while it is closed (see
     // open, domeBox)
-    this.dome = new THREE.Mesh(this.geometry(boxUv(grow(new THREE.CylinderGeometry(450 * Math.SQRT2, 650 * Math.SQRT2, 500, 4).rotateY(Math.PI / 4)), ARMOR_TILE, 'lengthwise')), armor);
+    this.dome = new THREE.Mesh(this.geometry(boxUv(grow(rotateY(new THREE.CylinderGeometry(450 * Math.SQRT2, 650 * Math.SQRT2, 500, 4), Math.PI / 4)), ARMOR_TILE, 'lengthwise')), armor);
     this.dome.position.set(0, sized(DECK_TOP + 250), sized(-1200));
     this.root.add(this.dome);
 
@@ -1263,13 +1265,13 @@ export class Fleet implements Obstacle {
     const barrels = this.geometry(
       grow(mergeGeometries([
         ...[-130, 0, 130].flatMap((x) => [
-          new THREE.CylinderGeometry(40, 48, 1000, 8).rotateX(Math.PI / 2).translate(x, 0, -720),
-          new THREE.CylinderGeometry(64, 64, 240, 8).rotateX(Math.PI / 2).translate(x, 0, -380),
-          new THREE.CylinderGeometry(56, 56, 80, 8).rotateX(Math.PI / 2).translate(x, 0, -1180),
+          rotateX(new THREE.CylinderGeometry(40, 48, 1000, 8), Math.PI / 2).translate(x, 0, -720),
+          rotateX(new THREE.CylinderGeometry(64, 64, 240, 8), Math.PI / 2).translate(x, 0, -380),
+          rotateX(new THREE.CylinderGeometry(56, 56, 80, 8), Math.PI / 2).translate(x, 0, -1180),
         ]),
         new THREE.CylinderGeometry(300, 320, 60, 16).translate(0, -190, 0),
         new THREE.BoxGeometry(380, 50, 70).translate(0, 145, 120),
-        ...[-1, 1].map((s) => new THREE.CylinderGeometry(40, 40, 90, 8).rotateX(Math.PI / 2).translate(s * 210, 145, 120)),
+        ...[-1, 1].map((s) => rotateX(new THREE.CylinderGeometry(40, 40, 90, 8), Math.PI / 2).translate(s * 210, 145, 120)),
       ])),
     );
     const vents = this.geometry(grow(mergeGeometries([-195, -65, 65, 195].map((x) => new THREE.BoxGeometry(90, 170, 12).translate(x, 0, 282)))));
@@ -1277,7 +1279,7 @@ export class Fleet implements Obstacle {
       const turret = new THREE.Group();
       turret.position.set(...at).multiplyScalar(FLEET_SCALE);
       // under the keel it hangs upside down
-      if (at[1] < 0) turret.rotation.z = Math.PI;
+      if (at[1] < 0) setRotation(turret, 0, 0, Math.PI);
       turret.add(new THREE.Mesh(housing, armor), new THREE.Mesh(collar, gold), new THREE.Mesh(barrels, gunmetal), new THREE.Mesh(vents, recess));
       this.root.add(turret);
       // on deck it shows itself above the deck and over its edge, under the keel below it
@@ -1290,7 +1292,7 @@ export class Fleet implements Obstacle {
       solid([at[0], at[1], at[2] - 740], [390, 130, 960], part);
       this.zones.push({ kind: 'battery', at: turret.position.clone(), radius: sized(300), face, mesh: turret });
     }
-    const nozzle = this.geometry(grow(new THREE.CylinderGeometry(420, 520, 600, 16).rotateX(Math.PI / 2)));
+    const nozzle = this.geometry(grow(rotateX(new THREE.CylinderGeometry(420, 520, 600, 16), Math.PI / 2)));
     for (const side of [-1, 1]) {
       const drive = new THREE.Mesh(nozzle, this.driveGlow);
       drive.position.set(sized(side * 700), 0, sized(7400));
@@ -1309,7 +1311,7 @@ export class Fleet implements Obstacle {
     solid([0, DECK_TOP + 250, -1200], [1300, 500, 1300]);
     this.domeBox = this.colliders[this.colliders.length - 1];
     // the plume behind the drives, while they burn
-    this.flame = new THREE.Mesh(this.geometry(new THREE.ConeGeometry(PLUME_REACH * PLUME_SPREAD, PLUME_REACH, 24, 1, true).rotateX(-Math.PI / 2).translate(0, 0, NOZZLES + PLUME_REACH / 2)), flame);
+    this.flame = new THREE.Mesh(this.geometry(rotateX(new THREE.ConeGeometry(PLUME_REACH * PLUME_SPREAD, PLUME_REACH, 24, 1, true), -Math.PI / 2).translate(0, 0, NOZZLES + PLUME_REACH / 2)), flame);
     this.flame.visible = false;
     this.root.add(this.flame);
     // the hull throws its shadow and takes those of the rocks; glowing exhaust and glass do neither
@@ -1372,9 +1374,9 @@ export class Fleet implements Obstacle {
       const height = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * LANE_STEP || 0;
       if (sheet > 0 && height + low < sheet + ROCK_CLEAR && height + high > -sheet - ROCK_CLEAR) continue;
       const inner = ORBIT - flank;
-      const outer = Math.hypot(entryRadius(height) + flank, length);
+      const outer = hypot(entryRadius(height) + flank, length);
       const crossing = paths.filter(({ at, reach }) =>
-        at.some((point) => Math.hypot(Math.max(0, inner - Math.hypot(point.x, point.z), Math.hypot(point.x, point.z) - outer), Math.max(0, height + low - point.y, point.y - height - high)) < reach),
+        at.some((point) => hypot(Math.max(0, inner - hypot(point.x, point.z), hypot(point.x, point.z) - outer), Math.max(0, height + low - point.y, point.y - height - high)) < reach),
       ).length;
       if (crossing < fewest) {
         fewest = crossing;
@@ -1920,13 +1922,13 @@ export class Fleet implements Obstacle {
     const bow = prey ? want.subVectors(position, prey.flight.position) : want.copy(this.velocity);
     if (bow.lengthSq() > 1) {
       turn.setFromRotationMatrix(look.lookAt(local.set(0, 0, 0), bow.normalize(), UP));
-      turned.copy(this.quaternion).rotateTowards(turn, FLEET_TURN * dt);
+      rotateTowards(turned.copy(this.quaternion), turn, FLEET_TURN * dt);
       if (!this.crowded(turned)) this.quaternion.copy(turned);
     }
-    this.burning = !!prey && this.quaternion.angleTo(turn) < PLUME_AIM;
+    this.burning = !!prey && quaternionAngleTo(this.quaternion, turn) < PLUME_AIM;
     // how fast it turned this frame (rad/s), for the speed its hull sweeps what it meets at
     before.invert().premultiply(this.quaternion);
-    const angle = 2 * Math.acos(Math.min(1, Math.abs(before.w)));
+    const angle = 2 * acos(Math.min(1, Math.abs(before.w)));
     this.spin.set(before.x, before.y, before.z);
     if (this.spin.lengthSq() > 1e-18 && dt > 0) this.spin.setLength((angle / dt) * Math.sign(before.w || 1));
     else this.spin.set(0, 0, 0);
@@ -2001,7 +2003,7 @@ export class Fleet implements Obstacle {
     if (!this.heardFresh) return;
     this.heard.addScaledVector(this.velocity, dt);
     this.position.lerp(this.heard, Math.min(1, dt * 4));
-    this.quaternion.slerp(this.heardTurn, Math.min(1, dt * 4));
+    slerp(this.quaternion, this.heardTurn, Math.min(1, dt * 4));
     this.root.updateMatrixWorld();
   }
 
@@ -2051,9 +2053,9 @@ export class Fleet implements Obstacle {
       else zone.mesh.visible = !this.broken(i);
     }
     this.dome.visible = this.phase < 3 && !dying;
-    this.reactorGlow.color.setRGB(1, 0.75, 0.4).multiplyScalar(dying ? 3 + 2 * Math.sin(now * 30) : this.phase === 3 ? 2 + Math.sin(now * 8) : 1.5);
+    this.reactorGlow.color.setRGB(1, 0.75, 0.4).multiplyScalar(dying ? 3 + 2 * sin(now * 30) : this.phase === 3 ? 2 + sin(now * 8) : 1.5);
     this.flame.visible = this.burning;
-    if (this.burning) this.flame.scale.set(1 + 0.08 * Math.sin(now * 40), 1 + 0.08 * Math.sin(now * 37), 1);
+    if (this.burning) this.flame.scale.set(1 + 0.08 * sin(now * 40), 1 + 0.08 * sin(now * 37), 1);
     this.procession.uniforms.time.value = now;
   }
 
@@ -2078,7 +2080,7 @@ export class Fleet implements Obstacle {
     const r = new Randomizer(this.seed * 13 + 101);
     const angle = r.range(0, Math.PI * 2);
     const out = entryRadius(this.lane);
-    this.position.set(Math.cos(angle) * out, this.lane, Math.sin(angle) * out);
+    this.position.set(cos(angle) * out, this.lane, sin(angle) * out);
     this.velocity.crossVectors(UP, this.position).setLength(FLEET_SPEED);
     this.quaternion.setFromRotationMatrix(look.lookAt(local.set(0, 0, 0), want.copy(this.velocity).normalize(), UP));
     this.target = null;

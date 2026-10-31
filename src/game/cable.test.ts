@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { cos, sin } from '../detmath';
 import { describe, expect, it, vi } from 'vitest';
 import { FlightModel, MAX_SPEED } from '../ship/flight';
 import { testField } from '../test/field';
@@ -210,7 +211,7 @@ describe('a cable lying on the field', () => {
     const to = new THREE.Vector3();
     const wound = new Cable();
     let turn = -Math.PI / 2 + 0.3;
-    while (turn < Math.PI * 6 && wound.follow(small.field, from, to.set(Math.cos(turn) * circle, 0, Math.sin(turn) * circle), true)) turn += 0.01;
+    while (turn < Math.PI * 6 && wound.follow(small.field, from, to.set(cos(turn) * circle, 0, sin(turn) * circle), true)) turn += 0.01;
     expect(wound.count).toBe(WRAP_MAX);
     expect(turn).toBeLessThan(Math.PI * 6);
     // the well's body across the cable: it snaps, and lies on nothing elsewhere

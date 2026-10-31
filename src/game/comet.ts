@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { cos, pow, sin } from '../detmath';
+import { setRotation } from '../detthree';
 import { Randomizer } from '../random';
 import { hash } from '../music/songs';
 import { radialTexture } from '../view/textures';
@@ -85,7 +87,7 @@ const FLASH = 1.5;
  * nuclei (500 kg/m³), some 0.7 million tonnes. A solid piece it breaks up on takes its momentum
  * (see strikeWall) and turns at up to SHOVE_SPIN (rad/s) more.
  */
-export const HEAD_MASS = (4 / 3) * Math.PI * (HEAD_RADIUS / 20) ** 3 * 500;
+export const HEAD_MASS = (4 / 3) * Math.PI * pow(HEAD_RADIUS / 20, 3) * 500;
 const SHOVE_SPIN = 0.12;
 
 /**
@@ -313,7 +315,7 @@ export function cometsOf(seed: number, round: number, well: Well | null = null):
     const edge = r.range(window.from, window.to);
     const heading = r.range(0, Math.PI * 2);
     const tilt = r.range(-COMET_TILT, COMET_TILT);
-    const direction = new THREE.Vector3(Math.cos(heading) * Math.cos(tilt), Math.sin(tilt), Math.sin(heading) * Math.cos(tilt));
+    const direction = new THREE.Vector3(cos(heading) * cos(tilt), sin(tilt), sin(heading) * cos(tilt));
     const dive = r.range(DIVE[0], DIVE[1]);
     // a miss square to the course: around the course by an angle, out by a distance
     const across = new THREE.Vector3(0, 1, 0).cross(direction).normalize();
@@ -323,13 +325,13 @@ export function cometsOf(seed: number, round: number, well: Well | null = null):
     const nearest = new THREE.Vector3();
     if (well && well.position.length() < ARENA_LIMIT) {
       // a body in the field: aimed close by it, where its pull catches the head
-      nearest.copy(across).multiplyScalar(Math.cos(turn)).addScaledVector(up, Math.sin(turn)).multiplyScalar(miss * well.radius * CAPTURE).add(well.position);
+      nearest.copy(across).multiplyScalar(cos(turn)).addScaledVector(up, sin(turn)).multiplyScalar(miss * well.radius * CAPTURE).add(well.position);
     } else {
-      nearest.copy(across).multiplyScalar(Math.cos(turn) * miss * COMET_MISS).addScaledVector(up, Math.sin(turn) * miss * COMET_MISS);
+      nearest.copy(across).multiplyScalar(cos(turn) * miss * COMET_MISS).addScaledVector(up, sin(turn) * miss * COMET_MISS);
       if (well) {
         // a body beneath the field: the course turned down towards it by the dive
         const down = pull.subVectors(well.position, nearest).normalize();
-        direction.addScaledVector(down, -direction.dot(down)).normalize().multiplyScalar(Math.cos(dive)).addScaledVector(down, Math.sin(dive));
+        direction.addScaledVector(down, -direction.dot(down)).normalize().multiplyScalar(cos(dive)).addScaledVector(down, sin(dive));
       }
     }
     // the head reaches the arena's edge (as far before the nearest point as the field's edge) about `edge`
@@ -422,13 +424,13 @@ export class Shower {
     this.up.crossVectors(comet.direction, this.across);
     for (let i = 0; i < SHOWER_PIECES; i++) {
       // denser near the head, thinning out towards the end of the tail
-      const along = r.nextFloat() ** 1.6;
+      const along = pow(r.nextFloat(), 1.6);
       const width = SHOWER_NARROW + (SHOWER_WIDE - SHOWER_NARROW) * along;
       const angle = r.range(0, Math.PI * 2);
       const out = Math.sqrt(r.nextFloat()) * width;
       this.behind[i] = SHOWER_GAP + along * (SHOWER_LENGTH - SHOWER_GAP);
-      this.offsets[i * 2] = Math.cos(angle) * out;
-      this.offsets[i * 2 + 1] = Math.sin(angle) * out;
+      this.offsets[i * 2] = cos(angle) * out;
+      this.offsets[i * 2 + 1] = sin(angle) * out;
     }
   }
 
@@ -775,10 +777,10 @@ function lagOf(course: THREE.Vector3, target: THREE.Vector3): THREE.Vector3 {
 }
 
 /** How far along its tail (0 at the head, 1 at the end) the k-th point of its ribbon lies. */
-const shareOf = (k: number) => (k / TAIL_SEGMENTS) ** TAIL_SPACING;
+const shareOf = (k: number) => pow(k / TAIL_SEGMENTS, TAIL_SPACING);
 
 /** A tail's half width (units) at share `s` of its length, `scale` of it drawn (see TAILS). */
-const halfWidth = (t: number, s: number, scale: number) => (TAILS[t].width[0] + (TAILS[t].width[1] - TAILS[t].width[0]) * s ** TAIL_OPENING) * scale;
+const halfWidth = (t: number, s: number, scale: number) => (TAILS[t].width[0] + (TAILS[t].width[1] - TAILS[t].width[0]) * pow(s, TAIL_OPENING)) * scale;
 
 /** The point of tail `t` at share `s` of its length, `scale` of it drawn, for a head at `head` whose dust lags along `lag` (see lagOf). */
 function tailAt(t: number, s: number, head: THREE.Vector3, lag: THREE.Vector3, scale: number, target: THREE.Vector3): THREE.Vector3 {
@@ -937,7 +939,7 @@ export class CometView {
     // only a well draws it out
     const drawn = Math.max(0, 1 - (comet.swallowed - time) / STRETCH);
     this.body.scale.set(1 / (1 + drawn), 1 + 3 * drawn, 1 / (1 + drawn));
-    this.nucleus.rotation.set(time * TUMBLE[0], time * TUMBLE[1], time * TUMBLE[2]);
+    setRotation(this.nucleus, time * TUMBLE[0], time * TUMBLE[1], time * TUMBLE[2]);
     const seen = camera.distanceTo(head);
     this.near.visible = seen < this.nearRange;
     this.far.visible = !this.near.visible;
@@ -975,7 +977,7 @@ export class CometView {
       } else {
         dummy.scale.setScalar(1);
         shower.pieceAt(i, time, dummy.position);
-        dummy.rotation.set(i + time * 1.3, i * 0.7 + time, 0);
+        setRotation(dummy, i + time * 1.3, i * 0.7 + time, 0);
         glints.setXYZ(i, dummy.position.x, dummy.position.y, dummy.position.z);
       }
       dummy.updateMatrix();
@@ -993,7 +995,7 @@ export class CometView {
       const s = shareOf(k);
       tailAt(t, s, this.head, behind, this.scale, lane);
       along.copy(AWAY).addScaledVector(behind, 2 * TAILS[t].lag * s).normalize();
-      const light = TAILS[t].bright * this.strength * Math.min(1, s / TAIL_RISE) * (1 - s) ** 1.5;
+      const light = TAILS[t].bright * this.strength * Math.min(1, s / TAIL_RISE) * pow(1 - s, 1.5);
       setRibbon(this.tails.geometry, t * TAIL_VERTICES + k * 2, lane, along, halfWidth(t, s, this.scale), light);
     }
   }
@@ -1011,7 +1013,7 @@ export class CometView {
       start.copy(vent.point).applyMatrix4(frame);
       flow.copy(vent.normal).transformDirection(frame);
       const wake = THREE.MathUtils.smoothstep(flow.dot(SUN_DIRECTION), JET_WAKE[0], JET_WAKE[1]);
-      const strength = wake * (0.75 + 0.25 * Math.sin(time * JET_BREATH + j * 2.1));
+      const strength = wake * (0.75 + 0.25 * sin(time * JET_BREATH + j * 2.1));
       flow.addScaledVector(SUN_DIRECTION, JET_SUNWARD).normalize();
       // each vent's own reach, spread evenly by the golden ratio
       const length = JET_LENGTH * (JET_REACH + (1 - JET_REACH) * ((j * 0.618034) % 1));
@@ -1019,7 +1021,7 @@ export class CometView {
         const s = k / JET_SEGMENTS;
         lane.copy(start).addScaledVector(flow, length * s).addScaledVector(AWAY, length * JET_BEND * s * s);
         along.copy(flow).addScaledVector(AWAY, 2 * JET_BEND * s).normalize();
-        const half = JET_WIDTH[0] + (JET_WIDTH[1] - JET_WIDTH[0]) * s ** 0.7;
+        const half = JET_WIDTH[0] + (JET_WIDTH[1] - JET_WIDTH[0]) * pow(s, 0.7);
         const light = JET_BRIGHT * strength * Math.min(1, s * 12) * (1 - s) * (1 - s);
         setRibbon(geometry, j * JET_VERTICES + k * 2, lane, along, half, light);
       }
