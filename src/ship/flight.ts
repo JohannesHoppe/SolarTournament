@@ -28,6 +28,7 @@ const axis = new THREE.Vector3();
 const local = new THREE.Vector3();
 const inverse = new THREE.Quaternion();
 const acceleration = new THREE.Vector3();
+const before = new THREE.Vector3();
 const targetRate = new THREE.Vector3();
 const AXES = ['x', 'y', 'z'] as const;
 
@@ -109,12 +110,23 @@ export class FlightModel {
     this.properAcceleration = acceleration.length();
     if (push) acceleration.add(push);
     acceleration.applyQuaternion(this.orientation);
+    before.copy(this.velocity);
     this.velocity.addScaledVector(acceleration, dt);
     // a step that crosses the limit ends on it, however long the frame was; at or past the
     // limit (after an overdrive, or a fall into a well) a push across the course turns the
     // flight but never adds speed
     const limit = Math.max(speed, MAX_SPEED);
-    if (this.velocity.lengthSq() > limit * limit) this.velocity.setLength(limit);
+    if (this.velocity.lengthSq() > limit * limit) {
+      const pushed = acceleration.length() * dt;
+      this.velocity.setLength(limit);
+      // the ship is held at the limit: a drag that takes a little each step (a planet's air)
+      // leaves the drive only that little to give back, so the flame and the load on the clone
+      // are the share of the push the limit let through
+      const share = pushed > 1e-9 ? Math.min(1, this.velocity.distanceTo(before) / pushed) : 0;
+      this.limited = true;
+      this.properAcceleration *= share;
+      drive *= share;
+    }
     // gravity is no push of the ship's: the limit holds only against its own, so a well pulls
     // a ship past it, and the flight computer never brakes the speed it gained
     this.velocity.addScaledVector(gravity, dt);

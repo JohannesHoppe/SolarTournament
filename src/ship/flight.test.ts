@@ -310,6 +310,22 @@ describe('the speed limit', () => {
     expect(flight.velocity.length()).toBeGreaterThan(MAX_SPEED * 0.999);
   });
 
+  it("against a planet's drag holds the limit with only the push the drag takes: MAX shown, the flame low, the clone feeling the drag alone", () => {
+    const flight = new FlightModel();
+    flight.reset(new THREE.Vector3(), new THREE.Quaternion());
+    flight.velocity.set(0, 0, -MAX_SPEED);
+    // the air's drag at the deck at the limit, 1.5 g against the flight
+    const drag = new THREE.Vector3(0, 0, 1.5 * 196.2);
+    const controls = { ...IDLE, thrust: 1 };
+    for (let t = 0; t < 2; t += STEP) {
+      flight.update(STEP, controls, drag);
+      expect(flight.limited).toBe(true);
+    }
+    expect(flight.velocity.length()).toBeGreaterThan(MAX_SPEED * 0.99);
+    expect(flight.throttle).toBeLessThan(0.2);
+    expect(flight.properAcceleration).toBeLessThan(1.5 * 196.2 * 1.01);
+  });
+
   it("holds only against the ship's own push: a well pulls it past, and the flight computer never brakes that back", () => {
     // at the limit, the drive burning towards the hole from 1.5 km
     const burning = fall(30000, MAX_SPEED, 1);
