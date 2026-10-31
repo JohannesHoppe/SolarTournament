@@ -376,11 +376,11 @@ const ramHull = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), 
 const sweep = new THREE.Vector3();
 const before = new THREE.Quaternion();
 const outward = new THREE.Vector3();
-/** The smallest of `points` (xyz, a flat list) along `axis`, and in `low` the point it is. */
-function lowest(points: Float32Array, axis: THREE.Vector3, low: THREE.Vector3 | null = null): number {
+/** The smallest of the first `length` values of `points` (xyz, a flat list) along `axis`, and in `low` the point it is. */
+function lowest(points: Float32Array, length: number, axis: THREE.Vector3, low: THREE.Vector3 | null = null): number {
   let least = Infinity;
   let at = 0;
-  for (let k = 0; k < points.length; k += 3) {
+  for (let k = 0; k < length; k += 3) {
     const along = points[k] * axis.x + points[k + 1] * axis.y + points[k + 2] * axis.z;
     if (along < least) {
       least = along;
@@ -389,6 +389,33 @@ function lowest(points: Float32Array, axis: THREE.Vector3, low: THREE.Vector3 | 
   }
   low?.set(points[at], points[at + 1], points[at + 2]);
   return least;
+}
+/**
+ * Lists a collider of the hull (a box `half` its extents around `center`, or a ball of `radius`)
+ * in `touching` at place `near` when a piece's bounding sphere (`reach` around pieceCenter)
+ * reaches it, with the way out from its nearest point to the piece's center (zero for a center
+ * inside a box); returns how many are listed (see Fleet.depthOf).
+ */
+function reached(near: number, center: THREE.Vector3, half: THREE.Vector3 | null, radius: number, reach: number): number {
+  const out = (outs[near] ??= new THREE.Vector3());
+  if (half) {
+    if (!boxContact(offCenter.subVectors(pieceCenter, center), half, reach, out, nearest)) return near;
+    if (Math.abs(offCenter.x) <= half.x && Math.abs(offCenter.y) <= half.y && Math.abs(offCenter.z) <= half.z) out.set(0, 0, 0);
+  } else {
+    out.subVectors(pieceCenter, center);
+    if (out.length() >= radius + reach) return near;
+    out.normalize();
+  }
+  const entry = (touching[near] ??= { center, half, radius, out });
+  entry.center = center;
+  entry.half = half;
+  entry.radius = radius;
+  entry.out = out;
+  return near + 1;
+}
+/** A piece's outline (its extent hullLow to hullHigh in the hull's frame) lies wholly beside a box, along one of the hull's axes. */
+function beside(center: THREE.Vector3, half: THREE.Vector3): boolean {
+  return hullLow.x >= center.x + half.x || hullHigh.x <= center.x - half.x || hullLow.y >= center.y + half.y || hullHigh.y <= center.y - half.y || hullLow.z >= center.z + half.z || hullHigh.z <= center.z - half.z;
 }
 /** How far a box (`half` its extents) or a ball (`half` null, `radius`) around `center` reaches along a unit `axis`. */
 function farthest(center: THREE.Vector3, half: THREE.Vector3 | null, radius: number, axis: THREE.Vector3): number {
@@ -448,6 +475,10 @@ const HANGAR_SPANS: readonly (readonly [number, number])[] = HANGARS.map((z) => 
 
 /** How far the hangar deck reaches out from the hull's middle at its widest: its flanks (units). */
 const DECK_REACH = Math.max(...HANGAR_SPANS.flat().map((z) => hullAt(z).half));
+/** How far the hangar deck reaches out from the hull's middle at its narrowest, where its mouths open: its flanks (units). */
+const DECK_INSIDE = Math.min(...HANGAR_SPANS.flat().map((z) => hullAt(z).half));
+/** How far each tunnel reaches out from the hull's middle at its middle (units). */
+const HANGAR_HALVES = HANGARS.map((z) => hullAt(z).half);
 
 /**
  * The hangar deck as the motes' shelter (see world/space): from the hull's frame into a box of
@@ -1423,36 +1454,22 @@ export class Fleet implements Obstacle {
     this.toLocal(piece.object.position, pieceCenter);
     // the colliders its bounding sphere reaches, with the way out from each one's nearest point
     let near = 0;
-    const enter = (center: THREE.Vector3, half: THREE.Vector3 | null, radius: number) => {
-      const out = (outs[near] ??= new THREE.Vector3());
-      if (half) {
-        if (!boxContact(offCenter.subVectors(pieceCenter, center), half, piece.radius, out, nearest)) return;
-        if (Math.abs(offCenter.x) <= half.x && Math.abs(offCenter.y) <= half.y && Math.abs(offCenter.z) <= half.z) out.set(0, 0, 0);
-      } else {
-        out.subVectors(pieceCenter, center);
-        if (out.length() >= radius + piece.radius) return;
-        out.normalize();
-      }
-      const entry = (touching[near] ??= { center, half, radius, out });
-      entry.center = center;
-      entry.half = half;
-      entry.radius = radius;
-      entry.out = out;
-      near++;
-    };
-    for (const box of this.colliders) if (this.solid(box)) enter(box.center, box.half, 0);
-    for (const ball of this.balls) if (this.solidBall(ball)) enter(ball.center, null, ball.radius);
+    for (const box of this.colliders) if (this.solid(box)) near = reached(near, box.center, box.half, 0, piece.radius);
+    for (const ball of this.balls) if (this.solidBall(ball)) near = reached(near, ball.center, null, ball.radius, piece.radius);
     if (!near) return 0;
     // of those, the ones its outline reaches into: within a box's extent along the hull's axes,
     // and towards the collider from the piece's center
-    const points = this.outlineInFrame(piece);
+    const length = this.outlineInFrame(piece);
+    const points = hullPoints;
     let count = 0;
     for (let i = 0; i < near; i++) {
       const { center, half, radius, out } = touching[i];
-      if (half && [0, 1, 2].some((axis) => hullLow.getComponent(axis) >= center.getComponent(axis) + half.getComponent(axis) || hullHigh.getComponent(axis) <= center.getComponent(axis) - half.getComponent(axis))) continue;
-      if (out.lengthSq() > 0 && lowest(points, out) >= farthest(center, half, radius, out)) continue;
+      if (half && beside(center, half)) continue;
+      if (out.lengthSq() > 0 && lowest(points, length, out) >= farthest(center, half, radius, out)) continue;
       // kept in the first places of the list, in order
-      [touching[count], touching[i]] = [touching[i], touching[count]];
+      const kept = touching[count];
+      touching[count] = touching[i];
+      touching[i] = kept;
       count++;
     }
     if (!count) return 0;
@@ -1461,7 +1478,7 @@ export class Fleet implements Obstacle {
     for (let k = 0; k < AXES.length + count; k++) {
       const axis = k < AXES.length ? AXES[k] : touching[k - AXES.length].out;
       if (axis.lengthSq() === 0) continue;
-      const low = lowest(points, axis);
+      const low = lowest(points, length, axis);
       let push = 0;
       for (let i = 0; i < count; i++) push = Math.max(push, farthest(touching[i].center, touching[i].half, touching[i].radius, axis) - low);
       if (push < depth) {
@@ -1470,26 +1487,25 @@ export class Fleet implements Obstacle {
       }
     }
     if (depth <= 0) return 0;
-    lowest(points, normal, point);
+    lowest(points, length, normal, point);
     point.applyMatrix4(this.root.matrixWorld);
     normal.applyQuaternion(this.quaternion);
     return depth;
   }
 
-  /** A piece's outline in the battleship's frame (into hullPoints), with its extent along the frame's axes (hullLow, hullHigh). */
-  private outlineInFrame(piece: Asteroid): Float32Array {
+  /** A piece's outline in the battleship's frame (into the first places of hullPoints; returns how many it takes), with its extent along the frame's axes (hullLow, hullHigh). */
+  private outlineInFrame(piece: Asteroid): number {
     const shape = outline(piece);
     if (hullPoints.length < shape.length) hullPoints = new Float32Array(shape.length);
-    const points = hullPoints.subarray(0, shape.length);
     toHull.copy(this.root.matrixWorld).invert().multiply(piece.object.matrixWorld);
     hullLow.setScalar(Infinity);
     hullHigh.setScalar(-Infinity);
     for (let k = 0; k < shape.length; k += 3) {
-      across.fromArray(shape, k).applyMatrix4(toHull).toArray(points, k);
+      across.fromArray(shape, k).applyMatrix4(toHull).toArray(hullPoints, k);
       hullLow.min(across);
       hullHigh.max(across);
     }
-    return points;
+    return shape.length;
   }
 
   /**
@@ -1741,16 +1757,21 @@ export class Fleet implements Obstacle {
    */
   novaHits(point: THREE.Vector3): { zone: number; count: number }[] {
     return this.zones.flatMap((_, i) => {
-      const count = this.targetable(i) ? Math.min(this.novaHit(i, this.zoneAt(i, sighted).distanceTo(point)), this.hitsOf(i) - this.hits[i]) : 0;
+      const count = this.novaCount(i, point);
       return count > 0 ? [{ zone: i, count }] : [];
     });
   }
 
-  /** What a nova core going off at `point` would take of the battleship, in hits on its parts. A bot weighs a nova by it (see novaWorth). */
+  /** What a nova core going off at `point` would take of the battleship, in hits on its parts. A bot weighs a nova by it (see novaWorth), every frame it holds one: counted without building a list. */
   novaDamage(point: THREE.Vector3): number {
     let sum = 0;
-    for (const { count } of this.novaHits(point)) sum += count;
+    for (let i = 0; i < this.zones.length; i++) sum += this.novaCount(i, point);
     return sum;
+  }
+
+  /** The hits a nova core going off at `point` deals a part (see novaHits). */
+  private novaCount(zone: number, point: THREE.Vector3): number {
+    return this.targetable(zone) ? Math.min(this.novaHit(zone, this.zoneAt(zone, sighted).distanceTo(point)), this.hitsOf(zone) - this.hits[zone]) : 0;
   }
 
   /**
@@ -1789,7 +1810,7 @@ export class Fleet implements Obstacle {
     if (!this.standing || point.distanceTo(this.position) > REACH) return false;
     this.toLocal(point, local);
     if (local.y < HANGAR_FLOOR || local.y > HANGAR_CEILING) return false;
-    for (const z of HANGARS) if (Math.abs(local.z - z) < HANGAR_WIDTH / 2) return Math.abs(local.x) < hullAt(z).half;
+    for (let i = 0; i < HANGARS.length; i++) if (Math.abs(local.z - HANGARS[i]) < HANGAR_WIDTH / 2) return Math.abs(local.x) < HANGAR_HALVES[i];
     return false;
   }
 
@@ -2008,7 +2029,8 @@ export class Fleet implements Obstacle {
   /**
    * Shows a tunnel's machinery in full only while `eye` (the camera) is in the hangar deck or
    * within HANGAR_APPROACH of it, and of the tunnel nearest it along the hull; from anywhere else
-   * the walls' pictures stand in for it.
+   * the walls' pictures stand in for it. Above or below the deck's height only a camera out
+   * beyond a flank looks into a mouth: over the flight deck, or under the hull, the hull hides it.
    */
   view(eye: THREE.Vector3) {
     const local = EYE.copy(eye).applyMatrix4(UNDO.copy(this.root.matrixWorld).invert());
@@ -2018,7 +2040,8 @@ export class Fleet implements Obstacle {
       local.y > HANGAR_FLOOR - HANGAR_APPROACH &&
       local.y < HANGAR_CEILING + HANGAR_APPROACH &&
       local.z > HANGARS[0] - HANGAR_WIDTH / 2 - HANGAR_APPROACH &&
-      local.z < HANGARS[HANGARS.length - 1] + HANGAR_WIDTH / 2 + HANGAR_APPROACH;
+      local.z < HANGARS[HANGARS.length - 1] + HANGAR_WIDTH / 2 + HANGAR_APPROACH &&
+      ((local.y >= HANGAR_FLOOR && local.y <= HANGAR_CEILING) || Math.abs(local.x) > DECK_INSIDE);
     let nearest = 0;
     for (let i = 1; i < HANGARS.length; i++) if (Math.abs(local.z - HANGARS[i]) < Math.abs(local.z - HANGARS[nearest])) nearest = i;
     for (let i = 0; i < this.machinery.length; i++) this.machinery[i].visible = near && i === nearest;
