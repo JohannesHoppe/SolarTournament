@@ -48,6 +48,21 @@ const NEAR_FLAT = 0.05;
  */
 const RING_GLOW = 0.3;
 /**
+ * A deliberate deviation for the look: where the edge-on disk meets the halo's left and right
+ * sides it flares in two hot spots, as the iconic pictures of a black hole show it: centered
+ * SPOT_AT times the shadow's angle out from the hole along the disk's plane, SPOT_LONG of it long
+ * and SPOT_THIN of it thin, SPOT_LIGHT bright (linear, before the tone mapping: over the bloom's
+ * threshold, so they glow locally), the side whose gas streams towards the pilot the brighter by
+ * the disk's own Doppler beaming (see world/landmarks, diskGas), and the band running on faintly
+ * from them out to both sides, fading out SPOT_REACH times the shadow's angle from the hole. Only
+ * while the disk is seen nearly edge-on (see spotFlare).
+ */
+const SPOT_AT = 1.35;
+const SPOT_LONG = 0.32;
+const SPOT_THIN = 0.045;
+const SPOT_LIGHT = 0.7;
+const SPOT_REACH = 4.0;
+/**
  * The disk's gas in front of a rock or ship inside its slab, softly held below VEIL_SHARE of the
  * surface's own luminance (linear, before the tone mapping) plus VEIL_FLOOR: the veil tints a
  * rock's lit side and barely lifts its dark side, so it shows the rock lies in the glowing gas
@@ -82,6 +97,11 @@ const shader = {
     ringAngle: { value: 0 },
     /** How much of the bend is drawn: 1 with the hole ahead, fading to 0 as it comes abeam (see BEND_FADE). */
     bend: { value: 1 },
+    /** The hot spots (see SPOT_AT): the way along the disk's plane across the line to the hole, the way out of the plane, each side's Doppler boost (along +lateral, along -lateral) and how much of them shows. */
+    spotLateral: { value: new THREE.Vector3(1, 0, 0) },
+    spotNormal: { value: new THREE.Vector3(0, 1, 0) },
+    spotBoost: { value: new THREE.Vector2(1, 1) },
+    spotFlare: { value: 0 },
     /** How many steps the ray is marched outward looking for its source (see Look.lens, view/quality): fewer leaves the bend coarser, never unbent. */
     samples: { value: 6 },
   },
@@ -98,6 +118,10 @@ const shader = {
     uniform float shadowAngle;
     uniform float ringAngle;
     uniform float bend;
+    uniform vec3 spotLateral;
+    uniform vec3 spotNormal;
+    uniform vec2 spotBoost;
+    uniform float spotFlare;
     uniform int samples;
     uniform mat4 cameraWorld;
     uniform mat4 projectionInverse;
@@ -208,7 +232,15 @@ const shader = {
       // and, as the disk's light bent all the way round the hole, a warm glow hugging the ring
       // outside it, fading out over a fifth of the shadow's angle (see RING_GLOW)
       float skirt = exp(-max(theta - shadowAngle * 1.04, 0.0) / (shadowAngle * 0.2));
-      gl_FragColor = color + vec4(vec3(1.0, 0.88, 0.7) * photon * 0.75 + vec3(1.0, 0.68, 0.42) * skirt * ${RING_GLOW}, 0.0);
+      // the hot spots where the edge-on disk meets the halo's sides, and the band running on from them
+      float lateral = dot(rd, spotLateral) / shadowAngle;
+      float offPlane = dot(rd, spotNormal) / (shadowAngle * ${SPOT_THIN});
+      float spotAcross = exp(-offPlane * offPlane);
+      float spotAlong = (abs(lateral) - ${SPOT_AT}) / ${SPOT_LONG};
+      // (only towards the hole: within SPOT_REACH times the shadow's angle of it)
+      float flare = (exp(-spotAlong * spotAlong) + 0.06 * exp(-max(abs(lateral) - ${SPOT_AT}, 0.0) * 1.2)) * spotAcross * spotFlare
+        * (1.0 - smoothstep(${(SPOT_REACH * 0.6).toFixed(2)}, ${SPOT_REACH.toFixed(2)}, theta / shadowAngle)) * (lateral > 0.0 ? spotBoost.x : spotBoost.y);
+      gl_FragColor = color + vec4(vec3(1.0, 0.88, 0.7) * photon * 0.75 + vec3(1.0, 0.68, 0.42) * skirt * ${RING_GLOW} + vec3(1.0, 0.86, 0.68) * flare * ${SPOT_LIGHT}, 0.0);
     }
   `,
 };
@@ -222,6 +254,38 @@ const forward = new THREE.Vector3();
  * HOLE_SHADOW and EINSTEIN times the horizon's angle as a share of the field of view, taken as a
  * share of the screen's height in the picture's middle and turned into the angle that spans there.
  */
+const up = new THREE.Vector3(0, 1, 0);
+const flow = new THREE.Vector3();
+
+/** The uniforms hotSpots sets. */
+export interface SpotUniforms {
+  spotLateral: { value: THREE.Vector3 };
+  spotNormal: { value: THREE.Vector3 };
+  spotBoost: { value: THREE.Vector2 };
+  spotFlare: { value: number };
+}
+
+/**
+ * The hot spots' frame for a line of sight `toHole` (unit, in the hole's frame, the disk in its
+ * xz plane): the way across it along the disk's plane, the way out of the plane, each side's
+ * boost by the gas streaming towards the pilot or away (as diskGas beams it, at the inner edge),
+ * and how much of them shows: in full seen within about 18° of edge-on, none from 41° on.
+ */
+export function hotSpots(toHole: THREE.Vector3, out: SpotUniforms) {
+  const lateral = out.spotLateral.value.crossVectors(toHole, up);
+  const level = lateral.length();
+  out.spotFlare.value = THREE.MathUtils.smoothstep(level, 0.75, 0.95);
+  if (level < 1e-6) return;
+  lateral.divideScalar(level);
+  out.spotNormal.value.crossVectors(lateral, toHole).normalize();
+  // the gas circles counterclockwise seen from above: at a point p its flow is (p.z, 0, -p.x) / |p|
+  const boost = (side: number) => {
+    flow.set(lateral.z * side, 0, -lateral.x * side);
+    return Math.max(1 + 0.55 * flow.dot(toHole) * -1, 0.05) ** 3;
+  };
+  out.spotBoost.value.set(boost(1), boost(-1));
+}
+
 export function lensAngles(horizon: number, distance: number, fov: number): { shadow: number; ring: number } {
   const share = Math.atan(horizon / distance) / fov;
   const middle = 2 * Math.tan(fov / 2);
@@ -260,6 +324,7 @@ export class Lensing {
     uniforms.shadowAngle.value = shadow;
     uniforms.ringAngle.value = ring;
     uniforms.bend.value = THREE.MathUtils.smoothstep(toHole.dot(forward) / distance, 0, BEND_FADE);
+    hotSpots(toHole.divideScalar(distance), uniforms as unknown as SpotUniforms);
     uniforms.shadowRadius.value = horizon * HOLE_SHADOW;
     // the camera as this frame draws it, so the near side in the shadow sits on the disk around it
     camera.updateMatrixWorld();

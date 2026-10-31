@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { Lensing, lensAngles } from './lensing';
+import { Lensing, hotSpots, lensAngles } from './lensing';
 import { HOLE_SHADOW } from '../world/landmarks';
 
 const HORIZON = 7000;
@@ -70,5 +70,24 @@ describe("the black hole's lens", () => {
     const lens = new Lensing();
     lens.update(c, new THREE.Vector3(), HORIZON, null);
     expect(lens.pass.enabled).toBe(true);
+  });
+
+  it('flares its hot spots only with the disk seen nearly edge-on, the side streaming towards the pilot the brighter, as the gas circles counterclockwise seen from above', () => {
+    const spots = { spotLateral: { value: new THREE.Vector3() }, spotNormal: { value: new THREE.Vector3() }, spotBoost: { value: new THREE.Vector2() }, spotFlare: { value: 0 } };
+    // the pilot on +x looking at the hole: the side towards -z is where the gas streams away (towards -x), the side towards +z where it comes on
+    hotSpots(new THREE.Vector3(-1, 0, 0), spots);
+    expect(spots.spotFlare.value).toBe(1);
+    expect(spots.spotLateral.value.z).toBeCloseTo(-1, 9);
+    expect(spots.spotNormal.value.y).toBeCloseTo(1, 9);
+    expect(spots.spotBoost.value.x).toBeCloseTo(0.45 ** 3, 9);
+    expect(spots.spotBoost.value.y).toBeCloseTo(1.55 ** 3, 9);
+    // 30° above the plane: fading; 60° above and straight down: none
+    hotSpots(new THREE.Vector3(-Math.cos(Math.PI / 6), -Math.sin(Math.PI / 6), 0), spots);
+    expect(spots.spotFlare.value).toBeGreaterThan(0);
+    expect(spots.spotFlare.value).toBeLessThan(1);
+    hotSpots(new THREE.Vector3(-0.5, -Math.sqrt(0.75), 0), spots);
+    expect(spots.spotFlare.value).toBe(0);
+    hotSpots(new THREE.Vector3(0, -1, 0), spots);
+    expect(spots.spotFlare.value).toBe(0);
   });
 });
