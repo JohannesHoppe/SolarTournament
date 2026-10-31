@@ -390,3 +390,36 @@ test('a nova from a ship without a core never goes off; once is forgiven, and wh
   expect(await cheat.evaluate(() => window.game.state)).not.toBe('menu');
   expect(errors).toEqual([]);
 });
+
+test("two tabs agree again on a piece one of them moved alone, once the lead's sync of the field came round", async ({ context }) => {
+  const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}s`);
+  // where a piece is at a field time both tabs can name, on each tab
+  const at = (page: Page, id: string, time: number) =>
+    page.evaluate(
+      ([id, time]) => {
+        const piece = window.game.field.asteroids.get(id);
+        return piece ? window.game.field.positionOf(piece, time, piece.object.position.clone()).toArray() : null;
+      },
+      [id, time] as const,
+    );
+  const id = await a.evaluate(() => [...window.game.field.asteroids.values()].find((piece: { solid: boolean }) => !piece.solid)!.id as string);
+  // the second tab (it follows) shoves it 100 m aside on its own
+  const moved = await b.evaluate((id) => {
+    const field = window.game.field;
+    const piece = field.asteroids.get(id);
+    const before = piece.object.position.y;
+    field.move({ id, b: field.clock, p: piece.object.position.clone().setY(piece.object.position.y + 2000).toArray(), v: [0, 0, 0], q: piece.object.quaternion.toArray(), s: [0, 1, 0, 0], c: -2 });
+    return piece.object.position.y - before;
+  }, id);
+  expect(moved).toBeCloseTo(2000, 0);
+  const later = (await a.evaluate(() => window.game.field.clock as number)) + 60;
+  // apart on the two tabs (a piece a bot's laser broke in the meantime is gone on both)
+  const apart = async () => {
+    const [here, there] = [await at(a, id, later), await at(b, id, later)];
+    if (!here || !there) return here === there ? 0 : Infinity;
+    return Math.hypot(here[0] - there[0], here[1] - there[1], here[2] - there[2]);
+  };
+  // the whole field comes round every 10 s
+  await expect.poll(apart, { timeout: 25_000, intervals: [1000] }).toBeLessThan(1);
+  expect(errors).toEqual([]);
+});

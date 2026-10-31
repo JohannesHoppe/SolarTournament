@@ -3,7 +3,7 @@ import { Randomizer } from '../random';
 import { hash } from '../music/songs';
 import { radialTexture } from '../view/textures';
 import { ARENA_LIMIT } from '../world/arena';
-import type { Asteroid, AsteroidField, Obstacle, Well } from '../world/asteroids';
+import { blowSpin, type Asteroid, type AsteroidField, type Obstacle, type Well } from '../world/asteroids';
 import { share } from '../world/bodies';
 import { nucleusGeometry, nucleusMaterial, nucleusVents, type Vent } from '../world/nucleus';
 import { dustStreaks, SUN_DIRECTION } from '../world/space';
@@ -472,14 +472,19 @@ const LOOK_BACK = 3;
  * The head runs down what stands in its way: a rock or hull piece it touches is struck at the
  * first moment of a grid of BREAK_STEP (s) of field time at which it touched it (looked for up
  * to LOOK_BACK back), so every browser strikes it at the same field time, however its frames
- * fell. A rock breaks (its fragments, deterministic from the rock and that time, fly alike
- * everywhere; those born in the head's way go the same way) and `broke` hears of it. On the
+ * fell. A whole rock breaks (its fragments, deterministic from the rock and that time, fly alike
+ * everywhere); a piece of one (a fragment, broken junk) goes to dust without pieces, and so do
+ * the fragments born in the head's way. `broke` hears of each. On the
  * first solid piece its own shape meets (a hull section, the junkyard's hub) the head breaks up,
  * as on the battleship's hull, and the piece takes its momentum (see strikeWall); what lies
  * beyond it is never reached. Once the well swallowed the head, or it broke up, it strikes
  * nothing.
  */
 export function runDown(comet: Comet, field: AsteroidField, time: number, broke: (rock: Asteroid) => void, shoved: (piece: Asteroid, point: THREE.Vector3) => void = () => {}) {
+  if (time >= headEnd(comet)) return;
+  // a piece it shoved already (a browser that took the field from a snapshot after the head
+  // broke up on it): the head broke up when that piece took its motion, and never strikes it twice
+  for (const rock of field.asteroids.values()) if (rock.solid && rock.shovedBy === comet.seed && rock.born < comet.broken) comet.broken = rock.born;
   if (time >= headEnd(comet)) return;
   headAt(comet, time, head);
   // the solid piece the head meets first, if it meets one: there it breaks up
@@ -498,7 +503,8 @@ export function runDown(comet: Comet, field: AsteroidField, time: number, broke:
     const at = firstTouch(comet, field, rock, time, touches);
     // what lies beyond where it broke up, it never reaches
     if (at === null || at >= wallAt) continue;
-    const broken = field.shatter(rock.id, at);
+    // a whole rock breaks into its fragments, a piece of one goes to dust
+    const broken = rock.generation === 0 ? field.shatter(rock.id, at) : field.pulverize(rock.id, at);
     if (broken) broke(broken);
   }
   if (wall) strikeWall(comet, field, wall, wallAt, shoved);
@@ -528,8 +534,7 @@ function strikeWall(comet: Comet, field: AsteroidField, wall: Asteroid, at: numb
   meets(comet, field, wall, at);
   piece.copy(struck).addScaledVector(struckNormal, -HEAD_RADIUS);
   kick.copy(course).multiplyScalar(COMET_SPEED * share(field.bodyMass(wall), HEAD_MASS));
-  const radius = wall.meanRadius;
-  axis.subVectors(piece, stone).cross(kick).divideScalar(0.4 * radius * radius).clampLength(0, SHOVE_SPIN).addScaledVector(wall.spinAxis, wall.spinRate);
+  blowSpin(wall, stone.subVectors(piece, stone), kick, SHOVE_SPIN, axis);
   const rate = axis.length();
   if (rate > 1e-9) axis.divideScalar(rate);
   else axis.copy(wall.spinAxis);
@@ -575,10 +580,11 @@ function meets(comet: Comet, field: AsteroidField, rock: Asteroid, time: number)
  * (true then, the head's end set to `time`), and each piece of its `shower` that touches it, or
  * met it on its way since (a piece flies 10 m in a frame at 60 frames a second, as far as a
  * battery's barrels are thick), bursts there (`burst` hears of each, with where), so the hull is
- * cover from the swarm.
+ * cover from the swarm. Only the browser that `decides` (the lead browser, or a solo round) ends
+ * the head on its own view of the obstacle; the others take its word (see Fleet.rammedAt).
  */
-export function meetObstacle(comet: Comet, shower: Shower | null, obstacle: Obstacle, time: number, since: number, burst: (point: THREE.Vector3) => void = () => {}): boolean {
-  const broke = time < headEnd(comet) && obstacle.touches(headAt(comet, time, head), HEAD_RADIUS);
+export function meetObstacle(comet: Comet, shower: Shower | null, obstacle: Obstacle, time: number, since: number, burst: (point: THREE.Vector3) => void = () => {}, decides = true): boolean {
+  const broke = decides && time < headEnd(comet) && obstacle.touches(headAt(comet, time, head), HEAD_RADIUS);
   if (broke) comet.broken = time;
   // the swarm trails the head by up to its length, as wide as it spreads
   if (!shower || headAt(comet, time, head).distanceTo(obstacle.position) > SHOWER_LENGTH + SHOWER_WIDE + OBSTACLE_REACH) return broke;

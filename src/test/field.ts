@@ -3,6 +3,7 @@ import { AsteroidField, type TemplateSet } from '../world/asteroids';
 import { fractureSet } from '../world/fracture';
 import { createRocks, DISTANT_DETAIL, FAR_DETAIL } from '../world/rocks';
 import { planMining, standClaims, type Plan } from '../world/mining';
+import { fieldSolid, obstacleSolid, type Probes, type Solid } from '../game/items';
 
 /** The rock shapes of each detail, built once for all tests (a field only clones them). */
 const built = new Map<number, THREE.Mesh[]>();
@@ -43,3 +44,15 @@ export function testField(detail = DISTANT_DETAIL, hulls: readonly THREE.Vector3
 
 /** The Belt's mining plan by the rocks' detail, made once for all tests (it follows from the layout and the shapes). */
 const claims = new Map<number, Plan>();
+
+const probeSolids = new WeakMap<AsteroidField, { solids: Solid[]; shared: Solid[] }>();
+
+/** Moves the probes a step in a field, they and their slots bouncing off its pieces and its battleship (see game/items, Probes.update). */
+export function driftProbes(probes: Probes, dt: number, now: number, field: AsteroidField) {
+  let pair = probeSolids.get(field);
+  if (!pair) {
+    const shared = [fieldSolid(field), obstacleSolid(field)];
+    probeSolids.set(field, (pair = { solids: shared, shared }));
+  }
+  probes.update(dt, now, field, pair.solids, pair.shared);
+}

@@ -308,6 +308,15 @@ export class Effects {
     this.smoke.emit(position, velocity, life, size, endSize, color);
   }
 
+  /** A small piece of the field crumbling to dust: a slow cloud as large as the piece, drifting with it, no fire. */
+  crumble(center: THREE.Vector3, radius: number, drift: THREE.Vector3) {
+    for (let i = 0; i < 16; i++) {
+      scratchVelocity.randomDirection().multiplyScalar(radius * (0.1 + Math.random() * 0.3)).add(drift);
+      scratch.copy(center).addScaledVector(spread.randomDirection(), Math.random() * radius * 0.7);
+      this.smoke.emit(scratch, scratchVelocity, 2 + Math.random() * 1.5, radius * 0.6, radius * 1.6, ROCK);
+    }
+  }
+
   /** Rock splinters and dust where a laser hits an asteroid. */
   debris(point: THREE.Vector3, normal: THREE.Vector3, size: number) {
     for (let i = 0; i < 14; i++) {

@@ -60,7 +60,7 @@ import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
-import { knockShare, ramShare } from '../net/plausible';
+import { knockShare, ramShare, syncShare } from '../net/plausible';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
@@ -68,12 +68,13 @@ import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES,
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
 import { ringReach, ringRim, touchRing } from '../world/gates';
 import { FieldContacts, ringFixture } from '../world/contacts';
+import { fieldSlice, SYNC_EVERY, SYNC_GRACE, SYNC_SLICES, syncField, type FieldSlice } from '../world/fieldsync';
 import { IMMOVABLE, massOf, type Body } from '../world/bodies';
 import { COMET_SPEED, COMET_WARNING, cometAt, cometEnd, cometStart, CometView, courseAt, headAt, headEnd, HEAD_RADIUS, meetObstacle, meetSolids, PIECE_RADIUS, roundComets, routeNearest, runDown, Shower, SHOWER_LENGTH, SHOWER_PIECES, SHOWER_WIDE, type Comet } from './comet';
 import { BASE_RADIUS, CAPTURE_POINTS, CORE_REACH, Flags, GRAB_POINTS, RETURN_POINTS, TEAM_NAMES, TEAM_TINTS, type FlagEvent } from './flags';
 import { CLONES, clonesLeft, FLARE_APPROACH, FLARE_BURN, FLARE_END, FLARE_HEAT, FLARE_KEEP, FLARE_RADIUS, FLARE_SHADE, FLARE_START, flareCenter, flareClearance, flareFront, flarePocket, isOut, standing } from './survival';
 import { FlareView } from '../world/flare';
-import { BEAM_STOPS, PROBE_BOUNCES, pushesOf, rayOf, SHOWER_BURSTS, solidTable, TORPEDO_FUSE, touchOf, WRECK_GRINDS } from './solids';
+import { BEAM_STOPS, PROBE_BOUNCES, pushesOf, SLOT_BOUNCES, rayOf, SHOWER_BURSTS, solidTable, TORPEDO_FUSE, touchOf, WRECK_GRINDS } from './solids';
 import { markedName, markLead, swatch } from '../view/marks';
 import { Coach, type Tip } from './coach';
 import {
@@ -290,6 +291,8 @@ const WELL_DEATHS: Partial<Record<ArenaId, string>> = { giant: msg('Crushed in t
 const ROUND_SNAP = 0.25;
 /** A rock hit from another browser counts only within this much field time (s) of the own clock; the clocks agree to a fraction of a second. */
 const ROCK_TIME_SLACK = 5;
+/** A motion the lead gave a piece counts as older than the piece's own beyond this much field time (s): the field times travel to the millisecond. */
+const STALE_MOTION = 0.002;
 /** A lead browser's next round is taken this long (s) before the own clock ends the running one at the earliest: clocks drift a little, not by minutes. */
 const ROUND_END_SLACK = 30;
 /** Online, the asteroids jump to the lead browser's field time when they are this far off (s), and otherwise glide towards it. */
@@ -1344,6 +1347,14 @@ export class Game implements OnlineGame {
     $('again').addEventListener('click', () => this.showMenu());
     $('invite').addEventListener('click', () => void this.share.share());
     $('radio').addEventListener('click', () => this.toggleRadio());
+    // the radio page opens in this tab, so the game is left and only the radio page plays; a
+    // click on the title while a round is flown (a shot aimed into the corner) pauses the round
+    // instead, and from the pause menu the click leaves
+    $('now-playing-link').addEventListener('click', (event) => {
+      if (this.state !== 'playing' || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      event.preventDefault();
+      this.pause();
+    });
     bindVolume($<HTMLInputElement>('radio-volume'));
     // the slider hands the focus back once let go, so Enter and Space go to the game again
     $('radio-volume').addEventListener('change', () => $('radio-volume').blur());
@@ -3229,6 +3240,8 @@ export class Game implements OnlineGame {
       stepped ||= running;
       this.field.update(dt / steps);
       if (running) this.knock();
+      // after the contacts of the step, which still meet a piece up to the field time it crumbles
+      for (const piece of this.field.crumble()) this.effects.crumble(piece.object.position, piece.meanRadius, piece.velocity);
     }
     // the screen shows the round as the last step left it, once a frame
     if (stepped && this.me && (this.state === 'playing' || (this.state === 'paused' && !!this.online))) this.presentRound();
@@ -3954,12 +3967,52 @@ export class Game implements OnlineGame {
       return;
     }
     for (const state of this.contacts.run(this.field)) this.online?.sendKnock(state, this.roundId);
+    this.sendFieldSync();
+  }
+
+  /** The next slice of the lead's field it sends (see world/fieldsync), and the field time it is due. */
+  private syncSlice = 0;
+  private syncDue = 0;
+
+  /** The lead browser sends a slice of its field every SYNC_EVERY seconds of field time, the slices in turn, with when the round's comets' heads broke up. */
+  private sendFieldSync() {
+    const online = this.online;
+    const clock = this.field.clock;
+    if (!online || this.roundId < 0) return;
+    // a new round's field starts its clock over
+    if (this.syncDue - clock > SYNC_EVERY) this.syncDue = clock;
+    if (clock < this.syncDue) return;
+    this.syncDue = clock + SYNC_EVERY;
+    online.sendFieldSync(fieldSlice(this.field, this.syncSlice), this.roundId, this.comets.map((comet) => (comet.broken === Infinity ? null : comet.broken)));
+    this.syncSlice = (this.syncSlice + 1) % SYNC_SLICES;
+  }
+
+  /**
+   * A slice of the lead's field (see world/fieldsync): this browser sets its own to it, every
+   * motion within the bounds of syncShare, and its comets' heads to where the lead's broke up
+   * (one the lead has whole, broken here longer than SYNC_GRACE ago, flies on).
+   */
+  syncField(slice: FieldSlice, round: number, heads: (number | null)[]) {
+    if (this.online?.isLead || (this.roundId >= 0 && round !== this.roundId)) return;
+    const result = syncField(this.field, slice, (state) => syncShare(Math.hypot(state.v[0], state.v[1], state.v[2]), state.s[3]) <= 1);
+    if (result.rebuilt || result.eased || result.set) devlog?.add({ kind: 'sync', t: this.time, slice: slice.i, ...result });
+    heads.forEach((at, i) => {
+      const comet = this.comets[i];
+      if (!comet) return;
+      if (at === null) {
+        if (comet.broken < slice.t - SYNC_GRACE) comet.broken = Infinity;
+      } else if (Math.abs(comet.broken - at) > 1e-3) {
+        const whole = comet.broken === Infinity;
+        comet.broken = at;
+        if (whole && this.shower?.comet === comet) this.headBroke(comet);
+      }
+    });
   }
 
   /** A piece of the field struck another or a ring as the lead decided: it takes the motion the lead gave it, if that lies close to where this browser has it (see knockShare). */
   remoteKnock(state: ShovedState, round: number) {
     const piece = this.field.asteroids.get(state.id);
-    if (!piece || round !== this.roundId) return;
+    if (!piece || !this.fieldMotion(piece, state, round)) return;
     const before = this.field.positionOf(piece, state.b, scratch);
     const age = state.b - this.field.clock;
     // the cheap bounds first, the search for what it struck only for a blow they pass
@@ -3968,11 +4021,22 @@ export class Game implements OnlineGame {
     this.field.move(state);
   }
 
+  /**
+   * Whether a motion the lead gave a piece belongs to this browser's field: of its round (a
+   * newcomer that does not know the round yet takes it for the field it has, as a rock's break),
+   * and no older than the motion the piece has (a knock and a ram arriving out of order, or
+   * after a comet's shove here). What the order loses, the lead's sync of the field sets right
+   * (see syncField).
+   */
+  private fieldMotion(piece: Asteroid, state: ShovedState, round: number): boolean {
+    return (this.roundId < 0 || round === this.roundId) && state.b >= piece.born - STALE_MOTION;
+  }
+
   /** The lead's battleship rammed a piece of the field: it takes the motion the lead gave it, if it lay at the hull as this browser sees them (see ramShare). */
   remoteRam(state: ShovedState, round: number) {
     const fleet = this.fleet;
     const piece = this.field.asteroids.get(state.id);
-    if (!fleet || !piece || round !== this.roundId) return;
+    if (!fleet || !piece || !this.fieldMotion(piece, state, round)) return;
     const before = this.field.positionOf(piece, state.b, scratch);
     if (ramShare(before, rammedTo.fromArray(state.p), Math.hypot(...state.v), fleet.position, fleet.reach + piece.radius, state.b - this.field.clock) > 1) return;
     this.field.move(state);
@@ -5328,7 +5392,8 @@ export class Game implements OnlineGame {
     // the flight school shows only the probes its drills put out
     const seed = this.online ? textSeed(this.online.session.room) : this.soloSeed;
     if (!this.school && this.roundId >= 0) this.probes.schedule(seed, this.roundId, this.roundSeconds(), now, this.field, this.course?.points);
-    this.probes.update(dt, now, this.field, (this.probeSolids ??= [fieldSolid(this.field), obstacleSolid(this.field), ...pushesOf(this.solids, PROBE_BOUNCES)]));
+    const shared = (this.slotSolids ??= [fieldSolid(this.field), obstacleSolid(this.field), ...pushesOf(this.solids, SLOT_BOUNCES)]);
+    this.probes.update(dt, now, this.field, (this.probeSolids ??= [...shared, ...pushesOf(this.solids, PROBE_BOUNCES.filter((kind) => !SLOT_BOUNCES.includes(kind)))]), shared);
     for (const ship of this.ships) {
       if (ship.owner !== null || !ship.alive || ship === this.drone || (this.spectating && ship === this.me)) continue;
       const probe = this.probes.touching(ship.flight.position, ship.radius);
@@ -6239,6 +6304,8 @@ export class Game implements OnlineGame {
 
   /** What a probe bounces off: the field, the battleship, and the solids of PROBE_BOUNCES (see game/items, bounce). */
   private probeSolids: readonly Solid[] | null = null;
+  /** What a probe's slot bounces off: the field, the rings and the battleship, which every browser has (nearly) alike (see Probes.update). */
+  private slotSolids: readonly Solid[] | null = null;
 
   /** How far along a beam (within `max`) the first of the solids of BEAM_STOPS lies; null when none does (see fireLaser). */
   private readonly solidRay = rayOf(this.solids, BEAM_STOPS);
@@ -6684,8 +6751,8 @@ export class Game implements OnlineGame {
   };
 
   /**
-   * A comet meets the President's battleship: its head breaks up on the hull (see Comet.broken),
-   * where this browser's battleship meets it or where the lead browser said it did, and the
+   * A comet meets the President's battleship: its head breaks up on the hull (see Comet.broken)
+   * where the lead browser's battleship meets it (a solo round's own), as the lead says, and the
    * battleship that did not get out of its way goes down (the lead browser decides); each piece
    * of its shower bursts where it meets the hull, so the hull is cover from it.
    */
@@ -6693,10 +6760,11 @@ export class Game implements OnlineGame {
     const whole = comet.broken === Infinity;
     const told = fleet.rammedAt;
     if (told !== null && told >= cometStart(comet) && told <= cometEnd(comet)) comet.broken = told;
-    const struck = meetObstacle(comet, this.shower, fleet, clock, dt, (point) => {
+    const sparks = (point: THREE.Vector3) => {
       if (Math.random() < SHOWER_SPARKS) this.effects.sparks(point, SCRAPE_COLOR, PIECE_RADIUS * 4);
-    });
-    if (struck && (!this.online || this.online.isLead)) {
+    };
+    // only the lead's battleship ends the head: each browser glides its own a little apart
+    if (meetObstacle(comet, this.shower, fleet, clock, dt, sparks, !this.online || this.online.isLead)) {
       fleet.rammedAt = clock;
       if (fleet.present(clock)) {
         this.hud.flashMessage(this.time, t('The comet rams the battleship'), 3);

@@ -8,7 +8,7 @@
 </head>
 <body class="page">
   <main class="station">
-    <img class="logo" src="crest.svg" alt="SolarTournament: seal of the Ministry of War" data-i18n-attr="alt" width="120" height="120">
+    <a href="./"><img class="logo" src="crest.svg" alt="SolarTournament: seal of the Ministry of War" data-i18n-attr="alt" width="120" height="120"></a>
     <h1 class="station-logo">Radio <span class="neon">2584</span></h1>
     <p class="station-tagline" data-i18n>The soundtrack of the Presidential Games. Every round grows its own track, and its title is its seed: the same title, the same track, note for note.</p>
 
@@ -31,6 +31,7 @@
         <label class="track-volume"><span data-i18n>Volume</span> <input type="range" id="radio-volume" class="volume" min="0" max="100" step="5"></label>
       </div>
       <p id="download-status"></p>
+      <p class="download-again" hidden><a id="download-again" href="#"></a></p>
     </section>
 
     <div id="transmission" hidden><span id="transmission-speaker"></span><span id="transmission-text"></span></div>

@@ -15,7 +15,7 @@ import { COMET_WARNING } from '../game/comet';
 import { STREAK_SECONDS, streakBonus } from '../game/streaks';
 import { HULL_CRITICAL, WELL_CAUTION, WELL_CRITICAL, WELL_WARNING } from '../game/alarms';
 import { orbitRoom, safePeriapsis, wellMu } from '../game/orbit';
-import { ASTEROID_POINTS } from '../world/asteroids';
+import { ASTEROID_POINTS, CRUMBLE_AFTER } from '../world/asteroids';
 import { ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { arenaById, RING_LAYER } from '../world/arenas';
 
@@ -107,6 +107,7 @@ export const FROM_CODE: Record<string, number> = {
   hangarHeight: meters(HANGAR_CEILING - HANGAR_FLOOR),
   fleetSpeed: meters(FLEET_SPEED),
   cometWarning: COMET_WARNING,
+  crumble: CRUMBLE_AFTER,
   wellCaution: percent(WELL_CAUTION),
   wellWarning: percent(WELL_WARNING),
   wellCritical: percent(WELL_CRITICAL),

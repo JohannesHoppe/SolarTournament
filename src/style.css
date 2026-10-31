@@ -3427,6 +3427,15 @@ body.page {
   color: var(--muted);
 }
 
+/* the last pressing, kept to be saved again */
+.download-again {
+  margin-top: 4px;
+}
+
+#download-again {
+  color: var(--accent);
+}
+
 .station-footer {
   margin-top: 48px;
   color: var(--muted);

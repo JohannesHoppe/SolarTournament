@@ -22,7 +22,7 @@ The files at this level:
 
 - `main.ts`: starts the game page (WebGL check, assets, the `Game`), and the benchmark or the frame meter when the address asks for them.
 - `bench.ts`: the benchmark (`?bench`, `?bench=<seconds>`, `&only=<sections>`): plays a fixed scene and measures what each feature, each rung of the quality ladder, each arena and each mode costs per frame, with a table on screen, in the console and as JSON; the frame meter (`?fps`) with the frame rate and the rung the governor is on. See the README's section "Performance".
-- `radio-page.ts`: starts the radio page (tune in a title, play it, download it as WAV).
+- `radio-page.ts`: starts the radio page (tune in a title, play it, download it as WAV, save the last pressing again).
 - `handbook-page.ts`: starts the Pilot's Handbook (`handbook.html`): translates it into the Host's language and fills in the game's numbers.
 - `assets.ts`: loads the ship models, drive sprites and the planets' maps (the sharp ones only when the picture's quality asks for them), collects what is generated in code.
 - `srgb.ts`: linear light as an sRGB byte, shared by the pictures baked in code.
@@ -30,7 +30,7 @@ The files at this level:
 - `storage.ts`: the browser's localStorage, safe where it is unavailable.
 - `recorder.ts`: the input recorder, a ring buffer of the own ship's last minute step by step (the Host's controls, the mouse pointer, the commands flown, the ship before the step), read in the console as `game.recorder` and saved with `game.recorder.download()`; replayed in tests by `src/test/cockpit.ts`; only in development, null and free in production.
 - `share.ts`: the share button on every screen of the game (at the end of the radio box) and on the radio page and the handbook (alone in the corner): the link and text by where the Host is, the device's share sheet on touch, else a small menu to copy the link, e-mail it or post it through a network's plain share link. `share.test.ts` checks the links and texts.
-- `devlog.ts`: the development log, a ring buffer of the round's deaths, ship contacts, shoves, bot decisions, where torpedoes went off, the hits on the President's battleship and the cheat checks other browsers' ships failed, read in the console as `game.log`; only in development, null and free in production.
+- `devlog.ts`: the development log, a ring buffer of the round's deaths, ship contacts, shoves, bot decisions, where torpedoes went off, the hits on the President's battleship, the cheat checks other browsers' ships failed and what the lead's sync of the field set right, read in the console as `game.log`; only in development, null and free in production.
 - `style.css`: the styles of all pages.
 
 Unit tests sit next to the code they test (`*.test.ts`) and run with `npm test`.

@@ -1,4 +1,4 @@
-import { Band, type Voice } from './band';
+import { Band } from './band';
 import { barSeconds, createSong, ROUND_SECONDS, STEPS_PER_BAR, type Energy, type Flavor, type Song } from './songs';
 import { loadVoice } from './voice';
 
@@ -8,78 +8,117 @@ export function trackSeconds(song: Song): number {
   return (outro.start + outro.bars) * barSeconds(song);
 }
 
-/** Rendering time grows faster than the music, so long tracks are pressed in chunks. */
-const CHUNK = 20;
-/** Each chunk starts this early, so reverbs, echoes and voice lines are already sounding at its seam (s). */
+/** A stretch that starts inside a track starts this early, so reverbs, echoes and voice lines are already sounding where it begins (s). */
 const PREROLL = 8;
-/** Chunks overlap by this much and crossfade, so no seam clicks (s). */
-const FADE = 0.05;
-/** A seam lies this far before a beat (s). */
-const SEAM_LEAD = 0.06;
 /** Events are scheduled this far after the start of a render (s). */
 const LEAD = 0.05;
-/** The last chunk keeps ringing for this long (s), and its last FADE_OUT seconds fade to silence. */
+/** The track keeps ringing for this long after its last step (s), and its last FADE_OUT seconds fade to silence. */
 const TAIL = 4;
 const FADE_OUT = 1;
+/** The audio a render works on at a time, and the step of Tone's clock (frames). */
+const BLOCK = 128;
+/**
+ * The render stops every this many blocks (about 1.5 s at 44.1 kHz) and the band plays the next
+ * stretch. Notes scheduled all at once sit in the audio graph from the start, each of them
+ * costing time in every block, so the render slows down with its length; played stretch by
+ * stretch, the graph holds little more than what sounds.
+ */
+const STRETCH_BLOCKS = 512;
+/** A step is played at least this long before the render reaches it (s). */
+const AHEAD = 0.1;
 
 /**
- * Renders a stretch of a track offline, voice included, as 16-bit stereo WAV. The radio page
- * uses it for downloads; in development it lets you listen to tracks without playing.
+ * Renders a stretch of a track offline, voice included, as 16-bit stereo WAV, in one pass:
+ * the band plays it a stretch ahead of the render. The radio page uses it for downloads; in
+ * development it lets you listen to tracks without playing.
  */
 export async function renderTrack(song: Song, from: number, seconds: number, sampleRate = 44100, onProgress: (done: number) => void = () => {}): Promise<ArrayBuffer> {
   const T = await import('tone');
   const voice = await loadVoice();
-  const total = Math.round((seconds + TAIL) * sampleRate);
-  const out = [new Float32Array(total), new Float32Array(total)];
-  const fade = Math.round(FADE * sampleRate);
-  // the chunks' free-running oscillators are out of phase with each other: a seam sits just
-  // before a beat, where the last kick has died away and the next has not begun
-  const beat = barSeconds(song) / 4;
-  const seams: number[] = [];
-  for (let t = CHUNK; t < seconds; t += CHUNK) {
-    const seam = Math.ceil((from + t + SEAM_LEAD) / beat) * beat - SEAM_LEAD - from;
-    if (seam < seconds && seam > (seams[seams.length - 1] ?? 0)) seams.push(seam);
-  }
-  const bounds = [0, ...seams, seconds];
-  for (let k = 0; k + 1 < bounds.length; k++) {
-    const start = bounds[k];
-    const last = k + 2 === bounds.length;
-    const length = bounds[k + 1] - start;
-    const pre = Math.min(PREROLL, from + start);
-    const chunk = await renderChunk(T, song, voice, from + start - pre, pre + length, last ? TAIL : FADE, sampleRate);
-    const skip = Math.round((pre + LEAD) * sampleRate);
-    const at = Math.round(start * sampleRate);
-    for (let c = 0; c < 2; c++) {
-      const source = chunk[c];
-      const target = out[c];
-      for (let i = 0; skip + i < source.length && at + i < total; i++) {
-        // the first samples blend with the overlap the previous chunk left behind
-        const weight = start > 0 && i < fade ? i / fade : 1;
-        target[at + i] = target[at + i] * (1 - weight) + source[skip + i] * weight;
-      }
+  const pre = Math.min(PREROLL, from);
+  const start = from - pre;
+  const length = LEAD + pre + seconds + TAIL;
+  const raw = new OfflineAudioContext(2, Math.ceil(length * sampleRate), sampleRate);
+  const block = BLOCK / sampleRate;
+  const stretch = STRETCH_BLOCKS * block;
+  /**
+   * Tone's context on the render, offline as Tone's own offline context is (nothing disposed
+   * while the render runs), but with its clock run by hand: block by block, a stretch ahead of
+   * the render, so whatever Tone holds back on its clock (a chord's notes, a sound's end) reaches
+   * the render at its time.
+   */
+  const context = new (class extends T.Context {
+    override readonly isOffline = true;
+    /** Blocks Tone's clock has run. */
+    private blocks = 0;
+    override now() {
+      return this.blocks * block;
     }
-    onProgress(Math.min(1, (start + length) / seconds));
-  }
-  // the rumble of the last bars dies away instead of being cut off
-  const fadeOut = Math.round(FADE_OUT * sampleRate);
-  for (const channel of out) for (let i = 0; i < fadeOut; i++) channel[total - 1 - i] *= i / fadeOut;
-  return encodeWav(out, sampleRate);
-}
-
-async function renderChunk(T: typeof import('tone'), song: Song, voice: Voice, from: number, seconds: number, extra: number, sampleRate: number): Promise<Float32Array[]> {
-  const buffer = await T.Offline(async (context) => {
+    override immediate() {
+      return this.now();
+    }
+    override get currentTime() {
+      return this.now();
+    }
+    /** Runs Tone's clock up to `until` (s), firing what is due in each block. */
+    run(until: number) {
+      for (; this.blocks * block < until; this.blocks++) this.emit('tick');
+    }
+    /** The bit crushers run as audio worklets, which have to be loaded before the render starts. */
+    worklets() {
+      return this.workletsAreReady();
+    }
+  })({ context: raw, clockSource: 'offline', lookAhead: 0, updateInterval: block });
+  // Tone builds on its global context: the band's nodes are made in this one, and the global
+  // context is handed back before anything is awaited
+  const within = <R>(work: () => R): R => {
+    const global = T.getContext();
+    T.setContext(context);
+    try {
+      return work();
+    } finally {
+      T.setContext(global);
+    }
+  };
+  const band = within(() => {
     const band = new Band(T);
     band.output.toDestination();
-    await band.ready();
+    return band;
+  });
+  await band.ready();
+  within(() => {
     band.setVoice(voice);
     band.prepare(song);
     context.transport.bpm.value = song.bpm;
-    const sixteenth = barSeconds(song) / STEPS_PER_BAR;
-    const first = Math.ceil(from / sixteenth - 1e-9);
-    const last = Math.ceil((from + seconds) / sixteenth - 1e-9);
-    for (let step = first; step < last; step++) band.play(song, step, step * sixteenth - from + LEAD);
-  }, LEAD + seconds + extra, 2, sampleRate);
-  return buffer.toArray() as Float32Array[];
+  });
+  const sixteenth = barSeconds(song) / STEPS_PER_BAR;
+  let step = Math.ceil(start / sixteenth - 1e-9);
+  const last = Math.ceil((from + seconds) / sixteenth - 1e-9);
+  const at = (step: number) => step * sixteenth - start + LEAD;
+  /** The render stands at `time` (s): the band plays the next stretch, and Tone's clock runs through it. */
+  const play = (time: number) =>
+    within(() => {
+      for (; step < last && at(step) < time + stretch + AHEAD; step++) band.play(song, step, at(step));
+      context.run(time + stretch);
+    });
+  play(0);
+  for (let stop = 1; stop * stretch < length; stop++) {
+    const time = stop * stretch;
+    void raw.suspend(time).then(() => {
+      play(time);
+      onProgress(time / length);
+      void raw.resume();
+    });
+  }
+  await context.worklets();
+  const rendered = await raw.startRendering();
+  const skip = Math.round((pre + LEAD) * sampleRate);
+  const out = [0, 1].map((c) => rendered.getChannelData(c).subarray(skip));
+  // the rumble of the last bars dies away instead of being cut off
+  const fadeOut = Math.round(FADE_OUT * sampleRate);
+  for (const channel of out) for (let i = 0; i < fadeOut; i++) channel[channel.length - 1 - i] *= i / fadeOut;
+  onProgress(1);
+  return encodeWav(out, sampleRate);
 }
 
 /** Development tool: a stretch of a track as base64 WAV plus what the generator decided. */
@@ -101,7 +140,8 @@ export async function renderPreview(title: string, energy: Energy, flavor: Flavo
   };
 }
 
-function encodeWav(channels: Float32Array[], sampleRate: number): ArrayBuffer {
+/** 16-bit PCM WAV of the channels (interleaved), each sample clipped to [-1, 1]. */
+export function encodeWav(channels: Float32Array[], sampleRate: number): ArrayBuffer {
   const frames = channels[0].length;
   const bytes = new DataView(new ArrayBuffer(44 + frames * channels.length * 2));
   const text = (offset: number, value: string) => [...value].forEach((c, i) => bytes.setUint8(offset + i, c.charCodeAt(0)));

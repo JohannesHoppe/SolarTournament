@@ -113,7 +113,7 @@ const PROBE_SETTLE = 100;
  * A probe meeting something solid (rock, ice, junk and hull, the President's battleship, a
  * ring, wreckage, a sponsor core: all at least ten times its mass, which hardly notice it)
  * bounces off as far out as its wings reach (PROBE_RADIUS), keeping PROBE_BOUNCE of the speed it
- * met it at; so does the slot it drifts on, which it flies back to.
+ * met it at; so does the slot it drifts on, which it flies back to, off what every browser has alike (see Probes.update).
  */
 const PROBE_BOUNCE = 0.4;
 
@@ -252,7 +252,10 @@ export class Probes {
         } else {
           position.set(h(1) * 2 - 1, (h(2) * 2 - 1) * 0.5, h(3) * 2 - 1).multiplyScalar(FIELD_RADIUS * 0.8);
         }
-        if (!field.overlap(position, PROBE_RADIUS * 4) && !field.insideWell(position, PROBE_RADIUS * 20) && !inGrip(field.well, position, WELL_WARNING)) break;
+        // the field as it stands at the probe's due time taken as a field time, not at this
+        // browser's clock: each browser's runs a jitter apart, and the place must be the same
+        // everywhere (a round's field starts with its round, so it is about where it is then)
+        if (!field.overlapAt(position, PROBE_RADIUS * 4, PROBE_FIRST + n * PROBE_EVERY) && !field.insideWell(position, PROBE_RADIUS * 20) && !inGrip(field.well, position, WELL_WARNING)) break;
       }
       // in a race the probe is sealed: its luck and the taker's place decide what it holds
       const luck = hash(seed, round, n, 99);
@@ -331,21 +334,26 @@ export class Probes {
 
   /**
    * Probes drift, turn slowly and blink; one a hook let go flies back to its slot; a dropped
-   * one is gone after its time, or in the arena's massive body.
+   * one is gone after its time, or in the arena's massive body. A probe bounces off `solids`;
+   * its slot only off `shared`, those of them every browser has (nearly) alike (the field's
+   * pieces, the rings, the battleship), so the slots stay the same everywhere: a probe that met
+   * anything else (a core in tow, wreckage, each where this browser has it) left its slot and
+   * flies back to it.
    */
-  update(dt: number, now: number, field: AsteroidField, solids: readonly Solid[] = this.solidsOf(field)) {
+  update(dt: number, now: number, field: AsteroidField, solids: readonly Solid[], shared: readonly Solid[]) {
     this.sealed.color.setHSL((now * SEALED_CYCLE) % 1, 1, 0.6).multiplyScalar(2.5);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const probe = this.list[i];
       probe.slot.addScaledVector(probe.slotVelocity, dt);
-      const returning = probe.astray && !probe.holder;
+      for (const solid of shared) bounce(solid, probe.slot, probe.slotVelocity);
+      // a slot behind what only this browser sees there (a core in tow, wreckage) is waited
+      // for, drifting, until that is gone
+      const returning = probe.astray && !probe.holder && clear(probe.slot, solids, shared);
       if (returning) homeIn(probe, dt);
       probe.position.addScaledVector(probe.velocity, dt);
-      for (const solid of solids) {
-        bounce(solid, probe.slot, probe.slotVelocity);
-        bounce(solid, probe.position, probe.velocity);
-      }
-      if (returning && probe.position.distanceTo(probe.slot) < PROBE_SETTLE && probe.velocity.distanceTo(probe.slotVelocity) < PROBE_SETTLE) {
+      let bumped = false;
+      for (const solid of solids) if (bounce(solid, probe.position, probe.velocity) && !shared.includes(solid)) bumped = probe.astray = true;
+      if (returning && !bumped && probe.position.distanceTo(probe.slot) < PROBE_SETTLE && probe.velocity.distanceTo(probe.slotVelocity) < PROBE_SETTLE) {
         probe.position.copy(probe.slot);
         probe.velocity.copy(probe.slotVelocity);
         probe.astray = false;
@@ -355,18 +363,6 @@ export class Probes {
       if (now >= probe.until || field.insideWell(probe.position, PROBE_RADIUS)) this.remove(probe);
     }
   }
-
-  /** The field's pieces and its obstacle as the Solids a probe bounces off by default (see update), made once a field. */
-  private solidsOf(field: AsteroidField): readonly Solid[] {
-    if (this.solidField !== field) {
-      this.solidField = field;
-      this.solids = [fieldSolid(field), obstacleSolid(field)];
-    }
-    return this.solids;
-  }
-
-  private solidField: AsteroidField | null = null;
-  private solids: readonly Solid[] = [];
 
   /** The probe a ship of `radius` at `position` flies through, if any. */
   touching(position: THREE.Vector3, radius: number): Probe | null {
@@ -434,15 +430,26 @@ const BOUNCE_PASSES = 8;
  */
 export type Solid = (position: THREE.Vector3, radius: number, normal: THREE.Vector3, moving: THREE.Vector3) => boolean;
 
-/** A probe (or its slot) at `position` moving at `velocity` bounces off what it touches (see PROBE_BOUNCE): what it touches does not notice it. */
-function bounce(touch: Solid, position: THREE.Vector3, velocity: THREE.Vector3) {
+/** Whether a probe at `slot` would touch none of `solids` besides the `shared` ones. */
+function clear(slot: THREE.Vector3, solids: readonly Solid[], shared: readonly Solid[]): boolean {
+  for (const solid of solids) if (!shared.includes(solid) && solid(spot.copy(slot), PROBE_RADIUS, hullNormal, hull.velocity)) return false;
+  return true;
+}
+
+const spot = new THREE.Vector3();
+
+/** A probe (or its slot) at `position` moving at `velocity` bounces off what it touches (see PROBE_BOUNCE): what it touches does not notice it. True when it touched. */
+function bounce(touch: Solid, position: THREE.Vector3, velocity: THREE.Vector3): boolean {
+  let touched = false;
   for (let pass = 0; pass < BOUNCE_PASSES && touch(position, PROBE_RADIUS, hullNormal, hull.velocity); pass++) {
+    touched = true;
     bouncing.position.copy(position);
     bouncing.velocity.copy(velocity);
     hull.position.copy(position);
     contact(bouncing, hull, hullNormal, PROBE_BOUNCE, 0, true, false);
     velocity.copy(bouncing.velocity);
   }
+  return touched;
 }
 
 const surfacePoint = new THREE.Vector3();

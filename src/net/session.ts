@@ -1,4 +1,5 @@
 import type { FieldState, ShovedState } from '../world/asteroids';
+import { SYNC_EVERY, type FieldSlice } from '../world/fieldsync';
 import type { ShipState } from '../ship/ship';
 import type { WreckState } from '../world/wrecks';
 import { CHEATS, type Cheat } from './plausible';
@@ -8,7 +9,7 @@ import type { RoomMode } from '../game/race';
 import type { ProbeState } from '../game/items';
 import type { FlagsState } from '../game/flags';
 import { TORPEDO_HITS, ZONE_HITS, type FleetState } from '../game/fleet';
-import { fieldState, flagsState, fleetState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, shovedState, UNIT_LENGTH, vec, wreckStates } from './validate';
+import { fieldState, fieldSync, flagsState, headTimes, fleetState, id, ids, int, probeStates, isRecord, MAX_COORDINATE, MAX_COUNT, MAX_FIELD_TIME, MAX_SPEED, num, ROUND_LIMIT, shipState, shovedState, UNIT_LENGTH, vec, wreckStates } from './validate';
 
 /** Ship states go out this often (Hz); the receivers predict the motion in between, and take at most three times as many. */
 const STATE_RATE = 15;
@@ -80,6 +81,8 @@ const MAX_RAMS_PER_SECOND = 60;
  * contact every few seconds, a rock's fragments meeting its neighbours at once.
  */
 const MAX_KNOCKS_PER_SECOND = 40;
+/** The lead sends a slice of its field every SYNC_EVERY seconds (see world/fieldsync): twice that rate with room for a burst. */
+const MAX_SYNCS_PER_SECOND = 2 / SYNC_EVERY;
 /** The parts of a battleship are numbered from zero, far fewer than this (see game/fleet); one message counts a laser's hit, a torpedo's or a nova core's. */
 const MAX_FLEET_ZONE = 31;
 /** The most hits a part takes (the reactor's): a nova core breaks a part close by outright. */
@@ -170,6 +173,8 @@ export class Session {
   onRam: (state: ShovedState, round: number) => void = () => {};
   /** A piece of the field struck another or a ring in a round, as the lead browser decided: its motion since (see world/contacts). */
   onKnock: (state: ShovedState, round: number) => void = () => {};
+  /** A slice of the lead browser's field in a round, with the field times its comets' heads broke up (null for one still whole, see world/fieldsync). */
+  onFieldSync: (slice: FieldSlice, round: number, heads: (number | null)[]) => void = () => {};
   /** A ship of another browser launched a torpedo, at a target or none. */
   onTorpedo: (id: string, shooter: string, target: string | null, position: Vec, velocity: Vec) => void = () => {};
   /**
@@ -253,6 +258,7 @@ export class Session {
   private readonly cheatBudget = new Budget(MAX_CHEAT_REPORTS_PER_SECOND);
   private readonly ramBudget = new Budget(MAX_RAMS_PER_SECOND);
   private readonly knockBudget = new Budget(MAX_KNOCKS_PER_SECOND);
+  private readonly syncBudget = new Budget(MAX_SYNCS_PER_SECOND);
   private readonly stateBudget = new Budget(STATE_RATE * 3);
   private readonly beamBudget = new Budget(MAX_HITS_PER_SECOND);
   private readonly pingBudget = new Budget(MAX_PING_RATE);
@@ -323,6 +329,14 @@ export class Session {
       const round = int(d?.n, 0, MAX_COUNT);
       if (!state || round === null || from !== this.leadId || !this.knockBudget.spend(from)) return;
       this.guard(() => this.onKnock(state, round));
+    });
+    transport.on('fs', (d, from) => {
+      // the lead's field is the one every browser sets its own to, so only the lead sends it
+      const slice = fieldSync(d?.s);
+      const round = int(d?.n, 0, MAX_COUNT);
+      const heads = headTimes(d?.h);
+      if (!slice || round === null || !heads || from !== this.leadId || !this.syncBudget.spend(from)) return;
+      this.guard(() => this.onFieldSync(slice, round, heads));
     });
     transport.on('tl', (d, from) => {
       const torpedo = id(d?.i);
@@ -444,7 +458,7 @@ export class Session {
     transport.onPeerLeave((peer) => {
       // join time and last word stay: a link that comes back belongs to the same peer
       this.backAt.delete(peer);
-      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.ramBudget, this.knockBudget, this.stateBudget, this.beamBudget, this.pingBudget, this.pongBudget]) budget.forget(peer);
+      for (const budget of [this.hitBudget, this.rockBudget, this.destroyBudget, this.wreckBudget, this.torpedoBudget, this.cheatBudget, this.ramBudget, this.knockBudget, this.syncBudget, this.stateBudget, this.beamBudget, this.pingBudget, this.pongBudget]) budget.forget(peer);
       for (const key of this.lastHit.keys()) if (ownerOf(key.slice(0, key.indexOf('>'))) === peer) this.lastHit.delete(key);
       this.pingSeq.delete(peer);
       this.pingSentAt.delete(peer);
@@ -688,6 +702,11 @@ export class Session {
   /** A piece of the field struck another or a ring in `round`, as the lead decided: its motion since (see world/contacts). */
   sendKnock(state: ShovedState, round: number) {
     this.transport.send('fk', { m: state, n: round });
+  }
+
+  /** A slice of the own field in `round` (the lead's, see world/fieldsync), with the field times the round's comets' heads broke up (null while whole). */
+  sendFieldSync(slice: FieldSlice, round: number, heads: (number | null)[]) {
+    this.transport.send('fs', { s: slice, n: round, h: heads });
   }
 
   sendSync(to: string, field: FieldState, wrecks: WreckState[], probesTaken: string[], probes: ProbeState[]) {

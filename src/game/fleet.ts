@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
-import { FIELD_RADIUS, outline, RAMMED, raySphere, type Asteroid, type AsteroidField, type Obstacle, type ShovedState } from '../world/asteroids';
+import { blowSpin, blowState, FIELD_RADIUS, outline, RAMMED, raySphere, type Asteroid, type AsteroidField, type Obstacle, type ShovedState } from '../world/asteroids';
 import { contact, MASS, share } from '../world/bodies';
 import { ARENA_LIMIT } from '../world/arena';
 import { boxContact, rayBox } from '../world/boxes';
@@ -369,7 +369,7 @@ const ramPoint = new THREE.Vector3();
 const ramVelocity = new THREE.Vector3();
 const ramBefore = new THREE.Vector3();
 const ramSpin = new THREE.Vector3();
-const ramOrbit = new THREE.Vector3();
+const ramArm = new THREE.Vector3();
 const ramPiece = { position: new THREE.Vector3(), velocity: ramVelocity, mass: 0 };
 /** The hull where it meets a piece: its velocity there, its turn included (see Fleet.shove). */
 const ramHull = { position: new THREE.Vector3(), velocity: new THREE.Vector3(), mass: MASS.battleship };
@@ -1575,27 +1575,11 @@ export class Fleet implements Obstacle {
   private budge(field: AsteroidField, piece: Asteroid, clock: number, change: THREE.Vector3, push: number, normal: THREE.Vector3, point: THREE.Vector3, tumble: number) {
     const center = piece.object.position;
     field.surfaceVelocity(piece, center, ramVelocity).add(change);
-    // the tumble the blow gives it about its center: the change of momentum's moment over the
-    // moment of inertia of a ball as large (2/5 m r²), on top of its spin
-    const radius = piece.meanRadius;
-    ramSpin.subVectors(point, center).cross(change).divideScalar(0.4 * radius * radius).clampLength(0, tumble);
-    ramSpin.addScaledVector(piece.spinAxis, piece.spinRate);
-    const rate = ramSpin.length();
-    if (rate > 1e-9) ramSpin.divideScalar(rate);
-    else ramSpin.copy(piece.spinAxis);
-    // from where it stands, pushed out; its drift such that, carried on its orbit, it flies as the blow sent it
+    // the tumble the blow gives it about its center, on top of its spin (see blowSpin)
+    blowSpin(piece, ramArm.subVectors(point, center), change, tumble, ramSpin);
+    // from where it stands, pushed out
     const at = ramPiece.position.copy(center).addScaledVector(normal, push);
-    ramVelocity.sub(ramOrbit.copy(piece.orbitAxis).multiplyScalar(piece.orbitRate).cross(at));
-    const fixed = (values: number[], digits: number) => values.map((v) => +v.toFixed(digits));
-    const state: ShovedState = {
-      id: piece.id,
-      b: clock,
-      p: fixed(at.toArray(), 2),
-      v: fixed(ramVelocity.toArray(), 3),
-      q: fixed(piece.object.quaternion.toArray(), 6),
-      s: fixed([...ramSpin.toArray(), rate], 6),
-      c: piece.shovedBy ?? RAMMED,
-    };
+    const state = blowState(piece, clock, at, ramVelocity, ramSpin, piece.shovedBy ?? RAMMED);
     field.move(state);
     this.rams.push(state);
   }
