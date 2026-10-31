@@ -76,7 +76,7 @@ describe('the comets of a round', () => {
       expect(roundComets(seed, -1, null, false)).toEqual([]);
     }
     // 59 seeds by four rounds by eight wells, six minutes each: a few seconds on a busy machine
-  }, 30_000);
+  });
 
   it('come to a round as cometsOf lays them out, each followed from its warning to the end of its shower and then let go', () => {
     let seen = 0;
@@ -154,7 +154,7 @@ describe("a comet's head", () => {
     expect(a.snapshot().x.length).toBeGreaterThan(0);
     expect(b.snapshot().x).toEqual(a.snapshot().x);
     // two Belt fields generated and flown for 20 seconds: a few seconds on a busy machine
-  }, 30_000);
+  });
 
   it("breaks up on the wreck's hull, which takes its momentum the same way on every browser, and a newcomer's snapshot carries it", () => {
     const derelict = layoutOf('derelict');

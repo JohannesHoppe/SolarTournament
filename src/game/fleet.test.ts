@@ -275,7 +275,7 @@ describe("the President's fleet", () => {
     expect(stopped).toBeGreaterThan(SHOWER_PIECES / 10);
     expect(stopped).toBeLessThan(SHOWER_PIECES);
     // a whole comet's flight past the hull: a few seconds on a busy machine
-  }, 30_000);
+  });
 
   it('stays solid while it sinks, for ships as for rays and torpedoes, and is gone once it went up', () => {
     const fleet = battleship();

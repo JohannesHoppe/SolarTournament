@@ -195,11 +195,18 @@ export const dragAt = (altitude: number, speed: number) => DRAG * density(altitu
 export const airHeat = (altitude: number, speed: number) => DECK_HEAT * density(altitude) * (speed / MAX_SPEED) ** 3;
 
 /**
- * The fastest a ship flies at an altitude without the air heating its hull beyond what its
- * radiators shed (`cooling`, heat units per second; units/s): above 600 m below the deck the
- * tournament's limit; 214 m/s at 1 km, 146 m/s at 2 km, 87 m/s at the arena's bottom.
+ * The speed at which the air heats a hull at an altitude (units) exactly as fast as its radiators
+ * shed (`cooling`, heat units per second; units/s), past the tournament's limit too: how far a
+ * coil's boost may go before the air heats the hull.
  */
-export const safeSpeed = (altitude: number, cooling: number) => Math.min(MAX_SPEED, MAX_SPEED * Math.cbrt(cooling / (DECK_HEAT * density(altitude))));
+export const heatSpeed = (altitude: number, cooling: number) => MAX_SPEED * Math.cbrt(cooling / (DECK_HEAT * density(altitude)));
+
+/**
+ * The fastest a ship flies at an altitude without the air heating its hull beyond what its
+ * radiators shed (units/s, see heatSpeed): above 600 m below the deck the tournament's limit;
+ * 214 m/s at 1 km, 146 m/s at 2 km, 87 m/s at the arena's bottom.
+ */
+export const safeSpeed = (altitude: number, cooling: number) => Math.min(MAX_SPEED, heatSpeed(altitude, cooling));
 
 /** The haze's numbers for the shaders (see view/haze): extinction, scale heights, the clamp of the depth. */
 export const HAZE_SHAPE = { haze: HAZE, scale: SCALE_HEIGHT, top: TOP_HEIGHT, topDensity: TOP_DENSITY, deepest: DEEPEST, deck: DECK_DEPTH };
