@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { flowAt, flowRate } from './streaks';
+import * as THREE from 'three';
+import { flowAt, flowRate, stillStale } from './streaks';
 import { METERS_PER_UNIT } from '../ship/flight';
 
 const FOCAL = 500;
@@ -55,5 +56,18 @@ describe('motion streaks', () => {
     expect(at(150)).toBeCloseTo(0.6);
     expect(at(250)).toBeCloseTo(0.75);
     expect(at(10000)).toBeLessThan(1.2);
+  });
+
+  it('standing dashes (reduced motion) are drawn anew when the speed changes, not only when the flow turns', () => {
+    const ahead = new THREE.Vector3(0, 0, -1);
+    const drawn = { count: 10, direction: ahead.clone(), fade: 0, rate: flowRate(20) };
+    expect(stillStale(drawn, 10, ahead, 0, flowRate(20))).toBe(false);
+    // a straight burn from rest: same direction, the fade and rate grow
+    expect(stillStale(drawn, 10, ahead, 0.5, flowRate(100))).toBe(true);
+    // braking straight down from speed
+    const fast = { count: 10, direction: ahead.clone(), fade: 1, rate: flowRate(2000) };
+    expect(stillStale(fast, 10, ahead, 0.3, flowRate(60))).toBe(true);
+    expect(stillStale(fast, 10, new THREE.Vector3(0.1, 0, -1).normalize(), 1, flowRate(2000))).toBe(true);
+    expect(stillStale(fast, 12, ahead, 1, flowRate(2000))).toBe(true);
   });
 });
