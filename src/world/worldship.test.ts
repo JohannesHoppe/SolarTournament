@@ -16,15 +16,15 @@ const shaderOf = (material: THREE.Material) => {
 };
 
 describe("the world ship's frost", () => {
-  it("lies where the hull was laid out: a welded body's pieces take materials of their own whose patches follow the body's drift", () => {
+  it("lies where the hull was laid out: a welded body's pieces take materials of their own whose patches follow the body home", () => {
     const plating = frosted(new THREE.MeshStandardMaterial(), true);
     const plain = new THREE.MeshBasicMaterial();
     const piece = (material: THREE.Material) => new THREE.Group().add(new THREE.Mesh(new THREE.BoxGeometry(), material));
     const [a, b, other] = [piece(plating), piece(plating), piece(plating)];
     const bare = piece(plain);
-    const drift = weldFrost(a, 0);
-    expect(weldFrost(b, 0)).toBe(drift);
-    expect(weldFrost(other, 1)).not.toBe(drift);
+    const home = weldFrost(a, 0);
+    expect(weldFrost(b, 0)).toBe(home);
+    expect(weldFrost(other, 1)).not.toBe(home);
     weldFrost(bare, 0);
     const material = (group: THREE.Group) => (group.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial;
     // one copy per body, the plating still the plating; what is not frosted stays as it is
@@ -33,11 +33,11 @@ describe("the world ship's frost", () => {
     expect(material(other)).not.toBe(material(a));
     expect(material(a).defines?.PLATING).toBe('');
     expect(material(bare)).toBe(plain);
-    // the patches are placed by the world position less the body's drift
+    // the patches are placed by the world position taken back home with the body
     const shader = shaderOf(material(a));
-    expect(shader.uniforms.frostDrift.value).toBe(drift);
-    expect(shader.vertexShader).toContain('- frostDrift');
-    expect(shaderOf(material(other)).uniforms.frostDrift.value).not.toBe(drift);
+    expect(shader.uniforms.frostHome.value).toBe(home);
+    expect(shader.vertexShader).toContain('frostHome * modelMatrix');
+    expect(shaderOf(material(other)).uniforms.frostHome.value).not.toBe(home);
   });
 
   it("rides on a half of the derelict a comet shoves", () => {
@@ -46,12 +46,12 @@ describe("the world ship's frost", () => {
     const pieces = [...field.asteroids.values()].filter((piece) => piece.weld === 0);
     expect(pieces.length).toBeGreaterThan(1);
     const laidOut = pieces.map((piece) => piece.object.position.clone());
-    const drift = weldFrost(new THREE.Group(), 0);
-    expect(drift.length()).toBe(0);
+    // the matrix the field keeps for the half (asked for before the shove: asking lays it out at home)
+    const home = weldFrost(new THREE.Group(), 0);
     field.shove(pieces[0].id, 10, new THREE.Vector3(400, -100, 250), new THREE.Vector3(0, 1, 0), 0, 7);
     field.setClock(70);
-    // every piece of the half has moved by that very drift
-    expect(drift.length()).toBeGreaterThan(1000);
-    pieces.forEach((piece, i) => expect(piece.object.position.clone().sub(laidOut[i]).distanceTo(drift)).toBeLessThan(1e-6));
+    // the half has drifted far, and the frost's way home takes every piece of it back to where it was laid out
+    expect(pieces[0].object.position.distanceTo(laidOut[0])).toBeGreaterThan(1000);
+    pieces.forEach((piece, i) => expect(piece.object.position.clone().applyMatrix4(home).distanceTo(laidOut[i])).toBeLessThan(1e-3));
   });
 });

@@ -311,8 +311,8 @@ export class AsteroidField {
   private detail = 1;
   /** Rocks broken so far, with the field time each broke (for snapshot). */
   private readonly broken = new Map<string, number>();
-  /** Each welded piece's place as laid out, and its body's drift from it, which place keeps for the hull's frost (see world/worldship, weldFrost). */
-  private readonly drifts = new Map<string, { drift: THREE.Vector3; rest: THREE.Vector3 }>();
+  /** Per welded structure: the way its frost takes from where it is now back to where it was laid out, which place keeps (see world/worldship, weldFrost). */
+  private readonly frosts = new Map<number, THREE.Matrix4>();
   private readonly templates: Record<TemplateKind, Template[]>;
   /** The layout of the field as generated, from which restore rebuilds it. */
   layout: FieldLayout | null = null;
@@ -431,7 +431,7 @@ export class AsteroidField {
       asteroid.baseOrientation.copy(piece.orientation).multiply(asteroid.object.quaternion);
       asteroid.weld = piece.weld ?? null;
       // a welded body's frost and plating ride on it as it drifts (see world/worldship)
-      if (asteroid.weld !== null) this.drifts.set(id, { drift: weldFrost(asteroid.object, asteroid.weld), rest: piece.position.clone() });
+      if (asteroid.weld !== null) this.frosts.set(asteroid.weld, weldFrost(asteroid.object, asteroid.weld));
       this.place(asteroid);
       if (asteroid.weld !== null && !this.weldHomes.has(asteroid.weld)) this.weldHomes.set(asteroid.weld, { id, position: asteroid.object.position.clone(), quaternion: asteroid.object.quaternion.clone() });
     }
@@ -477,7 +477,7 @@ export class AsteroidField {
     this.asteroids.clear();
     this.weldHomes.clear();
     this.broken.clear();
-    this.drifts.clear();
+    this.frosts.clear();
   }
 
   private boundingRadius(t: Template, scale: number) {
@@ -574,8 +574,8 @@ export class AsteroidField {
     a.object.quaternion.setFromAxisAngle(a.spinAxis, a.spinRate * age).multiply(a.baseOrientation);
     a.object.updateMatrixWorld(true);
     a.inverse.copy(a.object.matrixWorld).invert();
-    const welded = this.drifts.get(a.id);
-    if (welded) welded.drift.subVectors(a.object.position, welded.rest);
+    const frost = a.weld === null ? undefined : this.frosts.get(a.weld);
+    if (frost && this.weldMotion(a.weld!, frost)) frost.invert();
   }
 
   /**

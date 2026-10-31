@@ -114,34 +114,37 @@ const frostUniforms = { frost: { value: 0 }, frostSun: { value: SUN_DIRECTION.cl
 /** The rime's color, and the faint cold glow it keeps in the shadow (as ice does). */
 const RIME = 'vec3(0.86, 0.91, 0.98)';
 const RIME_GLOW = 'vec3(0.015, 0.025, 0.045)';
-/** No drift: the hull where it was laid out (see frosted). */
-const STILL = { value: new THREE.Vector3() };
+/** At home: the hull where it was laid out (see frosted). */
+const HOME = { value: new THREE.Matrix4() };
 /** Every frosted material, and whether it is the plating's (see frosted). */
 const frostedPlating = new WeakMap<THREE.Material, boolean>();
-/** Each welded body's drift and its copies of the frosted materials (see weldFrost). */
-const welds = new Map<number, { drift: { value: THREE.Vector3 }; copies: Map<THREE.Material, THREE.Material> }>();
+/** Each welded body's way home and its copies of the frosted materials (see weldFrost). */
+const welds = new Map<number, { home: { value: THREE.Matrix4 }; copies: Map<THREE.Material, THREE.Material> }>();
 
 /**
  * Gives the pieces of welded body `weld` (a half of the world ship, the junkyard's hub; see
- * Placement.weld) their own copies of the frosted materials, all of them sharing one drift,
- * and returns that drift for the field to set: how far the body has drifted from where it was
- * laid out (units). The copies share their shader with the originals; only the drift differs.
+ * Placement.weld) their own copies of the frosted materials, all of them sharing one matrix,
+ * and returns that matrix for the field to set: the way from where the body is now back to
+ * where it was laid out (see AsteroidField.weldMotion, inverted). The copies share their
+ * shader with the originals; only the matrix differs.
  */
-export function weldFrost(object: THREE.Object3D, weld: number): THREE.Vector3 {
+export function weldFrost(object: THREE.Object3D, weld: number): THREE.Matrix4 {
   let body = welds.get(weld);
-  if (!body) welds.set(weld, (body = { drift: { value: new THREE.Vector3() }, copies: new Map() }));
-  const { drift, copies } = body;
+  if (!body) welds.set(weld, (body = { home: { value: new THREE.Matrix4() }, copies: new Map() }));
+  const { home, copies } = body;
+  // laid out: at home
+  home.value.identity();
   const own = (material: THREE.Material) => {
     const plating = frostedPlating.get(material);
     if (plating === undefined || !(material instanceof THREE.MeshStandardMaterial)) return material;
     let copy = copies.get(material);
-    if (!copy) copies.set(material, (copy = frosted(material.clone(), plating, drift)));
+    if (!copy) copies.set(material, (copy = frosted(material.clone(), plating, home)));
     return copy;
   };
   object.traverse((o) => {
     if (o instanceof THREE.Mesh) o.material = Array.isArray(o.material) ? o.material.map(own) : own(o.material);
   });
-  return drift.value;
+  return home.value;
 }
 
 /**
@@ -151,17 +154,17 @@ export function weldFrost(object: THREE.Object3D, weld: number): THREE.Vector3 {
  * the centuries, soot of the battle. So neighboring stretches never look alike, and nothing that
  * large can shimmer.
  *
- * The patches lie where the hull was laid out: `drift` is how far its body has drifted since
- * (units, see weldFrost), so they ride on the hull a comet shoves.
+ * The patches lie where the hull was laid out: `home` takes a point of the hull from where its
+ * body is now back there (see weldFrost), so they ride on the hull a comet shoves.
  */
-export function frosted<M extends THREE.MeshStandardMaterial>(material: M, plating = false, drift = STILL): M {
+export function frosted<M extends THREE.MeshStandardMaterial>(material: M, plating = false, home = HOME): M {
   if (plating) material.defines = { ...material.defines, PLATING: '' };
   frostedPlating.set(material, plating);
   material.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, frostUniforms, { frostDrift: drift });
+    Object.assign(shader.uniforms, frostUniforms, { frostHome: home });
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 frostDrift;\nvarying vec3 vFrostNormal;\nvarying vec3 vFrostAt;')
-      .replace('#include <project_vertex>', '#include <project_vertex>\nvFrostNormal = mat3(modelMatrix) * objectNormal;\nvFrostAt = (modelMatrix * vec4(transformed, 1.0)).xyz - frostDrift;');
+      .replace('#include <common>', '#include <common>\nuniform mat4 frostHome;\nvarying vec3 vFrostNormal;\nvarying vec3 vFrostAt;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvFrostNormal = mat3(modelMatrix) * objectNormal;\nvFrostAt = (frostHome * modelMatrix * vec4(transformed, 1.0)).xyz;');
     shader.fragmentShader = shader.fragmentShader
       .replace(
         '#include <common>',
