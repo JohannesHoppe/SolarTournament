@@ -19,6 +19,16 @@ const MS = 20;
 /** A direction `yaw` right of ahead (-Z) and `pitch` up (rad). */
 const direction = (yaw: number, pitch = 0) => new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
 
+/** What a recorded frame keeps of a ship before its step, flown without gravity at full drive and thrusters. */
+const kept = (flight: FlightModel) => ({
+  gravity: [0, 0, 0] as [number, number, number],
+  position: flight.position.toArray(),
+  velocity: flight.velocity.toArray(),
+  orientation: flight.orientation.toArray() as [number, number, number, number],
+  drive: 1,
+  thrusters: 1,
+});
+
 /** Seconds from `from` until the flight stays within ON_NOSE of the nose for good. */
 function backOnNose(cockpit: Cockpit, from: number) {
   let settled = Infinity;
@@ -243,12 +253,7 @@ describe('the input recorder', () => {
         mode: 'autopilot' as const,
         controls,
         pointer: [hand.pointer.x, hand.pointer.y] as [number, number],
-        gravity: [0, 0, 0] as [number, number, number],
-        position: flight.position.toArray(),
-        velocity: flight.velocity.toArray(),
-        orientation: flight.orientation.toArray() as [number, number, number, number],
-        drive: 1,
-        thrusters: 1,
+        ...kept(flight),
       };
       ship.step(controls);
       recorder.add({ ...frame, out: { ...ship.out } });
@@ -277,12 +282,7 @@ describe('the input recorder', () => {
         pointer: null,
         aim: aim.toArray(),
         out: { ...ship.out },
-        gravity: [0, 0, 0],
-        position: flight.position.toArray(),
-        velocity: flight.velocity.toArray(),
-        orientation: flight.orientation.toArray() as [number, number, number, number],
-        drive: 1,
-        thrusters: 1,
+        ...kept(flight),
       });
       flight.update(STEP, ship.out, ship.gravity);
       ship.t += STEP;
