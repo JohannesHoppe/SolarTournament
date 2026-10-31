@@ -231,6 +231,17 @@ describe('a contact', () => {
     expect(b.shovedBy).toBe(KNOCKED);
   });
 
+  it("finds a piece's point in the middle of a ring's band, as in its housings", () => {
+    const center = new THREE.Vector3(1000, 2000, -500);
+    const ring = ringFixture(center, new THREE.Vector3(0, 0, 1), 2000);
+    const rim = ringRim(2000);
+    // halfway through the band's thickness, on its middle plane
+    const point = center.clone().add(new THREE.Vector3(rim.inner + 100, 0, 0));
+    const normal = new THREE.Vector3();
+    expect(ring.touch(point, normal)).toBe(true);
+    expect(normal.length()).toBeCloseTo(1);
+  });
+
   it('bounces a ring off a piece drifting into it, never through it', () => {
     const { field, a, b } = pair(300, 1, 1);
     // the second rock out of the way, a ring standing across the first one's path, its band

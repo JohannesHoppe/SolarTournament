@@ -53,7 +53,8 @@ export interface Fixture {
 
 /** A ring of opening `radius` at `center`, facing `facing`, as a Fixture: its band, housings, struts and station (see world/gates, touchRing). */
 export function ringFixture(center: THREE.Vector3, facing: THREE.Vector3, radius: number): Fixture {
-  return { position: center, reach: ringRim(radius).outer, touch: (point, normal) => touchRing(center, facing, radius, point, 0, normal), points: ringSamples(center, facing, radius) };
+  // a point as a sphere the least bit thick: one of no size touches nothing it lies in
+  return { position: center, reach: ringRim(radius).outer, touch: (point, normal) => touchRing(center, facing, radius, point, 1e-3, normal), points: ringSamples(center, facing, radius) };
 }
 
 /** The world itself, for points already in it (see pointsInto). */
