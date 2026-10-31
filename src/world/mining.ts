@@ -167,7 +167,8 @@ const beamVertex = /* glsl */ `
     vec3 side = normalize(cross(to - from, cameraPosition - p));
     vec4 mv = viewMatrix * vec4(p, 1.0);
     // half a meter wide, at least MIN_PIXELS, dimmer by what it gains
-    float px = pixels(${(0.5 * M).toFixed(1)}, -mv.z);
+    // (an end behind the camera plane takes the width of one a few meters ahead of it: never a negative one, which would taper the beam towards the camera)
+    float px = pixels(${(0.5 * M).toFixed(1)}, max(-mv.z, ${(2 * M).toFixed(1)}));
     float width = ${(0.5 * M).toFixed(1)} * max(px, ${MIN_PIXELS.toFixed(1)}) / px;
     vBright = dimmed(px);
     vAlong = corner.x;
@@ -195,6 +196,7 @@ const moteVertex = /* glsl */ `
   uniform float viewport;
   uniform vec3 sun;
   uniform vec3 sunColor;
+  uniform float share;
   attribute vec3 bite0;
   attribute vec3 bite1;
   attribute vec2 sweepAt;
@@ -208,7 +210,8 @@ const moteVertex = /* glsl */ `
   ${PHASE_GLSL}
   void main() {
     mat4 m = rockMatrix();
-    if (rockGone(m)) { gl_Position = OUT_OF_SIGHT; gl_PointSize = 0.0; return; }
+    // fewer on a cheaper rung: every rig and cutter thins alike, by a pick of its own motes (never the phase, which would bunch them)
+    if (rockGone(m) || fract(seed.w * 131.7) >= share) { gl_Position = OUT_OF_SIGHT; gl_PointSize = 0.0; return; }
     vec3 normal = normalize(mat3(m) * up);
     vec3 spread = mat3(m) * seed.xyz;
     spread = length(spread) > 0.0 ? normalize(spread) : normal;
@@ -1159,9 +1162,10 @@ export class Mining {
   private readonly sunColor = { value: new THREE.Color(1, 0.94, 0.87) };
   private plan: Plan | null = null;
   private layoutKey: string | null = null;
-  private motes: THREE.Points | null = null;
   private clouds: THREE.Mesh<THREE.InstancedBufferGeometry> | null = null;
   private share = 1;
+  /** The share of the motes drawn, as the motes' shader reads it. */
+  private readonly shareUniform = { value: 1 };
   /** The drill holes in the world this frame: position and up (see dustAt). */
   private readonly holes: { at: THREE.Vector3; up: THREE.Vector3; live: boolean }[] = [];
 
@@ -1205,12 +1209,11 @@ export class Mining {
     const lights = new THREE.Points(plan.lights.geometry(), new THREE.ShaderMaterial({ uniforms: common, vertexShader: lightVertex, fragmentShader: lightFragment, ...additive }));
     const beams = new THREE.Mesh(plan.beams.geometry(), new THREE.ShaderMaterial({ uniforms: common, vertexShader: beamVertex, fragmentShader: beamFragment, ...additive, side: THREE.DoubleSide }));
     const motes = new THREE.Points(plan.motes.geometry(), new THREE.ShaderMaterial({
-      uniforms: { ...common, sun: this.sun, sunColor: this.sunColor },
+      uniforms: { ...common, sun: this.sun, sunColor: this.sunColor, share: this.shareUniform },
       vertexShader: moteVertex,
       fragmentShader: moteFragment,
       ...additive,
     }));
-    this.motes = motes;
     // the clouds: one quad, instanced
     const quad = new THREE.InstancedBufferGeometry();
     quad.setAttribute('position', new THREE.Float32BufferAttribute([-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0], 3));
@@ -1265,7 +1268,7 @@ export class Mining {
   /** The share of the sparks, drill dust and dust clouds drawn (see view/quality, Look.particles). */
   setShare(share: number) {
     this.share = share;
-    if (this.motes) this.motes.geometry.setDrawRange(0, Math.round(this.motes.geometry.getAttribute('position').count * share));
+    this.shareUniform.value = share;
     if (this.clouds && this.plan) this.clouds.geometry.instanceCount = Math.round((this.plan.clouds.length / 8) * share);
   }
 
