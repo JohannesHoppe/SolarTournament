@@ -23,7 +23,7 @@ const JETS = [
   { from: new THREE.Vector3(-14200, 0, 0), along: new THREE.Vector3(1, 0, 0) },
   { from: new THREE.Vector3(...sternAt(9200), 3000), along: STERN_AXIS.clone().negate() },
 ] as const;
-/** A jet reaches MIST_REACH (units, 450 m) from its torn end, widening from MIST_START to MIST_END across (radius, units: 70 m, the hull's, to 200 m). */
+/** A jet reaches MIST_REACH (units, 450 m) from its torn end, widening from a radius of MIST_START (units, 70 m, the hull's) to MIST_END (units, 200 m). */
 const MIST_REACH = 9000;
 const MIST_START = 1400;
 const MIST_END = 4000;

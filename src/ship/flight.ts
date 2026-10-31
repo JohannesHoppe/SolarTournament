@@ -28,6 +28,7 @@ const axis = new THREE.Vector3();
 const local = new THREE.Vector3();
 const inverse = new THREE.Quaternion();
 const acceleration = new THREE.Vector3();
+const before = new THREE.Vector3();
 const targetRate = new THREE.Vector3();
 const AXES = ['x', 'y', 'z'] as const;
 
@@ -109,12 +110,23 @@ export class FlightModel {
     this.properAcceleration = acceleration.length();
     if (push) acceleration.add(push);
     acceleration.applyQuaternion(this.orientation);
+    before.copy(this.velocity);
     this.velocity.addScaledVector(acceleration, dt);
     // a step that crosses the limit ends on it, however long the frame was; at or past the
     // limit (after an overdrive, or a fall into a well) a push across the course turns the
     // flight but never adds speed
     const limit = Math.max(speed, MAX_SPEED);
-    if (this.velocity.lengthSq() > limit * limit) this.velocity.setLength(limit);
+    if (this.velocity.lengthSq() > limit * limit) {
+      const pushed = acceleration.length() * dt;
+      this.velocity.setLength(limit);
+      // the ship is held at the limit: a drag that takes a little each step (a planet's air)
+      // leaves the drive only that little to give back, so the flame and the load on the clone
+      // are the share of the push the limit let through
+      const share = pushed > 1e-9 ? Math.min(1, this.velocity.distanceTo(before) / pushed) : 0;
+      this.limited = true;
+      this.properAcceleration *= share;
+      drive *= share;
+    }
     // gravity is no push of the ship's: the limit holds only against its own, so a well pulls
     // a ship past it, and the flight computer never brakes the speed it gained
     this.velocity.addScaledVector(gravity, dt);
@@ -200,7 +212,12 @@ export const ON_NOSE = (15 * Math.PI) / 180;
  * is the slip it takes out that fast.
  */
 export const LEAD_TIME = 1;
-/** Below this speed (units/s, 1 m/s) the ship counts as at rest: the autopilot holds it still. Up to AUTO_MOVING (10 m/s) it blends into flying. */
+/**
+ * Below this speed (units/s, 1 m/s) the ship counts as at rest: the autopilot holds it still
+ * (from half of it down it takes out the speed along the nose too; above AUTO_REST that speed is
+ * kept, however slow). Up to AUTO_MOVING (10 m/s) the hold of gravity and of the nose's lead
+ * blends into flying.
+ */
 const AUTO_REST = 20;
 const AUTO_MOVING = 200;
 /** The autopilot takes out the drift across the nose with this gain (1/s): a fifth of a second per e-fold. */
@@ -355,21 +372,25 @@ function stop(out: Controls, moving: number) {
 function bend(flight: FlightModel, speed: number, moving: number, pilot: number, gravity: THREE.Vector3, controls: Readonly<Controls>, out: Controls): Controls {
   const thrust = MAIN_THRUST * flight.driveFactor;
   const thrusters = RCS_THRUST * flight.thrusterFactor;
-  // the velocity wanted: the speed along the nose as it is; gravity is held off across the
-  // flight, along it it changes the speed as ever (at rest, it is held off altogether)
-  want.copy(nose).multiplyScalar(flight.velocity.dot(nose) * moving);
+  // the velocity wanted: the speed along the nose as it is (at rest, none); gravity is held off
+  // across the flight, along it it changes the speed as ever (at rest, it is held off altogether).
+  // The kept speed has no share of `moving`, which would brake a slow coast to rest by itself
+  want.copy(nose).multiplyScalar(flight.velocity.dot(nose) * THREE.MathUtils.smoothstep(speed, AUTO_REST / 2, AUTO_REST));
   demand.subVectors(want, flight.velocity).multiplyScalar(AUTO_GAIN).sub(gravity).addScaledVector(path, gravity.dot(path) * moving);
   across.copy(demand).addScaledVector(path, -demand.dot(path));
   const sideways = across.length();
   let drive = 0;
-  const open = Math.max(pilot, THREE.MathUtils.smoothstep(speed / MAX_SPEED, FREE_FROM, FREE));
+  const free = THREE.MathUtils.smoothstep(speed / MAX_SPEED, FREE_FROM, FREE);
+  const open = Math.max(pilot, free);
   if (sideways > thrusters && thrust > 0 && open > 0) {
     const share = nose.dot(across) / sideways;
     if (share > 0.05) drive = (open * moving * (sideways - thrusters)) / (thrust * share);
   }
   out.thrust = Math.max(pilot, THREE.MathUtils.clamp(drive, 0, 1));
-  // the thrusters: what the drive leaves, across the flight first
-  demand.addScaledVector(nose, -out.thrust * thrust);
+  // the thrusters: what the drive leaves, across the flight first; the drive's push along the
+  // flight is wanted as far as it is the Host's or free, so the thrusters never burn against it
+  const wanted = Math.max(pilot, out.thrust * free) * thrust * nose.dot(path);
+  demand.addScaledVector(nose, -out.thrust * thrust).addScaledVector(path, wanted);
   flight.toLocalDirection(demand, across).divideScalar(Math.max(thrusters, 1e-6));
   const side = Math.hypot(across.x, across.y);
   if (side > 1) across.multiplyScalar(1 / side);

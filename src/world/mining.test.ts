@@ -91,7 +91,8 @@ describe("the Rockborn's mining in the Belt", () => {
     const { field, plan: p } = plan();
     for (let i = 0; i < p.clouds.length; i += 8) {
       const at = new THREE.Vector3(p.clouds[i], p.clouds[i + 1], p.clouds[i + 2]);
-      for (const rock of field.asteroids.values()) expect(rock.object.position.distanceTo(at)).toBeGreaterThan(rock.radius);
+      // a cloud's core (a third of its size) meets no rock's measured surface and no rig or buoy standing on one
+      expect(field.overlap(at, p.clouds[i + 3] * 0.3), `cloud ${i / 8}`).toBeNull();
     }
   });
 });

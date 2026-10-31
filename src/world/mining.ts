@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { attachment, type Asteroid, type AsteroidField, type Attachment } from './asteroids';
 import { noise } from './nebula';
+import { tangentDirections } from './surface';
 import { SUN_DIRECTION } from './space';
 import { hazeUniforms } from '../view/haze';
 import { rockTone } from './rocks';
@@ -11,8 +12,9 @@ import { boxUv, shine, surfaced, wornSurface, type Wear } from '../view/surfaces
  * The Rockborn's mining in the Belt: rigs with work lights on some of its rocks, cutting lasers
  * slicing them with sparks where they bite, dust rising from drill holes, rocks cut half away
  * with smooth faces and lit tunnels, beacon buoys marking the claims, the miners' neon graffiti,
- * and dust between the rocks that glows against the sun. Scenery only: nothing of it collides,
- * pulls or breaks, and what stands on a rock is built in that rock's own frame and turns with it
+ * and dust between the rocks that glows against the sun. Rigs and buoys are solid (`Plan.solids`,
+ * stood on their rocks by `standClaims`); the rest is looks only, and nothing of it pulls or
+ * breaks. What stands on a rock is built in that rock's own frame and turns with it
  * (a rock that breaks takes its dressing along). Where it all stands follows from the field's
  * seed, so every browser sees the same claims.
  *
@@ -434,12 +436,6 @@ function surfaceAt(site: Site, direction: THREE.Vector3, target: THREE.Vector3):
   return target.copy(scratch2).multiplyScalar(radius).add(a.center);
 }
 
-/** Two directions across `normal`. */
-function across(normal: THREE.Vector3, side: THREE.Vector3, other: THREE.Vector3) {
-  side.set(Math.abs(normal.x) < 0.9 ? 1 : 0, Math.abs(normal.x) < 0.9 ? 0 : 1, 0).cross(normal).normalize();
-  other.crossVectors(normal, side);
-}
-
 /**
  * A footing on the rock's surface towards `direction`, `reach` (world units) around: the plane's
  * normal fitted to the surface there, the highest point of the footprint (where a platform
@@ -450,7 +446,7 @@ function footing(site: Site, direction: THREE.Vector3, reach: number) {
   const radial = center.clone().sub(site.asteroid.center).normalize();
   const side = new THREE.Vector3();
   const other = new THREE.Vector3();
-  across(radial, side, other);
+  tangentDirections(radial, side, other);
   const r = reach / site.scale;
   const at = (x: number, y: number) => surfaceAt(site, scratch.copy(center).addScaledVector(side, x * r).addScaledVector(other, y * r).sub(site.asteroid.center), new THREE.Vector3());
   const normal = new THREE.Vector3().crossVectors(at(1, 0).sub(at(-1, 0)), at(0, 1).sub(at(0, -1))).normalize();
@@ -473,7 +469,7 @@ function footing(site: Site, direction: THREE.Vector3, reach: number) {
 function frameOf(site: Site, origin: THREE.Vector3, up: THREE.Vector3, turn: number): THREE.Matrix4 {
   const side = new THREE.Vector3();
   const other = new THREE.Vector3();
-  across(up, side, other);
+  tangentDirections(up, side, other);
   const x = side.clone().multiplyScalar(Math.cos(turn)).addScaledVector(other, Math.sin(turn));
   const z = new THREE.Vector3().crossVectors(x, up);
   return new THREE.Matrix4().makeBasis(x, up, z).setPosition(origin).multiply(new THREE.Matrix4().makeScale(1 / site.scale, 1 / site.scale, 1 / site.scale));
@@ -616,7 +612,7 @@ function decal(kit: Kit, site: Site, center: THREE.Vector3, normal: THREE.Vector
 function disc(kit: Kit, site: Site, at: THREE.Vector3, normal: THREE.Vector3, radius: number, cell: number[], color: THREE.Color) {
   const side = new THREE.Vector3();
   const other = new THREE.Vector3();
-  across(normal, side, other);
+  tangentDirections(normal, side, other);
   const r = radius / site.scale;
   const corner = (x: number, y: number) => {
     const p = at.clone().addScaledVector(side, x * r).addScaledVector(other, y * r);
@@ -747,7 +743,7 @@ function rig(plan: Plan, site: Site, r: Randomizer, cutter: boolean) {
 
 /** A spark (kind 0) or a mote of drill dust (kind 1) from a cut or a hole. */
 function mote(plan: Plan, slot: number, bite0: THREE.Vector3, bite1: THREE.Vector3, sweepAt: [number, number], up: THREE.Vector3, r: Randomizer, kind: number) {
-  const spread = v3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).multiplyScalar(kind ? 0.6 : 1);
+  const spread = v3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1));
   plan.motes.push('position', bite0.x, bite0.y, bite0.z);
   plan.motes.push('bite0', bite0.x, bite0.y, bite0.z);
   plan.motes.push('bite1', bite1.x, bite1.y, bite1.z);
@@ -778,7 +774,7 @@ function cutFace(plan: Plan, site: Site, r: Randomizer) {
   const ANGLES = 20;
   for (let attempt = 0; attempt < 32; attempt++) {
     const normal = v3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-    across(normal, side, other);
+    tangentDirections(normal, side, other);
     const reach = surfaceAt(site, normal, new THREE.Vector3()).sub(center).length();
     // the plane: the highest point within the cone the face may cover
     const cone = 0.7 * site.mean;
@@ -815,7 +811,7 @@ function cutFace(plan: Plan, site: Site, r: Randomizer) {
   if (!best) return;
   plan.faces.push(best);
   const { normal, outline } = best;
-  across(normal, side, other);
+  tangentDirections(normal, side, other);
   const color = rockColor(site, normal).multiplyScalar(1.7);
   const middle = center.clone().addScaledVector(normal, best.height);
   const depth = tolerance + (6 * M) / site.scale;
@@ -881,7 +877,7 @@ function graffiti(plan: Plan, site: Site, r: Randomizer, slogan: number) {
   const foot = footing(site, direction, 30 * M);
   const side = new THREE.Vector3();
   const other = new THREE.Vector3();
-  across(foot.normal, side, other);
+  tangentDirections(foot.normal, side, other);
   const turn = r.range(-0.3, 0.3);
   side.multiplyScalar(Math.cos(turn)).addScaledVector(other, Math.sin(turn)).normalize();
   const width = Math.min(1.1 * site.mean * site.scale, 130 * M);

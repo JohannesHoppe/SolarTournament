@@ -24,6 +24,8 @@ export interface InputFrame {
   controls: Controls;
   /** The mouse pointer's offset from the screen center, in full deflections (x right, y up), null without a mouse in flight. */
   pointer: [number, number] | null;
+  /** From the ship to the ship the aim assist pulled the nose onto in this step (world, units), if one did. */
+  aim?: Vec3 | null;
   /** The commands the flight computer gave the ship. */
   out: Controls;
   /** Gravity at the ship (units/s²). */

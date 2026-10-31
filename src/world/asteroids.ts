@@ -859,9 +859,14 @@ export class AsteroidField {
   lineOfSight(from: THREE.Vector3, to: THREE.Vector3, haze = SIGHT_DEPTH): boolean {
     const distance = from.distanceTo(to);
     if (distance < 1) return true;
-    if (this.air && opticalDepth(this.air, from, to) > haze) return false;
+    if (!this.clearAir(from, to, haze)) return false;
     sight.subVectors(to, from).divideScalar(distance);
     return this.cast(from, sight, distance, true, true) === null;
+  }
+
+  /** The haze of the arena's air between two points sums up to no more than `haze` (see lineOfSight); always so in vacuum. */
+  clearAir(from: THREE.Vector3, to: THREE.Vector3, haze = SIGHT_DEPTH): boolean {
+    return !this.air || opticalDepth(this.air, from, to) <= haze;
   }
 
   /**

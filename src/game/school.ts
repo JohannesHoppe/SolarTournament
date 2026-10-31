@@ -321,7 +321,7 @@ const EXAM_SKILL = 0.5;
  * The orbit drill, at the Event Horizon: the pilot starts ORBIT_START from the hole's center
  * (units, 1.2 km straight above it, out of the plane its rocks circle in, inside their ring),
  * its nose along ORBIT_NOSE, across the line to the hole, drifting that way at ORBIT_DRIFT
- * (units/s, 100 m/s; a circular orbit there flies 181 m/s, ORBIT READY comes from about 156
+ * (units/s, 100 m/s; a circular orbit there flies 181 m/s, ORBIT READY comes from about 157
  * m/s), and has to fly ORBIT_SWEEP (rad, half a turn) about the hole in a stable orbit.
  */
 export const ORBIT_START = new THREE.Vector3(0, 24000, 0);
@@ -579,6 +579,8 @@ export function ringCourse(position: THREE.Vector3, orientation: THREE.Quaternio
     }
     if (blocked === 0) break;
   }
+  // no way clear of rock: the course straight ahead, not as the last tilt left the frame
+  frame.copy(straight);
   return best.length ? best : course.map(place);
 }
 /** A course's way keeps this clear of rock (units, 180 m, the room a ring keeps, see layRings), or it tilts (rad: straight, then 15°, 30° and 45° up and down). */
@@ -739,6 +741,8 @@ export const DRILL = {
         return false;
       }
       if (!lit) return false;
+      // a drive first lit after the window is too late (the failure says so), however soon it burns now
+      if (a.litAt > START_GO + START_LATE) return false;
       if (a.litAt >= START_GO - START_EARLY) {
         ctx.perfectStart();
         return true;
@@ -885,7 +889,8 @@ export const DRILL = {
     enter: (ctx, a) => drift(ctx, a.rep === 0 ? 1500 : 2400),
     // counts once the burn has taken out the drift along the course; a burn by hand never
     // hits the flight direction exactly, so some sideways drift is allowed to remain
-    done: (ctx, a) => ctx.me.flight.velocity.dot(a.forward) < STOPPED && !a.usedBrake,
+    // the brake pressed in this very frame has already taken the speed down, and does not count
+    done: (ctx, a) => ctx.me.flight.velocity.dot(a.forward) < STOPPED && !a.usedBrake && !(ctx.braking && a.brakeLetGo),
     // the S brake does not count: the attempt starts over the moment it is pressed
     fail(ctx, a) {
       a.brakeLetGo ||= !ctx.braking;
@@ -1221,6 +1226,8 @@ function atDrone(line: string, praise: string, distance: number, nova = false): 
       ctx.spawnDrone(clear(ctx, ahead(ctx, 0, 0, -distance), 2000), new THREE.Vector3());
     },
     done: (ctx) => !!ctx.drone && !ctx.drone.alive,
+    // the core is spent on the first shot: a nova set off out of reach leaves the drone alive, once more
+    fail: nova ? (ctx) => (!ctx.me.nova && ctx.drone?.alive ? SCHOOL.again : null) : undefined,
     waypoint: (ctx) => (ctx.drone?.alive ? ctx.drone.flight.position : null),
     mark: () => t('Drone'),
   };
@@ -1254,6 +1261,28 @@ function sparring(line: string, praise: string, keys: Command[], armed: boolean,
   };
 }
 
+/** The debris' way keeps this clear of rock (units, 30 m): its own size twice over. */
+const DEBRIS_CLEAR = DEBRIS_RADIUS * 2;
+
+/**
+ * Where the debris of a dodge drill starts: `distance` ahead of the pilot if the straight way to
+ * the pilot is free of rock, else off to one side of that line (a ninth of the distance, at
+ * random angles), else straight ahead all the same.
+ */
+function debrisStart(ctx: SchoolContext, distance: number) {
+  const pilot = ctx.me.flight.position;
+  const steps = Math.ceil(distance / DEBRIS_CLEAR);
+  for (let attempt = 0; attempt < 12; attempt++) {
+    const angle = attempt ? Math.random() * Math.PI * 2 : 0;
+    const side = attempt ? distance / 9 : 0;
+    const start = ahead(ctx, Math.cos(angle) * side, Math.sin(angle) * side, -distance);
+    let free = true;
+    for (let i = 0; i <= steps && free; i++) free = !ctx.field.overlap(scratch.lerpVectors(start, pilot, i / steps), DEBRIS_RADIUS * DEBRIS_FILL + DEBRIS_CLEAR);
+    if (free) return start;
+  }
+  return ahead(ctx, 0, 0, -distance);
+}
+
 /**
  * Debris from `distance` ahead drifting straight at the pilot at `speed`, twice: done once it is
  * past, without turning; with `kick`, only past with a dodge fired.
@@ -1266,14 +1295,15 @@ function debris(line: string, praise: string, distance: number, speed: number, k
     reps: 2,
     enter(ctx, a, markers) {
       stop(ctx);
-      const start = ahead(ctx, 0, 0, -distance);
+      const start = debrisStart(ctx, distance);
       const velocity = ctx.me.flight.position.clone().sub(start).setLength(speed);
       a.points = [markers.debris(start, velocity, DEBRIS_RADIUS)];
       a.count = ctx.dodges;
     },
-    // debris that burst on rock on its way is past as well: the rock took it
-    done: (ctx, a) => burst.has(a.points[0]) || (local(ctx, a.points[0]).z > 1500 && (!kick || ctx.dodges > a.count)),
+    done: (ctx, a) => local(ctx, a.points[0]).z > 1500 && (!kick || ctx.dodges > a.count),
     fail(ctx, a) {
+      // debris the rock took was no test of the dodge: once more, from another side
+      if (burst.has(a.points[0])) return SCHOOL.again;
       if (ctx.me.flight.position.distanceTo(a.points[0]) < DEBRIS_RADIUS + ctx.me.radius) return SCHOOL.dodgeHit;
       return turned(ctx, a) ? SCHOOL.noTurn : null;
     },
@@ -1365,6 +1395,15 @@ const NUMBERED: Partial<Record<SchoolCourse, string[]>> = {
   tactician: ['opening', 'kick', 'onTail', 'slideShot', 'slideShot', 'cover', 'torpedoCover', 'exam', 'exam', 'closing'],
 };
 
+/**
+ * Drills a browser may have kept by name that a course no longer has, and the drill that goes on
+ * where they were: the tactician's bursts (the gladiator teaches them) at the slide shot, its
+ * comet drill at the orbit drill.
+ */
+const RENAMED: Partial<Record<SchoolCourse, Record<string, string>>> = {
+  tactician: { bursts: 'slideShot', comet: 'orbit' },
+};
+
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
 class Markers {
   readonly root = new THREE.Group();
@@ -1427,7 +1466,7 @@ class Markers {
   }
 
   /** Moves the drifting props; a chunk of debris that meets rock in `field` bursts there (see burst). */
-  update(dt: number, field: AsteroidField | null = null) {
+  update(dt: number, field: AsteroidField) {
     this.clock += dt;
     this.kit.blink(this.clock);
     for (const item of this.moving) {
@@ -1435,7 +1474,7 @@ class Markers {
       if (burst.has(position)) continue;
       position.addScaledVector(velocity, dt);
       // a chunk of 15 m meeting a rock at 60 m/s or more goes to dust, as wreckage does
-      if (field && mesh.userData.spin && field.overlap(position, mesh.scale.x * DEBRIS_FILL)) {
+      if (mesh.userData.spin && field.overlap(position, mesh.scale.x * DEBRIS_FILL)) {
         burst.add(position);
         mesh.visible = false;
       }
@@ -1503,7 +1542,8 @@ export class FlightSchool {
 
   /** The drill a kept name (or number, see NUMBERED) stands for in a course; undefined for none. */
   static reached(course: SchoolCourse, kept: unknown): number | undefined {
-    const name = Number.isInteger(kept) ? (NUMBERED[course]?.[kept as number] ?? (kept as number)) : kept;
+    const numbered = Number.isInteger(kept) ? (NUMBERED[course]?.[kept as number] ?? (kept as number)) : kept;
+    const name = typeof numbered === 'string' ? (RENAMED[course]?.[numbered] ?? numbered) : numbered;
     if (typeof name === 'number') return name >= 0 && name < COURSES[course].length ? name : undefined;
     const index = COURSES[course].findIndex((_, i) => drillName(course, i) === name);
     return index >= 0 ? index : undefined;

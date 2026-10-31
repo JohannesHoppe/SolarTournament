@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { IDLE, pointerAxis, type Controls } from '../input/input';
 import { flyByNose, FlightModel, MAX_TURN_RATE } from '../ship/flight';
-import { Brake } from '../ship/computer';
+import { assistAim, Brake } from '../ship/computer';
 import type { Recording } from '../recorder';
 import type { RacingLine } from '../game/racingline';
 
@@ -229,8 +229,9 @@ export interface Replay {
 /**
  * Replays a recording (see recorder.ts) through the flight model and the autopilot: every step
  * the autopilot flew is flown again from the recorded input; a step flown otherwise (free drift,
- * brake, flip, a swing) takes the recorded state as it was. Roll and the aim assist come from the
- * recording's commands (the game adds them to the autopilot's).
+ * brake, flip, a swing) takes the recorded state as it was. The roll comes from the recording's
+ * commands (the game adds it to the autopilot's), the aim assist is flown again toward the ship it
+ * pulled onto.
  */
 export function replay(recording: Recording): Replay {
   const cockpit = new Cockpit();
@@ -259,6 +260,7 @@ export function replay(recording: Recording): Replay {
     if (frame.mode !== 'autopilot') continue;
     flyByNose(flight, frame.controls, cockpit.gravity, cockpit.out);
     cockpit.out.roll = frame.out.roll;
+    if (frame.aim) assistAim(flight, scratch.fromArray(frame.aim), cockpit.out);
     flight.update(frame.dt, cockpit.out, cockpit.gravity);
     flown++;
   }

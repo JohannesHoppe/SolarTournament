@@ -98,14 +98,20 @@ function bell(section: Section, ends: End[], colors: number[], wall: number): TH
 }
 
 /** Mirrors a part to the other side (x), keeping its faces turned outwards. */
-function mirror(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+export function mirror(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   const copy = geometry.clone().scale(-1, 1, 1);
-  const position = copy.attributes.position;
-  // the mirror turns the winding inside out: swap two corners of every triangle
-  for (let i = 0; i < position.count; i += 3) {
-    const x = position.getX(i + 1), y = position.getY(i + 1), z = position.getZ(i + 1);
-    position.setXYZ(i + 1, position.getX(i + 2), position.getY(i + 2), position.getZ(i + 2));
-    position.setXYZ(i + 2, x, y, z);
+  // the mirror turns the winding inside out: swap two corners of every triangle, with everything
+  // painted on them (the vertex colors carry the heat tint and the radiators' warmth)
+  for (const [name, attribute] of Object.entries(copy.attributes)) {
+    if (name === 'normal') continue;
+    const size = attribute.itemSize;
+    for (let i = 0; i < attribute.count; i += 3) {
+      for (let k = 0; k < size; k++) {
+        const second = attribute.getComponent(i + 1, k);
+        attribute.setComponent(i + 1, k, attribute.getComponent(i + 2, k));
+        attribute.setComponent(i + 2, k, second);
+      }
+    }
   }
   copy.computeVertexNormals();
   return copy;
@@ -155,11 +161,11 @@ function thrusterQuads(layout: QuadLayout, housing: number, collar: number, nozz
  */
 export const THRUSTER_LAYOUTS: Record<'human' | 'alien' | 'sovereign', QuadLayout> = {
   // the fuselage's flank behind the canopy; the outside of the drive nacelles
-  human: { fore: new THREE.Vector3(58, 0, -150), aft: new THREE.Vector3(127, 2, 200) },
+  human: { fore: new THREE.Vector3(58, 0, -150), aft: new THREE.Vector3(124, 2, 200) },
   // the dart's flank ahead of its widest and near its stern, above the drive pods
   alien: { fore: new THREE.Vector3(48, -5, -120), aft: new THREE.Vector3(52, -8, 330) },
   // the arrowhead's flank behind the canards; the outside of the gold wing tips
-  sovereign: { fore: new THREE.Vector3(53, 0, -100), aft: new THREE.Vector3(298, 8, 200) },
+  sovereign: { fore: new THREE.Vector3(53, 0, -100), aft: new THREE.Vector3(294, 8, 200) },
 };
 
 /** A new root for a hull: the model file's collider, drive flame and glows, where they were. */
@@ -224,7 +230,8 @@ const BARE_STEEL = new THREE.Color(0xb4b8be);
  * The hull's shader: caps the lacquer's mirror image of the lights at the glint's peak, keeping
  * its hue; shows bare steel wherever the surface's metalness rises well above its paint's
  * (`userData.paint`, the wear's metalness), so that paint chipped down to the metal reads as
- * metal; takes from each part's finish (see paint) how much lacquer, polish and metal it has;
+ * metal (scaled by the part's finish, so soot stays black); takes from each part's finish (see
+ * paint) how much lacquer, polish and metal it has;
  * lets the skin glow faintly along its outline in `userData.rim` (black for none), brightest
  * where the hull turns away from the eye; and takes the haze as every material does (see
  * view/haze).
@@ -249,7 +256,7 @@ function hullShader(this: THREE.Material, shader: THREE.WebGLProgramParametersWi
       .replace(
         '#include <metalnessmap_fragment>',
         `#include <metalnessmap_fragment>
-	diffuseColor.rgb = mix( diffuseColor.rgb, ${steel} * sampledDiffuseColor.rgb, smoothstep( paintMetal + 0.15, paintMetal + 0.4, metalnessFactor ) );
+	diffuseColor.rgb = mix( diffuseColor.rgb, ${steel} * sampledDiffuseColor.rgb, smoothstep( paintMetal + 0.15, paintMetal + 0.4, metalnessFactor ) * vColor.a );
 	// the part's finish (see paint): soot is dull, neither polished nor metal
 	roughnessFactor = mix( 1.0, roughnessFactor, vColor.a );
 	metalnessFactor *= vColor.a;`,
@@ -288,10 +295,16 @@ function band(ends: End[], from: number, to: number, height: number): THREE.Buff
 /**
  * The glowing skin of a radiator: the part lofted from `back` to `front`, a little larger all
  * round (see SKIN), its vertices as hot as `warmth` says at their place (0..1, the
- * glow's share there: hottest where the coolant comes in).
+ * glow's share there: hottest where the coolant comes in). A blade's skin stands SKIN off its
+ * sloped faces measured across them (its section scaled so each face's line moves out by SKIN),
+ * so it keeps its distance out to the blade's thin edges too.
  */
 function radiator(section: Section, back: End, front: End, warmth: (p: THREE.Vector3) => number): THREE.BufferGeometry {
-  const grow = (end: End, dz: number): End => ({ ...end, z: end.z + dz, w: end.w + SKIN, h: end.h + SKIN });
+  const grow = (end: End, dz: number): End => {
+    if (section !== BLADE) return { ...end, z: end.z + dz, w: end.w + SKIN, h: end.h + SKIN };
+    const scale = 1 + SKIN * Math.hypot(1 / end.w, 1 / end.h);
+    return { ...end, z: end.z + dz, w: end.w * scale, h: end.h * scale };
+  };
   const geometry = loft(section, grow(back, SKIN), grow(front, -SKIN));
   const position = geometry.attributes.position;
   const colors = new Float32Array(position.count * 3);

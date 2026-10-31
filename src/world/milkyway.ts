@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Noise } from './noise';
+import { srgbByte } from '../srgb';
 import { celestial, cubeDirection, galactic, galacticVector } from './celestial';
 import { magnitudeFlux, starColor, type StarList } from './starfile';
 
@@ -83,9 +84,9 @@ const warped = new THREE.Vector3();
 
 /**
  * The Milky Way's light (linear RGB, 0 to about 1) in the unit direction `d` of the celestial
- * frame, into `out` at `at`.
+ * frame, into `out`.
  */
-export function milkyWayLight(d: THREE.Vector3, out: Float32Array | Uint8Array | number[], at = 0) {
+export function milkyWayLight(d: THREE.Vector3, out: Float32Array | Uint8Array | number[]) {
   const { l, b } = galactic(d);
   // towards the center (1) or the anticenter (0)
   const center = 0.5 + 0.5 * Math.cos(l * DEG);
@@ -145,7 +146,7 @@ export function milkyWayLight(d: THREE.Vector3, out: Float32Array | Uint8Array |
   // a band of many old stars glows warmer towards the bulge, a cool white elsewhere; dust
   // reddens what shines through it
   const tint = [0.86 + 0.14 * warm, 0.88 + 0.04 * warm, 1 - 0.25 * warm];
-  for (let c = 0; c < 3; c++) out[at + c] = light * tint[c] * Math.exp(-REDDENING[c] * dust);
+  for (let c = 0; c < 3; c++) out[c] = light * tint[c] * Math.exp(-REDDENING[c] * dust);
 }
 
 
@@ -197,12 +198,6 @@ export function joinStars(a: StarList, b: StarList): StarList {
     return both;
   };
   return { count: a.count + b.count, directions: join(a.directions, b.directions), colors: join(a.colors, b.colors), fluxes: join(a.fluxes, b.fluxes) };
-}
-
-/** Linear light (0 to 1) to an sRGB byte. */
-function srgbByte(value: number): number {
-  const v = Math.min(Math.max(value, 0), 1);
-  return Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * v ** (1 / 2.4) - 0.055));
 }
 
 /**

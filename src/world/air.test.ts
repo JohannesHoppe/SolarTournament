@@ -77,6 +77,22 @@ describe("Jupiter's air", () => {
     expect(field.lineOfSight(above, at(m(-100), m(2000)), Infinity)).toBe(true);
   });
 
+  it('counts the deck on a line that dips under it between two points over it', () => {
+    // two ships skimming 5 m over the deck 2 km apart: the curved deck rises 12.5 m between them
+    expect(opticalDepth(air, at(m(5)), at(m(5), m(2000)))).toBeGreaterThan(SIGHT_DEPTH);
+    // 20 m over it they see each other
+    expect(opticalDepth(air, at(m(20)), at(m(20), m(2000)))).toBeLessThan(SIGHT_DEPTH);
+    // a look a few degrees down from just over the deck ends where it goes in, though it comes out again within 10 km
+    for (const degrees of [3, 5, 7]) {
+      const angle = THREE.MathUtils.degToRad(degrees);
+      const direction = new THREE.Vector3(Math.cos(angle), -Math.sin(angle), 0);
+      const origin = at(m(5));
+      const reach = reachIn(air, origin, direction, SIGHT_DEPTH, m(10000));
+      expect(reach / 20, `${degrees}°`).toBeLessThan(200);
+      expect(altitudeIn(air, origin.clone().addScaledVector(direction, m(10000))), `${degrees}°`).toBeGreaterThan(0);
+    }
+  });
+
   it('brakes a ship by 1.5 g at the deck at the speed limit, by its speed squared, ten times as hard 2 km down', () => {
     expect(dragAt(-1, MAX_SPEED) / G).toBeCloseTo(1.5, 1);
     expect(dragAt(-1, MAX_SPEED / 2) / G).toBeCloseTo(1.5 / 4, 1);
@@ -131,7 +147,8 @@ describe("Jupiter's air", () => {
       burnt += airBurn(radiators, airHeat(m(-2000), MAX_SPEED) * step, step, 100);
     }
     expect(radiators.overheated).toBe(true);
-    expect(radiators.heat).toBeLessThanOrEqual(100);
+    // a burning hull has full radiators after the air's step: the alarm's CRITICAL, Nicole's line and the burning on screen read them
+    expect(radiators.heat).toBe(100);
     // full after half a second, then burning
     expect(burnt / 9.5).toBeCloseTo(15, 0);
     // radiators full of the laser's heat while the air heats less than they shed: nothing burns, they cool

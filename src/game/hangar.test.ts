@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buy, complete, emptyHangar, HANGAR_SHIPS, hangarFrom, keepable, LEVELS, nextPrice, ONLINE_LEVEL, payOut, perksOf, sovereignEarned, STOCK, UPGRADES, WALLET } from './hangar';
+import { buy, complete, emptyHangar, HANGAR_SHIPS, hangarFrom, keepable, LEVELS, MAX_LOOKS, nextPrice, ONLINE_LEVEL, packLooks, payOut, perksOf, sovereignEarned, STOCK, unpackLooks, UPGRADES, WALLET } from './hangar';
 
 /** A hangar with every upgrade of both interceptors bought. */
 function maxed() {
@@ -48,6 +48,18 @@ describe('the hangar', () => {
     expect(online.neon).toBe(LEVELS);
     // the Sovereign flies like a complete interceptor, whatever was bought
     expect(perksOf(emptyHangar(), 'sovereign', false)).toEqual(solo);
+  });
+
+  it('tells other browsers its looks and its radiators online, so they heat it in the air as its own browser does', () => {
+    const online = perksOf(maxed(), 'human', true);
+    const seen = unpackLooks(packLooks(online));
+    expect(seen.cooling).toBeCloseTo(online.cooling);
+    expect(seen.neon).toBe(online.neon);
+    expect(seen.flame).toBe(online.flame);
+    expect(packLooks(online)).toBeLessThanOrEqual(MAX_LOOKS);
+    expect(unpackLooks(packLooks(STOCK))).toEqual(STOCK);
+    // the Sovereign's too, its looks in full and its radiators at the cap
+    expect(packLooks(perksOf(emptyHangar(), 'sovereign', true))).toBe(MAX_LOOKS);
   });
 
   it('holds in its wallet what the hangar sells, and no more', () => {

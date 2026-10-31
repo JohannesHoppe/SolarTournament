@@ -299,8 +299,9 @@ export class Hud {
     const speed = Math.round(me.flight.velocity.length() * METERS_PER_UNIT);
     setText(this.speed, me.flight.limited ? t('{speed} m/s · MAX', { speed }) : t('{speed} m/s', { speed }));
 
-    if (!me.alive) setText(this.message, t('Live link lost'));
-    else if (now > this.messageUntil) setText(this.message, '');
+    // the HUD is written after the frame's steps: a message flashed in them (a watching Host's
+    // line, renewed every step) stands over the lost link until it runs out
+    if (now > this.messageUntil) setText(this.message, me.alive ? '' : t('Live link lost'));
     if (now > this.splitUntil) setText(this.splitText, '');
 
     // the newest entries come first: expired ones are at the end
@@ -496,8 +497,9 @@ export class Hud {
       for (let i = 0; !taken && i < this.marked.length; i += 2) taken = near(spot.x, spot.y, this.marked[i], this.marked[i + 1], REFERENCE_ROOM);
       for (let i = start; !taken && i < placed.length; i += 2) taken = near(spot.x, spot.y, placed[i], placed[i + 1], REFERENCE_ROOM);
       const name = t(reference.label);
+      // the distance to a reference's surface: under Jupiter's deck below zero, how deep
       const distance = reference.distance ? me.flight.position.distanceTo(reference.position) - (reference.radius ?? 0) : 0;
-      const text = reference.distance ? t('{name} · {distance}', { name, distance: meters(Math.max(0, distance)) }) : name;
+      const text = reference.distance ? t('{name} · {distance}', { name, distance: meters(distance) }) : name;
       // where glyph and label reach (see .reference in style.css): the label above the glyph, or
       // at the edge beside it, towards the middle
       const east = spot.x > viewport.width / 2;
@@ -1116,10 +1118,11 @@ const near = (x: number, y: number, x2: number, y2: number, room: number) => Mat
 /** A number with its sign, a plus too (a typographic minus for the negative). */
 const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${-n}` : '0');
 
-/** A distance in world units as the HUD shows it: meters, kilometers from 1000 m on. */
+/** A distance in world units as the HUD shows it: meters, kilometers from 1000 m on; below zero (under Jupiter's deck) with a typographic minus. */
 export function meters(units: number): string {
-  const m = units * METERS_PER_UNIT;
-  return m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+  const m = Math.abs(units) * METERS_PER_UNIT;
+  const text = m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(1)} km`;
+  return units < 0 && Math.round(m) > 0 ? `−${text}` : text;
 }
 
 /** Shows `text` in an element that pops in and fades out by its CSS animation (class `pop`). */
