@@ -126,6 +126,7 @@ The first run downloads Chatterbox (about 3 GB) and Whisper into the Hugging Fac
 | File | What it does |
 |---|---|
 | `render.ts` | Renders all sprites (`npm run voice`, run by build and dev): radio, announcer, Nicole |
+| `clonestore.ts` | The build cache's clone stores for `render.ts`: a store taken from the cache only if it is the audio its index names, written whole or not at all, the language's earlier stores removed |
 | `ffmpeg.ts` | ffmpeg for `render.ts`: the release it comes from, the SHA-256 of each platform's binary, fetched only when the cache lacks it |
 | `nicole.ts` | What Nicole is made of: Kokoro voice, reference, clone settings, the release, the keys of her lines |
 | `clone/prepare.ts` | Writes the list of lines to clone and the reference, checks the Python lock against `nicole.ts` |

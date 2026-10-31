@@ -23,7 +23,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { allLines, clipKey, phraseKey, phrases, words, type Language } from '../../src/music/lines.ts';
 import { ffmpegBinary, ffmpegHash } from './ffmpeg.ts';
-import { toolCache } from '../pinned.ts';
+import { sha256, toolCache, writeWhole } from '../pinned.ts';
+import { cachedStore, keepStore, pruneStores } from './clonestore.ts';
 import { CATALOGS, cloneAudioName, CLONED, cloneKey, COMPUTER_VOICE, nicoleLines, releaseUrl, type Cloned } from './nicole.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -104,7 +105,7 @@ async function cloneIndex(locale: Cloned): Promise<CloneIndex | null> {
     const index = JSON.parse(text) as CloneIndex;
     tryCache(() => {
       mkdirSync(clonesCache, { recursive: true });
-      writeFileSync(copy, text);
+      writeWhole(copy, Buffer.from(text));
     });
     return index;
   } catch (error) {
@@ -241,17 +242,19 @@ const tokenizer = (kokoro as unknown as { tokenizer: (text: string, options: obj
 
 /** A language's store of cloned lines as samples, fetched once (and kept in the cache under its fingerprint); null when it cannot be had or is not the one its index names. */
 async function cloneAudio(locale: Cloned, index: CloneIndex): Promise<Float32Array | null> {
-  const file = join(clonesCache, `nicole-${locale}-${index.audio.slice(0, 16)}.flac`);
   try {
-    if (!existsSync(file)) {
+    let file = cachedStore(clonesCache, locale, index.audio);
+    if (!file) {
       const answer = await fetch(releaseUrl(cloneAudioName(locale, index.audio)), { signal: AbortSignal.timeout(120000) });
       if (!answer.ok) throw new Error(`HTTP ${answer.status}`);
       const bytes = Buffer.from(await answer.arrayBuffer());
       // the audio is named by its fingerprint, which its index names; a download cut short is not used
-      if (createHash('sha256').update(bytes).digest('hex') !== index.audio) throw new Error('audio and index do not match');
+      if (sha256(bytes) !== index.audio) throw new Error('audio and index do not match');
       mkdirSync(clonesCache, { recursive: true });
-      writeFileSync(file, bytes);
+      file = keepStore(clonesCache, locale, index.audio, bytes);
     }
+    // the stores of the language's earlier fingerprints are of no use any more
+    tryCache(() => pruneStores(clonesCache, locale, index.audio));
     const decoded = spawnSync(ffmpeg, ['-v', 'error', '-i', file, '-f', 'f32le', '-ac', '1', 'pipe:1'], { maxBuffer: 1 << 30 });
     if (decoded.status !== 0) throw new Error('ffmpeg failed: ' + decoded.stderr);
     const bytes = decoded.stdout;
