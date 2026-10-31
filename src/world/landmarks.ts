@@ -726,6 +726,9 @@ function streaksOf(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   return streaks;
 }
 
+/** A sharp map that did not load is asked for again after this pause (ms), doubling with each failure. */
+const SHARP_RETRY_MS = 10_000;
+
 /** The scenery of every arena, built once; only the one of the arena in play is shown. */
 export class Landmarks {
   readonly group = new THREE.Group();
@@ -747,8 +750,11 @@ export class Landmarks {
   private readonly planets = new Map<Planet, (map: THREE.Texture) => void>();
   /** The sharp maps (see loadPlanetMap), once asked for, and once loaded. */
   private sharpAsked = false;
+  private sharpFailures = 0;
   private readonly sharp = new Map<Planet, THREE.Texture>();
   private sharpWanted = false;
+  /** The share of detail the rung last asked for (see setDetail). */
+  private detailShare = 0;
   /** What the sun gives the planets, the ring and its specks: its color times its strength over π (Lambert's diffuse light), the arena's (see show). */
   private readonly light = new THREE.Color();
   /** The materials of the ring's specks, which size them by the picture's height (see setViewport). */
@@ -850,6 +856,7 @@ export class Landmarks {
    * holeDetail says.
    */
   setDetail(share: number) {
+    this.detailShare = share;
     this.holeDetail(share);
     this.sharpWanted = share >= 0.5;
     if (this.sharpWanted && !this.sharpAsked) {
@@ -860,7 +867,12 @@ export class Landmarks {
             this.sharp.set(planet, texture);
             this.useMaps();
           },
-          (error: unknown) => console.warn(`The sharp map of ${planet} did not load`, error),
+          (error: unknown) => {
+            console.warn(`The sharp map of ${planet} did not load`, error);
+            // asked again after a pause, doubling with each failure, so a dropped connection does not keep the planet on its small map for good
+            if (this.sharpAsked) setTimeout(() => this.setDetail(this.detailShare), SHARP_RETRY_MS * 2 ** this.sharpFailures++);
+            this.sharpAsked = false;
+          },
         );
       }
     }
