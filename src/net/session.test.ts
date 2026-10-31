@@ -101,6 +101,29 @@ describe('the lead browser', () => {
     expect(synced).toEqual(['real']);
   });
 
+  it('does not start over for the seconds it spends building the field it was sent, only for a gap in its frames', () => {
+    const { session, transport } = joined('n');
+    let restarts = 0;
+    session.onRestart = () => restarts++;
+    // building the field takes 3 s, longer than a browser may go without a frame
+    session.onSync = () => at(clock / 1000 + 3);
+    at(1);
+    transport.states('old', 100, 'old', true);
+    transport.states('h2', 50, 'old');
+    session.tick();
+    at(1.5);
+    session.tick();
+    transport.handlers.get('y')!({ f: { k: 'real', t: 5, a: [], x: [] }, w: [], p: [], q: [], g: 100.1 }, 'old');
+    expect(clock).toBe(4500);
+    at(4.6);
+    session.tick();
+    expect(restarts).toBe(0);
+    // a gap of its own, a hidden tab, still starts it over
+    at(8);
+    session.tick();
+    expect(restarts).toBe(1);
+  });
+
   it('settles two browsers that each lead alone and meet only after settling: the higher id steps back', () => {
     const higher = joined('z');
     at(7);
