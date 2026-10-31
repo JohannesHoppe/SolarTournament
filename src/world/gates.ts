@@ -105,9 +105,8 @@ function solidParts(radius: number) {
   return kit;
 }
 
-/** The points a ring's solid parts are sampled by (see ringSamples), at most this far apart (units, 5 m), and the band's around its circle. */
+/** The points a ring's solid parts are sampled by (see ringSamples), at most this far apart (units, 5 m). */
 const SAMPLE_SPACING = 100;
-const BAND_SAMPLES = 96;
 
 /**
  * Points on the surface of a ring's solid parts in the world, as a flat list (xyz): around its
@@ -124,11 +123,16 @@ export function ringSamples(center: THREE.Vector3, facing: THREE.Vector3, radius
     point.applyQuaternion(turn).add(center);
     list.push(point.x, point.y, point.z);
   };
-  for (let k = 0; k < BAND_SAMPLES; k++) {
-    const angle = (k / BAND_SAMPLES) * Math.PI * 2;
-    for (const out of [inner, inner + THICKNESS / 2, inner + THICKNESS]) {
-      for (const along of [-DEPTH / 2, 0, DEPTH / 2]) {
-        point.set(Math.cos(angle) * out, Math.sin(angle) * out, along);
+  // the band: rings of points across its section, around the circle at its outer face's spacing
+  const around = Math.ceil((Math.PI * 2 * (inner + THICKNESS)) / SAMPLE_SPACING);
+  const across = Math.ceil(THICKNESS / SAMPLE_SPACING);
+  const lengthwise = Math.ceil(DEPTH / SAMPLE_SPACING);
+  for (let k = 0; k < around; k++) {
+    const angle = (k / around) * Math.PI * 2;
+    for (let i = 0; i <= across; i++) {
+      const out = inner + (THICKNESS * i) / across;
+      for (let j = 0; j <= lengthwise; j++) {
+        point.set(Math.cos(angle) * out, Math.sin(angle) * out, -DEPTH / 2 + (DEPTH * j) / lengthwise);
         add();
       }
     }
