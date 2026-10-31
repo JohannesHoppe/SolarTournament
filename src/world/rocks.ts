@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { Randomizer } from '../random';
+import { Noise } from './noise';
+import { cubeDirection, cubeTexel } from './celestial';
 import { tangentDirections } from './surface';
 import { impostorGeometry, impostorMaterial, impostorViews, IMPOSTOR_VIEWS, type ImpostorLook } from '../view/impostor';
 import { hazeUniforms } from '../view/haze';
@@ -37,50 +39,7 @@ const COMPOSITIONS: Composition[] = [
   { color: [0.28, 0.28, 0.3], fresh: [1.04, 1.02, 1], roughness: 0.6, metalness: 0.6 },
 ];
 
-/**
- * Smooth 3D value noise in [-1, 1]. It uses integer hashing and polynomial blending only,
- * no transcendental functions, so every browser computes exactly the same shapes.
- */
-export class Noise {
-  constructor(private readonly seed: number) {}
-
-  private lattice(x: number, y: number, z: number): number {
-    let h = Math.imul(x, 374761393) ^ Math.imul(y, 668265263) ^ Math.imul(z, 2147483647) ^ this.seed;
-    h = Math.imul(h ^ (h >>> 13), 1274126177);
-    h ^= h >>> 16;
-    return (h & 0xffff) / 32767.5 - 1;
-  }
-
-  /** Written out without helper closures (the bakes call it millions of times); the arithmetic is the plain trilinear blend of the quintic fade. */
-  sample(x: number, y: number, z: number): number {
-    const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
-    const fx = x - xi, fy = y - yi, fz = z - zi;
-    const u = fx * fx * fx * (fx * (fx * 6 - 15) + 10);
-    const v = fy * fy * fy * (fy * (fy * 6 - 15) + 10);
-    const w = fz * fz * fz * (fz * (fz * 6 - 15) + 10);
-    const x1 = xi + 1, y1 = yi + 1, z1 = zi + 1;
-    const n000 = this.lattice(xi, yi, zi), n100 = this.lattice(x1, yi, zi);
-    const n010 = this.lattice(xi, y1, zi), n110 = this.lattice(x1, y1, zi);
-    const n001 = this.lattice(xi, yi, z1), n101 = this.lattice(x1, yi, z1);
-    const n011 = this.lattice(xi, y1, z1), n111 = this.lattice(x1, y1, z1);
-    const a00 = n000 + (n100 - n000) * u, a10 = n010 + (n110 - n010) * u;
-    const a01 = n001 + (n101 - n001) * u, a11 = n011 + (n111 - n011) * u;
-    const b0 = a00 + (a10 - a00) * v, b1 = a01 + (a11 - a01) * v;
-    return b0 + (b1 - b0) * w;
-  }
-
-  /** Fractal noise: octaves of halving size and amplitude. Ridged noise gives sharp crests. */
-  fractal(x: number, y: number, z: number, octaves: number, ridged = false): number {
-    let sum = 0, amplitude = 0.5, frequency = 1;
-    for (let i = 0; i < octaves; i++) {
-      const s = this.sample(x * frequency, y * frequency, z * frequency);
-      sum += amplitude * (ridged ? 1 - 2 * Math.abs(s) : s);
-      amplitude *= 0.5;
-      frequency *= 2.03;
-    }
-    return sum;
-  }
-}
+export { Noise };
 
 export interface Crater {
   center: THREE.Vector3;
@@ -362,40 +321,6 @@ export function sphere(detail: number): THREE.BufferGeometry {
   return geometry;
 }
 
-/**
- * The direction a texel of a cube map's face stands for, as WebGL picks face and texel for a
- * direction (the OpenGL ES 3.0 cube map table): `face` in the order +x, −x, +y, −y, +z, −z,
- * `s` across a row and `t` down the rows (both −1..1, row 0 at t = −1).
- */
-function cubeTexelDirection(face: number, s: number, t: number, out: THREE.Vector3): THREE.Vector3 {
-  if (face === 0) out.set(1, -t, -s);
-  else if (face === 1) out.set(-1, -t, s);
-  else if (face === 2) out.set(s, 1, t);
-  else if (face === 3) out.set(s, -1, -t);
-  else if (face === 4) out.set(s, -t, 1);
-  else out.set(-s, -t, -1);
-  return out.normalize();
-}
-
-/** The same table read backwards (see cubeTexelDirection): the face a direction (x, y, z) lies on and its `s`, `t` there, written into `out`. */
-function cubeCoordinates(x: number, y: number, z: number, out: { face: number; s: number; t: number }) {
-  const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z);
-  if (ax >= ay && ax >= az) {
-    out.face = x >= 0 ? 0 : 1;
-    out.s = (x >= 0 ? -z : z) / ax;
-    out.t = -y / ax;
-  } else if (ay >= az) {
-    out.face = y >= 0 ? 2 : 3;
-    out.s = x / ay;
-    out.t = (y >= 0 ? z : -z) / ay;
-  } else {
-    out.face = z >= 0 ? 4 : 5;
-    out.s = (z >= 0 ? x : -x) / az;
-    out.t = -y / az;
-  }
-  return out;
-}
-
 /** Edge length, in texels, of each of the 6 faces of a rock's relief map: about 0.7° a texel, 1.5 to 4 m on a rock of the field. */
 export const RELIEF_RES = 128;
 /** What a relief map holds at a direction: how far the surface reaches there (a share added to 1 on the shape's ellipsoid, see surfacePoint) and the value its alpha keeps (0..1). */
@@ -470,10 +395,10 @@ export function bakeCube(axes: THREE.Vector3, sample: ReliefSampler): Uint8Array
   const faces: Uint8Array[] = [];
   for (let face = 0; face < 6; face++) {
     for (let j = -1; j <= R; j++) {
-      const t = ((j + 0.5) / R) * 2 - 1;
+      const t = (j + 0.5) / R;
       for (let i = -1; i <= R; i++) {
-        const s = ((i + 0.5) / R) * 2 - 1;
-        cubeTexelDirection(face, s, t, direction);
+        const s = (i + 0.5) / R;
+        cubeDirection(face, s, t, direction).normalize();
         reliefPoint(axes, sample, direction, point, sampled);
         const k = (j + 1) * W + i + 1;
         points[k * 3] = point.x;
@@ -517,6 +442,9 @@ function cubeMap(faces: Uint8Array[]): THREE.CubeTexture {
   return map;
 }
 
+/** A relief worker that has not finished within this long (ms) is given up. */
+const RELIEF_TIMEOUT = 60000;
+
 /** A relief map a worker bakes: its kind and its shape. */
 export type ReliefJob = [ReliefKind, number];
 
@@ -542,16 +470,24 @@ export async function bakeReliefMaps(): Promise<void> {
         return;
       }
       let left = indices.length;
+      let finished = false;
+      // a worker that goes silent (torn down without an error, a message that cannot be read)
+      // is given up after RELIEF_TIMEOUT; what it did not bake is baked when first asked for
       const done = () => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
         worker.terminate();
         resolve();
       };
+      const timer = setTimeout(done, RELIEF_TIMEOUT);
       worker.onmessage = (event: MessageEvent<{ kind: ReliefKind; index: number; faces: Uint8Array[] }>) => {
         const { kind, index, faces } = event.data;
         if (!reliefMaps.has(kind + index)) reliefMaps.set(kind + index, cubeMap(faces));
         if (--left === 0) done();
       };
       worker.onerror = done;
+      worker.onmessageerror = done;
       worker.postMessage(indices);
     });
   await Promise.all(Array.from({ length: count }, (_, w) => bake(shapes(w))));
@@ -1084,7 +1020,7 @@ function bumpTable(recipe: RockRecipe): { bump: (x: number, y: number, z: number
   for (let face = 0; face < 6; face++) {
     for (let j = 0; j < N; j++) {
       for (let i = 0; i < N; i++) {
-        cubeTexelDirection(face, ((i + 0.5) / N) * 2 - 1, ((j + 0.5) / N) * 2 - 1, d);
+        cubeDirection(face, (i + 0.5) / N, (j + 0.5) / N, d).normalize();
         const bump = surfaceSample(noise, recipe, d).bump;
         table[(face * N + j) * N + i] = bump;
         reach = Math.max(reach, Math.hypot(d.x * recipe.axes.x, d.y * recipe.axes.y, d.z * recipe.axes.z) * (1 + bump));
@@ -1093,10 +1029,10 @@ function bumpTable(recipe: RockRecipe): { bump: (x: number, y: number, z: number
     }
   }
   const at = { face: 0, s: 0, t: 0 };
-  const half = N / 2;
+  const probe = new THREE.Vector3();
   const bump = (x: number, y: number, z: number) => {
-    cubeCoordinates(x, y, z, at);
-    let fx = (at.s + 1) * half - 0.5, fy = (at.t + 1) * half - 0.5;
+    cubeTexel(probe.set(x, y, z), at);
+    let fx = at.s * N - 0.5, fy = at.t * N - 0.5;
     fx = fx < 0 ? 0 : fx > N - 1 ? N - 1 : fx;
     fy = fy < 0 ? 0 : fy > N - 1 ? N - 1 : fy;
     const i = fx >= N - 1 ? N - 2 : fx | 0, j = fy >= N - 1 ? N - 2 : fy | 0;

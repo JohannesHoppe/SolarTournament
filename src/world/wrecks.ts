@@ -315,7 +315,7 @@ export class Wrecks {
         material.emissiveIntensity = GLOW * glow;
       }
       // debris that hits a rock grinds to dust, and so does debris that hits the armor of what
-      // else stands in the field (the President's battleship, 270,000 times its mass: a
+      // else stands in the field (the President's battleship, 900,000 times its mass: a
       // torn plate crumples on it as on rock); debris that falls into the arena's massive body
       // is gone, and so is debris that drifts off into the belt
       // and so does debris that hits what `solid` says (a ring's housing, a sponsor core, a comet's head)

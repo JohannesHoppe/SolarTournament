@@ -55,7 +55,7 @@ export interface ArenaProfile {
   preview?: { from: [number, number, number]; at?: [number, number, number] };
   /** The big things that never move, besides the field's center and the sun, which the HUD marks (see Reference). */
   references: Reference[];
-  /** Half the thickness (units) of a layer of ice grains in the horizon plane, a ring's: harmless, but felt on the hull flying through (see Game.ringGrains). */
+  /** Half the thickness (units) of a layer of ice grains in the horizon plane, a ring's: harmless, but felt on the hull flying through (see Game.hullPatter). */
   grains?: number;
   /** Half the thickness (units) of a sheet drawn through the horizon plane, a ring's (see RING_SHEET): the President's battleship flies its lane clear of it. */
   sheet?: number;

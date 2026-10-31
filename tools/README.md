@@ -12,4 +12,6 @@ Programs that run on a developer's machine or in a build, never in the player's 
 | [`relays/`](relays/) | Checks public Nostr relays and keeps the healthy ones in `src/net/relays.json` | `npm run relays` (weekly by the workflow Relays) |
 | [`check/`](check/) | Runs every quality gate and sums them up | `npm run check`, `npm run check:full` |
 
+`pinned.ts` is what the tools that fetch a source share: the folder they cache in (`toolCache`, inside npm's cache), a download checked against a pinned SHA-256 (`fetchPinned`) and a file written whole or not at all (`writeWhole`).
+
 They are TypeScript run directly by Node (type stripping), except the clone, which is Python.

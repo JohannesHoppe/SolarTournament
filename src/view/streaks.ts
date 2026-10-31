@@ -64,6 +64,19 @@ export function flowAt(x: number, y: number, tx: number, ty: number, tz: number,
 /** The flow's rate (1/s) at a speed (units/s), see RATE_MAX. */
 export const flowRate = (speed: number) => (RATE_MAX * speed) / (speed + RATE_HALF);
 
+/** What the standing dashes were drawn for (reduced motion): the dashes count, the flow's direction in the camera's frame, its fade and its rate. */
+export interface StillDrawn {
+  count: number;
+  direction: THREE.Vector3;
+  fade: number;
+  rate: number;
+}
+
+/** Whether standing dashes drawn for `drawn` must be drawn anew: the flow turned, or its fade or rate (the speed) changed noticeably. */
+export function stillStale(drawn: StillDrawn, count: number, direction: THREE.Vector3, fade: number, rate: number): boolean {
+  return count !== drawn.count || direction.distanceToSquared(drawn.direction) >= 1e-4 || Math.abs(fade - drawn.fade) >= 0.02 || Math.abs(rate - drawn.rate) >= 0.02 * RATE_MAX;
+}
+
 export class Streaks extends Overlay {
   private readonly x = new Float32Array(STREAKS);
   private readonly y = new Float32Array(STREAKS);
@@ -73,8 +86,7 @@ export class Streaks extends Overlay {
   private readonly drawn = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
   private last = NaN;
   /** With reduced motion: the flow the standing dashes were drawn for. */
-  private readonly stillFor = new THREE.Vector3();
-  private stillCount = -1;
+  private readonly stillDrawn: StillDrawn = { count: -1, direction: new THREE.Vector3(), fade: 0, rate: 0 };
 
   constructor(canvas: HTMLCanvasElement) {
     super(canvas);
@@ -85,7 +97,7 @@ export class Streaks extends Overlay {
   protected resized() {
     this.drawn.left = Infinity;
     this.drawn.right = -Infinity;
-    this.stillCount = -1;
+    this.stillDrawn.count = -1;
     for (let i = 0; i < STREAKS; i++) this.spawn(i, Math.random());
   }
 
@@ -101,18 +113,20 @@ export class Streaks extends Overlay {
     const fade = show ? THREE.MathUtils.smoothstep(speed, SHOW_FROM, SHOW_FULL) : 0;
     if (fade <= 0) {
       this.clear();
-      this.stillCount = -1;
+      this.stillDrawn.count = -1;
       return;
     }
     seen.copy(velocity).divideScalar(speed).applyQuaternion(unturn.copy(camera.quaternion).invert());
     const n = still ? Math.round(count * STILL_SHARE) : count;
-    // standing dashes are drawn anew only as the flow turns
-    if (still && n === this.stillCount && seen.distanceToSquared(this.stillFor) < 1e-4) return;
-    this.stillFor.copy(seen);
-    this.stillCount = still ? n : -1;
+    const rate = flowRate(speed);
+    // standing dashes are drawn anew only as the flow turns or the speed changes
+    if (still && !stillStale(this.stillDrawn, n, seen, fade, rate)) return;
+    this.stillDrawn.direction.copy(seen);
+    this.stillDrawn.fade = fade;
+    this.stillDrawn.rate = rate;
+    this.stillDrawn.count = still ? n : -1;
     const { width, height } = this;
     const focal = (camera.projectionMatrix.elements[5] * height) / 2;
-    const rate = flowRate(speed);
     const context = this.context;
     this.clear();
     context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);

@@ -23,6 +23,16 @@ const hueGap = (a: number, b: number) => {
 };
 
 describe('arena moods', () => {
+  it('the grade never leaves a channel below zero, whatever the saturation (the screen encoding raises to a power)', () => {
+    for (const arena of ARENAS) {
+      const color = gradeColor(arena.mood.grade, new THREE.Color(0.958, 0.005, 0.007));
+      expect(Math.min(color.r, color.g, color.b)).toBeGreaterThanOrEqual(0);
+    }
+    const oversaturated = gradeColor({ gain: [1, 1, 1], lift: [0, 0, 0], saturation: 1.5 }, new THREE.Color(0.958, 0.005, 0.007));
+    expect(oversaturated.g).toBeGreaterThanOrEqual(0);
+    expect(new GradedOutputPass().material.fragmentShader).toContain('max(graded * gradeGain + gradeLift * (1.0 - graded), 0.0)');
+  });
+
   it('every arena has a mood of its own', () => {
     const grades = new Set(ARENAS.map((arena) => JSON.stringify(arena.mood.grade)));
     const skies = new Set(ARENAS.map((arena) => arena.mood.sky));

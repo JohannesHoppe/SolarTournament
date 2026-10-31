@@ -137,6 +137,9 @@ const FLARE_GLARE = 2.2;
 /** The color a flaring sun burns in. */
 const WHITE_HOT = new THREE.Color(1, 0.97, 0.92);
 
+/** A sharp Milky Way that was not baked is asked for again after this pause (ms), doubling with each failure. */
+const SHARP_RETRY_MS = 10_000;
+
 /** Star field, sun, nebula glow and lighting. Follows the camera so it is always at infinity. */
 export class Space {
   readonly sky = new THREE.Group();
@@ -161,6 +164,7 @@ export class Space {
   private files: SkyFiles | null = null;
   private sharpGlow: THREE.CubeTexture | null = null;
   private sharpAsked = false;
+  private sharpFailures = 0;
   private detail = 0;
   /** Whether the arena's mood shows the real sky, and how bright its stars show (see setMood). */
   private realSky = false;
@@ -299,7 +303,12 @@ export class Space {
           this.sharpGlow = glow;
           this.showSky();
         },
-        (error: unknown) => console.warn('The sharp Milky Way was not baked', error),
+        (error: unknown) => {
+          console.warn('The sharp Milky Way was not baked', error);
+          // asked again after a pause, doubling with each failure
+          if (this.sharpAsked) setTimeout(() => this.setDetail(this.detail), SHARP_RETRY_MS * 2 ** this.sharpFailures++);
+          this.sharpAsked = false;
+        },
       );
     }
     this.showSky();

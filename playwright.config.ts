@@ -22,11 +22,11 @@ export default defineConfig({
   },
   // the tests start a dev server of this checkout and stop with an error when the port is
   // taken, so they never test whatever another checkout serves there; E2E_REUSE=1 tests against
-  // a server already running (one's own, kept up between runs)
+  // a server already running (one's own, kept up between runs); unset, empty, 0 and false mean no
   webServer: {
     command: 'npm run dev',
     url: `http://127.0.0.1:${port}`,
-    reuseExistingServer: Boolean(process.env.E2E_REUSE),
+    reuseExistingServer: !['', '0', 'false'].includes((process.env.E2E_REUSE ?? '').trim().toLowerCase()),
     timeout: 300_000,
   },
 });

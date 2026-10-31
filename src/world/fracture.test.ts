@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cutPiece, measure, PIECES, pieceCount, pieceSolid, solidMesh, type Solid } from './fracture';
 import { DISTANT_DETAIL, FAR_DETAIL, ROCK_COUNT, rockRecipe } from './rocks';
 
@@ -147,5 +147,49 @@ describe('a broken rock', () => {
     expect([...b.near.position]).toEqual([...a.near.position]);
     // whole units, as a template's center
     for (const v of a.centroid) expect(Number.isInteger(v)).toBe(true);
+  });
+});
+
+describe('the fracture worker', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('is replaced when a job fails: the jobs queued behind it are still cut ahead, only the failed one is cut here', async () => {
+    vi.resetModules();
+    const fracture = await import('./fracture');
+    const details = { collision: DISTANT_DETAIL, near: DISTANT_DETAIL, far: FAR_DETAIL };
+    const workers: { posted: number[] }[] = [];
+    const made: Record<string, unknown> = {};
+    // a worker that fails on shape 0 and otherwise sends a stand-in for every piece of a job
+    vi.stubGlobal('Worker', class {
+      onmessage: ((event: { data: unknown }) => void) | null = null;
+      onerror: (() => void) | null = null;
+      posted: number[] = [];
+      constructor() {
+        workers.push(this);
+      }
+      dead = false;
+      terminate() {
+        this.dead = true;
+      }
+      postMessage(job: { shape: number; path: number[]; details: typeof details }) {
+        this.posted.push(job.shape);
+        queueMicrotask(() => {
+          if (this.dead) return;
+          if (job.shape === 0) return this.onerror?.();
+          for (let i = 0; i < fracture.pieceCount(job.shape, job.path); i++) {
+            const path = [...job.path, i];
+            const data = { stand: 'in' };
+            made[fracture.pieceKey(job.shape, path, job.details)] = data;
+            this.onmessage?.({ data: { key: fracture.pieceKey(job.shape, path, job.details), data } });
+          }
+        });
+      }
+    });
+    for (const shape of [0, 1, 2]) fracture.prefetch(shape, [], details);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(workers.length).toBe(2);
+    expect(workers[1].posted).toEqual([1, 2]);
+    expect(fracture.pieceData(1, [0], details)).toBe(made[fracture.pieceKey(1, [0], details)]);
+    expect(fracture.pieceData(2, [1], details)).toBe(made[fracture.pieceKey(2, [1], details)]);
   });
 });

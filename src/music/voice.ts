@@ -9,6 +9,10 @@ let radioSprite: Promise<Sprite> | null = null;
 /** The voice being loaded or loaded lacks the language's sprite: it is loaded again from languageRetryAt (performance.now(), ms). */
 let partial = false;
 let languageFailures = 0;
+/** Loads started so far: only the latest one's failure counts. */
+let attempts = 0;
+/** A fetch that neither answers nor fails is given up after this long (ms), as a failed one. */
+const FETCH_TIMEOUT_MS = 30000;
 let languageRetryAt = 0;
 
 type Sprite = { buffer: AudioBuffer; manifest: Manifest };
@@ -32,10 +36,14 @@ export function loadVoice(): Promise<Voice> {
     radioSprite = null;
     throw error;
   });
+  const attempt = ++attempts;
   const language = load(currentLocale()).catch((error) => {
     console.warn('Voice of the language unavailable', error);
-    partial = true;
-    languageRetryAt = performance.now() + LANGUAGE_RETRY_MS * 2 ** languageFailures++;
+    // a load that a newer one has overtaken changes nothing about the voice in use
+    if (attempt === attempts) {
+      partial = true;
+      languageRetryAt = performance.now() + LANGUAGE_RETRY_MS * 2 ** languageFailures++;
+    }
     return null;
   });
   const voice = Promise.all([radioSprite, language])
@@ -51,7 +59,7 @@ export function loadVoice(): Promise<Voice> {
 async function load(sprite: string): Promise<Sprite> {
   const base = import.meta.env.BASE_URL + 'assets/voice/';
   const fetchOk = async (file: string, init?: RequestInit) => {
-    const response = await fetch(base + file, init);
+    const response = await fetch(base + file, { ...init, signal: AbortSignal.timeout(FETCH_TIMEOUT_MS) });
     if (!response.ok) throw new Error(`${file}: HTTP ${response.status}`);
     return response;
   };

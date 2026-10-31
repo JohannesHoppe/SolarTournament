@@ -26,8 +26,17 @@ export interface Transport {
   readonly relayOff: string | null;
 }
 
-/** Identifies the game on the signaling relays; peers with other app ids never meet. */
-const APP_ID = 'solartournament-2584';
+/**
+ * The version of what goes over the network. Every push goes live while Hosts keep tabs of the
+ * build before open, and a build checks every message by its own rules (see validate.ts): one
+ * that sends a key the other lacks, or a value the other takes for a lie, would drop the other's
+ * states and fields whole. So builds of different protocols never meet: they play in rooms and
+ * a lobby of their own. A change to a message that a build before it would read otherwise (a
+ * key added, removed or required, a bound narrowed, a meaning changed) raises it by one.
+ */
+export const PROTOCOL = 2;
+/** Identifies the game and its protocol on the signaling relays and between local tabs; peers with other app ids never meet. */
+const APP_ID = `solartournament-2584-p${PROTOCOL}`;
 /**
  * The public Nostr relays every browser announces itself on, checked every week by
  * tools/relays/check.ts (`npm run relays`): all browsers of a build share them, so two Hosts

@@ -6,9 +6,14 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { CASING_PLAIN, shine, torpedoCasing } from '../view/surfaces';
 import { MASS } from '../world/bodies';
 import { LOCK_DEPTH } from '../world/air';
+import { ONLINE_LEVEL, tubeTorpedoes } from './hangar';
 
 /** Torpedoes a fresh clone carries. */
 export const TORPEDOES = 2;
+/** The most a fresh clone carries online: the standard load and its tubes up to the online cap (see game/hangar). */
+export const ONLINE_LOAD = TORPEDOES + tubeTorpedoes(ONLINE_LEVEL);
+/** A torpedo another browser says went off is this close (units, 1.5 km) to where it flies here, or the report is ignored: torpedoes fly alike everywhere, up to the lag. */
+export const TORPEDO_GONE_SLACK = 30000;
 /** A torpedo leaves the tube this much faster than its ship (units/s, 40 m/s). */
 export const TORPEDO_LAUNCH = 800;
 /**
@@ -26,7 +31,7 @@ export const TORPEDO_TOP_SPEED = 7200;
 /** Its main drive along its flight (units/s², 20 g): from a standing launch to top speed in under 2 s, quick on a straight line. */
 export const TORPEDO_THRUST = 3924;
 /**
- * Its thrusters across its flight, and against it to brake (units/s², 9 g): less than the nearly 10 g
+ * Its thrusters across its flight, and against it to brake (units/s², 9 g): less than the 11 g
  * a ship turns with at the speed limit (see gripAt), so a hard turn at the right moment leaves it wide. At top speed it turns on a
  * circle of about 1.5 km; one that went past brakes and comes round again.
  */
