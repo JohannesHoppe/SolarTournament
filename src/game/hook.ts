@@ -109,8 +109,10 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
   let rock = field.raycast(origin, forward, HOOK_RANGE, true);
   // the well's body or the battleship's hull on the nose's line: no ship beyond it is bitten
   const wall = rock && !rock.asteroid ? rock.distance : HOOK_RANGE;
-  // nothing straight ahead: the rock whose surface comes closest to the nose's line within HOOK_CONE
-  if (!rock?.asteroid) {
+  // nothing straight ahead: the rock whose surface comes closest to the nose's line within HOOK_CONE;
+  // a ship or a mark on the nose's line wins over it, however near it lies
+  const beside = !rock?.asteroid;
+  if (beside) {
     let nearest = HOOK_CONE;
     for (const asteroid of field.asteroids.values()) {
       const line = toward.subVectors(asteroid.object.position, origin);
@@ -126,20 +128,24 @@ export function aimHook(owner: Ship, field: AsteroidField, ships: readonly Ship[
     }
   }
   let best: { anchor: Anchor; distance: number; at: THREE.Vector3 } | null = null;
-  if (rock?.asteroid) {
-    const at = origin.clone().addScaledVector(chosen, rock.distance);
-    best = { anchor: rockAnchor(rock.asteroid, at), distance: rock.distance, at };
-  }
+  // the nearest ship or mark on the nose's line, short of a rock on it
+  let limit = rock?.asteroid && !beside ? rock.distance : wall;
   for (const ship of ships) {
     if (ship === owner || !ship.alive) continue;
     const distance = raySphere(origin, forward, ship.flight.position, ship.radius);
-    if (distance === null || distance > wall || (best && distance >= best.distance)) continue;
+    if (distance === null || distance > wall || distance >= limit) continue;
+    limit = distance;
     best = { anchor: { rock: null, local: null, ship, mark: null }, distance, at: ship.flight.position.clone() };
   }
   for (const mark of marks) {
     const distance = raySphere(origin, forward, mark.position, MARK_REACH);
-    if (distance === null || distance > wall || (best && distance >= best.distance)) continue;
+    if (distance === null || distance > wall || distance >= limit) continue;
+    limit = distance;
     best = { anchor: { rock: null, local: null, ship: null, mark }, distance, at: mark.position.clone() };
+  }
+  if (!best && rock?.asteroid) {
+    const at = origin.clone().addScaledVector(chosen, rock.distance);
+    best = { anchor: rockAnchor(rock.asteroid, at), distance: rock.distance, at };
   }
   return best;
 }

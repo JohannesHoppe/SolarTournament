@@ -222,8 +222,10 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
   const hosts = Object.entries(sidesA).filter(([id]) => id.startsWith('p:'));
   expect(new Set(hosts.map(([, team]) => team)).size).toBe(2);
   // the second tab's clone, 300 m in front of the other side's ring, its nose on the core,
-  // fires its harpoon at it (the hook held); the lead hears of the bite, takes the core for it
-  // and tells both
+  // fires its harpoon at it (the hook held) once the round's start has let it go (a loaded
+  // machine may still be counting down); the lead hears of the bite, takes the core for it and
+  // tells both
+  await b.waitForFunction(() => window.game.countdown === 0, undefined, { timeout: 30_000 });
   const thief = await b.evaluate(() => {
     const game = window.game;
     const base = game.flags.bases[1 - game.me.team];
@@ -235,8 +237,11 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' }));
     return game.me.id;
   });
-  await play(b, 2);
+  // the hook is held until the core is in tow (a harpoon let go early takes nothing)
+  const towed = (page: Page) => page.waitForFunction((thief) => window.game.flags.cores.some((core: { carrier: string | null }) => core.carrier === thief), thief, { timeout: 15_000 });
+  await towed(b);
   await b.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyV' })));
+  await towed(a);
   for (const page of [a, b]) expect(await page.evaluate(() => window.game.flags.cores.map((core: { carrier: string | null }) => core.carrier))).toContain(thief);
   expect(errors).toEqual([]);
 });

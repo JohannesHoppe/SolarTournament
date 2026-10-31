@@ -1,7 +1,10 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { FlightModel, MAIN_THRUST, MAX_SPEED, OVERDRIVE_PUSH } from '../ship/flight';
-import { HOOK_PULL, HOOK_RANGE, keepsHold, pullOn } from './hook';
+import { aimHook, HOOK_PULL, HOOK_RANGE, keepsHold, pullOn } from './hook';
+import type { Ship } from '../ship/ship';
+import { ARENAS } from '../world/arenas';
+import { testField } from '../test/field';
 import { SAFE_IMPACT } from '../ship/impact';
 import { IMMOVABLE, MASS, type Body } from '../world/bodies';
 
@@ -174,5 +177,35 @@ describe('two hooks on one probe or torpedo', () => {
         expect(keepsHold(mine, theirs)).not.toBe(keepsHold(theirs, mine));
       }
     }
+  });
+});
+
+describe("the harpoon's aim", () => {
+  /** A ship of the test: its nose at its center, flying along `forward` from `at`. */
+  const ship = (at: THREE.Vector3, forward = new THREE.Vector3(0, 0, -1)) => {
+    const flight = new FlightModel();
+    flight.position.copy(at);
+    flight.orientation.setFromUnitVectors(new THREE.Vector3(0, 0, -1), forward);
+    return { flight, radius: 200, alive: true, nose: (out = new THREE.Vector3()) => out.copy(flight.position) } as unknown as Ship;
+  };
+
+  it("takes a core or a ship on the nose's line before a rock nearer beside it", () => {
+    const field = testField();
+    field.generate(ARENAS[0].layout);
+    // a rock, and a line past it 5 m clear of its bounding sphere: the line misses it, but its
+    // surface comes within the harpoon's aim of the line 200 m short of where the line passes it
+    const rock = [...field.asteroids.values()].find((asteroid) => asteroid.kind === 'rock' || asteroid.kind === 'ice')!;
+    const across = new THREE.Vector3(1, 0, 0);
+    const along = new THREE.Vector3(0, 0, -1);
+    const passing = rock.object.position.clone().addScaledVector(across, rock.radius + 100);
+    const owner = ship(passing.clone().addScaledVector(along, -4000), along);
+    // nothing else on the line: the rock beside it is bitten
+    const alone = aimHook(owner, field, [owner], []);
+    expect(alone?.anchor.rock).toBe(rock);
+    // a core 400 m out on the line is bitten instead, and so is a ship there
+    const core = { team: 0, position: passing.clone().addScaledVector(along, 4000) };
+    expect(aimHook(owner, field, [owner], [core])?.anchor.mark).toBe(core);
+    const rival = ship(core.position);
+    expect(aimHook(owner, field, [owner, rival], [])?.anchor.ship).toBe(rival);
   });
 });
