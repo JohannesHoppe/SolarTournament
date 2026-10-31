@@ -1729,14 +1729,16 @@ export class Fleet implements Obstacle {
   /**
    * Where a ray (from `origin` along the normalized `direction`, up to `max`) meets the
    * battleship: the distance and the part it hits (-1: the armor; a part's colliders count as
-   * the part while it can be hit); null when it misses.
+   * the part while it can be hit); null when it misses. While it goes down its hull still stops
+   * a ray, as armor only: no part takes a hit any more.
    */
   raycast(origin: THREE.Vector3, direction: THREE.Vector3, max: number, clock: number): { distance: number; zone: number } | null {
-    if (!this.present(clock) || raySphere(origin, direction, this.position, REACH) === null) return null;
+    if (!this.inField(clock) || raySphere(origin, direction, this.position, REACH) === null) return null;
+    const fighting = this.present(clock);
     const armor = this.rayHull(origin, direction, max);
-    let best = armor === null ? null : { distance: armor, zone: this.rayPart >= 0 && this.open(this.rayPart) ? this.rayPart : -1 };
+    let best = armor === null ? null : { distance: armor, zone: fighting && this.rayPart >= 0 && this.open(this.rayPart) ? this.rayPart : -1 };
     this.zones.forEach((zone, i) => {
-      if (!this.open(i)) return;
+      if (!fighting || !this.open(i)) return;
       const d = raySphere(local, step, zone.at, zone.radius);
       if (d !== null && d <= max && (!best || d <= best.distance)) best = { distance: d, zone: i };
     });

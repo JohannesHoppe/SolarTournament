@@ -5802,7 +5802,8 @@ export class Game implements OnlineGame {
 
   /**
    * Hitscan laser along the nose. The beam ends at the first thing in its path: a ship (of
-   * either side), a torpedo, the battleship, a wreck or an asteroid, which takes one hit.
+   * either side), a torpedo, the battleship, a wreck or an asteroid, which takes one hit, or
+   * whatever else is solid (see solidRay); each is looked for only before the nearest found so far.
    */
   private fireLaser(shooter: Ship) {
     // shooting ends the own spawn protection: nobody fires from behind it
@@ -5830,25 +5831,25 @@ export class Game implements OnlineGame {
       asteroidHit = wreckHit = null;
       beamLength = hull.distance;
     }
-    // a torpedo in the way takes the beam and goes off
-    const torpedoHit = this.torpedoes.raycast(origin, direction, beamLength, shooter, this.time);
-    if (torpedoHit) {
-      asteroidHit = wreckHit = struck = null;
-      beamLength = torpedoHit.distance;
-    }
     // the President's battleship stops it: on its armor, or on a part it breaks
-    const fleetHit = torpedoHit ? null : (this.fleet?.raycast(origin, direction, beamLength, this.field.clock) ?? null);
+    let fleetHit = this.fleet?.raycast(origin, direction, beamLength, this.field.clock) ?? null;
     if (fleetHit) {
       asteroidHit = wreckHit = struck = null;
       beamLength = fleetHit.distance;
     }
     // and so does whatever else is solid: a ring's housing, a core, a probe, the comet's head
-    const blocked = torpedoHit || fleetHit ? null : this.solidRay(origin, direction, beamLength);
+    let blocked = this.solidRay(origin, direction, beamLength);
     if (blocked !== null) {
-      asteroidHit = wreckHit = struck = null;
+      asteroidHit = wreckHit = struck = fleetHit = null;
       beamLength = blocked;
-      this.effects.sparks(beamEnd.copy(origin).addScaledVector(direction, beamLength), shooter.color, 30);
     }
+    // a torpedo before all of it takes the beam and goes off
+    const torpedoHit = this.torpedoes.raycast(origin, direction, beamLength, shooter, this.time);
+    if (torpedoHit) {
+      asteroidHit = wreckHit = struck = fleetHit = blocked = null;
+      beamLength = torpedoHit.distance;
+    }
+    if (blocked !== null) this.effects.sparks(beamEnd.copy(origin).addScaledVector(direction, beamLength), shooter.color, 30);
 
     // the beam's ends are copied wherever they are kept (the effects, the kill cam, the message)
     const end = beamEnd.copy(origin).addScaledVector(direction, beamLength);
