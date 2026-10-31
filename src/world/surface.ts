@@ -96,6 +96,52 @@ export function measureRadii(points: ArrayLike<number>, center: THREE.Vector3): 
   return radii;
 }
 
+const inside = new THREE.Vector3();
+const along = new THREE.Vector3();
+
+/**
+ * Cuts a surface's cells measured around `center` (see measureRadii) back to where they leave
+ * `within`, another surface around `withinCenter` in the same frame: a piece of a broken rock
+ * reaches no farther than the rock did, in no direction, so a ship outside the rock is outside
+ * every piece of it, to the 2 % of a radius a measured surface keeps to its mesh. Each cell's
+ * point is held to it (to a unit, by halving) along its middle's direction and those a quarter
+ * of a cell around it, and a little more (`margin`, units).
+ */
+export function clampRadii(radii: Float32Array, center: THREE.Vector3, within: Surface, withinCenter: THREE.Vector3, margin = 0) {
+  const out = (r: number) => {
+    inside.copy(center).addScaledVector(along, r).sub(withinCenter);
+    return inside.length() > within.radius(inside) - margin;
+  };
+  for (let f = 0; f < 6; f++) {
+    for (let j = 0; j < CELLS; j++) {
+      for (let i = 0; i < CELLS; i++) {
+        const index = f * CELLS * CELLS + j * CELLS + i;
+        // over the cell's middle and a quarter of a cell around it, where it weighs most in a lookup's blend
+        for (let dj = -1; dj <= 1; dj++) {
+          for (let di = -1; di <= 1; di++) {
+            const s = Math.max(-1, Math.min(1, ((i + 0.5 + di / 4) / CELLS) * 2 - 1));
+            const t = Math.max(-1, Math.min(1, ((j + 0.5 + dj / 4) / CELLS) * 2 - 1));
+            const sign = f % 2 === 0 ? 1 : -1;
+            if (f < 2) along.set(sign, s, t);
+            else if (f < 4) along.set(s, sign, t);
+            else along.set(s, t, sign);
+            along.normalize();
+            if (!out(radii[index])) continue;
+            let low = 0;
+            let high = radii[index];
+            while (high - low > 1) {
+              const middle = (low + high) / 2;
+              if (out(middle)) high = middle;
+              else low = middle;
+            }
+            radii[index] = Math.floor(low);
+          }
+        }
+      }
+    }
+  }
+}
+
 export class Surface {
   /** How far the surface reaches in each cell (units, whole, in the rock's own unscaled coordinates). */
   private readonly radii: Float32Array;

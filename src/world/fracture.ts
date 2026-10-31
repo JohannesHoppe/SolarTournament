@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { Noise, rockGeometry, rockRecipe } from './rocks';
-import { measureRadii, Surface, tangentDirections } from './surface';
+import { clampRadii, measureRadii, Surface, tangentDirections } from './surface';
 
 /**
  * How a rock shape breaks: every shape (rock and ice share them) has a fixed tree of pieces, cut
@@ -737,6 +737,9 @@ export function cutPiece(shape: number, path: readonly number[], details: Fractu
   centroid.round();
   const whole = measure(pieceSolid(shape, [], details.collision, 'collision')).volume;
   const radii = measureRadii(collision.p, centroid);
+  // never beyond what it broke off from, which a ship outside it is outside of
+  const parent = parentSurface(shape, path, details);
+  clampRadii(radii, centroid, parent.surface, parent.center, PIECE_INSET);
   return {
     near: solidMesh(pieceSolid(shape, path, details.near, 'near'), true),
     far: solidMesh(pieceSolid(shape, path, details.far, 'far'), false),
@@ -745,6 +748,21 @@ export function cutPiece(shape: number, path: readonly number[], details: Fractu
     share: Math.round((volume / whole) * 1e4) / 1e4,
     radii,
   };
+}
+
+/** A piece's surface stays this far inside its parent's (shape units, a fifth of a percent of a rock's mean radius): room for the blending of the cells between their middles. */
+const PIECE_INSET = 2;
+
+/** The surface a piece broke off from as its collisions measure it, and its center: the whole shape's around the middle of its bounds (as a field's template, see world/asteroids), or the parent piece's around its centroid. */
+export function parentSurface(shape: number, path: readonly number[], details: FractureDetails): { surface: Surface; center: THREE.Vector3 } {
+  if (path.length > 1) {
+    const parent = pieceData(shape, path.slice(0, -1), details);
+    return { surface: new Surface(parent.radii), center: new THREE.Vector3().fromArray(parent.centroid) };
+  }
+  const whole = pieceSolid(shape, [], details.collision, 'collision');
+  const box = new THREE.Box3().setFromArray(whole.p);
+  const center = box.getCenter(new THREE.Vector3()).round();
+  return { surface: new Surface(measureRadii(whole.p, center)), center };
 }
 
 /** The key a piece is kept and sent under. */
@@ -822,7 +840,7 @@ export function prefetch(shape: number, path: readonly number[], details: Fractu
 export function runJob(job: FractureJob, send: (message: { key: string; data: PieceData }, transfer: ArrayBuffer[]) => void) {
   for (let i = 0; i < pieceCount(job.shape, job.path); i++) {
     const path = [...job.path, i];
-    const data = cutPiece(job.shape, path, job.details);
+    const data = pieceData(job.shape, path, job.details);
     const arrays = [data.near, data.far].flatMap((m) => [m.position, m.normal, m.fracture, m.index]);
     send({ key: pieceKey(job.shape, path, job.details), data }, [...arrays, data.radii].map((a) => a.buffer as ArrayBuffer));
   }
