@@ -2298,6 +2298,10 @@ export class Game implements OnlineGame {
     this.ships = [];
     this.bots = [];
     this.botPoints.clear();
+    // the ships' ids come again in the next round (a solo round's 'me' and bots): nothing they
+    // did is avenged or carries a streak there
+    this.moments.reset();
+    this.streaks.reset();
     this.me = null;
     this.drone = null;
     this.watchedShip = null;
