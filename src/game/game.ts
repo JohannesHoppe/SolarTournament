@@ -922,6 +922,8 @@ export class Game implements OnlineGame {
   private onTarget: 'drive' | 'armor' | 'friend' | null = null;
   /** When the on-target tick last sounded (see ON_TARGET_TICK). */
   private onTargetTickAt = -Infinity;
+  /** The point the HUD marks to fly for, as the frame's last step left it (a ring, a gate, a core), or null; the screen shows it once a frame (see presentRound). */
+  private waypoint: THREE.Vector3 | null = null;
   /** When Nicole last warned of friendly fire (see FRIEND_WARNING). */
   private friendWarnedAt = -Infinity;
   /** Strength of the camera jolt after the own laser hit something, 0..2. */
@@ -3497,9 +3499,7 @@ export class Game implements OnlineGame {
     const racing = !!this.course && !this.school && !this.clamped;
     if (racing) this.callRace(subject);
     this.pushRadio(racing && !this.spectating && me.finish < 0 && lapOf(me.gates) === LAPS);
-    if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
-    this.orient(subject, waypoint);
-    this.hud.showCrosshair(me.alive);
+    this.waypoint = waypoint;
     const onTarget = me.alive ? this.onTarget : null;
     // the nose comes onto a hull: a short tick, as the crosshair turns orange; onto a ship of
     // the own side no tick, the crosshair crossed out (see Hud.setOnTarget)
@@ -3546,7 +3546,8 @@ export class Game implements OnlineGame {
 
   /**
    * What the screen shows of the round, once a frame after its steps (see draw): the ships'
-   * tints, the HUD's gauges and markers, the radar, the attitude and the g-force strain. A slow
+   * tints, the crosshair, the HUD's gauges and markers, the reference plane and the fixed
+   * references, the radar, the attitude and the g-force strain. A slow
    * frame runs several steps, but the DOM and the canvases are written only for the last.
    */
   private presentRound() {
@@ -3555,6 +3556,8 @@ export class Game implements OnlineGame {
     const subject = this.subject();
     // its gauges too: the own clone is not printed while the Host watches
     if (wallClock() >= this.tintedAt) this.tintShips(wallClock());
+    if (me.alive && this.state === 'playing') this.aimCrosshair(this.waypoint);
+    this.hud.showCrosshair(me.alive);
     // (the benchmark leaves out the HUD, the radar or the attitude to see what each costs)
     if (!this.bench.has('hud')) {
       this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
@@ -3563,6 +3566,8 @@ export class Game implements OnlineGame {
       // a solar storm blinds the sensors: no ship shows a marker
       this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject));
     }
+    // the fixed references' labels after the ships' names, keeping clear of them
+    this.orient(subject, this.waypoint);
     if (!this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
     if (!this.bench.has('attitude')) this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
     // the motion streaks, fewer on a cheaper picture (see view/streaks)
