@@ -83,4 +83,27 @@ describe('loading the voices', () => {
     await loadVoice();
     expect(tries()).toBe(3);
   });
+
+  it("ignores the failure of a language's load that a newer load has overtaken", async () => {
+    let failEnglish: (error: Error) => void = () => {};
+    const manifest = (sprite: string) => ({ sampleRate: 1, version: '1', clips: { [`${sprite}:clip`]: [0, 1] } });
+    let radioCalls = 0;
+    let englishCalls = 0;
+    const fetch = vi.fn((url: string) => {
+      const sprite = /voice-(\w+)\./.exec(url)![1];
+      if (sprite === 'radio' && url.endsWith('.json') && radioCalls++ === 0) return Promise.reject(new Error('offline'));
+      if (sprite === 'en' && url.endsWith('.json') && englishCalls++ === 0) return new Promise((_, reject) => (failEnglish = reject));
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(manifest(sprite)), arrayBuffer: () => Promise.resolve(new ArrayBuffer(4)) });
+    });
+    vi.stubGlobal('fetch', fetch);
+    const { loadVoice } = await import('./voice');
+    // the first load loses its radio sprite while its language's fetch hangs; a second one succeeds
+    await expect(loadVoice()).rejects.toThrow();
+    const second = await loadVoice();
+    expect(second.partial).toBeFalsy();
+    failEnglish(new Error('late'));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    now = 11000;
+    expect(await loadVoice()).toBe(second);
+  });
 });
