@@ -99,7 +99,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      # the whole history: a stage moves only as a fast-forward, which git checks against it
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          fetch-depth: 0
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: sprites
