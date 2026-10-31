@@ -142,6 +142,8 @@ export interface Flier {
   readonly flight: { readonly position: THREE.Vector3; readonly velocity: THREE.Vector3; readonly orientation: THREE.Quaternion };
   /** Its flight as a body on a rope or in a bump (see world/bodies). */
   readonly body: Body;
+  /** How far the last step set another browser's ship right as this browser predicts it (see Ship.corrected); none for a ship this browser runs. */
+  readonly corrected?: number;
 }
 
 const tow = new THREE.Vector3();
@@ -268,8 +270,9 @@ export class Flags {
         const carrier = byId(ships, core.carrier);
         // a carrier that died, left, or changed sides lets the core go where it hangs, flying
         // on with its cable end's velocity; so does a tow cable that snaps where lying on what
-        // came across it is no answer (see game/cable), never in the step it is laid out
-        if (!carrier?.alive || this.teamOf(carrier.id) === team || !core.lies.follow(this.field, core.position, sternOf(carrier, stern), core.cable > 0)) {
+        // came across it is no answer (see game/cable), never in the step it is laid out, nor
+        // for the jump of another browser's carrier set right as this browser predicts it
+        if (!carrier?.alive || this.teamOf(carrier.id) === team || !core.lies.follow(this.field, core.position, sternOf(carrier, stern), core.cable > 0, carrier.corrected ?? 0)) {
           this.event('drop', core.carrier, team);
           core.carrier = null;
           core.droppedAt = now;
@@ -315,10 +318,23 @@ export class Flags {
       this.goHome(team);
       this.event('return', ship.id, team);
     } else if (this.carrying(ship.id) < 0) {
-      core.carrier = ship.id;
-      core.home = false;
+      this.towBy(core, ship.id);
       this.event('grab', ship.id, team);
     }
+  }
+
+  /**
+   * The ship `id` has the core in tow. A new carrier's cable is laid out afresh where the core
+   * hangs (see tow): never on the length and wrap points of the one before, which may have lost
+   * it in the same frame.
+   */
+  private towBy(core: Core, id: string) {
+    if (core.carrier !== id) {
+      core.cable = 0;
+      core.lies.clear();
+    }
+    core.carrier = id;
+    core.home = false;
   }
 
   /** A harpoon of `ship` bit the core of side `team`: the lead's rules take it next frame (see lead). */
@@ -387,8 +403,7 @@ export class Flags {
       const core = this.cores[team];
       if (wire === null) this.goHome(team);
       else if (typeof wire === 'string') {
-        core.carrier = wire;
-        core.home = false;
+        this.towBy(core, wire);
         const towed = state.w[team];
         if (towed) {
           const told = this.told[team];
@@ -467,7 +482,7 @@ export class Flags {
     const flight = carrier.flight;
     const length = carrier.radius * TOW_CABLE;
     const local = carrier.owner === null;
-    if (core.cable === 0) core.cable = THREE.MathUtils.clamp(sternOf(carrier, stern).distanceTo(core.position), length, HOOK_RANGE + CLAIM_SLACK);
+    const fresh = core.cable === 0;
     core.position.addScaledVector(core.velocity, dt);
     this.collide(core.position, core.velocity);
     this.bump(core, ships);
@@ -476,13 +491,19 @@ export class Flags {
     // snaps, the lead's rules decide (see lead)
     sternOf(carrier, stern);
     core.lies.follow(this.field, core.position, stern, false);
+    // a core just taken hangs on as much cable as the way to it, over what the cable already
+    // lies on (a harpoon's bite from afar, with a rock come across meanwhile): the rope starts
+    // slack, never with a jerk by the way round the rock
+    if (fresh) {
+      const straight = stern.distanceTo(core.position);
+      core.cable = THREE.MathUtils.clamp(straight, length, HOOK_RANGE + CLAIM_SLACK) + core.lies.length(core.position, stern) - straight;
+    }
     sternAt.copy(stern);
     sternBody.velocity = flight.velocity;
     // wrapped, the winch holds the cable as it is: reeling in over a rock would drag the
     // carrier back to it
     const path = core.lies.path(false);
-    if (path) path.floor = length;
-    const cable = pullOn(core, sternBody, core.cable, core.cable > length && !path, length, Infinity, dt, local ? 'moved' : 'elsewhere', path);
+    const cable = pullOn(core, sternBody, core.cable, core.cable > length && !path, length, Infinity, dt, local ? 'moved' : 'elsewhere', path, length);
     flight.position.add(stern.sub(sternAt));
     if (cable !== null) core.cable = cable;
   }
@@ -513,8 +534,11 @@ export class Flags {
     const free = !other.home && !other.carrier;
     const toCore = free ? share(core.mass, other.mass) : 1;
     core.position.addScaledVector(apart, (reach - distance) * toCore);
-    if (free) other.position.addScaledVector(apart, -(reach - distance) * (1 - toCore));
-    bump(core, other, apart, CORE_RESTITUTION, true, free);
+    // a held core moves for nobody: this one bounces off it as off a wall moving with it
+    if (free) {
+      other.position.addScaledVector(apart, -(reach - distance) * (1 - toCore));
+      bump(core, other, apart, CORE_RESTITUTION, true, true);
+    } else bounceOff(core.velocity, other.velocity, apart, CORE_RESTITUTION);
   }
 
   /**

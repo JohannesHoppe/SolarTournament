@@ -26,10 +26,10 @@ class FakeTransport implements Transport {
     return this.connected;
   }
   leave() {}
-  /** A peer's states: no ships, its time in the room, the round clock of a lead, the lead it follows. */
-  states(from: string, age: number, follows?: string, round = false) {
+  /** A peer's states: no ships, its time in the room, the round clock of a lead, the lead it follows, the peers it says came before it. */
+  states(from: string, age: number, follows?: string, round = false, elders?: string[]) {
     if (!this.connected.includes(from)) this.connected.push(from);
-    this.handlers.get('s')!({ s: [], r: round ? { id: 0, left: 100, field: 5 } : null, g: age, ...(follows ? { l: follows } : {}) }, from);
+    this.handlers.get('s')!({ s: [], r: round ? { id: 0, left: 100, field: 5 } : null, g: age, ...(follows ? { l: follows } : {}), ...(elders ? { o: elders } : {}) }, from);
   }
 }
 
@@ -101,6 +101,29 @@ describe('the lead browser', () => {
     expect(synced).toEqual(['real']);
   });
 
+  it('does not start over for the seconds it spends building the field it was sent, only for a gap in its frames', () => {
+    const { session, transport } = joined('n');
+    let restarts = 0;
+    session.onRestart = () => restarts++;
+    // building the field takes 3 s, longer than a browser may go without a frame
+    session.onSync = () => at(clock / 1000 + 3);
+    at(1);
+    transport.states('old', 100, 'old', true);
+    transport.states('h2', 50, 'old');
+    session.tick();
+    at(1.5);
+    session.tick();
+    transport.handlers.get('y')!({ f: { k: 'real', t: 5, a: [], x: [] }, w: [], p: [], q: [], g: 100.1 }, 'old');
+    expect(clock).toBe(4500);
+    at(4.6);
+    session.tick();
+    expect(restarts).toBe(0);
+    // a gap of its own, a hidden tab, still starts it over
+    at(8);
+    session.tick();
+    expect(restarts).toBe(1);
+  });
+
   it('settles two browsers that each lead alone and meet only after settling: the higher id steps back', () => {
     const higher = joined('z');
     at(7);
@@ -130,6 +153,71 @@ describe('the lead browser', () => {
     transport.states('liar', 10001.5, 'liar', true);
     at(7);
     session.tick();
+    expect(session.leadId).toBe('old');
+  });
+
+  it('starts over to take the field from the lead the others follow, when that field came while it elected another', () => {
+    const { session, transport } = joined('n');
+    const synced: string[] = [];
+    let restarts = 0;
+    session.onSync = (field) => synced.push(field.k);
+    session.onRestart = () => restarts++;
+    const field = (k: string, age: number) => ({ f: { k, t: 5, a: [], x: [] }, w: [], p: [], q: [], g: age });
+    at(5);
+    transport.states('old', 100, 'old', true);
+    transport.states('h2', 50, 'old');
+    transport.states('liar', 10000, 'liar', true);
+    // the real lead's field arrives while a liar leads here: not taken
+    transport.handlers.get('y')!(field('real', 100.1), 'old');
+    expect(synced).toEqual([]);
+    frames(session, 5.1, 8, (time) => {
+      transport.states('old', 95 + time, 'old', true);
+      transport.states('h2', 45 + time, 'old');
+      transport.states('liar', 9995 + time, 'liar', true);
+    });
+    // the others' votes move the election to the real lead, and it starts over to get its field
+    expect(session.leadId).toBe('old');
+    expect(restarts).toBe(1);
+    at(8.5);
+    transport.handlers.get('y')!(field('real', 103.5), 'old');
+    expect(synced).toEqual(['real']);
+    // with its field, it stays
+    frames(session, 8.6, 20, (time) => {
+      transport.states('old', 95 + time, 'old', true);
+      transport.states('h2', 45 + time, 'old');
+    });
+    expect(restarts).toBe(1);
+  });
+
+  it('ranks a peer it reached only after settling by its own join time once those who came after it vouch for it, and a liar behind them all the same', () => {
+    const { session, transport } = joined('n');
+    // the room: 'old' leads, 's' came 50 s ago, 'h2' and 'h3' after it; this browser reaches all but 's' at once
+    const room = (time: number, elders: boolean) => {
+      transport.states('old', 100 + time, 'old', true, elders ? [] : undefined);
+      transport.states('h2', 40 + time, 'old', false, elders ? ['old', 's'] : undefined);
+      transport.states('h3', 30 + time, 'old', false, elders ? ['old', 's'] : undefined);
+    };
+    at(1);
+    room(1, false);
+    transport.handlers.get('y')!({ f: { k: 'field', t: 5, a: [], x: [] }, w: [], p: [], q: [], g: 101 }, 'old');
+    frames(session, 1, 8, (time) => room(time, false));
+    expect(session.rank()).toBe(3);
+    // 's' is reached at 8 s: moved up to then, it would rank behind this browser
+    frames(session, 8, 9, (time) => {
+      room(time, false);
+      transport.states('s', 50 + time, 'old');
+      transport.states('liar', 1000 + time, 'old');
+    });
+    expect(session.rank()).toBe(3);
+    // the others say 's' came before them, and nobody says so of the liar
+    frames(session, 9, 12, (time) => {
+      room(time, true);
+      transport.states('s', 50 + time, 'old');
+      transport.states('liar', 1000 + time, 'old');
+    });
+    expect(session.rank()).toBe(4);
+    expect(session.joinedTime('s')).toBeLessThan(session.joinedTime('h2'));
+    expect(session.joinedTime('liar')).toBeGreaterThan(0);
     expect(session.leadId).toBe('old');
   });
 

@@ -89,7 +89,7 @@ class PointCloud {
   protected upload(count: number) {
     const geometry = this.points.geometry;
     geometry.setDrawRange(0, count);
-    for (const [name, size] of [['position', 3], ['size', 1], ['tint', 4]] as const) {
+    for (const [name, size] of UPLOADED) {
       const attribute = geometry.attributes[name] as THREE.BufferAttribute;
       attribute.clearUpdateRanges();
       if (count === 0) continue;
@@ -98,6 +98,9 @@ class PointCloud {
     }
   }
 }
+
+/** The attributes of a point cloud, with their widths. */
+const UPLOADED = [['position', 3], ['size', 1], ['tint', 4]] as const;
 
 /**
  * All particles of one texture live in a single buffer and render with one draw call.
@@ -215,7 +218,10 @@ class Jets extends PointCloud {
       scratch.copy(mouth).addScaledVector(exhaust, along * JET_LENGTH * (0.4 + 0.6 * strength)).toArray(this.position, i * 3);
       this.size[i] = JET_WIDTH * (0.3 + 0.7 * along) * (0.5 + 0.5 * strength);
       const fade = light * (1 - 0.6 * along);
-      this.tint.set([JET_COLOR.r, JET_COLOR.g, JET_COLOR.b, fade], i * 4);
+      this.tint[i * 4] = JET_COLOR.r;
+      this.tint[i * 4 + 1] = JET_COLOR.g;
+      this.tint[i * 4 + 2] = JET_COLOR.b;
+      this.tint[i * 4 + 3] = fade;
     }
   }
 

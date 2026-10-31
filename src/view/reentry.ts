@@ -308,6 +308,8 @@ class Burn {
         depthWrite: false,
         transparent: true,
         side: THREE.DoubleSide,
+        // one pass for both faces: the glow adds up and writes no depth, so the order of the faces changes nothing, and three.js would otherwise draw the sheet twice and validate its program twice a frame
+        forceSinglePass: true,
         fog: true,
       }),
     );
@@ -384,6 +386,7 @@ export class Reentry {
         depthWrite: false,
         transparent: true,
         side: THREE.DoubleSide,
+        forceSinglePass: true,
       }),
     );
     this.licks.frustumCulled = false;
@@ -455,7 +458,8 @@ export class Reentry {
     const full = ship.owner === null ? ship.heat >= MAX_HEAT : burn.fill >= MAX_HEAT;
     const wasBurning = burn.burning;
     burn.burning = ship.alive && load > 1 && full;
-    if (burn.wasAlive && !ship.alive && wasBurning) this.ignite(ship);
+    // a ship whose browser only went quiet is gone from the screen, not burnt up
+    if (burn.wasAlive && ship.died && wasBurning) this.ignite(ship);
     burn.wasAlive = ship.alive;
     burn.plasma += (plasmaOf(load) - burn.plasma) * (1 - Math.exp(-dt / PLASMA_EASE));
     const scorch = burn.burning ? 1 : SCORCH_HEATING * burn.plasma;

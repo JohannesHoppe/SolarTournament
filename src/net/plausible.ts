@@ -1,12 +1,8 @@
 import * as THREE from 'three';
 import { MAX_SPEED } from '../ship/flight';
-import { TORPEDO_LIFETIME, TORPEDOES } from '../game/torpedoes';
+import { ONLINE_LOAD as LOAD, TORPEDO_LIFETIME } from '../game/torpedoes';
 import { HOOK_RANGE } from '../game/hook';
-import { ONLINE_LEVEL, tubeTorpedoes } from '../game/hangar';
 import { FINISH_GATES } from '../game/race';
-
-/** The most torpedoes a clone carries online: the standard load and its tubes up to the online cap. */
-const LOAD = TORPEDOES + tubeTorpedoes(ONLINE_LEVEL);
 
 /**
  * Rough plausibility checks on what other browsers report about their own ships. Every bound is
@@ -143,8 +139,8 @@ function turned(q: THREE.Quaternion, w: THREE.Vector3, seconds: number, target: 
 
 export class Plausibility {
   private readonly tracks = new Map<string, Track>();
-  /** The probes of the round some ship took without this browser seeing what they held (see probe). */
-  private readonly unseenProbes = new Set<string>();
+  /** The probes of the round some ship said it took (see probe). */
+  private readonly namedProbes = new Set<string>();
   /** The most each check measured, as a share of its bound (see Margins): in honest play the margin to a cheat, above 1 a strike. */
   readonly margins: Margins = {};
   /** The share each check measured when it last failed (see measure), for the log; until it first fails, the last it measured. */
@@ -189,7 +185,7 @@ export class Plausibility {
 
   /** A new round: every ship is printed again, its kills start over, no core is held, every probe is new. */
   newRound(now: number) {
-    this.unseenProbes.clear();
+    this.namedProbes.clear();
     for (const track of this.tracks.values()) {
       this.regrace(track, now);
       track.kills = null;
@@ -366,21 +362,22 @@ export class Plausibility {
 
   /**
    * A ship took the probe `probe`: of a kind this browser knows, or null when it could not see
-   * what it held (it did not have the probe, or it refused the take, the taker too far as it
-   * sees them; it may have held either). A probe is taken once: each ship's word counts once per
-   * probe, and a probe whose contents this browser did not see opens the window for a core and
-   * adds its torpedoes only for the first ship that names it. A second honest taker of the same
-   * probe (two that reached it at once, each first on its own screen) is left with TORPEDO_SLACK.
+   * what it held (it no longer had the probe; it may have held either). `seen` is false for a
+   * take this browser could not watch: the probe was no longer here, or the taker too far from it
+   * as this browser sees them (lag may put an honest taker there; the kind is then what the probe
+   * held here). A probe is taken once: each ship's word counts once per probe, and a take not
+   * seen counts only for the first ship that names the probe at all; one of unknown contents
+   * opens the window for a core and adds its torpedoes. A second honest taker of the same probe
+   * (two that reached it at once, each first on its own screen) is left with TORPEDO_SLACK.
    */
-  probe(id: string, probe: string, kind: string | null, now: number) {
+  probe(id: string, probe: string, kind: string | null, now: number, seen = kind !== null) {
     const track = this.track(id, now);
     if (track.probes.has(probe)) return;
     track.probes.add(probe);
-    if (kind === null) {
-      if (this.unseenProbes.has(probe)) return;
-      this.unseenProbes.add(probe);
-      track.tookAt = now;
-    }
+    const first = !this.namedProbes.has(probe);
+    this.namedProbes.add(probe);
+    if (!seen && !first) return;
+    if (kind === null) track.tookAt = now;
     if (kind === 'nova') track.nova = true;
     if (kind === 'torpedoes' || kind === null) track.torpedoes += 2;
   }
@@ -520,16 +517,25 @@ export function hookShare(ship: THREE.Vector3, held: THREE.Vector3): number {
  */
 const RAM_PUSH = 2000;
 const RAM_SPEED = 10000;
+/**
+ * The field time of a blow the lead reports (a ram, a contact) lies no farther from this
+ * browser's field clock than BLOW_AGE (s): the lead sends a blow the frame it meets it, a step of
+ * the contacts' grid or up to 2 s of them after a tab stood still, and this browser's field clock
+ * follows the lead's up to FIELD_SNAP (half a second) and the lag. A blow dated far back would
+ * move a piece from where it lay then, as far as it drifted since.
+ */
+const BLOW_AGE = 3;
 
 /**
  * How close a ram the lead browser reports comes to a lie (above 1: one this browser does not
- * take): the piece lay at the battleship's hull as this browser sees them, no farther from its
- * center than the hull reaches (`reach`, the piece's own reach in it) and AIM_SLACK (this browser
- * glides after the lead's battleship), it was pushed out from `before` to `after` no farther than
- * RAM_PUSH, and it drifts away no faster than RAM_SPEED.
+ * take): dated `age` (s) off this browser's field clock, no more than BLOW_AGE; the piece lay at
+ * the battleship's hull as this browser sees them, no farther from its center than the hull
+ * reaches (`reach`, the piece's own reach in it) and AIM_SLACK (this browser glides after the
+ * lead's battleship), it was pushed out from `before` to `after` no farther than RAM_PUSH, and it
+ * drifts away no faster than RAM_SPEED.
  */
-export function ramShare(before: THREE.Vector3, after: THREE.Vector3, speed: number, hull: THREE.Vector3, reach: number): number {
-  return Math.max(before.distanceTo(hull) / (reach + AIM_SLACK), before.distanceTo(after) / RAM_PUSH, speed / RAM_SPEED);
+export function ramShare(before: THREE.Vector3, after: THREE.Vector3, speed: number, hull: THREE.Vector3, reach: number, age: number): number {
+  return Math.max(Math.abs(age) / BLOW_AGE, before.distanceTo(hull) / (reach + AIM_SLACK), before.distanceTo(after) / RAM_PUSH, speed / RAM_SPEED);
 }
 
 /**
@@ -542,9 +548,16 @@ export function ramShare(before: THREE.Vector3, after: THREE.Vector3, speed: num
 const KNOCK_PUSH = 1000;
 const KNOCK_SPEED = 5000;
 
-/** How close a contact the lead browser reports comes to a lie (above 1: one this browser does not take): the piece, where this browser has it at the contact's field time (`before`), was pushed to `after` no farther than KNOCK_PUSH, and drifts on no faster than KNOCK_SPEED. */
-export function knockShare(before: THREE.Vector3, after: THREE.Vector3, speed: number): number {
-  return Math.max(before.distanceTo(after) / KNOCK_PUSH, speed / KNOCK_SPEED);
+/**
+ * How close a contact the lead browser reports comes to a lie (above 1: one this browser does not
+ * take): dated `age` (s) off this browser's field clock, no more than BLOW_AGE; the piece, where
+ * this browser has it at the contact's field time (`before`), lay within KNOCK_PUSH of something
+ * it could have struck (`gap`: how far its bounding sphere stood off the nearest other piece's or
+ * ring's then, see FieldContacts.gap), was pushed to `after` no farther than KNOCK_PUSH, and
+ * drifts on no faster than KNOCK_SPEED.
+ */
+export function knockShare(before: THREE.Vector3, after: THREE.Vector3, speed: number, age: number, gap: number): number {
+  return Math.max(Math.abs(age) / BLOW_AGE, gap / KNOCK_PUSH, before.distanceTo(after) / KNOCK_PUSH, speed / KNOCK_SPEED);
 }
 
 /**
@@ -589,16 +602,20 @@ function offSegment(point: THREE.Vector3, from: THREE.Vector3, to: THREE.Vector3
  */
 export class Evidence {
   private readonly beams = new Map<string, { at: number; from: THREE.Vector3; to: THREE.Vector3 }[]>();
-  private readonly blasts = new Map<string, { at: number; position: THREE.Vector3 }[]>();
-  private readonly novas = new Map<string, { at: number; position: THREE.Vector3 }[]>();
+  /** Where each ship's torpedoes went off, and on which parts of the battleship each was already counted (see fleetHit). */
+  private readonly blasts = new Map<string, Blow[]>();
+  /** Where each ship's nova cores went off, and on which parts each was already counted. */
+  private readonly novas = new Map<string, Blow[]>();
   private readonly launches = new Map<string, number>();
 
   beam(ship: string, from: THREE.Vector3, to: THREE.Vector3, now: number) {
     keep(this.beams, ship, { at: now, from: from.clone(), to: to.clone() }, now);
   }
 
-  blast(ship: string, position: THREE.Vector3, now: number) {
-    keep(this.blasts, ship, { at: now, position: position.clone() }, now);
+  /** A torpedo of the ship went off there: once per torpedo, a second word of the same one adds nothing. */
+  blast(ship: string, torpedo: string, position: THREE.Vector3, now: number) {
+    if (this.blasts.get(ship)?.some((blast) => blast.torpedo === torpedo)) return;
+    keep(this.blasts, ship, { at: now, position: position.clone(), torpedo, parts: new Set<number>() }, now);
   }
 
   launch(ship: string, now: number) {
@@ -626,30 +643,31 @@ export class Evidence {
    * off there, its shooter alive or not, for a torpedo launched by a living clone flies on after
    * that clone died and counts where it lands; a nova core's (`nova`: the hits it deals a part
    * by distance) one the ship set off near enough (see novaReached), its clone reprinted since.
-   * `part` is null for a part this browser does not know (another round), and a browser that has
-   * only just come takes the hit on trust.
+   * A torpedo's blast and a nova core each count once on a part (`zone`, where it lies here,
+   * `part`): their hits on it are told once, so a report said again finds its evidence used up.
+   * A browser that has only just come takes the hit on trust.
    */
-  fleetHit(ship: string, alive: boolean, part: THREE.Vector3 | null, count: number, reach: number, trusting: boolean, now: number, nova: ((distance: number) => number) | null = null): boolean {
+  fleetHit(ship: string, alive: boolean, zone: number, part: THREE.Vector3, count: number, reach: number, trusting: boolean, now: number, nova: ((distance: number) => number) | null = null): boolean {
     if (count <= 1 && !alive && !nova) return false;
-    if (!part || trusting) return true;
-    if (nova) return this.novaReached(ship, part, count, nova, now);
-    return count > 1 ? this.blasted(ship, part, reach, now) : this.beamEnded(ship, part, reach, now);
+    if (trusting) return true;
+    if (nova) return this.novaReached(ship, zone, part, count, nova, now);
+    return count > 1 ? useBlow(this.blasts.get(ship), zone, now, (blast) => blast.position.distanceTo(part) < reach) : this.beamEnded(ship, part, reach, now);
   }
 
   /** The ship set off a nova core there. */
   nova(ship: string, position: THREE.Vector3, now: number) {
-    keep(this.novas, ship, { at: now, position: position.clone() }, now);
+    keep(this.novas, ship, { at: now, position: position.clone(), torpedo: null, parts: new Set<number>() }, now);
   }
 
   /**
    * A nova core's hits on a part of the battleship stand: a nova core of the ship went off
-   * lately, near enough to the part to deal `count` hits (`dealt`, by the distance from it to the
-   * part's center), that distance shortened by NOVA_SLACK. Where the core went off is the
-   * holder's own word, checked against where its ship flies (see Plausibility.nova); only the
-   * battleship lies a little elsewhere on each browser.
+   * lately, not counted on this part yet, near enough to it to deal `count` hits (`dealt`, by
+   * the distance from it to the part's center), that distance shortened by NOVA_SLACK. Where the
+   * core went off is the holder's own word, checked against where its ship flies (see
+   * Plausibility.nova); only the battleship lies a little elsewhere on each browser.
    */
-  private novaReached(ship: string, part: THREE.Vector3, count: number, dealt: (distance: number) => number, now: number): boolean {
-    return (this.novas.get(ship) ?? []).some((nova) => now - nova.at < EVIDENCE_SECONDS && count <= dealt(Math.max(0, nova.position.distanceTo(part) - NOVA_SLACK)));
+  private novaReached(ship: string, zone: number, part: THREE.Vector3, count: number, dealt: (distance: number) => number, now: number): boolean {
+    return useBlow(this.novas.get(ship), zone, now, (nova) => count <= dealt(Math.max(0, nova.position.distanceTo(part) - NOVA_SLACK)));
   }
 
   /** The ship launched a torpedo that may still fly. */
@@ -663,8 +681,29 @@ export class Evidence {
   }
 }
 
-/** Keeps a ship's latest entries, the stale ones dropped. */
+/** A torpedo's blast (by its id) or a nova core going off: where and when, and the parts of the battleship it was counted on. */
+interface Blow {
+  at: number;
+  position: THREE.Vector3;
+  torpedo: string | null;
+  parts: Set<number>;
+}
+
+/** Counts a recent blow of a ship on a part, the first that `fits` and was not counted there yet; whether there was one. */
+function useBlow(blows: Blow[] | undefined, zone: number, now: number, fits: (blow: Blow) => boolean): boolean {
+  const blow = blows?.find((b) => now - b.at < EVIDENCE_SECONDS && !b.parts.has(zone) && fits(b));
+  blow?.parts.add(zone);
+  return blow !== undefined;
+}
+
+/**
+ * Keeps a ship's latest entries, the stale ones dropped. A ship heard of for the first time also
+ * clears out the ships whose entries all went stale: evidence is kept for any id its peer may run
+ * (a bot adopted under a new id fires before its first state), and an id made up costs nothing
+ * once its time is over.
+ */
 function keep<T extends { at: number }>(map: Map<string, T[]>, ship: string, entry: T, now: number) {
+  if (!map.has(ship)) for (const [id, old] of map) if (old.every((e) => now - e.at >= LAUNCH_EVIDENCE)) map.delete(id);
   const list = (map.get(ship) ?? []).filter((old) => now - old.at < LAUNCH_EVIDENCE);
   list.push(entry);
   if (list.length > EVIDENCE_KEPT) list.shift();

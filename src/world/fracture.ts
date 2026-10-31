@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { Noise, rockGeometry, rockRecipe } from './rocks';
-import { measureRadii, Surface } from './surface';
+import { measureRadii, Surface, tangentDirections } from './surface';
 
 /**
  * How a rock shape breaks: every shape (rock and ice share them) has a fixed tree of pieces, cut
@@ -513,8 +513,7 @@ function voronoi(sites: THREE.Vector3[], amplitude: number, frequency: number, r
     for (let j = i + 1; j < sites.length; j++) {
       const normal = sites[j].clone().sub(sites[i]).normalize();
       const u = new THREE.Vector3(), w = new THREE.Vector3();
-      u.set(Math.abs(normal.x) < 0.9 ? 1 : 0, Math.abs(normal.x) < 0.9 ? 0 : 1, 0).cross(normal).normalize();
-      w.crossVectors(normal, u);
+      tangentDirections(normal, u, w);
       const offset = normal.dot(sites[i].clone().add(sites[j]).multiplyScalar(0.5));
       const cut: Cut = { normal, u, w, offset, noise: new Noise(r.nextInt()), amplitude, frequency };
       cells[i].push({ cut, keep: 1 });
@@ -748,7 +747,8 @@ export function cutPiece(shape: number, path: readonly number[], details: Fractu
   };
 }
 
-const pieceKey = (shape: number, path: readonly number[], details: FractureDetails) => `${details.collision}:${details.near}:${details.far}:${shape}:${path.join('.')}`;
+/** The key a piece is kept and sent under. */
+export const pieceKey = (shape: number, path: readonly number[], details: FractureDetails) => `${details.collision}:${details.near}:${details.far}:${shape}:${path.join('.')}`;
 const cutPieces = new Map<string, PieceData>();
 
 /** A piece's arrays: cut already (here or by the worker, see prefetch), else cut here and now. */
@@ -764,6 +764,42 @@ export type FractureJob = { shape: number; path: number[]; details: FractureDeta
 
 let worker: Worker | null | undefined;
 const asked = new Set<string>();
+/** The jobs sent to the worker, oldest first, until their pieces are all there. */
+let sent: FractureJob[] = [];
+/** How often the worker may fail before pieces are cut here for good. */
+const MAX_RESTARTS = 3;
+let restarts = 0;
+
+const jobDone = (job: FractureJob) => {
+  for (let i = 0; i < pieceCount(job.shape, job.path); i++) if (!cutPieces.has(pieceKey(job.shape, [...job.path, i], job.details))) return false;
+  return true;
+};
+
+/** Starts the worker (null where it cannot be had) and sends it the jobs not done. */
+function startWorker(): Worker | null {
+  try {
+    const started = new Worker(new URL('./fracture.worker.ts', import.meta.url), { type: 'module' });
+    worker = started;
+    started.onmessage = (event: MessageEvent<{ key: string; data: PieceData }>) => {
+      if (!cutPieces.has(event.data.key)) cutPieces.set(event.data.key, event.data.data);
+    };
+    // the job that was running is lost (its pieces are cut here when its rock breaks); the
+    // queue behind it goes to a fresh worker
+    started.onerror = () => {
+      started.terminate();
+      worker = restarts++ < MAX_RESTARTS ? undefined : null;
+      sent = sent.filter((job) => !jobDone(job)).slice(1);
+      if (worker === undefined && sent.length > 0) {
+        const fresh = startWorker();
+        for (const job of sent) fresh?.postMessage(job);
+      }
+    };
+    return started;
+  } catch {
+    worker = null;
+    return null;
+  }
+}
 
 /**
  * Has a background worker cut the pieces the piece at `path` breaks into (the whole shape at
@@ -774,21 +810,12 @@ export function prefetch(shape: number, path: readonly number[], details: Fractu
   const key = pieceKey(shape, path, details);
   if (asked.has(key) || typeof Worker === 'undefined') return;
   asked.add(key);
-  if (worker === undefined) {
-    try {
-      worker = new Worker(new URL('./fracture.worker.ts', import.meta.url), { type: 'module' });
-      worker.onmessage = (event: MessageEvent<{ key: string; data: PieceData }>) => {
-        if (!cutPieces.has(event.data.key)) cutPieces.set(event.data.key, event.data.data);
-      };
-      worker.onerror = () => {
-        worker?.terminate();
-        worker = null;
-      };
-    } catch {
-      worker = null;
-    }
-  }
-  worker?.postMessage({ shape, path: [...path], details } satisfies FractureJob);
+  const active = worker === undefined ? startWorker() : worker;
+  if (!active) return;
+  const job: FractureJob = { shape, path: [...path], details };
+  sent = sent.filter((earlier) => !jobDone(earlier));
+  sent.push(job);
+  active.postMessage(job);
 }
 
 /** Cuts every piece of a job (see prefetch) and sends each with its key, its arrays handed over, not copied. */

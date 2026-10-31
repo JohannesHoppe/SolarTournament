@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { shelter, shelterPars, SUN_DIRECTION } from './space';
 import { ARENAS, RING_LAYER, RING_SHEET, SATURN_CENTER, type ArenaId, type ArenaProfile } from './arenas';
-import { Derelict, mistDensity } from './derelict';
+import { Derelict } from './derelict';
 import { sizeBeacons } from './worldship';
 import { loadPlanetMap, type Planet, type PlanetMaps } from '../assets';
 import { junkyard } from './junkyard';
@@ -132,10 +132,10 @@ const JUPITER_CAP = 0.62;
 /**
  * The arena hangs over this latitude of Jupiter (rad, 13° south), between its southern
  * belts, so they run across the view; its great red storm (on the map at 20° south) lies some
- * 6 km off to the south and east.
+ * 6 km off to the south and west.
  */
 const JUPITER_LATITUDE = -0.22;
-/** Where the map's longitude 0 lies (a share of a turn): the great storm, at 0.3625 on the map, 0.1 rad east of the point below the arena. */
+/** Where the map's longitude 0 lies (a share of a turn): the great storm, at 0.3625 on the map, 0.1 rad west of the point below the arena. */
 const JUPITER_LONGITUDE = 0.3625 + 0.1 / (2 * Math.PI);
 /** The light a planet's lit side gets on top of the arena's sun (the sky's faint glow), a share of the sun's. */
 const PLANET_AMBIENT = 0.02;
@@ -726,6 +726,9 @@ function streaksOf(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
   return streaks;
 }
 
+/** A sharp map that did not load is asked for again after this pause (ms), doubling with each failure. */
+const SHARP_RETRY_MS = 10_000;
+
 /** The scenery of every arena, built once; only the one of the arena in play is shown. */
 export class Landmarks {
   readonly group = new THREE.Group();
@@ -747,8 +750,11 @@ export class Landmarks {
   private readonly planets = new Map<Planet, (map: THREE.Texture) => void>();
   /** The sharp maps (see loadPlanetMap), once asked for, and once loaded. */
   private sharpAsked = false;
+  private sharpFailures = 0;
   private readonly sharp = new Map<Planet, THREE.Texture>();
   private sharpWanted = false;
+  /** The share of detail the rung last asked for (see setDetail). */
+  private detailShare = 0;
   /** What the sun gives the planets, the ring and its specks: its color times its strength over π (Lambert's diffuse light), the arena's (see show). */
   private readonly light = new THREE.Color();
   /** The materials of the ring's specks, which size them by the picture's height (see setViewport). */
@@ -790,9 +796,14 @@ export class Landmarks {
     sizeBeacons(height);
   }
 
+  /** The derelict's mist leaves the torn ends where the halves are now (see Derelict.moveJets). */
+  moveBreak(motions: readonly THREE.Matrix4[]) {
+    if (this.shown === 'derelict') this.wreck.moveJets(motions);
+  }
+
   /** How thick the mist escaping at the derelict's break is at `point` (0..1; 0 in every other arena). */
   mistAt(point: THREE.Vector3): number {
-    return this.shown === 'derelict' ? mistDensity(point) : 0;
+    return this.shown === 'derelict' ? this.wreck.mistAt(point) : 0;
   }
 
   /**
@@ -845,6 +856,7 @@ export class Landmarks {
    * holeDetail says.
    */
   setDetail(share: number) {
+    this.detailShare = share;
     this.holeDetail(share);
     this.sharpWanted = share >= 0.5;
     if (this.sharpWanted && !this.sharpAsked) {
@@ -855,7 +867,12 @@ export class Landmarks {
             this.sharp.set(planet, texture);
             this.useMaps();
           },
-          (error: unknown) => console.warn(`The sharp map of ${planet} did not load`, error),
+          (error: unknown) => {
+            console.warn(`The sharp map of ${planet} did not load`, error);
+            // asked again after a pause, doubling with each failure, so a dropped connection does not keep the planet on its small map for good
+            if (this.sharpAsked) setTimeout(() => this.setDetail(this.detailShare), SHARP_RETRY_MS * 2 ** this.sharpFailures++);
+            this.sharpAsked = false;
+          },
         );
       }
     }

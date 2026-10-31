@@ -55,8 +55,6 @@ export interface CablePath {
   readonly farRock: Asteroid;
   /** The cable from `near` to `far`, over the wrap points between. */
   readonly between: number;
-  /** How close the other end's winch reels it to `far` (see pullOn). */
-  floor: number;
 }
 
 const hit: RayHit = { asteroid: null, distance: 0, center: new THREE.Vector3() };
@@ -76,7 +74,7 @@ export class Cable {
   private readonly points: WrapPoint[] = Array.from({ length: WRAP_MAX }, () => new WrapPoint());
   count = 0;
   /** The path as one end sees it (see path), kept. */
-  private readonly seen: { near: Body; nearRock: Asteroid; far: Body; farRock: Asteroid; between: number; floor: number } = { near: this.points[0].body, nearRock: null!, far: this.points[0].body, farRock: null!, between: 0, floor: 0 };
+  private readonly seen: { near: Body; nearRock: Asteroid; far: Body; farRock: Asteroid; between: number } = { near: this.points[0].body, nearRock: null!, far: this.points[0].body, farRock: null!, between: 0 };
 
   /** The field's revision when the cable last followed it (see AsteroidField.revision), null before it did. */
   private revision: number | null = null;
@@ -96,9 +94,12 @@ export class Cable {
    * The cable stretched from `start` to `end` after a step: its wrap points follow their pieces
    * (a piece broken lets its point go), those the cable lifts off let go, and each stretch that
    * something solid cuts lies on it from now on. False when it snapped (only `strict`, on the
-   * browser that runs the cable; elsewhere it is drawn as well as it goes).
+   * browser that runs the cable; elsewhere it is drawn as well as it goes). `give` (units) is how
+   * far an end jumped this step beyond its own flight: another browser's ship as this browser
+   * predicts it, set right when that browser's word comes late. A piece reaching that much
+   * deeper into a stretch is the jump's sweep, not a cut, and snaps nothing.
    */
-  follow(field: AsteroidField, start: THREE.Vector3, end: THREE.Vector3, strict: boolean): boolean {
+  follow(field: AsteroidField, start: THREE.Vector3, end: THREE.Vector3, strict: boolean, give = 0): boolean {
     // a piece that appeared or jumped since the last step (the pieces of a rock broken under the
     // cable, a piece the lead's sync set at once) did not sweep through it: it lies on them
     const since = this.revision ?? field.revision;
@@ -136,7 +137,7 @@ export class Cable {
         continue;
       }
       const deep = this.wrap(field, hit.asteroid, from, to, k);
-      if (deep > WRAP_DEPTH && hit.asteroid.appeared <= since) whole = false;
+      if (deep > WRAP_DEPTH + give && hit.asteroid.appeared <= since) whole = false;
       // the two new stretches are looked at in turn
       k += 2;
     }

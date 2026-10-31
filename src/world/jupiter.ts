@@ -173,7 +173,7 @@ const POP_CELL = POP_TILE / 16;
 const POP_SHADOW = 0.16;
 const RELIEF = 1000;
 const SHEAR = 40;
-/** The great red storm where the map shows it: its latitude (rad, 22° south), its longitude east of the map's 0 (rad, see landmarks' JUPITER_LONGITUDE), half its height (units, 2.8 km; as an oval 9 km wide). */
+/** The great red storm where the map shows it: its latitude (rad, 22° south), its longitude west of the point below the arena (rad, see landmarks' JUPITER_LONGITUDE), half its height (units, 2.8 km; as an oval 9 km wide). */
 const GREAT_STORM = { latitude: -0.38, longitude: 0.1, height: 56000 };
 
 /**
@@ -190,10 +190,10 @@ export function topsTexture(): THREE.DataTexture {
     let amplitude = 1;
     for (let octave = 0, cells = 4; octave < octaves; octave++, cells *= 2, amplitude *= 0.55) {
       const angles = Float32Array.from({ length: cells * cells }, () => random.nextFloat() * Math.PI * 2);
-      const dot = (i: number, j: number, x: number, y: number) => {
-        const angle = angles[((j + cells) % cells) * cells + ((i + cells) % cells)];
-        return Math.cos(angle) * x + Math.sin(angle) * y;
-      };
+      // the lattice's gradients, their cosines and sines taken once per cell
+      const gradientX = Float64Array.from(angles, Math.cos);
+      const gradientY = Float64Array.from(angles, Math.sin);
+      const at = (i: number, j: number) => ((j + cells) % cells) * cells + ((i + cells) % cells);
       for (let y = 0; y < size; y++) {
         for (let x = 0; x < size; x++) {
           const u = (x / size) * cells;
@@ -204,8 +204,11 @@ export function topsTexture(): THREE.DataTexture {
           const fv = v - j;
           const su = fu * fu * fu * (fu * (fu * 6 - 15) + 10);
           const sv = fv * fv * fv * (fv * (fv * 6 - 15) + 10);
-          const top = dot(i, j, fu, fv) + (dot(i + 1, j, fu - 1, fv) - dot(i, j, fu, fv)) * su;
-          const bottom = dot(i, j + 1, fu, fv - 1) + (dot(i + 1, j + 1, fu - 1, fv - 1) - dot(i, j + 1, fu, fv - 1)) * su;
+          const c00 = at(i, j), c10 = at(i + 1, j), c01 = at(i, j + 1), c11 = at(i + 1, j + 1);
+          const d00 = gradientX[c00] * fu + gradientY[c00] * fv;
+          const d01 = gradientX[c01] * fu + gradientY[c01] * (fv - 1);
+          const top = d00 + (gradientX[c10] * (fu - 1) + gradientY[c10] * fv - d00) * su;
+          const bottom = d01 + (gradientX[c11] * (fu - 1) + gradientY[c11] * (fv - 1) - d01) * su;
           sums[y * size + x] += amplitude * (top + (bottom - top) * sv);
         }
       }
@@ -762,6 +765,8 @@ export class Jupiter {
   private readonly backdrop: THREE.Mesh;
   private strike: Strike | null = null;
   private nextStrike = STRIKE_EVERY;
+  /** The field time of the last frame (see update). */
+  private clockAt = 0;
   /** The map's mean color around the point below the arena (linear). */
   private readonly cloudColor = new THREE.Color(0.55, 0.42, 0.3);
   /** How many samples a ray in the haze takes of its clouds (see CLOUD_SAMPLES). */
@@ -938,10 +943,11 @@ export class Jupiter {
   /**
    * One frame at field time `time`: the sheets drawn from the farthest to the nearest as seen
    * from `eye`, each in the light `shade` says reaches its depth (units); the sky kept around the
-   * eye, the auroras on its horizon; lightning. Returns whether a strike began (its place in
-   * strikePoint), for its thunder.
+   * eye, the auroras on its horizon; lightning, on the field time as its flash is, so a paused
+   * round begins no strike that would stand lit through the pause. Returns whether a strike
+   * began (its place in strikePoint), for its thunder.
    */
-  update(time: number, dt: number, eye: THREE.Vector3, shade: (depth: number) => number): boolean {
+  update(time: number, eye: THREE.Vector3, shade: (depth: number) => number): boolean {
     for (const material of this.timed) material.uniforms.time.value = time;
     const altitude = eye.distanceTo(this.air.center) - this.air.radius;
     for (const { mesh, depth } of this.sheets) {
@@ -961,7 +967,9 @@ export class Jupiter {
     wisps.eye.value.copy(eye);
     wisps.drift.value.set(clouds.x, clouds.y, clouds.z);
     this.auroraHeights(altitude);
-    this.nextStrike -= dt;
+    // a new round starts its clock again: nothing passes for the strikes
+    this.nextStrike -= Math.max(0, time - this.clockAt);
+    this.clockAt = time;
     let begun = false;
     if (this.nextStrike <= 0) {
       this.nextStrike = STRIKE_EVERY * (0.3 + 1.4 * Math.random());

@@ -8,17 +8,16 @@
  * The catalogue (about 0.9 MB) is fetched once into npm's cache directory (SKY_SOURCES moves it)
  * and used only if its SHA-256 is the one pinned here. Run with `npm run sky`.
  */
-import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { fetchPinned, sha256, toolCache, writeWhole } from '../pinned.ts';
 import { magnitudeFlux, spectralBV, STAR_BYTES, starBrightnessCode, starColor } from '../../src/world/starfile.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const out = join(root, 'public/assets/sky/stars.bin');
-const cache = process.env.SKY_SOURCES ?? join(process.env.npm_config_cache ?? join(homedir(), '.npm'), '_solartournament', 'sky');
+const cache = process.env.SKY_SOURCES ?? join(toolCache(), 'sky');
 
 /** The catalogue as HEASARC's archive serves it, and its SHA-256 as fetched on 2026-10-30. */
 const SOURCE = {
@@ -29,19 +28,14 @@ const SOURCE = {
 
 async function source(): Promise<Buffer> {
   const path = join(cache, SOURCE.file);
-  const hash = (bytes: Buffer) => createHash('sha256').update(bytes).digest('hex');
   if (existsSync(path)) {
     const bytes = readFileSync(path);
-    if (hash(bytes) === SOURCE.sha256) return bytes;
+    if (sha256(bytes) === SOURCE.sha256) return bytes;
   }
   console.log(`Fetching ${SOURCE.url}`);
-  const answer = await fetch(SOURCE.url, { signal: AbortSignal.timeout(300000) });
-  if (!answer.ok) throw new Error(`${SOURCE.file} not fetched: HTTP ${answer.status}`);
-  const bytes = Buffer.from(await answer.arrayBuffer());
-  if (hash(bytes) !== SOURCE.sha256) throw new Error(`${SOURCE.file} has SHA-256 ${hash(bytes)}, pinned is ${SOURCE.sha256}: not used`);
+  const bytes = await fetchPinned(SOURCE.url, SOURCE.file, SOURCE.sha256);
   mkdirSync(cache, { recursive: true });
-  writeFileSync(`${path}.part`, bytes);
-  renameSync(`${path}.part`, path);
+  writeWhole(path, bytes);
   return bytes;
 }
 

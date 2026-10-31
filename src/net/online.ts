@@ -8,7 +8,7 @@ import { unpackItems, type ItemKind, type ProbeState } from '../game/items';
 import { Accusations, AIM_SLACK, beamShare, Evidence, ORIGIN_SLACK, Plausibility, plausibleBlast, hookShare, SenderClock, Standings, Strikes, type Cheat, type Margins } from './plausible';
 import { devlog, type SuspicionEvent } from '../devlog';
 import { HOOK_RANGE } from '../game/hook';
-import type { Homing, Torpedo } from '../game/torpedoes';
+import { TORPEDO_GONE_SLACK, type Homing, type Torpedo } from '../game/torpedoes';
 
 /** What the online layer needs from the game. */
 export interface OnlineGame {
@@ -34,7 +34,7 @@ export interface OnlineGame {
   remoteRock(id: string, at: number, round: number): void;
   /** Where a rock of the running round is and how far it reaches: one in the field, or one this browser broke a moment ago; null for none. */
   rockAt(id: string): { position: THREE.Vector3; radius: number } | null;
-  /** Where a part of the President's battleship is, while it is in the arena. */
+  /** Where a part of the President's battleship is, while it is in the arena; null before it arrives, once it went down, and for a part it does not have. */
   fleetZoneAt(zone: number): THREE.Vector3 | null;
   /** The hits a nova core going off this far from a part's center (units) deals it (see Fleet.novaHit). */
   fleetNovaHit(zone: number, distance: number): number;
@@ -73,8 +73,9 @@ export interface OnlineGame {
   /**
    * A ship of another browser took a probe, in the third of a race its browser names: what it
    * held, null when this browser did not have the probe, undefined for an id no probe could have.
+   * With `take` false, only what it held: the probe stays.
    */
-  remoteProbe(id: string, ship: Ship | null, bucket: number): ItemKind | null | undefined;
+  remoteProbe(id: string, ship: Ship | null, bucket: number, take?: boolean): ItemKind | null | undefined;
   /** Whether a ship is close enough to a probe to take it, as this browser sees them (true for a probe it does not have). */
   probeWithin(id: string, ship: Ship): boolean;
   /** A ship of another browser set off its nova core: this browser's ships near it are gone. */
@@ -180,8 +181,12 @@ export class Online {
       from.fromArray(a);
       to.fromArray(b);
       const ship = this.find(shooter);
-      // only a ship that is here fires (what a made-up id did is not kept)
-      if (!ship) return;
+      // a ship not here yet (a bot a new lead adopted under a new id fires before its first
+      // state arrives) leaves its beam as evidence of what it hit, nothing else
+      if (!ship) {
+        this.evidence.beam(shooter, from, to, wall());
+        return;
+      }
       // a living ship's beam leaves from near where it flies here, or it is no beam of its; the
       // next state of the ship judges whether it left along a nose the ship could have had
       if (ship.alive && ship.owner !== null) {
@@ -232,12 +237,14 @@ export class Online {
     session.onWreck = (id) => game.remoteWreck(id);
     session.onFleetHit = (zone, round, shooter, count, nova) => {
       // a living shooter's beam that ended on the part, a torpedo that went off there (also
-      // one whose shooter died while it flew), or its nova core that went off near enough
+      // one whose shooter died while it flew), or its nova core that went off near enough; and
+      // only on a part the battleship of the running round has, while it is in the arena here
+      // (nothing hits it before it arrives or once it went down)
       const ship = this.find(shooter);
-      if (!ship) return;
       const part = round === game.roundId ? game.fleetZoneAt(zone) : null;
+      if (!ship || !part) return;
       const dealt = nova ? (distance: number) => game.fleetNovaHit(zone, distance) : null;
-      if (!this.evidence.fleetHit(shooter, ship.alive, part, count, EVIDENCE_REACH, this.session.justJoined, wall(), dealt)) return;
+      if (!this.evidence.fleetHit(shooter, ship.alive, zone, part, count, EVIDENCE_REACH, this.session.justJoined, wall(), dealt)) return;
       game.remoteFleetHit(zone, round, ship, count);
     };
     session.onRam = (state, round) => game.remoteRam(state, round);
@@ -255,24 +262,28 @@ export class Online {
     session.onTorpedoGone = (id, p, shooter, holder) => {
       from.fromArray(p);
       // the browser that launched it says where it went off, or the one whose ship took it on
-      // its hook (as this browser heard); another one only shot it down with a beam that ended there
+      // its hook (as this browser heard); another one only shot it down with a beam that ended
+      // there. Where it went off is evidence for its hits on the battleship only for a torpedo
+      // that flew here too and went off near where this browser has it (see Evidence.blast)
+      const torpedo = game.recentTorpedo(id);
+      const near = torpedo !== null && torpedo.position.distanceTo(from) <= TORPEDO_GONE_SLACK;
       if (holder !== null) {
-        const torpedo = game.recentTorpedo(id);
         if (!torpedo || (torpedo.holder?.id !== holder && torpedo.flinger?.id !== holder)) return;
-        this.evidence.blast(holder, from, wall());
+        if (near) this.evidence.blast(holder, id, from, wall());
       } else if (shooter === null) {
-        const launcher = id.slice(0, id.lastIndexOf('.'));
-        if (this.find(launcher)) this.evidence.blast(launcher, from, wall());
+        if (near && torpedo.shooter.id === id.slice(0, id.lastIndexOf('.'))) this.evidence.blast(torpedo.shooter.id, id, from, wall());
       } else if (!this.evidence.beamEnded(shooter, from, EVIDENCE_REACH, wall())) return;
       game.remoteTorpedoGone(id, from);
     };
     session.onProbe = (id, ship, bucket) => {
       const taker = this.find(ship);
       // taken only by a ship near the probe, as this browser sees them; one refused here (lag may
-      // have put the taker too far) may still have held a nova core it sets off later. The checks
-      // count each probe once (see Plausibility.probe), and only for a ship that is here
+      // have put the taker too far) still counts for what the probe held here, should it be the
+      // first to name it: its ship may set off a nova core from it later. The checks count each
+      // probe once (see Plausibility.probe), and only for a ship that is here
       if (taker && !game.probeWithin(id, taker)) {
-        this.plausible.probe(ship, id, null, wall());
+        const held = game.remoteProbe(id, taker, bucket, false);
+        if (held !== undefined) this.plausible.probe(ship, id, held, wall(), false);
         return;
       }
       const kind = game.remoteProbe(id, taker, bucket);

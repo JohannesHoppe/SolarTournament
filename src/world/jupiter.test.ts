@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { topsTexture } from './jupiter';
 
@@ -55,5 +56,9 @@ describe("Jupiter's cloud tops", () => {
     expect(covered / (size * size)).toBeGreaterThan(0.03);
     expect(covered / (size * size)).toBeLessThan(0.2);
     expect(topsTexture().image.data).toEqual(data);
+  });
+
+  it('are the very same texels on every machine', () => {
+    expect(createHash('sha256').update(data).digest('hex')).toBe('eb67f76b30e6a9a2d8b4eda941b0264b64fa0866d3f3e554f56b4630697a1f83');
   });
 });

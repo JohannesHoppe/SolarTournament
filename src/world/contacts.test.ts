@@ -206,16 +206,22 @@ describe("the lead's word", () => {
       follower.setClock(lead.clock - random.nextFloat() / 30);
       for (const state of contacts.run(lead)) {
         const piece = follower.asteroids.get(state.id)!;
-        worst = Math.max(worst, knockShare(follower.positionOf(piece, state.b, at), told.fromArray(state.p), Math.hypot(...state.v)));
+        const gap = contacts.gap(follower, piece, state.b);
+        worst = Math.max(worst, knockShare(follower.positionOf(piece, state.b, at), told.fromArray(state.p), Math.hypot(...state.v), state.b - follower.clock, gap));
         checked++;
         follower.move(state);
       }
     }
     expect(checked).toBeGreaterThan(20);
     expect(worst).toBeLessThan(0.5);
-    // a piece flung 60 m, or off at 300 m/s, is not taken
-    expect(knockShare(at.set(0, 0, 0), told.set(1200, 0, 0), 100)).toBeGreaterThan(1);
-    expect(knockShare(at.set(0, 0, 0), told.set(10, 0, 0), 6000)).toBeGreaterThan(1);
+    // a piece flung 60 m, off at 300 m/s, dated 5 s back, or 60 m clear of anything it could have struck, is not taken
+    expect(knockShare(at.set(0, 0, 0), told.set(1200, 0, 0), 100, 0, 0)).toBeGreaterThan(1);
+    expect(knockShare(at.set(0, 0, 0), told.set(10, 0, 0), 6000, 0, 0)).toBeGreaterThan(1);
+    expect(knockShare(at.set(0, 0, 0), told.set(10, 0, 0), 100, -5, 0)).toBeGreaterThan(1);
+    expect(knockShare(at.set(0, 0, 0), told.set(10, 0, 0), 100, 0, 1200)).toBeGreaterThan(1);
+    // the junk lies apart: most of it flies alone, far from anything it could strike
+    const gaps = [...follower.asteroids.values()].map((piece) => contacts.gap(follower, piece, follower.clock));
+    expect(gaps.filter((gap) => gap > 1000).length).toBeGreaterThan(gaps.length / 2);
   }, 120000);
 });
 

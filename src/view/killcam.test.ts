@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Ship } from '../ship/ship';
 import type { Effects } from './effects';
-import { KillCam } from './killcam';
+import { KillCam, runStartsAt } from './killcam';
 
 /** A ship as the kill cam sees it: its flight, its picture, alive, its size. */
 function ship(): Ship {
@@ -41,5 +41,28 @@ describe('the kill cam', () => {
     }
     // the pictures go back to where the ships are
     expect(killer.root.position.x).toBe(0);
+  });
+
+  it('starts the replay after the recording gap of a respawn, never sweeping the ships across it', () => {
+    expect(runStartsAt([0, 0.5, 1, 8, 8.5, 9, -Infinity], 1)).toBe(8);
+    expect(runStartsAt([3, 2, 1], 1)).toBe(1);
+    expect(runStartsAt([-Infinity], 1)).toBe(Infinity);
+    const killcam = new KillCam({ beam: () => {} } as unknown as Effects);
+    const killer = ship();
+    const victim = ship();
+    // life one up to 2 s, a gap while the first replay and the sponsor break run, life two from 9 s; killed again at 9.5 s
+    const times = [...Array.from({ length: 41 }, (_, i) => i / 20), ...Array.from({ length: 11 }, (_, i) => 9 + i / 20)];
+    for (const time of times) {
+      killer.flight.position.set(time < 5 ? time * 1000 : 50000, 0, 0);
+      killcam.record(time, [killer, victim]);
+    }
+    const clock = vi.spyOn(performance, 'now');
+    clock.mockReturnValue(0);
+    killcam.start(killer, victim, 9.5);
+    const camera = new THREE.PerspectiveCamera();
+    // the first moments of the replay show life two (the first frame since the gap), not a position between the lives
+    expect(killcam.pose(camera)).toBe(true);
+    expect(killer.root.position.x).toBe(50000);
+    killcam.restore();
   });
 });

@@ -102,6 +102,15 @@ describe('the governor', () => {
     expect(governor.cap).toBe(0);
   });
 
+  it('does not take a fill-rate-bound GPU for a capped screen: rungs that only thin rocks gain nothing', () => {
+    // 40 frames/s on the first rungs (rocks only), the lower resolutions run at 52
+    const fps = (rung: number) => (LADDER[rung].pixelRatio < LADDER[0].pixelRatio ? 52 : 40 + rung * 0.4);
+    const governor = new Governor(0);
+    run(governor, 600, fps, 0.2);
+    expect(governor.cap).toBe(0);
+    expect(governor.rung).toBeGreaterThanOrEqual(3);
+  });
+
   it('steps down under a cap once the device itself gets slower than the cap', () => {
     const governor = new Governor(2);
     run(governor, 120, 30, 0.25);

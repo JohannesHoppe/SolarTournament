@@ -54,8 +54,8 @@ function lattice(x: number, y: number, seed: number): number {
   return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
 }
 
-/** Smooth value noise of a seed at (x, y). */
-function noise(x: number, y: number, seed: number): number {
+/** Smooth value noise of a seed at (x, y), 0..1, from integer hashing only (the surfaces' brushed grain and the soft dust clouds of world/mining use it too). */
+export function noise(x: number, y: number, seed: number): number {
   const x0 = Math.floor(x);
   const y0 = Math.floor(y);
   const fx = x - x0;

@@ -25,6 +25,7 @@ The files at this level:
 - `radio-page.ts`: starts the radio page (tune in a title, play it, download it as WAV).
 - `handbook-page.ts`: starts the Pilot's Handbook (`handbook.html`): translates it into the Host's language and fills in the game's numbers.
 - `assets.ts`: loads the ship models, drive sprites and the planets' maps (the sharp ones only when the picture's quality asks for them), collects what is generated in code.
+- `srgb.ts`: linear light as an sRGB byte, shared by the pictures baked in code.
 - `random.ts`: the seeded random generator every browser shares, so all see the same world.
 - `storage.ts`: the browser's localStorage, safe where it is unavailable.
 - `recorder.ts`: the input recorder, a ring buffer of the own ship's last minute step by step (the Host's controls, the mouse pointer, the commands flown, the ship before the step), read in the console as `game.recorder` and saved with `game.recorder.download()`; replayed in tests by `src/test/cockpit.ts`; only in development, null and free in production.

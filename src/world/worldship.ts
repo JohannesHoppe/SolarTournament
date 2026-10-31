@@ -228,7 +228,7 @@ export function paint(lettering: Lettering, seed: number, x: number, y: number, 
  * `glass`, the ring to `parts`, the garden to `garden`.
  */
 export function biodome(r: Randomizer, x: number, y: number, z: number, radius: number, rise: number, glass: THREE.BufferGeometry[], parts: THREE.BufferGeometry[], garden: THREE.BufferGeometry[]) {
-  const shell = new THREE.IcosahedronGeometry(radius, 1).toNonIndexed();
+  const shell = new THREE.IcosahedronGeometry(radius, 1); // a polyhedron is built non-indexed
   const from = shell.getAttribute('position');
   const kept: number[] = [];
   for (let f = 0; f < from.count; f += 3) {
@@ -266,7 +266,7 @@ export function biodome(r: Randomizer, x: number, y: number, z: number, radius: 
     const angle = r.range(0, Math.PI * 2);
     const out = r.range(0.2, 0.85) * radius;
     const size = r.range(0.04, 0.09) * radius;
-    garden.push(new THREE.IcosahedronGeometry(size, 0).scale(1, 0.6, 1).translate(x + Math.cos(angle) * out, y + radius * 0.06 + size * 0.4, z + Math.sin(angle) * out).toNonIndexed());
+    garden.push(new THREE.IcosahedronGeometry(size, 0).scale(1, 0.6, 1).translate(x + Math.cos(angle) * out, y + radius * 0.06 + size * 0.4, z + Math.sin(angle) * out));
   }
 }
 

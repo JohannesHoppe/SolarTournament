@@ -58,7 +58,6 @@ function swing(field: AsteroidField, flight: FlightModel, anchor: THREE.Vector3,
     whole = cable.follow(field, anchor, flight.position, t > 0);
     if (!whole) break;
     const path = cable.path(true);
-    if (path) path.floor = 0;
     const rock = path ? path.nearRock : field.asteroids.values().next().value!;
     length = pullOn(body(flight), fixed(anchor), length, reeling, clearOf(SHIP, rock), MAX_SPEED, DT, 'fixed', path);
     flight.position.addScaledVector(flight.velocity, DT);
@@ -168,7 +167,6 @@ describe('a cable lying on the field', () => {
     cable.follow(field, start, flight.position, true);
     expect(cable.count).toBeGreaterThan(0);
     const path = cable.path(true)!;
-    path.floor = 0;
     const toward = path.near.position.clone().sub(flight.position).normalize();
     pullOn(body(flight), fixed(start), cable.length(start, flight.position), true, clearOf(SHIP, rock), MAX_SPEED, DT, 'fixed', path);
     expect(flight.velocity.clone().normalize().dot(toward)).toBeGreaterThan(0.999);
@@ -225,8 +223,7 @@ describe('a cable lying on the field', () => {
       expect(cable.follow(field, core.position, ship.position, true)).toBe(true);
       wrapped ||= cable.count > 0;
       const path = cable.path(false);
-      if (path) path.floor = length;
-      cord = pullOn(core, body(ship), cord, false, length, Infinity, DT, 'moved', path);
+      cord = pullOn(core, body(ship), cord, false, length, Infinity, DT, 'moved', path, length);
       core.position.addScaledVector(core.velocity, DT);
       ship.position.addScaledVector(ship.velocity, DT);
       expect(field.overlap(core.position, 100)).toBeNull();

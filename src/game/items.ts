@@ -6,6 +6,7 @@ import { contact, IMMOVABLE, MASS } from '../world/bodies';
 import type { Ship } from '../ship/ship';
 import { msg } from '../i18n/i18n';
 import { inGrip, WELL_WARNING } from './alarms';
+import { hazeUniforms } from '../view/haze';
 import { shine, solarWing, surfaced, WING_BACK, WING_CELLS_ACROSS, WING_CELLS_ALONG, WING_FRONT, wornSurface, type Wear } from '../view/surfaces';
 
 /** The wear of a sponsor's probe (see wornSurface). */
@@ -151,9 +152,10 @@ const NEON_NEAR = 0.35;
 const NEON_CLOSE = 300;
 const NEON_FULL = 2000;
 
-/** A neon material that dims up close (see NEON_NEAR), by its depth in the view, in its own shaders. */
+/** A neon material that dims up close (see NEON_NEAR), by its depth in the view, in its own shaders; in a planet's haze it fades as everything does. */
 function nearDim(material: THREE.MeshBasicMaterial): THREE.MeshBasicMaterial {
   material.onBeforeCompile = (shader) => {
+    hazeUniforms(shader, material);
     shader.vertexShader = shader.vertexShader.replace('void main() {', 'varying float vNeon;\nvoid main() {').replace('#include <project_vertex>', `#include <project_vertex>\n  vNeon = mix(${NEON_NEAR.toFixed(2)}, 1.0, smoothstep(${NEON_CLOSE.toFixed(1)}, ${NEON_FULL.toFixed(1)}, -mvPosition.z));`);
     shader.fragmentShader = shader.fragmentShader.replace('void main() {', 'varying float vNeon;\nvoid main() {').replace('#include <color_fragment>', '#include <color_fragment>\n  diffuseColor.rgb *= vNeon;');
   };
