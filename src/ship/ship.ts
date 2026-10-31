@@ -501,6 +501,7 @@ export class Ship {
     this.plating = 0;
     this.nova = false;
     this.heat = 0;
+    this.glow = 0;
     this.overheated = false;
     this.strain = 0;
     this.driveOfflineUntil = 0;
@@ -610,6 +611,7 @@ export class Ship {
       // the owner booted a new clone
       this.alive = true;
       this.heat = 0;
+      this.glow = 0;
       this.holes.length = 0;
       this.root.visible = true;
       this.flight.position.copy(r.position);
