@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { contact, IMMOVABLE, MASS, share, type Body } from '../world/bodies';
+import { pow } from '../detmath';
 
 /** Impacts slower than this (units/s) only scratch the paint. */
 export const SAFE_IMPACT = 250;
@@ -82,7 +83,7 @@ export type RamZone = 'nose' | 'flank' | 'drive';
 /** What a ram closing at `closing` (units/s) does to a ship struck in `zone`: hull points, and shares of the drive's and the thrusters' health. */
 export function ramDamage(closing: number, zone: RamZone): { hull: number; drive: number; thrusters: number } {
   if (closing <= RAM_SAFE) return { hull: 0, drive: 0, thrusters: 0 };
-  const blow = ((closing - RAM_SAFE) / RAM_SCALE) ** 2;
+  const blow = pow((closing - RAM_SAFE) / RAM_SCALE, 2);
   if (zone === 'drive') return { hull: Math.max(RAM_LEAST, blow), drive: Math.max(RAM_LEAST_DRIVE, blow / RAM_DRIVE), thrusters: 0 };
   const hull = Math.max(RAM_LEAST, blow * (zone === 'nose' ? RAM_NOSE : RAM_FLANK));
   return { hull, drive: 0, thrusters: zone === 'flank' ? Math.min(1, hull * RAM_THRUSTERS) : 0 };

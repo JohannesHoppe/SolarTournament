@@ -13,6 +13,7 @@ import { WELL_GAUGE, WELL_LOST, wellLevel, type Alarm, type AlarmLevel } from '.
 import type { Orbit, OrbitState } from '../game/orbit';
 import type { Reference } from '../world/arenas';
 import { climbOf, closure, heightOf } from '../world/reference';
+import { atan2 } from '../detmath';
 
 /** The master caution above the alarm list names the worst level. */
 const MASTER: Record<AlarmLevel, string> = { caution: msg('CAUTION'), warning: msg('WARNING'), critical: msg('CRITICAL') };
@@ -577,7 +578,7 @@ export class Hud {
       if (!alarm.hasDirection) continue;
       // the direction as the screen sees it: right and up of the camera
       toward.copy(alarm.direction).applyQuaternion(unturn.copy(camera.quaternion).invert());
-      const angle = Math.round(THREE.MathUtils.radToDeg(Math.atan2(toward.x, toward.y)) / ARROW_STEP) * ARROW_STEP;
+      const angle = Math.round(THREE.MathUtils.radToDeg(atan2(toward.x, toward.y)) / ARROW_STEP) * ARROW_STEP;
       if (angle === line.angle) continue;
       line.angle = angle;
       line.arrow.style.rotate = `${angle}deg`;

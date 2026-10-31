@@ -12,6 +12,8 @@ import { packItems, unpackItems } from '../game/items';
 import { packLooks, STOCK, unpackLooks, type Perks } from '../game/hangar';
 import { runningLight } from '../view/textures';
 import { botTint, SOVEREIGN_TINT, TINTS } from './tints';
+import { cos, exp, hypot, pow, sin } from '../detmath';
+import { setFromAxisAngle, slerp } from '../detthree';
 
 /** Hull integrity of an intact ship. There are no shields: every hit stays. */
 export const MAX_HULL = 100;
@@ -28,7 +30,7 @@ const ARMOR_DAMAGE = 2;
 const DRIVE_HIT = 0.2;
 /** Half the opening angle of the cone behind a ship from which a beam reaches the drive (rad, 50°). */
 const REAR_CONE = 0.87;
-const REAR_CONE_COS = Math.cos(REAR_CONE);
+const REAR_CONE_COS = cos(REAR_CONE);
 /** Damage a beam into the flanks deals to the maneuvering thrusters (0..1), on top of the armor. */
 const THRUSTER_HIT = 0.1;
 /** Holes a hull keeps at most (four hits from behind); the oldest has vented long since and goes first. */
@@ -105,7 +107,7 @@ export function noseOn(shooter: FlightModel, at: THREE.Vector3, radius: number):
   const line = local.subVectors(at, shooter.position);
   const distance = line.length();
   if (distance > LOCK_RANGE) return 0;
-  const angle = shooter.angleTo(line);
+  const angle = shooter.noseAngleTo(line);
   const size = radius / Math.max(distance, 1);
   return angle < size ? 2 : angle < size * LOCK_TRACKING ? 1 : 0;
 }
@@ -472,7 +474,7 @@ export class Ship {
   pulse(now: number) {
     this.aura.visible = this.nova && this.alive;
     if (!this.aura.visible) return;
-    const beat = 0.5 + 0.5 * Math.sin(now * NOVA_PULSE * Math.PI * 2);
+    const beat = 0.5 + 0.5 * sin(now * NOVA_PULSE * Math.PI * 2);
     this.aura.scale.setScalar(this.radius * (5 + 3 * beat));
     this.aura.material.color.setHSL((now * 0.4) % 1, 1, 0.5).multiplyScalar(1.5 + 2 * beat);
   }
@@ -690,7 +692,7 @@ export class Ship {
     firing(this.nozzles, jetPush, f.turnThrust, firingNow);
     for (let i = 0; i < NOZZLES; i++) {
       const target = this.alive ? firingNow[i] : 0;
-      this.jets[i] += (target - this.jets[i]) * (1 - Math.exp(-(target > this.jets[i] ? JET_RISE : JET_FALL) * dt));
+      this.jets[i] += (target - this.jets[i]) * (1 - exp(-(target > this.jets[i] ? JET_RISE : JET_FALL) * dt));
     }
   }
 
@@ -707,19 +709,19 @@ export class Ship {
     const r = this.remote;
     const age = Math.min(now - r.at, 1);
     local.copy(r.position).addScaledVector(r.velocity, age);
-    const blend = 1 - Math.exp(-12 * dt);
+    const blend = 1 - exp(-12 * dt);
     const spin = r.spin.length();
     // the shown ship moves and turns on as predicted first, and the blend only takes out the
     // correction; so it is drawn where the prediction says, not a stretch of travel behind
     this.flight.position.addScaledVector(r.velocity, dt);
-    if (spin > 1e-6) this.flight.orientation.multiply(spinStep.setFromAxisAngle(offset.copy(r.spin).divideScalar(spin), spin * dt));
+    if (spin > 1e-6) this.flight.orientation.multiply(setFromAxisAngle(spinStep, offset.copy(r.spin).divideScalar(spin), spin * dt));
     const gap = this.flight.position.distanceTo(local);
     if (gap > 4000) this.flight.position.copy(local);
     else this.flight.position.lerp(local, blend);
     this.corrected = gap > 4000 ? gap : gap * blend;
     inverse.copy(r.orientation);
-    if (spin > 1e-6) inverse.multiply(spinStep.setFromAxisAngle(offset.copy(r.spin).divideScalar(spin), spin * age));
-    this.flight.orientation.slerp(inverse, blend);
+    if (spin > 1e-6) inverse.multiply(setFromAxisAngle(spinStep, offset.copy(r.spin).divideScalar(spin), spin * age));
+    slerp(this.flight.orientation, inverse, blend);
     this.show(dt, now);
   }
 
@@ -733,10 +735,10 @@ export class Ship {
 
   /** The radiators glow as hot as the ship is (see RADIATOR_GLOW): dull red, then orange-red; unseen while cool. */
   private radiate(dt: number) {
-    this.glow += (this.heat / MAX_HEAT - this.glow) * (1 - Math.exp(-dt / RADIATOR_LAG));
+    this.glow += (this.heat / MAX_HEAT - this.glow) * (1 - exp(-dt / RADIATOR_LAG));
     const t = THREE.MathUtils.smoothstep(this.glow, RADIATOR_GLOW, 1);
     this.radiators.visible = t > 0.01;
-    if (this.radiators.visible) this.radiators.material.color.setRGB(0.95 * t ** 1.5, 0.22 * t ** 3, 0.03 * t ** 5);
+    if (this.radiators.visible) this.radiators.material.color.setRGB(0.95 * pow(t, 1.5), 0.22 * t * t * t, 0.03 * pow(t, 5));
   }
 
   /**
@@ -781,7 +783,7 @@ export class Ship {
 
   /** Strength of a hole's venting, 1 right after the hit, fading to 0. */
   ventStrength(hole: Hole, now: number) {
-    return hole.size * Math.exp(-(now - hole.at) / VENT_TIME);
+    return hole.size * exp(-(now - hole.at) / VENT_TIME);
   }
 
   private vent(now: number) {
@@ -809,7 +811,7 @@ export class Ship {
       // the armor takes it: a scorch mark and a few points, no hole; a beam into the flanks,
       // more than 45° off the ship's axis, also shakes the maneuvering thrusters
       this.flight.toLocalDirection(direction, local);
-      const flank = Math.hypot(local.x, local.y) > Math.abs(local.z);
+      const flank = hypot(local.x, local.y) > Math.abs(local.z);
       if (flank) this.thrusters = Math.max(0, this.thrusters - THRUSTER_HIT * weight);
       return { status: this.structural(ARMOR_DAMAGE * weight, now), zone: flank ? 'thrusters' : 'armor' };
     }
@@ -844,7 +846,7 @@ export class Ship {
     let zone: RamZone = 'drive';
     if (!this.tailToward(direction)) {
       this.flight.toLocalDirection(direction, local);
-      zone = Math.hypot(local.x, local.y) > Math.abs(local.z) ? 'flank' : 'nose';
+      zone = hypot(local.x, local.y) > Math.abs(local.z) ? 'flank' : 'nose';
     }
     if (!this.alive || now < this.protectedUntil) return { status: 'protected', zone };
     const damage = ramDamage(closing, zone);

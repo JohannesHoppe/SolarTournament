@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { expect } from 'vitest';
 import { Randomizer } from '../random';
 import { cubeDirection, cubeTexel as glTexel } from '../world/celestial';
+import { acos } from '../detmath';
 
 /**
  * Reading a baked cube map back the way the GPU does, for the tests of the relief maps of rock
@@ -79,10 +80,10 @@ export function normalFit(map: THREE.CubeTexture, res: number, reference: (d: TH
     const center = texelCenter(face, i, j, res);
     const expected = reference(center);
     const normal = decode(texel(map, face, i, j));
-    angles.push(Math.acos(Math.min(1, normal.dot(expected))));
+    angles.push(acos(Math.min(1, normal.dot(expected))));
     if (normal.dot(d) > 0.3) outward++;
     const m = cubeTexel(center, res, true);
-    mirrored.push(Math.acos(Math.min(1, decode(texel(map, m.face, m.i, m.j)).dot(expected))));
+    mirrored.push(acos(Math.min(1, decode(texel(map, m.face, m.i, m.j)).dot(expected))));
   }
   return { angle: median(angles), mirrored: median(mirrored), outward: outward / sample.length };
 }

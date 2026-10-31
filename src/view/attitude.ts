@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { footOf, PLANE_UP, skyPointer } from '../world/reference';
 import { Overlay } from './overlay';
+import { atan2, cos, hypot, sin } from '../detmath';
 
 /**
  * The flight computer keeps the ship upright to the arena (its north pole is up), and the
@@ -104,7 +105,7 @@ export class Attitude extends Overlay {
     context.font = '11px ui-monospace, Menlo, Consolas, monospace';
     for (let pitch = -90; pitch <= 90; pitch += PITCH_STEP) this.rung(camera, pitch);
     if (tape) {
-      this.tape(Math.atan2(forward.x, -forward.z));
+      this.tape(atan2(forward.x, -forward.z));
       this.bank(skyPointer(camera.quaternion));
     }
   }
@@ -112,7 +113,7 @@ export class Attitude extends Overlay {
   /** The horizon (pitch 0) or a rung of the ladder, where that elevation lies ahead in the picture. */
   private rung(camera: THREE.Camera, pitch: number) {
     const angle = THREE.MathUtils.degToRad(pitch);
-    direction.copy(level).multiplyScalar(Math.cos(angle)).addScaledVector(PLANE_UP, Math.sin(angle));
+    direction.copy(level).multiplyScalar(cos(angle)).addScaledVector(PLANE_UP, sin(angle));
     at.copy(camera.position).addScaledVector(direction, FAR).project(camera);
     if (at.z > 1) return;
     const x = ((at.x + 1) / 2) * this.width;
@@ -122,7 +123,7 @@ export class Attitude extends Overlay {
     beside.copy(camera.position).addScaledVector(direction, FAR).addScaledVector(side, FAR * 0.05).project(camera);
     let dx = ((beside.x + 1) / 2) * this.width - x;
     let dy = ((1 - beside.y) / 2) * this.height - y;
-    const length = Math.hypot(dx, dy) || 1;
+    const length = hypot(dx, dy) || 1;
     dx /= length;
     dy /= length;
     const half = (pitch === 0 ? HORIZON_HALF : RUNG_HALF) * this.width;
@@ -170,27 +171,27 @@ export class Attitude extends Overlay {
       const long = degrees === 0 || degrees === 30 ? 9 : 5;
       for (let sign = -1; sign <= (degrees ? 1 : -1); sign += 2) {
         const angle = THREE.MathUtils.degToRad(degrees * sign);
-        const sin = Math.sin(angle);
-        const cos = Math.cos(angle);
-        context.moveTo(x + sin * radius, y - cos * radius);
-        context.lineTo(x + sin * (radius + long), y - cos * (radius + long));
+        const sinA = sin(angle);
+        const cosA = cos(angle);
+        context.moveTo(x + sinA * radius, y - cosA * radius);
+        context.lineTo(x + sinA * (radius + long), y - cosA * (radius + long));
       }
     }
     context.stroke();
     if (Number.isNaN(sky)) return;
     const angle = THREE.MathUtils.clamp(sky, -THREE.MathUtils.degToRad(BANK_SPAN), THREE.MathUtils.degToRad(BANK_SPAN));
-    const sin = Math.sin(angle);
-    const cos = Math.cos(angle);
+    const sinA = sin(angle);
+    const cosA = cos(angle);
     // a triangle inside the arc, its tip on it
-    const tipX = x + sin * (radius - 1);
-    const tipY = y - cos * (radius - 1);
-    const baseX = x + sin * (radius - 9);
-    const baseY = y - cos * (radius - 9);
+    const tipX = x + sinA * (radius - 1);
+    const tipY = y - cosA * (radius - 1);
+    const baseX = x + sinA * (radius - 9);
+    const baseY = y - cosA * (radius - 9);
     context.fillStyle = LINE_STRONG;
     context.beginPath();
     context.moveTo(tipX, tipY);
-    context.lineTo(baseX + cos * 5, baseY + sin * 5);
-    context.lineTo(baseX - cos * 5, baseY - sin * 5);
+    context.lineTo(baseX + cosA * 5, baseY + sinA * 5);
+    context.lineTo(baseX - cosA * 5, baseY - sinA * 5);
     context.closePath();
     context.fill();
   }

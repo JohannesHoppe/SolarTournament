@@ -51,7 +51,7 @@ describe('the maneuvering thrusters', () => {
           expect(fired, `axis ${k} ${sign}`).toBeGreaterThanOrEqual(2);
           expect(push.length(), `axis ${k} ${sign}`).toBeLessThan(1e-6);
           expect(turn.getComponent(k) * sign, `axis ${k} ${sign}`).toBeGreaterThan(0);
-          expect(Math.sqrt(turn.lengthSq() - turn.getComponent(k) ** 2), `axis ${k} ${sign}`).toBeLessThan(0.15 * Math.abs(turn.getComponent(k)));
+          expect(Math.sqrt(turn.lengthSq() - turn.getComponent(k) * turn.getComponent(k)), `axis ${k} ${sign}`).toBeLessThan(0.15 * Math.abs(turn.getComponent(k)));
         }
       }
     });

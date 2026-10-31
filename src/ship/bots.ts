@@ -8,6 +8,7 @@ import { escapeLoad } from '../game/alarms';
 import { devlog } from '../devlog';
 import { ringRim } from '../world/gates';
 import { airHeat, altitudeIn, heatSpeed, LOCK_DEPTH, RADAR_DEPTH, SIGHT_DEPTH } from '../world/air';
+import { exp, hypot } from '../detmath';
 
 /** Bots notice ships within this distance (units, 3.5 km: across the whole field), when no rock is in the way, so the fight finds a Host quickly. */
 const SIGHT_RANGE = 70000;
@@ -594,12 +595,12 @@ export class Bot {
     const burning = danger || !!this.flee || (!defending && !lookingBack && error.length() > BURN_THRESHOLD && (racing || !(((target && targetDistance < FIRE_RANGE) || sieging) && !this.ship.overheated)));
     if (burning) {
       me.steer(error, 2.5, controls);
-      controls.thrust = me.angleTo(error) < 0.25 ? 1 : 0;
-    } else if (target && (!racing || lookingBack || me.angleTo(line.subVectors(target.flight.position, me.position)) < RACE_AIM_CONE)) {
+      controls.thrust = me.noseAngleTo(error) < 0.25 ? 1 : 0;
+    } else if (target && (!racing || lookingBack || me.noseAngleTo(line.subVectors(target.flight.position, me.position)) < RACE_AIM_CONE)) {
       aimPoint.copy(target.flight.position).addScaledVector(this.aimOffset, this.aimError(targetDistance)).add(this.jinkOffset);
       me.steer(aimPoint.sub(me.position), 3, controls);
       const angularSize = (target.radius * 0.8) / Math.max(targetDistance, 1);
-      const onTarget = me.angleTo(aimPoint) < angularSize + this.ship.radius / Math.max(targetDistance, 1);
+      const onTarget = me.noseAngleTo(aimPoint) < angularSize + this.ship.radius / Math.max(targetDistance, 1);
       this.onTargetFor = onTarget ? this.onTargetFor + dt : 0;
       const reaction = reactionOf(this.skills.reflexes) + EASE_REACTION * this.ease + STRAIN_REACTION * this.ship.strain;
       // a shot into the drive is worth the heat; at the armor a bot only snipes now and then,
@@ -613,7 +614,7 @@ export class Bot {
     } else if (sieging) {
       // a part of a battleship holds still: the nose on it, and fire while the laser allows
       me.steer(toTarget, 3, controls);
-      controls.fire = me.angleTo(toTarget) < SIEGE_AIM && !this.ship.overheated && this.ship.heat < this.hotHeat;
+      controls.fire = me.noseAngleTo(toTarget) < SIEGE_AIM && !this.ship.overheated && this.ship.heat < this.hotHeat;
     } else {
       me.steer(toTarget, 2.5, controls);
     }
@@ -684,7 +685,7 @@ export class Bot {
       if (!field.raycast(ship.flight.position, away, SHOVE_TARGET, true, wayHit)) continue;
       // the thrusters kick sideways and up and down: a rival ahead or behind is out of reach
       me.toLocalDirection(away, away);
-      if (Math.hypot(away.x, away.y) < 0.7) continue;
+      if (hypot(away.x, away.y) < 0.7) continue;
       this.nextShove = now + SHOVE_PAUSE;
       if (Math.random() > this.skills.daring) return null;
       this.shoveDriftUntil = now + SHOVE_DRIFT_SECONDS;
@@ -788,7 +789,7 @@ export class Bot {
    */
   private byHand(wanted: Controls, dt: number): Controls {
     const hand = this.hand;
-    const k = 1 - Math.exp(-dt / (HAND_TIME_SLOW - (HAND_TIME_SLOW - HAND_TIME_FAST) * this.skills.reflexes));
+    const k = 1 - exp(-dt / (HAND_TIME_SLOW - (HAND_TIME_SLOW - HAND_TIME_FAST) * this.skills.reflexes));
     hand.yaw += (wanted.yaw - hand.yaw) * k;
     hand.pitch += (wanted.pitch - hand.pitch) * k;
     hand.roll += (wanted.roll - hand.roll) * k;
@@ -822,7 +823,7 @@ export class Bot {
       if (ship === this.ship || ship === prey || !ship.alive || ship.allyOf(prey)) continue;
       if (ship.flight.position.distanceTo(eye) >= sight) continue;
       const line = hunt.subVectors(prey.flight.position, ship.flight.position);
-      if (line.length() > FIRE_RANGE || ship.flight.angleTo(line) > HUNT_ANGLE || !field.lineOfSight(eye, ship.flight.position)) continue;
+      if (line.length() > FIRE_RANGE || ship.flight.noseAngleTo(line) > HUNT_ANGLE || !field.lineOfSight(eye, ship.flight.position)) continue;
       hunters++;
     }
     return hunters;
@@ -846,7 +847,7 @@ export class Bot {
     this.lastTargetVelocity.copy(velocity);
     line.subVectors(target.flight.position, this.ship.flight.position).normalize();
     jinkStep.addScaledVector(line, -jinkStep.dot(line));
-    this.jink += (jinkStep.length() / dt - this.jink) * (1 - Math.exp(-dt / JINK_MEMORY));
+    this.jink += (jinkStep.length() / dt - this.jink) * (1 - exp(-dt / JINK_MEMORY));
     if (now < this.nextJinkRoll) return;
     this.nextJinkRoll = now + 0.2 + Math.random() * 0.2;
     const scatter = Math.min(JINK_SCATTER_MAX, this.jink / (RCS_THRUST * JINK_SCATTER));

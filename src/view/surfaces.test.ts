@@ -3,6 +3,7 @@ import { DEPOT, GIFT, sovereignNumberSpan, THRUSTER_LAYOUTS, TILE } from '../shi
 import { QUAD_SIZE } from '../ship/thrusters';
 import { Randomizer } from '../random';
 import { ARMOR_RELIEF_SIZE, ARMOR_SLOPE, ARMOR_TILE, armorLayout, armorRelief, normalPixels, panelLayout, SIZE, windingHeights } from './surfaces';
+import { acos, hypot } from '../detmath';
 
 /** A gray canvas of `size` pixels, its height at each pixel from `height(column, row)` (0..255). */
 function heights(size: number, height: (x: number, y: number) => number) {
@@ -49,7 +50,7 @@ describe('the armor relief baked as a normal map', () => {
     const right = sample(map, size, 1.5 / size, 0.5);
     expect(left[0]).toBeGreaterThan(0.1);
     expect(right[0]).toBeLessThan(-0.1);
-    for (const n of [left, right]) expect(Math.hypot(...n)).toBeCloseTo(1, 1);
+    for (const n of [left, right]) expect(hypot(n[0], n[1], n[2])).toBeCloseTo(1, 1);
   });
 });
 
@@ -99,7 +100,7 @@ describe("the battleship's armor", () => {
         const mean = [0, 0, 0];
         for (let y = by; y < by + block; y++) for (let x = bx; x < bx + block; x++) for (let k = 0; k < 3; k++) mean[k] += normals[(y * S + x) * 4 + k] / 255 / (block * block);
         const [nx, ny, nz] = mean.map((c) => c * 2 - 1);
-        steepest = Math.max(steepest, Math.acos(nz / Math.hypot(nx, ny, nz)));
+        steepest = Math.max(steepest, acos(nz / hypot(nx, ny, nz)));
       }
     }
     expect((steepest * 180) / Math.PI).toBeLessThan(15);

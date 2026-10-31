@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Overlay } from './overlay';
+import { hypot } from '../detmath';
 
 /**
  * Motion streaks: the flight computer's cue for where the ship moves, whatever the nose does and
@@ -147,7 +148,7 @@ export class Streaks extends Overlay {
         this.spawn(i, 0);
         continue;
       }
-      const pace = Math.hypot(motion.x, motion.y);
+      const pace = hypot(motion.x, motion.y);
       const length = Math.min(pace * TRAIL, LONGEST) * (still ? STILL_LENGTH : 1);
       if (length < SHORTEST) continue;
       const edge = Math.min(1, Math.min(x, y, width - x, height - y) / EDGE_FADE);

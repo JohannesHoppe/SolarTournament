@@ -5,6 +5,7 @@ import type { Perks } from '../game/hangar';
 import { Ship } from '../ship/ship';
 import { hazardSurface, lacquer, shine } from './surfaces';
 import { canvas, radialTexture, toTexture } from './textures';
+import { cos, sin } from '../detmath';
 
 /** The ship on show hovers level above the pad's middle and turns on the spot, once in TURN_SECONDS: an exhibit on a turntable. */
 const TURN_SECONDS = 30;
@@ -177,7 +178,7 @@ export class Showcase {
     // the pad where the screen has room for it: the picture is cut so its middle lands there
     const spot = this.wide.matches ? WIDE_SPOT : NARROW_SPOT;
     const distance = CAMERA_DISTANCE * spot.scale;
-    this.camera.position.set(0, Math.sin(CAMERA_ELEVATION) * distance, Math.cos(CAMERA_ELEVATION) * distance);
+    this.camera.position.set(0, sin(CAMERA_ELEVATION) * distance, cos(CAMERA_ELEVATION) * distance);
     this.camera.lookAt(0, HOVER * 0.5, 0);
     this.camera.setViewOffset(width, height, (0.5 - spot.x) * width, (0.5 - spot.y) * height, width, height);
     const dt = Math.min(0.1, Math.max(0, time - this.last));
@@ -276,7 +277,7 @@ export class Showcase {
     const lampPositions = new Float32Array(LAMPS * 3);
     for (let i = 0; i < LAMPS; i++) {
       const a = ((i + 0.5) / LAMPS) * Math.PI * 2;
-      lampPositions.set([Math.sin(a) * 531, -45, Math.cos(a) * 531], i * 3);
+      lampPositions.set([sin(a) * 531, -45, cos(a) * 531], i * 3);
     }
     const lampGeometry = new THREE.BufferGeometry();
     lampGeometry.setAttribute('position', new THREE.BufferAttribute(lampPositions, 3));
@@ -312,7 +313,7 @@ function bolts(material: THREE.Material): THREE.InstancedMesh {
   for (let i = 0; i < RIM_PLATES * 2; i++) {
     const a = ((Math.floor(i / 2) + 0.04) / RIM_PLATES) * Math.PI * 2;
     const r = i % 2 === 0 ? 464 : 486;
-    place.position.set(Math.sin(a) * r, 2, Math.cos(a) * r);
+    place.position.set(sin(a) * r, 2, cos(a) * r);
     place.rotation.y = a;
     place.updateMatrix();
     mesh.setMatrixAt(i, place.matrix);
@@ -331,7 +332,7 @@ function around(element: HTMLCanvasElement, times: number, anisotropy: number, c
 
 /** A small fixed hash (0..1) for the pad's wear: the same scuffs on every visit. */
 const wear = (n: number) => {
-  const x = Math.sin(n * 12.9898 + 78.233) * 43758.5453;
+  const x = sin(n * 12.9898 + 78.233) * 43758.5453;
   return x - Math.floor(x);
 };
 

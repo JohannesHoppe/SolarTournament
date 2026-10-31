@@ -1,5 +1,6 @@
 import { msg } from '../i18n/i18n';
 import { storageGet, storageSet } from '../storage';
+import { pow } from '../detmath';
 
 /**
  * The picture's quality: one ladder of looks, from the picture as designed down to the cheapest
@@ -282,7 +283,7 @@ export class Governor {
       }
     } else this.probe = spare ? { from: this.rung, fps, steps: 0 } : null;
     const bar = this.barred.get(this.rung) ?? { until: 0, times: 0 };
-    this.barred.set(this.rung, { until: this.clock + BACKOFF_SECONDS * 2 ** bar.times, times: bar.times + 1 });
+    this.barred.set(this.rung, { until: this.clock + BACKOFF_SECONDS * pow(2, bar.times), times: bar.times + 1 });
     return this.step(this.rung + 1);
   }
 

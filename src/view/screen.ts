@@ -4,6 +4,7 @@
  * it, the line between two marks, and when the aids of free drift show (see Hud). Pixels are CSS
  * pixels from the screen's top left.
  */
+import { atan2, hypot } from '../detmath';
 
 /** The edge of the screen an arrow sits at. */
 export const enum Side {
@@ -45,7 +46,7 @@ export function toFrame(x: number, y: number, behind: boolean, edgeX: number, ed
   out.x = ((x + 1) / 2) * width;
   out.y = ((1 - y) / 2) * height;
   out.offscreen = offscreen;
-  out.angle = Math.atan2(-y, x);
+  out.angle = atan2(-y, x);
   return out;
 }
 
@@ -117,9 +118,9 @@ export interface Segment {
 export function between(x1: number, y1: number, x2: number, y2: number, startGap: number, endGap: number, shortest: number, out: Segment): Segment {
   const dx = x2 - x1;
   const dy = y2 - y1;
-  const distance = Math.hypot(dx, dy);
+  const distance = hypot(dx, dy);
   const length = distance - startGap - endGap;
-  out.angle = Math.atan2(dy, dx);
+  out.angle = atan2(dy, dx);
   if (length < shortest) {
     out.length = 0;
     return out;

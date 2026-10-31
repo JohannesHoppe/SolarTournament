@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { Randomizer } from '../random';
 import { canvas, toTexture } from './textures';
 import { noise } from '../world/nebula';
+import { atan2, cos, exp, hypot, pow, sin } from '../detmath';
 
 /**
  * The surfaces of everything built in code, drawn on canvases from fixed seeds, so every
@@ -336,7 +337,7 @@ function engraving(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRe
     for (let k = 0; k < BAND_WAVES; k++) {
       cut((g) => {
         for (let x = 0; x <= SIZE; x += 1) {
-          const y = y0 + (BAND_HALF - 3) * Math.sin(((x / WAVE_LENGTH) + k / BAND_WAVES) * Math.PI * 2);
+          const y = y0 + (BAND_HALF - 3) * sin(((x / WAVE_LENGTH) + k / BAND_WAVES) * Math.PI * 2);
           if (x === 0) g.moveTo(x, y);
           else g.lineTo(x, y);
         }
@@ -347,8 +348,8 @@ function engraving(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRe
       cut((g) => {
         for (let p = 0; p <= 5; p++) {
           const angle = -Math.PI / 2 + (p * 4 * Math.PI) / 5;
-          const px = x + Math.cos(angle) * 5;
-          const py = cy + Math.sin(angle) * 5;
+          const px = x + cos(angle) * 5;
+          const py = cy + sin(angle) * 5;
           if (p === 0) g.moveTo(px, py);
           else g.lineTo(px, py);
         }
@@ -420,8 +421,8 @@ function chips(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRender
         g.beginPath();
         reaches.forEach((reach, k) => {
           const angle = (k / 5) * Math.PI * 2;
-          if (k === 0) g.moveTo(px + Math.cos(angle) * reach, py + Math.sin(angle) * reach);
-          else g.lineTo(px + Math.cos(angle) * reach, py + Math.sin(angle) * reach);
+          if (k === 0) g.moveTo(px + cos(angle) * reach, py + sin(angle) * reach);
+          else g.lineTo(px + cos(angle) * reach, py + sin(angle) * reach);
         });
         g.fill();
       }
@@ -440,8 +441,8 @@ function flakes(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRende
     g.beginPath();
     reach.forEach((k, i) => {
       const angle = (i / reach.length) * Math.PI * 2;
-      const px = x + Math.cos(angle) * size * k * scale;
-      const py = y + Math.sin(angle) * size * k * scale * 0.8;
+      const px = x + cos(angle) * size * k * scale;
+      const py = y + sin(angle) * size * k * scale * 0.8;
       if (i === 0) g.moveTo(px, py);
       else g.lineTo(px, py);
     });
@@ -452,7 +453,7 @@ function flakes(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRende
     const x = r.range(0, SIZE);
     const y = onSeam ? Math.floor(r.range(0, 4)) * 64 + r.range(-3, 3) : r.range(0, SIZE);
     // small ones far more often than large ones: bare metal from a few centimeters to half a meter across
-    const size = 0.4 + 2.4 * r.nextFloat() ** 2.2;
+    const size = 0.4 + 2.4 * pow(r.nextFloat(), 2.2);
     const reach = Array.from({ length: 6 + (r.nextInt() % 4) }, () => r.range(0.45, 1.25));
     // one near the tile's edge is drawn on its far side too, so it wraps
     for (const dx of [0, -SIZE, SIZE]) {
@@ -483,7 +484,7 @@ function scratches(r: Randomizer, color: CanvasRenderingContext2D, orm: CanvasRe
       for (const g of [color, orm]) {
         g.beginPath();
         g.moveTo(px, py);
-        g.lineTo(px + Math.cos(angle) * length, py + Math.sin(angle) * length);
+        g.lineTo(px + cos(angle) * length, py + sin(angle) * length);
         g.stroke();
       }
     });
@@ -791,7 +792,7 @@ function craters(r: Randomizer, m: PlatingMaps, embers: CanvasRenderingContext2D
     const rays = Array.from({ length: 14 }, () => (r.nextFloat() < 0.45 ? r.range(0.4, 1) : 0));
     const reach = radius * 2.6;
     m.around(cx, cy, reach, reach, (i, dx, dy) => {
-      const q = Math.hypot(dx, dy) / radius;
+      const q = hypot(dx, dy) / radius;
       if (q >= 2.6) return;
       if (q < 1) {
         m.height[i] += depth * (q * q - 1) + rim * smoothstep(0.7, 1, q);
@@ -805,7 +806,7 @@ function craters(r: Randomizer, m: PlatingMaps, embers: CanvasRenderingContext2D
       m.shade(i, 1 + 0.15 * scour);
       m.finish(i, 0.4, 0.7, scour);
       if (q > 1.1) {
-        const ray = rays[Math.floor(((Math.atan2(dy, dx) + Math.PI) / (Math.PI * 2)) * rays.length) % rays.length];
+        const ray = rays[Math.floor(((atan2(dy, dx) + Math.PI) / (Math.PI * 2)) * rays.length) % rays.length];
         m.shade(i, 1 - 0.3 * ray * (1 - (q - 1.1) / 1.5));
       }
     });
@@ -832,11 +833,11 @@ function hole(r: Randomizer, m: PlatingMaps) {
   const deck = r.range(0, 0.5) * radius;
   const reach = radius * 2.4;
   m.around(cx, cy, reach, reach, (i, dx, dy) => {
-    const a = ((Math.atan2(dy, dx) + Math.PI) / (Math.PI * 2)) * petals.length;
+    const a = ((atan2(dy, dx) + Math.PI) / (Math.PI * 2)) * petals.length;
     const p0 = petals[Math.floor(a) % petals.length];
     const p1 = petals[(Math.floor(a) + 1) % petals.length];
     const edge = radius * (1 + p0 + (p1 - p0) * (a - Math.floor(a)));
-    const d = Math.hypot(dx, dy);
+    const d = hypot(dx, dy);
     if (d < edge) {
       // the drop eased over a few pixels: a cliff in a normal map lights up as a line
       const structure = Math.abs(dx - frame) < 2;
@@ -871,7 +872,7 @@ function scorch(r: Randomizer, m: PlatingMaps) {
     m.around(cx + length * 0.4, cy, length * 1.4, width * 2, (i, dx, dy) => {
       const along = (dx - length * 0.4) / length;
       const across = dy / width;
-      const s = Math.exp(-across * across * 2) * smoothstep(-1, -0.5, along) * (1 - smoothstep(-0.1, 1, along)) * streaks[Math.floor(i / PLATING)] * strength;
+      const s = exp(-across * across * 2) * smoothstep(-1, -0.5, along) * (1 - smoothstep(-0.1, 1, along)) * streaks[Math.floor(i / PLATING)] * strength;
       if (s < 0.01) return;
       m.shade(i, s * 0.85, [28, 22, 18]);
       m.shade(i, 0.1 * smoothstep(0.08, 0.25, s) * (1 - smoothstep(0.3, 0.55, s)), [182, 132, 74]);
@@ -1147,7 +1148,7 @@ export function armorRelief(seed: number) {
       for (let dx = -6; dx <= 5; dx++) {
         const off = dx + 0.5;
         const i = at(w.x + dx, w.y + dy);
-        const bead = Math.max(0, 1 - (off / 1.8) ** 2);
+        const bead = Math.max(0, 1 - pow(off / 1.8, 2));
         height[i] += 9 * bead;
         const heat = Math.max(0, 1 - Math.abs(off) / 6) * 0.06;
         const tint = Math.abs(off) < 3 ? [214, 196, 160] : [150, 170, 214];
@@ -1163,7 +1164,7 @@ export function armorRelief(seed: number) {
     for (let dy = -reach; dy <= reach; dy++) {
       for (let dx = -reach; dx <= reach; dx++) {
         const i = at(Math.floor(port.x + dx), Math.floor(port.y + dy));
-        const rho = Math.hypot(dx + 0.5, dy + 0.5);
+        const rho = hypot(dx + 0.5, dy + 0.5);
         const recess = 1 - smoothstep(port.radius - 0.7, port.radius + 0.7, rho);
         height[i] -= 20 * recess;
         const glass = 1 - smoothstep(port.radius - 2.2, port.radius - 1.2, rho);
@@ -1179,7 +1180,7 @@ export function armorRelief(seed: number) {
     for (let dy = -3; dy <= 3; dy++) {
       for (let dx = -3; dx <= 3; dx++) {
         const i = at(Math.floor(bolt.x + dx), Math.floor(bolt.y + dy));
-        const hole = 1 - smoothstep(bolt.radius - 0.6, bolt.radius + 0.6, Math.hypot(dx + 0.5, dy + 0.5));
+        const hole = 1 - smoothstep(bolt.radius - 0.6, bolt.radius + 0.6, hypot(dx + 0.5, dy + 0.5));
         height[i] -= 8 * hole;
         for (let k = 0; k < 3; k++) color[i * 3 + k] *= 1 - 0.35 * hole;
       }
@@ -1253,7 +1254,7 @@ export function normalPixels(heights: ArrayLike<number>, size: number, slope: nu
       // rising along u tilts the normal back along -u; rising down the canvas is falling along v
       const nx = -(at(x + 1, y) - at(x - 1, y)) * slope;
       const ny = (at(x, y + 1) - at(x, y - 1)) * slope;
-      const length = Math.hypot(nx, ny, 1);
+      const length = hypot(nx, ny, 1);
       const i = (y * size + x) * 4;
       out[i] = Math.round((nx / length / 2 + 0.5) * 255);
       out[i + 1] = Math.round((ny / length / 2 + 0.5) * 255);
@@ -1365,7 +1366,7 @@ export function hazardSurface(): Surface {
       g.beginPath();
       reaches.forEach((reach, k) => {
         const angle = (k / 6) * Math.PI * 2;
-        g[k ? 'lineTo' : 'moveTo'](x + Math.cos(angle) * reach * 1.6, y + Math.sin(angle) * reach);
+        g[k ? 'lineTo' : 'moveTo'](x + cos(angle) * reach * 1.6, y + sin(angle) * reach);
       });
       g.fill();
     }
@@ -1431,7 +1432,7 @@ export function windingHeights(size: number, turns: number, strap: number): Uint
   const band = strap * size;
   for (let y = 0; y < size; y++) {
     const t = ((y % pitch) + 0.5) / pitch;
-    const crown = Math.sqrt(Math.max(0, 1 - (2 * t - 1) ** 2));
+    const crown = Math.sqrt(Math.max(0, 1 - pow(2 * t - 1, 2)));
     for (let x = 0; x < size; x++) {
       // the strap's bevel: two pixels each side
       const inStrap = Math.min(x + 0.5, band - x - 0.5);
@@ -1481,7 +1482,7 @@ export function windingSurface(): WindingSurface {
       colorPixels.data[i + 1] = Math.min(255, cg * lit);
       colorPixels.data[i + 2] = Math.min(255, cb * lit);
       colorPixels.data[i + 3] = 255;
-      const glow = strap ? 0.04 : 0.18 + 0.82 * crown ** 2;
+      const glow = strap ? 0.04 : 0.18 + 0.82 * crown * crown;
       glowPixels.data.fill(Math.round(255 * glow), i, i + 3);
       glowPixels.data[i + 3] = 255;
     }
@@ -1792,7 +1793,7 @@ export function foilSurface(tone: 'gold' | 'silver'): Foil {
   const folds = Array.from({ length: 14 }, () => {
     const kx = Math.floor(r.range(1, 6)) * (r.nextFloat() < 0.5 ? -1 : 1);
     const ky = Math.floor(r.range(0, 6));
-    return { kx, ky, phase: r.range(0, Math.PI), height: r.range(0.4, 1) / Math.sqrt(Math.hypot(kx, ky)) };
+    return { kx, ky, phase: r.range(0, Math.PI), height: r.range(0.4, 1) / Math.sqrt(hypot(kx, ky)) };
   });
   // the reflectance of the metal: a clear golden yellow (or silver), one hue all over
   const base = tone === 'gold' ? [255, 206, 96] : [204, 208, 214];
@@ -1809,8 +1810,8 @@ export function foilSurface(tone: 'gold' | 'silver'): Foil {
       let crease = 1;
       for (const fold of folds) {
         const angle = (Math.PI * (fold.kx * x + fold.ky * y)) / SIZE + fold.phase;
-        const wave = Math.sin(angle);
-        const slope = fold.height * Math.sign(wave) * Math.cos(angle);
+        const wave = sin(angle);
+        const slope = fold.height * Math.sign(wave) * cos(angle);
         hx += slope * fold.kx;
         hy += slope * fold.ky;
         // right on a crease the foil is folded sharp and catches less light
@@ -1821,7 +1822,7 @@ export function foilSurface(tone: 'gold' | 'silver'): Foil {
       const i = (y * SIZE + x) * 4;
       const shade = tape ? 0.85 : crease;
       for (let c = 0; c < 3; c++) colors.data[i + c] = Math.min(255, base[c] * shade);
-      const length = Math.hypot(hx * steep, hy * steep, 1);
+      const length = hypot(hx * steep, hy * steep, 1);
       const nx = tape ? 0 : (-hx * steep) / length;
       const ny = tape ? 0 : (hy * steep) / length;
       normals.data[i] = (nx * 0.5 + 0.5) * 255;
@@ -2013,7 +2014,7 @@ export function networkLivery(): Surface {
     for (const g of [color, orm]) {
       for (const [along, a, b] of strokes) {
         g.beginPath();
-        g.ellipse(x + Math.cos(angle) * along, y + Math.sin(angle) * along, a, b, angle, 0, Math.PI * 2);
+        g.ellipse(x + cos(angle) * along, y + sin(angle) * along, a, b, angle, 0, Math.PI * 2);
         g.fill();
       }
     }
@@ -2025,7 +2026,7 @@ export function networkLivery(): Surface {
       const length = r.range(0.3, 0.8) * size;
       color.beginPath();
       color.moveTo(x + ox, y + oy);
-      color.lineTo(x + ox + Math.cos(angle) * length, y + oy + Math.sin(angle) * length);
+      color.lineTo(x + ox + cos(angle) * length, y + oy + sin(angle) * length);
       color.stroke();
     }
   };

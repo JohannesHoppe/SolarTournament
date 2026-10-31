@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { DISK_UNIFORMS, HOLE_SHADOW, diskGas } from '../world/landmarks';
+import { atan, pow, tan } from '../detmath';
 
 /**
  * The black hole bends light: a pass over the rendered picture that moves every pixel around
@@ -281,15 +282,15 @@ export function hotSpots(toHole: THREE.Vector3, out: SpotUniforms) {
   // the gas circles counterclockwise seen from above: at a point p its flow is (p.z, 0, -p.x) / |p|
   const boost = (side: number) => {
     flow.set(lateral.z * side, 0, -lateral.x * side);
-    return Math.max(1 + 0.55 * flow.dot(toHole) * -1, 0.05) ** 3;
+    return pow(Math.max(1 + 0.55 * flow.dot(toHole) * -1, 0.05), 3);
   };
   out.spotBoost.value.set(boost(1), boost(-1));
 }
 
 export function lensAngles(horizon: number, distance: number, fov: number): { shadow: number; ring: number } {
-  const share = Math.atan(horizon / distance) / fov;
-  const middle = 2 * Math.tan(fov / 2);
-  return { shadow: Math.atan(middle * share * HOLE_SHADOW), ring: Math.atan(middle * share * EINSTEIN) };
+  const share = atan(horizon / distance) / fov;
+  const middle = 2 * tan(fov / 2);
+  return { shadow: atan(middle * share * HOLE_SHADOW), ring: atan(middle * share * EINSTEIN) };
 }
 
 export class Lensing {

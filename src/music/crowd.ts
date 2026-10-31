@@ -6,6 +6,7 @@
  * loudspeakers: a soft clip and the narrow band of a broadcast. For an eruption a second layer
  * of it joins, off in time and a little higher, so the crowd sounds twice as big.
  */
+import { pow, tanh } from '../detmath';
 
 const RECORDING = 'assets/sounds/crowd-roar.mp3';
 /** The recording loops past the encoder's silence at its start and end (s). */
@@ -91,7 +92,7 @@ export class Crowd {
       // no crowd this time: the show goes on without it
       .catch(() => {
         this.loading = false;
-        this.retryAt = performance.now() + RETRY * 1000 * 2 ** this.failures;
+        this.retryAt = performance.now() + RETRY * 1000 * pow(2, this.failures);
         this.failures++;
       });
   }
@@ -175,7 +176,7 @@ function softClip(drive: number): Float32Array<ArrayBuffer> {
   const curve = new Float32Array(new ArrayBuffer(1024 * 4));
   for (let i = 0; i < curve.length; i++) {
     const x = (i / (curve.length - 1)) * 2 - 1;
-    curve[i] = Math.tanh(drive * x) / Math.tanh(drive);
+    curve[i] = tanh(drive * x) / tanh(drive);
   }
   return curve;
 }

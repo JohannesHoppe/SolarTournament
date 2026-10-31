@@ -1,5 +1,6 @@
 import type { Voice } from './band';
 import { currentLocale } from '../i18n/i18n';
+import { pow } from '../detmath';
 
 /** After the language's sprite failed to load, the next try waits this long (ms), twice as long after each further failure. */
 const LANGUAGE_RETRY_MS = 10000;
@@ -42,7 +43,7 @@ export function loadVoice(): Promise<Voice> {
     // a load that a newer one has overtaken changes nothing about the voice in use
     if (attempt === attempts) {
       partial = true;
-      languageRetryAt = performance.now() + LANGUAGE_RETRY_MS * 2 ** languageFailures++;
+      languageRetryAt = performance.now() + LANGUAGE_RETRY_MS * pow(2, languageFailures++);
     }
     return null;
   });

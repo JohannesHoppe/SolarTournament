@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { cos, exp, pow, sin } from '../detmath';
 
 /** A canvas to draw a texture on (square without a height), with its 2D context. */
 export function canvas(width: number, height = width): [HTMLCanvasElement, CanvasRenderingContext2D] {
@@ -55,8 +56,8 @@ export function smokeTexture(): THREE.CanvasTexture {
   for (let i = 0; i < 14; i++) {
     const angle = Math.random() * Math.PI * 2;
     const distance = Math.random() * size * 0.12;
-    const x = size / 2 + Math.cos(angle) * distance;
-    const y = size / 2 + Math.sin(angle) * distance;
+    const x = size / 2 + cos(angle) * distance;
+    const y = size / 2 + sin(angle) * distance;
     // blobs stay inside the canvas, so the puff never shows a square edge; together they stay
     // below full white, so the center never clips into a flat disc with a hard rim
     const radius = size * (0.16 + Math.random() * 0.14);
@@ -84,7 +85,7 @@ export function runningLight(): THREE.DataTexture {
   for (let i = 0; i < width; i++) {
     // the pulse's head at 3/4 of the period: ahead of it the short front, behind it the tail
     const d = i / width - 0.75;
-    const pulse = d > 0 ? Math.exp(-((d / 0.04) ** 2)) : Math.exp(d / 0.12);
+    const pulse = d > 0 ? exp(-pow(d / 0.04, 2)) : exp(d / 0.12);
     const value = Math.round(255 * (0.6 + 0.4 * pulse));
     data.set([value, value, value, 255], i * 4);
   }

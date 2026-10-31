@@ -10,6 +10,7 @@ import { flyCourse, flyRings, SHIP_RADIUS, startFlight, STEP, type Driver, type 
 import { BOOST_RADIUS, Course, GATE_RADIUS } from '../game/race';
 import { RACE_SPEED } from '../ship/bots';
 import type { ArenaProfile } from '../world/arenas';
+import { exp, tan } from '../detmath';
 
 /** The screen the simulated Host looks at (pixels): the game at 1280×720, the pointer's full deflection at its share of the shorter side. */
 const WIDTH = 1280;
@@ -27,7 +28,7 @@ const WOBBLE = 0.3;
 /** A Host turns the nose no faster than this share of the inverse of its lag (its reaction and its stroke): faster, every correction would swing past. */
 const CALM = 0.8;
 /** Pixels per radian near the screen's middle. */
-const PIXELS_PER_RADIAN = HEIGHT / 2 / Math.tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
+const PIXELS_PER_RADIAN = HEIGHT / 2 / tan(THREE.MathUtils.degToRad(CAMERA_FOV / 2));
 /** The pointer's spring is integrated in steps no longer than this (s). */
 const SPRING_STEP = 1 / 240;
 /** A Host looks this far ahead along the ribbon (s of flight, at least LOOK_MIN units, 200 m), through the rings as the ribbon runs on. */
@@ -109,7 +110,7 @@ export class Human {
    * for `ship` (a ship the Host aims at). Returns the commands for the flight model.
    */
   fly(flight: FlightModel, mark: THREE.Vector3, pedal: Pedal, gravity: THREE.Vector3, ship?: THREE.Vector3): Controls {
-    this.follow(flight, 1 - Math.exp(-CAMERA_FOLLOW * this.step), 1 - Math.exp(-CAMERA_TURN * this.step));
+    this.follow(flight, 1 - exp(-CAMERA_FOLLOW * this.step), 1 - exp(-CAMERA_TURN * this.step));
     // the crosshair is the nose, at the mark's distance: the Host sees how far the mark is off it
     // and pushes the pointer from the middle that way
     this.pixel(mark, seen);

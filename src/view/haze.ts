@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { altitudeIn, HAZE_SHAPE, type Air } from '../world/air';
 import { Randomizer } from '../random';
+import { exp } from '../detmath';
 
 /**
  * The haze of an arena's air (see world/air) in the picture: a height fog computed in the
@@ -281,14 +282,14 @@ export class Haze {
       return shade;
     }
     const altitude = altitudeIn(this.air, eye);
-    shade.sun = Math.exp(-hazeAbove(altitude) / Math.max(sunHeight, 0.05));
+    shade.sun = exp(-hazeAbove(altitude) / Math.max(sunHeight, 0.05));
     shade.sky = skyLight(altitude);
     return shade;
   }
 }
 
 /** The haze from an altitude (units) straight up to space: the optical depth of the air and the deck above it (see world/air), leaving out the faint haze over the deck. */
-const hazeAbove = (altitude: number) => (altitude >= 0 ? 0 : HAZE_SHAPE.deck + HAZE_SHAPE.haze * HAZE_SHAPE.scale * (Math.exp(-altitude / HAZE_SHAPE.scale) - 1));
+const hazeAbove = (altitude: number) => (altitude >= 0 ? 0 : HAZE_SHAPE.deck + HAZE_SHAPE.haze * HAZE_SHAPE.scale * (exp(-altitude / HAZE_SHAPE.scale) - 1));
 
 /** The share of the sky's diffuse light that reaches an altitude (units) through the haze above it. */
-export const skyLight = (altitude: number) => SKY_FLOOR + (1 - SKY_FLOOR) * Math.exp(-hazeAbove(altitude) / SKY_SPREAD);
+export const skyLight = (altitude: number) => SKY_FLOOR + (1 - SKY_FLOOR) * exp(-hazeAbove(altitude) / SKY_SPREAD);

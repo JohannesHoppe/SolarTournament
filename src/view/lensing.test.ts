@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { Lensing, hotSpots, lensAngles } from './lensing';
 import { HOLE_SHADOW } from '../world/landmarks';
+import { atan, cos, pow, sin, tan } from '../detmath';
 
 const HORIZON = 7000;
 
@@ -35,8 +36,8 @@ describe("the black hole's lens", () => {
       const c = camera(distance, 0);
       const { shadow } = lensAngles(HORIZON, distance, THREE.MathUtils.degToRad(c.fov));
       // the cone's rim straight above the hole, on the picture
-      const rim = new THREE.Vector3(0, Math.tan(shadow) * distance, 0).project(c);
-      expect(rim.y / 2).toBeCloseTo((HOLE_SHADOW * Math.atan(HORIZON / distance)) / THREE.MathUtils.degToRad(c.fov), 6);
+      const rim = new THREE.Vector3(0, tan(shadow) * distance, 0).project(c);
+      expect(rim.y / 2).toBeCloseTo((HOLE_SHADOW * atan(HORIZON / distance)) / THREE.MathUtils.degToRad(c.fov), 6);
     }
   });
 
@@ -79,10 +80,10 @@ describe("the black hole's lens", () => {
     expect(spots.spotFlare.value).toBe(1);
     expect(spots.spotLateral.value.z).toBeCloseTo(-1, 9);
     expect(spots.spotNormal.value.y).toBeCloseTo(1, 9);
-    expect(spots.spotBoost.value.x).toBeCloseTo(0.45 ** 3, 9);
-    expect(spots.spotBoost.value.y).toBeCloseTo(1.55 ** 3, 9);
+    expect(spots.spotBoost.value.x).toBeCloseTo(pow(0.45, 3), 9);
+    expect(spots.spotBoost.value.y).toBeCloseTo(pow(1.55, 3), 9);
     // 30° above the plane: fading; 60° above and straight down: none
-    hotSpots(new THREE.Vector3(-Math.cos(Math.PI / 6), -Math.sin(Math.PI / 6), 0), spots);
+    hotSpots(new THREE.Vector3(-cos(Math.PI / 6), -sin(Math.PI / 6), 0), spots);
     expect(spots.spotFlare.value).toBeGreaterThan(0);
     expect(spots.spotFlare.value).toBeLessThan(1);
     hotSpots(new THREE.Vector3(-0.5, -Math.sqrt(0.75), 0), spots);

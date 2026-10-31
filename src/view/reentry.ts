@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { airHeat, altitudeIn, type Air } from '../world/air';
 import { COOLING_SHADOW, MAX_HEAT, type Ship } from '../ship/ship';
 import type { Effects } from './effects';
+import { exp, log2 } from '../detmath';
 
 /**
  * A ship flying hot through a planet's air (Jupiter's, see world/air), as everyone sees it: a
@@ -25,7 +26,7 @@ import type { Effects } from './effects';
  * is a quarter at the edge of the safe speed, half at twice, full at eight times.
  */
 export function plasmaOf(load: number): number {
-  return load <= 0 ? 0 : THREE.MathUtils.clamp((Math.log2(load) + 1) / 4, 0, 1);
+  return load <= 0 ? 0 : THREE.MathUtils.clamp((log2(load) + 1) / 4, 0, 1);
 }
 
 /** How hard the air heats a ship at `position` flying at `velocity` against its radiators in the clouds (see plasmaOf). */
@@ -461,7 +462,7 @@ export class Reentry {
     // a ship whose browser only went quiet is gone from the screen, not burnt up
     if (burn.wasAlive && ship.died && wasBurning) this.ignite(ship);
     burn.wasAlive = ship.alive;
-    burn.plasma += (plasmaOf(load) - burn.plasma) * (1 - Math.exp(-dt / PLASMA_EASE));
+    burn.plasma += (plasmaOf(load) - burn.plasma) * (1 - exp(-dt / PLASMA_EASE));
     const scorch = burn.burning ? 1 : SCORCH_HEATING * burn.plasma;
     burn.scorch = scorch > burn.scorch ? Math.min(scorch, burn.scorch + dt / SCORCH_RISE) : Math.max(scorch, burn.scorch - dt / SCORCH_FADE);
     if (!ship.alive) {
@@ -587,7 +588,7 @@ export class Reentry {
 /** Something burning that falls through the air: braked by it, pulled down by the planet. */
 function fall(body: { position: THREE.Vector3; velocity: THREE.Vector3 }, air: Air, dt: number) {
   down.subVectors(air.center, body.position).normalize();
-  body.velocity.multiplyScalar(Math.exp(-FIREBALL_DRAG * dt)).addScaledVector(down, SINK * dt);
+  body.velocity.multiplyScalar(exp(-FIREBALL_DRAG * dt)).addScaledVector(down, SINK * dt);
   body.position.addScaledVector(body.velocity, dt);
 }
 

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Controls } from '../input/input';
 import { MAIN_THRUST, RCS_THRUST, type FlightModel } from './flight';
+import { atan2, hypot } from '../detmath';
 
 /** The upright hold rolls at full rate from this roll error on (1/rad): firm, without overshooting. */
 const UPRIGHT_GAIN = 1.2;
@@ -41,10 +42,10 @@ const assistSteer = { yaw: 0, pitch: 0 };
  * turn the nose elsewhere. The bots aim with a computer too; the pilot still pulls the trigger.
  */
 export function assistAim(flight: FlightModel, toTarget: THREE.Vector3, out: Controls): Controls {
-  const angle = flight.angleTo(toTarget);
+  const angle = flight.noseAngleTo(toTarget);
   if (angle >= AIM_ASSIST_ANGLE) return out;
   flight.steer(toTarget, AIM_ASSIST_GAIN, assistSteer);
-  const pull = AIM_ASSIST_STRENGTH * (1 - angle / AIM_ASSIST_ANGLE) * (1 - THREE.MathUtils.smoothstep(Math.hypot(out.yaw, out.pitch), 0.3, 0.8));
+  const pull = AIM_ASSIST_STRENGTH * (1 - angle / AIM_ASSIST_ANGLE) * (1 - THREE.MathUtils.smoothstep(hypot(out.yaw, out.pitch), 0.3, 0.8));
   out.yaw += (assistSteer.yaw - out.yaw) * pull;
   out.pitch += (assistSteer.pitch - out.pitch) * pull;
   return out;
@@ -61,7 +62,7 @@ export function keepUpright(flight: FlightModel, out: Controls): Controls {
   flight.toLocalDirection(up.set(0, 1, 0), up);
   // the ship's nose is -Z, so |up.z| is how steeply it points up or down
   const hold = 1 - THREE.MathUtils.smoothstep(Math.abs(up.z), UPRIGHT_LET_GO, UPRIGHT_FREE);
-  out.roll = THREE.MathUtils.clamp(Math.atan2(up.x, up.y) * UPRIGHT_GAIN, -1, 1) * hold;
+  out.roll = THREE.MathUtils.clamp(atan2(up.x, up.y) * UPRIGHT_GAIN, -1, 1) * hold;
   return out;
 }
 
@@ -99,7 +100,7 @@ export class Brake {
     // the drift in ship space (the nose is -Z): +Z is the speed the drive brakes once flipped
     flight.toLocalDirection(flight.velocity, drift);
     retrograde.copy(flight.velocity).negate();
-    const aligned = flight.angleTo(retrograde) < BRAKE_BURN_ANGLE;
+    const aligned = flight.noseAngleTo(retrograde) < BRAKE_BURN_ANGLE;
     this.flipping = speed > BRAKE_FINE || (this.flipping && speed > BRAKE_SETTLE);
     if (this.flipping) {
       flight.flip(retrograde, 3, Object.assign(out, controls));

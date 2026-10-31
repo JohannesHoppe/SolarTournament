@@ -4,6 +4,7 @@ import { flyByNose, FlightModel, MAX_TURN_RATE } from '../ship/flight';
 import { assistAim, Brake } from '../ship/computer';
 import type { Recording } from '../recorder';
 import type { RacingLine } from '../game/racingline';
+import { asin, atan2, cos, hypot, sin } from '../detmath';
 
 /** The simulation steps at 60 frames a second. */
 export const STEP = 1 / 60;
@@ -54,7 +55,7 @@ export class Cockpit {
       path: this.flight.velocity.clone().divideScalar(Math.max(speed, 1e-6)),
       nose: this.flight.forward(),
       speed,
-      input: Math.hypot(controls.yaw, controls.pitch),
+      input: hypot(controls.yaw, controls.pitch),
     });
   }
 
@@ -68,8 +69,8 @@ export class Cockpit {
 /** Yaw and pitch of a world direction off the nose (rad; right and up positive), as the crosshair shows it: the chase camera looks along the nose. */
 function bearing(cockpit: Cockpit, direction: THREE.Vector3, target = { yaw: 0, pitch: 0 }) {
   const local = cockpit.flight.toLocalDirection(direction, scratch).normalize();
-  target.yaw = Math.atan2(local.x, -local.z);
-  target.pitch = Math.atan2(local.y, Math.hypot(local.x, local.z));
+  target.yaw = atan2(local.x, -local.z);
+  target.pitch = atan2(local.y, hypot(local.x, local.z));
   return target;
 }
 const scratch = new THREE.Vector3();
@@ -118,7 +119,7 @@ export class Hand {
    * turning at `rate` (rad/s) for full deflection: the controls it gives.
    */
   move(yaw: number, pitch: number, rate: number): Partial<Controls> {
-    yaw = Math.atan2(Math.sin(yaw), Math.cos(yaw));
+    yaw = atan2(sin(yaw), cos(yaw));
     this.seen.push({ yaw, pitch });
     const late = this.seen.length > Math.round(this.reaction / this.step) ? this.seen.shift()! : { yaw: 0, pitch: 0 };
     const omega = 4.7 / this.stroke;
@@ -210,7 +211,7 @@ export function convergence(samples: readonly Sample[], direction: THREE.Vector3
       for (const s of after) if (s.t >= approach.t) overshoot = Math.max(overshoot, -s[of].dot(side));
     }
   }
-  return { seconds: settled, overshoot: Math.asin(Math.min(1, overshoot)), noseOff: after.at(-1)!.nose.angleTo(direction) };
+  return { seconds: settled, overshoot: asin(Math.min(1, overshoot)), noseOff: after.at(-1)!.nose.angleTo(direction) };
 }
 
 /** The slip of a sample: the angle between the flight and the nose (rad). */

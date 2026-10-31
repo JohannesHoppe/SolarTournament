@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { tan } from '../detmath';
 
 /** Particles per texture; the oldest is recycled when all are in use. */
 const PARTICLE_CAPACITY = 6000;
@@ -77,7 +78,7 @@ class PointCloud {
 
   /** Converts world size to pixels for the current viewport height and field of view. */
   setViewport(heightPx: number, fovDeg: number) {
-    this.material.uniforms.pixelScale.value = heightPx / (2 * Math.tan(THREE.MathUtils.degToRad(fovDeg) / 2));
+    this.material.uniforms.pixelScale.value = heightPx / (2 * tan(THREE.MathUtils.degToRad(fovDeg) / 2));
   }
 
   /** Nothing drawn now, and nothing to draw: the buffers on the GPU need nothing. */
