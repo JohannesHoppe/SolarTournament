@@ -27,13 +27,9 @@ const shader = {
     holeDepth: { value: 1 },
     center: { value: new THREE.Vector2(0.5, 0.5) },
     aspect: { value: 1 },
-    /** The Einstein ring, as a share of the screen height. */
+    /** The Einstein ring and the shadow, as shares of the screen height. */
     ring: { value: 0 },
-    /** The shadow as the angle it spans seen from the camera (rad), and the angle the screen's height spans (rad): the shadow's edge and the photon ring are measured along each pixel's own ray, so they stay true towards the picture's edge, where a flat circle would not. */
-    shadowAngle: { value: 0 },
-    heightAngle: { value: 1 },
-    /** 1 while the hole's middle lies in front of the camera and the light is bent around it; 0 when only the shadow's edge reaches into the picture. */
-    bend: { value: 1 },
+    shadow: { value: 0 },
     /** How many steps the ray is marched outward looking for its source (see Look.lens, view/quality): fewer leaves the bend coarser, never unbent. */
     samples: { value: 6 },
   },
@@ -51,9 +47,7 @@ const shader = {
     uniform vec2 center;
     uniform float aspect;
     uniform float ring;
-    uniform float shadowAngle;
-    uniform float heightAngle;
-    uniform float bend;
+    uniform float shadow;
     uniform int samples;
     uniform mat4 cameraWorld;
     uniform mat4 projectionInverse;
@@ -67,25 +61,19 @@ const shader = {
         gl_FragColor = texture2D(tDiffuse, vUv);
         return;
       }
-      // each pixel's ray, and the angle it makes with the line to the hole
-      vec4 view = projectionInverse * vec4(vUv * 2.0 - 1.0, -1.0, 1.0);
-      vec3 rd = normalize((cameraWorld * vec4(view.xyz / view.w, 0.0)).xyz);
-      float b = dot(eye, rd);
-      float angle = acos(clamp(dot(rd, -normalize(eye)), -1.0, 1.0));
-      if (angle < shadowAngle) {
+      vec2 d = (vUv - center) * vec2(aspect, 1.0);
+      float theta = length(d);
+      if (theta < shadow) {
         // black, but for the disk's gas in front of the hole: along the pixel's ray up to the shadow's sphere (or, past its edge, the hole's nearest point)
+        vec4 view = projectionInverse * vec4(vUv * 2.0 - 1.0, -1.0, 1.0);
+        vec3 rd = normalize((cameraWorld * vec4(view.xyz / view.w, 0.0)).xyz);
+        float b = dot(eye, rd);
         float h = b * b - dot(eye, eye) + shadowRadius * shadowRadius;
         float far = h > 0.0 ? -b - sqrt(h) : -b;
         float near = diskEntry(eye, rd);
         gl_FragColor = vec4(far > near ? diskGas(eye, rd, near, far) : vec3(0.0), 1.0);
         return;
       }
-      if (bend < 0.5) {
-        gl_FragColor = texture2D(tDiffuse, vUv);
-        return;
-      }
-      vec2 d = (vUv - center) * vec2(aspect, 1.0);
-      float theta = length(d);
       float beta = theta - ring * ring / theta;
       vec2 along = (d / theta) / vec2(aspect, 1.0);
       // the lens bends only light from behind the hole: where a ship or rock in front of it
@@ -102,7 +90,7 @@ const shader = {
       }
       // the light that grazes the shadow piles up into a thin bright ring
       // squared by hand: GLSL ES leaves pow() of a negative base undefined (NaN on some GPUs)
-      float ring = (angle - shadowAngle * 1.05) / (shadowAngle * 0.08 + 0.0005 * heightAngle);
+      float ring = (theta - shadow * 1.05) / (shadow * 0.08 + 0.0005);
       float photon = exp(-ring * ring);
       gl_FragColor = color + vec4(vec3(1.0, 0.75, 0.45) * photon * 0.8, 0.0);
     }
@@ -137,32 +125,23 @@ export class Lensing {
     toHole.subVectors(hole, camera.position);
     const distance = toHole.length();
     camera.getWorldDirection(forward);
-    const shadowRadius = horizon * HOLE_SHADOW;
-    const shadowAngle = Math.asin(Math.min(shadowRadius / Math.max(distance, 1e-3), 1));
-    const heightAngle = THREE.MathUtils.degToRad(camera.fov);
-    // the hole's middle behind the camera plane: the light is not bent, but the shadow's edge may still reach into the picture, black where the disk's far side would show
-    const behind = toHole.dot(forward) <= 0;
-    const aspect = camera.view?.enabled ? camera.view.width / camera.view.height : camera.aspect;
-    const reach = Math.atan(Math.tan(heightAngle / 2) * Math.hypot(1, aspect));
-    if (behind && Math.acos(THREE.MathUtils.clamp(toHole.dot(forward) / distance, -1, 1)) - shadowAngle > reach) {
+    // behind the camera there is nothing to bend on screen
+    if (toHole.dot(forward) <= 0) {
       this.pass.enabled = false;
       return;
     }
     projected.copy(hole).project(camera);
     const uniforms = this.pass.uniforms;
-    uniforms.bend.value = behind ? 0 : 1;
     uniforms.center.value.set(projected.x * 0.5 + 0.5, projected.y * 0.5 + 0.5);
     uniforms.tDepth.value = depth;
-    // (a middle behind the camera has no depth in the picture: whatever is drawn is in front of the shadow's sky)
-    uniforms.holeDepth.value = behind ? 1 : projected.z * 0.5 + 0.5;
+    uniforms.holeDepth.value = projected.z * 0.5 + 0.5;
     // the picture's own shape: a camera showing a cut of a wider view (the menu's preview) has the wider one's aspect
-    uniforms.aspect.value = aspect;
+    uniforms.aspect.value = camera.view?.enabled ? camera.view.width / camera.view.height : camera.aspect;
     // the hole's angular radius as a share of the screen height
-    const angular = Math.atan(horizon / distance) / heightAngle;
-    uniforms.shadowAngle.value = shadowAngle;
-    uniforms.heightAngle.value = heightAngle;
+    const angular = Math.atan(horizon / distance) / THREE.MathUtils.degToRad(camera.fov);
+    uniforms.shadow.value = angular * HOLE_SHADOW;
     uniforms.ring.value = angular * 2.4;
-    uniforms.shadowRadius.value = shadowRadius;
+    uniforms.shadowRadius.value = horizon * HOLE_SHADOW;
     // the camera as this frame draws it, so the near side in the shadow sits on the disk around it
     camera.updateMatrixWorld();
     uniforms.cameraWorld.value.copy(camera.matrixWorld);
