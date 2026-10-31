@@ -493,7 +493,7 @@ interface Soil {
  */
 function addShape(kit: Kit, slot: number, shape: THREE.BufferGeometry, frame: THREE.Matrix4, color: THREE.Color, glow = 0.04, hazard: number | 'sides' = 0, soil: Soil | null = null) {
   const geometry = shape.index ? shape.toNonIndexed() : shape;
-  if (!shape.userData.mapped) boxUv(geometry, STEEL_TILE);
+  if (!shape.userData.mapped) boxUv(geometry, STEEL_TILE, 'readable');
   const position = geometry.getAttribute('position');
   const local = position.clone();
   const up = geometry.getAttribute('normal').clone();
@@ -536,7 +536,7 @@ function strut(from: THREE.Vector3, to: THREE.Vector3, thickness: number): THREE
     position.setXYZ(i, Math.sign(x) * (wide ? h : h - c), position.getY(i), Math.sign(z) * (wide ? h - c : h));
   }
   beam.computeVertexNormals();
-  boxUv(beam, STEEL_TILE * 2);
+  boxUv(beam, STEEL_TILE * 2, 'readable');
   const turn = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), scratch.subVectors(to, from).normalize());
   beam.applyMatrix4(new THREE.Matrix4().compose(from.clone().lerp(to, 0.5), turn, new THREE.Vector3(1, 1, 1)));
   beam.userData.mapped = true;
