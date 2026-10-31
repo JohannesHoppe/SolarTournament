@@ -299,8 +299,9 @@ export class Hud {
     const speed = Math.round(me.flight.velocity.length() * METERS_PER_UNIT);
     setText(this.speed, me.flight.limited ? t('{speed} m/s · MAX', { speed }) : t('{speed} m/s', { speed }));
 
-    if (!me.alive) setText(this.message, t('Live link lost'));
-    else if (now > this.messageUntil) setText(this.message, '');
+    // the HUD is written after the frame's steps: a message flashed in them (a watching Host's
+    // line, renewed every step) stands over the lost link until it runs out
+    if (now > this.messageUntil) setText(this.message, me.alive ? '' : t('Live link lost'));
     if (now > this.splitUntil) setText(this.splitText, '');
 
     // the newest entries come first: expired ones are at the end
