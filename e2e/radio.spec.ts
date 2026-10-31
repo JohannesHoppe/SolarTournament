@@ -4,7 +4,7 @@ import { openGame, startSolo } from './game';
 /**
  * Radio 2584's page: the game's title of the running track leads there in the same tab (in a
  * round only from the pause menu), its seal leads back, and the last pressing kept in the
- * browser is offered again after a reload.
+ * browser is offered again after a reload; while it plays, the game in another tab stays silent.
  */
 
 test("the track's title pauses a round, then opens the radio page in the same tab, whose seal leads back", async ({ page, context }) => {
@@ -47,5 +47,18 @@ test('the last pressing is offered again after a reload and saved as often as wa
   const download = page.waitForEvent('download', { timeout: 5_000 });
   await page.click('#download');
   expect((await download).suggestedFilename()).toBe('SolarTournament - Orbit Terror.wav');
+  expect(errors).toEqual([]);
+});
+
+test("the game's radio in another tab falls silent while the radio page plays, and comes back after", async ({ page, context }) => {
+  const errors = await openGame(page);
+  const level = () => page.evaluate(() => (window.game.radio as unknown as { targetLevel(): number }).targetLevel());
+  expect(await level()).toBeGreaterThan(0);
+  const radio = await context.newPage();
+  await radio.goto('/radio.html?title=Neon%20Funeral');
+  await radio.click('#play');
+  await expect.poll(level, { timeout: 30_000 }).toBe(0);
+  await radio.click('#play');
+  await expect.poll(level, { timeout: 10_000 }).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });

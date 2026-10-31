@@ -45,6 +45,32 @@ export function bindVolume(slider: HTMLInputElement) {
     storageSet(VOLUME_KEY, String(hostVolume));
   });
 }
+/**
+ * The radio page tells the browser's other tabs that it plays, every ON_AIR_EVERY ms while it
+ * does; a game tab's radio stays silent while it heard so within ON_AIR_HEARD ms, so only one
+ * tab plays music, and comes back by itself once the page stops or is closed.
+ */
+const ON_AIR_CHANNEL = 'solartournament.on-air';
+const ON_AIR_EVERY = 1000;
+const ON_AIR_HEARD = 3000;
+/** When another tab last said it plays (performance.now, ms). */
+let onAirHeard = -Infinity;
+let onAirChannel: BroadcastChannel | null | undefined;
+
+/** The channel between this browser's tabs, opened on first use; null where the browser has none. */
+function onAir(): BroadcastChannel | null {
+  if (onAirChannel !== undefined) return onAirChannel;
+  try {
+    onAirChannel = new BroadcastChannel(ON_AIR_CHANNEL);
+    onAirChannel.onmessage = () => (onAirHeard = performance.now());
+    // Node's channel (the unit tests) would keep the process alive
+    (onAirChannel as unknown as { unref?: () => void }).unref?.();
+  } catch {
+    onAirChannel = null;
+  }
+  return onAirChannel;
+}
+
 /** A failed load of Tone.js or the voice is tried again after this long (s). */
 const RETRY_SECONDS = 5;
 /** An announcement needs this much quiet before the track's next line (s): the announcer's lines are a few seconds long. */
@@ -110,6 +136,9 @@ export class Radio {
     this.muffler.connect(this.lows).connect(this.highs).connect(this.output).connect(destination);
     // without a kept choice the radio starts switched on
     if (remember) this.enabledFlag = storageGet(ENABLED_KEY) !== 'off';
+    const channel = onAir();
+    // the radio page says so while it plays
+    if (!remember) setInterval(() => this.cue && this.level > 0 && channel?.postMessage('playing'), ON_AIR_EVERY);
     setInterval(() => this.tick(), TICK_MS);
   }
 
@@ -145,6 +174,8 @@ export class Radio {
 
   /** The output level the radio should have now: the Host's volume while it is on. */
   private targetLevel() {
+    // the game's radio gives way to the radio page playing in another tab
+    if (this.remember && performance.now() - onAirHeard < ON_AIR_HEARD) return 0;
     return this.enabledFlag ? VOLUME * hostVolume : 0;
   }
 
