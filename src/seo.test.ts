@@ -69,8 +69,8 @@ describe('the texts in place', () => {
     expect(html).toContain('data-i18n="Play now">Jetzt spielen<');
     expect(html).toMatch(/alt="Ein Schiff im Orbit[^"]*" data-i18n-alt="A ship in orbit/);
     expect(html).toContain('data-i18n-attr="alt"');
-    expect(html).toContain('data-i18n="A space shooter that &lt;span class=&quot;neon&quot;&gt;obeys Newton&lt;/span&gt;"');
-    expect(html).toContain('>Ein Weltraum-Shooter, der <span class="neon">Newton gehorcht</span></h1>');
+    expect(html).toContain('data-i18n="Realistic physics, &lt;span class=&quot;neon&quot;&gt;awesome dogfights&lt;/span&gt;"');
+    expect(html).toContain('>Realistische Physik, <span class="neon">geile Dogfights</span></h1>');
   });
 
   it('leave no English behind in another language, and the handbook no placeholder', () => {

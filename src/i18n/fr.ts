@@ -1165,8 +1165,8 @@ export const FR: Catalog = {
   'They are meant to be flown with friends. Whoever cheats, cheats their friends. If that is fun for you, have fun while it lasts: the other Hosts will cast you out.': 'Ils sont faits pour voler entre amis. Qui triche trompe ses amis. Si ça t’amuse, amuse-toi tant que ça dure : les autres Hôtes te mettront dehors.',
   // what search results and link previews say, and the page that says what the game is (about.html)
   'SolarTournament: free multiplayer space shooter in your browser': 'SolarTournament : shooter spatial multijoueur gratuit dans le navigateur',
-  "Newtonian dogfights and races in five-minute rounds, online or against bots: free, no download, no account. Seven arenas, from Saturn's rings to a black hole.":
-    'Combats et courses newtoniens en manches de cinq minutes, en ligne ou contre des bots : gratuit, sans téléchargement, sans compte. Sept arènes, des anneaux de Saturne à un trou noir.',
+  "Realistic physics and awesome dogfights in five-minute rounds, online or against bots: free, no download, no account. Seven arenas, from Saturn's rings to a black hole.":
+    'Physique réaliste et combats d’enfer en manches de cinq minutes, en ligne ou contre des bots : gratuit, sans téléchargement, sans compte. Sept arènes, des anneaux de Saturne à un trou noir.',
   'SolarTournament is a free multiplayer space shooter in the browser and needs JavaScript and WebGL to fly. <a href="about.html">What the game is</a> and the <a href="handbook.html">Pilot\'s Handbook</a> can be read without them.':
     'SolarTournament est un shooter spatial multijoueur gratuit dans le navigateur et a besoin de JavaScript et de WebGL pour voler. <a href="about.html">Ce qu’est le jeu</a> et le <a href="handbook.html">Manuel du pilote</a> se lisent sans eux.',
   'About the game': 'À propos du jeu',
@@ -1176,17 +1176,17 @@ export const FR: Catalog = {
   "Pilot's Handbook: controls, tactics and rules · SolarTournament": 'Manuel du pilote : commandes, tactiques et règles · SolarTournament',
   "The Pilot's Handbook of the Ministry of War: controls, flying, racing, the dogfight, every mode and arena of SolarTournament, with the real numbers.":
     'Le Manuel du pilote du ministère de la Guerre : commandes, vol, course, combat, chaque mode et chaque arène de SolarTournament, avec les vrais chiffres.',
-  'A free space shooter in the browser that obeys Newton. Five minutes a round. SolarTournament': 'Un shooter spatial gratuit dans le navigateur qui obéit à Newton. Cinq minutes par manche. SolarTournament',
+  'A free space shooter in the browser with realistic physics and awesome dogfights. Five minutes a round. SolarTournament': 'Un shooter spatial gratuit dans le navigateur, avec une physique réaliste et des combats d’enfer. Cinq minutes par manche. SolarTournament',
   'About the game: a free space shooter in the browser · SolarTournament': 'À propos du jeu : shooter spatial gratuit dans le navigateur · SolarTournament',
-  'SolarTournament is a free multiplayer space shooter in the browser: Newtonian flight, no shields, seven arenas and five modes. No download, no account.':
-    'SolarTournament est un shooter spatial multijoueur gratuit dans le navigateur : vol newtonien, aucun bouclier, sept arènes et cinq modes. Sans téléchargement, sans compte.',
-  'A space shooter that <span class="neon">obeys Newton</span>': 'Un shooter spatial qui <span class="neon">obéit à Newton</span>',
+  'SolarTournament is a free multiplayer space shooter in the browser: realistic physics, awesome dogfights, seven arenas and five modes. No download, no account.':
+    'SolarTournament est un shooter spatial multijoueur gratuit dans le navigateur : physique réaliste, combats d’enfer, sept arènes et cinq modes. Sans téléchargement, sans compte.',
+  'Realistic physics, <span class="neon">awesome dogfights</span>': 'Physique réaliste, <span class="neon">combats d’enfer</span>',
   'SolarTournament is a free multiplayer space shooter in the browser. No download, no account, five minutes a round: open the page and fly.':
     'SolarTournament est un shooter spatial multijoueur gratuit dans le navigateur. Sans téléchargement, sans compte, cinq minutes par manche : ouvre la page et vole.',
   'Play now': 'Jouer maintenant',
   'A ship in orbit around a black hole, its glowing disk bent by the gravitational lens': 'Un vaisseau en orbite autour d’un trou noir, son disque incandescent courbé par la lentille gravitationnelle',
   'A ship among the asteroids of the Belt, its drive burning bright': 'Un vaisseau parmi les astéroïdes de la Ceinture, son moteur brûlant avec éclat',
-  'Newtonian flight, no shields': 'Vol newtonien, aucun bouclier',
+  'Realistic physics, no shields': 'Physique réaliste, aucun bouclier',
   'A ship keeps flying where it was flying until a drive says otherwise. There is no drag in space and no shield on any hull: a laser punches straight through, and a careless burn ends in a rock. The flight computer makes it flyable from the first minute; switch it off, drift sideways and fire past your own course.':
     'Un vaisseau continue de voler là où il volait tant qu’un moteur n’en décide pas autrement. Dans l’espace, il n’y a ni traînée ni bouclier sur aucune coque : un laser transperce tout, et une poussée imprudente finit dans un rocher. L’ordinateur de vol rend le vaisseau pilotable dès la première minute ; coupe-le, dérive de côté et tire à côté de ta propre trajectoire.',
   'Five ways to play': 'Cinq façons de jouer',

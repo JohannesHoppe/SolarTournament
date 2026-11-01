@@ -1242,8 +1242,8 @@ export const ES: Catalog = {
     'Están hechos para volarlos con amigos. Quien hace trampas, se las hace a sus amigos. Si eso te divierte, diviértete mientras dure: los demás Hosts te expulsarán.',
   // what search results and link previews say, and the page that says what the game is (about.html)
   'SolarTournament: free multiplayer space shooter in your browser': 'SolarTournament: shooter espacial multijugador gratis en el navegador',
-  "Newtonian dogfights and races in five-minute rounds, online or against bots: free, no download, no account. Seven arenas, from Saturn's rings to a black hole.":
-    'Combates y carreras newtonianos en rondas de cinco minutos, online o contra bots: gratis, sin descarga y sin cuenta. Siete arenas, de los anillos de Saturno a un agujero negro.',
+  "Realistic physics and awesome dogfights in five-minute rounds, online or against bots: free, no download, no account. Seven arenas, from Saturn's rings to a black hole.":
+    'Física realista y combates brutales en rondas de cinco minutos, online o contra bots: gratis, sin descarga y sin cuenta. Siete arenas, de los anillos de Saturno a un agujero negro.',
   'SolarTournament is a free multiplayer space shooter in the browser and needs JavaScript and WebGL to fly. <a href="about.html">What the game is</a> and the <a href="handbook.html">Pilot\'s Handbook</a> can be read without them.':
     'SolarTournament es un shooter espacial multijugador gratis en el navegador y necesita JavaScript y WebGL para volar. <a href="about.html">Qué es el juego</a> y el <a href="handbook.html">Manual del piloto</a> se pueden leer sin ellos.',
   'About the game': 'Sobre el juego',
@@ -1253,17 +1253,17 @@ export const ES: Catalog = {
   "Pilot's Handbook: controls, tactics and rules · SolarTournament": 'Manual del piloto: controles, tácticas y reglas · SolarTournament',
   "The Pilot's Handbook of the Ministry of War: controls, flying, racing, the dogfight, every mode and arena of SolarTournament, with the real numbers.":
     'El Manual del piloto del Ministerio de la Guerra: controles, vuelo, carreras, combate, cada modo y arena de SolarTournament, con las cifras reales.',
-  'A free space shooter in the browser that obeys Newton. Five minutes a round. SolarTournament': 'Un shooter espacial gratis en el navegador que obedece a Newton. Cinco minutos por ronda. SolarTournament',
+  'A free space shooter in the browser with realistic physics and awesome dogfights. Five minutes a round. SolarTournament': 'Un shooter espacial gratis en el navegador con física realista y combates brutales. Cinco minutos por ronda. SolarTournament',
   'About the game: a free space shooter in the browser · SolarTournament': 'Sobre el juego: shooter espacial gratis en el navegador · SolarTournament',
-  'SolarTournament is a free multiplayer space shooter in the browser: Newtonian flight, no shields, seven arenas and five modes. No download, no account.':
-    'SolarTournament es un shooter espacial multijugador gratis en el navegador: vuelo newtoniano, sin escudos, siete arenas y cinco modos. Sin descarga y sin cuenta.',
-  'A space shooter that <span class="neon">obeys Newton</span>': 'Un shooter espacial que <span class="neon">obedece a Newton</span>',
+  'SolarTournament is a free multiplayer space shooter in the browser: realistic physics, awesome dogfights, seven arenas and five modes. No download, no account.':
+    'SolarTournament es un shooter espacial multijugador gratis en el navegador: física realista, combates brutales, siete arenas y cinco modos. Sin descarga y sin cuenta.',
+  'Realistic physics, <span class="neon">awesome dogfights</span>': 'Física realista, <span class="neon">combates brutales</span>',
   'SolarTournament is a free multiplayer space shooter in the browser. No download, no account, five minutes a round: open the page and fly.':
     'SolarTournament es un shooter espacial multijugador gratis en el navegador. Sin descarga, sin cuenta, cinco minutos por ronda: abre la página y vuela.',
   'Play now': 'Jugar ahora',
   'A ship in orbit around a black hole, its glowing disk bent by the gravitational lens': 'Una nave en órbita alrededor de un agujero negro, con su disco incandescente curvado por la lente gravitatoria',
   'A ship among the asteroids of the Belt, its drive burning bright': 'Una nave entre los asteroides del Cinturón, con el motor ardiendo con fuerza',
-  'Newtonian flight, no shields': 'Vuelo newtoniano, sin escudos',
+  'Realistic physics, no shields': 'Física realista, sin escudos',
   'A ship keeps flying where it was flying until a drive says otherwise. There is no drag in space and no shield on any hull: a laser punches straight through, and a careless burn ends in a rock. The flight computer makes it flyable from the first minute; switch it off, drift sideways and fire past your own course.':
     'Una nave sigue volando hacia donde volaba hasta que un motor diga lo contrario. En el espacio no hay rozamiento y ningún casco tiene escudo: un láser lo atraviesa de lado a lado, y un empuje descuidado acaba en una roca. El ordenador de vuelo hace que se pueda pilotar desde el primer minuto; apágalo, deriva de lado y dispara fuera de tu propio rumbo.',
   'Five ways to play': 'Cinco formas de jugar',

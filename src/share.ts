@@ -35,7 +35,7 @@ const GAME_TEXTS = {
   solo: msg('Five minutes, one arena, and I died for the President again. Your turn. SolarTournament'),
   radio: msg('Radio 2584: hard techno from the Presidential Games, a new track every round. SolarTournament'),
   handbook: msg("The Pilot's Handbook of the Ministry of War: read it between deaths. SolarTournament"),
-  about: msg('A free space shooter in the browser that obeys Newton. Five minutes a round. SolarTournament'),
+  about: msg('A free space shooter in the browser with realistic physics and awesome dogfights. Five minutes a round. SolarTournament'),
 };
 
 /** The link and text shared from where the Host is. */
