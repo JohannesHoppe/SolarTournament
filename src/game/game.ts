@@ -3339,16 +3339,17 @@ export class Game implements OnlineGame {
   /**
    * On the medium tier (shadows still on, a device that may still be weak), the sun's shadow
    * map is refreshed only every other frame: a rock's spin and a ship's flight barely change
-   * its shadows between two frames, so the saved pass goes unseen. Elsewhere the renderer
-   * refreshes it itself (the default), including during the benchmark, which measures features
-   * one frame at a time.
+   * its shadows between two frames, so the saved pass goes unseen. A frame without the map (the
+   * first, or after it changed size) always refreshes it: without one, whatever takes the sun's
+   * shadows fails to draw. Elsewhere the renderer refreshes it itself (the default), including
+   * during the benchmark, which measures features one frame at a time.
    */
   private updateShadowMap() {
     const medium = !this.bench.size && this.graphics.look.shadows > 0 && this.graphics.rung >= TIER_RUNGS.medium;
     this.renderer.shadowMap.autoUpdate = !medium;
     if (!medium) return;
     this.shadowFrame = (this.shadowFrame + 1) % 2;
-    this.renderer.shadowMap.needsUpdate = this.shadowFrame === 0;
+    this.renderer.shadowMap.needsUpdate = this.shadowFrame === 0 || !this.space.hasShadowMap;
   }
 
   /** The parts of the scene the benchmark switched off. */

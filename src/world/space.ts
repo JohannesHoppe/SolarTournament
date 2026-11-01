@@ -260,6 +260,11 @@ export class Space {
     this.flare(0);
   }
 
+  /** Whether the sun's shadow map exists: the renderer makes it in its next shadow pass. */
+  get hasShadowMap() {
+    return this.sunLight.shadow.map !== null;
+  }
+
   /**
    * The picture's quality (see view/quality): the sun's shadow map `shadows` px on an edge, 0
    * for no shadows (the rocks then leave the ships lit), and the share of the dust drawn.

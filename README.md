@@ -47,7 +47,7 @@ The game draws the same world on every device, but not with the same effort: the
 | 3 | 1.75 device pixels per CSS pixel | |
 | 4 | Bloom at half resolution (a quarter of its pixels); the black hole's lens (seen only in its own arena) marches 4 steps along each pixel's ray instead of 6 | |
 | 5 | Shadow map 2048 px | |
-| 6 | 1.5 device pixels per CSS pixel, the pad as well; the sun's shadow map (still on through rung 9) is refreshed only every other frame, not every one (`Game.updateShadowMap`): what casts it barely moves between two | **medium** |
+| 6 | 1.5 device pixels per CSS pixel, the pad as well; the sun's shadow map (still on through rung 9) is refreshed only every other frame, not every one, and at once when it does not exist yet or changed size (`Game.updateShadowMap`): what casts it barely moves between two | **medium** |
 | 7 | Shadow map 1024 px | |
 | 8 | 1.25 device pixels per CSS pixel; the pad at 1, without its shadow | |
 | 9 | Half the particles, dust and grains of the ring, the Belt's sparks, drill dust and dust clouds, half the belt's rocks beyond the arena; Jupiter's cap at 64 × 24 segments, without its sheets of cloud, its cloud tops without their grain and the pop-up clouds' shadows, 32 wisps, one layer of the auroras; Saturn's, Jupiter's and Earth's maps at 1024 instead of 2048 wide, the real sky's Milky Way at 512 instead of 1024 texels a face; the Corona's eight tallest prominences, its sun's face without its finest grain | |
