@@ -723,7 +723,7 @@ export const ES: Catalog = {
   'Hot, isn’t it? Cool down in the shadow of an asteroid. I marked one.': 'Qué calor, ¿verdad? Enfríate a la sombra de un asteroide. Te he marcado uno.',
   'Trouble ahead. When impact flashes, brake, or steer around the rock.': 'Problemas a la vista. Cuando parpadee el aviso de impacto, frena o rodea la roca.',
   'Without turning, darling.': 'Sin girar, cariño.',
-  'A bot on the run. It does not shoot. Stay on its tail and hit its drive. Brake if you overshoot.': 'Un bot a la fuga. No dispara. Pégate a su cola y dale en el motor. Frena si te pasas.',
+  'A bot on the run. It does not shoot. Stay on its tail and hit its drive. Brake if you overshoot. Autopilot too stiff? Switch to free drift, and your nose is free to follow it.': 'Un bot a la fuga. No dispara. Pégate a su cola y dale en el motor. Frena si te pasas. ¿El piloto automático va demasiado rígido? Pasa a deriva libre, y tu morro podrá seguirlo sin ataduras.',
   'Now it shoots back. Never let it get behind you. Keep your armored nose on it, slide, and work your way onto its tail.': 'Ahora te devuelve los disparos. No dejes nunca que se te ponga detrás. Mantén el morro acorazado hacia él, deslízate y ve colocándote en su cola.',
   'Final exam. A real bot, and it knows the trick too. Win the dogfight.': 'Examen final. Un bot de verdad, y él también se sabe el truco. Gana el duelo.',
   'Well done, pilot. Remember: firing at armor only heats your laser. Win the dogfight, get on their tail, and hit the drive. You are cleared for the tournament. Go and die for the President.':
@@ -758,10 +758,9 @@ export const ES: Catalog = {
   'Debris, and it is fast. Too fast to slide. Tap a thruster twice, and every thruster kicks at once. Do not turn.': 'Escombros, y van muy rápido. Demasiado para esquivarlos deslizándote. Pulsa dos veces un propulsor y todos empujarán a la vez. No gires.',
   'A drone drifts beside you, past a rock. When the rock comes up, kick your thrusters into the drone, and put it into the stone. Dirty, darling. Dirty is the point.': 'Un dron va a la deriva a tu lado, junto a una roca. Cuando llegue la roca, empuja con los propulsores contra el dron y estréllalo contra la piedra. Sucio, cariño. De eso se trata.',
   'Someone is right behind you, on your drive. Turn your armored nose to it, and fight back.': 'Alguien se te ha pegado justo detrás, apuntando a tu motor. Encáralo con tu morro acorazado y devuélvele el fuego.',
-  'Kill this one without overheating. Short bursts, only when the crosshair glows.': 'Acaba con este sin sobrecalentarte. Ráfagas cortas, solo cuando brille la mira.',
+  'This one shoots back. Get behind it and hit its drive: once is enough. Armor just heats your laser, so fire short bursts, only when the crosshair glows. Use free drift if the autopilot will not take you there.': 'Este te devuelve los disparos. Ponte detrás y dale en el motor: con una vez basta. El blindaje solo calienta tu láser, así que ráfagas cortas, solo cuando brille la mira. Usa la deriva libre si el piloto automático no te lleva.',
   'Free drift wins dogfights. Switch to it as you pass the bot. Your flight slides on, and your nose is all yours: turn it onto the bot, and hit it three times. Then autopilot back on.': 'La deriva libre gana duelos. Actívala al pasar junto al bot. Tu vuelo sigue deslizándose, y el morro es todo tuyo: gíralo hacia el bot y dale tres veces. Después, vuelve a activar el piloto automático.',
   'Sideways, darling. Fire while your nose is off your flight. Again.': 'De lado, cariño. Dispara mientras tu morro apunta fuera de tu trayectoria. Otra vez.',
-  'Too hot, darling. A locked laser is a dead clone. Short bursts. Again.': 'Demasiado caliente, cariño. Un láser sobrecalentado es un clon muerto. Ráfagas cortas. Otra vez.',
   'This one is good, and it is hunting you. Get the rock between you and it, and stay there.': 'Este es bueno, y te está cazando. Pon la roca entre tú y él y quédate ahí.',
   'A torpedo is coming. Do not shoot it this time. Get behind the rock.': 'Viene un torpedo. Esta vez no lo derribes. Ponte detrás de la roca.',
   'It got you. Put the rock between you and it. Again.': 'Te ha dado. Pon la roca entre tú y él. Otra vez.',
@@ -1240,6 +1239,8 @@ export const ES: Catalog = {
     'Los Juegos funcionan sin servidor central. Los navegadores de los Hosts construyen entre ellos la red del torneo y acuerdan por consenso lo que ocurre.',
   'They are meant to be flown with friends. Whoever cheats, cheats their friends. If that is fun for you, have fun while it lasts: the other Hosts will cast you out.':
     'Están hechos para volarlos con amigos. Quien hace trampas, se las hace a sus amigos. Si eso te divierte, diviértete mientras dure: los demás Hosts te expulsarán.',
+  'Getting behind a bot on autopilot is hard, because your flight follows your nose and carries you past it. Switch to free drift for the fight: your flight slides on, and your nose stays on its drive.':
+    'Con el piloto automático cuesta ponerse detrás de un bot, porque tu vuelo sigue a tu morro y te lleva más allá de él. Pasa a deriva libre para el combate: tu vuelo sigue deslizándose y tu morro se queda en su motor.',
   // what search results and link previews say, and the page that says what the game is (about.html)
   'SolarTournament: free multiplayer space shooter in your browser': 'SolarTournament: shooter espacial multijugador gratis en el navegador',
   "Realistic physics and awesome dogfights in five-minute rounds, online or against bots: free, no download, no account. Seven arenas, from Saturn's rings to a black hole.":

@@ -316,7 +316,7 @@ export const SLIDE_ANGLE = Math.PI / 3;
 const SLIDE_MOVING = 400;
 /** Skill of the tactician's sparring bots (see Bot): the one on the tail, the one for bursts, the hunter of the cover drill, and the exam's, as good as the middling bot of the field. */
 const TAIL_SKILL = 0.15;
-const BURST_SKILL = 0.25;
+const BURST_SKILL = 0.15;
 const HUNTER_SKILL = 0.5;
 const EXAM_SKILL = 0.5;
 /**
@@ -951,9 +951,9 @@ export const DRILL = {
     done: (ctx) => ctx.autopilot,
     autopilotAfter: true,
   },
-  chase: sparring(SCHOOL.chase, SCHOOL_PRAISE.chase, ['turn', 'drive', 'brake', 'fire'], false, 0.1),
-  evade: sparring(SCHOOL.evade, SCHOOL_PRAISE.evade, ['turn', 'drive', 'slide', 'fire'], true, 0.05),
-  duel: sparring(SCHOOL.duel, SCHOOL_PRAISE.duel, ['turn', 'drive', 'brake', 'slide', 'fire'], true, 0.2),
+  chase: sparring(SCHOOL.chase, SCHOOL_PRAISE.chase, ['turn', 'drive', 'brake', 'fire', 'autopilot'], false, 0.1),
+  evade: sparring(SCHOOL.evade, SCHOOL_PRAISE.evade, ['turn', 'drive', 'slide', 'fire', 'autopilot'], true, 0.05),
+  duel: sparring(SCHOOL.duel, SCHOOL_PRAISE.duel, ['turn', 'drive', 'brake', 'slide', 'fire', 'autopilot'], true, 0.2),
   // the arsenal: what a clone carries besides its laser, and what it finds out there
   torpedo: {
     line: SCHOOL.torpedo,
@@ -1070,10 +1070,12 @@ export const DRILL = {
   },
   // a bot sits on the pilot's tail and fires: the armored nose has to come round to it
   onTail: sparring(SCHOOL.onTail, SCHOOL_PRAISE.onTail, ['turn', 'slide', 'fire'], true, TAIL_SKILL, 6000),
-  // a kill without ever overheating the laser
+  // one hit into the drive of a bot that fights back, or the bot gone however it went; an
+  // overheated laser only locks, which is lesson enough
   bursts: {
-    ...sparring(SCHOOL.bursts, SCHOOL_PRAISE.bursts, ['turn', 'drive', 'fire'], true, BURST_SKILL),
-    fail: (ctx, a) => (ctx.me.overheated ? SCHOOL.tooHot : botLost(ctx, a) ? SCHOOL.again : null),
+    ...sparring(SCHOOL.bursts, SCHOOL_PRAISE.bursts, ['turn', 'drive', 'fire', 'autopilot'], true, BURST_SKILL),
+    done: (ctx) => !!ctx.bot && (!ctx.bot.alive || ctx.bot.drive < 1),
+    fail: undefined,
   },
   // free drift in a dogfight: sliding past a bot, the nose turned onto it, firing sideways or
   // back; then the autopilot on again to leave
@@ -1254,8 +1256,8 @@ function sparring(line: string, praise: string, keys: Command[], armed: boolean,
       ctx.spawnBot(clear(ctx, ahead(ctx, 0, 0, at), 2000), armed, skill);
       a.count = ctx.me.kills;
     },
-    // the bot down by the pilot's hand; crashed on its own, it counts for nothing
-    done: (ctx, a) => !!ctx.bot && !ctx.bot.alive && ctx.me.kills > a.count,
+    // the bot down by the pilot's hand, or crashed with a drive the pilot shot up; crashed on its own, it counts for nothing
+    done: (ctx, a) => !!ctx.bot && !ctx.bot.alive && (ctx.me.kills > a.count || ctx.bot.drive < 1),
     fail: (ctx, a) => (botLost(ctx, a) ? SCHOOL.again : null),
     leave: (ctx) => ctx.removeBot(),
     waypoint: (ctx) => (ctx.bot?.alive ? ctx.bot.flight.position : null),
@@ -1338,8 +1340,9 @@ export function coursesFrom(text: string | null): Set<SchoolCourse> | null {
  * drive that the turn alone lacks and the brake, aiming, a curve with the autopilot, stopping at
  * a point and the rocks, all with the autopilot on. The racer, in the order a race runs: the start, the rings and the X
  * where the flight crosses them, their coils, the racing line's brake zones, the line at full
- * speed, and the hook. The gladiator: the laser, its heat and firing in bursts, free drift like a
- * real spaceship, dodging, and the dogfight last. The arsenal: torpedoes (launching one, shooting
+ * speed, and the hook. The gladiator: the laser and its heat, free drift like a real spaceship,
+ * dodging, and the dogfight last: onto a bot's tail, and only then firing in bursts at one that
+ * shoots back, for the laser's heat is spent on misses and armor. The arsenal: torpedoes (launching one, shooting
  * one down), the overdrive, the hook on a ship, then a probe, whose colors name the nova core
  * that follows it. The tactician: defending first (a bot on the tail, the kick), then attacking
  * (shooting sideways in free drift, the shove into rock), then cover from a hunter and from a
@@ -1355,7 +1358,6 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
     DRILL.shootMoving,
     DRILL.overheat,
     DRILL.shadow,
-    DRILL.bursts,
     DRILL.freeDrift,
     DRILL.drift,
     DRILL.lookBack,
@@ -1365,6 +1367,7 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
     DRILL.autopilotOn,
     DRILL.chase,
     DRILL.evade,
+    DRILL.bursts,
     DRILL.duel,
     saying(SCHOOL.done),
   ],

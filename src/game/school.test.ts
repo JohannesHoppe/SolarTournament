@@ -16,11 +16,33 @@ describe('judging a drill', () => {
     expect(judged(DRILL.torpedo, { ...lastHit, torpedoesHit: 0 }, { count: 0 })).toBeTypeOf('string');
   });
 
-  it('counts the kill whose shot overheats the laser as done', () => {
-    const kill = { bot: { alive: false }, me: { overheated: true, kills: 1 } };
-    expect(judged(DRILL.bursts, kill, { count: 0 })).toBe(true);
-    // overheated with the bot still alive: too hot
-    expect(judged(DRILL.bursts, { ...kill, bot: { alive: true } }, {})).toBeTypeOf('string');
+  it('asks one hit into the drive of the bot that shoots back, or the bot gone however it went', () => {
+    const me = { overheated: false, kills: 0 };
+    expect(judged(DRILL.bursts, { bot: { alive: true, drive: 0.8 }, me }, { count: 0 })).toBe(true);
+    expect(judged(DRILL.bursts, { bot: { alive: false, drive: 1 }, me }, { count: 0 })).toBe(true);
+    expect(judged(DRILL.bursts, { bot: { alive: true, drive: 1 }, me }, { count: 0 })).toBeNull();
+    // an overheated laser only locks: the attempt goes on
+    expect(judged(DRILL.bursts, { bot: { alive: true, drive: 1 }, me: { ...me, overheated: true } }, { count: 0 })).toBeNull();
+  });
+
+  it('counts a sparring bot crashed with the drive the pilot shot up, not one crashed on its own', () => {
+    const me = { overheated: false, kills: 0 };
+    for (const drill of [DRILL.chase, DRILL.evade, DRILL.duel]) {
+      expect(judged(drill, { bot: { alive: false, drive: 0.6 }, me }, { count: 0 })).toBe(true);
+      expect(judged(drill, { bot: { alive: false, drive: 1 }, me }, { count: 0 })).toBeTypeOf('string');
+    }
+  });
+
+  it('teaches free drift before the bots, and firing in bursts only at one the pilot has learned to get behind', () => {
+    const order = ['freeDrift', 'chase', 'evade', 'bursts', 'duel'].map((name) => FlightSchool.reached('gladiator', name as never));
+    expect(order).toEqual([...order].sort((a, b) => Number(a) - Number(b)));
+  });
+
+  it('names the drive, the tail and free drift where a bot has to be shot from behind', () => {
+    expect(DRILL.bursts.line).toMatch(/drive/);
+    expect(DRILL.bursts.line).toMatch(/free drift/);
+    expect(DRILL.chase.line).toMatch(/free drift/);
+    for (const drill of [DRILL.chase, DRILL.evade, DRILL.bursts, DRILL.duel]) expect(drill.keys).toContain('autopilot');
   });
 
   it('counts a turn drill done for a pilot who burns to the marker, however the nose points there', () => {
@@ -114,7 +136,7 @@ describe('judging a drill', () => {
 
   it('counts a sparring bot only when the pilot downed it; one that crashed on its own means once more', () => {
     const dead = (kills: number) => ({ bot: { alive: false }, me: { kills, overheated: false } });
-    for (const drill of [DRILL.chase, DRILL.duel, DRILL.exam, DRILL.bursts]) {
+    for (const drill of [DRILL.chase, DRILL.duel, DRILL.exam]) {
       expect(judged(drill, dead(1), { count: 0 })).toBe(true);
       expect(judged(drill, dead(0), { count: 0 })).toBe(SCHOOL.again);
     }

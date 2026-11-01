@@ -237,16 +237,16 @@ The ring courses and the curve lie ahead of the pilot, or, where they would reac
 3. Shooting a drifting drone, again into the drive (the laser hits instantly, no lead needed).
 4. Firing until the laser overheats.
 5. Cooling down in the shadow of an asteroid: the marker stays behind the rock nearest as the drill begins.
-6. Bursts: an armed bot (skill 0.25) 400 m ahead, shot down without the laser ever overheating ("Too hot" starts the attempt over).
-7. Free drift: T switches the autopilot off; the drift lessons that follow need it.
-8. Drifting: let go, nothing slows the ship down.
-9. Looking back while drifting: in free drift steering only turns the nose and the ship slides on, the flight stays (the prograde marker shows it); the praise sets it against the autopilot, where the Host points where to fly.
-10. Flip and burn by hand, twice: hold X and W together; the drive fires once the nose points back; the S brake does not count here, and pressing it starts the attempt over at once ("By hand"). The drill counts once the drift along the course is gone; a little sideways drift may remain.
-11. Jinking: a gunner on the tail fires red shots at where the ship was a moment ago; pushing left and right with the thrusters (A/D) makes them go past. It counts after four changes of side; turning and drift do not matter, a hit only sparks.
-12. Dodging debris that drifts straight at the ship, twice, without turning (more than 45°). The debris starts where its way to the ship is free of rock; one that bursts on rock anyway starts the attempt over.
-13. Autopilot back on (T).
-14. Chasing a bot that flies but does not shoot: it runs, staying on its tail opens its drive.
-15. Fighting a weak bot that shoots back: keep the armored nose on it, slide, and work onto its tail.
+6. Free drift: T switches the autopilot off; the drift lessons that follow need it.
+7. Drifting: let go, nothing slows the ship down.
+8. Looking back while drifting: in free drift steering only turns the nose and the ship slides on, the flight stays (the prograde marker shows it); the praise sets it against the autopilot, where the Host points where to fly.
+9. Flip and burn by hand, twice: hold X and W together; the drive fires once the nose points back; the S brake does not count here, and pressing it starts the attempt over at once ("By hand"). The drill counts once the drift along the course is gone; a little sideways drift may remain.
+10. Jinking: a gunner on the tail fires red shots at where the ship was a moment ago; pushing left and right with the thrusters (A/D) makes them go past. It counts after four changes of side; turning and drift do not matter, a hit only sparks.
+11. Dodging debris that drifts straight at the ship, twice, without turning (more than 45°). The debris starts where its way to the ship is free of rock; one that bursts on rock anyway starts the attempt over.
+12. Autopilot back on (T).
+13. Chasing a bot that flies but does not shoot: it runs, staying on its tail opens its drive. Nicole points out free drift for a nose that follows it freely; this and the fights after it leave the choice to the pilot.
+14. Fighting a weak bot that shoots back: keep the armored nose on it, slide, and work onto its tail.
+15. Bursts: an armed bot (skill 0.15) 400 m ahead that fights back. One hit into its drive from behind is enough, and so is the bot gone however it went; a laser that overheats only locks for a while. Nicole says why it comes to that: armor just heats the laser.
 16. Final exam: a real bot that knows the trick too. Win the dogfight.
 17. Cleared for the tournament.
 
