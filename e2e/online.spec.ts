@@ -24,12 +24,19 @@ const world = (page: Page) =>
     const game = window.game;
     return {
       arena: game.venue.id,
+      mode: game.roundMode,
       round: game.roundId,
       ships: game.ships.map((ship: { id: string }) => ship.id).sort(),
       rocks: [...game.field.asteroids.keys()].sort(),
       tints: game.ships.map((ship: { id: string; tint: string; kind: string }) => `${ship.kind} ${ship.id} ${ship.tint}`).sort(),
     };
   });
+
+/** No errors in the tabs, and honest tabs never take each other for cheats. */
+async function ranHonestly(errors: string[], ...pages: Page[]) {
+  expect(errors).toEqual([]);
+  for (const page of pages) expect(await page.evaluate(() => window.game.online.reported.size)).toBe(0);
+}
 
 test('two tabs of one tournament see the same world', async ({ context }) => {
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}`);
@@ -43,9 +50,46 @@ test('two tabs of one tournament see the same world', async ({ context }) => {
   expect(seenB.tints).toEqual(seenA.tints);
   const hosts = seenA.tints.filter((entry: string) => entry.startsWith('host '));
   expect(new Set(hosts.map((entry: string) => entry.split(' ')[2])).size).toBe(2);
-  expect(errors).toEqual([]);
-  // honest tabs never take each other for cheats
-  for (const page of [a, b]) expect(await page.evaluate(() => window.game.online.reported.size)).toBe(0);
+  await ranHonestly(errors, a, b);
+});
+
+test('the game master, named on its screen alone, cuts a round short for a new one in the arena and mode it chose, on both tabs', async ({ context }) => {
+  const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}m`);
+  const room = (page: Page) => page.evaluate(() => document.getElementById('hud-room')!.textContent!);
+  expect(await room(a)).toContain('You are the game master');
+  expect(await room(b)).not.toContain('You are the game master');
+  // only the game master is offered a new round
+  const offered = (page: Page) =>
+    page.evaluate(() => {
+      window.game.pause();
+      return !document.getElementById('new-round-open')!.hidden;
+    });
+  expect(await offered(b)).toBe(false);
+  await b.evaluate(() => document.getElementById('resume')!.click());
+  expect(await offered(a)).toBe(true);
+  const before = await world(a);
+  const target = before.arena === 'hole' ? 'corona' : 'hole';
+  const mode = before.mode === 'race' ? 'deathmatch' : 'race';
+  await a.evaluate(
+    ({ target, mode }) => {
+      document.getElementById('new-round-open')!.click();
+      document.querySelector<HTMLElement>(`#new-round-arenas button[data-value="${target}"]`)!.click();
+      document.querySelector<HTMLElement>(`[data-choice="new-round-mode"] button[data-value="${mode}"]`)!.click();
+      document.getElementById('new-round-start')!.click();
+    },
+    { target, mode },
+  );
+  // the round ends on both, with the reason on the scoreboard of the other
+  await b.waitForFunction(() => !document.getElementById('results')!.hidden, undefined, { timeout: 20_000 });
+  expect(await b.evaluate(() => document.getElementById('results-next')!.textContent)).toContain('game master');
+  for (const page of [a, b]) await page.waitForFunction((round) => window.game.roundId === round + 1, before.round, { timeout: 30_000 });
+  await b.waitForFunction((target) => window.game.venue.id === target, target, { timeout: 10_000 });
+  const [seenA, seenB] = [await world(a), await world(b)];
+  expect(seenA.arena).toBe(target);
+  expect(seenB.arena).toBe(target);
+  expect(seenB.rocks).toEqual(seenA.rocks);
+  expect([seenA.mode, seenB.mode]).toEqual([mode, mode]);
+  await ranHonestly(errors, a, b);
 });
 
 test('two tabs show a ping for each other and agree on who leads', async ({ context }) => {
@@ -204,8 +248,7 @@ test('two tabs see a probe on a hook travel to the hooking ship, and be taken th
   // taken by the ship that hooked it, on its arrival: two more torpedoes, and gone on both tabs
   expect(await a.evaluate(() => window.game.me.torpedoes)).toBe(before + 2);
   for (const page of [a, b]) expect(await page.evaluate(() => window.game.probes.find('e2e.0.0'))).toBeNull();
-  expect(errors).toEqual([]);
-  for (const page of [a, b]) expect(await page.evaluate(() => window.game.online.reported.size)).toBe(0);
+  await ranHonestly(errors, a, b);
 });
 
 test('two tabs of Capture the Flag agree on the sides and on who has a core in tow, taken by a hook shot', async ({ context }) => {
@@ -248,12 +291,16 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
 
 test("two tabs of the President's Fleet see one battleship and count the same hits, a torpedo's too", async ({ context }) => {
   const { a, b, errors } = await pair(context, `e2e-${Date.now().toString(36)}b&m=fleet&bots=0`);
-  // the battleship comes in on the field time; both tabs wait for it
-  for (const page of [a, b]) await page.evaluate(() => window.game.field.setClock(13));
+  // the batteries hold their fire on both tabs, each firing at its own view of the clones, which
+  // sit right above them: the test counts hits, and a clone shot down could not fire the next
+  // shot or fly through the core. The battleship comes in on the field time; both tabs wait for it
+  for (const page of [a, b]) {
+    await page.evaluate(() => {
+      window.game.fireBattery = () => {};
+      window.game.field.setClock(13);
+    });
+  }
   await play(b, 2);
-  // the batteries hold their fire on the shooting tab's clone, which sits right above them: the
-  // test counts hits, and a clone shot down between two shots could not fire the next
-  await b.evaluate(() => (window.game.fireBattery = () => {}));
   const where = (page: Page) => page.evaluate(() => window.game.fleet.position.toArray());
   const [atA, atB] = [await where(a), await where(b)];
   expect(Math.hypot(atA[0] - atB[0], atA[1] - atB[1], atA[2] - atB[2])).toBeLessThan(2000);
@@ -308,7 +355,6 @@ test("two tabs of the President's Fleet see one battleship and count the same hi
   // the dead clone of the second tab dropped a nova core 150 m above the third battery, on both
   // tabs alike; the first tab's clone flies through it, fires there, and both count the core's
   // hits on every part it reached: the battery under it broken outright
-  await a.evaluate(() => (window.game.fireBattery = () => {}));
   const dropper = await b.evaluate(() => ({ id: window.game.me.id, deaths: window.game.me.deaths }));
   for (const page of [a, b]) {
     await page.evaluate(({ id, deaths }) => {

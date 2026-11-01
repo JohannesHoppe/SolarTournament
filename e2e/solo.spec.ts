@@ -31,6 +31,38 @@ for (const mode of ['deathmatch', 'survival', 'flag', 'fleet']) {
   });
 }
 
+test('alone, the pause menu pays out the round and starts a new one at once, in the arena and mode chosen; the flight school offers none', async ({ page }) => {
+  const errors = await openGame(page);
+  await startSolo(page, 'deathmatch');
+  await play(page, 3);
+  const round = await page.evaluate(() => {
+    const game = window.game;
+    game.me.score = 500;
+    const coins = game.hangar.coins;
+    game.pause();
+    const offered = !document.getElementById('new-round-open')!.hidden;
+    const named = document.querySelector<HTMLElement>('#hud-room')!.textContent;
+    document.getElementById('new-round-open')!.click();
+    const mixed = !document.querySelector<HTMLElement>('[data-choice="new-round-mode"] button[data-value="mixed"]')!.hidden;
+    document.querySelector<HTMLElement>('#new-round-arenas button[data-value="hole"]')!.click();
+    document.querySelector<HTMLElement>('[data-choice="new-round-mode"] button[data-value="flag"]')!.click();
+    document.getElementById('new-round-start')!.click();
+    return { offered, named, mixed, paid: game.hangar.coins - coins, state: game.state, arena: game.venue.id, mode: game.roundMode, score: game.me.score, plate: document.getElementById('new-round')!.hidden, pause: document.getElementById('pause')!.hidden };
+  });
+  expect(round).toMatchObject({ offered: true, named: '', mixed: false, state: 'playing', arena: 'hole', mode: 'flag', score: 0, plate: true, pause: true });
+  expect(round.paid).toBeGreaterThan(0);
+  await play(page, 2);
+  const school = await page.evaluate(() => {
+    const game = window.game;
+    game.showMenu();
+    document.getElementById('school-basic')!.click();
+    game.pause();
+    return document.getElementById('new-round-open')!.hidden;
+  });
+  expect(school).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 test('the hangar sells an upgrade for Solar Coins and keeps it, and the Sovereign is not flown before it is earned', async ({ page }) => {
   await page.addInitScript(() => {
     if (!sessionStorage.getItem('seeded')) localStorage.setItem('solartournament.hangar', JSON.stringify({ coins: 1200, ship: 'human' }));

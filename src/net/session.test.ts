@@ -51,6 +51,26 @@ function joined(self: string) {
   return { session: created, transport };
 }
 
+describe('the game master in the round state', () => {
+  /** The round the session passes on when a peer sends `round` with its states. */
+  function heard(round: object) {
+    const { session, transport } = joined('z');
+    let seen: unknown = 'nothing';
+    session.onStates = (_states, passed) => (seen = passed);
+    transport.connected.push('h');
+    transport.handlers.get('s')!({ s: [], r: { id: 3, left: -9, field: 5, ...round }, g: 1 }, 'h');
+    return seen;
+  }
+
+  it('passes on a chosen arena and a round cut short', () => {
+    expect(heard({ a: 'hole', c: 1 })).toMatchObject({ id: 3, left: -9, a: 'hole', c: 1 });
+  });
+
+  it('drops a message naming an arena that does not exist or a cut that is not one', () => {
+    for (const bad of [{ a: 'moon' }, { a: 7 }, { a: 'toString' }, { c: 2 }, { c: true }]) expect(heard(bad)).toBe('nothing');
+  });
+});
+
 describe('the lead browser', () => {
   beforeEach(() => {
     clock = 0;

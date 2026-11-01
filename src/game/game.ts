@@ -112,6 +112,8 @@ import { ShareButton, type ShareWhere } from '../share';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
 const RESULTS_SECONDS = 12;
+/** A round the game master cuts short shows its scoreboard this long: long enough to read one's place, short since the Hosts just asked for the next (s). */
+const CUT_RESULTS_SECONDS = 3;
 /** The motion streaks follow the share of particles drawn, but keep at least this share of STREAKS: they say where the ship moves. */
 const STREAKS_LEAST = 0.75;
 /** The standings held open with Tab are written anew this often (s, real time). */
@@ -843,6 +845,17 @@ export class Game implements OnlineGame {
   private roomPublic = true;
   private roomBots = true;
   private roomMode: RoomMode = 'race';
+  /** What the game master chose on the plate of a new round; online the lead browser starts it once the scoreboard of the round cut short has been shown. */
+  private nextRound: { arena: ArenaId; mode: RoomMode } | null = null;
+  /** The plate of a new round is open, with the choices on it. */
+  private choosingRound = false;
+  private roundChoice: { arena: ArenaId; mode: RoomMode } = { arena: DEFAULT_ARENA.id, mode: 'deathmatch' };
+  /** The round whose arena the game master chose, instead of the room's order. */
+  private pickedArena: { round: number; arena: ArenaId } | null = null;
+  /** The game master is cutting the running round short for a new one. */
+  private roundCut = false;
+  /** This browser's Host was last told it is the game master. */
+  private toldGameMaster = false;
   /** What the running round is, its course when it is a race, its bases and cores in Capture the Flag. */
   private roundMode: RoundMode = 'deathmatch';
   private course: Course | null = null;
@@ -1304,7 +1317,7 @@ export class Game implements OnlineGame {
     $('hangar-back').addEventListener('click', () => this.showHangar(false));
     this.renderShowcase();
     // the modes to choose from, for a solo round and for a room, each a button with its name
-    for (const [choice, modes] of [['solo-mode', ROUND_MODES], ['room-mode', [...ROUND_MODES, 'mixed']]] as const) {
+    for (const [choice, modes] of [['solo-mode', ROUND_MODES], ['room-mode', [...ROUND_MODES, 'mixed']], ['new-round-mode', [...ROUND_MODES, 'mixed']]] as const) {
       document.querySelector(`[data-choice="${choice}"]`)!.append(
         ...modes.map((mode) => {
           const button = Object.assign(document.createElement('button'), { type: 'button', textContent: t(MODE_NAMES[mode]) });
@@ -1346,6 +1359,7 @@ export class Game implements OnlineGame {
     this.describeRoom();
     $('resume').addEventListener('click', () => this.resume());
     $('quit').addEventListener('click', () => this.endRound());
+    this.buildNewRound();
     $('again').addEventListener('click', () => this.showMenu());
     $('invite').addEventListener('click', () => void this.share.share());
     $('radio').addEventListener('click', () => this.toggleRadio());
@@ -2089,6 +2103,12 @@ export class Game implements OnlineGame {
         if (action === 'watch' && this.watching()) this.watchNext();
         break;
       case 'paused':
+        // on the plate of a new round Enter starts it and Escape goes back
+        if (this.choosingRound) {
+          if (action === 'confirm') this.startChosenRound();
+          if (action === 'back' || action === 'pause') this.showNewRound(false);
+          break;
+        }
         if (action === 'confirm' || action === 'pause' || action === 'back') this.resume();
         if (action === 'quit') this.endRound();
         break;
@@ -2107,6 +2127,8 @@ export class Game implements OnlineGame {
     $('menu').hidden = state !== 'menu';
     $('crest').hidden = state !== 'menu';
     $('pause').hidden = state !== 'paused';
+    $('new-round').hidden = true;
+    this.choosingRound = false;
     $('results').hidden = state !== 'results';
     // a phone held upright is asked to turn sideways while a round is flown (see #turn-phone)
     document.body.classList.toggle('playing', state === 'playing');
@@ -2217,7 +2239,95 @@ export class Game implements OnlineGame {
 
   /** The arena of the running online round, from the room and the round number. */
   private roundArena(): ArenaProfile {
-    return arenaOfRound(this.online!.session.room, Math.max(0, this.roundId));
+    const round = Math.max(0, this.roundId);
+    const picked = this.pickedArena?.round === round ? arenaById(this.pickedArena.arena) : undefined;
+    return picked ?? arenaOfRound(this.online!.session.room, round);
+  }
+
+  /** This browser's Host decides what is played: online the Host of the lead browser, alone the Host itself; the flight school has its own course. */
+  private get gameMaster() {
+    return !this.school && (!this.online || this.online.isLead);
+  }
+
+  /** The plate of a new round: the arenas and the modes to choose from. */
+  private buildNewRound() {
+    $('new-round-arenas').append(
+      ...ARENAS.map((arena) => {
+        const button = Object.assign(document.createElement('button'), { type: 'button', innerHTML: `${t(arena.name)}<small>${t(arena.tagline)}</small>` });
+        button.dataset.value = arena.id;
+        button.addEventListener('click', () => {
+          this.roundChoice.arena = arena.id;
+          this.renderNewRound();
+        });
+        return button;
+      }),
+    );
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-choice="new-round-mode"] button[data-value]')) {
+      button.addEventListener('click', () => {
+        this.roundChoice.mode = button.dataset.value as RoomMode;
+        this.renderNewRound();
+      });
+    }
+    $('new-round-open').addEventListener('click', () => this.showNewRound(true));
+    $('new-round-start').addEventListener('click', () => this.startChosenRound());
+    $('new-round-back').addEventListener('click', () => this.showNewRound(false));
+  }
+
+  /** Marks the choices on the plate of a new round. */
+  private renderNewRound() {
+    const { arena, mode } = this.roundChoice;
+    [...$('new-round-arenas').children].forEach((b, i) => b.classList.toggle('selected', ARENAS[i].id === arena));
+    for (const button of document.querySelectorAll<HTMLButtonElement>('[data-choice="new-round-mode"] button[data-value]')) {
+      button.classList.toggle('selected', button.dataset.value === mode);
+      // every mode in turn is a rule of a tournament's rounds
+      if (button.dataset.value === 'mixed') button.hidden = !this.online;
+    }
+  }
+
+  /** Opens the plate of a new round on what is played now, or goes back to the pause menu. */
+  private showNewRound(open: boolean) {
+    this.choosingRound = open;
+    $('new-round').hidden = !open;
+    $('pause').hidden = open;
+    if (open) {
+      this.roundChoice = { arena: this.venue.id, mode: this.online ? (this.room?.mode ?? this.roundMode) : this.roundMode };
+      $('new-round-note').textContent = this.online ? t('You are the game master: the round is cut short for every Host, its points paid out as usual.') : t('The round so far is paid out as usual.');
+      this.renderNewRound();
+    }
+    $(open ? 'new-round-start' : 'resume').focus();
+  }
+
+  /**
+   * Starts the round chosen on the plate. Alone at once. In a tournament the running round ends
+   * for everyone with a short scoreboard, by the lead's clock as a round decided early does, so
+   * every browser pays out its points; the next round then starts as any next round does.
+   */
+  private startChosenRound() {
+    const { arena, mode } = this.roundChoice;
+    if (!this.online) {
+      this.renderScoreboard();
+      this.solo.arena = arena;
+      this.solo.mode = mode === 'mixed' ? this.solo.mode : mode;
+      this.startRound('solo');
+      return;
+    }
+    // the job of the lead browser may have gone to another while the plate was open
+    if (this.online.isLead) {
+      this.nextRound = { arena, mode };
+      this.roundCut = true;
+      this.setRoundEnd(Math.min(this.roundEndsAtWall - this.roundClock(), CUT_RESULTS_SECONDS - RESULTS_SECONDS));
+    }
+    this.resume();
+  }
+
+  /** The HUD says who decides: it names the game master on this browser, and the pause menu offers a new round only there. */
+  private showGameMaster(online: Online) {
+    if (online.isLead === this.toldGameMaster) return;
+    this.toldGameMaster = online.isLead;
+    $('new-round-open').hidden = !online.isLead;
+    $('hud-room').classList.toggle('game-master', online.isLead);
+    if (online.isLead) this.hud.flashMessage(this.time, t('You are the game master: the pause menu starts a new round, with any arena and mode'), 8);
+    else if (this.choosingRound) this.showNewRound(false);
   }
 
   /** Shows where the round is played and what it is: the arena's name, a race's laps, what makes the arena special; the opening's intro card says it while it runs. */
@@ -2346,6 +2456,9 @@ export class Game implements OnlineGame {
     // the flight school trains in the default arena; a solo round is in the arena chosen; online the
     // room and round decide, so a first round starts in the room's first arena (see arriveInRound)
     this.roundId = mode === 'online' ? -1 : 0;
+    this.nextRound = this.pickedArena = null;
+    this.roundCut = this.toldGameMaster = false;
+    $('hud-room').classList.remove('game-master');
     // a solo round plays what the Host chose, in the arena chosen or one by chance
     this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? this.solo.mode : 'deathmatch';
     if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0));
@@ -2649,6 +2762,9 @@ export class Game implements OnlineGame {
   syncRound(round: RoundState) {
     // the room's modes are the lead's: a link or a lobby listing may have named others
     if (round.m && this.room && round.m !== this.room.mode) this.room.mode = round.m;
+    // so is the choice of the game master, known before the arena is entered
+    if (round.a && round.id >= this.roundId) this.pickedArena = { round: round.id, arena: round.a };
+    if (round.id === this.roundId) this.roundCut = round.c === 1;
     // the first round state a newcomer hears only tells it which round runs: its field is the
     // lead's snapshot already (see Online's onSync), not a fresh one. A browser that started
     // over in another round than its own leaves its own behind.
@@ -2661,8 +2777,8 @@ export class Game implements OnlineGame {
       this.arriveInRound(newcomer);
     } else if (round.id > this.roundId) {
       // a new round only once the running one is over; a lead that counts rounds up before
-      // has nothing to say about this one
-      if (this.roundClock() < this.roundEndsAtWall - ROUND_END_SLACK) return;
+      // has nothing to say about this one, unless its game master chose the new round
+      if (!round.a && this.roundClock() < this.roundEndsAtWall - ROUND_END_SLACK) return;
       this.roundId = round.id;
       this.startNextRound();
     } else if (round.id < this.roundId) return;
@@ -2693,6 +2809,12 @@ export class Game implements OnlineGame {
     // the lead browser starts the next round once the scoreboard has been shown
     if (this.roundClock() >= this.roundEndsAtWall + RESULTS_SECONDS) {
       this.roundId++;
+      // what the game master chose: the mode stays the room's rule from here on, the arena is this round's
+      if (this.nextRound) {
+        if (this.room) this.room.mode = this.nextRound.mode;
+        this.pickedArena = { round: this.roundId, arena: this.nextRound.arena };
+        this.nextRound = null;
+      }
       this.startNextRound();
       this.setRoundEnd(ROUND_SECONDS);
     }
@@ -2700,7 +2822,7 @@ export class Game implements OnlineGame {
     const left = this.roundEndsAtWall - this.roundClock();
     this.roundEndsAt = this.time + left;
     this.followStart();
-    const round: RoundState = { id: this.roundId, left: +left.toFixed(3), field: +this.field.clock.toFixed(3), ...(this.room ? { m: this.room.mode } : {}) };
+    const round: RoundState = { id: this.roundId, left: +left.toFixed(3), field: +this.field.clock.toFixed(3), ...(this.room ? { m: this.room.mode } : {}), ...(this.pickedArena?.round === this.roundId ? { a: this.pickedArena.arena } : {}), ...(this.roundCut ? { c: 1 as const } : {}) };
     if (this.flags) round.f = this.flags.toState();
     if (this.fleet) round.b = this.fleet.toState();
     return round;
@@ -2825,6 +2947,7 @@ export class Game implements OnlineGame {
     this.streaks.reset();
     this.wrecks.clear();
     this.probes.reset();
+    this.roundCut = false;
     $('results').hidden = true;
   }
 
@@ -2919,6 +3042,7 @@ export class Game implements OnlineGame {
   private pause() {
     // the handbook opens at the section of what is being flown (its sections are named after the modes)
     ($('pause-handbook') as HTMLAnchorElement).hash = this.school ? 'flying' : this.roundMode;
+    $('new-round-open').hidden = !this.gameMaster;
     this.setScreen('paused');
     // Enter resumes, so the keyboard's focus starts there too
     $('resume').focus();
@@ -3174,7 +3298,8 @@ export class Game implements OnlineGame {
       this.speaker.say(COMPUTER.roundOver, 'urgent');
     }
     $('results').hidden = this.state !== 'playing';
-    const next = t('Next round in {seconds} s', { seconds: Math.ceil(Math.max(0, this.roundEndsAt + RESULTS_SECONDS - this.time)) });
+    const seconds = Math.ceil(Math.max(0, this.roundEndsAt + RESULTS_SECONDS - this.time));
+    const next = this.roundCut ? t('The game master ended the round · next round in {seconds} s', { seconds }) : t('Next round in {seconds} s', { seconds });
     if ($('results-next').textContent !== next) $('results-next').textContent = next;
   }
 
@@ -3547,8 +3672,10 @@ export class Game implements OnlineGame {
       const relayOff = this.online.session.relayOff;
       const pilots = { name: this.room?.name ?? t('Online'), n: this.online.pilots };
       const hosts = pilots.n === 1 ? t('{name} · {n} Host', pilots) : t('{name} · {n} Hosts', pilots);
-      const room = relayOff ? t('{hosts} · Relay off: {reason}', { hosts, reason: t(relayOff) }) : hosts;
+      const relayed = relayOff ? t('{hosts} · Relay off: {reason}', { hosts, reason: t(relayOff) }) : hosts;
+      const room = this.online.isLead ? t('{room} · You are the game master', { room: relayed }) : relayed;
       if ($('hud-room').textContent !== room) $('hud-room').textContent = room;
+      this.showGameMaster(this.online);
       if (now >= this.roundEndsAt) this.showOnlineResults();
     } else {
       if (this.decided() && this.roundEndsAt - now > DECIDED_SECONDS) this.setRoundEnd(DECIDED_SECONDS);

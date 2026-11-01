@@ -19,14 +19,14 @@ export function markedName(kind: Kind, name: string): Node[] {
 }
 
 /**
- * The lead browser, which runs the round and the bots, before its Host's name in the standings:
+ * The game master, whose browser leads and runs the round and the bots, before its Host's name in the standings:
  * a small star, drawn the same way as the bot and Host marks, never a character.
  */
 export function markLead(): HTMLElement {
   const mark = document.createElement('i');
   mark.className = 'mark lead';
   mark.setAttribute('role', 'img');
-  mark.setAttribute('aria-label', t('Lead browser: runs the round and the bots'));
+  mark.setAttribute('aria-label', t('Game master: runs the round and the bots, and can start a new one'));
   return mark;
 }
 

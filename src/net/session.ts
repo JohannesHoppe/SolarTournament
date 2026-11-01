@@ -6,6 +6,7 @@ import { CHEATS, type Cheat } from './plausible';
 import { LocalTransport, TrysteroTransport, type Transport } from './transport';
 import { roomMode } from './room';
 import type { RoomMode } from '../game/race';
+import { arenaById, type ArenaId } from '../world/arenas';
 import type { ProbeState } from '../game/items';
 import type { FlagsState } from '../game/flags';
 import { TORPEDO_HITS, ZONE_HITS, type FleetState } from '../game/fleet';
@@ -108,7 +109,8 @@ const MAX_PING_RATE = 4;
  * rounds; in Capture the Flag also the sides and the cores (see game/flags), in the President's
  * Fleet the battleship (see game/fleet).
  */
-export type RoundState = { id: number; left: number; field: number; m?: RoomMode; f?: FlagsState; b?: FleetState };
+/** The lead's round: `a` names its arena where the game master chose it, `c` says the game master is cutting it short for a new one. */
+export type RoundState = { id: number; left: number; field: number; m?: RoomMode; a?: ArenaId; c?: 1; f?: FlagsState; b?: FleetState };
 
 export type Vec = number[];
 
@@ -928,6 +930,15 @@ export class Session {
       const mode = roomMode(x.m);
       if (mode !== x.m) return undefined;
       state.m = mode;
+    }
+    if (x.a !== undefined) {
+      const arena = typeof x.a === 'string' ? arenaById(x.a) : undefined;
+      if (!arena) return undefined;
+      state.a = arena.id;
+    }
+    if (x.c !== undefined) {
+      if (x.c !== 1) return undefined;
+      state.c = 1;
     }
     if (x.f !== undefined) {
       const flags = flagsState(x.f);

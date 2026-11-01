@@ -391,11 +391,13 @@ button.primary .mode-note {
 }
 
 /* the arenas: two in a row, each with its name and what it is like (the chosen one shows behind the plate) */
-#solo-arenas {
+#solo-arenas,
+#new-round-arenas {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 }
 
-#solo-arenas small {
+#solo-arenas small,
+#new-round-arenas small {
   text-align: justify;
   hyphens: auto;
 }
@@ -433,7 +435,8 @@ button.primary .mode-note {
   border-color: var(--accent);
 }
 
-#solo {
+#solo,
+#new-round {
   width: min(560px, calc(100vw - 32px));
 }
 
@@ -1979,6 +1982,11 @@ body.nova-flash #hud::after {
   left: 16px;
   color: var(--hud-dim);
   font-size: 0.8rem;
+}
+
+/* the own browser leads: the line names its Host the game master, in the HUD's full azure */
+#hud-room.game-master {
+  color: var(--hud);
 }
 
 body.touch #hud-room {

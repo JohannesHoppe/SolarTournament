@@ -221,8 +221,20 @@
     <button type="button" id="resume" class="primary" data-i18n>Resume <kbd>Enter</kbd></button>
     <button type="button" id="invite" hidden data-i18n>Invite friends</button>
     <button type="button" id="fullscreen-pause" hidden data-i18n>Fullscreen</button>
+    <button type="button" id="new-round-open" hidden data-i18n>New round</button>
     <a id="pause-handbook" class="button" href="handbook.html" target="_blank" data-i18n>Pilot's Handbook</a>
     <button type="button" id="quit" data-i18n>Quit round <kbd>Q</kbd></button>
+  </div>
+
+  <div id="new-round" class="plate" hidden>
+    <h2 data-i18n>New round</h2>
+    <p id="new-round-note" class="plate-note"></p>
+    <p class="plate-label" data-i18n>Arena</p>
+    <div id="new-round-arenas" class="choice-grid" role="group" aria-label="Arena" data-i18n-attr="aria-label"></div>
+    <p class="plate-label" data-i18n>Rounds</p>
+    <div class="choice-grid" role="group" aria-label="Rounds" data-i18n-attr="aria-label" data-choice="new-round-mode"></div>
+    <button type="button" id="new-round-start" class="primary" data-i18n>Start new round <kbd>Enter</kbd></button>
+    <button type="button" id="new-round-back" data-i18n>Back <kbd>Esc</kbd></button>
   </div>
 
   <div id="results" class="plate" hidden>
