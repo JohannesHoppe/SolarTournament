@@ -16,7 +16,7 @@ export const GAME_URL = 'https://solartournament.games/';
  * net/room.ts; the pages of the station share this module without the game's code), so a friend
  * joins at once.
  */
-export type ShareWhere = 'menu' | 'school' | 'solo' | 'radio' | 'handbook' | { name: string; public: boolean; link: string };
+export type ShareWhere = 'menu' | 'school' | 'solo' | 'radio' | 'handbook' | 'about' | { name: string; public: boolean; link: string };
 
 export interface ShareLink {
   title: string;
@@ -35,6 +35,7 @@ const GAME_TEXTS = {
   solo: msg('Five minutes, one arena, and I died for the President again. Your turn. SolarTournament'),
   radio: msg('Radio 2584: hard techno from the Presidential Games, a new track every round. SolarTournament'),
   handbook: msg("The Pilot's Handbook of the Ministry of War: read it between deaths. SolarTournament"),
+  about: msg('A free space shooter in the browser that obeys Newton. Five minutes a round. SolarTournament'),
 };
 
 /** The link and text shared from where the Host is. */

@@ -74,7 +74,7 @@ test("in an online tournament the share menu shares the tournament's own link an
   expect(errors).toEqual([]);
 });
 
-for (const path of ['radio.html', 'handbook.html']) {
+for (const path of ['radio.html', 'handbook.html', 'about.html']) {
   test(`${path} has the share button in its corner`, async ({ page }) => {
     const errors: string[] = [];
     page.on('pageerror', (error) => errors.push(String(error)));

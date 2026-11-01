@@ -1,5 +1,5 @@
 import { HANDBOOK_NUMBERS } from './handbook/numbers';
-import { currentLocale, initLocale, t, translatePage } from './i18n/i18n';
+import { currentLocale, initLocale, t, translatePage, writtenNumbers } from './i18n/i18n';
 import { shareCorner } from './share';
 
 /**
@@ -8,9 +8,7 @@ import { shareCorner } from './share';
  */
 
 initLocale();
-const format = new Intl.NumberFormat(currentLocale());
-translatePage(document, Object.fromEntries(Object.entries(HANDBOOK_NUMBERS).map(([name, value]) => [name, format.format(value)])));
-document.title = `${t("Pilot's Handbook")} · SolarTournament`;
+translatePage(document, writtenNumbers(HANDBOOK_NUMBERS, currentLocale()));
 shareCorner('handbook');
 // a number keeps its unit on its line ("30 %", "250 m/s")
 const texts = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);

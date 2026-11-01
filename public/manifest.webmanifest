@@ -2,6 +2,7 @@
   "name": "SolarTournament",
   "short_name": "SolarTournament",
   "description": "Five minutes. Die for the President. Again and again.",
+  "categories": ["games"],
   "start_url": "./",
   "scope": "./",
   "display": "fullscreen",

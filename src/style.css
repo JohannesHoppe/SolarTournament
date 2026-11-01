@@ -4015,6 +4015,32 @@ button.quiet:focus-visible {
   font-size: 0.85rem;
 }
 
+/* What the game is (about.html): the handbook's plates, with pictures of the game between them. */
+.about-play {
+  margin: 24px 0;
+}
+
+.about-shot {
+  margin: 0 0 24px;
+}
+
+.about-shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+}
+
+/* the home page without JavaScript */
+.no-script {
+  position: relative;
+  z-index: 1;
+  max-width: 40rem;
+  margin: 16px auto;
+  padding: 0 16px;
+}
+
 /*
  * The Pilot's Handbook (handbook.html): a column of plates, one per section, the Ministry's
  * headings in neon, the practical text justified, the keys as keycaps.
@@ -4034,7 +4060,8 @@ button.quiet:focus-visible {
   padding-left: 1.6em;
 }
 
-.handbook-contents a {
+.handbook-contents a,
+.handbook section a {
   color: var(--accent-strong);
 }
 

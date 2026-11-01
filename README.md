@@ -102,6 +102,10 @@ On a phone: open the address with `?bench` (the test stage, or the dev server ov
 
 On the desktop the ladder's own resolution rungs (3, 6, 8, 11, 13) change little: at 1 device pixel per CSS pixel, the picture is already drawn at its lowest; the "Half the resolution" row above forces a cut below that floor to measure the full-screen passes' cost per pixel on their own.
 
+## Search engines and link previews
+
+Every page a search can land on (the game, `about.html`, the handbook, the radio) has one address per language, its texts in place in the file itself: `/`, `/about`, `/handbook`, `/radio` in English, `/de`, `/about-de`, `/handbook-de`, `/radio-de` in German, the same with `es` and `fr`. Opening one of them chooses its language; the English addresses still follow a browser's own language, so links already out there go on working as they did. The build writes all of it (`tools/seo/`): canonical address, siblings, link preview, the home page's structured data, the sitemap. Only production is found: the test stage and the raw Pages addresses answer `X-Robots-Tag: noindex`, and the German legal pages carry `noindex`.
+
 ## Deploy
 
 The game is a static site on [Cloudflare Pages](https://pages.cloudflare.com/), project `solartournament` (`wrangler.toml`). Two stages, one branch each:

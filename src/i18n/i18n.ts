@@ -36,20 +36,29 @@ export const currentLocale = () => locale;
 /** The language a Host chose in the menu (see chooseLocale). */
 const LOCALE_KEY = 'solartournament.language';
 
-/** Sets the language at startup: the one the Host chose, else its browser's (see pickLocale). */
+/**
+ * Sets the language at startup: the one of the address the Host came to (a page written out in
+ * that language names it, see tools/seo/pages.ts, and the Host's pages stay in it from then on),
+ * else the one the Host chose, else its browser's (see pickLocale).
+ */
 export function initLocale() {
-  setLocale(pickLocale(storageGet(LOCALE_KEY), typeof navigator === 'undefined' ? [] : navigator.languages));
+  const addressed = typeof document === 'undefined' ? undefined : document.documentElement.dataset.locale;
+  if (addressed) storageSet(LOCALE_KEY, addressed);
+  setLocale(pickLocale(addressed ?? storageGet(LOCALE_KEY), typeof navigator === 'undefined' ? [] : navigator.languages));
 }
 
 /**
- * The Host chooses a language: it is kept, and the page starts anew in it. Texts are put in
- * place once (the page's, the marks on the radar, the voices), so a fresh start puts them all
- * in the new language at once.
+ * The Host chooses a language: it is kept, and the page starts anew in it, at its address in that
+ * language where the page has one (on this host, the room's code kept). Texts are put in place
+ * once (the page's, the marks on the radar, the voices), so a fresh start puts them all in the
+ * new language at once.
  */
 export function chooseLocale(next: Locale) {
   if (next === locale) return;
   storageSet(LOCALE_KEY, next);
-  location.reload();
+  const sibling = document.querySelector<HTMLLinkElement>(`link[rel="alternate"][hreflang="${next}"]`);
+  if (sibling) location.assign(new URL(sibling.href).pathname + location.search + location.hash);
+  else location.reload();
 }
 
 export function setLocale(next: Locale) {
@@ -60,6 +69,12 @@ export function setLocale(next: Locale) {
 /** A text in the current language, its placeholders filled in. */
 export function t(source: string, params?: Record<string, string | number>): string {
   return fill(locale === 'en' ? source : (CATALOGS[locale][source] ?? source), params);
+}
+
+/** Numbers as a language writes them, ready to fill a text's placeholders. */
+export function writtenNumbers(numbers: Record<string, number>, language: Locale): Record<string, string> {
+  const format = new Intl.NumberFormat(language);
+  return Object.fromEntries(Object.entries(numbers).map(([name, value]) => [name, format.format(value)]));
 }
 
 /** Marks a text for translation where it is kept (a table, a constant) and shown elsewhere through t(): it returns the text as it is. */

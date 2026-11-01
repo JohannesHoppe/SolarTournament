@@ -3,7 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>SolarTournament</title>
+  <title data-i18n>SolarTournament: free multiplayer space shooter in your browser</title>
+  <meta name="description" content="Newtonian dogfights and races in five-minute rounds, online or against bots: free, no download, no account. Seven arenas, from Saturn's rings to a black hole." data-i18n-attr="content">
   <!-- added to the home screen, the game starts without the browser's bars -->
   <link rel="manifest" href="manifest.webmanifest">
   <meta name="theme-color" content="#02030a">
@@ -13,6 +14,7 @@
   <link rel="apple-touch-icon" href="icon-180.png">
 </head>
 <body>
+  <noscript><p class="no-script" data-i18n>SolarTournament is a free multiplayer space shooter in the browser and needs JavaScript and WebGL to fly. <a href="about.html">What the game is</a> and the <a href="handbook.html">Pilot's Handbook</a> can be read without them.</p></noscript>
   <div id="game"></div>
 
   <div id="hud" hidden>
@@ -113,7 +115,7 @@
     <p class="best" id="best-score"></p>
     <div id="languages" class="ship-select" role="group" aria-label="Language" data-i18n-attr="aria-label"></div>
     <div id="quality" class="ship-select" role="group" aria-label="Graphics" data-i18n-attr="aria-label"></div>
-    <p class="source"><a href="handbook.html" target="_blank" class="handbook-link" data-i18n>Pilot's Handbook</a> · <a href="https://github.com/JohannesHoppe/SolarTournament" target="_blank" rel="noopener noreferrer" data-i18n>Source code</a> · AGPL-3.0 · <a href="impressum.html" target="_blank">Impressum</a> · <a href="datenschutz.html" target="_blank">Datenschutz</a></p>
+    <p class="source"><a href="about.html" target="_blank" data-i18n>About the game</a> · <a href="handbook.html" target="_blank" class="handbook-link" data-i18n>Pilot's Handbook</a> · <a href="https://github.com/JohannesHoppe/SolarTournament" target="_blank" rel="noopener noreferrer" data-i18n>Source code</a> · AGPL-3.0 · <a href="impressum.html" target="_blank">Impressum</a> · <a href="datenschutz.html" target="_blank">Datenschutz</a></p>
   </div>
 
   <div id="transmission" hidden><span id="transmission-speaker"></span><span id="transmission-text"></span></div>

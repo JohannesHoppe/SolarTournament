@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { allLines } from '../../src/music/lines.ts';
+import { I18N_ATTRIBUTES, I18N_TEXT } from '../seo/pages.ts';
 
 /**
  * Every English text of the game that is translated (see src/i18n/i18n.ts), with where it is
@@ -22,10 +23,10 @@ export function sources(root: string): Map<string, string[]> {
       add(unescape(match[2]), relative(root, file));
     }
   }
-  for (const page of ['index.html', 'radio.html', 'handbook.html']) {
+  for (const page of ['index.html', 'radio.html', 'handbook.html', 'about.html']) {
     const html = readFileSync(join(root, page), 'utf8');
-    for (const match of html.matchAll(/<(\w+)\b[^>]*\sdata-i18n(?:="")?(?=[\s>])[^>]*>([\s\S]*?)<\/\1>/g)) add(match[2].replace(/\s+/g, ' '), page);
-    for (const match of html.matchAll(/<\w+\b([^>]*)\sdata-i18n-attr="([^"]+)"([^>]*)>/g)) {
+    for (const match of html.matchAll(I18N_TEXT)) add(match[3].replace(/\s+/g, ' '), page);
+    for (const match of html.matchAll(I18N_ATTRIBUTES)) {
       const attributes = match[1] + match[3];
       for (const name of match[2].split(' ')) {
         const value = attributes.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];

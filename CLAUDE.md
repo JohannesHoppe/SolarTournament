@@ -122,7 +122,9 @@ Never use `npx`, always the scripts from `package.json`.
 
 ## Structure
 
-The repository root is the Vite project: `index.html` (the game), `radio.html` (Radio 2584), `handbook.html` (the Pilot's Handbook, linked from the menu, the flight school's plate and the pause menu, which opens it at the section of the mode flown), `impressum.html` and `datenschutz.html` (German legal pages, linked from the menu and the radio page) are its pages, `public/` holds the static files, `tools/` the generators that write into `public/`.
+The repository root is the Vite project: `index.html` (the game), `radio.html` (Radio 2584), `handbook.html` (the Pilot's Handbook, linked from the menu, the flight school's plate and the pause menu, which opens it at the section of the mode flown), `about.html` (what the game is, for those a search or a link brings, linked from the menu), `impressum.html` and `datenschutz.html` (German legal pages, linked from the menu and the radio page) are its pages, `public/` holds the static files, `tools/` the generators that write into `public/`.
+
+**Search engines.** The build writes each page a search can land on in every language at an address of its own, with its head, plus the sitemap (`tools/seo/`, checked by `src/seo.test.ts`). A title and a description are ordinary texts of their page; a new such page goes into `PAGES` in `tools/seo/pages.ts` and the build's inputs. `about.html` and the home page's description say what the game offers (arenas, modes, what it costs), so a change to that updates them in the same commit.
 
 **The privacy policy follows the code.** `datenschutz.html` lists every data flow of the game: Cloudflare hosting, the thirteen localStorage entries, the radio page's last pressing in IndexedDB, the online tournament and its lobby (WebRTC between players, public Nostr relays, Cloudflare's STUN server and TURN relay, public tournament names, the cheat reports between the browsers), the share menu (nothing sent until the Host picks a target; the networks it links to), the satire ads (no ad network), e-mail contact. Any change that adds a data flow (a new storage key, an external request, an ad network, analytics, another TURN or STUN server) updates the privacy policy in the same commit. Nothing is loaded from third-party servers at runtime.
 
@@ -135,6 +137,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `main.ts` | Startup of the game: WebGL check, load assets, create `Game` |
 | `radio-page.ts` | Startup of the radio page: tune in a title, play it, jump in it, download it as WAV, and save the last pressing again |
 | `handbook-page.ts` | Startup of the Pilot's Handbook: its texts in the Host's language, the game's numbers filled in |
+| `about-page.ts` | Startup of the page that says what the game is: its texts in the Host's language |
 | `handbook/` | The handbook's numbers (`numbers.ts`), taken from the game's constants or checked against the README |
 | `bench.ts` | The benchmark (`?bench`): a fixed scene, the cost per frame of every feature, quality rung, arena and mode, as a table on screen, in the console and as JSON; the frame meter (`?fps`) |
 | `style.css` | Styles of both pages |

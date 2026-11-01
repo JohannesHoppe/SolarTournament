@@ -9,6 +9,7 @@ Programs that run on a developer's machine or in a build, never in the player's 
 | [`sky/`](sky/) | The real sky's stars, `public/assets/sky/stars.bin`, from the Yale Bright Star Catalogue | `npm run sky` |
 | [`i18n/`](i18n/) | Lists the texts a language's catalog still lacks | `npm run i18n -- de` |
 | [`dupes/`](dupes/) | Finds style rules declared twice | `npm run dupes` (with jscpd) |
+| [`seo/`](seo/) | What search engines and link previews read: every findable page in every language, its head, the sitemap, who may index what | part of `npm run build` |
 | [`relays/`](relays/) | Checks public Nostr relays and keeps the healthy ones in `src/net/relays.json` | `npm run relays` (weekly by the workflow Relays) |
 | [`check/`](check/) | Runs every quality gate and sums them up | `npm run check`, `npm run check:full` |
 

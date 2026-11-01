@@ -1,9 +1,10 @@
-import { defineConfig, type Plugin } from 'vite';
+import { createServer, defineConfig, type Plugin } from 'vite';
 import { createHash } from 'node:crypto';
 import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { defaultRelayUrls } from 'trystero';
 import relayList from './src/net/relays.json' with { type: 'json' };
+import { indexingRules, LANGUAGES, LEGAL_PAGE, localizePage, NOT_FOR_SEARCH, pageFile, PAGES, sitemap } from './tools/seo/pages.ts';
 
 /** Sends visitors of the Cloudflare Pages addresses of production and test (the test stage's branch, and main, which Cloudflare built earlier and still serves) on to our own domains, keeping path and room code. */
 const HOME_SCRIPT =
@@ -46,9 +47,35 @@ const redirect = (html: string, page: string) => insert(html, page, '<meta chars
  *   Vite only copies);
  * - at the end of the head, icon and stylesheet;
  * - on the pages of the station look (`<body class="page">`), the seal glowing behind the page;
- * - on the legal pages (`<main class="station legal">`), the seal leading home and the eyebrow.
+ * - on the legal pages (`<main class="station legal">`), the seal leading home and the eyebrow,
+ *   and the word to search engines to leave them out.
  */
 let building = false;
+
+/**
+ * Writes every page a search can land on in every language, with sitemap, into the built site
+ * (see tools/seo/pages.ts). The catalogs and the handbook's numbers come from the game's own code,
+ * loaded through Vite as the unit tests load it.
+ */
+async function writeLanguages(dist: string) {
+  const loader = await createServer({ configFile: false, root: import.meta.dirname, logLevel: 'error', appType: 'custom', server: { middlewareMode: true, hmr: false, watch: null } });
+  try {
+    const { CATALOGS, writtenNumbers } = await loader.ssrLoadModule('/src/i18n/i18n.ts');
+    const { HANDBOOK_NUMBERS } = await loader.ssrLoadModule('/src/handbook/numbers.ts');
+    for (const page of PAGES) {
+      const built = readFileSync(join(dist, `${page}.html`), 'utf8');
+      for (const language of LANGUAGES) {
+        const translate = (text: string) => (language === 'en' ? text : (CATALOGS[language][text] ?? text));
+        const numbers = page === 'handbook' ? writtenNumbers(HANDBOOK_NUMBERS, language) : {};
+        writeFileSync(join(dist, pageFile(page, language)), localizePage(built, page, language, translate, numbers));
+      }
+    }
+  } finally {
+    await loader.close();
+  }
+  writeFileSync(join(dist, 'sitemap.xml'), sitemap());
+}
+
 const pageShell: Plugin = {
   name: 'page-shell',
   configResolved(config) {
@@ -60,18 +87,19 @@ const pageShell: Plugin = {
       let page = redirect(html, filename);
       page = insert(page, filename, '</head>', '  <link rel="icon" href="crest.svg" type="image/svg+xml">\n  <link rel="stylesheet" href="/src/style.css">\n', true);
       if (page.includes('<body class="page">')) page = insert(page, filename, '<body class="page">', '\n  <div class="crest" aria-hidden="true"></div>');
-      if (page.includes('<main class="station legal">')) {
+      if (page.includes(LEGAL_PAGE)) {
+        page = insert(page, filename, '</head>', `  ${NOT_FOR_SEARCH}\n`, true);
         page = insert(
           page,
           filename,
-          '<main class="station legal">',
+          LEGAL_PAGE,
           '\n    <a href="./" class="legal-home"><img class="logo" src="crest.svg" alt="SolarTournament" width="88" height="88"></a>\n    <p class="legal-eyebrow">Rechtliches</p>',
         );
       }
       return page;
     },
   },
-  closeBundle() {
+  async closeBundle() {
     if (!building) return;
     const notFound = resolve(import.meta.dirname, 'dist/404.html');
     writeFileSync(notFound, redirect(readFileSync(notFound, 'utf8'), '404.html'));
@@ -81,7 +109,8 @@ const pageShell: Plugin = {
     const lines = SECURITY_HEADERS.map((header) => `  ${header}`);
     const tooLong = lines.find((line) => line.length > HEADER_LINE_LIMIT);
     if (tooLong) throw new Error(`_headers: a line of ${tooLong.length} characters, Cloudflare Pages takes ${HEADER_LINE_LIMIT} at most: ${tooLong.slice(0, 60)}…`);
-    writeFileSync(join(dist, '_headers'), `/*\n${lines.map((line) => `${line}\n`).join('')}`);
+    writeFileSync(join(dist, '_headers'), `/*\n${lines.map((line) => `${line}\n`).join('')}\n${indexingRules(process.env.CF_PAGES_BRANCH)}`);
+    await writeLanguages(dist);
   },
 };
 
@@ -97,7 +126,7 @@ export default defineConfig({
   build: {
     target: 'es2022',
     rollupOptions: {
-      input: Object.fromEntries(['index', 'radio', 'handbook', 'impressum', 'datenschutz'].map((page) => [page, resolve(import.meta.dirname, `${page}.html`)])),
+      input: Object.fromEntries(['index', 'radio', 'handbook', 'about', 'impressum', 'datenschutz'].map((page) => [page, resolve(import.meta.dirname, `${page}.html`)])),
     },
   },
 });

@@ -1163,6 +1163,61 @@ export const FR: Catalog = {
   'In the hangar the coins buy upgrades for both interceptors, three steps each: radiators, thrusters, main drive, torpedo tubes, plating, and the looks (neon trim, drive flame). Online every upgrade counts for one step at most, so newcomers meet veterans almost as equals; the looks count in full. Complete both interceptors, and the President gives you the Sovereign: a trophy, not a better ship.': 'Au hangar, les Solar Coins achètent des améliorations pour les deux intercepteurs, trois niveaux chacune : radiateurs, propulseurs, moteur principal, tubes lance-torpilles, surblindage, et l’apparence (liseré néon, flamme du moteur). En ligne, chaque amélioration compte pour un niveau au plus, si bien que les nouveaux affrontent les vétérans presque à égalité ; l’apparence compte en entier. Complète les deux intercepteurs, et le Président t’offre le Souverain : un trophée, pas un meilleur vaisseau.',
   'The Games run without a central server. The Hosts\' browsers build the tournament\'s network among themselves and agree on what happens by consensus.': 'Les Jeux tournent sans serveur central. Les navigateurs des Hôtes construisent entre eux le réseau du tournoi et s’accordent par consensus sur ce qui se passe.',
   'They are meant to be flown with friends. Whoever cheats, cheats their friends. If that is fun for you, have fun while it lasts: the other Hosts will cast you out.': 'Ils sont faits pour voler entre amis. Qui triche trompe ses amis. Si ça t’amuse, amuse-toi tant que ça dure : les autres Hôtes te mettront dehors.',
+  // what search results and link previews say, and the page that says what the game is (about.html)
+  'SolarTournament: free multiplayer space shooter in your browser': 'SolarTournament : shooter spatial multijoueur gratuit dans le navigateur',
+  "Newtonian dogfights and races in five-minute rounds, online or against bots: free, no download, no account. Seven arenas, from Saturn's rings to a black hole.":
+    'Combats et courses newtoniens en manches de cinq minutes, en ligne ou contre des bots : gratuit, sans téléchargement, sans compte. Sept arènes, des anneaux de Saturne à un trou noir.',
+  'SolarTournament is a free multiplayer space shooter in the browser and needs JavaScript and WebGL to fly. <a href="about.html">What the game is</a> and the <a href="handbook.html">Pilot\'s Handbook</a> can be read without them.':
+    'SolarTournament est un shooter spatial multijoueur gratuit dans le navigateur et a besoin de JavaScript et de WebGL pour voler. <a href="about.html">Ce qu’est le jeu</a> et le <a href="handbook.html">Manuel du pilote</a> se lisent sans eux.',
+  'About the game': 'À propos du jeu',
+  'Radio 2584: generated hard techno · SolarTournament': 'Radio 2584 : hard techno généré · SolarTournament',
+  'Every round of SolarTournament grows its own techno track. Its title is its seed: enter a title, listen again, download it.':
+    'Chaque manche de SolarTournament fait pousser son propre morceau de techno. Son titre est sa graine : saisis un titre, réécoute-le, télécharge-le.',
+  "Pilot's Handbook: controls, tactics and rules · SolarTournament": 'Manuel du pilote : commandes, tactiques et règles · SolarTournament',
+  "The Pilot's Handbook of the Ministry of War: controls, flying, racing, the dogfight, every mode and arena of SolarTournament, with the real numbers.":
+    'Le Manuel du pilote du ministère de la Guerre : commandes, vol, course, combat, chaque mode et chaque arène de SolarTournament, avec les vrais chiffres.',
+  'A free space shooter in the browser that obeys Newton. Five minutes a round. SolarTournament': 'Un shooter spatial gratuit dans le navigateur qui obéit à Newton. Cinq minutes par manche. SolarTournament',
+  'About the game: a free space shooter in the browser · SolarTournament': 'À propos du jeu : shooter spatial gratuit dans le navigateur · SolarTournament',
+  'SolarTournament is a free multiplayer space shooter in the browser: Newtonian flight, no shields, seven arenas and five modes. No download, no account.':
+    'SolarTournament est un shooter spatial multijoueur gratuit dans le navigateur : vol newtonien, aucun bouclier, sept arènes et cinq modes. Sans téléchargement, sans compte.',
+  'A space shooter that <span class="neon">obeys Newton</span>': 'Un shooter spatial qui <span class="neon">obéit à Newton</span>',
+  'SolarTournament is a free multiplayer space shooter in the browser. No download, no account, five minutes a round: open the page and fly.':
+    'SolarTournament est un shooter spatial multijoueur gratuit dans le navigateur. Sans téléchargement, sans compte, cinq minutes par manche : ouvre la page et vole.',
+  'Play now': 'Jouer maintenant',
+  'A ship in orbit around a black hole, its glowing disk bent by the gravitational lens': 'Un vaisseau en orbite autour d’un trou noir, son disque incandescent courbé par la lentille gravitationnelle',
+  'A ship among the asteroids of the Belt, its drive burning bright': 'Un vaisseau parmi les astéroïdes de la Ceinture, son moteur brûlant avec éclat',
+  'Newtonian flight, no shields': 'Vol newtonien, aucun bouclier',
+  'A ship keeps flying where it was flying until a drive says otherwise. There is no drag in space and no shield on any hull: a laser punches straight through, and a careless burn ends in a rock. The flight computer makes it flyable from the first minute; switch it off, drift sideways and fire past your own course.':
+    'Un vaisseau continue de voler là où il volait tant qu’un moteur n’en décide pas autrement. Dans l’espace, il n’y a ni traînée ni bouclier sur aucune coque : un laser transperce tout, et une poussée imprudente finit dans un rocher. L’ordinateur de vol rend le vaisseau pilotable dès la première minute ; coupe-le, dérive de côté et tire à côté de ta propre trajectoire.',
+  'Five ways to play': 'Cinq façons de jouer',
+  '<strong>Deathmatch.</strong> Everyone against everyone among the rocks, for points.': '<strong>Match à mort.</strong> Tous contre tous parmi les rochers, pour les points.',
+  '<strong>Race.</strong> Laps through a course of gates at full burn, with a ghost of your best lap.': '<strong>Course.</strong> Des tours à travers un circuit de portes à pleine poussée, avec le fantôme de ton meilleur tour.',
+  '<strong>Last Clone Standing.</strong> A limited supply of clones, and a solar flare eating into the arena.': '<strong>Dernier Clone Debout.</strong> Une réserve limitée de clones et une éruption solaire qui ronge l’arène.',
+  "<strong>Capture the Flag.</strong> Two sides tow each other's sponsor cores home on a cable.": '<strong>Capture du drapeau.</strong> Deux camps se volent leurs noyaux de sponsors et les remorquent chez eux au bout d’un câble.',
+  "<strong>The President's Fleet.</strong> Everyone together against one battleship, part by part, down to its reactor.": '<strong>La Flotte du Président.</strong> Tous ensemble contre un cuirassé, pièce par pièce, jusqu’à son réacteur.',
+  'Seven arenas': 'Sept arènes',
+  '<strong>The Belt.</strong> Rock and mining rigs, the classic dogfight.': '<strong>La Ceinture.</strong> Roche et plateformes minières, le combat classique.',
+  '<strong>Rings of Saturn.</strong> Inside the ring, in a layer of ice.': '<strong>Anneaux de Saturne.</strong> À l’intérieur de l’anneau, dans une couche de glace.',
+  '<strong>The Satellite Junkyard.</strong> Dead satellites and rocket stages high above Earth.': '<strong>La Casse des Satellites.</strong> Des satellites morts et des étages de fusée très haut au-dessus de la Terre.',
+  '<strong>Jupiter.</strong> Dive through the clouds, where the air slows and burns a hull.': '<strong>Jupiter.</strong> Plonge à travers les nuages, là où l’air freine et brûle la coque.',
+  '<strong>Corona.</strong> A fight close to the boiling face of the sun.': '<strong>Couronne.</strong> Un combat tout près de la surface bouillonnante du soleil.',
+  '<strong>Event Horizon.</strong> Around a black hole, where only a stable orbit is safe.': '<strong>Horizon des événements.</strong> Autour d’un trou noir, où seule une orbite stable est sûre.',
+  '<strong>The Derelict.</strong> The two halves of a broken world ship.': '<strong>L’Épave.</strong> Les deux moitiés d’un vaisseau-monde brisé.',
+  'Online, without a game server': 'En ligne, sans serveur de jeu',
+  'Join a public tournament or start your own and send a friend the link. The browsers connect directly to each other, peer to peer. Nobody around? Bots fly by the same rules as you, in solo rounds and to fill up a tournament.':
+    'Rejoins un tournoi public ou lance le tien et envoie le lien à un ami. Les navigateurs se connectent directement entre eux, en pair à pair. Personne dans le coin ? Les bots volent selon les mêmes règles que toi, en manche solo et pour compléter un tournoi.',
+  'Learn to fly, then keep flying': 'Apprends à voler, puis continue',
+  "The flight school teaches every maneuver in short drills. Each round pays out coins for the hangar's upgrades. Fly with mouse and keyboard, a gamepad, or touch on a phone; the picture adapts to what your device can draw.":
+    'L’école de pilotage enseigne chaque manœuvre en courts exercices. Chaque manche rapporte des pièces pour les améliorations du hangar. Vole avec la souris et le clavier, une manette ou le tactile d’un téléphone ; l’image s’adapte à ce que ton appareil peut dessiner.',
+  'A universe of clones and sponsors': 'Un univers de clones et de sponsors',
+  "The year is 2584, and the Orange President's Presidential Games are the only show left. Clones fly old fighters from the depots of centuries of war, and you are their Host, bound to them by a live link: every death comes back to you. Between deaths, sponsors sell you products nobody needs, and Nicole, your flight computer, has opinions.":
+    'Nous sommes en 2584, et les Jeux présidentiels du Président Orange sont le dernier spectacle qui reste. Des clones pilotent de vieux chasseurs issus des dépôts de siècles de guerre, et tu es leur Hôte, lié à eux par une liaison en direct : chaque mort te revient. Entre deux morts, des sponsors te vendent des produits dont personne n’a besoin, et Nicole, ton ordinateur de vol, a son avis là-dessus.',
+  'Radio 2584': 'Radio 2584',
+  'Every round grows its own hard techno track from a seed. Its title is the seed: <a href="radio.html">enter a title on the radio page</a>, listen again, download it.':
+    'Chaque manche fait pousser son propre morceau de hard techno à partir d’une graine. Son titre est la graine : <a href="radio.html">saisis un titre sur la page de la radio</a>, réécoute-le, télécharge-le.',
+  'Open source': 'Open source',
+  'The whole game is free software under the AGPL: <a href="https://github.com/JohannesHoppe/SolarTournament" rel="noopener noreferrer">read the source code</a>. The rules, tactics and numbers are in the <a href="handbook.html">Pilot\'s Handbook</a>.':
+    'Tout le jeu est un logiciel libre sous AGPL : <a href="https://github.com/JohannesHoppe/SolarTournament" rel="noopener noreferrer">lis le code source</a>. Les règles, les tactiques et les chiffres sont dans le <a href="handbook.html">Manuel du pilote</a>.',
   'Whoever cheats their friends is an asshole. Period.': 'Qui triche contre ses amis est un connard. Point.',
   'And yes, we know what DevTools are. Go ahead and edit your localStorage. Out there are Hosts who fly the flight school themselves and earn their Solar Coins round by round, to build the perfect ship the honest way. Online the upgrades count only up to their cap anyway.': 'Et oui, on sait ce que sont les DevTools. Vas-y, bidouille ton localStorage. Là-dehors, il y a des Hôtes qui passent eux-mêmes l’École de pilotage et gagnent leurs Solar Coins manche après manche, pour bâtir le vaisseau parfait à la loyale. En ligne, de toute façon, les améliorations ne comptent que jusqu’à leur plafond.',
 };

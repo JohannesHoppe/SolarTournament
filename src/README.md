@@ -24,6 +24,8 @@ The files at this level:
 - `bench.ts`: the benchmark (`?bench`, `?bench=<seconds>`, `&only=<sections>`): plays a fixed scene and measures what each feature, each rung of the quality ladder, each arena and each mode costs per frame, with a table on screen, in the console and as JSON; the frame meter (`?fps`) with the frame rate and the rung the governor is on. See the README's section "Performance".
 - `radio-page.ts`: starts the radio page (tune in a title, play it, download it as WAV, save the last pressing again).
 - `handbook-page.ts`: starts the Pilot's Handbook (`handbook.html`): translates it into the Host's language and fills in the game's numbers.
+- `about-page.ts`: starts the page that says what the game is (`about.html`): translates it into the Host's language.
+- `seo.test.ts`: the pages as the build writes them for search engines (see `tools/seo/`), in every language.
 - `assets.ts`: loads the ship models, drive sprites and the planets' maps (the sharp ones only when the picture's quality asks for them), collects what is generated in code.
 - `srgb.ts`: linear light as an sRGB byte, shared by the pictures baked in code.
 - `random.ts`: the seeded random generator every browser shares, so all see the same world.
