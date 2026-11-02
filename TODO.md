@@ -78,7 +78,12 @@ Each arena gets a look of its own, recognized at first glance, cheap on phones (
 
 Ideas Johannes has named that are not built yet, with the day they came up. One goes in the moment it is named and not built at once, and out once it is built (then the README has it) or dropped.
 
-None open.
+- 2026-11-02: A push notification when someone opens a public tournament, so the lobby fills.
+- 2026-11-02: A solo campaign: a story through the solar system (exploring, bounties on bandits, escorts, wild races and fights) in which the Host earns the fame to be admitted to the President's Games, and a fourth ship to unlock.
+  - Solo only: online rounds stay fair and alike for everyone, the campaign changes nothing there.
+  - The ship starts as scrap without even a laser; menial jobs pay for the first laser, which mines rock, then the first missions (escorting a freighter); the torpedoes, the hook and the overdrive come later. Nicole is aboard from the start; upgrades of her too (her voice changing, say). Everything the tournament ship has is earned on the way.
+  - The fourth ship: the campaign's own, built up from scrap to mighty, as strong as the Sovereign.
+  - Places, not the arenas: planets, moons, asteroids and stations in orbit around them (around Pluto, say), as they really are; beyond Pluto the bodies found there and imagined ones (a ninth, tenth and eleventh planet), with trading stations and outposts everywhere. No travel to other stars: humanity is still bound to the solar system and what lies around it. The black hole is a primordial one not far beyond the solar system, its way there still to be explained. The worlds look grand.
 
 ## Domains
 
