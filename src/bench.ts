@@ -53,8 +53,16 @@ export type BenchSection = (typeof BENCH_SECTIONS)[number];
 
 /** Seconds of warm-up before each measurement: a switched feature compiles its shaders, buffers are made anew. */
 const WARMUP = 1;
-/** Seconds the bench round runs before the first measurement: the clones are printed, the bots find each other. */
+/** Seconds the title screen runs before its first measurement. */
 const SETTLE = 3;
+/**
+ * Seconds a bench round runs before its first measurement: the clones are printed, the bots find
+ * each other, and the frame's GPU time comes down to where it stays, which in the test browser
+ * takes some ten seconds after an arena is loaded (Jupiter's, the Belt's, the derelict's); a
+ * measurement before reads far dearer than the same scene afterwards. Why it takes so long is not
+ * measured.
+ */
+const SCENE_SETTLE = 12;
 /** The camera's circle around the field's middle (units) and how high above its plane. */
 const PATH_RADIUS = FIELD_RADIUS * 0.7;
 const PATH_HEIGHT = FIELD_RADIUS * 0.12;
@@ -259,7 +267,7 @@ export async function runBench(game: Game, seconds: number, only: BenchSection[]
   async function scene(arena: ArenaId, mode: RoundMode) {
     game.benchRound(arena, mode);
     game.benchCamera = fly;
-    await wait(SETTLE);
+    await wait(SCENE_SETTLE);
   }
 
   game.benchCamera = null;

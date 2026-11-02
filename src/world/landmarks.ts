@@ -426,19 +426,20 @@ export const diskGas = /* glsl */ `
     return clumps;
   }
   // the clumps at a point of the disk: two neighboring bands blended, so no band shows an edge
-  float diskClumps(vec3 p) {
+  float diskClumps(vec3 p, float fine) {
     float t = clamp((length(p.xz) - ${DISK_INNER.toFixed(1)}) / ${(DISK_OUTER - DISK_INNER).toFixed(1)}, 0.0, 1.0);
     // counterclockwise seen from above: the angle grows from +x towards -z
     float phi = atan(-p.z, p.x);
     float u = t * ${DISK_BANDS.toFixed(1)} - 0.5;
     float band = floor(u);
-    float clumps = mix(diskBand(phi, t, band, diskFine), diskBand(phi, t, band + 1.0, diskFine), smoothstep(0.0, 1.0, u - band));
+    float clumps = mix(diskBand(phi, t, band, fine), diskBand(phi, t, band + 1.0, fine), smoothstep(0.0, 1.0, u - band));
     return clumps;
   }
-  vec3 diskGas(vec3 ro, vec3 rd, float near, float far) {
+  // summed in so many stretches, with the finer clumps weighed by fine (see diskBand); fine below 0
+  // leaves the clumps out for their mean, where the gas is too faint for them to show
+  vec3 diskGasIn(vec3 ro, vec3 rd, float near, float far, float stretches, float fine) {
     near = max(near, ${DISK_CLEAR.toFixed(1)});
     if (far <= near) return vec3(0.0);
-    float stretches = diskFine > 0.0 ? 8.0 : 5.0;
     float len = (far - near) / stretches;
     vec3 light = vec3(0.0);
     vec3 middle = vec3(0.0);
@@ -474,10 +475,13 @@ export const diskGas = /* glsl */ `
     }
     if (weight <= 0.0) return vec3(0.0);
     // the clumps once, where the gas along the ray lies; where it is thin it glows redder, in faint wisps
-    float clumps = diskClumps(middle / weight);
+    float clumps = fine < 0.0 ? 0.5 : diskClumps(middle / weight, fine);
     light *= (0.35 + 1.3 * clumps) * ${DISK_GAIN.toFixed(2)} * mix(vec3(1.0, 0.42, 0.22), vec3(1.0), 0.4 + 0.6 * smoothstep(0.25, 0.5, clumps));
     // the brightest gas held below a ceiling, so the edge-on band glows instead of burning out
     return light / (1.0 + dot(light, vec3(0.3, 0.5, 0.2)) / ${DISK_CEILING.toFixed(3)});
+  }
+  vec3 diskGas(vec3 ro, vec3 rd, float near, float far) {
+    return diskGasIn(ro, rd, near, far, diskFine > 0.0 ? 8.0 : 5.0, diskFine);
   }
 `;
 

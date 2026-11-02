@@ -72,6 +72,12 @@ const SPOT_REACH = 4.0;
  */
 const VEIL_SHARE = 0.3;
 const VEIL_FLOOR = 0.003;
+/**
+ * The veil is summed in VEIL_STRETCHES stretches and without the gas's clumps, at their mean (see
+ * diskGas): held that faint, they would not show, and their noise would be the dearest part of the
+ * lens, taken by every pixel of a rock or ship inside the slab.
+ */
+const VEIL_STRETCHES = 3;
 /** ...and that fade spans no fewer pixels on screen than this. */
 const EDGE_PIXELS = 60;
 
@@ -152,7 +158,7 @@ const shader = {
       if (at < diskExit(eye, r)) {
         float near = diskEntry(eye, r);
         if (at > near) {
-          vec3 veil = diskGas(eye, r, near, at);
+          vec3 veil = diskGasIn(eye, r, near, at, ${VEIL_STRETCHES.toFixed(1)}, -1.0);
           float cap = ${VEIL_FLOOR} + ${VEIL_SHARE} * dot(color.rgb, vec3(0.2126, 0.7152, 0.0722));
           color.rgb += veil * cap / (cap + dot(veil, vec3(0.2126, 0.7152, 0.0722)));
         }
@@ -181,7 +187,7 @@ const shader = {
         float h = b * b - dot(flatEye, flatEye) + shadowRadius * shadowRadius;
         float far = h > 0.0 ? -b - sqrt(h) : -b;
         float near = diskEntry(flatEye, flatRay);
-        gl_FragColor = vec4(far > near ? diskGas(flatEye, flatRay, near, far) : vec3(0.0), 1.0);
+        gl_FragColor = vec4(far > near ? diskGasIn(flatEye, flatRay, near, far, diskFine > 0.0 ? 8.0 : 5.0, 0.0) : vec3(0.0), 1.0);
         return;
       }
       // the lens bends only light from beyond the hole: where a ship or rock in front of it

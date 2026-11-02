@@ -97,8 +97,10 @@ On a phone: open the address with `?bench` (the test stage, or the dev server ov
 | Glitch (while on) | 7 % | 2 % |
 | DOM HUD, radar, attitude, sound, particles, dust, sky, ships, wreckage, lacquer, landmark of the belt | each within ±3 % | each within ±8 % |
 | The title screen's pad (frame time, in the menu) | 44 % | 38 % |
-| Landmark of Jupiter (its map's cap; its sheets of cloud and haze not measured) / the rings / the black hole | 25 % / 6 % / 6 % | 21 % / 12 % / 8 % |
-| The black hole's lens | 15 % | 14 % |
+| Landmark of Jupiter (its map's cap; its sheets of cloud and haze not measured) / the rings / the black hole | 47–61 % / 10–18 % / 12–17 % | 42–58 % / 4–14 % / 20–26 % |
+| The black hole's lens | 17–37 % | 20–28 % |
+
+The landmarks' and the lens's rows come from two runs of the arenas section alone (`BENCH_ONLY=arenas`, 3 seconds per measurement), as the range between them: single measurements of one scene scatter that far in the test browser. A bench round runs 12 seconds before its first measurement, since the frame's GPU time takes some ten seconds after an arena is loaded to come down to where it stays. The lens is a full-screen pass whose cost goes with the picture's resolution: measured on, off and on again at every rung (twice each), in the test browser at 1 device pixel per CSS pixel it costs some 25 ms (about 30 % of the frame) on every rung from 0 to 12 alike, whatever steps it marches, and some 15 ms on rung 13 at three quarters of that resolution. The disk's gas it adds in front of a rock inside the disk's slab, a faint veil, is summed coarser and without the gas's clumps, whose noise would not show through it and would cost the most of the lens there; the gas across the shadow takes only the coarser clumps (see `src/view/lensing.ts`).
 
 On the desktop the ladder's own resolution rungs (3, 6, 8, 11, 13) change little: at 1 device pixel per CSS pixel, the picture is already drawn at its lowest; the "Half the resolution" row above forces a cut below that floor to measure the full-screen passes' cost per pixel on their own.
 
