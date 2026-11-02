@@ -1270,7 +1270,7 @@ export const ES: Catalog = {
     'Una nave sigue volando hacia donde volaba hasta que un motor diga lo contrario. En el espacio no hay rozamiento y ningún casco tiene escudo: un láser lo atraviesa de lado a lado, y un empuje descuidado acaba en una roca. El ordenador de vuelo hace que se pueda pilotar desde el primer minuto; apágalo, deriva de lado y dispara fuera de tu propio rumbo.',
   'Five ways to play': 'Cinco formas de jugar',
   '<strong>Deathmatch.</strong> Everyone against everyone among the rocks, for points.': '<strong>Todos contra todos.</strong> Cada uno por su cuenta entre las rocas, por los puntos.',
-  '<strong>Race.</strong> Laps through a course of gates at full burn, with a ghost of your best lap.': '<strong>Carrera.</strong> Vueltas por un circuito de puertas a pleno empuje, con el fantasma de tu mejor vuelta.',
+  '<strong>Race.</strong> Laps through a course of gates at full burn, every gate timed against your best lap.': '<strong>Carrera.</strong> Vueltas por un circuito de puertas a pleno empuje, cada puerta cronometrada contra tu mejor vuelta.',
   '<strong>Last Clone Standing.</strong> A limited supply of clones, and a solar flare eating into the arena.': '<strong>El último clon en pie.</strong> Clones limitados y una llamarada solar que devora la arena.',
   "<strong>Capture the Flag.</strong> Two sides tow each other's sponsor cores home on a cable.": '<strong>Captura la bandera.</strong> Dos bandos se roban los núcleos de sus patrocinadores y los remolcan a casa con un cable.',
   "<strong>The President's Fleet.</strong> Everyone together against one battleship, part by part, down to its reactor.": '<strong>La flota del Presidente.</strong> Todos juntos contra un acorazado, pieza a pieza, hasta llegar a su reactor.',

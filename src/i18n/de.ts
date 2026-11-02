@@ -12,7 +12,7 @@ import type { Catalog } from './i18n';
  * - Deathmatch → Deathmatch; Race → Rennen; Last Clone Standing → Der letzte Klon; Capture the Flag → Capture the Flag;
  *   The President's Fleet → Die Flotte des Präsidenten; every mode in turn → alle Modi im Wechsel
  * - round → Runde; lap → Runde (a race's lap; sentences that hold both keep them apart by context); gate → Tor;
- *   ring → Ring; coil → Spule; start / finish → Start / Ziel; best lap → Bestzeit; ghost → Geist
+ *   ring → Ring; coil → Spule; start / finish → Start / Ziel; best lap → Bestzeit
  * - flight school → Flugschule; course → Kurs; drill → Übung; Basic training → Grundausbildung; Racer → Rennpilot;
  *   Gladiator → Gladiator; Arsenal → Arsenal; Tactician → Taktiker
  * - flight computer → Bordcomputer; Nicole calls the pilot "Schätzchen" (darling)
@@ -1230,7 +1230,7 @@ export const DE: Catalog = {
     'Ein Schiff fliegt weiter, wohin es flog, bis ein Triebwerk etwas anderes sagt. Im All gibt es keinen Luftwiderstand und an keinem Rumpf einen Schild: Ein Laser schlägt glatt durch, und ein unbedachter Schub endet im Fels. Der Flugcomputer macht das Schiff von der ersten Minute an fliegbar; schalte ihn ab, drifte seitwärts und feuere an deinem eigenen Kurs vorbei.',
   'Five ways to play': 'Fünf Arten zu spielen',
   '<strong>Deathmatch.</strong> Everyone against everyone among the rocks, for points.': '<strong>Deathmatch.</strong> Alle gegen alle zwischen den Felsen, um Punkte.',
-  '<strong>Race.</strong> Laps through a course of gates at full burn, with a ghost of your best lap.': '<strong>Rennen.</strong> Runden durch einen Kurs aus Toren unter vollem Schub, mit dem Geist deiner besten Runde.',
+  '<strong>Race.</strong> Laps through a course of gates at full burn, every gate timed against your best lap.': '<strong>Rennen.</strong> Runden durch einen Kurs aus Toren unter vollem Schub, jedes Tor gegen deine beste Runde gestoppt.',
   '<strong>Last Clone Standing.</strong> A limited supply of clones, and a solar flare eating into the arena.': '<strong>Der letzte Klon.</strong> Ein begrenzter Vorrat an Klonen und eine Sonneneruption, die sich in die Arena frisst.',
   "<strong>Capture the Flag.</strong> Two sides tow each other's sponsor cores home on a cable.": '<strong>Capture the Flag.</strong> Zwei Seiten schleppen einander die Sponsorenkerne am Kabel nach Hause.',
   "<strong>The President's Fleet.</strong> Everyone together against one battleship, part by part, down to its reactor.": '<strong>Die Flotte des Präsidenten.</strong> Alle zusammen gegen ein Schlachtschiff, Teil für Teil, bis hinunter zum Reaktor.',

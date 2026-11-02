@@ -17,7 +17,6 @@ import { Datamosh } from '../view/datamosh';
 import { GuideLine } from '../view/guide';
 import { ReferencePlane } from '../view/plane';
 import { referencesOf } from '../world/reference';
-import { Ghost } from '../view/ghost';
 import { lapClock, LapTimer, parseLaps } from './laps';
 import { aimHook, cableEnd, Cables, clearOf, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, anchorPoint, pullOn, type Anchor, type Mark, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
@@ -515,7 +514,7 @@ function keepSchoolSteps(steps: Partial<Record<SchoolCourse, number>>) {
 }
 /** The solo round a Host chose last: mode, arena (none: by chance) and rivals. */
 const SOLO_KEY = 'solartournament.solo';
-/** The best lap of each arena's course, with its ghost (see game/laps). */
+/** The best lap of each arena's course: its time and splits (see game/laps). */
 const LAPS_KEY = 'solartournament.laps';
 
 /** What a solo round plays: a race unless the Host asks for another mode, its arena (the default arena unless the Host asks for another; null: by chance), and the bots it flies against: a full grid unless the Host picks fewer (the rivals chosen set how fast and how hard it is). */
@@ -735,12 +734,9 @@ const FLARE_WARNING = 12000;
 /** The Host's screen glows with the flare's heat from this distance outside the front (units, 300 m) to full inside it. */
 const FLARE_GLOW = 6000;
 
-/** Where the ghost of the best lap is this frame. */
-const ghostPosition = new THREE.Vector3();
 const crossingPoint = new THREE.Vector3();
 /** How fast an enemy crosses the own line of sight to it (see crossingTip). */
 const crossingAcross = new THREE.Vector3();
-const ghostTurn = new THREE.Quaternion();
 
 /** The turn of a ship at `eye` that looks at `target`, `up` as up; a fresh quaternion for a new clone. */
 const lookingAt = (eye: THREE.Vector3, target: THREE.Vector3, up: THREE.Vector3) => new THREE.Quaternion().setFromRotationMatrix(facing.lookAt(eye, target, up));
@@ -1139,9 +1135,8 @@ export class Game implements OnlineGame {
   private hookHeld = false;
   /** The own ship was let go by its hook: until then the flight computer turns it onto its new course (see FLING_SECONDS). */
   private flungUntil = 0;
-  /** The own laps in a race, against the best lap of the arena, and its ghost. */
+  /** The own laps in a race, against the best lap of the arena. */
   private laps: LapTimer | null = null;
-  private readonly ghost = new Ghost();
   private readonly radio: Radio;
   /** The stadium on Earth, heard through the broadcast (see Crowd). */
   private readonly crowd: Crowd;
@@ -1227,7 +1222,7 @@ export class Game implements OnlineGame {
     this.scene.add(this.replayEffects.group);
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
-    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.ghost.root, this.cables.group, this.cometView.root, this.plane.group);
+    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.cables.group, this.cometView.root, this.plane.group);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.mining.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group, this.reentry.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
@@ -2147,7 +2142,6 @@ export class Game implements OnlineGame {
     if (state === 'menu' || state === 'results') {
       this.datamosh.stop();
       this.guide.hide();
-      this.ghost.show(null);
       this.pushRadio(false);
     }
   }
@@ -2198,8 +2192,11 @@ export class Game implements OnlineGame {
     this.fleetPhase = 1;
     // against the President every ship is on one side
     for (const ship of this.ships) ship.team = this.fleet ? 0 : -1;
-    // the course of an arena is always the same: its best lap and ghost race along
-    this.laps = this.course ? new LapTimer(parseLaps(storageGet(LAPS_KEY))[arena.id] ?? null) : null;
+    // the course of an arena is always the same: its best lap races along; the browser keeps only
+    // what parseLaps reads back of the kept laps
+    const kept = this.course ? parseLaps(storageGet(LAPS_KEY)) : null;
+    if (kept) storageSet(LAPS_KEY, JSON.stringify(kept));
+    this.laps = kept ? new LapTimer(kept[arena.id] ?? null) : null;
     this.leader = null;
     this.lastLapCalled = this.winCalled = false;
     this.flareCalled = this.survivorCalled = false;
@@ -2472,7 +2469,6 @@ export class Game implements OnlineGame {
     this.me.setTint(TINTS[this.tint].hex);
     // the own ship flies with its upgrades, online only up to their cap
     this.me.outfit(perksOf(this.hangar, this.selectedShip, !!this.online));
-    this.ghost.wear(this.assets.ships[this.selectedShip]);
     this.school = mode === 'school' ? new FlightSchool(this.schoolCourse, schoolSteps()[this.schoolCourse] ?? 0) : null;
     if (this.school) this.scene.add(this.school.root);
     // the flight school has no radio; the share button stays in its corner
@@ -3641,7 +3637,6 @@ export class Game implements OnlineGame {
     // the drill judged and the calls of the mode, every step; what the HUD shows of them, once a frame (see presentRound)
     if (this.school) this.teach(dt, myControls);
     else if (this.survival) this.callSurvival(me);
-    this.flyGhost(me);
     const racing = !!this.course && !this.school && !this.clamped;
     if (racing) this.callRace(subject);
     this.pushRadio(racing && !this.spectating && me.finish < 0 && lapOf(me.gates) === LAPS);
@@ -4652,7 +4647,7 @@ export class Game implements OnlineGame {
 
   /**
    * The own racer flew through gate `gate` of the lap: the split against the best lap, or the
-   * lap's time; a new best lap is kept in this browser, with its ghost.
+   * lap's time; a new best lap is kept in this browser.
    */
   private timeLap(gate: number) {
     const event = this.laps?.pass(gate, this.raceSeconds());
@@ -4668,18 +4663,6 @@ export class Game implements OnlineGame {
     const laps = parseLaps(storageGet(LAPS_KEY));
     laps[this.venue.id] = this.laps!.best!;
     storageSet(LAPS_KEY, JSON.stringify(laps));
-  }
-
-  /** The ghost of the best lap flies along the own lap, and the own lap is kept for the next ghost. */
-  private flyGhost(me: Ship) {
-    const laps = this.laps;
-    if (!laps || this.school || this.spectating || me.finish >= 0) {
-      this.ghost.show(null);
-      return;
-    }
-    const t = this.raceSeconds();
-    if (me.alive) laps.record(t, me.flight.position, me.flight.orientation);
-    this.ghost.show(laps.ghostAt(t, ghostPosition, ghostTurn) ? ghostPosition : null, ghostTurn);
   }
 
   /**

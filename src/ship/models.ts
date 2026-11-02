@@ -688,7 +688,7 @@ export function sovereignNumberSpan() {
 /**
  * The hull number on both flanks (see SOVEREIGN_NUMBER): a quad lying on each flat flank of the
  * arrowhead, in gold outlined dark, polished like the gold; paint, so it casts and takes shadows
- * with the plates but has no shape of its own (`decal`: the ghost and the silhouette leave it out).
+ * with the plates but has no shape of its own (`decal`: the silhouette leaves it out).
  */
 function hullNumber(): THREE.Mesh {
   const { fore, aft, bottom, top } = sovereignNumberSpan();
