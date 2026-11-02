@@ -10,7 +10,7 @@ import { RacingLine } from './racingline';
 import { ARENA_LIMIT } from '../world/arena';
 import { GateKit, touchRing } from '../world/gates';
 import { GATE_RADIUS } from './race';
-import { MAX_SPEED } from '../ship/flight';
+import { MAX_SPEED, METERS_PER_UNIT } from '../ship/flight';
 import type { ItemKind } from './items';
 import { HOOK_RANGE } from './hook';
 import { msg, t } from '../i18n/i18n';
@@ -128,6 +128,8 @@ interface Attempt {
   doneAt: number;
   /** The angle flown about the black hole in a stable orbit so far (rad), see the orbit drill. */
   swept: number;
+  /** Nicole has called the moment to act in this attempt (the hook drill's: let go now). */
+  told: boolean;
 }
 
 interface Drill {
@@ -774,6 +776,8 @@ export const DRILL = {
     done(ctx, a) {
       if (!a.points.length) return true;
       if (ctx.hooked) a.warned = true;
+      // swinging fast enough on the cable: Nicole calls the second press, once
+      if (ctx.hooked && !a.told && speed(ctx) > HOOK_FLING) a.told = ctx.say([SCHOOL.hookLetGo]);
       return a.warned && !ctx.hooked && speed(ctx) > HOOK_FLING;
     },
     fail(ctx, a) {
@@ -781,7 +785,13 @@ export const DRILL = {
       return a.points.length && ctx.me.flight.position.distanceTo(a.points[0]) > 40000 ? SCHOOL.again : null;
     },
     waypoint: (_, a) => a.points[0] ?? null,
-    mark: () => t('Hook it'),
+    // each step of the toggle on the mark: press to fire, swing, press again to let go
+    mark: (ctx) =>
+      !ctx.hooked
+        ? t('Hook it: press the hook')
+        : speed(ctx) > HOOK_FLING
+          ? t('Let go: press the hook again')
+          : t('Swing: {speed} of {goal} m/s', { speed: Math.round(speed(ctx) * METERS_PER_UNIT), goal: Math.round(HOOK_FLING * METERS_PER_UNIT) }),
   },
   shoot: atDrone(SCHOOL.shoot, SCHOOL_PRAISE.shoot, 6000),
   shootMoving: {
@@ -1692,7 +1702,7 @@ export class FlightSchool {
     const drill = this.drills[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0 };
+    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0, told: false };
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
     const instruction = rep > 0 && drill.repLine ? drill.repLine : drill.line;

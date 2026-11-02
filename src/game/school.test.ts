@@ -154,6 +154,25 @@ describe('judging a drill', () => {
     expect(judged(DRILL.hookShip, runner(40000), {})).toBe(SCHOOL.again);
   });
 
+  it('walks the hook drill through the toggle: press, swing, the call to press again once, let go fast', () => {
+    const said: string[][] = [];
+    const flight = (speed: number) => ({ position: new THREE.Vector3(), velocity: new THREE.Vector3(speed, 0, 0) });
+    const ctx = (hooked: boolean, speed: number) => ({ hooked, me: { flight: flight(speed) }, say: (lines: string[]) => (said.push(lines), true) });
+    const attempt = { points: [new THREE.Vector3()], warned: false, told: false };
+    expect(DRILL.hook.mark(ctx(false, 1000) as never)).toBe('Hook it: press the hook');
+    // bitten, still too slow: the swing's speed against the goal, nothing said
+    expect(judged(DRILL.hook, ctx(true, 1000), attempt)).toBeNull();
+    expect(DRILL.hook.mark(ctx(true, 1000) as never)).toBe('Swing: 50 of 65 m/s');
+    expect(said).toEqual([]);
+    // fast enough: the call to press again, said once
+    for (let i = 0; i < 3; i++) expect(judged(DRILL.hook, ctx(true, 1400), attempt)).toBeNull();
+    expect(said).toEqual([[SCHOOL.hookLetGo]]);
+    expect(DRILL.hook.mark(ctx(true, 1400) as never)).toBe('Let go: press the hook again');
+    // let go fast: done; let go slow: once more, and why
+    expect(judged(DRILL.hook, ctx(false, 1400), attempt)).toBe(true);
+    expect(judged(DRILL.hook, ctx(false, 1000), { ...attempt })).toBe(SCHOOL.hookSlow);
+  });
+
   it('counts the impact drill done for a pilot who steered past the rock before any warning', () => {
     const rock = new THREE.Vector3(0, 0, -5000);
     const past = { dt: 1, impactAhead: false, me: { flight: { position: new THREE.Vector3(3000, 0, -6000), velocity: new THREE.Vector3(0, 0, -2000) } } };

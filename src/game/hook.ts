@@ -12,7 +12,7 @@ import { Cable, WRAP_MAX, type CablePath } from './cable';
  * The hook: a harpoon on a cable, fired along the nose. It bites into a rock or a ship within
  * HOOK_RANGE (units, 1 km) after flying there at HOOK_SPEED (units/s, 2 km/s); a rock that
  * passes within HOOK_CONE of the nose counts as ahead, so the harpoon need not be aimed to the
- * meter. While the pilot holds the hook, the winch yanks the cable in with HOOK_PULL
+ * meter. While the hook holds, the winch yanks the cable in with HOOK_PULL
  * (units/s², 8 g) and the cable never gets longer: a ship moving past its rock swings around
  * it, faster the shorter the cable gets (its angular momentum stays), and flies off along its
  * swing when the pilot lets go: a jump, flung across the field. Hooked to a ship, the winch
@@ -23,7 +23,7 @@ import { Cable, WRAP_MAX, type CablePath } from './cable';
  * piece sweeping through it, too many wraps). The winch stops HOOK_SLACK ship radii (about
  * 70 m) from a ship it holds, and off a rock where a ship on a cable leaving the rock's surface
  * keeps that much off its farthest reach (see floorOf); it pulls nothing beyond the limit it is
- * given (the game gives the coils' limit); while the hook is held, the flight computer burns
+ * given (the game gives the coils' limit); while the hook holds, the flight computer burns
  * against any speed towards the cable's next hold it could no longer stop before that distance
  * (with up to HOOK_BRAKE, as late as it can): holding on never slams a ship into its rock. Letting go
  * before, the ship keeps all its speed; what it flies into is its pilot's business. In Capture

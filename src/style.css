@@ -2237,6 +2237,11 @@ body.touch #school-panel {
   box-sizing: border-box;
 }
 
+#waypoint.low .hud-label {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
 .reference .hud-label {
   top: auto;
   bottom: calc(100% + 5px);

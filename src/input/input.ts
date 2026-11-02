@@ -170,7 +170,7 @@ export class Input {
 
     canvas.addEventListener('mousedown', (e) => {
       if (!this.steering || this.touch.active) return;
-      // the left button fires, the right one holds the hook
+      // the left button fires, the right one fires the hook and lets it go
       if (e.button === 0) this.mouseFire = true;
       if (e.button === 2) this.mouseHook = true;
     });
@@ -243,7 +243,7 @@ export class Input {
     return this.keys.has('KeyS') || this.touch.brake || this.padHeld(PAD.b);
   }
 
-  /** The hook is held: V, the right mouse button, the D-pad down, or HOOK on touch. Pressed it fires, held it reels in, let go it releases. */
+  /** The hook's button is down: V, the right mouse button, the D-pad down, or HOOK on touch. Pressed it fires, pressed again it lets go (see Game.hookOwn). */
   get hooking(): boolean {
     return this.keys.has('KeyV') || this.mouseHook || this.touch.hook || this.padHeld(PAD.down);
   }

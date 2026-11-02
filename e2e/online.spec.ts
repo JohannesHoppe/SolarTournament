@@ -167,7 +167,7 @@ test('two tabs agree on a tug of war between their ships on one rope', async ({ 
   await place(b, 6000, 1);
   await place(a, 0, 1);
   await play(a, 1);
-  // the first tab's clone hooks the other, holding the hook; the winch reels it in to 70 m
+  // the first tab's clone hooks the other; the winch reels it in to 70 m while the hook holds
   await a.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' })));
   await play(a, 3);
   expect(await a.evaluate(() => window.game.me.flight.position.distanceTo(window.game.ships.find((s: { id: string }) => s.id !== window.game.me.id).flight.position))).toBeLessThan(2000);
@@ -265,7 +265,7 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
   const hosts = Object.entries(sidesA).filter(([id]) => id.startsWith('p:'));
   expect(new Set(hosts.map(([, team]) => team)).size).toBe(2);
   // the second tab's clone, 300 m in front of the other side's ring, its nose on the core,
-  // fires its harpoon at it (the hook held) once the round's start has let it go (a loaded
+  // fires its harpoon at it once the round's start has let it go (a loaded
   // machine may still be counting down); the lead hears of the bite, takes the core for it and
   // tells both
   await b.waitForFunction(() => window.game.countdown === 0, undefined, { timeout: 30_000 });
@@ -280,7 +280,8 @@ test('two tabs of Capture the Flag agree on the sides and on who has a core in t
     window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyV' }));
     return game.me.id;
   });
-  // the hook is held until the core is in tow (a harpoon let go early takes nothing)
+  // the key comes up once the core is in tow (a second press before would let the harpoon go,
+  // and a harpoon let go early takes nothing)
   const towed = (page: Page) => page.waitForFunction((thief) => window.game.flags.cores.some((core: { carrier: string | null }) => core.carrier === thief), thief, { timeout: 15_000 });
   await towed(b);
   await b.evaluate(() => window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyV' })));

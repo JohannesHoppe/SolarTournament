@@ -428,7 +428,15 @@ export class Hud {
     const at = pin(this.waypoint, camera, point);
     this.waypointAt.x = at.x;
     this.waypointAt.y = at.y;
+    // low on the screen, the name goes above the mark, clear of the readouts along the bottom
+    const low = at.y > viewport.height * WAYPOINT_LOW;
+    if (low !== this.waypointLow) {
+      this.waypoint.classList.toggle('low', low);
+      this.waypointLow = low;
+    }
   }
+
+  private waypointLow = false;
 
   /** Where the waypoint sat when last placed (px). */
   private readonly waypointAt = { x: NaN, y: NaN };
@@ -1094,6 +1102,9 @@ function pin(element: HTMLElement, camera: THREE.Camera, point: THREE.Vector3) {
   element.style.translate = `${at.x}px ${at.y}px`;
   return at;
 }
+
+/** Farther down than this share of the screen's height, the waypoint's name sits above its mark: the mark held at the lower edge (0.85, see pin) would put it on the readouts. */
+const WAYPOINT_LOW = 0.75;
 
 /** No reference, while no clone flies. */
 const NONE: readonly Reference[] = [];

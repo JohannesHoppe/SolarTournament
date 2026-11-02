@@ -11,8 +11,8 @@ const STICK_LOOK = {
 /**
  * Touch controls for phones and tablets, shown on touch devices and hidden as soon as a key
  * is pressed. Left stick (fixed): turn the ship, drag up = nose up. Right stick (appears
- * under the thumb): maneuvering thrusters. Buttons: main drive, fire, brake, flip and hook (hold),
- * autopilot, overdrive, torpedo, pause.
+ * under the thumb): maneuvering thrusters. Buttons: main drive, fire, brake and flip (hold), hook
+ * (tap to fire, tap again to let go), autopilot, overdrive, torpedo, pause.
  * nipplejs is only loaded once the touch UI is used.
  */
 export class TouchControls {

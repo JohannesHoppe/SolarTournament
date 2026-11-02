@@ -5084,19 +5084,18 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * V, the right mouse button: pressed, the own hook fires along the nose; held, it reels in;
-   * let go, it releases (see game/hook). Not in the clamps of a round's opening.
+   * V, the right mouse button: pressed, the own hook fires along the nose, and the winch reels
+   * in while it holds; pressed again, it lets go (see game/hook). A toggle, so the hands stay
+   * free for every other maneuver on the cable. Not in the clamps of a round's opening.
    */
   private hookOwn(now: number) {
     const me = this.me!;
     const held = this.state === 'playing' && me.alive && !this.spectating && !this.clamped && this.input.hooking;
     const pressed = held && !this.hookHeld;
     this.hookHeld = held;
-    if (this.tethers.has(me)) {
-      if (!held) this.unhook(me);
-    } else if (pressed && now >= this.hookReadyAt) {
-      this.fireHook(me);
-    }
+    if (!pressed) return;
+    if (this.tethers.has(me)) this.unhook(me);
+    else if (now >= this.hookReadyAt) this.fireHook(me);
   }
 
   /**
