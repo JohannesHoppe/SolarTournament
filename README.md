@@ -246,7 +246,7 @@ The ring courses and the curve lie ahead of the pilot, or, where they would reac
 12. Autopilot back on (T).
 13. Chasing a bot that flies but does not shoot: it runs, staying on its tail opens its drive. Nicole points out free drift for a nose that follows it freely; this and the fights after it leave the choice to the pilot.
 14. Fighting a weak bot that shoots back: keep the armored nose on it, slide, and work onto its tail.
-15. Bursts: an armed bot (skill 0.15) 400 m ahead that fights back. One hit into its drive from behind is enough, and so is the bot gone however it went; a laser that overheats only locks for a while. Nicole says why it comes to that: armor just heats the laser.
+15. Bursts: an armed bot (skill 0.15) 400 m ahead that fights back. It counts once the bot is gone with its drive hit at least once on the way; gone with its drive whole, the attempt starts over and Nicole says why. A laser that overheats only locks for a while. Nicole says why it comes to that: armor just heats the laser.
 16. Final exam: a real bot that knows the trick too. Win the dogfight.
 17. Cleared for the tournament.
 

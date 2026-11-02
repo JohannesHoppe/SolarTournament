@@ -1070,12 +1070,12 @@ export const DRILL = {
   },
   // a bot sits on the pilot's tail and fires: the armored nose has to come round to it
   onTail: sparring(SCHOOL.onTail, SCHOOL_PRAISE.onTail, ['turn', 'slide', 'fire'], true, TAIL_SKILL, 6000),
-  // one hit into the drive of a bot that fights back, or the bot gone however it went; an
-  // overheated laser only locks, which is lesson enough
+  // the bot that fights back gone, its drive hit at least once on the way; gone with its drive
+  // whole, the attempt starts over with why; an overheated laser only locks, which is lesson enough
   bursts: {
     ...sparring(SCHOOL.bursts, SCHOOL_PRAISE.bursts, ['turn', 'drive', 'fire', 'autopilot'], true, BURST_SKILL),
-    done: (ctx) => !!ctx.bot && (!ctx.bot.alive || ctx.bot.drive < 1),
-    fail: undefined,
+    done: (ctx) => !!ctx.bot && !ctx.bot.alive && ctx.bot.drive < 1,
+    fail: (ctx) => (ctx.bot && !ctx.bot.alive && ctx.bot.drive >= 1 ? SCHOOL.burstsNoDrive : null),
   },
   // free drift in a dogfight: sliding past a bot, the nose turned onto it, firing sideways or
   // back; then the autopilot on again to leave

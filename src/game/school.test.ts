@@ -16,10 +16,15 @@ describe('judging a drill', () => {
     expect(judged(DRILL.torpedo, { ...lastHit, torpedoesHit: 0 }, { count: 0 })).toBeTypeOf('string');
   });
 
-  it('asks one hit into the drive of the bot that shoots back, or the bot gone however it went', () => {
+  it('asks the bot that shoots back gone, its drive hit at least once, and says why when it was not', () => {
     const me = { overheated: false, kills: 0 };
-    expect(judged(DRILL.bursts, { bot: { alive: true, drive: 0.8 }, me }, { count: 0 })).toBe(true);
-    expect(judged(DRILL.bursts, { bot: { alive: false, drive: 1 }, me }, { count: 0 })).toBe(true);
+    expect(judged(DRILL.bursts, { bot: { alive: false, drive: 0.8 }, me }, { count: 0 })).toBe(true);
+    expect(judged(DRILL.bursts, { bot: { alive: false, drive: 0.8 }, me: { ...me, kills: 1 } }, { count: 0 })).toBe(true);
+    // a hit alone is not the kill
+    expect(judged(DRILL.bursts, { bot: { alive: true, drive: 0.8 }, me }, { count: 0 })).toBeNull();
+    // gone with its drive whole, even by the pilot's kill: once more, and why
+    expect(judged(DRILL.bursts, { bot: { alive: false, drive: 1 }, me }, { count: 0 })).toBe(SCHOOL.burstsNoDrive);
+    expect(judged(DRILL.bursts, { bot: { alive: false, drive: 1 }, me: { ...me, kills: 1 } }, { count: 0 })).toBe(SCHOOL.burstsNoDrive);
     expect(judged(DRILL.bursts, { bot: { alive: true, drive: 1 }, me }, { count: 0 })).toBeNull();
     // an overheated laser only locks: the attempt goes on
     expect(judged(DRILL.bursts, { bot: { alive: true, drive: 1 }, me: { ...me, overheated: true } }, { count: 0 })).toBeNull();
