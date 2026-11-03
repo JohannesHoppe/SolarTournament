@@ -1845,6 +1845,10 @@ body:has(#sponsor:not([hidden]))::after {
     width: 56px;
     height: 56px;
   }
+
+  .satire-show .hologram {
+    height: 120px;
+  }
 }
 
 /* The sponsor's own neon sign, in the complementary blue. */
@@ -1935,6 +1939,14 @@ body:has(#sponsor:not([hidden]))::after {
   color: var(--brand);
   filter: drop-shadow(0 0 10px var(--brand));
   animation: satire-bob 2.4s ease-in-out infinite;
+}
+
+/* the sponsor's product as a hologram (see view/hologram), its light glowing out over the slot */
+.satire-show .hologram {
+  display: block;
+  height: clamp(120px, 24vh, 220px);
+  aspect-ratio: 1;
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--brand) 55%, transparent));
 }
 
 @keyframes satire-bob {
