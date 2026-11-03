@@ -1,7 +1,7 @@
 import type * as ToneLib from 'tone';
 import { clipKey, phraseKey, phrases, words, type Language } from './lines';
 import * as i18n from '../i18n/i18n';
-import { barSeconds, stepEvents, STEPS_PER_BAR, type BarInfo, type KickDesign, type Song, type VoiceLine } from './songs';
+import { barSeconds, hash, stepEvents, STEPS_PER_BAR, type BarInfo, type KickDesign, type Song, type VoiceLine } from './songs';
 import { atan, cos, pow, sin, tanh } from '../detmath';
 
 type Tone = typeof ToneLib;
@@ -31,22 +31,51 @@ const opening = (sweep: number) => (sweep < 0.5 ? sweep * 2 : 2 - sweep * 2);
 /** Master filter cutoff for a brightness of 0..1: 200 Hz to 18 kHz. */
 const cutoff = (brightness: number) => 200 * pow(90, Math.max(0, Math.min(1, brightness)));
 /**
- * The pedal bass's timbre (see BarInfo.tone): its filter from PEDAL_CUTOFF[0] (closed, Hz) to
- * PEDAL_CUTOFF[1] (open), its resonance PEDAL_Q, PEDAL_Q_UP at a peak; there the cutoff also
- * sweeps PEDAL_SWEEP octaves up and down over PEDAL_SWEEP_BARS bars. The flanger's delay swings
- * between PEDAL_FLANGE (s), and each effect's wet when it is on (PEDAL_WET).
+ * The pedal bass, after a synthesizer player's basslines as measured (bright, full saws, a filter
+ * snapping open on every note and falling back within about a tenth of a second, never closed
+ * dark; no distortion to speak of; notes running into each other):
+ * - its filter's sustain follows the note (key tracking): PEDAL_TRACK[0] times the note's
+ *   frequency with the track's timbre closed (BarInfo.tone 0, some 600 Hz on its root), up to
+ *   PEDAL_TRACK[1] times wide open (some 1.9 kHz); on every note it snaps up PEDAL_SNAP octaves
+ *   (to some 10 kHz open) and falls back in a straight line in Hz over PEDAL_DECAY (s);
+ * - its resonance PEDAL_Q, PEDAL_Q_UP at a peak, where the cutoff also sweeps PEDAL_SWEEP
+ *   octaves up and down over PEDAL_SWEEP_BARS bars;
+ * - its two saws run the track's spread apart (12 to 16 cents in all: steady, a slow beat), every note's pitch
+ *   off by up to PEDAL_DRIFT cents (seeded, the same on every browser), the track's tuning off by
+ *   up to PEDAL_TUNING cents: a free-running analog oscillator is never quite in tune;
+ * - its notes sound PEDAL_GATE of their sixteenth and ring out over the track's release, so the
+ *   gallop runs on and the filter, not the gate, shapes every note;
+ * - the flanger's delay swings between PEDAL_FLANGE (s); each effect's wet when it is on
+ *   (PEDAL_WET; the chorus shallow, PEDAL_CHORUS_DEPTH, so it never smears the pitch).
  */
-const PEDAL_CUTOFF = [250, 8000] as const;
-const PEDAL_Q = 1.5;
-const PEDAL_Q_UP = 8;
+const PEDAL_TRACK = [8, 24] as const;
+const PEDAL_SNAP = 2.5;
+const PEDAL_DECAY = 0.13;
+const PEDAL_Q = 0.7;
+const PEDAL_Q_UP = 6;
 const PEDAL_SWEEP = 0.7;
 const PEDAL_SWEEP_BARS = 4;
+const PEDAL_DRIFT = 7;
+const PEDAL_TUNING = 5;
+const PEDAL_GATE = 0.95;
 const PEDAL_FLANGE = [0.001, 0.005] as const;
-const PEDAL_WET = { chorus: 0.45, phaser: 0.5, flanger: 0.5 } as const;
-/** The pedal's notes sound this share of their sixteenth: short and gated, a gallop; the second voice's notes are held. */
-const PEDAL_GATE = 0.7;
-/** The pedal bass's cutoff for a tone of 0..1 (Hz), exponential between PEDAL_CUTOFF. */
-const pedalCutoff = (tone: number) => PEDAL_CUTOFF[0] * pow(PEDAL_CUTOFF[1] / PEDAL_CUTOFF[0], Math.max(0, Math.min(1, tone)));
+const PEDAL_WET = { chorus: 0.3, phaser: 0.5, flanger: 0.5 } as const;
+const PEDAL_CHORUS_DEPTH = 0.15;
+/** The pedal bass's filter can never open past this (Hz). */
+const PEDAL_TOP = 16000;
+/** The level of a pedal note at full velocity. */
+const PEDAL_LEVEL = 0.55;
+
+/**
+ * Drive's clap, after a drum machine's as measured: a dense plateau of noise, not a click. Four
+ * bursts DRIVE_CLAP.spacing (s) apart, then one body of LENGTH (s) dying away in a straight line,
+ * band-passed wide (Q) around 1.25 kHz at LEVEL (dB, 4 dB over the other flavors' clap), a
+ * sizzle above 2 kHz SIZZLE dB under it, and only ROOM of the usual reverb send: a short room,
+ * not a long wash. It stands out over the kick's mid, which drive keeps low.
+ */
+const DRIVE_CLAP = { spacing: 0.009, length: 0.1, Q: 0.6, level: -7, sizzle: 5, room: 0.25 } as const;
+/** The other flavors' clap: three bursts a few milliseconds apart into its body, its level, its reverb. */
+const CLAP = { offsets: [0, 0.011, 0.023], length: 0.11, Q: 1, level: -11, room: 1 } as const;
 
 /** The music ducks under a voice line and comes back over this long (s), without a click. */
 const DUCK_RAMP = 0.02;
@@ -122,6 +151,10 @@ export class Band {
   private readonly crush: ToneLib.BitCrusher;
   private readonly ride: ToneLib.NoiseSynth;
   private readonly clap: ToneLib.NoiseSynth;
+  private readonly clapBody: ToneLib.Filter;
+  private readonly clapSizzle: ToneLib.NoiseSynth;
+  /** How much of the clap goes into the shared reverb. */
+  private readonly clapRoom: ToneLib.Gain;
   private readonly perc: ToneLib.MembraneSynth;
   private readonly percCrush: ToneLib.BitCrusher;
   private readonly cowbell: ToneLib.PolySynth;
@@ -131,8 +164,11 @@ export class Band {
   private readonly bassDrive: ToneLib.Gain;
   private readonly bassHighpass: ToneLib.Filter;
   private readonly bassEcho: ToneLib.FeedbackDelay;
-  private readonly pedalBass: ToneLib.MonoSynth;
-  private readonly pedalTone: ToneLib.Filter;
+  private readonly pedalSaws: [ToneLib.Oscillator, ToneLib.Oscillator];
+  private readonly pedalFilter: ToneLib.Filter;
+  private readonly pedalAmp: ToneLib.Gain;
+  /** The pedal bass's timbre of the bar being played: the filter's tracking (times the note's frequency) and its sweep at a peak. */
+  private pedalTrack: number = PEDAL_TRACK[0];
   private readonly pedalChorus: ToneLib.Chorus;
   private readonly pedalPhaser: ToneLib.Phaser;
   private readonly pedalFlanger: ToneLib.FeedbackDelay;
@@ -231,9 +267,13 @@ export class Band {
     );
 
     const clapDrive = new T.WaveShaper(saturate(3), 1024).connect(this.master);
-    clapDrive.connect(this.fxSend);
-    this.clap = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.11, sustain: 0 }, volume: -11 })
-      .connect(new T.Filter({ type: 'bandpass', frequency: 1250, Q: 1 }).connect(clapDrive));
+    this.clapRoom = new T.Gain(1).connect(this.fxSend);
+    clapDrive.connect(this.clapRoom);
+    this.clapBody = new T.Filter({ type: 'bandpass', frequency: 1250, Q: 1 }).connect(clapDrive);
+    this.clap = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.11, sustain: 0 }, volume: -11 }).connect(this.clapBody);
+    // drive's clap has a sizzle above its body, up to 14 kHz (see DRIVE_CLAP)
+    this.clapSizzle = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: DRIVE_CLAP.length, sustain: 0, decayCurve: 'linear' }, volume: DRIVE_CLAP.level - DRIVE_CLAP.sizzle })
+      .connect(new T.Filter({ type: 'highpass', frequency: 2000, Q: 0 }).connect(clapDrive));
 
     this.percCrush = new T.BitCrusher({ bits: 5 }).connect(this.master);
     this.percCrush.connect(this.echoSend);
@@ -259,25 +299,19 @@ export class Band {
       volume: -9,
     }).connect(this.bassHighpass);
 
-    // the pedal bass (drive's analog bassline): two detuned saws through a steep low-pass whose
-    // envelope snaps open on every note and closes within a tenth of a second; then the
-    // track's filter (its timbre per bar, see BarInfo.tone, with its resonance), one effect of
-    // three (chorus, phaser, a flanger: a short delay swept slowly), and hardly any drive: its
-    // warmth is the filter and the loose tuning
+    // the pedal bass (drive's analog bassline, see PEDAL_TRACK): two free-running saws through a
+    // steep low-pass that every note snaps open, into its amplitude, then one effect of three
+    // (chorus, phaser, a flanger: a short delay swept slowly) and hardly any drive
     const pedalWarmth = new T.WaveShaper(saturate(1.3), 2048).connect(this.pump);
     this.pedalFlanger = new T.FeedbackDelay({ delayTime: PEDAL_FLANGE[1], feedback: 0.6, wet: 0 }).connect(pedalWarmth);
     new T.LFO({ frequency: 0.3, min: PEDAL_FLANGE[0], max: PEDAL_FLANGE[1] }).connect(this.pedalFlanger.delayTime).start();
     this.pedalPhaser = new T.Phaser({ frequency: 0.2, octaves: 3, baseFrequency: 400, Q: 6, wet: 0 }).connect(this.pedalFlanger);
-    this.pedalChorus = new T.Chorus({ frequency: 0.8, delayTime: 3.5, depth: 0.6, spread: 180, wet: 0 }).connect(this.pedalPhaser);
+    this.pedalChorus = new T.Chorus({ frequency: 0.8, delayTime: 3.5, depth: PEDAL_CHORUS_DEPTH, spread: 180, wet: 0 }).connect(this.pedalPhaser);
     this.pedalChorus.start();
-    this.pedalTone = new T.Filter({ type: 'lowpass', frequency: 400, rolloff: -24, Q: PEDAL_Q }).connect(this.pedalChorus);
-    this.pedalBass = new T.MonoSynth({
-      oscillator: { type: 'fatsawtooth', count: 2, spread: 9 },
-      filter: { type: 'lowpass', rolloff: -24, Q: 1 },
-      envelope: { attack: 0.002, decay: 0.2, sustain: 0.8, release: 0.04 },
-      filterEnvelope: { attack: 0.002, decay: 0.12, sustain: 0.05, release: 0.05, baseFrequency: 250, octaves: 4.5 },
-      volume: -7,
-    }).connect(this.pedalTone);
+    this.pedalAmp = new T.Gain(0).connect(this.pedalChorus);
+    this.pedalFilter = new T.Filter({ type: 'lowpass', frequency: 600, rolloff: -24, Q: PEDAL_Q }).connect(this.pedalAmp);
+    const sawLevel = new T.Gain(0.5).connect(this.pedalFilter);
+    this.pedalSaws = [0, 1].map(() => new T.Oscillator({ type: 'sawtooth', frequency: 65 }).connect(sawLevel).start()) as [ToneLib.Oscillator, ToneLib.Oscillator];
     // its lower wave: a square an octave under the pedal, only the sub range of it
     this.pedalSub = new T.MonoSynth({
       oscillator: { type: 'square' },
@@ -421,8 +455,15 @@ export class Band {
     this.kickTone.frequency.value = song.kick.tone;
     this.rumbleLow.frequency.value = song.kick.rumbleCut;
     this.rumbleLevel.gain.value = 0.75 * song.kick.rumbleLevel;
-    // the pedal bass's own voice: how far its two saws are apart, how long its notes ring
-    this.pedalBass.set({ oscillator: { spread: song.pedalVoice.spread }, envelope: { release: song.pedalVoice.release } });
+    // a drive kick's body dies away in a long sub tail, the others stop short
+    this.kickAmp.release = song.kick.release;
+    // drive's clap is a plateau that stands out, the others' a short burst into the reverb
+    const drive = song.flavor === 'drive';
+    this.clap.envelope.decay = drive ? DRIVE_CLAP.length : CLAP.length;
+    this.clap.envelope.decayCurve = drive ? 'linear' : 'exponential';
+    this.clap.volume.value = drive ? DRIVE_CLAP.level : CLAP.level;
+    this.clapBody.Q.value = drive ? DRIVE_CLAP.Q : CLAP.Q;
+    this.clapRoom.gain.value = drive ? DRIVE_CLAP.room : CLAP.room;
     if (this.flavor === song.flavor) return;
     this.flavor = song.flavor;
     this.crush.wet.value = this.hatCrush();
@@ -461,8 +502,11 @@ export class Band {
       this.pump.gain.linearRampToValueAtTime(1, t + 0.45 * beat);
     }
     if (events.clap) {
-      // a clap is several hands: three bursts a few milliseconds apart
-      for (const offset of [0, 0.011, 0.023]) this.clap.triggerAttackRelease(0.1, t + offset, events.clap);
+      // a clap is several hands: bursts a few milliseconds apart (see CLAP, DRIVE_CLAP)
+      if (song.flavor === 'drive') {
+        for (let i = 0; i < 4; i++) this.clap.triggerAttackRelease(0.1, t + i * DRIVE_CLAP.spacing, events.clap);
+        this.clapSizzle.triggerAttackRelease(DRIVE_CLAP.length, t, events.clap);
+      } else for (const offset of CLAP.offsets) this.clap.triggerAttackRelease(0.1, t + offset, events.clap);
     }
     if (events.hat) this.hat.triggerAttackRelease(0.03, t, events.hat);
     if (events.openHat) this.openHat.triggerAttackRelease(0.2, t + 0.004, events.openHat);
@@ -475,7 +519,7 @@ export class Band {
 
     if (events.bass && info.bassStyle === 'pedal') {
       const hit = events.bass;
-      this.pedalBass.triggerAttackRelease(midiToHz(hit.note), sixteenth * (hit.melody ? hit.length * 0.95 : PEDAL_GATE), t, hit.velocity);
+      this.pedalNote(song, step, info, midiToHz(hit.note), sixteenth * hit.length * PEDAL_GATE, t, hit.velocity);
     } else if (events.bass) this.bass.triggerAttackRelease(midiToHz(events.bass.note), sixteenth * (info.bassStyle === 'ebm' ? 0.6 : 0.8), t, events.bass.velocity);
     if (events.sub) this.pedalSub.triggerAttackRelease(midiToHz(events.sub.note), sixteenth * PEDAL_GATE, t, events.sub.velocity);
     if (events.acid) this.playAcid(song, events.acid.note, events.acid.accent, events.acid.slide, step, t, sixteenth, info);
@@ -523,14 +567,10 @@ export class Band {
 
   /** The sound of a bar from t on, for the `bar` seconds it has left: filters, drive, sends. */
   private setUpBar(song: Song, info: BarInfo, t: number, bar: number) {
-    // the pedal bass's timbre: its filter where the bar puts it, at a peak swept slowly and
-    // resonant; its effect on or off (see BarInfo.tone)
-    const sweep = (n: number) => (info.resonance ? pow(2, PEDAL_SWEEP * sin((2 * Math.PI * n) / PEDAL_SWEEP_BARS)) : 1);
-    const toneCut = pedalCutoff(info.tone);
-    this.pedalTone.frequency.cancelAndHoldAtTime(t);
-    this.pedalTone.frequency.setValueAtTime(toneCut * sweep(info.bar), t);
-    this.pedalTone.frequency.linearRampToValueAtTime(toneCut * sweep(info.bar + 1), t + bar);
-    this.pedalTone.Q.setValueAtTime(info.resonance ? PEDAL_Q_UP : PEDAL_Q, t);
+    // the pedal bass's timbre: how far its filter tracks over the note (see PEDAL_TRACK), its
+    // resonance up at a peak; its effect on or off (see BarInfo.tone)
+    this.pedalTrack = PEDAL_TRACK[0] + (PEDAL_TRACK[1] - PEDAL_TRACK[0]) * Math.max(0, Math.min(1, info.tone));
+    this.pedalFilter.Q.setValueAtTime(info.resonance ? PEDAL_Q_UP : PEDAL_Q, t);
     this.pedalChorus.wet.setValueAtTime(info.fx && song.fx === 'chorus' ? PEDAL_WET.chorus : 0, t);
     this.pedalPhaser.wet.setValueAtTime(info.fx && song.fx === 'phaser' ? PEDAL_WET.phaser : 0, t);
     this.pedalFlanger.wet.setValueAtTime(info.fx && song.fx === 'flanger' ? PEDAL_WET.flanger : 0, t);
@@ -593,7 +633,7 @@ export class Band {
 
   /** The record slows down: every tonal part slides two octaves down, the level falls away. */
   private tapeStop(t: number, length: number) {
-    const tonal = [this.bass, this.pedalBass, this.pedalSub, this.acid, this.hoover, this.bell, this.arp];
+    const tonal = [this.bass, ...this.pedalSaws, this.pedalSub, this.acid, this.hoover, this.bell, this.arp];
     for (const synth of tonal) {
       // cents are already logarithmic: a straight line in cents is the slowing record
       synth.detune.setValueAtTime(0, t);
@@ -608,9 +648,39 @@ export class Band {
     this.musicLevel.gain.setValueAtTime(1, t + length);
   }
 
+  /**
+   * One note of the pedal bass (see PEDAL_TRACK) at `frequency`, sounding `gate` seconds: both
+   * saws on the note, a little off it as a free-running oscillator is (seeded by the step, so
+   * every browser plays the same), the filter snapped open over the track's tracking of the note
+   * and falling back in a straight line, the level held through the gate and ringing out over the
+   * track's release into the next note.
+   */
+  private pedalNote(song: Song, step: number, info: BarInfo, frequency: number, gate: number, t: number, velocity: number) {
+    const drift = (hash(song.seed, 77, step) / 4294967296 - 0.5) * 2 * PEDAL_DRIFT + (hash(song.seed, 78) / 4294967296 - 0.5) * 2 * PEDAL_TUNING;
+    const [a, b] = this.pedalSaws;
+    for (const [saw, side] of [[a, 1], [b, -1]] as const) {
+      saw.frequency.setValueAtTime(frequency, t);
+      saw.detune.setValueAtTime(drift + (side * song.pedalVoice.spread) / 2, t);
+    }
+    // at a peak the filter sweeps slowly up and down over PEDAL_SWEEP_BARS bars
+    const position = info.bar + (step % STEPS_PER_BAR) / STEPS_PER_BAR;
+    const sweep = info.resonance ? pow(2, PEDAL_SWEEP * sin((2 * Math.PI * position) / PEDAL_SWEEP_BARS)) : 1;
+    const hold = Math.min(PEDAL_TOP / 4, frequency * this.pedalTrack * sweep);
+    const cutoff = this.pedalFilter.frequency;
+    cutoff.cancelAndHoldAtTime(t);
+    cutoff.setValueAtTime(Math.min(PEDAL_TOP, hold * pow(2, PEDAL_SNAP)), t);
+    cutoff.linearRampToValueAtTime(hold, t + PEDAL_DECAY);
+    const level = PEDAL_LEVEL * velocity;
+    const amp = this.pedalAmp.gain;
+    amp.cancelAndHoldAtTime(t);
+    amp.linearRampToValueAtTime(level, t + 0.003);
+    amp.setValueAtTime(level, t + gate);
+    amp.linearRampToValueAtTime(0, t + gate + song.pedalVoice.release);
+  }
+
   /** Two-stage pitch drop: a fast click of pitch, then the body falls to the fundamental. */
   private kick(song: Song, t: number, velocity: number, drive: number, detune: number) {
-    const fundamental = midiToHz(song.root) * pow(2, detune / 1200);
+    const fundamental = midiToHz(song.root + song.kick.pitch) * pow(2, detune / 1200);
     const frequency = this.kickOsc.frequency;
     frequency.cancelAndHoldAtTime(t);
     const design = song.kick;

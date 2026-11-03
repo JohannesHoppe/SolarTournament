@@ -161,6 +161,9 @@ export interface KickDesign {
   rumbleCut: number;
   rumbleLevel: number;
   swell: number;
+  /** The fundamental over the track's root (semitones), and how long the body dies away after it (s; a short stop, or a long sub tail). */
+  pitch: number;
+  release: number;
 }
 
 export interface Hit {
@@ -214,7 +217,7 @@ export interface Song {
   scale: readonly number[];
   /** How far the music ducks under every kick (the level it falls to, 0..1; see PUMP). */
   pump: number;
-  /** A pedal bass's loop (32 sixteenths, null for a rest), its effect, and its voice: detune of its two saws (cents), its release (s). */
+  /** A pedal bass's loop (32 sixteenths, null for a rest), its effect, and its voice: how far its two saws are apart in all (cents), its release (s). */
   pedal: (PedalStep | null)[];
   fx: 'chorus' | 'phaser' | 'flanger';
   pedalVoice: { spread: number; release: number };
@@ -392,8 +395,9 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
     energy,
     bpm,
     swing: settings.swing[0] + unit(seed, Ch.Genes, 5) * (settings.swing[1] - settings.swing[0]),
-    // kick fundamental between E1 (41 Hz) and B1 (62 Hz)
-    root: 28 + (hash(seed, Ch.Genes, 6) % 8),
+    // the key: the kick's fundamental between E1 (41 Hz) and B1 (62 Hz); drive's a little lower,
+    // C1 to F1, so its pedal bass sits on C2 to F2 (65 to 87 Hz) and its lower wave an octave under
+    root: chosen === 'drive' ? 24 + (hash(seed, Ch.Genes, 6) % 6) : 28 + (hash(seed, Ch.Genes, 6) % 8),
     acidSet: choose(ACID_SETS, seed, Ch.Genes, 7),
     // a 12-step acid loop over the 16-step bar is a classic acid techno trick
     acidLength: unit(seed, Ch.Genes, 8) < 0.4 ? 12 : 16,
@@ -411,7 +415,8 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
     pump: PUMP[chosen],
     pedal: pedalLoop(seed, scale),
     fx: choose(PEDAL_FX, seed, Ch.Genes, 61),
-    pedalVoice: { spread: 6 + 6 * unit(seed, Ch.Genes, 62), release: unit(seed, Ch.Genes, 63) < 0.5 ? 0.04 : 0.25 },
+    // two saws some 12 to 16 cents apart in all, notes ringing out over 0.12 to 0.2 s into the next
+    pedalVoice: { spread: 12 + 4 * unit(seed, Ch.Genes, 62), release: 0.12 + 0.08 * unit(seed, Ch.Genes, 63) },
     surprises: [],
     voice: [],
     cache: new Map(),
@@ -440,19 +445,28 @@ export const KICK_SHAPES: Record<Flavor, KickDesign['shape'][]> = {
 function kickDesign(seed: number, flavor: Flavor): KickDesign {
   const r = (key: number, min: number, max: number) => min + unit(seed, Ch.Genes, 40 + key) * (max - min);
   const soft = flavor === 'french' || flavor === 'motorik' || flavor === 'drive';
+  const shape = choose(KICK_SHAPES[flavor], seed, Ch.Genes, 46);
+  if (flavor === 'drive') {
+    // a drum machine's round kick, as a synthesizer player's tracks have it: its pitch falls only
+    // from two or three times its fundamental and settles within 50 ms, a short body and then a
+    // long sub tail dying away (about 10 dB down at 110 ms), little mid and a quiet click; its
+    // fundamental two semitones under the pedal bass's root
+    return { start: r(1, 2, 3), middle: 1.4, snap: 0.005, fall: r(4, 0.04, 0.06), length: r(5, 0.1, 0.14), shape, click: r(7, 0.1, 0.2), tone: r(8, 4000, 5000), rumbleCut: r(9, 110, 230), rumbleLevel: 0, swell: r(11, 0.4, 0.85), pitch: 10, release: r(12, 0.25, 0.35) };
+  }
   return {
     start: r(1, 10, 26),
     middle: r(2, 4, 9),
     snap: r(3, 0.008, 0.025),
     fall: r(4, 0.06, 0.18),
-    // drive's kick is short and round: the bass is the lead
-    length: flavor === 'drive' ? r(5, 0.35, 0.5) : soft ? r(5, 0.4, 0.6) : r(5, 0.45, 0.8),
-    shape: choose(KICK_SHAPES[flavor], seed, Ch.Genes, 46),
+    length: soft ? r(5, 0.4, 0.6) : r(5, 0.45, 0.8),
+    shape,
     click: r(7, 0.2, 1),
     tone: r(8, 2500, 9500),
     rumbleCut: r(9, 110, 230),
     rumbleLevel: soft ? r(10, 0.2, 0.5) : r(10, 0.5, 1),
     swell: r(11, 0.4, 0.85),
+    pitch: 0,
+    release: 0.03,
   };
 }
 
