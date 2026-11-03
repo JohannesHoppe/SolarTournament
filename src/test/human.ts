@@ -63,6 +63,8 @@ const sight = { x: 0, y: 0 };
 const course = { x: 0, y: 0 };
 /** How much the Host steers by the prograde marker rather than the crosshair (0..1), once the ship flies faster than EYE_FROM (units/s, 20 m/s). */
 const COURSE_EYE = 0.5;
+/** In free drift a racing Host lets a difference between the flight it has and the flight it wants under this be (units/s, 5 m/s; see racer). */
+const DRIFT_AIM = 100;
 const EYE_FROM = 400;
 const reticle = new THREE.Vector3();
 const aim = new THREE.Vector3();
@@ -208,16 +210,25 @@ export class Human {
  * looks, up to `cruise`. The brake flips the ship and takes the nose off the line for seconds, so
  * a racing Host brakes only to turn back for a ring it missed, or, with `brakes` (a drill that
  * asks for it), for a bend ahead far too fast for it, holding the brake until it is slow enough.
- * `drive` false never touches the drive (a drill that starts drifting).
+ * `drive` false never touches the drive (a drill that starts drifting). In free drift (without
+ * `autopilot`) nothing takes out the drift but the Host's own drive, so it flies as a pilot does
+ * by the Course marker: it sees how far the flight it has (the Course marker) is from the flight it
+ * wants (towards the point it looks at, as fast as the bends ahead allow), turns its nose into that
+ * difference and burns until the difference is gone, the nose back on the point; slowing for a
+ * bend is the same, nose against the flight and burn. A difference under DRIFT_AIM it lets be.
  */
-export function racer(field: AsteroidField, rings: Rings, flight: FlightModel, cruise = MAX_SPEED, drive = true, seed = 1, hands = ORDINARY, brakes = false): Driver {
+export function racer(field: AsteroidField, rings: Rings, flight: FlightModel, cruise = MAX_SPEED, drive = true, seed = 1, hands = ORDINARY, brakes = false, autopilot = true): Driver {
   const human = new Human(flight, STEP, seed, hands);
+  human.autopilot = autopilot;
+  const look = new THREE.Vector3();
   const mark = new THREE.Vector3();
+  const miss = new THREE.Vector3();
   const a = new THREE.Vector3();
   const b = new THREE.Vector3();
   const c = new THREE.Vector3();
   let pedal: Pedal = 'coast';
   let glance = 0;
+  let wanted = cruise;
   return (flight, next, _seconds, gravity) => {
     const line = rings.line;
     const gate = next % line.gateCount;
@@ -225,8 +236,13 @@ export function racer(field: AsteroidField, rings: Rings, flight: FlightModel, c
     // the ribbon ahead; past a ring missed, the way back to it, as the game's racers come back,
     // slowed down to turn
     const missed = line.beyond(flight.position, gate);
-    if (missed) line.target(flight.position, gate, speed, field, mark);
-    else line.clear(line.progress(flight.position, gate, 0) + Math.max(LOOK_MIN, speed * LOOK), field, mark);
+    if (missed) line.target(flight.position, gate, speed, field, look);
+    else line.clear(line.progress(flight.position, gate, 0) + Math.max(LOOK_MIN, speed * LOOK), field, look);
+    mark.copy(look);
+    // in free drift: the flight it wants less the flight it has, and the nose into the difference
+    // (with no limit of its own, the speed limit, or what a coil threw it to)
+    miss.subVectors(look, flight.position).setLength(Number.isFinite(wanted) ? wanted : Math.max(MAX_SPEED, speed)).sub(flight.velocity);
+    if (!autopilot && miss.length() > DRIFT_AIM) mark.copy(miss).setLength(look.distanceTo(flight.position)).add(flight.position);
     if (glance++ % GLANCE === 0) {
       // the ribbon ahead within BRAKE_SECONDS: the speed its bends allow (where it glows orange)
       const from = line.progress(flight.position, gate, 0);
@@ -234,13 +250,19 @@ export function racer(field: AsteroidField, rings: Rings, flight: FlightModel, c
       for (let s = from; s < from + Math.min(RIBBON_REACH, speed * BRAKE_SECONDS); s += RIBBON_STEP) {
         slowest = Math.min(slowest, cornerSpeed(bendRadius(line.clear(s - BEND_SPAN, field, a), line.clear(s, field, b), line.clear(s + BEND_SPAN, field, c)), flight));
       }
-      const braking = (missed || brakes) && speed > slowest * (pedal === 'brake' ? SLOW : HARD);
-      // and it holds the drive while the nose points about where it looks, or nearer to it than
-      // the flight goes: the drive pushes along the nose
-      a.subVectors(mark, flight.position);
-      const off = flight.forward(b).angleTo(a);
-      const onLine = off < ON_LINE || (speed > 1 && off < flight.velocity.angleTo(a));
-      pedal = braking ? 'brake' : drive && onLine && speed < Math.min(cruise, slowest * GLOW) ? 'drive' : 'coast';
+      wanted = Math.min(cruise, slowest * GLOW);
+      if (!autopilot) {
+        // in free drift it burns while its nose is in the difference, until the difference is gone
+        pedal = drive && miss.length() > DRIFT_AIM && flight.forward(b).angleTo(miss) < ON_LINE ? 'drive' : 'coast';
+      } else {
+        const braking = (missed || brakes) && speed > slowest * (pedal === 'brake' ? SLOW : HARD);
+        // and it holds the drive while the nose points about where it looks, or nearer to it than
+        // the flight goes: the drive pushes along the nose
+        a.subVectors(mark, flight.position);
+        const off = flight.forward(b).angleTo(a);
+        const onLine = off < ON_LINE || (speed > 1 && off < flight.velocity.angleTo(a));
+        pedal = braking ? 'brake' : drive && onLine && speed < wanted ? 'drive' : 'coast';
+      }
     }
     return human.fly(flight, mark, pedal, gravity);
   };
@@ -262,13 +284,13 @@ export function lapOf(field: AsteroidField, arena: ArenaProfile) {
 }
 
 /** A lap of an arena's race by every hand of SPREAD with every seed of SEEDS, and by a racing bot of `skill`, each in the field as it starts. */
-export function raceLaps(field: AsteroidField, arena: ArenaProfile, skill: number) {
+export function raceLaps(field: AsteroidField, arena: ArenaProfile, skill: number, autopilot = false) {
   const laps: { hands: Hands; seed: number; flight: Flight }[] = [];
   for (const hands of SPREAD) {
     for (const seed of SEEDS) {
       const { start, facing, rings } = lapOf(field, arena);
       const flight = startFlight(start, facing);
-      laps.push({ hands, seed, flight: flyCourse(field, rings, flight, racer(field, rings, flight, undefined, true, seed, hands), LAP_LIMIT) });
+      laps.push({ hands, seed, flight: flyCourse(field, rings, flight, racer(field, rings, flight, undefined, true, seed, hands, false, autopilot), LAP_LIMIT) });
     }
   }
   const { start, facing, rings } = lapOf(field, arena);

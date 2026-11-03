@@ -2496,7 +2496,7 @@ export class Game implements OnlineGame {
     this.cockpit = false;
     this.flipping = false;
     this.kick = 0;
-    this.autopilot = true;
+    this.autopilot = false;
     this.overdriveReadyAt = 0;
     this.hookReadyAt = 0;
     this.dodgeReadyAt = 0;
@@ -2913,12 +2913,12 @@ export class Game implements OnlineGame {
     this.briefRound();
   }
 
-  /** What every round starts with on screen and in the cockpit: no replay, no old marks, the autopilot on. */
+  /** What every round starts with on screen and in the cockpit: no replay, no old marks, free drift. */
   private freshRound() {
     this.killcam.stop();
     this.hud.reset();
     this.resetOpening();
-    this.autopilot = true;
+    this.autopilot = false;
   }
 
   /** The opening starts from nothing (see startCountdown): a round left during the last one's intro leaves none behind, and a browser that arrives during an opening sees the rest of it. */
@@ -4907,7 +4907,7 @@ export class Game implements OnlineGame {
       hooked: false,
       impactAhead: false,
       orbit: null,
-      autopilot: true,
+      autopilot: false,
       setAutopilot: (on) => {
         if (this.autopilot !== on) this.toggleAutopilot();
       },

@@ -15,15 +15,20 @@ const SLIPS = 1;
 const RACE_TIMEOUT = 120_000;
 
 /**
- * The race test of an arena (see raceLaps): a simulated Host with hands from quick to slow flies
- * a lap; it is never lost, misses at most one gate nearly every time, and an ordinary Host is
- * about as fast as a middling bot. The race tests run in two files, so they run side by side.
+ * The race tests of an arena (see raceLaps): a simulated Host with hands from quick to slow flies
+ * a lap, in free drift as every round starts, and with the autopilot; it is never lost, misses at
+ * most one gate nearly every time, and an ordinary Host is about as fast as a middling bot. The
+ * race tests run in two files, so they run side by side.
  */
 export function raceTest(arena: ArenaProfile) {
+  for (const autopilot of [false, true]) raceLap(arena, autopilot);
+}
+
+function raceLap(arena: ArenaProfile, autopilot: boolean) {
   it(
-    `a lap in ${arena.id} with hands from quick to slow: never lost, at most one gate missed nearly every time, an ordinary Host about as fast as a middling bot`,
+    `a lap in ${arena.id} ${autopilot ? 'with the autopilot' : 'in free drift'}, hands from quick to slow: never lost, at most one gate missed nearly every time, an ordinary Host about as fast as a middling bot`,
     () => {
-      const { laps, bot } = raceLaps(testField(DETAIL), arena, SKILL);
+      const { laps, bot } = raceLaps(testField(DETAIL), arena, SKILL, autopilot);
       const lines = laps.map(({ hands, seed, flight }) => `reaction ${hands.reaction} s, seed ${seed}: ${flight.crashed ? 'LOST' : `${flight.passed}/${GATES + 1} gates in ${flight.seconds.toFixed(0)} s, ${flight.missed} missed`}`);
       const summary = `${arena.id}: middling bot ${bot.seconds.toFixed(0)} s; ${lines.join('; ')}`;
       console.info(`Host laps in ${summary}`);

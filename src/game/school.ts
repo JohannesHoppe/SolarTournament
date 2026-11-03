@@ -503,7 +503,7 @@ function ringDrill(line: string, praise: string, keys: Command[], course: readon
     line,
     praise,
     keys,
-    autopilot: true,
+    autopilot: false,
     enter(ctx, a, markers) {
       layRings(ctx, a, markers, course);
       if (drift !== null) headFor(ctx, a.points[0], drift);
@@ -613,7 +613,7 @@ export const DRILL = {
     // the drive's keys show beside the stick's, since the line says turning alone moves nothing
     keys: ['turn', 'drive'],
     reps: TURN_MARKERS.length,
-    autopilot: true,
+    autopilot: false,
     enter(ctx, a, markers) {
       stop(ctx);
       const [x, y, z] = TURN_MARKERS[a.rep];
@@ -628,7 +628,7 @@ export const DRILL = {
     line: SCHOOL.fineAim,
     praise: SCHOOL_PRAISE.fineAim,
     keys: ['fine', 'turn'],
-    autopilot: true,
+    autopilot: false,
     enter(ctx, a, markers) {
       stop(ctx);
       a.points = [markers.buoy(ahead(ctx, 0.12, -0.07, -1).sub(ctx.me.flight.position).setLength(8000).add(ctx.me.flight.position), 0.5)];
@@ -643,7 +643,7 @@ export const DRILL = {
     line: SCHOOL.cockpit,
     praise: SCHOOL_PRAISE.cockpit,
     keys: ['camera'],
-    autopilot: true,
+    autopilot: false,
     // touch screens have no camera switch: there the drill is not given at all
     skip: (ctx) => ctx.device === 'touch',
     // in, then out again
@@ -656,7 +656,7 @@ export const DRILL = {
     line: SCHOOL.drive,
     praise: SCHOOL_PRAISE.drive,
     keys: ['drive'],
-    autopilot: true,
+    autopilot: false,
     enter: (ctx) => stop(ctx),
     done: (ctx) => speed(ctx) >= FAST,
   },
@@ -664,7 +664,7 @@ export const DRILL = {
     line: SCHOOL.brake,
     praise: SCHOOL_PRAISE.brake,
     keys: ['brake'],
-    autopilot: true,
+    autopilot: false,
     enter(ctx) {
       if (speed(ctx) < FAST * 0.8) drift(ctx, FAST * 1.2, speed(ctx) > 10 ? ctx.me.flight.velocity : undefined);
     },
@@ -676,7 +676,7 @@ export const DRILL = {
     line: SCHOOL.curve,
     praise: SCHOOL_PRAISE.curve,
     keys: ['turn', 'drive'],
-    autopilot: true,
+    autopilot: false,
     enter(ctx, a, markers) {
       stop(ctx);
       a.points = ringCourse(ctx.me.flight.position, ctx.me.flight.orientation, CURVE_COURSE, ctx.field).map((point) => clear(ctx, point, CURVE_ZONE / 2));
@@ -710,7 +710,7 @@ export const DRILL = {
     line: SCHOOL.coil,
     praise: SCHOOL_PRAISE.coil,
     keys: ['drive', 'turn', 'fine'],
-    autopilot: true,
+    autopilot: false,
     enter: (ctx, a, markers) => layRings(ctx, a, markers, COIL_COURSE),
     done(ctx, a, markers) {
       const off = passRing(ctx, a);
@@ -729,7 +729,7 @@ export const DRILL = {
     line: SCHOOL.start,
     praise: SCHOOL_PRAISE.start,
     keys: ['drive'],
-    autopilot: true,
+    autopilot: false,
     enter: (ctx) => stop(ctx),
     done(ctx, a) {
       const lit = ctx.controls.thrust > 0;
@@ -762,7 +762,7 @@ export const DRILL = {
     line: SCHOOL.hook,
     praise: SCHOOL_PRAISE.hook,
     keys: ['hook', 'turn', 'drive'],
-    autopilot: true,
+    autopilot: false,
     // the drift past the rock is what the cable swings: the autopilot leaves it alone until the hook bites
     keepsDrift: (_, a) => !a.warned,
     enter(ctx, a) {
@@ -798,7 +798,7 @@ export const DRILL = {
     line: SCHOOL.shootMoving,
     praise: SCHOOL_PRAISE.shootMoving,
     keys: ['fire', 'turn', 'fine'],
-    autopilot: true,
+    autopilot: false,
     enter(ctx) {
       stop(ctx);
       const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ctx.me.flight.orientation);
@@ -813,7 +813,7 @@ export const DRILL = {
     line: SCHOOL.overheat,
     praise: SCHOOL_PRAISE.overheat,
     keys: ['fire'],
-    autopilot: true,
+    autopilot: false,
     // a laser still hot from the last drill would pass this one before the first shot
     enter(ctx) {
       stop(ctx);
@@ -826,7 +826,7 @@ export const DRILL = {
     line: SCHOOL.shadow,
     praise: SCHOOL_PRAISE.shadow,
     keys: ['turn', 'drive', 'brake'],
-    autopilot: true,
+    autopilot: false,
     // the shadow of the rock nearest as the drill begins: the marker stays behind that one
     enter(ctx, a) {
       const rock = nearestAsteroid(ctx);
@@ -842,7 +842,7 @@ export const DRILL = {
     line: SCHOOL.impact,
     praise: SCHOOL_PRAISE.impact,
     keys: ['brake', 'turn', 'slide'],
-    autopilot: true,
+    autopilot: false,
     enter(ctx, a) {
       // between a rock and the field's center, heading for the rock at 100 m/s
       const facing = faceRock(ctx, 14000);
@@ -858,15 +858,6 @@ export const DRILL = {
       const away = toTarget.copy(a.points[0]).sub(ctx.me.flight.position).dot(ctx.me.flight.velocity) < 0;
       return holdFor(ctx, a, !ctx.impactAhead && (speed(ctx) < STOPPED || away), 1);
     },
-  },
-  // free drift: flying like a real spaceship, for the dogfight
-  freeDrift: {
-    line: SCHOOL.freeDrift,
-    praise: SCHOOL_PRAISE.freeDrift,
-    keys: ['autopilot'],
-    autopilot: true,
-    done: (ctx) => !ctx.autopilot,
-    autopilotAfter: false,
   },
   drift: {
     line: SCHOOL.drift,
@@ -916,7 +907,7 @@ export const DRILL = {
     repLine: SCHOOL.stopAtFar,
     keys: ['turn', 'drive', 'brake'],
     reps: 2,
-    autopilot: true,
+    autopilot: false,
     enter(ctx, a, markers) {
       stop(ctx);
       a.points = [markers.buoy(clear(ctx, a.rep === 0 ? ahead(ctx, 0, 0, -10000) : ahead(ctx, 3000, 1500, -18000), STOP_RADIUS))];
@@ -953,23 +944,27 @@ export const DRILL = {
     },
   },
   dodge: debris(SCHOOL.dodge, SCHOOL_PRAISE.dodge, 9000, DEBRIS_SPEED, false),
-  autopilotOn: {
-    line: SCHOOL.autopilotOn,
-    praise: SCHOOL_PRAISE.autopilotOn,
+  // the autopilot, an aid for when the head is needed elsewhere: on, a look at what it does, off again
+  autopilot: {
+    line: SCHOOL.autopilot,
+    praise: SCHOOL_PRAISE.autopilot,
     keys: ['autopilot'],
     autopilot: false,
-    done: (ctx) => ctx.autopilot,
-    autopilotAfter: true,
+    done(ctx, a) {
+      if (ctx.autopilot) a.next = 1;
+      return a.next === 1 && !ctx.autopilot;
+    },
+    autopilotAfter: false,
   },
-  chase: sparring(SCHOOL.chase, SCHOOL_PRAISE.chase, ['turn', 'drive', 'brake', 'fire', 'autopilot'], false, 0.1),
-  evade: sparring(SCHOOL.evade, SCHOOL_PRAISE.evade, ['turn', 'drive', 'slide', 'fire', 'autopilot'], true, 0.05),
-  duel: sparring(SCHOOL.duel, SCHOOL_PRAISE.duel, ['turn', 'drive', 'brake', 'slide', 'fire', 'autopilot'], true, 0.2),
+  chase: sparring(SCHOOL.chase, SCHOOL_PRAISE.chase, ['turn', 'drive', 'brake', 'fire'], false, 0.1),
+  evade: sparring(SCHOOL.evade, SCHOOL_PRAISE.evade, ['turn', 'drive', 'slide', 'fire'], true, 0.05),
+  duel: sparring(SCHOOL.duel, SCHOOL_PRAISE.duel, ['turn', 'drive', 'brake', 'slide', 'fire'], true, 0.2),
   // the arsenal: what a clone carries besides its laser, and what it finds out there
   torpedo: {
     line: SCHOOL.torpedo,
     praise: SCHOOL_PRAISE.torpedo,
     keys: ['turn', 'torpedo'],
-    autopilot: true,
+    autopilot: false,
     enter(ctx, a) {
       stop(ctx);
       ctx.arm('torpedo');
@@ -987,7 +982,7 @@ export const DRILL = {
     line: SCHOOL.torpedoDown,
     praise: SCHOOL_PRAISE.torpedoDown,
     keys: ['turn', 'fine', 'fire'],
-    autopilot: true,
+    autopilot: false,
     enter(ctx, a) {
       stop(ctx);
       incoming(ctx, a, clear(ctx, ahead(ctx, 0, 0, -30000), 2000));
@@ -1002,7 +997,7 @@ export const DRILL = {
     line: SCHOOL.overdrive,
     praise: SCHOOL_PRAISE.overdrive,
     keys: ['overdrive'],
-    autopilot: true,
+    autopilot: false,
     // the overdrive ready, however recently it was fired, and room ahead to fly off with it
     enter(ctx) {
       stop(ctx);
@@ -1015,7 +1010,7 @@ export const DRILL = {
     line: SCHOOL.probe,
     praise: SCHOOL_PRAISE.probe,
     keys: ['turn', 'drive', 'brake'],
-    autopilot: true,
+    autopilot: false,
     enter(ctx, a) {
       stop(ctx);
       a.count = ctx.me.torpedoes;
@@ -1030,7 +1025,7 @@ export const DRILL = {
     line: SCHOOL.hookShip,
     praise: SCHOOL_PRAISE.hookShip,
     keys: ['turn', 'drive', 'hook'],
-    autopilot: true,
+    autopilot: false,
     enter(ctx) {
       stop(ctx);
       ctx.spawnBot(clear(ctx, ahead(ctx, 0, 0, -12000), 2000), false, 0.2);
@@ -1083,17 +1078,16 @@ export const DRILL = {
   // the bot that fights back gone, its drive hit at least once on the way; gone with its drive
   // whole, the attempt starts over with why; an overheated laser only locks, which is lesson enough
   bursts: {
-    ...sparring(SCHOOL.bursts, SCHOOL_PRAISE.bursts, ['turn', 'drive', 'fire', 'autopilot'], true, BURST_SKILL),
+    ...sparring(SCHOOL.bursts, SCHOOL_PRAISE.bursts, ['turn', 'drive', 'fire'], true, BURST_SKILL),
     done: (ctx) => !!ctx.bot && !ctx.bot.alive && ctx.bot.drive < 1,
     fail: (ctx) => (ctx.bot && !ctx.bot.alive && ctx.bot.drive >= 1 ? SCHOOL.burstsNoDrive : null),
   },
-  // free drift in a dogfight: sliding past a bot, the nose turned onto it, firing sideways or
-  // back; then the autopilot on again to leave
+  // free drift in a dogfight: sliding past a bot, the nose turned onto it, firing sideways or back
   slideShot: {
     line: SCHOOL.slideShot,
     praise: SCHOOL_PRAISE.slideShot,
-    keys: ['autopilot', 'turn', 'fire'],
-    autopilot: true,
+    keys: ['turn', 'fire'],
+    autopilot: false,
     enter(ctx, a) {
       stop(ctx);
       ctx.me.heat = 0;
@@ -1111,7 +1105,7 @@ export const DRILL = {
       const sideways = !ctx.autopilot && speed(ctx) > SLIDE_MOVING && flight.noseAngleTo(flight.velocity) > SLIDE_ANGLE;
       if (bot.hull < a.reach && sideways) a.count++;
       a.reach = bot.hull;
-      return a.count >= SLIDE_HITS && ctx.autopilot;
+      return a.count >= SLIDE_HITS;
     },
     fail(ctx, a) {
       if (ctx.bot && !ctx.bot.alive && a.count < SLIDE_HITS) return SCHOOL.slideShotStraight;
@@ -1120,14 +1114,13 @@ export const DRILL = {
     leave: (ctx) => ctx.removeBot(),
     waypoint: (ctx) => (ctx.bot?.alive ? ctx.bot.flight.position : null),
     mark: () => t('Bot'),
-    autopilotAfter: true,
   },
   // a better bot hunts the pilot: a rock between them hides the pilot from its sensors
   cover: {
     line: SCHOOL.cover,
     praise: SCHOOL_PRAISE.cover,
     keys: ['turn', 'drive', 'brake', 'slide'],
-    autopilot: true,
+    autopilot: false,
     enter(ctx, a) {
       const behind = takeCover(ctx, a);
       if (behind) ctx.spawnBot(behind, true, HUNTER_SKILL);
@@ -1142,7 +1135,7 @@ export const DRILL = {
     line: SCHOOL.torpedoCover,
     praise: SCHOOL_PRAISE.torpedoCover,
     keys: ['turn', 'drive', 'brake', 'slide'],
-    autopilot: true,
+    autopilot: false,
     enter(ctx, a) {
       const behind = takeCover(ctx, a, COVER_DRONE);
       if (behind) incoming(ctx, a, behind);
@@ -1160,10 +1153,9 @@ export const DRILL = {
   orbit: {
     line: SCHOOL.orbit,
     praise: SCHOOL_PRAISE.orbit,
-    keys: ['drive', 'turn', 'autopilot'],
+    keys: ['drive', 'turn'],
     arena: 'hole',
-    autopilot: true,
-    autopilotAfter: true,
+    autopilot: false,
     enter(ctx, a) {
       const flight = ctx.me.flight;
       const center = ctx.field.well?.position ?? ORIGIN;
@@ -1233,7 +1225,7 @@ function atDrone(line: string, praise: string, distance: number, nova = false): 
     line,
     praise,
     keys: nova ? ['turn', 'drive', 'fire'] : ['fire'],
-    autopilot: true,
+    autopilot: false,
     enter(ctx) {
       stop(ctx);
       if (nova) ctx.arm('nova');
@@ -1346,13 +1338,15 @@ export function coursesFrom(text: string | null): Set<SchoolCourse> | null {
 }
 
 /**
- * The drills of each course, in the order a Host needs them. Basic training: turning, then the
- * drive that the turn alone lacks and the brake, aiming, a curve with the autopilot, stopping at
- * a point and the rocks, all with the autopilot on. The racer, in the order a race runs: the start, the rings and the X
+ * The drills of each course, in the order a Host needs them, all in free drift, as every round
+ * is flown. Basic training: turning, then the drive that the turn alone lacks, the drift that
+ * nothing out there slows, looking back while it carries the ship on, the brake and the flip and
+ * burn by hand, aiming, a curve bent by the drive, stopping at a point and the rocks, and last
+ * the autopilot, an aid for a busy head. The racer, in the order a race runs: the start, the rings and the X
  * where the flight crosses them, their coils, the racing line's brake zones, the line at full
- * speed, and the hook. The gladiator: the laser and its heat, free drift like a real spaceship,
- * dodging, and the dogfight last: onto a bot's tail, and only then firing in bursts at one that
- * shoots back, for the laser's heat is spent on misses and armor. The arsenal: torpedoes (launching one, shooting
+ * speed, and the hook. The gladiator: the laser and its heat, dodging, and the dogfight last:
+ * onto a bot's tail, and only then firing in bursts at one that shoots back, for the laser's
+ * heat is spent on misses and armor. The arsenal: torpedoes (launching one, shooting
  * one down), the overdrive, the hook on a ship, then a probe, whose colors name the nova core
  * that follows it. The tactician: defending first (a bot on the tail, the kick), then attacking
  * (shooting sideways in free drift, the shove into rock), then cover from a hunter and from a
@@ -1360,7 +1354,22 @@ export function coursesFrom(text: string | null): Set<SchoolCourse> | null {
  * alone), and an exam against a bot as good as the field's middling one.
  */
 const COURSES: Record<SchoolCourse, Drill[]> = {
-  basic: [DRILL.briefing, DRILL.turn, DRILL.drive, DRILL.brake, DRILL.fineAim, DRILL.cockpit, DRILL.curve, DRILL.stopAt, DRILL.impact, saying(SCHOOL.basicDone)],
+  basic: [
+    DRILL.briefing,
+    DRILL.turn,
+    DRILL.drive,
+    DRILL.drift,
+    DRILL.lookBack,
+    DRILL.brake,
+    DRILL.flipBurn,
+    DRILL.fineAim,
+    DRILL.cockpit,
+    DRILL.curve,
+    DRILL.stopAt,
+    DRILL.impact,
+    DRILL.autopilot,
+    saying(SCHOOL.basicDone),
+  ],
   racer: [saying(SCHOOL.racer), DRILL.start, DRILL.rings, DRILL.coil, DRILL.brakeZone, DRILL.fullSpeed, DRILL.hook, saying(SCHOOL.racerDone)],
   gladiator: [
     saying(SCHOOL.gladiator),
@@ -1368,13 +1377,8 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
     DRILL.shootMoving,
     DRILL.overheat,
     DRILL.shadow,
-    DRILL.freeDrift,
-    DRILL.drift,
-    DRILL.lookBack,
-    DRILL.flipBurn,
     DRILL.slide,
     DRILL.dodge,
-    DRILL.autopilotOn,
     DRILL.chase,
     DRILL.evade,
     DRILL.bursts,
@@ -1413,10 +1417,12 @@ const NUMBERED: Partial<Record<SchoolCourse, string[]>> = {
 /**
  * Drills a browser may have kept by name that a course no longer has, and the drill that goes on
  * where they were: the tactician's bursts (the gladiator teaches them) at the slide shot, its
- * comet drill at the orbit drill.
+ * comet drill at the orbit drill; the gladiator's drills of free drift (basic training teaches
+ * them) at the slide, its switch to the autopilot at the chase.
  */
 const RENAMED: Partial<Record<SchoolCourse, Record<string, string>>> = {
   tactician: { bursts: 'slideShot', comet: 'orbit' },
+  gladiator: { freeDrift: 'slide', drift: 'slide', lookBack: 'slide', flipBurn: 'slide', autopilotOn: 'chase' },
 };
 
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
@@ -1566,7 +1572,7 @@ export class FlightSchool {
 
   /** Whether the autopilot is on at the starting drill: as the drills before it left it. */
   get startsWithAutopilot() {
-    let on = true;
+    let on = false;
     for (let i = 0; i < this.index; i++) on = this.drills[i].autopilotAfter ?? on;
     return on;
   }

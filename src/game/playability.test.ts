@@ -31,8 +31,8 @@ describe("a simulated Host flies the flight school's drills", () => {
     { drill: 'brake', layout: BRAKE_COURSE, radius: RING_RADIUS, core: 0, drift: MAX_SPEED, seconds: 60 },
     { drill: 'full-speed', layout: LINE_COURSE, radius: RING_RADIUS, core: BOOST_RADIUS, drift: 0, seconds: 0 },
   ];
-  for (const { drill, layout, radius, core, drift, seconds } of drills) {
-    it(`the ${drill} drill, missing nothing`, () => {
+  for (const { drill, layout, radius, core, drift, seconds } of drills) for (const autopilot of [false, true]) {
+    it(`the ${drill} drill ${autopilot ? 'with the autopilot' : 'in free drift'}, missing nothing`, () => {
       const points = ringCourse(position, new THREE.Quaternion(), layout);
       const normals = points.map((point, i) => point.clone().sub(i === 0 ? position : points[i - 1]).normalize());
       const line = new RacingLine(points, false, position);
@@ -40,10 +40,13 @@ describe("a simulated Host flies the flight school's drills", () => {
       const field = gameField();
       const flight = startFlight(position, drift !== null ? normals[0] : facing, drift ?? 0);
       const limit = seconds || line.length / LINE_PACE + LINE_SPARE;
-      // the curve drill starts drifting and is flown without the drive, the others with it; the full-speed drill all the way
-      const host = flyCourse(field, rings, flight, racer(field, rings, flight, drill === 'full-speed' ? Infinity : undefined, drill !== 'curve', 1, ORDINARY, drill === 'brake'), limit);
+      // the curve drill starts drifting: with the autopilot it is flown without the drive, the
+      // thrusters bending the flight; in free drift only the drive bends it. The others with the
+      // drive; the full-speed drill all the way
+      const drive = !autopilot || drill !== 'curve';
+      const host = flyCourse(field, rings, flight, racer(field, rings, flight, drill === 'full-speed' ? Infinity : undefined, drive, 1, ORDINARY, drill === 'brake', autopilot), limit);
       const summary = `${host.passed} of ${points.length} in ${host.seconds.toFixed(1)} of ${limit.toFixed(0)} s, ${host.missed} missed, offs ${host.offs.map((off) => (off / 20).toFixed(0)).join(', ')} m`;
-      console.info(`Host in the ${drill} drill: ${summary}`);
+      console.info(`Host in the ${drill} drill ${autopilot ? 'with the autopilot' : 'in free drift'}: ${summary}`);
       expect(host.passed, summary).toBe(points.length);
       expect(host.missed, summary).toBe(0);
       if (drill === 'coil') for (const off of host.offs) expect(off, summary).toBeLessThan(RING_RADIUS * CORE_SHARE);

@@ -38,16 +38,19 @@ describe('judging a drill', () => {
     }
   });
 
-  it('teaches free drift before the bots, and firing in bursts only at one the pilot has learned to get behind', () => {
-    const order = ['freeDrift', 'chase', 'evade', 'bursts', 'duel'].map((name) => FlightSchool.reached('gladiator', name as never));
+  it('teaches dodging before the bots, and firing in bursts only at one the pilot has learned to get behind', () => {
+    const order = ['dodge', 'chase', 'evade', 'bursts', 'duel'].map((name) => FlightSchool.reached('gladiator', name as never));
     expect(order).toEqual([...order].sort((a, b) => Number(a) - Number(b)));
   });
 
-  it('names the drive, the tail and free drift where a bot has to be shot from behind', () => {
+  it('teaches free drift in basic training, before the brake and the curve, and the autopilot only last', () => {
+    const order = ['drift', 'lookBack', 'brake', 'flipBurn', 'curve', 'autopilot'].map((name) => FlightSchool.reached('basic', name as never));
+    expect(order).toEqual([...order].sort((a, b) => Number(a) - Number(b)));
+  });
+
+  it('names the drive where a bot has to be shot from behind', () => {
     expect(DRILL.bursts.line).toMatch(/drive/);
-    expect(DRILL.bursts.line).toMatch(/free drift/);
-    expect(DRILL.chase.line).toMatch(/free drift/);
-    for (const drill of [DRILL.chase, DRILL.evade, DRILL.bursts, DRILL.duel]) expect(drill.keys).toContain('autopilot');
+    expect(DRILL.chase.line).toMatch(/drive/);
   });
 
   it('counts a turn drill done for a pilot who burns to the marker, however the nose points there', () => {
@@ -187,9 +190,11 @@ describe('judging a drill', () => {
     expect(judged(DRILL.shove, at(-8000), { points: [rock, along], reach: 1000 })).toBe(SCHOOL.again);
   });
 
-  it('sets the autopilot each drill needs, and leaves the hook’s drift alone until it bites', () => {
-    for (const drill of [DRILL.turn, DRILL.drive, DRILL.brake, DRILL.fineAim, DRILL.curve, DRILL.stopAt, DRILL.impact, DRILL.freeDrift, DRILL.hook]) expect(drill.autopilot).toBe(true);
-    for (const drill of [DRILL.drift, DRILL.lookBack, DRILL.flipBurn, DRILL.autopilotOn]) expect(drill.autopilot).toBe(false);
+  it('flies every drill in free drift, as every round is, and leaves the hook’s drift alone until it bites', () => {
+    for (const drill of Object.values(DRILL)) if ('autopilot' in drill && drill.autopilot !== undefined) expect(drill.autopilot).toBe(false);
+    // the autopilot drill: on, then off again
+    expect(judged(DRILL.autopilot, { autopilot: true }, { next: 0 })).not.toBe(true);
+    expect(judged(DRILL.autopilot, { autopilot: false }, { next: 1 })).toBe(true);
     expect(DRILL.hook.keepsDrift(null as never, { warned: false } as never)).toBe(true);
     expect(DRILL.hook.keepsDrift(null as never, { warned: true } as never)).toBe(false);
   });
@@ -214,10 +219,10 @@ describe('judging a drill', () => {
       });
     };
 
-    it('is flown at the Event Horizon, from the autopilot to free drift and back', () => {
+    it('is flown at the Event Horizon, in free drift', () => {
       expect(DRILL.orbit.arena).toBe('hole');
-      expect(DRILL.orbit.autopilot).toBe(true);
-      expect(DRILL.orbit.keys).toEqual(expect.arrayContaining(['drive', 'turn', 'autopilot']));
+      expect(DRILL.orbit.autopilot).toBe(false);
+      expect(DRILL.orbit.keys).toEqual(expect.arrayContaining(['drive', 'turn']));
     });
 
     it('counts half a turn about the hole in a stable orbit', () => {

@@ -119,7 +119,7 @@ for (const course of ['basic', 'racer', 'gladiator', 'arsenal', 'tactician']) {
   });
 }
 
-test('the flight school’s orbit drill flies at the Event Horizon: the readout says ORBIT READY, and free drift flies a STABLE ORBIT without the well’s alarm', async ({ page }) => {
+test('the flight school’s orbit drill flies at the Event Horizon: free drift flies a STABLE ORBIT without the well’s alarm, and the autopilot calls the path ORBIT READY', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('solartournament.school-step', JSON.stringify({ tactician: 'orbit' })));
   const errors = await openGame(page);
   await page.click('#school');
@@ -137,12 +137,12 @@ test('the flight school’s orbit drill flies at the Event Horizon: the readout 
     const across = arm.clone().cross(flight.velocity).cross(arm).normalize();
     flight.velocity.copy(across).multiplyScalar(Math.sqrt((well.surfaceGravity * well.radius * well.radius) / arm.length()));
   });
-  await expect(page.locator('#hud-orbit-state')).toHaveText('ORBIT READY');
-  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT' })));
   await expect(page.locator('#hud-orbit-state')).toHaveText('STABLE ORBIT');
   await play(page, 1);
   expect(await page.evaluate(() => window.game.alarms.list.some((alarm: { id: string }) => alarm.id === 'well'))).toBe(false);
   await expect(page.locator('#hud-escape')).not.toHaveClass(/caution|warning|critical/);
+  await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyT' })));
+  await expect(page.locator('#hud-orbit-state')).toHaveText('ORBIT READY');
   expect(errors).toEqual([]);
 });
 
