@@ -3709,6 +3709,8 @@ export class Game implements OnlineGame {
       this.hud.flashMessage(now, this.flipAligned ? t('Flipped · drive brakes') : t('Flip'), 0.2);
     } else if (this.brakePhase !== 'off' && me.alive) {
       this.hud.flashMessage(now, this.brakePhase === 'return' ? t('Back on target') : this.brake.rested ? t('At rest') : t('Braking'), 0.2);
+    } else if (me.mending && me.alive) {
+      this.hud.flashMessage(now, t('Nanobots repairing'), 0.2);
     }
 
     if (this.online) {

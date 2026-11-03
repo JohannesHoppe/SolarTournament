@@ -214,6 +214,7 @@ export const ES: Catalog = {
   Flip: 'Volteo',
   'At rest': 'En reposo',
   'Back on target': 'De vuelta al objetivo',
+  'Nanobots repairing': 'Nanobots reparando',
   'Juno is shooting at you!': '¡Juno te está disparando!',
   'Ceres is shooting at you!': '¡Ceres te está disparando!',
   'Kessler is shooting at you!': '¡Kessler te está disparando!',
@@ -1137,6 +1138,8 @@ export const ES: Catalog = {
   'Armor and the drive': 'Coraza y motor',
   'There are no shields. Nose and flanks are armor: a beam only scorches it, {armor} of {hull} hull points. From behind, within {driveCone}° of the axis, a beam hits the main drive: each hit costs a fifth of its thrust, and the fifth sends the reactor critical. Five hits from behind win the fight.':
     'No hay escudos. Morro y flancos son coraza: un rayo solo la chamusca, {armor} de {hull} puntos de casco. Por detrás, a menos de {driveCone}° del eje, un rayo da en el motor principal: cada impacto le quita una quinta parte del empuje, y el quinto pone el reactor en estado crítico. Cinco impactos por detrás ganan el combate.',
+  'Nanobots mend your drive and thrusters {nanoWait} s after the last blow to them, whole again in {nanoSeconds} s; the hull stays as it is. So a hurt drive is no reason to give up: break off, take cover behind a rock, and come back at full thrust.':
+    'Los nanobots reparan el motor y los propulsores {nanoWait} s después del último golpe, y en {nanoSeconds} s vuelven a estar enteros; el casco se queda como está. Así que un motor dañado no es motivo para rendirse: retírate, ponte a cubierto tras una roca y vuelve con todo el empuje.',
   'So a fight is won by position: get behind the other ship, and keep your armored nose to anyone behind you. The crosshair glows orange only over a drive. ON YOUR TAIL means: turn your nose to that ship, now.':
     'Así que un combate se gana por posición: ponte detrás de la otra nave y mantén tu morro acorazado hacia quien tengas detrás. La mira solo brilla en naranja sobre un motor. EN TU COLA significa: gira el morro hacia esa nave, ya.',
   'Whoever hit you in the last few seconds carries a red warning sign on its mark, the latest one pulsing, and when it hit you from out of sight, Nicole names it. Turn round, and you know whom to take on.':

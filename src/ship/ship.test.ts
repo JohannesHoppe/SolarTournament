@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { FlightModel } from './flight';
-import { Ship } from './ship';
+import { NANO_SECONDS, NANO_WAIT, Ship } from './ship';
 import { STOCK } from '../game/hangar';
 import { shipState } from '../net/validate';
 import { Plausibility } from '../net/plausible';
@@ -121,5 +121,46 @@ describe("another browser's ship", () => {
     owner.flight.velocity.set(0, -80, 0);
     seen.applyState(shipState(owner.toState(0.2))!, 0.2);
     expect(seen.flight.rcs.length()).toBeGreaterThan(0.3);
+  });
+});
+
+describe('the nanobots', () => {
+  /** A ship with a hurt drive and thrusters, mended by its nanobots step by step. */
+  const hurt = () => {
+    const s = Object.create(Ship.prototype) as Ship;
+    Object.assign(s, { drive: 1, thrusters: 1, hull: 60, mending: false, hurtAt: -Infinity, driveBefore: 1, thrustersBefore: 1 });
+    return s;
+  };
+  const mend = (s: Ship, from: number, to: number) => {
+    for (let t = from; t < to; t += 1 / 60) (s as unknown as { nanobots(dt: number, now: number): void }).nanobots(1 / 60, t);
+  };
+
+  it(`wait ${NANO_WAIT} s after the last blow, then mend drive and thrusters whole in ${NANO_SECONDS} s, and leave the hull be`, () => {
+    const s = hurt();
+    mend(s, 0, 1);
+    s.drive = 0.2;
+    s.thrusters = 0.5;
+    mend(s, 1, 1 + NANO_WAIT - 0.1);
+    expect(s.drive).toBeCloseTo(0.2, 6);
+    expect(s.mending).toBe(false);
+    mend(s, 1 + NANO_WAIT - 0.1, 1 + NANO_WAIT + 5);
+    expect(s.mending).toBe(true);
+    expect(s.drive).toBeCloseTo(0.2 + 5 / NANO_SECONDS, 1);
+    mend(s, 1 + NANO_WAIT + 5, 1 + NANO_WAIT + NANO_SECONDS);
+    expect(s.drive).toBe(1);
+    expect(s.thrusters).toBe(1);
+    expect(s.mending).toBe(false);
+    expect(s.hull).toBe(60);
+  });
+
+  it('stop at a new blow, and wait again', () => {
+    const s = hurt();
+    s.drive = 0.4;
+    mend(s, 0, NANO_WAIT + 2);
+    const mended = s.drive;
+    expect(mended).toBeGreaterThan(0.4);
+    s.drive -= 0.2;
+    mend(s, NANO_WAIT + 2, NANO_WAIT * 2 + 1.9);
+    expect(s.drive).toBeCloseTo(mended - 0.2, 6);
   });
 });

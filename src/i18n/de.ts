@@ -233,6 +233,7 @@ export const DE: Catalog = {
   'Flip': 'Wende',
   'At rest': 'Stillstand',
   'Back on target': 'Zurück aufs Ziel',
+  'Nanobots repairing': 'Nanobots reparieren',
   'Juno is shooting at you!': 'Juno schießt auf dich!',
   'Ceres is shooting at you!': 'Ceres schießt auf dich!',
   'Kessler is shooting at you!': 'Kessler schießt auf dich!',
@@ -1141,6 +1142,8 @@ export const DE: Catalog = {
   'Victory Through Superior Position': 'Sieg durch überlegene Position',
   'Armor and the drive': 'Panzerung und Antrieb',
   'There are no shields. Nose and flanks are armor: a beam only scorches it, {armor} of {hull} hull points. From behind, within {driveCone}° of the axis, a beam hits the main drive: each hit costs a fifth of its thrust, and the fifth sends the reactor critical. Five hits from behind win the fight.': 'Es gibt keine Schilde. Nase und Flanken sind gepanzert: Ein Strahl versengt die Panzerung nur, {armor} von {hull} Rumpfpunkten. Von hinten, bis {driveCone}° um die Achse, trifft ein Strahl den Hauptantrieb: Jeder Treffer kostet ein Fünftel seines Schubs, und der fünfte macht den Reaktor kritisch. Fünf Treffer von hinten entscheiden den Kampf.',
+  'Nanobots mend your drive and thrusters {nanoWait} s after the last blow to them, whole again in {nanoSeconds} s; the hull stays as it is. So a hurt drive is no reason to give up: break off, take cover behind a rock, and come back at full thrust.':
+    'Nanobots reparieren Antrieb und Steuerdüsen {nanoWait} s nach dem letzten Treffer darauf, in {nanoSeconds} s sind sie wieder ganz; der Rumpf bleibt, wie er ist. Ein angeschlagener Antrieb ist also kein Grund aufzugeben: Brich ab, geh hinter einem Felsen in Deckung und komm mit vollem Schub zurück.',
   'So a fight is won by position: get behind the other ship, and keep your armored nose to anyone behind you. The crosshair glows orange only over a drive. ON YOUR TAIL means: turn your nose to that ship, now.': 'Ein Kampf wird also über die Position gewonnen: Setz dich hinter das andere Schiff und halt deine gepanzerte Nase jedem zugewandt, der hinter dir ist. Das Fadenkreuz leuchtet nur über einem Antrieb orange. IM NACKEN heißt: Dreh deine Nase zu diesem Schiff, sofort.',
   'Whoever hit you in the last few seconds carries a red warning sign on its mark, the latest one pulsing, and when it hit you from out of sight, Nicole names it. Turn round, and you know whom to take on.':
     'Wer dich in den letzten Sekunden getroffen hat, trägt ein rotes Warnzeichen an seiner Markierung, der Letzte pulsiert, und traf er dich von außerhalb deines Blicks, nennt Nicole seinen Namen. Dreh dich um, und du weißt, wen du dir vornehmen musst.',

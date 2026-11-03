@@ -34,6 +34,13 @@ const REAR_CONE = 0.87;
 const REAR_CONE_COS = cos(REAR_CONE);
 /** Damage a beam into the flanks deals to the maneuvering thrusters (0..1), on top of the armor. */
 const THRUSTER_HIT = 0.1;
+/**
+ * Every ship in the arena carries nanobots (see Ship.nanobots): NANO_WAIT (s) after the last blow
+ * to the drive or the thrusters they begin to mend both, back to whole in NANO_SECONDS (s) from
+ * nothing, so nobody flies on with a broken drive for the rest of a life. The hull they leave alone.
+ */
+export const NANO_WAIT = 10;
+export const NANO_SECONDS = 20;
 /** Holes a hull keeps at most (four hits from behind); the oldest has vented long since and goes first. */
 const MAX_HOLES = 8;
 /** Venting from a hole fades with this time constant (s): the compartment runs out of air. */
@@ -337,6 +344,11 @@ export class Ship {
   inShadow = false;
   /** Set by the game: how well the radiators shed heat in sunlight in this arena (the sun's glare: less). */
   sunCooling = 1;
+  /** Whether the nanobots are mending the drive and the thrusters now (see nanobots); when they were last hurt, and what they were last step. */
+  mending = false;
+  private hurtAt = -Infinity;
+  private driveBefore = 1;
+  private thrustersBefore = 1;
   /** How far a planet's clouds have clogged the radiators, 0 clean to 1 through (see world/air, clogging); kept by the browser that runs the ship. */
   clog = 0;
 
@@ -527,6 +539,9 @@ export class Ship {
     this.nova = false;
     this.heat = 0;
     this.clog = 0;
+    this.mending = false;
+    this.hurtAt = -Infinity;
+    this.driveBefore = this.thrustersBefore = 1;
     this.glow = 0;
     this.overheated = false;
     this.strain = 0;
@@ -768,6 +783,7 @@ export class Ship {
     this.flight.update(dt, controls, gravity, this.ventForce, this.ventSpin);
     this.strain = strainAfter(this.strain, this.flight.properAcceleration, dt);
     this.show(dt, now);
+    this.nanobots(dt, now);
 
     this.heat = Math.max(0, this.heat - this.cooling * dt);
     if (this.overheated && this.heat <= OVERHEAT_RESUME) this.overheated = false;
@@ -785,6 +801,23 @@ export class Ship {
       return true;
     }
     return false;
+  }
+
+  /**
+   * The nanobots (see NANO_WAIT): once nothing has hurt the drive or the thrusters for NANO_WAIT
+   * seconds, they mend both back to whole in NANO_SECONDS; a new blow stops them and the wait
+   * begins again. The hull they leave alone: it is the clone's life. Run by the browser that
+   * flies the ship, so the others see the mended parts in its state.
+   */
+  private nanobots(dt: number, now: number) {
+    if (this.drive < this.driveBefore || this.thrusters < this.thrustersBefore) this.hurtAt = now;
+    this.mending = now - this.hurtAt >= NANO_WAIT && (this.drive < 1 || this.thrusters < 1);
+    if (this.mending) {
+      this.drive = Math.min(1, this.drive + dt / NANO_SECONDS);
+      this.thrusters = Math.min(1, this.thrusters + dt / NANO_SECONDS);
+    }
+    this.driveBefore = this.drive;
+    this.thrustersBefore = this.thrusters;
   }
 
   /** Strength of a hole's venting, 1 right after the hit, fading to 0. */

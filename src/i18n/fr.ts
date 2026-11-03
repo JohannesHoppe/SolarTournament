@@ -220,6 +220,7 @@ export const FR: Catalog = {
   'Flip': 'Bascule',
   'At rest': 'À l’arrêt',
   'Back on target': 'Retour sur la cible',
+  'Nanobots repairing': 'Nanobots en réparation',
   'Juno is shooting at you!': 'Juno te tire dessus !',
   'Ceres is shooting at you!': 'Ceres te tire dessus !',
   'Kessler is shooting at you!': 'Kessler te tire dessus !',
@@ -1102,6 +1103,8 @@ export const FR: Catalog = {
   'Victory Through Superior Position': 'La victoire par la position supérieure',
   'Armor and the drive': 'Le blindage et le moteur',
   'There are no shields. Nose and flanks are armor: a beam only scorches it, {armor} of {hull} hull points. From behind, within {driveCone}° of the axis, a beam hits the main drive: each hit costs a fifth of its thrust, and the fifth sends the reactor critical. Five hits from behind win the fight.': 'Il n’y a pas de boucliers. Le nez et les flancs sont blindés : un rayon ne fait que roussir le blindage, {armor} points de coque sur {hull}. Par l’arrière, à moins de {driveCone}° de l’axe, un rayon touche le moteur principal : chaque tir coûte un cinquième de sa poussée, et le cinquième fait passer le réacteur en critique. Cinq tirs par l’arrière gagnent le combat.',
+  'Nanobots mend your drive and thrusters {nanoWait} s after the last blow to them, whole again in {nanoSeconds} s; the hull stays as it is. So a hurt drive is no reason to give up: break off, take cover behind a rock, and come back at full thrust.':
+    'Les nanobots réparent ton moteur et tes propulseurs {nanoWait} s après le dernier coup, et en {nanoSeconds} s ils sont de nouveau intacts. La coque reste telle quelle. Un moteur touché n’est donc pas une raison d’abandonner. Décroche, mets-toi à couvert derrière un rocher, et reviens à pleine poussée.',
   'So a fight is won by position: get behind the other ship, and keep your armored nose to anyone behind you. The crosshair glows orange only over a drive. ON YOUR TAIL means: turn your nose to that ship, now.': 'Un combat se gagne donc par la position : passe derrière l’autre vaisseau, et garde ton nez blindé tourné vers quiconque est derrière toi. Le viseur ne brille en orange qu’au-dessus d’un moteur. DANS TES SIX HEURES veut dire : tourne ton nez vers ce vaisseau, maintenant.',
   'Whoever hit you in the last few seconds carries a red warning sign on its mark, the latest one pulsing, and when it hit you from out of sight, Nicole names it. Turn round, and you know whom to take on.':
     'Celui qui t’a touché ces dernières secondes porte un signal rouge d’alerte sur sa marque, le dernier clignote, et s’il t’a touché hors de ta vue, Nicole le nomme. Retourne-toi, et tu sais qui viser.',

@@ -1,6 +1,6 @@
 import { gripAt, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
 import { NOZZLES, NOZZLES_PER_QUAD, QUADS } from '../ship/thrusters';
-import { COOLING_SHADOW, G, MAX_HULL } from '../ship/ship';
+import { COOLING_SHADOW, G, MAX_HULL, NANO_SECONDS, NANO_WAIT } from '../ship/ship';
 import { CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS } from '../game/race';
@@ -137,6 +137,9 @@ export const FROM_CODE: Record<string, number> = {
   safeTwoKm: Math.round(meters(safeSpeed(-40000, COOLING_SHADOW))),
   // how far over the deck the flight computer takes its horizon from the planet
   airTop: meters(IN_AIR_TOP),
+  // the nanobots: how long after the last blow they begin, and how long they take from nothing
+  nanoWait: NANO_WAIT,
+  nanoSeconds: NANO_SECONDS,
   // the clouds clogging the radiators: through just under the deck, and from how deep twice as
   // fast; how much less they shed then (%); how fast the crust boils off over the deck
   clogDeck: CLOG_SECONDS,
