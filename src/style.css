@@ -1809,9 +1809,21 @@ body.nova-flash #hud::after {
   gap: 14px;
   /* the bottom stays free for the transmission (the announcer goes on talking during the break) */
   padding: 16px 16px 220px;
-  /* the kill cam runs on behind the ad */
-  background: rgba(2, 3, 10, 0.6);
   text-align: center;
+  /* above everything, the transmission too: where a low screen brings them together, the boot
+     button stays on top and can be pressed */
+  z-index: 16;
+}
+
+/* the kill cam runs on behind the ad, dimmed by a veil under the transmission, which stays
+   bright where it is not in the break's way */
+body:has(#sponsor:not([hidden]))::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 14;
+  background: rgba(2, 3, 10, 0.6);
+  pointer-events: none;
 }
 
 @media (max-height: 480px) {

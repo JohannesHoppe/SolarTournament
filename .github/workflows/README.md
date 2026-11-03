@@ -1,6 +1,6 @@
 # .github/workflows
 
-The GitHub Actions of the repository. Cloudflare Pages builds the site itself, from the two stage branches only, which `ci.yml` moves.
+What GitHub runs for the repository: its Actions. (`.github/` itself has no README: GitHub would show it as the repository's front page instead of the root's.) Cloudflare Pages builds the site itself, from the two stage branches only, which `ci.yml` moves.
 
 - `ci.yml` (workflow "CI"): every push to `main` renders the voice sprites, checks types and duplicates, runs the unit tests and the site's build on x64 Linux, and the unit tests again on ARM Linux and on macOS (the job `platforms`: the shared world and the bits the tests pin must come out alike on every processor and system, see `src/detmath.ts`); only a commit that passes them all goes on to `stage_test` and, while `PROMOTE_PROD` is on (no players yet), `stage_prod`. Its sprites go up to the release `voice-sprites` under their inputs' key with a pointer per commit (the newest 30 kept), and Cloudflare's build takes them from there (`tools/voice/prebuilt.ts`). The check and platforms jobs, which run our code and its packages, may only read; the publish job, which runs nothing but the shell, jq, git and gh, writes the release and the two branches. A newer push cancels an older run.
 
