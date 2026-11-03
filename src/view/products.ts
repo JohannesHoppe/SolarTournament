@@ -1,17 +1,17 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { cos, sin } from '../detmath';
+import { atan2, cos, sin } from '../detmath';
 import { Randomizer } from '../random';
 
 /**
  * The sponsors' products, modelled in code for their holograms (see view/hologram): a can of
- * Victory Cola with its pull tab, a stacked Space Burger, a T-bone of Orange Steaks with its
- * bone and fat rim, and so on, one for every sponsor of game/satire-ads. Each is a single
+ * Victory Cola with its pull tab, a stacked Space Burger, a ribeye of Orange Steaks with its
+ * crescent of fat and its marbling, and so on, one for every sponsor of game/satire-ads. Each is a single
  * geometry of a few hundred to a few thousand triangles, centered and scaled so its largest
  * side is one unit long, with an attribute `tone` per vertex: how brightly a part glows and how
  * far towards white, so a burger's patty, cheese and bun read apart in one color.
  */
-export type Product = 'can' | 'burger' | 'bottle' | 'clone' | 'oxygen' | 'wall' | 'headset' | 'steak' | 'medkit';
+export type Product = 'can' | 'burger' | 'bottle' | 'clone' | 'oxygen' | 'bond' | 'headset' | 'steak' | 'medkit';
 
 /** Most triangles a product may have: a hologram in a small window, drawn while a clone is printed. */
 export const PRODUCT_TRIANGLES = 3000;
@@ -111,42 +111,78 @@ function can(): THREE.BufferGeometry[] {
   return [part(body), part(swoosh(0.336, 0.6, 0.12, 0.14), 1.4, 0.35), part(band(0.334, 0.12, 0.16), 1.2, 0.2), part(ring, 1.4, 0.5), part(rivet, 1.4, 0.5), part(mouth, 0.8)];
 }
 
-/** A Space Burger: bun, patty, cheese drooping over its corners, ruffled lettuce, tomato, a sesame-seeded top bun. */
-function burger(): THREE.BufferGeometry[] {
-  const bottom = lathe([[0, 0], [0.42, 0], [0.47, 0.04], [0.48, 0.11], [0.45, 0.16], [0, 0.16]]);
-  const patty = lathe([[0, 0.16], [0.49, 0.16], [0.53, 0.19], [0.54, 0.24], [0.52, 0.29], [0.48, 0.31], [0, 0.31]]);
-  // the cheese: a square slice turned half a corner, its corners hanging down over the patty
-  const cheese = new THREE.PlaneGeometry(0.86, 0.86, 10, 10).rotateX(-Math.PI / 2).rotateY(Math.PI / 4);
-  const p = cheese.attributes.position;
-  for (let i = 0; i < p.count; i++) {
-    const out = Math.max(0, Math.sqrt(p.getX(i) * p.getX(i) + p.getZ(i) * p.getZ(i)) - 0.42);
-    p.setY(i, 0.325 - out * out * 2.2);
-  }
-  cheese.computeVertexNormals();
-  // the lettuce: a ring whose rim ruffles up and down
-  const leaf: number[] = [];
-  const leafAt = (i: number, j: number) => {
-    const a = (i / 72) * Math.PI * 2;
-    const r = 0.3 + j * 0.09;
-    const y = 0.35 + j * j * 0.012 * sin(a * 11) - j * 0.012;
+/** A frilled ring around the vertical: `inner` to `outer` out at `height`, its rim waving `waves` times by up to `wave`. */
+function frill(inner: number, outer: number, height: number, waves: number, wave: number): THREE.BufferGeometry {
+  const positions: number[] = [];
+  const at = (i: number, j: number) => {
+    const a = (i / 84) * Math.PI * 2;
+    const r = inner + (j / 2) * (outer - inner) * (1 + 0.08 * sin(a * waves * 0.5 + 1));
+    const y = height + (j / 2) * (j / 2) * wave * sin(a * waves) - (j / 2) * wave * 0.6;
     return [sin(a) * r, y, cos(a) * r];
   };
-  for (let i = 0; i < 72; i++) for (let j = 0; j < 3; j++) leaf.push(...leafAt(i, j), ...leafAt(i + 1, j), ...leafAt(i + 1, j + 1), ...leafAt(i, j), ...leafAt(i + 1, j + 1), ...leafAt(i, j + 1));
-  const lettuce = new THREE.BufferGeometry();
-  lettuce.setAttribute('position', new THREE.Float32BufferAttribute(leaf, 3));
-  lettuce.computeVertexNormals();
-  const tomato = (x: number, z: number) => new THREE.CylinderGeometry(0.2, 0.2, 0.045, 18).translate(x, 0.385, z);
-  const top = lathe([[0, 0.4], [0.47, 0.4], [0.5, 0.43], ...dome(0.5, 0.44, 0.34, 6)]);
+  for (let i = 0; i < 84; i++) for (let j = 0; j < 2; j++) positions.push(...at(i, j), ...at(i + 1, j), ...at(i + 1, j + 1), ...at(i, j), ...at(i + 1, j + 1), ...at(i, j + 1));
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geometry.computeVertexNormals();
+  return geometry;
+}
+
+/**
+ * A Space Burger as everyone draws one: wider than tall, a high domed bun with sesame on top,
+ * under it a ruffle of lettuce, tomato slices and a thick, rough patty sticking out past the bun,
+ * cheese melting down over its edge in drips, the flat bottom bun. Each layer apart by a dark
+ * gap, standing level, so it turns without wobbling.
+ */
+function burger(): THREE.BufferGeometry[] {
+  const bottom = lathe([[0, 0], [0.44, 0], [0.5, 0.03], [0.52, 0.09], [0.5, 0.15], [0, 0.15]]);
+  // the patty: thick, rough at its rim, sticking out past the bun
+  const patty = lathe([[0, 0.17], [0.53, 0.17], [0.58, 0.2], [0.6, 0.25], [0.58, 0.3], [0.53, 0.33], [0, 0.33]], 40);
+  const rough = patty.attributes.position;
+  for (let i = 0; i < rough.count; i++) {
+    const [x, z] = [rough.getX(i), rough.getZ(i)];
+    const r = Math.sqrt(x * x + z * z);
+    if (r < 0.5) continue;
+    const a = atan2(x, z);
+    const bump = 1 + 0.025 * sin(a * 13) + 0.02 * sin(a * 29 + 1.3);
+    rough.setX(i, x * bump);
+    rough.setZ(i, z * bump);
+  }
+  patty.computeVertexNormals();
+  // the cheese: a square slice, its corners hanging down over the patty, with drips at the corners
+  const cheese = new THREE.PlaneGeometry(0.92, 0.92, 12, 12).rotateX(-Math.PI / 2).rotateY(Math.PI / 4);
+  const p = cheese.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const out = Math.max(0, Math.sqrt(p.getX(i) * p.getX(i) + p.getZ(i) * p.getZ(i)) - 0.5);
+    p.setY(i, 0.345 - out * 1.6);
+  }
+  cheese.computeVertexNormals();
+  const drips = [0, 1, 2, 3].map((k) => {
+    const a = (k / 4) * Math.PI * 2 + Math.PI / 4 + 0.2;
+    return new THREE.CapsuleGeometry(0.025, 0.07, 2, 6).translate(sin(a) * 0.6, 0.23, cos(a) * 0.6);
+  });
+  const lettuce = frill(0.3, 0.63, 0.375, 10, 0.035);
+  const tomato = (a: number) => new THREE.CylinderGeometry(0.17, 0.17, 0.04, 14).translate(sin(a) * 0.36, 0.41, cos(a) * 0.36);
+  const top = lathe([[0, 0.44], [0.48, 0.44], [0.53, 0.47], ...dome(0.54, 0.49, 0.3, 6)]);
   const seeds: THREE.BufferGeometry[] = [];
   const random = new Randomizer(2584);
-  for (let i = 0; i < 16; i++) {
-    const a = 0.35 + random.nextFloat() * 0.9;
-    const around = (i / 16) * Math.PI * 2 + random.nextFloat() * 0.3;
+  for (let i = 0; i < 18; i++) {
+    const a = 0.45 + random.nextFloat() * 0.95;
+    const around = (i / 18) * Math.PI * 2 + random.nextFloat() * 0.25;
     const normal = new THREE.Vector3(cos(a) * sin(around), sin(a), cos(a) * cos(around));
-    const point = new THREE.Vector3(0.5 * cos(a) * sin(around), 0.44 + 0.34 * sin(a), 0.5 * cos(a) * cos(around));
-    seeds.push(part(laid(new THREE.SphereGeometry(1, 6, 4).scale(0.032, 0.018, 0.012), point, normal, random.nextFloat() * 3), 1.5, 0.6));
+    const point = new THREE.Vector3(0.54 * cos(a) * sin(around), 0.49 + 0.3 * sin(a), 0.54 * cos(a) * cos(around));
+    seeds.push(part(laid(new THREE.SphereGeometry(1, 5, 3).scale(0.034, 0.018, 0.012), point, normal, random.nextFloat() * 3), 1.7, 0.75));
   }
-  return [part(bottom), part(patty, 0.75), part(cheese, 1.3, 0.25), part(lettuce, 1.1, 0.1), part(tomato(-0.13, 0.08), 1), part(tomato(0.15, -0.06), 1), part(top), ...seeds];
+  const all = [
+    part(bottom, 1),
+    part(patty, 0.55),
+    part(cheese, 1.2, 0.25),
+    ...drips.map((drip) => part(drip, 1.2, 0.25)),
+    part(lettuce, 1.25, 0.15),
+    ...[0.6, 2.7, 4.6].map((a) => part(tomato(a), 0.9)),
+    part(top, 1.05),
+    ...seeds,
+  ];
+  return all;
 }
 
 /** Victory Cola Zero in its contour bottle: waisted body, the label with its zero, the cap. */
@@ -228,35 +264,68 @@ function oxygen(): THREE.BufferGeometry[] {
   ];
 }
 
-/** Solar Wall Bonds: a stretch of the biggest wall in history, brick by brick, crenellated, its banner on a pole. */
-function wall(): THREE.BufferGeometry[] {
-  const parts: THREE.BufferGeometry[] = [];
-  const [brick, course, depth, radius] = [0.24, 0.12, 0.2, 2.4];
-  const random = new Randomizer(1984);
-  const lay = (geometry: THREE.BufferGeometry, along: number, y: number, glow: number) => {
-    // bricks follow a gentle arc, so the wall goes round something
-    const a = along / radius;
-    parts.push(part(geometry.translate(0, y, 0).rotateY(-a).translate(sin(a) * radius, 0, radius - cos(a) * radius), glow, 0.05));
+/**
+ * Solar Wall Bonds: the bond itself, an engraved certificate between two scroll rods: its double
+ * border with corner rosettes, the title, the lines of its promise, the sun of the United Solar
+ * States in the middle, the gold seal with its ribbons, and along the bottom the coupons to tear
+ * off for the interest Mars pays. Presented upright, facing the Host.
+ */
+function bond(): THREE.BufferGeometry[] {
+  const [width, height] = [1, 0.7];
+  const face = 0.012;
+  const sheet = new THREE.PlaneGeometry(width, height);
+  const back = new THREE.PlaneGeometry(width, height).rotateY(Math.PI);
+  const rod = (y: number) => new THREE.CylinderGeometry(0.035, 0.035, width + 0.06, 12).rotateZ(Math.PI / 2).translate(0, y, -0.02);
+  const knobs = [-1, 1].flatMap((side) => [-1, 1].map((end) => new THREE.SphereGeometry(0.05, 8, 5).translate(end * (width / 2 + 0.05), side * (height / 2 + 0.01), -0.02)));
+  // the frame: a heavy outer border and a fine inner one, rosettes at the corners
+  const frame = (inset: number, thickness: number) => {
+    const [w, h] = [width - inset * 2, height - inset * 2];
+    return [box(w, thickness, face, 0, h / 2), box(w, thickness, face, 0, -h / 2), box(thickness, h, face, -w / 2, 0), box(thickness, h, face, w / 2, 0)];
   };
-  const rows = 7;
-  for (let row = 0; row < rows; row++) {
-    const shift = row % 2 ? brick / 2 : 0;
-    for (let i = -2; i <= 3; i++) {
-      const along = i * brick + shift - brick / 4;
-      if (Math.abs(along) > brick * 2.3) continue;
-      lay(new THREE.BoxGeometry(brick - 0.014, course - 0.014, depth), along, row * course + course / 2, 0.8 + random.nextFloat() * 0.4);
-    }
-  }
-  // the battlements: every other brick on top
-  for (let i = -2; i <= 2; i += 2) lay(new THREE.BoxGeometry(brick - 0.014, course - 0.014, depth), i * brick, rows * course + course / 2, 1.1);
-  const top = (rows + 1) * course;
-  const pole = new THREE.CylinderGeometry(0.008, 0.008, 0.4, 6).translate(0, top + 0.2, 0);
-  const banner = new THREE.PlaneGeometry(0.26, 0.15, 6, 1);
-  const b = banner.attributes.position;
-  for (let i = 0; i < b.count; i++) b.setZ(i, 0.02 * sin((b.getX(i) + 0.13) * 16));
-  banner.computeVertexNormals();
-  banner.translate(0.13, top + 0.32, 0);
-  return [...parts, part(pole, 1.2, 0.3), part(banner, 1.5, 0.4)];
+  const rosettes = [-1, 1].flatMap((sx) => [-1, 1].map((sy) => new THREE.TorusGeometry(0.025, 0.008, 6, 16).translate(sx * (width / 2 - 0.05), sy * (height / 2 - 0.05), face)));
+  // the title and the lines of the promise, engraved across the upper half
+  const title = box(0.5, 0.055, face * 1.5, 0, 0.23);
+  const lines = [0.15, 0.115, 0.08].map((y, i) => box(0.62 - i * 0.12, 0.014, face, 0, y));
+  // the sun of the United Solar States: a disc in a ring, its rays around it
+  const sun = new THREE.CylinderGeometry(0.06, 0.06, face * 2, 24).rotateX(Math.PI / 2).translate(-0.24, -0.04, face);
+  const halo = new THREE.TorusGeometry(0.085, 0.008, 6, 20).translate(-0.24, -0.04, face);
+  const rays = Array.from({ length: 12 }, (_, i) => {
+    const a = (i / 12) * Math.PI * 2;
+    return box(0.05, 0.012, face).translate(0.13, 0, 0).rotateZ(a).translate(-0.24, -0.04, face);
+  });
+  // the amount, written large as bars beside the sun
+  const amount = [0.04, -0.005, -0.05].map((y, i) => box(i === 1 ? 0.3 : 0.22, i === 1 ? 0.04 : 0.016, face * 1.5, 0.12, y - 0.04));
+  // the seal: a gold disc with a scalloped rim, two ribbon tails hanging from it
+  const seal = new THREE.CylinderGeometry(0.075, 0.075, 0.02, 24).rotateX(Math.PI / 2).translate(0.36, -0.14, 0.02);
+  const scallop = new THREE.TorusGeometry(0.075, 0.012, 6, 24).translate(0.36, -0.14, 0.02);
+  const ribbons = [-1, 1].map((side) => box(0.035, 0.13, 0.008).translate(0, -0.06, 0).rotateZ(side * 0.3).translate(0.36 + side * 0.02, -0.17, 0.012));
+  // the coupons along the bottom, each a framed slip, the perforation dotted above them
+  const coupons = Array.from({ length: 6 }, (_, i) => {
+    const x = -0.375 + i * 0.12;
+    return [box(0.1, 0.006, face, x, -0.21), box(0.1, 0.006, face, x, -0.28), box(0.006, 0.07, face, x - 0.05, -0.245), box(0.006, 0.07, face, x + 0.05, -0.245), box(0.05, 0.012, face, x, -0.245)];
+  }).flat();
+  const perforation = Array.from({ length: 24 }, (_, i) => box(0.012, 0.006, face, -0.44 + i * 0.0383, -0.195));
+  return [
+    part(sheet, 0.6),
+    part(back, 0.5),
+    part(rod(height / 2 + 0.01), 1.2, 0.2),
+    part(rod(-height / 2 - 0.01), 1.2, 0.2),
+    ...knobs.map((knob) => part(knob, 1.4, 0.4)),
+    ...frame(0.03, 0.016).map((bar) => part(bar, 1.5, 0.4)),
+    ...frame(0.055, 0.006).map((bar) => part(bar, 1.2, 0.2)),
+    ...rosettes.map((rosette) => part(rosette, 1.5, 0.4)),
+    part(title, 1.7, 0.6),
+    ...lines.map((line) => part(line, 1.1, 0.2)),
+    part(sun, 1.8, 0.7),
+    part(halo, 1.5, 0.5),
+    ...rays.map((ray) => part(ray, 1.6, 0.5)),
+    ...amount.map((bar) => part(bar, 1.5, 0.45)),
+    part(seal, 1.8, 0.7),
+    part(scallop, 1.6, 0.5),
+    ...ribbons.map((ribbon) => part(ribbon, 1.4, 0.3)),
+    ...coupons.map((line) => part(line, 1.2, 0.25)),
+    ...perforation.map((dot) => part(dot, 1, 0.2)),
+  ];
 }
 
 /** DreamLink: a sleeper's bust under the headset, its band over the head, the visor over the eyes, the crescent at the temple. */
@@ -273,59 +342,80 @@ function headset(): THREE.BufferGeometry[] {
   return [...bust(), part(band, 1.4, 0.3), ...pads.map((pad) => part(pad, 1.3, 0.3)), part(visor, 1.6, 0.5), part(crescent, 1.7, 0.6), part(cable, 1.1, 0.2)];
 }
 
+/** A smooth line through points in the plane, `count` points along it. */
+const smooth = (points: number[][], count: number) => new THREE.SplineCurve(points.map(([x, y]) => new THREE.Vector2(x, y))).getPoints(count);
+
 /**
- * Orange Steaks: a T-bone, its bone a T between the strip and the tenderloin, a rim of fat
- * along its back, the grill's marks across it. Presented tilted towards the Host.
+ * A band along a line in the plane, `width(t)` wide at the share `t` of the way along it, set
+ * off `offset(t)` to its left (the line's normal turned a quarter counterclockwise).
+ */
+function ribbon(line: THREE.Vector2[], width: (t: number) => number, offset: (t: number) => number = () => 0): THREE.Shape {
+  const left: THREE.Vector2[] = [];
+  const right: THREE.Vector2[] = [];
+  line.forEach((p, i) => {
+    const prev = line[Math.max(0, i - 1)];
+    const next = line[Math.min(line.length - 1, i + 1)];
+    const normal = new THREE.Vector2(prev.y - next.y, next.x - prev.x).normalize();
+    const t = i / (line.length - 1);
+    const middle = p.clone().addScaledVector(normal, offset(t));
+    left.push(middle.clone().addScaledVector(normal, width(t) / 2));
+    right.push(middle.clone().addScaledVector(normal, -width(t) / 2));
+  });
+  return new THREE.Shape([...left, ...right.reverse()]);
+}
+
+/** A band's width that tapers to a point at both ends, `most` at its middle. */
+const tapered = (most: number) => (t: number) => most * Math.min(1, 4 * t * (1 - t) * 1.6);
+
+/**
+ * Orange Steaks: a thick ribeye as the butcher cuts it. A slab with a flat top and straight sides,
+ * its outline a rounded, uneven oblong; on its top the big eye of lean meat, parted from the cap
+ * on its left by a bright crescent of fat, a rim of fat along the cap's edge running down its
+ * side, and threads of marbling through the meat. The fat glows white over the dim meat, so it
+ * reads like the drawings on every butcher's wall. Lying flat, tilted towards the Host.
  */
 function steak(): THREE.BufferGeometry[] {
-  // the outline, smooth through these points: the big strip loin on the left, the bone's bar
-  // along the top, the smaller, rounder tenderloin on the right, set a little lower
-  const outline = new THREE.SplineCurve(
-    [[-0.04, 0.44], [-0.3, 0.47], [-0.53, 0.38], [-0.66, 0.16], [-0.64, -0.1], [-0.5, -0.32], [-0.26, -0.43], [-0.04, -0.4], [0.12, -0.42], [0.32, -0.35], [0.46, -0.18], [0.5, 0.04], [0.42, 0.22], [0.24, 0.32], [0.08, 0.36], [-0.04, 0.44]].map(([x, y]) => new THREE.Vector2(x, y)),
-  ).getSpacedPoints(64);
+  const [thickness, top] = [0.2, 0.2 + 0.02];
+  const outline = smooth(
+    [[-0.5, 0.06], [-0.44, 0.26], [-0.24, 0.34], [0.04, 0.3], [0.3, 0.33], [0.48, 0.22], [0.53, 0.0], [0.44, -0.2], [0.2, -0.29], [0.0, -0.26], [-0.22, -0.33], [-0.43, -0.22], [-0.5, 0.06]],
+    72,
+  );
   outline.pop();
-  const meat = extrude(new THREE.Shape(outline), 0.14, 0.03);
-  // the fat: a cap along the strip's outer edge, a little proud of the meat
-  const cap = outline.filter((p) => p.x < -0.12 && p.y > -0.36);
-  const normal = (i: number) => {
-    const prev = cap[Math.max(0, i - 1)];
-    const next = cap[Math.min(cap.length - 1, i + 1)];
-    return new THREE.Vector2(next.y - prev.y, prev.x - next.x).normalize();
-  };
-  // the outline runs counterclockwise, so the normal above points out of the meat
-  const fat = new THREE.Shape([...cap.map((p, i) => p.clone().addScaledVector(normal(i), 0.05)), ...cap.map((p, i) => p.clone().addScaledVector(normal(i), -0.035)).reverse()]);
-  const rind = extrude(fat, 0.15, 0.025);
-  // the bone: the T, its bar along the top edge, its stem down between strip and tenderloin
-  const bone = new THREE.Shape([[-0.3, 0.47], [0.12, 0.43], [0.12, 0.38], [0.0, 0.37], [-0.01, -0.3], [-0.05, -0.34], [-0.07, 0.37], [-0.3, 0.42]].map(([x, y]) => new THREE.Vector2(x, y)));
-  const boneGeometry = extrude(bone, 0.16, 0.015).translate(0, 0, -0.01);
-  // the grill's marks: diagonal bars burnt across the face, each as long as the meat under it
-  const inside = (x: number, y: number) => {
-    let within = false;
-    for (let i = 0, j = outline.length - 1; i < outline.length; j = i++) {
-      const [a, b] = [outline[i], outline[j]];
-      if (a.y > y !== b.y > y && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) within = !within;
+  const meat = extrude(new THREE.Shape(outline), thickness, 0.02);
+  // a flat patch of fat laid on the top, a hair proud of the meat
+  const onTop = (shape: THREE.Shape) => extrude(shape, 0.008).translate(0, 0, top - 0.004);
+  // the crescent of fat parting the cap from the eye, with its kernel where it bends
+  const seam = onTop(ribbon(smooth([[-0.36, 0.3], [-0.16, 0.2], [-0.08, 0.03], [-0.14, -0.14], [-0.34, -0.27]], 24), tapered(0.07)));
+  const kernel = onTop(rounded(0.09, 0.06, 0.03, new THREE.Shape(), -0.07, 0.04));
+  // the rim of fat along the cap's edge: on the top, and down the side as a band standing proud of it
+  // (the outline begins on the cap's side, so it is read from its far end round to keep the edge in one piece)
+  const half = outline.length >> 1;
+  const edge = [...outline.slice(half), ...outline.slice(0, half)].filter((p) => p.x < -0.16);
+  const rimTop = onTop(ribbon(edge, tapered(0.07), () => 0.035));
+  const rind = extrude(ribbon(edge, tapered(0.03), () => -0.008), thickness + 0.03).translate(0, 0, -0.005);
+  // the marbling: thin wandering threads through the eye and the cap
+  const random = new Randomizer(1600);
+  const marbling = Array.from({ length: 9 }, () => {
+    let [x, y] = [-0.3 + random.nextFloat() * 0.7, -0.18 + random.nextFloat() * 0.36];
+    let heading = random.nextFloat() * Math.PI * 2;
+    const points: number[][] = [];
+    for (let k = 0; k < 4; k++) {
+      points.push([x, y]);
+      heading += (random.nextFloat() - 0.5) * 1.4;
+      [x, y] = [x + cos(heading) * 0.06, y + sin(heading) * 0.06];
     }
-    return within;
-  };
-  const marks: THREE.BufferGeometry[] = [];
-  const [dx, dy] = [cos(0.6), sin(0.6)];
-  for (let i = -3; i <= 3; i++) {
-    if (i === 0) continue;
-    // where the bar's line runs over the meat, kept clear of the edge
-    const across = i * 0.17;
-    let [low, high] = [Infinity, -Infinity];
-    for (let s = -0.8; s <= 0.8; s += 0.01) {
-      const [x, y] = [s * dx - across * dy, s * dy + across * dx];
-      if (inside(x, y) && Math.abs(x + 0.03) > 0.1) [low, high] = [Math.min(low, s), Math.max(high, s)];
-    }
-    if (high - low < 0.2) continue;
-    const middle = (low + high) / 2;
-    const length = (high - low) * 0.8;
-    marks.push(box(length, 0.026, 0.012).rotateZ(0.6).translate(middle * dx - across * dy, middle * dy + across * dx, 0.175));
-  }
-  const all = [part(meat, 0.85), part(rind, 1.35, 0.5), part(boneGeometry, 1.5, 0.75), ...marks.map((mark) => part(mark, 1.25, 0.1))];
-  // standing, tilted back a little, its face towards the Host as on a menu's photo
-  for (const geometry of all) geometry.rotateX(-0.35);
+    return onTop(ribbon(smooth(points, 10), tapered(0.016)));
+  });
+  const all = [
+    part(meat, 0.6),
+    part(seam, 1.25, 0.6),
+    part(kernel, 1.25, 0.6),
+    part(rimTop, 1.1, 0.55),
+    part(rind, 0.55, 0.35),
+    ...marbling.map((thread) => part(thread, 1.2, 0.5)),
+  ];
+  // lying flat, its top tilted towards the Host as on a menu's photo
+  for (const geometry of all) geometry.rotateX(-1.0);
   return all;
 }
 
@@ -345,7 +435,7 @@ function medkit(): THREE.BufferGeometry[] {
   return [part(caseGeometry, 0.9), part(lid, 1.2, 0.2), part(handle, 1.3, 0.3), ...latches.map((latch) => part(latch, 1.3, 0.4)), part(cross, 1.7, 0.6)];
 }
 
-const BUILDERS: Record<Product, () => THREE.BufferGeometry[]> = { can, burger, bottle, clone, oxygen, wall, headset, steak, medkit };
+const BUILDERS: Record<Product, () => THREE.BufferGeometry[]> = { can, burger, bottle, clone, oxygen, bond, headset, steak, medkit };
 
 /** Every product there is. */
 export const PRODUCTS = Object.keys(BUILDERS) as Product[];
@@ -369,4 +459,4 @@ export function fitted(parts: THREE.BufferGeometry[]): THREE.BufferGeometry {
 export const productModel = (product: Product) => fitted(BUILDERS[product]());
 
 /** How far (rad) a flat product swings to and fro instead of turning, so its face stays towards the Host; 0 turns all the way. */
-export const productSwing = (product: Product) => (product === 'steak' ? 0.75 : 0);
+export const productSwing = (product: Product) => (product === 'steak' || product === 'bond' ? 0.75 : 0);

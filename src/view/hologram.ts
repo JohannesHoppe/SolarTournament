@@ -164,6 +164,82 @@ function light(shared: Shared, kind: 'SURFACE' | 'LINES' | 'BEAM', glow: number,
   });
 }
 
+/** Fresh shared uniforms: white, steady, no glitch. */
+const sharedUniforms = (): Shared => ({
+  uColor: { value: new THREE.Vector3(1, 1, 1) },
+  uLevel: { value: 1 },
+  uScroll: { value: 0 },
+  uPixel: { value: 1 },
+  uGlitchLow: { value: 0 },
+  uGlitchHigh: { value: 0 },
+  uGlitchShift: { value: 0 },
+});
+
+/** Sets the shared uniforms' color to `color` (CSS hex) as it is written: the shader writes display values. */
+function paint(uniforms: Shared, color: string) {
+  const rgb = new THREE.Color(color);
+  rgb.convertLinearToSRGB();
+  (uniforms.uColor.value as THREE.Vector3).set(rgb.r, rgb.g, rgb.b);
+}
+
+/**
+ * Sets the shared uniforms to a hologram's state; its object's middle stands at `middle` (world
+ * height) and its unit box is `size` world units, which scales the band a glitch tears.
+ */
+function apply(uniforms: Shared, state: HologramState, ratio: number, middle = 0, size = 1) {
+  uniforms.uLevel.value = state.level;
+  uniforms.uScroll.value = state.scroll;
+  uniforms.uPixel.value = ratio;
+  uniforms.uGlitchLow.value = state.glitch ? middle + state.glitch.low * size : 0;
+  uniforms.uGlitchHigh.value = state.glitch ? middle + state.glitch.high * size : 0;
+  uniforms.uGlitchShift.value = state.glitch ? state.glitch.shift * size : 0;
+}
+
+/**
+ * A hologram's light on a model in a scene of its own (the title screen's pad shows a ship not
+ * earned yet this way): every mesh a see-through volume of light in one color with its edges
+ * glowing, flickering, its scanlines drifting, a band of it torn sideways now and then. Its
+ * meshes take an even tone; `tick` it every frame.
+ */
+export class HologramLight {
+  private readonly uniforms = sharedUniforms();
+  private readonly surface = light(this.uniforms, 'SURFACE', 1);
+  private readonly edges = light(this.uniforms, 'LINES', 0.75, 0.45);
+
+  constructor(color: string) {
+    paint(this.uniforms, color);
+  }
+
+  /** Dresses `root`'s meshes in the light, their geometries copied with an even tone; meshes `hide` names vanish. */
+  dress(root: THREE.Object3D, hide: (mesh: THREE.Mesh) => boolean) {
+    const meshes: THREE.Mesh[] = [];
+    root.traverse((o) => {
+      if (o instanceof THREE.Mesh) meshes.push(o);
+    });
+    for (const mesh of meshes) {
+      if (hide(mesh)) {
+        mesh.visible = false;
+        continue;
+      }
+      const geometry = mesh.geometry.clone();
+      const count = geometry.attributes.position.count;
+      const tone = new Float32Array(count * 2);
+      for (let i = 0; i < count; i++) tone[i * 2] = 1;
+      geometry.setAttribute('tone', new THREE.BufferAttribute(tone, 2));
+      if (!geometry.attributes.normal) geometry.computeVertexNormals();
+      mesh.geometry = geometry;
+      mesh.material = this.surface;
+      mesh.castShadow = mesh.receiveShadow = false;
+      mesh.add(new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 24), this.edges));
+    }
+  }
+
+  /** The light at `time` (s), with reduced motion `still`; the model's middle at `middle` (world height), its size `size` world units. */
+  tick(time: number, still: boolean, ratio: number, middle: number, size: number) {
+    apply(this.uniforms, hologramState(time, still), ratio, middle, size);
+  }
+}
+
 /** The hologram's look on a rung of the picture's quality (see view/quality, Look.showcase): its pixel ratio, and every how many frames it is drawn. */
 let look = { pixelRatio: 2, every: 1 };
 let shared: Hologram | null | undefined;
@@ -179,15 +255,7 @@ export class Hologram {
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(FOV, 1, 0.1, 20);
   private readonly still = window.matchMedia('(prefers-reduced-motion: reduce)');
-  private readonly uniforms: Shared = {
-    uColor: { value: new THREE.Vector3(1, 1, 1) },
-    uLevel: { value: 1 },
-    uScroll: { value: 0 },
-    uPixel: { value: 1 },
-    uGlitchLow: { value: 0 },
-    uGlitchHigh: { value: 0 },
-    uGlitchShift: { value: 0 },
-  };
+  private readonly uniforms = sharedUniforms();
   private readonly surface = light(this.uniforms, 'SURFACE', 1);
   private readonly edges = light(this.uniforms, 'LINES', 0.75, 0.45);
   private readonly cone: THREE.Group;
@@ -230,10 +298,7 @@ export class Hologram {
   show(host: HTMLElement, model: THREE.BufferGeometry, color: string, swing = 0) {
     this.stop();
     this.swing = swing;
-    const rgb = new THREE.Color(color);
-    // the brand's color as it is written, without the renderer's conversion: the shader writes display values
-    rgb.convertLinearToSRGB();
-    (this.uniforms.uColor.value as THREE.Vector3).set(rgb.r, rgb.g, rgb.b);
+    paint(this.uniforms, color);
     this.object.add(new THREE.Mesh(model, this.surface), new THREE.LineSegments(new THREE.EdgesGeometry(model, 24), this.edges));
     host.replaceChildren(this.canvas);
     this.drawn = -Infinity;
@@ -281,13 +346,7 @@ export class Hologram {
     this.sweep.position.y = LENS_Y + rise * (TOP_Y - LENS_Y);
     this.sweep.scale.setScalar((LENS_RADIUS + rise * (CONE_TOP - LENS_RADIUS)) / LENS_RADIUS);
     (this.sweep.material as THREE.ShaderMaterial).uniforms.uGlow.value = 2.4 * (1 - rise) * rise;
-    const u = this.uniforms;
-    u.uLevel.value = state.level;
-    u.uScroll.value = state.scroll;
-    u.uPixel.value = ratio;
-    u.uGlitchLow.value = state.glitch ? state.glitch.low + this.object.position.y : 0;
-    u.uGlitchHigh.value = state.glitch ? state.glitch.high + this.object.position.y : 0;
-    u.uGlitchShift.value = state.glitch ? state.glitch.shift : 0;
+    apply(this.uniforms, state, ratio, this.object.position.y);
     this.renderer.render(this.scene, this.camera);
   }
 

@@ -3,6 +3,8 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { Assets, ShipType } from '../assets';
 import type { Perks } from '../game/hangar';
 import { Ship } from '../ship/ship';
+import { SOVEREIGN_GOLD } from '../ship/tints';
+import { HologramLight } from './hologram';
 import { hazardSurface, lacquer, shine } from './surfaces';
 import { canvas, radialTexture, toTexture } from './textures';
 import { cos, sin } from '../detmath';
@@ -64,22 +66,25 @@ const LAMP_SECONDS = 4;
 /**
  * The ship on show in the menu: the seal of the Ministry of War inlaid in a landing pad seen
  * from above at a slant, and the chosen ship hovers above it and turns slowly, an exhibit in its
- * upgrades' looks, its drive burning low. A ship not earned yet (the Sovereign) shows as a black
- * silhouette against a rim of light: it is there, but not yet the Host's. A view of its own,
- * behind the menu's plates.
+ * upgrades' looks, its drive burning low. A ship not earned yet (the Sovereign) shows as a
+ * hologram in its gold (see view/hologram): only its picture is there, the ship itself is not yet
+ * the Host's. A view of its own, behind the menu's plates.
  */
 export class Showcase {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(30, 1, 10, 20000);
   private readonly ships = new Map<ShipType, Ship>();
-  private readonly silhouette: THREE.Object3D;
+  /** The ship not earned yet, as a hologram, and its height (units), which scales the band a glitch tears. */
+  private readonly picture: THREE.Object3D;
+  private readonly hologram = new HologramLight(SOVEREIGN_GOLD);
+  private readonly hologramSize: number;
   private readonly wide = window.matchMedia(WIDE);
   private readonly still = window.matchMedia('(prefers-reduced-motion: reduce)');
   /** The light of the ship's lift on the pad below it: a pool on the seal, and a lamp. */
   private readonly pool: THREE.Mesh;
   private readonly lift = new THREE.PointLight(0x4d91ff, 3, 900, 1.3);
-  /** The floodlight behind the pad (see the constructor); turned low behind a silhouette, which stays black. */
+  /** The floodlight behind the pad (see the constructor); turned low under a hologram, so its light stands out. */
   private readonly flood = new THREE.DirectionalLight(0xfff3e0, FLOOD);
   private readonly lamps: THREE.Points;
   private shown: Ship | null = null;
@@ -113,7 +118,7 @@ export class Showcase {
     flood.shadow.radius = 6;
     flood.shadow.intensity = 0.7;
     this.scene.add(flood);
-    // the rim of light behind a silhouette, from below the pad's plane, so it leaves the pad's top dark
+    // a rim of light from behind and below the pad's plane, so it leaves the pad's top dark
     const rim = new THREE.DirectionalLight(0xff9d00, 2.5);
     rim.position.set(0, -0.4, -2);
     this.scene.add(rim);
@@ -121,24 +126,22 @@ export class Showcase {
     this.pool = pool;
     this.lamps = lamps;
     this.scene.add(pad, this.lift);
-    this.silhouette = assets.ships.sovereign.clone(true);
-    const black = new THREE.MeshStandardMaterial({ color: 0x000000, roughness: 0.4, metalness: 0.9 });
-    this.silhouette.traverse((o) => {
-      if (!(o instanceof THREE.Mesh)) return;
-      const name = o.name.toLowerCase();
-      // no flame and no glow: nothing of it burns yet; and no paint (a decal), only the shape
-      if (name.startsWith('drive') || name.includes('glow') || o.userData.decal) o.visible = false;
-      else o.material = black;
+    this.picture = assets.ships.sovereign.clone(true);
+    // no flame and no glow: nothing of it burns; and no paint (a decal), only the shape in light
+    this.hologram.dress(this.picture, (mesh) => {
+      const name = mesh.name.toLowerCase();
+      return name.startsWith('drive') || name.includes('glow') || !!mesh.userData.decal;
     });
-    castsShadow(this.silhouette);
-    this.scene.add(this.silhouette);
+    const bounds = new THREE.Box3().setFromObject(this.picture);
+    this.hologramSize = bounds.getSize(new THREE.Vector3()).y;
+    this.scene.add(this.picture);
   }
 
-  /** Puts a ship on show in its looks, or its silhouette while it is `locked`. */
+  /** Puts a ship on show in its looks, or its hologram while it is `locked`. */
   show(type: ShipType, perks: Perks, locked: boolean) {
     this.locked = locked;
     this.flood.intensity = locked ? FLOOD * 0.2 : FLOOD;
-    this.silhouette.visible = locked;
+    this.picture.visible = locked;
     for (const ship of this.ships.values()) ship.root.visible = false;
     this.shown = null;
     if (locked) return;
@@ -183,17 +186,18 @@ export class Showcase {
     this.camera.setViewOffset(width, height, (0.5 - spot.x) * width, (0.5 - spot.y) * height, width, height);
     const dt = Math.min(0.1, Math.max(0, time - this.last));
     this.last = time;
-    const root = this.locked ? this.silhouette : this.shown?.root;
+    const root = this.locked ? this.picture : this.shown?.root;
     if (root) {
       root.position.set(0, HOVER, 0);
       root.rotation.set(0, (time / TURN_SECONDS) * Math.PI * 2, 0);
-      // its lift lights the seal below it; a silhouette lifts unlit
+      // its lift lights the seal below it; a hologram lifts unlit
       this.pool.position.set(0, this.pool.position.y, 0);
       (this.pool.material as THREE.MeshBasicMaterial).opacity = 0.5;
       this.pool.visible = !this.locked;
       this.lift.position.set(0, HOVER - 120, 0);
       this.lift.intensity = this.locked ? 0 : 3;
     }
+    if (this.locked) this.hologram.tick(time, this.still.matches, this.renderer.getPixelRatio(), HOVER, this.hologramSize);
     this.runLamps(time);
     this.shown?.idle(dt, 0.35);
     this.renderer.render(this.scene, this.camera);

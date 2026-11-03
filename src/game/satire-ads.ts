@@ -69,7 +69,7 @@ const ADS: SatireAd[] = [
     slogan: msg('Invest in the biggest wall in the history of walls. Mars pays the interest!*'),
     fine: msg('*Mars has not agreed. Mars has never agreed. Past returns are fake news.'),
     color: '#ffcc33',
-    product: 'wall',
+    product: 'bond',
     art: '<g fill="currentColor"><rect x="10" y="62" width="24" height="12"/><rect x="38" y="62" width="24" height="12"/><rect x="66" y="62" width="24" height="12"/><rect x="24" y="46" width="24" height="12"/><rect x="52" y="46" width="24" height="12"/><rect x="38" y="30" width="24" height="12"/></g>',
   },
   {
