@@ -366,6 +366,7 @@ export const ES: Catalog = {
   'OUT OF FIELD': 'FUERA DEL CAMPO',
   'HULL FAILING': 'CASCO FALLANDO',
   'NO RETURN': 'SIN RETORNO',
+  'OVERDRIVE · AWAY FROM IT': 'OVERDRIVE · LEJOS DE AHÍ',
   'BLACK HOLE · BURN AWAY': 'AGUJERO NEGRO · ALÉJATE A FONDO',
   'ORBIT READY': 'ÓRBITA LISTA',
   'STABLE ORBIT': 'ÓRBITA ESTABLE',
@@ -901,6 +902,7 @@ export const ES: Catalog = {
   'We are burning up! Climb, darling!': '¡Nos quemamos! ¡Sube, cariño!',
   'The clouds are clogging our radiators, sweetheart. Get out of them before the reactor cooks us.': 'Las nubes nos están atascando los radiadores, cielo. Sal de ellas antes de que el reactor nos cueza.',
   'Now it gets really tight! Full burn, now!': '¡Ahora sí que se pone feo! ¡A fondo, ya!',
+  'Overdrive, now!': '¡Overdrive, ya!',
   'I am sorry, love.': 'Lo siento, mi amor.',
   'Orbit ready, darling.': 'Órbita lista, cariño.',
   'Entering stable orbit.': 'Entrando en órbita estable.',
@@ -1262,6 +1264,8 @@ export const ES: Catalog = {
     'En el aire, por una vez, oyes lo que hay fuera: el viento rugiendo contra el casco y los truenos tras los relámpagos en las nubes.',
   'Near the black hole and over Jupiter the PULL gauge shows how much of your drive it would take to get out: CAUTION from {wellCaution} %, WARNING from {wellWarning} %, CRITICAL from {wellCritical} %, and when it would take all of it, NO RETURN. Burn away early: falling, the gauge climbs fast. The speed limit holds only against your own drive; gravity pulls you past {limit} m/s.':
     'Cerca del agujero negro y sobre Júpiter, el indicador TIRÓN muestra cuánto de tu motor haría falta para salir: PRECAUCIÓN desde el {wellCaution} %, ALERTA desde el {wellWarning} %, CRÍTICO desde el {wellCritical} %, y cuando haría falta todo, SIN RETORNO. Aléjate a fondo a tiempo: en caída, el indicador sube rápido. El límite de velocidad solo rige para tu propio motor; la gravedad te arrastra más allá de {limit} m/s.',
+  "Past the drive's point of no return the overdrive may still save you. Turn your nose straight away from the hole and fire it: its shove and your drive together get you out more often than you would think. While that can still work, the alarm says OVERDRIVE · AWAY FROM IT, and Nicole calls it. At the Event Horizon, keep your distance, and fight from an orbit around the hole, where it never pulls you in.":
+    'Pasado el punto en que el motor ya no te saca, el overdrive todavía puede salvarte. Gira el morro justo en dirección contraria al agujero y dispáralo: su empujón y tu motor juntos te sacan más a menudo de lo que crees. Mientras eso aún pueda funcionar, la alarma dice OVERDRIVE · LEJOS DE AHÍ, y Nicole te lo grita. En el Horizonte de sucesos, mantén la distancia y combate desde una órbita alrededor del agujero, donde nunca te arrastra.',
   "The arena's edge": 'El borde de la arena',
   'Space has no walls, but the Games do. More than {edge} km from the center the clock runs: {grace} s to get back, or the clone is lost in deep space. Outside, the whole edge glows orange, so the way home is always in sight.':
     'El espacio no tiene paredes, pero los Juegos sí. A más de {edge} km del centro corre el reloj: {grace} s para volver, o el clon se pierde en el espacio profundo. Fuera, todo el borde brilla en naranja, así que el camino a casa siempre está a la vista.',

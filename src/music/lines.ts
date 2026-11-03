@@ -417,6 +417,7 @@ export const COMPUTER = {
   airBurn: 'We are burning up! Climb, darling!',
   clog: 'The clouds are clogging our radiators, sweetheart. Get out of them before the reactor cooks us.',
   wellTight: 'Now it gets really tight! Full burn, now!',
+  wellOverdrive: 'Overdrive, now!',
   wellLost: 'I am sorry, love.',
   orbitReady: 'Orbit ready, darling.',
   orbitStable: 'Entering stable orbit.',

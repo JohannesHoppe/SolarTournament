@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import type { Well } from '../world/asteroids';
-import { MAIN_THRUST } from '../ship/flight';
+import { MAIN_THRUST, OVERDRIVE_PUSH } from '../ship/flight';
 
 /**
  * The flight computer's alarms, tiered like a fighter's master caution: CAUTION (something to
@@ -187,6 +187,22 @@ export function escapeLoad(well: Well, position: THREE.Vector3, velocity: THREE.
   const inward = -(velocity.x * (position.x - well.position.x) + velocity.y * (position.y - well.position.y) + velocity.z * (position.z - well.position.z)) / distance;
   const braking = inward > 0 ? (inward * inward) / (2 * gap) : 0;
   return (pull + braking) / Math.max(thrust, 1);
+}
+
+/**
+ * Whether the overdrive's shove (`push`, units/s), fired straight away from a well, still gets a
+ * ship out that its drive alone no longer can: after the shove it climbs on its drive against
+ * the pull, and it is out if its speed away carries it to where the drive outpulls the well, the
+ * pull taken all the way as strong as where the ship is (an estimate on the safe side).
+ */
+export function overdriveEscapes(well: Well, position: THREE.Vector3, velocity: THREE.Vector3, thrust: number, push = OVERDRIVE_PUSH): boolean {
+  const distance = Math.max(position.distanceTo(well.position), 1);
+  const pull = (well.surfaceGravity * well.radius * well.radius) / (distance * distance);
+  // where the drive pulls as hard as the well
+  const free = well.radius * Math.sqrt(well.surfaceGravity / Math.max(thrust, 1));
+  if (distance >= free) return true;
+  const away = (velocity.x * (position.x - well.position.x) + velocity.y * (position.y - well.position.y) + velocity.z * (position.z - well.position.z)) / distance + push;
+  return away > 0 && away * away >= 2 * (pull - thrust) * (free - distance);
 }
 
 /** The escape gauge shows from this load on (a share of the drive's thrust), before the first alarm. */

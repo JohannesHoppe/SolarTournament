@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { AlarmTones, Alarms, escapeLoad, WELL_CAUTION, WELL_CRITICAL, WELL_LOST, WELL_WARNING, wellLevel } from './alarms';
+import { AlarmTones, Alarms, escapeLoad, overdriveEscapes, WELL_CAUTION, WELL_CRITICAL, WELL_LOST, WELL_WARNING, wellLevel } from './alarms';
 import { arenaById } from '../world/arenas';
-import { MAIN_THRUST } from '../ship/flight';
+import { MAIN_THRUST, OVERDRIVE_PUSH } from '../ship/flight';
 
 /** One frame of the game's alarms: raise, rank, start the next. */
 function frame(alarms: Alarms, raise: () => void) {
@@ -129,5 +129,41 @@ describe('the escape load of a gravity well', () => {
     const distanceAt = (load: number) => hole.radius * Math.sqrt(hole.surfaceGravity / (load * MAIN_THRUST));
     expect(distanceAt(WELL_CAUTION) - hole.radius).toBeGreaterThan(10000);
     expect(distanceAt(WELL_LOST)).toBeGreaterThan(hole.radius);
+  });
+});
+
+describe("the overdrive's last chance at a well", () => {
+  const hole = arenaById('hole')!.layout.well!;
+  /** A fall flown straight out, 1D: the shove away, then the full drive away against the pull, until the drive outpulls it (out) or the horizon. */
+  const flownOut = (distance: number, inward: number) => {
+    const free = hole.radius * Math.sqrt(hole.surfaceGravity / MAIN_THRUST);
+    let r = distance;
+    let v = -inward + OVERDRIVE_PUSH;
+    for (let t = 0; t < 60; t += 1 / 120) {
+      if (r >= free) return true;
+      if (r <= hole.radius) return false;
+      v += (MAIN_THRUST - (hole.surfaceGravity * hole.radius * hole.radius) / (r * r)) / 120;
+      r += v / 120;
+    }
+    return r >= free;
+  };
+
+  it('says the overdrive gets a ship out only where flying it out does, and does so past the drive’s point of no return', () => {
+    let rescued = 0;
+    let given = 0;
+    for (let distance = hole.radius * 1.05; distance < hole.radius * 3; distance += 400) {
+      for (const inward of [0, 1000, 2000, 4000, 6000]) {
+        const at = new THREE.Vector3(distance, 0, 0);
+        const velocity = new THREE.Vector3(-inward, 0, 0);
+        if (escapeLoad(hole, at, velocity, MAIN_THRUST) < WELL_LOST) continue;
+        given++;
+        if (!overdriveEscapes(hole, at, velocity, MAIN_THRUST)) continue;
+        rescued++;
+        expect(flownOut(distance, inward), `${distance} units out, ${inward} units/s inward`).toBe(true);
+      }
+    }
+    // the trick is real: a good share of the falls the drive alone has lost
+    expect(rescued).toBeGreaterThan(0);
+    expect(rescued).toBeLessThan(given);
   });
 });

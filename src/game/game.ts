@@ -90,6 +90,7 @@ import {
   HULL_CRITICAL,
   IMPACT_CRITICAL,
   inGrip,
+  overdriveEscapes,
   SILENCE_BEFORE,
   SILENCE_COOLDOWN,
   SILENCE_SECONDS,
@@ -6890,7 +6891,9 @@ export class Game implements OnlineGame {
   /**
    * A gravity well's hold on the own ship (see escapeLoad): the escape gauge, its alarm towards
    * the well, and Nicole, once for each level it reaches until the pull lets go again: the well
-   * is near, it is pulling, full burn now, and past the point of no return a quiet goodbye.
+   * is near, it is pulling, full burn now (the overdrive, now, while it is ready), past the drive's
+   * point of no return the overdrive as long as its shove away would still get the ship out (see
+   * overdriveEscapes), and only then a quiet goodbye.
    * Returns the load (0 without a well).
    */
   private wellAlarm(me: Ship): number {
@@ -6913,11 +6916,14 @@ export class Game implements OnlineGame {
     if (!level) return orbit === 'stable' ? 0 : load;
     const hole = this.venue.id === 'hole';
     const lost = load >= WELL_LOST;
-    this.alarms.raise({ id: 'well', level, text: lost ? t('NO RETURN') : hole ? t('BLACK HOLE · BURN AWAY') : t('GRAVITY WELL · BURN AWAY'), direction: relative.subVectors(well.position, me.flight.position) });
-    const said = lost ? ALARM_RANK.critical + 1 : ALARM_RANK[level];
+    // past the drive's point of no return the overdrive may still get the ship out, while it is ready
+    const ready = this.time >= this.overdriveReadyAt;
+    const rescue = lost && ready && overdriveEscapes(well, me.flight.position, me.flight.velocity, thrust);
+    this.alarms.raise({ id: 'well', level, text: rescue ? t('OVERDRIVE · AWAY FROM IT') : lost ? t('NO RETURN') : hole ? t('BLACK HOLE · BURN AWAY') : t('GRAVITY WELL · BURN AWAY'), direction: relative.subVectors(well.position, me.flight.position) });
+    const said = lost ? ALARM_RANK.critical + (rescue ? 1 : 2) : ALARM_RANK[level];
     if (said > this.wellSaid) {
       this.wellSaid = said;
-      const line = lost ? COMPUTER.wellLost : level === 'critical' ? COMPUTER.wellTight : level === 'warning' ? (hole ? COMPUTER.holePull : COMPUTER.jupiterPull) : hole ? COMPUTER.holeNear : COMPUTER.jupiterNear;
+      const line = rescue || (level === 'critical' && !lost && ready) ? COMPUTER.wellOverdrive : lost ? COMPUTER.wellLost : level === 'critical' ? COMPUTER.wellTight : level === 'warning' ? (hole ? COMPUTER.holePull : COMPUTER.jupiterPull) : hole ? COMPUTER.holeNear : COMPUTER.jupiterNear;
       this.speaker.say(line, 'urgent');
     }
     return load;
