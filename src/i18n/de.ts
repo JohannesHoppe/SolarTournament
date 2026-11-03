@@ -23,7 +23,7 @@ import type { Catalog } from './i18n';
  *   Solar Wall → Sonnenmauer; sponsor → Sponsor; sponsor break / ad → Werbung
  * - main drive → Hauptantrieb; drive → Antrieb; thrusters → Steuerdüsen; brake → Bremse / bremsen; burn → Schub;
  *   flip → Wende / wenden; dodge → Ausweichen; fine aim → Feinzielen; autopilot → Autopilot; free drift → freier Drift;
- *   overdrive → Turbo (short, clear for a child, and spoken well by the German voice)
+ *   overdrive → Overdrive (der Overdrive; English terms of the game stay English, as the laser is the Laser)
  * - laser → Laser; heat → Hitze; radiators → Kühler; armor → Panzerung; plating → Panzerplatten; hull → Rumpf
  * - torpedo → Torpedo (pl. Torpedos); torpedo tubes → Torpedorohre; lock → Zielerfassung; hook → Haken; harpoon → Harpune;
  *   cable → Seil; winch → Winde; probe → Sonde; sealed probe → versiegelte Sonde; twin laser → Zwillingslaser;
@@ -78,7 +78,7 @@ export const DE: Catalog = {
   'Turn, aim, burn and brake. Start here.': 'Drehen, zielen, Schub geben, bremsen. Fang hier an.',
   'Rings, coils and the perfect start.': 'Ringe, Spulen und der perfekte Start.',
   'The laser, free drift and the dogfight.': 'Der Laser, freier Drift und das Duell.',
-  'Torpedoes, overdrive, probes, the hook on a ship and the nova core.': 'Torpedos, Turbo, Sonden, der Haken am Schiff und der Nova-Kern.',
+  'Torpedoes, overdrive, probes, the hook on a ship and the nova core.': 'Torpedos, Overdrive, Sonden, der Haken am Schiff und der Nova-Kern.',
 
   // solo round plate
   'Three laps through eight gates. Killing your opponents is explicitly allowed.': 'Drei Runden durch acht Tore. Gegner abschießen ist ausdrücklich erlaubt.',
@@ -313,7 +313,7 @@ export const DE: Catalog = {
   'SOLAR STORM · SENSORS BLIND': 'SONNENSTURM · SENSOREN BLIND',
   'Target drone': 'Zieldrohne',
   'Sparring bot': 'Sparringsbot',
-  'Overdrive': 'Turbo',
+  'Overdrive': 'Overdrive',
   'Cable snapped': 'Seil gerissen',
   'Hooked {name}': '{name} am Haken',
   'Hooked': 'Eingehakt',
@@ -418,7 +418,7 @@ export const DE: Catalog = {
   'Sealed probe': 'Versiegelte Sonde',
   'Twin laser': 'Zwillingslaser',
   '+2 torpedoes': '+2 Torpedos',
-  'Overdrive charged': 'Turbo geladen',
+  'Overdrive charged': 'Overdrive geladen',
   'Repair': 'Reparatur',
   'Nova core': 'Nova-Kern',
   'fires twice as fast': 'feuert doppelt so schnell',
@@ -501,7 +501,7 @@ export const DE: Catalog = {
   'FIRE': 'FEUER',
   'AUTO': 'AUTO',
   'HOOK': 'HAKEN',
-  'OVERDRIVE': 'TURBO',
+  'OVERDRIVE': 'OVERDRIVE',
 
   // loading, radio, network
   'Failed to load: {error}': 'Laden fehlgeschlagen: {error}',
@@ -540,8 +540,8 @@ export const DE: Catalog = {
   'Climbing ▲ {speed} m/s': 'Steigend ▲ {speed} m/s',
   'Sinking ▼ {speed} m/s': 'Sinkend ▼ {speed} m/s',
   'Live link lost': 'Live-Verbindung verloren',
-  'Overdrive {s} s': 'Turbo {s} s',
-  'Overdrive ready': 'Turbo bereit',
+  'Overdrive {s} s': 'Overdrive {s} s',
+  'Overdrive ready': 'Overdrive bereit',
   'Hooked · {m} m': 'Eingehakt · {m} m',
   'Hook {s} s': 'Haken {s} s',
   'Hook ready': 'Haken bereit',
@@ -591,7 +591,7 @@ export const DE: Catalog = {
   'Hook': 'Haken',
   'Fire': 'Feuer',
   'Auto': 'Auto',
-  'Over<br>drive': 'Turbo',
+  'Over<br>drive': 'Overdrive',
   'Torp<br>edo': 'Tor<br>pedo',
   'Five minutes. Die for the President. Again and again.': 'Fünf Minuten. Stirb für den Präsidenten. Immer und immer wieder.',
   'Callsign': 'Rufzeichen',
@@ -627,7 +627,7 @@ export const DE: Catalog = {
   'X (hold)': 'X (halten)',
   'Flip: nose against the flight; with the drive it brakes until you let go': 'Wende: Nase gegen die Flugrichtung; mit dem Antrieb bremst sie, bis du loslässt',
   'Autopilot (flies where it points) / free drift': 'Autopilot (fliegt, wohin die Nase zeigt) / freier Drift',
-  'Overdrive: one shove forward, last resort, once a minute': 'Turbo: ein Stoß nach vorn, letzter Ausweg, einmal pro Minute',
+  'Overdrive: one shove forward, last resort, once a minute': 'Overdrive: ein Stoß nach vorn, letzter Ausweg, einmal pro Minute',
   'Extras: thrusters up and down': 'Extras: Steuerdüsen hoch und runter',
   'A D R F twice': 'A D R F zweimal',
   'Dodge: a hard kick that way': 'Ausweichen: ein harter Stoß in diese Richtung',
@@ -635,7 +635,7 @@ export const DE: Catalog = {
   'V / Right click': 'V / Rechtsklick',
   'Hook: bite a rock or a ship and reel in; press again to let go and fly off': 'Haken: Felsen oder Schiff packen und einholen; nochmal drücken, loslassen und davonfliegen',
   'Gamepad': 'Gamepad',
-  'Sticks turn and push, RT drive, B brake, LT/A fire, Y flip, R3 autopilot, RB overdrive, LB dodge, D-pad up torpedo, D-pad down hook': 'Sticks drehen und schieben, RT Antrieb, B Bremse, LT/A Feuer, Y Wende, R3 Autopilot, RB Turbo, LB Ausweichen, Steuerkreuz oben Torpedo, Steuerkreuz unten Haken',
+  'Sticks turn and push, RT drive, B brake, LT/A fire, Y flip, R3 autopilot, RB overdrive, LB dodge, D-pad up torpedo, D-pad down hook': 'Sticks drehen und schieben, RT Antrieb, B Bremse, LT/A Feuer, Y Wende, R3 Autopilot, RB Overdrive, LB Ausweichen, Steuerkreuz oben Torpedo, Steuerkreuz unten Haken',
   'Cockpit / chase camera': 'Cockpit- / Verfolgerkamera',
   'Radio on / off': 'Radio an / aus',
   'Esc / P': 'Esc / P',
@@ -773,12 +773,12 @@ export const DE: Catalog = {
   'Swing: {speed} of {goal} m/s': 'Schwung: {speed} von {goal} m/s',
   'You are a racer now. Fly the clean line, mind the plumes, and win one for the President.': 'Jetzt bist du Rennpilot. Flieg die saubere Linie, hüte dich vor den Antriebsstrahlen und hol den Sieg für den Präsidenten.',
   'Gladiator training. The laser, the heat, and the dogfight. Let us hurt somebody.': 'Training für Gladiatoren. Der Laser, die Hitze und das Duell. Lass uns jemandem wehtun.',
-  'Arsenal training. Torpedoes, the overdrive, the probes, and the nova core. Toys, big guy. Deadly toys.': 'Training im Arsenal. Torpedos, der Turbo, die Sonden und der Nova-Kern. Spielzeug, Großer. Tödliches Spielzeug.',
+  'Arsenal training. Torpedoes, the overdrive, the probes, and the nova core. Toys, big guy. Deadly toys.': 'Training im Arsenal. Torpedos, der Overdrive, die Sonden und der Nova-Kern. Spielzeug, Großer. Tödliches Spielzeug.',
   'Torpedoes. Keep the drone close to your crosshair until the lock holds, then launch.': 'Torpedos. Halt die Drohne nah an deinem Fadenkreuz, bis die Zielerfassung steht, dann feuer ab.',
   'Now one is coming for you. Find the red mark, and shoot it down before it reaches you.': 'Jetzt kommt einer auf dich zu. Such die rote Markierung und schieß ihn ab, bevor er dich erreicht.',
   'It got you. Aim for the red mark, and keep firing. Again.': 'Er hat dich erwischt. Ziel auf die rote Markierung und feuer weiter. Nochmal.',
   'It got past you. Aim for the red mark, and keep firing. Again.': 'Er ist dir entwischt. Ziel auf die rote Markierung und feuer weiter. Nochmal.',
-  'Your overdrive. One shove, and you fly a hundred and fifty meters per second faster. Use it.': 'Dein Turbo. Ein Stoß, und du fliegst hundertfünfzig Meter pro Sekunde schneller. Nutz ihn.',
+  'Your overdrive. One shove, and you fly a hundred and fifty meters per second faster. Use it.': 'Dein Overdrive. Ein Stoß, und du fliegst hundertfünfzig Meter pro Sekunde schneller. Nutz ihn.',
   'Sponsor probes drift in every arena. Fly through this one, and take what it carries.': 'In jeder Arena treiben Sponsorsonden. Flieg durch diese hier und nimm mit, was sie bringt.',
   'Your hook bites ships too. Catch that runner, and reel it in.': 'Dein Haken packt auch Schiffe. Schnapp dir den Flüchtling da und zieh ihn zu dir heran.',
   'This is a nova core. Everything around you dies when you set it off, and so does your clone. Fly close to the drone, and fire.': 'Das ist ein Nova-Kern. Alles um dich herum stirbt, wenn du ihn zündest, und dein Klon auch. Flieg nah an die Drohne heran und feuer.',
@@ -1089,7 +1089,7 @@ export const DE: Catalog = {
   'Coasting never slows you down: in space only a burn against the flight brakes. The brake (S) does it all and stops by itself: it flips the ship, burns, takes out the drift sideways too and holds you at rest; slow, it stops you with the thrusters alone. The flip (X) only turns the nose against the flight and holds it there. With W you burn as long as you hold it: let go early and keep some speed, hold on past zero and you speed up backwards. The flip alone changes nothing: you fly on backwards, gun first, which is how you shoot at whatever chases you.': 'Ohne Schub wirst du nie langsamer: Im All bremst nur Schub gegen die Flugrichtung. Die Bremse (S) macht alles und hält von selbst an: Sie wendet das Schiff, gibt Schub, nimmt auch die Drift zur Seite heraus und hält dich im Stillstand; langsam stoppt sie dich allein mit den Steuerdüsen. Die Wende (X) dreht nur die Nase gegen die Flugrichtung und hält sie dort. Mit W gibst du Schub, solange du es hältst: Lass früh los und behalte etwas Fahrt, halt über null hinaus, und du beschleunigst rückwärts. Die Wende allein ändert nichts: Du fliegst rückwärts weiter, die Waffe voran, und so schießt du auf alles, was dich jagt.',
   'The dodge': 'Das Ausweichen',
   'Tap a thruster twice: every thruster kicks the ship {dodge} m/s that way, more than a ship\'s length out of the line of fire, ready again after {dodgeRecharge} s. A laser hits the instant it fires, so nobody outruns a beam; a dodge beats the aim.': 'Tipp eine Steuerdüse zweimal an: Jede Steuerdüse stößt das Schiff mit {dodge} m/s in ihre Richtung, mehr als eine Schiffslänge aus der Schusslinie, wieder bereit nach {dodgeRecharge} s. Ein Laser trifft im selben Augenblick, in dem er feuert, also entkommt niemand einem Strahl; Ausweichen schlägt das Zielen.',
-  'The overdrive': 'Der Turbo',
+  'The overdrive': 'Der Overdrive',
   'One shove of {overdrive} m/s along the nose, past the speed limit. It leaves your clone at the edge of blacking out and the main drive dead for {overdriveHeat} s, while thrusters and laser keep working, and recharges for {overdriveRecharge} s. Fire it across an attacker\'s line of fire, never straight away from a ship on your tail: that only makes you a farther target.': 'Ein Stoß von {overdrive} m/s entlang der Nase, über das Tempolimit hinaus. Er bringt deinen Klon an den Rand der Ohnmacht und legt den Hauptantrieb für {overdriveHeat} s lahm, während Steuerdüsen und Laser weiterarbeiten, und lädt {overdriveRecharge} s lang nach. Zünde ihn quer zur Schusslinie eines Angreifers, nie geradeaus weg von einem Schiff in deinem Nacken: Das macht dich nur zu einem ferneren Ziel.',
   'The maneuvering thrusters': 'Die Steuerdüsen',
   'Besides the main drive your ship carries {nozzles} small nozzles: {quads} clusters of {quadNozzles}, one at each corner of the hull, fore and aft on both flanks. Each nozzle of a cluster points another way: out from the flank, up, down, and along the ship. Gas leaving a nozzle pushes the ship the other way.': 'Neben dem Hauptantrieb trägt dein Schiff {nozzles} kleine Düsen: {quads} Blöcke zu je {quadNozzles}, einer an jeder Ecke des Rumpfs, vorn und hinten an beiden Flanken. Jede Düse eines Blocks zeigt in eine andere Richtung: von der Flanke nach außen, nach oben, nach unten und längs des Schiffs. Gas, das aus einer Düse strömt, schiebt das Schiff in die Gegenrichtung.',
@@ -1116,7 +1116,7 @@ export const DE: Catalog = {
   'The start': 'Der Start',
   'The clamps hold every ship through the countdown. Light the drive within {early} s before BURN! or {late} s after it: a perfect start, a shove of {startShove} m/s. Earlier, and the drive stalls for {stall} s.': 'Die Klammern halten jedes Schiff während des Countdowns fest. Zünde den Antrieb zwischen {early} s vor BURN! und {late} s danach: ein perfekter Start, ein Stoß von {startShove} m/s. Früher, und der Antrieb stirbt für {stall} s ab.',
   'The probes on the track': 'Die Sonden auf der Strecke',
-  'A race\'s probes are sealed, and luck favors the back of the field: torpedoes, overdrives and the nova cores go to the last third, plating and repairs to the leaders.': 'Die Sonden eines Rennens sind versiegelt, und das Glück ist mit den Hinteren: Torpedos, Turbos und die Nova-Kerne gehen an das letzte Drittel, Panzerplatten und Reparaturen an die Spitze.',
+  'A race\'s probes are sealed, and luck favors the back of the field: torpedoes, overdrives and the nova cores go to the last third, plating and repairs to the leaders.': 'Die Sonden eines Rennens sind versiegelt, und das Glück ist mit den Hinteren: Torpedos, Overdrives und die Nova-Kerne gehen an das letzte Drittel, Panzerplatten und Reparaturen an die Spitze.',
   'Victory Through Superior Position': 'Sieg durch überlegene Position',
   'Armor and the drive': 'Panzerung und Antrieb',
   'There are no shields. Nose and flanks are armor: a beam only scorches it, {armor} of {hull} hull points. From behind, within {driveCone}° of the axis, a beam hits the main drive: each hit costs a fifth of its thrust, and the fifth sends the reactor critical. Five hits from behind win the fight.': 'Es gibt keine Schilde. Nase und Flanken sind gepanzert: Ein Strahl versengt die Panzerung nur, {armor} von {hull} Rumpfpunkten. Von hinten, bis {driveCone}° um die Achse, trifft ein Strahl den Hauptantrieb: Jeder Treffer kostet ein Fünftel seines Schubs, und der fünfte macht den Reaktor kritisch. Fünf Treffer von hinten entscheiden den Kampf.',
@@ -1133,11 +1133,11 @@ export const DE: Catalog = {
   '{torpedoes} per clone. A torpedo locks on the ship closest to your nose within {lockAngle}° and {lockRange} km: keep the target near the crosshair until the lock holds, then launch. Armor does not stop it: {torpedoDamage} hull points, whatever side it reaches. Two kill.': '{torpedoes} pro Klon. Ein Torpedo erfasst das Schiff, das deiner Nase am nächsten ist, innerhalb von {lockAngle}° und {lockRange} km: Halt das Ziel nah am Fadenkreuz, bis die Zielerfassung steht, dann feuer ab. Panzerung hält ihn nicht auf: {torpedoDamage} Rumpfpunkte, egal welche Seite er erreicht. Zwei sind tödlich.',
   'TORPEDO INBOUND: shoot it down (a small target, {torpedoShot} points), or break its lock. A seeker that loses sight behind a rock or a hull flies straight on for good.': 'TORPEDO IM ANFLUG: Schieß ihn ab (ein kleines Ziel, {torpedoShot} Punkte) oder brich seine Zielerfassung. Ein Sucher, der hinter einem Felsen oder einem Rumpf die Sicht verliert, fliegt für immer geradeaus weiter.',
   'Or outfly it. A torpedo flies at up to {torpedoSpeed} m/s, more than your {limit} m/s: running straight away only buys time, and only an overdrive outruns it, for a moment. But it turns with {torpedoTurn} g, you with {grip}. Nicole counts it down (a thousand, five hundred, three hundred, two hundred, a hundred meters) and calls “Break!” about {torpedoBreak} s before it hits: turn hard across its path now, or dodge a moment later, and it overshoots. Hold the turn, and it comes round again; jink one way, then the other, and it burns out after {torpedoBurn} s.':
-    'Oder flieg ihn aus. Ein Torpedo fliegt mit bis zu {torpedoSpeed} m/s, schneller als deine {limit} m/s: Geradeaus fliehen bringt nur Zeit, und nur der Turbo hängt ihn ab, für einen Moment. Aber er wendet mit {torpedoTurn} g, du mit {grip}. Nicole zählt ihn herunter (tausend, fünfhundert, dreihundert, zweihundert, hundert Meter) und ruft „Abdrehen!“ etwa {torpedoBreak} s vor dem Einschlag: Dreh jetzt hart quer zu seiner Bahn oder weich einen Moment später aus, und er schießt vorbei. Hältst du die Kurve, kommt er wieder herum; schlag Haken, mal hierhin, mal dorthin, und er brennt nach {torpedoBurn} s aus.',
+    'Oder flieg ihn aus. Ein Torpedo fliegt mit bis zu {torpedoSpeed} m/s, schneller als deine {limit} m/s: Geradeaus fliehen bringt nur Zeit, und nur der Overdrive hängt ihn ab, für einen Moment. Aber er wendet mit {torpedoTurn} g, du mit {grip}. Nicole zählt ihn herunter (tausend, fünfhundert, dreihundert, zweihundert, hundert Meter) und ruft „Abdrehen!“ etwa {torpedoBreak} s vor dem Einschlag: Dreh jetzt hart quer zu seiner Bahn oder weich einen Moment später aus, und er schießt vorbei. Hältst du die Kurve, kommt er wieder herum; schlag Haken, mal hierhin, mal dorthin, und er brennt nach {torpedoBurn} s aus.',
   "A torpedo on your hook is a bomb on a string. It weighs {torpedoMass} t, and its motor still pushes for its target at {torpedoThrust} g, but your drive drags it wherever you go; after {torpedoBurn} s it is just a mass on the rope. Its fuse goes off on every ship, yours too: swing it into a rival, or let go to fling it. While you hold it, and {fling} s after, its kill is yours. The HUD says TORPEDO ON THE LINE.": "Ein Torpedo an deinem Haken ist eine Bombe an der Schnur. Er wiegt {torpedoMass} t, und sein Motor schiebt weiter mit {torpedoThrust} g auf sein Ziel zu, aber dein Antrieb schleppt ihn mit, wohin du fliegst; nach {torpedoBurn} s ist er nur noch Masse am Seil. Sein Zünder geht bei jedem Schiff los, auch bei deinem: Schwing ihn in einen Gegner, oder lass los und schleudere ihn. Solange du ihn hältst und {fling} s danach, ist sein Abschuss deiner. Das HUD meldet TORPEDO AM HAKEN.",
   'The hook': 'Der Haken',
   "A harpoon flies along the nose and bites the first rock, ship, sponsor probe or torpedo within {hookRange} km; a probe it bites comes in on the cable and is yours when it arrives, unless another ship flies through it first. While it holds, the winch reels in at {hookPull} g, and the cable never gets longer: a ship flying past its rock swings around it, faster the more cable comes in. Press the hook again to let go, and you fly off along the swing like a stone from a sling. Ready again after {hookReady} s.": "Eine Harpune fliegt entlang der Nase und beißt sich in den ersten Felsen, das erste Schiff, die erste Sponsorsonde oder den ersten Torpedo bis {hookRange} km; eine Sonde, in die sie sich beißt, kommt am Seil herein und gehört dir, sobald sie ankommt, es sei denn, ein anderes Schiff fliegt vorher durch sie hindurch. Solange er hält, holt die Winde mit {hookPull} g ein, und das Seil wird nie länger: Ein Schiff, das an seinem Felsen vorbeifliegt, schwingt um ihn herum, umso schneller, je mehr Seil hereinkommt. Drück den Haken nochmal, um loszulassen, und du fliegst entlang des Schwungs davon wie ein Stein aus der Schleuder. Wieder bereit nach {hookReady} s.",
-  "The cable only pulls, and every jerk is shared by mass: a rock is millions of times your {shipMass} t and stays where it is, a rival of your mass is pulled as hard as you. Hooked to a ship, both drives pull against the rope: a tug of war the stronger drive wins, and an overdrive's shove yanks the other along. In Capture the Flag the hook takes a sponsor core too.": "Das Seil zieht nur, und jeden Ruck teilen sich beide nach ihrer Masse: Ein Felsen wiegt Millionen Mal deine {shipMass} t und bleibt, wo er ist, ein Gegner deiner Masse wird so stark gezogen wie du. Hängt der Haken an einem Schiff, ziehen beide Antriebe gegen das Seil: ein Tauziehen, das der stärkere Antrieb gewinnt, und der Stoß eines Turbos reißt den anderen mit. In Capture the Flag nimmt der Haken auch einen Sponsorkern.",
+  "The cable only pulls, and every jerk is shared by mass: a rock is millions of times your {shipMass} t and stays where it is, a rival of your mass is pulled as hard as you. Hooked to a ship, both drives pull against the rope: a tug of war the stronger drive wins, and an overdrive's shove yanks the other along. In Capture the Flag the hook takes a sponsor core too.": "Das Seil zieht nur, und jeden Ruck teilen sich beide nach ihrer Masse: Ein Felsen wiegt Millionen Mal deine {shipMass} t und bleibt, wo er ist, ein Gegner deiner Masse wird so stark gezogen wie du. Hängt der Haken an einem Schiff, ziehen beide Antriebe gegen das Seil: ein Tauziehen, das der stärkere Antrieb gewinnt, und der Stoß eines Overdrives reißt den anderen mit. In Capture the Flag nimmt der Haken auch einen Sponsorkern.",
   "A cable never passes through anything solid: it wraps around it. When rock, ice, junk or a hull comes between you and what you hooked, the cable lies on its edge and you swing around that edge; swing back, and it comes off again. Let go before it winds onto the rock: the winch keeps you clear of it by paying out cable, and that eats your swing. It snaps on a planet's or a black hole's body, on the battleship's hull, on a rock that sweeps right through it, and once it has wound a whole turn round a rock.":
     'Ein Seil geht durch nichts Festes hindurch: Es legt sich darum. Kommt Fels, Eis, Schrott oder ein Rumpf zwischen dich und das, woran dein Haken hängt, legt sich das Seil über dessen Kante, und du schwingst um diese Kante; schwingst du zurück, löst es sich wieder. Lass los, bevor es sich um den Felsen wickelt: Die Winde hält dich von ihm fern, indem sie Seil nachgibt, und das frisst deinen Schwung. Es reißt am Körper eines Planeten oder eines Schwarzen Lochs, am Rumpf des Schlachtschiffs, an einem Felsen, der quer hindurchfegt, und sobald es sich einmal ganz um einen Felsen gewickelt hat.',
   'Probes': 'Sonden',
@@ -1145,7 +1145,7 @@ export const DE: Catalog = {
   'Twin laser (pink): twice as fast, half the heat per shot, for the clone\'s life.': 'Zwillingslaser (pink): doppelt so schnell, halbe Hitze pro Schuss, solange der Klon lebt.',
   'Plating (blue): two hits into the drive bounce off, or one torpedo.': 'Panzerplatten (blau): Zwei Treffer in den Antrieb prallen ab, oder ein Torpedo.',
   'Torpedoes (orange): two more.': 'Torpedos (orange): zwei mehr.',
-  'Overdrive (yellow): charged at once.': 'Turbo (gelb): sofort geladen.',
+  'Overdrive (yellow): charged at once.': 'Overdrive (gelb): sofort geladen.',
   'Repair (green): hull, drive and thrusters as new.': 'Reparatur (grün): Rumpf, Antrieb und Steuerdüsen wie neu.',
   'Nova core (white): see below.': 'Nova-Kern (weiß): siehe unten.',
   'A dead clone\'s twin laser, plating and nova core fly out again as probes, for whoever gets there first.': 'Zwillingslaser, Panzerplatten und Nova-Kern eines toten Klons fliegen wieder als Sonden hinaus, für den, der zuerst da ist.',
