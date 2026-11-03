@@ -167,6 +167,8 @@ interface Drill {
 /** 50 m/s and 5 m/s in world units (1 unit = 5 cm). */
 const FAST = 1000;
 const STOPPED = 100;
+/** The brake drill counts once the brake has taken the drift (60 m/s) down below this share of FAST (30 m/s) and is ended. */
+const BRAKED_TO = 0.6;
 /** Ring radius of the course: a race's gate (120 m), so the rings fly as a race does. */
 export const RING_RADIUS = GATE_RADIUS;
 /** Radius of the zone the stop drill wants the ship to rest in: 200 m, shown as a sphere around the marker. */
@@ -668,7 +670,12 @@ export const DRILL = {
     enter(ctx) {
       if (speed(ctx) < FAST * 0.8) drift(ctx, FAST * 1.2, speed(ctx) > 10 ? ctx.me.flight.velocity : undefined);
     },
-    done: (ctx) => speed(ctx) < STOPPED,
+    // the brake pressed once, then ended again (pressed a second time, or at rest) slower than
+    // BRAKED_TO of the drill's drift: the flight computer turns the ship back then
+    done(ctx, a) {
+      if (ctx.braking) a.warned = true;
+      return !!a.warned && !ctx.braking && speed(ctx) < FAST * BRAKED_TO;
+    },
   },
   // the autopilot: the nose through an arc of markers, and the flight comes after it; once
   // steering stops, the ship flies straight on to the last

@@ -11,7 +11,7 @@ import { arenaById } from '../world/arenas';
 import { ARENA_LIMIT } from '../world/arena';
 import { PLAUSIBLE_SPEED } from '../net/plausible';
 import { cos, sin } from '../detmath';
-import { angleTo, quaternionAngleTo } from '../detthree';
+import { angleTo, quaternionAngleTo, setFromEuler } from '../detthree';
 
 /** A degree (rad). */
 const DEGREE = Math.PI / 180;
@@ -379,5 +379,38 @@ describe('the speed limit', () => {
   it("keeps a fall into the black hole inside the cheat checks' bound on speed", () => {
     // from the arena's edge at the limit plus an overdrive's shove, burning all the way down
     const speeds = fall(ARENA_LIMIT, MAX_SPEED + OVERDRIVE_PUSH, 1, 60);    expect(Math.max(...speeds)).toBeLessThan(PLAUSIBLE_SPEED * 0.7);
+  });
+});
+
+describe('the turn back into an attitude', () => {
+  /** A ship turned `from` its start, flown back by FlightModel.attitude alone; how far off it ends (rad) and when it got there (s). */
+  function back(from: THREE.Quaternion, seconds = 6) {
+    const flight = new FlightModel();
+    const home = new THREE.Quaternion();
+    flight.reset(new THREE.Vector3(), from);
+    const out = { ...IDLE, off: 0 };
+    let arrived = Infinity;
+    for (let t = 0; t < seconds; t += 1 / 60) {
+      flight.attitude(home, 2.5, out);
+      flight.update(1 / 60, out, new THREE.Vector3());
+      if (quaternionAngleTo(flight.orientation, home) < 0.02 && arrived === Infinity) arrived = t;
+    }
+    return { off: quaternionAngleTo(flight.orientation, home), arrived };
+  }
+
+  it('turns a ship flipped about, and rolled on its back, into the very attitude it had, roll and all', () => {
+    for (const [x, y, z] of [[0, Math.PI, 0], [Math.PI * 0.9, 0, 0], [0.4, 2.6, 1.2], [0, 0, Math.PI * 0.95]]) {
+      const { off, arrived } = back(setFromEuler(new THREE.Quaternion(), x, y, z));
+      expect(off).toBeLessThan(0.02);
+      expect(arrived).toBeLessThan(3);
+    }
+  });
+
+  it('holds an attitude it is in: no turn asked', () => {
+    const flight = new FlightModel();
+    const home = setFromEuler(new THREE.Quaternion(), 0.3, -1, 2);
+    flight.reset(new THREE.Vector3(), home);
+    const out = flight.attitude(home, 2.5, { ...IDLE, off: 0 });
+    expect(Math.abs(out.yaw) + Math.abs(out.pitch) + Math.abs(out.roll)).toBeLessThan(1e-9);
   });
 });

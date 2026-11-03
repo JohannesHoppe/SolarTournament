@@ -180,6 +180,26 @@ export class FlightModel {
   }
 
   /**
+   * Yaw, pitch and roll commands that turn the ship into a whole attitude, nose and roll alike
+   * (`goal`, a world orientation), the shortest way round; how far it still is (rad) is returned
+   * in `target.off`. Writes into `target`.
+   */
+  attitude<T extends { yaw: number; pitch: number; roll: number; off?: number }>(goal: THREE.Quaternion, gain = 2.5, target: T = { yaw: 0, pitch: 0, roll: 0 } as T): T {
+    // the turn still to make, in the ship's own frame, as an axis times its angle
+    inverse.copy(this.orientation).invert().multiply(goal);
+    if (inverse.w < 0) inverse.set(-inverse.x, -inverse.y, -inverse.z, -inverse.w);
+    const sine = hypot(inverse.x, inverse.y, inverse.z);
+    const angle = 2 * atan2(sine, inverse.w);
+    const scale = sine > 1e-9 ? angle / sine : 2;
+    // the rate the commands ask for is (pitch, -yaw, -roll) in ship space (see update)
+    target.pitch = THREE.MathUtils.clamp(inverse.x * scale * gain, -1, 1);
+    target.yaw = THREE.MathUtils.clamp(-inverse.y * scale * gain, -1, 1);
+    target.roll = THREE.MathUtils.clamp((-inverse.z * scale * gain * MAX_TURN_RATE) / MAX_ROLL_RATE, -1, 1);
+    target.off = angle;
+    return target;
+  }
+
+  /**
    * Commands for a head-over flip towards a world direction: the ship rolls until the
    * direction lies straight above its canopy, then pulls the nose up and over. The last
    * stretch is ordinary steering, where the roll angle would be meaningless. Writes into

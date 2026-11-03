@@ -1483,6 +1483,15 @@ body.touch #hud-message {
   transform: rotate(-45deg);
 }
 
+/* the brake's target (see Game.brakeManeuver): a faint, larger dotted ring where the nose turns back to */
+#return-mark {
+  width: 40px;
+  height: 40px;
+  margin: -20px 0 0 -20px;
+  border-style: dotted;
+  opacity: 0.55;
+}
+
 /* the motion streaks (see view/streaks.ts): faint dashes streaming out of where the ship moves */
 #hud-streaks {
   position: absolute;

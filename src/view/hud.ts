@@ -104,6 +104,7 @@ export class Hud {
   private readonly torpedo = $('hud-torpedo');
   private readonly prograde = $('prograde');
   private readonly retrograde = $('retrograde');
+  private readonly returnMark = $('return-mark');
   private readonly message = $('hud-message');
   private readonly countdownText = $('hud-countdown');
   private readonly startFlash = $('start-flash');
@@ -792,6 +793,11 @@ export class Hud {
    * screen, an arrow at the screen's edge pointing to it, named like a ship's (see placeNames),
    * the line running to that arrow. Called before updateMarkers, which places the arrow's name.
    */
+  /** The point on the sky the brake turns the nose back to ("Target", see Game.brakeManeuver), or none (`direction` null). */
+  updateReturnMark(camera: THREE.Camera, direction: THREE.Vector3 | null) {
+    placeVelocityMarker(this.returnMark, camera, direction ?? ahead, 1, !!direction);
+  }
+
   updateVelocityMarkers(camera: THREE.Camera, me: Ship, own: boolean, free: boolean) {
     const velocity = me.flight.velocity;
     const show = me.alive && velocity.lengthSq() > 400;

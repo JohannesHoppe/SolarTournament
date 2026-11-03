@@ -270,6 +270,18 @@ const PLUME_BURN = 8;
  */
 const FLING_SECONDS = 1.2;
 const FLING_STEER = 0.1;
+/**
+ * The brake as a switch (see Game.brakeManeuver): steering past BRAKE_STEER (stick, both axes)
+ * during the brake gives the Host the nose, the drive burning only while it points within BRAKE_AIM
+ * (rad, 30°) of against the flight; steering past BRAKE_TAKEOVER during the turn back breaks it
+ * off; the turn back is done within BRAKE_HOME (rad, about a degree) of the attitude remembered.
+ */
+const BRAKE_STEER = 0.15;
+const BRAKE_AIM = 0.52;
+const BRAKE_TAKEOVER = 0.6;
+const BRAKE_HOME = 0.02;
+const homeTurn = { yaw: 0, pitch: 0, roll: 0, off: 0 };
+const returnAt = new THREE.Vector3();
 /** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km); within TORPEDO_CRITICAL it is CRITICAL (units, 500 m). */
 const TORPEDO_WARNING = 40000;
 const TORPEDO_CRITICAL = 10000;
@@ -989,8 +1001,15 @@ export class Game implements OnlineGame {
   private lastScrape = -Infinity;
   /** When the overdrive can fire again (game time, s). */
   private overdriveReadyAt = 0;
-  /** The brake (S held; it beeps once at rest). */
+  /** The brake (it beeps once at rest). */
   private readonly brake = new Brake();
+  /**
+   * The brake as a switch (see brakeManeuver): off, braking, or turning back to the attitude the
+   * ship had when it began (`brakeHome`); and whether its key was down last frame.
+   */
+  private brakePhase: 'off' | 'brake' | 'return' = 'off';
+  private brakeHeld = false;
+  private readonly brakeHome = new THREE.Quaternion();
   /** The flight computer's output, reused from frame to frame. */
   private readonly computed: Controls = { ...IDLE };
   /**
@@ -2495,6 +2514,7 @@ export class Game implements OnlineGame {
     else this.roundEndsAt = this.roundEndsAtWall = Infinity;
     this.cockpit = false;
     this.flipping = false;
+    this.brakePhase = 'off';
     this.kick = 0;
     this.autopilot = false;
     this.overdriveReadyAt = 0;
@@ -3665,8 +3685,8 @@ export class Game implements OnlineGame {
       if (!this.toldToReturn) this.toldToReturn = this.speaker.say(COMPUTER.arena, 'urgent');
     } else if (this.flipping) {
       this.hud.flashMessage(now, this.flipAligned ? t('Flipped · drive brakes') : t('Flip'), 0.2);
-    } else if (this.input.braking && me.alive) {
-      this.hud.flashMessage(now, this.brake.rested ? t('At rest') : t('Braking'), 0.2);
+    } else if (this.brakePhase !== 'off' && me.alive) {
+      this.hud.flashMessage(now, this.brakePhase === 'return' ? t('Back on target') : this.brake.rested ? t('At rest') : t('Braking'), 0.2);
     }
 
     if (this.online) {
@@ -3720,6 +3740,7 @@ export class Game implements OnlineGame {
       this.hud.update(now, Math.max(0, this.roundEndsAt - now), subject);
       // the velocity markers first: the names at the screen's edge keep clear of the Course arrow
       this.hud.updateVelocityMarkers(this.camera, subject, subject === me, !this.autopilot);
+      this.hud.updateReturnMark(this.camera, subject === me && this.brakePhase !== 'off' ? returnAt.set(0, 0, -1).applyQuaternion(this.brakeHome) : null);
       // a solar storm blinds the sensors: no ship shows a marker
       this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject));
     }
@@ -4833,7 +4854,7 @@ export class Game implements OnlineGame {
     const school = this.school!;
     const context = (this.schoolContext ??= this.createSchoolContext());
     context.controls = controls;
-    context.braking = this.input.braking;
+    context.braking = this.brakePhase === 'brake';
     const hook = this.tethers.get(this.me!);
     context.hooked = !!hook?.anchor && hook.flying <= 0;
     context.autopilot = this.autopilot;
@@ -5020,26 +5041,73 @@ export class Game implements OnlineGame {
   }
 
   /**
-   * The own ship's flight computer. While the brake is held, it flips the ship head over
-   * and burns against the flight direction until the ship is at rest. While the flip is held,
-   * it only turns the nose against the flight and keeps it there; the pilot's drive pushes
-   * once the nose points the right way. Otherwise it keeps the ship upright and, with the
+   * The brake, a switch like the hook, so the hands stay free: pressed, it remembers the ship's
+   * whole attitude and brakes (see flightComputer); pressed again, or at rest, it turns the ship
+   * back to that attitude, so the Host looks exactly where it looked before; pressed during the
+   * turn back, it brakes again towards the same attitude. The drive (W) breaks the whole maneuver
+   * off at once, and so does steering past BRAKE_TAKEOVER during the turn back: the Host has the
+   * nose then. Returns the phase this frame.
+   */
+  private brakeManeuver(controls: Readonly<Controls>): 'off' | 'brake' | 'return' {
+    const me = this.me!;
+    const live = this.state === 'playing' && me.alive;
+    const held = live && this.input.braking;
+    const pressed = held && !this.brakeHeld;
+    this.brakeHeld = held;
+    if (!live) return (this.brakePhase = 'off');
+    if (pressed) {
+      if (this.brakePhase === 'off') this.brakeHome.copy(me.flight.orientation);
+      this.brakePhase = this.brakePhase === 'brake' ? 'return' : 'brake';
+    }
+    if (this.brakePhase !== 'off' && controls.thrust > 0) this.brakePhase = 'off';
+    if (this.brakePhase === 'brake' && this.brake.rested) this.brakePhase = 'return';
+    if (this.brakePhase === 'return' && Math.abs(controls.yaw) + Math.abs(controls.pitch) > BRAKE_TAKEOVER) this.brakePhase = 'off';
+    return this.brakePhase;
+  }
+
+  /**
+   * The own ship's flight computer. The brake (see brakeManeuver) flips the ship head over and
+   * burns against the flight with the full drive until the Host ends it or the ship is at rest;
+   * the Host may steer meanwhile (to shoot, say), the drive burning only while the nose points
+   * within BRAKE_AIM of against the flight, and let go of the stick the brake turns the nose back
+   * against it; then the flight computer turns the ship back to the attitude it had. While the
+   * flip is held, it only turns the nose against the flight and keeps it there; the pilot's drive
+   * pushes once the nose points the right way. Otherwise it keeps the ship upright and, with the
    * autopilot, flies the ship where its nose points (see flyByNose).
    */
   private flightComputer(controls: Readonly<Controls>): Controls {
     const me = this.me!;
     const flight = me.flight;
-    const braking = this.state === 'playing' && this.input.braking && me.alive;
-    if (braking) {
+    const phase = this.brakeManeuver(controls);
+    if (phase === 'brake') {
       this.flightMode = 'brake';
       this.flipping = false;
       this.aimTarget();
       const rested = this.brake.rested;
       const out = this.brake.fly(flight, controls, me.drive, this.computed);
       if (this.brake.rested && !rested) this.sound.beep(660, 0.08);
+      if (Math.abs(controls.yaw) + Math.abs(controls.pitch) > BRAKE_STEER) {
+        // the Host steers: the nose is the Host's, and the drive only burns against the flight
+        out.yaw = controls.yaw;
+        out.pitch = controls.pitch;
+        if (flight.noseAngleTo(retrograde.copy(flight.velocity).negate()) > BRAKE_AIM) out.thrust = 0;
+        return this.assistAim(out);
+      }
       return out;
     }
     this.brake.release();
+    if (phase === 'return') {
+      this.flightMode = 'brake';
+      this.flipping = false;
+      this.aimTarget();
+      const turn = flight.attitude(this.brakeHome, 2.5, homeTurn);
+      const out = Object.assign(this.computed, controls, { yaw: turn.yaw, pitch: turn.pitch, roll: turn.roll, thrust: 0 });
+      if (turn.off < BRAKE_HOME) {
+        this.brakePhase = 'off';
+        this.sound.beep(880, 0.06);
+      }
+      return out;
+    }
     const flipping = this.state === 'playing' && this.input.flipping && me.alive;
     if (!flipping) {
       this.flipping = false;
