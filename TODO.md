@@ -80,6 +80,7 @@ Ideas Johannes has named that are not built yet, with the day they came up. One 
 
 - 2026-11-02: A push notification when someone opens a public tournament, so the lobby fills.
   - 2026-11-03: Free plan only, closing down at its limits; it says how many public tournaments are open (counted from the lobby on Nostr) and comes only when that number rose, each Host choosing from how many on.
+- 2026-11-03: Self-destruct: a clone with a wrecked ship and no torpedoes ends itself in a small, pretty explosion that still destroys a rival close by; it counts as a death like a crash into rock, and a rival it takes along counts as the Host's kill. Bought in the hangar, not there from the start; the hook too should be bought there first.
 - 2026-11-03: An admin dashboard for Johannes with the game's figures (push subscribers and sends, open public tournaments, TURN traffic against its budget), behind Cloudflare Access.
 - 2026-11-02: A solo campaign: a story through the solar system (exploring, bounties on bandits, escorts, wild races and fights) in which the Host earns the fame to be admitted to the President's Games, and a fourth ship to unlock.
   - Solo only: online rounds stay fair and alike for everyone, the campaign changes nothing there.
