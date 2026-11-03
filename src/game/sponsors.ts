@@ -11,6 +11,8 @@ import { t } from '../i18n/i18n';
 export interface AdProvider {
   /** Fills the slot with one ad; resolves once it has run long enough to count as watched. */
   render(slot: HTMLElement): Promise<void>;
+  /** Stops what the ad still draws once the break is over (a hologram's frames). */
+  stop?(): void;
 }
 
 /**
@@ -91,6 +93,7 @@ export class SponsorBreak {
     this.generation++;
     this.root.hidden = true;
     this.onDone = null;
+    this.ads.stop?.();
   }
 
   /** Boots the clone from keyboard or gamepad, once the ad has run. */

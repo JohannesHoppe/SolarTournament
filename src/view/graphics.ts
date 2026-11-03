@@ -10,6 +10,7 @@ import type { Lensing } from './lensing';
 import { COMPILING, deviceHints, guessStartRung, guessTier, Governors, LADDER, loadQuality, saveQuality, tierOf, TIER_RUNGS, TOUCH_DOWN_SECONDS, TOUCH_UP_SECONDS, type Look, type Quality, type Scene, type Tier } from './quality';
 import type { ReferencePlane } from './plane';
 import type { Showcase } from './showcase';
+import { setHologramLook } from './hologram';
 import { setLacquer } from './surfaces';
 
 /**
@@ -131,6 +132,7 @@ export class Graphics {
     setLacquer(next.lacquer);
     setParticleShare(next.particles);
     this.showcase?.setLook(next.showcase);
+    setHologramLook(next.showcase);
     this.plane.setDetail(next.spokes);
     this.landmarks.setDetail(next.landmark);
     this.space.setDetail(next.landmark);

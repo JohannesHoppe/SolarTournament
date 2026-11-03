@@ -23,7 +23,7 @@ export interface Look {
   rocks: number;
   /** Share of the belt's rocks drawn beyond the arena (0..1): scenery, 480 rocks of about 1000 triangles each. */
   belt: number;
-  /** The title screen's pad: its pixel ratio, its shadow, and every how many frames it is drawn. */
+  /** The title screen's pad: its pixel ratio, its shadow, and every how many frames it is drawn; the holograms (see view/hologram) take its pixel ratio and frames too. */
   showcase: { pixelRatio: number; shadows: boolean; every: number };
   /** The reference plane's grid with its spokes, or only its rings (see ReferencePlane.setDetail). */
   spokes: boolean;
