@@ -2,7 +2,8 @@ import type { Spoken } from './music/band';
 import { keepPressing, keptPressing, type Pressing } from './music/kept';
 import { renderTrack, trackSeconds } from './music/preview';
 import { bindVolume, Radio } from './music/radio';
-import { createSong, ROUND_SECONDS, titleFor, type SectionKind, type Song, type Strategy } from './music/songs';
+import { createSong, ROUND_SECONDS, titleFor, type SectionKind, type Song } from './music/songs';
+import { recipeCards, scaleNote, STRATEGY_NAMES, titleOf } from './music/recipes';
 import { showTransmission } from './music/transmission';
 import { initLocale, msg, t, translatePage } from './i18n/i18n';
 import { shareCorner } from './share';
@@ -31,16 +32,6 @@ const seek = $<HTMLInputElement>('track-seek');
 /** The Host holds the playhead: the clock does not move it meanwhile. */
 let dragging = false;
 
-/** How a track develops, as the listener reads it. */
-const STRATEGY_NAMES: Record<Strategy, string> = {
-  classic: msg('classic'),
-  relentless: msg('relentless'),
-  hypnotic: msg('hypnotic'),
-  movements: msg('in movements'),
-  switcher: msg('switching'),
-  fakeDrop: msg('fake drop'),
-  polymeter: msg('polymeter'),
-};
 const time = (seconds: number) => `${Math.floor(seconds / 60)}:${String(Math.floor(seconds % 60)).padStart(2, '0')}`;
 /** Capitalizes each word; words start after a space, so ß or ö inside a word stay as they are. */
 const tidy = (title: string) => title.trim().replace(/\s+/g, ' ').replace(/(^| )(\p{L})/gu, (_, space: string, c: string) => space + c.toUpperCase());
@@ -213,6 +204,25 @@ seek.addEventListener('input', () => jump(Number(seek.value)));
 seek.addEventListener('pointerdown', () => (dragging = true));
 window.addEventListener('pointerup', () => (dragging = false));
 bindVolume($<HTMLInputElement>('radio-volume'));
+
+/**
+ * The recipes (the footer's link, #recipes): every flavor's card, built once when first shown;
+ * a card's button tunes in a track of its flavor and scrolls up to it.
+ */
+function showRecipes() {
+  const section = $('recipes');
+  section.hidden = location.hash !== '#recipes';
+  if (section.hidden || $('recipe-cards').childElementCount) return;
+  $('recipe-cards').replaceChildren(
+    ...recipeCards((flavor) => {
+      tune(titleOf(flavor));
+      $('track').scrollIntoView({ behavior: 'smooth' });
+    }),
+  );
+  $('recipe-scales').textContent = scaleNote();
+}
+window.addEventListener('hashchange', showRecipes);
+showRecipes();
 
 tune(new URLSearchParams(location.search).get('title') ?? randomTitle());
 // the pressing kept from an earlier visit, unless a new one is done first

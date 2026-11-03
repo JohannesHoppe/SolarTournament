@@ -257,7 +257,8 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `sound/sounds.ts` | Synthesized sound effects: laser, explosion |
 | `sound/speaker.ts` | Nicole, the flight computer's voice: reads out what the screen shows, whole lines from the sprite |
 | **`music/`** | **Radio 2584** |
-| `music/songs.ts` | Hard techno tracks from a seed (flavor, form, energy curve, weighted step patterns, fills); every decision is an integer hash of seed, bar and step |
+| `music/songs.ts` | Techno tracks from a seed (flavor, form, energy curve, weighted step patterns, fills, drive's pedal bass and its timbre); every decision is an integer hash of seed, bar and step |
+| `music/recipes.ts` | The radio page's recipes: every flavor's numbers read from the generator's tables, what it sounds like, a track of it to listen to |
 | `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser), the voices, and how one sixteenth is played |
 | `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts |
 | `music/preview.ts` | Renders a track (or a stretch) offline as WAV in one pass, the band playing a stretch ahead of the render: downloads on the radio page, previews in development |

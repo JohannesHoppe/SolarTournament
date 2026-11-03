@@ -3368,7 +3368,8 @@ body.page {
 }
 
 .tuner button,
-.track-actions button {
+.track-actions button,
+.recipe button {
   padding: 10px 16px;
   border: 1px solid var(--line);
   border-radius: 10px;
@@ -3452,6 +3453,49 @@ body.page {
 
 #download-again {
   color: var(--accent);
+}
+
+/* the recipes (the footer's link): one card per flavor, its facts in two columns */
+.recipes {
+  margin-top: 48px;
+}
+
+.recipes p {
+  text-align: justify;
+  hyphens: auto;
+  text-wrap: pretty;
+}
+
+.recipe {
+  margin: 24px 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.recipe h3 {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-weight: 400;
+  color: var(--accent-strong);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.recipe dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 12px 0 16px;
+  font-size: 0.85rem;
+}
+
+.recipe dt {
+  color: var(--muted);
+}
+
+.recipe dd {
+  margin: 0;
 }
 
 .station-footer {

@@ -1,11 +1,12 @@
 # src/music
 
-Radio 2584, the station of the games: hard techno generated from a track's title, the same notes on every browser, and the lines all voices speak.
+Radio 2584, the station of the games: techno generated from a track's title, the same notes on every browser, and the lines all voices speak.
 
 | File | What it does |
 |---|---|
-| `songs.ts` | A track from its seed: flavor, form, energy curve, step patterns, fills |
-| `band.ts` | The Tone.js instruments and how one sixteenth is played |
+| `songs.ts` | A track from its seed: flavor, form, energy curve, step patterns, fills; drive's pedal bass loop and its timbre bar by bar; the tables the recipes read |
+| `band.ts` | The Tone.js instruments and how one sixteenth is played; the pedal bass's own voice (two detuned saws, a snapping filter envelope, the track's filter, one effect) and its lower wave |
+| `recipes.ts` | The recipes on the radio page (its footer's link, `#recipes`): every flavor's numbers read from `songs.ts`, what it sounds like in words, a title that grows a track of it |
 | `radio.ts` | Plays the track on the round's clock and keeps it in step; the game's radio stays silent while the radio page plays in another tab (a BroadcastChannel between the browser's tabs) |
 | `preview.ts` | Renders a track offline as WAV in one pass, the band playing a stretch ahead of the render (radio page downloads, development) |
 | `kept.ts` | The radio page's last pressing, kept in the browser's IndexedDB to be saved again (only the last one; nothing kept where IndexedDB is blocked) |
@@ -14,4 +15,4 @@ Radio 2584, the station of the games: hard techno generated from a track's title
 | `lines.ts` | Every line spoken: the regime, the announcer, Nicole's lessons and tips |
 | `transmission.ts` | Shows what the radio says, in neon, while it is spoken |
 
-A new or changed line in `lines.ts` needs its translations in `src/i18n/`; the voice is rendered again by `tools/voice/` and Nicole's clone by the workflow Voice. `songs.test.ts` checks that a title always gives the same song; `crowd.test.ts` that the crowd is heard only on air, cheers a round's end and fades out, and tries its recording again only after a pause once it failed; `voice.test.ts` that a language's sprite that failed to load is tried again after a growing pause, the radio's kept; `preview.test.ts` the WAV file a pressing is written into; `kept.test.ts` that the last pressing is found again after a reload, and nothing where the browser keeps nothing.
+A new or changed line in `lines.ts` needs its translations in `src/i18n/`; the voice is rendered again by `tools/voice/` and Nicole's clone by the workflow Voice. `songs.test.ts` checks that a title always gives the same song, every note on its scale, drive as the main sound and grown by its timbre; `crowd.test.ts` that the crowd is heard only on air, cheers a round's end and fades out, and tries its recording again only after a pause once it failed; `voice.test.ts` that a language's sprite that failed to load is tried again after a growing pause, the radio's kept; `preview.test.ts` the WAV file a pressing is written into; `kept.test.ts` that the last pressing is found again after a reload, and nothing where the browser keeps nothing.

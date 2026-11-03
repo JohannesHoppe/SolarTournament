@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createSong, ROUND_SECONDS, stepEvents, STEPS_PER_BAR, titleFor } from './songs';
+import { createSong, FLAVOR_WEIGHTS, ROUND_SECONDS, SCALES, stepEvents, STEPS_PER_BAR, titleFor } from './songs';
 
 const notes = (title: string, from: number, steps: number) => {
   const song = createSong(title, 'round', ROUND_SECONDS);
@@ -20,16 +20,58 @@ describe('Radio 2584', () => {
     expect(JSON.stringify(stepEvents(other, 3000), (key, value) => (key === 'info' ? undefined : value))).toBe(late);
   });
 
-  it('keeps every tonal part on the minor scale of the track', () => {
-    const minor = [0, 2, 3, 5, 7, 8, 10];
-    for (const title of ['Orbit Terror', 'Golden Damage', titleFor(7), titleFor(99)]) {
-      const song = createSong(title, 'round', ROUND_SECONDS);
-      for (let step = 0; step < 200 * STEPS_PER_BAR; step += 3) {
-        const events = stepEvents(song, step);
-        // a key lift late in the track moves the key; the scale stays
-        const root = song.root + events.info.transpose;
-        for (const hit of [events.bass, events.acid, events.lead]) if (hit) expect(minor).toContain((((hit.note - root) % 12) + 12) % 12);
+  it('keeps every tonal part on the scale of the track: natural minor, in drive also phrygian', () => {
+    for (const title of ['Orbit Terror', 'Golden Damage', titleFor(7), titleFor(99), titleFor(5), titleFor(11)]) {
+      for (const flavor of [undefined, 'drive' as const]) {
+        const song = createSong(title, 'round', ROUND_SECONDS, flavor);
+        expect(song.flavor === 'drive' ? [SCALES.aeolian, SCALES.phrygian] : [SCALES.aeolian]).toContain(song.scale);
+        for (let step = 0; step < 200 * STEPS_PER_BAR; step += 3) {
+          const events = stepEvents(song, step);
+          // a key lift late in the track moves the key; the scale stays
+          const root = song.root + events.info.transpose;
+          for (const hit of [events.bass, events.sub, events.acid, events.lead]) if (hit) expect(song.scale).toContain((((hit.note - root) % 12) + 12) % 12);
+        }
       }
+    }
+  });
+
+  it('plays drive most of all, and French second: the hard flavors are guests', () => {
+    const counts = new Map<string, number>();
+    for (let seed = 0; seed < 2000; seed++) {
+      const flavor = createSong(titleFor(seed), 'round', ROUND_SECONDS).flavor;
+      counts.set(flavor, (counts.get(flavor) ?? 0) + 1);
+    }
+    const share = (flavor: string) => (counts.get(flavor) ?? 0) / 2000;
+    expect(share('drive')).toBeGreaterThan(0.33);
+    expect(share('drive') + share('french')).toBeGreaterThan(0.5);
+    for (const [flavor] of FLAVOR_WEIGHTS) if (flavor !== 'drive') expect(share(flavor)).toBeLessThan(share('drive'));
+  });
+
+  it('grows drive by its timbre: a pedal bass from the first bar, its lower wave later, a gentle pump and little drive', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6, 7, 8]) {
+      const song = createSong(titleFor(seed), 'round', ROUND_SECONDS, 'drive');
+      expect(song.strategy).toBe('timbre');
+      expect(song.bpm).toBeGreaterThanOrEqual(116);
+      expect(song.bpm).toBeLessThanOrEqual(124);
+      expect(song.pump).toBeGreaterThan(0.8);
+      // the loop: the root on about half the sixteenths or more, up to four held notes of a second voice off the beat
+      const played = song.pedal.filter((s) => s !== null);
+      const roots = played.filter((s) => !s.melody && s.degree % 12 === 0).length;
+      const melody = song.pedal.map((s, i) => (s?.melody ? i : -1)).filter((i) => i >= 0);
+      expect(roots / 32).toBeGreaterThanOrEqual(0.45);
+      expect(melody.length).toBeGreaterThanOrEqual(1);
+      expect(melody.length).toBeLessThanOrEqual(4);
+      for (const i of melody) expect([1, 3]).toContain(i % 4);
+      let sub = -1;
+      for (let bar = 0; bar < 140; bar++) {
+        const events = stepEvents(song, bar * STEPS_PER_BAR + 1);
+        // the bass alone in the first bars, no rumble ever, never more than a little drive
+        if (bar < 8) expect(events.kick).toBe(0);
+        expect(events.info.layers.rumble).toBe(false);
+        expect(events.info.drive).toBeLessThanOrEqual(0.45);
+        if (sub < 0 && events.info.layers.sub) sub = bar;
+      }
+      expect(sub).toBeGreaterThan(16);
     }
   });
 
