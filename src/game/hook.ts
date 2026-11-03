@@ -173,6 +173,27 @@ const WINCH_LIGHT = 4;
 const winchOn = (body: Body, other: Body) => (HOOK_PULL * Math.min(MASS.ship, WINCH_LIGHT * Math.min(body.mass, other.mass))) / body.mass;
 
 /**
+ * Whether the winch pulls `body` in, the two ends `closing` on each other along the cable (units/s):
+ * a ship (or anything as heavy as the other end) while the speed between them is below `limit`,
+ * so the winch throws it no harder than a coil; a lighter body (a probe, a torpedo) while its
+ * speed along the cable is below it. Across the cable the winch adds nothing, and a probe hooked
+ * beside a ship flying past at the limit would otherwise hang on the rope, swinging round it,
+ * with the winch off for as long as the ship flies that fast.
+ */
+const winches = (body: Body, other: Body, closing: number, limit: number) => (body.mass < other.mass ? closing < limit : relative.length() < limit);
+
+/**
+ * A deliberate deviation for the fun of it: a probe on the line holds no swing. Its speed across
+ * the cable against its ship's is taken out with up to STEADY (units/s², 32 g, as hard as the
+ * winch pulls it in; its thrusters and the winch's computer together): reeled in for real, a probe
+ * hooked beside a ship flying past fast would circle it on a shortening rope ever faster (its
+ * angular momentum stays) and come in after many seconds, or not at all. A torpedo on a string
+ * keeps its swing, which flings it.
+ */
+const STEADY = WINCH_LIGHT * HOOK_PULL;
+const across = new THREE.Vector3();
+
+/**
  * The cable between `body` and its `anchor` (see world/bodies), with `length` of cable out:
  * the winch takes in any slack and, while `reeling`, pulls the body in (towards `floor`, never
  * past `speedLimit`); a taut cable is a rope (see rope): it only pulls, holds its length, and
@@ -190,7 +211,7 @@ const winchOn = (body: Body, other: Body) => (HOOK_PULL * Math.min(MASS.ship, WI
  * stretch at least at its floor, paying out what the cable wraps onto a piece: a ship winding
  * its cable round a rock never comes nearer to it, and spends its swing on the winch's brake.
  */
-export function pullOn(body: Body, anchor: Body, length: number, reeling: boolean, floor: number, speedLimit: number, dt: number, anchorEnd: 'moved' | 'fixed' | 'elsewhere' = 'fixed', path: CablePath | null = null, farFloor = 0): number | null {
+export function pullOn(body: Body, anchor: Body, length: number, reeling: boolean, floor: number, speedLimit: number, dt: number, anchorEnd: 'moved' | 'fixed' | 'elsewhere' = 'fixed', path: CablePath | null = null, farFloor = 0, steady = false): number | null {
   const moveAnchor = anchorEnd === 'moved';
   const near = path ? path.near : anchor;
   toAnchor.subVectors(near.position, body.position);
@@ -216,12 +237,23 @@ export function pullOn(body: Body, anchor: Body, length: number, reeling: boolea
     const brake = Math.min(closing - stoppable, HOOK_BRAKE * dt);
     body.velocity.addScaledVector(toAnchor, -brake * share(body.mass, anchor.mass));
     if (moveAnchor) anchor.velocity.addScaledVector(fromAnchor, -brake * share(anchor.mass, body.mass));
-  } else if (reeling && cable > floor + between && relative.length() < speedLimit) {
+  } else if (reeling && cable > floor + between) {
     // the winch's force gives a ship HOOK_PULL, a lighter body more (see WINCH_LIGHT); with the
     // cable in to the floor it holds, and the rope alone pulls
     const room = stoppable - closing;
-    body.velocity.addScaledVector(toAnchor, Math.min(winchOn(body, anchor) * dt, room));
-    if (moveAnchor && (!path || reach > farFloor)) anchor.velocity.addScaledVector(fromAnchor, Math.min(winchOn(anchor, body) * dt, room));
+    if (winches(body, anchor, closing, speedLimit)) body.velocity.addScaledVector(toAnchor, Math.min(winchOn(body, anchor) * dt, room));
+    if (moveAnchor && (!path || reach > farFloor) && winches(anchor, body, closing, speedLimit)) anchor.velocity.addScaledVector(fromAnchor, Math.min(winchOn(anchor, body) * dt, room));
+  }
+  // a probe on the line holds no swing (see STEADY): the lighter end's speed across a straight
+  // cable, against the other end's, taken out
+  if (steady && !path) {
+    across.copy(relative).addScaledVector(toAnchor, -closing);
+    const swing = across.length();
+    if (swing > 0) {
+      const cut = Math.min(1, (STEADY * dt) / swing);
+      if (body.mass < anchor.mass) body.velocity.addScaledVector(across, -cut);
+      else if (moveAnchor) anchor.velocity.addScaledVector(across, cut);
+    }
   }
   if (!path) {
     cable = Math.max(floor, cable);

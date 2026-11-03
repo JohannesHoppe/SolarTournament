@@ -4,6 +4,7 @@ import { contents, fieldSolid, packItems, placeBucket, PROBE_THRUST, Probes, unp
 import { floorOf, pullOn, type Anchor } from './hook';
 import { MASS, type Body } from '../world/bodies';
 import { MAX_SPEED } from '../ship/flight';
+import { BOOST_PUSH } from './race';
 import type { Ship } from '../ship/ship';
 import { ARENAS, arenaById } from '../world/arenas';
 import { driftProbes, testField } from '../test/field';
@@ -228,6 +229,28 @@ describe('a probe on the hook', () => {
     expect(arrived).toBeLessThan(3);
     // the ship hardly moved for it: half a tonne against sixty
     expect(body.position.length()).toBeLessThan(100);
+  });
+
+  it('comes in within three seconds to a ship racing past it at the limit, its drive held', () => {
+    for (const speed of [MAX_SPEED, MAX_SPEED + BOOST_PUSH]) {
+      const { body, ship } = shipAt('a');
+      const state = hooked(ship);
+      // the ship flies across the line to the probe, as past a probe hooked beside the course
+      body.velocity.set(0, speed, 0);
+      let length: number | null = 8000;
+      let arrived = -1;
+      for (let t = 0; t < 8 && arrived < 0; t += DT) {
+        length = pullOn(body, state.probe, length!, true, state.floor, MAX_SPEED + BOOST_PUSH, DT, 'moved', null, 0, true);
+        expect(length).not.toBeNull();
+        // the drive holds the ship's speed
+        body.velocity.setLength(speed);
+        body.position.addScaledVector(body.velocity, DT);
+        driftProbes(state.probes, DT, t, state.field);
+        if (state.probes.touching(body.position, RADIUS)) arrived = t;
+      }
+      expect(arrived).toBeGreaterThan(1);
+      expect(arrived).toBeLessThan(3);
+    }
   });
 
   it('goes to another ship that touches it on the way first', () => {

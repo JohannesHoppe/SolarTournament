@@ -5283,10 +5283,12 @@ export class Game implements OnlineGame {
       const path = owns || runsAnchor ? tether.cable.path(owns) : null;
       const farFloor = path ? clearOf(owner, path.farRock) : 0;
       const floor = path ? clearOf(owner, path.nearRock) : floorOf(owner, tether.anchor);
-      // the winch yanks as hard as a coil throws: up to the limit plus a coil's push
+      // the winch yanks as hard as a coil throws: up to the limit plus a coil's push; a probe
+      // comes in without a swing (see STEADY in game/hook)
       const limit = MAX_SPEED + BOOST_PUSH;
-      if (owns) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor ? 'moved' : target ? 'elsewhere' : 'fixed', path, farFloor);
-      else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt, 'elsewhere', path, farFloor);
+      const steady = !!probe;
+      if (owns) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor ? 'moved' : target ? 'elsewhere' : 'fixed', path, farFloor, steady);
+      else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt, 'elsewhere', path, farFloor, steady);
       if (length === null) {
         this.cableSnapped(owner);
         continue;
