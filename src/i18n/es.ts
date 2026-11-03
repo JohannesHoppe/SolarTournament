@@ -1091,8 +1091,12 @@ export const ES: Catalog = {
   'The dashed ribbon is the ideal line: through the center of every gate, around rock as it lies right now. The farther you stray, the brighter it glows, so you find it again under fire.':
     'La cinta discontinua es la trazada ideal: por el centro de cada puerta, rodeando la roca tal como está ahora mismo. Cuanto más te desvías, más brilla, para que la encuentres de nuevo bajo el fuego.',
   'The X': 'La X',
-  "The X marks where your flight, held as it is, crosses the next gate's plane. Azure: you will pass through. Orange: you will miss. Steer the X into the ring. A missed gate has to be flown again, from either side.":
-    'La X marca dónde tu vuelo, tal como va, cruza el plano de la siguiente puerta. Azul: pasarás. Naranja: fallarás. Lleva la X dentro del anillo. Una puerta fallada hay que volver a volarla, desde cualquier lado.',
+  "The X marks where your flight, held as it is, crosses the next gate's plane. Azure: you will pass through. Orange: you will miss. Steer the X into the ring.":
+    'La X marca dónde tu vuelo, tal como va, cruza el plano de la siguiente puerta. Azul: pasarás. Naranja: fallarás. Lleva la X dentro del anillo.',
+  'One gate a lap may be left out. The next gate glows orange, the one after it blue, and both count: fly through the blue one, and the orange one is skipped, without its points. Miss a gate, and the line takes you on to the next. Your skip for that lap is spent; a second missed gate has to be flown again, from either side. The pink gate can never be left out.':
+    'En cada vuelta puedes saltarte una puerta. La siguiente brilla en naranja, la de después en azul, y las dos cuentan: cruza la azul y la naranja queda saltada, sin sus puntos. Si fallas una puerta, la línea te lleva directo a la siguiente. Tu salto de esa vuelta queda gastado; una segunda puerta fallada hay que volver a volarla, desde cualquier lado. La puerta rosa nunca se puede saltar.',
+  'Gate {n} skipped · your one skip this lap': 'Puerta {n} saltada · tu único salto de esta vuelta',
+  'Missed gate {missed}: fly on through gate {n}, your one skip this lap': 'Puerta {missed} fallada: sigue por la puerta {n}, tu único salto de esta vuelta',
   'Brake zones': 'Zonas de frenada',
   'Where the line ahead bends tighter than you can turn at your speed, it glows orange: brake before the orange, not in it. Hold the drive with your nose on the line, and you take every bend at the speed limit; only rock on the move bends it tighter.': 'Donde la trazada por delante se curva más de lo que puedes girar a tu velocidad, brilla en naranja: frena antes del naranja, no dentro. Mantén el motor con el morro en la trazada, y tomas cada curva a la velocidad límite; solo la roca en movimiento la curva más.',
   'The coils': 'Las bobinas',

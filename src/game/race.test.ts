@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { BOOST_RADIUS, Course, GATE_RADIUS, GATES, modeOfRound, ROUND_MODES, takesStart } from './race';
+import { BOOST_RADIUS, canSkip, Course, GATE_RADIUS, GATES, lapOf, modeOfRound, ROUND_MODES, takesStart } from './race';
 import { ARENAS } from '../world/arenas';
 import { testField } from '../test/field';
 import { MAX_SPEED, turnRadius } from '../ship/flight';
@@ -164,5 +164,19 @@ describe('the start of a round', () => {
 
   it('solo, follows the end: a pause or a skipped intro moves both', () => {
     expect(takesStart(false, 100, 160, 0.25)).toBe(true);
+  });
+});
+
+describe('leaving a gate out', () => {
+  it('allows one skip a lap, never the pink gate, and a new one in the next lap', () => {
+    // in lap 1 (gates 1..8 passed means the next is gate 2..8, then the pink one)
+    expect(canSkip(1, -1)).toBe(true);
+    expect(canSkip(5, -1)).toBe(true);
+    // the pink gate (next index 0) starts and counts the laps: never left out
+    expect(canSkip(0, -1)).toBe(false);
+    expect(canSkip(GATES, -1)).toBe(false);
+    // spent in lap 1: no second skip in it, a fresh one in lap 2
+    expect(canSkip(3, lapOf(3))).toBe(false);
+    expect(canSkip(GATES + 2, lapOf(3))).toBe(true);
   });
 });

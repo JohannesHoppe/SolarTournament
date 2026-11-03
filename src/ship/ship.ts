@@ -348,6 +348,8 @@ export class Ship {
   /** Gates passed in a race, and the second of the round it crossed the finish (-1 while it races). */
   gates = 0;
   finish = -1;
+  /** The lap in which it left a gate out, its one skip of that lap (see canSkip in game/race; -1 before any); kept by the browser that runs it. */
+  skipLap = -1;
   respawnAt = 0;
   protectedUntil = 0;
   /** The ship that shoved this one last (a ram, a kick into its side), and when (game time): its crash soon after is that ship's knockout. */

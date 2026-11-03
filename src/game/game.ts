@@ -65,7 +65,7 @@ import { knockShare, ramShare, syncShare } from '../net/plausible';
 import { RacingLine } from './racingline';
 import { bounceOff, impactDamage, ram, ramImpulse, RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { setGlint } from '../ship/models';
-import { approachGate, BOOST_PUSH, BOOST_RADIUS, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, type RoomMode, type RoundMode } from './race';
+import { approachGate, BOOST_PUSH, BOOST_RADIUS, canSkip, coilPush, Course, FINISH_GATES, GATE_POINTS, GATE_RADIUS, GATES, lapOf, LAPS, modeOfRound, pathCrossing, PLACE_POINTS, ROUND_MODES, takesStart, type RoomMode, type RoundMode } from './race';
 import { BATTERY_DAMAGE, BATTERY_RANGE, batteryChance, Fleet, FLEET_HIT_POINTS, PLUME_BURN as FLEET_PLUME_BURN, PLUME_HEAT as FLEET_PLUME_HEAT, SINK_BLAST, SINK_POINTS, SINK_SECONDS, TORPEDO_HITS, ZONE_NAMES, ZONE_POINTS, type FleetEvent, type FleetWeapon } from './fleet';
 import { ringReach, ringRim, touchRing } from '../world/gates';
 import { FieldContacts, ringFixture } from '../world/contacts';
@@ -2937,7 +2937,7 @@ export class Game implements OnlineGame {
     for (const ship of this.ships) {
       if (ship.owner !== null) continue;
       ship.score = ship.kills = ship.deaths = ship.gates = 0;
-      ship.finish = -1;
+      ship.finish = ship.skipLap = -1;
     }
     this.brokenHere.clear();
     this.lastRockHit.clear();
@@ -3541,8 +3541,9 @@ export class Game implements OnlineGame {
         // a racing bot flies the course until it has finished, then it only fights
         // along the ideal line, bowed around the rock as it lies now
         bot.rings = this.rings;
-        bot.through = this.course && ship.finish < 0 ? this.rings[ship.gates % GATES] : null;
-        bot.waypoint = this.course && ship.finish < 0 ? this.approach(this.course, ship, this.course.line.target(ship.flight.position, ship.gates % GATES, ship.flight.velocity.length(), this.field, this.botPoint(bot))) : null;
+        const aim = this.course && ship.finish < 0 ? this.aimGate(ship, this.course) : -1;
+        bot.through = this.course && aim >= 0 ? this.rings[aim] : null;
+        bot.waypoint = this.course && aim >= 0 ? this.approach(this.course, ship, this.course.line.target(ship.flight.position, aim, ship.flight.velocity.length(), this.field, this.botPoint(bot))) : null;
         // a probe it sees, as a Host's eyes would, not one behind rock
         bot.lure = this.probes.nearest(ship.flight.position, PROBE_LURE, this.field)?.position ?? null;
         // a nova core close by, a battleship whose reactor went critical, the plume of one
@@ -3958,9 +3959,21 @@ export class Game implements OnlineGame {
     return this.botPoints.get(bot) ?? this.botPoints.set(bot, new THREE.Vector3()).get(bot)!;
   }
 
-  /** Where a racer flies for near its next gate, clear of the coil's housings (see approachGate). */
-  private approach(course: Course, ship: Ship, waypoint: THREE.Vector3): THREE.Vector3 {
+  /** Whether a racer is past its next gate's plane without having gone through it, and still moving away from it. */
+  private missedGate(ship: Ship, course: Course): boolean {
     const next = ship.gates % GATES;
+    return scratch.subVectors(ship.flight.position, course.points[next]).dot(course.normals[next]) > GATE_RADIUS && ship.flight.velocity.dot(course.normals[next]) > 0;
+  }
+
+  /** The gate a racer flies for: its next, or, past that one with the lap's skip still to spend (see canSkip), the one after it. */
+  private aimGate(ship: Ship, course: Course): number {
+    const next = ship.gates % GATES;
+    return canSkip(ship.gates, ship.skipLap) && this.missedGate(ship, course) ? (next + 1) % GATES : next;
+  }
+
+  /** Where a racer flies for near the gate it aims at, clear of the coil's housings (see approachGate). */
+  private approach(course: Course, ship: Ship, waypoint: THREE.Vector3): THREE.Vector3 {
+    const next = this.aimGate(ship, course);
     return approachGate(course.points[next], course.normals[next], GATE_RADIUS, ship.flight.position, ship.flight.velocity, ship.radius, waypoint);
   }
 
@@ -4301,7 +4314,7 @@ export class Game implements OnlineGame {
     const course = this.course;
     if (course && subject.finish < 0) {
       const gate = this.marks[1];
-      const next = subject.gates % GATES;
+      const next = this.aimGate(subject, course);
       gate.position.copy(course.points[next]);
       gate.label = t('Gate {n}', { n: next + 1 });
       list.push(gate);
@@ -4359,8 +4372,22 @@ export class Game implements OnlineGame {
    */
   private passGates(ship: Ship, course: Course) {
     if (!ship.alive || ship.finish >= 0) return;
-    const gate = ship.gates % GATES;
-    const off = course.crossing(gate, ship.previous, ship.flight.position);
+    let gate = ship.gates % GATES;
+    let off = course.crossing(gate, ship.previous, ship.flight.position);
+    // the gate after the next counts too while the lap's skip is not spent (see canSkip): the
+    // next one is left out, without its points
+    if (off === null && canSkip(ship.gates, ship.skipLap)) {
+      const after = (gate + 1) % GATES;
+      off = course.crossing(after, ship.previous, ship.flight.position);
+      if (off === null) return;
+      ship.skipLap = lapOf(ship.gates);
+      if (ship === this.me) {
+        this.timeLap(gate);
+        this.hud.flashMessage(this.time, t('Gate {n} skipped · your one skip this lap', { n: gate + 1 }), 2);
+      }
+      ship.gates++;
+      gate = after;
+    }
     if (off === null) return;
     if (off < BOOST_RADIUS) this.boost(ship, course, gate);
     ship.gates++;
@@ -4624,11 +4651,13 @@ export class Game implements OnlineGame {
       this.hud.setSchool({ step: t('Finished · {place}', { place }), text: t('{time} s. Now hunt the others.', { time: me.finish.toFixed(1) }), keys: [] });
       return null;
     }
-    const next = me.gates % GATES;
     const lap = lapOf(me.gates);
+    // past its next gate with the lap's skip still to spend, the racer flies on for the one after
+    // it (see canSkip); past it with the skip spent, it has to turn back
+    const next = this.aimGate(me, course);
+    const skipping = next !== me.gates % GATES;
+    const missed = !skipping && this.missedGate(me, course);
     course.highlight(next, this.time);
-    // past the gate's plane without going through it, and still moving away from it
-    const missed = scratch.subVectors(me.flight.position, course.points[next]).dot(course.normals[next]) > GATE_RADIUS && me.flight.velocity.dot(course.normals[next]) > 0;
     const gate = { n: next + 1, gates: GATES };
     const label = missed ? t('Missed · turn back') : next === 0 ? (me.gates === 0 ? t('Start') : lap === LAPS ? t('Finish') : t('Lap')) : t('Gate {n}/{gates}', gate);
     this.hud.setWaypoint(this.camera, course.points[next], label);
@@ -4639,7 +4668,11 @@ export class Game implements OnlineGame {
     const lapTime = this.laps?.lapTime(this.raceSeconds());
     const best = this.laps?.best ? ` · ${t('best {time}', { time: lapClock(this.laps.best.time) })}` : '';
     const timing = lapTime != null ? ` · ${lapClock(lapTime)}${best}` : '';
-    const text = missed ? t('Missed gate {n}: turn back and fly through it', gate) : `${t('Gate {n} of {gates}', gate)}${timing}`;
+    const text = missed
+      ? t('Missed gate {n}: turn back and fly through it', gate)
+      : skipping
+        ? t('Missed gate {missed}: fly on through gate {n}, your one skip this lap', { missed: (me.gates % GATES) + 1, n: next + 1 })
+        : `${t('Gate {n} of {gates}', gate)}${timing}`;
     this.hud.setSchool({ step: t('Race · lap {lap}/{laps} · {place}', { lap, laps: LAPS, place }), text, keys: [] });
     return course.points[next];
   }

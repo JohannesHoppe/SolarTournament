@@ -14,6 +14,14 @@ export const FINISH_GATES = GATES * LAPS + 1;
 
 /** The lap a ship flies after passing `gates` gates (1 to LAPS). */
 export const lapOf = (gates: number) => Math.min(LAPS, Math.floor(Math.max(0, gates - 1) / GATES) + 1);
+
+/**
+ * One gate a lap may be left out: a racer that flies through the gate after its next one has
+ * skipped its next, and its skip for that lap is spent (`skipLap`, the lap it was spent in; -1
+ * before any). Never the pink gate, which starts, counts and ends the laps. A missed gate costs
+ * its points, not the race: turning back is only for the second miss in a lap.
+ */
+export const canSkip = (gates: number, skipLap: number) => gates % GATES !== 0 && skipLap !== lapOf(gates);
 /**
  * Radius of a gate's opening (units, 120 m): wide enough for a pack of 35 m ships, and for a
  * racer coming in at speed a little off its center to pass the coil's solid housings.
