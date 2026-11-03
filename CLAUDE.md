@@ -122,7 +122,7 @@ Never use `npx`, always the scripts from `package.json`.
 
 ## Structure
 
-The repository root is the Vite project: `index.html` (the game), `radio.html` (Radio 2584), `handbook.html` (the Pilot's Handbook, linked from the menu, the flight school's plate and the pause menu, which opens it at the section of the mode flown), `about.html` (what the game is, for those a search or a link brings, linked from the menu), `impressum.html` and `datenschutz.html` (German legal pages, linked from the menu and the radio page) are its pages, `public/` holds the static files, `tools/` the generators that write into `public/`.
+The repository root is the Vite project: `index.html` (the game), `radio.html` (Radio 2584), `handbook.html` (the Pilot's Handbook, linked from the menu, the flight school's plate and the pause menu, which opens it at the section of the mode flown), `about.html` (what the game is, for those a search or a link brings, linked from the menu), `impressum.html` and `datenschutz.html` (German legal pages, linked from the menu and the radio page) are its pages, `public/` holds the static files, `tools/` the generators that write into `public/`, `docs/` the design documents of what is planned or being built (the solo campaign in `docs/campaign/`).
 
 **Search engines.** The build writes each page a search can land on in every language at an address of its own, with its head, plus the sitemap (`tools/seo/`, checked by `src/seo.test.ts`). A title and a description are ordinary texts of their page; a new such page goes into `PAGES` in `tools/seo/pages.ts` and the build's inputs. `about.html` and the home page's description say what the game offers (arenas, modes, what it costs), so a change to that updates them in the same commit.
 
