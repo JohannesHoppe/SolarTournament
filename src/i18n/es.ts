@@ -214,6 +214,7 @@ export const ES: Catalog = {
   Flip: 'Volteo',
   'At rest': 'En reposo',
   'Back on target': 'De vuelta al objetivo',
+  Level: 'Nivel',
   'Nanobots repairing': 'Nanobots reparando',
   'Juno is shooting at you!': '¡Juno te está disparando!',
   'Ceres is shooting at you!': '¡Ceres te está disparando!',

@@ -233,6 +233,7 @@ export const DE: Catalog = {
   'Flip': 'Wende',
   'At rest': 'Stillstand',
   'Back on target': 'Zurück aufs Ziel',
+  Level: 'Waagerecht',
   'Nanobots repairing': 'Nanobots reparieren',
   'Juno is shooting at you!': 'Juno schießt auf dich!',
   'Ceres is shooting at you!': 'Ceres schießt auf dich!',

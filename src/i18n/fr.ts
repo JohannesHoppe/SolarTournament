@@ -220,6 +220,7 @@ export const FR: Catalog = {
   'Flip': 'Bascule',
   'At rest': 'À l’arrêt',
   'Back on target': 'Retour sur la cible',
+  Level: 'Niveau',
   'Nanobots repairing': 'Nanobots en réparation',
   'Juno is shooting at you!': 'Juno te tire dessus !',
   'Ceres is shooting at you!': 'Ceres te tire dessus !',

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { footOf, PLANE_UP, skyPointer } from '../world/reference';
 import { Overlay } from './overlay';
 import { atan2, cos, hypot, sin } from '../detmath';
+import { t } from '../i18n/i18n';
 
 /**
  * The flight computer keeps the ship upright to the arena (its north pole is up), and the
@@ -34,8 +35,11 @@ const SHADE = 'rgba(2, 3, 10, 0.55)';
  * In a planet's air (see world/air, IN_AIR_TOP), where haze and cloud hide every horizon, the
  * horizon is the planet's (square to the way away from its center) and drawn bold: across
  * AIR_HORIZON_HALF of the picture's width to either side, AIR_HORIZON_WIDTH thick (px), in
- * AIR_LINE, over a broader dark shade, so which way is up reads at a glance in any cloud.
+ * AIR_LINE, over a broader dark shade, so which way is up reads at a glance in any cloud. It is
+ * the artificial horizon, the level, dashed (AIR_DASH, px) and named "Level", so it is never
+ * taken for the clouds' curved edge, the visible horizon the Host sees over the deck.
  */
+const AIR_DASH = [18, 10];
 const AIR_HORIZON_HALF = 0.46;
 const AIR_HORIZON_WIDTH = 3.5;
 const AIR_LINE = 'rgba(170, 205, 255, 0.95)';
@@ -160,11 +164,17 @@ export class Attitude extends Overlay {
     context.setLineDash(pitch < 0 ? DASHED : SOLID);
     // a dark hairline under the line, then the line itself; in the air the horizon bold over a broad shade
     if (bold) {
+      // dashed, and named: it is the level, not the clouds' curved edge the Host sees
+      context.setLineDash(AIR_DASH);
       context.lineWidth = AIR_HORIZON_WIDTH + 3;
       this.stroke(x, y, dx, dy, half, pitch, AIR_SHADE);
       context.lineWidth = AIR_HORIZON_WIDTH;
       this.stroke(x, y, dx, dy, half, pitch, AIR_LINE);
       context.lineWidth = 1.5;
+      context.fillStyle = AIR_LINE;
+      context.textAlign = 'left';
+      // at its left end, clear of the radar at the right, just above it (square to the line on the screen)
+      context.fillText(t('Level'), x - dx * half + dy * 10, y - dy * half - dx * 10);
     } else {
       this.stroke(x + 1, y + 1, dx, dy, half, pitch, SHADE);
       this.stroke(x, y, dx, dy, half, pitch, pitch === 0 ? LINE_STRONG : LINE);
