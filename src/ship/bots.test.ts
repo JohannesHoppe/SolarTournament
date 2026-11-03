@@ -328,6 +328,61 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
     expect(fastest).toBeLessThan(1);
   });
 
+  it('fight over the clouds: rise out of them, and follow no probe, nor as a cautious bot a rival, down into them', () => {
+    // under the deck with nothing to do but a probe deeper still: it rises over the deck instead
+    const f = air();
+    const me = ship('Kessler', deep(600), at(1));
+    const bot = new Bot(me, evenSkills(0.5));
+    bot.lure = deep(1200, 1500);
+    fly(f, me, bot, 30);
+    expect(altitudeIn(f.air!, me.flight.position)).toBeGreaterThan(0);
+    // a cautious bot over the deck with a rival under it: it never sinks under 200 m over the deck after it
+    const high = ship('Ceres', deep(-400), at(1));
+    const hunter = new Bot(high, evenSkills(0.4));
+    const rival = ship('Halley', deep(300, 600), at(-1));
+    let lowest = Infinity;
+    let hunted = false;
+    const outside = new THREE.Vector3();
+    for (let t = 0; t < 20; t += STEP) {
+      f.gravity(high.flight.position, outside);
+      dragOn(f.air!, high.flight.position, high.flight.velocity, STEP, outside);
+      high.flight.update(STEP, hunter.think(t, [high, rival], f), outside);
+      hunted ||= hunter.target === rival;
+      lowest = Math.min(lowest, altitudeIn(f.air!, high.flight.position));
+    }
+    expect(hunted).toBe(true);
+    expect(lowest).toBeGreaterThan(0);
+  });
+
+  it('follow a rival into the clouds when they are daring, and hide in them a while when hit', () => {
+    const f = air();
+    const outside = new THREE.Vector3();
+    const flyWith = (me: Ship, bot: Bot, others: Ship[], seconds: number, each: (t: number) => void = () => {}) => {
+      for (let t = 0; t < seconds; t += STEP) {
+        f.gravity(me.flight.position, outside);
+        dragOn(f.air!, me.flight.position, me.flight.velocity, STEP, outside);
+        me.flight.update(STEP, bot.think(t, [me, ...others], f), outside);
+        each(t);
+      }
+    };
+    // a daring hunter goes down after the rival under the deck
+    const high = ship('Vega', deep(-400), at(1));
+    const hunter = new Bot(high, evenSkills(0.9));
+    const rival = ship('Halley', deep(300, 600), at(-1));
+    let lowest = Infinity;
+    flyWith(high, hunter, [rival], 20, () => (lowest = Math.min(lowest, altitudeIn(f.air!, high.flight.position))));
+    expect(lowest).toBeLessThan(0);
+    // hit over the deck, a cautious bot slips into the clouds, and is out of them again a while later
+    const prey = ship('Kessler', deep(-150), at(1));
+    const hidden = new Bot(prey, evenSkills(0.4));
+    const shooter = ship('Halley', deep(-150, -1500), at(1));
+    hidden.struck(shooter, 0);
+    let dived = false;
+    flyWith(prey, hidden, [], 40, () => (dived ||= altitudeIn(f.air!, prey.flight.position) < 0));
+    expect(dived).toBe(true);
+    expect(altitudeIn(f.air!, prey.flight.position)).toBeGreaterThan(0);
+  });
+
   it('lose a ship that dived under the deck, seen at a slant from above it', () => {
     const f = air();
     const me = ship('Kessler', deep(-150), at(1));

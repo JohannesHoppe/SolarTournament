@@ -134,16 +134,30 @@ const WELL_PULL = 0.3;
 /**
  * In a planet's air (see Bot.air): a bot wants no more than AIR_MARGIN of the speed at which the
  * air heats its hull as fast as it cools at its depth (see heatSpeed; not of the tournament's
- * limit, which is no heat), dodging rock and escaping a well included, climbs straight out once
- * its hull is hotter than AIR_HOT (the laser's heat; 100 locks it) while the air still heats it, until it has cooled below AIR_COOL, and under attack drifts
- * down at AIR_DIVE (units/s, 40 m/s) while it is less than AIR_DIVE_DEPTH below the deck (units,
- * 300 m).
+ * limit, which is no heat), dodging rock and escaping a well included, and climbs straight out
+ * once its hull is hotter than AIR_HOT (the laser's heat; 100 locks it) while the air still heats
+ * it, until it has cooled below AIR_COOL. Fights belong over the clouds, where a Host sees them:
+ * a bot that is not racing keeps AIR_ABOVE over the deck (units, 200 m), rising when it is under
+ * that by up to AIR_RISE (units/s, 80 m/s), in full from AIR_RISE_SPAN under it (units, 500 m),
+ * and never sinks under it of its own wish, after a rival or a probe neither: it waits above. Over
+ * it, it sinks no faster than it could stop at it braking with AIR_BRAKE (units/s², 1.5 g: its
+ * thrusters' 4 g, less the planet's pull of nearly a g, with room to spare). Three exceptions:
+ * under attack it may shake the chaser off in the clouds, drifting down at AIR_DIVE (units/s,
+ * 40 m/s) to AIR_DIVE_DEPTH under the deck (units, 300 m), for AIR_HIDE (s) after the last blow;
+ * a bot of AIR_DARING and more follows its target down into them; and one heading home from
+ * beyond its reach goes home first.
  */
 const AIR_MARGIN = 0.85;
 const AIR_HOT = 60;
 const AIR_COOL = 30;
+const AIR_ABOVE = 4000;
+const AIR_RISE = 1600;
+const AIR_RISE_SPAN = 10000;
+const AIR_BRAKE = 294;
 const AIR_DIVE = 800;
 const AIR_DIVE_DEPTH = 6000;
+const AIR_HIDE = 8;
+const AIR_DARING = 0.5;
 /**
  * Bots do not ram by accident. They look KEEP_CLEAR_AHEAD seconds ahead: another ship whose way
  * comes closer to theirs than KEEP_CLEAR ship radii (about 85 m) within that time (a racer a
@@ -387,6 +401,8 @@ export class Bot {
   private shoveDriftUntil = 0;
   /** The bot climbs out of a planet's air to cool its hull (see air). */
   private climbing = false;
+  /** Until when the bot may hide in a planet's clouds after a blow (see AIR_HIDE). */
+  private hidingUntil = -Infinity;
   /** The fastest the bot wants to fly in a planet's air (units/s; Infinity without one; see air). */
   private airLimit = Infinity;
   /** The ship that last hit the drive, and until when the bot defends against it (see STRUCK_MEMORY). */
@@ -554,7 +570,7 @@ export class Bot {
     const homeDistance = fromHome.length();
     if (homeDistance > this.home) desired.addScaledVector(fromHome, -CRUISE_SPEED / homeDistance);
     const givingWay = this.keepClear(ships, field);
-    const hot = this.air(field, defending);
+    const hot = this.air(field, racing, defending, !!target, homeDistance > this.home, now);
     // a massive body pulls: near it, away from it comes first
     const well = field.well;
     let falling = false;
@@ -650,11 +666,11 @@ export class Bot {
    * In a planet's air the bot reads what a Host's HUD shows (see Game.airAlarm): the speed at its
    * depth where the air heats the hull as fast as it cools, AIR_MARGIN of which is the most it
    * wants (`airLimit`, set here and held in think after every other wish), and the hull heat
-   * alarm, on which it climbs out of the air with its drive (returns true then). Under attack
-   * above the deck's depths it slips down into the clouds (AIR_DIVE), which break a chaser's
-   * line of sight (see world/air).
+   * alarm, on which it climbs out of the air with its drive (returns true then). Unless it races
+   * (a course runs along the deck), it keeps over the clouds (see AIR_ABOVE): rising out of them,
+   * and never sinking into them of its own wish.
    */
-  private air(field: AsteroidField, defending: boolean): boolean {
+  private air(field: AsteroidField, racing: boolean, defending: boolean, hunting: boolean, homeward: boolean, now: number): boolean {
     const air = field.air;
     this.airLimit = Infinity;
     if (!air) return false;
@@ -662,7 +678,21 @@ export class Bot {
     const altitude = altitudeIn(air, me.position);
     const cooling = this.ship.cooling;
     up.subVectors(me.position, air.center).normalize();
-    if (defending && altitude > -AIR_DIVE_DEPTH) desired.addScaledVector(up, -AIR_DIVE);
+    // under attack it may shake the chaser off in the clouds for a while (AIR_HIDE), slipping
+    // down to AIR_DIVE_DEPTH under the deck
+    if (defending) this.hidingUntil = now + AIR_HIDE;
+    const hiding = now < this.hidingUntil;
+    if (hiding && altitude > -AIR_DIVE_DEPTH) desired.addScaledVector(up, -AIR_DIVE);
+    // a daring bot follows its target into the clouds; any bot heading home goes home first
+    const chasing = hunting && this.skills.daring >= AIR_DARING;
+    if (!racing && !hiding && !chasing && !homeward) {
+      // over the floor it sinks no faster than it can stop at it (AIR_BRAKE); under it, no wish
+      // downwards at all, and up the deeper it is
+      const sinking = -desired.dot(up);
+      const allowed = Math.sqrt(2 * AIR_BRAKE * Math.max(0, altitude - AIR_ABOVE));
+      if (sinking > allowed) desired.addScaledVector(up, sinking - allowed);
+      if (altitude < AIR_ABOVE) desired.addScaledVector(up, AIR_RISE * Math.min(1, (AIR_ABOVE - altitude) / AIR_RISE_SPAN));
+    }
     const safe = heatSpeed(altitude, cooling) * AIR_MARGIN;
     this.airLimit = safe;
     // the alarm: the air heats the hull faster than it cools, and the heat is up; the bot climbs
