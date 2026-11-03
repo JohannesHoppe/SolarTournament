@@ -24,7 +24,7 @@ import { STREAKS } from '../view/streaks';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
+import { COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
@@ -280,6 +280,15 @@ const BRAKE_STEER = 0.15;
 const BRAKE_AIM = 0.52;
 const BRAKE_TAKEOVER = 0.6;
 const BRAKE_HOME = 0.02;
+/**
+ * Who is shooting at the Host (see Game.attacked): marked on the HUD for ATTACK_MEMORY seconds
+ * after its hit; named by Nicole when it is more than ATTACK_UNSEEN (rad, about 35°) off the
+ * nose, the same ship at most every ATTACK_REPEAT seconds, any at most every ATTACK_GAP.
+ */
+const ATTACK_MEMORY = 5;
+const ATTACK_UNSEEN = 0.6;
+const ATTACK_REPEAT = 10;
+const ATTACK_GAP = 3;
 const homeTurn = { yaw: 0, pitch: 0, roll: 0, off: 0 };
 const returnAt = new THREE.Vector3();
 /** A torpedo homing on the own ship within this distance sets off TORPEDO INBOUND (units, 2 km); within TORPEDO_CRITICAL it is CRITICAL (units, 500 m). */
@@ -1009,6 +1018,11 @@ export class Game implements OnlineGame {
    * ship had when it began (`brakeHome`); and whether its key was down last frame.
    */
   private brakePhase: 'off' | 'brake' | 'return' = 'off';
+  /** The ships that hit the own one and when (game time, s), the last of them, and the one Nicole last named and when (see attacked). */
+  private readonly attackers = new Map<Ship, number>();
+  private lastAttacker: Ship | null = null;
+  private namedAttacker: Ship | null = null;
+  private namedAt = -Infinity;
   private brakeHeld = false;
   private readonly brakeHome = new THREE.Quaternion();
   /** The flight computer's output, reused from frame to frame. */
@@ -2940,6 +2954,9 @@ export class Game implements OnlineGame {
     this.hud.reset();
     this.resetOpening();
     this.autopilot = false;
+    this.attackers.clear();
+    this.lastAttacker = this.namedAttacker = null;
+    this.namedAt = -Infinity;
   }
 
   /** The opening starts from nothing (see startCountdown): a round left during the last one's intro leaves none behind, and a browser that arrives during an opening sees the rest of it. */
@@ -3743,7 +3760,7 @@ export class Game implements OnlineGame {
       this.hud.updateVelocityMarkers(this.camera, subject, subject === me, !this.autopilot);
       this.hud.updateReturnMark(this.camera, subject === me && this.brakePhase !== 'off' ? returnAt.set(0, 0, -1).applyQuaternion(this.brakeHome) : null);
       // a solar storm blinds the sensors: no ship shows a marker
-      this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject));
+      this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject), subject === me ? this.attackerOf : undefined);
     }
     // the fixed references' labels after the ships' names, keeping clear of them
     this.orient(subject, waypoint);
@@ -5912,6 +5929,7 @@ export class Game implements OnlineGame {
     // the blast shakes the thrusters too
     ship.thrusters = Math.max(0, ship.thrusters - 0.3);
     if (ship.isLocal) {
+      if (shooter && shooter !== ship) this.attacked(shooter);
       this.hud.damaged();
       this.hud.flashMessage(now, t('Torpedo hit'), 1.5);
       this.sound.play('explosion', { volume: 1.5, rate: 0.9 });
@@ -6299,6 +6317,46 @@ export class Game implements OnlineGame {
   }
 
   /**
+   * A ship hit the own one (a beam, a torpedo): it is marked as an attacker on the HUD for
+   * ATTACK_MEMORY seconds (see attackerOf). Nicole names it ("Vega is shooting at you!", another
+   * Host by its number) when it is out of sight ahead (more than ATTACK_UNSEEN off the nose) or
+   * a new one, but the same ship at most every ATTACK_REPEAT seconds and any at most every
+   * ATTACK_GAP seconds. Whether she named it.
+   */
+  private attacked(shooter: Ship): boolean {
+    const now = this.time;
+    const me = this.me!;
+    this.attackers.set(shooter, now);
+    this.lastAttacker = shooter;
+    const seen = me.flight.noseAngleTo(scratch.subVectors(shooter.flight.position, me.flight.position)) < ATTACK_UNSEEN;
+    const fresh = shooter !== this.namedAttacker || now - this.namedAt > ATTACK_REPEAT;
+    if (seen || !fresh || now - this.namedAt < ATTACK_GAP) return false;
+    const line = shooter.kind === 'bot' ? ATTACKED.bot[shooter.name] : ATTACKED.host[this.hostNumber(shooter) - 1];
+    if (!line || !this.speaker.say(line, 'urgent')) return false;
+    this.namedAttacker = shooter;
+    this.namedAt = now;
+    return true;
+  }
+
+  /** Another Host's number in the round: its place among the Hosts besides the own one, in the order the round lists them. */
+  private hostNumber(ship: Ship): number {
+    let n = 0;
+    for (const other of this.ships) {
+      if (other === this.me || other.kind !== 'host') continue;
+      n++;
+      if (other === ship) return n;
+    }
+    return n;
+  }
+
+  /** How the HUD marks a ship that hit the own one (see attacked): the latest attacker, another within ATTACK_MEMORY seconds, or none. */
+  private readonly attackerOf = (ship: Ship): 'latest' | 'recent' | null => {
+    const at = this.attackers.get(ship);
+    if (at === undefined || this.time - at > ATTACK_MEMORY) return null;
+    return ship === this.lastAttacker ? 'latest' : 'recent';
+  };
+
+  /**
    * A laser beam struck a ship this browser simulates: damage, feedback, destruction, whichever
    * side the shooter is on (friendly fire). Also called for beams from other peers.
    */
@@ -6329,7 +6387,7 @@ export class Game implements OnlineGame {
       // a hit into the drive is told at once; the armor's scorch marks are chatter
       this.hud.damaged();
       this.hud.flashMessage(this.time, t(ZONE_MESSAGES[zone]), 1.5);
-      this.speaker.say(COMPUTER[zone], serious ? 'urgent' : 'chatter');
+      if (!(shooter && shooter !== ship && this.attacked(shooter))) this.speaker.say(COMPUTER[zone], serious ? 'urgent' : 'chatter');
       this.sound.play('explosion', { volume: serious ? 1.2 : 0.6, rate: 1.5 });
       this.sound.beep(220, 0.25, 0.12);
       this.linkHit(zone === 'reactor' ? 1 : serious ? 0.7 : 0.3, serious ? 0.5 : 0.2);

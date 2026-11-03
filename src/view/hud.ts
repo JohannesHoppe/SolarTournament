@@ -883,9 +883,11 @@ export class Hud {
   /**
    * Marks other ships in line of sight with their name; ships off screen get an arrow at the
    * screen edge with their name beside it (see placeNames). The `target`'s mark adds its closure
-   * rate and is set in the numbers' face.
+   * rate and is set in the numbers' face. A ship that hit the own one in the last few seconds
+   * (`threat`: 'latest' the last of them, 'recent' the others) carries a red warning sign on its
+   * mark and its arrow, the latest's the boldest.
    */
-  updateMarkers(camera: THREE.Camera, ships: Ship[], me: Ship, visible: (ship: Ship) => boolean, target: Ship | null = null) {
+  updateMarkers(camera: THREE.Camera, ships: Ship[], me: Ship, visible: (ship: Ship) => boolean, target: Ship | null = null, threat: (ship: Ship) => 'latest' | 'recent' | null = () => null) {
     const { width, height } = viewport;
     const seen = this.seen;
     seen.clear();
@@ -911,6 +913,9 @@ export class Hud {
       }
       // a ship of the own side is marked by a ring, a rival by a square, whatever their colors
       setClass(element, 'ally', ship.allyOf(me));
+      const danger = threat(ship);
+      setClass(element, 'attacker', danger !== null);
+      setClass(element, 'attacker-latest', danger === 'latest');
       const { x: left, y: top, offscreen, angle } = toScreen(camera, ship.flight.position, EDGE_X, EDGE_Y);
       marked.push(left, top);
       const side = sideOf(left, top, EDGE_X, EDGE_Y, width, height);

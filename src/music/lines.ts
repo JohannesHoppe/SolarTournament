@@ -479,6 +479,18 @@ export const SPONSOR_HAPPY = [
   'I missed you. Again.',
 ] as const;
 
+/** How many other Hosts Nicole names by number when they shoot at the Host (see ATTACKED). */
+export const ATTACKER_HOSTS = 8;
+
+/**
+ * Nicole names the ship that is shooting at the Host, short and quick (see Game.attacked): a bot
+ * by its name, another Host by its number in the round.
+ */
+export const ATTACKED = {
+  bot: Object.fromEntries(BOT_NAMES.map((name) => [name, `${name} is shooting at you!`])) as Record<string, string>,
+  host: Array.from({ length: ATTACKER_HOSTS }, (_, i) => `Host ${i + 1} is shooting at you!`),
+};
+
 /** All phrases and fixed announcements of a language, for the renderer. */
 export function allLines(language: Language): string[] {
   switch (language) {
@@ -490,7 +502,7 @@ export function allLines(language: Language): string[] {
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
       return [...ANNOUNCER_KILL, ...ANNOUNCER_TEAM_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
-      return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY];
+      return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY, ...Object.values(ATTACKED.bot), ...ATTACKED.host];
   }
 }
 
