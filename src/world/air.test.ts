@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { airBurn, airHeat, altitudeIn, density, dragAt, dragOn, LOCK_DEPTH, opticalDepth, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH } from './air';
+import { airAround, airBurn, airHeat, altitudeIn, density, dragAt, dragOn, IN_AIR_TOP, LOCK_DEPTH, opticalDepth, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from './air';
+import { footOf, skyPointer } from './reference';
 import { arenaById } from './arenas';
 import { ARENA_LIMIT } from './arena';
 import { FlightModel, MAIN_THRUST, MAX_SPEED } from '../ship/flight';
@@ -157,5 +158,36 @@ describe("Jupiter's air", () => {
     laser.heat -= COOLING * step;
     expect(airBurn(laser, airHeat(m(-200), MAX_SPEED) * step, step, 100)).toBe(0);
     expect(laser.heat).toBeLessThan(110);
+  });
+});
+
+describe('up in a planet’s air', () => {
+  // a planet lying off to the side of the arena's axes, its air's deck 40 km from its center
+  const tilted = { center: new THREE.Vector3(-30000, -20000, 50000).setLength(800000), radius: 800000 - 1 };
+  const at = (altitude: number, along: THREE.Vector3) => tilted.center.clone().addScaledVector(along.clone().normalize(), tilted.radius + altitude);
+
+  it('points away from the planet’s center, wherever the arena’s axes point', () => {
+    const along = new THREE.Vector3(0.3, -0.5, 0.8);
+    const up = upIn(tilted, at(-4000, along), new THREE.Vector3());
+    expect(up.distanceTo(along.normalize())).toBeLessThan(1e-9);
+    // the horizon square to it: a direction along the deck lies on it, its foot is itself
+    const across = new THREE.Vector3().crossVectors(up, new THREE.Vector3(1, 0, 0)).normalize();
+    expect(footOf(across, new THREE.Vector3(), up).distanceTo(across)).toBeLessThan(1e-9);
+    // a view along the deck, its wings level to the planet: the sky pointer stands straight up
+    const level = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(new THREE.Vector3(), across, up));
+    expect(skyPointer(level, up)).toBeCloseTo(0);
+    // the arena's own up is far off there: against it the same view is banked
+    expect(Math.abs(skyPointer(level))).toBeGreaterThan(0.3);
+  });
+
+  it('counts a ship as in the air under the deck and a little over it, and not beyond', () => {
+    const along = new THREE.Vector3(1, 2, 3);
+    expect(airAround(tilted, at(-20000, along))).toBe(tilted);
+    expect(airAround(tilted, at(IN_AIR_TOP - 1, along))).toBe(tilted);
+    expect(airAround(tilted, at(IN_AIR_TOP + 1, along))).toBeNull();
+    expect(airAround(null, at(-20000, along))).toBeNull();
+    // in the Jupiter arena: under its deck, in the field's middle
+    expect(airAround(air, new THREE.Vector3(0, -2000, 0))).toBe(air);
+    expect(altitudeIn(air, new THREE.Vector3(0, -2000, 0))).toBeLessThan(0);
   });
 });

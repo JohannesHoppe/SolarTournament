@@ -2393,6 +2393,11 @@ body.touch #school-panel {
   color: var(--hud);
 }
 
+/* in a planet's air the climb is named, and sinking under its cloud deck is the pilot's to act on */
+#hud-climb.sinking {
+  color: var(--accent);
+}
+
 /* the target's range and closure rate in the numbers' face */
 .marker.target > span:last-child {
   font-family: var(--font-numbers);

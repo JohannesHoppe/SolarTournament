@@ -6,7 +6,8 @@ import { atan2, cos, hypot, sin } from '../detmath';
 /**
  * The flight computer keeps the ship upright to the arena (its north pole is up), and the
  * projection shows it the way a fighter's head-up display does: a horizon line through the
- * view where the reference plane lies (see world/reference), a pitch ladder every PITCH_STEP
+ * view where the reference plane lies (see world/reference; in a planet's air the planet's own
+ * horizon, bold, see AIR_HORIZON_HALF), a pitch ladder every PITCH_STEP
  * degrees above and below it, a bank scale over the ladder and a heading tape above the gauges.
  * All of it in the projection's blue, faint, and broken in the middle so the crosshair stays
  * free. A rung lies where that elevation really is in the picture, so it bends with the view.
@@ -29,6 +30,16 @@ const TAPE_HALF = 0.17;
 const LINE = 'rgba(77, 145, 255, 0.55)';
 const LINE_STRONG = 'rgba(120, 175, 255, 0.85)';
 const SHADE = 'rgba(2, 3, 10, 0.55)';
+/**
+ * In a planet's air (see world/air, IN_AIR_TOP), where haze and cloud hide every horizon, the
+ * horizon is the planet's (square to the way away from its center) and drawn bold: across
+ * AIR_HORIZON_HALF of the picture's width to either side, AIR_HORIZON_WIDTH thick (px), in
+ * AIR_LINE, over a broader dark shade, so which way is up reads at a glance in any cloud.
+ */
+const AIR_HORIZON_HALF = 0.46;
+const AIR_HORIZON_WIDTH = 3.5;
+const AIR_LINE = 'rgba(170, 205, 255, 0.95)';
+const AIR_SHADE = 'rgba(2, 3, 10, 0.6)';
 /**
  * How far from the camera a direction is looked up (units, 50 m): a point that far from the
  * camera along a direction sits in the picture where the direction does, between the camera's
@@ -67,6 +78,12 @@ export class Attitude extends Overlay {
   private readonly drawnTurn = new THREE.Quaternion();
   private readonly drawnLens = [0, 0];
   private drawnTape = false;
+  /** The up it was drawn for: a planet's (see update), or the reference plane's while `drawnAir` is false. */
+  private readonly drawnUp = new THREE.Vector3();
+  private drawnAir = false;
+  /** The up this picture refers to. */
+  private readonly up = new THREE.Vector3();
+  private air = false;
 
   protected resized() {
     this.drawn = false;
@@ -76,9 +93,11 @@ export class Attitude extends Overlay {
    * Draws the attitude for the camera; `show` false clears it. The heading tape only where
    * `tape` (not on a phone, whose top row holds its buttons). What it draws depends only on how
    * the camera is turned and its lens (every line is a direction, wherever the camera stands),
-   * so while neither changed the picture on the canvas stays as it is.
+   * so while neither changed the picture on the canvas stays as it is. `sky`, in a planet's air,
+   * is the planet's up there (see world/air, upIn): the horizon, the ladder and the sky pointer
+   * then refer to it, and the horizon is drawn bold; null, they refer to the reference plane.
    */
-  update(camera: THREE.Camera, show: boolean, tape: boolean) {
+  update(camera: THREE.Camera, show: boolean, tape: boolean, sky: Readonly<THREE.Vector3> | null = null) {
     const context = this.context;
     if (!show) {
       if (this.drawn) context.clearRect(0, 0, this.canvas.width, this.canvas.height);
@@ -86,39 +105,47 @@ export class Attitude extends Overlay {
       return;
     }
     const lens = camera.projectionMatrix.elements;
-    if (this.drawn && tape === this.drawnTape && camera.quaternion.equals(this.drawnTurn) && lens[0] === this.drawnLens[0] && lens[5] === this.drawnLens[1]) return;
+    const air = sky !== null;
+    const sameUp = air === this.drawnAir && (!air || this.drawnUp.equals(sky));
+    if (this.drawn && sameUp && tape === this.drawnTape && camera.quaternion.equals(this.drawnTurn) && lens[0] === this.drawnLens[0] && lens[5] === this.drawnLens[1]) return;
     this.drawn = true;
     this.drawnTape = tape;
     this.drawnTurn.copy(camera.quaternion);
     this.drawnLens[0] = lens[0];
     this.drawnLens[1] = lens[5];
+    this.drawnAir = air;
+    if (air) this.drawnUp.copy(sky);
+    this.air = air;
+    this.up.copy(sky ?? PLANE_UP);
     context.setTransform(this.ratio, 0, 0, this.ratio, 0, 0);
     context.clearRect(0, 0, this.width, this.height);
     camera.getWorldDirection(forward);
-    // the horizon is the reference plane's, seen from the camera (see world/reference)
-    footOf(forward, level);
+    // the horizon is the reference plane's, or in a planet's air the planet's, seen from the camera (see world/reference)
+    footOf(forward, level, this.up);
     // straight up or down there is no heading to keep a horizon by
     if (level.lengthSq() < 1e-6) return;
     level.normalize();
-    side.crossVectors(level, PLANE_UP);
+    side.crossVectors(level, this.up);
     context.lineWidth = 1.5;
     context.font = '11px ui-monospace, Menlo, Consolas, monospace';
     for (let pitch = -90; pitch <= 90; pitch += PITCH_STEP) this.rung(camera, pitch);
     if (tape) {
       this.tape(atan2(forward.x, -forward.z));
-      this.bank(skyPointer(camera.quaternion));
+      this.bank(skyPointer(camera.quaternion, this.up));
     }
   }
 
   /** The horizon (pitch 0) or a rung of the ladder, where that elevation lies ahead in the picture. */
   private rung(camera: THREE.Camera, pitch: number) {
     const angle = THREE.MathUtils.degToRad(pitch);
-    direction.copy(level).multiplyScalar(cos(angle)).addScaledVector(PLANE_UP, sin(angle));
+    direction.copy(level).multiplyScalar(cos(angle)).addScaledVector(this.up, sin(angle));
     at.copy(camera.position).addScaledVector(direction, FAR).project(camera);
     if (at.z > 1) return;
     const x = ((at.x + 1) / 2) * this.width;
     const y = ((1 - at.y) / 2) * this.height;
-    if (Math.abs(y - this.height / 2) > this.height * LADDER_REACH || x < 0 || x > this.width) return;
+    // in the air the horizon shows anywhere in the picture, so a dive still sees it above
+    const reach = pitch === 0 && this.air ? 0.5 : LADDER_REACH;
+    if (Math.abs(y - this.height / 2) > this.height * reach || x < 0 || x > this.width) return;
     // the rung runs along the horizon as the picture shows it (the view may roll in a steep climb)
     beside.copy(camera.position).addScaledVector(direction, FAR).addScaledVector(side, FAR * 0.05).project(camera);
     let dx = ((beside.x + 1) / 2) * this.width - x;
@@ -126,13 +153,22 @@ export class Attitude extends Overlay {
     const length = hypot(dx, dy) || 1;
     dx /= length;
     dy /= length;
-    const half = (pitch === 0 ? HORIZON_HALF : RUNG_HALF) * this.width;
+    const bold = pitch === 0 && this.air;
+    const half = (bold ? AIR_HORIZON_HALF : pitch === 0 ? HORIZON_HALF : RUNG_HALF) * this.width;
     const context = this.context;
     // below the horizon the rungs are dashed, as on every flight instrument
     context.setLineDash(pitch < 0 ? DASHED : SOLID);
-    // a dark hairline under the line, then the line itself
-    this.stroke(x + 1, y + 1, dx, dy, half, pitch, SHADE);
-    this.stroke(x, y, dx, dy, half, pitch, pitch === 0 ? LINE_STRONG : LINE);
+    // a dark hairline under the line, then the line itself; in the air the horizon bold over a broad shade
+    if (bold) {
+      context.lineWidth = AIR_HORIZON_WIDTH + 3;
+      this.stroke(x, y, dx, dy, half, pitch, AIR_SHADE);
+      context.lineWidth = AIR_HORIZON_WIDTH;
+      this.stroke(x, y, dx, dy, half, pitch, AIR_LINE);
+      context.lineWidth = 1.5;
+    } else {
+      this.stroke(x + 1, y + 1, dx, dy, half, pitch, SHADE);
+      this.stroke(x, y, dx, dy, half, pitch, pitch === 0 ? LINE_STRONG : LINE);
+    }
     context.setLineDash(SOLID);
     if (pitch !== 0) {
       context.fillStyle = LINE;

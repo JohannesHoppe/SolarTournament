@@ -18,8 +18,8 @@ export const heightOf = (position: THREE.Vector3) => position.dot(PLANE_UP);
 /** How fast a velocity climbs away from the plane (units/s; sinking, negative). */
 export const climbOf = (velocity: THREE.Vector3) => velocity.dot(PLANE_UP);
 
-/** Where a point lies on the plane straight below or above it (writes into `target`). */
-export const footOf = (position: THREE.Vector3, target: THREE.Vector3) => target.copy(position).addScaledVector(PLANE_UP, -heightOf(position));
+/** Where a point lies on the plane straight below or above it (writes into `target`); with `up`, on the plane through the origin square to that up instead. */
+export const footOf = (position: THREE.Vector3, target: THREE.Vector3, up: Readonly<THREE.Vector3> = PLANE_UP) => target.copy(position).addScaledVector(up, -position.dot(up));
 
 /**
  * Below this share of the plane's up seen across a view (the length of up in the view's picture
@@ -33,10 +33,10 @@ const inverse = new THREE.Quaternion();
  * Which way the plane's up points in a view's picture (rad, from the picture's top, clockwise
  * positive): 0 with the wings level, positive when the view is banked left (up leans right on
  * screen), as a fighter's sky pointer swings. NaN while the view looks almost straight up or
- * down (see BANK_STEEP).
+ * down (see BANK_STEEP). With `sky`, that up instead of the plane's (a planet's, see world/air).
  */
-export function skyPointer(orientation: THREE.Quaternion): number {
-  up.copy(PLANE_UP).applyQuaternion(inverse.copy(orientation).invert());
+export function skyPointer(orientation: THREE.Quaternion, sky: Readonly<THREE.Vector3> = PLANE_UP): number {
+  up.copy(sky).applyQuaternion(inverse.copy(orientation).invert());
   return hypot(up.x, up.y) < BANK_STEEP ? NaN : atan2(up.x, up.y);
 }
 

@@ -507,6 +507,8 @@ export const ES: Catalog = {
   '{n} pts': '{n} pts',
   '{speed} m/s · MAX': '{speed} m/s · MÁX',
   '{speed} m/s': '{speed} m/s',
+  'Climbing ▲ {speed} m/s': 'Subiendo ▲ {speed} m/s',
+  'Sinking ▼ {speed} m/s': 'Bajando ▼ {speed} m/s',
   'Live link lost': 'Enlace en vivo perdido',
   'Overdrive {s} s': 'Overdrive {s} s',
   'Overdrive ready': 'Overdrive listo',
@@ -1222,6 +1224,8 @@ export const ES: Catalog = {
     'La neblina oculta lo que hay en ella: justo bajo la capa de nubes ves unos {seeDeck} km; un kilómetro más abajo, {seeKm} m; dos kilómetros más abajo, {seeTwoKm} m. Las naves se vuelven sombras y luego nada. Tu láser llega hasta donde ves, el radar el doble, el fijado de un torpedo dos tercios. La capa de nubes es un velo: atraviésala en picado y quien te persigue desde arriba te pierde de vista, salvo que mire casi en vertical hacia abajo.',
   'The air brakes you by your speed squared, {dragDeck} g at the deck at {limit} m/s and ten times as much two kilometers down: a hard turn in the clouds costs speed, a climb out of them lets you have it back. It heats your hull too. At {limit} m/s it gets too hot from {hotDepth} m below the deck on; a kilometer down {safeKm} m/s is safe, two kilometers down {safeTwoKm} m/s. HULL HEAT names the safe speed where you are. The heat locks your laser first, then it burns the hull: slow down, or climb.':
     'El aire te frena con el cuadrado de tu velocidad: {dragDeck} g en la capa de nubes a {limit} m/s, y diez veces más dos kilómetros más abajo. Un giro brusco en las nubes cuesta velocidad; subir fuera de ellas te la devuelve. También calienta tu casco. A {limit} m/s se calienta demasiado a partir de {hotDepth} m bajo la capa; un kilómetro más abajo son seguros {safeKm} m/s; dos kilómetros más abajo, {safeTwoKm} m/s. CALOR DEL CASCO indica la velocidad segura donde estás. El calor bloquea primero tu láser y luego quema el casco: frena o sube.',
+  "In the clouds there is no horizon to fly by, so the flight computer draws one. Under the deck and up to {airTop} m over it, it takes up from the planet's center: a bold line across the view where level lies, the ladder and the bank scale by it, and right of the crosshair your height over the deck with Climbing ▲ or Sinking ▼, sinking under the deck in orange. Lost in the haze? Put the bold line below the crosshair and climb.":
+    'En las nubes no hay horizonte por el que volar, así que el ordenador de vuelo dibuja uno. Bajo la cubierta y hasta {airTop} m por encima, toma el arriba desde el centro del planeta: una línea gruesa que cruza la vista donde está el nivel, la escala de cabeceo y la de alabeo según ella, y a la derecha de la mira tu altura sobre la cubierta con Subiendo ▲ o Bajando ▼, bajando bajo la cubierta en naranja. ¿Perdido en la bruma? Pon la línea gruesa por debajo de la mira y sube.',
   'In the air, for once, you hear what is outside: the wind roaring past the hull, and thunder after the lightning in the clouds.':
     'En el aire, por una vez, oyes lo que hay fuera: el viento rugiendo contra el casco y los truenos tras los relámpagos en las nubes.',
   'Near the black hole and over Jupiter the PULL gauge shows how much of your drive it would take to get out: CAUTION from {wellCaution} %, WARNING from {wellWarning} %, CRITICAL from {wellCritical} %, and when it would take all of it, NO RETURN. Burn away early: falling, the gauge climbs fast. The speed limit holds only against your own drive; gravity pulls you past {limit} m/s.':

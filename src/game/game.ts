@@ -38,7 +38,7 @@ import { Lobby, type Listing } from '../net/lobby';
 import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
-import { airBurn, airHeat, altitudeIn, density, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH } from '../world/air';
+import { airAround, airBurn, airHeat, altitudeIn, density, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
 import { Haze, installHaze, skyLight } from '../view/haze';
 import { Reentry } from '../view/reentry';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
@@ -613,6 +613,8 @@ const forward = new THREE.Vector3();
 const upward = new THREE.Vector3();
 /** Up from a planet's center, through the camera or a ship (see airWeather, airAlarm). */
 const up = new THREE.Vector3();
+/** A planet's up at the watched ship, for the attitude in its air. */
+const skyUp = new THREE.Vector3();
 const facing = new THREE.Matrix4();
 const muzzle = new THREE.Vector3();
 const cameraGoal = new THREE.Vector3();
@@ -3717,7 +3719,9 @@ export class Game implements OnlineGame {
     // the fixed references' labels after the ships' names, keeping clear of them
     this.orient(subject, waypoint);
     if (!this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
-    if (!this.bench.has('attitude')) this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive);
+    // in a planet's air the horizon is the planet's, from the ship's place (see world/air)
+    const air = airAround(this.field.air, subject.flight.position);
+    if (!this.bench.has('attitude')) this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive, air ? upIn(air, subject.flight.position, skyUp) : null);
     // the motion streaks, fewer on a cheaper picture (see view/streaks)
     if (!this.bench.has('streaks')) this.hud.updateStreaks(now, this.camera, subject.flight.velocity, subject.alive, Math.round(STREAKS * Math.max(STREAKS_LEAST, this.graphics.look.particles)));
     this.hud.setAutopilot(this.autopilot);
@@ -7151,7 +7155,7 @@ export class Game implements OnlineGame {
     const aim = this.me?.alive ? aimPoint : this.camera.getWorldDirection(scratch).multiplyScalar(AIM_DEPTH).add(this.camera.position);
     plane.update(shown, subject.flight.position, this.camera, aim, window.innerWidth, window.innerHeight, this.renderer.getPixelRatio());
     if (!hud) return;
-    this.hud.setAltitude(subject);
+    this.hud.setAltitude(subject, airAround(this.field.air, subject.flight.position));
     const references = this.shownReferences;
     references.length = 0;
     for (const reference of this.arenaReferences) references.push(reference);

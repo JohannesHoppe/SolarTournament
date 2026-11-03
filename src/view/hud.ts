@@ -13,6 +13,7 @@ import { WELL_GAUGE, WELL_LOST, wellLevel, type Alarm, type AlarmLevel } from '.
 import type { Orbit, OrbitState } from '../game/orbit';
 import type { Reference } from '../world/arenas';
 import { climbOf, closure, heightOf } from '../world/reference';
+import { altitudeIn, upIn, type Air } from '../world/air';
 import { atan2 } from '../detmath';
 
 /** The master caution above the alarm list names the worst level. */
@@ -27,6 +28,8 @@ const toward = new THREE.Vector3();
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 const projected = new THREE.Vector3();
+/** A planet's up at the own ship (see setAltitude). */
+const skyward = new THREE.Vector3();
 const rim = new THREE.Vector3();
 const cameraUp = new THREE.Vector3();
 /** A ring is bracketed while its opening spans this many pixels on screen, up to this share of the screen's height (closer, it fills the view by itself). */
@@ -234,8 +237,9 @@ export class Hud {
   }
 
   /** The horizon, the pitch ladder and the heading tape (see Attitude), while a clone flies; a phone leaves out the tape. */
-  updateAttitude(camera: THREE.Camera, show: boolean, phone: boolean) {
-    this.attitude.update(camera, show, !phone);
+  /** The attitude (see view/attitude); `sky` a planet's up while the ship is in its air, else null. */
+  updateAttitude(camera: THREE.Camera, show: boolean, phone: boolean, sky: Readonly<THREE.Vector3> | null = null) {
+    this.attitude.update(camera, show, !phone, sky);
   }
 
   /** The crosshair shows while the own clone flies. */
@@ -553,14 +557,23 @@ export class Hud {
     }
   }
 
-  /** The height above the reference plane and the climb (see world/reference), right of the crosshair; hidden while no clone flies. */
-  setAltitude(me: Ship) {
+  /**
+   * The height above the reference plane and the climb (see world/reference), right of the
+   * crosshair; hidden while no clone flies. In a planet's air (`air`, see world/air) the height
+   * over its cloud deck and the climb away from its center instead, named CLIMBING or SINKING,
+   * sinking under the deck in orange: there the eye has no horizon to tell it.
+   */
+  setAltitude(me: Ship, air: Air | null = null) {
     setHidden(this.altitude, !me.alive);
     if (!me.alive) return;
-    const height = heightOf(me.flight.position);
+    const position = me.flight.position;
+    const height = air ? altitudeIn(air, position) : heightOf(position);
     setText(this.height, `${height < 0 ? '−' : '+'}${meters(Math.abs(height))}`);
-    const climb = Math.round(climbOf(me.flight.velocity) * METERS_PER_UNIT);
-    setText(this.climb, `${climb > 0 ? '▲' : climb < 0 ? '▼' : '◆'} ${t('{speed} m/s', { speed: Math.abs(climb) })}`);
+    const climb = Math.round((air ? me.flight.velocity.dot(upIn(air, position, skyward)) : climbOf(me.flight.velocity)) * METERS_PER_UNIT);
+    const speed = Math.abs(climb);
+    const text = !air ? `${climb > 0 ? '▲' : climb < 0 ? '▼' : '◆'} ${t('{speed} m/s', { speed })}` : climb > 0 ? t('Climbing ▲ {speed} m/s', { speed }) : climb < 0 ? t('Sinking ▼ {speed} m/s', { speed }) : `◆ ${t('{speed} m/s', { speed })}`;
+    setText(this.climb, text);
+    setClass(this.climb, 'sinking', !!air && climb < 0 && height < 0);
   }
 
   /**

@@ -93,6 +93,22 @@ export function airBurn(hull: { heat: number; overheated: boolean; readonly cool
 /** Altitude above the cloud deck (units, negative below it). */
 export const altitudeIn = (air: Air, position: THREE.Vector3) => position.distanceTo(air.center) - air.radius;
 
+/**
+ * Up in a planet's air: away from its center, wherever the arena's own axes point (writes into
+ * `target`). The flight computer's aids in the air (the horizon, the climb) refer to it.
+ */
+export const upIn = (air: Air, position: THREE.Vector3, target: THREE.Vector3) => target.subVectors(position, air.center).normalize();
+
+/**
+ * A ship counts as in the air, for the flight computer's aids, below IN_AIR_TOP over the cloud
+ * deck (units, 500 m): under the deck, in its clouds and in the upper haze over them, where the
+ * eye loses the planet's horizon.
+ */
+export const IN_AIR_TOP = 10000;
+
+/** The planet's air a ship at `position` is in (see IN_AIR_TOP), or null. */
+export const airAround = (air: Air | null, position: THREE.Vector3): Air | null => (air && altitudeIn(air, position) < IN_AIR_TOP ? air : null);
+
 /** How the density falls off at an altitude (units): its scale height, and its share at the deck. */
 const TOP = { height: TOP_HEIGHT, share: TOP_DENSITY };
 const BELOW = { height: SCALE_HEIGHT, share: 1 };
