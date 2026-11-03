@@ -1846,6 +1846,20 @@ body.nova-flash #hud::after {
   animation: neon-flicker-blue 5s step-end infinite;
 }
 
+/* the break's parts keep their size: where the screen is too low for all of them, it scrolls
+   (see #sponsor) instead of squeezing the ad until its contents spill over its frame */
+#sponsor > * {
+  flex-shrink: 0;
+}
+
+/* the button to boot the next clone keeps its place while it waits, unseen and not to be
+   pressed: the break is centered on the screen, and the button coming in must not move it
+   (important, as the rule that hides whatever is hidden is) */
+#sponsor-boot[hidden] {
+  display: inline-block !important;
+  visibility: hidden;
+}
+
 .sponsor-label,
 #sponsor-status {
   margin: 0;
@@ -1853,6 +1867,13 @@ body.nova-flash #hud::after {
   font-size: 0.9rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+
+/* the status under the ad changes its words as the clone is printed; it keeps room for two lines
+   (a narrow screen wraps the longer one), so the break never moves */
+#sponsor-status {
+  min-height: 2.8em;
+  line-height: 1.4;
 }
 
 #ad-slot {
@@ -1918,11 +1939,15 @@ body.nova-flash #hud::after {
   text-shadow: 0 0 6px var(--brand), 0 0 18px var(--brand);
 }
 
+/* an ad is a sign, not running text: its slogan and small print are centered, never justified,
+   whose few words a line would gape apart */
 .satire-slogan {
   margin: 0;
   font-weight: 700;
   font-size: 1.05rem;
   line-height: 1.4;
+  text-align: center;
+  text-wrap: balance;
 }
 
 .satire-fine {
@@ -1931,6 +1956,8 @@ body.nova-flash #hud::after {
   color: var(--muted);
   font-size: 0.68rem;
   line-height: 1.4;
+  text-align: center;
+  text-wrap: balance;
 }
 
 .satire-progress {
@@ -3699,8 +3726,6 @@ body.page {
 .tagline,
 #transmission-text,
 #sponsor-report,
-.satire-slogan,
-.satire-fine,
 .legal p,
 .legal li,
 .handbook p,
@@ -3716,8 +3741,6 @@ body.page {
 .sponsor-pitch,
 .tagline,
 #sponsor-report,
-.satire-slogan,
-.satire-fine,
 #transmission-text {
   text-align-last: center;
 }
