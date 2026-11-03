@@ -16,6 +16,7 @@ import { GradedOutputPass } from '../view/grade';
 import { Datamosh } from '../view/datamosh';
 import { GuideLine } from '../view/guide';
 import { ReferencePlane } from '../view/plane';
+import { OrbitPath } from '../view/orbitpath';
 import { referencesOf } from '../world/reference';
 import { lapClock, LapTimer, parseLaps } from './laps';
 import { aimHook, cableEnd, Cables, clearOf, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, anchorPoint, pullOn, type Anchor, type Mark, type Tether } from './hook';
@@ -1159,6 +1160,8 @@ export class Game implements OnlineGame {
   private readonly guide = new GuideLine();
   /** The reference plane's grid and the drop lines to it (see orient). */
   private readonly plane = new ReferencePlane();
+  /** The orbit the readout sees, drawn into space (see view/orbitpath). */
+  private readonly orbitPath = new OrbitPath();
   /** The sun as a fixed reference: always in the same direction, far beyond the arena. */
   private readonly sunReference: Reference = { glyph: 'sun', label: msg('Sun'), position: new THREE.Vector3(), distance: false };
   /** The bases of Capture the Flag and the President's battleship as fixed references. */
@@ -1265,7 +1268,7 @@ export class Game implements OnlineGame {
     this.scene.add(this.replayEffects.group);
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
-    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.cables.group, this.cometView.root, this.plane.group);
+    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.cables.group, this.cometView.root, this.plane.group, this.orbitPath.line);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.mining.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group, this.reentry.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
@@ -6901,6 +6904,7 @@ export class Game implements OnlineGame {
     if (!me.alive || !well) {
       this.hud.setEscape(null);
       this.showOrbit(null, null, 0);
+      this.orbitPath.show(null, me.flight.position, me.flight.velocity);
       return 0;
     }
     const thrust = MAIN_THRUST * Math.max(me.drive, 0.01);
@@ -6908,6 +6912,7 @@ export class Game implements OnlineGame {
     // the orbit readout, recomputed every frame: whatever changed the path (a burn, a ram, a hit) shows at once
     const orbit = orbitable(well) ? readOrbit(well, me.flight.position, me.flight.velocity, thrust, !this.autopilot, this.orbitState === 'ready' || this.orbitState === 'stable', this.orbit) : null;
     this.showOrbit(orbit, well, load);
+    this.orbitPath.show(orbit === 'ready' || orbit === 'stable' ? well : null, me.flight.position, me.flight.velocity);
     this.hud.setEscape(load, orbit === 'stable');
     // the warnings come again once the well has let go of the ship for good
     if (load < WELL_RELEASE) this.wellSaid = 0;

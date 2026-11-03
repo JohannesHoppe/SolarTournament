@@ -10,6 +10,7 @@ What the screen shows besides the 3D world: the HUD as DOM elements, and the pas
 | `overlay.ts` | A canvas over the whole picture the HUD draws on in CSS pixels, sized with the picture's resolution: what the attitude and the motion streaks share |
 | `attitude.ts` | Horizon line, pitch ladder, bank scale with its sky pointer and heading tape on a canvas, as in a fighter's head-up display; in a planet's air the planet's horizon, bold, up from its center; as sharp as the picture's resolution, drawn anew only when the camera turns or up changes |
 | `plane.ts` | The reference plane's polar grid and the drop lines from ships, gates and the waypoint down or up to it: lines over everything, faded with distance, built once |
+| `orbitpath.ts` | The orbit the readout sees (ORBIT READY, STABLE ORBIT) drawn into space: the whole ellipse free drift would fly about the well, a thin azure line over everything; `orbitpath.test.ts` flies a turn about the hole along it |
 | `radar.ts` | The radar sphere on a canvas |
 | `effects.ts` | Particles and laser beams, pooled, fading in a planet's haze; a cheaper picture emits a share of the particles; the maneuvering thrusters' puffs, laid anew each frame at the firing nozzles, fewer points on a cheaper picture |
 | `killcam.ts` | Records the last seconds and replays the own clone's death in slow motion, each ship put between the two kept frames around the moment shown (tested in `killcam.test.ts`) |

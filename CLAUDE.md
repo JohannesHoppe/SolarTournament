@@ -230,6 +230,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `view/overlay.ts` | A canvas over the whole picture the HUD draws on (the attitude, the motion streaks), sized with the picture's resolution |
 | `view/attitude.ts` | The HUD's attitude on a canvas: horizon line, pitch ladder, bank scale and heading tape, as in a fighter's head-up display; in a planet's air the planet's horizon, bold, up from its center |
 | `view/plane.ts` | The reference plane's grid and the drop lines to it, an overlay over everything in the HUD's azure |
+| `view/orbitpath.ts` | The orbit the readout sees, drawn into space: the ellipse free drift would fly about the well, a thin azure line over everything |
 | `view/effects.ts` | Particles (one draw call per texture), laser beams; both fade in a planet's haze; the maneuvering thrusters' puffs at their firing nozzles |
 | `view/killcam.ts` | The kill cam: keeps the last seconds of every ship and beam, replays the kill of the own clone in slow motion from behind the shooter |
 | `view/radar.ts` | The radar sphere: everything within 2.5 km around the own ship, ahead and behind, on a canvas |
