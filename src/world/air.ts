@@ -90,6 +90,31 @@ export function airBurn(hull: { heat: number; overheated: boolean; readonly cool
   return beyond * AIR_BURN;
 }
 
+/**
+ * Under the deck the clouds' ammonia and sulfur crust over the radiators: CLOG_SECONDS (s) to
+ * clog them through just under the deck, faster the deeper, twice as fast from CLOG_DEPTH (units,
+ * 300 m) down, so a ship deep down still has the time to climb out; over the deck the crust boils
+ * off in UNCLOG_SECONDS (s), quickly, so a ship that made it out is not burnt over the clouds. Clogged through, they shed
+ * CLOG_LOSS less (see Ship.cooling), and the reactor's waste heat, REACTOR_WASTE (heat units per
+ * second) at full clog, which clean radiators shed without a trace, builds up in them: the laser
+ * locks within seconds, and what the radiators cannot hold burns the hull (see airBurn). The
+ * clouds are a place to shake a chaser off, not to stay in.
+ */
+export const CLOG_SECONDS = 40;
+export const CLOG_DEPTH = 6000;
+export const UNCLOG_SECONDS = 4;
+export const CLOG_LOSS = 0.9;
+export const REACTOR_WASTE = 20;
+
+/** The radiators' clog (0 clean, 1 through) after `dt` seconds at an altitude (units) over the deck. */
+export function clogging(clog: number, altitude: number, dt: number): number {
+  if (altitude >= 0) return Math.max(0, clog - dt / UNCLOG_SECONDS);
+  return Math.min(1, clog + ((1 + Math.min(1, -altitude / CLOG_DEPTH)) * dt) / CLOG_SECONDS);
+}
+
+/** All the heat going into a hull's radiators in the air per second: the air's at an altitude (units) and speed (units/s), and the reactor's waste heat that a `clog` holds in. */
+export const heatInto = (altitude: number, speed: number, clog: number) => airHeat(altitude, speed) + REACTOR_WASTE * clog;
+
 /** Altitude above the cloud deck (units, negative below it). */
 export const altitudeIn = (air: Air, position: THREE.Vector3) => position.distanceTo(air.center) - air.radius;
 

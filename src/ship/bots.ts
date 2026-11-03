@@ -7,7 +7,7 @@ import { BOOST_PUSH } from '../game/race';
 import { escapeLoad } from '../game/alarms';
 import { devlog } from '../devlog';
 import { ringRim } from '../world/gates';
-import { airHeat, altitudeIn, heatSpeed, LOCK_DEPTH, RADAR_DEPTH, SIGHT_DEPTH } from '../world/air';
+import { altitudeIn, heatInto, heatSpeed, LOCK_DEPTH, REACTOR_WASTE, RADAR_DEPTH, SIGHT_DEPTH } from '../world/air';
 import { exp, hypot } from '../detmath';
 
 /** Bots notice ships within this distance (units, 3.5 km: across the whole field), when no rock is in the way, so the fight finds a Host quickly. */
@@ -145,7 +145,9 @@ const WELL_PULL = 0.3;
  * under attack it may shake the chaser off in the clouds, drifting down at AIR_DIVE (units/s,
  * 40 m/s) to AIR_DIVE_DEPTH under the deck (units, 300 m), for AIR_HIDE (s) after the last blow;
  * a bot of AIR_DARING and more follows its target down into them; and one heading home from
- * beyond its reach goes home first.
+ * beyond its reach goes home first. None of them stays once the clouds have clogged its radiators
+ * past AIR_CLOG, and AIR_CLOG_DARING more for every point of daring (see world/air, clogging):
+ * then it hides and chases no more, and the floor brings it up.
  */
 const AIR_MARGIN = 0.85;
 const AIR_HOT = 60;
@@ -158,6 +160,8 @@ const AIR_DIVE = 800;
 const AIR_DIVE_DEPTH = 6000;
 const AIR_HIDE = 8;
 const AIR_DARING = 0.5;
+const AIR_CLOG = 0.3;
+const AIR_CLOG_DARING = 0.4;
 /**
  * Bots do not ram by accident. They look KEEP_CLEAR_AHEAD seconds ahead: another ship whose way
  * comes closer to theirs than KEEP_CLEAR ship radii (about 85 m) within that time (a racer a
@@ -678,13 +682,15 @@ export class Bot {
     const altitude = altitudeIn(air, me.position);
     const cooling = this.ship.cooling;
     up.subVectors(me.position, air.center).normalize();
+    // its radiators clogged as far as it dares (AIR_CLOG), it gets out of the clouds whatever it is doing
+    const choking = this.ship.clog > AIR_CLOG + AIR_CLOG_DARING * this.skills.daring;
     // under attack it may shake the chaser off in the clouds for a while (AIR_HIDE), slipping
     // down to AIR_DIVE_DEPTH under the deck
-    if (defending) this.hidingUntil = now + AIR_HIDE;
-    const hiding = now < this.hidingUntil;
+    if (defending && !choking) this.hidingUntil = now + AIR_HIDE;
+    const hiding = now < this.hidingUntil && !choking;
     if (hiding && altitude > -AIR_DIVE_DEPTH) desired.addScaledVector(up, -AIR_DIVE);
     // a daring bot follows its target into the clouds; any bot heading home goes home first
-    const chasing = hunting && this.skills.daring >= AIR_DARING;
+    const chasing = hunting && this.skills.daring >= AIR_DARING && !choking;
     if (!racing && !hiding && !chasing && !homeward) {
       // over the floor it sinks no faster than it can stop at it (AIR_BRAKE); under it, no wish
       // downwards at all, and up the deeper it is
@@ -693,14 +699,19 @@ export class Bot {
       if (sinking > allowed) desired.addScaledVector(up, sinking - allowed);
       if (altitude < AIR_ABOVE) desired.addScaledVector(up, AIR_RISE * Math.min(1, (AIR_ABOVE - altitude) / AIR_RISE_SPAN));
     }
-    const safe = heatSpeed(altitude, cooling) * AIR_MARGIN;
-    this.airLimit = safe;
+    // what the radiators shed beyond the reactor's waste heat a clog holds in is what the air may add
+    const safe = heatSpeed(altitude, Math.max(0, cooling - REACTOR_WASTE * this.ship.clog)) * AIR_MARGIN;
     // the alarm: the air heats the hull faster than it cools, and the heat is up; the bot climbs
-    // until the hull has cooled again
-    if (this.ship.heat > AIR_HOT && airHeat(altitude, me.velocity.length()) > cooling) this.climbing = true;
+    // until the hull has cooled again; and choking under the deck, it climbs out at once
+    if (this.ship.heat > AIR_HOT && heatInto(altitude, me.velocity.length(), this.ship.clog) > cooling) this.climbing = true;
     else if (this.ship.heat < AIR_COOL) this.climbing = false;
-    if (this.climbing) desired.copy(up).multiplyScalar(Math.min(safe, CRUISE_SPEED));
-    return this.climbing;
+    const out = this.climbing || (choking && altitude < 0);
+    // on the way out the waste heat comes whatever the speed, so the quicker out the better: as
+    // fast as the air alone allows (AIR_RISE at least), not the speed that would stay cool
+    const escape = Math.max(heatSpeed(altitude, cooling) * AIR_MARGIN, AIR_RISE);
+    this.airLimit = out ? escape : Math.max(safe, AIR_RISE);
+    if (out) desired.copy(up).multiplyScalar(Math.min(escape, CRUISE_SPEED));
+    return out;
   }
 
   /** A rival to shove into the rock beside it (see SHOVE_REACH): the kick, or null. */

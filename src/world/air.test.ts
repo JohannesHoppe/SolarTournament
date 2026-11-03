@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { airAround, airBurn, airHeat, altitudeIn, density, dragAt, dragOn, IN_AIR_TOP, LOCK_DEPTH, opticalDepth, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from './air';
+import { airAround, airBurn, airHeat, altitudeIn, CLOG_LOSS, clogging, density, dragAt, dragOn, heatInto, IN_AIR_TOP, LOCK_DEPTH, opticalDepth, RADAR_DEPTH, REACTOR_WASTE, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from './air';
 import { footOf, skyPointer } from './reference';
 import { arenaById } from './arenas';
 import { ARENA_LIMIT } from './arena';
@@ -158,6 +158,41 @@ describe("Jupiter's air", () => {
     laser.heat -= COOLING * step;
     expect(airBurn(laser, airHeat(m(-200), MAX_SPEED) * step, step, 100)).toBe(0);
     expect(laser.heat).toBeLessThan(110);
+  });
+
+  it('clogs the radiators in 40 s just under the deck and in 20 s 300 m down, and clears them in 4 s over it', () => {
+    const through = (altitude: number) => {
+      let clog = 0;
+      let t = 0;
+      for (; clog < 1; t += 0.1) clog = clogging(clog, altitude, 0.1);
+      return t;
+    };
+    expect(through(-1)).toBeCloseTo(40, 0);
+    expect(through(m(-300))).toBeCloseTo(20, 0);
+    let clog = 1;
+    let t = 0;
+    for (; clog > 0; t += 0.1) clog = clogging(clog, m(50), 0.1);
+    expect(t).toBeCloseTo(4, 0);
+  });
+
+  it('burns a ship camping under the deck at rest: the laser locks within half a minute, the hull burns after', () => {
+    const step = 1 / 30;
+    const ship = { heat: 0, overheated: false, clog: 0, get cooling() {
+      return COOLING * (1 - CLOG_LOSS * this.clog);
+    } };
+    let locked = Infinity;
+    let burnt = 0;
+    for (let t = 0; t < 90; t += step) {
+      ship.clog = clogging(ship.clog, m(-200), step);
+      ship.heat = Math.max(0, ship.heat - ship.cooling * step);
+      burnt += airBurn(ship, heatInto(m(-200), 0, ship.clog) * step, step, 100);
+      if (ship.overheated) locked = Math.min(locked, t);
+    }
+    expect(locked).toBeLessThan(30);
+    expect(burnt).toBeGreaterThan(30);
+    // clean radiators shed the reactor's waste heat without a trace
+    expect(heatInto(m(-200), 0, 0)).toBe(0);
+    expect(REACTOR_WASTE).toBeLessThan(COOLING);
   });
 });
 

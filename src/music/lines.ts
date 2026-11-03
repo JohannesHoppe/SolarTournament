@@ -417,6 +417,7 @@ export const COMPUTER = {
   jupiterPull: 'Jupiter is dragging us down! Burn away from it!',
   airHot: 'It is getting hot down there, sweetheart. Slow down, or climb before you boil over.',
   airBurn: 'We are burning up! Climb, darling!',
+  clog: 'The clouds are clogging our radiators, sweetheart. Get out of them before the reactor cooks us.',
   wellTight: 'Now it gets really tight! Full burn, now!',
   wellLost: 'I am sorry, love.',
   orbitReady: 'Orbit ready, darling.',

@@ -5,6 +5,7 @@ import { firing, NOZZLES, thrustersOf, type Thrusters } from './thrusters';
 import { THRUSTER_LAYOUTS } from './models';
 import { MASS, type Body } from '../world/bodies';
 import { raySphere } from '../world/asteroids';
+import { CLOG_LOSS } from '../world/air';
 import { ramDamage, type RamZone } from './impact';
 import type { Controls } from '../input/input';
 import { ONLINE_LOAD, TORPEDOES } from '../game/torpedoes';
@@ -336,10 +337,12 @@ export class Ship {
   inShadow = false;
   /** Set by the game: how well the radiators shed heat in sunlight in this arena (the sun's glare: less). */
   sunCooling = 1;
+  /** How far a planet's clouds have clogged the radiators, 0 clean to 1 through (see world/air, clogging); kept by the browser that runs the ship. */
+  clog = 0;
 
-  /** How much heat the radiators shed per second where the ship is now (heat units/s, MAX_HEAT the laser's limit). */
+  /** How much heat the radiators shed per second where the ship is now (heat units/s, MAX_HEAT the laser's limit), less as far as they are clogged. */
   get cooling() {
-    return (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * this.perks.cooling;
+    return (this.inShadow ? COOLING_SHADOW : COOLING_SUN * this.sunCooling) * this.perks.cooling * (1 - CLOG_LOSS * this.clog);
   }
   alive = true;
   score = 0;
@@ -523,6 +526,7 @@ export class Ship {
     this.plating = 0;
     this.nova = false;
     this.heat = 0;
+    this.clog = 0;
     this.glow = 0;
     this.overheated = false;
     this.strain = 0;

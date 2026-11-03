@@ -38,7 +38,7 @@ import { Lobby, type Listing } from '../net/lobby';
 import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
-import { airAround, airBurn, airHeat, altitudeIn, density, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
+import { airAround, airBurn, altitudeIn, clogging, density, heatInto, REACTOR_WASTE, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
 import { Haze, installHaze, skyLight } from '../view/haze';
 import { Reentry } from '../view/reentry';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
@@ -360,6 +360,10 @@ const WIND_FULL = 0.8;
 const AIR_HOT = 70;
 const AIR_COOL = 40;
 const AIR_GLOW = { caution: 0.12, warning: 0.3, critical: 0.6 } as const;
+/** The clog alarm (see clogAlarm): CAUTION from CLOG_CAUTION of a full clog, WARNING from CLOG_WARNING; Nicole may warn again once it is under CLOG_QUIET. */
+const CLOG_CAUTION = 0.25;
+const CLOG_WARNING = 0.6;
+const CLOG_QUIET = 0.1;
 /** Nicole warns of friendly fire (a trigger pulled with the nose on a ship of the own side, or a hit on one) at most this often (s). */
 const FRIEND_WARNING = 15;
 /** The on-target tick sounds at most this often (s), so a nose on the edge of a hull does not chatter. */
@@ -1004,6 +1008,8 @@ export class Game implements OnlineGame {
   private readonly orbitCalls = new OrbitCalls();
   /** How far Nicole has warned of the air's heat (1 heating, 2 burning), reset once the hull has cooled (see airAlarm). */
   private airSaid = 0;
+  /** Whether Nicole has warned of the clogged radiators this dive (see clogAlarm). */
+  private clogSaid = false;
   /** How much the screen glows with a solar flare's heat and with the air's (0..1), the larger shown (see showFlare, airAlarm). */
   private flareGlow = 0;
   private airGlow = 0;
@@ -4792,18 +4798,34 @@ export class Game implements OnlineGame {
       return;
     }
     const altitude = altitudeIn(air, me.flight.position);
-    const cooling = me.cooling;
-    if (airHeat(altitude, me.flight.velocity.length()) <= cooling) {
+    up.subVectors(me.flight.position, air.center);
+    this.clogAlarm(me, up);
+    // what the radiators shed beyond the reactor's waste heat a clog holds in is left for the air
+    const cooling = Math.max(0, me.cooling - REACTOR_WASTE * me.clog);
+    if (heatInto(altitude, me.flight.velocity.length(), me.clog) <= me.cooling) {
       if (me.heat < AIR_COOL) this.airSaid = 0;
       return;
     }
     const level = me.heat >= MAX_HEAT ? 'critical' : me.heat >= AIR_HOT ? 'warning' : 'caution';
     const safe = Math.round(safeSpeed(altitude, cooling) * METERS_PER_UNIT);
-    this.alarms.raise({ id: 'air', level, text: t('HULL HEAT · SAFE {speed} m/s', { speed: safe }), direction: up.subVectors(me.flight.position, air.center) });
+    this.alarms.raise({ id: 'air', level, text: t('HULL HEAT · SAFE {speed} m/s', { speed: safe }), direction: up });
     this.airGlow = AIR_GLOW[level];
     const said = level === 'critical' ? 2 : 1;
     // a line Nicole could not say yet (she was speaking) is tried again the next frame
     if (said > this.airSaid && level !== 'warning' && this.speaker.say(said === 2 ? COMPUTER.airBurn : COMPUTER.airHot, said === 2 ? 'urgent' : undefined)) this.airSaid = said;
+  }
+
+  /**
+   * The clouds' crust on the own radiators (see world/air, clogging): CAUTION from CLOG_CAUTION,
+   * WARNING from CLOG_WARNING, pointing up, out of the clouds; Nicole says it once a dive, when
+   * the warning comes, and again only once the radiators were nearly clean.
+   */
+  private clogAlarm(me: Ship, out: THREE.Vector3) {
+    if (me.clog < CLOG_QUIET) this.clogSaid = false;
+    if (me.clog < CLOG_CAUTION) return;
+    const level = me.clog >= CLOG_WARNING ? 'warning' : 'caution';
+    this.alarms.raise({ id: 'clog', level, text: t('RADIATORS CLOGGED {n} %', { n: Math.round(me.clog * 100) }), direction: out });
+    if (level === 'warning' && !this.clogSaid && this.speaker.say(COMPUTER.clog)) this.clogSaid = true;
   }
 
   /** Runs the flight school for this step: judges the drill, and leaves its marker and racing line for the HUD (see showSchoolHud). */
@@ -6001,13 +6023,16 @@ export class Game implements OnlineGame {
   /**
    * The air of an arena heats a ship this browser runs by its speed and depth (see world/air):
    * the heat goes into its radiators as the laser's does (see world/air, airBurn), and what the full
-   * radiators cannot shed burns the hull. A clone that burns up counts as a knockout of whoever
-   * shoved it last (see KNOCKOUTS).
+   * radiators cannot shed burns the hull. Under the deck the clouds clog its radiators, and the
+   * reactor's waste heat builds up in them (see world/air, clogging). A clone that burns up counts
+   * as a knockout of whoever shoved it last (see KNOCKOUTS).
    */
   private friction(ship: Ship, dt: number, now: number) {
     const air = this.field.air;
     if (!air || !ship.alive) return;
-    const heat = airHeat(altitudeIn(air, ship.flight.position), ship.flight.velocity.length()) * dt;
+    const altitude = altitudeIn(air, ship.flight.position);
+    ship.clog = clogging(ship.clog, altitude, dt);
+    const heat = heatInto(altitude, ship.flight.velocity.length(), ship.clog) * dt;
     if (heat < 1e-4) return;
     const burn = airBurn(ship, heat, dt, MAX_HEAT);
     if (burn > 0 && ship.structural(burn, now) === 'destroyed') this.shipDestroyed(ship, null, 'air');

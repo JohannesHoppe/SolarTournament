@@ -7,7 +7,7 @@ import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, strainAfter
 import { testField } from '../test/field';
 import type { AsteroidField } from '../world/asteroids';
 import { arenaById } from '../world/arenas';
-import { airBurn, airHeat, altitudeIn, dragOn, safeSpeed } from '../world/air';
+import { airBurn, altitudeIn, clogging, dragOn, heatInto, safeSpeed } from '../world/air';
 
 /** A ship's hit radius (units, 17 m), as the game's hulls have it. */
 const RADIUS = 340;
@@ -16,7 +16,7 @@ const STEP = 1 / 30;
 /** A ship with the game's rules for sides and its tail, but no model: the bots only read its flight and state. */
 function ship(name: string, position: THREE.Vector3, facing: THREE.Vector3): Ship {
   const s = Object.create(Ship.prototype) as Ship;
-  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, heat: 0, overheated: false, inShadow: false, sunCooling: 1, perks: { cooling: 1 }, flight: new FlightModel() });
+  Object.assign(s, { id: name, name, radius: RADIUS, alive: true, drive: 1, protectedUntil: 0, team: -1, strain: 0, heat: 0, clog: 0, overheated: false, inShadow: false, sunCooling: 1, perks: { cooling: 1 }, flight: new FlightModel() });
   s.flight.reset(position, new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(position, facing.clone().add(position), new THREE.Vector3(0, 1, 0))));
   return s;
 }
@@ -248,8 +248,9 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
       dragOn(f.air!, me.flight.position, me.flight.velocity, STEP, outside);
       me.inShadow = altitudeIn(f.air!, me.flight.position) < 0;
       me.flight.update(STEP, bot.think(t, [me], f), outside);
+      // the air's heat alone, with clean radiators: their clogging has a test of its own
       me.heat = Math.max(0, me.heat - me.cooling * STEP);
-      burnt += airBurn(me, airHeat(altitudeIn(f.air!, me.flight.position), me.flight.velocity.length()) * STEP, STEP, MAX_HEAT);
+      burnt += airBurn(me, heatInto(altitudeIn(f.air!, me.flight.position), me.flight.velocity.length(), 0) * STEP, STEP, MAX_HEAT);
       hottest = Math.max(hottest, me.heat);
       fastest = Math.max(fastest, me.flight.velocity.length() / safeSpeed(altitudeIn(f.air!, me.flight.position), me.cooling));
     }
@@ -381,6 +382,65 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
     flyWith(prey, hidden, [], 40, () => (dived ||= altitudeIn(f.air!, prey.flight.position) < 0));
     expect(dived).toBe(true);
     expect(altitudeIn(f.air!, prey.flight.position)).toBeGreaterThan(0);
+  });
+
+  it('leave the clouds once they clog its radiators, however hard it is hit, a daring bot later than a cautious one', () => {
+    const f = air();
+    const outside = new THREE.Vector3();
+    // under fire 200 m under the deck all the time from a ship 100 m off in the clouds, its
+    // radiators half clogged already and clogging on as in the game
+    const stay = (daring: number) => {
+      const me = ship('Kessler', deep(200), at(1));
+      me.clog = 0.5;
+      const bot = new Bot(me, { ...evenSkills(0.5), daring });
+      const shooter = ship('Halley', deep(200, -2000), at(1));
+      let left = Infinity;
+      for (let t = 0; t < 60; t += STEP) {
+        bot.struck(shooter, t);
+        const altitude = altitudeIn(f.air!, me.flight.position);
+        me.clog = clogging(me.clog, altitude, STEP);
+        f.gravity(me.flight.position, outside);
+        dragOn(f.air!, me.flight.position, me.flight.velocity, STEP, outside);
+        me.flight.update(STEP, bot.think(t, [me], f), outside);
+        if (altitude > 0 && left === Infinity) left = t;
+      }
+      return left;
+    };
+    // the bots' own chance (their jinks, their wandering) from a fixed seed, so the run is the same every time
+    let seed = 2584;
+    const random = vi.spyOn(Math, 'random').mockImplementation(() => (seed = (seed * 16807) % 2147483647) / 2147483647);
+    try {
+      expect(stay(0.1)).toBeLessThan(40);
+      expect(stay(0.9)).toBeLessThan(60);
+    } finally {
+      random.mockRestore();
+    }
+  });
+
+  it('dare a clog: half clogged and under fire, a daring bot still hides in the clouds, a cautious one climbs out', () => {
+    const f = air();
+    const outside = new THREE.Vector3();
+    // the bots' own chance (their jinks, their wandering) held still, so only the clog decides
+    const random = vi.spyOn(Math, 'random').mockReturnValue(0.5);
+    const climb = (daring: number) => {
+      const me = ship('Kessler', deep(150), at(1));
+      me.clog = 0.5;
+      const bot = new Bot(me, { ...evenSkills(0.5), daring });
+      const shooter = ship('Halley', deep(150, -2000), at(1));
+      for (let t = 0; t < 4; t += STEP) {
+        bot.struck(shooter, t);
+        f.gravity(me.flight.position, outside);
+        dragOn(f.air!, me.flight.position, me.flight.velocity, STEP, outside);
+        me.flight.update(STEP, bot.think(t, [me], f), outside);
+      }
+      return altitudeIn(f.air!, me.flight.position) - altitudeIn(f.air!, deep(150));
+    };
+    try {
+      expect(climb(0.1)).toBeGreaterThan(0);
+      expect(climb(0.9)).toBeLessThan(0);
+    } finally {
+      random.mockRestore();
+    }
   });
 
   it('lose a ship that dived under the deck, seen at a slant from above it', () => {
