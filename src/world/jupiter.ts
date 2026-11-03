@@ -411,7 +411,8 @@ const sheetFragment = () => /* glsl */ `
     vec2 s = vec2(-(around + turn) * span, latitude * sheet.w);
     float pixel = length(fwidth(s));
     // from above, a view that dipped through the sheet rises out of it again farther on: the
-    // sheet's underside there is the same cloud, already drawn where the view went in
+    // sheet's underside there is the same cloud, already drawn where the view went in (and from
+    // above the sheet draws its front faces only, see Jupiter.update)
     if (!gl_FrontFacing && distance(cameraPosition, sheet.xyz) > sheet.w) discard;
     float away = distance(cameraPosition, vWorld);
     vec3 view = normalize(cameraPosition - vWorld);
@@ -954,6 +955,9 @@ export class Jupiter {
     for (const { mesh, depth } of this.sheets) {
       mesh.renderOrder = -Math.round(Math.abs(altitude + depth));
       mesh.material.uniforms.glow.value = shade(depth);
+      // from above a sheet its undersides are all left out (see sheetFragment): its front faces
+      // alone, instead of a second pass over the undersides that only discards; from below both
+      mesh.material.side = altitude > -depth ? THREE.FrontSide : THREE.DoubleSide;
     }
     this.sky.position.copy(eye);
     // the clouds carried by the wind, the wisps around the eye while it is under the deck
