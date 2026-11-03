@@ -128,7 +128,7 @@ describe('the nanobots', () => {
   /** A ship with a hurt drive and thrusters, mended by its nanobots step by step. */
   const hurt = () => {
     const s = Object.create(Ship.prototype) as Ship;
-    Object.assign(s, { drive: 1, thrusters: 1, hull: 60, mending: false, hurtAt: -Infinity, driveBefore: 1, thrustersBefore: 1 });
+    Object.assign(s, { perks: { nanobots: true }, drive: 1, thrusters: 1, hull: 60, mending: false, hurtAt: -Infinity, driveBefore: 1, thrustersBefore: 1 });
     return s;
   };
   const mend = (s: Ship, from: number, to: number) => {

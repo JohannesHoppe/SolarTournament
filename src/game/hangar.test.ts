@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buy, complete, emptyHangar, HANGAR_SHIPS, hangarFrom, keepable, LEVELS, MAX_LOOKS, nextPrice, ONLINE_LEVEL, packLooks, payOut, perksOf, sovereignEarned, STOCK, unpackLooks, UPGRADES, WALLET } from './hangar';
+import { BOT_GEAR, buy, buyGear, complete, emptyHangar, HANGAR_SHIPS, hangarFrom, keepable, LEVELS, MAX_LOOKS, nextPrice, ONLINE_LEVEL, packLooks, payOut, perksOf, sovereignEarned, STOCK, unpackLooks, UPGRADES, WALLET } from './hangar';
 
 /** A hangar with every upgrade of both interceptors bought. */
 function maxed() {
@@ -46,8 +46,26 @@ describe('the hangar', () => {
     expect(solo.damage).toBeLessThan(1);
     expect(solo.torpedoes).toBe(2);
     expect(online.neon).toBe(LEVELS);
-    // the Sovereign flies like a complete interceptor, whatever was bought
-    expect(perksOf(emptyHangar(), 'sovereign', false)).toEqual(solo);
+    // the Sovereign flies like a complete interceptor with all the gear, whatever was bought
+    expect(perksOf(emptyHangar(), 'sovereign', false)).toEqual({ ...solo, hook: true, nanobots: true, selfDestruct: true });
+  });
+
+  it('sells the gear once for both interceptors, carried in full online too, never by a stock ship', () => {
+    const hangar = emptyHangar();
+    for (const gear of ['hook', 'nanobots', 'selfDestruct'] as const) expect(perksOf(hangar, 'human', false)[gear]).toBe(false);
+    hangar.coins = 2500;
+    expect(buyGear(hangar, 'selfDestruct')).toBe(false);
+    expect(buyGear(hangar, 'hook')).toBe(true);
+    expect(buyGear(hangar, 'hook')).toBe(false);
+    expect(hangar.coins).toBe(500);
+    for (const ship of ['human', 'alien'] as const) for (const online of [false, true]) expect(perksOf(hangar, ship, online).hook).toBe(true);
+    expect(perksOf(hangar, 'human', true).nanobots).toBe(false);
+    // kept and read back
+    expect(hangarFrom(JSON.stringify(hangar)).hangar.gear.hook).toBe(true);
+  });
+
+  it('fits a bot with the hook and the nanobots on a stock ship, never the self-destruct', () => {
+    expect(BOT_GEAR).toEqual({ ...STOCK, hook: true, nanobots: true, selfDestruct: false });
   });
 
   it('tells other browsers its looks and its radiators online, so they heat it in the air as its own browser does', () => {
@@ -63,7 +81,7 @@ describe('the hangar', () => {
   });
 
   it('holds in its wallet what the hangar sells, and no more', () => {
-    expect(WALLET).toBe(113_000);
+    expect(WALLET).toBe(122_000);
     const hangar = emptyHangar();
     hangar.coins = WALLET - 500;
     expect(payOut(hangar, 2000)).toBe(500);

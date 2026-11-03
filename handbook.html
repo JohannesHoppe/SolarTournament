@@ -65,6 +65,7 @@
         <dt>T</dt><dd data-i18n>Autopilot (flies where it points) / free drift</dd>
         <dt>E</dt><dd data-i18n>Overdrive: one shove forward, last resort, once a minute</dd>
         <dt>G</dt><dd data-i18n>Torpedo: homes on the ship ahead, two per clone</dd>
+        <dt data-i18n>B (hold)</dt><dd data-i18n>Self-destruct: takes every rival close by along</dd>
         <dt data-i18n>V / Right click</dt><dd data-i18n>Hook: bite a rock or a ship and reel in; press again to let go and fly off</dd>
         <dt>C</dt><dd data-i18n>Cockpit / chase camera</dd>
         <dt>M</dt><dd data-i18n>Radio on / off</dd>
@@ -87,6 +88,7 @@
         <dt>RB</dt><dd data-i18n>Overdrive: one shove forward, last resort, once a minute</dd>
         <dt data-i18n>D-pad up</dt><dd data-i18n>Torpedo: homes on the ship ahead, two per clone</dd>
         <dt data-i18n>D-pad down</dt><dd data-i18n>Hook: bite a rock or a ship and reel in; press again to let go and fly off</dd>
+        <dt data-i18n>D-pad left (hold)</dt><dd data-i18n>Self-destruct: takes every rival close by along</dd>
         <dt data-i18n>View</dt><dd data-i18n>Cockpit / chase camera</dd>
       </dl>
       <h3 data-i18n>Touch screen</h3>
@@ -101,6 +103,7 @@
         <dt data-i18n>Auto</dt><dd data-i18n>Autopilot / free drift</dd>
         <dt data-i18n>Overdrive</dt><dd data-i18n>One shove forward, last resort</dd>
         <dt data-i18n>Torpedo</dt><dd data-i18n>Launch a torpedo</dd>
+        <dt data-i18n>Self-destruct</dt><dd data-i18n>Hold: takes every rival close by along</dd>
       </dl>
       <p data-i18n>Fly with the phone held sideways. A key pressed on a hardware keyboard hides the touch controls; a touch brings them back.</p>
     </section>
@@ -200,7 +203,7 @@
       <h2 data-i18n>Victory Through Superior Position</h2>
       <h3 data-i18n>Armor and the drive</h3>
       <p data-i18n>There are no shields. Nose and flanks are armor: a beam only scorches it, {armor} of {hull} hull points. From behind, within {driveCone}° of the axis, a beam hits the main drive: each hit costs a fifth of its thrust, and the fifth sends the reactor critical. Five hits from behind win the fight.</p>
-      <p data-i18n>Nanobots mend your drive and thrusters {nanoWait} s after the last blow to them, whole again in {nanoSeconds} s; the hull stays as it is. So a hurt drive is no reason to give up: break off, take cover behind a rock, and come back at full thrust.</p>
+      <p data-i18n>Nanobots, gear from the hangar, mend your drive and thrusters {nanoWait} s after the last blow to them, whole again in {nanoSeconds} s; the hull stays as it is. So a hurt drive is no reason to give up: break off, take cover behind a rock, and come back at full thrust.</p>
       <p data-i18n>So a fight is won by position: get behind the other ship, and keep your armored nose to anyone behind you. The crosshair glows orange only over a drive. ON YOUR TAIL means: turn your nose to that ship, now.</p>
       <p data-i18n>Whoever hit you in the last few seconds carries a red warning sign on its mark, the latest one pulsing, and when it hit you from out of sight, Nicole names it. Turn round, and you know whom to take on.</p>
       <p data-i18n>Getting behind a bot is a matter of drift: your flight slides on, and your nose stays on its drive. With the autopilot on, your flight would follow your nose and carry you past it.</p>
@@ -217,7 +220,7 @@
       <p data-i18n>Or outfly it. A torpedo flies at up to {torpedoSpeed} m/s, more than your {limit} m/s: running straight away only buys time, and only an overdrive outruns it, for a moment. But it turns with {torpedoTurn} g, you with {grip}. Nicole counts it down (a thousand, five hundred, three hundred, two hundred, a hundred meters) and calls “Break!” about {torpedoBreak} s before it hits: turn hard across its path now, or dodge a moment later, and it overshoots. Hold the turn, and it comes round again; jink one way, then the other, and it burns out after {torpedoBurn} s.</p>
       <p data-i18n>A torpedo on your hook is a bomb on a string. It weighs {torpedoMass} t, and its motor still pushes for its target at {torpedoThrust} g, but your drive drags it wherever you go; after {torpedoBurn} s it is just a mass on the rope. Its fuse goes off on every ship, yours too: swing it into a rival, or let go to fling it. While you hold it, and {fling} s after, its kill is yours. The HUD says TORPEDO ON THE LINE.</p>
       <h3 id="hook" data-i18n>The hook</h3>
-      <p data-i18n>A harpoon flies along the nose and bites the first rock, ship, sponsor probe or torpedo within {hookRange} km; a probe it bites comes in on the cable and is yours when it arrives, unless another ship flies through it first. While it holds, the winch reels in at {hookPull} g, and the cable never gets longer: a ship flying past its rock swings around it, faster the more cable comes in. Press the hook again to let go, and you fly off along the swing like a stone from a sling. Ready again after {hookReady} s.</p>
+      <p data-i18n>A harpoon flies along the nose and bites the first rock, ship, sponsor probe or torpedo within {hookRange} km; a probe it bites comes in on the cable and is yours when it arrives, unless another ship flies through it first. While it holds, the winch reels in at {hookPull} g, and the cable never gets longer: a ship flying past its rock swings around it, faster the more cable comes in. Press the hook again to let go, and you fly off along the swing like a stone from a sling. Ready again after {hookReady} s. The hook is gear: buy it in the hangar; the flight school lends you one for its drills.</p>
       <p data-i18n>The cable only pulls, and every jerk is shared by mass: a rock is millions of times your {shipMass} t and stays where it is, a rival of your mass is pulled as hard as you. Hooked to a ship, both drives pull against the rope: a tug of war the stronger drive wins, and an overdrive's shove yanks the other along. In Capture the Flag the hook takes a sponsor core too.</p>
       <p data-i18n>A cable never passes through anything solid: it wraps around it. When rock, ice, junk or a hull comes between you and what you hooked, the cable lies on its edge and you swing around that edge; swing back, and it comes off again. Let go before it winds onto the rock: the winch keeps you clear of it by paying out cable, and that eats your swing. It snaps on a planet's or a black hole's body, on the battleship's hull, on a rock that sweeps right through it, and once it has wound a whole turn round a rock.</p>
       <h3 id="probes" data-i18n>Probes</h3>
@@ -233,6 +236,8 @@
       <p data-i18n>A dead clone's twin laser, plating and nova core fly out again as probes, for whoever gets there first.</p>
       <h3 id="nova" data-i18n>The nova core</h3>
       <p data-i18n>One probe in fourteen. Your next press of fire is no laser: the core goes off and destroys every other ship within {nova} m, your own side's too, each rival a double kill. Your clone burns up with it, free of charge: no death, no ad. So fly into the crowd first, then fire. Within {novaPanic} km of a holder the siren tells everyone else to run.</p>
+      <h3 id="self-destruct" data-i18n>The self-destruct</h3>
+      <p data-i18n>Gear from the hangar. Hold its key for {selfDestructHold} s, and your reactor goes off: every ship within {selfDestruct} m dies with you, each a kill of yours. Your own clone dies too, a death like a crash, ad and all. The last answer to a rival on your tail or on your hook: reel it in, then hold. Not in a race, not in the flight school.</p>
     </section>
 
     <section id="dirty">
@@ -325,7 +330,7 @@
       <h2 data-i18n>Points, Coins and the Hangar</h2>
       <p data-i18n>A kill {kill} (in a race {raceKill}), rocks {rock1}, {rock2} and {rock3}, a close call {closeCall}, a gate {gatePoints}, first place in a race {firstPlace}. Every point is paid out as one Solar Coin at the round's end; training is free and pays nothing.</p>
       <p data-i18n>Kills close together are a show, and the crowd pays for it: a kill within {streak} s of your last one makes a streak. The second earns half a kill more ({streakDouble}), the third and every one after a whole kill more ({streakMore}); the bots' streaks pay alike. A nova's kills already count double and earn no bonus, but they count in the streak; a kill of your own side counts in none, and your clone's death ends it.</p>
-      <p data-i18n>In the hangar the coins buy upgrades for both interceptors, three steps each: radiators, thrusters, main drive, torpedo tubes, plating, and the looks (neon trim, drive flame). Online every upgrade counts for one step at most, so newcomers meet veterans almost as equals; the looks count in full. Complete both interceptors, and the President gives you the Sovereign: a trophy, not a better ship.</p>
+      <p data-i18n>In the hangar the coins buy upgrades for both interceptors, three steps each: radiators, thrusters, main drive, torpedo tubes, plating, and the looks (neon trim, drive flame). Besides, they buy gear, once for both: the hook ({hookPrice} ☉), the nanobots ({nanobotsPrice} ☉) and the self-destruct ({selfDestructPrice} ☉). Online every upgrade counts for one step at most, so newcomers meet veterans almost as equals; gear and looks count in full, and the bots carry the hook and the nanobots. Complete both interceptors, and the President gives you the Sovereign: a trophy, not a better ship.</p>
     </section>
 
     <section id="honor">

@@ -18,6 +18,7 @@ import { orbitRoom, safePeriapsis, wellMu } from '../game/orbit';
 import { ASTEROID_POINTS, CRUMBLE_AFTER } from '../world/asteroids';
 import { ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
 import { arenaById, RING_LAYER } from '../world/arenas';
+import { GEAR, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS } from '../game/hangar';
 
 /**
  * The numbers of the Pilot's Handbook (handbook.html), filled into its texts as {placeholders}
@@ -96,6 +97,11 @@ export const FROM_CODE: Record<string, number> = {
   reactor: ZONE_HITS.reactor,
   torpedoHits: TORPEDO_HITS,
   nova: meters(NOVA_RADIUS),
+  selfDestruct: meters(SELF_DESTRUCT_RADIUS),
+  selfDestructHold: SELF_DESTRUCT_HOLD,
+  hookPrice: GEAR.find((gear) => gear.id === 'hook')!.price,
+  nanobotsPrice: GEAR.find((gear) => gear.id === 'nanobots')!.price,
+  selfDestructPrice: GEAR.find((gear) => gear.id === 'selfDestruct')!.price,
   novaShatter: meters(NOVA_SHATTER),
   novaEdge: percent(NOVA_EDGE),
   batteryPeriod: BATTERY_PERIOD,

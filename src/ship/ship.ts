@@ -35,7 +35,7 @@ const REAR_CONE_COS = cos(REAR_CONE);
 /** Damage a beam into the flanks deals to the maneuvering thrusters (0..1), on top of the armor. */
 const THRUSTER_HIT = 0.1;
 /**
- * Every ship in the arena carries nanobots (see Ship.nanobots): NANO_WAIT (s) after the last blow
+ * A ship whose Host bought them carries nanobots (see Ship.nanobots): NANO_WAIT (s) after the last blow
  * to the drive or the thrusters they begin to mend both, back to whole in NANO_SECONDS (s) from
  * nothing, so nobody flies on with a broken drive for the rest of a life. The hull they leave alone.
  */
@@ -804,12 +804,14 @@ export class Ship {
   }
 
   /**
-   * The nanobots (see NANO_WAIT): once nothing has hurt the drive or the thrusters for NANO_WAIT
+   * The nanobots (see NANO_WAIT), gear bought in the hangar (Perks.nanobots; stock ships, the
+   * bots' too, carry none): once nothing has hurt the drive or the thrusters for NANO_WAIT
    * seconds, they mend both back to whole in NANO_SECONDS; a new blow stops them and the wait
    * begins again. The hull they leave alone: it is the clone's life. Run by the browser that
    * flies the ship, so the others see the mended parts in its state.
    */
   private nanobots(dt: number, now: number) {
+    if (!this.perks.nanobots) return;
     if (this.drive < this.driveBefore || this.thrusters < this.thrustersBefore) this.hurtAt = now;
     this.mending = now - this.hurtAt >= NANO_WAIT && (this.drive < 1 || this.thrusters < 1);
     if (this.mending) {

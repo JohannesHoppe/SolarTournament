@@ -27,7 +27,7 @@ type ActionHandler = (action: Action) => void;
 export type Device = 'keyboard' | 'gamepad' | 'touch';
 
 /** What the Host can be asked to use, by the flight school's drills and by the HUD's labels. */
-export type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'dodge' | 'fire' | 'autopilot' | 'camera' | 'cinema' | 'hook' | 'overdrive' | 'torpedo';
+export type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'dodge' | 'fire' | 'autopilot' | 'camera' | 'cinema' | 'hook' | 'overdrive' | 'torpedo' | 'selfDestruct';
 
 /**
  * The keys, buttons and sticks of each device for each command, as keycaps show them (the first
@@ -50,6 +50,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     hook: ['V', msg('Right click')],
     overdrive: ['E'],
     torpedo: ['G'],
+    selfDestruct: ['B'],
   },
   gamepad: {
     turn: [msg('Left stick')],
@@ -66,6 +67,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     hook: [msg('D-pad down')],
     overdrive: ['RB'],
     torpedo: [msg('D-pad up')],
+    selfDestruct: [msg('D-pad left')],
   },
   touch: {
     turn: [msg('Left stick')],
@@ -82,6 +84,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     hook: [msg('HOOK')],
     overdrive: [msg('OVERDRIVE')],
     torpedo: [msg('TORPEDO')],
+    selfDestruct: [msg('SELF-DESTRUCT')],
   },
 };
 
@@ -104,7 +107,7 @@ const THRUSTER_KEYS: Record<string, { axis: 'x' | 'y'; sign: number } | undefine
 };
 
 /** Buttons of the standard gamepad layout (Xbox naming). */
-const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, leftStick: 10, rightStick: 11, up: 12, down: 13 } as const;
+const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, leftStick: 10, rightStick: 11, up: 12, down: 13, left: 14 } as const;
 const PAD_ACTIONS: [number, Action][] = [
   [PAD.a, 'confirm'],
   [PAD.menu, 'pause'],
@@ -246,6 +249,11 @@ export class Input {
   /** The hook's button is down: V, the right mouse button, the D-pad down, or HOOK on touch. Pressed it fires, pressed again it lets go (see Game.hookOwn). */
   get hooking(): boolean {
     return this.keys.has('KeyV') || this.mouseHook || this.touch.hook || this.padHeld(PAD.down);
+  }
+
+  /** The self-destruct's button is held: B, the D-pad left, or SELF-DESTRUCT on touch; held long enough, it goes off (see Game.selfDestructOwn). */
+  get selfDestructing(): boolean {
+    return this.keys.has('KeyB') || this.touch.selfDestruct || this.padHeld(PAD.left);
   }
 
   /** A button of the gamepad (standard layout) is held. */

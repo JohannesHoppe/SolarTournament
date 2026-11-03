@@ -194,7 +194,9 @@ for (const kick of [true, false]) {
       const wait = async (seconds: number) => {
         while (game.time - start < seconds) await new Promise((resolve) => requestAnimationFrame(resolve));
       };
-      await wait(1);
+      // the kick 100 m before the gate: kicked earlier, the victim would drift out past the band
+      // before it reaches the gate
+      await wait(2);
       if (kick) game.dodge({ x: Math.sign(me.flight.toLocal(victim.flight.position.clone()).x), y: 0 });
       await wait(3.5);
       return { died: victim.deaths > deaths, kills: me.kills - kills, banner: game.hud.bannerText.textContent };
@@ -203,3 +205,52 @@ for (const kick of [true, false]) {
     expect(errors).toEqual([]);
   });
 }
+
+test('the self-destruct, held for a second, takes a rival close by along, a kill of the Host’s, and the Host’s clone with it', async ({ page }) => {
+  const errors = await openGame(page);
+  await startSolo(page, 'deathmatch');
+  await page.waitForFunction(() => window.game.clamped, null, { timeout: 90_000 });
+  await page.waitForFunction(() => window.game.state === 'playing' && !window.game.clamped && window.game.me?.alive, null, { timeout: 60_000 });
+  const before = await page.evaluate(() => {
+    const game = window.game;
+    const me = game.me;
+    const [rival, ...others] = game.ships.filter((ship: { id: string }) => ship !== me);
+    for (const ship of others) {
+      ship.alive = false;
+      ship.respawnAt = Infinity;
+    }
+    // the rival 30 m off the own ship, at rest beside it
+    rival.flight.position.copy(me.flight.position).add({ x: 600, y: 0, z: 0 });
+    rival.flight.velocity.set(0, 0, 0);
+    rival.protectedUntil = 0;
+    me.protectedUntil = 0;
+    game.rivalForTest = rival;
+    return { kills: me.kills, deaths: me.deaths };
+  });
+  // held: nothing before the second is up, then it goes off (within 3 s of game time, however the frames fall)
+  // the rival is a bot and would fly off: it is held beside the own ship every frame
+  await page.keyboard.down('KeyB');
+  const held = await page.evaluate(async () => {
+    const game = window.game;
+    const me = game.me;
+    const rival = game.rivalForTest;
+    const start = game.time;
+    let early = false;
+    while (me.alive && game.time - start < 3) {
+      if (rival.alive) {
+        rival.flight.position.copy(me.flight.position).add({ x: 600, y: 0, z: 0 });
+        rival.flight.velocity.copy(me.flight.velocity);
+      }
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      if (!me.alive && game.time - start < 0.6) early = true;
+    }
+    return { early };
+  });
+  await page.keyboard.up('KeyB');
+  expect(held.early).toBe(false);
+  const after = await page.evaluate(() => ({ kills: window.game.me.kills, deaths: window.game.me.deaths, rival: window.game.rivalForTest.alive }));
+  expect(after.rival).toBe(false);
+  expect(after.kills).toBe(before.kills + 1);
+  expect(after.deaths).toBe(before.deaths + 1);
+  expect(errors).toEqual([]);
+});

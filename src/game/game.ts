@@ -57,7 +57,7 @@ import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
 import { Showcase } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
-import { buy, emptyHangar, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, sovereignEarned, UPGRADES, WALLET } from './hangar';
+import { BOT_GEAR, buy, buyGear, emptyHangar, GEAR, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS, sovereignEarned, UPGRADES, WALLET } from './hangar';
 import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, PROBE_STEADY, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
@@ -578,7 +578,7 @@ type State = 'menu' | 'playing' | 'paused' | 'results';
  * space, the arena's massive body; or, with a killer, its nova core, its plume, its ram, or a
  * crash right after its shove (a knockout).
  */
-type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | null;
+type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | null;
 /** How the President's battleship killed a ship, for the sponsor break. */
 const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
   battery: msg("Shot down by the President's battleship"),
@@ -1026,6 +1026,8 @@ export class Game implements OnlineGame {
   private namedAttacker: Ship | null = null;
   private namedAt = -Infinity;
   private brakeHeld = false;
+  /** Since when the self-destruct's button is held (game time, s), or null (see selfDestructOwn). */
+  private selfDestructSince: number | null = null;
   private readonly brakeHome = new THREE.Quaternion();
   /** The flight computer's output, reused from frame to frame. */
   private readonly computed: Controls = { ...IDLE };
@@ -2714,6 +2716,7 @@ export class Game implements OnlineGame {
       const ship = heir
         ? this.addShip(id, heir.name, heir.type, false)
         : this.addShip(id, names[free++] ?? `Bot ${i + 1}`, i % 2 === 0 ? 'alien' : 'human', false);
+      ship.outfit(BOT_GEAR);
       this.bots.push(new Bot(ship, skillsOf(ship.name)));
       if (!heir) this.respawn(ship);
       else {
@@ -3245,7 +3248,19 @@ export class Game implements OnlineGame {
       list.textContent = sovereignEarned(this.hangar) ? t('The Sovereign flies with every upgrade, and wears every look.') : t('The Sovereign is the President’s gift for both interceptors made complete.');
       return;
     }
+    // the gear, bought once for both interceptors, then each interceptor's upgrades
+    const gear = GEAR.map((piece) => {
+      const owned = this.hangar.gear[piece.id];
+      const row = Object.assign(document.createElement('button'), { type: 'button', className: 'upgrade gear' });
+      row.disabled = owned || piece.price > this.hangar.coins;
+      row.innerHTML = `<span class="upgrade-name">${t(piece.name)}<small>${t('{note} · for both interceptors', { note: t(piece.note) })}</small></span><span class="upgrade-price">${owned ? t('Owned') : `${coinText(piece.price)} ☉`}</span>`;
+      row.addEventListener('click', () => {
+        if (buyGear(this.hangar, piece.id)) this.saveHangar();
+      });
+      return row;
+    });
     list.replaceChildren(
+      ...gear,
       ...UPGRADES.map((upgrade) => {
         const level = this.hangar.levels[ship][upgrade.id];
         const price = nextPrice(this.hangar, ship, upgrade.id);
@@ -3671,6 +3686,7 @@ export class Game implements OnlineGame {
     if (this.flags) this.playFlags(this.flags, dt, now);
     if (this.fleet) this.playFleet(this.fleet, dt, now);
     this.hookOwn(now);
+    this.selfDestructOwn(now);
     this.updateHooks(dt);
     this.wrecks.update(dt, now, this.field, this.grinds);
     this.killcam.record(now, this.ships);
@@ -3787,7 +3803,7 @@ export class Game implements OnlineGame {
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
     const hook = this.tethers.get(me);
-    this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now));
+    this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now), me.perks.hook || !!this.school);
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
     this.hud.setKeys(this.input.device);
     this.hud.setStrain(me.alive ? me.strain : 0);
@@ -5254,7 +5270,62 @@ export class Game implements OnlineGame {
     this.hookHeld = held;
     if (!pressed) return;
     if (this.tethers.has(me)) this.unhook(me);
-    else if (now >= this.hookReadyAt) this.fireHook(me);
+    // the hook is gear bought in the hangar; the flight school lends its training clones one
+    else if (now >= this.hookReadyAt && (me.perks.hook || this.school)) this.fireHook(me);
+  }
+
+  /**
+   * B (the D-pad left, SELF-DESTRUCT on touch) held for SELF_DESTRUCT_HOLD seconds: the own ship
+   * blows itself up (see selfDestruct), every browser told. Only a ship that carries one (gear
+   * bought in the hangar), never in a race or the flight school, never in the clamps. The touch
+   * buttons of the gear show only for a ship that carries it.
+   */
+  private selfDestructOwn(now: number) {
+    const me = this.me!;
+    const allowed = me.perks.selfDestruct && !this.school && this.roundMode !== 'race';
+    const touch = $('touch-selfDestruct');
+    if (touch.hidden === allowed) touch.hidden = !allowed;
+    const hook = $('touch-hook');
+    const hooks = me.perks.hook || !!this.school;
+    if (hook.hidden === hooks) hook.hidden = !hooks;
+    if (!allowed || this.state !== 'playing' || !me.alive || this.spectating || this.clamped || !this.input.selfDestructing) {
+      this.selfDestructSince = null;
+      return;
+    }
+    this.selfDestructSince ??= now;
+    const left = SELF_DESTRUCT_HOLD - (now - this.selfDestructSince);
+    if (left > 0) {
+      this.hud.flashMessage(now, t('Self-destruct in {s} s', { s: left.toFixed(1) }), 0.2);
+      return;
+    }
+    this.selfDestructSince = null;
+    this.online?.sendSelfDestruct(me, me.flight.position);
+    this.selfDestruct(me, me.flight.position);
+  }
+
+  /**
+   * A self-destruct goes off where `holder` is: a small blast that destroys every ship this
+   * browser runs within SELF_DESTRUCT_RADIUS (a kill of the holder's) and the holder itself, a
+   * death of its own as a crash is, its sponsor break and all; the torpedoes and wreckage in it
+   * go too. Every browser hears of it and does the same for the ships it runs.
+   */
+  selfDestruct(holder: Ship, position: THREE.Vector3) {
+    const now = this.time;
+    this.effects.explosion(position, holder.radius * 6, holder.flight.velocity);
+    this.shockwave(position);
+    for (const ship of [...this.ships]) {
+      if (ship === holder || ship.owner !== null || !ship.alive || ship.flight.position.distanceTo(position) > SELF_DESTRUCT_RADIUS) continue;
+      ship.protectedUntil = Math.min(ship.protectedUntil, now);
+      if (ship.structural(Infinity, now) === 'destroyed') this.shipDestroyed(ship, holder, 'self');
+    }
+    this.dropCables(holder);
+    if (holder.owner === null && holder.alive) {
+      holder.protectedUntil = Math.min(holder.protectedUntil, now);
+      if (holder.structural(Infinity, now) === 'destroyed') this.shipDestroyed(holder, null, 'self');
+    }
+    for (const torpedo of [...this.torpedoes.list]) if (torpedo.position.distanceTo(position) < SELF_DESTRUCT_RADIUS) this.blowUp(torpedo);
+    for (const wreck of [...this.wrecks.list]) if (wreck.mesh.position.distanceTo(position) < SELF_DESTRUCT_RADIUS) this.shatterWreck(wreck);
+    if (holder !== this.me) this.hud.flashMessage(now, t('SELF-DESTRUCT · {name}', { name: holder.name }), 2.5);
   }
 
   /**
@@ -5263,6 +5334,8 @@ export class Game implements OnlineGame {
    */
   private botHook(bot: Bot, dt: number, now: number) {
     const ship = bot.ship;
+    // the hook is gear: a round's bots carry it (BOT_GEAR), the flight school's sparring bot not
+    if (!ship.perks.hook) return;
     const target = bot.target;
     const tether = this.tethers.get(ship);
     if (tether) {
@@ -6454,6 +6527,8 @@ export class Game implements OnlineGame {
         const line =
           cause === 'nova'
             ? t('Vaporized by the nova of {name}')
+            : cause === 'self'
+              ? t('Taken along by the self-destruct of {name}')
             : cause === 'plume'
               ? t('Grilled in the drive plume of {name}')
               : cause === 'ram'
@@ -6465,7 +6540,8 @@ export class Game implements OnlineGame {
                     : t('Shot down by {name}');
         const [before, after = ''] = line.split('{name}');
         this.deathCause = [before, ...markedName(killer.kind, killer.name), after];
-      } else if (cause === 'well') this.deathCause = t(WELL_DEATHS[this.venue.id] ?? msg('Crashed'));
+      } else if (cause === 'self') this.deathCause = t('Self-destructed');
+      else if (cause === 'well') this.deathCause = t(WELL_DEATHS[this.venue.id] ?? msg('Crashed'));
       else if (cause === 'air') this.deathCause = t('Burned up in the clouds');
       else if (cause === 'flare') this.deathCause = t('Burned up in the solar flare');
       else if (fleetDeath || cometDeath) this.deathCause = t((fleetDeath || cometDeath)!);

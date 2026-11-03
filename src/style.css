@@ -2717,6 +2717,16 @@ body.touch #game canvas {
   border-color: var(--accent-strong);
 }
 
+/* the self-destruct, held for a second, above the hook, in the red of danger; only for a ship that carries one */
+#touch-selfDestruct {
+  right: calc(max(20px, env(safe-area-inset-right)) + 22px);
+  bottom: 278px;
+  width: 52px;
+  height: 52px;
+  font-size: 0.5rem;
+  border-color: var(--danger);
+}
+
 #touch-pause {
   top: 12px;
   left: max(12px, env(safe-area-inset-left));

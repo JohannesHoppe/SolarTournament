@@ -400,6 +400,19 @@ export class Plausibility {
     return null;
   }
 
+  /**
+   * A ship blows itself up (its self-destruct, gear no other browser can see): where it is, as a
+   * nova must be (a claim from far off counts as one, `nova`); its clone is gone, and the next
+   * one is printed elsewhere.
+   */
+  selfDestruct(id: string, p: number[], now: number, sent = now): Cheat | null {
+    const track = this.track(id, now);
+    if (Number.isFinite(track.at) && this.measure('nova', tooFar(track, p, sent))) return 'nova';
+    this.freshClone(track);
+    this.regrace(track, now);
+    return null;
+  }
+
   /** A ship launches a torpedo: no more than its clone can carry. */
   torpedo(id: string, now: number): Cheat | null {
     const track = this.track(id, now);

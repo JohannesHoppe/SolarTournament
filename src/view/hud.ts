@@ -452,8 +452,11 @@ export class Hud {
     setClass(this.overdrive, 'ready', seconds <= 0);
   }
 
-  /** The hook: holding with so much cable out (m), recharging for `seconds`, or ready. */
-  setHook(cable: number | null, seconds: number) {
+  /** The hook: holding with so much cable out (m), recharging for `seconds`, or ready; not shown at all for a ship that carries none (`carried`, see game/hangar, GEAR). */
+  setHook(cable: number | null, seconds: number, carried = true) {
+    const gauge = this.hook.parentElement!;
+    if (gauge.hidden === carried) gauge.hidden = !carried;
+    if (!carried) return;
     setText(this.hook, cable !== null ? t('Hooked · {m} m', { m: Math.round(cable) }) : seconds > 0 ? t('Hook {s} s', { s: seconds.toFixed(1) }) : t('Hook ready'));
     const state = cable !== null ? 'held' : seconds > 0 ? '' : 'ready';
     if (this.hook.className !== `readout ${state}`.trim()) this.hook.className = `readout ${state}`.trim();

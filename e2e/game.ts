@@ -13,6 +13,11 @@ export async function openGame(page: Page, path = '/', timeout = 60_000): Promis
   page.on('pageerror', (error) => errors.push(String(error)));
   // the low tier, pinned: the governor would only step down further without a GPU
   await page.addInitScript(() => localStorage.setItem('solartournament.quality', JSON.stringify({ choice: 'low' })));
+  // the gear bought (the hook, the nanobots, the self-destruct), so the tests can use it; a test
+  // that keeps a hangar of its own has put it there first
+  await page.addInitScript(() => {
+    if (!localStorage.getItem('solartournament.hangar')) localStorage.setItem('solartournament.hangar', JSON.stringify({ coins: 0, gear: { hook: true, nanobots: true, selfDestruct: true }, ship: 'human' }));
+  });
   await page.goto(path, { timeout });
   await page.waitForFunction(() => window.game?.composer, null, { timeout });
   // several tabs render too slowly without a GPU (the scene and the title screen's pad hold up

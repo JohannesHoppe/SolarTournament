@@ -56,10 +56,37 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: 'flame', name: msg('Drive flame'), note: msg('Azure, violet, white-hot'), prices: [500, 1500, 3000], looks: true },
 ];
 
-/** What a Host owns: its coins, the steps of every upgrade of each interceptor, and the ship it flies. */
+/**
+ * The gear: what a stock ship does not carry at all, bought once for both interceptors (the
+ * Sovereign carries all of it). The hook (harpoon, cable and winch), the nanobots that mend the
+ * drive and the thrusters (see ship/ship, NANO_WAIT), the self-destruct that takes a rival close
+ * by along. Online it counts in full: an advantage on purpose, bought with the coins of rounds
+ * played. The flight school lends its training clones the hook for its drills.
+ */
+export type GearId = 'hook' | 'nanobots' | 'selfDestruct';
+
+export interface Gear {
+  id: GearId;
+  name: string;
+  note: string;
+  price: number;
+}
+
+export const GEAR: readonly Gear[] = [
+  { id: 'hook', name: msg('Hook'), note: msg('Harpoon, cable and winch'), price: 2000 },
+  { id: 'nanobots', name: msg('Nanobots'), note: msg('They mend the drive and the thrusters'), price: 3000 },
+  { id: 'selfDestruct', name: msg('Self-destruct'), note: msg('Takes a rival close by along'), price: 4000 },
+];
+
+/** The self-destruct (see Game.selfDestructOwn): held this long (s) it goes off, and takes every ship within this (units, 60 m, about two ship lengths) along. */
+export const SELF_DESTRUCT_HOLD = 1;
+export const SELF_DESTRUCT_RADIUS = 1200;
+
+/** What a Host owns: its coins, the steps of every upgrade of each interceptor, the gear, and the ship it flies. */
 export interface Hangar {
   coins: number;
   levels: Record<HangarShip, Record<UpgradeId, number>>;
+  gear: Record<GearId, boolean>;
   ship: ShipType;
 }
 
@@ -74,9 +101,20 @@ export interface Perks {
   /** The looks: neon trim and drive flame, 0 (stock) to LEVELS. */
   neon: number;
   flame: number;
+  /** The gear the ship carries (see GEAR). */
+  hook: boolean;
+  nanobots: boolean;
+  selfDestruct: boolean;
 }
 
-export const STOCK: Readonly<Perks> = { cooling: 1, thrusters: 1, drive: 1, torpedoes: 0, damage: 1, neon: 0, flame: 0 };
+export const STOCK: Readonly<Perks> = { cooling: 1, thrusters: 1, drive: 1, torpedoes: 0, damage: 1, neon: 0, flame: 0, hook: false, nanobots: false, selfDestruct: false };
+
+/**
+ * A bot's ship: stock, with the hook and the nanobots, so a round's rivals hook and mend as a
+ * Host who bought them does; no bot carries the self-destruct, since no bot decides when to blow
+ * itself up.
+ */
+export const BOT_GEAR: Readonly<Perks> = { ...STOCK, hook: true, nanobots: true };
 
 /** What each step of the radiators adds to their cooling (a share of the stock's). */
 const RADIATOR_STEP = 0.15;
@@ -94,14 +132,17 @@ export const unpackLooks = (looks: number): Perks => ({ ...STOCK, cooling: 1 + R
 
 const noLevels = (): Record<UpgradeId, number> => Object.fromEntries(UPGRADES.map((upgrade) => [upgrade.id, 0])) as Record<UpgradeId, number>;
 
-export const emptyHangar = (): Hangar => ({ coins: 0, levels: { human: noLevels(), alien: noLevels() }, ship: 'human' });
+const noGear = (): Record<GearId, boolean> => Object.fromEntries(GEAR.map((gear) => [gear.id, false])) as Record<GearId, boolean>;
+
+export const emptyHangar = (): Hangar => ({ coins: 0, levels: { human: noLevels(), alien: noLevels() }, gear: noGear(), ship: 'human' });
 
 /**
  * The wallet: a Host holds at most what the hangar sells, every step of every upgrade of both
- * interceptors (113,000 coins). More would buy nothing, so a round's payout stops there, and the
- * hangar says the wallet is full.
+ * interceptors and all the gear (122,000 coins). More would buy nothing, so a round's payout stops
+ * there, and the hangar says the wallet is full.
  */
-export const WALLET = HANGAR_SHIPS.length * UPGRADES.reduce((sum, upgrade) => sum + upgrade.prices.reduce((a, b) => a + b, 0), 0);
+export const WALLET =
+  HANGAR_SHIPS.length * UPGRADES.reduce((sum, upgrade) => sum + upgrade.prices.reduce((a, b) => a + b, 0), 0) + GEAR.reduce((sum, gear) => sum + gear.price, 0);
 
 const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
@@ -155,6 +196,14 @@ export function hangarFrom(text: string | null): KeptHangar {
       }
     }
   } else if (levels !== undefined) unreadable.push('levels');
+  const { gear } = entry;
+  if (isRecord(gear)) {
+    for (const { id } of GEAR) {
+      if (gear[id] === undefined) continue;
+      if (typeof gear[id] === 'boolean') hangar.gear[id] = gear[id];
+      else unreadable.push(`gear.${id}`);
+    }
+  } else if (gear !== undefined) unreadable.push('gear');
   if (ship === 'human' || ship === 'alien') hangar.ship = ship;
   // the Sovereign is judged only on steps read in full: an unreadable step is no reason to call anyone a cheater
   else if (ship === 'sovereign' && !kept.cheated) {
@@ -184,6 +233,15 @@ export function buy(hangar: Hangar, ship: HangarShip, id: UpgradeId): boolean {
   if (price === null || price > hangar.coins) return false;
   hangar.coins -= price;
   hangar.levels[ship][id]++;
+  return true;
+}
+
+/** Buys a piece of gear: true when the coins sufficed and it was not owned yet. */
+export function buyGear(hangar: Hangar, id: GearId): boolean {
+  const price = GEAR.find((gear) => gear.id === id)!.price;
+  if (hangar.gear[id] || price > hangar.coins) return false;
+  hangar.coins -= price;
+  hangar.gear[id] = true;
   return true;
 }
 
@@ -218,5 +276,9 @@ export function perksOf(hangar: Hangar, ship: ShipType, online: boolean): Perks 
     damage: 1 - 0.07 * step('plating'),
     neon: look('neon'),
     flame: look('flame'),
+    // the gear counts in full online too (see GEAR)
+    hook: ship === 'sovereign' || hangar.gear.hook,
+    nanobots: ship === 'sovereign' || hangar.gear.nanobots,
+    selfDestruct: ship === 'sovereign' || hangar.gear.selfDestruct,
   };
 }
