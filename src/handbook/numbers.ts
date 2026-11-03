@@ -179,7 +179,7 @@ function hotDepth(): number {
 export const FROM_README: Record<string, { value: number; readme: string }> = {
   overdriveHeat: { value: 4, readme: 'for # seconds it gives no thrust' },
   overdriveRecharge: { value: 60, readme: 'needs # seconds before it fires again' },
-  dodge: { value: 40, readme: 'a kick of # m/s' },
+  dodge: { value: 60, readme: 'a kick of # m/s' },
   dodgeRecharge: { value: 1.5, readme: 'the thrusters need # seconds before the next dodge' },
   early: { value: 0.3, readme: 'A drive lit within # seconds before BURN!' },
   late: { value: 0.2, readme: 'within # seconds after it, makes a perfect start' },
@@ -197,7 +197,7 @@ export const FROM_README: Record<string, { value: number; readme: string }> = {
   novaPanic: { value: 1.2, readme: 'Everyone within # km of a holder' },
   shove: { value: 5, readme: 'struck by another at # m/s or more is shoved' },
   knockout: { value: 3, readme: 'crashes within # seconds' },
-  shoveSpeed: { value: 26, readme: 'flies off at about # m/s' },
+  shoveSpeed: { value: 39, readme: 'flies off at about # m/s' },
   ramNose: { value: 30, readme: 'on the armored nose # % of the blow' },
   ramFlank: { value: 50, readme: 'on a flank # %' },
   plume: { value: 150, readme: '# m long and spreading' },
