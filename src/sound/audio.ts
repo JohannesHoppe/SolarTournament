@@ -6,8 +6,20 @@
  * past the hull, the roar of the plasma around a hull flying hot through it, and thunder after
  * lightning, through the hull like the rest.
  */
+
+/**
+ * An audio context that plays like a media player: where the browser lets a page say so (the
+ * Audio Session API of Safari and every browser on iOS), the page's sound is playback, which the
+ * device's silent mode leaves alone; without it iOS mutes Web Audio in silent mode.
+ */
+export function playbackContext(): AudioContext {
+  const session = (navigator as Navigator & { audioSession?: { type: string } }).audioSession;
+  if (session) session.type = 'playback';
+  return new AudioContext();
+}
+
 export class Sound {
-  readonly context = new AudioContext();
+  readonly context = playbackContext();
   private readonly master = this.context.createGain();
   private readonly hull = this.context.createBiquadFilter();
   private readonly driveGain = this.context.createGain();

@@ -1,3 +1,5 @@
+import { pow } from '../detmath';
+
 type Collection = ReturnType<(typeof import('nipplejs'))['create']>;
 type StickName = 'turn' | 'push';
 
@@ -96,7 +98,7 @@ export class TouchControls {
         if (this.sticks[name]) continue;
         const stick = nipplejs.create({ zone: document.getElementById(`touch-${name}`)!, ...STICK_LOOK[name] });
         const axes = this[name];
-        stick.on('move', (e) => Object.assign(axes, quantize(e.data.vector)));
+        stick.on('move', (e) => Object.assign(axes, quantize(name === 'turn' ? turnShape(e.data.vector) : e.data.vector)));
         stick.on('end', () => Object.assign(axes, { x: 0, y: 0 }));
         this.sticks[name] = stick;
       }
@@ -170,3 +172,18 @@ export class TouchControls {
 function quantize(v: { x: number; y: number }) {
   return { x: Math.round(v.x * 30) / 30, y: Math.round(v.y * 30) / 30 };
 }
+
+/**
+ * The turn stick's answer to the finger: nothing within TURN_DEAD of its middle, then by the
+ * power TURN_CURVE of the way out, so a small push turns the nose slowly enough to aim with, and
+ * only the stick's rim turns it at full rate. The finger's few millimetres would else be full
+ * deflection.
+ */
+export function turnShape(v: { x: number; y: number }) {
+  const out = Math.min(1, Math.sqrt(v.x * v.x + v.y * v.y));
+  if (out <= TURN_DEAD) return { x: 0, y: 0 };
+  const scale = pow((out - TURN_DEAD) / (1 - TURN_DEAD), TURN_CURVE) / out;
+  return { x: v.x * scale, y: v.y * scale };
+}
+const TURN_DEAD = 0.08;
+const TURN_CURVE = 2.2;

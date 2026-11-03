@@ -7,6 +7,7 @@ import { recipeCards, scaleNote, STRATEGY_NAMES, titleOf } from './music/recipes
 import { showTransmission } from './music/transmission';
 import { initLocale, msg, t, translatePage } from './i18n/i18n';
 import { shareCorner } from './share';
+import { playbackContext } from './sound/audio';
 
 /**
  * Radio 2584's own page: enter a title, and the track it grows plays again or downloads as a
@@ -77,7 +78,7 @@ function tune(title: string) {
 
 function play() {
   if (!song) return;
-  context ??= new AudioContext();
+  context ??= playbackContext();
   void context.resume();
   // the track's clock starts when the band has loaded and takes the song, not at the click,
   // so the first bars are not lost to loading
