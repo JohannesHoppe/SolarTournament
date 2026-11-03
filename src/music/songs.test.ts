@@ -75,6 +75,33 @@ describe('Radio 2584', () => {
     }
   });
 
+  it('ends drive as the hits of the eighties did: a tom roll into a finale lifted in key with the hook on top, a cadence, one hit, silence', () => {
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const song = createSong(titleFor(seed), 'round', ROUND_SECONDS, 'drive');
+      const finale = song.form.find((s) => s.kind === 'finale')!;
+      const outro = song.form.find((s) => s.kind === 'outro')!;
+      const bar = (b: number) => Array.from({ length: STEPS_PER_BAR }, (_, s) => stepEvents(song, b * STEPS_PER_BAR + s));
+      // toms rolling down in the last half bar before the finale, a crash on its first beat
+      const before = bar(finale.start - 1);
+      expect(before.slice(8).every((e) => e.perc !== null)).toBe(true);
+      expect(bar(finale.start)[0].info.impact).toBe(true);
+      // the finale lifted by a semitone or two, the hook playing on top
+      expect([1, 2]).toContain(song.lift);
+      expect(bar(finale.start)[0].info.transpose).toBe(song.lift);
+      const hook = Array.from({ length: 4 }, (_, i) => bar(finale.start + i)).flat().filter((e) => e.lead?.melody);
+      expect(hook.length).toBeGreaterThan(0);
+      // the cadence on the fifth and the fourth, then one hit on the root with a crash, then nothing
+      const fifth = bar(outro.start).find((e) => e.bass && !e.bass.melody)!.bass!;
+      expect((((fifth.note - song.root - song.lift) % 12) + 12) % 12).toBe(7);
+      const hit = bar(outro.start + 2);
+      expect(hit[0].kick).toBe(1);
+      expect(hit[0].info.impact).toBe(true);
+      expect(hit[0].bass!.length).toBe(16);
+      expect(hit.slice(1).every((e) => !e.kick && !e.bass && !e.clap && !e.hat)).toBe(true);
+      expect(bar(outro.start + 3).every((e) => !e.kick && !e.bass && !e.clap && !e.hat && !e.lead)).toBe(true);
+    }
+  });
+
   it('picks titles from any seed, the same every time', () => {
     expect(titleFor(12345)).toBe(titleFor(12345));
     expect(titleFor(1)).not.toBe('');

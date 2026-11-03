@@ -80,7 +80,8 @@ export interface Section {
 /** The parts of a track; `sub` is the pedal bass's lower wave, an octave under its root (see BassStyle). */
 export type Layer = 'kick' | 'rumble' | 'bass' | 'sub' | 'hat' | 'openHat' | 'ride' | 'clap' | 'perc' | 'metal' | 'acid' | 'lead' | 'chords';
 
-export type FillType = 'kickEdit' | 'hatRoll' | 'clapBurst' | 'tomRun' | 'vacuum' | 'kickRoll' | 'stutter' | 'tapeStop' | 'rugPull';
+/** Ways to end a bar or a section; tomRoll is drive's run into its finale: toms falling down the scale over half a bar. */
+export type FillType = 'kickEdit' | 'hatRoll' | 'clapBurst' | 'tomRun' | 'tomRoll' | 'vacuum' | 'kickRoll' | 'stutter' | 'tapeStop' | 'rugPull';
 
 export interface Fill {
   type: FillType;
@@ -221,6 +222,8 @@ export interface Song {
   pedal: (PedalStep | null)[];
   fx: 'chorus' | 'phaser' | 'flanger';
   pedalVoice: { spread: number; release: number };
+  /** Semitones a drive track's finale lifts the key by, as the hits of the eighties did (see DRIVE_ENDING). */
+  lift: number;
   surprises: Surprise[];
   voice: VoiceLine[];
   cache: Map<number, BarInfo>;
@@ -363,6 +366,18 @@ export const PUMP: Record<Flavor, number> = { hard: 0.4, industrial: 0.4, acid: 
  */
 export const TURNAROUND = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 5, 5, 0, 0, 7, 5, 0, 0];
 
+/**
+ * How a drive track ends, as the hits of the eighties did: the finale (the round's last minute)
+ * lifts the key by Song.lift semitones, a tom roll running into it and a crash on its first beat,
+ * and the hook on top (the second voice's notes an octave over the bass, held, on a bright lead);
+ * then the outro is a cadence of two bars on the fifth and the fourth (DRIVE_CADENCE, semitones)
+ * and one big hit on the root in its third bar (DRIVE_HIT_BAR): kick, crash, the bass and its
+ * lower wave held for a bar (DRIVE_HIT_LENGTH sixteenths); then silence, the reverb ringing out.
+ */
+export const DRIVE_CADENCE = [7, 5] as const;
+const DRIVE_HIT_BAR = 2;
+const DRIVE_HIT_LENGTH = 16;
+
 /** The effects a pedal bass's track picks one of (see Band, the pedal bass). */
 const PEDAL_FX = ['chorus', 'phaser', 'flanger'] as const;
 /** The gallop of a pedal bass: which sixteenths of a beat play the root (most of them). */
@@ -417,6 +432,7 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
     fx: choose(PEDAL_FX, seed, Ch.Genes, 61),
     // two saws some 12 to 16 cents apart in all, notes ringing out over 0.12 to 0.2 s into the next
     pedalVoice: { spread: 12 + 4 * unit(seed, Ch.Genes, 62), release: 0.12 + 0.08 * unit(seed, Ch.Genes, 63) },
+    lift: chosen === 'drive' ? 1 + (hash(seed, Ch.Genes, 64) % 2) : 0,
     surprises: [],
     voice: [],
     cache: new Map(),
@@ -663,7 +679,8 @@ function planSurprises(song: Song): Surprise[] {
   const finale = song.form.find((s) => s.kind === 'finale')!;
   // drive's night drive has no air-raid siren and no crushed drums
   const gentle = song.flavor === 'drive';
-  const fits = (type: SurpriseType, bar: number) => (type !== 'keyLift' || bar >= finale.start - 48) && (type !== 'bitDrop' || (bitDrop && !gentle)) && (type !== 'siren' || !gentle);
+  // (and lifts its key in its finale, not by a surprise)
+  const fits = (type: SurpriseType, bar: number) => (type !== 'keyLift' || (bar >= finale.start - 48 && !gentle)) && (type !== 'bitDrop' || (bitDrop && !gentle)) && (type !== 'siren' || !gentle);
   // first at bars the seed picks, 12 bars apart; a track that got too few that way takes
   // them at any free groove or peak bar, closer together if it has to
   const place = (chance: number, spacing: number) => {
@@ -788,9 +805,15 @@ function barInfo(song: Song, absoluteBar: number): BarInfo {
       for (const layer of Object.keys(layers) as Layer[]) layers[layer] = gates[layer] <= 1;
       break;
     case 'outro':
-      // drive's bass plays on to the end as its filter closes
-      layers.bass = drive;
-      layers.sub = layers.acid = layers.lead = layers.ride = layers.perc = layers.metal = layers.chords = false;
+      if (drive) {
+        // the cadence with its drums, the hit with kick and bass alone, then nothing (see DRIVE_CADENCE)
+        for (const layer of Object.keys(layers) as Layer[]) {
+          const groove = layer === 'clap' || layer === 'hat' || layer === 'openHat';
+          layers[layer] = inSection <= DRIVE_HIT_BAR && (layer === 'kick' || layer === 'bass' || layer === 'sub' || (groove && inSection < DRIVE_HIT_BAR));
+        }
+        break;
+      }
+      layers.sub = layers.bass = layers.acid = layers.lead = layers.ride = layers.perc = layers.metal = layers.chords = false;
       layers.clap = inSection < 8;
       break;
   }
@@ -839,9 +862,10 @@ function barInfo(song: Song, absoluteBar: number): BarInfo {
     // peaks by its timbre, hardly by distortion
     drive: drive ? (section.kind === 'finale' ? 0.45 : 0.15 + 0.3 * energy) : section.kind === 'finale' ? 0.85 : 0.25 + 0.6 * energy,
     riserBars: section.kind === 'break' && inSection === section.bars - Math.min(4, section.bars) ? Math.min(4, section.bars) : 0,
-    impact: inSection === 0 && (previous?.kind === 'break' || previous?.kind === 'gap' || section.kind === 'finale'),
+    impact: (inSection === 0 && (previous?.kind === 'break' || previous?.kind === 'gap' || section.kind === 'finale')) || (drive && section.kind === 'outro' && inSection === DRIVE_HIT_BAR),
     bassStyle: section.second && song.bassStyle !== 'ebm' && song.bassStyle !== 'moroder' && song.bassStyle !== 'pedal' ? 'ebm' : song.bassStyle,
-    transpose: lift ? choose([2, 3, 5], song.seed, Ch.Surprise, 9) : 0,
+    // drive lifts its key for the finale and its ending (see DRIVE_CADENCE), the others by a surprise
+    transpose: drive && (section.kind === 'finale' || section.kind === 'outro') ? song.lift : lift ? choose([2, 3, 5], song.seed, Ch.Surprise, 9) : 0,
     surprise,
     voice: song.voice.find((v) => v.bar === bar) ?? null,
     sweep: (bar % 8) / 8,
@@ -887,6 +911,8 @@ function fillAt(song: Song, section: Section, inSection: number): Fill | null {
   const lastOfSection = inSection === section.bars - 1;
   const variant = hash(seed, Ch.Fill, key, 2) % 4;
   const next = song.form[song.form.indexOf(section) + 1];
+  // drive runs into its finale with a roll of toms (see DRIVE_CADENCE)
+  if (song.flavor === 'drive' && lastOfSection && next?.kind === 'finale') return { type: 'tomRoll', from: 8, variant };
   if (lastOfSection && section.kind === 'break') {
     const index = song.form.filter((s) => s.kind === 'break' && s.start < section.start).length;
     const type = BREAK_ENDINGS[(hash(seed, Ch.Fill, 0) + index) % BREAK_ENDINGS.length];
@@ -1013,8 +1039,20 @@ export function stepEvents(song: Song, absoluteStep: number): StepEvents {
   const inFill = fill !== null && step >= fill.from;
   if (inFill && (fill.type === 'vacuum' || fill.type === 'rugPull')) return events;
   const root = song.root + info.transpose;
-  // drive moves its whole loop through the turnaround bar by bar; the others per two bars
-  const move = song.flavor === 'drive' ? TURNAROUND[bar % TURNAROUND.length] : song.progression[(bar >> 1) % song.progression.length];
+  const drive = song.flavor === 'drive';
+  const ending = drive && info.section.kind === 'outro';
+  // drive's ending: after the cadence one hit on the root, held a bar, then silence
+  if (ending && info.inSection >= DRIVE_HIT_BAR) {
+    if (info.inSection > DRIVE_HIT_BAR || step > 0) return events;
+    const held = (note: number): Hit => ({ note, velocity: 1, length: DRIVE_HIT_LENGTH, accent: true, slide: false });
+    events.kick = 1;
+    events.bass = held(root + 12);
+    events.sub = held(root);
+    return events;
+  }
+  // drive moves its whole loop through the turnaround bar by bar, through the cadence at its
+  // end; the others per two bars
+  const move = ending ? DRIVE_CADENCE[info.inSection] : drive ? TURNAROUND[bar % TURNAROUND.length] : song.progression[(bar >> 1) % song.progression.length];
 
   if (layers.kick) events.kick = kickAt(info.section.groove, step);
   if (layers.clap) events.clap = info.section.groove === 'electro' ? (step === 4 || step === 12 ? 1 : 0) : level(song, 'clap', info, step);
@@ -1100,6 +1138,16 @@ function bassAt(song: Song, info: BarInfo, step: number, root: number): Hit | nu
 }
 
 function leadAt(song: Song, info: BarInfo, step: number, root: number, events: StepEvents) {
+  // drive's finale: the hook, the second voice an octave over the bass, each note held to the next
+  if (song.flavor === 'drive' && info.section.kind === 'finale') {
+    const position = (info.bar % 2) * STEPS_PER_BAR + step;
+    const at = song.pedal[position];
+    if (!at?.melody) return;
+    let length = 1;
+    while (length < 8 && !song.pedal[(position + length) % 32]?.melody) length++;
+    events.lead = { note: root + 24 + at.degree, velocity: 0.9, length, accent: false, slide: false, melody: true };
+    return;
+  }
   switch (song.lead) {
     case 'stab': {
       const velocity = level(song, 'lead', info, step);
@@ -1156,6 +1204,12 @@ function applyFill(events: StepEvents, fill: Fill, step: number, root: number) {
     case 'clapBurst':
       events.clap = 0.45 + 0.18 * (step - 12);
       break;
+    case 'tomRoll': {
+      // eight toms down the scale over half a bar, louder as they fall, into the finale's crash
+      const degrees = [24, 22, 19, 15, 12, 10, 7, 3];
+      events.perc = { note: root + 24 + degrees[step - 8], velocity: 0.6 + 0.05 * (step - 8), length: 1, accent: true, slide: false };
+      break;
+    }
     case 'tomRun': {
       const degrees = [12, 10, 7, 3];
       events.perc = { note: root + 24 + degrees[step - 12], velocity: 0.7 + 0.1 * (step - 12), length: 1, accent: true, slide: false };

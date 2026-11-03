@@ -173,6 +173,7 @@ export class Band {
   private readonly pedalPhaser: ToneLib.Phaser;
   private readonly pedalFlanger: ToneLib.FeedbackDelay;
   private readonly pedalSub: ToneLib.MonoSynth;
+  private readonly hook: ToneLib.MonoSynth;
   private readonly acid: ToneLib.MonoSynth;
   private readonly acidFilter: ToneLib.Filter;
   private readonly acidDrive: ToneLib.Gain;
@@ -312,6 +313,22 @@ export class Band {
     this.pedalFilter = new T.Filter({ type: 'lowpass', frequency: 600, rolloff: -24, Q: PEDAL_Q }).connect(this.pedalAmp);
     const sawLevel = new T.Gain(0.5).connect(this.pedalFilter);
     this.pedalSaws = [0, 1].map(() => new T.Oscillator({ type: 'sawtooth', frequency: 65 }).connect(sawLevel).start()) as [ToneLib.Oscillator, ToneLib.Oscillator];
+    // drive's hook in its finale: a bright, brassy lead (three detuned saws whose filter swells
+    // open a little late on every note, as a brass section's does), through a slow chorus, with
+    // echo and some reverb
+    const hookOut = new T.Chorus({ frequency: 0.6, delayTime: 4, depth: 0.3, spread: 180, wet: 0.4 }).connect(this.pump);
+    hookOut.start();
+    hookOut.connect(this.echoSend);
+    hookOut.connect(this.fxSend);
+    this.hook = new T.MonoSynth({
+      oscillator: { type: 'fatsawtooth', count: 3, spread: 20 },
+      portamento: 0.02,
+      filter: { type: 'lowpass', rolloff: -24, Q: 1 },
+      envelope: { attack: 0.03, decay: 0.3, sustain: 0.8, release: 0.25 },
+      filterEnvelope: { attack: 0.04, decay: 0.4, sustain: 0.6, release: 0.3, baseFrequency: 500, octaves: 3.5 },
+      volume: -15,
+    }).connect(hookOut);
+
     // its lower wave: a square an octave under the pedal, only the sub range of it
     this.pedalSub = new T.MonoSynth({
       oscillator: { type: 'square' },
@@ -521,7 +538,7 @@ export class Band {
       const hit = events.bass;
       this.pedalNote(song, step, info, midiToHz(hit.note), sixteenth * hit.length * PEDAL_GATE, t, hit.velocity);
     } else if (events.bass) this.bass.triggerAttackRelease(midiToHz(events.bass.note), sixteenth * (info.bassStyle === 'ebm' ? 0.6 : 0.8), t, events.bass.velocity);
-    if (events.sub) this.pedalSub.triggerAttackRelease(midiToHz(events.sub.note), sixteenth * PEDAL_GATE, t, events.sub.velocity);
+    if (events.sub) this.pedalSub.triggerAttackRelease(midiToHz(events.sub.note), sixteenth * events.sub.length * PEDAL_GATE, t, events.sub.velocity);
     if (events.acid) this.playAcid(song, events.acid.note, events.acid.accent, events.acid.slide, step, t, sixteenth, info);
 
     if (events.chord) {
@@ -534,7 +551,8 @@ export class Band {
     if (events.lead) {
       const frequency = midiToHz(events.lead.note);
       const length = sixteenth * events.lead.length * 0.95;
-      if (song.lead === 'hoover') this.hoover.triggerAttackRelease(frequency, length, t, events.lead.velocity);
+      if (events.lead.melody) this.hook.triggerAttackRelease(frequency, length, t, events.lead.velocity);
+      else if (song.lead === 'hoover') this.hoover.triggerAttackRelease(frequency, length, t, events.lead.velocity);
       else if (song.lead === 'bell') this.bell.triggerAttackRelease(frequency, length, t, events.lead.velocity);
       else this.arp.triggerAttackRelease(frequency, sixteenth * 0.8, t, events.lead.velocity);
     }
@@ -633,7 +651,7 @@ export class Band {
 
   /** The record slows down: every tonal part slides two octaves down, the level falls away. */
   private tapeStop(t: number, length: number) {
-    const tonal = [this.bass, ...this.pedalSaws, this.pedalSub, this.acid, this.hoover, this.bell, this.arp];
+    const tonal = [this.bass, ...this.pedalSaws, this.pedalSub, this.hook, this.acid, this.hoover, this.bell, this.arp];
     for (const synth of tonal) {
       // cents are already logarithmic: a straight line in cents is the slowing record
       synth.detune.setValueAtTime(0, t);
