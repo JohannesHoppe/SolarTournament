@@ -1160,6 +1160,8 @@ export class Game implements OnlineGame {
   private readonly guide = new GuideLine();
   /** The reference plane's grid and the drop lines to it (see orient). */
   private readonly plane = new ReferencePlane();
+  /** The flight computer's lines in space (the reference plane, the orbit), drawn after the lens (see the composer). */
+  private readonly hudScene = new THREE.Scene();
   /** The orbit the readout sees, drawn into space (see view/orbitpath). */
   private readonly orbitPath = new OrbitPath();
   /** The sun as a fixed reference: always in the same direction, far beyond the arena. */
@@ -1242,6 +1244,11 @@ export class Game implements OnlineGame {
     for (const target of [this.composer.renderTarget1, this.composer.renderTarget2]) target.depthTexture = new THREE.DepthTexture(1, 1);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
     this.composer.addPass(this.lensing.pass);
+    // the flight computer's lines in space go straight into the display, after the lens: it bends
+    // the picture of space, never the HUD (they are drawn over everything, so they need no depth)
+    const hud = new RenderPass(this.hudScene, this.camera);
+    hud.clear = false;
+    this.composer.addPass(hud);
     this.composer.addPass(this.bloom);
     this.composer.addPass(this.output);
     this.composer.addPass(this.datamosh);
@@ -1268,7 +1275,8 @@ export class Game implements OnlineGame {
     this.scene.add(this.replayEffects.group);
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
-    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.cables.group, this.cometView.root, this.plane.group, this.orbitPath.line);
+    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.cables.group, this.cometView.root);
+    this.hudScene.add(this.plane.group, this.orbitPath.line);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.mining.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group, this.reentry.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
       const light = new THREE.PointLight(0x88bbff, 0, 2500, 2);
