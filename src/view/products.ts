@@ -111,32 +111,18 @@ function can(): THREE.BufferGeometry[] {
   return [part(body), part(swoosh(0.336, 0.6, 0.12, 0.14), 1.4, 0.35), part(band(0.334, 0.12, 0.16), 1.2, 0.2), part(ring, 1.4, 0.5), part(rivet, 1.4, 0.5), part(mouth, 0.8)];
 }
 
-/** A frilled ring around the vertical: `inner` to `outer` out at `height`, its rim waving `waves` times by up to `wave`. */
-function frill(inner: number, outer: number, height: number, waves: number, wave: number): THREE.BufferGeometry {
-  const positions: number[] = [];
-  const at = (i: number, j: number) => {
-    const a = (i / 84) * Math.PI * 2;
-    const r = inner + (j / 2) * (outer - inner) * (1 + 0.08 * sin(a * waves * 0.5 + 1));
-    const y = height + (j / 2) * (j / 2) * wave * sin(a * waves) - (j / 2) * wave * 0.6;
-    return [sin(a) * r, y, cos(a) * r];
-  };
-  for (let i = 0; i < 84; i++) for (let j = 0; j < 2; j++) positions.push(...at(i, j), ...at(i + 1, j), ...at(i + 1, j + 1), ...at(i, j), ...at(i + 1, j + 1), ...at(i, j + 1));
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
 /**
- * A Space Burger as everyone draws one: wider than tall, a high domed bun with sesame on top,
- * under it a ruffle of lettuce, tomato slices and a thick, rough patty sticking out past the bun,
- * cheese melting down over its edge in drips, the flat bottom bun. Each layer apart by a dark
- * gap, standing level, so it turns without wobbling.
+ * A Space Burger, as plain as space makes it: the flat bottom bun, a thick, rough patty sticking
+ * out past the bun, a slice of cheese with its corners hanging over the patty, a high domed bun
+ * with sesame on top. Nothing grows out there, so nothing green. Each layer apart by a dark gap,
+ * standing level, so it turns without wobbling. The layers are open shells without their flat
+ * inner faces: a hologram glows brightest where a face turns away, and those discs, seen almost
+ * edge-on, would flood its middle with light.
  */
 function burger(): THREE.BufferGeometry[] {
-  const bottom = lathe([[0, 0], [0.44, 0], [0.5, 0.03], [0.52, 0.09], [0.5, 0.15], [0, 0.15]]);
+  const bottom = lathe([[0.38, 0], [0.47, 0.02], [0.52, 0.08], [0.5, 0.15], [0.44, 0.16]]);
   // the patty: thick, rough at its rim, sticking out past the bun
-  const patty = lathe([[0, 0.17], [0.53, 0.17], [0.58, 0.2], [0.6, 0.25], [0.58, 0.3], [0.53, 0.33], [0, 0.33]], 40);
+  const patty = lathe([[0.5, 0.17], [0.58, 0.2], [0.6, 0.25], [0.58, 0.3], [0.5, 0.33]], 40);
   const rough = patty.attributes.position;
   for (let i = 0; i < rough.count; i++) {
     const [x, z] = [rough.getX(i), rough.getZ(i)];
@@ -148,37 +134,28 @@ function burger(): THREE.BufferGeometry[] {
     rough.setZ(i, z * bump);
   }
   patty.computeVertexNormals();
-  // the cheese: a square slice, its corners hanging down over the patty, with drips at the corners
-  const cheese = new THREE.PlaneGeometry(0.92, 0.92, 12, 12).rotateX(-Math.PI / 2).rotateY(Math.PI / 4);
+  // the cheese: a square slice, its corners hanging down over the patty
+  const cheese = new THREE.PlaneGeometry(0.9, 0.9, 12, 12).rotateX(-Math.PI / 2).rotateY(Math.PI / 4);
   const p = cheese.attributes.position;
   for (let i = 0; i < p.count; i++) {
-    const out = Math.max(0, Math.sqrt(p.getX(i) * p.getX(i) + p.getZ(i) * p.getZ(i)) - 0.5);
-    p.setY(i, 0.345 - out * 1.6);
+    const out = Math.max(0, Math.sqrt(p.getX(i) * p.getX(i) + p.getZ(i) * p.getZ(i)) - 0.48);
+    p.setY(i, 0.35 - out * 1.4);
   }
   cheese.computeVertexNormals();
-  const drips = [0, 1, 2, 3].map((k) => {
-    const a = (k / 4) * Math.PI * 2 + Math.PI / 4 + 0.2;
-    return new THREE.CapsuleGeometry(0.025, 0.07, 2, 6).translate(sin(a) * 0.6, 0.23, cos(a) * 0.6);
-  });
-  const lettuce = frill(0.3, 0.63, 0.375, 10, 0.035);
-  const tomato = (a: number) => new THREE.CylinderGeometry(0.17, 0.17, 0.04, 14).translate(sin(a) * 0.36, 0.41, cos(a) * 0.36);
-  const top = lathe([[0, 0.44], [0.48, 0.44], [0.53, 0.47], ...dome(0.54, 0.49, 0.3, 6)]);
+  const top = lathe([[0.46, 0.4], [0.53, 0.43], ...dome(0.54, 0.45, 0.3, 6)]);
   const seeds: THREE.BufferGeometry[] = [];
   const random = new Randomizer(2584);
   for (let i = 0; i < 18; i++) {
     const a = 0.45 + random.nextFloat() * 0.95;
     const around = (i / 18) * Math.PI * 2 + random.nextFloat() * 0.25;
     const normal = new THREE.Vector3(cos(a) * sin(around), sin(a), cos(a) * cos(around));
-    const point = new THREE.Vector3(0.54 * cos(a) * sin(around), 0.49 + 0.3 * sin(a), 0.54 * cos(a) * cos(around));
+    const point = new THREE.Vector3(0.54 * cos(a) * sin(around), 0.45 + 0.3 * sin(a), 0.54 * cos(a) * cos(around));
     seeds.push(part(laid(new THREE.SphereGeometry(1, 5, 3).scale(0.034, 0.018, 0.012), point, normal, random.nextFloat() * 3), 1.7, 0.75));
   }
   const all = [
-    part(bottom, 1),
-    part(patty, 0.55),
-    part(cheese, 1.2, 0.25),
-    ...drips.map((drip) => part(drip, 1.2, 0.25)),
-    part(lettuce, 1.25, 0.15),
-    ...[0.6, 2.7, 4.6].map((a) => part(tomato(a), 0.9)),
+    part(bottom, 0.8),
+    part(patty, 0.85),
+    part(cheese, 0.7, 0.2),
     part(top, 1.05),
     ...seeds,
   ];
@@ -393,19 +370,18 @@ function steak(): THREE.BufferGeometry[] {
   const edge = [...outline.slice(half), ...outline.slice(0, half)].filter((p) => p.x < -0.16);
   const rimTop = onTop(ribbon(edge, tapered(0.07), () => 0.035));
   const rind = extrude(ribbon(edge, tapered(0.03), () => -0.008), thickness + 0.03).translate(0, 0, -0.005);
-  // the marbling: thin wandering threads through the eye and the cap
-  const random = new Randomizer(1600);
-  const marbling = Array.from({ length: 9 }, () => {
-    let [x, y] = [-0.3 + random.nextFloat() * 0.7, -0.18 + random.nextFloat() * 0.36];
-    let heading = random.nextFloat() * Math.PI * 2;
-    const points: number[][] = [];
-    for (let k = 0; k < 4; k++) {
-      points.push([x, y]);
-      heading += (random.nextFloat() - 0.5) * 1.4;
-      [x, y] = [x + cos(heading) * 0.06, y + sin(heading) * 0.06];
-    }
-    return onTop(ribbon(smooth(points, 10), tapered(0.016)));
-  });
+  // the marbling: a few veins of fat, laid by hand as a butcher's drawing shows them: one long
+  // wave across the eye with a branch off it, shorter streaks of different lengths and bends
+  // here and there, one in the cap; each thinning out at both ends
+  const veins: [number, number[][]][] = [
+    [0.014, [[0.04, 0.17], [0.14, 0.1], [0.27, 0.13], [0.41, 0.05]]],
+    [0.01, [[0.15, 0.1], [0.19, 0.02], [0.27, -0.04]]],
+    [0.012, [[0.01, -0.06], [0.08, -0.02], [0.15, -0.09]]],
+    [0.011, [[0.24, -0.06], [0.31, -0.13], [0.4, -0.15]]],
+    [0.008, [[0.33, 0.0], [0.38, 0.06]]],
+    [0.01, [[-0.34, 0.04], [-0.3, 0.12], [-0.27, 0.15]]],
+  ];
+  const marbling = veins.map(([width, points]) => onTop(ribbon(smooth(points, 14), tapered(width))));
   const all = [
     part(meat, 0.6),
     part(seam, 1.25, 0.6),
