@@ -167,7 +167,7 @@ export const keepsHold = (holder: string, claimant: string) => holder < claimant
  * lighter than a ship is pulled harder, by the ship's mass over its own, but at most
  * WINCH_LIGHT times HOOK_PULL (32 g, a core's: the cable comes in no faster), and then the
  * force is that much smaller for the heavier end. Two ships pull each other with 8 g each; a
- * probe (half a tonne) comes in at 32 g while its ship feels a quarter of a g of it.
+ * probe (60 kg) comes in at 32 g while its ship feels hardly a thirtieth of a g of it.
  */
 const WINCH_LIGHT = 4;
 const winchOn = (body: Body, other: Body) => (HOOK_PULL * Math.min(MASS.ship, WINCH_LIGHT * Math.min(body.mass, other.mass))) / body.mass;
@@ -182,15 +182,6 @@ const winchOn = (body: Body, other: Body) => (HOOK_PULL * Math.min(MASS.ship, WI
  */
 const winches = (body: Body, other: Body, closing: number, limit: number) => (body.mass < other.mass ? closing < limit : relative.length() < limit);
 
-/**
- * A deliberate deviation for the fun of it: a probe on the line holds no swing. Its speed across
- * the cable against its ship's is taken out with up to STEADY (units/s², 32 g, as hard as the
- * winch pulls it in; its thrusters and the winch's computer together): reeled in for real, a probe
- * hooked beside a ship flying past fast would circle it on a shortening rope ever faster (its
- * angular momentum stays) and come in after many seconds, or not at all. A torpedo on a string
- * keeps its swing, which flings it.
- */
-const STEADY = WINCH_LIGHT * HOOK_PULL;
 const across = new THREE.Vector3();
 
 /**
@@ -210,8 +201,14 @@ const across = new THREE.Vector3();
  * end's own stretch, `floor` the body's and `farFloor` the anchor's. The winch keeps each
  * stretch at least at its floor, paying out what the cable wraps onto a piece: a ship winding
  * its cable round a rock never comes nearer to it, and spends its swing on the winch's brake.
+ *
+ * `steady` (units/s²) is what the lighter end's own thrusters give it against its swing across a
+ * straight cable (a probe's, see PROBE_STEADY in game/items; 0 for anything without them): reeled
+ * in on its swing alone, a probe hooked beside a ship racing past would circle it on the
+ * shortening rope ever faster (its angular momentum stays) and come in after many seconds or not
+ * at all. A torpedo on a string keeps its swing, which flings it.
  */
-export function pullOn(body: Body, anchor: Body, length: number, reeling: boolean, floor: number, speedLimit: number, dt: number, anchorEnd: 'moved' | 'fixed' | 'elsewhere' = 'fixed', path: CablePath | null = null, farFloor = 0, steady = false): number | null {
+export function pullOn(body: Body, anchor: Body, length: number, reeling: boolean, floor: number, speedLimit: number, dt: number, anchorEnd: 'moved' | 'fixed' | 'elsewhere' = 'fixed', path: CablePath | null = null, farFloor = 0, steady = 0): number | null {
   const moveAnchor = anchorEnd === 'moved';
   const near = path ? path.near : anchor;
   toAnchor.subVectors(near.position, body.position);
@@ -244,13 +241,13 @@ export function pullOn(body: Body, anchor: Body, length: number, reeling: boolea
     if (winches(body, anchor, closing, speedLimit)) body.velocity.addScaledVector(toAnchor, Math.min(winchOn(body, anchor) * dt, room));
     if (moveAnchor && (!path || reach > farFloor) && winches(anchor, body, closing, speedLimit)) anchor.velocity.addScaledVector(fromAnchor, Math.min(winchOn(anchor, body) * dt, room));
   }
-  // a probe on the line holds no swing (see STEADY): the lighter end's speed across a straight
-  // cable, against the other end's, taken out
-  if (steady && !path) {
+  // the lighter end's own thrusters burn against its speed across a straight cable, against the
+  // other end's, with up to `steady` (see the doc above)
+  if (steady > 0 && !path) {
     across.copy(relative).addScaledVector(toAnchor, -closing);
     const swing = across.length();
     if (swing > 0) {
-      const cut = Math.min(1, (STEADY * dt) / swing);
+      const cut = Math.min(1, (steady * dt) / swing);
       if (body.mass < anchor.mass) body.velocity.addScaledVector(across, -cut);
       else if (moveAnchor) anchor.velocity.addScaledVector(across, cut);
     }

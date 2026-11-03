@@ -58,7 +58,7 @@ import { Showcase } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { buy, emptyHangar, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, sovereignEarned, UPGRADES, WALLET } from './hangar';
 import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
-import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
+import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, PROBE_STEADY, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
 import { type Orbit, OrbitCalls, orbitable, type OrbitState, readOrbit, wellAlarmLevel } from './orbit';
 import { knockShare, ramShare, syncShare } from '../net/plausible';
@@ -5287,10 +5287,10 @@ export class Game implements OnlineGame {
       const path = owns || runsAnchor ? tether.cable.path(owns) : null;
       const farFloor = path ? clearOf(owner, path.farRock) : 0;
       const floor = path ? clearOf(owner, path.nearRock) : floorOf(owner, tether.anchor);
-      // the winch yanks as hard as a coil throws: up to the limit plus a coil's push; a probe
-      // comes in without a swing (see STEADY in game/hook)
+      // the winch yanks as hard as a coil throws: up to the limit plus a coil's push; a probe's
+      // thrusters burn against its swing (see PROBE_STEADY)
       const limit = MAX_SPEED + BOOST_PUSH;
-      const steady = !!probe;
+      const steady = probe ? PROBE_STEADY : 0;
       if (owns) length = pullOn(owner.body, anchor, length, true, floor, limit, dt, runsAnchor ? 'moved' : target ? 'elsewhere' : 'fixed', path, farFloor, steady);
       else if (runsAnchor && (target || held)) length = pullOn(anchor, owner.body, length, true, floor, limit, dt, 'elsewhere', path, farFloor, steady);
       if (length === null) {

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { contents, fieldSolid, packItems, placeBucket, PROBE_THRUST, Probes, unpackItems, type Solid } from './items';
+import { contents, fieldSolid, packItems, placeBucket, PROBE_STEADY, PROBE_THRUST, Probes, unpackItems, type Solid } from './items';
 import { floorOf, pullOn, type Anchor } from './hook';
 import { MASS, type Body } from '../world/bodies';
 import { MAX_SPEED } from '../ship/flight';
@@ -224,10 +224,10 @@ describe('a probe on the hook', () => {
       expect(length).not.toBeNull();
       if (state.probes.touching(body.position, RADIUS)) arrived = t;
     }
-    // not at once: half a tonne on 400 m of cable at 32 g, braked to arrive gently, takes some two and a half seconds
+    // not at once: 400 m of cable at 32 g, braked to arrive gently, takes some two and a half seconds
     expect(arrived).toBeGreaterThan(1);
     expect(arrived).toBeLessThan(3);
-    // the ship hardly moved for it: half a tonne against sixty
+    // the ship hardly moved for it: 60 kg against sixty tonnes
     expect(body.position.length()).toBeLessThan(100);
   });
 
@@ -240,7 +240,7 @@ describe('a probe on the hook', () => {
       let length: number | null = 8000;
       let arrived = -1;
       for (let t = 0; t < 8 && arrived < 0; t += DT) {
-        length = pullOn(body, state.probe, length!, true, state.floor, MAX_SPEED + BOOST_PUSH, DT, 'moved', null, 0, true);
+        length = pullOn(body, state.probe, length!, true, state.floor, MAX_SPEED + BOOST_PUSH, DT, 'moved', null, 0, PROBE_STEADY);
         expect(length).not.toBeNull();
         // the drive holds the ship's speed
         body.velocity.setLength(speed);

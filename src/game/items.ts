@@ -109,6 +109,14 @@ const DROP_SPREAD = 400;
  */
 export const PROBE_THRUST = 785;
 const PROBE_RETURN = 2000;
+/**
+ * A probe's thrusters in full (N, about 20 kN): on its MASS.probe of 60 kg some 33 g, of which it
+ * burns only PROBE_THRUST flying home. On a hook's cable it burns them in full against its swing
+ * across the cable (see PROBE_STEADY): a sponsor wants its probe taken, so it helps the winch.
+ */
+const PROBE_FORCE = 20_000;
+/** What a probe's thrusters in full give it (units/s²: N over kg, 1 unit = 5 cm, about 33 g), see PROBE_FORCE. */
+export const PROBE_STEADY = (PROBE_FORCE / MASS.probe) * 20;
 const PROBE_SETTLE = 100;
 /**
  * A probe meeting something solid (rock, ice, junk and hull, the President's battleship, a
@@ -126,7 +134,7 @@ export interface Probe {
   luck: number | null;
   position: THREE.Vector3;
   velocity: THREE.Vector3;
-  /** A probe is a body (see world/bodies) on a hook's cable: half a tonne. */
+  /** A probe is a body (see world/bodies) on a hook's cable: 60 kg. */
   readonly mass: number;
   /** Where the probe belongs now and how that place drifts: the same on every browser (round clock, or a dead clone's death). The probe flies there unless a hook moved it (see astray). */
   readonly slot: THREE.Vector3;

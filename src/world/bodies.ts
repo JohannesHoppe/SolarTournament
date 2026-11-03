@@ -20,7 +20,9 @@ export const IMMOVABLE = Infinity;
 /**
  * The masses of what flies (kg). An interceptor (35 m) is a fighter of 60 t, about three
  * times a fighter jet of today, for its reactor, drive and armor. A sponsor core (an armored
- * reactor canister 14 m long) a quarter of that; a sponsor probe half a tonne; a torpedo a
+ * reactor canister 14 m long) a quarter of that; a sponsor probe 60 kg (solar wings, a dish and
+ * a beacon on a light frame: a hook's winch has it in at a jerk, and its thrusters, about 20 kN,
+ * throw it about at some 33 g, see game/items); a torpedo a
  * tonne (its 20 g motor makes about 196 kN); a piece of wreckage five tonnes; the President's
  * battleship (1,150 m) 4.5 million t: a carrier of today, 330 m long, displaces some 100,000 t,
  * and a mass goes with the cube of the length, (1,150 / 330)³ × 100,000 t ≈ 4.2 million t,
@@ -29,7 +31,7 @@ export const IMMOVABLE = Infinity;
 export const MASS = {
   ship: 60_000,
   core: 15_000,
-  probe: 500,
+  probe: 60,
   torpedo: 1_000,
   wreck: 5_000,
   battleship: 4.5e9,
