@@ -28,6 +28,14 @@ describe('the Boneyard on Psyche', () => {
     for (let k = 0; k <= 40; k++) expect(field.overlap(new THREE.Vector3().lerpVectors(start, door, k / 40), 300), `${k}/40 along the lane`).toBeNull();
   });
 
+  it('pulls a ship nowhere: the ground, the racks and the depot have no gravity, the spoil next to none', () => {
+    const field = testField();
+    field.generate(place.layout);
+    const start = new THREE.Vector3(...place.start!.at);
+    // in the lane, at the hall's door, over the pad: far less than a hundredth of a g (1.96 units/s²)
+    for (const at of [start, new THREE.Vector3(BAY_MOUTH - 1000, start.y, 0), PAD.clone().setY(PAD.y + 400)]) expect(field.gravity(at).length(), `at ${at.toArray()}`).toBeLessThan(0.5);
+  });
+
   it('leaves the spoil on the yard’s edge just over the ground, clear of the racks and the depot', () => {
     const field = testField();
     field.generate(place.layout);

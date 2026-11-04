@@ -3411,14 +3411,14 @@ export class Game implements OnlineGame {
       list.textContent = sovereignEarned(this.hangar) ? t('The Sovereign flies with every upgrade, and wears every look.') : t('The Sovereign is the President’s gift for both interceptors made complete.');
       return;
     }
-    // the gear, bought once for both interceptors, then each interceptor's upgrades
+    // the ship on show: its gear, then its upgrades
     const gear = GEAR.map((piece) => {
-      const owned = this.hangar.gear[piece.id];
+      const owned = this.hangar.gear[ship][piece.id];
       const row = Object.assign(document.createElement('button'), { type: 'button', className: 'upgrade gear' });
       row.disabled = owned || piece.price > this.hangar.coins;
-      row.innerHTML = `<span class="upgrade-name">${t(piece.name)}<small>${t('{note} · for both interceptors', { note: t(piece.note) })}</small></span><span class="upgrade-price">${owned ? t('Owned') : `${coinText(piece.price)} ☉`}</span>`;
+      row.innerHTML = `<span class="upgrade-name">${t(piece.name)}<small>${t(piece.note)}</small></span><span class="upgrade-price">${owned ? t('Owned') : `${coinText(piece.price)} ☉`}</span>`;
       row.addEventListener('click', () => {
-        if (buyGear(this.hangar, piece.id)) this.saveHangar();
+        if (buyGear(this.hangar, ship, piece.id)) this.saveHangar();
       });
       return row;
     });

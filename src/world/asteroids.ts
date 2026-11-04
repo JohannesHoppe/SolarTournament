@@ -1330,10 +1330,15 @@ export class AsteroidField {
     return target.add(u.copy(asteroid.orbitAxis).multiplyScalar(asteroid.orbitRate).cross(asteroid.object.position));
   }
 
-  /** Sum of the asteroids' gravitational pull at a point (units/s²). */
+  /**
+   * Sum of the asteroids' gravitational pull at a point (units/s²). Built things (a yard's racks,
+   * its depot, the ground it stands on: kind 'rack') do not pull: they are no rock of the game's
+   * exaggerated gravity, and a place's ground is held by its own (see world/yard).
+   */
   gravity(position: THREE.Vector3, target = new THREE.Vector3()): THREE.Vector3 {
     target.set(0, 0, 0);
     for (const asteroid of this.asteroids.values()) {
+      if (asteroid.kind === 'rack') continue;
       pull.subVectors(asteroid.object.position, position);
       const distance = Math.max(pull.length(), asteroid.meanRadius);
       const surfaceGravity = GRAVITY_PER_RADIUS * asteroid.meanRadius;

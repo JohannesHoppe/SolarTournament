@@ -59,7 +59,7 @@ export const UPGRADES: readonly Upgrade[] = [
 ];
 
 /**
- * The gear: what a stock ship does not carry at all, bought once for both interceptors (the
+ * The gear: what a stock ship does not carry at all, bought for each interceptor on its own (the
  * Sovereign carries all of it). The hook (harpoon, cable and winch), the nanobots that mend the
  * drive and the thrusters (see ship/ship, NANO_WAIT), the self-destruct that takes a rival close
  * by along. Online it counts in full: an advantage on purpose, bought with the coins of rounds
@@ -84,11 +84,11 @@ export const GEAR: readonly Gear[] = [
 export const SELF_DESTRUCT_HOLD = 1;
 export const SELF_DESTRUCT_RADIUS = 1200;
 
-/** What a Host owns: its coins, the steps of every upgrade of each interceptor, the gear, and the ship it flies. */
+/** What a Host owns: its coins, the steps of every upgrade of each interceptor, the gear of each, and the ship it flies. */
 export interface Hangar {
   coins: number;
   levels: Record<HangarShip, Record<UpgradeId, number>>;
-  gear: Record<GearId, boolean>;
+  gear: Record<HangarShip, Record<GearId, boolean>>;
   ship: TournamentShip;
 }
 
@@ -162,15 +162,15 @@ const noLevels = (): Record<UpgradeId, number> => Object.fromEntries(UPGRADES.ma
 
 const noGear = (): Record<GearId, boolean> => Object.fromEntries(GEAR.map((gear) => [gear.id, false])) as Record<GearId, boolean>;
 
-export const emptyHangar = (): Hangar => ({ coins: 0, levels: { human: noLevels(), alien: noLevels() }, gear: noGear(), ship: 'human' });
+export const emptyHangar = (): Hangar => ({ coins: 0, levels: { human: noLevels(), alien: noLevels() }, gear: { human: noGear(), alien: noGear() }, ship: 'human' });
 
 /**
- * The wallet: a Host holds at most what the hangar sells, every step of every upgrade of both
- * interceptors and all the gear (122,000 coins). More would buy nothing, so a round's payout stops
+ * The wallet: a Host holds at most what the hangar sells, every step of every upgrade and all the
+ * gear of both interceptors (131,000 coins). More would buy nothing, so a round's payout stops
  * there, and the hangar says the wallet is full.
  */
 export const WALLET =
-  HANGAR_SHIPS.length * UPGRADES.reduce((sum, upgrade) => sum + upgrade.prices.reduce((a, b) => a + b, 0), 0) + GEAR.reduce((sum, gear) => sum + gear.price, 0);
+  HANGAR_SHIPS.length * (UPGRADES.reduce((sum, upgrade) => sum + upgrade.prices.reduce((a, b) => a + b, 0), 0) + GEAR.reduce((sum, gear) => sum + gear.price, 0));
 
 const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 
@@ -226,10 +226,20 @@ export function hangarFrom(text: string | null): KeptHangar {
   } else if (levels !== undefined) unreadable.push('levels');
   const { gear } = entry;
   if (isRecord(gear)) {
-    for (const { id } of GEAR) {
-      if (gear[id] === undefined) continue;
-      if (typeof gear[id] === 'boolean') hangar.gear[id] = gear[id];
-      else unreadable.push(`gear.${id}`);
+    // a hangar that keeps one set of gear (not one per interceptor) carries it on both
+    const shared = GEAR.some(({ id }) => gear[id] !== undefined);
+    for (const interceptor of HANGAR_SHIPS) {
+      const pieces = shared ? gear : gear[interceptor];
+      if (pieces === undefined) continue;
+      if (!isRecord(pieces)) {
+        unreadable.push(`gear.`);
+        continue;
+      }
+      for (const { id } of GEAR) {
+        if (pieces[id] === undefined) continue;
+        if (typeof pieces[id] === 'boolean') hangar.gear[interceptor][id] = pieces[id];
+        else unreadable.push(shared ? `gear.` : `gear..`);
+      }
     }
   } else if (gear !== undefined) unreadable.push('gear');
   if (ship === 'human' || ship === 'alien') hangar.ship = ship;
@@ -264,12 +274,12 @@ export function buy(hangar: Hangar, ship: HangarShip, id: UpgradeId): boolean {
   return true;
 }
 
-/** Buys a piece of gear: true when the coins sufficed and it was not owned yet. */
-export function buyGear(hangar: Hangar, id: GearId): boolean {
+/** Buys a piece of gear for an interceptor: true when the coins sufficed and it did not carry it yet. */
+export function buyGear(hangar: Hangar, ship: HangarShip, id: GearId): boolean {
   const price = GEAR.find((gear) => gear.id === id)!.price;
-  if (hangar.gear[id] || price > hangar.coins) return false;
+  if (hangar.gear[ship][id] || price > hangar.coins) return false;
   hangar.coins -= price;
-  hangar.gear[id] = true;
+  hangar.gear[ship][id] = true;
   return true;
 }
 
@@ -306,8 +316,8 @@ export function perksOf(hangar: Hangar, ship: TournamentShip, online: boolean): 
     neon: look('neon'),
     flame: look('flame'),
     // the gear counts in full online too (see GEAR)
-    hook: ship === 'sovereign' || hangar.gear.hook,
-    nanobots: ship === 'sovereign' || hangar.gear.nanobots,
-    selfDestruct: ship === 'sovereign' || hangar.gear.selfDestruct,
+    hook: ship === 'sovereign' || hangar.gear[ship].hook,
+    nanobots: ship === 'sovereign' || hangar.gear[ship].nanobots,
+    selfDestruct: ship === 'sovereign' || hangar.gear[ship].selfDestruct,
   };
 }
