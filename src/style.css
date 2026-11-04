@@ -294,6 +294,51 @@ button.primary .mode-note {
   opacity: 0.75;
 }
 
+/*
+ * The title screen's two halves: the story (Lot 7731), flown alone, and the Games with the ways
+ * into them (the flight school, bot training, the online tournament, the hangar), each under its
+ * label in a frame of its own.
+ */
+.menu-half {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.menu-half .plate-label {
+  margin: 0;
+}
+
+/* the story's name in neon, as the logo's: the campaign is a game of its own */
+#campaign .mode-label {
+  font-family: var(--font-display);
+  color: var(--tube-orange);
+  text-shadow: var(--neon-orange);
+  letter-spacing: 0.06em;
+}
+
+/* not playable yet: shown, but it takes no click */
+#campaign:disabled {
+  cursor: default;
+  border-style: dashed;
+}
+
+#campaign:disabled:hover {
+  border-color: var(--line);
+}
+
+.mode-soon {
+  font-size: 0.7rem;
+  font-weight: 400;
+  color: var(--accent-strong);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
 .ship-select {
   display: grid;
   grid-auto-columns: 1fr;

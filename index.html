@@ -108,10 +108,17 @@
     <p class="tagline sentences" data-i18n>Five minutes. Die for the President. Again and again.</p>
     <label class="field"><span data-i18n>Callsign</span> <input id="callsign" maxlength="16" autocomplete="off" spellcheck="false"></label>
     <div class="field tint-field"><span data-i18n>Color</span> <span id="tints" role="radiogroup" aria-label="Your color" data-i18n-attr="aria-label"></span> <span id="tint-name"></span></div>
-    <button type="button" id="school" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Flight school</span></span><span class="mode-note" data-i18n>Learn to fly. Training clones are free.</span></button>
-    <button type="button" id="start" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Solo round</span></span><span class="mode-note" data-i18n>Race the gates or fight it out: your arena, your rivals.</span></button>
-    <button type="button" id="online" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Online tournament</span></span><span class="mode-note" data-i18n>Real Hosts: join a public one or start your own.</span></button>
-    <button type="button" id="hangar" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Hangar</span></span><span class="mode-note" id="hangar-note"></span></button>
+    <section class="menu-half" id="menu-story" aria-labelledby="menu-story-label">
+      <p class="plate-label" id="menu-story-label" data-i18n>The story</p>
+      <button type="button" id="campaign" class="mode" disabled><span class="mode-name"><span class="mode-label">Lot 7731</span> <span class="mode-soon" data-i18n>In the making</span></span><span class="mode-note" data-i18n>From a scrapyard in the Belt to the President's Games: a story flown alone.</span></button>
+    </section>
+    <section class="menu-half" id="menu-games" aria-labelledby="menu-games-label">
+      <p class="plate-label" id="menu-games-label" data-i18n>The Games</p>
+      <button type="button" id="school" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Flight school</span></span><span class="mode-note" data-i18n>Learn to fly. Training clones are free.</span></button>
+      <button type="button" id="start" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Bot training</span></span><span class="mode-note" data-i18n>Race the gates or fight it out: your arena, your rivals.</span></button>
+      <button type="button" id="online" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Online tournament</span></span><span class="mode-note" data-i18n>Real Hosts: join a public one or start your own.</span></button>
+      <button type="button" id="hangar" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Hangar</span></span><span class="mode-note" id="hangar-note"></span></button>
+    </section>
     <p id="menu-notice" role="status" hidden></p>
     <button type="button" id="fullscreen" hidden data-i18n>Fullscreen</button>
     <p class="best" id="best-score"></p>
@@ -165,7 +172,7 @@
   </div>
 
   <div id="solo" class="plate" hidden>
-    <h2 data-i18n>Solo round</h2>
+    <h2 data-i18n>Bot training</h2>
     <div class="choice-grid" role="group" aria-label="Round" data-i18n-attr="aria-label" data-choice="solo-mode"></div>
     <p id="solo-mode-note" class="plate-note"></p>
     <p class="plate-label" data-i18n>Arena</p>
