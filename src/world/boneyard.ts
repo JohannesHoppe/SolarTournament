@@ -463,8 +463,8 @@ const platedBox = (half: THREE.Vector3, shift: number, cx = 0, cy = 0, cz = 0) =
  * the control room's windows and the pad in front of it, pipes along its inner walls; the
  * habitation cylinders on their saddles, their ends domed, windows in rows, a tube over to the
  * vault; the office tower, a column with its lift, and the round, glazed cab of Rask's office on
- * top under a plated dome; the crane's boom with its hook; the printer dome with its glowing
- * stacks; the crusher and its hopper; the tanks on their legs; the dish; the floodlight masts.
+ * top under a plated dome; the crane's boom with its hook; the printer dome with its radiator
+ * fins glowing dull red; the crusher and its hopper; the tanks on their legs; the dish; the floodlight masts.
  * Everything is moored to anchors in the ground by cables, and cables hang out of it everywhere.
  */
 function depotPart(part: DepotPart, half: THREE.Vector3, steel: THREE.Material, looks: ReturnType<typeof depotLooks>): THREE.Group {
@@ -586,15 +586,18 @@ function depotPart(part: DepotPart, half: THREE.Vector3, steel: THREE.Material, 
       const ribs: THREE.BufferGeometry[] = [];
       for (let k = 0; k < 8; k++) ribs.push(arch(DOME_RADIUS + 15, 30, 50, 0, base).applyMatrix4(new THREE.Matrix4().set(cos(k * Math.PI / 8), 0, sin(k * Math.PI / 8), 0, 0, 1, 0, 0, -sin(k * Math.PI / 8), 0, cos(k * Math.PI / 8), 0, 0, 0, 0, 1)));
       add(ribs, steel);
-      const stacks: THREE.BufferGeometry[] = [];
-      const tops: THREE.BufferGeometry[] = [];
-      for (const [dx, dz] of [[-0.3, -0.2], [0.1, 0.35], [0.35, -0.25]]) {
-        const y = base + DOME_RADIUS * 0.85;
-        stacks.push(new THREE.CylinderGeometry(70, 90, 500, 12).translate(dx * DOME_RADIUS, y + 250, dz * DOME_RADIUS));
-        tops.push(new THREE.CylinderGeometry(60, 60, 10, 12).translate(dx * DOME_RADIUS, y + 505, dz * DOME_RADIUS));
+      // the printers' waste heat goes out the only way it can in vacuum, as light: radiator fins on a
+      // mast over the dome, their faces glowing a dull red; and the valves that vent the vats now and then
+      const top = base + DOME_RADIUS;
+      const fins: THREE.BufferGeometry[] = [block(80, 500, 80, 0, top + 200, 0)];
+      const glowing: THREE.BufferGeometry[] = [];
+      for (const side of [-1, 1]) {
+        fins.push(block(1400, 20, 360, 0, top + 300 + side * 120, 0));
+        glowing.push(block(1360, 4, 330, 0, top + 300 + side * 120 + 12, 0), block(1360, 4, 330, 0, top + 300 + side * 120 - 12, 0));
       }
-      add(stacks, steel);
-      add(tops, looks.glow);
+      for (const [dx, dz] of [[-0.45, -0.3], [0.2, 0.5], [0.5, -0.35]]) fins.push(new THREE.CylinderGeometry(30, 40, 80, 8).translate(dx * DOME_RADIUS * 0.8, base + DOME_RADIUS * 0.75 + 40, dz * DOME_RADIUS * 0.8));
+      add(fins, steel);
+      add(glowing, looks.glow);
       anchors(group, looks, steel, r, [0, 1, 2, 3, 4, 5].map((k) => {
         const a = (k / 6) * Math.PI * 2;
         return [new THREE.Vector3(DOME_RADIUS * 0.75 * cos(a), base + DOME_RADIUS * 0.6, DOME_RADIUS * 0.75 * sin(a)), new THREE.Vector3((DOME_RADIUS + 500) * cos(a), base, (DOME_RADIUS + 500) * sin(a))] as const;
@@ -670,57 +673,20 @@ function withCollider(group: THREE.Group, half: THREE.Vector3): THREE.Group {
   return group;
 }
 
-/** Psyche's ground: one tile of it every GROUND_TILE units (200 m), with the yard's grime over it. */
-const GROUND_TILE = 4000;
-
 /**
- * Psyche's ground in the crater: metal dust gone dark, pebbles and the pits of small impacts, the
- * tracks of haulers and cranes scraped through it, oil and coolant spilled.
+ * Psyche's ground at a middle scale: a real photograph of a planetary surface, the Moon's valley
+ * of Taurus-Littrow as the Lunar Reconnaissance Orbiter's narrow angle camera mapped it (see
+ * public/assets/psyche/README.md): small craters, boulders, the scars of their tracks, bright
+ * fresh ejecta, its broad shading taken out and its edges made to tile. Laid on at half its scale
+ * (GROUND_TILE, 1.2 km a tile, its pixels 60 cm), tinted to Psyche's metal by the material.
  */
-function groundTexture(): THREE.Texture {
-  if (typeof document === 'undefined') return new THREE.Texture();
-  const size = 1024;
-  const [element, g] = sheet(size);
-  g.fillStyle = '#4a4640';
-  g.fillRect(0, 0, size, size);
-  const r = new Randomizer(YARD_SEED + 70);
-  for (let k = 0; k < 14000; k++) {
-    const shade = r.range(-1, 1);
-    g.fillStyle = shade > 0 ? `rgba(150, 142, 128, ${0.25 * shade})` : `rgba(14, 12, 10, ${-0.35 * shade})`;
-    const s = r.range(1, 4);
-    g.fillRect(r.range(0, size), r.range(0, size), s, s);
-  }
-  for (let k = 0; k < 120; k++) {
-    const x = r.range(0, size);
-    const y = r.range(0, size);
-    const radius = 2 + 30 * r.nextFloat() * r.nextFloat();
-    g.fillStyle = `rgba(18, 16, 14, ${r.range(0.25, 0.5)})`;
-    g.beginPath();
-    g.arc(x, y, radius, 0, Math.PI * 2);
-    g.fill();
-    g.strokeStyle = `rgba(150, 140, 125, ${r.range(0.2, 0.4)})`;
-    g.lineWidth = Math.max(1, radius * 0.15);
-    g.beginPath();
-    g.arc(x, y, radius, Math.PI * 0.9, Math.PI * 1.9);
-    g.stroke();
-  }
-  for (let k = 0; k < 6; k++) {
-    // a hauler's tracks: two scraped bands running across, a little bright
-    const y = r.range(0, size);
-    for (const offset of [0, 26]) {
-      g.fillStyle = 'rgba(120, 114, 104, 0.25)';
-      g.fillRect(0, y + offset, size, 9);
-      g.fillStyle = 'rgba(20, 18, 16, 0.2)';
-      for (let x = 0; x < size; x += 12) g.fillRect(x, y + offset, 4, 9);
-    }
-  }
-  for (let k = 0; k < 10; k++) {
-    g.fillStyle = `rgba(8, 7, 6, ${r.range(0.3, 0.55)})`;
-    g.beginPath();
-    g.ellipse(r.range(0, size), r.range(0, size), r.range(8, 50), r.range(6, 30), r.range(0, 3), 0, Math.PI * 2);
-    g.fill();
-  }
-  return tiled(element, 8);
+const GROUND_TILE = 24576;
+function groundPhoto(): THREE.Texture {
+  const texture = new THREE.TextureLoader().load(import.meta.env.BASE_URL + 'assets/psyche/ground-2k.jpg');
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  return texture;
 }
 
 /** The ground's fine detail (dust, grit and pebbles): one tile every DUST_TILE units (20 m). */
@@ -800,16 +766,16 @@ function relief(list: readonly Pit[], x: number, z: number): number {
  * CRATER_RADIUS, pitted by smaller craters (see pits; the yard itself cleared and flat), and its
  * wall rising from there to the crest CRATER_HEIGHT high at CRATER_CREST and falling away outside,
  * lumpy; scenery beyond the yard, collided with as the flat floor. Its ground in three layers
- * that never line up: dust and pebbles every DUST_TILE, small pits, tracks and spills every
- * GROUND_TILE, the yard's grime every MACRO_TILE.
+ * that never line up: dust and pebbles every DUST_TILE, the photograph of a real surface
+ * every GROUND_TILE (see groundPhoto), the yard's grime every MACRO_TILE.
  */
 function crater(): THREE.Group {
   const half = DEPOT_LAYOUT.ground.half;
   const group = new THREE.Group();
   grime ??= grimeTexture();
-  const middle = groundTexture();
+  const middle = groundPhoto();
   // the sun stands low over the crater: Psyche's bright metal dust and the yard's floodlights keep the floor from going black
-  const material = new THREE.MeshStandardMaterial({ map: dustTexture(), roughness: 0.9, metalness: 0.15, color: 0xffffff, emissive: 0x2e2a26, aoMap: grime, aoMapIntensity: 0 });
+  const material = new THREE.MeshStandardMaterial({ map: dustTexture(), roughness: 0.9, metalness: 0.15, color: 0xe6ddd0, emissive: 0x2e2a26, aoMap: grime, aoMapIntensity: 0 });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.middleMap = { value: middle };
     shader.fragmentShader = shader.fragmentShader
@@ -817,7 +783,7 @@ function crater(): THREE.Group {
       .replace(
         '#include <map_fragment>',
         `#include <map_fragment>
-  diffuseColor.rgb *= texture2D( middleMap, vAoMapUv * ${(MACRO_TILE / GROUND_TILE).toFixed(3)} ).rgb * 2.2;
+  diffuseColor.rgb *= texture2D( middleMap, vAoMapUv * ${(MACRO_TILE / GROUND_TILE).toFixed(4)} ).rgb * 2.0;
   diffuseColor.rgb *= texture2D( aoMap, vAoMapUv ).rgb;`,
       );
   };

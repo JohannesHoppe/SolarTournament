@@ -1,0 +1,8 @@
+# public/assets/psyche
+
+The ground of the Boneyard's crater on Psyche (see `src/world/boneyard.ts`, `groundPhoto`): a real photograph of a planetary surface, the Moon's, since no spacecraft has photographed Psyche's surface up close yet. The game lays it on at half its scale and tints it to Psyche's metal, under a finer layer of dust and over the yard's grime, so its tile never shows.
+
+| File | What it is | Source and license | Changed |
+|---|---|---|---|
+| `ground-2k.jpg` | The ground, 2048 × 2048, grey, tiling seamlessly | `NAC_DTM_APOLLO17_MOSAIC_120CM.IMG` (41599 × 48330, 16 bit, 1.2 m per pixel), the orthophoto of the Apollo 17 site in the valley of Taurus-Littrow made by the Lunar Reconnaissance Orbiter Camera's narrow angle cameras, from the [LROC archive of NASA's Planetary Data System](https://pds.lroc.im-ldi.com/data/LRO-L-LROC-5-RDR-V1.0/LROLRC_2001/DATA/SDP/NAC_DTM/APOLLO17/), credit NASA/GSFC/Arizona State University. Per the [LROC terms](https://lroc.im-ldi.com/about/terms), "data products available through the LROC Data Node of the PDS or through NASA PDS interfaces are in the public domain" | the square of lines 24000 to 26047 and samples 26500 to 28547 (2.46 km across); its broad shading divided out (each pixel by a blur of it over about 96 pixels, a box blur three times along each axis, wrapping); cross-faded with itself shifted by half a tile, each copy weighted towards its own middle, so its edges meet; its 1st and 99th percentiles stretched to 10 and 245; JPEG quality 82 |
+| `ground-1k.jpg` | The same, 1024 × 1024 | the same | scaled down, JPEG quality 82 |
