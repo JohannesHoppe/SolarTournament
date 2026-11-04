@@ -29,14 +29,16 @@ export const YARD_END = 3 * (RACK_LENGTH + RACK_GAP) + RACK_LENGTH / 2;
 export const RACK_Y = GROUND + RACK_HEIGHT / 2;
 
 /**
- * The depot at the lane's far end, on the crater floor, all of it sized for fighters 35 m long:
- * the hangar hall, its door towards the lane, inside 80 m deep, 90 m wide and 45 m high with the
- * round landing pad on its floor; beside it the two habitation blocks of stacked containers, the
- * couches of the Hosts in debt in the cellar under them; behind it Rask's office tower, 120 m
- * high, its glazed cab on top looking down on the yard and a crane's boom reaching out over it;
- * the printer hall with its stacks; the crusher with its hopper; three spherical tanks on legs;
- * the dish. And along the lane the yard's floodlight masts. Each part is a solid box of the field
- * (kind 'rack', types from DEPOT_TYPE on; a tank collides as the box just inside its round), so
+ * The depot at the lane's far end, on the crater floor, sized for fighters 35 m long and built as
+ * a station is in space, for Psyche's pull is next to nothing: round modules, no walls to stand
+ * on, everything moored to the ground by cables and anchors so it never drifts off. The hangar
+ * hall a vault (half a cylinder) open towards the lane, inside 80 m deep, 90 m wide and 45 m high
+ * with the round landing pad on its floor; beside it the two habitation cylinders on their
+ * saddles, the couches of the Hosts in debt inside; behind it Rask's office tower, a column 120 m
+ * high with the round, glazed cab of his office on top and a crane's boom reaching out over the
+ * yard; the printer hall a dome; the crusher with its hopper; three spherical tanks on legs; the
+ * dish. And along the lane the yard's floodlight masts. Each part is a solid box of the field
+ * (kind 'rack', types from DEPOT_TYPE on; a round part collides as the box inside its round), so
  * the hall stands open where the ship flies in; `shape` says how it is drawn.
  */
 export type DepotPart =
@@ -62,17 +64,24 @@ export type DepotPart =
   | 'mast4'
   | 'mast5'
   | 'mast6';
-export type DepotShape = 'ground' | 'wall' | 'roof' | 'stack' | 'tower' | 'cab' | 'lattice' | 'hall' | 'crusher' | 'tank' | 'dish' | 'mast';
+export type DepotShape = 'ground' | 'wall' | 'vault' | 'end' | 'hab' | 'tower' | 'cab' | 'lattice' | 'dome' | 'crusher' | 'tank' | 'dish' | 'mast';
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
 /** The hangar hall's door at BAY_MOUTH along x, its back wall at BAY_BACK; its inside half as wide and as high as these (units). */
 export const BAY_MOUTH = YARD_END + 2400;
 export const BAY_BACK = BAY_MOUTH + 1600;
 export const BAY_HALF_WIDTH = 900;
 export const BAY_HEIGHT = 900;
-/** The hall's walls and roof are this thick (units, 10 m). */
-const SHELL = 200;
 /** The tanks' radius (units, 15 m). */
 export const TANK_RADIUS = 300;
+/** The hall's vault: half a cylinder of this radius (units, 70 m) over the bay, its axis on the ground. */
+export const VAULT_RADIUS = 1400;
+/** The habitation cylinders' radius (units, 21 m) and how high their saddles lift them (6 m). */
+export const HAB_RADIUS = 420;
+export const HAB_LIFT = 120;
+/** The office tower's and its cab's radii (units, 16 and 26 m), the printer dome's (55 m). */
+export const TOWER_RADIUS = 320;
+export const CAB_RADIUS = 520;
+export const DOME_RADIUS = 1100;
 const bayMiddle = (BAY_MOUTH + BAY_BACK) / 2;
 const bayHalf = (BAY_BACK - BAY_MOUTH) / 2;
 const TOWER_X = BAY_BACK + 1400;
@@ -82,16 +91,19 @@ const mast = (x: number, z: number) => ({ center: v(x, on(1600), z), half: v(60,
 export const DEPOT_LAYOUT: Readonly<Record<DepotPart, { center: THREE.Vector3; half: THREE.Vector3; shape: DepotShape }>> = {
   // the crater floor out to the crater's wall, 4.5 km all round
   ground: { center: v(0, GROUND - 4000, 0), half: v(90000, 4000, 90000), shape: 'ground' },
-  hallLeft: { center: v(bayMiddle, on(BAY_HEIGHT + SHELL), -BAY_HALF_WIDTH - SHELL / 2), half: v(bayHalf, (BAY_HEIGHT + SHELL) / 2, SHELL / 2), shape: 'wall' },
-  hallRight: { center: v(bayMiddle, on(BAY_HEIGHT + SHELL), BAY_HALF_WIDTH + SHELL / 2), half: v(bayHalf, (BAY_HEIGHT + SHELL) / 2, SHELL / 2), shape: 'wall' },
-  hallBack: { center: v(BAY_BACK + SHELL / 2, on(BAY_HEIGHT + SHELL), 0), half: v(SHELL / 2, (BAY_HEIGHT + SHELL) / 2, BAY_HALF_WIDTH + SHELL), shape: 'wall' },
-  hallRoof: { center: v(bayMiddle + SHELL / 2, GROUND + BAY_HEIGHT + SHELL / 2, 0), half: v(bayHalf + SHELL / 2, SHELL / 2, BAY_HALF_WIDTH + SHELL), shape: 'roof' },
-  habLeft: { center: v(bayMiddle + 200, on(900), -BAY_HALF_WIDTH - SHELL - 900), half: v(750, 450, 400), shape: 'stack' },
-  habRight: { center: v(bayMiddle + 200, on(900), BAY_HALF_WIDTH + SHELL + 900), half: v(750, 450, 400), shape: 'stack' },
-  tower: { center: v(TOWER_X, on(TOWER_HEIGHT), 0), half: v(300, TOWER_HEIGHT / 2, 300), shape: 'tower' },
-  cab: { center: v(TOWER_X, GROUND + TOWER_HEIGHT + 200, 0), half: v(500, 200, 500), shape: 'cab' },
+  // the hall is a vault, half a cylinder lying on the ground; its colliders lie inside its shell: side walls, a roof slab, its closed end
+  hallLeft: { center: v(bayMiddle, GROUND + 430, -BAY_HALF_WIDTH - 100), half: v(bayHalf, 430, 100), shape: 'wall' },
+  hallRight: { center: v(bayMiddle, GROUND + 430, BAY_HALF_WIDTH + 100), half: v(bayHalf, 430, 100), shape: 'wall' },
+  hallBack: { center: v(BAY_BACK + 100, GROUND + 525, 0), half: v(100, 525, BAY_HALF_WIDTH), shape: 'end' },
+  hallRoof: { center: v(bayMiddle + 100, GROUND + 980, 0), half: v(bayHalf + 100, 80, 850), shape: 'vault' },
+  // the habitation cylinders lying on their saddles beside the hall, each colliding as the box inside its round
+  habLeft: { center: v(bayMiddle + 200, GROUND + HAB_LIFT + HAB_RADIUS, -VAULT_RADIUS - 200 - HAB_RADIUS), half: v(750, HAB_RADIUS * 0.7, HAB_RADIUS * 0.7), shape: 'hab' },
+  habRight: { center: v(bayMiddle + 200, GROUND + HAB_LIFT + HAB_RADIUS, VAULT_RADIUS + 200 + HAB_RADIUS), half: v(750, HAB_RADIUS * 0.7, HAB_RADIUS * 0.7), shape: 'hab' },
+  tower: { center: v(TOWER_X, on(TOWER_HEIGHT), 0), half: v(TOWER_RADIUS * 0.7, TOWER_HEIGHT / 2, TOWER_RADIUS * 0.7), shape: 'tower' },
+  cab: { center: v(TOWER_X, GROUND + TOWER_HEIGHT + 200, 0), half: v(CAB_RADIUS * 0.7, 200, CAB_RADIUS * 0.7), shape: 'cab' },
   boom: { center: v(TOWER_X - 2200, GROUND + TOWER_HEIGHT + 460, 0), half: v(1700, 60, 60), shape: 'lattice' },
-  printer: { center: v(TOWER_X + 1800, on(900), -1600), half: v(1100, 450, 700), shape: 'hall' },
+  // the printer hall a dome on the ground, colliding as the box inside it
+  printer: { center: v(TOWER_X + 2000, GROUND + 300, -1800), half: v(600, 300, 600), shape: 'dome' },
   crusher: { center: v(TOWER_X + 1600, on(1000), 1900), half: v(450, 500, 450), shape: 'crusher' },
   tankA: { center: v(BAY_BACK + 600, GROUND + 700, 2800), half: v(TANK_RADIUS * 0.82, TANK_RADIUS * 0.82, TANK_RADIUS * 0.82), shape: 'tank' },
   tankB: { center: v(BAY_BACK + 1300, GROUND + 700, 3100), half: v(TANK_RADIUS * 0.82, TANK_RADIUS * 0.82, TANK_RADIUS * 0.82), shape: 'tank' },

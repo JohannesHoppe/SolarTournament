@@ -7,7 +7,7 @@ import { letteringTexture, PAINT_ASPECT } from '../view/lettering';
 import { DEPOT } from '../ship/models';
 import { setFromEuler } from '../detthree';
 import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
-import { BAY_BACK, BAY_HALF_WIDTH, BAY_MOUTH, CRATER_CREST, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED } from './yard';
+import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED } from './yard';
 
 /**
  * How the Boneyard on Psyche looks (the campaign's first place; where things stand in
@@ -229,7 +229,7 @@ function patchTexture(): THREE.Texture {
 /** Each module's paint: its own surface (seed, stencils) and base tint, so no two modules share a pattern. */
 const MODULE_PAINT: Record<'hall' | 'hab' | 'tower' | 'printer' | 'crusher' | 'tank', { seed: number; tint: number; texts: readonly string[] }> = {
   hall: { seed: YARD_SEED + 21, tint: 0xd9cfba, texts: ['BAY 3', 'NO SMOKING', 'CLAMP 3-A', 'DANGER', 'MIND THE GAP'] },
-  hab: { seed: YARD_SEED + 22, tint: 0xffffff, texts: ['HAB 2', 'COUCHES 1-40', 'AIRLOCK', 'O2 LOW?', 'PSYCHE 4'] },
+  hab: { seed: YARD_SEED + 22, tint: 0xb9bd9c, texts: ['HAB 2', 'COUCHES 1-40', 'AIRLOCK', 'O2 LOW?', 'PSYCHE 4'] },
   tower: { seed: YARD_SEED + 23, tint: 0xaab5c0, texts: ['OFFICE', 'RASK SALVAGE', 'NO ENTRY', 'MOW-2584'] },
   printer: { seed: YARD_SEED + 24, tint: 0xc7a184, texts: ['PRINTER HALL', 'BIOHAZARD', 'FEED 07', 'RACK 7700-7799'] },
   crusher: { seed: YARD_SEED + 25, tint: 0xb8a070, texts: ['CRUSHER', 'KEEP CLEAR', 'DANGER'] },
@@ -260,7 +260,7 @@ let patches: THREE.Texture | null = null;
  * stationSurface) in its tint every PLATING_TILE, the patches and holes of patchTexture every
  * PATCH_TILE, the yard's grime multiplied over both every MACRO_TILE (both read with the
  * geometry's second texture coordinates, see macroUv); faintly lit by the yard's floodlights so
- * its shadow side never goes black. A hab container's own color comes in its vertices.
+ * its shadow side never goes black.
  */
 function platingOf(part: DepotPart): THREE.MeshStandardMaterial {
   const name = PAINT_OF[part] ?? 'hall';
@@ -271,7 +271,8 @@ function platingOf(part: DepotPart): THREE.MeshStandardMaterial {
   grime ??= grimeTexture();
   patches ??= patchTexture();
   // the grime rides in the AO slot only for its texture coordinates of channel 1; it darkens the color itself, not the ambient light
-  const material = new THREE.MeshStandardMaterial({ map: hull.map, roughnessMap: hull.orm, metalnessMap: hull.orm, roughness: 1, metalness: 1, normalMap: hull.normal, color: paint.tint, emissive: 0x2c2a26, aoMap: grime, aoMapIntensity: 0, vertexColors: name === 'hab' });
+  // both sides: a vault and a dome are seen from inside too
+  const material = new THREE.MeshStandardMaterial({ map: hull.map, roughnessMap: hull.orm, metalnessMap: hull.orm, roughness: 1, metalness: 1, normalMap: hull.normal, color: paint.tint, emissive: 0x2c2a26, aoMap: grime, aoMapIntensity: 0, side: THREE.DoubleSide });
   const patchMap = patches;
   material.onBeforeCompile = (shader) => {
     shader.uniforms.patchMap = { value: patchMap };
@@ -399,17 +400,72 @@ function cablesOn(r: Randomizer, half: THREE.Vector3, count: number): THREE.Buff
   return list;
 }
 
+/** Turns a shape built along y to lie along -x or z, and a ring lying in the xy plane to stand in the yz plane (quarter turns, no trigonometry). */
+const Y_TO_MINUS_X = new THREE.Matrix4().set(0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
+const Y_TO_Z = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1);
+const XY_TO_YZ = new THREE.Matrix4().set(0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1);
+/** How high the habitation cylinders' saddles stand (units, 6 m; see HAB_LIFT in world/yard). */
+const HAB_LIFT_DRAWN = HAB_LIFT;
+
+/**
+ * A round module's shell: an open cylinder of `radius` and `length` along `axis`, from
+ * `thetaStart` round by `thetaLength` (all the way, or half of it for a vault), its plating at
+ * its true scale, with the second texture coordinates for patches and grime.
+ */
+function roundShell(radius: number, length: number, axis: 'x' | 'y' | 'z', thetaStart: number, thetaLength: number, shift: number): THREE.BufferGeometry {
+  const shell = new THREE.CylinderGeometry(radius, radius, length, 48, 1, true, thetaStart, thetaLength);
+  const uv = shell.getAttribute('uv');
+  for (let i = 0; i < uv.count; i++) uv.setXY(i, (uv.getX(i) * thetaLength * radius) / PLATING_TILE, (uv.getY(i) * length) / PLATING_TILE);
+  const turned = axis === 'x' ? shell.applyMatrix4(Y_TO_X) : axis === 'z' ? shell.applyMatrix4(Y_TO_Z) : shell;
+  return macroUv(turned, shift);
+}
+
+/** Texture coordinates for a curved part (a dome, a cap, a tube) from where its points lie, at the plating's scale: no pole pinched, no seam stretched. */
+function planarUv(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  const p = geometry.getAttribute('position');
+  const uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) {
+    uv[i * 2] = (p.getX(i) + p.getZ(i) * 0.7) / PLATING_TILE;
+    uv[i * 2 + 1] = (p.getY(i) + p.getZ(i) * 0.3) / PLATING_TILE;
+  }
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return geometry;
+}
+
+/** A half ring standing in the yz plane at `x` over the ground at `base`: a vault's rib or a door's arch, `thick` units through. */
+function arch(radius: number, thick: number, _width: number, x: number, base: number): THREE.BufferGeometry {
+  return new THREE.TorusGeometry(radius, thick / 2, 6, 32, Math.PI).applyMatrix4(XY_TO_YZ).translate(x, base, 0);
+}
+
+/**
+ * Moorings: for each pair, a cable from a point on a module down to an anchor on the ground,
+ * pulled taut (Psyche's pull would never hold a module down by itself), the anchor a plate bolted
+ * into the ground with a stake through it.
+ */
+function anchors(group: THREE.Group, looks: ReturnType<typeof depotLooks>, steel: THREE.Material, r: Randomizer, pairs: readonly (readonly [THREE.Vector3, THREE.Vector3])[]) {
+  const cables: THREE.BufferGeometry[] = [];
+  const plates: THREE.BufferGeometry[] = [];
+  for (const [from, to] of pairs) {
+    cables.push(noUv(cable(from, to, r.range(5, 20), 10)));
+    plates.push(block(120, 30, 120, to.x, to.y + 15, to.z), block(30, 80, 30, to.x, to.y + 40, to.z));
+  }
+  group.add(new THREE.Mesh(mergeGeometries(cables), looks.cable));
+  group.add(new THREE.Mesh(boxUv(mergeGeometries(plates.map(noUv)), 200), steel));
+}
+
 /** A plated box `half` large, with its second texture coordinates for patches and grime. */
 const platedBox = (half: THREE.Vector3, shift: number, cx = 0, cy = 0, cz = 0) => macroUv(boxUv(block(half.x * 2, half.y * 2, half.z * 2, cx, cy, cz), PLATING_TILE), shift);
 
 /**
- * One part of the depot within its collider box (see world/yard): the hangar hall's walls with
- * buttresses outside, its roof with lights underneath, hazard paint and lamps round the door and
- * the bay's number painted over it, the pad in its back half; the habitation blocks of stacked
- * containers in faded colors with lit windows and catwalks; the office tower with its lift
- * shaft, and the glazed cab of Rask's office on top; the crane's boom with its hook; the printer
- * hall with its glowing stacks; the crusher and its hopper; the tanks on their legs; the dish;
- * the floodlight masts. Cables hang out of the walls everywhere.
+ * One part of the depot within its collider box (see world/yard), round as a station in space is:
+ * the hangar's vault (half a cylinder of plating with ribs, the door's arch in hazard paint with
+ * lamps, the bay's number painted over it, light panels under the shell), its closed end with
+ * the control room's windows and the pad in front of it, pipes along its inner walls; the
+ * habitation cylinders on their saddles, their ends domed, windows in rows, a tube over to the
+ * vault; the office tower, a column with its lift, and the round, glazed cab of Rask's office on
+ * top under a plated dome; the crane's boom with its hook; the printer dome with its glowing
+ * stacks; the crusher and its hopper; the tanks on their legs; the dish; the floodlight masts.
+ * Everything is moored to anchors in the ground by cables, and cables hang out of it everywhere.
  */
 function depotPart(part: DepotPart, half: THREE.Vector3, steel: THREE.Material, looks: ReturnType<typeof depotLooks>): THREE.Group {
   const r = new Randomizer(YARD_SEED + 100 + DEPOT_PARTS.indexOf(part));
@@ -430,115 +486,119 @@ function depotPart(part: DepotPart, half: THREE.Vector3, steel: THREE.Material, 
       group.add(crater());
       break;
     case 'wall': {
-      plated([platedBox(half, shift)]);
-      // buttresses on the outside, the door's frame in hazard paint at the front
-      const outward = part === 'hallBack' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, Math.sign(center.z));
-      const ribs: THREE.BufferGeometry[] = [];
-      if (part === 'hallBack') for (let z = -half.z + 150; z < half.z; z += 450) ribs.push(block(60, half.y * 2, 50, half.x + 30, 0, z));
-      else for (let x = -half.x + 100; x < half.x; x += 400) ribs.push(block(50, half.y * 2, 60, x, 0, outward.z * (half.z + 30)));
-      add(ribs, steel);
-      if (part !== 'hallBack') add([block(30, half.y * 2, half.z * 2 + 4, -half.x - 15, 0, 0)], looks.hazard, 200);
-      if (part === 'hallBack') {
-        // the windows of the hall's control room, looking down on the pad; and the pad itself, in front of the wall
-        const strips: THREE.BufferGeometry[] = [];
-        for (let z = -BAY_HALF_WIDTH + 100; z < BAY_HALF_WIDTH - 100; z += 220) if (r.nextFloat() > 0.25) strips.push(block(8, 70, 160, -half.x - 4, half.y * 0.45, z + 80));
-        add(strips, looks.windows);
-        pad(group, local(PAD), looks);
-      }
-      hang(part === 'hallBack' ? 3 : 5);
-      break;
-    }
-    case 'roof': {
-      plated([platedBox(half, shift)]);
-      const panels: THREE.BufferGeometry[] = [];
-      for (let x = -half.x + 250; x < half.x; x += 400) for (const z of [-0.5, 0.5]) panels.push(block(200, 8, 300, x, -half.y - 4, z * BAY_HALF_WIDTH));
-      add(panels, looks.light);
-      add([block(30, 40, half.z * 2, -half.x - 15, -half.y + 20, 0)], looks.hazard, 200);
-      group.add(new THREE.Mesh(new THREE.PlaneGeometry(half.z * 1.4, (half.z * 1.4) / PAINT_ASPECT).applyMatrix4(FACING_OUT).translate(-half.x - 0.5, half.y * 0.1, 0), looks.sign));
-      const edge: THREE.BufferGeometry[] = [];
-      for (let z = -half.z + 60; z < half.z; z += 240) edge.push(block(20, 20, 40, -half.x - 10, -half.y - 10, z));
-      add(edge, looks.lamp);
-      // vents and a beacon on top
-      add([block(120, 60, 120, half.x * 0.4, half.y + 30, -half.z * 0.5), block(120, 60, 120, -half.x * 0.2, half.y + 30, half.z * 0.6)], steel);
-      add([block(50, 50, 50, half.x - 60, half.y + 25, 0)], looks.beacon);
-      break;
-    }
-    case 'stack': {
-      // containers 15 m long, 5 m high and deep, stacked in courses, a few missing, each in a faded color of its own
-      const containers: THREE.BufferGeometry[] = [];
-      const lit: THREE.BufferGeometry[] = [];
-      const colors = [[0.62, 0.64, 0.5], [0.66, 0.42, 0.32], [0.5, 0.56, 0.64], [0.7, 0.68, 0.62], [0.64, 0.58, 0.42]];
-      const L = 300;
-      const H = 100;
-      for (let y = -half.y; y < half.y - 1; y += H) {
-        for (let x = -half.x; x < half.x - 1; x += L) {
-          for (let z = -half.z; z < half.z - 1; z += H) {
-            if (r.nextFloat() < 0.06 && y > -half.y) continue;
-            const box = macroUv(boxUv(block(L - 8, H - 8, H - 8, x + L / 2, y + H / 2, z + H / 2), PLATING_TILE), shift);
-            const tone = colors[r.nextInt() % colors.length];
-            const count = box.getAttribute('position').count;
-            box.setAttribute('color', new THREE.BufferAttribute(Float32Array.from({ length: count * 3 }, (_, i) => tone[i % 3]), 3));
-            containers.push(box);
-            const outer = z + H >= half.z - 1 ? 1 : z <= -half.z + 1 ? -1 : 0;
-            if (outer && r.nextFloat() < 0.4) lit.push(block(40, 30, 6, x + L * r.range(0.2, 0.8), y + H * 0.55, outer * (half.z + 2)));
-          }
-        }
-      }
-      plated(containers);
-      add(lit, looks.windows);
-      // catwalks along every second course, ladders up their ends
-      const walks: THREE.BufferGeometry[] = [];
-      for (let y = -half.y + 2 * H; y < half.y; y += 2 * H) for (const side of [-1, 1]) walks.push(block(half.x * 2, 8, 40, 0, y, side * (half.z + 20)));
-      for (const side of [-1, 1]) walks.push(block(20, half.y * 2, 20, side * (half.x + 10), 0, half.z + 20));
-      add(walks, steel);
-      hang(6);
-      break;
-    }
-    case 'tower': {
-      plated([platedBox(half, shift)]);
-      const shaft = lattice(new THREE.Vector3(80, half.y, 80), 200).map((g) => g.translate(-half.x - 80, 0, 0));
-      add([...shaft, ...[-1, 1].flatMap((sx) => [-1, 1].map((sz) => block(40, half.y * 2, 40, sx * (half.x + 10), 0, sz * (half.z + 10))))], steel);
-      const lit: THREE.BufferGeometry[] = [];
-      for (let y = -half.y + 200; y < half.y - 100; y += 160) if (r.nextFloat() < 0.35) lit.push(block(6, 40, 60, -half.x - 3, y, r.range(-half.z * 0.6, half.z * 0.6)));
-      add(lit, looks.windows);
+      // inside the vault: pipes along the wall at hand height, and cables slung between them
+      add([0.25, 0.45, 0.65].map((k) => block(half.x * 2, 24, 24, 0, -half.y + half.y * 2 * k, -Math.sign(center.z) * (half.z + 12))), steel);
       hang(4);
       break;
     }
-    case 'cab': {
-      // Rask's office: a band of glass all round under a plated roof, its lights on
-      plated([platedBox(new THREE.Vector3(half.x, half.y * 0.25, half.z), shift, 0, half.y * 0.75, 0), platedBox(new THREE.Vector3(half.x, half.y * 0.2, half.z), shift, 0, -half.y * 0.8, 0)]);
-      const glass: THREE.BufferGeometry[] = [];
-      for (const side of [-1, 1]) {
-        glass.push(block(6, half.y * 0.9, half.z * 2 - 40, side * (half.x - 3), -half.y * 0.05, 0));
-        glass.push(block(half.x * 2 - 40, half.y * 0.9, 6, 0, -half.y * 0.05, side * (half.z - 3)));
+    case 'vault': {
+      // the shell over the bay: half a cylinder on the ground, from the door to past the end wall
+      const length = half.x * 2;
+      const base = -center.y + GROUND;
+      group.add(new THREE.Mesh(roundShell(VAULT_RADIUS, length, 'x', Math.PI, Math.PI, shift).translate(0, base, 0), platingOf(part)));
+      // ribs round the outside every 20 m, the door's arch in hazard paint, lamps along it
+      const ribs: THREE.BufferGeometry[] = [];
+      for (let x = -half.x + 50; x < half.x; x += 400) ribs.push(arch(VAULT_RADIUS + 20, 40, 60, x, base));
+      add(ribs, steel);
+      add([arch(VAULT_RADIUS - 10, 50, 40, -half.x - 20, base)], looks.hazard, 200);
+      const lamps: THREE.BufferGeometry[] = [];
+      for (let k = 1; k < 12; k++) {
+        const a = (k / 12) * Math.PI;
+        lamps.push(block(30, 30, 30, -half.x - 30, base + (VAULT_RADIUS - 60) * sin(a), (VAULT_RADIUS - 60) * cos(a)));
       }
-      add(glass, looks.windows);
-      add([block(20, 300, 20, half.x * 0.6, half.y + 150, half.z * 0.6), block(60, 60, 60, half.x * 0.6, half.y + 330, half.z * 0.6)], steel);
-      add([block(40, 40, 40, half.x * 0.6, half.y + 380, half.z * 0.6)], looks.beacon);
+      add(lamps, looks.lamp);
+      // the bay's number painted over the door, light panels under the shell, a beacon on top
+      group.add(new THREE.Mesh(new THREE.PlaneGeometry(1000, 1000 / PAINT_ASPECT).applyMatrix4(FACING_OUT).translate(-half.x - 25, base + VAULT_RADIUS * 0.82, 0), looks.sign));
+      const panels: THREE.BufferGeometry[] = [];
+      for (let x = -half.x + 250; x < half.x; x += 400) for (const z of [-0.4, 0.4]) panels.push(block(200, 8, 260, x, base + BAY_HEIGHT + 60, z * BAY_HALF_WIDTH));
+      add(panels, looks.light);
+      add([block(50, 50, 50, half.x * 0.5, base + VAULT_RADIUS + 25, 0)], looks.beacon);
+      anchors(group, looks, steel, r, [-1, 1].flatMap((side) => [-0.7, 0, 0.7].map((k) => [new THREE.Vector3(k * half.x, base + VAULT_RADIUS * 0.7, side * VAULT_RADIUS * 0.7), new THREE.Vector3(k * half.x, base, side * (VAULT_RADIUS + 700))] as const)));
       break;
     }
-    case 'lattice': {
-      add(lattice(half, 240), steel);
-      // the crane's trolley and its hook, hanging on two cables over the yard
-      const x = -half.x + 300;
-      add([block(140, 60, 140, x, -half.y - 30, 0), block(120, 120, 80, x, -half.y - 700, 0)], steel);
-      group.add(new THREE.Mesh(mergeGeometries([-30, 30].map((dz) => noUv(cable(new THREE.Vector3(x, -half.y - 60, dz), new THREE.Vector3(x, -half.y - 640, dz), 0, 5)))), looks.cable));
+    case 'end': {
+      // the vault's closed end: half a disc of plating, the control room's windows in it looking down on the pad
+      const base = -center.y + GROUND;
+      group.add(new THREE.Mesh(macroUv(planarUv(new THREE.CircleGeometry(VAULT_RADIUS, 48, 0, Math.PI).applyMatrix4(FACING_OUT).translate(0, base, 0)), shift), platingOf(part)));
+      const strips: THREE.BufferGeometry[] = [];
+      for (let z = -BAY_HALF_WIDTH + 100; z < BAY_HALF_WIDTH - 100; z += 220) if (r.nextFloat() > 0.25) strips.push(block(8, 70, 160, -half.x - 4, base + BAY_HEIGHT * 0.75, z + 80));
+      add(strips, looks.windows);
+      pad(group, local(PAD), looks);
+      hang(3);
       break;
     }
-    case 'hall': {
-      plated([platedBox(half, shift)]);
+    case 'hab': {
+      // a cylinder lying on its saddles, its ends domed, rows of windows along it, a tube over to the vault
+      const radius = HAB_RADIUS;
+      group.add(new THREE.Mesh(roundShell(radius, half.x * 2, 'x', 0, Math.PI * 2, shift), platingOf(part)));
+      for (const end of [-1, 1]) {
+        const cap = new THREE.SphereGeometry(radius, 24, 12, 0, Math.PI * 2, 0, Math.PI / 2).applyMatrix4(end > 0 ? Y_TO_X : Y_TO_MINUS_X).translate(end * half.x, 0, 0);
+        group.add(new THREE.Mesh(macroUv(planarUv(cap), shift), platingOf(part)));
+      }
+      const saddles: THREE.BufferGeometry[] = [];
+      for (const x of [-0.6, 0, 0.6]) saddles.push(block(80, HAB_LIFT_DRAWN, radius * 1.4, x * half.x, -radius - HAB_LIFT_DRAWN / 2 + 40, 0), arch(radius + 12, 30, 80, x * half.x, 0));
+      add(saddles, steel);
+      const lit: THREE.BufferGeometry[] = [];
+      for (let x = -half.x + 80; x < half.x - 40; x += 120) for (const a of [0.35, -0.35]) if (r.nextFloat() < 0.45) lit.push(block(50, 30, 6, x, radius * sin(a) * 0.98, radius * cos(a) * 0.98 * -Math.sign(center.z)));
+      add(lit, looks.windows);
+      const tube = new THREE.CylinderGeometry(80, 80, 360, 12).applyMatrix4(Y_TO_Z).translate(0, -radius * 0.3, Math.sign(center.z) * -(radius + 160));
+      group.add(new THREE.Mesh(macroUv(planarUv(tube), shift), platingOf(part)));
+      anchors(group, looks, steel, r, [-0.8, 0.8].map((k) => [new THREE.Vector3(k * half.x, radius * 0.6, Math.sign(center.z) * radius * 0.6), new THREE.Vector3(k * half.x, -center.y + GROUND, Math.sign(center.z) * (radius + 600))] as const));
+      hang(3);
+      break;
+    }
+    case 'tower': {
+      // a column with a lift running up its side, guyed to the ground on four sides
+      group.add(new THREE.Mesh(roundShell(TOWER_RADIUS, half.y * 2, 'y', 0, Math.PI * 2, shift), platingOf(part)));
+      add(lattice(new THREE.Vector3(80, half.y, 80), 200).map((g) => g.translate(-TOWER_RADIUS - 80, 0, 0)), steel);
+      const rings: THREE.BufferGeometry[] = [];
+      for (let y = -half.y + 200; y < half.y; y += 400) rings.push(new THREE.TorusGeometry(TOWER_RADIUS + 10, 14, 6, 32).applyMatrix4(FLAT).translate(0, y, 0));
+      add(rings, steel);
+      const lit: THREE.BufferGeometry[] = [];
+      for (let y = -half.y + 200; y < half.y - 100; y += 160) if (r.nextFloat() < 0.35) {
+        const a = r.range(0, Math.PI * 2);
+        lit.push(block(30, 40, 30, (TOWER_RADIUS + 2) * cos(a), y, (TOWER_RADIUS + 2) * sin(a)));
+      }
+      add(lit, looks.windows);
+      anchors(group, looks, steel, r, [0, 1, 2, 3].map((k) => {
+        const a = (k / 4) * Math.PI * 2 + Math.PI / 4;
+        return [new THREE.Vector3(TOWER_RADIUS * cos(a), half.y * 0.6, TOWER_RADIUS * sin(a)), new THREE.Vector3(1400 * cos(a), -half.y, 1400 * sin(a))] as const;
+      }));
+      hang(3);
+      break;
+    }
+    case 'cab': {
+      // Rask's office: a ring of glass under a plated dome, a floor below, an antenna and its beacon on top
+      const floor = new THREE.CylinderGeometry(CAB_RADIUS, CAB_RADIUS * 0.8, half.y * 0.6, 32).translate(0, -half.y * 0.7, 0);
+      group.add(new THREE.Mesh(macroUv(planarUv(floor), shift), platingOf(part)));
+      add([new THREE.CylinderGeometry(CAB_RADIUS - 6, CAB_RADIUS - 6, half.y * 0.9, 32, 1, true).translate(0, 0, 0)], looks.windows);
+      const roof = new THREE.SphereGeometry(CAB_RADIUS, 32, 10, 0, Math.PI * 2, 0, Math.PI / 2).scale(1, 0.45, 1).translate(0, half.y * 0.45, 0);
+      group.add(new THREE.Mesh(macroUv(planarUv(roof), shift), platingOf(part)));
+      add([block(20, 300, 20, CAB_RADIUS * 0.3, half.y + 300, 0), block(60, 60, 60, CAB_RADIUS * 0.3, half.y + 460, 0)], steel);
+      add([block(40, 40, 40, CAB_RADIUS * 0.3, half.y + 510, 0)], looks.beacon);
+      break;
+    }
+    case 'dome': {
+      // the printer hall: a dome on the ground, ribbed, with its stacks glowing and anchors round its foot
+      const base = -center.y + GROUND;
+      const dome = new THREE.SphereGeometry(DOME_RADIUS, 40, 16, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, base, 0);
+      group.add(new THREE.Mesh(macroUv(planarUv(dome), shift), platingOf(part)));
+      const ribs: THREE.BufferGeometry[] = [];
+      for (let k = 0; k < 8; k++) ribs.push(arch(DOME_RADIUS + 15, 30, 50, 0, base).applyMatrix4(new THREE.Matrix4().set(cos(k * Math.PI / 8), 0, sin(k * Math.PI / 8), 0, 0, 1, 0, 0, -sin(k * Math.PI / 8), 0, cos(k * Math.PI / 8), 0, 0, 0, 0, 1)));
+      add(ribs, steel);
       const stacks: THREE.BufferGeometry[] = [];
       const tops: THREE.BufferGeometry[] = [];
-      for (const [dx, dz] of [[-0.5, -0.3], [0, 0.4], [0.5, -0.2]]) {
-        stacks.push(new THREE.CylinderGeometry(70, 90, 500, 12).translate(dx * half.x, half.y + 250, dz * half.z));
-        tops.push(new THREE.CylinderGeometry(60, 60, 10, 12).translate(dx * half.x, half.y + 505, dz * half.z));
+      for (const [dx, dz] of [[-0.3, -0.2], [0.1, 0.35], [0.35, -0.25]]) {
+        const y = base + DOME_RADIUS * 0.85;
+        stacks.push(new THREE.CylinderGeometry(70, 90, 500, 12).translate(dx * DOME_RADIUS, y + 250, dz * DOME_RADIUS));
+        tops.push(new THREE.CylinderGeometry(60, 60, 10, 12).translate(dx * DOME_RADIUS, y + 505, dz * DOME_RADIUS));
       }
       add(stacks, steel);
       add(tops, looks.glow);
-      const louvers: THREE.BufferGeometry[] = [];
-      for (let x = -half.x + 150; x < half.x; x += 300) for (let k = 0; k < 4; k++) louvers.push(block(160, 10, 12, x, -half.y * 0.2 + k * 30, half.z + 6));
-      add(louvers, steel);
-      hang(6);
+      anchors(group, looks, steel, r, [0, 1, 2, 3, 4, 5].map((k) => {
+        const a = (k / 6) * Math.PI * 2;
+        return [new THREE.Vector3(DOME_RADIUS * 0.75 * cos(a), base + DOME_RADIUS * 0.6, DOME_RADIUS * 0.75 * sin(a)), new THREE.Vector3((DOME_RADIUS + 500) * cos(a), base, (DOME_RADIUS + 500) * sin(a))] as const;
+      }));
       break;
     }
     case 'crusher': {
