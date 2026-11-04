@@ -5,7 +5,7 @@ import { fractureSet } from './world/fracture';
 import { debrisSet, hullSet } from './world/shapes';
 import { rackSet } from './world/boneyard';
 import { iceSet } from './world/iceset';
-import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
+import { alienInterceptor, humanInterceptor, scrapInterceptor, sovereign } from './ship/models';
 import type { TemplateKind, TemplateSet } from './world/asteroids';
 import { synthesizeSounds } from './sound/sounds';
 import { gasTexture, radialTexture, smokeTexture, sparkTexture } from './view/textures';
@@ -13,7 +13,7 @@ import { bakeMilkyWayTexture, bakeSky, faintStars, joinStars, MILKY_WAY_SIZES } 
 import { decodeStars, type StarList } from './world/starfile';
 
 /** The ships a Host can fly: the two interceptors, and the Sovereign once earned (see game/hangar). */
-export type ShipType = 'human' | 'alien' | 'sovereign';
+export type ShipType = 'human' | 'alien' | 'sovereign' | 'magpie';
 
 export interface Assets {
   ships: Record<ShipType, THREE.Object3D>;
@@ -194,7 +194,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   return {
     sky: { stars, glow: milkyWay.texture, sharp: () => bakeMilkyWayTexture(MILKY_WAY_SIZES.at(-1)!) },
     // the hulls are built in code; the model files give collider, drive flame and glows
-    ships: { human: humanInterceptor(human), alien: alienInterceptor(alien), sovereign: sovereign(human) },
+    ships: { human: humanInterceptor(human), alien: alienInterceptor(alien), sovereign: sovereign(human), magpie: scrapInterceptor(human) },
     belt: { near: asteroidsNear, impostor: asteroidImpostors },
     fieldSets: { rock, ice: iceSet(rock), debris: debrisSet(), hull: hullSet(), rack: rackSet() },
     textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), gas: gasTexture(), glow },

@@ -610,6 +610,42 @@ export function humanInterceptor(original: THREE.Object3D): THREE.Object3D {
   return hull(original, 'humanHull', coats, trim, radiators, { parts: lights, color: TAIL_LIGHT });
 }
 
+/**
+ * Lot 7731 as the yard sold it (the campaign's ship, see campaign/campaign): the depot's paint
+ * worn almost to the metal, rust everywhere, the yard's stencils on it, and lacking what the
+ * yard took: no gun under the nose, no tournament stripes, and on its left flank neither strut
+ * nor fin, the bare frame where its panels were.
+ */
+const SCRAP: Wear = { rust: 1, chips: 1, grime: 0.9, scratches: 0.9, seams: 1, stencils: ['LOT 7731', 'AS IS', 'SCRAP', '7731', 'NO WARRANTY'], roughness: 0.8, metalness: 0.15, flakes: true };
+
+export function scrapInterceptor(original: THREE.Object3D): THREE.Object3D {
+  const parts: THREE.BufferGeometry[] = [
+    paint(loft(OCTAGON, HUMAN_BODY[2], HUMAN_BODY[1]), OLIVE_DARK),
+    paint(loft(OCTAGON, HUMAN_BODY[1], HUMAN_BODY[0]), OLIVE_DARK),
+    paint(loft(OCTAGON, { z: -40, w: 30, h: 14, y: 42 }, { z: -170, w: 18, h: 6, y: 34 }), GLASS),
+    paint(loft(RECTANGLE, { z: 230, w: 12, h: 10, y: 62 }, { z: -40, w: 8, h: 4, y: 50 }), STEEL),
+    ...pair(paint(loft(OCTAGON, { z: 250, w: 30, h: 26, x: 87, y: 2 }, { z: 60, w: 22, h: 20, x: 75, y: 4 }), STEEL)),
+    ...pair(paint(loft(OCTAGON, NACELLE_CAP, NACELLE_END, 'back'), GUNMETAL)),
+    // only the right flank keeps its strut and plate; the left one shows the bare frame
+    pair(paint(loft(BLADE, { z: 150, w: 60, h: 12, x: 120, y: 10 }, { z: 0, w: 40, h: 10, x: 190, y: 14 }), OLIVE_DARK))[0],
+    pair(paint(loft(RECTANGLE, { z: 120, w: 110, h: 8, x: 170, y: 12 }, { z: 20, w: 90, h: 6, x: 170, y: 12 }), OLIVE))[0],
+    pair(paint(loft(RECTANGLE, { z: 140, w: 4, h: 4, x: 120, y: 10 }, { z: 0, w: 4, h: 4, x: 190, y: 14 }), GUNMETAL))[1],
+    ...driveBells([GUNMETAL, HEAT_TINT, GUNMETAL], STEEL),
+    paint(loft(RECTANGLE, { z: 262, w: 40, h: 28, y: -2 }, { z: 200, w: 44, h: 32, y: 0 }), GUNMETAL),
+    ...RIBS.map((y) => paint(loft(RECTANGLE, { z: 266, w: 46, h: 2.5, y }, { z: 214, w: 46, h: 2.5, y }), STEEL)),
+    ...Object.values(thrusterQuads(THRUSTER_LAYOUTS.human, GUNMETAL, OLIVE_DARK, STEEL)).flat(),
+  ];
+  const fins = [pair(paint(loft(RECTANGLE, HUMAN_FIN[1], HUMAN_FIN[0]), OLIVE))[0]];
+  const lights = [...pair(loft(RECTANGLE, { z: 264, w: 4, h: 4, x: 30, y: 30 }, { z: 256, w: 4, h: 4, x: 30, y: 30 }))];
+  const trim = lightStrips(flankLine(HUMAN_BODY, 0.45, -230, 240), { width: 96, y: 48, z: 244 });
+  const radiators = RIBS.map((y) => radiator(RECTANGLE, { z: 266, w: 46, h: 2.5, y }, { z: 214, w: 46, h: 2.5, y }, (p) => 0.55 + 0.45 * THREE.MathUtils.smoothstep(p.z, 214, 266)));
+  const coats: Coat[] = [
+    { parts, wear: SCRAP, seed: 7731 },
+    { parts: fins, wear: { ...SCRAP, relief: 'ribs' }, seed: 7732 },
+  ];
+  return hull(original, 'humanHull', coats, trim, radiators, { parts: lights, color: TAIL_LIGHT });
+}
+
 const IVORY = 0xd9d3c3;
 const GOLD = 0xc9a227;
 const GOLD_DARK = 0x7a5f14;

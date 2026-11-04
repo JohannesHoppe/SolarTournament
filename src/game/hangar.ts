@@ -16,7 +16,9 @@ import { msg } from '../i18n/i18n';
  */
 
 /** The two interceptors, which have upgrades; every ship a Host can fly is a ShipType (the Sovereign too, once earned). */
-export type HangarShip = Exclude<ShipType, 'sovereign'>;
+/** The ships of the Games a Host flies (the campaign's own hull is no tournament's). */
+export type TournamentShip = Exclude<ShipType, 'magpie'>;
+export type HangarShip = Exclude<TournamentShip, 'sovereign'>;
 export const HANGAR_SHIPS: readonly HangarShip[] = ['human', 'alien'];
 
 export type UpgradeId = 'radiators' | 'thrusters' | 'drive' | 'tubes' | 'plating' | 'neon' | 'flame';
@@ -87,7 +89,7 @@ export interface Hangar {
   coins: number;
   levels: Record<HangarShip, Record<UpgradeId, number>>;
   gear: Record<GearId, boolean>;
-  ship: ShipType;
+  ship: TournamentShip;
 }
 
 /** How a ship flies and fights with its upgrades: multipliers on the stock ship, and torpedoes on top. */
@@ -280,7 +282,7 @@ export function payOut(hangar: Hangar, points: number): number {
 export const tubeTorpedoes = (level: number) => Math.ceil(level / 2);
 
 /** How a ship flies with the steps it has (the Sovereign: every step), online at most ONLINE_LEVEL of each but the looks. */
-export function perksOf(hangar: Hangar, ship: ShipType, online: boolean): Perks {
+export function perksOf(hangar: Hangar, ship: TournamentShip, online: boolean): Perks {
   const step = (id: UpgradeId) => {
     const level = ship === 'sovereign' ? LEVELS : hangar.levels[ship][id];
     return online ? Math.min(level, ONLINE_LEVEL) : level;

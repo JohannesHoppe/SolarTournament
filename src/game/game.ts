@@ -59,7 +59,7 @@ import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
 import { Showcase, TITLE_WIDE } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
-import { BOT_GEAR, buy, buyGear, emptyHangar, GEAR, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS, sovereignEarned, UPGRADES, WALLET } from './hangar';
+import { BOT_GEAR, buy, buyGear, emptyHangar, type TournamentShip, GEAR, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS, sovereignEarned, UPGRADES, WALLET } from './hangar';
 import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
 import { contents, fieldSolid, obstacleSolid, Probes, PROBE_RADIUS, PROBE_STEADY, ITEM_NAMES, ITEM_HINTS, NOVA_RADIUS, placeBucket, SEALED_NAME, type Probe, type ItemKind, type ProbeState, type Solid } from './items';
 import type { Asteroid, FieldState, RayHit, ShovedState, Well } from '../world/asteroids';
@@ -505,7 +505,7 @@ const BEST_SCORE_KEY = 'solartournament.best';
 /** What the Host owns: Solar Coins, the upgrades of its ships, the ship it flies (see game/hangar). */
 const HANGAR_KEY = 'solartournament.hangar';
 /** The ships as the menu names them. */
-const SHIP_NAMES: Record<ShipType, string> = { human: msg('Human Interceptor'), alien: msg('Alien Interceptor'), sovereign: msg('The Sovereign') };
+const SHIP_NAMES: Record<ShipType, string> = { human: msg('Human Interceptor'), alien: msg('Alien Interceptor'), sovereign: msg('The Sovereign'), magpie: 'Lot 7731' };
 const CALLSIGN_KEY = 'solartournament.callsign';
 /** The flight school's courses a Host has completed (a list); once the basic training is among them, the menu leads with the solo round. */
 const SCHOOL_DONE_KEY = 'solartournament.school';
@@ -937,8 +937,8 @@ export class Game implements OnlineGame {
   private tampered = false;
   /** The hangar's and the completed courses' entries as last read, so a change to them is noticed. */
   private earnedRead: [string | null, string | null] = [null, null];
-  private selectedShip: ShipType = 'human';
-  private shipShown: ShipType = 'human';
+  private selectedShip: TournamentShip = 'human';
+  private shipShown: TournamentShip = 'human';
   private showcase: Showcase | null = null;
   private inHangar = false;
   /**
@@ -2615,7 +2615,8 @@ export class Game implements OnlineGame {
     this.resetOpening();
     $('hud-room').textContent = '';
 
-    this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, this.selectedShip, true);
+    // the campaign flies its own hull (Lot 7731), never one of the Games
+    this.me = this.addShip(this.online ? `p:${this.online.selfId}` : 'me', callsign, mode === 'school' && this.mission ? 'magpie' : this.selectedShip, true);
     this.me.wish = this.tint;
     this.me.setTint(TINTS[this.tint].hex);
     // the own ship flies with its upgrades, online only up to their cap
@@ -3339,7 +3340,7 @@ export class Game implements OnlineGame {
 
   /** The next or the previous ship on show; one that is earned is the one the Host flies. */
   private turnShowcase(step: number) {
-    const ships: ShipType[] = ['human', 'alien', 'sovereign'];
+    const ships: TournamentShip[] = ['human', 'alien', 'sovereign'];
     this.shipShown = ships[(ships.indexOf(this.shipShown) + step + ships.length) % ships.length];
     if (this.shipShown !== 'sovereign' || sovereignEarned(this.hangar)) {
       this.selectedShip = this.hangar.ship = this.shipShown;

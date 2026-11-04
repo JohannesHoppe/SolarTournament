@@ -168,6 +168,8 @@ const THRUSTERS: Record<ShipType, Thrusters> = {
   human: thrustersOf(THRUSTER_LAYOUTS.human),
   alien: thrustersOf(THRUSTER_LAYOUTS.alien),
   sovereign: thrustersOf(THRUSTER_LAYOUTS.sovereign),
+  // the campaign's scrap hull is the human interceptor's, thrusters and all
+  magpie: thrustersOf(THRUSTER_LAYOUTS.human),
 };
 /** How fast a nozzle's puff follows its firing (1/s): there at once, gone a little slower, so a flight computer's quick corrections do not flicker. */
 const JET_RISE = 40;
