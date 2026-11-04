@@ -356,6 +356,9 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
   });
 
   it('follow a rival into the clouds when they are daring, and hide in them a while when hit', () => {
+    // the bots' decisions draw on Math.random: seeded, so the test asks the same of them every run
+    let seed = 7;
+    const random = vi.spyOn(Math, 'random').mockImplementation(() => (seed = (seed * 16807) % 2147483647) / 2147483647);
     const f = air();
     const outside = new THREE.Vector3();
     const flyWith = (me: Ship, bot: Bot, others: Ship[], seconds: number, each: (t: number) => void = () => {}) => {
@@ -382,6 +385,7 @@ describe("bots in Jupiter's air, by what a Host's HUD shows", () => {
     flyWith(prey, hidden, [], 40, () => (dived ||= altitudeIn(f.air!, prey.flight.position) < 0));
     expect(dived).toBe(true);
     expect(altitudeIn(f.air!, prey.flight.position)).toBeGreaterThan(0);
+    random.mockRestore();
   });
 
   it('leave the clouds once they clog its radiators, however hard it is hit, a daring bot later than a cautious one', () => {
