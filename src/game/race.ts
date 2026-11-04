@@ -89,6 +89,8 @@ const GATE_ROOM = 4000;
 const GATE_RUN = 6000;
 const GATE_TRIES = 18;
 const GATE_STEP = 1600;
+/** Two gates lie at least this far apart along the course (units, 1.2 km), so a racer has room to line up for each. */
+const GATE_GAP = 24000;
 const GATE_BEND = 30000;
 const BEND_ARC = 2400;
 const GATE_CLEAR = 3;
@@ -498,7 +500,9 @@ export class Course {
       for (let attempt = 0; attempt <= GATE_TRIES && worst > 0; attempt++) {
         const step = pace(even);
         const tried = even + (attempt % 2 ? 1 : -1) * Math.ceil(attempt / 2) * (GATE_STEP / step);
-        const bad = (crowded(field, loop(tried, probe)) ? Math.PI : 0) + inBow(tried) + inBend(tried);
+        // never nearer than GATE_GAP along the course to the gate before it (or, for the last, the first)
+        const gap = Math.min(i > 0 ? tried - angles[i - 1] : Infinity, i === GATES - 1 ? angles[0] + Math.PI * 2 - tried : Infinity) * step;
+        const bad = (crowded(field, loop(tried, probe)) || gap < GATE_GAP ? Math.PI : 0) + inBow(tried) + inBend(tried);
         if (bad < worst) {
           worst = bad;
           angle = tried;
