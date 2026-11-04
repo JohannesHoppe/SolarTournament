@@ -105,9 +105,27 @@ export interface Perks {
   hook: boolean;
   nanobots: boolean;
   selfDestruct: boolean;
+  /** What every ship of the Games has and the campaign's scrap hull lacks until it is fitted (see campaign/campaign): the laser, the overdrive, the dodge. */
+  laser: boolean;
+  overdrive: boolean;
+  dodge: boolean;
 }
 
-export const STOCK: Readonly<Perks> = { cooling: 1, thrusters: 1, drive: 1, torpedoes: 0, damage: 1, neon: 0, flame: 0, hook: false, nanobots: false, selfDestruct: false };
+export const STOCK: Readonly<Perks> = {
+  cooling: 1,
+  thrusters: 1,
+  drive: 1,
+  torpedoes: 0,
+  damage: 1,
+  neon: 0,
+  flame: 0,
+  hook: false,
+  nanobots: false,
+  selfDestruct: false,
+  laser: true,
+  overdrive: true,
+  dodge: true,
+};
 
 /**
  * A bot's ship: stock, with the hook and the nanobots, so a round's rivals hook and mend as a
@@ -269,6 +287,7 @@ export function perksOf(hangar: Hangar, ship: ShipType, online: boolean): Perks 
   };
   const look = (id: UpgradeId) => (ship === 'sovereign' ? LEVELS : hangar.levels[ship][id]);
   return {
+    ...STOCK,
     cooling: 1 + RADIATOR_STEP * step('radiators'),
     thrusters: 1 + 0.08 * step('thrusters'),
     drive: 1 + 0.05 * step('drive'),

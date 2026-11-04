@@ -7,6 +7,22 @@ test('the campaign Lot 7731 takes no click on the plain address', async ({ page 
   expect(errors).toEqual([]);
 });
 
+test('the campaign flies the scrap hull: the trigger fires nothing, and the HUD shows no overdrive and no torpedoes', async ({ page }) => {
+  const errors = await openGame(page, '/?campaign');
+  await page.click('#campaign');
+  await page.waitForFunction(() => window.game.state === 'playing' && window.game.me?.alive && window.game.school?.attempt?.live, null, { timeout: 90_000 });
+  await page.keyboard.down('Space');
+  await page.evaluate(async () => {
+    const start = window.game.time;
+    while (window.game.time - start < 1) await new Promise((resolve) => requestAnimationFrame(resolve));
+  });
+  await page.keyboard.up('Space');
+  expect(await page.evaluate(() => window.game.me.heat)).toBe(0);
+  await expect(page.locator('#hud-overdrive')).toBeHidden();
+  await expect(page.locator('#hud-torpedo')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
 test('on the address with ?campaign its first mission flies on the flight school’s machinery, and done it is kept', async ({ page }) => {
   // the mission at its last drill (Nicole's closing words), so it ends by itself
   await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: [], step: 5, coins: 0, bond: 25000 })));

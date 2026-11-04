@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, campaignFrom, complete, freshCampaign, MISSIONS, nextMission, YARD_CUT } from './campaign';
+import { BOND, campaignFrom, complete, freshCampaign, hullOf, MISSIONS, nextMission, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { TORPEDOES } from '../game/torpedoes';
 
 describe('the campaign Lot 7731', () => {
   it('starts with the Bond owed and the first mission next', () => {
@@ -34,6 +35,14 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
     expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9 }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND });
+  });
+
+  it('starts on the scrap hull: a weak drive and thrusters, no laser, torpedoes, overdrive or dodge', () => {
+    const hull = hullOf(freshCampaign());
+    expect(hull.drive).toBe(SCRAP_DRIVE);
+    expect(hull.thrusters).toBe(SCRAP_THRUSTERS);
+    expect(TORPEDOES + hull.torpedoes).toBe(0);
+    expect([hull.laser, hull.overdrive, hull.dodge, hull.hook, hull.nanobots, hull.selfDestruct]).toEqual([false, false, false, false, false, false]);
   });
 
   it('gives every mission a name and drills to fly', () => {

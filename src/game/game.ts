@@ -31,7 +31,7 @@ import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../
 import { showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls, type Device } from '../input/input';
 import { fillSheet, SHEET_TABS } from '../input/sheet';
-import { type Campaign, campaignFrom, complete, type Mission, nextMission } from '../campaign/campaign';
+import { type Campaign, campaignFrom, complete, hullOf, type Mission, nextMission } from '../campaign/campaign';
 import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -2592,7 +2592,11 @@ export class Game implements OnlineGame {
     this.me.wish = this.tint;
     this.me.setTint(TINTS[this.tint].hex);
     // the own ship flies with its upgrades, online only up to their cap
-    this.me.outfit(perksOf(this.hangar, this.selectedShip, !!this.online));
+    // in the campaign the hull it has come to (see campaign/campaign), never the tournament's hangar
+    this.me.outfit(mode === 'school' && this.mission ? hullOf(this.campaign) : perksOf(this.hangar, this.selectedShip, !!this.online));
+    // the HUD shows only what the ship has: no overdrive's readout on a hull without one, no tubes' without torpedoes
+    $('hud-overdrive').parentElement!.hidden = !this.me.perks.overdrive;
+    $('hud-torpedo').parentElement!.hidden = TORPEDOES + this.me.perks.torpedoes <= 0;
     this.school =
       mode !== 'school' ? null : this.mission ? new FlightSchool(null, this.campaign.step, this.mission) : new FlightSchool(this.schoolCourse, schoolSteps()[this.schoolCourse] ?? 0);
     if (this.school) this.scene.add(this.school.root);
@@ -5341,7 +5345,7 @@ export class Game implements OnlineGame {
   /** E: the overdrive, a last resort; see OVERDRIVE_STRAIN. */
   private overdrive() {
     const me = this.me!;
-    if (!me.alive || this.time < this.overdriveReadyAt) return;
+    if (!me.alive || !me.perks.overdrive || this.time < this.overdriveReadyAt) return;
     this.overdriveReadyAt = this.time + OVERDRIVE_RECHARGE;
     me.flight.velocity.addScaledVector(me.flight.forward(forward), OVERDRIVE_PUSH);
     me.overheatDrive(this.time + OVERDRIVE_DRIVE_COOLDOWN);
@@ -6143,7 +6147,7 @@ export class Game implements OnlineGame {
   /** A thruster key tapped twice, or LB: the dodge; see DODGE_SPEED. */
   private dodge(direction: { x: number; y: number }) {
     const me = this.me!;
-    if (!me.alive || this.time < this.dodgeReadyAt) return;
+    if (!me.alive || !me.perks.dodge || this.time < this.dodgeReadyAt) return;
     this.dodgeReadyAt = this.time + DODGE_RECHARGE;
     this.dodges++;
     this.thrusterKick(me, direction);
@@ -7110,7 +7114,7 @@ export class Game implements OnlineGame {
       const nose = me.flight.forward(forward);
       // the drive burning (its flame, as the flight model keeps it) with the nose away from the well
       const burning = me.flight.throttle > 0.5 && angleTo(nose, relative.subVectors(me.flight.position, well.position)) < BURNING_AWAY;
-      this.escape = wellEscape(well, me.flight.position, me.flight.velocity, nose, drive, me.driveColdFor(this.time), burning, this.time >= this.overdriveReadyAt);
+      this.escape = wellEscape(well, me.flight.position, me.flight.velocity, nose, drive, me.driveColdFor(this.time), burning, me.perks.overdrive && this.time >= this.overdriveReadyAt);
     }
     const rescue = this.escape === 'overdrive';
     const lost = this.escape === 'lost';

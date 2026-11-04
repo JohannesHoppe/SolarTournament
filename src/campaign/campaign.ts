@@ -1,6 +1,8 @@
 import { msg } from '../i18n/i18n';
 import { CAMPAIGN } from '../music/lines';
 import { DRILL, saying, type Drill } from '../game/school';
+import { STOCK, type Perks } from '../game/hangar';
+import { TORPEDOES } from '../game/torpedoes';
 
 /**
  * Lot 7731, the solo campaign (see docs/campaign/): the Host's state on the road to the Games and
@@ -12,6 +14,19 @@ import { DRILL, saying, type Drill } from '../game/school';
 export const BOND = 25000;
 /** The yard's cut of every payout while the Bond is unpaid (a share). */
 export const YARD_CUT = 0.4;
+
+/**
+ * The hull in rack 7731 as the yard sold it: a fighter below any of the Games', its drive at
+ * SCRAP_DRIVE of the thrust (a cracked bell), its thrusters at SCRAP_THRUSTERS, no laser, no
+ * torpedoes, no overdrive and no dodge (the thrusters cannot take the overload).
+ */
+export const SCRAP_DRIVE = 0.6;
+export const SCRAP_THRUSTERS = 0.5;
+
+/** How the campaign's ship flies as far as it is fitted (see Perks). */
+export function hullOf(_campaign: Campaign): Perks {
+  return { ...STOCK, drive: SCRAP_DRIVE, thrusters: SCRAP_THRUSTERS, torpedoes: -TORPEDOES, laser: false, overdrive: false, dodge: false };
+}
 
 export type MissionId = 'coldBoot';
 

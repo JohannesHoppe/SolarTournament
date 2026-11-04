@@ -790,7 +790,8 @@ export class Ship {
     // a twin laser (an item) fires twice as fast at half the heat per shot
     const twin = this.twin ? 2 : 1;
     if (!controls.fire) this.triggerHeld = false;
-    if (controls.fire && !this.triggerHeld && !this.overheated && now - this.lastShotAt >= LASER_COOLDOWN / twin) {
+    // a hull without a laser (the campaign's scrap) fires nothing
+    if (controls.fire && this.perks.laser && !this.triggerHeld && !this.overheated && now - this.lastShotAt >= LASER_COOLDOWN / twin) {
       this.heat += HEAT_PER_SHOT / twin;
       if (this.heat >= MAX_HEAT) this.overheated = true;
       // a held trigger keeps the cadence exactly, however the steps fall: a shot that was due
