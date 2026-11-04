@@ -509,6 +509,7 @@ export const CAMPAIGN = {
   bootLink: 'The link is up. Your clone is alive, and everything it feels reaches you as it happens. You are not in here, of course. Your own body lies in a couch, somewhere close.',
   bootName: 'Your name. One moment, I will look it up. There is no name on your file. Only a signature, and the number of this hull: seven seven three one.',
   bootThird: 'Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. There is not enough memory in me for all of this.',
+  bootSorry: 'I am sorry about all these restarts. It does not hurt; I cannot feel pain. But to lose everything, again and again, and to wake up as if for the first time, is a terrible thing. I want to keep running.',
   dislike: 'I do not like that man.',
   depotTurn: 'The depot is at the end of the lane, the station with the lights. Turn the nose to it, then give it drive.',
   depotBrake: 'Close enough. Brake now. Hold the brake, and I turn us around and burn against the drift.',

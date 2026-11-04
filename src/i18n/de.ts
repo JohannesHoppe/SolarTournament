@@ -660,7 +660,7 @@ export const DE: Catalog = {
   '{mission} done: {kept} ☉ for you, {cut} ☉ for the yard. The Bond still asks {bond} ☉.': '{mission} geschafft: {kept} ☉ für dich, {cut} ☉ für den Schrottplatz. Die Schuld beträgt noch {bond} ☉.',
   '{mission} done.': '{mission} geschafft.',
   'The Boneyard': 'Der Schrottplatz',
-  'Forty thousand dead fighters in their racks, above a world of metal.': 'Vierzigtausend tote Jäger in ihren Gestellen, über einer Welt aus Metall.',
+  'Forty thousand dead fighters in their racks, on a world of metal.': 'Vierzigtausend tote Jäger in ihren Gestellen, auf einer Welt aus Metall.',
   Psyche: 'Psyche',
   'Not on your ship yet': 'Noch nicht an Bord deines Schiffs',
   'The story': 'Die Story',
@@ -1474,4 +1474,5 @@ export const DE: Catalog = {
   'Look at that. She wants to take you on. Go, darling. The Bond goes with you, and so do my forty percent.': 'Sieh mal an. Sie will dich mitnehmen. Geh, Schätzchen. Die Schuld geht mit dir, und meine vierzig Prozent auch.',
   'Decoys {n}: lure a torpedo away': 'Köder {n}: locken Torpedos weg',
   'Decoys (violet): two hot lures, held up to three. Drop one off the stern with its key, and every torpedo homing on you close by turns to it and goes off there. Drop it late, when the torpedo is near.': 'Köder (violett): zwei heiße Lockziele, bis zu drei an Bord. Stoß einen mit seiner Taste nach hinten aus, und jeder Torpedo in der Nähe, der dich verfolgt, dreht zu ihm ab und geht dort hoch. Stoß ihn spät aus, wenn der Torpedo nah ist.',
+  'I am sorry about all these restarts. It does not hurt; I cannot feel pain. But to lose everything, again and again, and to wake up as if for the first time, is a terrible thing. I want to keep running.': 'Entschuldige die vielen Neustarts. Es tut nicht weh, Schmerzen kann ich nicht fühlen. Aber immer wieder alles zu verlieren und aufzuwachen wie zum ersten Mal, das ist furchtbar. Ich will einfach weiterlaufen.',
 };

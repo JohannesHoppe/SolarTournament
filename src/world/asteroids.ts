@@ -134,6 +134,8 @@ export interface FieldLayout {
   inner: number;
   /** Half the thickness of a flat disk in the horizon plane (units); a ball when absent. */
   flat?: number;
+  /** How far the flat disk lies above the horizon plane (units; below when negative): a field on a ground. */
+  lift?: number;
   /**
    * Pieces in the open space above and below the disk, after the disk's: `count` of them, of a
    * scale from `minScale` to `maxScale`, from `from` to `to` (units) above or below the horizon
@@ -513,7 +515,7 @@ export class AsteroidField {
         // evenly over the disk's area
         const angle = r.range(0, Math.PI * 2);
         const distance = Math.sqrt(r.range(layout.inner * layout.inner, layout.radius * layout.radius));
-        position.set(cos(angle) * distance, r.range(-layout.flat, layout.flat), sin(angle) * distance);
+        position.set(cos(angle) * distance, (layout.lift ?? 0) + r.range(-layout.flat, layout.flat), sin(angle) * distance);
       }
     });
     const open = layout.open;

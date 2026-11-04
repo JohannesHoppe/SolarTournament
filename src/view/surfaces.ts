@@ -930,6 +930,13 @@ export function ravagedSurface(seed: number): PlatingSurface {
   scorch(r, m);
   craters(r, m, embers[1]);
   hole(r, m);
+  const surface = platingTextures(m, embers[0]);
+  ravaged.set(seed, surface);
+  return surface;
+}
+
+/** A plating's maps as its textures: dust in its recesses, the normal map from its heights (and a bump map of them), what glows from `glow`. */
+function platingTextures(m: PlatingMaps, glow: HTMLCanvasElement, paint?: (color: CanvasRenderingContext2D) => void): PlatingSurface {
   const recess = recesses(m.height);
   const S = PLATING;
   const [colorCanvas, color] = canvas(S);
@@ -954,14 +961,137 @@ export function ravagedSurface(seed: number): PlatingSurface {
   }
   n.data.set(normalPixels(grays, S, PLATING_SLOPE, 1));
   color.putImageData(c, 0, 0);
+  paint?.(color);
   orm.putImageData(o, 0, 0);
   normal.putImageData(n, 0, 0);
   bump.putImageData(b, 0, 0);
   const normalMap = new THREE.CanvasTexture(normalCanvas);
   normalMap.wrapS = normalMap.wrapT = THREE.RepeatWrapping;
   normalMap.anisotropy = 4;
-  const surface = { ...textures(colorCanvas, ormCanvas, bumpCanvas), glow: glowTexture(embers[0]), normal: normalMap };
-  ravaged.set(seed, surface);
+  return { ...textures(colorCanvas, ormCanvas, bumpCanvas), glow: glowTexture(glow), normal: normalMap };
+}
+
+/** A station's plating repeats every STATION_TILE units (8 m): its plates of 0.5 to 2 m, rivets a hand apart, at about 1.6 cm a pixel. */
+export const STATION_TILE = 160;
+const stations = new Map<number, PlatingSurface>();
+
+/**
+ * Paint over the plates in patches, as plates were replaced and painted over again by whoever
+ * had paint: faded olive, red primer, blue-grey, bare steel, each a block of whole plates or
+ * a few of them; the paint worn off along every seam.
+ */
+function patchwork(r: Randomizer, m: PlatingMaps) {
+  const paints: [number, number, number, number, number][] = [
+    [118, 122, 98, 0.75, 0.15], // faded olive
+    [132, 62, 46, 0.85, 0.1], // red primer
+    [92, 104, 116, 0.7, 0.2], // blue-grey
+    [168, 166, 160, 0.4, 0.75], // bare steel
+    [150, 142, 120, 0.8, 0.1], // sand
+  ];
+  for (let k = 0; k < 14; k++) {
+    const [red, green, blue, rough, metal] = paints[r.nextInt() % paints.length];
+    const x = Math.floor(r.range(0, 8)) * 64;
+    const y = Math.floor(r.range(0, 16)) * 32;
+    const w = [64, 128, 192][r.nextInt() % 3];
+    const h = [32, 64, 96][r.nextInt() % 3];
+    const strength = r.range(0.45, 0.8);
+    for (let v = 0; v < h; v++) {
+      for (let u = 0; u < w; u++) {
+        const i = m.at(x + u, y + v);
+        // worn thin towards the patch's edges and wherever the plating stands proud
+        const edge = Math.min(u, v, w - 1 - u, h - 1 - v);
+        const k2 = strength * smoothstep(0, 4, edge) * (m.height[i] > 0.2 ? 0.4 : 1);
+        const lum = m.color[i * 3 + 1] / 210;
+        m.shade(i, k2, [red * lum, green * lum, blue * lum]);
+        m.finish(i, rough, metal, k2);
+      }
+    }
+  }
+}
+
+/** Rust bleeding down from the seams and rivets in streaks, orange where fresh, brown where old, roughening the paint. */
+function rustStreaks(r: Randomizer, m: PlatingMaps) {
+  for (let k = 0; k < 70; k++) {
+    const x = r.range(0, PLATING);
+    const y = Math.floor(r.range(0, 16)) * 32 + r.range(-2, 4);
+    const length = r.range(10, 90);
+    const width = r.range(1.5, 5);
+    const strength = r.range(0.35, 0.8);
+    const fresh = r.nextFloat() < 0.4;
+    const tone: [number, number, number] = fresh ? [150, 74, 30] : [84, 50, 32];
+    m.around(x, y + length / 2, width * 2, length / 2, (i, dx, dy) => {
+      const along = (dy + length / 2) / length;
+      const across = dx / width;
+      const s = strength * exp(-across * across * 2) * (1 - along) * (1 - along);
+      if (s < 0.02) return;
+      m.shade(i, s, tone);
+      m.finish(i, 0.95, 0.05, s);
+    });
+  }
+}
+
+/** Oil and coolant leaked from the joints: dark, glossy stains with a darker rim. */
+function stains(r: Randomizer, m: PlatingMaps) {
+  for (let k = 0; k < 9; k++) {
+    const cx = r.range(0, PLATING);
+    const cy = r.range(0, PLATING);
+    const radius = r.range(6, 26);
+    m.around(cx, cy, radius * 1.3, radius * 1.1, (i, dx, dy) => {
+      const d = hypot(dx / 1.3, dy) / radius;
+      if (d > 1) return;
+      const s = 0.55 * (1 - d * d) + 0.2 * smoothstep(0.75, 0.95, d) * (1 - smoothstep(0.95, 1, d));
+      m.shade(i, s, [20, 18, 16]);
+      m.finish(i, 0.25, 0.1, s);
+    });
+  }
+}
+
+/** A band of worn hazard stripes across a course of plates, black and yellow, chipped to the steel. */
+function hazardBand(r: Randomizer, m: PlatingMaps) {
+  const top = Math.floor(r.range(0, 16)) * 32;
+  for (let v = 4; v < 28; v++) {
+    for (let x = 0; x < PLATING; x++) {
+      const i = m.at(x, top + v);
+      const yellow = Math.floor((x + v) / 12) % 2 === 0;
+      const chipped = r.nextFloat() < 0.08 + 0.25 * smoothstep(20, 28, v);
+      if (chipped) continue;
+      const lum = m.color[i * 3 + 1] / 210;
+      m.shade(i, 0.8, yellow ? [196 * lum, 150 * lum, 34 * lum] : [26, 26, 24]);
+    }
+  }
+}
+
+/**
+ * The plating of a station in the yards (the Boneyard's depot): plates of 0.5 to 2 m in courses
+ * with grooved seams and rivets a hand apart, hatches and vents, patched and painted over in
+ * whatever paint there was, rust bleeding from the seams, oil stains, soot where something
+ * burned, a band of hazard stripes, the yard's stencils; the relief as a normal map. At its true
+ * scale: one tile every STATION_TILE units. A surface per seed, built once.
+ */
+export function stationSurface(seed: number, texts: readonly string[]): PlatingSurface {
+  const kept = stations.get(seed);
+  if (kept) return kept;
+  if (!drawable) return blankPlating();
+  const r = new Randomizer(seed);
+  const m = new PlatingMaps();
+  plates(r, m);
+  hatches(r, m);
+  patchwork(r, m);
+  weathering(r, m);
+  rustStreaks(r, m);
+  stains(r, m);
+  hazardBand(r, m);
+  scorch(r, m);
+  const surface = platingTextures(m, glowLayer(PLATING)[0], (color) => {
+    // the yard's stencils, weathered: a few centimeters high at the tile's scale, so a hand of them per plate
+    color.font = 'bold 18px monospace';
+    color.textBaseline = 'top';
+    for (const text of texts) {
+      color.fillStyle = `rgba(14, 13, 12, ${r.range(0.55, 0.8)})`;
+      color.fillText(text, r.range(8, PLATING - 120), Math.floor(r.range(0, 16)) * 32 + 8);
+    }
+  });
+  stations.set(seed, surface);
   return surface;
 }
 

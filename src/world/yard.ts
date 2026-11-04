@@ -3,99 +3,116 @@ import { Randomizer } from '../random';
 import type { Placement } from './asteroids';
 
 /**
- * Where the Boneyard on Psyche (the campaign's first place, see docs/campaign/) puts things:
- * the racks of dead fighters and Psyche below. Only the numbers, so the arenas and the tests
- * take them without the racks' looks (see world/boneyard).
+ * Where the Boneyard on Psyche (the campaign's first place, see docs/campaign/) puts things: the
+ * flat floor of a crater on Psyche, the racks of dead fighters standing on it in rows, the yard's
+ * floodlight masts, and the depot at the end of the lane. Psyche's gravity (about 0.006 g) holds
+ * all of it on the ground over the years, and is far too weak to matter to a ship: the flight
+ * does not feel it. Only the numbers, so the arenas and the tests take them without the looks
+ * (see world/boneyard). Centers and half extents in units, the field's center 60 m above the
+ * crater floor.
  */
 
-/** A rack is this long (units, 240 m), this tall and deep: a frame of girders holding a row of fighters on their cradles. */
+/** The crater floor lies this far below the field's center (units, 60 m). */
+export const GROUND = -1200;
+/** A rack is this long (units, 240 m), this tall and deep: a frame of girders holding three tiers of fighters on their cradles. */
 export const RACK_LENGTH = 4800;
 export const RACK_HEIGHT = 900;
 export const RACK_DEPTH = 700;
 /** The yard's seed: the rack's own number. */
 export const YARD_SEED = 7731;
+/** Racks stand in rows this far apart (units, 260 m), with this gap between two racks of a row (80 m). */
+export const ROW_SPACING = 5200;
+export const RACK_GAP = 1600;
+/** The far end of the lane through the yard (units, 1.3 km out): beside the last racks of the rows, where rack 7731 stands. */
+export const YARD_END = 3 * (RACK_LENGTH + RACK_GAP) + RACK_LENGTH / 2;
+/** A rack's middle stands this high: on the ground. */
+export const RACK_Y = GROUND + RACK_HEIGHT / 2;
 
 /**
- * The depot at the middle of the yard, where the lane leads: an old Navy station of modules
- * plugged together around a node, moored to Psyche by a tether running down from its truss. The
- * hangar module faces down the lane with bay 3 inside it, 60 m deep, 80 m wide and 40 m high, and
- * a round landing pad on its floor where a ship docks; behind it the node, a ball 50 m across;
- * from the node the two habitat cylinders reach out to the sides (the couches of the Hosts in
- * debt), the office tower stands up with a mast and dish on top, the printer hall runs on behind
- * with its radiator wings above and below, solar wings spread at the habitats' ends, and the truss
- * runs down. Each part is a solid box of the field (kind 'rack', types from DEPOT_TYPE on; a
- * cylinder or the ball collides as the box just inside its round), so the bay is open where the
- * ship flies in. `shape` says how it is drawn: plated box, cylinder along an axis, ball, lattice,
- * radiator or solar panel. Centers and half extents in units, the depot's middle at the field's
- * center.
+ * The depot at the lane's far end, on the crater floor, all of it sized for fighters 35 m long:
+ * the hangar hall, its door towards the lane, inside 80 m deep, 90 m wide and 45 m high with the
+ * round landing pad on its floor; beside it the two habitation blocks of stacked containers, the
+ * couches of the Hosts in debt in the cellar under them; behind it Rask's office tower, 120 m
+ * high, its glazed cab on top looking down on the yard and a crane's boom reaching out over it;
+ * the printer hall with its stacks; the crusher with its hopper; three spherical tanks on legs;
+ * the dish. And along the lane the yard's floodlight masts. Each part is a solid box of the field
+ * (kind 'rack', types from DEPOT_TYPE on; a tank collides as the box just inside its round), so
+ * the hall stands open where the ship flies in; `shape` says how it is drawn.
  */
 export type DepotPart =
-  | 'floor'
-  | 'ceiling'
-  | 'wallLeft'
-  | 'wallRight'
-  | 'back'
-  | 'node'
+  | 'ground'
+  | 'hallLeft'
+  | 'hallRight'
+  | 'hallBack'
+  | 'hallRoof'
   | 'habLeft'
   | 'habRight'
-  | 'office'
+  | 'tower'
+  | 'cab'
+  | 'boom'
   | 'printer'
-  | 'truss'
-  | 'mast'
-  | 'radiatorUp'
-  | 'radiatorDown'
-  | 'solarLeft'
-  | 'solarRight';
-export type DepotShape = 'box' | 'x' | 'y' | 'z' | 'ball' | 'lattice' | 'radiator' | 'solar';
+  | 'crusher'
+  | 'tankA'
+  | 'tankB'
+  | 'tankC'
+  | 'dish'
+  | 'mast1'
+  | 'mast2'
+  | 'mast3'
+  | 'mast4'
+  | 'mast5'
+  | 'mast6';
+export type DepotShape = 'ground' | 'wall' | 'roof' | 'stack' | 'tower' | 'cab' | 'lattice' | 'hall' | 'crusher' | 'tank' | 'dish' | 'mast';
 const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-/** The bay's inside (units): its mouth at BAY_MOUTH along x, its back wall at BAY_BACK, half its height and width. */
-export const BAY_MOUTH = -1600;
-export const BAY_BACK = -400;
-export const BAY_HALF_HEIGHT = 400;
-export const BAY_HALF_WIDTH = 800;
-/** The hangar module's walls, floor and ceiling are this thick (units, 15 m). */
-const SHELL = 300;
-/** The node's radius (units, 25 m) and where it sits, right behind the hangar. */
-const NODE_RADIUS = 500;
-const NODE_X = BAY_BACK + 2 * SHELL / 3 + NODE_RADIUS;
-/** The truss below the node, 300 m long (units). */
-export const TRUSS_LENGTH = 6000;
-/** A round module collides as the box just inside its round: this share of its radius. */
-const ROUND_FILL = 0.9;
+/** The hangar hall's door at BAY_MOUTH along x, its back wall at BAY_BACK; its inside half as wide and as high as these (units). */
+export const BAY_MOUTH = YARD_END + 2400;
+export const BAY_BACK = BAY_MOUTH + 1600;
+export const BAY_HALF_WIDTH = 900;
+export const BAY_HEIGHT = 900;
+/** The hall's walls and roof are this thick (units, 10 m). */
+const SHELL = 200;
+/** The tanks' radius (units, 15 m). */
+export const TANK_RADIUS = 300;
 const bayMiddle = (BAY_MOUTH + BAY_BACK) / 2;
 const bayHalf = (BAY_BACK - BAY_MOUTH) / 2;
-const round = (radius: number, along: 'x' | 'y' | 'z', half: number) => {
-  const r = radius * ROUND_FILL;
-  return along === 'x' ? v(half, r, r) : along === 'y' ? v(r, half, r) : v(r, r, half);
-};
+const TOWER_X = BAY_BACK + 1400;
+const TOWER_HEIGHT = 2400;
+const on = (height: number) => GROUND + height / 2;
+const mast = (x: number, z: number) => ({ center: v(x, on(1600), z), half: v(60, 800, 60), shape: 'mast' as const });
 export const DEPOT_LAYOUT: Readonly<Record<DepotPart, { center: THREE.Vector3; half: THREE.Vector3; shape: DepotShape }>> = {
-  floor: { center: v(bayMiddle, -BAY_HALF_HEIGHT - SHELL / 2, 0), half: v(bayHalf, SHELL / 2, BAY_HALF_WIDTH + SHELL), shape: 'box' },
-  ceiling: { center: v(bayMiddle, BAY_HALF_HEIGHT + SHELL / 2, 0), half: v(bayHalf, SHELL / 2, BAY_HALF_WIDTH + SHELL), shape: 'box' },
-  wallLeft: { center: v(bayMiddle, 0, -BAY_HALF_WIDTH - SHELL / 2), half: v(bayHalf, BAY_HALF_HEIGHT, SHELL / 2), shape: 'box' },
-  wallRight: { center: v(bayMiddle, 0, BAY_HALF_WIDTH + SHELL / 2), half: v(bayHalf, BAY_HALF_HEIGHT, SHELL / 2), shape: 'box' },
-  back: { center: v(BAY_BACK + SHELL / 3, 0, 0), half: v(SHELL / 3, BAY_HALF_HEIGHT + SHELL, BAY_HALF_WIDTH + SHELL), shape: 'box' },
-  node: { center: v(NODE_X, 0, 0), half: v(NODE_RADIUS * 0.82, NODE_RADIUS * 0.82, NODE_RADIUS * 0.82), shape: 'ball' },
-  habLeft: { center: v(NODE_X, 0, -1800), half: round(420, 'z', 1400), shape: 'z' },
-  habRight: { center: v(NODE_X, 0, 1800), half: round(420, 'z', 1400), shape: 'z' },
-  office: { center: v(NODE_X, 1350, 0), half: round(360, 'y', 900), shape: 'y' },
-  printer: { center: v(NODE_X + 1700, 0, 0), half: round(650, 'x', 1300), shape: 'x' },
-  truss: { center: v(NODE_X, -NODE_RADIUS - TRUSS_LENGTH / 2, 0), half: v(160, TRUSS_LENGTH / 2, 160), shape: 'lattice' },
-  mast: { center: v(NODE_X, 2250 + 600, 0), half: v(50, 600, 50), shape: 'lattice' },
-  radiatorUp: { center: v(NODE_X + 1800, 650 + 600, 0), half: v(1000, 600, 20), shape: 'radiator' },
-  radiatorDown: { center: v(NODE_X + 1800, -650 - 600, 0), half: v(1000, 600, 20), shape: 'radiator' },
-  solarLeft: { center: v(NODE_X, 0, -3200 - 500), half: v(1800, 20, 500), shape: 'solar' },
-  solarRight: { center: v(NODE_X, 0, 3200 + 500), half: v(1800, 20, 500), shape: 'solar' },
+  // the crater floor out to the crater's wall, 4.5 km all round
+  ground: { center: v(0, GROUND - 4000, 0), half: v(90000, 4000, 90000), shape: 'ground' },
+  hallLeft: { center: v(bayMiddle, on(BAY_HEIGHT + SHELL), -BAY_HALF_WIDTH - SHELL / 2), half: v(bayHalf, (BAY_HEIGHT + SHELL) / 2, SHELL / 2), shape: 'wall' },
+  hallRight: { center: v(bayMiddle, on(BAY_HEIGHT + SHELL), BAY_HALF_WIDTH + SHELL / 2), half: v(bayHalf, (BAY_HEIGHT + SHELL) / 2, SHELL / 2), shape: 'wall' },
+  hallBack: { center: v(BAY_BACK + SHELL / 2, on(BAY_HEIGHT + SHELL), 0), half: v(SHELL / 2, (BAY_HEIGHT + SHELL) / 2, BAY_HALF_WIDTH + SHELL), shape: 'wall' },
+  hallRoof: { center: v(bayMiddle + SHELL / 2, GROUND + BAY_HEIGHT + SHELL / 2, 0), half: v(bayHalf + SHELL / 2, SHELL / 2, BAY_HALF_WIDTH + SHELL), shape: 'roof' },
+  habLeft: { center: v(bayMiddle + 200, on(900), -BAY_HALF_WIDTH - SHELL - 900), half: v(750, 450, 400), shape: 'stack' },
+  habRight: { center: v(bayMiddle + 200, on(900), BAY_HALF_WIDTH + SHELL + 900), half: v(750, 450, 400), shape: 'stack' },
+  tower: { center: v(TOWER_X, on(TOWER_HEIGHT), 0), half: v(300, TOWER_HEIGHT / 2, 300), shape: 'tower' },
+  cab: { center: v(TOWER_X, GROUND + TOWER_HEIGHT + 200, 0), half: v(500, 200, 500), shape: 'cab' },
+  boom: { center: v(TOWER_X - 2200, GROUND + TOWER_HEIGHT + 460, 0), half: v(1700, 60, 60), shape: 'lattice' },
+  printer: { center: v(TOWER_X + 1800, on(900), -1600), half: v(1100, 450, 700), shape: 'hall' },
+  crusher: { center: v(TOWER_X + 1600, on(1000), 1900), half: v(450, 500, 450), shape: 'crusher' },
+  tankA: { center: v(BAY_BACK + 600, GROUND + 700, 2800), half: v(TANK_RADIUS * 0.82, TANK_RADIUS * 0.82, TANK_RADIUS * 0.82), shape: 'tank' },
+  tankB: { center: v(BAY_BACK + 1300, GROUND + 700, 3100), half: v(TANK_RADIUS * 0.82, TANK_RADIUS * 0.82, TANK_RADIUS * 0.82), shape: 'tank' },
+  tankC: { center: v(BAY_BACK + 600, GROUND + 700, 3500), half: v(TANK_RADIUS * 0.82, TANK_RADIUS * 0.82, TANK_RADIUS * 0.82), shape: 'tank' },
+  dish: { center: v(TOWER_X + 3200, on(800), 600), half: v(80, 400, 80), shape: 'dish' },
+  // floodlights along the lane, between it and the first rows, on both sides
+  mast1: mast(-2 * (RACK_LENGTH + RACK_GAP) + RACK_LENGTH / 2 + RACK_GAP / 2, -2600),
+  mast2: mast(RACK_GAP / 2 + RACK_LENGTH / 2, -2600),
+  mast3: mast(2 * (RACK_LENGTH + RACK_GAP) + RACK_LENGTH / 2 + RACK_GAP / 2, -2600),
+  mast4: mast(-(RACK_LENGTH + RACK_GAP) + RACK_LENGTH / 2 + RACK_GAP / 2, 2600),
+  mast5: mast((RACK_LENGTH + RACK_GAP) + RACK_LENGTH / 2 + RACK_GAP / 2, 2600),
+  mast6: mast(YARD_END + 900, 2600),
 };
 export const DEPOT_PARTS = Object.keys(DEPOT_LAYOUT) as DepotPart[];
 /** The yard's templates of kind 'rack': the three racks, then the depot's parts in DEPOT_PARTS' order. */
 export const DEPOT_TYPE = 3;
-/** The landing pad of bay 3: its center on the bay's floor, its radius (units, 15 m). */
-export const PAD = v(bayMiddle, -BAY_HALF_HEIGHT, 0);
+/** The landing pad in the hangar hall: its center on the floor, its radius (units, 15 m). */
+export const PAD = v(bayMiddle, GROUND, 0);
 export const PAD_RADIUS = 300;
-/** Where the tether's foot lies: under the truss, on Psyche. */
-export const TETHER_TOP = v(NODE_X, -NODE_RADIUS - TRUSS_LENGTH, 0);
-/** The round modules' radii as drawn (units): a little beyond their collider boxes. */
-export const DEPOT_RADIUS: Partial<Record<DepotPart, number>> = { node: NODE_RADIUS, habLeft: 420, habRight: 420, office: 360, printer: 650 };
+/** Where the crusher swallows what is brought to it: over its hopper. */
+export const HOPPER = v(DEPOT_LAYOUT.crusher.center.x, GROUND + 1000 + 300, DEPOT_LAYOUT.crusher.center.z);
 
 /**
  * The half extents of each template's collider box (units): 0 a full rack, 1 a rack with gaps, 2
@@ -103,14 +120,10 @@ export const DEPOT_RADIUS: Partial<Record<DepotPart, number>> = { node: NODE_RAD
  */
 export const RACK_BOXES: readonly THREE.Vector3[] = [...[0, 1, 2].map(() => v(RACK_LENGTH / 2, RACK_HEIGHT / 2, RACK_DEPTH / 2)), ...DEPOT_PARTS.map((part) => DEPOT_LAYOUT[part].half)];
 
-/** Racks stand in rows this far apart (units, 260 m), with this gap between two racks of a row (80 m). */
-export const ROW_SPACING = 5200;
-export const RACK_GAP = 1600;
-
 /**
- * Where the racks stand: rows along the field's x axis, every other row a little higher; the
- * row through the middle stays open, the lane to the yard office. A rack in four stands empty,
- * one in three has gaps. Solid pieces: they never break, never move.
+ * Where the racks stand: on the ground in rows along the field's x axis; the row through the
+ * middle stays open, the lane to the depot. A rack in four stands empty, one in three has gaps.
+ * Solid pieces: they never break, never move.
  */
 export function boneyardRacks(): Placement[] {
   const r = new Randomizer(YARD_SEED);
@@ -124,7 +137,7 @@ export function boneyardRacks(): Placement[] {
         kind: 'rack',
         type: roll < 0.25 ? 2 : roll < 0.55 ? 1 : 0,
         scale: 1,
-        position: new THREE.Vector3(column * (RACK_LENGTH + RACK_GAP), (row % 2) * 600, row * ROW_SPACING),
+        position: new THREE.Vector3(column * (RACK_LENGTH + RACK_GAP), RACK_Y, row * ROW_SPACING),
         orientation: level,
         solid: true,
       });
@@ -134,10 +147,11 @@ export function boneyardRacks(): Placement[] {
   return racks;
 }
 
-/** The far end of the lane through the yard (units, 1.3 km out): beside the last racks of the rows, where rack 7731 stands. */
-export const YARD_END = 3 * (RACK_LENGTH + RACK_GAP) + RACK_LENGTH / 2;
-
-/** Psyche's radius (units, 113 km) and how far its surface lies below the field's center (units, 6 km). */
+/** Psyche's radius (units, 113 km); its surface beyond the crater's wall lies a little below the crater floor. */
 export const PSYCHE_RADIUS = 2_260_000;
-export const PSYCHE_BELOW = 120_000;
+export const PSYCHE_BELOW = -GROUND + 1500;
 export const PSYCHE_CENTER = new THREE.Vector3(0, -(PSYCHE_RADIUS + PSYCHE_BELOW), 0);
+/** The crater's wall: rising from the floor at CRATER_RADIUS (units, 4.6 km) to its crest at CRATER_CREST (5.6 km), CRATER_HEIGHT high (400 m). */
+export const CRATER_RADIUS = 92000;
+export const CRATER_CREST = 112000;
+export const CRATER_HEIGHT = 8000;

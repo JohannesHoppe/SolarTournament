@@ -47,8 +47,8 @@ const REGIME: Record<'en' | 'de', Espeak> = {
 /** The announcer talks fast and lively, in every language with the same voice variant. */
 const ANNOUNCER = { rate: 170, pitch: 45, range: 60 };
 const ANNOUNCER_LANGUAGE: Record<Locale, string> = { en: 'en-us', de: 'de', es: 'es', fr: 'fr' };
-/** The yardmaster of the campaign's Boneyard: big, genial and much too loud, Kokoro's warm, round am_santa at his own pace. */
-const RASK_VOICE = { voice: 'am_santa', speed: 1.05 };
+/** The yardmaster of the campaign's Boneyard, fat and greasy: Kokoro's deep am_onyx, rendered a little fast, as the game plays him lower and slower (see sound/speaker, CAST_VOICES). */
+const RASK_VOICE = { voice: 'am_onyx', speed: 1.05 };
 /** Every package whose version changes what the sprites sound like: the speech engines, Kokoro's phonemizer and runtime (the encoder, ffmpeg, by its pinned hash). */
 const ENGINES = ['kokoro-js', 'phonemizer', '@huggingface/transformers', 'onnxruntime-node', '@echogarden/espeak-ng-emscripten'];
 

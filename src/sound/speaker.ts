@@ -1,11 +1,19 @@
 import type { Voice } from '../music/band';
-import { castOf, clipKey } from '../music/lines';
+import { type Cast, castOf, clipKey } from '../music/lines';
 import { loadVoice } from '../music/voice';
 import { t } from '../i18n/i18n';
 import { tanh } from '../detmath';
 
 /** A voice that failed to load is tried again after this long (ms), as the radio's. */
 const VOICE_RETRY_MS = 5000;
+
+/**
+ * How the campaign's other voices are played (see castOf): `rate` the share of the pitch and
+ * pace they were rendered at (Rask's is rendered fast and played at 78 %, a fat man's voice),
+ * `tremble` how far (cents) the pitch wavers at TREMBLE_RATE (Hz).
+ */
+const CAST_VOICES: Record<Cast, { rate: number; tremble: number }> = { rask: { rate: 0.78, tremble: 35 } };
+const TREMBLE_RATE = 5;
 
 /** How a line meets one still being said: see Speaker.say. */
 export type Urgency = 'chatter' | 'urgent' | 'lesson';
@@ -40,16 +48,21 @@ export class Speaker {
     level.gain.value = 1.1;
     this.input = context.createGain();
     this.input.connect(highpass).connect(grit).connect(level).connect(destination);
-    // a cheap comm from outside the ship: the telephone band, driven harder
+    // a cheap comm from outside the ship: the telephone band, nasal, driven hard into a rasp
     const band = context.createBiquadFilter();
     band.type = 'bandpass';
     band.frequency.value = 1400;
-    band.Q.value = 0.9;
+    band.Q.value = 0.8;
+    const nasal = context.createBiquadFilter();
+    nasal.type = 'peaking';
+    nasal.frequency.value = 1500;
+    nasal.Q.value = 1;
+    nasal.gain.value = 8;
     const crunch = context.createWaveShaper();
-    crunch.curve = Float32Array.from({ length: 1024 }, (_, i) => tanh(3 * ((i / 1023) * 2 - 1)) / tanh(3));
+    crunch.curve = Float32Array.from({ length: 1024 }, (_, i) => tanh(4 * ((i / 1023) * 2 - 1)) / tanh(4));
     this.comm = context.createGain();
-    this.comm.gain.value = 0.9;
-    this.comm.connect(band).connect(crunch).connect(level);
+    this.comm.gain.value = 1.2;
+    this.comm.connect(band).connect(nasal).connect(crunch).connect(level);
   }
 
   /** Loads the voice of the Host's language in the background; lines said before it is ready are skipped. */
@@ -113,11 +126,24 @@ export class Speaker {
       const source = this.context.createBufferSource();
       source.buffer = voice.buffer;
       source.connect(who ? this.comm : this.input);
+      // a voice of the cast lower and heavier than it was rendered, with a tremble in it
+      const cast = who ? CAST_VOICES[who] : null;
+      const rate = cast?.rate ?? 1;
+      source.playbackRate.value = rate;
+      if (cast) {
+        const tremble = this.context.createOscillator();
+        tremble.frequency.value = TREMBLE_RATE;
+        const depth = this.context.createGain();
+        depth.gain.value = cast.tremble;
+        tremble.connect(depth).connect(source.detune);
+        tremble.start(position);
+        tremble.stop(position + clip[1] / rate);
+      }
       source.start(position, clip[0], clip[1]);
       // a finished line leaves the list, so a long flight school does not pile them up
       source.onended = () => this.sources.delete(source);
       this.sources.set(source, line);
-      position += clip[1] + 0.3;
+      position += clip[1] / rate + 0.3;
     }
     if (said) {
       this.busyUntil = position;

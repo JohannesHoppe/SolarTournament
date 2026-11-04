@@ -3685,6 +3685,7 @@ export class Game implements OnlineGame {
   /** Draws the scene as the camera sees it: the sky around it, the arena's edge, its landmarks, a black hole's lens. */
   private paint() {
     this.space.follow(this.camera, this.state === 'menu' ? null : this.riding);
+    this.arena.mesh.visible = !this.venue.open;
     this.arena.update(this.state !== 'menu' && this.me?.alive ? this.me.flight.position : null);
     this.landmarks.update(this.field.clock);
     if (this.venue.id === 'derelict') this.moveBreak();
@@ -7779,7 +7780,8 @@ export class Game implements OnlineGame {
   /** Space has no walls: ships that stay outside the arena for too long are lost. */
   private keepInArena(ship: Ship, now: number) {
     if (!ship.alive) return;
-    if (ship.flight.position.length() < ARENA_LIMIT) {
+    // a place of the campaign has no edge: space goes on, empty, as far as a ship cares to fly
+    if (this.venue.open || ship.flight.position.length() < ARENA_LIMIT) {
       ship.outsideSince = null;
       return;
     }

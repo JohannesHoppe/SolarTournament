@@ -634,7 +634,7 @@ export const FR: Catalog = {
   '{mission} done.': '{mission} réussi.',
   'Not on your ship yet': 'Pas encore sur ton vaisseau',
   'The Boneyard': 'La Casse',
-  'Forty thousand dead fighters in their racks, above a world of metal.': 'Quarante mille chasseurs morts dans leurs râteliers, au-dessus d’un monde de métal.',
+  'Forty thousand dead fighters in their racks, on a world of metal.': 'Quarante mille chasseurs morts dans leurs râteliers, sur un monde de métal.',
   Psyche: 'Psyché',
   'The story': 'L’histoire',
   'In the making': 'En préparation',
@@ -1435,4 +1435,5 @@ export const FR: Catalog = {
   'Look at that. She wants to take you on. Go, darling. The Bond goes with you, and so do my forty percent.': 'Regarde-moi ça. Elle veut te prendre à bord. Va, mon chéri. La dette part avec toi, et mes quarante pour cent aussi.',
   'Decoys {n}: lure a torpedo away': 'Leurres {n} : détournent les torpilles',
   'Decoys (violet): two hot lures, held up to three. Drop one off the stern with its key, and every torpedo homing on you close by turns to it and goes off there. Drop it late, when the torpedo is near.': 'Leurres (violet) : deux leurres chauds, jusqu’à trois à bord. Largue-en un par l’arrière avec sa touche, et chaque torpille proche qui te poursuit se tourne vers lui et y explose. Largue-le tard, quand la torpille est proche.',
+  'I am sorry about all these restarts. It does not hurt; I cannot feel pain. But to lose everything, again and again, and to wake up as if for the first time, is a terrible thing. I want to keep running.': 'Pardon pour tous ces redémarrages. Ça ne fait pas mal, je ne ressens pas la douleur. Mais tout perdre, encore et encore, et me réveiller comme pour la première fois, c’est terrible. Je veux continuer à tourner.',
 };

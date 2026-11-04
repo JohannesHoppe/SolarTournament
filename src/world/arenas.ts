@@ -7,7 +7,7 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { boneyardRacks, PSYCHE_CENTER, PSYCHE_RADIUS, YARD_END } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_Y, YARD_END } from './yard';
 
 /** One standard gravity (units/s², 1 unit = 5 cm). */
 const G = 196.2;
@@ -62,6 +62,8 @@ export interface ArenaProfile {
   grains?: number;
   /** Half the thickness (units) of a sheet drawn through the horizon plane, a ring's (see RING_SHEET): the President's battleship flies its lane clear of it. */
   sheet?: number;
+  /** A place of the campaign: no edge, no grid; a ship may fly on into the empty dark as far as it likes. */
+  open?: boolean;
   /** Where a place of the campaign prints the own clone, and the point it faces (units); without, wherever the round's spawning finds room. */
   start?: { at: [number, number, number]; toward: [number, number, number] };
 }
@@ -317,8 +319,9 @@ export const PLACES: readonly ArenaProfile[] = [
   {
     id: 'boneyard',
     name: msg('The Boneyard'),
-    tagline: msg('Forty thousand dead fighters in their racks, above a world of metal.'),
-    layout: { key: 'boneyard', seed: 7731, kind: 'rock', count: 18, minScale: 0.6, maxScale: 1.6, radius: FIELD_RADIUS, inner: FIELD_RADIUS * 0.7, flat: 3000, spin: SPIN_RATE * 0.3, toughness: 800, placements: boneyardRacks() },
+    tagline: msg('Forty thousand dead fighters in their racks, on a world of metal.'),
+    // the yard's spoil: boulders of Psyche's metal pushed out to the yard's edge, lying just over the crater floor, still
+    layout: { key: 'boneyard', seed: 7731, kind: 'rock', count: 18, minScale: 0.2, maxScale: 0.35, radius: FIELD_RADIUS, inner: FIELD_RADIUS * 0.85, flat: 30, lift: GROUND + 700, spin: 0, toughness: 800, placements: boneyardRacks() },
     cooling: 1,
     storms: false,
     sun: { size: 30000, intensity: 3, color: 0xfff0dc },
@@ -326,7 +329,8 @@ export const PLACES: readonly ArenaProfile[] = [
     preview: { from: [20000, 9000, 30000] },
     references: [{ glyph: 'planet', label: msg('Psyche'), position: PSYCHE_CENTER, distance: true, radius: PSYCHE_RADIUS }],
     // in the lane beside rack 7731, at the yard's far end, facing down the lane to the office
-    start: { at: [-YARD_END, 0, 0], toward: [0, 0, 0] },
+    start: { at: [-YARD_END, RACK_Y, 0], toward: [BAY_MOUTH, RACK_Y, 0] },
+    open: true,
   },
 ];
 

@@ -634,7 +634,7 @@ export const ES: Catalog = {
   '{mission} done.': '{mission} hecho.',
   'Not on your ship yet': 'Aún no está en tu nave',
   'The Boneyard': 'El Desguace',
-  'Forty thousand dead fighters in their racks, above a world of metal.': 'Cuarenta mil cazas muertos en sus bastidores, sobre un mundo de metal.',
+  'Forty thousand dead fighters in their racks, on a world of metal.': 'Cuarenta mil cazas muertos en sus bastidores, en un mundo de metal.',
   Psyche: 'Psique',
   'The story': 'La historia',
   'In the making': 'En desarrollo',
@@ -1510,4 +1510,5 @@ export const ES: Catalog = {
   'Look at that. She wants to take you on. Go, darling. The Bond goes with you, and so do my forty percent.': 'Mira eso. Quiere llevarte con ella. Ve, cariño. La deuda va contigo, y mi cuarenta por ciento también.',
   'Decoys {n}: lure a torpedo away': 'Señuelos {n}: desvían torpedos',
   'Decoys (violet): two hot lures, held up to three. Drop one off the stern with its key, and every torpedo homing on you close by turns to it and goes off there. Drop it late, when the torpedo is near.': 'Señuelos (violeta): dos señuelos calientes, hasta tres a bordo. Lanza uno por la popa con su tecla, y cada torpedo cercano que te persigue se desvía hacia él y estalla allí. Lánzalo tarde, cuando el torpedo esté cerca.',
+  'I am sorry about all these restarts. It does not hurt; I cannot feel pain. But to lose everything, again and again, and to wake up as if for the first time, is a terrible thing. I want to keep running.': 'Perdona tantos reinicios. No duele, no puedo sentir dolor. Pero perderlo todo una y otra vez, y despertar como si fuera la primera vez, es algo terrible. Quiero seguir funcionando.',
 };

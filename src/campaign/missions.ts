@@ -3,7 +3,7 @@ import { msg, t } from '../i18n/i18n';
 import { CAMPAIGN, RASK } from '../music/lines';
 import { clear, holdFor, saying, stop, type Attempt, type Drill, type Markers } from '../game/school';
 import type { ArenaId } from '../world/arenas';
-import { BAY_MOUTH, DEPOT_LAYOUT, PAD, PAD_RADIUS, RACK_GAP, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
+import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { exp, hypot } from '../detmath';
 import type { Campaign, Mission } from './campaign';
 
@@ -17,12 +17,12 @@ import type { Campaign, Mission } from './campaign';
 const said = (line: string, arena: ArenaId = 'boneyard'): Drill => ({ ...saying(line), arena });
 
 const point = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-/** The depot's middle, at the middle of the lane (the place's center). */
+/** The yard's middle, over the middle of the lane (the place's center). */
 const OFFICE = point(0, 0, 0);
-/** The crusher, behind the depot's main block. */
-const CRUSHER = point(DEPOT_LAYOUT.printer.center.x + DEPOT_LAYOUT.printer.half.x + 1500, 0, 0);
+/** The crusher's hopper, behind the depot's hall. */
+const CRUSHER = HOPPER;
 /** Where the end of a row of racks stands, out at the lane's ends: the row's beacon. */
-const rowEnd = (side: -1 | 1, row: number) => point(side * (YARD_END + 800), 0, row * ROW_SPACING);
+const rowEnd = (side: -1 | 1, row: number) => point(side * (YARD_END + 800), GROUND + RACK_HEIGHT + 100, row * ROW_SPACING);
 
 /**
  * Lamplighter (1.1): six dead beacons at the ends of the rows, relit one after the other by
@@ -74,7 +74,7 @@ const TARGET_SECONDS = 90;
 const TARGET_ZONE = 20000;
 const TARGET_INTERVAL = 1.2;
 const TARGET_LAG = 0.4;
-const GUNNERS = [point(0, 6000, -24000), point(20000, -4000, 12000), point(-20000, 4000, 12000)];
+const GUNNERS = [point(0, 6000, -24000), point(20000, 3000, 12000), point(-20000, 4000, 12000)];
 
 const liveTarget: Drill = {
   line: CAMPAIGN.liveTarget,
@@ -109,7 +109,7 @@ const liveTarget: Drill = {
 const CANISTER_REACH = 600;
 const CRUSHER_REACH = 1200;
 const between = ROW_SPACING / 2;
-const CANISTERS = [point(-2 * (RACK_LENGTH + RACK_GAP), 800, between), point(RACK_LENGTH + RACK_GAP, -600, -between), point(2 * (RACK_LENGTH + RACK_GAP), 1200, 3 * between), point(-(RACK_LENGTH + RACK_GAP), 0, -3 * between)];
+const CANISTERS = [point(-2 * (RACK_LENGTH + RACK_GAP), GROUND + 500, between), point(RACK_LENGTH + RACK_GAP, GROUND + 300, -between), point(2 * (RACK_LENGTH + RACK_GAP), GROUND + 800, 3 * between), point(-(RACK_LENGTH + RACK_GAP), GROUND + 400, -3 * between)];
 
 /** The marker of the step the sweep is at: a canister to take, or the crusher to bring it to. */
 function sweepMarkers(a: Attempt, markers: Markers) {
@@ -318,6 +318,7 @@ export const MISSIONS: readonly Mission[] = [
       said(CAMPAIGN.bootName),
       crash,
       said(CAMPAIGN.bootThird),
+      said(CAMPAIGN.bootSorry),
       said(RASK.wake),
       said(RASK.deal),
       said(RASK.memory),
