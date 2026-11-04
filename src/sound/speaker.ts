@@ -1,5 +1,5 @@
 import type { Voice } from '../music/band';
-import { clipKey } from '../music/lines';
+import { castOf, clipKey } from '../music/lines';
 import { loadVoice } from '../music/voice';
 import { t } from '../i18n/i18n';
 import { tanh } from '../detmath';
@@ -21,6 +21,8 @@ export class Speaker {
   /** After a failed load, the next try waits until then (performance.now(), ms). */
   private retryAt = 0;
   private readonly input: GainNode;
+  /** The comm the campaign's other voices come in on (see castOf): a narrow radio band, gritty. */
+  private readonly comm: GainNode;
   /** The lines playing or waiting to play, by their source. */
   private readonly sources = new Map<AudioBufferSourceNode, string>();
   private busyUntil = 0;
@@ -38,6 +40,16 @@ export class Speaker {
     level.gain.value = 1.1;
     this.input = context.createGain();
     this.input.connect(highpass).connect(grit).connect(level).connect(destination);
+    // a cheap comm from outside the ship: the telephone band, driven harder
+    const band = context.createBiquadFilter();
+    band.type = 'bandpass';
+    band.frequency.value = 1400;
+    band.Q.value = 0.9;
+    const crunch = context.createWaveShaper();
+    crunch.curve = Float32Array.from({ length: 1024 }, (_, i) => tanh(3 * ((i / 1023) * 2 - 1)) / tanh(3));
+    this.comm = context.createGain();
+    this.comm.gain.value = 0.9;
+    this.comm.connect(band).connect(crunch).connect(level);
   }
 
   /** Loads the voice of the Host's language in the background; lines said before it is ready are skipped. */
@@ -93,13 +105,14 @@ export class Speaker {
     let said = false;
     for (const line of typeof lines === 'string' ? [lines] : lines) {
       // the line in the Host's language: the sprite holds it rendered in each
-      const clip = voice.clips[clipKey('sys', t(line))];
+      const who = castOf(line);
+      const clip = voice.clips[clipKey(who ?? 'sys', t(line))];
       if (!clip) continue;
       said = true;
       if (queued && waiting.has(line)) continue;
       const source = this.context.createBufferSource();
       source.buffer = voice.buffer;
-      source.connect(this.input);
+      source.connect(who ? this.comm : this.input);
       source.start(position, clip[0], clip[1]);
       // a finished line leaves the list, so a long flight school does not pile them up
       source.onended = () => this.sources.delete(source);

@@ -47,6 +47,8 @@ const REGIME: Record<'en' | 'de', Espeak> = {
 /** The announcer talks fast and lively, in every language with the same voice variant. */
 const ANNOUNCER = { rate: 170, pitch: 45, range: 60 };
 const ANNOUNCER_LANGUAGE: Record<Locale, string> = { en: 'en-us', de: 'de', es: 'es', fr: 'fr' };
+/** The yardmaster of the campaign's Boneyard: big, genial and much too loud, Kokoro's warm, round am_santa at his own pace. */
+const RASK_VOICE = { voice: 'am_santa', speed: 1.05 };
 /** Every package whose version changes what the sprites sound like: the speech engines, Kokoro's phonemizer and runtime (the encoder, ffmpeg, by its pinned hash). */
 const ENGINES = ['kokoro-js', 'phonemizer', '@huggingface/transformers', 'onnxruntime-node', '@echogarden/espeak-ng-emscripten'];
 
@@ -138,7 +140,7 @@ const packageVersion = (name: string) => (JSON.parse(readFileSync(join(root, 'no
 const hash = createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).update(readFileSync(join(root, 'tools/voice/nicole.ts'))).update(ENGINES.map(packageVersion).join()).update(ffmpegHash() ?? 'no ffmpeg');
 hash.update(readFileSync(join(root, 'src/music/lines.ts')));
 // of the catalogs only what is spoken: a text of the screen never renders the voice again
-for (const locale of CLONED) for (const line of [...allLines('mod'), ...allLines('sys')]) hash.update(`${line}\u0000${CATALOGS[locale][line] ?? ''}\u0000`);
+for (const locale of CLONED) for (const line of [...allLines('mod'), ...allLines('sys'), ...allLines('rask')]) hash.update(`${line}\u0000${CATALOGS[locale][line] ?? ''}\u0000`);
 for (const locale of CLONED) hash.update(clones[locale]?.audio ?? '-');
 const inputs = hash.digest('hex').slice(0, 12);
 const upToDate = SPRITES.every((sprite) => existsSync(manifest(sprite)) && (JSON.parse(readFileSync(manifest(sprite), 'utf8')) as { inputs?: string }).inputs === inputs);
@@ -290,8 +292,13 @@ async function nicole(locale: Locale, line: string): Promise<Int16Array> {
     }
     unclonedLines++;
   }
+  return kokoroSays(locale, line, COMPUTER_VOICE);
+}
+
+/** A line in a voice of Kokoro: English as Kokoro reads it, any other language in the phonemes espeak spells it in. */
+async function kokoroSays(locale: Locale, line: string, speaker: { voice: string; speed: number }): Promise<Int16Array> {
   let audio: { audio: Float32Array; sampling_rate: number };
-  if (locale === 'en') audio = await kokoro.generate(line, { voice: COMPUTER_VOICE.voice, speed: COMPUTER_VOICE.speed });
+  if (locale === 'en') audio = await kokoro.generate(line, { voice: speaker.voice as never, speed: speaker.speed });
   else {
     const spelled = new module.eSpeakNGWorker();
     spelled.set_voice(ANNOUNCER_LANGUAGE[locale]);
@@ -299,7 +306,7 @@ async function nicole(locale: Locale, line: string): Promise<Int16Array> {
     // espeak joins a word's phonemes with "_" and marks unstressed words with "-"
     const phonemes = (typeof ipa === 'string' ? ipa : ipa.ipa).replace(/[_-]/g, '').replace(/\s+/g, ' ').trim();
     const { input_ids } = tokenizer(phonemes, { truncation: true });
-    audio = await kokoro.generate_from_ids(input_ids as never, { voice: COMPUTER_VOICE.voice, speed: COMPUTER_VOICE.speed });
+    audio = await kokoro.generate_from_ids(input_ids as never, { voice: speaker.voice as never, speed: speaker.speed });
   }
   return trim(toPcm(resample(audio.audio, audio.sampling_rate, SAMPLE_RATE)));
 }
@@ -309,6 +316,7 @@ for (const locale of ['en', 'de', 'es', 'fr'] as const) {
   const sprite = new Sprite();
   sprite.speak('mod', allLines('mod').map(translate), { voice: `${ANNOUNCER_LANGUAGE[locale]}+m3`, ...ANNOUNCER });
   for (const line of locale === 'en' ? new Set(allLines('sys')) : nicoleLines(locale)) sprite.add(clipKey('sys', line), await nicole(locale, line));
+  for (const line of new Set(allLines('rask').map(translate))) sprite.add(clipKey('rask', line), await kokoroSays(locale, line, RASK_VOICE));
   sprite.write(locale);
 }
 if (unclonedLines) console.warn(`Nicole speaks ${unclonedLines} lines without her clone (not cloned yet: see the workflow Voice)`);

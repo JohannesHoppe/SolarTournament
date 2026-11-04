@@ -30,13 +30,13 @@ const PROBE_WEAR: Wear = { rust: 0.3, chips: 0.15, grime: 0.75, scratches: 0.6, 
  */
 /** A nova core destroys every other ship within this reach of where it goes off (units, 800 m). */
 export const NOVA_RADIUS = 16000;
-export type ItemKind = 'twin' | 'plating' | 'torpedoes' | 'overdrive' | 'repair' | 'nova';
-export const KINDS: readonly ItemKind[] = ['twin', 'plating', 'torpedoes', 'overdrive', 'repair', 'nova'];
+export type ItemKind = 'twin' | 'plating' | 'torpedoes' | 'overdrive' | 'repair' | 'nova' | 'decoys';
+export const KINDS: readonly ItemKind[] = ['twin', 'plating', 'torpedoes', 'overdrive', 'repair', 'nova', 'decoys'];
 
 /** A probe in flight as it travels to a browser that joins: id, kind, position, velocity, seconds left, and the luck of a sealed one (see Probe.luck). */
 export type ProbeState = { i: string; k: ItemKind; p: number[]; v: number[]; u: number; x?: number };
 /** How often each kind comes in a probe (relative), the coveted ones rarer. */
-const WEIGHTS: Record<ItemKind, number> = { twin: 2, plating: 3, torpedoes: 3, overdrive: 2, repair: 3, nova: 1 };
+const WEIGHTS: Record<ItemKind, number> = { twin: 2, plating: 3, torpedoes: 3, overdrive: 2, repair: 3, nova: 1, decoys: 2 };
 /** Sealed probes the radar names this way. */
 export const SEALED_NAME = msg('Sealed probe');
 /**
@@ -46,9 +46,9 @@ export const SEALED_NAME = msg('Sealed probe');
  * the nova cores, which the leaders never find.
  */
 const PLACE_WEIGHTS: readonly Record<ItemKind, number>[] = [
-  { twin: 1, plating: 4, torpedoes: 2, overdrive: 1, repair: 4, nova: 0 },
+  { twin: 1, plating: 4, torpedoes: 2, overdrive: 1, repair: 4, nova: 0, decoys: 1 },
   WEIGHTS,
-  { twin: 3, plating: 1, torpedoes: 4, overdrive: 4, repair: 2, nova: 2 },
+  { twin: 3, plating: 1, torpedoes: 4, overdrive: 4, repair: 2, nova: 2, decoys: 3 },
 ];
 
 /** The third of the field a place lies in: 0 the leaders, 1 the middle, 2 the last; a ship alone is the middle. */
@@ -65,6 +65,7 @@ export const ITEM_NAMES: Record<ItemKind, string> = {
   overdrive: msg('Overdrive charged'),
   repair: msg('Repair'),
   nova: msg('Nova core'),
+  decoys: msg('Decoys'),
 };
 /** What each item does, in as few words as the HUD can show next to its name. */
 export const ITEM_HINTS: Record<ItemKind, string> = {
@@ -74,11 +75,12 @@ export const ITEM_HINTS: Record<ItemKind, string> = {
   overdrive: msg('ready now'),
   repair: msg('ship as new'),
   nova: msg('next shot blows up everything around'),
+  decoys: msg('two lures for a torpedo'),
 };
 /** A sealed probe's neon runs through the colors this often (1/s). */
 const SEALED_CYCLE = 0.4;
 /** The neon of each kind, so a pilot sees from afar what a probe carries. */
-const COLORS: Record<ItemKind, number> = { twin: 0xff3fa4, plating: 0x4d91ff, torpedoes: 0xff9d00, overdrive: 0xffe04d, repair: 0x3dff9a, nova: 0xffffff };
+const COLORS: Record<ItemKind, number> = { twin: 0xff3fa4, plating: 0x4d91ff, torpedoes: 0xff9d00, overdrive: 0xffe04d, repair: 0x3dff9a, nova: 0xffffff, decoys: 0xb36bff };
 
 /**
  * A probe shows up every PROBE_EVERY seconds of a round, from PROBE_FIRST on, and drifts for
@@ -507,6 +509,6 @@ function kindOf(h: number, weights = WEIGHTS): ItemKind {
   return 'repair';
 }
 
-/** The items a clone holds, as one number for its state: twin laser (1), plating charges (2 each, up to 2), nova core (8). */
-export const packItems = (twin: boolean, plating: number, nova: boolean) => (twin ? 1 : 0) + plating * 2 + (nova ? 8 : 0);
-export const unpackItems = (packed: number) => ({ twin: (packed & 1) === 1, plating: (packed >> 1) & 3, nova: (packed & 8) === 8 });
+/** The items a clone holds, as one number for its state: twin laser (1), plating charges (2 each, up to 2), nova core (8), decoys (16 each, up to 3). */
+export const packItems = (twin: boolean, plating: number, nova: boolean, decoys = 0) => (twin ? 1 : 0) + plating * 2 + (nova ? 8 : 0) + Math.min(3, decoys) * 16;
+export const unpackItems = (packed: number) => ({ twin: (packed & 1) === 1, plating: (packed >> 1) & 3, nova: (packed & 8) === 8, decoys: (packed >> 4) & 3 });

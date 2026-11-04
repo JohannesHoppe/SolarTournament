@@ -336,6 +336,8 @@ export class Ship {
   plating = 0;
   /** The clone holds a nova core: it pulses for everyone to see (see pulse). */
   nova = false;
+  /** Decoys the clone holds (see game/decoys): lures a torpedo homing on it turns to. */
+  decoys = 0;
   private readonly aura: THREE.Sprite;
   /** Health of the main drive and of the maneuvering thrusters, 0..1. */
   drive = 1;
@@ -559,6 +561,7 @@ export class Ship {
     this.twin = false;
     this.plating = 0;
     this.nova = false;
+    this.decoys = 0;
     this.heat = 0;
     this.clog = 0;
     this.mending = false;
@@ -617,7 +620,7 @@ export class Ship {
   toState(now: number, full = false): ShipState {
     const f = this.flight;
     const round = (v: { toArray(): number[] }, digits = 0) => v.toArray().map((x) => +x.toFixed(digits));
-    const items = packItems(this.twin, this.plating, this.nova);
+    const items = packItems(this.twin, this.plating, this.nova, this.decoys);
     const slow = `${this.name}|${this.type}|${this.score}|${this.kills}|${this.deaths}|${this.gates}|${this.finish}|${items}|${this.wish}|${this.torpedoes}`;
     const withSlow = full || slow !== this.slowSent || now - this.slowSentAt >= SLOW_STATE_SECONDS;
     if (withSlow) {
@@ -665,7 +668,7 @@ export class Ship {
       this.deaths = state.de!;
       this.gates = state.g!;
       this.finish = state.fi!;
-      ({ twin: this.twin, plating: this.plating, nova: this.nova } = unpackItems(state.it!));
+      ({ twin: this.twin, plating: this.plating, nova: this.nova, decoys: this.decoys } = unpackItems(state.it!));
       // another browser's ship shows the looks of its upgrades and heats in the air with its
       // radiators; how it flies is that browser's
       if (state.lo !== packLooks(this.perks)) this.outfit(unpackLooks(state.lo!));

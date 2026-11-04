@@ -59,6 +59,8 @@ export interface Mission {
   pay: number;
   /** What it changes in the campaign the first time it is done: a part fitted, the Bond grown. */
   fit?: (campaign: Campaign) => void;
+  /** Where its clones are printed and face, if not where the place's story starts (see ArenaProfile.start). */
+  start?: { at: readonly [number, number, number]; toward: readonly [number, number, number] };
 }
 
 /** The campaign as the browser keeps it: the missions done, the drill reached in the running one, the wallet, what the Bond still asks, the parts fitted. */

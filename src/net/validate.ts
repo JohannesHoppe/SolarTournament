@@ -110,7 +110,7 @@ export function shipState(x: unknown): ShipState | null {
           de: int(x.de, 0, MAX_COUNT),
           g: int(x.g, 0, MAX_COUNT),
           fi: num(x.fi, -1, ROUND_LIMIT),
-          it: int(x.it, 0, 15),
+          it: int(x.it, 0, 63),
           lo: int(x.lo, 0, MAX_LOOKS),
           // a Host's tint is an entry of the palette, never a color of its own
           co: int(x.co, 0, TINTS.length - 1),

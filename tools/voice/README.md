@@ -9,6 +9,7 @@ Everything the game says out loud is rendered ahead of time, by the tools in thi
 | **The regime** | The radio's station calls, track titles and the Orange President's propaganda, in English and German | espeak-ng, a robotic voice ("robosoft") |
 | **The announcer** | Comments on kills, laps, wins, in the Host's language | espeak-ng, a lively male voice |
 | **Nicole** | The flight computer: every line of the flight school, every warning, every bit of comfort | English: Kokoro. German, Spanish, French: her clone, made with Chatterbox |
+| **Rask** | The yardmaster of the campaign's Boneyard, over the comm | Kokoro's `am_santa`; in German, Spanish and French reading the phonemes espeak-ng spells |
 
 ## The tools, in plain words
 

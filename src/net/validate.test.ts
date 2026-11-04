@@ -34,7 +34,7 @@ describe('messages from other browsers', () => {
     expect(shipState({ ...ship, h: Number.NaN })).toBeNull();
     expect(shipState({ ...ship, p: [1, 2, Infinity] })).toBeNull();
     expect(shipState({ ...ship, q: [0, 0, 0, 0] })).toBeNull();
-    expect(shipState({ ...ship, ...slow, it: 16 })).toBeNull();
+    expect(shipState({ ...ship, ...slow, it: 64 })).toBeNull();
     // the looks and the radiators within what the hangar sells online
     expect(shipState({ ...ship, ...slow, lo: MAX_LOOKS })?.lo).toBe(MAX_LOOKS);
     expect(shipState({ ...ship, ...slow, lo: MAX_LOOKS + 1 })).toBeNull();

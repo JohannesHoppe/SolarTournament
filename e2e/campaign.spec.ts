@@ -48,7 +48,8 @@ test('Lamplighter counts the beacons held by, one after the other', async ({ pag
   const errors = await openGame(page, '/?campaign');
   await page.click('#campaign');
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
-  // the clone set beside each beacon in turn, at rest, until the line after the drill comes
+  // past Rask's briefing to the drill itself, then the clone set beside each beacon in turn, at rest, until the line after the drill comes
+  await page.waitForFunction(() => window.game.school?.attempt?.points?.length > 0, null, { timeout: 60_000 });
   await page.evaluate(async () => {
     const game = window.game;
     const start = game.time;
@@ -61,17 +62,37 @@ test('Lamplighter counts the beacons held by, one after the other', async ({ pag
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
   });
-  await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(1);
+  await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(2);
+  expect(errors).toEqual([]);
+});
+
+test('Cold Boot docks the hull on bay 3’s pad once it rests above it', async ({ page }) => {
+  // at the docking drill, the flight into the bay done
+  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: [], step: 14, coins: 0, bond: 25000 })));
+  const errors = await openGame(page, '/?campaign');
+  await page.click('#campaign');
+  await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
+  // the clone set at rest over the pad's middle, a little above the bay's floor, until the drill counts
+  await page.evaluate(async () => {
+    const game = window.game;
+    const start = game.time;
+    while (game.school.stepIndex === 14 && game.time - start < 20) {
+      game.me.flight.position.set(-1000, -400 + game.me.radius + 100, 0);
+      game.me.flight.velocity.set(0, 0, 0);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  });
+  expect(await page.evaluate(() => window.game.school.stepIndex)).toBe(15);
   expect(errors).toEqual([]);
 });
 
 test('on the address with ?campaign its first mission flies on the flight school’s machinery, and done it is kept', async ({ page }) => {
-  // the mission at its last drill (Nicole's closing words), so it ends by itself
-  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: [], step: 5, coins: 0, bond: 25000 })));
+  // the mission at its last drill (Rask's words once docked), so it ends by itself and runs on into the next
+  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: [], step: 16, coins: 0, bond: 25000 })));
   const errors = await openGame(page, '/?campaign');
   await page.click('#campaign');
-  await expect(page.locator('#school-step')).toContainText('Cold Boot 6/6', { timeout: 90_000 });
-  await page.waitForFunction(() => window.game.state === 'menu', null, { timeout: 60_000 });
+  await expect(page.locator('#school-step')).toContainText('Cold Boot 17/17', { timeout: 90_000 });
+  await expect(page.locator('#school-step')).toContainText('Lamplighter 1/3', { timeout: 60_000 });
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
   expect(kept.done).toEqual(['coldBoot']);
   expect(kept.step).toBe(0);

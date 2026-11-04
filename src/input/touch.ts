@@ -32,7 +32,7 @@ export class TouchControls {
   private loading: Promise<void> | null = null;
 
   /** `onAction` hears the buttons that act at a tap: pause, autopilot, overdrive, torpedo. */
-  constructor(onAction: (action: 'pause' | 'autopilot' | 'overdrive' | 'torpedo') => void) {
+  constructor(onAction: (action: 'pause' | 'autopilot' | 'overdrive' | 'torpedo' | 'decoy') => void) {
     // touch controls from the start only where touch is the only way to point (phones,
     // tablets); a laptop with a touch screen or a tablet with a trackpad starts with the
     // mouse and switches on the first touch
@@ -51,7 +51,7 @@ export class TouchControls {
     });
 
     for (const held of ['drive', 'fire', 'brake', 'flip', 'hook', 'selfDestruct'] as const) this.hold(`touch-${held}`, (down) => (this[held] = down));
-    for (const action of ['pause', 'autopilot', 'overdrive', 'torpedo'] as const) {
+    for (const action of ['pause', 'autopilot', 'overdrive', 'torpedo', 'decoy'] as const) {
       document.getElementById(`touch-${action}`)!.addEventListener('pointerdown', (e) => {
         e.preventDefault();
         onAction(action);

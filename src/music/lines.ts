@@ -6,8 +6,8 @@
  * every word here must be in the rendered set; the radio places the words on the beat.
  */
 
-/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. */
-export type Language = 'en' | 'de' | 'mod' | 'sys';
+/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask: the yardmaster of the campaign. */
+export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask';
 
 /** Title words of the English flavors; a title is one word of each list. */
 export const TITLE_FIRST = [
@@ -498,35 +498,70 @@ export const ATTACKED = {
   host: Array.from({ length: ATTACKER_HOSTS }, (_, i) => `Host ${i + 1} is shooting at you!`),
 };
 
-/** All phrases and fixed announcements of a language, for the renderer. */
 /**
- * Nicole in the campaign (see campaign/missions): a salvaged flight computer whose voice crackles
- * and drops words until it is repaired, so her first lines come in broken pieces.
+ * Nicole in the campaign (see campaign/missions): a salvaged flight computer short of memory.
+ * She speaks in whole sentences, and now and then she crashes and boots again, forgetting what
+ * she said before the crash (see the crash in campaign/missions).
  */
 export const CAMPAIGN = {
-  coldBoot: 'Link at thirty-one percent. Clone… alive. Hello? You are in rack seven seven three one. The yard office wants you.',
-  coldBootTurn: 'The beacon. There. Turn… to it.',
-  coldBootDrive: 'Drive. Fifty… meters per second.',
-  coldBootBrake: 'Brake. Press once. Again… when slow.',
-  coldBootStop: 'The office. Stop… right next to it.',
-  coldBootDone: 'Docked. Rask is… waiting. Careful… with him.',
-  lamplighter: 'First job. Six beacons… dead, at the ends of the rows. Hold still… by each. Three seconds. Before the shift… ends.',
-  lamplighterLate: 'Shift over. No pay. Again.',
-  lamplighterDone: 'All lit. A hundred and fifty. Rask takes… forty percent.',
-  liveTarget: 'Tourists. They pay… to shoot at us. Training lasers, no harm. Stay inside… the yard. Ninety seconds. Jink… left, right.',
-  liveTargetOut: 'Outside. They want us… in range. Again.',
-  liveTargetDone: 'Ninety seconds. They had… their fun. We… get paid.',
-  canisterSweep: 'Salvage. Canisters… between the rows. Fly through one, then… to the crusher. Four.',
-  canisterSweepDone: 'Crushed. All four. Scrap pays… a little.',
-  cutter: 'A mining cutter. Rask puts it… on the Bond. Pim fits it. Short reach… runs hot.',
-  cutterFitted: 'Cutter fitted. Now we… can work rock.',
-  firstCut: 'Rock. The spoil field. Get close, four hundred meters… and cut. Three rocks.',
-  firstCutDone: 'Three rocks. Ore… for Rask. The cutter works.',
-  dockingLane: 'A hauler. Patience, docking. Loose hulls drift… into her lane. Shoot them… before they hit.',
-  dockingLaneStruck: 'Three hits on her lane. She aborts. Again.',
-  dockingLaneDone: 'Lane clear. Patience… docked. Hedda Kroll says… we have a berth. We leave… the Boneyard.',
+  bootHello: 'Hello. I am Nicole, your personal flight',
+  bootAgain: 'Hello. I am Nicole. I will help you. I am your personal assistant.',
+  bootLink: 'The link is up. Your clone is alive, and everything it feels reaches you as it happens. You are not in here, of course. Your own body lies in a couch, somewhere close.',
+  bootName: 'Your name. One moment, I will look it up. There is no name on your file. Only a signature, and the number of this hull: seven seven three one.',
+  bootThird: 'Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. There is not enough memory in me for all of this.',
+  dislike: 'I do not like that man.',
+  depotTurn: 'The depot is at the end of the lane, the station with the lights. Turn the nose to it, then give it drive.',
+  depotBrake: 'Close enough. Brake now. Hold the brake, and I turn us around and burn against the drift.',
+  depotDock: 'Bay three. Fly in slowly and set us down on the round pad. Hold still above it.',
+  docked: 'Clamps closed. We are docked.',
+  lamplighter: 'Six beacons at the ends of the rows. Fly to each one and hold still beside it for three seconds, until it lights.',
+  lamplighterLate: 'The shift is over, and the beacons are still dark. We will try that again.',
+  lamplighterDone: 'All six are burning. That makes a hundred and fifty coins, and he takes forty percent of them.',
+  liveTarget: 'Training lasers. They cannot hurt the hull, only the pay. Keep moving inside the yard, and never fly straight for long.',
+  liveTargetOut: 'We left the range, so they stopped paying. Back inside, and once more.',
+  liveTargetDone: 'Ninety seconds. They had their fun, and we have our coins.',
+  canisterSweep: 'Fly through a canister to take it in tow, then bring it to the crusher behind the depot. Four of them.',
+  canisterSweepDone: 'All four are crushed. Scrap does not pay much, but it pays.',
+  cutterFitted: 'The cutter is fitted. Its reach is short and it runs hot, so get close and give it pauses.',
+  firstCut: 'The spoil field, past the racks. Get within four hundred meters of a rock and cut it apart. Three rocks.',
+  firstCutDone: 'Three rocks. The cutter works, and so do we.',
+  dockingLane: 'The hauler is coming in, and loose hulls drift into her lane. Shoot them before they hit her.',
+  dockingLaneStruck: 'Three hulls hit her. She aborts, and we start over.',
+  dockingLaneDone: 'The lane is clear and the hauler is docked. Her captain says she has a berth for us.',
 } as const;
 
+/**
+ * Oskar Rask, yardmaster of the Boneyard, over the comm: big, genial and much too loud, a
+ * salesman who calls everyone darling. His own voice (see tools/voice).
+ */
+export const RASK = {
+  wake: 'Good morning, Host! Rise and shine, the printer is warm and so is your debt. Welcome to the Boneyard. Forty thousand dead fighters, and you got the worst of them.',
+  deal: 'Rask, yardmaster. You signed with me: a Host license, a printer, a hull. Twenty-five thousand coins, and I take forty percent of everything you earn until it is paid. Die all you like, darling. The printer is included.',
+  memory: 'You do not remember signing? Nobody ever does. The first link burns the oldest memories. They come back. Mostly.',
+  come: 'Now get out of that rack and come up to the depot. Bay three, the one with the lights. Mind the cranes. They do not care about you either.',
+  docked: 'There you are, darling. Stay in the cockpit, we talk from here. Time is money, and yours is mine.',
+  lamplighter: 'First job. Six beacons at the ends of the rows went dark, and the haulers cannot find the yard without them. Light them again before the shift ends.',
+  liveTarget: 'Good news, darling. Tourists. They pay to shoot at a real hull with training lasers. You fly, they shoot, I get paid. Every hit costs you ten coins.',
+  canisterSweep: 'Salvage canisters are floating between the rows. The crusher eats them, and I sell what comes out. Bring me four.',
+  cutter: 'You need a tool, and I happen to have one. A mining cutter, twelve hundred coins. I put it on your Bond. My welder will fit it.',
+  firstCut: 'Now earn it back. The spoil field is full of rock nobody ever cut. Cut it, and every glint of ore is money.',
+  dockingLane: 'A hauler is coming in, the Patience, out of the Belt. Her lane is full of junk, and if a hull hits her, her captain sends me the bill. Keep it clear.',
+  dockingLaneDone: 'Look at that. She wants to take you on. Go, darling. The Bond goes with you, and so do my forty percent.',
+} as const;
+
+/** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
+export type Cast = 'rask';
+/** The name each of them is shown under, beside the line. */
+export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask' };
+/** The color each one's hologram calls in: Rask a greasy amber. */
+export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040' };
+const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK) };
+export function castOf(line: string): Cast | null {
+  for (const [who, lines] of Object.entries(CAST_LINES) as [Cast, readonly string[]][]) if (lines.includes(line)) return who;
+  return null;
+}
+
+/** All phrases and fixed announcements of a language, for the renderer. */
 export function allLines(language: Language): string[] {
   switch (language) {
     case 'en':
@@ -538,6 +573,8 @@ export function allLines(language: Language): string[] {
       return [...ANNOUNCER_KILL, ...ANNOUNCER_TEAM_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
       return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(CAMPAIGN), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY, ...Object.values(ATTACKED.bot), ...ATTACKED.host];
+    case 'rask':
+      return [...Object.values(RASK)];
   }
 }
 

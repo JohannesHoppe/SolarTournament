@@ -25,12 +25,18 @@ import { STREAKS } from '../view/streaks';
 import { bindVolume, Radio, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
-import { COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
+import { COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
+import { Hologram } from '../view/hologram';
+import { PORTRAIT_SWING, portraitModel } from '../view/products';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Command, type Controls, type Device } from '../input/input';
 import { fillSheet, SHEET_TABS } from '../input/sheet';
+import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from './decoys';
+/** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
+const BOT_DECOY_AT = 0.6;
+const BOT_DECOY_RATE = 3;
 import { type Campaign, campaignFrom, complete, hullOf, type Mission, nextMission } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
@@ -665,6 +671,8 @@ const relative = new THREE.Vector3();
 const closingVelocity = new THREE.Vector3();
 const aimPoint = new THREE.Vector3();
 const toAim = new THREE.Vector3();
+const decoyAt = new THREE.Vector3();
+const decoyVelocity = new THREE.Vector3();
 const sweep = new THREE.Vector3();
 /** A ray's hit into the field, reused: one per place that casts every step, each read before that place casts again. */
 const rayHit = (): RayHit => ({ asteroid: null, distance: 0, center: new THREE.Vector3() });
@@ -808,6 +816,9 @@ export class Game implements OnlineGame {
   private readonly replayEffects: Effects;
   private readonly killcam: KillCam;
   private readonly torpedoes: Torpedoes;
+  /** The decoys in flight (see game/decoys), and how many the own ship has dropped, for their ids. */
+  private readonly decoys: Decoys;
+  private decoysDropped = 0;
   /** The shells of novas going off (see novaBlast). */
   private readonly shockwaves: { mesh: THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>; born: number }[] = [];
   private readonly shockwaveGeometry = new THREE.SphereGeometry(1, 48, 24);
@@ -971,6 +982,8 @@ export class Game implements OnlineGame {
   /** When the on-target tick last sounded (see ON_TARGET_TICK). */
   private onTargetTickAt = -Infinity;
   /** The flight school's marker as the frame's last step left it (see teach), or null; the screen shows it once a frame (see showSchoolHud). */
+  /** Who calls the ship as a hologram right now (see showCaller). */
+  private caller: Cast | null = null;
   private schoolMark: THREE.Vector3 | null = null;
   /** The racing line the flight school's HUD draws to its marker or through its rings, as the frame's last step left it (see teach), or null. */
   private schoolTrack: { line: RacingLine; next: number } | null = null;
@@ -1299,7 +1312,8 @@ export class Game implements OnlineGame {
     this.scene.add(this.replayEffects.group);
     this.killcam = new KillCam(this.replayEffects);
     this.torpedoes = new Torpedoes(this.effects);
-    this.scene.add(this.torpedoes.group, this.probes.group, this.guide.ribbon, this.cables.group, this.cometView.root);
+    this.decoys = new Decoys(assets.textures.glow);
+    this.scene.add(this.torpedoes.group, this.decoys.group, this.probes.group, this.guide.ribbon, this.cables.group, this.cometView.root);
     this.hudScene.add(this.plane.group, this.orbitPath.line);
     this.scene.add(this.space.sky, this.space.dust, this.space.streaks, this.arena.mesh, this.belt.group, this.landmarks.group, this.mining.group, this.flare.mesh, this.space.lights, this.field.group, this.wrecks.group, this.effects.group, this.reentry.group);
     for (let i = 0; i < ENGINE_LIGHTS; i++) {
@@ -2258,6 +2272,7 @@ export class Game implements OnlineGame {
         // the clamps of the opening hold the overdrive and the torpedoes too
         if (action === 'overdrive' && !this.clamped) this.overdrive();
         if (action === 'torpedo' && !this.spectating && this.me && !this.clamped) this.fireTorpedo(this.me);
+        if (action === 'decoy' && !this.spectating && this.me && !this.clamped) this.dropDecoy(this.me);
         if (action === 'watch' && this.watching()) this.watchNext();
         break;
       case 'paused':
@@ -2387,6 +2402,7 @@ export class Game implements OnlineGame {
     if (!keepWreckage) {
       this.wrecks.clear();
       this.torpedoes.clear();
+      this.decoys.clear();
     }
     this.storming = false;
   }
@@ -2542,7 +2558,26 @@ export class Game implements OnlineGame {
     }
   }
 
+  /**
+   * One of the campaign's people calls the ship: their bust as a hologram in the comm panel,
+   * their name under it, while their line stands; null ends the call.
+   */
+  private showCaller(who: Cast | null) {
+    if (who === this.caller) return;
+    this.caller = who;
+    const panel = $('comm');
+    const hologram = Hologram.shared();
+    panel.hidden = !who || !hologram;
+    if (!who || !hologram) {
+      if (hologram && panel.contains(hologram.canvas)) hologram.stop();
+      return;
+    }
+    panel.querySelector<HTMLElement>('.comm-name')!.textContent = CAST_NAMES[who];
+    hologram.show(panel.querySelector<HTMLElement>('.comm-show')!, portraitModel(who), CAST_COLORS[who], PORTRAIT_SWING);
+  }
+
   private showMenu() {
+    this.showCaller(null);
     this.showQuality();
     this.leaveOnline();
     this.clearShips();
@@ -2567,6 +2602,7 @@ export class Game implements OnlineGame {
     this.clearShockwaves();
     this.cues.length = 0;
     this.torpedoes.clear();
+    this.decoys.clear();
     this.probes.reset();
     this.wrecks.clear();
     this.brokenHere.clear();
@@ -3146,7 +3182,7 @@ export class Game implements OnlineGame {
       best = 0;
     }
     // a place of the campaign prints the own clone where its story starts, facing on (see ArenaProfile.start)
-    const start = ship === this.me && !course ? this.venue.start : undefined;
+    const start = ship === this.me && !course ? (this.mission?.start ?? this.venue.start) : undefined;
     if (start) {
       position.set(...start.at);
       candidate.set(...start.toward);
@@ -3799,6 +3835,7 @@ export class Game implements OnlineGame {
         }
       }
       if (bot && !clamped) this.botHook(bot, dt, now);
+      if (bot && !clamped && ship.decoys > 0) this.botDecoy(ship, dt);
       if (bot?.shove && !clamped) this.thrusterKick(ship, bot.shove);
       // the target drone keeps its drive turned to the pilot, wherever the pilot flies: the
       // drills train hitting the drive, not getting around the armor
@@ -3833,6 +3870,7 @@ export class Game implements OnlineGame {
     this.wrecks.update(dt, now, this.field, this.grinds);
     this.killcam.record(now, this.ships);
     this.replayEffects.update(dt);
+    this.decoys.update(dt, now);
     this.torpedoes.update(dt, now, this.field, this.ships, (torpedo, hit) => this.detonate(torpedo, hit), this.touchesSolid);
     this.items(dt, now);
     this.closeCall(now);
@@ -3946,7 +3984,7 @@ export class Game implements OnlineGame {
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
     const hook = this.tethers.get(me);
     this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now), this.hookCarried(me));
-    this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
+    this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova, me.decoys);
     this.hud.setKeys(this.input.device);
     // the own ship runs silent: the sensors find it only up close (see Ship.silent)
     const silent = me.alive && me.silent(this.time);
@@ -5077,8 +5115,12 @@ export class Game implements OnlineGame {
       const mission = this.mission;
       let paid = { kept: 0, cut: 0 };
       this.keepCampaign((campaign) => (paid = complete(campaign, mission)));
-      this.mission = null;
-      this.showMenu();
+      // the story runs on into its next mission without the menu, from the pad; the menu only
+      // once all that is built is flown
+      this.mission = nextMission(this.campaign);
+      this.schoolMark = this.schoolTrack = null;
+      if (this.mission) this.startRound('school');
+      else this.showMenu();
       this.notice(
         paid.kept + paid.cut > 0
           ? t('{mission} done: {kept} ☉ for you, {cut} ☉ for the yard. The Bond still asks {bond} ☉.', { mission: t(mission.name), kept: coinText(paid.kept), cut: coinText(paid.cut), bond: coinText(this.campaign.bond) })
@@ -5098,6 +5140,7 @@ export class Game implements OnlineGame {
       return;
     }
     const me = this.me!;
+    this.showCaller(me.alive ? school.caller : null);
     this.schoolMark = waypoint;
     // a ring course has its racing line, as a race does; any other marker a line to it, from
     // where the pilot was in the step the marker came up
@@ -5108,7 +5151,8 @@ export class Game implements OnlineGame {
   /** The flight school in the HUD, as the frame's last step left it (see teach): its plate, marker, rings and racing line; returns the marker for the crosshair. */
   private showSchoolHud(me: Ship): THREE.Vector3 | null {
     const school = this.school!;
-    const device = this.schoolContext!.device;
+    // a mission that just ran on into the next has no context yet: the Host's device as it is
+    const device = this.schoolContext?.device ?? this.input.device;
     this.hud.setSchool(school.status(device), device === 'keyboard');
     this.hud.setWaypoint(this.camera, this.schoolMark, school.mark);
     this.markRings(me, school.nextRing, school.nextNormal, school.ringAfter, RING_RADIUS);
@@ -5171,6 +5215,14 @@ export class Game implements OnlineGame {
         return game.speaker.speaking;
       },
       say: (lines) => this.speaker.say(lines, 'lesson'),
+      crash: () => {
+        // the voice cut off mid-word, the picture torn, a falling tone and the crackle of a dead unit
+        this.speaker.stop();
+        this.glitch.trigger(1, 2.2);
+        this.sound.beep(660, 0.12, 0.2);
+        this.sound.beep(330, 0.3, 0.2, 0.14);
+        this.sound.crackle(1);
+      },
       fireAt: (from, through) => this.drillShot(from, through),
       boost: (through) => this.coilPush(this.me!, through),
       arm: (item) => {
@@ -5453,6 +5505,9 @@ export class Game implements OnlineGame {
     const hook = $('touch-hook');
     const hooks = this.hookCarried(me);
     if (hook.hidden === hooks) hook.hidden = !hooks;
+    const decoy = $('touch-decoy');
+    const decoys = me.alive && me.decoys > 0;
+    if (decoy.hidden === decoys) decoy.hidden = !decoys;
     if (!allowed || this.state !== 'playing' || !me.alive || this.spectating || this.clamped || !this.input.selfDestructing) {
       this.selfDestructSince = null;
       return;
@@ -5847,6 +5902,43 @@ export class Game implements OnlineGame {
     }
   }
 
+  /**
+   * Z (the D-pad right, DECOY on touch): a ship this browser runs drops one of its decoys (see
+   * game/decoys); the torpedoes homing on it close by turn to it, and every browser is told.
+   */
+  dropDecoy(ship: Ship) {
+    if (!ship.alive || ship.decoys <= 0) return;
+    ship.decoys--;
+    // a flare of heat: the ship shows on the sensors again (see Ship.silent)
+    ship.loudAt = this.time;
+    decoyLaunch(ship, decoyAt, decoyVelocity);
+    const id = `${ship.id}:d${++this.decoysDropped}`;
+    this.decoys.drop(id, ship, decoyAt, decoyVelocity, this.time, this.torpedoes.list);
+    this.online?.sendDecoy(ship, decoyAt, decoyVelocity);
+    if (ship.isLocal) {
+      this.hud.flashMessage(this.time, t('Decoy away'), 1.2);
+      this.sound.beep(660, 0.08, 0.12);
+    }
+  }
+
+  /**
+   * A bot with a decoy drops it when a torpedo homing on it comes within BOT_DECOY_AT (a share of
+   * DECOY_LURE), as a Host who hears TORPEDO INBOUND does, a moment late (BOT_DECOY_RATE a second).
+   */
+  private botDecoy(ship: Ship, dt: number) {
+    for (const torpedo of this.torpedoes.list) {
+      if (torpedo.target !== ship || torpedo.position.distanceTo(ship.flight.position) > DECOY_LURE * BOT_DECOY_AT) continue;
+      if (Math.random() < dt * BOT_DECOY_RATE) this.dropDecoy(ship);
+      return;
+    }
+  }
+
+  /** Another browser's ship dropped a decoy: here too the torpedoes homing on it close by turn to it. */
+  remoteDecoy(ship: Ship, position: THREE.Vector3, velocity: THREE.Vector3) {
+    ship.loudAt = this.time;
+    this.decoys.drop(`${ship.id}:r${++this.decoysDropped}`, ship, position, velocity, this.time, this.torpedoes.list);
+  }
+
   /** What a torpedo of `ship` would lock on: the ship or part of the battleship in sight closest to its nose (see LOCK_ANGLE). */
   private torpedoTarget(ship: Ship): Homing | null {
     let best: Homing | null = null;
@@ -5942,6 +6034,9 @@ export class Game implements OnlineGame {
         break;
       case 'overdrive':
         if (ship === this.me) this.overdriveReadyAt = 0;
+        break;
+      case 'decoys':
+        ship.decoys = Math.min(DECOYS_HELD, ship.decoys + DECOYS_PER_PROBE);
         break;
       case 'repair':
         ship.repair();

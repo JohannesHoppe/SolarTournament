@@ -81,6 +81,7 @@ export interface OnlineGame {
   /** A ship of another browser set off its nova core: this browser's ships near it are gone. */
   novaBlast(holder: Ship, position: THREE.Vector3): void;
   selfDestruct(holder: Ship, position: THREE.Vector3): void;
+  remoteDecoy(ship: Ship, position: THREE.Vector3, velocity: THREE.Vector3): void;
   /** A ship of another browser hooked a rock (by id, a point in its frame) or a ship, with this much cable out. */
   remoteHook(owner: Ship, rock: string | null, local: THREE.Vector3 | null, target: Ship | null, length: number): void;
   /** A ship of another browser says its harpoon bit the core of side `team` (Capture the Flag). */
@@ -344,6 +345,14 @@ export class Online {
       if (!holder?.alive || this.caught(holder, this.plausible.selfDestruct(holder.id, p, wall(), this.clock.now(holder.owner ?? '', wall())))) return;
       game.selfDestruct(holder, from.fromArray(p));
     };
+    // a decoy only from a living ship whose state says it holds one, near where it is
+    session.onDecoy = (ship, p, v) => {
+      const holder = this.find(ship);
+      if (!holder?.alive || holder.decoys <= 0) return;
+      if (this.caught(holder, this.plausible.selfDestruct(holder.id, p, wall(), this.clock.now(holder.owner ?? '', wall())))) return;
+      holder.decoys--;
+      game.remoteDecoy(holder, from.fromArray(p), to.fromArray(v));
+    };
     session.onCheat = (ship, accuser) => {
       // only a browser in the room (or this one) can be accused: made-up peers are not kept
       const accused = ownerOf(ship);
@@ -488,6 +497,10 @@ export class Online {
 
   sendTorpedo(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3) {
     this.session.sendTorpedo(id, shooter.id, target?.id ?? null, round(position), round(velocity));
+  }
+
+  sendDecoy(ship: Ship, position: THREE.Vector3, velocity: THREE.Vector3) {
+    this.session.sendDecoy(ship.id, round(position), round(velocity));
   }
 
   sendSelfDestruct(ship: Ship, position: THREE.Vector3) {

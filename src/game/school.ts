@@ -5,7 +5,7 @@ import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
 import { CONTROLS, type Command, type Controls, type Device } from '../input/input';
 import type { Ship } from '../ship/ship';
 import { SUN_DIRECTION } from '../world/space';
-import { SCHOOL, SCHOOL_PRAISE } from '../music/lines';
+import { type Cast, CAST_NAMES, castOf, SCHOOL, SCHOOL_PRAISE } from '../music/lines';
 import { RacingLine } from './racingline';
 import { ARENA_LIMIT } from '../world/arena';
 import { GateKit, touchRing } from '../world/gates';
@@ -86,6 +86,8 @@ export interface SchoolContext {
   speaking: boolean;
   /** The flight computer says lines, one after the other, after whatever it is saying; false when it could not speak yet (voice still loading, audio not yet allowed). */
   say(lines: string[]): boolean;
+  /** The flight computer crashes: the link's picture breaks up, its voice cuts off mid-word, and it boots again. */
+  crash(): void;
 }
 
 /** The running state of one attempt at a drill. */
@@ -163,6 +165,8 @@ export interface Drill {
   skip?(ctx: SchoolContext): boolean;
   /** The arena the drill is flown in; without one, the school's home (the default arena). */
   arena?: ArenaId;
+  /** The line is only shown, never said (a screen's message: the flight computer crashing). */
+  silent?: boolean;
 }
 
 
@@ -1830,7 +1834,7 @@ export class FlightSchool {
     // the panel keeps the instruction; a repetition without a line of its own just goes on
     const instruction = rep > 0 && drill.repLine ? drill.repLine : drill.line;
     this.line = instruction;
-    if (fresh && (rep === 0 || drill.repLine)) this.unsaid = { lines: [instruction], since: ctx.now };
+    if (fresh && (rep === 0 || drill.repLine) && !drill.silent) this.unsaid = { lines: [instruction], since: ctx.now };
   }
 
   /**
@@ -1858,7 +1862,7 @@ export class FlightSchool {
       shown.device = device;
       shown.status = {
         step: t('{course} {n}/{total}', { course: this.course ? t(COURSE_NAMES[this.course]) : t(this.mission?.name ?? ''), n: index + 1, total: this.drills.length }),
-        text: t(this.line),
+        text: castOf(this.line) ? t('{who}: {line}', { who: CAST_NAMES[castOf(this.line)!], line: t(this.line) }) : t(this.line),
         keys: this.drills[index].keys.flatMap((command) => CONTROLS[device][command].map((label) => t(label))),
       };
     }
@@ -1866,6 +1870,11 @@ export class FlightSchool {
   }
 
   private readonly shown = { index: -1, line: '', device: 'keyboard' as Device, status: { step: '', text: '', keys: [] as string[] } };
+
+  /** Who besides Nicole says the current line, if anyone (see castOf): their hologram calls in while it stands. */
+  get caller(): Cast | null {
+    return castOf(this.line);
+  }
 
   get stepIndex() {
     return this.index;

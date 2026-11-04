@@ -20,6 +20,7 @@ export const SHEET: Record<Device, readonly (readonly [string, string])[]> = {
     ['T', msg('Autopilot (flies where it points) / free drift')],
     ['E', msg('Overdrive: one shove forward, last resort, once a minute')],
     ['G', msg('Torpedo: homes on the ship ahead, a limited load per ship')],
+    ['Z', msg('Decoy: a torpedo after you turns to it')],
     [msg('V / Right click'), msg('Hook: bite a rock or a ship and reel in; press again to let go and fly off')],
     [msg('B (hold)'), msg('Self-destruct: takes every rival close by along')],
     ['C', msg('Cockpit / chase camera')],
@@ -42,6 +43,7 @@ export const SHEET: Record<Device, readonly (readonly [string, string])[]> = {
     ['R3', msg('Autopilot (flies where it points) / free drift')],
     ['RB', msg('Overdrive: one shove forward, last resort, once a minute')],
     [msg('D-pad up'), msg('Torpedo: homes on the ship ahead, a limited load per ship')],
+    [msg('D-pad right'), msg('Decoy: a torpedo after you turns to it')],
     [msg('D-pad down'), msg('Hook: bite a rock or a ship and reel in; press again to let go and fly off')],
     [msg('D-pad left (hold)'), msg('Self-destruct: takes every rival close by along')],
     [msg('View'), msg('Cockpit / chase camera')],
@@ -58,6 +60,7 @@ export const SHEET: Record<Device, readonly (readonly [string, string])[]> = {
     [msg('Auto'), msg('Autopilot / free drift')],
     [msg('Overdrive'), msg('One shove forward, last resort')],
     [msg('Torpedo'), msg('Launch a torpedo')],
+    [msg('Decoy'), msg('Drop a decoy')],
     [msg('Self-destruct'), msg('Hold: takes every rival close by along')],
   ],
 };
@@ -71,18 +74,18 @@ export const SHEET_TABS: readonly (readonly [Device, string])[] = [
 
 /** The rows that need something a ship may lack (bought gear, or what the campaign's hull is not fitted with yet), by what they do. */
 const NEEDS: Partial<Record<string, Command>> = {
-  [SHEET.keyboard[2][1]]: 'fire',
-  [SHEET.keyboard[7][1]]: 'dodge',
-  [SHEET.gamepad[7][1]]: 'dodge',
-  [SHEET.keyboard[10][1]]: 'overdrive',
-  [SHEET.touch[8][1]]: 'overdrive',
-  [SHEET.keyboard[11][1]]: 'torpedo',
-  [SHEET.touch[9][1]]: 'torpedo',
-  [SHEET.keyboard[12][1]]: 'hook',
-  [SHEET.touch[6][1]]: 'hook',
-  [SHEET.keyboard[13][1]]: 'selfDestruct',
-  [SHEET.touch[10][1]]: 'selfDestruct',
-  [SHEET.touch[3][1]]: 'fire',
+  'Fire laser': 'fire',
+  'Hold to fire the laser': 'fire',
+  'Dodge: a hard kick that way': 'dodge',
+  'Dodge: a hard kick the way the right stick points': 'dodge',
+  'Overdrive: one shove forward, last resort, once a minute': 'overdrive',
+  'One shove forward, last resort': 'overdrive',
+  'Torpedo: homes on the ship ahead, a limited load per ship': 'torpedo',
+  'Launch a torpedo': 'torpedo',
+  'Hook: bite a rock or a ship and reel in; press again to let go and fly off': 'hook',
+  'Tap: fire the hook and reel in; tap again to let go': 'hook',
+  'Self-destruct: takes every rival close by along': 'selfDestruct',
+  'Hold: takes every rival close by along': 'selfDestruct',
 };
 
 /**

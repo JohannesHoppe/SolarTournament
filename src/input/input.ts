@@ -20,14 +20,14 @@ export interface Controls {
 
 export const IDLE: Readonly<Controls> = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
 
-export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'cinema' | 'radio' | 'help' | 'autopilot' | 'overdrive' | 'torpedo' | 'watch';
+export type Action = 'confirm' | 'back' | 'pause' | 'quit' | 'camera' | 'cinema' | 'radio' | 'help' | 'autopilot' | 'overdrive' | 'torpedo' | 'decoy' | 'watch';
 type ActionHandler = (action: Action) => void;
 
 /** What the Host flies with. */
 export type Device = 'keyboard' | 'gamepad' | 'touch';
 
 /** What the Host can be asked to use, by the flight school's drills and by the HUD's labels. */
-export type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'dodge' | 'fire' | 'autopilot' | 'camera' | 'cinema' | 'hook' | 'overdrive' | 'torpedo' | 'selfDestruct';
+export type Command = 'turn' | 'fine' | 'drive' | 'brake' | 'flip' | 'slide' | 'dodge' | 'fire' | 'autopilot' | 'camera' | 'cinema' | 'hook' | 'overdrive' | 'torpedo' | 'decoy' | 'selfDestruct';
 
 /**
  * The keys, buttons and sticks of each device for each command, as keycaps show them (the first
@@ -50,6 +50,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     hook: ['V', msg('Right click')],
     overdrive: ['E'],
     torpedo: ['G'],
+    decoy: ['Z'],
     selfDestruct: ['B'],
   },
   gamepad: {
@@ -67,6 +68,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     hook: [msg('D-pad down')],
     overdrive: ['RB'],
     torpedo: [msg('D-pad up')],
+    decoy: [msg('D-pad right')],
     selfDestruct: [msg('D-pad left')],
   },
   touch: {
@@ -84,6 +86,7 @@ export const CONTROLS: Record<Device, Record<Command, string[]>> = {
     hook: [msg('HOOK')],
     overdrive: [msg('OVERDRIVE')],
     torpedo: [msg('TORPEDO')],
+    decoy: [msg('DECOY')],
     selfDestruct: [msg('SELF-DESTRUCT')],
   },
 };
@@ -107,7 +110,7 @@ const THRUSTER_KEYS: Record<string, { axis: 'x' | 'y'; sign: number } | undefine
 };
 
 /** Buttons of the standard gamepad layout (Xbox naming). */
-const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, leftStick: 10, rightStick: 11, up: 12, down: 13, left: 14 } as const;
+const PAD = { a: 0, b: 1, x: 2, y: 3, lb: 4, rb: 5, lt: 6, rt: 7, view: 8, menu: 9, leftStick: 10, rightStick: 11, up: 12, down: 13, left: 14, right: 15 } as const;
 const PAD_ACTIONS: [number, Action][] = [
   [PAD.a, 'confirm'],
   [PAD.menu, 'pause'],
@@ -117,6 +120,7 @@ const PAD_ACTIONS: [number, Action][] = [
   [PAD.rightStick, 'autopilot'],
   [PAD.rb, 'overdrive'],
   [PAD.up, 'torpedo'],
+  [PAD.right, 'decoy'],
 ];
 /** The keys that act at a press rather than fly while held. */
 const KEY_ACTIONS: Record<string, Action | undefined> = {
@@ -131,6 +135,7 @@ const KEY_ACTIONS: Record<string, Action | undefined> = {
   KeyT: 'autopilot',
   KeyE: 'overdrive',
   KeyG: 'torpedo',
+  KeyZ: 'decoy',
   Tab: 'watch',
 };
 

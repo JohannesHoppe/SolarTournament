@@ -1,10 +1,10 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { CAMPAIGN } from '../music/lines';
-import { clear, DRILL, holdFor, saying, stop, type Attempt, type Drill, type Markers } from '../game/school';
+import { CAMPAIGN, RASK } from '../music/lines';
+import { clear, holdFor, saying, stop, type Attempt, type Drill, type Markers } from '../game/school';
 import type { ArenaId } from '../world/arenas';
-import { RACK_GAP, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
-import { exp } from '../detmath';
+import { BAY_MOUTH, DEPOT_LAYOUT, PAD, PAD_RADIUS, RACK_GAP, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
+import { exp, hypot } from '../detmath';
 import type { Campaign, Mission } from './campaign';
 
 /**
@@ -13,14 +13,14 @@ import type { Campaign, Mission } from './campaign';
  * Boneyard on Psyche: the first link, the menial jobs, the mining cutter, Patience docking.
  */
 
-/** A drill of the flight school with Nicole's campaign line instead of the school's, once, without the school's praise, flown at a place of the campaign. */
-const told = (drill: Drill, line: string, arena: ArenaId = 'boneyard'): Drill => ({ ...drill, line, praise: undefined, reps: 1, repLine: undefined, arena });
-/** A line Nicole says at a place of the campaign. */
+/** A line said at a place of the campaign: Nicole's, or someone's on the comm (see castOf). */
 const said = (line: string, arena: ArenaId = 'boneyard'): Drill => ({ ...saying(line), arena });
 
 const point = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z);
-/** The yard office, at the middle of the lane (the place's center). */
+/** The depot's middle, at the middle of the lane (the place's center). */
 const OFFICE = point(0, 0, 0);
+/** The crusher, behind the depot's main block. */
+const CRUSHER = point(DEPOT_LAYOUT.printer.center.x + DEPOT_LAYOUT.printer.half.x + 1500, 0, 0);
 /** Where the end of a row of racks stands, out at the lane's ends: the row's beacon. */
 const rowEnd = (side: -1 | 1, row: number) => point(side * (YARD_END + 800), 0, row * ROW_SPACING);
 
@@ -104,7 +104,7 @@ const liveTarget: Drill = {
 /**
  * Canister Sweep (1.3): salvage canisters drifting in the gaps between the rows, one at a time:
  * fly through one (within CANISTER_REACH, units, 30 m) to take it in tow, then through the
- * crusher at the yard office (within CRUSHER_REACH, 60 m) to deliver it.
+ * crusher behind the depot (within CRUSHER_REACH, 60 m) to deliver it.
  */
 const CANISTER_REACH = 600;
 const CRUSHER_REACH = 1200;
@@ -127,7 +127,7 @@ const canisterSweep: Drill = {
   autopilot: false,
   enter(_, a, markers) {
     // canister, crusher, canister, crusher…
-    a.points = CANISTERS.flatMap((canister) => [canister.clone(), OFFICE.clone()]);
+    a.points = CANISTERS.flatMap((canister) => [canister.clone(), CRUSHER.clone()]);
     sweepMarkers(a, markers);
   },
   done(ctx, a, markers) {
@@ -229,19 +229,112 @@ const fitCutter = (campaign: Campaign) => {
   campaign.bond += CUTTER_PRICE;
 };
 
+/**
+ * The salvaged flight computer crashes (see SchoolContext.crash): its fault on the screen for
+ * CRASH_SECONDS while it boots again.
+ */
+const CRASH_SECONDS = 2.5;
+const crash: Drill = {
+  line: msg('NAVIGATION UNIT · MEMORY FAULT · REBOOTING'),
+  keys: [],
+  arena: 'boneyard',
+  silent: true,
+  enter: (ctx) => ctx.crash(),
+  done: (_, a) => a.seconds > CRASH_SECONDS,
+};
+
+/**
+ * Cold Boot (0.1): out of rack 7731 along the lane to the depot, into bay 3 and down onto its
+ * pad. The approach ends APPROACH_NEAR (units, 400 m) short of the bay's mouth; the brake
+ * there takes the ship below DOCK_SLOW (units/s, 10 m/s); docked is resting on the pad: within
+ * its radius of its middle, no higher above it than a ship's own size and a little, slower
+ * than DOCK_REST (units/s, 2 m/s), for DOCK_HOLD seconds.
+ */
+const APPROACH_NEAR = 8000;
+const DOCK_SLOW = 200;
+const DOCK_REST = 40;
+const DOCK_HOLD = 1;
+const MOUTH = point(BAY_MOUTH, PAD.y + 400, 0);
+
+const approach: Drill = {
+  line: CAMPAIGN.depotTurn,
+  keys: ['turn', 'drive'],
+  arena: 'boneyard',
+  autopilot: true,
+  enter: (_, __, markers) => markers.buoy(MOUTH, 1.5),
+  done: (ctx) => ctx.me.flight.position.distanceTo(MOUTH) < APPROACH_NEAR,
+  waypoint: () => MOUTH,
+  mark: (ctx) => t('Bay 3 · {m} m', { m: Math.round(ctx.me.flight.position.distanceTo(MOUTH) * 0.05) }),
+};
+
+const slowDown: Drill = {
+  line: CAMPAIGN.depotBrake,
+  keys: ['brake'],
+  arena: 'boneyard',
+  enter: (_, __, markers) => markers.buoy(MOUTH, 1.5),
+  done: (ctx) => ctx.me.flight.velocity.length() < DOCK_SLOW,
+  waypoint: () => MOUTH,
+  mark: (ctx) => t('{speed} m/s', { speed: Math.round(ctx.me.flight.velocity.length() * 0.05) }),
+};
+
+const dock: Drill = {
+  line: CAMPAIGN.depotDock,
+  keys: ['turn', 'drive', 'slide', 'brake'],
+  arena: 'boneyard',
+  enter(_, __, markers) {
+    markers.buoy(PAD.clone().setY(PAD.y + 200), 0.8);
+    markers.zone(PAD, PAD_RADIUS);
+  },
+  done(ctx, a) {
+    const at = ctx.me.flight.position;
+    const over = hypot(at.x - PAD.x, at.z - PAD.z) < PAD_RADIUS && at.y - PAD.y < ctx.me.radius + 300;
+    if (!holdFor(ctx, a, over && ctx.me.flight.velocity.length() < DOCK_REST, DOCK_HOLD)) return false;
+    // the clamps take the hull
+    stop(ctx);
+    return true;
+  },
+  waypoint: () => PAD,
+  mark: (ctx) => t('Pad · {m} m', { m: Math.round(ctx.me.flight.position.distanceTo(PAD) * 0.05) }),
+};
+
+/** A line Rask says over the comm (see castOf), the hull held in the clamps while he talks. */
+const rask = (line: string): Drill => ({ ...said(line), enter: (ctx) => stop(ctx) });
+
+/** Where every mission after the first begins: docked on bay 3's pad, the nose out of the bay. */
+const ON_PAD = { at: [PAD.x, PAD.y + 400, PAD.z] as const, toward: [BAY_MOUTH - 20000, PAD.y + 400, PAD.z] as const };
+
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
-    // the first link into the hull in rack 7731, and out of the rack to the yard office's beacon
+    // the first link into the hull in rack 7731: Nicole boots and crashes, the yardmaster calls,
+    // and the hull flies out of the rack, down the lane and into the depot's bay
     id: 'coldBoot',
     name: msg('Cold Boot'),
-    drills: [said(CAMPAIGN.coldBoot), told(DRILL.turn, CAMPAIGN.coldBootTurn), told(DRILL.drive, CAMPAIGN.coldBootDrive), told(DRILL.brake, CAMPAIGN.coldBootBrake), told(DRILL.stopAt, CAMPAIGN.coldBootStop), said(CAMPAIGN.coldBootDone)],
+    drills: [
+      said(CAMPAIGN.bootHello),
+      crash,
+      said(CAMPAIGN.bootAgain),
+      said(CAMPAIGN.bootLink),
+      said(CAMPAIGN.bootName),
+      crash,
+      said(CAMPAIGN.bootThird),
+      said(RASK.wake),
+      said(RASK.deal),
+      said(RASK.memory),
+      said(RASK.come),
+      said(CAMPAIGN.dislike),
+      approach,
+      slowDown,
+      dock,
+      said(CAMPAIGN.docked),
+      rask(RASK.docked),
+    ],
     pay: 0,
   },
-  { id: 'lamplighter', name: msg('Lamplighter'), drills: [lamplighter, said(CAMPAIGN.lamplighterDone)], pay: 150 },
-  { id: 'liveTarget', name: msg('Live Target'), drills: [liveTarget, said(CAMPAIGN.liveTargetDone)], pay: 300 },
-  { id: 'canisterSweep', name: msg('Canister Sweep'), drills: [canisterSweep, said(CAMPAIGN.canisterSweepDone)], pay: 200 },
-  { id: 'cutter', name: msg('The Cutter'), drills: [said(CAMPAIGN.cutter), said(CAMPAIGN.cutterFitted)], pay: 0, fit: fitCutter },
-  { id: 'firstCut', name: msg('First Cut'), drills: [firstCut, said(CAMPAIGN.firstCutDone)], pay: 400 },
-  { id: 'dockingLane', name: msg('Docking Lane'), drills: [dockingLane, said(CAMPAIGN.dockingLaneDone)], pay: 600 },
+  { id: 'lamplighter', name: msg('Lamplighter'), drills: [rask(RASK.lamplighter), lamplighter, said(CAMPAIGN.lamplighterDone)], pay: 150, start: ON_PAD },
+  { id: 'liveTarget', name: msg('Live Target'), drills: [rask(RASK.liveTarget), liveTarget, said(CAMPAIGN.liveTargetDone)], pay: 300, start: ON_PAD },
+  { id: 'canisterSweep', name: msg('Canister Sweep'), drills: [rask(RASK.canisterSweep), canisterSweep, said(CAMPAIGN.canisterSweepDone)], pay: 200, start: ON_PAD },
+  { id: 'cutter', name: msg('The Cutter'), drills: [rask(RASK.cutter), rask(CAMPAIGN.cutterFitted)], pay: 0, fit: fitCutter, start: ON_PAD },
+  { id: 'firstCut', name: msg('First Cut'), drills: [rask(RASK.firstCut), firstCut, said(CAMPAIGN.firstCutDone)], pay: 400, start: ON_PAD },
+  { id: 'dockingLane', name: msg('Docking Lane'), drills: [rask(RASK.dockingLane), dockingLane, said(CAMPAIGN.dockingLaneDone), said(RASK.dockingLaneDone)], pay: 600, start: ON_PAD },
 ];

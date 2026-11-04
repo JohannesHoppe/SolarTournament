@@ -463,9 +463,9 @@ export class Hud {
   }
 
   /** The torpedoes left and the items held, each with what it does, next to the overdrive. */
-  setArsenal(torpedoes: number, twin: boolean, plating: number, nova: boolean) {
+  setArsenal(torpedoes: number, twin: boolean, plating: number, nova: boolean, decoys: number) {
     // each item is a phrase of its own, joined by the separator
-    const items = `${twin ? ` · ${t('Twin: fires twice as fast')}` : ''}${plating ? ` · ${t('Plating {n}: stops hits', { n: plating })}` : ''}${nova ? ` · ${t('Nova: next shot blows up everything around')}` : ''}`;
+    const items = `${twin ? ` · ${t('Twin: fires twice as fast')}` : ''}${plating ? ` · ${t('Plating {n}: stops hits', { n: plating })}` : ''}${nova ? ` · ${t('Nova: next shot blows up everything around')}` : ''}${decoys ? ` · ${t('Decoys {n}: lure a torpedo away', { n: decoys })}` : ''}`;
     setText(this.torpedo, `${torpedoes > 0 ? t('Torpedo {n}', { n: torpedoes }) : t('No torpedo')}${items}`);
     setClass(this.torpedo, 'ready', torpedoes > 0);
   }
