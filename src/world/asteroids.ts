@@ -119,6 +119,9 @@ export interface Placement {
  * How a field is built. Everything follows from it and the seed, so every browser builds the
  * same field for the same layout; `key` names it in snapshots.
  */
+/** A race course's own shape (see formPoint in game/race): a stadium of two straights and two bends, or an ellipse about the field's center (units). */
+export type CourseForm = { form: 'stadium'; straight: number; bend: number } | { form: 'ellipse'; near: number; far: number };
+
 export interface FieldLayout {
   key: string;
   seed: number;
@@ -153,8 +156,8 @@ export interface FieldLayout {
   /** Pieces placed by hand (the hulk of a wreck). */
   placements?: Placement[];
   well?: Well;
-  /** The shape of the race's course here (see game/race): the loop round the center, or the stadium of two straights and two bends. */
-  course?: 'loop' | 'stadium';
+  /** The shape of the race's course here (see formPoint in game/race); without one, the loop round the center. */
+  course?: CourseForm;
   /** A place on a world's surface: the world's pull there, straight down along -y (units/s²), the same everywhere in the place. */
   fall?: number;
   /** The air of a planet the arena dips into (see world/air): its haze hides, brakes and heats. */

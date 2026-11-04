@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { atan2, cos, hypot, sin } from '../detmath';
 import { Randomizer } from '../random';
-import type { AsteroidField } from '../world/asteroids';
+import type { AsteroidField, CourseForm } from '../world/asteroids';
 import { GateKit } from '../world/gates';
 import { BOW_RADIUS, CLEARANCE, RacingLine } from './racingline';
 import { inGrip, WELL_CAUTION } from './alarms';
@@ -204,22 +204,25 @@ export function pathCrossing(position: THREE.Vector3, velocity: THREE.Vector3, p
 }
 
 /**
- * A race course: GATES rings in a loop around the field's center, rising and falling, each
- * facing the way from the gate before. It is built from the arena's freshly generated field
- * and the arena's seed, so every browser builds the same course; gates keep clear of rock as
- * the field starts out (rocks that circle may cross the course later: mind them).
+ * The shapes a course may take instead of the loop round the center (FieldLayout.course), each
+ * flat (the course's rise comes on top), its points spread along it by `angle` (a whole turn, a
+ * lap), scaled by `scale` (the loop's distances tried, see LOOP_RADII):
+ * - a stadium: two straights `straight` long joined by two bends of radius `bend` (units); between
+ *   its bends a racer flies straight and lines up for the next, instead of holding one long curve;
+ * - an ellipse with the field's center at one focus, `near` from it at its nearest and `far` at
+ *   its farthest (units): a course that dives towards a massive body there and swings out again,
+ *   its gates closer together where it passes nearest.
  */
-/**
- * The stadium a course may take instead of the loop (FieldLayout.course): two straights of
- * STADIUM_STRAIGHT (units, 1.8 km) joined by two bends of STADIUM_BEND (1.5 km) radius, scaled by
- * `scale`, its points spread evenly along it by `angle` (a whole turn, a lap). Between its bends a
- * racer flies straight and lines up for the next, instead of holding one long curve.
- */
-const STADIUM_STRAIGHT = 36000;
-const STADIUM_BEND = 30000;
-function stadium(angle: number, scale: number, out: THREE.Vector3): THREE.Vector3 {
-  const straight = STADIUM_STRAIGHT * scale;
-  const bend = STADIUM_BEND * scale;
+function formPoint(course: CourseForm, angle: number, scale: number, out: THREE.Vector3): THREE.Vector3 {
+  if (course.form === 'ellipse') {
+    const near = course.near * scale;
+    const far = course.far * scale;
+    const e = (far - near) / (far + near);
+    const r = (near * (1 + e)) / (1 + e * cos(angle));
+    return out.set(r * cos(angle), 0, r * sin(angle));
+  }
+  const straight = course.straight * scale;
+  const bend = course.bend * scale;
   const arc = Math.PI * bend;
   const lap = 2 * straight + 2 * arc;
   let s = ((((angle / (Math.PI * 2)) % 1) + 1) % 1) * lap;
@@ -236,6 +239,13 @@ function stadium(angle: number, scale: number, out: THREE.Vector3): THREE.Vector
   return out.set(-straight / 2 + bend * cos(a), 0, bend * sin(a));
 }
 
+/**
+ * A race course: GATES rings in a loop around the field's center (or in the arena's own form, see
+ * CourseForm), rising and falling, each facing the way from the gate before. It is built from the
+ * arena's freshly generated field and the arena's seed, so every browser builds the same course;
+ * gates keep clear of rock as the field starts out (rocks that circle may cross the course later:
+ * mind them).
+ */
 export class Course {
   readonly root = new THREE.Group();
   readonly points: THREE.Vector3[] = [];
@@ -262,11 +272,11 @@ export class Course {
     // through a ring's layer, diving up and down through it (see COURSE_DIVE)
     const dives = !!field.layout?.open;
     const rise = dives ? COURSE_DIVE : COURSE_RISE;
-    const form = field.layout?.course ?? 'loop';
+    const form = field.layout?.course ?? null;
     const loop = (angle: number, out: THREE.Vector3) => {
-      if (form === 'stadium') {
-        stadium(angle, shape.radius / COURSE_RADIUS, out);
-        // the swell's turns turn the whole stadium about the center instead
+      if (form) {
+        formPoint(form, angle, shape.radius / COURSE_RADIUS, out);
+        // the swell's turns turn the whole form about the center instead
         const turn = shape.phase * 2;
         const x = out.x * cos(turn) - out.z * sin(turn);
         const z = out.x * sin(turn) + out.z * cos(turn);
@@ -283,7 +293,7 @@ export class Course {
     let least = [Infinity, Infinity];
     for (const lift of dives ? [0] : field.air ? AIR_LIFTS : LOOP_LIFTS) {
       for (const radius of LOOP_RADII) {
-        for (const swell of form === 'stadium' ? [COURSE_SWELL] : [0, COURSE_SWELL]) {
+        for (const swell of form ? [COURSE_SWELL] : [0, COURSE_SWELL]) {
           for (let turn = 0; turn < (swell ? LOOP_TURNS : 1); turn++) {
             Object.assign(shape, { lift, radius, swell, phase: (turn / LOOP_TURNS) * Math.PI });
             const { angles, badness, intrusion } = this.layout(field, loop, start, jitter);

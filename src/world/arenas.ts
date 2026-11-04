@@ -340,7 +340,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     id: 'belt',
     name: msg('The Belt'),
     tagline: msg('Forty rocks, ten ships long each. Cover is everywhere.'),
-    layout: { key: 'belt', seed: 11, kind: 'rock', count: 40, minScale: 2.5, maxScale: 7, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800 },
+    layout: { key: 'belt', seed: 11, kind: 'rock', count: 40, minScale: 2.5, maxScale: 7, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800, course: { form: 'stadium', straight: 44000, bend: 26000 } },
     cooling: 1,
     storms: false,
     sun: { size: 30000, intensity: 3.2, color: 0xffe4bf },
@@ -384,7 +384,7 @@ export const ARENAS: readonly ArenaProfile[] = [
       key: 'junkyard',
       seed: 31,
       // its junk orbits across the loop: two straights between two bends, lined up for between them
-      course: 'stadium',
+      course: { form: 'stadium', straight: 36000, bend: 30000 },
       kind: 'debris',
       count: 90,
       minScale: 1,
@@ -451,6 +451,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     layout: {
       key: 'hole',
       seed: 61,
+      course: { form: 'ellipse', near: 32000, far: 52000 },
       kind: 'rock',
       count: 20,
       minScale: 1.5,
