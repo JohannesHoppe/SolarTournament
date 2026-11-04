@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { openGame, play, startSolo } from './game';
+import { openGame, play, startSolo, startSoloByMenu } from './game';
 
 test('the title screen stands on two legs: the story Lot 7731, in the making and not to be clicked, and the Games with their three ways in; the ship and the hangar under the pad', async ({ page }) => {
   const errors = await openGame(page);
@@ -15,7 +15,7 @@ test('the title screen stands on two legs: the story Lot 7731, in the making and
 test('a solo round starts and runs without errors', async ({ page }) => {
   const errors = await openGame(page);
   // the solo plate opens with the default choice: a race against a full grid of seven rivals
-  await startSolo(page);
+  await startSoloByMenu(page);
   await play(page, 5);
   const state = await page.evaluate(() => {
     const game = window.game;

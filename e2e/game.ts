@@ -30,8 +30,16 @@ export async function openGame(page: Page, path = '/', timeout = 60_000): Promis
   return errors;
 }
 
-/** Launches a solo round from the menu, of `mode` or the default choice. */
-export async function startSolo(page: Page, mode?: string) {
+/**
+ * Starts a solo round of `mode` (else the one chosen) in `arena` (else the one chosen) at once,
+ * without the menu (see Game.playSolo): no click decides which scenario runs.
+ */
+export async function startSolo(page: Page, mode?: string, arena?: string) {
+  await page.evaluate(([mode, arena]) => window.game.playSolo(mode ?? window.game.solo.mode, arena ?? window.game.solo.arena), [mode, arena] as const);
+}
+
+/** Starts a solo round through the menu, as a Host does: the solo plate, its mode, its launch button. */
+export async function startSoloByMenu(page: Page, mode?: string) {
   await page.click('#start');
   if (mode) await page.click(`[data-choice="solo-mode"] button[data-value="${mode}"]`);
   await page.click('#solo-launch');

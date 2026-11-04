@@ -335,7 +335,7 @@ Every dependency is code that runs on Johannes' machine, in the build and in the
 
 In dev mode the game hangs on the window as `window.game`. It lets you read and set state (Playwright, `browser_evaluate`):
 
-- Start a solo round: `document.getElementById('start').click()` opens its choices, `document.getElementById('solo-launch').click()` launches it
+- Start a solo round: `game.playSolo('race', 'belt')` starts one of a mode in an arena (`null` for one by chance) at once, without the menu; the browser tests and balance runs start every round this way (`startSolo` in `e2e/game.ts`), and one test goes through the menu as a Host does (`startSoloByMenu`: `#start`, the mode's button, `#solo-launch`)
 - Start a course of the flight school: `document.getElementById('school-racer').click()` (also `school-basic`, `school-gladiator`, `school-arsenal`, `school-tactician`); to start one at a drill, set `localStorage['solartournament.school-step']` to `{"arsenal": "probe"}` (the course and the drill's name, its key in `DRILL` in `game/school.ts`; "opening" and "closing" for a course's first and last words) before
 - Simulate keys: `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))`
 - Freeze time for screenshots: `game.timeScale = 0`

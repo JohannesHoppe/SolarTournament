@@ -1893,6 +1893,16 @@ export class Game implements OnlineGame {
   }
 
   /**
+   * A solo round of `mode` in `arena` (null: by chance) against the rivals chosen, started at
+   * once, without the menu: what the browser tests and the balance runs start their rounds with,
+   * so no click on a button decides which scenario runs.
+   */
+  playSolo(mode: RoundMode, arena: ArenaId | null) {
+    this.solo = { ...this.solo, mode, arena };
+    this.startRound('solo');
+  }
+
+  /**
    * The benchmark's round (see bench.ts): a solo round of `mode` in `arena` against the default
    * rivals, the Host's clone watching, so the bots fight and nothing ends the round early.
    */

@@ -54,8 +54,9 @@ async function playRound(browser: Browser, mode: string, arena: string): Promise
   try {
     const page = await context.newPage();
     await openGame(page);
-    await page.evaluate((arena) => (window.game.solo.arena = arena), arena);
-    await startSolo(page, mode);
+    await startSolo(page, mode, arena);
+    // the round runs in the mode and arena asked for, or the run says so instead of judging another
+    expect(await page.evaluate(() => [window.game.roundMode, window.game.venue.id])).toEqual([mode, arena]);
     return await page.evaluate(
       async ([lapse, limit]) => {
         const game = window.game;
