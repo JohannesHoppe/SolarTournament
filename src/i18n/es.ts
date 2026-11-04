@@ -1168,8 +1168,8 @@ export const ES: Catalog = {
   'Back: the front clusters fire forward, the ship backs off, the rear ones stop it.': 'Atrás: los grupos delanteros se encienden hacia delante, la nave retrocede, los traseros la detienen.',
   'Turn: two opposite corners fire, the ship turns on the spot, the other two stop it.': 'Girar: dos esquinas opuestas se encienden, la nave gira sobre sí misma, las otras dos la detienen.',
   'Glory at Full Burn': 'Gloria a todo motor',
-  "{gates} gates, {laps} laps, around the field's center through the outer rocks. Every gate scores {gatePoints} points, first place at the finish {firstPlace}, and less for every place after. Lasers stay on: a kill scores {raceKill}.":
-    '{gates} puertas, {laps} vueltas, alrededor del centro del campo entre las rocas exteriores. Cada puerta da {gatePoints} puntos, el primer puesto en la meta {firstPlace}, y menos cada puesto siguiente. Los láseres siguen activos: una baja da {raceKill}.',
+  "{gates} gates, {laps} laps, on a circuit each arena has of its own: long straights for the drive, bends wide enough to take at full speed. Every gate scores {gatePoints} points, first place at the finish {firstPlace}, and less for every place after. Lasers stay on: a kill scores {raceKill}.":
+    '{gates} puertas, {laps} vueltas, en un circuito propio de cada arena: rectas largas para el propulsor y curvas lo bastante abiertas para tomarlas a toda velocidad. Cada puerta da {gatePoints} puntos, el primer puesto en la meta {firstPlace}, y menos cada puesto siguiente. Los láseres siguen activos: una baja da {raceKill}.',
   'The line': 'La trazada',
   'The dashed ribbon is the ideal line: through the center of every gate, around rock as it lies right now. The farther you stray, the brighter it glows, so you find it again under fire.':
     'La cinta discontinua es la trazada ideal: por el centro de cada puerta, rodeando la roca tal como está ahora mismo. Cuanto más te desvías, más brilla, para que la encuentres de nuevo bajo el fuego.',

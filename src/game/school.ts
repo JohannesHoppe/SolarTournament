@@ -9,7 +9,7 @@ import { type Cast, CAST_NAMES, castOf, SCHOOL, SCHOOL_PRAISE } from '../music/l
 import { RacingLine } from './racingline';
 import { ARENA_LIMIT } from '../world/arena';
 import { GateKit, touchRing } from '../world/gates';
-import { GATE_RADIUS } from './race';
+import { COURSE_ROOM, GATE_RADIUS } from './race';
 import { MAIN_THRUST, MAX_SPEED, METERS_PER_UNIT } from '../ship/flight';
 import type { ItemKind } from './items';
 import { HOOK_RANGE } from './hook';
@@ -263,8 +263,6 @@ export const LINE_COURSE: readonly [number, number, number][] = [
  */
 export const LINE_PACE = 4000;
 export const LINE_SPARE = 4;
-/** A ring course lies within this share of the arena's edge (see ringCourse); every course fits ahead of a pilot in the middle. */
-export const COURSE_ROOM = 0.85;
 /** A pilot this far from the next ring (units, 2.5 km) has lost the course and starts again. */
 const COURSE_LOST = 50000;
 /** A coil fires for a pilot through this share of its ring's radius, as a race's gates do (see race.ts). */

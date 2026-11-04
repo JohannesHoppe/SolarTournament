@@ -2,11 +2,11 @@ import * as THREE from 'three';
 import { atan2, cos, sin } from '../detmath';
 import { angleTo } from '../detthree';
 import { describe, expect, it } from 'vitest';
-import { BOOST_PUSH, BOOST_RADIUS, Course, GATE_RADIUS, GATES } from './race';
+import { BOOST_PUSH, BOOST_RADIUS, Course, COURSE_ROOM, GATE_RADIUS, GATES } from './race';
 import { Bot, evenSkills, RACE_SPEED } from '../ship/bots';
 import { cornerSpeed, MAIN_THRUST, MAX_SPEED, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, turnRadius } from '../ship/flight';
 import { wellEscape } from './alarms';
-import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, COURSE_ROOM, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, COVER_DRONE, COVER_STANDOFF, coverSpots, facingRock, LINE_SPARE, ORBIT_DRIFT, ORBIT_NOSE, ORBIT_START, ORBIT_SWEEP, RESCUE_DRIVE, RESCUE_START, rescueFree, RING_COURSE, RING_RADIUS, ringCourse, SLIDE_ANGLE, SLIDE_BOT, SLIDE_HITS, SLIDE_SPEED, clearOfRock } from './school';
+import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, COVER_DRONE, COVER_STANDOFF, coverSpots, facingRock, LINE_SPARE, ORBIT_DRIFT, ORBIT_NOSE, ORBIT_START, ORBIT_SWEEP, RESCUE_DRIVE, RESCUE_START, rescueFree, RING_COURSE, RING_RADIUS, ringCourse, SLIDE_ANGLE, SLIDE_BOT, SLIDE_HITS, SLIDE_SPEED, clearOfRock } from './school';
 import { ARENA_LIMIT } from '../world/arena';
 import { arenaById, ARENAS, DEFAULT_ARENA } from '../world/arenas';
 import { testField } from '../test/field';
@@ -60,6 +60,13 @@ describe("every race course's racing line", () => {
         if (here.distanceTo(there) > 2000) strays.push(Math.round(s / 20));
       }
       expect(strays, 'meters along the line').toEqual([]);
+    });
+
+    it(`stays inside the arena in ${arena.id}: within COURSE_ROOM of its edge`, () => {
+      const field = gameField();
+      field.generate(arena.layout);
+      const course = new Course(field, arena.layout.seed);
+      for (const point of course.points) expect(point.length()).toBeLessThan(ARENA_LIMIT * COURSE_ROOM);
     });
   }
 });

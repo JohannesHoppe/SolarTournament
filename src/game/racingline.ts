@@ -52,6 +52,12 @@ const p0 = new THREE.Vector3();
 const p1 = new THREE.Vector3();
 const p2 = new THREE.Vector3();
 const p3 = new THREE.Vector3();
+const bendA = new THREE.Vector3();
+const bendB = new THREE.Vector3();
+const bendC = new THREE.Vector3();
+/** How tight the bowed line bends is measured over TIGHT_SPAN (units, 50 m) to either side of points TIGHT_STEP (units, 20 m) apart (see tightest). */
+const TIGHT_SPAN = 1000;
+const TIGHT_STEP = 400;
 
 /** The radius of the circle through three points (units): how tight a line through them bends there; Infinity on a straight. */
 export function bendRadius(a: THREE.Vector3, b: THREE.Vector3, c: THREE.Vector3): number {
@@ -164,6 +170,13 @@ export class RacingLine {
     const span = arcs[high] - arcs[low];
     const t = (low + (span > 0 ? (at - arcs[low]) / span : 0)) / (arcs.length - 1);
     return this.curve.getPoint(Math.min(1, t), out);
+  }
+
+  /** The tightest bend of the line bowed around the rock of `field` as it lies now (units, radius; see clear). */
+  tightest(field: AsteroidField): number {
+    let radius = Infinity;
+    for (let s = 0; s < this.length; s += TIGHT_STEP) radius = Math.min(radius, bendRadius(this.clear(s - TIGHT_SPAN, field, bendA), this.clear(s, field, bendB), this.clear(s + TIGHT_SPAN, field, bendC)));
+    return radius;
   }
 
   /**

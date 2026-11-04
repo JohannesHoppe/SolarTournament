@@ -340,7 +340,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     id: 'belt',
     name: msg('The Belt'),
     tagline: msg('Forty rocks, ten ships long each. Cover is everywhere.'),
-    layout: { key: 'belt', seed: 11, kind: 'rock', count: 40, minScale: 2.5, maxScale: 7, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800, course: { form: 'stadium', straight: 44000, bend: 26000 } },
+    layout: { key: 'belt', seed: 11, kind: 'rock', count: 40, minScale: 2.5, maxScale: 7, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800, course: { form: 'circuit', layout: 'hairpin' } },
     cooling: 1,
     storms: false,
     sun: { size: 30000, intensity: 3.2, color: 0xffe4bf },
@@ -356,6 +356,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     // in the open space above and below it
     layout: {
       key: 'rings',
+      course: { form: 'circuit', layout: 'sweep' },
       seed: 23,
       kind: 'ice',
       count: 120,
@@ -384,7 +385,7 @@ export const ARENAS: readonly ArenaProfile[] = [
       key: 'junkyard',
       seed: 31,
       // its junk orbits across the loop: two straights between two bends, lined up for between them
-      course: { form: 'stadium', straight: 36000, bend: 30000 },
+      course: { form: 'circuit', layout: 'sweep' },
       kind: 'debris',
       count: 90,
       minScale: 1,
@@ -414,6 +415,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     tagline: msg('Half in space, half in the clouds. The deeper, the thicker the air: it hides, it brakes, it burns.'),
     layout: {
       key: 'giant',
+      course: { form: 'circuit', layout: 'grand' },
       seed: 47,
       kind: 'rock',
       count: 22,
@@ -437,7 +439,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     id: 'corona',
     name: msg('Corona'),
     tagline: msg('Close to the sun. Lasers barely cool in its glare, and its storms blind the sensors.'),
-    layout: { key: 'corona', seed: 59, kind: 'rock', count: 30, minScale: 2.5, maxScale: 6, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800 },
+    layout: { key: 'corona', seed: 59, kind: 'rock', count: 30, minScale: 2.5, maxScale: 6, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800, course: { form: 'circuit', layout: 'hairpin' } },
     cooling: 0.6,
     storms: true,
     sun: { size: 150000, intensity: 9, color: 0xffe0b4 },
@@ -476,7 +478,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     id: 'derelict',
     name: msg('The Derelict'),
     tagline: msg('A world ship, broken in two. Nothing else out here: only its hull to hide behind.'),
-    layout: { key: 'derelict', seed: 71, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: derelict() },
+    layout: { key: 'derelict', seed: 71, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, course: { form: 'circuit', layout: 'sweep' }, placements: derelict() },
     cooling: 1,
     storms: false,
     sun: { size: 30000, intensity: 2.7, color: 0xe6edf7 },

@@ -115,12 +115,15 @@ export interface Placement {
   weld?: number;
 }
 
+/** A race course's own shape (see formPoint in game/race): a circuit laid as a race track, or an ellipse about the field's center (units). */
+export type CourseForm = { form: 'ellipse'; near: number; far: number } | { form: 'circuit'; layout: CircuitName };
+/** The circuits of game/race a course may be laid as. */
+export type CircuitName = 'grand' | 'hairpin' | 'sweep';
+
 /**
  * How a field is built. Everything follows from it and the seed, so every browser builds the
  * same field for the same layout; `key` names it in snapshots.
  */
-/** A race course's own shape (see formPoint in game/race): a stadium of two straights and two bends, or an ellipse about the field's center (units). */
-export type CourseForm = { form: 'stadium'; straight: number; bend: number } | { form: 'ellipse'; near: number; far: number };
 
 export interface FieldLayout {
   key: string;

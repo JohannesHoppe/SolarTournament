@@ -1,9 +1,10 @@
 import * as THREE from 'three';
-import { atan2, cos, hypot, sin } from '../detmath';
+import { atan2, cos, sin } from '../detmath';
 import { Randomizer } from '../random';
-import type { AsteroidField, CourseForm } from '../world/asteroids';
+import { ARENA_LIMIT } from '../world/arena';
+import type { AsteroidField, CircuitName, CourseForm } from '../world/asteroids';
 import { GateKit } from '../world/gates';
-import { BOW_RADIUS, CLEARANCE, RacingLine } from './racingline';
+import { bendRadius, BOW_RADIUS, CLEARANCE, RacingLine } from './racingline';
 import { inGrip, WELL_CAUTION } from './alarms';
 
 /** Gates of a lap, and laps of a race. */
@@ -28,20 +29,21 @@ export const canSkip = (gates: number, skipLap: number) => gates % GATES !== 0 &
  */
 export const GATE_RADIUS = 2400;
 /**
- * The course is a smooth loop around the field's center at about this distance (units, 2 km),
- * swelling and shrinking by up to COURSE_SWELL of it twice around and rising and falling by up to
- * COURSE_RISE: a lap of about 12.5 km that bends no tighter than about 1.5 km, so the racing
- * line, bowed around rock (see RacingLine.clear), can be flown at the speed limit. The gates sit
- * on the loop, about 1.5 km apart, each up to COURSE_JITTER (rad, about 2°) off its even place.
+ * The course is the arena's own form (see CourseForm), drawn at its size for this distance (units,
+ * 2 km), or a smooth loop around the field's center at about this distance, swelling and shrinking
+ * by up to COURSE_SWELL of it twice around; either rises and falls by up to COURSE_RISE. The gates
+ * sit on it, each starting up to COURSE_JITTER (rad, about 2°) off its even place.
  */
 const COURSE_RADIUS = 40000;
 const COURSE_SWELL = 0.04;
 const COURSE_JITTER = 0.04;
 /** The loop is laid through this many points, and the gates (see Course). */
-const LOOP_POINTS = 48;
+const LOOP_POINTS = 144;
 /** The loop's distances from the center tried (units, 1.8 to 2.2 km), the turns of its swell tried (half a turn apart, see Course), and the points along it where rock is looked for. */
 const LOOP_RADII = [40000, 38000, 42000, 36000, 44000];
 const LOOP_TURNS = 8;
+/** Every course lies within this share of the arena's edge: a race's loop (see Course) and a ring course of the flight school (see ringCourse); every course fits ahead of a pilot in the middle. */
+export const COURSE_ROOM = 0.85;
 /** The heights of the loop above the field's plane tried (units, 0 and 600 m up and down): over a flat ring of rock, it may run above or below it. */
 const LOOP_LIFTS = [0, 12000, -12000];
 /**
@@ -75,7 +77,11 @@ const COURSE_DIVE = 6000;
  * A gate keeps GATE_ROOM (units, 200 m) clear of rock, and four times as much of an arena's
  * massive body and out of its grip (see crowded), and stays off the stretches where the racing line bows around
  * rock: the bow, the bends into it and out, and GATE_RUN (units, 300 m) more; a rock counts as
- * soon as its reach plus clearance reaches into the loop. To find such a place
+ * soon as its reach plus clearance reaches into the loop. It also stays out of the loop's bends tighter
+ * than GATE_BEND (units, 1.5 km, measured over BEND_ARC, 120 m, to either side), and GATE_CLEAR
+ * times BEND_ARC (360 m) clear of them: there the racing line
+ * runs at its tightest, and a gate in it leaves a pilot no room to swing wide; on a circuit the
+ * gates sit on its straights and where its bends open out. To find such a place
  * a gate moves along the loop, back and forth by GATE_STEP (units, 80 m) more each try, up to
  * GATE_TRIES tries (about 720 m either way).
  */
@@ -83,6 +89,11 @@ const GATE_ROOM = 4000;
 const GATE_RUN = 6000;
 const GATE_TRIES = 18;
 const GATE_STEP = 1600;
+const GATE_BEND = 30000;
+const BEND_ARC = 2400;
+const GATE_CLEAR = 3;
+/** The variant search builds the racing lines of this many of its best loops, at most (see Course). */
+const LINE_TRIES = 32;
 /**
  * The grid lies GRID_BEFORE (units, 300 m) before the first gate; a racer's new clone starts
  * RESPAWN_PAST (units, 120 m, a gate's radius) beyond the last gate it passed, within the rock
@@ -120,6 +131,8 @@ const crossing = new THREE.Vector3();
 const toGate = new THREE.Vector3();
 const through = new THREE.Vector3();
 const probe = new THREE.Vector3();
+const paceFrom = new THREE.Vector3();
+const paceTo = new THREE.Vector3();
 
 /**
  * Whether a gate at `point` lies too close to rock or to the arena's massive body: within
@@ -204,39 +217,115 @@ export function pathCrossing(position: THREE.Vector3, velocity: THREE.Vector3, p
 }
 
 /**
+ * The circuits a course may be laid as (CourseForm 'circuit'), as a planner lays a race track:
+ * straights and bends of a set radius one after the other, headings in degrees (positive to the
+ * left), lengths and radii in km. Two straights marked `free` take whatever length closes the lap,
+ * so the last bend leads back into the first straight. Every bend is at least 1.2 km in radius:
+ * where the racing line bows around rock in one (see RacingLine.clear), the two together still
+ * bend no tighter than BOW_RADIUS, so the whole lap is flown at the speed limit.
+ */
+type CircuitPiece = { straight: number } | { bend: number; turn: number } | { free: true };
+const CIRCUITS: Record<CircuitName, readonly CircuitPiece[]> = {
+  // a long main straight into a hairpin of two bends, a fast S, the back straight, a last long bend
+  grand: [{ free: true }, { bend: 1.2, turn: 90 }, { straight: 0.1 }, { bend: 1.2, turn: 90 }, { straight: 0.2 }, { bend: 1.4, turn: -40 }, { bend: 1.4, turn: 40 }, { straight: 0.3 }, { bend: 1.2, turn: 70 }, { free: true }, { bend: 1.3, turn: 110 }],
+  // two long straights, a wide double bend at one end, a gentle S into a hairpin at the other
+  hairpin: [{ free: true }, { bend: 1.2, turn: 90 }, { straight: 0.5 }, { bend: 1.2, turn: 110 }, { free: true }, { bend: 1.3, turn: -30 }, { bend: 1.3, turn: 30 }, { straight: 0.2 }, { bend: 1.2, turn: 160 }],
+  // fast sweeping bends and one chicane
+  sweep: [{ free: true }, { bend: 1.3, turn: 60 }, { straight: 0.1 }, { bend: 1.2, turn: -25 }, { bend: 1.2, turn: 25 }, { straight: 0.1 }, { bend: 1.3, turn: 140 }, { free: true }, { bend: 1.45, turn: 160 }],
+};
+/** A circuit's points are laid this far apart along it (units, 50 m). */
+const CIRCUIT_STEP = 1000;
+const KM = 20000;
+const circuits = new Map<CircuitName, THREE.Vector3[]>();
+
+/** The heading of a piece (degrees) as a direction in the field's plane. */
+const along = (heading: number, out: THREE.Vector3) => out.set(cos((heading * Math.PI) / 180), 0, sin((heading * Math.PI) / 180));
+
+/**
+ * A circuit's points along it, every CIRCUIT_STEP, centered on the field's center (the middle of
+ * its extent), built once: the free straights given the lengths that close it (two equations,
+ * the lap's displacement along x and z).
+ */
+export function circuitPoints(name: CircuitName): THREE.Vector3[] {
+  const kept = circuits.get(name);
+  if (kept) return kept;
+  const pieces = CIRCUITS[name];
+  const step = new THREE.Vector3();
+  // the displacement of everything but the free straights, and their headings
+  const walk = (lengths: number[], points?: THREE.Vector3[]) => {
+    const at = new THREE.Vector3();
+    let heading = 0;
+    let free = 0;
+    for (const piece of pieces) {
+      if ('bend' in piece) {
+        const length = (Math.abs(piece.turn) * Math.PI * piece.bend * KM) / 180;
+        const steps = Math.max(1, Math.ceil(length / CIRCUIT_STEP));
+        for (let k = 0; k < steps; k++) {
+          // the chord of each step, heading through its middle
+          const turn = piece.turn / steps;
+          const chord = 2 * piece.bend * KM * sin((Math.abs(turn) * Math.PI) / 360);
+          at.addScaledVector(along(heading + turn / 2, step), chord);
+          heading += turn;
+          points?.push(at.clone());
+        }
+      } else {
+        const length = 'free' in piece ? lengths[free++] : piece.straight * KM;
+        const steps = Math.max(1, Math.ceil(length / CIRCUIT_STEP));
+        for (let k = 0; k < steps; k++) {
+          at.addScaledVector(along(heading, step), length / steps);
+          points?.push(at.clone());
+        }
+      }
+    }
+    return at;
+  };
+  const headings: number[] = [];
+  let heading = 0;
+  for (const piece of pieces) {
+    if ('bend' in piece) heading += piece.turn;
+    else if ('free' in piece) headings.push(heading);
+  }
+  const rest = walk([0, 0]);
+  const [a, b] = headings.map((h) => along(h, new THREE.Vector3()));
+  const det = a.x * b.z - b.x * a.z;
+  const lengths = [(-rest.x * b.z + rest.z * b.x) / det, (-a.x * rest.z + a.z * rest.x) / det];
+  const points: THREE.Vector3[] = [];
+  walk(lengths, points);
+  const box = new THREE.Box3().setFromPoints(points);
+  const middle = box.getCenter(new THREE.Vector3());
+  for (const point of points) point.sub(middle);
+  circuits.set(name, points);
+  return points;
+}
+
+/**
  * The shapes a course may take instead of the loop round the center (FieldLayout.course), each
  * flat (the course's rise comes on top), its points spread along it by `angle` (a whole turn, a
  * lap), scaled by `scale` (the loop's distances tried, see LOOP_RADII):
- * - a stadium: two straights `straight` long joined by two bends of radius `bend` (units); between
- *   its bends a racer flies straight and lines up for the next, instead of holding one long curve;
+ * - a circuit (see CIRCUITS), laid as a race track is: long straights, hairpins, fast bends, S-bends;
  * - an ellipse with the field's center at one focus, `near` from it at its nearest and `far` at
  *   its farthest (units): a course that dives towards a massive body there and swings out again,
  *   its gates closer together where it passes nearest.
  */
 function formPoint(course: CourseForm, angle: number, scale: number, out: THREE.Vector3): THREE.Vector3 {
-  if (course.form === 'ellipse') {
-    const near = course.near * scale;
-    const far = course.far * scale;
-    const e = (far - near) / (far + near);
-    const r = (near * (1 + e)) / (1 + e * cos(angle));
-    return out.set(r * cos(angle), 0, r * sin(angle));
+  if (course.form === 'circuit') {
+    // the circuit's points spread along it by the share of a lap, between its points linearly
+    const points = circuitPoints(course.layout);
+    const s = ((((angle / (Math.PI * 2)) % 1) + 1) % 1) * points.length;
+    const i = Math.floor(s);
+    return out.lerpVectors(points[i % points.length], points[(i + 1) % points.length], s - i).multiplyScalar(scale);
   }
-  const straight = course.straight * scale;
-  const bend = course.bend * scale;
-  const arc = Math.PI * bend;
-  const lap = 2 * straight + 2 * arc;
-  let s = ((((angle / (Math.PI * 2)) % 1) + 1) % 1) * lap;
-  if (s < straight) return out.set(-straight / 2 + s, 0, -bend);
-  s -= straight;
-  if (s < arc) {
-    const a = -Math.PI / 2 + s / bend;
-    return out.set(straight / 2 + bend * cos(a), 0, bend * sin(a));
-  }
-  s -= arc;
-  if (s < straight) return out.set(straight / 2 - s, 0, bend);
-  s -= straight;
-  const a = Math.PI / 2 + s / bend;
-  return out.set(-straight / 2 + bend * cos(a), 0, bend * sin(a));
+  const near = course.near * scale;
+  const far = course.far * scale;
+  const e = (far - near) / (far + near);
+  const r = (near * (1 + e)) / (1 + e * cos(angle));
+  return out.set(r * cos(angle), 0, r * sin(angle));
+}
+
+/** How far a form reaches from the field's center at scale 1 (units). */
+function formReach(course: CourseForm): number {
+  if (course.form === 'ellipse') return course.far;
+  return Math.max(...circuitPoints(course.layout).map((point) => point.length()));
 }
 
 /**
@@ -285,30 +374,41 @@ export class Course {
       const distance = shape.radius * (1 + shape.swell * sin(angle * 2 + shape.phase));
       return out.set(cos(angle) * distance, shape.lift + sin(angle * 2 + start) * rise, sin(angle) * distance);
     };
-    // of LOOP_LIFTS heights (only the plane's through a ring's layer), LOOP_RADII distances, swells and turns of the swell, the loop whose
-    // gates lie least deep in rock or in the racing line's bows around it, then the one that runs
-    // through least rock
-    let best = { ...shape };
-    let bestAngles: number[] = [];
-    let least = [Infinity, Infinity];
+    // of LOOP_LIFTS heights (only the plane's through a ring's layer), LOOP_RADII distances, swells
+    // and turns of the swell, the loops ranked by how deep their gates lie in rock or in the racing
+    // line's bows around it, then by how far they run through rock
+    const candidates: { shape: typeof shape; angles: number[]; badness: number; intrusion: number }[] = [];
     for (const lift of dives ? [0] : field.air ? AIR_LIFTS : LOOP_LIFTS) {
       for (const radius of LOOP_RADII) {
+        // a form drawn larger than fits within COURSE_ROOM of the edge is never tried
+        if (form && formReach(form) * (radius / COURSE_RADIUS) > ARENA_LIMIT * COURSE_ROOM) continue;
         for (const swell of form ? [COURSE_SWELL] : [0, COURSE_SWELL]) {
           for (let turn = 0; turn < (swell ? LOOP_TURNS : 1); turn++) {
             Object.assign(shape, { lift, radius, swell, phase: (turn / LOOP_TURNS) * Math.PI });
-            const { angles, badness, intrusion } = this.layout(field, loop, start, jitter);
-            if (badness < least[0] - 1e-9 || (badness < least[0] + 1e-9 && intrusion < least[1])) {
-              least = [badness, intrusion];
-              best = { ...shape };
-              bestAngles = angles;
-            }
+            candidates.push({ shape: { ...shape }, ...this.layout(field, loop, start, jitter) });
           }
         }
       }
     }
+    candidates.sort((a, b) => (Math.abs(a.badness - b.badness) > 1e-9 ? a.badness - b.badness : a.intrusion - b.intrusion));
+    // of the best LINE_TRIES, the first whose racing line, bowed around the rock, bends nowhere
+    // tighter than BOW_RADIUS (where a bow meets a bend of the loop, it may), else the gentlest
+    let chosen: { angles: number[]; line: RacingLine } | null = null;
+    const best = { ...shape };
+    let gentlest = -Infinity;
+    for (const candidate of candidates.slice(0, LINE_TRIES)) {
+      Object.assign(shape, candidate.shape);
+      const line = this.lineAlong(loop, candidate.angles);
+      const tightest = line.tightest(field);
+      if (tightest > gentlest) {
+        gentlest = tightest;
+        chosen = { angles: candidate.angles, line };
+        Object.assign(best, candidate.shape);
+      }
+      if (tightest >= BOW_RADIUS) break;
+    }
     Object.assign(shape, best);
-    const angles = bestAngles;
-    for (const angle of angles) {
+    for (const angle of chosen!.angles) {
       const point = loop(angle, new THREE.Vector3());
       this.points.push(point);
       this.normals.push(loop(angle + 1e-4, new THREE.Vector3()).sub(point).normalize());
@@ -318,17 +418,21 @@ export class Course {
       this.rings.push(gate.coil);
       this.root.add(gate.root);
     }
-    // the line runs along the loop, through every gate: the loop's points between the gates
+    this.line = chosen!.line;
+  }
+
+  /** The line along the loop through every gate at `angles`: the loop's points between the gates. */
+  private lineAlong(loop: (angle: number, out: THREE.Vector3) => THREE.Vector3, angles: readonly number[]): RacingLine {
     const through: THREE.Vector3[] = [];
     const at: number[] = [];
     for (let i = 0; i < GATES; i++) {
       at.push(through.length);
-      through.push(this.points[i]);
+      through.push(loop(angles[i], new THREE.Vector3()));
       const to = i + 1 < GATES ? angles[i + 1] : angles[0] + Math.PI * 2;
       const steps = Math.max(1, Math.round(((to - angles[i]) / (Math.PI * 2)) * LOOP_POINTS));
       for (let k = 1; k < steps; k++) through.push(loop(angles[i] + ((to - angles[i]) * k) / steps, new THREE.Vector3()));
     }
-    this.line = new RacingLine(through, true, undefined, undefined, at);
+    return new RacingLine(through, true, undefined, undefined, at);
   }
 
   /**
@@ -348,6 +452,8 @@ export class Course {
     // taken once for all the rocks
     const samples = new Float64Array(LOOP_CHECKS * 3);
     for (let k = 0; k < LOOP_CHECKS; k++) loop((k / LOOP_CHECKS) * Math.PI * 2, probe).toArray(samples, k * 3);
+    // how far along the loop a step of angle goes there (units per rad), for stretches given in units
+    const pace = (angle: number) => loop(angle + 1e-3, paceTo).distanceTo(loop(angle - 1e-3, paceFrom)) / 2e-3;
     const bowAround = (center: THREE.Vector3, reach: number) => {
       let deepest = -Infinity;
       let deepestAt = 0;
@@ -360,8 +466,9 @@ export class Course {
           deepestAt = k;
         }
       }
-      const radius = hypot(samples[deepestAt * 3], samples[deepestAt * 3 + 2]);
-      if (deepest > 0 && radius > 0) bows.push({ angle: (deepestAt / LOOP_CHECKS) * Math.PI * 2, half: (2 * Math.sqrt(BOW_RADIUS * deepest) + GATE_RUN) / radius });
+      if (deepest <= 0) return;
+      const angle = (deepestAt / LOOP_CHECKS) * Math.PI * 2;
+      bows.push({ angle, half: (2 * Math.sqrt(BOW_RADIUS * deepest) + GATE_RUN) / pace(angle) });
     };
     for (const rock of field.asteroids.values()) bowAround(rock.object.position, rock.radius + CLEARANCE);
     if (field.well) bowAround(field.well.position, field.well.radius + CLEARANCE * 2);
@@ -371,6 +478,16 @@ export class Course {
       for (const bow of bows) deepest = Math.max(deepest, bow.half - Math.abs(atan2(sin(angle - bow.angle), cos(angle - bow.angle))));
       return deepest;
     };
+    // how far a gate at `angle` lies inside a bend tighter than GATE_BEND (0 outside, up to 1)
+    const inBend = (angle: number) => {
+      const arc = BEND_ARC / pace(angle);
+      let radius = Infinity;
+      for (let k = -GATE_CLEAR; k <= GATE_CLEAR; k++) {
+        const at = angle + k * arc;
+        radius = Math.min(radius, bendRadius(loop(at - arc, paceFrom), loop(at, probe), loop(at + arc, paceTo)));
+      }
+      return Math.max(0, 1 - radius / GATE_BEND);
+    };
     const spacing = (Math.PI * 2) / GATES;
     const angles: number[] = [];
     let badness = 0;
@@ -379,9 +496,9 @@ export class Course {
       let angle = even;
       let worst = Infinity;
       for (let attempt = 0; attempt <= GATE_TRIES && worst > 0; attempt++) {
-        const step = loop(even, probe).length();
+        const step = pace(even);
         const tried = even + (attempt % 2 ? 1 : -1) * Math.ceil(attempt / 2) * (GATE_STEP / step);
-        const bad = (crowded(field, loop(tried, probe)) ? Math.PI : 0) + inBow(tried);
+        const bad = (crowded(field, loop(tried, probe)) ? Math.PI : 0) + inBow(tried) + inBend(tried);
         if (bad < worst) {
           worst = bad;
           angle = tried;
@@ -390,6 +507,8 @@ export class Course {
       angles.push(angle);
       badness += worst;
     }
+    // a bow around rock in one of the loop's tight bends bends the line tighter yet
+    for (const bow of bows) badness += inBend(bow.angle);
     return { angles, badness, intrusion };
   }
 
