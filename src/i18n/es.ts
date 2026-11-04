@@ -414,7 +414,7 @@ export const ES: Catalog = {
   'Main drive': 'Motor principal',
   'More push, same speed limit': 'Más empuje, mismo límite de velocidad',
   'Torpedo tubes': 'Tubos lanzatorpedos',
-  'More torpedoes per clone': 'Más torpedos por clon',
+  'More torpedoes per ship': 'Más torpedos por nave',
   Plating: 'Blindaje',
   'Every hit hurts less': 'Cada impacto duele menos',
   'Neon trim': 'Franjas de neón',
@@ -659,7 +659,7 @@ export const ES: Catalog = {
   'Extras: thrusters up and down': 'Extras: propulsores arriba y abajo',
   'A D R F twice': 'A D R F dos veces',
   'Dodge: a hard kick that way': 'Esquiva: un golpe seco en esa dirección',
-  'Torpedo: homes on the ship ahead, two per clone': 'Torpedo: persigue a la nave de delante, dos por clon',
+  'Torpedo: homes on the ship ahead, a limited load per ship': 'Torpedo: persigue a la nave de delante, carga limitada por nave',
   'V / Right click': 'V / Clic derecho',
   'Hook: bite a rock or a ship and reel in; press again to let go and fly off': 'Gancho: engancha una roca o una nave y recoge cable; pulsa otra vez para soltar y salir disparado',
   Gamepad: 'Mando',
@@ -1203,8 +1203,8 @@ export const ES: Catalog = {
   'Ships stop beams too. A beam ends at the first hull on its line, and it cannot tell friend from foe: a ship of your own side in your line of fire takes the shot, a torpedo goes off at the first hull it meets, and a nova core takes your side with everyone else. A kill of your own side costs you {kill} points, a nova\'s twice that, and the announcer tells the whole system what you are. Your HUD marks your own side with a ring where a rival has a square, and while your nose is on one of them the crosshair is crossed out over FRIEND. Fire past your side, never through it.':
     'Las naves también detienen los rayos. Un rayo termina en el primer casco de su línea, y no distingue amigo de enemigo: una nave de tu propio bando en tu línea de fuego se lleva el disparo, un torpedo estalla en el primer casco que encuentra, y un núcleo nova se lleva a tu bando con todos los demás. Una baja de tu propio bando te cuesta {kill} puntos, con una nova el doble, y el comentarista le cuenta a todo el sistema lo que eres. Tu HUD marca a tu propio bando con un círculo donde un rival tiene un cuadrado, y mientras tu morro apunta a uno de ellos la mira aparece tachada sobre AMIGO. Dispara junto a tu bando, nunca a través de él.',
   Torpedoes: 'Torpedos',
-  '{torpedoes} per clone. A torpedo locks on the ship closest to your nose within {lockAngle}° and {lockRange} km: keep the target near the crosshair until the lock holds, then launch. Armor does not stop it: {torpedoDamage} hull points, whatever side it reaches. Two kill.':
-    '{torpedoes} por clon. Un torpedo fija la nave más cercana a tu morro dentro de {lockAngle}° y {lockRange} km: mantén el blanco cerca de la mira hasta que quede fijado, y lanza. La coraza no lo detiene: {torpedoDamage} puntos de casco, llegue por el lado que llegue. Dos matan.',
+  '{torpedoes} per ship, more with the hangar\'s tubes. A torpedo locks on the ship closest to your nose within {lockAngle}° and {lockRange} km: keep the target near the crosshair until the lock holds, then launch. Armor does not stop it: {torpedoDamage} hull points, whatever side it reaches. Two kill.':
+    '{torpedoes} por nave, más con los tubos del hangar. Un torpedo fija la nave más cercana a tu morro dentro de {lockAngle}° y {lockRange} km: mantén el blanco cerca de la mira hasta que quede fijado, y lanza. La coraza no lo detiene: {torpedoDamage} puntos de casco, llegue por el lado que llegue. Dos matan.',
   'TORPEDO INBOUND: shoot it down (a small target, {torpedoShot} points), or break its lock. A seeker that loses sight behind a rock or a hull flies straight on for good.':
     'TORPEDO ENTRANTE: derríbalo (un blanco pequeño, {torpedoShot} puntos) o rompe su fijación. Un buscador que pierde la vista tras una roca o un casco sigue recto para siempre.',
   'Or outfly it. A torpedo flies at up to {torpedoSpeed} m/s, more than your {limit} m/s: running straight away only buys time, and only an overdrive outruns it, for a moment. But it turns with {torpedoTurn} g, you with {grip}. Nicole counts it down (a thousand, five hundred, three hundred, two hundred, a hundred meters) and calls “Break!” about {torpedoBreak} s before it hits: turn hard across its path now, or dodge a moment later, and it overshoots. Hold the turn, and it comes round again; jink one way, then the other, and it burns out after {torpedoBurn} s.':

@@ -52,7 +52,7 @@ export const UPGRADES: readonly Upgrade[] = [
   { id: 'radiators', name: msg('Radiators'), note: msg('Your laser cools faster'), prices: [1000, 2500, 5000], looks: false },
   { id: 'thrusters', name: msg('Thrusters'), note: msg('Sharper turns and sidesteps'), prices: [1000, 2500, 5000], looks: false },
   { id: 'drive', name: msg('Main drive'), note: msg('More push, same speed limit'), prices: [1000, 2500, 5000], looks: false },
-  { id: 'tubes', name: msg('Torpedo tubes'), note: msg('More torpedoes per clone'), prices: [1500, 3000, 6000], looks: false },
+  { id: 'tubes', name: msg('Torpedo tubes'), note: msg('More torpedoes per ship'), prices: [1500, 3000, 6000], looks: false },
   { id: 'plating', name: msg('Plating'), note: msg('Every hit hurts less'), prices: [1500, 3000, 6000], looks: false },
   { id: 'neon', name: msg('Neon trim'), note: msg('Light strips along both flanks'), prices: [500, 1500, 3000], looks: true },
   { id: 'flame', name: msg('Drive flame'), note: msg('Azure, violet, white-hot'), prices: [500, 1500, 3000], looks: true },

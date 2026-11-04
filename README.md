@@ -142,7 +142,7 @@ The game speaks English, German, Spanish and French. It starts in the language t
 | A / D | Right stick left / right | Thrusters: sideways |
 | | X | Thrusters: backwards |
 | R / F | Right stick up / down | Thrusters: up / down |
-| G | D-pad up | Torpedo: two per clone, homing on the ship closest to the nose (see Combat rules). On touch screens the TORPEDO button |
+| G | D-pad up | Torpedo: a limited load per ship (two, more with the hangar's tubes; each new clone's ship comes loaded), homing on the ship closest to the nose (see Combat rules). On touch screens the TORPEDO button |
 | V / right click | D-pad down | Hook: pressed, a harpoon on a cable bites the rock or ship ahead, and while it holds the winch reels in and the ship swings around what it holds; pressed again, it lets go and the ship flies off along its swing (see Combat rules). A toggle, not a button to hold, so every other control stays free on the cable. On touch screens the HOOK button, tapped the same way |
 | B (hold) | D-pad left (hold) | Self-destruct, gear from the hangar: held for a second, the ship blows itself up and takes every rival within 60 m along (see Combat rules). Not in a race nor in the flight school. On touch screens the SELF-DESTRUCT button, held |
 | A, D, R or F tapped twice | LB (the way the right stick points) | Dodge: a 60 m/s kick of all thrusters that way (enough to throw the ship back onto the line after a missed ring), ready again after 1.5 s. On touch screens two quick flicks of the push stick |

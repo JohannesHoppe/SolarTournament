@@ -439,7 +439,7 @@ export const DE: Catalog = {
   'Main drive': 'Hauptantrieb',
   'More push, same speed limit': 'Mehr Schub, gleiches Tempolimit',
   'Torpedo tubes': 'Torpedorohre',
-  'More torpedoes per clone': 'Mehr Torpedos pro Klon',
+  'More torpedoes per ship': 'Mehr Torpedos pro Schiff',
   'Plating': 'Panzerplatten',
   'Every hit hurts less': 'Jeder Treffer schmerzt weniger',
   'Neon trim': 'Neonstreifen',
@@ -685,7 +685,7 @@ export const DE: Catalog = {
   'Extras: thrusters up and down': 'Extras: Steuerdüsen hoch und runter',
   'A D R F twice': 'A D R F zweimal',
   'Dodge: a hard kick that way': 'Ausweichen: ein harter Stoß in diese Richtung',
-  'Torpedo: homes on the ship ahead, two per clone': 'Torpedo: sucht sich das Schiff vor dir, zwei pro Klon',
+  'Torpedo: homes on the ship ahead, a limited load per ship': 'Torpedo: sucht sich das Schiff vor dir, begrenzte Ladung pro Schiff',
   'V / Right click': 'V / Rechtsklick',
   'Hook: bite a rock or a ship and reel in; press again to let go and fly off': 'Haken: Felsen oder Schiff packen und einholen; nochmal drücken, loslassen und davonfliegen',
   'Gamepad': 'Gamepad',
@@ -1204,7 +1204,7 @@ export const DE: Catalog = {
   'Ships stop beams too. A beam ends at the first hull on its line, and it cannot tell friend from foe: a ship of your own side in your line of fire takes the shot, a torpedo goes off at the first hull it meets, and a nova core takes your side with everyone else. A kill of your own side costs you {kill} points, a nova\'s twice that, and the announcer tells the whole system what you are. Your HUD marks your own side with a ring where a rival has a square, and while your nose is on one of them the crosshair is crossed out over FRIEND. Fire past your side, never through it.':
     'Auch Schiffe halten Strahlen auf. Ein Strahl endet am ersten Rumpf auf seiner Linie, und er kennt weder Freund noch Feind: Ein Schiff deiner eigenen Seite in deiner Schusslinie fängt den Schuss, ein Torpedo geht am ersten Rumpf hoch, den er trifft, und ein Nova-Kern reißt deine Seite mit allen anderen mit. Ein Abschuss der eigenen Seite kostet dich {kill} Punkte, mit einer Nova das Doppelte, und der Kommentator sagt dem ganzen Sonnensystem, was du bist. Dein HUD markiert deine eigene Seite mit einem Kreis, wo ein Gegner ein Quadrat hat, und solange deine Nase auf einem von ihnen liegt, ist das Fadenkreuz durchgestrichen, darunter FREUND. Schieß an deiner Seite vorbei, nie durch sie hindurch.',
   'Torpedoes': 'Torpedos',
-  '{torpedoes} per clone. A torpedo locks on the ship closest to your nose within {lockAngle}° and {lockRange} km: keep the target near the crosshair until the lock holds, then launch. Armor does not stop it: {torpedoDamage} hull points, whatever side it reaches. Two kill.': '{torpedoes} pro Klon. Ein Torpedo erfasst das Schiff, das deiner Nase am nächsten ist, innerhalb von {lockAngle}° und {lockRange} km: Halt das Ziel nah am Fadenkreuz, bis die Zielerfassung steht, dann feuer ab. Panzerung hält ihn nicht auf: {torpedoDamage} Rumpfpunkte, egal welche Seite er erreicht. Zwei sind tödlich.',
+  '{torpedoes} per ship, more with the hangar\'s tubes. A torpedo locks on the ship closest to your nose within {lockAngle}° and {lockRange} km: keep the target near the crosshair until the lock holds, then launch. Armor does not stop it: {torpedoDamage} hull points, whatever side it reaches. Two kill.': '{torpedoes} pro Schiff, mehr mit den Torpedorohren aus dem Hangar. Ein Torpedo erfasst das Schiff, das deiner Nase am nächsten ist, innerhalb von {lockAngle}° und {lockRange} km: Halt das Ziel nah am Fadenkreuz, bis die Zielerfassung steht, dann feuer ab. Panzerung hält ihn nicht auf: {torpedoDamage} Rumpfpunkte, egal welche Seite er erreicht. Zwei sind tödlich.',
   'TORPEDO INBOUND: shoot it down (a small target, {torpedoShot} points), or break its lock. A seeker that loses sight behind a rock or a hull flies straight on for good.': 'TORPEDO IM ANFLUG: Schieß ihn ab (ein kleines Ziel, {torpedoShot} Punkte) oder brich seine Zielerfassung. Ein Sucher, der hinter einem Felsen oder einem Rumpf die Sicht verliert, fliegt für immer geradeaus weiter.',
   'Or outfly it. A torpedo flies at up to {torpedoSpeed} m/s, more than your {limit} m/s: running straight away only buys time, and only an overdrive outruns it, for a moment. But it turns with {torpedoTurn} g, you with {grip}. Nicole counts it down (a thousand, five hundred, three hundred, two hundred, a hundred meters) and calls “Break!” about {torpedoBreak} s before it hits: turn hard across its path now, or dodge a moment later, and it overshoots. Hold the turn, and it comes round again; jink one way, then the other, and it burns out after {torpedoBurn} s.':
     'Oder flieg ihn aus. Ein Torpedo fliegt mit bis zu {torpedoSpeed} m/s, schneller als deine {limit} m/s: Geradeaus fliehen bringt nur Zeit, und nur der Overdrive hängt ihn ab, für einen Moment. Aber er wendet mit {torpedoTurn} g, du mit {grip}. Nicole zählt ihn herunter (tausend, fünfhundert, dreihundert, zweihundert, hundert Meter) und ruft „Abdrehen!“ etwa {torpedoBreak} s vor dem Einschlag: Dreh jetzt hart quer zu seiner Bahn oder weich einen Moment später aus, und er schießt vorbei. Hältst du die Kurve, kommt er wieder herum; schlag Haken, mal hierhin, mal dorthin, und er brennt nach {torpedoBurn} s aus.',

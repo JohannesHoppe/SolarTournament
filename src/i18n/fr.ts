@@ -418,7 +418,7 @@ export const FR: Catalog = {
   'Main drive': 'Moteur principal',
   'More push, same speed limit': 'Plus de poussée, même limite de vitesse',
   'Torpedo tubes': 'Tubes lance-torpilles',
-  'More torpedoes per clone': 'Plus de torpilles par clone',
+  'More torpedoes per ship': 'Plus de torpilles par vaisseau',
   'Plating': 'Surblindage',
   'Every hit hurts less': 'Chaque coup fait moins mal',
   'Neon trim': 'Liseré néon',
@@ -658,7 +658,7 @@ export const FR: Catalog = {
   'Extras: thrusters up and down': 'En plus : propulseurs vers le haut et le bas',
   'A D R F twice': 'A D R F deux fois',
   'Dodge: a hard kick that way': 'Esquive : un coup sec dans cette direction',
-  'Torpedo: homes on the ship ahead, two per clone': 'Torpille : se guide sur le vaisseau devant toi, deux par clone',
+  'Torpedo: homes on the ship ahead, a limited load per ship': 'Torpille : se guide sur le vaisseau devant toi, charge limitée par vaisseau',
   'V / Right click': 'V / Clic droit',
   'Hook: bite a rock or a ship and reel in; press again to let go and fly off': 'Grappin : harponne un rocher ou un vaisseau et rembobine ; appuie encore pour lâcher et filer',
   'Gamepad': 'Manette',
@@ -1165,7 +1165,7 @@ export const FR: Catalog = {
   'Ships stop beams too. A beam ends at the first hull on its line, and it cannot tell friend from foe: a ship of your own side in your line of fire takes the shot, a torpedo goes off at the first hull it meets, and a nova core takes your side with everyone else. A kill of your own side costs you {kill} points, a nova\'s twice that, and the announcer tells the whole system what you are. Your HUD marks your own side with a ring where a rival has a square, and while your nose is on one of them the crosshair is crossed out over FRIEND. Fire past your side, never through it.':
     'Les vaisseaux arrêtent aussi les rayons. Un rayon s’arrête à la première coque sur sa ligne, et il ne distingue pas l’ami de l’ennemi : un vaisseau de ton propre camp dans ta ligne de tir prend le coup, une torpille explose sur la première coque qu’elle rencontre, et un noyau nova emporte ton camp avec tous les autres. Une élimination de ton propre camp te coûte {kill} points, le double avec une nova, et le commentateur dit à tout le système ce que tu es. Ton HUD marque ton propre camp d’un cercle là où un rival a un carré, et tant que ton nez est sur l’un d’eux, le réticule est barré, avec AMI en dessous. Tire à côté de ton camp, jamais à travers.',
   'Torpedoes': 'Torpilles',
-  '{torpedoes} per clone. A torpedo locks on the ship closest to your nose within {lockAngle}° and {lockRange} km: keep the target near the crosshair until the lock holds, then launch. Armor does not stop it: {torpedoDamage} hull points, whatever side it reaches. Two kill.': '{torpedoes} par clone. Une torpille se verrouille sur le vaisseau le plus proche de ton nez, à moins de {lockAngle}° et de {lockRange} km : garde la cible près du viseur jusqu’à ce que le verrouillage tienne, puis lance. Le blindage ne l’arrête pas : {torpedoDamage} points de coque, quel que soit le côté touché. Deux suffisent à tuer.',
+  '{torpedoes} per ship, more with the hangar\'s tubes. A torpedo locks on the ship closest to your nose within {lockAngle}° and {lockRange} km: keep the target near the crosshair until the lock holds, then launch. Armor does not stop it: {torpedoDamage} hull points, whatever side it reaches. Two kill.': '{torpedoes} par vaisseau, davantage avec les tubes du hangar. Une torpille se verrouille sur le vaisseau le plus proche de ton nez, à moins de {lockAngle}° et de {lockRange} km : garde la cible près du viseur jusqu’à ce que le verrouillage tienne, puis lance. Le blindage ne l’arrête pas : {torpedoDamage} points de coque, quel que soit le côté touché. Deux suffisent à tuer.',
   'TORPEDO INBOUND: shoot it down (a small target, {torpedoShot} points), or break its lock. A seeker that loses sight behind a rock or a hull flies straight on for good.': 'TORPILLE EN APPROCHE : abats-la (une petite cible, {torpedoShot} points), ou romps son verrouillage. Un autodirecteur qui perd sa cible de vue derrière un rocher ou une coque file tout droit pour de bon.',
   'Or outfly it. A torpedo flies at up to {torpedoSpeed} m/s, more than your {limit} m/s: running straight away only buys time, and only an overdrive outruns it, for a moment. But it turns with {torpedoTurn} g, you with {grip}. Nicole counts it down (a thousand, five hundred, three hundred, two hundred, a hundred meters) and calls “Break!” about {torpedoBreak} s before it hits: turn hard across its path now, or dodge a moment later, and it overshoots. Hold the turn, and it comes round again; jink one way, then the other, and it burns out after {torpedoBurn} s.':
     'Ou sème-la en vol. Une torpille file jusqu’à {torpedoSpeed} m/s, plus que tes {limit} m/s : fuir tout droit ne fait que gagner du temps, et seul l’overdrive la distance, un instant. Mais elle tourne à {torpedoTurn} g, toi à {grip}. Nicole fait le décompte (mille, cinq cents, trois cents, deux cents, cent mètres) et lance « Dégage ! » environ {torpedoBreak} s avant l’impact : vire sec en travers de sa route maintenant, ou esquive un instant plus tard, et elle passe à côté. Garde le virage, et elle revient ; zigzague d’un côté, puis de l’autre, et elle s’éteint au bout de {torpedoBurn} s.',
