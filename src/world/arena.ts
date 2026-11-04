@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { FIELD_RADIUS } from './asteroids';
+import { WIDE } from '../view/wide';
 
 /** Ships beyond this distance from the center have a few seconds to come back. */
 export const ARENA_LIMIT = FIELD_RADIUS * 1.5;
@@ -19,10 +20,12 @@ const vertex = /* glsl */ `
   }
 `;
 
-// Thin lines where the sphere cuts the planes of a world-space grid, one pixel wide at any
-// distance. Inside the arena they light up only near the pilot, so the middle of the field
-// stays clean; outside the whole edge shows, so the way back is always in sight.
+// Lines where the sphere cuts the planes of a world-space grid, as wide on screen as the flight
+// computer's lines in space (lineWidth device pixels, see view/wide) at any distance. Inside the
+// arena they light up only near the pilot, so the middle of the field stays clean; outside the
+// whole edge shows, so the way back is always in sight.
 const fragment = /* glsl */ `
+  uniform float lineWidth;
   uniform float spacing;
   uniform float reach;
   uniform float outside;
@@ -32,7 +35,8 @@ const fragment = /* glsl */ `
   void main() {
     vec3 cell = vWorld / spacing;
     vec3 line = abs(fract(cell - 0.5) - 0.5) / fwidth(cell);
-    float grid = 1.0 - min(min(line.x, line.y), line.z);
+    // full within half the width of a line's middle, fading over one pixel beyond
+    float grid = clamp(0.5 * lineWidth + 0.5 - min(min(line.x, line.y), line.z), 0.0, 1.0);
     if (grid <= 0.0) discard;
     float near = 1.0 - smoothstep(0.0, reach, distance(vWorld, cameraPosition));
     float strength = mix(0.03 + 0.5 * near, 0.14 + 0.5 * near, outside);
@@ -54,6 +58,7 @@ export class Arena {
         outside: { value: 0 },
         inColor: { value: new THREE.Color(0.35, 0.55, 1) },
         outColor: { value: new THREE.Color(1, 0.55, 0.2) },
+        lineWidth: WIDE.lineWidth,
       },
       vertexShader: vertex,
       fragmentShader: fragment,

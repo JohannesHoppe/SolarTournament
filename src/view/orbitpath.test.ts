@@ -10,7 +10,7 @@ describe('the orbit drawn into space', () => {
 
   /** How far a point lies from the drawn line, the nearest of its stretches. */
   const drawn = (path: OrbitPath) => {
-    const array = path.line.geometry.attributes.position.array as Float32Array;
+    const array = path.line.geometry.attributes.instanceStart.array as Float32Array;
     const points: THREE.Vector3[] = [];
     for (let i = 0; i < array.length; i += 3) points.push(new THREE.Vector3(array[i], array[i + 1], array[i + 2]));
     const stretch = new THREE.Line3();

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ARENA_LIMIT } from '../world/arena';
 import { footOf, heightOf } from '../world/reference';
 import { cos, sin } from '../detmath';
+import { setWideLines, WIDE, WIDE_VERTEX, wideSegments } from './wide';
 
 /** The grid on the reference plane: a ring every RING (units, 500 m) out to the arena's edge, a spoke every SPOKES-th of a turn (30°). */
 const RING = 10000;
@@ -32,16 +33,7 @@ const NEAR_TO = 1200;
 /** Around the crosshair the lines give way within CLEAR (px), fully within half of it. */
 const CLEAR = 46;
 
-const vertex = /* glsl */ `
-  varying vec3 vWorld;
-  void main() {
-    vec4 world = modelMatrix * vec4(position, 1.0);
-    vWorld = world.xyz;
-    gl_Position = projectionMatrix * viewMatrix * world;
-  }
-`;
-
-// The flight computer's projection: thin lines in the HUD's azure over everything, fading with
+// The flight computer's projection: lines a few pixels wide (see view/wide) in the HUD's azure over everything, fading with
 // the distance from the ship, up close to the camera and around the crosshair. They are blended
 // as a screen (color times what is not lit yet), so over a bright rock or the sun they all but vanish.
 const fragment = /* glsl */ `
@@ -74,37 +66,45 @@ const crosshair = new THREE.Vector3();
  */
 export class ReferencePlane {
   readonly group = new THREE.Group();
-  private readonly grid: THREE.LineSegments;
-  private readonly drops: THREE.LineSegments;
+  private readonly grid: THREE.Mesh;
+  private readonly drops: THREE.Mesh;
   private readonly gridMaterial = material(GRID_REACH, GRID_STRENGTH);
   private readonly dropMaterial = material(DROP_REACH, DROP_STRENGTH);
   private readonly materials = [this.gridMaterial, this.dropMaterial];
-  /** Vertices of the rings, before the spokes: a plain grid draws only these (see setDetail). */
-  private readonly ringVertices: number;
-  private readonly positions = new Float32Array(MAX_DROPS * 6 * 3);
+  /** Segments of the rings, before the spokes: a plain grid draws only these (see setDetail). */
+  private readonly ringSegments: number;
+  private readonly segments: number;
+  /** The drops' segments, rewritten every frame: three a drop (the line, the tick's two bars). */
+  private readonly dropStarts: THREE.InstancedBufferAttribute;
+  private readonly dropEnds: THREE.InstancedBufferAttribute;
   private count = 0;
 
   constructor() {
-    const points: number[] = [];
+    const segments: number[][] = [];
     for (let radius = RING; radius < ARENA_LIMIT; radius += RING) {
       for (let i = 0; i < RING_SEGMENTS; i++) {
         const a = (i / RING_SEGMENTS) * Math.PI * 2;
         const b = ((i + 1) / RING_SEGMENTS) * Math.PI * 2;
-        points.push(cos(a) * radius, 0, sin(a) * radius, cos(b) * radius, 0, sin(b) * radius);
+        segments.push([cos(a) * radius, 0, sin(a) * radius, cos(b) * radius, 0, sin(b) * radius]);
       }
     }
-    this.ringVertices = points.length / 3;
+    this.ringSegments = segments.length;
     const outer = Math.floor((ARENA_LIMIT - 1) / RING) * RING;
     for (let i = 0; i < SPOKES; i++) {
       const a = (i / SPOKES) * Math.PI * 2;
-      points.push(cos(a) * RING, 0, sin(a) * RING, cos(a) * outer, 0, sin(a) * outer);
+      segments.push([cos(a) * RING, 0, sin(a) * RING, cos(a) * outer, 0, sin(a) * outer]);
     }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
-    this.grid = new THREE.LineSegments(geometry, this.gridMaterial);
-    const drops = new THREE.BufferGeometry();
-    drops.setAttribute('position', new THREE.BufferAttribute(this.positions, 3).setUsage(THREE.DynamicDrawUsage));
-    this.drops = new THREE.LineSegments(drops, this.dropMaterial);
+    this.segments = segments.length;
+    const grid = wideSegments(segments.length);
+    segments.forEach(([ax, ay, az, bx, by, bz], i) => {
+      grid.starts.setXYZ(i, ax, ay, az);
+      grid.ends.setXYZ(i, bx, by, bz);
+    });
+    this.grid = new THREE.Mesh(grid.geometry, this.gridMaterial);
+    const drops = wideSegments(MAX_DROPS * 3, true);
+    this.dropStarts = drops.starts;
+    this.dropEnds = drops.ends;
+    this.drops = new THREE.Mesh(drops.geometry, this.dropMaterial);
     for (const lines of [this.grid, this.drops]) {
       // over everything, after the world
       lines.frustumCulled = false;
@@ -115,7 +115,7 @@ export class ReferencePlane {
 
   /** The grid with its spokes, or (`full` false, for slow devices) only its rings. */
   setDetail(full: boolean) {
-    this.grid.geometry.setDrawRange(0, full ? Infinity : this.ringVertices);
+    (this.grid.geometry as THREE.InstancedBufferGeometry).instanceCount = full ? this.segments : this.ringSegments;
   }
 
   /** Starts this frame's drop lines. */
@@ -128,14 +128,15 @@ export class ReferencePlane {
     if (this.count >= MAX_DROPS || Math.abs(heightOf(point)) < 1) return;
     footOf(point, foot);
     const half = foot.distanceTo(camera.position) * TICK * 0.5;
-    const p = this.positions;
-    let i = this.count * 18;
-    i = put(p, i, point.x, point.y, point.z);
-    i = put(p, i, foot.x, foot.y, foot.z);
-    i = put(p, i, foot.x - half, foot.y, foot.z);
-    i = put(p, i, foot.x + half, foot.y, foot.z);
-    i = put(p, i, foot.x, foot.y, foot.z - half);
-    put(p, i, foot.x, foot.y, foot.z + half);
+    const s = this.dropStarts;
+    const e = this.dropEnds;
+    const i = this.count * 3;
+    s.setXYZ(i, point.x, point.y, point.z);
+    e.setXYZ(i, foot.x, foot.y, foot.z);
+    s.setXYZ(i + 1, foot.x - half, foot.y, foot.z);
+    e.setXYZ(i + 1, foot.x + half, foot.y, foot.z);
+    s.setXYZ(i + 2, foot.x, foot.y, foot.z - half);
+    e.setXYZ(i + 2, foot.x, foot.y, foot.z + half);
     this.count++;
   }
 
@@ -145,6 +146,8 @@ export class ReferencePlane {
    * `width` × `height` CSS pixels at `ratio` device pixels each.
    */
   update(show: boolean, ship: THREE.Vector3, camera: THREE.Camera, aim: THREE.Vector3, width: number, height: number, ratio: number) {
+    // the wide lines' measure, for the orbit's line too, whether the plane shows or not
+    setWideLines(width, height, ratio);
     this.group.visible = show;
     if (!show) return;
     const high = THREE.MathUtils.smoothstep(Math.abs(heightOf(ship)), 0, HIGH);
@@ -159,21 +162,13 @@ export class ReferencePlane {
     footOf(ship, this.gridMaterial.uniforms.ship.value);
     this.gridMaterial.uniforms.reach.value = GRID_REACH + Math.abs(heightOf(ship)) * GRID_HEIGHT;
     this.gridMaterial.uniforms.strength.value = THREE.MathUtils.lerp(GRID_STRENGTH, GRID_HIGH, high);
-    const geometry = this.drops.geometry;
-    geometry.setDrawRange(0, this.count * 6);
-    const attribute = geometry.attributes.position as THREE.BufferAttribute;
-    attribute.clearUpdateRanges();
-    attribute.addUpdateRange(0, this.count * 18);
-    attribute.needsUpdate = true;
+    (this.drops.geometry as THREE.InstancedBufferGeometry).instanceCount = this.count * 3;
+    for (const attribute of [this.dropStarts, this.dropEnds]) {
+      attribute.clearUpdateRanges();
+      attribute.addUpdateRange(0, this.count * 9);
+      attribute.needsUpdate = true;
+    }
   }
-}
-
-/** Writes a vertex into `array` at `i`; returns the index after it. */
-function put(array: Float32Array, i: number, x: number, y: number, z: number): number {
-  array[i] = x;
-  array[i + 1] = y;
-  array[i + 2] = z;
-  return i + 3;
 }
 
 /** The lines' material: the HUD's azure, over everything, fading beyond `reach` of the ship. */
@@ -186,8 +181,9 @@ function material(reach: number, strength: number): THREE.ShaderMaterial {
       strength: { value: strength },
       crosshair: { value: new THREE.Vector2() },
       clear: { value: 0 },
+      ...WIDE,
     },
-    vertexShader: vertex,
+    vertexShader: WIDE_VERTEX,
     fragmentShader: fragment,
     // a screen: the lines add what the picture has not lit yet
     blending: THREE.CustomBlending,
