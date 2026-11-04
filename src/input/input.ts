@@ -162,8 +162,17 @@ export class Input {
   /** A dodge asked for and not yet taken: sideways and up, each -1, 0 or 1. */
   private dodge: { x: number; y: number } | null = null;
   private readonly touch = new TouchControls((action) => this.handler(action));
+  /** The device steered with last (see device); before anything is touched, a screen without hover is a touch screen. */
+  private last: Device = window.matchMedia?.('(hover: none) and (pointer: coarse)').matches ? 'touch' : 'keyboard';
 
   constructor(private readonly canvas: HTMLElement) {
+    window.addEventListener('keydown', () => (this.last = 'keyboard'), { capture: true });
+    // a finger on the screen, or the mouse moved or pressed (phones emulate no pointer events
+    // of the mouse type for taps)
+    window.addEventListener('pointerdown', (e) => (this.last = e.pointerType === 'mouse' ? 'keyboard' : 'touch'), { capture: true });
+    window.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'mouse' && Math.abs(e.movementX) + Math.abs(e.movementY) > 2) this.last = 'keyboard';
+    });
     window.addEventListener('keydown', (e) => this.onKey(e, true));
     window.addEventListener('keyup', (e) => this.onKey(e, false));
     window.addEventListener('blur', () => {
@@ -219,9 +228,12 @@ export class Input {
     return this.gamepad() !== null;
   }
 
-  /** What the Host flies with now, for the keys shown: touch, a gamepad, or keyboard and mouse. */
+  /**
+   * What the Host steered with last, for the keys shown (the HUD's, the flight school's, the
+   * controls sheet's): a key or the mouse, a gamepad's button or stick, a finger on the screen.
+   */
   get device(): Device {
-    return this.touchActive ? 'touch' : this.gamepadActive ? 'gamepad' : 'keyboard';
+    return this.last;
   }
 
   /** The mouse pointer's offset from the screen center in full deflections (x right, y up), for the recorder; null while the mouse has not steered. */
@@ -336,6 +348,7 @@ export class Input {
     const pad = this.gamepad();
     if (!pad || !((pad.buttons[PAD.a]?.value ?? 0) > 0.5)) this.fireHeld = false;
     if (!pad) return;
+    if (padTouched(pad)) this.last = 'gamepad';
     // LB dodges the way the thruster stick points, sideways to the right when it rests
     if (this.padPress(pad, PAD.lb)) {
       const x = Math.sign(deadzone(pad.axes[2] ?? 0));
@@ -455,6 +468,13 @@ export function keyLabel(label: string): string {
 export const pointerAxis = (offset: number) => clamp(deadzone(offset, MOUSE_DEADZONE));
 
 /** Removes the dead zone and rescales the rest of the travel to 0..1. */
+/** A gamepad's button pressed or a stick pushed well past its dead zone: the Host steers with it. */
+function padTouched(pad: Gamepad): boolean {
+  for (let i = 0; i < pad.buttons.length; i++) if (pad.buttons[i].value > 0.5) return true;
+  for (let i = 0; i < pad.axes.length; i++) if (Math.abs(pad.axes[i]) > 2 * STICK_DEADZONE) return true;
+  return false;
+}
+
 function deadzone(v: number, zone = STICK_DEADZONE) {
   const magnitude = Math.abs(v);
   return magnitude < zone ? 0 : (Math.sign(v) * (magnitude - zone)) / (1 - zone);

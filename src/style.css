@@ -3866,6 +3866,26 @@ body.page {
   margin-bottom: 8px;
 }
 
+/* the sheet lets clicks through to the game; its tabs and its close button take them, and on a
+   touch screen the sheet itself, so a finger scrolls it where it is taller than the screen */
+#quicksheet button,
+#quicksheet[data-device="touch"] {
+  pointer-events: auto;
+}
+
+#quicksheet {
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+}
+
+#quicksheet-tabs {
+  margin-bottom: 8px;
+}
+
+#quicksheet-close {
+  margin-top: 10px;
+}
+
 #hud-mode {
   font-family: var(--font-body);
   color: var(--hud);

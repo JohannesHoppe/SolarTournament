@@ -257,6 +257,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | **`input/`** | **Controls** |
 | `input/input.ts` | Keyboard, mouse flight (the ship turns towards the visible pointer, its offset from the center is the stick) and gamepad, merges all input into `Controls` |
 | `input/touch.ts` | Touch controls with nipplejs: fixed stick left, dynamic stick right, hold buttons |
+| `input/sheet.ts` | The controls sheet (F1, the pause menu's Controls): each device's rows, opened at the device steered with last, with tabs for the others |
 | **`sound/`** | **What the pilot hears besides the radio** |
 | `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static, dust pattering on the hull; in a planet's air the wind, a hot hull's plasma and thunder from outside |
 | `sound/sounds.ts` | Synthesized sound effects: laser, explosion |

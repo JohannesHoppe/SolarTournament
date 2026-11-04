@@ -29,7 +29,8 @@ import { COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
-import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls } from '../input/input';
+import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls, type Device } from '../input/input';
+import { fillSheet, SHEET_TABS } from '../input/sheet';
 import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -1410,6 +1411,7 @@ export class Game implements OnlineGame {
     this.describeRoom();
     $('resume').addEventListener('click', () => this.resume());
     $('quit').addEventListener('click', () => this.endRound());
+    this.buildControlsSheet();
     this.buildNewRound();
     $('again').addEventListener('click', () => this.showMenu());
     $('invite').addEventListener('click', () => void this.share.share());
@@ -2087,6 +2089,40 @@ export class Game implements OnlineGame {
     this.radio.dropout(0.05 + 0.2 * strength);
   }
 
+  /** The controls sheet's tabs (one per device), its close button and the pause menu's way to it. */
+  private buildControlsSheet() {
+    const tabs = $('quicksheet-tabs');
+    for (const [device, name] of SHEET_TABS) {
+      const tab = document.createElement('button');
+      tab.type = 'button';
+      tab.setAttribute('role', 'tab');
+      tab.dataset.device = device;
+      tab.textContent = t(name);
+      tab.addEventListener('click', () => this.showControlsSheet(true, device));
+      tabs.append(tab);
+    }
+    $('quicksheet-close').addEventListener('click', () => this.showControlsSheet(false));
+    $('pause-controls').addEventListener('click', () => this.showControlsSheet(true));
+  }
+
+  /** Shows the controls sheet at a device's tab (the one the Host steered with last), or hides it. */
+  private showControlsSheet(open: boolean, device: Device = this.input.device) {
+    const sheet = $('quicksheet');
+    sheet.hidden = !open;
+    if (!open) return;
+    const tabs = $('quicksheet-tabs').children as HTMLCollectionOf<HTMLElement>;
+    for (let i = 0; i < tabs.length; i++) {
+      const tab = tabs[i];
+      // in the language chosen now
+      tab.textContent = t(SHEET_TABS[i][1]);
+      const selected = tab.dataset.device === device;
+      tab.classList.toggle('selected', selected);
+      tab.setAttribute('aria-selected', String(selected));
+    }
+    fillSheet($('quicksheet-list'), device);
+    sheet.dataset.device = device;
+  }
+
   private onAction(action: Action) {
     if (action === 'radio') {
       this.toggleRadio();
@@ -2094,7 +2130,7 @@ export class Game implements OnlineGame {
     }
     // F1 lays the controls over any screen, the running game included
     if (action === 'help') {
-      $('quicksheet').hidden = !$('quicksheet').hidden;
+      this.showControlsSheet($('quicksheet').hidden !== false);
       return;
     }
     // a confirm right after a screen change is a key or button still held from before (the

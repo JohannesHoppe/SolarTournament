@@ -144,28 +144,9 @@
 
   <div id="quicksheet" class="plate" hidden aria-live="polite">
     <h2 data-i18n>Controls</h2>
-    <dl class="controls">
-      <dt data-i18n>Mouse / Arrows</dt><dd data-i18n>Turn: the ship turns towards the pointer</dd>
-      <dt>W</dt><dd data-i18n>Main drive</dd>
-      <dt>S</dt><dd data-i18n>Brake: press, it flips and burns; press again, back on target</dd>
-      <dt>A / D</dt><dd data-i18n>Thrusters: slide sideways</dd>
-      <dt>Shift</dt><dd data-i18n>Fine aim</dd>
-      <dt data-i18n>Space / Click</dt><dd data-i18n>Fire laser</dd>
-      <dt data-i18n>X (hold)</dt><dd data-i18n>Flip: nose against the flight; with the drive it brakes until you let go</dd>
-      <dt>T</dt><dd data-i18n>Autopilot (flies where it points) / free drift</dd>
-      <dt>E</dt><dd data-i18n>Overdrive: one shove forward, last resort, once a minute</dd>
-      <dt>R / F</dt><dd data-i18n>Extras: thrusters up and down</dd>
-      <dt data-i18n>A D R F twice</dt><dd data-i18n>Dodge: a hard kick that way</dd>
-      <dt>G</dt><dd data-i18n>Torpedo: homes on the ship ahead, two per clone</dd>
-      <dt data-i18n>V / Right click</dt><dd data-i18n>Hook: bite a rock or a ship and reel in; press again to let go and fly off</dd>
-      <dt data-i18n>Gamepad</dt><dd data-i18n>Sticks turn and push, RT drive, B brake, LT/A fire, Y flip, R3 autopilot, RB overdrive, LB dodge, D-pad up torpedo, D-pad down hook</dd>
-      <dt>C</dt><dd data-i18n>Cockpit / chase camera</dd>
-      <dt>H</dt><dd data-i18n>Cinema mode: no HUD, a softer camera, for recordings</dd>
-      <dt>M</dt><dd data-i18n>Radio on / off</dd>
-      <dt data-i18n>Esc / P</dt><dd data-i18n>Pause; Q there quits the round</dd>
-      <dt data-i18n>Tab (hold)</dt><dd data-i18n>Standings: kills, deaths, score, in a race the lap</dd>
-      <dt>F1</dt><dd data-i18n>This sheet</dd>
-    </dl>
+    <div id="quicksheet-tabs" class="choice-grid" role="tablist" aria-label="Controls" data-i18n-attr="aria-label"></div>
+    <dl id="quicksheet-list" class="controls"></dl>
+    <button type="button" id="quicksheet-close" data-i18n>Close</button>
   </div>
 
   <div id="school-plate" class="plate" hidden>
@@ -226,6 +207,7 @@
     <button type="button" id="invite" hidden data-i18n>Invite friends</button>
     <button type="button" id="fullscreen-pause" hidden data-i18n>Fullscreen</button>
     <button type="button" id="new-round-open" hidden data-i18n>New round</button>
+    <button type="button" id="pause-controls" data-i18n>Controls</button>
     <a id="pause-handbook" class="button" href="handbook.html" target="_blank" data-i18n>Pilot's Handbook</a>
     <button type="button" id="quit" data-i18n>Quit round <kbd>Q</kbd></button>
   </div>
