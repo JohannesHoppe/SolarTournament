@@ -1,12 +1,14 @@
 import { expect, test } from '@playwright/test';
 import { openGame, play, startSolo } from './game';
 
-test('the title screen stands on two legs: the story Lot 7731, in the making and not to be clicked, and the Games with their four ways in', async ({ page }) => {
+test('the title screen stands on two legs: the story Lot 7731, in the making and not to be clicked, and the Games with their three ways in; the ship and the hangar under the pad', async ({ page }) => {
   const errors = await openGame(page);
   await expect(page.locator('#menu-story #campaign')).toBeVisible();
   await expect(page.locator('#campaign')).toBeDisabled();
   await expect(page.locator('#campaign .mode-label')).toHaveText('Lot 7731');
-  for (const id of ['school', 'start', 'online', 'hangar']) await expect(page.locator(`#menu-games #${id}`)).toBeVisible();
+  for (const id of ['school', 'start', 'online']) await expect(page.locator(`#menu-games #${id}`)).toBeVisible();
+  // the ship's arrows and the hangar under the pad (the test browser's screen is wide)
+  for (const id of ['ship-next', 'hangar']) await expect(page.locator(`#pad-controls #${id}`)).toBeVisible();
   expect(errors).toEqual([]);
 });
 

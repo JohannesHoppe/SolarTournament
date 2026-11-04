@@ -17,11 +17,11 @@ const HOVER = 280;
 /** The camera looks down on the pad from this far and this steeply (rad). */
 const CAMERA_DISTANCE = 2700;
 const CAMERA_ELEVATION = 0.5;
-/** Where the pad stands on screen, as shares of the width and the height: left of the menu on a wide screen, above it on a narrow one. */
-const WIDE_SPOT = { x: 0.27, y: 0.56, scale: 1 };
+/** Where the pad stands on screen, as shares of the width and the height: left of the menu on a wide screen, above it on a narrow one; under it the ship's arrows and the hangar's button (#pad-controls in style.css). */
+const WIDE_SPOT = { x: 0.27, y: 0.46, scale: 1.05 };
 const NARROW_SPOT = { x: 0.5, y: 0.2, scale: 1.5 };
 /** The same screens CSS calls wide (see style.css, the title screen). */
-const WIDE = '(min-width: 900px) and (min-aspect-ratio: 5/4)';
+export const TITLE_WIDE = '(min-width: 900px) and (min-aspect-ratio: 5/4)';
 
 /**
  * The pad's cross-section from its middle underneath out and up over its rim to the seal (units,
@@ -79,7 +79,7 @@ export class Showcase {
   private readonly picture: THREE.Object3D;
   private readonly hologram = new HologramLight(SOVEREIGN_GOLD);
   private readonly hologramSize: number;
-  private readonly wide = window.matchMedia(WIDE);
+  private readonly wide = window.matchMedia(TITLE_WIDE);
   private readonly still = window.matchMedia('(prefers-reduced-motion: reduce)');
   /** The light of the ship's lift on the pad below it: a pool on the seal, and a lamp. */
   private readonly pool: THREE.Mesh;

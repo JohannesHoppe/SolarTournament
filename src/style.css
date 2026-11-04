@@ -384,9 +384,47 @@ button.primary .mode-note {
   font-size: 0.72rem;
 }
 
-/* the ship on show, its name and the arrows that change it, on the menu's plate (and the hangar's) */
+/*
+ * Under the title screen's pad: the ship on show, its name and the arrows that change it, and
+ * the way into the hangar, shown with the menu and in the hangar (where the hangar's own button
+ * steps aside), on a wide screen, where the pad stands left of the menu. On a narrow one the
+ * menu's plate covers the pad, and the game puts them back onto the plates (Game.placePadControls).
+ */
+#pad-controls {
+  display: none;
+}
+
+body:has(#hangar-plate:not([hidden])) #hangar {
+  display: none;
+}
+
+#pad-controls #hangar,
 #showcase {
-  margin: 0 0 8px;
+  background: rgba(6, 12, 28, 0.55);
+  backdrop-filter: blur(1.5px);
+}
+
+#showcase {
+  padding: 6px 10px;
+  border-radius: 10px;
+}
+
+@media (min-width: 900px) and (min-aspect-ratio: 5/4) {
+  #pad-controls {
+    position: fixed;
+    left: 27%;
+    bottom: max(3vh, 16px);
+    transform: translateX(-50%);
+    width: min(360px, calc(100vw - 32px));
+    flex-direction: column;
+    gap: 8px;
+    z-index: 5;
+  }
+
+  body:has(#menu:not([hidden])) #pad-controls,
+  body:has(#hangar-plate:not([hidden])) #pad-controls {
+    display: flex;
+  }
 }
 
 .showcase-bar {

@@ -56,7 +56,7 @@ import { Mining } from '../world/mining';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
 import { KillCam } from '../view/killcam';
-import { Showcase } from '../view/showcase';
+import { Showcase, TITLE_WIDE } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { BOT_GEAR, buy, buyGear, emptyHangar, GEAR, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS, sovereignEarned, UPGRADES, WALLET } from './hangar';
 import { creditOf, LOCK_ANGLE, LOCK_DISTANCE, seesTarget, TORPEDO_BREAK, TORPEDO_DAMAGE, TORPEDO_GONE_SLACK, TORPEDO_LAUNCH, TORPEDO_LIFETIME, TORPEDO_RADIUS, TORPEDOES, Torpedoes, type Homing, type Torpedo } from './torpedoes';
@@ -1418,6 +1418,8 @@ export class Game implements OnlineGame {
     $('resume').addEventListener('click', () => this.resume());
     $('quit').addEventListener('click', () => this.endRound());
     this.buildControlsSheet();
+    this.placePadControls();
+    window.matchMedia(TITLE_WIDE).addEventListener('change', () => this.placePadControls());
     this.buildNewRound();
     $('again').addEventListener('click', () => this.showMenu());
     $('invite').addEventListener('click', () => void this.share.share());
@@ -3317,13 +3319,28 @@ export class Game implements OnlineGame {
     );
   }
 
+  /**
+   * The ship's arrows and the hangar's button: under the pad on a wide screen (#pad-controls);
+   * on a narrow one, where the menu's plate covers the pad, at the head of the menu's plate (or
+   * the hangar's, while it is open) and among the Games.
+   */
+  private placePadControls() {
+    const showcase = $('showcase');
+    const hangar = $('hangar');
+    if (window.matchMedia(TITLE_WIDE).matches) {
+      $('pad-controls').append(showcase, hangar);
+      return;
+    }
+    if (this.inHangar) $('hangar-plate').insertBefore(showcase, $('hangar-coins'));
+    else $('menu').prepend(showcase);
+    $('menu-games').append(hangar);
+  }
+
   private showHangar(open: boolean) {
     this.inHangar = open;
     $('menu').hidden = open || this.state !== 'menu';
     $('hangar-plate').hidden = !open;
-    // the ship's name and its arrows go along onto the hangar's plate, and back onto the menu's
-    if (open) $('hangar-plate').insertBefore($('showcase'), $('hangar-coins'));
-    else $('menu').prepend($('showcase'));
+    this.placePadControls();
     this.renderShowcase();
     if (open) $('hangar-back').focus();
   }

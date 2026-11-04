@@ -94,7 +94,7 @@
 
   <canvas id="crest" aria-hidden="true" hidden></canvas>
 
-  <div id="menu" class="plate" hidden>
+  <div id="pad-controls">
     <div id="showcase">
       <div class="showcase-bar">
         <button type="button" id="ship-prev" aria-label="Previous ship" data-i18n-attr="aria-label">◀</button>
@@ -103,6 +103,10 @@
       </div>
       <p id="ship-note"></p>
     </div>
+    <button type="button" id="hangar" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Hangar</span></span><span class="mode-note" id="hangar-note"></span></button>
+  </div>
+
+  <div id="menu" class="plate" hidden>
     <img class="logo" src="crest.svg" alt="SolarTournament: seal of the Ministry of War of the United Solar States" data-i18n-attr="alt" width="104" height="104">
     <h1>Solar<span class="neon">Tour<span class="neon-loose">n</span>ament</span></h1>
     <p class="tagline sentences" data-i18n>Five minutes. Die for the President. Again and again.</p>
@@ -117,7 +121,6 @@
       <button type="button" id="school" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Flight school</span></span><span class="mode-note" data-i18n>Learn to fly. Training clones are free.</span></button>
       <button type="button" id="start" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Bot training</span></span><span class="mode-note" data-i18n>Race the gates or fight it out: your arena, your rivals.</span></button>
       <button type="button" id="online" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Online tournament</span></span><span class="mode-note" data-i18n>Real Hosts: join a public one or start your own.</span></button>
-      <button type="button" id="hangar" class="mode"><span class="mode-name"><span class="mode-label" data-i18n>Hangar</span></span><span class="mode-note" id="hangar-note"></span></button>
     </section>
     <p id="menu-notice" role="status" hidden></p>
     <button type="button" id="fullscreen" hidden data-i18n>Fullscreen</button>
