@@ -510,6 +510,21 @@ export const CAMPAIGN = {
   coldBootBrake: 'Brake. Press once. Again… when slow.',
   coldBootStop: 'The office. Stop… right next to it.',
   coldBootDone: 'Docked. Rask is… waiting. Careful… with him.',
+  lamplighter: 'First job. Six beacons… dead, at the ends of the rows. Hold still… by each. Three seconds. Before the shift… ends.',
+  lamplighterLate: 'Shift over. No pay. Again.',
+  lamplighterDone: 'All lit. A hundred and fifty. Rask takes… forty percent.',
+  liveTarget: 'Tourists. They pay… to shoot at us. Training lasers, no harm. Stay inside… the yard. Ninety seconds. Jink… left, right.',
+  liveTargetOut: 'Outside. They want us… in range. Again.',
+  liveTargetDone: 'Ninety seconds. They had… their fun. We… get paid.',
+  canisterSweep: 'Salvage. Canisters… between the rows. Fly through one, then… to the crusher. Four.',
+  canisterSweepDone: 'Crushed. All four. Scrap pays… a little.',
+  cutter: 'A mining cutter. Rask puts it… on the Bond. Pim fits it. Short reach… runs hot.',
+  cutterFitted: 'Cutter fitted. Now we… can work rock.',
+  firstCut: 'Rock. The spoil field. Get close, four hundred meters… and cut. Three rocks.',
+  firstCutDone: 'Three rocks. Ore… for Rask. The cutter works.',
+  dockingLane: 'A hauler. Patience, docking. Loose hulls drift… into her lane. Shoot them… before they hit.',
+  dockingLaneStruck: 'Three hits on her lane. She aborts. Again.',
+  dockingLaneDone: 'Lane clear. Patience… docked. Hedda Kroll says… we have a berth. We leave… the Boneyard.',
 } as const;
 
 export function allLines(language: Language): string[] {

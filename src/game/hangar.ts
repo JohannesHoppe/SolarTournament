@@ -113,6 +113,9 @@ export interface Perks {
   dodge: boolean;
   /** The fins on its struts (see world/air, FINS): radiators, and in air what keeps it on its course. */
   fins: number;
+  /** The laser's reach (a share of LASER_RANGE) and the heat of a shot (a share of a stock shot's): the campaign's mining cutter reaches short and runs hot. */
+  laserReach: number;
+  laserHeat: number;
 }
 
 export const STOCK: Readonly<Perks> = {
@@ -130,6 +133,8 @@ export const STOCK: Readonly<Perks> = {
   overdrive: true,
   dodge: true,
   fins: 2,
+  laserReach: 1,
+  laserHeat: 1,
 };
 
 /**

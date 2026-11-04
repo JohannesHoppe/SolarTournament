@@ -796,7 +796,7 @@ export class Ship {
     if (!controls.fire) this.triggerHeld = false;
     // a hull without a laser (the campaign's scrap) fires nothing
     if (controls.fire && this.perks.laser && !this.triggerHeld && !this.overheated && now - this.lastShotAt >= LASER_COOLDOWN / twin) {
-      this.heat += HEAT_PER_SHOT / twin;
+      this.heat += (HEAT_PER_SHOT * this.perks.laserHeat) / twin;
       if (this.heat >= MAX_HEAT) this.overheated = true;
       // a held trigger keeps the cadence exactly, however the steps fall: a shot that was due
       // within this step counts from when it was due; a fresh press counts from now, so tapping

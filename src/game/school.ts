@@ -67,6 +67,8 @@ export interface SchoolContext {
   readonly torpedoes: number;
   readonly incoming: THREE.Vector3 | null;
   readonly torpedoesDown: number;
+  /** Rocks the pilot broke so far. */
+  readonly rocksBroken: number;
   /** How many of the pilot's torpedoes have hit a ship so far. */
   readonly torpedoesHit: number;
   /** A torpedo in flight still homes on the pilot. */
@@ -87,7 +89,7 @@ export interface SchoolContext {
 }
 
 /** The running state of one attempt at a drill. */
-interface Attempt {
+export interface Attempt {
   /** Repetition of the drill, from 0. */
   rep: number;
   /** The instruction has been said and the drill's props are out: from now on the attempt counts. */
@@ -364,7 +366,7 @@ const scratch = new THREE.Vector3();
 const toTarget = new THREE.Vector3();
 
 /** A point given in the pilot's frame (-Z ahead, +X right, +Y up), in world space. */
-function ahead(ctx: SchoolContext, x: number, y: number, z: number) {
+export function ahead(ctx: SchoolContext, x: number, y: number, z: number) {
   return ctx.me.flight.toWorld(new THREE.Vector3(x, y, z));
 }
 
@@ -374,12 +376,12 @@ function local(ctx: SchoolContext, point: THREE.Vector3, target = scratch) {
 }
 
 /** Angle between the pilot's nose and a point (rad). */
-function aimError(ctx: SchoolContext, point: THREE.Vector3) {
+export function aimError(ctx: SchoolContext, point: THREE.Vector3) {
   return ctx.me.flight.noseAngleTo(toTarget.copy(point).sub(ctx.me.flight.position));
 }
 
 /** Moves a point out of any asteroid, so markers never sit inside rock. */
-function clear(ctx: SchoolContext, point: THREE.Vector3, radius: number) {
+export function clear(ctx: SchoolContext, point: THREE.Vector3, radius: number) {
   return clearOfRock(ctx.field, point, radius);
 }
 
@@ -400,12 +402,12 @@ export function clearOfRock(field: AsteroidField, point: THREE.Vector3, radius: 
 }
 
 /** Counts seconds the condition has held without interruption. */
-function holdFor(ctx: SchoolContext, attempt: Attempt, condition: boolean, seconds: number) {
+export function holdFor(ctx: SchoolContext, attempt: Attempt, condition: boolean, seconds: number) {
   attempt.held = condition ? attempt.held + ctx.dt : 0;
   return attempt.held >= seconds;
 }
 
-function stop(ctx: SchoolContext) {
+export function stop(ctx: SchoolContext) {
   ctx.me.flight.velocity.set(0, 0, 0);
   ctx.me.flight.angularVelocity.set(0, 0, 0);
 }
@@ -1536,7 +1538,7 @@ const RENAMED: Partial<Record<SchoolCourse, Record<string, string>>> = {
 };
 
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
-class Markers {
+export class Markers {
   readonly root = new THREE.Group();
   private readonly buoyGeometry = new THREE.OctahedronGeometry(1, 0);
   /** The rings are a race's coils (see GateKit): the next one's windings glow orange, the others blue. */

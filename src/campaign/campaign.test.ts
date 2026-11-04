@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, MISSIONS, nextMission, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, MISSIONS, nextMission, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
+import { CUTTER_PRICE } from './missions';
 
 describe('the campaign Lot 7731', () => {
   it('starts with the Bond owed and the first mission next', () => {
@@ -34,7 +35,7 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(null)).toEqual(freshCampaign());
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
-    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9 }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND });
+    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, parts: ['cutter', 'warp'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, parts: ['cutter'] });
   });
 
   it('starts on the scrap hull: a weak drive and thrusters, no laser, torpedoes, overdrive or dodge', () => {
@@ -46,6 +47,19 @@ describe('the campaign Lot 7731', () => {
     // one fin of two: a quarter less radiator, and no course to hold in air
     expect(hull.fins).toBe(1);
     expect(hull.cooling).toBe(1 - FIN_RADIATOR);
+  });
+
+  it('fits the mining cutter on the Bond: a laser of short reach that runs hot', () => {
+    const campaign = freshCampaign();
+    const cutter = MISSIONS.find((mission) => mission.id === 'cutter')!;
+    complete(campaign, cutter);
+    expect(campaign.parts).toEqual(['cutter']);
+    expect(campaign.bond).toBe(BOND + CUTTER_PRICE);
+    const hull = hullOf(campaign);
+    expect([hull.laser, hull.laserReach, hull.laserHeat]).toEqual([true, CUTTER_REACH, CUTTER_HEAT]);
+    // done once, fitted once
+    complete(campaign, cutter);
+    expect(campaign.bond).toBe(BOND + CUTTER_PRICE);
   });
 
   it('gives every mission a name and drills to fly', () => {

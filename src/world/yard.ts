@@ -19,8 +19,8 @@ export const YARD_SEED = 7731;
 export const RACK_BOXES: readonly THREE.Vector3[] = [0, 1, 2].map(() => new THREE.Vector3(RACK_LENGTH / 2, RACK_HEIGHT / 2, RACK_DEPTH / 2));
 
 /** Racks stand in rows this far apart (units, 260 m), with this gap between two racks of a row (80 m). */
-const ROW_SPACING = 5200;
-const RACK_GAP = 1600;
+export const ROW_SPACING = 5200;
+export const RACK_GAP = 1600;
 
 /**
  * Where the racks stand: rows along the field's x axis, every other row a little higher; the

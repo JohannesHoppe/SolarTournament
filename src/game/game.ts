@@ -1142,6 +1142,8 @@ export class Game implements OnlineGame {
   private schoolContext: SchoolContext | null = null;
   /** Torpedoes the own pilot has shot down, for the flight school's drill. */
   private torpedoesDown = 0;
+  /** Rocks the own clone broke so far (the campaign's mining missions count them). */
+  private rocksBroken = 0;
   /** Torpedoes of the own pilot that hit a ship, for the flight school's drill. */
   private torpedoesHit = 0;
   /** Dodges the own pilot has fired, for the flight school's drill. */
@@ -1526,6 +1528,17 @@ export class Game implements OnlineGame {
       ['selfDestruct', !perks.selfDestruct],
     ];
     return new Set(missing.filter(([, lacks]) => lacks).map(([command]) => command));
+  }
+
+  /** The campaign's button says where the story stands: the next mission and the wallet, or that all that is built is flown. */
+  private showCampaign() {
+    const button = $<HTMLButtonElement>('campaign');
+    if (button.disabled) return;
+    const next = nextMission(this.campaign);
+    const note = button.querySelector<HTMLElement>('.mode-note')!;
+    note.textContent = next
+      ? t('Next: {mission} · {coins} ☉ · the Bond asks {bond} ☉', { mission: t(next.name), coins: coinText(this.campaign.coins), bond: coinText(this.campaign.bond) })
+      : t('All that is built is flown. More of the story is in the making.');
   }
 
   /** A ship has the hook: gear bought in the hangar, or lent by the flight school for its drills (never in a mission of the campaign, whose ship has what it was fitted with). */
@@ -2538,6 +2551,7 @@ export class Game implements OnlineGame {
     const best = Number(storageGet(BEST_SCORE_KEY) ?? 0);
     $('best-score').textContent = best ? t('Personal best: {points} pts', { points: best }) : '';
     this.showSchoolProgress();
+    this.showCampaign();
     this.markLeadMode();
     // a clone that died last leaves no muffled radio behind in the hangar
     this.radio.setMuffled(false);
@@ -5055,9 +5069,15 @@ export class Game implements OnlineGame {
     // a mission of the campaign done: paid, and back to the menu
     if (school.finished && this.mission) {
       const mission = this.mission;
-      this.keepCampaign((campaign) => complete(campaign, mission));
+      let paid = { kept: 0, cut: 0 };
+      this.keepCampaign((campaign) => (paid = complete(campaign, mission)));
       this.mission = null;
       this.showMenu();
+      this.notice(
+        paid.kept + paid.cut > 0
+          ? t('{mission} done: {kept} ☉ for you, {cut} ☉ for the yard. The Bond still asks {bond} ☉.', { mission: t(mission.name), kept: coinText(paid.kept), cut: coinText(paid.cut), bond: coinText(this.campaign.bond) })
+          : t('{mission} done.', { mission: t(mission.name) }),
+      );
       this.schoolMark = this.schoolTrack = null;
       return;
     }
@@ -5157,6 +5177,9 @@ export class Game implements OnlineGame {
       },
       get incoming() {
         return game.torpedoes.list[0]?.position ?? null;
+      },
+      get rocksBroken() {
+        return game.rocksBroken;
       },
       get torpedoesDown() {
         return game.torpedoesDown;
@@ -6444,7 +6467,9 @@ export class Game implements OnlineGame {
     const origin = shooter.nose(muzzle);
     const direction = shooter.flight.forward(forward);
     // in an arena's haze the beam scatters: it reaches as far as the eye sees (see world/air)
-    const reach = this.field.air ? reachIn(this.field.air, origin, direction, SIGHT_DEPTH, LASER_RANGE) : LASER_RANGE;
+    // a cutter reaches short (see Perks.laserReach)
+    const range = LASER_RANGE * shooter.perks.laserReach;
+    const reach = this.field.air ? reachIn(this.field.air, origin, direction, SIGHT_DEPTH, range) : range;
     let asteroidHit = this.field.raycast(origin, direction, reach, false, laserHit);
     let wreckHit = this.wrecks.raycast(origin, direction, asteroidHit?.distance ?? reach);
     if (wreckHit) asteroidHit = null;
@@ -6523,6 +6548,7 @@ export class Game implements OnlineGame {
       this.online?.sendRock(asteroid.id, this.field.clock, this.roundId >= 0 ? this.roundId : (this.rejoinedFrom ?? 0), shooter);
       if (destroyed) {
         const points = ASTEROID_POINTS[destroyed.generation];
+        if (shooter === this.me) this.rocksBroken++;
         shooter.score += points;
         // online, another Host may have broken the same rock a moment earlier (see remoteRock)
         if (this.online) this.keepBroken(destroyed, this.field.clock, shooter);

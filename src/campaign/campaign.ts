@@ -1,18 +1,21 @@
-import { msg } from '../i18n/i18n';
-import { CAMPAIGN } from '../music/lines';
-import { DRILL, saying, type Drill } from '../game/school';
-import type { ArenaId } from '../world/arenas';
+import type { Drill } from '../game/school';
 import { STOCK, type Perks } from '../game/hangar';
 import { TORPEDOES } from '../game/torpedoes';
+import { MISSIONS } from './missions';
 
 /**
- * Lot 7731, the solo campaign (see docs/campaign/): the Host's state on the road to the Games and
- * its missions, each a run of drills on the flight school's machinery (see FlightSchool). Solo
- * only: nothing of it reaches an online round.
+ * Lot 7731, the solo campaign (see docs/campaign/): the Host's state on the road to the Games,
+ * the ship as far as it is fitted, and what a mission pays (its missions in campaign/missions,
+ * each a run of drills on the flight school's machinery, see FlightSchool). Solo only: nothing of
+ * it reaches an online round.
  */
 
-/** The Bond the Host signed with the yard: what it owes (☉). */
+export { MISSIONS };
+
+/** The Bond the Host signed with the yard: what it owes (☉). The yard adds what it fits on credit. */
 export const BOND = 25000;
+/** The most the Bond can grow to with what the yard fits on credit (☉). */
+export const BOND_MAX = 100_000;
 /** The yard's cut of every payout while the Bond is unpaid (a share). */
 export const YARD_CUT = 0.4;
 
@@ -27,13 +30,25 @@ export const SCRAP_DRIVE = 0.6;
 export const SCRAP_THRUSTERS = 0.5;
 /** The share of a ship's radiators each of its two fins is. */
 export const FIN_RADIATOR = 0.25;
+/**
+ * The mining cutter (chapter 1): a laser that reaches CUTTER_REACH of the Games' (400 m) and puts
+ * CUTTER_HEAT of a stock shot's heat into the radiators (35 % a shot), made for rock.
+ */
+export const CUTTER_REACH = 0.04;
+export const CUTTER_HEAT = 1.75;
+
+/** What the yard can fit to the hull. */
+export type Part = 'cutter';
+const PARTS: readonly Part[] = ['cutter'];
 
 /** How the campaign's ship flies as far as it is fitted (see Perks). */
-export function hullOf(_campaign: Campaign): Perks {
-  return { ...STOCK, drive: SCRAP_DRIVE, thrusters: SCRAP_THRUSTERS, torpedoes: -TORPEDOES, laser: false, overdrive: false, dodge: false, fins: 1, cooling: 1 - FIN_RADIATOR };
+export function hullOf(campaign: Campaign): Perks {
+  const hull: Perks = { ...STOCK, drive: SCRAP_DRIVE, thrusters: SCRAP_THRUSTERS, torpedoes: -TORPEDOES, laser: false, overdrive: false, dodge: false, fins: 1, cooling: 1 - FIN_RADIATOR };
+  if (campaign.parts.includes('cutter')) Object.assign(hull, { laser: true, laserReach: CUTTER_REACH, laserHeat: CUTTER_HEAT });
+  return hull;
 }
 
-export type MissionId = 'coldBoot';
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane';
 
 export interface Mission {
   id: MissionId;
@@ -42,36 +57,23 @@ export interface Mission {
   drills: Drill[];
   /** What it pays the first time (☉, before the yard's cut). */
   pay: number;
+  /** What it changes in the campaign the first time it is done: a part fitted, the Bond grown. */
+  fit?: (campaign: Campaign) => void;
 }
 
-/** A drill of the flight school with Nicole's campaign line instead of the school's, once, without the school's praise, flown at a place of the campaign. */
-const told = (drill: Drill, line: string, arena: ArenaId = 'boneyard'): Drill => ({ ...drill, line, praise: undefined, reps: 1, repLine: undefined, arena });
-/** A line Nicole says at a place of the campaign. */
-const said = (line: string, arena: ArenaId = 'boneyard'): Drill => ({ ...saying(line), arena });
-
-/** The missions in the order the story runs them. */
-export const MISSIONS: readonly Mission[] = [
-  {
-    // the first link into the hull in rack 7731, and out of the rack to the yard office's beacon
-    id: 'coldBoot',
-    name: msg('Cold Boot'),
-    drills: [said(CAMPAIGN.coldBoot), told(DRILL.turn, CAMPAIGN.coldBootTurn), told(DRILL.drive, CAMPAIGN.coldBootDrive), told(DRILL.brake, CAMPAIGN.coldBootBrake), told(DRILL.stopAt, CAMPAIGN.coldBootStop), said(CAMPAIGN.coldBootDone)],
-    pay: 0,
-  },
-];
-
-/** The campaign as the browser keeps it: the missions done, the drill reached in the running one, the wallet and what the Bond still asks. */
+/** The campaign as the browser keeps it: the missions done, the drill reached in the running one, the wallet, what the Bond still asks, the parts fitted. */
 export interface Campaign {
   done: MissionId[];
   /** The drill reached in the next mission (0: its start). */
   step: number;
   coins: number;
   bond: number;
+  parts: Part[];
 }
 
-export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND });
+export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, parts: [] });
 
-/** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission it does not know is passed over. */
+/** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
 export function campaignFrom(text: string | null): Campaign {
   const fresh = freshCampaign();
   if (!text) return fresh;
@@ -79,8 +81,9 @@ export function campaignFrom(text: string | null): Campaign {
     const kept = JSON.parse(text) as Partial<Campaign>;
     const ids = new Set<string>(MISSIONS.map((mission) => mission.id));
     const done = Array.isArray(kept.done) ? kept.done.filter((id): id is MissionId => typeof id === 'string' && ids.has(id)) : [];
+    const parts = Array.isArray(kept.parts) ? PARTS.filter((part) => kept.parts!.includes(part)) : [];
     const number = (value: unknown, fallback: number, max: number) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(Math.floor(value), max) : fallback);
-    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND) };
+    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), parts };
   } catch {
     return fresh;
   }
@@ -90,13 +93,16 @@ export function campaignFrom(text: string | null): Campaign {
 export const nextMission = (campaign: Campaign): Mission | null => MISSIONS.find((mission) => !campaign.done.includes(mission.id)) ?? null;
 
 /**
- * A mission done: it counts, its pay goes to the Host's wallet less the yard's cut while the
- * Bond is unpaid (the cut pays the Bond off), and the next mission starts at its beginning.
- * Returns what the Host kept and what the yard took.
+ * A mission done: it counts, what it fits is fitted, its pay goes to the Host's wallet less the
+ * yard's cut while the Bond is unpaid (the cut pays the Bond off), and the next mission starts at
+ * its beginning. Returns what the Host kept and what the yard took.
  */
 export function complete(campaign: Campaign, mission: Mission): { kept: number; cut: number } {
   const first = !campaign.done.includes(mission.id);
-  if (first) campaign.done.push(mission.id);
+  if (first) {
+    campaign.done.push(mission.id);
+    mission.fit?.(campaign);
+  }
   campaign.step = 0;
   const pay = first ? mission.pay : 0;
   const cut = Math.min(campaign.bond, Math.round(pay * YARD_CUT));

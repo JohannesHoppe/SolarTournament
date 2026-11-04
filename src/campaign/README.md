@@ -4,5 +4,6 @@ Lot 7731, the solo campaign (its design in `docs/campaign/`). It is built missio
 
 | File | What it does |
 |---|---|
-| `campaign.ts` | The campaign's state as the browser keeps it (the missions done, the drill reached in the running one, the wallet, the Bond still owed), the ship as far as it is fitted (`hullOf`: the scrap hull, below any of the Games'), its missions in story order, each a run of drills on the flight school's machinery (`FlightSchool` with a mission instead of a course), and a mission's pay less the yard's cut while the Bond is unpaid |
-| `campaign.test.ts` | The pay and the cut, the state read back and refused, every mission with a name and drills |
+| `campaign.ts` | The campaign's state as the browser keeps it (the missions done, the drill reached in the running one, the wallet, the Bond still owed, the parts fitted), the ship as far as it is fitted (`hullOf`: the scrap hull, below any of the Games', with the mining cutter once fitted), and a mission done: what it fits, its pay less the yard's cut while the Bond is unpaid |
+| `missions.ts` | The missions in story order, each a run of drills on the flight school's machinery (`FlightSchool` with a mission instead of a course) at a place of the campaign: the prologue and chapter 1 in the Boneyard (Cold Boot, Lamplighter, Live Target, Canister Sweep, The Cutter, First Cut, Docking Lane) |
+| `campaign.test.ts` | The pay and the cut, the cutter fitted on the Bond, the scrap hull, the state read back and refused, every mission with a name and drills |
