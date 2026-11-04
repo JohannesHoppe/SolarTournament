@@ -239,7 +239,7 @@ const SIBLING_SECONDS = 2;
 /** The plates meet on the last this many steps of the grid of a long gap at most (1 s, see Wrecks.update). */
 const MEET_STEPS = 30;
 
-/** Flies a plate up to game time `time` in the fixed steps of its age, falling towards the rocks. */
+/** Flies a plate up to game time `time` in the fixed steps of its age, falling into a well or towards the ground of a place, where there is one. */
 function fly(wreck: Wreck, time: number, field: AsteroidField) {
   const age = time - wreck.bornAt;
   while ((wreck.steps + 1) * WRECK_STEP <= age) {

@@ -7,7 +7,7 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_Y, YARD_END } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END } from './yard';
 
 /** One standard gravity (units/s², 1 unit = 5 cm). */
 const G = 196.2;
@@ -321,7 +321,7 @@ export const PLACES: readonly ArenaProfile[] = [
     name: msg('The Boneyard'),
     tagline: msg('Forty thousand dead fighters in their racks, on a world of metal.'),
     // the yard's spoil: boulders of Psyche's metal pushed out to the yard's edge, lying just over the crater floor, still
-    layout: { key: 'boneyard', seed: 7731, kind: 'rock', count: 18, minScale: 0.2, maxScale: 0.35, radius: FIELD_RADIUS, inner: FIELD_RADIUS * 0.85, flat: 30, lift: GROUND + 700, spin: 0, toughness: 800, placements: boneyardRacks() },
+    layout: { key: 'boneyard', seed: 7731, kind: 'rock', count: 18, minScale: 0.2, maxScale: 0.35, radius: FIELD_RADIUS, inner: FIELD_RADIUS * 0.85, flat: 30, lift: GROUND + 700, spin: 0, toughness: 800, placements: boneyardRacks(), fall: PSYCHE_FALL },
     cooling: 1,
     storms: false,
     sun: { size: 30000, intensity: 3, color: 0xfff0dc },
@@ -383,6 +383,8 @@ export const ARENAS: readonly ArenaProfile[] = [
     layout: {
       key: 'junkyard',
       seed: 31,
+      // its junk orbits across the loop: two straights between two bends, lined up for between them
+      course: 'stadium',
       kind: 'debris',
       count: 90,
       minScale: 1,

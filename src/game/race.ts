@@ -209,6 +209,33 @@ export function pathCrossing(position: THREE.Vector3, velocity: THREE.Vector3, p
  * and the arena's seed, so every browser builds the same course; gates keep clear of rock as
  * the field starts out (rocks that circle may cross the course later: mind them).
  */
+/**
+ * The stadium a course may take instead of the loop (FieldLayout.course): two straights of
+ * STADIUM_STRAIGHT (units, 1.8 km) joined by two bends of STADIUM_BEND (1.5 km) radius, scaled by
+ * `scale`, its points spread evenly along it by `angle` (a whole turn, a lap). Between its bends a
+ * racer flies straight and lines up for the next, instead of holding one long curve.
+ */
+const STADIUM_STRAIGHT = 36000;
+const STADIUM_BEND = 30000;
+function stadium(angle: number, scale: number, out: THREE.Vector3): THREE.Vector3 {
+  const straight = STADIUM_STRAIGHT * scale;
+  const bend = STADIUM_BEND * scale;
+  const arc = Math.PI * bend;
+  const lap = 2 * straight + 2 * arc;
+  let s = ((((angle / (Math.PI * 2)) % 1) + 1) % 1) * lap;
+  if (s < straight) return out.set(-straight / 2 + s, 0, -bend);
+  s -= straight;
+  if (s < arc) {
+    const a = -Math.PI / 2 + s / bend;
+    return out.set(straight / 2 + bend * cos(a), 0, bend * sin(a));
+  }
+  s -= arc;
+  if (s < straight) return out.set(straight / 2 - s, 0, bend);
+  s -= straight;
+  const a = Math.PI / 2 + s / bend;
+  return out.set(-straight / 2 + bend * cos(a), 0, bend * sin(a));
+}
+
 export class Course {
   readonly root = new THREE.Group();
   readonly points: THREE.Vector3[] = [];
@@ -235,7 +262,16 @@ export class Course {
     // through a ring's layer, diving up and down through it (see COURSE_DIVE)
     const dives = !!field.layout?.open;
     const rise = dives ? COURSE_DIVE : COURSE_RISE;
+    const form = field.layout?.course ?? 'loop';
     const loop = (angle: number, out: THREE.Vector3) => {
+      if (form === 'stadium') {
+        stadium(angle, shape.radius / COURSE_RADIUS, out);
+        // the swell's turns turn the whole stadium about the center instead
+        const turn = shape.phase * 2;
+        const x = out.x * cos(turn) - out.z * sin(turn);
+        const z = out.x * sin(turn) + out.z * cos(turn);
+        return out.set(x, shape.lift + sin(angle * 2 + start) * rise, z);
+      }
       const distance = shape.radius * (1 + shape.swell * sin(angle * 2 + shape.phase));
       return out.set(cos(angle) * distance, shape.lift + sin(angle * 2 + start) * rise, sin(angle) * distance);
     };
@@ -247,7 +283,7 @@ export class Course {
     let least = [Infinity, Infinity];
     for (const lift of dives ? [0] : field.air ? AIR_LIFTS : LOOP_LIFTS) {
       for (const radius of LOOP_RADII) {
-        for (const swell of [0, COURSE_SWELL]) {
+        for (const swell of form === 'stadium' ? [COURSE_SWELL] : [0, COURSE_SWELL]) {
           for (let turn = 0; turn < (swell ? LOOP_TURNS : 1); turn++) {
             Object.assign(shape, { lift, radius, swell, phase: (turn / LOOP_TURNS) * Math.PI });
             const { angles, badness, intrusion } = this.layout(field, loop, start, jitter);

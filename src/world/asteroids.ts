@@ -53,8 +53,6 @@ export const IMPOSTOR_MIN = 140000;
 export function impostorDistance(meanRadius: number): number {
   return Math.max(meanRadius * IMPOSTOR_LEVEL, IMPOSTOR_MIN);
 }
-/** Surface gravity per unit of mean radius (1/s²): uniform density, so bigger rocks pull harder. */
-const GRAVITY_PER_RADIUS = 0.004;
 
 /** Points for breaking a rock, by generation: the big one is worth most, its fragments less. */
 export const ASTEROID_POINTS = [200, 120, 80];
@@ -155,6 +153,10 @@ export interface FieldLayout {
   /** Pieces placed by hand (the hulk of a wreck). */
   placements?: Placement[];
   well?: Well;
+  /** The shape of the race's course here (see game/race): the loop round the center, or the stadium of two straights and two bends. */
+  course?: 'loop' | 'stadium';
+  /** A place on a world's surface: the world's pull there, straight down along -y (units/s²), the same everywhere in the place. */
+  fall?: number;
   /** The air of a planet the arena dips into (see world/air): its haze hides, brakes and heats. */
   air?: Air;
 }
@@ -425,6 +427,8 @@ export class AsteroidField {
   layout: FieldLayout | null = null;
   /** The massive body of the arena, if it has one. */
   well: Well | null = null;
+  /** The pull of the world a place lies on, straight down (units/s²; see FieldLayout.fall). */
+  fall = 0;
   /** The air of the arena, if it dips into a planet's (see world/air). */
   air: Air | null = null;
   /** Something else in the field that blocks the line of sight and torpedoes, if a round has one. */
@@ -501,6 +505,7 @@ export class AsteroidField {
     if (this.layout?.key !== layout.key) this.attachments.clear();
     this.layout = layout;
     this.well = layout.well ?? null;
+    this.fall = layout.fall ?? 0;
     this.air = layout.air ?? null;
     this.clear();
     this.clock = 0;
@@ -1331,20 +1336,12 @@ export class AsteroidField {
   }
 
   /**
-   * Sum of the asteroids' gravitational pull at a point (units/s²). Built things (a yard's racks,
-   * its depot, the ground it stands on: kind 'rack') do not pull: they are no rock of the game's
-   * exaggerated gravity, and a place's ground is held by its own (see world/yard).
+   * The gravitational pull at a point (units/s²): an arena's massive body (its well), or the world a
+   * place lies on (its fall). The field's pieces pull as real ones do, a rock of 100 m with some
+   * hundred-thousandth of a g: nothing a ship would notice, so nothing at all.
    */
   gravity(position: THREE.Vector3, target = new THREE.Vector3()): THREE.Vector3 {
-    target.set(0, 0, 0);
-    for (const asteroid of this.asteroids.values()) {
-      if (asteroid.kind === 'rack') continue;
-      pull.subVectors(asteroid.object.position, position);
-      const distance = Math.max(pull.length(), asteroid.meanRadius);
-      const surfaceGravity = GRAVITY_PER_RADIUS * asteroid.meanRadius;
-      const strength = (surfaceGravity * asteroid.meanRadius * asteroid.meanRadius) / (distance * distance);
-      target.addScaledVector(pull.normalize(), strength);
-    }
+    target.set(0, -this.fall, 0);
     const well = this.well;
     if (well) {
       pull.subVectors(well.position, position);

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { testField } from '../test/field';
 import { arenaById, ARENAS, PLACES } from './arenas';
-import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, GROUND, PAD, RACK_BOXES } from './yard';
+import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, GROUND, PAD, PSYCHE_FALL, RACK_BOXES } from './yard';
 
 describe('the Boneyard on Psyche', () => {
   const place = arenaById('boneyard')!;
@@ -28,12 +28,12 @@ describe('the Boneyard on Psyche', () => {
     for (let k = 0; k <= 40; k++) expect(field.overlap(new THREE.Vector3().lerpVectors(start, door, k / 40), 300), `${k}/40 along the lane`).toBeNull();
   });
 
-  it('pulls a ship nowhere: the ground, the racks and the depot have no gravity, the spoil next to none', () => {
+  it('pulls a ship straight down with Psyche\'s gravity alone, the same all over the yard', () => {
     const field = testField();
     field.generate(place.layout);
     const start = new THREE.Vector3(...place.start!.at);
-    // in the lane, at the hall's door, over the pad: far less than a hundredth of a g (1.96 units/s²)
-    for (const at of [start, new THREE.Vector3(BAY_MOUTH - 1000, start.y, 0), PAD.clone().setY(PAD.y + 400)]) expect(field.gravity(at).length(), `at ${at.toArray()}`).toBeLessThan(0.5);
+    // in the lane, at the hall's door, over the pad: Psyche's 0.144 m/s², about 0.015 g, and nothing of the racks or the depot
+    for (const at of [start, new THREE.Vector3(BAY_MOUTH - 1000, start.y, 0), PAD.clone().setY(PAD.y + 400)]) expect(field.gravity(at).toArray(), `at ${at.toArray()}`).toEqual([0, -PSYCHE_FALL, 0]);
   });
 
   it('leaves the spoil on the yard’s edge just over the ground, clear of the racks and the depot', () => {

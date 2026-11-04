@@ -46,9 +46,10 @@ describe('wreckage', () => {
     }
   });
 
-  it('flies the same path at any frame rate, falling towards the rocks', () => {
+  it('flies the same path at any frame rate, falling towards a massive body', () => {
     const field = testField();
-    field.generate(ARENAS[0].layout);
+    // the Event Horizon's black hole pulls; the field's pieces pull nobody
+    field.generate(ARENAS.find((a) => a.id === 'hole')!.layout);
     const fly = (frames: (i: number) => number) => {
       const wrecks = new Wrecks();
       wrecks.spawn('p:abc', 1, new THREE.Vector3(30000, 0, 0), new THREE.Vector3(-200, 50, 0), 350, 0);
@@ -66,7 +67,7 @@ describe('wreckage', () => {
     const stuttering = fly((i) => [0.05, 0.003, 0.021, 0.011][i % 4]);
     expect(stuttering).toHaveLength(smooth.length);
     smooth.forEach((position, i) => expect(position.distanceTo(stuttering[i])).toBeLessThan(1e-6));
-    // and gravity did pull them
+    // and the hole did pull them
     expect(field.gravity(new THREE.Vector3(30000, 0, 0)).length()).toBeGreaterThan(0);
   });
 

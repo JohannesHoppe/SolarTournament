@@ -5,9 +5,9 @@ import type { Placement } from './asteroids';
 /**
  * Where the Boneyard on Psyche (the campaign's first place, see docs/campaign/) puts things: the
  * flat floor of a crater on Psyche, the racks of dead fighters standing on it in rows, the yard's
- * floodlight masts, and the depot at the end of the lane. Psyche's gravity (about 0.006 g) holds
- * all of it on the ground over the years, and is far too weak to matter to a ship: the flight
- * does not feel it. Only the numbers, so the arenas and the tests take them without the looks
+ * floodlight masts, and the depot at the end of the lane. Psyche's gravity (PSYCHE_FALL, about
+ * 0.015 g) holds all of it on the ground over the years and lets a ship that does nothing sink
+ * slowly towards the floor. Only the numbers, so the arenas and the tests take them without the looks
  * (see world/boneyard). Centers and half extents in units, the field's center 60 m above the
  * crater floor.
  */
@@ -159,6 +159,8 @@ export function boneyardRacks(): Placement[] {
   return racks;
 }
 
+/** Psyche's pull at its surface (units/s²): 0.144 m/s², about 0.015 g, from its mass of 2.4 × 10¹⁹ kg over its mean radius of 111 km. */
+export const PSYCHE_FALL = 2.88;
 /** Psyche's radius (units, 113 km); its surface beyond the crater's wall lies a little below the crater floor. */
 export const PSYCHE_RADIUS = 2_260_000;
 export const PSYCHE_BELOW = -GROUND + 1500;

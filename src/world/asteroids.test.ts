@@ -331,6 +331,14 @@ describe('collision with a box piece', () => {
   });
 });
 
+describe('the field\'s pieces', () => {
+  it('pull nobody: a rock of the game pulls as little as a real one, nothing a ship would feel', () => {
+    const field = testField();
+    field.generate(ARENAS[0].layout);
+    for (const rock of [...field.asteroids.values()].slice(0, 5)) expect(field.gravity(rock.object.position.clone().addScalar(rock.radius + 10)).length()).toBe(0);
+  });
+});
+
 describe('a massive body', () => {
   it('pulls, blocks the line of sight and kills', () => {
     const hole = ARENAS.find((a) => a.id === 'hole')!.layout;
