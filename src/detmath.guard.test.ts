@@ -5,14 +5,15 @@ import { describe, expect, it } from 'vitest';
 /**
  * The code computes every mathematical function beyond + - * / and Math.sqrt with src/detmath.ts,
  * never with Math's own, which differ in the last bits between processors and systems; and the
- * shared world (src/world, src/game, src/net, src/ship) turns and blends with src/detthree.ts,
+ * shared world (src/world, src/game, src/net, src/ship) and the simulated pilots that fly it in the
+ * unit tests (src/test, so their flights come out alike on every machine CI runs them on) turn and blends with src/detthree.ts,
  * never with three.js's helpers that call Math's. This scans the TypeScript of the game, its tools
  * and its server function, and their unit tests. Not the browser tests (`e2e/`): what they compute
  * runs in the page, passed in as source text, and cannot import a module.
  */
 const ROOT = join(__dirname, '..');
 const SCANNED = ['src', 'tools', 'functions'];
-const SHARED = ['src/world/', 'src/game/', 'src/net/', 'src/ship/'];
+const SHARED = ['src/world/', 'src/game/', 'src/net/', 'src/ship/', 'src/test/'];
 /** This file, whose examples break its own rules. */
 const SELF = 'src/detmath.guard.test.ts';
 

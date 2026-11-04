@@ -340,7 +340,7 @@ export const ARENAS: readonly ArenaProfile[] = [
     id: 'belt',
     name: msg('The Belt'),
     tagline: msg('Forty rocks, ten ships long each. Cover is everywhere.'),
-    layout: { key: 'belt', seed: 11, kind: 'rock', count: 40, minScale: 2.5, maxScale: 7, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800, course: { form: 'circuit', layout: 'hairpin' } },
+    layout: { key: 'belt', seed: 11, kind: 'rock', count: 40, minScale: 2.5, maxScale: 7, radius: FIELD_RADIUS, inner: 0, spin: SPIN_RATE, toughness: 800, course: { form: 'circuit', layout: 'grand' } },
     cooling: 1,
     storms: false,
     sun: { size: 30000, intensity: 3.2, color: 0xffe4bf },

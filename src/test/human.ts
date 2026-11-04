@@ -11,6 +11,7 @@ import { BOOST_RADIUS, Course, GATE_RADIUS } from '../game/race';
 import { RACE_SPEED } from '../ship/bots';
 import type { ArenaProfile } from '../world/arenas';
 import { exp, tan } from '../detmath';
+import { angleTo, slerp } from '../detthree';
 
 /** The screen the simulated Host looks at (pixels): the game at 1280×720, the pointer's full deflection at its share of the shorter side. */
 const WIDTH = 1280;
@@ -164,7 +165,7 @@ export class Human {
   private follow(flight: FlightModel, move: number, turn = move) {
     flight.toWorld(this.goal.set(0, SHIP_RADIUS * CHASE_HEIGHT, SHIP_RADIUS * CHASE_DISTANCE), this.goal);
     this.camera.position.lerp(this.goal, move);
-    this.camera.quaternion.slerp(flight.orientation, turn);
+    slerp(this.camera.quaternion, flight.orientation, turn);
     this.camera.updateMatrixWorld();
   }
 
@@ -253,14 +254,14 @@ export function racer(field: AsteroidField, rings: Rings, flight: FlightModel, c
       wanted = Math.min(cruise, slowest * GLOW);
       if (!autopilot) {
         // in free drift it burns while its nose is in the difference, until the difference is gone
-        pedal = drive && miss.length() > DRIFT_AIM && flight.forward(b).angleTo(miss) < ON_LINE ? 'drive' : 'coast';
+        pedal = drive && miss.length() > DRIFT_AIM && angleTo(flight.forward(b), miss) < ON_LINE ? 'drive' : 'coast';
       } else {
         const braking = (missed || brakes) && speed > slowest * (pedal === 'brake' ? SLOW : HARD);
         // and it holds the drive while the nose points about where it looks, or nearer to it than
         // the flight goes: the drive pushes along the nose
         a.subVectors(mark, flight.position);
-        const off = flight.forward(b).angleTo(a);
-        const onLine = off < ON_LINE || (speed > 1 && off < flight.velocity.angleTo(a));
+        const off = angleTo(flight.forward(b), a);
+        const onLine = off < ON_LINE || (speed > 1 && off < angleTo(flight.velocity, a));
         pedal = braking ? 'brake' : drive && onLine && speed < wanted ? 'drive' : 'coast';
       }
     }

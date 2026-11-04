@@ -5,6 +5,7 @@ import { assistAim, Brake } from '../ship/computer';
 import type { Recording } from '../recorder';
 import type { RacingLine } from '../game/racingline';
 import { asin, atan2, cos, hypot, sin } from '../detmath';
+import { angleTo } from '../detthree';
 
 /** The simulation steps at 60 frames a second. */
 export const STEP = 1 / 60;
@@ -198,11 +199,11 @@ export function convergence(samples: readonly Sample[], direction: THREE.Vector3
   const after = samples.filter((s) => s.t >= from);
   let settled = Infinity;
   for (let i = after.length - 1; i >= 0; i--) {
-    if (after[i][of].angleTo(direction) > tolerance) break;
+    if (angleTo(after[i][of], direction) > tolerance) break;
     settled = after[i].t - from;
   }
   // the side it came from: where the flight was when it got within 30° of the direction
-  const approach = after.find((s) => s[of].angleTo(direction) < 0.5);
+  const approach = after.find((s) => angleTo(s[of], direction) < 0.5);
   let overshoot = 0;
   if (approach) {
     const side = approach[of].clone().addScaledVector(direction, -approach[of].dot(direction));
@@ -211,11 +212,11 @@ export function convergence(samples: readonly Sample[], direction: THREE.Vector3
       for (const s of after) if (s.t >= approach.t) overshoot = Math.max(overshoot, -s[of].dot(side));
     }
   }
-  return { seconds: settled, overshoot: asin(Math.min(1, overshoot)), noseOff: after.at(-1)!.nose.angleTo(direction) };
+  return { seconds: settled, overshoot: asin(Math.min(1, overshoot)), noseOff: angleTo(after.at(-1)!.nose, direction) };
 }
 
 /** The slip of a sample: the angle between the flight and the nose (rad). */
-export const slip = (sample: Sample) => sample.path.angleTo(sample.nose);
+export const slip = (sample: Sample) => angleTo(sample.path, sample.nose);
 
 /** A replayed flight: what the autopilot did with the recorded input, and how far that is from what was recorded. */
 export interface Replay {

@@ -41,7 +41,7 @@ describe('the race course', () => {
       return values;
     });
     expect(hashes).toEqual({
-      belt: '795b077c7e06e8ef',
+      belt: '54d5c511a956ee57',
       rings: '2dbdac1a82b354d0',
       junkyard: 'd0509f083fbedab3',
       giant: '7b64f5f89ffa7b86',
@@ -61,7 +61,7 @@ describe('the race course', () => {
       return values;
     });
     expect(hashes).toEqual({
-      belt: 'f98773c4a2a40875',
+      belt: '9625566a70bf6e32',
       rings: 'cdf678790387c383',
       junkyard: '20234dbcd0ce36e1',
       giant: 'b4c2830251538e55',
