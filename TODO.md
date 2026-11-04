@@ -62,7 +62,8 @@ Each arena gets a look of its own, recognized at first glance, cheap on phones (
 
 - [x] Torpedoes: few shots, homing, can be shot down with the laser
 - [x] Items: sponsor probes with a twin laser, plating, torpedoes, overdrive or repair; a dead clone's fly out again
-- [ ] Decoys and silent running: a cold ship without drive is harder to detect
+- [x] Silent running: a cold ship without drive is harder to detect
+- [ ] Decoys: a decoy a torpedo locks on instead of the ship
 
 ### 7. Spreading the game
 

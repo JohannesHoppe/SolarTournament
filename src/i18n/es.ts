@@ -594,6 +594,7 @@ export const ES: Catalog = {
   Hull: 'Casco',
   Heat: 'Calor',
   Velocity: 'Velocidad',
+  'Silent running': 'Navegación silenciosa',
   Hook: 'Gancho',
   Fire: 'Fuego',
   Auto: 'Auto',
@@ -1234,6 +1235,8 @@ export const ES: Catalog = {
   'Ships stop beams too. A beam ends at the first hull on its line, and it cannot tell friend from foe: a ship of your own side in your line of fire takes the shot, a torpedo goes off at the first hull it meets, and a nova core takes your side with everyone else. A kill of your own side costs you {kill} points, a nova\'s twice that, and the announcer tells the whole system what you are. Your HUD marks your own side with a ring where a rival has a square, and while your nose is on one of them the crosshair is crossed out over FRIEND. Fire past your side, never through it.':
     'Las naves también detienen los rayos. Un rayo termina en el primer casco de su línea, y no distingue amigo de enemigo: una nave de tu propio bando en tu línea de fuego se lleva el disparo, un torpedo estalla en el primer casco que encuentra, y un núcleo nova se lleva a tu bando con todos los demás. Una baja de tu propio bando te cuesta {kill} puntos, con una nova el doble, y el comentarista le cuenta a todo el sistema lo que eres. Tu HUD marca a tu propio bando con un círculo donde un rival tiene un cuadrado, y mientras tu morro apunta a uno de ellos la mira aparece tachada sobre AMIGO. Dispara junto a tu bando, nunca a través de él.',
   Torpedoes: 'Torpedos',
+  "A burning drive and a firing laser glow on every sensor. Leave your drive cold and your trigger alone for {silentAfter} s, and you run silent: the radar, the HUD's marks, a torpedo's lock and the bots find you only within {silentRange} km. Your HUD says SILENT RUNNING. Drift out of a fight, let them lose you, and come back where they do not look. The eye still sees you, and the first burn or shot gives you away.":
+    'Un motor encendido y un láser que dispara brillan en todos los sensores. Deja el motor frío y el gatillo quieto {silentAfter} s, y navegas en silencio: el radar, las marcas del HUD, el bloqueo de un torpedo y los bots solo te encuentran a menos de {silentRange} km. Tu HUD dice NAVEGACIÓN SILENCIOSA. Déjate llevar fuera de un combate, haz que te pierdan y vuelve por donde no miran. El ojo aún te ve, y el primer impulso o disparo te delata.',
   '{torpedoes} per ship, more with the hangar\'s tubes. A torpedo locks on the ship closest to your nose within {lockAngle}° and {lockRange} km: keep the target near the crosshair until the lock holds, then launch. Armor does not stop it: {torpedoDamage} hull points, whatever side it reaches. Two kill.':
     '{torpedoes} por nave, más con los tubos del hangar. Un torpedo fija la nave más cercana a tu morro dentro de {lockAngle}° y {lockRange} km: mantén el blanco cerca de la mira hasta que quede fijado, y lanza. La coraza no lo detiene: {torpedoDamage} puntos de casco, llegue por el lado que llegue. Dos matan.',
   'TORPEDO INBOUND: shoot it down (a small target, {torpedoShot} points), or break its lock. A seeker that loses sight behind a rock or a hull flies straight on for good.':

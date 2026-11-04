@@ -1,6 +1,6 @@
 import { gripAt, LEAD_TIME, leadLimit, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, METERS_PER_UNIT, ON_NOSE, OVERDRIVE_PUSH, RCS_THRUST, TURN_ACCELERATION, turnRadius } from '../ship/flight';
 import { NOZZLES, NOZZLES_PER_QUAD, QUADS } from '../ship/thrusters';
-import { COOLING_SHADOW, G, MAX_HULL, NANO_SECONDS, NANO_WAIT } from '../ship/ship';
+import { COOLING_SHADOW, G, MAX_HULL, NANO_SECONDS, NANO_WAIT, SILENT_AFTER, SILENT_RANGE } from '../ship/ship';
 import { CLOG_DEPTH, CLOG_LOSS, CLOG_SECONDS, dragAt, IN_AIR_TOP, reachAt, safeSpeed, SIGHT_DEPTH, UNCLOG_SECONDS } from '../world/air';
 import { RAM_SAFE, SAFE_IMPACT } from '../ship/impact';
 import { BOOST_PUSH, BOOST_RADIUS, GATE_POINTS, GATE_RADIUS, GATES, LAPS, PLACE_POINTS } from '../game/race';
@@ -98,6 +98,8 @@ export const FROM_CODE: Record<string, number> = {
   torpedoHits: TORPEDO_HITS,
   nova: meters(NOVA_RADIUS),
   selfDestruct: meters(SELF_DESTRUCT_RADIUS),
+  silentAfter: SILENT_AFTER,
+  silentRange: km(SILENT_RANGE),
   selfDestructHold: SELF_DESTRUCT_HOLD,
   hookPrice: GEAR.find((gear) => gear.id === 'hook')!.price,
   nanobotsPrice: GEAR.find((gear) => gear.id === 'nanobots')!.price,

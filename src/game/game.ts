@@ -32,7 +32,7 @@ import { showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Command, type Controls, type Device } from '../input/input';
 import { fillSheet, SHEET_TABS } from '../input/sheet';
 import { type Campaign, campaignFrom, complete, hullOf, type Mission, nextMission } from '../campaign/campaign';
-import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
+import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS } from '../ship/tints';
@@ -1078,9 +1078,10 @@ export class Game implements OnlineGame {
   /** When the radio may fall silent again before an imminent death. */
   private silenceReadyAt = 0;
   /** Whether the camera sees a ship past the asteroids, for the HUD markers. */
-  private readonly inSight = (ship: Ship) => this.field.lineOfSight(this.camera.position, ship.flight.position);
+  // the HUD marks a ship its sensors find: in sight, and not running silent beyond SILENT_RANGE (see Ship.silent)
+  private readonly inSight = (ship: Ship) => detectable(ship, this.camera.position, this.time) && this.field.lineOfSight(this.camera.position, ship.flight.position);
   /** Whether the own ship's sensors see a ship past the asteroids (and through the haze, see world/air), for the radar. */
-  private readonly sensed = (ship: Ship) => this.field.lineOfSight(this.subject().flight.position, ship.flight.position, RADAR_DEPTH);
+  private readonly sensed = (ship: Ship) => detectable(ship, this.subject().flight.position, this.time) && this.field.lineOfSight(this.subject().flight.position, ship.flight.position, RADAR_DEPTH);
   private readonly radar = new Radar($<HTMLCanvasElement>('radar'));
   /** The radar's marks besides ships and rocks, reused from frame to frame. */
   private readonly marks: RadarMark[] = [
@@ -2844,6 +2845,8 @@ export class Game implements OnlineGame {
   }
 
   showBeam(shooter: Ship, from: THREE.Vector3, to: THREE.Vector3) {
+    // a shot is loud: the shooter shows up on the sensors again (see Ship.silent)
+    shooter.loudAt = this.time;
     if (shooter.owner !== null) shooter.warm();
     this.effects.beam(from, to, shooter.color);
     this.killcam.recordBeam(this.time, from, to, shooter.color);
@@ -3945,6 +3948,9 @@ export class Game implements OnlineGame {
     this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now), this.hookCarried(me));
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
     this.hud.setKeys(this.input.device);
+    // the own ship runs silent: the sensors find it only up close (see Ship.silent)
+    const silent = me.alive && me.silent(this.time);
+    if ($('hud-silent').hidden === silent) $('hud-silent').hidden = !silent;
     this.hud.setStrain(me.alive ? me.strain : 0);
     this.showJets();
   }
@@ -5848,6 +5854,8 @@ export class Game implements OnlineGame {
     const consider = (other: Homing) => {
       const line = toAim.subVectors(other.flight.position, ship.flight.position);
       if (line.length() > LOCK_DISTANCE) return;
+      // a ship running silent is found only up close (see Ship.silent)
+      if (other instanceof Ship && !detectable(other, ship.flight.position, this.time)) return;
       const off = ship.flight.noseAngleTo(line);
       if (off < angle && seesTarget(other, ship.flight.position, this.field)) {
         best = other;
@@ -6454,6 +6462,7 @@ export class Game implements OnlineGame {
    * whatever else is solid (see solidRay); each is looked for only before the nearest found so far.
    */
   private fireLaser(shooter: Ship) {
+    shooter.loudAt = this.time;
     // shooting ends the own spawn protection: nobody fires from behind it
     shooter.protectedUntil = Math.min(shooter.protectedUntil, this.time);
     // with a nova core, the next shot is the nova

@@ -102,6 +102,20 @@ export function strainAfter(strain: number, acceleration: number, dt: number): n
 
 /** Ships farther away than this never show as having their nose on another (units, 3 km): the sensors' reach for a lock warning. */
 export const LOCK_RANGE = 60000;
+/**
+ * Silent running: a ship whose drive has not burned (its flame above SILENT_THROTTLE) and which
+ * has not fired for SILENT_AFTER seconds shows no heat the sensors pick up from afar. The radar,
+ * the HUD's marks, a torpedo's lock and the bots find it only within SILENT_RANGE (units, 1 km;
+ * the radar reaches 2.5 km, a lock 3 km); the eye still sees it where nothing hides it.
+ */
+export const SILENT_AFTER = 2;
+export const SILENT_THROTTLE = 0.05;
+export const SILENT_RANGE = 20000;
+
+/** Whether the sensors at `from` find `ship` (its line of sight is the caller's): always within SILENT_RANGE, beyond it only while it does not run silent. */
+export function detectable(ship: Ship, from: THREE.Vector3, now: number): boolean {
+  return !ship.silent(now) || ship.flight.position.distanceTo(from) <= SILENT_RANGE;
+}
 /** A nose within this many times the other ship's angular radius counts as TRACKED. */
 const LOCK_TRACKING = 4;
 
@@ -332,6 +346,8 @@ export class Ship {
   private readonly trim: { strips: THREE.Object3D; stern: THREE.Object3D; light: THREE.MeshBasicMaterial; running: THREE.Texture };
   heat = 0;
   overheated = false;
+  /** When it last burned its drive or fired (game time, s), as every browser sees it: since SILENT_AFTER it runs silent (see silent). */
+  loudAt = -Infinity;
   /** The radiators' skin and how hot it glows, 0..1 of the laser's limit (see radiate). */
   private readonly radiators: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   private glow = 0;
@@ -532,6 +548,8 @@ export class Ship {
     this.jets.fill(0);
     this.kickLeft = 0;
     this.protectedUntil = now + SPAWN_PROTECTION;
+    // a fresh clone's ship is warm from the printer's bay
+    this.loudAt = now;
     this.flight.reset(position, orientation);
     // the move to the spawn point is no flight: collisions and gates do not sweep along it
     this.previous.copy(position);
@@ -634,6 +652,8 @@ export class Ship {
     r.alive = state.a;
     this.flight.velocity.copy(r.velocity);
     this.flight.throttle = state.th;
+    // its flame seen: loud (see silent)
+    if (state.th > SILENT_THROTTLE) this.loudAt = now;
     this.hull = state.h;
     this.drive = state.dr;
     this.thrusters = state.tr;
@@ -785,6 +805,8 @@ export class Ship {
     this.flight.thrusterFactor = (0.25 + 0.75 * this.thrusters) * this.perks.thrusters;
     this.vent(now);
     this.flight.update(dt, controls, gravity, this.ventForce, this.ventSpin);
+    // a burning drive is loud (see silent)
+    if (this.flight.throttle > SILENT_THROTTLE) this.loudAt = now;
     this.strain = strainAfter(this.strain, this.flight.properAcceleration, dt);
     this.show(dt, now);
     this.nanobots(dt, now);
@@ -934,6 +956,11 @@ export class Ship {
   /** The main drive is cooling down after an overdrive (see overheatDrive). */
   driveOffline(now: number) {
     return now < this.driveOfflineUntil;
+  }
+
+  /** Running silent: neither its drive burned nor a shot fired for SILENT_AFTER seconds, so the sensors find it only within SILENT_RANGE (see detectable). */
+  silent(now: number): boolean {
+    return now - this.loudAt >= SILENT_AFTER;
   }
 
   /** The seconds the main drive still gives no thrust (0: it does). */

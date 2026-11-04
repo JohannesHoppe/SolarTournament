@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { raySphere, type AsteroidField, type RayHit } from '../world/asteroids';
 import { IDLE, type Controls } from '../input/input';
-import { LASER_RANGE, noseOn, type Ship } from './ship';
+import { detectable, LASER_RANGE, noseOn, type Ship } from './ship';
 import { MAIN_THRUST, RCS_THRUST } from './flight';
 import { BOOST_PUSH } from '../game/race';
 import { escapeLoad } from '../game/alarms';
@@ -459,6 +459,8 @@ export class Bot {
       if (!this.rival(ship, now)) continue;
       const distance = ship.flight.position.distanceTo(me.position);
       if (distance >= sight) continue;
+      // a ship running silent its sensors find only up close, as a Host's (see Ship.silent)
+      if (!detectable(ship, me.position, now)) continue;
       const hunters = this.huntersOf(ship, ships, field, sight);
       if (hunters >= MAX_HUNTERS) continue;
       const cost = distance * (1 + hunters) * (ship === this.target ? STICKY : 1);

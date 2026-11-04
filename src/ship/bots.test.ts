@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { allyInLine, Bot, BOT_NAMES, evenSkills, meanSkill, missOf, NOVA_PATIENCE, NOVA_SHED, NOVA_SIEGE, novaWorth, reactionOf, skillsOf, startTiming, TORPEDO_CLEARANCE } from './bots';
 import { pow } from '../detmath';
 import { FlightModel, MAIN_THRUST, MAX_SPEED } from './flight';
-import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, strainAfter } from './ship';
+import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, SILENT_RANGE, strainAfter } from './ship';
 import { testField } from '../test/field';
 import type { AsteroidField } from '../world/asteroids';
 import { arenaById } from '../world/arenas';
@@ -75,6 +75,26 @@ describe('bots fly by the Hosts\' rules', () => {
     rival.flight.position.set(20000, 0, 0);
     blind.think(0, [me, rival], field(false));
     expect(blind.target).toBeNull();
+  });
+
+  it('finds a ship running silent only up close, as a Host\'s sensors do, and a loud one as far as ever', () => {
+    const me = ship('Kessler', at(0), at(1));
+    const rival = ship('Halley', at(SILENT_RANGE * 1.6), at(-1));
+    // drive cold and no shot for long enough: silent
+    rival.loudAt = 0;
+    const silent = new Bot(me, evenSkills(0.5));
+    silent.think(10, [me, rival], field(false));
+    expect(silent.target).toBeNull();
+    rival.flight.position.set(SILENT_RANGE * 0.8, 0, 0);
+    const close = new Bot(me, evenSkills(0.5));
+    close.think(10, [me, rival], field(false));
+    expect(close.target).toBe(rival);
+    // its drive lit a moment ago: loud, found from afar
+    rival.flight.position.set(SILENT_RANGE * 1.6, 0, 0);
+    rival.loudAt = 9.5;
+    const loud = new Bot(me, evenSkills(0.5));
+    loud.think(10, [me, rival], field(false));
+    expect(loud.target).toBe(rival);
   });
 
   it('chases a thief behind rock, as a Host\'s HUD marks it, but holds its fire until it sees it', () => {

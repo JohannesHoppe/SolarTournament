@@ -340,6 +340,8 @@ export class Torpedoes {
   constructor(private readonly effects: Effects) {}
 
   launch(id: string, shooter: Ship, target: Homing | null, position: THREE.Vector3, velocity: THREE.Vector3, now: number, own: boolean) {
+    // a launch is loud: the shooter shows up on the sensors again (see Ship.silent)
+    shooter.loudAt = now;
     const mesh = new THREE.Mesh(this.geometry, this.material);
     mesh.position.copy(position);
     this.group.add(mesh);
