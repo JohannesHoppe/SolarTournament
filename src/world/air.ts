@@ -259,5 +259,28 @@ export const heatSpeed = (altitude: number, cooling: number) => MAX_SPEED * cbrt
  */
 export const safeSpeed = (altitude: number, cooling: number) => Math.min(MAX_SPEED, heatSpeed(altitude, cooling));
 
+/** The fins every ship of the Games carries: two, on the struts aft. */
+export const FINS = 2;
+/**
+ * In air the fins keep a ship on its course, as a weathervane does: a hull short of one (the
+ * campaign's scrap) is dragged towards the side that keeps its fin, harder by the dynamic
+ * pressure (density times speed squared). FIN_YAW is the yaw (and FIN_ROLL the roll) it is
+ * turned with (rad/s²) for a missing fin right under the deck at the tournament's limit: at
+ * 100 m/s under the deck some 16 rad/s², more than the scrap's thrusters (about 12) turn
+ * against, so it cannot be steered there; at 50 m/s a quarter of that, which they hold. Over
+ * the deck, in its thin top, hardly anything.
+ */
+export const FIN_YAW = 100;
+export const FIN_ROLL = 40;
+
+/** The turn the air forces on a ship with `fins` at an altitude (units) and speed (units/s), as a spin of its own (pitch, yaw, roll in rad/s²) into `target`. */
+export function finSpin(altitude: number, speed: number, fins: number, target: THREE.Vector3): THREE.Vector3 {
+  const missing = Math.max(0, FINS - fins);
+  if (missing === 0) return target.set(0, 0, 0);
+  const share = speed / MAX_SPEED;
+  const pressure = density(altitude) * share * share * missing;
+  return target.set(0, -FIN_YAW * pressure, FIN_ROLL * pressure);
+}
+
 /** The haze's numbers for the shaders (see view/haze): extinction, scale heights, the clamp of the depth. */
 export const HAZE_SHAPE = { haze: HAZE, scale: SCALE_HEIGHT, top: TOP_HEIGHT, topDensity: TOP_DENSITY, deepest: DEEPEST, deck: DECK_DEPTH };

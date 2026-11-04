@@ -111,6 +111,8 @@ export interface Perks {
   laser: boolean;
   overdrive: boolean;
   dodge: boolean;
+  /** The fins on its struts (see world/air, FINS): radiators, and in air what keeps it on its course. */
+  fins: number;
 }
 
 export const STOCK: Readonly<Perks> = {
@@ -127,6 +129,7 @@ export const STOCK: Readonly<Perks> = {
   laser: true,
   overdrive: true,
   dodge: true,
+  fins: 2,
 };
 
 /**

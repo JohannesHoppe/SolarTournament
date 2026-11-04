@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { airAround, airBurn, airHeat, altitudeIn, CLOG_LOSS, clogging, density, dragAt, dragOn, heatInto, IN_AIR_TOP, LOCK_DEPTH, opticalDepth, RADAR_DEPTH, REACTOR_WASTE, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from './air';
+import { airAround, airBurn, FINS, finSpin, airHeat, altitudeIn, CLOG_LOSS, clogging, density, dragAt, dragOn, heatInto, IN_AIR_TOP, LOCK_DEPTH, opticalDepth, RADAR_DEPTH, REACTOR_WASTE, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from './air';
 import { footOf, skyPointer } from './reference';
 import { arenaById } from './arenas';
 import { ARENA_LIMIT } from './arena';
@@ -8,6 +8,7 @@ import { FlightModel, MAIN_THRUST, MAX_SPEED } from '../ship/flight';
 import { IDLE } from '../input/input';
 import { testField } from '../test/field';
 import { cos, pow, sin } from '../detmath';
+import { angleTo } from '../detthree';
 
 const air = arenaById('giant')!.layout.air!;
 const G = 196.2;
@@ -224,5 +225,39 @@ describe('up in a planet’s air', () => {
     // in the Jupiter arena: under its deck, in the field's middle
     expect(airAround(air, new THREE.Vector3(0, -2000, 0))).toBe(air);
     expect(altitudeIn(air, new THREE.Vector3(0, -2000, 0))).toBeLessThan(0);
+  });
+});
+
+describe('the fins in air', () => {
+  /** How far (rad) a ship's nose has turned after `seconds` flying level just under the deck at `speed` (units/s) with the stick centered, its thrusters at `thrusters` (the share the game gives them). */
+  const turned = (fins: number, speed: number, thrusters: number, seconds = 2) => {
+    const flight = new FlightModel();
+    flight.reset(new THREE.Vector3(), new THREE.Quaternion());
+    flight.thrusterFactor = thrusters;
+    const spin = new THREE.Vector3();
+    const nose = flight.forward(new THREE.Vector3());
+    for (let t = 0; t < seconds; t += 1 / 60) {
+      finSpin(-200, speed, fins, spin);
+      flight.velocity.copy(flight.forward()).multiplyScalar(speed);
+      flight.update(1 / 60, IDLE, new THREE.Vector3(), undefined, spin);
+    }
+    return angleTo(flight.forward(), nose);
+  };
+  // the scrap's thrusters: a stock ship's share at whole thrusters (0.25 + 0.75), halved
+  const scrap = 0.5;
+
+  it('keep a ship with both on its course', () => {
+    expect(finSpin(-200, MAX_SPEED, FINS, new THREE.Vector3()).length()).toBe(0);
+    expect(turned(FINS, 2000, 1)).toBeLessThan(1e-6);
+  });
+
+  it('leave a hull short of one unsteerable under the deck at speed, and steerable slow', () => {
+    expect(turned(1, 2000, scrap)).toBeGreaterThan(0.5);
+    // slow it drifts off a few degrees, which a hand on the stick takes back
+    expect(turned(1, 800, scrap)).toBeLessThan(0.15);
+  });
+
+  it('hardly matter over the deck, in its thin top', () => {
+    expect(finSpin(3000, 2000, 1, new THREE.Vector3()).length()).toBeLessThan(finSpin(-200, 2000, 1, new THREE.Vector3()).length() * 0.2);
   });
 });

@@ -309,6 +309,8 @@ export class Ship {
   /** Push and spin from venting air, in ship space, applied in the next update. */
   private readonly ventForce = new THREE.Vector3();
   private readonly ventSpin = new THREE.Vector3();
+  /** The turn the air forces on the ship where it lacks a fin (rad/s², pitch, yaw, roll; see world/air, finSpin); zero out of air. */
+  readonly finSpin = new THREE.Vector3();
 
   hull = MAX_HULL;
   /** Torpedoes left (see game/torpedoes); every clone comes with a full load. */
@@ -832,7 +834,8 @@ export class Ship {
 
   private vent(now: number) {
     this.ventForce.set(0, 0, 0);
-    this.ventSpin.set(0, 0, 0);
+    // the air's pull on a hull short of a fin (set by the game where there is air, see world/air, finSpin)
+    this.ventSpin.copy(this.finSpin);
     for (const hole of this.holes) {
       const strength = this.ventStrength(hole, now);
       if (strength < 0.01) continue;

@@ -41,7 +41,7 @@ import { Lobby, type Listing } from '../net/lobby';
 import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
-import { airAround, airBurn, altitudeIn, clogging, density, heatInto, REACTOR_WASTE, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
+import { airAround, airBurn, altitudeIn, clogging, density, finSpin, heatInto, REACTOR_WASTE, dragOn, LOCK_DEPTH, RADAR_DEPTH, reachIn, safeSpeed, SIGHT_DEPTH, upIn } from '../world/air';
 import { Haze, installHaze, skyLight } from '../view/haze';
 import { Reentry } from '../view/reentry';
 import { Arena, ARENA_GRACE, ARENA_LIMIT } from '../world/arena';
@@ -6339,8 +6339,13 @@ export class Game implements OnlineGame {
    */
   private friction(ship: Ship, dt: number, now: number) {
     const air = this.field.air;
-    if (!air || !ship.alive) return;
+    if (!air || !ship.alive) {
+      ship.finSpin.set(0, 0, 0);
+      return;
+    }
     const altitude = altitudeIn(air, ship.flight.position);
+    // a hull short of a fin cannot hold its course in air
+    finSpin(altitude, ship.flight.velocity.length(), ship.perks.fins, ship.finSpin);
     ship.clog = clogging(ship.clog, altitude, dt);
     const heat = heatInto(altitude, ship.flight.velocity.length(), ship.clog) * dt;
     if (heat < 1e-4) return;

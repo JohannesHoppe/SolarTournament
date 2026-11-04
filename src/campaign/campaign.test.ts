@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, campaignFrom, complete, freshCampaign, hullOf, MISSIONS, nextMission, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, MISSIONS, nextMission, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 
 describe('the campaign Lot 7731', () => {
@@ -43,6 +43,9 @@ describe('the campaign Lot 7731', () => {
     expect(hull.thrusters).toBe(SCRAP_THRUSTERS);
     expect(TORPEDOES + hull.torpedoes).toBe(0);
     expect([hull.laser, hull.overdrive, hull.dodge, hull.hook, hull.nanobots, hull.selfDestruct]).toEqual([false, false, false, false, false, false]);
+    // one fin of two: a quarter less radiator, and no course to hold in air
+    expect(hull.fins).toBe(1);
+    expect(hull.cooling).toBe(1 - FIN_RADIATOR);
   });
 
   it('gives every mission a name and drills to fly', () => {
