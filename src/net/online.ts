@@ -349,7 +349,7 @@ export class Online {
     session.onDecoy = (ship, p, v) => {
       const holder = this.find(ship);
       if (!holder?.alive || holder.decoys <= 0) return;
-      if (this.caught(holder, this.plausible.selfDestruct(holder.id, p, wall(), this.clock.now(holder.owner ?? '', wall())))) return;
+      if (this.caught(holder, this.plausible.decoy(holder.id, p, wall(), this.clock.now(holder.owner ?? '', wall())))) return;
       holder.decoys--;
       game.remoteDecoy(holder, from.fromArray(p), to.fromArray(v));
     };

@@ -88,6 +88,22 @@ describe('plausibility of what other browsers report', () => {
     expect(check.nova('s', [0, 0, 0], 51.1)).toBeNull();
   });
 
+  it('let a clone drop no more decoys than its probes gave it, and none from where its ship is not', () => {
+    const check = flying(new Plausibility());
+    // no probe of decoys: only the slack for messages of a round change that cross
+    for (let i = 0; i < 2; i++) expect(check.decoy('s', [0, 0, 0], 21)).toBeNull();
+    expect(check.decoy('s', [0, 0, 0], 21.1)).toBe('decoys');
+    // a probe of decoys gives two more
+    const taken = flying(new Plausibility());
+    taken.probe('s', '7.0', 'decoys', 22);
+    for (let i = 0; i < 4; i++) expect(taken.decoy('s', [0, 0, 0], 22.5)).toBeNull();
+    expect(taken.decoy('s', [0, 0, 0], 22.6)).toBe('decoys');
+    // and a drop far from the ship is one too many
+    const far = flying(new Plausibility());
+    far.probe('s', '8.0', 'decoys', 21);
+    expect(far.decoy('s', [400000, 0, 0], 21.5)).toBe('decoys');
+  });
+
   it('count a probe once: a take said again and again, refused or of a probe already gone, adds no torpedoes and opens no window for a core', () => {
     const check = flying(new Plausibility());
     // a take refused here (the taker too far, as lag may have it) may have held a core or torpedoes, once

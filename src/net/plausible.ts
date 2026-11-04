@@ -3,6 +3,7 @@ import { atan2, hypot } from '../detmath';
 import { angleTo, setFromAxisAngle } from '../detthree';
 import { MAX_SPEED } from '../ship/flight';
 import { ONLINE_LOAD as LOAD, TORPEDO_LIFETIME } from '../game/torpedoes';
+import { DECOYS_PER_PROBE } from '../game/decoys';
 import { HOOK_RANGE } from '../game/hook';
 import { FINISH_GATES } from '../game/race';
 
@@ -12,11 +13,11 @@ import { FINISH_GATES } from '../game/race';
  * honest browser look like a cheater; only the impossible does: a ship that jumps across the
  * arena, a nose that swings round faster than any thruster turns it, a beam that leaves where
  * the ship is not or along a nose it cannot have, a nova core nobody ever had, more torpedoes
- * than a clone can carry, kills nobody died for. Each check judges one event; a peer is only
+ * than a clone can carry, more decoys than its probes gave it, kills nobody died for. Each check judges one event; a peer is only
  * reported for what its ship does again and again (see Strikes).
  */
-export type Cheat = 'teleport' | 'nova' | 'torpedoes' | 'kills' | 'hit' | 'hook' | 'aim' | 'spin';
-export const CHEATS: readonly Cheat[] = ['teleport', 'nova', 'torpedoes', 'kills', 'hit', 'hook', 'aim', 'spin'];
+export type Cheat = 'teleport' | 'nova' | 'torpedoes' | 'decoys' | 'kills' | 'hit' | 'hook' | 'aim' | 'spin';
+export const CHEATS: readonly Cheat[] = ['teleport', 'nova', 'torpedoes', 'decoys', 'kills', 'hit', 'hook', 'aim', 'spin'];
 
 /**
  * No ship flies faster than this (units/s, 1 km/s): four times the tournament limit. An honest
@@ -87,6 +88,9 @@ interface Track {
   /** Torpedoes launched by this clone, and how many it can have had. */
   launched: number;
   torpedoes: number;
+  /** Decoys dropped by this clone, and how many its probes can have given it. */
+  dropped: number;
+  decoys: number;
   /** Its kills when first seen this round, and the kills everyone saw it make since. */
   kills: number | null;
   credits: number;
@@ -164,6 +168,8 @@ export class Plausibility {
         nova: false,
         launched: 0,
         torpedoes: LOAD,
+        dropped: 0,
+        decoys: 0,
         kills: null,
         credits: 0,
         aheadSince: null,
@@ -243,6 +249,8 @@ export class Plausibility {
   private freshClone(track: Track) {
     track.launched = 0;
     track.torpedoes = LOAD;
+    track.dropped = 0;
+    track.decoys = 0;
   }
 
   /**
@@ -382,6 +390,7 @@ export class Plausibility {
     if (kind === null) track.tookAt = now;
     if (kind === 'nova') track.nova = true;
     if (kind === 'torpedoes' || kind === null) track.torpedoes += 2;
+    if (kind === 'decoys' || kind === null) track.decoys += DECOYS_PER_PROBE;
   }
 
   /** A ship killed another (`credit` kills), or lost one to a nova (-1), as everyone saw it. */
@@ -411,6 +420,17 @@ export class Plausibility {
     this.freshClone(track);
     this.regrace(track, now);
     return null;
+  }
+
+  /**
+   * A ship drops a decoy at a place (see game/decoys): where it is, as a nova must be (a claim from
+   * far off counts as a strike), and no more than its clone's probes gave it.
+   */
+  decoy(id: string, p: number[], now: number, sent = now): Cheat | null {
+    const track = this.track(id, now);
+    if (Number.isFinite(track.at) && this.measure('decoys', tooFar(track, p, sent))) return 'decoys';
+    track.dropped++;
+    return this.measure('decoys', track.dropped / (track.decoys + TORPEDO_SLACK)) ? 'decoys' : null;
   }
 
   /** A ship launches a torpedo: no more than its clone can carry. */
