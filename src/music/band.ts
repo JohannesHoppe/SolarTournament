@@ -1,7 +1,7 @@
 import type * as ToneLib from 'tone';
 import { clipKey, phraseKey, phrases, words, type Language } from './lines';
 import * as i18n from '../i18n/i18n';
-import { barSeconds, hash, stepEvents, STEPS_PER_BAR, type BarInfo, type KickDesign, type Song, type VoiceLine } from './songs';
+import { barSeconds, GLITCH_MAX, glitchSteps, hash, stepEvents, STEPS_PER_BAR, type BarInfo, type KickDesign, type Song, type VoiceLine } from './songs';
 import { atan, cos, pow, sin, tanh } from '../detmath';
 
 type Tone = typeof ToneLib;
@@ -91,6 +91,17 @@ const REVERB_LEVEL = 0.5;
 const ANNOUNCER_DRIVE = 3;
 const ANNOUNCER_LEVEL = 2.6;
 const ANNOUNCER_DUCK = 0.2;
+/**
+ * A stammered line (see VoiceLine): its first word's opening is restarted STAMMER_HITS times, a
+ * sixteenth apart, each cut to STAMMER_CUT of a sixteenth, and the line follows STAMMER_STEPS
+ * sixteenths after the first.
+ */
+const STAMMER_HITS = 6;
+const STAMMER_CUT = 0.8;
+const STAMMER_STEPS = 8;
+/** A glitch's bursts of noise (see glitchSteps): the band each burst of a storm sounds in, the first one lowest (Hz), and its length (share of a sixteenth). */
+const GLITCH_BANDS = [600, 1200, 2400, 4800];
+const GLITCH_BURST = 0.9;
 
 /** The rendered words of the voices (see tools/voice/render.ts). */
 export interface Voice {
@@ -186,6 +197,8 @@ export class Band {
   private readonly bell: ToneLib.FMSynth;
   private readonly arp: ToneLib.Synth;
   private readonly siren: ToneLib.Synth;
+  private readonly glitchNoise: ToneLib.NoiseSynth;
+  private readonly glitchBand: ToneLib.Filter;
   private readonly bomb: ToneLib.MembraneSynth;
   private readonly riser: ToneLib.NoiseSynth;
   private readonly riserFilter: ToneLib.Filter;
@@ -406,6 +419,10 @@ export class Band {
     const bombOut = new T.Gain(1).connect(this.master);
     bombOut.connect(new T.Gain(2).connect(this.fxSend));
     this.bomb = new T.MembraneSynth({ pitchDecay: 0.3, octaves: 6, envelope: { attack: 0.001, decay: 1.2, sustain: 0, release: 0.3 }, volume: -6 }).connect(bombOut);
+    // a glitch: bursts of white noise through a band that climbs as they follow each other
+    this.glitchBand = new T.Filter({ type: 'bandpass', frequency: GLITCH_BANDS[0], Q: 1.2 }).connect(this.master);
+    this.glitchBand.connect(new T.Gain(0.5).connect(this.echoSend));
+    this.glitchNoise = new T.NoiseSynth({ noise: { type: 'white' }, envelope: { attack: 0.001, decay: 0.02, sustain: 1, release: 0.01 }, volume: -16 }).connect(this.glitchBand);
 
     // transitions: a noise riser into the drop, a crash on the first beat after it
     this.riserFilter = new T.Filter({ type: 'highpass', frequency: 1000, Q: 1 }).connect(this.master);
@@ -636,6 +653,22 @@ export class Band {
       case 'bomb':
         this.bomb.triggerAttackRelease(midiToHz(song.root - 12), 1, t, 1);
         break;
+      case 'glitch': {
+        const sixteenth = bar / STEPS_PER_BAR;
+        let storm = 0;
+        for (let b = 0; b < s.bars; b++) {
+          glitchSteps(song, s.bar + b).forEach((intensity, step) => {
+            if (intensity < GLITCH_MAX) {
+              storm = 0;
+              return;
+            }
+            const at = t + (b * STEPS_PER_BAR + step) * sixteenth;
+            this.glitchBand.frequency.setValueAtTime(GLITCH_BANDS[Math.min(storm++, GLITCH_BANDS.length - 1)], at);
+            this.glitchNoise.triggerAttackRelease(sixteenth * GLITCH_BURST, at, 0.8);
+          });
+        }
+        break;
+      }
       case 'bitDrop':
         // the drums lose their bits for a bar
         this.crush.wet.setValueAtTime(1, t);
@@ -745,18 +778,27 @@ export class Band {
    */
   speak(line: VoiceLine, t: number, eighth: number) {
     if (!this.voice) return;
-    let position = t;
-    const list = this.clips(line.language, line.text, line.style === 'chop');
+    const chopped = line.style !== 'speech';
+    const list = this.clips(line.language, line.text, chopped);
     // a line without a single clip (its sprite not loaded) is not on air: no duck, no transmission
     if (!list.length) return;
+    // a stammer: the first word's opening on every sixteenth, then the line from half a bar on
+    let from = t;
+    if (line.style === 'stammer') {
+      const sixteenth = eighth / 2;
+      const [offset, duration] = list[0].clip;
+      for (let k = 0; k < STAMMER_HITS; k++) this.playClip([offset, Math.min(duration, sixteenth * STAMMER_CUT)], t + k * sixteenth, this.voiceIn);
+      from = t + STAMMER_STEPS * sixteenth;
+    }
+    let position = from;
     list.forEach(({ clip, stop }, i) => {
-      const start = line.style === 'chop' ? t + Math.ceil((position - t) / eighth - 1e-6) * eighth : position;
+      const start = chopped ? from + Math.ceil((position - from) / eighth - 1e-6) * eighth : position;
       this.playClip(clip, start, this.voiceIn);
       if (i === list.length - 1) {
         this.voiceEcho.gain.setValueAtTime(0.9, start);
         this.voiceEcho.gain.setValueAtTime(0, start + clip[1]);
       }
-      position = start + clip[1] + (line.style === 'chop' ? 0.02 : 0.05) + (stop ? eighth : 0);
+      position = start + clip[1] + (chopped ? 0.02 : 0.05) + (stop ? eighth : 0);
     });
     // the music steps back while the voice talks
     // short ramps instead of steps, so the duck does not click

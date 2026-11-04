@@ -5,7 +5,7 @@ Radio 2584, the station of the games: techno generated from a track's title, the
 | File | What it does |
 |---|---|
 | `songs.ts` | A track from its seed: flavor, form, energy curve, step patterns, fills; drive's pedal bass loop and its timbre bar by bar; the tables the recipes read |
-| `band.ts` | The Tone.js instruments and how one sixteenth is played; the pedal bass's own voice (two free-running saws drifting a little off the note, a filter that follows the note and snaps open on every one, one effect) and its lower wave; drive's round kick and its clap of a plateau of noise |
+| `band.ts` | The Tone.js instruments and how one sixteenth is played; the pedal bass's own voice (two free-running saws drifting a little off the note, a filter that follows the note and snaps open on every one, one effect) and its lower wave; drive's round kick and its clap of a plateau of noise; the glitch's bursts of noise; the voice spoken, chopped onto the beat or stammered |
 | `recipes.ts` | The recipes on the radio page (its footer's link, `#recipes`): every flavor's numbers read from `songs.ts`, what it sounds like in words, a title that grows a track of it |
 | `radio.ts` | Plays the track on the round's clock and keeps it in step; the game's radio stays silent while the radio page plays in another tab (a BroadcastChannel between the browser's tabs) |
 | `preview.ts` | Renders a track offline as WAV in one pass, the band playing a stretch ahead of the render (radio page downloads, development) |

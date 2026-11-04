@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { createSong, FLAVOR_WEIGHTS, ROUND_SECONDS, SCALES, stepEvents, STEPS_PER_BAR, titleFor } from './songs';
+import { createSong, FLAVOR_WEIGHTS, GLITCH_BARS, GLITCH_MAX, glitchSteps, ROUND_SECONDS, SCALES, stepEvents, STEPS_PER_BAR, titleFor } from './songs';
+import { STATION_DE, STATION_EN } from './lines';
 
 const notes = (title: string, from: number, steps: number) => {
   const song = createSong(title, 'round', ROUND_SECONDS);
@@ -105,5 +106,39 @@ describe('Radio 2584', () => {
   it('picks titles from any seed, the same every time', () => {
     expect(titleFor(12345)).toBe(titleFor(12345));
     expect(titleFor(1)).not.toBe('');
+  });
+
+  it('calls the station once a round as a stammered jingle past the middle, and the hangar never', () => {
+    let stammered = 0;
+    for (let seed = 0; seed < 300; seed++) {
+      const song = createSong(titleFor(seed), 'round', ROUND_SECONDS);
+      const jingles = song.voice.filter((line) => line.text === STATION_EN || line.text === STATION_DE);
+      // the station's name opens the title line in the intro; the jingle calls it alone
+      expect(jingles.length).toBeLessThanOrEqual(1);
+      for (const jingle of jingles) {
+        expect(jingle.style).toBe('stammer');
+        expect(jingle.bar).toBeGreaterThanOrEqual(song.form[song.form.length - 1].start / 2);
+      }
+      stammered += song.voice.filter((line) => line.style === 'stammer').length;
+    }
+    expect(stammered).toBeGreaterThan(300);
+    expect(createSong('Orbit Terror', 'lounge', ROUND_SECONDS).voice.every((line) => line.style === 'speech')).toBe(true);
+  });
+
+  it('breaks the link into noise in a glitch, never in drive, the bursts the same from the same title', () => {
+    let glitches = 0;
+    for (let seed = 0; seed < 300; seed++) {
+      const song = createSong(titleFor(seed), 'round', ROUND_SECONDS);
+      const glitch = song.surprises.filter((s) => s.type === 'glitch');
+      if (song.flavor === 'drive') expect(glitch).toEqual([]);
+      glitches += glitch.length;
+      for (const s of glitch) {
+        expect(s.bars).toBe(GLITCH_BARS);
+        const steps = glitchSteps(song, s.bar);
+        expect(steps).toEqual(glitchSteps(createSong(titleFor(seed), 'round', ROUND_SECONDS), s.bar));
+        expect(steps.every((i) => i >= 0 && i <= GLITCH_MAX)).toBe(true);
+      }
+    }
+    expect(glitches).toBeGreaterThan(50);
   });
 });

@@ -91,7 +91,7 @@ export interface Fill {
 }
 
 /** A surprise that spans one or more bars. */
-export type SurpriseType = 'filterDip' | 'delayThrow' | 'siren' | 'bomb' | 'bitDrop' | 'keyLift';
+export type SurpriseType = 'filterDip' | 'delayThrow' | 'siren' | 'bomb' | 'bitDrop' | 'keyLift' | 'glitch';
 
 export interface Surprise {
   type: SurpriseType;
@@ -103,8 +103,12 @@ export interface VoiceLine {
   bar: number;
   language: Language;
   text: string;
-  /** chop: one word per eighth, like a vocoder hook; speech: sentence after sentence. */
-  style: 'chop' | 'speech';
+  /**
+   * chop: one word per eighth, like a vocoder hook; speech: sentence after sentence; stammer: the
+   * opening of its first word restarted on every sixteenth for half a bar, as a sampler loops a
+   * cut of a record, then the line word by word.
+   */
+  style: 'chop' | 'speech' | 'stammer';
 }
 
 export interface BarInfo {
@@ -662,7 +666,20 @@ function energyAt(section: Section, bar: number): number {
 
 // ---- surprises and the voice: planned once per track --------------------------------------
 
-const SURPRISES: SurpriseType[] = ['filterDip', 'delayThrow', 'siren', 'bitDrop', 'keyLift'];
+const SURPRISES: SurpriseType[] = ['filterDip', 'delayThrow', 'siren', 'bitDrop', 'keyLift', 'glitch'];
+/**
+ * A glitch: for GLITCH_BARS bars the link breaks up into noise. Every sixteenth draws an intensity
+ * of 0 to GLITCH_MAX from the seed; at the top one a burst of white noise sounds, its band rising
+ * the longer such bursts follow each other (see glitchSteps), as a corrupted picture flickers and
+ * tears apart in a storm.
+ */
+export const GLITCH_BARS = 2;
+export const GLITCH_MAX = 3;
+
+/** The intensities of a glitch bar's sixteenths, 0 to GLITCH_MAX, the same in every browser. */
+export function glitchSteps(song: Song, bar: number): number[] {
+  return Array.from({ length: STEPS_PER_BAR }, (_, step) => hash(song.seed, Ch.Surprise, 5, bar * STEPS_PER_BAR + step) % (GLITCH_MAX + 1));
+}
 
 /**
  * 3 to 5 surprises per round, 12 bars apart (8 where a track has no room for more), each type at most once. They land
@@ -680,7 +697,7 @@ function planSurprises(song: Song): Surprise[] {
   // drive's night drive has no air-raid siren and no crushed drums
   const gentle = song.flavor === 'drive';
   // (and lifts its key in its finale, not by a surprise)
-  const fits = (type: SurpriseType, bar: number) => (type !== 'keyLift' || (bar >= finale.start - 48 && !gentle)) && (type !== 'bitDrop' || (bitDrop && !gentle)) && (type !== 'siren' || !gentle);
+  const fits = (type: SurpriseType, bar: number) => (type !== 'keyLift' || (bar >= finale.start - 48 && !gentle)) && (type !== 'bitDrop' || (bitDrop && !gentle)) && (type !== 'siren' || !gentle) && (type !== 'glitch' || !gentle);
   // first at bars the seed picks, 12 bars apart; a track that got too few that way takes
   // them at any free groove or peak bar, closer together if it has to
   const place = (chance: number, spacing: number) => {
@@ -693,7 +710,7 @@ function planSurprises(song: Song): Surprise[] {
       const type = remaining.find((t) => fits(t, bar));
       if (!type) continue;
       remaining.splice(remaining.indexOf(type), 1);
-      result.push({ type, bar, bars: type === 'filterDip' ? 4 : type === 'siren' ? 2 : type === 'keyLift' ? finale.start + finale.bars + 16 - bar : 1 });
+      result.push({ type, bar, bars: type === 'filterDip' ? 4 : type === 'siren' ? 2 : type === 'glitch' ? GLITCH_BARS : type === 'keyLift' ? finale.start + finale.bars + 16 - bar : 1 });
     }
   };
   place(0.3, 12);
@@ -708,7 +725,8 @@ function planSurprises(song: Song): Surprise[] {
 /**
  * The voice: the station and the title in the intro, then propaganda at section changes and
  * now and then in between, never closer than 12 bars. Motorik tracks speak German; the
- * others now and then.
+ * others now and then. Once, at the first section past the middle, the station
+ * calls its name as a jingle, stammered; a chopped line now and then stammers too.
  */
 function planVoice(song: Song): VoiceLine[] {
   const seed = song.seed;
@@ -725,18 +743,28 @@ function planVoice(song: Song): VoiceLine[] {
   let deutsch = 0;
   let last = 4;
   const end = song.form[song.form.length - 1].start;
+  let jingled = false;
   for (let bar = 12; bar < end; bar += 4) {
     const section = sectionAt(song, bar);
     const starts = bar === section.start;
     const chance = starts ? 0.7 : section.kind === 'finale' ? 0.35 : 0.12;
     if (bar - last < 12 || unit(seed, Ch.Voice, bar) >= chance) continue;
     const speakGerman = german ? unit(seed, Ch.Voice, bar, 1) < 0.7 : unit(seed, Ch.Voice, bar, 1) < 0.12;
-    const text = speakGerman ? PHRASES_DE[germanOrder[deutsch++ % germanOrder.length]] : PHRASES_EN[englishOrder[english++ % englishOrder.length]];
-    lines.push({ bar, language: speakGerman ? 'de' : 'en', text, style: unit(seed, Ch.Voice, bar, 2) < 0.45 ? 'chop' : 'speech' });
     last = bar;
+    if (!jingled && starts && bar >= end / 2) {
+      jingled = true;
+      lines.push({ bar, language: speakGerman ? 'de' : 'en', text: speakGerman ? STATION_DE : STATION_EN, style: 'stammer' });
+      continue;
+    }
+    const chop = unit(seed, Ch.Voice, bar, 2) < 0.45;
+    const text = speakGerman ? PHRASES_DE[germanOrder[deutsch++ % germanOrder.length]] : PHRASES_EN[englishOrder[english++ % englishOrder.length]];
+    lines.push({ bar, language: speakGerman ? 'de' : 'en', text, style: chop ? (unit(seed, Ch.Voice, bar, 3) < STAMMERED ? 'stammer' : 'chop') : 'speech' });
   }
   return lines;
 }
+
+/** Of the chopped lines, this share stammers (see VoiceLine). */
+const STAMMERED = 0.3;
 
 /** A seeded permutation of 0..n-1: every phrase once before any repeats. */
 function order(seed: number, n: number, channel: number): number[] {
