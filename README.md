@@ -155,7 +155,7 @@ The game speaks English, German, Spanish and French. It starts in the language t
 | M | | Radio on / off (also with the ♪ button in the top right corner; a click on the song title opens the radio page) |
 | Esc / P | Menu | Pause |
 | Q | | On the pause screen: quit the round |
-| F1 | | Controls sheet over any screen, the running round included (F1 again closes it; the pause menu's Controls opens it too, on every device). It opens at the controls of whatever the Host steered with last (a key or the mouse, a gamepad's button or stick, a finger on the screen), with tabs for the other two; the HUD's key labels and the flight school's key hints follow the same device |
+| F1 | | Controls sheet over any screen, the running round included (F1 again closes it; the pause menu's Controls opens it too, on every device). It opens at the controls of whatever the Host steered with last (a key or the mouse, a gamepad's button or stick, a finger on the screen), with tabs for the other two; the HUD's key labels and the flight school's key hints follow the same device. What the ship lacks (gear not bought in the hangar, or what the campaign's hull is not fitted with yet: the laser, the dodge, the overdrive, torpedoes, the hook, the self-destruct) stays on the sheet, grey and struck through, its key doing nothing |
 | Tab (hold) | | Standings over the running round: place, kills, deaths, score, in a race the lap or the finish time. While watching a full tournament it also switches to the next pilot |
 | Enter | A | Confirm (start, resume, boot the next clone) |
 

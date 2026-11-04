@@ -1,5 +1,5 @@
 import { msg, t } from '../i18n/i18n';
-import type { Device } from './input';
+import type { Command, Device } from './input';
 
 /**
  * The controls sheet (F1, the pause menu's Controls): the controls of each device, a key or
@@ -69,14 +69,40 @@ export const SHEET_TABS: readonly (readonly [Device, string])[] = [
   ['touch', msg('Touch screen')],
 ];
 
-/** Fills a list with a device's controls, in the Host's language. */
-export function fillSheet(list: HTMLElement, device: Device) {
+/** The rows that need something a ship may lack (bought gear, or what the campaign's hull is not fitted with yet), by what they do. */
+const NEEDS: Partial<Record<string, Command>> = {
+  [SHEET.keyboard[2][1]]: 'fire',
+  [SHEET.keyboard[7][1]]: 'dodge',
+  [SHEET.gamepad[7][1]]: 'dodge',
+  [SHEET.keyboard[10][1]]: 'overdrive',
+  [SHEET.touch[8][1]]: 'overdrive',
+  [SHEET.keyboard[11][1]]: 'torpedo',
+  [SHEET.touch[9][1]]: 'torpedo',
+  [SHEET.keyboard[12][1]]: 'hook',
+  [SHEET.touch[6][1]]: 'hook',
+  [SHEET.keyboard[13][1]]: 'selfDestruct',
+  [SHEET.touch[10][1]]: 'selfDestruct',
+  [SHEET.touch[3][1]]: 'fire',
+};
+
+/**
+ * Fills a list with a device's controls, in the Host's language; what the ship lacks (`lacking`)
+ * stays on the list, grey and struck through, so the key is known before it does anything.
+ */
+export function fillSheet(list: HTMLElement, device: Device, lacking: ReadonlySet<Command> = new Set()) {
   list.replaceChildren(
     ...SHEET[device].flatMap(([keys, text]) => {
       const dt = document.createElement('dt');
       dt.textContent = t(keys);
       const dd = document.createElement('dd');
       dd.textContent = t(text);
+      const need = NEEDS[text];
+      if (need && lacking.has(need)) {
+        for (const cell of [dt, dd]) {
+          cell.classList.add('lacking');
+          cell.title = t('Not on your ship yet');
+        }
+      }
       return [dt, dd];
     }),
   );

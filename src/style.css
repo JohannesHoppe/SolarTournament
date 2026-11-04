@@ -3969,6 +3969,13 @@ body.page {
   margin-top: 10px;
 }
 
+/* what the ship lacks yet (gear not bought, the campaign's hull not fitted): announced, grey and struck through */
+.controls .lacking {
+  color: var(--muted);
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
 #hud-mode {
   font-family: var(--font-body);
   color: var(--hud);

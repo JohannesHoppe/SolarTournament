@@ -615,6 +615,7 @@ export const ES: Catalog = {
   'Flight school': 'Escuela de vuelo',
   'Bot training': 'Entrenamiento con bots',
   'Cold Boot': 'Arranque en frío',
+  'Not on your ship yet': 'Aún no está en tu nave',
   'The Boneyard': 'El Desguace',
   'Forty thousand dead fighters in their racks, above a world of metal.': 'Cuarenta mil cazas muertos en sus bastidores, sobre un mundo de metal.',
   Psyche: 'Psique',

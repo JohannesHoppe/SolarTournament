@@ -29,7 +29,7 @@ import { COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
-import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls, type Device } from '../input/input';
+import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Command, type Controls, type Device } from '../input/input';
 import { fillSheet, SHEET_TABS } from '../input/sheet';
 import { type Campaign, campaignFrom, complete, hullOf, type Mission, nextMission } from '../campaign/campaign';
 import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
@@ -1508,6 +1508,26 @@ export class Game implements OnlineGame {
     this.startRound('school');
   }
 
+  /**
+   * What the controls sheet shows grey and struck through: what the ship flown now lacks (in the
+   * menu, the ship picked as the hangar fits it): gear not bought, or what the campaign's hull is
+   * not fitted with yet.
+   */
+  private lacking(): Set<Command> {
+    const me = this.state !== 'menu' ? this.me : null;
+    const perks = me?.perks ?? perksOf(this.hangar, this.selectedShip, false);
+    const hook = me ? this.hookCarried(me) : perks.hook;
+    const missing: [Command, boolean][] = [
+      ['fire', !perks.laser],
+      ['dodge', !perks.dodge],
+      ['overdrive', !perks.overdrive],
+      ['torpedo', TORPEDOES + perks.torpedoes <= 0],
+      ['hook', !hook],
+      ['selfDestruct', !perks.selfDestruct],
+    ];
+    return new Set(missing.filter(([, lacks]) => lacks).map(([command]) => command));
+  }
+
   /** A ship has the hook: gear bought in the hangar, or lent by the flight school for its drills (never in a mission of the campaign, whose ship has what it was fitted with). */
   private hookCarried(ship: Ship): boolean {
     return ship.perks.hook || (!!this.school && !this.mission);
@@ -2156,7 +2176,7 @@ export class Game implements OnlineGame {
       tab.classList.toggle('selected', selected);
       tab.setAttribute('aria-selected', String(selected));
     }
-    fillSheet($('quicksheet-list'), device);
+    fillSheet($('quicksheet-list'), device, this.lacking());
     sheet.dataset.device = device;
   }
 

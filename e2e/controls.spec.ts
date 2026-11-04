@@ -9,6 +9,17 @@ const sheet = (page: import('@playwright/test').Page) =>
     first: document.querySelector('#quicksheet-list dt')?.textContent,
   }));
 
+test('the controls sheet names what the ship lacks, grey and struck through: gear not bought', async ({ page }) => {
+  // a hangar without gear: no hook, no nanobots, no self-destruct
+  await page.addInitScript(() => localStorage.setItem('solartournament.hangar', JSON.stringify({ coins: 0, ship: 'human' })));
+  const errors = await openGame(page);
+  await page.waitForFunction(() => window.game.state === 'menu');
+  await page.keyboard.press('F1');
+  const lacking = await page.evaluate(() => [...document.querySelectorAll('#quicksheet-list dd.lacking')].map((dd) => dd.textContent));
+  expect(lacking).toEqual(['Hook: bite a rock or a ship and reel in; press again to let go and fly off', 'Self-destruct: takes every rival close by along']);
+  expect(errors).toEqual([]);
+});
+
 test('the controls sheet opens at the device steered with last, with tabs for the others', async ({ page }) => {
   // a gamepad of the standard layout whose A button the test presses
   await page.addInitScript(() => {
