@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { bakeImpostors, bakeReliefMaps, createImpostors, createRocks, createRockShapes, DETAIL, FAR_DETAIL, NEAR_DETAIL, rockPieceMaterial } from './world/rocks';
 import { fractureSet } from './world/fracture';
 import { debrisSet, hullSet } from './world/shapes';
+import { rackSet } from './world/boneyard';
 import { iceSet } from './world/iceset';
 import { alienInterceptor, humanInterceptor, sovereign } from './ship/models';
 import type { TemplateKind, TemplateSet } from './world/asteroids';
@@ -195,7 +196,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     // the hulls are built in code; the model files give collider, drive flame and glows
     ships: { human: humanInterceptor(human), alien: alienInterceptor(alien), sovereign: sovereign(human) },
     belt: { near: asteroidsNear, impostor: asteroidImpostors },
-    fieldSets: { rock, ice: iceSet(rock), debris: debrisSet(), hull: hullSet() },
+    fieldSets: { rock, ice: iceSet(rock), debris: debrisSet(), hull: hullSet(), rack: rackSet() },
     textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), gas: gasTexture(), glow },
     sounds: synthesizeSounds(audio),
     planets: { maps: { saturn, giant, earth, 'earth-day': earthDay }, ring },

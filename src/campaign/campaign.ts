@@ -1,6 +1,7 @@
 import { msg } from '../i18n/i18n';
 import { CAMPAIGN } from '../music/lines';
 import { DRILL, saying, type Drill } from '../game/school';
+import type { ArenaId } from '../world/arenas';
 import { STOCK, type Perks } from '../game/hangar';
 import { TORPEDOES } from '../game/torpedoes';
 
@@ -39,8 +40,10 @@ export interface Mission {
   pay: number;
 }
 
-/** A drill of the flight school with Nicole's campaign line instead of the school's, once, without the school's praise. */
-const told = (drill: Drill, line: string): Drill => ({ ...drill, line, praise: undefined, reps: 1, repLine: undefined });
+/** A drill of the flight school with Nicole's campaign line instead of the school's, once, without the school's praise, flown at a place of the campaign. */
+const told = (drill: Drill, line: string, arena: ArenaId = 'boneyard'): Drill => ({ ...drill, line, praise: undefined, reps: 1, repLine: undefined, arena });
+/** A line Nicole says at a place of the campaign. */
+const said = (line: string, arena: ArenaId = 'boneyard'): Drill => ({ ...saying(line), arena });
 
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
@@ -48,7 +51,7 @@ export const MISSIONS: readonly Mission[] = [
     // the first link into the hull in rack 7731, and out of the rack to the yard office's beacon
     id: 'coldBoot',
     name: msg('Cold Boot'),
-    drills: [saying(CAMPAIGN.coldBoot), told(DRILL.turn, CAMPAIGN.coldBootTurn), told(DRILL.drive, CAMPAIGN.coldBootDrive), told(DRILL.brake, CAMPAIGN.coldBootBrake), told(DRILL.stopAt, CAMPAIGN.coldBootStop), saying(CAMPAIGN.coldBootDone)],
+    drills: [said(CAMPAIGN.coldBoot), told(DRILL.turn, CAMPAIGN.coldBootTurn), told(DRILL.drive, CAMPAIGN.coldBootDrive), told(DRILL.brake, CAMPAIGN.coldBootBrake), told(DRILL.stopAt, CAMPAIGN.coldBootStop), said(CAMPAIGN.coldBootDone)],
     pay: 0,
   },
 ];

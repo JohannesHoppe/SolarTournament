@@ -62,7 +62,7 @@ export const ASTEROID_POINTS = [200, 120, 80];
 const SOLID = 1000;
 
 /** The kinds of shapes a field is built from: rocks, ice, the debris of a station, the hull sections of a wreck. */
-export type TemplateKind = 'rock' | 'ice' | 'debris' | 'hull';
+export type TemplateKind = 'rock' | 'ice' | 'debris' | 'hull' | 'rack';
 
 /**
  * The shapes of one kind: `near` is what is drawn up close, `far` (optional) replaces it afar,
@@ -460,9 +460,9 @@ export class AsteroidField {
           parts: ((object.userData.parts ?? []) as { center: THREE.Vector3; half: THREE.Vector3 }[]).map((part) => attachment(new THREE.Matrix4().makeTranslation(part.center), part.half)),
         };
       });
-    this.templates = { rock: templates(sets.rock), ice: templates(sets.ice), debris: templates(sets.debris), hull: templates(sets.hull) };
+    this.templates = { rock: templates(sets.rock), ice: templates(sets.ice), debris: templates(sets.debris), hull: templates(sets.hull), rack: templates(sets.rack) };
     for (const list of Object.values(this.templates)) for (const t of list) t.mean = (t.semiAxes.x + t.semiAxes.y + t.semiAxes.z) / 3;
-    this.fractures = { rock: sets.rock.fracture, ice: sets.ice.fracture, debris: sets.debris.fracture, hull: sets.hull.fracture };
+    this.fractures = { rock: sets.rock.fracture, ice: sets.ice.fracture, debris: sets.debris.fracture, hull: sets.hull.fracture, rack: sets.rack.fracture };
   }
 
   /** How each kind breaks along its shapes' fracture trees, if it does (see world/fracture). */

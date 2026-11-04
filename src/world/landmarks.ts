@@ -10,6 +10,7 @@ import { loadPlanetMap, type Planet, type PlanetMaps } from '../assets';
 import { junkyard } from './junkyard';
 import { Jupiter } from './jupiter';
 import { Corona } from './corona';
+import { psyche } from './boneyard';
 import { BLOOM_THRESHOLD } from '../view/bloom';
 
 /**
@@ -824,6 +825,7 @@ export class Landmarks {
     this.scenes.set('corona', this.corona());
     this.scenes.set('hole', this.hole());
     this.scenes.set('derelict', this.derelict());
+    this.scenes.set('boneyard', psyche());
     for (const scene of this.scenes.values()) {
       scene.visible = false;
       this.group.add(scene);

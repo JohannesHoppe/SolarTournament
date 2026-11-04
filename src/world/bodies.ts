@@ -44,7 +44,7 @@ export const MASS = {
  * millions of times a ship: on a rope or in a bump it does not move, and the field keeps its
  * motion (shared by every browser) as it is.
  */
-const DENSITY: Record<TemplateKind, number> = { rock: 2000, ice: 900, debris: 300, hull: 500 };
+const DENSITY: Record<TemplateKind, number> = { rock: 2000, ice: 900, debris: 300, hull: 500, rack: 400 };
 /** Meters per world unit. */
 const METERS = 0.05;
 

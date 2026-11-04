@@ -7,6 +7,7 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
+import { boneyardRacks, PSYCHE_CENTER, PSYCHE_RADIUS, YARD_END } from './yard';
 
 /** One standard gravity (units/s², 1 unit = 5 cm). */
 const G = 196.2;
@@ -36,7 +37,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -61,6 +62,8 @@ export interface ArenaProfile {
   grains?: number;
   /** Half the thickness (units) of a sheet drawn through the horizon plane, a ring's (see RING_SHEET): the President's battleship flies its lane clear of it. */
   sheet?: number;
+  /** Where a place of the campaign prints the own clone, and the point it faces (units); without, wherever the round's spawning finds room. */
+  start?: { at: [number, number, number]; toward: [number, number, number] };
 }
 
 /** How the HUD draws a fixed reference: each kind has a glyph of its own in style.css (.reference[data-glyph]). */
@@ -286,7 +289,46 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.55, 0.6, 0.66],
     grade: { gain: [0.97, 0.99, 1.02], lift: [0.001, 0.0015, 0.0022], saturation: 0.78 },
   },
+  // the Belt gone cold: a grey-blue veil of the yard's dust, the sky's light pale, from below the
+  // dull metal of Psyche, a cool grade with little color
+  boneyard: {
+    space: 0x020305,
+    sky: 0x8894a4,
+    ground: 0x2a2622,
+    ambient: 1.4,
+    nebulae: [
+      { at: [-0.9, 0.3, 0.3], color: [0.05, 0.055, 0.07], size: 576000, shape: 0, turn: 1.1 },
+      { at: [0.6, 0.6, -0.5], color: [0.035, 0.035, 0.04], size: 468000, shape: 1, turn: 3.6 },
+    ],
+    stars: 0.8,
+    starmap: true,
+    dust: [0.6, 0.62, 0.66],
+    grade: { gain: [0.98, 1, 1.03], lift: [0.0012, 0.0014, 0.002], saturation: 0.82 },
+  },
 };
+
+/**
+ * The places of the campaign Lot 7731 (see docs/campaign/): flown alone, never in a tournament's
+ * order of arenas. The Boneyard on Psyche: rows of racks of dead fighters (see world/yard) with
+ * the lane to the yard office open through the middle, the yard's spoil (a few rocks) around
+ * them, Psyche's metal 6 km below.
+ */
+export const PLACES: readonly ArenaProfile[] = [
+  {
+    id: 'boneyard',
+    name: msg('The Boneyard'),
+    tagline: msg('Forty thousand dead fighters in their racks, above a world of metal.'),
+    layout: { key: 'boneyard', seed: 7731, kind: 'rock', count: 18, minScale: 0.6, maxScale: 1.6, radius: FIELD_RADIUS, inner: FIELD_RADIUS * 0.7, flat: 3000, spin: SPIN_RATE * 0.3, toughness: 800, placements: boneyardRacks() },
+    cooling: 1,
+    storms: false,
+    sun: { size: 30000, intensity: 3, color: 0xfff0dc },
+    mood: MOODS.boneyard,
+    preview: { from: [20000, 9000, 30000] },
+    references: [{ glyph: 'planet', label: msg('Psyche'), position: PSYCHE_CENTER, distance: true, radius: PSYCHE_RADIUS }],
+    // in the lane beside rack 7731, at the yard's far end, facing down the lane to the office
+    start: { at: [-YARD_END, 0, 0], toward: [0, 0, 0] },
+  },
+];
 
 /** Every arena. A tournament plays them in an order of its own; the default arena (see DEFAULT_ARENA) is the home of the flight school. */
 export const ARENAS: readonly ArenaProfile[] = [
@@ -441,13 +483,13 @@ export const ARENAS: readonly ArenaProfile[] = [
   },
 ];
 
-export const arenaById = (id: string): ArenaProfile | undefined => ARENAS.find((arena) => arena.id === id);
+export const arenaById = (id: string): ArenaProfile | undefined => ARENAS.find((arena) => arena.id === id) ?? PLACES.find((place) => place.id === id);
 
 /** The arena the game shows unless something else is chosen: the menu's backdrop, the flight school's home and the solo round's first choice. */
 export const DEFAULT_ARENA: ArenaProfile = arenaById('rings')!;
 
 /** The arena whose field has this layout key (see FieldState). */
-export const arenaByKey = (key: string): ArenaProfile | undefined => ARENAS.find((arena) => arena.layout.key === key);
+export const arenaByKey = (key: string): ArenaProfile | undefined => ARENAS.find((arena) => arena.layout.key === key) ?? PLACES.find((place) => place.layout.key === key);
 
 /**
  * The arena of a tournament round: the room's code shuffles the arenas into an order of its

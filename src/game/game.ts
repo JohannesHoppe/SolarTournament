@@ -1508,6 +1508,11 @@ export class Game implements OnlineGame {
     this.startRound('school');
   }
 
+  /** A ship has the hook: gear bought in the hangar, or lent by the flight school for its drills (never in a mission of the campaign, whose ship has what it was fitted with). */
+  private hookCarried(ship: Ship): boolean {
+    return ship.perks.hook || (!!this.school && !this.mission);
+  }
+
   /** The campaign's next mission, from the drill the Host reached in it, on the flight school's machinery (see campaign/campaign). */
   private startMission() {
     const mission = nextMission(this.campaign);
@@ -2583,6 +2588,8 @@ export class Game implements OnlineGame {
     // a solo round plays what the Host chose, in the arena chosen or one by chance
     this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? this.solo.mode : 'deathmatch';
     if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0));
+    // a mission of the campaign starts at the place of the drill it goes on from
+    else if (mode === 'school' && this.mission) this.enterArena(arenaById(this.mission.drills[Math.min(this.campaign.step, this.mission.drills.length - 1)].arena ?? '') ?? DEFAULT_ARENA);
     else this.enterArena(mode === 'school' ? DEFAULT_ARENA : (ARENAS.find((a) => a.id === this.solo.arena) ?? pick(ARENAS)));
     this.hud.reset();
     this.resetOpening();
@@ -2699,7 +2706,9 @@ export class Game implements OnlineGame {
 
   /** The announcer opens the broadcast from the arena of the round. */
   private openBroadcast() {
-    this.radio.announce(pick([ANNOUNCER_ARENA[this.venue.id], ...ANNOUNCER_OPEN]), null);
+    // a place of the campaign has no line of its own: no broadcast greets it
+    const arena = (ANNOUNCER_ARENA as Partial<Record<ArenaId, string>>)[this.venue.id];
+    this.radio.announce(pick(arena ? [arena, ...ANNOUNCER_OPEN] : [...ANNOUNCER_OPEN]), null);
   }
 
   /**
@@ -3098,6 +3107,13 @@ export class Game implements OnlineGame {
       candidate.copy(course.points[ship.gates % GATES]);
       best = 0;
     }
+    // a place of the campaign prints the own clone where its story starts, facing on (see ArenaProfile.start)
+    const start = ship === this.me && !course ? this.venue.start : undefined;
+    if (start) {
+      position.set(...start.at);
+      candidate.set(...start.toward);
+      best = 0;
+    }
     // of a dozen random places on the edge of the field (in Last Clone Standing around the middle
     // of a solar flare's safe pocket and clear of its plasma; in Capture the Flag around the own
     // side's base), clear of rock and of a massive body's grip (no alarm at the start), the one farthest from the nearest enemy, preferably hidden
@@ -3107,7 +3123,7 @@ export class Game implements OnlineGame {
     if (!this.survival) spawnMiddle.set(0, 0, 0);
     const scorched = (point: THREE.Vector3) => this.survival && flareClearance(point, clock) < ship.radius * 10;
     const base = this.flags && ship.team >= 0 ? this.flags.bases[ship.team] : null;
-    for (let attempt = 0; attempt < SPAWN_CANDIDATES && !course; attempt++) {
+    for (let attempt = 0; attempt < SPAWN_CANDIDATES && !course && !start; attempt++) {
       if (base) candidate.randomDirection().multiplyScalar(BASE_RADIUS * (2 + Math.random() * 2)).add(base);
       else candidate.randomDirection().multiplyScalar(edge * (0.9 + Math.random() * 0.2)).add(spawnMiddle);
       if (this.field.overlap(candidate, ship.radius * 10) || this.field.insideWell(candidate, ship.radius * 40) || inGrip(this.field.well, candidate, WELL_CAUTION) || scorched(candidate)) continue;
@@ -3136,7 +3152,7 @@ export class Game implements OnlineGame {
     // (in Last Clone Standing the open space behind the field, away from the sun, which no flare reaches)
     if (best === -Infinity && this.survival) position.copy(SUN_DIRECTION).multiplyScalar(-ARENA_LIMIT * 0.85);
     else if (best === -Infinity) position.randomDirection().multiplyScalar(Math.min(ARENA_LIMIT * 0.95, (this.field.layout?.radius ?? FIELD_RADIUS) * SPAWN_BEYOND));
-    ship.spawn(position, lookingAt(position, course ? candidate : spawnMiddle, UP), this.time);
+    ship.spawn(position, lookingAt(position, course || start ? candidate : spawnMiddle, UP), this.time);
     if (ship === this.me) {
       // the Host's mind locks onto the freshly printed clone: from here on we are the clone
       this.hud.flashMessage(this.time, t('Establishing live link to your clone…'), 2);
@@ -3891,7 +3907,7 @@ export class Game implements OnlineGame {
     this.hud.setAutopilot(this.autopilot);
     this.hud.setOverdrive(Math.max(0, this.overdriveReadyAt - now));
     const hook = this.tethers.get(me);
-    this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now), me.perks.hook || !!this.school);
+    this.hud.setHook(hook && hook.flying <= 0 && hook.anchor ? hook.length * METERS_PER_UNIT : null, Math.max(0, this.hookReadyAt - now), this.hookCarried(me));
     this.hud.setArsenal(me.torpedoes, me.twin, me.plating, me.nova);
     this.hud.setKeys(this.input.device);
     this.hud.setStrain(me.alive ? me.strain : 0);
@@ -5370,7 +5386,7 @@ export class Game implements OnlineGame {
     if (!pressed) return;
     if (this.tethers.has(me)) this.unhook(me);
     // the hook is gear bought in the hangar; the flight school lends its training clones one
-    else if (now >= this.hookReadyAt && (me.perks.hook || this.school)) this.fireHook(me);
+    else if (now >= this.hookReadyAt && this.hookCarried(me)) this.fireHook(me);
   }
 
   /**
@@ -5385,7 +5401,7 @@ export class Game implements OnlineGame {
     const touch = $('touch-selfDestruct');
     if (touch.hidden === allowed) touch.hidden = !allowed;
     const hook = $('touch-hook');
-    const hooks = me.perks.hook || !!this.school;
+    const hooks = this.hookCarried(me);
     if (hook.hidden === hooks) hook.hidden = !hooks;
     if (!allowed || this.state !== 'playing' || !me.alive || this.spectating || this.clamped || !this.input.selfDestructing) {
       this.selfDestructSince = null;

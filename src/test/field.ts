@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { AsteroidField, type TemplateSet } from '../world/asteroids';
 import { fractureSet } from '../world/fracture';
+import { RACK_BOXES } from '../world/yard';
 import { createRocks, DISTANT_DETAIL, FAR_DETAIL } from '../world/rocks';
 import { planMining, standClaims, type Plan } from '../world/mining';
 import { fieldSolid, obstacleSolid, type Probes, type Solid } from '../game/items';
@@ -30,7 +31,7 @@ export function testField(detail = DISTANT_DETAIL, hulls: readonly THREE.Vector3
     group.add(collider);
     return group;
   };
-  const field = new AsteroidField({ rock: rocks, ice: rocks, debris: { near: shapes(detail), far: [] }, hull: { near: hulls.map(box), far: [], box: true } });
+  const field = new AsteroidField({ rock: rocks, ice: rocks, debris: { near: shapes(detail), far: [] }, hull: { near: hulls.map(box), far: [], box: true }, rack: { near: RACK_BOXES.map(box), far: [], box: true } });
   // the Belt's rigs and buoys stand solid on their rocks, as the game dresses them (see world/mining)
   const generate = field.generate.bind(field);
   field.generate = (layout) => {
