@@ -322,6 +322,7 @@ export const SCHOOL = {
   torpedoCoverHit: 'It got you. Put the rock between you and it. Again.',
   hideInstead: 'Shot down. Nice, but this time hide. Again.',
   orbit: 'The Event Horizon, darling. Your nose points around the black hole. Burn until I say stable orbit. Then let go, and fall around it for half a turn.',
+  rescue: 'Bad news, darling: your drive is shot, down to a third, and the black hole has you. Burn away from it with all you have, and listen to me. When I call it, fire your overdrive.',
   exam: 'Final exam, tactician. This bot flies as well as the field. Use everything.',
   tacticianDone: 'You fight like a tactician now. Kick out of the line of fire, never show them your drive, fire in bursts, and let the rocks take the hits. Go and win one for the President.',
   again: 'Again.',
@@ -374,6 +375,7 @@ export const SCHOOL_PRAISE = {
   cover: 'Lasers do not bend, and sensors do not see through rock. Behind it, you do not exist.',
   orbit: 'Half a turn without a single burn. In orbit you fall all the time, and keep missing. That is why my alarms stay quiet up there.',
   torpedoCover: 'Lost you. A seeker that loses its line never finds it again.',
+  rescue: 'Out! The overdrive is one big kick, and while it carries you up, your drive cools down. Only fire it when I call it: while your drive can still make it alone, the cold drive after the kick drops you right back in.',
   exam: 'A real fight, and you won it. I am so proud of you, my hero.',
 } as const;
 

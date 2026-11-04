@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { AlarmTones, Alarms, escapeLoad, overdriveEscapes, WELL_CAUTION, WELL_CRITICAL, WELL_LOST, WELL_WARNING, wellLevel } from './alarms';
+import { AlarmTones, Alarms, ESCAPE_REACTION, escapeLoad, WELL_CAUTION, WELL_CRITICAL, WELL_LOST, WELL_WARNING, wellEscape, wellLevel } from './alarms';
 import { arenaById } from '../world/arenas';
-import { MAIN_THRUST, OVERDRIVE_PUSH } from '../ship/flight';
+import { MAIN_THRUST, MAX_SPEED, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH } from '../ship/flight';
 
 /** One frame of the game's alarms: raise, rank, start the next. */
 function frame(alarms: Alarms, raise: () => void) {
@@ -134,36 +134,98 @@ describe('the escape load of a gravity well', () => {
 
 describe("the overdrive's last chance at a well", () => {
   const hole = arenaById('hole')!.layout.well!;
-  /** A fall flown straight out, 1D: the shove away, then the full drive away against the pull, until the drive outpulls it (out) or the horizon. */
-  const flownOut = (distance: number, inward: number) => {
-    const free = hole.radius * Math.sqrt(hole.surfaceGravity / MAIN_THRUST);
+  /**
+   * A fall flown straight out, 1D and on its own, as the alarm's flight ahead must agree with,
+   * the nose away from the hole: the drive at `drive` of its thrust (from the start when the Host
+   * burns away already, else after the reaction), which the speed limit stops from pushing faster
+   * away; with the overdrive the shove after the reaction and the drive cold for its cooldown;
+   * out where the burning drive outpulls the pull, climbing.
+   */
+  const flownOut = (distance: number, inward: number, drive: number, overdrive: boolean, burning = false) => {
+    const thrust = MAIN_THRUST * drive;
+    const free = hole.radius * Math.sqrt(hole.surfaceGravity / thrust);
     let r = distance;
-    let v = -inward + OVERDRIVE_PUSH;
-    for (let t = 0; t < 60; t += 1 / 120) {
-      if (r >= free) return true;
+    let v = -inward;
+    const step = 1 / 240;
+    for (let t = 0; t < 60; t += step) {
+      const cold = overdrive && t >= ESCAPE_REACTION && t < ESCAPE_REACTION + OVERDRIVE_DRIVE_COOLDOWN;
+      const warm = (burning || t >= ESCAPE_REACTION) && !cold;
+      // out once the burning drive outpulls the pull, climbing: a cold drive lets the ship fall back
+      if (r >= free && v >= 0 && warm && (!overdrive || t >= ESCAPE_REACTION)) return true;
       if (r <= hole.radius) return false;
-      v += (MAIN_THRUST - (hole.surfaceGravity * hole.radius * hole.radius) / (r * r)) / 120;
-      r += v / 120;
+      if (overdrive && t >= ESCAPE_REACTION && t < ESCAPE_REACTION + step) v += OVERDRIVE_PUSH;
+      const push = warm && !(v >= MAX_SPEED) ? thrust : 0;
+      v += (push - (hole.surfaceGravity * hole.radius * hole.radius) / (r * r)) * step;
+      r += v * step;
     }
-    return r >= free;
+    return true;
   };
+  const away = new THREE.Vector3(1, 0, 0);
 
-  it('says the overdrive gets a ship out only where flying it out does, and does so past the drive’s point of no return', () => {
-    let rescued = 0;
-    let given = 0;
-    for (let distance = hole.radius * 1.05; distance < hole.radius * 3; distance += 400) {
-      for (const inward of [0, 1000, 2000, 4000, 6000]) {
-        const at = new THREE.Vector3(distance, 0, 0);
-        const velocity = new THREE.Vector3(-inward, 0, 0);
-        if (escapeLoad(hole, at, velocity, MAIN_THRUST) < WELL_LOST) continue;
-        given++;
-        if (!overdriveEscapes(hole, at, velocity, MAIN_THRUST)) continue;
-        rescued++;
-        expect(flownOut(distance, inward), `${distance} units out, ${inward} units/s inward`).toBe(true);
+  it('calls the overdrive exactly where only its shove gets a ship out, its cold drive after it reckoned in', () => {
+    const said = { drive: 0, overdrive: 0, lost: 0 };
+    /** The margin on either side of a fall judged (units, 7.5 m). */
+    const EDGE = 150;
+    let judged = 0;
+    for (const drive of [1, 0.6, 0.3]) for (const burning of [false, true]) {
+      for (let distance = hole.radius * 1.05; distance < hole.radius * 4; distance += 300) {
+        for (const inward of [0, 500, 1000, 2000, 4000]) {
+          const at = new THREE.Vector3(distance, 0, 0);
+          const velocity = new THREE.Vector3(-inward, 0, 0);
+          const escape = wellEscape(hole, at, velocity, away, drive, 0, burning, true);
+          said[escape]++;
+          // judged only where the fall comes out the same a few meters nearer and farther: right on
+          // the edge the two reckonings' steps decide, not the rule
+          const fate = (overdrive: boolean) => [-EDGE, 0, EDGE].map((off) => flownOut(distance + off, inward, drive, overdrive, burning));
+          const clear = (fates: boolean[]) => fates.every((each) => each === fates[0]);
+          const byDrive = fate(false);
+          const byOverdrive = fate(true);
+          const where = `${distance} units out, ${inward} units/s inward, drive ${drive}${burning ? ', burning away' : ''}`;
+          if (!clear(byDrive)) continue;
+          judged++;
+          expect(escape === 'drive', where).toBe(byDrive[1]);
+          if (!byDrive[1] && clear(byOverdrive)) expect(escape === 'overdrive', where).toBe(byOverdrive[1]);
+        }
       }
     }
-    // the trick is real: a good share of the falls the drive alone has lost
-    expect(rescued).toBeGreaterThan(0);
-    expect(rescued).toBeLessThan(given);
+    // nearly all of them judged; the rescue is real, with a hurt drive above all: falls the drive alone has lost
+    expect(judged).toBeGreaterThan(0.9 * (said.drive + said.overdrive + said.lost));
+    expect(said.overdrive).toBeGreaterThan(0);
+    expect(said.lost).toBeGreaterThan(0);
+  });
+
+  it('gets a hurt drive, burning flat out away and still slowly falling in, out with the overdrive', () => {
+    // a drive at 30 %: no return from about 1 km, where the pull is weak enough for the shove to carry the ship out cold
+    const free = hole.radius * Math.sqrt(hole.surfaceGravity / (MAIN_THRUST * 0.3));
+    const at = new THREE.Vector3(free * 0.95, 0, 0);
+    const velocity = new THREE.Vector3(-200, 0, 0);
+    expect(escapeLoad(hole, at, velocity, MAIN_THRUST * 0.3)).toBeGreaterThan(WELL_LOST);
+    expect(wellEscape(hole, at, velocity, away, 0.3, 0, true, true)).toBe('overdrive');
+    // without the overdrive ready, nothing gets it out
+    expect(wellEscape(hole, at, velocity, away, 0.3, 0, true, false)).toBe('lost');
+  });
+
+  it('never calls it for a whole drive at rest past its point of no return, nor where the drive alone still gets out', () => {
+    // at rest 500 m from the hole, burning away: the shove carries the ship up, the cold drive lets it fall back in
+    expect(wellEscape(hole, new THREE.Vector3(10000, 0, 0), new THREE.Vector3(), away, 1, 0, true, true)).toBe('lost');
+    // at rest 620 m from it, CRITICAL, burning away: the drive gets out, and the shove with its cold drive would not
+    const critical = new THREE.Vector3(12400, 0, 0);
+    expect(escapeLoad(hole, critical, new THREE.Vector3(), MAIN_THRUST)).toBeGreaterThan(WELL_CRITICAL);
+    expect(wellEscape(hole, critical, new THREE.Vector3(), away, 1, 0, true, true)).toBe('drive');
+    expect(flownOut(12400, 0, 1, true, true)).toBe(false);
+  });
+
+  it('turns the nose first: a ship facing the hole needs longer than one facing away', () => {
+    let later = 0;
+    for (let distance = hole.radius * 1.05; distance < hole.radius * 3; distance += 200) {
+      const at = new THREE.Vector3(distance, 0, 0);
+      const velocity = new THREE.Vector3(-1000, 0, 0);
+      const facingAway = wellEscape(hole, at, velocity, away, 1, 0, false, true);
+      const facingIn = wellEscape(hole, at, velocity, new THREE.Vector3(-1, 0, 0), 1, 0, false, true);
+      const rank = { drive: 0, overdrive: 1, lost: 2 };
+      expect(rank[facingIn]).toBeGreaterThanOrEqual(rank[facingAway]);
+      if (rank[facingIn] > rank[facingAway]) later++;
+    }
+    expect(later).toBeGreaterThan(0);
   });
 });

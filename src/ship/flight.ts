@@ -13,6 +13,8 @@ export const RCS_THRUST = 800;
 export const MAX_SPEED = 5000;
 /** The overdrive's shove along the nose (units/s, 150 m/s): past the tournament's limit, see Game.overdrive. */
 export const OVERDRIVE_PUSH = 3000;
+/** After the overdrive the main drive glows and gives no thrust for this long (s). */
+export const OVERDRIVE_DRIVE_COOLDOWN = 4;
 /**
  * Rotation rates the flight computer allows (rad/s) and how fast the thrusters reach them
  * (rad/s²): full rate in an eighth of a second, so the nose snaps where it is sent and

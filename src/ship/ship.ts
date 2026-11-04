@@ -930,6 +930,11 @@ export class Ship {
     return now < this.driveOfflineUntil;
   }
 
+  /** The seconds the main drive still gives no thrust (0: it does). */
+  driveColdFor(now: number) {
+    return Math.max(0, this.driveOfflineUntil - now);
+  }
+
   /** Hull damage, e.g. from a collision; the plating of an upgraded ship takes some of it (see Perks). */
   structural(amount: number, now: number): DamageStatus {
     if (!this.alive || now < this.protectedUntil) return 'protected';

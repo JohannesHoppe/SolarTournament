@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import type { Well } from '../world/asteroids';
-import { MAIN_THRUST, OVERDRIVE_PUSH } from '../ship/flight';
+import { FlightModel, MAIN_THRUST, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH } from '../ship/flight';
+import type { Controls } from '../input/input';
+import { angleTo } from '../detthree';
 
 /**
  * The flight computer's alarms, tiered like a fighter's master caution: CAUTION (something to
@@ -190,19 +192,80 @@ export function escapeLoad(well: Well, position: THREE.Vector3, velocity: THREE.
 }
 
 /**
- * Whether the overdrive's shove (`push`, units/s), fired straight away from a well, still gets a
- * ship out that its drive alone no longer can: after the shove it climbs on its drive against
- * the pull, and it is out if its speed away carries it to where the drive outpulls the well, the
- * pull taken all the way as strong as where the ship is (an estimate on the safe side).
+ * What still gets a ship out of a well: its drive alone ('drive'), only the overdrive's shove
+ * first ('overdrive'), or nothing ('lost'). It is flown ahead with the game's own flight model
+ * (the tournament's speed limit on the ship's own push included): ESCAPE_REACTION for the Host
+ * to act, the nose turned at the full rate to straight away from the well, then the full drive
+ * away (from the start when the Host burns away already, `burning`); with the overdrive its
+ * shove once the nose is turned and then OVERDRIVE_DRIVE_COOLDOWN seconds without thrust, as the
+ * game has it. Out is where the drive outpulls the well, climbing, with the drive
+ * burning again; in is the body. `drive` is the share of the drive's thrust the ship has (damage and upgrades), `cold`
+ * the seconds its drive still gives none (after an overdrive), `overdrive` whether it is ready.
+ * The well's pull alone counts, not the field's rocks. Only the 'overdrive' answer is worth
+ * Nicole's call: where the drive alone still gets out, the shove and the cold drive after it
+ * leave the ship weaker than a burn would (from CRITICAL on they drop it into the well).
  */
-export function overdriveEscapes(well: Well, position: THREE.Vector3, velocity: THREE.Vector3, thrust: number, push = OVERDRIVE_PUSH): boolean {
-  const distance = Math.max(position.distanceTo(well.position), 1);
-  const pull = (well.surfaceGravity * well.radius * well.radius) / (distance * distance);
-  // where the drive pulls as hard as the well
-  const free = well.radius * Math.sqrt(well.surfaceGravity / Math.max(thrust, 1));
-  if (distance >= free) return true;
-  const away = (velocity.x * (position.x - well.position.x) + velocity.y * (position.y - well.position.y) + velocity.z * (position.z - well.position.z)) / distance + push;
-  return away > 0 && away * away >= 2 * (pull - thrust) * (free - distance);
+export function wellEscape(well: Well, position: THREE.Vector3, velocity: THREE.Vector3, nose: THREE.Vector3, drive: number, cold: number, burning: boolean, overdrive: boolean): WellEscape {
+  if (fliesOut(well, position, velocity, nose, drive, cold, burning, false)) return 'drive';
+  return overdrive && fliesOut(well, position, velocity, nose, drive, cold, burning, true) ? 'overdrive' : 'lost';
+}
+
+/** The Host burns away from a well already when the drive is held with the nose within this of straight away (rad, 30°): the flight ahead burns on from the start. */
+export const BURNING_AWAY = Math.PI / 6;
+
+export type WellEscape = 'drive' | 'overdrive' | 'lost';
+
+/** The Host's time to act on Nicole's call (s), before the nose starts to turn. */
+export const ESCAPE_REACTION = 0.5;
+/** The flight ahead in steps of this (s), for at most this long (s): a ship still out of the body by then counts as out. */
+const ESCAPE_STEP = 1 / 30;
+const ESCAPE_HORIZON = 40;
+
+const probe = new FlightModel();
+const probeControls: Controls = { yaw: 0, pitch: 0, roll: 0, thrust: 0, strafeX: 0, strafeY: 0, strafeZ: 0, fire: false };
+const awayFrom = new THREE.Vector3();
+const probePull = new THREE.Vector3();
+const probeTarget = new THREE.Vector3();
+const probeLook = new THREE.Matrix4();
+const PROBE_UP = new THREE.Vector3(0, 1, 0);
+const PROBE_SIDE = new THREE.Vector3(1, 0, 0);
+
+function fliesOut(well: Well, position: THREE.Vector3, velocity: THREE.Vector3, nose: THREE.Vector3, drive: number, cold: number, burning: boolean, overdrive: boolean): boolean {
+  const flight = probe;
+  flight.position.copy(position);
+  flight.velocity.copy(velocity);
+  flight.angularVelocity.set(0, 0, 0);
+  awayFrom.subVectors(position, well.position).normalize();
+  // the Host reacting, then turning the nose to straight away at the full rate: the shove's
+  // moment, and the drive's too unless it burns away already
+  const turned = ESCAPE_REACTION + angleTo(nose, awayFrom) / MAX_TURN_RATE;
+  const driveFrom = burning ? 0 : turned;
+  const free = well.radius * Math.sqrt(well.surfaceGravity / Math.max(MAIN_THRUST * drive, 1));
+  const strength = well.surfaceGravity * well.radius * well.radius;
+  let coldUntil = cold;
+  let fired = false;
+  for (let t = 0; t < ESCAPE_HORIZON; t += ESCAPE_STEP) {
+    awayFrom.subVectors(flight.position, well.position);
+    const r = awayFrom.length();
+    if (r <= well.radius) return false;
+    awayFrom.divideScalar(r);
+    const thrusting = t >= driveFrom && t >= coldUntil;
+    // out: beyond where the drive outpulls the well, climbing, the drive burning (a cold drive lets it fall back)
+    if (r >= free && flight.velocity.dot(awayFrom) >= 0 && thrusting && (fired || !overdrive)) return true;
+    if (overdrive && !fired && t >= turned) {
+      flight.velocity.addScaledVector(awayFrom, OVERDRIVE_PUSH);
+      coldUntil = Math.max(coldUntil, t + OVERDRIVE_DRIVE_COOLDOWN);
+      fired = true;
+    }
+    // the nose straight away from the well, the drive on it while it burns
+    probeTarget.copy(flight.position).add(awayFrom);
+    flight.orientation.setFromRotationMatrix(probeLook.lookAt(flight.position, probeTarget, Math.abs(awayFrom.y) > 0.9 ? PROBE_SIDE : PROBE_UP));
+    flight.driveFactor = t < coldUntil ? 0 : drive;
+    probeControls.thrust = t >= driveFrom ? 1 : 0;
+    probePull.copy(awayFrom).multiplyScalar(-strength / (r * r));
+    flight.update(ESCAPE_STEP, probeControls, probePull);
+  }
+  return true;
 }
 
 /** The escape gauge shows from this load on (a share of the drive's thrust), before the first alarm. */

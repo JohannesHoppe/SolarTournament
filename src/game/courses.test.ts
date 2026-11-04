@@ -4,8 +4,9 @@ import { angleTo } from '../detthree';
 import { describe, expect, it } from 'vitest';
 import { BOOST_PUSH, BOOST_RADIUS, Course, GATE_RADIUS, GATES } from './race';
 import { Bot, evenSkills, RACE_SPEED } from '../ship/bots';
-import { cornerSpeed, MAIN_THRUST, MAX_SPEED, turnRadius } from '../ship/flight';
-import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, COURSE_ROOM, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, COVER_DRONE, COVER_STANDOFF, coverSpots, facingRock, LINE_SPARE, ORBIT_DRIFT, ORBIT_NOSE, ORBIT_START, ORBIT_SWEEP, RING_COURSE, RING_RADIUS, ringCourse, SLIDE_ANGLE, SLIDE_BOT, SLIDE_HITS, SLIDE_SPEED, clearOfRock } from './school';
+import { cornerSpeed, MAIN_THRUST, MAX_SPEED, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, turnRadius } from '../ship/flight';
+import { wellEscape } from './alarms';
+import { BRAKE_COURSE, COIL_COURSE, CORE_SHARE, COURSE_ROOM, CURVE_COURSE, CURVE_SPEED, CURVE_ZONE, LINE_COURSE, LINE_PACE, COVER_DRONE, COVER_STANDOFF, coverSpots, facingRock, LINE_SPARE, ORBIT_DRIFT, ORBIT_NOSE, ORBIT_START, ORBIT_SWEEP, RESCUE_DRIVE, RESCUE_START, rescueFree, RING_COURSE, RING_RADIUS, ringCourse, SLIDE_ANGLE, SLIDE_BOT, SLIDE_HITS, SLIDE_SPEED, clearOfRock } from './school';
 import { ARENA_LIMIT } from '../world/arena';
 import { arenaById, ARENAS, DEFAULT_ARENA } from '../world/arenas';
 import { testField } from '../test/field';
@@ -243,5 +244,40 @@ describe("the flight school's courses", () => {
     expect(readyAt).toBeLessThan(20);
     expect(broken).toEqual([]);
     expect(swept, `swept ${((swept * 180) / Math.PI).toFixed(0)}° in ${seconds.toFixed(0)} s`).toBeGreaterThanOrEqual(ORBIT_SWEEP);
+  });
+
+  it('lets a Host fly the rescue drill at the Event Horizon: burning away on a hurt drive, the overdrive fired a second after Nicole calls it gets out, the drive alone falls in', () => {
+    const field = gameField();
+    field.generate(arenaById('hole')!.layout);
+    const well = field.well!;
+    const up = new THREE.Vector3(0, 1, 0);
+    const start = well.position.clone().addScaledVector(up, rescueFree(well) * RESCUE_START);
+    const late = 1;
+    const fly = (overdrive: boolean) => {
+      const flight = startFlight(start, up);
+      const gravity = new THREE.Vector3();
+      const controls = { ...IDLE, thrust: 1 };
+      let calledAt = -1;
+      let coldUntil = 0;
+      for (let t = 0; t < 60; t += 1 / 30) {
+        flight.driveFactor = t < coldUntil ? 0 : RESCUE_DRIVE;
+        const verdict = wellEscape(well, flight.position, flight.velocity, flight.forward(), RESCUE_DRIVE, Math.max(0, coldUntil - t), true, coldUntil === 0);
+        if (verdict === 'overdrive' && calledAt < 0) calledAt = t;
+        if (overdrive && calledAt >= 0 && coldUntil === 0 && t >= calledAt + late) {
+          flight.velocity.addScaledVector(flight.forward(), OVERDRIVE_PUSH);
+          coldUntil = t + OVERDRIVE_DRIVE_COOLDOWN;
+        }
+        field.gravity(flight.position, gravity);
+        flight.update(1 / 30, controls, gravity);
+        const r = flight.position.distanceTo(well.position);
+        if (r < well.radius) return { out: false, calledAt };
+        if (r > rescueFree(well) * 2) return { out: true, calledAt };
+      }
+      return { out: false, calledAt };
+    };
+    const rescued = fly(true);
+    expect(rescued.calledAt, 'Nicole calls the overdrive at once').toBeLessThan(0.5);
+    expect(rescued.out).toBe(true);
+    expect(fly(false).out).toBe(false);
   });
 });

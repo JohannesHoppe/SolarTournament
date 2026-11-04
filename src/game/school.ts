@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { cos, exp, sin } from '../detmath';
 import { angleTo, rotateY, setFromAxisAngle } from '../detthree';
-import type { Asteroid, AsteroidField } from '../world/asteroids';
+import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
 import { CONTROLS, type Command, type Controls, type Device } from '../input/input';
 import type { Ship } from '../ship/ship';
 import { SUN_DIRECTION } from '../world/space';
@@ -10,7 +10,7 @@ import { RacingLine } from './racingline';
 import { ARENA_LIMIT } from '../world/arena';
 import { GateKit, touchRing } from '../world/gates';
 import { GATE_RADIUS } from './race';
-import { MAX_SPEED, METERS_PER_UNIT } from '../ship/flight';
+import { MAIN_THRUST, MAX_SPEED, METERS_PER_UNIT } from '../ship/flight';
 import type { ItemKind } from './items';
 import { HOOK_RANGE } from './hook';
 import { msg, t } from '../i18n/i18n';
@@ -346,6 +346,16 @@ export const ORBIT_START = new THREE.Vector3(0, 24000, 0);
 export const ORBIT_NOSE = new THREE.Vector3(1, 0, 0);
 export const ORBIT_DRIFT = 2000;
 export const ORBIT_SWEEP = Math.PI;
+/**
+ * The rescue drill, at the Event Horizon: the drive shot down to RESCUE_DRIVE of its thrust, the
+ * pilot at rest straight above the hole at RESCUE_START of the distance where that drive outpulls
+ * it (about 1 km), its nose away: the drive's full push no longer gets out, the overdrive's kick
+ * still does, for about ten seconds of falling (see wellEscape).
+ */
+export const RESCUE_DRIVE = 0.3;
+export const RESCUE_START = 0.99;
+/** Where a drive at RESCUE_DRIVE outpulls a well (units). */
+export const rescueFree = (well: Well | null) => (well ? well.radius * Math.sqrt(well.surfaceGravity / (MAIN_THRUST * RESCUE_DRIVE)) : 0);
 const ORIGIN = new THREE.Vector3();
 const UP = new THREE.Vector3(0, 1, 0);
 
@@ -1243,6 +1253,40 @@ export const DRILL = {
     fail: (ctx) => (ctx.me.flight.position.length() > ARENA_LIMIT ? SCHOOL.again : null),
     leave: (ctx) => ctx.setAutopilot(true),
   },
+  // the overdrive's one real use in a well: a drive shot down to RESCUE_DRIVE, burning flat out
+  // away from the black hole and still falling in, where the drive's whole push no longer gets
+  // out and the overdrive's kick still does; Nicole calls it (see Game.wellAlarm)
+  rescue: {
+    line: SCHOOL.rescue,
+    praise: SCHOOL_PRAISE.rescue,
+    keys: ['drive', 'overdrive'],
+    arena: 'hole',
+    autopilot: false,
+    enter(ctx, a) {
+      const flight = ctx.me.flight;
+      const well = ctx.field.well;
+      const center = well?.position ?? ORIGIN;
+      const free = rescueFree(well);
+      flight.position.copy(center).addScaledVector(UP, free * RESCUE_START);
+      flight.orientation.setFromRotationMatrix(new THREE.Matrix4().lookAt(flight.position, scratch.copy(flight.position).add(UP), new THREE.Vector3(0, 0, 1)));
+      stop(ctx);
+      ctx.me.drive = RESCUE_DRIVE;
+      ctx.readyOverdrive();
+      a.reach = free;
+      a.warned = false;
+    },
+    // fired, and out: twice as far as where the hurt drive outpulls the hole
+    done(ctx, a) {
+      if (ctx.me.driveColdFor(ctx.now) > 0) a.warned = true;
+      const center = ctx.field.well?.position ?? ORIGIN;
+      return a.warned && ctx.me.flight.position.distanceTo(center) > a.reach * 2;
+    },
+    fail: (ctx) => (ctx.me.flight.position.length() > ARENA_LIMIT ? SCHOOL.again : null),
+    // the drive whole again for whatever comes next
+    leave: (ctx) => {
+      ctx.me.drive = 1;
+    },
+  },
   exam: sparring(SCHOOL.exam, SCHOOL_PRAISE.exam, ['turn', 'drive', 'brake', 'slide', 'dodge', 'fire'], true, EXAM_SKILL),
 } satisfies Record<string, Drill>;
 
@@ -1452,7 +1496,7 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
     saying(SCHOOL.done),
   ],
   arsenal: [saying(SCHOOL.arsenal), DRILL.torpedo, DRILL.torpedoDown, DRILL.overdrive, DRILL.hookShip, DRILL.probe, DRILL.nova, saying(SCHOOL.arsenalDone)],
-  tactician: [saying(SCHOOL.tactician), DRILL.onTail, DRILL.kick, DRILL.turnShoot, DRILL.slideShot, DRILL.shove, DRILL.cover, DRILL.torpedoCover, DRILL.orbit, DRILL.exam, saying(SCHOOL.tacticianDone)],
+  tactician: [saying(SCHOOL.tactician), DRILL.onTail, DRILL.kick, DRILL.turnShoot, DRILL.slideShot, DRILL.shove, DRILL.cover, DRILL.torpedoCover, DRILL.orbit, DRILL.rescue, DRILL.exam, saying(SCHOOL.tacticianDone)],
 };
 
 /** Each drill's name, its key in DRILL; a course's opening and closing words are "opening" and "closing". */

@@ -162,6 +162,24 @@ test('the tactician’s turn and shoot drill: the brake flips the nose onto the 
   expect(errors).toEqual([]);
 });
 
+test('the tactician’s rescue drill at the Event Horizon: burning away on a hurt drive, the alarm calls the overdrive, and fired the ship gets out', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('solartournament.school-step', JSON.stringify({ tactician: 'rescue' })));
+  const errors = await openGame(page);
+  await page.click('#school');
+  await page.click('#school-tactician');
+  await page.waitForFunction(() => window.game.venue?.id === 'hole' && window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
+  expect(await page.evaluate(() => window.game.me.drive)).toBeCloseTo(0.3, 5);
+  await page.keyboard.down('KeyW');
+  // the drive alone no longer gets out: the alarm calls the overdrive
+  await page.waitForFunction(() => window.game.alarms.list.some((alarm: { id: string; text: string }) => alarm.id === 'well' && alarm.text === 'OVERDRIVE · AWAY FROM IT'), null, { timeout: 10_000 });
+  await page.keyboard.down('KeyE');
+  await play(page, 0.1);
+  await page.keyboard.up('KeyE');
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.school-step') ?? '{}').tactician), { timeout: 60_000 }).toBe('exam');
+  await page.keyboard.up('KeyW');
+  expect(errors).toEqual([]);
+});
+
 test('the flight school’s orbit drill flies at the Event Horizon: free drift flies a STABLE ORBIT without the well’s alarm, and the autopilot calls the path ORBIT READY', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('solartournament.school-step', JSON.stringify({ tactician: 'orbit' })));
   const errors = await openGame(page);

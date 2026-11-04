@@ -32,7 +32,7 @@ import { showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls, type Device } from '../input/input';
 import { fillSheet, SHEET_TABS } from '../input/sheet';
 import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
-import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
+import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
@@ -92,15 +92,17 @@ import {
   HULL_CRITICAL,
   IMPACT_CRITICAL,
   inGrip,
-  overdriveEscapes,
   SILENCE_BEFORE,
   SILENCE_COOLDOWN,
   SILENCE_SECONDS,
   WELL_CAUTION,
   WELL_CRITICAL,
-  WELL_LOST,
   WELL_GAUGE,
   WELL_RELEASE,
+  WELL_WARNING,
+  BURNING_AWAY,
+  wellEscape,
+  type WellEscape,
 } from './alarms';
 import { MOMENTS, Moments, type Moment } from './moments';
 import { killScore } from './friendly';
@@ -456,8 +458,9 @@ const KICK_FADE = 9;
  * still fires. It needs OVERDRIVE_RECHARGE seconds before it fires again.
  */
 const OVERDRIVE_STRAIN = 0.9;
-const OVERDRIVE_DRIVE_COOLDOWN = 4;
 const OVERDRIVE_RECHARGE = 60;
+/** The flight ahead of a well's alarm (see wellEscape) runs again this often (s): a fifth of a second late at most. */
+const ESCAPE_EVERY = 0.2;
 /**
  * The dodge (a thruster key tapped twice, LB): the maneuvering thrusters fire all at once at
  * overload, a kick of DODGE_SPEED (units/s, 60 m/s) sideways or up or down: strong enough to leave
@@ -1040,6 +1043,9 @@ export class Game implements OnlineGame {
   private readonly alarmTones = new AlarmTones();
   /** How far Nicole has warned of a gravity well (an alarm rank, 4: past return), reset once the pull lets go. */
   private wellSaid = 0;
+  /** What still gets the own ship out of the well, as last flown ahead (see wellAlarm), and when it is flown ahead again. */
+  private escape: WellEscape = 'drive';
+  private escapeAt = 0;
   /** The orbit readout of the frame before (null: no orbit about the arena's well possible, or no clone) and its conic (see game/orbit). */
   private orbitState: OrbitState | null = null;
   private readonly orbit: Orbit = { periapsis: 0, apoapsis: 0, circular: 0, radial: 0 };
@@ -6950,7 +6956,7 @@ export class Game implements OnlineGame {
       const hit = this.field.raycast(flight.position, heading, speed * 20, true, impactHit);
       if (hit) {
         const timeToImpact = Math.max(0, hit.distance - me.radius) / speed;
-        const thrust = MAIN_THRUST * Math.max(me.drive, 0.01);
+        const thrust = MAIN_THRUST * Math.max(me.drive * me.perks.drive, 0.01);
         // the head-over flip rolls first, and damaged thrusters turn the ship more slowly
         const turning = flight.noseAngleTo(retrograde.copy(heading).negate());
         const turnRate = 0.3 + 0.7 * (0.25 + 0.75 * me.thrusters);
@@ -7005,7 +7011,7 @@ export class Game implements OnlineGame {
       // the link frays in a panic: short and seldom, never long enough to hide a warning
       if (Math.random() < dt * CRITICAL_GLITCHES) this.glitch.trigger(0.2 + Math.random() * 0.2, 0.06 + Math.random() * 0.1);
       // death is a breath away: the music drops out, only the heart and the alarm remain
-      if ((impact < SILENCE_BEFORE || well >= WELL_LOST) && now >= this.silenceReadyAt) {
+      if ((impact < SILENCE_BEFORE || (well > 0 && this.escape === 'lost')) && now >= this.silenceReadyAt) {
         this.radio.dropout(SILENCE_SECONDS);
         this.silenceReadyAt = now + SILENCE_COOLDOWN;
       }
@@ -7029,7 +7035,7 @@ export class Game implements OnlineGame {
       this.orbitPath.show(null, me.flight.position, me.flight.velocity);
       return 0;
     }
-    const thrust = MAIN_THRUST * Math.max(me.drive, 0.01);
+    const thrust = MAIN_THRUST * Math.max(me.drive * me.perks.drive, 0.01);
     const load = escapeLoad(well, me.flight.position, me.flight.velocity, thrust);
     // the orbit readout, recomputed every frame: whatever changed the path (a burn, a ram, a hit) shows at once
     const orbit = orbitable(well) ? readOrbit(well, me.flight.position, me.flight.velocity, thrust, !this.autopilot, this.orbitState === 'ready' || this.orbitState === 'stable', this.orbit) : null;
@@ -7042,15 +7048,26 @@ export class Game implements OnlineGame {
     // in a stable orbit the ship falls around the body, never into it: the alarms are quiet
     if (!level) return orbit === 'stable' ? 0 : load;
     const hole = this.venue.id === 'hole';
-    const lost = load >= WELL_LOST;
-    // past the drive's point of no return the overdrive may still get the ship out, while it is ready
-    const ready = this.time >= this.overdriveReadyAt;
-    const rescue = lost && ready && overdriveEscapes(well, me.flight.position, me.flight.velocity, thrust);
-    this.alarms.raise({ id: 'well', level, text: rescue ? t('OVERDRIVE · AWAY FROM IT') : lost ? t('NO RETURN') : hole ? t('BLACK HOLE · BURN AWAY') : t('GRAVITY WELL · BURN AWAY'), direction: relative.subVectors(well.position, me.flight.position) });
-    const said = lost ? ALARM_RANK.critical + (rescue ? 1 : 2) : ALARM_RANK[level];
+    // from WARNING on the flight ahead says what still gets the ship out (see wellEscape), a few
+    // times a second: the drive alone, only the overdrive's shove first, or nothing
+    if (load < WELL_WARNING) this.escape = 'drive';
+    else if (this.time >= this.escapeAt) {
+      this.escapeAt = this.time + ESCAPE_EVERY;
+      const drive = me.drive * me.perks.drive;
+      const nose = me.flight.forward(forward);
+      // the drive burning (its flame, as the flight model keeps it) with the nose away from the well
+      const burning = me.flight.throttle > 0.5 && angleTo(nose, relative.subVectors(me.flight.position, well.position)) < BURNING_AWAY;
+      this.escape = wellEscape(well, me.flight.position, me.flight.velocity, nose, drive, me.driveColdFor(this.time), burning, this.time >= this.overdriveReadyAt);
+    }
+    const rescue = this.escape === 'overdrive';
+    const lost = this.escape === 'lost';
+    this.alarms.raise({ id: 'well', level: rescue || lost ? 'critical' : level, text: rescue ? t('OVERDRIVE · AWAY FROM IT') : lost ? t('NO RETURN') : hole ? t('BLACK HOLE · BURN AWAY') : t('GRAVITY WELL · BURN AWAY'), direction: relative.subVectors(well.position, me.flight.position) });
+    const said = rescue || lost ? ALARM_RANK.critical + (rescue ? 1 : 2) : ALARM_RANK[level];
     if (said > this.wellSaid) {
       this.wellSaid = said;
-      const line = rescue || (level === 'critical' && !lost && ready) ? COMPUTER.wellOverdrive : lost ? COMPUTER.wellLost : level === 'critical' ? COMPUTER.wellTight : level === 'warning' ? (hole ? COMPUTER.holePull : COMPUTER.jupiterPull) : hole ? COMPUTER.holeNear : COMPUTER.jupiterNear;
+      // the overdrive only where nothing else gets the ship out: where the drive still does, its
+      // shove and the cold drive after it would leave the ship weaker than a burn
+      const line = rescue ? COMPUTER.wellOverdrive : lost ? COMPUTER.wellLost : level === 'critical' ? COMPUTER.wellTight : level === 'warning' ? (hole ? COMPUTER.holePull : COMPUTER.jupiterPull) : hole ? COMPUTER.holeNear : COMPUTER.jupiterNear;
       this.speaker.say(line, 'urgent');
     }
     return load;
