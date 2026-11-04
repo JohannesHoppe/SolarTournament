@@ -80,7 +80,6 @@ Ideas Johannes has named that are not built yet, with the day they came up. One 
 
 - 2026-11-02: A push notification when someone opens a public tournament, so the lobby fills.
   - 2026-11-03: Free plan only, closing down at its limits; it says how many public tournaments are open (counted from the lobby on Nostr) and comes only when that number rose, each Host choosing from how many on.
-- 2026-11-03: Drills for the brake as a switch (built; basic training and the handbook teach it): the racer brakes for a bend with it and swings back onto the line; the tactician turns, shoots a chaser down and comes back onto the course in one flowing move.
 - 2026-11-03: A flight school drill at the Event Horizon where the ship falls towards the hole past the drive's point of no return and the overdrive saves it (Nicole's call and the alarm are built).
 - 2026-11-03: On an iPad (Chrome) no sound at all, radio included: the audio session asks for playback now (suspected the iOS silent mode); still to be checked on the iPad.
 - 2026-11-03: The title screen in two big halves: the story campaign (a name of its own), and the way into multiplayer: the flight school, bot training (the solo round) and the online tournament.

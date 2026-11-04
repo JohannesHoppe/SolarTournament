@@ -288,8 +288,8 @@ const KICK_DEBRIS_START = 12000;
  * The shove drill: the pilot and the drone drift side by side at SHOVE_DRIFT (units/s, 20 m/s)
  * at a rock SHOVE_AHEAD (units, 200 m) ahead, the drone SHOVE_ABREAST (45 m, a few meters
  * between the hulls) off the pilot's left, its way passing SHOVE_CLEAR (20 m) off the rock. A
- * kick (40 m/s) throws it at the stone at some 26 m/s. The drone starts with SHOVE_DRONE_HULL,
- * a wreck already: the stone finishes it (some 20 points at that speed), a knockout.
+ * kick (60 m/s) throws it at the stone. The drone starts with SHOVE_DRONE_HULL, a wreck
+ * already: the stone finishes it, a knockout.
  */
 const SHOVE_DRIFT = 400;
 const SHOVE_AHEAD = 4000;
@@ -304,6 +304,18 @@ const SHOVE_DRONE_HULL = 15;
 export const COVER_STANDOFF = 3000;
 const COVER_GUNNER = 24000;
 export const COVER_DRONE = 40000;
+/**
+ * The turn and shoot drill: the pilot drifts at TURN_SHOOT_SPEED (units/s, 150 m/s) towards a
+ * buoy TURN_SHOOT_COURSE ahead (units, 2 km), a drone drifting along TURN_SHOOT_TAIL behind
+ * (600 m). The brake's burn takes that speed in about 1.2 s once the nose points back, the time
+ * to shoot before it stops and turns back by itself; braking, the pilot slows and the drone comes
+ * on, some five seconds until it passes. The nose counts as back on the buoy within
+ * TURN_SHOOT_BACK (rad, 10°).
+ */
+export const TURN_SHOOT_SPEED = 3000;
+export const TURN_SHOOT_COURSE = 40000;
+export const TURN_SHOOT_TAIL = 12000;
+const TURN_SHOOT_BACK = 0.17;
 /** Seconds out of the gunner's sight the cover drill wants. */
 const COVER_HOLD = 3;
 /**
@@ -704,8 +716,20 @@ export const DRILL = {
   // the X where the flight crosses the next ring's plane: steered into the ring, azure, it is a pass
   rings: ringDrill(SCHOOL.rings, SCHOOL_PRAISE.rings, ['turn', 'drive', 'brake'], RING_COURSE, SCHOOL.missed),
   // at the speed limit into a bend tighter than the autopilot turns there: the racing line glows
-  // orange before it, and only a brake in time makes the ring
-  brakeZone: ringDrill(SCHOOL.brakeZone, SCHOOL_PRAISE.brakeZone, ['turn', 'brake', 'drive'], BRAKE_COURSE, SCHOOL.tooFast, MAX_SPEED),
+  // orange before it, and only a brake in time makes the ring; the brake as a switch (pressed,
+  // pressed again to turn back onto the line), so a flip and burn by hand does not count
+  brakeZone: (() => {
+    const rings = ringDrill(SCHOOL.brakeZone, SCHOOL_PRAISE.brakeZone, ['brake', 'turn', 'drive'], BRAKE_COURSE, SCHOOL.tooFast, MAX_SPEED);
+    return {
+      ...rings,
+      done(ctx, a, markers) {
+        a.brakeLetGo ||= !ctx.braking;
+        a.usedBrake ||= ctx.braking && a.brakeLetGo;
+        return rings.done(ctx, a, markers) && a.usedBrake;
+      },
+      fail: (ctx, a) => (a.next >= a.points.length && !a.usedBrake ? SCHOOL.brakeZoneSwitch : rings.fail!(ctx, a)),
+    } satisfies Drill;
+  })(),
   // the racing line at full speed: the drive held all the way, the autopilot bends it through the turns
   fullSpeed: {
     ...ringDrill(SCHOOL.fullSpeed, SCHOOL_PRAISE.fullSpeed, ['drive', 'turn'], LINE_COURSE, SCHOOL.missed, 0, true),
@@ -1049,6 +1073,41 @@ export const DRILL = {
   // the tactician: how to win a dogfight, and how not to lose one
   // past fast debris with a dodge: sliding alone does not get there in time
   kick: debris(SCHOOL.kick, SCHOOL_PRAISE.kick, KICK_DEBRIS_START, KICK_DEBRIS_SPEED, true),
+  // turn, shoot, and back on course in one move: the brake flips the nose onto a drone on the
+  // tail, the laser takes it down, and the brake pressed again turns the ship back to the buoy
+  turnShoot: {
+    line: SCHOOL.turnShoot,
+    praise: SCHOOL_PRAISE.turnShoot,
+    keys: ['brake', 'fire', 'turn'],
+    autopilot: false,
+    enter(ctx, a, markers) {
+      stop(ctx);
+      ctx.me.heat = 0;
+      ctx.me.overheated = false;
+      faceOpenSpace(ctx, TURN_SHOOT_COURSE + TURN_SHOOT_TAIL);
+      ctx.me.flight.forward(a.forward);
+      a.points = [markers.buoy(clear(ctx, ahead(ctx, 0, 0, -TURN_SHOOT_COURSE), 2000))];
+      drift(ctx, TURN_SHOOT_SPEED);
+      ctx.spawnDrone(clear(ctx, ahead(ctx, 0, 0, TURN_SHOOT_TAIL), 2000), ctx.me.flight.velocity);
+    },
+    // the drone down with the brake used, the brake ended and the nose back on the buoy
+    done(ctx, a) {
+      a.brakeLetGo ||= !ctx.braking;
+      a.usedBrake ||= ctx.braking && a.brakeLetGo;
+      const down = !!ctx.drone && !ctx.drone.alive;
+      return holdFor(ctx, a, down && a.usedBrake && !ctx.braking && aimError(ctx, a.points[0]) < TURN_SHOOT_BACK, 0.5);
+    },
+    fail(ctx, a) {
+      const drone = ctx.drone;
+      if (drone && !drone.alive && !a.usedBrake) return SCHOOL.turnShootSwitch;
+      // the drone past the pilot along the course (the nose turned onto it is no matter), or the
+      // buoy left far behind: once more
+      if (drone?.alive && toTarget.subVectors(drone.flight.position, ctx.me.flight.position).dot(a.forward) > 0) return SCHOOL.again;
+      return ctx.me.flight.position.distanceTo(a.points[0]) > TURN_SHOOT_COURSE * 2 ? SCHOOL.again : null;
+    },
+    waypoint: (ctx, a) => (ctx.drone?.alive ? ctx.drone.flight.position : (a.points[0] ?? null)),
+    mark: (ctx) => (ctx.drone?.alive ? t('Drone') : t('Course')),
+  },
   // the kick as a weapon: a drone beside the pilot, past a rock, shoved into the stone
   shove: {
     line: SCHOOL.shove,
@@ -1393,7 +1452,7 @@ const COURSES: Record<SchoolCourse, Drill[]> = {
     saying(SCHOOL.done),
   ],
   arsenal: [saying(SCHOOL.arsenal), DRILL.torpedo, DRILL.torpedoDown, DRILL.overdrive, DRILL.hookShip, DRILL.probe, DRILL.nova, saying(SCHOOL.arsenalDone)],
-  tactician: [saying(SCHOOL.tactician), DRILL.onTail, DRILL.kick, DRILL.slideShot, DRILL.shove, DRILL.cover, DRILL.torpedoCover, DRILL.orbit, DRILL.exam, saying(SCHOOL.tacticianDone)],
+  tactician: [saying(SCHOOL.tactician), DRILL.onTail, DRILL.kick, DRILL.turnShoot, DRILL.slideShot, DRILL.shove, DRILL.cover, DRILL.torpedoCover, DRILL.orbit, DRILL.exam, saying(SCHOOL.tacticianDone)],
 };
 
 /** Each drill's name, its key in DRILL; a course's opening and closing words are "opening" and "closing". */

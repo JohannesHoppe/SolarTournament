@@ -119,6 +119,49 @@ for (const course of ['basic', 'racer', 'gladiator', 'arsenal', 'tactician']) {
   });
 }
 
+test('the tactician’s turn and shoot drill: the brake flips the nose onto the drone on the tail, the laser takes it down, and the brake pressed again turns the ship back onto its course', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('solartournament.school-step', JSON.stringify({ tactician: 'turnShoot' })));
+  const errors = await openGame(page);
+  await page.click('#school');
+  await page.click('#school-tactician');
+  // the drill counts once its line is said and the drone is out
+  await page.waitForFunction(() => window.game.drone?.alive && window.game.school?.attempt?.live, null, { timeout: 90_000 });
+  const step = () => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.school-step') ?? '{}').tactician);
+  // a press the game sees: held over a few frames
+  const tapBrake = async () => {
+    await page.keyboard.down('KeyS');
+    await play(page, 0.1);
+    await page.keyboard.up('KeyS');
+  };
+  await tapBrake();
+  // as a Host does: the pointer on the drone as the brake brings the nose round to it (the
+  // ship turns towards the pointer), firing while the nose is on it
+  const viewport = page.viewportSize()!;
+  const trace: string[] = [];
+  for (let i = 0; i < 200; i++) {
+    const aim = await page.evaluate(() => {
+      const game = window.game;
+      const drone = game.drone;
+      if (!drone?.alive) return null;
+      const on = drone.flight.position.clone().project(game.camera);
+      const to = drone.flight.position.clone().sub(game.me.flight.position);
+      return { x: on.x, y: on.y, front: on.z < 1, nose: game.me.flight.noseAngleTo(to), t: game.time, phase: game.brakePhase, hull: drone.hull, v: game.me.flight.velocity.length() / 20 };
+    });
+    if (!aim) break;
+    trace.push(`${aim.t.toFixed(2)} ${aim.phase} nose ${((aim.nose * 180) / Math.PI).toFixed(1)}° v ${aim.v.toFixed(0)} hull ${aim.hull.toFixed(0)}`);
+    if (aim.front) await page.mouse.move(((aim.x + 1) / 2) * viewport.width, ((1 - aim.y) / 2) * viewport.height);
+    if (aim.nose < 0.03) await page.keyboard.down('Space');
+    else await page.keyboard.up('Space');
+    await page.waitForTimeout(30);
+  }
+  await page.keyboard.up('Space');
+  expect(await page.evaluate(() => window.game.drone?.alive ?? false), trace.slice(-30).join('\n')).toBe(false);
+  // pressed again, unless the brake came to rest and turned back by itself already
+  if (await page.evaluate(() => window.game.brakePhase === 'brake')) await tapBrake();
+  await expect.poll(step, { timeout: 30_000 }).toBe('slideShot');
+  expect(errors).toEqual([]);
+});
+
 test('the flight school’s orbit drill flies at the Event Horizon: free drift flies a STABLE ORBIT without the well’s alarm, and the autopilot calls the path ORBIT READY', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('solartournament.school-step', JSON.stringify({ tactician: 'orbit' })));
   const errors = await openGame(page);
