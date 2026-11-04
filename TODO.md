@@ -26,9 +26,6 @@ Worked through from top to bottom. Every finished item is also documented in the
 - [ ] Radio 2584: jingles and samples as in Johannes' inscription experiments (`haushoppe/deconstructed-inscriptions`)
 - [ ] Radio 2584: now and then something cheerful in between (indie dance-pop after The Ting Tings). A first try (major key, claps, cowbell, choppy chords) did not sound right and is out again; revisit later
 - [x] Glitch of the link to the clone on hits, impacts and death
-- [ ] Audience favor (hype) for spectacular maneuvers
-- [ ] Sponsors on the ships, sponsor missions
-- [ ] Clone counter with HUD artifacts after many copies
 
 ### 4. Arenas with their own physics
 
@@ -58,10 +55,8 @@ Each arena gets a look of its own, recognized at first glance, cheap on phones (
 ### 5. Game modes
 
 - [x] Race: three laps through eight gates, lasers on; rooms play deathmatch, race, or both in turn
-- [ ] Slingshot race with checkpoints around gravity wells
 - [x] Last Clone Standing: three clones a round, a ship whose last clone dies is out until the next round (with a solar flare driving everyone into a corner)
 - [x] Capture the Flag (two sides, Orange and Blue, with sponsor cores) and the President's Fleet (everyone on one side against his battleship)
-- [ ] Teams: humans against aliens
 
 ### 6. Tactics
 
