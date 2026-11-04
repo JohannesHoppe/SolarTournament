@@ -499,6 +499,19 @@ export const ATTACKED = {
 };
 
 /** All phrases and fixed announcements of a language, for the renderer. */
+/**
+ * Nicole in the campaign (see campaign/missions): a salvaged flight computer whose voice crackles
+ * and drops words until it is repaired, so her first lines come in broken pieces.
+ */
+export const CAMPAIGN = {
+  coldBoot: 'Link at thirty-one percent. Clone… alive. Hello? You are in rack seven seven three one. The yard office wants you.',
+  coldBootTurn: 'The beacon. There. Turn… to it.',
+  coldBootDrive: 'Drive. Fifty… meters per second.',
+  coldBootBrake: 'Brake. Press once. Again… when slow.',
+  coldBootStop: 'The office. Stop… right next to it.',
+  coldBootDone: 'Docked. Rask is… waiting. Careful… with him.',
+} as const;
+
 export function allLines(language: Language): string[] {
   switch (language) {
     case 'en':
@@ -509,7 +522,7 @@ export function allLines(language: Language): string[] {
       // lines keep their {name}: the renderer cuts them into the pieces around it, as the game does
       return [...ANNOUNCER_KILL, ...ANNOUNCER_TEAM_KILL, ...ANNOUNCER_ALIEN, ...ANNOUNCER_ROCK, ...ANNOUNCER_LEAD, ...ANNOUNCER_LAST_LAP, ...ANNOUNCER_WIN, ...ANNOUNCER_OUT, ...ANNOUNCER_SURVIVOR, ANNOUNCER_FLARE, ...ANNOUNCER_COMET, ...ANNOUNCER_COMET_KILL,...ANNOUNCER_CAPTURE, ...Object.values(ANNOUNCER_MOMENT).flat(), ...Object.values(ANNOUNCER_FLEET).flat(), ...ANNOUNCER_OPEN, ...Object.values(ANNOUNCER_START).flat(), ...ANNOUNCER_PERFECT, ...Object.values(ANNOUNCER_ARENA), ...ANNOUNCER_NAMES];
     case 'sys':
-      return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY, ...Object.values(ATTACKED.bot), ...ATTACKED.host];
+      return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(CAMPAIGN), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY, ...Object.values(ATTACKED.bot), ...ATTACKED.host];
   }
 }
 

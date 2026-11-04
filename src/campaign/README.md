@@ -1,0 +1,8 @@
+# src/campaign
+
+Lot 7731, the solo campaign (its design in `docs/campaign/`). It is built mission by mission; while it is in the making the title screen shows it without a click, and the address with `?campaign` lets it be flown.
+
+| File | What it does |
+|---|---|
+| `campaign.ts` | The campaign's state as the browser keeps it (the missions done, the drill reached in the running one, the wallet, the Bond still owed), its missions in story order, each a run of drills on the flight school's machinery (`FlightSchool` with a mission instead of a course), and a mission's pay less the yard's cut while the Bond is unpaid |
+| `campaign.test.ts` | The pay and the cut, the state read back and refused, every mission with a name and drills |

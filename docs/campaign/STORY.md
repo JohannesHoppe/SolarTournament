@@ -4,7 +4,7 @@
 
 The campaign is the road of one nobody from a scrapyard in the asteroid belt to the President's Ballroom on the Moon, where the Hosts of the Presidential Games are admitted. It is solo only. Online rounds stay fair and alike for everyone: nothing earned here counts online beyond what the tournament hangar already allows (see section 5, "Online").
 
-Nothing here is built yet. Section 10 maps it onto what the game already does and names the first slice to build.
+Built so far (`src/campaign/`, flown on the address with `?campaign`): the campaign's state and save, the mission runner on the flight school's drills, the pay with the yard's cut, and mission 0.1, Cold Boot, in the Rings of Saturn until the Boneyard is built. Section 10 maps the rest onto what the game already does and names the first slice to build.
 
 ---
 

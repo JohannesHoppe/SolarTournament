@@ -31,6 +31,7 @@ import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../
 import { showTransmission } from '../music/transmission';
 import { IDLE, Input, keyLabel, learnKeyboardLayout, type Action, type Controls, type Device } from '../input/input';
 import { fillSheet, SHEET_TABS } from '../input/sheet';
+import { type Campaign, campaignFrom, complete, type Mission, nextMission } from '../campaign/campaign';
 import { firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -546,6 +547,8 @@ function keepSchoolSteps(steps: Partial<Record<SchoolCourse, number>>) {
 }
 /** The solo round a Host chose last: mode, arena (none: by chance) and rivals. */
 const SOLO_KEY = 'solartournament.solo';
+/** The campaign Lot 7731 as the browser keeps it (see campaign/campaign). */
+const CAMPAIGN_KEY = 'solartournament.campaign';
 /** The best lap of each arena's course: its time and splits (see game/laps). */
 const LAPS_KEY = 'solartournament.laps';
 
@@ -921,6 +924,15 @@ export class Game implements OnlineGame {
    */
   private hangar = emptyHangar();
   private coursesDone = new Set<SchoolCourse>();
+  /** The campaign as the browser keeps it, and the mission of it flown now (null: none). */
+  private campaign = campaignFrom(storageGet(CAMPAIGN_KEY));
+  private mission: Mission | null = null;
+
+  /** Changes the campaign and keeps it. */
+  private keepCampaign(change: (campaign: Campaign) => void) {
+    change(this.campaign);
+    storageSet(CAMPAIGN_KEY, JSON.stringify(this.campaign));
+  }
   /** The browser keeps values no Host can own: the screen says what it thinks of that, and nothing is kept over them. */
   private tampered = false;
   /** The hangar's and the completed courses' entries as last read, so a change to them is noticed. */
@@ -1391,6 +1403,9 @@ export class Game implements OnlineGame {
     $('school-back').addEventListener('click', () => this.showSchool(false));
     this.buildSchool();
     $('online').addEventListener('click', () => this.openOnline());
+    // the campaign is in the making: playable on the address with ?campaign while it is built
+    if (new URLSearchParams(location.search).has('campaign')) $<HTMLButtonElement>('campaign').disabled = false;
+    $('campaign').addEventListener('click', () => this.startMission());
     $('room-create').addEventListener('click', () => this.createTournament());
     $('tournaments-back').addEventListener('click', () => this.showTournaments(false));
     // two pairs of switches: who can find the tournament, and whether bots fill it
@@ -1489,6 +1504,15 @@ export class Game implements OnlineGame {
 
   private startSchool(course: SchoolCourse) {
     this.schoolCourse = course;
+    this.mission = null;
+    this.startRound('school');
+  }
+
+  /** The campaign's next mission, from the drill the Host reached in it, on the flight school's machinery (see campaign/campaign). */
+  private startMission() {
+    const mission = nextMission(this.campaign);
+    if (!mission) return;
+    this.mission = mission;
     this.startRound('school');
   }
 
@@ -2569,7 +2593,8 @@ export class Game implements OnlineGame {
     this.me.setTint(TINTS[this.tint].hex);
     // the own ship flies with its upgrades, online only up to their cap
     this.me.outfit(perksOf(this.hangar, this.selectedShip, !!this.online));
-    this.school = mode === 'school' ? new FlightSchool(this.schoolCourse, schoolSteps()[this.schoolCourse] ?? 0) : null;
+    this.school =
+      mode !== 'school' ? null : this.mission ? new FlightSchool(null, this.campaign.step, this.mission) : new FlightSchool(this.schoolCourse, schoolSteps()[this.schoolCourse] ?? 0);
     if (this.school) this.scene.add(this.school.root);
     // the flight school has no radio; the share button stays in its corner
     $('now-playing').classList.toggle('silent', mode === 'school');
@@ -4980,14 +5005,25 @@ export class Game implements OnlineGame {
     }
     const step = school.stepIndex;
     const waypoint = school.update(context);
+    const course = school.course;
     if (school.stepIndex !== step) {
       this.sound.beep(880, 0.1, 0.15);
-      keepSchoolSteps({ ...schoolSteps(), [school.course]: school.stepIndex });
+      if (course) keepSchoolSteps({ ...schoolSteps(), [course]: school.stepIndex });
+      else this.keepCampaign((campaign) => (campaign.step = school.stepIndex));
     }
-    if (school.finished) {
-      this.coursesDone.add(school.course);
+    // a mission of the campaign done: paid, and back to the menu
+    if (school.finished && this.mission) {
+      const mission = this.mission;
+      this.keepCampaign((campaign) => complete(campaign, mission));
+      this.mission = null;
+      this.showMenu();
+      this.schoolMark = this.schoolTrack = null;
+      return;
+    }
+    if (school.finished && course) {
+      this.coursesDone.add(course);
       this.keepEarned(SCHOOL_DONE_KEY);
-      keepSchoolSteps({ ...schoolSteps(), [school.course]: undefined });
+      keepSchoolSteps({ ...schoolSteps(), [course]: undefined });
       // back on the school's plate: the next course is a key away
       this.showMenu();
       this.showSchool(true);

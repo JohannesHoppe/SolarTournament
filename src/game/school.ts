@@ -132,7 +132,7 @@ interface Attempt {
   told: boolean;
 }
 
-interface Drill {
+export interface Drill {
   /** Said and shown when the drill begins. */
   line: string;
   /** Said once the drill is mastered: praise and the physics behind it. */
@@ -492,7 +492,7 @@ const TURN_MARKERS: [number, number, number][] = [
 ];
 
 /** A drill that only says its line: a course's opening or closing words. */
-const saying = (line: string): Drill => ({
+export const saying = (line: string): Drill => ({
   line,
   keys: [],
   done: (ctx, a) => (a.seconds > 2 && !ctx.speaking) || a.seconds > 30,
@@ -1649,12 +1649,17 @@ export class FlightSchool {
   /** What the current waypoint is, for its label in the HUD. */
   mark = '';
 
-  /** Starts a course at a drill: 0 for its opening, or where a Host left off. */
+  /**
+   * Starts a course at a drill: 0 for its opening, or where a Host left off. Without a course, a
+   * mission of the campaign runs its own drills on the same machinery (see campaign/missions),
+   * under its name.
+   */
   constructor(
-    readonly course: SchoolCourse,
+    readonly course: SchoolCourse | null,
     start = 0,
+    readonly mission: { name: string; drills: Drill[] } | null = null,
   ) {
-    this.drills = COURSES[course];
+    this.drills = mission?.drills ?? COURSES[course ?? 'basic'];
     this.index = THREE.MathUtils.clamp(Math.floor(start), 0, this.drills.length - 1);
     this.line = this.drills[this.index].line;
     // the very first words of the school: Nicole introduces herself before the briefing
@@ -1850,7 +1855,7 @@ export class FlightSchool {
       shown.line = this.line;
       shown.device = device;
       shown.status = {
-        step: t('{course} {n}/{total}', { course: t(COURSE_NAMES[this.course]), n: index + 1, total: this.drills.length }),
+        step: t('{course} {n}/{total}', { course: this.course ? t(COURSE_NAMES[this.course]) : t(this.mission?.name ?? ''), n: index + 1, total: this.drills.length }),
         text: t(this.line),
         keys: this.drills[index].keys.flatMap((command) => CONTROLS[device][command].map((label) => t(label))),
       };
