@@ -494,6 +494,11 @@ export const ES: Catalog = {
   // sponsor break
   'Your next clone is being printed during this message': 'Tu próximo clon se está imprimiendo durante este mensaje',
   'The sponsor is happy': 'El patrocinador está contento',
+  'Save this death as a clip': 'Guardar esta muerte como clip',
+  'Recording the clip': 'Grabando el clip',
+  'Share the clip': 'Compartir el clip',
+  'Clip saved': 'Clip guardado',
+  'My last clone, in slow motion. Die for the President too. SolarTournament': 'Mi último clon, a cámara lenta. Muere tú también por el Presidente. SolarTournament',
 
   // controls
   Mouse: 'Ratón',

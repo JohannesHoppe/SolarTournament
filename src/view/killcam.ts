@@ -67,6 +67,11 @@ export class KillCam {
     return this.replay !== null;
   }
 
+  /** A replay ran to its end and is kept for the sponsor break (see again). */
+  get canReplay() {
+    return this.kept !== null;
+  }
+
   /**
    * Keeps this frame's ships, at game time `time`; at most 60 frames a second, so fast screens
    * keep the same span. Nothing is kept while a replay runs or waits for the sponsor break, so

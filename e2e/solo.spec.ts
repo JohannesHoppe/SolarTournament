@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { openGame, play, startSolo, startSoloByMenu } from './game';
 
@@ -324,5 +325,41 @@ test('the self-destruct, held for a second, takes a rival close by along, a kill
   expect(after.rival).toBe(false);
   expect(after.kills).toBe(before.kills + 1);
   expect(after.deaths).toBe(before.deaths + 1);
+  expect(errors).toEqual([]);
+});
+
+test('the sponsor break keeps a death by a shooter as a clip: three seconds of the replay as a video, saved where the browser shares no files', async ({ page }) => {
+  const errors = await openGame(page);
+  await startSolo(page, 'deathmatch', 'belt');
+  // past the round's opening (intro, countdown), when lasers start to count
+  await play(page, 10);
+  // a rival's lasers take the clone; the kill cam replays it, then the break offers the clip
+  await page.evaluate(() => {
+    const game = window.game;
+    const killer = game.ships.find((ship: { alive: boolean }) => ship !== game.me && ship.alive);
+    for (let k = 0; k < 200 && game.me.alive; k++) game.applyLaserHit(game.me, killer.flight.position.clone(), game.me.flight.position.clone().sub(killer.flight.position).normalize(), killer);
+  });
+  const clip = page.locator('#sponsor-clip');
+  await expect(clip).toBeVisible({ timeout: 20_000 });
+  await clip.click();
+  await expect(clip).toHaveText('Share the clip', { timeout: 15_000 });
+  const download = page.waitForEvent('download');
+  await clip.click();
+  const file = await download;
+  expect(file.suggestedFilename()).toMatch(/^solartournament-kill\.(mp4|webm)$/);
+  const seconds = await page.evaluate(async (url) => {
+    const video = document.createElement('video');
+    video.src = url;
+    await new Promise((resolve) => (video.onloadedmetadata = resolve));
+    // a WebM's length is known once it is read to its end
+    if (!Number.isFinite(video.duration)) {
+      video.currentTime = 1e6;
+      await new Promise((resolve) => (video.ontimeupdate = resolve));
+    }
+    return video.duration;
+  }, `data:video/${file.suggestedFilename().endsWith('.mp4') ? 'mp4' : 'webm'};base64,${readFileSync(await file.path()).toString('base64')}`);
+  expect(seconds).toBeGreaterThan(2.5);
+  expect(seconds).toBeLessThan(4);
+  await expect(clip).toHaveText('Clip saved');
   expect(errors).toEqual([]);
 });

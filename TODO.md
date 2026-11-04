@@ -67,7 +67,7 @@ Each arena gets a look of its own, recognized at first glance, cheap on phones (
 
 ### 7. Spreading the game
 
-- [ ] Kill clip as a short video to share
+- [x] Kill clip as a short video to share: the death in the sponsor break, recorded in the browser and shared through the device
 - [ ] Leaderboard without a server of our own
 
 ## Ideas

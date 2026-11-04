@@ -494,6 +494,11 @@ export const FR: Catalog = {
   '{course} {n}/{total}': '{course} {n}/{total}',
   'Your next clone is being printed during this message': 'Ton prochain clone s’imprime pendant ce message',
   'The sponsor is happy': 'Le sponsor est content',
+  'Save this death as a clip': 'Enregistrer cette mort en clip',
+  'Recording the clip': 'Enregistrement du clip',
+  'Share the clip': 'Partager le clip',
+  'Clip saved': 'Clip enregistré',
+  'My last clone, in slow motion. Die for the President too. SolarTournament': 'Mon dernier clone, au ralenti. Meurs toi aussi pour le Président. SolarTournament',
 
   // controls
   'Mouse': 'Souris',

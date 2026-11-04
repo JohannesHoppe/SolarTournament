@@ -1,5 +1,6 @@
 import { AD_SECONDS, SatireAds } from './satire-ads';
 import { t } from '../i18n/i18n';
+import { passOnClip } from '../view/clip';
 
 /**
  * Sponsor breaks. In 2584 a Host's next clone only boots after the Host has watched an
@@ -38,6 +39,9 @@ export class SponsorBreak {
   private readonly cause = $('sponsor-cause');
   private readonly report = $('sponsor-report');
   private readonly boot = $('sponsor-boot') as HTMLButtonElement;
+  private readonly clipButton = $('sponsor-clip') as HTMLButtonElement;
+  /** The clip on offer in this break: how it is recorded, and once it is, the video. */
+  private clip: { record: () => Promise<Blob | null>; text: string; video: Blob | null } | null = null;
   /** Named so no blocker list knows it: it scolds the Host whose blocker hid even the satire. */
   private readonly conscience = $('conscience');
   private onDone: (() => void) | null = null;
@@ -46,6 +50,7 @@ export class SponsorBreak {
 
   constructor(private readonly ads: AdProvider = new SatireAds()) {
     this.boot.addEventListener('click', () => this.finish());
+    this.clipButton.addEventListener('click', () => void this.onClip());
   }
 
   get visible() {
@@ -63,6 +68,8 @@ export class SponsorBreak {
     this.report.textContent = report;
     this.boot.hidden = true;
     this.status.textContent = t('Your next clone is being printed during this message');
+    this.clip = null;
+    this.clipButton.hidden = true;
     this.root.hidden = false;
     this.conscience.hidden = true;
     setTimeout(() => {
@@ -81,6 +88,40 @@ export class SponsorBreak {
   }
 
   /**
+   * Offers the kill cam's replay behind the ad as a clip: `record` records it (null where it
+   * fails), `text` goes along when it is shared. The button records first and shares on its next
+   * press: a share sheet only opens on a press of the Host's own, not seconds after one.
+   */
+  offerClip(record: () => Promise<Blob | null>, text: string) {
+    this.clip = { record, text, video: null };
+    this.clipButton.textContent = t('Save this death as a clip');
+    this.clipButton.disabled = false;
+    this.clipButton.hidden = false;
+  }
+
+  private async onClip() {
+    const clip = this.clip;
+    if (!clip) return;
+    if (!clip.video) {
+      this.clipButton.disabled = true;
+      this.clipButton.textContent = t('Recording the clip');
+      const video = await clip.record();
+      // the break may be over, or another one begun, by the time the recording ends
+      if (this.clip !== clip) return;
+      this.clipButton.disabled = false;
+      if (!video) {
+        this.clipButton.hidden = true;
+        return;
+      }
+      clip.video = video;
+      this.clipButton.textContent = t('Share the clip');
+      return;
+    }
+    const outcome = await passOnClip(clip.video, clip.text);
+    if (this.clip === clip && outcome === 'saved') this.clipButton.textContent = t('Clip saved');
+  }
+
+  /**
    * Whether a blocker took the ad away: blockers hide the slot or the ad inside it by their
    * names (`display: none`) or remove them, and either way nothing of the ad has a size.
    */
@@ -93,6 +134,7 @@ export class SponsorBreak {
     this.generation++;
     this.root.hidden = true;
     this.onDone = null;
+    this.clip = null;
     this.ads.stop?.();
   }
 

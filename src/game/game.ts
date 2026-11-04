@@ -62,7 +62,8 @@ import { animateHull, setHullFrost } from '../world/worldship';
 import { Mining } from '../world/mining';
 import { Lensing } from '../view/lensing';
 import { Radar, type RadarMark } from '../view/radar';
-import { KillCam } from '../view/killcam';
+import { KillCam, REPLAY_SECONDS } from '../view/killcam';
+import { clipType, recordClip } from '../view/clip';
 import { Showcase, TITLE_WIDE } from '../view/showcase';
 import { storageGet, storageSet } from '../storage';
 import { BOT_GEAR, buy, buyGear, emptyHangar, type TournamentShip, GEAR, hangarFrom, keepable, LEVELS, nextPrice, payOut, perksOf, SELF_DESTRUCT_HOLD, SELF_DESTRUCT_RADIUS, sovereignEarned, UPGRADES, WALLET } from './hangar';
@@ -119,7 +120,7 @@ import { recorder, type FlightMode, type InputFrame } from '../recorder';
 import { CAMERA_FOLLOW, CAMERA_FOV, CAMERA_TURN, CHASE_DISTANCE, CHASE_HEIGHT } from '../view/chase';
 import { AIM_ASSIST_ANGLE, AIM_ASSIST_RANGE, assistAim, BRAKE_BURN_ANGLE, BRAKE_REST, Brake, keepUpright } from '../ship/computer';
 import { chooseLocale, currentLocale, LOCALE_NAMES, LOCALES, msg, t } from '../i18n/i18n';
-import { ShareButton, type ShareWhere } from '../share';
+import { GAME_URL, ShareButton, type ShareWhere } from '../share';
 
 /** Online tournaments show the scoreboard this long before the next round starts. */
 const RESULTS_SECONDS = 12;
@@ -3267,6 +3268,18 @@ export class Game implements OnlineGame {
       this.input.steerWithMouse(true);
       this.input.holdFire();
     });
+    // the kill again as a clip to share: one run of the replay from its start, picture and sound
+    const type = clipType();
+    if (type && this.killcam.canReplay)
+      this.sponsors.offerClip(async () => {
+        this.killcam.again();
+        try {
+          return await recordClip(this.renderer.domElement, this.sound.headset, REPLAY_SECONDS, type);
+        } catch (error) {
+          console.warn('Clip failed', error);
+          return null;
+        }
+      }, `${t('My last clone, in slow motion. Die for the President too. SolarTournament')} ${GAME_URL}`);
   }
 
   private pause() {
