@@ -557,10 +557,10 @@ export const RASK = {
   lamplighter: "First job. Six beacons at the ends of the rows have gone dark, and the haulers can't find the yard without them. Get them lit again before the shift's over.",
   liveTarget: 'Good news, darling. Tourists. They pay to shoot at a real hull with training lasers. You fly, they shoot, I get paid. Every hit costs you ten coins.',
   canisterSweep: 'Salvage canisters are floating between the rows. The crusher eats them, and I sell what comes out. Bring me four.',
-  cutter: "You need a tool, and I happen to have one. A mining cutter, twelve hundred coins. I'll put it on your Bond. My welder will fit it.",
+  cutter: "You need a tool, and I happen to have one. A mining cutter, twelve hundred coins. I'll put it on your debt. My welder will fit it.",
   firstCut: "Now earn it back. The spoil field is full of rock nobody's ever bothered to cut. Cut it up, and every glint of ore is money.",
   dockingLane: 'A hauler is coming in, the Patience, out of the Belt. Her lane is full of junk, and if a hull hits her, her captain sends me the bill. Keep it clear.',
-  dockingLaneDone: 'Look at that. She wants to take you on. Go, darling. The Bond goes with you, and so does my forty percent.',
+  dockingLaneDone: 'Look at that. She wants to take you on. Go, darling. Your debt goes with you, and so does my forty percent.',
 } as const;
 
 /**

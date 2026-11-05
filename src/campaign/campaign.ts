@@ -13,11 +13,11 @@ import { MISSIONS } from './missions';
 
 export { MISSIONS };
 
-/** The Bond the Host signed with the yard: what it owes (☉). The yard adds what it fits on credit. */
+/** The debt the Host signed with the yard: what it owes (☉). The yard adds what it fits on credit. */
 export const BOND = 25000;
-/** The most the Bond can grow to with what the yard fits on credit (☉). */
+/** The most the debt can grow to with what the yard fits on credit (☉). */
 export const BOND_MAX = 100_000;
-/** The yard's cut of every payout while the Bond is unpaid (a share). */
+/** The yard's cut of every payout while the debt is unpaid (a share). */
 export const YARD_CUT = 0.4;
 
 /**
@@ -81,7 +81,7 @@ export interface Mission {
   pay: number;
   /** The ratings it earns the first time (see RANKS); the yard takes no cut of them. */
   ratings?: number;
-  /** What it changes in the campaign the first time it is done: a part fitted, the Bond grown. */
+  /** What it changes in the campaign the first time it is done: a part fitted, the debt grown. */
   fit?: (campaign: Campaign) => void;
   /** Where its clones are printed and face, if not where the place's story starts (see ArenaProfile.start). */
   start?: { at: readonly [number, number, number]; toward: readonly [number, number, number] };
@@ -106,7 +106,7 @@ export const RANKS: readonly { name: string; from: number }[] = [
 /** The rank a pilot holds with these ratings (its English name, see RANKS). */
 export const rankOf = (ratings: number): string => RANKS.reduce((rank, step) => (ratings >= step.from ? step.name : rank), RANKS[0].name);
 
-/** The campaign as the browser keeps it: the missions done, the drill reached in the running one, the wallet, what the Bond still asks, the ratings, the parts fitted, Nicole's modules installed. */
+/** The campaign as the browser keeps it: the missions done, the drill reached in the running one, the wallet, what the debt still asks, the ratings, the parts fitted, Nicole's modules installed. */
 export interface Campaign {
   done: MissionId[];
   /** The drill reached in the next mission (0: its start). */
@@ -143,7 +143,7 @@ export const nextMission = (campaign: Campaign): Mission | null => MISSIONS.find
 /**
  * A mission done: it counts, what it fits is fitted, its pay less `fine` (what the Host lost on
  * the job: the tourists' hits of Live Target) goes to the Host's wallet less the yard's cut while
- * the Bond is unpaid (the cut pays the Bond off), its ratings count in full, and the next
+ * the debt is unpaid (the cut pays the debt off), its ratings count in full, and the next
  * mission starts at its beginning. Returns what the Host kept, what the yard took, the ratings
  * earned and the rank reached, if the ratings raised it.
  */

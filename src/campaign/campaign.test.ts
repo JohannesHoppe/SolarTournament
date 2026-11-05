@@ -4,13 +4,13 @@ import { TORPEDOES } from '../game/torpedoes';
 import { CUTTER_PRICE } from './missions';
 
 describe('the campaign Lot 7731', () => {
-  it('starts with the Bond owed and the first mission next', () => {
+  it('starts with the debt owed and the first mission next', () => {
     const campaign = freshCampaign();
     expect(campaign.bond).toBe(BOND);
     expect(nextMission(campaign)?.id).toBe(MISSIONS[0].id);
   });
 
-  it('pays a mission once, less the yard’s cut while the Bond is unpaid, the cut paying it off', () => {
+  it('pays a mission once, less the yard’s cut while the debt is unpaid, the cut paying it off', () => {
     const campaign = freshCampaign();
     const mission = { ...MISSIONS[0], pay: 1000 };
     expect(complete(campaign, mission)).toMatchObject({ kept: 1000 * (1 - YARD_CUT), cut: 1000 * YARD_CUT });
@@ -19,7 +19,7 @@ describe('the campaign Lot 7731', () => {
     // done once: flown again it pays nothing
     expect(complete(campaign, mission)).toMatchObject({ kept: 0, cut: 0 });
     expect(campaign.done).toEqual([mission.id]);
-    // a Bond nearly paid takes only what is left
+    // a debt nearly paid takes only what is left
     campaign.bond = 100;
     campaign.done = [];
     expect(complete(campaign, mission)).toMatchObject({ kept: 900, cut: 100 });
@@ -84,7 +84,7 @@ describe('the campaign Lot 7731', () => {
     expect(hull.cooling).toBe(1 - FIN_RADIATOR);
   });
 
-  it('fits the mining cutter on the Bond: a laser of short reach that runs hot', () => {
+  it('fits the mining cutter on the debt: a laser of short reach that runs hot', () => {
     const campaign = freshCampaign();
     const cutter = MISSIONS.find((mission) => mission.id === 'cutter')!;
     complete(campaign, cutter);
@@ -97,7 +97,7 @@ describe('the campaign Lot 7731', () => {
     expect(campaign.bond).toBe(BOND + CUTTER_PRICE);
   });
 
-  it('has Pim weld the thrusters up when the hull is docked, free, the Bond untouched, and her welds show', () => {
+  it('has Pim weld the thrusters up when the hull is docked, free, the debt untouched, and her welds show', () => {
     const campaign = freshCampaign();
     expect(hullOf(campaign).patched).toBe(false);
     complete(campaign, MISSIONS.find((mission) => mission.id === 'coldBoot')!);

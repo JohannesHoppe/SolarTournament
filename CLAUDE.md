@@ -185,7 +185,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `game/sponsors.ts` | Sponsor break before the respawn: `AdProvider` interface, how the clone died, the round so far |
 | `game/satire-ads.ts` | The invented sponsors of 2584 (Victory Cola, Space Burger, PrintMe Bodies, …): consumer satire in the ad slot until real sponsors take it, each presenting its product as a hologram (see view/hologram, view/products), its flat picture where WebGL cannot be had |
 | **`campaign/`** | **Lot 7731, the solo campaign** |
-| `campaign/campaign.ts` | The campaign's state as the browser keeps it, the ship as far as it is fitted, a mission's pay less the yard's cut while the Bond is unpaid; flown on the address with `?campaign` while it is in the making |
+| `campaign/campaign.ts` | The campaign's state as the browser keeps it, the ship as far as it is fitted, a mission's pay less the yard's cut while the debt is unpaid; flown on the address with `?campaign` while it is in the making |
 | `campaign/missions.ts` | The missions in story order, each a run of drills on the flight school's machinery at a place of the campaign: the prologue and chapter 1 in the Boneyard |
 | `campaign/scenes.ts` | The scenes in person: the clone climbs out of the cockpit and stands among the people in the flesh, its eyes the camera; who stands where (`planOf`), the stage around the set (`stageOf`); the first: Rask's office, where he hands the Host on to Hedda Kroll |
 | **`world/`** | **The arena** |

@@ -1604,7 +1604,7 @@ export class Game implements OnlineGame {
     const next = nextMission(this.campaign);
     const note = button.querySelector<HTMLElement>('.mode-note')!;
     note.textContent = next
-      ? t('Next: {mission} · {coins} ☉ · the Bond asks {bond} ☉ · {rank}', { mission: t(next.name), coins: coinText(this.campaign.coins), bond: coinText(this.campaign.bond), rank: t(rankOf(this.campaign.ratings)) })
+      ? t('Next: {mission} · {coins} ☉ · you owe {bond} ☉ · {rank}', { mission: t(next.name), coins: coinText(this.campaign.coins), bond: coinText(this.campaign.bond), rank: t(rankOf(this.campaign.ratings)) })
       : t('All that is built is flown. More of the story is in the making.');
   }
 
@@ -1615,7 +1615,7 @@ export class Game implements OnlineGame {
 
   /**
    * The campaign's job board, where the story stands between its jobs: the place, the wallet,
-   * the Bond and the rank, the next job (Enter takes it), the jobs done to fly again for nothing,
+   * the debt and the rank, the next job (Enter takes it), the jobs done to fly again for nothing,
    * and what the hull and Nicole have come to.
    */
   private showBoard(open: boolean) {
@@ -1632,7 +1632,7 @@ export class Game implements OnlineGame {
     const next = nextMission(campaign);
     const place = arenaById(next?.drills[0].arena ?? MISSIONS[MISSIONS.length - 1].drills[0].arena ?? '');
     $('board-place').textContent = place ? t(place.name) : '';
-    $('board-wallet').textContent = t('{coins} ☉ in the wallet · the Bond asks {bond} ☉ · {rank}', { coins: coinText(campaign.coins), bond: coinText(campaign.bond), rank: t(rankOf(campaign.ratings)) });
+    $('board-wallet').textContent = t('{coins} ☉ in the wallet · you owe {bond} ☉ · {rank}', { coins: coinText(campaign.coins), bond: coinText(campaign.bond), rank: t(rankOf(campaign.ratings)) });
     const job = (mission: Mission, note: string) => {
       const button = Object.assign(document.createElement('button'), { type: 'button', className: 'mode' });
       button.innerHTML = `<span class="mode-name"><span class="mode-label"></span></span><span class="mode-note"></span>`;
@@ -5410,7 +5410,7 @@ export class Game implements OnlineGame {
       else this.showMenu();
       const done =
         paid.kept + paid.cut > 0
-          ? t('{mission} done: {kept} ☉ for you, {cut} ☉ for the yard, {ratings} ratings. The Bond still asks {bond} ☉.', { mission: t(mission.name), kept: coinText(paid.kept), cut: coinText(paid.cut), ratings: paid.ratings, bond: coinText(this.campaign.bond) })
+          ? t('{mission} done: {kept} ☉ for you, {cut} ☉ for the yard, {ratings} ratings. You still owe {bond} ☉.', { mission: t(mission.name), kept: coinText(paid.kept), cut: coinText(paid.cut), ratings: paid.ratings, bond: coinText(this.campaign.bond) })
           : t('{mission} done.', { mission: t(mission.name) });
       this.notice(paid.rank ? `${done} ${t('The feeds rank you: {rank}.', { rank: t(paid.rank) })}` : done);
       this.schoolMark = this.schoolTrack = null;

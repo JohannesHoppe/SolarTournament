@@ -280,7 +280,7 @@ const dockingLane: Drill = {
   mark: (_, a) => t('Hull {n}/{total} · strikes {strikes}/{max}', { n: Math.min(LANE_WAVES, a.count + 1), total: LANE_WAVES, strikes: a.jinks, max: LANE_STRIKES }),
 };
 
-/** Fits the mining cutter (see hullOf), on the Bond: the yard adds its price to what the Host owes. */
+/** Fits the mining cutter (see hullOf), on the debt: the yard adds its price to what the Host owes. */
 export const CUTTER_PRICE = 1200;
 const fitCutter = (campaign: Campaign) => {
   if (!campaign.parts.includes('cutter')) campaign.parts.push('cutter');
