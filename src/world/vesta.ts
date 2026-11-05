@@ -102,5 +102,6 @@ export function slopeGround(type: number): Placement {
     position: new THREE.Vector3(sin(SLOPE) * SLOPE_HALF.y, VESTA_GROUND - cos(SLOPE) * SLOPE_HALF.y, 0),
     orientation: setFromAxisAngle(new THREE.Quaternion(), new THREE.Vector3(0, 0, 1), SLOPE),
     solid: true,
+    ground: true,
   };
 }

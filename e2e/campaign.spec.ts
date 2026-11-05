@@ -143,6 +143,38 @@ test('the Saw Brothers saw at a rig while the clone keeps away, and two of them 
   expect(errors).toEqual([]);
 });
 
+test('the Peak Run races three rivals through six old pipes, two laps, and counts the clone home', async ({ page }) => {
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify({ ...kept, done: [...kept.done, 'rheasilvia', 'claimSurvey', 'cutAndHaul', 'sawBrothers'] })), CHAPTER_ONE_DONE);
+  const errors = await openGame(page, '/?campaign');
+  await takeNextJob(page);
+  await page.waitForFunction(() => window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.racers?.bots.length === 3, null, { timeout: 120_000 });
+  // the rivals race off along the line towards the first pipe
+  const off = await page.evaluate(async () => {
+    const game = window.game;
+    const ring = game.school.attempt.points[0];
+    const before = game.racers.bots.map((bot: { ship: { flight: { position: { distanceTo(p: unknown): number } } } }) => bot.ship.flight.position.distanceTo(ring));
+    const start = game.time;
+    while (game.time - start < 6) await new Promise((resolve) => requestAnimationFrame(resolve));
+    return game.racers.bots.map((bot: { ship: { flight: { position: { distanceTo(p: unknown): number } } } }, i: number) => before[i] - bot.ship.flight.position.distanceTo(ring));
+  });
+  for (const closer of off) expect(closer).toBeGreaterThan(0);
+  // the clone flown through each pipe in turn, both laps, before any rival is home: it wins
+  await page.evaluate(async () => {
+    const game = window.game;
+    const start = game.time;
+    while (game.school.stepIndex === 1 && game.time - start < 60) {
+      const attempt = game.school.attempt;
+      const ring = attempt.points[attempt.next % attempt.points.length];
+      const normal = attempt.normals[attempt.next % attempt.points.length];
+      game.me.flight.position.copy(ring).addScaledVector(normal, attempt.side < 0 ? 400 : -400);
+      game.me.flight.velocity.set(0, 0, 0);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  });
+  await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(2);
+  expect(errors).toEqual([]);
+});
+
 test('Lamplighter counts the beacons held by, one after the other', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: ['coldBoot'], step: 0, coins: 0, bond: 25000, parts: [] })));
   const errors = await openGame(page, '/?campaign');

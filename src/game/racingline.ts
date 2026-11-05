@@ -251,7 +251,8 @@ export class RacingLine {
       sample.copy(center).addScaledVector(off, reach - radius);
       keeps.push({ x: sample.x, y: sample.y, z: sample.z, radius });
     };
-    for (const rock of field.asteroids.values()) add(rock.object.position, rock.radius + CLEARANCE);
+    // a world's ground is flown over, not round: no sphere holds it
+    for (const rock of field.asteroids.values()) if (!rock.ground) add(rock.object.position, rock.radius + CLEARANCE);
     if (field.well) add(field.well.position, field.well.radius + CLEARANCE * 2);
     const bows = this.bows;
     if (fresh || keeps.length === 0) bows.fill(0);

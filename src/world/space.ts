@@ -158,7 +158,7 @@ export class Space {
   private skyIntensity = 1;
   /** What the screen shows where nothing is drawn, in the arena's space (see setMood). */
   readonly background = new THREE.Color();
-  /** The stars generated in code, for the arenas beyond the solar system (see Mood.starmap). */
+  /** The stars generated in code: the sky until the real one has loaded, and of a mood that asks for no real sky (see Mood.starmap). */
   private readonly stars: THREE.Points<THREE.BufferGeometry, THREE.PointsMaterial>;
   /** The real sky of the arenas in the solar system and its parts (see setStarmap), its sharp Milky Way once asked for and baked, and the share of detail the rung asks for (see setDetail). */
   private starmap: Starmap | null = null;

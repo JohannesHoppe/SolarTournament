@@ -123,6 +123,8 @@ export interface Placement {
   solid: boolean;
   /** Pieces of one structure (a half of the world ship, the junkyard's hub) share a weld: they move as one body, never against each other (see AsteroidField.welded). */
   weld?: number;
+  /** A world's ground under a place (see world/vesta): ships fly over it, and a racing line keeps over it without bowing round it as round a rock. */
+  ground?: boolean;
 }
 
 /** A race course's own shape (see formPoint in game/race): a circuit laid as a race track, or an ellipse about the field's center (units). */
@@ -221,6 +223,8 @@ export interface Asteroid {
   shovedBy: number | null;
   /** The structure it is welded into (see Placement.weld), or null for a piece on its own. */
   weld: number | null;
+  /** A world's ground (see Placement.ground). */
+  ground?: boolean;
   /** The field's revision when it last appeared or jumped (see AsteroidField.revision). */
   appeared: number;
   /**
@@ -563,6 +567,7 @@ export class AsteroidField {
       const asteroid = this.asteroids.get(id)!;
       asteroid.baseOrientation.copy(piece.orientation).multiply(asteroid.object.quaternion);
       asteroid.weld = piece.weld ?? null;
+      if (piece.ground) asteroid.ground = true;
       // a welded body's frost and plating ride on it as it drifts (see world/worldship)
       if (asteroid.weld !== null) this.frosts.set(asteroid.weld, weldFrost(asteroid.object, asteroid.weld));
       this.place(asteroid);

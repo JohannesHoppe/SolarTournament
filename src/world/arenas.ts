@@ -272,7 +272,7 @@ const MOODS: Record<ArenaId, Mood> = {
       { at: [0.6, -0.5, 0.8], color: [0.03, 0.017, 0.011], size: 504000, shape: 1, turn: 3.6 },
     ],
     stars: 1.15,
-    starmap: false,
+    starmap: true,
     dust: [0.85, 0.74, 0.62],
     grade: { gain: [1.03, 0.99, 0.94], lift: [0.0012, 0.0007, 0.0004], saturation: 1.03 },
   },

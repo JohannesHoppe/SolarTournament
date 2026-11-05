@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
 import { CAMPAIGN, HEDDA, PIM, RASK, SAW } from '../music/lines';
-import { clear, holdFor, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
+import { clear, holdFor, PIPE_BORE, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
+import { RISE, VESTA_GROUND } from '../world/vesta';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
-import { exp, hypot } from '../detmath';
+import { cos, exp, hypot, sin } from '../detmath';
 import type { Campaign, Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
@@ -532,6 +533,69 @@ const sawBrothers: Drill = {
   mark: (ctx) => t('Down {n}/{needed} · rig {wear}/{falls}', { n: ctx.jumpersDown, needed: JUMPERS_DOWN, wear: ctx.rigWear, falls: RIG_FALLS }),
 };
 
+/**
+ * The Peak Run (2.4): the Rockborn kids' race through PEAK_RINGS sections of an old ore line's
+ * pipe (see Markers.pipe), hung on an ellipse round the claims (PEAK_REACH and PEAK_DEPTH its half
+ * axes), PEAK_OVER above the flank, PEAK_LAPS laps against PEAK_RIVALS rivals of PEAK_SKILL (see
+ * Game.racers); a pipe counts flown through its bore, either way. In the first PEAK_PODIUM it wins;
+ * later, the attempt starts over.
+ */
+export const PEAK_RINGS = 6;
+const PEAK_REACH = 32000;
+const PEAK_DEPTH = 24000;
+const PEAK_OVER = 6000;
+export const PEAK_LAPS = 2;
+const PEAK_RIVALS = 3;
+const PEAK_SKILL = 0.2;
+const PEAK_PODIUM = 2;
+export const PEAK_COURSE = Array.from({ length: PEAK_RINGS }, (_, k) => {
+  const angle = (k / PEAK_RINGS) * Math.PI * 2;
+  const x = cos(angle) * PEAK_REACH;
+  return point(x, VESTA_GROUND + RISE * x + PEAK_OVER, sin(angle) * PEAK_DEPTH);
+});
+
+const peakRun: Drill = {
+  line: CAMPAIGN.peakRun,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'rheasilvia',
+  autopilot: true,
+  enter(ctx, a, markers) {
+    stop(ctx);
+    a.points = PEAK_COURSE.map((pipe) => clear(ctx, pipe.clone(), PIPE_BORE * 2));
+    // each ring faces along the loop, from the ring before it to the ring after it
+    a.normals = a.points.map((_, i) => a.points[(i + 1) % PEAK_RINGS].clone().sub(a.points[(i + PEAK_RINGS - 1) % PEAK_RINGS]).normalize());
+    a.points.forEach((pipe, i) => markers.pipe(pipe, a.normals[i], VESTA_GROUND + RISE * pipe.x));
+    a.pipes = true;
+    a.next = 0;
+    a.side = NaN;
+    a.warned = false;
+    ctx.spawnRacers(a.points, a.normals, PIPE_BORE, PEAK_LAPS, PEAK_RIVALS, PEAK_SKILL, ctx.me.flight.position);
+  },
+  done(ctx, a) {
+    const k = a.next % PEAK_RINGS;
+    const offset = a.site.subVectors(ctx.me.flight.position, a.points[k]);
+    const side = offset.dot(a.normals[k]);
+    const crossed = Number.isFinite(a.side) && a.side < 0 !== side < 0;
+    a.side = side;
+    if (!crossed || offset.addScaledVector(a.normals[k], -side).length() >= PIPE_BORE) return false;
+    a.next++;
+    a.side = NaN;
+    if (a.next < PEAK_RINGS * PEAK_LAPS) return false;
+    // home: in the first two, or the race is lost
+    a.warned = ctx.racersFinished >= PEAK_PODIUM;
+    return !a.warned;
+  },
+  fail: (_, a) => (a.warned ? CAMPAIGN.peakRunLost : null),
+  leave: (ctx) => ctx.removeRacers(),
+  waypoint: (_, a) => a.points[a.next % PEAK_RINGS] ?? null,
+  mark: (_, a) => t('Lap {lap}/{laps} · pipe {n}/{total}', { lap: Math.min(PEAK_LAPS, Math.floor(a.next / PEAK_RINGS) + 1), laps: PEAK_LAPS, n: (a.next % PEAK_RINGS) + 1, total: PEAK_RINGS }),
+};
+
+/** The prize of the Peak Run, Pim's thruster parts: the thrusters rebuilt to stock, and with them the dodge. */
+const fitThrusters = (campaign: Campaign) => {
+  if (!campaign.parts.includes('thrusters')) campaign.parts.push('thrusters');
+};
+
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
@@ -574,4 +638,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'claimSurvey', name: msg('Claim Survey'), drills: [onVesta(HEDDA.claimSurvey), claimSurvey, said(CAMPAIGN.claimSurveyDone, 'rheasilvia')], pay: 400, ratings: 20 },
   { id: 'cutAndHaul', name: msg('Cut and Haul'), drills: [onVesta(HEDDA.cutAndHaul), cutAndHaul, said(CAMPAIGN.cutAndHaulDone, 'rheasilvia')], pay: HAUL_ORE * ORE_PAY, ratings: 25 },
   { id: 'sawBrothers', name: msg('Saw Brothers'), drills: [onVesta(HEDDA.sawBrothers), onVesta(SAW.giggle), sawBrothers, said(SAW.lost, 'rheasilvia'), said(CAMPAIGN.sawBrothersDone, 'rheasilvia')], pay: 1200, ratings: 80 },
+  { id: 'peakRun', name: msg('The Peak Run'), drills: [onVesta(HEDDA.peakRun), peakRun, said(CAMPAIGN.peakRunDone, 'rheasilvia'), onVesta(PIM.thrusters)], pay: 800, ratings: 60, fit: fitThrusters },
 ];

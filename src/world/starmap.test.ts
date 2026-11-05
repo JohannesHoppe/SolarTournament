@@ -142,14 +142,14 @@ describe('the stars of the real sky', () => {
     let inBand = 0;
     const direction = new THREE.Vector3();
     for (let i = 0; i < faint.count; i++) if (Math.abs(galactic(direction.fromArray(faint.directions, i * 3)).b) < 15) inBand++;
-    // a uniform sky would hold sin 15° (26 %) of them within 15° of the plane
+    // a uniform sky would hold sin 15Â° (26 %) of them within 15Â° of the plane
     expect(inBand / faint.count).toBeGreaterThan(0.5);
   });
 });
 
 describe('the Milky Way', () => {
   it('lies along the galactic plane where the galactic pole and center say', () => {
-    // the frame: its center and pole, longitude 90° in Cygnus, and Sirius where the catalogue puts it (227.23°, -8.89°)
+    // the frame: its center and pole, longitude 90Â° in Cygnus, and Sirius where the catalogue puts it (227.23Â°, -8.89Â°)
     expect(galactic(celestial(266.40499, -28.93617)).l).toBeCloseTo(0, 3);
     expect(galactic(celestial(266.40499, -28.93617)).b).toBeCloseTo(0, 3);
     expect(galactic(celestial(192.85948, 27.12825)).b).toBeCloseTo(90, 3);
@@ -174,7 +174,7 @@ describe('the Milky Way', () => {
   });
 
   it('shines brightest and widest towards the center in Sagittarius, faintest towards the anticenter', () => {
-    // the brightest place of the band lies within 8° of the center
+    // the brightest place of the band lies within 8Â° of the center
     let best = { l: 0, b: 0, value: 0 };
     for (let l = 0; l < 360; l += 1) {
       for (let b = -15; b <= 15; b += 1) {
@@ -235,7 +235,7 @@ describe('the orientation of the real sky', () => {
     }
   });
 
-  it('shows in every arena of the solar system, and only there', () => {
-    for (const arena of ARENAS) expect(arena.mood.starmap).toBe(arena.id !== 'hole');
+  it('shows in every arena: all of them lie in the solar system, the Event Horizon’s hole on its wide orbit about the sun too', () => {
+    for (const arena of ARENAS) expect(arena.mood.starmap).toBe(true);
   });
 });

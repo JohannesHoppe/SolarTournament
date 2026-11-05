@@ -204,30 +204,38 @@ export function touchRing(center: THREE.Vector3, facing: THREE.Vector3, radius: 
  * `position` moves out of the band and `normal` is the band's outward normal there; true.
  */
 function touchBand(center: THREE.Vector3, facing: THREE.Vector3, radius: number, position: THREE.Vector3, shipRadius: number, normal: THREE.Vector3): boolean {
+  return touchTube(center, facing, radius + CLEARANCE, THICKNESS, DEPTH, position, shipRadius, normal);
+}
+
+/**
+ * Whether a ship touches a tube about `facing` through `center`: its wall from `inner` (units,
+ * the bore's radius) outwards, `thickness` thick and `depth` long (a ring's band, a pipe). When
+ * it does, `position` moves out of the wall and `normal` is the wall's outward normal there; true.
+ */
+export function touchTube(center: THREE.Vector3, facing: THREE.Vector3, inner: number, thickness: number, depth: number, position: THREE.Vector3, shipRadius: number, normal: THREE.Vector3): boolean {
   offset.subVectors(position, center);
   const along = offset.dot(facing);
-  // far off the band's plane, or far from its circle: no touch (cheap test first)
-  if (Math.abs(along) > DEPTH / 2 + shipRadius) return false;
+  // far off the tube's middle plane, or far from its circle: no touch (cheap test first)
+  if (Math.abs(along) > depth / 2 + shipRadius) return false;
   outward.copy(offset).addScaledVector(facing, -along);
   const out = outward.length();
-  const inner = radius + CLEARANCE;
-  const outer = inner + THICKNESS;
+  const outer = inner + thickness;
   if (out < inner - shipRadius || out > outer + shipRadius) return false;
   if (out > 1e-6) outward.divideScalar(out);
   else outward.set(1, 0, 0);
   // the nearest point of the band's cross section (out, along) to the ship
   let nearOut = THREE.MathUtils.clamp(out, inner, outer);
-  let nearAlong = THREE.MathUtils.clamp(along, -DEPTH / 2, DEPTH / 2);
+  let nearAlong = THREE.MathUtils.clamp(along, -depth / 2, depth / 2);
   let dOut = out - nearOut;
   let dAlong = along - nearAlong;
   const distance = hypot(dOut, dAlong);
   if (distance >= shipRadius) return false;
   if (distance < 1e-6) {
-    // the ship's center inside the band: out through the nearest face
+    // the ship's center inside the wall: out through the nearest face
     const toInner = out - inner;
     const toOuter = outer - out;
-    const toFront = DEPTH / 2 - along;
-    const toBack = along + DEPTH / 2;
+    const toFront = depth / 2 - along;
+    const toBack = along + depth / 2;
     const least = Math.min(toInner, toOuter, toFront, toBack);
     dOut = dAlong = 0;
     if (least === toInner || least === toOuter) {
@@ -235,14 +243,14 @@ function touchBand(center: THREE.Vector3, facing: THREE.Vector3, radius: number,
       nearOut = least === toInner ? inner : outer;
     } else {
       dAlong = least === toFront ? 1 : -1;
-      nearAlong = dAlong * (DEPTH / 2);
+      nearAlong = dAlong * (depth / 2);
     }
   } else {
     dOut /= distance;
     dAlong /= distance;
   }
   normal.copy(outward).multiplyScalar(dOut).addScaledVector(facing, dAlong).normalize();
-  // onto the band's surface, one ship radius off
+  // onto the wall's surface, one ship radius off
   position.copy(center).addScaledVector(outward, nearOut).addScaledVector(facing, nearAlong).addScaledVector(normal, shipRadius);
   return true;
 }

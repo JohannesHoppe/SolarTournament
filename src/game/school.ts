@@ -11,7 +11,8 @@ import { SUN_DIRECTION } from '../world/space';
 import { type Cast, CAST_NAMES, castOf, SCHOOL, SCHOOL_PRAISE } from '../music/lines';
 import { RacingLine } from './racingline';
 import { ARENA_LIMIT } from '../world/arena';
-import { GateKit, touchRing } from '../world/gates';
+import { GateKit, touchRing, touchTube } from '../world/gates';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { COURSE_ROOM, GATE_RADIUS } from './race';
 import { MAIN_THRUST, MAX_SPEED, METERS_PER_UNIT } from '../ship/flight';
 import type { ItemKind } from './items';
@@ -89,6 +90,11 @@ export interface SchoolContext {
   /** The claim-jumpers shot down so far, and their hits on their rig. */
   readonly jumpersDown: number;
   readonly rigWear: number;
+  /** A race against `count` rivals of `skill` through openings of `radius` at `rings` (facing `normals`), `laps` laps, from beside `start` (see Game.racers). */
+  spawnRacers(rings: THREE.Vector3[], normals: THREE.Vector3[], radius: number, laps: number, count: number, skill: number, start: THREE.Vector3): void;
+  removeRacers(): void;
+  /** The rivals that have flown every lap. */
+  readonly racersFinished: number;
   /** Where the pilot last broke a rock. */
   readonly brokenAt: THREE.Vector3;
   /** How many of the pilot's torpedoes have hit a ship so far. */
@@ -156,6 +162,8 @@ export interface Attempt {
   swept: number;
   /** Nicole has called the moment to act in this attempt (the hook drill's: let go now). */
   told: boolean;
+  /** The attempt's course is of pipes (see Markers.pipe), not of rings: their walls are what is solid. */
+  pipes: boolean;
   /** A place the drill keeps for the attempt: where the rock a mining job cuts stood. */
   site: THREE.Vector3;
   /** The pilot's beams on rigs as the attempt began (see SchoolContext.rigBeams). */
@@ -1577,6 +1585,34 @@ const TOW_LAG = 0.5;
 const CANISTER_SIZE = [40, 60] as const;
 /** The seed of the canister's plating. */
 const CANISTER_SEED = 7317;
+/**
+ * An old ore line's pipe (see Markers.pipe): its bore's radius (units, 70 m), its wall (5 m),
+ * its length (160 m), the legs it stands on (4 m square); its steel's seed. Built along +y.
+ */
+export const PIPE_BORE = 1400;
+const PIPE_WALL = 100;
+const PIPE_LENGTH = 3200;
+const PIPE_LEG = 80;
+const PIPE_SEED = 7318;
+const PIPE_AXIS = new THREE.Vector3(0, 1, 0);
+/** A quarter turn about x, so a flat ring of RingGeometry lies across the pipe's axis (no trigonometry). */
+const ACROSS = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1);
+
+/** A tube along y from `inner` to `outer` (units), `length` long at `y`: its two walls and its two end faces. */
+function tube(inner: number, outer: number, length: number, y = 0): THREE.BufferGeometry[] {
+  const parts: THREE.BufferGeometry[] = [new THREE.CylinderGeometry(outer, outer, length, 48, 1, true), new THREE.CylinderGeometry(inner, inner, length, 48, 1, true)];
+  for (const end of [-1, 1]) parts.push(new THREE.RingGeometry(inner, outer, 48).applyMatrix4(ACROSS).translate(0, (end * length) / 2, 0));
+  return parts.map((part) => part.translate(0, y, 0));
+}
+
+/** The pipe's steel as one geometry: the tube, a flange at each end, three stiffening rings between. */
+function pipeShell(): THREE.BufferGeometry {
+  const outer = PIPE_BORE + PIPE_WALL;
+  const parts = tube(PIPE_BORE, outer, PIPE_LENGTH);
+  for (const end of [-1, 1]) parts.push(...tube(outer, outer + PIPE_WALL * 1.4, PIPE_WALL * 1.6, (end * (PIPE_LENGTH - PIPE_WALL * 1.6)) / 2));
+  for (const at of [-0.25, 0, 0.25]) parts.push(...tube(outer, outer + PIPE_WALL * 0.7, PIPE_WALL * 0.8, at * PIPE_LENGTH));
+  return mergeGeometries(parts.map((part) => (part.index ? part.toNonIndexed() : part)));
+}
 const towAt = new THREE.Vector3();
 /** A glint of ore's size (units, 1.5 m) and how its flicker runs (rad/s): the speck turning its faces to the sun and away. */
 const GLINT_SIZE = 30;
@@ -1597,6 +1633,10 @@ export class Markers {
   private readonly rock = new THREE.MeshBasicMaterial({ color: 0xff4d2e, wireframe: true });
   private readonly ore = new THREE.MeshBasicMaterial({ color: 0xffd27a });
   private rings: { root: THREE.Group; coil: THREE.Mesh }[] = [];
+  /** The pipes a drill laid (see pipe): each its middle and its axis, solid; built once, as the steel of them is. */
+  private pipes: { center: THREE.Vector3; facing: THREE.Vector3 }[] = [];
+  private pipeGeometry: THREE.BufferGeometry | null = null;
+  private pipeMaterial: THREE.Material | null = null;
   /** Seconds the props have run, for the rings' position lights. */
   private clock = 0;
   private moving: { mesh: THREE.Object3D; position: THREE.Vector3; velocity: THREE.Vector3 }[] = [];
@@ -1631,6 +1671,48 @@ export class Markers {
     const ring = this.kit.build(position, normal, this.laterCoil);
     this.root.add(ring.root);
     this.rings.push(ring);
+  }
+
+  /**
+   * A section of an old ore line's pipe, cut loose and left as a mark (the Rockborn kids race
+   * through them): open at both ends, PIPE_BORE inside, PIPE_LENGTH long, along `normal` through
+   * `position`, its steel rusted and patched, flanged at both ends and ringed by stiffeners, on
+   * two legs down to `ground` (a height) where there is one; it never glows. Solid (see touchesPipe).
+   */
+  pipe(position: THREE.Vector3, normal: THREE.Vector3, ground: number | null = null) {
+    this.pipeGeometry ??= pipeShell();
+    this.pipeMaterial ??= new THREE.MeshStandardMaterial({ ...surfaced(industrialSurface(PIPE_SEED), 4), color: 0x8a6a52, side: THREE.DoubleSide });
+    const turn = new THREE.Quaternion().setFromUnitVectors(PIPE_AXIS, normal);
+    const shell = new THREE.Mesh(this.pipeGeometry, this.pipeMaterial);
+    shell.position.copy(position);
+    shell.quaternion.copy(turn);
+    shell.castShadow = shell.receiveShadow = true;
+    this.root.add(shell);
+    if (ground !== null) {
+      // two legs from the pipe's underside straight down to the ground, braced across
+      for (const side of [-1, 1]) {
+        const foot = position.clone().addScaledVector(normal, side * PIPE_LENGTH * 0.3);
+        const top = foot.y - (PIPE_BORE + PIPE_WALL);
+        const height = top - ground;
+        if (height <= 0) continue;
+        const leg = new THREE.Mesh(new THREE.BoxGeometry(PIPE_LEG, height, PIPE_LEG), this.pipeMaterial);
+        leg.position.set(foot.x, ground + height / 2, foot.z);
+        leg.castShadow = leg.receiveShadow = true;
+        this.root.add(leg);
+      }
+    }
+    this.pipes.push({ center: position.clone(), facing: normal.clone() });
+  }
+
+  /** Whether a ship touches the wall of a pipe a drill laid (see pipe): moves it out and sets `normal`. */
+  touchesPipe(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
+    for (const pipe of this.pipes) if (touchTube(pipe.center, pipe.facing, PIPE_BORE, PIPE_WALL, PIPE_LENGTH, position, radius, normal)) return true;
+    return false;
+  }
+
+  /** The pipes a drill laid, each handed to `visit` as a ring is (its middle, its axis, its bore), so bots keep off its walls. */
+  eachPipe(visit: (center: THREE.Vector3, facing: THREE.Vector3, radius: number) => void) {
+    for (const pipe of this.pipes) visit(pipe.center, pipe.facing, PIPE_BORE);
   }
 
   /** The next ring's coil glows orange, passed rings disappear. */
@@ -1753,6 +1835,7 @@ export class Markers {
     this.towing?.cable.geometry.dispose();
     this.towing = null;
     this.rings = [];
+    this.pipes = [];
     this.moving = [];
   }
 
@@ -1762,6 +1845,8 @@ export class Markers {
     for (const resource of [this.buoyGeometry, this.debrisGeometry, this.zoneGeometry, this.bright, this.dim, this.rock, this.ore, this.cableMaterial]) resource.dispose();
     this.canisterGeometry?.dispose();
     this.canisterMaterial?.dispose();
+    this.pipeGeometry?.dispose();
+    this.pipeMaterial?.dispose();
     this.kit.dispose();
   }
 }
@@ -1872,13 +1957,18 @@ export class FlightSchool {
    */
   /** Each ring still standing (see touchesRing) handed to `visit`: its center, facing and opening's radius. */
   eachRing(visit: (center: THREE.Vector3, facing: THREE.Vector3, radius: number) => void) {
+    this.markers.eachPipe(visit);
     const a = this.attempt;
+    if (a?.pipes) return;
     if (!a?.live || !a.normals.length) return;
     for (let i = a.next; i < a.points.length; i++) visit(a.points[i], a.normals[i], RING_RADIUS);
   }
 
   touchesRing(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
+    // a course of pipes: their walls are what is solid (see Markers.pipe)
+    if (this.markers.touchesPipe(position, radius, normal)) return true;
     const a = this.attempt;
+    if (a?.pipes) return false;
     if (!a?.live || !a.normals.length) return false;
     for (let i = a.next; i < a.points.length; i++) if (touchRing(a.points[i], a.normals[i], RING_RADIUS, position, radius, normal)) return true;
     return false;
@@ -1965,7 +2055,7 @@ export class FlightSchool {
     const drill = this.drills[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0, told: false, site: new THREE.Vector3(), rigBeams: 0 };
+    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0, told: false, site: new THREE.Vector3(), rigBeams: 0, pipes: false };
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
     const instruction = rep > 0 && drill.repLine ? drill.repLine : drill.line;

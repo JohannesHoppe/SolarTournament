@@ -702,6 +702,11 @@ const SAW_REACH = 200;
 const JUMPER_NOTICE = 16000;
 /** The claim-jumpers' side (see Ship.team): the three brothers fight together, the Host stays on none. */
 const JUMPER_TEAM = 1;
+/** A mission's race rivals (see Game.racers): their names, the Rockborn kids', and how far apart they start beside the Host (units, 60 m). */
+const RIVAL_NAMES = ['Nix', 'Bean', 'Spark'];
+const RIVAL_GAP = 1200;
+const rivalOffset = new THREE.Vector3();
+const rivalAt = new THREE.Vector3();
 /** A laser beam's ends, reused shot after shot. */
 const beamEnd = new THREE.Vector3();
 const beamStart = new THREE.Vector3();
@@ -1288,6 +1293,12 @@ export class Game implements OnlineGame {
   private sparring: { bot: Bot; armed: boolean } | null = null;
   /** A mission's claim-jumpers (see campaign/missions, Saw Brothers): their bots, the rock whose rig they saw at, the rig's middle, their hits on it so far. */
   private jumpers: { bots: Bot[]; rock: string; rig: THREE.Vector3; hits: number } | null = null;
+  /**
+   * A mission's race (see campaign/missions, The Peak Run): its rival bots, the rings and their
+   * facings and the radius of their openings, the racing line round them, the laps; each rival's rings passed and the side of its
+   * next ring's plane it was on; the rivals that finished.
+   */
+  private racers: { bots: Bot[]; rings: THREE.Vector3[]; normals: THREE.Vector3[]; radius: number; line: RacingLine; laps: number; passed: number[]; sides: number[]; finished: number } | null = null;
   /** The pilot has been told to return to the field during this excursion. */
   private toldToReturn = false;
   /** Song of the running solo round. */
@@ -2764,6 +2775,7 @@ export class Game implements OnlineGame {
     this.watchedShip = null;
     this.sparring = null;
     this.jumpers = null;
+    this.racers = null;
     // the clone climbs back in: no scene outlives its round
     this.setStage(null);
     if (this.school) {
@@ -3970,6 +3982,8 @@ export class Game implements OnlineGame {
         bot.homeAt = this.survival ? this.pocket : null;
         bot.prey = null;
         bot.siege = this.fleet ? this.siegePoint(bot, this.fleet) : this.jumpers?.bots.includes(bot) ? this.sawPoint(bot, this.jumpers) : null;
+        // a mission's rival races its rings
+        if (this.racers?.bots.includes(bot)) this.raceRival(bot, this.racers);
         // a race at the bot's own pace, by how good it is; a raid in Capture the Flag at the raiders'
         bot.raceSpeed = this.flags ? FLAG_RAID_SPEED : raceSpeedOf(bot.skills);
         if (this.flags) this.flagRole(bot, this.flags);
@@ -4730,6 +4744,56 @@ export class Game implements OnlineGame {
     this.jumpers = { bots, rock, rig: rig.clone(), hits: 0 };
   }
 
+  /**
+   * A mission's rival in its race (see racers): it flies the racing line to its next ring and
+   * through it, counts a ring when it crosses the ring's plane inside it, and once it has flown
+   * every lap it is done and loiters.
+   */
+  private raceRival(bot: Bot, racers: NonNullable<Game['racers']>) {
+    const i = racers.bots.indexOf(bot);
+    const total = racers.rings.length * racers.laps;
+    if (racers.passed[i] >= total) {
+      bot.through = bot.waypoint = null;
+      return;
+    }
+    const k = racers.passed[i] % racers.rings.length;
+    const flight = bot.ship.flight;
+    const side = rivalOffset.subVectors(flight.position, racers.rings[k]).dot(racers.normals[k]);
+    const before = racers.sides[i];
+    racers.sides[i] = side;
+    if (Number.isFinite(before) && before < 0 !== side < 0 && rivalOffset.addScaledVector(racers.normals[k], -side).length() < racers.radius) {
+      racers.passed[i]++;
+      racers.sides[i] = NaN;
+      if (racers.passed[i] >= total) racers.finished++;
+      return;
+    }
+    bot.through = { center: racers.rings[k], facing: racers.normals[k], radius: racers.radius };
+    const ahead = racers.line.target(flight.position, k, flight.velocity.length(), this.field, this.botPoint(bot));
+    bot.waypoint = approachGate(racers.rings[k], racers.normals[k], racers.radius, flight.position, flight.velocity, bot.ship.radius, ahead);
+    bot.raceSpeed = raceSpeedOf(bot.skills);
+  }
+
+  /** A mission's rivals at the start of their race (see racers): `count` bots of `skill`, beside `start`, facing the first of the openings (`radius` theirs). */
+  private spawnRacers(rings: THREE.Vector3[], normals: THREE.Vector3[], radius: number, laps: number, count: number, skill: number, start: THREE.Vector3) {
+    this.removeRacers();
+    const bots: Bot[] = [];
+    for (let i = 0; i < count; i++) {
+      const ship = this.addShip(`racer${i}`, RIVAL_NAMES[i % RIVAL_NAMES.length], i % 2 ? 'human' : 'alien', false);
+      const bot = new Bot(ship, evenSkills(skill));
+      this.bots.push(bot);
+      bots.push(bot);
+      const at = rivalAt.set((i + 1) * RIVAL_GAP * (i % 2 ? 1 : -1), 0, 0).applyQuaternion(lookingAt(start, rings[0], upward.set(0, 1, 0))).add(start);
+      ship.spawn(at, lookingAt(at, rings[0], upward.set(0, 1, 0)), this.time);
+      ship.protectedUntil = this.time;
+    }
+    this.racers = { bots, rings, normals, radius, line: new RacingLine(rings, true), laps, passed: bots.map(() => 0), sides: bots.map(() => NaN), finished: 0 };
+  }
+
+  private removeRacers() {
+    for (const bot of this.racers?.bots ?? []) this.removeShip(bot.ship);
+    this.racers = null;
+  }
+
   private removeJumpers() {
     for (const bot of this.jumpers?.bots ?? []) this.removeShip(bot.ship);
     this.jumpers = null;
@@ -5476,6 +5540,11 @@ export class Game implements OnlineGame {
       },
       spawnJumpers: (rock, rig, count, skill) => this.spawnJumpers(rock, rig, count, skill),
       removeJumpers: () => this.removeJumpers(),
+      spawnRacers: (rings, normals, radius, laps, count, skill, start) => this.spawnRacers(rings, normals, radius, laps, count, skill, start),
+      removeRacers: () => this.removeRacers(),
+      get racersFinished() {
+        return game.racers?.finished ?? 0;
+      },
       get jumpersDown() {
         return game.jumpers?.bots.filter((b) => !b.ship.alive).length ?? 0;
       },

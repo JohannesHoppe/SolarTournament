@@ -56,9 +56,9 @@ describe('the campaign Lot 7731', () => {
       expect(done.ratings).toBe(mission.ratings ?? 0);
       if (done.rank) ranks.push(done.rank);
     }
-    // chapter 1 lifts the Host into the background of the feeds, and no further
+    // chapter 1 lifts the Host into the background of the feeds, chapter 2 onto the local ones
     expect(campaign.ratings).toBe(MISSIONS.reduce((sum, mission) => sum + (mission.ratings ?? 0), 0));
-    expect(ranks).toEqual(['Background']);
+    expect(ranks).toEqual(['Background', 'Local Feed']);
     expect(complete(campaign, MISSIONS[1]).ratings).toBe(0);
     expect(RANKS.map((rank) => rank.from)).toEqual([...RANKS.map((rank) => rank.from)].sort((a, b) => a - b));
     expect(rankOf(49)).toBe('Unrated');
