@@ -82,12 +82,15 @@ for (const [index, id] of CHAPTER_ONE.entries()) {
 /** Chapter 1 flown: every mission of it done, the cutter fitted and the thrusters welded. */
 const CHAPTER_ONE_DONE = { done: ['coldBoot', 'lamplighter', 'liveTarget', 'canisterSweep', 'cutter', 'firstCut', 'dockingLane'], step: 0, coins: 0, bond: 25000, parts: ['cutter', 'patch'] };
 
-test('chapter 2 opens on Vesta: the clone over Rheasilvia’s flank, the claims’ boulders lying on it', async ({ page }) => {
+test('chapter 2 opens on Vesta, in Patience’s galley: Hedda and Pim in the flesh, the HUD only what is said', async ({ page }) => {
   await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), CHAPTER_ONE_DONE);
   const errors = await openGame(page, '/?campaign');
   await takeNextJob(page);
   await page.waitForFunction(() => window.game.venue?.id === 'rheasilvia' && window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
-  await expect(page.locator('#school-step')).toContainText('Rheasilvia 1/3');
+  await expect(page.locator('#school-step')).toContainText('Rheasilvia 1/6');
+  // the galley's set and both figures, fetched as they come
+  await page.waitForFunction(() => window.game.stage?.root.children.length === 3, null, { timeout: 30_000 });
+  await expect(page.locator('#hud')).toHaveClass(/in-person/);
   expect(errors).toEqual([]);
 });
 

@@ -363,10 +363,10 @@ const rask = (line: string): Drill => ({ ...said(line), enter: (ctx) => stop(ctx
  * in its clamps, the canopy open, the clone up in the room CLIMB_SECONDS later, looking around.
  */
 const CLIMB_SECONDS = 4;
-const climbOut = (scene: SceneName, line: string): Drill => ({
+const climbOut = (scene: SceneName, line: string, arena: ArenaId = 'boneyard'): Drill => ({
   line,
   keys: ['turn'],
-  arena: 'boneyard',
+  arena,
   silent: true,
   enter(ctx) {
     stop(ctx);
@@ -377,6 +377,15 @@ const climbOut = (scene: SceneName, line: string): Drill => ({
 
 /** A line Nicole says about what the clone just felt in a scene in person, the touch jolting through the link as it begins. */
 const felt = (line: string): Drill => ({ ...said(line), enter: (ctx) => ctx.feel() });
+
+/** A line said in the room of a scene in person at a place of the campaign. */
+const inRoom = (line: string, arena: ArenaId): Drill => said(line, arena);
+
+/** The clone climbs back into the cockpit, the hull still held: the scene is over, and `line` said. */
+const climbIn = (line: string, arena: ArenaId): Drill => ({ ...said(line, arena), enter: (ctx) => {
+    ctx.stage(null);
+    stop(ctx);
+  } });
 
 /** Pim welds the thrusters while she talks (see hullOf): free, she says, and Rask need not know. */
 const fitPatch = (campaign: Campaign) => {
@@ -659,7 +668,20 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'firstCut', name: msg('First Cut'), drills: [rask(RASK.firstCut), firstCut, said(CAMPAIGN.firstCutDone), rask(PIM.magpie)], pay: 400, ratings: 20, start: ON_PAD },
   { id: 'dockingLane', name: msg('Docking Lane'), drills: [rask(RASK.dockingLane), dockingLane, said(CAMPAIGN.dockingLaneDone), climbOut('office', msg("The canopy opens. Your clone climbs out and takes the lift up to Rask's office.")), rask(RASK.dockingLaneDone), felt(CAMPAIGN.handshake), rask(HEDDA.meet)], pay: 600, ratings: 40, start: ON_PAD },
   // chapter 2, Rheasilvia on Vesta: Patience brings the Host to the Rockborn's claims, and Pim gives Nicole a voice board
-  { id: 'rheasilvia', name: msg('Rheasilvia'), drills: [onVesta(HEDDA.vesta), onVesta(PIM.voice), onVesta(CAMPAIGN.voiceOne)], pay: 0 },
+  {
+    id: 'rheasilvia',
+    name: msg('Rheasilvia'),
+    // Patience holds over the claims; first the clone climbs up to her galley, where the crew eats
+    drills: [
+      climbOut('galley', msg("Patience holds over Vesta. The clamps keep the hull in her workshop; your clone climbs up to the galley."), 'rheasilvia'),
+      inRoom(PIM.galley, 'rheasilvia'),
+      inRoom(HEDDA.tally, 'rheasilvia'),
+      climbIn(HEDDA.vesta, 'rheasilvia'),
+      onVesta(PIM.voice),
+      onVesta(CAMPAIGN.voiceOne),
+    ],
+    pay: 0,
+  },
   { id: 'claimSurvey', name: msg('Claim Survey'), drills: [onVesta(HEDDA.claimSurvey), claimSurvey, said(CAMPAIGN.claimSurveyDone, 'rheasilvia')], pay: 400, ratings: 20 },
   { id: 'cutAndHaul', name: msg('Cut and Haul'), drills: [onVesta(HEDDA.cutAndHaul), cutAndHaul, said(CAMPAIGN.cutAndHaulDone, 'rheasilvia')], pay: HAUL_ORE * ORE_PAY, ratings: 25 },
   { id: 'sawBrothers', name: msg('Saw Brothers'), drills: [onVesta(HEDDA.sawBrothers), onVesta(SAW.giggle), sawBrothers, said(SAW.lost, 'rheasilvia'), said(CAMPAIGN.sawBrothersDone, 'rheasilvia')], pay: 1200, ratings: 80 },

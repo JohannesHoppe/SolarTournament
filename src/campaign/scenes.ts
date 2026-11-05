@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { atan2 } from '../detmath';
 import { DOOR, EYE, inOffice, office, SPOTS } from '../world/office';
+import { galley, GALLEY_DOOR, GALLEY_EYE, GALLEY_SPOTS, inGalley } from '../world/galley';
 import { type Placement, Stage } from '../view/stage';
 
 /**
@@ -10,7 +11,7 @@ import { type Placement, Stage } from '../view/stage';
  * into one (see campaign/missions, `climbOut`) and its lines are then said in the room, not over
  * the comm.
  */
-export type SceneName = 'office';
+export type SceneName = 'office' | 'galley';
 
 /** Who stands where in a scene, where the clone's eyes are and which way they first look (rad about y, 0 towards -z, as a camera looks). */
 export interface ScenePlan {
@@ -38,8 +39,23 @@ function officePlan(): ScenePlan {
   };
 }
 
-const PLANS: Record<SceneName, () => ScenePlan> = { office: officePlan };
-const SETS: Record<SceneName, () => THREE.Object3D> = { office };
+/** Patience's galley: Hedda at the head of the table, Pim at the counter, the clone by the door looking down the table to the porthole. */
+function galleyPlan(): ScenePlan {
+  const eye = inGalley(GALLEY_DOOR).setY(inGalley(GALLEY_DOOR).y + GALLEY_EYE);
+  const head = inGalley(GALLEY_SPOTS.head);
+  const counter = inGalley(GALLEY_SPOTS.counter);
+  return {
+    people: [
+      { who: 'hedda', at: head, facing: towards(head, eye) },
+      { who: 'pim', at: counter, facing: towards(counter, eye) },
+    ],
+    eye,
+    look: atan2(-(head.x - eye.x), -(head.z - eye.z)),
+  };
+}
+
+const PLANS: Record<SceneName, () => ScenePlan> = { office: officePlan, galley: galleyPlan };
+const SETS: Record<SceneName, () => THREE.Object3D> = { office, galley };
 
 /** A scene's plan. */
 export const planOf = (name: SceneName) => PLANS[name]();

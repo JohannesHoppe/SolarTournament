@@ -575,12 +575,14 @@ export const PIM = {
   cutter: "Cutter's on. Don't point it at me. Or at Rask. Actually, point it at Rask.",
   magpie: "Magpie. 'Cause everything on you is nicked. I'm putting it on the fin. Don't tell Rask.",
   thrusters: "Thruster parts! Real ones, off the prize table! Hold still, I'm putting them in. Now you can dodge like a proper fighter.",
+  galley: "Soup's protein paste again. Don't ask what protein. Sit, eat, you're paying for it anyway.",
   voice: "Hold still, Nicole. Found you a voice board in Patience's scrap bin. Second-hand, like everything. This'll tickle.",
 } as const;
 
 /** Captain Hedda Kroll of the ore hauler Patience: Rockborn, sixties, short sentences, a voice of gravel. Her own voice (see tools/voice). */
 export const HEDDA = {
   meet: "Patience here. Captain Kroll. You the nobody who cleared my lane? Right. I need a gunner who works for food and a bunk. Your gun's a joke. You'll do anyway.",
+  tally: "Don't count them. I stopped at eleven hundred. Counting's how it gets in.",
   vesta: "Vesta. Rheasilvia. The Rockborn hold claims up on the peak, and claims need surveying. Nobody pays a gunner to sit in a clamp.",
   claimSurvey: "Five claims filed this morning, five buoys on the flank. Fly past each one in the order they were filed, so the office logs you. Eight minutes, then the window shuts.",
   peakRun: "The Rockborn kids race round the claims on rest days, through old pipe from the smelter line. Six of them, two laps. Pim's put you down for it. Win, and she gets thruster parts off the prize table.",
