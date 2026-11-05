@@ -8,6 +8,7 @@ import { exp, hypot } from '../detmath';
 import type { Campaign, Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
+import type { SceneName } from './scenes';
 
 /**
  * The missions of Lot 7731 (see docs/campaign/STORY.md, section 3), each a run of drills on the
@@ -347,6 +348,23 @@ const dock: Drill = {
 /** A line someone of the campaign says over the comm (Rask, Pim, Hedda: see castOf), the hull held in the clamps while they talk. */
 const rask = (line: string): Drill => ({ ...said(line), enter: (ctx) => stop(ctx) });
 
+/**
+ * The clone climbs out of the cockpit into a scene in person (see campaign/scenes): the hull held
+ * in its clamps, the canopy open, the clone up in the room CLIMB_SECONDS later, looking around.
+ */
+const CLIMB_SECONDS = 4;
+const climbOut = (scene: SceneName, line: string): Drill => ({
+  line,
+  keys: ['turn'],
+  arena: 'boneyard',
+  silent: true,
+  enter(ctx) {
+    stop(ctx);
+    ctx.stage(scene);
+  },
+  done: (_, a) => a.seconds > CLIMB_SECONDS,
+});
+
 /** Pim welds the thrusters while she talks (see hullOf): free, she says, and Rask need not know. */
 const fitPatch = (campaign: Campaign) => {
   if (!campaign.parts.includes('patch')) campaign.parts.push('patch');
@@ -391,5 +409,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'canisterSweep', name: msg('Canister Sweep'), drills: [rask(RASK.canisterSweep), canisterSweep, said(CAMPAIGN.canisterSweepDone)], pay: 200, start: ON_PAD },
   { id: 'cutter', name: msg('The Cutter'), drills: [rask(RASK.cutter), rask(PIM.cutter), rask(CAMPAIGN.cutterFitted)], pay: 0, fit: fitCutter, start: ON_PAD },
   { id: 'firstCut', name: msg('First Cut'), drills: [rask(RASK.firstCut), firstCut, said(CAMPAIGN.firstCutDone), rask(PIM.magpie)], pay: 400, start: ON_PAD },
-  { id: 'dockingLane', name: msg('Docking Lane'), drills: [rask(RASK.dockingLane), dockingLane, said(CAMPAIGN.dockingLaneDone), said(RASK.dockingLaneDone), rask(HEDDA.meet)], pay: 600, start: ON_PAD },
+  { id: 'dockingLane', name: msg('Docking Lane'), drills: [rask(RASK.dockingLane), dockingLane, said(CAMPAIGN.dockingLaneDone), climbOut('office', msg("The canopy opens. Your clone climbs out and takes the lift up to Rask's office.")), rask(RASK.dockingLaneDone), rask(HEDDA.meet)], pay: 600, start: ON_PAD },
 ];

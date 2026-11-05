@@ -28,6 +28,8 @@ import type { Spoken } from '../music/band';
 import { COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
 import { Hologram } from '../view/hologram';
 import { loadBust, PORTRAIT_SWING, portraitModel } from '../view/products';
+import { type SceneName, stageOf } from '../campaign/scenes';
+import type { Stage } from '../view/stage';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
@@ -1163,6 +1165,8 @@ export class Game implements OnlineGame {
   private missionFine = 0;
   /** Where the own clone last broke a rock (the campaign's ore glints spring from it). */
   private readonly brokenAt = new THREE.Vector3();
+  /** The scene in person the clone stands in (see campaign/scenes), or null in the cockpit. */
+  private stage: Stage | null = null;
   /** Torpedoes of the own pilot that hit a ship, for the flight school's drill. */
   private torpedoesHit = 0;
   /** Dodges the own pilot has fired, for the flight school's drill. */
@@ -2577,6 +2581,26 @@ export class Game implements OnlineGame {
   }
 
   /**
+   * The clone climbs out of the cockpit into a scene in person (see campaign/scenes): the set and
+   * the people put into the world, the camera its eyes, the HUD but its panel of what is said off
+   * (nothing is projected on a clone's eyes), the people's lines said in the room; null climbs back in.
+   */
+  private setStage(name: SceneName | null) {
+    if (this.stage) {
+      this.stage.remove();
+      this.stage = null;
+    }
+    this.speaker.inPerson = !!name;
+    if (name) {
+      this.stage = stageOf(name);
+      this.scene.add(this.stage.root);
+    }
+    this.hud.inPerson(!!this.stage);
+    // the reference plane's grid and the drop lines are the flight computer's too
+    this.hudScene.visible = !this.stage;
+  }
+
+  /**
    * One of the campaign's people calls the ship: their bust as a hologram in the comm panel,
    * their name under it, while their line stands; null ends the call.
    */
@@ -2652,6 +2676,8 @@ export class Game implements OnlineGame {
     this.drone = null;
     this.watchedShip = null;
     this.sparring = null;
+    // the clone climbs back in: no scene outlives its round
+    this.setStage(null);
     if (this.school) {
       this.speaker.stop();
       this.scene.remove(this.school.root);
@@ -3697,6 +3723,8 @@ export class Game implements OnlineGame {
     if (still && !this.redraw) return false;
     this.redraw = false;
     this.benchCamera?.(this.camera);
+    // in a scene in person the camera is the clone's eyes
+    this.stage?.pose(this.camera);
     // the kill cam borrows the ships' pictures and the camera for this one picture, from the
     // second picture after the death on: the first one is the cockpit's last, which rots
     const replaying = this.state === 'playing' && !this.datamosh.freezing && this.killcam.pose(this.camera);
@@ -3797,7 +3825,10 @@ export class Game implements OnlineGame {
     this.ease = Math.max(0, this.ease - dt / EASE_FADE);
     this.weather(dt, now);
     this.direct(now);
-    const hand = this.state === 'playing' ? this.input.read() : IDLE;
+    const read = this.state === 'playing' ? this.input.read() : IDLE;
+    // in a scene in person the Host's stick turns the clone's head, the ship waits in its clamps
+    if (this.stage) this.stage.turnHead(read.yaw, read.pitch, dt);
+    const hand = this.stage ? IDLE : read;
     if (recorder) this.record(hand, dt);
     const myControls = this.flightComputer(hand);
     if (recorder) this.recorded(myControls);
@@ -5183,7 +5214,8 @@ export class Game implements OnlineGame {
       return;
     }
     const me = this.me!;
-    this.showCaller(me.alive ? school.caller : null);
+    // in person the people stand in the room: no hologram calls in
+    this.showCaller(me.alive && !this.stage ? school.caller : null);
     this.schoolMark = waypoint;
     // a ring course has its racing line, as a race does; any other marker a line to it, from
     // where the pilot was in the step the marker came up
@@ -5268,6 +5300,7 @@ export class Game implements OnlineGame {
       },
       fireAt: (from, through) => this.drillShot(from, through),
       fine: (coins) => (this.missionFine = coins),
+      stage: (name) => this.setStage(name),
       boost: (through) => this.coilPush(this.me!, through),
       arm: (item) => {
         if (item === 'nova') game.me!.nova = true;

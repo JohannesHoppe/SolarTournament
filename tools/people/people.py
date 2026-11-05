@@ -7,9 +7,9 @@ from bl_ext.blender_org.mpfb.services import HumanService, TargetService
 
 OUT = sys.argv[sys.argv.index('--') + 1]
 PEOPLE = {
-    'rask': dict(phenotype=dict(gender=1.0, age=0.72, muscle=0.3, weight=1.0, height=0.55, proportions=0.3), hair='', eyebrows='eyebrow010', clothes=['male_casualsuit03'], skin='middleage_caucasian_male', targets={'head-fat-incr': 1.0, 'neck-double-incr': 1.0, 'l-cheek-volume-incr': 1.0, 'r-cheek-volume-incr': 1.0, 'stomach-pregnant-incr': 0.7, 'head-age-incr': 0.5}),
-    'pim': dict(phenotype=dict(gender=0.0, age=0.34, muscle=0.5, weight=0.35, height=0.5, proportions=0.6), hair='short02', eyebrows='eyebrow006', clothes=['male_worksuit01'], skin='young_caucasian_female'),
-    'hedda': dict(phenotype=dict(gender=0.0, age=0.78, muscle=0.6, weight=0.45, height=0.6, proportions=0.5), hair='short01', eyebrows='eyebrow002', clothes=['female_elegantsuit01'], skin='old_caucasian_female', targets={'head-age-incr': 0.9, 'l-cheek-bones-incr': 0.6, 'r-cheek-bones-incr': 0.6}),
+    'rask': dict(phenotype=dict(gender=1.0, age=0.72, muscle=0.3, weight=1.0, height=0.55, proportions=0.3), hair='', eyebrows='eyebrow010', clothes=['male_casualsuit03', 'shoes02'], skin='middleage_caucasian_male', targets={'head-fat-incr': 1.0, 'neck-double-incr': 1.0, 'l-cheek-volume-incr': 1.0, 'r-cheek-volume-incr': 1.0, 'stomach-pregnant-incr': 0.7, 'head-age-incr': 0.5}),
+    'pim': dict(phenotype=dict(gender=0.0, age=0.34, muscle=0.5, weight=0.35, height=0.5, proportions=0.6), hair='short02', eyebrows='eyebrow006', clothes=['male_worksuit01', 'shoes05'], skin='young_caucasian_female'),
+    'hedda': dict(phenotype=dict(gender=0.0, age=0.78, muscle=0.6, weight=0.45, height=0.6, proportions=0.5), hair='short01', eyebrows='eyebrow002', clothes=['male_casualsuit06', 'shoes03'], skin='old_caucasian_female', targets={'head-age-incr': 0.9, 'l-cheek-bones-incr': 0.6, 'r-cheek-bones-incr': 0.6}),
 }
 
 def asset(sub, name):
@@ -30,6 +30,8 @@ for who, spec in PEOPLE.items():
     info['skin_mhmat'] = f"{spec['skin']}/{spec['skin']}.mhmat"
     info['skin_material_type'] = 'MAKESKIN'
     info['alternative_materials'] = {}
+    # a rig, so the clothes are rigged as they are put on (figure.py poses the figure on it)
+    info['rig'] = 'game_engine'
     info['targets'] = [{'target': name, 'value': value} for name, value in spec.get('targets', {}).items()]
     settings = HumanService.get_default_deserialization_settings()
     settings['subdiv_levels'] = 0

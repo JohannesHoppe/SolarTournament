@@ -8,6 +8,6 @@ The few files the game loads that are not generated in code. Asteroids, the Milk
 - [`sounds/`](sounds/): the crowd's roar, a CC0 recording.
 - [`planets/`](planets/): the maps of Saturn (and its ring) and of the gas giant (Jupiter), from Solar System Scope (CC BY 4.0) and NASA (JPL Image Use Policy).
 - [`psyche/`](psyche/): the ground of the Boneyard's crater on Psyche, a photograph of the Moon by the Lunar Reconnaissance Orbiter from NASA's Planetary Data System (public domain).
-- [`people/`](people/): the busts of the campaign's people for their holograms, made from figures of MakeHuman (CC0 assets) by `tools/people`.
+- [`people/`](people/): the campaign's people, their busts for their holograms and their figures in the flesh for the scenes in person, made from figures of MakeHuman (CC0 assets) by `tools/people`.
 - [`sky/`](sky/): the stars of the real sky of the arenas in the solar system, packed by `npm run sky` from the Yale Bright Star Catalogue (as NASA's HEASARC distributes it, a U.S. government work); the Milky Way is generated in code.
 - `voice/`: the rendered voices, made by `npm run voice` at build time and never committed (see `tools/voice/`).

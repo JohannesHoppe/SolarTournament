@@ -32,6 +32,10 @@ export class Speaker {
   private readonly input: GainNode;
   /** The comm the campaign's other voices come in on (see castOf): a narrow radio band, gritty. */
   private readonly comm: GainNode;
+  /** The room the campaign's people stand in with the clone in a scene in person: their voices as they are, no comm. */
+  private readonly room: GainNode;
+  /** The clone stands among the people (a scene in person, see campaign/scenes): their lines come from the room, not the comm. */
+  inPerson = false;
   /** The lines playing or waiting to play, by their source. */
   private readonly sources = new Map<AudioBufferSourceNode, string>();
   private busyUntil = 0;
@@ -64,6 +68,10 @@ export class Speaker {
     this.comm = context.createGain();
     this.comm.gain.value = 1.2;
     this.comm.connect(band).connect(nasal).connect(crunch).connect(level);
+    // in the room: the voice as the clone's ears hear it, close and plain
+    this.room = context.createGain();
+    this.room.gain.value = 1.1;
+    this.room.connect(destination);
   }
 
   /** Loads the voice of the Host's language in the background; lines said before it is ready are skipped. */
@@ -126,7 +134,7 @@ export class Speaker {
       if (queued && waiting.has(line)) continue;
       const source = this.context.createBufferSource();
       source.buffer = voice.buffer;
-      source.connect(who ? this.comm : this.input);
+      source.connect(who ? (this.inPerson ? this.room : this.comm) : this.input);
       // a voice of the cast lower and heavier than it was rendered, with a tremble in it
       const cast = who ? CAST_VOICES[who] : null;
       const rate = cast?.rate ?? 1;

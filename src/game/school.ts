@@ -18,6 +18,7 @@ import { HOOK_RANGE } from './hook';
 import { msg, t } from '../i18n/i18n';
 import type { ArenaId } from '../world/arenas';
 import type { OrbitState } from './orbit';
+import type { SceneName } from '../campaign/scenes';
 
 /** What a flight school drill can see and do. */
 export interface SchoolContext {
@@ -61,6 +62,8 @@ export interface SchoolContext {
   fireAt(from: THREE.Vector3, through: THREE.Vector3): boolean;
   /** A mission of the campaign: its pay is cut by this many coins, as the attempt stands now (see campaign/campaign, complete). */
   fine(coins: number): void;
+  /** The clone climbs out of the cockpit and stands in a scene in person (see campaign/scenes), or, with null, climbs back in. */
+  stage(name: SceneName | null): void;
   /** A coil throws the pilot on along a direction (either way, as it flies), as a race's gate does. */
   boost(through: THREE.Vector3): void;
   /** Hands the pilot's clone two torpedoes, or a nova core. */

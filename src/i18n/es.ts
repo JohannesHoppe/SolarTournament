@@ -638,6 +638,7 @@ export const ES: Catalog = {
   'The Cutter': 'El cortador',
   'First Cut': 'Primer corte',
   'Docking Lane': 'Pasillo de atraque',
+  "The canopy opens. Your clone climbs out and takes the lift up to Rask's office.": 'La cabina se abre. Tu clon baja de la nave y sube en el ascensor al despacho de Rask.',
   'Next: {mission} · {coins} ☉ · the Bond asks {bond} ☉': 'Siguiente: {mission} · {coins} ☉ · la deuda: {bond} ☉',
   'All that is built is flown. More of the story is in the making.': 'Todo lo construido está volado. Más de la historia está en desarrollo.',
   '{mission} done: {kept} ☉ for you, {cut} ☉ for the yard. The Bond still asks {bond} ☉.': '{mission} hecho: {kept} ☉ para ti, {cut} ☉ para el desguace. La deuda sigue en {bond} ☉.',

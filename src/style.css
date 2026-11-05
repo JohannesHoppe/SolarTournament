@@ -661,6 +661,12 @@ body:has(#hangar-plate:not([hidden])) #hangar {
 
 /* HUD */
 
+/* in a scene in person (see campaign/scenes) nothing is projected on the clone's eyes: only the
+   panel with what is said stands */
+#hud.in-person > :not(#school-panel) {
+  visibility: hidden;
+}
+
 #hud {
   position: fixed;
   inset: 0;

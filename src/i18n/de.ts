@@ -665,6 +665,7 @@ export const DE: Catalog = {
   'The Cutter': 'Der Schneidlaser',
   'First Cut': 'Erster Schnitt',
   'Docking Lane': 'Andockschneise',
+  "The canopy opens. Your clone climbs out and takes the lift up to Rask's office.": 'Die Kanzel öffnet sich. Dein Klon steigt aus und fährt mit dem Lift hinauf in Rasks Büro.',
   'Next: {mission} · {coins} ☉ · the Bond asks {bond} ☉': 'Als Nächstes: {mission} · {coins} ☉ · die Schuld: {bond} ☉',
   'All that is built is flown. More of the story is in the making.': 'Du hast alles geflogen, was es bisher gibt. Der Rest der Geschichte entsteht gerade.',
   '{mission} done: {kept} ☉ for you, {cut} ☉ for the yard. The Bond still asks {bond} ☉.': '{mission} geschafft: {kept} ☉ für dich, {cut} ☉ für den Schrottplatz. Die Schuld beträgt noch {bond} ☉.',

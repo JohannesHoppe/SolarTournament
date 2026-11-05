@@ -209,6 +209,11 @@ export class Hud {
     }
   }
 
+  /** In a scene in person: only the panel of what is said shows (see style.css, `in-person`). */
+  inPerson(on: boolean) {
+    this.root.classList.toggle('in-person', on);
+  }
+
   show(visible: boolean) {
     this.root.hidden = !visible;
     // a hidden HUD cancels the popups' animation without ending it: they would replay later
