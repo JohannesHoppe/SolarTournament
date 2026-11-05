@@ -367,6 +367,19 @@ interface Site {
   scale: number;
   /** The rock's mean radius in its own frame. */
   mean: number;
+  /** The rock lies on a ground (see FieldLayout.rest): what stands on it stands on its upper half. */
+  grounded: boolean;
+}
+
+/**
+ * A direction from a claim's rock's center in its own frame, from three draws of `r`: anywhere
+ * on a rock adrift; on a rock lying on a ground, only over its upper half and never at its foot,
+ * so nothing stands buried. The draws are the same either way.
+ */
+function outward(site: Site, r: Randomizer): THREE.Vector3 {
+  const direction = v3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1));
+  if (site.grounded) direction.y = Math.abs(direction.y) + 0.4;
+  return direction.normalize();
 }
 
 /** A cut face as built, in the rock's own frame (for the tests): its plane's normal and height from the center, and its outline. */
@@ -402,6 +415,8 @@ export interface Plan {
   clouds: number[];
   /** The solid boxes of the rigs and buoys, by slot, in their rocks' own frames (see AsteroidField.attach). */
   solids: Attachment[][];
+  /** The buoys' cans, each with its claim's slot, in their rocks' own frames (see Mining.buoys). */
+  buoys: { slot: number; at: THREE.Vector3 }[];
 }
 
 /**
@@ -643,7 +658,7 @@ function rockColor(site: Site, direction: THREE.Vector3): THREE.Color {
  * where it bites and the cut glowing behind it.
  */
 function rig(plan: Plan, site: Site, r: Randomizer, cutter: boolean) {
-  const direction = v3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
+  const direction = outward(site, r);
   const foot = footing(site, direction, 20 * M);
   const turn = r.range(0, Math.PI * 2);
   const frame = frameOf(site, foot.center, foot.normal, turn);
@@ -775,7 +790,7 @@ function cutFace(plan: Plan, site: Site, r: Randomizer) {
   let bestArea = 0;
   const ANGLES = 20;
   for (let attempt = 0; attempt < 32; attempt++) {
-    const normal = v3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
+    const normal = outward(site, r);
     tangentDirections(normal, side, other);
     const reach = surfaceAt(site, normal, new THREE.Vector3()).sub(center).length();
     // the plane: the highest point within the cone the face may cover
@@ -875,7 +890,7 @@ function cutFace(plan: Plan, site: Site, r: Randomizer) {
 
 /** Neon graffiti of the Rockborn on a rock: a slogan in a paint of its own, sprayed across its face, glowing faintly. */
 function graffiti(plan: Plan, site: Site, r: Randomizer, slogan: number) {
-  const direction = v3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
+  const direction = outward(site, r);
   const foot = footing(site, direction, 30 * M);
   const side = new THREE.Vector3();
   const other = new THREE.Vector3();
@@ -889,7 +904,7 @@ function graffiti(plan: Plan, site: Site, r: Randomizer, slogan: number) {
 
 /** A buoy marking a claim: a can in orange and black stripes on a mast anchored in the rock, its amber light blinking slowly. */
 function buoy(plan: Plan, site: Site, r: Randomizer) {
-  const direction = v3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
+  const direction = outward(site, r);
   const foot = footing(site, direction, 4 * M);
   const frame = frameOf(site, foot.center, foot.normal, r.range(0, Math.PI));
   const tall = r.range(18, 34) * M;
@@ -901,6 +916,7 @@ function buoy(plan: Plan, site: Site, r: Randomizer) {
   solidBeam(plan, site, frame, v3(0, deep, 0), v3(0, tall, 0), 1.5 * M);
   solid(plan, site, frame, v3(0, tall, 0), v3(2.2 * M, 2.5 * M, 2.2 * M));
   addLight(plan.lights, site.slot, v3(0, tall + 3.5 * M, 0).applyMatrix4(frame), AMBER, 2.2 * M, [r.range(3, 4.5), r.nextFloat(), 0.3]);
+  plan.buoys.push({ slot: site.slot, at: v3(0, tall, 0).applyMatrix4(frame) });
 }
 
 /**
@@ -928,11 +944,12 @@ export function planMining(field: AsteroidField): Plan {
     paint: [],
     clouds: [],
     solids: [],
+    buoys: [],
   };
   // each claim draws from its own sequence, so one claim's dressing never shifts another's
   claimed.forEach((asteroid, slot) => {
     const scale = asteroid.object.scale.x;
-    const site: Site = { slot, asteroid, scale, mean: asteroid.meanRadius / scale };
+    const site: Site = { slot, asteroid, scale, mean: asteroid.meanRadius / scale, grounded: layout.rest !== undefined };
     const own = new Randomizer(layout.seed * 7919 + 131 * (slot + 1));
     if (slot < RIGS) rig(plan, site, own, slot < CUTTERS);
     // the faces on the first rocks without a rig that leave room for one
@@ -1157,6 +1174,24 @@ export class Mining {
   private readonly shareUniform = { value: 1 };
   /** The drill holes in the world this frame: position and up (see dustAt). */
   private readonly holes: { at: THREE.Vector3; up: THREE.Vector3; live: boolean }[] = [];
+
+  /**
+   * Where the claims' buoys stand in `field` as dressed (their cans, in the world): one for each
+   * claim, its first, in the order the claims were filed (their slots); none for a field not dressed.
+   */
+  buoys(field: AsteroidField): THREE.Vector3[] {
+    const plan = this.plan;
+    if (!plan || field.layout?.key !== this.layoutKey) return [];
+    const list: THREE.Vector3[] = [];
+    for (const { slot, at } of plan.buoys) {
+      if (list.length > slot) continue;
+      const rock = field.asteroids.get(plan.ids[slot]);
+      if (!rock) continue;
+      rock.object.updateWorldMatrix(true, false);
+      list.push(at.clone().applyMatrix4(rock.object.matrixWorld));
+    }
+    return list;
+  }
 
   /** Builds the dressing of `field` (once per layout), or hides it for an arena without one. */
   dress(field: AsteroidField | null) {

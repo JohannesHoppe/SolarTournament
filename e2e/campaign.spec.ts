@@ -7,6 +7,26 @@ async function takeNextJob(page: Page) {
   await page.click('#board-next button');
 }
 
+/**
+ * Sets the clone at rest beside each point of the running drill in turn (`over` units above it),
+ * until the drill moves on to its next step (the line after it).
+ */
+async function visitPoints(page: Page, over: number) {
+  await page.evaluate(async (over) => {
+    const game = window.game;
+    const start = game.time;
+    while (game.school.attempt?.points?.length && game.time - start < 60) {
+      const attempt = game.school.attempt;
+      const point = attempt.points[attempt.next];
+      if (!point) break;
+      game.me.flight.position.copy(point).add({ x: 0, y: over, z: 0 });
+      game.me.flight.velocity.set(0, 0, 0);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  }, over);
+  await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(2);
+}
+
 test('the campaign Lot 7731 takes no click on the plain address', async ({ page }) => {
   const errors = await openGame(page);
   await expect(page.locator('#campaign')).toBeDisabled();
@@ -59,6 +79,28 @@ for (const [index, id] of CHAPTER_ONE.entries()) {
   });
 }
 
+/** Chapter 1 flown: every mission of it done, the cutter fitted and the thrusters welded. */
+const CHAPTER_ONE_DONE = { done: ['coldBoot', 'lamplighter', 'liveTarget', 'canisterSweep', 'cutter', 'firstCut', 'dockingLane'], step: 0, coins: 0, bond: 25000, parts: ['cutter', 'patch'] };
+
+test('chapter 2 opens on Vesta: the clone over Rheasilvia’s flank, the claims’ boulders lying on it', async ({ page }) => {
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), CHAPTER_ONE_DONE);
+  const errors = await openGame(page, '/?campaign');
+  await takeNextJob(page);
+  await page.waitForFunction(() => window.game.venue?.id === 'rheasilvia' && window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
+  await expect(page.locator('#school-step')).toContainText('Rheasilvia 1/3');
+  expect(errors).toEqual([]);
+});
+
+test('Claim Survey logs the claims’ buoys flown past, in the order they were filed', async ({ page }) => {
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify({ ...kept, done: [...kept.done, 'rheasilvia'] })), CHAPTER_ONE_DONE);
+  const errors = await openGame(page, '/?campaign');
+  await takeNextJob(page);
+  await page.waitForFunction(() => window.game.school?.attempt?.points?.length === 5 && window.game.me?.alive, null, { timeout: 90_000 });
+  // the clone set beside each buoy in turn, at rest, until the line after the drill comes
+  await visitPoints(page, 1200);
+  expect(errors).toEqual([]);
+});
+
 test('Lamplighter counts the beacons held by, one after the other', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: ['coldBoot'], step: 0, coins: 0, bond: 25000, parts: [] })));
   const errors = await openGame(page, '/?campaign');
@@ -66,19 +108,7 @@ test('Lamplighter counts the beacons held by, one after the other', async ({ pag
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
   // past Rask's briefing to the drill itself, then the clone set beside each beacon in turn, at rest, until the line after the drill comes
   await page.waitForFunction(() => window.game.school?.attempt?.points?.length > 0, null, { timeout: 60_000 });
-  await page.evaluate(async () => {
-    const game = window.game;
-    const start = game.time;
-    while (game.school.attempt?.points?.length && game.time - start < 60) {
-      const attempt = game.school.attempt;
-      const lamp = attempt.points[attempt.next];
-      if (!lamp) break;
-      game.me.flight.position.copy(lamp);
-      game.me.flight.velocity.set(0, 0, 0);
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-    }
-  });
-  await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(2);
+  await visitPoints(page, 0);
   expect(errors).toEqual([]);
 });
 

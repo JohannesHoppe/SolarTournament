@@ -376,6 +376,45 @@ const fitPatch = (campaign: Campaign) => {
 /** Where every mission after the first begins: docked on bay 3's pad, the nose out of the bay. */
 const ON_PAD = { at: [PAD.x, PAD.y + 400, PAD.z] as const, toward: [BAY_MOUTH - 20000, PAD.y + 400, PAD.z] as const };
 
+/** A line said on Vesta's flank, the ship held still for it (Hedda's from Patience, Pim's, Nicole's). */
+const onVesta = (line: string): Drill => ({ ...said(line, 'rheasilvia'), enter: (ctx) => stop(ctx) });
+
+/**
+ * Claim Survey (2.1): five claims filed, each marked by its buoy (see world/mining), flown past
+ * in the order they were filed, within SURVEY_REACH (units, 100 m) of each, before the survey
+ * window shuts (SURVEY_WINDOW seconds).
+ */
+const SURVEY_CLAIMS = 5;
+const SURVEY_REACH = 2000;
+const SURVEY_WINDOW = 480;
+
+const claimSurvey: Drill = {
+  line: CAMPAIGN.claimSurvey,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'rheasilvia',
+  autopilot: false,
+  enter(ctx, a, markers) {
+    a.points = ctx.buoys().slice(0, SURVEY_CLAIMS);
+    surveyMarkers(a, markers);
+  },
+  done(ctx, a, markers) {
+    if (ctx.me.flight.position.distanceTo(a.points[a.next]) >= SURVEY_REACH) return false;
+    a.next++;
+    surveyMarkers(a, markers);
+    return a.next >= a.points.length;
+  },
+  fail: (_, a) => (a.seconds > SURVEY_WINDOW ? CAMPAIGN.claimSurveyLate : null),
+  waypoint: (_, a) => a.points[a.next] ?? null,
+  mark: (_, a) => t('Claim {n}/{total} · {seconds} s left', { n: a.next + 1, total: a.points.length, seconds: Math.max(0, Math.ceil(SURVEY_WINDOW - a.seconds)) }),
+};
+
+/** The next claim's buoy in its sphere; the others wait their turn. */
+function surveyMarkers(a: Attempt, markers: Markers) {
+  markers.clear();
+  const next = a.points[a.next];
+  if (next) markers.zone(next, SURVEY_REACH);
+}
+
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
@@ -413,4 +452,7 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'cutter', name: msg('The Cutter'), drills: [rask(RASK.cutter), rask(PIM.cutter), rask(CAMPAIGN.cutterFitted)], pay: 0, fit: fitCutter, start: ON_PAD },
   { id: 'firstCut', name: msg('First Cut'), drills: [rask(RASK.firstCut), firstCut, said(CAMPAIGN.firstCutDone), rask(PIM.magpie)], pay: 400, ratings: 20, start: ON_PAD },
   { id: 'dockingLane', name: msg('Docking Lane'), drills: [rask(RASK.dockingLane), dockingLane, said(CAMPAIGN.dockingLaneDone), climbOut('office', msg("The canopy opens. Your clone climbs out and takes the lift up to Rask's office.")), rask(RASK.dockingLaneDone), felt(CAMPAIGN.handshake), rask(HEDDA.meet)], pay: 600, ratings: 40, start: ON_PAD },
+  // chapter 2, Rheasilvia on Vesta: Patience brings the Host to the Rockborn's claims, and Pim gives Nicole a voice board
+  { id: 'rheasilvia', name: msg('Rheasilvia'), drills: [onVesta(HEDDA.vesta), onVesta(PIM.voice), onVesta(CAMPAIGN.voiceOne)], pay: 0 },
+  { id: 'claimSurvey', name: msg('Claim Survey'), drills: [onVesta(HEDDA.claimSurvey), claimSurvey, said(CAMPAIGN.claimSurveyDone, 'rheasilvia')], pay: 400, ratings: 20 },
 ];

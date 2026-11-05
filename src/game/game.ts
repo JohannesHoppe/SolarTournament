@@ -5385,6 +5385,7 @@ export class Game implements OnlineGame {
       },
       fireAt: (from, through) => this.drillShot(from, through),
       fine: (coins) => (this.missionFine = coins),
+      buoys: () => this.mining.buoys(this.field),
       stage: (name) => this.setStage(name),
       // a touch the clone feels streams into the Host: a jolt in the link, a dull thump
       feel: () => {

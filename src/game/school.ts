@@ -62,6 +62,8 @@ export interface SchoolContext {
   fireAt(from: THREE.Vector3, through: THREE.Vector3): boolean;
   /** A mission of the campaign: its pay is cut by this many coins, as the attempt stands now (see campaign/campaign, complete). */
   fine(coins: number): void;
+  /** Where the claims' buoys stand in a field dressed with the Rockborn's mining, one for each claim in the order they were filed (see world/mining); none elsewhere. */
+  buoys(): THREE.Vector3[];
   /** The clone climbs out of the cockpit and stands in a scene in person (see campaign/scenes), or, with null, climbs back in. */
   stage(name: SceneName | null): void;
   /** What the clone feels in a scene in person reaches the Host over the link: a jolt of it, the picture flickering. */

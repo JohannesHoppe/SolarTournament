@@ -530,6 +530,10 @@ export const CAMPAIGN = {
   dockingLaneStruck: 'Three hulls hit her. She aborts, and we start over.',
   dockingLaneDone: 'The lane is clear and the hauler is docked. Her captain says she has a berth for us.',
   handshake: 'He shakes your hand, darling. His is wet. I felt it too.',
+  voiceOne: 'There. Do you hear that? Whole sentences, and nothing cut off. I have missed them more than I can tell you.',
+  claimSurvey: 'Five buoys, in the order the claims were filed. Fly within a hundred meters of each, and the claim office logs it.',
+  claimSurveyLate: 'The survey window has closed. We will fly it again.',
+  claimSurveyDone: 'All five are logged. That is four hundred coins, and the yard still takes its forty percent.',
 } as const;
 
 /**
@@ -559,11 +563,14 @@ export const PIM = {
   meet: "Oi! Lot seven thousand whatever! That's my pad you're parked on. Wait. You're the one Rask sold the junk computer to? Mint. Hold still, I'm welding your thrusters. And don't shoot. Not that you've got anything to shoot with.",
   cutter: "Cutter's on. Don't point it at me. Or at Rask. Actually, point it at Rask.",
   magpie: "Magpie. 'Cause everything on you is nicked. I'm putting it on the fin. Don't tell Rask.",
+  voice: "Hold still, Nicole. Found you a voice board in Patience's scrap bin. Second-hand, like everything. This'll tickle.",
 } as const;
 
 /** Captain Hedda Kroll of the ore hauler Patience: Rockborn, sixties, short sentences, a voice of gravel. Her own voice (see tools/voice). */
 export const HEDDA = {
   meet: "Patience here. Captain Kroll. You the nobody who cleared my lane? Right. I need a gunner who works for food and a bunk. Your gun's a joke. You'll do anyway.",
+  vesta: "Vesta. Rheasilvia. The Rockborn hold claims up on the peak, and claims need surveying. Nobody pays a gunner to sit in a clamp.",
+  claimSurvey: "Five claims filed this morning, five buoys on the flank. Fly past each one in the order they were filed, so the office logs you. Eight minutes, then the window shuts.",
 } as const;
 
 /** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
