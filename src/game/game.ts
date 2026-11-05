@@ -1159,6 +1159,8 @@ export class Game implements OnlineGame {
   private torpedoesDown = 0;
   /** Rocks the own clone broke so far (the campaign's mining missions count them). */
   private rocksBroken = 0;
+  /** Where the own clone last broke a rock (the campaign's ore glints spring from it). */
+  private readonly brokenAt = new THREE.Vector3();
   /** Torpedoes of the own pilot that hit a ship, for the flight school's drill. */
   private torpedoesHit = 0;
   /** Dodges the own pilot has fired, for the flight school's drill. */
@@ -5263,6 +5265,9 @@ export class Game implements OnlineGame {
       get rocksBroken() {
         return game.rocksBroken;
       },
+      get brokenAt() {
+        return game.brokenAt;
+      },
       get torpedoesDown() {
         return game.torpedoesDown;
       },
@@ -6676,7 +6681,10 @@ export class Game implements OnlineGame {
       this.online?.sendRock(asteroid.id, this.field.clock, this.roundId >= 0 ? this.roundId : (this.rejoinedFrom ?? 0), shooter);
       if (destroyed) {
         const points = ASTEROID_POINTS[destroyed.generation];
-        if (shooter === this.me) this.rocksBroken++;
+        if (shooter === this.me) {
+          this.rocksBroken++;
+          this.brokenAt.copy(destroyed.object.position);
+        }
         shooter.score += points;
         // online, another Host may have broken the same rock a moment earlier (see remoteRock)
         if (this.online) this.keepBroken(destroyed, this.field.clock, shooter);

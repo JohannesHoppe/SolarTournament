@@ -70,6 +70,8 @@ export interface SchoolContext {
   readonly torpedoesDown: number;
   /** Rocks the pilot broke so far. */
   readonly rocksBroken: number;
+  /** Where the pilot last broke a rock. */
+  readonly brokenAt: THREE.Vector3;
   /** How many of the pilot's torpedoes have hit a ship so far. */
   readonly torpedoesHit: number;
   /** A torpedo in flight still homes on the pilot. */
@@ -1553,6 +1555,9 @@ const CANISTER_SIZE = [40, 60] as const;
 /** The seed of the canister's plating. */
 const CANISTER_SEED = 7317;
 const towAt = new THREE.Vector3();
+/** A glint of ore's size (units, 1.5 m) and how its flicker runs (rad/s): the speck turning its faces to the sun and away. */
+const GLINT_SIZE = 30;
+const GLINT_FLICKER = 9;
 
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
 export class Markers {
@@ -1567,6 +1572,7 @@ export class Markers {
   private readonly bright = new THREE.MeshBasicMaterial({ color: 0xff9d00, wireframe: true });
   private readonly dim = new THREE.MeshBasicMaterial({ color: 0x4d91ff, wireframe: true, transparent: true, opacity: 0.45 });
   private readonly rock = new THREE.MeshBasicMaterial({ color: 0xff4d2e, wireframe: true });
+  private readonly ore = new THREE.MeshBasicMaterial({ color: 0xffd27a });
   private rings: { root: THREE.Group; coil: THREE.Mesh }[] = [];
   /** Seconds the props have run, for the rings' position lights. */
   private clock = 0;
@@ -1638,6 +1644,27 @@ export class Markers {
     return mesh;
   }
 
+  /**
+   * A glint of ore: a speck of metal out of a broken rock, catching the sun (plain light, as a
+   * glow is), drifting away with a velocity and flickering as it turns; returns its live position.
+   */
+  glint(position: THREE.Vector3, velocity: THREE.Vector3) {
+    const mesh = new THREE.Mesh(this.buoyGeometry, this.ore);
+    mesh.scale.setScalar(GLINT_SIZE);
+    mesh.position.copy(position);
+    mesh.userData.glint = true;
+    this.root.add(mesh);
+    this.moving.push({ mesh, position: mesh.position, velocity });
+    return mesh.position;
+  }
+
+  /** Takes away the prop at a live position (see glint, debris). */
+  remove(position: THREE.Vector3) {
+    const mesh = this.root.children.find((child) => child.position === position);
+    if (mesh) this.root.remove(mesh);
+    this.moving = this.moving.filter((item) => item.position !== position);
+  }
+
   /** Takes a prop in tow behind a ship, on a cable, until the props are cleared. */
   tow(prop: THREE.Object3D, ship: Ship) {
     prop.userData.spin = false;
@@ -1674,6 +1701,10 @@ export class Markers {
     }
     for (const child of this.root.children) {
       if (child.userData.spin) rotateY(child, dt * 1.5);
+      if (child.userData.glint) {
+        rotateY(child, dt * GLINT_FLICKER);
+        child.scale.setScalar(GLINT_SIZE * (0.6 + 0.4 * Math.abs(sin(this.clock * GLINT_FLICKER + child.id))));
+      }
     }
   }
 
@@ -1688,7 +1719,7 @@ export class Markers {
   /** Frees the geometries and materials on the GPU when the flight school ends. */
   dispose() {
     this.clear();
-    for (const resource of [this.buoyGeometry, this.debrisGeometry, this.zoneGeometry, this.bright, this.dim, this.rock, this.cableMaterial]) resource.dispose();
+    for (const resource of [this.buoyGeometry, this.debrisGeometry, this.zoneGeometry, this.bright, this.dim, this.rock, this.ore, this.cableMaterial]) resource.dispose();
     this.canisterGeometry?.dispose();
     this.canisterMaterial?.dispose();
     this.kit.dispose();

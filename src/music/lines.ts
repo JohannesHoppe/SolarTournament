@@ -524,7 +524,7 @@ export const CAMPAIGN = {
   canisterSweep: 'Fly through a canister to take it in tow, then bring it to the crusher behind the depot. Four of them.',
   canisterSweepDone: 'All four are crushed. Scrap does not pay much, but it pays.',
   cutterFitted: 'The cutter is fitted. Its reach is short and it runs hot, so get close and give it pauses.',
-  firstCut: 'The spoil field, past the racks. Get within four hundred meters of a rock and cut it apart. Three rocks.',
+  firstCut: 'The spoil field, past the racks. Get within four hundred meters of a rock and cut it apart, then fly through the glints of ore it sheds. Three rocks, twenty glints.',
   firstCutDone: 'Three rocks. The cutter works, and so do we.',
   dockingLane: 'The hauler is coming in, and loose hulls drift into her lane. Shoot them before they hit her.',
   dockingLaneStruck: 'Three hulls hit her. She aborts, and we start over.',

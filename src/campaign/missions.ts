@@ -7,6 +7,7 @@ import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK
 import { exp, hypot } from '../detmath';
 import type { Campaign, Mission } from './campaign';
 import type { Ship } from '../ship/ship';
+import { Randomizer } from '../random';
 
 /**
  * The missions of Lot 7731 (see docs/campaign/STORY.md, section 3), each a run of drills on the
@@ -149,8 +150,17 @@ const canisterSweep: Drill = {
   mark: (_, a) => (a.next % 2 ? t('Crusher') : t('Canister {n}/{total}', { n: a.next / 2 + 1, total: CANISTERS.length })),
 };
 
-/** First Cut (1.5): break FIRST_CUT rocks of the yard's spoil with the cutter, the nearest one marked. */
+/**
+ * First Cut (1.5): break FIRST_CUT rocks of the yard's spoil with the cutter and fly through
+ * ORE_NEEDED glints of ore. Every rock broken sheds GLINTS_PER_ROCK glints from where it stood,
+ * drifting away at GLINT_SPEED (units/s, 3 to 8 m/s); one is taken within GLINT_REACH (units,
+ * 25 m). The marker leads to the nearest glint, else to the nearest rock.
+ */
 const FIRST_CUT = 3;
+const ORE_NEEDED = 20;
+const GLINTS_PER_ROCK = 7;
+const GLINT_SPEED = [60, 160] as const;
+const GLINT_REACH = 500;
 
 const firstCut: Drill = {
   line: CAMPAIGN.firstCut,
@@ -158,25 +168,48 @@ const firstCut: Drill = {
   arena: 'boneyard',
   autopilot: false,
   enter(ctx, a) {
+    // a.count: rocks broken before the attempt, a.jinks: rocks whose glints are out, a.next: glints taken
     a.count = ctx.rocksBroken;
+    a.jinks = 0;
+    a.next = 0;
+    a.points = [];
     ctx.me.heat = 0;
     ctx.me.overheated = false;
   },
-  done: (ctx, a) => ctx.rocksBroken - a.count >= FIRST_CUT,
-  waypoint(ctx) {
+  done(ctx, a, markers) {
+    // a rock just broken sheds its glints, the same ones every attempt
+    while (a.jinks < ctx.rocksBroken - a.count) {
+      a.jinks++;
+      const r = new Randomizer(a.jinks * 7 + 1);
+      for (let i = 0; i < GLINTS_PER_ROCK; i++) {
+        const way = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
+        a.points.push(markers.glint(ctx.brokenAt, way.multiplyScalar(r.range(GLINT_SPEED[0], GLINT_SPEED[1]))));
+      }
+    }
+    for (const glint of a.points) {
+      if (ctx.me.flight.position.distanceTo(glint) > GLINT_REACH) continue;
+      markers.remove(glint);
+      a.points.splice(a.points.indexOf(glint), 1);
+      a.next++;
+      break;
+    }
+    return ctx.rocksBroken - a.count >= FIRST_CUT && a.next >= ORE_NEEDED;
+  },
+  waypoint(ctx, a) {
     let best: THREE.Vector3 | null = null;
     let nearest = Infinity;
-    for (const rock of ctx.field.asteroids.values()) {
-      if (rock.solid) continue;
-      const distance = rock.object.position.distanceTo(ctx.me.flight.position);
+    const candidates = a.points.length ? a.points : [...ctx.field.asteroids.values()].filter((rock) => !rock.solid).map((rock) => rock.object.position);
+    for (const position of candidates) {
+      const distance = position.distanceTo(ctx.me.flight.position);
       if (distance < nearest) {
         nearest = distance;
-        best = rock.object.position;
+        best = position;
       }
     }
     return best;
   },
-  mark: (ctx, a) => t('Rock {n}/{total}', { n: Math.min(FIRST_CUT, ctx.rocksBroken - a.count + 1), total: FIRST_CUT }),
+  mark: (ctx, a) =>
+    t('Rock {n}/{total} · ore {ore}/{needed}', { n: Math.min(FIRST_CUT, ctx.rocksBroken - a.count + (ctx.rocksBroken - a.count < FIRST_CUT ? 1 : 0)), total: FIRST_CUT, ore: a.next, needed: ORE_NEEDED }),
 };
 
 /**
