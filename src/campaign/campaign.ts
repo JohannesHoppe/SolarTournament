@@ -95,18 +95,19 @@ export function campaignFrom(text: string | null): Campaign {
 export const nextMission = (campaign: Campaign): Mission | null => MISSIONS.find((mission) => !campaign.done.includes(mission.id)) ?? null;
 
 /**
- * A mission done: it counts, what it fits is fitted, its pay goes to the Host's wallet less the
- * yard's cut while the Bond is unpaid (the cut pays the Bond off), and the next mission starts at
- * its beginning. Returns what the Host kept and what the yard took.
+ * A mission done: it counts, what it fits is fitted, its pay less `fine` (what the Host lost on
+ * the job: the tourists' hits of Live Target) goes to the Host's wallet less the yard's cut while
+ * the Bond is unpaid (the cut pays the Bond off), and the next mission starts at its beginning.
+ * Returns what the Host kept and what the yard took.
  */
-export function complete(campaign: Campaign, mission: Mission): { kept: number; cut: number } {
+export function complete(campaign: Campaign, mission: Mission, fine = 0): { kept: number; cut: number } {
   const first = !campaign.done.includes(mission.id);
   if (first) {
     campaign.done.push(mission.id);
     mission.fit?.(campaign);
   }
   campaign.step = 0;
-  const pay = first ? mission.pay : 0;
+  const pay = first ? Math.max(0, mission.pay - fine) : 0;
   const cut = Math.min(campaign.bond, Math.round(pay * YARD_CUT));
   campaign.bond -= cut;
   campaign.coins += pay - cut;

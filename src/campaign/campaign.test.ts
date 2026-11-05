@@ -26,6 +26,15 @@ describe('the campaign Lot 7731', () => {
     expect(campaign.bond).toBe(0);
   });
 
+  it('takes what the Host lost on the job off the pay before the yard takes its cut, never below nothing', () => {
+    const campaign = freshCampaign();
+    const mission = { ...MISSIONS[0], pay: 300 };
+    // seven hits of the tourists at ☉ 10 each
+    expect(complete(campaign, mission, 70)).toEqual({ kept: Math.round(230 * (1 - YARD_CUT)), cut: Math.round(230 * YARD_CUT) });
+    campaign.done = [];
+    expect(complete(campaign, mission, 500)).toEqual({ kept: 0, cut: 0 });
+  });
+
   it('reads back what it keeps, and takes anything else for a fresh start', () => {
     const campaign = freshCampaign();
     campaign.step = 3;

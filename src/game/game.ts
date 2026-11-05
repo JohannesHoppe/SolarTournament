@@ -1159,6 +1159,8 @@ export class Game implements OnlineGame {
   private torpedoesDown = 0;
   /** Rocks the own clone broke so far (the campaign's mining missions count them). */
   private rocksBroken = 0;
+  /** What the running mission's pay is cut by, as its attempt stands (see SchoolContext.fine). */
+  private missionFine = 0;
   /** Where the own clone last broke a rock (the campaign's ore glints spring from it). */
   private readonly brokenAt = new THREE.Vector3();
   /** Torpedoes of the own pilot that hit a ship, for the flight school's drill. */
@@ -1568,6 +1570,7 @@ export class Game implements OnlineGame {
   private startMission() {
     const mission = nextMission(this.campaign);
     if (!mission) return;
+    this.missionFine = 0;
     this.mission = mission;
     this.startRound('school');
   }
@@ -5140,7 +5143,8 @@ export class Game implements OnlineGame {
     if (school.finished && this.mission) {
       const mission = this.mission;
       let paid = { kept: 0, cut: 0 };
-      this.keepCampaign((campaign) => (paid = complete(campaign, mission)));
+      this.keepCampaign((campaign) => (paid = complete(campaign, mission, this.missionFine)));
+      this.missionFine = 0;
       // the story runs on into its next mission without the menu, from the pad; the menu only
       // once all that is built is flown
       this.mission = nextMission(this.campaign);
@@ -5250,6 +5254,7 @@ export class Game implements OnlineGame {
         this.sound.crackle(1);
       },
       fireAt: (from, through) => this.drillShot(from, through),
+      fine: (coins) => (this.missionFine = coins),
       boost: (through) => this.coilPush(this.me!, through),
       arm: (item) => {
         if (item === 'nova') game.me!.nova = true;
@@ -5300,16 +5305,17 @@ export class Game implements OnlineGame {
    * no hull; a beam that passes the own ship closer than its radius sparks on it and shakes
    * the link, so the pilot sees a jink that came too late.
    */
-  private drillShot(from: THREE.Vector3, through: THREE.Vector3) {
+  private drillShot(from: THREE.Vector3, through: THREE.Vector3): boolean {
     const me = this.me!;
     const direction = forward.subVectors(through, from).normalize();
     const end = aimPoint.copy(from).addScaledVector(direction, from.distanceTo(through) * 2);
     this.effects.beam(from, end, DRILL_GUNNER_COLOR);
     const distance = raySphere(from, direction, me.flight.position, me.radius);
-    if (distance === null) return;
+    if (distance === null) return false;
     this.effects.sparks(scratch.copy(from).addScaledVector(direction, distance), DRILL_GUNNER_COLOR, 40);
     this.glitch.trigger(0.35, 0.3);
     this.sound.beep(220, 0.1, 0.2);
+    return true;
   }
 
   /** A defenseless target for the flight school, its drive towards the pilot: the one place a laser hurts. */

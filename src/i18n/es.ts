@@ -621,7 +621,7 @@ export const ES: Catalog = {
   'Bot training': 'Entrenamiento con bots',
   'Cold Boot': 'Arranque en frío',
   'Beacon {n}/{total} · {seconds} s left': 'Baliza {n}/{total} · quedan {seconds} s',
-  'Stay alive: {seconds} s': 'Sobrevive: {seconds} s',
+  'Stay alive: {seconds} s · {hits} hits, ☉ {fine} off the pay': 'Sobrevive: {seconds} s · {hits} impactos, ☉ {fine} menos de paga',
   Crusher: 'Prensa',
   'Canister {n}/{total}': 'Bidón {n}/{total}',
   'Rock {n}/{total} · ore {ore}/{needed}': 'Roca {n}/{total} · mineral {ore}/{needed}',

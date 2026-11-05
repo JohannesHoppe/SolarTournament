@@ -57,8 +57,10 @@ export interface SchoolContext {
   /** A bot at a point; an unarmed one only flees. Skill as in Bot (0..1). */
   spawnBot(position: THREE.Vector3, armed: boolean, skill: number): void;
   removeBot(): void;
-  /** A laser shot from a point through a target point, for show: it costs no hull, a hit only sparks and shakes the link. */
-  fireAt(from: THREE.Vector3, through: THREE.Vector3): void;
+  /** A laser shot from a point through a target point, for show: it costs no hull, a hit only sparks and shakes the link. Returns whether it hit. */
+  fireAt(from: THREE.Vector3, through: THREE.Vector3): boolean;
+  /** A mission of the campaign: its pay is cut by this many coins, as the attempt stands now (see campaign/campaign, complete). */
+  fine(coins: number): void;
   /** A coil throws the pilot on along a direction (either way, as it flies), as a race's gate does. */
   boost(through: THREE.Vector3): void;
   /** Hands the pilot's clone two torpedoes, or a nova core. */

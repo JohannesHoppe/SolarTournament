@@ -621,7 +621,7 @@ export const FR: Catalog = {
   'Bot training': 'Entraînement contre les bots',
   'Cold Boot': 'Démarrage à froid',
   'Beacon {n}/{total} · {seconds} s left': 'Balise {n}/{total} · encore {seconds} s',
-  'Stay alive: {seconds} s': 'Survis : {seconds} s',
+  'Stay alive: {seconds} s · {hits} hits, ☉ {fine} off the pay': 'Survis : {seconds} s · {hits} touches, ☉ {fine} de moins sur la paie',
   Crusher: 'Presse',
   'Canister {n}/{total}': 'Bidon {n}/{total}',
   'Rock {n}/{total} · ore {ore}/{needed}': 'Rocher {n}/{total} · minerai {ore}/{needed}',

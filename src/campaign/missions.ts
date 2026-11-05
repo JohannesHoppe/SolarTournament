@@ -70,12 +70,14 @@ const lamplighter: Drill = {
  * Live Target (1.2): tourists pay to shoot at the hull. Three gunners on a ring around the yard
  * fire, each every TARGET_INTERVAL seconds, at where the ship was TARGET_LAG ago (as the slide
  * drill's gunner does); the ship lives TARGET_SECONDS inside TARGET_ZONE of the office (units,
- * 1 km) by jinking. Leaving the zone starts it over.
+ * 1 km) by jinking. Leaving the zone starts it over. Every hit takes TARGET_FINE coins off the
+ * pay (see complete), as the attempt stands.
  */
 const TARGET_SECONDS = 90;
 const TARGET_ZONE = 20000;
 const TARGET_INTERVAL = 1.2;
 const TARGET_LAG = 0.4;
+const TARGET_FINE = 10;
 const GUNNERS = [point(0, 6000, -24000), point(20000, 3000, 12000), point(-20000, 4000, 12000)];
 
 const liveTarget: Drill = {
@@ -88,18 +90,21 @@ const liveTarget: Drill = {
     a.points = [ctx.me.flight.position.clone()];
     markers.zone(OFFICE, TARGET_ZONE);
     a.lastShot = 0;
+    // a.jinks: the hits taken in this attempt
+    a.jinks = 0;
+    ctx.fine(0);
   },
   done(ctx, a) {
     a.points[0].lerp(ctx.me.flight.position, 1 - exp(-ctx.dt / TARGET_LAG));
     if (a.seconds - a.lastShot > TARGET_INTERVAL / GUNNERS.length) {
       a.lastShot = a.seconds;
       a.count = (a.count + 1) % GUNNERS.length;
-      ctx.fireAt(GUNNERS[a.count], a.points[0]);
+      if (ctx.fireAt(GUNNERS[a.count], a.points[0])) ctx.fine(++a.jinks * TARGET_FINE);
     }
     return a.seconds >= TARGET_SECONDS;
   },
   fail: (ctx) => (ctx.me.flight.position.distanceTo(OFFICE) > TARGET_ZONE ? CAMPAIGN.liveTargetOut : null),
-  mark: (_, a) => t('Stay alive: {seconds} s', { seconds: Math.max(0, Math.ceil(TARGET_SECONDS - a.seconds)) }),
+  mark: (_, a) => t('Stay alive: {seconds} s · {hits} hits, ☉ {fine} off the pay', { seconds: Math.max(0, Math.ceil(TARGET_SECONDS - a.seconds)), hits: a.jinks, fine: a.jinks * TARGET_FINE }),
   waypoint: () => null,
 };
 
