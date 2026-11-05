@@ -2428,7 +2428,7 @@ export class Game implements OnlineGame {
     recorder?.clear();
     this.field.generate(arena.layout);
     // the Belt's rigs and buoys stand on their rocks before a course or a lane is laid out around them
-    this.mining.dress(arena.id === 'belt' ? this.field : null);
+    this.mining.dress(arena.id === 'belt' || arena.id === 'rheasilvia' ? this.field : null);
     // a race's course is laid out in the field as generated, the same on every browser
     if (this.course) {
       this.scene.remove(this.course.root);

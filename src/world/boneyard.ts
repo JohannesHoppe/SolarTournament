@@ -7,7 +7,8 @@ import { letteringTexture, PAINT_ASPECT } from '../view/lettering';
 import { DEPOT } from '../ship/models';
 import { setFromEuler } from '../detthree';
 import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
-import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED } from './yard';
+import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE } from './yard';
+import { vestaGround } from './rheasilvia';
 
 /**
  * How the Boneyard on Psyche looks (the campaign's first place; where things stand in
@@ -60,6 +61,7 @@ export function rackSet(): TemplateSet {
   const paint = new THREE.MeshStandardMaterial({ ...surfaced(wornSurface(YARD_SEED + 1, DEPOT), 2), color: 0x7d8466 });
   const depot = depotLooks();
   const near = RACK_BOXES.map((half, type) => {
+    if (type === VESTA_GROUND_TYPE) return vestaGround(half);
     if (type >= DEPOT_TYPE) return depotPart(DEPOT_PARTS[type - DEPOT_TYPE], half, steel, depot);
     const r = new Randomizer(YARD_SEED + 10 + type);
     const girders: THREE.BufferGeometry[] = [];
@@ -669,7 +671,7 @@ function pad(group: THREE.Group, at: THREE.Vector3, looks: ReturnType<typeof dep
 }
 
 /** A piece's looks with its collider box (half extents `half`), the shape it collides as. */
-function withCollider(group: THREE.Group, half: THREE.Vector3): THREE.Group {
+export function withCollider(group: THREE.Group, half: THREE.Vector3): THREE.Group {
   const collider = new THREE.Mesh(new THREE.BoxGeometry(half.x * 2, half.y * 2, half.z * 2));
   collider.userData.collider = true;
   collider.visible = false;
@@ -773,13 +775,16 @@ function relief(list: readonly Pit[], x: number, z: number): number {
  * that never line up: dust and pebbles every DUST_TILE, the photograph of a real surface
  * every GROUND_TILE (see groundPhoto), the yard's grime every MACRO_TILE.
  */
-function crater(): THREE.Group {
-  const half = DEPOT_LAYOUT.ground.half;
-  const group = new THREE.Group();
+/**
+ * A world's ground in the three layers of the crater floor (dust and pebbles, the photograph of a
+ * real surface, the grime), in `color` and lit a little by `emissive` (a light that keeps it from
+ * going black where the sun stands low); its geometries take their texture coordinates from
+ * groundUv.
+ */
+export function groundMaterial(color: number, emissive: number, metalness: number): THREE.MeshStandardMaterial {
   grime ??= grimeTexture();
   const middle = groundPhoto();
-  // the sun stands low over the crater: Psyche's bright metal dust and the yard's floodlights keep the floor from going black
-  const material = new THREE.MeshStandardMaterial({ map: dustTexture(), roughness: 0.9, metalness: 0.15, color: 0xe6ddd0, emissive: 0x2e2a26, aoMap: grime, aoMapIntensity: 0 });
+  const material = new THREE.MeshStandardMaterial({ map: dustTexture(), roughness: 0.9, metalness, color, emissive, aoMap: grime, aoMapIntensity: 0 });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.middleMap = { value: middle };
     shader.fragmentShader = shader.fragmentShader
@@ -791,6 +796,26 @@ function crater(): THREE.Group {
   diffuseColor.rgb *= texture2D( aoMap, vAoMapUv ).rgb;`,
       );
   };
+  return material;
+}
+
+/** A ground's texture coordinates for groundMaterial: laid on from above, its dust every DUST_TILE, the photograph and the grime on the second set. */
+export function groundUv(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
+  const p = geometry.getAttribute('position');
+  const uv = new Float32Array(p.count * 2);
+  for (let i = 0; i < p.count; i++) {
+    uv[i * 2] = p.getX(i) / DUST_TILE;
+    uv[i * 2 + 1] = p.getZ(i) / DUST_TILE;
+  }
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  return macroUv(geometry, 0.5, DUST_TILE);
+}
+
+function crater(): THREE.Group {
+  const half = DEPOT_LAYOUT.ground.half;
+  const group = new THREE.Group();
+  // the sun stands low over the crater: Psyche's bright metal dust and the yard's floodlights keep the floor from going black
+  const material = groundMaterial(0xe6ddd0, 0x2e2a26, 0.15);
   const list = pits();
   const reach = CRATER_RADIUS + 2000;
   const floor = new THREE.PlaneGeometry(reach * 2, reach * 2, 320, 320).applyMatrix4(FLAT);
@@ -823,15 +848,7 @@ function crater(): THREE.Group {
   }
   wall.computeVertexNormals();
   for (const geometry of [floor, wall]) {
-    const p = geometry.getAttribute('position');
-    const uv = new Float32Array(p.count * 2);
-    for (let i = 0; i < p.count; i++) {
-      uv[i * 2] = p.getX(i) / DUST_TILE;
-      uv[i * 2 + 1] = p.getZ(i) / DUST_TILE;
-    }
-    geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
-    macroUv(geometry, 0.5, DUST_TILE);
-    const mesh = new THREE.Mesh(geometry, material);
+    const mesh = new THREE.Mesh(groundUv(geometry), material);
     mesh.receiveShadow = true;
     group.add(mesh);
   }

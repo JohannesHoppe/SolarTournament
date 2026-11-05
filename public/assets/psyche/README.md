@@ -1,6 +1,6 @@
 # public/assets/psyche
 
-The ground of the Boneyard's crater on Psyche (see `src/world/boneyard.ts`, `groundPhoto`): a real photograph of a planetary surface, the Moon's, since no spacecraft has photographed Psyche's surface up close yet. The game lays it on at half its scale and tints it to Psyche's metal, under a finer layer of dust and over the yard's grime, so its tile never shows.
+The ground of the Boneyard's crater on Psyche and of the flank under Rheasilvia's claims on Vesta (see `src/world/boneyard.ts`, `groundPhoto` and `groundMaterial`): a real photograph of a planetary surface, the Moon's, since no spacecraft has photographed either world's surface at that scale. The game lays it on at half its scale and tints it to each world's ground (Psyche's metal, Vesta's pale basalt), under a finer layer of dust and over the yard's grime, so its tile never shows.
 
 | File | What it is | Source and license | Changed |
 |---|---|---|---|

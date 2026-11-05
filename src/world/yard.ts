@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Randomizer } from '../random';
 import type { Placement } from './asteroids';
+import { SLOPE_HALF } from './vesta';
 
 /**
  * Where the Boneyard on Psyche (the campaign's first place, see docs/campaign/) puts things: the
@@ -128,9 +129,12 @@ export const HOPPER = v(DEPOT_LAYOUT.crusher.center.x, GROUND + 1000 + 300, DEPO
 
 /**
  * The half extents of each template's collider box (units): 0 a full rack, 1 a rack with gaps, 2
- * an empty frame, then the depot's parts.
+ * an empty frame, then the depot's parts, then the slope under Vesta's claims (VESTA_GROUND_TYPE,
+ * see world/vesta).
  */
-export const RACK_BOXES: readonly THREE.Vector3[] = [...[0, 1, 2].map(() => v(RACK_LENGTH / 2, RACK_HEIGHT / 2, RACK_DEPTH / 2)), ...DEPOT_PARTS.map((part) => DEPOT_LAYOUT[part].half)];
+export const RACK_BOXES: readonly THREE.Vector3[] = [...[0, 1, 2].map(() => v(RACK_LENGTH / 2, RACK_HEIGHT / 2, RACK_DEPTH / 2)), ...DEPOT_PARTS.map((part) => DEPOT_LAYOUT[part].half), SLOPE_HALF];
+/** The template of the slope under Vesta's claims in the yards' set. */
+export const VESTA_GROUND_TYPE = DEPOT_TYPE + DEPOT_PARTS.length;
 
 /**
  * Where the racks stand: on the ground in rows along the field's x axis; the row through the
