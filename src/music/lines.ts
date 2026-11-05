@@ -6,8 +6,8 @@
  * every word here must be in the rendered set; the radio places the words on the beat.
  */
 
-/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda: the people of the campaign (see Cast). */
-export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda';
+/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda, saw: the people of the campaign (see Cast). */
+export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda' | 'saw';
 
 /** Title words of the English flavors; a title is one word of each list. */
 export const TITLE_FIRST = [
@@ -536,6 +536,9 @@ export const CAMPAIGN = {
   claimSurveyDone: 'All five are logged. That is four hundred coins, and the yard still takes its forty percent.',
   cutAndHaul: 'The rock beside the working rig. Cut it apart and fly through its ore. Every beam that strikes the rig costs us fifty coins.',
   cutAndHaulDone: 'Forty loads of ore. Thirty-five coins a load, less whatever the rig cost us.',
+  sawBrothers: 'Three ships at the rig, sawing at it. Shoot two of them down before it comes off its rock. The cutter reaches four hundred meters, so get close.',
+  sawBrothersFell: 'The rig has come off its rock. They have taken the claim. We start over.',
+  sawBrothersDone: 'Two down, and the third is running. The rig still stands.',
 } as const;
 
 /**
@@ -573,16 +576,23 @@ export const HEDDA = {
   meet: "Patience here. Captain Kroll. You the nobody who cleared my lane? Right. I need a gunner who works for food and a bunk. Your gun's a joke. You'll do anyway.",
   vesta: "Vesta. Rheasilvia. The Rockborn hold claims up on the peak, and claims need surveying. Nobody pays a gunner to sit in a clamp.",
   claimSurvey: "Five claims filed this morning, five buoys on the flank. Fly past each one in the order they were filed, so the office logs you. Eight minutes, then the window shuts.",
+  sawBrothers: "Trouble on the peak. The Saw Brothers are cutting a rig off its rock. Three of them, all mouth. Shoot two and the third one runs. That rig falls, nobody gets paid.",
   cutAndHaul: "Claim's paid for, ore's not. Cut up the rock next to the working rig and bring in the ore. Forty loads. Mind the rig. You hit it, you pay for it. Fifty a beam.",
 } as const;
 
+/** The Saw Brothers, claim-jumpers at Vesta: three of them, one voice, giggling over the comm while they cut other people's rigs off their rocks. */
+export const SAW = {
+  giggle: "Oh look, brothers, a scrap heap with a gun! Hee hee! Keep sawing, it can't hurt us!",
+  lost: "Okay, okay! We're going! It was a lousy rig anyway!",
+} as const;
+
 /** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
-export type Cast = 'rask' | 'pim' | 'hedda';
+export type Cast = 'rask' | 'pim' | 'hedda' | 'saw';
 /** The name each of them is shown under, beside the line. */
-export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda' };
-/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights. */
-export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0' };
-const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA) };
+export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda', saw: 'Saw' };
+/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights, the Saw Brothers a toxic lime. */
+export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0', saw: '#b6ff3a' };
+const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA), saw: Object.values(SAW) };
 export function castOf(line: string): Cast | null {
   for (const [who, lines] of Object.entries(CAST_LINES) as [Cast, readonly string[]][]) if (lines.includes(line)) return who;
   return null;
@@ -606,6 +616,8 @@ export function allLines(language: Language): string[] {
       return [...Object.values(PIM)];
     case 'hedda':
       return [...Object.values(HEDDA)];
+    case 'saw':
+      return [...Object.values(SAW)];
   }
 }
 

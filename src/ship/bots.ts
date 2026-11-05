@@ -665,6 +665,8 @@ export class Bot {
     }
     // the beam would end on a ship of the own side: no shot (friendly fire hurts)
     if (controls.fire && allyInLine(this.ship, ships, field, me.position, me.forward(heading), LASER_RANGE, ALLY_CLEARANCE)) controls.fire = false;
+    // a trigger the ship ignores until let go (a fresh clone's): let go of it first, as a Host does, then press again
+    if (controls.fire && this.ship.mustRelease) controls.fire = false;
     return this.byHand(controls, dt);
   }
 

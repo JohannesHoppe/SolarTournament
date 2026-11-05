@@ -586,6 +586,11 @@ export class Ship {
     this.triggerHeld = true;
   }
 
+  /** Whether fire is ignored until the trigger is let go (a fresh clone's, a nova core just taken: see holdTrigger). */
+  get mustRelease(): boolean {
+    return this.triggerHeld;
+  }
+
   /**
    * Takes over a ship another peer ran, as its last state left it (moved on by its velocity):
    * score, kills, deaths, damage, the torpedoes its clone has left (up to a fresh load) and whether its clone lives.

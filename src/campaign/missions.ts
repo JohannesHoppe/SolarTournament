@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { CAMPAIGN, HEDDA, PIM, RASK } from '../music/lines';
+import { CAMPAIGN, HEDDA, PIM, RASK, SAW } from '../music/lines';
 import { clear, holdFor, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import type { Asteroid } from '../world/asteroids';
+import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { exp, hypot } from '../detmath';
@@ -492,6 +493,45 @@ const cutAndHaul: Drill = {
   mark: (ctx, a) => t('Ore {ore}/{needed} · rig hits {hits}', { ore: a.next, needed: HAUL_ORE, hits: ctx.rigBeams - a.rigBeams }),
 };
 
+/**
+ * Saw Brothers (2.3): JUMPERS claim-jumpers of JUMPER_SKILL saw at the rig nearest the place's
+ * middle (see Game.jumpers: each holds off it and fires at it until a ship comes near, then
+ * fights); JUMPERS_DOWN of them shot down wins, and the third runs; the rig falls at RIG_FALLS
+ * hits of theirs, and the attempt starts over.
+ */
+const JUMPERS = 3;
+const JUMPER_SKILL = 0.15;
+const JUMPERS_DOWN = 2;
+const RIG_FALLS = 30;
+
+/** The claim whose rig the Saw Brothers saw at: of those with a rig, the one nearest the place's middle. */
+function sawnClaim(ctx: SchoolContext): Claim | null {
+  let best: Claim | null = null;
+  for (const claim of ctx.claims()) if (claim.rig && (!best || claim.rig.length() < best.rig!.length())) best = claim;
+  return best;
+}
+
+const sawBrothers: Drill = {
+  line: CAMPAIGN.sawBrothers,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'rheasilvia',
+  autopilot: false,
+  enter(ctx, a) {
+    const claim = sawnClaim(ctx);
+    if (claim?.rig) {
+      ctx.spawnJumpers(claim.rock, claim.rig, JUMPERS, JUMPER_SKILL);
+      a.site.copy(claim.rig);
+    }
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+  },
+  done: (ctx) => ctx.jumpersDown >= JUMPERS_DOWN,
+  fail: (ctx) => (ctx.rigWear >= RIG_FALLS ? CAMPAIGN.sawBrothersFell : null),
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: (_, a) => a.site,
+  mark: (ctx) => t('Down {n}/{needed} · rig {wear}/{falls}', { n: ctx.jumpersDown, needed: JUMPERS_DOWN, wear: ctx.rigWear, falls: RIG_FALLS }),
+};
+
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
@@ -533,4 +573,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'rheasilvia', name: msg('Rheasilvia'), drills: [onVesta(HEDDA.vesta), onVesta(PIM.voice), onVesta(CAMPAIGN.voiceOne)], pay: 0 },
   { id: 'claimSurvey', name: msg('Claim Survey'), drills: [onVesta(HEDDA.claimSurvey), claimSurvey, said(CAMPAIGN.claimSurveyDone, 'rheasilvia')], pay: 400, ratings: 20 },
   { id: 'cutAndHaul', name: msg('Cut and Haul'), drills: [onVesta(HEDDA.cutAndHaul), cutAndHaul, said(CAMPAIGN.cutAndHaulDone, 'rheasilvia')], pay: HAUL_ORE * ORE_PAY, ratings: 25 },
+  { id: 'sawBrothers', name: msg('Saw Brothers'), drills: [onVesta(HEDDA.sawBrothers), onVesta(SAW.giggle), sawBrothers, said(SAW.lost, 'rheasilvia'), said(CAMPAIGN.sawBrothersDone, 'rheasilvia')], pay: 1200, ratings: 80 },
 ];

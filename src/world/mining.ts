@@ -417,6 +417,8 @@ export interface Plan {
   solids: Attachment[][];
   /** The buoys' cans, each with its claim's slot, in their rocks' own frames (see Mining.buoys). */
   buoys: { slot: number; at: THREE.Vector3 }[];
+  /** The middle of each claim's rig, by slot, in its rock's own frame; none for a claim without one. */
+  rigs: THREE.Vector3[];
 }
 
 /**
@@ -672,6 +674,8 @@ function rig(plan: Plan, site: Site, r: Randomizer, cutter: boolean) {
   const rust = new THREE.Color(0.55, 0.24, 0.13);
   const soil: Soil = { tone: rockColor(site, foot.normal), ground: foot.top * site.scale };
   const add = (shape: THREE.BufferGeometry, color: THREE.Color, glow = 0.04, paint: number | 'sides' = 0) => addShape(plan.steel, site.slot, shape, frame, color, glow, paint, soil);
+  // the derrick's middle, where a beam at the rig strikes it (see Mining.claims)
+  plan.rigs[site.slot] = v3(0, level + 20 * M, 0).applyMatrix4(frame);
   // platform and legs: the deck's rim in hazard stripes, its plating dark
   add(block(32 * M, 2.5 * M, 32 * M, 0, level, 0), hazard, 0.04, 'sides');
   add(block(29 * M, 0.3 * M, 29 * M, 0, level + 1.3 * M, 0), dark);
@@ -945,6 +949,7 @@ export function planMining(field: AsteroidField): Plan {
     clouds: [],
     solids: [],
     buoys: [],
+    rigs: [],
   };
   // each claim draws from its own sequence, so one claim's dressing never shifts another's
   claimed.forEach((asteroid, slot) => {
@@ -968,10 +973,10 @@ export function planMining(field: AsteroidField): Plan {
   return plan;
 }
 
-/** A claim of the Rockborn in a field (see Mining.claims): its rock, whether a rig works on it, its first buoy. */
+/** A claim of the Rockborn in a field (see Mining.claims): its rock, the middle of the rig working on it (null for none), its first buoy. */
 export interface Claim {
   rock: string;
-  rig: boolean;
+  rig: THREE.Vector3 | null;
   buoy: THREE.Vector3;
 }
 
@@ -1184,7 +1189,7 @@ export class Mining {
 
   /**
    * The claims of `field` as dressed, in the order they were filed (their slots): each its rock,
-   * whether a rig works on it, and where its first buoy stands (its can, in the world); none for
+   * the rig working on it, and where its first buoy stands (its can, in the world); none for
    * a field not dressed.
    */
   claims(field: AsteroidField): Claim[] {
@@ -1196,7 +1201,8 @@ export class Mining {
       const rock = field.asteroids.get(plan.ids[slot]);
       if (!rock) continue;
       rock.object.updateWorldMatrix(true, false);
-      list.push({ rock: rock.id, rig: slot < RIGS, buoy: at.clone().applyMatrix4(rock.object.matrixWorld) });
+      const rig = plan.rigs[slot];
+      list.push({ rock: rock.id, rig: rig ? rig.clone().applyMatrix4(rock.object.matrixWorld) : null, buoy: at.clone().applyMatrix4(rock.object.matrixWorld) });
     }
     return list;
   }

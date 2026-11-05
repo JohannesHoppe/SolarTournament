@@ -277,7 +277,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | **`sound/`** | **What the pilot hears besides the radio** |
 | `sound/audio.ts` | Sound through the hull (low-pass), flight computer beeps, drive noise, link static, dust pattering on the hull; in a planet's air the wind, a hot hull's plasma and thunder from outside |
 | `sound/sounds.ts` | Synthesized sound effects: laser, explosion |
-| `sound/speaker.ts` | Nicole, the flight computer's voice: reads out what the screen shows, whole lines from the sprite; the campaign's other people (Rask, Pim, Hedda) on a comm of their own, a narrow radio band |
+| `sound/speaker.ts` | Nicole, the flight computer's voice: reads out what the screen shows, whole lines from the sprite; the campaign's other people (Rask, Pim, Hedda, the Saw Brothers) on a comm of their own, a narrow radio band |
 | **`music/`** | **Radio 2584** |
 | `music/songs.ts` | Techno tracks from a seed (flavor, form, energy curve, weighted step patterns, fills, drive's pedal bass and its timbre); every decision is an integer hash of seed, bar and step |
 | `music/recipes.ts` | The radio page's recipes: every flavor's numbers read from the generator's tables, what it sounds like, a track of it to listen to |
@@ -285,7 +285,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts |
 | `music/preview.ts` | Renders a track (or a stretch) offline as WAV in one pass, the band playing a stretch ahead of the render: downloads on the radio page, previews in development |
 | `music/kept.ts` | The radio page's last pressing (title and WAV file), kept in the browser's IndexedDB to be saved again; nothing kept where IndexedDB is blocked |
-| `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the announcer's lines, the flight computer's lines, the campaign's lines (Nicole's, Rask's, Pim's and Hedda's, who says which) |
+| `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the announcer's lines, the flight computer's lines, the campaign's lines (Nicole's, Rask's, Pim's, Hedda's and the Saw Brothers', who says which) |
 | `music/transmission.ts` | The on-screen transmission: whatever the radio says, in neon, while it is spoken (game and radio page) |
 | `music/crowd.ts` | The stadium's crowd on the broadcast: a recorded roar (CC0), looped, through overdriven loudspeakers; it swells, erupts and hushes with the show |
 | `music/voice.ts` | Loads the pre-rendered voices for the Host's language: the radio's sprite and the language's, joined (once, shared) |

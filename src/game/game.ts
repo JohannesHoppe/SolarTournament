@@ -687,6 +687,21 @@ const sweepHit = rayHit();
 const impactHit = rayHit();
 const aimHit = rayHit();
 const laserHit = rayHit();
+/** Scratch of a claim-jumper's sight of its rig and where it starts (see Game.sawPoint, spawnJumpers). */
+const sawHit = rayHit();
+const sawWay = new THREE.Vector3();
+const jumperAt = new THREE.Vector3();
+/**
+ * A claim-jumper (see Game.jumpers) holds SAW_DISTANCE off its rig (units, 400 m) and takes it
+ * for in sight when its rock is the first thing within SAW_REACH (units, 10 m) past the rig's
+ * middle; it heeds a ship only within JUMPER_NOTICE of it (units, 800 m) and saws on until one
+ * comes that close.
+ */
+const SAW_DISTANCE = 8000;
+const SAW_REACH = 200;
+const JUMPER_NOTICE = 16000;
+/** The claim-jumpers' side (see Ship.team): the three brothers fight together, the Host stays on none. */
+const JUMPER_TEAM = 1;
 /** A laser beam's ends, reused shot after shot. */
 const beamEnd = new THREE.Vector3();
 const beamStart = new THREE.Vector3();
@@ -1271,6 +1286,8 @@ export class Game implements OnlineGame {
   private impactAhead = false;
   /** The flight school's sparring bot, and whether it may fire. */
   private sparring: { bot: Bot; armed: boolean } | null = null;
+  /** A mission's claim-jumpers (see campaign/missions, Saw Brothers): their bots, the rock whose rig they saw at, the rig's middle, their hits on it so far. */
+  private jumpers: { bots: Bot[]; rock: string; rig: THREE.Vector3; hits: number } | null = null;
   /** The pilot has been told to return to the field during this excursion. */
   private toldToReturn = false;
   /** Song of the running solo round. */
@@ -2746,6 +2763,7 @@ export class Game implements OnlineGame {
     this.drone = null;
     this.watchedShip = null;
     this.sparring = null;
+    this.jumpers = null;
     // the clone climbs back in: no scene outlives its round
     this.setStage(null);
     if (this.school) {
@@ -3920,7 +3938,8 @@ export class Game implements OnlineGame {
         continue;
       }
       if (!ship.alive) {
-        if (now < ship.respawnAt || ship === this.drone || ship === this.sparring?.bot.ship || this.out(ship)) continue;
+        // a mission's claim-jumper shot down stays down
+        if (now < ship.respawnAt || ship === this.drone || ship === this.sparring?.bot.ship || this.jumpers?.bots.some((b) => b.ship === ship) || this.out(ship)) continue;
         // training clones are free; tournament clones cost an ad
         if (ship !== me || this.school) this.respawn(ship);
         else if (!this.sponsors.visible && this.state === 'playing' && !this.killcam.active) this.sponsorBreak();
@@ -3950,12 +3969,13 @@ export class Game implements OnlineGame {
         bot.home = this.fleet ? FLEET_HOME : this.survival ? Math.min(HOME_RADIUS, this.pocketRadius * FLARE_KEEP) : HOME_RADIUS;
         bot.homeAt = this.survival ? this.pocket : null;
         bot.prey = null;
-        bot.siege = this.fleet ? this.siegePoint(bot, this.fleet) : null;
+        bot.siege = this.fleet ? this.siegePoint(bot, this.fleet) : this.jumpers?.bots.includes(bot) ? this.sawPoint(bot, this.jumpers) : null;
         // a race at the bot's own pace, by how good it is; a raid in Capture the Flag at the raiders'
         bot.raceSpeed = this.flags ? FLAG_RAID_SPEED : raceSpeedOf(bot.skills);
         if (this.flags) this.flagRole(bot, this.flags);
       }
-      const thought = bot ? bot.think(now, this.ships, this.field) : null;
+      // a claim-jumper keeps sawing until a ship comes within JUMPER_NOTICE of it; then it fights
+      const thought = bot ? bot.think(now, this.jumpers?.bots.includes(bot) ? this.noticed(ship) : this.ships, this.field) : null;
       // the flight school's unarmed sparring bot only flies
       if (thought && bot === this.sparring?.bot && !this.sparring.armed) thought.fire = false;
       // a bot with a nova core saves it for a crowd of rivals or the battleship's parts, with
@@ -4671,6 +4691,48 @@ export class Game implements OnlineGame {
     this.kick = 2;
     this.sound.play('explosion', { volume: 2, rate });
     return true;
+  }
+
+  /**
+   * Where a claim-jumper saws at its rig (see jumpers): it holds SAW_DISTANCE off the rig on its
+   * own side, and has it in sight when the first thing its beam would meet is the rig's rock.
+   */
+  private sawPoint(bot: Bot, jumpers: { rock: string; rig: THREE.Vector3 }): THREE.Vector3 {
+    const from = bot.ship.flight.position;
+    bot.siegeHold.subVectors(from, jumpers.rig).normalize().multiplyScalar(SAW_DISTANCE).add(jumpers.rig);
+    sawWay.subVectors(jumpers.rig, from);
+    const distance = sawWay.length();
+    bot.siegeClear = this.field.raycast(from, sawWay.divideScalar(Math.max(distance, 1)), distance + SAW_REACH, false, sawHit)?.asteroid?.id === jumpers.rock;
+    return jumpers.rig;
+  }
+
+  /** The ships a claim-jumper heeds: itself, and the others within JUMPER_NOTICE of it. */
+  private noticed(jumper: Ship): Ship[] {
+    return this.ships.filter((ship) => ship === jumper || ship.flight.position.distanceTo(jumper.flight.position) < JUMPER_NOTICE);
+  }
+
+  /** The claim-jumpers at a rig: `count` bots of `skill` around it, each sawing at it while no ship comes near (see sawPoint). */
+  private spawnJumpers(rock: string, rig: THREE.Vector3, count: number, skill: number) {
+    this.removeJumpers();
+    const bots: Bot[] = [];
+    for (let i = 0; i < count; i++) {
+      const ship = this.addShip(`jumper${i}`, 'Saw', i % 2 ? 'alien' : 'human', false);
+      // brothers: one side, never at each other
+      ship.team = JUMPER_TEAM;
+      const bot = new Bot(ship, evenSkills(skill));
+      this.bots.push(bot);
+      bots.push(bot);
+      const angle = (i / count) * Math.PI * 2;
+      const at = jumperAt.set(cos(angle) * SAW_DISTANCE, SAW_DISTANCE * 0.5, sin(angle) * SAW_DISTANCE).add(rig);
+      ship.spawn(at, lookingAt(at, rig, upward.set(0, 1, 0)), this.time);
+      ship.protectedUntil = this.time;
+    }
+    this.jumpers = { bots, rock, rig: rig.clone(), hits: 0 };
+  }
+
+  private removeJumpers() {
+    for (const bot of this.jumpers?.bots ?? []) this.removeShip(bot.ship);
+    this.jumpers = null;
   }
 
   /** The part of the battleship a bot attacks: the nearest it can hurt; none while the battleship is away. */
@@ -5411,6 +5473,14 @@ export class Game implements OnlineGame {
       },
       get rigBeams() {
         return game.rigBeams;
+      },
+      spawnJumpers: (rock, rig, count, skill) => this.spawnJumpers(rock, rig, count, skill),
+      removeJumpers: () => this.removeJumpers(),
+      get jumpersDown() {
+        return game.jumpers?.bots.filter((b) => !b.ship.alive).length ?? 0;
+      },
+      get rigWear() {
+        return game.jumpers?.hits ?? 0;
       },
       get brokenAt() {
         return game.brokenAt;
@@ -6821,6 +6891,13 @@ export class Game implements OnlineGame {
     if (asteroid) {
       // a beam on a rig or a buoy, not on the rock it stands on (the campaign fines it)
       if (shooter === this.me && asteroidHit!.part) this.rigBeams++;
+      // a claim-jumper's beam on the rig it saws at wears the rig down, never the rock (see jumpers)
+      const jumpers = this.jumpers;
+      if (jumpers && asteroidHit!.part && asteroid.id === jumpers.rock && jumpers.bots.some((b) => b.ship === shooter)) {
+        jumpers.hits++;
+        this.effects.sparks(end, shooter.color, 40);
+        return;
+      }
       normal.subVectors(end, asteroid.object.position).normalize();
       this.effects.sparks(end, shooter.color, 40);
       this.effects.debris(end, normal, 120);

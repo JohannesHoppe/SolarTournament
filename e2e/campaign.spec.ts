@@ -109,15 +109,37 @@ test('Cut and Haul marks the claim beside a working rig, and fines a beam on the
   // the claim it cuts carries no rig, and a rig works on the claim nearest it
   const claim = await page.evaluate(() => {
     const game = window.game;
-    const claims: { rock: string; rig: boolean }[] = game.mining.claims(game.field);
+    const claims: { rock: string; rig: unknown }[] = game.mining.claims(game.field);
     const site = game.school.attempt.site;
     const cut = claims.find((c) => game.field.asteroids.get(c.rock)?.object.position.distanceTo(site) < 1);
-    return { found: !!cut, rig: cut?.rig, rigs: claims.filter((c) => c.rig).length };
+    return { found: !!cut, rig: !!cut?.rig, rigs: claims.filter((c) => c.rig).length };
   });
   expect(claim).toEqual({ found: true, rig: false, rigs: 6 });
   // a beam that ends on a rig is counted, and costs the pay
   await page.evaluate(() => (window.game.rigBeams += 2));
   await expect.poll(() => page.evaluate(() => window.game.missionFine)).toBe(100);
+  expect(errors).toEqual([]);
+});
+
+test('the Saw Brothers saw at a rig while the clone keeps away, and two of them shot down end it', async ({ page }) => {
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify({ ...kept, done: [...kept.done, 'rheasilvia', 'claimSurvey', 'cutAndHaul'] })), CHAPTER_ONE_DONE);
+  const errors = await openGame(page, '/?campaign');
+  await takeNextJob(page);
+  await page.waitForFunction(() => window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 3, null, { timeout: 120_000 });
+  // the clone held far off: the brothers saw at the rig, and their beams wear it down
+  await page.waitForFunction(
+    () => {
+      const game = window.game;
+      game.me.flight.position.set(-60000, 20000, -60000);
+      game.me.flight.velocity.set(0, 0, 0);
+      return game.jumpers.hits > 0;
+    },
+    null,
+    { timeout: 90_000, polling: 100 },
+  );
+  // two of them shot down: the third runs, and the mission goes on
+  await page.evaluate(() => window.game.jumpers.bots.slice(0, 2).forEach((bot: { ship: { alive: boolean } }) => (bot.ship.alive = false)));
+  await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(3);
   expect(errors).toEqual([]);
 });
 

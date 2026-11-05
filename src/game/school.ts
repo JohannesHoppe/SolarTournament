@@ -83,6 +83,12 @@ export interface SchoolContext {
   readonly rocksBroken: number;
   /** The pilot's beams that struck what stands on a rock (a rig, a buoy) so far. */
   readonly rigBeams: number;
+  /** Claim-jumpers at the rig of the rock `rock` (its middle `rig`): `count` bots of `skill` sawing at it while no ship comes near (see Game.jumpers). */
+  spawnJumpers(rock: string, rig: THREE.Vector3, count: number, skill: number): void;
+  removeJumpers(): void;
+  /** The claim-jumpers shot down so far, and their hits on their rig. */
+  readonly jumpersDown: number;
+  readonly rigWear: number;
   /** Where the pilot last broke a rock. */
   readonly brokenAt: THREE.Vector3;
   /** How many of the pilot's torpedoes have hit a ship so far. */
