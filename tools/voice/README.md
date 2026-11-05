@@ -9,9 +9,9 @@ Everything the game says out loud is rendered ahead of time, by the tools in thi
 | **The regime** | The radio's station calls, track titles and the Orange President's propaganda, in English and German | espeak-ng, a robotic voice ("robosoft") |
 | **The announcer** | Comments on kills, laps, wins, in the Host's language | espeak-ng, a lively male voice |
 | **Nicole** | The flight computer: every line of the flight school, every warning, every bit of comfort | English: Kokoro. German, Spanish, French: her clone, made with Chatterbox |
-| **Rask** | The yardmaster of the campaign's Boneyard, over the comm | Kokoro's `am_onyx`, played lower, slower and trembling by the game (`CAST_VOICES` in `src/sound/speaker.ts`); in German, Spanish and French reading the phonemes espeak-ng spells |
-| **Pim** | The Boneyard's welder, a girl of fifteen, over the comm | Kokoro's `af_jessica`, rendered quick and played 12 % higher by the game; in the other languages as Rask's |
-| **Hedda** | Captain Kroll of the hauler Patience, in her sixties, over the comm | Kokoro's `af_kore`, rendered a little slow and played 16 % lower and trembling by the game; in the other languages as Rask's |
+| **Rask** | The yardmaster of the campaign's Boneyard, over the comm | Kokoro's `am_onyx`, played lower, slower and trembling by the game (`CAST_VOICES` in `src/sound/speaker.ts`); in German, Spanish and French his clone, made as Nicole's is from an English reference of his own (see "The campaign's people") |
+| **Pim** | The Boneyard's welder, a girl of fifteen, over the comm | Kokoro's `af_jessica`, rendered quick and played 12 % higher by the game; in the other languages her clone, as Rask's |
+| **Hedda** | Captain Kroll of the hauler Patience, in her sixties, over the comm | Kokoro's `af_kore`, rendered a little slow and played 16 % lower and trembling by the game; in the other languages her clone, as Rask's |
 
 ## The tools, in plain words
 
@@ -51,6 +51,10 @@ Nicole was born in English: Kokoro's `af_nicole`. For the other languages she is
 3. **Store** (the release `voice-nicole`). The cloned lines of a language sit in one lossless FLAC file, one after the other, with an index saying where each line starts. Both are assets of a GitHub release of the repository: public, versioned, but not part of the Git history (generated audio in the history would bloat every clone of the repository forever). The index carries the audio's fingerprint, and the release keeps the audio under it (`nicole-de-1d66db33fb6d98eb.flac`, the index as `nicole-de.json`): an index always finds the very audio it was written for, so no build ever cuts one recording by another's clips.
 4. **Build** (`render.ts`, run by `npm run build` and `npm run dev`). It downloads each language's index and audio, cuts out every line Nicole says, and puts them into that language's sprite, together with the announcer. A line not cloned yet (new or just changed) is spoken by the fallback: Kokoro's Nicole reading the phonemes espeak-ng spells it in, with a heavy English accent, until its clone is there.
 5. **Game.** The browser loads the radio sprite and the sprite of the Host's language, and plays a line by cutting it from the sprite.
+
+### The campaign's people
+
+Rask, Pim and Hedda are cloned the same way (`SPEAKERS` in `nicole.ts`): each has an English reference of their own, about ten seconds of their lines in their Kokoro voice (`reference-rask.wav`, …), a voice print the German job takes from it once (`rask-conds.pt`, …), and per language a store of their lines (`rask-de.flac` with its index `rask-de.json`, …) in the same release as Nicole's, with the same clone settings. Their lines' keys name the speaker as well (Nicole's, which came first, do not), so the same sentence in two voices is two clips. One job per language clones every speaker's missing lines, the model loaded once. Until a person's store of a language is there, the build speaks their lines in that language as before, Kokoro reading espeak-ng's phonemes; a store the release has never held is no error, only one that cannot be fetched is (see below). The game plays the clones as it plays the English lines, at each person's own pitch (`CAST_VOICES`).
 
 ## Who does the cloning: the workflow "Voice"
 
@@ -95,6 +99,8 @@ Everything is pinned, so that the same inputs always give the same voice:
 | The chosen settings: emotion (`exaggeration` 0.8), closeness to the text (`cfg` 0.3), freedom of sampling (`temperature` 0.8) | `CLONE` in `nicole.ts` |
 | What checks the takes: Whisper's model and revision, the Python package of the store (`soundfile`) | `CHECK` in `nicole.ts` (not part of a line's key: they choose a take, they shape no voice) |
 | Nicole's voice print, the reference, the cloned lines | the release `voice-nicole` |
+| The campaign's people: each one's Kokoro voice, speed and English reference | `SPEAKERS` in `nicole.ts` |
+| Their voice prints, references and cloned lines | the release `voice-nicole`, beside Nicole's (`rask-conds.pt`, `reference-rask.wav`, `rask-de.json`, …) |
 
 The settings are the maintainer's choice by ear ("variant D"): unmistakably a machine, feeling and unfeeling at once, monotonous and aloof, with an English accent that stays. Changing any value of `CLONE` changes every key, and every line is cloned again on the next run.
 

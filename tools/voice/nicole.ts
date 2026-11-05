@@ -1,7 +1,8 @@
 /**
- * Nicole, the flight computer's voice: what she is made of, shared by the voice tool
- * (render.ts) and the tools that clone her into the other languages (clone/). See README.md
- * in this folder for the whole pipeline.
+ * The voices made of Kokoro and cloned into the other languages: Nicole, the flight computer, and
+ * the campaign's people (Rask, Pim, Hedda). What each is made of, shared by the voice tool
+ * (render.ts) and the tools that clone them (clone/). See README.md in this folder for the whole
+ * pipeline.
  */
 import { createHash } from 'node:crypto';
 import { allLines } from '../../src/music/lines.ts';
@@ -52,22 +53,58 @@ export const REFERENCE = {
   speed: 1,
 } as const;
 
+/**
+ * Who is cloned: each speaker's English voice in Kokoro (rendered at `speed`), what they say to
+ * give the clone their voice (`reference`: about ten to twenty seconds of their own lines), and
+ * the lines of theirs the game speaks (a Language of src/music/lines). Nicole is the flight
+ * computer; the others are the campaign's people, played by the game at a pitch of their own
+ * (see CAST_VOICES in src/sound/speaker.ts).
+ */
+export const SPEAKERS = {
+  nicole: { voice: COMPUTER_VOICE.voice, speed: COMPUTER_VOICE.speed, reference: REFERENCE, language: 'sys' },
+  rask: {
+    voice: 'am_onyx',
+    speed: 1.05,
+    reference: { text: "Good morning, Host! Rise and shine! The printer's warm, and so's your debt. There you are, darling. Stay in the cockpit, we'll talk from here. Time is money, and yours is mine.", speed: 1 },
+    language: 'rask',
+  },
+  pim: {
+    voice: 'af_jessica',
+    speed: 1.15,
+    reference: { text: "Oi! Lot seven thousand whatever! That's my pad you're parked on. Wait. You're the one Rask sold the junk computer to? Mint. Hold still, I'm welding your thrusters.", speed: 1 },
+    language: 'pim',
+  },
+  hedda: {
+    voice: 'af_kore',
+    speed: 0.95,
+    reference: { text: "Patience here. Captain Kroll. You the nobody who cleared my lane? Right. I need a gunner who works for food and a bunk. Your gun's a joke. You'll do anyway.", speed: 1 },
+    language: 'hedda',
+  },
+} as const;
+export type Speaker = keyof typeof SPEAKERS;
+export const SPEAKER_NAMES = Object.keys(SPEAKERS) as Speaker[];
+
 /** Where the cloned lines are kept: assets of one release of the public repository, never in its history. */
 export const RELEASE = { repo: 'JohannesHoppe/SolarTournament', tag: 'voice-nicole' } as const;
 export const releaseUrl = (file: string) => `https://github.com/${RELEASE.repo}/releases/download/${RELEASE.tag}/${file}`;
+/** A speaker's store of a language in the release (its index `<name>.json`, see cloneAudioName): Nicole's `nicole-de`, Rask's `rask-de`, … */
+export const storeName = (speaker: Speaker, locale: Cloned) => `${speaker}-${locale}`;
+/** A speaker's voice print as Chatterbox holds it, and the English reference it was taken from (Nicole's under the names they had before the others were cloned). */
+export const condsName = (speaker: Speaker) => `${speaker}-conds.pt`;
+export const referenceName = (speaker: Speaker) => (speaker === 'nicole' ? 'reference.wav' : `reference-${speaker}.wav`);
 /**
- * A language's cloned audio in the release, named by its fingerprint (the start of its sha256,
- * which the index names): an index uploaded after its audio, or not at all, never points at
- * another audio, and builds of the older index keep finding theirs.
+ * A speaker's cloned audio of a language in the release, named by its fingerprint (the start of
+ * its sha256, which the index names): an index uploaded after its audio, or not at all, never
+ * points at another audio, and builds of the older index keep finding theirs.
  */
-export const cloneAudioName = (locale: Cloned, sha256: string) => `nicole-${locale}-${sha256.slice(0, 16)}.flac`;
+export const cloneAudioName = (speaker: Speaker, locale: Cloned, sha256: string) => `${storeName(speaker, locale)}-${sha256.slice(0, 16)}.flac`;
 
-/** A line's name in the store of cloned lines: its language, its text and the settings it was cloned with. */
-export function cloneKey(locale: Cloned, text: string): string {
-  return createHash('sha256').update(JSON.stringify([CLONE, locale, text])).digest('hex').slice(0, 16);
+/** A line's name in a store of cloned lines: its language, its text, the settings it was cloned with, and (but for Nicole, whose keys came first) its speaker. */
+export function cloneKey(locale: Cloned, text: string, speaker: Speaker = 'nicole'): string {
+  return createHash('sha256').update(JSON.stringify(speaker === 'nicole' ? [CLONE, locale, text] : [CLONE, locale, text, speaker])).digest('hex').slice(0, 16);
 }
 
-/** Nicole's lines in a language, each once, as the game says them. */
-export function nicoleLines(locale: Cloned): string[] {
-  return [...new Set(allLines('sys').map((line) => CATALOGS[locale][line] ?? line))];
+/** A speaker's lines in a language, each once, as the game says them. */
+export function speakerLines(speaker: Speaker, locale: Cloned): string[] {
+  return [...new Set(allLines(SPEAKERS[speaker].language).map((line) => CATALOGS[locale][line] ?? line))];
 }

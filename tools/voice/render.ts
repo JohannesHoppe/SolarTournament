@@ -4,15 +4,15 @@
  * word and every sentence of the regime's lines in src/music/lines.ts, in English and German,
  * because the game speaks sentences whole and places single words on the beat. Each language of
  * the game (see src/i18n) has a sprite of its own with the announcer (espeak-ng in that language)
- * and the flight computer: Nicole, Kokoro (neural, Apache-2.0), a natural voice. Kokoro speaks
- * English by itself; in the other languages she speaks as her clone, made with Chatterbox and
- * kept in a release of the repository (see README.md in this folder), and a line not cloned yet
- * in the phonemes espeak-ng spells it in. The game loads the radio sprite and the sprite of the
- * Host's language.
+ * and the voices of Kokoro (neural, Apache-2.0): Nicole, the flight computer, and the campaign's
+ * people (see SPEAKERS in nicole.ts). Kokoro speaks English by itself; in the other languages
+ * they speak as their clones, made with Chatterbox and kept in a release of the repository (see
+ * README.md in this folder), and a line not cloned yet in the phonemes espeak-ng spells it in.
+ * The game loads the radio sprite and the sprite of the Host's language.
  *
  * The sprites are not kept in the repository: `npm run build` and `npm run dev` render them into
  * public/assets/voice/ (with a pinned ffmpeg, see ffmpeg.ts), and only when the lines,
- * their translations, Nicole's clones, this tool or the speech engines have changed since the
+ * their translations, the clones, this tool or the speech engines have changed since the
  * last time. Sprites, Kokoro model and clones are kept in a build cache (see cacheRoot), so a
  * fresh checkout copies sprites rendered before instead of rendering them.
  */
@@ -26,7 +26,7 @@ import { ffmpegBinary, ffmpegHash } from './ffmpeg.ts';
 import { sha256, toolCache, writeWhole } from '../pinned.ts';
 import { cachedStore, keepStore, pruneStores } from './clonestore.ts';
 import { fetchPrebuilt } from './prebuilt.ts';
-import { CATALOGS, cloneAudioName, CLONED, cloneKey, COMPUTER_VOICE, nicoleLines, releaseUrl, type Cloned } from './nicole.ts';
+import { CATALOGS, cloneAudioName, CLONED, cloneKey, COMPUTER_VOICE, releaseUrl, SPEAKER_NAMES, SPEAKERS, speakerLines, storeName, type Cloned, type Speaker } from './nicole.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const out = join(root, 'public/assets/voice');
@@ -47,14 +47,6 @@ const REGIME: Record<'en' | 'de', Espeak> = {
 /** The announcer talks fast and lively, in every language with the same voice variant. */
 const ANNOUNCER = { rate: 170, pitch: 45, range: 60 };
 const ANNOUNCER_LANGUAGE: Record<Locale, string> = { en: 'en-us', de: 'de', es: 'es', fr: 'fr' };
-/** The yardmaster of the campaign's Boneyard, fat and greasy: Kokoro's deep am_onyx, rendered a little fast, as the game plays him lower and slower (see sound/speaker, CAST_VOICES). */
-const RASK_VOICE = { voice: 'am_onyx', speed: 1.05 };
-/** Pim, the yard's welder, a girl of fifteen: Kokoro's af_jessica, quick, played higher still (see CAST_VOICES). */
-const PIM_VOICE = { voice: 'af_jessica', speed: 1.15 };
-/** Hedda Kroll, the hauler's captain in her sixties: Kokoro's af_kore, a little slow, played lower and worn (see CAST_VOICES). */
-const HEDDA_VOICE = { voice: 'af_kore', speed: 0.95 };
-/** The campaign's people and the voices they are rendered in. */
-const CAST: readonly ['rask' | 'pim' | 'hedda', { voice: string; speed: number }][] = [['rask', RASK_VOICE], ['pim', PIM_VOICE], ['hedda', HEDDA_VOICE]];
 /** Every package whose version changes what the sprites sound like: the speech engines, Kokoro's phonemizer and runtime (the encoder, ffmpeg, by its pinned hash). */
 const ENGINES = ['kokoro-js', 'phonemizer', '@huggingface/transformers', 'onnxruntime-node', '@echogarden/espeak-ng-emscripten'];
 
@@ -99,26 +91,28 @@ const tryCache = (action: () => void) => {
  * A store of clones (its index or its audio) that could not be had: the sprites speak its lines
  * without it, keep no stamp and go into no cache, so the next build tries again. A build for the
  * site (CI, as Cloudflare Pages and GitHub Actions set it) stops instead, so the site never goes
- * out without Nicole's clones.
+ * out without the clones.
  */
 let cloneMissed = false;
 const building = Boolean(process.env.CI || process.env.CF_PAGES);
-function missClones(locale: Cloned, reason: string) {
-  const message = `Nicole's ${locale} clones not used (${reason})`;
+function missClones(store: string, reason: string) {
+  const message = `The clones of ${store} not used (${reason})`;
   if (building) throw new Error(`${message}; a build for the site does not go out without them`);
   console.warn(message);
   cloneMissed = true;
 }
 
-// Nicole cloned into the other languages (see README.md): the index of each language's store
-// from the release, or the copy the cache kept of the last one; a line without a clone there
-// (new, not cloned yet) she speaks as Kokoro does
+// the speakers cloned into the other languages (see README.md): the index of each speaker's store
+// of a language from the release, or the copy the cache kept of the last one; a line without a
+// clone there (new, not cloned yet) is spoken as Kokoro speaks it. A store the release has never
+// held (a speaker not cloned into the language yet) is no loss: its lines are spoken by Kokoro.
 type CloneIndex = { sampleRate: number; audio: string; clips: Record<string, [number, number]> };
 const clonesCache = join(cacheRoot, 'clones');
-async function cloneIndex(locale: Cloned): Promise<CloneIndex | null> {
-  const copy = join(clonesCache, `nicole-${locale}.json`);
+async function cloneIndex(store: string): Promise<CloneIndex | null> {
+  const copy = join(clonesCache, `${store}.json`);
   try {
-    const answer = await fetch(releaseUrl(`nicole-${locale}.json`), { signal: AbortSignal.timeout(20000) });
+    const answer = await fetch(releaseUrl(`${store}.json`), { signal: AbortSignal.timeout(20000) });
+    if (answer.status === 404 && !store.startsWith('nicole-')) return null;
     if (!answer.ok) throw new Error(`HTTP ${answer.status}`);
     const text = await answer.text();
     const index = JSON.parse(text) as CloneIndex;
@@ -130,24 +124,25 @@ async function cloneIndex(locale: Cloned): Promise<CloneIndex | null> {
   } catch (error) {
     const reason = `index not reachable: ${(error as Error).message}`;
     if (existsSync(copy)) {
-      console.warn(`Nicole's ${locale} clones: ${reason}, the cached index is used`);
+      console.warn(`The clones of ${store}: ${reason}, the cached index is used`);
       return JSON.parse(readFileSync(copy, 'utf8')) as CloneIndex;
     }
-    missClones(locale, reason);
+    missClones(store, reason);
     return null;
   }
 }
-const clones = Object.fromEntries(await Promise.all(CLONED.map(async (locale) => [locale, await cloneIndex(locale)] as const))) as Record<Cloned, CloneIndex | null>;
+const stores = SPEAKER_NAMES.flatMap((speaker) => CLONED.map((locale) => storeName(speaker, locale)));
+const clones = Object.fromEntries(await Promise.all(stores.map(async (store) => [store, await cloneIndex(store)] as const))) as Record<string, CloneIndex | null>;
 
 // the sprites are rendered again only when what they are made of has changed: the lines and
-// their translations, Nicole's clones, this tool (with the model revision) and the engines'
+// their translations, the clones, this tool (with the model revision) and the engines'
 // versions; a fresh checkout without cached sprites renders them
 const packageVersion = (name: string) => (JSON.parse(readFileSync(join(root, 'node_modules', name, 'package.json'), 'utf8')) as { version: string }).version;
 const hash = createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).update(readFileSync(join(root, 'tools/voice/nicole.ts'))).update(ENGINES.map(packageVersion).join()).update(ffmpegHash() ?? 'no ffmpeg');
 hash.update(readFileSync(join(root, 'src/music/lines.ts')));
 // of the catalogs only what is spoken: a text of the screen never renders the voice again
-for (const locale of CLONED) for (const line of [...allLines('mod'), ...allLines('sys'), ...allLines('rask'), ...allLines('pim'), ...allLines('hedda')]) hash.update(`${line}\u0000${CATALOGS[locale][line] ?? ''}\u0000`);
-for (const locale of CLONED) hash.update(clones[locale]?.audio ?? '-');
+for (const locale of CLONED) for (const line of [...allLines('mod'), ...SPEAKER_NAMES.flatMap((speaker) => allLines(SPEAKERS[speaker].language))]) hash.update(`${line}\u0000${CATALOGS[locale][line] ?? ''}\u0000`);
+for (const store of stores) hash.update(clones[store]?.audio ?? '-');
 const inputs = hash.digest('hex').slice(0, 12);
 const upToDate = SPRITES.every((sprite) => existsSync(manifest(sprite)) && (JSON.parse(readFileSync(manifest(sprite), 'utf8')) as { inputs?: string }).inputs === inputs);
 // with a store missed, the key cannot tell what the sprites should hold: neither the stamped
@@ -259,46 +254,48 @@ const kokoro = await KokoroTTS.from_pretrained(COMPUTER_VOICE.model, { dtype: 'f
 if (modelsCached) tryCache(() => writeFileSync(complete, COMPUTER_VOICE.revision + '\n'));
 const tokenizer = (kokoro as unknown as { tokenizer: (text: string, options: object) => { input_ids: unknown } }).tokenizer;
 
-/** A language's store of cloned lines as samples, fetched once (and kept in the cache under its fingerprint); null when it cannot be had or is not the one its index names. */
-async function cloneAudio(locale: Cloned, index: CloneIndex): Promise<Float32Array | null> {
+/** A store of cloned lines as samples, fetched once (and kept in the cache under its fingerprint); null when it cannot be had or is not the one its index names. */
+async function cloneAudio(speaker: Speaker, locale: Cloned, index: CloneIndex): Promise<Float32Array | null> {
+  const store = storeName(speaker, locale);
   try {
-    let file = cachedStore(clonesCache, locale, index.audio);
+    let file = cachedStore(clonesCache, store, index.audio);
     if (!file) {
-      const answer = await fetch(releaseUrl(cloneAudioName(locale, index.audio)), { signal: AbortSignal.timeout(120000) });
+      const answer = await fetch(releaseUrl(cloneAudioName(speaker, locale, index.audio)), { signal: AbortSignal.timeout(120000) });
       if (!answer.ok) throw new Error(`HTTP ${answer.status}`);
       const bytes = Buffer.from(await answer.arrayBuffer());
       // the audio is named by its fingerprint, which its index names; a download cut short is not used
       if (sha256(bytes) !== index.audio) throw new Error('audio and index do not match');
       mkdirSync(clonesCache, { recursive: true });
-      file = keepStore(clonesCache, locale, index.audio, bytes);
+      file = keepStore(clonesCache, store, index.audio, bytes);
     }
-    // the stores of the language's earlier fingerprints are of no use any more
-    tryCache(() => pruneStores(clonesCache, locale, index.audio));
+    // the store's earlier fingerprints are of no use any more
+    tryCache(() => pruneStores(clonesCache, store, index.audio));
     const decoded = spawnSync(ffmpeg, ['-v', 'error', '-i', file, '-f', 'f32le', '-ac', '1', 'pipe:1'], { maxBuffer: 1 << 30 });
     if (decoded.status !== 0) throw new Error('ffmpeg failed: ' + decoded.stderr);
     const bytes = decoded.stdout;
     return new Float32Array(bytes.buffer, bytes.byteOffset, bytes.byteLength / 4);
   } catch (error) {
-    missClones(locale, (error as Error).message);
+    missClones(store, (error as Error).message);
     return null;
   }
 }
-const cloneSamples = new Map<Cloned, Float32Array | null>();
-let unclonedLines = 0;
+const cloneSamples = new Map<string, Float32Array | null>();
+const uncloned = new Map<Speaker, number>();
 
-/** Nicole says a line: English by herself; any other language as her clone (see README.md), or, where it has no clone of the line yet, in the phonemes espeak spells it in. */
-async function nicole(locale: Locale, line: string): Promise<Int16Array> {
+/** A speaker says a line: English as Kokoro speaks them; any other language as their clone (see README.md), or, where there is no clone of the line yet, in the phonemes espeak spells it in. */
+async function speaks(speaker: Speaker, locale: Locale, line: string): Promise<Int16Array> {
   if (locale !== 'en') {
-    const index = clones[locale];
-    const clip = index?.clips[cloneKey(locale, line)];
+    const store = storeName(speaker, locale);
+    const index = clones[store];
+    const clip = index?.clips[cloneKey(locale, line, speaker)];
     if (index && clip) {
-      if (!cloneSamples.has(locale)) cloneSamples.set(locale, await cloneAudio(locale, index));
-      const samples = cloneSamples.get(locale);
+      if (!cloneSamples.has(store)) cloneSamples.set(store, await cloneAudio(speaker, locale, index));
+      const samples = cloneSamples.get(store);
       if (samples) return trim(toPcm(resample(samples.subarray(clip[0], clip[0] + clip[1]), index.sampleRate, SAMPLE_RATE)));
     }
-    unclonedLines++;
+    uncloned.set(speaker, (uncloned.get(speaker) ?? 0) + 1);
   }
-  return kokoroSays(locale, line, COMPUTER_VOICE);
+  return kokoroSays(locale, line, SPEAKERS[speaker]);
 }
 
 /** A line in a voice of Kokoro: English as Kokoro reads it, any other language in the phonemes espeak spells it in. */
@@ -321,11 +318,13 @@ for (const locale of ['en', 'de', 'es', 'fr'] as const) {
   const translate = (line: string) => (locale === 'en' ? line : (CATALOGS[locale][line] ?? line));
   const sprite = new Sprite();
   sprite.speak('mod', allLines('mod').map(translate), { voice: `${ANNOUNCER_LANGUAGE[locale]}+m3`, ...ANNOUNCER });
-  for (const line of locale === 'en' ? new Set(allLines('sys')) : nicoleLines(locale)) sprite.add(clipKey('sys', line), await nicole(locale, line));
-  for (const [who, speaker] of CAST) for (const line of new Set(allLines(who).map(translate))) sprite.add(clipKey(who, line), await kokoroSays(locale, line, speaker));
+  for (const speaker of SPEAKER_NAMES) {
+    const lines = locale === 'en' ? [...new Set(allLines(SPEAKERS[speaker].language))] : speakerLines(speaker, locale);
+    for (const line of lines) sprite.add(clipKey(SPEAKERS[speaker].language, line), await speaks(speaker, locale, line));
+  }
   sprite.write(locale);
 }
-if (unclonedLines) console.warn(`Nicole speaks ${unclonedLines} lines without her clone (not cloned yet: see the workflow Voice)`);
+for (const [speaker, count] of uncloned) console.warn(`${speaker} speaks ${count} lines without a clone (not cloned yet: see the workflow Voice)`);
 
 // sprites made without a store that was there are not what their inputs promise: no stamp
 // (the next build renders them again) and nothing for the cache
