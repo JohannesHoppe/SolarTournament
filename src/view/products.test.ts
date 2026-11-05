@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { PORTRAIT_TRIANGLES, portraitModel, PRODUCT_TRIANGLES, PRODUCTS, productModel, productSwing } from './products';
+import { readFileSync } from 'node:fs';
+import { bustParts, fitted, PORTRAIT_TRIANGLES, PRODUCT_TRIANGLES, PRODUCTS, productModel, productSwing } from './products';
 import { CAST_NAMES, type Cast } from '../music/lines';
 import { sponsorProducts } from '../game/satire-ads';
 import { HOLOGRAM_FPS, STILL_ANGLE, hologramState } from './hologram';
@@ -38,8 +39,9 @@ describe("the sponsors' products", () => {
 
 describe("the campaign's people as their holograms show them", () => {
   for (const who of Object.keys(CAST_NAMES) as Cast[]) {
-    it(`${who}: a bust within a unit box, under its triangle budget, every vertex toned`, () => {
-      const model = portraitModel(who);
+    it(`${who}: a bust from its file within a unit box, under its triangle budget, every vertex toned`, () => {
+      const file = readFileSync(`public/assets/people/${who}.bin`);
+      const model = fitted(bustParts(file.buffer.slice(file.byteOffset, file.byteOffset + file.byteLength)));
       const position = model.attributes.position;
       expect(position.count / 3).toBeGreaterThan(300);
       expect(position.count / 3).toBeLessThanOrEqual(PORTRAIT_TRIANGLES);

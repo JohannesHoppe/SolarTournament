@@ -417,157 +417,55 @@ function medkit(): THREE.BufferGeometry[] {
 const BUILDERS: Record<Product, () => THREE.BufferGeometry[]> = { can, burger, bottle, clone, oxygen, bond, headset, steak, medkit };
 
 /**
- * Oskar Rask as his hologram calls in (see docs/campaign/STORY.md), a man nobody likes: shoulders
- * wide as a door over a belly straining its shirt's buttons, no neck to speak of, two chins and
- * jowls, a bulb of a nose under a heavy brow, small eyes under drooping lids, a crooked grin with
- * one gold tooth, a fat cigar hanging from its corner with its ember glowing, a gold chain on his
- * chest and three strands combed over his bald dome. Facing +z.
+ * The campaign's people as their holograms call in: busts of figures made with MakeHuman (CC0,
+ * see public/assets/people), head and shoulders, thinned out for a hologram. Their file
+ * (`<who>.bin`, written by tools/people): "BUST", the number of parts (u16), then each part: its
+ * glow and share of white (see part, two f32), its vertex count (u32), and every vertex of its
+ * triangles: its position (three i16, a share of the figure's half extent around its middle) and
+ * its normal (three i8, a share of 127). y is up, the face towards +z.
  */
-function rask(): THREE.BufferGeometry[] {
-  const shoulders = lathe([[0, 0], [0.42, 0], [0.46, 0.12], [0.45, 0.24], [0.36, 0.33], [0.2, 0.38], [0, 0.39]], 32).scale(1, 1, 0.7);
-  // the belly bulging out over the bottom of the picture, the shirt stretched over it
-  const belly = new THREE.SphereGeometry(0.3, 18, 10).scale(1.1, 0.65, 0.8).translate(0, 0.08, 0.14);
-  const button = (y: number) => new THREE.SphereGeometry(0.014, 6, 4).translate(0, y, 0.385 - (y - 0.1) * 0.6);
-  const neck = new THREE.CylinderGeometry(0.13, 0.17, 0.16, 16, 1, true).translate(0, 0.4, 0);
-  const head = new THREE.SphereGeometry(0.2, 22, 14).scale(1.06, 1.02, 1).translate(0, 0.63, 0);
-  // two chins, the lower one sagging onto the collar
-  const chin = new THREE.SphereGeometry(0.15, 14, 8).scale(1.05, 0.55, 0.95).translate(0, 0.47, 0.05);
-  const chin2 = new THREE.SphereGeometry(0.16, 14, 8).scale(1.1, 0.45, 0.9).translate(0, 0.41, 0.06);
-  const jowl = (side: number) => new THREE.SphereGeometry(0.08, 10, 8).translate(side * 0.13, 0.51, 0.06);
-  const nose = new THREE.SphereGeometry(0.048, 10, 8).scale(1, 0.9, 1).translate(0, 0.615, 0.21);
-  const brow = (side: number) => box(0.09, 0.025, 0.04).rotateZ(-side * 0.25).translate(side * 0.07, 0.695, 0.18);
-  const eye = (side: number) => new THREE.SphereGeometry(0.017, 8, 6).translate(side * 0.068, 0.66, 0.19);
-  // heavy lids drooping over the eyes: he looks at the Host as at a debt
-  const lid = (side: number) => new THREE.SphereGeometry(0.03, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).scale(1.2, 0.7, 0.8).translate(side * 0.068, 0.665, 0.183);
-  const ear = (side: number) => new THREE.SphereGeometry(0.045, 8, 6).scale(0.5, 1, 1).translate(side * 0.215, 0.62, 0);
-  // the grin: the lower half of a ring under the nose, one tooth of it gold
-  const grin = new THREE.TorusGeometry(0.065, 0.009, 4, 14, Math.PI).rotateZ(Math.PI + 0.18).translate(0.01, 0.56, 0.2);
-  const tooth = box(0.02, 0.022, 0.012, 0.028, 0.548, 0.205);
-  // the cigar out of the grin's corner, pointing forward and aside, its ember at the tip
-  const cigar = new THREE.CylinderGeometry(0.02, 0.017, 0.2, 10).rotateX(Math.PI / 2 - 0.35).rotateY(0.55).translate(0.1, 0.52, 0.28);
-  const ember = new THREE.SphereGeometry(0.023, 8, 6).translate(0.15, 0.485, 0.36);
-  // three strands combed from one side of the dome over to the other
-  const strands = [-0.05, 0, 0.05].map((z) => new THREE.TorusGeometry(0.205, 0.006, 3, 20, 1.3).rotateZ((Math.PI - 1.3) / 2).translate(0, 0.635, z));
-  const chain = new THREE.TorusGeometry(0.17, 0.008, 4, 32).rotateX(Math.PI / 2 - 0.35).translate(0, 0.3, 0.07);
-  return [
-    part(shoulders, 0.85),
-    part(belly, 0.85),
-    ...[0.18, 0.26, 0.34].map((y) => part(button(y), 1.4, 0.4)),
-    part(chin2),
-    part(lid(-1), 1.1),
-    part(lid(1), 1.1),
-    part(neck, 0.9),
-    part(head),
-    part(chin),
-    part(jowl(-1)),
-    part(jowl(1)),
-    part(nose, 1.05),
-    part(brow(-1), 1.2, 0.2),
-    part(brow(1), 1.2, 0.2),
-    part(eye(-1), 1.6, 0.6),
-    part(eye(1), 1.6, 0.6),
-    part(ear(-1)),
-    part(ear(1)),
-    part(grin, 1.3, 0.3),
-    part(tooth, 1.9, 0.9),
-    part(cigar, 1.2, 0.2),
-    part(ember, 2, 0.8),
-    ...strands.map((strand) => part(strand, 1.3, 0.3)),
-    part(chain, 1.6, 0.6),
-  ];
+export function bustParts(data: ArrayBuffer): THREE.BufferGeometry[] {
+  const view = new DataView(data);
+  if (String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3)) !== 'BUST') throw new Error('Not a bust');
+  const parts: THREE.BufferGeometry[] = [];
+  let at = 6;
+  for (let p = view.getUint16(4, true); p > 0; p--) {
+    const glow = view.getFloat32(at, true);
+    const white = view.getFloat32(at + 4, true);
+    const count = view.getUint32(at + 8, true);
+    at += 12;
+    const position = new Float32Array(count * 3);
+    const normal = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++, at += 9) {
+      for (let k = 0; k < 3; k++) {
+        position[i * 3 + k] = view.getInt16(at + k * 2, true) / 32767;
+        normal[i * 3 + k] = view.getInt8(at + 6 + k) / 127;
+      }
+    }
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
+    parts.push(part(geometry, glow, white));
+  }
+  return parts;
 }
 
-/**
- * Pim as her hologram calls in: a thin girl in a welder's overall, its straps over a shirt, a
- * small head with a sharp chin and a wide grin, choppy hair sticking out every way and the welding
- * goggles pushed up into it, a smudge on one cheek, a marker behind her ear. Facing +z.
- */
-function pim(): THREE.BufferGeometry[] {
-  const shoulders = lathe([[0, 0], [0.3, 0], [0.33, 0.1], [0.31, 0.2], [0.24, 0.29], [0.12, 0.33], [0, 0.34]], 28).scale(1, 1, 0.65);
-  const strap = (side: number) => box(0.045, 0.3, 0.02, side * 0.12, 0.17, 0.2).rotateX(-0.25);
-  const neck = new THREE.CylinderGeometry(0.06, 0.075, 0.14, 12, 1, true).translate(0, 0.38, 0);
-  const head = new THREE.SphereGeometry(0.16, 20, 14).scale(0.95, 1.08, 1).translate(0, 0.58, 0);
-  const chin = new THREE.SphereGeometry(0.07, 10, 8).scale(1, 0.8, 0.9).translate(0, 0.47, 0.08);
-  const eye = (side: number) => new THREE.SphereGeometry(0.02, 8, 6).translate(side * 0.058, 0.6, 0.145);
-  const brow = (side: number) => box(0.06, 0.014, 0.02).rotateZ(side * 0.3).translate(side * 0.06, 0.64, 0.145);
-  const nose = new THREE.SphereGeometry(0.022, 8, 6).translate(0, 0.565, 0.16);
-  const grin = new THREE.TorusGeometry(0.055, 0.008, 4, 14, Math.PI).rotateZ(Math.PI).translate(0, 0.52, 0.14);
-  const smudge = new THREE.SphereGeometry(0.03, 8, 6).scale(1.4, 0.6, 0.3).translate(0.09, 0.54, 0.13);
-  // hair cut with a welder's knife: tufts sticking out over the head every way
-  const tufts = Array.from({ length: 11 }, (_, i) => {
-    const angle = (i / 11) * Math.PI * 2;
-    return new THREE.ConeGeometry(0.045, 0.13, 5).rotateZ(-0.9 * cos(angle)).rotateX(0.9 * sin(angle)).translate(0.11 * cos(angle), 0.71, 0.08 * sin(angle) - 0.02);
-  });
-  const crown = new THREE.SphereGeometry(0.165, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 0.6, -0.01);
-  // the goggles pushed up onto the hair: two round lenses on their strap
-  const lens = (side: number) => new THREE.TorusGeometry(0.038, 0.012, 6, 14).rotateX(-0.6).translate(side * 0.055, 0.7, 0.12);
-  const goggleStrap = new THREE.TorusGeometry(0.165, 0.009, 4, 28).rotateX(Math.PI / 2 - 0.35).translate(0, 0.69, 0);
-  const marker = new THREE.CylinderGeometry(0.012, 0.012, 0.12, 6).rotateZ(0.5).translate(0.17, 0.62, -0.02);
-  return [
-    part(shoulders, 0.8),
-    part(strap(-1), 1.2, 0.2),
-    part(strap(1), 1.2, 0.2),
-    part(neck, 0.9),
-    part(head),
-    part(chin),
-    part(crown, 0.9),
-    ...tufts.map((tuft) => part(tuft, 1.1)),
-    part(eye(-1), 1.6, 0.6),
-    part(eye(1), 1.6, 0.6),
-    part(brow(-1), 1.2, 0.2),
-    part(brow(1), 1.2, 0.2),
-    part(nose, 1.05),
-    part(grin, 1.4, 0.4),
-    part(smudge, 0.7),
-    part(lens(-1), 1.7, 0.7),
-    part(lens(1), 1.7, 0.7),
-    part(goggleStrap, 1.2, 0.2),
-    part(marker, 1.5, 0.5),
-  ];
+/** The people's busts as fetched (see loadBust). */
+const busts = new Map<Cast, ArrayBuffer>();
+
+/** Fetches a person's bust (`public/assets/people/<who>.bin`) once. */
+export async function loadBust(who: Cast): Promise<void> {
+  if (busts.has(who)) return;
+  const answer = await fetch(`${import.meta.env.BASE_URL}assets/people/${who}.bin`);
+  if (!answer.ok) throw new Error(`No bust of ${who}: ${answer.status}`);
+  busts.set(who, await answer.arrayBuffer());
 }
 
-/**
- * Captain Hedda Kroll as her hologram calls in: square shoulders in a worn coat with a high
- * collar, the captain's badge on it, a long, hard face, grey hair cropped short, a straight brow,
- * a thin mouth that does not smile, a scar across one cheek and a ring in one ear. Facing +z.
- */
-function hedda(): THREE.BufferGeometry[] {
-  const shoulders = lathe([[0, 0], [0.4, 0], [0.43, 0.1], [0.42, 0.22], [0.34, 0.3], [0.18, 0.35], [0, 0.36]], 30).scale(1, 1, 0.7);
-  // the coat's high collar standing up around the neck, open at the front
-  const collar = new THREE.CylinderGeometry(0.15, 0.2, 0.16, 20, 1, true, Math.PI * 0.15, Math.PI * 1.7).translate(0, 0.42, 0);
-  const badge = box(0.06, 0.04, 0.015, -0.17, 0.27, 0.27);
-  const neck = new THREE.CylinderGeometry(0.075, 0.09, 0.16, 14, 1, true).translate(0, 0.42, 0);
-  const head = new THREE.SphereGeometry(0.17, 20, 14).scale(0.92, 1.16, 1).translate(0, 0.62, 0);
-  const jaw = new THREE.SphereGeometry(0.11, 12, 8).scale(1.1, 0.7, 0.9).translate(0, 0.5, 0.05);
-  const hair = new THREE.SphereGeometry(0.178, 18, 8, 0, Math.PI * 2, 0, Math.PI * 0.42).scale(0.94, 1.1, 1.02).translate(0, 0.63, -0.005);
-  const brow = box(0.17, 0.018, 0.03, 0, 0.665, 0.15);
-  const eye = (side: number) => new THREE.SphereGeometry(0.016, 8, 6).translate(side * 0.058, 0.64, 0.155);
-  const nose = new THREE.ConeGeometry(0.025, 0.07, 6).rotateX(Math.PI / 2 + 0.3).translate(0, 0.6, 0.17);
-  const mouth = box(0.08, 0.008, 0.01, 0, 0.53, 0.155);
-  const scar = box(0.09, 0.008, 0.01).rotateZ(-0.5).translate(-0.08, 0.58, 0.14);
-  const ring = new THREE.TorusGeometry(0.018, 0.005, 4, 10).translate(0.165, 0.56, 0);
-  return [
-    part(shoulders, 0.8),
-    part(collar, 1.1, 0.1),
-    part(badge, 1.8, 0.8),
-    part(neck, 0.9),
-    part(head),
-    part(jaw),
-    part(hair, 0.85),
-    part(brow, 1.2, 0.2),
-    part(eye(-1), 1.6, 0.6),
-    part(eye(1), 1.6, 0.6),
-    part(nose, 1.05),
-    part(mouth, 1.3, 0.3),
-    part(scar, 1.5, 0.5),
-    part(ring, 1.8, 0.8),
-  ];
-}
-
-const PORTRAITS: Record<Cast, () => THREE.BufferGeometry[]> = { rask, pim, hedda };
-
-/** The bust of one of the campaign's people as their hologram shows them, built anew (its caller disposes it). */
-export const portraitModel = (who: Cast) => fitted(PORTRAITS[who]());
+/** The bust of one of the campaign's people as their hologram shows them, built anew (its caller disposes it); null until it is fetched (see loadBust). */
+export const portraitModel = (who: Cast): THREE.BufferGeometry | null => {
+  const data = busts.get(who);
+  return data ? fitted(bustParts(data)) : null;
+};
 /** A person faces the Host and only turns a little to and fro as they talk (rad). */
 export const PORTRAIT_SWING = 0.35;
 

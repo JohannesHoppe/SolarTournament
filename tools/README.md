@@ -11,8 +11,9 @@ Programs that run on a developer's machine or in a build, never in the player's 
 | [`dupes/`](dupes/) | Finds style rules declared twice | `npm run dupes` (with jscpd) |
 | [`seo/`](seo/) | What search engines and link previews read: every findable page in every language, its head, the sitemap, who may index what | part of `npm run build` |
 | [`relays/`](relays/) | Checks public Nostr relays and keeps the healthy ones in `src/net/relays.json` | `npm run relays` (weekly by the workflow Relays) |
+| [`people/`](people/) | The busts of the campaign's people, `public/assets/people/`, from figures of MakeHuman (in Blender with MPFB) | Blender, by hand when a person changes (see its README) |
 | [`check/`](check/) | Runs every quality gate and sums them up | `npm run check`, `npm run check:full` |
 
 `pinned.ts` is what the tools that fetch a source share: the folder they cache in (`toolCache`, inside npm's cache), a download checked against a pinned SHA-256 (`fetchPinned`) and a file written whole or not at all (`writeWhole`).
 
-They are TypeScript run directly by Node (type stripping), except the clone, which is Python.
+They are TypeScript run directly by Node (type stripping), except the clone and the people, which are Python (the people's in Blender).

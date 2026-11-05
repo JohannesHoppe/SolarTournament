@@ -27,7 +27,7 @@ import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
 import { COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
 import { Hologram } from '../view/hologram';
-import { PORTRAIT_SWING, portraitModel } from '../view/products';
+import { loadBust, PORTRAIT_SWING, portraitModel } from '../view/products';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
 import { showTransmission } from '../music/transmission';
@@ -1570,6 +1570,8 @@ export class Game implements OnlineGame {
   private startMission() {
     const mission = nextMission(this.campaign);
     if (!mission) return;
+    // the people who call in, fetched ahead of their first call
+    for (const who of Object.keys(CAST_NAMES) as Cast[]) loadBust(who).catch((error) => console.warn('Bust failed', error));
     this.missionFine = 0;
     this.mission = mission;
     this.startRound('school');
@@ -2589,7 +2591,18 @@ export class Game implements OnlineGame {
       return;
     }
     panel.querySelector<HTMLElement>('.comm-name')!.textContent = CAST_NAMES[who];
-    hologram.show(panel.querySelector<HTMLElement>('.comm-show')!, portraitModel(who), CAST_COLORS[who], PORTRAIT_SWING);
+    const model = portraitModel(who);
+    if (model) hologram.show(panel.querySelector<HTMLElement>('.comm-show')!, model, CAST_COLORS[who], PORTRAIT_SWING);
+    // a bust not fetched yet: the name stands, the hologram comes on once it is there
+    else
+      loadBust(who).then(
+        () => {
+          if (this.caller !== who) return;
+          this.caller = null;
+          this.showCaller(who);
+        },
+        (error) => console.warn('Bust failed', error),
+      );
   }
 
   private showMenu() {
