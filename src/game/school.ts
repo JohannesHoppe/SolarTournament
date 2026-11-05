@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { cos, exp, sin } from '../detmath';
-import { angleTo, rotateY, setFromAxisAngle } from '../detthree';
+import { angleTo, rotateX, rotateY, setFromAxisAngle } from '../detthree';
+import { boxUv, industrialSurface, STATION_TILE, surfaced } from '../view/surfaces';
 import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
 import { CONTROLS, type Command, type Controls, type Device } from '../input/input';
 import type { Ship } from '../ship/ship';
@@ -1539,6 +1540,20 @@ const RENAMED: Partial<Record<SchoolCourse, Record<string, string>>> = {
   gladiator: { freeDrift: 'slide', drift: 'slide', lookBack: 'slide', flipBurn: 'slide', autopilotOn: 'chase' },
 };
 
+/**
+ * A salvage canister in tow (see Markers.tow): it hangs TOW_LENGTH (units, 15 m) behind the ship's
+ * stern and TOW_DROP (4 m) below it, as its weight pulls it down on Psyche: under the hull in
+ * the chase camera's view, never between the hull and the camera. It follows with a lag of
+ * TOW_LAG seconds, so it swings out in a turn; CANISTER_SIZE is its radius and half its length (units, 2 m and 3 m).
+ */
+const TOW_LENGTH = 300;
+const TOW_DROP = 80;
+const TOW_LAG = 0.5;
+const CANISTER_SIZE = [40, 60] as const;
+/** The seed of the canister's plating. */
+const CANISTER_SEED = 7317;
+const towAt = new THREE.Vector3();
+
 /** The 3D props of the drills: marker buoys, rings of the course, debris. */
 export class Markers {
   readonly root = new THREE.Group();
@@ -1556,6 +1571,12 @@ export class Markers {
   /** Seconds the props have run, for the rings' position lights. */
   private clock = 0;
   private moving: { mesh: THREE.Object3D; position: THREE.Vector3; velocity: THREE.Vector3 }[] = [];
+  /** A salvage canister: an octagonal drum of the depots' plating with a band of hazard paint, made at its first use. */
+  private canisterGeometry: THREE.BufferGeometry | null = null;
+  private canisterMaterial: THREE.Material | null = null;
+  /** The prop in tow behind a ship and the cable to it (see tow). */
+  private towing: { prop: THREE.Object3D; ship: Ship; cable: THREE.Line } | null = null;
+  private readonly cableMaterial = new THREE.LineBasicMaterial({ color: 0x6b6f75 });
 
   /** A spinning diamond (150 units, about 7.5 m, by default). */
   buoy(position: THREE.Vector3, scale = 1) {
@@ -1600,10 +1621,47 @@ export class Markers {
     return mesh.position;
   }
 
+  /** A salvage canister at a point, tumbling slowly; returns it. */
+  canister(position: THREE.Vector3): THREE.Object3D {
+    if (!this.canisterGeometry) {
+      const [radius, half] = CANISTER_SIZE;
+      this.canisterGeometry = boxUv(new THREE.CylinderGeometry(radius, radius, half * 2, 8).toNonIndexed(), STATION_TILE / 2);
+      // lying along its own z, so it trails along the cable it hangs on
+      rotateX(this.canisterGeometry, Math.PI / 2);
+      this.canisterGeometry.computeVertexNormals();
+      this.canisterMaterial = new THREE.MeshStandardMaterial({ ...surfaced(industrialSurface(CANISTER_SEED), 1.2), color: 0xb0a48a, flatShading: true });
+    }
+    const mesh = new THREE.Mesh(this.canisterGeometry, this.canisterMaterial!);
+    mesh.position.copy(position);
+    mesh.userData.spin = true;
+    this.root.add(mesh);
+    return mesh;
+  }
+
+  /** Takes a prop in tow behind a ship, on a cable, until the props are cleared. */
+  tow(prop: THREE.Object3D, ship: Ship) {
+    prop.userData.spin = false;
+    const cable = new THREE.Line(new THREE.BufferGeometry().setFromPoints([ship.flight.position, prop.position]), this.cableMaterial);
+    cable.frustumCulled = false;
+    this.root.add(cable);
+    this.towing = { prop, ship, cable };
+  }
+
   /** Moves the drifting props; a chunk of debris that meets rock in `field` bursts there (see burst). */
   update(dt: number, field: AsteroidField) {
     this.clock += dt;
     this.kit.blink(this.clock);
+    if (this.towing) {
+      const { prop, ship, cable } = this.towing;
+      ship.flight.forward(towAt).multiplyScalar(-TOW_LENGTH).add(ship.flight.position);
+      towAt.y -= TOW_DROP;
+      prop.position.lerp(towAt, 1 - exp(-dt / TOW_LAG));
+      prop.lookAt(ship.flight.position);
+      const ends = cable.geometry.attributes.position as THREE.BufferAttribute;
+      ends.setXYZ(0, ship.flight.position.x, ship.flight.position.y, ship.flight.position.z);
+      ends.setXYZ(1, prop.position.x, prop.position.y, prop.position.z);
+      ends.needsUpdate = true;
+    }
     for (const item of this.moving) {
       const { mesh, position, velocity } = item;
       if (burst.has(position)) continue;
@@ -1621,6 +1679,8 @@ export class Markers {
 
   clear() {
     this.root.clear();
+    this.towing?.cable.geometry.dispose();
+    this.towing = null;
     this.rings = [];
     this.moving = [];
   }
@@ -1628,7 +1688,9 @@ export class Markers {
   /** Frees the geometries and materials on the GPU when the flight school ends. */
   dispose() {
     this.clear();
-    for (const resource of [this.buoyGeometry, this.debrisGeometry, this.zoneGeometry, this.bright, this.dim, this.rock]) resource.dispose();
+    for (const resource of [this.buoyGeometry, this.debrisGeometry, this.zoneGeometry, this.bright, this.dim, this.rock, this.cableMaterial]) resource.dispose();
+    this.canisterGeometry?.dispose();
+    this.canisterMaterial?.dispose();
     this.kit.dispose();
   }
 }

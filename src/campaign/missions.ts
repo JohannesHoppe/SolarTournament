@@ -6,6 +6,7 @@ import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { exp, hypot } from '../detmath';
 import type { Campaign, Mission } from './campaign';
+import type { Ship } from '../ship/ship';
 
 /**
  * The missions of Lot 7731 (see docs/campaign/STORY.md, section 3), each a run of drills on the
@@ -103,21 +104,28 @@ const liveTarget: Drill = {
 
 /**
  * Canister Sweep (1.3): salvage canisters drifting in the gaps between the rows, one at a time:
- * fly through one (within CANISTER_REACH, units, 30 m) to take it in tow, then through the
- * crusher behind the depot (within CRUSHER_REACH, 60 m) to deliver it.
+ * fly through one (within CANISTER_REACH, units, 30 m) to take it in tow (it hangs on a cable
+ * behind the stern and swings out in the turns, see Markers.tow), then through the crusher behind
+ * the depot (within CRUSHER_REACH, 60 m) to deliver it.
  */
 const CANISTER_REACH = 600;
 const CRUSHER_REACH = 1200;
 const between = ROW_SPACING / 2;
 const CANISTERS = [point(-2 * (RACK_LENGTH + RACK_GAP), GROUND + 500, between), point(RACK_LENGTH + RACK_GAP, GROUND + 300, -between), point(2 * (RACK_LENGTH + RACK_GAP), GROUND + 800, 3 * between), point(-(RACK_LENGTH + RACK_GAP), GROUND + 400, -3 * between)];
 
-/** The marker of the step the sweep is at: a canister to take, or the crusher to bring it to. */
-function sweepMarkers(a: Attempt, markers: Markers) {
+/**
+ * The props of the step the sweep is at: a canister drifting where it is to be taken, or, on the
+ * way to the crusher, the canister in tow behind the ship (`me`) and the crusher marked.
+ */
+function sweepMarkers(a: Attempt, markers: Markers, me: Ship) {
   markers.clear();
   const target = a.points[a.next];
   if (!target) return;
-  markers.buoy(target, a.next % 2 ? 1.5 : 0.6);
-  markers.zone(target, a.next % 2 ? CRUSHER_REACH : CANISTER_REACH);
+  const towing = a.next % 2 === 1;
+  if (towing) markers.tow(markers.canister(me.flight.position), me);
+  else markers.canister(target);
+  if (towing) markers.buoy(target, 1.5);
+  markers.zone(target, towing ? CRUSHER_REACH : CANISTER_REACH);
 }
 
 const canisterSweep: Drill = {
@@ -125,16 +133,16 @@ const canisterSweep: Drill = {
   keys: ['turn', 'drive', 'brake'],
   arena: 'boneyard',
   autopilot: false,
-  enter(_, a, markers) {
+  enter(ctx, a, markers) {
     // canister, crusher, canister, crusher…
     a.points = CANISTERS.flatMap((canister) => [canister.clone(), CRUSHER.clone()]);
-    sweepMarkers(a, markers);
+    sweepMarkers(a, markers, ctx.me);
   },
   done(ctx, a, markers) {
     const reach = a.next % 2 ? CRUSHER_REACH : CANISTER_REACH;
     if (ctx.me.flight.position.distanceTo(a.points[a.next]) > reach) return false;
     a.next++;
-    sweepMarkers(a, markers);
+    sweepMarkers(a, markers, ctx.me);
     return a.next >= a.points.length;
   },
   waypoint: (_, a) => a.points[a.next] ?? null,
