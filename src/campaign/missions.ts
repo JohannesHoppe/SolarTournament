@@ -630,6 +630,47 @@ const practiceLog: Drill = {
   mark: () => t('Tunnel'),
 };
 
+/**
+ * The launch ring (docs/campaign/STORY.md, "The gel of a nobody"): Patience lines up for the
+ * ring that throws her to Vesta, and every body aboard gets the gel. The Host chooses: the gel,
+ * long past its date, an agony of GEL_PAIN seconds over the link; or the self-destruct's button
+ * held for CHOICE_HOLD seconds before the ring, the clone dead and the next printed by Patience's
+ * printer after the boost, PRINT_DEBT coins more on the debt. Left alone for GEL_WAIT seconds,
+ * it is the gel.
+ */
+const GEL_WAIT = 20;
+const CHOICE_HOLD = 1.5;
+const GEL_PAIN = 6;
+const PRINT_DEBT = 2000;
+/** How long the dead clone's link stays dark before the next one wakes (s). */
+const REPRINT_SECONDS = 3;
+
+const launchRing: Drill = {
+  line: CAMPAIGN.gelChoice,
+  keys: ['selfDestruct'],
+  arena: 'rheasilvia',
+  enter(ctx, a) {
+    stop(ctx);
+    a.doneAt = NaN;
+    a.warned = false;
+  },
+  done(ctx, a) {
+    if (!Number.isNaN(a.doneAt)) return a.seconds >= a.doneAt;
+    if (holdFor(ctx, a, ctx.selfDestructing, CHOICE_HOLD)) {
+      // a.warned: the clone died for it
+      a.warned = true;
+      a.doneAt = a.seconds + REPRINT_SECONDS;
+      ctx.crash();
+      ctx.owe(PRINT_DEBT);
+    } else if (a.seconds > GEL_WAIT) {
+      a.doneAt = a.seconds + GEL_PAIN;
+      ctx.agony(GEL_PAIN);
+    }
+    return false;
+  },
+  mark: (_, a) => (Number.isNaN(a.doneAt) ? t('Launch ring in {seconds} s', { seconds: Math.max(0, Math.ceil(GEL_WAIT - a.seconds)) }) : a.warned ? t('Clone lost · printing the next') : t('Gel · boost')),
+};
+
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
@@ -673,6 +714,8 @@ export const MISSIONS: readonly Mission[] = [
     name: msg('Rheasilvia'),
     // Patience holds over the claims; first the clone climbs up to her galley, where the crew eats
     drills: [
+      launchRing,
+      said(CAMPAIGN.throughRing, 'rheasilvia'),
       climbOut('galley', msg("Patience holds over Vesta. The clamps keep the hull in her workshop; your clone climbs up to the galley."), 'rheasilvia'),
       inRoom(PIM.galley, 'rheasilvia'),
       inRoom(HEDDA.tally, 'rheasilvia'),

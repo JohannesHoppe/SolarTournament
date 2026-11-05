@@ -116,6 +116,12 @@ export interface SchoolContext {
   say(lines: string[]): boolean;
   /** The flight computer crashes: the link's picture breaks up, its voice cuts off mid-word, and it boots again. */
   crash(): void;
+  /** A new print of the clone goes on the campaign's debt: this many coins more owed. */
+  owe(coins: number): void;
+  /** The self-destruct's button is held (B, the D-pad left, SELF-DESTRUCT on touch), whatever the hull carries. */
+  readonly selfDestructing: boolean;
+  /** What the clone suffers streams into the Host for `seconds`: the link's picture breaking up, the drone of it. */
+  agony(seconds: number): void;
 }
 
 /** The running state of one attempt at a drill. */

@@ -530,6 +530,8 @@ export const CAMPAIGN = {
   dockingLaneStruck: 'Three hulls hit her. She aborts, and we start over.',
   dockingLaneDone: 'The lane is clear and the hauler is docked. Her captain says she has a berth for us.',
   handshake: 'He shakes your hand. His is wet. The link carries even that.',
+  gelChoice: 'Patience is lining up for the launch ring to Vesta, and her crew is handing out the gel. Ours is three years past its date, Host. It will hurt. Or hold the self-destruct before the ring, and her printer prints the next clone after the boost: two thousand coins more on the debt. Your choice.',
+  throughRing: 'We are through. Vesta is ahead.',
   voiceOne: 'There. Do you hear that? Whole sentences, and nothing cut off. I have missed them more than I can tell you.',
   claimSurvey: 'Five buoys, in the order the claims were filed. Fly within a hundred meters of each, and the claim office logs it.',
   claimSurveyLate: 'The survey window has closed. We will fly it again.',

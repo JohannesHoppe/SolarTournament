@@ -82,15 +82,31 @@ for (const [index, id] of CHAPTER_ONE.entries()) {
 /** Chapter 1 flown: every mission of it done, the cutter fitted and the thrusters welded. */
 const CHAPTER_ONE_DONE = { done: ['coldBoot', 'lamplighter', 'liveTarget', 'canisterSweep', 'cutter', 'firstCut', 'dockingLane'], step: 0, coins: 0, bond: 25000, parts: ['cutter', 'patch'] };
 
-test('chapter 2 opens on Vesta, in Patience’s galley: Hedda and Pim in the flesh, the HUD only what is said', async ({ page }) => {
+test('chapter 2 opens at the launch ring: the self-destruct held, the clone dies and its next print goes on the debt; then Patience’s galley, Hedda and Pim in the flesh', async ({ page }) => {
   await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), CHAPTER_ONE_DONE);
   const errors = await openGame(page, '/?campaign');
   await takeNextJob(page);
   await page.waitForFunction(() => window.game.venue?.id === 'rheasilvia' && window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
-  await expect(page.locator('#school-step')).toContainText('Rheasilvia 1/6');
+  await expect(page.locator('#school-step')).toContainText('Rheasilvia 1/8');
+  // the self-destruct held before the ring: the next print costs two thousand coins on the debt
+  await page.keyboard.down('KeyB');
+  await page.waitForFunction(() => window.game.school?.attempt?.warned, null, { timeout: 30_000 });
+  await page.keyboard.up('KeyB');
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).bond)).toBe(27000);
   // the galley's set and both figures, fetched as they come
   await page.waitForFunction(() => window.game.stage?.root.children.length === 3, null, { timeout: 30_000 });
   await expect(page.locator('#hud')).toHaveClass(/in-person/);
+  expect(errors).toEqual([]);
+});
+
+test('the launch ring left alone is the gel: the agony over the link, the debt as it was', async ({ page }) => {
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), CHAPTER_ONE_DONE);
+  const errors = await openGame(page, '/?campaign');
+  await takeNextJob(page);
+  await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
+  await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 60_000 }).toBe(1);
+  expect(await page.evaluate(() => window.game.school.attempt?.warned ?? false)).toBe(false);
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).bond)).toBe(25000);
   expect(errors).toEqual([]);
 });
 

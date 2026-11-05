@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { type Campaign, campaignFrom, complete, hullOf, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, rankOf } from '../campaign/campaign';
+import { BOND_MAX, type Campaign, campaignFrom, complete, hullOf, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, rankOf } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -359,6 +359,8 @@ const NOVA_KILL_CREDIT = 2;
 /** A touch the clone feels in a scene in person (see SchoolContext.feel): how hard the link jolts (glitch strength) and for how long (s). */
 const FEEL_GLITCH = 0.3;
 const FEEL_SECONDS = 0.5;
+/** How hard pain the clone lives through breaks the link's picture up (see SchoolContext.agony): far harder than a touch (FEEL_GLITCH). */
+const AGONY_GLITCH = 0.85;
 const DEATH_EASE = 0.35;
 const KILL_EASE = 0.1;
 /**
@@ -5513,6 +5515,17 @@ export class Game implements OnlineGame {
       },
       fireAt: (from, through) => this.drillShot(from, through),
       fine: (coins) => (this.missionFine = coins),
+      // a new print on the campaign's debt (see campaign/campaign), as far as the debt may grow
+      owe: (coins) => this.keepCampaign((campaign) => (campaign.bond = Math.min(BOND_MAX, campaign.bond + coins))),
+      get selfDestructing() {
+        return game.input.selfDestructing;
+      },
+      // pain streams into the Host for `seconds`: the link's picture breaking up, a low drone of it
+      agony: (seconds) => {
+        this.glitch.trigger(AGONY_GLITCH, seconds);
+        this.linkHit(1, seconds);
+        this.sound.beep(70, seconds, 0.3);
+      },
       claims: () => this.mining.claims(this.field),
       stage: (name) => this.setStage(name),
       // a touch the clone feels streams into the Host: a jolt in the link, a dull thump
