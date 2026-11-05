@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
-import { CAMPAIGN, RASK } from '../music/lines';
+import { CAMPAIGN, HEDDA, PIM, RASK } from '../music/lines';
 import { clear, holdFor, saying, stop, type Attempt, type Drill, type Markers } from '../game/school';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
@@ -344,8 +344,13 @@ const dock: Drill = {
   mark: (ctx) => t('Pad · {m} m', { m: Math.round(ctx.me.flight.position.distanceTo(PAD) * 0.05) }),
 };
 
-/** A line Rask says over the comm (see castOf), the hull held in the clamps while he talks. */
+/** A line someone of the campaign says over the comm (Rask, Pim, Hedda: see castOf), the hull held in the clamps while they talk. */
 const rask = (line: string): Drill => ({ ...said(line), enter: (ctx) => stop(ctx) });
+
+/** Pim welds the thrusters while she talks (see hullOf): free, she says, and Rask need not know. */
+const fitPatch = (campaign: Campaign) => {
+  if (!campaign.parts.includes('patch')) campaign.parts.push('patch');
+};
 
 /** Where every mission after the first begins: docked on bay 3's pad, the nose out of the bay. */
 const ON_PAD = { at: [PAD.x, PAD.y + 400, PAD.z] as const, toward: [BAY_MOUTH - 20000, PAD.y + 400, PAD.z] as const };
@@ -376,13 +381,15 @@ export const MISSIONS: readonly Mission[] = [
       dock,
       said(CAMPAIGN.docked),
       rask(RASK.docked),
+      rask(PIM.meet),
     ],
     pay: 0,
+    fit: fitPatch,
   },
   { id: 'lamplighter', name: msg('Lamplighter'), drills: [rask(RASK.lamplighter), lamplighter, said(CAMPAIGN.lamplighterDone)], pay: 150, start: ON_PAD },
   { id: 'liveTarget', name: msg('Live Target'), drills: [rask(RASK.liveTarget), liveTarget, said(CAMPAIGN.liveTargetDone)], pay: 300, start: ON_PAD },
   { id: 'canisterSweep', name: msg('Canister Sweep'), drills: [rask(RASK.canisterSweep), canisterSweep, said(CAMPAIGN.canisterSweepDone)], pay: 200, start: ON_PAD },
-  { id: 'cutter', name: msg('The Cutter'), drills: [rask(RASK.cutter), rask(CAMPAIGN.cutterFitted)], pay: 0, fit: fitCutter, start: ON_PAD },
-  { id: 'firstCut', name: msg('First Cut'), drills: [rask(RASK.firstCut), firstCut, said(CAMPAIGN.firstCutDone)], pay: 400, start: ON_PAD },
-  { id: 'dockingLane', name: msg('Docking Lane'), drills: [rask(RASK.dockingLane), dockingLane, said(CAMPAIGN.dockingLaneDone), said(RASK.dockingLaneDone)], pay: 600, start: ON_PAD },
+  { id: 'cutter', name: msg('The Cutter'), drills: [rask(RASK.cutter), rask(PIM.cutter), rask(CAMPAIGN.cutterFitted)], pay: 0, fit: fitCutter, start: ON_PAD },
+  { id: 'firstCut', name: msg('First Cut'), drills: [rask(RASK.firstCut), firstCut, said(CAMPAIGN.firstCutDone), rask(PIM.magpie)], pay: 400, start: ON_PAD },
+  { id: 'dockingLane', name: msg('Docking Lane'), drills: [rask(RASK.dockingLane), dockingLane, said(CAMPAIGN.dockingLaneDone), said(RASK.dockingLaneDone), rask(HEDDA.meet)], pay: 600, start: ON_PAD },
 ];

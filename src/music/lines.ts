@@ -6,8 +6,8 @@
  * every word here must be in the rendered set; the radio places the words on the beat.
  */
 
-/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask: the yardmaster of the campaign. */
-export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask';
+/** en, de: the propaganda voice. mod: the announcer. sys: the flight computer, clear and calm. rask, pim, hedda: the people of the campaign (see Cast). */
+export type Language = 'en' | 'de' | 'mod' | 'sys' | 'rask' | 'pim' | 'hedda';
 
 /** Title words of the English flavors; a title is one word of each list. */
 export const TITLE_FIRST = [
@@ -550,13 +550,28 @@ export const RASK = {
   dockingLaneDone: 'Look at that. She wants to take you on. Go, darling. The Bond goes with you, and so do my forty percent.',
 } as const;
 
+/**
+ * Pim, the Boneyard's welder, a Rockborn girl of fifteen or so on no register: fast, slangy,
+ * fearless. She patches the hull and names it the Magpie. Her own voice (see tools/voice).
+ */
+export const PIM = {
+  meet: "Oi! Lot seven thousand whatever! That's my rack you're scraping. Wait. You're the one Rask sold the bin computer to? Shiny. Hold still, I'm welding your thrusters. Don't fire anything. You haven't got anything. Good.",
+  cutter: "Cutter's on. Don't point it at me. Or at Rask. Actually, point it at Rask.",
+  magpie: "Magpie. 'Cause everything on you is nicked. I'm putting it on the fin. Don't tell Rask.",
+} as const;
+
+/** Captain Hedda Kroll of the ore hauler Patience: Rockborn, sixties, short sentences, a voice of gravel. Her own voice (see tools/voice). */
+export const HEDDA = {
+  meet: "Patience, Captain Kroll. You the nobody that cleared my lane? Right. I need a gun that works for food. Yours doesn't work. You'll do.",
+} as const;
+
 /** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
-export type Cast = 'rask';
+export type Cast = 'rask' | 'pim' | 'hedda';
 /** The name each of them is shown under, beside the line. */
-export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask' };
-/** The color each one's hologram calls in: Rask a greasy amber. */
-export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040' };
-const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK) };
+export const CAST_NAMES: Record<Cast, string> = { rask: 'Rask', pim: 'Pim', hedda: 'Hedda' };
+/** The color each one's hologram calls in: Rask a greasy amber, Pim her spray paint's pink, Hedda the cold teal of old hull lights. */
+export const CAST_COLORS: Record<Cast, string> = { rask: '#ffb040', pim: '#ff5ec4', hedda: '#5fe0d0' };
+const CAST_LINES: Record<Cast, readonly string[]> = { rask: Object.values(RASK), pim: Object.values(PIM), hedda: Object.values(HEDDA) };
 export function castOf(line: string): Cast | null {
   for (const [who, lines] of Object.entries(CAST_LINES) as [Cast, readonly string[]][]) if (lines.includes(line)) return who;
   return null;
@@ -576,6 +591,10 @@ export function allLines(language: Language): string[] {
       return [...Object.values(SCHOOL), ...Object.values(SCHOOL_PRAISE), ...Object.values(CAMPAIGN), ...Object.values(COMPUTER), ...Object.values(TIPS), ...SPONSOR_BREAK, ...SPONSOR_HAPPY, ...Object.values(ATTACKED.bot), ...ATTACKED.host];
     case 'rask':
       return [...Object.values(RASK)];
+    case 'pim':
+      return [...Object.values(PIM)];
+    case 'hedda':
+      return [...Object.values(HEDDA)];
   }
 }
 

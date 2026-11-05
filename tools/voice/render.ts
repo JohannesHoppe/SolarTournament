@@ -49,6 +49,12 @@ const ANNOUNCER = { rate: 170, pitch: 45, range: 60 };
 const ANNOUNCER_LANGUAGE: Record<Locale, string> = { en: 'en-us', de: 'de', es: 'es', fr: 'fr' };
 /** The yardmaster of the campaign's Boneyard, fat and greasy: Kokoro's deep am_onyx, rendered a little fast, as the game plays him lower and slower (see sound/speaker, CAST_VOICES). */
 const RASK_VOICE = { voice: 'am_onyx', speed: 1.05 };
+/** Pim, the yard's welder, a girl of fifteen: Kokoro's af_jessica, quick, played higher still (see CAST_VOICES). */
+const PIM_VOICE = { voice: 'af_jessica', speed: 1.15 };
+/** Hedda Kroll, the hauler's captain in her sixties: Kokoro's af_kore, a little slow, played lower and worn (see CAST_VOICES). */
+const HEDDA_VOICE = { voice: 'af_kore', speed: 0.95 };
+/** The campaign's people and the voices they are rendered in. */
+const CAST: readonly ['rask' | 'pim' | 'hedda', { voice: string; speed: number }][] = [['rask', RASK_VOICE], ['pim', PIM_VOICE], ['hedda', HEDDA_VOICE]];
 /** Every package whose version changes what the sprites sound like: the speech engines, Kokoro's phonemizer and runtime (the encoder, ffmpeg, by its pinned hash). */
 const ENGINES = ['kokoro-js', 'phonemizer', '@huggingface/transformers', 'onnxruntime-node', '@echogarden/espeak-ng-emscripten'];
 
@@ -140,7 +146,7 @@ const packageVersion = (name: string) => (JSON.parse(readFileSync(join(root, 'no
 const hash = createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).update(readFileSync(join(root, 'tools/voice/nicole.ts'))).update(ENGINES.map(packageVersion).join()).update(ffmpegHash() ?? 'no ffmpeg');
 hash.update(readFileSync(join(root, 'src/music/lines.ts')));
 // of the catalogs only what is spoken: a text of the screen never renders the voice again
-for (const locale of CLONED) for (const line of [...allLines('mod'), ...allLines('sys'), ...allLines('rask')]) hash.update(`${line}\u0000${CATALOGS[locale][line] ?? ''}\u0000`);
+for (const locale of CLONED) for (const line of [...allLines('mod'), ...allLines('sys'), ...allLines('rask'), ...allLines('pim'), ...allLines('hedda')]) hash.update(`${line}\u0000${CATALOGS[locale][line] ?? ''}\u0000`);
 for (const locale of CLONED) hash.update(clones[locale]?.audio ?? '-');
 const inputs = hash.digest('hex').slice(0, 12);
 const upToDate = SPRITES.every((sprite) => existsSync(manifest(sprite)) && (JSON.parse(readFileSync(manifest(sprite), 'utf8')) as { inputs?: string }).inputs === inputs);
@@ -316,7 +322,7 @@ for (const locale of ['en', 'de', 'es', 'fr'] as const) {
   const sprite = new Sprite();
   sprite.speak('mod', allLines('mod').map(translate), { voice: `${ANNOUNCER_LANGUAGE[locale]}+m3`, ...ANNOUNCER });
   for (const line of locale === 'en' ? new Set(allLines('sys')) : nicoleLines(locale)) sprite.add(clipKey('sys', line), await nicole(locale, line));
-  for (const line of new Set(allLines('rask').map(translate))) sprite.add(clipKey('rask', line), await kokoroSays(locale, line, RASK_VOICE));
+  for (const [who, speaker] of CAST) for (const line of new Set(allLines(who).map(translate))) sprite.add(clipKey(who, line), await kokoroSays(locale, line, speaker));
   sprite.write(locale);
 }
 if (unclonedLines) console.warn(`Nicole speaks ${unclonedLines} lines without her clone (not cloned yet: see the workflow Voice)`);

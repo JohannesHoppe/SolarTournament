@@ -9,10 +9,11 @@ const VOICE_RETRY_MS = 5000;
 
 /**
  * How the campaign's other voices are played (see castOf): `rate` the share of the pitch and
- * pace they were rendered at (Rask's is rendered fast and played at 78 %, a fat man's voice),
- * `tremble` how far (cents) the pitch wavers at TREMBLE_RATE (Hz).
+ * pace they were rendered at (Rask's is rendered fast and played at 78 %, a fat man's voice;
+ * Pim's a girl's at 112 %; Hedda's low and worn at 84 %), `tremble` how far (cents) the pitch
+ * wavers at TREMBLE_RATE (Hz).
  */
-const CAST_VOICES: Record<Cast, { rate: number; tremble: number }> = { rask: { rate: 0.78, tremble: 35 } };
+const CAST_VOICES: Record<Cast, { rate: number; tremble: number }> = { rask: { rate: 0.78, tremble: 35 }, pim: { rate: 1.12, tremble: 0 }, hedda: { rate: 0.84, tremble: 25 } };
 const TREMBLE_RATE = 5;
 
 /** How a line meets one still being said: see Speaker.say. */

@@ -37,6 +37,8 @@ export function sources(root: string): Map<string, string[]> {
   for (const line of allLines('sys')) add(line, 'src/music/lines.ts (flight computer)');
   for (const line of allLines('mod')) add(line, 'src/music/lines.ts (announcer)');
   for (const line of allLines('rask')) add(line, 'src/music/lines.ts (yardmaster)');
+  for (const line of allLines('pim')) add(line, 'src/music/lines.ts (welder)');
+  for (const line of allLines('hedda')) add(line, 'src/music/lines.ts (captain)');
   return found;
 }
 

@@ -10,6 +10,8 @@ Everything the game says out loud is rendered ahead of time, by the tools in thi
 | **The announcer** | Comments on kills, laps, wins, in the Host's language | espeak-ng, a lively male voice |
 | **Nicole** | The flight computer: every line of the flight school, every warning, every bit of comfort | English: Kokoro. German, Spanish, French: her clone, made with Chatterbox |
 | **Rask** | The yardmaster of the campaign's Boneyard, over the comm | Kokoro's `am_onyx`, played lower, slower and trembling by the game (`CAST_VOICES` in `src/sound/speaker.ts`); in German, Spanish and French reading the phonemes espeak-ng spells |
+| **Pim** | The Boneyard's welder, a girl of fifteen, over the comm | Kokoro's `af_jessica`, rendered quick and played 12 % higher by the game; in the other languages as Rask's |
+| **Hedda** | Captain Kroll of the hauler Patience, in her sixties, over the comm | Kokoro's `af_kore`, rendered a little slow and played 16 % lower and trembling by the game; in the other languages as Rask's |
 
 ## The tools, in plain words
 

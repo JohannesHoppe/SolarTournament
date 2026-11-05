@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, MISSIONS, nextMission, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, MISSIONS, nextMission, PATCHED_THRUSTERS, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 import { CUTTER_PRICE } from './missions';
 
@@ -69,6 +69,14 @@ describe('the campaign Lot 7731', () => {
     // done once, fitted once
     complete(campaign, cutter);
     expect(campaign.bond).toBe(BOND + CUTTER_PRICE);
+  });
+
+  it('has Pim weld the thrusters up when the hull is docked, free, the Bond untouched', () => {
+    const campaign = freshCampaign();
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'coldBoot')!);
+    expect(campaign.parts).toEqual(['patch']);
+    expect(campaign.bond).toBe(BOND);
+    expect(hullOf(campaign).thrusters).toBe(PATCHED_THRUSTERS);
   });
 
   it('gives every mission a name and drills to fly', () => {

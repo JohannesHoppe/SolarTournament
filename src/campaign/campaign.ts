@@ -28,6 +28,8 @@ export const YARD_CUT = 0.4;
  */
 export const SCRAP_DRIVE = 0.6;
 export const SCRAP_THRUSTERS = 0.5;
+/** The thrusters once Pim has welded them (chapter 1): PATCHED_THRUSTERS of a stock ship's. */
+export const PATCHED_THRUSTERS = 0.7;
 /** The share of a ship's radiators each of its two fins is. */
 export const FIN_RADIATOR = 0.25;
 /**
@@ -37,14 +39,15 @@ export const FIN_RADIATOR = 0.25;
 export const CUTTER_REACH = 0.04;
 export const CUTTER_HEAT = 1.75;
 
-/** What the yard can fit to the hull. */
-export type Part = 'cutter';
-const PARTS: readonly Part[] = ['cutter'];
+/** What the yard can fit to the hull: the mining cutter, Pim's patch on the thrusters. */
+export type Part = 'cutter' | 'patch';
+const PARTS: readonly Part[] = ['cutter', 'patch'];
 
 /** How the campaign's ship flies as far as it is fitted (see Perks). */
 export function hullOf(campaign: Campaign): Perks {
   const hull: Perks = { ...STOCK, drive: SCRAP_DRIVE, thrusters: SCRAP_THRUSTERS, torpedoes: -TORPEDOES, laser: false, overdrive: false, dodge: false, fins: 1, cooling: 1 - FIN_RADIATOR };
   if (campaign.parts.includes('cutter')) Object.assign(hull, { laser: true, laserReach: CUTTER_REACH, laserHeat: CUTTER_HEAT });
+  if (campaign.parts.includes('patch')) hull.thrusters = PATCHED_THRUSTERS;
   return hull;
 }
 

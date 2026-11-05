@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { PRODUCT_TRIANGLES, PRODUCTS, productModel, productSwing } from './products';
+import { PORTRAIT_TRIANGLES, portraitModel, PRODUCT_TRIANGLES, PRODUCTS, productModel, productSwing } from './products';
+import { CAST_NAMES, type Cast } from '../music/lines';
 import { sponsorProducts } from '../game/satire-ads';
 import { HOLOGRAM_FPS, STILL_ANGLE, hologramState } from './hologram';
 
@@ -30,6 +31,23 @@ describe("the sponsors' products", () => {
       expect(largest).toBeGreaterThan(0.499);
       const tone = model.attributes.tone.array;
       for (let i = 0; i < tone.length; i++) expect(tone[i]).toBeGreaterThanOrEqual(0);
+      model.dispose();
+    });
+  }
+});
+
+describe("the campaign's people as their holograms show them", () => {
+  for (const who of Object.keys(CAST_NAMES) as Cast[]) {
+    it(`${who}: a bust within a unit box, under its triangle budget, every vertex toned`, () => {
+      const model = portraitModel(who);
+      const position = model.attributes.position;
+      expect(position.count / 3).toBeGreaterThan(300);
+      expect(position.count / 3).toBeLessThanOrEqual(PORTRAIT_TRIANGLES);
+      expect(model.attributes.tone.count).toBe(position.count);
+      let largest = 0;
+      for (let i = 0; i < position.count * 3; i++) largest = Math.max(largest, Math.abs(position.array[i]));
+      expect(largest).toBeLessThanOrEqual(0.5 + 1e-6);
+      expect(largest).toBeGreaterThan(0.499);
       model.dispose();
     });
   }
