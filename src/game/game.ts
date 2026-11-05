@@ -6979,6 +6979,8 @@ export class Game implements OnlineGame {
       this.bounce(ship, surface, now, 'rock');
     } else if (this.fleet?.resolve(flight.position, ship.radius, this.field.clock, normal)) this.bounce(ship, this.fleet.velocity, now, 'hull');
     else if (this.touchesRing(flight.position, ship.radius)) this.bounce(ship, STILL, now, 'gate');
+    // a hull a drill moored (Patience in the campaign): a hull as the battleship's is
+    else if (this.school?.touchesHull(flight.position, ship.radius, normal)) this.bounce(ship, STILL, now, 'hull');
   }
 
   /** The solids besides the field and the battleship (see game/solids): every use below is taken from this one table. */

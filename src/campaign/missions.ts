@@ -213,17 +213,19 @@ const firstCut: Drill = {
 };
 
 /**
- * Docking Lane (1.6): Patience docks at the yard; loose hulls drift into its lane, one after the
- * other, LANE_WAVES of them, from LANE_FROM (units, 1 km) off its berth at LANE_SPEED (units/s,
- * 40 m/s). Each has to be shot before it comes within LANE_STRIKE (units, 100 m) of the berth;
- * LANE_STRIKES that do fail it.
+ * Docking Lane (1.6): Patience (see world/patience) lies at her berth over the yard; loose hulls
+ * drift at her, one after the other, LANE_WAVES of them, from LANE_FROM (units, 1 km) off at
+ * LANE_SPEED (units/s, 40 m/s). Each has to be shot before it strikes her hull; LANE_STRIKES
+ * strikes fail it. Her hull is solid to the Host's ship too.
  */
 const BERTH = point(0, 4000, -6000);
 const LANE_WAVES = 6;
 const LANE_FROM = 20000;
 const LANE_SPEED = 800;
-const LANE_STRIKE = 2000;
 const LANE_STRIKES = 3;
+/** Where a hull struck Patience, and the way out of her (scratch). */
+const struck = new THREE.Vector3();
+const strikeNormal = new THREE.Vector3();
 /** The ways the hulls come from, one after the other: from above and the sides, over the racks. */
 const LANE_FROM_WAYS = [point(0.6, 0.8, 0), point(-0.5, 0.6, -0.62), point(0, 0.7, 0.71), point(-0.8, 0.6, 0), point(0.5, 0.5, -0.71), point(0.3, 0.9, 0.3)].map((way) => way.normalize());
 
@@ -234,13 +236,12 @@ const dockingLane: Drill = {
   autopilot: false,
   enter(ctx, a, markers) {
     stop(ctx);
-    markers.buoy(BERTH, 3);
-    markers.zone(BERTH, LANE_STRIKE);
+    markers.hauler(BERTH);
     a.count = 0;
     a.jinks = 0;
     a.lit = false;
   },
-  done(ctx, a) {
+  done(ctx, a, markers) {
     const drone = ctx.drone;
     // the next hull comes once the last is gone, shot or past
     if (!a.lit || !drone || !drone.alive) {
@@ -251,7 +252,7 @@ const dockingLane: Drill = {
       a.lit = true;
       return false;
     }
-    if (drone.flight.position.distanceTo(BERTH) < LANE_STRIKE) {
+    if (markers.touchesHull(struck.copy(drone.flight.position), drone.radius, strikeNormal)) {
       a.jinks++;
       ctx.removeDrone();
       a.lit = false;

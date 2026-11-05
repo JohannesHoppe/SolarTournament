@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { cos, exp, sin } from '../detmath';
 import { angleTo, rotateX, rotateY, setFromAxisAngle } from '../detthree';
 import { boxUv, industrialSurface, STATION_TILE, surfaced } from '../view/surfaces';
+import { patience, touchPatience } from '../world/patience';
 import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
 import { CONTROLS, type Command, type Controls, type Device } from '../input/input';
 import type { Ship } from '../ship/ship';
@@ -1580,6 +1581,8 @@ export class Markers {
   /** A salvage canister: an octagonal drum of the depots' plating with a band of hazard paint, made at its first use. */
   private canisterGeometry: THREE.BufferGeometry | null = null;
   private canisterMaterial: THREE.Material | null = null;
+  /** Patience moored where a drill wants her (see hauler), or null. */
+  private patience: THREE.Object3D | null = null;
   /** The prop in tow behind a ship and the cable to it (see tow). */
   private towing: { prop: THREE.Object3D; ship: Ship; cable: THREE.Line } | null = null;
   private readonly cableMaterial = new THREE.LineBasicMaterial({ color: 0x6b6f75 });
@@ -1665,6 +1668,20 @@ export class Markers {
     this.moving = this.moving.filter((item) => item.position !== position);
   }
 
+  /** Patience, Hedda Kroll's hauler (see world/patience), moored at a point until the props are cleared; solid (see touchesHull). */
+  hauler(position: THREE.Vector3) {
+    const { root } = patience();
+    root.position.copy(position);
+    root.updateMatrixWorld();
+    this.root.add(root);
+    this.patience = root;
+  }
+
+  /** Whether a sphere touches the hauler's hull: moves it out and sets the outward `normal`, as a ring's housing does. */
+  touchesHull(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
+    return !!this.patience && touchPatience(this.patience, position, radius, normal);
+  }
+
   /** Takes a prop in tow behind a ship, on a cable, until the props are cleared. */
   tow(prop: THREE.Object3D, ship: Ship) {
     prop.userData.spin = false;
@@ -1710,6 +1727,7 @@ export class Markers {
 
   clear() {
     this.root.clear();
+    this.patience = null;
     this.towing?.cable.geometry.dispose();
     this.towing = null;
     this.rings = [];
@@ -1842,6 +1860,11 @@ export class FlightSchool {
     if (!a?.live || !a.normals.length) return false;
     for (let i = a.next; i < a.points.length; i++) if (touchRing(a.points[i], a.normals[i], RING_RADIUS, position, radius, normal)) return true;
     return false;
+  }
+
+  /** Whether a ship touches a hull the drill moored (see Markers.hauler): moves it out and sets `normal`. */
+  touchesHull(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
+    return this.markers.touchesHull(position, radius, normal);
   }
 
   dispose() {

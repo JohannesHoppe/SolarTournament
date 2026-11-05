@@ -92,7 +92,7 @@ export function rackSet(): TemplateSet {
 }
 
 /** The depot's plating: one tile of it every this far (units, 8 m), the scale of its plates of 0.5 to 2 m (see stationSurface). */
-const PLATING_TILE = STATION_TILE;
+export const PLATING_TILE = STATION_TILE;
 
 /** The yard's grime over everything, at a scale of its own: one tile every MACRO_TILE units (150 m), so the plating's tile never shows as a pattern. */
 const MACRO_TILE = 3000;
@@ -264,9 +264,13 @@ let patches: THREE.Texture | null = null;
  */
 function platingOf(part: DepotPart): THREE.MeshStandardMaterial {
   const name = PAINT_OF[part] ?? 'hall';
-  const kept = platings.get(name);
+  return patchedPlating(name, MODULE_PAINT[name]);
+}
+
+/** The plating of platingOf in a paint of its own (`key` names it), for whatever else is built of the yards' modules (a hauler). Its geometry needs both texture coordinates (see macroUv). */
+export function patchedPlating(key: string, paint: { seed: number; tint: number; texts: readonly string[] }): THREE.MeshStandardMaterial {
+  const kept = platings.get(key);
   if (kept) return kept;
-  const paint = MODULE_PAINT[name];
   const hull = stationSurface(paint.seed, paint.texts);
   grime ??= grimeTexture();
   patches ??= patchTexture();
@@ -286,12 +290,12 @@ function platingOf(part: DepotPart): THREE.MeshStandardMaterial {
   diffuseColor.rgb *= texture2D( aoMap, vAoMapUv ).rgb;`,
       );
   };
-  platings.set(name, material);
+  platings.set(key, material);
   return material;
 }
 
 /** The second texture coordinates the patches and the grime are read with: the first ones (one unit every `tile`) at MACRO_TILE, shifted by `shift` so neighbouring parts differ. */
-function macroUv(geometry: THREE.BufferGeometry, shift: number, tile = PLATING_TILE): THREE.BufferGeometry {
+export function macroUv(geometry: THREE.BufferGeometry, shift: number, tile = PLATING_TILE): THREE.BufferGeometry {
   const uv = geometry.getAttribute('uv');
   const uv1 = new Float32Array(uv.count * 2);
   for (let i = 0; i < uv.count; i++) {
