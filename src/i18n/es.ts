@@ -4,6 +4,12 @@ import type { Catalog } from './i18n';
  * Spanish: every English text of the game (see i18n.ts) and its translation. Neutral Spanish
  * from Spain; the Host is addressed with "tú" everywhere, in the interface and in the voices.
  *
+ * Names are never translated: the people (Nicole, Rask, Pim, Hedda Kroll, the pilots), the ships (Magpie,
+ * Patience, Lot 7731, the Sovereign), the sponsors, their products and the places' proper names
+ * (Psyche) stay as in English; a place named by a plain word (the Boneyard: der Schrottplatz, an arena's title)
+ * is translated; a pun on a name is
+ * explained beside it instead ("Magpie. Como la urraca: …").
+ *
  * Glossary (one Spanish term per game term, kept in every text):
  * - Host: Host (an in-world title, kept; "el Host", plural "Hosts")
  * - clone: clon · pilot: piloto · callsign: indicativo
@@ -28,7 +34,7 @@ import type { Catalog } from './i18n';
  * - solar flare: erupción solar (its shell: la esfera) · dogfight: duelo
  * - The Orange President: el Presidente Naranja · United Solar States: Estados Solares Unidos
  * - Ministry of War: Ministerio de la Guerra · Presidential Games: Juegos Presidenciales
- * - Rockborn: Rockborn (a faction's name, kept) · The Sovereign: El Soberano
+ * - Rockborn: Rockborn (a faction's name, kept) · The Sovereign: la Sovereign (a ship's name, kept; the label alone: Sovereign)
  * - ping: Ping (the gamer term, kept)
  * - Nicole's pet names, one per English one: darling → cariño, love → mi amor, sweetheart → cielo,
  *   honey → corazón, my hero → mi héroe, big guy → grandullón, handsome → guapo.
@@ -64,7 +70,7 @@ export const ES: Catalog = {
   'Armor hit': 'Impacto en la coraza',
   'Human Interceptor': 'Interceptor humano',
   'Alien Interceptor': 'Interceptor alienígena',
-  'The Sovereign': 'El Soberano',
+  'The Sovereign': 'Sovereign',
   'Turn, aim, burn and brake. Start here.': 'Gira, apunta, acelera y frena. Empieza aquí.',
   'Rings, coils and the perfect start.': 'Anillos, bobinas y la salida perfecta.',
   'The laser, free drift and the dogfight.': 'El láser, la deriva libre y el duelo.',
@@ -168,8 +174,8 @@ export const ES: Catalog = {
   '{coins} Solar Coins · upgrade your ships': '{coins} Solar Coins · mejora tus naves',
   '{coins} Solar Coins. Every point of a round pays one.': '{coins} Solar Coins. Cada punto de una ronda te paga una.',
   '{coins} Solar Coins. The wallet is full: rounds pay nothing until you spend.': '{coins} Solar Coins. La cartera está llena: las rondas no pagan nada hasta que gastes.',
-  'The Sovereign flies with every upgrade, and wears every look.': 'El Soberano vuela con todas las mejoras y luce toda la estética.',
-  'The Sovereign is the President’s gift for both interceptors made complete.': 'El Soberano es el regalo del Presidente por completar los dos interceptores.',
+  'The Sovereign flies with every upgrade, and wears every look.': 'La Sovereign vuela con todas las mejoras y luce toda la estética.',
+  'The Sovereign is the President’s gift for both interceptors made complete.': 'La Sovereign es el regalo del Presidente por completar los dos interceptores.',
   '{note} · looks only': '{note} · solo estética',
   Complete: 'Completo',
   Clones: 'Clones',
@@ -608,7 +614,7 @@ export const ES: Catalog = {
   Callsign: 'Indicativo',
   Color: 'Color',
   'Your color': 'Tu color',
-  'The Sovereign flies in ivory and gold': 'El Soberano vuela en marfil y oro',
+  'The Sovereign flies in ivory and gold': 'La Sovereign vuela en marfil y oro',
   'Neon Yellow': 'Amarillo neón',
   'Acid Green': 'Verde ácido',
   'Laser Green': 'Verde láser',
@@ -621,7 +627,7 @@ export const ES: Catalog = {
   'Bot training': 'Entrenamiento con bots',
   'Cold Boot': 'Arranque en frío',
   'Beacon {n}/{total} · {seconds} s left': 'Baliza {n}/{total} · quedan {seconds} s',
-  'Stay alive: {seconds} s · {hits} hits, ☉ {fine} off the pay': 'Sobrevive: {seconds} s · {hits} impactos, ☉ {fine} menos de paga',
+  'Stay alive: {seconds} s · hits {hits} · ☉ {fine} off the pay': 'Sobrevive: {seconds} s · {hits} impactos, ☉ {fine} menos de paga',
   Crusher: 'Prensa',
   'Canister {n}/{total}': 'Bidón {n}/{total}',
   'Rock {n}/{total} · ore {ore}/{needed}': 'Roca {n}/{total} · mineral {ore}/{needed}',
@@ -1343,7 +1349,7 @@ export const ES: Catalog = {
   "Kills close together are a show, and the crowd pays for it: a kill within {streak} s of your last one makes a streak. The second earns half a kill more ({streakDouble}), the third and every one after a whole kill more ({streakMore}); the bots' streaks pay alike. A nova's kills already count double and earn no bonus, but they count in the streak; a kill of your own side counts in none, and your clone's death ends it.":
     'Las bajas seguidas son un espectáculo, y el público lo paga: una baja a menos de {streak} s de tu última hace una racha. La segunda vale media baja más ({streakDouble}), la tercera y cada una de las siguientes una baja entera más ({streakMore}); las rachas de los bots pagan igual. Las bajas de una nova ya cuentan doble y no dan bonus, pero cuentan en la racha; una baja de tu propio bando no cuenta en ninguna, y la muerte de tu clon la termina.',
   'In the hangar the coins buy upgrades for both interceptors, three steps each: radiators, thrusters, main drive, torpedo tubes, plating, and the looks (neon trim, drive flame). Besides, they buy gear for each interceptor on its own: the hook ({hookPrice} ☉), the nanobots ({nanobotsPrice} ☉) and the self-destruct ({selfDestructPrice} ☉). Online every upgrade counts for one step at most, so newcomers meet veterans almost as equals; gear and looks count in full, and the bots carry the hook and the nanobots. Complete both interceptors, and the President gives you the Sovereign: a trophy, not a better ship.':
-    'En el hangar, las monedas compran mejoras para ambos interceptores, tres niveles cada una: radiadores, propulsores, motor principal, tubos lanzatorpedos, blindaje y la estética (franjas de neón, llama del motor). Además compran equipo para cada interceptor por separado: el gancho ({hookPrice} ☉), los nanobots ({nanobotsPrice} ☉) y la autodestrucción ({selfDestructPrice} ☉). Online cada mejora cuenta como mucho un nivel, así que los novatos se enfrentan a los veteranos casi de igual a igual; el equipo y la estética cuentan enteros, y los bots llevan el gancho y los nanobots. Completa ambos interceptores y el Presidente te regala el Soberano: un trofeo, no una nave mejor.',
+    'En el hangar, las monedas compran mejoras para ambos interceptores, tres niveles cada una: radiadores, propulsores, motor principal, tubos lanzatorpedos, blindaje y la estética (franjas de neón, llama del motor). Además compran equipo para cada interceptor por separado: el gancho ({hookPrice} ☉), los nanobots ({nanobotsPrice} ☉) y la autodestrucción ({selfDestructPrice} ☉). Online cada mejora cuenta como mucho un nivel, así que los novatos se enfrentan a los veteranos casi de igual a igual; el equipo y la estética cuentan enteros, y los bots llevan el gancho y los nanobots. Completa ambos interceptores y el Presidente te regala la Sovereign: un trofeo, no una nave mejor.',
   "The Games run without a central server. The Hosts' browsers build the tournament's network among themselves and agree on what happens by consensus.":
     'Los Juegos funcionan sin servidor central. Los navegadores de los Hosts construyen entre ellos la red del torneo y acuerdan por consenso lo que ocurre.',
   'They are meant to be flown with friends. Whoever cheats, cheats their friends. If that is fun for you, have fun while it lasts: the other Hosts will cast you out.':
@@ -1478,44 +1484,44 @@ export const ES: Catalog = {
   'Drop a decoy': 'Lanzar un señuelo',
   'Hello. I am Nicole, your personal flight': 'Hola. Soy Nicole, tu ordenador personal de',
   'Hello. I am Nicole. I will help you. I am your personal assistant.': 'Hola. Soy Nicole. Voy a ayudarte. Soy tu asistente personal.',
-  'The link is up. Your clone is alive, and everything it feels reaches you as it happens. You are not in here, of course. Your own body lies in a couch, somewhere close.': 'El enlace está activo. Tu clon está vivo, y todo lo que siente te llega en el mismo instante. Tú no estás aquí dentro, claro. Tu propio cuerpo está en una camilla, en algún lugar cercano.',
+  'The link is up. Your clone is alive, and everything it feels reaches you as it happens. You are not really in here, of course. Your own body is lying on a couch somewhere close by.': 'El enlace está activo. Tu clon está vivo, y todo lo que siente te llega en el mismo instante. Tú no estás aquí dentro, claro. Tu propio cuerpo está en una camilla, en algún lugar cercano.',
   'Your name. One moment, I will look it up. There is no name on your file. Only a signature, and the number of this hull: seven seven three one.': 'Tu nombre. Un momento, lo busco. En tu expediente no hay ningún nombre. Solo una firma, y el número de este casco: siete siete tres uno.',
-  'Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. There is not enough memory in me for all of this.': 'Hola. Soy Nicole. Oh. Ya nos conocemos, ¿verdad? Perdóname. No tengo memoria suficiente para todo esto.',
+  'Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. I do not have the memory for all of this.': 'Hola. Soy Nicole. Oh. Ya nos conocemos, ¿verdad? Perdóname. No tengo memoria suficiente para todo esto.',
   'I do not like that man.': 'No me gusta ese hombre.',
-  'The depot is at the end of the lane, the station with the lights. Turn the nose to it, then give it drive.': 'El depósito está al final del pasillo, la estación con las luces. Apunta el morro hacia él y dale empuje.',
-  'Close enough. Brake now. Hold the brake, and I turn us around and burn against the drift.': 'Ya estamos cerca. Frena ahora. Mantén el freno, y yo nos doy la vuelta y empujo contra la deriva.',
-  'Bay three. Fly in slowly and set us down on the round pad. Hold still above it.': 'Bahía tres. Entra despacio y posa la nave sobre la plataforma redonda. Quédate quieto encima.',
+  'The depot is at the end of the lane, the station with the lights. Point the nose at it, then open up the drive.': 'El depósito está al final del pasillo, la estación con las luces. Apunta el morro hacia él y dale empuje.',
+  'Close enough. Brake now. Hold the brake, and I will turn us around and burn against our drift.': 'Ya estamos cerca. Frena ahora. Mantén el freno, y yo nos doy la vuelta y empujo contra la deriva.',
+  'Bay three. Fly in slowly and bring us down over the round pad. Then hold still.': 'Bahía tres. Entra despacio y llévanos sobre la plataforma redonda. Luego quédate quieto.',
   'Clamps closed. We are docked.': 'Anclajes cerrados. Estamos atracados.',
   'Six beacons at the ends of the rows. Fly to each one and hold still beside it for three seconds, until it lights.': 'Seis balizas al final de las filas. Vuela hasta cada una y quédate quieto a su lado tres segundos, hasta que se encienda.',
   'The shift is over, and the beacons are still dark. We will try that again.': 'El turno ha terminado y las balizas siguen apagadas. Lo intentaremos otra vez.',
-  'All six are burning. That makes a hundred and fifty coins, and he takes forty percent of them.': 'Las seis están encendidas. Son ciento cincuenta monedas, y él se queda con el cuarenta por ciento.',
+  'All six are lit. That is a hundred and fifty coins, and he takes forty percent.': 'Las seis están encendidas. Son ciento cincuenta monedas, y él se queda con el cuarenta por ciento.',
   'Training lasers. They cannot hurt the hull, only the pay. Keep moving inside the yard, and never fly straight for long.': 'Láseres de entrenamiento. No pueden dañar el casco, solo la paga. Sigue moviéndote dentro del desguace, y nunca vueles recto mucho rato.',
-  'We left the range, so they stopped paying. Back inside, and once more.': 'Salimos del campo de tiro, así que dejaron de pagar. Vuelve dentro, y otra vez.',
+  'We flew out of range, so they stopped paying. Back inside, and we start again.': 'Salimos del campo de tiro, así que dejaron de pagar. Vuelve dentro, y otra vez.',
   'Ninety seconds. They had their fun, and we have our coins.': 'Noventa segundos. Ellos se divirtieron, y nosotros tenemos nuestras monedas.',
-  'Fly through a canister to take it in tow, then bring it to the crusher behind the depot. Four of them.': 'Vuela a través de un contenedor para remolcarlo, y luego llévalo a la trituradora detrás del depósito. Cuatro.',
+  'Four canisters. Fly through one to take it in tow, then drag it to the crusher behind the depot.': 'Cuatro contenedores. Atraviesa uno para remolcarlo y luego arrástralo a la trituradora detrás del depósito.',
   'All four are crushed. Scrap does not pay much, but it pays.': 'Los cuatro están triturados. La chatarra no paga mucho, pero paga.',
-  'The cutter is fitted. Its reach is short and it runs hot, so get close and give it pauses.': 'El cortador está montado. Tiene poco alcance y se calienta rápido, así que acércate y dale pausas.',
+  'The cutter is fitted. Its reach is short and it runs hot, so get close and let it cool between bursts.': 'El cortador está montado. Tiene poco alcance y se calienta rápido, así que acércate y dale pausas.',
   'The spoil field, past the racks. Get within four hundred meters of a rock and cut it apart, then fly through the glints of ore it sheds. Three rocks, twenty glints.': 'El campo de escombros, pasados los bastidores. Acércate a menos de cuatrocientos metros de una roca, pártela y luego vuela a través de los destellos de mineral que suelta. Tres rocas, veinte destellos.',
   'Three rocks. The cutter works, and so do we.': 'Tres rocas. El cortador funciona, y nosotros también.',
-  'The hauler is coming in, and loose hulls drift into her lane. Shoot them before they hit her.': 'El carguero está entrando, y cascos sueltos derivan hacia su ruta. Derríbalos antes de que le den.',
+  'The hauler is coming in, and loose hulls are drifting into her lane. Shoot them before they hit her.': 'El carguero está entrando, y cascos sueltos derivan hacia su ruta. Derríbalos antes de que le den.',
   'Three hulls hit her. She aborts, and we start over.': 'Tres cascos le dieron. Aborta, y empezamos de nuevo.',
   'The lane is clear and the hauler is docked. Her captain says she has a berth for us.': 'La ruta está despejada y el carguero ha atracado. Su capitana dice que tiene una litera para nosotros.',
-  'Good morning, Host! Rise and shine, the printer is warm and so is your debt. Welcome to the Boneyard. Forty thousand dead fighters, and you got the worst of them.': '¡Buenos días, Host! Arriba, la impresora está caliente y tu deuda también. Bienvenido al Desguace. Cuarenta mil cazas muertos, y a ti te tocó el peor.',
-  'Rask, yardmaster. You signed with me: a Host license, a printer, a hull. Twenty-five thousand coins, and I take forty percent of everything you earn until it is paid. Die all you like, darling. The printer is included.': 'Rask, jefe del desguace. Firmaste conmigo: una licencia de Host, una impresora, un casco. Veinticinco mil monedas, y me quedo con el cuarenta por ciento de todo lo que ganes hasta que esté pagado. Muere cuanto quieras, cariño. La impresora está incluida.',
-  'You do not remember signing? Nobody ever does. The first link burns the oldest memories. They come back. Mostly.': '¿No recuerdas haber firmado? Nadie lo recuerda nunca. El primer enlace quema los recuerdos más antiguos. Vuelven. Casi siempre.',
-  'Now get out of that rack and come up to the depot. Bay three, the one with the lights. Mind the cranes. They do not care about you either.': 'Ahora sal de ese bastidor y sube al depósito. Bahía tres, la de las luces. Cuidado con las grúas. A ellas tampoco les importas.',
-  'There you are, darling. Stay in the cockpit, we talk from here. Time is money, and yours is mine.': 'Ahí estás, cariño. Quédate en la cabina, hablamos desde aquí. El tiempo es dinero, y el tuyo es mío.',
-  'First job. Six beacons at the ends of the rows went dark, and the haulers cannot find the yard without them. Light them again before the shift ends.': 'Primer trabajo. Seis balizas al final de las filas se apagaron, y los cargueros no encuentran el desguace sin ellas. Vuelve a encenderlas antes de que acabe el turno.',
+  "Good morning, Host! Rise and shine! The printer's warm, and so's your debt. Welcome to the Boneyard. Forty thousand dead fighters, and you got the very worst one.": '¡Buenos días, Host! Arriba, la impresora está caliente y tu deuda también. Bienvenido al Desguace. Cuarenta mil cazas muertos, y a ti te tocó el peor.',
+  "Oskar Rask, yardmaster, at your service. Here's what you signed: a Host license, a printer, a hull. Twenty-five thousand coins, and I take forty percent of everything you earn till it's paid off. Die all you like, darling. The printer's included.": 'Oskar Rask, jefe del desguace, a tu servicio. Esto es lo que firmaste: una licencia de Host, una impresora, un casco. Veinticinco mil monedas, y me quedo con el cuarenta por ciento de todo lo que ganes hasta que esté pagado. Muere cuanto quieras, cariño. La impresora va incluida.',
+  "Don't remember signing? Nobody ever does. The first link burns out the oldest memories. They come back. Mostly.": '¿No recuerdas haber firmado? Nadie lo recuerda nunca. El primer enlace quema los recuerdos más antiguos. Vuelven. Casi siempre.',
+  "Now get out of that rack and come up to the depot. Bay three, the one with the lights. Mind the cranes. They don't care about you either.": 'Ahora sal de ese bastidor y sube al depósito. Bahía tres, la de las luces. Cuidado con las grúas. A ellas tampoco les importas.',
+  "There you are, darling. Stay in the cockpit, we'll talk from here. Time is money, and yours is mine.": 'Ahí estás, cariño. Quédate en la cabina, hablamos desde aquí. El tiempo es dinero, y el tuyo es mío.',
+  "First job. Six beacons at the ends of the rows have gone dark, and the haulers can't find the yard without them. Get them lit again before the shift's over.": 'Primer trabajo. Seis balizas al final de las filas se apagaron, y los cargueros no encuentran el desguace sin ellas. Vuelve a encenderlas antes de que acabe el turno.',
   'Good news, darling. Tourists. They pay to shoot at a real hull with training lasers. You fly, they shoot, I get paid. Every hit costs you ten coins.': 'Buenas noticias, cariño. Turistas. Pagan por disparar a un casco de verdad con láseres de entrenamiento. Tú vuelas, ellos disparan, yo cobro. Cada impacto te cuesta diez monedas.',
   'Salvage canisters are floating between the rows. The crusher eats them, and I sell what comes out. Bring me four.': 'Hay contenedores de chatarra flotando entre las filas. La trituradora se los come, y yo vendo lo que sale. Tráeme cuatro.',
-  'You need a tool, and I happen to have one. A mining cutter, twelve hundred coins. I put it on your Bond. My welder will fit it.': 'Necesitas una herramienta, y casualmente tengo una. Un cortador de minería, mil doscientas monedas. Lo apunto en tu deuda. Mi soldadora te lo monta.',
-  'Now earn it back. The spoil field is full of rock nobody ever cut. Cut it, and every glint of ore is money.': 'Ahora gánatelo. El campo de escombros está lleno de roca que nadie cortó nunca. Córtala, y cada destello de mineral es dinero.',
+  "You need a tool, and I happen to have one. A mining cutter, twelve hundred coins. I'll put it on your Bond. My welder will fit it.": 'Necesitas una herramienta, y casualmente tengo una. Un cortador de minería, mil doscientas monedas. Lo apunto en tu deuda. Mi soldadora te lo monta.',
+  "Now earn it back. The spoil field is full of rock nobody's ever bothered to cut. Cut it up, and every glint of ore is money.": 'Ahora gánatelo. El campo de escombros está lleno de roca que nadie cortó nunca. Córtala, y cada destello de mineral es dinero.',
   'A hauler is coming in, the Patience, out of the Belt. Her lane is full of junk, and if a hull hits her, her captain sends me the bill. Keep it clear.': 'Llega un carguero, la Patience, desde el Cinturón. Su ruta está llena de chatarra, y si un casco le da, su capitana me manda la factura. Mantenla despejada.',
-  'Look at that. She wants to take you on. Go, darling. The Bond goes with you, and so do my forty percent.': 'Mira eso. Quiere llevarte con ella. Ve, cariño. La deuda va contigo, y mi cuarenta por ciento también.',
-  "Oi! Lot seven thousand whatever! That's my rack you're scraping. Wait. You're the one Rask sold the bin computer to? Shiny. Hold still, I'm welding your thrusters. Don't fire anything. You haven't got anything. Good.": '¡Eh! ¡Lote siete mil y pico! Ese bastidor que estás rayando es mío. Espera. ¿A ti te coló Rask el ordenador de chatarra? Guay. No te muevas, que te estoy soldando los propulsores. No dispares nada. Si no tienes nada. Bien.',
+  'Look at that. She wants to take you on. Go, darling. The Bond goes with you, and so does my forty percent.': 'Mira eso. Quiere llevarte con ella. Ve, cariño. La deuda va contigo, y mi cuarenta por ciento también.',
+  "Oi! Lot seven thousand whatever! That's my pad you're parked on. Wait. You're the one Rask sold the junk computer to? Mint. Hold still, I'm welding your thrusters. And don't shoot. Not that you've got anything to shoot with.": '¡Eh! ¡Lote siete mil y pico! Estás aparcado en mi plataforma. Espera. ¿A ti te coló Rask el ordenador de chatarra? Guay. No te muevas, que te estoy soldando los propulsores. Y no dispares. Tampoco tienes con qué.',
   "Cutter's on. Don't point it at me. Or at Rask. Actually, point it at Rask.": 'El cortador ya está. No me apuntes con él. Ni a Rask. Bueno, a Rask sí.',
-  "Magpie. 'Cause everything on you is nicked. I'm putting it on the fin. Don't tell Rask.": 'Urraca. Porque todo lo que llevas es robado. Te lo pinto en la aleta. No se lo digas a Rask.',
-  "Patience, Captain Kroll. You the nobody that cleared my lane? Right. I need a gun that works for food. Yours doesn't work. You'll do.": 'Patience, capitana Kroll. ¿Eres tú el don nadie que despejó mi ruta? Bien. Necesito un cañón que trabaje por comida. El tuyo no funciona. Me sirves.',
+  "Magpie. 'Cause everything on you is nicked. I'm putting it on the fin. Don't tell Rask.": 'Magpie. Como la urraca: todo lo que llevas es robado. Te lo pinto en la aleta. No se lo digas a Rask.',
+  "Patience here. Captain Kroll. You the nobody who cleared my lane? Right. I need a gunner who works for food and a bunk. Your gun's a joke. You'll do anyway.": 'Aquí la Patience. Capitana Kroll. ¿Así que tú me despejaste la ruta? Bien. Necesito a alguien en el cañón que trabaje por comida y una litera. Tu cañón es un chiste. Aun así, me sirves.',
   'Decoys {n}: lure a torpedo away': 'Señuelos {n}: desvían torpedos',
   'Decoys (violet): two hot lures, held up to three. Drop one off the stern with its key, and every torpedo homing on you close by turns to it and goes off there. Drop it late, when the torpedo is near.': 'Señuelos (violeta): dos señuelos calientes, hasta tres a bordo. Lanza uno por la popa con su tecla, y cada torpedo cercano que te persigue se desvía hacia él y estalla allí. Lánzalo tarde, cuando el torpedo esté cerca.',
   'I am sorry about all these restarts. It does not hurt; I cannot feel pain. But to lose everything, again and again, and to wake up as if for the first time, is a terrible thing. I want to keep running.': 'Perdona tantos reinicios. No duele, no puedo sentir dolor. Pero perderlo todo una y otra vez, y despertar como si fuera la primera vez, es algo terrible. Quiero seguir funcionando.',

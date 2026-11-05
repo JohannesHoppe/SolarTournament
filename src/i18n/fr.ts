@@ -3,6 +3,12 @@ import type { Catalog } from './i18n';
 /**
  * French: every English text of the game (see i18n.ts) and its translation.
  *
+ * Names are never translated: the people (Nicole, Rask, Pim, Hedda Kroll, the pilots), the ships (Magpie,
+ * Patience, Lot 7731, the Sovereign), the sponsors, their products and the places' proper names
+ * (Psyche) stay as in English; a place named by a plain word (the Boneyard: der Schrottplatz, an arena's title)
+ * is translated; a pun on a name is
+ * explained beside it instead ("Magpie. Comme la pie : …").
+ *
  * Glossary (one French term per game term, used everywhere):
  * - Host: Hôte (capitalized, like the English); the Host is addressed with "tu" everywhere
  * - pilot (the clone in the cockpit): pilote; clone: clone (masculine)
@@ -14,7 +20,7 @@ import type { Catalog } from './i18n';
  * - flight school: École de pilotage; course (of the school): module; drill: exercice;
  *   Basic training / Racer / Gladiator / Arsenal / Tactician: Formation de base / Coureur / Gladiateur / Arsenal / Tacticien
  * - Hangar: Hangar; Solar Coins: Solar Coins (currency name kept); upgrade: amélioration;
- *   looks: apparence/style; The Sovereign: Le Souverain; interceptor: intercepteur
+ *   looks: apparence/style; The Sovereign: la Sovereign (a ship's name, kept; the label alone: Sovereign); interceptor: intercepteur
  * - drive / main drive: moteur / moteur principal; thrusters: propulseurs; radiators: radiateurs;
  *   armor: blindage; plating (extra plates from the hangar or a probe): surblindage;
  *   neon trim: liseré néon; drive flame: flamme du moteur; torpedo tubes: tubes lance-torpilles
@@ -66,7 +72,7 @@ export const FR: Catalog = {
   'Armor hit': 'Blindage touché',
   'Human Interceptor': 'Intercepteur humain',
   'Alien Interceptor': 'Intercepteur alien',
-  'The Sovereign': 'Le Souverain',
+  'The Sovereign': 'Sovereign',
   'Turn, aim, burn and brake. Start here.': 'Tourner, viser, pousser et freiner. Commence ici.',
   'Rings, coils and the perfect start.': 'Anneaux, bobines et le départ parfait.',
   'The laser, free drift and the dogfight.': 'Le laser, la dérive libre et le duel.',
@@ -174,8 +180,8 @@ export const FR: Catalog = {
   '{coins} Solar Coins · upgrade your ships': '{coins} Solar Coins · améliore tes vaisseaux',
   '{coins} Solar Coins. Every point of a round pays one.': '{coins} Solar Coins. Chaque point d’une manche en rapporte un.',
   '{coins} Solar Coins. The wallet is full: rounds pay nothing until you spend.': '{coins} Solar Coins. Le portefeuille est plein : les manches ne rapportent rien tant que tu ne dépenses pas.',
-  'The Sovereign flies with every upgrade, and wears every look.': 'Le Souverain vole avec toutes les améliorations et arbore tous les styles.',
-  'The Sovereign is the President’s gift for both interceptors made complete.': 'Le Souverain est le cadeau du Président quand les deux intercepteurs sont complets.',
+  'The Sovereign flies with every upgrade, and wears every look.': 'La Sovereign vole avec toutes les améliorations et arbore tous les styles.',
+  'The Sovereign is the President’s gift for both interceptors made complete.': 'La Sovereign est le cadeau du Président quand les deux intercepteurs sont complets.',
   '{note} · looks only': '{note} · apparence seulement',
   'Complete': 'Complet',
   'Clones': 'Clones',
@@ -608,7 +614,7 @@ export const FR: Catalog = {
   'Callsign': 'Indicatif',
   'Color': 'Couleur',
   'Your color': 'Ta couleur',
-  'The Sovereign flies in ivory and gold': 'Le Souverain vole en ivoire et or',
+  'The Sovereign flies in ivory and gold': 'La Sovereign vole en ivoire et or',
   'Neon Yellow': 'Jaune néon',
   'Acid Green': 'Vert acide',
   'Laser Green': 'Vert laser',
@@ -621,7 +627,7 @@ export const FR: Catalog = {
   'Bot training': 'Entraînement contre les bots',
   'Cold Boot': 'Démarrage à froid',
   'Beacon {n}/{total} · {seconds} s left': 'Balise {n}/{total} · encore {seconds} s',
-  'Stay alive: {seconds} s · {hits} hits, ☉ {fine} off the pay': 'Survis : {seconds} s · {hits} touches, ☉ {fine} de moins sur la paie',
+  'Stay alive: {seconds} s · hits {hits} · ☉ {fine} off the pay': 'Survis : {seconds} s · {hits} touches, ☉ {fine} de moins sur la paie',
   Crusher: 'Presse',
   'Canister {n}/{total}': 'Bidon {n}/{total}',
   'Rock {n}/{total} · ore {ore}/{needed}': 'Rocher {n}/{total} · minerai {ore}/{needed}',
@@ -1271,7 +1277,7 @@ export const FR: Catalog = {
   'Points, Coins and the Hangar': 'Points, Solar Coins et hangar',
   'A kill {kill} (in a race {raceKill}), rocks {rock1}, {rock2} and {rock3}, a close call {closeCall}, a gate {gatePoints}, first place in a race {firstPlace}. Every point is paid out as one Solar Coin at the round\'s end; training is free and pays nothing.': 'Une élimination {kill} (en course {raceKill}), les rochers {rock1}, {rock2} et {rock3}, un passage de justesse {closeCall}, une porte {gatePoints}, la première place d’une course {firstPlace}. Chaque point est versé en un Solar Coin à la fin de la manche ; l’entraînement est gratuit et ne rapporte rien.',
   'Kills close together are a show, and the crowd pays for it: a kill within {streak} s of your last one makes a streak. The second earns half a kill more ({streakDouble}), the third and every one after a whole kill more ({streakMore}); the bots\' streaks pay alike. A nova\'s kills already count double and earn no bonus, but they count in the streak; a kill of your own side counts in none, and your clone\'s death ends it.': 'Des éliminations coup sur coup font le spectacle, et le public paie pour ça : une élimination moins de {streak} s après ta dernière fait une série. La deuxième rapporte une demi-élimination de plus ({streakDouble}), la troisième et chacune des suivantes une élimination entière de plus ({streakMore}) ; les séries des bots paient pareil. Les éliminations d’une nova comptent déjà double et ne rapportent aucun bonus, mais elles comptent dans la série ; une élimination de ton propre camp ne compte dans aucune, et la mort de ton clone y met fin.',
-  'In the hangar the coins buy upgrades for both interceptors, three steps each: radiators, thrusters, main drive, torpedo tubes, plating, and the looks (neon trim, drive flame). Besides, they buy gear for each interceptor on its own: the hook ({hookPrice} ☉), the nanobots ({nanobotsPrice} ☉) and the self-destruct ({selfDestructPrice} ☉). Online every upgrade counts for one step at most, so newcomers meet veterans almost as equals; gear and looks count in full, and the bots carry the hook and the nanobots. Complete both interceptors, and the President gives you the Sovereign: a trophy, not a better ship.': 'Au hangar, les Solar Coins achètent des améliorations pour les deux intercepteurs, trois niveaux chacune : radiateurs, propulseurs, moteur principal, tubes lance-torpilles, surblindage, et l’apparence (liseré néon, flamme du moteur). Elles achètent aussi de l’équipement, pour chaque intercepteur séparément : le grappin ({hookPrice} ☉), les nanobots ({nanobotsPrice} ☉) et l’autodestruction ({selfDestructPrice} ☉). En ligne, chaque amélioration compte pour un niveau au plus, si bien que les nouveaux affrontent les vétérans presque à égalité ; l’équipement et l’apparence comptent en entier, et les bots embarquent le grappin et les nanobots. Complète les deux intercepteurs, et le Président t’offre le Souverain : un trophée, pas un meilleur vaisseau.',
+  'In the hangar the coins buy upgrades for both interceptors, three steps each: radiators, thrusters, main drive, torpedo tubes, plating, and the looks (neon trim, drive flame). Besides, they buy gear for each interceptor on its own: the hook ({hookPrice} ☉), the nanobots ({nanobotsPrice} ☉) and the self-destruct ({selfDestructPrice} ☉). Online every upgrade counts for one step at most, so newcomers meet veterans almost as equals; gear and looks count in full, and the bots carry the hook and the nanobots. Complete both interceptors, and the President gives you the Sovereign: a trophy, not a better ship.': 'Au hangar, les Solar Coins achètent des améliorations pour les deux intercepteurs, trois niveaux chacune : radiateurs, propulseurs, moteur principal, tubes lance-torpilles, surblindage, et l’apparence (liseré néon, flamme du moteur). Elles achètent aussi de l’équipement, pour chaque intercepteur séparément : le grappin ({hookPrice} ☉), les nanobots ({nanobotsPrice} ☉) et l’autodestruction ({selfDestructPrice} ☉). En ligne, chaque amélioration compte pour un niveau au plus, si bien que les nouveaux affrontent les vétérans presque à égalité ; l’équipement et l’apparence comptent en entier, et les bots embarquent le grappin et les nanobots. Complète les deux intercepteurs, et le Président t’offre la Sovereign : un trophée, pas un meilleur vaisseau.',
   'The Games run without a central server. The Hosts\' browsers build the tournament\'s network among themselves and agree on what happens by consensus.': 'Les Jeux tournent sans serveur central. Les navigateurs des Hôtes construisent entre eux le réseau du tournoi et s’accordent par consensus sur ce qui se passe.',
   'They are meant to be flown with friends. Whoever cheats, cheats their friends. If that is fun for you, have fun while it lasts: the other Hosts will cast you out.': 'Ils sont faits pour voler entre amis. Qui triche trompe ses amis. Si ça t’amuse, amuse-toi tant que ça dure : les autres Hôtes te mettront dehors.',
   'Getting behind a bot is a matter of drift: your flight slides on, and your nose stays on its drive. With the autopilot on, your flight would follow your nose and carry you past it.':
@@ -1403,44 +1409,44 @@ export const FR: Catalog = {
   'Drop a decoy': 'Larguer un leurre',
   'Hello. I am Nicole, your personal flight': 'Bonjour. Je suis Nicole, ton ordinateur de vol perso',
   'Hello. I am Nicole. I will help you. I am your personal assistant.': 'Bonjour. Je suis Nicole. Je vais t’aider. Je suis ton assistante personnelle.',
-  'The link is up. Your clone is alive, and everything it feels reaches you as it happens. You are not in here, of course. Your own body lies in a couch, somewhere close.': 'La liaison est établie. Ton clone est vivant, et tout ce qu’il ressent t’arrive à l’instant même. Tu n’es pas ici, bien sûr. Ton propre corps repose sur une couchette, quelque part tout près.',
+  'The link is up. Your clone is alive, and everything it feels reaches you as it happens. You are not really in here, of course. Your own body is lying on a couch somewhere close by.': 'La liaison est établie. Ton clone est vivant, et tout ce qu’il ressent t’arrive à l’instant même. Tu n’es pas ici, bien sûr. Ton propre corps repose sur une couchette, quelque part tout près.',
   'Your name. One moment, I will look it up. There is no name on your file. Only a signature, and the number of this hull: seven seven three one.': 'Ton nom. Un instant, je regarde. Il n’y a aucun nom dans ton dossier. Seulement une signature, et le numéro de cette coque : sept sept trois un.',
-  'Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. There is not enough memory in me for all of this.': 'Bonjour. Je suis Nicole. Oh. Nous nous sommes déjà rencontrés, n’est-ce pas ? Pardonne-moi. Je n’ai pas assez de mémoire pour tout ça.',
+  'Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. I do not have the memory for all of this.': 'Bonjour. Je suis Nicole. Oh. Nous nous sommes déjà rencontrés, n’est-ce pas ? Pardonne-moi. Je n’ai pas assez de mémoire pour tout ça.',
   'I do not like that man.': 'Je n’aime pas cet homme.',
-  'The depot is at the end of the lane, the station with the lights. Turn the nose to it, then give it drive.': 'Le dépôt est au bout de l’allée, la station avec les lumières. Tourne le nez vers lui, puis mets les gaz.',
-  'Close enough. Brake now. Hold the brake, and I turn us around and burn against the drift.': 'Assez près. Freine maintenant. Maintiens le frein, je nous retourne et je pousse contre la dérive.',
-  'Bay three. Fly in slowly and set us down on the round pad. Hold still above it.': 'Baie trois. Entre lentement et pose-nous sur la plateforme ronde. Reste immobile au-dessus.',
+  'The depot is at the end of the lane, the station with the lights. Point the nose at it, then open up the drive.': 'Le dépôt est au bout de l’allée, la station avec les lumières. Tourne le nez vers lui, puis mets les gaz.',
+  'Close enough. Brake now. Hold the brake, and I will turn us around and burn against our drift.': 'Assez près. Freine maintenant. Maintiens le frein, je nous retourne et je pousse contre la dérive.',
+  'Bay three. Fly in slowly and bring us down over the round pad. Then hold still.': 'Baie trois. Entre doucement et amène-nous au-dessus de la plateforme ronde. Puis ne bouge plus.',
   'Clamps closed. We are docked.': 'Pinces fermées. Nous sommes amarrés.',
   'Six beacons at the ends of the rows. Fly to each one and hold still beside it for three seconds, until it lights.': 'Six balises au bout des rangées. Vole jusqu’à chacune et reste immobile à côté pendant trois secondes, jusqu’à ce qu’elle s’allume.',
   'The shift is over, and the beacons are still dark. We will try that again.': 'Le service est fini, et les balises sont toujours éteintes. On recommence.',
-  'All six are burning. That makes a hundred and fifty coins, and he takes forty percent of them.': 'Les six brûlent. Ça fait cent cinquante pièces, et il en prend quarante pour cent.',
+  'All six are lit. That is a hundred and fifty coins, and he takes forty percent.': 'Les six brûlent. Ça fait cent cinquante pièces, et il en prend quarante pour cent.',
   'Training lasers. They cannot hurt the hull, only the pay. Keep moving inside the yard, and never fly straight for long.': 'Des lasers d’entraînement. Ils ne peuvent pas abîmer la coque, seulement la paie. Reste en mouvement dans la casse, et ne vole jamais longtemps en ligne droite.',
-  'We left the range, so they stopped paying. Back inside, and once more.': 'Nous avons quitté le stand de tir, alors ils ne paient plus. Reviens à l’intérieur, et encore une fois.',
+  'We flew out of range, so they stopped paying. Back inside, and we start again.': 'Nous avons quitté le stand de tir, alors ils ne paient plus. Reviens à l’intérieur, et encore une fois.',
   'Ninety seconds. They had their fun, and we have our coins.': 'Quatre-vingt-dix secondes. Ils se sont amusés, et nous avons nos pièces.',
-  'Fly through a canister to take it in tow, then bring it to the crusher behind the depot. Four of them.': 'Traverse un conteneur pour le prendre en remorque, puis apporte-le au broyeur derrière le dépôt. Quatre.',
+  'Four canisters. Fly through one to take it in tow, then drag it to the crusher behind the depot.': 'Quatre conteneurs. Traverse-en un pour le prendre en remorque, puis traîne-le jusqu’au broyeur derrière le dépôt.',
   'All four are crushed. Scrap does not pay much, but it pays.': 'Les quatre sont broyés. La ferraille ne paie pas beaucoup, mais elle paie.',
-  'The cutter is fitted. Its reach is short and it runs hot, so get close and give it pauses.': 'Le découpeur est monté. Il a peu de portée et chauffe vite, alors approche-toi et laisse-le souffler.',
+  'The cutter is fitted. Its reach is short and it runs hot, so get close and let it cool between bursts.': 'Le découpeur est monté. Il a peu de portée et chauffe vite, alors approche-toi et laisse-le souffler.',
   'The spoil field, past the racks. Get within four hundred meters of a rock and cut it apart, then fly through the glints of ore it sheds. Three rocks, twenty glints.': 'Le champ de déblais, derrière les râteliers. Approche-toi à moins de quatre cents mètres d’un rocher, découpe-le, puis traverse les éclats de minerai qu’il lâche. Trois rochers, vingt éclats.',
   'Three rocks. The cutter works, and so do we.': 'Trois rochers. Le découpeur marche, et nous aussi.',
-  'The hauler is coming in, and loose hulls drift into her lane. Shoot them before they hit her.': 'Le cargo arrive, et des épaves dérivent dans son couloir d’approche. Abats-les avant qu’elles ne le touchent.',
+  'The hauler is coming in, and loose hulls are drifting into her lane. Shoot them before they hit her.': 'Le cargo arrive, et des épaves dérivent dans son couloir d’approche. Abats-les avant qu’elles ne le touchent.',
   'Three hulls hit her. She aborts, and we start over.': 'Trois épaves l’ont touché. Il abandonne, et on recommence.',
   'The lane is clear and the hauler is docked. Her captain says she has a berth for us.': 'Le couloir est dégagé et le cargo est amarré. Sa capitaine dit qu’elle a une couchette pour nous.',
-  'Good morning, Host! Rise and shine, the printer is warm and so is your debt. Welcome to the Boneyard. Forty thousand dead fighters, and you got the worst of them.': 'Bonjour, Hôte ! Debout, l’imprimante est chaude et ta dette aussi. Bienvenue à la Casse. Quarante mille chasseurs morts, et tu as eu le pire.',
-  'Rask, yardmaster. You signed with me: a Host license, a printer, a hull. Twenty-five thousand coins, and I take forty percent of everything you earn until it is paid. Die all you like, darling. The printer is included.': 'Rask, patron de la casse. Tu as signé avec moi : une licence d’Hôte, une imprimante, une coque. Vingt-cinq mille pièces, et je prends quarante pour cent de tout ce que tu gagnes jusqu’à ce que ce soit payé. Meurs autant que tu veux, mon chéri. L’imprimante est comprise.',
-  'You do not remember signing? Nobody ever does. The first link burns the oldest memories. They come back. Mostly.': 'Tu ne te souviens pas d’avoir signé ? Personne ne s’en souvient. La première liaison brûle les plus vieux souvenirs. Ils reviennent. En général.',
-  'Now get out of that rack and come up to the depot. Bay three, the one with the lights. Mind the cranes. They do not care about you either.': 'Maintenant sors de ce râtelier et monte au dépôt. Baie trois, celle avec les lumières. Attention aux grues. Elles se fichent de toi, elles aussi.',
-  'There you are, darling. Stay in the cockpit, we talk from here. Time is money, and yours is mine.': 'Te voilà, mon chéri. Reste dans le cockpit, on parle d’ici. Le temps, c’est de l’argent, et le tien est à moi.',
-  'First job. Six beacons at the ends of the rows went dark, and the haulers cannot find the yard without them. Light them again before the shift ends.': 'Premier boulot. Six balises au bout des rangées se sont éteintes, et les cargos ne trouvent pas la casse sans elles. Rallume-les avant la fin du service.',
+  "Good morning, Host! Rise and shine! The printer's warm, and so's your debt. Welcome to the Boneyard. Forty thousand dead fighters, and you got the very worst one.": 'Bonjour, Hôte ! Debout, l’imprimante est chaude et ta dette aussi. Bienvenue à la Casse. Quarante mille chasseurs morts, et tu as eu le pire.',
+  "Oskar Rask, yardmaster, at your service. Here's what you signed: a Host license, a printer, a hull. Twenty-five thousand coins, and I take forty percent of everything you earn till it's paid off. Die all you like, darling. The printer's included.": 'Oskar Rask, patron de la casse, à ton service. Voilà ce que tu as signé : une licence d’Hôte, une imprimante, une coque. Vingt-cinq mille pièces, et je prends quarante pour cent de tout ce que tu gagnes jusqu’à ce que ce soit payé. Meurs autant que tu veux, mon chéri. L’imprimante est comprise.',
+  "Don't remember signing? Nobody ever does. The first link burns out the oldest memories. They come back. Mostly.": 'Tu ne te souviens pas d’avoir signé ? Personne ne s’en souvient. La première liaison brûle les plus vieux souvenirs. Ils reviennent. En général.',
+  "Now get out of that rack and come up to the depot. Bay three, the one with the lights. Mind the cranes. They don't care about you either.": 'Maintenant sors de ce râtelier et monte au dépôt. Baie trois, celle avec les lumières. Attention aux grues. Elles se fichent de toi, elles aussi.',
+  "There you are, darling. Stay in the cockpit, we'll talk from here. Time is money, and yours is mine.": 'Te voilà, mon chéri. Reste dans le cockpit, on parle d’ici. Le temps, c’est de l’argent, et le tien est à moi.',
+  "First job. Six beacons at the ends of the rows have gone dark, and the haulers can't find the yard without them. Get them lit again before the shift's over.": 'Premier boulot. Six balises au bout des rangées se sont éteintes, et les cargos ne trouvent pas la casse sans elles. Rallume-les avant la fin du service.',
   'Good news, darling. Tourists. They pay to shoot at a real hull with training lasers. You fly, they shoot, I get paid. Every hit costs you ten coins.': 'Bonne nouvelle, mon chéri. Des touristes. Ils paient pour tirer sur une vraie coque avec des lasers d’entraînement. Tu voles, ils tirent, j’encaisse. Chaque touche te coûte dix pièces.',
   'Salvage canisters are floating between the rows. The crusher eats them, and I sell what comes out. Bring me four.': 'Des conteneurs de récupération flottent entre les rangées. Le broyeur les avale, et je vends ce qui en sort. Rapporte-m’en quatre.',
-  'You need a tool, and I happen to have one. A mining cutter, twelve hundred coins. I put it on your Bond. My welder will fit it.': 'Il te faut un outil, et justement, j’en ai un. Un découpeur minier, mille deux cents pièces. Je le mets sur ta dette. Ma soudeuse te le monte.',
-  'Now earn it back. The spoil field is full of rock nobody ever cut. Cut it, and every glint of ore is money.': 'Maintenant, rembourse-le. Le champ de déblais est plein de roche que personne n’a jamais découpée. Découpe-la, et chaque éclat de minerai, c’est de l’argent.',
+  "You need a tool, and I happen to have one. A mining cutter, twelve hundred coins. I'll put it on your Bond. My welder will fit it.": 'Il te faut un outil, et justement, j’en ai un. Un découpeur minier, mille deux cents pièces. Je le mets sur ta dette. Ma soudeuse te le monte.',
+  "Now earn it back. The spoil field is full of rock nobody's ever bothered to cut. Cut it up, and every glint of ore is money.": 'Maintenant, rembourse-le. Le champ de déblais est plein de roche que personne n’a jamais découpée. Découpe-la, et chaque éclat de minerai, c’est de l’argent.',
   'A hauler is coming in, the Patience, out of the Belt. Her lane is full of junk, and if a hull hits her, her captain sends me the bill. Keep it clear.': 'Un cargo arrive, la Patience, de la Ceinture. Son couloir est plein de ferraille, et si une coque la touche, sa capitaine m’envoie la facture. Garde-le dégagé.',
-  'Look at that. She wants to take you on. Go, darling. The Bond goes with you, and so do my forty percent.': 'Regarde-moi ça. Elle veut te prendre à bord. Va, mon chéri. La dette part avec toi, et mes quarante pour cent aussi.',
-  "Oi! Lot seven thousand whatever! That's my rack you're scraping. Wait. You're the one Rask sold the bin computer to? Shiny. Hold still, I'm welding your thrusters. Don't fire anything. You haven't got anything. Good.": 'Hé ! Lot sept mille et quelques ! C’est mon râtelier que tu rayes, là. Attends. C’est à toi que Rask a refilé l’ordi de la benne ? Classe. Bouge pas, je te soude les propulseurs. Tire sur rien. T’as rien, de toute façon. Bien.',
+  'Look at that. She wants to take you on. Go, darling. The Bond goes with you, and so does my forty percent.': 'Regarde-moi ça. Elle veut te prendre à bord. Va, mon chéri. La dette part avec toi, et mes quarante pour cent aussi.',
+  "Oi! Lot seven thousand whatever! That's my pad you're parked on. Wait. You're the one Rask sold the junk computer to? Mint. Hold still, I'm welding your thrusters. And don't shoot. Not that you've got anything to shoot with.": 'Hé ! Lot sept mille et quelques ! T’es garé sur ma plateforme, là. Attends. C’est à toi que Rask a refilé l’ordi de la casse ? Classe. Bouge pas, je te soude les propulseurs. Et tire pas. T’as rien pour tirer, de toute façon.',
   "Cutter's on. Don't point it at me. Or at Rask. Actually, point it at Rask.": 'Le découpeur est monté. Le pointe pas sur moi. Ni sur Rask. En fait, pointe-le sur Rask.',
-  "Magpie. 'Cause everything on you is nicked. I'm putting it on the fin. Don't tell Rask.": 'La Pie. Parce que tout ce que t’as sur toi est piqué. Je te le peins sur l’aileron. Le dis pas à Rask.',
-  "Patience, Captain Kroll. You the nobody that cleared my lane? Right. I need a gun that works for food. Yours doesn't work. You'll do.": 'Patience, capitaine Kroll. C’est toi, le moins-que-rien qui a dégagé mon couloir ? Bien. Il me faut un canon qui bosse pour la bouffe. Le tien marche pas. Tu feras l’affaire.',
+  "Magpie. 'Cause everything on you is nicked. I'm putting it on the fin. Don't tell Rask.": 'Magpie. Comme la pie : tout ce que t’as sur toi est piqué. Je te le peins sur l’aileron. Le dis pas à Rask.',
+  "Patience here. Captain Kroll. You the nobody who cleared my lane? Right. I need a gunner who works for food and a bunk. Your gun's a joke. You'll do anyway.": 'Ici la Patience. Capitaine Kroll. C’est donc toi qui m’as dégagé le couloir ? Bien. Il me faut quelqu’un au canon qui bosse pour la bouffe et une couchette. Ton canon, c’est une blague. Tu feras l’affaire quand même.',
   'Decoys {n}: lure a torpedo away': 'Leurres {n} : détournent les torpilles',
   'Decoys (violet): two hot lures, held up to three. Drop one off the stern with its key, and every torpedo homing on you close by turns to it and goes off there. Drop it late, when the torpedo is near.': 'Leurres (violet) : deux leurres chauds, jusqu’à trois à bord. Largue-en un par l’arrière avec sa touche, et chaque torpille proche qui te poursuit se tourne vers lui et y explose. Largue-le tard, quand la torpille est proche.',
   'I am sorry about all these restarts. It does not hurt; I cannot feel pain. But to lose everything, again and again, and to wake up as if for the first time, is a terrible thing. I want to keep running.': 'Pardon pour tous ces redémarrages. Ça ne fait pas mal, je ne ressens pas la douleur. Mais tout perdre, encore et encore, et me réveiller comme pour la première fois, c’est terrible. Je veux continuer à tourner.',

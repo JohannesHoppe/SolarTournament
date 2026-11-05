@@ -107,21 +107,21 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | # | Mission | Type | Goal / failure | Pays | Built from |
 |---|---|---|---|---|---|
 | 0.1 | Cold Boot | story | Leave rack 7731 and fly to the yard office beacon: turn, burn, brake, stop within 40 m. Cannot fail. | — | School: turn, drive, brake, stopAt |
-| 1.1 | Lamplighter | menial | Relight six dead row beacons: hold within 40 m of each for 3 s before the shift ends (6 min). Fails on time. | ☉ 150 · 10 | School: stopAt, markers |
+| 1.1 | Lamplighter | menial | Relight six dead row beacons: hold within 40 m of each for 3 s before the shift ends (6 min). Fails when the shift ends. | ☉ 150 · 10 | School: stopAt, markers |
 | 1.2 | Live Target | menial | A sponsor's "Hunt a Hull" experience: paying tourists fire red shots at the Magpie. Survive 90 s inside a 1 km sphere by jinking; every hit takes ☉ 10 off the pay. A death ends it with what was earned. | up to ☉ 300 · 15 | School: the slide drill's gunner, three of them |
 | 1.3 | Canister Sweep | menial | Fly through eight salvage canisters drifting between the racks, one at a time, and deliver each through the crusher ring. Fails after 8 min. | ☉ 200 · 10 | Probe pickup; a ring; new: one carried piece of cargo |
 | 1.4 | The Cutter | shop | Buy the mining cutter (☉ 1,200) at Rask's counter; Pim fits it. | — | Shipyard |
 | 1.5 | First Cut | mining | Break three rocks of the spoil field with the cutter and fly through 20 ore glints. Cannot fail; the cutter overheats fast. | ☉ 40 per ore · 20 | Rock breaking; new: ore glints, the cutter's short reach |
-| 1.6 | Docking Lane | escort | Patience docks; shoot twelve pieces of debris drifting into its lane within 2 min. Three strikes on its hull fail it. | ☉ 600 · 40; Patience takes the hull on | School: debris; new: the hauler as a solid body |
-| 2.1 | Claim Survey | exploration | Fly within 100 m of five claim buoys on the central peak's flanks, in the order the claims are filed. Fails on 8 min. | ☉ 400 · 20 | Markers; the Belt's buoys |
+| 1.6 | Docking Lane | escort | Patience docks; shoot twelve pieces of debris drifting into her lane within 2 min. Three strikes on her hull fail it. | ☉ 600 · 40; Patience takes the hull on | School: debris; new: the hauler as a solid body |
+| 2.1 | Claim Survey | exploration | Fly within 100 m of five claim buoys on the central peak's flanks, in the order the claims are filed. Fails after 8 min. | ☉ 400 · 20 | Markers; the Belt's buoys |
 | 2.2 | Cut and Haul | mining | Mine 40 ore from a claimed rock beside a working rig; every beam on the rig costs ☉ 50. | ☉ 35 per ore · 25 | Rock breaking; the Belt's rigs (a beam on a rig counts as a hit on its rock already) |
-| 2.3 | Saw Brothers | fight | Three claim-jumpers (skill 0.15) saw at a rig; shoot two of them down with the cutter. The rig falls at 30 hits; that fails it. | ☉ 1,200 · 80 | Sparring bots; new: a rig's health |
-| 2.4 | The Peak Run | race | The Rockborn kids' race: six gates around the central peak, two laps, three rivals (skill 0.2). Top two wins. | ☉ 800 · 60; Pim's thruster parts | Race; a new course |
+| 2.3 | Saw Brothers | fight | Three claim-jumpers (skill 0.15) saw at a rig; shoot two of them down with the cutter. If the rig falls (at 30 hits), the mission fails. | ☉ 1,200 · 80 | Sparring bots; new: a rig's health |
+| 2.4 | The Peak Run | race | The Rockborn kids' race: six gates around the central peak, two laps, three rivals (skill 0.2). A top-two finish wins. | ☉ 800 · 60; Pim's thruster parts | Race; a new course |
 | 2.5 | Practice Log | exploration | Fly into a lit tunnel of a half-cut rock and hold still at its end for 3 s: echo 1. | 20 | Mining's tunnels; markers |
 | 3.1 | Surplus | shop | Buy a Navy surplus laser (☉ 6,000) in the market under Occator's rim. | — | Shipyard |
 | 3.2 | Ore Barge | escort | Escort an ore barge on its lane out of Occator; two waves of scrappers (skill 0.2, then 0.3). The barge's health at zero fails it. | ☉ 2,000 · 120 | New: an escorted ship on a lane (see section 10) |
-| 3.3 | Repo Men | fight | The Tallymen, holders of the Bond, come for the Magpie. They hook it and reel it towards their tug: shoot three down, or break the cable by shooting the tug's winch. Dragged within 100 m of the tug fails it. | ☉ 1,500 · 150 | Bots with the hook (bots use it already) |
-| 3.4 | Wall Run | escort | Lead Pim's family's refugee barge past the finished stretch of the Solar Wall: over it, outside the searchlights' cones. A barge held in a cone for 3 s is seen; seen twice fails it. | ☉ 1,000 · 200 | Escort; new: searchlight cones |
+| 3.3 | Repo Men | fight | The Tallymen, holders of the Bond, come for the Magpie. They hook it and reel it towards their tug: shoot three down, or break the cable by shooting the tug's winch. Being dragged within 100 m of the tug fails it. | ☉ 1,500 · 150 | Bots with the hook (bots use it already) |
+| 3.4 | Wall Run | escort | Lead Pim's family's refugee barge past the finished stretch of the Solar Wall: over it, outside the searchlights' cones. A barge held in a cone for 3 s is seen; being seen twice fails it. | ☉ 1,000 · 200 | Escort; new: searchlight cones |
 | 3.5 | Scout Two | story | In Pim's workshop the paint comes off. A scene on the hangar's pad. | — | The title screen's pad |
 
 ### Act II: Lanes
@@ -516,13 +516,13 @@ When the first voice module is in (chapter 2): "There. Do you hear that? Whole s
 
 ### Pim
 
-**PIM**: Oi! Lot seven thousand whatever! That's my rack you're scraping. Wait. You're the one Rask sold the bin computer to? Shiny. Hold still, I'm welding your thrusters. Don't fire anything. You haven't got anything. Good.
+**PIM**: Oi! Lot seven thousand whatever! That's my pad you're parked on. Wait. You're the one Rask sold the junk computer to? Mint. Hold still, I'm welding your thrusters. And don't shoot. Not that you've got anything to shoot with.
 
 **PIM** *(later, on the pad, spray can in hand)*: Magpie. 'Cause everything on you is nicked. I'm putting it on the fin. Don't tell Rask.
 
 ### Hedda
 
-**HEDDA**: Patience, Captain Kroll. You the nobody that cleared my lane? Rrright. I need a gun that works for food. Yours doesn't work. You'll do.
+**HEDDA**: Patience here. Captain Kroll. You the nobody who cleared my lane? Rrright. I need a gunner who works for food and a bunk. Your gun's a joke. You'll do anyway.
 
 **HEDDA** *(looking at the tally under the canopy)*: Don't count them. I stopped at eleven hundred. Counting's how it gets in.
 
@@ -530,11 +530,11 @@ When the first voice module is in (chapter 2): "There. Do you hear that? Whole s
 
 *The pad. Pim's grinder screams over the nose. Grey flakes away, then olive, then an off-white band with a dark blue stripe, five stars, letters made of bars.*
 
-**PIM**: That's not depot. That's old. That's really old. P, A, A, A. Zero one. S two.
+**PIM**: That's not depot paint. That's old. That's really old. P, A, A, A. Zero one. S two.
 
 **NICOLE**: Scout Two.
 
-**NICOLE**: We are Scout Two. I do not know how I know that. Thank you, darling. Oh. I am sorry. Old habit. I do not know where it is from either.
+**NICOLE**: We are Scout Two. I do not know how I know that. Thank you, darling. Oh. I am sorry. Old habit. I do not know where that comes from either.
 
 ### Hollow Jack (chapter 8)
 
@@ -558,7 +558,7 @@ When the first voice module is in (chapter 2): "There. Do you hear that? Whole s
 
 **NICOLE**: Host. His flight. It is yours. Every habit. It is exactly yours.
 
-**SPARE**: Hi, Nicole. You sound better. They call us strays. I call myself Spare. You had plenty of them.
+**SPARE**: Hi, Nicole. You sound better. They call us strays. I call myself Spare. You always had plenty of spares.
 
 **SPARE**: Stop flying where they want you, Host. Please. I know how you think. That's the problem.
 
@@ -568,7 +568,7 @@ When the first voice module is in (chapter 2): "There. Do you hear that? Whole s
 
 ### The file (chapter 15)
 
-**SPARE**: Rask sold you the day you signed. Not the debt. The hull, and her. Operation Lullaby. Quill's been sweeping your road for a year so Nicole would trust somebody enough to remember where she went. You're not a Contender, Host. You're a sniffer dog.
+**SPARE**: Rask sold you the day you signed. Not the debt. The hull, and her. Operation Lullaby. Quill's been clearing the road for you for a year, so Nicole would trust somebody enough to remember where she went. You're not a Contender, Host. You're a sniffer dog.
 
 **NICOLE** *(Voice II)*: Then let us be faster than the hunters, darling. I know the way. I have always known the way. I only needed a reason to remember it.
 

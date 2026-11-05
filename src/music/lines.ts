@@ -506,27 +506,27 @@ export const ATTACKED = {
 export const CAMPAIGN = {
   bootHello: 'Hello. I am Nicole, your personal flight',
   bootAgain: 'Hello. I am Nicole. I will help you. I am your personal assistant.',
-  bootLink: 'The link is up. Your clone is alive, and everything it feels reaches you as it happens. You are not in here, of course. Your own body lies in a couch, somewhere close.',
+  bootLink: 'The link is up. Your clone is alive, and everything it feels reaches you as it happens. You are not really in here, of course. Your own body is lying on a couch somewhere close by.',
   bootName: 'Your name. One moment, I will look it up. There is no name on your file. Only a signature, and the number of this hull: seven seven three one.',
-  bootThird: 'Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. There is not enough memory in me for all of this.',
+  bootThird: 'Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. I do not have the memory for all of this.',
   bootSorry: 'I am sorry about all these restarts. It does not hurt; I cannot feel pain. But to lose everything, again and again, and to wake up as if for the first time, is a terrible thing. I want to keep running.',
   dislike: 'I do not like that man.',
-  depotTurn: 'The depot is at the end of the lane, the station with the lights. Turn the nose to it, then give it drive.',
-  depotBrake: 'Close enough. Brake now. Hold the brake, and I turn us around and burn against the drift.',
-  depotDock: 'Bay three. Fly in slowly and set us down on the round pad. Hold still above it.',
+  depotTurn: 'The depot is at the end of the lane, the station with the lights. Point the nose at it, then open up the drive.',
+  depotBrake: 'Close enough. Brake now. Hold the brake, and I will turn us around and burn against our drift.',
+  depotDock: 'Bay three. Fly in slowly and bring us down over the round pad. Then hold still.',
   docked: 'Clamps closed. We are docked.',
   lamplighter: 'Six beacons at the ends of the rows. Fly to each one and hold still beside it for three seconds, until it lights.',
   lamplighterLate: 'The shift is over, and the beacons are still dark. We will try that again.',
-  lamplighterDone: 'All six are burning. That makes a hundred and fifty coins, and he takes forty percent of them.',
+  lamplighterDone: 'All six are lit. That is a hundred and fifty coins, and he takes forty percent.',
   liveTarget: 'Training lasers. They cannot hurt the hull, only the pay. Keep moving inside the yard, and never fly straight for long.',
-  liveTargetOut: 'We left the range, so they stopped paying. Back inside, and once more.',
+  liveTargetOut: 'We flew out of range, so they stopped paying. Back inside, and we start again.',
   liveTargetDone: 'Ninety seconds. They had their fun, and we have our coins.',
-  canisterSweep: 'Fly through a canister to take it in tow, then bring it to the crusher behind the depot. Four of them.',
+  canisterSweep: 'Four canisters. Fly through one to take it in tow, then drag it to the crusher behind the depot.',
   canisterSweepDone: 'All four are crushed. Scrap does not pay much, but it pays.',
-  cutterFitted: 'The cutter is fitted. Its reach is short and it runs hot, so get close and give it pauses.',
+  cutterFitted: 'The cutter is fitted. Its reach is short and it runs hot, so get close and let it cool between bursts.',
   firstCut: 'The spoil field, past the racks. Get within four hundred meters of a rock and cut it apart, then fly through the glints of ore it sheds. Three rocks, twenty glints.',
   firstCutDone: 'Three rocks. The cutter works, and so do we.',
-  dockingLane: 'The hauler is coming in, and loose hulls drift into her lane. Shoot them before they hit her.',
+  dockingLane: 'The hauler is coming in, and loose hulls are drifting into her lane. Shoot them before they hit her.',
   dockingLaneStruck: 'Three hulls hit her. She aborts, and we start over.',
   dockingLaneDone: 'The lane is clear and the hauler is docked. Her captain says she has a berth for us.',
 } as const;
@@ -536,18 +536,18 @@ export const CAMPAIGN = {
  * salesman who calls everyone darling. His own voice (see tools/voice).
  */
 export const RASK = {
-  wake: 'Good morning, Host! Rise and shine, the printer is warm and so is your debt. Welcome to the Boneyard. Forty thousand dead fighters, and you got the worst of them.',
-  deal: 'Rask, yardmaster. You signed with me: a Host license, a printer, a hull. Twenty-five thousand coins, and I take forty percent of everything you earn until it is paid. Die all you like, darling. The printer is included.',
-  memory: 'You do not remember signing? Nobody ever does. The first link burns the oldest memories. They come back. Mostly.',
-  come: 'Now get out of that rack and come up to the depot. Bay three, the one with the lights. Mind the cranes. They do not care about you either.',
-  docked: 'There you are, darling. Stay in the cockpit, we talk from here. Time is money, and yours is mine.',
-  lamplighter: 'First job. Six beacons at the ends of the rows went dark, and the haulers cannot find the yard without them. Light them again before the shift ends.',
+  wake: "Good morning, Host! Rise and shine! The printer's warm, and so's your debt. Welcome to the Boneyard. Forty thousand dead fighters, and you got the very worst one.",
+  deal: "Oskar Rask, yardmaster, at your service. Here's what you signed: a Host license, a printer, a hull. Twenty-five thousand coins, and I take forty percent of everything you earn till it's paid off. Die all you like, darling. The printer's included.",
+  memory: "Don't remember signing? Nobody ever does. The first link burns out the oldest memories. They come back. Mostly.",
+  come: "Now get out of that rack and come up to the depot. Bay three, the one with the lights. Mind the cranes. They don't care about you either.",
+  docked: "There you are, darling. Stay in the cockpit, we'll talk from here. Time is money, and yours is mine.",
+  lamplighter: "First job. Six beacons at the ends of the rows have gone dark, and the haulers can't find the yard without them. Get them lit again before the shift's over.",
   liveTarget: 'Good news, darling. Tourists. They pay to shoot at a real hull with training lasers. You fly, they shoot, I get paid. Every hit costs you ten coins.',
   canisterSweep: 'Salvage canisters are floating between the rows. The crusher eats them, and I sell what comes out. Bring me four.',
-  cutter: 'You need a tool, and I happen to have one. A mining cutter, twelve hundred coins. I put it on your Bond. My welder will fit it.',
-  firstCut: 'Now earn it back. The spoil field is full of rock nobody ever cut. Cut it, and every glint of ore is money.',
+  cutter: "You need a tool, and I happen to have one. A mining cutter, twelve hundred coins. I'll put it on your Bond. My welder will fit it.",
+  firstCut: "Now earn it back. The spoil field is full of rock nobody's ever bothered to cut. Cut it up, and every glint of ore is money.",
   dockingLane: 'A hauler is coming in, the Patience, out of the Belt. Her lane is full of junk, and if a hull hits her, her captain sends me the bill. Keep it clear.',
-  dockingLaneDone: 'Look at that. She wants to take you on. Go, darling. The Bond goes with you, and so do my forty percent.',
+  dockingLaneDone: 'Look at that. She wants to take you on. Go, darling. The Bond goes with you, and so does my forty percent.',
 } as const;
 
 /**
@@ -555,14 +555,14 @@ export const RASK = {
  * fearless. She patches the hull and names it the Magpie. Her own voice (see tools/voice).
  */
 export const PIM = {
-  meet: "Oi! Lot seven thousand whatever! That's my rack you're scraping. Wait. You're the one Rask sold the bin computer to? Shiny. Hold still, I'm welding your thrusters. Don't fire anything. You haven't got anything. Good.",
+  meet: "Oi! Lot seven thousand whatever! That's my pad you're parked on. Wait. You're the one Rask sold the junk computer to? Mint. Hold still, I'm welding your thrusters. And don't shoot. Not that you've got anything to shoot with.",
   cutter: "Cutter's on. Don't point it at me. Or at Rask. Actually, point it at Rask.",
   magpie: "Magpie. 'Cause everything on you is nicked. I'm putting it on the fin. Don't tell Rask.",
 } as const;
 
 /** Captain Hedda Kroll of the ore hauler Patience: Rockborn, sixties, short sentences, a voice of gravel. Her own voice (see tools/voice). */
 export const HEDDA = {
-  meet: "Patience, Captain Kroll. You the nobody that cleared my lane? Right. I need a gun that works for food. Yours doesn't work. You'll do.",
+  meet: "Patience here. Captain Kroll. You the nobody who cleared my lane? Right. I need a gunner who works for food and a bunk. Your gun's a joke. You'll do anyway.",
 } as const;
 
 /** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
