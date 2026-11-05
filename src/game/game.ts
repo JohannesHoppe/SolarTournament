@@ -1592,8 +1592,13 @@ export class Game implements OnlineGame {
     this.atBoard = open;
     $('menu').hidden = open || this.state !== 'menu';
     $('board').hidden = !open;
-    if (!open) return;
+    // Pim's pad: Lot 7731 stands on it as far as it is fitted while the board is open, the ship of the Games again after
+    if (!open) {
+      this.renderShowcase();
+      return;
+    }
     const campaign = this.campaign;
+    this.showcase?.show('magpie', hullOf(campaign), false);
     const next = nextMission(campaign);
     const place = arenaById(next?.drills[0].arena ?? MISSIONS[MISSIONS.length - 1].drills[0].arena ?? '');
     $('board-place').textContent = place ? t(place.name) : '';
@@ -3756,7 +3761,7 @@ export class Game implements OnlineGame {
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
     this.airWeather(dt);
     // the ship on show, while the menu or the hangar shows it
-    if (this.state === 'menu' && !this.choosingSolo && !this.choosingSchool && !this.atBoard && !this.browsing && !this.bench.has('showcase')) this.showcase?.render(wallClock());
+    if (this.state === 'menu' && !this.choosingSolo && !this.choosingSchool && !this.browsing && !this.bench.has('showcase')) this.showcase?.render(wallClock());
 
     const cue = this.musicCue();
     if (cue) this.radio.setCue(cue);
