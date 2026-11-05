@@ -40,7 +40,7 @@ export async function ffmpegBinary(folder: string): Promise<string> {
   const url = `${FFMPEG_RELEASE}/ffmpeg-${target}.gz`;
   console.log(`Fetching ffmpeg for ${target}`);
   const binary = await fetchPinned(url, 'ffmpeg', expected, gunzipSync);
-  // other binaries are of no use any more
+  // a binary of another pinned build is of no use: removed
   if (existsSync(folder)) for (const entry of readdirSync(folder)) if (entry !== expected.slice(0, 16)) rmSync(join(folder, entry), { recursive: true, force: true });
   mkdirSync(dirname(file), { recursive: true });
   writeWhole(file, binary, 0o755);

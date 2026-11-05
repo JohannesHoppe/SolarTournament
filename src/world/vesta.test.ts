@@ -25,7 +25,7 @@ describe('Rheasilvia on Vesta', () => {
     expect(surfaceHeight(-2_000_000, 0)).toBeLessThan(VESTA_GROUND - 200000);
   });
 
-  it('lays every boulder of the claims on the flank, none in it and none afloat, and the flank solid beneath them', () => {
+  it('beds every boulder of the claims in the flank’s dust, a share of its height, none buried and none afloat, and the flank solid beneath them', () => {
     const field = testField();
     field.generate(place.layout);
     const rocks = [...field.asteroids.values()].filter((piece) => piece.kind === 'rock');
@@ -34,13 +34,16 @@ describe('Rheasilvia on Vesta', () => {
     for (const rock of rocks) {
       const points = outline(rock);
       let low = Infinity;
+      let high = -Infinity;
       for (let k = 0; k < points.length; k += 3) {
         rock.object.localToWorld(point.set(points[k], points[k + 1], points[k + 2]));
         low = Math.min(low, point.y - flank(point.x));
+        high = Math.max(high, point.y - flank(point.x));
       }
-      // its lowest point a meter over the flank
-      expect(low, rock.id).toBeGreaterThan(0);
-      expect(low, rock.id).toBeLessThan(40);
+      // sunk a tenth to a third of its height into the flank
+      const bedded = -low / (high - low);
+      expect(bedded, rock.id).toBeGreaterThan(0.1);
+      expect(bedded, rock.id).toBeLessThan(0.32);
     }
     // the flank is solid: under it a piece is found, over it none, along the slope
     for (const x of [-30000, 0, 30000]) {

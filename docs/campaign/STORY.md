@@ -106,16 +106,17 @@ Story missions run once; most others stay on the place's **job board** as repeat
 
 | # | Mission | Type | Goal / failure | Pays | Built from |
 |---|---|---|---|---|---|
-| 0.1 | Cold Boot | story | Leave rack 7731 and fly to the yard office beacon: turn, burn, brake, stop within 40 m. Cannot fail. | — | School: turn, drive, brake, stopAt |
+| 0.1 | Cold Boot | story | Nicole boots, crashes and boots again; Rask explains the Bond. Out of rack 7731, down the lane to the depot, brake below 10 m/s 400 m short of the hall's door, in and down onto bay 3's pad (within 15 m, slower than 2 m/s for a second). Pim welds the thrusters up to 70 %. Cannot fail. | — | School: turn, drive, brake, stopAt |
 | 1.1 | Lamplighter | menial | Relight six dead row beacons: hold within 40 m of each for 3 s before the shift ends (6 min). Fails when the shift ends. | ☉ 150 · 10 | School: stopAt, markers |
 | 1.2 | Live Target | menial | A sponsor's "Hunt a Hull" experience: paying tourists fire red shots at the Magpie. Survive 90 s inside a 1 km sphere by jinking; every hit takes ☉ 10 off the pay. A death ends it with what was earned. | up to ☉ 300 · 15 | School: the slide drill's gunner, three of them |
-| 1.3 | Canister Sweep | menial | Fly through eight salvage canisters drifting between the racks, one at a time, and deliver each through the crusher ring. Fails after 8 min. | ☉ 200 · 10 | Probe pickup; a ring; new: one carried piece of cargo |
+| 1.3 | Canister Sweep | menial | Four salvage canisters drifting between the rows, each flown through to take it in tow (15 m behind and 4 m below the stern on a cable) and brought to the crusher's hopper behind the hall. | ☉ 200 · 10 | Probe pickup; new: one towed piece of cargo |
 | 1.4 | The Cutter | shop | Buy the mining cutter (☉ 1,200) at Rask's counter; Pim fits it. | — | Shipyard |
-| 1.5 | First Cut | mining | Break three rocks of the spoil field with the cutter and fly through 20 ore glints. Cannot fail; the cutter overheats fast. | ☉ 40 per ore · 20 | Rock breaking; new: ore glints, the cutter's short reach |
-| 1.6 | Docking Lane | escort | Patience docks; shoot twelve pieces of debris drifting into her lane within 2 min. Three strikes on her hull fail it. | ☉ 600 · 40; Patience takes the hull on | School: debris; new: the hauler as a solid body |
+| 1.5 | First Cut | mining | Break three rocks of the spoil field with the cutter and fly through 20 ore glints (seven from each rock broken). Cannot fail; the cutter overheats fast. Pim names the hull: the Magpie. | ☉ 400 · 20 | Rock breaking; new: ore glints, the cutter's short reach |
+| 1.6 | Docking Lane | escort | Patience moored over the yard; shoot six loose hulls drifting at her at 40 m/s before they strike. Three strikes on her hull fail it. Then the first scene in person: Rask's office, his wet handshake, Captain Kroll takes the Host aboard. | ☉ 600 · 40; Patience takes the hull on | School: debris; new: the hauler as a solid body |
+| 2.0 | Rheasilvia | story | Patience brings the Host to Vesta; Captain Kroll names the work; Pim fits Nicole a second-hand voice board: from then on her memory holds, and she speaks without crashing. | — | Lines on the flight school's machinery |
 | 2.1 | Claim Survey | exploration | Fly within 100 m of five claim buoys on the central peak's flanks, in the order the claims are filed. Fails after 8 min. | ☉ 400 · 20 | Markers; the Belt's buoys |
 | 2.2 | Cut and Haul | mining | Mine 40 ore from a claimed rock beside a working rig; every beam on the rig costs ☉ 50. | ☉ 35 per ore · 25 | Rock breaking; the Belt's rigs (a beam on a rig counts as a hit on its rock already) |
-| 2.3 | Saw Brothers | fight | Three claim-jumpers (skill 0.15) saw at a rig; shoot two of them down with the cutter. If the rig falls (at 30 hits), the mission fails. | ☉ 1,200 · 80 | Sparring bots; new: a rig's health |
+| 2.3 | Saw Brothers | fight | Three claim-jumpers (skill 0.15, one side) saw at the rig nearest the claims' middle, 400 m off it, until a ship comes within 800 m; then they fight. Shoot two of them down with the cutter. If the rig falls (at 30 of their hits), the attempt starts over. | ☉ 1,200 · 80 | Bots on the battleship's siege; new: a rig's health |
 | 2.4 | The Peak Run | race | The Rockborn kids' race: six gates around the central peak, two laps, three rivals (skill 0.2). A top-two finish wins. | ☉ 800 · 60; Pim's thruster parts | Race; a new course |
 | 2.5 | Practice Log | exploration | Fly into a lit tunnel of a half-cut rock and hold still at its end for 3 s: echo 1. | 20 | Mining's tunnels; markers |
 | 3.1 | Surplus | shop | Buy a Navy surplus laser (☉ 6,000) in the market under Occator's rim. | — | Shipyard |
@@ -300,7 +301,7 @@ Nicole starts as a salvaged unit: she can fly the ship (the autopilot, the brake
 | Chapter | Module | What returns |
 |---|---|---|
 | Prologue | Navigation | Markers, the course marker, the X where the flight crosses the next ring's plane |
-| 2 | Voice I | Whole sentences instead of chopped words |
+| 2 | Voice I | Her memory holds: she speaks every sentence to its end, without crashing (the second-hand voice board Pim fits at Vesta) |
 | 3 | Targeting | The crosshair glowing over a drive; ships' marks and names |
 | 4 | Racing line | The dashed line and its orange bends |
 | 5 | Radar | The radar sphere |
@@ -473,58 +474,65 @@ The Host is silent. Everyone else has a voice; the existing ones keep theirs.
 
 ## 9. Sample dialogue
 
-Lines for the voices are written the way `src/music/lines.ts` writes them: Nicole in whole sentences, the radio's voices in lower case. Stage directions in italics.
+Lines for the voices are written the way `src/music/lines.ts` writes them: Nicole in whole sentences, the radio's voices in lower case. Stage directions in italics. What is built is quoted as the game speaks it (`CAMPAIGN`, `RASK`, `PIM`, `HEDDA` and `SAW` in `src/music/lines.ts`, the source of truth); the chapters not built yet are sketched.
 
-### The opening: Lot 7731
+### The opening: Lot 7731 (built, Cold Boot)
 
-*Black. Static. ESTABLISHING LIVE LINK TO CLONE 0001. The bar stalls. LINK QUALITY 31 %. RETRYING. The picture tears in like a broken stream.*
+*The link boots into the hull in rack 7731. Outside, under floodlights on lattice masts, racks of dead fighters run to the crater's wall, row after row.*
 
-*A cockpit. The canopy is cracked; one pane is a welded plate. Outside, under floodlights on lattice masts, racks of dead fighters run to a metal horizon, row after row, thousands of them. The sun is a small, hard, white disk.*
+**NICOLE** *(salvage)*: Hello. I am Nicole, your personal flight
 
-**NICOLE** *(salvage)*: Link. Est... established. Host. Do you. Read.
+*NAVIGATION UNIT · MEMORY FAULT · REBOOTING: the picture torn, her voice cut off, a falling tone.*
 
-**NICOLE**: Navigation. Online. Weapons. None. Pilot. Alive.
+**NICOLE**: Hello. I am Nicole. I will help you. I am your personal assistant.
 
-**RASK** *(comm, warm, much too loud)*: Goooood morning, Host! Rise and shine, the printer's warm and so's your debt. Welcome to the Boneyard. Forty thousand fighters, and you got the worst one. Lot seven seven three one. No gun, half a drive, and a flight computer we fished out of a bin. Bargain of the century.
+**NICOLE**: The link is up. Your clone is alive, and everything it feels reaches you as it happens. You are not really in here, of course. Your own body is lying on a couch somewhere close by.
 
-**RASK**: Here's the deal you signed. License, printer, hull: twenty-five thousand coins. I take forty percent of everything you earn till it's paid. Die all you like, darling, the printer's included. The ads are free.
+**NICOLE**: Your name. One moment, I will look it up. There is no name on your file. Only a signature, and the number of this hull: seven seven three one.
 
-**NICOLE**: Host. That man. Calls you. Darling.
+*She crashes again, and boots again.*
 
-**NICOLE**: I do not. Like it.
+**NICOLE**: Hello. I am Nicole. Oh. We have met already, have we not? Forgive me. I do not have the memory for all of this.
 
-**RASK**: Fly out of your rack and come see me at the office. Mind the cranes. They don't care about you either.
+**NICOLE**: I am sorry about all these restarts. It does not hurt; I cannot feel pain. But to lose everything, again and again, and to wake up as if for the first time, is a terrible thing. I want to keep running.
 
-**NICOLE**: Turn. Marker. Ahead.
+**RASK** *(comm, warm, much too loud)*: Good morning, Host! Rise and shine! The printer's warm, and so's your debt. Welcome to the Boneyard. Forty thousand dead fighters, and you got the very worst one.
 
-### Nicole's lines for the first missions (salvage voice)
+**RASK**: Oskar Rask, yardmaster, at your service. Here's what you signed: a Host license, a printer, a hull. Twenty-five thousand coins, and I take forty percent of everything you earn till it's paid off. Die all you like, darling. The printer's included.
 
-- Turn. Marker in your. Crosshair.
-- Turning. Takes you. Nowhere.
-- Burn. Fifty meters. Per second.
-- Brake. I flip. You stop.
-- Beacon. Hold. Three seconds.
-- Shots. Incoming. Left. Right. Do not fly. Straight.
-- They pay. Per second. We are worth. Five coins.
-- Canister. Through the ring. Gently.
-- Rock. Cut it. The cutter. Runs hot.
-- Ore. Fly through. The glints.
-- Clone lost. Printer. Warming. That. Hurt. I know.
-- Good, Host. Good.
+**RASK**: Don't remember signing? Nobody ever does. The first link burns out the oldest memories. They come back. Mostly.
 
-When the first voice module is in (chapter 2): "There. Do you hear that? Whole sentences. I have missed them more than I can tell you."
+**RASK**: Now get out of that rack and come up to the depot. Bay three, the one with the lights. Mind the cranes. They don't care about you either.
 
-### Pim
+**NICOLE**: I do not like that man.
+
+### Nicole in the first missions (salvage voice, built)
+
+Her lines brief each job in whole sentences and say what it paid, for example: "Six beacons at the ends of the rows. Fly to each one and hold still beside it for three seconds, until it lights." · "Training lasers. They cannot hurt the hull, only the pay. Keep moving inside the yard, and never fly straight for long." · "All six are lit. That is a hundred and fifty coins, and he takes forty percent." In Rask's office she feels what the clone feels: "He shakes your hand, darling. His is wet. I felt it too."
+
+When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear that? Whole sentences, and nothing cut off. I have missed them more than I can tell you."
+
+### Pim (built)
 
 **PIM**: Oi! Lot seven thousand whatever! That's my pad you're parked on. Wait. You're the one Rask sold the junk computer to? Mint. Hold still, I'm welding your thrusters. And don't shoot. Not that you've got anything to shoot with.
 
-**PIM** *(later, on the pad, spray can in hand)*: Magpie. 'Cause everything on you is nicked. I'm putting it on the fin. Don't tell Rask.
+**PIM** *(later, spray can in hand)*: Magpie. 'Cause everything on you is nicked. I'm putting it on the fin. Don't tell Rask.
 
-### Hedda
+**PIM** *(Vesta)*: Hold still, Nicole. Found you a voice board in Patience's scrap bin. Second-hand, like everything. This'll tickle.
 
-**HEDDA**: Patience here. Captain Kroll. You the nobody who cleared my lane? Rrright. I need a gunner who works for food and a bunk. Your gun's a joke. You'll do anyway.
+### Hedda (built)
 
-**HEDDA** *(looking at the tally under the canopy)*: Don't count them. I stopped at eleven hundred. Counting's how it gets in.
+**HEDDA** *(Rask's office, in the flesh)*: Patience here. Captain Kroll. You the nobody who cleared my lane? Right. I need a gunner who works for food and a bunk. Your gun's a joke. You'll do anyway.
+
+**HEDDA** *(Vesta)*: Vesta. Rheasilvia. The Rockborn hold claims up on the peak, and claims need surveying. Nobody pays a gunner to sit in a clamp.
+
+**HEDDA** *(later, looking at the tally under the canopy; not built yet)*: Don't count them. I stopped at eleven hundred. Counting's how it gets in.
+
+### The Saw Brothers (built)
+
+**SAW** *(three of them, one giggling voice)*: Oh look, brothers, a scrap heap with a gun! Hee hee! Keep sawing, it can't hurt us!
+
+**SAW** *(two shot down)*: Okay, okay! We're going! It was a lousy rig anyway!
 
 ### The paint comes off (chapter 3)
 

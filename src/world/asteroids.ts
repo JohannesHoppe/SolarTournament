@@ -58,8 +58,15 @@ export function impostorDistance(meanRadius: number): number {
 export const ASTEROID_POINTS = [200, 120, 80];
 /** Hit points of a solid piece (the hulk of a wreck): beyond any number of shots in a round, and never counted down. */
 const SOLID = 1000;
-/** How far over its ground a piece set down on it lies (units, 1 m; see FieldLayout.rest): its outline's points are some 13° apart, and the surface between them may dip a little lower. */
-const REST_GAP = 20;
+/**
+ * How deep a piece set down on its ground sinks into it (see FieldLayout.rest): between SINK_LEAST
+ * and SINK_MOST of its height, a different share for each, as boulders lie bedded in dust. Two
+ * resting pieces never meet (see world/contacts), so a boulder in its ground's solid box stays put.
+ */
+const SINK_LEAST = 0.12;
+const SINK_MOST = 0.3;
+/** Spreads the shares of the pieces' sinking evenly (the golden ratio's fraction). */
+const SINK_SPREAD = 0.618034;
 
 /** The kinds of shapes a field is built from: rocks, ice, the debris of a station, the hull sections of a wreck. */
 export type TemplateKind = 'rock' | 'ice' | 'debris' | 'hull' | 'rack';
@@ -166,7 +173,7 @@ export interface FieldLayout {
   course?: CourseForm;
   /** A place on a world's surface: the world's pull there, straight down along -y (units/s²), the same everywhere in the place. */
   fall?: number;
-  /** A ground the generated pieces lie on: a plane at `height` (units) over the field's center, rising `rise` (height per distance) towards +x; each piece set down so the lowest point of its outline sits REST_GAP over it (see AsteroidField.rest). */
+  /** A ground the generated pieces lie on: a plane at `height` (units) over the field's center, rising `rise` (height per distance) towards +x; each piece set down on it, bedded in it a share of its height (see AsteroidField.rest). */
   rest?: { height: number; rise: number };
   /** The air of a planet the arena dips into (see world/air): its haze hides, brakes and heats. */
   air?: Air;
@@ -644,25 +651,30 @@ export class AsteroidField {
       }
       const orbitRate = layout.orbit ? this.orbitRate(position, layout.orbit.speed) : 0;
       const piece = this.add(String(i), layout.kind, type, templates[type], scale, 0, 0, position, spinAxis, new THREE.Vector3(), orbitAxis, orbitRate);
-      if (layout.rest !== undefined) this.rest(piece, layout.rest);
+      if (layout.rest !== undefined) this.rest(piece, layout.rest, i);
     }
   }
 
   /**
-   * Sets a piece down on its layout's ground (see FieldLayout.rest): moved straight up or down
-   * until the lowest point of its outline, as it lies turned, is REST_GAP over the ground, so
-   * it never lies in the ground's solid box, nor floats above it. Its scatter's spacing was across
-   * the ground, so moving it up or down brings it into no other piece.
+   * Sets the `nth` piece down on its layout's ground (see FieldLayout.rest): moved straight up or
+   * down until it is bedded in the ground a share of its height (SINK_LEAST to SINK_MOST, measured
+   * from the lowest to the highest point of its outline as it lies turned). Its scatter's spacing
+   * was across the ground, so moving it up or down brings it into no other piece.
    */
-  private rest(piece: Asteroid, ground: { height: number; rise: number }) {
+  private rest(piece: Asteroid, ground: { height: number; rise: number }, nth: number) {
     const points = outline(piece);
-    // the lowest point against the plane: its height over the plane, wherever it lies across the piece
+    // its lowest and highest point against the plane, wherever they lie across the piece
     let low = Infinity;
+    let high = -Infinity;
     for (let k = 0; k < points.length; k += 3) {
       u.set(points[k], points[k + 1], points[k + 2]).multiply(piece.object.scale).applyQuaternion(piece.object.quaternion);
-      low = Math.min(low, u.y - ground.rise * u.x);
+      const over = u.y - ground.rise * u.x;
+      low = Math.min(low, over);
+      high = Math.max(high, over);
     }
-    piece.basePosition.y = ground.height + ground.rise * piece.basePosition.x + REST_GAP - low;
+    const share = (nth * SINK_SPREAD) % 1;
+    const sink = (SINK_LEAST + (SINK_MOST - SINK_LEAST) * share) * (high - low);
+    piece.basePosition.y = ground.height + ground.rise * piece.basePosition.x - low - sink;
     this.place(piece);
   }
 

@@ -116,7 +116,7 @@ export async function fetchRelease(url: string, seconds: number, get: typeof fet
 }
 /** A speaker's store of a language in the release (its index `<name>.json`, see cloneAudioName): Nicole's `nicole-de`, Rask's `rask-de`, … */
 export const storeName = (speaker: Speaker, locale: Cloned) => `${speaker}-${locale}`;
-/** A speaker's voice print as Chatterbox holds it, and the English reference it was taken from (Nicole's under the names they had before the others were cloned). */
+/** A speaker's voice print as Chatterbox holds it, and the English reference it was taken from (Nicole's reference is plain `reference.wav`). */
 export const condsName = (speaker: Speaker) => `${speaker}-conds.pt`;
 export const referenceName = (speaker: Speaker) => (speaker === 'nicole' ? 'reference.wav' : `reference-${speaker}.wav`);
 /**

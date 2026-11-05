@@ -244,7 +244,7 @@ let modelsCached = false;
 tryCache(() => {
   if (!existsSync(complete)) rmSync(models, { recursive: true, force: true });
   mkdirSync(models, { recursive: true });
-  // other revisions are of no use any more
+  // a model of another revision is of no use: removed
   for (const entry of readdirSync(dirname(models))) if (entry !== COMPUTER_VOICE.revision) rmSync(join(dirname(models), entry), { recursive: true, force: true });
   modelsCached = true;
 });
@@ -268,7 +268,7 @@ async function cloneAudio(speaker: Speaker, locale: Cloned, index: CloneIndex): 
       mkdirSync(clonesCache, { recursive: true });
       file = keepStore(clonesCache, store, index.audio, bytes);
     }
-    // the store's earlier fingerprints are of no use any more
+    // the store under any other fingerprint is of no use: removed
     tryCache(() => pruneStores(clonesCache, store, index.audio));
     const decoded = spawnSync(ffmpeg, ['-v', 'error', '-i', file, '-f', 'f32le', '-ac', '1', 'pipe:1'], { maxBuffer: 1 << 30 });
     if (decoded.status !== 0) throw new Error('ffmpeg failed: ' + decoded.stderr);
