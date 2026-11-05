@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { type Campaign, campaignFrom, complete, hullOf, type Mission, nextMission } from '../campaign/campaign';
+import { type Campaign, campaignFrom, complete, hullOf, type Mission, type Module, nextMission } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -949,6 +949,11 @@ export class Game implements OnlineGame {
   private keepCampaign(change: (campaign: Campaign) => void) {
     change(this.campaign);
     storageSet(CAMPAIGN_KEY, JSON.stringify(this.campaign));
+  }
+
+  /** Whether the own flight computer has a module (see campaign/campaign, Module): every one but in a mission of the campaign, where Nicole has only those installed. */
+  private aid(module: Module): boolean {
+    return !this.school?.mission || this.campaign.modules.includes(module);
   }
   /** The browser keeps values no Host can own: the screen says what it thinks of that, and nothing is kept over them. */
   private tampered = false;
@@ -4031,7 +4036,8 @@ export class Game implements OnlineGame {
     if (!this.course && !this.school) this.guide.hide();
     if (me.alive && this.state === 'playing') this.aimCrosshair(waypoint);
     this.hud.showCrosshair(me.alive);
-    const onTarget = me.alive ? this.onTarget : null;
+    // without the targeting module the crosshair never knows a hull under it
+    const onTarget = me.alive && this.aid('targeting') ? this.onTarget : null;
     // the nose comes onto a hull: a short tick, as the crosshair turns orange; onto a ship of
     // the own side no tick, the crosshair crossed out (see Hud.setOnTarget)
     if (onTarget && onTarget !== 'friend' && !this.hud.onTarget && now - this.onTargetTickAt > ON_TARGET_TICK) {
@@ -4045,12 +4051,15 @@ export class Game implements OnlineGame {
       // the velocity markers first: the names at the screen's edge keep clear of the Course arrow
       this.hud.updateVelocityMarkers(this.camera, subject, subject === me, !this.autopilot);
       this.hud.updateReturnMark(this.camera, subject === me && this.brakePhase !== 'off' ? returnAt.set(0, 0, -1).applyQuaternion(this.brakeHome) : null);
-      // a solar storm blinds the sensors: no ship shows a marker
-      this.hud.updateMarkers(this.camera, this.ships, subject, this.storming ? blind : this.inSight, this.storming ? null : this.cueTarget(subject), subject === me ? this.attackerOf : undefined);
+      // a solar storm blinds the sensors, and a flight computer without the targeting module marks no ship
+      const marking = !this.storming && this.aid('targeting');
+      this.hud.updateMarkers(this.camera, this.ships, subject, marking ? this.inSight : blind, marking ? this.cueTarget(subject) : null, subject === me ? this.attackerOf : undefined);
     }
     // the fixed references' labels after the ships' names, keeping clear of them
     this.orient(subject, waypoint);
-    if (!this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
+    const radar = this.aid('radar');
+    if ($('radar').hidden === radar) $('radar').hidden = !radar;
+    if (radar && !this.bench.has('radar')) this.radar.update(wallClock(), subject, this.ships, this.field, this.sensed, this.radarMarks(subject), this.storming);
     // in a planet's air the horizon is the planet's, from the ship's place (see world/air)
     const air = airAround(this.field.air, subject.flight.position);
     if (!this.bench.has('attitude')) this.hud.updateAttitude(this.camera, subject.alive, this.input.touchActive, air ? upIn(air, subject.flight.position, skyUp) : null);
@@ -4970,6 +4979,10 @@ export class Game implements OnlineGame {
 
   /** The racing line from a ship on to gate `next` of an ideal line: it leaves along the flight, or along the nose of a ship that hardly moves. */
   private showGuide(me: Ship, line: RacingLine, next: number, missed: boolean) {
+    if (!this.aid('racingLine')) {
+      this.guide.hide();
+      return;
+    }
     const speed = me.flight.velocity.length();
     const heading = speed > 20 ? scratch.copy(me.flight.velocity).divideScalar(speed) : me.flight.forward(scratch);
     this.guide.show(me.flight.position, heading, speed, me.flight, line, this.field, next, missed, wallClock());
@@ -7361,10 +7374,12 @@ export class Game implements OnlineGame {
     const thrust = MAIN_THRUST * Math.max(me.drive * me.perks.drive, 0.01);
     const load = escapeLoad(well, me.flight.position, me.flight.velocity, thrust);
     // the orbit readout, recomputed every frame: whatever changed the path (a burn, a ram, a hit) shows at once
-    const orbit = orbitable(well) ? readOrbit(well, me.flight.position, me.flight.velocity, thrust, !this.autopilot, this.orbitState === 'ready' || this.orbitState === 'stable', this.orbit) : null;
-    this.showOrbit(orbit, well, load);
+    // (a flight computer without the wells module has no escape gauge and reads no orbit; the alarm it sounds all the same)
+    const gauged = this.aid('wells');
+    const orbit = gauged && orbitable(well) ? readOrbit(well, me.flight.position, me.flight.velocity, thrust, !this.autopilot, this.orbitState === 'ready' || this.orbitState === 'stable', this.orbit) : null;
+    this.showOrbit(orbit, well, gauged ? load : 0);
     this.orbitPath.show(orbit === 'ready' || orbit === 'stable' ? well : null, me.flight.position, me.flight.velocity);
-    this.hud.setEscape(load, orbit === 'stable');
+    this.hud.setEscape(gauged ? load : null, orbit === 'stable');
     // the warnings come again once the well has let go of the ship for good
     if (load < WELL_RELEASE) this.wellSaid = 0;
     const level = wellAlarmLevel(load, orbit);
@@ -7704,7 +7719,8 @@ export class Game implements OnlineGame {
   private torpedoAlarm(me: Ship) {
     let torpedo: Torpedo | null = null;
     let distance = TORPEDO_WARNING;
-    if (me.alive) {
+    // (a flight computer without the threat module sees no torpedo coming)
+    if (me.alive && this.aid('threat')) {
       for (const candidate of this.torpedoes.list) {
         if (candidate.target !== me) continue;
         const away = candidate.position.distanceTo(me.flight.position);
@@ -7767,8 +7783,8 @@ export class Game implements OnlineGame {
    */
   private lockWarning() {
     const me = this.me!;
-    // a solar storm blinds the sensors that would see a nose on the own ship
-    if (!me.alive || this.storming) {
+    // a solar storm blinds the sensors that would see a nose on the own ship, and a flight computer without the threat module never reads them
+    if (!me.alive || this.storming || !this.aid('threat')) {
       this.hud.setLock('', null);
       return;
     }

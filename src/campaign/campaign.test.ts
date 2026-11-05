@@ -44,7 +44,15 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(null)).toEqual(freshCampaign());
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
-    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, parts: ['cutter', 'warp'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, parts: ['cutter'] });
+    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, parts: ['cutter'], modules: ['radar'] });
+  });
+
+  it('has Nicole start as a salvaged unit: none of her modules installed, and none by the missions of chapter 1', () => {
+    const campaign = freshCampaign();
+    expect(campaign.modules).toEqual([]);
+    for (const mission of MISSIONS) complete(campaign, mission);
+    expect(campaign.modules).toEqual([]);
+    expect(campaignFrom(JSON.stringify({ done: [] })).modules).toEqual([]);
   });
 
   it('starts on the scrap hull: a weak drive and thrusters, no laser, torpedoes, overdrive or dodge', () => {

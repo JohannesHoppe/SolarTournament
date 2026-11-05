@@ -43,6 +43,18 @@ export const CUTTER_HEAT = 1.75;
 export type Part = 'cutter' | 'patch';
 const PARTS: readonly Part[] = ['cutter', 'patch'];
 
+/**
+ * Nicole's modules (docs/campaign/STORY.md, "Nicole's restoration"): the pieces of the HUD a
+ * salvaged flight computer lacks until she installs them, each with a chapter of the story.
+ * Navigation (the markers, the course marker, where the flight crosses a ring's plane), the
+ * autopilot, the brake and the impact warning are hers from the prologue on, so no module stands
+ * for them. Targeting: the crosshair turning orange over a hull, the ships' marks and names.
+ * Racing line: the dashed line. Radar: the radar sphere. Threat: TRACKED, LOCKED, ON YOUR TAIL and
+ * TORPEDO INBOUND with its countdown. Wells: the escape gauge and the orbit readout.
+ */
+export type Module = 'targeting' | 'racingLine' | 'radar' | 'threat' | 'wells';
+const MODULES: readonly Module[] = ['targeting', 'racingLine', 'radar', 'threat', 'wells'];
+
 /** How the campaign's ship flies as far as it is fitted (see Perks). */
 export function hullOf(campaign: Campaign): Perks {
   const hull: Perks = { ...STOCK, drive: SCRAP_DRIVE, thrusters: SCRAP_THRUSTERS, torpedoes: -TORPEDOES, laser: false, overdrive: false, dodge: false, fins: 1, cooling: 1 - FIN_RADIATOR };
@@ -66,7 +78,7 @@ export interface Mission {
   start?: { at: readonly [number, number, number]; toward: readonly [number, number, number] };
 }
 
-/** The campaign as the browser keeps it: the missions done, the drill reached in the running one, the wallet, what the Bond still asks, the parts fitted. */
+/** The campaign as the browser keeps it: the missions done, the drill reached in the running one, the wallet, what the Bond still asks, the parts fitted, Nicole's modules installed. */
 export interface Campaign {
   done: MissionId[];
   /** The drill reached in the next mission (0: its start). */
@@ -74,9 +86,10 @@ export interface Campaign {
   coins: number;
   bond: number;
   parts: Part[];
+  modules: Module[];
 }
 
-export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, parts: [] });
+export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, parts: [], modules: [] });
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
 export function campaignFrom(text: string | null): Campaign {
@@ -87,8 +100,9 @@ export function campaignFrom(text: string | null): Campaign {
     const ids = new Set<string>(MISSIONS.map((mission) => mission.id));
     const done = Array.isArray(kept.done) ? kept.done.filter((id): id is MissionId => typeof id === 'string' && ids.has(id)) : [];
     const parts = Array.isArray(kept.parts) ? PARTS.filter((part) => kept.parts!.includes(part)) : [];
+    const modules = Array.isArray(kept.modules) ? MODULES.filter((module) => kept.modules!.includes(module)) : [];
     const number = (value: unknown, fallback: number, max: number) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(Math.floor(value), max) : fallback);
-    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), parts };
+    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), parts, modules };
   } catch {
     return fresh;
   }

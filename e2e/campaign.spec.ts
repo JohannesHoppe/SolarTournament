@@ -7,7 +7,7 @@ test('the campaign Lot 7731 takes no click on the plain address', async ({ page 
   expect(errors).toEqual([]);
 });
 
-test('the campaign flies the scrap hull: the trigger fires nothing, and the HUD shows no overdrive and no torpedoes', async ({ page }) => {
+test('the campaign flies the scrap hull: the trigger fires nothing, the HUD shows no overdrive and no torpedoes, and Nicole has no radar', async ({ page }) => {
   const errors = await openGame(page, '/?campaign');
   await page.click('#campaign');
   await page.waitForFunction(() => window.game.state === 'playing' && window.game.me?.alive && window.game.school?.attempt?.live, null, { timeout: 90_000 });
@@ -20,6 +20,16 @@ test('the campaign flies the scrap hull: the trigger fires nothing, and the HUD 
   expect(await page.evaluate(() => window.game.me.heat)).toBe(0);
   await expect(page.locator('#hud-overdrive')).toBeHidden();
   await expect(page.locator('#hud-torpedo')).toBeHidden();
+  // a salvaged flight computer: none of her modules installed (see Module in src/campaign/campaign.ts)
+  await expect(page.locator('#radar')).toBeHidden();
+  expect(errors).toEqual([]);
+});
+
+test('out of the campaign the flight computer has every module: the radar shows in the flight school', async ({ page }) => {
+  const errors = await openGame(page, '/?campaign');
+  await page.evaluate(() => document.getElementById('school-basic')!.click());
+  await page.waitForFunction(() => window.game.state === 'playing' && window.game.me?.alive, null, { timeout: 90_000 });
+  await expect(page.locator('#radar')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -88,11 +98,11 @@ test('Cold Boot docks the hull on bay 3’s pad once it rests above it', async (
 });
 
 test('on the address with ?campaign its first mission flies on the flight school’s machinery, and done it is kept', async ({ page }) => {
-  // the mission at its last drill (Rask's words once docked), so it ends by itself and runs on into the next
-  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: [], step: 17, coins: 0, bond: 25000 })));
+  // the mission at its last drill (Pim's words once docked), so it ends by itself and runs on into the next
+  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: [], step: 18, coins: 0, bond: 25000 })));
   const errors = await openGame(page, '/?campaign');
   await page.click('#campaign');
-  await expect(page.locator('#school-step')).toContainText('Cold Boot 18/18', { timeout: 90_000 });
+  await expect(page.locator('#school-step')).toContainText('Cold Boot 19/19', { timeout: 90_000 });
   await expect(page.locator('#school-step')).toContainText('Lamplighter 1/3', { timeout: 60_000 });
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
   expect(kept.done).toEqual(['coldBoot']);
