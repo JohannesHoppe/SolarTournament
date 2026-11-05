@@ -101,6 +101,26 @@ test('Claim Survey logs the claims’ buoys flown past, in the order they were f
   expect(errors).toEqual([]);
 });
 
+test('Cut and Haul marks the claim beside a working rig, and fines a beam on the rig', async ({ page }) => {
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify({ ...kept, done: [...kept.done, 'rheasilvia', 'claimSurvey'] })), CHAPTER_ONE_DONE);
+  const errors = await openGame(page, '/?campaign');
+  await takeNextJob(page);
+  await page.waitForFunction(() => window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.me?.alive, null, { timeout: 120_000 });
+  // the claim it cuts carries no rig, and a rig works on the claim nearest it
+  const claim = await page.evaluate(() => {
+    const game = window.game;
+    const claims: { rock: string; rig: boolean }[] = game.mining.claims(game.field);
+    const site = game.school.attempt.site;
+    const cut = claims.find((c) => game.field.asteroids.get(c.rock)?.object.position.distanceTo(site) < 1);
+    return { found: !!cut, rig: cut?.rig, rigs: claims.filter((c) => c.rig).length };
+  });
+  expect(claim).toEqual({ found: true, rig: false, rigs: 6 });
+  // a beam that ends on a rig is counted, and costs the pay
+  await page.evaluate(() => (window.game.rigBeams += 2));
+  await expect.poll(() => page.evaluate(() => window.game.missionFine)).toBe(100);
+  expect(errors).toEqual([]);
+});
+
 test('Lamplighter counts the beacons held by, one after the other', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: ['coldBoot'], step: 0, coins: 0, bond: 25000, parts: [] })));
   const errors = await openGame(page, '/?campaign');

@@ -4,6 +4,7 @@ import { angleTo, rotateX, rotateY, setFromAxisAngle } from '../detthree';
 import { boxUv, industrialSurface, STATION_TILE, surfaced } from '../view/surfaces';
 import { patience, touchPatience } from '../world/patience';
 import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
+import type { Claim } from '../world/mining';
 import { CONTROLS, type Command, type Controls, type Device } from '../input/input';
 import type { Ship } from '../ship/ship';
 import { SUN_DIRECTION } from '../world/space';
@@ -62,8 +63,8 @@ export interface SchoolContext {
   fireAt(from: THREE.Vector3, through: THREE.Vector3): boolean;
   /** A mission of the campaign: its pay is cut by this many coins, as the attempt stands now (see campaign/campaign, complete). */
   fine(coins: number): void;
-  /** Where the claims' buoys stand in a field dressed with the Rockborn's mining, one for each claim in the order they were filed (see world/mining); none elsewhere. */
-  buoys(): THREE.Vector3[];
+  /** The claims of a field dressed with the Rockborn's mining, in the order they were filed (see world/mining, Mining.claims); none elsewhere. */
+  claims(): Claim[];
   /** The clone climbs out of the cockpit and stands in a scene in person (see campaign/scenes), or, with null, climbs back in. */
   stage(name: SceneName | null): void;
   /** What the clone feels in a scene in person reaches the Host over the link: a jolt of it, the picture flickering. */
@@ -80,6 +81,8 @@ export interface SchoolContext {
   readonly torpedoesDown: number;
   /** Rocks the pilot broke so far. */
   readonly rocksBroken: number;
+  /** The pilot's beams that struck what stands on a rock (a rig, a buoy) so far. */
+  readonly rigBeams: number;
   /** Where the pilot last broke a rock. */
   readonly brokenAt: THREE.Vector3;
   /** How many of the pilot's torpedoes have hit a ship so far. */
@@ -147,6 +150,10 @@ export interface Attempt {
   swept: number;
   /** Nicole has called the moment to act in this attempt (the hook drill's: let go now). */
   told: boolean;
+  /** A place the drill keeps for the attempt: where the rock a mining job cuts stood. */
+  site: THREE.Vector3;
+  /** The pilot's beams on rigs as the attempt began (see SchoolContext.rigBeams). */
+  rigBeams: number;
 }
 
 export interface Drill {
@@ -1952,7 +1959,7 @@ export class FlightSchool {
     const drill = this.drills[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0, told: false };
+    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0, told: false, site: new THREE.Vector3(), rigBeams: 0 };
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
     const instruction = rep > 0 && drill.repLine ? drill.repLine : drill.line;

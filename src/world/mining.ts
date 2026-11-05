@@ -968,6 +968,13 @@ export function planMining(field: AsteroidField): Plan {
   return plan;
 }
 
+/** A claim of the Rockborn in a field (see Mining.claims): its rock, whether a rig works on it, its first buoy. */
+export interface Claim {
+  rock: string;
+  rig: boolean;
+  buoy: THREE.Vector3;
+}
+
 /** The rigs and buoys of a plan stand solid on their rocks in `field` (see AsteroidField.attach); the plan made for its layout when none is given. */
 export function standClaims(field: AsteroidField, plan: Plan = planMining(field)) {
   plan.ids.forEach((id, slot) => field.attach(id, plan.solids[slot] ?? []));
@@ -1176,19 +1183,20 @@ export class Mining {
   private readonly holes: { at: THREE.Vector3; up: THREE.Vector3; live: boolean }[] = [];
 
   /**
-   * Where the claims' buoys stand in `field` as dressed (their cans, in the world): one for each
-   * claim, its first, in the order the claims were filed (their slots); none for a field not dressed.
+   * The claims of `field` as dressed, in the order they were filed (their slots): each its rock,
+   * whether a rig works on it, and where its first buoy stands (its can, in the world); none for
+   * a field not dressed.
    */
-  buoys(field: AsteroidField): THREE.Vector3[] {
+  claims(field: AsteroidField): Claim[] {
     const plan = this.plan;
     if (!plan || field.layout?.key !== this.layoutKey) return [];
-    const list: THREE.Vector3[] = [];
+    const list: Claim[] = [];
     for (const { slot, at } of plan.buoys) {
       if (list.length > slot) continue;
       const rock = field.asteroids.get(plan.ids[slot]);
       if (!rock) continue;
       rock.object.updateWorldMatrix(true, false);
-      list.push(at.clone().applyMatrix4(rock.object.matrixWorld));
+      list.push({ rock: rock.id, rig: slot < RIGS, buoy: at.clone().applyMatrix4(rock.object.matrixWorld) });
     }
     return list;
   }

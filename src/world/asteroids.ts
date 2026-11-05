@@ -73,7 +73,8 @@ export type TemplateKind = 'rock' | 'ice' | 'debris' | 'hull' | 'rack';
  * simplified for drawing, or a test field that does not care).
  */
 /** A ray's nearest hit (see AsteroidField.raycast): the rock (null for the well's body or an obstacle), the distance along the ray, and the center of what it hit. */
-export type RayHit = { asteroid: Asteroid | null; distance: number; center: THREE.Vector3 };
+/** Where a ray met the field: the piece, how far along, its center; `part` when it met what stands on the piece (a rig, a buoy: see attach), not the piece itself. */
+export type RayHit = { asteroid: Asteroid | null; distance: number; center: THREE.Vector3; part?: boolean };
 
 export type TemplateSet = { near: THREE.Object3D[]; far: THREE.Object3D[]; impostor?: THREE.Object3D[]; collision?: THREE.Object3D[]; box?: boolean; fracture?: FractureSet };
 
@@ -397,6 +398,9 @@ const pull = new THREE.Vector3();
 const sight = new THREE.Vector3();
 /** The rock of the last cast (see AsteroidField.cast), null for the well, an obstacle or nothing; and the center of what it hit. */
 let castRock: Asteroid | null = null;
+/** Whether castRock was met on what stands on it, and whether rayInto's last hit was (see RayHit.part). */
+let castPart = false;
+let rayPart = false;
 let castCenter: THREE.Vector3 | null = null;
 
 /**
@@ -1159,6 +1163,7 @@ export class AsteroidField {
     hit.asteroid = castRock;
     hit.distance = distance;
     hit.center = castCenter!;
+    hit.part = castPart;
     return hit;
   }
 
@@ -1186,9 +1191,13 @@ export class AsteroidField {
    */
   rayInto(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
     let distance = asteroid.box ? rayPiece(asteroid, origin, direction) : asteroid.surface ? raySurface(asteroid, asteroid.surface, origin, direction) : rayEllipsoid(asteroid, origin, direction);
+    rayPart = false;
     for (const part of this.attachments.get(asteroid.id) ?? NONE) {
       const along = rayAttachment(asteroid, part, origin, direction);
-      if (along !== null && (distance === null || along < distance)) distance = along;
+      if (along !== null && (distance === null || along < distance)) {
+        distance = along;
+        rayPart = true;
+      }
     }
     return distance;
   }
@@ -1202,6 +1211,7 @@ export class AsteroidField {
     let best: number | null = null;
     castRock = null;
     castCenter = null;
+    castPart = false;
     const obstacle = obstacles ? this.obstacle : null;
     const hull = obstacle?.ray(origin, direction, max) ?? null;
     if (hull !== null) {
@@ -1226,6 +1236,7 @@ export class AsteroidField {
         best = distance;
         castRock = asteroid;
         castCenter = asteroid.object.position;
+        castPart = rayPart;
         if (any) return best;
       }
     }

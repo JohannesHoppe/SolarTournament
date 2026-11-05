@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { testField } from '../test/field';
 import { arenaById, ARENAS, PLACES } from './arenas';
 import { outline } from './asteroids';
+import { planMining, standClaims } from './mining';
 import { RISE, SLOPE, SUMMIT, surfaceHeight, VESTA_GROUND } from './vesta';
 
 describe('Rheasilvia on Vesta', () => {
@@ -46,6 +47,26 @@ describe('Rheasilvia on Vesta', () => {
       expect(field.overlap(new THREE.Vector3(x, flank(x) - 200, -40000), 10), `${x} under`).not.toBeNull();
       expect(field.overlap(new THREE.Vector3(x, flank(x) + 200, -40000), 10), `${x} over`).toBeNull();
     }
+  });
+
+  it('tells a ray that meets a claim’s buoy from one that meets its rock', () => {
+    const field = testField();
+    field.generate(place.layout);
+    const plan = planMining(field);
+    standClaims(field, plan);
+    const { slot, at } = plan.buoys[0];
+    const rock = field.asteroids.get(plan.ids[slot])!;
+    rock.object.updateWorldMatrix(true, false);
+    const can = at.clone().applyMatrix4(rock.object.matrixWorld);
+    // from straight above the can, down onto it
+    const hit = field.raycast(can.clone().add(new THREE.Vector3(0, 4000, 0)), new THREE.Vector3(0, -1, 0), 8000);
+    expect(hit?.asteroid).toBe(rock);
+    expect(hit?.part).toBe(true);
+    // from the far side of the rock, at its middle, onto the rock itself
+    const away = rock.object.position.clone().sub(can).setY(0).normalize();
+    const bare = field.raycast(rock.object.position.clone().addScaledVector(away, rock.radius * 3), away.clone().negate(), rock.radius * 3);
+    expect(bare?.asteroid).toBe(rock);
+    expect(bare?.part).toBe(false);
   });
 
   it('prints the clone over the flank, clear of every piece', () => {

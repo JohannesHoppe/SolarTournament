@@ -1173,6 +1173,8 @@ export class Game implements OnlineGame {
   private torpedoesDown = 0;
   /** Rocks the own clone broke so far (the campaign's mining missions count them). */
   private rocksBroken = 0;
+  /** The own clone's beams that struck what stands on a rock, a rig or a buoy, so far (see SchoolContext.rigBeams). */
+  private rigBeams = 0;
   /** What the running mission's pay is cut by, as its attempt stands (see SchoolContext.fine). */
   private missionFine = 0;
   /** Where the own clone last broke a rock (the campaign's ore glints spring from it). */
@@ -5385,7 +5387,7 @@ export class Game implements OnlineGame {
       },
       fireAt: (from, through) => this.drillShot(from, through),
       fine: (coins) => (this.missionFine = coins),
-      buoys: () => this.mining.buoys(this.field),
+      claims: () => this.mining.claims(this.field),
       stage: (name) => this.setStage(name),
       // a touch the clone feels streams into the Host: a jolt in the link, a dull thump
       feel: () => {
@@ -5406,6 +5408,9 @@ export class Game implements OnlineGame {
       },
       get rocksBroken() {
         return game.rocksBroken;
+      },
+      get rigBeams() {
+        return game.rigBeams;
       },
       get brokenAt() {
         return game.brokenAt;
@@ -6814,6 +6819,8 @@ export class Game implements OnlineGame {
     // a beam into the well's body (a planet's clouds, a black hole) is simply gone
     const asteroid = asteroidHit?.asteroid;
     if (asteroid) {
+      // a beam on a rig or a buoy, not on the rock it stands on (the campaign fines it)
+      if (shooter === this.me && asteroidHit!.part) this.rigBeams++;
       normal.subVectors(end, asteroid.object.position).normalize();
       this.effects.sparks(end, shooter.color, 40);
       this.effects.debris(end, normal, 120);

@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
 import { CAMPAIGN, HEDDA, PIM, RASK } from '../music/lines';
-import { clear, holdFor, saying, stop, type Attempt, type Drill, type Markers } from '../game/school';
+import { clear, holdFor, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
+import type { Asteroid } from '../world/asteroids';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { exp, hypot } from '../detmath';
@@ -168,6 +169,38 @@ const GLINTS_PER_ROCK = 7;
 const GLINT_SPEED = [60, 160] as const;
 const GLINT_REACH = 500;
 
+/** The glints of ore the `nth` rock broken in an attempt sheds from `at`, the same every attempt, among the attempt's points. */
+function glintsOf(a: Attempt, markers: Markers, at: THREE.Vector3, nth: number) {
+  const r = new Randomizer(nth * 7 + 1);
+  for (let i = 0; i < GLINTS_PER_ROCK; i++) {
+    const way = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
+    a.points.push(markers.glint(at, way.multiplyScalar(r.range(GLINT_SPEED[0], GLINT_SPEED[1]))));
+  }
+}
+
+/** A glint within GLINT_REACH of the pilot taken (one a frame): gone, and counted in a.next. */
+function takeGlint(ctx: SchoolContext, a: Attempt, markers: Markers) {
+  const glint = a.points.find((point) => ctx.me.flight.position.distanceTo(point) <= GLINT_REACH);
+  if (!glint) return;
+  markers.remove(glint);
+  a.points.splice(a.points.indexOf(glint), 1);
+  a.next++;
+}
+
+/** The point of `points` nearest the pilot, if any. */
+function nearestOf(ctx: SchoolContext, points: readonly THREE.Vector3[]): THREE.Vector3 | null {
+  let best: THREE.Vector3 | null = null;
+  let nearest = Infinity;
+  for (const position of points) {
+    const distance = position.distanceTo(ctx.me.flight.position);
+    if (distance < nearest) {
+      nearest = distance;
+      best = position;
+    }
+  }
+  return best;
+}
+
 const firstCut: Drill = {
   line: CAMPAIGN.firstCut,
   keys: ['turn', 'drive', 'fire'],
@@ -184,36 +217,11 @@ const firstCut: Drill = {
   },
   done(ctx, a, markers) {
     // a rock just broken sheds its glints, the same ones every attempt
-    while (a.jinks < ctx.rocksBroken - a.count) {
-      a.jinks++;
-      const r = new Randomizer(a.jinks * 7 + 1);
-      for (let i = 0; i < GLINTS_PER_ROCK; i++) {
-        const way = new THREE.Vector3(r.range(-1, 1), r.range(-1, 1), r.range(-1, 1)).normalize();
-        a.points.push(markers.glint(ctx.brokenAt, way.multiplyScalar(r.range(GLINT_SPEED[0], GLINT_SPEED[1]))));
-      }
-    }
-    for (const glint of a.points) {
-      if (ctx.me.flight.position.distanceTo(glint) > GLINT_REACH) continue;
-      markers.remove(glint);
-      a.points.splice(a.points.indexOf(glint), 1);
-      a.next++;
-      break;
-    }
+    while (a.jinks < ctx.rocksBroken - a.count) glintsOf(a, markers, ctx.brokenAt, ++a.jinks);
+    takeGlint(ctx, a, markers);
     return ctx.rocksBroken - a.count >= FIRST_CUT && a.next >= ORE_NEEDED;
   },
-  waypoint(ctx, a) {
-    let best: THREE.Vector3 | null = null;
-    let nearest = Infinity;
-    const candidates = a.points.length ? a.points : [...ctx.field.asteroids.values()].filter((rock) => !rock.solid).map((rock) => rock.object.position);
-    for (const position of candidates) {
-      const distance = position.distanceTo(ctx.me.flight.position);
-      if (distance < nearest) {
-        nearest = distance;
-        best = position;
-      }
-    }
-    return best;
-  },
+  waypoint: (ctx, a) => nearestOf(ctx, a.points.length ? a.points : [...ctx.field.asteroids.values()].filter((rock) => !rock.solid).map((rock) => rock.object.position)),
   mark: (ctx, a) =>
     t('Rock {n}/{total} · ore {ore}/{needed}', { n: Math.min(FIRST_CUT, ctx.rocksBroken - a.count + (ctx.rocksBroken - a.count < FIRST_CUT ? 1 : 0)), total: FIRST_CUT, ore: a.next, needed: ORE_NEEDED }),
 };
@@ -394,7 +402,7 @@ const claimSurvey: Drill = {
   arena: 'rheasilvia',
   autopilot: false,
   enter(ctx, a, markers) {
-    a.points = ctx.buoys().slice(0, SURVEY_CLAIMS);
+    a.points = ctx.claims().slice(0, SURVEY_CLAIMS).map((claim) => claim.buoy);
     surveyMarkers(a, markers);
   },
   done(ctx, a, markers) {
@@ -414,6 +422,75 @@ function surveyMarkers(a: Attempt, markers: Markers) {
   const next = a.points[a.next];
   if (next) markers.zone(next, SURVEY_REACH);
 }
+
+/**
+ * Cut and Haul (2.2): the claim beside a working rig (the claim without a rig nearest to one
+ * with a rig, see world/mining) cut apart with the cutter, and HAUL_ORE glints of its ore flown
+ * through (its pieces shed them as First Cut's rocks do, see glintsOf). Every beam that strikes
+ * a rig or a buoy takes RIG_FINE coins off the pay; it cannot fail. HAUL_FAMILY: how far from
+ * where the claim stood (in its radii) a piece broken counts as its own.
+ */
+const HAUL_ORE = 40;
+const ORE_PAY = 35;
+const RIG_FINE = 50;
+const HAUL_FAMILY = 2.5;
+
+/** The claim the haul cuts: the one without a rig nearest to a claim with one. */
+function haulClaim(ctx: SchoolContext): Asteroid | null {
+  const claims = ctx.claims();
+  let best: Asteroid | null = null;
+  let nearest = Infinity;
+  for (const claim of claims) {
+    if (claim.rig) continue;
+    const rock = ctx.field.asteroids.get(claim.rock);
+    if (!rock) continue;
+    for (const rigged of claims) {
+      const rig = rigged.rig ? ctx.field.asteroids.get(rigged.rock) : undefined;
+      const distance = rig ? rig.object.position.distanceTo(rock.object.position) : Infinity;
+      if (distance < nearest) {
+        nearest = distance;
+        best = rock;
+      }
+    }
+  }
+  return best;
+}
+
+const cutAndHaul: Drill = {
+  line: CAMPAIGN.cutAndHaul,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'rheasilvia',
+  autopilot: false,
+  enter(ctx, a) {
+    // a.count: rocks broken before the attempt, a.jinks: breaks whose glints are out, a.next: ore taken, a.reach: how far the claim's pieces lie
+    const claim = haulClaim(ctx);
+    a.site.copy(claim?.object.position ?? ctx.me.flight.position);
+    a.reach = (claim?.radius ?? 2000) * HAUL_FAMILY;
+    a.count = ctx.rocksBroken;
+    a.jinks = 0;
+    a.next = 0;
+    a.points = [];
+    a.rigBeams = ctx.rigBeams;
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+  },
+  done(ctx, a, markers) {
+    // the claim's pieces shed their glints; a rock broken elsewhere sheds none for this job
+    while (a.jinks < ctx.rocksBroken - a.count) {
+      a.jinks++;
+      if (ctx.brokenAt.distanceTo(a.site) < a.reach) glintsOf(a, markers, ctx.brokenAt, a.jinks);
+    }
+    takeGlint(ctx, a, markers);
+    ctx.fine((ctx.rigBeams - a.rigBeams) * RIG_FINE);
+    return a.next >= HAUL_ORE;
+  },
+  waypoint(ctx, a) {
+    // the nearest glint, else the nearest piece of the claim
+    const pieces = [...ctx.field.asteroids.values()].filter((rock) => !rock.solid && rock.kind === 'rock' && rock.object.position.distanceTo(a.site) < a.reach).map((rock) => rock.object.position);
+    return nearestOf(ctx, a.points.length ? a.points : pieces);
+  },
+  mark: (ctx, a) => t('Ore {ore}/{needed} · rig hits {hits}', { ore: a.next, needed: HAUL_ORE, hits: ctx.rigBeams - a.rigBeams }),
+};
 
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
@@ -455,4 +532,5 @@ export const MISSIONS: readonly Mission[] = [
   // chapter 2, Rheasilvia on Vesta: Patience brings the Host to the Rockborn's claims, and Pim gives Nicole a voice board
   { id: 'rheasilvia', name: msg('Rheasilvia'), drills: [onVesta(HEDDA.vesta), onVesta(PIM.voice), onVesta(CAMPAIGN.voiceOne)], pay: 0 },
   { id: 'claimSurvey', name: msg('Claim Survey'), drills: [onVesta(HEDDA.claimSurvey), claimSurvey, said(CAMPAIGN.claimSurveyDone, 'rheasilvia')], pay: 400, ratings: 20 },
+  { id: 'cutAndHaul', name: msg('Cut and Haul'), drills: [onVesta(HEDDA.cutAndHaul), cutAndHaul, said(CAMPAIGN.cutAndHaulDone, 'rheasilvia')], pay: HAUL_ORE * ORE_PAY, ratings: 25 },
 ];

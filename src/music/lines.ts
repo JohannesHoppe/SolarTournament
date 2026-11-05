@@ -534,6 +534,8 @@ export const CAMPAIGN = {
   claimSurvey: 'Five buoys, in the order the claims were filed. Fly within a hundred meters of each, and the claim office logs it.',
   claimSurveyLate: 'The survey window has closed. We will fly it again.',
   claimSurveyDone: 'All five are logged. That is four hundred coins, and the yard still takes its forty percent.',
+  cutAndHaul: 'The rock beside the working rig. Cut it apart and fly through its ore. Every beam that strikes the rig costs us fifty coins.',
+  cutAndHaulDone: 'Forty loads of ore. Thirty-five coins a load, less whatever the rig cost us.',
 } as const;
 
 /**
@@ -571,6 +573,7 @@ export const HEDDA = {
   meet: "Patience here. Captain Kroll. You the nobody who cleared my lane? Right. I need a gunner who works for food and a bunk. Your gun's a joke. You'll do anyway.",
   vesta: "Vesta. Rheasilvia. The Rockborn hold claims up on the peak, and claims need surveying. Nobody pays a gunner to sit in a clamp.",
   claimSurvey: "Five claims filed this morning, five buoys on the flank. Fly past each one in the order they were filed, so the office logs you. Eight minutes, then the window shuts.",
+  cutAndHaul: "Claim's paid for, ore's not. Cut up the rock next to the working rig and bring in the ore. Forty loads. Mind the rig. You hit it, you pay for it. Fifty a beam.",
 } as const;
 
 /** Who besides Nicole speaks a line of the campaign, by the line: the voice it is rendered and played in. */
