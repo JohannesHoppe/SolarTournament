@@ -101,3 +101,21 @@ test('on the address with ?campaign its first mission flies on the flight school
   expect(await page.evaluate(() => localStorage.getItem('solartournament.school-step'))).toBeNull();
   expect(errors).toEqual([]);
 });
+
+test("after the docking lane the clone climbs out into Rask's office: Rask and Hedda in the flesh, the HUD only what is said, no hologram", async ({ page }) => {
+  // the docking lane done up to its climb out of the cockpit (its fourth drill)
+  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: ['coldBoot', 'lamplighter', 'liveTarget', 'canisterSweep', 'cutter', 'firstCut'], step: 3, coins: 0, bond: 25000, parts: ['cutter', 'patch'] })));
+  const errors = await openGame(page, '/?campaign');
+  await page.click('#campaign');
+  await page.waitForFunction(() => window.game.stage && window.game.school?.attempt?.live, null, { timeout: 90_000 });
+  // the figures come in as they are fetched: the set, Rask and Hedda
+  await page.waitForFunction(() => window.game.stage.root.children.length === 3, null, { timeout: 30_000 });
+  await expect(page.locator('#hud')).toHaveClass(/in-person/);
+  await expect(page.locator('#school-panel')).toBeVisible();
+  await expect(page.locator('#crosshair')).toBeHidden();
+  expect(await page.evaluate(() => window.game.caller)).toBeNull();
+  // the camera stands at the clone's eyes in the cab, not behind the ship
+  const apart = await page.evaluate(() => window.game.camera.position.distanceTo(window.game.me.flight.position));
+  expect(apart).toBeGreaterThan(1000);
+  expect(errors).toEqual([]);
+});
