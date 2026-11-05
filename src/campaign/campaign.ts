@@ -1,6 +1,7 @@
 import type { Drill } from '../game/school';
 import { STOCK, type Perks } from '../game/hangar';
 import { TORPEDOES } from '../game/torpedoes';
+import { msg } from '../i18n/i18n';
 import { MISSIONS } from './missions';
 
 /**
@@ -72,24 +73,46 @@ export interface Mission {
   drills: Drill[];
   /** What it pays the first time (☉, before the yard's cut). */
   pay: number;
+  /** The ratings it earns the first time (see RANKS); the yard takes no cut of them. */
+  ratings?: number;
   /** What it changes in the campaign the first time it is done: a part fitted, the Bond grown. */
   fit?: (campaign: Campaign) => void;
   /** Where its clones are printed and face, if not where the place's story starts (see ArenaProfile.start). */
   start?: { at: readonly [number, number, number]; toward: readonly [number, number, number] };
 }
 
-/** The campaign as the browser keeps it: the missions done, the drill reached in the running one, the wallet, what the Bond still asks, the parts fitted, Nicole's modules installed. */
+/**
+ * The ranks of the feeds' attention (docs/campaign/STORY.md, "Rating ranks"): from how many
+ * ratings on a pilot holds each. Ratings are earned by missions and never spent; the story
+ * gives the last rank, Chosen, and no number does.
+ */
+export const RANKS: readonly { name: string; from: number }[] = [
+  { name: msg('Unrated'), from: 0 },
+  // seen in a crowd shot
+  { name: msg('Background'), from: 50 },
+  { name: msg('Local Feed'), from: 250 },
+  { name: msg('Regional Feed'), from: 1200 },
+  { name: msg('Sponsored'), from: 3500 },
+  { name: msg('Prime Time'), from: 7000 },
+  { name: msg('Contender'), from: 12000 },
+];
+
+/** The rank a pilot holds with these ratings (its English name, see RANKS). */
+export const rankOf = (ratings: number): string => RANKS.reduce((rank, step) => (ratings >= step.from ? step.name : rank), RANKS[0].name);
+
+/** The campaign as the browser keeps it: the missions done, the drill reached in the running one, the wallet, what the Bond still asks, the ratings, the parts fitted, Nicole's modules installed. */
 export interface Campaign {
   done: MissionId[];
   /** The drill reached in the next mission (0: its start). */
   step: number;
   coins: number;
   bond: number;
+  ratings: number;
   parts: Part[];
   modules: Module[];
 }
 
-export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, parts: [], modules: [] });
+export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [] });
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
 export function campaignFrom(text: string | null): Campaign {
@@ -102,7 +125,7 @@ export function campaignFrom(text: string | null): Campaign {
     const parts = Array.isArray(kept.parts) ? PARTS.filter((part) => kept.parts!.includes(part)) : [];
     const modules = Array.isArray(kept.modules) ? MODULES.filter((module) => kept.modules!.includes(module)) : [];
     const number = (value: unknown, fallback: number, max: number) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(Math.floor(value), max) : fallback);
-    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), parts, modules };
+    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules };
   } catch {
     return fresh;
   }
@@ -114,10 +137,11 @@ export const nextMission = (campaign: Campaign): Mission | null => MISSIONS.find
 /**
  * A mission done: it counts, what it fits is fitted, its pay less `fine` (what the Host lost on
  * the job: the tourists' hits of Live Target) goes to the Host's wallet less the yard's cut while
- * the Bond is unpaid (the cut pays the Bond off), and the next mission starts at its beginning.
- * Returns what the Host kept and what the yard took.
+ * the Bond is unpaid (the cut pays the Bond off), its ratings count in full, and the next
+ * mission starts at its beginning. Returns what the Host kept, what the yard took, the ratings
+ * earned and the rank reached, if the ratings raised it.
  */
-export function complete(campaign: Campaign, mission: Mission, fine = 0): { kept: number; cut: number } {
+export function complete(campaign: Campaign, mission: Mission, fine = 0): { kept: number; cut: number; ratings: number; rank: string | null } {
   const first = !campaign.done.includes(mission.id);
   if (first) {
     campaign.done.push(mission.id);
@@ -128,5 +152,9 @@ export function complete(campaign: Campaign, mission: Mission, fine = 0): { kept
   const cut = Math.min(campaign.bond, Math.round(pay * YARD_CUT));
   campaign.bond -= cut;
   campaign.coins += pay - cut;
-  return { kept: pay - cut, cut };
+  const ratings = first ? (mission.ratings ?? 0) : 0;
+  const before = rankOf(campaign.ratings);
+  campaign.ratings += ratings;
+  const rank = rankOf(campaign.ratings);
+  return { kept: pay - cut, cut, ratings, rank: rank !== before ? rank : null };
 }

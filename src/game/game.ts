@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { type Campaign, campaignFrom, complete, hullOf, type Mission, type Module, nextMission } from '../campaign/campaign';
+import { type Campaign, campaignFrom, complete, hullOf, type Mission, type Module, nextMission, rankOf } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -1569,7 +1569,7 @@ export class Game implements OnlineGame {
     const next = nextMission(this.campaign);
     const note = button.querySelector<HTMLElement>('.mode-note')!;
     note.textContent = next
-      ? t('Next: {mission} · {coins} ☉ · the Bond asks {bond} ☉', { mission: t(next.name), coins: coinText(this.campaign.coins), bond: coinText(this.campaign.bond) })
+      ? t('Next: {mission} · {coins} ☉ · the Bond asks {bond} ☉ · {rank}', { mission: t(next.name), coins: coinText(this.campaign.coins), bond: coinText(this.campaign.bond), rank: t(rankOf(this.campaign.ratings)) })
       : t('All that is built is flown. More of the story is in the making.');
   }
 
@@ -5202,7 +5202,7 @@ export class Game implements OnlineGame {
     // a mission of the campaign done: paid, and back to the menu
     if (school.finished && this.mission) {
       const mission = this.mission;
-      let paid = { kept: 0, cut: 0 };
+      let paid: ReturnType<typeof complete> = { kept: 0, cut: 0, ratings: 0, rank: null };
       this.keepCampaign((campaign) => (paid = complete(campaign, mission, this.missionFine)));
       this.missionFine = 0;
       // the story runs on into its next mission without the menu, from the pad; the menu only
@@ -5211,11 +5211,11 @@ export class Game implements OnlineGame {
       this.schoolMark = this.schoolTrack = null;
       if (this.mission) this.startRound('school');
       else this.showMenu();
-      this.notice(
+      const done =
         paid.kept + paid.cut > 0
-          ? t('{mission} done: {kept} ☉ for you, {cut} ☉ for the yard. The Bond still asks {bond} ☉.', { mission: t(mission.name), kept: coinText(paid.kept), cut: coinText(paid.cut), bond: coinText(this.campaign.bond) })
-          : t('{mission} done.', { mission: t(mission.name) }),
-      );
+          ? t('{mission} done: {kept} ☉ for you, {cut} ☉ for the yard, {ratings} ratings. The Bond still asks {bond} ☉.', { mission: t(mission.name), kept: coinText(paid.kept), cut: coinText(paid.cut), ratings: paid.ratings, bond: coinText(this.campaign.bond) })
+          : t('{mission} done.', { mission: t(mission.name) });
+      this.notice(paid.rank ? `${done} ${t('The feeds rank you: {rank}.', { rank: t(paid.rank) })}` : done);
       this.schoolMark = this.schoolTrack = null;
       return;
     }

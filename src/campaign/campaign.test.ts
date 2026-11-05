@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, MISSIONS, nextMission, PATCHED_THRUSTERS, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, MISSIONS, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 import { CUTTER_PRICE } from './missions';
 
@@ -13,16 +13,16 @@ describe('the campaign Lot 7731', () => {
   it('pays a mission once, less the yard’s cut while the Bond is unpaid, the cut paying it off', () => {
     const campaign = freshCampaign();
     const mission = { ...MISSIONS[0], pay: 1000 };
-    expect(complete(campaign, mission)).toEqual({ kept: 1000 * (1 - YARD_CUT), cut: 1000 * YARD_CUT });
+    expect(complete(campaign, mission)).toMatchObject({ kept: 1000 * (1 - YARD_CUT), cut: 1000 * YARD_CUT });
     expect(campaign.coins).toBe(600);
     expect(campaign.bond).toBe(BOND - 400);
     // done once: flown again it pays nothing
-    expect(complete(campaign, mission)).toEqual({ kept: 0, cut: 0 });
+    expect(complete(campaign, mission)).toMatchObject({ kept: 0, cut: 0 });
     expect(campaign.done).toEqual([mission.id]);
     // a Bond nearly paid takes only what is left
     campaign.bond = 100;
     campaign.done = [];
-    expect(complete(campaign, mission)).toEqual({ kept: 900, cut: 100 });
+    expect(complete(campaign, mission)).toMatchObject({ kept: 900, cut: 100 });
     expect(campaign.bond).toBe(0);
   });
 
@@ -30,9 +30,9 @@ describe('the campaign Lot 7731', () => {
     const campaign = freshCampaign();
     const mission = { ...MISSIONS[0], pay: 300 };
     // seven hits of the tourists at ☉ 10 each
-    expect(complete(campaign, mission, 70)).toEqual({ kept: Math.round(230 * (1 - YARD_CUT)), cut: Math.round(230 * YARD_CUT) });
+    expect(complete(campaign, mission, 70)).toMatchObject({ kept: Math.round(230 * (1 - YARD_CUT)), cut: Math.round(230 * YARD_CUT) });
     campaign.done = [];
-    expect(complete(campaign, mission, 500)).toEqual({ kept: 0, cut: 0 });
+    expect(complete(campaign, mission, 500)).toMatchObject({ kept: 0, cut: 0 });
   });
 
   it('reads back what it keeps, and takes anything else for a fresh start', () => {
@@ -44,7 +44,25 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(null)).toEqual(freshCampaign());
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
-    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, parts: ['cutter'], modules: ['radar'] });
+    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'] });
+  });
+
+  it('counts a mission’s ratings once and in full, and names the rank they raise the Host to', () => {
+    const campaign = freshCampaign();
+    expect(rankOf(campaign.ratings)).toBe('Unrated');
+    const ranks: string[] = [];
+    for (const mission of MISSIONS) {
+      const done = complete(campaign, mission);
+      expect(done.ratings).toBe(mission.ratings ?? 0);
+      if (done.rank) ranks.push(done.rank);
+    }
+    // chapter 1 lifts the Host into the background of the feeds, and no further
+    expect(campaign.ratings).toBe(MISSIONS.reduce((sum, mission) => sum + (mission.ratings ?? 0), 0));
+    expect(ranks).toEqual(['Background']);
+    expect(complete(campaign, MISSIONS[1]).ratings).toBe(0);
+    expect(RANKS.map((rank) => rank.from)).toEqual([...RANKS.map((rank) => rank.from)].sort((a, b) => a - b));
+    expect(rankOf(49)).toBe('Unrated');
+    expect(rankOf(12000)).toBe('Contender');
   });
 
   it('has Nicole start as a salvaged unit: none of her modules installed, and none by the missions of chapter 1', () => {
