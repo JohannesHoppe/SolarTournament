@@ -365,6 +365,9 @@ const climbOut = (scene: SceneName, line: string): Drill => ({
   done: (_, a) => a.seconds > CLIMB_SECONDS,
 });
 
+/** A line Nicole says about what the clone just felt in a scene in person, the touch jolting through the link as it begins. */
+const felt = (line: string): Drill => ({ ...said(line), enter: (ctx) => ctx.feel() });
+
 /** Pim welds the thrusters while she talks (see hullOf): free, she says, and Rask need not know. */
 const fitPatch = (campaign: Campaign) => {
   if (!campaign.parts.includes('patch')) campaign.parts.push('patch');
@@ -409,5 +412,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'canisterSweep', name: msg('Canister Sweep'), drills: [rask(RASK.canisterSweep), canisterSweep, said(CAMPAIGN.canisterSweepDone)], pay: 200, start: ON_PAD },
   { id: 'cutter', name: msg('The Cutter'), drills: [rask(RASK.cutter), rask(PIM.cutter), rask(CAMPAIGN.cutterFitted)], pay: 0, fit: fitCutter, start: ON_PAD },
   { id: 'firstCut', name: msg('First Cut'), drills: [rask(RASK.firstCut), firstCut, said(CAMPAIGN.firstCutDone), rask(PIM.magpie)], pay: 400, start: ON_PAD },
-  { id: 'dockingLane', name: msg('Docking Lane'), drills: [rask(RASK.dockingLane), dockingLane, said(CAMPAIGN.dockingLaneDone), climbOut('office', msg("The canopy opens. Your clone climbs out and takes the lift up to Rask's office.")), rask(RASK.dockingLaneDone), rask(HEDDA.meet)], pay: 600, start: ON_PAD },
+  { id: 'dockingLane', name: msg('Docking Lane'), drills: [rask(RASK.dockingLane), dockingLane, said(CAMPAIGN.dockingLaneDone), climbOut('office', msg("The canopy opens. Your clone climbs out and takes the lift up to Rask's office.")), rask(RASK.dockingLaneDone), felt(CAMPAIGN.handshake), rask(HEDDA.meet)], pay: 600, start: ON_PAD },
 ];

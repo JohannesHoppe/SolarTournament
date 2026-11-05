@@ -64,6 +64,8 @@ export interface SchoolContext {
   fine(coins: number): void;
   /** The clone climbs out of the cockpit and stands in a scene in person (see campaign/scenes), or, with null, climbs back in. */
   stage(name: SceneName | null): void;
+  /** What the clone feels in a scene in person reaches the Host over the link: a jolt of it, the picture flickering. */
+  feel(): void;
   /** A coil throws the pilot on along a direction (either way, as it flies), as a race's gate does. */
   boost(through: THREE.Vector3): void;
   /** Hands the pilot's clone two torpedoes, or a nova core. */

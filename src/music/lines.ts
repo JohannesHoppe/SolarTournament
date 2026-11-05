@@ -529,6 +529,7 @@ export const CAMPAIGN = {
   dockingLane: 'The hauler is coming in, and loose hulls are drifting into her lane. Shoot them before they hit her.',
   dockingLaneStruck: 'Three hulls hit her. She aborts, and we start over.',
   dockingLaneDone: 'The lane is clear and the hauler is docked. Her captain says she has a berth for us.',
+  handshake: 'He shakes your hand, darling. His is wet. I felt it too.',
 } as const;
 
 /**

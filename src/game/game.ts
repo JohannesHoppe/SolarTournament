@@ -356,6 +356,9 @@ const KILL_POINTS = 500;
  */
 const NOVA_KILL_CREDIT = 2;
 /** Each death of the Host by an enemy raises the bots' ease (see Bot.ease) by this much in a solo round; a kill by the Host lowers it by KILL_EASE. */
+/** A touch the clone feels in a scene in person (see SchoolContext.feel): how hard the link jolts (glitch strength) and for how long (s). */
+const FEEL_GLITCH = 0.3;
+const FEEL_SECONDS = 0.5;
 const DEATH_EASE = 0.35;
 const KILL_EASE = 0.1;
 /**
@@ -5301,6 +5304,11 @@ export class Game implements OnlineGame {
       fireAt: (from, through) => this.drillShot(from, through),
       fine: (coins) => (this.missionFine = coins),
       stage: (name) => this.setStage(name),
+      // a touch the clone feels streams into the Host: a jolt in the link, a dull thump
+      feel: () => {
+        this.glitch.trigger(FEEL_GLITCH, FEEL_SECONDS);
+        this.sound.beep(90, 0.18, 0.25);
+      },
       boost: (through) => this.coilPush(this.me!, through),
       arm: (item) => {
         if (item === 'nova') game.me!.nova = true;
