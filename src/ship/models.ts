@@ -834,7 +834,7 @@ const CAPILLARY = new THREE.Color(0.1, 1, 0.75).multiplyScalar(0.25);
  * twice as strongly as painted plates, so the film and the scales show on the side away from
  * the sun too.
  */
-const FILM: THREE.MeshPhysicalMaterialParameters = { iridescence: 0.8, iridescenceIOR: 1.5, iridescenceThicknessRange: [280, 620], envMapIntensity: 2 * SHEEN };
+const FILM: THREE.MeshPhysicalMaterialParameters = { iridescence: 0.8, iridescenceIOR: 1.5, iridescenceThicknessMinimum: 280, iridescenceThicknessMaximum: 620, envMapIntensity: 2 * SHEEN };
 /** The skin's faint glow along its outline, violet (linear; see hullShader): a dark hull keeps its shape against the black of space. */
 const SKIN_GLOW = new THREE.Color(0.16, 0.08, 0.3);
 
