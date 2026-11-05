@@ -1,5 +1,11 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import { openGame } from './game';
+
+/** Opens the campaign's job board from the menu and takes the next job on it. */
+async function takeNextJob(page: Page) {
+  await page.click('#campaign');
+  await page.click('#board-next button');
+}
 
 test('the campaign Lot 7731 takes no click on the plain address', async ({ page }) => {
   const errors = await openGame(page);
@@ -9,7 +15,7 @@ test('the campaign Lot 7731 takes no click on the plain address', async ({ page 
 
 test('the campaign flies the scrap hull: the trigger fires nothing, the HUD shows no overdrive and no torpedoes, and Nicole has no radar', async ({ page }) => {
   const errors = await openGame(page, '/?campaign');
-  await page.click('#campaign');
+  await takeNextJob(page);
   await page.waitForFunction(() => window.game.state === 'playing' && window.game.me?.alive && window.game.school?.attempt?.live, null, { timeout: 90_000 });
   await page.keyboard.down('Space');
   await page.evaluate(async () => {
@@ -42,7 +48,7 @@ for (const [index, id] of CHAPTER_ONE.entries()) {
     const parts = index >= 3 ? ['cutter'] : [];
     await page.addInitScript(([done, parts]) => localStorage.setItem('solartournament.campaign', JSON.stringify({ done, step: 0, coins: 0, bond: 25000, parts })), [before, parts] as const);
     const errors = await openGame(page, '/?campaign');
-    await page.click('#campaign');
+    await takeNextJob(page);
     await page.waitForFunction(() => window.game.venue?.id === 'boneyard' && window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
     await page.evaluate(async () => {
       const start = window.game.time;
@@ -56,7 +62,7 @@ for (const [index, id] of CHAPTER_ONE.entries()) {
 test('Lamplighter counts the beacons held by, one after the other', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: ['coldBoot'], step: 0, coins: 0, bond: 25000, parts: [] })));
   const errors = await openGame(page, '/?campaign');
-  await page.click('#campaign');
+  await takeNextJob(page);
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
   // past Rask's briefing to the drill itself, then the clone set beside each beacon in turn, at rest, until the line after the drill comes
   await page.waitForFunction(() => window.game.school?.attempt?.points?.length > 0, null, { timeout: 60_000 });
@@ -80,7 +86,7 @@ test('Cold Boot docks the hull on bay 3’s pad once it rests above it', async (
   // at the docking drill, the flight into the bay done
   await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: [], step: 15, coins: 0, bond: 25000 })));
   const errors = await openGame(page, '/?campaign');
-  await page.click('#campaign');
+  await takeNextJob(page);
   await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
   // the clone set at rest over the pad's middle, a little above the bay's floor, until the drill counts
   await page.evaluate(async () => {
@@ -101,7 +107,7 @@ test('on the address with ?campaign its first mission flies on the flight school
   // the mission at its last drill (Pim's words once docked), so it ends by itself and runs on into the next
   await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: [], step: 18, coins: 0, bond: 25000 })));
   const errors = await openGame(page, '/?campaign');
-  await page.click('#campaign');
+  await takeNextJob(page);
   await expect(page.locator('#school-step')).toContainText('Cold Boot 19/19', { timeout: 90_000 });
   await expect(page.locator('#school-step')).toContainText('Lamplighter 1/3', { timeout: 60_000 });
   const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
@@ -116,7 +122,7 @@ test("after the docking lane the clone climbs out into Rask's office: Rask and H
   // the docking lane done up to its climb out of the cockpit (its fourth drill)
   await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: ['coldBoot', 'lamplighter', 'liveTarget', 'canisterSweep', 'cutter', 'firstCut'], step: 3, coins: 0, bond: 25000, parts: ['cutter', 'patch'] })));
   const errors = await openGame(page, '/?campaign');
-  await page.click('#campaign');
+  await takeNextJob(page);
   await page.waitForFunction(() => window.game.stage && window.game.school?.attempt?.live, null, { timeout: 90_000 });
   // the figures come in as they are fetched: the set, Rask and Hedda
   await page.waitForFunction(() => window.game.stage.root.children.length === 3, null, { timeout: 30_000 });
@@ -127,5 +133,32 @@ test("after the docking lane the clone climbs out into Rask's office: Rask and H
   // the camera stands at the clone's eyes in the cab, not behind the ship
   const apart = await page.evaluate(() => window.game.camera.position.distanceTo(window.game.me.flight.position));
   expect(apart).toBeGreaterThan(1000);
+  expect(errors).toEqual([]);
+});
+
+test('the job board names the wallet, the Bond and the rank, takes the next job up where it was left, and flies a job done again from its start, keeping the story where it stands', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: ['coldBoot', 'lamplighter'], step: 1, coins: 90, bond: 24940, ratings: 10, parts: ['patch'] })));
+  const errors = await openGame(page, '/?campaign');
+  await page.click('#campaign');
+  await expect(page.locator('#board')).toBeVisible();
+  await expect(page.locator('#board-wallet')).toContainText('90 ☉');
+  await expect(page.locator('#board-wallet')).toContainText('Unrated');
+  await expect(page.locator('#board-next button')).toContainText('Live Target');
+  await expect(page.locator('#board-next button')).toContainText('Taken up where you left it.');
+  await expect(page.locator('#board-done button')).toHaveCount(2);
+  await expect(page.locator('#board-ship')).toContainText('the thrusters welded up');
+  await expect(page.locator('#board-ship')).toContainText('none of her modules');
+  // Escape goes back to the menu, the campaign's button opens the board again
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#board')).toBeHidden();
+  await page.click('#campaign');
+  // Lamplighter flown again: from its first drill, the story's drill reached kept as it was
+  await page.locator('#board-done button', { hasText: 'Lamplighter' }).click();
+  await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.me?.alive, null, { timeout: 90_000 });
+  await expect(page.locator('#school-step')).toContainText('Lamplighter 1/3');
+  await page.waitForFunction(() => window.game.school.stepIndex === 1, null, { timeout: 60_000 });
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
+  expect(kept.step).toBe(1);
+  expect(kept.done).toEqual(['coldBoot', 'lamplighter']);
   expect(errors).toEqual([]);
 });

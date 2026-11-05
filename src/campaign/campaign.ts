@@ -43,6 +43,8 @@ export const CUTTER_HEAT = 1.75;
 /** What the yard can fit to the hull: the mining cutter, Pim's patch on the thrusters. */
 export type Part = 'cutter' | 'patch';
 const PARTS: readonly Part[] = ['cutter', 'patch'];
+/** What the job board calls each part fitted. */
+export const PART_NAMES: Record<Part, string> = { cutter: msg('the mining cutter'), patch: msg('the thrusters welded up') };
 
 /**
  * Nicole's modules (docs/campaign/STORY.md, "Nicole's restoration"): the pieces of the HUD a
@@ -55,6 +57,8 @@ const PARTS: readonly Part[] = ['cutter', 'patch'];
  */
 export type Module = 'targeting' | 'racingLine' | 'radar' | 'threat' | 'wells';
 const MODULES: readonly Module[] = ['targeting', 'racingLine', 'radar', 'threat', 'wells'];
+/** What the job board calls each of Nicole's modules. */
+export const MODULE_NAMES: Record<Module, string> = { targeting: msg('targeting'), racingLine: msg('racing line'), radar: msg('radar'), threat: msg('threat'), wells: msg('wells') };
 
 /** How the campaign's ship flies as far as it is fitted (see Perks). */
 export function hullOf(campaign: Campaign): Perks {

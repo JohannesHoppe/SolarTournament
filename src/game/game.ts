@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { type Campaign, campaignFrom, complete, hullOf, type Mission, type Module, nextMission, rankOf } from '../campaign/campaign';
+import { type Campaign, campaignFrom, complete, hullOf, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, rankOf } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -944,6 +944,10 @@ export class Game implements OnlineGame {
   /** The campaign as the browser keeps it, and the mission of it flown now (null: none). */
   private campaign = campaignFrom(storageGet(CAMPAIGN_KEY));
   private mission: Mission | null = null;
+  /** The mission flown is one done before, flown again for nothing: it keeps no drill reached and runs on into no other. */
+  private flyingAgain = false;
+  /** The campaign's job board is open (see showBoard). */
+  private atBoard = false;
 
   /** Changes the campaign and keeps it. */
   private keepCampaign(change: (campaign: Campaign) => void) {
@@ -1439,7 +1443,8 @@ export class Game implements OnlineGame {
     $('online').addEventListener('click', () => this.openOnline());
     // the campaign is in the making: playable on the address with ?campaign while it is built
     if (new URLSearchParams(location.search).has('campaign')) $<HTMLButtonElement>('campaign').disabled = false;
-    $('campaign').addEventListener('click', () => this.startMission());
+    $('campaign').addEventListener('click', () => this.showBoard(true));
+    $('board-back').addEventListener('click', () => this.showBoard(false));
     $('room-create').addEventListener('click', () => this.createTournament());
     $('tournaments-back').addEventListener('click', () => this.showTournaments(false));
     // two pairs of switches: who can find the tournament, and whether bots fill it
@@ -1578,15 +1583,59 @@ export class Game implements OnlineGame {
     return ship.perks.hook || (!!this.school && !this.mission);
   }
 
-  /** The campaign's next mission, from the drill the Host reached in it, on the flight school's machinery (see campaign/campaign). */
-  private startMission() {
-    const mission = nextMission(this.campaign);
+  /**
+   * The campaign's job board, where the story stands between its jobs: the place, the wallet,
+   * the Bond and the rank, the next job (Enter takes it), the jobs done to fly again for nothing,
+   * and what the hull and Nicole have come to.
+   */
+  private showBoard(open: boolean) {
+    this.atBoard = open;
+    $('menu').hidden = open || this.state !== 'menu';
+    $('board').hidden = !open;
+    if (!open) return;
+    const campaign = this.campaign;
+    const next = nextMission(campaign);
+    const place = arenaById(next?.drills[0].arena ?? MISSIONS[MISSIONS.length - 1].drills[0].arena ?? '');
+    $('board-place').textContent = place ? t(place.name) : '';
+    $('board-wallet').textContent = t('{coins} ☉ in the wallet · the Bond asks {bond} ☉ · {rank}', { coins: coinText(campaign.coins), bond: coinText(campaign.bond), rank: t(rankOf(campaign.ratings)) });
+    const job = (mission: Mission, note: string) => {
+      const button = Object.assign(document.createElement('button'), { type: 'button', className: 'mode' });
+      button.innerHTML = `<span class="mode-name"><span class="mode-label"></span></span><span class="mode-note"></span>`;
+      button.querySelector('.mode-label')!.textContent = t(mission.name);
+      button.querySelector('.mode-note')!.textContent = note;
+      button.addEventListener('click', () => this.startMission(mission));
+      return button;
+    };
+    const pays = (mission: Mission) => (mission.pay ? t('Pays {pay} ☉ before the yard’s cut, {ratings} ratings.', { pay: coinText(mission.pay), ratings: mission.ratings ?? 0 }) : t('Pays nothing.'));
+    $('board-next').replaceChildren(next ? job(next, campaign.step ? `${pays(next)} ${t('Taken up where you left it.')}` : pays(next)) : Object.assign(document.createElement('p'), { className: 'plate-note', textContent: t('All that is built is flown. More of the story is in the making.') }));
+    const done = MISSIONS.filter((mission) => campaign.done.includes(mission.id));
+    $('board-done-label').hidden = !done.length;
+    $('board-done').replaceChildren(...done.map((mission) => job(mission, t('Flown again, it pays nothing.'))));
+    const parts = campaign.parts.map((part) => t(PART_NAMES[part]));
+    const modules = campaign.modules.map((module) => t(MODULE_NAMES[module]));
+    $('board-ship').textContent = `${parts.length ? t('Fitted: {parts}.', { parts: parts.join(', ') }) : t('Nothing fitted yet: no laser, no torpedoes, a cracked drive bell, one fin.')} ${modules.length ? t('Nicole’s modules: {modules}.', { modules: modules.join(', ') }) : t('Nicole is a salvaged unit, none of her modules installed.')}`;
+    (next ? $('board-next').querySelector('button')! : $('board-back')).focus();
+  }
+
+  /**
+   * Flies a mission of the campaign: the next one from the drill the Host reached in it, or one
+   * done before from its start, for nothing (see campaign/campaign); on the flight school's
+   * machinery.
+   */
+  private startMission(mission = nextMission(this.campaign)) {
     if (!mission) return;
+    this.flyingAgain = this.campaign.done.includes(mission.id);
+    if (this.atBoard) this.showBoard(false);
     // the people who call in, fetched ahead of their first call
     for (const who of Object.keys(CAST_NAMES) as Cast[]) loadBust(who).catch((error) => console.warn('Bust failed', error));
     this.missionFine = 0;
     this.mission = mission;
     this.startRound('school');
+  }
+
+  /** The drill a mission of the campaign starts at: where the Host left the story's next one, a mission flown again from its start. */
+  private missionStep(): number {
+    return this.flyingAgain ? 0 : this.campaign.step;
   }
 
   /**
@@ -2269,6 +2318,12 @@ export class Game implements OnlineGame {
           if (action === 'back' || action === 'pause') this.showHangar(false);
           break;
         }
+        // on the campaign's job board Enter takes the next job
+        if (this.atBoard) {
+          if (action === 'confirm') this.startMission();
+          if (action === 'back' || action === 'pause') this.showBoard(false);
+          break;
+        }
         // on the flight school's plate Enter starts the next course
         if (this.choosingSchool) {
           if (action === 'confirm') this.startSchool(this.nextCourse());
@@ -2723,7 +2778,7 @@ export class Game implements OnlineGame {
     this.roundMode = mode === 'online' ? this.onlineRoundMode() : mode === 'solo' ? this.solo.mode : 'deathmatch';
     if (mode === 'online') this.enterArena(arenaOfRound(this.online!.session.room, 0));
     // a mission of the campaign starts at the place of the drill it goes on from
-    else if (mode === 'school' && this.mission) this.enterArena(arenaById(this.mission.drills[Math.min(this.campaign.step, this.mission.drills.length - 1)].arena ?? '') ?? DEFAULT_ARENA);
+    else if (mode === 'school' && this.mission) this.enterArena(arenaById(this.mission.drills[Math.min(this.missionStep(), this.mission.drills.length - 1)].arena ?? '') ?? DEFAULT_ARENA);
     else this.enterArena(mode === 'school' ? DEFAULT_ARENA : (ARENAS.find((a) => a.id === this.solo.arena) ?? pick(ARENAS)));
     this.hud.reset();
     this.resetOpening();
@@ -2740,7 +2795,7 @@ export class Game implements OnlineGame {
     $('hud-overdrive').parentElement!.hidden = !this.me.perks.overdrive;
     $('hud-torpedo').parentElement!.hidden = TORPEDOES + this.me.perks.torpedoes <= 0;
     this.school =
-      mode !== 'school' ? null : this.mission ? new FlightSchool(null, this.campaign.step, this.mission) : new FlightSchool(this.schoolCourse, schoolSteps()[this.schoolCourse] ?? 0);
+      mode !== 'school' ? null : this.mission ? new FlightSchool(null, this.missionStep(), this.mission) : new FlightSchool(this.schoolCourse, schoolSteps()[this.schoolCourse] ?? 0);
     if (this.school) this.scene.add(this.school.root);
     // the flight school has no radio; the share button stays in its corner
     $('now-playing').classList.toggle('silent', mode === 'school');
@@ -3701,7 +3756,7 @@ export class Game implements OnlineGame {
     if (this.state === 'menu' || this.state === 'results') this.updateMenuCamera();
     this.airWeather(dt);
     // the ship on show, while the menu or the hangar shows it
-    if (this.state === 'menu' && !this.choosingSolo && !this.choosingSchool && !this.browsing && !this.bench.has('showcase')) this.showcase?.render(wallClock());
+    if (this.state === 'menu' && !this.choosingSolo && !this.choosingSchool && !this.atBoard && !this.browsing && !this.bench.has('showcase')) this.showcase?.render(wallClock());
 
     const cue = this.musicCue();
     if (cue) this.radio.setCue(cue);
@@ -5197,7 +5252,16 @@ export class Game implements OnlineGame {
     if (school.stepIndex !== step) {
       this.sound.beep(880, 0.1, 0.15);
       if (course) keepSchoolSteps({ ...schoolSteps(), [course]: school.stepIndex });
-      else this.keepCampaign((campaign) => (campaign.step = school.stepIndex));
+      else if (!this.flyingAgain) this.keepCampaign((campaign) => (campaign.step = school.stepIndex));
+    }
+    // a mission flown again done: nothing paid, nothing kept, back to the job board
+    if (school.finished && this.mission && this.flyingAgain) {
+      this.flyingAgain = false;
+      this.mission = null;
+      this.schoolMark = this.schoolTrack = null;
+      this.showMenu();
+      this.showBoard(true);
+      return;
     }
     // a mission of the campaign done: paid, and back to the menu
     if (school.finished && this.mission) {

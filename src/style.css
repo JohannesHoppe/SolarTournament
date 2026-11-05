@@ -523,8 +523,11 @@ body:has(#hangar-plate:not([hidden])) #hangar {
   width: min(560px, calc(100vw - 32px));
 }
 
-/* the flight school's courses, one above the other, each with its way to start over below it */
-#school-courses {
+/* the flight school's courses, one above the other, each with its way to start over below it;
+   the job board's jobs the same way */
+#school-courses,
+#board-next,
+#board-done {
   display: flex;
   flex-direction: column;
   gap: 8px;
