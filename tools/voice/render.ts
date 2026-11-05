@@ -26,7 +26,7 @@ import { ffmpegBinary, ffmpegHash } from './ffmpeg.ts';
 import { sha256, toolCache, writeWhole } from '../pinned.ts';
 import { cachedStore, keepStore, pruneStores } from './clonestore.ts';
 import { fetchPrebuilt } from './prebuilt.ts';
-import { CATALOGS, cloneAudioName, CLONED, cloneKey, COMPUTER_VOICE, releaseUrl, SPEAKER_NAMES, SPEAKERS, speakerLines, storeName, type Cloned, type Speaker } from './nicole.ts';
+import { CATALOGS, cloneAudioName, CLONED, cloneKey, COMPUTER_VOICE, fetchRelease, releaseUrl, SPEAKER_NAMES, SPEAKERS, speakerLines, storeName, type Cloned, type Speaker } from './nicole.ts';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '../..');
 const out = join(root, 'public/assets/voice');
@@ -111,7 +111,7 @@ const clonesCache = join(cacheRoot, 'clones');
 async function cloneIndex(store: string): Promise<CloneIndex | null> {
   const copy = join(clonesCache, `${store}.json`);
   try {
-    const answer = await fetch(releaseUrl(`${store}.json`), { signal: AbortSignal.timeout(20000) });
+    const answer = await fetchRelease(releaseUrl(`${store}.json`), 20);
     if (answer.status === 404 && !store.startsWith('nicole-')) return null;
     if (!answer.ok) throw new Error(`HTTP ${answer.status}`);
     const text = await answer.text();
@@ -260,7 +260,7 @@ async function cloneAudio(speaker: Speaker, locale: Cloned, index: CloneIndex): 
   try {
     let file = cachedStore(clonesCache, store, index.audio);
     if (!file) {
-      const answer = await fetch(releaseUrl(cloneAudioName(speaker, locale, index.audio)), { signal: AbortSignal.timeout(120000) });
+      const answer = await fetchRelease(releaseUrl(cloneAudioName(speaker, locale, index.audio)), 120);
       if (!answer.ok) throw new Error(`HTTP ${answer.status}`);
       const bytes = Buffer.from(await answer.arrayBuffer());
       // the audio is named by its fingerprint, which its index names; a download cut short is not used

@@ -87,6 +87,27 @@ export const SPEAKER_NAMES = Object.keys(SPEAKERS) as Speaker[];
 /** Where the cloned lines are kept: assets of one release of the public repository, never in its history. */
 export const RELEASE = { repo: 'JohannesHoppe/SolarTournament', tag: 'voice-nicole' } as const;
 export const releaseUrl = (file: string) => `https://github.com/${RELEASE.repo}/releases/download/${RELEASE.tag}/${file}`;
+
+/** How often a download from a release is tried, and the wait before the first retry (ms, doubled for each after it). */
+const RELEASE_TRIES = 4;
+const RELEASE_WAIT = 2000;
+/**
+ * A file of a release, fetched with patience: GitHub's downloads now and then answer a while
+ * with a server error (5xx) or not at all for a file that is there, so such an answer is tried
+ * again a few times; any other answer (the file, a 404) is returned as it comes. `seconds` bounds
+ * each try.
+ */
+export async function fetchRelease(url: string, seconds: number, get: typeof fetch = fetch): Promise<Response> {
+  for (let attempt = 1, wait = RELEASE_WAIT; ; attempt++, wait *= 2) {
+    try {
+      const answer = await get(url, { signal: AbortSignal.timeout(seconds * 1000) });
+      if (answer.status < 500 || attempt === RELEASE_TRIES) return answer;
+    } catch (error) {
+      if (attempt === RELEASE_TRIES) throw error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, wait));
+  }
+}
 /** A speaker's store of a language in the release (its index `<name>.json`, see cloneAudioName): Nicole's `nicole-de`, Rask's `rask-de`, … */
 export const storeName = (speaker: Speaker, locale: Cloned) => `${speaker}-${locale}`;
 /** A speaker's voice print as Chatterbox holds it, and the English reference it was taken from (Nicole's under the names they had before the others were cloned). */

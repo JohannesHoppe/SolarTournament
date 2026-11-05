@@ -7,7 +7,7 @@
  */
 import { join } from 'node:path';
 import { sha256, writeWhole } from '../pinned.ts';
-import { RELEASE } from './nicole.ts';
+import { fetchRelease, RELEASE } from './nicole.ts';
 
 export const SPRITES_TAG = 'voice-sprites';
 const spritesUrl = (file: string) => `https://github.com/${RELEASE.repo}/releases/download/${SPRITES_TAG}/${file}`;
@@ -25,14 +25,14 @@ export const spriteAsset = (inputs: string, file: string) => `${inputs}-${file}`
  */
 export async function fetchPrebuilt(commit: string, files: readonly string[], out: string, get: typeof fetch = fetch): Promise<boolean> {
   try {
-    const answer = await get(spritesUrl(pointerName(commit)), { signal: AbortSignal.timeout(20000) });
+    const answer = await fetchRelease(spritesUrl(pointerName(commit)), 20, get);
     if (!answer.ok) throw new Error(`pointer: HTTP ${answer.status}`);
     const pointer = (await answer.json()) as Pointer;
     const fetched: Buffer[] = [];
     for (const file of files) {
       const expected = pointer.sha256?.[file];
       if (!expected) throw new Error(`${file} not in the pointer`);
-      const response = await get(spritesUrl(spriteAsset(pointer.inputs, file)), { signal: AbortSignal.timeout(120000) });
+      const response = await fetchRelease(spritesUrl(spriteAsset(pointer.inputs, file)), 120, get);
       if (!response.ok) throw new Error(`${file}: HTTP ${response.status}`);
       const bytes = Buffer.from(await response.arrayBuffer());
       if (sha256(bytes) !== expected) throw new Error(`${file} is not the file its pointer names`);
