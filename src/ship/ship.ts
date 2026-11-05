@@ -491,6 +491,9 @@ export class Ship {
    */
   outfit(perks: Perks) {
     this.perks = perks;
+    // Pim's welds, on the one hull that carries them (see models, welds)
+    const patches = this.model.getObjectByName('patches');
+    if (patches) patches.visible = perks.patched;
     if (this.engine.flameMaterial) this.engine.flameMaterial.color.copy(FLAME_TINTS[perks.flame]);
     const { strips, stern, light } = this.trim;
     strips.visible = perks.neon > 0;

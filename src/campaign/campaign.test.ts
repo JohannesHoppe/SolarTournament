@@ -97,9 +97,11 @@ describe('the campaign Lot 7731', () => {
     expect(campaign.bond).toBe(BOND + CUTTER_PRICE);
   });
 
-  it('has Pim weld the thrusters up when the hull is docked, free, the Bond untouched', () => {
+  it('has Pim weld the thrusters up when the hull is docked, free, the Bond untouched, and her welds show', () => {
     const campaign = freshCampaign();
+    expect(hullOf(campaign).patched).toBe(false);
     complete(campaign, MISSIONS.find((mission) => mission.id === 'coldBoot')!);
+    expect(hullOf(campaign).patched).toBe(true);
     expect(campaign.parts).toEqual(['patch']);
     expect(campaign.bond).toBe(BOND);
     expect(hullOf(campaign).thrusters).toBe(PATCHED_THRUSTERS);

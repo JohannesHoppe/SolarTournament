@@ -64,7 +64,7 @@ export const MODULE_NAMES: Record<Module, string> = { targeting: msg('targeting'
 export function hullOf(campaign: Campaign): Perks {
   const hull: Perks = { ...STOCK, drive: SCRAP_DRIVE, thrusters: SCRAP_THRUSTERS, torpedoes: -TORPEDOES, laser: false, overdrive: false, dodge: false, fins: 1, cooling: 1 - FIN_RADIATOR };
   if (campaign.parts.includes('cutter')) Object.assign(hull, { laser: true, laserReach: CUTTER_REACH, laserHeat: CUTTER_HEAT });
-  if (campaign.parts.includes('patch')) hull.thrusters = PATCHED_THRUSTERS;
+  if (campaign.parts.includes('patch')) Object.assign(hull, { thrusters: PATCHED_THRUSTERS, patched: true });
   return hull;
 }
 

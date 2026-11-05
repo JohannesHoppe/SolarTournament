@@ -116,6 +116,8 @@ export interface Perks {
   /** The laser's reach (a share of LASER_RANGE) and the heat of a shot (a share of a stock shot's): the campaign's mining cutter reaches short and runs hot. */
   laserReach: number;
   laserHeat: number;
+  /** A look: plates welded over the thrusters' housings (the campaign's hull once Pim has welded its thrusters up, see campaign/campaign); only a hull that carries them shows them. */
+  patched: boolean;
 }
 
 export const STOCK: Readonly<Perks> = {
@@ -135,6 +137,7 @@ export const STOCK: Readonly<Perks> = {
   fins: 2,
   laserReach: 1,
   laserHeat: 1,
+  patched: false,
 };
 
 /**

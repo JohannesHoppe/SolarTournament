@@ -643,7 +643,41 @@ export function scrapInterceptor(original: THREE.Object3D): THREE.Object3D {
     { parts, wear: SCRAP, seed: 7731 },
     { parts: fins, wear: { ...SCRAP, relief: 'ribs' }, seed: 7732 },
   ];
-  return hull(original, 'humanHull', coats, trim, radiators, { parts: lights, color: TAIL_LIGHT });
+  const root = hull(original, 'humanHull', coats, trim, radiators, { parts: lights, color: TAIL_LIGHT });
+  root.add(welds(THRUSTER_LAYOUTS.human));
+  return root;
+}
+
+/**
+ * Pim's welds (see Perks.patched): around each thruster housing, near both its ends, a band of
+ * other steel welded on crooked to hold the cracked housing together, its beads still tinted by
+ * the heat; clear of the nozzles, which leave the housing's faces between the bands. One mesh
+ * named `patches`, hidden until the hull is welded.
+ */
+const WELDED: Wear = { rust: 0.15, chips: 0.3, grime: 0.5, scratches: 0.8, seams: 0.6, stencils: [], roughness: 0.7, metalness: 0.5, relief: 'flush', dents: 0.4 };
+
+function welds(layout: QuadLayout): THREE.Mesh {
+  const band = (q: THREE.Vector3, z: number, half: number, grow: number, tilt: number, color: number) =>
+    paint(
+      loft(
+        HOUSING,
+        { z: z + half, w: QUAD_SIZE + grow, h: QUAD_SIZE + grow, x: q.x + tilt, y: q.y - tilt },
+        { z: z - half, w: QUAD_SIZE + grow, h: QUAD_SIZE + grow, x: q.x - tilt, y: q.y + tilt },
+      ),
+      color,
+    );
+  const parts = quadsOf(layout).flatMap((q, i) =>
+    [-1, 1].flatMap((end) => {
+      const z = q.z + end * (QUAD_SIZE - 2.5);
+      // each band set on by hand, a little askew, and no two alike
+      const tilt = 0.5 + 0.3 * ((i * 2 + end + 3) % 3);
+      return [band(q, z, 1.6, 2, tilt, STEEL), band(q, z + 1.8, 0.35, 2.4, tilt, HEAT_TINT), band(q, z - 1.8, 0.35, 2.4, tilt, HEAT_TINT)];
+    }),
+  );
+  const mesh = coat({ parts, wear: WELDED, seed: 7733 });
+  mesh.name = 'patches';
+  mesh.visible = false;
+  return mesh;
 }
 
 const IVORY = 0xd9d3c3;
