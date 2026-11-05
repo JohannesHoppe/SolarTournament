@@ -175,6 +175,27 @@ test('the Peak Run races three rivals through six old pipes, two laps, and count
   expect(errors).toEqual([]);
 });
 
+test('Practice Log hears the first echo once the clone holds still before a lit tunnel', async ({ page }) => {
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify({ ...kept, done: [...kept.done, 'rheasilvia', 'claimSurvey', 'cutAndHaul', 'sawBrothers', 'peakRun'] })), CHAPTER_ONE_DONE);
+  const errors = await openGame(page, '/?campaign');
+  await takeNextJob(page);
+  await page.waitForFunction(() => window.game.school?.attempt?.live && window.game.school.attempt.points?.length === 1 && window.game.me?.alive, null, { timeout: 120_000 });
+  // the clone held at rest before the tunnel's mouth, until the echo plays
+  await page.waitForFunction(
+    () => {
+      const game = window.game;
+      if (game.school.stepIndex !== 0) return true;
+      game.me.flight.position.copy(game.school.attempt.points[0]);
+      game.me.flight.velocity.set(0, 0, 0);
+      return false;
+    },
+    null,
+    { timeout: 30_000, polling: 50 },
+  );
+  expect(await page.evaluate(() => window.game.school.stepIndex)).toBe(1);
+  expect(errors).toEqual([]);
+});
+
 test('Lamplighter counts the beacons held by, one after the other', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('solartournament.campaign', JSON.stringify({ done: ['coldBoot'], step: 0, coins: 0, bond: 25000, parts: [] })));
   const errors = await openGame(page, '/?campaign');

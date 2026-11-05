@@ -596,6 +596,31 @@ const fitThrusters = (campaign: Campaign) => {
   if (!campaign.parts.includes('thrusters')) campaign.parts.push('thrusters');
 };
 
+/**
+ * Practice Log (2.5): before the mouth of a lit tunnel in a cut rock's face (the first claim with
+ * one, see world/mining), the ship held within ECHO_REACH (units, 40 m) and slower than ECHO_STILL
+ * (units/s, 2 m/s) for ECHO_HOLD seconds, so Nicole can listen to what is there: the first echo.
+ */
+const ECHO_REACH = 800;
+const ECHO_STILL = 40;
+const ECHO_HOLD = 3;
+
+const practiceLog: Drill = {
+  line: CAMPAIGN.practiceLog,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'rheasilvia',
+  autopilot: false,
+  enter(ctx, a, markers) {
+    const tunnel = ctx.claims().find((claim) => claim.tunnel)?.tunnel;
+    a.points = tunnel ? [tunnel.clone()] : [];
+    markers.clear();
+    if (tunnel) markers.zone(tunnel, ECHO_REACH);
+  },
+  done: (ctx, a) => !!a.points[0] && holdFor(ctx, a, ctx.me.flight.position.distanceTo(a.points[0]) < ECHO_REACH && ctx.me.flight.velocity.length() < ECHO_STILL, ECHO_HOLD),
+  waypoint: (_, a) => a.points[0] ?? null,
+  mark: () => t('Tunnel'),
+};
+
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
@@ -639,4 +664,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'cutAndHaul', name: msg('Cut and Haul'), drills: [onVesta(HEDDA.cutAndHaul), cutAndHaul, said(CAMPAIGN.cutAndHaulDone, 'rheasilvia')], pay: HAUL_ORE * ORE_PAY, ratings: 25 },
   { id: 'sawBrothers', name: msg('Saw Brothers'), drills: [onVesta(HEDDA.sawBrothers), onVesta(SAW.giggle), sawBrothers, said(SAW.lost, 'rheasilvia'), said(CAMPAIGN.sawBrothersDone, 'rheasilvia')], pay: 1200, ratings: 80 },
   { id: 'peakRun', name: msg('The Peak Run'), drills: [onVesta(HEDDA.peakRun), peakRun, said(CAMPAIGN.peakRunDone, 'rheasilvia'), onVesta(PIM.thrusters)], pay: 800, ratings: 60, fit: fitThrusters },
+  { id: 'practiceLog', name: msg('Practice Log'), drills: [practiceLog, said(CAMPAIGN.echoOne, 'rheasilvia'), said(CAMPAIGN.echoOneHeard, 'rheasilvia')], pay: 0, ratings: 20 },
 ];

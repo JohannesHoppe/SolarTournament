@@ -419,6 +419,8 @@ export interface Plan {
   buoys: { slot: number; at: THREE.Vector3 }[];
   /** The middle of each claim's rig, by slot, in its rock's own frame; none for a claim without one. */
   rigs: THREE.Vector3[];
+  /** Before the mouth of each claim's first lit tunnel, by slot, in its rock's own frame; none for a claim without a cut face. */
+  tunnels: THREE.Vector3[];
 }
 
 /**
@@ -889,8 +891,13 @@ function cutFace(plan: Plan, site: Site, r: Randomizer) {
     }
     disc(plan.glow, site, at.clone().addScaledVector(normal, (1.6 * M) / site.scale), normal, radius * 0.9, TUNNEL_CELL, new THREE.Color(1.0, 0.6, 0.25));
     addLight(plan.lights, site.slot, at.clone().addScaledVector(normal, (2.5 * M) / site.scale), SODIUM, 2.5 * M);
+    // where a ship holds before the first tunnel's mouth (see Mining.claims)
+    if (i === 0) plan.tunnels[site.slot] = at.clone().addScaledVector(normal, TUNNEL_STANDOFF / site.scale);
   }
 }
+
+/** How far before a tunnel's mouth a ship holds to listen into it (units, 60 m: clear of the face, its hull 35 m long). */
+const TUNNEL_STANDOFF = 60 * M;
 
 /** Neon graffiti of the Rockborn on a rock: a slogan in a paint of its own, sprayed across its face, glowing faintly. */
 function graffiti(plan: Plan, site: Site, r: Randomizer, slogan: number) {
@@ -950,6 +957,7 @@ export function planMining(field: AsteroidField): Plan {
     solids: [],
     buoys: [],
     rigs: [],
+    tunnels: [],
   };
   // each claim draws from its own sequence, so one claim's dressing never shifts another's
   claimed.forEach((asteroid, slot) => {
@@ -973,10 +981,11 @@ export function planMining(field: AsteroidField): Plan {
   return plan;
 }
 
-/** A claim of the Rockborn in a field (see Mining.claims): its rock, the middle of the rig working on it (null for none), its first buoy. */
+/** A claim of the Rockborn in a field (see Mining.claims): its rock, the middle of the rig working on it (null for none), where a ship holds before its first lit tunnel (null for none), its first buoy. */
 export interface Claim {
   rock: string;
   rig: THREE.Vector3 | null;
+  tunnel: THREE.Vector3 | null;
   buoy: THREE.Vector3;
 }
 
@@ -1202,7 +1211,8 @@ export class Mining {
       if (!rock) continue;
       rock.object.updateWorldMatrix(true, false);
       const rig = plan.rigs[slot];
-      list.push({ rock: rock.id, rig: rig ? rig.clone().applyMatrix4(rock.object.matrixWorld) : null, buoy: at.clone().applyMatrix4(rock.object.matrixWorld) });
+      const tunnel = plan.tunnels[slot];
+      list.push({ rock: rock.id, rig: rig ? rig.clone().applyMatrix4(rock.object.matrixWorld) : null, tunnel: tunnel ? tunnel.clone().applyMatrix4(rock.object.matrixWorld) : null, buoy: at.clone().applyMatrix4(rock.object.matrixWorld) });
     }
     return list;
   }

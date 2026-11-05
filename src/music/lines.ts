@@ -542,6 +542,9 @@ export const CAMPAIGN = {
   peakRun: 'Six old pipes round the claims, two laps, three rivals. Through every one of them, and finish in the first two: the prize is ours.',
   peakRunLost: 'Two of them were home before us. No prize. We race again.',
   peakRunDone: 'In the first two. The prize table is ours.',
+  practiceLog: 'There is something on an old frequency, very weak, from the face of a cut rock. A lit tunnel. Fly to its mouth and hold still, so I can listen.',
+  echoOne: "Scout Two, navigator's practice log. Can you hear me, little ship? Good. We will be talking a lot.",
+  echoOneHeard: 'That voice. It sounds like mine. I do not remember ever recording it.',
 } as const;
 
 /**
