@@ -24,7 +24,7 @@ Worked through from top to bottom. Every finished item is also documented in the
 - [x] Radio 2584: generative music with Tone.js, in sync for all pilots
 - [x] Radio 2584: an announcer cutting in after kills, crashes and the round's big moments, a crowd on the broadcast
 - [x] Radio 2584: jingles and samples as in Johannes' inscription experiments (`haushoppe/deconstructed-inscriptions`): the stammer of a sampled cut and the station's jingle, the glitch's bursts of noise; to be judged by ear
-- [x] Radio 2584: now and then something cheerful in between: one French track in three in a bright key (mixolydian)
+- [x] Radio 2584: a cheerful key, French house in mixolydian, kept for the campaign's cheerful scenes (never in the tournament's rotation)
 - [x] Glitch of the link to the clone on hits, impacts and death
 
 ### 4. Arenas with their own physics
@@ -85,6 +85,7 @@ Ideas Johannes has named that are not built yet, with the day they came up. One 
   - The ship starts as scrap without even a laser; menial jobs pay for the first laser, which mines rock, then the first missions (escorting a freighter); the torpedoes, the hook and the overdrive come later. Nicole is aboard from the start; upgrades of her too (her voice changing, say). Everything the tournament ship has is earned on the way.
   - The fourth ship: the campaign's own, built up from scrap to mighty, as strong as the Sovereign.
   - 2026-11-03: Music by situation, never by chance: every level, world or scene has its music fixed (a title and a style of its own), calm styles that just flow on while little happens (mining ore), no pushing beat; the music changes when the situation does (bandits arrive). Background music only: no announcer, no voice of the regime.
+  - 2026-11-06: Cheerful only where something is cheerful: the bright key (French in mixolydian, `bright` in `createSong`) for a cheerful scene, never in the tournament or the flight school; picking scrap and such things need a calm soundscape of their own (`docs/campaign/STORY.md`, Music).
   - 2026-11-04: Its name is **Lot 7731**; the title screen shows it in the making until the first slice (`docs/campaign/STORY.md`, section 10) is playable.
   - Places, not the arenas: planets, moons, asteroids and stations in orbit around them (around Pluto, say), as they really are; beyond Pluto the bodies found there and imagined ones (a ninth, tenth and eleventh planet), with trading stations and outposts everywhere. No travel to other stars: humanity is still bound to the solar system and what lies around it. The black hole is a primordial one not far beyond the solar system, its way there still to be explained. The worlds look grand.
 

@@ -11,6 +11,8 @@ export interface MusicCue {
   /** Seconds since the song began; tournament songs run on the shared round clock. */
   elapsed: number;
   roundLength: number;
+  /** A cheerful scene's track: French in the bright key (see createSong). */
+  bright?: boolean;
 }
 
 /** Steps are scheduled this far ahead of the audio clock (s). */
@@ -318,10 +320,10 @@ export class Radio {
     if (!this.enabledFlag) return;
 
     const elapsed = cue.elapsed + (performance.now() - this.cueAt) / 1000;
-    const key = `${cue.title}:${cue.energy}:${cue.roundLength}`;
+    const key = `${cue.title}:${cue.energy}:${cue.roundLength}:${cue.bright ?? false}`;
     if (key !== this.songKey) {
       this.songKey = key;
-      this.song = createSong(cue.title, cue.energy, cue.roundLength);
+      this.song = createSong(cue.title, cue.energy, cue.roundLength, undefined, cue.bright);
       this.band.prepare(this.song);
       this.start = Infinity;
       this.onSong(this.song);

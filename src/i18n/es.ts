@@ -1537,11 +1537,10 @@ export const ES: Catalog = {
   Scale: 'Escala',
   'phrygian (two in three) or natural minor': 'frigia (dos de cada tres) o menor natural',
   'natural minor': 'menor natural',
-  'mixolydian (one in three) or natural minor': 'mixolidia (una de cada tres) o menor natural',
   Development: 'Desarrollo',
   'Parts by energy': 'Partes según la energía',
   'Listen to a {flavor} track': 'Escuchar un tema {flavor}',
-  'Natural minor: {aeolian}. Phrygian: {phrygian}, the flat second over the root. Mixolydian: {mixolydian}, major with the flat seventh, French’s good mood. Drive’s harmony, bar by bar: {turnaround} semitones.': 'Menor natural: {aeolian}. Frigia: {phrygian}, con la segunda menor sobre la tónica. Mixolidia: {mixolydian}, mayor con la séptima menor, el buen humor de French. La armonía de drive, compás a compás: {turnaround} semitonos.',
+  'Natural minor: {aeolian}. Phrygian: {phrygian}, the flat second over the root. Drive’s harmony, bar by bar: {turnaround} semitones.': 'Menor natural: {aeolian}. Frigia: {phrygian}, con la segunda menor sobre la tónica. La armonía de drive, compás a compás: {turnaround} semitonos.',
   'Whoever cheats their friends is an asshole. Period.': 'Quien engaña a sus amigos es un gilipollas. Punto.',
   'And yes, we know what DevTools are. Go ahead and edit your localStorage. Out there are Hosts who fly the flight school themselves and earn their Solar Coins round by round, to build the perfect ship the honest way. Online the upgrades count only up to their cap anyway.':
     'Y sí, sabemos lo que son las DevTools. Adelante, edita tu localStorage. Ahí fuera hay Hosts que vuelan la escuela de vuelo con sus propias manos y se ganan sus Solar Coins ronda a ronda, para construir la nave perfecta por el camino honrado. Total, online las mejoras solo cuentan hasta su límite.',

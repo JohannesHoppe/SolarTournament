@@ -114,7 +114,7 @@ function card(flavor: Flavor, listen: (flavor: Flavor) => void): HTMLElement {
     [msg('Lead'), list(settings.lead.map((voice) => LEAD_NAMES[voice]))],
     [msg('Kick'), list(KICK_SHAPES[flavor].map((shape) => KICK_NAMES[shape]))],
     [msg('Pump'), t('ducks to {percent} % on every kick', { percent: percent(PUMP[flavor]) })],
-    [msg('Scale'), flavor === 'drive' ? t('phrygian (two in three) or natural minor') : flavor === 'french' ? t('mixolydian (one in three) or natural minor') : t('natural minor')],
+    [msg('Scale'), flavor === 'drive' ? t('phrygian (two in three) or natural minor') : t('natural minor')],
     [msg('Development'), list(strategiesOf(flavor).map((strategy) => STRATEGY_NAMES[strategy]))],
     [msg('Parts by energy'), parts.join(' · ')],
   ];
@@ -147,9 +147,8 @@ export function recipeCards(listen: (flavor: Flavor) => void): HTMLElement[] {
 
 /** The note under the cards: the scales in semitones over the root, and drive's harmony bar by bar. */
 export const scaleNote = () =>
-  t('Natural minor: {aeolian}. Phrygian: {phrygian}, the flat second over the root. Mixolydian: {mixolydian}, major with the flat seventh, French’s good mood. Drive’s harmony, bar by bar: {turnaround} semitones.', {
+  t('Natural minor: {aeolian}. Phrygian: {phrygian}, the flat second over the root. Drive’s harmony, bar by bar: {turnaround} semitones.', {
     aeolian: SCALES.aeolian.join(' '),
     phrygian: SCALES.phrygian.join(' '),
-    mixolydian: SCALES.mixolydian.join(' '),
     turnaround: TURNAROUND.join(' '),
   });

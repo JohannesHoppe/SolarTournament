@@ -354,12 +354,11 @@ const LEAD_NOTES = [0, 0, 3, 7, 10, 12, 1, -2];
  * The scales a track's tonal parts land on (semitones over the root): natural minor (aeolian),
  * and phrygian, minor with the flat second, darker, the color of the 80s night drive's lines.
  * And mixolydian, major with the flat seventh, the bright and funky color of French house in a
- * good mood: the radio's cheerful moment in between. Drive picks phrygian two times in three,
- * French mixolydian one time in three (BRIGHT_CHANCE); every other track plays aeolian.
+ * good mood: never by chance, only where a scene of the campaign is cheerful and asks for it
+ * (`bright` in createSong). Drive picks phrygian two times in three; every other track plays
+ * aeolian.
  */
 export const SCALES = { aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], mixolydian: [0, 2, 4, 5, 7, 9, 10] } as const;
-/** The share of French tracks in the bright key (see SCALES): with French's weight about one track in eighteen. */
-export const BRIGHT_CHANCE = 1 / 3;
 
 /**
  * How far the music ducks under every kick (the level it falls to; it swells back over half a
@@ -399,16 +398,20 @@ const GALLOPS = [
 /** Where in a beat the second voice's notes fall: off the beat, on the "e" and the "a". */
 const OFFBEATS = [1, 3];
 
-/** A track from its title. The title decides everything; online, titleFor picks the title. */
-export function createSong(title: string, energy: Energy, roundLength: number, flavor?: Flavor): Song {
+/**
+ * A track from its title. The title decides everything; online, titleFor picks the title. A
+ * bright track (for a cheerful scene of the campaign) plays French in the bright key, whatever
+ * the title would pick.
+ */
+export function createSong(title: string, energy: Energy, roundLength: number, flavor?: Flavor, bright = false): Song {
   const seed = textSeed(title.toLowerCase());
   const german = isGerman(title);
-  const chosen = flavor ?? (german ? 'motorik' : weighted(seed));
+  const chosen = bright ? 'french' : (flavor ?? (german ? 'motorik' : weighted(seed)));
   const settings = FLAVOR_SETTINGS[chosen];
   const lounge = energy === 'lounge';
   const bpm = settings.bpm[0] + (hash(seed, Ch.Genes, 2) % (settings.bpm[1] - settings.bpm[0] + 1)) - (lounge ? 6 : 0);
   const strategy: Strategy = lounge ? 'hypnotic' : chosen === 'drive' ? 'timbre' : chosen === 'motorik' ? choose(['relentless', 'hypnotic', 'movements'], seed, Ch.Genes, 3) : choose(STRATEGIES, seed, Ch.Genes, 3);
-  const scale = chosen === 'drive' && unit(seed, Ch.Genes, 60) < 2 / 3 ? SCALES.phrygian : chosen === 'french' && unit(seed, Ch.Genes, 65) < BRIGHT_CHANCE ? SCALES.mixolydian : SCALES.aeolian;
+  const scale = chosen === 'drive' && unit(seed, Ch.Genes, 60) < 2 / 3 ? SCALES.phrygian : bright ? SCALES.mixolydian : SCALES.aeolian;
   const song: Song = {
     title,
     seed,

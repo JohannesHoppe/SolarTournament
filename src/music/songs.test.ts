@@ -21,14 +21,13 @@ describe('Radio 2584', () => {
     expect(JSON.stringify(stepEvents(other, 3000), (key, value) => (key === 'info' ? undefined : value))).toBe(late);
   });
 
-  it('keeps every tonal part on the scale of the track: natural minor, in drive also phrygian, in French also the bright mixolydian', () => {
-    const allowed = (flavor: string) => (flavor === 'drive' ? [SCALES.aeolian, SCALES.phrygian] : flavor === 'french' ? [SCALES.aeolian, SCALES.mixolydian] : [SCALES.aeolian]);
-    // a French track in the bright key, its chords and motif lifted onto the major third
-    expect(createSong('Hull Mantra', 'round', ROUND_SECONDS).scale).toBe(SCALES.mixolydian);
+  it('keeps every tonal part on the scale of the track: natural minor, in drive also phrygian, bright tracks mixolydian', () => {
     for (const title of ['Orbit Terror', 'Golden Damage', 'Hull Mantra', titleFor(7), titleFor(99), titleFor(5), titleFor(11)]) {
-      for (const flavor of [undefined, 'drive' as const, 'french' as const]) {
-        const song = createSong(title, 'round', ROUND_SECONDS, flavor);
-        expect(allowed(song.flavor)).toContain(song.scale);
+      for (const [flavor, bright] of [[undefined, false], ['drive', false], ['french', false], [undefined, true]] as const) {
+        const song = createSong(title, 'round', ROUND_SECONDS, flavor, bright);
+        // the bright key only where a scene asks for it, and then always French
+        if (bright) expect([song.flavor, song.scale]).toEqual(['french', SCALES.mixolydian]);
+        else expect(song.flavor === 'drive' ? [SCALES.aeolian, SCALES.phrygian] : [SCALES.aeolian]).toContain(song.scale);
         for (let step = 0; step < 200 * STEPS_PER_BAR; step += 3) {
           const events = stepEvents(song, step);
           // a key lift late in the track moves the key; the scale stays
