@@ -45,12 +45,14 @@ export const CUTTER_HEAT = 1.75;
 
 /** The Navy surplus laser bought in Occator's market (chapter 3): the Games' own laser, its price (☉), what the wallet holds of it paid, the rest put on the debt. */
 export const LASER_PRICE = 6000;
+/** The drive's overhaul at Occator (chapter 3): a new bell of Rockborn make for the cracked one, the main drive to stock; its price (☉), paid as the laser's is. */
+export const OVERHAUL_PRICE = 1600;
 
-/** What the yard can fit to the hull: the mining cutter, Pim's patch on the thrusters, her rebuilt thrusters, the military laser; and the depot's grey ground off it (Scout Two). */
-export type Part = 'cutter' | 'patch' | 'thrusters' | 'laser' | 'stripped';
-const PARTS: readonly Part[] = ['cutter', 'patch', 'thrusters', 'laser', 'stripped'];
+/** What the yard can fit to the hull: the mining cutter, Pim's patch on the thrusters, her rebuilt thrusters, the military laser, the drive's overhaul; and the depot's grey ground off it (Scout Two). */
+export type Part = 'cutter' | 'patch' | 'thrusters' | 'laser' | 'stripped' | 'drive';
+const PARTS: readonly Part[] = ['cutter', 'patch', 'thrusters', 'laser', 'stripped', 'drive'];
 /** What the job board calls each part fitted. */
-export const PART_NAMES: Record<Part, string> = { cutter: msg('the mining cutter'), patch: msg('the thrusters welded up'), thrusters: msg('the thrusters rebuilt to stock'), laser: msg('the military laser'), stripped: msg('the old livery, the paint ground off') };
+export const PART_NAMES: Record<Part, string> = { cutter: msg('the mining cutter'), patch: msg('the thrusters welded up'), thrusters: msg('the thrusters rebuilt to stock'), laser: msg('the military laser'), stripped: msg('the old livery, the paint ground off'), drive: msg('the main drive overhauled to stock') };
 
 /**
  * Nicole's modules (docs/campaign/STORY.md, "Nicole's restoration"): the pieces of the HUD a
@@ -76,10 +78,12 @@ export function hullOf(campaign: Campaign): Perks {
   // the Navy surplus laser in place of the cutter: the Games' own
   if (campaign.parts.includes('laser')) Object.assign(hull, { laser: true, laserReach: STOCK.laserReach, laserHeat: STOCK.laserHeat });
   if (campaign.parts.includes('stripped')) hull.stripped = true;
+  // the cracked bell replaced: the drive pushes as a stock ship's
+  if (campaign.parts.includes('drive')) hull.drive = STOCK.drive;
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo';
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul';
 
 export interface Mission {
   id: MissionId;

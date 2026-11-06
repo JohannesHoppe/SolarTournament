@@ -129,6 +129,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 3.3 | Repo Men | fight | The Tallymen, holders of the debt, come for the Magpie. Their tug (dark, the firm's stencils, a winch drum on its stern) lies 1.5 km off over the crater; 4 s in, its harpoon bites the hull and the winch reels it in at 12 m/s, the cable as long as the way was and shortening, the hull held on it whatever its drive does. Four guards (Docket, Lien, Arrears, Escrow; skill 0.3) fight round the tug. Twelve beams on the winch (within 25 m of its drum) snap the cable, or three guards shot down make them give up; reeled within 100 m of the winch, the hull is theirs and the attempt starts over. (built) | ☉ 1,500 · 150 | Raiders as guards; a cable reeled in |
 | 3.4 | Wall Run | escort | Lead Hedda's barge of forty Rockborn refugees, bound for the inner system, over the finished stretch of the Solar Wall. The barge follows the hull's way 400 m behind it at up to 25 m/s. Fifteen searchlights stand on the wall's top edge, 400 m apart, each a cone 14° wide on either side reaching 3 km, sweeping across the lane by up to 76° over 24 s and along the wall at a pace of its own: they look up and out, never down at their own feet, so a barge led over within some 50 m of the edge mostly stays under them, and one led high over it is seen. A light that holds the barge (bow, middle or stern) for 3 s sees it, the time adding up while it is lit and fading at half that pace while it is not; seen twice fails it. 1 km beyond the wall it is through. (built) | ☉ 1,000 · 200 | Escort; new: searchlight cones |
 | 3.5 | Scout Two | story | In Patience's workshop Pim grinds the depot's grey off the hull, and the scout's old livery shows: PAAA 01, S2, five stars. Nicole knows the name. Then something on the old frequency again, from the wall's second step under the neon NO WALL IN SPACE: the hull held before it (within 40 m, slower than 2 m/s, 3 s), and Nicole hears echo 2. The hull wears the livery from then on, on the pad too. (built) | 20 | Lines; markers; a look on the hull |
+| 3.6 | Overhaul | shop | Pim replaces the drive's bell, cracked since the Boneyard, with a new one of Rockborn make (☉ 1,600, from the wallet as far as it holds, the rest on the debt): the main drive to stock. (built) | — | Shipyard |
 
 ### Act II: Lanes
 
@@ -270,7 +271,7 @@ The Magpie starts below the Games' stock interceptor in every respect and ends a
 | 2 | Thruster rebuild | Pim's parts, the Peak Run's prize | Thrusters to stock; the dodge |
 | 2 | A rig's drive bell | 800 | Main drive to 80 % |
 | 3 | Military laser | 6,000 | The Games' laser |
-| 3 | Drive overhaul | 1,600 | Main drive to stock |
+| 3 | Drive overhaul | 1,600 | Main drive to stock (built: Overhaul) |
 | 4 | Armor panels | 1,500 | The bare flank closed: stock armor |
 | 5 | Radiators I | 1,000 | |
 | 6 | Plating I | 1,500 | |

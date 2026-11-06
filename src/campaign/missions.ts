@@ -10,7 +10,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -713,10 +713,9 @@ const marketRun: Drill = {
  * on her targeting.
  */
 const fitLaser = (campaign: Campaign) => {
-  if (!campaign.parts.includes('laser')) campaign.parts.push('laser');
-  const paid = Math.min(campaign.coins, LASER_PRICE);
-  campaign.coins -= paid;
-  campaign.bond += LASER_PRICE - paid;
+  if (campaign.parts.includes('laser')) return;
+  campaign.parts.push('laser');
+  buy(campaign, LASER_PRICE);
   if (!campaign.modules.includes('targeting')) campaign.modules.push('targeting');
 };
 
@@ -952,6 +951,20 @@ const echoTwo: Drill = {
   mark: () => t('Signal'),
 };
 
+/** Pays a part's price from the wallet as far as it holds, the rest put on the debt (the laser, the overhaul). */
+const buy = (campaign: Campaign, price: number) => {
+  const paid = Math.min(campaign.coins, price);
+  campaign.coins -= paid;
+  campaign.bond += price - paid;
+};
+
+/** Overhaul (3.6): the drive's cracked bell replaced by one of Rockborn make, the main drive to stock (see hullOf), at OVERHAUL_PRICE. */
+const fitDrive = (campaign: Campaign) => {
+  if (campaign.parts.includes('drive')) return;
+  campaign.parts.push('drive');
+  buy(campaign, OVERHAUL_PRICE);
+};
+
 const fitStripped = (campaign: Campaign) => {
   if (!campaign.parts.includes('stripped')) campaign.parts.push('stripped');
 };
@@ -1022,4 +1035,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'repoMen', name: msg('Repo Men'), drills: [onCeres(HEDDA.repoMen), said(TALLY.repo, 'occator'), repoMen, said(TALLY.noted, 'occator'), said(CAMPAIGN.repoMenDone, 'occator')], pay: 1500, ratings: 150 },
   { id: 'wallRun', name: msg('Wall Run'), drills: [said(HEDDA.wallRun, 'wall'), wallRun, said(CAMPAIGN.wallRunDone, 'wall')], pay: 1000, ratings: 200 },
   { id: 'scoutTwo', name: msg('Scout Two'), drills: [onCeres(PIM.grind), onCeres(PIM.paintOld), onCeres(CAMPAIGN.scoutTwo), onCeres(CAMPAIGN.scoutTwoHull), echoTwo, said(CAMPAIGN.echoTwo, 'occator'), said(CAMPAIGN.echoTwoHeard, 'occator')], pay: 0, ratings: 20, fit: fitStripped },
+  { id: 'overhaul', name: msg('Overhaul'), drills: [onCeres(PIM.overhaul), onCeres(CAMPAIGN.overhaul)], pay: 0, fit: fitDrive },
 ];

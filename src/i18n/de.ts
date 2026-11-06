@@ -1626,4 +1626,8 @@ export const DE: Catalog = {
   "The old frequency again, from up the wall, under the pink letters. Fly to it and hold still, so I can listen.": "Wieder die alte Frequenz, von oben an der Wand, unter den rosa Buchstaben. Flieg hin und halt still, damit ich lauschen kann.",
   "They painted the emblem on the hull today. Five stars. Somebody cried. I think it was me.": "Heute haben sie das Emblem auf den Rumpf gemalt. Fünf Sterne. Jemand hat geweint. Ich glaube, das war ich.",
   "Five stars, on this hull. I remember the brush. That is not possible, Host. I am a flight computer.": "Fünf Sterne, auf diesem Rumpf. Ich erinnere mich an den Pinsel. Das ist nicht möglich, Host. Ich bin ein Bordcomputer.",
+  "Overhaul": "Überholung",
+  "the main drive overhauled to stock": "der Hauptantrieb auf Serienstand überholt",
+  "While I'm in there. Your drive bell's been cracked since the Boneyard. Got you a new one, Rockborn make, sixteen hundred. You'll pay. Hold on, this one kicks.": "Wo ich schon dabei bin. Deine Triebwerksglocke ist seit dem Schrottplatz gesprungen. Hab dir eine neue besorgt, Rockborn-Bauart, sechzehnhundert. Zahlst du. Festhalten, die tritt.",
+  "The new bell takes the full burn. Our drive pushes as hard as anything in the Games now, Host.": "Die neue Glocke verträgt den vollen Schub. Unser Antrieb drückt jetzt so stark wie alles in den Spielen, Host.",
 };

@@ -1662,4 +1662,8 @@ export const ES: Catalog = {
   "The old frequency again, from up the wall, under the pink letters. Fly to it and hold still, so I can listen.": "Otra vez la frecuencia antigua, desde arriba en la pared, bajo las letras rosas. Vuela hasta allí y quédate quieto, para que pueda escuchar.",
   "They painted the emblem on the hull today. Five stars. Somebody cried. I think it was me.": "Hoy han pintado el emblema en el casco. Cinco estrellas. Alguien lloró. Creo que fui yo.",
   "Five stars, on this hull. I remember the brush. That is not possible, Host. I am a flight computer.": "Cinco estrellas, en este casco. Recuerdo el pincel. Eso no es posible, Host. Soy un ordenador de vuelo.",
+  "Overhaul": "Revisión",
+  "the main drive overhauled to stock": "el motor principal revisado de serie",
+  "While I'm in there. Your drive bell's been cracked since the Boneyard. Got you a new one, Rockborn make, sixteen hundred. You'll pay. Hold on, this one kicks.": "Ya que estoy. Tu tobera tiene una grieta desde el desguace. Te he conseguido una nueva, fabricación Rockborn, mil seiscientos. Pagas tú. Agárrate, esta empuja.",
+  "The new bell takes the full burn. Our drive pushes as hard as anything in the Games now, Host.": "La tobera nueva aguanta el empuje completo. Nuestro motor empuja ahora tanto como cualquiera de los Juegos, Host.",
 };

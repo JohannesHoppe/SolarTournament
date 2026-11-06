@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
+import { STOCK } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
 
 describe('the campaign Lot 7731', () => {
@@ -82,6 +83,14 @@ describe('the campaign Lot 7731', () => {
     complete(campaign, MISSIONS.find((mission) => mission.id === 'scoutTwo')!);
     expect(hullOf(campaign).stripped).toBe(true);
     expect(campaignFrom(JSON.stringify({ parts: ['stripped'] })).parts).toEqual(['stripped']);
+  });
+
+  it('overhauls the drive in Overhaul: a stock ship’s push, paid as the laser is', () => {
+    const campaign = { ...freshCampaign(), coins: 1000, bond: 20000 };
+    expect(hullOf(campaign).drive).toBe(SCRAP_DRIVE);
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'overhaul')!);
+    expect(hullOf(campaign).drive).toBe(STOCK.drive);
+    expect([campaign.coins, campaign.bond]).toEqual([0, 20000 + OVERHAUL_PRICE - 1000]);
   });
 
   it('fits the military laser in Surplus: paid from the wallet as far as it holds, the rest on the debt, the Games\' own laser in place of the cutter', () => {

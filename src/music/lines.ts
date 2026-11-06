@@ -560,6 +560,7 @@ export const CAMPAIGN = {
   wallRunSeen: 'They have seen the barge. Once more, and they send the pickets.',
   wallRunLost: 'Seen twice. The pickets are coming, and Hedda turns back. We start over.',
   wallRunDone: 'Over the wall, and gone. Forty people the regime will never count.',
+  overhaul: 'The new bell takes the full burn. Our drive pushes as hard as anything in the Games now, Host.',
   scoutTwo: 'Scout Two.',
   scoutTwoHull: 'We are Scout Two. I do not know how I know that. I have been in this hull all along, Host. I think I was here before the paint.',
   echoTwoCall: 'The old frequency again, from up the wall, under the pink letters. Fly to it and hold still, so I can listen.',
@@ -600,6 +601,7 @@ export const PIM = {
   voice: "Hold still, Nicole. Found you a voice board in Patience's scrap bin. Second-hand, like everything. This'll tickle.",
   grind: "Hold still. I'm grinding the depot grey off before it flakes into your intakes. There's something under it.",
   paintOld: "That's not depot paint. That's old. That's really old. P, A, A, A. Zero one. S two.",
+  overhaul: "While I'm in there. Your drive bell's been cracked since the Boneyard. Got you a new one, Rockborn make, sixteen hundred. You'll pay. Hold on, this one kicks.",
   surplus: "A real laser! Navy surplus, hardly fired. Six thousand. You haven't got six thousand. The dealer takes the rest on your paper. Hold still, I'm fitting it.",
 } as const;
 
