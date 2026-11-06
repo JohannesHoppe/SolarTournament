@@ -6,6 +6,7 @@ import { OCCATOR_BOXES } from './ceres';
 import { WALL_HALF } from './wall';
 import { GROUND_HALF as PHOBOS_HALF, groundRelief } from './phobos';
 import { GROUND_HALF as CALLISTO_HALF, groundRelief as callistoRelief, POST_HALF } from './callisto';
+import { GROUND_HALF as EUROPA_HALF, groundRelief as europaRelief } from './europa';
 import type { Relief } from './asteroids';
 
 /**
@@ -135,23 +136,34 @@ export const HOPPER = v(DEPOT_LAYOUT.crusher.center.x, GROUND + 1000 + 300, DEPO
 /**
  * The half extents of each template's collider box (units): 0 a full rack, 1 a rack with gaps, 2
  * an empty frame, then the depot's parts, then the slope under Vesta's claims (VESTA_GROUND_TYPE,
- * see world/vesta), then Occator's terrace, steps and domes (from OCCATOR_TYPE, see world/ceres), then the Solar Wall (WALL_TYPE, see world/wall), then Phobos's ground at Stickney (PHOBOS_TYPE, see world/phobos), then Callisto's at Valhalla (CALLISTO_TYPE, see world/callisto) and the Navy's listening post there (POST_TYPE).
+ * see world/vesta), then Occator's terrace, steps and domes (from OCCATOR_TYPE, see world/ceres), then the places after them in PLACE_BOXES.
  */
-export const RACK_BOXES: readonly THREE.Vector3[] = [...[0, 1, 2].map(() => v(RACK_LENGTH / 2, RACK_HEIGHT / 2, RACK_DEPTH / 2)), ...DEPOT_PARTS.map((part) => DEPOT_LAYOUT[part].half), SLOPE_HALF, ...OCCATOR_BOXES, WALL_HALF, PHOBOS_HALF, CALLISTO_HALF, POST_HALF];
+/** The templates of the campaign's later places, in order: the Solar Wall (see world/wall), Phobos's ground at Stickney (see world/phobos), Callisto's at Valhalla and the Navy's listening post there (see world/callisto), Europa's at the Lineae and the science station in its Crack (see world/europa). */
+const PLACE_BOXES = [WALL_HALF, PHOBOS_HALF, CALLISTO_HALF, POST_HALF, EUROPA_HALF, POST_HALF];
+export const RACK_BOXES: readonly THREE.Vector3[] = [...[0, 1, 2].map(() => v(RACK_LENGTH / 2, RACK_HEIGHT / 2, RACK_DEPTH / 2)), ...DEPOT_PARTS.map((part) => DEPOT_LAYOUT[part].half), SLOPE_HALF, ...OCCATOR_BOXES, ...PLACE_BOXES];
 /** The template of the slope under Vesta's claims in the yards' set. */
 export const VESTA_GROUND_TYPE = DEPOT_TYPE + DEPOT_PARTS.length;
 /** The first of Occator's templates in the yards' set (see world/ceres, occatorGround). */
 export const OCCATOR_TYPE = VESTA_GROUND_TYPE + 1;
-/** The Solar Wall's template in the yards' set (see world/wall). */
-export const WALL_TYPE = RACK_BOXES.length - 4;
-/** Phobos's ground at Stickney in the yards' set (see world/phobos): a box whose top is the moon's relief. */
-export const PHOBOS_TYPE = RACK_BOXES.length - 3;
-/** Callisto's ground at Valhalla in the yards' set (see world/callisto): a box whose top is the moon's relief. */
-export const CALLISTO_TYPE = RACK_BOXES.length - 2;
-/** The Navy's old listening post at Valhalla in the yards' set (see world/callisto). */
-export const POST_TYPE = RACK_BOXES.length - 1;
-/** The templates whose top is a ground of hills and hollows (see Relief), by their index in RACK_BOXES: Phobos's and Callisto's. */
-export const RACK_RELIEFS: readonly (Relief | null)[] = RACK_BOXES.map((_, type) => (type === PHOBOS_TYPE ? groundRelief : type === CALLISTO_TYPE ? callistoRelief : null));
+/** The Solar Wall's template in the yards' set (see world/wall), the first of PLACE_BOXES. */
+export const WALL_TYPE = RACK_BOXES.length - PLACE_BOXES.length;
+/** Phobos's ground at Stickney (see world/phobos): a box whose top is the moon's relief. */
+export const PHOBOS_TYPE = WALL_TYPE + 1;
+/** Callisto's ground at Valhalla (see world/callisto): a box whose top is the moon's relief. */
+export const CALLISTO_TYPE = WALL_TYPE + 2;
+/** The Navy's old listening post at Valhalla (see world/callisto). */
+export const POST_TYPE = WALL_TYPE + 3;
+/** Europa's ground at the Lineae (see world/europa): a box whose top is the shell's relief, the Crack cut into it. */
+export const EUROPA_TYPE = WALL_TYPE + 4;
+/** The science station on the Crack's floor (see world/europa), built as the listening post. */
+export const STATION_TYPE = WALL_TYPE + 5;
+/** The templates whose top is a ground of hills and hollows (see Relief), by their index in RACK_BOXES: Phobos's, Callisto's and Europa's. */
+const RELIEFS = new Map<number, Relief>([
+  [PHOBOS_TYPE, groundRelief],
+  [CALLISTO_TYPE, callistoRelief],
+  [EUROPA_TYPE, europaRelief],
+]);
+export const RACK_RELIEFS: readonly (Relief | null)[] = RACK_BOXES.map((_, type) => RELIEFS.get(type) ?? null);
 
 /**
  * Where the racks stand: on the ground in rows along the field's x axis; the row through the

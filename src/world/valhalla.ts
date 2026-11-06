@@ -22,18 +22,19 @@ const CALLISTO_GLOW = 0x1c1a16;
 export const callistoGround = (half: THREE.Vector3): THREE.Group => reliefGround(half, groundRelief, CALLISTO_TINT, CALLISTO_GLOW);
 
 /** The listening post's plating: the Navy's old olive, stencilled, patched where it was hit. */
-const POST_PAINT = { key: 'navy-post', seed: 5101, tint: 0x8c9480, texts: ['UEN LP-3', 'NAVY', 'NO ENTRY', 'RESTRICTED', 'CALLISTO'] };
+export const POST_PAINT = { key: 'navy-post', seed: 5101, tint: 0x8c9480, texts: ['UEN LP-3', 'NAVY', 'NO ENTRY', 'RESTRICTED', 'CALLISTO'] };
 const POST_STEEL_SEED = 5102;
 
 /**
  * The Navy's old listening post (where it stands in world/callisto), in its box's frame (`half`
- * its half extents): a bunker half sunk into the ground under a curved roof, its door's frame in
- * hazard paint; a lattice tower beside it carrying a dish 40 m across, turned up at the sky; two
- * aerial masts; a red beacon on the tower; long dead, nobody has kept it up.
+ * its half extents): a bunker dug into the ground under a curved roof; a lattice tower beside it
+ * carrying a dish 40 m across, turned up at the sky; two aerial masts; a red beacon on the tower;
+ * long dead, nobody has kept it up. The same build in another `paint` serves for other outposts
+ * (the science station in Europa's Crack).
  */
-export function listeningPost(half: THREE.Vector3): THREE.Group {
+export function listeningPost(half: THREE.Vector3, paint = POST_PAINT): THREE.Group {
   const group = new THREE.Group();
-  const plating = patchedPlating(POST_PAINT.key, POST_PAINT);
+  const plating = patchedPlating(paint.key, paint);
   const steel = new THREE.MeshStandardMaterial({ ...surfaced(industrialSurface(POST_STEEL_SEED), 2), color: 0x7b7f78 });
   const floor = -half.y;
   // the bunker: 60 m by 18 m high by 36 m, its foot dug into the ground, its roof a half cylinder along x

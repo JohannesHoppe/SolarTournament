@@ -322,7 +322,7 @@ async function takeJobFrom(page: Page, kept: object): Promise<string[]> {
 }
 
 /** The clone held still at an echo (the export `echo` of the missions) while the mission is at drill `step`, until it moves on (20 s at most). */
-async function holdAtEcho(page: Page, echo: 'ECHO_TWO' | 'ECHO_THREE', step: number) {
+async function holdAtEcho(page: Page, echo: 'ECHO_TWO' | 'ECHO_THREE' | 'ECHO_FOUR', step: number) {
   await page.evaluate(
     async ([path, echo, step]) => {
       const game = window.game;
@@ -519,5 +519,14 @@ test('Callisto Echo: the hull held still over the listening post’s dish hears 
   await page.waitForFunction(() => window.game.venue?.id === 'callisto' && window.game.school?.stepIndex === 0 && window.game.school.attempt?.live, null, { timeout: 180_000 });
   await holdAtEcho(page, 'ECHO_THREE', 0);
   expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(0);
+  expect(errors).toEqual([]);
+});
+
+test('chapter 6 opens on Europa: down in the Crack, the hull held over the science station’s dish hears the fourth echo', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, chapterFive('pilotEpisode', 'iceRun', 'valhallaSprint', 'callistoEcho', 'radiators'));
+  await page.waitForFunction(() => window.game.venue?.id === 'europa' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  await holdAtEcho(page, 'ECHO_FOUR', 1);
+  expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(1);
   expect(errors).toEqual([]);
 });

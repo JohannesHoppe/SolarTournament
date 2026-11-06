@@ -7,8 +7,9 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE } from './yard';
-import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, postPlacement, VALHALLA_MARK } from './callisto';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE } from './yard';
+import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF, postPlacement, VALHALLA_MARK } from './callisto';
+import { CRACK_MARK, EUROPA_FALL, groundPlacement as europaGround, JUPITER_AT as EUROPA_JUPITER, stationPlacement } from './europa';
 import { WALL_TOP, wallPlacement } from './wall';
 import { groundPlacement, MARS_AT, PHOBOS_FALL, STICKNEY_FLOOR } from './phobos';
 import { CERES_FALL, CEREALIA, MARKET, occatorPlacements, onPlace, TERRACE } from './ceres';
@@ -42,7 +43,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -391,6 +392,22 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.64, 0.6, 0.54],
     grade: { gain: [1.02, 1, 0.95], lift: [0.0015, 0.0012, 0.0008], saturation: 0.92 },
   },
+  // the Lineae: Europa's bright, cold ice under Jupiter's cream, the sky's light from the ice
+  // itself, a grade cooler than Callisto's
+  europa: {
+    space: 0x020203,
+    sky: 0x9aa4b0,
+    ground: 0x3a4048,
+    ambient: 1.35,
+    nebulae: [
+      { at: [-0.6, 0.5, -0.5], color: [0.055, 0.04, 0.03], size: 540000, shape: 2, turn: 1.3 },
+      { at: [0.6, 0.3, 0.6], color: [0.03, 0.04, 0.055], size: 460000, shape: 0, turn: 0.4 },
+    ],
+    stars: 0.9,
+    starmap: true,
+    dust: [0.66, 0.7, 0.76],
+    grade: { gain: [0.98, 1, 1.03], lift: [0.0012, 0.0013, 0.0016], saturation: 0.9 },
+  },
 };
 
 /**
@@ -507,6 +524,26 @@ export const PLACES: readonly ArenaProfile[] = [
     ],
     // over the ground, facing along the rings towards the basin
     start: { at: [30000, 2000, 0], toward: [-30000, 0, 0] },
+    open: true,
+  },
+  {
+    id: 'europa',
+    name: msg('The Lineae'),
+    tagline: msg('The cracked ice shell of Europa over its hidden ocean, and Jupiter hanging huge in its sky.'),
+    // nothing loose on the ice: its relief, and the science station in the Crack
+    layout: { key: 'europa', seed: 6000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [europaGround(EUROPA_TYPE), stationPlacement(STATION_TYPE, POST_HALF)], fall: EUROPA_FALL },
+    cooling: 1,
+    storms: false,
+    // 5.2 AU from the sun, as Jupiter's arena
+    sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
+    mood: MOODS.europa,
+    preview: { from: [30000, 8000, 30000], at: [0, -4000, -10000] },
+    references: [
+      { glyph: 'planet', label: msg('The Crack'), position: CRACK_MARK, distance: true },
+      { glyph: 'planet', label: msg('Jupiter'), position: EUROPA_JUPITER, distance: false },
+    ],
+    // over the ice beside the Crack, facing along it
+    start: { at: [30000, 2000, 20000], toward: [0, 0, -30000] },
     open: true,
   },
 ];

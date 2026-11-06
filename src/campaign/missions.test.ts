@@ -8,7 +8,7 @@ import { DETAIL } from '../world/rocks';
 import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
-import { BARGE_FROM, BARGE_TO, convoyAt, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME } from './missions';
+import { BARGE_FROM, BARGE_TO, convoyAt, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME } from './missions';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 
@@ -111,7 +111,7 @@ describe('the Ice Run over Valhalla', () => {
 });
 
 describe('the echoes', () => {
-  for (const [name, arena, at] of [['the second, before Occator’s second step', 'occator', ECHO_TWO], ['the third, over the listening post on Callisto', 'callisto', ECHO_THREE]] as const) {
+  for (const [name, arena, at] of [['the second, before Occator’s second step', 'occator', ECHO_TWO], ['the third, over the listening post on Callisto', 'callisto', ECHO_THREE], ['the fourth, over the science station in Europa’s Crack', 'europa', ECHO_FOUR]] as const) {
     it(`${name}: clear of every piece of the place, inside the arena`, () => {
       const field = testField(DETAIL);
       field.generate(arenaById(arena)!.layout);

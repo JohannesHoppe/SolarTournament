@@ -18,6 +18,8 @@ import { phobos } from './stickney';
 import { MARS_AT, MARS_SIZE } from './phobos';
 import { callisto } from './valhalla';
 import { JUPITER_AT, JUPITER_SIZE } from './callisto';
+import { europa } from './lineae';
+import { JUPITER_AT as EUROPA_JUPITER_AT, JUPITER_SIZE as EUROPA_JUPITER_SIZE } from './europa';
 import { BLOOM_THRESHOLD } from '../view/bloom';
 
 /**
@@ -837,7 +839,8 @@ export class Landmarks {
     this.scenes.set('occator', ceres());
     this.scenes.set('wall', this.wall.group);
     this.scenes.set('phobos', this.mars());
-    this.scenes.set('callisto', this.callisto());
+    this.scenes.set('callisto', this.underJupiter(callisto(), JUPITER_AT, JUPITER_SIZE));
+    this.scenes.set('europa', this.underJupiter(europa(), EUROPA_JUPITER_AT, EUROPA_JUPITER_SIZE));
     for (const scene of this.scenes.values()) {
       scene.visible = false;
       this.group.add(scene);
@@ -988,13 +991,13 @@ export class Landmarks {
     return material;
   }
 
-  /** Callisto beyond the field and Jupiter over it, from its real map (see world/callisto). */
-  private callisto(): THREE.Group {
+  /** A moon of Jupiter beyond the field (`ground`) and Jupiter over it at `at`, `size` in radius, from its real map (see world/callisto, world/europa). */
+  private underJupiter(ground: THREE.Group, at: THREE.Vector3, size: number): THREE.Group {
     const material = this.gas('giant', { frame: new THREE.Matrix3(), longitude: 0, haze: 0xffd2a8, storms: false });
-    const planet = new THREE.Mesh(new THREE.SphereGeometry(JUPITER_SIZE, 96, 48), material);
-    planet.position.copy(JUPITER_AT);
+    const planet = new THREE.Mesh(new THREE.SphereGeometry(size, 96, 48), material);
+    planet.position.copy(at);
     planet.userData.shadowless = true;
-    return callisto().add(planet);
+    return ground.add(planet);
   }
 
   /** Phobos beyond the field and Mars over it, from its real map, its thin air a haze along its limb (see world/phobos). */

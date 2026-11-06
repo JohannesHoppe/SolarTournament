@@ -7,6 +7,7 @@ import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
 import { hullInLight } from '../world/wall';
 import { inGrooves, surfaceHeight as phobosHeight } from '../world/phobos';
 import { POST_AT, POST_HALF, surfaceHeight as callistoHeight } from '../world/callisto';
+import { stationPlacement } from '../world/europa';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
@@ -1296,6 +1297,17 @@ const ECHO_THREE_OVER = 1000;
 export const ECHO_THREE = point(POST_AT.x + 560, POST_AT.y + POST_HALF.y + ECHO_THREE_OVER, POST_AT.z);
 const echoThree = echoAt(CAMPAIGN.echoThreeCall, 'callisto', ECHO_THREE);
 
+/**
+ * Under the Lineae (6.2): down into Europa's Crack, 200 m between its walls, to the science
+ * station on its floor 800 m below the plain (see world/europa), the hull held ECHO_FOUR_OVER
+ * over its dish: the fourth echo, in which Nicole hears her own name.
+ */
+const ECHO_FOUR_OVER = 1000;
+const STATION = stationPlacement(0, POST_HALF).position;
+// the station is turned along the Crack: its dish stands 28 m along -z from its middle
+export const ECHO_FOUR = point(STATION.x, STATION.y + POST_HALF.y + ECHO_FOUR_OVER, STATION.z - 560);
+const echoFour = echoAt(CAMPAIGN.echoFourCall, 'europa', ECHO_FOUR);
+
 /** Pays a part's price from the wallet as far as it holds, the rest put on the debt (the laser, the overhaul). */
 const buy = (campaign: Campaign, price: number) => {
   const paid = Math.min(campaign.coins, price);
@@ -1404,4 +1416,6 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'valhallaSprint', name: msg('Valhalla Sprint'), drills: [valhallaSprint, said(CAMPAIGN.valhallaSprintDone, 'callisto')], pay: 1500, ratings: 150, start: SPRINT_START },
   { id: 'callistoEcho', name: msg('Callisto Echo'), drills: [echoThree, said(CAMPAIGN.echoThree, 'callisto'), said(CAMPAIGN.echoThreeHeard, 'callisto')], pay: 0, ratings: 30 },
   { id: 'radiators', name: msg('Radiators I'), drills: [said(PIM.radiators, 'callisto'), said(CAMPAIGN.radiators, 'callisto')], pay: 0, fit: fitRadiators },
+  // chapter 6, the Lineae on Europa: the Crack in the ice shell and the science station on its floor
+  { id: 'underTheLineae', name: msg('Under the Lineae'), drills: [said(HEDDA.europa, 'europa'), echoFour, said(CAMPAIGN.echoFour, 'europa'), said(CAMPAIGN.echoFourHeard, 'europa')], pay: 1000, ratings: 100 },
 ];
