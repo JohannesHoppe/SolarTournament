@@ -3,12 +3,13 @@ import { msg, t } from '../i18n/i18n';
 import { CAMPAIGN, HEDDA, PIM, RASK, SAW } from '../music/lines';
 import { clear, holdFor, PIPE_BORE, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
+import { MARKET_DOCK } from '../world/ceres';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import type { Campaign, Mission } from './campaign';
+import { type Campaign, LASER_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -679,6 +680,45 @@ const launchRing: Drill = {
   mark: (_, a) => (Number.isNaN(a.doneAt) ? t('Launch ring in {seconds} s', { seconds: Math.max(0, Math.ceil(GEL_WAIT - a.seconds)) }) : a.warned ? t('Clone lost · printing the next') : t('Gel · boost')),
 };
 
+/** A line said at Occator on Ceres (chapter 3), the hull held still. */
+const onCeres = (line: string): Drill => ({ ...said(line, 'occator'), enter: (ctx) => stop(ctx) });
+
+/**
+ * Occator (3.0): down to the market terrace and before the mouth of the market's gallery in the
+ * wall's first step, held within MARKET_REACH (units, 60 m) of its dock (see world/ceres) and
+ * slower than MARKET_STILL (units/s, 2 m/s) for MARKET_HOLD seconds, so the dock takes the hull.
+ */
+const MARKET_REACH = 1200;
+const MARKET_STILL = 40;
+const MARKET_HOLD = 2;
+
+const marketRun: Drill = {
+  line: CAMPAIGN.market,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'occator',
+  autopilot: true,
+  enter(_, __, markers) {
+    markers.clear();
+    markers.zone(MARKET_DOCK, MARKET_REACH);
+  },
+  done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.position.distanceTo(MARKET_DOCK) < MARKET_REACH && ctx.me.flight.velocity.length() < MARKET_STILL, MARKET_HOLD),
+  waypoint: () => MARKET_DOCK,
+  mark: () => t('Market'),
+};
+
+/**
+ * Surplus (3.1): the Navy surplus laser from Occator's market, the Games' own (see hullOf); what
+ * the wallet holds of LASER_PRICE is paid, the rest put on the debt; and with it Nicole switches
+ * on her targeting.
+ */
+const fitLaser = (campaign: Campaign) => {
+  if (!campaign.parts.includes('laser')) campaign.parts.push('laser');
+  const paid = Math.min(campaign.coins, LASER_PRICE);
+  campaign.coins -= paid;
+  campaign.bond += LASER_PRICE - paid;
+  if (!campaign.modules.includes('targeting')) campaign.modules.push('targeting');
+};
+
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
@@ -738,4 +778,7 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'sawBrothers', name: msg('Saw Brothers'), drills: [onVesta(HEDDA.sawBrothers), onVesta(SAW.giggle), sawBrothers, said(SAW.lost, 'rheasilvia'), said(CAMPAIGN.sawBrothersDone, 'rheasilvia')], pay: 1200, ratings: 80 },
   { id: 'peakRun', name: msg('The Peak Run'), drills: [onVesta(HEDDA.peakRun), peakRun, said(CAMPAIGN.peakRunDone, 'rheasilvia'), onVesta(PIM.thrusters)], pay: 800, ratings: 60, fit: fitThrusters },
   { id: 'practiceLog', name: msg('Practice Log'), drills: [practiceLog, said(CAMPAIGN.echoOne, 'rheasilvia'), said(CAMPAIGN.echoOneHeard, 'rheasilvia')], pay: 0, ratings: 20 },
+  // chapter 3, Occator on Ceres: the Rockborn's capital, the market and the laser, the debt sold
+  { id: 'occator', name: msg('Occator'), drills: [onCeres(HEDDA.occator), marketRun, said(CAMPAIGN.marketReached, 'occator')], pay: 0 },
+  { id: 'surplus', name: msg('Surplus'), drills: [onCeres(PIM.surplus), onCeres(CAMPAIGN.targeting), onCeres(RASK.soldDebt)], pay: 0, fit: fitLaser },
 ];

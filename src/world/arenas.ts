@@ -7,7 +7,8 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE } from './yard';
+import { CERES_FALL, CEREALIA, MARKET, occatorPlacements, onPlace, TERRACE } from './ceres';
 import { RISE, slopeGround, SUMMIT, VESTA_FALL, VESTA_GROUND } from './vesta';
 
 /** One standard gravity (units/s², 1 unit = 5 cm). */
@@ -38,7 +39,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -324,6 +325,22 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.66, 0.62, 0.56],
     grade: { gain: [1.01, 1, 0.98], lift: [0.0016, 0.0014, 0.0012], saturation: 0.86 },
   },
+  // Occator's wall: Ceres's dark dust, the sky's light the cold grey of it with the town's warm
+  // glow from below, a grade a little colder than Vesta's, the neon carrying the color
+  occator: {
+    space: 0x020304,
+    sky: 0x7c8088,
+    ground: 0x2c2826,
+    ambient: 1.25,
+    nebulae: [
+      { at: [-0.6, 0.5, 0.6], color: [0.045, 0.05, 0.06], size: 540000, shape: 0, turn: 1.9 },
+      { at: [0.7, 0.5, -0.4], color: [0.05, 0.035, 0.045], size: 420000, shape: 1, turn: 0.4 },
+    ],
+    stars: 0.85,
+    starmap: true,
+    dust: [0.58, 0.6, 0.64],
+    grade: { gain: [0.99, 1, 1.02], lift: [0.0012, 0.0013, 0.0017], saturation: 0.88 },
+  },
 };
 
 /**
@@ -364,6 +381,26 @@ export const PLACES: readonly ArenaProfile[] = [
     references: [{ glyph: 'planet', label: msg('The summit'), position: SUMMIT, distance: true }],
     // down the flank from the claims, some 360 m over it, facing up the slope towards them
     start: { at: [-24000, 0, 6000], toward: [30000, 6000, 0] },
+    open: true,
+  },
+  {
+    id: 'occator',
+    name: msg('Occator'),
+    tagline: msg('The Rockborn capital, cut into the wall of a crater whose salt shines like two lamps left on.'),
+    // a few boulders fallen from the wall, lying on the market terrace
+    layout: { key: 'occator', seed: 3003, kind: 'rock', count: 8, minScale: 0.25, maxScale: 0.5, radius: FIELD_RADIUS, inner: 0, flat: 30, lift: TERRACE, rest: { height: TERRACE, rise: 0 }, spin: 0, toughness: 800, placements: occatorPlacements(OCCATOR_TYPE), fall: CERES_FALL },
+    cooling: 1,
+    storms: false,
+    // 2.8 AU from the sun, a little nearer than Psyche
+    sun: { size: 31000, intensity: 3.1, color: 0xfff0dc },
+    mood: MOODS.occator,
+    preview: { from: onPlace(-30000, 6000, 20000).toArray() },
+    references: [
+      { glyph: 'planet', label: msg('Cerealia Facula'), position: CEREALIA, distance: true },
+      { glyph: 'planet', label: msg('The market'), position: MARKET, distance: true },
+    ],
+    // out over the terrace's edge, some 160 m over it, facing the wall and the market
+    start: { at: onPlace(-30000, 2000, 0).toArray(), toward: MARKET.toArray() },
     open: true,
   },
 ];

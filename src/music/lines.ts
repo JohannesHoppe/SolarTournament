@@ -547,6 +547,9 @@ export const CAMPAIGN = {
   practiceLog: 'There is something on an old frequency, very weak, from the face of a cut rock. A lit tunnel. Fly to its mouth and hold still, so I can listen.',
   echoOne: "Scout Two, navigator's practice log. Can you hear me, little ship? Good. We will be talking a lot.",
   echoOneHeard: 'That voice. It sounds like mine. I do not remember ever recording it.',
+  market: 'The market is in the old gallery in the first step of the wall, the one with the orange sign. Fly to its mouth and hold still there, so the dock can take our hull.',
+  marketReached: 'Every second stall in there sells something with a Navy number filed off. I like this place, Host.',
+  targeting: 'The laser talks to me. I can see their drives now, and their names. I have switched on targeting for you, Host. I think I trust you with it.',
 } as const;
 
 /**
@@ -566,6 +569,7 @@ export const RASK = {
   firstCut: "Now earn it back. The spoil field is full of rock nobody's ever bothered to cut. Cut it up, and every glint of ore is money.",
   dockingLane: 'A hauler is coming in, the Patience, out of the Belt. Her lane is full of junk, and if a hull hits her, her captain sends me the bill. Keep it clear.',
   dockingLaneDone: 'Look at that. She wants to take you on. Go, darling. Your debt goes with you, and so does my forty percent.',
+  soldDebt: "Rask here, darling. Just so you hear it from me: I've sold your paper. The Tallymen bought it, debt, cut and clone. Lovely people. Don't ever miss a payment.",
 } as const;
 
 /**
@@ -579,6 +583,7 @@ export const PIM = {
   thrusters: "Thruster parts! Real ones, off the prize table! Hold still, I'm putting them in. Now you can dodge like a proper fighter.",
   galley: "Soup's protein paste again. Don't ask what protein. Sit, eat, you're paying for it anyway.",
   voice: "Hold still, Nicole. Found you a voice board in Patience's scrap bin. Second-hand, like everything. This'll tickle.",
+  surplus: "A real laser! Navy surplus, hardly fired. Six thousand. You haven't got six thousand. The dealer takes the rest on your paper. Hold still, I'm fitting it.",
 } as const;
 
 /** Captain Hedda Kroll of the ore hauler Patience: Rockborn, sixties, short sentences, a voice of gravel. Her own voice (see tools/voice). */
@@ -590,6 +595,7 @@ export const HEDDA = {
   peakRun: "The Rockborn kids race round the claims on rest days, through old pipe from the smelter line. Six of them, two laps. Pim's put you down for it. Win, and she gets thruster parts off the prize table.",
   sawBrothers: "Trouble on the peak. The Saw Brothers are cutting a rig off its rock. Three of them, all mouth. Shoot two and the third one runs. That rig falls, nobody gets paid.",
   cutAndHaul: "Claim's paid for, ore's not. Cut up the rock next to the working rig and bring in the ore. Forty loads. Mind the rig. You hit it, you pay for it. Fifty a beam.",
+  occator: "Ceres. Occator. Our capital, cut into the crater wall. The only market in the Belt where the Navy sells what it stole. Take the hull down to the terrace. Mind the domes. People live in them.",
 } as const;
 
 /** The Saw Brothers, claim-jumpers at Vesta: three of them, one voice, giggling over the comm while they cut other people's rigs off their rocks. */

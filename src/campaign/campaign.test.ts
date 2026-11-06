@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, MISSIONS, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 import { CUTTER_PRICE } from './missions';
 
@@ -65,12 +65,26 @@ describe('the campaign Lot 7731', () => {
     expect(rankOf(12000)).toBe('Contender');
   });
 
-  it('has Nicole start as a salvaged unit: none of her modules installed, and none by the missions of chapter 1', () => {
+  it('has Nicole start as a salvaged unit: none of her modules installed, none by the missions before chapter 3, and targeting with its laser', () => {
     const campaign = freshCampaign();
     expect(campaign.modules).toEqual([]);
-    for (const mission of MISSIONS) complete(campaign, mission);
-    expect(campaign.modules).toEqual([]);
+    for (const mission of MISSIONS) {
+      if (mission.id === 'surplus') expect(campaign.modules).toEqual([]);
+      complete(campaign, mission);
+    }
+    expect(campaign.modules).toEqual(['targeting']);
     expect(campaignFrom(JSON.stringify({ done: [] })).modules).toEqual([]);
+  });
+
+  it('fits the military laser in Surplus: paid from the wallet as far as it holds, the rest on the debt, the Games\' own laser in place of the cutter', () => {
+    const campaign = { ...freshCampaign(), coins: 2500, bond: 20000, parts: ['cutter' as const] };
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'surplus')!);
+    expect([campaign.coins, campaign.bond]).toEqual([0, 20000 + LASER_PRICE - 2500]);
+    const hull = hullOf(campaign);
+    expect([hull.laser, hull.laserReach, hull.laserHeat]).toEqual([true, 1, 1]);
+    const rich = { ...freshCampaign(), coins: 9000, parts: [] };
+    complete(rich, MISSIONS.find((mission) => mission.id === 'surplus')!);
+    expect([rich.coins, rich.bond]).toEqual([9000 - LASER_PRICE, BOND]);
   });
 
   it('starts on the scrap hull: a weak drive and thrusters, no laser, torpedoes, overdrive or dodge', () => {

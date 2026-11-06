@@ -306,3 +306,34 @@ test('the job board names the wallet, the Bond and the rank, takes the next job 
   expect(kept.done).toEqual(['coldBoot', 'lamplighter']);
   expect(errors).toEqual([]);
 });
+
+/** Chapter 2 flown: every mission of it done, the thrusters rebuilt, three thousand coins in the wallet. */
+const CHAPTER_TWO_DONE = { ...CHAPTER_ONE_DONE, done: [...CHAPTER_ONE_DONE.done, 'rheasilvia', 'claimSurvey', 'cutAndHaul', 'sawBrothers', 'peakRun', 'practiceLog'], coins: 3000, ratings: 300, parts: [...CHAPTER_ONE_DONE.parts, 'thrusters'] };
+
+test('chapter 3 opens at Occator: the clone held before the market’s mouth is docked, and Surplus fits the military laser, paid from the wallet and the rest on the debt, with targeting', async ({ page }) => {
+  // both missions' lines are said out in full
+  test.setTimeout(300_000);
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), CHAPTER_TWO_DONE);
+  const errors = await openGame(page, '/?campaign');
+  await takeNextJob(page);
+  await page.waitForFunction(() => window.game.venue?.id === 'occator' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.me?.alive, null, { timeout: 120_000 });
+  // the clone set at rest at the market's dock, the drill's waypoint
+  await page.evaluate(async (path) => {
+    const game = window.game;
+    const { MARKET_DOCK } = (await import(path)) as typeof import('../src/world/ceres');
+    const start = game.time;
+    while (game.school?.stepIndex === 1 && game.time - start < 20) {
+      game.me.flight.position.copy(MARKET_DOCK);
+      game.me.flight.velocity.set(0, 0, 0);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  }, '/src/world/ceres.ts');
+  await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(2);
+  // the mission runs on into Surplus, fitted as it is done: the laser, three thousand from the wallet, three thousand on the debt
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('surplus')), { timeout: 120_000 }).toBe(true);
+  const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
+  expect(kept.parts).toContain('laser');
+  expect(kept.modules).toContain('targeting');
+  expect([kept.coins, kept.bond]).toEqual([0, 28000]);
+  expect(errors).toEqual([]);
+});

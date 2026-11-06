@@ -12,6 +12,7 @@ import { Jupiter } from './jupiter';
 import { Corona } from './corona';
 import { psyche } from './boneyard';
 import { vesta } from './rheasilvia';
+import { ceres } from './occator';
 import { BLOOM_THRESHOLD } from '../view/bloom';
 
 /**
@@ -828,6 +829,7 @@ export class Landmarks {
     this.scenes.set('derelict', this.derelict());
     this.scenes.set('boneyard', psyche());
     this.scenes.set('rheasilvia', vesta());
+    this.scenes.set('occator', ceres());
     for (const scene of this.scenes.values()) {
       scene.visible = false;
       this.group.add(scene);

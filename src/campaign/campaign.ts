@@ -43,11 +43,14 @@ export const FIN_RADIATOR = 0.25;
 export const CUTTER_REACH = 0.04;
 export const CUTTER_HEAT = 1.75;
 
-/** What the yard can fit to the hull: the mining cutter, Pim's patch on the thrusters. */
-export type Part = 'cutter' | 'patch' | 'thrusters';
-const PARTS: readonly Part[] = ['cutter', 'patch', 'thrusters'];
+/** The Navy surplus laser bought in Occator's market (chapter 3): the Games' own laser, its price (☉), what the wallet holds of it paid, the rest put on the debt. */
+export const LASER_PRICE = 6000;
+
+/** What the yard can fit to the hull: the mining cutter, Pim's patch on the thrusters, her rebuilt thrusters, the military laser. */
+export type Part = 'cutter' | 'patch' | 'thrusters' | 'laser';
+const PARTS: readonly Part[] = ['cutter', 'patch', 'thrusters', 'laser'];
 /** What the job board calls each part fitted. */
-export const PART_NAMES: Record<Part, string> = { cutter: msg('the mining cutter'), patch: msg('the thrusters welded up'), thrusters: msg('the thrusters rebuilt to stock') };
+export const PART_NAMES: Record<Part, string> = { cutter: msg('the mining cutter'), patch: msg('the thrusters welded up'), thrusters: msg('the thrusters rebuilt to stock'), laser: msg('the military laser') };
 
 /**
  * Nicole's modules (docs/campaign/STORY.md, "Nicole's restoration"): the pieces of the HUD a
@@ -70,10 +73,12 @@ export function hullOf(campaign: Campaign): Perks {
   if (campaign.parts.includes('patch')) Object.assign(hull, { thrusters: PATCHED_THRUSTERS, patched: true });
   // Pim's thruster parts from the Peak Run: the thrusters a stock ship's, strong enough for the dodge
   if (campaign.parts.includes('thrusters')) Object.assign(hull, { thrusters: STOCK.thrusters, dodge: true });
+  // the Navy surplus laser in place of the cutter: the Games' own
+  if (campaign.parts.includes('laser')) Object.assign(hull, { laser: true, laserReach: STOCK.laserReach, laserHeat: STOCK.laserHeat });
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog';
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus';
 
 export interface Mission {
   id: MissionId;
@@ -96,11 +101,13 @@ export interface Mission {
  * The sound of each place of the campaign, chosen by hand (docs/campaign/STORY.md, Music): the
  * flavor its calm music and its fights are played in. The Boneyard drones warm and low over the
  * racks (drive's pedal bass) and fights in the clang of the yard (industrial); Rheasilvia travels
- * on the steady pulse of the ore lines (motorik) and fights the claim-jumpers in acid.
+ * on the steady pulse of the ore lines (motorik) and fights the claim-jumpers in acid; Occator,
+ * the Rockborn's capital, hums with the chords of a city at night (rave) and fights in schranz.
  */
 export const PLACE_MUSIC: Partial<Record<ArenaId, { calm: Flavor; fight: Flavor }>> = {
   boneyard: { calm: 'drive', fight: 'industrial' },
   rheasilvia: { calm: 'motorik', fight: 'acid' },
+  occator: { calm: 'rave', fight: 'schranz' },
 };
 
 /**
