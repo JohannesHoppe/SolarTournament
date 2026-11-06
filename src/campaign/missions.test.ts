@@ -8,7 +8,7 @@ import { DETAIL } from '../world/rocks';
 import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
-import { BARGE_FROM, BARGE_TO, convoyAt, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME } from './missions';
+import { BARGE_FROM, BARGE_TO, convoyAt, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt } from './missions';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 
@@ -107,6 +107,30 @@ describe('the Ice Run over Valhalla', () => {
         expect(at.length()).toBeLessThan(ARENA_LIMIT);
       }
     }
+  });
+});
+
+describe('Dose on Europa', () => {
+  it('flies its tanker up the Crack, out of it and away into the belt, clear of the ice and the station, inside the arena', () => {
+    const field = testField(DETAIL);
+    field.generate(arenaById('europa')!.layout);
+    const at = new THREE.Vector3();
+    for (let seconds = 0; seconds <= 220; seconds += 0.5) {
+      tankerAt(seconds, at);
+      // the tanker is some 140 m long: nothing within 60 m of its middle
+      expect(field.overlap(at, 1200), `${seconds} s`).toBeNull();
+      expect(at.length()).toBeLessThan(ARENA_LIMIT);
+    }
+  });
+
+  it('doses the clone not at all in the Crack, the more the higher over the ice, the full rate from 300 m on', () => {
+    const plain = new THREE.Vector3(30000, -2000, 0);
+    expect(doseRate(plain.clone().setY(-10000))).toBe(0);
+    expect(doseRate(plain.clone().setY(1000))).toBeGreaterThan(0);
+    expect(doseRate(plain.clone().setY(1000))).toBeLessThan(doseRate(plain.clone().setY(4000)));
+    expect(doseRate(plain.clone().setY(4000))).toBe(doseRate(plain.clone().setY(20000)));
+    // a full dose in some two and a half minutes at the full rate
+    expect(1 / doseRate(plain.clone().setY(20000))).toBe(150);
   });
 });
 

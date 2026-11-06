@@ -7,7 +7,7 @@ import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
 import { hullInLight } from '../world/wall';
 import { inGrooves, surfaceHeight as phobosHeight } from '../world/phobos';
 import { POST_AT, POST_HALF, surfaceHeight as callistoHeight } from '../world/callisto';
-import { stationPlacement } from '../world/europa';
+import { crackMiddle, LAND as EUROPA_LAND, stationPlacement } from '../world/europa';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
@@ -876,49 +876,72 @@ export function convoyAt(index: number, seconds: number, out: THREE.Vector3): TH
   return out;
 }
 
+/**
+ * The tugs a drill escorts against the Loose, a step on (see Markers.hook): each held tug is
+ * dragged off its lane at DRAG towards its raider's side, a lost one drifts on, a freed one
+ * glides back; dragged TUG_GONE off its lane it is lost (`lost`, then `onLost`). `laneAt` says
+ * where a tug would be on its lane now; each is posed turned by `turn`. The frontmost tug still
+ * free, or null.
+ */
+function haul(markers: Markers, dt: number, count: number, laneAt: (i: number, out: THREE.Vector3) => THREE.Vector3, side: THREE.Vector3, turn: THREE.Quaternion, offs: THREE.Vector3[], lost: boolean[], onLost: () => void): THREE.Vector3 | null {
+  let front: THREE.Vector3 | null = null;
+  for (let i = 0; i < count; i++) {
+    const raider = markers.hookedBy[i];
+    if (raider && !raider.alive) markers.hookedBy[i] = null;
+    const held = markers.hookedBy[i];
+    const off = offs[i];
+    if (held) off.addScaledVector(side, DRAG * dt * (laneAt(i, tugNow).sub(held.flight.position).dot(side) > 0 ? -1 : 1));
+    else if (lost[i]) off.addScaledVector(side, DRAG * dt * (off.dot(side) < 0 ? -1 : 1));
+    else off.multiplyScalar(exp(-dt / TUG_BACK));
+    if (!lost[i] && off.length() > TUG_GONE) {
+      lost[i] = true;
+      onLost();
+    }
+    laneAt(i, tugNow).add(off);
+    markers.iceTugAt(i, tugNow, turn);
+    markers.tether(i, held ? held.flight.position : null);
+    if (!front && !lost[i] && !held) front = tugNow.clone();
+  }
+  return front;
+}
+
+/**
+ * What an escort against the Loose shares (Ice Run, Dose): its keys, no autopilot, the music
+ * turning to the fight once they come (a.count), and its start: the hull stopped, no raiders and
+ * no props yet, the radiators cold.
+ */
+const escort = (line: string, arena: ArenaId): Pick<Drill, 'line' | 'keys' | 'arena' | 'autopilot' | 'turn'> => ({ line, keys: ['turn', 'drive', 'fire'], arena, autopilot: false, turn: (_, a) => (a.count > 0 ? 'fight' : undefined) });
+function startEscort(ctx: SchoolContext, a: Attempt, markers: Markers) {
+  stop(ctx);
+  ctx.removeJumpers();
+  markers.clear();
+  a.count = 0;
+  ctx.me.heat = 0;
+  ctx.me.overheated = false;
+}
+/** The seconds since the attempt's last step (kept in a.lastShot). */
+function stepOf(a: Attempt): number {
+  const dt = a.seconds - a.lastShot;
+  a.lastShot = a.seconds;
+  return dt;
+}
+
 const iceRun: Drill = {
-  line: CAMPAIGN.iceRun,
-  keys: ['turn', 'drive', 'fire'],
-  arena: 'callisto',
-  autopilot: false,
-  turn: (_, a) => (a.count > 0 ? 'fight' : undefined),
+  ...escort(CAMPAIGN.iceRun, 'callisto'),
   enter(ctx, a, markers) {
-    stop(ctx);
-    ctx.removeJumpers();
-    markers.clear();
+    startEscort(ctx, a, markers);
     convoyLost.length = 0;
     for (let i = 0; i < CONVOY; i++) {
       convoyOff[i].set(0, 0, 0);
       convoyLost.push(false);
       markers.iceTugAt(i, convoyAt(i, 0, tugNow), CONVOY_TURN);
     }
-    // a.count: the Loose have come
-    a.count = 0;
-    ctx.me.heat = 0;
-    ctx.me.overheated = false;
   },
   done(ctx, a, markers) {
-    const dt = a.seconds - a.lastShot;
-    a.lastShot = a.seconds;
-    let front: THREE.Vector3 | null = null;
-    for (let i = 0; i < CONVOY; i++) {
-      const raider = markers.hookedBy[i];
-      if (raider && !raider.alive) markers.hookedBy[i] = null;
-      const held = markers.hookedBy[i];
-      const off = convoyOff[i];
-      // a held tug goes the way its raider is, off the lane; a lost one drifts on; a freed one glides back
-      if (held) off.addScaledVector(CONVOY_SIDE, DRAG * dt * (convoyAt(i, a.seconds, tugNow).sub(held.flight.position).dot(CONVOY_SIDE) > 0 ? -1 : 1));
-      else if (convoyLost[i]) off.addScaledVector(CONVOY_SIDE, DRAG * dt * (off.dot(CONVOY_SIDE) < 0 ? -1 : 1));
-      else off.multiplyScalar(exp(-dt / TUG_BACK));
-      if (!convoyLost[i] && off.length() > TUG_GONE) {
-        convoyLost[i] = true;
-        if (convoyLost.filter(Boolean).length === 1) ctx.say([CAMPAIGN.iceRunTugLost]);
-      }
-      convoyAt(i, a.seconds, tugNow).add(off);
-      markers.iceTugAt(i, tugNow, CONVOY_TURN);
-      markers.tether(i, held ? held.flight.position : null);
-      if (!front && !convoyLost[i] && !held) front = tugNow.clone();
-    }
+    const dt = stepOf(a);
+    const front = haul(markers, dt, CONVOY, (i, out) => convoyAt(i, a.seconds, out), CONVOY_SIDE, CONVOY_TURN, convoyOff, convoyLost, () => {
+      if (convoyLost.filter(Boolean).length === 1) ctx.say([CAMPAIGN.iceRunTugLost]);
+    });
     ctx.moveJumpers(front ?? convoyAt(0, a.seconds, tugNow));
     if (a.count === 0 && a.seconds >= LOOSE_QUIET) {
       ctx.spawnJumpers(null, front ?? tugNow, LOOSE, LOOSE_SKILL, LOOSE_NAMES, LOOSE_HOLD, false, true);
@@ -1315,6 +1338,105 @@ const STATION = stationPlacement(0, POST_HALF).position;
 export const ECHO_FOUR = point(STATION.x, STATION.y + POST_HALF.y + ECHO_FOUR_OVER, STATION.z - 560);
 const echoFour = echoAt(CAMPAIGN.echoFourCall, 'europa', ECHO_FOUR);
 
+/**
+ * Dose (6.1): an ice tanker climbs out of Europa's Crack and away through Jupiter's radiation
+ * belt, on its lane (TANKER_LANE) at TANKER_SPEED. The clone takes a dose wherever it flies over
+ * the ice, the more the higher: none in the Crack, whose ice shields it, the full rate from
+ * BELT_RISE (units, 300 m) over the plain on; DOSE_SECONDS at the full rate fill the dose, and
+ * a full dose is more than a clone can take. Once the tanker is out of the Crack, TANKER_RAIDERS
+ * of the Loose come for it with their harpoons (see haul); dragged off its lane it is lost.
+ */
+const TANKER_SPEED = 500;
+const BELT_RISE = 6000;
+const DOSE_SECONDS = 150;
+/** At this share of the dose Nicole warns. */
+const DOSE_WARN = 0.75;
+const TANKER_RAIDERS = 3;
+/** The tanker's lane: along the Crack 500 m below the plain, climbing out of it, and away over the ice into the belt. */
+const TANKER_LANE: THREE.Vector3[] = [
+  ...Array.from({ length: 10 }, (_, k) => point(crackMiddle(30000 - k * 3000), EUROPA_LAND - 10000, 30000 - k * 3000)),
+  point(crackMiddle(-3000), EUROPA_LAND - 3000, -3000),
+  point(crackMiddle(-6000), EUROPA_LAND + 7000, -6000),
+  point(20000, EUROPA_LAND + 10000, -30000),
+  point(45000, EUROPA_LAND + 12000, -45000),
+];
+/** Where the lane leaves the Crack: the Loose come once the tanker is past it. */
+const TANKER_OUT = 11;
+const laneLengths = TANKER_LANE.map((p, i) => (i === 0 ? 0 : p.distanceTo(TANKER_LANE[i - 1])));
+const laneTotal = laneLengths.reduce((sum, length) => sum + length, 0);
+const tankerTurn = new THREE.Quaternion();
+const tankerSide = new THREE.Vector3();
+const tankerOff = [new THREE.Vector3()];
+const tankerLost = [false];
+
+/** Where the tanker is `seconds` after it set out, along its lane (into `out`), and the leg it flies (its index into TANKER_LANE's points, from 1). */
+export function tankerAt(seconds: number, out: THREE.Vector3): number {
+  let along = Math.min(laneTotal, seconds * TANKER_SPEED);
+  for (let i = 1; i < TANKER_LANE.length; i++) {
+    if (along <= laneLengths[i] || i === TANKER_LANE.length - 1) {
+      out.lerpVectors(TANKER_LANE[i - 1], TANKER_LANE[i], Math.min(1, along / laneLengths[i]));
+      return i;
+    }
+    along -= laneLengths[i];
+  }
+  return TANKER_LANE.length - 1;
+}
+
+/** The share of a full dose a clone at `position` takes a second (see Dose). */
+export const doseRate = (position: THREE.Vector3) => Math.min(1, Math.max(0, (position.y - EUROPA_LAND) / BELT_RISE)) / DOSE_SECONDS;
+
+const doseRun: Drill = {
+  ...escort(CAMPAIGN.dose, 'europa'),
+  enter(ctx, a, markers) {
+    startEscort(ctx, a, markers);
+    tankerOff[0].set(0, 0, 0);
+    tankerLost[0] = false;
+    a.told = false;
+    a.warned = false;
+  },
+  done(ctx, a, markers) {
+    const dt = stepOf(a);
+    const leg = tankerAt(a.seconds, tugNow);
+    tankerSide.subVectors(TANKER_LANE[leg], TANKER_LANE[leg - 1]).normalize();
+    tankerTurn.setFromUnitVectors(new THREE.Vector3(-1, 0, 0), tankerSide);
+    tankerSide.set(-tankerSide.z, 0, tankerSide.x).normalize();
+    const onLane = (_: number, out: THREE.Vector3) => {
+      tankerAt(a.seconds, out);
+      return out;
+    };
+    // the Loose go for the tanker where it is, on its cable or not (haul leaves it in tugNow)
+    haul(markers, dt, 1, onLane, tankerSide, tankerTurn, tankerOff, tankerLost, () => undefined);
+    ctx.moveJumpers(tugNow);
+    if (a.count === 0 && leg > TANKER_OUT) {
+      ctx.spawnJumpers(null, tugNow, TANKER_RAIDERS, LOOSE_SKILL, LOOSE_NAMES, LOOSE_HOLD, false, true);
+      a.count = 1;
+    }
+    // the dose, as long as the clone lives; a full one is more than it can take
+    if (ctx.me.alive) a.taken = Math.min(1, a.taken + doseRate(ctx.me.flight.position) * dt);
+    if (a.taken >= DOSE_WARN && !a.told) {
+      a.told = true;
+      ctx.say([CAMPAIGN.doseHigh]);
+    }
+    if (a.taken >= 1 && !a.warned) {
+      a.warned = true;
+      ctx.agony(3);
+    }
+    return !a.warned && !tankerLost[0] && a.seconds * TANKER_SPEED >= laneTotal;
+  },
+  fail: (_, a) => (a.warned ? CAMPAIGN.doseFull : tankerLost[0] ? CAMPAIGN.doseLost : null),
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: (_, a) => {
+    tankerAt(a.seconds, waypointAt);
+    return waypointAt.add(tankerOff[0]);
+  },
+  mark: (_, a) => t('Tanker · dose {dose} %', { dose: Math.floor(a.taken * 100) }),
+};
+
+/** Dose: Nicole installs her threat warnings (see Module). */
+const fitThreat = (campaign: Campaign) => {
+  if (!campaign.modules.includes('threat')) campaign.modules.push('threat');
+};
+
 /** Pays a part's price from the wallet as far as it holds, the rest put on the debt (the laser, the overhaul). */
 const buy = (campaign: Campaign, price: number) => {
   const paid = Math.min(campaign.coins, price);
@@ -1424,6 +1546,7 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'callistoEcho', name: msg('Callisto Echo'), drills: [echoThree, said(CAMPAIGN.echoThree, 'callisto'), said(CAMPAIGN.echoThreeHeard, 'callisto')], pay: 0, ratings: 30 },
   { id: 'radiators', name: msg('Radiators I'), drills: [said(PIM.radiators, 'callisto'), said(CAMPAIGN.radiators, 'callisto')], pay: 0, fit: fitRadiators },
   // chapter 6, the Lineae on Europa: the Crack in the ice shell and the science station on its floor
+  { id: 'dose', name: msg('Dose'), drills: [said(HEDDA.dose, 'europa'), said(CAMPAIGN.threat, 'europa'), doseRun, said(CAMPAIGN.doseDone, 'europa')], pay: 3500, ratings: 250, fit: fitThreat },
   { id: 'underTheLineae', name: msg('Under the Lineae'), drills: [said(HEDDA.europa, 'europa'), echoFour, said(CAMPAIGN.echoFour, 'europa'), said(CAMPAIGN.echoFourHeard, 'europa')], pay: 1000, ratings: 100 },
   { id: 'plating', name: msg('Plating I'), drills: [said(PIM.plating, 'europa'), said(CAMPAIGN.plating, 'europa')], pay: 0, fit: fitPlating },
 ];

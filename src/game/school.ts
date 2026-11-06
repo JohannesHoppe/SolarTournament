@@ -184,6 +184,8 @@ export interface Attempt {
   turned: Mood | null | undefined;
   /** When a drill's clock started in this attempt (attempt seconds; NaN: not yet), a sprint's at its first coil. */
   clockFrom: number;
+  /** The share of a hazard the clone has taken in this attempt (a dose of radiation), 0 to 1. */
+  taken: number;
 }
 
 export interface Drill {
@@ -2236,7 +2238,7 @@ export class FlightSchool {
     const drill = this.drills[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0, told: false, site: new THREE.Vector3(), rigBeams: 0, pipes: false, turned: undefined, clockFrom: NaN };
+    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0, told: false, site: new THREE.Vector3(), rigBeams: 0, pipes: false, turned: undefined, clockFrom: NaN, taken: 0 };
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
     const instruction = rep > 0 && drill.repLine ? drill.repLine : drill.line;

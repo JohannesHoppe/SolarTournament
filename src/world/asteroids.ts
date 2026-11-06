@@ -1550,18 +1550,41 @@ export type Relief = (x: number, z: number) => number;
 const RELIEF_STEP = 20;
 
 /**
+ * Where a sphere's footprint is sampled against a ground (see reliefContact): its middle, and
+ * RELIEF_RING points on each of the rings at RELIEF_RINGS of its radius (as shares of it, in x
+ * and z), so a steep wall beside the sphere is met as well as the ground beneath it.
+ */
+const RELIEF_RING = 8;
+const RELIEF_RINGS = [0.5, 1];
+const RELIEF_SAMPLES: readonly (readonly [number, number])[] = [
+  [0, 0],
+  ...RELIEF_RINGS.flatMap((share) => Array.from({ length: RELIEF_RING }, (_, k) => [share * cos((Math.PI * 2 * k) / RELIEF_RING), share * sin((Math.PI * 2 * k) / RELIEF_RING)] as const)),
+];
+
+/**
  * A sphere of `radius` around `local` (the box's coordinates) against a box's ground (see
- * Relief): the point of the ground under the center into `closest`, the ground's outward normal
- * there into `normal`, when the sphere reaches down to it (along the normal); otherwise null.
+ * Relief): the ground is sampled under the sphere's footprint (see RELIEF_SAMPLES), and where
+ * it rises into the sphere deepest, that point of the ground goes into `closest` and the
+ * ground's outward normal there into `normal`; null where it rises into it nowhere.
  */
 export function reliefContact(local: THREE.Vector3, half: THREE.Vector3, relief: Relief, radius: number, normal: THREE.Vector3, closest: THREE.Vector3): THREE.Vector3 | null {
   if (Math.abs(local.x) > half.x || Math.abs(local.z) > half.z || local.y < -half.y - radius) return null;
   const ground = (x: number, z: number) => Math.min(half.y, relief(THREE.MathUtils.clamp(x, -half.x, half.x), THREE.MathUtils.clamp(z, -half.z, half.z)));
-  const y = ground(local.x, local.z);
-  normal.set(ground(local.x - RELIEF_STEP, local.z) - ground(local.x + RELIEF_STEP, local.z), 2 * RELIEF_STEP, ground(local.x, local.z - RELIEF_STEP) - ground(local.x, local.z + RELIEF_STEP)).normalize();
-  closest.set(local.x, y, local.z);
-  // how far the center stands off the ground along its normal: under the radius, they touch
-  return (local.y - y) * normal.y < radius ? closest : null;
+  let deepest = 0;
+  for (const [u, w] of RELIEF_SAMPLES) {
+    const x = local.x + u * radius;
+    const z = local.z + w * radius;
+    const y = ground(x, z);
+    // how far below the center the sphere reaches at this offset; the ground above that is inside it
+    const into = y - (local.y - radius * Math.sqrt(Math.max(0, 1 - u * u - w * w)));
+    if (into > deepest) {
+      deepest = into;
+      closest.set(x, y, z);
+    }
+  }
+  if (deepest <= 0) return null;
+  normal.set(ground(closest.x - RELIEF_STEP, closest.z) - ground(closest.x + RELIEF_STEP, closest.z), 2 * RELIEF_STEP, ground(closest.x, closest.z - RELIEF_STEP) - ground(closest.x, closest.z + RELIEF_STEP)).normalize();
+  return closest;
 }
 
 /** How far along a ray (in the box's coordinates, `step` one world unit along it) it meets a box's ground, marched in steps of RELIEF_MARCH and narrowed down; null when it does not. */

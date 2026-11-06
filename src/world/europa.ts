@@ -38,7 +38,7 @@ const CRACK_SWAY = 6000;
 const CRACK_WAVE = 90000;
 export const CRACK_WIDTH = 4000;
 export const CRACK_DEPTH = 16000;
-const CRACK_EDGE = 600;
+export const CRACK_EDGE = 600;
 const LIP = 1600;
 const LIP_WIDTH = 6000;
 /** Rubble on the Crack's floor: blocks fallen from its walls, up to 20 m. */

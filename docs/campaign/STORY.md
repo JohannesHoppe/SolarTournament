@@ -143,7 +143,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 5.2 | Ice Run | escort | Three ice tugs for Ganymede, 400 m apart in a line across Valhalla at 30 m/s, 150 m over the highest ground under their lane. 15 s in, four of the Loose (Driftwood, Salvo, Magpie Jack, Lanyard; skill 0.45) come for the frontmost tug still free, holding 250 m off it; they never fire beams at a tug, only harpoons, one each, and they fight a ship that comes near. A harpooned tug is dragged off its lane at 15 m/s while its raider lives and glides back once that raider is shot down; 800 m off its lane, it is lost. One tug lost is allowed, a second fails it. (built; still to come: the Loose sparing the Magpie's drive) | ☉ 2,500 · 200 | Escort; raiders with harpoons |
 | 5.3 | Valhalla Sprint | race | Six Ministry coils that *Lanes Watch* leases for the show, in a straight line over the rings of the Valhalla basin, 1 km apart and level 100 m over the highest ground beneath them, at the speed limit, against the clock: from rest 1 km before the first, the clock starts at the first coil, and the last within 25 s wins; a coil missed or the clock run out starts it over. (built; still to come: a gold time) | ☉ 1,500 · 150 | School: the full-speed course |
 | 5.4 | Callisto Echo | exploration | Echo 3, in an old Navy listening post among the craters: a bunker dug into the ground, a lattice tower with its dish turned up at the sky, two aerial masts, all solid. The hull held still over the dish. (built) | 30 | Markers |
-| 6.1 | Dose | escort | Escort an ice tanker out through Jupiter's radiation belt. A dose meter fills while in the belt; full, the clone dies. Loose raiders slow the tanker. The tanker lost fails it. | ☉ 3,500 · 250 | Escort; new: the dose (a hazard like heat) |
+| 6.1 | Dose | escort | Escort an ice tanker out through Jupiter's radiation belt: it climbs along the Crack 500 m below the plain, out of it and away over the ice. A dose meter fills while the clone flies over the ice, none in the Crack, the full rate from 300 m over the plain on, where 150 s fill it; full, the clone has had more than it can take and the attempt starts over. Three of the Loose come for the tanker with their harpoons once it is out of the Crack; dragged 800 m off its lane, it is lost and the attempt starts over. Nicole installs her threat warnings. (built) | ☉ 3,500 · 250 | Escort; new: the dose (a hazard like heat) |
 | 6.2 | Under the Lineae | exploration | Fly down a crack of the ice shell, 200 m wide and 800 m deep, to a science station on its floor, and hold at its dish: echo 4. (built) | ☉ 1,000 · 100 | Surface as a canyon; markers |
 | 6.3 | The Quiet Man | bounty | A Loose raider (skill 0.5) who shoots only drives and never finishes a clone. Shoot him down, or let him go when he turns away (fewer ratings; Nicole remembers it later). | ☉ 2,500 · 250 or · 100 | Duel; a choice |
 | 7.1 | Flux Tube Race | race | The sulfur miners' race, between their beacon buoys through the Io plasma torus. The nearer the flux tube, the more the link glitches (the picture breaks up as on a hit). Perihelion again. Top two. | ☉ 4,000 · 350 | Race; the link glitch |
@@ -312,7 +312,7 @@ Nicole starts as a salvaged unit: she can fly the ship (the autopilot, the brake
 | 3 | Targeting | The crosshair glowing over a drive; ships' marks and names |
 | 4 | Racing line | The dashed line and its orange bends (built: the Stickney Grand) |
 | 5 | Radar | The radar sphere (built: Pilot Episode) |
-| 6 | Threat | ON YOUR TAIL, the lock warning, the torpedo countdown |
+| 6 | Threat | ON YOUR TAIL, the lock warning, the torpedo countdown (built: Dose) |
 | 10 | Voice II | Her own voice, clean |
 | 15 | Wells | The escape gauge and the orbit readout |
 | 19 | Ministry certification | The Games' Nicole (the end) |
@@ -380,7 +380,7 @@ A place in the game is a **landmark** (the body in the sky, from real maps where
 Jupiter's moons lie inside a magnetic field that traps radiation fierce enough to kill an unshielded person in hours near the inner moons; Callisto, the outermost of the four, lies mostly outside the worst of it, which is why the Lanes' traffic gathers there.
 
 - **Callisto: Valhalla.** About 4,820 km across, the most heavily cratered body known, dark, with the multi-ring basin Valhalla on its face like ripples frozen in a pond. Jupiter hangs about eight times as wide as the full moon seen from Earth, banded in cream and rust, the Great Red Spot turning on it. Station: Lanes Watch's studio, a converted ice-tug depot, its neon sign blinking ON AIR. Flown: bounties, convoys, the Valhalla Sprint. (Built: the field over Valhalla's ring zone, its ridges 150 m high and packed closer than the real ones, 1.5 km apart, so a sprint crosses several; some 260 craters of 40 to 700 m in radius; Callisto's eighth of a g, which a ship feels; Jupiter still in the sky, 34° up and 4.4° across, from its Cassini map; the Navy's old listening post among the craters. Still to come: the studio.)
-- **Europa: the Lineae.** About 3,120 km across, a shell of ice over an ocean, its face crossed by long reddish-brown cracks. Jupiter fills some 12° of its sky. The radiation is intense. A science station clings in a crack, its dish pointing at the ice; nobody has found life down there, and its last scientist keeps looking. Flown: the tanker through the belt, the dive into the crack. (Built: the field over the Crack, 200 m wide and some 800 m deep with nearly sheer walls, its lips raised into ridges 80 m high, older double ridges across the plain; the science station on the Crack's floor; Jupiter still in the sky, 30° up and 12° across. Still to come: the radiation belt.)
+- **Europa: the Lineae.** About 3,120 km across, a shell of ice over an ocean, its face crossed by long reddish-brown cracks. Jupiter fills some 12° of its sky. The radiation is intense. A science station clings in a crack, its dish pointing at the ice; nobody has found life down there, and its last scientist keeps looking. Flown: the tanker through the belt, the dive into the crack. (Built: the field over the Crack, 200 m wide and some 800 m deep with nearly sheer walls, its lips raised into ridges 80 m high, older double ridges across the plain; the science station on the Crack's floor; Jupiter still in the sky, 30° up and 12° across; the radiation belt over the ice, a dose for the clone the higher it flies, none in the Crack.)
 - **Io: Flux.** About 3,640 km across, the most volcanic body known: hundreds of active volcanoes, a surface of sulfur yellow, orange and white, plumes rising high above it. Jupiter fills some 19° of its sky. Io sheds a ring of charged gas along its orbit, and between Io and Jupiter runs a current of millions of amperes along the field's lines: the flux tube, where Jupiter's auroras have a spot of their own. In the game the tube shows as a faint violet glow and a rising static on the link. Station: sulfur miners in shielded bunkers. Flown: the Flux Tube Race, the Blackout.
 - **Ganymede.** About 5,270 km across, the largest moon in the solar system, larger than Mercury, the only moon with a magnetic field of its own (with auroras of its own); bright grooved ground beside dark old ground. The Loose hide in its tug yards. Flown: Hollow Jack, the harpoon, the hook yard.
 
@@ -623,6 +623,20 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **NICOLE** *(a coil missed)*: We missed a coil. Back to the start, and once more.
 
 **NICOLE**: Six coils, and the clock beaten. The ridges went by like waves, Host.
+
+### Dose (chapter 6, built)
+
+**HEDDA**: Europa. Paying job: an ice tanker bound for the inner moons, and it has to climb out through the belt. The radiation up there fills a clone's dose fast. The Loose know it too. Three and a half thousand.
+
+**NICOLE**: I found one more module in my old storage, Host: my threat warnings. A ship on our tail, a torpedo locking on, how long until it strikes. I will tell you now.
+
+**NICOLE**: The tanker climbs out of the Crack and into the belt. Down in the ice we take no dose; up in the belt the clone takes more the higher we fly. When the Loose come, keep them off the tanker, and keep us low when you can.
+
+**NICOLE** *(at three quarters)*: Three quarters of the dose, Host. Get us low, or into the ice.
+
+**NICOLE** *(the dose full)*: The dose is full. This clone has had more than a body can take. The next one goes again.
+
+**NICOLE**: The tanker is through the belt. Our clone will feel this dose for the rest of its short life, Host. So will you.
 
 ### Under the Lineae (chapter 6, built)
 

@@ -522,11 +522,39 @@ test('Callisto Echo: the hull held still over the listening post’s dish hears 
   expect(errors).toEqual([]);
 });
 
-test('chapter 6 opens on Europa: down in the Crack, the hull held over the science station’s dish hears the fourth echo', async ({ page }) => {
+test('Under the Lineae: down in Europa’s Crack, the hull held over the science station’s dish hears the fourth echo', async ({ page }) => {
   test.setTimeout(300_000);
-  const errors = await takeJobFrom(page, chapterFive('pilotEpisode', 'iceRun', 'valhallaSprint', 'callistoEcho', 'radiators'));
+  const errors = await takeJobFrom(page, chapterFive('pilotEpisode', 'iceRun', 'valhallaSprint', 'callistoEcho', 'radiators', 'dose'));
   await page.waitForFunction(() => window.game.venue?.id === 'europa' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
   await holdAtEcho(page, 'ECHO_FOUR', 1);
   expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(1);
+  expect(errors).toEqual([]);
+});
+
+test('chapter 6 opens on Europa: Dose sets the tanker on its lane, and the belt doses the clone over the ice, never down in the Crack', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, chapterFive('pilotEpisode', 'iceRun', 'valhallaSprint', 'callistoEcho', 'radiators'));
+  await page.waitForFunction(() => window.game.venue?.id === 'europa' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.school.markers.hookedBy.length)).toBe(1);
+  // the clone held at (x, y, z) for two seconds: the dose it takes meanwhile
+  const taken = (x: number, y: number, z: number) =>
+    page.evaluate(
+      async ([x, y, z]) => {
+        const game = window.game;
+        const start = game.time;
+        const before: number = game.school.attempt.taken;
+        while (game.time - start < 2) {
+          game.me.flight.position.set(x, y, z);
+          game.me.flight.velocity.set(0, 0, 0);
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+        return game.school.attempt.taken - before;
+      },
+      [x, y, z] as const,
+    );
+  // 500 m over the ice the belt doses the clone; in the Crack, 500 m down, nothing
+  expect(await taken(30000, 8000, 30000)).toBeGreaterThan(0);
+  const middle = await page.evaluate(async (path) => ((await import(path)) as typeof import('../src/world/europa')).crackMiddle(30000), '/src/world/europa.ts');
+  expect(await taken(middle, -12000, 30000)).toBe(0);
   expect(errors).toEqual([]);
 });
