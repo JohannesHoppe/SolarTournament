@@ -7,7 +7,8 @@ import { arenaById } from '../world/arenas';
 import { DETAIL } from '../world/rocks';
 import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
-import { BARGE_FROM, BARGE_TO, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS } from './missions';
+import { BARGE_FROM, BARGE_TO, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME } from './missions';
+import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 
 /** A middling bot: what a Host is asked to fly, it must manage (see CLAUDE.md, Plausibility). */
@@ -42,6 +43,22 @@ describe('the races of the campaign', () => {
     const { flight, total } = flyRace('rheasilvia', PEAK_COURSE, PEAK_LAPS, PIPE_BORE, PEAK_SECONDS);
     expect(flight.passed, `${flight.passed} of ${total} in ${flight.seconds.toFixed(0)} s`).toBe(total);
     expect(flight.missed).toBe(0);
+  });
+
+  it('the Valhalla Sprint on Callisto is flown by a middling bot: from its start through every coil in a straight line over the ridges, the clock beaten, without a crash', () => {
+    const field = testField(DETAIL);
+    field.generate(arenaById('callisto')!.layout);
+    const start = new THREE.Vector3(...SPRINT_START.at);
+    const way = new THREE.Vector3(-1, 0, 0);
+    for (const coil of SPRINT_COURSE) expect(coil.length()).toBeLessThan(ARENA_LIMIT);
+    expect(start.length()).toBeLessThan(ARENA_LIMIT);
+    const points = SPRINT_COURSE.map((coil) => coil.clone());
+    const line = new RacingLine(points, false, start);
+    // the clock runs from the first coil: the burn up to it (1 km from rest) takes some 6 s of it
+    const flight = flyRings(field, { points, normals: points.map(() => way), radius: RING_RADIUS, core: BOOST_RADIUS, line, open: false }, start, way, SKILL, RACE_SPEED, SPRINT_TIME + 6);
+    expect(flight.passed, `${flight.passed} of ${points.length} in ${flight.seconds.toFixed(1)} s`).toBe(points.length);
+    expect(flight.missed).toBe(0);
+    expect(flight.crashed).toBe(false);
   });
 
   it('the Stickney Grand on Phobos is flown by a middling bot: three laps through every ring, down into the crater and out, nothing missed, without a crash', () => {

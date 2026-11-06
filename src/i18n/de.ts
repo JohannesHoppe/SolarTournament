@@ -1666,4 +1666,11 @@ export const DE: Catalog = {
   "One more module from my old storage, Host: the radar. Every ship and rock within two and a half kilometers, ahead and behind, in its sphere on the screen.": "Noch ein Modul aus meinem alten Speicher, Host: das Radar. Jedes Schiff und jeder Fels im Umkreis von zweieinhalb Kilometern, vor und hinter uns, in seiner Kugel auf dem Bildschirm.",
   "We are on air. The bounty is a Tallyman they call Red Ledger, with two wingmen, over the craters. Red Ledger is the one who pays. The other two are only in the way.": "Wir sind auf Sendung. Das Kopfgeld gilt einem Tallyman, den sie Red Ledger nennen, mit zwei Flügelmännern, über den Kratern. Red Ledger ist der, der zahlt. Die anderen zwei sind nur im Weg.",
   "Red Ledger is down, and all of Jupiter's lanes watched it. They will want a second episode, Host.": "Red Ledger ist erledigt, und alle Bahnen um Jupiter haben zugesehen. Die werden eine zweite Folge wollen, Host.",
+  "Valhalla Sprint": "Valhalla-Sprint",
+  "Coil {n}/{total}": "Spule {n}/{total}",
+  "Coil {n}/{total} · {seconds} s left": "Spule {n}/{total} · noch {seconds} s",
+  "Six coils of the Ministry, leased for the show, in a straight line over the ridges. The clock starts at the first one. Through the cores, the drive held all the way: twenty-five seconds to the last.": "Sechs Spulen des Ministeriums, für die Show gemietet, in gerader Linie über die Wälle. Die Uhr läuft ab der ersten. Durch die Mitten, das Triebwerk die ganze Zeit an: fünfundzwanzig Sekunden bis zur letzten.",
+  "Too slow for the show. Back to the start, and once more.": "Zu langsam für die Show. Zurück zum Start, und noch einmal.",
+  "We missed a coil. Back to the start, and once more.": "Wir haben eine Spule verfehlt. Zurück zum Start, und noch einmal.",
+  "Six coils, and the clock beaten. The ridges went by like waves, Host.": "Sechs Spulen, und die Uhr geschlagen. Die Wälle zogen vorbei wie Wellen, Host.",
 };

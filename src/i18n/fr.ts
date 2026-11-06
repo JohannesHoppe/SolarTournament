@@ -1627,4 +1627,11 @@ export const FR: Catalog = {
   "One more module from my old storage, Host: the radar. Every ship and rock within two and a half kilometers, ahead and behind, in its sphere on the screen.": "Encore un module de ma vieille mémoire, Hôte : le radar. Chaque vaisseau et chaque rocher à moins de deux kilomètres et demi, devant et derrière, dans sa sphère à l’écran.",
   "We are on air. The bounty is a Tallyman they call Red Ledger, with two wingmen, over the craters. Red Ledger is the one who pays. The other two are only in the way.": "Nous sommes à l’antenne. La prime est sur un Tallyman qu’on appelle Red Ledger, avec deux ailiers, au-dessus des cratères. C’est Red Ledger qui rapporte. Les deux autres ne font que gêner.",
   "Red Ledger is down, and all of Jupiter's lanes watched it. They will want a second episode, Host.": "Red Ledger est abattu, et toutes les voies de Jupiter ont regardé. Ils vont vouloir un deuxième épisode, Hôte.",
+  "Valhalla Sprint": "Sprint de Valhalla",
+  "Coil {n}/{total}": "Bobine {n}/{total}",
+  "Coil {n}/{total} · {seconds} s left": "Bobine {n}/{total} · encore {seconds} s",
+  "Six coils of the Ministry, leased for the show, in a straight line over the ridges. The clock starts at the first one. Through the cores, the drive held all the way: twenty-five seconds to the last.": "Six bobines du Ministère, louées pour l’émission, en ligne droite au-dessus des crêtes. Le chrono démarre à la première. Par les centres, le moteur à fond tout du long : vingt-cinq secondes jusqu’à la dernière.",
+  "Too slow for the show. Back to the start, and once more.": "Trop lent pour l’émission. Retour au départ, et encore une fois.",
+  "We missed a coil. Back to the start, and once more.": "Nous avons raté une bobine. Retour au départ, et encore une fois.",
+  "Six coils, and the clock beaten. The ridges went by like waves, Host.": "Six bobines, et le chrono battu. Les crêtes ont défilé comme des vagues, Hôte.",
 };

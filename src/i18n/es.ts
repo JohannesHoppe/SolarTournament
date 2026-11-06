@@ -1702,4 +1702,11 @@ export const ES: Catalog = {
   "One more module from my old storage, Host: the radar. Every ship and rock within two and a half kilometers, ahead and behind, in its sphere on the screen.": "Otro módulo de mi vieja memoria, Host: el radar. Cada nave y cada roca a menos de dos kilómetros y medio, delante y detrás, en su esfera en la pantalla.",
   "We are on air. The bounty is a Tallyman they call Red Ledger, with two wingmen, over the craters. Red Ledger is the one who pays. The other two are only in the way.": "Estamos en el aire. La recompensa es por un Tallyman al que llaman Red Ledger, con dos escoltas, sobre los cráteres. Red Ledger es el que paga. Los otros dos solo estorban.",
   "Red Ledger is down, and all of Jupiter's lanes watched it. They will want a second episode, Host.": "Red Ledger ha caído, y todas las rutas de Júpiter lo han visto. Van a querer un segundo episodio, Host.",
+  "Valhalla Sprint": "Sprint de Valhalla",
+  "Coil {n}/{total}": "Bobina {n}/{total}",
+  "Coil {n}/{total} · {seconds} s left": "Bobina {n}/{total} · quedan {seconds} s",
+  "Six coils of the Ministry, leased for the show, in a straight line over the ridges. The clock starts at the first one. Through the cores, the drive held all the way: twenty-five seconds to the last.": "Seis bobinas del Ministerio, alquiladas para el programa, en línea recta sobre las crestas. El reloj empieza en la primera. Por los núcleos, con el motor encendido todo el rato: veinticinco segundos hasta la última.",
+  "Too slow for the show. Back to the start, and once more.": "Demasiado lento para el programa. Vuelta a la salida, y otra vez.",
+  "We missed a coil. Back to the start, and once more.": "Hemos fallado una bobina. Vuelta a la salida, y otra vez.",
+  "Six coils, and the clock beaten. The ridges went by like waves, Host.": "Seis bobinas, y el reloj vencido. Las crestas pasaron como olas, Host.",
 };

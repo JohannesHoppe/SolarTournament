@@ -28,13 +28,13 @@ const CALLISTO_RADIUS = 2410 * KM;
 export const LAND = -2000;
 
 /**
- * Valhalla's rings across the field: a ridge every RING_SPACING (units, 3 km) out from the
+ * Valhalla's rings across the field: a ridge every RING_SPACING (units, 1.5 km) out from the
  * basin's middle at VALHALLA, RIDGE (150 m) high, rising over RING_RISE of the spacing and
  * dropping off over the rest. The real rings lie farther apart; here they are packed closer,
  * so that a sprint over the field crosses several.
  */
 export const VALHALLA = new THREE.Vector3(-600 * KM, 0, 0);
-export const RING_SPACING = 3 * KM;
+export const RING_SPACING = 1.5 * KM;
 const RIDGE = 3000;
 const RING_RISE = 0.8;
 

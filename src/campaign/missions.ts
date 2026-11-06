@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
 import { CAMPAIGN, HEDDA, NAVY, PIM, RASK, SAW, TALLY } from '../music/lines';
-import { clear, holdFor, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
+import { clear, CORE_SHARE, holdFor, passRing, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
 import { hullInLight } from '../world/wall';
@@ -763,6 +763,61 @@ const pilotEpisode: Drill = {
   mark: () => t('Bounty: {name}', { name: BOUNTY_NAMES[0] }),
 };
 
+/**
+ * Valhalla Sprint (5.3): SPRINT_COILS coils of the Ministry, which Lanes Watch leases for the show,
+ * in a straight line across Valhalla's ridges along -x, SPRINT_GAP apart (units, 1 km), level at
+ * SPRINT_OVER over the highest ground under the line; the clock starts at the first coil, and
+ * every coil after it within SPRINT_TIME wins; each coil's core throws the ship on, a coil missed
+ * starts it over.
+ */
+const SPRINT_COILS = 6;
+const SPRINT_FROM = 62000;
+const SPRINT_GAP = 20000;
+const SPRINT_OVER = 2000;
+export const SPRINT_TIME = 25;
+const SPRINT_WAY = point(-1, 0, 0);
+const SPRINT_HEIGHT = (() => {
+  let highest = -Infinity;
+  for (let x = -SPRINT_FROM; x <= SPRINT_FROM; x += 250) highest = Math.max(highest, callistoHeight(x, 0));
+  return highest + SPRINT_OVER;
+})();
+export const SPRINT_COURSE = Array.from({ length: SPRINT_COILS }, (_, k) => point(SPRINT_FROM - (k + 1) * SPRINT_GAP, SPRINT_HEIGHT, 0));
+export const SPRINT_START = { at: [SPRINT_FROM, SPRINT_HEIGHT, 0] as const, toward: [0, SPRINT_HEIGHT, 0] as const };
+
+const valhallaSprint: Drill = {
+  line: CAMPAIGN.valhallaSprint,
+  keys: ['drive', 'turn'],
+  arena: 'callisto',
+  music: 'fight',
+  autopilot: true,
+  enter(_, a, markers) {
+    a.points = SPRINT_COURSE.map((coil) => coil.clone());
+    a.normals = a.points.map(() => SPRINT_WAY.clone());
+    a.points.forEach((coil, i) => markers.ring(coil, a.normals[i]));
+    markers.highlight(0);
+  },
+  done(ctx, a, markers) {
+    // the first coil counts only flown along the line, so a pilot coming back to start over turns first
+    if (a.next === 0 && ctx.me.flight.velocity.dot(SPRINT_WAY) <= 0) {
+      a.side = NaN;
+      return false;
+    }
+    const off = passRing(ctx, a);
+    if (off === null) return false;
+    if (off >= RING_RADIUS) {
+      a.warned = true;
+      return false;
+    }
+    markers.highlight(a.next);
+    if (off < RING_RADIUS * CORE_SHARE) ctx.boost(SPRINT_WAY);
+    if (a.next === 1) a.clockFrom = a.seconds;
+    return a.next >= a.points.length;
+  },
+  fail: (_, a) => (a.warned ? CAMPAIGN.valhallaSprintMissed : a.seconds - a.clockFrom > SPRINT_TIME ? CAMPAIGN.valhallaSprintSlow : null),
+  waypoint: (_, a) => a.points[a.next] ?? null,
+  mark: (_, a) => (Number.isFinite(a.clockFrom) ? t('Coil {n}/{total} · {seconds} s left', { n: a.next + 1, total: a.points.length, seconds: Math.max(0, Math.ceil(SPRINT_TIME - (a.seconds - a.clockFrom))) }) : t('Coil {n}/{total}', { n: a.next + 1, total: a.points.length })),
+};
+
 /** Pilot Episode: Nicole installs her radar (see Module). */
 const fitRadar = (campaign: Campaign) => {
   if (!campaign.modules.includes('radar')) campaign.modules.push('radar');
@@ -1220,4 +1275,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'armorPanels', name: msg('Armor Panels'), drills: [said(PIM.panels, 'phobos'), said(CAMPAIGN.panels, 'phobos')], pay: 0, fit: fitPanels },
   // chapter 5, Valhalla on Callisto: Lanes Watch's bounty show over the craters, under Jupiter
   { id: 'pilotEpisode', name: msg('Pilot Episode'), drills: [said(HEDDA.callisto, 'callisto'), said(CAMPAIGN.radar, 'callisto'), pilotEpisode, said(CAMPAIGN.pilotEpisodeDone, 'callisto')], pay: 3000, ratings: 300, fit: fitRadar },
+  { id: 'valhallaSprint', name: msg('Valhalla Sprint'), drills: [valhallaSprint, said(CAMPAIGN.valhallaSprintDone, 'callisto')], pay: 1500, ratings: 150, start: SPRINT_START },
 ];

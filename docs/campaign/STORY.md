@@ -141,7 +141,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 4.4 | Armor Panels | shop | Pim welds panels from Phobos's Navy yards over the bare left flank (☉ 1,500, from the wallet as far as it holds, the rest on the debt): a beam from that side no longer counts double. (built) | — | Shipyard; a look on the hull |
 | 5.1 | Pilot Episode | bounty | Captain Kroll names the place: Callisto, where Jupiter's lanes start, and *Lanes Watch* wants the Host on its first show. Nicole finds her radar module in her old storage and installs it. On air: the Tallyman "Red Ledger" and his two wingmen, Carbon and Copy (all skill 0.4), fight every ship they see over Valhalla's craters; Red Ledger shot down ends it, the wingmen only in the way. (built; still to come: style moments paying double ratings) | ☉ 3,000 · 300 | Raiders as guards; a named target; moments |
 | 5.2 | Ice Run | escort | Three ice tugs through a field to Ganymede. The Loose (skill 0.45) hook the tugs away instead of shooting them, and never fire at the Magpie's drive. One tug lost is allowed. | ☉ 2,500 · 200 | Escort; bots with the hook |
-| 5.3 | Valhalla Sprint | race | Ministry coils that *Lanes Watch* leases for the show, in a straight line over the rings of the Valhalla basin, at the speed limit, against the clock. Gold under 40 s. | ☉ 1,500 · 150 | School: the full-speed course |
+| 5.3 | Valhalla Sprint | race | Six Ministry coils that *Lanes Watch* leases for the show, in a straight line over the rings of the Valhalla basin, 1 km apart and level 100 m over the highest ground beneath them, at the speed limit, against the clock: from rest 1 km before the first, the clock starts at the first coil, and the last within 25 s wins; a coil missed or the clock run out starts it over. (built; still to come: a gold time) | ☉ 1,500 · 150 | School: the full-speed course |
 | 5.4 | Callisto Echo | exploration | Echo 3, in an old Navy listening post among the craters. | 30 | Markers |
 | 6.1 | Dose | escort | Escort an ice tanker out through Jupiter's radiation belt. A dose meter fills while in the belt; full, the clone dies. Loose raiders slow the tanker. The tanker lost fails it. | ☉ 3,500 · 250 | Escort; new: the dose (a hazard like heat) |
 | 6.2 | Under the Lineae | exploration | Fly down a crack of the ice shell, 200 m wide, to a science station, and hold at its dish: echo 4. | ☉ 1,000 · 100 | Surface as a canyon; markers |
@@ -379,7 +379,7 @@ A place in the game is a **landmark** (the body in the sky, from real maps where
 
 Jupiter's moons lie inside a magnetic field that traps radiation fierce enough to kill an unshielded person in hours near the inner moons; Callisto, the outermost of the four, lies mostly outside the worst of it, which is why the Lanes' traffic gathers there.
 
-- **Callisto: Valhalla.** About 4,820 km across, the most heavily cratered body known, dark, with the multi-ring basin Valhalla on its face like ripples frozen in a pond. Jupiter hangs about eight times as wide as the full moon seen from Earth, banded in cream and rust, the Great Red Spot turning on it. Station: Lanes Watch's studio, a converted ice-tug depot, its neon sign blinking ON AIR. Flown: bounties, convoys, the Valhalla Sprint. (Built: the field over Valhalla's ring zone, its ridges 150 m high and packed closer than the real ones, 3 km apart, so a sprint crosses several; some 260 craters of 40 to 700 m in radius; Callisto's eighth of a g, which a ship feels; Jupiter still in the sky, 34° up and 4.4° across, from its Cassini map. Still to come: the studio.)
+- **Callisto: Valhalla.** About 4,820 km across, the most heavily cratered body known, dark, with the multi-ring basin Valhalla on its face like ripples frozen in a pond. Jupiter hangs about eight times as wide as the full moon seen from Earth, banded in cream and rust, the Great Red Spot turning on it. Station: Lanes Watch's studio, a converted ice-tug depot, its neon sign blinking ON AIR. Flown: bounties, convoys, the Valhalla Sprint. (Built: the field over Valhalla's ring zone, its ridges 150 m high and packed closer than the real ones, 1.5 km apart, so a sprint crosses several; some 260 craters of 40 to 700 m in radius; Callisto's eighth of a g, which a ship feels; Jupiter still in the sky, 34° up and 4.4° across, from its Cassini map. Still to come: the studio.)
 - **Europa: the Lineae.** About 3,120 km across, a shell of ice over an ocean, its face crossed by long reddish-brown cracks. Jupiter fills some 12° of its sky. The radiation is intense. A science station clings in a crack, its dish pointing at the ice; nobody has found life down there, and its last scientist keeps looking. Flown: the tanker through the belt, the dive into the crack.
 - **Io: Flux.** About 3,640 km across, the most volcanic body known: hundreds of active volcanoes, a surface of sulfur yellow, orange and white, plumes rising high above it. Jupiter fills some 19° of its sky. Io sheds a ring of charged gas along its orbit, and between Io and Jupiter runs a current of millions of amperes along the field's lines: the flux tube, where Jupiter's auroras have a spot of their own. In the game the tube shows as a faint violet glow and a rising static on the link. Station: sulfur miners in shielded bunkers. Flown: the Flux Tube Race, the Blackout.
 - **Ganymede.** About 5,270 km across, the largest moon in the solar system, larger than Mercury, the only moon with a magnetic field of its own (with auroras of its own); bright grooved ground beside dark old ground. The Loose hide in its tug yards. Flown: Hollow Jack, the harpoon, the hook yard.
@@ -613,6 +613,16 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **NICOLE**: We are on air. The bounty is a Tallyman they call Red Ledger, with two wingmen, over the craters. Red Ledger is the one who pays. The other two are only in the way.
 
 **NICOLE**: Red Ledger is down, and all of Jupiter's lanes watched it. They will want a second episode, Host.
+
+### Valhalla Sprint (chapter 5, built)
+
+**NICOLE**: Six coils of the Ministry, leased for the show, in a straight line over the ridges. The clock starts at the first one. Through the cores, the drive held all the way: twenty-five seconds to the last.
+
+**NICOLE** *(too slow)*: Too slow for the show. Back to the start, and once more.
+
+**NICOLE** *(a coil missed)*: We missed a coil. Back to the start, and once more.
+
+**NICOLE**: Six coils, and the clock beaten. The ridges went by like waves, Host.
 
 ### The paint comes off (chapter 3, built)
 

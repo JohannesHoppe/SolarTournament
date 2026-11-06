@@ -182,6 +182,8 @@ export interface Attempt {
   rigBeams: number;
   /** The music the drill turned to in this attempt (see Drill.turn); undefined while it has not. */
   turned: Mood | null | undefined;
+  /** When a drill's clock started in this attempt (attempt seconds; NaN: not yet), a sprint's at its first coil. */
+  clockFrom: number;
 }
 
 export interface Drill {
@@ -559,7 +561,7 @@ export const saying = (line: string): Drill => ({
  * from its center, or null. Inside the ring it counts as passed; beside it (RING_RADIUS or more)
  * the ring is missed.
  */
-function passRing(ctx: SchoolContext, a: Attempt): number | null {
+export function passRing(ctx: SchoolContext, a: Attempt): number | null {
   const normal = a.normals[a.next];
   const offset = toTarget.copy(ctx.me.flight.position).sub(a.points[a.next]);
   const side = offset.dot(normal);
@@ -2169,7 +2171,7 @@ export class FlightSchool {
     const drill = this.drills[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0, told: false, site: new THREE.Vector3(), rigBeams: 0, pipes: false, turned: undefined };
+    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0, told: false, site: new THREE.Vector3(), rigBeams: 0, pipes: false, turned: undefined, clockFrom: NaN };
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
     const instruction = rep > 0 && drill.repLine ? drill.repLine : drill.line;

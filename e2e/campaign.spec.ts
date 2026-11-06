@@ -467,3 +467,13 @@ test('Pilot Episode: over Valhalla on Callisto, Red Ledger shot down ends the bo
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).modules)).toContain('radar');
   expect(errors).toEqual([]);
 });
+
+test('Valhalla Sprint: six coils in a straight line over Valhalla, the clock starting at the first', async ({ page }) => {
+  test.setTimeout(300_000);
+  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge', 'repoMen', 'wallRun', 'scoutTwo', 'overhaul', 'stickneyGrand', 'debtDay', 'grooveShoot', 'armorPanels', 'pilotEpisode'], coins: 9000, parts: [...CHAPTER_TWO_DONE.parts, 'laser', 'stripped', 'drive', 'panels'], modules: ['targeting', 'racingLine', 'radar'], held: true };
+  const errors = await takeJobFrom(page, kept);
+  await page.waitForFunction(() => window.game.venue?.id === 'callisto' && window.game.school?.stepIndex === 0 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(6);
+  expect(await page.evaluate(() => Number.isNaN(window.game.school.attempt.clockFrom))).toBe(true);
+  expect(errors).toEqual([]);
+});

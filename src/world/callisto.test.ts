@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GROUND_HALF, groundPlacement, groundRelief, RING_SPACING, ringAt, surfaceHeight, VALHALLA } from './callisto';
 import { CALLISTO_TYPE } from './yard';
 import { groundField } from '../test/field';
+import { ARENA_LIMIT } from './arena';
 
 describe('Valhalla on Callisto', () => {
   it('collides as its ground: a ship just under it touches, one just over it flies free, on a ridge, in a crater and between', () => {
@@ -20,15 +21,18 @@ describe('Valhalla on Callisto', () => {
   });
 
   it('crosses the field with Valhalla’s ridges, each rising gently away from the basin and dropping off in a scarp', () => {
-    const steps = 60;
+    const step = RING_SPACING / 60;
     let ridges = 0;
-    for (let out = -VALHALLA.x - GROUND_HALF.x; out < -VALHALLA.x + GROUND_HALF.x; out += RING_SPACING / steps) {
-      const step = ringAt(out + RING_SPACING / steps) - ringAt(out);
-      // the rise never steeper than a tenth, the scarp's drop steeper than a third
-      expect(step, `${out}`).toBeLessThan((RING_SPACING / steps) * 0.1);
-      if (step < -(RING_SPACING / steps) / 3) ridges++;
+    let inScarp = false;
+    for (let out = -VALHALLA.x - ARENA_LIMIT; out < -VALHALLA.x + ARENA_LIMIT; out += step) {
+      const slope = (ringAt(out + step) - ringAt(out)) / step;
+      // the rise never steeper than a fifth (11°), the scarp's drop steeper than two fifths (22°)
+      expect(slope, `${out}`).toBeLessThan(0.2);
+      const scarp = slope < -0.4;
+      if (scarp && !inScarp) ridges++;
+      inScarp = scarp;
     }
-    // each scarp's steep stretch counted over several steps: at least five ridges over the field's 16 km
-    expect(ridges / 4).toBeGreaterThanOrEqual(5);
+    // at least four ridges across the arena
+    expect(ridges).toBeGreaterThanOrEqual(4);
   });
 });
