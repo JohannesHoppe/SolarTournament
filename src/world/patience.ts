@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { cos, sin } from '../detmath';
 import { rotateX, rotateY, rotateZ, setFromAxisAngle } from '../detthree';
 import { Randomizer } from '../random';
-import { boxContact } from './boxes';
+import { type HullBox, type Pose, rayHull, touchHull } from './boxes';
 import { macroUv, patchedPlating, PLATING_TILE } from './boneyard';
 import { paint } from './worldship';
 import { boxUv } from '../view/surfaces';
@@ -59,17 +59,10 @@ const PAINTS = [
   { key: 'patience-grey', seed: PATIENCE_SEED + 4, tint: 0xb5b2aa, texts: ['PATIENCE', 'CREW 9', 'AIRLOCK', 'CLAMP', 'NO SMOKING'] },
 ] as const;
 
-/** A collider: a box in its own frame (`half` its extents) at `center`, turned by `turn`, all in Patience's frame. */
-interface Collider {
-  center: THREE.Vector3;
-  turn: THREE.Quaternion;
-  half: THREE.Vector3;
-}
+/** A collider: a box of its hull (see world/boxes), in Patience's frame. */
+type Collider = HullBox;
 
 const X_AXIS = new THREE.Vector3(1, 0, 0);
-const local = new THREE.Vector3();
-const closest = new THREE.Vector3();
-const inverse = new THREE.Quaternion();
 
 /** Patience as built once: the group drawn, the boxes it collides as. */
 let built: { root: THREE.Group; colliders: Collider[] } | null = null;
@@ -169,19 +162,11 @@ export function patience(): { root: THREE.Group; colliders: readonly Collider[] 
  * matrix's position and turn): moves the sphere out of the box it touches and sets the outward
  * `normal` (both in the world), as the rings' housings do (see touchRing).
  */
-export function touchPatience(pose: { position: THREE.Vector3; quaternion: THREE.Quaternion }, position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
-  for (const collider of patience().colliders) {
-    // into the box's frame: Patience's turn, then the box's own
-    inverse.copy(pose.quaternion).multiply(collider.turn).invert();
-    local.copy(collider.center).applyQuaternion(pose.quaternion).add(pose.position);
-    local.subVectors(position, local).applyQuaternion(inverse);
-    if (!boxContact(local, collider.half, radius, normal, closest)) continue;
-    const outward = inverse.invert();
-    normal.applyQuaternion(outward);
-    // the sphere's center out to its radius beyond the closest point of the box
-    closest.applyQuaternion(outward);
-    position.copy(collider.center).applyQuaternion(pose.quaternion).add(pose.position).add(closest).addScaledVector(normal, radius);
-    return true;
-  }
-  return false;
+export function touchPatience(pose: Pose, position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
+  return touchHull(patience().colliders, pose, position, radius, normal);
+}
+
+/** How far along a beam Patience, posed by `pose`, stops it, nearer than `max`; null when it does not. */
+export function rayPatience(pose: Pose, origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
+  return rayHull(patience().colliders, pose, origin, direction, max);
 }

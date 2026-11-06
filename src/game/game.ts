@@ -1303,8 +1303,13 @@ export class Game implements OnlineGame {
   private impactAhead = false;
   /** The flight school's sparring bot, and whether it may fire. */
   private sparring: { bot: Bot; armed: boolean } | null = null;
-  /** A mission's claim-jumpers (see campaign/missions, Saw Brothers): their bots, the rock whose rig they saw at, the rig's middle, their hits on it so far. */
-  private jumpers: { bots: Bot[]; rock: string; rig: THREE.Vector3; hits: number } | null = null;
+  /**
+   * A mission's raiders at a target (see campaign/missions): the Saw Brothers sawing at a rig
+   * (`rock` the rock it stands on), or scrappers at an ore barge (no rock: the hull the drill set
+   * out); their bots, the target's middle (moved with it), how far off it they hold, their hits on
+   * it so far.
+   */
+  private jumpers: { bots: Bot[]; rock: string | null; rig: THREE.Vector3; hold: number; hits: number } | null = null;
   /**
    * A mission's race (see campaign/missions, The Peak Run): its rival bots, the rings and their
    * facings and the radius of their openings, the racing line round them, the laps; each rival's rings passed and the side of its
@@ -4782,12 +4787,14 @@ export class Game implements OnlineGame {
    * Where a claim-jumper saws at its rig (see jumpers): it holds SAW_DISTANCE off the rig on its
    * own side, and has it in sight when the first thing its beam would meet is the rig's rock.
    */
-  private sawPoint(bot: Bot, jumpers: { rock: string; rig: THREE.Vector3 }): THREE.Vector3 {
+  private sawPoint(bot: Bot, jumpers: { rock: string | null; rig: THREE.Vector3; hold: number }): THREE.Vector3 {
     const from = bot.ship.flight.position;
-    bot.siegeHold.subVectors(from, jumpers.rig).normalize().multiplyScalar(SAW_DISTANCE).add(jumpers.rig);
+    bot.siegeHold.subVectors(from, jumpers.rig).normalize().multiplyScalar(jumpers.hold).add(jumpers.rig);
     sawWay.subVectors(jumpers.rig, from);
     const distance = sawWay.length();
-    bot.siegeClear = this.field.raycast(from, sawWay.divideScalar(Math.max(distance, 1)), distance + SAW_REACH, false, sawHit)?.asteroid?.id === jumpers.rock;
+    const first = this.field.raycast(from, sawWay.divideScalar(Math.max(distance, 1)), distance + SAW_REACH, false, sawHit);
+    // a rig: its rock is the first thing in the way; a hull of the drill's: no rock before it
+    bot.siegeClear = jumpers.rock !== null ? first?.asteroid?.id === jumpers.rock : !first;
     return jumpers.rig;
   }
 
@@ -4796,23 +4803,27 @@ export class Game implements OnlineGame {
     return this.ships.filter((ship) => ship === jumper || ship.flight.position.distanceTo(jumper.flight.position) < JUMPER_NOTICE);
   }
 
-  /** The claim-jumpers at a rig: `count` bots of `skill` around it, each sawing at it while no ship comes near (see sawPoint). */
-  private spawnJumpers(rock: string, rig: THREE.Vector3, count: number, skill: number) {
+  /**
+   * Raiders at a target (see jumpers): `count` bots of `skill` named from `names` around it,
+   * `hold` off it, each firing at it while no ship comes near (see sawPoint); `rock` the rock a
+   * rig stands on, or null for a hull of the drill's.
+   */
+  private spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number, names: readonly string[] = ['Saw'], hold = SAW_DISTANCE) {
     this.removeJumpers();
     const bots: Bot[] = [];
     for (let i = 0; i < count; i++) {
-      const ship = this.addShip(`jumper${i}`, 'Saw', i % 2 ? 'alien' : 'human', false);
+      const ship = this.addShip(`jumper${i}`, names[i % names.length], i % 2 ? 'alien' : 'human', false);
       // brothers: one side, never at each other
       ship.team = JUMPER_TEAM;
       const bot = new Bot(ship, evenSkills(skill));
       this.bots.push(bot);
       bots.push(bot);
       const angle = (i / count) * Math.PI * 2;
-      const at = jumperAt.set(cos(angle) * SAW_DISTANCE, SAW_DISTANCE * 0.5, sin(angle) * SAW_DISTANCE).add(rig);
+      const at = jumperAt.set(cos(angle) * hold, hold * 0.5, sin(angle) * hold).add(rig);
       ship.spawn(at, lookingAt(at, rig, upward.set(0, 1, 0)), this.time);
       ship.protectedUntil = this.time;
     }
-    this.jumpers = { bots, rock, rig: rig.clone(), hits: 0 };
+    this.jumpers = { bots, rock, rig: rig.clone(), hold, hits: 0 };
   }
 
   /**
@@ -5620,7 +5631,8 @@ export class Game implements OnlineGame {
       get rigBeams() {
         return game.rigBeams;
       },
-      spawnJumpers: (rock, rig, count, skill) => this.spawnJumpers(rock, rig, count, skill),
+      spawnJumpers: (rock, rig, count, skill, names, hold) => this.spawnJumpers(rock, rig, count, skill, names, hold),
+      moveJumpers: (to) => game.jumpers?.rig.copy(to),
       removeJumpers: () => this.removeJumpers(),
       spawnRacers: (rings, normals, radius, laps, count, skill, start) => this.spawnRacers(rings, normals, radius, laps, count, skill, start),
       removeRacers: () => this.removeRacers(),
@@ -7002,6 +7014,9 @@ export class Game implements OnlineGame {
       beamLength = torpedoHit.distance;
     }
     if (blocked !== null) this.effects.sparks(beamEnd.copy(origin).addScaledVector(direction, beamLength), shooter.color, 30);
+    // a raider's beam on the hull it raids, the drill's barge, wears it down (see jumpers)
+    const raid = this.jumpers;
+    if (raid && raid.rock === null && blocked !== null && raid.bots.some((b) => b.ship === shooter) && this.school?.bargeRay(origin, direction, blocked + 1) !== null) raid.hits++;
 
     // the beam's ends are copied wherever they are kept (the effects, the kill cam, the message)
     const end = beamEnd.copy(origin).addScaledVector(direction, beamLength);
@@ -7372,6 +7387,10 @@ export class Game implements OnlineGame {
       ray: (origin, direction, max) => this.ringsRay(origin, direction, max),
     },
     cores: () => this.flags?.cores ?? NO_BALLS,
+    hulls: {
+      touch: (position, radius, out) => !!this.school?.touchesHull(position, radius, out),
+      ray: (origin, direction, max) => this.school?.hullRay(origin, direction, max) ?? null,
+    },
     wreck: (position, radius) => this.wrecks.overlap(position, radius),
     probes: () => this.probes.list,
     torpedoes: () => this.torpedoes.list,

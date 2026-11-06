@@ -3,7 +3,7 @@ import { msg, t } from '../i18n/i18n';
 import { CAMPAIGN, HEDDA, PIM, RASK, SAW } from '../music/lines';
 import { clear, holdFor, PIPE_BORE, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
-import { MARKET_DOCK } from '../world/ceres';
+import { MARKET_DOCK, onPlace } from '../world/ceres';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
@@ -719,6 +719,74 @@ const fitLaser = (campaign: Campaign) => {
   if (!campaign.modules.includes('targeting')) campaign.modules.push('targeting');
 };
 
+/**
+ * Ore Barge (3.2): a Rockborn ore barge (see world/barge) flies its lane out of Occator, from
+ * before the market over the terrace and out over the crater floor and up, at BARGE_SPEED (units/s, 20 m/s);
+ * BARGE_QUIET seconds after it sets out the scrappers come, a wave of SCRAPPERS of skill
+ * SCRAP_SKILL[0], and once they are down a second of SCRAP_SKILL[1], each holding SCRAP_HOLD
+ * (units, 500 m) off the barge and firing at it until a ship comes near. The barge at its lane's
+ * end with both waves down wins; BARGE_HULL of their hits on it fail it (three raiders left
+ * alone land some four a second, so a wave left alone sinks it in a little over a minute), and
+ * the attempt starts over.
+ */
+export const BARGE_FROM = onPlace(6000, 3600, 0);
+export const BARGE_TO = onPlace(-60000, 14000, -20000);
+const BARGE_SPEED = 400;
+const BARGE_QUIET = 25;
+const SCRAPPERS = 3;
+const SCRAP_SKILL = [0.2, 0.3];
+const SCRAP_HOLD = 10000;
+const BARGE_HULL = 300;
+/** The scrappers' names, the Rockborn's own (never translated). */
+const SCRAP_NAMES = ['Rust', 'Grit', 'Slag'];
+const BARGE_WAY = new THREE.Vector3().subVectors(BARGE_TO, BARGE_FROM).normalize();
+const BARGE_TURN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(-1, 0, 0), BARGE_WAY);
+const bargeNow = new THREE.Vector3();
+
+/** Where the barge is `seconds` after it set out, on its lane, stopped at its end. */
+function bargeAt(seconds: number, out: THREE.Vector3): THREE.Vector3 {
+  const length = BARGE_FROM.distanceTo(BARGE_TO);
+  return out.copy(BARGE_FROM).addScaledVector(BARGE_WAY, Math.min(length, seconds * BARGE_SPEED));
+}
+
+const oreBarge: Drill = {
+  line: CAMPAIGN.oreBarge,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'occator',
+  autopilot: false,
+  // the lane's calm until the scrappers come, then the fight
+  turn: (_, a) => (a.count > 0 ? 'fight' : undefined),
+  enter(ctx, a, markers) {
+    stop(ctx);
+    ctx.removeJumpers();
+    markers.clear();
+    markers.bargeAt(BARGE_FROM, BARGE_TURN);
+    // a.count: the waves sent; a.jinks: the hits of the waves before this one
+    a.count = 0;
+    a.jinks = 0;
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+  },
+  done(ctx, a, markers) {
+    bargeAt(a.seconds, bargeNow);
+    markers.bargeAt(bargeNow, BARGE_TURN);
+    ctx.moveJumpers(bargeNow);
+    if (a.count === 0 && a.seconds >= BARGE_QUIET) {
+      ctx.spawnJumpers(null, bargeNow, SCRAPPERS, SCRAP_SKILL[0], SCRAP_NAMES, SCRAP_HOLD);
+      a.count = 1;
+    } else if (a.count > 0 && a.count < SCRAP_SKILL.length && ctx.jumpersDown >= SCRAPPERS) {
+      a.jinks += ctx.rigWear;
+      ctx.spawnJumpers(null, bargeNow, SCRAPPERS, SCRAP_SKILL[a.count], SCRAP_NAMES, SCRAP_HOLD);
+      a.count++;
+    }
+    return a.count >= SCRAP_SKILL.length && ctx.jumpersDown >= SCRAPPERS && bargeNow.distanceTo(BARGE_TO) < 1;
+  },
+  fail: (ctx, a) => (a.jinks + ctx.rigWear >= BARGE_HULL ? CAMPAIGN.oreBargeLost : null),
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: () => bargeNow,
+  mark: (ctx, a) => t('Wave {n}/{waves} · barge hull {hull} %', { n: Math.max(1, a.count), waves: SCRAP_SKILL.length, hull: Math.max(0, Math.round(100 * (1 - (a.jinks + ctx.rigWear) / BARGE_HULL))) }),
+};
+
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
@@ -781,4 +849,5 @@ export const MISSIONS: readonly Mission[] = [
   // chapter 3, Occator on Ceres: the Rockborn's capital, the market and the laser, the debt sold
   { id: 'occator', name: msg('Occator'), drills: [onCeres(HEDDA.occator), marketRun, said(CAMPAIGN.marketReached, 'occator')], pay: 0 },
   { id: 'surplus', name: msg('Surplus'), drills: [onCeres(PIM.surplus), onCeres(CAMPAIGN.targeting), onCeres(RASK.soldDebt)], pay: 0, fit: fitLaser },
+  { id: 'oreBarge', name: msg('Ore Barge'), drills: [onCeres(HEDDA.oreBarge), oreBarge, said(CAMPAIGN.oreBargeDone, 'occator')], pay: 2000, ratings: 120 },
 ];

@@ -7,7 +7,8 @@ import { arenaById } from '../world/arenas';
 import { DETAIL } from '../world/rocks';
 import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
-import { MISSIONS, PEAK_COURSE, PEAK_LAPS, PEAK_RINGS } from './missions';
+import { BARGE_FROM, BARGE_TO, MISSIONS, PEAK_COURSE, PEAK_LAPS, PEAK_RINGS } from './missions';
+import { ARENA_LIMIT } from '../world/arena';
 
 /** A middling bot: what a Host is asked to fly, it must manage (see CLAUDE.md, Plausibility). */
 const SKILL = 0.5;
@@ -41,5 +42,18 @@ describe('the Saw Brothers’ music', () => {
     expect(at(1000 + 30000)).toBeUndefined();
     expect(at(1000 + 20000)).toBe('fight');
     expect(at(1000 + 30000, 1)).toBe('fight');
+  });
+});
+
+describe('the Ore Barge out of Occator', () => {
+  it('flies a lane clear of the capital: no piece of the place within 150 m of the barge’s middle anywhere on it, inside the arena', () => {
+    const field = testField(DETAIL);
+    field.generate(arenaById('occator')!.layout);
+    const point = new THREE.Vector3();
+    for (let k = 0; k <= 100; k++) {
+      point.lerpVectors(BARGE_FROM, BARGE_TO, k / 100);
+      expect(field.overlap(point, 3000), `at ${k} %`).toBeNull();
+      expect(point.length()).toBeLessThan(ARENA_LIMIT);
+    }
   });
 });

@@ -37,12 +37,29 @@ function world(place: Partial<Record<SolidKindName, THREE.Vector3>>) {
       velocity?.set(-9, 0, 0);
       return out.copy(place.head);
     },
+    // a hauler's hull as a ball of 30 units, pushing out along its radius
+    hulls: {
+      touch(position, radius, normal) {
+        const hull = place.hull;
+        if (!hull || hull.distanceTo(position) >= 30 + radius) return false;
+        normal.subVectors(position, hull).normalize();
+        if (normal.lengthSq() === 0) normal.set(0, 1, 0);
+        position.copy(hull).addScaledVector(normal, 30 + radius);
+        return true;
+      },
+      ray(origin, direction, max) {
+        const hull = place.hull;
+        if (!hull) return null;
+        const along = hull.clone().sub(origin).dot(direction) - 30;
+        return along >= 0 && along < max && hull.clone().sub(origin).addScaledVector(direction, -along - 30).length() < 30 ? along : null;
+      },
+    },
   };
   return { table: solidTable(sources), shooter };
 }
 
 const USES = { PROBE_BOUNCES, BEAM_STOPS, WRECK_GRINDS, TORPEDO_FUSE, SHOWER_BURSTS };
-const KINDS: SolidKindName[] = ['ring', 'core', 'wreck', 'probe', 'torpedo', 'head'];
+const KINDS: SolidKindName[] = ['ring', 'core', 'wreck', 'probe', 'torpedo', 'head', 'hull'];
 
 describe('solids besides the field', () => {
   it('lets each use meet the kinds it names and no other', () => {
@@ -55,11 +72,11 @@ describe('solids besides the field', () => {
       expect(touchOf(table, SHOWER_BURSTS)(v(0), 5, at), kind).toBe(SHOWER_BURSTS.includes(kind));
     }
     // what the README lists for each
-    expect([...PROBE_BOUNCES].sort()).toEqual(['core', 'head', 'ring', 'wreck']);
-    expect([...BEAM_STOPS].sort()).toEqual(['core', 'head', 'probe', 'ring']);
-    expect([...WRECK_GRINDS].sort()).toEqual(['core', 'head', 'ring']);
+    expect([...PROBE_BOUNCES].sort()).toEqual(['core', 'head', 'hull', 'ring', 'wreck']);
+    expect([...BEAM_STOPS].sort()).toEqual(['core', 'head', 'hull', 'probe', 'ring']);
+    expect([...WRECK_GRINDS].sort()).toEqual(['core', 'head', 'hull', 'ring']);
     expect([...TORPEDO_FUSE].sort()).toEqual([...KINDS].sort());
-    expect([...SHOWER_BURSTS].sort()).toEqual(['core', 'ring', 'wreck']);
+    expect([...SHOWER_BURSTS].sort()).toEqual(['core', 'hull', 'ring', 'wreck']);
   });
 
   it('builds every use from the kinds that have its operation', () => {

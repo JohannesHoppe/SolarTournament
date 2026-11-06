@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { cos, exp, sin } from '../detmath';
 import { angleTo, rotateX, rotateY, setFromAxisAngle } from '../detthree';
 import { boxUv, industrialSurface, STATION_TILE, surfaced } from '../view/surfaces';
-import { patience, touchPatience } from '../world/patience';
+import { patience, rayPatience, touchPatience } from '../world/patience';
+import { barge, rayBarge, touchBarge } from '../world/barge';
 import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import { CONTROLS, type Command, type Controls, type Device } from '../input/input';
@@ -85,10 +86,12 @@ export interface SchoolContext {
   readonly rocksBroken: number;
   /** The pilot's beams that struck what stands on a rock (a rig, a buoy) so far. */
   readonly rigBeams: number;
-  /** Claim-jumpers at the rig of the rock `rock` (its middle `rig`): `count` bots of `skill` sawing at it while no ship comes near (see Game.jumpers). */
-  spawnJumpers(rock: string, rig: THREE.Vector3, count: number, skill: number): void;
+  /** Raiders at a target (see Game.jumpers): claim-jumpers at the rig of the rock `rock` (its middle `rig`), or with no rock at a hull of the drill's; `count` bots of `skill` named from `names`, holding `hold` off it, firing at it while no ship comes near. */
+  spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number, names?: readonly string[], hold?: number): void;
+  /** Moves the raiders' target (a hull of the drill's that flies) to `to`. */
+  moveJumpers(to: THREE.Vector3): void;
   removeJumpers(): void;
-  /** The claim-jumpers shot down so far, and their hits on their rig. */
+  /** The raiders shot down so far, and their hits on their target. */
   readonly jumpersDown: number;
   readonly rigWear: number;
   /** A race against `count` rivals of `skill` through openings of `radius` at `rings` (facing `normals`), `laps` laps, from beside `start` (see Game.racers). */
@@ -1658,6 +1661,8 @@ export class Markers {
   private canisterMaterial: THREE.Material | null = null;
   /** Patience moored where a drill wants her (see hauler), or null. */
   private patience: THREE.Object3D | null = null;
+  /** The ore barge a drill escorts (see world/barge), posed where it flies. */
+  private barge: THREE.Object3D | null = null;
   /** The prop in tow behind a ship and the cable to it (see tow). */
   private towing: { prop: THREE.Object3D; ship: Ship; cable: THREE.Line } | null = null;
   private readonly cableMaterial = new THREE.LineBasicMaterial({ color: 0x6b6f75 });
@@ -1796,7 +1801,30 @@ export class Markers {
 
   /** Whether a sphere touches the hauler's hull: moves it out and sets the outward `normal`, as a ring's housing does. */
   touchesHull(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
-    return !!this.patience && touchPatience(this.patience, position, radius, normal);
+    return (!!this.patience && touchPatience(this.patience, position, radius, normal)) || (!!this.barge && touchBarge(this.barge, position, radius, normal));
+  }
+
+  /** How far along a beam a hull the drill set out stops it (Patience, the barge), nearer than `max`; null when none does. */
+  hullRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
+    const moored = this.patience ? rayPatience(this.patience, origin, direction, max) : null;
+    const escorted = this.barge ? rayBarge(this.barge, origin, direction, moored ?? max) : null;
+    return escorted ?? moored;
+  }
+
+  /** Whether a beam meets the barge before anything else at `max` (see hullRay). */
+  bargeRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
+    return this.barge ? rayBarge(this.barge, origin, direction, max) : null;
+  }
+
+  /** The ore barge, set out at `position` turned by `quaternion` (its bow along -x), or moved there. */
+  bargeAt(position: THREE.Vector3, quaternion: THREE.Quaternion) {
+    if (!this.barge) {
+      this.barge = barge().root;
+      this.root.add(this.barge);
+    }
+    this.barge.position.copy(position);
+    this.barge.quaternion.copy(quaternion);
+    this.barge.updateMatrixWorld();
   }
 
   /** Takes a prop in tow behind a ship, on a cable, until the props are cleared. */
@@ -1845,6 +1873,7 @@ export class Markers {
   clear() {
     this.root.clear();
     this.patience = null;
+    this.barge = null;
     this.towing?.cable.geometry.dispose();
     this.towing = null;
     this.rings = [];
@@ -1993,9 +2022,19 @@ export class FlightSchool {
     return false;
   }
 
-  /** Whether a ship touches a hull the drill moored (see Markers.hauler): moves it out and sets `normal`. */
+  /** Whether a beam meets the barge the drill escorts before `max` (see Markers.bargeRay). */
+  bargeRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
+    return this.markers.bargeRay(origin, direction, max);
+  }
+
+  /** Whether a ship touches a hull the drill set out (see Markers.hauler, Markers.bargeAt): moves it out and sets `normal`. */
   touchesHull(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
     return this.markers.touchesHull(position, radius, normal);
+  }
+
+  /** How far along a beam a hull the drill set out stops it (see Markers.hullRay). */
+  hullRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
+    return this.markers.hullRay(origin, direction, max);
   }
 
   dispose() {

@@ -337,3 +337,21 @@ test('chapter 3 opens at Occator: the clone held before the market’s mouth is 
   expect([kept.coins, kept.bond]).toEqual([0, 28000]);
   expect(errors).toEqual([]);
 });
+
+test('Ore Barge sets the barge out on its lane, sends the scrappers at its hull, and the second wave once the first is down', async ({ page }) => {
+  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus'], coins: 0, parts: [...CHAPTER_TWO_DONE.parts, 'laser'], modules: ['targeting'] };
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), kept);
+  const errors = await openGame(page, '/?campaign');
+  await takeNextJob(page);
+  await page.waitForFunction(() => window.game.venue?.id === 'occator' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.me?.alive, null, { timeout: 120_000 });
+  // the first wave comes and its beams wear the barge's hull
+  await page.evaluate(() => (window.game.timeScale = 4));
+  await page.waitForFunction(() => window.game.school.attempt?.count === 1 && window.game.jumpers?.hits > 0, null, { timeout: 60_000 });
+  // the first wave shot down: the second comes
+  await page.evaluate(() => {
+    for (const bot of window.game.jumpers.bots) bot.ship.alive = false;
+  });
+  await page.waitForFunction(() => window.game.school.attempt?.count === 2 && window.game.jumpers?.bots.every((b: { ship: { alive: boolean } }) => b.ship.alive), null, { timeout: 30_000 });
+  await page.evaluate(() => (window.game.timeScale = 1));
+  expect(errors).toEqual([]);
+});

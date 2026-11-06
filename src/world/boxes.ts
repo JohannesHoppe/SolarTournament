@@ -50,3 +50,56 @@ export function rayBox(origin: THREE.Vector3, step: THREE.Vector3, half: THREE.V
   if (near > far || far < 0) return null;
   return Math.max(near, 0);
 }
+
+/** A box of a hull built of boxes (a hauler, a barge): its middle, its own turn and its half extents, in the hull's frame. */
+export interface HullBox {
+  center: THREE.Vector3;
+  turn: THREE.Quaternion;
+  half: THREE.Vector3;
+}
+
+/** Where a hull stands: its world position and turn. */
+export interface Pose {
+  position: THREE.Vector3;
+  quaternion: THREE.Quaternion;
+}
+
+const hullLocal = new THREE.Vector3();
+const hullClosest = new THREE.Vector3();
+const hullInverse = new THREE.Quaternion();
+const hullStep = new THREE.Vector3();
+
+/**
+ * Whether a sphere of `radius` at `position` touches a hull of `boxes` posed by `pose`: moves the
+ * sphere out of the box it touches and sets the outward `normal` (both in the world).
+ */
+export function touchHull(boxes: readonly HullBox[], pose: Pose, position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
+  for (const box of boxes) {
+    // into the box's frame: the hull's turn, then the box's own
+    hullInverse.copy(pose.quaternion).multiply(box.turn).invert();
+    hullLocal.copy(box.center).applyQuaternion(pose.quaternion).add(pose.position);
+    hullLocal.subVectors(position, hullLocal).applyQuaternion(hullInverse);
+    if (!boxContact(hullLocal, box.half, radius, normal, hullClosest)) continue;
+    const outward = hullInverse.invert();
+    normal.applyQuaternion(outward);
+    // the sphere's center out to its radius beyond the closest point of the box
+    hullClosest.applyQuaternion(outward);
+    position.copy(box.center).applyQuaternion(pose.quaternion).add(pose.position).add(hullClosest).addScaledVector(normal, radius);
+    return true;
+  }
+  return false;
+}
+
+/** How far along a beam from `origin` along `direction` (a unit vector) it meets a hull of `boxes` posed by `pose`, nearer than `max`; null when it does not. */
+export function rayHull(boxes: readonly HullBox[], pose: Pose, origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
+  let best: number | null = null;
+  for (const box of boxes) {
+    hullInverse.copy(pose.quaternion).multiply(box.turn).invert();
+    hullLocal.copy(box.center).applyQuaternion(pose.quaternion).add(pose.position);
+    hullLocal.subVectors(origin, hullLocal).applyQuaternion(hullInverse);
+    hullStep.copy(direction).applyQuaternion(hullInverse);
+    const distance = rayBox(hullLocal, hullStep, box.half);
+    if (distance !== null && distance < (best ?? max)) best = distance;
+  }
+  return best;
+}

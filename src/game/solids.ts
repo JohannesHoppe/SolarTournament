@@ -7,12 +7,12 @@ import { TORPEDO_RADIUS } from './torpedoes';
 
 /**
  * The solids besides the field and the battleship, in one table: the rings' housings, the
- * sponsor cores, wreckage, the probes, the torpedoes in flight and the comet's head while it
- * flies whole. Each kind has the operations some use asks of it; every use (what a probe bounces
+ * sponsor cores, wreckage, the probes, the torpedoes in flight, the comet's head while it
+ * flies whole, and the hulls a mission of the campaign sets out (Patience, an ore barge). Each kind has the operations some use asks of it; every use (what a probe bounces
  * off, where a beam stops, what wreckage grinds on, what sets off a torpedo, what the comet's
  * shower bursts on) names the kinds it takes and is derived from the table.
  */
-export type SolidKindName = 'ring' | 'core' | 'wreck' | 'probe' | 'torpedo' | 'head';
+export type SolidKindName = 'ring' | 'core' | 'wreck' | 'probe' | 'torpedo' | 'head' | 'hull';
 
 /** What one kind of solid answers. */
 export interface SolidKind {
@@ -36,7 +36,7 @@ export type SolidTable = Readonly<Record<SolidKindName, SolidKind>>;
  * drift apart on their slots. Not a torpedo: a torpedo that meets a probe goes off (see
  * TORPEDO_FUSE).
  */
-export const PROBE_BOUNCES: readonly SolidKindName[] = ['ring', 'wreck', 'core', 'head'];
+export const PROBE_BOUNCES: readonly SolidKindName[] = ['ring', 'wreck', 'core', 'head', 'hull'];
 /** Of them, what a probe's slot bounces off as well: what every browser has alike, unlike wreckage and cores, each where its own browser has it, and a head one browser may have broken up already (see game/items, Probes.update). */
 export const SLOT_BOUNCES: readonly SolidKindName[] = ['ring'];
 
@@ -45,24 +45,24 @@ export const SLOT_BOUNCES: readonly SolidKindName[] = ['ring'];
  * torpedoes take the beam too, but the laser asks them itself (Game.fireLaser): a wreck stops it
  * as rock does, a torpedo it reaches before all else is shot down.
  */
-export const BEAM_STOPS: readonly SolidKindName[] = ['ring', 'core', 'probe', 'head'];
+export const BEAM_STOPS: readonly SolidKindName[] = ['ring', 'core', 'probe', 'head', 'hull'];
 
 /**
  * What wreckage grinds to dust on besides rock and hull. Wreckage meets wreckage in world/wrecks
  * (two plates clang off each other); a probe bounces off a plate ten times its mass, which does
  * not notice it (see PROBE_BOUNCES); a torpedo goes off on a plate (see TORPEDO_FUSE).
  */
-export const WRECK_GRINDS: readonly SolidKindName[] = ['ring', 'core', 'head'];
+export const WRECK_GRINDS: readonly SolidKindName[] = ['ring', 'core', 'head', 'hull'];
 
 /** What sets off a torpedo where it flies, besides rock and hull: everything solid, another shooter's torpedo too. */
-export const TORPEDO_FUSE: readonly SolidKindName[] = ['ring', 'core', 'head', 'wreck', 'probe', 'torpedo'];
+export const TORPEDO_FUSE: readonly SolidKindName[] = ['ring', 'core', 'head', 'wreck', 'probe', 'torpedo', 'hull'];
 
 /**
  * What a piece of the comet's shower bursts on besides the field's pieces near the swarm and the
  * battleship (see Game.showerMeetsSolids). Not its own comet's head, which leads the swarm; the
  * probes and torpedoes it passes stay whole, as the README's list of what it bursts on says.
  */
-export const SHOWER_BURSTS: readonly SolidKindName[] = ['ring', 'wreck', 'core'];
+export const SHOWER_BURSTS: readonly SolidKindName[] = ['ring', 'wreck', 'core', 'hull'];
 
 /** A ball that moves: a sponsor core, a piece of wreckage. */
 interface Ball {
@@ -78,6 +78,11 @@ export interface SolidSources {
     ray(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null;
   };
   cores(): readonly Ball[];
+  /** The hulls a mission set out (see game/school, Markers.hullRay): `touch` moves `position` out and sets `normal` when it touches; `ray` the nearest within `max`. */
+  hulls: {
+    touch(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean;
+    ray(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null;
+  };
   /** The first piece of wreckage touching a sphere (see Wrecks.overlap). */
   wreck(position: THREE.Vector3, radius: number): { mesh: { position: THREE.Vector3 }; radius: number; velocity: THREE.Vector3 } | null;
   probes(): readonly { position: THREE.Vector3 }[];
@@ -182,6 +187,16 @@ export function solidTable(s: SolidSources): SolidTable {
         const distance = raySphere(origin, direction, head, HEAD_RADIUS);
         return distance !== null && distance < max ? distance : null;
       },
+    },
+    hull: {
+      touch: (position, radius, at) => s.hulls.touch(at.copy(position), radius, ringNormal),
+      // a hauler's mass: what bounces off it, it does not notice
+      push: (position, radius, out, moving) => {
+        if (!s.hulls.touch(position, radius, out)) return false;
+        moving.set(0, 0, 0);
+        return true;
+      },
+      ray: (origin, direction, max) => s.hulls.ray(origin, direction, max),
     },
   };
 }

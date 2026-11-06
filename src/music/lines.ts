@@ -550,6 +550,9 @@ export const CAMPAIGN = {
   market: 'The market is in the old gallery in the first step of the wall, the one with the orange sign. Fly to its mouth and hold still there, so the dock can take our hull.',
   marketReached: 'Every second stall in there sells something with a Navy number filed off. I like this place, Host.',
   targeting: 'The laser talks to me. I can see their drives now, and their names. I have switched on targeting for you, Host. I think I trust you with it.',
+  oreBarge: 'The barge is setting out. Stay close to it. When the scrappers come, they will go for its hull, not for us, until we get near them.',
+  oreBargeLost: 'The barge has taken too much. It is turning back to the terrace, and we start over.',
+  oreBargeDone: 'The barge is out of the crater, and its ore with it. That is our first real escort, Host.',
 } as const;
 
 /**
@@ -596,6 +599,7 @@ export const HEDDA = {
   sawBrothers: "Trouble on the peak. The Saw Brothers are cutting a rig off its rock. Three of them, all mouth. Shoot two and the third one runs. That rig falls, nobody gets paid.",
   cutAndHaul: "Claim's paid for, ore's not. Cut up the rock next to the working rig and bring in the ore. Forty loads. Mind the rig. You hit it, you pay for it. Fifty a beam.",
   occator: "Ceres. Occator. Our capital, cut into the crater wall. The only market in the Belt where the Navy sells what it stole. Take the hull down to the terrace. Mind the domes. People live in them.",
+  oreBarge: "Paying work. An ore barge leaves the terrace for the launch ring, and scrappers pick off whatever flies out alone. Fly with it. Two thousand if it gets out whole.",
 } as const;
 
 /** The Saw Brothers, claim-jumpers at Vesta: three of them, one voice, giggling over the comm while they cut other people's rigs off their rocks. */
