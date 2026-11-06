@@ -1686,4 +1686,8 @@ export const ES: Catalog = {
   "Next: {mission} · {coins} ☉ · debt held · {rank}": "Siguiente: {mission} · {coins} ☉ · la deuda está retenida · {rank}",
   "{coins} ☉ in the wallet · your debt of {bond} ☉ is held, nobody takes a cut · {rank}": "{coins} ☉ en la cartera · tu deuda de {bond} ☉ está retenida, nadie se lleva comisión · {rank}",
   "{mission} done: {kept} ☉ for you, {ratings} ratings.": "{mission} hecho: {kept} ☉ para ti, {ratings} puntos de audiencia.",
+  "Groove Shoot": "Rodaje en el surco",
+  "Low in a groove {seconds}/{needed} s · {meters} m over the ground": "Bajo en un surco {seconds}/{needed} s · {meters} m sobre el suelo",
+  "A camera drone from Lanes Watch. They want the hull low in one of the grooves beyond the rim: under sixty meters, and moving, for thirty seconds without a break. Do not touch the ground.": "Un dron de cámara de Lanes Watch. Quieren el casco bajo en uno de los surcos más allá del borde: por debajo de sesenta metros, en movimiento, treinta segundos sin parar. No toques el suelo.",
+  "Thirty seconds of us on every screen in the lanes. I have never been famous before. I think.": "Treinta segundos nuestros en todas las pantallas de las rutas. Nunca he sido famosa. Creo.",
 };

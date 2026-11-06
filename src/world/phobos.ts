@@ -88,3 +88,10 @@ const MARS_DISTANCE = 250000;
 const MARS_ANGLE = 0.367;
 export const MARS_AT = new THREE.Vector3(0.3, 0.57, 0.76).normalize().multiplyScalar(MARS_DISTANCE);
 export const MARS_SIZE = MARS_DISTANCE * sin(MARS_ANGLE);
+
+/** Whether (x, z) lies in the grooved land beyond Stickney's rim (its grooves deep from a fifth of a crater's radius beyond it on). */
+export function inGrooves(x: number, z: number): boolean {
+  return hypot(x - STICKNEY.x, z - STICKNEY.z) / STICKNEY_RADIUS >= 1.2;
+}
+/** The way the grooves run (a unit vector in x and z), across the way their troughs repeat. */
+export const GROOVE_WAY = new THREE.Vector3(-sin(GROOVE_TURN), 0, cos(GROOVE_TURN));

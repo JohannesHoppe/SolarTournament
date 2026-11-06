@@ -5,7 +5,7 @@ import { clear, holdFor, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, typ
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
 import { hullInLight } from '../world/wall';
-import { surfaceHeight as phobosHeight } from '../world/phobos';
+import { inGrooves, surfaceHeight as phobosHeight } from '../world/phobos';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
@@ -712,6 +712,30 @@ const debtDay: Drill = {
   mark: (ctx) => t('Collectors down {n}/{needed}', { n: ctx.jumpersDown, needed: COLLECTORS_DOWN }),
 };
 
+/**
+ * Groove Shoot (4.3): a camera drone of Lanes Watch films the hull flying a groove of the land
+ * beyond Stickney's rim, under GROOVE_LOW (units, 60 m) over the ground and faster than
+ * GROOVE_FAST (units/s, 20 m/s), for GROOVE_HOLD seconds without a break.
+ */
+const GROOVE_LOW = 1200;
+const GROOVE_FAST = 400;
+const GROOVE_HOLD = 30;
+export const GROOVE_START = point(50000, phobosHeight(50000, -40000) + 800, -40000);
+
+const grooveShoot: Drill = {
+  line: CAMPAIGN.grooveShoot,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'phobos',
+  autopilot: false,
+  done(ctx, a) {
+    const { position, velocity } = ctx.me.flight;
+    const low = position.y - phobosHeight(position.x, position.z) < GROOVE_LOW;
+    return holdFor(ctx, a, low && inGrooves(position.x, position.z) && velocity.length() > GROOVE_FAST, GROOVE_HOLD);
+  },
+  waypoint: (_, a) => (a.held > 0 ? null : GROOVE_START),
+  mark: (ctx, a) => t('Low in a groove {seconds}/{needed} s · {meters} m over the ground', { seconds: Math.floor(a.held), needed: GROOVE_HOLD, meters: Math.round((ctx.me.flight.position.y - phobosHeight(ctx.me.flight.position.x, ctx.me.flight.position.z)) / 20) }),
+};
+
 /** Debt Day's end: the benefactor holds the debt, and nobody takes a cut from then on. */
 const fitHeld = (campaign: Campaign) => {
   campaign.held = true;
@@ -1153,4 +1177,5 @@ export const MISSIONS: readonly Mission[] = [
   // chapter 4, Stickney on Phobos: the Navy town under Mars, the race into the crater, the debt changing hands
   { id: 'stickneyGrand', name: msg('Stickney Grand'), drills: [said(HEDDA.phobos, 'phobos'), said(CAMPAIGN.racingLine, 'phobos'), stickneyGrand, said(CAMPAIGN.stickneyGrandDone, 'phobos')], pay: 2500, ratings: 250, fit: fitRacingLine, start: GRAND_START },
   { id: 'debtDay', name: msg('Debt Day'), drills: [said(TALLY.debtDay, 'phobos'), debtDay, said(NAVY.hail, 'phobos'), said(TALLY.closed, 'phobos'), said(CAMPAIGN.debtDayBought, 'phobos')], pay: 2000, ratings: 200, fit: fitHeld },
+  { id: 'grooveShoot', name: msg('Groove Shoot'), drills: [grooveShoot, said(CAMPAIGN.grooveShootDone, 'phobos')], pay: 1200, ratings: 150 },
 ];

@@ -1650,4 +1650,8 @@ export const DE: Catalog = {
   "Next: {mission} · {coins} ☉ · debt held · {rank}": "Als Nächstes: {mission} · {coins} ☉ · die Schuld wird gehalten · {rank}",
   "{coins} ☉ in the wallet · your debt of {bond} ☉ is held, nobody takes a cut · {rank}": "{coins} ☉ im Geldbeutel · deine Schuld von {bond} ☉ wird gehalten, niemand nimmt einen Anteil · {rank}",
   "{mission} done: {kept} ☉ for you, {ratings} ratings.": "{mission} geschafft: {kept} ☉ für dich, {ratings} Quotenpunkte.",
+  "Groove Shoot": "Rillendreh",
+  "Low in a groove {seconds}/{needed} s · {meters} m over the ground": "Tief in einer Rille {seconds}/{needed} s · {meters} m über dem Boden",
+  "A camera drone from Lanes Watch. They want the hull low in one of the grooves beyond the rim: under sixty meters, and moving, for thirty seconds without a break. Do not touch the ground.": "Eine Kameradrohne von Lanes Watch. Sie wollen den Rumpf tief in einer der Rillen hinter dem Rand: unter sechzig Metern, in Bewegung, dreißig Sekunden am Stück. Berühr den Boden nicht.",
+  "Thirty seconds of us on every screen in the lanes. I have never been famous before. I think.": "Dreißig Sekunden von uns auf jedem Bildschirm in den Bahnen. Ich war noch nie berühmt. Glaube ich.",
 };

@@ -567,6 +567,8 @@ export const CAMPAIGN = {
   stickneyGrandDone: 'In the first three. Lanes Watch has our name now, Host. I am not sure that is good news.',
   debtDay: 'Seven of them in the grooves, the tug behind. They want the hull. Shoot four of them, and they may think again.',
   debtDayBought: 'Bought. By whom? Nobody buys a debt to forgive it, Host.',
+  grooveShoot: 'A camera drone from Lanes Watch. They want the hull low in one of the grooves beyond the rim: under sixty meters, and moving, for thirty seconds without a break. Do not touch the ground.',
+  grooveShootDone: 'Thirty seconds of us on every screen in the lanes. I have never been famous before. I think.',
   scoutTwo: 'Scout Two.',
   scoutTwoHull: 'We are Scout Two. I do not know how I know that. I have been in this hull all along, Host. I think I was here before the paint.',
   echoTwoCall: 'The old frequency again, from up the wall, under the pink letters. Fly to it and hold still, so I can listen.',

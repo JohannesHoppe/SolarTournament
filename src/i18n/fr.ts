@@ -1611,4 +1611,8 @@ export const FR: Catalog = {
   "Next: {mission} · {coins} ☉ · debt held · {rank}": "Ensuite : {mission} · {coins} ☉ · la dette est détenue · {rank}",
   "{coins} ☉ in the wallet · your debt of {bond} ☉ is held, nobody takes a cut · {rank}": "{coins} ☉ dans le portefeuille · ta dette de {bond} ☉ est détenue, personne ne prend de part · {rank}",
   "{mission} done: {kept} ☉ for you, {ratings} ratings.": "{mission} réussi : {kept} ☉ pour toi, {ratings} points d’audience.",
+  "Groove Shoot": "Tournage dans le sillon",
+  "Low in a groove {seconds}/{needed} s · {meters} m over the ground": "Bas dans un sillon {seconds}/{needed} s · {meters} m au-dessus du sol",
+  "A camera drone from Lanes Watch. They want the hull low in one of the grooves beyond the rim: under sixty meters, and moving, for thirty seconds without a break. Do not touch the ground.": "Un drone caméra de Lanes Watch. Ils veulent la coque basse dans un des sillons au-delà du rebord : sous soixante mètres, en mouvement, trente secondes d’affilée. Ne touche pas le sol.",
+  "Thirty seconds of us on every screen in the lanes. I have never been famous before. I think.": "Trente secondes de nous sur tous les écrans des voies. Je n’ai jamais été célèbre. Je crois.",
 };

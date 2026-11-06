@@ -35,3 +35,18 @@ describe('Stickney on Phobos', () => {
     expect(surfaceHeight(40000, 0)).toBeLessThan(-1600);
   });
 });
+
+describe('the grooves beyond Stickney', () => {
+  it('give a groove to fly low along for half a minute at 25 m/s, inside the arena, from where Groove Shoot marks', async () => {
+    const { GROOVE_WAY, inGrooves } = await import('./phobos');
+    const { GROOVE_START } = await import('../campaign/missions');
+    const { ARENA_LIMIT } = await import('./arena');
+    const at = GROOVE_START.clone();
+    for (let t = 0; t <= 30; t += 0.5) {
+      at.copy(GROOVE_START).addScaledVector(GROOVE_WAY, 500 * t);
+      at.y = surfaceHeight(at.x, at.z) + 600;
+      expect(inGrooves(at.x, at.z), `${t} s`).toBe(true);
+      expect(at.length()).toBeLessThan(ARENA_LIMIT);
+    }
+  });
+});
