@@ -1693,4 +1693,13 @@ export const FR: Catalog = {
   "The drive pushes harder than a stock ship now. Only a little, Host. In a race, a little is everything.": "Le moteur pousse plus fort qu’un vaisseau de série maintenant. Juste un peu, Hôte. Dans une course, un peu, c’est tout.",
   "The miners know torpedoes, they blast with them. Got one tube off them for two thousand, mounted under your belly. One fish per clone. Don't waste it.": "Les mineurs s’y connaissent en torpilles, ils font sauter la roche avec. Je leur ai pris un tube pour deux mille, monté sous ton ventre. Un poisson par clone. Le gaspille pas.",
   "Miner's tuning on your drive bell, a thousand. It pushes a bit past stock now. Don't tell the Games' inspectors.": "Réglage de mineur sur ta tuyère, mille. Elle pousse un peu au-delà de la série maintenant. Le dis pas aux inspecteurs des Jeux.",
+  "Freighter": "Cargo",
+  "Blackout": "Black-out",
+  "LINK LOST": "LIAISON PERDUE",
+  "The freighter flies straight through the flux tube, Host, and we stay with it. The static will be bad in there. I will keep talking as long as I can.": "Le cargo traverse le tube de flux, Hôte, et nous restons avec lui. Les parasites vont être forts là-dedans. Je continuerai à parler tant que je pourrai.",
+  "The link is up. A new clone, Host, printed on Patience. I lost the last one in the tube. I do not know what happened to it.": "La liaison est établie. Un nouveau clone, Hôte, imprimé sur la Patience. J’ai perdu le dernier dans le tube. Je ne sais pas ce qui lui est arrivé.",
+  "My logs are blank, Host. Two hours of them. Two hours I do not have, and a clone I cannot find.": "Mes journaux sont vides, Hôte. Deux heures entières. Deux heures que je n’ai pas, et un clone que je ne trouve pas.",
+  "Last job here: a sulfur freighter out through the flux tube. The miners won't fly it alone, the static scrambles their computers. Two thousand. Stay close to it.": "Dernier boulot ici : un cargo de soufre qui sort par le tube de flux. Les mineurs le pilotent pas seuls, les parasites brouillent leurs ordinateurs. Deux mille. Reste collé à lui.",
+  "Freighter's out the other side. Made it on its own. Didn't need us after all.": "Le cargo est sorti de l’autre côté. Il s’en est sorti tout seul. Il avait pas besoin de nous, finalement.",
+  "Patience's log. Recovered the Magpie adrift past the tube, an hour after the link went. Canopy open. Cockpit empty. No body. Nobody.": "Journal de la Patience. Récupéré la Magpie à la dérive au-delà du tube, une heure après la perte de la liaison. Verrière ouverte. Cockpit vide. Pas de corps. Personne.",
 };

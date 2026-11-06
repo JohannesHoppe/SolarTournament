@@ -3,7 +3,8 @@ import { cos, exp, sin } from '../detmath';
 import { angleTo, rotateX, rotateY, setFromAxisAngle } from '../detthree';
 import { boxUv, industrialSurface, STATION_TILE, surfaced } from '../view/surfaces';
 import { patience, rayPatience, touchPatience } from '../world/patience';
-import { barge, iceTug, rayBarge, rayIceTug, rayTug, touchBarge, touchIceTug, touchTug, tug, WINCH, WINCH_REACH } from '../world/barge';
+import { barge, iceTug, rayBarge, rayTug, touchBarge, touchTug, tug, WINCH, WINCH_REACH } from '../world/barge';
+import { type HullBox, rayHull, touchHull } from '../world/boxes';
 import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import { CONTROLS, type Command, type Controls, type Device } from '../input/input';
@@ -135,6 +136,8 @@ export interface SchoolContext {
   owe(coins: number): void;
   /** The self-destruct's button is held (B, the D-pad left, SELF-DESTRUCT on touch), whatever the hull carries. */
   readonly selfDestructing: boolean;
+  /** The link to the clone cut for `seconds`: the picture white with LINK LOST on it, the voice gone, no rot of a death. */
+  linkLost(seconds: number): void;
   /** Static on the link this frame, `strength` from 0 (none) to 1: the picture breaking up as on a hit, the stronger the more (the flux tube at Io). */
   linkStatic(strength: number): void;
   /** What the clone suffers streams into the Host for `seconds`: the link's picture breaking up, the drone of it. */
@@ -1687,8 +1690,8 @@ export class Markers {
   private tug: THREE.Object3D | null = null;
   winchHits = 0;
   private harpoon: THREE.Line | null = null;
-  /** A convoy of ice tugs a drill escorts (see world/barge, iceTugAt), each posed where it flies; the raider whose harpoon holds each (see hook) and its cable. */
-  private convoy: THREE.Object3D[] = [];
+  /** A convoy of working hulls a drill escorts (ice tugs, a freighter: see world/barge, iceTugAt), each posed where it flies with the boxes it is built of; the raider whose harpoon holds each (see hook) and its cable. */
+  private convoy: { hull: THREE.Object3D; boxes: readonly HullBox[] }[] = [];
   hookedBy: (Ship | null)[] = [];
   private tethers: (THREE.Line | null)[] = [];
   /** The prop in tow behind a ship and the cable to it (see tow). */
@@ -1829,29 +1832,30 @@ export class Markers {
 
   /** Whether a sphere touches the hauler's hull: moves it out and sets the outward `normal`, as a ring's housing does. */
   touchesHull(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
-    return (!!this.patience && touchPatience(this.patience, position, radius, normal)) || (!!this.barge && touchBarge(this.barge, position, radius, normal)) || (!!this.tug && touchTug(this.tug, position, radius, normal)) || this.convoy.some((tug) => touchIceTug(tug, position, radius, normal));
+    return (!!this.patience && touchPatience(this.patience, position, radius, normal)) || (!!this.barge && touchBarge(this.barge, position, radius, normal)) || (!!this.tug && touchTug(this.tug, position, radius, normal)) || this.convoy.some(({ hull, boxes }) => touchHull(boxes, hull, position, radius, normal));
   }
 
-  /** Ice tug `index` of the convoy set out at `position` turned by `quaternion` (its bow along -x), or moved there. */
-  iceTugAt(index: number, position: THREE.Vector3, quaternion: THREE.Quaternion) {
+  /** Hull `index` of the convoy (an ice tug, or what `kind` builds) set out at `position` turned by `quaternion` (its bow along -x), or moved there. */
+  iceTugAt(index: number, position: THREE.Vector3, quaternion: THREE.Quaternion, kind: () => { root: THREE.Group; boxes: readonly HullBox[] } = iceTug) {
     while (this.convoy.length <= index) {
-      const tug = iceTug().root.clone();
-      this.root.add(tug);
-      this.convoy.push(tug);
+      const built = kind();
+      const hull = built.root.clone();
+      this.root.add(hull);
+      this.convoy.push({ hull, boxes: built.boxes });
       this.hookedBy.push(null);
       this.tethers.push(null);
     }
-    const tug = this.convoy[index];
-    tug.position.copy(position);
-    tug.quaternion.copy(quaternion);
-    tug.updateMatrixWorld();
+    const { hull } = this.convoy[index];
+    hull.position.copy(position);
+    hull.quaternion.copy(quaternion);
+    hull.updateMatrixWorld();
   }
 
   /** The ice tug a beam meets first, nearer than `max`: its index and the distance, or null. */
   convoyRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): { index: number; distance: number } | null {
     let best: { index: number; distance: number } | null = null;
-    this.convoy.forEach((tug, index) => {
-      const distance = rayIceTug(tug, origin, direction, best?.distance ?? max);
+    this.convoy.forEach(({ hull, boxes }, index) => {
+      const distance = rayHull(boxes, hull, origin, direction, best?.distance ?? max);
       if (distance !== null) best = { index, distance };
     });
     return best;
@@ -1864,7 +1868,7 @@ export class Markers {
 
   /** The cable from the raider holding ice tug `index` to the tug, drawn while one does; gone with null. */
   tether(index: number, from: THREE.Vector3 | null) {
-    const tug = this.convoy[index];
+    const tug = this.convoy[index]?.hull;
     const line = this.tethers[index];
     if (!from || !tug) {
       if (line) this.root.remove(line);

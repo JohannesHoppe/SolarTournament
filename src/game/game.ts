@@ -2896,6 +2896,7 @@ export class Game implements OnlineGame {
    */
   private startRound(mode: 'solo' | 'school' | 'online') {
     if (this.input.touchActive) this.enterFullscreen();
+    this.showLinkLost(false);
     // cleaned as every peer cleans it, so no callsign leaves nothing visible
     const callsign = cleanName($<HTMLInputElement>('callsign').value) || 'Host';
     $<HTMLInputElement>('callsign').value = callsign;
@@ -4900,6 +4901,11 @@ export class Game implements OnlineGame {
     this.racers = null;
   }
 
+  /** The white of a cut link over the picture, with its words (see SchoolContext.linkLost), or gone. */
+  private showLinkLost(on: boolean) {
+    $('link-lost').hidden = !on;
+  }
+
   private removeJumpers() {
     for (const bot of this.jumpers?.bots ?? []) this.removeShip(bot.ship);
     this.jumpers = null;
@@ -5627,6 +5633,12 @@ export class Game implements OnlineGame {
         return game.input.selfDestructing;
       },
       // pain streams into the Host for `seconds`: the link's picture breaking up, a low drone of it
+      linkLost: (seconds) => {
+        // the voice cut off where it was, the picture white, nothing rotting: the link is simply gone
+        this.speaker.stop();
+        this.showLinkLost(true);
+        window.setTimeout(() => this.showLinkLost(false), seconds * 1000);
+      },
       linkStatic: (strength) => {
         if (strength > 0) this.glitch.trigger(Math.min(1, strength) * STATIC_GLITCH, STATIC_SECONDS);
       },

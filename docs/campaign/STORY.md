@@ -148,7 +148,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 6.3 | The Quiet Man | bounty | A Loose raider (skill 0.5) who never finishes a clone: a hull he has worn down to 30 of 100 only scorches under his beam. 40 s into the fight, or once he has worn the hull down that far, he turns away and flies off; shoot him down, or let him go (fewer ratings; the campaign remembers it, for Nicole later). (built; still to come: him shooting only drives) | ☉ 2,500 · 250 or · 100 | Duel; a choice |
 | 7.1 | Flux Tube Race | race | The sulfur miners' race, eight rings on an ellipse over Io's plain, one side running past the flux tube. The nearer the flux tube, the more the link glitches (the picture breaks up as on a hit). Two laps; Perihelion again (skill 0.65) and four miners. Top two. (built; still to come: the miners' beacon buoys in place of the rings, the plasma torus) | ☉ 4,000 · 350 | Race; the link glitch |
 | 7.2 | Tube Fitting | shop | The first torpedo tube (☉ 2,000), fitted by Io's sulfur miners: one torpedo a clone. Then Main Drive I (☉ 1,000), the miners' tuning on the drive's bell. (built) | — | Shipyard |
-| 7.3 | Blackout | story escort | Escort a sulfur freighter through the tube. At two thirds of the way the link cuts: the picture freezes white, no datamosh, LINK LOST. A new clone boots on Patience's printer; the freighter made it alone. Then Patience's log: the Magpie recovered adrift, canopy open, cockpit empty. Cannot fail. | ☉ 2,000 · 150 | Escort; new: the link cut |
+| 7.3 | Blackout | story escort | Escort a sulfur freighter through the tube. Where its lane comes nearest the tube's axis the link cuts: the picture white, no datamosh, LINK LOST, for 5 s. A new clone boots on Patience's printer; the freighter made it alone. Then Patience's log: the Magpie recovered adrift, canopy open, cockpit empty; Nicole's logs blank for two hours. Cannot fail. (built) | ☉ 2,000 · 150 | Escort; new: the link cut |
 | 8.1 | Hollow Jack | bounty | Hollow Jack (skill 0.7, shoves and hooks) and three of the Loose among Ganymede's ice. Kill Jack. | ☉ 6,000 · 600 | Deathmatch; a named target |
 | 8.2 | The Harpoon | salvage | Fly through the piece of Jack's wreck that holds his harpoon before it drifts out of the arena. | the hook | Wreckage; probe pickup |
 | 8.3 | Swing Shift | skill | In a tug yard, hook three rocks in turn and let go faster than 65 m/s each time. | ☉ 1,000 · 100 | School: the hook drill |
@@ -647,6 +647,22 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **ECHO 4**: This is Nicole Aster, navigator of the PAAA 01. If anyone finds this voice, it is a copy. The real one has gone somewhere better.
 
 **NICOLE**: Nicole Aster. Navigator. That is my name, Host. And I am the copy she meant.
+
+### Blackout (chapter 7, built)
+
+**HEDDA**: Last job here: a sulfur freighter out through the flux tube. The miners won't fly it alone, the static scrambles their computers. Two thousand. Stay close to it.
+
+**NICOLE**: The freighter flies straight through the flux tube, Host, and we stay with it. The static will be bad in there. I will keep talking as long as I can.
+
+*(The link cuts. White. LINK LOST.)*
+
+**NICOLE**: The link is up. A new clone, Host, printed on Patience. I lost the last one in the tube. I do not know what happened to it.
+
+**HEDDA**: Freighter's out the other side. Made it on its own. Didn't need us after all.
+
+**HEDDA**: Patience's log. Recovered the Magpie adrift past the tube, an hour after the link went. Canopy open. Cockpit empty. No body. Nobody.
+
+**NICOLE**: My logs are blank, Host. Two hours of them. Two hours I do not have, and a clone I cannot find.
 
 ### Flux Tube Race (chapter 7, built)
 

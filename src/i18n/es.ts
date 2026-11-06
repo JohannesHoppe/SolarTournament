@@ -1768,4 +1768,13 @@ export const ES: Catalog = {
   "The drive pushes harder than a stock ship now. Only a little, Host. In a race, a little is everything.": "El motor empuja ahora más que el de una nave de serie. Solo un poco, Host. En una carrera, un poco lo es todo.",
   "The miners know torpedoes, they blast with them. Got one tube off them for two thousand, mounted under your belly. One fish per clone. Don't waste it.": "Los mineros saben de torpedos, vuelan roca con ellos. Les he sacado un tubo por dos mil, montado bajo tu panza. Un pez por clon. No lo malgastes.",
   "Miner's tuning on your drive bell, a thousand. It pushes a bit past stock now. Don't tell the Games' inspectors.": "Ajuste de minero en tu tobera, mil. Ahora empuja un poco más que de serie. No se lo digas a los inspectores de los Juegos.",
+  "Freighter": "Carguero",
+  "Blackout": "Apagón",
+  "LINK LOST": "ENLACE PERDIDO",
+  "The freighter flies straight through the flux tube, Host, and we stay with it. The static will be bad in there. I will keep talking as long as I can.": "El carguero atraviesa el tubo de flujo, Host, y nosotros nos quedamos con él. Ahí dentro la estática será mala. Seguiré hablando mientras pueda.",
+  "The link is up. A new clone, Host, printed on Patience. I lost the last one in the tube. I do not know what happened to it.": "El enlace está activo. Un clon nuevo, Host, impreso en la Patience. Perdí el anterior en el tubo. No sé qué le pasó.",
+  "My logs are blank, Host. Two hours of them. Two hours I do not have, and a clone I cannot find.": "Mis registros están en blanco, Host. Dos horas. Dos horas que no tengo, y un clon que no encuentro.",
+  "Last job here: a sulfur freighter out through the flux tube. The miners won't fly it alone, the static scrambles their computers. Two thousand. Stay close to it.": "Último trabajo aquí: un carguero de azufre que sale por el tubo de flujo. Los mineros no lo vuelan solos, la estática les revuelve los ordenadores. Dos mil. Pégate a él.",
+  "Freighter's out the other side. Made it on its own. Didn't need us after all.": "El carguero ha salido por el otro lado. Lo ha logrado solo. Al final no nos necesitaba.",
+  "Patience's log. Recovered the Magpie adrift past the tube, an hour after the link went. Canopy open. Cockpit empty. No body. Nobody.": "Diario de la Patience. Recuperada la Magpie a la deriva más allá del tubo, una hora después de caer el enlace. Capota abierta. Cabina vacía. Ningún cuerpo. Nadie.",
 };

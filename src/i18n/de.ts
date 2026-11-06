@@ -1732,4 +1732,13 @@ export const DE: Catalog = {
   "The drive pushes harder than a stock ship now. Only a little, Host. In a race, a little is everything.": "Das Triebwerk schiebt jetzt stärker als bei einem Serienschiff. Nur ein wenig, Host. In einem Rennen ist ein wenig alles.",
   "The miners know torpedoes, they blast with them. Got one tube off them for two thousand, mounted under your belly. One fish per clone. Don't waste it.": "Die Bergleute kennen sich mit Torpedos aus, sie sprengen damit. Hab ihnen ein Rohr abgekauft, zweitausend, unter deinen Bauch geschraubt. Ein Fisch pro Klon. Verschwend ihn nicht.",
   "Miner's tuning on your drive bell, a thousand. It pushes a bit past stock now. Don't tell the Games' inspectors.": "Bergmanns-Tuning an deiner Triebwerksglocke, tausend. Sie schiebt jetzt ein bisschen über Serie. Sag's nicht den Prüfern der Spiele.",
+  "Freighter": "Frachter",
+  "Blackout": "Blackout",
+  "LINK LOST": "VERBINDUNG VERLOREN",
+  "The freighter flies straight through the flux tube, Host, and we stay with it. The static will be bad in there. I will keep talking as long as I can.": "Der Frachter fliegt mitten durch die Flussröhre, Host, und wir bleiben bei ihm. Das Rauschen wird da drin schlimm. Ich rede, solange ich kann.",
+  "The link is up. A new clone, Host, printed on Patience. I lost the last one in the tube. I do not know what happened to it.": "Die Verbindung steht. Ein neuer Klon, Host, gedruckt auf Patience. Den letzten habe ich in der Röhre verloren. Ich weiß nicht, was mit ihm passiert ist.",
+  "My logs are blank, Host. Two hours of them. Two hours I do not have, and a clone I cannot find.": "Meine Logs sind leer, Host. Zwei Stunden davon. Zwei Stunden, die mir fehlen, und ein Klon, den ich nicht finde.",
+  "Last job here: a sulfur freighter out through the flux tube. The miners won't fly it alone, the static scrambles their computers. Two thousand. Stay close to it.": "Letzter Auftrag hier: ein Schwefelfrachter raus durch die Flussröhre. Die Bergleute fliegen ihn nicht allein, das Rauschen bringt ihre Computer durcheinander. Zweitausend. Bleib dicht dran.",
+  "Freighter's out the other side. Made it on its own. Didn't need us after all.": "Der Frachter ist auf der anderen Seite raus. Hat es allein geschafft. Hat uns am Ende gar nicht gebraucht.",
+  "Patience's log. Recovered the Magpie adrift past the tube, an hour after the link went. Canopy open. Cockpit empty. No body. Nobody.": "Logbuch der Patience. Die Magpie treibend hinter der Röhre geborgen, eine Stunde nachdem die Verbindung weg war. Kanzel offen. Cockpit leer. Keine Leiche. Niemand.",
 };

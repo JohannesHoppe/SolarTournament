@@ -9,7 +9,7 @@ import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
 import { fluxStatic } from '../world/io';
-import { BARGE_FROM, BARGE_TO, convoyAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt } from './missions';
+import { BARGE_FROM, BARGE_TO, BLACKOUT_AT, convoyAt, freighterAt, FLUX_COURSE, FLUX_LAPS, FLUX_START, doseRate, ECHO_FOUR, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME, tankerAt } from './missions';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 
@@ -142,6 +142,27 @@ describe('Dose on Europa', () => {
     expect(doseRate(plain.clone().setY(4000))).toBe(doseRate(plain.clone().setY(20000)));
     // a full dose in some two and a half minutes at the full rate
     expect(1 / doseRate(plain.clone().setY(20000))).toBe(150);
+  });
+});
+
+describe('Blackout on Io', () => {
+  it('flies its freighter through the flux tube clear of the plain, the patera and the mesa, inside the arena, the link cut where the lane comes nearest the tube', () => {
+    const field = testField(DETAIL);
+    field.generate(arenaById('io')!.layout);
+    const at = new THREE.Vector3();
+    for (let seconds = 0; ; seconds += 0.5) {
+      const share = freighterAt(seconds, at);
+      // nothing within 70 m of the freighter's middle, its spine level along the lane
+      expect(field.overlap(at, 1400), `${seconds} s`).toBeNull();
+      expect(at.length()).toBeLessThan(ARENA_LIMIT);
+      if (share >= 1) break;
+    }
+    expect(BLACKOUT_AT).toBeGreaterThan(0.3);
+    expect(BLACKOUT_AT).toBeLessThan(0.8);
+    // where the link cuts, the static is all but full
+    let seconds = 0;
+    while (freighterAt(seconds, at) < BLACKOUT_AT) seconds += 0.1;
+    expect(fluxStatic(at)).toBeGreaterThan(0.9);
   });
 });
 

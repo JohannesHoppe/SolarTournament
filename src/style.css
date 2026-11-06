@@ -2663,7 +2663,8 @@ body.touch #touch {
 }
 
 /* an edited hangar or flight school (see game/seal): named across the whole screen, over menu and round, until it is put back; it takes no input */
-#tampered {
+#tampered,
+#link-lost {
   position: fixed;
   inset: 0;
   z-index: 3000;
@@ -2686,6 +2687,22 @@ body.touch #touch {
   color: var(--tube-orange);
   text-shadow: var(--neon-orange);
   animation: neon-flicker 5s step-end infinite;
+}
+
+/* the link to the clone cut: the last picture frozen white, the flight computer's words on it, no rot of a death */
+#link-lost {
+  z-index: 2999;
+  background: #eef1f4;
+}
+
+#link-lost strong {
+  max-width: 100%;
+  font-family: var(--font-display);
+  font-size: clamp(1.5rem, 6vw, 6rem);
+  font-weight: 400;
+  letter-spacing: 0.12em;
+  text-align: center;
+  color: #5a6470;
 }
 
 #tampered p {

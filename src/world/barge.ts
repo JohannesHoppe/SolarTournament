@@ -19,7 +19,7 @@ import { boxUv } from '../view/surfaces';
 interface HullKind {
   spine: number;
   hoppers: number;
-  cargo?: 'ore' | 'ice';
+  cargo?: 'ore' | 'ice' | 'sulfur';
   winch: boolean;
   seed: number;
   paints: readonly { key: string; seed: number; tint: number; texts: readonly string[] }[];
@@ -59,6 +59,24 @@ const TUG: HullKind = {
   ],
 };
 
+/** What a hull's hoppers are heaped with: dark ore, blocks of dirty ice glinting where they were cut, or Io's yellow sulfur. */
+const CARGO = {
+  ore: { color: 0x4a443e, roughness: 1, metalness: 0.15 },
+  ice: { color: 0xc8d8e2, roughness: 0.35, metalness: 0 },
+  sulfur: { color: 0xd8c048, roughness: 0.9, metalness: 0 },
+} as const;
+/** A sulfur freighter of Io's miners (Blackout): an ice tug's build with three hoppers heaped with sulfur, in the miners' paints. */
+const SULFUR_FREIGHTER: HullKind = {
+  spine: 1700,
+  hoppers: 3,
+  cargo: 'sulfur',
+  winch: false,
+  seed: 3601,
+  paints: [
+    { key: 'freighter-ochre', seed: 3602, tint: 0xa08850, texts: ['SULFUR', 'IO MINERS', 'NO SPARKS', 'FREIGHT 3'] },
+    { key: 'freighter-grey', seed: 3603, tint: 0x8a8c88, texts: ['TORUS LINE', 'IO', 'AIRLOCK', 'SHIELDED'] },
+  ],
+};
 /** An ice tug of the Jupiter lanes (Ice Run): a spine of 60 m half length, two hoppers heaped with blocks of Callisto's ice, in a tug yard's paints. */
 const ICE_TUG: HullKind = {
   spine: 1200,
@@ -86,6 +104,8 @@ export const barge = () => working(BARGE);
 export const tug = () => working(TUG);
 /** An ice tug, built as barge is; a convoy poses a clone of it for each tug. */
 export const iceTug = () => working(ICE_TUG);
+/** A sulfur freighter, built as barge is. */
+export const sulfurFreighter = () => working(SULFUR_FREIGHTER);
 
 function working(kind: HullKind): { root: THREE.Group; boxes: readonly HullBox[] } {
   const kept = built.get(kind);
@@ -104,7 +124,7 @@ function working(kind: HullKind): { root: THREE.Group; boxes: readonly HullBox[]
   box(new THREE.Vector3(0, 0, 0), new THREE.Vector3(SPINE_HALF, SPINE_SECTION.y, SPINE_SECTION.z));
   // the hoppers on the spine, open on top, the ore heaped in them
   // dark ore, or blocks of dirty ice glinting where they were cut
-  const ore = kind.cargo === 'ice' ? new THREE.MeshStandardMaterial({ color: 0xc8d8e2, roughness: 0.35, metalness: 0, flatShading: true }) : new THREE.MeshStandardMaterial({ color: 0x4a443e, roughness: 1, metalness: 0.15, flatShading: true });
+  const ore = new THREE.MeshStandardMaterial({ ...CARGO[kind.cargo ?? 'ore'], flatShading: true });
   for (let k = 0; k < kind.hoppers; k++) {
     const x = -SPINE_HALF + 700 + k * HOPPER_STEP;
     box(new THREE.Vector3(x, SPINE_SECTION.y + HOPPER_HALF.y, 0), HOPPER_HALF);
@@ -174,9 +194,6 @@ function working(kind: HullKind): { root: THREE.Group; boxes: readonly HullBox[]
   return made;
 }
 
-/** Whether a sphere touches an ice tug posed by `pose`, and how far along a beam it stops it (see touchBarge, rayBarge). */
-export const touchIceTug = (pose: Pose, position: THREE.Vector3, radius: number, normal: THREE.Vector3) => touchHull(iceTug().boxes, pose, position, radius, normal);
-export const rayIceTug = (pose: Pose, origin: THREE.Vector3, direction: THREE.Vector3, max: number) => rayHull(iceTug().boxes, pose, origin, direction, max);
 
 /** Whether a sphere touches the tug posed by `pose` (see touchBarge). */
 export function touchTug(pose: Pose, position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {

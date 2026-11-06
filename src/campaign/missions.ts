@@ -8,7 +8,8 @@ import { hullInLight } from '../world/wall';
 import { inGrooves, surfaceHeight as phobosHeight } from '../world/phobos';
 import { POST_AT, POST_HALF, surfaceHeight as callistoHeight } from '../world/callisto';
 import { crackMiddle, LAND as EUROPA_LAND, stationPlacement } from '../world/europa';
-import { fluxStatic, surfaceHeight as ioHeight } from '../world/io';
+import { FLUX_AT, fluxStatic, LAND as IO_LAND, surfaceHeight as ioHeight } from '../world/io';
+import { sulfurFreighter } from '../world/barge';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
@@ -1002,6 +1003,59 @@ const fitPlating = (campaign: Campaign) => {
   buy(campaign, PLATING_PRICE);
 };
 
+/**
+ * Blackout (7.3): a sulfur freighter of Io's miners flies its lane straight through the flux
+ * tube (FREIGHTER_FROM to FREIGHTER_TO) at FREIGHTER_SPEED, the hull escorting it, the link
+ * crackling the nearer the tube (see fluxStatic). Where the lane comes nearest the tube's axis,
+ * the link cuts (see SchoolContext.linkLost) for LINK_DARK seconds, and the drill ends there: the
+ * next lines wake a new clone on Patience. It cannot fail.
+ */
+const FREIGHTER_SPEED = 400;
+const FREIGHTER_FROM = point(-40000, IO_LAND + 5000, -40000);
+const FREIGHTER_TO = point(44000, IO_LAND + 6000, 36000);
+const FREIGHTER_WAY = new THREE.Vector3().subVectors(FREIGHTER_TO, FREIGHTER_FROM).normalize();
+const FREIGHTER_TURN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(-1, 0, 0), FREIGHTER_WAY);
+/** The share of its lane where the freighter comes nearest the tube's axis: where the link cuts. */
+export const BLACKOUT_AT = (() => {
+  const level = new THREE.Vector3(FREIGHTER_WAY.x, 0, FREIGHTER_WAY.z);
+  const along = new THREE.Vector3(FLUX_AT.x - FREIGHTER_FROM.x, 0, FLUX_AT.z - FREIGHTER_FROM.z).dot(level) / level.lengthSq();
+  return along / FREIGHTER_FROM.distanceTo(FREIGHTER_TO);
+})();
+const LINK_DARK = 5;
+const freighterNow = new THREE.Vector3();
+
+/** Where the freighter is `seconds` after it set out (into `out`), and the share of its lane flown. */
+export function freighterAt(seconds: number, out: THREE.Vector3): number {
+  const share = Math.min(1, (seconds * FREIGHTER_SPEED) / FREIGHTER_FROM.distanceTo(FREIGHTER_TO));
+  out.lerpVectors(FREIGHTER_FROM, FREIGHTER_TO, share);
+  return share;
+}
+
+const blackout: Drill = {
+  line: CAMPAIGN.blackout,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'io',
+  autopilot: false,
+  enter(ctx, a, markers) {
+    startEscort(ctx, a, markers);
+    freighterAt(0, freighterNow);
+    markers.iceTugAt(0, freighterNow, FREIGHTER_TURN, sulfurFreighter);
+  },
+  done(ctx, a, markers) {
+    if (!Number.isNaN(a.doneAt)) return a.seconds >= a.doneAt;
+    const share = freighterAt(a.seconds, freighterNow);
+    markers.iceTugAt(0, freighterNow, FREIGHTER_TURN, sulfurFreighter);
+    ctx.linkStatic(fluxStatic(ctx.me.flight.position));
+    if (share >= BLACKOUT_AT) {
+      ctx.linkLost(LINK_DARK);
+      a.doneAt = a.seconds + LINK_DARK;
+    }
+    return false;
+  },
+  waypoint: (_, a) => (Number.isNaN(a.doneAt) ? freighterNow : null),
+  mark: () => t('Freighter'),
+};
+
 /** Tube Fitting (7.2): the first torpedo tube, one torpedo a clone (see hullOf), at TUBE_PRICE. */
 const fitTube = (campaign: Campaign) => {
   if (campaign.parts.includes('tube')) return;
@@ -1661,4 +1715,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'fluxTubeRace', name: msg('Flux Tube Race'), drills: [said(HEDDA.io, 'io'), fluxTubeRace, said(CAMPAIGN.fluxTubeRaceDone, 'io')], pay: 4000, ratings: 350, start: FLUX_START },
   { id: 'tubeFitting', name: msg('Tube Fitting'), drills: [said(PIM.tube, 'io'), said(CAMPAIGN.tube, 'io')], pay: 0, fit: fitTube },
   { id: 'mainDrive', name: msg('Main Drive I'), drills: [said(PIM.driveOne, 'io'), said(CAMPAIGN.driveOne, 'io')], pay: 0, fit: fitDriveOne },
+  { id: 'blackout', name: msg('Blackout'), drills: [said(HEDDA.blackout, 'io'), blackout, said(CAMPAIGN.blackoutBoot, 'io'), said(HEDDA.blackoutFreighter, 'io'), said(HEDDA.blackoutLog, 'io'), said(CAMPAIGN.blackoutBlank, 'io')], pay: 2000, ratings: 150 },
 ];

@@ -591,3 +591,15 @@ test('chapter 7 opens on Io: the Flux Tube Race lines up five rivals, Perihelion
   expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(8);
   expect(errors).toEqual([]);
 });
+
+test('Blackout: in the flux tube the link cuts, the picture white with LINK LOST and no rot, and a new clone wakes; it cannot fail', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, chapterFive('pilotEpisode', 'iceRun', 'valhallaSprint', 'callistoEcho', 'radiators', 'dose', 'underTheLineae', 'quietMan', 'plating', 'fluxTubeRace', 'tubeFitting', 'mainDrive'));
+  await page.waitForFunction(() => window.game.venue?.id === 'io' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  // the freighter flown on to where the lane meets the tube
+  await page.evaluate(() => (window.game.school.attempt.seconds = 1000));
+  await expect(page.locator('#link-lost')).toBeVisible({ timeout: 20_000 });
+  await expect(page.locator('#link-lost')).toBeHidden({ timeout: 20_000 });
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('blackout')), { timeout: 180_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});
