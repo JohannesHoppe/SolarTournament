@@ -13,6 +13,7 @@ import { Corona } from './corona';
 import { psyche } from './boneyard';
 import { vesta } from './rheasilvia';
 import { ceres } from './occator';
+import { WallScene } from './solarwall';
 import { BLOOM_THRESHOLD } from '../view/bloom';
 
 /**
@@ -830,6 +831,7 @@ export class Landmarks {
     this.scenes.set('boneyard', psyche());
     this.scenes.set('rheasilvia', vesta());
     this.scenes.set('occator', ceres());
+    this.scenes.set('wall', this.wall.group);
     for (const scene of this.scenes.values()) {
       scene.visible = false;
       this.group.add(scene);
@@ -895,6 +897,9 @@ export class Landmarks {
     this.wreck.setParticles(share);
   }
 
+  /** The Solar Wall beyond its stretch by the field, and its searchlights' cones (see world/solarwall). */
+  private readonly wall = new WallScene();
+
   update(time: number) {
     for (const material of this.timed) material.uniforms.time.value = time;
     DISK_UNIFORMS.diskTime.value = time;
@@ -902,6 +907,7 @@ export class Landmarks {
     // a neon sign stutters now and then, as a sign on emergency power does
     for (const sign of this.flicker) (sign.material as THREE.MeshBasicMaterial).opacity = Math.random() < 0.03 ? 0.25 : 1;
     if (this.shown === 'derelict') this.wreck.update(time);
+    if (this.shown === 'wall') this.wall.update(time);
   }
 
   /**

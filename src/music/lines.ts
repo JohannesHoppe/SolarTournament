@@ -556,6 +556,10 @@ export const CAMPAIGN = {
   repoMen: "A harpoon in our hull, and their winch is reeling us in. Shoot the winch on the tug's stern, or shoot down three of them. Do not let them pull us within a hundred meters.",
   repoMenCaught: 'They have reeled us in, and their clamps are on the hull. We start over.',
   repoMenDone: 'The cable is gone, and so are they. Debt collectors always come back, Host.',
+  wallRun: 'It is a wall, in space. We go over it. The barge follows our way, four hundred meters behind. The searchlights look up and out, never down at their own feet: lead it over low, close above the edge. Three seconds in a light, and they see it.',
+  wallRunSeen: 'They have seen the barge. Once more, and they send the pickets.',
+  wallRunLost: 'Seen twice. The pickets are coming, and Hedda turns back. We start over.',
+  wallRunDone: 'Over the wall, and gone. Forty people the regime will never count.',
 } as const;
 
 /**
@@ -602,6 +606,7 @@ export const HEDDA = {
   sawBrothers: "Trouble on the peak. The Saw Brothers are cutting a rig off its rock. Three of them, all mouth. Shoot two and the third one runs. That rig falls, nobody gets paid.",
   cutAndHaul: "Claim's paid for, ore's not. Cut up the rock next to the working rig and bring in the ore. Forty loads. Mind the rig. You hit it, you pay for it. Fifty a beam.",
   occator: "Ceres. Occator. Our capital, cut into the crater wall. The only market in the Belt where the Navy sells what it stole. Take the hull down to the terrace. Mind the domes. People live in them.",
+  wallRun: "This one's off the books. Forty of ours in a barge, bound for the inner system, and the President's wall in the way. Lead it over. Stay out of the lights. They see us twice, it's over for all of them.",
   repoMen: "Tallymen on the scope. Rask sold you to the worst of them. They don't shoot to kill. They reel you in and sell the parts. Don't let them have my gunner.",
   oreBarge: "Paying work. An ore barge leaves the terrace for the launch ring, and scrappers pick off whatever flies out alone. Fly with it. Two thousand if it gets out whole.",
 } as const;

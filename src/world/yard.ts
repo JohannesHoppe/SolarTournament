@@ -3,6 +3,7 @@ import { Randomizer } from '../random';
 import type { Placement } from './asteroids';
 import { SLOPE_HALF } from './vesta';
 import { OCCATOR_BOXES } from './ceres';
+import { WALL_HALF } from './wall';
 
 /**
  * Where the Boneyard on Psyche (the campaign's first place, see docs/campaign/) puts things: the
@@ -131,13 +132,15 @@ export const HOPPER = v(DEPOT_LAYOUT.crusher.center.x, GROUND + 1000 + 300, DEPO
 /**
  * The half extents of each template's collider box (units): 0 a full rack, 1 a rack with gaps, 2
  * an empty frame, then the depot's parts, then the slope under Vesta's claims (VESTA_GROUND_TYPE,
- * see world/vesta), then Occator's terrace, steps and domes (from OCCATOR_TYPE, see world/ceres).
+ * see world/vesta), then Occator's terrace, steps and domes (from OCCATOR_TYPE, see world/ceres), then the Solar Wall (WALL_TYPE, see world/wall).
  */
-export const RACK_BOXES: readonly THREE.Vector3[] = [...[0, 1, 2].map(() => v(RACK_LENGTH / 2, RACK_HEIGHT / 2, RACK_DEPTH / 2)), ...DEPOT_PARTS.map((part) => DEPOT_LAYOUT[part].half), SLOPE_HALF, ...OCCATOR_BOXES];
+export const RACK_BOXES: readonly THREE.Vector3[] = [...[0, 1, 2].map(() => v(RACK_LENGTH / 2, RACK_HEIGHT / 2, RACK_DEPTH / 2)), ...DEPOT_PARTS.map((part) => DEPOT_LAYOUT[part].half), SLOPE_HALF, ...OCCATOR_BOXES, WALL_HALF];
 /** The template of the slope under Vesta's claims in the yards' set. */
 export const VESTA_GROUND_TYPE = DEPOT_TYPE + DEPOT_PARTS.length;
 /** The first of Occator's templates in the yards' set (see world/ceres, occatorGround). */
 export const OCCATOR_TYPE = VESTA_GROUND_TYPE + 1;
+/** The Solar Wall's template in the yards' set (see world/wall). */
+export const WALL_TYPE = RACK_BOXES.length - 1;
 
 /**
  * Where the racks stand: on the ground in rows along the field's x axis; the row through the

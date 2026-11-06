@@ -7,7 +7,8 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE } from './yard';
+import { WALL_TOP, wallPlacement } from './wall';
 import { CERES_FALL, CEREALIA, MARKET, occatorPlacements, onPlace, TERRACE } from './ceres';
 import { RISE, slopeGround, SUMMIT, VESTA_FALL, VESTA_GROUND } from './vesta';
 
@@ -39,7 +40,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -341,6 +342,22 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.58, 0.6, 0.64],
     grade: { gain: [0.99, 1, 1.02], lift: [0.0012, 0.0013, 0.0017], saturation: 0.88 },
   },
+  // the Solar Wall: open space on the lane to Mars, black and cold, the sun low beside the wall,
+  // the searchlights' white and the sign's gold the only warmth
+  wall: {
+    space: 0x010203,
+    sky: 0x5c6470,
+    ground: 0x1a1c20,
+    ambient: 1.1,
+    nebulae: [
+      { at: [0.7, 0.3, 0.6], color: [0.05, 0.03, 0.03], size: 560000, shape: 1, turn: 2.2 },
+      { at: [-0.6, 0.6, -0.4], color: [0.03, 0.035, 0.05], size: 460000, shape: 0, turn: 0.9 },
+    ],
+    stars: 0.9,
+    starmap: true,
+    dust: [0.5, 0.52, 0.56],
+    grade: { gain: [0.98, 1, 1.03], lift: [0.001, 0.0011, 0.0016], saturation: 0.84 },
+  },
 };
 
 /**
@@ -401,6 +418,23 @@ export const PLACES: readonly ArenaProfile[] = [
     ],
     // out over the terrace's edge, some 160 m over it, facing the wall and the market
     start: { at: onPlace(-30000, 2000, 0).toArray(), toward: MARKET.toArray() },
+    open: true,
+  },
+  {
+    id: 'wall',
+    name: msg('The Solar Wall'),
+    tagline: msg('The biggest wall in the history of walls, and Mars is going to pay for it.'),
+    // a few pieces of rubble drifting by the wall, all else open space
+    layout: { key: 'wall', seed: 3500, kind: 'rock', count: 6, minScale: 0.2, maxScale: 0.45, radius: FIELD_RADIUS, inner: FIELD_RADIUS * 0.5, flat: 20, spin: SPIN_RATE, toughness: 800, placements: [wallPlacement(WALL_TYPE)] },
+    cooling: 1,
+    storms: false,
+    // 1.8 AU from the sun, on the lane from the Belt to Mars
+    sun: { size: 40000, intensity: 3.6, color: 0xfff4e6 },
+    mood: MOODS.wall,
+    preview: { from: [-50000, 14000, 30000] },
+    references: [{ glyph: 'planet', label: msg('The wall'), position: new THREE.Vector3(0, WALL_TOP, 0), distance: true }],
+    // 2 km before the wall, facing it
+    start: { at: [-40000, 0, 0], toward: [0, WALL_TOP, 0] },
     open: true,
   },
 ];

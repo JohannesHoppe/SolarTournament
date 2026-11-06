@@ -46,8 +46,8 @@ import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/sessi
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
 import { Lobby, type Listing } from '../net/lobby';
-import { OpenBeat, pushFrom, pushKey, setPushFrom, subscribe as subscribePush, unsubscribe as unsubscribePush } from '../net/push';
-import { MAX_FROM } from '../net/pushtext';
+import { OpenBeat, pausePush, pushKey, pushStatus, setPushFrom, subscribe as subscribePush, unsubscribe as unsubscribePush } from '../net/push';
+import { MAX_FROM, snoozeUntil } from '../net/pushtext';
 import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
@@ -1504,6 +1504,14 @@ export class Game implements OnlineGame {
       });
       $('push-from-choice').append(button);
     }
+    // a pause of the notifications: an hour, until tomorrow morning, or none any more
+    const pause = (until: () => number) => async () => {
+      await pausePush(until());
+      await this.renderPush();
+    };
+    $('push-pause-hour').addEventListener('click', pause(() => snoozeUntil('hour', Date.now())));
+    $('push-pause-morning').addEventListener('click', pause(() => snoozeUntil('morning', Date.now())));
+    $('push-resume').addEventListener('click', pause(() => 0));
     // a notification of an open tournament leads here
     if (location.hash === '#tournaments') {
       history.replaceState(null, '', location.pathname + location.search);
@@ -1835,8 +1843,13 @@ export class Game implements OnlineGame {
     const button = $('push-toggle');
     button.hidden = $('push-note').hidden = !this.pushKey;
     if (!this.pushKey) return;
-    const from = await pushFrom();
+    const status = await pushStatus();
+    const from = status?.from ?? null;
     const on = from !== null;
+    const paused = on && status!.snoozed > Date.now() / 1000;
+    $('push-paused').hidden = !paused;
+    $('push-resume').hidden = !paused;
+    if (paused) $('push-paused').textContent = t('Quiet until {time}', { time: new Date(status!.snoozed * 1000).toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }) });
     button.textContent = on ? t('Notifications on: stop them') : t('Notify me when a public tournament opens');
     button.setAttribute('aria-pressed', String(on));
     $('push-from').hidden = !on;
@@ -1847,7 +1860,7 @@ export class Game implements OnlineGame {
     if (!this.pushKey) return;
     const button = $<HTMLButtonElement>('push-toggle');
     button.disabled = true;
-    if ((await pushFrom()) !== null) await unsubscribePush();
+    if ((await pushStatus()) !== null) await unsubscribePush();
     else if (!(await subscribePush(this.pushKey, currentLocale()))) $('room-note').textContent = t('No notifications: this browser refused them.');
     button.disabled = false;
     await this.renderPush();

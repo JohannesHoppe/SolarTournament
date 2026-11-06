@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
-import { checkSubscription, DAILY_WRITES, handle, MAX_SUBSCRIPTIONS, OPEN_HEARTBEAT, PUSH_GAP, sendAll, TOURNAMENT_FORGET, vapidOf, type PushStore } from '../../functions/push';
+import { checkSubscription, DAILY_WRITES, handle, MAX_SUBSCRIPTIONS, OPEN_HEARTBEAT, PUSH_GAP, sendAll, SNOOZE_MAX, TOURNAMENT_FORGET, vapidOf, type PushStore } from '../../functions/push';
 import { freshKeys, toBase64Url, type Subscription } from './webpush';
-import { pushText } from './pushtext';
+import { pushText, snoozeUntil } from './pushtext';
 import type { Locale } from '../i18n/i18n';
 
 /** The function's store as a few maps, its writes counted as D1's would be. */
 function memoryStore() {
   const days = new Map<string, number>();
   const rooms = new Map<string, number>();
-  const subs = new Map<string, Subscription & { locale: Locale; from?: number }>();
+  const subs = new Map<string, Subscription & { locale: Locale; from?: number; snoozed?: number }>();
   let last = -Infinity;
   let waiting = false;
   const store: PushStore = {
@@ -28,12 +28,17 @@ function memoryStore() {
     waiting: async () => waiting,
     setWaiting: async (value) => void (waiting = value),
     stats: async () => ({ subscribers: subs.size, writes: 0, open: 0, heardToday: rooms.size, lastPush: last, pushes: 0 }),
-    subscriptions: async (open) => [...subs.values()].filter((s) => (s.from ?? 1) <= open),
+    subscriptions: async (open, now) => [...subs.values()].filter((s) => (s.from ?? 1) <= open && (s.snoozed ?? 0) <= now),
     countSubscriptions: async () => subs.size,
     openCount: async (now) => [...rooms.values()].filter((heard) => heard >= now - TOURNAMENT_FORGET).length,
     subscribe: async (s, locale, from) => void subs.set(s.endpoint, { ...s, locale, from }),
     unsubscribe: async (endpoint) => void subs.delete(endpoint),
     fromOf: async (endpoint) => subs.get(endpoint)?.from ?? null,
+    snoozedOf: async (endpoint) => subs.get(endpoint)?.snoozed ?? 0,
+    snooze: async (endpoint, until) => {
+      const kept = subs.get(endpoint);
+      if (kept) kept.snoozed = until;
+    },
   };
   return { store, days, rooms, subs };
 }
@@ -134,6 +139,23 @@ describe('the notification when a public tournament opens', () => {
   });
 });
 
+describe('a pause of the notifications', () => {
+  it('lasts an hour, or until 8 o’clock on the device’s clock, today while that is ahead, else tomorrow', () => {
+    const at = (hours: number, minutes = 0) => new Date(2026, 10, 6, hours, minutes).getTime();
+    expect(snoozeUntil('hour', at(14, 30))).toBe(at(15, 30) / 1000);
+    expect(snoozeUntil('morning', at(2))).toBe(at(8) / 1000);
+    expect(snoozeUntil('morning', at(8))).toBe(new Date(2026, 10, 7, 8).getTime() / 1000);
+    expect(snoozeUntil('morning', at(23, 59))).toBe(new Date(2026, 10, 7, 8).getTime() / 1000);
+    // never longer than the server takes
+    expect(snoozeUntil('morning', at(8, 1)) - at(8, 1) / 1000).toBeLessThan(SNOOZE_MAX);
+  });
+
+  it('is offered as the notification’s buttons, in the Host’s language', () => {
+    expect(pushText('en', 1).actions.map((a) => a.action)).toEqual(['hour', 'morning']);
+    expect(pushText('de', 1).actions[0].title).not.toBe(pushText('en', 1).actions[0].title);
+  });
+});
+
 describe('the VAPID keys from the environment', () => {
   it('takes the private key raw or as PKCS #8, and nothing unreadable', async () => {
     const pair = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])) as CryptoKeyPair;
@@ -182,12 +204,30 @@ describe('from how many open tournaments a Host hears', () => {
     expect((await handle(store, { open: 'room-two-bbbbbb' }, 1002)).send).toHaveLength(1);
   });
 
+  it('pauses a subscription until the time it asked for, and no longer than SNOOZE_MAX', async () => {
+    const { store } = memoryStore();
+    await handle(store, { subscribe: subscription(1), locale: 'en' }, 0);
+    await handle(store, { subscribe: subscription(2), locale: 'en' }, 0);
+    expect((await handle(store, { snooze: subscription(1).endpoint, until: 1000 + 3600 }, 1000)).status).toBe(200);
+    expect((await handle(store, { status: subscription(1).endpoint }, 1100)).body).toEqual({ from: 1, snoozed: 4600 });
+    // the paused one hears nothing while it is paused, the other does
+    expect((await handle(store, { open: 'first-room' }, 1200)).send?.map((s) => s.endpoint)).toEqual([subscription(2).endpoint]);
+    // past its pause it hears again, as once it asks to hear again at once
+    expect((await handle(store, { open: 'second-room' }, 1200 + PUSH_GAP + 3600)).send).toHaveLength(2);
+    expect((await handle(store, { snooze: subscription(1).endpoint, until: 0 }, 9000)).status).toBe(200);
+    expect((await handle(store, { status: subscription(1).endpoint }, 9000)).body).toEqual({ from: 1, snoozed: 0 });
+    // no pause beyond SNOOZE_MAX, none in the past but 0, nothing but a number
+    expect((await handle(store, { snooze: subscription(1).endpoint, until: 9000 + SNOOZE_MAX + 1 }, 9000)).status).toBe(400);
+    expect((await handle(store, { snooze: subscription(1).endpoint, until: -1 }, 9000)).status).toBe(400);
+    expect((await handle(store, { snooze: subscription(1).endpoint, until: 'tomorrow' }, 9000)).status).toBe(400);
+  });
+
   it('says what a subscription chose, without writing', async () => {
     const { store, days } = memoryStore();
     await handle(store, { subscribe: subscription(1), locale: 'en', from: 2 }, 0);
     const writes = [...days.values()].reduce((a, b) => a + b, 0);
-    expect((await handle(store, { status: subscription(1).endpoint }, 0)).body).toEqual({ from: 2 });
-    expect((await handle(store, { status: 'https://unknown' }, 0)).body).toEqual({ from: null });
+    expect((await handle(store, { status: subscription(1).endpoint }, 0)).body).toEqual({ from: 2, snoozed: 0 });
+    expect((await handle(store, { status: 'https://unknown' }, 0)).body).toEqual({ from: null, snoozed: 0 });
     expect([...days.values()].reduce((a, b) => a + b, 0)).toBe(writes);
   });
 });

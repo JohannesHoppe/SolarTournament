@@ -307,15 +307,27 @@ test('the job board names the wallet, the Bond and the rank, takes the next job 
   expect(errors).toEqual([]);
 });
 
+/** The running mission at its drill `step`, without an error on the page. */
+async function movesOn(page: Page, step: number, errors: string[]) {
+  await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(step);
+  expect(errors).toEqual([]);
+}
+
+/** The campaign as `kept` says, the game opened with `?campaign` and the next job taken; the page's errors. */
+async function takeJobFrom(page: Page, kept: object): Promise<string[]> {
+  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), kept);
+  const errors = await openGame(page, '/?campaign');
+  await takeNextJob(page);
+  return errors;
+}
+
 /** Chapter 2 flown: every mission of it done, the thrusters rebuilt, three thousand coins in the wallet. */
 const CHAPTER_TWO_DONE = { ...CHAPTER_ONE_DONE, done: [...CHAPTER_ONE_DONE.done, 'rheasilvia', 'claimSurvey', 'cutAndHaul', 'sawBrothers', 'peakRun', 'practiceLog'], coins: 3000, ratings: 300, parts: [...CHAPTER_ONE_DONE.parts, 'thrusters'] };
 
 test('chapter 3 opens at Occator: the clone held before the market’s mouth is docked, and Surplus fits the military laser, paid from the wallet and the rest on the debt, with targeting', async ({ page }) => {
   // both missions' lines are said out in full
   test.setTimeout(300_000);
-  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), CHAPTER_TWO_DONE);
-  const errors = await openGame(page, '/?campaign');
-  await takeNextJob(page);
+  const errors = await takeJobFrom(page, CHAPTER_TWO_DONE);
   await page.waitForFunction(() => window.game.venue?.id === 'occator' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.me?.alive, null, { timeout: 120_000 });
   // the clone set at rest at the market's dock, the drill's waypoint
   await page.evaluate(async (path) => {
@@ -340,9 +352,7 @@ test('chapter 3 opens at Occator: the clone held before the market’s mouth is 
 
 test('Ore Barge sets the barge out on its lane, sends the scrappers at its hull, and the second wave once the first is down', async ({ page }) => {
   const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus'], coins: 0, parts: [...CHAPTER_TWO_DONE.parts, 'laser'], modules: ['targeting'] };
-  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), kept);
-  const errors = await openGame(page, '/?campaign');
-  await takeNextJob(page);
+  const errors = await takeJobFrom(page, kept);
   await page.waitForFunction(() => window.game.venue?.id === 'occator' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.me?.alive, null, { timeout: 120_000 });
   // the first wave comes and its beams wear the barge's hull
   await page.evaluate(() => (window.game.timeScale = 4));
@@ -358,9 +368,7 @@ test('Ore Barge sets the barge out on its lane, sends the scrappers at its hull,
 
 test('Repo Men: the tug’s harpoon reels the hull in, and beams on its winch break it free', async ({ page }) => {
   const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge'], coins: 1200, parts: [...CHAPTER_TWO_DONE.parts, 'laser'], modules: ['targeting'] };
-  await page.addInitScript((kept) => localStorage.setItem('solartournament.campaign', JSON.stringify(kept)), kept);
-  const errors = await openGame(page, '/?campaign');
-  await takeNextJob(page);
+  const errors = await takeJobFrom(page, kept);
   await page.waitForFunction(() => window.game.venue?.id === 'occator' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.me?.alive, null, { timeout: 180_000 });
   // the harpoon bites and the cable shortens
   await page.waitForFunction(() => window.game.school.attempt?.reach > 0, null, { timeout: 30_000 });
@@ -375,6 +383,33 @@ test('Repo Men: the tug’s harpoon reels the hull in, and beams on its winch br
       await new Promise((resolve) => requestAnimationFrame(resolve));
     }
   });
-  await expect.poll(() => page.evaluate(() => window.game.school?.stepIndex), { timeout: 20_000 }).toBe(3);
+  await movesOn(page, 3, errors);
+});
+
+test('Wall Run: the barge follows the hull low over the Solar Wall’s top edge, under the searchlights, and through', async ({ page }) => {
+  test.setTimeout(300_000);
+  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge', 'repoMen'], coins: 2700, parts: [...CHAPTER_TWO_DONE.parts, 'laser'], modules: ['targeting'] };
+  const errors = await takeJobFrom(page, kept);
+  await page.waitForFunction(() => window.game.venue?.id === 'wall' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.me?.alive, null, { timeout: 120_000 });
+  // the hull flown up to 50 m over the edge, across it, and on; time runs three times as fast
+  await page.evaluate(() => {
+    const game = window.game;
+    game.timeScale = 3;
+    const flight = game.me.flight;
+    const way = [[-40000, 0, 2000], [-6000, 5000, 2000], [6000, 5000, 2000], [60000, 3000, 2000]];
+    let k = 0;
+    const steer = () => {
+      if (game.school?.stepIndex !== 1) return;
+      const [x, y, z] = way[k];
+      const d = flight.position.clone().set(x, y, z).sub(flight.position);
+      if (d.length() < 600 && k < way.length - 1) k++;
+      flight.velocity.copy(d.normalize().multiplyScalar(600));
+      requestAnimationFrame(steer);
+    };
+    steer();
+  });
+  await page.waitForFunction(() => window.game.school?.stepIndex === 2, null, { timeout: 240_000 });
+  expect(await page.evaluate(() => window.game.school.attempt?.count ?? 0)).toBe(0);
+  await page.evaluate(() => (window.game.timeScale = 1));
   expect(errors).toEqual([]);
 });

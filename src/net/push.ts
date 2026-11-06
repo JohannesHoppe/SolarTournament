@@ -38,16 +38,26 @@ async function current(): Promise<PushSubscription | null> {
   return (await registration?.pushManager.getSubscription()) ?? null;
 }
 
-/** From how many open public tournaments on this browser's subscription hears, or null without one. */
-export async function pushFrom(): Promise<number | null> {
+/** This browser's subscription as the server keeps it: from how many open public tournaments on it hears, and until when it is paused (s since 1970, 0: it is not); null without one. */
+export async function pushStatus(): Promise<{ from: number; snoozed: number } | null> {
   if (!pushSupported()) return null;
   try {
     const subscription = await current();
     if (!subscription) return null;
-    const { from } = (await (await post({ status: subscription.endpoint })).json()) as { from?: unknown };
-    return typeof from === 'number' ? from : null;
+    const { from, snoozed } = (await (await post({ status: subscription.endpoint })).json()) as { from?: unknown; snoozed?: unknown };
+    return typeof from === 'number' ? { from, snoozed: typeof snoozed === 'number' ? snoozed : 0 } : null;
   } catch {
     return null;
+  }
+}
+
+/** Pauses the subscription until `until` (s since 1970, see snoozeUntil in net/pushtext), 0 to hear again at once. */
+export async function pausePush(until: number): Promise<boolean> {
+  try {
+    const subscription = await current();
+    return !!subscription && (await post({ snooze: subscription.endpoint, until })).ok;
+  } catch {
+    return false;
   }
 }
 

@@ -7,7 +7,10 @@
  * - POST `{ subscribe: PushSubscription, locale, from }`: keeps a browser's subscription, the
  *   Host's language and from how many open public tournaments on it wants to hear (1 to MAX_FROM).
  * - POST `{ unsubscribe: endpoint }`: forgets it.
- * - POST `{ status: endpoint }`: from how many open tournaments on that subscription hears, or null.
+ * - POST `{ status: endpoint }`: from how many open tournaments on that subscription hears (or
+ *   null without one), and until when it is paused (0 when it is not).
+ * - POST `{ snooze: endpoint, until }`: pauses a subscription until `until` (s since 1970, at most
+ *   SNOOZE_MAX ahead), 0 to hear again at once; the notification offers it as its buttons.
  * - POST `{ open: room }`: the lead browser of a public tournament says it is open, once when it
  *   starts announcing it and every OPEN_HEARTBEAT seconds after. A tournament not heard of
  *   before (or not for TOURNAMENT_FORGET seconds) is new: the number of open ones rose, and the
@@ -47,6 +50,8 @@ export const OPEN_HEARTBEAT = 120;
 export const TOURNAMENT_FORGET = 10 * 60;
 /** At most one notification this often (s), for all tournaments together, so nobody's phone is flooded. */
 export const PUSH_GAP = 15 * 60;
+/** The longest pause a subscription takes (s): a day and a half, enough for a night and a morning. */
+export const SNOOZE_MAX = 36 * 60 * 60;
 /** Subscriptions kept at most; beyond it a new one is refused. */
 export const MAX_SUBSCRIPTIONS = 5000;
 /** The longest endpoint taken (characters): push services' addresses are far shorter. */
@@ -67,8 +72,8 @@ export interface PushStore {
   setWaiting(waiting: boolean): Promise<void>;
   /** The figures of the admin page (functions/admin.ts). */
   stats(day: string, now: number): Promise<PushStats>;
-  /** The subscriptions that asked to hear of `open` tournaments or fewer. */
-  subscriptions(open: number): Promise<(Subscription & { locale: Locale })[]>;
+  /** The subscriptions that asked to hear of `open` tournaments or fewer and are not paused at `now`. */
+  subscriptions(open: number, now: number): Promise<(Subscription & { locale: Locale })[]>;
   countSubscriptions(): Promise<number>;
   /** The tournaments heard of within TOURNAMENT_FORGET. */
   openCount(now: number): Promise<number>;
@@ -76,6 +81,10 @@ export interface PushStore {
   unsubscribe(endpoint: string): Promise<void>;
   /** From how many open tournaments on a subscription hears, or null without one. */
   fromOf(endpoint: string): Promise<number | null>;
+  /** Until when a subscription is paused (0: it is not). */
+  snoozedOf(endpoint: string): Promise<number>;
+  /** Pauses a subscription until `until` (0: no more). */
+  snooze(endpoint: string, until: number): Promise<void>;
 }
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -117,12 +126,22 @@ export type PushAnswer = { status: number; body: unknown; send?: (Subscription &
 export async function handle(store: PushStore, body: unknown, now: number): Promise<PushAnswer> {
   const day = new Date(now * 1000).toISOString().slice(0, 10);
   if (typeof body !== 'object' || body === null) return { status: 400, body: { error: 'bad request' } };
-  const request = body as { subscribe?: unknown; locale?: unknown; from?: unknown; unsubscribe?: unknown; status?: unknown; open?: unknown };
+  const request = body as { subscribe?: unknown; locale?: unknown; from?: unknown; unsubscribe?: unknown; status?: unknown; open?: unknown; snooze?: unknown; until?: unknown };
 
   // a read only: nothing counted against the writes
   if ('status' in request) {
     if (!isText(request.status, MAX_ENDPOINT)) return { status: 400, body: { error: 'bad request' } };
-    return { status: 200, body: { from: await store.fromOf(request.status) } };
+    const from = await store.fromOf(request.status);
+    const snoozed = from === null ? 0 : await store.snoozedOf(request.status);
+    return { status: 200, body: { from, snoozed: snoozed > now ? snoozed : 0 } };
+  }
+
+  if ('snooze' in request) {
+    const until = request.until;
+    if (!isText(request.snooze, MAX_ENDPOINT) || typeof until !== 'number' || !Number.isFinite(until) || until < 0 || until > now + SNOOZE_MAX) return { status: 400, body: { error: 'bad request' } };
+    if (!(await store.spend(day, 1))) return { status: 503, body: { error: 'budget spent' } };
+    await store.snooze(request.snooze, until);
+    return { status: 200, body: { ok: true } };
   }
 
   if ('subscribe' in request) {
@@ -161,7 +180,7 @@ export async function handle(store: PushStore, body: unknown, now: number): Prom
     if (!(await store.spend(day, 2))) return { status: 200, body: { ok: true } };
     if (waiting) await store.setWaiting(false);
     const open = await store.openCount(now);
-    const send = await store.subscriptions(open);
+    const send = await store.subscriptions(open, now);
     // nobody asked to hear of this many: the gap stays open for the next
     if (!send.length) return { status: 200, body: { ok: true } };
     await store.setLastPush(now, send.length);
@@ -182,7 +201,13 @@ export function d1Store(db: D1Like): PushStore {
   let ready: Promise<unknown> | null = null;
   const run = async (query: string, ...values: unknown[]) => {
     ready ??= Promise.all([
-      db.prepare('CREATE TABLE IF NOT EXISTS subscriptions (endpoint TEXT PRIMARY KEY, p256dh TEXT NOT NULL, auth TEXT NOT NULL, locale TEXT NOT NULL, from_open INTEGER NOT NULL, created INTEGER NOT NULL)').bind().run(),
+      db
+        .prepare('CREATE TABLE IF NOT EXISTS subscriptions (endpoint TEXT PRIMARY KEY, p256dh TEXT NOT NULL, auth TEXT NOT NULL, locale TEXT NOT NULL, from_open INTEGER NOT NULL, created INTEGER NOT NULL, snoozed REAL NOT NULL DEFAULT 0)')
+        .bind()
+        .run()
+        // a table made before subscriptions could pause gets the column; one that has it refuses, and that is fine
+        .then(() => db.prepare('ALTER TABLE subscriptions ADD COLUMN snoozed REAL NOT NULL DEFAULT 0').bind().run())
+        .catch(() => undefined),
       db.prepare('CREATE TABLE IF NOT EXISTS tournaments (room TEXT PRIMARY KEY, heard INTEGER NOT NULL)').bind().run(),
       db.prepare('CREATE TABLE IF NOT EXISTS days (day TEXT PRIMARY KEY, writes INTEGER NOT NULL)').bind().run(),
       db.prepare('CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value REAL NOT NULL)').bind().run(),
@@ -234,8 +259,8 @@ export function d1Store(db: D1Like): PushStore {
       const row = await (await run('SELECT COUNT(*) AS n FROM tournaments WHERE heard >= ?1', now - TOURNAMENT_FORGET)).first<{ n: number }>();
       return row?.n ?? 0;
     },
-    async subscriptions(open) {
-      const { results } = await (await run('SELECT endpoint, p256dh, auth, locale FROM subscriptions WHERE from_open <= ?1 LIMIT ?2', open, MAX_SUBSCRIPTIONS)).all<{ endpoint: string; p256dh: string; auth: string; locale: Locale }>();
+    async subscriptions(open, now) {
+      const { results } = await (await run('SELECT endpoint, p256dh, auth, locale FROM subscriptions WHERE from_open <= ?1 AND snoozed <= ?3 LIMIT ?2', open, MAX_SUBSCRIPTIONS, now)).all<{ endpoint: string; p256dh: string; auth: string; locale: Locale }>();
       return results.map(({ endpoint, p256dh, auth, locale }) => ({ endpoint, keys: { p256dh, auth }, locale }));
     },
     async countSubscriptions() {
@@ -248,6 +273,13 @@ export function d1Store(db: D1Like): PushStore {
     async fromOf(endpoint) {
       const row = await (await run('SELECT from_open FROM subscriptions WHERE endpoint = ?1', endpoint)).first<{ from_open: number }>();
       return row?.from_open ?? null;
+    },
+    async snoozedOf(endpoint) {
+      const row = await (await run('SELECT snoozed FROM subscriptions WHERE endpoint = ?1', endpoint)).first<{ snoozed: number }>();
+      return row?.snoozed ?? 0;
+    },
+    async snooze(endpoint, until) {
+      await (await run('UPDATE subscriptions SET snoozed = ?2 WHERE endpoint = ?1', endpoint, until)).run();
     },
     async unsubscribe(endpoint) {
       await (await run('DELETE FROM subscriptions WHERE endpoint = ?1', endpoint)).run();

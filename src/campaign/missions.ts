@@ -4,6 +4,7 @@ import { CAMPAIGN, HEDDA, PIM, RASK, SAW, TALLY } from '../music/lines';
 import { clear, holdFor, PIPE_BORE, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace } from '../world/ceres';
+import { hullInLight } from '../world/wall';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
@@ -857,6 +858,79 @@ const repoMen: Drill = {
   mark: (ctx, a) => (a.reach > 0 ? t('Winch {hits}/{needed} · down {n}/{down} · cable {meters} m', { hits: a.count, needed: WINCH_HITS, n: ctx.jumpersDown, down: TALLY_DOWN, meters: Math.round(a.reach / 20) }) : t('Tug')),
 };
 
+/**
+ * Wall Run (3.4): Hedda's barge of Rockborn refugees (the barge of world/barge) follows the
+ * hull's way, FOLLOW (units, 400 m) behind it at most at FOLLOW_SPEED (units/s, 25 m/s), from
+ * before the Solar Wall over its top edge (see world/wall). The searchlights see it, bow, middle
+ * or stern, once their cones have held it SEEN_HOLD seconds, adding up while it is lit and
+ * fading at half that pace while it is not; seen SEEN_MAX times fails it. Beyond the wall by
+ * WALL_CLEAR (units, 1 km) it is through.
+ */
+const FOLLOW = 8000;
+const FOLLOW_SPEED = 500;
+const SEEN_HOLD = 3;
+const SEEN_MAX = 2;
+const WALL_CLEAR = 20000;
+/** The hull's way as the barge follows it: a point every TRAIL_STEP (units, 20 m) it has flown. */
+const TRAIL_STEP = 400;
+const RUN_FROM = point(-48000, 0, 0);
+const runBarge = new THREE.Vector3();
+const runWay = new THREE.Vector3();
+const runTurn = new THREE.Quaternion();
+const BOW = new THREE.Vector3(-1, 0, 0);
+
+const wallRun: Drill = {
+  line: CAMPAIGN.wallRun,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'wall',
+  autopilot: true,
+  enter(ctx, a, markers) {
+    markers.clear();
+    runBarge.copy(RUN_FROM);
+    runWay.set(1, 0, 0);
+    runTurn.setFromUnitVectors(BOW, runWay);
+    markers.bargeAt(runBarge, runTurn);
+    // a.points: the hull's way; a.held: the barge's time in a light; a.count: how often it was seen
+    a.points = [ctx.me.flight.position.clone()];
+    a.count = 0;
+    a.lastShot = 0;
+  },
+  done(ctx, a, markers) {
+    const flight = ctx.me.flight;
+    if (flight.position.distanceTo(a.points[a.points.length - 1]) > TRAIL_STEP) a.points.push(flight.position.clone());
+    // the barge along the way, never nearer the hull than FOLLOW
+    let moved = FOLLOW_SPEED * ctx.dt;
+    while (moved > 0 && a.points.length > 1 && runBarge.distanceTo(flight.position) > FOLLOW) {
+      const next = a.points[0];
+      const gap = runBarge.distanceTo(next);
+      if (gap <= moved) {
+        runBarge.copy(next);
+        a.points.shift();
+        moved -= gap;
+      } else {
+        runWay.subVectors(next, runBarge).normalize();
+        runBarge.addScaledVector(runWay, moved);
+        runTurn.setFromUnitVectors(BOW, runWay);
+        moved = 0;
+      }
+    }
+    markers.bargeAt(runBarge, runTurn);
+    // the lights that hold it (bow, middle or stern) long enough see it; then it has a moment to get out of them
+    const lit = hullInLight(runBarge, runWay, ctx.field.clock) && a.seconds >= a.lastShot;
+    a.held = lit ? a.held + ctx.dt : Math.max(0, a.held - ctx.dt / 2);
+    if (a.held >= SEEN_HOLD) {
+      a.count++;
+      a.held = 0;
+      a.lastShot = a.seconds + SEEN_HOLD;
+      if (a.count < SEEN_MAX) ctx.say([CAMPAIGN.wallRunSeen]);
+    }
+    return runBarge.x > WALL_CLEAR;
+  },
+  fail: (_, a) => (a.count >= SEEN_MAX ? CAMPAIGN.wallRunLost : null),
+  waypoint: () => runBarge,
+  mark: (_, a) => t('Barge · seen {n}/{max}', { n: a.count, max: SEEN_MAX }),
+};
+
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
@@ -921,4 +995,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'surplus', name: msg('Surplus'), drills: [onCeres(PIM.surplus), onCeres(CAMPAIGN.targeting), onCeres(RASK.soldDebt)], pay: 0, fit: fitLaser },
   { id: 'oreBarge', name: msg('Ore Barge'), drills: [onCeres(HEDDA.oreBarge), oreBarge, said(CAMPAIGN.oreBargeDone, 'occator')], pay: 2000, ratings: 120 },
   { id: 'repoMen', name: msg('Repo Men'), drills: [onCeres(HEDDA.repoMen), said(TALLY.repo, 'occator'), repoMen, said(TALLY.noted, 'occator'), said(CAMPAIGN.repoMenDone, 'occator')], pay: 1500, ratings: 150 },
+  { id: 'wallRun', name: msg('Wall Run'), drills: [said(HEDDA.wallRun, 'wall'), wallRun, said(CAMPAIGN.wallRunDone, 'wall')], pay: 1000, ratings: 200 },
 ];
