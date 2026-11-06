@@ -18,7 +18,7 @@
  * Don't be silly. Just play a nice match with us, mate!
  */
 
-interface Env {
+export interface TurnEnv {
   TURN_KEY_ID?: string;
   TURN_KEY_API_TOKEN?: string;
   CLOUDFLARE_ACCOUNT_ID?: string;
@@ -29,7 +29,7 @@ interface Env {
 const TTL = 60 * 60;
 
 /** Outbound relay traffic a month (GB) after which no credentials go out: half of the 1,000 GB Cloudflare gives free, the rest is room for credentials already handed out. */
-const MONTHLY_BUDGET_GB = 500;
+export const MONTHLY_BUDGET_GB = 500;
 
 /** How long one reading of the month's traffic is trusted (ms): the analytics lag minutes behind anyway. */
 const USAGE_MEMORY_MS = 5 * 60 * 1000;
@@ -59,7 +59,7 @@ type Usage = { gb: number; unread: string };
 let usage = { gb: Infinity, unread: 'not read yet', at: -Infinity };
 
 /** The relay's outbound traffic of the current month (GB, UTC). */
-async function monthlyGb(env: Env): Promise<Usage> {
+export async function monthlyGb(env: TurnEnv): Promise<Usage> {
   if (Date.now() - usage.at < USAGE_MEMORY_MS) return usage;
   let gb = Infinity;
   let unread = 'no analytics token';
@@ -91,7 +91,7 @@ async function monthlyGb(env: Env): Promise<Usage> {
   return usage;
 }
 
-export async function onRequestGet({ env, request }: { env: Env; request: Request }): Promise<Response> {
+export async function onRequestGet({ env, request }: { env: TurnEnv; request: Request }): Promise<Response> {
   // only the game's own pages get an answer: a current browser says where a request comes from,
   // so a page of another site gets nothing; an older one (Safari before 16.4) says nothing and is
   // answered. A script can say anything: what keeps it from collecting credentials in bulk is the

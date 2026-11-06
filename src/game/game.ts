@@ -46,7 +46,8 @@ import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/sessi
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
 import { Lobby, type Listing } from '../net/lobby';
-import { OpenBeat, pushKey, subscribe as subscribePush, subscribed as pushSubscribed, unsubscribe as unsubscribePush } from '../net/push';
+import { OpenBeat, pushFrom, pushKey, setPushFrom, subscribe as subscribePush, unsubscribe as unsubscribePush } from '../net/push';
+import { MAX_FROM } from '../net/pushtext';
 import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
@@ -1485,6 +1486,15 @@ export class Game implements OnlineGame {
     $('room-create').addEventListener('click', () => this.createTournament());
     $('tournaments-back').addEventListener('click', () => this.showTournaments(false));
     $('push-toggle').addEventListener('click', () => void this.togglePush());
+    for (let n = 1; n <= MAX_FROM; n++) {
+      const button = Object.assign(document.createElement('button'), { type: 'button', textContent: String(n) });
+      button.dataset.from = String(n);
+      button.addEventListener('click', async () => {
+        await setPushFrom(n, currentLocale());
+        await this.renderPush();
+      });
+      $('push-from-choice').append(button);
+    }
     // a notification of an open tournament leads here
     if (location.hash === '#tournaments') {
       history.replaceState(null, '', location.pathname + location.search);
@@ -1816,16 +1826,19 @@ export class Game implements OnlineGame {
     const button = $('push-toggle');
     button.hidden = !this.pushKey;
     if (!this.pushKey) return;
-    const on = await pushSubscribed();
+    const from = await pushFrom();
+    const on = from !== null;
     button.textContent = on ? t('Notifications on: stop them') : t('Notify me when a public tournament opens');
     button.setAttribute('aria-pressed', String(on));
+    $('push-from').hidden = !on;
+    for (const choice of $('push-from-choice').children) choice.classList.toggle('selected', (choice as HTMLElement).dataset.from === String(from));
   }
 
   private async togglePush() {
     if (!this.pushKey) return;
     const button = $<HTMLButtonElement>('push-toggle');
     button.disabled = true;
-    if (await pushSubscribed()) await unsubscribePush();
+    if ((await pushFrom()) !== null) await unsubscribePush();
     else if (!(await subscribePush(this.pushKey, currentLocale()))) $('room-note').textContent = t('No notifications: this browser refused them.');
     button.disabled = false;
     await this.renderPush();

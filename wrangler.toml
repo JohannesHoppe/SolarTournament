@@ -9,4 +9,8 @@ compatibility_date = "2026-10-01"
 [vars]
 CLOUDFLARE_ACCOUNT_ID = "2ccacec509bc697696aa0b57f969dc16"
 # The VAPID public key of functions/push.ts (its private key, VAPID_PRIVATE_KEY, is a secret in the dashboard).
+# The admin page functions/admin.ts: the Cloudflare Access team (its name in <team>.cloudflareaccess.com)
+# and the application's audience tag; until both are set, /admin answers 404.
+# ACCESS_TEAM = ""
+# ACCESS_AUD = ""
 VAPID_PUBLIC_KEY = "BJH00R6tfAPkd_kF9r5uDQeEU0ezUOqlYDA_5T1hvWEHMXoIx7S3mATeP3vlC3HT-CkXbM3usjFmugR27R9zhoA"

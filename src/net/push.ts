@@ -1,4 +1,5 @@
 import type { Locale } from '../i18n/i18n';
+import { fromBase64Url } from './webpush';
 
 /**
  * The notification when a public tournament opens, on the browser's side: subscribing and
@@ -37,30 +38,37 @@ async function current(): Promise<PushSubscription | null> {
   return (await registration?.pushManager.getSubscription()) ?? null;
 }
 
-/** Whether this browser is subscribed. */
-export async function subscribed(): Promise<boolean> {
-  if (!pushSupported()) return false;
+/** From how many open public tournaments on this browser's subscription hears, or null without one. */
+export async function pushFrom(): Promise<number | null> {
+  if (!pushSupported()) return null;
   try {
-    return (await current()) !== null;
+    const subscription = await current();
+    if (!subscription) return null;
+    const { from } = (await (await post({ status: subscription.endpoint })).json()) as { from?: unknown };
+    return typeof from === 'number' ? from : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Changes from how many open public tournaments on the subscription hears. */
+export async function setPushFrom(from: number, locale: Locale): Promise<boolean> {
+  try {
+    const subscription = await current();
+    return !!subscription && (await post({ subscribe: subscription.toJSON(), locale, from })).ok;
   } catch {
     return false;
   }
 }
 
-function keyBytes(key: string): Uint8Array<ArrayBuffer> {
-  const base64 = key.replace(/-/g, '+').replace(/_/g, '/');
-  const binary = atob(base64 + '='.repeat((4 - (base64.length % 4)) % 4));
-  return Uint8Array.from(binary, (c) => c.charCodeAt(0));
-}
-
 /** Asks for notifications and subscribes; false when the Host or the browser says no, or the server refuses. */
-export async function subscribe(key: string, locale: Locale): Promise<boolean> {
+export async function subscribe(key: string, locale: Locale, from = 1): Promise<boolean> {
   try {
     if ((await Notification.requestPermission()) !== 'granted') return false;
     const registration = await navigator.serviceWorker.register(WORKER);
     await navigator.serviceWorker.ready;
-    const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(key) });
-    const answer = await post({ subscribe: subscription.toJSON(), locale });
+    const subscription = await registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: fromBase64Url(key) });
+    const answer = await post({ subscribe: subscription.toJSON(), locale, from });
     if (answer.ok) return true;
     await subscription.unsubscribe();
     return false;

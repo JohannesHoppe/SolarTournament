@@ -8,7 +8,7 @@ import type { Locale } from '../i18n/i18n';
 function memoryStore() {
   const days = new Map<string, number>();
   const rooms = new Map<string, number>();
-  const subs = new Map<string, Subscription & { locale: Locale }>();
+  const subs = new Map<string, Subscription & { locale: Locale; from?: number }>();
   let last = -Infinity;
   const store: PushStore = {
     async spend(day, rows) {
@@ -24,10 +24,13 @@ function memoryStore() {
     },
     lastPush: async () => last,
     setLastPush: async (now) => void (last = now),
-    subscriptions: async () => [...subs.values()],
+    stats: async () => ({ subscribers: subs.size, writes: 0, open: 0, heardToday: rooms.size, lastPush: last, pushes: 0 }),
+    subscriptions: async (open) => [...subs.values()].filter((s) => (s.from ?? 1) <= open),
     countSubscriptions: async () => subs.size,
-    subscribe: async (s, locale) => void subs.set(s.endpoint, { ...s, locale }),
+    openCount: async (now) => [...rooms.values()].filter((heard) => heard >= now - TOURNAMENT_FORGET).length,
+    subscribe: async (s, locale, from) => void subs.set(s.endpoint, { ...s, locale, from }),
     unsubscribe: async (endpoint) => void subs.delete(endpoint),
+    fromOf: async (endpoint) => subs.get(endpoint)?.from ?? null,
   };
   return { store, days, rooms, subs };
 }
@@ -55,7 +58,8 @@ describe('the notification when a public tournament opens', () => {
   it('notifies of a new tournament, never again of one still open, and at most once every PUSH_GAP', async () => {
     const { store } = memoryStore();
     await handle(store, { subscribe: subscription(1), locale: 'en' }, 0);
-    expect((await handle(store, { open: 'alpha123' }, 1000)).send).toHaveLength(1);
+    expect((await handle(store, { open: 'kessler-s-revenge-k7m2pq' }, 1000)).send).toHaveLength(1);
+    await handle(store, { open: 'alpha123' }, 1001);
     // the same tournament's heartbeats send nothing
     expect((await handle(store, { open: 'alpha123' }, 1120)).send).toBeUndefined();
     // another one within the gap neither
@@ -98,14 +102,16 @@ describe('the notification when a public tournament opens', () => {
     const target = { endpoint: 'https://push.example.net/send/gone', keys: { p256dh: toBase64Url(keys.publicKey), auth: toBase64Url(new Uint8Array(16).fill(7)) }, locale: 'de' as Locale };
     subs.set(target.endpoint, target);
     const sent: string[] = [];
-    await sendAll(store, [target], { keys: await freshKeys(), subject: 'https://solartournament.games' }, 1000, async (url) => {
+    await sendAll(store, [target], 1, { keys: await freshKeys(), subject: 'https://solartournament.games' }, 1000, async (url: string | URL | Request) => {
       sent.push(String(url));
       return new Response(null, { status: 410 });
     });
     expect(sent).toEqual([target.endpoint]);
     expect(subs.has(target.endpoint)).toBe(false);
-    expect(pushText('de').title).not.toBe(pushText('en').title);
-    expect(pushText('fr').url).toBe('/#tournaments');
+    expect(pushText('de', 1).title).not.toBe(pushText('en', 1).title);
+    expect(pushText('en', 3).title).toBe('3 public tournaments are open');
+    expect(pushText('de', 2).title).toContain('2');
+    expect(pushText('fr', 1).url).toBe('/#tournaments');
   });
 });
 
@@ -121,5 +127,41 @@ describe('the VAPID keys from the environment', () => {
     expect(fromRaw && toBase64Url(fromRaw.keys.privateKey)).toBe(raw);
     expect(await vapidOf({ VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: 'nonsense' })).toBeNull();
     expect(await vapidOf({ VAPID_PUBLIC_KEY: publicKey })).toBeNull();
+  });
+});
+
+describe('from how many open tournaments a Host hears', () => {
+  it('tells each Host only once its number is reached, and says how many are open', async () => {
+    const { store } = memoryStore();
+    await handle(store, { subscribe: subscription(1), locale: 'en', from: 1 }, 0);
+    await handle(store, { subscribe: subscription(2), locale: 'en', from: 2 }, 0);
+    await handle(store, { subscribe: subscription(3), locale: 'en', from: 99 }, 0);
+    const first = await handle(store, { open: 'room-one-aaaaaa' }, 1000);
+    // a number out of bounds counts as 1
+    expect(first.send?.map((s) => s.endpoint).sort()).toEqual([subscription(1).endpoint, subscription(3).endpoint].sort());
+    expect(first.open).toBe(1);
+    // the first one is still open, its lead says so on its heartbeat
+    await handle(store, { open: 'room-one-aaaaaa' }, 1000 + PUSH_GAP - 60);
+    // a second one opens after the gap: two are open, the second Host hears of it too
+    const second = await handle(store, { open: 'room-two-bbbbbb' }, 1000 + PUSH_GAP);
+    expect(second.open).toBe(2);
+    expect(second.send?.map((s) => s.endpoint).sort()).toEqual([subscription(1).endpoint, subscription(2).endpoint, subscription(3).endpoint].sort());
+  });
+
+  it('keeps the gap open when nobody asked to hear of so few', async () => {
+    const { store } = memoryStore();
+    await handle(store, { subscribe: subscription(1), locale: 'en', from: 3 }, 0);
+    expect((await handle(store, { open: 'room-one-aaaaaa' }, 1000)).send).toBeUndefined();
+    await handle(store, { subscribe: subscription(2), locale: 'en', from: 1 }, 1001);
+    expect((await handle(store, { open: 'room-two-bbbbbb' }, 1002)).send).toHaveLength(1);
+  });
+
+  it('says what a subscription chose, without writing', async () => {
+    const { store, days } = memoryStore();
+    await handle(store, { subscribe: subscription(1), locale: 'en', from: 2 }, 0);
+    const writes = [...days.values()].reduce((a, b) => a + b, 0);
+    expect((await handle(store, { status: subscription(1).endpoint }, 0)).body).toEqual({ from: 2 });
+    expect((await handle(store, { status: 'https://unknown' }, 0)).body).toEqual({ from: null });
+    expect([...days.values()].reduce((a, b) => a + b, 0)).toBe(writes);
   });
 });

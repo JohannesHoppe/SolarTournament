@@ -4,12 +4,15 @@
  *
  * - GET: the VAPID public key a browser subscribes with, or `{ key: null }` while the push is
  *   not set up (no database, no key); the game then shows no button for it.
- * - POST `{ subscribe: PushSubscription, locale }`: keeps a browser's subscription.
+ * - POST `{ subscribe: PushSubscription, locale, from }`: keeps a browser's subscription, the
+ *   Host's language and from how many open public tournaments on it wants to hear (1 to MAX_FROM).
  * - POST `{ unsubscribe: endpoint }`: forgets it.
+ * - POST `{ status: endpoint }`: from how many open tournaments on that subscription hears, or null.
  * - POST `{ open: room }`: the lead browser of a public tournament says it is open, once when it
  *   starts announcing it and every OPEN_HEARTBEAT seconds after. A tournament not heard of
- *   before (or not for TOURNAMENT_FORGET seconds) is new, and a new one sends every subscriber
- *   a notification, at most one every PUSH_GAP seconds for all tournaments together.
+ *   before (or not for TOURNAMENT_FORGET seconds) is new: the number of open ones rose, and the
+ *   notification (saying how many are open) goes to every subscriber whose number is reached, at
+ *   most one every PUSH_GAP seconds for all tournaments together.
  *
  * The VAPID keys come from the project's environment (VAPID_PUBLIC_KEY a plain variable in
  * wrangler.toml, VAPID_PRIVATE_KEY a secret in the dashboard, the raw private scalar in
@@ -20,7 +23,7 @@
  * and refuses to write beyond (the game works on without, the lobby needs none of this).
  */
 import { pushRequest, fromBase64Url, type Subscription, type Vapid } from '../src/net/webpush';
-import { pushText } from '../src/net/pushtext';
+import { MAX_FROM, pushText } from '../src/net/pushtext';
 import { LOCALES, type Locale } from '../src/i18n/i18n';
 
 /** The few calls of D1 this function makes (see Cloudflare's D1 client API). */
@@ -55,11 +58,19 @@ export interface PushStore {
   heard(room: string, now: number): Promise<number | null>;
   /** The time of the last notification, or -Infinity. */
   lastPush(): Promise<number>;
-  setLastPush(now: number): Promise<void>;
-  subscriptions(): Promise<(Subscription & { locale: Locale })[]>;
+  /** Keeps the time of a notification and counts the pushes it sends. */
+  setLastPush(now: number, pushes: number): Promise<void>;
+  /** The figures of the admin page (functions/admin.ts). */
+  stats(day: string, now: number): Promise<PushStats>;
+  /** The subscriptions that asked to hear of `open` tournaments or fewer. */
+  subscriptions(open: number): Promise<(Subscription & { locale: Locale })[]>;
   countSubscriptions(): Promise<number>;
-  subscribe(subscription: Subscription, locale: Locale, now: number): Promise<void>;
+  /** The tournaments heard of within TOURNAMENT_FORGET. */
+  openCount(now: number): Promise<number>;
+  subscribe(subscription: Subscription, locale: Locale, from: number, now: number): Promise<void>;
   unsubscribe(endpoint: string): Promise<void>;
+  /** From how many open tournaments on a subscription hears, or null without one. */
+  fromOf(endpoint: string): Promise<number | null>;
 }
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' } });
@@ -81,8 +92,18 @@ export function checkSubscription(value: unknown): Subscription | null {
   return { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } };
 }
 
+/** The push's figures: subscribers, the day's writes against the budget, tournaments open now and heard of in the last day, the last notification and the pushes sent in all. */
+export interface PushStats {
+  subscribers: number;
+  writes: number;
+  open: number;
+  heardToday: number;
+  lastPush: number;
+  pushes: number;
+}
+
 /** What a POST asks for, or why it is refused. */
-export type PushAnswer = { status: number; body: unknown; send?: (Subscription & { locale: Locale })[] };
+export type PushAnswer = { status: number; body: unknown; send?: (Subscription & { locale: Locale })[]; open?: number };
 
 /**
  * The function's rules on a POST's body, at `now` (s): subscribe, unsubscribe, or a tournament
@@ -91,15 +112,22 @@ export type PushAnswer = { status: number; body: unknown; send?: (Subscription &
 export async function handle(store: PushStore, body: unknown, now: number): Promise<PushAnswer> {
   const day = new Date(now * 1000).toISOString().slice(0, 10);
   if (typeof body !== 'object' || body === null) return { status: 400, body: { error: 'bad request' } };
-  const request = body as { subscribe?: unknown; locale?: unknown; unsubscribe?: unknown; open?: unknown };
+  const request = body as { subscribe?: unknown; locale?: unknown; from?: unknown; unsubscribe?: unknown; status?: unknown; open?: unknown };
+
+  // a read only: nothing counted against the writes
+  if ('status' in request) {
+    if (!isText(request.status, MAX_ENDPOINT)) return { status: 400, body: { error: 'bad request' } };
+    return { status: 200, body: { from: await store.fromOf(request.status) } };
+  }
 
   if ('subscribe' in request) {
     const subscription = checkSubscription(request.subscribe);
     if (!subscription) return { status: 400, body: { error: 'bad subscription' } };
     const locale = LOCALES.includes(request.locale as Locale) ? (request.locale as Locale) : 'en';
+    const from = Number.isInteger(request.from) && (request.from as number) >= 1 && (request.from as number) <= MAX_FROM ? (request.from as number) : 1;
     if ((await store.countSubscriptions()) >= MAX_SUBSCRIPTIONS) return { status: 503, body: { error: 'full' } };
     if (!(await store.spend(day, 1))) return { status: 503, body: { error: 'budget spent' } };
-    await store.subscribe(subscription, locale, now);
+    await store.subscribe(subscription, locale, from, now);
     return { status: 200, body: { ok: true } };
   }
 
@@ -111,8 +139,8 @@ export async function handle(store: PushStore, body: unknown, now: number): Prom
   }
 
   if ('open' in request) {
-    // a room's code: six to 32 letters or digits (see src/net/room.ts)
-    if (typeof request.open !== 'string' || !/^[a-z0-9]{6,32}$/i.test(request.open)) return { status: 400, body: { error: 'bad request' } };
+    // a room's code: six to 64 small letters, digits and dashes (roomCode in src/net/room.ts)
+    if (typeof request.open !== 'string' || !/^[a-z0-9-]{6,64}$/.test(request.open)) return { status: 400, body: { error: 'bad request' } };
     // the tournament's row, and the rows of those gone for a day
     if (!(await store.spend(day, 2))) return { status: 503, body: { error: 'budget spent' } };
     const room = await roomKey(request.open);
@@ -120,8 +148,12 @@ export async function handle(store: PushStore, body: unknown, now: number): Prom
     const fresh = before === null || now - before > TOURNAMENT_FORGET;
     if (!fresh || now - (await store.lastPush()) < PUSH_GAP) return { status: 200, body: { ok: true } };
     if (!(await store.spend(day, 1))) return { status: 200, body: { ok: true } };
-    await store.setLastPush(now);
-    return { status: 200, body: { ok: true }, send: await store.subscriptions() };
+    const open = await store.openCount(now);
+    const send = await store.subscriptions(open);
+    // nobody asked to hear of this many: the gap stays open for the next
+    if (!send.length) return { status: 200, body: { ok: true } };
+    await store.setLastPush(now, send.length);
+    return { status: 200, body: { ok: true }, send, open };
   }
 
   return { status: 400, body: { error: 'bad request' } };
@@ -134,11 +166,11 @@ async function roomKey(code: string): Promise<string> {
 }
 
 /** The store on D1; its tables are made on the first call of an instance. */
-function d1Store(db: D1Like): PushStore {
+export function d1Store(db: D1Like): PushStore {
   let ready: Promise<unknown> | null = null;
   const run = async (query: string, ...values: unknown[]) => {
     ready ??= Promise.all([
-      db.prepare('CREATE TABLE IF NOT EXISTS subscriptions (endpoint TEXT PRIMARY KEY, p256dh TEXT NOT NULL, auth TEXT NOT NULL, locale TEXT NOT NULL, created INTEGER NOT NULL)').bind().run(),
+      db.prepare('CREATE TABLE IF NOT EXISTS subscriptions (endpoint TEXT PRIMARY KEY, p256dh TEXT NOT NULL, auth TEXT NOT NULL, locale TEXT NOT NULL, from_open INTEGER NOT NULL, created INTEGER NOT NULL)').bind().run(),
       db.prepare('CREATE TABLE IF NOT EXISTS tournaments (room TEXT PRIMARY KEY, heard INTEGER NOT NULL)').bind().run(),
       db.prepare('CREATE TABLE IF NOT EXISTS days (day TEXT PRIMARY KEY, writes INTEGER NOT NULL)').bind().run(),
       db.prepare('CREATE TABLE IF NOT EXISTS state (key TEXT PRIMARY KEY, value REAL NOT NULL)').bind().run(),
@@ -163,19 +195,40 @@ function d1Store(db: D1Like): PushStore {
       const row = await (await run("SELECT value FROM state WHERE key = 'lastPush'")).first<{ value: number }>();
       return row?.value ?? -Infinity;
     },
-    async setLastPush(now) {
+    async setLastPush(now, pushes) {
       await (await run("INSERT INTO state (key, value) VALUES ('lastPush', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1", now)).run();
+      await (await run("INSERT INTO state (key, value) VALUES ('pushes', ?1) ON CONFLICT(key) DO UPDATE SET value = value + ?1", pushes)).run();
     },
-    async subscriptions() {
-      const { results } = await (await run('SELECT endpoint, p256dh, auth, locale FROM subscriptions LIMIT ?1', MAX_SUBSCRIPTIONS)).all<{ endpoint: string; p256dh: string; auth: string; locale: Locale }>();
+    async stats(day, now) {
+      const one = async <T>(query: string, ...values: unknown[]) => (await (await run(query, ...values)).first<T>()) ?? null;
+      const value = async (key: string) => (await one<{ value: number }>('SELECT value FROM state WHERE key = ?1', key))?.value;
+      return {
+        subscribers: (await one<{ n: number }>('SELECT COUNT(*) AS n FROM subscriptions'))?.n ?? 0,
+        writes: (await one<{ writes: number }>('SELECT writes FROM days WHERE day = ?1', day))?.writes ?? 0,
+        open: await this.openCount(now),
+        heardToday: (await one<{ n: number }>('SELECT COUNT(*) AS n FROM tournaments'))?.n ?? 0,
+        lastPush: (await value('lastPush')) ?? -Infinity,
+        pushes: (await value('pushes')) ?? 0,
+      };
+    },
+    async openCount(now) {
+      const row = await (await run('SELECT COUNT(*) AS n FROM tournaments WHERE heard >= ?1', now - TOURNAMENT_FORGET)).first<{ n: number }>();
+      return row?.n ?? 0;
+    },
+    async subscriptions(open) {
+      const { results } = await (await run('SELECT endpoint, p256dh, auth, locale FROM subscriptions WHERE from_open <= ?1 LIMIT ?2', open, MAX_SUBSCRIPTIONS)).all<{ endpoint: string; p256dh: string; auth: string; locale: Locale }>();
       return results.map(({ endpoint, p256dh, auth, locale }) => ({ endpoint, keys: { p256dh, auth }, locale }));
     },
     async countSubscriptions() {
       const row = await (await run('SELECT COUNT(*) AS n FROM subscriptions')).first<{ n: number }>();
       return row?.n ?? 0;
     },
-    async subscribe(subscription, locale, now) {
-      await (await run('INSERT INTO subscriptions (endpoint, p256dh, auth, locale, created) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(endpoint) DO UPDATE SET p256dh = ?2, auth = ?3, locale = ?4', subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, locale, now)).run();
+    async subscribe(subscription, locale, from, now) {
+      await (await run('INSERT INTO subscriptions (endpoint, p256dh, auth, locale, from_open, created) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(endpoint) DO UPDATE SET p256dh = ?2, auth = ?3, locale = ?4, from_open = ?5', subscription.endpoint, subscription.keys.p256dh, subscription.keys.auth, locale, from, now)).run();
+    },
+    async fromOf(endpoint) {
+      const row = await (await run('SELECT from_open FROM subscriptions WHERE endpoint = ?1', endpoint)).first<{ from_open: number }>();
+      return row?.from_open ?? null;
     },
     async unsubscribe(endpoint) {
       await (await run('DELETE FROM subscriptions WHERE endpoint = ?1', endpoint)).run();
@@ -203,10 +256,10 @@ export async function vapidOf(env: Env): Promise<Vapid | null> {
 }
 
 /** Sends the notification to every subscription, each in its Host's language; forgets those the push service says are gone. */
-export async function sendAll(store: PushStore, targets: (Subscription & { locale: Locale })[], vapid: Vapid, now: number, post: typeof fetch = fetch) {
+export async function sendAll(store: PushStore, targets: (Subscription & { locale: Locale })[], open: number, vapid: Vapid, now: number, post: typeof fetch = fetch) {
   for (const target of targets) {
     try {
-      const { url, init } = await pushRequest(target, JSON.stringify(pushText(target.locale)), vapid, now);
+      const { url, init } = await pushRequest(target, JSON.stringify(pushText(target.locale, open)), vapid, now);
       const answer = await post(url, init);
       if (answer.status === 404 || answer.status === 410) await store.unsubscribe(target.endpoint);
       else if (!answer.ok) console.error(`push: the push service answered ${answer.status}`);
@@ -219,6 +272,9 @@ export async function sendAll(store: PushStore, targets: (Subscription & { local
 export const onRequestGet: PagesFunction<Env> = async ({ env }) => json({ key: env.PUSH_DB && (await vapidOf(env)) ? env.VAPID_PUBLIC_KEY!.trim() : null });
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
+  // only the game's own pages: a current browser says where a request comes from
+  const site = request.headers.get('sec-fetch-site');
+  if (site !== null && site !== 'same-origin') return json({ error: 'foreign site' }, 403);
   const vapid = await vapidOf(env);
   if (!env.PUSH_DB || !vapid) return json({ error: 'not set up' }, 503);
   let body: unknown;
@@ -230,7 +286,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUnti
   const store = d1Store(env.PUSH_DB);
   const now = Date.now() / 1000;
   const answer = await handle(store, body, now);
-  if (answer.send?.length) waitUntil(sendAll(store, answer.send, vapid, now));
+  if (answer.send?.length) waitUntil(sendAll(store, answer.send, answer.open ?? 1, vapid, now));
   return json(answer.body, answer.status);
 };
 
