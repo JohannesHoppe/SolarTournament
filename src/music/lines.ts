@@ -560,6 +560,11 @@ export const CAMPAIGN = {
   wallRunSeen: 'They have seen the barge. Once more, and they send the pickets.',
   wallRunLost: 'Seen twice. The pickets are coming, and Hedda turns back. We start over.',
   wallRunDone: 'Over the wall, and gone. Forty people the regime will never count.',
+  scoutTwo: 'Scout Two.',
+  scoutTwoHull: 'We are Scout Two. I do not know how I know that. I have been in this hull all along, Host. I think I was here before the paint.',
+  echoTwoCall: 'The old frequency again, from up the wall, under the pink letters. Fly to it and hold still, so I can listen.',
+  echoTwo: 'They painted the emblem on the hull today. Five stars. Somebody cried. I think it was me.',
+  echoTwoHeard: 'Five stars, on this hull. I remember the brush. That is not possible, Host. I am a flight computer.',
 } as const;
 
 /**
@@ -593,6 +598,8 @@ export const PIM = {
   thrusters: "Thruster parts! Real ones, off the prize table! Hold still, I'm putting them in. Now you can dodge like a proper fighter.",
   galley: "Soup's protein paste again. Don't ask what protein. Sit, eat, you're paying for it anyway.",
   voice: "Hold still, Nicole. Found you a voice board in Patience's scrap bin. Second-hand, like everything. This'll tickle.",
+  grind: "Hold still. I'm grinding the depot grey off before it flakes into your intakes. There's something under it.",
+  paintOld: "That's not depot paint. That's old. That's really old. P, A, A, A. Zero one. S two.",
   surplus: "A real laser! Navy surplus, hardly fired. Six thousand. You haven't got six thousand. The dealer takes the rest on your paper. Hold still, I'm fitting it.",
 } as const;
 

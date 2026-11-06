@@ -7,7 +7,7 @@ import { arenaById } from '../world/arenas';
 import { DETAIL } from '../world/rocks';
 import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
-import { BARGE_FROM, BARGE_TO, MISSIONS, PEAK_COURSE, PEAK_LAPS, PEAK_RINGS } from './missions';
+import { BARGE_FROM, BARGE_TO, ECHO_TWO, MISSIONS, PEAK_COURSE, PEAK_LAPS, PEAK_RINGS } from './missions';
 import { ARENA_LIMIT } from '../world/arena';
 
 /** A middling bot: what a Host is asked to fly, it must manage (see CLAUDE.md, Plausibility). */
@@ -55,5 +55,14 @@ describe('the Ore Barge out of Occator', () => {
       expect(field.overlap(point, 3000), `at ${k} %`).toBeNull();
       expect(point.length()).toBeLessThan(ARENA_LIMIT);
     }
+  });
+});
+
+describe('the second echo at Occator', () => {
+  it('lies before the wall’s second step, clear of every piece of the place, inside the arena', () => {
+    const field = testField(DETAIL);
+    field.generate(arenaById('occator')!.layout);
+    expect(field.overlap(ECHO_TWO, 800)).toBeNull();
+    expect(ECHO_TWO.length()).toBeLessThan(ARENA_LIMIT);
   });
 });

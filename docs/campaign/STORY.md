@@ -128,7 +128,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 3.2 | Ore Barge | escort | Escort a Rockborn ore barge (240 m, four hoppers heaped with ore) on its lane out of Occator, from before the market over the terrace and out over the crater floor and up, 3.3 km at 20 m/s. 25 s after it sets out the scrappers come (Rust, Grit and Slag), three of skill 0.2, and once they are down three of skill 0.3; each holds 500 m off the barge and fires at its hull until a ship comes within 800 m of it, then fights. The barge at its lane's end with both waves down wins; 300 of their hits on its hull (three left alone land about four a second) fail it, and the attempt starts over. The music turns to the fight when they come. (built) | ☉ 2,000 · 120 | New: an escorted ship on a lane, the raiders of Saw Brothers |
 | 3.3 | Repo Men | fight | The Tallymen, holders of the debt, come for the Magpie. Their tug (dark, the firm's stencils, a winch drum on its stern) lies 1.5 km off over the crater; 4 s in, its harpoon bites the hull and the winch reels it in at 12 m/s, the cable as long as the way was and shortening, the hull held on it whatever its drive does. Four guards (Docket, Lien, Arrears, Escrow; skill 0.3) fight round the tug. Twelve beams on the winch (within 25 m of its drum) snap the cable, or three guards shot down make them give up; reeled within 100 m of the winch, the hull is theirs and the attempt starts over. (built) | ☉ 1,500 · 150 | Raiders as guards; a cable reeled in |
 | 3.4 | Wall Run | escort | Lead Hedda's barge of forty Rockborn refugees, bound for the inner system, over the finished stretch of the Solar Wall. The barge follows the hull's way 400 m behind it at up to 25 m/s. Fifteen searchlights stand on the wall's top edge, 400 m apart, each a cone 14° wide on either side reaching 3 km, sweeping across the lane by up to 76° over 24 s and along the wall at a pace of its own: they look up and out, never down at their own feet, so a barge led over within some 50 m of the edge mostly stays under them, and one led high over it is seen. A light that holds the barge (bow, middle or stern) for 3 s sees it, the time adding up while it is lit and fading at half that pace while it is not; seen twice fails it. 1 km beyond the wall it is through. (built) | ☉ 1,000 · 200 | Escort; new: searchlight cones |
-| 3.5 | Scout Two | story | In Pim's workshop the paint comes off. A scene on the hangar's pad. | — | The title screen's pad |
+| 3.5 | Scout Two | story | In Patience's workshop Pim grinds the depot's grey off the hull, and the scout's old livery shows: PAAA 01, S2, five stars. Nicole knows the name. Then something on the old frequency again, from the wall's second step under the neon NO WALL IN SPACE: the hull held before it (within 40 m, slower than 2 m/s, 3 s), and Nicole hears echo 2. The hull wears the livery from then on, on the pad too. (built) | 20 | Lines; markers; a look on the hull |
 
 ### Act II: Lanes
 
@@ -344,7 +344,7 @@ It gets its name from Pim in chapter 1: "Magpie. 'Cause everything on you is nic
 
 1. **Lot 7731** (prologue, built). The human interceptor of the Games worn to the metal and rusted, the yard's stencils on it, without its gun, its tournament stripes and its left strut and fin; one drive bell cracked.
 2. **Patched** (chapters 1 to 3; built so far: a crooked band of other steel welded around both ends of each thruster housing). Olive panels from depot fighters, each a slightly different olive; Rockborn plates in yellow and black hazard stripes over the bare flank; the mining cutter's boom under the nose, striped as a moving part; Pim's spray stencil of a magpie on the fin; WE DIG sprayed across a hatch.
-3. **Scout Two** (chapters 3 to 8). Pim strips the paint off the fuselage: the scout's original plating shows, its old off-white livery with its dark blue stripes above and below (the same band as the Derelict's), the five stars of the united Earth's emblem and the stencil PAAA 01 · S2 in letters built from bars. The military laser's pod; the torpedo tube in a salvaged pod; radiator fins of a Jupiter tug, bronze and copper, tinted by heat.
+3. **Scout Two** (chapters 3 to 8; built so far: the livery on both flanks, from behind the nose's thrusters to over the wing root, 12 m long and 1.5 m tall, an off-white band chipped to the metal, more towards its ends, over a dark blue stripe, the five stars of the united Earth's emblem, PAAA 01 and S2 in letters built from bars). Pim strips the paint off the fuselage: the scout's original plating shows, its old off-white livery with its dark blue stripes above and below (the same band as the Derelict's), the five stars of the united Earth's emblem and the stencil PAAA 01 · S2 in letters built from bars. The military laser's pod; the torpedo tube in a salvaged pod; radiator fins of a Jupiter tug, bronze and copper, tinted by heat.
 4. **Rigged** (chapters 8 to 13). The harpoon's winch on the belly; a Victory Cola decal, as the contract requires (Pim puts it on upside down); neon trim; the tally marks in rows under the canopy.
 5. **Magpie** (chapter 13 to the end). The whole livery, hand-brushed: panels in matte black and chalk white, as the bird is colored, every brush stroke showing. The old PAAA band kept on the fuselage, with S2 and the five stars. The scout's long nose and sensor mast rebuilt by Pim. A film of salvaged flip paint along the wing edges that shifts from blue to green as the angle changes, as the bird's feathers do. A neon tube in sun orange, bent by hand into a magpie, on the fin. The overdrive's reactor vents tinted straw and blue. The knot sigil of the Loose, small, behind the cockpit. Behind the canopy the hump of the sleeper pod, rebuilt as the scout carried it.
 
@@ -590,15 +590,23 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 
 **NICOLE** *(through)*: Over the wall, and gone. Forty people the regime will never count.
 
-### The paint comes off (chapter 3)
+### The paint comes off (chapter 3, built)
 
-*The pad. Pim's grinder screams along the fuselage. Grey flakes away, then olive, then an off-white band with a dark blue stripe, five stars, letters made of bars.*
+*Patience's workshop. Pim's grinder screams along the fuselage. Grey flakes away, then olive, then an off-white band with a dark blue stripe, five stars, letters made of bars.*
+
+**PIM**: Hold still. I'm grinding the depot grey off before it flakes into your intakes. There's something under it.
 
 **PIM**: That's not depot paint. That's old. That's really old. P, A, A, A. Zero one. S two.
 
 **NICOLE**: Scout Two.
 
 **NICOLE**: We are Scout Two. I do not know how I know that. I have been in this hull all along, Host. I think I was here before the paint.
+
+**NICOLE**: The old frequency again, from up the wall, under the pink letters. Fly to it and hold still, so I can listen.
+
+**ECHO 2** *(her voice, from long ago)*: They painted the emblem on the hull today. Five stars. Somebody cried. I think it was me.
+
+**NICOLE**: Five stars, on this hull. I remember the brush. That is not possible, Host. I am a flight computer.
 
 ### Hollow Jack (chapter 8)
 

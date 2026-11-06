@@ -118,6 +118,8 @@ export interface Perks {
   laserHeat: number;
   /** A look: plates welded over the thrusters' housings (the campaign's hull once Pim has welded its thrusters up, see campaign/campaign); only a hull that carries them shows them. */
   patched: boolean;
+  /** A look: the depot's grey ground off and the scout's old livery under it (the campaign's hull from Scout Two on, see campaign/campaign); only a hull that carries it shows it. */
+  stripped: boolean;
 }
 
 export const STOCK: Readonly<Perks> = {
@@ -138,6 +140,7 @@ export const STOCK: Readonly<Perks> = {
   laserReach: 1,
   laserHeat: 1,
   patched: false,
+  stripped: false,
 };
 
 /**

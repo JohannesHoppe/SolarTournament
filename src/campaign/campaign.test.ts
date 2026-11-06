@@ -76,6 +76,14 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(JSON.stringify({ done: [] })).modules).toEqual([]);
   });
 
+  it('grinds the depot’s grey off in Scout Two: the old livery shows on the hull from then on', () => {
+    const campaign = freshCampaign();
+    expect(hullOf(campaign).stripped).toBe(false);
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'scoutTwo')!);
+    expect(hullOf(campaign).stripped).toBe(true);
+    expect(campaignFrom(JSON.stringify({ parts: ['stripped'] })).parts).toEqual(['stripped']);
+  });
+
   it('fits the military laser in Surplus: paid from the wallet as far as it holds, the rest on the debt, the Games\' own laser in place of the cutter', () => {
     const campaign = { ...freshCampaign(), coins: 2500, bond: 20000, parts: ['cutter' as const] };
     complete(campaign, MISSIONS.find((mission) => mission.id === 'surplus')!);

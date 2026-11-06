@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { mergeGeometries, toCreasedNormals } from 'three/addons/utils/BufferGeometryUtils.js';
 import { boxUv, hullSurface, lacquer, shine, type Wear } from '../view/surfaces';
 import { hazeUniforms } from '../view/haze';
-import { numberAspect, numberTexture } from '../view/lettering';
+import { letteringTexture, numberAspect, numberTexture } from '../view/lettering';
 import { NOZZLE_LENGTH, QUAD_SIZE, quadsOf, thrustersOf, type QuadLayout } from './thrusters';
 import { hypot } from '../detmath';
+import { Randomizer } from '../random';
 
 /**
  * The two interceptors, built in code as low-poly hulls (a few hundred triangles each), shaded
@@ -645,7 +646,61 @@ export function scrapInterceptor(original: THREE.Object3D): THREE.Object3D {
   ];
   const root = hull(original, 'humanHull', coats, trim, radiators, { parts: lights, color: TAIL_LIGHT });
   root.add(welds(THRUSTER_LAYOUTS.human));
+  root.add(oldLivery());
   return root;
+}
+
+/**
+ * What lies under the depot's grey once Pim has ground it off (see Perks.stripped): the scout's
+ * old livery on both flanks, the five stars of the united Earth's emblem, the mother ship's
+ * registry and the scout's own, PAAA 01 and S2, between livery stripes (see view/lettering), weathered as paint
+ * five centuries old is. Paint, like the Sovereign's number; one mesh named `livery`, hidden
+ * until the paint comes off.
+ */
+export const SCOUT_LIVERY = { name: 'PAAA 01', registry: 'S2', fore: -150, aft: 90, y: 2, height: 30 };
+
+function oldLivery(): THREE.Group {
+  const { fore, aft, y, height } = SCOUT_LIVERY;
+  const span = { fore, aft, bottom: y - height / 2, top: y + height / 2 };
+  const paint = (map: THREE.Texture, lift: number) =>
+    new THREE.Mesh(flankPaint(HUMAN_BODY, span), new THREE.MeshStandardMaterial({ map, transparent: true, alphaTest: 0.05, roughness: 0.8, metalness: 0.1, polygonOffset: true, polygonOffsetFactor: lift, polygonOffsetUnits: lift }));
+  const livery = new THREE.Group().add(paint(liveryBand(7735), -1), paint(letteringTexture({ emblem: true, name: SCOUT_LIVERY.name, registry: SCOUT_LIVERY.registry }, 7734), -2));
+  livery.name = 'livery';
+  livery.traverse((part) => (part.userData.decal = true));
+  livery.visible = false;
+  return livery;
+}
+
+/** The band the old livery's letters lie on: off-white over a dark blue stripe, five centuries old, chipped to the metal here and there, its edges ragged. */
+function liveryBand(seed: number): THREE.Texture {
+  if (typeof document === 'undefined') return new THREE.Texture();
+  const width = 1024;
+  const height = 128;
+  const element = document.createElement('canvas');
+  element.width = width;
+  element.height = height;
+  const g = element.getContext('2d');
+  if (!g) return new THREE.Texture();
+  g.fillStyle = '#d6cfbd';
+  g.fillRect(0, height * 0.08, width, height * 0.74);
+  g.fillStyle = '#1a2d55';
+  g.fillRect(0, height * 0.82, width, height * 0.12);
+  // chips down to the metal: the paint gone in flakes, more of them towards the ends
+  const r = new Randomizer(seed);
+  const next = () => r.nextFloat();
+  g.globalCompositeOperation = 'destination-out';
+  for (let k = 0; k < 260; k++) {
+    const x = next() * width;
+    const end = Math.min(x, width - x) / width;
+    if (next() > 0.35 + end * 2) continue;
+    g.beginPath();
+    g.ellipse(x, next() * height, 2 + next() * 14, 1 + next() * 6, next() * Math.PI, 0, Math.PI * 2);
+    g.fill();
+  }
+  const texture = new THREE.CanvasTexture(element);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 4;
+  return texture;
 }
 
 /**
@@ -760,15 +815,20 @@ export function sovereignNumberSpan() {
  * arrowhead, in gold outlined dark, polished like the gold; paint, so it casts and takes shadows
  * with the plates but has no shape of its own (`decal`: the silhouette leaves it out).
  */
-function hullNumber(): THREE.Mesh {
-  const { fore, aft, bottom, top } = sovereignNumberSpan();
+/**
+ * Paint lying on both flat flanks of an octagonal body lofted through `body`, over `span` (along
+ * z from its fore end to its aft end, from its foot to its top), reading the right way round from
+ * either side: seen from outside, towards the nose on the right flank and towards the stern on
+ * the left. Its texture runs across it once.
+ */
+function flankPaint(body: End[], span: { fore: number; aft: number; bottom: number; top: number }): THREE.BufferGeometry {
+  const { fore, aft, bottom, top } = span;
   const points: number[] = [];
   const uv: number[] = [];
   for (const side of [1, -1]) {
-    // seen from outside, the number reads towards the nose on the right flank and towards the stern on the left
     const [left, right] = side > 0 ? [aft, fore] : [fore, aft];
     const corner = (z: number, y: number) => {
-      const end = at(SOVEREIGN_BODY, z);
+      const end = at(body, z);
       return [side * ((end.x ?? 0) + end.w + NUMBER_LIFT), y, z];
     };
     const quad = [corner(left, bottom), corner(right, bottom), corner(right, top), corner(left, top)];
@@ -782,6 +842,11 @@ function hullNumber(): THREE.Mesh {
   geometry.setAttribute('position', new THREE.Float32BufferAttribute(points, 3));
   geometry.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
   geometry.computeVertexNormals();
+  return geometry;
+}
+
+function hullNumber(): THREE.Mesh {
+  const geometry = flankPaint(SOVEREIGN_BODY, sovereignNumberSpan());
   const material = new THREE.MeshStandardMaterial({
     map: numberTexture(SOVEREIGN_NUMBER.text, `#${new THREE.Color(GOLD).getHexString()}`, NUMBER_EDGE),
     // cut out along the digits' outline, drawn and shadowed with the opaque hull

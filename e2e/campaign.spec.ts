@@ -413,3 +413,24 @@ test('Wall Run: the barge follows the hull low over the Solar Wall’s top edge,
   await page.evaluate(() => (window.game.timeScale = 1));
   expect(errors).toEqual([]);
 });
+
+test('Scout Two grinds the grey off: the old livery shows on the hull once the second echo is heard', async ({ page }) => {
+  test.setTimeout(300_000);
+  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge', 'repoMen', 'wallRun'], coins: 3700, parts: [...CHAPTER_TWO_DONE.parts, 'laser'], modules: ['targeting'] };
+  const errors = await takeJobFrom(page, kept);
+  await page.waitForFunction(() => window.game.venue?.id === 'occator' && window.game.school?.stepIndex === 4 && window.game.school.attempt?.live && window.game.me?.alive, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.me.model.getObjectByName('livery')?.visible)).toBe(false);
+  // the clone held before the wall's second step: the echo, and the livery on the hull from then on
+  await page.evaluate(async (path) => {
+    const game = window.game;
+    const { ECHO_TWO } = (await import(path)) as typeof import('../src/campaign/missions');
+    const start = game.time;
+    while (game.school?.stepIndex === 4 && game.time - start < 20) {
+      game.me.flight.position.copy(ECHO_TWO);
+      game.me.flight.velocity.set(0, 0, 0);
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+  }, '/src/campaign/missions.ts');
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).parts.includes('stripped')), { timeout: 120_000 }).toBe(true);
+  expect(errors).toEqual([]);
+});

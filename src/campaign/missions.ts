@@ -3,7 +3,7 @@ import { msg, t } from '../i18n/i18n';
 import { CAMPAIGN, HEDDA, PIM, RASK, SAW, TALLY } from '../music/lines';
 import { clear, holdFor, PIPE_BORE, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
-import { MARKET_DOCK, onPlace } from '../world/ceres';
+import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
 import { hullInLight } from '../world/wall';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
@@ -931,6 +931,31 @@ const wallRun: Drill = {
   mark: (_, a) => t('Barge · seen {n}/{max}', { n: a.count, max: SEEN_MAX }),
 };
 
+/**
+ * Scout Two (3.5): Pim grinds the depot's grey off and the scout's old livery shows under it (see
+ * Perks.stripped); then the second echo, from the wall's second step under the neon NO WALL IN
+ * SPACE: the hull held before it, within ECHO_REACH and slower than ECHO_STILL for ECHO_HOLD seconds.
+ */
+export const ECHO_TWO = onPlace(stepFace(2) - 1200, stepTop(1) + (stepTop(2) - stepTop(1)) * 0.7, -7000);
+
+const echoTwo: Drill = {
+  line: CAMPAIGN.echoTwoCall,
+  keys: ['turn', 'drive', 'brake'],
+  arena: 'occator',
+  autopilot: true,
+  enter(_, __, markers) {
+    markers.clear();
+    markers.zone(ECHO_TWO, ECHO_REACH);
+  },
+  done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.position.distanceTo(ECHO_TWO) < ECHO_REACH && ctx.me.flight.velocity.length() < ECHO_STILL, ECHO_HOLD),
+  waypoint: () => ECHO_TWO,
+  mark: () => t('Signal'),
+};
+
+const fitStripped = (campaign: Campaign) => {
+  if (!campaign.parts.includes('stripped')) campaign.parts.push('stripped');
+};
+
 /** The missions in the order the story runs them. */
 export const MISSIONS: readonly Mission[] = [
   {
@@ -996,4 +1021,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'oreBarge', name: msg('Ore Barge'), drills: [onCeres(HEDDA.oreBarge), oreBarge, said(CAMPAIGN.oreBargeDone, 'occator')], pay: 2000, ratings: 120 },
   { id: 'repoMen', name: msg('Repo Men'), drills: [onCeres(HEDDA.repoMen), said(TALLY.repo, 'occator'), repoMen, said(TALLY.noted, 'occator'), said(CAMPAIGN.repoMenDone, 'occator')], pay: 1500, ratings: 150 },
   { id: 'wallRun', name: msg('Wall Run'), drills: [said(HEDDA.wallRun, 'wall'), wallRun, said(CAMPAIGN.wallRunDone, 'wall')], pay: 1000, ratings: 200 },
+  { id: 'scoutTwo', name: msg('Scout Two'), drills: [onCeres(PIM.grind), onCeres(PIM.paintOld), onCeres(CAMPAIGN.scoutTwo), onCeres(CAMPAIGN.scoutTwoHull), echoTwo, said(CAMPAIGN.echoTwo, 'occator'), said(CAMPAIGN.echoTwoHeard, 'occator')], pay: 0, ratings: 20, fit: fitStripped },
 ];

@@ -494,6 +494,9 @@ export class Ship {
     // Pim's welds, on the one hull that carries them (see models, welds)
     const patches = this.model.getObjectByName('patches');
     if (patches) patches.visible = perks.patched;
+    // the scout's old livery under the depot's grey, once Pim has ground it off (see models, oldLivery)
+    const livery = this.model.getObjectByName('livery');
+    if (livery) livery.visible = perks.stripped;
     if (this.engine.flameMaterial) this.engine.flameMaterial.color.copy(FLAME_TINTS[perks.flame]);
     const { strips, stern, light } = this.trim;
     strips.visible = perks.neon > 0;
