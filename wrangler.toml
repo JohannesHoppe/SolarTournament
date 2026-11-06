@@ -8,11 +8,12 @@ compatibility_date = "2026-10-01"
 # dashboard). The account whose TURN traffic the monthly budget reads; an account ID is no secret.
 [vars]
 CLOUDFLARE_ACCOUNT_ID = "2ccacec509bc697696aa0b57f969dc16"
-# The VAPID public key of functions/push.ts (its private key, VAPID_PRIVATE_KEY, is a secret in the dashboard).
 # The admin page functions/admin.ts: the Cloudflare Access team (its name in <team>.cloudflareaccess.com)
-# and the application's audience tag; until both are set, /admin answers 404.
-# ACCESS_TEAM = ""
-# ACCESS_AUD = ""
+# and the audience tag of its application (solartournament.games/admin and test.solartournament.games/admin,
+# an e-mail one-time code for Johannes); until both are set, /admin answers 404.
+ACCESS_TEAM = "angular"
+ACCESS_AUD = "9c4a746da8a48ddb7b8b331c9ec20a5dffef2ba52f20fa0a8568f05d5940495b"
+# The VAPID public key of functions/push.ts (its private key, VAPID_PRIVATE_KEY, is a secret in the dashboard).
 VAPID_PUBLIC_KEY = "BJH00R6tfAPkd_kF9r5uDQeEU0ezUOqlYDA_5T1hvWEHMXoIx7S3mATeP3vlC3HT-CkXbM3usjFmugR27R9zhoA"
 
 # The subscriptions of functions/push.ts (the tables are made by the function itself).
