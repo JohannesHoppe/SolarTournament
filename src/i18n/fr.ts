@@ -1670,4 +1670,11 @@ export const FR: Catalog = {
   "The old frequency, Host, from the craters. A Navy listening post, dead for longer than anyone remembers. Hold us still over its dish, so I can listen.": "L’ancienne fréquence, Hôte, depuis les cratères. Un poste d’écoute de la Marine, mort depuis plus longtemps que quiconque s’en souvienne. Tiens-nous immobiles au-dessus de son antenne, que je puisse écouter.",
   "Departure minus thirty days. The children keep asking whether the stars are warm.": "Départ moins trente jours. Les enfants n’arrêtent pas de demander si les étoiles sont chaudes.",
   "Children. There were children on that ship, Host. I told them something about the stars. I wish I knew what.": "Des enfants. Il y avait des enfants sur ce vaisseau, Hôte. Je leur ai dit quelque chose sur les étoiles. J’aimerais savoir quoi.",
+  "The Quiet Man": "The Quiet Man",
+  "The Quiet Man · turned away": "The Quiet Man · s’est détourné",
+  "There he is. They say he has never finished a clone, Host. They say he does not need to.": "Le voilà. On dit qu’il n’a jamais achevé un clone, Hôte. On dit qu’il n’en a pas besoin.",
+  "He has turned away. He could have finished us, and he did not. Shoot him in the back, or let him go. It is your choice, Host.": "Il s’est détourné. Il aurait pu nous achever, et il ne l’a pas fait. Tire-lui dans le dos, ou laisse-le partir. C’est ton choix, Hôte.",
+  "He is down. Lanes Watch will love it. I am not sure I do.": "Il est abattu. Lanes Watch va adorer. Je ne suis pas sûre d’aimer ça.",
+  "He is gone. He let us live, and we let him. I will remember that, Host.": "Il est parti. Il nous a laissés vivre, et nous aussi. Je m’en souviendrai, Hôte.",
+  "Lanes Watch posted a bounty on one of the Loose. They call him the Quiet Man. Shoots drives, never finishes a clone, never says a word. Strange thing to put a price on. Two and a half thousand.": "Lanes Watch a mis une prime sur l’un des Loose. On l’appelle le Quiet Man. Tire sur les moteurs, n’achève jamais un clone, ne dit jamais un mot. Drôle de chose à mettre à prix. Deux mille cinq cents.",
 };

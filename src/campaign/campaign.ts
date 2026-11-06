@@ -95,7 +95,7 @@ export function hullOf(campaign: Campaign): Perks {
   return hull;
 }
 
-export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'plating';
+export type MissionId = 'coldBoot' | 'lamplighter' | 'liveTarget' | 'canisterSweep' | 'cutter' | 'firstCut' | 'dockingLane' | 'rheasilvia' | 'claimSurvey' | 'cutAndHaul' | 'sawBrothers' | 'peakRun' | 'practiceLog' | 'occator' | 'surplus' | 'oreBarge' | 'repoMen' | 'wallRun' | 'scoutTwo' | 'overhaul' | 'stickneyGrand' | 'debtDay' | 'grooveShoot' | 'armorPanels' | 'pilotEpisode' | 'iceRun' | 'valhallaSprint' | 'callistoEcho' | 'radiators' | 'dose' | 'underTheLineae' | 'quietMan' | 'plating';
 
 export interface Mission {
   id: MissionId;
@@ -104,8 +104,8 @@ export interface Mission {
   drills: Drill[];
   /** What it pays the first time (☉, before the yard's cut). */
   pay: number;
-  /** The ratings it earns the first time (see RANKS); the yard takes no cut of them. */
-  ratings?: number;
+  /** The ratings it earns the first time (see RANKS), or what a choice made in it earns; the yard takes no cut of them. */
+  ratings?: number | ((campaign: Campaign) => number);
   /** What it changes in the campaign the first time it is done: a part fitted, the debt grown. */
   fit?: (campaign: Campaign) => void;
   /** Its music (see Mood in src/music/radio.ts) where a drill or a scene asks for none of its own; calm without. */
@@ -159,9 +159,15 @@ export interface Campaign {
   modules: Module[];
   /** The debt bought by an anonymous benefactor (Debt Day, chapter 4): from then on nobody takes a cut, and the debt stands as it is. */
   held: boolean;
+  /** What the Host chose where the story asks (see Choice), for what remembers it later. */
+  choices: Choice[];
 }
 
-export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false });
+/** The choices the story asks of the Host: the Quiet Man let go when he turned away (The Quiet Man, chapter 6). */
+export type Choice = 'quietManSpared';
+const CHOICES: readonly Choice[] = ['quietManSpared'];
+
+export const freshCampaign = (): Campaign => ({ done: [], step: 0, coins: 0, bond: BOND, ratings: 0, parts: [], modules: [], held: false, choices: [] });
 
 /** A campaign from what the browser kept; anything it cannot read is a fresh start, a mission or part it does not know is passed over. */
 export function campaignFrom(text: string | null): Campaign {
@@ -173,8 +179,9 @@ export function campaignFrom(text: string | null): Campaign {
     const done = Array.isArray(kept.done) ? kept.done.filter((id): id is MissionId => typeof id === 'string' && ids.has(id)) : [];
     const parts = Array.isArray(kept.parts) ? PARTS.filter((part) => kept.parts!.includes(part)) : [];
     const modules = Array.isArray(kept.modules) ? MODULES.filter((module) => kept.modules!.includes(module)) : [];
+    const choices = Array.isArray(kept.choices) ? CHOICES.filter((choice) => kept.choices!.includes(choice)) : [];
     const number = (value: unknown, fallback: number, max: number) => (typeof value === 'number' && Number.isFinite(value) && value >= 0 ? Math.min(Math.floor(value), max) : fallback);
-    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true };
+    return { done, step: number(kept.step, 0, 1000), coins: number(kept.coins, 0, 10_000_000), bond: number(kept.bond, BOND, BOND_MAX), ratings: number(kept.ratings, 0, 1_000_000), parts, modules, held: kept.held === true, choices };
   } catch {
     return fresh;
   }
@@ -190,6 +197,9 @@ export const nextMission = (campaign: Campaign): Mission | null => MISSIONS.find
  * mission starts at its beginning. Returns what the Host kept, what the yard took, the ratings
  * earned and the rank reached, if the ratings raised it.
  */
+/** The ratings a mission earns the first time, for the choices the campaign holds. */
+export const ratingsOf = (mission: Mission, campaign: Campaign): number => (typeof mission.ratings === 'function' ? mission.ratings(campaign) : (mission.ratings ?? 0));
+
 export function complete(campaign: Campaign, mission: Mission, fine = 0): { kept: number; cut: number; ratings: number; rank: string | null } {
   const first = !campaign.done.includes(mission.id);
   if (first) {
@@ -202,7 +212,7 @@ export function complete(campaign: Campaign, mission: Mission, fine = 0): { kept
   const cut = campaign.held ? 0 : Math.min(campaign.bond, Math.round(pay * YARD_CUT));
   campaign.bond -= cut;
   campaign.coins += pay - cut;
-  const ratings = first ? (mission.ratings ?? 0) : 0;
+  const ratings = first ? ratingsOf(mission, campaign) : 0;
   const before = rankOf(campaign.ratings);
   campaign.ratings += ratings;
   const rank = rankOf(campaign.ratings);

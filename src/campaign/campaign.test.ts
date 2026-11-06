@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, PLATING_PRICE, RADIATORS_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, ratingsOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 import { PLATING_STEP, RADIATOR_STEP, STOCK } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
@@ -45,7 +45,7 @@ describe('the campaign Lot 7731', () => {
     expect(campaignFrom(null)).toEqual(freshCampaign());
     expect(campaignFrom('{oops')).toEqual(freshCampaign());
     // a mission it does not know is passed over, a number out of reach held in it
-    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false });
+    expect(campaignFrom(JSON.stringify({ done: ['later', MISSIONS[0].id], step: -4, coins: 'x', bond: 1e9, ratings: -3, parts: ['cutter', 'warp'], modules: ['radar', 'psychic'], choices: ['quietManSpared', 'mercy'] }))).toEqual({ done: [MISSIONS[0].id], step: 0, coins: 0, bond: BOND_MAX, ratings: 0, parts: ['cutter'], modules: ['radar'], held: false, choices: ['quietManSpared'] });
   });
 
   it('counts a mission’s ratings once and in full, and names the rank they raise the Host to', () => {
@@ -54,11 +54,11 @@ describe('the campaign Lot 7731', () => {
     const ranks: string[] = [];
     for (const mission of MISSIONS) {
       const done = complete(campaign, mission);
-      expect(done.ratings).toBe(mission.ratings ?? 0);
+      expect(done.ratings).toBe(ratingsOf(mission, campaign));
       if (done.rank) ranks.push(done.rank);
     }
     // chapter 1 lifts the Host into the background of the feeds, chapter 2 onto the local ones, chapter 4 onto the regional ones
-    expect(campaign.ratings).toBe(MISSIONS.reduce((sum, mission) => sum + (mission.ratings ?? 0), 0));
+    expect(campaign.ratings).toBe(MISSIONS.reduce((sum, mission) => sum + ratingsOf(mission, campaign), 0));
     expect(ranks).toEqual(['Background', 'Local Feed', 'Regional Feed']);
     expect(complete(campaign, MISSIONS[1]).ratings).toBe(0);
     expect(RANKS.map((rank) => rank.from)).toEqual([...RANKS.map((rank) => rank.from)].sort((a, b) => a - b));
@@ -121,6 +121,15 @@ describe('the campaign Lot 7731', () => {
     expect(hullOf(campaign).cooling).toBeCloseTo(before + RADIATOR_STEP, 10);
     expect(hullOf(campaign).cooling).toBeLessThan(1);
     expect([campaign.coins, campaign.bond]).toEqual([0, 20000 + RADIATORS_PRICE - 400]);
+  });
+
+  it('pays the Quiet Man’s full ratings for him shot down, fewer for him let go, and keeps the choice', () => {
+    const quiet = MISSIONS.find((mission) => mission.id === 'quietMan')!;
+    const shot = freshCampaign();
+    expect(complete(shot, quiet).ratings).toBe(250);
+    const spared = { ...freshCampaign(), choices: ['quietManSpared' as const] };
+    expect(complete(spared, quiet).ratings).toBe(100);
+    expect(campaignFrom(JSON.stringify(spared)).choices).toEqual(['quietManSpared']);
   });
 
   it('fits Plating I at Europa: every hit hurting a step less, paid as the laser is', () => {

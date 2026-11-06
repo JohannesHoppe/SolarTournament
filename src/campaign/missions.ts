@@ -1432,6 +1432,60 @@ const doseRun: Drill = {
   mark: (_, a) => t('Tanker · dose {dose} %', { dose: Math.floor(a.taken * 100) }),
 };
 
+/**
+ * The Quiet Man (6.3): a raider of the Loose (skill QUIET_SKILL) who fights the hull over the
+ * ice and never finishes a clone (see SchoolContext.spareClones). QUIET_DUEL seconds into the
+ * fight, or once he has worn the hull down to SPARED (of 100), he turns away and flies off to
+ * QUIET_GONE: shot down, he pays the full ratings; once within QUIET_REACH of it he is gone, let
+ * go, and the campaign remembers it (Choice 'quietManSpared'), for fewer ratings.
+ */
+const QUIET_SKILL = 0.5;
+const QUIET_DUEL = 40;
+const SPARED = 30;
+const QUIET_FIELD = point(35000, EUROPA_LAND + 6000, -20000);
+const QUIET_GONE = point(-50000, EUROPA_LAND + 8000, 30000);
+const QUIET_REACH = 6000;
+/** How long the outcome's line has before the drill ends (s). */
+const QUIET_AFTER = 4;
+const QUIET_RATINGS = 250;
+const QUIET_SPARED_RATINGS = 100;
+
+const quietMan: Drill = {
+  line: CAMPAIGN.quietMan,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'europa',
+  autopilot: false,
+  music: 'fight',
+  enter(ctx, a) {
+    ctx.spawnJumpers(null, QUIET_FIELD, 1, QUIET_SKILL, ['The Quiet Man'], 12000, true);
+    ctx.spareClones();
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+    // a.count: 0 fighting, 1 turned away; a.doneAt: when the drill ends, its outcome said
+    a.count = 0;
+  },
+  done(ctx, a) {
+    if (!Number.isNaN(a.doneAt)) return a.seconds >= a.doneAt;
+    if (ctx.leaderDown) {
+      ctx.say([CAMPAIGN.quietManShot]);
+      a.doneAt = a.seconds + QUIET_AFTER;
+    } else if (a.count === 0 && (a.seconds >= QUIET_DUEL || ctx.me.hull <= SPARED)) {
+      a.count = 1;
+      ctx.standDown(QUIET_GONE);
+      ctx.say([CAMPAIGN.quietManTurns]);
+    } else if (a.count === 1 && ctx.jumperNear(QUIET_GONE, QUIET_REACH)) {
+      ctx.choose('quietManSpared');
+      ctx.removeJumpers();
+      ctx.say([CAMPAIGN.quietManGone]);
+      a.doneAt = a.seconds + QUIET_AFTER;
+    }
+    return false;
+  },
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: () => null,
+  mark: (_, a) => (a.count === 0 ? t('The Quiet Man') : t('The Quiet Man · turned away')),
+};
+
 /** Dose: Nicole installs her threat warnings (see Module). */
 const fitThreat = (campaign: Campaign) => {
   if (!campaign.modules.includes('threat')) campaign.modules.push('threat');
@@ -1548,5 +1602,6 @@ export const MISSIONS: readonly Mission[] = [
   // chapter 6, the Lineae on Europa: the Crack in the ice shell and the science station on its floor
   { id: 'dose', name: msg('Dose'), drills: [said(HEDDA.dose, 'europa'), said(CAMPAIGN.threat, 'europa'), doseRun, said(CAMPAIGN.doseDone, 'europa')], pay: 3500, ratings: 250, fit: fitThreat },
   { id: 'underTheLineae', name: msg('Under the Lineae'), drills: [said(HEDDA.europa, 'europa'), echoFour, said(CAMPAIGN.echoFour, 'europa'), said(CAMPAIGN.echoFourHeard, 'europa')], pay: 1000, ratings: 100 },
+  { id: 'quietMan', name: msg('The Quiet Man'), drills: [said(HEDDA.quietMan, 'europa'), quietMan], pay: 2500, ratings: (campaign) => (campaign.choices.includes('quietManSpared') ? QUIET_SPARED_RATINGS : QUIET_RATINGS) },
   { id: 'plating', name: msg('Plating I'), drills: [said(PIM.plating, 'europa'), said(CAMPAIGN.plating, 'europa')], pay: 0, fit: fitPlating },
 ];

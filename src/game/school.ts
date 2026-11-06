@@ -23,6 +23,7 @@ import { msg, t } from '../i18n/i18n';
 import type { ArenaId } from '../world/arenas';
 import type { OrbitState } from './orbit';
 import type { SceneName } from '../campaign/scenes';
+import type { Choice } from '../campaign/campaign';
 
 /** What a flight school drill can see and do. */
 export interface SchoolContext {
@@ -94,6 +95,14 @@ export interface SchoolContext {
   /** The raiders shot down so far, and their hits on their target. */
   readonly jumpersDown: number;
   readonly rigWear: number;
+  /** The raiders spawned last never finish a clone: a hull they wore down only scorches (The Quiet Man). */
+  spareClones(): void;
+  /** The raiders stop fighting and fly off to `to`; a ship that comes near them they still fight. */
+  standDown(to: THREE.Vector3): void;
+  /** Whether the raider named first is alive and within `reach` of `point`. */
+  jumperNear(point: THREE.Vector3, reach: number): boolean;
+  /** The Host made a choice the story remembers (see Campaign.choices). */
+  choose(choice: Choice): void;
   /** Whether the raider named first (a bounty's target, see spawnJumpers) is shot down. */
   readonly leaderDown: boolean;
   /** A race against `count` rivals of `skill` (or each of its own `skills`) named from `names` through openings of `radius` at `rings` (facing `normals`), `laps` laps, from beside `start` (see Game.racers). */

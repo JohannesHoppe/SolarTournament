@@ -145,7 +145,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 | 5.4 | Callisto Echo | exploration | Echo 3, in an old Navy listening post among the craters: a bunker dug into the ground, a lattice tower with its dish turned up at the sky, two aerial masts, all solid. The hull held still over the dish. (built) | 30 | Markers |
 | 6.1 | Dose | escort | Escort an ice tanker out through Jupiter's radiation belt: it climbs along the Crack 500 m below the plain, out of it and away over the ice. A dose meter fills while the clone flies over the ice, none in the Crack, the full rate from 300 m over the plain on, where 150 s fill it; full, the clone has had more than it can take and the attempt starts over. Three of the Loose come for the tanker with their harpoons once it is out of the Crack; dragged 800 m off its lane, it is lost and the attempt starts over. Nicole installs her threat warnings. (built) | ☉ 3,500 · 250 | Escort; new: the dose (a hazard like heat) |
 | 6.2 | Under the Lineae | exploration | Fly down a crack of the ice shell, 200 m wide and 800 m deep, to a science station on its floor, and hold at its dish: echo 4. (built) | ☉ 1,000 · 100 | Surface as a canyon; markers |
-| 6.3 | The Quiet Man | bounty | A Loose raider (skill 0.5) who shoots only drives and never finishes a clone. Shoot him down, or let him go when he turns away (fewer ratings; Nicole remembers it later). | ☉ 2,500 · 250 or · 100 | Duel; a choice |
+| 6.3 | The Quiet Man | bounty | A Loose raider (skill 0.5) who never finishes a clone: a hull he has worn down to 30 of 100 only scorches under his beam. 40 s into the fight, or once he has worn the hull down that far, he turns away and flies off; shoot him down, or let him go (fewer ratings; the campaign remembers it, for Nicole later). (built; still to come: him shooting only drives) | ☉ 2,500 · 250 or · 100 | Duel; a choice |
 | 7.1 | Flux Tube Race | race | The sulfur miners' race, between their beacon buoys through the Io plasma torus. The nearer the flux tube, the more the link glitches (the picture breaks up as on a hit). Perihelion again. Top two. | ☉ 4,000 · 350 | Race; the link glitch |
 | 7.2 | Tube Fitting | shop | The first torpedo tube (☉ 2,000), fitted by Io's sulfur miners. | — | Shipyard |
 | 7.3 | Blackout | story escort | Escort a sulfur freighter through the tube. At two thirds of the way the link cuts: the picture freezes white, no datamosh, LINK LOST. A new clone boots on Patience's printer; the freighter made it alone. Then Patience's log: the Magpie recovered adrift, canopy open, cockpit empty. Cannot fail. | ☉ 2,000 · 150 | Escort; new: the link cut |
@@ -647,6 +647,18 @@ When Pim fits her voice board at Vesta (chapter 2, built): "There. Do you hear t
 **ECHO 4**: This is Nicole Aster, navigator of the PAAA 01. If anyone finds this voice, it is a copy. The real one has gone somewhere better.
 
 **NICOLE**: Nicole Aster. Navigator. That is my name, Host. And I am the copy she meant.
+
+### The Quiet Man (chapter 6, built)
+
+**HEDDA**: Lanes Watch posted a bounty on one of the Loose. They call him the Quiet Man. Shoots drives, never finishes a clone, never says a word. Strange thing to put a price on. Two and a half thousand.
+
+**NICOLE**: There he is. They say he has never finished a clone, Host. They say he does not need to.
+
+**NICOLE** *(he turns away)*: He has turned away. He could have finished us, and he did not. Shoot him in the back, or let him go. It is your choice, Host.
+
+**NICOLE** *(shot down)*: He is down. Lanes Watch will love it. I am not sure I do.
+
+**NICOLE** *(let go)*: He is gone. He let us live, and we let him. I will remember that, Host.
 
 ### Callisto Echo (chapter 5, built)
 

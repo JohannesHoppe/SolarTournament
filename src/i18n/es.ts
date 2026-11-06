@@ -1745,4 +1745,11 @@ export const ES: Catalog = {
   "The old frequency, Host, from the craters. A Navy listening post, dead for longer than anyone remembers. Hold us still over its dish, so I can listen.": "La frecuencia antigua, Host, desde los cráteres. Un puesto de escucha de la Armada, muerto desde antes de que nadie recuerde. Mantennos quietos sobre su antena, para que pueda escuchar.",
   "Departure minus thirty days. The children keep asking whether the stars are warm.": "Partida menos treinta días. Los niños no dejan de preguntar si las estrellas son cálidas.",
   "Children. There were children on that ship, Host. I told them something about the stars. I wish I knew what.": "Niños. Había niños en esa nave, Host. Les conté algo sobre las estrellas. Ojalá supiera qué.",
+  "The Quiet Man": "The Quiet Man",
+  "The Quiet Man · turned away": "The Quiet Man · se ha retirado",
+  "There he is. They say he has never finished a clone, Host. They say he does not need to.": "Ahí está. Dicen que nunca ha rematado a un clon, Host. Dicen que no le hace falta.",
+  "He has turned away. He could have finished us, and he did not. Shoot him in the back, or let him go. It is your choice, Host.": "Se ha retirado. Podría habernos rematado, y no lo ha hecho. Dispárale por la espalda, o déjalo ir. Tú decides, Host.",
+  "He is down. Lanes Watch will love it. I am not sure I do.": "Ha caído. A Lanes Watch le encantará. No estoy segura de que a mí me guste.",
+  "He is gone. He let us live, and we let him. I will remember that, Host.": "Se ha ido. Nos dejó vivir, y nosotros a él. Lo recordaré, Host.",
+  "Lanes Watch posted a bounty on one of the Loose. They call him the Quiet Man. Shoots drives, never finishes a clone, never says a word. Strange thing to put a price on. Two and a half thousand.": "Lanes Watch ha puesto precio a uno de los Loose. Lo llaman el Quiet Man. Dispara a los motores, nunca remata a un clon, nunca dice una palabra. Qué cosa más rara para ponerle precio. Dos mil quinientos.",
 };

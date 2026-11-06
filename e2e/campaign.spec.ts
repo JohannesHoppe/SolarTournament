@@ -558,3 +558,27 @@ test('chapter 6 opens on Europa: Dose sets the tanker on its lane, and the belt 
   expect(await taken(middle, -12000, 30000)).toBe(0);
   expect(errors).toEqual([]);
 });
+
+for (const [outcome, ratings] of [['shot down', 250], ['let go', 100]] as const) {
+  test(`The Quiet Man ${outcome}: he never finishes the clone, turns away, and pays ${ratings} ratings`, async ({ page }) => {
+    test.setTimeout(300_000);
+    const errors = await takeJobFrom(page, chapterFive('pilotEpisode', 'iceRun', 'valhallaSprint', 'callistoEcho', 'radiators', 'dose', 'underTheLineae'));
+    await page.waitForFunction(() => window.game.venue?.id === 'europa' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 1, null, { timeout: 180_000 });
+    const before: number = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).ratings);
+    // the clone worn down to where he spares it: he turns away
+    await page.evaluate(() => (window.game.me.hull = 20));
+    await page.waitForFunction(() => window.game.school.attempt.count === 1, null, { timeout: 30_000 });
+    expect(await page.evaluate(() => window.game.me.alive)).toBe(true);
+    if (outcome === 'shot down') await page.evaluate(() => (window.game.jumpers.bots[0].ship.alive = false));
+    else
+      await page.evaluate(() => {
+        const ship = window.game.jumpers.bots[0].ship;
+        ship.flight.position.set(-50000, 6000, 30000);
+      });
+    await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).done.includes('quietMan')), { timeout: 60_000 }).toBe(true);
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!));
+    expect(kept.ratings - before).toBe(ratings);
+    expect(kept.choices.includes('quietManSpared')).toBe(outcome === 'let go');
+    expect(errors).toEqual([]);
+  });
+}

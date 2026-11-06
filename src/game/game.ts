@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { BOND_MAX, type Campaign, campaignFrom, complete, hullOf, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf } from '../campaign/campaign';
+import { BOND_MAX, type Campaign, campaignFrom, complete, hullOf, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf, ratingsOf } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -601,6 +601,8 @@ type State = 'menu' | 'playing' | 'paused' | 'results';
  * space, the arena's massive body; or, with a killer, its nova core, its plume, its ram, or a
  * crash right after its shove (a knockout).
  */
+/** A hull worn down to this (of 100) by a raider who spares clones takes no more from him: he never finishes a clone (The Quiet Man). */
+const SPARED_HULL = 30;
 type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | null;
 /** How the President's battleship killed a ship, for the sponsor break. */
 const FLEET_DEATHS: Partial<Record<NonNullable<DeathCause>, string>> = {
@@ -1308,9 +1310,10 @@ export class Game implements OnlineGame {
    * (`rock` the rock it stands on), or scrappers at an ore barge (no rock: the hull the drill set
    * out), or guards of a hull (the Tallymen at their tug), who fight every ship they see, or the
    * Loose at a convoy of ice tugs (`hooks`), whose shots at it are harpoons; their bots, the
-   * target's middle (moved with it), how far off it they hold, their hits on it so far.
+   * target's middle (moved with it), how far off it they hold, their hits on it so far; with
+   * `spares`, they never finish a clone (see SPARED_HULL).
    */
-  private jumpers: { bots: Bot[]; rock: string | null; rig: THREE.Vector3; hold: number; hits: number; guard: boolean; hooks: boolean } | null = null;
+  private jumpers: { bots: Bot[]; rock: string | null; rig: THREE.Vector3; hold: number; hits: number; guard: boolean; hooks: boolean; spares: boolean } | null = null;
   /**
    * A mission's race (see campaign/missions, The Peak Run): its rival bots, the rings and their
    * facings and the radius of their openings, the racing line round them, the laps; each rival's rings passed and the side of its
@@ -1686,7 +1689,7 @@ export class Game implements OnlineGame {
       button.addEventListener('click', () => this.startMission(mission));
       return button;
     };
-    const pays = (mission: Mission) => (mission.pay ? t('Pays {pay} ☉ before the yard’s cut, {ratings} ratings.', { pay: coinText(mission.pay), ratings: mission.ratings ?? 0 }) : t('Pays nothing.'));
+    const pays = (mission: Mission) => (mission.pay ? t('Pays {pay} ☉ before the yard’s cut, {ratings} ratings.', { pay: coinText(mission.pay), ratings: ratingsOf(mission, campaign) }) : t('Pays nothing.'));
     $('board-next').replaceChildren(next ? job(next, campaign.step ? `${pays(next)} ${t('Taken up where you left it.')}` : pays(next)) : Object.assign(document.createElement('p'), { className: 'plate-note', textContent: t('All that is built is flown. More of the story is in the making.') }));
     const done = MISSIONS.filter((mission) => campaign.done.includes(mission.id));
     $('board-done-label').hidden = !done.length;
@@ -4841,7 +4844,7 @@ export class Game implements OnlineGame {
       ship.spawn(at, lookingAt(at, rig, upward.set(0, 1, 0)), this.time);
       ship.protectedUntil = this.time;
     }
-    this.jumpers = { bots, rock, rig: rig.clone(), hold, hits: 0, guard, hooks };
+    this.jumpers = { bots, rock, rig: rig.clone(), hold, hits: 0, guard, hooks, spares: false };
   }
 
   /**
@@ -5665,6 +5668,23 @@ export class Game implements OnlineGame {
       get rigWear() {
         return game.jumpers?.hits ?? 0;
       },
+      spareClones: () => {
+        if (game.jumpers) game.jumpers.spares = true;
+      },
+      standDown: (to) => {
+        if (!game.jumpers) return;
+        game.jumpers.guard = false;
+        game.jumpers.rig.copy(to);
+        game.jumpers.hold = 0;
+      },
+      jumperNear: (point, reach) => {
+        const first = game.jumpers?.bots[0]?.ship;
+        return !!first && first.alive && first.flight.position.distanceTo(point) < reach;
+      },
+      choose: (choice) =>
+        this.keepCampaign((campaign) => {
+          if (!campaign.choices.includes(choice)) campaign.choices.push(choice);
+        }),
       get leaderDown() {
         return !!game.jumpers && !game.jumpers.bots[0].ship.alive;
       },
@@ -7181,6 +7201,11 @@ export class Game implements OnlineGame {
       ship.plating--;
       this.effects.sparks(scratch.copy(origin).addScaledVector(direction, along), PLATING_COLOR, 80);
       if (ship.isLocal) this.hud.flashMessage(this.time, ship.plating ? t('Plating holds') : t('Plating gone'), 1.2);
+      return;
+    }
+    // a raider who spares clones (see jumpers) only scorches a hull he has worn down
+    if (shooter && ship.hull <= SPARED_HULL && this.jumpers?.spares && this.jumpers.bots.some((bot) => bot.ship === shooter)) {
+      this.effects.sparks(scratch.copy(origin).addScaledVector(direction, along), shooter.color, 30);
       return;
     }
     const { status, zone } = ship.laserHit(origin, direction, this.time, weight);

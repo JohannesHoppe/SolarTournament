@@ -1709,4 +1709,11 @@ export const DE: Catalog = {
   "The old frequency, Host, from the craters. A Navy listening post, dead for longer than anyone remembers. Hold us still over its dish, so I can listen.": "Die alte Frequenz, Host, aus den Kratern. Ein Horchposten der Marine, tot seit länger, als sich irgendwer erinnert. Halt uns still über seiner Schüssel, damit ich lauschen kann.",
   "Departure minus thirty days. The children keep asking whether the stars are warm.": "Abflug minus dreißig Tage. Die Kinder fragen immer wieder, ob die Sterne warm sind.",
   "Children. There were children on that ship, Host. I told them something about the stars. I wish I knew what.": "Kinder. Auf diesem Schiff waren Kinder, Host. Ich habe ihnen etwas über die Sterne erzählt. Ich wünschte, ich wüsste, was.",
+  "The Quiet Man": "The Quiet Man",
+  "The Quiet Man · turned away": "The Quiet Man · abgedreht",
+  "There he is. They say he has never finished a clone, Host. They say he does not need to.": "Da ist er. Man sagt, er hat noch nie einen Klon erledigt, Host. Man sagt, er muss es nicht.",
+  "He has turned away. He could have finished us, and he did not. Shoot him in the back, or let him go. It is your choice, Host.": "Er hat abgedreht. Er hätte uns erledigen können, und er hat es nicht getan. Schieß ihm in den Rücken, oder lass ihn ziehen. Du entscheidest, Host.",
+  "He is down. Lanes Watch will love it. I am not sure I do.": "Er ist erledigt. Lanes Watch wird es lieben. Ich bin mir nicht sicher, ob ich es tue.",
+  "He is gone. He let us live, and we let him. I will remember that, Host.": "Er ist weg. Er hat uns leben lassen, und wir ihn. Das werde ich mir merken, Host.",
+  "Lanes Watch posted a bounty on one of the Loose. They call him the Quiet Man. Shoots drives, never finishes a clone, never says a word. Strange thing to put a price on. Two and a half thousand.": "Lanes Watch hat ein Kopfgeld auf einen der Loose ausgesetzt. Sie nennen ihn den Quiet Man. Schießt auf Triebwerke, erledigt nie einen Klon, sagt nie ein Wort. Seltsam, auf so einen einen Preis auszusetzen. Zweieinhalbtausend.",
 };
