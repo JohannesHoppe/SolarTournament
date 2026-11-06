@@ -580,6 +580,7 @@ export const CAMPAIGN = {
   echoThreeCall: 'The old frequency, Host, from the craters. A Navy listening post, dead for longer than anyone remembers. Hold us still over its dish, so I can listen.',
   echoThree: 'Departure minus thirty days. The children keep asking whether the stars are warm.',
   echoThreeHeard: 'Children. There were children on that ship, Host. I told them something about the stars. I wish I knew what.',
+  radiators: "The new radiators shed the laser's heat faster. One fin is still missing, Host: we are not a stock ship yet.",
   scoutTwo: 'Scout Two.',
   scoutTwoHull: 'We are Scout Two. I do not know how I know that. I have been in this hull all along, Host. I think I was here before the paint.',
   echoTwoCall: 'The old frequency again, from up the wall, under the pink letters. Fly to it and hold still, so I can listen.',
@@ -621,6 +622,7 @@ export const PIM = {
   grind: "Hold still. I'm grinding the depot grey off before it flakes into your intakes. There's something under it.",
   paintOld: "That's not depot paint. That's old. That's really old. P, A, A, A. Zero one. S two.",
   panels: "The Navy yard here throws out armor like it's nothing. Got you a set for your bare side, fifteen hundred. No more hits counting double on your left. Hold still.",
+  radiators: "Tug yard out here strips radiators off wrecks. Got you a set, first grade, a thousand. Your laser cools quicker. Still a fin short, mind. Can't weld on what isn't there.",
   overhaul: "While I'm in there. Your drive bell's been cracked since the Boneyard. Got you a new one, Rockborn make, sixteen hundred. You'll pay. Hold on, this one kicks.",
   surplus: "A real laser! Navy surplus, hardly fired. Six thousand. You haven't got six thousand. The dealer takes the rest on your paper. Hold still, I'm fitting it.",
 } as const;

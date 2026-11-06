@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, RADIATORS_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
-import { STOCK } from '../game/hangar';
+import { RADIATOR_STEP, STOCK } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
 
 describe('the campaign Lot 7731', () => {
@@ -111,6 +111,15 @@ describe('the campaign Lot 7731', () => {
     complete(campaign, MISSIONS.find((mission) => mission.id === 'armorPanels')!);
     expect(hullOf(campaign).bareFlank).toBe(false);
     expect([campaign.coins, campaign.bond]).toEqual([0, 20000 + PANELS_PRICE - 500]);
+  });
+
+  it('fits Radiators I at Callisto: the radiators a step up, the missing fin still short of a stock ship, paid as the laser is', () => {
+    const campaign = { ...freshCampaign(), coins: 400, bond: 20000 };
+    const before = hullOf(campaign).cooling;
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'radiators')!);
+    expect(hullOf(campaign).cooling).toBeCloseTo(before + RADIATOR_STEP, 10);
+    expect(hullOf(campaign).cooling).toBeLessThan(1);
+    expect([campaign.coins, campaign.bond]).toEqual([0, 20000 + RADIATORS_PRICE - 400]);
   });
 
   it('fits the military laser in Surplus: paid from the wallet as far as it holds, the rest on the debt, the Games\' own laser in place of the cutter', () => {

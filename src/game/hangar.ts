@@ -154,7 +154,7 @@ export const STOCK: Readonly<Perks> = {
 export const BOT_GEAR: Readonly<Perks> = { ...STOCK, hook: true, nanobots: true };
 
 /** What each step of the radiators adds to their cooling (a share of the stock's). */
-const RADIATOR_STEP = 0.15;
+export const RADIATOR_STEP = 0.15;
 
 /**
  * What other browsers are told of a ship's upgrades (a ship state's `lo`): the looks, and the

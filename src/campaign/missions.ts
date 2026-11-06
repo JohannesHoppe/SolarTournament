@@ -12,7 +12,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, RADIATORS_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -818,6 +818,13 @@ const valhallaSprint: Drill = {
   mark: (_, a) => (Number.isFinite(a.clockFrom) ? t('Coil {n}/{total} · {seconds} s left', { n: a.next + 1, total: a.points.length, seconds: Math.max(0, Math.ceil(SPRINT_TIME - (a.seconds - a.clockFrom))) }) : t('Coil {n}/{total}', { n: a.next + 1, total: a.points.length })),
 };
 
+/** Radiators I (5.5): a tug yard's radiators of the first grade, a step up (see hullOf), at RADIATORS_PRICE. */
+const fitRadiators = (campaign: Campaign) => {
+  if (campaign.parts.includes('radiators')) return;
+  campaign.parts.push('radiators');
+  buy(campaign, RADIATORS_PRICE);
+};
+
 /** Pilot Episode: Nicole installs her radar (see Module). */
 const fitRadar = (campaign: Campaign) => {
   if (!campaign.modules.includes('radar')) campaign.modules.push('radar');
@@ -1288,4 +1295,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'pilotEpisode', name: msg('Pilot Episode'), drills: [said(HEDDA.callisto, 'callisto'), said(CAMPAIGN.radar, 'callisto'), pilotEpisode, said(CAMPAIGN.pilotEpisodeDone, 'callisto')], pay: 3000, ratings: 300, fit: fitRadar },
   { id: 'valhallaSprint', name: msg('Valhalla Sprint'), drills: [valhallaSprint, said(CAMPAIGN.valhallaSprintDone, 'callisto')], pay: 1500, ratings: 150, start: SPRINT_START },
   { id: 'callistoEcho', name: msg('Callisto Echo'), drills: [echoThree, said(CAMPAIGN.echoThree, 'callisto'), said(CAMPAIGN.echoThreeHeard, 'callisto')], pay: 0, ratings: 30 },
+  { id: 'radiators', name: msg('Radiators I'), drills: [said(PIM.radiators, 'callisto'), said(CAMPAIGN.radiators, 'callisto')], pay: 0, fit: fitRadiators },
 ];
