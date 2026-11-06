@@ -11,8 +11,8 @@ import { GROUND_HALF, groundRelief, surfaceHeight } from './phobos';
  */
 
 /** Phobos's ground: very dark, a little red (it reflects some 7 % of the light), lit faintly by Mars's glow. */
-const PHOBOS_TINT = 0x9a8c82;
-const PHOBOS_GLOW = 0x1c1512;
+const PHOBOS_TINT = 0xd6c4b6;
+const PHOBOS_GLOW = 0x2a1d17;
 
 /** The ground's grid: cells of CELL (units, 75 m) over the piece's square. */
 const CELL = 1500;

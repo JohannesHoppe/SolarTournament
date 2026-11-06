@@ -1594,4 +1594,11 @@ export const FR: Catalog = {
   "Stickney": "Stickney",
   "The great crater of Phobos, and Mars filling half the sky.": "Le grand cratère de Phobos, et Mars qui remplit la moitié du ciel.",
   "Mars": "Mars",
+  "Stickney Grand": "Stickney Grand",
+  "Lap {lap}/{laps} · ring {n}/{total}": "Tour {lap}/{laps} · anneau {n}/{total}",
+  "Phobos. Navy town, under Mars. They race here for the cameras: the Stickney Grand, three laps down into the crater. Perihelion flies it. She's never died. Not once. Top three, and Lanes Watch comes calling.": "Phobos. Ville de la Marine, sous Mars. Ici on court pour les caméras : le Stickney Grand, trois tours en plongeant dans le cratère. Perihelion le court. Elle n’est jamais morte. Pas une fois. Dans les trois premiers, et Lanes Watch t’appelle.",
+  "I found something in my old storage while we flew here: a module for the racing line. The dashes, and the bends drawn orange where they are too tight. It is yours now, Host.": "J’ai trouvé quelque chose dans ma vieille mémoire en volant jusqu’ici : un module pour la trajectoire idéale. Les tirets, et les virages en orange là où ils sont trop serrés. Il est à toi maintenant, Hôte.",
+  "Eight rings, three laps, down into the crater and out again. Follow the line. Home in the first three, and the show wants us.": "Huit anneaux, trois tours, dans le cratère et ressortir. Suis la ligne. Dans les trois premiers, et l’émission nous veut.",
+  "Three of them were home before us. Lanes Watch is not interested yet. We race again.": "Trois sont arrivés avant nous. Lanes Watch ne s’intéresse pas encore à nous. On recommence.",
+  "In the first three. Lanes Watch has our name now, Host. I am not sure that is good news.": "Dans les trois premiers. Lanes Watch a notre nom maintenant, Hôte. Je ne suis pas sûre que ce soit une bonne nouvelle.",
 };

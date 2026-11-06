@@ -1,10 +1,11 @@
 import * as THREE from 'three';
 import { msg, t } from '../i18n/i18n';
 import { CAMPAIGN, HEDDA, PIM, RASK, SAW, TALLY } from '../music/lines';
-import { clear, holdFor, PIPE_BORE, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
+import { clear, holdFor, PIPE_BORE, RING_RADIUS, saying, stop, type Attempt, type Drill, type Markers, type SchoolContext } from '../game/school';
 import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
 import { hullInLight } from '../world/wall';
+import { surfaceHeight as phobosHeight } from '../world/phobos';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
@@ -569,44 +570,118 @@ export const PEAK_COURSE = Array.from({ length: PEAK_RINGS }, (_, k) => {
   return point(x, VESTA_GROUND + RISE * x + PEAK_OVER, sin(angle) * PEAK_DEPTH);
 });
 
-const peakRun: Drill = {
+/**
+ * A race of a mission against rivals (see Game.racers): `laps` laps through `marks` (each facing
+ * along the loop, from the mark before it to the mark after it), pipes of PIPE_BORE standing on
+ * `ground` (a height by x) or rings of the Games of RING_RADIUS; home among the first `podium`
+ * wins, later the race is flown again (`lost` said).
+ */
+interface RaceSpec {
+  line: string;
+  lost: string;
+  arena: ArenaId;
+  marks: readonly THREE.Vector3[];
+  laps: number;
+  pipes: { ground: (x: number) => number } | null;
+  rivals: { names: readonly string[]; skills: readonly number[] };
+  podium: number;
+  /** What a mark is called under the waypoint, with the lap: a text marked with msg(). */
+  mark: string;
+}
+
+function race(spec: RaceSpec): Drill {
+  const count = spec.marks.length;
+  const bore = spec.pipes ? PIPE_BORE : RING_RADIUS;
+  return {
+    line: spec.line,
+    keys: ['turn', 'drive', 'brake'],
+    arena: spec.arena,
+    // a race against rivals
+    music: 'fight',
+    autopilot: true,
+    enter(ctx, a, markers) {
+      stop(ctx);
+      a.points = spec.marks.map((mark) => clear(ctx, mark.clone(), bore * 2));
+      a.normals = a.points.map((_, i) => a.points[(i + 1) % count].clone().sub(a.points[(i + count - 1) % count]).normalize());
+      a.points.forEach((mark, i) => (spec.pipes ? markers.pipe(mark, a.normals[i], spec.pipes.ground(mark.x)) : markers.ring(mark, a.normals[i])));
+      a.pipes = !!spec.pipes;
+      a.next = 0;
+      a.side = NaN;
+      a.warned = false;
+      ctx.spawnRacers(a.points, a.normals, bore, spec.laps, spec.rivals.skills.length, spec.rivals.skills[0], ctx.me.flight.position, spec.rivals.names, spec.rivals.skills);
+    },
+    done(ctx, a) {
+      const k = a.next % count;
+      const offset = a.site.subVectors(ctx.me.flight.position, a.points[k]);
+      const side = offset.dot(a.normals[k]);
+      const crossed = Number.isFinite(a.side) && a.side < 0 !== side < 0;
+      a.side = side;
+      if (!crossed || offset.addScaledVector(a.normals[k], -side).length() >= bore) return false;
+      a.next++;
+      a.side = NaN;
+      if (a.next < count * spec.laps) return false;
+      // home: among the first, or the race is lost
+      a.warned = ctx.racersFinished >= spec.podium;
+      return !a.warned;
+    },
+    fail: (_, a) => (a.warned ? spec.lost : null),
+    leave: (ctx) => ctx.removeRacers(),
+    waypoint: (_, a) => a.points[a.next % count] ?? null,
+    mark: (_, a) => t(spec.mark, { lap: Math.min(spec.laps, Math.floor(a.next / count) + 1), laps: spec.laps, n: (a.next % count) + 1, total: count }),
+  };
+}
+
+const peakRun = race({
   line: CAMPAIGN.peakRun,
-  keys: ['turn', 'drive', 'brake'],
+  lost: CAMPAIGN.peakRunLost,
   arena: 'rheasilvia',
-  // a race against the claims' racers
-  music: 'fight',
-  autopilot: true,
-  enter(ctx, a, markers) {
-    stop(ctx);
-    a.points = PEAK_COURSE.map((pipe) => clear(ctx, pipe.clone(), PIPE_BORE * 2));
-    // each ring faces along the loop, from the ring before it to the ring after it
-    a.normals = a.points.map((_, i) => a.points[(i + 1) % PEAK_RINGS].clone().sub(a.points[(i + PEAK_RINGS - 1) % PEAK_RINGS]).normalize());
-    a.points.forEach((pipe, i) => markers.pipe(pipe, a.normals[i], VESTA_GROUND + RISE * pipe.x));
-    a.pipes = true;
-    a.next = 0;
-    a.side = NaN;
-    a.warned = false;
-    ctx.spawnRacers(a.points, a.normals, PIPE_BORE, PEAK_LAPS, PEAK_RIVALS, PEAK_SKILL, ctx.me.flight.position);
-  },
-  done(ctx, a) {
-    const k = a.next % PEAK_RINGS;
-    const offset = a.site.subVectors(ctx.me.flight.position, a.points[k]);
-    const side = offset.dot(a.normals[k]);
-    const crossed = Number.isFinite(a.side) && a.side < 0 !== side < 0;
-    a.side = side;
-    if (!crossed || offset.addScaledVector(a.normals[k], -side).length() >= PIPE_BORE) return false;
-    a.next++;
-    a.side = NaN;
-    if (a.next < PEAK_RINGS * PEAK_LAPS) return false;
-    // home: in the first two, or the race is lost
-    a.warned = ctx.racersFinished >= PEAK_PODIUM;
-    return !a.warned;
-  },
-  fail: (_, a) => (a.warned ? CAMPAIGN.peakRunLost : null),
-  leave: (ctx) => ctx.removeRacers(),
-  waypoint: (_, a) => a.points[a.next % PEAK_RINGS] ?? null,
-  mark: (_, a) => t('Lap {lap}/{laps} · pipe {n}/{total}', { lap: Math.min(PEAK_LAPS, Math.floor(a.next / PEAK_RINGS) + 1), laps: PEAK_LAPS, n: (a.next % PEAK_RINGS) + 1, total: PEAK_RINGS }),
-};
+  marks: PEAK_COURSE,
+  laps: PEAK_LAPS,
+  pipes: { ground: (x) => VESTA_GROUND + RISE * x },
+  rivals: { names: ['Nix', 'Bean', 'Spark'], skills: Array.from({ length: PEAK_RIVALS }, () => PEAK_SKILL) },
+  podium: PEAK_PODIUM,
+  mark: msg('Lap {lap}/{laps} · pipe {n}/{total}'),
+});
+
+/**
+ * The Stickney Grand (4.1): GRAND_RINGS rings of the Games on an ellipse (GRAND_REACH by
+ * GRAND_DEPTH, about GRAND_MIDDLE) that dives from over Stickney's rim down into the crater and
+ * out again, each GRAND_OVER over Phobos's ground beneath it; GRAND_LAPS laps against Perihelion
+ * (who has never died) and four others; home among the first GRAND_PODIUM goes to Lanes Watch.
+ */
+export const GRAND_RINGS = 8;
+const GRAND_REACH = 44000;
+const GRAND_DEPTH = 32000;
+const GRAND_MIDDLE = -12000;
+const GRAND_OVER = 6000;
+export const GRAND_LAPS = 3;
+const GRAND_PODIUM = 3;
+export const GRAND_COURSE = Array.from({ length: GRAND_RINGS }, (_, k) => {
+  const angle = (k / GRAND_RINGS) * Math.PI * 2;
+  const x = GRAND_MIDDLE + cos(angle) * GRAND_REACH;
+  const z = sin(angle) * GRAND_DEPTH;
+  return point(x, phobosHeight(x, z) + GRAND_OVER, z);
+});
+
+/** Where the racers line up: on the ellipse a stretch before the first ring, facing it. */
+export const GRAND_START = (() => {
+  const angle = -0.5;
+  const x = GRAND_MIDDLE + cos(angle) * GRAND_REACH;
+  const z = sin(angle) * GRAND_DEPTH;
+  return { at: [x, phobosHeight(x, z) + GRAND_OVER, z] as const, toward: GRAND_COURSE[0].toArray() as [number, number, number] };
+})();
+
+const stickneyGrand = race({
+  line: CAMPAIGN.stickneyGrand,
+  lost: CAMPAIGN.stickneyGrandLost,
+  arena: 'phobos',
+  marks: GRAND_COURSE,
+  laps: GRAND_LAPS,
+  pipes: null,
+  rivals: { names: ['Perihelion', 'Vasquez', 'Kade', 'Moth', 'Dray'], skills: [0.65, 0.35, 0.35, 0.3, 0.3] },
+  podium: GRAND_PODIUM,
+  mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
+});
 
 /** The prize of the Peak Run, Pim's thruster parts: the thrusters rebuilt to stock, and with them the dodge. */
 const fitThrusters = (campaign: Campaign) => {
@@ -965,6 +1040,11 @@ const fitDrive = (campaign: Campaign) => {
   buy(campaign, OVERHAUL_PRICE);
 };
 
+/** The Stickney Grand: Nicole installs her racing line (see Module). */
+const fitRacingLine = (campaign: Campaign) => {
+  if (!campaign.modules.includes('racingLine')) campaign.modules.push('racingLine');
+};
+
 const fitStripped = (campaign: Campaign) => {
   if (!campaign.parts.includes('stripped')) campaign.parts.push('stripped');
 };
@@ -1036,4 +1116,6 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'wallRun', name: msg('Wall Run'), drills: [said(HEDDA.wallRun, 'wall'), wallRun, said(CAMPAIGN.wallRunDone, 'wall')], pay: 1000, ratings: 200 },
   { id: 'scoutTwo', name: msg('Scout Two'), drills: [onCeres(PIM.grind), onCeres(PIM.paintOld), onCeres(CAMPAIGN.scoutTwo), onCeres(CAMPAIGN.scoutTwoHull), echoTwo, said(CAMPAIGN.echoTwo, 'occator'), said(CAMPAIGN.echoTwoHeard, 'occator')], pay: 0, ratings: 20, fit: fitStripped },
   { id: 'overhaul', name: msg('Overhaul'), drills: [onCeres(PIM.overhaul), onCeres(CAMPAIGN.overhaul)], pay: 0, fit: fitDrive },
+  // chapter 4, Stickney on Phobos: the Navy town under Mars, the race into the crater, the debt changing hands
+  { id: 'stickneyGrand', name: msg('Stickney Grand'), drills: [said(HEDDA.phobos, 'phobos'), said(CAMPAIGN.racingLine, 'phobos'), stickneyGrand, said(CAMPAIGN.stickneyGrandDone, 'phobos')], pay: 2500, ratings: 250, fit: fitRacingLine, start: GRAND_START },
 ];

@@ -434,3 +434,14 @@ test('Scout Two grinds the grey off: the old livery shows on the hull once the s
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).parts.includes('stripped')), { timeout: 120_000 }).toBe(true);
   expect(errors).toEqual([]);
 });
+
+test('chapter 4 opens on Phobos: the Stickney Grand lines up five rivals, Perihelion among them, at eight rings down into the crater', async ({ page }) => {
+  test.setTimeout(300_000);
+  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge', 'repoMen', 'wallRun', 'scoutTwo', 'overhaul'], coins: 2100, parts: [...CHAPTER_TWO_DONE.parts, 'laser', 'stripped', 'drive'], modules: ['targeting'] };
+  const errors = await takeJobFrom(page, kept);
+  await page.waitForFunction(() => window.game.venue?.id === 'phobos' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.racers?.bots.length === 5, null, { timeout: 180_000 });
+  const names = await page.evaluate(() => window.game.racers.bots.map((bot: { ship: { name: string } }) => bot.ship.name));
+  expect(names).toContain('Perihelion');
+  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(8);
+  expect(errors).toEqual([]);
+});

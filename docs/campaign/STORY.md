@@ -135,7 +135,7 @@ Story missions run once; most others stay on the place's **job board** as repeat
 
 | # | Mission | Type | Goal / failure | Pays | Built from |
 |---|---|---|---|---|---|
-| 4.1 | Stickney Grand | race | Three laps around Phobos, the course diving into the Stickney crater; Perihelion (skill 0.65) and four others. Top three goes to *Lanes Watch*. | ☉ 2,500 · 250 | Race; new: a moon's surface (see section 10) |
+| 4.1 | Stickney Grand | race | Captain Kroll names the place: Phobos, the Navy town under Mars. Nicole finds her racing line module in her old storage and installs it. Eight rings of the Games on an ellipse 4.4 by 3.2 km that dives from over Stickney's rim down into the crater and out again, each 300 m over the ground beneath it; three laps against Perihelion (skill 0.65), who has never died, and four others (Vasquez and Kade 0.35, Moth and Dray 0.3), lined up on the loop before the first ring. Top three goes to *Lanes Watch*; later, the race is flown again. (built: the race, the module) | ☉ 2,500 · 250 | Race; the place on a moon's relief (built) |
 | 4.2 | debt Day | fight | Ma Tally and six Tallymen (skill 0.35) in Phobos's grooves. Kill four. At the fourth, a Navy cutter hails: the debt is bought by an anonymous benefactor; the Tallymen leave. | ☉ 2,000 · 200; the debt changes hands, and the cut stops | Deathmatch with a scripted end |
 | 4.3 | Groove Shoot | exploration | A sponsor's camera drone films the Magpie flying a groove under 60 m above the ground for 30 s. | ☉ 1,200 · 150 | Surface; new: a height band |
 | 5.1 | Pilot Episode | bounty | *Lanes Watch* goes on air: the Tallyman "Red Ledger" (skill 0.4) and two wingmen. Kills of the target pay; style moments pay double ratings. | ☉ 3,000 · 300 | Deathmatch; a named target; moments |
@@ -309,7 +309,7 @@ Nicole starts as a salvaged unit: she can fly the ship (the autopilot, the brake
 | Prologue | Navigation | Markers, the course marker, the X where the flight crosses the next ring's plane |
 | 2 | Voice I | Her memory holds: she speaks every sentence to its end, without crashing (the second-hand voice board Pim fits at Vesta) |
 | 3 | Targeting | The crosshair glowing over a drive; ships' marks and names |
-| 4 | Racing line | The dashed line and its orange bends |
+| 4 | Racing line | The dashed line and its orange bends (built: the Stickney Grand) |
 | 5 | Radar | The radar sphere |
 | 6 | Threat | ON YOUR TAIL, the lock warning, the torpedo countdown |
 | 10 | Voice II | Her own voice, clean |

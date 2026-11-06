@@ -4868,13 +4868,13 @@ export class Game implements OnlineGame {
     bot.raceSpeed = raceSpeedOf(bot.skills);
   }
 
-  /** A mission's rivals at the start of their race (see racers): `count` bots of `skill`, beside `start`, facing the first of the openings (`radius` theirs). */
-  private spawnRacers(rings: THREE.Vector3[], normals: THREE.Vector3[], radius: number, laps: number, count: number, skill: number, start: THREE.Vector3) {
+  /** A mission's rivals at the start of their race (see racers): `count` bots of `skill` (or each of its own `skills`) named from `names`, beside `start`, facing the first of the openings (`radius` theirs). */
+  private spawnRacers(rings: THREE.Vector3[], normals: THREE.Vector3[], radius: number, laps: number, count: number, skill: number, start: THREE.Vector3, names: readonly string[] = RIVAL_NAMES, skills?: readonly number[]) {
     this.removeRacers();
     const bots: Bot[] = [];
     for (let i = 0; i < count; i++) {
-      const ship = this.addShip(`racer${i}`, RIVAL_NAMES[i % RIVAL_NAMES.length], i % 2 ? 'human' : 'alien', false);
-      const bot = new Bot(ship, evenSkills(skill));
+      const ship = this.addShip(`racer${i}`, names[i % names.length], i % 2 ? 'human' : 'alien', false);
+      const bot = new Bot(ship, evenSkills(skills?.[i] ?? skill));
       this.bots.push(bot);
       bots.push(bot);
       const at = rivalAt.set((i + 1) * RIVAL_GAP * (i % 2 ? 1 : -1), 0, 0).applyQuaternion(lookingAt(start, rings[0], upward.set(0, 1, 0))).add(start);
@@ -5647,7 +5647,7 @@ export class Game implements OnlineGame {
       spawnJumpers: (rock, rig, count, skill, names, hold, guard) => this.spawnJumpers(rock, rig, count, skill, names, hold, guard),
       moveJumpers: (to) => game.jumpers?.rig.copy(to),
       removeJumpers: () => this.removeJumpers(),
-      spawnRacers: (rings, normals, radius, laps, count, skill, start) => this.spawnRacers(rings, normals, radius, laps, count, skill, start),
+      spawnRacers: (rings, normals, radius, laps, count, skill, start, names, skills) => this.spawnRacers(rings, normals, radius, laps, count, skill, start, names, skills),
       removeRacers: () => this.removeRacers(),
       get racersFinished() {
         return game.racers?.finished ?? 0;
