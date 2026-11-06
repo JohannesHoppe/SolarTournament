@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkSubscription, DAILY_WRITES, handle, MAX_SUBSCRIPTIONS, PUSH_GAP, sendAll, TOURNAMENT_FORGET, vapidOf, type PushStore } from '../../functions/push';
+import { checkSubscription, DAILY_WRITES, handle, MAX_SUBSCRIPTIONS, OPEN_HEARTBEAT, PUSH_GAP, sendAll, TOURNAMENT_FORGET, vapidOf, type PushStore } from '../../functions/push';
 import { freshKeys, toBase64Url, type Subscription } from './webpush';
 import { pushText } from './pushtext';
 import type { Locale } from '../i18n/i18n';
@@ -10,6 +10,7 @@ function memoryStore() {
   const rooms = new Map<string, number>();
   const subs = new Map<string, Subscription & { locale: Locale; from?: number }>();
   let last = -Infinity;
+  let waiting = false;
   const store: PushStore = {
     async spend(day, rows) {
       const writes = (days.get(day) ?? 0) + rows + 1;
@@ -24,6 +25,8 @@ function memoryStore() {
     },
     lastPush: async () => last,
     setLastPush: async (now) => void (last = now),
+    waiting: async () => waiting,
+    setWaiting: async (value) => void (waiting = value),
     stats: async () => ({ subscribers: subs.size, writes: 0, open: 0, heardToday: rooms.size, lastPush: last, pushes: 0 }),
     subscriptions: async (open) => [...subs.values()].filter((s) => (s.from ?? 1) <= open),
     countSubscriptions: async () => subs.size,
@@ -62,12 +65,28 @@ describe('the notification when a public tournament opens', () => {
     await handle(store, { open: 'alpha123' }, 1001);
     // the same tournament's heartbeats send nothing
     expect((await handle(store, { open: 'alpha123' }, 1120)).send).toBeUndefined();
-    // another one within the gap neither
+    // another one within the gap neither: it waits
     expect((await handle(store, { open: 'beta4567' }, 1200)).send).toBeUndefined();
-    // after the gap, a new one does
-    expect((await handle(store, { open: 'gamma890' }, 1000 + PUSH_GAP)).send).toHaveLength(1);
+    expect((await handle(store, { open: 'beta4567' }, 1320)).send).toBeUndefined();
+    // the gap's end: the next word of any open tournament announces the one that waited, once
+    expect((await handle(store, { open: 'alpha123' }, 1000 + PUSH_GAP)).send).toHaveLength(1);
+    expect((await handle(store, { open: 'beta4567' }, 1000 + PUSH_GAP + 60)).send).toBeUndefined();
+    // after a gap with nothing waiting, a new one goes out at once
+    expect((await handle(store, { open: 'gamma890' }, 1000 + 2 * PUSH_GAP)).send).toHaveLength(1);
     // one gone longer than TOURNAMENT_FORGET counts as new again
-    expect((await handle(store, { open: 'alpha123' }, 1120 + TOURNAMENT_FORGET + 2 * PUSH_GAP)).send).toHaveLength(1);
+    expect((await handle(store, { open: 'alpha123' }, 1120 + TOURNAMENT_FORGET + 3 * PUSH_GAP)).send).toHaveLength(1);
+  });
+
+  it('never loses a tournament that opened within the gap: it is announced within the gap and a heartbeat', async () => {
+    const { store } = memoryStore();
+    await handle(store, { subscribe: subscription(1), locale: 'en' }, 0);
+    expect((await handle(store, { open: 'first-room' }, 1000)).send).toHaveLength(1);
+    // a second opens a minute later; its own heartbeats carry it past the gap
+    await handle(store, { open: 'second-room' }, 1060);
+    let sent = 0;
+    let at = 1060;
+    for (; at < 1060 + PUSH_GAP + OPEN_HEARTBEAT; at += OPEN_HEARTBEAT) if ((await handle(store, { open: 'second-room' }, at)).send) sent++;
+    expect(sent).toBe(1);
   });
 
   it('refuses a room that is not a code and anything it does not know', async () => {

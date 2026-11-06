@@ -12,7 +12,9 @@
  *   starts announcing it and every OPEN_HEARTBEAT seconds after. A tournament not heard of
  *   before (or not for TOURNAMENT_FORGET seconds) is new: the number of open ones rose, and the
  *   notification (saying how many are open) goes to every subscriber whose number is reached, at
- *   most one every PUSH_GAP seconds for all tournaments together.
+ *   most one every PUSH_GAP seconds for all tournaments together. A new one heard within the gap
+ *   is kept as waiting, and the first word of any open tournament after the gap sends it: no
+ *   tournament goes unannounced, and none waits longer than the gap and a heartbeat.
  *
  * The VAPID keys come from the project's environment (VAPID_PUBLIC_KEY a plain variable in
  * wrangler.toml, VAPID_PRIVATE_KEY a secret in the dashboard, the raw private scalar in
@@ -60,6 +62,9 @@ export interface PushStore {
   lastPush(): Promise<number>;
   /** Keeps the time of a notification and counts the pushes it sends. */
   setLastPush(now: number, pushes: number): Promise<void>;
+  /** Whether a new tournament waits to be announced (heard within the gap). */
+  waiting(): Promise<boolean>;
+  setWaiting(waiting: boolean): Promise<void>;
   /** The figures of the admin page (functions/admin.ts). */
   stats(day: string, now: number): Promise<PushStats>;
   /** The subscriptions that asked to hear of `open` tournaments or fewer. */
@@ -146,8 +151,15 @@ export async function handle(store: PushStore, body: unknown, now: number): Prom
     const room = await roomKey(request.open);
     const before = await store.heard(room, now);
     const fresh = before === null || now - before > TOURNAMENT_FORGET;
-    if (!fresh || now - (await store.lastPush()) < PUSH_GAP) return { status: 200, body: { ok: true } };
-    if (!(await store.spend(day, 1))) return { status: 200, body: { ok: true } };
+    const waiting = await store.waiting();
+    if (!fresh && !waiting) return { status: 200, body: { ok: true } };
+    if (now - (await store.lastPush()) < PUSH_GAP) {
+      // within the gap: a new one waits for the gap's end, announced by the next word of any open tournament
+      if (fresh && !waiting && (await store.spend(day, 1))) await store.setWaiting(true);
+      return { status: 200, body: { ok: true } };
+    }
+    if (!(await store.spend(day, 2))) return { status: 200, body: { ok: true } };
+    if (waiting) await store.setWaiting(false);
     const open = await store.openCount(now);
     const send = await store.subscriptions(open);
     // nobody asked to hear of this many: the gap stays open for the next
@@ -198,6 +210,13 @@ export function d1Store(db: D1Like): PushStore {
     async setLastPush(now, pushes) {
       await (await run("INSERT INTO state (key, value) VALUES ('lastPush', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1", now)).run();
       await (await run("INSERT INTO state (key, value) VALUES ('pushes', ?1) ON CONFLICT(key) DO UPDATE SET value = value + ?1", pushes)).run();
+    },
+    async waiting() {
+      const row = await (await run("SELECT value FROM state WHERE key = 'waiting'")).first<{ value: number }>();
+      return (row?.value ?? 0) > 0;
+    },
+    async setWaiting(waiting) {
+      await (await run("INSERT INTO state (key, value) VALUES ('waiting', ?1) ON CONFLICT(key) DO UPDATE SET value = ?1", waiting ? 1 : 0)).run();
     },
     async stats(day, now) {
       const one = async <T>(query: string, ...values: unknown[]) => (await (await run(query, ...values)).first<T>()) ?? null;

@@ -1833,7 +1833,7 @@ export class Game implements OnlineGame {
   private async renderPush() {
     this.pushKey ??= await pushKey();
     const button = $('push-toggle');
-    button.hidden = !this.pushKey;
+    button.hidden = $('push-note').hidden = !this.pushKey;
     if (!this.pushKey) return;
     const from = await pushFrom();
     const on = from !== null;
