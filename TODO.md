@@ -24,7 +24,7 @@ Worked through from top to bottom. Every finished item is also documented in the
 - [x] Radio 2584: generative music with Tone.js, in sync for all pilots
 - [x] Radio 2584: an announcer cutting in after kills, crashes and the round's big moments, a crowd on the broadcast
 - [x] Radio 2584: jingles and samples as in Johannes' inscription experiments (`haushoppe/deconstructed-inscriptions`): the stammer of a sampled cut and the station's jingle, the glitch's bursts of noise; to be judged by ear
-- [ ] Radio 2584: now and then something cheerful in between (indie dance-pop after The Ting Tings). A first try (major key, claps, cowbell, choppy chords) did not sound right and is out again; revisit later
+- [x] Radio 2584: now and then something cheerful in between: one French track in three in a bright key (mixolydian)
 - [x] Glitch of the link to the clone on hits, impacts and death
 
 ### 4. Arenas with their own physics

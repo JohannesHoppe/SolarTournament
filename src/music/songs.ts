@@ -353,9 +353,13 @@ const LEAD_NOTES = [0, 0, 3, 7, 10, 12, 1, -2];
 /**
  * The scales a track's tonal parts land on (semitones over the root): natural minor (aeolian),
  * and phrygian, minor with the flat second, darker, the color of the 80s night drive's lines.
- * Drive picks phrygian two times in three; every other flavor plays aeolian.
+ * And mixolydian, major with the flat seventh, the bright and funky color of French house in a
+ * good mood: the radio's cheerful moment in between. Drive picks phrygian two times in three,
+ * French mixolydian one time in three (BRIGHT_CHANCE); every other track plays aeolian.
  */
-export const SCALES = { aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10] } as const;
+export const SCALES = { aeolian: [0, 2, 3, 5, 7, 8, 10], phrygian: [0, 1, 3, 5, 7, 8, 10], mixolydian: [0, 2, 4, 5, 7, 9, 10] } as const;
+/** The share of French tracks in the bright key (see SCALES): with French's weight about one track in eighteen. */
+export const BRIGHT_CHANCE = 1 / 3;
 
 /**
  * How far the music ducks under every kick (the level it falls to; it swells back over half a
@@ -404,7 +408,7 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
   const lounge = energy === 'lounge';
   const bpm = settings.bpm[0] + (hash(seed, Ch.Genes, 2) % (settings.bpm[1] - settings.bpm[0] + 1)) - (lounge ? 6 : 0);
   const strategy: Strategy = lounge ? 'hypnotic' : chosen === 'drive' ? 'timbre' : chosen === 'motorik' ? choose(['relentless', 'hypnotic', 'movements'], seed, Ch.Genes, 3) : choose(STRATEGIES, seed, Ch.Genes, 3);
-  const scale = chosen === 'drive' && unit(seed, Ch.Genes, 60) < 2 / 3 ? SCALES.phrygian : SCALES.aeolian;
+  const scale = chosen === 'drive' && unit(seed, Ch.Genes, 60) < 2 / 3 ? SCALES.phrygian : chosen === 'french' && unit(seed, Ch.Genes, 65) < BRIGHT_CHANCE ? SCALES.mixolydian : SCALES.aeolian;
   const song: Song = {
     title,
     seed,
@@ -1130,10 +1134,15 @@ export function stepEvents(song: Song, absoluteStep: number): StepEvents {
   return events;
 }
 
-/** A note on the scale of `root` (see SCALES): a note outside it moves down a semitone onto the scale. */
+/**
+ * A note on the scale of `root` (see SCALES): a note outside it moves a semitone onto the scale,
+ * down on the minor scales, up on the bright one, so a minor third the motif or a chord asks for
+ * is heard as the major third there and the track is bright through and through.
+ */
 function inKey(note: number, root: number, scale: readonly number[]): number {
   const degree = (((note - root) % 12) + 12) % 12;
-  return scale.includes(degree) ? note : note - 1;
+  if (scale.includes(degree)) return note;
+  return scale === SCALES.mixolydian ? note + 1 : note - 1;
 }
 
 function bassAt(song: Song, info: BarInfo, step: number, root: number): Hit | null {
