@@ -46,6 +46,7 @@ import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/sessi
 import { assignTints, botTint, loadTint, saveTint, shownTint, TINTS } from '../ship/tints';
 import { isLeadHost, Online, pingPeerOf, type OnlineGame } from '../net/online';
 import { Lobby, type Listing } from '../net/lobby';
+import { OpenBeat, pushKey, subscribe as subscribePush, subscribed as pushSubscribed, unsubscribe as unsubscribePush } from '../net/push';
 import { newRoom, roomFragment, roomFromFragment, roomLink, type Room } from '../net/room';
 import { cleanName } from '../net/validate';
 import { Space, SUN_DIRECTION } from '../world/space';
@@ -913,6 +914,10 @@ export class Game implements OnlineGame {
   private readonly tournamentRows = new Map<string, { item: HTMLLIElement; name: HTMLElement; meta: HTMLElement; join: HTMLButtonElement; listing: Listing }>();
   /** Counts down the time left of the listed tournaments while the list is open. */
   private tournamentClock = 0;
+  /** The lead browser's word to /push that its public tournament is open. */
+  private readonly openBeat = new OpenBeat();
+  /** The server's VAPID key once asked for (null: no notifications to offer), undefined before. */
+  private pushKey: string | null | undefined;
   /** The choices of the form that starts a tournament. */
   private roomPublic = true;
   private roomBots = true;
@@ -1479,6 +1484,12 @@ export class Game implements OnlineGame {
     $('board-back').addEventListener('click', () => this.showBoard(false));
     $('room-create').addEventListener('click', () => this.createTournament());
     $('tournaments-back').addEventListener('click', () => this.showTournaments(false));
+    $('push-toggle').addEventListener('click', () => void this.togglePush());
+    // a notification of an open tournament leads here
+    if (location.hash === '#tournaments') {
+      history.replaceState(null, '', location.pathname + location.search);
+      queueMicrotask(() => this.showTournaments(true));
+    }
     // two pairs of switches: who can find the tournament, and whether bots fill it
     const choose = (on: string, off: string, set: (value: boolean) => void, value: boolean) =>
       $(on).addEventListener('click', () => {
@@ -1794,8 +1805,30 @@ export class Game implements OnlineGame {
       this.renderTournaments(this.lobby?.list() ?? []);
       this.tournamentClock = window.setInterval(() => this.renderTournaments(this.lobby?.list() ?? []), 1000);
       $('room-name').focus();
+      void this.renderPush();
     }
     this.updateLobby();
+  }
+
+  /** The plate's notification button: shown only where the browser and the server can do it, saying what a press does. */
+  private async renderPush() {
+    this.pushKey ??= await pushKey();
+    const button = $('push-toggle');
+    button.hidden = !this.pushKey;
+    if (!this.pushKey) return;
+    const on = await pushSubscribed();
+    button.textContent = on ? t('Notifications on: stop them') : t('Notify me when a public tournament opens');
+    button.setAttribute('aria-pressed', String(on));
+  }
+
+  private async togglePush() {
+    if (!this.pushKey) return;
+    const button = $<HTMLButtonElement>('push-toggle');
+    button.disabled = true;
+    if (await pushSubscribed()) await unsubscribePush();
+    else if (!(await subscribePush(this.pushKey, currentLocale()))) $('room-note').textContent = t('No notifications: this browser refused them.');
+    button.disabled = false;
+    await this.renderPush();
   }
 
   /**
@@ -1889,6 +1922,7 @@ export class Game implements OnlineGame {
 
   private updateLobby() {
     const announcing = this.announcing();
+    this.openBeat.beat(announcing ? this.room!.code : null, performance.now());
     if (!this.lobbyWanted()) {
       this.lobby?.close();
       this.lobby = null;

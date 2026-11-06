@@ -8,3 +8,5 @@ compatibility_date = "2026-10-01"
 # dashboard). The account whose TURN traffic the monthly budget reads; an account ID is no secret.
 [vars]
 CLOUDFLARE_ACCOUNT_ID = "2ccacec509bc697696aa0b57f969dc16"
+# The VAPID public key of functions/push.ts (its private key, VAPID_PRIVATE_KEY, is a secret in the dashboard).
+VAPID_PUBLIC_KEY = "BJH00R6tfAPkd_kF9r5uDQeEU0ezUOqlYDA_5T1hvWEHMXoIx7S3mATeP3vlC3HT-CkXbM3usjFmugR27R9zhoA"
