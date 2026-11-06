@@ -22,7 +22,7 @@
  * Costs: D1 has a daily allowance of rows written; this function keeps to DAILY_WRITES of it
  * and refuses to write beyond (the game works on without, the lobby needs none of this).
  */
-import { pushRequest, fromBase64Url, type Subscription, type Vapid } from '../src/net/webpush';
+import { pushRequest, fromBase64Url, toBase64Url, type Subscription, type Vapid } from '../src/net/webpush';
 import { MAX_FROM, pushText } from '../src/net/pushtext';
 import { LOCALES, type Locale } from '../src/i18n/i18n';
 
@@ -237,22 +237,50 @@ export function d1Store(db: D1Like): PushStore {
 }
 
 /**
- * The VAPID keys from the environment, or null while they are not set or unreadable. The private
- * key is taken as its raw scalar (32 bytes) or as a PKCS #8 key, either in base64 or base64url.
+ * The private key's text as pasted into the dashboard, down to its base64: quotes, a PEM armor and
+ * line breaks taken off, and from a JSON object (a JWK, or a file of both keys) its private field.
+ */
+function privateText(value: string): string {
+  let text = value.trim().replace(/^["']|["']$/g, '');
+  if (text.startsWith('{')) {
+    const fields = JSON.parse(text) as Record<string, unknown>;
+    const found = ['d', 'privateKey', 'private_key', 'private', 'VAPID_PRIVATE_KEY'].map((name) => fields[name]).find((field) => typeof field === 'string');
+    text = typeof found === 'string' ? found : '';
+  }
+  return text.replace(/-----[A-Z ]+-----/g, '').replace(/\s+/g, '');
+}
+
+/**
+ * The VAPID keys from the environment, or null while they are not set, unreadable or not one pair.
+ * The private key is taken as its raw scalar (32 bytes) or as a PKCS #8 key, in base64 or base64url,
+ * bare, as PEM or in JSON (see privateText); a test signature checks it against the public key.
  */
 export async function vapidOf(env: Env): Promise<Vapid | null> {
   if (!env.VAPID_PUBLIC_KEY || !env.VAPID_PRIVATE_KEY) return null;
   try {
     const publicKey = fromBase64Url(env.VAPID_PUBLIC_KEY.trim());
-    let privateKey = fromBase64Url(env.VAPID_PRIVATE_KEY.trim());
+    let privateKey = fromBase64Url(privateText(env.VAPID_PRIVATE_KEY));
     if (privateKey.length !== 32) {
       const key = await crypto.subtle.importKey('pkcs8', privateKey, { name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign']);
       privateKey = fromBase64Url((await crypto.subtle.exportKey('jwk', key)).d!);
     }
-    return publicKey.length === 65 && privateKey.length === 32 ? { keys: { publicKey, privateKey }, subject: 'https://solartournament.games' } : null;
+    if (publicKey.length !== 65 || privateKey.length !== 32) return null;
+    return (await onePair(publicKey, privateKey)) ? { keys: { publicKey, privateKey }, subject: 'https://solartournament.games' } : null;
   } catch {
     return null;
   }
+}
+
+/** Whether the private key signs what the public key verifies. */
+async function onePair(publicKey: Uint8Array<ArrayBuffer>, privateKey: Uint8Array<ArrayBuffer>): Promise<boolean> {
+  const curve = { name: 'ECDSA', namedCurve: 'P-256' };
+  const signing = { name: 'ECDSA', hash: 'SHA-256' };
+  const x = toBase64Url(publicKey.subarray(1, 33));
+  const y = toBase64Url(publicKey.subarray(33, 65));
+  const sign = await crypto.subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', x, y, d: toBase64Url(privateKey) }, curve, false, ['sign']);
+  const verify = await crypto.subtle.importKey('raw', publicKey, curve, false, ['verify']);
+  const probe = new TextEncoder().encode('vapid');
+  return crypto.subtle.verify(signing, verify, await crypto.subtle.sign(signing, sign, probe), probe);
 }
 
 /** Sends the notification to every subscription, each in its Host's language; forgets those the push service says are gone. */
@@ -269,7 +297,12 @@ export async function sendAll(store: PushStore, targets: (Subscription & { local
   }
 }
 
-export const onRequestGet: PagesFunction<Env> = async ({ env }) => json({ key: env.PUSH_DB && (await vapidOf(env)) ? env.VAPID_PUBLIC_KEY!.trim() : null });
+/** The public key to subscribe with, or null and what of the setup is missing (nothing secret). */
+export const onRequestGet: PagesFunction<Env> = async ({ env }) => {
+  const vapid = await vapidOf(env);
+  if (env.PUSH_DB && vapid) return json({ key: env.VAPID_PUBLIC_KEY!.trim() });
+  return json({ key: null, missing: !env.PUSH_DB ? 'database' : !env.VAPID_PRIVATE_KEY ? 'private key' : 'a readable key pair' });
+};
 
 export const onRequestPost: PagesFunction<Env> = async ({ env, request, waitUntil }) => {
   // only the game's own pages: a current browser says where a request comes from

@@ -125,6 +125,13 @@ describe('the VAPID keys from the environment', () => {
     const fromRaw = await vapidOf({ VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: raw });
     expect(fromPkcs8 && toBase64Url(fromPkcs8.keys.privateKey)).toBe(raw);
     expect(fromRaw && toBase64Url(fromRaw.keys.privateKey)).toBe(raw);
+    const pem = `-----BEGIN PRIVATE KEY-----\n${pkcs8.match(/.{1,64}/g)!.join('\n')}\n-----END PRIVATE KEY-----\n`;
+    for (const pasted of [pem, `"${raw}"`, JSON.stringify({ publicKey, privateKey: raw }), JSON.stringify({ kty: 'EC', crv: 'P-256', d: raw })]) {
+      const found = await vapidOf({ VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: pasted });
+      expect(found && toBase64Url(found.keys.privateKey)).toBe(raw);
+    }
+    const other = (await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify'])) as CryptoKeyPair;
+    expect(await vapidOf({ VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: (await crypto.subtle.exportKey('jwk', other.privateKey)).d! })).toBeNull();
     expect(await vapidOf({ VAPID_PUBLIC_KEY: publicKey, VAPID_PRIVATE_KEY: 'nonsense' })).toBeNull();
     expect(await vapidOf({ VAPID_PUBLIC_KEY: publicKey })).toBeNull();
   });
