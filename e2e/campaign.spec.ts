@@ -321,6 +321,23 @@ async function takeJobFrom(page: Page, kept: object): Promise<string[]> {
   return errors;
 }
 
+/** The clone held still at an echo (the export `echo` of the missions) while the mission is at drill `step`, until it moves on (20 s at most). */
+async function holdAtEcho(page: Page, echo: 'ECHO_TWO' | 'ECHO_THREE', step: number) {
+  await page.evaluate(
+    async ([path, echo, step]) => {
+      const game = window.game;
+      const at = ((await import(path)) as typeof import('../src/campaign/missions'))[echo];
+      const start = game.time;
+      while (game.school?.stepIndex === step && game.time - start < 20) {
+        game.me.flight.position.copy(at);
+        game.me.flight.velocity.set(0, 0, 0);
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+      }
+    },
+    ['/src/campaign/missions.ts', echo, step] as const,
+  );
+}
+
 /** Chapter 2 flown: every mission of it done, the thrusters rebuilt, three thousand coins in the wallet. */
 const CHAPTER_TWO_DONE = { ...CHAPTER_ONE_DONE, done: [...CHAPTER_ONE_DONE.done, 'rheasilvia', 'claimSurvey', 'cutAndHaul', 'sawBrothers', 'peakRun', 'practiceLog'], coins: 3000, ratings: 300, parts: [...CHAPTER_ONE_DONE.parts, 'thrusters'] };
 
@@ -421,16 +438,7 @@ test('Scout Two grinds the grey off: the old livery shows on the hull once the s
   await page.waitForFunction(() => window.game.venue?.id === 'occator' && window.game.school?.stepIndex === 4 && window.game.school.attempt?.live && window.game.me?.alive, null, { timeout: 180_000 });
   expect(await page.evaluate(() => window.game.me.model.getObjectByName('livery')?.visible)).toBe(false);
   // the clone held before the wall's second step: the echo, and the livery on the hull from then on
-  await page.evaluate(async (path) => {
-    const game = window.game;
-    const { ECHO_TWO } = (await import(path)) as typeof import('../src/campaign/missions');
-    const start = game.time;
-    while (game.school?.stepIndex === 4 && game.time - start < 20) {
-      game.me.flight.position.copy(ECHO_TWO);
-      game.me.flight.velocity.set(0, 0, 0);
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-    }
-  }, '/src/campaign/missions.ts');
+  await holdAtEcho(page, 'ECHO_TWO', 4);
   await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('solartournament.campaign')!).parts.includes('stripped')), { timeout: 120_000 }).toBe(true);
   expect(errors).toEqual([]);
 });
@@ -475,5 +483,15 @@ test('Valhalla Sprint: six coils in a straight line over Valhalla, the clock sta
   await page.waitForFunction(() => window.game.venue?.id === 'callisto' && window.game.school?.stepIndex === 0 && window.game.school.attempt?.live, null, { timeout: 180_000 });
   expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(6);
   expect(await page.evaluate(() => Number.isNaN(window.game.school.attempt.clockFrom))).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test('Callisto Echo: the hull held still over the listening post’s dish hears the third echo', async ({ page }) => {
+  test.setTimeout(300_000);
+  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge', 'repoMen', 'wallRun', 'scoutTwo', 'overhaul', 'stickneyGrand', 'debtDay', 'grooveShoot', 'armorPanels', 'pilotEpisode', 'valhallaSprint'], coins: 10500, parts: [...CHAPTER_TWO_DONE.parts, 'laser', 'stripped', 'drive', 'panels'], modules: ['targeting', 'racingLine', 'radar'], held: true };
+  const errors = await takeJobFrom(page, kept);
+  await page.waitForFunction(() => window.game.venue?.id === 'callisto' && window.game.school?.stepIndex === 0 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  await holdAtEcho(page, 'ECHO_THREE', 0);
+  expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(0);
   expect(errors).toEqual([]);
 });

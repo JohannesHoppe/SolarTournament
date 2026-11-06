@@ -7,8 +7,8 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE } from './yard';
-import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, VALHALLA_MARK } from './callisto';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE } from './yard';
+import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, postPlacement, VALHALLA_MARK } from './callisto';
 import { WALL_TOP, wallPlacement } from './wall';
 import { groundPlacement, MARS_AT, PHOBOS_FALL, STICKNEY_FLOOR } from './phobos';
 import { CERES_FALL, CEREALIA, MARKET, occatorPlacements, onPlace, TERRACE } from './ceres';
@@ -494,7 +494,7 @@ export const PLACES: readonly ArenaProfile[] = [
     name: msg('Valhalla'),
     tagline: msg('The great basin of Callisto, its rings frozen like ripples in a pond, and Jupiter standing still over it.'),
     // nothing loose on the ground: its relief alone
-    layout: { key: 'callisto', seed: 5000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [callistoGround(CALLISTO_TYPE)], fall: CALLISTO_FALL },
+    layout: { key: 'callisto', seed: 5000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [callistoGround(CALLISTO_TYPE), postPlacement(POST_TYPE)], fall: CALLISTO_FALL },
     cooling: 1,
     storms: false,
     // 5.2 AU from the sun, as Jupiter's arena

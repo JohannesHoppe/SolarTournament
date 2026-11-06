@@ -1673,4 +1673,8 @@ export const DE: Catalog = {
   "Too slow for the show. Back to the start, and once more.": "Zu langsam für die Show. Zurück zum Start, und noch einmal.",
   "We missed a coil. Back to the start, and once more.": "Wir haben eine Spule verfehlt. Zurück zum Start, und noch einmal.",
   "Six coils, and the clock beaten. The ridges went by like waves, Host.": "Sechs Spulen, und die Uhr geschlagen. Die Wälle zogen vorbei wie Wellen, Host.",
+  "Callisto Echo": "Callisto-Echo",
+  "The old frequency, Host, from the craters. A Navy listening post, dead for longer than anyone remembers. Hold us still over its dish, so I can listen.": "Die alte Frequenz, Host, aus den Kratern. Ein Horchposten der Marine, tot seit länger, als sich irgendwer erinnert. Halt uns still über seiner Schüssel, damit ich lauschen kann.",
+  "Departure minus thirty days. The children keep asking whether the stars are warm.": "Abflug minus dreißig Tage. Die Kinder fragen immer wieder, ob die Sterne warm sind.",
+  "Children. There were children on that ship, Host. I told them something about the stars. I wish I knew what.": "Kinder. Auf diesem Schiff waren Kinder, Host. Ich habe ihnen etwas über die Sterne erzählt. Ich wünschte, ich wüsste, was.",
 };

@@ -6,7 +6,7 @@ import { RISE, VESTA_GROUND } from '../world/vesta';
 import { MARKET_DOCK, onPlace, stepFace, stepTop } from '../world/ceres';
 import { hullInLight } from '../world/wall';
 import { inGrooves, surfaceHeight as phobosHeight } from '../world/phobos';
-import { surfaceHeight as callistoHeight } from '../world/callisto';
+import { POST_AT, POST_HALF, surfaceHeight as callistoHeight } from '../world/callisto';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
@@ -1157,19 +1157,30 @@ const wallRun: Drill = {
  */
 export const ECHO_TWO = onPlace(stepFace(2) - 1200, stepTop(1) + (stepTop(2) - stepTop(1)) * 0.7, -7000);
 
-const echoTwo: Drill = {
-  line: CAMPAIGN.echoTwoCall,
+/** An echo at a fixed place (`at`, at the place `arena`): Nicole's `call` to it, the hull held there within ECHO_REACH and slower than ECHO_STILL for ECHO_HOLD seconds. */
+const echoAt = (call: string, arena: ArenaId, at: THREE.Vector3): Drill => ({
+  line: call,
   keys: ['turn', 'drive', 'brake'],
-  arena: 'occator',
+  arena,
   autopilot: true,
   enter(_, __, markers) {
     markers.clear();
-    markers.zone(ECHO_TWO, ECHO_REACH);
+    markers.zone(at, ECHO_REACH);
   },
-  done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.position.distanceTo(ECHO_TWO) < ECHO_REACH && ctx.me.flight.velocity.length() < ECHO_STILL, ECHO_HOLD),
-  waypoint: () => ECHO_TWO,
+  done: (ctx, a) => holdFor(ctx, a, ctx.me.flight.position.distanceTo(at) < ECHO_REACH && ctx.me.flight.velocity.length() < ECHO_STILL, ECHO_HOLD),
+  waypoint: () => at,
   mark: () => t('Signal'),
-};
+});
+
+const echoTwo = echoAt(CAMPAIGN.echoTwoCall, 'occator', ECHO_TWO);
+
+/**
+ * Callisto Echo (5.4): the third echo, from the Navy's old listening post among Valhalla's
+ * craters (see world/callisto), the hull held ECHO_THREE_OVER over the dish.
+ */
+const ECHO_THREE_OVER = 1000;
+export const ECHO_THREE = point(POST_AT.x + 560, POST_AT.y + POST_HALF.y + ECHO_THREE_OVER, POST_AT.z);
+const echoThree = echoAt(CAMPAIGN.echoThreeCall, 'callisto', ECHO_THREE);
 
 /** Pays a part's price from the wallet as far as it holds, the rest put on the debt (the laser, the overhaul). */
 const buy = (campaign: Campaign, price: number) => {
@@ -1276,4 +1287,5 @@ export const MISSIONS: readonly Mission[] = [
   // chapter 5, Valhalla on Callisto: Lanes Watch's bounty show over the craters, under Jupiter
   { id: 'pilotEpisode', name: msg('Pilot Episode'), drills: [said(HEDDA.callisto, 'callisto'), said(CAMPAIGN.radar, 'callisto'), pilotEpisode, said(CAMPAIGN.pilotEpisodeDone, 'callisto')], pay: 3000, ratings: 300, fit: fitRadar },
   { id: 'valhallaSprint', name: msg('Valhalla Sprint'), drills: [valhallaSprint, said(CAMPAIGN.valhallaSprintDone, 'callisto')], pay: 1500, ratings: 150, start: SPRINT_START },
+  { id: 'callistoEcho', name: msg('Callisto Echo'), drills: [echoThree, said(CAMPAIGN.echoThree, 'callisto'), said(CAMPAIGN.echoThreeHeard, 'callisto')], pay: 0, ratings: 30 },
 ];

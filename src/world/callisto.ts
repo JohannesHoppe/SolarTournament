@@ -3,6 +3,7 @@ import { cos, hypot, pow, sin } from '../detmath';
 import { Randomizer } from '../random';
 import { Noise } from './noise';
 import { reliefPiece } from './horizon';
+import type { Placement } from './asteroids';
 
 /**
  * Valhalla on Callisto (the campaign's chapter 5, see docs/campaign/): a stretch of the ring zone
@@ -114,6 +115,22 @@ const GROUND_TOP = LAND + RIDGE + 2 * RIM * CRATER_MAX + BUMPS;
 const piece = reliefPiece(surfaceHeight, GROUND_HALF, GROUND_TOP);
 export const groundRelief = piece.relief;
 export const groundPlacement = piece.placement;
+
+/**
+ * The Navy's old listening post among the craters (the third echo, see Callisto Echo): a bunker
+ * half sunk into the ground, a lattice tower with a dish turned up at the sky, aerial masts; one
+ * solid box of POST_HALF (units, 70 by 90 by 50 m) standing BURIED in the ground at POST_SPOT.
+ */
+export const POST_HALF = new THREE.Vector3(700, 900, 500);
+// a flat stretch between the craters: the ground under the box within 3 m of level
+const POST_SPOT = [10000, -34000] as const;
+const BURIED = 200;
+export const POST_AT = new THREE.Vector3(POST_SPOT[0], surfaceHeight(POST_SPOT[0], POST_SPOT[1]) + POST_HALF.y - BURIED, POST_SPOT[1]);
+
+/** The post as the field's piece of kind 'rack' (type `type` in the yards' set). */
+export function postPlacement(type: number): Placement {
+  return { kind: 'rack', type, scale: 1, position: POST_AT.clone(), orientation: new THREE.Quaternion(), solid: true };
+}
 
 /** Where the HUD marks the basin: towards Valhalla's middle, on the ground at the field's edge (units). */
 export const VALHALLA_MARK = new THREE.Vector3(-GROUND_HALF.x, surfaceHeight(-GROUND_HALF.x, 0), 0);

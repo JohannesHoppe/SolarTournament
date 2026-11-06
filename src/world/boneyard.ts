@@ -7,9 +7,9 @@ import { letteringTexture, PAINT_ASPECT } from '../view/lettering';
 import { DEPOT } from '../ship/models';
 import { setFromEuler } from '../detthree';
 import { acos, atan2, cos, exp, hypot, sin } from '../detmath';
-import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, RACK_RELIEFS } from './yard';
+import { BAY_BACK, BAY_HALF_WIDTH, BAY_HEIGHT, BAY_MOUTH, CAB_RADIUS, CRATER_CREST, DOME_RADIUS, GROUND, HAB_LIFT, HAB_RADIUS, TOWER_RADIUS, VAULT_RADIUS, CRATER_HEIGHT, CRATER_RADIUS, DEPOT_LAYOUT, DEPOT_PARTS, DEPOT_TYPE, type DepotPart, PAD, PAD_RADIUS, PSYCHE_BELOW, PSYCHE_CENTER, PSYCHE_RADIUS, RACK_BOXES, RACK_DEPTH, RACK_HEIGHT, RACK_LENGTH, TANK_RADIUS, YARD_SEED, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, RACK_RELIEFS } from './yard';
 import { phobosGround } from './stickney';
-import { callistoGround } from './valhalla';
+import { callistoGround, listeningPost } from './valhalla';
 import { wallPiece } from './solarwall';
 import { occatorDome, occatorGround, occatorStep } from './occator';
 import { STEPS } from './ceres';
@@ -36,7 +36,7 @@ const BEHIND_ALL = 0.99999;
 const FLAT = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 0, 0, 1);
 const FACING_OUT = new THREE.Matrix4().set(0, 0, -1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1);
 
-const block = (x: number, y: number, z: number, cx = 0, cy = 0, cz = 0) => new THREE.BoxGeometry(x, y, z).translate(cx, cy, cz).toNonIndexed();
+export const block = (x: number, y: number, z: number, cx = 0, cy = 0, cz = 0) => new THREE.BoxGeometry(x, y, z).translate(cx, cy, cz).toNonIndexed();
 
 /** A dead fighter, low poly: fuselage, cockpit, the two drive bells' housings, stub wings and a fin; nose along -x, lying slightly askew, now and then a wing gone. */
 function fighter(r: Randomizer, x: number, y: number, z: number, into: THREE.BufferGeometry[]) {
@@ -51,7 +51,7 @@ function fighter(r: Randomizer, x: number, y: number, z: number, into: THREE.Buf
   for (const part of parts) into.push(part.applyMatrix4(turn).translate(x, y, z));
 }
 
-const noUv = (geometry: THREE.BufferGeometry) => {
+export const noUv = (geometry: THREE.BufferGeometry) => {
   if (geometry.hasAttribute('uv')) geometry.deleteAttribute('uv');
   return geometry;
 };
@@ -72,6 +72,7 @@ export function rackSet(): TemplateSet {
     if (type === WALL_TYPE) return wallPiece(half);
     if (type === PHOBOS_TYPE) return phobosGround(half);
     if (type === CALLISTO_TYPE) return callistoGround(half);
+    if (type === POST_TYPE) return listeningPost(half);
     if (type > OCCATOR_TYPE + STEPS) return occatorDome(type - OCCATOR_TYPE - STEPS - 1, half);
     if (type >= DEPOT_TYPE) return depotPart(DEPOT_PARTS[type - DEPOT_TYPE], half, steel, depot);
     const r = new Randomizer(YARD_SEED + 10 + type);
@@ -338,7 +339,7 @@ function depotLooks() {
 }
 
 /** A lattice within a box along its long axis: four rails at its corners and braces between them every `step` units. */
-function lattice(half: THREE.Vector3, step: number): THREE.BufferGeometry[] {
+export function lattice(half: THREE.Vector3, step: number): THREE.BufferGeometry[] {
   const parts: THREE.BufferGeometry[] = [];
   const along = half.y > half.x && half.y > half.z ? 'y' : half.x > half.z ? 'x' : 'z';
   const length = half[along] * 2;

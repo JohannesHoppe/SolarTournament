@@ -7,7 +7,8 @@ import { arenaById } from '../world/arenas';
 import { DETAIL } from '../world/rocks';
 import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
-import { BARGE_FROM, BARGE_TO, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME } from './missions';
+import { POST_AT, POST_HALF } from '../world/callisto';
+import { BARGE_FROM, BARGE_TO, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME } from './missions';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 
@@ -93,11 +94,22 @@ describe('the Ore Barge out of Occator', () => {
   });
 });
 
-describe('the second echo at Occator', () => {
-  it('lies before the wall’s second step, clear of every piece of the place, inside the arena', () => {
+describe('the echoes', () => {
+  for (const [name, arena, at] of [['the second, before Occator’s second step', 'occator', ECHO_TWO], ['the third, over the listening post on Callisto', 'callisto', ECHO_THREE]] as const) {
+    it(`${name}: clear of every piece of the place, inside the arena`, () => {
+      const field = testField(DETAIL);
+      field.generate(arenaById(arena)!.layout);
+      expect(field.overlap(at, 800)).toBeNull();
+      expect(at.length()).toBeLessThan(ARENA_LIMIT);
+    });
+  }
+
+  it('the third hangs over the listening post, which stands solid on Callisto’s ground', () => {
     const field = testField(DETAIL);
-    field.generate(arenaById('occator')!.layout);
-    expect(field.overlap(ECHO_TWO, 800)).toBeNull();
-    expect(ECHO_TWO.length()).toBeLessThan(ARENA_LIMIT);
+    field.generate(arenaById('callisto')!.layout);
+    // a ship flying down onto the post meets its roof long before the ground
+    const hit = field.raycast(ECHO_THREE, new THREE.Vector3(0, -1, 0), 10000);
+    expect(hit).not.toBeNull();
+    expect(ECHO_THREE.y - hit!.distance).toBeGreaterThan(POST_AT.y - POST_HALF.y + 300);
   });
 });
