@@ -825,6 +825,113 @@ const fitRadiators = (campaign: Campaign) => {
   buy(campaign, RADIATORS_PRICE);
 };
 
+/**
+ * Ice Run (5.2): a convoy of CONVOY ice tugs flies its lane across Valhalla, CONVOY_GAP apart,
+ * at CONVOY_SPEED, level CONVOY_OVER over the highest ground under it, out of the arena towards
+ * Ganymede. LOOSE_QUIET seconds in, LOOSE raiders of the Loose (skill LOOSE_SKILL) come for the
+ * frontmost tug still free, holding LOOSE_HOLD off it; they never fire beams at a tug, only
+ * harpoons (see Markers.hook), and they fight a ship that comes near. A harpooned tug is dragged
+ * off its lane at DRAG while its raider lives and glides back once it is shot down; dragged
+ * TUG_GONE off its lane, it is lost. The convoy at its lane's end with at most one tug lost wins;
+ * a second lost fails it.
+ */
+const CONVOY = 3;
+const CONVOY_GAP = 8000;
+const CONVOY_SPEED = 600;
+const CONVOY_OVER = 3000;
+const CONVOY_FROM = point(-55000, 0, 25000);
+const CONVOY_TO = point(55000, 0, -15000);
+const CONVOY_WAY = new THREE.Vector3().subVectors(CONVOY_TO, CONVOY_FROM).normalize();
+const CONVOY_LENGTH = CONVOY_FROM.distanceTo(CONVOY_TO);
+const CONVOY_HEIGHT = (() => {
+  let highest = -Infinity;
+  for (let s = 0; s <= 1; s += 0.005) highest = Math.max(highest, callistoHeight(CONVOY_FROM.x + (CONVOY_TO.x - CONVOY_FROM.x) * s, CONVOY_FROM.z + (CONVOY_TO.z - CONVOY_FROM.z) * s));
+  return highest + CONVOY_OVER;
+})();
+const CONVOY_TURN = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(-1, 0, 0), CONVOY_WAY);
+/** Sideways off the lane, the way a dragged tug goes (level, square to the lane). */
+const CONVOY_SIDE = new THREE.Vector3(-CONVOY_WAY.z, 0, CONVOY_WAY.x);
+const LOOSE = 4;
+const LOOSE_SKILL = 0.45;
+const LOOSE_HOLD = 5000;
+const LOOSE_QUIET = 15;
+/** The Loose's names, their own (never translated). */
+const LOOSE_NAMES = ['Driftwood', 'Salvo', 'Magpie Jack', 'Lanyard'];
+const DRAG = 300;
+export const TUG_GONE = 16000;
+/** A freed tug's way back to its lane: its offset shrinks by e every TUG_BACK seconds. */
+const TUG_BACK = 4;
+const waypointAt = new THREE.Vector3();
+/** Each tug's offset from its lane and whether it is lost, for the running attempt. */
+const convoyOff = Array.from({ length: CONVOY }, () => new THREE.Vector3());
+const convoyLost: boolean[] = [];
+const tugNow = new THREE.Vector3();
+
+/** Where tug `index` would be on its lane `seconds` after the convoy set out, from its place in the line to the lane's end. */
+export function convoyAt(index: number, seconds: number, out: THREE.Vector3): THREE.Vector3 {
+  const along = Math.min(CONVOY_LENGTH, Math.max(0, seconds * CONVOY_SPEED - index * CONVOY_GAP));
+  out.copy(CONVOY_FROM).addScaledVector(CONVOY_WAY, along);
+  out.y = CONVOY_HEIGHT;
+  return out;
+}
+
+const iceRun: Drill = {
+  line: CAMPAIGN.iceRun,
+  keys: ['turn', 'drive', 'fire'],
+  arena: 'callisto',
+  autopilot: false,
+  turn: (_, a) => (a.count > 0 ? 'fight' : undefined),
+  enter(ctx, a, markers) {
+    stop(ctx);
+    ctx.removeJumpers();
+    markers.clear();
+    convoyLost.length = 0;
+    for (let i = 0; i < CONVOY; i++) {
+      convoyOff[i].set(0, 0, 0);
+      convoyLost.push(false);
+      markers.iceTugAt(i, convoyAt(i, 0, tugNow), CONVOY_TURN);
+    }
+    // a.count: the Loose have come
+    a.count = 0;
+    ctx.me.heat = 0;
+    ctx.me.overheated = false;
+  },
+  done(ctx, a, markers) {
+    const dt = a.seconds - a.lastShot;
+    a.lastShot = a.seconds;
+    let front: THREE.Vector3 | null = null;
+    for (let i = 0; i < CONVOY; i++) {
+      const raider = markers.hookedBy[i];
+      if (raider && !raider.alive) markers.hookedBy[i] = null;
+      const held = markers.hookedBy[i];
+      const off = convoyOff[i];
+      // a held tug goes the way its raider is, off the lane; a lost one drifts on; a freed one glides back
+      if (held) off.addScaledVector(CONVOY_SIDE, DRAG * dt * (convoyAt(i, a.seconds, tugNow).sub(held.flight.position).dot(CONVOY_SIDE) > 0 ? -1 : 1));
+      else if (convoyLost[i]) off.addScaledVector(CONVOY_SIDE, DRAG * dt * (off.dot(CONVOY_SIDE) < 0 ? -1 : 1));
+      else off.multiplyScalar(exp(-dt / TUG_BACK));
+      if (!convoyLost[i] && off.length() > TUG_GONE) {
+        convoyLost[i] = true;
+        if (convoyLost.filter(Boolean).length === 1) ctx.say([CAMPAIGN.iceRunTugLost]);
+      }
+      convoyAt(i, a.seconds, tugNow).add(off);
+      markers.iceTugAt(i, tugNow, CONVOY_TURN);
+      markers.tether(i, held ? held.flight.position : null);
+      if (!front && !convoyLost[i] && !held) front = tugNow.clone();
+    }
+    ctx.moveJumpers(front ?? convoyAt(0, a.seconds, tugNow));
+    if (a.count === 0 && a.seconds >= LOOSE_QUIET) {
+      ctx.spawnJumpers(null, front ?? tugNow, LOOSE, LOOSE_SKILL, LOOSE_NAMES, LOOSE_HOLD, false, true);
+      a.count = 1;
+    }
+    const home = CONVOY_LENGTH + (CONVOY - 1) * CONVOY_GAP;
+    return a.seconds * CONVOY_SPEED >= home && convoyLost.filter(Boolean).length <= 1;
+  },
+  fail: () => (convoyLost.filter(Boolean).length > 1 ? CAMPAIGN.iceRunLost : null),
+  leave: (ctx) => ctx.removeJumpers(),
+  waypoint: (_, a) => convoyAt(1, a.seconds, waypointAt).add(convoyOff[1]),
+  mark: () => t('Tugs {n}/{total} · lost {lost}', { n: CONVOY - convoyLost.filter(Boolean).length, total: CONVOY, lost: convoyLost.filter(Boolean).length }),
+};
+
 /** Pilot Episode: Nicole installs her radar (see Module). */
 const fitRadar = (campaign: Campaign) => {
   if (!campaign.modules.includes('radar')) campaign.modules.push('radar');
@@ -1293,6 +1400,7 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'armorPanels', name: msg('Armor Panels'), drills: [said(PIM.panels, 'phobos'), said(CAMPAIGN.panels, 'phobos')], pay: 0, fit: fitPanels },
   // chapter 5, Valhalla on Callisto: Lanes Watch's bounty show over the craters, under Jupiter
   { id: 'pilotEpisode', name: msg('Pilot Episode'), drills: [said(HEDDA.callisto, 'callisto'), said(CAMPAIGN.radar, 'callisto'), pilotEpisode, said(CAMPAIGN.pilotEpisodeDone, 'callisto')], pay: 3000, ratings: 300, fit: fitRadar },
+  { id: 'iceRun', name: msg('Ice Run'), drills: [said(HEDDA.iceRun, 'callisto'), iceRun, said(CAMPAIGN.iceRunDone, 'callisto')], pay: 2500, ratings: 200 },
   { id: 'valhallaSprint', name: msg('Valhalla Sprint'), drills: [valhallaSprint, said(CAMPAIGN.valhallaSprintDone, 'callisto')], pay: 1500, ratings: 150, start: SPRINT_START },
   { id: 'callistoEcho', name: msg('Callisto Echo'), drills: [echoThree, said(CAMPAIGN.echoThree, 'callisto'), said(CAMPAIGN.echoThreeHeard, 'callisto')], pay: 0, ratings: 30 },
   { id: 'radiators', name: msg('Radiators I'), drills: [said(PIM.radiators, 'callisto'), said(CAMPAIGN.radiators, 'callisto')], pay: 0, fit: fitRadiators },

@@ -8,7 +8,7 @@ import { DETAIL } from '../world/rocks';
 import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
 import { POST_AT, POST_HALF } from '../world/callisto';
-import { BARGE_FROM, BARGE_TO, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME } from './missions';
+import { BARGE_FROM, BARGE_TO, convoyAt, ECHO_THREE, ECHO_TWO, GRAND_COURSE, GRAND_LAPS, GRAND_START, MISSIONS, PEAK_COURSE, PEAK_LAPS, SPRINT_COURSE, SPRINT_START, SPRINT_TIME } from './missions';
 import { BOOST_RADIUS } from '../game/race';
 import { ARENA_LIMIT } from '../world/arena';
 
@@ -90,6 +90,22 @@ describe('the Ore Barge out of Occator', () => {
       point.lerpVectors(BARGE_FROM, BARGE_TO, k / 100);
       expect(field.overlap(point, 3000), `at ${k} %`).toBeNull();
       expect(point.length()).toBeLessThan(ARENA_LIMIT);
+    }
+  });
+});
+
+describe('the Ice Run over Valhalla', () => {
+  it('flies its convoy on a lane clear of the ground and the listening post, inside the arena, from its start to its end', () => {
+    const field = testField(DETAIL);
+    field.generate(arenaById('callisto')!.layout);
+    const at = new THREE.Vector3();
+    for (let seconds = 0; seconds <= 240; seconds += 1) {
+      for (let tug = 0; tug < 3; tug++) {
+        convoyAt(tug, seconds, at);
+        // a tug is some 100 m long: nothing within 75 m of its middle, and room to be dragged off the lane
+        expect(field.overlap(at, 1500), `${tug} at ${seconds} s`).toBeNull();
+        expect(at.length()).toBeLessThan(ARENA_LIMIT);
+      }
     }
   });
 });

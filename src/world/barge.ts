@@ -15,10 +15,11 @@ import { boxUv } from '../view/surfaces';
  * that reels in the cable of its harpoon, and the firm's paint.
  */
 
-/** A kind of working hull: its spine's half length (units), how many hoppers it carries, a winch or not, its seed and its yards' paints. */
+/** A kind of working hull: its spine's half length (units), how many hoppers it carries and what is heaped in them, a winch or not, its seed and its yards' paints. */
 interface HullKind {
   spine: number;
   hoppers: number;
+  cargo?: 'ore' | 'ice';
   winch: boolean;
   seed: number;
   paints: readonly { key: string; seed: number; tint: number; texts: readonly string[] }[];
@@ -58,6 +59,19 @@ const TUG: HullKind = {
   ],
 };
 
+/** An ice tug of the Jupiter lanes (Ice Run): a spine of 60 m half length, two hoppers heaped with blocks of Callisto's ice, in a tug yard's paints. */
+const ICE_TUG: HullKind = {
+  spine: 1200,
+  hoppers: 2,
+  cargo: 'ice',
+  winch: false,
+  seed: 3501,
+  paints: [
+    { key: 'icetug-blue', seed: 3502, tint: 0x7d93a6, texts: ['ICE', 'GANYMEDE RUN', 'NO STEP', 'TUG 12'] },
+    { key: 'icetug-orange', seed: 3503, tint: 0xc28a52, texts: ['LANES TUG CO', 'CALLISTO', 'AIRLOCK', 'MAX 2 KT'] },
+  ],
+};
+
 /** The barge's length (units): the escorts keep it in mind. */
 export const BARGE_LENGTH = 2 * (BARGE.spine + CAB_HALF.x + POD_HALF.x + BELL_LENGTH);
 /** The tug's winch: its drum's middle on the stern (in the tug's frame) and how far round it a beam strikes it (units, 25 m). */
@@ -70,6 +84,8 @@ const built = new Map<HullKind, { root: THREE.Group; boxes: HullBox[] }>();
 export const barge = () => working(BARGE);
 /** The Tallymen's tug, built as barge is. */
 export const tug = () => working(TUG);
+/** An ice tug, built as barge is; a convoy poses a clone of it for each tug. */
+export const iceTug = () => working(ICE_TUG);
 
 function working(kind: HullKind): { root: THREE.Group; boxes: readonly HullBox[] } {
   const kept = built.get(kind);
@@ -87,7 +103,8 @@ function working(kind: HullKind): { root: THREE.Group; boxes: readonly HullBox[]
   };
   box(new THREE.Vector3(0, 0, 0), new THREE.Vector3(SPINE_HALF, SPINE_SECTION.y, SPINE_SECTION.z));
   // the hoppers on the spine, open on top, the ore heaped in them
-  const ore = new THREE.MeshStandardMaterial({ color: 0x4a443e, roughness: 1, metalness: 0.15, flatShading: true });
+  // dark ore, or blocks of dirty ice glinting where they were cut
+  const ore = kind.cargo === 'ice' ? new THREE.MeshStandardMaterial({ color: 0xc8d8e2, roughness: 0.35, metalness: 0, flatShading: true }) : new THREE.MeshStandardMaterial({ color: 0x4a443e, roughness: 1, metalness: 0.15, flatShading: true });
   for (let k = 0; k < kind.hoppers; k++) {
     const x = -SPINE_HALF + 700 + k * HOPPER_STEP;
     box(new THREE.Vector3(x, SPINE_SECTION.y + HOPPER_HALF.y, 0), HOPPER_HALF);
@@ -156,6 +173,10 @@ function working(kind: HullKind): { root: THREE.Group; boxes: readonly HullBox[]
   built.set(kind, made);
   return made;
 }
+
+/** Whether a sphere touches an ice tug posed by `pose`, and how far along a beam it stops it (see touchBarge, rayBarge). */
+export const touchIceTug = (pose: Pose, position: THREE.Vector3, radius: number, normal: THREE.Vector3) => touchHull(iceTug().boxes, pose, position, radius, normal);
+export const rayIceTug = (pose: Pose, origin: THREE.Vector3, direction: THREE.Vector3, max: number) => rayHull(iceTug().boxes, pose, origin, direction, max);
 
 /** Whether a sphere touches the tug posed by `pose` (see touchBarge). */
 export function touchTug(pose: Pose, position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {

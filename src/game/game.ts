@@ -1306,10 +1306,11 @@ export class Game implements OnlineGame {
   /**
    * A mission's raiders at a target (see campaign/missions): the Saw Brothers sawing at a rig
    * (`rock` the rock it stands on), or scrappers at an ore barge (no rock: the hull the drill set
-   * out), or guards of a hull (the Tallymen at their tug), who fight every ship they see; their
-   * bots, the target's middle (moved with it), how far off it they hold, their hits on it so far.
+   * out), or guards of a hull (the Tallymen at their tug), who fight every ship they see, or the
+   * Loose at a convoy of ice tugs (`hooks`), whose shots at it are harpoons; their bots, the
+   * target's middle (moved with it), how far off it they hold, their hits on it so far.
    */
-  private jumpers: { bots: Bot[]; rock: string | null; rig: THREE.Vector3; hold: number; hits: number; guard: boolean } | null = null;
+  private jumpers: { bots: Bot[]; rock: string | null; rig: THREE.Vector3; hold: number; hits: number; guard: boolean; hooks: boolean } | null = null;
   /**
    * A mission's race (see campaign/missions, The Peak Run): its rival bots, the rings and their
    * facings and the radius of their openings, the racing line round them, the laps; each rival's rings passed and the side of its
@@ -4825,7 +4826,7 @@ export class Game implements OnlineGame {
    * `hold` off it, each firing at it while no ship comes near (see sawPoint); `rock` the rock a
    * rig stands on, or null for a hull of the drill's; `guard`: guarding it instead.
    */
-  private spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number, names: readonly string[] = ['Saw'], hold = SAW_DISTANCE, guard = false) {
+  private spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number, names: readonly string[] = ['Saw'], hold = SAW_DISTANCE, guard = false, hooks = false) {
     this.removeJumpers();
     const bots: Bot[] = [];
     for (let i = 0; i < count; i++) {
@@ -4840,7 +4841,7 @@ export class Game implements OnlineGame {
       ship.spawn(at, lookingAt(at, rig, upward.set(0, 1, 0)), this.time);
       ship.protectedUntil = this.time;
     }
-    this.jumpers = { bots, rock, rig: rig.clone(), hold, hits: 0, guard };
+    this.jumpers = { bots, rock, rig: rig.clone(), hold, hits: 0, guard, hooks };
   }
 
   /**
@@ -5650,7 +5651,7 @@ export class Game implements OnlineGame {
       get rigBeams() {
         return game.rigBeams;
       },
-      spawnJumpers: (rock, rig, count, skill, names, hold, guard) => this.spawnJumpers(rock, rig, count, skill, names, hold, guard),
+      spawnJumpers: (rock, rig, count, skill, names, hold, guard, hooks) => this.spawnJumpers(rock, rig, count, skill, names, hold, guard, hooks),
       moveJumpers: (to) => game.jumpers?.rig.copy(to),
       removeJumpers: () => this.removeJumpers(),
       spawnRacers: (rings, normals, radius, laps, count, skill, start, names, skills) => this.spawnRacers(rings, normals, radius, laps, count, skill, start, names, skills),
@@ -7038,7 +7039,12 @@ export class Game implements OnlineGame {
     if (blocked !== null) this.effects.sparks(beamEnd.copy(origin).addScaledVector(direction, beamLength), shooter.color, 30);
     // a raider's beam on the hull it raids, the drill's barge, wears it down (see jumpers)
     const raid = this.jumpers;
-    if (raid && raid.rock === null && blocked !== null && raid.bots.some((b) => b.ship === shooter) && this.school?.bargeRay(origin, direction, blocked + 1) !== null) raid.hits++;
+    if (raid && raid.rock === null && blocked !== null && raid.bots.some((b) => b.ship === shooter)) {
+      // the Loose fire harpoons, never beams, at the tugs they raid: the cable holds the tug (see Markers.hook)
+      if (raid.hooks) {
+        if (this.school?.harpoonAlong(origin, direction, blocked + 1, shooter)) return;
+      } else if (this.school?.bargeRay(origin, direction, blocked + 1) !== null) raid.hits++;
+    }
 
     // the beam's ends are copied wherever they are kept (the effects, the kill cam, the message)
     const end = beamEnd.copy(origin).addScaledVector(direction, beamLength);

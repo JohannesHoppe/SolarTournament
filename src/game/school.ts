@@ -3,7 +3,7 @@ import { cos, exp, sin } from '../detmath';
 import { angleTo, rotateX, rotateY, setFromAxisAngle } from '../detthree';
 import { boxUv, industrialSurface, STATION_TILE, surfaced } from '../view/surfaces';
 import { patience, rayPatience, touchPatience } from '../world/patience';
-import { barge, rayBarge, rayTug, touchBarge, touchTug, tug, WINCH, WINCH_REACH } from '../world/barge';
+import { barge, iceTug, rayBarge, rayIceTug, rayTug, touchBarge, touchIceTug, touchTug, tug, WINCH, WINCH_REACH } from '../world/barge';
 import type { Asteroid, AsteroidField, Well } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import { CONTROLS, type Command, type Controls, type Device } from '../input/input';
@@ -86,8 +86,8 @@ export interface SchoolContext {
   readonly rocksBroken: number;
   /** The pilot's beams that struck what stands on a rock (a rig, a buoy) so far. */
   readonly rigBeams: number;
-  /** Raiders at a target (see Game.jumpers): claim-jumpers at the rig of the rock `rock` (its middle `rig`), or with no rock at a hull of the drill's; `count` bots of `skill` named from `names`, holding `hold` off it, firing at it while no ship comes near; with `guard`, guarding it instead, fighting every ship they see. */
-  spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number, names?: readonly string[], hold?: number, guard?: boolean): void;
+  /** Raiders at a target (see Game.jumpers): claim-jumpers at the rig of the rock `rock` (its middle `rig`), or with no rock at a hull of the drill's; `count` bots of `skill` named from `names`, holding `hold` off it, firing at it while no ship comes near; with `guard`, guarding it instead, fighting every ship they see; with `hooks`, their shots at a convoy of ice tugs are harpoons (see Markers.hook). */
+  spawnJumpers(rock: string | null, rig: THREE.Vector3, count: number, skill: number, names?: readonly string[], hold?: number, guard?: boolean, hooks?: boolean): void;
   /** Moves the raiders' target (a hull of the drill's that flies) to `to`. */
   moveJumpers(to: THREE.Vector3): void;
   removeJumpers(): void;
@@ -1674,6 +1674,10 @@ export class Markers {
   private tug: THREE.Object3D | null = null;
   winchHits = 0;
   private harpoon: THREE.Line | null = null;
+  /** A convoy of ice tugs a drill escorts (see world/barge, iceTugAt), each posed where it flies; the raider whose harpoon holds each (see hook) and its cable. */
+  private convoy: THREE.Object3D[] = [];
+  hookedBy: (Ship | null)[] = [];
+  private tethers: (THREE.Line | null)[] = [];
   /** The prop in tow behind a ship and the cable to it (see tow). */
   private towing: { prop: THREE.Object3D; ship: Ship; cable: THREE.Line } | null = null;
   private readonly cableMaterial = new THREE.LineBasicMaterial({ color: 0x6b6f75 });
@@ -1812,7 +1816,56 @@ export class Markers {
 
   /** Whether a sphere touches the hauler's hull: moves it out and sets the outward `normal`, as a ring's housing does. */
   touchesHull(position: THREE.Vector3, radius: number, normal: THREE.Vector3): boolean {
-    return (!!this.patience && touchPatience(this.patience, position, radius, normal)) || (!!this.barge && touchBarge(this.barge, position, radius, normal)) || (!!this.tug && touchTug(this.tug, position, radius, normal));
+    return (!!this.patience && touchPatience(this.patience, position, radius, normal)) || (!!this.barge && touchBarge(this.barge, position, radius, normal)) || (!!this.tug && touchTug(this.tug, position, radius, normal)) || this.convoy.some((tug) => touchIceTug(tug, position, radius, normal));
+  }
+
+  /** Ice tug `index` of the convoy set out at `position` turned by `quaternion` (its bow along -x), or moved there. */
+  iceTugAt(index: number, position: THREE.Vector3, quaternion: THREE.Quaternion) {
+    while (this.convoy.length <= index) {
+      const tug = iceTug().root.clone();
+      this.root.add(tug);
+      this.convoy.push(tug);
+      this.hookedBy.push(null);
+      this.tethers.push(null);
+    }
+    const tug = this.convoy[index];
+    tug.position.copy(position);
+    tug.quaternion.copy(quaternion);
+    tug.updateMatrixWorld();
+  }
+
+  /** The ice tug a beam meets first, nearer than `max`: its index and the distance, or null. */
+  convoyRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): { index: number; distance: number } | null {
+    let best: { index: number; distance: number } | null = null;
+    this.convoy.forEach((tug, index) => {
+      const distance = rayIceTug(tug, origin, direction, best?.distance ?? max);
+      if (distance !== null) best = { index, distance };
+    });
+    return best;
+  }
+
+  /** A raider's harpoon bit ice tug `index`: it holds it from now on, unless another's holds it already or the raider holds another (one harpoon each). */
+  hook(index: number, raider: Ship) {
+    if (this.hookedBy[index] === null && !this.hookedBy.includes(raider)) this.hookedBy[index] = raider;
+  }
+
+  /** The cable from the raider holding ice tug `index` to the tug, drawn while one does; gone with null. */
+  tether(index: number, from: THREE.Vector3 | null) {
+    const tug = this.convoy[index];
+    const line = this.tethers[index];
+    if (!from || !tug) {
+      if (line) this.root.remove(line);
+      line?.geometry.dispose();
+      this.tethers[index] = null;
+      return;
+    }
+    if (line) line.geometry.setFromPoints([from, tug.position]);
+    else {
+      const made = new THREE.Line(new THREE.BufferGeometry().setFromPoints([from, tug.position]), this.cableMaterial);
+      made.frustumCulled = false;
+      this.root.add(made);
+      this.tethers[index] = made;
+    }
   }
 
   /** How far along a beam a hull the drill set out stops it (Patience, the barge), nearer than `max`; null when none does. */
@@ -1820,7 +1873,8 @@ export class Markers {
     const moored = this.patience ? rayPatience(this.patience, origin, direction, max) : null;
     const escorted = this.barge ? rayBarge(this.barge, origin, direction, moored ?? max) : null;
     const tugged = this.tug ? rayTug(this.tug, origin, direction, escorted ?? moored ?? max) : null;
-    return tugged ?? escorted ?? moored;
+    const convoy = this.convoyRay(origin, direction, tugged ?? escorted ?? moored ?? max)?.distance ?? null;
+    return convoy ?? tugged ?? escorted ?? moored;
   }
 
   /** The tug, set out at `position` turned by `quaternion` (its bow along -x), its winch whole. */
@@ -1928,6 +1982,10 @@ export class Markers {
     this.harpoon = null;
     this.towing?.cable.geometry.dispose();
     this.towing = null;
+    for (const line of this.tethers) line?.geometry.dispose();
+    this.convoy = [];
+    this.hookedBy = [];
+    this.tethers = [];
     this.rings = [];
     this.pipes = [];
     this.moving = [];
@@ -2082,6 +2140,13 @@ export class FlightSchool {
   /** Whether a beam meets the barge the drill escorts before `max` (see Markers.bargeRay). */
   bargeRay(origin: THREE.Vector3, direction: THREE.Vector3, max: number): number | null {
     return this.markers.bargeRay(origin, direction, max);
+  }
+
+  /** A raider's shot along a beam: where it meets an ice tug of the convoy before `max`, its harpoon bites that tug (see Markers.hook); whether it did. */
+  harpoonAlong(origin: THREE.Vector3, direction: THREE.Vector3, max: number, raider: Ship): boolean {
+    const tug = this.markers.convoyRay(origin, direction, max);
+    if (tug) this.markers.hook(tug.index, raider);
+    return !!tug;
   }
 
   /** Whether a ship touches a hull the drill set out (see Markers.hauler, Markers.bargeAt): moves it out and sets `normal`. */

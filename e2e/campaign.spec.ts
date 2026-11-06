@@ -464,10 +464,19 @@ test('Debt Day: four collectors shot down, the Navy hails, and the benefactor ho
   expect(errors).toEqual([]);
 });
 
+/** Chapter 4 flown, and of chapter 5 the missions `done` (each after the one before): the debt held, the hull armored, Nicole's radar in once Pilot Episode is done. */
+const chapterFive = (...done: string[]) => ({
+  ...CHAPTER_TWO_DONE,
+  done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge', 'repoMen', 'wallRun', 'scoutTwo', 'overhaul', 'stickneyGrand', 'debtDay', 'grooveShoot', 'armorPanels', ...done],
+  coins: 9000,
+  parts: [...CHAPTER_TWO_DONE.parts, 'laser', 'stripped', 'drive', 'panels'],
+  modules: done.length ? ['targeting', 'racingLine', 'radar'] : ['targeting', 'racingLine'],
+  held: true,
+});
+
 test('Pilot Episode: over Valhalla on Callisto, Red Ledger shot down ends the bounty, and Nicole has her radar', async ({ page }) => {
   test.setTimeout(300_000);
-  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge', 'repoMen', 'wallRun', 'scoutTwo', 'overhaul', 'stickneyGrand', 'debtDay', 'grooveShoot', 'armorPanels'], coins: 6000, parts: [...CHAPTER_TWO_DONE.parts, 'laser', 'stripped', 'drive', 'panels'], modules: ['targeting', 'racingLine'], held: true };
-  const errors = await takeJobFrom(page, kept);
+  const errors = await takeJobFrom(page, chapterFive());
   await page.waitForFunction(() => window.game.venue?.id === 'callisto' && window.game.school?.stepIndex === 2 && window.game.school.attempt?.live && window.game.jumpers?.bots.length === 3, null, { timeout: 180_000 });
   expect(await page.evaluate(() => window.game.jumpers.bots[0].ship.name)).toBe('Red Ledger');
   await page.evaluate(() => (window.game.jumpers.bots[0].ship.alive = false));
@@ -476,10 +485,28 @@ test('Pilot Episode: over Valhalla on Callisto, Red Ledger shot down ends the bo
   expect(errors).toEqual([]);
 });
 
+test('Ice Run: the Loose harpoon the ice tugs, one each, and a tug whose raider is shot down is free again', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, chapterFive('pilotEpisode'));
+  await page.waitForFunction(() => window.game.venue?.id === 'callisto' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live, null, { timeout: 180_000 });
+  // the Loose come and harpoon a tug
+  await page.waitForFunction(() => window.game.school.markers.hookedBy.some((ship: unknown) => ship), null, { timeout: 120_000 });
+  const holders = await page.evaluate(() => window.game.school.markers.hookedBy.filter((ship: unknown) => ship).map((ship: { name: string }) => ship.name));
+  expect(new Set(holders).size).toBe(holders.length);
+  // the raider holding the first tug held shot down: its cable lets go (another of the Loose may harpoon the tug again)
+  const [index, name] = await page.evaluate(() => {
+    const hooked: ({ alive: boolean; name: string } | null)[] = window.game.school.markers.hookedBy;
+    const i = hooked.findIndex((ship) => ship);
+    hooked[i]!.alive = false;
+    return [i, hooked[i]!.name] as const;
+  });
+  await expect.poll(() => page.evaluate((i) => window.game.school.markers.hookedBy[i]?.name ?? null, index), { timeout: 20_000 }).not.toBe(name);
+  expect(errors).toEqual([]);
+});
+
 test('Valhalla Sprint: six coils in a straight line over Valhalla, the clock starting at the first', async ({ page }) => {
   test.setTimeout(300_000);
-  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge', 'repoMen', 'wallRun', 'scoutTwo', 'overhaul', 'stickneyGrand', 'debtDay', 'grooveShoot', 'armorPanels', 'pilotEpisode'], coins: 9000, parts: [...CHAPTER_TWO_DONE.parts, 'laser', 'stripped', 'drive', 'panels'], modules: ['targeting', 'racingLine', 'radar'], held: true };
-  const errors = await takeJobFrom(page, kept);
+  const errors = await takeJobFrom(page, chapterFive('pilotEpisode', 'iceRun'));
   await page.waitForFunction(() => window.game.venue?.id === 'callisto' && window.game.school?.stepIndex === 0 && window.game.school.attempt?.live, null, { timeout: 180_000 });
   expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(6);
   expect(await page.evaluate(() => Number.isNaN(window.game.school.attempt.clockFrom))).toBe(true);
@@ -488,8 +515,7 @@ test('Valhalla Sprint: six coils in a straight line over Valhalla, the clock sta
 
 test('Callisto Echo: the hull held still over the listening post’s dish hears the third echo', async ({ page }) => {
   test.setTimeout(300_000);
-  const kept = { ...CHAPTER_TWO_DONE, done: [...CHAPTER_TWO_DONE.done, 'occator', 'surplus', 'oreBarge', 'repoMen', 'wallRun', 'scoutTwo', 'overhaul', 'stickneyGrand', 'debtDay', 'grooveShoot', 'armorPanels', 'pilotEpisode', 'valhallaSprint'], coins: 10500, parts: [...CHAPTER_TWO_DONE.parts, 'laser', 'stripped', 'drive', 'panels'], modules: ['targeting', 'racingLine', 'radar'], held: true };
-  const errors = await takeJobFrom(page, kept);
+  const errors = await takeJobFrom(page, chapterFive('pilotEpisode', 'iceRun', 'valhallaSprint'));
   await page.waitForFunction(() => window.game.venue?.id === 'callisto' && window.game.school?.stepIndex === 0 && window.game.school.attempt?.live, null, { timeout: 180_000 });
   await holdAtEcho(page, 'ECHO_THREE', 0);
   expect(await page.evaluate(() => window.game.school?.stepIndex ?? 0)).toBeGreaterThan(0);
