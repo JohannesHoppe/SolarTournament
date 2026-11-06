@@ -601,6 +601,9 @@ type State = 'menu' | 'playing' | 'paused' | 'results';
  * space, the arena's massive body; or, with a killer, its nova core, its plume, its ram, or a
  * crash right after its shove (a knockout).
  */
+/** The link's static at its strongest (a share of a full glitch), and how long each frame's lingers (s): a flicker that follows the strength from frame to frame. */
+const STATIC_GLITCH = 0.7;
+const STATIC_SECONDS = 0.12;
 /** A hull worn down to this (of 100) by a raider who spares clones takes no more from him: he never finishes a clone (The Quiet Man). */
 const SPARED_HULL = 30;
 type DeathCause = 'rock' | 'wreck' | 'space' | 'well' | 'air' | 'flare' | 'battery' | 'exhaust' | 'blast' | 'nova' | 'self' | 'plume' | 'shower' | 'comet' | 'ram' | 'knockout' | null;
@@ -5624,6 +5627,9 @@ export class Game implements OnlineGame {
         return game.input.selfDestructing;
       },
       // pain streams into the Host for `seconds`: the link's picture breaking up, a low drone of it
+      linkStatic: (strength) => {
+        if (strength > 0) this.glitch.trigger(Math.min(1, strength) * STATIC_GLITCH, STATIC_SECONDS);
+      },
       agony: (seconds) => {
         this.glitch.trigger(AGONY_GLITCH, seconds);
         this.linkHit(1, seconds);

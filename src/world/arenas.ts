@@ -7,13 +7,17 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE, CALLISTO_TYPE, POST_TYPE, EUROPA_TYPE, STATION_TYPE, IO_TYPE } from './yard';
 import { CALLISTO_FALL, groundPlacement as callistoGround, JUPITER_AT, POST_HALF, postPlacement, VALHALLA_MARK } from './callisto';
+import { FLUX_AT, groundPlacement as ioGround, IO_FALL, JUPITER_AT as IO_JUPITER, LAND as IO_LAND } from './io';
 import { CRACK_MARK, EUROPA_FALL, groundPlacement as europaGround, JUPITER_AT as EUROPA_JUPITER, stationPlacement } from './europa';
 import { WALL_TOP, wallPlacement } from './wall';
 import { groundPlacement, MARS_AT, PHOBOS_FALL, STICKNEY_FLOOR } from './phobos';
 import { CERES_FALL, CEREALIA, MARKET, occatorPlacements, onPlace, TERRACE } from './ceres';
 import { RISE, slopeGround, SUMMIT, VESTA_FALL, VESTA_GROUND } from './vesta';
+
+/** Where the HUD marks Io's flux tube: its foot on the plain. */
+const FLUX_MARK = new THREE.Vector3(FLUX_AT.x, IO_LAND, FLUX_AT.z);
 
 /** One standard gravity (units/s², 1 unit = 5 cm). */
 const G = 196.2;
@@ -43,7 +47,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos' | 'callisto' | 'europa' | 'io';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -408,6 +412,21 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.66, 0.7, 0.76],
     grade: { gain: [0.98, 1, 1.03], lift: [0.0012, 0.0013, 0.0016], saturation: 0.9 },
   },
+  // Flux on Io: sulfur yellow under Jupiter's cream, the lava's orange from below, a warm grade
+  io: {
+    space: 0x030202,
+    sky: 0xa89a70,
+    ground: 0x4a3a18,
+    ambient: 1.3,
+    nebulae: [
+      { at: [-0.6, 0.5, -0.5], color: [0.06, 0.045, 0.02], size: 540000, shape: 1, turn: 0.9 },
+      { at: [0.6, 0.3, 0.6], color: [0.045, 0.03, 0.06], size: 460000, shape: 2, turn: 2.6 },
+    ],
+    stars: 0.9,
+    starmap: true,
+    dust: [0.72, 0.64, 0.42],
+    grade: { gain: [1.03, 1, 0.94], lift: [0.0016, 0.0012, 0.0006], saturation: 0.95 },
+  },
 };
 
 /**
@@ -544,6 +563,26 @@ export const PLACES: readonly ArenaProfile[] = [
     ],
     // over the ice beside the Crack, facing along it
     start: { at: [30000, 2000, 20000], toward: [0, 0, -30000] },
+    open: true,
+  },
+  {
+    id: 'io',
+    name: msg('Flux'),
+    tagline: msg('The sulfur plains of Io, a lava lake in its pit, and the flux tube crackling up to Jupiter.'),
+    // nothing loose on the plain: its relief alone
+    layout: { key: 'io', seed: 7000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [ioGround(IO_TYPE)], fall: IO_FALL },
+    cooling: 1,
+    storms: false,
+    // 5.2 AU from the sun, as Jupiter's arena
+    sun: { size: 30000, intensity: 3.4, color: 0xfff0dd },
+    mood: MOODS.io,
+    preview: { from: [30000, 8000, 30000], at: [0, -2000, 0] },
+    references: [
+      { glyph: 'planet', label: msg('The flux tube'), position: FLUX_MARK, distance: true },
+      { glyph: 'planet', label: msg('Jupiter'), position: IO_JUPITER, distance: false },
+    ],
+    // over the plain, facing the flux tube
+    start: { at: [40000, 2000, 30000], toward: [2000, 0, -2000] },
     open: true,
   },
 ];

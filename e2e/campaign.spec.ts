@@ -582,3 +582,12 @@ for (const [outcome, ratings] of [['shot down', 250], ['let go', 100]] as const)
     expect(errors).toEqual([]);
   });
 }
+
+test('chapter 7 opens on Io: the Flux Tube Race lines up five rivals, Perihelion among them, at eight rings past the flux tube', async ({ page }) => {
+  test.setTimeout(300_000);
+  const errors = await takeJobFrom(page, chapterFive('pilotEpisode', 'iceRun', 'valhallaSprint', 'callistoEcho', 'radiators', 'dose', 'underTheLineae', 'quietMan', 'plating'));
+  await page.waitForFunction(() => window.game.venue?.id === 'io' && window.game.school?.stepIndex === 1 && window.game.school.attempt?.live && window.game.racers?.bots.length === 5, null, { timeout: 180_000 });
+  expect(await page.evaluate(() => window.game.racers.bots.map((bot: { ship: { name: string } }) => bot.ship.name))).toContain('Perihelion');
+  expect(await page.evaluate(() => window.game.school.attempt.points.length)).toBe(8);
+  expect(errors).toEqual([]);
+});

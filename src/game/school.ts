@@ -135,6 +135,8 @@ export interface SchoolContext {
   owe(coins: number): void;
   /** The self-destruct's button is held (B, the D-pad left, SELF-DESTRUCT on touch), whatever the hull carries. */
   readonly selfDestructing: boolean;
+  /** Static on the link this frame, `strength` from 0 (none) to 1: the picture breaking up as on a hit, the stronger the more (the flux tube at Io). */
+  linkStatic(strength: number): void;
   /** What the clone suffers streams into the Host for `seconds`: the link's picture breaking up, the drone of it. */
   agony(seconds: number): void;
 }

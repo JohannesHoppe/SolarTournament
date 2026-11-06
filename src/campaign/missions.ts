@@ -8,6 +8,7 @@ import { hullInLight } from '../world/wall';
 import { inGrooves, surfaceHeight as phobosHeight } from '../world/phobos';
 import { POST_AT, POST_HALF, surfaceHeight as callistoHeight } from '../world/callisto';
 import { crackMiddle, LAND as EUROPA_LAND, stationPlacement } from '../world/europa';
+import { fluxStatic, surfaceHeight as ioHeight } from '../world/io';
 import type { Asteroid } from '../world/asteroids';
 import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
@@ -658,20 +659,20 @@ const GRAND_MIDDLE = -12000;
 const GRAND_OVER = 6000;
 export const GRAND_LAPS = 3;
 const GRAND_PODIUM = 3;
-export const GRAND_COURSE = Array.from({ length: GRAND_RINGS }, (_, k) => {
-  const angle = (k / GRAND_RINGS) * Math.PI * 2;
-  const x = GRAND_MIDDLE + cos(angle) * GRAND_REACH;
-  const z = sin(angle) * GRAND_DEPTH;
-  return point(x, phobosHeight(x, z) + GRAND_OVER, z);
-});
-
+/** A race's loop of `rings` rings over a moon's ground: an ellipse `reach` by `depth` about (x, z) of `middle`, each ring `over` the ground (`height`) beneath it; and where the racers line up, on the ellipse half a radian before the first ring, facing it. */
+function groundLoop(rings: number, middle: readonly [number, number], reach: number, depth: number, over: number, height: (x: number, z: number) => number) {
+  const at = (angle: number) => {
+    const x = middle[0] + cos(angle) * reach;
+    const z = middle[1] + sin(angle) * depth;
+    return point(x, height(x, z) + over, z);
+  };
+  const course = Array.from({ length: rings }, (_, k) => at((k / rings) * Math.PI * 2));
+  return { course, start: { at: at(-0.5).toArray() as [number, number, number], toward: course[0].toArray() as [number, number, number] } };
+}
+const grand = groundLoop(GRAND_RINGS, [GRAND_MIDDLE, 0], GRAND_REACH, GRAND_DEPTH, GRAND_OVER, phobosHeight);
+export const GRAND_COURSE = grand.course;
 /** Where the racers line up: on the ellipse a stretch before the first ring, facing it. */
-export const GRAND_START = (() => {
-  const angle = -0.5;
-  const x = GRAND_MIDDLE + cos(angle) * GRAND_REACH;
-  const z = sin(angle) * GRAND_DEPTH;
-  return { at: [x, phobosHeight(x, z) + GRAND_OVER, z] as const, toward: GRAND_COURSE[0].toArray() as [number, number, number] };
-})();
+export const GRAND_START = grand.start;
 
 const stickneyGrand = race({
   line: CAMPAIGN.stickneyGrand,
@@ -684,6 +685,44 @@ const stickneyGrand = race({
   podium: GRAND_PODIUM,
   mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
 });
+
+/**
+ * The Flux Tube Race (7.1): the sulfur miners' race, FLUX_RINGS rings on an ellipse over Io's
+ * plain (FLUX_REACH by FLUX_DEPTH about FLUX_MIDDLE), each FLUX_OVER over the ground beneath it,
+ * one side of it running past the flux tube: the nearer, the more the link crackles (see
+ * fluxStatic). FLUX_LAPS laps against Perihelion and four of the miners; home among the first
+ * FLUX_PODIUM.
+ */
+export const FLUX_RINGS = 8;
+const FLUX_REACH = 22000;
+const FLUX_DEPTH = 16000;
+const FLUX_MIDDLE = [-20000, 6000] as const;
+const FLUX_OVER = 6000;
+export const FLUX_LAPS = 2;
+const FLUX_PODIUM = 2;
+const flux = groundLoop(FLUX_RINGS, FLUX_MIDDLE, FLUX_REACH, FLUX_DEPTH, FLUX_OVER, ioHeight);
+export const FLUX_COURSE = flux.course;
+export const FLUX_START = flux.start;
+
+const fluxRace = race({
+  line: CAMPAIGN.fluxTubeRace,
+  lost: CAMPAIGN.fluxTubeRaceLost,
+  arena: 'io',
+  marks: FLUX_COURSE,
+  laps: FLUX_LAPS,
+  pipes: null,
+  rivals: { names: ['Perihelion', 'Brimstone', 'Cinder', 'Kade', 'Moth'], skills: [0.65, 0.4, 0.35, 0.35, 0.3] },
+  podium: FLUX_PODIUM,
+  mark: msg('Lap {lap}/{laps} · ring {n}/{total}'),
+});
+/** The race, the link crackling by the tube (see fluxStatic). */
+const fluxTubeRace: Drill = {
+  ...fluxRace,
+  done(ctx, a, markers) {
+    ctx.linkStatic(fluxStatic(ctx.me.flight.position));
+    return fluxRace.done(ctx, a, markers);
+  },
+};
 
 /**
  * Debt Day (4.2): Ma Tally's collectors, COLLECTORS of skill COLLECTOR_SKILL, come for the hull over
@@ -1604,4 +1643,6 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'underTheLineae', name: msg('Under the Lineae'), drills: [said(HEDDA.europa, 'europa'), echoFour, said(CAMPAIGN.echoFour, 'europa'), said(CAMPAIGN.echoFourHeard, 'europa')], pay: 1000, ratings: 100 },
   { id: 'quietMan', name: msg('The Quiet Man'), drills: [said(HEDDA.quietMan, 'europa'), quietMan], pay: 2500, ratings: (campaign) => (campaign.choices.includes('quietManSpared') ? QUIET_SPARED_RATINGS : QUIET_RATINGS) },
   { id: 'plating', name: msg('Plating I'), drills: [said(PIM.plating, 'europa'), said(CAMPAIGN.plating, 'europa')], pay: 0, fit: fitPlating },
+  // chapter 7, Flux on Io: the sulfur miners' race round the flux tube
+  { id: 'fluxTubeRace', name: msg('Flux Tube Race'), drills: [said(HEDDA.io, 'io'), fluxTubeRace, said(CAMPAIGN.fluxTubeRaceDone, 'io')], pay: 4000, ratings: 350, start: FLUX_START },
 ];
