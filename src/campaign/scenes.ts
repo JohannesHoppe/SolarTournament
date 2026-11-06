@@ -3,6 +3,7 @@ import { atan2 } from '../detmath';
 import { DOOR, EYE, inOffice, office, SPOTS } from '../world/office';
 import { galley, GALLEY_DOOR, GALLEY_EYE, GALLEY_SPOTS, inGalley } from '../world/galley';
 import { type Placement, Stage } from '../view/stage';
+import type { Mood } from '../music/radio';
 
 /**
  * The scenes in person (docs/campaign/STORY.md, "Holograms in flight, people in person"): for the
@@ -12,6 +13,9 @@ import { type Placement, Stage } from '../view/stage';
  * the comm.
  */
 export type SceneName = 'office' | 'galley';
+
+/** The music of a scene in person: Rask's office is quiet but for his voice; Pim's galley is the crew's good hour. */
+export const SCENE_MUSIC: Record<SceneName, Mood | null> = { office: null, galley: 'bright' };
 
 /** Who stands where in a scene, where the clone's eyes are and which way they first look (rad about y, 0 towards -z, as a camera looks). */
 export interface ScenePlan {

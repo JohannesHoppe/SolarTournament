@@ -22,13 +22,13 @@ import { lapClock, LapTimer, parseLaps } from './laps';
 import { aimHook, cableEnd, Cables, clearOf, flightTime, floorOf, HOOK_RANGE, HOOK_RECHARGE, keepsHold, newTether, anchorPoint, pullOn, type Anchor, type Mark, type Tether } from './hook';
 import { Hud, METERS_PER_UNIT, meters } from '../view/hud';
 import { STREAKS } from '../view/streaks';
-import { bindVolume, Radio, type MusicCue } from '../music/radio';
+import { bindVolume, moodCue, Radio, type Mood, type MusicCue } from '../music/radio';
 import { Crowd } from '../music/crowd';
 import type { Spoken } from '../music/band';
 import { COMPUTER, ATTACKED, ANNOUNCER_ALIEN, ANNOUNCER_ARENA, ANNOUNCER_CAPTURE, ANNOUNCER_COMET, ANNOUNCER_COMET_KILL, ANNOUNCER_FLARE, ANNOUNCER_FLEET, ANNOUNCER_KILL, ANNOUNCER_LAST_LAP, ANNOUNCER_LEAD, ANNOUNCER_NAMES, ANNOUNCER_OPEN, ANNOUNCER_OUT, ANNOUNCER_PERFECT, ANNOUNCER_ROCK, ANNOUNCER_START, ANNOUNCER_SURVIVOR, ANNOUNCER_TEAM_KILL, ANNOUNCER_WIN, type Cast, CAST_COLORS, CAST_NAMES, SPONSOR_BREAK, SPONSOR_HAPPY, TIPS } from '../music/lines';
 import { Hologram } from '../view/hologram';
 import { loadBust, PORTRAIT_SWING, portraitModel } from '../view/products';
-import { type SceneName, stageOf } from '../campaign/scenes';
+import { SCENE_MUSIC, type SceneName, stageOf } from '../campaign/scenes';
 import type { Stage } from '../view/stage';
 import { Speaker } from '../sound/speaker';
 import { hash, mixSeed, ROUND_SECONDS, textSeed, titleFor, type Song } from '../music/songs';
@@ -1209,6 +1209,10 @@ export class Game implements OnlineGame {
   private readonly brokenAt = new THREE.Vector3();
   /** The scene in person the clone stands in (see campaign/scenes), or null in the cockpit. */
   private stage: Stage | null = null;
+  /** The scene in person the clone stands in, if any (its music, see SCENE_MUSIC). */
+  private stageName: SceneName | null = null;
+  /** The campaign's music as it stands: its track and since when (wall clock, s) it plays. */
+  private mood = { key: '', since: 0 };
   /** Torpedoes of the own pilot that hit a ship, for the flight school's drill. */
   private torpedoesHit = 0;
   /** Dodges the own pilot has fired, for the flight school's drill. */
@@ -2317,10 +2321,18 @@ export class Game implements OnlineGame {
    * What the radio plays now. A tournament round has its own song on the round clock: online,
    * the room and round number pick it, so every pilot hears the same song at the same beat.
    * The menu plays a calm song on a local clock; the flight school plays nothing (null), so
-   * Nicole has the cockpit to herself.
+   * Nicole has the cockpit to herself; the campaign plays its music by situation (campaignMood),
+   * each track from its start when the situation turns.
    */
   private musicCue(): MusicCue | null {
-    if (this.school) return null;
+    if (this.school) {
+      const mood = this.campaignMood();
+      if (!mood || !this.mission) return null;
+      const title = this.stageName ? `${this.mission.name} · ${this.stageName}` : this.mission.name;
+      const key = `${title}:${mood}`;
+      if (key !== this.mood.key) this.mood = { key, since: wallClock() };
+      return moodCue(mood, title, wallClock() - this.mood.since, ROUND_SECONDS);
+    }
     const inRound = this.state === 'playing' || this.state === 'results' || (this.state === 'paused' && !!this.online);
     if (inRound && Number.isFinite(this.roundEndsAtWall)) {
       // a browser that started over plays on the round it was in until it hears the round again
@@ -2329,6 +2341,14 @@ export class Game implements OnlineGame {
       return { title: titleFor(seed), energy: 'round', elapsed: ROUND_SECONDS - (this.roundEndsAtWall - this.roundClock()), roundLength: ROUND_SECONDS };
     }
     return { title: titleFor(LOUNGE_SEED), energy: 'lounge', elapsed: wallClock() - this.loungeEpoch, roundLength: ROUND_SECONDS };
+  }
+
+  /** The campaign's music now: a scene's, else the drill's, else its mission's (calm without); none in the flight school. */
+  private campaignMood(): Mood | null {
+    if (!this.mission || !this.school) return null;
+    if (this.stageName) return SCENE_MUSIC[this.stageName];
+    const drill = this.school.music;
+    return drill === undefined ? (this.mission.music ?? 'calm') : drill;
   }
 
   /** A blow to the clone shakes the link to it: the picture breaks up, the radio drops out. */
@@ -2738,6 +2758,7 @@ export class Game implements OnlineGame {
       this.stage = null;
     }
     this.speaker.inPerson = !!name;
+    this.stageName = name;
     if (name) {
       this.stage = stageOf(name);
       this.scene.add(this.stage.root);

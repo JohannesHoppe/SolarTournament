@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createSong, FLAVOR_WEIGHTS, GLITCH_BARS, GLITCH_MAX, glitchSteps, ROUND_SECONDS, SCALES, stepEvents, STEPS_PER_BAR, titleFor } from './songs';
+import { moodCue } from './radio';
 import { STATION_DE, STATION_EN } from './lines';
 
 const notes = (title: string, from: number, steps: number) => {
@@ -24,7 +25,7 @@ describe('Radio 2584', () => {
   it('keeps every tonal part on the scale of the track: natural minor, in drive also phrygian, bright tracks mixolydian', () => {
     for (const title of ['Orbit Terror', 'Golden Damage', 'Hull Mantra', titleFor(7), titleFor(99), titleFor(5), titleFor(11)]) {
       for (const [flavor, bright] of [[undefined, false], ['drive', false], ['french', false], [undefined, true]] as const) {
-        const song = createSong(title, 'round', ROUND_SECONDS, flavor, bright);
+        const song = createSong(title, 'round', ROUND_SECONDS, flavor, { bright });
         // the bright key only where a scene asks for it, and then always French
         if (bright) expect([song.flavor, song.scale]).toEqual(['french', SCALES.mixolydian]);
         else expect(song.flavor === 'drive' ? [SCALES.aeolian, SCALES.phrygian] : [SCALES.aeolian]).toContain(song.scale);
@@ -142,5 +143,30 @@ describe('Radio 2584', () => {
       }
     }
     expect(glitches).toBeGreaterThan(50);
+  });
+});
+
+describe("the campaign's music", () => {
+  it('a calm track never pushes: no kick, clap or rumble, and no voice on background music', () => {
+    for (const title of ['Cold Boot', 'Lamplighter', titleFor(3)]) {
+      const song = createSong(title, 'calm', ROUND_SECONDS, undefined, { voiceless: true });
+      expect(song.voice).toEqual([]);
+      let notes = 0;
+      for (let step = 0; step < song.cycle * STEPS_PER_BAR; step++) {
+        const events = stepEvents(song, step);
+        expect([events.kick, events.clap, events.openHat, events.ride]).toEqual([0, 0, 0, 0]);
+        expect(events.info.layers.rumble).toBe(false);
+        if (events.bass || events.chord || events.lead || events.hat) notes++;
+      }
+      // it still plays: the chords, the bass, the bells and the hats flow on
+      expect(notes).toBeGreaterThan(0);
+    }
+  });
+
+  it('every mood is background music, the bright one French in the bright key, the fight a round', () => {
+    expect(moodCue('calm', 'x', 0, ROUND_SECONDS)).toMatchObject({ energy: 'calm', voiceless: true });
+    expect(moodCue('bright', 'x', 0, ROUND_SECONDS)).toMatchObject({ bright: true, voiceless: true });
+    expect(moodCue('fight', 'x', 0, ROUND_SECONDS)).toMatchObject({ energy: 'round', voiceless: true });
+    expect(createSong('x', 'round', ROUND_SECONDS, undefined, { voiceless: true }).voice).toEqual([]);
   });
 });

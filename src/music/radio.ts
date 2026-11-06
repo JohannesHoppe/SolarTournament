@@ -13,6 +13,22 @@ export interface MusicCue {
   roundLength: number;
   /** A cheerful scene's track: French in the bright key (see createSong). */
   bright?: boolean;
+  /** Background music: no station and no voice on it. */
+  voiceless?: boolean;
+}
+
+/**
+ * The campaign's music by situation (docs/campaign/STORY.md, Music), background only: calm while
+ * little happens (no pushing beat), bright for a cheerful scene (French in the bright key),
+ * fight when it gets dangerous (a round's full arc). None of them carries the station or a voice.
+ */
+export type Mood = 'calm' | 'bright' | 'fight';
+
+/** The cue of a mood: its track by `title`, `elapsed` seconds in. */
+export function moodCue(mood: Mood, title: string, elapsed: number, roundLength: number): MusicCue {
+  if (mood === 'fight') return { title, energy: 'round', elapsed, roundLength, voiceless: true };
+  if (mood === 'bright') return { title, energy: 'lounge', elapsed, roundLength, bright: true, voiceless: true };
+  return { title, energy: 'calm', elapsed, roundLength, voiceless: true };
 }
 
 /** Steps are scheduled this far ahead of the audio clock (s). */
@@ -320,10 +336,10 @@ export class Radio {
     if (!this.enabledFlag) return;
 
     const elapsed = cue.elapsed + (performance.now() - this.cueAt) / 1000;
-    const key = `${cue.title}:${cue.energy}:${cue.roundLength}:${cue.bright ?? false}`;
+    const key = `${cue.title}:${cue.energy}:${cue.roundLength}:${cue.bright ?? false}:${cue.voiceless ?? false}`;
     if (key !== this.songKey) {
       this.songKey = key;
-      this.song = createSong(cue.title, cue.energy, cue.roundLength, undefined, cue.bright);
+      this.song = createSong(cue.title, cue.energy, cue.roundLength, undefined, { bright: cue.bright, voiceless: cue.voiceless });
       this.band.prepare(this.song);
       this.start = Infinity;
       this.onSong(this.song);
@@ -333,7 +349,8 @@ export class Radio {
       // when that comes within two bars, the scheduler is left to it.
       const bars = (elapsed + Math.max(0, this.scheduledUntil - now) + 1e-3) / barSeconds(this.song);
       const position = this.song.cycle ? bars % this.song.cycle : bars;
-      const announced = this.song.voice[0].bar;
+      // a voiceless track names nothing
+      const announced = this.song.voice[0]?.bar ?? Infinity;
       const nextByItself = this.song.cycle ? this.song.cycle - position + announced : Infinity;
       this.lateAnnouncement = position > announced && nextByItself > 2;
     }

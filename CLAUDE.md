@@ -286,7 +286,7 @@ The repository root is the Vite project: `index.html` (the game), `radio.html` (
 | `music/songs.ts` | Techno tracks from a seed (flavor, form, energy curve, weighted step patterns, fills, drive's pedal bass and its timbre); every decision is an integer hash of seed, bar and step |
 | `music/recipes.ts` | The radio page's recipes: every flavor's numbers read from the generator's tables, what it sounds like, a track of it to listen to |
 | `music/band.ts` | The Tone.js instruments (kick with rumble, hats, clap, perc, bass, acid, stabs, hoover, riser, the glitch's noise), the voices (spoken, chopped, stammered), and how one sixteenth is played |
-| `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts |
+| `music/radio.ts` | Plays the song on the cue's clock (tournament: the lead browser's round clock), jumps when it drifts; the campaign's moods (calm, bright, fight), voiceless |
 | `music/preview.ts` | Renders a track (or a stretch) offline as WAV in one pass, the band playing a stretch ahead of the render: downloads on the radio page, previews in development |
 | `music/kept.ts` | The radio page's last pressing (title and WAV file), kept in the browser's IndexedDB to be saved again; nothing kept where IndexedDB is blocked |
 | `music/lines.ts` | Everything the voices say: title words, the regime's propaganda (EN/DE), the announcer's lines, the flight computer's lines, the campaign's lines (Nicole's, Rask's, Pim's, Hedda's and the Saw Brothers', who says which) |

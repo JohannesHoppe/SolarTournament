@@ -1,5 +1,5 @@
 import { Band } from './band';
-import { barSeconds, createSong, ROUND_SECONDS, STEPS_PER_BAR, type Energy, type Flavor, type Song } from './songs';
+import { barSeconds, createSong, ROUND_SECONDS, STEPS_PER_BAR, type Energy, type Flavor, type Song, type SongOptions } from './songs';
 import { loadVoice } from './voice';
 
 /** Length of a tournament track in seconds: the round, then the outro. */
@@ -122,8 +122,8 @@ export async function renderTrack(song: Song, from: number, seconds: number, sam
 }
 
 /** Development tool: a stretch of a track as base64 WAV plus what the generator decided. */
-export async function renderPreview(title: string, energy: Energy, flavor: Flavor | undefined, from: number, seconds: number) {
-  const song = createSong(title, energy, ROUND_SECONDS, flavor);
+export async function renderPreview(title: string, energy: Energy, flavor: Flavor | undefined, from: number, seconds: number, options: SongOptions = {}) {
+  const song = createSong(title, energy, ROUND_SECONDS, flavor, options);
   const wav = await renderTrack(song, from, seconds, 32000);
   let binary = '';
   const bytes = new Uint8Array(wav);

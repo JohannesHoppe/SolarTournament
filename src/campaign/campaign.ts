@@ -1,4 +1,5 @@
 import type { Drill } from '../game/school';
+import type { Mood } from '../music/radio';
 import { STOCK, type Perks } from '../game/hangar';
 import { TORPEDOES } from '../game/torpedoes';
 import { msg } from '../i18n/i18n';
@@ -83,6 +84,8 @@ export interface Mission {
   ratings?: number;
   /** What it changes in the campaign the first time it is done: a part fitted, the debt grown. */
   fit?: (campaign: Campaign) => void;
+  /** Its music (see Mood in src/music/radio.ts) where a drill or a scene asks for none of its own; calm without. */
+  music?: Mood;
   /** Where its clones are printed and face, if not where the place's story starts (see ArenaProfile.start). */
   start?: { at: readonly [number, number, number]; toward: readonly [number, number, number] };
 }

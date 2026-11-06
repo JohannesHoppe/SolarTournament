@@ -43,8 +43,20 @@ export type Flavor = 'hard' | 'industrial' | 'acid' | 'ebm' | 'french' | 'motori
 export type Strategy = 'classic' | 'relentless' | 'hypnotic' | 'movements' | 'switcher' | 'fakeDrop' | 'polymeter' | 'timbre';
 export const STRATEGIES: Strategy[] = ['classic', 'relentless', 'hypnotic', 'movements', 'switcher', 'fakeDrop', 'polymeter'];
 
-/** Tracks for tournament rounds run the full arc; the menu idles in a groove. */
-export type Energy = 'lounge' | 'round';
+/**
+ * Tracks for tournament rounds run the full arc; the menu idles in a groove; calm is the
+ * campaign's music while little happens (picking scrap, cutting ore): the lounge's form without a
+ * pushing beat, no kick, clap or rumble, the chords, bass, bells and hats flowing on.
+ */
+export type Energy = 'lounge' | 'round' | 'calm';
+/** The layers a calm track leaves out: everything that pushes. */
+const PUSHING: readonly Layer[] = ['kick', 'rumble', 'clap', 'openHat', 'ride', 'metal', 'acid'];
+
+/** How a track is asked for beyond its title: bright (French in the bright key, a cheerful scene of the campaign), voiceless (background music: no station, no voice). */
+export interface SongOptions {
+  bright?: boolean;
+  voiceless?: boolean;
+}
 
 export type SectionKind = 'intro' | 'groove' | 'peak' | 'break' | 'strip' | 'gap' | 'finale' | 'outro';
 export type Groove = 'four' | 'half' | 'broken' | 'electro';
@@ -403,12 +415,12 @@ const OFFBEATS = [1, 3];
  * bright track (for a cheerful scene of the campaign) plays French in the bright key, whatever
  * the title would pick.
  */
-export function createSong(title: string, energy: Energy, roundLength: number, flavor?: Flavor, bright = false): Song {
+export function createSong(title: string, energy: Energy, roundLength: number, flavor?: Flavor, { bright = false, voiceless = false }: SongOptions = {}): Song {
   const seed = textSeed(title.toLowerCase());
   const german = isGerman(title);
   const chosen = bright ? 'french' : (flavor ?? (german ? 'motorik' : weighted(seed)));
   const settings = FLAVOR_SETTINGS[chosen];
-  const lounge = energy === 'lounge';
+  const lounge = energy !== 'round';
   const bpm = settings.bpm[0] + (hash(seed, Ch.Genes, 2) % (settings.bpm[1] - settings.bpm[0] + 1)) - (lounge ? 6 : 0);
   const strategy: Strategy = lounge ? 'hypnotic' : chosen === 'drive' ? 'timbre' : chosen === 'motorik' ? choose(['relentless', 'hypnotic', 'movements'], seed, Ch.Genes, 3) : choose(STRATEGIES, seed, Ch.Genes, 3);
   const scale = chosen === 'drive' && unit(seed, Ch.Genes, 60) < 2 / 3 ? SCALES.phrygian : bright ? SCALES.mixolydian : SCALES.aeolian;
@@ -452,7 +464,7 @@ export function createSong(title: string, energy: Energy, roundLength: number, f
   song.form = lounge ? loungeForm(settings.groove) : roundForm(song, roundLength, settings.groove);
   song.cycle = lounge ? song.form.reduce((sum, s) => sum + s.bars, 0) : 0;
   song.surprises = lounge ? [] : planSurprises(song);
-  song.voice = planVoice(song);
+  song.voice = voiceless ? [] : planVoice(song);
   return song;
 }
 
@@ -740,9 +752,9 @@ function planVoice(song: Song): VoiceLine[] {
   const lines: VoiceLine[] = [];
   const german = song.language === 'de';
   const titleLine = `${german ? STATION_DE : STATION_EN}. ${german ? NOW_PLAYING_DE : NOW_PLAYING_EN}. ${song.title.toLowerCase()}`;
-  lines.push({ bar: song.energy === 'lounge' ? 2 : 4, language: song.language, text: titleLine, style: 'speech' });
+  lines.push({ bar: song.energy !== 'round' ? 2 : 4, language: song.language, text: titleLine, style: 'speech' });
   // in the hangar the radio only names its track; the flight computer has the floor
-  if (song.energy === 'lounge') return lines;
+  if (song.energy !== 'round') return lines;
 
   const englishOrder = order(seed, PHRASES_EN.length, 1);
   const germanOrder = order(seed, PHRASES_DE.length, 2);
@@ -864,6 +876,10 @@ function barInfo(song: Song, absoluteBar: number): BarInfo {
     if (unit(song.seed, Ch.Mute, bar >> 1) < 0.35) layers[choose(MUTABLE, song.seed, Ch.Mute, bar >> 1, 1)] = false;
     if (inSection % 16 === 15) layers.hat = layers.ride = layers.clap = false;
   }
+  if (song.energy === 'calm') {
+    for (const layer of PUSHING) layers[layer] = false;
+    layers.hat = layers.hat || phraseEnergy >= 0.45;
+  }
   // room to breathe: of the melodic parts and of the extra percussion, at most two play at
   // once; which one rests changes every eight bars
   for (const [group, salt] of CROWDS) {
@@ -881,7 +897,7 @@ function barInfo(song: Song, absoluteBar: number): BarInfo {
   const surprise = song.surprises.find((s) => s.bar === bar) ?? null;
   const dip = song.surprises.find((s) => s.type === 'filterDip' && bar >= s.bar && bar < s.bar + s.bars);
   if (dip) brightness = Math.min(brightness, 0.28);
-  if (song.energy === 'lounge') brightness = Math.min(brightness, 0.55);
+  if (song.energy !== 'round') brightness = Math.min(brightness, 0.55);
   const lift = song.surprises.find((s) => s.type === 'keyLift' && bar >= s.bar);
 
   const previous = section.start > 0 ? sectionAt(song, section.start - 1) : null;
@@ -1071,7 +1087,8 @@ export function stepEvents(song: Song, absoluteStep: number): StepEvents {
   const bar = info.bar;
   const { layers, fill } = info;
   const events = NONE(info);
-  const inFill = fill !== null && step >= fill.from;
+  // a calm track rolls no fills: they are drums
+  const inFill = fill !== null && step >= fill.from && song.energy !== 'calm';
   if (inFill && (fill.type === 'vacuum' || fill.type === 'rugPull')) return events;
   const root = song.root + info.transpose;
   const drive = song.flavor === 'drive';

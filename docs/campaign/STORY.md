@@ -414,10 +414,18 @@ These bodies are invented for the game. They are numbered by when they were foun
 - **The Moon: the Ballroom.** The President's ballroom, as the radio promised: a gilded dome on the lunar highlands, its own neon portrait of the President across it, Earth hanging overhead, blue and white with the lights of its cities on the night side. Flown: the parade.
 - **Earth.** Seen from the Moon, and from the existing Satellite Junkyard.
 
+- *Side:* **Mercury**, where the sun looks two to three times as wide as from Earth, sun miners work in the Caloris basin, and the Terminator Run races along the moving line between day and night. **Venus**, where some 50 km up the air has Earth's pressure and a bearable temperature; Victory Cola's cloud city floats there above the sulfuric acid clouds, whose upper layers race around the planet in about four days.
+
 ### Music
 
-Not built yet: the campaign plays no music. What it is meant to be: music by situation, never by chance. Every place, mission and scene has its music fixed (a title and a style of its own) and it changes when the situation does: bandits arriving, a fight, a race. Background music only, no announcer and no voice of the regime. Where little happens (picking scrap off the Boneyard's racks, cutting ore on Vesta) a calm style flows on without a pushing beat, a soundscape more than a track. Cheerful only where something is cheerful (a debt paid off, a good haul, Pim's galley on a good day): there the campaign asks for the bright key, French house in mixolydian (`bright` in `createSong`, `src/music/songs.ts`), the one place that key is heard; the tournament's rounds and the flight school never play it.
-- *Side:* **Mercury**, where the sun looks two to three times as wide as from Earth, sun miners work in the Caloris basin, and the Terminator Run races along the moving line between day and night. **Venus**, where some 50 km up the air has Earth's pressure and a bearable temperature; Victory Cola's cloud city floats there above the sulfuric acid clouds, whose upper layers race around the planet in about four days.
+Music by situation, never by chance, and background only: no station, no announcer, no voice of the regime. Every mission has its music and keeps it while the situation holds; it turns when the situation does, each track from its start. Built so far (`Mission.music`, `Drill.music`, `SCENE_MUSIC` in `src/campaign/scenes.ts`, the moods in `src/music/radio.ts`):
+
+- **Calm**, the mission's music unless it asks for another: picking scrap off the Boneyard's racks, the lamps, the canisters, cutting ore on Vesta. The station's sound without a pushing beat: no kick, clap, rumble or fills, the chords, the bass, the bells and the hats flowing on, a soundscape more than a track.
+- **Bright**, only where something is cheerful: Pim's galley on Patience, the crew at table. French house in the bright key (mixolydian), the one place that key is heard; the tournament's rounds and the flight school never play it.
+- **Fight**, when it gets dangerous: the Saw Brothers jumping the claim, the Peak Run against the claims' racers. A round's full arc, voiceless.
+- **Silence** where a moment wants none: Rask's office (his voice is the scene), the launch ring's choice between the gel and the switch.
+
+Still to come: a mission's own title and style chosen by hand for each place, and the turn of the music mid-drill (bandits arriving while the clone cuts ore).
 
 ---
 

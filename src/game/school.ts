@@ -9,6 +9,7 @@ import { CONTROLS, type Command, type Controls, type Device } from '../input/inp
 import type { Ship } from '../ship/ship';
 import { SUN_DIRECTION } from '../world/space';
 import { type Cast, CAST_NAMES, castOf, SCHOOL, SCHOOL_PRAISE } from '../music/lines';
+import type { Mood } from '../music/radio';
 import { RacingLine } from './racingline';
 import { ARENA_LIMIT } from '../world/arena';
 import { GateKit, touchRing, touchTube } from '../world/gates';
@@ -207,6 +208,8 @@ export interface Drill {
   arena?: ArenaId;
   /** The line is only shown, never said (a screen's message: the flight computer crashing). */
   silent?: boolean;
+  /** The campaign's music while the drill runs (see Mood), null for silence; without it, the mission's. */
+  music?: Mood | null;
 }
 
 
@@ -1918,6 +1921,11 @@ export class FlightSchool {
     let on = false;
     for (let i = 0; i < this.index; i++) on = this.drills[i].autopilotAfter ?? on;
     return on;
+  }
+
+  /** The music the current drill asks for (see Drill.music): undefined leaves it to the mission. */
+  get music(): Mood | null | undefined {
+    return this.drills[Math.min(this.index, this.drills.length - 1)].music;
   }
 
   /** The arena the current drill is flown in (see Drill.arena); null for the school's home. */

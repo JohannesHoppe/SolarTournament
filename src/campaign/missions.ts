@@ -525,6 +525,8 @@ const sawBrothers: Drill = {
   line: CAMPAIGN.sawBrothers,
   keys: ['turn', 'drive', 'fire'],
   arena: 'rheasilvia',
+  // the bandits are here: the music turns
+  music: 'fight',
   autopilot: false,
   enter(ctx, a) {
     const claim = sawnClaim(ctx);
@@ -567,6 +569,8 @@ const peakRun: Drill = {
   line: CAMPAIGN.peakRun,
   keys: ['turn', 'drive', 'brake'],
   arena: 'rheasilvia',
+  // a race against the claims' racers
+  music: 'fight',
   autopilot: true,
   enter(ctx, a, markers) {
     stop(ctx);
@@ -649,6 +653,8 @@ const launchRing: Drill = {
   line: CAMPAIGN.gelChoice,
   keys: ['selfDestruct'],
   arena: 'rheasilvia',
+  // the needle or the switch: no music over that choice
+  music: null,
   enter(ctx, a) {
     stop(ctx);
     a.doneAt = NaN;
