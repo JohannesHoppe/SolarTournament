@@ -7,8 +7,9 @@ import { SUN_DIRECTION } from './space';
 import type { Mood } from './nebula';
 import { cos, pow, sin } from '../detmath';
 import { setFromAxisAngle, setFromEuler } from '../detthree';
-import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE } from './yard';
+import { BAY_MOUTH, boneyardRacks, GROUND, PSYCHE_CENTER, PSYCHE_FALL, PSYCHE_RADIUS, RACK_Y, YARD_END, VESTA_GROUND_TYPE, OCCATOR_TYPE, WALL_TYPE, PHOBOS_TYPE } from './yard';
 import { WALL_TOP, wallPlacement } from './wall';
+import { groundPlacement, MARS_AT, PHOBOS_FALL, STICKNEY_FLOOR } from './phobos';
 import { CERES_FALL, CEREALIA, MARKET, occatorPlacements, onPlace, TERRACE } from './ceres';
 import { RISE, slopeGround, SUMMIT, VESTA_FALL, VESTA_GROUND } from './vesta';
 
@@ -40,7 +41,7 @@ export const HOLE_RADIUS = 7000;
 const HOLE_PULL = G;
 const HOLE_PULL_AT = 40000;
 
-export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall';
+export type ArenaId = 'belt' | 'rings' | 'junkyard' | 'giant' | 'corona' | 'hole' | 'derelict' | 'boneyard' | 'rheasilvia' | 'occator' | 'wall' | 'phobos';
 
 /** What makes an arena: its field, its sky, and the rules its place in space brings. */
 export interface ArenaProfile {
@@ -358,6 +359,21 @@ const MOODS: Record<ArenaId, Mood> = {
     dust: [0.5, 0.52, 0.56],
     grade: { gain: [0.98, 1, 1.03], lift: [0.001, 0.0011, 0.0016], saturation: 0.84 },
   },
+  // Phobos: its dark dust under Mars's rust-red glow, the sky's light warm from Mars's side
+  phobos: {
+    space: 0x020203,
+    sky: 0x8a6a58,
+    ground: 0x2a1e18,
+    ambient: 1.2,
+    nebulae: [
+      { at: [-0.6, 0.4, -0.6], color: [0.04, 0.035, 0.045], size: 520000, shape: 0, turn: 1.4 },
+      { at: [0.7, 0.3, 0.5], color: [0.06, 0.035, 0.025], size: 460000, shape: 1, turn: 2.8 },
+    ],
+    stars: 0.85,
+    starmap: true,
+    dust: [0.6, 0.52, 0.46],
+    grade: { gain: [1.02, 1, 0.97], lift: [0.0016, 0.0012, 0.001], saturation: 0.9 },
+  },
 };
 
 /**
@@ -435,6 +451,25 @@ export const PLACES: readonly ArenaProfile[] = [
     references: [{ glyph: 'planet', label: msg('The wall'), position: new THREE.Vector3(0, WALL_TOP, 0), distance: true }],
     // 2 km before the wall, facing it
     start: { at: [-40000, 0, 0], toward: [0, WALL_TOP, 0] },
+    open: true,
+  },  {
+    id: 'phobos',
+    name: msg('Stickney'),
+    tagline: msg('The great crater of Phobos, and Mars filling half the sky.'),
+    // nothing loose on the ground: its relief alone
+    layout: { key: 'phobos', seed: 4000, kind: 'rock', count: 0, minScale: 1, maxScale: 1, radius: FIELD_RADIUS, inner: 0, spin: 0, toughness: 800, placements: [groundPlacement(PHOBOS_TYPE)], fall: PHOBOS_FALL },
+    cooling: 1,
+    storms: false,
+    // 1.5 AU from the sun
+    sun: { size: 46000, intensity: 3.8, color: 0xfff4e6 },
+    mood: MOODS.phobos,
+    preview: { from: [40000, 10000, 20000], at: [-20000, -10000, 0] },
+    references: [
+      { glyph: 'planet', label: msg('Stickney'), position: STICKNEY_FLOOR, distance: true },
+      { glyph: 'planet', label: msg('Mars'), position: MARS_AT, distance: false },
+    ],
+    // over the crater's rim, facing down into it
+    start: { at: [30000, 2000, 0], toward: [-20000, -8000, 0] },
     open: true,
   },
 ];

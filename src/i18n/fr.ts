@@ -1591,4 +1591,7 @@ export const FR: Catalog = {
   "the main drive overhauled to stock": "le moteur principal révisé au standard",
   "While I'm in there. Your drive bell's been cracked since the Boneyard. Got you a new one, Rockborn make, sixteen hundred. You'll pay. Hold on, this one kicks.": "Tant que j’y suis. Ta tuyère est fendue depuis la casse. Je t’en ai trouvé une neuve, fabrication Rockborn, mille six cents. C’est toi qui paies. Accroche-toi, celle-là pousse.",
   "The new bell takes the full burn. Our drive pushes as hard as anything in the Games now, Host.": "La nouvelle tuyère tient la pleine poussée. Notre moteur pousse maintenant aussi fort que n’importe quoi aux Jeux, Hôte.",
+  "Stickney": "Stickney",
+  "The great crater of Phobos, and Mars filling half the sky.": "Le grand cratère de Phobos, et Mars qui remplit la moitié du ciel.",
+  "Mars": "Mars",
 };

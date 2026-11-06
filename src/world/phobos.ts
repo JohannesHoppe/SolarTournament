@@ -78,3 +78,13 @@ export function groundPlacement(type: number): Placement {
 
 /** Where the race's mark stands for the HUD: Stickney's floor in its middle (units). */
 export const STICKNEY_FLOOR = new THREE.Vector3(STICKNEY.x, surfaceHeight(STICKNEY.x, STICKNEY.z), STICKNEY.z);
+
+/**
+ * Mars over Stickney: Phobos keeps one face to it, so it stands still in the sky, some 35° up,
+ * 42° across (from 9,400 km off, its radius 3,390 km); drawn as a sphere at MARS_DISTANCE (units,
+ * inside the sky's sphere of stars, which it hides) sized to look as large.
+ */
+const MARS_DISTANCE = 250000;
+const MARS_ANGLE = 0.367;
+export const MARS_AT = new THREE.Vector3(0.3, 0.57, 0.76).normalize().multiplyScalar(MARS_DISTANCE);
+export const MARS_SIZE = MARS_DISTANCE * sin(MARS_ANGLE);

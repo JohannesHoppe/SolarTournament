@@ -41,8 +41,8 @@ export interface SkyFiles {
   sharp: () => Promise<THREE.CubeTexture>;
 }
 
-/** The planets drawn from real maps (see world/landmarks): Saturn, Jupiter (its key `giant`, as its map files are named), and Earth below the Satellite Junkyard (see world/junkyard), its night and its day side each from a map of its own. */
-export type Planet = 'saturn' | 'giant' | 'earth' | 'earth-day';
+/** The planets drawn from real maps (see world/landmarks): Saturn, Jupiter (its key `giant`, as its map files are named), Earth below the Satellite Junkyard (see world/junkyard), its night and its day side each from a map of its own, and Mars over Phobos (see world/stickney). */
+export type Planet = 'saturn' | 'giant' | 'earth' | 'earth-day' | 'mars';
 export interface PlanetMaps {
   maps: Record<Planet, THREE.Texture>;
   ring: THREE.Texture;
@@ -150,7 +150,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
   // every file is requested at once, and the rocks are generated while they are on their way
   const ships = Promise.all(['human-interceptor.glb', 'alien-interceptor.glb'].map(model));
   const flames = Promise.all(['driveflame.png', 'driveflametwo.png', 'driveflamethree.png', 'driveflamefour.png'].map(texture));
-  const planetMaps = Promise.all([planetTexture('saturn-1k.jpg'), planetTexture('giant-1k.jpg'), planetTexture('saturn-ring.png'), planetTexture('earth-1k.jpg'), planetTexture('earth-day-1k.jpg')]);
+  const planetMaps = Promise.all([planetTexture('saturn-1k.jpg'), planetTexture('giant-1k.jpg'), planetTexture('saturn-ring.png'), planetTexture('earth-1k.jpg'), planetTexture('earth-day-1k.jpg'), planetTexture('mars-1k.jpg')]);
   // the Milky Way bakes in background workers too (see world/milkyway)
   const sky = Promise.all([loadStars(), bakeSky(MILKY_WAY_SIZES[0], true)]);
   // the rocks' relief maps bake in background workers while the rest is built here
@@ -177,7 +177,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     [1, '#000000'],
   ]);
 
-  const [saturn, giant, ring, earth, earthDay] = await planetMaps;
+  const [saturn, giant, ring, earth, earthDay, mars] = await planetMaps;
   // the ring is a strip across its radius: it never wraps, and its edges stay sharp. One texel
   // high, it is read along its length alone, so its plain mipmaps filter it by a pixel's footprint
   // along it; anisotropic filtering finds no footprint across it (its height never changes from
@@ -199,7 +199,7 @@ export async function loadAssets(audio: AudioContext): Promise<Assets> {
     fieldSets: { rock, ice: iceSet(rock), debris: debrisSet(), hull: hullSet(), rack: rackSet() },
     textures: { flameFrames, smoke: smokeTexture(), spark: sparkTexture(), gas: gasTexture(), glow },
     sounds: synthesizeSounds(audio),
-    planets: { maps: { saturn, giant, earth, 'earth-day': earthDay }, ring },
+    planets: { maps: { saturn, giant, earth, 'earth-day': earthDay, mars }, ring },
   };
 }
 

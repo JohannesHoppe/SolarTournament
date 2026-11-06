@@ -14,6 +14,8 @@ import { psyche } from './boneyard';
 import { vesta } from './rheasilvia';
 import { ceres } from './occator';
 import { WallScene } from './solarwall';
+import { phobos } from './stickney';
+import { MARS_AT, MARS_SIZE } from './phobos';
 import { BLOOM_THRESHOLD } from '../view/bloom';
 
 /**
@@ -832,6 +834,7 @@ export class Landmarks {
     this.scenes.set('rheasilvia', vesta());
     this.scenes.set('occator', ceres());
     this.scenes.set('wall', this.wall.group);
+    this.scenes.set('phobos', this.mars());
     for (const scene of this.scenes.values()) {
       scene.visible = false;
       this.group.add(scene);
@@ -975,6 +978,15 @@ export class Landmarks {
     this.timed.push(material);
     this.planets.set(planet, (map) => (material.uniforms.map.value = map));
     return material;
+  }
+
+  /** Phobos beyond the field and Mars over it, from its real map, its thin air a haze along its limb (see world/phobos). */
+  private mars(): THREE.Group {
+    const material = this.gas('mars', { frame: new THREE.Matrix3(), longitude: 0.3, haze: 0xc8906a, storms: false });
+    const planet = new THREE.Mesh(new THREE.SphereGeometry(MARS_SIZE, 96, 48), material);
+    planet.position.copy(MARS_AT);
+    planet.userData.shadowless = true;
+    return phobos().add(planet);
   }
 
   private rings(): THREE.Group {
