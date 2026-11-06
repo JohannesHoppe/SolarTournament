@@ -1,5 +1,7 @@
 import type { Drill } from '../game/school';
 import type { Mood } from '../music/radio';
+import type { Flavor } from '../music/songs';
+import type { ArenaId } from '../world/arenas';
 import { STOCK, type Perks } from '../game/hangar';
 import { TORPEDOES } from '../game/torpedoes';
 import { msg } from '../i18n/i18n';
@@ -89,6 +91,17 @@ export interface Mission {
   /** Where its clones are printed and face, if not where the place's story starts (see ArenaProfile.start). */
   start?: { at: readonly [number, number, number]; toward: readonly [number, number, number] };
 }
+
+/**
+ * The sound of each place of the campaign, chosen by hand (docs/campaign/STORY.md, Music): the
+ * flavor its calm music and its fights are played in. The Boneyard drones warm and low over the
+ * racks (drive's pedal bass) and fights in the clang of the yard (industrial); Rheasilvia travels
+ * on the steady pulse of the ore lines (motorik) and fights the claim-jumpers in acid.
+ */
+export const PLACE_MUSIC: Partial<Record<ArenaId, { calm: Flavor; fight: Flavor }>> = {
+  boneyard: { calm: 'drive', fight: 'industrial' },
+  rheasilvia: { calm: 'motorik', fight: 'acid' },
+};
 
 /**
  * The ranks of the feeds' attention (docs/campaign/STORY.md, "Rating ranks"): from how many

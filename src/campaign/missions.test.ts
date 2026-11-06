@@ -2,12 +2,12 @@ import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
 import { RACE_SPEED } from '../ship/bots';
 import { RacingLine } from '../game/racingline';
-import { clearOfRock, PIPE_BORE } from '../game/school';
+import { type Attempt, clearOfRock, PIPE_BORE, type SchoolContext } from '../game/school';
 import { arenaById } from '../world/arenas';
 import { DETAIL } from '../world/rocks';
 import { testField } from '../test/field';
 import { flyRings } from '../test/pilot';
-import { PEAK_COURSE, PEAK_LAPS, PEAK_RINGS } from './missions';
+import { MISSIONS, PEAK_COURSE, PEAK_LAPS, PEAK_RINGS } from './missions';
 
 /** A middling bot: what a Host is asked to fly, it must manage (see CLAUDE.md, Plausibility). */
 const SKILL = 0.5;
@@ -30,5 +30,16 @@ describe('the Peak Run on Rheasilvia', () => {
     const flight = flyRings(field, { points, normals, radius: PIPE_BORE, core: 0, line, open: false }, start, rings[0].clone().sub(start).normalize(), SKILL, RACE_SPEED, PEAK_SECONDS);
     expect(flight.passed, `${flight.passed} of ${points.length} in ${flight.seconds.toFixed(0)} s`).toBe(points.length);
     expect(flight.missed).toBe(0);
+  });
+});
+
+describe('the Saw Brothers’ music', () => {
+  it('stays the claim’s calm while the brothers saw undisturbed and turns to the fight once the pilot comes near or one is down', () => {
+    const drill = MISSIONS.find((mission) => mission.id === 'sawBrothers')!.drills.find((d) => d.turn)!;
+    const site = new THREE.Vector3(1000, 0, 0);
+    const at = (x: number, jumpersDown = 0) => drill.turn!({ me: { flight: { position: new THREE.Vector3(x, 0, 0) } }, jumpersDown } as unknown as SchoolContext, { site } as Attempt);
+    expect(at(1000 + 30000)).toBeUndefined();
+    expect(at(1000 + 20000)).toBe('fight');
+    expect(at(1000 + 30000, 1)).toBe('fight');
   });
 });

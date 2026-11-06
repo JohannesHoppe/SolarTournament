@@ -513,6 +513,8 @@ const JUMPERS = 3;
 const JUMPER_SKILL = 0.15;
 const JUMPERS_DOWN = 2;
 const RIG_FALLS = 30;
+/** The music turns to the fight once the pilot is this near the rig (units, 1.2 km): the brothers hold 400 m off it and heed a ship within 800 m of them. */
+const SAW_FIGHT = 24000;
 
 /** The claim whose rig the Saw Brothers saw at: of those with a rig, the one nearest the place's middle. */
 function sawnClaim(ctx: SchoolContext): Claim | null {
@@ -525,8 +527,8 @@ const sawBrothers: Drill = {
   line: CAMPAIGN.sawBrothers,
   keys: ['turn', 'drive', 'fire'],
   arena: 'rheasilvia',
-  // the bandits are here: the music turns
-  music: 'fight',
+  // the claim's calm while the brothers saw; the music turns the moment the fight does
+  turn: (ctx, a) => (ctx.jumpersDown > 0 || ctx.me.flight.position.distanceTo(a.site) < SAW_FIGHT ? 'fight' : undefined),
   autopilot: false,
   enter(ctx, a) {
     const claim = sawnClaim(ctx);

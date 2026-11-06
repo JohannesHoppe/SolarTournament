@@ -1,5 +1,5 @@
 import { Band, type Spoken } from './band';
-import { barSeconds, createSong, STEPS_PER_BAR, type Energy, type Song } from './songs';
+import { barSeconds, createSong, STEPS_PER_BAR, type Energy, type Flavor, type Song } from './songs';
 import { loadVoice } from './voice';
 import { t } from '../i18n/i18n';
 import { storageGet, storageSet } from '../storage';
@@ -11,6 +11,8 @@ export interface MusicCue {
   /** Seconds since the song began; tournament songs run on the shared round clock. */
   elapsed: number;
   roundLength: number;
+  /** The track's flavor, chosen by hand (a place of the campaign); without it, the title's. */
+  flavor?: Flavor;
   /** A cheerful scene's track: French in the bright key (see createSong). */
   bright?: boolean;
   /** Background music: no station and no voice on it. */
@@ -24,11 +26,11 @@ export interface MusicCue {
  */
 export type Mood = 'calm' | 'bright' | 'fight';
 
-/** The cue of a mood: its track by `title`, `elapsed` seconds in. */
-export function moodCue(mood: Mood, title: string, elapsed: number, roundLength: number): MusicCue {
-  if (mood === 'fight') return { title, energy: 'round', elapsed, roundLength, voiceless: true };
+/** The cue of a mood: its track by `title`, `elapsed` seconds in, in the place's `flavor` (bright is always French). */
+export function moodCue(mood: Mood, title: string, elapsed: number, roundLength: number, flavor?: Flavor): MusicCue {
+  if (mood === 'fight') return { title, energy: 'round', elapsed, roundLength, flavor, voiceless: true };
   if (mood === 'bright') return { title, energy: 'lounge', elapsed, roundLength, bright: true, voiceless: true };
-  return { title, energy: 'calm', elapsed, roundLength, voiceless: true };
+  return { title, energy: 'calm', elapsed, roundLength, flavor, voiceless: true };
 }
 
 /** Steps are scheduled this far ahead of the audio clock (s). */
@@ -336,10 +338,10 @@ export class Radio {
     if (!this.enabledFlag) return;
 
     const elapsed = cue.elapsed + (performance.now() - this.cueAt) / 1000;
-    const key = `${cue.title}:${cue.energy}:${cue.roundLength}:${cue.bright ?? false}:${cue.voiceless ?? false}`;
+    const key = `${cue.title}:${cue.energy}:${cue.roundLength}:${cue.flavor ?? ''}:${cue.bright ?? false}:${cue.voiceless ?? false}`;
     if (key !== this.songKey) {
       this.songKey = key;
-      this.song = createSong(cue.title, cue.energy, cue.roundLength, undefined, { bright: cue.bright, voiceless: cue.voiceless });
+      this.song = createSong(cue.title, cue.energy, cue.roundLength, cue.flavor, { bright: cue.bright, voiceless: cue.voiceless });
       this.band.prepare(this.song);
       this.start = Infinity;
       this.onSong(this.song);

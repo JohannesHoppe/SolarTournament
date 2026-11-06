@@ -418,14 +418,15 @@ These bodies are invented for the game. They are numbered by when they were foun
 
 ### Music
 
-Music by situation, never by chance, and background only: no station, no announcer, no voice of the regime. Every mission has its music and keeps it while the situation holds; it turns when the situation does, each track from its start. Built so far (`Mission.music`, `Drill.music`, `SCENE_MUSIC` in `src/campaign/scenes.ts`, the moods in `src/music/radio.ts`):
+Music by situation, never by chance, and background only: no station, no announcer, no voice of the regime. Every mission has its music and keeps it while the situation holds; it turns when the situation does, each track from its start. Built so far (`Mission.music`, `Drill.music` and `Drill.turn`, `SCENE_MUSIC` in `src/campaign/scenes.ts`, `PLACE_MUSIC` in `src/campaign/campaign.ts`, the moods in `src/music/radio.ts`):
 
 - **Calm**, the mission's music unless it asks for another: picking scrap off the Boneyard's racks, the lamps, the canisters, cutting ore on Vesta. The station's sound without a pushing beat: no kick, clap, rumble or fills, the chords, the bass, the bells and the hats flowing on, a soundscape more than a track.
 - **Bright**, only where something is cheerful: Pim's galley on Patience, the crew at table. French house in the bright key (mixolydian), the one place that key is heard; the tournament's rounds and the flight school never play it.
-- **Fight**, when it gets dangerous: the Saw Brothers jumping the claim, the Peak Run against the claims' racers. A round's full arc, voiceless.
+- **Fight**, when it gets dangerous: the Saw Brothers jumping the claim, the Peak Run against the claims' racers. A round's full arc, voiceless. The music turns mid-drill when the danger comes: the Saw Brothers' claim plays its calm while the brothers saw undisturbed, and turns to the fight once the clone comes within 1.2 km of their rig or one of them is down; it stays the fight for the rest of the attempt, and an attempt started over begins calm again.
 - **Silence** where a moment wants none: Rask's office (his voice is the scene), the launch ring's choice between the gel and the switch.
+- **Each place its sound**, chosen by hand: the Boneyard's calm drones warm and low over the racks (drive, its pedal bass), its fights in the clang of the yard (industrial); Rheasilvia's calm travels on the steady pulse of the ore lines (motorik), its fights in acid. Each mission's track is its own by its name; bright is French wherever it plays.
 
-Still to come: a mission's own title and style chosen by hand for each place, and the turn of the music mid-drill (bandits arriving while the clone cuts ore).
+Still to come: the places of the chapters not built yet get their sound as they are built.
 
 ---
 

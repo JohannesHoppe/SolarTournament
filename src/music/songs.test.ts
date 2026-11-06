@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createSong, FLAVOR_WEIGHTS, GLITCH_BARS, GLITCH_MAX, glitchSteps, ROUND_SECONDS, SCALES, stepEvents, STEPS_PER_BAR, titleFor } from './songs';
 import { moodCue } from './radio';
+import { PLACE_MUSIC } from '../campaign/campaign';
 import { STATION_DE, STATION_EN } from './lines';
 
 const notes = (title: string, from: number, steps: number) => {
@@ -148,8 +149,10 @@ describe('Radio 2584', () => {
 
 describe("the campaign's music", () => {
   it('a calm track never pushes: no kick, clap or rumble, and no voice on background music', () => {
-    for (const title of ['Cold Boot', 'Lamplighter', titleFor(3)]) {
-      const song = createSong(title, 'calm', ROUND_SECONDS, undefined, { voiceless: true });
+    const places = Object.values(PLACE_MUSIC).map((sound) => sound.calm);
+    for (const [title, flavor] of [['Cold Boot', undefined], ['Lamplighter', undefined], [titleFor(3), undefined], ...places.map((calm) => ['Claim Survey', calm] as const)] as const) {
+      const song = createSong(title, 'calm', ROUND_SECONDS, flavor, { voiceless: true });
+      if (flavor) expect(song.flavor).toBe(flavor);
       expect(song.voice).toEqual([]);
       let notes = 0;
       for (let step = 0; step < song.cycle * STEPS_PER_BAR; step++) {
@@ -167,6 +170,10 @@ describe("the campaign's music", () => {
     expect(moodCue('calm', 'x', 0, ROUND_SECONDS)).toMatchObject({ energy: 'calm', voiceless: true });
     expect(moodCue('bright', 'x', 0, ROUND_SECONDS)).toMatchObject({ bright: true, voiceless: true });
     expect(moodCue('fight', 'x', 0, ROUND_SECONDS)).toMatchObject({ energy: 'round', voiceless: true });
+    // a place's flavor carries into calm and fight, never into the bright key
+    expect(moodCue('calm', 'x', 0, ROUND_SECONDS, 'motorik').flavor).toBe('motorik');
+    expect(moodCue('fight', 'x', 0, ROUND_SECONDS, 'acid').flavor).toBe('acid');
+    expect(moodCue('bright', 'x', 0, ROUND_SECONDS, 'acid').flavor).toBeUndefined();
     expect(createSong('x', 'round', ROUND_SECONDS, undefined, { voiceless: true }).voice).toEqual([]);
   });
 });

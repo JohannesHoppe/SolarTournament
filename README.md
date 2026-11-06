@@ -299,7 +299,7 @@ Decisions so far:
 - Hard flavors stay, as guests; schranz and generic rave are not the maintainer's taste and only play rarely.
 - German words in the robot voice, but only now and then.
 - Cheerful only where something is cheerful: the tournament's rounds and the flight school keep the station's dark sound; the campaign uses French house in a bright key (mixolydian) as a means of style for a scene in a good mood, the station's own sound rather than a pop flavor of its own.
-- The campaign plays music by situation, background only (no station, no voice): calm while little happens, the station's sound without a pushing beat (no kick, clap, rumble or fills); bright for a cheerful scene; a fight's full arc when it gets dangerous; silence where a moment wants none (`docs/campaign/STORY.md`, Music).
+- The campaign plays music by situation, background only (no station, no voice): calm while little happens, the station's sound without a pushing beat (no kick, clap, rumble or fills); bright for a cheerful scene; a fight's full arc when it gets dangerous, turning mid-mission the moment the danger comes; silence where a moment wants none; each place its own sound, chosen by hand (the Boneyard drive and industrial, Rheasilvia motorik and acid) (`docs/campaign/STORY.md`, Music).
 - Daft Punk styles and elements are always welcome: loops that a filter opens and closes, phaser, pumping compression, vocoder robot voices, phrases chopped into the beat word by word, and the raw, distorted early sound.
 
 - **Driving, not exhausting.** Mostly 116 to 132 BPM, the hard guests up to 152: a round lasts five minutes, but people play many rounds, and peak-time speed and full distortion wear the ears out over an evening.

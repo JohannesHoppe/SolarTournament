@@ -175,6 +175,8 @@ export interface Attempt {
   site: THREE.Vector3;
   /** The pilot's beams on rigs as the attempt began (see SchoolContext.rigBeams). */
   rigBeams: number;
+  /** The music the drill turned to in this attempt (see Drill.turn); undefined while it has not. */
+  turned: Mood | null | undefined;
 }
 
 export interface Drill {
@@ -210,6 +212,8 @@ export interface Drill {
   silent?: boolean;
   /** The campaign's music while the drill runs (see Mood), null for silence; without it, the mission's. */
   music?: Mood | null;
+  /** The music turning mid-drill (bandits arriving): the mood it turns to once this returns one, kept for the rest of the attempt. */
+  turn?(ctx: SchoolContext, attempt: Attempt): Mood | null | undefined;
 }
 
 
@@ -1923,8 +1927,9 @@ export class FlightSchool {
     return on;
   }
 
-  /** The music the current drill asks for (see Drill.music): undefined leaves it to the mission. */
+  /** The music the current drill asks for (see Drill.music, Drill.turn): undefined leaves it to the mission. */
   get music(): Mood | null | undefined {
+    if (this.attempt?.turned !== undefined) return this.attempt.turned;
     return this.drills[Math.min(this.index, this.drills.length - 1)].music;
   }
 
@@ -2032,6 +2037,7 @@ export class FlightSchool {
       drill.enter?.(ctx, attempt, this.markers);
     }
     ctx.keepDrift = drill.keepsDrift?.(ctx, attempt) ?? false;
+    if (attempt.turned === undefined) attempt.turned = drill.turn?.(ctx, attempt);
     attempt.seconds += ctx.dt;
     this.markers.update(ctx.dt, ctx.field);
 
@@ -2069,7 +2075,7 @@ export class FlightSchool {
     const drill = this.drills[this.index];
     const fresh = !this.attempt || this.attempt.rep !== rep;
     this.markers.clear();
-    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0, told: false, site: new THREE.Vector3(), rigBeams: 0, pipes: false };
+    this.attempt = { rep, live: false, seconds: 0, held: 0, forward: ctx.me.flight.forward(), points: [], normals: [], next: 0, track: null, side: NaN, warned: false, usedBrake: false, brakeLetGo: false, reach: 0, jinkSide: 0, jinks: 0, lastShot: 0, lit: false, litAt: -Infinity, count: -1, early: false, doneAt: NaN, swept: 0, told: false, site: new THREE.Vector3(), rigBeams: 0, pipes: false, turned: undefined };
     this.restart = false;
     // the panel keeps the instruction; a repetition without a line of its own just goes on
     const instruction = rep > 0 && drill.repLine ? drill.repLine : drill.line;

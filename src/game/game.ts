@@ -39,7 +39,7 @@ import { DECOY_LURE, decoyLaunch, Decoys, DECOYS_HELD, DECOYS_PER_PROBE } from '
 /** A bot drops a decoy when a torpedo homing on it is within this share of the lure's reach (see botDecoy), at this rate a second once it is. */
 const BOT_DECOY_AT = 0.6;
 const BOT_DECOY_RATE = 3;
-import { BOND_MAX, type Campaign, campaignFrom, complete, hullOf, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, rankOf } from '../campaign/campaign';
+import { BOND_MAX, type Campaign, campaignFrom, complete, hullOf, MISSIONS, type Mission, type Module, MODULE_NAMES, nextMission, PART_NAMES, PLACE_MUSIC, rankOf } from '../campaign/campaign';
 import { detectable, firstHull, LASER_RANGE, LOCK_RANGE, MAX_HEAT, noseOn, Ship, type ShipState, type Zone } from '../ship/ship';
 import { flyByNose, MAIN_THRUST, MAX_SPEED, MAX_TURN_RATE, OVERDRIVE_DRIVE_COOLDOWN, OVERDRIVE_PUSH, type FlightModel } from '../ship/flight';
 import { ownerOf, Session, TOURNAMENT_SIZE, type RoundState } from '../net/session';
@@ -2331,7 +2331,8 @@ export class Game implements OnlineGame {
       const title = this.stageName ? `${this.mission.name} · ${this.stageName}` : this.mission.name;
       const key = `${title}:${mood}`;
       if (key !== this.mood.key) this.mood = { key, since: wallClock() };
-      return moodCue(mood, title, wallClock() - this.mood.since, ROUND_SECONDS);
+      const sound = PLACE_MUSIC[this.venue.id];
+      return moodCue(mood, title, wallClock() - this.mood.since, ROUND_SECONDS, sound && (mood === 'fight' ? sound.fight : sound.calm));
     }
     const inRound = this.state === 'playing' || this.state === 'results' || (this.state === 'paused' && !!this.online);
     if (inRound && Number.isFinite(this.roundEndsAtWall)) {
