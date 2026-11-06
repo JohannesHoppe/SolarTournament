@@ -14,3 +14,9 @@ CLOUDFLARE_ACCOUNT_ID = "2ccacec509bc697696aa0b57f969dc16"
 # ACCESS_TEAM = ""
 # ACCESS_AUD = ""
 VAPID_PUBLIC_KEY = "BJH00R6tfAPkd_kF9r5uDQeEU0ezUOqlYDA_5T1hvWEHMXoIx7S3mATeP3vlC3HT-CkXbM3usjFmugR27R9zhoA"
+
+# The subscriptions of functions/push.ts (the tables are made by the function itself).
+[[d1_databases]]
+binding = "PUSH_DB"
+database_name = "solartournament-push"
+database_id = "3832e961-baa3-449a-ac16-fadf727fd94c"
