@@ -195,6 +195,8 @@ export interface Asteroid {
   solid: boolean;
   /** Collides as a box (the hull of a wreck): `semiAxes` are its half extents; otherwise as its measured surface, or without one as an ellipsoid. */
   box: boolean;
+  /** A box whose top is a ground of hills and hollows (see Relief): it collides as that ground over the box's footprint. */
+  relief: Relief | null;
   spinAxis: THREE.Vector3;
   spinRate: number;
   velocity: THREE.Vector3;
@@ -389,6 +391,8 @@ interface Template {
   impostor: THREE.Object3D | null;
   /** Collides as its box (see Asteroid.box). */
   box: boolean;
+  /** Its box's top as a ground (see Asteroid.relief). */
+  relief: Relief | null;
   /** The measured surface of a shape without a collider box (see Asteroid.surface). */
   surface: Surface | null;
   /** The mean of the semi-axes (template units, unscaled); a piece's from its share of the whole shape's volume. */
@@ -484,6 +488,7 @@ export class AsteroidField {
           far: set.far[i] ?? null,
           impostor: set.impostor?.[i] ?? null,
           box: !!set.box,
+          relief: (object.userData.relief as Relief | undefined) ?? null,
           // a shape without a computed collider is measured: a rock collides where it is seen
           surface: set.box || collider ? null : new Surface(reference, center),
           mean: 0,
@@ -516,6 +521,7 @@ export class AsteroidField {
       far: piece.far,
       impostor: null,
       box: false,
+      relief: null,
       surface: piece.surface,
       mean: whole.mean * cbrt(piece.share),
       centroid: piece.centroid,
@@ -777,6 +783,7 @@ export class AsteroidField {
       semiAxes: template.semiAxes,
       surface: template.surface,
       box: template.box,
+      relief: template.relief,
       inverse: new THREE.Matrix4(),
       shovedBy: null,
       weld: null,
@@ -1527,7 +1534,62 @@ const closest = new THREE.Vector3();
 function pieceContact(asteroid: Asteroid, center: THREE.Vector3, radius: number, normal: THREE.Vector3) {
   const scale = asteroid.object.matrixWorld.getMaxScaleOnAxis();
   const local = u.copy(center).applyMatrix4(asteroid.inverse).sub(asteroid.center);
-  return boxContact(local, asteroid.semiAxes, radius / scale, normal, closest);
+  return asteroid.relief ? reliefContact(local, asteroid.semiAxes, asteroid.relief, radius / scale, normal, closest) : boxContact(local, asteroid.semiAxes, radius / scale, normal, closest);
+}
+
+/**
+ * A ground of hills and hollows on top of a box piece (a moon's surface under a place): its
+ * height (in the box's own coordinates, about its center) at each point of the box's footprint,
+ * never above the box's top. The piece collides as that ground: whatever lies below it within
+ * the footprint is inside.
+ */
+export type Relief = (x: number, z: number) => number;
+
+/** The step for a ground's slope (units, in the box's coordinates). */
+const RELIEF_STEP = 20;
+
+/**
+ * A sphere of `radius` around `local` (the box's coordinates) against a box's ground (see
+ * Relief): the point of the ground under the center into `closest`, the ground's outward normal
+ * there into `normal`, when the sphere reaches down to it (along the normal); otherwise null.
+ */
+export function reliefContact(local: THREE.Vector3, half: THREE.Vector3, relief: Relief, radius: number, normal: THREE.Vector3, closest: THREE.Vector3): THREE.Vector3 | null {
+  if (Math.abs(local.x) > half.x || Math.abs(local.z) > half.z || local.y < -half.y - radius) return null;
+  const ground = (x: number, z: number) => Math.min(half.y, relief(THREE.MathUtils.clamp(x, -half.x, half.x), THREE.MathUtils.clamp(z, -half.z, half.z)));
+  const y = ground(local.x, local.z);
+  normal.set(ground(local.x - RELIEF_STEP, local.z) - ground(local.x + RELIEF_STEP, local.z), 2 * RELIEF_STEP, ground(local.x, local.z - RELIEF_STEP) - ground(local.x, local.z + RELIEF_STEP)).normalize();
+  closest.set(local.x, y, local.z);
+  // how far the center stands off the ground along its normal: under the radius, they touch
+  return (local.y - y) * normal.y < radius ? closest : null;
+}
+
+/** How far along a ray (in the box's coordinates, `step` one world unit along it) it meets a box's ground, marched in steps of RELIEF_MARCH and narrowed down; null when it does not. */
+const RELIEF_MARCH = 200;
+export function reliefRay(origin: THREE.Vector3, step: THREE.Vector3, half: THREE.Vector3, relief: Relief): number | null {
+  const enter = rayBox(origin, step, half);
+  if (enter === null) return null;
+  const length = step.length();
+  const through = (2 * half.length()) / length;
+  const under = (t: number) => {
+    const x = origin.x + step.x * t;
+    const z = origin.z + step.z * t;
+    if (Math.abs(x) > half.x || Math.abs(z) > half.z) return false;
+    return origin.y + step.y * t <= Math.min(half.y, relief(x, z));
+  };
+  const stride = RELIEF_MARCH / length;
+  if (under(enter)) return enter;
+  for (let t = enter; t < enter + through; t += stride) {
+    if (!under(t + stride)) continue;
+    let low = t;
+    let high = t + stride;
+    for (let k = 0; k < 12; k++) {
+      const middle = (low + high) / 2;
+      if (under(middle)) high = middle;
+      else low = middle;
+    }
+    return high;
+  }
+  return null;
 }
 
 const localOrigin = new THREE.Vector3();
@@ -1543,7 +1605,7 @@ function toLocalRay(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.
 /** Distance along a normalized ray to a box piece's surface (slabs), or null. */
 function rayPiece(asteroid: Asteroid, origin: THREE.Vector3, direction: THREE.Vector3): number | null {
   toLocalRay(asteroid, origin, direction);
-  return rayBox(localOrigin, localStep, asteroid.semiAxes);
+  return asteroid.relief ? reliefRay(localOrigin, localStep, asteroid.semiAxes, asteroid.relief) : rayBox(localOrigin, localStep, asteroid.semiAxes);
 }
 
 /** Distance along a normalized ray to the asteroid's ellipsoid surface, or null. */
