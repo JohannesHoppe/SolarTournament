@@ -164,3 +164,25 @@ describe('the nanobots', () => {
     expect(s.drive).toBeCloseTo(mended - 0.2, 6);
   });
 });
+
+describe('a hull without its left armor panels', () => {
+  it('takes a beam into its bare left flank twice as hard, its right flank and nose as ever, and closed with panels as a stock hull', () => {
+    const hit = (bareFlank: boolean, from: THREE.Vector3) => {
+      const s = ship('scrap');
+      s.perks = { ...STOCK, bareFlank };
+      Object.assign(s, { radius: 340 });
+      s.flight.position.set(0, 0, 0);
+      const before = s.hull;
+      s.laserHit(from, from.clone().negate().normalize(), 10);
+      return before - s.hull;
+    };
+    // the ship's left lies along -x of its own frame: a beam from there runs towards +x
+    const left = new THREE.Vector3(-5000, 0, 0);
+    const right = new THREE.Vector3(5000, 0, 0);
+    const nose = new THREE.Vector3(0, 0, -5000);
+    expect(hit(true, left)).toBeCloseTo(2 * hit(false, left));
+    expect(hit(true, right)).toBeCloseTo(hit(false, right));
+    expect(hit(true, nose)).toBeCloseTo(hit(false, nose));
+    expect(hit(false, left)).toBeGreaterThan(0);
+  });
+});

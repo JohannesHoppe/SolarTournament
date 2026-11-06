@@ -120,6 +120,8 @@ export interface Perks {
   patched: boolean;
   /** A look: the depot's grey ground off and the scout's old livery under it (the campaign's hull from Scout Two on, see campaign/campaign); only a hull that carries it shows it. */
   stripped: boolean;
+  /** The left flank without its armor panels (the campaign's hull until they are fitted): a beam from that side counts double (see Ship.laserHit). */
+  bareFlank: boolean;
 }
 
 export const STOCK: Readonly<Perks> = {
@@ -141,6 +143,7 @@ export const STOCK: Readonly<Perks> = {
   laserHeat: 1,
   patched: false,
   stripped: false,
+  bareFlank: false,
 };
 
 /**

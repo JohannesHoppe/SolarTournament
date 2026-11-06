@@ -647,7 +647,27 @@ export function scrapInterceptor(original: THREE.Object3D): THREE.Object3D {
   const root = hull(original, 'humanHull', coats, trim, radiators, { parts: lights, color: TAIL_LIGHT });
   root.add(welds(THRUSTER_LAYOUTS.human));
   root.add(oldLivery());
+  root.add(flankPanels());
   return root;
+}
+
+/**
+ * The armor panels welded over the bare left flank (see Perks.bareFlank): the right flank's strut
+ * and plate mirrored onto the left, in an olive of another depot and a band of fresh weld round
+ * the plate; one mesh named `panels`, hidden until they are fitted.
+ */
+const PANELLED: Wear = { rust: 0.3, chips: 0.5, grime: 0.6, scratches: 0.6, seams: 0.8, stencils: ['NAVY SURPLUS', 'PHOBOS'], roughness: 0.75, metalness: 0.3, relief: 'flush', dents: 0.3 };
+
+function flankPanels(): THREE.Mesh {
+  const parts = [
+    pair(paint(loft(BLADE, { z: 150, w: 60, h: 12, x: 120, y: 10 }, { z: 0, w: 40, h: 10, x: 190, y: 14 }), OLIVE))[1],
+    pair(paint(loft(RECTANGLE, { z: 120, w: 110, h: 8, x: 170, y: 12 }, { z: 20, w: 90, h: 6, x: 170, y: 12 }), OLIVE_DARK))[1],
+    pair(paint(loft(RECTANGLE, { z: 124, w: 114, h: 9, x: 170, y: 12 }, { z: 116, w: 114, h: 9, x: 170, y: 12 }), HEAT_TINT))[1],
+  ];
+  const mesh = coat({ parts, wear: PANELLED, seed: 7736 });
+  mesh.name = 'panels';
+  mesh.visible = false;
+  return mesh;
 }
 
 /**

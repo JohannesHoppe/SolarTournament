@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
+import { BOND, BOND_MAX, CUTTER_HEAT, CUTTER_REACH, campaignFrom, complete, FIN_RADIATOR, freshCampaign, hullOf, LASER_PRICE, MISSIONS, OVERHAUL_PRICE, PANELS_PRICE, nextMission, PATCHED_THRUSTERS, RANKS, rankOf, SCRAP_DRIVE, SCRAP_THRUSTERS, YARD_CUT } from './campaign';
 import { TORPEDOES } from '../game/torpedoes';
 import { STOCK } from '../game/hangar';
 import { CUTTER_PRICE } from './missions';
@@ -102,6 +102,14 @@ describe('the campaign Lot 7731', () => {
     expect([paid.kept, paid.cut, campaign.bond]).toEqual([debtDay.pay, 0, 20000]);
     const later = complete(campaign, MISSIONS.find((mission) => mission.id === 'stickneyGrand')!);
     expect(later.cut).toBe(0);
+  });
+
+  it('starts with a bare left flank and closes it with Armor Panels, paid as the laser is', () => {
+    const campaign = { ...freshCampaign(), coins: 500, bond: 20000 };
+    expect(hullOf(campaign).bareFlank).toBe(true);
+    complete(campaign, MISSIONS.find((mission) => mission.id === 'armorPanels')!);
+    expect(hullOf(campaign).bareFlank).toBe(false);
+    expect([campaign.coins, campaign.bond]).toEqual([0, 20000 + PANELS_PRICE - 500]);
   });
 
   it('fits the military laser in Surplus: paid from the wallet as far as it holds, the rest on the debt, the Games\' own laser in place of the cutter', () => {

@@ -11,7 +11,7 @@ import type { Claim } from '../world/mining';
 import type { ArenaId } from '../world/arenas';
 import { BAY_MOUTH, GROUND, HOPPER, PAD, PAD_RADIUS, RACK_GAP, RACK_HEIGHT, RACK_LENGTH, ROW_SPACING, YARD_END } from '../world/yard';
 import { cos, exp, hypot, sin } from '../detmath';
-import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, type Mission } from './campaign';
+import { type Campaign, LASER_PRICE, OVERHAUL_PRICE, PANELS_PRICE, type Mission } from './campaign';
 import type { Ship } from '../ship/ship';
 import { Randomizer } from '../random';
 import type { SceneName } from './scenes';
@@ -1103,6 +1103,13 @@ const fitRacingLine = (campaign: Campaign) => {
   if (!campaign.modules.includes('racingLine')) campaign.modules.push('racingLine');
 };
 
+/** Armor Panels (4.4): the bare left flank closed (see Perks.bareFlank), at PANELS_PRICE. */
+const fitPanels = (campaign: Campaign) => {
+  if (campaign.parts.includes('panels')) return;
+  campaign.parts.push('panels');
+  buy(campaign, PANELS_PRICE);
+};
+
 const fitStripped = (campaign: Campaign) => {
   if (!campaign.parts.includes('stripped')) campaign.parts.push('stripped');
 };
@@ -1178,4 +1185,5 @@ export const MISSIONS: readonly Mission[] = [
   { id: 'stickneyGrand', name: msg('Stickney Grand'), drills: [said(HEDDA.phobos, 'phobos'), said(CAMPAIGN.racingLine, 'phobos'), stickneyGrand, said(CAMPAIGN.stickneyGrandDone, 'phobos')], pay: 2500, ratings: 250, fit: fitRacingLine, start: GRAND_START },
   { id: 'debtDay', name: msg('Debt Day'), drills: [said(TALLY.debtDay, 'phobos'), debtDay, said(NAVY.hail, 'phobos'), said(TALLY.closed, 'phobos'), said(CAMPAIGN.debtDayBought, 'phobos')], pay: 2000, ratings: 200, fit: fitHeld },
   { id: 'grooveShoot', name: msg('Groove Shoot'), drills: [grooveShoot, said(CAMPAIGN.grooveShootDone, 'phobos')], pay: 1200, ratings: 150 },
+  { id: 'armorPanels', name: msg('Armor Panels'), drills: [said(PIM.panels, 'phobos'), said(CAMPAIGN.panels, 'phobos')], pay: 0, fit: fitPanels },
 ];

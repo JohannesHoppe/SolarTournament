@@ -1690,4 +1690,8 @@ export const ES: Catalog = {
   "Low in a groove {seconds}/{needed} s · {meters} m over the ground": "Bajo en un surco {seconds}/{needed} s · {meters} m sobre el suelo",
   "A camera drone from Lanes Watch. They want the hull low in one of the grooves beyond the rim: under sixty meters, and moving, for thirty seconds without a break. Do not touch the ground.": "Un dron de cámara de Lanes Watch. Quieren el casco bajo en uno de los surcos más allá del borde: por debajo de sesenta metros, en movimiento, treinta segundos sin parar. No toques el suelo.",
   "Thirty seconds of us on every screen in the lanes. I have never been famous before. I think.": "Treinta segundos nuestros en todas las pantallas de las rutas. Nunca he sido famosa. Creo.",
+  "Armor Panels": "Placas de blindaje",
+  "armor panels on the bare flank": "placas de blindaje en el flanco desnudo",
+  "The Navy yard here throws out armor like it's nothing. Got you a set for your bare side, fifteen hundred. No more hits counting double on your left. Hold still.": "El astillero de la Armada tira blindaje como si nada. Te he conseguido un juego para tu lado desnudo, mil quinientos. Se acabó que los impactos por la izquierda cuenten doble. Quieto.",
+  "Both flanks armored. A beam from the left is only a beam again, Host.": "Los dos flancos blindados. Un rayo por la izquierda vuelve a ser solo un rayo, Host.",
 };

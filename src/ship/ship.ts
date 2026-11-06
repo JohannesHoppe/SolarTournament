@@ -497,6 +497,9 @@ export class Ship {
     // the scout's old livery under the depot's grey, once Pim has ground it off (see models, oldLivery)
     const livery = this.model.getObjectByName('livery');
     if (livery) livery.visible = perks.stripped;
+    // the armor panels welded over the bare left flank, once fitted (see models, flankPanels)
+    const panels = this.model.getObjectByName('panels');
+    if (panels) panels.visible = !perks.bareFlank;
     if (this.engine.flameMaterial) this.engine.flameMaterial.color.copy(FLAME_TINTS[perks.flame]);
     const { strips, stern, light } = this.trim;
     strips.visible = perks.neon > 0;
@@ -896,7 +899,9 @@ export class Ship {
       this.flight.toLocalDirection(direction, local);
       const flank = hypot(local.x, local.y) > Math.abs(local.z);
       if (flank) this.thrusters = Math.max(0, this.thrusters - THRUSTER_HIT * weight);
-      return { status: this.structural(ARMOR_DAMAGE * weight, now), zone: flank ? 'thrusters' : 'armor' };
+      // a hull whose left flank lacks its armor panels (see Perks.bareFlank) takes a beam from that side twice as hard
+      const bare = flank && this.perks.bareFlank && local.x > 0;
+      return { status: this.structural(ARMOR_DAMAGE * weight * (bare ? 2 : 1), now), zone: flank ? 'thrusters' : 'armor' };
     }
     offset.subVectors(this.flight.position, origin);
     const along = offset.dot(direction);

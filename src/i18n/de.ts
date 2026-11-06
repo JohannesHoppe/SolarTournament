@@ -1654,4 +1654,8 @@ export const DE: Catalog = {
   "Low in a groove {seconds}/{needed} s · {meters} m over the ground": "Tief in einer Rille {seconds}/{needed} s · {meters} m über dem Boden",
   "A camera drone from Lanes Watch. They want the hull low in one of the grooves beyond the rim: under sixty meters, and moving, for thirty seconds without a break. Do not touch the ground.": "Eine Kameradrohne von Lanes Watch. Sie wollen den Rumpf tief in einer der Rillen hinter dem Rand: unter sechzig Metern, in Bewegung, dreißig Sekunden am Stück. Berühr den Boden nicht.",
   "Thirty seconds of us on every screen in the lanes. I have never been famous before. I think.": "Dreißig Sekunden von uns auf jedem Bildschirm in den Bahnen. Ich war noch nie berühmt. Glaube ich.",
+  "Armor Panels": "Panzerplatten",
+  "armor panels on the bare flank": "Panzerplatten auf der nackten Flanke",
+  "The Navy yard here throws out armor like it's nothing. Got you a set for your bare side, fifteen hundred. No more hits counting double on your left. Hold still.": "Die Marinewerft hier schmeißt Panzerung weg, als wär's nichts. Hab dir einen Satz für deine nackte Seite besorgt, fünfzehnhundert. Links zählt kein Treffer mehr doppelt. Halt still.",
+  "Both flanks armored. A beam from the left is only a beam again, Host.": "Beide Flanken gepanzert. Ein Strahl von links ist wieder nur ein Strahl, Host.",
 };
