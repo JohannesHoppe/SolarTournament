@@ -1,8 +1,9 @@
-# Nicole in German, Spanish and French (see tools/voice/README.md): clones the lines the store
-# in the release "voice-nicole" still lacks, one job per language, and puts the store back
-# there. Runs when the lines, their translations or the clone tools change, and by hand
-# (Actions → Voice → Run workflow). A job stops after about five hours and keeps what it has
-# cloned; running the workflow again goes on from there.
+# Nicole and the campaign's people (SPEAKERS in tools/voice/nicole.ts) in German, Spanish and
+# French (see tools/voice/README.md): clones the lines their stores in the release "voice-nicole" still lack,
+# one job per language for every speaker, and puts the stores back there. Runs when the lines,
+# their translations or the clone tools change, and by hand (Actions → Voice → Run workflow). A
+# job stops after about five hours and keeps what it has cloned; running the workflow again goes on
+# from there.
 #
 # Two kinds of jobs, so that no code of others ever holds a token that writes: the clone jobs
 # run Chatterbox, Whisper and their packages and may only read; they hand their store on as an
@@ -55,36 +56,37 @@ jobs:
       # Linux binaries in their packages; onnxruntime-node's script would only fetch CUDA
       # libraries, unchecked)
       - run: npm ci --ignore-scripts
-      # the store of this language and Nicole's voice (voice print and reference), as far as the
-      # release has them; a download that fails stops the job, so a store that is there is never
-      # taken for an empty one and overwritten. Nicole's voice is shared by all three jobs: only
-      # the German job makes it (see "Prepare").
-      - name: Download the store
-        id: store
+      # every speaker's store of this language and their voices (voice print and reference), as
+      # far as the release has them; a download that fails stops the job, so a store that is
+      # there is never taken for an empty one and overwritten. A speaker's voice is shared by all
+      # three jobs: only the German job makes it (see prepare.ts)
+      - name: Download the stores
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir -p "$WORK"
           assets=$(gh release view voice-nicole --json assets --jq '.assets[].name')
-          for file in "nicole-${{ matrix.language }}.json" nicole-conds.pt reference.wav; do
-            if grep -qx "$file" <<< "$assets"; then gh release download voice-nicole --dir "$WORK" --pattern "$file"; fi
+          speakers=$(node -e "import('./tools/voice/nicole.ts').then((m) => console.log(m.SPEAKER_NAMES.join(' ')))")
+          for speaker in $speakers; do
+            store="$speaker-${{ matrix.language }}"
+            reference=$([ "$speaker" = nicole ] && echo reference.wav || echo "reference-$speaker.wav")
+            for file in "$store.json" "$speaker-conds.pt" "$reference"; do
+              if grep -qx "$file" <<< "$assets"; then gh release download voice-nicole --dir "$WORK" --pattern "$file"; fi
+            done
+            # the index names its audio by its fingerprint (see cloneAudioName in tools/voice/nicole.ts)
+            if [ -f "$WORK/$store.json" ]; then
+              audio="$store-$(node -p "require('$WORK/$store.json').audio.slice(0, 16)").flac"
+              if ! grep -qx "$audio" <<< "$assets"; then echo "The release lacks $audio, the audio its index names"; exit 1; fi
+              gh release download voice-nicole --pattern "$audio" --output "$WORK/$store.flac"
+            fi
           done
-          # the index names its audio by its fingerprint (see cloneAudioName in tools/voice/nicole.ts)
-          if [ -f "$WORK/nicole-${{ matrix.language }}.json" ]; then
-            audio="nicole-${{ matrix.language }}-$(node -p "require('$WORK/nicole-${{ matrix.language }}.json').audio.slice(0, 16)").flac"
-            if ! grep -qx "$audio" <<< "$assets"; then echo "The release lacks $audio, the audio its index names"; exit 1; fi
-            gh release download voice-nicole --pattern "$audio" --output "$WORK/nicole-${{ matrix.language }}.flac"
-          fi
-          if grep -qx nicole-conds.pt <<< "$assets"; then echo "voice=kept" >> "$GITHUB_OUTPUT"; else echo "voice=new" >> "$GITHUB_OUTPUT"; fi
+      # what this language's job has to do: the lines its stores lack, and in German the voice
+      # prints of speakers the release has none of (the other languages wait for the next run, so
+      # every language speaks with the same print)
       - name: Prepare
         id: prepare
         run: |
           node tools/voice/clone/prepare.ts "$WORK"
-          # without a voice print in the release, German makes it and the others wait for the
-          # next run, so every language speaks with the same one
-          if [ "${{ steps.store.outputs.voice }}" = new ] && [ "${{ matrix.language }}" != de ]; then echo "todo=0" >> "$GITHUB_OUTPUT"; exit 0; fi
-          # German makes the voice print even with nothing to clone
-          if [ "${{ steps.store.outputs.voice }}" = new ]; then echo "todo=voice" >> "$GITHUB_OUTPUT"; exit 0; fi
           echo "todo=$(node -p "require('$WORK/todo.json')['${{ matrix.language }}']")" >> "$GITHUB_OUTPUT"
       - if: steps.prepare.outputs.todo != '0'
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
@@ -106,19 +108,19 @@ jobs:
       - if: steps.prepare.outputs.todo != '0'
         name: Clone
         run: python tools/voice/clone/clone.py "$WORK" ${{ matrix.language }} 290
-      # also after a clone that broke off: the store written every ten lines goes on to the
+      # also after a clone that broke off: the stores written every ten lines go on to the
       # upload job (a clone that broke off before its first ten lines wrote none, and the German
-      # job may hand on only the voice print)
+      # job may hand on only voice prints)
       - if: always() && steps.prepare.outcome == 'success' && steps.prepare.outputs.todo != '0'
-        name: Hand the store on
+        name: Hand the stores on
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: store-${{ matrix.language }}
           path: |
-            ${{ env.WORK }}/nicole-${{ matrix.language }}.json
-            ${{ env.WORK }}/nicole-${{ matrix.language }}.flac
-            ${{ env.WORK }}/nicole-conds.pt
-            ${{ env.WORK }}/reference.wav
+            ${{ env.WORK }}/*-${{ matrix.language }}.json
+            ${{ env.WORK }}/*-${{ matrix.language }}.flac
+            ${{ env.WORK }}/*-conds.pt
+            ${{ env.WORK }}/reference*.wav
           if-no-files-found: ignore
           retention-days: 1
           compression-level: 0
@@ -147,26 +149,37 @@ jobs:
           STORE: ${{ runner.temp }}/store
         run: |
           failed=0
-          # Nicole's voice: the German job makes it when the release has none
+          # the speakers' voices: the German job makes those the release has none of
           assets=$(gh release view voice-nicole --json assets --jq '.assets[].name')
-          if ! grep -qx nicole-conds.pt <<< "$assets" && [ -f "$STORE/store-de/nicole-conds.pt" ] && [ -f "$STORE/store-de/reference.wav" ]; then
-            gh release upload voice-nicole "$STORE/store-de/nicole-conds.pt" "$STORE/store-de/reference.wav" --clobber
-          fi
+          for conds in "$STORE"/store-de/*-conds.pt; do
+            [ -f "$conds" ] || continue
+            name=$(basename "$conds")
+            [[ "$name" =~ ^([a-z]+)-conds\.pt$ ]] || continue
+            speaker="${BASH_REMATCH[1]}"
+            reference=$([ "$speaker" = nicole ] && echo reference.wav || echo "reference-$speaker.wav")
+            if ! grep -qx "$name" <<< "$assets" && [ -f "$STORE/store-de/$reference" ]; then
+              gh release upload voice-nicole "$conds" "$STORE/store-de/$reference" --clobber
+            fi
+          done
           for language in de es fr; do
             dir="$STORE/store-$language"
-            [ -f "$dir/nicole-$language.json" ] || continue
-            fingerprint=$(jq -r '.audio' "$dir/nicole-$language.json" 2> /dev/null) || fingerprint=
-            if ! [[ "$fingerprint" =~ ^[0-9a-f]{64}$ ]] || [ "$(sha256sum "$dir/nicole-$language.flac" | cut -d' ' -f1)" != "$fingerprint" ]; then
-              echo "::error::The store of $language is not the audio its index names; it does not go up"
-              failed=1
-              continue
-            fi
-            audio="nicole-$language-${fingerprint:0:16}.flac"
-            cp "$dir/nicole-$language.flac" "$dir/$audio"
-            gh release upload voice-nicole "$dir/$audio" --clobber
-            gh release upload voice-nicole "$dir/nicole-$language.json" --clobber
-            for old in $(gh release view voice-nicole --json assets --jq '.assets[].name' | grep -E "^nicole-$language(-[0-9a-f]{16})?\.flac$" | grep -vx "$audio"); do
-              gh release delete-asset voice-nicole "$old" --yes
+            for index in "$dir"/*-"$language".json; do
+              [ -f "$index" ] || continue
+              store=$(basename "$index" .json)
+              [[ "$store" =~ ^[a-z]+-(de|es|fr)$ ]] || continue
+              fingerprint=$(jq -r '.audio' "$index" 2> /dev/null) || fingerprint=
+              if ! [[ "$fingerprint" =~ ^[0-9a-f]{64}$ ]] || [ "$(sha256sum "$dir/$store.flac" | cut -d' ' -f1)" != "$fingerprint" ]; then
+                echo "::error::The store $store is not the audio its index names; it does not go up"
+                failed=1
+                continue
+              fi
+              audio="$store-${fingerprint:0:16}.flac"
+              cp "$dir/$store.flac" "$dir/$audio"
+              gh release upload voice-nicole "$dir/$audio" --clobber
+              gh release upload voice-nicole "$index" --clobber
+              for old in $(gh release view voice-nicole --json assets --jq '.assets[].name' | grep -E "^$store(-[0-9a-f]{16})?\.flac$" | grep -vx "$audio"); do
+                gh release delete-asset voice-nicole "$old" --yes
+              done
             done
           done
           exit "$failed"
